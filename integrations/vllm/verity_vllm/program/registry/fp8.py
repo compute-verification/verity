@@ -398,6 +398,92 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
 SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
 
 
+# ---------------------------------------------------------------------------------------------------------
+# the same blockwise GEMM with the e4m3 k32 step as a static: sm_120's `cutlass_scaled_mm_blockwise_sm120_fp8` (all three of its
+# dispatch configs) is `ScaledMmFp8Block_v1`'s schedule over `BlackwellE4m3QmmaDot32_v1`, not Hopper's step.
+# ---------------------------------------------------------------------------------------------------------
+
+_BLOCK_CONF_V2 = ("exact-model-tested; RTX PRO 6000 (cc 12.0) 2026-09-30, vLLM d9105ea80 under VLLM_USE_DEEP_GEMM=0 (CutlassFp8BlockScaledMMKernel, "
+                  "cutlass_3x_gemm_fp8_blockwise sm120: swap_ab 128x32x128 at M <= 64, pingpong 64x128x128 at M <= 256, 128x128x128 above), "
+                  "#469's pinned block-FP8 checkpoint, layer 0's qkv/o/gate_up/down at 11-21 values of M: 119,016 of 119,016 sampled coordinates with "
+                  "DOT = BlackwellE4m3QmmaDot32_v1 and the FFMA promotion (mul+add 119,003; Hopper's step 111,401), run r20260930-164401-c04d, "
+                  "check r20260930-164854-5f2c")
+
+
+@composite("ScaledMmFp8BlockCoordinate", 2, ["K", "G", "DOT"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3)), ("sw", Array(S.K // S.G, F32))), BF16),
+           conformance=_BLOCK_CONF_V2)
+def ScaledMmFp8BlockCoordinateV2(B, S, xq, sx, wrow, sw):
+    """`ScaledMmFp8BlockCoordinate_v1{K,G}` with the k32 step `DOT`: per tile, G/32 `DOT` steps from +0; `s = FMUL(sx[kb], sw[kb])`;
+    `acc = FFMA(temp, s, acc)` from +0; then `cvt.rn.bf16.f32(acc)`."""
+    K, G = S.K, S.G
+    assert K % G == 0 and G % 32 == 0, (K, G)
+    acc = B.call(b1.ZERO32)
+    for kb in range(K // G):
+        temp = B.call(b1.ZERO32)
+        for st in range(G // 32):
+            lo = kb * G + 32 * st
+            temp = B.call(S.DOT, temp, xq[lo:lo + 32], wrow[lo:lo + 32])
+        acc = B.call(P.F32Fma, temp, B.call(P.F32Mul, sx[kb], sw[kb]), acc)
+    return B.call(P.F2fpBf16, acc)
+
+
+@composite("ScaledMmFp8Block", 2, ["K", "N", "G", "DOT"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
+                       ("ws", Array(S.N // S.G, Array(S.K // S.G, F32)))), Array(S.N, BF16)),
+           conformance=_BLOCK_CONF_V2)
+def ScaledMmFp8BlockV2(B, S, xq, sx, w, ws):
+    """`ScaledMmFp8Block_v1{K,N,G}` with the k32 step `DOT`: column n over the weight row `w[n]` and the scale row `ws[n // G]`."""
+    K, N, G = S.K, S.N, S.G
+    assert N % G == 0, (N, G)
+    coord = bind(ScaledMmFp8BlockCoordinateV2, K=K, G=G, DOT=S.DOT)
+    parts = [B.batch(coord, xq, sx, w[nb * G:(nb + 1) * G], ws[nb], axes=(None, None, 0, None)) for nb in range(N // G)]
+    return _Coll(Array(N, BF16), concat([p.refs for p in parts]))
+
+
+@composite("ScaledMmFp8BlockCoordinateGivenScale", 2, ["K", "G", "DOT"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("s", Array(S.K // S.G, F32)), ("wrow", Array(S.K, E4M3))), BF16),
+           conformance=_BLOCK_CONF_V2)
+def ScaledMmFp8BlockCoordinateGivenScaleV2(B, S, xq, s, wrow):
+    """`ScaledMmFp8BlockCoordinate_v2{K,G,DOT}` with the tile scales `s[kb] = FMUL(sx[kb], sw[kb])` read, not computed."""
+    K, G = S.K, S.G
+    assert K % G == 0 and G % 32 == 0, (K, G)
+    acc = B.call(b1.ZERO32)
+    for kb in range(K // G):
+        temp = B.call(b1.ZERO32)
+        for st in range(G // 32):
+            lo = kb * G + 32 * st
+            temp = B.call(S.DOT, temp, xq[lo:lo + 32], wrow[lo:lo + 32])
+        acc = B.call(P.F32Fma, temp, s[kb], acc)
+    return B.call(P.F2fpBf16, acc)
+
+
+@composite("ScaledMmFp8BlockSharedScaleTile", 2, ["K", "G", "DOT"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.G, Array(S.K, E4M3))),
+                       ("sw", Array(S.K // S.G, F32))), Array(S.G, BF16)),
+           conformance=_BLOCK_CONF_V2)
+def ScaledMmFp8BlockSharedScaleTileV2(B, S, xq, sx, w, sw):
+    """One weight block's G output words with the k32 step `DOT`: its K/G scale products once, then the G coordinates reading them."""
+    s = B.batch(P.F32Mul, sx, sw, axes=(0, 0))
+    return B.batch(bind(ScaledMmFp8BlockCoordinateGivenScaleV2, K=S.K, G=S.G, DOT=S.DOT), xq, s, w, axes=(None, None, 0))
+
+
+@composite("ScaledMmFp8BlockSharedScale", 2, ["K", "N", "G", "DOT"],
+           lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
+                       ("ws", Array(S.N // S.G, Array(S.K // S.G, F32)))), Array(S.N, BF16)),
+           conformance=_BLOCK_CONF_V2)
+def ScaledMmFp8BlockSharedScaleV2(B, S, xq, sx, w, ws):
+    """`ScaledMmFp8Block_v2{K,N,G,DOT}`'s function and signature, each weight block's scale products computed once."""
+    K, N, G = S.K, S.N, S.G
+    assert N % G == 0, (N, G)
+    blocks = w.reshape(Array(N // G, Array(G, Array(K, E4M3))))
+    out = B.batch(bind(ScaledMmFp8BlockSharedScaleTileV2, K=K, G=G, DOT=S.DOT), xq, sx, blocks, ws, axes=(None, None, 0, 0))
+    return _Coll(Array(N, BF16), out.refs)
+
+
+SHARED_SCALE["ScaledMmFp8Block_v2"] = ScaledMmFp8BlockSharedScaleV2
+
+
 def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
     """The f32 words a host committer commits as `ScaledMmFp8BlockSharedScale_v1`'s scale products: `F32Mul_v1(x_s[kb], w_s[nb][kb])`
     for every weight block nb and k block kb, computed by the IR (`evaluate_batch` on `F32Mul_v1`), NaN payloads included.  `x_s` is one

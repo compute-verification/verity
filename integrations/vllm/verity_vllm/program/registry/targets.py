@@ -299,6 +299,16 @@ def gemm_spec(profile, K: int, N: int):
     return bind(b1.GemmV2, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
 
 
+def fp8_block_dot(profile):
+    """The e4m3 k32 step of the blockwise FP8 linear's `ScaledMmFp8Block_v2{K,N,G,DOT}` on the declared target (`GemmTarget.fp8_dot`),
+    or None: the target binds `ScaledMmFp8Block_v1`, Hopper's step (cc 9.0's records; an unregistered target as before)."""
+    try:
+        gt = gemm_target(profile)
+    except UnregisteredTarget:
+        return None
+    return FP8_DOTS.get(gt.fp8_dot) if gt.fp8_dot else None
+
+
 def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
     """The registered Definition of the per-tensor FP8 linear (`_C.cutlass_scaled_mm` over the quantised row) on the declared
     target: `ScaledMmFp8NoSwap_v1{K,N,BIAS,DOT}` where the GEMM target records the unswapped epilogue and its e4m3 step
@@ -353,5 +363,5 @@ def describe(profile) -> dict[str, Any]:
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "scaled_mm_fp8_spec", "attention_spec", "describe",
+           "fp8_block_dot", "scaled_mm_fp8_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]

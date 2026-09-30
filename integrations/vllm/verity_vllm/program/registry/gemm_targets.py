@@ -118,6 +118,7 @@ class GemmTarget:
     #: the per-tensor FP8 linear (`_C.cutlass_scaled_mm`), as measured (`evidence`): `fp8_dot` names its e4m3 k32 step (`targets.FP8_DOTS`)
     #: and `fp8_scale_order` its epilogue, "no_swap" = bf16(s_x * (s_w * acc)) with ScaleA = s_x.  None = not a target fact: cc 9.0's
     #: batch-invariant dispatch swaps (ScaleA = s_w) for the B1 shapes, and its FP8 program binds ScaledMmFp8_v1 in its own composites.
+    #: The blockwise FP8 linear reads the same `fp8_dot` (`targets.fp8_block_dot`: ScaledMmFp8Block_v2{DOT}; None keeps v1, Hopper's step).
     fp8_dot: str | None = None
     fp8_scale_order: str | None = None
 
@@ -207,7 +208,11 @@ REGISTERED: dict[str, GemmTarget] = {
                   "786,432 coordinates exact (run r20260930-090150-a42a); "
                   "the swapped order misses 89 of its 125 discriminating coordinates (red team fp8-per-tensor-scale-order, reproducer "
                   "r20260930-081238-476e); the step is pinned (trust dossier "
-                  "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)")),
+                  "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)",
+                  "the blockwise FP8 linear under VLLM_USE_DEEP_GEMM=0 (CutlassFp8BlockScaledMMKernel, all three sm120 blockwise dispatch "
+                  "configs): ScaledMmFp8Block_v1's schedule over BlackwellE4m3QmmaDot32_v1, 119,016 of 119,016 sampled coordinates of "
+                  "a pinned block-FP8 checkpoint's layer-0 linears (#469) (Hopper's step: 111,401), Fp8GroupQuant_v1 8,669 of 8,669 rows, run "
+                  "r20260930-164401-c04d, check r20260930-164854-5f2c")),
 }
 
 

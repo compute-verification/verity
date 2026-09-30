@@ -101,14 +101,15 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
     [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named."""
     modes = frozenset({"profile"})
-    info = RuleInfo("CutlassScaledMmFp8Block[vllm]", 1, "in-place-binding",
+    info = RuleInfo("CutlassScaledMmFp8Block[vllm]", 2, "in-place-binding",
                     applies_to="_C.cutlass_scaled_mm(Tensor! out, a e4m3, b e4m3 [K, N], a_scales f32 [.., K/G], b_scales f32 [K/G, N/G], bias None)",
                     preconditions=("a is a float8_e4m3fn value [.., K]; out an unwritten bf16 allocation [.., N]",
                                    "b is a transposed view of an e4m3 [N, K] matrix; b_scales a transposed view of an f32 [N/G, K/G] matrix, G = 128",
                                    "a_scales is an f32 value [.., K/G] (the group scales the quant rule computed)", "bias is None",
                                    "K % G == 0 and N % G == 0"),
                     evidence_domain="structural; numerics: ScaledMmFp8Block_v1 (exact-model-tested on the H100 against the blockwise _C.cutlass_scaled_mm, both dispatch "
-                                    "variants) and ScaledMmFp8BlockSharedScale_v1, its function restated")
+                                    "variants) and ScaledMmFp8BlockSharedScale_v1, its function restated; where the target records an e4m3 step "
+                                    "(targets.fp8_block_dot: cc 12.0) their v2 over that step, exact-model-tested on the RTX PRO 6000")
 
     def targets(self):
         return _C_op("cutlass_scaled_mm")
@@ -161,11 +162,15 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         srows, _ = rows_of(ctx.coll(a_s))
         if len(rows) != len(srows):
             refuse("shape", node, ctx.module_path(node), f"a has {len(rows)} rows but a_scales {len(srows)}")
-        scale = active_target_profile().effective_fp8_scale_construction()
-        fn = ctx.kind("scaled_mm_fp8_block", node, K=K, N=N, G=G, SCALE=scale)
+        from verity_vllm.program.registry import targets as T
+        tp = active_target_profile()
+        scale = tp.effective_fp8_scale_construction()
+        dot = T.fp8_block_dot(tp)
+        fn = (ctx.kind("scaled_mm_fp8_block", node, K=K, N=N, G=G, SCALE=scale) if dot is None
+              else ctx.kind("scaled_mm_fp8_block_dot", node, K=K, N=N, G=G, SCALE=scale, FP8_DOT=dot))
         outs = [ctx.call(fn, r, s, w, ws, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, (r, s) in enumerate(zip(rows, srows))]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"K": K, "N": N, "G": G, "rows": len(rows), "scale": scale, "b_view": str(getattr(b, "target", None)),
+        ctx.record(self, node, {"K": K, "N": N, "G": G, "rows": len(rows), "scale": scale, "fp8_dot": getattr(dot, "id", None), "b_view": str(getattr(b, "target", None)),
                                 "b_scales_view": str(getattr(b_s, "target", None))}, emitted=f"{fn.id} x{len(rows)}")
 
 

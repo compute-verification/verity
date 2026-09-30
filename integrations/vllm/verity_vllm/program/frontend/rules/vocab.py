@@ -241,6 +241,7 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
 _PAD_KINDS = {k: PROFILE_B1_EAGER_V2.kinds[k] for k in ("const", "i32_eq", "bit_not", "bit_and", "select_i32", "select_bf16")}
 _PAD_NOTES = {k: PROFILE_B1_EAGER_V2.notes[k] for k in _PAD_KINDS}
 _FP8_SCALE = {"per-coordinate": _fp8.ScaledMmFp8Block, "shared-per-block": _fp8.SHARED_SCALE[_fp8.ScaledMmFp8Block.id]}
+_FP8_SCALE_V2 = {"per-coordinate": _fp8.ScaledMmFp8BlockV2, "shared-per-block": _fp8.SHARED_SCALE[_fp8.ScaledMmFp8BlockV2.id]}
 
 PROFILE_B1_EAGER_V3 = Vocabulary(
     "b1-eager-v3", "profile", "b1-eager-v3",
@@ -304,7 +305,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
-           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G)},
+           "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G),
+           # FP8_DOT, not DOT: the e4m3 k32 step, which circuit-check's shared statics table binds apart from the bf16 k16 DOT
+           "scaled_mm_fp8_block_dot": lambda K, N, G, SCALE, FP8_DOT: ir_bind(_FP8_SCALE_V2[SCALE], K=K, N=N, G=G, DOT=FP8_DOT)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
@@ -346,7 +349,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
-                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs"})
+                                  "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
+           "scaled_mm_fp8_block_dot": "ScaledMmFp8BlockSharedScale_v2{K,N,G,DOT} or ScaledMmFp8Block_v2{K,N,G,DOT}: scaled_mm_fp8_block's schedule "
+                                      "over the target's e4m3 k32 step (registry.targets.fp8_block_dot; sm_120's CUTLASS blockwise kernel)"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

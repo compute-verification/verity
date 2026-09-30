@@ -631,7 +631,7 @@ def tc_dot32_e4m3(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.nda
 
 
 def scaled_mm_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: np.ndarray, *, G: int = 128,
-                            chunk: int = 4096) -> tuple[np.ndarray, np.ndarray]:
+                            chunk: int = 4096, dot=tc_dot32_e4m3) -> tuple[np.ndarray, np.ndarray]:
     """`ScaledMmFp8Block_v1{K,N,G}` on ONE token row (`_C.cutlass_scaled_mm` blockwise, CutlassFp8BlockScaledMMKernel): xq (K,) e4m3
     bytes, sx (K/G,) f32 words, w (N, K) e4m3 bytes, ws (N/G, K/G) f32 words -> (N bf16 words, nonfinite mask).  Per output column n
     (`ScaledMmFp8BlockCoordinate`): for kb ascending, `temp` = G/32 `tc_dot32_e4m3` steps from +0 over the tile's bytes, `s` =
@@ -657,7 +657,7 @@ def scaled_mm_fp8_block_row(xq: np.ndarray, sx: np.ndarray, w: np.ndarray, ws: n
             temp = np.zeros(n1 - n0, dtype=np.uint32)
             for st in range(G // 32):
                 lo = kb * G + 32 * st
-                temp, f = tc_dot32_e4m3(temp, np.broadcast_to(xq[lo:lo + 32], (n1 - n0, 32)), wc[:, lo:lo + 32])
+                temp, f = dot(temp, np.broadcast_to(xq[lo:lo + 32], (n1 - n0, 32)), wc[:, lo:lo + 32])
                 nf |= f
             s = mul_rn(np.broadcast_to(sx[kb], (n1 - n0,)), ws[rows, kb])
             acc = fma_rn(temp, s, acc)

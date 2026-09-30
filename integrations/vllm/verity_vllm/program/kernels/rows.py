@@ -97,6 +97,9 @@ EVALUATORS = {
                            "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
     "ScaledMmFp8BlockSharedScale_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ScaledMmFp8Block_v1's function and signature: "
                                       "each weight block's scale products once, registry.fp8.ScaledMmFp8BlockSharedScale)",
+    "ScaledMmFp8Block_v2": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row with the DOT static's k32 twin (fp8_dot_rows."
+                           "TC_DOT32_E4M3_BY_PRIM): ScaledMmFp8Block_v1's schedule over the named e4m3 step",
+    "ScaledMmFp8BlockSharedScale_v2": "the ScaledMmFp8Block_v2 row (its function and signature: each weight block's scale products once)",
     # [MAN-06f v3 unit 2, moe R16] the fused-MoE block relations (verity_vllm.program.registry.moe bodies; R13 moe_kernel_xcheck = the reference against
     # the real kernels): every plane word is PRODUCED by an evaluated relation over committed plane words + registered expert weights
     "MoeRouterTopK_v1": "verity_vllm.program.registry.moe.MoeRouterTopK evaluated per token with the registry's scalar primitives (f32 softmax in the kernel's "
@@ -158,8 +161,18 @@ _FP8_TWIN_PROVENANCE = {
     "definitions": "verity_vllm/program/registry/fp8.py: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}, HopperE4m3QgmmaDot32_v1 (the reference; the twins are checked against them, never the other way round)",
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
+_FP8_SM120_TWIN_PROVENANCE = {
+    "fixture": "tests/program/data/fp8_block_sm120_operands.npz",
+    "fixture_sha256": "67306cfecd9de152f91abaf5a3f69410f72d503ce21d9bb05e6415d4561eb1d6",
+    "captured_from": ["_C.per_token_group_fp8_quant", "_C.cutlass_scaled_mm blockwise sm120 (CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0)"],
+    "device": "vy-nebius-1, NVIDIA RTX PRO 6000 Blackwell Server Edition (cc 12.0), vLLM 0.28.1rc1.dev472+gd9105ea80",
+    "captured_utc": "2026-09-30", "runs": ["r20260930-164401-c04d", "r20260930-164854-5f2c"],
+    "tests": ["tests/program/test_fp8_block_sm120.py"],
+    "definitions": "verity_vllm/program/registry/fp8.py: ScaledMmFp8Block_v2{K,N,G,DOT}, ScaledMmFp8BlockSharedScale_v2{K,N,G,DOT}",
+}
 EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,
-                                          "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE}
+                                          "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE,
+                                          "ScaledMmFp8Block_v2": _FP8_SM120_TWIN_PROVENANCE, "ScaledMmFp8BlockSharedScale_v2": _FP8_SM120_TWIN_PROVENANCE}
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
@@ -428,7 +441,7 @@ def fp8_group_quant(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[
     return {"0": np.asarray(xq, dtype=np.uint8), "1": np.asarray(sx, dtype=np.uint32)}
 
 
-def scaled_mm_fp8_block(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+def scaled_mm_fp8_block(statics: dict[str, Any], ops: Sequence[np.ndarray], dot=None) -> dict[str, np.ndarray]:
     """`_C.cutlass_scaled_mm` blockwise on one token row: xq / sx composed from the interior quant, w (N x K e4m3) and ws (N/G x K/G
     f32, `weight_scale_inv`) the registered checkpoint words.  A lane with a NaN e4m3 byte or a non-finite accumulator is outside
     the twin's domain -> unresolved by name (the tc_dot16 convention), never a silent word."""
@@ -438,11 +451,20 @@ def scaled_mm_fp8_block(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> d
     sx = np.asarray(ops[1], dtype=np.uint32).reshape(K // G)
     w = np.asarray(ops[2], dtype=np.uint8).reshape(N, K)
     ws = np.asarray(ops[3], dtype=np.uint32).reshape(N // G, K // G)
-    out, nonfin = D.scaled_mm_fp8_block_row(xq, sx, w, ws, G=G, chunk=GEMM_CHUNK)
+    out, nonfin = D.scaled_mm_fp8_block_row(xq, sx, w, ws, G=G, chunk=GEMM_CHUNK, dot=dot or D.tc_dot32_e4m3)
     if nonfin.any():
         raise Declined(f"ScaledMmFp8Block: {int(nonfin.sum())} output coordinates have a NaN e4m3 operand or a non-finite accumulator "
                        "(outside the vectorised twin's domain)")
     return {"0": np.asarray(out, dtype=np.uint16)}
+
+
+def scaled_mm_fp8_block_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`ScaledMmFp8Block_v2{K,N,G,DOT}` (and its shared-scale restatement): the v1 row with the k32 twin the DOT static names."""
+    from verity_vllm.program.kernels.fp8_dot_rows import TC_DOT32_E4M3_BY_PRIM
+    dot_id = prim_static(statics, "DOT", "ScaledMmFp8Block_v2")
+    if dot_id not in TC_DOT32_E4M3_BY_PRIM:
+        raise Declined(f"no registered evaluator for ScaledMmFp8Block_v2 with DOT={dot_id} (e4m3 k32 twins: {sorted(TC_DOT32_E4M3_BY_PRIM)})")
+    return scaled_mm_fp8_block(statics, ops, dot=TC_DOT32_E4M3_BY_PRIM[dot_id])
 
 
 def moe_router(statics: dict[str, Any], ops: Sequence[np.ndarray], *, renormalize: bool) -> dict[str, np.ndarray]:
@@ -670,6 +692,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
+    from verity.ml.prims import BlackwellE4m3QmmaDot32
     from verity_vllm.program.registry import b1, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
@@ -700,6 +723,8 @@ def _check_targets() -> dict[str, list]:
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
         "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=128, G=128)],
+        "ScaledMmFp8Block_v2": [bind(fp8.ScaledMmFp8BlockV2, K=128, N=128, G=128, DOT=d) for d in (BlackwellE4m3QmmaDot32, fp8.HopperE4m3QgmmaDot32)],
+        "ScaledMmFp8BlockSharedScale_v2": [bind(fp8.ScaledMmFp8BlockSharedScaleV2, K=128, N=128, G=128, DOT=BlackwellE4m3QmmaDot32)],
         "MoeRouterTopK_v1": [bind(moe.MoeRouterTopK, **router)],
         "MoeRouterTopKNorm_v1": [bind(moe.MoeRouterTopKNorm, **router)],
         "MoeRouterTopKOrdered_v1": [bind(moe.MoeRouterTopKOrdered, **router)],
@@ -741,6 +766,8 @@ _row("GumbelTopPTokenSelect_v2", gumbel_topp_split, (SAMPLED_MEMBER,), _sample_g
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
 _row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))
+_row("ScaledMmFp8Block_v2", scaled_mm_fp8_block_dot, ("0",))
+_row("ScaledMmFp8BlockSharedScale_v2", scaled_mm_fp8_block_dot, ("0",))
 _row("MoeRouterTopK_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
 _row("MoeRouterTopKNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))
 _row("MoeRouterTopKOrdered_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
