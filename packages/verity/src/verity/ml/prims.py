@@ -13,7 +13,8 @@ A100/RTX 4090 campaign on the NaN word (`0x7FC00000` vs the measured `0x7FFFFFFF
 an opposite-sign infinity (rule R6).  `_v2` is `tc_dot_total(AMPERE_BF16_M16N8K16, ...)`, the measured total function;
 equal to `_v1` on every finite input.  A registered id denotes one function, so the id changed.
 `F32ToE4m3Sat_v1` and `HopperE4m3QgmmaDot32_v1` are the definitions the vLLM integration registered for its FP8 linear
-(same ids, same functions).
+(same ids, same functions).  `BlackwellE4m3QmmaDot32_v1` is the consumer-Blackwell (sm_120) FP8 `mma.sync` step,
+`tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
 
 from .tc import cast
+from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32
 from .tc.silicon import AMPERE_BF16_M16N8K16
 from .tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from .tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
@@ -29,8 +31,8 @@ BF16, F32, E4M3 = Value(16), Value(32), Value(8)
 A16 = Array(16, BF16)
 A32_8 = Array(32, E4M3)
 
-__all__ = ["A16", "A32_8", "BF16", "E4M3", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE4m3Sat",
-           "HopperBF16WgmmaDot16", "HopperE4m3QgmmaDot32", "const"]
+__all__ = ["A16", "A32_8", "BF16", "E4M3", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "BlackwellE4m3QmmaDot32", "F2fpBf16", "F32ToBf16Rn",
+           "F32ToE4m3Sat", "HopperBF16WgmmaDot16", "HopperE4m3QgmmaDot32", "const"]
 
 
 @primitive("Bf16ToF32", 1, [("a", BF16)], F32, conformance="exact-model-tested")
@@ -94,6 +96,19 @@ def HopperE4m3QgmmaDot32(acc: int, *ab: int) -> int:
     return tc_dot_total_e4m3(HOPPER_E4M3_WGMMA_K32, acc, list(ab[:32]), list(ab[32:64]))
 
 
+@primitive("BlackwellE4m3QmmaDot32", 1, [("acc", F32), ("a", A32_8), ("b", A32_8)], F32,
+           conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) QMMA.16832.F32.E4M3.E4M3: fresh-seed sweep "
+                       "r20260930-063457-5410, 25,041,024 words in 14 families, 0 mismatches (trust dossier "
+                       "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89, PINNED); specials under this total "
+                       "function: r20260930-041757-0bde evaluated by r20260930-052000-e32d, 0 mismatches")
+def BlackwellE4m3QmmaDot32(acc: int, *ab: int) -> int:
+    """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32` on sm_120a (SASS
+    `QMMA.16832.F32.E4M3.E4M3`): one group of 32 exact E4M3 products plus `acc` through the 26-bit adder of sm_120's BF16
+    pipeline, exponent floor -133 (unobservable on E4M3 operands); total on every encoding.  Unlike the Hopper and Ada FP8
+    adders (14 bits), the accumulator is not truncated."""
+    return tc_dot_total_e4m3(BLACKWELL_SM120_E4M3_M16N8K32, acc, list(ab[:32]), list(ab[32:64]))
+
+
 # ---- constants: one primitive per (width, bits), materialised on demand and decodable by id -------------------------------------------
 
 _CONSTS: dict[tuple[int, int], PrimitiveDefinition] = {}
@@ -137,6 +152,8 @@ def _register_kernels() -> None:
     register_kernel(HopperBF16WgmmaDot16, lambda acc, a, b: K.group_sum_total_batch(HOPPER_BF16_WGMMA_K16, acc, a, b),
                     domain=every, sample=K.sample_tc)
     register_kernel(HopperE4m3QgmmaDot32, lambda acc, a, b: K.group_sum_total_batch(HOPPER_E4M3_WGMMA_K32, acc, a, b),
+                    domain=every, sample=K.sample_tc)
+    register_kernel(BlackwellE4m3QmmaDot32, lambda acc, a, b: K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b),
                     domain=every, sample=K.sample_tc)
 
 

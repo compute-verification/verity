@@ -183,7 +183,8 @@ def _core_roots() -> list[Any]:
 
     A, H = P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16
     return [bind(G.DotBf16, K=64, DOT=A), bind(G.DotBf16, K=48, DOT=H), bind(G.GemmCoordinate, K=64, DOT=A),
-            bind(G.GemmCoordinate, K=64, DOT=H), bind(G.Gemm, K=32, N=3, DOT=A), K.HOPPER_E4M3_STEP, K.HOPPER_E4M3_DOT.bind(K=128),
+            bind(G.GemmCoordinate, K=64, DOT=H), bind(G.Gemm, K=32, N=3, DOT=A), P.BlackwellE4m3QmmaDot32, K.HOPPER_E4M3_STEP,
+            K.HOPPER_E4M3_DOT.bind(K=128),
             K.ADA_E4M3_STEP, K.ADA_E4M3_DOT.bind(K=128), K.SM120_NVF4_STEP, K.SM120_NVF4_DOT.bind(K=256), K.SM120_MXF4_STEP,
             K.SM120_MXF4_DOT.bind(K=256)]
 
