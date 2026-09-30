@@ -5,7 +5,9 @@
 - **Timed windows are left alone.** While the fill runner's `status.txt` says `timed True`, or the last observation held
   a timed lease, the agent reads nothing but `status.txt`, every `window_poll_s` seconds, and resumes once it says
   `timed False` and was written after the window began. With no `status.txt` (no fill runner) it reads the leases every
-  `window_poll_s` until the timed lease is gone. It never touches NVML or `nvidia-smi` (an audit hook counts any
+  `window_poll_s` until the timed lease is gone. In live mode a window `status.txt` has begun before its timed lease
+  exists is the agent's to open: `gpu-lease` queues the timed request to it, so it reads the leases every
+  `window_poll_s`, plans only quiet requests, and reads nothing but `status.txt` once the timed lease is there. It never touches NVML or `nvidia-smi` (an audit hook counts any
   process it starts and any library it loads that names them, and `summary.json` reports the count).
 - **Shadow mode** (`mode="shadow"`) observes `gpu-lease` (`nebius2.read`, `preempted.log`) and plans beside it
   (`shadow.Shadow`). It never takes `agent.lock`, so `gpu-lease` keeps deciding.
@@ -149,6 +151,7 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
     stop = {"why": None}
     exception = None
     in_window_since: float | None = None
+    lease_seen = False
     windows = ticks = window_polls = status_only = 0
     prev_handler = signal.getsignal(signal.SIGTERM)
 
@@ -173,14 +176,12 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
                 stop["why"] = f"stop file {stop_file}"
                 break
             timed, mtime = status_timed(status)
-            if in_window_since is not None and timed is not None and (timed or mtime < in_window_since):
-                window_polls += 1
-                sleep(window_poll_s)
-                continue
-            if timed:
+            in_status_window = in_window_since is not None and timed is not None and (timed or mtime < in_window_since)
+            if timed and in_window_since is None:
                 windows += 1
                 status_only += 1
-                in_window_since = now
+                in_window_since, lease_seen, in_status_window = now, False, True
+            if in_status_window and (mode == "shadow" or lease_seen):
                 window_polls += 1
                 sleep(window_poll_s)
                 continue
@@ -193,11 +194,16 @@ def run(cluster: Cluster, out: Path, *, mode: str = "shadow", clock: Callable[[]
                 stop["why"] = f"invariant: {broke[0]['msg']}"
                 break
             if mode == "live":
-                _carry_out(cluster, sh, obs, executor, int(now))
+                _carry_out(cluster, sh, obs, executor, int(now), quiet_only=in_status_window)
             ledger.write_state(out / "state.json", sh.state)
             if nebius2.timed_now(cluster, obs):
                 windows += 0 if in_window_since is not None else 1
-                in_window_since = now
+                in_window_since = now if in_window_since is None else in_window_since
+                lease_seen = True
+                sleep(window_poll_s)
+                continue
+            if in_status_window:
+                window_polls += 1
                 sleep(window_poll_s)
                 continue
             in_window_since = None
@@ -233,11 +239,13 @@ def _tail(path: Path, sh: shadow.Shadow) -> list[dict[str, Any]]:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def _carry_out(cluster: Cluster, sh: shadow.Shadow, obs: nebius2.Observation, ex: Executor, t: int) -> None:
+def _carry_out(cluster: Cluster, sh: shadow.Shadow, obs: nebius2.Observation, ex: Executor, t: int,
+               quiet_only: bool = False) -> None:
     """Live mode: grant the requests the plan starts and evict what it evicts. The grants are `gpu-lease`'s to take; the
-    ledger records them when their leases appear (the next observation), as in shadow mode."""
+    ledger records them when their leases appear (the next observation), as in shadow mode. `quiet_only` plans only the
+    quiet requests (a window the fill runner has begun, whose timed lease is still to be granted)."""
     observed = [a for a in sh.state.allocations.values()] + sh.unowned
-    queue = [r.job for r in sh.requests.values() if r.granted is None and r.gone is None]
+    queue = [r.job for r in sh.requests.values() if r.granted is None and r.gone is None and (r.job.quiet or not quiet_only)]
     if not queue:
         return
     actions = plan(cluster, sh.node, observed, queue, t)
