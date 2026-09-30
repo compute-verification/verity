@@ -150,7 +150,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         stdout, stderr = out_f, err_f
     t_start, armed = time.monotonic(), clock()
     try:
-        proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None)
+        proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None,
+                                env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve())})
     except OSError as e:
         set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage)
         em.emit("mark", stage=a.stage, name="spawn_failed", error=str(e))
@@ -263,7 +264,9 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--workload-digest", default=None)
     ap.add_argument("--input", action="append", default=[], help="name=path input artifact reference")
     ap.add_argument("--profile-key", action="append", default=[], help="environment variable NAMES to record (allowlist); values are read from the environment")
-    ap.add_argument("--declared-output", action="append", default=[])
+    ap.add_argument("--declared-output", action="append", default=[], metavar="GLOB",
+                    help="run-dir-relative glob of files custody uploads (repeatable; `*` crosses `/`); other files are listed by size and "
+                         "hash, not uploaded, past 256 MiB. See .agents/skills/writing-runs/SKILL.md")
     ap.add_argument("--reservation-gpu", default=None)
     ap.add_argument("--reservation-host-memory-bytes", type=int, default=None)
     ap.add_argument("--policy", default=None, help="policy toml; its version + sha256 are recorded")
