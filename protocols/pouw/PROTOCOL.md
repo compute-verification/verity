@@ -188,7 +188,9 @@ useful    U/(α_A·α_B), glue
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
   - `word_flags` flags an atom when some set of its promotion group's atoms containing it, skipped jointly, leaves the
     word's output unchanged. The later promotions are tested by intervals found backward by bisection.
-  - It equals P1's 552 Lean-checked word vectors (`tests/vectors/pearl_c_skip_vectors*.txt.gz`).
+  - It equals P1's Lean-checked word vectors: all 552 when they were cut, and the 448 kept in
+    `tests/vectors/pearl_c_skip_vectors*.txt.gz` under the 256 KiB blob limit (every word with k ≤ 512, and §5's
+    aligned-spike words at k = 2,048 and 8,192).
   - A tile's chain debit is 40 units per flagged atom-word, summed over its words. The forming debit's per-tile rule
     is pending from P3's owner, so `forming_elements` is a stub that returns 0.
   - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the

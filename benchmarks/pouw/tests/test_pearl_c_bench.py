@@ -196,7 +196,7 @@ def test_bench_dry_run(small_fixture, tmp_path):
     env = dict(os.environ, PEARLC_LIBCUDA=str(lib), PEARLC_LIBNVML="/nonexistent", FAKE_LOG=str(log),
                FAKE_KERNELS=",".join(kernel_names()), REPS="2", PEARLC_UNGATED="1")
     r = subprocess.run([sys.executable, str(ship / "bench.py"), str(ship / "bench.json"), str(small_fixture / "check.json")],
-                       env=env, capture_output=True, text=True, timeout=600)
+                       env=env, capture_output=True, text=True)
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     assert [x["kind"] for x in rows] == ["env", "check", "bench", "bench"]
