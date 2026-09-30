@@ -1,11 +1,11 @@
 """The config record (`verity-vllm/config-record/v1`): what a config run keeps (docs/vllm-config-sweep-plan.md §2 step 4, §5).
 
 A config run is one job over one vLLM configuration: the Build (the Programs and the `Q_word` manifest, with the strict word check), ONE
-instrumented Commit (no control arm, no pairs) and a k-unit random replay.  Its record is small (kB) and keyed by the config (the row id):
-the Build's Program digests and manifest, the word check, the Commit's run root, openings and verdict, and the replay's result with the
-units that differed.  Everything is read from the files the stages write in the row dir; nothing here runs a stage.  A TP2 row's record
-has the same parts, each with `per_rank` beside the total: the ranks' Program and workload digests, run roots, openings and replays, the
-global manifest, the combined run root and the replay summed over the ranks.
+instrumented Commit (no pairs; a control arm only as the slowdown's baseline) and a k-unit random replay.  Its record is small (kB) and
+keyed by the config (the row id): the Build's Program digests and manifest, the word check, the Commit's run root, openings and verdict,
+the replay's result with the units that differed, and the timing per arm.  Everything is read from the files the stages write in the row
+dir; nothing here runs a stage.  A TP2 row's record has the same parts, each with `per_rank` beside the total: the ranks' Program and
+workload digests, run roots, openings and replays, the global manifest, the combined run root and the replay summed over the ranks.
 
 Outcome PASS: the Build passed, the word check passed, the instrumented run's Commit verdict passed (`check.verdict.commit_verdict`, which
 includes the replay) and the replay evaluated k units, all equal.  Anything else is FAIL with the first reason; a failure is a finding of
@@ -145,6 +145,18 @@ def tp_commit_part(d: Path, world: int) -> tuple[dict[str, Any], dict[str, Any]]
     return commit, replay
 
 
+def timing_part(d: Path) -> dict[str, Any]:
+    """Per arm, the run's wall and its engine steps' prefill (the first step) and mean decode time; with the control arm (the config
+    run's `--config-baseline 1`), the extraction slowdown per phase: instrumented / control."""
+    arms = {r.get("arm"): r for r in _jsonl(d / "commit" / "runs.jsonl")}
+    t = {a: {"wall_s": r.get("wall_s"), "prefill_s": r.get("step_wall_prefill_s"), "decode_mean_s": r.get("step_wall_decode_mean_s"),
+             "engine_steps": r.get("engine_steps")} for a, r in sorted(arms.items()) if a in ("control", "instrumented")}
+    i, c = t.get("instrumented") or {}, t.get("control") or {}
+    t["slowdown"] = {k: (i[f] / c[f] if i.get(f) and c.get(f) else None)
+                     for k, f in (("prefill", "prefill_s"), ("decode", "decode_mean_s"), ("wall", "wall_s"))} if c else None
+    return t
+
+
 def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str, Any] | None = None,
            stages: dict[str, Any] | None = None) -> dict[str, Any]:
     """The config record of the run in row dir `d` (a TP row's per rank and in total)."""
@@ -157,7 +169,8 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
     if why == "commit FAIL" and commit.get("reason"):
         why = f"commit FAIL: {commit['reason']}"
     return {"schema": SCHEMA, "config": config_of(row), "tree": tree, "device": device, "outcome": "PASS" if why is None else "FAIL",
-            "why": why, "build": build, "word_check": word, "commit": commit, "replay": replay, "stages": stages or {}}
+            "why": why, "build": build, "word_check": word, "commit": commit, "replay": replay, "timing": timing_part(d),
+            "stages": stages or {}}
 
 
 def write(d: str | Path, row: str, **kw: Any) -> dict[str, Any]:

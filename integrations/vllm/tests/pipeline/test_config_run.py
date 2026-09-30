@@ -440,6 +440,27 @@ def test_a_tp2_config_run_missing_a_rank_is_not_pass(tmp_path):
     assert rec["replay"]["ok"] is False and rec["outcome"] == "FAIL"
 
 
+def test_the_record_s_slowdown_is_instrumented_over_control_per_phase(tmp_path):
+    d = _row_dir(tmp_path)
+    assert CR.record(d, ROW)["timing"]["slowdown"] is None, "no control arm: no baseline, no slowdown"
+    inst = json.loads((d / "commit" / "runs.jsonl").read_text())
+    inst.update(step_wall_prefill_s=0.30, step_wall_decode_mean_s=0.050)
+    ctrl = {"arm": "control", "pair": 0, "wall_s": 2.5, "engine_steps": 32, "step_wall_prefill_s": 0.02, "step_wall_decode_mean_s": 0.010}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(ctrl) + "\n" + json.dumps(inst) + "\n")
+    rec = CR.record(d, ROW)
+    assert rec["outcome"] == "PASS" and rec["commit"]["runs"] == 1, "the control arm is timing only; the decision is the instrumented run's"
+    sd = rec["timing"]["slowdown"]
+    assert sd["prefill"] == pytest.approx(15.0) and sd["decode"] == pytest.approx(5.0) and sd["wall"] == pytest.approx(5.0)
+    assert rec["timing"]["control"]["decode_mean_s"] == 0.010
+
+
+def test_a_config_baseline_keeps_the_control_arm(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--config-baseline", "1")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    assert "--only-arm" not in cmd and cmd[cmd.index("--pairs") + 1] == "1" and "--bounded-staging" in cmd
+
+
 # ---------------------------------------------------------------------------------------------------------------- the Program cache
 
 def _workload(tmp_path: Path, name: str, *, batch: int = 1, prompt: list[int] | None = None) -> Path:

@@ -320,6 +320,9 @@ class CommitConfig:
     replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
                                   help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
                                        "stays pending until `row stage replay` (CPU) replays the bundle; slim = a slim bundle")
+    config_baseline: str = option("--config-baseline", env="CONFIG_BASELINE", default="0",
+                                  help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
+                                       "the record's extraction slowdown")
     replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
                               help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
                                    "stratified by family (each family at least once, the rest split evenly)")
