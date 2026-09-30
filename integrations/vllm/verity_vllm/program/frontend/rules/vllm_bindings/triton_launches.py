@@ -93,7 +93,7 @@ class TritonGemmRule(InPlaceRule):
     `b` is `W.t()` (a view of the [N, K] parameter: stride_bk == 1, stride_bn == K); the kind takes W as [N, K].  When the only reader
     of `c` is the linear's bias add (`_bias_add_reader`), the pair is one `GemmBias_v1{K,N}(a row, W, b)` per row bound to the add's
     value instead, on the target whose GEMM is `Gemm_v1`, and one `GemmBias_v2{K,N,DOT}` on a target whose record says `gemm_bias_dot`
-    (`registry.targets.gemm_bias_spec`); cc 9.0 keeps `Gemm_v2` + `BiasAdd_v1`."""
+    (`registry.targets.gemm_bias_spec`: cc 9.0 and cc 12.0)."""
     modes = frozenset({"profile"})
     info = RuleInfo("TritonGemm[vllm-bi]", 3, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",

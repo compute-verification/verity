@@ -58,6 +58,9 @@ TARGETS: dict[str, dict[str, Any]] = {
                "pipeline": "veritor.core.silicon_total.HOPPER_BF16_WGMMA_K16 (one group of 16, width 26, floor -133; lane HP 2026-09-07) = "
                            "silicon.HOPPER_BF16_M16N8K16 (Hawkeye H100)",
                "flash_attn_versions": (2, 3),
+               # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`): serving has no source for the
+               # pre-bias word of Gemm_v2 + BiasAdd_v1
+               "gemm_bias_dot": True,
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
@@ -122,8 +125,8 @@ def moe_expert_dot(profile):
 
 def gemm_bias_dot(profile):
     """The k16 step of a biased linear's one-Call Definition `GemmBias_v2{K,N,DOT}` on the declared target, or None: the accepted kinds
-    bind `GemmBias_v1`, and a family whose record does not say `gemm_bias_dot` keeps `Gemm_v2` + `BiasAdd_v1` (cc 9.0, as its records
-    bind it).  An unregistered target raises `UnregisteredTarget`."""
+    bind `GemmBias_v1`, and a family whose record does not say `gemm_bias_dot` keeps `Gemm_v2` + `BiasAdd_v1`.  An unregistered target
+    raises `UnregisteredTarget`."""
     if uses_accepted_kinds(profile):
         return None
     return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("gemm_bias_dot") else None

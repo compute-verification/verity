@@ -7,9 +7,9 @@ Triton GEMM launch whose only reader is the linear's bias add (in its module, th
 shape as `Gemm_v1` (+ `BiasAdd_v1`); `Q_word_v1` cuts it into one unit per output word with no committed interior word; the replay's
 row kernel agrees.  The launch is the export's carrier (`verity_cba::triton_launch`), built here as in `test_harden_alias.py`.
 
-`GemmBias_v2{K,N,DOT}` is the same pair with `Gemm_v2`'s k16 step: the frontend binds it on cc 12.0, whose record says `gemm_bias_dot`,
-at every M (vLLM's linear runs the same launch at M = 1), and cc 9.0 keeps `Gemm_v2` + `BiasAdd_v1`.  Either one-Call form is its
-module's slot `0` in the manifest, as the collector binds a Linear's value.
+`GemmBias_v2{K,N,DOT}` is the same pair with `Gemm_v2`'s k16 step: the frontend binds it where the target's record says
+`gemm_bias_dot` (cc 12.0 and cc 9.0), at every M (vLLM's linear runs the same launch at M = 1); a family whose record lacks it keeps
+`Gemm_v2` + `BiasAdd_v1`.  Either one-Call form is its module's slot `0` in the manifest, as the collector binds a Linear's value.
 """
 from __future__ import annotations
 
@@ -223,11 +223,12 @@ def test_every_other_shape_keeps_gemm_and_bias_add(cls, want):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# a Gemm_v2 target: cc 12.0 binds the pair as GemmBias_v2, cc 9.0 keeps it as two Calls
+# a Gemm_v2 target: cc 12.0 and cc 9.0 bind the pair as GemmBias_v2
 # ---------------------------------------------------------------------------------------------------------
 
 SM120_TP = TargetProfile(compute_capability=(12, 0), num_sms=188)
 H100_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)
+GEMM_V2_TARGETS = pytest.mark.parametrize("tp", [SM120_TP, H100_TP], ids=["cc12.0", "cc9.0"])
 
 
 @pytest.fixture
@@ -249,15 +250,16 @@ def _pair(m: nn.Module, x: torch.Tensor, dot) -> list[int]:
     return [v for r in range(x.shape[0]) for v in evaluate(ba, list(evaluate(g, _bits(x[r]), _bits(m.weight))), _bits(m.bias))]
 
 
+@GEMM_V2_TARGETS
 @pytest.mark.parametrize("rows", [M, 1])
 @pytest.mark.parametrize("cls", [_Linear, _BiasFirst])
-def test_on_sm120_the_biased_linear_derives_to_one_gemm_bias_v2_per_row(cls, rows, on_target):
-    on_target(SM120_TP)
+def test_the_biased_linear_derives_to_one_gemm_bias_v2_per_row(cls, rows, tp, on_target):
+    on_target(tp)
     m = cls()
     rep = _derive(m, rows)
     assert rep.ok, rep.unsupported
-    dot = TG.tensor_core_dot(SM120_TP)
-    spec = TG.gemm_bias_spec(SM120_TP, K, N)
+    dot = TG.tensor_core_dot(tp)
+    spec = TG.gemm_bias_spec(tp, K, N)
     assert dot is hopper.HopperBF16WgmmaDot16 and spec.id == bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=dot).id
     assert _hist(rep.program) == {"GemmBias_v2": rows}, _hist(rep.program)
     apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
@@ -268,17 +270,19 @@ def test_on_sm120_the_biased_linear_derives_to_one_gemm_bias_v2_per_row(cls, row
     assert _values(rep, m, x) == _pair(m, x, dot)
 
 
+@GEMM_V2_TARGETS
 @pytest.mark.parametrize("cls,want", [(_NoBias, {"Gemm_v2": M}),
                                       (_PreBiasAlsoReturned, {"Gemm_v2": M, "BiasAdd_v1": M}),
                                       (_OtherOpBetween, {"Gemm_v2": M, "BiasAdd_v1": M, "ResidualAdd_v1": M})])
-def test_on_sm120_every_other_shape_keeps_gemm_v2_and_bias_add(cls, want, on_target):
-    on_target(SM120_TP)
+def test_every_other_shape_keeps_gemm_v2_and_bias_add(cls, want, tp, on_target):
+    on_target(tp)
     rep = _derive(cls())
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == want, _hist(rep.program)
 
 
-def test_on_hopper_the_biased_linear_stays_gemm_v2_then_bias_add(on_target):
+def test_a_family_whose_record_lacks_gemm_bias_dot_keeps_gemm_v2_then_bias_add(on_target, monkeypatch):
+    monkeypatch.delitem(TG.TARGETS["hopper"], "gemm_bias_dot")
     on_target(H100_TP)
     m = _Linear()
     rep = _derive(m)
