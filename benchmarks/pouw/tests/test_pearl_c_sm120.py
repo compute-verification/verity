@@ -427,6 +427,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         assert set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
         assert t["form_rate"]["blocks"] == 2 * 188 and set(form_rates()) <= set(t["form_rate"])
         assert {"form_a_scalar", "form_b_scalar"} <= set(t["ms"])
+        assert set(t["deferral"]["ms"]) == {"gemm_alone", "hashing_alone", "pair_same_priority", "pair_main_greatest",
+                                            "fused_gemm", "y_only_gemm"}
 
     allocs: dict[int, int] = {}
     seen, maps = set(), set()

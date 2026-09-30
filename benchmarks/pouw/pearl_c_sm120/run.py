@@ -20,6 +20,8 @@
    unfused call's; form_s5_scalar and form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
    within it (form_rate less form_rate_nocast; at the 144-byte row stride, form_rate_r144 less form_rate_nocast_r144).
+   `deferral` times the unfused GEMM alone and beside the previous call's -h1 hashing on a least-priority side stream, the
+   alternative to fusing the message digests (fuse only if the pair costs more than about 3 us over the GEMM alone).
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
    it, and every product over k against the unpermuted operands'.  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
    only; the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
@@ -67,7 +69,9 @@ CUDA = {
     "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
     "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
+    "cuStreamCreate": [P(vp), u], "cuStreamDestroy_v2": [vp], "cuStreamWaitEvent": [vp, vp, u],
 }
+CU_STREAM_NON_BLOCKING = 1
 NVML = {
     "nvmlInit_v2": [], "nvmlDeviceGetHandleByUUID": [C.c_char_p, P(vp)], "nvmlSystemGetDriverVersion": [C.c_char_p, u],
     "nvmlDeviceGetClockInfo": [vp, i32, P(u)], "nvmlDeviceGetCurrentClocksThrottleReasons": [vp, P(C.c_ulonglong)],
@@ -240,7 +244,7 @@ class Dev:
                 TMAP_L2_128B, 0)
         return C.string_at(at, TMAP_BYTES)
 
-    def timed(self, body, reps: int) -> list[float]:
+    def timed(self, body, reps: int, stream=None) -> list[float]:
         body()
         self.sync()
         out = []
@@ -248,9 +252,9 @@ class Dev:
             a, b, ms = vp(), vp(), C.c_float()
             self.ck("cuEventCreate", C.byref(a), 0)
             self.ck("cuEventCreate", C.byref(b), 0)
-            self.ck("cuEventRecord", a, None)
+            self.ck("cuEventRecord", a, stream)
             body()
-            self.ck("cuEventRecord", b, None)
+            self.ck("cuEventRecord", b, stream)
             self.ck("cuEventSynchronize", b)
             self.ck("cuEventElapsedTime", C.byref(ms), a, b)
             self.cu.cuEventDestroy_v2(a)
@@ -710,6 +714,89 @@ def form_rates(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int) -> dict:
     return out
 
 
+def deferral(dev: Dev, pipe: Pipeline, reps: int) -> dict:
+    """The unfused call's GEMM (gemm_pearlc_cu: C~, U and y stored) alone, the previous call's -h1 hashing (hash_msg, the tile
+    leaves and the tile tree) alone on a side stream, and the two overlapped with the side stream at the least priority, beside
+    a main stream at the least and at the greatest.  The side stream hashes a scratch copy (c2 as C~ and U, digests2, its own
+    leaves and tile tree), so it never races the GEMM's outputs.  Where fusable, also gemm_pearlc_b and gemm_pearlc_s alone:
+    the fused digests' cost.  Medians in ms; every stream non-blocking."""
+    b, extra = pipe.b, pipe.extra()
+    hashing = [extra["hash_msg"]] + [f for nm, ph, f in pipe.steps() if ph == "hashing" and nm != "hash_msg"]
+    least, greatest = i32(0), i32(0)
+    prio = getattr(dev.cu, "cuStreamCreateWithPriority", None)
+    if prio is not None:
+        prio.argtypes, prio.restype = [P(vp), u, i32], i32
+        rng = dev.cu.cuCtxGetStreamPriorityRange
+        rng.argtypes, rng.restype = [P(i32), P(i32)], i32
+        dev.ck("cuCtxGetStreamPriorityRange", C.byref(least), C.byref(greatest))
+
+    def stream(p: int) -> vp:
+        s = vp()
+        if prio is None:
+            dev.ck("cuStreamCreate", C.byref(s), CU_STREAM_NON_BLOCKING)
+        else:
+            dev.ck("cuStreamCreateWithPriority", C.byref(s), CU_STREAM_NON_BLOCKING, p)
+        return s
+
+    main_least, main_greatest, side = stream(least.value), stream(greatest.value), stream(least.value)
+    scratch = {"leaves": dev.alloc(pipe.size["leaves"]), "tree_t": dev.alloc(pipe.size["tree_t"])}
+    swap = {"c": b["c2"], "u": b["c2"], "digests": b["digests2"], **scratch}
+    ev = [vp(), vp()]
+    for e in ev:
+        dev.ck("cuEventCreate", C.byref(e), 0)
+
+    def on(s, fs):
+        dev.stream = s
+        try:
+            for f in fs:
+                f()
+        finally:
+            dev.stream = None
+
+    def side_hashing():
+        saved = {x: b[x] for x in swap}
+        b.update(swap)
+        try:
+            on(side, hashing)
+        finally:
+            b.update(saved)
+
+    def pair(main):
+        def body():
+            dev.ck("cuEventRecord", ev[0], main)
+            dev.ck("cuStreamWaitEvent", side, ev[0], 0)
+            on(main, [extra["gemm_pearlc_cu"]])
+            side_hashing()
+            dev.ck("cuEventRecord", ev[1], side)
+            dev.ck("cuStreamWaitEvent", main, ev[1], 0)
+        return body
+
+    bodies = {"gemm_alone": (lambda: on(main_least, [extra["gemm_pearlc_cu"]]), main_least),
+              "hashing_alone": (side_hashing, side),
+              "pair_same_priority": (pair(main_least), main_least),
+              "pair_main_greatest": (pair(main_greatest), main_greatest)}
+    if "gemm_pearlc_b" in extra:
+        bodies["fused_gemm"] = (lambda: on(main_least, [extra["gemm_pearlc_b"]]), main_least)
+        bodies["y_only_gemm"] = (lambda: on(main_least, [extra["gemm_pearlc_s"]]), main_least)
+    runs = {nm: dev.timed(f, reps, s) for nm, (f, s) in bodies.items()}
+    dev.sync()
+    for e in ev:
+        dev.cu.cuEventDestroy_v2(e)
+    for s in (main_least, main_greatest, side):
+        dev.ck("cuStreamDestroy_v2", s)
+    for p_ in scratch.values():
+        dev.free(p_)
+    med = {nm: statistics.median(t) for nm, t in runs.items()}
+    us = lambda x, y: round((med[x] - med[y]) * 1e3, 2)  # noqa: E731
+    out = {"ms": {nm: round(v, 4) for nm, v in med.items()}, "runs": {nm: [round(x, 4) for x in t] for nm, t in runs.items()},
+           "priorities": {"least": least.value, "greatest": greatest.value} if prio else "unavailable (one level)",
+           "pair_over_gemm_us": {"same_priority": us("pair_same_priority", "gemm_alone"),
+                                 "main_greatest": us("pair_main_greatest", "gemm_alone")}}
+    if "fused_gemm" in med:
+        out["fused_digests_us"] = us("fused_gemm", "y_only_gemm")
+    return out
+
+
 def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
     """The timed part of `timing` on a pipeline whose kernels have run once: medians, phases, ratios, consistency."""
     m, n, k, steps, extra = pipe.m, pipe.n, pipe.k, pipe.steps(), pipe.extra()
@@ -770,6 +857,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         out["form_rate"] = rate = form_rates(dev, nv, pipe, reps)
         out["consistency"].update({f"bt_{nm}_codes_differing": rate[nm]["codes_differing"]
                                    for nm in ("form_rate", "form_rate_scalar", "form_rate_r144") if nm in rate})
+        out["deferral"] = deferral(dev, pipe, reps)
     if gates["plain"] and "gemm_plain" in med:
         out["plain_call_ms"] = round(med["plainq_a"] + med["gemm_plain"], 4)
         out["plain_tflops"] = round(2 * m * n * k / med["gemm_plain"] / 1e9, 1)
@@ -830,6 +918,10 @@ def main(argv: list[str]) -> int:
             if "split_ms" in row:
                 print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms, no hashing {row['call_e2e_no_hash_ms']:.3f} ms; split "
                       f"{row['split_ms']}", file=sys.stderr)
+            if "deferral" in row:
+                dfr = row["deferral"]
+                print(f"{label} {variant}: deferral {dfr['ms']}; pair over the GEMM alone {dfr['pair_over_gemm_us']} us; fused "
+                      f"digests {dfr.get('fused_digests_us', '-')} us", file=sys.stderr)
             if "ratio_vs_own_plain_gemm" in row:
                 s, r = row["split_ms"], row["ratio_vs_own_plain_gemm"]
                 print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms = {r['call_e2e']:.3f}x this build's plain FP8 GEMM "
