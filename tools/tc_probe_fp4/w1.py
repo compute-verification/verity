@@ -3,11 +3,12 @@
 accumulation), the 2:4-sparse E4M3 atom (mma.sp m16n8k64), the block-scaled mxf8f6f4 and nvf4 atoms, BF16 and FP16 mma.sync, FP32
 FADD and FFMA, the packed add.rn.f32x2 and the same adds as plain C pairs, the E4M3 cast and the E2M1 cast (three loops, whose split
 gives the cast's own cost), the E4M3 cast-and-store of Pearl-C's sm_120 forming kernel (one code per convert, two per 16-bit store)
-beside its packed replacement (four codes per 32-bit store), each fed by one FADD per code or by no per-code input, and the prices
-W1 reads off them.
+beside its packed replacement (four codes per 32-bit store) and the packed words through 64- and 128-bit stores (at conflict-free row
+strides and at the port's), each fed by one FADD per code or by no per-code input, and the prices W1 reads off them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
                                     [--ops qmma_e4m3_f32,qmma_sp_e4m3] [--prebuilt libw1_prices_sm_120a.so] [--lease-max-min 10]
+                                    [--smi-every 5]
 
 ``--lease-max-min M`` builds and SASS-gates here, then runs the rest under ``gpu-lease 1 --wait --max-min M`` on the built library.
 
@@ -16,7 +17,8 @@ rate over an op's rate in its own unit: per MAC for the atoms (the sparse atom p
 nonzero product, half of them), per register written for FADD / FFMA, per result word (and per
 instruction, two words) for the packed add, per code (and per instruction, two codes) for the cast, per code stored for the
 cast-and-store loops.  Per-clock rates come from clock64() around each block's loop, so they don't move with the SM clock; the
-clock itself is recorded per rep (cycles over event time, and an ``nvidia-smi --id`` sample), and results carry ``--clocks`` as
+clock itself is recorded per rep as cycles over event time, and by an ``nvidia-smi --id`` sample before the first rep round and after
+every ``--smi-every``-th and the last (not every rep: the GPU idles through each sample), and results carry ``--clocks`` as
 their clock label (unlocked unless the operator says otherwise, e.g. locked-2100 on node 2).
 
 Gates, in order, before anything is timed: the device (``fp8.identity_gate``: one visible device, its UUID, sm_120); the SASS gate
@@ -80,19 +82,29 @@ OPS = [
     ("cs_port_nogen", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 64, 32, "code"),
     ("cs_packed_fadd", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
     ("cs_packed_nogen", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
+    # the packed words through wider stores: STS.64 (rows 160 bytes apart) and STS.128 (192), then both at the port's 144
+    ("cs_w64_fadd", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
+    ("cs_w64_nogen", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
+    ("cs_w128_fadd", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
+    ("cs_w128_nogen", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
+    ("cs_w64_nogen_r144", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
+    ("cs_w128_nogen_r144", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
 ]
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
            "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate", "fadd_f32x2_rate", "fadd_pairs_rate",
            "f2fp_e2m1_rate", "f2fp_e2m1_u8_rate", "f2fp_e2m1_x2_rate", "qmma_sp_e4m3_rate",
-           "cs_port_fadd_rate", "cs_port_nogen_rate", "cs_packed_fadd_rate", "cs_packed_nogen_rate"]  # w1_prices.cu's KERNELS, in op order
+           "cs_port_fadd_rate", "cs_port_nogen_rate", "cs_packed_fadd_rate", "cs_packed_nogen_rate",
+           "cs_w64_fadd_rate", "cs_w64_nogen_rate", "cs_w128_fadd_rate", "cs_w128_nogen_rate",
+           "cs_w64_nogen_r144_rate", "cs_w128_nogen_r144_rate"]  # w1_prices.cu's KERNELS, in op order
 SP_OP = 15
-CS_OPS = (16, 17, 18, 19)
-CS_FADD = (16, 18)  # fed by one FADD per code; 17 and 19 need no per-code input
+CS_OPS = tuple(range(16, 26))
+CS_FADD = (16, 18, 20, 22)  # fed by one FADD per code; the others need no per-code input
 NCS = 64  # codes per thread per loop iteration
 #: the rest of each cast-and-store loop body, exactly (the watched opcodes and these; FADD.FTZ would be a different opcode)
 LOOP_EXTRA = {16: {"FADD": 64, "LOP3.LUT": 32, "IMAD": 32, "STS.U16": 32}, 17: {"LOP3.LUT": 32, "IMAD": 32, "STS.U16": 32},
-              18: {"FADD": 64, "STS": 16}, 19: {"STS": 16}}
+              18: {"FADD": 64, "STS": 16}, 19: {"STS": 16}, 20: {"FADD": 64, "STS.64": 8}, 21: {"STS.64": 8},
+              22: {"FADD": 64, "STS.128": 4}, 23: {"STS.128": 4}, 24: {"STS.64": 8}, 25: {"STS.128": 4}}
 #: the metadata nibbles mma.sp::ordered_metadata accepts for 2:4: kept indices i0 < i1 as (i1 << 2) | i0
 SP_META_VALID = np.array([0b0100, 0b1000, 0b1001, 0b1100, 0b1101, 0b1110], np.uint32)
 E2M1_OPS = (12, 13, 14)
@@ -102,7 +114,8 @@ _WATCHED = re.compile(r"^(?:[A-Z]*MMA|F2FP|F2F|FADD2?|FFMA2?|FMUL2?|UF2FP|UFADD|
 _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 1024, "omma_nvf4": 2048, "hmma_bf16_f32": 512,
               "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64, "f2fp_e4m3x2_u16": 64, "fadd_f32x2": 128,
               "fadd_pairs": 128, "f2fp_e2m1x2": 64, "f2fp_e2m1x2_u8": 64, "f2fp_e2m1x2_x2": 64, "qmma_sp_e4m3": 2048,
-              "cs_port_fadd": 32, "cs_port_nogen": 43, "cs_packed_fadd": 72, "cs_packed_nogen": 128}
+              "cs_port_fadd": 32, "cs_port_nogen": 43, "cs_packed_fadd": 72, "cs_packed_nogen": 128, "cs_w64_fadd": 100,
+              "cs_w64_nogen": 128, "cs_w128_fadd": 100, "cs_w128_nogen": 128, "cs_w64_nogen_r144": 128, "cs_w128_nogen_r144": 128}
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
@@ -286,8 +299,8 @@ def cs_values(base: np.ndarray, n: int) -> np.ndarray:
 
 def cs_model(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     """(32, 16) chk words of a cast-and-store loop, each four staged codes in store order (byte i of word w = code 4w + i): the codes
-    of the FADD chains after ``iters`` adds (ops 16, 18), of the constants (17), or constant 2w, f, g, constant 2w + 1 with the last
-    iteration's f and g (19)."""
+    of the FADD chains after ``iters`` adds (ops 16, 18, 20, 22), of the constants (17), or constant 2w, f, g, constant 2w + 1 with
+    the last iteration's f and g (19, 21, 23-25: the wide stores stage op 19's words)."""
     rows = np.asarray(rows, np.uint32).reshape(32, 8)
 
     def code(words):
@@ -408,7 +421,10 @@ def smi_sample(uuid: str | None) -> dict | None:
     return F8.smi_query(uuid, "clocks.sm,clocks.mem,temperature.gpu,power.draw,clocks_event_reasons.active", nounits=True)
 
 
-def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uuid: str | None, ops=None) -> dict:
+def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uuid: str | None, ops=None, smi_every: int = 5) -> dict:
+    """``reps`` rounds over the ops, interleaved.  nvidia-smi is sampled before the first round and after every ``smi_every``-th and
+    the last (a sample is an nvidia-smi process, and the GPU idles through it); every rep records its own clock as cycles over
+    event time."""
     ops = sorted(range(len(OPS)) if ops is None else ops)
     iters = {}
     for op in ops:
@@ -416,6 +432,7 @@ def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uu
         _, cyc, _, _ = dev.run(op, 256, rows_t[op])
         iters[op] = int(min(1 << 24, max(256, round(256 * target_cycles / max(1, int(np.median(cyc)))))))
     per = {OPS[op][0]: [] for op in ops}
+    smi = [{"before_round": 0, **(smi_sample(uuid) or {})}]
     for rep in range(reps):
         for op in ops:
             name, _, per_loop, work, _ = OPS[op]
@@ -426,8 +443,10 @@ def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uu
                               "rate_max": float(rate.max()), "cycles_median": int(np.median(cyc)), "ms": ms,
                               "sm_mhz_from_cycles": float(np.max(cyc) / (ms * 1e3)) if ms > 0 else None,
                               "distinct_sms": int(len(set(sm.tolist()))), "blocks": int(len(sm)),
-                              "throughput_per_s": per_block * len(cyc) / (ms * 1e-3) if ms > 0 else None, "smi": smi_sample(uuid)})
-    return {"iters": {OPS[op][0]: n for op, n in iters.items()}, "reps": per}
+                              "throughput_per_s": per_block * len(cyc) / (ms * 1e-3) if ms > 0 else None})
+        if (rep + 1) % smi_every == 0 or rep == reps - 1:
+            smi.append({"after_round": rep, **(smi_sample(uuid) or {})})
+    return {"iters": {OPS[op][0]: n for op, n in iters.items()}, "reps": per, "smi": smi}
 
 
 def prices(tim: dict) -> dict:
@@ -529,7 +548,7 @@ def run(args) -> tuple[int, dict]:
         failures.append("numeric gate: " + ", ".join(k for k, r in res["numeric_gate"]["ops"].items()
                                                      if r["mismatches"] or r["vacuous"] or r["distinct_sms"] != r["blocks"]))
         return finish(out, args, res, failures, ident, t0)
-    res["timing"] = timing(dev, rows_t, args.reps, args.target_cycles, ident.get("gpu_uuid"), ops)
+    res["timing"] = timing(dev, rows_t, args.reps, args.target_cycles, ident.get("gpu_uuid"), ops, args.smi_every)
     res["prices"] = prices(res["timing"])
     if res["sass"].get("kernels") and set(E2M1_OPS) <= set(ops):
         res["prices"]["e2m1_split"] = split(res["prices"], {k: r["loop"] for k, r in res["sass"]["kernels"].items()})
@@ -541,7 +560,7 @@ def lease_child(out: Path, args, res: dict, so: Path, t0: float) -> tuple[int, d
     lease holds the GPU only for the identity and numeric gates and the timing.  Its results become this run's."""
     sub = out / "lease"
     child = [sys.executable, str(Path(__file__).resolve()), "--out", str(sub), "--prebuilt", str(so), "--seed", str(args.seed),
-             "--reps", str(args.reps), "--target-cycles", str(args.target_cycles), "--clocks", args.clocks]
+             "--reps", str(args.reps), "--target-cycles", str(args.target_cycles), "--clocks", args.clocks, "--smi-every", str(args.smi_every)]
     if args.ops:
         child += ["--ops", args.ops]
     env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_ID"}
@@ -603,6 +622,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--seed", type=int, default=F8.SEED_DEFAULT)
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--target-cycles", type=int, default=1 << 27, help="cycles per timed launch (about 50 ms at 2.6 GHz)")
+    ap.add_argument("--smi-every", type=int, default=5, help="an nvidia-smi sample before the first rep round and after every Nth and the last")
     ap.add_argument("--compile-only", action="store_true", help="build + SASS gate only (no GPU)")
     ap.add_argument("--clocks", default="unlocked", help="the clock state the operator set, as results label it (e.g. locked-2100)")
     ap.add_argument("--ops", default=None, help=f"comma list of op names to gate and time (default all; {UNIT_OP}, the unit, always)")
@@ -623,6 +643,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.corrupt_word is not None and not args.fake_silicon:
         print("w1.py: --corrupt-word needs --fake-silicon", file=sys.stderr)
+        return 2
+    if args.smi_every < 1:
+        print("w1.py: --smi-every must be at least 1", file=sys.stderr)
         return 2
     if args.lease_max_min and (args.fake_silicon or args.prebuilt):
         print("w1.py: --lease-max-min builds here and leases a real GPU; not with --fake-silicon or --prebuilt", file=sys.stderr)

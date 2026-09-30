@@ -26,6 +26,12 @@
 //   17  cs_port_nogen_rate     the same instruction mix with a live partner in place of zero, no per-code input          32 codes
 //   18  cs_packed_fadd_rate    cvt.rn.satfinite.e4m3x2.f32 on two live floats, four codes to a word, STS.32 (+ FADD)      64 codes
 //   19  cs_packed_nogen_rate   the same with no per-code input                                                           64 codes
+//   20  cs_w64_fadd_rate       op 18's words two to a store: st.shared.v2.b32 (STS.64), rows 160 bytes apart (+ FADD)   64 codes
+//   21  cs_w64_nogen_rate      the same with no per-code input                                                           64 codes
+//   22  cs_w128_fadd_rate      four words to a store: st.shared.v4.b32 (STS.128), rows 192 bytes apart (+ FADD)         64 codes
+//   23  cs_w128_nogen_rate     the same with no per-code input                                                           64 codes
+//   24  cs_w64_nogen_r144_rate   op 21 at the port's 144-byte rows (two-way bank conflicts per half-warp)               64 codes
+//   25  cs_w128_nogen_r144_rate  op 23 at the port's 144-byte rows (two-way bank conflicts per quarter-warp)            64 codes
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -510,11 +516,115 @@ __global__ void __launch_bounds__(THREADS) cs_packed_nogen_rate(const uint32_t* 
     cs_packed_readback(p0, chk + (size_t)tid * CHK);
 }
 
+// Wide stores (ops 20-25): ops 18 and 19's words, W to a store (st.shared.v2 / v4: STS.64 / STS.128), a row every ROW bytes.
+// A thread's store h of a row covers bytes 16 W h + 4 W q .. + 4 W, its row's words W h .. W h + W - 1: in form_s5 those are the
+// 4 W codes of one row from 2 W consecutive atoms.  Rows at 160 bytes keep a half-warp's STS.64 on 32 distinct banks and rows at
+// 192 a quarter-warp's STS.128; the port's 144 gives both two-way conflicts (ops 24, 25).
+template <int W>
+__device__ __forceinline__ void cs_store(unsigned a, const uint32_t* w) {
+    if constexpr (W == 2)
+        asm volatile("st.shared.v2.b32 [%0], {%1, %2};" ::"r"(a), "r"(w[0]), "r"(w[1]) : "memory");
+    else
+        asm volatile("st.shared.v4.b32 [%0], {%1, %2, %3, %4};" ::"r"(a), "r"(w[0]), "r"(w[1]), "r"(w[2]), "r"(w[3]) : "memory");
+}
+
+template <int W, int ROW>
+__device__ __forceinline__ uint8_t* cs_wide_base() {
+    extern __shared__ unsigned char smem_pad[];
+    const int lane = threadIdx.x & 31;
+    return smem_pad + (threadIdx.x >> 5) * 16 * ROW + (lane >> 2) * ROW + 4 * W * (lane & 3);
+}
+
+// chk words 2m, 2m + 1 = row g's and row g + 8's word m, as cs_packed_readback.
+template <int W, int ROW>
+__device__ __forceinline__ void cs_wide_readback(const uint8_t* p0, uint32_t* out) {
+#pragma unroll
+    for (int m = 0; m < 8; m++) {
+        const int off = 16 * W * (m / W) + 4 * (m % W);
+        out[2 * m] = *reinterpret_cast<const volatile uint32_t*>(p0 + off);
+        out[2 * m + 1] = *reinterpret_cast<const volatile uint32_t*>(p0 + 8 * ROW + off);
+    }
+}
+
+template <int W, int ROW>
+__device__ __forceinline__ void cs_wide_fadd(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk, long long* __restrict__ cycles,
+                                             int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint8_t* base = cs_wide_base<W, ROW>();
+    const unsigned p0 = (unsigned)__cvta_generic_to_shared(base), p1 = p0 + 8 * ROW;
+    float x[NCS];
+    cs_values<NCS>(row[0], x);
+    const float y = __uint_as_float(row[1]);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+        for (int j = 0; j < NCS; j++) x[j] = __fadd_rn(x[j], y);
+#pragma unroll
+        for (int h = 0; h < 8 / W; h++) {
+            uint32_t w0[W], w1[W];
+#pragma unroll
+            for (int e = 0; e < W; e++) {
+                const int m = W * h + e;
+                w0[e] = cvt_e4m3x4(x[8 * m + 1], x[8 * m], x[8 * m + 3], x[8 * m + 2]);
+                w1[e] = cvt_e4m3x4(x[8 * m + 5], x[8 * m + 4], x[8 * m + 7], x[8 * m + 6]);
+            }
+            cs_store<W>(p0 + 16 * W * h, w0);
+            cs_store<W>(p1 + 16 * W * h, w1);
+        }
+    }
+    RATE_EPILOGUE
+    cs_wide_readback<W, ROW>(base, chk + (size_t)tid * CHK);
+}
+
+template <int W, int ROW>
+__device__ __forceinline__ void cs_wide_nogen(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk, long long* __restrict__ cycles,
+                                              int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint8_t* base = cs_wide_base<W, ROW>();
+    const unsigned p0 = (unsigned)__cvta_generic_to_shared(base), p1 = p0 + 8 * ROW;
+    float xs[NCS / 2];
+    cs_values<NCS / 2>(row[1], xs);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+        const float f = __uint_as_float(row[0] + (uint32_t)it);
+        const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
+#pragma unroll
+        for (int h = 0; h < 8 / W; h++) {
+            uint32_t w0[W], w1[W];
+#pragma unroll
+            for (int e = 0; e < W; e++) {
+                const int m = W * h + e;
+                w0[e] = cvt_e4m3x4(f, xs[4 * m], xs[4 * m + 1], g);
+                w1[e] = cvt_e4m3x4(f, xs[4 * m + 2], xs[4 * m + 3], g);
+            }
+            cs_store<W>(p0 + 16 * W * h, w0);
+            cs_store<W>(p1 + 16 * W * h, w1);
+        }
+    }
+    RATE_EPILOGUE
+    cs_wide_readback<W, ROW>(base, chk + (size_t)tid * CHK);
+}
+
+#define CS_WIDE(KNAME, BODY, W, ROW)                                                                                      \
+    __global__ void __launch_bounds__(THREADS) KNAME(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,         \
+                                                     long long* __restrict__ cycles, int* __restrict__ sm, int iters) {  \
+        BODY<W, ROW>(in, chk, cycles, sm, iters);                                                                        \
+    }
+
+CS_WIDE(cs_w64_fadd_rate, cs_wide_fadd, 2, 160)
+CS_WIDE(cs_w64_nogen_rate, cs_wide_nogen, 2, 160)
+CS_WIDE(cs_w128_fadd_rate, cs_wide_fadd, 4, 192)
+CS_WIDE(cs_w128_nogen_rate, cs_wide_nogen, 4, 192)
+CS_WIDE(cs_w64_nogen_r144_rate, cs_wide_nogen, 2, 144)
+CS_WIDE(cs_w128_nogen_r144_rate, cs_wide_nogen, 4, 144)
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
                           fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate,
                           f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate, qmma_sp_e4m3_rate,
-                          cs_port_fadd_rate, cs_port_nogen_rate, cs_packed_fadd_rate, cs_packed_nogen_rate};
+                          cs_port_fadd_rate, cs_port_nogen_rate, cs_packed_fadd_rate, cs_packed_nogen_rate,
+                          cs_w64_fadd_rate, cs_w64_nogen_rate, cs_w128_fadd_rate, cs_w128_nogen_rate,
+                          cs_w64_nogen_r144_rate, cs_w128_nogen_r144_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace

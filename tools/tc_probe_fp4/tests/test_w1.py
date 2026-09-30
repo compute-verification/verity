@@ -4,8 +4,8 @@ The fake run passes every gate and turns its rates into prices in the unit; a fl
 timed; the SASS loop gate rejects a loop with a missing or an extra watched instruction, and pins add.rn.f32x2's sm_120a lowering
 (two FADDs, no FADD2); the packed add's gate words tell its halves apart; the casts' packing (hi operand in the upper byte or
 nibble) and the E2M1 reference's grid, ties and saturation are pinned; the cast-and-store loops' staged words and exact loop bodies
-are pinned; the three-loop split recovers known costs; the tool declarations resolve their key params.  With nvcc on the PATH, the
-real build's loops are checked.
+are pinned; timing samples nvidia-smi every few rounds, not every rep; the three-loop split recovers known costs; the tool
+declarations resolve their key params.  With nvcc on the PATH, the real build's loops are checked.
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
     assert "timing" not in res and "prices" not in res
 
 
-@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, 16, 17, 18, 19])
+@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, *range(16, 26)])
 def test_gate_words_are_not_vacuous(op):
     rows = w1.timing_rows(op, np.random.default_rng(w1.F8.SEED_DEFAULT))
     assert w1.expected_words(op, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
@@ -150,11 +150,13 @@ def test_cast_store_packing_pinned():
     fadd_rows[:, 1] = 0  # y = +0: the chains keep their values
     c = [(0x38 + j) | (0x80 if j % 2 else 0) for j in range(64)]
     want = [c[4 * w] | c[4 * w + 1] << 8 | c[4 * w + 2] << 16 | c[4 * w + 3] << 24 for w in range(16)]
-    assert w1.cs_model(16, 1, fadd_rows)[0].tolist() == want == w1.cs_model(18, 1, fadd_rows)[0].tolist()
+    for op in w1.CS_FADD:
+        assert w1.cs_model(op, 1, fadd_rows)[0].tolist() == want
     assert w1.cs_model(17, 5, rows)[0].tolist() == want
     rows[:, 1] = np.float32(2.0).view(np.uint32)
     cx = [(0x40 + j) | (0x80 if j % 2 else 0) for j in range(32)]
-    assert w1.cs_model(19, 1, rows)[0].tolist() == [cx[2 * w] | 0x38 << 8 | 0x3A << 16 | cx[2 * w + 1] << 24 for w in range(16)]
+    for op in (19, 21, 23, 24, 25):
+        assert w1.cs_model(op, 1, rows)[0].tolist() == [cx[2 * w] | 0x38 << 8 | 0x3A << 16 | cx[2 * w + 1] << 24 for w in range(16)]
 
 
 _PORT = ["FADD"] * 64 + [w1.OPS[16][1]] * 64 + ["LOP3.LUT"] * 32 + ["IMAD"] * 32 + ["STS.U16"] * 32 + ["UIADD3", "UISETP.NE.AND"]
@@ -167,6 +169,27 @@ def test_sass_gate_pins_the_cast_store_loop(monkeypatch, body, ok):
     instruction or a missing store fails."""
     monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body, "cs_port_fadd_rate")})())
     assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"]["cs_port_fadd"]["ok"] is ok
+
+
+_W64 = ["FADD"] * 64 + [w1.OPS[20][1]] * 32 + ["STS.64"] * 8 + ["UIADD3", "UISETP.NE.AND"]
+
+
+@pytest.mark.parametrize("body, ok", [(_W64, True), (["STS" if op == "STS.64" else op for op in _W64], False),
+                                      (_W64[:64 + 32] + ["STS.64"] * 7 + _W64[-2:], False),
+                                      (_W64[:64 + 32] + ["STS.128"] * 4 + _W64[-2:], False)])
+def test_sass_gate_pins_the_wide_store(monkeypatch, body, ok):
+    """The 64-bit-store loop is exactly its FADD feed, 32 converts and 8 STS.64: narrower stores, a missing one or STS.128 fail."""
+    monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body, "cs_w64_fadd_rate")})())
+    assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"]["cs_w64_fadd"]["ok"] is ok
+
+
+def test_smi_sampled_every_few_rounds(monkeypatch):
+    calls = []
+    monkeypatch.setattr(w1, "smi_sample", lambda uuid: calls.append(uuid) or {"clocks.sm": "2092"})
+    rng = np.random.default_rng(1)
+    tim = w1.timing(w1.FakeDevice(), {0: w1.timing_rows(0, rng), 6: w1.timing_rows(6, rng)}, 10, 1 << 20, "GPU-x", [0, 6], smi_every=4)
+    assert [s.get("before_round", s.get("after_round")) for s in tim["smi"]] == [0, 3, 7, 9] and len(calls) == 4
+    assert all("smi" not in r for reps in tim["reps"].values() for r in reps)
 
 
 def test_lease_needs_a_real_build(tmp_path, capsys):
@@ -195,7 +218,7 @@ def test_tool_declarations_resolve():
 
     _, k = TC_PROBE_FP8.resolve_params(["python", "tools/tc_probe_fp4/fp8.py", "--row", "chain", "--out", "/x", "--expect-gpu-uuid", "GPU-1"])
     assert k["row"] == "chain" and k["instruction"] is None and k["steps"] == 2048
-    argv = ["python", "tools/tc_probe_fp4/w1.py", "--out", "/x", "--reps", "12", "--lease-max-min", "10"]
+    argv = ["python", "tools/tc_probe_fp4/w1.py", "--out", "/x", "--reps", "12", "--lease-max-min", "10", "--smi-every", "5"]
     _, k = W1_PRICES.resolve_params(argv)
     assert k["reps"] == 12 and k["clocks"] == "unlocked" and "_unknown" not in parse_w1(argv)
 

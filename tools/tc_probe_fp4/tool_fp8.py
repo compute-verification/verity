@@ -62,6 +62,7 @@ def parse_w1(argv: list[str]) -> dict:
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--target-cycles", type=int, default=1 << 27)
+    ap.add_argument("--smi-every", type=int, default=5)
     ap.add_argument("--compile-only", action="store_true")
     ap.add_argument("--clocks", default="unlocked")
     ap.add_argument("--expect-gpu-uuid", default=None)
