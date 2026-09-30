@@ -793,7 +793,7 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                      "h3t: leaves, segment trees and row seeds in the producer, A alone, priorities",
                      "h3ts: leaves, segment trees and row seeds in a split producer, A alone, priorities",
                      "h3ts: leaves, segment trees and row seeds in a split producer, deferred side stream, priorities"],
-           "widefused": ["plain fp32 rows", "plain fp32 rows, wide whole-row producer",
+           "widefused": ["plain fp32 rows", "plain fp32 rows, wide whole-row producer", "plain fp32 rows, whole-row producer",
                          "h2 A alone, with its seed", "h2 with its seed, deferred side stream, priorities",
                          "h2tw: leaves and segment trees in the wide producer, with its seed, A alone",
                          "h2tw: leaves and segment trees in the wide producer, with its seed, deferred side stream, priorities",
@@ -1058,7 +1058,8 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             usual = f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"   # every preset has its plain arm
             r["baseline"], r["baseline_matched"] = usual, MATCHED.get(r["a"], usual)
             plain = out[usual]["per_call_us"]
-            r["hashing_us_matched"] = r["per_call_us"] - out[r["baseline_matched"]]["per_call_us"]
+            matched = out.get(r["baseline_matched"])
+            r["hashing_us_matched"] = r["per_call_us"] - matched["per_call_us"] if matched else None
             r["hashing_us"] = r["per_call_us"] - plain
             r["x_plain_standin"] = r["per_call_us"] / plain
     return out
