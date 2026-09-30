@@ -90,9 +90,9 @@ def test_f2fp_packing_pinned():
     assert g == 0x3A
     want = [0] * 8
     for k in range(16):
-        want[k % 8] += ((f << 8) | xs[k]) + ((xs[k] << 8) | f)
-        want[(k + 1) % 8] += ((g << 8) | xs[k]) + ((xs[k] << 8) | g)
-    assert h[0].tolist() == want and all(want)
+        want[k % 8] += ((f << 8) | xs[k]) | (((xs[k] << 8) | f) << 16)
+        want[k % 8] += ((g << 8) | xs[k]) | (((xs[k] << 8) | g) << 16)
+    assert h[0].tolist() == [w % 2**32 for w in want] and all(want)
 
 
 def test_tool_declarations_resolve():

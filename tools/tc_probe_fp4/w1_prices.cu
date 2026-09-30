@@ -12,7 +12,7 @@
 //    5  hmma_f16_f16_rate      mma.sync.aligned.m16n8k16.row.col.f16.f16.f16.f16                                2048 MAC
 //    6  fadd_rate              add.rn.f32                                                                         32 lanes
 //    7  ffma_rate              fma.rn.f32                                                                         32 lanes
-//    8  f2fp_rate              cvt.rn.satfinite.e4m3x2.f32 (+ one 3-input add per two converts)                 64 elements
+//    8  f2fp_rate              cvt.rn.satfinite.e4m3x2.f32 (+ one 3-input add per four converts)                64 elements
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -162,17 +162,19 @@ MMA_F16_RATE(hmma_f16_f16_rate, mma_f16_f16(c[j], a, b))
 SCALAR_RATE(fadd_rate, asm volatile("add.rn.f32 %0, %0, %1;" : "+f"(x[j]) : "f"(y)))
 SCALAR_RATE(ffma_rate, asm volatile("fma.rn.f32 %0, %0, %1, %2;" : "+f"(x[j]) : "f"(m), "f"(y)))
 
-__device__ __forceinline__ uint32_t cvt_e4m3x2(float hi, float lo) {
+// Four E4M3 codes in one word, as an FP8 quantizer packs them: P(a, b) = code(a) << 8 | code(b) in the low half, P(c, d) in the high.
+__device__ __forceinline__ uint32_t cvt_e4m3x4(float a, float b, float c, float d) {
     uint32_t r;
-    asm volatile("{ .reg .b16 t; cvt.rn.satfinite.e4m3x2.f32 t, %1, %2; cvt.u32.u16 %0, t; }" : "=r"(r) : "f"(hi), "f"(lo));
+    asm volatile("{ .reg .b16 lo, hi; cvt.rn.satfinite.e4m3x2.f32 lo, %1, %2; cvt.rn.satfinite.e4m3x2.f32 hi, %3, %4; mov.b32 %0, {lo, hi}; }"
+                 : "=r"(r) : "f"(a), "f"(b), "f"(c), "f"(d));
     return r;
 }
 
 // F2FP: each convert pairs one of the iteration's two values f, g (two integer adds per iteration, so nothing can be hoisted) with
-// one of 16 per-lane constants, in both orders: 64 distinct converts per iteration, folded two at a time into a chain's word by one
-// 3-input add (an XOR fold of both orders keeps only hi ^ lo, and f and g cancel out of it).  Row word 0 = f's start word
-// (g = f + 2^21), word 1 = the constants' base word (constant k = base + k * 2^20): the constants sit one E4M3 ulp apart and g two
-// from f, so the gate's check words cover 18 distinct codes per lane.
+// one of 16 per-lane constants, in both orders: 64 distinct converts per iteration, packed four to a word, and two words folded into
+// a chain's word by one 3-input add (an XOR fold of both orders keeps only hi ^ lo, and f and g cancel out of it).  Row word 0 = f's
+// start word (g = f + 2^21), word 1 = the constants' base word (constant k = base + k * 2^20): the constants sit one E4M3 ulp apart
+// and g two from f, so the gate's check words cover 18 distinct codes per lane.
 __global__ void __launch_bounds__(THREADS) f2fp_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk, long long* __restrict__ cycles,
                                                      int* __restrict__ sm, int iters) {
     RATE_PROLOGUE
@@ -184,10 +186,7 @@ __global__ void __launch_bounds__(THREADS) f2fp_rate(const uint32_t* __restrict_
         const float f = __uint_as_float(row[0] + (uint32_t)it);
         const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
 #pragma unroll
-        for (int k = 0; k < 2 * NCHAIN; k++) {
-            h[k % NCHAIN] += cvt_e4m3x2(f, xs[k]) + cvt_e4m3x2(xs[k], f);
-            h[(k + 1) % NCHAIN] += cvt_e4m3x2(g, xs[k]) + cvt_e4m3x2(xs[k], g);
-        }
+        for (int k = 0; k < 2 * NCHAIN; k++) h[k % NCHAIN] += cvt_e4m3x4(f, xs[k], xs[k], f) + cvt_e4m3x4(g, xs[k], xs[k], g);
     }
     RATE_EPILOGUE
     for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];

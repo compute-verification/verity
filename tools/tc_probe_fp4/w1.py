@@ -181,17 +181,18 @@ def _f16_bits(x: float) -> int:
 
 
 def f2fp_model(iters: int, rows: np.ndarray) -> np.ndarray:
-    """h[lane][8] of f2fp_rate: per iteration 16 constants x {f, g} x both operand orders, summed mod 2^32; P(hi, lo) = code(hi) << 8 | code(lo)."""
+    """h[lane][8] of f2fp_rate: per iteration and constant x_k, chain k % 8 adds the words P(f, x_k) | P(x_k, f) << 16 and the same
+    for g, mod 2^32; P(hi, lo) = code(hi) << 8 | code(lo)."""
     rows = np.asarray(rows, np.uint32).reshape(32, 8)
     h = np.zeros((32, NCHAIN), np.uint32)
     xs = rows[:, 1:2] + (np.arange(2 * NCHAIN, dtype=np.uint32) << 20)
     cx = F8.cvt_ref("e4m3", xs).astype(np.uint32)
     for it in range(iters):
-        for s, off in ((0, 0), (1, 1 << 21)):
+        for off in (0, 1 << 21):
             c = F8.cvt_ref("e4m3", rows[:, 0] + np.uint32(it + off)).astype(np.uint32)[:, None]
-            v = ((c << 8) | cx) + ((cx << 8) | c)
+            v = ((c << 8) | cx) | (((cx << 8) | c) << 16)
             for k in range(2 * NCHAIN):
-                h[:, (k + s) % NCHAIN] += v[:, k]
+                h[:, k % NCHAIN] += v[:, k]
     return h
 
 
