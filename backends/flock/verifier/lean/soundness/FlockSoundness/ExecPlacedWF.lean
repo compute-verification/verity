@@ -315,7 +315,7 @@ theorem setupH_nets_placed (ht : tags.typed = true)
       List.getElem_mem _
     obtain ⟨p, hp, hpj⟩ := Array.any_eq_true'.1 (List.mem_filter.1 hjm).2
     have hpr := hparts p hp
-    unfold partReadsOk at hpr
+    unfold DeriveAll.partReadsOk at hpr
     simp only [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem, decide_eq_true_eq] at hpr
     rw [beq_iff_eq] at hpj
     rw [hpj] at hpr
@@ -340,7 +340,10 @@ theorem setupH_placedWF (ht : tags.typed = true)
     (hk32 : ∀ j, ∀ r ∈ (k.done.getD j default).reads.toList, r.k ≤ 32) : Refine.PlacedWF st := by
   have hn := setupH_nets_placed ht h hr hk32
   have hleaf := setupH_leaf_typed ht h
-  have hnet : ∀ n, n < st.c.nets.size → st.c.nets.getD n default = st.c.nets[n]'(by omega) := by
+  have hnet : ∀ n (hlt : n < st.c.nets.size), st.c.nets.getD n default = st.c.nets[n] := by
+    intro n hlt
+    simp [Array.getD_eq_getD_getElem?, hlt]
+  have hdef : ∀ n, ¬ n < st.c.nets.size → st.c.nets.getD n default = default := by
     intro n hlt
     simp [Array.getD_eq_getD_getElem?, hlt]
   refine ⟨fun n i t hi ht' => ?_, fun n i t hi ht' => ?_, fun i t hi _ => ?_, fun i t hi _ => ?_, fun n lk hlk => ?_⟩
@@ -348,20 +351,23 @@ theorem setupH_placedWF (ht : tags.typed = true)
     · rw [hnet n hlt] at hi ht' ⊢
       obtain ⟨⟨_, ha⟩, -, -⟩ := hn _ (Array.getElem_mem_toList hlt)
       exact ofRows_col_lt ha i t hi ht'
-    · simp [Array.getD_eq_getD_getElem?, hlt] at hi
+    · rw [hdef n hlt] at hi
+      exact absurd hi (Nat.not_lt_zero i)
   · by_cases hlt : n < st.c.nets.size
     · rw [hnet n hlt] at hi ht' ⊢
       obtain ⟨-, ⟨_, hb⟩, -⟩ := hn _ (Array.getElem_mem_toList hlt)
       exact ofRows_col_lt hb i t hi ht'
-    · simp [Array.getD_eq_getD_getElem?, hlt] at hi
+    · rw [hdef n hlt] at hi
+      exact absurd hi (Nat.not_lt_zero i)
   · rw [hleaf] at hi
-    simp at hi
+    exact absurd hi (Nat.not_lt_zero i)
   · rw [hleaf] at hi
-    simp at hi
+    exact absurd hi (Nat.not_lt_zero i)
   · by_cases hlt : n < st.c.nets.size
     · rw [hnet n hlt] at hlk ⊢
       exact (hn _ (Array.getElem_mem_toList hlt)).2.2 lk hlk
-    · simp [Array.getD_eq_getD_getElem?, hlt] at hlk
+    · rw [hdef n hlt] at hlk
+      cases hlk
 
 /-- **A typed template's table class over the refinement's `stmtOf`, from `Stmt.setupH`**: `StmtWF` is
 `Refine.setupH_wf`'s, and `PlacedWF` is `setupH_placedWF`'s, given that every generated read of the class has at most 32
