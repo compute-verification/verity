@@ -145,6 +145,16 @@ def build(snap, dev):
     return cfg, model, shards, names
 
 
+_RB = {}
+
+
+def rot_bf16(d, dev, seed):
+    """One shared BF16 copy of the rotation per size: a copy per linear would take 560 x 134 MB on the 70B model."""
+    if (d, seed) not in _RB:
+        _RB[(d, seed)] = G.rot_matrix(d, dev, seed).to(torch.bfloat16)
+    return _RB[(d, seed)]
+
+
 def project(model, shards, names, rung, seed, dev):
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
@@ -158,11 +168,11 @@ def project(model, shards, names, rung, seed, dev):
             if n.endswith(("o_proj", "down_proj")):
                 r = G.rot_matrix(w.shape[0], dev, seed)
                 w = r.T @ w
-                mod.rout = r.to(torch.bfloat16)
+                mod.rout = rot_bf16(r.shape[0], dev, seed)
             else:
                 r = G.rot_matrix(w.shape[1], dev, seed)
                 w = w @ r
-                mod.rin = r.to(torch.bfloat16)
+                mod.rin = rot_bf16(r.shape[0], dev, seed)
         set_codes(mod, w, fmt)
         del w
     torch.cuda.empty_cache()

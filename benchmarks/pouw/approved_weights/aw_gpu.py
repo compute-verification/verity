@@ -150,6 +150,15 @@ def act_quant(x, fmt, f_lines, g):
     return (x2 + (a - x2).detach()).to(x.dtype).reshape(shape)
 
 
+_RD = {}
+
+
+def rot_dtype(d, dev, seed, dtype):
+    if (d, seed, dtype) not in _RD:
+        _RD[(d, seed, dtype)] = rot_matrix(d, dev, seed).to(dtype)
+    return _RD[(d, seed, dtype)]
+
+
 def install_act(model, rung, seed, dev):
     """Deploy every linear with the fork's activation path: y = Q_act(x R_in) W_q^T (then R_out^T), W_q the deployed weights
     in the deployed basis. The bf16 rung keeps BF16 weights and activations (the reference)."""
@@ -166,11 +175,11 @@ def install_act(model, rung, seed, dev):
             if base == "rot" and n.endswith(("o_proj", "down_proj")):
                 r = rot_matrix(w.shape[0], dev, seed)
                 m.weight.copy_(q(r.T @ w).to(m.weight.dtype))
-                m._aw_rout = r.to(m.weight.dtype)
+                m._aw_rout = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
             elif base == "rot":
                 r = rot_matrix(w.shape[1], dev, seed)
                 m.weight.copy_(q(w @ r).to(m.weight.dtype))
-                m._aw_rin = r.to(m.weight.dtype)
+                m._aw_rin = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
             else:
                 m.weight.copy_(q(w).to(m.weight.dtype))
         k = m.in_features
