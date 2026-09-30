@@ -104,9 +104,9 @@ extern "C" __global__ void nv_diff(const Args a) {
 
 // C = A B^T by the mainloop, persistent over the TM x 128 tiles: p0 SFA, p1 SFB, p2 C (FP32 words, or BF16 if BF16), p10 the
 // Maps; i0 M, i1 N, i2 K, i3 raster group
-template <int TM, int ST, int RP, int BO, int BK, bool BF16>
+template <int TM, int ST, int RP, int BO, bool BF16>
 DEV void nv_gemm_body(const Args& a) {
-  using L = nvf4::Mainloop<TM, ST, RP, BO, BK>;
+  using L = nvf4::Mainloop<TM, ST, RP, BO>;
   extern __shared__ __align__(1024) uint8_t nv_smem[];
   L ml(nv_smem);
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
@@ -123,17 +123,14 @@ DEV void nv_gemm_body(const Args& a) {
   }
 }
 
-#define NV_GEMM(NAME, TM, ST, RP, BO, BK, BF16)                                                                         \
-  extern "C" __global__ void __launch_bounds__((nvf4::Mainloop<TM, ST, RP, BO, BK>::NT), 1) NAME(const Args a) {        \
-    nv_gemm_body<TM, ST, RP, BO, BK, BF16>(a);                                                                          \
+#define NV_GEMM(NAME, TM, ST, RP, BO, BF16)                                                                             \
+  extern "C" __global__ void __launch_bounds__((nvf4::Mainloop<TM, ST, RP, BO>::NT), 1) NAME(const Args a) {            \
+    nv_gemm_body<TM, ST, RP, BO, BF16>(a);                                                                              \
   }                                                                                                                     \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = nvf4::Mainloop<TM, ST, RP, BO, BK>::SMEM; }
-#define NV_PAIR(NAME, TM, ST, RP, BO, BK) \
-  NV_GEMM(NAME##_w, TM, ST, RP, BO, BK, false) NV_GEMM(NAME##_b, TM, ST, RP, BO, BK, true)
+  extern "C" __global__ void NAME##_smem(int* out) { *out = nvf4::Mainloop<TM, ST, RP, BO>::SMEM; }
+#define NV_PAIR(NAME, TM, ST, RP, BO) NV_GEMM(NAME##_w, TM, ST, RP, BO, false) NV_GEMM(NAME##_b, TM, ST, RP, BO, true)
 
-// nv256: 256 x 128 tiles, 128-deep stages, 3 of them, the producer at 40 registers (232 to each consumer), A-major MMA
-// order; _o: B-major order (CUTLASS's); _k64: 64-deep stages, 7 of them
-NV_PAIR(nv256, 256, 3, 40, 0, 128)
-NV_PAIR(nv256_o, 256, 3, 40, 1, 128)
-NV_PAIR(nv256_k64, 256, 7, 40, 0, 64)
-NV_PAIR(nv256_k64_o, 256, 7, 40, 1, 64)
+// nv256: 256 x 128 tiles, 3 stages, the producer at 40 registers (232 to each consumer), A-major MMA order; _o: B-major
+// order (CUTLASS's)
+NV_PAIR(nv256, 256, 3, 40, 0)
+NV_PAIR(nv256_o, 256, 3, 40, 1)
