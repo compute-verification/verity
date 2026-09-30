@@ -273,7 +273,9 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 #: power of two) and no level wider than hash_tree_small's; and -h2's (hash_h2.cuh) in place of the leaves'
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
 H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"hash_rows_b3s", "hash_leaves_b3s"}
-#: pearl_c_sm120.cu's kernels that run under -h2 only: rows form `s`, A's row leaves and stats_s5's outputs in one pass
+#: the kernels of the headers pearl_c_sm120.cu includes from its own directory, and those that run under -h2 only (rows form
+#: `s`, A's row leaves and stats_s5's outputs in one pass)
+OWN_HEADERS = "".join((HERE / f).read_text() for f in ("h2_rows_stats.cuh",))
 H2_ONLY = {"hash_rows_b3s_stats"}
 
 
@@ -286,7 +288,7 @@ def form_rates() -> list[str]:
 
 
 def own_kernels() -> list[str]:
-    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"}
+    plain = set(re.findall(KERNEL, SOURCE + OWN_HEADERS)) - {"NAME"}
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names] + form_kernels()
 
