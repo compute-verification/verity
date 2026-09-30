@@ -184,7 +184,7 @@ def window_charges(p: np.ndarray, kappa: np.ndarray, block: int = 16) -> np.ndar
 
 
 def split_units_fast(x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int, scales: Sequence[int],
-                     dead: Sequence[bool]) -> tuple[Fraction, dict]:
+                     dead: Sequence[bool], overfit: float = 1) -> tuple[Fraction, dict]:
     """F1′ per word the row feeds (NVFP4), by the cheap sound evaluation: at least `pearl_c4.split_units` on the exact
     law.  Returns (units, counts)."""
     k = len(x) - len(x) % F.SPAN_K
@@ -199,14 +199,15 @@ def split_units_fast(x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int
     p = np.where(np.array(dead[:k]).reshape(-1, 16), 0.0, p).reshape(-1, F.SPAN_K)
     moved = ((realised != modes) & ~uncertified).reshape(-1, F.SPAN_K // 16).sum(1)
     kappa = np.minimum(C * moved, F.DENSE_CORRECTION)
-    units = F.SPAN_K * window_charges(p, kappa).sum()
+    units = F.SPAN_K * np.minimum(1.0, overfit * window_charges(p, kappa)).sum()
     return Fraction(float(units)), {"blocks": len(modes), "uncertified": int(uncertified.sum())}
 
 
-def row_units(fmt: F.Fmt, side: F.Formed, e_rows: Sequence[Sequence[int]], pos: int,
-              dead: Sequence[bool]) -> tuple[Fraction, int]:
+def row_units(fmt: F.Fmt, side: F.Formed, e_rows: Sequence[Sequence[int]], pos: int, dead: Sequence[bool],
+              overfit: float = 1) -> tuple[Fraction, int]:
     """`pearl_c4.RowF1`, vectorised (NVFP4): `PearlC4(f1=row_units)` makes it the verifier's path."""
     if fmt is not F.NVFP4:
-        return F.row_f1(fmt, side, e_rows, pos, dead)
-    units, counts = split_units_fast(side.x[pos], side.alpha[pos], e_rows[pos], side.ae[pos], side.scales[pos], dead)
+        return F.row_f1(fmt, side, e_rows, pos, dead, overfit)
+    units, counts = split_units_fast(side.x[pos], side.alpha[pos], e_rows[pos], side.ae[pos], side.scales[pos], dead,
+                                     overfit)
     return units, counts["uncertified"]

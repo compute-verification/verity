@@ -629,6 +629,11 @@ F1_EPS = 1e-12
 #: R1's tolerance band (the assessor's condition 3, 16:10Z): a row within this relative distance of its bound may be
 #: declared either way, and a tile's debit is compared with its cap at the same margin.  Soundness cost ≤ 10^-9·ρ.
 R1_TOLERANCE = 1e-9
+#: B̃'s overfit factor (theory-pearl-c4-domain.md §6.10, the assessor's 16:00Z mirror): a layout chosen after the salt for
+#: B̃'s residual is shared by all n weight rows and re-lays no A′, so it gains up to 6.8× F1′'s expectation on narrow
+#: weights (the hill-climb at G = n = 256, net of its gather and search).  B̃'s F1′ is charged at 10× that expectation,
+#: per window, capped at the window's MACs; A′'s at 1× (its layout must re-gather B̃, which doesn't pay at n ≤ 2^18).
+F1_B_OVERFIT = 10
 
 
 def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
@@ -769,7 +774,8 @@ def split_saving(fmt: Fmt, p: Sequence[float], kappa: float = 0.0) -> float:
     return min(1.0, s)
 
 
-def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int | None], scales: Sequence[int]) -> Fraction:
+def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int | None], scales: Sequence[int],
+                overfit: float = 1) -> Fraction:
     """F1′ per word the row feeds, in FP4 units: 128·`split_saving` per window at κ = min(c·M_w, 0.125), M_w the window's
     blocks whose realised scale byte is not their modal byte (each costs A0's part one correction FFMA per word; a dense
     correction GEMM over k/16 in FP8 costs at least 0.125 per MAC)."""
@@ -779,7 +785,7 @@ def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int | None], scale
     for w in range(0, len(p) - len(p) % SPAN_K, SPAN_K):
         b0 = w // fmt.block
         moved = sum(modes[b] is not None and hw[b] != modes[b] for b in range(b0, b0 + per))
-        total += SPAN_K * split_saving(fmt, p[w:w + SPAN_K], min(c * moved, DENSE_CORRECTION))
+        total += SPAN_K * min(1.0, overfit * split_saving(fmt, p[w:w + SPAN_K], min(c * moved, DENSE_CORRECTION)))
     return Fraction(total)
 
 
@@ -910,15 +916,16 @@ class Debit:
                 "windows": self.windows, "counts": dict(self.counts)}
 
 
-#: A row's F1′ per word: (format, formed side, its E lines, the row's position, its salt-dead codes) ->
-#: (FP4 units, uncertified blocks).  An implementation other than `row_f1` must compute the same C to float rounding.
-RowF1 = Callable[[Fmt, Formed, Sequence[Sequence[int]], int, Sequence[bool]], tuple[Fraction, int]]
+#: A row's F1′ per word: (format, formed side, its E lines, the row's position, its salt-dead codes, the overfit factor)
+#: -> (FP4 units, uncertified blocks).  An implementation other than `row_f1` must compute the same C to float rounding.
+RowF1 = Callable[[Fmt, Formed, Sequence[Sequence[int]], int, Sequence[bool], float], tuple[Fraction, int]]
 
 
-def row_f1(fmt: Fmt, side: Formed, e_rows: Sequence[Sequence[int]], pos: int, dead: Sequence[bool]) -> tuple[Fraction, int]:
+def row_f1(fmt: Fmt, side: Formed, e_rows: Sequence[Sequence[int]], pos: int, dead: Sequence[bool],
+           overfit: float = 1) -> tuple[Fraction, int]:
     """The rule's evaluation of a row's F1′ (`change_probabilities`, `split_units`), with its uncertified blocks."""
     p, modes = change_probabilities(fmt, side.x[pos], side.alpha[pos], e_rows[pos], side.ae[pos], dead, side.scales[pos])
-    return split_units(fmt, p, modes, side.scales[pos]), sum(m is None for m in modes)
+    return split_units(fmt, p, modes, side.scales[pos], overfit), sum(m is None for m in modes)
 
 
 def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int,
@@ -931,8 +938,8 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
     f1 = row_f1 if f1 is None else f1
     dead_a = {i: salt_dead(fmt, a.x[i], a.alpha[i], a.ae[i]) for i in rows}
     dead_b = {j: salt_dead(fmt, b.x[j], b.alpha[j], b.ae[j]) for j in cols}
-    f1_a = {i: f1(fmt, a, e_a, i, dead_a[i]) for i in rows}
-    f1_b = {j: f1(fmt, b, e_b, j, dead_b[j]) for j in cols}
+    f1_a = {i: f1(fmt, a, e_a, i, dead_a[i], 1) for i in rows}
+    f1_b = {j: f1(fmt, b, e_b, j, dead_b[j], F1_B_OVERFIT) for j in cols}
     split = len(cols) * sum(u for u, _ in f1_a.values()) + len(rows) * sum(u for u, _ in f1_b.values())
     uncertified = sum(c for _, c in f1_a.values()) + sum(c for _, c in f1_b.values())
     k = len(a.codes[0])
@@ -1073,9 +1080,9 @@ class PearlC4:
         cell = Fraction(self.credit_of(Shape(1, record.k_kept, s.n)), s.n)
         return self.last_debit.total, CAP * cell * len(rows) * len(cols)
 
-    def _row_f1(self, side: Formed, e_rows: Sequence[Sequence[int]], pos: int) -> Fraction:
+    def _row_f1(self, side: Formed, e_rows: Sequence[Sequence[int]], pos: int, overfit: float = 1) -> Fraction:
         dead = salt_dead(self.fmt, side.x[pos], side.alpha[pos], side.ae[pos])
-        return self.f1(self.fmt, side, e_rows, pos, dead)[0]
+        return self.f1(self.fmt, side, e_rows, pos, dead, overfit)[0]
 
     def _r1_cap(self, k_kept: int, n: int) -> Fraction:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
@@ -1085,8 +1092,8 @@ class PearlC4:
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `pearl_c_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
         still formed, checked and hashed; it earns nothing."""
-        formed, e_rows = (ops.a, ops.e_a) if side == "A" else (ops.b, ops.e_b)
-        return self._row_f1(formed, e_rows, pos) / self._r1_cap(record.k_kept, record.matmul.shape.n)
+        formed, e_rows, overfit = (ops.a, ops.e_a, 1) if side == "A" else (ops.b, ops.e_b, F1_B_OVERFIT)
+        return self._row_f1(formed, e_rows, pos, overfit) / self._r1_cap(record.k_kept, record.matmul.shape.n)
 
     def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
         """Whether R1 requires the row excluded (its ratio over 1)."""
@@ -1104,7 +1111,8 @@ class PearlC4:
             if not live:
                 continue
             side, e = self._side([rows[i] for i in live], live, role_e, role_f, seed_e, noise.seed_b, k)
-            dest.update(i for p, i in enumerate(live) if self._row_f1(side, e, p) > cap)
+            overfit = 1 if dest is out[0] else F1_B_OVERFIT
+            dest.update(i for p, i in enumerate(live) if self._row_f1(side, e, p, overfit) > cap)
         return out
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,

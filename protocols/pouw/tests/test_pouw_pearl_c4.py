@@ -211,8 +211,9 @@ def test_row_rules_and_debit(fmt):
     clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
     # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare draws (a trace, under
-    # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 1% of this tile's cap)
-    assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 1)
+    # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's cap
+    # with B̃'s overfit factor; MXFP4 is contrast only)
+    assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
     # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
@@ -359,6 +360,22 @@ def test_c_charges_at_least_the_first_reading(family):
         q, exact = F.change_probabilities_exact(f, a.x[i], a.alpha[i], e[i], a.ae[i], dead)
         assert None not in modes and all(x <= y + 1e-15 for x, y in zip(p, q))
         assert F.split_units(f, p, modes, a.scales[i]) >= F.split_units(f, q, exact, a.scales[i]) * (1 - 1e-12)
+
+
+def test_b_tilde_rows_are_charged_at_the_overfit_factor():
+    """B̃'s F1′ is charged at F1_B_OVERFIT = 10 times its expectation per window, capped at the window's MACs (a layout
+    chosen after the salt for B̃'s residual is shared by all n weight rows and gains up to 6.8× on narrow weights,
+    theory §6.10); A′'s at 1×.  R1 reads B rows the same way."""
+    f, k, n = F.NVFP4, 1024, 4096
+    assert F.F1_B_OVERFIT == 10
+    a, e_a = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "A", 2, k)], F.ROLE_EA, F.ROLE_FA, k)
+    b, e_b = formed(f, [narrow_cell_row(i) for i in range(2)], F.ROLE_EB, F.ROLE_FB, k)
+    d = F.tile_debit(f, a, b, range(2), range(2), n, e_a, e_b)
+    per_b = [F.row_f1(f, b, e_b, j, F.salt_dead(f, b.x[j], b.alpha[j], b.ae[j]), F.F1_B_OVERFIT)[0] for j in range(2)]
+    once = [F.row_f1(f, b, e_b, j, F.salt_dead(f, b.x[j], b.alpha[j], b.ae[j]))[0] for j in range(2)]
+    per_a = [F.row_f1(f, a, e_a, i, F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i]))[0] for i in range(2)]
+    assert d.split == 2 * sum(per_a) + 2 * sum(per_b)
+    assert all(once[j] < per_b[j] <= min(10 * once[j], k) for j in range(2))
 
 
 def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
