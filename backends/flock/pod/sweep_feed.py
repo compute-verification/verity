@@ -4,7 +4,7 @@ files, a CPU stage job and then, once that succeeded, a one-GPU prove job, so th
     sweep_feed.py tick|loop|status --row ROW [--row ROW ...] [--limit N] [--ahead 6] [--every 60]
 
 M0's pinned benches keep priority: a file is written only while `provers` has no pending workload, M0's ready directory
-(flock-netlist) is empty and this lane's holds nothing unsubmitted, at most one stage and one prove file a tick (the dispatcher's
+(flock-netlist) is empty and this lane's holds nothing unsubmitted, at most PER_TICK stage and prove files a tick (the dispatcher's
 `provers` depth of 2 counts anyone's pending workloads, so ours never fill it ahead of a bench).
 Ids are `<tag>-s<i>` (stage) and `<tag>-p<i>` (prove), `i` the shape's line in $SWEEP/<row>/shapes.tsv (smallest first), `tag` a
 digest of the row. Every 25th prove job selftests on the GPU (the device's proofs and transcripts against the CPU's). `--limit`: only
@@ -27,8 +27,10 @@ SWEEP = Path(os.environ.get("SWEEP", "/workspace/jobs/sweep2"))
 STATE = Path(os.environ.get("SWEEP_FEED_STATE", "/workspace/jobs/sweep2-feed"))   # the feeder's (research's); SWEEP is the jobs'
 TREE = os.environ.get("SWEEP_TREE", f"/workspace/research/trees/{LANE}")
 SELFTEST_EVERY = 25
-STAGE_RES = {"cpus": 4, "memory": 96, "gpus": 0}
-PROVE_RES = {"cpus": 8, "memory": 48, "gpus": 1}
+STAGE_RES = {"cpus": 2, "memory": 32, "gpus": 0}                 # the K = 2048 GEMM coordinate's stage: 10.7 GiB
+PROVE_RES = {"cpus": 4, "memory": 48, "gpus": 1}
+SELFTEST_RES = {"cpus": 8, "memory": 128, "gpus": 1}              # its 43-case GPU selftest at the full batch: 101.5 GiB
+PER_TICK = 3
 
 
 def provers_pending() -> int:
@@ -77,34 +79,34 @@ def write(item_id: str, item: dict) -> None:
 
 
 def item(row: str, shape: str, mode: str, i: int) -> dict:
-    env = f"MODE={mode} ROW={row} SHAPE={shape}"
+    env, res = f"MODE={mode} ROW={row} SHAPE={shape}", STAGE_RES if mode == "stage" else PROVE_RES
     if mode == "shape" and i % SELFTEST_EVERY == 0:
-        env += " SELFTEST=1 SELFTEST_GPU=1"
-    return {"template": "prover-bench", "tree": TREE, "queue": "provers", "priority": "dev",
-            "resources": {"prover-bench": STAGE_RES if mode == "stage" else PROVE_RES},
+        env, res = env + " SELFTEST=1 SELFTEST_GPU=1", SELFTEST_RES
+    return {"template": "prover-bench", "tree": TREE, "queue": "provers", "priority": "dev", "resources": {"prover-bench": res},
             "env": {"CAMPAIGN": "backend-sweep", "CMD": f"bash backends/flock/pod/73-sweep-shape.sh {env}"}}
 
 
 def tick(rows: list[str], limit: int | None, ahead: int, dry: bool = False) -> dict:
     d, w = done(), written()
-    todo: dict[str, tuple[str, dict]] = {}
+    todo: dict[str, list[tuple[str, dict]]] = {"prove": [], "stage": []}
     counts = {}
     for row in rows:
         t, sh = tag(row), shapes(row)[:limit]
         staging = sum(1 for i in range(len(sh)) if f"{t}-s{i}" in w and f"{t}-s{i}" not in d)
         for i, s in enumerate(sh):
             sid, pid = f"{t}-s{i}", f"{t}-p{i}"
-            if "prove" not in todo and sid in d and d[sid].get("state") == "succeeded" and pid not in w:
-                todo["prove"] = (pid, item(row, s, "shape", i))
-            if "stage" not in todo and sid not in w and staging < ahead:
-                todo["stage"] = (sid, item(row, s, "stage", i))
+            if len(todo["prove"]) < PER_TICK and sid in d and d[sid].get("state") == "succeeded" and pid not in w:
+                todo["prove"].append((pid, item(row, s, "shape", i)))
+            if len(todo["stage"]) < PER_TICK and sid not in w and staging < ahead:
+                todo["stage"].append((sid, item(row, s, "stage", i)))
+                staging += 1
         p = [f"{t}-p{i}" for i in range(len(sh))]
         s_ = [f"{t}-s{i}" for i in range(len(sh))]
         counts[row] = {"shapes": len(sh), "queued": sum(x in w for x in p),
                        "done": sum(d.get(x, {}).get("state") == "succeeded" for x in p),
                        "failed": sum(x in d and d[x].get("state") != "succeeded" for x in p + s_)}
-    if todo and not dry and clear_to_write():
-        for item_id, it in todo.values():
+    if (todo["prove"] or todo["stage"]) and not dry and clear_to_write():
+        for item_id, it in todo["prove"] + todo["stage"]:
             write(item_id, it)
     return counts
 
