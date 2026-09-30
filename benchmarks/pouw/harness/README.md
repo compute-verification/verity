@@ -17,6 +17,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune), from each cuBLASLt loaded, and CUTLASS's sm_120 kernels, and the bit-exact gate on ternary operands |
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
 | `sass_gate.py` | the SASS gate, before anything is timed: no FP32 `FADD`, `FFMA` or `FMUL` with `.FTZ` (no `-ftz=true` or `--use_fast_math` build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run; ptxas's IEEE div/sqrt/rcp expansions are exempt by name and shape; nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`) |
+| `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
@@ -71,6 +72,15 @@ $R -- gpu-lease 1 --wait -- bash -c "$H"                                        
 $R -- gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
 ```
 
+A measured panel row also needs the verify step in the same run, after the lease, so no GPU waits on the CPU verifier:
+
+```bash
+V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"'
+$R -- bash -c "gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
+```
+
+`H` and `V` go to `bash -c`, so each must be one line (`H` is wrapped above for reading).
+
 An arm on another branch runs from a tree that holds both: its branch with this directory and `../tests/test_harness.py`
 checked out from the harness's commit, `--arm-path` its own directory. `jobs/harness.yaml` and `jobs/harness-timed.yaml` are
 node 2's queue jobs, for when its Kueue is up.
@@ -91,6 +101,24 @@ An arm's `build` names every cubin, fatbin or library its kernels come from in `
 with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
 (`POUW_CUDA_BIN`, `CUDA_HOME/bin`, the PATH or `/usr/local/cuda/bin`) and caches passes by the binary's sha256
 (`POUW_SASS_GATE_CACHE`). To check a build before a run: `python sass_gate.py my_kernels.cubin --json gate.json`.
+
+An arm's `build` also names its reference verifier in `verifier` (arm interface v0.4, `arm.check_verifier`, checked before
+anything is timed): the transcript file per shape, relative to the run's directory (e.g.
+`transcripts/{arm}/{shape}/manifest.json`; the arm writes it under `ctx["transcripts_dir"]`), the commands that check it,
+run once per shape (`per: "shape"`, the default) or once per run (`per: "run"`), and the verifier's `commit` if it isn't the
+run's source commit (`RESEARCH_SOURCE_SHA`). For example, GPU 1's `verify.py` over the whole run directory:
+
+```python
+"verifier": {"per": "run", "transcript": "transcripts/{arm}/{shape}/manifest.json",
+             "commands": [["{python}", str(HERE / "verify.py"), "{run_dir}", "--commit", "{commit}"]]}
+```
+
+`verify.py RESULT_JSON` runs them from the run's working directory, keeps their output under `verify/`, and accepts a
+transcript only by an output line that starts with `ACCEPT` and names `sha256:<hex>` of the transcript file as it hashes it
+itself, with no `REJECT` line naming it (per shape, every command must also exit 0). Each panel row gets `verification`,
+and when accepted `verifier_commit`, `verifier_accept` (the line verbatim), `transcript` and `panel_args`; the result JSON
+gets `verification` with every command's exit code. It exits 0 only if every panel row was accepted and every command
+exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured row.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
 consistency gate rejected an arm; 7 the SASS gate refused a binary. The JSON is written in every case, with every rep, and

@@ -10,15 +10,37 @@ context, so an arm may use the CUDA runtime, the driver API, or its own shared l
 library its kernels are loaded from, ``[]`` if they all come from libraries mapped into the process (those the SASS gate
 finds itself; a cubin loaded with ``cuModuleLoadData`` is never mapped, so it must be listed). `sass_gate.py` passes each
 before anything is timed: no FP32 FADD, FFMA or FMUL with .FTZ, so no -ftz=true or --use_fast_math build.
+
+The record may also name the arm's reference ``verifier`` (v0.4), which `verify.py` runs after timing, in the same run, on
+the transcripts the timed code emitted (server.md 08:35Z: a measured panel row needs the verifier's acceptance of its own
+run's transcript). ``ctx["out_dir"]`` is the run's directory, and ``ctx["transcripts_dir"]`` its ``transcripts/``, where an
+arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention). The declaration (`check_verifier`):
+
+- ``transcript``: the file the verifier checks, relative to the run's directory, with ``{arm}`` and ``{shape}``; its sha256
+  is what the panel row cites.
+- ``commands``: argv lists, run in order from the run's working directory. Placeholders: ``{python}`` (verify.py's
+  interpreter), ``{run_dir}``, ``{run_id}``, ``{commit}``, ``{arm}``; with ``per: "shape"`` (the default) they run once per
+  timed shape, with ``{shape}``, ``{transcript}`` (its absolute path) and ``{dir}`` (the transcript's directory) too; with
+  ``per: "run"`` once for the run (identical commands of several arms run once).
+- ``commit`` (optional): the verifier's git commit, when it isn't the run's source commit.
+
+A transcript is accepted only by a line of the commands' output that starts with ``ACCEPT`` and names
+``sha256:<the transcript file's sha256>``, with no ``REJECT`` line naming it (and, per shape, every command exiting 0).
 """
 
 from __future__ import annotations
 
 import importlib
+import re
+import string
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-VERSION = "v0.3"
+VERSION = "v0.4"
+VERIFIER_FIELDS = {
+    "run": ("python", "run_dir", "run_id", "commit", "arm"),
+    "shape": ("python", "run_dir", "run_id", "commit", "arm", "shape", "transcript", "dir"),
+}
 
 STREAMS = ("fp8", "fp4")
 INPUTS = ("f32", "bf16", "e4m3", "e2m1-nv", "e2m1-mx", "int8")
@@ -146,6 +168,43 @@ def check_arm(arm: Any, precisions: set[str]) -> None:
     roles = set(arm.flag_sets)
     if not set(REQUIRED_ROLES) <= roles:
         raise ArmError(f"arm {arm.name}: flag_sets needs roles {REQUIRED_ROLES}, has {sorted(roles)}")
+
+
+def check_verifier(name: str, build: dict) -> dict | None:
+    """The build record's ``verifier``, checked before anything is timed (a bad declaration would otherwise surface after the
+    lease); None if the arm names none, and then none of its rows can be measured."""
+    v = build.get("verifier")
+    if v is None:
+        return None
+    if not isinstance(v, dict):
+        raise ArmError(f"arm {name}: verifier must be a dict, not {type(v).__name__}")
+    per = v.get("per", "shape")
+    if per not in VERIFIER_FIELDS:
+        raise ArmError(f"arm {name}: verifier per {per!r} not in {sorted(VERIFIER_FIELDS)}")
+    t = v.get("transcript")
+    if not isinstance(t, str) or not t or t.startswith("/") or ".." in t.split("/"):
+        raise ArmError(f"arm {name}: verifier transcript must be a path inside the run's directory, not {t!r}")
+    if not {"arm", "shape"} <= fields(t) <= {"arm", "shape"}:
+        raise ArmError(f"arm {name}: verifier transcript {t!r} must name {{arm}} and {{shape}}, and nothing else")
+    cmds = v.get("commands")
+    if not cmds or not all(isinstance(c, list) and c and all(isinstance(x, str) for x in c) for c in cmds):
+        raise ArmError(f"arm {name}: verifier commands must be a non-empty list of non-empty argv lists of strings")
+    bad = sorted({f for c in cmds for x in c for f in fields(x)} - set(VERIFIER_FIELDS[per]))
+    if bad:
+        raise ArmError(f"arm {name}: verifier commands use {bad}, not placeholders of per {per!r} "
+                       f"({', '.join(VERIFIER_FIELDS[per])})")
+    commit = v.get("commit")
+    if commit is not None and not (isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{7,40}", commit)):
+        raise ArmError(f"arm {name}: verifier commit must be a git commit (7-40 hex characters), not {commit!r}")
+    return {"per": per, "transcript": t, "commands": [list(c) for c in cmds], "commit": commit,
+            "name": v.get("name")}
+
+
+def fields(template: str) -> set[str]:
+    try:
+        return {f for _, f, _, _ in string.Formatter().parse(template) if f is not None}
+    except ValueError as ex:
+        raise ArmError(f"bad placeholder in {template!r}: {ex}") from None
 
 
 def check_gate(gate: Gate, call: Call) -> None:

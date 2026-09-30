@@ -1001,9 +1001,14 @@ def main(argv: list[str] | None = None) -> int:
         sass = SG.Gate(log)
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
-            build = a.build({"device": dev, "arch": "sm_120a", "out_dir": str(args.out.parent)})
+            build = a.build({"device": dev, "arch": "sm_120a", "out_dir": str(args.out.parent),
+                             "transcripts_dir": str(args.out.parent / "transcripts")})
+            verifier = A.check_verifier(a.name, build)
+            if verifier is None:
+                log(f"arm {a.name} names no verifier: verify.py can't accept any of its rows, so none can be measured")
             out["arms"][a.name] = {"stream": a.stream, "precision": a.precision, "inputs": a.inputs,
-                                   "flag_sets": {r: sorted(f) for r, f in a.flag_sets.items()}, "build": build}
+                                   "flag_sets": {r: sorted(f) for r, f in a.flag_sets.items()}, "build": build,
+                                   "verifier": verifier}
             sass.check(SG.declared(a.name, build), f"arm:{a.name}")
         sass.check(sass.discover(), "mapped")
         kernels = B.cutlass_kernels(dev)
