@@ -248,6 +248,17 @@ def test_no_claims_at_the_disk_pause_and_no_b8_while_bundles_pass_the_cap(pilot,
     assert (spool / "results" / "b1.json").exists() and (spool / "queue" / "b8.json").exists()
 
 
+def test_the_bundle_cap_counts_the_commits_running_and_the_candidate(pilot):
+    def e(row):
+        return {"env": {"ROW": row}}
+    long_b8 = e(LLAMA_B8.replace("__i256__o32__", "__i1024__o128__"))
+    short_b8, b1 = e(LLAMA_B8), e(LLAMA_B8.replace("__b8__", "__b1__"))
+    assert pilot.bundle_est(long_b8) == pilot.BUNDLE_EST and pilot.bundle_est(short_b8) == pilot.BUNDLE_EST / 4
+    assert pilot.bundle_ok(long_b8, 0, []) and not pilot.bundle_ok(long_b8, 0, [long_b8])
+    assert pilot.bundle_ok(short_b8, 0, [short_b8, short_b8]) and not pilot.bundle_ok(short_b8, int(pilot.BUNDLE_CAP), [])
+    assert pilot.bundle_ok(b1, int(pilot.BUNDLE_CAP) * 2, [long_b8, long_b8])
+
+
 def test_claim_has_one_winner(pilot, tmp_path):
     spool = tmp_path / "spool"
     _queue(spool, "only", "exit 0")
