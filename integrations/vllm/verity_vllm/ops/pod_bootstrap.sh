@@ -38,7 +38,7 @@ SAMPLED=$(cd "$ROOT/../../protocols/sampled_proofs" 2>/dev/null && pwd -P) || { 
 WORK=${WORK:-/workspace}; VENV=${VENV:-$WORK/venv312}; PY=$VENV/bin/python
 export HF_HOME=${HF_HOME:-$WORK/hf}
 export PYTHONPATH=$ROOT:$CORE:$RESEARCH:$SAMPLED${PYTHONPATH:+:$PYTHONPATH}
-export VERITOR_REPO=$ROOT
+export VERITY_TREE=$ROOT
 CASES=B0; OUT=$ROOT/out/bootstrap; MODE=auto; DRY_RUN=0
 while [ $# -gt 0 ]; do case "$1" in --cases) CASES=$2; shift 2;; --out) OUT=$2; shift 2;; --cpu) MODE=cpu; shift;; --gpu) MODE=gpu; shift;; --dry-run) DRY_RUN=1; shift;; *) echo "unknown arg $1" >&2; exit 2;; esac; done
 if [ "$MODE" = auto ]; then
