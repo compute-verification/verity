@@ -180,8 +180,10 @@ class _PearlC4:
             self._jobs[key] = T.job(F.FORMATS[self.fmt], seed_a, seed_b, k)
         return dataclasses.replace(self._jobs[key], seed_a=seed_a)
 
-    def commitments(self, call: _Call, shape: Shape) -> dict:
-        """The device's roots and seeds against `audit.commit_rows` over the rows and the scheme's `noise` on the host."""
+    def commitments(self, call: _Call, shape: Shape, mode: str) -> dict:
+        """The device's roots and seeds against `audit.commit_rows` over the rows and the scheme's `noise` on the host.  The
+        roles other than ``hash`` commit nothing per call, so there only B's are checked (A's are those `prepare` primed,
+        of the operands before a dependent chain rewrote them)."""
         _, F, au = _ref()
         from verity_pouw.protocol import Context, Matmul
         from verity_pouw.protocol import Shape as PShape
@@ -195,18 +197,24 @@ class _PearlC4:
         ctx = Context(call.salt, Matmul(0, PShape(call.m_pad, k, shape.n), call.weight), ta.commitment.root,
                       tb.commitment.root)
         noise = F.PearlC4(self.fmt).noise(ctx)
+        names = ("root_a", "root_b", "seed_a", "seed_b") if mode == "hash" else ("root_b", "seed_b")
         got = {nm: d.read(pl.buf[nm], 32) for nm in ("root_a", "root_b", "seed_a", "seed_b")}
         want = {"root_a": ctx.root_a, "root_b": ctx.root_b, "seed_a": noise.seed_a, "seed_b": noise.seed_b}
-        return {nm: got[nm] == want[nm] for nm in want} | {"root_a_hex": got["root_a"].hex()}
+        return {nm: got[nm] == want[nm] for nm in names} | {"root_a_hex": got["root_a"].hex()}
 
     def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> Gate:
         T, _, _ = _ref()
         d, mode, m, n, k = self.d, mode_of(flags), call.m_pad, shape.n, shape.k
+        seed_a, seed_b = (d.read(call.pl.buf[nm], 32) for nm in ("seed_a", "seed_b"))
         twin = call._pipeline(_Ops(call), store_cu=False)
         try:
             call.pad(twin, 0)
             twin.weight_side()
-            twin.prime()
+            if mode == "hash":
+                twin.prime()
+            else:
+                for nm in ("root_a", "seed_a", "lines_ea"):
+                    d.copy(twin.buf[nm], call.pl.buf[nm], twin.sizes[nm], 0)
             twin.launch(0, mode)
             d.sync()
             relaunch = {nm: d.read(twin.buf[nm], b.nbytes) == d.read(b.ptr, b.nbytes) for nm, b in call.outputs.items()}
@@ -214,8 +222,8 @@ class _PearlC4:
             twin.free()
         xa = call.pl.buf["xa"]
         y = np.frombuffer(d.read(call.pl.buf["y"], call.pl.sizes["y"]), "<u2").reshape(m, n)
-        jb = self._job(call.seed_a, call.seed_b, k)
-        rng = random.Random(f"{shape.label}/{call.seed_a.hex()}")
+        jb = self._job(seed_a, seed_b, k)
+        rng = random.Random(f"{shape.label}/{seed_a.hex()}")
         spots = [(0, 0)] + [(rng.randrange(m // TILE), rng.randrange(n // TILE)) for _ in range(self.gate_tiles() - 1)]
         tiles = []
         for ti, tj in spots:
@@ -224,7 +232,7 @@ class _PearlC4:
             b_rows = np.frombuffer(d.read(call.pl.buf["xb"] + TILE * tj * k * 2, TILE * k * 2), "<u2").reshape(TILE, k)
             t = T.tile(jb, a_rows, b_rows, rows, cols)
             tiles.append(self._compare(call, t, ti, tj, y, mode, T))
-        commit = self.commitments(call, shape)
+        commit = self.commitments(call, shape, mode)
         ok = all(relaunch.values()) and all(all(v for key, v in t.items() if key != "tile") for t in tiles)
         ok = ok and all(v for key, v in commit.items() if key != "root_a_hex")
         checked = {nm: "all" for nm in call.outputs}
