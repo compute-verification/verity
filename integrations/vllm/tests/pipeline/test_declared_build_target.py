@@ -3,13 +3,17 @@ on a GPU-free host: the target is declared by the row id, the preflight asks no 
 vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  Every other class Builds as before."""
 from __future__ import annotations
 
+import importlib.abc
+import importlib.util
 import json
+import os
 import sys
 import types
 
 import pytest
 
 from verity_vllm import target_family as tf
+from verity_vllm.engine import env as engine_env
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -100,13 +104,26 @@ def vllm_without_nvml(monkeypatch):
         raise AttributeError(name)
 
     plat.__getattr__ = __getattr__
-    cuda = types.ModuleType("vllm.platforms.cuda")
-    cuda.CudaPlatform = NonNvmlCudaPlatform
+    plat.__path__ = []
+    plat.env_at_cuda_import = {}
+
+    class CudaFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+        def find_spec(self, name, path, target=None):
+            return importlib.util.spec_from_loader(name, self) if name == "vllm.platforms.cuda" else None
+
+        def exec_module(self, module):   # the pinned vLLM reads its import-time knobs here (`torch_utils._USE_LAYERNAME`)
+            plat.env_at_cuda_import = {"VLLM_USE_LAYERNAME": os.environ.get("VLLM_USE_LAYERNAME")}
+            module.CudaPlatform = NonNvmlCudaPlatform
+
     vllm = types.ModuleType("vllm")
     vllm.platforms = plat
-    plat.cuda = cuda
-    for name, mod in (("vllm", vllm), ("vllm.platforms", plat), ("vllm.platforms.cuda", cuda)):
+    for name, mod in (("vllm", vllm), ("vllm.platforms", plat)):
         monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.delitem(sys.modules, "vllm.platforms.cuda", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [CudaFinder(), *sys.meta_path])
+    for k in engine_env.EXPORT:   # set-then-delete: teardown restores each to what it was, the selection's pin included
+        monkeypatch.setenv(k, "")
+        monkeypatch.delenv(k)
     return plat
 
 
@@ -126,6 +143,8 @@ def _build(tmp_path, monkeypatch, target):
 def test_a_declared_target_s_build_takes_the_cuda_platform_when_nvml_is_absent(tmp_path, monkeypatch, vllm_without_nvml):
     target = parse_target_arg(R.declared_target(_wl(tmp_path), row=ROW_120))
     assert _build(tmp_path, monkeypatch, target) == "NonNvmlCudaPlatform"
+    assert vllm_without_nvml.env_at_cuda_import == {"VLLM_USE_LAYERNAME": "0"}, \
+        "the selection imports vLLM, so the construction's export env is in force first (else layer names export as opaque LayerName)"
 
 
 def test_a_build_without_a_declared_target_resolves_the_platform_as_before(tmp_path, monkeypatch, vllm_without_nvml):

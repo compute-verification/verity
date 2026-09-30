@@ -14,7 +14,7 @@ from contextlib import contextmanager
 
 import torch
 
-from verity_vllm.engine import hooks
+from verity_vllm.engine import env as engine_env, hooks
 
 _ORIG_DATA = torch._C.TensorBase.data
 
@@ -95,6 +95,8 @@ def select_cuda_platform() -> str:
     installed is the one the probe picks on a GPU host (`vllm.platforms.cuda.CudaPlatform`: the NVML-backed class when NVML answers,
     the torch-backed one when it does not), and `apply_target_profile` answers the target's capability on either.  Build path only:
     serving resolves its platform as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
+    # vLLM freezes export knobs at import (`VLLM_USE_LAYERNAME` -> `torch_utils._USE_LAYERNAME`): pin them before importing vLLM here
+    engine_env.pin(engine_env.EXPORT)
     import vllm.platforms as P
     from vllm.platforms.cuda import CudaPlatform
     resolved = P.__dict__.get("current_platform") or P._current_platform   # the lazy `current_platform` getter returns `_current_platform`
