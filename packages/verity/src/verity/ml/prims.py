@@ -120,14 +120,27 @@ def BlackwellE4m3QmmaDot32(acc: int, *ab: int) -> int:
            conformance="exact-model-tested; pinned (dossier art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e: two "
                        "RTX 5090 dies, 17.3M words); on the RTX PRO 6000 Blackwell Server Edition (driver 580.173.02, CUDA 13.0, "
                        "SASS-checked) lane pouw's sweeps r20260930-064142-07f5 and r20260930-064149-a24f, 16,932,864 gated words each "
-                       "on two GPUs, 0 mismatches")
+                       "on two GPUs, 0 mismatches, their specials tiles for the accumulator rule; the scale bytes outside UE4M3 by "
+                       "r20260930-093614-53fd (1,024 single-instruction tiles, 131,072 words, every rule below exact)")
 def BlackwellNvf4OmmaDot64(acc: int, *ab: int) -> int:
     """One accumulator coordinate of `mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64 ... e2m1.e2m1.f32.ue4m3`
     on sm_120a (SASS `OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X`): 64 E2M1 codes per operand in four blocks of 16, one UE4M3 scale
-    byte per block, `models.BLACKWELL_SM120_NVF4.step_scaled` (`BlockScaledAlignAdd`: exact group dots, lossless block scales,
-    the five-way align-add, truncation, every zero +0).  Defined on finite accumulators, valid scale bytes (bit 7 clear, not
-    0x7F) and sums inside binary32; outside that domain it raises (D20)."""
-    return BLACKWELL_SM120_NVF4.step_scaled(acc, list(ab[:64]), list(ab[64:128]), list(ab[128:132]), list(ab[132:136]))
+    byte per block.  Total on every encoding, as measured:
+
+    1. a scale byte whose low seven bits are 0x7F (the UE4M3 NaN, 0xFF included) -> 0x7FFFFFFF, whatever the accumulator;
+    2. else a NaN accumulator -> 0x7FFFFFFF, and ±inf -> itself;
+    3. else bit 7 of every scale byte is ignored, and the word is `models.BLACKWELL_SM120_NVF4.step_scaled` (`BlockScaledAlignAdd`:
+       exact group dots, lossless block scales, the five-way align-add, truncation, every zero +0).  From a finite accumulator
+       the sum cannot leave binary32 (the accumulator's window puts its grid far above every group dot).
+
+    Rule 1 was measured on groups with nonzero products."""
+    sa, sb = list(ab[128:132]), list(ab[132:136])
+    if any(s & 0x7F == 0x7F for s in sa + sb):
+        return 0x7FFFFFFF
+    acc &= 0xFFFFFFFF
+    if (acc & 0x7F800000) == 0x7F800000:
+        return 0x7FFFFFFF if acc & 0x7FFFFF else acc
+    return BLACKWELL_SM120_NVF4.step_scaled(acc, list(ab[:64]), list(ab[64:128]), [s & 0x7F for s in sa], [s & 0x7F for s in sb])
 
 
 @primitive("F32ToE2m1Sat", 1, [("x", F32)], E2M1,
@@ -191,7 +204,7 @@ def _register_kernels() -> None:
     register_kernel(BlackwellE4m3QmmaDot32, lambda acc, a, b: K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b),
                     domain=every, sample=K.sample_tc)
     register_kernel(BlackwellNvf4OmmaDot64, lambda acc, a, b, sa, sb: K.block_scaled_batch(BLACKWELL_SM120_NVF4, acc, a, b, sa, sb),
-                    domain="finite accumulators, valid scale codes, sums inside binary32",
+                    domain="finite accumulators and valid scale codes (the rest declined, computed by the reference)",
                     sample=K._sample_block_scaled(BLACKWELL_SM120_NVF4))
     register_kernel(F32ToE2m1Sat, lambda x: K.f32_to_e2m1_sat_batch(x, E2M1_NAN_CODE), domain=every)
     register_kernel(E4m3ToF32, K.e4m3_to_f32_batch, domain=every)
