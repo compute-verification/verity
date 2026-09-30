@@ -654,14 +654,16 @@ def test_a_capture_replay_counts_the_model_and_the_other_tile_positions() -> Non
     assert all((REPO_ROOT / p).is_file() for p in ref.paths)
 
 
-def test_the_sm120_fp8_target_is_anchored_on_the_pro_6000_and_its_e5m2_sibling_on_the_arch_default():
+def test_the_sm120_fp8_steps_are_anchored_on_the_pro_6000_and_the_arch_default_is_unchanged():
     """The target names its conformance device, and trust matches evidence to it by SKU family, whether asked by target or by
-    instruction id.  The e5m2 id has no target, so it keeps the sm_120 default anchor (the RTX 5090), which is unchanged."""
+    instruction id.  The e5m2 id has no target: its registry entry names the device, and the sm_120 default anchor (the RTX
+    5090) stays for every other sm_120 instruction."""
     from verity.ml.tc.models import BLACKWELL_SM120_E4M3_M16N8K32
 
     for name in ("fp8-sm120-mma-draft/2026-09-30", "sm120.mma.m16n8k32.e4m3"):
         s = trust.subjects(name)
         assert s.model is BLACKWELL_SM120_E4M3_M16N8K32 and s.instruction == "sm120.mma.m16n8k32.e4m3"
         assert s.anchor_sku == "NVIDIA RTX PRO 6000 Blackwell Server Edition" and trust.sku_family(s.anchor_sku) == "rtxpro6000"
-    assert trust.subjects("sm120.mma.m16n8k32.e5m2").anchor_family == "rtx5090"
+    assert trust.subjects("sm120.mma.m16n8k32.e5m2").anchor_family == "rtxpro6000"
+    assert trust.subjects("sm120.mma.m16n8k64.e2m1.mxf4").anchor_family == "rtx5090"
     assert trust.ANCHOR_SKU["sm_120"] == "NVIDIA GeForce RTX 5090" and trust.sku_family(trust.ANCHOR_SKU["sm_120"]) == "rtx5090"

@@ -65,6 +65,9 @@ class Instruction:
     evidence: tuple[str, ...] = ()
     #: The ``trust-dossier/v1`` artifact id (``art:...``) whose computed level this pin cites (``tools/tc_probe/trust.py``).
     dossier: str | None = None
+    #: The device trust anchors this instruction on when no Target wraps it and it was measured on a device other than the
+    #: arch's default anchor (``trust.ANCHOR_SKU``); a Target's own ``anchor_device`` takes precedence.
+    anchor_device: str | None = None
 
     def __post_init__(self) -> None:
         if self.status == "pinned" and self.model is None:
@@ -362,8 +365,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             evidence=(_PRO6000_E4M3,),
         ),
         _i(
-            # No target wraps this id, so trust anchors it on the arch's default device (the RTX 5090), where it has no run: the
-            # computed level is HYPOTHESIS although the PRO 6000 reproduces every word.
+            # No target wraps this id; it was measured on the RTX PRO 6000 only, and anchors there like the e4m3 target does.
             id="sm120.mma.m16n8k32.e5m2",
             sm="sm_120",
             ptx="mma.sync.aligned.m16n8k32.row.col.f32.e5m2.e5m2.f32",
@@ -372,6 +374,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=BLACKWELL_SM120_E5M2_M16N8K32,
             status="hypothesis",
             dossier="art:164a66c8084c4afd42d3b4ecb2f30676e6364a17e6e5877bed07cefc8ddd04a5",
+            anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
             evidence=(_PRO6000_E5M2, "model = sm120.mma.m16n8k32.e4m3's pipeline (groups (32,), width 26, floor -133) with e5m2 products"),
         ),
         _i(
