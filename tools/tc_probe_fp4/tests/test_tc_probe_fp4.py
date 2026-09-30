@@ -1,6 +1,7 @@
 """The FP4 probe's and the W1 price bench's CPU side: the K=32 candidates against verity's own ``GroupSum``, the cast references
-against brute force, the fake-silicon dry runs (each candidate the truth in turn must be the only one reproducing every word;
-one flipped word must fail the gate), the W1 driver's gates, and the store declarations.  No test here builds or runs a kernel:
+against brute force, the 2:4 sparse rows' stored-to-logical mapping and their ``gather_dense`` candidate against the dense pinned
+model, the fake-silicon dry runs (each candidate the truth in turn must be the only one reproducing every word; one flipped word,
+or a device reading the sparse metadata another way, must fail the gate), the W1 driver's gates, and the store declarations.  No test here builds or runs a kernel:
 ``nvcc_bin`` is pointed at nothing, so a machine with CUDA runs the same tests as one without.  The offline SASS gates run only
 with ``VERITY_TC_PROBE_FP4_NVCC=1`` (nvcc 12.9 and cuobjdump, about 30 s)."""
 
@@ -23,6 +24,7 @@ sys.path.insert(0, str(HERE))
 import cast  # noqa: E402
 import k32  # noqa: E402
 import probe as P  # noqa: E402
+import sparse as S  # noqa: E402
 import tool  # noqa: E402
 import w1_price as W  # noqa: E402
 
@@ -127,6 +129,64 @@ def test_cast_dry_run_passes_and_a_flipped_word_fails(no_nvcc, tmp_path, instr):
     assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) != 0
 
 
+def test_sparse_expand_puts_each_stored_pair_at_its_metadata_pair():
+    for v in S.META_VALID.tolist():
+        p0, p1 = v & 3, v >> 2
+        row = S.expand(np.arange(1, 65, dtype=np.int64)[None], np.full((1, 16), v, np.uint8))[0]
+        for c in range(16):
+            chunk = row[8 * c:8 * c + 8]
+            assert chunk[2 * p0:2 * p0 + 2].tolist() == [4 * c + 1, 4 * c + 2]
+            assert chunk[2 * p1:2 * p1 + 2].tolist() == [4 * c + 3, 4 * c + 4]
+            assert np.count_nonzero(chunk) == 4
+
+
+@pytest.mark.parametrize("instr", ["sp_nvf4", "sp_mxf4"])
+def test_sparse_gather_dense_is_the_dense_model_on_the_compressed_operands(instr):
+    """``gather_dense`` (k = 128 logical, groups of 32) is the pinned dense model on the stored A and the B its metadata selects."""
+    rng = np.random.default_rng(5)
+    model, dense = S.candidates(instr)["gather_dense"], S.PINNED[instr]
+    nb = S.NBLK[instr]
+    for _ in range(200):
+        a = rng.integers(0, 16, 64).astype(np.uint8)
+        meta = S.META_VALID[rng.integers(0, 6, 16)]
+        b = rng.integers(0, 16, 128).astype(np.uint8)
+        sa = (P.UE4M3_VALID[rng.integers(0, 127, nb)] if nb == 4 else rng.integers(100, 150, nb)).astype(np.uint8)
+        sb = (P.UE4M3_VALID[rng.integers(0, 127, nb)] if nb == 4 else rng.integers(100, 150, nb)).astype(np.uint8)
+        acc = _f32(float(rng.normal()) * 2.0 ** int(rng.integers(-30, 30)))
+        got = model.step_scaled(acc, S.expand(a, meta).tolist(), b.tolist(), S.model_scales(sa).tolist(), S.model_scales(sb).tolist())
+        want = dense.step_scaled(acc, a.tolist(), b[S.logical_columns(meta)].tolist(), sa.tolist(), sb.tolist())
+        assert got == want
+
+
+SPARSE_FAMILIES = "random_random_scales,per_row_metadata,grid_straddle"
+
+
+@pytest.mark.parametrize("instr,truth", [("sp_nvf4", "gather_dense"), ("sp_nvf4", "logical_g16"), ("sp_nvf4", "two_halves"),
+                                         ("sp_mxf4", "logical_g64"), ("sp_mxf4", "gather_dense_underflow_signed")])
+def test_sparse_fake_capture_singles_out_the_truth(no_nvcc, tmp_path, instr, truth):
+    families = SPARSE_FAMILIES + (",ue8m0_underflow" if instr == "sp_mxf4" else "")  # D13's sign shows below the subnormal grid only
+    rc = P.main(["--instruction", instr, "--out", str(tmp_path), "--fake-silicon", truth, "--sweep", "--n-random", "16", "--procs", "1",
+                 "--families", families])
+    assert rc == 0
+    finding = json.loads((tmp_path / "probe_results.json").read_text())["candidate_finding"]
+    assert finding["agreeing"] == [truth], finding["mismatches"]
+
+
+def test_sparse_gates_fail_closed(no_nvcc, tmp_path, monkeypatch):
+    base = ["--instruction", "sp_nvf4", "--fake-silicon", "gather_dense", "--expect-model", "gather_dense", "--sweep", "--n-random", "8",
+            "--procs", "1", "--families", SPARSE_FAMILIES]
+    assert P.main(base + ["--out", str(tmp_path / "ok")]) == 0
+    assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) == 1
+    # a device that reads the packed metadata with the quad's two bits swapped: the layout gate stops the run and names the reading
+    tiles = S.FakeSparse.tiles
+    monkeypatch.setattr(S.FakeSparse, "tiles", lambda self, instr, As, B, META, *r: tiles(self, instr, As, B,
+                                                                                        S.META_READINGS["quad_bits_swapped"](META), *r))
+    assert P.main(base + ["--out", str(tmp_path / "meta")]) == 1
+    doc = json.loads((tmp_path / "meta" / "probe_results.json").read_text())
+    assert "['quad_bits_swapped']" in doc["failures"][0] and "sweep" not in doc
+    assert not list((tmp_path / "meta").glob("tiles_*.npz"))
+
+
 def test_w1_fragments_carry_only_the_row_formats():
     for row, (_, k, fa, fb, sf, _) in W.ROWS.items():
         f = W.fragments(row, 2, 1)
@@ -196,6 +256,7 @@ def test_offline_sass_gates(tmp_path):
     for cmd in (["w1_price.py", "--out", str(tmp_path / "w1"), "--sass-only"],
                 ["probe.py", "--instruction", "f8f6f4", "--out", str(tmp_path / "p"), "--sass-only"],
                 ["probe.py", "--instruction", "cvt_e2m1x2_f32", "--out", str(tmp_path / "c"), "--sass-only"],
+                ["probe.py", "--instruction", "sp_nvf4", "--out", str(tmp_path / "sp"), "--sass-only"],
                 ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])

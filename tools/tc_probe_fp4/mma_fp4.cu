@@ -300,6 +300,63 @@ __global__ void row_tiles_kernel(const uint8_t* __restrict__ A, const uint8_t* _
     store_d(D + (size_t)warp * 128, cf, lane);
 }
 
+// ---- 2:4 sparse kind::mxf4nvf4 m16n8k128 (lane pouw rtx-pro GPU 4): one mma.sp per tile ----
+//
+// A is pair-wise 4:8 structured sparse (PTX ISA "Sparse matrix storage"): each 8-wide chunk of a row keeps two of its four
+// element pairs, whose indices p0 < p1 form the chunk's metadata nibble (p1 << 2) | p0; the stored row is 64 codes, chunk c's four
+// at stored columns 4c..4c+3 (pair p0 first).  Per tile: As u8[16][64] stored codes, Bt u8[8][128] (all of B, k contiguous),
+// META u8[16][16] (one nibble per row and chunk), SFA u8[16][NB], SFB u8[8][NB] (NB = 4 for scale_vec::4X, 2 for 2X: each scale
+// covers 128 / NB logical columns).  Fragments (PTX ISA figures 143-150):
+//   stored A: the dense K = 64 layout (reg r, nibble j -> row lane/4 + 8*(r&1), stored col 8*(lane%4) + j + 32*(r>>1));
+//   B (4 regs): reg r, nibble j -> col lane/4, k = 8*(lane%4) + j + 32*r;
+//   metadata: lane 4g+q holds row g + 8*(q&1), logical cols 64*(q>>1) .. +63: bits [4c+3:4c] = chunk 8*(q>>1) + c's nibble;
+//   sparsity selector 0 (every thread of the quad contributes); scales as the dense rows.
+enum SparseKind { SP_NVF4 = 0, SP_MXF4 = 1 };
+
+template <int SK>
+__global__ void sparse_tiles_kernel(const uint8_t* __restrict__ As, const uint8_t* __restrict__ Bt, const uint8_t* __restrict__ META,
+                                    const uint8_t* __restrict__ SFA, const uint8_t* __restrict__ SFB, const uint32_t* __restrict__ C,
+                                    uint32_t* __restrict__ D, int ntiles) {
+    constexpr int NB = SK == SP_NVF4 ? 4 : 2;
+    const int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+    if (warp >= ntiles) return;
+    const int lane = threadIdx.x & 31, g = lane >> 2, q = lane & 3;
+    uint32_t a[4], b[4];
+    pack_a_e2m1(a, As + (size_t)warp * 16 * 64, lane);
+    const uint8_t* Bw = Bt + (size_t)warp * 8 * 128;
+#pragma unroll
+    for (int r = 0; r < 4; r++) {
+        uint32_t v = 0;
+#pragma unroll
+        for (int j = 0; j < 8; j++) v |= (uint32_t)(Bw[g * 128 + 8 * q + j + 32 * r] & 0xF) << (4 * j);
+        b[r] = v;
+    }
+    const uint8_t* M = META + (size_t)warp * 16 * 16 + (g + 8 * (q & 1)) * 16 + 8 * (q >> 1);
+    uint32_t e = 0;
+#pragma unroll
+    for (int c = 0; c < 8; c++) e |= (uint32_t)(M[c] & 0xF) << (4 * c);
+    const uint32_t sfa = pack_sfa(SFA + (size_t)warp * 16 * NB, NB, lane);
+    const uint32_t sfb = pack_sfb(SFB + (size_t)warp * 8 * NB, NB, lane);
+    float cf[4], df[4];
+    load_c(cf, C + (size_t)warp * 128, lane);
+    if constexpr (SK == SP_NVF4) {
+        asm volatile(
+            "mma.sp::ordered_metadata.sync.aligned.m16n8k128.row.col.kind::mxf4nvf4.block_scale.scale_vec::4X.f32.e2m1.e2m1.f32.ue4m3 "
+            "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0, {%17}, {0, 0}, {%18}, {0, 0};\n"
+            : "=f"(df[0]), "=f"(df[1]), "=f"(df[2]), "=f"(df[3])
+            : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(b[2]), "r"(b[3]),
+              "f"(cf[0]), "f"(cf[1]), "f"(cf[2]), "f"(cf[3]), "r"(e), "r"(sfa), "r"(sfb));
+    } else {
+        asm volatile(
+            "mma.sp::ordered_metadata.sync.aligned.m16n8k128.row.col.kind::mxf4nvf4.block_scale.scale_vec::2X.f32.e2m1.e2m1.f32.ue8m0 "
+            "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0, {%17}, {0, 0}, {%18}, {0, 0};\n"
+            : "=f"(df[0]), "=f"(df[1]), "=f"(df[2]), "=f"(df[3])
+            : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(b[2]), "r"(b[3]),
+              "f"(cf[0]), "f"(cf[1]), "f"(cf[2]), "f"(cf[3]), "r"(e), "r"(sfa), "r"(sfb));
+    }
+    store_d(D + (size_t)warp * 128, df, lane);
+}
+
 // Host-side plumbing shared by every entry point: upload, launch (4 warps per block), download, free.
 struct Buf {
     void* p = nullptr;
@@ -405,6 +462,46 @@ static int run_rows(int kind, const uint8_t* A, const uint8_t* Bt, const uint8_t
     return (int)err;
 }
 
+static int run_sparse(int kind, const uint8_t* As, const uint8_t* Bt, const uint8_t* META, const uint8_t* SFA, const uint8_t* SFB,
+                      const uint32_t* C, uint32_t* D, int ntiles) {
+    if (kind != SP_NVF4 && kind != SP_MXF4) return (int)cudaErrorInvalidValue;
+    const int nb = kind == SP_NVF4 ? 4 : 2;
+    const size_t a_bytes = (size_t)ntiles * 16 * 64, b_bytes = (size_t)ntiles * 8 * 128, m_bytes = (size_t)ntiles * 16 * 16;
+    const size_t sfa_bytes = (size_t)ntiles * 16 * nb, sfb_bytes = (size_t)ntiles * 8 * nb, c_bytes = (size_t)ntiles * 128 * 4;
+    uint8_t *dA = nullptr, *dB = nullptr, *dM = nullptr, *dSFA = nullptr, *dSFB = nullptr;
+    uint32_t *dC = nullptr, *dD = nullptr;
+    cudaError_t err = cudaSuccess;
+    if ((err = cudaMalloc(&dA, a_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dB, b_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dM, m_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dSFA, sfa_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dSFB, sfb_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dC, c_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dD, c_bytes)) != cudaSuccess) return (int)err;
+    cudaMemcpy(dA, As, a_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(dB, Bt, b_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(dM, META, m_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(dSFA, SFA, sfa_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(dSFB, SFB, sfb_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(dC, C, c_bytes, cudaMemcpyHostToDevice);
+    const int wpb = 4, blocks = (ntiles + wpb - 1) / wpb, threads = 32 * wpb;
+    if (kind == SP_NVF4)
+        sparse_tiles_kernel<SP_NVF4><<<blocks, threads>>>(dA, dB, dM, dSFA, dSFB, dC, dD, ntiles);
+    else
+        sparse_tiles_kernel<SP_MXF4><<<blocks, threads>>>(dA, dB, dM, dSFA, dSFB, dC, dD, ntiles);
+    err = cudaGetLastError();
+    if (err == cudaSuccess) err = cudaDeviceSynchronize();
+    if (err == cudaSuccess) cudaMemcpy(D, dD, c_bytes, cudaMemcpyDeviceToHost);
+    cudaFree(dA);
+    cudaFree(dB);
+    cudaFree(dM);
+    cudaFree(dSFA);
+    cudaFree(dSFB);
+    cudaFree(dC);
+    cudaFree(dD);
+    return (int)err;
+}
+
 }  // namespace
 
 extern "C" {
@@ -438,6 +535,13 @@ int mma_bf16_tiles(const uint16_t* A, const uint16_t* Bt, const uint32_t* C, uin
 int mma_row_tiles(int kind, const uint8_t* A, const uint8_t* Bt, const uint8_t* SFA, const uint8_t* SFB, const uint32_t* C, uint32_t* D, int n,
                   int L) {
     return run_rows(kind, A, Bt, SFA, SFB, C, D, n, L);
+}
+
+// The 2:4 sparse rows (SparseKind: 0 nvf4 4X ue4m3, 1 mxf4 2X ue8m0): As u8[n][16][64] stored codes, Bt u8[n][8][128],
+// META u8[n][16][16] chunk nibbles, SFA u8[n][16][NB], SFB u8[n][8][NB], C/D u32[n][16][8].
+int mma_sparse_tiles(int kind, const uint8_t* As, const uint8_t* Bt, const uint8_t* META, const uint8_t* SFA, const uint8_t* SFB,
+                     const uint32_t* C, uint32_t* D, int n) {
+    return run_sparse(kind, As, Bt, META, SFA, SFB, C, D, n);
 }
 
 // The device's UUID as nvidia-smi prints it ("GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"): the one CUDA sees, whatever the host lists.

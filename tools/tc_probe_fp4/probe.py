@@ -67,7 +67,8 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
   * ``--sass-only`` (the offline SASS gate: exactly one MMA per kernel, the row's kernel present), ``--fake-silicon MODEL`` (a CPU
     dry run where MODEL's words stand in for the device; refused under a research run), ``--corrupt-word`` (one flipped bit in the
     first gated family: the run must fail).
-  * casts (``--instruction cvt_*``, ``cast.py``).
+  * casts (``--instruction cvt_*``, ``cast.py``); the 2:4 sparse ``mma.sp`` m16n8k128 rows (``--instruction sp_nvf4 | sp_mxf4``,
+    ``sparse.py``: a capture over named candidates, the first of which is the dense pinned model on the compressed operands).
 
 Lane tcgen05 -- the datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
 ``--instruction tcgen05_nvf4`` = ``tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X`` (UE4M3, registry id
@@ -132,6 +133,8 @@ PTX = {
 #: the conversion rows (cast.py; cvt_fp4.cu), dispatched before any MMA machinery
 CAST_INSTRUCTIONS = ("cvt_e2m1x2_f32", "cvt_f16x2_e2m1x2", "cvt_ue8m0x2_f32_rz", "cvt_ue8m0x2_f32_rp", "cvt_bf16x2_ue8m0x2",
                      "cvt_e4m3x2_f32_ue4m3")
+#: the 2:4 sparse mma.sp rows (sparse.py; mma_fp4.cu's sparse_tiles_kernel), dispatched like the casts
+SPARSE_INSTRUCTIONS = ("sp_nvf4", "sp_mxf4")
 #: mma.sync instruction -> RowKind of mma_fp4.cu's generic kernel (single tiles of the new rows, and every in-register chain)
 ROW_KIND = {"nvf4": 0, "mxf4": 1, "f8f6f4": 2, "f8f6f4_e2m1_e4m3": 3, "f8f6f4_e4m3_e2m1": 4, "mxf8f6f4_e2m1": 5, "mxf8f6f4_e2m1_e4m3": 6,
             "mxf8f6f4_e4m3_e2m1": 7}
@@ -1131,7 +1134,7 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--instruction", default="nvf4", choices=sorted(PTX) + list(CAST_INSTRUCTIONS))
+    ap.add_argument("--instruction", default="nvf4", choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--chain2", action="store_true", help="tcgen05: pair each family's tiles into K=128 chains (two MMAs on one TMEM accumulator)")
@@ -1157,6 +1160,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.instruction in CAST_INSTRUCTIONS:
         import cast
         return cast.main(args)
+    if args.instruction in SPARSE_INSTRUCTIONS:
+        import sparse
+        return sparse.main(args)
     # the remote runner passes argv without a shell: `$RESEARCH_RUN_DIR` arrives literally and is expanded here
     args.replay_autoproof = [os.path.expandvars(p) for p in args.replay_autoproof]
     out = Path(os.path.expandvars(args.out))
