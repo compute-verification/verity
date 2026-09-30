@@ -28,6 +28,8 @@ stored operands (``candidates``: ``gather_g32``, one GroupSum (32,)/26/-133 over
 compressed operands; ``two_atoms`` and ``two_atoms_swapped``, the same adder as two groups of 16, one per logical half, in either
 order).  The gate: the capture's integrity, and every dense twin reproduced by its model on every word (the dense E4M3 atom's
 GroupSum, the vLLM port's sm_120 pin, is the control); which candidates reproduce every sparse word is recorded, never gated.
+Each family's counts are checkpointed in OUT/families/, bound to its capture record; no family's models start once
+``--budget-s`` has passed (exit 99), so a CPU fill job resumes where it stopped.
 """
 from __future__ import annotations
 
@@ -577,6 +579,9 @@ def verify(args) -> int:
         failures.append("the capture loaded another library than --prebuilt")
     fams: dict = {}
     models = sorted(candidates())
+    ck = out / "families"
+    ck.mkdir(exist_ok=True)
+    evaluated = 0
     if not failures:
         pool = mp.Pool(args.procs, initializer=_init) if args.procs > 1 else None
         try:
@@ -596,6 +601,15 @@ def verify(args) -> int:
                     words[k] = np.load(p)
                 if any(f.startswith(f"{name}:") for f in failures):
                     continue
+                cp, key = ck / f"{name}.json", hashlib.sha256(json.dumps(rec, sort_keys=True).encode()).hexdigest()
+                if cp.exists() and (c := json.loads(cp.read_text()))["record_sha256"] == key:
+                    fams[name] = c["family"]
+                    failures += c["failures"]
+                    continue
+                if evaluated and time.time() - t_all > args.budget_s:
+                    print(f"SPARSE VERIFY: budget reached after {evaluated} families; exit 99", flush=True)
+                    return 99
+                n0 = len(failures)
                 t0 = time.time()
                 mw, merr = evaluate(pool, As, M, B, C, args.procs)
                 D = words["sparse"]
@@ -618,6 +632,8 @@ def verify(args) -> int:
                     fam["sparse_vs_model"][m] = int(((mw[m] != D) | merr[m]).sum())
                 fam["model_seconds"] = round(time.time() - t0, 1)
                 fams[name] = fam
+                write_json(cp, {"record_sha256": key, "family": fam, "failures": failures[n0:]})
+                evaluated += 1
                 print(name, json.dumps({k: v for k, v in fam.items() if k != "first_differences"}), flush=True)
         finally:
             if pool is not None:
@@ -682,6 +698,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--capture", required=True)
     v.add_argument("--prebuilt", default=None)
     v.add_argument("--procs", type=int, default=max(1, min(32, (os.cpu_count() or 4) - 2)))
+    v.add_argument("--budget-s", type=float, default=float("inf"))
     v.add_argument("--out", required=True)
     b = sub.add_parser("build")
     b.add_argument("--out", required=True)

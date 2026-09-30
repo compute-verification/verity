@@ -473,8 +473,11 @@ def test_sparse_e4m3_packs_registers_and_verify_derives_every_word(no_nvcc, tmp_
     done.update(fake_silicon=None, expect_uuid="GPU-x")
     done["identity"].update(backend="mma.sync", gpu_uuid="GPU-x")
     (d / "done.json").write_text(json.dumps(done))
-    assert SP.main(ver + ["--out", str(tmp_path / "ok")]) == 0
+    rcs = [SP.main(ver + ["--budget-s", "0", "--out", str(tmp_path / "ok")]) for _ in range(11)]
+    assert rcs[0] == 99 and rcs[-1] == 0
+    assert SP.main(ver + ["--out", str(tmp_path / "whole")]) == 0
     f = json.loads((tmp_path / "ok" / "sparse.json").read_text())["finding"]
+    assert f == json.loads((tmp_path / "whole" / "sparse.json").read_text())["finding"]
     assert f["candidates_reproducing_every_sparse_word"] == ["gather_g32"]
     assert f["sparse_vs_dense"]["dense_on_compressed"]["differing_words"] == 0 < f["sparse_vs_dense"]["dense_two_atoms"]["differing_words"]
     D = np.load(d / "random_acc.sparse.npy")
