@@ -46,6 +46,10 @@ DEV uint32_t ue8m0_up(uint32_t w) {
   return (uint32_t)min(max(e + 127, 0), 254);
 }
 DEV float pow2f(int e) { return __uint_as_float(e >= -126 ? (uint32_t)(e + 127) << 23 : 1u << (e + 149)); }
+// FP32 division and square root, correctly rounded, through FP64: 53 >= 2·24 + 2 bits make the double rounding innocuous,
+// and FP32's own slow paths (FADD.FTZ, FMUL.FTZ in their SASS) never enter a shipped kernel
+DEV float div_rn(float a, float b) { return __double2float_rn(__ddiv_rn((double)a, (double)b)); }
+DEV float sqrt_rn(float a) { return __double2float_rn(__dsqrt_rn((double)a)); }
 // cvt.rn.satfinite.e2m1x2.f32 on 4 pairs: byte i = v[2i] in the low nibble, v[2i + 1] in the high one
 DEV uint32_t e2m1x8(const float v[8]) {
   uint32_t r;
@@ -362,9 +366,12 @@ template <int FMT> DEV void form_body(const Args& a) {
   __shared__ float s_alpha[16];
   __shared__ uint32_t s_ae[16];
   __shared__ __align__(16) uint8_t E[16 * 16];
+  __shared__ float s_rcp[128];
   const int r0 = blockIdx.x * 16, warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   const bool lead = blockIdx.y == 0;
 
+  if constexpr (FMT == NVFP4)
+    for (int c = threadIdx.x; c < 128; c += blockDim.x) s_rcp[c] = div_rn(1.0f, ue4m3f(c));
   if (threadIdx.x < 16) {
     ulonglong2* eg = reinterpret_cast<ulonglong2*>(a.p[1]) + r0 + threadIdx.x;
     ulonglong2 l;
@@ -391,17 +398,17 @@ template <int FMT> DEV void form_body(const Args& a) {
     mx = __reduce_max_sync(FULL, mx);
     if (lane == 0) {
       const float s = __uint_as_float(mx << 16);
-      const float rho = __fsqrt_rn(__fdiv_rn(part, (float)(K / 8)));
+      const float rho = sqrt_rn(div_rn(part, (float)(K / 8)));
       const float sigma = __fmul_rn(rho, DELTA);
       const float t = __fadd_rn(s, __fmul_rn(FOUR, sigma));
-      float alpha = __fdiv_rn(TOP, fmaxf(t, __uint_as_float(FLOOR_BITS)));
+      float alpha = div_rn(TOP, fmaxf(t, __uint_as_float(FLOOR_BITS)));
       if constexpr (FMT == MXFP4) alpha = __uint_as_float(__float_as_uint(alpha) & 0xFF800000u);
       const uint32_t ae = ue4m3(__fmul_rn(__fmul_rn(sigma, alpha), __uint_as_float(K_BETA_BITS)));
       s_alpha[rr] = alpha;
       s_ae[rr] = ae;
       if (lead) {
         reinterpret_cast<float*>(a.p[5])[r0 + rr] = alpha;
-        reinterpret_cast<float*>(a.p[6])[r0 + rr] = __fdiv_rn(1.0f, alpha);
+        reinterpret_cast<float*>(a.p[6])[r0 + rr] = div_rn(1.0f, alpha);
         reinterpret_cast<uint8_t*>(a.p[7])[r0 + rr] = (uint8_t)ae;
       }
     }
@@ -460,8 +467,8 @@ template <int FMT> DEV void form_body(const Args& a) {
       if constexpr (FMT == NVFP4) {
         c0 = max(ue4m3(v0), 1u);
         c1 = max(ue4m3(v1), 1u);
-        rg[b] = __fdiv_rn(1.0f, ue4m3f(c0));
-        rh[b] = __fdiv_rn(1.0f, ue4m3f(c1));
+        rg[b] = s_rcp[c0];
+        rh[b] = s_rcp[c1];
       } else {
         c0 = ue8m0_up(__float_as_uint(v0));
         c1 = ue8m0_up(__float_as_uint(v1));
