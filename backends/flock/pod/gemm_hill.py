@@ -15,12 +15,19 @@ the GPU every second from the job's start. Per coordinate (one FP32 output word 
   count as idle); and the timed sessions' GPU-held seconds per coordinate.
 - the verifier's seconds per statement: its verdict's verify_s, the median of the timed sessions.
 
+A coordinate is the campaign contract's VU (verity_numerical.bench.contract: K MACs, 2 K FLOP): result.json is a contract result
+(t.total = T_prove per statement, its buckets, vu.*, verifier.seconds, fixed.setup_seconds = staging), with the overhead against
+the RTX PRO peak under the workload's own `hill.` names, since the contract's overhead.vs_native_peak divides by the profile's
+H100 anchor. hillclimb.json is the step's verity/hillclimb-point/v0 record (throughput = VUs / T_prove; gpu_util and
+gpu_held_s_per_vu over the timed sessions, the verifier's verdicts included), which `rollup` appends to its subcircuit's roll-up.
+
     python gemm_hill.py defs --K 8192 --out defs.json [--n 1024]      # the Gemm_v2 row whose coordinates are the statement's lanes
     python gemm_hill.py dmon --out dmon.tsv [--gpu 0]                  # nvidia-smi dmon -s u every second, each line after its epoch
     python gemm_hill.py stamp --out stamps.tsv -- BINARY prove ...    # the prover, its stdout passed through and each line stamped
     python gemm_hill.py metrics --K 8192 --gate gate.jsonl --sweep results.jsonl --stamps stamps.tsv --dmon dmon.tsv \
-        --phases phases.tsv --census census/hardware.json --out metrics.json --result result.json
-    python gemm_hill.py plot RUN... --out DIR [--steps NAME...] [--put]  # per K, the three metrics over the steps, from the store
+        --phases phases.tsv --census census/hardware.json --out metrics.json --result result.json --hillclimb hillclimb.json
+    python gemm_hill.py rollup --point hillclimb.json --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
+    python gemm_hill.py plot POINTS... --out DIR [--put]   # per K, the three panels over the steps (roll-ups, points or run ids)
 """
 from __future__ import annotations
 
@@ -45,9 +52,19 @@ M = 35
 #: instances per statement at m = 35: 2^(35 - k_log), k_log the block circuit.compose packs one coordinate into (the unit's row
 #: slot and its rows' hashing): 24, 24, 25, 26. K = 16384 is at Stmt.InRange's k_log <= 26
 INSTANCES = {2048: 2048, 4096: 2048, 8192: 1024, 16384: 512}
-PEAK_ID = "rtx-pro-6000-blackwell-server/bf16"
+PEAK_ID = "rtx-pro-6000-bse/bf16"
 QUESTION = ("what is BF16 GemmCoordinate_v2{K} proving overhead against the RTX PRO 6000 spec peak, its throughput and its GPU "
             "utilization, at this step?")
+#: the campaign target whose operands and accumulator these are (verity_flock.bench.PROFILES["bf16-hopper"])
+PROFILE = "bf16-hopper-mma-draft/2026-09-22"
+#: flock-circuit's non-ZK sessions draw every round's coins from the step-0 seed (config_with: cfg.coin_seed), a SHA-256
+#: counter-mode PRF under a SHA-512 commitment; points under different coin modes are never compared
+COINS = "seed-mode"
+POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
+
+
+def subcircuit(K: int) -> dict:
+    return {"id": f"bf16/GemmCoordinate_v2/K={K}", "dtype": "bf16", "definition": "GemmCoordinate_v2", "K": K, "dot": DOT}
 
 
 def defs(a) -> None:
@@ -251,110 +268,221 @@ def metrics(a) -> None:
                         **{k: _window(samples, *v) for k, v in phases.items() if k != "job"}},
             "others_cores_steady": _others(Path(a.others) if a.others else None, t0, t1),
             "prover_peak_gb": lv.get("prover_peak_gb"), "verifier_peak_gb": lv.get("verifier_peak_gb"), "buckets": lv.get("buckets"),
+            "setup_s": rec.get("stage_s"), "domain": rec.get("domain"),
         })
         if lv.get("dense_m") != M:
-            flags.append(f"m = {lv.get('dense_m')}, not {M}")
+            flags.append(f"m-{lv.get('dense_m')}-not-{M}")
         if st.get("tile") and a.K == 2048:
-            flags.append("rests on the unreviewed 4x4 tile")
-        if not out["peak"]["matches_gpu"]:
-            flags.append(f"the peak's device ({peak.get('device')}) is not this GPU ({gpu.get('name')})")
+            flags.append("tile-statement-unreviewed")
+        if (out["others_cores_steady"] or {}).get("median", 0) > 2:
+            flags.append("cpu-contended")
+    if not out["peak"]["matches_gpu"]:
+        flags.append("peak-device-mismatch")
+    if out.get("accepted") and not rec.get("domain"):
+        flags.append("domain-unrecorded")
+    flags.append(f"coins-{COINS}")
+    out["vcpu"] = len(os.sched_getaffinity(0))
+    out["coins"] = COINS
+    status = g["status"] if out["accepted"] else "failed"
+    try:
+        res = _contract_result(a, out, g, status, rec, lv, peak)
+    except (ImportError, ValueError, KeyError, TypeError) as e:
+        res = {"schema": "research/result/v0.1", "run_id": out["run_id"] or "unknown", "workload_fingerprint": None, "measurements": [],
+               "validation": {"status": "failed", "checker": "the campaign contract", "detail": f"{type(e).__name__}: {e}"[:900]}}
+    out["contract_problems"] = _validate(res)
+    point = _point(a, out, g, peak, gpu, flags, timed)
     Path(a.out).write_text(json.dumps(out, indent=1, default=str))
-    ms = [(k, u) for k, u in (("overhead", "x-native"), ("t_prove_s_per_coord", "s"), ("t_native_s_per_coord", "s"),
-                              ("throughput_coords_per_s", "coords/s"), ("throughput_prove_coords_per_s", "coords/s"),
-                              ("gpu_util_steady", "fraction"), ("gpu_util_job", "fraction"), ("gpu_held_s_per_coord", "s"),
-                              ("gpu_held_s_job", "s"), ("verify_s_per_statement", "s"), ("statement_s", "s"),
-                              ("coords_per_statement", "coords"), ("m", "log2")) if out.get(k) is not None]
-    res = {"schema": "research/result/v0.1", "run_id": out["run_id"],
-           "workload_fingerprint": {"kind": "gemm-hill/v1", "K": a.K, "definition": out["definition"], "statement_digest": out.get("statement_digest"),
-                                    "m": out.get("m"), "instances": out.get("instances"), "tile": out.get("tile"), "gpu": gpu.get("name"),
-                                    "peak_id": a.peak_id, "peak_flop_per_second": peak["flop_per_second"], "commit": out["commit"]["commit"],
-                                    "flags": flags},
-           "validation": {"status": g["status"] if out["accepted"] else "failed", "checker": "byte identity at B = 16: " + ", ".join(GS.GATE_CASES),
-                          "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/gate/classes/results.jsonl"]},
-           "measurements": [{"name": k, "value": out[k], "unit": u} for k, u in ms],
-           "measurement_files": ["out/metrics.json", "out/results.jsonl"]}
-    tmp = Path(a.result).with_suffix(".tmp")
-    tmp.write_text(json.dumps(res, indent=1, default=str))
-    os.replace(tmp, a.result)
-    print(json.dumps({k: out.get(k) for k in ("K", "m", "overhead", "throughput_coords_per_s", "gpu_util_steady", "gpu_held_s_per_coord",
-                                              "verify_s_per_statement", "flags")}), g["status"])
+    for path, doc in ((a.result, res), (a.hillclimb, point)):
+        if path:
+            tmp = Path(path).with_suffix(".tmp")
+            tmp.write_text(json.dumps(doc, indent=1, default=str))
+            os.replace(tmp, path)
+    print(json.dumps({k: point.get(k) for k in ("subcircuit", "overhead", "throughput_vu_per_s", "gpu_util", "gpu_held_s_per_vu",
+                                                "verify_s_per_statement", "byte_identical", "flags")}), status,
+          "contract:", out["contract_problems"] or "conforms")
 
 
-def _stored(run: str, research: str) -> dict:
-    """A run's result: its result.json (a local run dir or file), else the store's bench-result/v1 for the attempt."""
-    p = Path(run)
+def _validate(res: dict) -> list[str]:
+    try:
+        from verity_numerical.bench import contract
+    except ImportError as e:
+        return [f"contract unavailable: {e}"]
+    return contract.validate(res)
+
+
+def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, peak: dict) -> dict:
+    """The campaign contract's result.json for this step (verity_numerical.bench.contract): one statement's coordinates are
+    the VUs, t.total its prover seconds (M0's T_prove), the buckets both reps of the median timed run."""
+    from verity_numerical.bench import contract
+
+    b, ms = lv.get("buckets") or [], []
+    if status == "passed" and out.get("statement_s"):
+        n, total = out["coords_per_statement"], out["statement_s"]
+        rep = lambda k: sum(r.get(k) or 0.0 for r in b)  # noqa: E731
+        ms = [contract.measurement("t.total", total), contract.measurement("t.witness", rep("t.witness")),
+              contract.measurement("t.encoding_commitment", rep("t.encoding_commitment")), contract.measurement("t.arithmetic", rep("t.arithmetic")),
+              contract.measurement("t.serialization", rep("h.serialize")),
+              contract.measurement("vu.count", n), contract.measurement("vu.seconds_per_vu", total / n), contract.measurement("vu.per_second", n / total),
+              *([contract.measurement("t.total_live", max(total, out["session_s_per_statement"]))] if out.get("session_s_per_statement") else []),
+              *([contract.measurement("verifier.seconds", out["verify_s_per_statement"])] if out.get("verify_s_per_statement") is not None else []),
+              *([contract.measurement("fixed.setup_seconds", out["setup_s"])] if out.get("setup_s") is not None else []),
+              *[{"name": f"hill.{k}", "value": out[k], "unit": u} for k, u in (
+                  ("overhead", "ratio"), ("t_native_s_per_coord", "s"), ("throughput_coords_per_s", "1/s"), ("gpu_util_steady", "fraction"),
+                  ("gpu_util_job", "fraction"), ("gpu_held_s_per_coord", "s"), ("gpu_held_s_job", "s"), ("session_s_per_statement", "s"))
+                if out.get(k) is not None],
+              {"name": "hill.peak_flop_per_second", "value": peak["flop_per_second"], "unit": "FLOP/s"},
+              *[{"name": f"hill.t_{k[2:]}", "value": rep(k), "unit": "s"} for k in ("t.zerocheck", "t.lincheck", "t.ring_switch", "t.ligerito")
+                if any(k in r for r in b)]]
+    fp = contract.fingerprint(
+        profile=PROFILE, domain=out.get("domain") or "total", K=a.K, B=out.get("coords_per_statement") or 1, proof_class="NON_ZK_PROOF",
+        authentication="included-hash", zk_mode=contract.ZK_NONE,
+        security={"target": -100, "profile": "fast100", "reps": 2, "coins": f"{COINS}: the step-0 seed's SHA-256 counter-mode PRF under a "
+                  "SHA-512 commitment (flock-circuit's non-ZK default), beyond SHA-512 collision resistance"},
+        hardware=contract.probe_hardware(),
+        software={"backend": {"name": "flock-circuit", "configuration": "C-interactive/flock-circuit serve + prove --gpu (loopback verifier "
+                              "in series)", "commit": out["commit"]["commit"], "dirty": out["commit"]["dirty"], "binary_sha256": _read(a.binary_sha),
+                              "prover": lv.get("prover"), "env": {k: os.environ.get(k) for k in ("FC_PIPELINE_DEPTH", "FC_HOST_PREPIN")}},
+                  "toolchain": {"python": sys.version.split()[0]}},
+        preprocessing="none amortised: the statement's circuit is lowered and staged once per process (fixed.setup_seconds); every timed "
+                      "session builds its witness and proves both reps afresh",
+        retention="retained", instances=None,
+        subcircuit=subcircuit(a.K)["id"], definition=out.get("definition"), statement_digest=out.get("statement_digest"), dense_m=out.get("m"),
+        k_log=out.get("k_log"), tile=out.get("tile"), vcpu=out["vcpu"], hill_peak={"census_id": a.peak_id, "flop_per_second": peak["flop_per_second"],
+                                                                                    "device": peak.get("device")},
+        coins=COINS, flags=out["flags"], hill={"step": a.step, "label": a.label})
+    return {"schema": contract.RESULT_SCHEMA, "run_id": out["run_id"] or "local", "workload_fingerprint": fp,
+            "validation": {"status": status, "checker": "byte identity at B = 16: " + ", ".join(GS.GATE_CASES),
+                           "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/gate/classes/results.jsonl"]},
+            "measurements": ms, "measurement_files": ["out/metrics.json", "out/results.jsonl"], "artifacts": ["hillclimb.json"]}
+
+
+def _read(path: str | None) -> str | None:
+    try:
+        return Path(path).read_text().split()[0] if path else None
+    except (OSError, IndexError):
+        return None
+
+
+def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed: list) -> dict:
+    """The step's verity/hillclimb-point/v0 record (lanes/console/20260930T2259Z-handoff-from-proofs-hillclimb-plots-spec)."""
+    t = timed[-1][0] if timed else time.time()
+    cap = gpu.get("compute_cap") or ""
+    return {"schema": POINT_SCHEMA, "subcircuit": subcircuit(a.K), "step": a.step, "label": a.label, "commit": out["commit"]["commit"],
+            "run_id": out["run_id"], "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)),
+            "hardware": {"gpu": gpu.get("name"), "sm": f"sm_{cap.replace('.', '')}" if cap else None, "node": a.node, "vcpu": out["vcpu"]},
+            "peak_flop_per_s": peak["flop_per_second"], "peak_census_id": a.peak_id, "vus": out.get("coords_per_statement"),
+            "t_prove_s_per_vu": out.get("t_prove_s_per_coord"), "setup_s": out.get("setup_s"), "overhead": out.get("overhead"),
+            "throughput_vu_per_s": out.get("throughput_prove_coords_per_s"), "gpu_util": out.get("gpu_util_steady"),
+            "gpu_held_s_per_vu": out.get("gpu_held_s_per_coord"), "verify_s_per_statement": out.get("verify_s_per_statement"),
+            "byte_identical": g["status"] == "passed" and bool(out.get("accepted")), "coins": COINS, "flags": flags,
+            "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
+            "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
+            "gpu_util_job": out.get("gpu_util_job")}
+
+
+def rollup(a) -> None:
+    """Append a point to its subcircuit's roll-up (verity/hillclimb-rollup/v0), the whole file written beside it and renamed over
+    it; strings cut at 200 characters and the commit at 12. A point whose run is already there is not appended twice."""
+    pt = json.loads(Path(a.point).read_text())
+    f = Path(a.file)
+    doc = json.loads(f.read_text())
+    if doc.get("schema") != ROLLUP_SCHEMA or pt.get("schema") != POINT_SCHEMA or doc["subcircuit"]["id"] != pt["subcircuit"]["id"]:
+        raise SystemExit(f"{f}: not the roll-up of {pt.get('subcircuit', {}).get('id')}")
+    if pt.get("run_id") and any(p.get("run_id") == pt["run_id"] for p in doc["points"]):
+        print(f"{pt['run_id']} is already in {f}")
+        return
+    cut = lambda v: v[:200] if isinstance(v, str) else [cut(x) for x in v] if isinstance(v, list) else {k: cut(x) for k, x in v.items()} if isinstance(v, dict) else v  # noqa: E731
+    pt = cut(pt)
+    pt["commit"] = (pt.get("commit") or "")[:12]
+    doc["points"].append(pt)
+    doc["updated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(doc) + "\n")
+    os.chmod(tmp, 0o664)
+    os.replace(tmp, f)
+    print(f"{f}: {len(doc['points'])} points")
+
+
+def _points(src: str, research: str) -> list[dict]:
+    """hillclimb points from a roll-up or point file, else the store's hillclimb-point/v0 output of the attempt `src`."""
+    p = Path(src)
     if p.exists():
-        return json.loads((p / "result.json" if p.is_dir() else p).read_text())
-    arts = json.loads(subprocess.run([research, "data", "select", "--attempt", run, "--kind", "bench-result/v1", "--json"],
+        doc = json.loads(p.read_text())
+        return doc["points"] if doc.get("schema") == ROLLUP_SCHEMA else [doc]
+    arts = json.loads(subprocess.run([research, "data", "select", "--attempt", src, "--kind", "hillclimb-point/v0", "--json"],
                                      capture_output=True, text=True, check=True).stdout)
     if not arts:
-        raise SystemExit(f"{run}: no bench-result/v1 in the store")
-    return arts[0]["manifest"]["meta"]
+        raise SystemExit(f"{src}: no hillclimb-point/v0 in the store")
+    import tempfile
 
-
-def _step_label(run: str, research: str) -> str | None:
-    if Path(run).exists():
-        return None
-    r = subprocess.run([research, "data", "labels", run, "--key", "hill.step", "--json"], capture_output=True, text=True)
-    try:
-        rows = json.loads(r.stdout)
-    except json.JSONDecodeError:
-        return None
-    vals = [x.get("value") for x in (rows if isinstance(rows, list) else rows.get("labels", [])) if isinstance(x, dict)]
-    return str(vals[-1]) if vals else None
+    with tempfile.TemporaryDirectory() as d:
+        subprocess.run([research, "data", "fetch", arts[0]["id"], "--to", d], capture_output=True, text=True, check=True)
+        return [json.loads(f.read_text()) for f in Path(d).rglob("*.json")][:1]
 
 
 def plot(a) -> None:
+    """Per subcircuit, the console's three panels over the steps: overhead (log, best-so-far over byte-identical points),
+    throughput, and GPU utilization with GPU-held seconds per VU on its own axis; a point that fails the gate is hollow."""
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     research = os.environ.get("RESEARCH_BIN", "research")
-    pts = []
-    for i, run in enumerate(a.runs):
-        doc = _stored(run, research)
-        fp, ms = doc["workload_fingerprint"], {m["name"]: m["value"] for m in doc["measurements"]}
-        step = a.steps[i] if a.steps and i < len(a.steps) else (_step_label(run, research) or (fp.get("commit") or "")[:9] or run)
-        pts.append({"run": run, "step": step, "K": fp["K"], "gpu": fp.get("gpu"), "peak_id": fp.get("peak_id"), "flags": fp.get("flags"),
-                    "byte_identity": doc["validation"]["status"], **ms})
+    pts = [pt for src in a.points for pt in _points(src, research)]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "points.json").write_text(json.dumps(pts, indent=1))
-    for K in sorted({p["K"] for p in pts}):
-        ps = [p for p in pts if p["K"] == K]
-        x = list(range(len(ps)))
-        fig, ax = plt.subplots(1, 3, figsize=(15, 4.2))
-        bad = [i for i, p in enumerate(ps) if p["byte_identity"] != "passed"]
-        panels = [("overhead", [("overhead", "T_prove / T_native", "o-")], "x native (log)", True),
-                  ("throughput", [("throughput_coords_per_s", "sessions back to back, verifier included", "o-"),
-                                  ("throughput_prove_coords_per_s", "1 / T_prove", "s--")], "coordinates / s", True),
-                  ("GPU utilization", [("gpu_util_steady", "timed sessions", "o-"), ("gpu_util_job", "whole job", "s--")], "dmon sm %", False)]
-        for axi, (title, series, ylab, log) in zip(ax, panels):
-            for key, lab, sty in series:
-                ys = [p.get(key) for p in ps]
-                ys = [100 * y if y is not None and title == "GPU utilization" else y for y in ys]
-                axi.plot([i for i, y in zip(x, ys) if y is not None], [y for y in ys if y is not None], sty, label=lab)
-                axi.plot([i for i in bad if ys[i] is not None], [ys[i] for i in bad if ys[i] is not None], "rx", ms=12)
-            axi.set_title(title)
-            axi.set_ylabel(ylab)
-            if log:
-                axi.set_yscale("log")
-            else:
-                axi.set_ylim(0, 100)
-            axi.set_xticks(x, [p["step"] for p in ps], rotation=30, ha="right", fontsize=8)
+    for sid in sorted({p["subcircuit"]["id"] for p in pts}, key=lambda s: (len(s), s)):
+        ps = sorted((p for p in pts if p["subcircuit"]["id"] == sid), key=lambda p: (p["step"], p.get("time_utc") or ""))
+        good = [p for p in ps if p.get("byte_identical")]
+        fig, ax = plt.subplots(3, 1, figsize=(8, 9), sharex=True)
+
+        def series(axi, key, color, label, scale=1.0):
+            for p in ps:
+                if p.get(key) is not None:
+                    axi.plot(p["step"], p[key] * scale, "o", color=color, mfc=color if p.get("byte_identical") else "none", ms=8)
+            axi.plot([], [], "o", color=color, label=label)
+
+        series(ax[0], "overhead", "C0", "overhead = peak / R_proved")
+        best, lo = [], None
+        for p in good:
+            if p.get("overhead") is not None:
+                lo = p["overhead"] if lo is None else min(lo, p["overhead"])
+                best.append((p["step"], lo))
+        if best:
+            ax[0].step([s for s, _ in best], [v for _, v in best], where="post", color="C0", alpha=0.5, label=f"best so far {best[-1][1]:.3g}x")
+        ax[0].set_yscale("log")
+        ax[0].set_ylabel("x native peak (log)")
+        series(ax[1], "throughput_vu_per_s", "C1", "VUs / t_prove")
+        ax[1].set_ylabel("VUs (coordinates) / s")
+        series(ax[2], "gpu_util", "C2", "SM-active fraction (timed sessions, verifier included)")
+        ax[2].set_ylim(0, 1)
+        ax[2].set_ylabel("GPU utilization")
+        tw = ax[2].twinx()
+        series(tw, "gpu_held_s_per_vu", "C3", "GPU-held s / VU")
+        tw.set_ylabel("GPU-held s / VU")
+        tw.set_ylim(bottom=0)
+        steps = sorted({p["step"] for p in ps})
+        ax[2].set_xticks(steps, [str(s) for s in steps])
+        ax[2].set_xlabel("optimization step")
+        for axi in (*ax, tw):
+            axi.legend(fontsize=7, loc="best")
+        for axi in ax:
             axi.grid(alpha=0.3)
-            axi.legend(fontsize=7)
+        last = ps[-1]
         flags = sorted({f for p in ps for f in (p.get("flags") or [])})
-        fig.suptitle(f"GemmCoordinate_v2{{K={K}, DOT={DOT}}} on {ps[-1]['gpu']}; P_peak {ps[-1]['peak_id']}"
-                     + (f"; flags: {'; '.join(flags)}" if flags else "") + ("; red x: byte identity not passed" if bad else ""), fontsize=9)
+        fig.suptitle(f"{sid}, DOT={last['subcircuit']['dot']}\n{last['hardware']['gpu']} ({last['hardware'].get('vcpu')} vCPU); peak "
+                     f"{last['peak_census_id']} {last['peak_flop_per_s'] / 1e12:.0f} TFLOPS" + (f"\nflags: {', '.join(flags)}" if flags else "")
+                     + ("; hollow: byte identity not passed" if len(good) < len(ps) else ""), fontsize=9)
         fig.tight_layout()
-        fig.savefig(out / f"gemm-hill-K{K}.png", dpi=120)
+        fig.savefig(out / f"hill-{sid.replace('/', '-').replace('=', '')}.png", dpi=110)
         plt.close(fig)
-    print(json.dumps([{k: p.get(k) for k in ("run", "step", "K", "overhead", "throughput_coords_per_s", "gpu_util_steady")} for p in pts]))
+    print(json.dumps([{k: p.get(k) for k in ("run_id", "step", "overhead", "throughput_vu_per_s", "gpu_util", "gpu_held_s_per_vu")}
+                      | {"id": p["subcircuit"]["id"]} for p in pts]))
     if a.put:
-        meta = {"what": "gemm-hill plots, one per K: overhead, throughput and GPU utilization over the steps", "runs": a.runs,
-                "steps": [p["step"] for p in pts], "question": QUESTION}
+        meta = {"what": "hillclimb plots, one per subcircuit: overhead, throughput, GPU utilization and GPU-held s / VU over the steps",
+                "sources": a.points, "runs": [p.get("run_id") for p in pts], "question": QUESTION}
         r = subprocess.run([research, "data", "put", "--kind", "plot/v1", "--tree", str(out), "--meta", json.dumps(meta), "--preserve"],
                            capture_output=True, text=True)
         print(r.stdout.strip() or r.stderr.strip())
@@ -387,15 +515,22 @@ def main() -> None:
     m.add_argument("--census", default="census/hardware.json")
     m.add_argument("--peak-id", default=PEAK_ID)
     m.add_argument("--root", default=".")
+    m.add_argument("--binary-sha", default=None)
+    m.add_argument("--step", type=int, default=0)
+    m.add_argument("--label", default="baseline")
+    m.add_argument("--node", default="vy-nebius-1")
     m.add_argument("--out", required=True)
     m.add_argument("--result", required=True)
+    m.add_argument("--hillclimb", default=None)
+    r = sub.add_parser("rollup")
+    r.add_argument("--point", required=True)
+    r.add_argument("--file", required=True)
     p = sub.add_parser("plot")
-    p.add_argument("runs", nargs="+")
-    p.add_argument("--steps", nargs="*", default=None)
+    p.add_argument("points", nargs="+")
     p.add_argument("--out", required=True)
     p.add_argument("--put", action="store_true")
     a = ap.parse_args()
-    {"defs": defs, "dmon": dmon, "stamp": stamp, "metrics": metrics, "plot": plot}[a.cmd_](a)
+    {"defs": defs, "dmon": dmon, "stamp": stamp, "metrics": metrics, "rollup": rollup, "plot": plot}[a.cmd_](a)
 
 
 if __name__ == "__main__":

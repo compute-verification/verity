@@ -661,6 +661,7 @@ def _stage_job_fresh(s: str) -> dict:
     else:
         try:
             rec["ands"] = cc.counts["ands"]
+            rec["domain"] = "finite-only" if cc.circuit.asserts else "total"
             rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
             tile = GEMM_TILE if GEMM_TILE and str(uc.definition).startswith("GemmCoordinate") and _tile_fits(cc, *GEMM_TILE) else None
             if tile:
