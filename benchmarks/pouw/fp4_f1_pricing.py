@@ -496,17 +496,39 @@ def attack(args):
 VARIANTS = ("base", "f1", "f1_in")     # v1 now (term 1 on the witness); F1′ as stated; F1′ with κ inside
 
 
-def linear(X, W, rng, law, max_cols, m_shape, fmt="nv"):
-    """X: (m, k) activations as a float array; W: (n, k) weights as a torch tensor (only the sampled tiles are read)."""
+def split_keep(X):
+    """GPU 5's stand-in split unit (`benchmarks/pouw/pearl_c4/real.py`): the ⌊k/100⌋ channels with the largest max|x| over
+    the captured rows leave the chain as the side product, ties to the lower channel; the kept ones, in order."""
+    k = X.shape[1]
+    side = np.lexsort((np.arange(k), -np.abs(X).max(0)))[:k // 100]
+    return np.setdiff1d(np.arange(k), side)
+
+
+def unit(Z, keep, k_unit):
+    out = np.zeros((len(Z), k_unit))
+    out[:, :len(keep)] = Z[:, keep]
+    return out
+
+
+def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False):
+    """X: (m, k) activations as a float array; W: (n, k) weights as a torch tensor (only the sampled tiles are read).
+    With `split`, the census is of the split unit: the kept channels zero-padded to a multiple of 128 on both sides."""
     B = BLOCK[fmt]
     X = bf16(X)
-    m, k = X.shape
+    m, k_full = X.shape
     n = W.shape[0]
     m -= m % T
-    k -= k % B
-    cL = c_L(m_shape or m, k, n, B)
     cols = sorted(rng.choice(n // T, min(n // T, max_cols), replace=False))
-    Wj = bf16(np.concatenate([W[c * T:(c + 1) * T].float().numpy() for c in cols]))[:, :k]
+    Wj = bf16(np.concatenate([W[c * T:(c + 1) * T].float().numpy() for c in cols]))
+    side_share = 0.0
+    if split:
+        keep = split_keep(X)
+        k_unit = -(-len(keep) // 128) * 128
+        X, Wj = unit(X, keep, k_unit), unit(Wj, keep, k_unit)
+        side_share = 1 - len(keep) / k_full
+    k = X.shape[1] - X.shape[1] % B
+    cL = c_L(m_shape or m, k, n, B)
+    Wj = Wj[:, :k]
     Xa = X[:m, :k]
     a, b = side_fmt(Xa, fmt), side_fmt(Wj, fmt)
     la, lb = law_side(Xa, rng, law, fmt=fmt, sd=a), law_side(Wj, rng, law, fmt=fmt, sd=b)
@@ -554,7 +576,8 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv"):
     o = {key: np.array([t[key] for t in rows]) for key in rows[0]}
     cred = o["cred"]
     tot = cred.sum()
-    out = dict(k=k, n=n, tiles=len(cred), macs=float(m * n * k), dnf_fail=float(1 - ok_all.mean()), c_L=cL,
+    out = dict(k=k, n=n, tiles=len(cred), macs=float(m * n * k_full), dnf_fail=float(1 - ok_all.mean()), c_L=cL,
+               side_share=side_share,
                f2_max=float(o["f2"].max()), f2_cl0_max=float(o["f2_cl0"].max()), fAB_max=float(o["fAB"].max()),
                fAB_median=float(np.median(o["fAB"])), tiles_f1_chain_over=int((o["f1_chain"] > CAP).sum()),
                f1_row_a=dict(mean=float(fa_row.mean()), p99=float(np.quantile(fa_row, 0.99)), max=float(fa_row.max())),
@@ -638,7 +661,7 @@ def real(args):
     for i, nm in enumerate(lins):
         x, w = got.pop(nm).float().numpy(), weight(nm)
         for fmt in args.fmts:
-            r = allres[fmt][nm] = linear(x, w, rng, args.law, args.max_cols, args.m_shape, fmt)
+            r = allres[fmt][nm] = linear(x, w, rng, args.law, args.max_cols, args.m_shape, fmt, args.split)
             if r["f1"]["over"] > 0 or r["base"]["over"] > 0 or r["f1_in"]["over"] > 0 or i % 20 == 0:
                 print(f"{fmt} {nm:40s} k={r['k']:5d} n={r['n']:5d} over cap: base {100*r['base']['over']:.1f}% F1′ {100*r['f1']['over']:.1f}% "
                       f"κ-in {100*r['f1_in']['over']:.1f}%  worst {100*r['f1']['max']:.3f}% "
@@ -654,6 +677,7 @@ def summarize(args, res, tokens, t0, fmt):
     macs = sum(r["macs"] for r in res.values())
     wavg = lambda f: sum(f(r) * r["macs"] for r in res.values()) / macs  # noqa: E731
     summ = {"model": args.model, "format": fmt, "tokens": tokens, "law": args.law, "max_cols": args.max_cols,
+            "split": bool(getattr(args, "split", False)),
             "layer_step": args.layer_step, "linears": len(res), "tiles": sum(r["tiles"] for r in res.values()),
             "seconds": round(time.time() - t0)}
     for v in VARIANTS:
@@ -668,6 +692,7 @@ def summarize(args, res, tokens, t0, fmt):
                   "rows_excluded_b": wavg(lambda r: r["r1"]["rows_excluded_b"]),
                   "tiles_rejected": sum(r["r1"]["tiles_rejected"] for r in res.values()),
                   "max_tile_debit": max(r["r1"]["max_debit"] for r in res.values())}
+    summ["side_share"] = wavg(lambda r: r.get("side_share", 0.0))
     summ["f1_chain_tiles_over_cap"] = sum(r["tiles_f1_chain_over"] for r in res.values())
     summ["f1_row_a"] = {"mean": wavg(lambda r: r["f1_row_a"]["mean"]), "max": max(r["f1_row_a"]["max"] for r in res.values())}
     summ["f1_row_w"] = {"mean": wavg(lambda r: r["f1_row_w"]["mean"]), "max": max(r["f1_row_w"]["max"] for r in res.values())}
@@ -758,6 +783,7 @@ def main(argv=None) -> int:
     r.add_argument("--layer-step", type=int, default=1, help="decoder layers whose index is a multiple of this, and the last")
     r.add_argument("--m-shape", type=int, default=0, help="the GEMM's m for F2's c_L (default: the tokens captured)")
     r.add_argument("--fmts", nargs="+", choices=("nv", "mx"), default=["nv", "mx"], help="NVFP4 and/or MXFP4 forming")
+    r.add_argument("--split", action="store_true", help="the census of GPU 5's stand-in split unit (⌊k/100⌋ side channels)")
     r.add_argument("--delta-nv", type=float, default=0.25, help="the noise level δ (σ = δρ), a lever; the design's is 1/4")
     r.add_argument("--delta-mx", type=float, default=0.25)
     r.add_argument("--offload", default=None, help="CPU memory for the forward, e.g. 9GiB; the rest streams from disk")
