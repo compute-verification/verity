@@ -112,17 +112,6 @@ def test_commit_pass_without_its_decision_document_is_refused(tmp_path):
         raise AssertionError("a PASS TP1 Commit without verdict.json published")
 
 
-def test_a_config_run_commit_s_decision_document_is_its_config_record(tmp_path):
-    d = tmp_path / "cfg"
-    _w(d / "stages.txt", "commit PASS 2026-09-23T00:00:02Z rc=0\n")
-    _w(d / "config_record.json", {"schema": "verity-vllm/config-record/v1", "outcome": "PASS"})
-    doc = ro.build_outputs(d, "smollm2-135m__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager", "commit", tmp_path / "run_cfg",
-                           {"build": "art:" + "f" * 64})
-    v = next(e for e in doc["outputs"] if e["name"] == "verdict")
-    assert v["meta"]["decision_record"] == "config_record.json" and v["meta"]["outcome"] == "PASS"
-    assert (tmp_path / "run_cfg" / "outputs" / "verdict" / "config_record.json").is_file()
-
-
 def test_failed_commit_names_the_missing_decision_document(tmp_path):
     d = _tp_dir(tmp_path)
     _commit_line(d, "FAIL")
@@ -180,3 +169,22 @@ def test_tp1_layout_unchanged(tmp_path):
     _w(d / "build_summary.json", {"request": {"program_digest": "r" * 64}, "step": {"program_digest": "s" * 64}})
     dig = ro.program_digest(d, "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager")
     assert dig == {"program_digest": "r" * 64, "request_digest": "r" * 64, "step_digest": "s" * 64, "workload_digest": None}
+
+
+def test_a_replay_stage_publishes_the_config_record_it_decided(tmp_path):
+    row = "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    d = tmp_path / "row"
+    _w(d / "stages.txt", "commit PENDING 2026-09-30T00:00:01Z rc=0\nreplay PASS 2026-09-30T00:00:02Z rc=0\n")
+    _w(d / "config_record.json", {"outcome": "PASS"})
+    _w(d / "commit" / "verdict.json", {"commit_pass": True})
+    doc = ro.build_outputs(d, row, "replay", tmp_path / "run", {})
+    v = next(e for e in doc["outputs"] if e["name"] == "verdict")
+    assert (v["kind"], v["meta"]["decision_record"], v["meta"]["outcome"]) == ("vllm-verdict/v1", "config_record.json", "PASS")
+    assert (tmp_path / "run" / "outputs" / "verdict" / "config_record.json").is_file()
+    (d / "config_record.json").unlink()
+    try:
+        ro.build_outputs(d, row, "replay", tmp_path / "run2", {})
+    except ValueError as e:
+        assert "config_record.json" in str(e)
+    else:
+        raise AssertionError("a PASS replay without its config record published")

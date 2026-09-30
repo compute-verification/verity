@@ -18,7 +18,9 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
-k-unit replay (uniform by default, ``--replay-draw``), and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
+k-unit replay (uniform by default, ``--replay-draw``), and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
+``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
+it and writes ``config_record.json``.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
 record incomplete at Commit; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the Commit
@@ -65,6 +67,7 @@ class SingleRow(Row):
         self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
         self.config_run = commit.config_run == "1"
+        self.replay_pending = False
 
     def run(self) -> int:
         try:
@@ -77,6 +80,9 @@ class SingleRow(Row):
                 self.match()
             if stage_on(self.stages, "commit"):
                 self.commit()
+            if stage_on(self.stages, "replay"):
+                RC.replay(self)
+                self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
                 RC.config_record(self)
@@ -84,7 +90,9 @@ class SingleRow(Row):
         finally:
             if self.trap:
                 self.research_result()
-        if self.config_run:
+        if self.replay_pending:
+            self.log("config run PENDING: the C2 replay runs on CPU from the sealed bundle (`row stage replay`), which writes config_record.json")
+        elif self.config_run:
             RC.config_record(self)
         self.tl("row", "end", ("ok", "true"))
         self.timeline_report()
@@ -561,6 +569,8 @@ class SingleRow(Row):
         if self.config_run:                           # one instrumented run (and its control with a baseline), bounded staging, k units
             cmd += [] if ck.config_baseline == "1" else ["--only-arm", "instrumented"]
             cmd += ["--bounded-staging", "--replay-k", str(ck.replay_k), "--replay-draw", ck.replay_draw]
+            if ck.replay_deferred == "1":
+                cmd.append("--replay-deferred")
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
@@ -769,7 +779,7 @@ class SingleRow(Row):
             rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
         if self.config_run:
-            RC.commit_verdict(self, rck, wall)
+            self.replay_pending = RC.commit_verdict(self, rck, wall)
             return
         if rck == 0 and man:
             self.manifest_verify(man)
