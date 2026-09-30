@@ -506,13 +506,16 @@ def merged(atom: Atom, factor: int = 2) -> Atom:
     return m
 
 
-def hot_start(rms: np.ndarray, ia: np.ndarray, rows: int, hot_bits: int) -> np.ndarray:
-    """T1's H = 1.5 * 2^E_H per word, one per A row: the grid 2^(E_H - 23) at 2^-hot_bits of the row's largest RMS atom
-    sum over the given words (``fp4_emulation.py --hot-rule row``)."""
-    rms_row = np.zeros(rows)
-    np.maximum.at(rms_row, ia, rms)
-    eh = np.floor(np.log2(np.maximum(rms_row, 2.0 ** -100))).astype(np.int64) + 23 - hot_bits
-    return np.ldexp(1.5, eh)[ia]
+def hot_start(rms: np.ndarray, ia: np.ndarray, rows: int, hot_bits: int, rule: str = "row") -> np.ndarray:
+    """T1's H = 1.5 * 2^E_H per word, its grid 2^(E_H - 23) at 2^-hot_bits of the RMS atom sum: the row's largest over the
+    given words, one H per A row (``row``, ``fp4_emulation.py --hot-rule row``), or the word's own (``word``, the ideal
+    that GPU 5's product-free per-word estimate aims at)."""
+    if rule == "row":
+        rms_row = np.zeros(rows)
+        np.maximum.at(rms_row, ia, rms)
+        rms = rms_row[ia]
+    eh = np.floor(np.log2(np.maximum(rms, 2.0 ** -100))).astype(np.int64) + 23 - hot_bits
+    return np.ldexp(1.5, eh)
 
 
 def lone_skip_identities(atom: Atom, qa, qb, ia, ib, traj: np.ndarray) -> np.ndarray:
@@ -532,12 +535,12 @@ def lone_skip_identities(atom: Atom, qa, qb, ia, ib, traj: np.ndarray) -> np.nda
 
 
 def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str, delta: float, rng, rows: int,
-                 tile: int = 16, skip_words: int = 128, hot_bits: int = 14, rho: float = 1 / 400) -> dict:
+                 tile: int = 16, skip_tiles: int = 2, hot_bits: int = 14, rho: float = 1 / 400,
+                 hot_rule: str = "row") -> dict:
     """The per-tile replayed debit of §2's items 2 and 5 on every word of ``rows`` x ``rows`` (A rows x B rows), as a share
-    of the tile's chain MACs against the cap rho: v1's chains from +0 and v2's (T1) from H = 1.5 * 2^E_H, one per A row,
-    its grid 2^(E_H - 23) at 2^-hot_bits of the row's largest RMS atom sum over these words (``fp4_emulation.py
-    --hot-rule row``).  Identity atoms are counted as identity steps on every word (a lower bound on the lone-skip
-    test) and by the exact lone-skip test on ``skip_words`` words."""
+    of the tile's chain MACs against the cap rho: v1's chains from +0 and v2's (T1) from H (``hot_start``).  On every
+    tile, identity atoms are counted as identity steps (a lower bound on the debit's lone-skip test); on ``skip_tiles``
+    whole tiles (the worst by that count, and random ones) by the lone-skip test itself."""
     ya, yb = noisy(A, fmt, noise, delta, rng), noisy(B, fmt, noise, delta, rng)
     ca, sa, _ = quantize(ya, fmt)
     cb, sb, _ = quantize(yb, fmt)
@@ -545,25 +548,33 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     qa, qb = (numerators(ca), scale_pairs(scale, sa)), (numerators(cb), scale_pairs(scale, sb))
     ra, rb = min(rows, A.shape[0]) // tile * tile, min(rows, B.shape[0]) // tile * tile
     ia, ib = (x.ravel() for x in np.meshgrid(np.arange(ra), np.arange(rb), indexing="ij"))
-    K = ca.shape[1]
-    keep = rng.choice(len(ia), min(skip_words, len(ia)), replace=False)
-    out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(ra // tile * rb // tile), "k": int(K), "rho": rho,
-           "hot_bits": hot_bits, "skip_words": int(len(keep))}
+    K, nt = ca.shape[1], (ra // tile) * (rb // tile)
+    out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(nt), "k": int(K), "rho": rho,
+           "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles}
     cold = None
     for name in ("v1", "v2"):
-        acc0 = np.zeros(len(ia)) if name == "v1" else hot_start(cold["rms"], ia, ra, hot_bits)
-        r = debit_chain(atom, qa, qb, ia, ib, acc0, keep)
+        acc0 = np.zeros(len(ia)) if name == "v1" else hot_start(cold["rms"], ia, ra, hot_bits, hot_rule)
+        r = debit_chain(atom, qa, qb, ia, ib, acc0, np.arange(len(ia)))
         cold = r if name == "v1" else cold
-        k128 = debit_chain(merged(atom), qa, qb, ia, ib, acc0, keep[:0])["final"] if K % (2 * atom.k) == 0 else None
-        skip = lone_skip_identities(atom, qa, qb, ia[keep], ib[keep], r["traj"])
+        k128 = debit_chain(merged(atom), qa, qb, ia, ib, acc0, ia[:0])["final"] if K % (2 * atom.k) == 0 else None
         units = SUBGRID_UNITS * r["subgrid"] + IDENTITY_UNITS * r["ident"]
-        per_tile = units.reshape(ra // tile, tile, rb // tile, tile).sum((1, 3)) / (tile * tile * K)
+        per_tile = units.reshape(ra // tile, tile, rb // tile, tile).sum((1, 3)).ravel() / (tile * tile * K)
+        worst = int(per_tile.argmax())
+        picked = [worst, *map(int, rng.choice(np.delete(np.arange(nt), worst), min(skip_tiles, nt) - 1, replace=False))]
+        exact = []
+        for t in picked:
+            ti, tj = divmod(t, rb // tile)
+            w = ((ti * tile + np.arange(tile))[:, None] * rb + tj * tile + np.arange(tile)).ravel()
+            skip = lone_skip_identities(atom, qa, qb, ia[w], ib[w], r["traj"][w])
+            exact.append({"tile": [ti, tj], "step_identity_share": float(per_tile[t]),
+                          "lone_skip_share": float((SUBGRID_UNITS * r["subgrid"][w] + IDENTITY_UNITS * skip).sum()
+                                                   / (tile * tile * K)),
+                          "lone_skip_identities": float(skip.sum() / (len(w) * r["steps"]))})
         out[name] = {"subgrid_groups": float(r["subgrid"].sum() / (len(ia) * r["steps"] * atom.groups)),
                      "identity_steps": float(r["ident"].sum() / (len(ia) * r["steps"])),
-                     "identity_steps_on_skip_words": float(r["ident"][keep].sum() / (len(keep) * r["steps"])),
-                     "lone_skip_identities_on_skip_words": float(skip.sum() / (len(keep) * r["steps"])),
                      "tile_debit_share": {"mean": float(per_tile.mean()), "max": float(per_tile.max()),
                                           "over_rho": float((per_tile > rho).mean())},
+                     "tile_debit_exact": exact, "tile_debit_exact_max": max(e["lone_skip_share"] for e in exact),
                      "merged_k128_words_equal": None if k128 is None else float((k128 == r["final"]).mean())}
     return out
 
@@ -838,15 +849,15 @@ def cmd_debit(args) -> dict:
         for label, A, B in cells:
             for noise in args.noise.split(","):
                 try:
-                    r = debit_census(atom, fmt, A, B, noise, args.delta, rng, args.pairs, hot_bits=args.hot_bits)
+                    r = debit_census(atom, fmt, A, B, noise, args.delta, rng, args.pairs, hot_bits=args.hot_bits,
+                                     hot_rule=args.hot_rule)
                 except OverflowError as e:
                     r = {"outside_model": str(e)}
                 res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
                 print(json.dumps({"format": fmt, **label, "noise": noise, **{
                     f"{v}_{q}": round(r[v][key], 6) for v in ("v1", "v2") if v in r
                     for q, key in (("subgrid", "subgrid_groups"), ("ident", "identity_steps"),
-                                   ("skip_ident", "lone_skip_identities_on_skip_words"))},
-                    **{f"{v}_tile_max": round(r[v]["tile_debit_share"]["max"], 6) for v in ("v1", "v2") if v in r},
+                                   ("tile_max", "tile_debit_exact_max"))},
                     **{f"{v}_k128_equal": r[v]["merged_k128_words_equal"] for v in ("v1", "v2") if v in r}}), flush=True)
     return res
 
@@ -943,7 +954,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--operand", choices=["a", "b"], default="a", help="basesplit/merge: activations (a) or weights (b)")
     ap.add_argument("--max-k", type=int, default=0)
     ap.add_argument("--partner-blocks", type=int, default=256, help="merge: k-blocks the adaptive partner search covers")
-    ap.add_argument("--hot-bits", type=int, default=14, help="debit: v2's H sits 2^-hot_bits above the row's largest RMS atom sum")
+    ap.add_argument("--hot-bits", type=int, default=14, help="debit: v2's H has its grid at 2^-hot_bits of the RMS atom sum")
+    ap.add_argument("--hot-rule", choices=["row", "word"], default="row", help="debit: whose RMS atom sum sets v2's H")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="")
     args = ap.parse_args(argv)
@@ -979,7 +991,7 @@ def main() -> None:
         out.write_text(json.dumps(doc, indent=1) + "\n")
         es = [r["words"]["exact_steps"] for r in doc["results"] if "words" in r]
         eps = [r["eps_R_strict_max"] for r in doc["results"] if "eps_R_strict_max" in r]
-        tiles = [r[v]["tile_debit_share"]["max"] for r in doc["results"] for v in ("v1", "v2") if v in r]
+        tiles = [r[v]["tile_debit_exact_max"] for r in doc["results"] for v in ("v1", "v2") if v in r]
         if tiles:
             run_result.write(out, all("v1" in r for r in doc["results"]), f"fp4-census-{args.cmd}",
                              f"{len(doc['results'])} cells; worst tile debit share {max(tiles):.6f}",

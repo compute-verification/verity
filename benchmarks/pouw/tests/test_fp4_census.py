@@ -250,3 +250,17 @@ def test_merged_atom_is_the_pinned_align_add_over_eight_groups():
             word = ref.chain(C.f32_word(acc0[w]), [int(v) for v in ca[ia[w]]], [int(v) for v in cb[ib[w]]],
                              [int(v) for v in sa[ia[w]]], [int(v) for v in sb[ib[w]]])
             assert word == C.f32_word(got[w])
+
+
+def test_debit_census_exact_tiles_bound_the_step_count_from_above():
+    """Each tile's lone-skip debit is at least its identity-step count, the worst tile by that count is among those
+    replayed, and a freezing family charges v1 and v2 alike while Gaussians charge nearly nothing."""
+    atom, fmt = C.atoms_from(C.parse_args(["debit", "--atom", "blackwell_sm120_nvf4_m16n8k64"]))["blackwell_sm120_nvf4_m16n8k64"]
+    rng = np.random.default_rng(13)
+    for fam, lo, hi in (("acc-freeze", 0.1, 10.0), ("gaussian", 0.0, 1e-3)):
+        A, B = C.family(fam, 32, 1024, rng)
+        r = C.debit_census(atom, fmt, A, B, "none", 0.25, rng, 32)
+        for v in ("v1", "v2"):
+            assert all(e["lone_skip_share"] >= e["step_identity_share"] for e in r[v]["tile_debit_exact"])
+            assert r[v]["tile_debit_exact"][0]["step_identity_share"] == r[v]["tile_debit_share"]["max"]
+            assert lo <= r[v]["tile_debit_exact_max"] <= hi
