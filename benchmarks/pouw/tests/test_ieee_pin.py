@@ -6,6 +6,7 @@ toolkit's entry in `sass_pins.json`, with every pinned build passing the gate an
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -59,6 +60,15 @@ def test_a_run_that_differs_skips_or_sees_no_subnormals_fails(run, why):
 def test_a_control_must_differ_somewhere():
     assert "exact everywhere" in IP.judge_run(good_run(), control=True)[0]
     assert IP.judge_run(with_check(good_run(), "host_div", bad=9), control=True) == []
+
+
+def test_every_shipped_toolkit_names_a_run_of_these_builds():
+    """A repin that changes a body drops its toolkit's run (`sass_gate.update_pins`), and a toolkit without one exempts
+    nothing; a change to the pinned builds needs a new run too."""
+    want = [" ".join(["nvcc", *IP.NVCC_ARGS, *flags]) for flags in IP.PINNED]
+    for name, tk in SG.load_pins()["toolkits"].items():
+        assert tk["numeric"] and re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", tk["numeric"]["run"]), name
+        assert tk["numeric"]["builds"] == want, name
 
 
 @pytest.mark.slow
