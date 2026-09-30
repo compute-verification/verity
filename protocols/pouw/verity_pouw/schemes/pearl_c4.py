@@ -572,13 +572,15 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
     pairs = sum(p and q for i in rows for j in cols for p, q in zip(blocks_a[i], blocks_b[j]))
     unneeded = [all(b.codes[j][t] & 7 == 0 for j in cols) for t in range(len(a.codes[0]))]
     elements = sum(d or u for i in rows for d, u in zip(dead_a[i], unneeded))
+    screened_only = sum(not (d or u) and blocks_a[i][t // fmt.block]
+                        for i in rows for t, (d, u) in enumerate(zip(dead_a[i], unneeded)))
     spans = sum(all(win_a[i][w] for i in range(r, r + 16)) for r in range(0, len(a.codes) - 15, 16)
                 for w in range(len(win_a[0])))
     counts = {"salt_dead_a": sum(sum(dead_a[i]) for i in rows), "salt_dead_b": sum(sum(dead_b[j]) for j in cols),
               "two_four_windows_a": sum(sum(win_a[i]) for i in rows), "two_four_windows_b": sum(sum(win_b[j]) for j in cols),
               "d24_spans_a": spans, "identity_atom_words": identity, "subgrid_block_words": subgrid, "dead_pairs": pairs,
               "screened_blocks_a": sum(sum(blocks_a[i]) for i in rows), "screened_blocks_b": sum(sum(blocks_b[j]) for j in cols),
-              "forming_elements": elements, "unneeded_positions": sum(unneeded),
+              "forming_elements": elements, "screened_only_elements": screened_only, "unneeded_positions": sum(unneeded),
               "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
               + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
               "words": len(rows) * len(cols)}
