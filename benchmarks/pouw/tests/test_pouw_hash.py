@@ -62,8 +62,7 @@ def test_against_holds_device_rows_to_the_host_rows(host_rows):
 def test_domain_bytes_are_the_schemes():
     src = (HERE / "pouw_hash.cuh").read_text()
     m = re.search(r"constexpr uint8_t D_MESSAGE = (0x[0-9A-F]+), D_LEAF = (0x[0-9A-F]+), D_ROWS = (0x[0-9A-F]+);", src)
-    fixture = (HERE.parent / "pearl_c" / "fixture.py").read_text()
-    d_rows = int(re.search(r"^FP10_SEGMENT, F32_SEGMENT, D_ROWS = \d+, \d+, (0x[0-9A-Fa-f]+)$", fixture, re.M).group(1), 16)
+    d_rows = 0x23                     # h0's rows domain byte: -h1 commits A's rows with BLAKE3 and has none
     assert [int(x, 16) for x in m.groups()] == [C.D_MESSAGE, C.D_LEAF, d_rows]
     assert re.search(r"constexpr int TILE = 64, CHUNK = (\d+)", src).group(1) == str(C.CHUNK)
 
