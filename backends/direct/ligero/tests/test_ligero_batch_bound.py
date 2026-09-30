@@ -2,7 +2,7 @@
 sub-batch proofs is accepted iff every proof verifies, the union of the verifier's OWN per-proof bounds over the N
 presented is <= 2^-target, and every proof's n_proofs is N.  ``protocol.batch_bound`` is the rule (arithmetic; the
 reason strings are shared with backends/ligero-verify); ``serialize.verify_batch_dir`` is the file-level batch verifier,
-exercised on copies of the committed B = 1 fixture (backends/ligero-verify/fixtures, l = 256, ZK interactive, sized
+exercised on copies of the fetched B = 1 fixture (backends/ligero-verify/fixtures, l = 256, ZK interactive, sized
 for n_proofs = 1 at 2^-128.16) exactly as tests/fixture.rs exercises the Rust one.  Needs torch (the Python verifier)
 -- skipped on a laptop without it; the fixture verifications run on the CPU (a few seconds each)."""
 from __future__ import annotations
@@ -52,6 +52,7 @@ def test_batch_bound_is_the_union_bound_with_the_shared_reason_strings():
 
 
 def _copies(tmp_path: Path, name: str, n: int, claimed: int) -> Path:
+    assert (FIXTURES / "b1.proof").is_file(), "b1.proof is a fetched fixture: `uv run research data fetch-fixtures backends/ligero-verify`"
     st = bytearray((FIXTURES / "b1.stmt").read_bytes())
     assert struct.unpack_from("<I", st, N_PROOFS_OFF)[0] == 1, "the fixture was proved at n_proofs = 1"
     struct.pack_into("<I", st, N_PROOFS_OFF, claimed)
@@ -65,7 +66,6 @@ def _copies(tmp_path: Path, name: str, n: int, claimed: int) -> Path:
     return d
 
 
-@pytest.mark.skipif(not (FIXTURES / "b1.proof").is_file(), reason="no committed fixture")
 @pytest.mark.slow
 def test_python_file_batch_verifier_enforces_the_rule(tmp_path):
     # the statement's n_proofs is not in the statement digest: relabelling it leaves the proof valid, so copies of the
