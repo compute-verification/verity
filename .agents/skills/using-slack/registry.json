@@ -1,9 +1,12 @@
 {
   "schema": "verity/slack-registry/v1",
   "workspace": "computeverification.slack.com",
-  "bot_id": null,
+  "bot_id": "B0C5VQ1KKFW",
   "humans": [
-    {"name": "Daniel Reuter", "slack_user": "U0BEN96ES8Y"}
+    {
+      "name": "Daniel Reuter",
+      "slack_user": "U0BEN96ES8Y"
+    }
   ],
   "channels": {
     "agent-coordination": {
@@ -14,8 +17,15 @@
     "agent-alerts": {
       "id": "C0C5Q30MCNA",
       "purpose": "Machine alerts. Every top-level post is addressed to the subscribers.",
-      "subscribers": ["infra"],
-      "bots": [{"name": "grafana", "bot_id": null}]
+      "subscribers": [
+        "infra"
+      ],
+      "bots": [
+        {
+          "name": "grafana",
+          "bot_id": null
+        }
+      ]
     }
   },
   "handles": [
@@ -24,49 +34,49 @@
       "holder": "the infra coordinator (in the top-level Project; took over node-2 ops at 18:57Z, and owns one-cluster and the GitHub broker)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
-      "usergroup": null
+      "usergroup": "S0C5APDSYF9"
     },
     {
       "handle": "proofs",
       "holder": "the research coordinator (bc-8ece7cde), or the Verity root's successor",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
-      "usergroup": null
+      "usergroup": "S0C5Q6KJZTQ"
     },
     {
       "handle": "circuits",
       "holder": "the vLLM coordinator (bc-ecac3029)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
-      "usergroup": null
+      "usergroup": "S0C5U3LHMFT"
     },
     {
       "handle": "compute-accounting",
       "holder": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
       "remit": "Proof of useful work: protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": null
+      "usergroup": "S0C5U3Q04JD"
     },
     {
       "handle": "memory-accounting",
       "holder": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
       "remit": "Proof of useful space: protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": null
+      "usergroup": "S0C5VRGBZFE"
     },
     {
       "handle": "network-accounting",
       "holder": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
       "remit": "Network accounting: the network warden (protocols/network_warden) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
-      "usergroup": null
+      "usergroup": "S0C6LGGSY6L"
     },
     {
       "handle": "console",
       "holder": "the website worker (bc-41cff24f), moving to a worker on Daniel's laptop",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
-      "usergroup": null
+      "usergroup": "S0C5LSDENA1"
     }
   ]
 }
