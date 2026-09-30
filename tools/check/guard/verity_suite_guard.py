@@ -19,7 +19,8 @@ the reports workers send it. A worker that sends no record fails the suite (`ung
 For `suites.py`'s per-test verdicts it also records each test that passed (every phase, and not an xfail) with its call's
 seconds, each test that failed, and which of the suite's `test_*.py` files were opened while a test module was collected or
 its tests ran (under `"*"` when neither: a session fixture, a conftest). It deselects the tests `VERITY_SUITE_REUSE` names,
-whose passes `suites.py` reuses. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+whose passes `suites.py` reuses, and in an xdist worker it moves the longest tests (`VERITY_SUITE_HEAVY`) to the heads of the
+workers' shares: an order only, which parallel suites declare their outcomes don't depend on. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 """
@@ -160,16 +161,41 @@ def pytest_runtest_protocol(item, nextitem):
         _leave(before)
 
 
+def heavy_first(nodeids: list[str], heavy: list[str], workers: int) -> list[int]:
+    """The order (indices into ``nodeids``) that starts each of the ``heavy`` tests (longest first) at the head of its own
+    worker's first share under xdist's `worksteal` with ``workers`` workers, the other tests in collection order. `worksteal`
+    splits the collection into contiguous shares, one per worker, and steals from a share's tail, so a long test deep in a share
+    starts late and ends the run late."""
+    starts, at = [], 0
+    for i in range(workers):
+        n = (len(nodeids) - at) // (workers - i)
+        if n:
+            starts.append(at)
+        at += n
+    where = {n: i for i, n in enumerate(nodeids)}
+    first = [where[n] for n in dict.fromkeys(heavy) if n in where][:len(starts)]
+    placed = set(first)
+    rest = iter(i for i in range(len(nodeids)) if i not in placed)
+    heads = dict(zip(starts, first))
+    return [heads[p] if p in heads else next(rest) for p in range(len(nodeids))]
+
+
+@pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items) -> None:
-    reuse = os.environ.get("VERITY_SUITE_REUSE")
-    if not reuse:
-        return
-    with open(reuse) as f:
-        ids = set(json.load(f))
-    gone = [i for i in items if i.nodeid in ids]
-    if gone:
-        config.hook.pytest_deselected(items=gone)
-        items[:] = [i for i in items if i.nodeid not in ids]
+    """Deselect the tests `VERITY_SUITE_REUSE` names; in an xdist worker, start the longest of those left at the heads of the
+    workers' shares (`VERITY_SUITE_HEAVY`, longest first; every worker orders its collection alike, as xdist requires)."""
+    if reuse := os.environ.get("VERITY_SUITE_REUSE"):
+        with open(reuse) as f:
+            ids = set(json.load(f))
+        gone = [i for i in items if i.nodeid in ids]
+        if gone:
+            config.hook.pytest_deselected(items=gone)
+            items[:] = [i for i in items if i.nodeid not in ids]
+    workers = (getattr(config, "workerinput", None) or {}).get("workercount", 1)
+    if (heavy := os.environ.get("VERITY_SUITE_HEAVY")) and workers > 1:
+        with open(heavy) as f:
+            order = heavy_first([i.nodeid for i in items], json.load(f), workers)
+        items[:] = [items[i] for i in order]
 
 
 def pytest_runtest_logreport(report) -> None:

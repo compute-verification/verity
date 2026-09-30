@@ -488,3 +488,90 @@ def test_the_child_tracer_hands_on_to_the_interpreter_s_own_sitecustomize(tmp_pa
     p = subprocess.run([sys.executable, "-c", "import builtins, sitecustomize; print(builtins.SYSTEM_SITECUSTOMIZE, sitecustomize.__file__)"],
                        env=env, capture_output=True, text=True)
     assert p.returncode == 0 and p.stdout.startswith("True ") and "guard/child/sitecustomize.py" in p.stdout, p.stdout + p.stderr
+
+
+def _guard(monkeypatch):
+    """The guard module, loaded without its audit hook (which it installs only when `suites.py` runs it)."""
+    monkeypatch.delenv("VERITY_SUITE_ROOT", raising=False)
+    spec = importlib.util.spec_from_file_location("guard_under_test", HERE / "guard" / "verity_suite_guard.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_each_heavy_test_heads_its_own_worker_s_share_under_worksteal(monkeypatch):
+    """The placement matches the split of the pinned pytest-xdist's `worksteal`: each worker is sent a contiguous share at
+    once, and runs it from the head, while steals take from the tail."""
+    from xdist.scheduler.worksteal import WorkStealingScheduling
+
+    G = _guard(monkeypatch)
+    ids = [f"tests/test_{i:02d}.py::test" for i in range(23)]
+    heavy = [ids[22], ids[17], ids[9], "tests/test_gone.py::test"]
+
+    class Node:
+        shutting_down = False
+
+        def __init__(self, i):
+            self.sent, self.gateway = [], type("Gateway", (), {"id": f"gw{i}"})
+
+        def send_runtest_some(self, indices):
+            self.sent += indices
+
+        def shutdown(self):
+            pass
+
+    for workers in (2, 3, 5, 30):
+        order = [ids[i] for i in G.heavy_first(ids, heavy, workers)]
+        assert sorted(order) == sorted(ids)
+        assert [n for n in order if n not in heavy] == [n for n in ids if n not in heavy]
+        sched = WorkStealingScheduling.__new__(WorkStealingScheduling)
+        sched.numnodes, sched.node2collection, sched.node2pending, sched.pending = workers, {}, {}, []
+        sched.collection, sched.log, sched.config, sched.steal_requested_from_node = None, lambda *a: None, None, None
+        nodes = [Node(i) for i in range(workers)]
+        for n in nodes:
+            sched.add_node(n)
+            sched.add_node_collection(n, order)
+        sched.schedule()
+        heads = [order[n.sent[0]] for n in nodes if n.sent]
+        k = min(3, len(heads))
+        assert heads[:k] == heavy[:k], (workers, heads)
+
+
+def test_the_longest_tests_are_read_from_the_newest_kept_passes(tmp_path, monkeypatch):
+    import json
+
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "CACHE", tmp_path / "cache")
+    d = tmp_path / "cache" / "per-test" / "pkg"
+    d.mkdir(parents=True)
+    (d / "a--old.json").write_text(json.dumps({"when": "2026-09-29 10:00", "passed": {"t::a": 90.0, "t::b": 1.0}}))
+    (d / "a--new.json").write_text(json.dumps({"when": "2026-09-30 10:00", "passed": {"t::a": 3.0}}))
+    (d / "b--one.json").write_text(json.dumps({"when": "2026-09-30 09:00", "passed": {"t::c": 5.0, "t::d": 5.0}}))
+    suite = S.Suite("pkg", "pkg", ("pkg",), ())
+    assert S.longest(suite, 3) == ["t::c", "t::d", "t::a"]
+    assert S.longest(S.Suite("other", "other", ("other",), ()), 3) == []
+
+
+def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path):
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (tests / "test_z.py").write_text("import os\n\ndef test_z():\n    pass\n\ndef test_zz():\n    pass\n")
+    for f in tests.glob("test_*.py"):
+        f.write_text(f.read_text() + "\n\nimport os as _os, pytest as _pytest\n\n\n@_pytest.fixture(autouse=True)\n"
+                     "def _order(request):\n    with open(_os.environ['ORDER_LOG'], 'a') as f:\n"
+                     "        f.write(_os.environ.get('PYTEST_XDIST_WORKER', '-') + ' ' + request.node.nodeid + '\\n')\n")
+    kept = tmp_path / "cache" / "per-test" / "pkg"
+    kept.mkdir(parents=True)
+    (kept / "pkg~tests~test_z.py--earlier.json").write_text(json.dumps({"when": "2026-09-30 00:00", "passed": {"tests/test_z.py::test_zz": 120.0}}))
+    log = tmp_path / "order.log"
+    p = _run_suite(root, tmp_path, "--jobs", "2", extra={"ORDER_LOG": str(log)})
+    assert p.returncode == 0 and "on 2 workers" in p.stdout, p.stdout
+    assert json.loads((tmp_path / "logs" / "pkg.heavy.json").read_text())[0] == "tests/test_z.py::test_zz"
+    first = {}
+    for line in log.read_text().splitlines():
+        worker, node = line.split(" ", 1)
+        first.setdefault(worker, node)
+    assert "tests/test_z.py::test_zz" in first.values(), log.read_text()

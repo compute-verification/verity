@@ -47,8 +47,9 @@ outputs, the resolved dependencies, the environment, the pytest arguments), and 
 pass kept here, naming a changed directory's files from git's trees, and says per test module what it reaches that moved.
 
 `--jobs` is how many test processes run at once. A suite that declares `[tool.verity.tests] parallel = true` spreads its tests
-over all of them with pytest-xdist, whose workers load the guard too. Parallel suites run first, one at a time, then the
-others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
+over all of them with pytest-xdist, whose workers load the guard too; each worker's share starts with one of the tests whose
+kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. Parallel suites run first, one
+at a time, then the others side by side, longest first. Without pytest-xdist installed, a parallel suite runs in one process.
 """
 from __future__ import annotations
 
@@ -731,6 +732,21 @@ def _durations() -> dict[str, float]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+def longest(suite: Suite, n: int) -> list[str]:
+    """The ``n`` tests of ``suite`` whose calls took longest when their passes were last kept (`PerTest`), longest first: what
+    the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
+    d = CACHE / PER_TEST / (suite.path.replace("/", "_") if suite.path != "." else "repository")
+    last: dict[str, tuple[str, float]] = {}
+    for p in d.glob("*.json") if d.is_dir() else ():
+        try:
+            e = json.loads(p.read_text())
+        except (OSError, ValueError):
+            continue
+        for node, s in (e.get("passed") or {}).items():
+            last[node] = max(last.get(node, ("", 0.0)), (e.get("when") or "", s))
+    return sorted(last, key=lambda node: (-last[node][1], node))[:n]
+
+
 @dataclass
 class Result:
     suite: Suite
@@ -781,6 +797,11 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     if reuse:
         (logs / f"{slug}.reuse.json").write_text(json.dumps(sorted(reuse)))
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
+    env.pop("VERITY_SUITE_HEAVY", None)
+    (logs / f"{slug}.heavy.json").unlink(missing_ok=True)
+    if workers > 1 and (first := longest(suite, workers)):
+        (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
+        env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     start = time.monotonic()
     with log.open("w") as out:
