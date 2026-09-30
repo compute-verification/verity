@@ -76,6 +76,94 @@ theorem netCols_of_ofRows {net : Net} {u : ℕ} (ha : ∃ ra, Sparse.ofRows ra (
       (∀ i t, i < net.b.rows → t < net.b.len[i]! → net.b.col i t < net.b.width) :=
   ⟨let ⟨_, h⟩ := ha; ofRows_col_lt h, let ⟨_, h⟩ := hb; ofRows_col_lt h⟩
 
+/-! ## `Lookup.build`'s lookup is inside its net -/
+
+/-- `Lookup.decode` only adds rows. -/
+theorem decode_mono (fuel : ℕ) : ∀ (bd : Lookup.Builder) (bits : List ℕ),
+    bd.a.size ≤ (Lookup.decode bd bits fuel).1.a.size := by
+  induction fuel with
+  | zero => intro bd bits; unfold Lookup.decode; split <;> exact le_refl _
+  | succ fuel ih =>
+    intro bd bits
+    unfold Lookup.decode
+    split
+    · exact le_refl _
+    · exact le_refl _
+    · rename_i heq _
+      obtain rfl := Nat.succ.inj heq
+      dsimp only
+      exact foldl_inv (fun s : Lookup.Builder × Array Lookup.Form => bd.a.size ≤ s.1.a.size)
+        (fun s x hs => by simp only [Lookup.row, Array.size_push]; omega) (le_trans (ih _ _) (ih _ _)) rfl
+
+/-- **The low decoder's top block**: for `lo ≥ 2` bits, `decode` returns the first row of the top block it pushed last,
+`2^lo` rows. -/
+theorem decode_top {lo : ℕ} (hlo : 2 ≤ lo) (bd : Lookup.Builder) :
+    (Lookup.decode bd (List.range lo) lo).2.2 + 2 ^ lo = (Lookup.decode bd (List.range lo) lo).1.a.size := by
+  obtain ⟨k, rfl⟩ : ∃ k, lo = k + 1 := ⟨lo - 1, by omega⟩
+  unfold Lookup.decode
+  split
+  · rename_i heq
+    have := congrArg List.length heq
+    simp at this
+    omega
+  · omega
+  · rename_i heq _
+    obtain rfl := Nat.succ.inj heq
+    dsimp only
+    symm
+    refine (foldl_count (fun s : Lookup.Builder × Array Lookup.Form => s.1.a.size) (fun s x => ?_) _ _).trans ?_
+    · simp [Lookup.row]
+    · simp
+
+/-- **What `Lookup.build` builds, for `PlacedWF`**: its matrices are `Sparse.ofRows`'s at its slot size, and its
+lookup has at most 32 output bits and its low minterms inside the `B` width. -/
+theorem build_placed {name : String} {table : ByteArray} {n lo bits : ℕ} {net : Net}
+    (h : Lookup.build name table n lo bits = .ok net) :
+    (∃ ra, Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a) ∧ (∃ rb, Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b) ∧
+      ∀ lk, net.lookup = some lk → lk.loTop + 2 ^ lk.lo ≤ net.b.width ∧ lk.bits ≤ 32 := by
+  unfold Lookup.build at h
+  obtain ⟨hc, h⟩ := ite_throw_ok_not h
+  have hc' : 2 ≤ lo ∧ bits ≤ 32 := by simp at hc; omega
+  obtain ⟨s1, hs1, h⟩ := except_bind_ok h
+  dsimp only at h
+  rcases hd1 : Lookup.decode s1 (List.range lo) lo with ⟨bd1, loM, loTop⟩
+  rw [hd1] at h
+  rcases hd2 : Lookup.decode bd1 ((List.range (n - lo)).map (lo + ·)) (n - lo) with ⟨bd2, hiM, x⟩
+  rw [hd2] at h
+  dsimp only at h
+  obtain ⟨s2, hs2, h⟩ := except_bind_ok h
+  obtain ⟨s3, hs3, h⟩ := except_bind_ok h
+  obtain ⟨s4, hs4, h⟩ := except_bind_ok h
+  obtain ⟨hc2, h⟩ := ite_throw_ok_not h
+  obtain ⟨u, -, h⟩ := except_bind_ok h
+  obtain ⟨a, ha, h⟩ := except_bind_ok h
+  obtain ⟨b, hb, h⟩ := except_bind_ok h
+  cases h
+  have htop := decode_top hc'.1 s1
+  rw [hd1] at htop
+  have hm2 : bd1.a.size ≤ bd2.a.size := by
+    have := decode_mono (n - lo) bd1 ((List.range (n - lo)).map (lo + ·)); rwa [hd2] at this
+  have e1a := forIn_range_pure (fun r : Lookup.Builder => r.a.size) (fun i r => by split <;> simp) hs1
+  have e1b := forIn_range_pure (fun r : Lookup.Builder => r.b.size) (fun i r => by split <;> simp) hs1
+  simp only [Array.size_empty] at e1a e1b
+  have hb1 : bd1.a.size = bd1.b.size := by
+    have := decode_sizes lo s1 (List.range lo) (by omega); rwa [hd1] at this
+  have hb2 : bd2.a.size = bd2.b.size := by
+    have := decode_sizes (n - lo) bd1 ((List.range (n - lo)).map (lo + ·)) hb1; rwa [hd2] at this
+  have e2a := forIn_range_nested (fun r : Lookup.Builder => r.a.size) (fun i r => by simp) hs2
+  have e2b := forIn_range_nested (fun r : Lookup.Builder => r.b.size) (fun i r => by simp) hs2
+  have e3 := while_pad (X := s2.a.size) ⟨le_refl _, by omega⟩ hs3
+  have e4a := forIn_range_pure (fun r : Lookup.Builder => r.a.size) (fun i r => by split <;> simp) hs4
+  refine ⟨⟨_, ha⟩, ⟨_, hb⟩, fun lk hlk => ?_⟩
+  cases hlk
+  refine ⟨?_, hc'.2⟩
+  rw [ofRows_width hb]
+  have hu := le_two_pow_log2ceil (s4.a.size + 1)
+  have hp : 2 ^ log2ceil (s4.a.size + 1) ≤ 2 ^ max 7 (log2ceil (s4.a.size + 1)) :=
+    Nat.pow_le_pow_right (by norm_num) (le_max_right _ _)
+  simp only [Array.size_push] at hu hp ⊢
+  omega
+
 /-! ## The leaf of an accepted statement -/
 
 set_option maxHeartbeats 4000000 in
