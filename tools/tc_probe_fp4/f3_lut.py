@@ -57,6 +57,7 @@ from verity.ml.tc import models as M  # noqa: E402
 ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f3-lut-sm120/v1"
 SRC = HERE / "f3_lut.cu"
+HEADER = HERE / "nvf4_step.cuh"
 NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math (the 09:34Z rule); build refuses them
 LUT_TPB, NATIVE_TPB = 256, 128
 AROW = 9
@@ -322,7 +323,7 @@ def build(out: Path) -> dict:
     cmd = [nvcc, *NVCC_FLAGS, *P.arch_flags(ARCH), "-Xptxas", "-v", "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(SRC)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     rec: dict = {"schema": SCHEMA + "/build", "arch": ARCH, "nvcc_flags": NVCC_FLAGS, "source_sha256": hashlib.sha256(src.encode()).hexdigest(),
-                 "variants": variants(src), "nt": nt_of(src), "so": so.name}
+                 "header_sha256": hashlib.sha256(HEADER.read_bytes()).hexdigest(), "variants": variants(src), "nt": nt_of(src), "so": so.name}
     if r.returncode:
         rec.update(ok=False, error=(r.stderr + r.stdout)[-4000:])
         (out / "build.json").write_text(json.dumps(rec, indent=1) + "\n")
