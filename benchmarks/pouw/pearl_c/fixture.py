@@ -3,7 +3,9 @@ kernels write, for both formings and the plain baseline.  Forming, lines and has
 `verity_pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
 `verity.ml.kernels.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
 `checked`, `digest`, `tickets`) and must agree.  The hashing is format -h1, the verifier's: BLAKE3 messages and leaves,
-and A's rows and the tile leaves committed as `verity_pouw.audit` commits them (frame-b3), whose roots must agree too.
+and A's rows and the tile leaves committed as `verity_pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
+forming's seed_A is its unit's over its own A rows' root (`pearl_c.unit_seed_a`), as the device derives it, so E_A's lines,
+A's forming and the tickets follow A's commitment.
 run.py compares the device's buffers with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
@@ -27,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "protocols" / "pouw" / "tests"))
 
 import pearl_c_vectors as CV  # noqa: E402
-from verity.commitments.blake3 import keyed  # noqa: E402
+from verity.commitments.blake3 import blake3, keyed  # noqa: E402
 from verity.ml.kernels import group_sum_total_batch  # noqa: E402
 from verity.ml.tc import fp32  # noqa: E402
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32  # noqa: E402
@@ -229,21 +231,18 @@ def context(m: int, n: int, k: int) -> Context:
 def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     assert m % 128 == 0 and n % 128 == 0 and k % 1024 == 0, (m, n, k)
     out_dir.mkdir(parents=True, exist_ok=True)
-    ctx = context(m, n, k)
-    noise = C.PearlC().noise(ctx)
-    manifest = {"schema": "verity-pouw/pearl-c-gpu-check/v1", "shape": [m, n, k], "case": CASE,
-                "keys": {"line_a": P._line_key(noise.seed_a).hex(), "line_b": P._line_key(noise.seed_b).hex(),
-                         "jackpot": P.subkey("jackpot", noise.seed_a).hex(), "dom_a": a_domain(ctx).domain_id.hex(),
-                         "dom_t": t_domain(ctx, (m // 64) * (n // 64)).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(),
+    job = context(m, n, k)                      # the salt, the unit and root_B; each forming's root_A is its A rows' root
+    seed_b = C.PearlC().noise(job).seed_b
+    manifest = {"schema": "verity-pouw/pearl-c-gpu-check/v2", "shape": [m, n, k], "case": CASE,
+                "keys": {"salt": job.salt.hex(), "root_b": job.root_b.hex(), "seed_key": blake3(C.LABELS["seed-A"]).hex(),
+                         "line_b": P._line_key(seed_b).hex(), "dom_a": a_domain(job).domain_id.hex(),
+                         "dom_t": t_domain(job, (m // 64) * (n // 64)).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(),
                          "k_leaf": C.H1_KEYS["leaf"].hex()},
-                "hashing": HASHING,
-                "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex()}, "formings": {}}
-    lines = {name: np.array([P.sample_line(seed, side, 0, t) for t in range(count)], np.uint8)
-             for name, seed, side, count in (("ea", noise.seed_a, 0, m), ("eb", noise.seed_b, 1, n))}
+                "unit": {"index": job.matmul.index}, "hashing": HASHING, "seeds": {"seed_b": seed_b.hex()}, "formings": {}}
+    lines = {"eb": np.array([P.sample_line(seed_b, 1, 0, t) for t in range(n)], np.uint8)}
     common = Out(out_dir)
-    for name, x in lines.items():
-        common.put(f"{name}_codes", x, "u8")
-        common.put(f"{name}_tiled", tiled(x, 128), "u8")
+    common.put("eb_codes", lines["eb"], "u8")
+    common.put("eb_tiled", tiled(lines["eb"], 128), "u8")
     manifest["common"] = common.files
 
     with Pool() as pool:
@@ -252,6 +251,17 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             fdir.mkdir(exist_ok=True)
             o = Out(fdir)
             norm = C.PearlC(forming=forming).line_norm
+            make = CV.rows if forming == "v0" else CV.rows_f32
+            ra, rb = make(CASE, "A", m, k), make(CASE, "B", n, k)
+            tree_a = tree_bytes(a_domain(job), ra, ROW_SCHEMA)
+            ctx = Context(job.salt, job.matmul, tree_a[-32:], job.root_b)
+            noise = C.PearlC().noise(ctx)
+            assert noise.seed_a == C.unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index) and noise.seed_b == seed_b
+            o.put("seed_a", noise.seed_a, "u8")
+            o.put("a_keys", P._line_key(noise.seed_a) + P.subkey("jackpot", noise.seed_a), "u8")
+            lines["ea"] = np.array([P.sample_line(noise.seed_a, 0, 0, t) for t in range(m)], np.uint8)
+            o.put("ea_codes", lines["ea"], "u8")
+            o.put("ea_tiled", tiled(lines["ea"], 128), "u8")
             for name, side in (("fa", 0), ("fb", 1)):
                 lines[name] = np.array(C._basis(noise.seed_b, side, k, norm), np.uint8)
                 o.put(f"{name}_codes", lines[name], "u8")
@@ -262,8 +272,6 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             g = product(padded(lines["fb"].T, 128), lines["fa"].T.copy())
             o.put("g", g, "u32")
             assert all(int(g[p, q]) == C.gram(noise.seed_b, k, norm)[p][q] for p, q in ((0, 0), (3, 17), (31, 31)))
-            make = CV.rows if forming == "v0" else CV.rows_f32
-            ra, rb = make(CASE, "A", m, k), make(CASE, "B", n, k)
             o.put("xa", b"".join(ra), "u8")
             o.put("xb", b"".join(rb), "u8")
             a, e_a, na = form(pool, forming, ra, 0, noise.seed_a, noise.seed_b, k)
@@ -306,7 +314,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             lv = leaves(dg, m, n)
             o.put("leaves", lv, "u8")
             o.put("tickets", tickets(c, noise.seed_a), "u8")
-            o.put("tree_a", tree_bytes(a_domain(ctx), ra, ROW_SCHEMA), "u8")
+            o.put("tree_a", tree_a, "u8")
             o.put("tree_t", tree_bytes(t_domain(ctx, len(lv)), lv, TILE_SCHEMA), "u8")
 
             if forming == "v0":
@@ -334,7 +342,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
 
             agree = crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n)
             manifest["formings"][forming] = {"scheme": C.PearlC(forming=forming, hashing=HASHING).name, "files": o.files,
-                                             "crosscheck": agree}
+                                             "seed_a": noise.seed_a.hex(), "crosscheck": agree}
     x, y = ieee_inputs()
     ops, q = ieee_reference(x, y)
     ieee = Out(out_dir)
@@ -394,7 +402,7 @@ def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n) -> dict
     trees' roots as `verity_pouw.audit` commits A's rows and the tile leaves."""
     s = C.PearlC(forming=forming, hashing=HASHING)
     root_a = commit_rows(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ra, s.commitment_hash).commitment.root
-    assert tree_bytes(a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a
+    assert tree_bytes(a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a == ctx.root_a
     tree_t = MerkleTree(t_domain(ctx, len(lv)), dict(enumerate(lv)), lambda _: TILE_SCHEMA)
     assert tree_bytes(t_domain(ctx, len(lv)), lv, TILE_SCHEMA)[-32:] == tree_t.commitment.root
     rows, cols = range(64, 128), range(n - 64, n)

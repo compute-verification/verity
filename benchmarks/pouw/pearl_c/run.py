@@ -10,7 +10,8 @@ only, nothing built on the pod).
    times regardless and says so.
 2. The timing, at each of SHAPES (default 8192 and 16384, m = n = k), for forming v1 (§5), v0 (#311's, as ported) and the
    FP8 baselines, on generated inputs: each kernel launched REPS times after a warm-up, the median per kernel, the phases
-   (per job; the unit's forming, GEMM, clean-up and hashing), the unit end to end with and without hashing, and consistency
+   (per job; the unit's A commitment and seed_A, which forming waits for, then forming, GEMM, clean-up and hashing), the
+   unit end to end with and without hashing, and consistency
    checks at that shape (C~ of gemm_ct equals gemm_pearlc's; a second gemm_pearlc gives the same U).  The baselines share
    the GEMM: plain-max (s = 448/max|x|, `plainq`) for both formings, and for v1 the adopted quantizer (the model's FP8 path
    with PoUW off: e4m3(alpha x) with v1's alpha, `stats_s5` + `quant_s5`).
@@ -38,6 +39,8 @@ NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, a
 #: hashing format -h1's public label keys, blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf") (`pearl_c.H1_KEYS`)
 H1_KEYS = {"k_msg": "071cf46377a5d6f62e118a6c4d1bcd93d8d781af04ef0bdd84f9011381e801d1",
            "k_leaf": "0e661b01c2077b147887d1ee19aed2ddb35c2cc459cc62f6af0b05ea9f926169"}
+#: the seed-A label's key, blake3("pearl-c/v0/seed-A"), under which b3_seeds derives a unit's seed_A (`pearl_c.unit_seed_a`)
+SEED_KEY = "6c8abb01868eaa7a07ed62333c4c6ae75daeb48c0f4e709fe7a6d8401f2a202a"
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
 CUDA = {
@@ -227,16 +230,22 @@ def depth(n: int) -> int:
 class Pipeline:
     """One (shape, forming) instance: its buffers and its kernels in order, each a (name, phase, launch) step.
 
-    The hashing phase's launches go to `hash_stream` (default: the default stream, like the rest).  On a side stream they
+    A unit starts with A's commitment: its rows' frame-b3 tree and, for unit index `unit`, the unit's seed_A over that root
+    (b3_seeds, `pearl_c.unit_seed_a`, from the keys salt, root_b and seed_key) and seed_A's two subkeys (seed_subkeys): E_A's
+    line key and the tickets' key.  So forming waits for A's root, as the protocol has it.  With `unit` None the keys carry
+    line_a and jackpot instead (bench.py: its twin can't hash a whole A of the bench's shapes).
+
+    The post-GEMM hashing's launches go to `hash_stream` (default: the default stream, like the rest).  On a side stream they
     fence themselves: the side stream waits for the default stream's work before the first kernel that reads C~ and U
-    (hash_msg), and the default stream waits for the side stream after the tile tree, so A's rows hash beside the forming
-    and the GEMMs and a unit ends when its tile root is written."""
+    (hash_msg), and the default stream waits for the side stream after the tile tree, so a unit ends when its tile root is
+    written."""
 
     GEMM_SMEM: dict[str, int] = {}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, forming: str, keys: dict[str, int], xa: int, xb: int,
-                 hash_stream=None):
+                 hash_stream=None, unit: int | None = None):
         self.dev, self.m, self.n, self.k, self.forming, self.keys, self.hs = dev, m, n, k, forming, keys, hash_stream
+        self.unit = unit
         v1 = forming == "v1"
         rowa, rowb = (4 * k, 4 * k) if v1 else (k + k // 4, k + k // 4)
         self.row_bytes = rowa
@@ -253,7 +262,7 @@ class Pipeline:
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
             "digests": m * n, "leaves": self.tiles * 32, "tickets": (m // 16) * (n // 16) * 32,
             "tree_a": (2 * pow2(m) - 1) * 32, "tree_t": (2 * pow2(self.tiles) - 1) * 32,
-            "keys_a": 32 * depth(m), "keys_t": 32 * depth(self.tiles),
+            "keys_a": 32 * depth(m), "keys_t": 32 * depth(self.tiles), "seed_a": 32, "a_keys": 64,
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2, "diff": 8,
         }
         if v1:
@@ -287,10 +296,10 @@ class Pipeline:
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms), 384, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, 8))
 
-    def levels(self, name: str, count: int, dom: str, keys: str) -> None:
-        """A frame-b3 tree over `count` leaves already at level 0 of buffer `name`: its pads, its level keys (into buffer
-        `keys`), then each level above."""
-        d, s, base, width, lk = self.dev, self.hs, self.b[name], pow2(count), self.b[keys]
+    def levels(self, name: str, count: int, dom: str, keys: str, s=None) -> None:
+        """A frame-b3 tree over `count` leaves already at level 0 of buffer `name`, on stream s: its pads, its level keys (into
+        buffer `keys`), then each level above."""
+        d, base, width, lk = self.dev, self.b[name], pow2(count), self.b[keys]
         if width > count:
             d.launch("hash_pad", cdiv(width - count, 128), 128, p=(base, self.keys[dom]), i=(count, width), stream=s)
         if width > 1:
@@ -342,7 +351,18 @@ class Pipeline:
                ("bf", lambda: self.gemm("gemm_words", "bt", "faT32", n, 32, out=("bf",))),
                ("g", lambda: self.gemm("gemm_words", "fbT128", "faT32", 128, 32, out=("g",))),
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b[noise_b], b["beta_b"], b["bf"], b["g"], b["pb_t"]), i=(n, fl)))]
-        forming = [lines("ea", self.keys["line_a"], 0, 0, m, "ea_codes", "ea_tiled"),
+        root_a = b["tree_a"] + 32 * (2 * pow2(m) - 2)
+        if self.unit is None:
+            line_a, jackpot, seed = self.keys["line_a"], self.keys["jackpot"], []
+        else:
+            line_a, jackpot = b["a_keys"], b["a_keys"] + 32
+            seed = [("seed_a", lambda: d.launch("b3_seeds", 1, 128, p=(root_a, b["seed_a"], self.keys["seed_key"], self.keys["salt"],
+                                                                    self.keys["root_b"]), i=(1, self.unit, 0))),
+                    ("a_keys", lambda: d.launch("seed_subkeys", 1, 32, p=(b["seed_a"], b["a_keys"])))]
+        commit = [("hash_rows", lambda: d.launch("hash_rows", m, 256, p=(b["xa"], b["tree_a"], self.keys["dom_a"]),
+                                                 i=(m, self.row_bytes))),
+                  ("tree_a", lambda: self.levels("tree_a", m, "dom_a", "keys_a")), *seed]
+        forming = [lines("ea", line_a, 0, 0, m, "ea_codes", "ea_tiled"),
                    *form_side("a", m, "xa", "ea_codes", "ea_tiled", "fa_tiled", "at")]
         gemm = [("gemm_ct", lambda: self.gemm("gemm_ct", "at", "bt", m, n, out=("c2",)))]
         cleanup = [("af", lambda: self.gemm("gemm_words", "at", "fbT32", m, 32, out=("af",))),
@@ -350,20 +370,17 @@ class Pipeline:
                    ("gemm_pearlc", lambda: self.gemm("gemm_pearlc", "at", "bt", m, n, out=("c", "u", "y"), pa=b["pa_t"],
                                                      pb=b["pb_t"], rs=b["ia_a"], cs=b["ia_b"]))]
         hs = self.hs
-        hashing = [("hash_rows", lambda: d.launch("hash_rows", m, 256, p=(b["xa"], b["tree_a"], self.keys["dom_a"]),
-                                                  i=(m, self.row_bytes), stream=hs)),
-                   ("tree_a", lambda: self.levels("tree_a", m, "dom_a", "keys_a")),
-                   ("hash_msg", lambda: (self.fence_in(), d.launch("hash_msg", cdiv(m * n // 32, 128), 128,
+        hashing = [("hash_msg", lambda: (self.fence_in(), d.launch("hash_msg", cdiv(m * n // 32, 128), 128,
                                                                    p=(b["c"], b["u"], b["digests"], self.keys["k_msg"]),
                                                                    i=(m, n), stream=hs))),
                    ("hash_leaf", lambda: d.launch("hash_leaf", cdiv(self.tiles, 64), 64, p=(b["digests"], b["leaves"],
                                                                                            self.keys["k_leaf"]), i=(m, n),
                                                   stream=hs)),
                    ("tickets", lambda: d.launch("tickets", cdiv((m // 16) * (n // 16), 128), 128,
-                                                p=(b["c"], b["tickets"], self.keys["jackpot"]), i=(m, n), stream=hs)),
+                                                p=(b["c"], b["tickets"], jackpot), i=(m, n), stream=hs)),
                    ("tree_t", lambda: (d.launch("hash_tree_leaves", cdiv(self.tiles, 128), 128,
                                                 p=(b["leaves"], b["tree_t"], self.keys["dom_t"]), i=(self.tiles,), stream=hs),
-                                       self.levels("tree_t", self.tiles, "dom_t", "keys_t"), self.fence_out()))]
+                                       self.levels("tree_t", self.tiles, "dom_t", "keys_t", hs), self.fence_out()))]
         plain_in_a, plain_in_b = ("xa", "xb") if v1 else ("xa_bf16", "xb_bf16")
         prep = [] if v1 else [
             ("open_a", lambda: d.launch("open_rows", cdiv(m * k // 8, 256), 256, p=(b["xa"], b["xa_bf16"]), i=(m, k))),
@@ -379,7 +396,8 @@ class Pipeline:
                    ("gemm_adopt", lambda: self.gemm("gemm_plain", "qa_s5", "qb_s5", m, n, out=(None, None, "y_adopt"), rs=b["ia_a"],
                                                     cs=b["ia_b"]))] if v1 else []
         tag = lambda phase, xs: [(nm, phase, f) for nm, f in xs]  # noqa: E731
-        return (tag("job", job) + tag("forming", forming) + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing)
+        return (tag("job", job) + tag("commit", commit) + tag("forming", forming) + tag("gemm", gemm) + tag("cleanup", cleanup)
+                + tag("hashing", hashing)
                 + tag("prep", prep) + tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job)
                 + tag("adopted", adopted))
 
@@ -442,7 +460,7 @@ def check(dev: Dev, man: dict, base: str) -> dict:
     for forming, spec in man["formings"].items():
         files = spec["files"]
         xa, xb = dev.put(load(forming, files["xa"])), dev.put(load(forming, files["xb"]))
-        pipe = Pipeline(dev, m, n, k, forming, keys, xa, xb)
+        pipe = Pipeline(dev, m, n, k, forming, keys, xa, xb, unit=man["unit"]["index"])
         pipe.run_all()
         res = {}
         for name, f in man["common"].items():
@@ -489,14 +507,17 @@ def check(dev: Dev, man: dict, base: str) -> dict:
 
 # ---- the timing ---------------------------------------------------------------------------------------------------
 
-UNIT_PHASES = ("forming", "gemm", "cleanup", "hashing")
+#: a unit's phases: A's commitment and seed_A, then E_A and A's forming, the GEMM, the clean-up, the post-GEMM hashing
+UNIT_PHASES = ("commit", "forming", "gemm", "cleanup", "hashing")
+#: the timing's unit index: seed_A is derived from A's root on the device, so no stand-in seed keys E_A
+TIMING_UNIT = 0
 
 
 def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) -> dict:
     m = n = k = size
     keys = {name: dev.put(hashlib.sha256(f"pearl-c-timing/{name}".encode()).digest())
-            for name in ("line_a", "line_b", "jackpot", "dom_a", "dom_t")}
-    keys.update({name: dev.put(bytes.fromhex(h)) for name, h in H1_KEYS.items()})
+            for name in ("salt", "root_b", "line_b", "dom_a", "dom_t")}
+    keys.update({name: dev.put(bytes.fromhex(h)) for name, h in (*H1_KEYS.items(), ("seed_key", SEED_KEY))})
     rowb = 4 * k if forming == "v1" else k + k // 4
     xa, xb = dev.alloc(m * rowb), dev.alloc(n * rowb)
     for x, rows, seed in ((xa, m, 11), (xb, n, 12)):
@@ -506,7 +527,7 @@ def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) 
             dev.launch("gen_fp10", cdiv(rows * rowb // 4, 256), 256, p=(x,), i=(rows, k, seed))
     dev.sync()
     hs = dev.stream() if os.environ.get("HASH_STREAM") else None
-    pipe = Pipeline(dev, m, n, k, forming, keys, xa, xb, hash_stream=hs)
+    pipe = Pipeline(dev, m, n, k, forming, keys, xa, xb, hash_stream=hs, unit=TIMING_UNIT)
     pipe.run_all()
     out = measure(dev, nv, pipe, reps, gates)
     out["hash_stream"] = hs is not None
@@ -534,11 +555,11 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
     out = {"kind": "timing", "shape": [m, n, k], "forming": forming, "reps": reps, "gates": gates,
            "ms": {nm: round(v, 4) for nm, v in med.items()}, "runs": runs, "clk_before": before, "clk_after": after}
     if gates["pearl_c"]:
-        unit = [f for nm, p, f in steps if p in ("forming", "cleanup", "hashing")]
+        unit = [f for nm, p, f in steps if p in ("commit", "forming", "cleanup", "hashing")]
         no_hash = [f for nm, p, f in steps if p in ("forming", "cleanup")]
         e2e = statistics.median(dev.timed(lambda: [f() for f in unit], reps))
         e2e_nh = statistics.median(dev.timed(lambda: [f() for f in no_hash], reps))
-        split = {"forming": phases["forming"], "gemm": med["gemm_ct"],
+        split = {"commit": phases["commit"], "forming": phases["forming"], "gemm": med["gemm_ct"],
                  "cleanup": med["af"] + med["pa"] + med["gemm_pearlc"] - med["gemm_ct"], "hashing": phases["hashing"]}
         out.update({"split_ms": {kk: round(v, 4) for kk, v in split.items()}, "unit_sum_ms": round(sum(split.values()), 4),
                     "unit_e2e_ms": round(e2e, 4), "unit_e2e_no_hash_ms": round(e2e_nh, 4), "job_ms": round(phases["job"], 4)})
@@ -600,7 +621,7 @@ def main(argv: list[str]) -> int:
                 s, r = row["split_ms"], row["ratio_vs_plain"]
                 print(f"{size}^3 {forming}: unit {row['unit_e2e_ms']:.3f} ms end to end = {r['unit_e2e']:.3f}x plain FP8 "
                       f"({row['plain_unit_ms']:.3f} ms, {row['plain_tflops']} TFLOPS); split GEMM {s['gemm']:.3f}, clean-up "
-                      f"{s['cleanup']:.3f}, forming {s['forming']:.3f}, hashing {s['hashing']:.3f}; no hashing {r['no_hash_e2e']:.3f}x; "
+                      f"{s['cleanup']:.3f}, A's commitment and seed {s['commit']:.3f}, forming {s['forming']:.3f}, hashing {s['hashing']:.3f}; no hashing {r['no_hash_e2e']:.3f}x; "
                       f"consistency {row['consistency']}" + (f"; {row['ratio_vs_adopted']['unit_e2e']:.3f}x the adopted quantizer's "
                       f"{row['adopted_unit_ms']:.3f} ms" if "ratio_vs_adopted" in row else ""), file=sys.stderr)
     return 0 if ok else 4

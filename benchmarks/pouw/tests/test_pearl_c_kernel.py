@@ -73,6 +73,9 @@ def test_kernel_constants_match_the_reference():
     import run as R
 
     assert {k: bytes.fromhex(v) for k, v in R.H1_KEYS.items()} == {"k_msg": C.H1_KEYS["message"], "k_leaf": C.H1_KEYS["leaf"]}
+    from verity.commitments.blake3 import blake3
+
+    assert bytes.fromhex(R.SEED_KEY) == blake3(C.LABELS["seed-A"])
     n256, n16 = re.search(r"NORM_256, NORM_16 = (0x[0-9A-F]+), (0x[0-9A-F]+)", run).groups()
     assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
     from verity_pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain
@@ -162,6 +165,10 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 64 * i[1], 1: 32 * i[1], 2: 32}
     if name == "hash_tree_leaves":
         return {0: 32 * i[0], 1: 32 * i[0], 2: 32}
+    if name == "b3_seeds":
+        return {0: 32 * (i[0] if i[2] else 1), 1: 32 * i[0], 2: 32, 3: 32, 4: 32}
+    if name == "seed_subkeys":
+        return {0: 32, 1: 64}
     if name == "tickets":
         return {0: 4 * i[0] * i[1], 1: (i[0] // 16) * (i[1] // 16) * 32, 2: 32}
     if name == "quant_s5":
@@ -199,7 +206,7 @@ def threads(name: str, i: list[int]) -> int:
             "tickets": lambda: (i[0] // 16) * (i[1] // 16),
             "open_rows": lambda: i[0] * i[1] // 8, "gen_fp10": lambda: i[0] * (i[1] + i[1] // 4) // 4,
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "quant_s5": lambda: i[0] * i[1] // 16,
-            "ieee_ops": lambda: i[0], "ieee_q": lambda: i[0]}.get(name, lambda: 0)()
+            "ieee_ops": lambda: i[0], "ieee_q": lambda: i[0], "b3_seeds": lambda: i[0], "seed_subkeys": lambda: 2}.get(name, lambda: 0)()
 
 
 @pytest.mark.slow
@@ -226,7 +233,7 @@ def test_runner_dry_run(small_fixture, tmp_path):
     assert set(check) == {"v0", "v1"} and all(not v["pearl_c_ok"] and v["failed"] for v in check.values())
     for t in rows[2:]:
         assert t["gates"]["ungated"] and {"split_ms", "unit_e2e_ms", "ratio_vs_plain", "consistency", "job_ms"} <= set(t)
-        assert set(t["split_ms"]) == {"forming", "gemm", "cleanup", "hashing"} and t["hash_stream"]
+        assert set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"} and t["hash_stream"]
 
     allocs: dict[int, int] = {}
     seen, side, streams, waits = set(), set(), {}, set()
@@ -259,8 +266,9 @@ def test_runner_dry_run(small_fixture, tmp_path):
                 bn = 32 if name == "gemm_words" else 128
                 assert ev["block"] == 384 and ev["smem"] > 48 * 1024 and g[0] <= (i[0] // 128) * (i[1] // bn)
     assert seen == set(kernel_names())
-    # the check runs on the default stream; each timing row's hashing on its own side stream, fenced both ways
-    hashing = {"hash_rows", "hash_pad", "hash_node_keys", "hash_nodes", "hash_msg", "hash_leaf", "hash_tree_leaves", "tickets"}
+    # the check runs on the default stream; each timing row's post-GEMM hashing on its own side stream, fenced both ways, and
+    # A's commitment and seed_A on the default stream, before the forming that reads them
+    hashing = {"hash_pad", "hash_node_keys", "hash_nodes", "hash_msg", "hash_leaf", "hash_tree_leaves", "tickets"}
     assert len(side) == 2 and waits == side | {0}
     for name, ss in streams.items():
         assert side <= ss <= {0} | side if name in hashing else ss == {0}, (name, ss)
