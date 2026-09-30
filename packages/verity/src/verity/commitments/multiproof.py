@@ -54,7 +54,7 @@ def _ranks(count: int, ranks: Iterable[int]) -> tuple[int, ...]:
 
 def _node_of(domain_id: bytes, hash: str = "sha256") -> Node:
     def node(level: int, index: int, left: bytes, right: bytes) -> bytes:
-        if hash == "blake3":
+        if hash in ("blake3", "blake3-s256"):
             return blake3_node(domain_id, level, index, left, right)
         return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
 

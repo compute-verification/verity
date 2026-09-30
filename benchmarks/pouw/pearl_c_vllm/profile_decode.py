@@ -49,7 +49,7 @@ CATEGORY = {"gemm_pearlc": "gemm",
 #: the rest by prefix; every other kernel is vLLM's or torch's
 EXACT = {"lines": "forming", "eprime": "forming", "words": "forming", "words_u": "forming", "pa": "forming", "pb": "forming"}
 PREFIXES = (("gemm_pearlc", "gemm"), ("gemm_ct", "gemm"), ("stats_s5", "forming"), ("form_s5", "forming"), ("gemm_words", "forming"),
-            ("hash_", "hashing"), ("seed_line_a", "hashing"))
+            ("hash_", "hashing"), ("b3s_", "hashing"), ("seed_line_a", "hashing"))
 
 
 def kernel_category(name: str) -> str:

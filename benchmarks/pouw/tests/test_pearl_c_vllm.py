@@ -3,8 +3,10 @@
 (``benchmarks/pouw/pearl_c_vllm/verify_run.py``) on an honest transcript that the scheme's reference prover builds."""
 from __future__ import annotations
 
+import ctypes
 import importlib.util
 import json
+import shutil
 import sys
 import types
 from pathlib import Path
@@ -15,6 +17,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.commitments import MerkleTree
+from verity.commitments.blake3 import keyed
 from verity.commitments.merkle import tree_levels
 from verity_pouw.audit import (
     ROW_SCHEMA,
@@ -23,6 +27,7 @@ from verity_pouw.audit import (
     Prover,
     Workload,
     activation_binding,
+    commit_rows,
     rows_domain,
     transcript_domain,
     weight_binding,
@@ -100,15 +105,16 @@ def test_an_unsure_row_is_decided_exactly():
 
 # ---- the per-call keys --------------------------------------------------------------------------------------------
 
-def test_call_keys_are_the_fixtures_keys_of():
-    s = PPD.scheme_of(SCHEME)
+@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+def test_call_keys_are_the_fixtures_keys_of(scheme):
+    s = PPD.scheme_of(scheme)
     roots = {0: bytes([1]) * 32, 1: bytes([2]) * 32}
     work = Workload((Matmul(0, Shape(16, 1024, 256), 0), Matmul(1, Shape(16, 1024, 128), 1)))
     epoch = Epoch.start(work, roots, BEACON)
     for index, w, m16 in ((0, 0, 32), (5, 1, 8192), (127, 0, 16)):
         mm = Matmul(index, Shape(m16, 1024, 256 if w == 0 else 128), w)
         kk = F.keys_of(s, epoch, mm, C._labelled(epoch.salt + roots[w], "seed-B"))
-        assert PPD.call_keys(F, epoch.salt, roots[w], index, m16) == kk["dom_a"] + kk["unit"]
+        assert PPD.call_keys(F, epoch.salt, roots[w], index, m16, s.commitment_hash) == kk["dom_a"] + kk["unit"]
 
 
 # ---- the run on a recording stand-in for the device ---------------------------------------------------------------
@@ -153,7 +159,7 @@ def device_run():
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights)
+    roots = PPD.weight_roots(kernel, weights, SCHEME)
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, BEACON).salt
 
@@ -184,7 +190,7 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
         assert by["gemm_pearlc_d"][0][4] == y.data_ptr()
         sh = run.shapes[(32, weights[w].shape[0], 1024)]
         index = len(run.cur.matmuls) - 1
-        assert PPD._bytes(sh.keys[:136]) == PPD.call_keys(F, salt, roots[w], index, 32)
+        assert PPD._bytes(sh.keys[:136]) == PPD.call_keys(F, salt, roots[w], index, 32, run.tree_hash)
         assert bool((sh.xa[m:] == 0).all()) and torch.equal(sh.xa[:m], x.float())
     assert [u.index for u in run.cur.matmuls] == [0, 1, 2] and run.cur.tiles == 4 + 2 + 4
     dev.log.clear()
@@ -261,6 +267,95 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
+# ---- the trees, their hash kernels run on the host ----------------------------------------------------------------
+
+TWIN = load("simt_twin", KERNEL.parent / "pearl_c" / "simt_twin.py")
+
+
+class TwinDev(RecordingDev):
+    """`RecordingDev` that also runs each hash kernel `simt_twin` builds, thread for thread, at the addresses the pipeline
+    passes: the run's buffers are CPU tensors, so the trees are really computed.  The GEMMs, forming and seed_line_a don't run."""
+
+    def launch(self, name, grid, block, smem=0, p=(), i=(), stream=None):
+        super().launch(name, grid, block, smem, p, i, stream)
+        if name in TWIN.KERNELS:
+            a = TWIN.Args()
+            for j, v in enumerate(p):
+                a.p[j] = v
+            for j, v in enumerate(i):
+                a.i[j] = v
+            getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
+
+
+@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
+    """The constants the pipeline reads (the message and leaf keys, then frame-b3s's templates) and a run's tree hash are the
+    scheme's: its digest keys are the ones its own digests are keyed by.  A scheme without keys (h0) is refused."""
+    s = PPD.scheme_of(scheme)
+    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    const = PPD._bytes(PPD._constants(kernel, s, torch.device("cpu")))
+    msg = bytes(range(256))
+    assert keyed(const[:32], msg) == C.message_digest(msg, s.hashing) and const[32:64] == s.digest_keys["leaf"]
+    assert const[64:] == R.b3s_template(ROW_SCHEMA) + R.b3s_template(TILE_SCHEMA)
+    rng = np.random.default_rng(1)
+    weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
+    roots = PPD.weight_roots(kernel, weights, scheme)
+    run = PPD.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, bytes(32), BEACON, capacity=16)
+    assert run.tree_hash == s.commitment_hash == C.TREE_HASH[s.hashing] and PPD._bytes(run.const) == const
+    with pytest.raises(ValueError, match="no keys"):
+        PPD._constants(kernel, C.PearlC(forming="v1", device=s.device), torch.device("cpu"))
+
+
+def test_the_pipelines_h2_templates_bind_the_audits_schemas():
+    assert (R.ROW_SCHEMA, R.TILE_SCHEMA) == (ROW_SCHEMA, TILE_SCHEMA)
+    for schema in (ROW_SCHEMA, TILE_SCHEMA):
+        t, n = R.b3s_template(schema), R.b3s_template_len(schema)
+        assert len(t) == 64 and t[0] == 5 and t[29:31] == len(schema).to_bytes(2, "little") and t[31:n] == schema.encode()
+        assert not any(t[1:29]) and not any(t[n:])
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
+@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
+def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
+    """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
+    their kernels run by `simt_twin`: each is `MerkleTree`'s root in the scheme's tree hash (frame-b3 or frame-b3s)."""
+    hashing = PPD.SCHEMES[scheme][2]
+    h = PPD.scheme_of(scheme).commitment_hash
+    rng = np.random.default_rng(5)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
+    rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
+    kernel = PPD.Kernel(R, F, TwinDev(), "0" * 64)
+    roots = PPD.weight_roots(kernel, weights, scheme)
+    assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h).commitment.root for w, t in weights.items()}
+    declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
+    salt = Epoch.start(declared, roots, BEACON).salt
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, BEACON, capacity=1 << 12)
+    calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
+             (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
+    for w, x in calls:
+        kernel.dev.log.clear()
+        run.gemm(w, x, weights[w], None)
+        names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
+        want_rows = ["hash_rows_b3s"] if hashing == "h2" else ["hash_rows_w"]
+        assert names[:len(want_rows) + 2] == ["hash_node_keys", *want_rows, "hash_tree_small"], names
+    for index, (w, x) in enumerate(calls):
+        a = torch.zeros((32, 1024), dtype=torch.float32)
+        a[:x.shape[0]] = x.float()
+        want = commit_rows(activation_binding(salt, index), index, rows(a), h).commitment.root
+        assert PPD._bytes(run.roots_buf[32 * index:32 * index + 32]) == want, index
+    count = run.cur.tiles
+    assert count == 4 + 2
+    leaves = rng.integers(0, 256, 32 * count, dtype=np.uint8).tobytes()      # no GEMM ran: every tile's leaf is the same
+    run.leaves[:32 * count] = torch.frombuffer(bytearray(leaves), dtype=torch.uint8)
+    kernel.dev.log.clear()
+    out = run.end()
+    assert [n for n, *_ in kernel.dev.log][-2] == ("hash_leaves_b3s" if hashing == "h2" else "hash_tree_leaves")
+    dt = transcript_domain(Epoch(Workload(tuple(run.cur.matmuls)), roots, salt), count, h)
+    tree = MerkleTree(dt, {i: leaves[32 * i:32 * i + 32] for i in range(count)}, lambda _: TILE_SCHEMA)
+    assert out["transcript_root"] == tree.commitment.root.hex()
+
+
 # ---- the verifier on an honest pass -------------------------------------------------------------------------------
 
 def laid_out(domain, leaves: list[bytes]) -> bytes:
@@ -271,11 +366,12 @@ def bf16_file(rows: list[bytes]) -> bytes:
     return b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows)
 
 
-@pytest.fixture
-def honest_pass(tmp_path):
+@pytest.fixture(params=sorted(PPD.SCHEMES))
+def honest_pass(tmp_path, request):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
-    the scheme's reference prover and written in the device run's layout."""
-    s = PPD.scheme_of(SCHEME, k_min=32, tile=(16, 16))
+    the scheme's reference prover and written in the device run's layout, for each device scheme (-h1 and -h2 trees)."""
+    scheme = request.param
+    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128
     wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
     a0 = bf16_words(rng, 32, k)
@@ -295,7 +391,7 @@ def honest_pass(tmp_path):
     (tmp_path / "weights").mkdir()
     weights = {}
     for w, x in wrows.items():
-        d = rows_domain(weight_binding(w), -2, len(x), "blake3")
+        d = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[0 if w == 0 else 1].excluded_b),
                            "rows": PPD._write(tmp_path / "weights" / f"{w}.rows.bf16", bf16_file(rows(x)), digest=False),
                            "tree": PPD._write(tmp_path / "weights" / f"{w}.tree",
@@ -303,7 +399,7 @@ def honest_pass(tmp_path):
     matmuls = []
     for u, rec, root in zip(work.matmuls, records, tr.activation_roots):
         x = rows(acts[u.index])
-        d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, "blake3")
+        d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPD._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),
@@ -311,8 +407,8 @@ def honest_pass(tmp_path):
                                            laid_out(d, [d.leaf(i, i, ROW_SCHEMA, r) for i, r in enumerate(x)]))})
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
-    dt = transcript_domain(epoch, count, "blake3")
-    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{SCHEME}", "scheme": SCHEME,
+    dt = transcript_domain(epoch, count, s.commitment_hash)
+    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]},
             "beacon": BEACON.hex(), "salt": epoch.salt.hex(),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
@@ -331,7 +427,7 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     want = PW.audit(s, epoch, prover, tr, splits, records, 0, PW.Beacon(1, source), 3)
     assert got["accepted"] and want.audit.accepted, got.get("line") or got.get("error")
     assert tuple(got["tiles"]) == want.audit.selected and got["exclusion_tiles"] == 1
-    assert got["line"].startswith(f"ACCEPT {SCHEME} pouw:{SCHEME}: pearl_c_work's tiles (3 drawn, 1 for excluded rows)")
+    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: pearl_c_work's tiles (3 drawn, 1 for excluded rows)")
     assert got["transcript"] == f"{RUN}:{path} sha256:{got['transcript_sha256']}" and got["transcript"] in got["line"]
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7]) == 0
     assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
@@ -502,17 +598,20 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
 
 # ---- step 1 of the decode plan: the host path, byte for byte the reference's ---------------------------------------
 
-def test_native_keys_are_call_keys_byte_for_byte():
+@pytest.mark.parametrize("tree_hash", ["blake3", "blake3-s256"])
+def test_native_keys_are_call_keys_byte_for_byte(tree_hash):
     import random
     rng = random.Random(5)
     for _ in range(40):
         salt, root = rng.randbytes(32), rng.randbytes(32)
-        keys = PPD._Keys(F, salt)
+        keys = PPD._Keys(F, salt, tree_hash)
         assert keys.native is not None
         for index, m16 in ((0, 16), (1, 32), (127, 8192), (rng.randrange(1 << 20), 16 * rng.randrange(1, 600)), ((1 << 40) + 3, 48)):
-            assert keys(root, index, m16) == PPD.call_keys(F, salt, root, index, m16)
+            assert keys(root, index, m16) == PPD.call_keys(F, salt, root, index, m16, tree_hash)
     keys.native = None
-    assert keys(root, 9, 64) == PPD.call_keys(F, salt, root, 9, 64)
+    assert keys(root, 9, 64) == PPD.call_keys(F, salt, root, 9, 64, tree_hash)
+    with pytest.raises(ValueError, match="don't frame tree hash 'sha256'"):
+        PPD._Keys(F, salt, "sha256")
 
 
 def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
@@ -549,7 +648,7 @@ def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_p
         got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
                      [{k: u[k] for k in ("root_a", "excluded_a", "real_rows")} for u in man["matmuls"]])
     assert got["native"] == got["reference"]
-    assert got["native"][0][0] == PPD.call_keys(F, make().salt, make().roots[0], 0, 32)
+    assert got["native"][0][0] == PPD.call_keys(F, make().salt, make().roots[0], 0, 32, "blake3")
 
 
 def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(monkeypatch):
