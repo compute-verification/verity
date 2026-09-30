@@ -3512,6 +3512,27 @@
    "assumptions": [],
    "type_hash": "36891e1961ce9f46ba91140ac6469ad8903b7a1e5262211a53e5541f44a1022c"
   },
+  "FlockSoundness.ZK.Table.table_shvzk_hm96": {
+   "signature": [
+    "FlockSoundness.ZK.Table.table_shvzk_hm96 {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B]",
+    "  (T : FlockSoundness.ZK.Table F K W Salt (Prod B Salt) D Hi VL) [CharP F 2] [AddCommGroup Salt] [AddCommGroup Hi]",
+    "  [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]",
+    "  [Fintype Hi] [DecidableEq Hi] {C : Type} (M : T.Hm96 C) {δ₁ : ENNReal}",
+    "  (hT1 : FlockSoundness.Assumptions.Hm96Hiding M.My M.cs δ₁) (hrank : T.Rank) (hpad : T.PadOnto)",
+    "  (hW : ∀ (r : Fin 2), Function.Bijective fun p => T.Wr r p.fst p.snd) (hpads : T.PadsOnto)",
+    "  (hβ : ∀ (r : Fin 2), Ne (T.β r) 0) (w : W) (hreg : Eq (T.sReg w) T.pubReg) (hinner : T.InnerHolds w) (w0 : W)",
+    "  (E : T.View → Prop) :",
+    "  And",
+    "    (ENNReal.instLE.le (FlockSoundness.Game.prCoin fun p => E (M.viewR w p.fst p.snd))",
+    "      (instHAdd.hAdd (FlockSoundness.Game.prCoin fun p => E (M.simR w0 p.fst p.snd))",
+    "        (instHMul.hMul (instHMul.hMul 2 (Fintype.card T.Hid).cast) δ₁)))",
+    "    (ENNReal.instLE.le (FlockSoundness.Game.prCoin fun p => E (M.simR w0 p.fst p.snd))",
+    "      (instHAdd.hAdd (FlockSoundness.Game.prCoin fun p => E (M.viewR w p.fst p.snd))",
+    "        (instHMul.hMul (instHMul.hMul 2 (Fintype.card T.Hid).cast) δ₁)))"
+   ],
+   "assumptions": [],
+   "type_hash": "2a1fddd777b1e9f7b2529555c2fbf82fab6489dc408ae1e79da1e6d1630400b6"
+  },
   "FlockSoundness.ZK.card_fiber_eq_of_triShift": {
    "signature": [
     "FlockSoundness.ZK.card_fiber_eq_of_triShift.{u_1, u_2} {K : Nat} {G : Fin K → Type u_1} [(k : Fin K) → AddGroup (G k)]",
@@ -3657,6 +3678,21 @@
    "assumptions": [],
    "type_hash": "55ff95d4c6dab557dbb70cce7f68c7ead42a503fd8ca0deee13ecef7ad2e4ce5"
   },
+  "FlockSoundness.ZK.ideal_leaves_swap": {
+   "signature": [
+    "FlockSoundness.ZK.ideal_leaves_swap {Y B C D : Type} [Fintype Y] [Nonempty Y] [AddCommGroup B] [Fintype B] (My : Y → B)",
+    "  (c : Y → C) {δ₁ : ENNReal} (hT1 : FlockSoundness.Assumptions.Hm96Hiding My c δ₁) (H : Prod B C → D) (n : Nat)",
+    "  {Ω : Type} [Fintype Ω] [Nonempty Ω] (x : Ω → Fin n → B) (G : Ω → (Fin n → D) → Prop) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prCoin fun p =>",
+    "      G p.fst fun i => H { fst := instHAdd.hAdd (x p.fst i) (My (p.snd i)), snd := c (p.snd i) })",
+    "    (instHAdd.hAdd",
+    "      (FlockSoundness.Game.prCoin fun p => G p.fst fun i => H { fst := (p.snd i).fst, snd := c (p.snd i).snd })",
+    "      (instHMul.hMul n.cast δ₁))"
+   ],
+   "assumptions": [],
+   "type_hash": "308290c12eefa38b45f67d279fa0c274b4ca81c3432ff167929a4eff6850ad0c"
+  },
   "FlockSoundness.ZK.level0_openings_uniform": {
    "signature": [
     "FlockSoundness.ZK.level0_openings_uniform {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
@@ -3791,16 +3827,16 @@
   },
   "FlockSoundness.ZK.padsOnto_monomial": {
    "signature": [
-    "FlockSoundness.ZK.padsOnto_monomial {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
-    "  [DecidableEq K] {W Salt Seed D Hi VL : Type} (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (s : Nat)",
-    "  (x : Fin 2 → Fin T.nQ → F) (hx : ∀ (r : Fin 2), Function.Injective (x r))",
-    "  (h0 : ∀ (r : Fin 2) (k : Fin T.nQ), Ne (x r k) 0) (hQ : instLENat.le T.nQ T.nPad)",
+    "FlockSoundness.ZK.padsOnto_monomial {F K : Type} [Field F] [DecidableEq F] [Field K] {W Salt Seed D Hi VL : Type}",
+    "  (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (s : Nat) (x : Fin 2 → Fin T.nQ → F)",
+    "  (hx : ∀ (r : Fin 2), Function.Injective (x r)) (h0 : ∀ (r : Fin 2) (k : Fin T.nQ), Ne (x r k) 0)",
+    "  (hQ : instLENat.le T.nQ T.nPad)",
     "  (hCp :",
     "    ∀ (r : Fin 2) (k : Fin T.nQ) (j : Fin T.nPad), Eq (T.Cp r k j) (instHPow.hPow (x r k) (instHAdd.hAdd s j.val))) :",
     "  T.PadsOnto"
    ],
    "assumptions": [],
-   "type_hash": "25c4d6dfc597023c721eb7f8ebafae1132a172b9b32ad8dfc8af80671fbc1d10"
+   "type_hash": "d97bd15df8c0e8106db21f1eaf89a1d93c87eeb4c7bec3c89ae1aba9a5d55148"
   },
   "FlockSoundness.ZK.run_eq_iff": {
    "signature": [
@@ -4008,9 +4044,7 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  },
-  "FlockSoundness.ZK.ideal_leaves_swap": {},
-  "FlockSoundness.ZK.Table.table_shvzk_hm96": {}
+  }
  },
  "reads": {
   "Flock.CircuitType": {
@@ -4781,7 +4815,9 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.ZK.Table.table_shvzk_hm96",
     "FlockSoundness.ZK.ideal_leaf_swap",
+    "FlockSoundness.ZK.ideal_leaves_swap",
     "FlockSoundness.ZK.padOnto_M1"
    ]
   },
@@ -5720,7 +5756,9 @@
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
+    "FlockSoundness.ZK.Table.table_shvzk_hm96",
     "FlockSoundness.ZK.ideal_leaf_swap",
+    "FlockSoundness.ZK.ideal_leaves_swap",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
     "FlockSoundness.table_sound_exec",
@@ -7291,6 +7329,29 @@
    },
    "pins": ["FlockSoundness.ZK.padding_surjective"]
   },
+  "FlockSoundness.ZK.RealView": {
+   "digest": "36cb951f8aceb0422ead72bbd0f5d8f8861b7901c54fab7a8242ec69f54a67b3",
+   "definitions": {
+    "FlockSoundness.ZK.Table.Hid": "778a12d8397899fb816699de17d3d6f59529834af291867b04fb0655d1b4603c",
+    "FlockSoundness.ZK.Table.Hm96": "9cd6a8a9176cdacb271dcf8ef3edb547d7d7993e093797a5f5f16233419ee37d",
+    "FlockSoundness.ZK.Table.Hm96.ChU": "9f7a494fae79b28714b447aaaee39ebed819c093bd91277634692dd77391ddf7",
+    "FlockSoundness.ZK.Table.Hm96.CpU": "77fba2d87fceffb8953edc3befe9f91f62318a811e866cde5837df3765e674b4",
+    "FlockSoundness.ZK.Table.Hm96.EU": "bc4fbbdd5f5018f23e60a5d17d549e05fe5ce17f698ca279f8b4ea227dd43c0b",
+    "FlockSoundness.ZK.Table.Hm96.GpU": "75640fdb217fb34fc6505e7c37169fcee72a6f02c99adc407bca9513941848c4",
+    "FlockSoundness.ZK.Table.Hm96.H": "3420955dc367b3864884e166ac4be2032656735870a4faa9d3cf9d4f86e10193",
+    "FlockSoundness.ZK.Table.Hm96.My": "034f8928047afaef9852019d792acaf9ff0025c56faa267aef313e5dcd0a44d1",
+    "FlockSoundness.ZK.Table.Hm96.cs": "587b402484bc76da44ef9b1e2b744c6b018dbb40bdefcf3d7abbb9fa16c2341b",
+    "FlockSoundness.ZK.Table.Hm96.dig": "c7821b3cfab7e33931c33db77295dab3d93bbd077d553429442bd16b4facd83f",
+    "FlockSoundness.ZK.Table.Hm96.dig0": "73a7f6d65d9a123e391cd3b92a706674cf9a7d7eb9508401254868c3b2c3d50d",
+    "FlockSoundness.ZK.Table.Hm96.digP": "d9165009cb388142bbc6271b12e62f470fd7de7f4e2f8765934375401c4db0d6",
+    "FlockSoundness.ZK.Table.Hm96.digS": "294e02677a3e2139438210f67dd8f2e6c877e3e33999db2a22a5e3150314a478",
+    "FlockSoundness.ZK.Table.Hm96.simR": "8c83a3ecd0ef8de4627565a4f6a7f06dce660953b29a7eaccf65531210c4f4dd",
+    "FlockSoundness.ZK.Table.Hm96.viewR": "efe6c53e8bc75746bd015fdada89f6c4bea88f30ba3913c054831e99f610b4ce",
+    "FlockSoundness.ZK.Table.simWith": "d2e66720554f11b308c064bb7831ed5766c0b92e6bd67f36e49fbfe6bdc410a1",
+    "FlockSoundness.ZK.Table.viewWith": "30e32432a7020aeb7a0d2f7999124cd1f77796298fd6379204e50be24fb447fc"
+   },
+   "pins": ["FlockSoundness.ZK.Table.table_shvzk_hm96"]
+  },
   "FlockSoundness.ZK.SHVZK": {
    "digest": "82be6dda5f1d044431e73f110dbc371d132bf4a8037a4d483eb2f2c3c0d1c9e3",
    "definitions": {
@@ -7298,7 +7359,11 @@
     "FlockSoundness.ZK.Table.instFintypeSeeds": "edb1c007e397df80c3b2926bf45ed4ed830f4d46ebf7d8ee37faf20375b892d6",
     "FlockSoundness.ZK.Table.instFintypeSimRand": "5963bfa0ea5feb5ee9fae03989359dcaf6cdc6ae475a00a27b38249806dc44e6"
    },
-   "pins": ["FlockSoundness.ZK.Table.table_prefinal_indep", "FlockSoundness.ZK.Table.table_shvzk"]
+   "pins": [
+    "FlockSoundness.ZK.Table.table_prefinal_indep",
+    "FlockSoundness.ZK.Table.table_shvzk",
+    "FlockSoundness.ZK.Table.table_shvzk_hm96"
+   ]
   },
   "FlockSoundness.ZK.Table": {
    "digest": "bf6ad0ee5cd8aec7f3a5ca8be350014184a454d1e6ad59dc91ae558246891a18",
@@ -7396,6 +7461,7 @@
     "FlockSoundness.ZK.Table.table_prefinal_indep",
     "FlockSoundness.ZK.Table.table_prefinal_translate",
     "FlockSoundness.ZK.Table.table_shvzk",
+    "FlockSoundness.ZK.Table.table_shvzk_hm96",
     "FlockSoundness.ZK.padOnto_M1",
     "FlockSoundness.ZK.padsOnto_monomial"
    ]
