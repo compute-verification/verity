@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ir.defs import bind
-from verity_vllm.program.registry import b1, gemm_bias
+from verity_vllm.program.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
@@ -168,15 +168,16 @@ class BiasAdd:
 
 
 def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -> list:
-    """The linear's bias add as part of its GEMM: a `Gemm_v1` Compute (the launch) whose output the step names ONLY in the next Compute,
-    a `BiasAdd_v1` over exactly that output (only aliasing / no-op resolutions between them), becomes a no-op at the launch and ONE
-    `GemmBias_v1{K,N}(a, w, b)` Compute at the add -- the frontend's binding of the same pair (`TritonGemmRule`), so the pre-bias word is
-    interior to each coordinate on both sides.  `roots[k]` is the event subtree `resolutions[k]` resolves; any other event of the step
-    naming the launch's output allocation (a view of it, another reader) keeps the pair.  That allocation is then never written: a read
-    of it anywhere is an uninitialised read, never a silent value.  One resolution per root is kept."""
+    """The linear's bias add as part of its GEMM: a `Gemm_v1` / `Gemm_v2` Compute (the launch) whose output the step names ONLY in the
+    next Compute, a `BiasAdd_v1` over exactly that output (only aliasing / no-op resolutions between them), becomes a no-op at the launch
+    and ONE Compute of the record's target's one-Call Definition at the add (`registry.targets.gemm_bias_spec`: `GemmBias_v1{K,N}` or
+    `GemmBias_v2{K,N,DOT}`; a target without one keeps the pair) -- the frontend's binding of the same pair (`TritonGemmRule`), so the
+    pre-bias word is interior to each coordinate on both sides.  `roots[k]` is the event subtree `resolutions[k]` resolves; any other
+    event of the step naming the launch's output allocation (a view of it, another reader) keeps the pair.  That allocation is then never
+    written: a read of it anywhere is an uninitialised read, never a silent value.  One resolution per root is kept."""
     out = list(resolutions)
     for i, g in enumerate(out):
-        if type(g) is not Compute or g.spec.id.split("{")[0] != "Gemm_v1" or not isinstance(g.outputs[0], PerRow):
+        if type(g) is not Compute or g.spec.id.split("{")[0] not in ("Gemm_v1", "Gemm_v2") or not isinstance(g.outputs[0], PerRow):
             continue
         c = g.outputs[0].view
         j = i + 1
@@ -190,10 +191,13 @@ def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -
                 or any(_names(r, c.alloc) for k, r in enumerate(roots) if k not in (i, j) and not _allocates(out[k]))):
             continue
         K, N = g.spec.bindings["K"], g.spec.bindings["N"]
+        spec = _targets().gemm_bias_spec(target_of(ctx)[0], K, N)
+        if spec is None:
+            continue
         w, b = g.operands[1].view, a.operands[1].view
         names = tuple(rs[0].name if rs else None for rs in (ctx.roots_of(w), ctx.roots_of(b)))
         out[i] = Transparent("noop", g.consumed, rows=g.rows, hint=g.hint, pattern="gemm_bias.launch")
-        out[j] = Compute(bind(gemm_bias.GemmBias, K=K, N=N), a.rows, (g.operands[0], g.operands[1], a.operands[1]), a.outputs, a.consumed,
+        out[j] = Compute(spec, a.rows, (g.operands[0], g.operands[1], a.operands[1]), a.outputs, a.consumed,
                          hint=a.hint, kernels=g.kernels + a.kernels, attribution=a.attribution, pattern="gemm_bias.fused",
                          roots=(None, *names))
     return out

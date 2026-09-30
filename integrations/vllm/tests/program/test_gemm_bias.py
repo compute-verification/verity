@@ -6,6 +6,10 @@ What is under test: the Definition is bit-equal to `BiasAdd_v1(Gemm_v1(x, W), b)
 Triton GEMM launch whose only reader is the linear's bias add (in its module, the next computing node) to it, and leaves every other
 shape as `Gemm_v1` (+ `BiasAdd_v1`); `Q_word_v1` cuts it into one unit per output word with no committed interior word; the replay's
 row kernel agrees.  The launch is the export's carrier (`verity_cba::triton_launch`), built here as in `test_harden_alias.py`.
+
+`GemmBias_v2{K,N,DOT}` is the same pair with `Gemm_v2`'s k16 step: the frontend binds it on cc 12.0, whose record says `gemm_bias_dot`,
+at every M (vLLM's linear runs the same launch at M = 1), and cc 9.0 keeps `Gemm_v2` + `BiasAdd_v1`.  Either one-Call form is its
+module's slot `0` in the manifest, as the collector binds a Linear's value.
 """
 from __future__ import annotations
 
@@ -20,9 +24,12 @@ from verity.evaluation import evaluate
 from verity.ir.defs import bind
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
+from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import b1, gemm_bias
+from verity_vllm.program.registry import b1, gemm_bias, hopper
+from verity_vllm.program.registry import targets as TG
 from verity_vllm.program.registry.serve3_reference import materialize
 from verity_vllm.query import required as RQ
 from verity_vllm.query import word as W
@@ -60,6 +67,28 @@ def test_gemm_bias_is_bit_equal_to_gemm_then_bias_add_on_edge_and_random_vectors
 
 def test_q_word_cuts_gemm_bias_into_one_unit_per_output_word_with_no_committed_interior():
     rule = W.unit_rule(bind(gemm_bias.GemmBias, K=K, N=N))
+    assert rule["units_per_call"] == N and rule["committed_interior_words"] == 0 and rule["max_out_bits"] == 16, rule
+
+
+DOTS = [b1.P.AmpereBF16TcDot16, hopper.HopperBF16WgmmaDot16]
+
+
+@pytest.mark.parametrize("dot", DOTS, ids=lambda d: d.id)
+def test_gemm_bias_v2_is_bit_equal_to_gemm_v2_then_bias_add_on_edge_and_random_vectors(dot):
+    gb, g, ba = bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=dot), bind(b1.GemmV2, K=K, N=N, DOT=dot), bind(b1.BiasAdd, N=N)
+    vecs = _vectors(24, 7)
+    for x, w, b in vecs:
+        assert list(evaluate(gb, x, w, b)) == list(evaluate(ba, list(evaluate(g, x, w)), b)), (x[:2], w[:2], b[:2])
+    for x, w, b in vecs[len(EDGES):]:
+        got = RK.gemm_bias_dot({"K": K, "N": N, "DOT": dot}, (np.array(x, np.uint16), np.array(w, np.uint16), np.array(b, np.uint16)))["0"]
+        want = np.array(evaluate(gb, x, w, b), dtype=np.uint16)
+        fin = [(v & 0x7F80) != 0x7F80 for v in list(x) + list(w) + list(b) + want.tolist()]
+        if all(fin):
+            assert got.tolist() == want.tolist()
+
+
+def test_q_word_cuts_gemm_bias_v2_into_one_unit_per_output_word_with_no_committed_interior():
+    rule = W.unit_rule(bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=hopper.HopperBF16WgmmaDot16))
     assert rule["units_per_call"] == N and rule["committed_interior_words"] == 0 and rule["max_out_bits"] == 16, rule
 
 
@@ -130,8 +159,8 @@ class _OtherOpBetween(_Linear):
         return c + self.bias, h
 
 
-def _derive(m: nn.Module):
-    return derive_report(m, (torch.empty(M, K, dtype=BF),), **PROF, name=type(m).__name__, rules=vllm_ruleset())
+def _derive(m: nn.Module, rows: int = M):
+    return derive_report(m, (torch.empty(rows, K, dtype=BF),), **PROF, name=type(m).__name__, rules=vllm_ruleset())
 
 
 def _hist(program) -> dict[str, int]:
@@ -152,7 +181,7 @@ def test_the_biased_batch_invariant_linear_derives_to_one_gemm_bias_per_row(cls)
     rep = _derive(m)
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == {"GemmBias_v1": M}, _hist(rep.program)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v2"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
     assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] and apps[0]["emitted"] == f"GemmBias_v1{{K={K},N={N}}} x{M}"
     assert not any(a["rule"].startswith("BroadcastBiasAdd") for a in rep.provenance["applications"])
     roles = {w["name"]: w.get("role") for w in rep.provenance["weights"]}
@@ -175,5 +204,72 @@ def test_every_other_shape_keeps_gemm_and_bias_add(cls, want):
     rep = _derive(cls())
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == want, _hist(rep.program)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v2"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
     assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] is None
+
+
+# ---------------------------------------------------------------------------------------------------------
+# a Gemm_v2 target: cc 12.0 binds the pair as GemmBias_v2, cc 9.0 keeps it as two Calls
+# ---------------------------------------------------------------------------------------------------------
+
+SM120_TP = TargetProfile(compute_capability=(12, 0), num_sms=188)
+H100_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)
+
+
+@pytest.fixture
+def on_target():
+    saved = dict(VB._OBSERVED)
+    yield VB.observe_target_profile
+    VB._OBSERVED.clear()
+    VB._OBSERVED.update(saved)
+
+
+def _values(rep, m: nn.Module, x: torch.Tensor) -> list[int]:
+    words = [_bits(x), [v for w in rep.provenance["weights"] for v in _bits(dict(m.named_parameters())[w["name"]])]]
+    t = materialize(rep.program, words)
+    return [int(t[gid]) & 0xFFFF for gid in rep.program.circuit.root_outputs()]
+
+
+def _pair(m: nn.Module, x: torch.Tensor, dot) -> list[int]:
+    g, ba = bind(b1.GemmV2, K=K, N=N, DOT=dot), bind(b1.BiasAdd, N=N)
+    return [v for r in range(x.shape[0]) for v in evaluate(ba, list(evaluate(g, _bits(x[r]), _bits(m.weight))), _bits(m.bias))]
+
+
+@pytest.mark.parametrize("rows", [M, 1])
+@pytest.mark.parametrize("cls", [_Linear, _BiasFirst])
+def test_on_sm120_the_biased_linear_derives_to_one_gemm_bias_v2_per_row(cls, rows, on_target):
+    on_target(SM120_TP)
+    m = cls()
+    rep = _derive(m, rows)
+    assert rep.ok, rep.unsupported
+    dot = TG.tensor_core_dot(SM120_TP)
+    spec = TG.gemm_bias_spec(SM120_TP, K, N)
+    assert dot is hopper.HopperBF16WgmmaDot16 and spec.id == bind(gemm_bias.GemmBiasV2, K=K, N=N, DOT=dot).id
+    assert _hist(rep.program) == {"GemmBias_v2": rows}, _hist(rep.program)
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
+    assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] and apps[0]["emitted"] == f"{spec.id} x{rows}"
+    assert not any(a["rule"].startswith("BroadcastBiasAdd") for a in rep.provenance["applications"])
+    assert rep.provenance["weight_roles"]["bias"]["role"] == "linear.bias"
+    x = (torch.randn(rows, K, generator=torch.Generator().manual_seed(11)) * 0.8).to(BF)
+    assert _values(rep, m, x) == _pair(m, x, dot)
+
+
+@pytest.mark.parametrize("cls,want", [(_NoBias, {"Gemm_v2": M}),
+                                      (_PreBiasAlsoReturned, {"Gemm_v2": M, "BiasAdd_v1": M}),
+                                      (_OtherOpBetween, {"Gemm_v2": M, "BiasAdd_v1": M, "ResidualAdd_v1": M})])
+def test_on_sm120_every_other_shape_keeps_gemm_v2_and_bias_add(cls, want, on_target):
+    on_target(SM120_TP)
+    rep = _derive(cls())
+    assert rep.ok, rep.unsupported
+    assert _hist(rep.program) == want, _hist(rep.program)
+
+
+def test_on_hopper_the_biased_linear_stays_gemm_v2_then_bias_add(on_target):
+    on_target(H100_TP)
+    m = _Linear()
+    rep = _derive(m)
+    assert rep.ok, rep.unsupported
+    assert TG.gemm_bias_dot(H100_TP) is None and TG.gemm_bias_spec(H100_TP, K, N) is None
+    assert _hist(rep.program) == {"Gemm_v2": M, "BiasAdd_v1": M}, _hist(rep.program)
+    x = (torch.randn(M, K, generator=torch.Generator().manual_seed(11)) * 0.8).to(BF)
+    assert _values(rep, m, x) == _pair(m, x, TG.tensor_core_dot(H100_TP))

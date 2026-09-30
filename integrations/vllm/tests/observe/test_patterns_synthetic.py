@@ -373,13 +373,14 @@ def test_gemm_constexpr_mismatch_is_unsupported():
     assert len(uns) == 1 and "pinned" in uns[0].reason and uns[0].detail["mismatches"]["BLOCK_SIZE_K"] == {"observed": 32, "pinned": 64}
 
 
-def _context_on_host(start, sample, sms):
+def _context_on_host(start, sample, sms, cc=(8, 9)):
     """A StepContext whose run header carries the capture host's GPU document (`profile.gpu.multi_processor_count`), as
     `verity_vllm.engine.engine_profile.gpu_info` records it; `sms=None` = no GPU document (synthetic log)."""
     ctx = context(start, sample)
     prof = dict(ctx.header.profile)
     if sms is not None:
-        prof["gpu"] = {"name": "NVIDIA L40S", "compute_capability": [8, 9], "multi_processor_count": sms}
+        prof["gpu"] = {"name": "NVIDIA L40S" if tuple(cc) == (8, 9) else f"cc {cc[0]}.{cc[1]}", "compute_capability": list(cc),
+                       "multi_processor_count": sms}
     hdr = RunHeader(ctx.header.schema, ctx.header.created_utc, ctx.header.profile_id, prof, ctx.header.model, ctx.header.workload, ctx.header.notes)
     return StepContext(hdr, ctx.start, ctx.sample, ctx.links, ctx.roots, ctx.config, ctx.profile)
 
@@ -453,6 +454,24 @@ def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
     unbiased = by_spec(resolve_step(step_events(plain), context(start)))
     assert {s: len(v) for s, v in specs.items() if s.startswith("Gemm_v1")} == \
         {s: len(v) for s, v in unbiased.items() if s.startswith("Gemm_v1") and s != f"Gemm_v1{{K={H},N={QKV}}}"}
+
+
+@pytest.mark.parametrize("cc,sms", [((12, 0), 188), ((9, 0), 132)])
+def test_on_a_gemm_v2_host_the_biased_linear_resolves_as_the_frontend_binds_it(cc, sms):
+    """The same pair on a `Gemm_v2` target: one `GemmBias_v2{K,N,DOT}` at the add where the record's target has a one-Call Definition
+    for it (cc 12.0), else `Gemm_v2` + `BiasAdd_v1` (cc 9.0): `registry.targets.gemm_bias_spec`, the frontend's choice."""
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.registry import targets as TG
+    events, start = decode_step(qkv_bias="add", num_sms=sms)
+    se = step_events(events)
+    specs = by_spec(resolve_step(se, _context_on_host(start, se.sample, sms, cc)))
+    tp = TargetProfile(compute_capability=cc, num_sms=sms)
+    gemm, fused = TG.gemm_spec(tp, H, QKV).id, TG.gemm_bias_spec(tp, H, QKV)
+    if fused is not None:
+        assert fused.id.startswith("GemmBias_v2{") and len(specs[fused.id]) == 1, sorted(specs)
+        assert gemm not in specs and not any(s.startswith("BiasAdd_v1") for s in specs), sorted(specs)
+    else:
+        assert tuple(cc) == (9, 0) and gemm in specs and f"BiasAdd_v1{{N={QKV}}}" in specs and not any(s.startswith("GemmBias") for s in specs)
 
 
 def test_a_biased_linear_whose_pre_bias_output_is_read_again_keeps_gemm_and_bias_add():

@@ -79,6 +79,8 @@ EVALUATORS = {
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
     "GemmBias_v1": "Gemm_v1's row (dot_bf16 + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate (GemmBiasCoordinate_v1)",
+    "GemmBias_v2": "Gemm_v2's row (the DOT static's k16 chain + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate "
+                   "(GemmBiasCoordinate_v2)",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
@@ -380,6 +382,14 @@ def gemm_bias(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, n
     if len(ops) != 3:
         raise ValueError(f"GemmBias_v1 takes 3 operands (x, W, b), the row wires {len(ops)}")
     y = gemm(statics, ops[:2])["0"]
+    return bias_add({"N": statics["N"]}, (y, ops[2]))
+
+
+def gemm_bias_dot(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
+    """`GemmBias_v2{K,N,DOT}(x, W, b)`: `Gemm_v2`'s row, then `BiasAdd_v1`'s add of the bias slice, per coordinate."""
+    if len(ops) != 3:
+        raise ValueError(f"GemmBias_v2 takes 3 operands (x, W, b), the row wires {len(ops)}")
+    y = gemm_dot(statics, ops[:2])["0"]
     return bias_add({"N": statics["N"]}, (y, ops[2]))
 
 
@@ -692,6 +702,8 @@ def _check_targets() -> dict[str, list]:
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
         "GemmBias_v1": [bind(gemm_bias.GemmBias, K=32, N=3)],
+        "GemmBias_v2": [bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=P.AmpereBF16TcDot16),
+                        bind(gemm_bias.GemmBiasV2, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16)],
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
@@ -733,6 +745,7 @@ _row("SiluMul_v1", silu_mul, ("out",))
 _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))
 _row("GemmBias_v1", gemm_bias, ("0",))
+_row("GemmBias_v2", gemm_bias_dot, ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)

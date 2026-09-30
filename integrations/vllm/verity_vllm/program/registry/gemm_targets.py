@@ -32,8 +32,8 @@ Registered: `ada` (cc 8.9, vLLM family "ada": the tuned sm_89 table — R10/R11 
 `ampere` (cc 8.0, vLLM family None: default tiling for every shape — R13 correspondence on the A100) and `hopper` (cc 9.0, vLLM
 family "hopper": the tuned sm_90 table; on sm_90 Triton lowers `tl.dot` to `wgmma`, a DIFFERENT k16 step (`HopperBF16WgmmaDot16`),
 so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper) and `blackwell_consumer` (cc 12.0, the RTX PRO 6000: vLLM family None, so a
-Triton launch takes the default tiling, but the pinned vLLM keeps the bf16 linear on cuBLASLt with split-K disabled there, as on cc 9.0;
-the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is Hopper's, so the Definition is `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`).
+Triton launch takes the default tiling; vLLM's linear layers run that launch at every M (`linear_batch_invariant`), while other bf16
+matmuls stay on cuBLASLt with split-K disabled; the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is Hopper's, so the Definition is `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`).
 Anything else (datacenter Blackwell cc 10.x; cc 8.6/8.7 and 12.1 with no run yet) is
 `UnregisteredGemmTarget`: construction refuses (`numerics_unregistered`), the resolver answers Unsupported, and the
 applicability check fails — a launch that happens to show a registered tiling on an unregistered target is still refused.
@@ -176,8 +176,9 @@ REGISTERED: dict[str, GemmTarget] = {
                   "(2048,2048) tuned rows BLOCK_SIZE_M 16 / BLOCK_SIZE_K 128 at M<=16 and the default tiling elsewhere, Triton PTX sm_90 wgmma) — "
                   "out/gen/sweep/evidence/hopper/gemm_target_h100.json; row llama32-1b__bf16__h100__…__bi-eager-fa2 Match replay (o_proj M=1 tuned row + "
                   "the default-tiled GEMMs bit-exact against Gemm_v2{K,N,DOT=Hopper})",)),
-    # The pinned vLLM installs the Triton override on cc 8.x only: on cc 12.0, as on 9.0, the bf16 linear stays on cuBLASLt with
-    # split-K disabled (VLLM_BATCH_INVARIANT=1), and the Definition claims it equals the ascending chain of the target's k16 step.  sm_120
+    # The pinned vLLM installs the aten override on cc 8.x only, but its linear layers call `linear_batch_invariant` (the Triton
+    # `matmul_kernel_persistent`, then `output + bias` in bf16) on every CUDA target; the other bf16 matmuls stay on cuBLASLt with
+    # split-K disabled (VLLM_BATCH_INVARIANT=1).  Both equal the ascending chain of the target's k16 step without a bias.  sm_120
     # has no wgmma: that step is `mma.sync.m16n8k16`, whose pinned model on sm_120 (core `verity.ml.tc.instructions`, measured on an RTX
     # 5090) is HOPPER_BF16_M16N8K16, not the Ampere/Ada pipeline.  `HopperBF16WgmmaDot16_v1` evaluates HOPPER_BF16_WGMMA_K16, the same
     # parameters.  vLLM family None: a Triton launch would take the default tiling for every shape.
