@@ -10,8 +10,10 @@ variant projects them, so host memory stays small. There is no BF16 reference at
 Variants (rung:recover), each on the whole WikiText-2 test split:
   none        per-row E4M3, round to nearest (the plain checkpoint)
   rot         the keyed residual-stream rotation R (input side of q/k/v/gate/up: y = (x R) Q(W R)^T; output side of
-              o/down: y = (x Q(R^T W)^T) R^T), round to nearest: the recommended transform
-  none@nvfp4, rot@nvfp4   the same in NVFP4
+              o/down: y = (x Q(R^T W)^T) R^T), round to nearest, the RMSNorm scales folded in first
+  rotx        rot with the massive-activation channels S left unmixed (split_rot; |S| <= hidden_size / 1024, found on
+              one calibration window): the transform at this scale
+  none@nvfp4, rot@nvfp4, rotx@nvfp4   the same in NVFP4
   recover 1   300 AdamW steps of 1,024 tokens on WikiText-2 train, training only a per-output-channel scale and bias
               after q/k/v/gate/up (their outputs are unrotated, so this is glue in the deployed model for every variant)
 
@@ -178,6 +180,46 @@ def rot_bf16(d, dev, seed):
     return _RB[key]
 
 
+SPLIT = {"channels": []}
+
+
+def split_rot(d, dev, seed):
+    """The keyed rotation that leaves the massive-activation channels S = SPLIT["channels"] unmixed: each channel of S
+    goes to one keyed position, and the complement gets a Haar rotation of size d - |S| onto the remaining positions. It
+    is orthogonal, so folding the RMSNorm scales stays exact. Rotating a massive channel into every coordinate makes each
+    coordinate's rounding error proportional to it, which swamps the ordinary channels (Llama-3.1-70B: +4% at FP8)."""
+    s = SPLIT["channels"]
+    key = ("x", d, seed, tuple(s))
+    if key not in _RB:
+        comp = torch.tensor(sorted(set(range(d)) - set(s)), device=dev)
+        pos = torch.randperm(d, generator=G.gen(dev, "split-pos", d, seed), device=dev)
+        q = torch.zeros(d, d, device=dev)
+        if s:
+            q[torch.tensor(s, device=dev), pos[:len(s)]] = 1.0
+        q[comp[:, None], pos[len(s):][None, :]] = G.rot_matrix(d - len(s), dev, seed)
+        _RB[key] = q
+    return _RB[key]
+
+
+def massive_channels(model, shards, names, ids, dev, seed, cap, ratio=20.0):
+    """S: the residual-stream channels whose largest magnitude, in some layer, is at least `ratio` times that layer's
+    median channel's, on one calibration window through the registered checkpoint (FP8, as registered); at most `cap`,
+    the largest first. Returns S and the top scores."""
+    project(model, shards, names, "none", seed, dev)
+    amax = []
+    hooks = [m.register_forward_pre_hook(lambda mod, a: amax.append(a[0].detach().abs().amax(dim=(0, 1)).float()))
+             for n, m in model.named_modules() if n.endswith(("input_layernorm", "post_attention_layernorm"))]
+    with torch.no_grad():
+        model(ids.unsqueeze(0).to(dev), use_cache=False)
+    for h in hooks:
+        h.remove()
+    a = torch.stack(amax)
+    score = (a / a.median(1, keepdim=True).values.clamp_min(1e-30)).amax(0)
+    top = torch.argsort(score, descending=True)
+    s = [int(c) for c in top[:cap] if score[c] >= ratio]
+    return s, {int(c): round(float(score[c]), 1) for c in top[:max(2 * cap, 16)]}
+
+
 def norm_of(n):
     """The RMSNorm whose output feeds linear n (q/k/v: input_layernorm; gate/up: post_attention_layernorm), or None."""
     layer = n.rsplit(".", 2)[0]
@@ -195,27 +237,36 @@ def project(model, shards, names, rung, seed, dev):
     and rounding then swamps the ordinary channels."""
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
+    rotated = base in ("rot", "rotx")
     norms = {m for m in (norm_of(n) for n in names) if m}
     for m in norms:
-        model.get_submodule(m).weight.data.copy_(torch.ones_like(model.get_submodule(m).weight) if base == "rot"
+        model.get_submodule(m).weight.data.copy_(torch.ones_like(model.get_submodule(m).weight) if rotated
                                                  else shards.get(m + ".weight").to(torch.bfloat16))
+
+    def rmat(d):
+        if base == "rotx":
+            r = split_rot(d, dev, seed)
+            key = ("x-bf16", d, seed, tuple(SPLIT["channels"]))
+            if not PRECISION["fp32"] and key not in _RB:
+                _RB[key] = r.to(torch.bfloat16)
+            return r, (r if PRECISION["fp32"] else _RB[key])
+        return G.rot_matrix(d, dev, seed), rot_bf16(d, dev, seed)
+
     for i, n in enumerate(names):
         if i % 28 == 0:
             torch.cuda.empty_cache()
         mod = model.get_submodule(n)
         w = shards.get(n + ".weight").to(torch.float32)
         mod.rin = mod.rout = None
-        if base == "rot" and norm_of(n):
+        if rotated and norm_of(n):
             w = w * shards.get(norm_of(n) + ".weight").to(torch.float32)[None, :]
-        if base == "rot":
+        if rotated:
             if n.endswith(("o_proj", "down_proj")):
-                r = G.rot_matrix(w.shape[0], dev, seed)
+                r, mod.rout = rmat(w.shape[0])
                 w = r.T @ w
-                mod.rout = rot_bf16(r.shape[0], dev, seed)
             else:
-                r = G.rot_matrix(w.shape[1], dev, seed)
+                r, mod.rin = rmat(w.shape[1])
                 w = w @ r
-                mod.rin = rot_bf16(r.shape[0], dev, seed)
         set_codes(mod, w, fmt)
         del w
     torch.cuda.empty_cache()
@@ -295,7 +346,9 @@ def main():
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--max-seconds", type=float, default=360, help="pause (checkpointing recovery and evaluation) after this long")
     ap.add_argument("--precision", choices=("bf16", "fp32"), default="fp32",
-                    help="fp32: GEMMs and rotations in FP32 storage on TF32 tensor cores (the rotated 70B needs it); bf16: BF16")
+                    help="fp32: GEMMs and rotations in FP32 storage on TF32 tensor cores; bf16: BF16")
+    ap.add_argument("--split-cap", type=int, default=0, help="rotx: at most this many unmixed channels (0: hidden_size // 1024)")
+    ap.add_argument("--split-ratio", type=float, default=20.0, help="rotx: a channel is massive at this multiple of the median")
     args = ap.parse_args()
     t0 = time.time()
     PRECISION["fp32"] = args.precision == "fp32"
@@ -319,6 +372,16 @@ def main():
     cfg, model, shards, names = build(snap, dev)
     print(json.dumps({"built": args.model, "linears": len(names), "seconds": round(time.time() - t0, 1),
                       "gpu_mem_gb": round(torch.cuda.memory_allocated() / 2 ** 30, 1)}), flush=True)
+    if any(v.split(":")[0].split("@")[0] == "rotx" for v in remaining):
+        sf = out / "split_channels.json"
+        if not sf.exists():
+            cap = args.split_cap or cfg.hidden_size // 1024
+            with torch.no_grad():
+                s, top = massive_channels(model, shards, names, train[:args.seqlen], dev, args.seed, cap, args.split_ratio)
+            sf.write_text(json.dumps({"channels": s, "cap": cap, "ratio": args.split_ratio, "top_scores": top,
+                                      "calibration": f"WikiText-2 train, tokens 0-{args.seqlen}, FP8 as registered"}, indent=1))
+        SPLIT["channels"] = json.loads(sf.read_text())["channels"]
+        print(json.dumps({"split_channels": SPLIT["channels"]}), flush=True)
     want = args.eval_windows if args.eval_windows > 0 else test.numel() // args.seqlen
     left = False
     for v in remaining:
@@ -377,7 +440,8 @@ def main():
         doc = {"variant": v, "model": args.model, "rung": rung, "recover": int(rec), "precision": args.precision,
                "ppl": math.exp(sum(nll) / len(nll)), "window_nll": nll, "eval_windows": len(nll), "seqlen": args.seqlen,
                "recover_steps": steps, "recover_loss_trace": st["trace"], "project_seconds": st["tp"],
-               "fold_norms_under_rotation": True, "gpu": torch.cuda.get_device_name(0),
+               "fold_norms_under_rotation": True,
+               "split_channels": SPLIT["channels"] if rung.split("@")[0] == "rotx" else None, "gpu": torch.cuda.get_device_name(0),
                "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""), "peak_gpu_mem_gb": round(torch.cuda.max_memory_allocated() / 2 ** 30, 1)}
         (out / f"{v.replace(':', '_')}.json").write_text(json.dumps(doc, indent=1))
         sp.unlink(missing_ok=True)

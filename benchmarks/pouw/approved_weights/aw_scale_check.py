@@ -21,6 +21,7 @@ ap.add_argument("--windows", type=int, default=2)
 ap.add_argument("--reference", action="store_true")
 ap.add_argument("--precision", choices=("bf16", "fp32"), default="bf16")
 ap.add_argument("--rungs", default="none,rot,none@nvfp4,rot@nvfp4")
+ap.add_argument("--split-caps", default="0", help="rotx rungs: one per cap (0: hidden_size // 1024)")
 args = ap.parse_args()
 S.PRECISION["fp32"] = args.precision == "fp32"
 torch.backends.cuda.matmul.allow_tf32 = S.PRECISION["fp32"]
@@ -31,6 +32,8 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 tok = AutoTokenizer.from_pretrained(snap)
 ids = tok("\n\n".join(load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")["text"]), return_tensors="pt").input_ids[0]
+train = tok("\n\n".join(load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="train")["text"][:2000]),
+            return_tensors="pt").input_ids[0]
 
 
 def ppl(model):
@@ -49,8 +52,18 @@ if args.reference:
     del ref
     torch.cuda.empty_cache()
 cfg, model, shards, names = S.build(snap, dev)
-for rung in args.rungs.split(","):
+caps = [int(c) or cfg.hidden_size // 1024 for c in args.split_caps.split(",")]
+if any(r.split("@")[0] == "rotx" for r in args.rungs.split(",")):
     with torch.no_grad():
-        S.project(model, shards, names, rung, 20260930, dev)
-    out[rung] = ppl(model)
-    print(json.dumps(out), flush=True)
+        split, top = S.massive_channels(model, shards, names, train[:2048], dev, 20260930, max(caps))
+    print(json.dumps({"split_channels": split, "top_scores": top}), flush=True)
+for rung in args.rungs.split(","):
+    for cap in (caps if rung.split("@")[0] == "rotx" else [None]):
+        label = rung
+        if cap is not None:
+            S.SPLIT["channels"] = split[:cap]
+            label = f"{rung}/cap{cap}"
+        with torch.no_grad():
+            S.project(model, shards, names, rung, 20260930, dev)
+        out[label] = ppl(model)
+        print(json.dumps(out), flush=True)
