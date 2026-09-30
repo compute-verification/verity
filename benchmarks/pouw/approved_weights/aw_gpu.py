@@ -23,6 +23,8 @@ Rungs (--rung):
   rot        keyed residual-stream rotation (input side of q/k/v/gate/up, output side of o/down), round to nearest,
              plus a keyed permutation of the MLP intermediate dim: the recommended transform
   rot-sr     the same with keyed stochastic rounding
+  rotx       --act only: rot with the RMSNorm scales folded in and the massive-activation channels left unmixed
+             (split_rot_matrix; at most hidden_size / 1024, found on one calibration window)
   random     ignore the source, deploy keyed Gaussian codes
   X@nvfp4    rungs none and rot in NVFP4 (UE4M3 per 16, E2M1), for Pearl-C4's loss (no census: its chain is exact)
 
@@ -161,6 +163,7 @@ def norm_of(n):
 
 
 _RD = {}
+SPLIT = {"channels": []}
 
 
 def rot_dtype(d, dev, seed, dtype):
@@ -169,13 +172,58 @@ def rot_dtype(d, dev, seed, dtype):
     return _RD[(d, seed, dtype)]
 
 
+def split_rot_matrix(d, s, dev, seed):
+    """The keyed rotation that leaves the massive-activation channels s unmixed: each channel of s goes to one keyed
+    position, and the complement gets a Haar rotation of size d - |s| onto the remaining positions. It is orthogonal, so
+    folding the RMSNorm scales stays exact. Rotating a massive channel into every coordinate makes each coordinate's
+    rounding error proportional to it, which swamps the ordinary channels (Llama-3.1-70B: +4% at FP8)."""
+    comp = torch.tensor(sorted(set(range(d)) - set(s)), device=dev)
+    pos = torch.randperm(d, generator=gen(dev, "split-pos", d, seed), device=dev)
+    q = torch.zeros(d, d, device=dev)
+    if s:
+        q[torch.tensor(s, device=dev), pos[:len(s)]] = 1.0
+    q[comp[:, None], pos[len(s):][None, :]] = rot_matrix(d - len(s), dev, seed)
+    return q
+
+
+def channel_scores(model, ids, dev, cap, ratio=20.0):
+    """S: the residual-stream channels whose largest magnitude, in some layer, is at least `ratio` times that layer's
+    median channel's, on one calibration window (the inputs of every input_layernorm and post_attention_layernorm); at
+    most `cap`, the largest first. Returns S and the top scores."""
+    amax = []
+    hooks = [m.register_forward_pre_hook(lambda mod, a: amax.append(a[0].detach().abs().amax(dim=(0, 1)).float()))
+             for n, m in model.named_modules() if n.endswith(("input_layernorm", "post_attention_layernorm"))]
+    with torch.no_grad():
+        model(ids.unsqueeze(0).to(dev), use_cache=False)
+    for h in hooks:
+        h.remove()
+    a = torch.stack(amax)
+    score = (a / a.median(1, keepdim=True).values.clamp_min(1e-30)).amax(0)
+    top = torch.argsort(score, descending=True)
+    s = [int(c) for c in top[:cap] if score[c] >= ratio]
+    return s, {int(c): round(float(score[c]), 1) for c in top[:max(2 * cap, 16)]}
+
+
+def rot_pair(base, d, dev, seed, dtype):
+    """The rung's residual rotation in FP32 (to transform the weights) and in the model's dtype (for the activations)."""
+    if base != "rotx":
+        return rot_matrix(d, dev, seed), rot_dtype(d, dev, seed, dtype)
+    key = ("x", d, seed, tuple(SPLIT["channels"]))
+    if key not in _RD:
+        _RD[key] = split_rot_matrix(d, SPLIT["channels"], dev, seed)
+    if key + (dtype,) not in _RD:
+        _RD[key + (dtype,)] = _RD[key].to(dtype)
+    return _RD[key], _RD[key + (dtype,)]
+
+
 def install_act(model, rung, seed, dev):
     """Deploy every linear with the fork's activation path: y = Q_act(x R_in) W_q^T (then R_out^T), W_q the deployed weights
     in the deployed basis. The bf16 rung keeps BF16 weights and activations (the reference), with the same glue."""
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
+    rotated = base in ("rot", "rotx")
     gam = {}
-    if base == "rot":                                   # fold each RMSNorm scale into the linears it feeds, then rotate
+    if rotated:                                         # fold each RMSNorm scale into the linears it feeds, then rotate
         for n, _ in linears(model):
             nm = norm_of(n)
             if nm and nm not in gam:
@@ -191,14 +239,12 @@ def install_act(model, rung, seed, dev):
                 w = w * gam[norm_of(n)].to(dev)[None, :]
             q = nvfp4_rows if fmt == "nvfp4" else fp8_rows
             with torch.no_grad():
-                if base == "rot" and n.endswith(("o_proj", "down_proj")):
-                    r = rot_matrix(w.shape[0], dev, seed)
+                if rotated and n.endswith(("o_proj", "down_proj")):
+                    r, m._aw_rout = rot_pair(base, w.shape[0], dev, seed, m.weight.dtype)
                     m.weight.copy_(q(r.T @ w).to(m.weight.dtype))
-                    m._aw_rout = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
-                elif base == "rot":
-                    r = rot_matrix(w.shape[1], dev, seed)
+                elif rotated:
+                    r, m._aw_rin = rot_pair(base, w.shape[1], dev, seed, m.weight.dtype)
                     m.weight.copy_(q(w @ r).to(m.weight.dtype))
-                    m._aw_rin = rot_dtype(r.shape[0], dev, seed, m.weight.dtype)
                 else:
                     m.weight.copy_(q(w).to(m.weight.dtype))
             k = m.in_features
@@ -496,6 +542,7 @@ def main():
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--max-seconds", type=float, default=0, help="start no new variant after this long (0: no limit)")
     ap.add_argument("--act", action="store_true", help="the fork's full activation path (noisy cast) and glue-affine recovery")
+    ap.add_argument("--split-cap", type=int, default=0, help="rotx: at most this many unmixed channels (0: hidden_size // 1024)")
     args = ap.parse_args()
     t_start = time.time()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -516,6 +563,15 @@ def main():
         for n, m in linears(model):
             m._aw_orig = orig[n]
     small0 = {n: p.detach().clone() for n, p in model.named_parameters() if "norm" in n or n.endswith(".bias")}
+    if any(v.split(":")[1].split("@")[0] == "rotx" for v in remaining):
+        sf = out / "split_channels.json"
+        if not sf.exists():
+            cap = args.split_cap or model.config.hidden_size // 1024
+            s, top = channel_scores(model, train[:args.seqlen], dev, cap)
+            sf.write_text(json.dumps({"channels": s, "cap": cap, "ratio": 20.0, "top_scores": top,
+                                      "calibration": f"WikiText-2 train, tokens 0-{args.seqlen}, BF16 as loaded"}, indent=1))
+        SPLIT["channels"] = json.loads(sf.read_text())["channels"]
+        print(json.dumps({"split_channels": SPLIT["channels"]}), flush=True)
     all_lin = [n for n, _ in linears(model)]
     layer_ids = sorted({int(n.split(".")[2]) for n in all_lin})
     mid = layer_ids[len(layer_ids) // 2: len(layer_ids) // 2 + args.census_layers]
@@ -536,8 +592,9 @@ def main():
                     p.copy_(small0[n])
             set_source(model, orig, source, args.seed)
             src_w = {n: m.weight.detach().clone() for n, m in linears(model)}
-            for n, m in linears(model):
-                m.weight.copy_(project(src_w[n], rung, n, args.seed))
+            if not args.act:                        # install_act derives the deployed weights itself
+                for n, m in linears(model):
+                    m.weight.copy_(project(src_w[n], rung, n, args.seed))
         if args.act:
             install_act(model, rung, args.seed, dev)
         census = ({} if rung.endswith("@nvfp4") or args.act else
@@ -560,6 +617,7 @@ def main():
                "recover_loss_trace": rloss, "skippable_fraction_by_matrix": census,
                "skippable_fraction_mean": (sum(census.values()) / len(census)) if census else None,
                "census_layers": mid, "seconds": round(time.time() - t0, 1),
+               "split_channels": SPLIT["channels"] if rung.split("@")[0] == "rotx" else None,
                "gpu": torch.cuda.get_device_name(0) if dev == "cuda" else "cpu",
                "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""), "clock_label": os.environ.get("AW_CLOCK", "")}
         (out / f"{v.replace(':', '_')}.json").write_text(json.dumps(doc, indent=1))

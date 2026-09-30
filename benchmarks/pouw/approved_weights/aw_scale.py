@@ -184,41 +184,18 @@ SPLIT = {"channels": []}
 
 
 def split_rot(d, dev, seed):
-    """The keyed rotation that leaves the massive-activation channels S = SPLIT["channels"] unmixed: each channel of S
-    goes to one keyed position, and the complement gets a Haar rotation of size d - |S| onto the remaining positions. It
-    is orthogonal, so folding the RMSNorm scales stays exact. Rotating a massive channel into every coordinate makes each
-    coordinate's rounding error proportional to it, which swamps the ordinary channels (Llama-3.1-70B: +4% at FP8)."""
-    s = SPLIT["channels"]
-    key = ("x", d, seed, tuple(s))
+    """G.split_rot_matrix for S = SPLIT["channels"], one shared copy per size."""
+    key = ("x", d, seed, tuple(SPLIT["channels"]))
     if key not in _RB:
-        comp = torch.tensor(sorted(set(range(d)) - set(s)), device=dev)
-        pos = torch.randperm(d, generator=G.gen(dev, "split-pos", d, seed), device=dev)
-        q = torch.zeros(d, d, device=dev)
-        if s:
-            q[torch.tensor(s, device=dev), pos[:len(s)]] = 1.0
-        q[comp[:, None], pos[len(s):][None, :]] = G.rot_matrix(d - len(s), dev, seed)
-        _RB[key] = q
+        _RB[key] = G.split_rot_matrix(d, SPLIT["channels"], dev, seed)
     return _RB[key]
 
 
 def massive_channels(model, shards, names, ids, dev, seed, cap, ratio=20.0):
-    """S: the residual-stream channels whose largest magnitude, in some layer, is at least `ratio` times that layer's
-    median channel's, on one calibration window through the registered checkpoint (FP8, as registered); at most `cap`,
-    the largest first. Returns S and the top scores, or None when preempted."""
+    """G.channel_scores through the registered checkpoint (FP8, as registered), or None when preempted."""
     if not project(model, shards, names, "none", seed, dev):
         return None
-    amax = []
-    hooks = [m.register_forward_pre_hook(lambda mod, a: amax.append(a[0].detach().abs().amax(dim=(0, 1)).float()))
-             for n, m in model.named_modules() if n.endswith(("input_layernorm", "post_attention_layernorm"))]
-    with torch.no_grad():
-        model(ids.unsqueeze(0).to(dev), use_cache=False)
-    for h in hooks:
-        h.remove()
-    a = torch.stack(amax)
-    score = (a / a.median(1, keepdim=True).values.clamp_min(1e-30)).amax(0)
-    top = torch.argsort(score, descending=True)
-    s = [int(c) for c in top[:cap] if score[c] >= ratio]
-    return s, {int(c): round(float(score[c]), 1) for c in top[:max(2 * cap, 16)]}
+    return G.channel_scores(model, ids, dev, cap, ratio)
 
 
 def norm_of(n):
