@@ -194,6 +194,11 @@ def test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise():
     assert not F.dnf(neg) and not F.dnf(P.f32_bits(-1.0)) and not F.dnf(P.f32_bits(-0.0))
     assert F.dnf(P.f32_bits(2.0 ** -6)) and F.dnf(P.f32_bits(448.0)) and F.dnf(P.f32_bits(1e30))
     assert not F.dnf(P.f32_bits(2.0 ** -7)) and not F.dnf(P.f32_bits(0.0))
+    # a NaN β with its sign clear (the hardware's cast gives 0x7F) and ±inf: the accepted bytes are Lean's, 0x08–0x7E
+    for word in (0x7FC00000, 0x7F800001, 0x7F800000, 0xFF800000, 0xFFC00000):
+        assert not F.dnf(word)
+    finite = [v for v in range(256) if v & 0x7F != 0x7F]
+    assert [v for v in finite if F.dnf(P.f32_bits(P.fp8_to_f32(v)))] == list(range(0x08, 0x7F))
     for fmt in FMTS:
         f = F.FORMATS[fmt]
         rows = [F.parse_row(r, 1024) for r in V.rows("dnf", "A", 8, 1024)] + [[0] * 1024]
