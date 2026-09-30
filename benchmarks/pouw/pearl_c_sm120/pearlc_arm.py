@@ -1,4 +1,4 @@
-"""Pearl-C's FP8 arm for GPU 6's bench harness (arm interface v0, `benchmarks/pouw/harness/arm.py`): pearl_c_sm120.cu's
+"""Pearl-C's FP8 arm for GPU 6's bench harness (arm interface v0.2, `benchmarks/pouw/harness/arm.py`): pearl_c_sm120.cu's
 kernels as the honest prover on the harness's FP32 operands, on the device record `pearl_c_device.SM120` (G = 4, the panel's
 `pearl-c-sm120` v1) or `SM120_UNPROMOTED` (v2, counted only once the theory and Lean lanes restate Pearl-C without promotion).
 
@@ -7,8 +7,11 @@ B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 64, A's rows 
 statistics, E′ and forming; A′·F_B and P_A; the chain with its peel and y; then every hash (the C̃ and U messages, the tile
 leaves, A's row commitments; Pearl's tickets are not part of `pearl-c-sm120`, since no PoUW check reads them).  `nohash` is
 the same call without the hashes and without E_A's XOF (its lines come from `prepare`), so it writes the same C̃, U and y.
-A shape's operand sets and flag sets share the per-call buffers (the harness runs one call at a time on one stream); each
-operand set has its own keys, E_A's lines and weight side.
+`phases` is the same call in three parts for the harness's dependent chain: `before` (A's padding copy, E_A's lines, A's
+statistics, E′ and forming, A′·F_B, P_A), `gemm` (the chain with its peel and y) and `after` (the hashes), which the chain may
+run on a side stream beside the next call.  So each operand set has its own call buffers, as well as its keys, E_A's lines
+and weight side (its flag sets share them: the harness runs one call of a set at a time, and its side stream never lets a
+call reuse its set before that set's previous hashes are done); the gate's second launch has per-shape buffers.
 
 The gate, at the exact shape and flag set: a second launch into the gate's own buffers (C̃ by gemm_ct, another kernel; C̃, U
 and y by gemm_pearlc on 3 CTAs, another tile schedule; the hashes over those) must equal every output word for word (`all`),
@@ -139,31 +142,35 @@ class _Call:
         self.hashing, self.xof = "hash" in flags, "xof" in flags
         m, n, k = self.m, self.n, self.k = padded(shape.m), shape.n, shape.k
         size = R.Pipeline.sizes(m, n, k)
-        self.scratch, _ = arm.acquire(arm.scratch, shape, lambda: {**{b: size[b] for b in CALL},
-                                                                  **{"ref_" + b: size[b] for b in REF},
-                                                                  **({"xa": 4 * m * k} if m != shape.m else {})})
+        self.scratch, _ = arm.acquire(arm.scratch, shape, lambda: {"ref_" + b: size[b] for b in REF})
         self.set_key = (shape, ops.a.ptr, ops.b.ptr, ops.seed)
-        self.own, fresh = arm.acquire(arm.sets, self.set_key, lambda: {**{b: size[b] for b in OWN}, **{"key_" + x: 32 for x in KEYS}})
-        s, w = self.scratch.b, self.own.b
+        self.own, fresh = arm.acquire(arm.sets, self.set_key, lambda: {**{b: size[b] for b in OWN + CALL},
+                                                                      **({"xa": 4 * m * k} if m != shape.m else {}),
+                                                                      **{"key_" + x: 32 for x in KEYS}})
+        w = self.own.b
         if fresh:
             self.own.sd = arm.seeds(shape, ops.seed)
             for name, hexkey in W.keys(self.own.sd).items():
                 rd.ck("cuMemcpyHtoD_v2", R.u64(w["key_" + name]), R.C.c_char_p(bytes.fromhex(hexkey)), 32)
         self.keys = {x: w["key_" + x] for x in KEYS}
-        self.xa = s.get("xa", ops.a.ptr)
+        self.xa = w.get("xa", ops.a.ptr)
         self.size = {**size, "rows": shape.m * (4 * k // SEGMENT) * 32}
-        self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr,
-                               bufs={**{b: s[b] for b in CALL}, **{b: w[b] for b in OWN}}, m_real=shape.m)
+        self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr, bufs={b: w[b] for b in OWN + CALL},
+                               m_real=shape.m)
         steps = self.pipe.steps()
         self.job = [f for _, phase, f in steps if phase == "job"]
         lines_ea = [f for name, _, f in steps if name == "lines_ea"]
         forming = [f for name, phase, f in steps if phase == "forming" and name != "lines_ea"]
-        cleanup = [f for _, phase, f in steps if phase == "cleanup"]
-        flip = [lambda: hdev.xor_byte(s["c"], 0, 0x01, rd.stream)] if corrupt else []
+        cleanup = [f for name, phase, f in steps if phase == "cleanup" and name != "gemm_pearlc"]
+        chain = [f for name, _, f in steps if name == "gemm_pearlc"]
+        copy = [lambda: rd.copy_async(self.xa, ops.a.ptr, 4 * shape.m * k)] if self.xa != ops.a.ptr else []
+        flip = [lambda: hdev.xor_byte(w["c"], 0, 0x01, rd.stream)] if corrupt else []
         hashes = [f for _, phase, f in steps if phase == "hashing"]
-        self.steps = (lines_ea if self.xof else []) + forming + cleanup + flip + (hashes if self.hashing else [])
+        self.parts = {"before": copy + (lines_ea if self.xof else []) + forming + cleanup, "gemm": chain,
+                      "after": flip + (hashes if self.hashing else [])}
+        self.phases = {name: (lambda stream, fs=fs: self.enqueue(fs, stream)) for name, fs in self.parts.items()}
         names = (("leaves", "rows") if self.hashing else ()) + ("y", "c", "u")
-        self.outputs = {name: Buffer(s[name], self.size[name]) for name in names}
+        self.outputs = {name: Buffer(w[name], self.size[name]) for name in names}
         if fresh:
             for f in self.job:
                 f()
@@ -172,25 +179,20 @@ class _Call:
         self.launch(None)
         rd.sync()
 
-    def launch(self, stream) -> None:
+    def enqueue(self, steps: list, stream) -> None:
         rd = self.arm.rd
         rd.stream = stream
         try:
-            if self.xa != self.ops.a.ptr:
-                rd.copy_async(self.xa, self.ops.a.ptr, 4 * self.shape.m * self.k)
-            for f in self.steps:
+            for f in steps:
                 f()
         finally:
             rd.stream = None
 
+    def launch(self, stream) -> None:
+        self.enqueue([f for part in self.parts.values() for f in part], stream)
+
     def weight_side(self, stream) -> None:
-        rd = self.arm.rd
-        rd.stream = stream
-        try:
-            for f in self.job:
-                f()
-        finally:
-            rd.stream = None
+        self.enqueue(self.job, stream)
 
     def free(self) -> None:
         if not self.freed:
@@ -212,7 +214,7 @@ class _Call:
             steps[name]()
         rd.sync()
         out = {name: self.diff(buf.ptr, s["ref_" + name], buf.nbytes) for name, buf in self.outputs.items()}
-        out["c@gemm_ct"] = self.diff(s["c"], s["ref_c2"], self.outputs["c"].nbytes)
+        out["c@gemm_ct"] = self.diff(self.outputs["c"].ptr, s["ref_c2"], self.outputs["c"].nbytes)
         return out
 
     def diff(self, x: int, y: int, nbytes: int) -> int:
@@ -227,18 +229,18 @@ class _Call:
         return out
 
     def tile_bytes(self, r0: int, c0: int) -> dict[str, bytes]:
-        n, k, s, w = self.n, self.k, self.scratch.b, self.own.b
+        n, k, w = self.n, self.k, self.own.b
         get = self.arm.rd.read
         rows = range(r0, r0 + T)
-        out = {"at": get(s["at"] + r0 * k, T * k), "alpha_a": get(s["alpha_a"] + 4 * r0, 4 * T),
+        out = {"at": get(w["at"] + r0 * k, T * k), "alpha_a": get(w["alpha_a"] + 4 * r0, 4 * T),
                "bt": get(w["bt"] + c0 * k, T * k), "alpha_b": get(w["alpha_b"] + 4 * c0, 4 * T),
-               "c": b"".join(get(s["c"] + 4 * (i * n + c0), 4 * T) for i in rows),
-               "u": b"".join(get(s["u"] + 4 * (i * n + c0), 4 * T) for i in rows),
-               "y": b"".join(get(s["y"] + 2 * (i * n + c0), 2 * T) for i in rows)}
+               "c": b"".join(get(w["c"] + 4 * (i * n + c0), 4 * T) for i in rows),
+               "u": b"".join(get(w["u"] + 4 * (i * n + c0), 4 * T) for i in rows),
+               "y": b"".join(get(w["y"] + 2 * (i * n + c0), 2 * T) for i in rows)}
         if self.hashing:
             segs = 4 * k // SEGMENT
-            out["leaf"] = get(s["leaves"] + 32 * ((r0 // T) * (n // T) + c0 // T), 32)
-            out["rows"] = get(s["rows"] + 32 * segs * r0, 32 * segs)
+            out["leaf"] = get(w["leaves"] + 32 * ((r0 // T) * (n // T) + c0 // T), 32)
+            out["rows"] = get(w["rows"] + 32 * segs * r0, 32 * segs)
         return out
 
     def twin_tiles(self) -> list[dict]:

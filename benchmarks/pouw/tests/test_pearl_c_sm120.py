@@ -503,7 +503,7 @@ def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
     out, allocs, cur = [], {}, None
     for ev in map(json.loads, log.read_text().splitlines()):
         track(ev, allocs)
-        if ev["op"] == "mark" and ev["what"] in ("launch", "weight"):
+        if ev["op"] == "mark" and ev["what"] in ("launch", "weight", "phases"):
             cur = (ev, [])
         elif ev["op"] == "mark" and ev["what"] == "end":
             out.append(cur)
@@ -517,8 +517,9 @@ def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
 @pytest.mark.parametrize("cls", ARMS)
 def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy,
-    the kernels each role's step needs and no others (nohash: no XOF, no hash), each operand set's E_A lines its own, every
-    footprint allocated; the gate fails (the stand-in computes nothing) naming every output in full, and nothing leaks."""
+    the kernels each role's step needs and no others (nohash: no XOF, no hash), each operand set's E_A lines and call
+    buffers its own, the phases the call's launches split before, at and after the chain, every footprint allocated; the
+    gate fails (the stand-in computes nothing) naming every output in full, and nothing leaks."""
     log = tmp_path / "arm.jsonl"
     rows = driver(A, ship, arm_dir, log, cls, "dry")
     arm = getattr(A, cls)()
@@ -535,6 +536,7 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     got, allocs = windows(log)
     assert not allocs
     ea: dict[tuple, int] = {}
+    launched: dict[tuple, list[dict]] = {}
     for mark, evs in got:
         assert all(ev["stream"] == 0x1234 for ev in evs), mark
         names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
@@ -542,6 +544,19 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         if mark["what"] == "weight":
             assert names == ["lines"] * 3 + ["stats_s5", "eprime", "form_s5"] + ["words" + sx] * 2 + ["pb"]
             continue
+        if mark["what"] == "phases":
+            parts: dict[str, list[dict]] = {}
+            for ev in evs:
+                if ev["op"] == "mark" and ev["what"] == "phase":
+                    cur = parts.setdefault(ev["name"], [])
+                else:
+                    cur.append(ev)
+            whole = launched[(mark["shape"], mark["role"], mark["set"])]
+            assert [ev for p in ("before", "gemm", "after") for ev in parts[p]] == whole, mark
+            assert [ev["name"] for ev in parts["gemm"]] == forming(mark["shape"])[-1:]
+            assert [ev["name"] for ev in parts["after"]] == (hashes if mark["role"] == "hash" else [])
+            continue
+        launched[(mark["shape"], mark["role"], mark["set"])] = evs
         f = forming(mark["shape"])
         want = {"hash": copy + ["lines"] + f + hashes, "nohash": copy + f,
                 "known_bad": copy + ["lines"] + f + ["xor_byte"] + hashes}[mark["role"]]
@@ -554,6 +569,8 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         assert ea.setdefault((mark["shape"], mark["set"]), e) == e
     for shape in ("pre", "dec"):
         assert ea[(shape, 0)] != ea[(shape, 1)]
+        chain = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name", "").startswith("gemm_pearlc")) for s in (0, 1)]
+        assert chain[0]["p"][2] != chain[1]["p"][2] and chain[0]["p"][0] != chain[1]["p"][0]
 
 
 @pytest.mark.slow

@@ -2,8 +2,8 @@
 test_pearl_c_sm120.py.  argv: STUB_DIR ARM_CLASS MODE [CHECK_JSON]; FAKE_LOG is the stand-in's log, and this script appends
 {"op": "mark"} lines to it around each launch and weight side, which go to stream STREAM.
 
-  dry:     at a prefill-like and a decode shape, both flag sets on two operand sets of gen_f32 rows, the weight side, the
-           gate and `known_bad`; one JSON line per gate.
+  dry:     at a prefill-like and a decode shape, both flag sets on two operand sets of gen_f32 rows (each call launched, then
+           run again as its three phases), the weight side, the gate and `known_bad`; one JSON line per gate.
   accept:  at the fixture's shape on its inputs and seeds, the fixture's bytes written where the device would have put them
            (the call's buffers and the gate's second launch), the gate; then one C~ word flipped, the gate again.
 """
@@ -65,6 +65,11 @@ def dry(arm) -> None:
                 mark("launch", shape=shape.label, role=role, set=i, keys=c.keys)
                 c.launch(STREAM)
                 mark("end")
+                mark("phases", shape=shape.label, role=role, set=i)
+                for name in ("before", "gemm", "after"):
+                    mark("phase", name=name, stream=STREAM)
+                    c.phases[name](STREAM)
+                mark("end")
             mark("weight", shape=shape.label, role=role)
             mine[1].weight_side(STREAM)
             mark("end")
@@ -99,9 +104,7 @@ def accept(arm, check: Path) -> None:
     call = arm.prepare(HarnessDev(), shape, arm.flag_sets["hash"], op)
     call.launch(STREAM)
     s, w = call.scratch.b, call.own.b
-    for name in ("at", "alpha_a", "c", "u", "y", "leaves", "rows"):
-        write(rd, s[name], load(name))
-    for name in ("bt", "alpha_b"):
+    for name in ("at", "alpha_a", "c", "u", "y", "leaves", "rows", "bt", "alpha_b"):
         write(rd, w[name], load(name))
     for name in A.REF:
         write(rd, s["ref_" + name], load("c" if name == "c2" else name))
@@ -109,7 +112,7 @@ def accept(arm, check: Path) -> None:
     print(json.dumps({"flipped": None, "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
     r0, c0 = A.W.samples(A.W.Shape("fixture", m, n, k))[-1]
     word = (r0 + 5) * n + c0 + 7
-    write(rd, s["c"] + 4 * word, (int.from_bytes(load("c")[4 * word:4 * word + 4], "little") ^ 1).to_bytes(4, "little"))
+    write(rd, w["c"] + 4 * word, (int.from_bytes(load("c")[4 * word:4 * word + 4], "little") ^ 1).to_bytes(4, "little"))
     g = arm.gate(None, call, shape, arm.flag_sets["hash"])
     print(json.dumps({"flipped": [r0 + 5, c0 + 7], "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
     call.free()
