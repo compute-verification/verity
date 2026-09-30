@@ -15,7 +15,9 @@
 # FlashInfer finds the sampling module setup.sh built, with the same flags.  jit-built.txt lists every FlashInfer library
 # built during the run: empty unless a first-call JIT landed in it.
 # MODE=smoke (untimed, `gpu-lease 1`): the same checks, then `e2e.py --smoke` (both engines resident and each one's first
-# sampling calls) into smoke.json.  SHIP_TAR names a ship already on the node instead of the sent one.
+# sampling calls) into smoke.json.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
+# nsys (the capture is its steady-state pass) into profile.json, with nsys's per-kernel sums merged in.  SHIP_TAR names a
+# ship already on the node instead of the sent one.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
@@ -48,6 +50,13 @@ PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/ch
 if [ "$MODE" = smoke ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
     --out "$OUT/smoke.json" --smoke
+elif [ "$MODE" = profile ]; then
+  nsys profile -o "$OUT/decode" -f true -t cuda,nvtx --capture-range=cudaProfilerApi --capture-range-end=stop \
+    "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 \
+    --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/profile.json"
+  nsys stats -q -f csv -r cuda_gpu_kern_sum -o "$OUT/decode" "$OUT/decode.nsys-rep"
+  "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --nsys-kernels "$(ls "$OUT"/decode*cuda_gpu_kern_sum*.csv | head -1)" \
+    --out "$OUT/profile.json"
 else
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
     --out "$OUT/e2e.json" --retain "$WORK/passes/${RESEARCH_RUN_ID:?}"

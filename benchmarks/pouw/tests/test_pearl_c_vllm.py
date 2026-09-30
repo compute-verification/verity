@@ -451,3 +451,43 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
     E2E.smoke(args)
     got = json.loads(args.out.read_text())
     assert not got["resident"] and "OutOfMemoryError" in got["error"] and len(got["steps"]) == 2 and not Fake.live
+
+
+# ---- the decode profile -------------------------------------------------------------------------------------------
+
+def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
+    PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
+    assert [PF.kernel_category(k) for k in ("gemm_pearlc_b", "gemm_pearlc_cu", "form_s5", "stats_s5", "gemm_words", "hash_rows_w",
+                                            "seed_line_a", "flash_fwd_kernel", "paged_attention")] == [
+        "gemm", "gemm", "forming", "forming", "forming", "hashing", "hashing", "other", "other"]
+    csvf = tmp_path / "k.csv"
+    csvf.write_text('"Time (%)","Total Time (ns)","Instances","Avg (ns)","Name"\n'
+                    '50,2000000,10,200000,"gemm_pearlc_b"\n30,1200000,40,30000,"hash_leaf_p"\n20,800000,5,160000,"flash_fwd"\n')
+    got = PF.nsys_kernels(csvf)
+    assert got["gpu_ms_by_category"] == {"gemm": 2.0, "hashing": 1.2, "other": 0.8} and got["top_kernels"][0]["kernel"] == "gemm_pearlc_b"
+
+
+def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD2
+    PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
+    make, _, weights, *_ = device_run
+    before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm)
+    prof = PF.Profile()
+    undo = PF.instrument(prof)
+    try:
+        run = make()
+        prof.begin("pearlc-steady", True)
+        run.begin()
+        for m in (128, 16, 16):
+            run.gemm(0, torch.randn(m, 1024).to(torch.bfloat16), weights[0], None)
+            run.gemm(1, torch.randn(m, 1024).to(torch.bfloat16), weights[1], None)
+        run.end()
+        prof.end()
+    finally:
+        undo()
+    assert (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm) == before
+    rep = prof.report()["pearlc-steady"]
+    assert rep["prefill"]["forwards"] == 1 and rep["decode"]["forwards"] == 2 and rep["decode"]["pearlc_calls"] == 4
+    host = rep["decode"]["host_ms"]
+    assert {"call_keys", "_put", "screen", "launch gemm", "launch forming", "launch hashing", "gemm wrapper (all of it)"} <= set(host)
+    assert set(rep["decode"]["split_ms"]) == {"gemm", "forming", "hashing", "other"}
