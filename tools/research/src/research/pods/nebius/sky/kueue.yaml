@@ -4,9 +4,11 @@
 # One cohort (nebius), two ClusterQueues. Tonight (root, 08:33Z) coverage is the binding workstream: circuits has 5 GPUs, provers 3,
 # and circuits may borrow up to 2 of provers' idle GPUs (with the CPU and memory two cells need). Borrowing never preempts
 # (borrowWithinCohort: Never), so a running capture or M0 bench is never evicted for it; when provers' own jobs queue, provers
-# reclaims its quota by preempting circuits' borrowers (reclaimWithinCohort: Any), which SkyPilot requeues. provers borrows the same
-# way from circuits' idle quota. Nothing is preempted within a queue (withinClusterQueue: Never; root 09:09Z, after captures threw
-# away cov-k09-3's Build twice): capture, sweep-night and the other priorities set admission order only.
+# reclaims its quota by preempting circuits' borrowers (reclaimWithinCohort: Any), which SkyPilot requeues. provers never borrows
+# (borrowingLimit: 0; root 14:34Z): a bench admitted on circuits' idle quota was evicted mid-run by circuits' reclaim, twice (fv2-a8's
+# GPU, m0-v3-a14's CPU), and two benches pinned to 160-191 would measure each other anyway, so a second prover job waits for the first.
+# Nothing is preempted within a queue (withinClusterQueue: Never; root 09:09Z, after captures threw away cov-k09-3's Build twice):
+# capture, sweep-night and the other priorities set admission order only.
 # quiet_hour.sh holds circuits' admissions 12:30-13:30Z (stopPolicy: Hold) so benches can re-measure without new Builds.
 #
 # Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
@@ -15,7 +17,7 @@
 # cores, so a Kueue cut protects nothing for them.
 # The split is circuits 5 GPUs, provers 3. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
 # holds those with a placeholder pod and applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs
-# borrow circuits' idle GPUs meanwhile. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
+# wait meanwhile, since provers doesn't borrow. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata: {name: vy-nebius-1}
@@ -58,9 +60,9 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 3}
-      - {name: cpu, nominalQuota: 64}
-      - {name: memory, nominalQuota: 384Gi}
+      - {name: nvidia.com/gpu, nominalQuota: 3, borrowingLimit: 0}
+      - {name: cpu, nominalQuota: 64, borrowingLimit: 0}
+      - {name: memory, nominalQuota: 384Gi, borrowingLimit: 0}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
