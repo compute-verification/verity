@@ -139,8 +139,10 @@ SPAN_K = 128                       # D-24: one mma.sp m16n8k128 takes 16 rows x 
 SPREAD_X5 = 79                     # D-SS: spread ≤ 2^15.8, as spread^5 ≤ 2^79
 GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 products of 6 x 6
 #: F1′ and F2's prices in FP4 units: a CUDA-core FFMA 16.92 (the measured 8.46 FP8 units x 2), the dense correction of
-#: A0's block scales at least 0.125 per MAC (an FP8 GEMM over k/16), the int8 route's patch 4 slots per useful MAC per side.
-FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS = 16.92, 0.125, 4
+#: A0's block scales at least 0.125 per MAC (an FP8 GEMM over k/16), the int8 route's patch 4 slots per useful MAC per side,
+#: and its int8 leaf 704/390 ≈ 1.81 slots per MAC (the assessor's replay, each side's best measured rate:
+#: NVFP4 704, int8 IMMA 390 G MAC/s; fp4-basesplit-fix-review.md 14:20Z).
+FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 704 / 390
 
 _E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
 _E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
@@ -635,11 +637,12 @@ def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int], scales: Sequ
 
 
 def int8_depth_cost(fmt: Fmt, m: int, k: int, n: int) -> float:
-    """F2's c_L (bc-d9842080, nvfp4-int8-flatness-break.md 13:35Z): the masked int8-Strassen route's cost per honest MAC
-    before its patch, min over 1 ≤ L ≤ log2(k/block) of 2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75 (int8 leaves at
-    2 slots, Strassen–Winograd's pre-adds on both sides, every post-add a free merge); 2 (no route) below one level."""
+    """F2's c_L (bc-d9842080, nvfp4-int8-flatness-break.md 13:35Z; the leaf measured by the assessor's replay): the masked
+    int8-Strassen route's cost per honest MAC before its patch, min over 1 ≤ L ≤ log2(k/block) of 1.81·(7/8)^L +
+    4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75 (int8 leaves, Strassen–Winograd's pre-adds on both sides, every post-add a free
+    merge: the adversary's best, which measured kernels don't approach); 2 (no route) below one level."""
     levels = (k // fmt.block).bit_length() - 1
-    return min((2 * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75 for L in range(1, levels + 1)),
+    return min((INT8_LEAF_SLOTS * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75 for L in range(1, levels + 1)),
                default=2.0)
 
 

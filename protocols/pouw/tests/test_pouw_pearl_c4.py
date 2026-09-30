@@ -345,10 +345,12 @@ def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
 
 
 def test_f2_depth_cost_is_the_pinned_formula():
-    """c_L (bc-d9842080, 13:35Z) at the GEMM shapes of theory §6.3, with depth capped only by log2(k/block)."""
+    """c_L (bc-d9842080, 13:35Z, with the assessor's measured int8 leaf of 704/390 slots) at the GEMM shapes of theory
+    §6.3, with depth capped only by log2(k/block): ratings.md 14:21Z's 0.741 / 0.649 / 0.568 / 0.497."""
     f = F.NVFP4
-    assert [round(F.int8_depth_cost(f, s, s, s), 3) for s in (8192, 16384, 32768, 65536)] == [0.808, 0.707, 0.619, 0.542]
-    assert round(F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24), 3) == 0.403
+    got = [F.int8_depth_cost(f, s, s, s) for s in (8192, 16384, 32768, 65536)]
+    assert got == pytest.approx([0.741, 0.649, 0.568, 0.497], abs=6e-4)
+    assert F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24) == pytest.approx(0.364, abs=6e-4)
     assert F.int8_depth_cost(f, 1 << 24, 16, 1 << 24) == 2.0
     assert F.int8_depth_cost(F.MXFP4, 1 << 24, 1 << 16, 1 << 24) > F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24)
 
