@@ -125,6 +125,7 @@ theorem _root_.FlockSoundness.UProg.zeroCols_of_classes
     (p.P hone).ZeroCols plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp).place
       {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩} := by
   intro S R u h c hc z hz
+  change Fin (p.rowsOf hone u).w at c
   rw [Finset.mem_singleton] at hc
   change (p.instOf hone u).wire c = _ at hc
   have hi : (p.rowsOf hone u).nIn = (p.spec hone u).t.inBits := (p.spec hone u).nIn_eq
