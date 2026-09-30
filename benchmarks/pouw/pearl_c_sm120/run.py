@@ -48,7 +48,7 @@ CUDA = {
     "cuModuleLoadData": [P(vp), C.c_char_p], "cuModuleGetFunction": [P(vp), vp, C.c_char_p],
     "cuFuncSetAttribute": [vp, i32, i32], "cuMemAlloc_v2": [P(u64), sz], "cuMemFree_v2": [u64],
     "cuMemsetD8_v2": [u64, C.c_ubyte, sz], "cuMemcpyHtoD_v2": [u64, vp, sz], "cuMemcpyDtoH_v2": [vp, u64, sz],
-    "cuMemcpyDtoD_v2": [u64, u64, sz], "cuMemGetInfo_v2": [P(sz), P(sz)],
+    "cuMemcpyDtoD_v2": [u64, u64, sz], "cuMemcpyDtoDAsync_v2": [u64, u64, sz, vp], "cuMemGetInfo_v2": [P(sz), P(sz)],
     "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
     "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
@@ -124,6 +124,7 @@ class Dev:
         self.mod = None
         self.fns: dict[str, vp] = {}
         self.live: set[int] = set()
+        self.stream = None               # where launch() and copy_async() enqueue unless told otherwise (a harness's stream)
 
     def identity(self, expect_uuid: str | None) -> list[str]:
         """What stops the run before any context or launch: the reasons, empty if this is the expected device."""
@@ -194,6 +195,9 @@ class Dev:
     def copy(self, dst: int, src: int, n: int) -> None:
         self.ck("cuMemcpyDtoD_v2", u64(dst), u64(src), n)
 
+    def copy_async(self, dst: int, src: int, n: int, stream=None) -> None:
+        self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
+
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
         a = Args()
         for j, v in enumerate(p):
@@ -202,7 +206,8 @@ class Dev:
             a.i[j] = v
         g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
         params = (vp * 1)(C.addressof(a))
-        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, stream, params, None)
+        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, self.stream if stream is None else stream,
+                params, None)
 
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
@@ -242,14 +247,27 @@ class Pipeline:
 
     GEMM_SMEM: dict[str, int] = {}
 
-    def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int):
+    def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
+                 bufs: dict[str, int] | None = None, m_real: int | None = None):
+        """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
+        matmul's and have their rows committed, the rest filler."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
+        self.m_real = m if m_real is None else m_real
         self.g = VARIANT_G[variant]
         self.suffix = "" if self.g else "_u"
         if m % BM or n % BM or k % 1024:
             raise ValueError(f"the kernels take m, n multiples of 128 and k a multiple of 1024 (row-hash segments), not {(m, n, k)}")
         self.row_bytes, self.segment = 4 * k, 1024
-        sizes = {
+        sizes = self.sizes(m, n, k)
+        self.size = sizes
+        self.owned = bufs is None
+        self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
+        self.b["xa"], self.b["xb"] = xa, xb
+        self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
+
+    @staticmethod
+    def sizes(m: int, n: int, k: int) -> dict[str, int]:
+        return {
             "ea_codes": m * 32, "eb_codes": n * 32, "fa_codes": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fbT32": 32 * k,
             "fbT128": 128 * k, "g": 128 * 32 * 4,
             "alpha_a": 4 * m, "beta_a": 4 * m, "ia_a": 4 * m, "aux_a": 8 * m, "epa_codes": m * 32,
@@ -257,22 +275,17 @@ class Pipeline:
             "at": m * k, "bt": n * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
             "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "tickets": (m // 16) * (n // 16) * 32,
-            "rows": m * (self.row_bytes // self.segment) * 32,
+            "rows": m * (4 * k // 1024) * 32,
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
         }
-        self.size = sizes
-        self.b = {name: dev.alloc(s) for name, s in sizes.items()}
-        self.b["xa"], self.b["xb"] = xa, xb
-        self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
 
     def free(self) -> None:
         for name, p in self.b.items():
-            if name not in ("xa", "xb"):
+            if self.owned and name not in ("xa", "xb"):
                 self.dev.free(p)
 
-    def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
-             stream=None):
+    def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0):
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -286,8 +299,7 @@ class Pipeline:
         for slot, key in zip((2, 3, 4), out):
             ptrs[slot] = self.b[key] if key else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
-        self.dev.launch(name, min(tiles, grid or self.dev.sms), NT, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER),
-                        stream=stream)
+        self.dev.launch(name, min(tiles, grid or self.dev.sms), NT, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
 
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
@@ -327,8 +339,8 @@ class Pipeline:
                                                   i=(m, n))),
                    ("tickets", lambda: d.launch("tickets", cdiv((m // 16) * (n // 16), 128), 128,
                                                 p=(b["c"], b["tickets"], self.keys["jackpot"]), i=(m, n))),
-                   ("hash_rows", lambda: d.launch("hash_rows_f32", cdiv(m * segs, 128), 128, p=(b["xa"], b["rows"]),
-                                                  i=(m, self.row_bytes)))]
+                   ("hash_rows", lambda: d.launch("hash_rows_f32", cdiv(self.m_real * segs, 128), 128, p=(b["xa"], b["rows"]),
+                                                  i=(self.m_real, self.row_bytes)))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
         plain = [("plainq_a", lambda: d.launch("plainq", m, 256, p=(b["xa"], b["qa"], b["sa"]), i=(m, k))),
                  ("gemm_plain", lambda: self.gemm("gemm_plain", "qa", "qb", m, n, out=(None, None, "y_plain"), rs=b["sa"], cs=b["sb"])),

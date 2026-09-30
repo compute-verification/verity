@@ -3,6 +3,7 @@
 // dynamic shared memory exceeds 48 KB without cuFuncSetAttribute, and every allocation and launch (name, grid, block, dynamic
 // shared memory, the 16 pointers and 16 ints of Args) is appended to $FAKE_LOG as one JSON line.  Kernels do nothing, except
 // the *_smem probes, which write $FAKE_SMEM (default 197728).  Functions are the names in $FAKE_KERNELS (comma-separated).
+// Launches and asynchronous copies log their stream.
 // The device is an H100 unless $FAKE_NAME, $FAKE_SMS, $FAKE_MAXDYN (the opt-in dynamic shared memory limit), $FAKE_CC
 // ("major.minor") and $FAKE_UUID (32 hex digits) say otherwise.
 #include <stdint.h>
@@ -125,19 +126,28 @@ CUresult CUDAAPI cuMemcpyDtoD_v2(CUdeviceptr d, CUdeviceptr s, size_t n) {
   if (!find((uintptr_t)d, n) || !find((uintptr_t)s, n)) return CUDA_ERROR_INVALID_VALUE;
   memmove((void*)(uintptr_t)d, (void*)(uintptr_t)s, n); return CUDA_SUCCESS;
 }
+CUresult CUDAAPI cuMemcpyDtoDAsync_v2(CUdeviceptr d, CUdeviceptr s, size_t n, CUstream st) {
+  if (!find((uintptr_t)d, n) || !find((uintptr_t)s, n)) return CUDA_ERROR_INVALID_VALUE;
+  memmove((void*)(uintptr_t)d, (void*)(uintptr_t)s, n);
+  fprintf(log_file(), "{\"op\":\"copy\",\"dst\":%llu,\"src\":%llu,\"bytes\":%zu,\"stream\":%llu}\n", d, s, n,
+          (unsigned long long)(uintptr_t)st);
+  fflush(log_file());
+  return CUDA_SUCCESS;
+}
 CUresult CUDAAPI cuMemGetInfo_v2(size_t* f, size_t* t) { *f = 80ull << 30; *t = 80ull << 30; return CUDA_SUCCESS; }
 
 struct Args { uint64_t p[16]; int32_t i[16]; };
 CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned gx, unsigned gy, unsigned gz, unsigned bx, unsigned by, unsigned bz,
                                 unsigned smem, CUstream s, void** params, void** extra) {
-  (void)s; (void)extra;
+  (void)extra;
   const int i = (int)(uintptr_t)f - 1;
   if (i < 0 || i >= g_nfn || !params) return CUDA_ERROR_INVALID_HANDLE;
   if (!gx || !gy || !gz || bx * by * bz > 1024 || !bx) return CUDA_ERROR_INVALID_VALUE;
   if ((int)smem > g_maxdyn[i]) return CUDA_ERROR_INVALID_VALUE;
   const struct Args* a = params[0];
   FILE* L = log_file();
-  fprintf(L, "{\"op\":\"launch\",\"name\":\"%s\",\"grid\":[%u,%u,%u],\"block\":%u,\"smem\":%u,\"p\":[", g_names[i], gx, gy, gz, bx, smem);
+  fprintf(L, "{\"op\":\"launch\",\"name\":\"%s\",\"grid\":[%u,%u,%u],\"block\":%u,\"smem\":%u,\"stream\":%llu,\"p\":[", g_names[i], gx,
+          gy, gz, bx, smem, (unsigned long long)(uintptr_t)s);
   for (int j = 0; j < 16; j++) fprintf(L, "%s%llu", j ? "," : "", (unsigned long long)a->p[j]);
   fprintf(L, "],\"i\":[");
   for (int j = 0; j < 16; j++) fprintf(L, "%s%d", j ? "," : "", a->i[j]);
