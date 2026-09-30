@@ -118,8 +118,7 @@ def registry(tmp_path, monkeypatch):
     reg["channels"]["agent-alerts"]["bots"][0]["bot_id"] = "BGRAFANA"
     reg["humans"][0]["slack_user"] = "UDANIEL"
     for h in reg["handles"]:
-        if h["handle"] == "infra":
-            h["usergroup"] = "SINFRA"
+        h["usergroup"] = "SINFRA" if h["handle"] == "infra" else None
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(reg))
     monkeypatch.setenv("RESEARCH_SLACK_REGISTRY", str(path))
