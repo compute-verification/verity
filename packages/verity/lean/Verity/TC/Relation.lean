@@ -10,8 +10,8 @@ and `check_step`, predicate for predicate and in order, over the integers (Pytho
 Where this differs from the Python:
 
 * **The witness has a fixed shape**: `k` product rows, one group row per group, `size + 1` term rows per group
-  (`Witness.Shaped`). `check_step` iterates over whatever lists the witness dict holds and so accepts truncated ones;
-  the relation the census counts, like any circuit, has a fixed set of columns.
+  (`Witness.Shaped`), the columns the census counts. The Python witness is a dict of lists, whose lengths the shape
+  pins.
 * **The operands and the input state are arguments**, not witness fields (`w["a"]`, `w["b"]`, `w["in"]`).
 * **`RANGE` and `ISZERO` are their meaning**: `RANGE x bits` is `0 ≤ x < 2^bits`, which is what `Census.RANGE` accepts
   (one `T_range` lookup when `bits ≤ 16`; otherwise non-negativity, the 16-bit chunk split and a lookup per chunk), and
