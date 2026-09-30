@@ -218,6 +218,44 @@ useful    U/(α_A·α_B), glue
     gate's expected buffers, whose hashes they record.
   - The H100 capture confirms it on silicon.
 
+## `pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`: Pearl-C on sm_120's block-scaled FP4 (`schemes/pearl_c4.py`)
+
+GPU 5's RTX PRO 6000 design (research store `internal/pouw/rtx-pro/fp4-design.md`). It is Pearl-C with the FP8 product
+replaced by `mma.sync kind::mxf4nvf4`: NVFP4 (UE4M3 scales per 16) is the headline, MXFP4 (UE8M0 per 32) is beside it.
+The conjecture it would rest on, TT_OUT for this Π, is not stated yet, so the certificate names no γ_0. The module's
+docstring states every step and rounding.
+
+~~~text
+rows      k BF16 words per row of either operand
+stats     s, ρ as pearl-c-h100-v1; σ = ρ/4; α = 2688/max(s + 4σ, 2^−32) (mxfp4: floored to a power of two);
+          β_row = (σ·α)·f32(16/√2346.125), a_E = ue4m3(β_row)
+lines     32 uniform E2M1 codes: TurboSHAKE128(seed ‖ role ‖ index u32, D = 0x24), 16 bytes; seed labels pearl-c4/v0/seed-*
+forming   D_t = NVF4.step(C = α·x_t, E ‖ 0 at a_E, F_t ‖ 0 at 2^−4); per scale block s_b from amax|D|/6 (nvfp4: UE4M3
+          nearest even, at least 2^−9; mxfp4: UE8M0 rounded up); code = e2m1(D·(1/s_b))
+chain     C̃ = the scheme's atom chained from +0 over k/64 steps, no promotion
+peel      Ẽ = E·a_E·2^−4 (exact in BF16); P_A = [Ẽ_A ‖ bf16(A′·F_B)], P_B = [bf16(Ẽ_B·G − B̃·F_A) ‖ −Ẽ_B], G = F_Bᵀ·F_A;
+          U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_M16N8K16 steps (sm_120 mma.sync) into C̃'s word
+leaf      pearl-c-h100's; tickets: Pearl's lottery over C̃
+useful    U/(α_A·α_B), glue
+~~~
+
+- **The chain is exact on the domain:** each C̃ word is the exact dot product rounded once toward zero (a test). So rounding
+  binds no word to its order. The design's defense against a salt-free precomputation is that every code and every
+  block scale depends on the salt.
+- **Per-row rules (placeholders for the theory lane):** a_E is a normal UE4M3, and at most one scale block in 64 is dead.
+  A block is dead when its clean |max| exceeds 12ρ (noise under τ = 1/8 of a code step). The tile debit (`tile_cap`)
+  charges each dead × dead block pair's MACs and each dead A element's credited forming by the tile's share of its row.
+  The cap is ρ = 1/400 of the tile's credited cells' credit. Zero-sum atoms are not debited.
+- **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
+  - W_ref = mnk + 32·mk + 256·mn + 117·mk;
+  - creditOf = W_ref − 2·mk (ρ is A-only);
+  - the weight side is `job_cost`.
+- **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
+- **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
+  PTX ISA.
+- **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
+  and one 64 × 1,024 × 64 NVFP4 tile.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
