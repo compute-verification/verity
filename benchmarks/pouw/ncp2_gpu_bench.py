@@ -252,6 +252,61 @@ def fused_timings(torch, reps: int, save=lambda part: None) -> dict:
     return out
 
 
+#: change 1 measured on fixed shapes: one decode step's calls, every linear of `ASYNC_LAYERS` layers of QWEN05 at `ASYNC_ROWS` rows
+ASYNC_ROWS, ASYNC_LAYERS = 32, 24
+
+
+def async_timings(torch, reps: int) -> dict:
+    """The hashing cut's change 1 on fixed shapes, with no model: one decode step's calls (`ASYNC_LAYERS` layers of QWEN05's
+    linears at `ASYNC_ROWS` rows, each layer's weights their own), committed one after another on one stream by
+    `FusedCommitter` (whose served y is its committed y), against served from the exact product and committed on side streams
+    by `AsyncCommitter`, drained before the clock stops; and the exact serve alone. Wall time per step over ``reps`` steps."""
+    m, salt = ASYNC_ROWS, bytes(range(32))
+    shapes = []
+    for k, n in QWEN05:
+        g = torch.Generator(device="cuda").manual_seed(3 * k + n)
+        shapes.append((torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g),
+                       torch.full((m,), 1e-3, dtype=torch.float32, device="cuda").view(torch.int32),
+                       torch.randint(-64, 64, (n, k), dtype=torch.int8, device="cuda", generator=g),
+                       torch.full((n,), 1e-2, dtype=torch.float32, device="cuda").view(torch.int32),
+                       torch.zeros(n, dtype=torch.int16, device="cuda"), torch.arange(n, dtype=torch.int32, device="cuda")))
+    rowids = torch.arange(m, dtype=torch.int32, device="cuda")
+    sync = PD.FusedCommitter("ncp-v2", salt, PD.HASH | PD.CACHE_Y)
+    exact = PD.AsyncCommitter("ncp-v2", salt, PD.HASH | PD.CACHE_Y)
+    out: dict = {"rows": m, "calls_per_step": ASYNC_LAYERS * len(QWEN05), "sync_step_s": [], "async_step_s": [], "serve_step_s": [],
+                 "mismatched_words": 0}
+
+    def step(commit, forward: int) -> None:
+        for layer in range(ASYNC_LAYERS):
+            for j, (a, s, b, t, bias, colids) in enumerate(shapes):
+                commit(a, s, b, t, bias, forward, (layer << 32) | j, len(QWEN05) * layer + j, rowids, colids)
+
+    def drained(forward: int) -> None:
+        step(exact, forward)
+        out["mismatched_words"] += exact.drain()["mismatched_words"]
+
+    def wall(run) -> float:
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
+        run()
+        torch.cuda.synchronize()
+        return time.perf_counter() - t0
+
+    step(sync, 0)                                           # warm: every weight's Y leaves cached, every workspace grown
+    drained(0)
+    for i in range(1, reps + 1):
+        out["sync_step_s"].append(wall(lambda: step(sync, i)))
+        out["async_step_s"].append(wall(lambda: drained(i)))
+        out["serve_step_s"].append(wall(lambda: [exact.serve(a, s, b, t, bias) for _ in range(ASYNC_LAYERS)
+                                                 for a, s, b, t, bias, _c in shapes]))
+    exact.close()
+    for key in ("sync_step_s", "async_step_s", "serve_step_s"):
+        out[key[:-2] + "_mean_s"] = sum(out[key]) / max(1, len(out[key]))
+    if out["mismatched_words"]:
+        raise SystemExit(f"async path: {out['mismatched_words']} served words differ from the committed y")
+    return out
+
+
 def _cfgs(m: int, n: int) -> list[int]:
     """The configs whose tile divides (m, n), largest first."""
     return [c for c, (bm, bn) in ROUTE_U_TILES.items() if m % bm == 0 and n % bn == 0]
@@ -426,6 +481,7 @@ def main() -> None:
             res["gates"]["async"] = gate_async(torch)
             save("gates", res["gates"])
             save("fused", fused_timings(torch, args.reps, save=lambda part: save("fused", part)))
+            save("async", async_timings(torch, args.reps))
             _report(res)
             return
         ext = load()

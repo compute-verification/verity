@@ -328,3 +328,36 @@ def test_the_vllm_split_adds_up_to_the_slowdown():
     got = V.split(bf16, full, nohash, low, exact)
     assert got["prefill_2048"]["async_slowdown"] == 60.0 and got["decode_b32"]["async_s"] == 4.0
     assert abs(got["decode_b32"]["async_serve_x_bf16"] - 0.6) < 1e-12 and "async_s" not in out["decode_b32"]
+
+
+def test_the_async_timings_run_one_decode_steps_calls_both_ways(monkeypatch):
+    calls = {"sync": 0, "async": 0, "serve": 0, "drains": 0}
+
+    class Sync:
+        def __init__(self, scheme, salt, flags):
+            pass
+
+        def __call__(self, *args):
+            calls["sync"] += 1
+
+    class Exact(Sync):
+        def __call__(self, *args):
+            calls["async"] += 1
+
+        def serve(self, *args):
+            calls["serve"] += 1
+
+        def drain(self):
+            calls["drains"] += 1
+            return {"calls": 0, "mismatched_words": 0, "roots": []}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(B.PD, "FusedCommitter", Sync)
+    monkeypatch.setattr(B.PD, "AsyncCommitter", Exact)
+    out = B.async_timings(_FT, 2)
+    per = B.ASYNC_LAYERS * len(B.QWEN05)
+    assert out["calls_per_step"] == per and calls == {"sync": 3 * per, "async": 3 * per, "serve": 2 * per, "drains": 3}
+    assert len(out["sync_step_s"]) == len(out["async_step_s"]) == 2 and out["mismatched_words"] == 0
+    assert {"sync_step_mean_s", "async_step_mean_s", "serve_step_mean_s"} <= set(out)
