@@ -1,11 +1,14 @@
-"""The SASS gate (`harness/sass_gate.py`): a --use_fast_math build fails and the same kernels built without it pass, on
-CUDA 12.9.1's listings of `fixtures/sass_gate/ftz_probe.cu`; every spelling of an FP32 .FTZ add, multiply or FMA is refused;
-only ptxas's IEEE expansions are exempt; the two disassemblies must agree; the fatbin parser finds every cubin and refuses
-what it can't read; passes are cached and failures aren't; an arm must declare its binaries; and, where a CUDA toolkit is
-present, real builds with and without the flags."""
+"""The SASS gate (`harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
+`ftz_refused.cu`: builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
+and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
+(version, build, arguments) isn't pinned with a numeric run exempts nothing; each sequence breaks under a mutation; a read
+the gate can't tell from a merge passes and is listed; the pins regenerate; the two disassemblies must agree; the fatbin
+parser finds every cubin and refuses what it can't read; passes are cached and failures aren't; an arm must declare its
+binaries; and, where a CUDA toolkit is present, real builds."""
 
 from __future__ import annotations
 
+import json
 import struct
 import subprocess
 import sys
@@ -18,114 +21,384 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 import sass_gate as SG  # noqa: E402
 
 FIX = Path(__file__).parent / "fixtures" / "sass_gate"
-PLAIN_EXEMPT = {"rcp-fast-path": 1, "__cuda_sm20_rcp_rn_f32_slowpath": 2, "sqrt-fast-path": 2,
-                "__cuda_sm20_sqrt_rn_f32_slowpath": 5, "__cuda_sm3x_div_rn_noftz_f32_slowpath": 2}
+NOTES = json.loads((FIX / "tool_notes.json").read_text())
+PLAIN_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1,
+                 "sqrt-fast-path": 6, "__cuda_sm20_sqrt_rn_f32_slowpath": 18, "div-fast-path": 4,
+                 "__cuda_sm3x_div_rn_noftz_f32_slowpath": 30, "rcp-fast-path": 2, "__cuda_sm20_rcp_rn_f32_slowpath": 7}
+INTEGER_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1}
+FP32_KERNELS = {"rho_k", "rcp_k", "div_k", "cdiv_k", "sqrt_k", "arith_k"}
+TEST_RUN = {"run": "test"}
 
 
-def listings(name: str) -> tuple[str, str]:
-    return (FIX / f"{name}.nvdisasm.txt").read_text(), (FIX / f"{name}.cuobjdump.txt").read_text()
+def pins(numeric: dict | None = TEST_RUN) -> dict:
+    """sass_pins.json with each toolkit's numeric run replaced by `numeric`."""
+    p = SG.load_pins()
+    for tk in p["toolkits"].values():
+        tk["numeric"] = numeric
+    return p
 
 
-def judge(name: str, nvdisasm: str | None = None, cuobjdump: str | None = None) -> dict:
-    n, c = listings(name)
-    return SG.judge(SG.parse_nvdisasm(nvdisasm or n), cuobjdump or c, [])
+def listing(name: str) -> str:
+    return (FIX / f"{name}.nvdisasm.txt").read_text()
+
+
+def verdict(name: str, text: str | None = None, notes: list | None = None, p: dict | None = None) -> dict:
+    return SG.cubin_verdict(SG.parse_nvdisasm(listing(name) if text is None else text),
+                            NOTES[name] if notes is None else notes, pins() if p is None else p)
+
+
+def offending(v: dict) -> set[tuple[str, str]]:
+    return {(o["function"], o["instruction"]) for o in v["offending"]}
+
+
+def in_function(text: str, fn: str, old: str, new: str) -> str:
+    """`text` with `old` replaced by `new` once, inside function `fn`'s section."""
+    start = text.index(f"\n{fn}:\n")
+    end = text.find("\t.section", start)
+    end = len(text) if end < 0 else end
+    assert text.count(old, start, end) == 1, (fn, old)
+    return text[:start] + text[start:end].replace(old, new) + text[end:]
+
+
+def after(text: str, fn: str, line: str, insn: str, addr: int) -> str:
+    """`text` with `insn` inserted in `fn` after the instruction `line`, at address `addr`."""
+    return in_function(text, fn, f"{line} ;\n", f"{line} ;\n        /*{addr:04x}*/                   {insn} ;\n")
+
+
+@pytest.fixture(autouse=True)
+def _list_everything(monkeypatch):
+    monkeypatch.setattr(SG, "MAX_LISTED", 10_000)
 
 
 # ---- the verdicts ---------------------------------------------------------------------------------------------------------
 
 
-def test_a_fast_math_build_fails_and_the_same_kernels_built_without_it_pass():
-    plain = judge("plain")
-    assert plain["ok"] and plain["ftz_fp32"] == 12 and plain["offending_n"] == 0
-    assert plain["exempt"] == PLAIN_EXEMPT
-    assert plain["cross_check"] == {"cuobjdump_ftz_fp32": 12, "agree": True}
-    fast = judge("fast_math")
-    assert not fast["ok"] and fast["exempt"] == {} and fast["offending_n"] == fast["ftz_fp32"] == 16
-    assert {o["function"] for o in fast["offending"]} == {"arith_k", "rho_k", "rcp_k"}
-    assert any(o["function"] == "arith_k" and o["instruction"].startswith("FADD.FTZ") for o in fast["offending"])
-    assert SG.why_failed(fast).startswith("16 FP32 .FTZ instruction(s) outside ptxas's IEEE expansions, first arith_k 0x")
+@pytest.mark.parametrize("name,toolkit", [("plain", "12.9.1"), ("plain13", "13.0.1")])
+def test_a_build_without_flags_passes_with_every_flagged_instruction_in_a_pinned_sequence(name, toolkit):
+    v = verdict(name)
+    assert v["toolkit"] == toolkit and v["unpinned"] is None
+    assert v["offending_n"] == 0 and v["merged_reads_n"] == 0 and v["unmatched_calls"] == []
+    assert v["covered"] == PLAIN_COVERED and v["flagged"] == sum(PLAIN_COVERED.values())
 
 
-@pytest.mark.parametrize("text", ["FADD.FTZ R0, R2, R3", "@!P0 FFMA.FTZ R0, R1, R2, R3", "@P1 FMUL.FTZ R0, R3, 0.5",
-                                  "FFMA.RZ.FTZ R0, R1, R2, R3", "FADD.FTZ.SAT R0, R1, R2", "FFMA2.FTZ R0, R2, R4, R6",
-                                  "FADD32I.FTZ R0, R1, 0x3f800000", "FMUL32I.FTZ.SAT R0, R1, 2", "{ FADD.FTZ R0, R1, R2"])
-def test_every_spelling_of_an_fp32_ftz_add_multiply_or_fma_is_refused(text):
-    assert SG.is_ftz_arith(text)
+@pytest.mark.parametrize("name,flagged,offending_n", [("fast_math", 55, 42), ("ftz", 94, 81)])
+def test_fast_math_and_ftz_builds_fail_on_every_fp32_kernel(name, flagged, offending_n):
+    v = verdict(name)
+    assert v["flagged"] == flagged and v["offending_n"] == offending_n
+    assert {o["function"] for o in v["offending"]} == FP32_KERNELS
+    assert v["covered"] == INTEGER_COVERED
+    assert ("arith_k", "FADD.FTZ R0, R2, -R5") in offending(v)
 
 
-@pytest.mark.parametrize("text", ["FADD R0, R2, R3", "FFMA.RZ R0, R1, R2, R3", "FSETP.GTU.FTZ.AND P0, PT, |R0|, +INF , PT",
-                                  "F2I.FTZ.U32.TRUNC.NTZ R5, R4", "HADD2.FTZ R0, R1, R2", "DADD R0, R2, R4",
-                                  "FMNMX.FTZ R0, R1, R2, !PT"])
-def test_other_opcodes_are_not_the_rule(text):
-    assert not SG.is_ftz_arith(text)
+def test_the_approximate_forms_fail_though_they_carry_no_ftz():
+    """-prec-div=false -prec-sqrt=false: the bare MUFU the .FTZ rule alone would miss; __fdiv_rn and __fsqrt_rn stay exact."""
+    v = verdict("prec")
+    assert offending(v) == {("sqrt_k", "MUFU.SQRT R7, R0"), ("cdiv_k", "MUFU.RCP R0, R0"), ("div_k", "MUFU.RCP R9, R8")}
+    assert "rho_k" not in {o["function"] for o in v["offending"]}
 
 
-def test_a_fast_path_is_exempt_only_when_its_arithmetic_is_the_intrinsics():
-    n, c = listings("plain")
-    at = n.index("FMUL.FTZ R0, R3, 0.5 ;")
-    line_end = n.index("\n", at) + 1
-    extra = n[:line_end] + "        /*0248*/                   FADD.FTZ R9, R9, R9 ;\n" + n[line_end:]
-    r = judge("plain", nvdisasm=extra)
-    assert not r["ok"]
-    assert {o["instruction"] for o in r["offending"]} == {"FMUL.FTZ R7, R3.reuse, R4", "FMUL.FTZ R0, R3, 0.5",
-                                                         "FADD.FTZ R9, R9, R9"}
-    assert "sqrt-fast-path" not in r["exempt"]
+def test_every_refused_kernel_fails():
+    """`ftz_refused.cu`, built without flags: __frsqrt_rn's two bare MUFU.RSQ (no .FTZ at default flags, so no entry), the
+    approximate intrinsics, .ftz on add, min, setp and cvt, and a division whose slow path ptxas specialized."""
+    v = verdict("refused")
+    assert v["covered"] == {} and v["offending_n"] == v["flagged"] == 18
+    assert {o["function"] for o in v["offending"]} == {"frsqrt_k", "rsqrtf_k", "expf_k", "fdividef_k", "sqrt_approx_k",
+                                                       "add_ftz_k", "min_ftz_k", "setp_ftz_k", "cvt_ftz_k", "cdiv1_k"}
+    assert [SG.opcode(i)[:2] for f, i in sorted(offending(v)) if f == "frsqrt_k"] == [["MUFU", "RSQ"]] * 2
+    assert any("isn't its pin" in o.get("why", "") for o in v["offending"] if o["function"] == "cdiv1_k")
 
 
-def test_sm90s_move_after_the_call_is_a_move_and_nothing_else_is():
-    """sm_90a moves the slow path's result with IMAD.MOV.U32 (#449's pearl_c.cubin); any other instruction there ends the
-    idiom, so the fast path after it is not exempt."""
-    n, _ = listings("plain")
-    assert "MOV R7, R3 ;" in n
-    assert judge("plain", nvdisasm=n.replace("MOV R7, R3 ;", "IMAD.MOV.U32 R7, RZ, RZ, R3 ;")) == judge("plain")
-    r = judge("plain", nvdisasm=n.replace("MOV R7, R3 ;", "IMAD R7, R3, R4, RZ ;"))
-    assert not r["ok"] and "sqrt-fast-path" not in r["exempt"]
+@pytest.mark.parametrize("text", ["FADD.FTZ R0, R2, R3", "@!P0 FFMA.FTZ R0, R1, R2, R3", "FFMA.RZ.FTZ R0, R1, R2, R3",
+                                  "FADD32I.FTZ R0, R1, 0x3f800000", "FSETP.GTU.FTZ.AND P0, PT, |R0|, +INF , PT",
+                                  "FMNMX.FTZ R0, R1, R2, !PT", "F2I.FTZ.U32.TRUNC.NTZ R5, R4", "F2F.FTZ.F32.F32 R0, R1",
+                                  "HADD2.FTZ R0, R1, R2", "{ FMUL.FTZ R0, R1, R2", "MUFU.RCP R0, R1", "MUFU.RSQ R0, R1",
+                                  "MUFU.SQRT R0, R1", "MUFU.EX2 R0, R1", "MUFU.LG2 R0, R1", "MUFU.SIN R0, R1",
+                                  "MUFU.COS R0, R1", "MUFU.TANH R0, R1", "@P1 MUFU.RCP R0, R1"])
+def test_every_ftz_and_every_fp32_mufu_is_flagged(text):
+    assert SG.flagged(SG.opcode(text))
 
 
-def test_an_ftz_slow_path_is_not_exempt_nor_the_fast_path_around_it():
-    n, _ = listings("plain")
-    r = judge("plain", nvdisasm=n.replace("__cuda_sm20_sqrt_rn_f32_slowpath", "__cuda_sm20_sqrt_rn_ftz_f32_slowpath"))
-    assert not r["ok"] and r["offending_n"] == 7
-    assert "sqrt-fast-path" not in r["exempt"] and "__cuda_sm20_sqrt_rn_f32_slowpath" not in r["exempt"]
+@pytest.mark.parametrize("text", ["FADD R0, R2, R3", "FFMA.RZ R0, R1, R2, R3", "FSETP.GTU.AND P0, PT, |R0|, +INF , PT",
+                                  "F2I.U32.TRUNC.NTZ R5, R4", "DADD R0, R2, R4", "MUFU.RCP64H R1, R3",
+                                  "MUFU.RSQ64H R1, R3", "I2F.U32.RP R0, R5"])
+def test_the_rest_is_not(text):
+    assert not SG.flagged(SG.opcode(text))
 
 
-def test_the_two_disassemblies_must_agree():
-    n, c = listings("plain")
-    lines = c.splitlines(keepends=True)
-    drop = next(i for i, ln in enumerate(lines) if "FADD.FTZ" in ln)
-    r = judge("plain", cuobjdump="".join(lines[:drop] + lines[drop + 1:]))
-    assert r["offending_n"] == 0 and not r["ok"]
-    assert r["cross_check"] == {"cuobjdump_ftz_fp32": 11, "agree": False}
-    assert "disagree" in SG.why_failed(r)
+# ---- the toolkit key ------------------------------------------------------------------------------------------------------
+
+
+def note(**kw) -> list[dict]:
+    return [{**NOTES["plain"][0], **kw}]
+
+
+@pytest.mark.parametrize("notes,why", [
+    ([], "no ptxas record"),
+    (note(version="Cuda compilation tools, release 12.8, V12.8.93"), "no pinned toolkit built it"),
+    (note(branch="Build cuda_12.9.r12.9/compiler.00000000_0"), "no pinned toolkit built it"),
+    (note(args="-arch sm_120a -m 64 -O2"), "with unpinned arguments '-arch sm_120a -m 64 -O2'"),
+    (note(args="-arch sm_100a -m 64"), "with unpinned arguments"),
+    (NOTES["plain"] + [{**NOTES["plain13"][0], "tool": "nvlink"}], "no pinned toolkit built it"),
+])
+def test_a_cubin_from_any_other_ptxas_exempts_nothing(notes, why):
+    v = verdict("plain", notes=notes)
+    assert v["toolkit"] is None and why in v["unpinned"]
+    assert v["covered"] == {} and v["offending_n"] == v["flagged"] == sum(PLAIN_COVERED.values())
+
+
+def test_ptxas_verbose_flag_is_not_an_argument_that_matters():
+    assert verdict("plain", notes=note(args="-v -arch sm_120a -m 64"))["offending_n"] == 0
+    assert verdict("plain", notes=note(args="-arch sm_120a -m 64 -fmad false"))["offending_n"] == 0
+
+
+def test_a_toolkit_pinned_without_a_numeric_run_exempts_nothing():
+    v = verdict("plain", p=pins(numeric=None))
+    assert v["toolkit"] is None and v["unpinned"] == "ptxas Cuda compilation tools, release 12.9, V12.9.86 is pinned " \
+                                                     "without a numeric run"
+    assert v["offending_n"] == v["flagged"]
+
+
+def test_a_subroutine_is_exempt_only_as_its_own_toolkit_builds_it():
+    """ptxas 13.0 builds __cuda_sm20_div_u16 differently: 12.9.1's body under 13.0.1's notes is refused, and back."""
+    for name, other in (("plain", "plain13"), ("plain13", "plain")):
+        v = verdict(name, notes=NOTES[other])
+        assert {o["function"] for o in v["offending"]} == {"udiv16_k"}
+        assert all("__cuda_sm20_div_u16's body" in o["why"] for o in v["offending"])
+
+
+# ---- the sequences --------------------------------------------------------------------------------------------------------
+
+SQRT_K = {("sqrt_k", "MUFU.RSQ R5, R0"), ("sqrt_k", "FMUL.FTZ R3, R0, R5"), ("sqrt_k", "FMUL.FTZ R5, R5, 0.5")}
+
+
+def test_a_fast_block_with_an_extra_instruction_is_not_exempt():
+    v = verdict("plain", text=after(listing("plain"), "sqrt_k", "FMUL.FTZ R5, R5, 0.5", "FADD.FTZ R9, R9, R9", 0xf8))
+    assert offending(v) == SQRT_K | {("sqrt_k", "FADD.FTZ R9, R9, R9")}
+    assert any("sqrt: the fast block isn't four instructions" in m for m in v["unmatched_calls"])
+
+
+def test_a_seed_read_outside_its_sequence_is_not_exempt():
+    v = verdict("plain", text=after(listing("plain"), "sqrt_k", "ISETP.GT.U32.AND P0, PT, R4, 0x727fffff, PT",
+                                    "STG.E desc[UR4][R2.64], R5", 0x98))
+    assert offending(v) == SQRT_K
+    assert any("R5 from 0x0080 is read outside the sequence at 0x0098" in m for m in v["unmatched_calls"])
+
+
+def test_a_slow_path_of_another_name_is_not_exempt_nor_the_fast_path_around_it():
+    text = listing("plain").replace("__cuda_sm20_sqrt_rn_f32_slowpath", "__cuda_sm20_sqrt_rn_ftz_f32_slowpath")
+    v = verdict("plain", text=text)
+    assert "sqrt-fast-path" not in v["covered"] and "__cuda_sm20_sqrt_rn_f32_slowpath" not in v["covered"]
+    assert {o["function"] for o in v["offending"]} == {"sqrt_k", "rho_k"}
+
+
+def test_a_fast_path_around_a_slow_path_that_isnt_its_pin_is_not_exempt():
+    text = in_function(listing("plain"), "rcp_k", "@P0 FFMA R6, R5, R2, -1", "@P0 FFMA R6, R5, R2, -2")
+    v = verdict("plain", text=text)
+    assert {o["function"] for o in v["offending"]} == {"rcp_k"} and "rcp-fast-path" not in v["covered"]
+    assert any("the __cuda_sm20_rcp_rn_f32_slowpath it calls isn't the pinned body" in m for m in v["unmatched_calls"])
+
+
+def test_the_div_chain_must_be_div_rn():
+    text = in_function(listing("plain"), "div_k", "FFMA R10, -R3, R8, R0", "FFMA R10, -R3, R8, R3")
+    v = verdict("plain", text=text)
+    assert ("div_k", "MUFU.RCP R8, R3") in offending(v) and v["covered"]["div-fast-path"] == 3
+
+
+def test_a_constant_numerator_must_be_the_constant_fchk_checks():
+    text = in_function(listing("plain"), "cdiv_k", "UMOV UR6, 0x40400000", "UMOV UR6, 0x40800000")
+    v = verdict("plain", text=text)
+    assert offending(v) == {("cdiv_k", "MUFU.RCP R0, R3")}
+    assert "FCHK's numerator R8 isn't the constant 3" in v["offending"][0]["why"]
+
+
+def test_integer_division_seed_must_round_up_by_two_ulps():
+    text = in_function(listing("plain"), "udiv_k", "IADD3 R6, PT, PT, R0, 0xffffffe, RZ", "IADD3 R6, PT, PT, R0, 0xfffffff, RZ")
+    v = verdict("plain", text=text)
+    assert offending(v) == {("udiv_k", "MUFU.RCP R0, R0"), ("udiv_k", "F2I.FTZ.U32.TRUNC.NTZ R7, R6")}
+    assert "the seed isn't rounded up by IADD3 +2 ulp" in v["offending"][0]["why"]
+
+
+MERGE = """\t.section\t.text.merge_k,"ax",@progbits
+merge_k:
+        /*0000*/                   I2F.U32.RP R0, R5 ;
+        /*0010*/                   MUFU.RCP R0, R0 ;
+        /*0020*/                   IADD3 R6, PT, PT, R0, 0xffffffe, RZ ;
+        /*0030*/                   F2I.FTZ.U32.TRUNC.NTZ R7, R6 ;
+        /*0040*/               @P0 BRA `(.L_x_1) ;
+        /*0050*/                   MOV R0, 0x5 ;
+.L_x_1:
+        /*0060*/                   STG.E desc[UR4][R2.64], R0 ;
+        /*0070*/                   EXIT ;
+"""
+
+
+def test_a_read_the_gate_cant_tell_from_a_merge_passes_and_is_listed():
+    """The seed reaches the store only when P0 holds; another write reaches it otherwise. The gate can't show that path
+    infeasible (hash_leaf's 22 such reads are: its tail reads R10 only when a count it skipped the loop for is 1-3), so it
+    passes the read and lists it; without the other write the read is direct, and refused."""
+    v = SG.cubin_verdict(SG.parse_nvdisasm(MERGE), NOTES["plain"], pins())
+    assert v["offending_n"] == 0 and v["covered"] == {"int-seed": 2}
+    assert v["merged_reads"] == [{"function": "merge_k", "sequence": "int-seed", "value": "R0 from 0x0010",
+                                  "reader": "0x0060 STG.E desc[UR4][R2.64], R0"}]
+    v = SG.cubin_verdict(SG.parse_nvdisasm(MERGE.replace("MOV R0, 0x5", "MOV R9, 0x5")), NOTES["plain"], pins())
+    assert v["offending_n"] == 2 and "R0 from 0x0010 is read outside the sequence at 0x0060" in v["offending"][0]["why"]
+
+
+def test_moves_after_a_call_may_be_either_spelling_and_nothing_else():
+    n = listing("plain")
+    same = in_function(n, "cdiv_k", "MOV R4, R9 ;", "IMAD.MOV.U32 R4, RZ, RZ, R9 ;")
+    assert verdict("plain", text=same)["covered"] == PLAIN_COVERED
+    v = verdict("plain", text=in_function(n, "cdiv_k", "MOV R4, R9 ;", "IMAD R4, R9, R3, RZ ;"))
+    assert v["covered"]["div-fast-path"] == 3 and {o["function"] for o in v["offending"]} == {"cdiv_k"}
+
+
+def test_a_signature_ignores_how_an_immediate_is_loaded_and_nothing_else():
+    n = listing("plain")
+    hfma = "HFMA2 R3, -RZ, RZ, 15, 0"
+    assert verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800000"))["covered"] == PLAIN_COVERED
+    v = verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800001"))
+    assert {o["function"] for o in v["offending"]} == {"udiv16_k"} and "__cuda_sm20_div_u16's body" in v["offending"][0]["why"]
 
 
 def test_a_sections_flags_line_keeps_its_function():
     """nvdisasm writes `.sectionflags` after `.section` for a kernel that uses barriers (#449's sm_90a plainq)."""
-    n, _ = listings("plain")
     flagged = "".join(ln + ('\t.sectionflags\t@"SHF_BARRIERS=1"\n' if ln.lstrip().startswith(".section\t.text.") else "")
-                      for ln in n.splitlines(keepends=True))
+                      for ln in listing("plain").splitlines(keepends=True))
     assert flagged.count(".sectionflags") >= 3
-    assert judge("plain", nvdisasm=flagged) == judge("plain")
+    assert verdict("plain", text=flagged) == verdict("plain")
 
 
-def test_ftz_f32_ptx_fails():
-    n, c = listings("plain")
-    r = SG.judge(SG.parse_nvdisasm(n), c, ["\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n"])
-    assert not r["ok"] and r["ptx_ftz"] == ["fma.rn.ftz.f32 %f4, %f1, %f2, %f3;"]
+# ---- the pins -------------------------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def records(tmp_path, monkeypatch):
+    """`pin_record` of a listing: a stand-in cubin naming it, which `_disassemble` reads back as the listing and its notes."""
+    def disassemble(cubins, tools):
+        names = [c[off:off + size].decode() for c in cubins for _, off, size in [SG._sections(c)[".text.k"]]]
+        return [(SG.parse_nvdisasm(listing(n)), NOTES[n]) for n in names]
+
+    monkeypatch.setattr(SG, "_disassemble", disassemble)
+
+    def record(name: str) -> list[dict]:
+        p = tmp_path / f"{name}.cubin"
+        p.write_bytes(elf(SG.EM_CUDA, {".text.k": name.encode()}))
+        return SG.pin_record([p], {})
+    return record
+
+
+def test_pinning_a_toolkit_from_its_builds_reproduces_its_entry(tmp_path, records):
+    shipped = SG.load_pins()
+    out = tmp_path / "pins.json"
+    for tk, name in (("12.9.1", "plain"), ("13.0.1", "plain13")):
+        entry = SG.update_pins(records(name), tk, out)
+        assert entry == {**shipped["toolkits"][tk], "args": ["-arch sm_120a -m 64"], "numeric": None}
+    assert json.loads(out.read_text())["signatures"] == shipped["signatures"]
+
+
+def test_a_numeric_run_survives_a_repin_only_while_the_subroutines_are_unchanged(tmp_path, records):
+    out = tmp_path / "pins.json"
+    rec = records("plain")
+    SG.update_pins(rec, "12.9.1", out)
+    p = json.loads(out.read_text())
+    p["toolkits"]["12.9.1"]["numeric"] = TEST_RUN
+    out.write_text(json.dumps(p))
+    assert SG.update_pins(rec, "12.9.1", out)["numeric"] == TEST_RUN
+    div_u16 = records("plain13")[0]["subroutines"]["__cuda_sm20_div_u16"]
+    other = [{**r, "subroutines": {**r["subroutines"], "__cuda_sm20_div_u16": div_u16}} for r in rec]
+    assert SG.update_pins(other, "12.9.1", out)["numeric"] is None
+
+
+def test_pinning_refuses_two_ptxas_builds_or_two_bodies_of_one_subroutine(tmp_path, records):
+    a, b = records("plain"), records("plain13")
+    with pytest.raises(SG.SassGateFailed, match="the builds name 2 ptxas builds, not one"):
+        SG.update_pins(a + b, "x", tmp_path / "pins.json")
+    with pytest.raises(SG.SassGateFailed, match="__cuda_sm20_div_u16 has two signatures across the builds"):
+        SG.update_pins(a + [{**r, "tool_notes": NOTES["plain"]} for r in b], "x", tmp_path / "pins.json")
+
+
+def test_the_shipped_pins_are_consistent():
+    """Every pinned subroutine has its signature's blocks, and every signature is some toolkit's."""
+    p = SG.load_pins()
+    live = {sid for tk in p["toolkits"].values() for sid in tk["subroutines"].values()}
+    assert live == set(p["signatures"])
+    assert all(SG.signature_id(p["signatures"][sid]) == sid for sid in live)
+
+
+# ---- tool notes -----------------------------------------------------------------------------------------------------------
+
+
+def tkinfo(notes: list[dict]) -> bytes:
+    """A .note.nv.tkinfo section's bytes, as ptxas writes it."""
+    out = b""
+    for n in notes:
+        strs, offs = b"\0", []
+        for s in (n["tool"], n["version"], n["branch"], n["args"]):
+            offs.append(len(strs))
+            strs += s.encode() + b"\0"
+        desc = struct.pack("<II4I", 0x81, 0, *offs) + strs
+        name = b"NVIDIA Corp\0"
+        out += struct.pack("<III", len(name), len(desc), 2000) + name + desc + bytes(-len(desc) % 4)
+    return out
+
+
+def test_tool_notes_reads_every_record_and_refuses_a_short_one():
+    notes = NOTES["plain"] + [{"tool": "nvlink", "version": "v", "branch": "b", "args": "-arch  sm_120a"}]
+    got = SG.tool_notes(elf(SG.EM_CUDA, {".text.k": b"\x01" * 8, ".note.nv.tkinfo": tkinfo(notes)}))
+    assert got == NOTES["plain"] + [{"tool": "nvlink", "version": "v", "branch": "b", "args": "-arch sm_120a"}]
+    assert SG.tool_notes(elf(SG.EM_CUDA, {".text.k": b"\x01" * 8})) == []
+    short = struct.pack("<III", 12, 8, 2000) + b"NVIDIA Corp\0" + bytes(8)
+    with pytest.raises(SG.SassGateFailed, match="a .note.nv.tkinfo record of 8 bytes"):
+        SG.tool_notes(elf(SG.EM_CUDA, {".note.nv.tkinfo": short}))
+
+
+# ---- the binary's verdict -------------------------------------------------------------------------------------------------
+
+
+def judge(name: str, cuobjdump: str | None = None, ptx: list[str] = ()) -> dict:
+    c = cuobjdump if cuobjdump is not None else (FIX / f"{name}.cuobjdump.txt").read_text()
+    return SG.judge([(SG.parse_nvdisasm(listing(name)), NOTES[name])], c, list(ptx), pins())
+
+
+def test_the_two_disassemblies_must_agree():
+    ok = judge("plain")
+    assert ok["ok"] and ok["cross_check"] == {"cuobjdump_flagged": 80, "agree": True}
+    lines = (FIX / "plain.cuobjdump.txt").read_text().splitlines(keepends=True)
+    drop = next(i for i, ln in enumerate(lines) if "MUFU.RSQ" in ln)
+    r = judge("plain", cuobjdump="".join(lines[:drop] + lines[drop + 1:]))
+    assert r["offending_n"] == 0 and not r["ok"] and r["cross_check"] == {"cuobjdump_flagged": 79, "agree": False}
+    assert "disagree" in SG.why_failed(r)
+
+
+def test_why_failed_names_the_first_instruction_and_why():
+    r = judge("fast_math")
+    assert not r["ok"] and r["cross_check"]["agree"] and r["offending_n"] == 42
+    assert SG.why_failed(r).startswith("42 flagged instruction(s) (.FTZ or FP32 MUFU) outside a pinned IEEE sequence, "
+                                       "first ")
+    unpinned = SG.judge([(SG.parse_nvdisasm(listing("plain")), [])], (FIX / "plain.cuobjdump.txt").read_text(), [], pins())
+    assert "(cubin 0: no ptxas record (.note.nv.tkinfo), so nothing is exempt)" in SG.why_failed(unpinned)
+
+
+def test_ftz_or_approximate_ptx_fails():
+    r = judge("plain", ptx=["\tadd.rn.f32 %f1, %f2, %f3;\n\tfma.rn.ftz.f32 %f4, %f1, %f2, %f3;\n\tdiv.full.f32 %f5, %f1, %f2;"
+                            "\n\tsqrt.approx.f32 %f6, %f1;\n\tadd.rn.f32 %f7, %f1, %f2; // .ftz\n"])
+    assert not r["ok"] and r["ptx_bad"] == ["fma.rn.ftz.f32 %f4, %f1, %f2, %f3;", "div.full.f32 %f5, %f1, %f2;",
+                                            "sqrt.approx.f32 %f6, %f1;"]
 
 
 # ---- the binaries ---------------------------------------------------------------------------------------------------------
 
 
 def elf(machine: int, sections: dict[str, bytes]) -> bytes:
-    """An ELF64 with the named sections and a .shstrtab, its section headers last."""
+    """An ELF64 with the named sections (a .note.* one a note) and a .shstrtab, its section headers last."""
     names, offsets = b"\0", {}
     for name in [*sections, ".shstrtab"]:
         offsets[name] = len(names)
         names += name.encode() + b"\0"
     body, heads, off = b"", [(0, 0, 0, 0)], 64
     for name, data in [*sections.items(), (".shstrtab", names)]:
-        heads.append((offsets[name], 3 if name == ".shstrtab" else 1, off, len(data)))
+        typ = 3 if name == ".shstrtab" else SG.SHT_NOTE if name.startswith(".note") else 1
+        heads.append((offsets[name], typ, off, len(data)))
         body += data
         off += len(data)
     ident = b"\x7fELF" + bytes([2, 1, 1]) + bytes(9)
@@ -177,35 +450,45 @@ TOOLS = {"cuobjdump": {"path": "cuobjdump", "version": "fake"}, "nvdisasm": {"pa
 
 def fake_tools(monkeypatch, name: str) -> list:
     calls: list = []
-    n, c = listings(name)
+    n, c = listing(name), (FIX / f"{name}.cuobjdump.txt").read_text()
     monkeypatch.setattr(SG, "_run", lambda cmd: calls.append(cmd[0]) or (n if cmd[0] == "nvdisasm" else c))
     return calls
 
 
-def a_library(path: Path) -> Path:
-    path.write_bytes(elf(62, {".nv_fatbin": fatbin([(2, elf(SG.EM_CUDA, {".text.k": b"\x01" * 8}), 0)])}))
+def a_library(path: Path, notes: list[dict] = NOTES["plain"]) -> Path:
+    cubin = elf(SG.EM_CUDA, {".text.k": b"\x01" * 8, ".note.nv.tkinfo": tkinfo(notes)})
+    path.write_bytes(elf(62, {".nv_fatbin": fatbin([(2, cubin, 0)])}))
+    return path
+
+
+def pins_file(path: Path, numeric: dict | None = TEST_RUN) -> Path:
+    path.write_text(json.dumps(pins(numeric)))
     return path
 
 
 def test_a_pass_is_cached_by_the_binary_and_a_failure_is_not(tmp_path, monkeypatch):
-    lib, cache = a_library(tmp_path / "libarm.so"), tmp_path / "cache"
+    lib, cache, p = a_library(tmp_path / "libarm.so"), tmp_path / "cache", pins_file(tmp_path / "pins.json")
     calls = fake_tools(monkeypatch, "plain")
-    first = SG.scan(lib, TOOLS, cache)
+    first = SG.scan(lib, TOOLS, cache, p)
     assert first["ok"] and not first["cached"] and calls == ["nvdisasm", "cuobjdump"]
-    again = SG.scan(lib, TOOLS, cache)
-    assert again["cached"] and calls == ["nvdisasm", "cuobjdump"] and again["exempt"] == PLAIN_EXEMPT
+    assert first["cubins"][0]["tool_notes"] == NOTES["plain"] and first["cubins"][0]["toolkit"] == "12.9.1"
+    again = SG.scan(lib, TOOLS, cache, p)
+    assert again["cached"] and calls == ["nvdisasm", "cuobjdump"] and again["covered"] == PLAIN_COVERED
+    assert not SG.scan(lib, TOOLS, cache, pins_file(tmp_path / "unpinned.json", None))["ok"]
     lib.write_bytes(lib.read_bytes() + b"\0")
     calls = fake_tools(monkeypatch, "fast_math")
-    assert not SG.scan(lib, TOOLS, cache)["ok"]
-    assert not SG.scan(lib, TOOLS, cache)["cached"] and calls == ["nvdisasm", "cuobjdump"] * 2
+    assert not SG.scan(lib, TOOLS, cache, p)["ok"]
+    assert not SG.scan(lib, TOOLS, cache, p)["cached"] and calls == ["nvdisasm", "cuobjdump"] * 2
 
 
 def test_the_gate_names_the_failing_binary_function_and_instruction(tmp_path, monkeypatch):
     lib = a_library(tmp_path / "libarm.so")
     fake_tools(monkeypatch, "fast_math")
-    g = SG.Gate(tools=TOOLS, cache=None)
-    with pytest.raises(SG.SassGateFailed, match=r"libarm\.so: 16 FP32 \.FTZ .* first arith_k 0x[0-9a-f]+: FADD\.FTZ"):
+    logged: list[str] = []
+    g = SG.Gate(log=logged.append, tools=TOOLS, cache=None, pins=pins_file(tmp_path / "pins.json"))
+    with pytest.raises(SG.SassGateFailed, match=r"libarm\.so: 42 flagged instruction\(s\) .* first \w+ 0x[0-9a-f]+: "):
         g.check([str(lib)], "arm:x")
+    assert logged[0].startswith(f"sass gate: FAIL {lib} (ptxas 12.9.1; 55 flagged, covered ")
     rep = g.report()
     assert not rep["ok"] and rep["binaries"][0]["source"] == "arm:x"
     with pytest.raises(SG.SassGateFailed, match="is not a file"):
@@ -241,12 +524,15 @@ def test_this_process_maps_the_python_interpreter():
 
 @pytest.mark.slow
 @pytest.mark.parametrize("arch", ["sm_120a", "sm_90a"])
-@pytest.mark.parametrize("flags,ok", [((), True), (("-fmad=false",), True), (("--use_fast_math",), False),
-                                      (("-ftz=true",), False)])
-def test_a_real_build_passes_without_fast_math_or_ftz_and_fails_with_either(tmp_path, arch, flags, ok):
-    """Compiles `ftz_probe.cu` as a cubin and as a shared library with the toolkit the gate finds (CUDA_HOME, POUW_CUDA_BIN or
-    /usr/local/cuda) and gates both, for sm_120a and #449's sm_90a; skipped without nvcc, cuobjdump and nvdisasm. It catches
-    what the listings can't: a toolkit or an architecture whose expansions differ, and the fatbin of a real host ELF."""
+@pytest.mark.parametrize("src,flags,ok", [
+    ("ftz_probe.cu", (), True), ("ftz_probe.cu", ("-fmad=false",), True), ("ftz_probe.cu", ("--use_fast_math",), False),
+    ("ftz_probe.cu", ("-ftz=true",), False), ("ftz_probe.cu", ("-prec-div=false", "-prec-sqrt=false"), False),
+    ("ftz_refused.cu", (), False)])
+def test_a_real_build(tmp_path, arch, src, flags, ok):
+    """Compiles the probe as a cubin and as a shared library with the toolkit the gate finds (CUDA_HOME, POUW_CUDA_BIN or
+    /usr/local/cuda) and gates both with the shipped pins; skipped without nvcc, cuobjdump and nvdisasm. It catches what the
+    listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
+    toolkit pinned with a numeric run; an sm_90a cubin never does (12.9 writes it no ptxas note, 13.0 unpinned arguments)."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -254,12 +540,22 @@ def test_a_real_build_passes_without_fast_math_or_ftz_and_fails_with_either(tmp_
     nvcc = Path(tools["cuobjdump"]["path"]).with_name("nvcc")
     if not nvcc.exists():
         pytest.skip(f"no nvcc beside {tools['cuobjdump']['path']}")
+    version = subprocess.run([str(nvcc), "--version"], capture_output=True, text=True, check=True).stdout
+    pinned = arch == "sm_120a" and any(t["version"] in version and t["branch"] in version and t["numeric"]
+                                       for t in SG.load_pins()["toolkits"].values())
     base = [str(nvcc), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", *flags]
-    for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared"])):
-        subprocess.run([*base, *extra, "-o", str(tmp_path / out), str(FIX / "ftz_probe.cu")], check=True)
+    for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared", "--no-compress"])):
+        subprocess.run([*base, *extra, "-o", str(tmp_path / out), str(FIX / src)], check=True)
         rec = SG.scan(tmp_path / out, tools, None)
-        assert rec["ok"] is ok and rec["cross_check"]["agree"], (out, rec)
-        if ok:
-            assert rec["exempt"] == PLAIN_EXEMPT, (out, rec["exempt"])
-        else:
-            assert any(o["function"] == "arith_k" for o in rec["offending"]), (out, rec["offending"])
+        code = [c for c in rec["cubins"] if c["functions"]]
+        assert rec["cross_check"]["agree"] and len(code) == 1, (out, rec["cross_check"], len(code))
+        assert (code[0]["toolkit"] is not None) is pinned, (out, code[0]["unpinned"])
+        if arch == "sm_90a":
+            assert code[0]["unpinned"] == "no ptxas record (.note.nv.tkinfo)" \
+                or "with unpinned arguments '-arch sm_90a -m 64" in code[0]["unpinned"], code[0]["unpinned"]
+        assert rec["ok"] is (ok and pinned), (out, rec["offending"][:3])
+        if rec["ok"]:
+            assert rec["covered"] == PLAIN_COVERED, (out, rec["covered"])
+        elif pinned:
+            fns = {o["function"] for o in rec["offending"]}
+            assert fns and (fns <= FP32_KERNELS or src == "ftz_refused.cu"), (out, fns)

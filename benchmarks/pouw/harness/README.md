@@ -16,7 +16,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
 | `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune), from each cuBLASLt loaded, and CUTLASS's sm_120 kernels, and the bit-exact gate on ternary operands |
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
-| `sass_gate.py` | the SASS gate, before anything is timed: no FP32 `FADD`, `FFMA` or `FMUL` with `.FTZ` (no `-ftz=true` or `--use_fast_math` build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run; ptxas's IEEE div/sqrt/rcp expansions are exempt by name and shape; nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`) |
+| `sass_gate.py` | the SASS gate, before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` (version, build, arguments, numeric run) builds them; nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`, `--pin`) |
 | `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
@@ -100,7 +100,10 @@ after) to get the split; `arm.py` has the contract.
 An arm's `build` names every cubin, fatbin or library its kernels come from in `binaries` (arm interface v0.3; a cubin loaded
 with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
 (`POUW_CUDA_BIN`, `CUDA_HOME/bin`, the PATH or `/usr/local/cuda/bin`) and caches passes by the binary's sha256
-(`POUW_SASS_GATE_CACHE`). To check a build before a run: `python sass_gate.py my_kernels.cubin --json gate.json`.
+(`POUW_SASS_GATE_CACHE`). To check a build before a run: `python sass_gate.py my_kernels.cubin --json gate.json`. Build
+sm_120a with a pinned toolkit (CUDA 12.9.1 from `jobs/toolkit.sh`, or 13.0.1, node 2's `/usr/local/cuda`) and without
+`-ftz=true`, `--use_fast_math`, `-prec-div=false` or `-prec-sqrt=false`; `-fmad=false` is pinned too. Any other toolkit,
+architecture or ptxas argument fails closed until it is pinned (`--pin ... --toolkit`) with a numeric run.
 
 An arm's `build` also names its reference verifier in `verifier` (arm interface v0.4, `arm.check_verifier`, checked before
 anything is timed): the transcript file per shape, relative to the run's directory (e.g.

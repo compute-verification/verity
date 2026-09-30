@@ -9,7 +9,8 @@ context, so an arm may use the CUDA runtime, the driver API, or its own shared l
 `build` returns the arm's build record (JSON), which names its ``binaries`` (v0.3): the path of every cubin, fatbin or
 library its kernels are loaded from, ``[]`` if they all come from libraries mapped into the process (those the SASS gate
 finds itself; a cubin loaded with ``cuModuleLoadData`` is never mapped, so it must be listed). `sass_gate.py` passes each
-before anything is timed: no FP32 FADD, FFMA or FMUL with .FTZ, so no -ftz=true or --use_fast_math build.
+before anything is timed: no .FTZ and no FP32 MUFU outside ptxas's pinned IEEE sequences, so no -ftz=true, --use_fast_math or
+approximate div/sqrt build, and only from a pinned toolkit.
 
 The record may also name the arm's reference ``verifier`` (v0.4), which `verify.py` runs after timing, in the same run, on
 the transcripts the timed code emitted (server.md 08:35Z: a measured panel row needs the verifier's acceptance of its own
