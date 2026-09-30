@@ -2,8 +2,8 @@
 
 A spatial unit is the machines behind network wardens. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
-This package is the reference for the answer, in the terms of its Lean package `network-timing` (`lean/`), which pins
-every statement the tests mirror.
+This package is the reference for the answer, in the terms of its Lean package `network-timing` (`lean/`). The tests
+mirror some of its statements by name; the Tests section lists which.
 
 ## The warden (`grid`)
 
@@ -103,7 +103,7 @@ about T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds a
 | Envelope, with no clock | `T·log2(r + 1)` bits per link-window | Proposition 2 |
 | Accepted runs, with clock-sync advice | `A_c + W·log2 #Σ_sync + n·log2 D` bits | `encard_accSeqs_le_sync` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `encard_accSeqs_le_fixedClock` |
-| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | the envelope on the ingress grid |
+| Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | not stated in Lean (`card_leftPacked`'s count) |
 
 The inference-only policy charges an IU the ingress covert capacity from the last wipe before it starts, plus what
 survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
@@ -141,19 +141,29 @@ every frame), the capacity per day, and the K charge by span.
 
 ## Tests
 
-`uv run pytest protocols/network_warden`. The tests mirror the Lean package's statements, which are its 31 pins plus
-`occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (proved and audited, not pinned):
-- **`test_network_warden_grid.py`:** the counts, `fill`, tightness and the fixed-M bounds, by enumeration, plus the warden's
-  semantics;
+`uv run pytest protocols/network_warden`. The tests enumerate small horizons, so they check the Lean statements on
+examples and prove nothing. By name, they mirror 15 of the Lean package's 31 pins and its three proved but unpinned
+lemmas:
+- **`test_network_warden_grid.py`:**
+  - Proposition 2's ten pins, by enumeration: `card_free`, `card_leftPacked`, `fill_injective`,
+    `exists_fill_of_leftPacked`, `card_counts_eq_le`, `card_counts_le_le`, `released_self`, `sum_released_le`,
+    `encard_fifoGrids` and `encard_fifoGrids_le_of_available`;
+  - the unpinned `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`;
+  - the warden's semantics, which Lean takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed);
 - **`test_network_warden_capacity.py`:**
-  - the tree lemma;
-  - accepted grids at most `#Σ_sync^W`, over every sender and declaration on a small horizon;
-  - the fixed clock's single accepted grid;
-  - a reacting operator;
-  - the block bound on random Programs;
-- **`test_network_warden_audit.py`:** record-and-reject;
+  - `encard_le_prod_of_branching`, the tree lemma;
+  - `encard_accSeqs_le_sync`: accepted grids at most `#Σ_sync^W`, over every sender and declaration on a small
+    horizon, with ρ below 1, and with a reacting operator;
+  - `encard_accSeqs_le_fixedClock`: the fixed clock's single accepted grid;
+  - `encard_obsDecodable_le`: under a fixed clock, accepted secrets all show one grid sequence;
+  - `encard_accSeqs_le_blocks`: the block bound on random Programs;
+- **`test_network_warden_audit.py`:** record-and-reject and each violation, which no Lean statement names;
 - **`test_network_warden_commitment.py`:**
   - the elided digest is injective on left-packed grids, by enumeration;
   - it binds the link, window, status and parameters;
   - the committed audit's verdicts equal the raw audit's;
 - **`test_network_warden_calibration.py`:** the calibration tool.
+
+No test mirrors the other seven pins of Theorems 1(b) and 3 (`encard_acceptedRuns_le`, `encard_decodable_le`,
+`no_fault_of_accepted`, `recorded_row_eq_fill`, `encard_accSeqs_le_advice`, `encard_accSeqs_le_blocks_counts`,
+`encard_decodable_le_blocks`), and the nine witnesses of `NetTiming.Sanity` have no Python counterpart.

@@ -86,7 +86,9 @@ The audit checks them like every declaration, and they use only the three axioms
 `lean-audit.json`, so no citation may call them pinned. Pinning them needs a statement reviewer.
 
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
-reference implementation, `protocols/network_warden` (`verity_network_warden`), mirrors them in its tests.
+reference implementation, `protocols/network_warden` (`verity_network_warden`), mirrors 15 of the pins and the three
+unpinned lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python
+counterpart.
 
 ## Modelling choices a statement reviewer checks
 

@@ -1,5 +1,6 @@
-"""Theorems 1(b) and 3 on small grids, mirroring the Lean package's pinned statements (`NetTiming.Counting`,
-`NetTiming.Advice`).
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror five of the theorems `NetTiming.Counting` and
+`NetTiming.Advice` pin: `encard_le_prod_of_branching`, `encard_obsDecodable_le`, `encard_accSeqs_le_sync`,
+`encard_accSeqs_le_fixedClock` and `encard_accSeqs_le_blocks`.
 
 The accepted observation sequences are the grids an accepted run can show. The tests enumerate every sender behaviour
 on a small horizon: every hand-time schedule, and every declared clock sync. They count what an accepted run can

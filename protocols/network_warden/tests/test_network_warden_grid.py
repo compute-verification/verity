@@ -1,5 +1,6 @@
-"""Proposition 2 and the warden's semantics, mirroring the Lean package's statements (`NetTiming.Occupancy`,
-`NetTiming.Assumptions`): pinned, except `occ_fill` and `leftPacked_occ_fill`, which are proved but not pinned."""
+"""Proposition 2 and the warden's semantics. By name, the tests mirror the ten theorems `NetTiming.Occupancy` pins and
+its three proved but unpinned lemmas, `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid`. The warden tests
+check the behaviour `NetTiming.Assumptions` takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed)."""
 
 import itertools
 import math
@@ -91,6 +92,7 @@ def test_encard_fifoGrids(T, r):
     """Tightness: over all enqueue schedules, the FIFO warden releases exactly (r + 1)^T grids."""
     grids = {fill(frames(T * (r + 1)), released(r, enq), r)
              for enq in itertools.product(range(r + 2), repeat=T)}
+    assert all(left_packed(g) for g in grids)  # leftPacked_fifoGrid
     assert len(grids) == capacity.left_packed_patterns(T, r)
 
 
