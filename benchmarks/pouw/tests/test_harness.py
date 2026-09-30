@@ -230,6 +230,16 @@ def test_a_gate_that_raises_has_failed_and_a_pass_cannot_turn_into_a_fail():
         b.gate(("j",), lambda: (False, {}))
 
 
+def test_a_sigterm_during_a_gate_stops_the_run_and_fails_no_gate():
+    b, _ = bench()
+
+    def term():
+        H._terminated(15, None)
+    with pytest.raises(H.Terminated):
+        b.gate(("k",), term)
+    assert ("k",) not in b.ledger.records
+
+
 def test_a_failed_arm_gate_times_nothing_of_that_flag_set():
     b, dev = bench()
     arm = FakeArm(failing={"nohash"})

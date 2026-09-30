@@ -13,7 +13,8 @@ dependent chains (`chain.py`) and their gates; interleaved timing of everything,
 report (`report.py`). Every failure stops what it guards and writes no timing for it.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its
-gate, or it couldn't run); 6 the consistency gate rejected an arm. The JSON (`--out`) is written in every case.
+gate, or it couldn't run); 6 the consistency gate rejected an arm; 143 terminated (SIGTERM: a timeout or the fill queue's
+preemption). The JSON (`--out`) is written in every case.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ import datetime as dt
 import inspect
 import json
 import os
+import signal
 import statistics
 import sys
 import traceback
@@ -40,7 +42,7 @@ import report as R
 import schedule as S
 import shapes as SH
 
-EXIT_OK, EXIT_USAGE, EXIT_DEVICE, EXIT_NEGATIVE, EXIT_CONSISTENCY = 0, 2, 3, 5, 6
+EXIT_OK, EXIT_USAGE, EXIT_DEVICE, EXIT_NEGATIVE, EXIT_CONSISTENCY, EXIT_TERMINATED = 0, 2, 3, 5, 6, 143
 METHODS = ("graph", "burst")
 DECODE_METHODS = ("dependent-chain", "independent")
 #: an arm's `inputs` -> the operands' fill format, and the family whose scale factors it gets
@@ -48,7 +50,6 @@ INPUT_FORMATS = {"f32": (F.F32, None), "bf16": (F.BF16, None), "e4m3": (F.E4M3, 
                  "e2m1-mx": (F.E2M1, "mxfp4"), "int8": (F.INT8, None)}
 L2_SM120 = 128 << 20
 TUNE_REPS, FINALISTS = 3, 2
-LT_SEARCHES = ("heuristic", "enumerate")
 SCREEN_KEEP, SCREEN_CHUNK = 8, 16
 #: operands may take at most this share of the free device memory
 MEMORY_SHARE = 0.85
@@ -56,6 +57,14 @@ MEMORY_SHARE = 0.85
 
 class NegativeControlFailed(RuntimeError):
     """A known-bad variant passed its gate, or couldn't be run: the gates' power is unshown, so nothing is timed."""
+
+
+class Terminated(BaseException):
+    """SIGTERM: not an Exception, so no gate or screen records it as its own failure; the run stops and writes its JSON."""
+
+
+def _terminated(signum, frame):
+    raise Terminated(f"signal {signum}")
 
 
 @dataclass
@@ -318,9 +327,10 @@ def arm_entries(bench: Bench, dev, arm, shape, opsets: list[A.OperandSet], first
 
 
 def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
-                   search: str = "heuristic") -> dict:
-    """Every family's candidates, each gated on the gate set; at the first shape, the known-bad variants. Returns per family
-    the gated candidates and what was tried."""
+                   enumerate_fams: frozenset = frozenset()) -> dict:
+    """Every family's candidates, each gated on the gate set (cuBLASLt's configurations enumerated for the families in
+    `enumerate_fams`); at the first shape, the known-bad variants. Returns per family the gated candidates and what was
+    tried."""
     out = {}
     for fam in fams:
         gops = so.ops(fam, -1)
@@ -330,7 +340,7 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
         for lt in dev.lts:
             heur = B.lt_candidates(dev, fam, shape, gops, want, refused=refused, lt=lt)
             lts += heur
-            if search == "enumerate":
+            if fam.name in enumerate_fams:
                 more, enumeration[lt.prefix] = B.lt_enumerated(dev, fam, shape, gops, lt, B.lt_splitks(shape, dev.info["sms"]),
                                                                {B.lt_key(c) for c in heur}, refused=refused)
                 lts += more
@@ -603,7 +613,7 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     unchained: dict = {}
     try:
         gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed,
-                               getattr(args, "lt_search", "heuristic"))
+                               frozenset(getattr(args, "lt_enumerate", None) or ()))
         arm_ents, arm_sets = [], {}
         for a in arms:
             arm_sets[a.name] = arm_operand_sets(dev, a, so)
@@ -719,9 +729,10 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                    help="at decode shapes (m = 32), also time every kernel and arm as a dependent chain (chain.py), the "
                         "panel's decode method; 'independent' times bursts of independent calls only")
     p.add_argument("--lt-candidates", type=int, default=B.LT_CANDIDATES)
-    p.add_argument("--lt-search", choices=LT_SEARCHES, default="heuristic",
-                   help="'enumerate': beside the heuristic's candidates, every configuration each cuBLASLt's capabilities "
-                        "admit at the shape (gated; the --screen-keep fastest of one graph rep go on to the tune)")
+    p.add_argument("--lt-enumerate", nargs="*", default=[], choices=list(B.FAMILIES), metavar="FAMILY",
+                   help="for these families, beside the heuristic's candidates, every configuration each cuBLASLt's "
+                        "capabilities admit at the shape (gated; the --screen-keep fastest of one graph rep go on to the "
+                        "tune); cuBLASLt 13's FP8 space alone is past 8,192 at 8,192^3")
     p.add_argument("--screen-keep", type=int, default=SCREEN_KEEP)
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")
@@ -838,6 +849,7 @@ def main(argv: list[str] | None = None) -> int:
     out: dict = {"harness": {"interface": A.VERSION, "argv": sys.argv if argv is None else argv, "started": now()},
                  "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}, "shapes": [], "arms": {}}
     code, bench, lock, uuid = EXIT_DEVICE, None, None, None
+    signal.signal(signal.SIGTERM, _terminated)
     try:
         import native as N
 
@@ -877,6 +889,8 @@ def main(argv: list[str] | None = None) -> int:
             log(f"shape {shape.label}")
             out["shapes"].append(run_shape(bench, dev, shape, fams, arms, i == 0, args, kernels, lt_ws))
         code = EXIT_CONSISTENCY if bench.rejected else EXIT_OK
+    except Terminated as ex:
+        code, out["error"] = EXIT_TERMINATED, f"terminated: {ex}"
     except I.IdentityError as ex:
         code, out["error"] = EXIT_USAGE, f"identity: {ex}"
     except NegativeControlFailed as ex:
