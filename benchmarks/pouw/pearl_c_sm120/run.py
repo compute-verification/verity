@@ -313,7 +313,7 @@ class Pipeline:
             "fbT128": 128 * k, "g": 128 * 32 * 4,
             "alpha_a": 4 * m, "beta_a": 4 * m, "ia_a": 4 * m, "aux_a": 8 * m, "epa_codes": m * 32,
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
-            "at": m * k, "bt": n * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
+            "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
             "line_a": 32, "seed_a": 32, "digests": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
@@ -358,6 +358,14 @@ class Pipeline:
         return [(f"hash_rows_{tag}", lambda: d.launch("hash_rows_w", cdiv(count, ROWS_WARPS), 32 * ROWS_WARPS, smem,
                                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
                 (f"tree_{tag}", lambda: self.levels(tag, count))]
+
+    def form_scalar(self, tag: str) -> int:
+        """form_s5_scalar over one side's rows into at2, and the words where form_s5's codes (at or bt) differ from it."""
+        b, rows = self.b, self.m if tag == "a" else self.n
+        self.dev.launch("form_s5_scalar", (self.k // 128, rows // 64), 128,
+                        p=(b[f"x{tag}"], b[f"alpha_{tag}"], b[f"ep{tag}_codes"], b[f"f{tag}_codes"], b["at2"]), i=(rows, self.k))
+        self.dev.sync()
+        return self.diff(f"{tag}t", "at2")
 
     def free(self) -> None:
         for name, p in self.b.items():
@@ -502,6 +510,9 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             res[name] = compare(dev, pipe, name, want(name))
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
+        for tag in ("a", "b"):
+            pipe.form_scalar(tag)
+            res[f"{tag}t@form_s5_scalar"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
         small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
         for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
             steps = {nm: fn for nm, _, fn in p_.steps()}
@@ -591,6 +602,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
         [f for nm, _, f in steps if nm == "gemm_pearlc"][0]()
         out["consistency"]["u_rerun_words_differing"] = pipe.diff("c2", "u")
+        out["consistency"].update({f"{tag}t_form_s5_vs_scalar_words_differing": pipe.form_scalar(tag) for tag in ("a", "b")})
     if gates["plain"] and "gemm_plain" in med:
         out["plain_call_ms"] = round(med["plainq_a"] + med["gemm_plain"], 4)
         out["plain_tflops"] = round(2 * m * n * k / med["gemm_plain"] / 1e9, 1)
@@ -645,6 +657,7 @@ def main(argv: list[str]) -> int:
             row = timing(dev, nv, shape, variant, reps, gates)
             row["seconds"] = round(time.time() - t0, 2)
             row["m_real"] = shape[0]
+            ok = ok and not any(row.get("consistency", {}).values())
             emit(row)
             label = "x".join(map(str, shape))
             if "split_ms" in row:

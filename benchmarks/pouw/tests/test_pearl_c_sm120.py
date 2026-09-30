@@ -97,7 +97,7 @@ def test_gemms_fit_sm120_shared_memory():
         assert (tm, bn) == gemm_tile(name)
         assert g in (0, 4) and (g == 0) == (name.endswith("_u") or name == "gemm_fast")
     assert gemm_smem("M_PEARLC", 128, 128) == 98304 and gemm_smem("M_PEARLC", 64, 64) == 49152
-    assert set(S.WANT) - {"form_s5", "words", "words_u"} == names
+    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "words", "words_u"} == names
 
 
 def test_kernel_constants_match_the_reference():
@@ -245,7 +245,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
     if name == "eprime":
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
-    if name == "form_s5":
+    if name in ("form_s5", "form_s5_scalar"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
     if name.startswith("gemm_") and not name.endswith("_smem"):
@@ -407,7 +407,7 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
         assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
-        if name == "form_s5":
+        if name in ("form_s5", "form_s5_scalar"):
             assert g[:2] == [i[1] // 128, i[0] // 64] and ev["block"] == 128
         if name == "plainq":
             assert g[0] == i[0]
