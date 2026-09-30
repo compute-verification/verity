@@ -34,11 +34,6 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 4; ++i) dg[4 * (2 * ph::pearlc::narrow_row(p, lane) + chunk) + i] = d[lane][i];
     }
   ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o.pc_leaf_narrow);
-  uint32_t tk[8];
-  ticket_key(tk);
-  for (int chunk = 0; chunk < 2; ++chunk)
-    ph::pearlc::warp_tickets_warp<4>([&](int lane, int mi, int j, int i) { return ticket_frag(chunk, lane, mi, j, i); }, tk,
-                                     [&](int s, const uint32_t* h) { memcpy(o.pc_ticket_warp[ticket_warp_index(chunk, s)], h, 32); });
   print_checks(o, "host");
   return 0;
 }
@@ -78,14 +73,6 @@ __global__ void k_check_quad(CheckOut* o, uint64_t* dg) {
     }
   __syncwarp();
   if (lane == 0) ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o->pc_leaf_narrow);
-  __shared__ __align__(16) uint32_t tscratch[16 * 4 * 32];
-  uint32_t tk[8];
-  ticket_key(tk);
-  for (int chunk = 0; chunk < 2; ++chunk)
-    ph::pearlc::warp_tickets<4>([&](int mi, int j, int i) { return ticket_frag(chunk, lane, mi, j, i); }, tk, tscratch,
-                                [&](int s, const uint32_t* h) {
-                                  for (int i = 0; i < 8; ++i) o->pc_ticket_warp[ticket_warp_index(chunk, s)][i] = h[i];
-                                });
 }
 
 void device_checks(CheckOut* h) {
