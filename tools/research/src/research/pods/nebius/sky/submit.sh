@@ -5,7 +5,9 @@
 #   e.g.  .../submit.sh prover-dev fri-sweep-1 --env CMD='cargo test --release -p flock'
 #         .../submit.sh config-run row-23 --env ROW=... --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
 #
-# It needs uv, rsync, ssh, git, python3 and curl on this machine (it checks, and names what's missing).
+# It needs uv, rsync, ssh, git, python3 and curl on this machine (it checks, and names what's missing). It refuses (exit 3) unless
+# this checkout's sky/ (the templates and this script) equals origin/infra/nebius, and names the commit to merge; --allow-stale
+# submits anyway, loudly.
 # TEMPLATE is a file in jobs/ (config-run, config-run-row, port-capture, prover-dev, prover-bench). It:
 #   1. installs the SkyPilot 0.13.0 client if missing, and opens the ssh tunnel to the API server on vy-nebius-1
 #      (127.0.0.1:46580, through the research key) unless one answers;
@@ -20,10 +22,37 @@ set -euo pipefail
 [ $# -ge 2 ] || { sed -n '2,15p' "$0" >&2; exit 2; }
 template=$1 name=$2
 shift 2
+allow_stale=0
+args=()
+for a in "$@"; do if [ "$a" = --allow-stale ]; then allow_stale=1; else args+=("$a"); fi; done
+set -- ${args[@]+"${args[@]}"}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(git -C "$here" rev-parse --show-toplevel)
 yaml=$here/jobs/$template.yaml
 [ -f "$yaml" ] || { echo "no template $template (jobs/: $(cd "$here/jobs" && ls | sed 's/.yaml//' | tr '\n' ' '))" >&2; exit 2; }
+# The templates and this script must be the shared ones: a job submitted from a stale checkout ran old templates (port-capture job
+# 35, 36 minutes lost). Refused unless this checkout's sky/ equals $VY_INFRA_REMOTE's infra/nebius, or --allow-stale.
+remote=${VY_INFRA_REMOTE:-origin}
+ref=$remote/${VY_INFRA_BRANCH:-infra/nebius}
+rel=$(git -C "$here" rev-parse --show-prefix); rel=${rel%/}
+stale=""
+if ! git -C "$repo" fetch -q "$remote" "${ref#"$remote"/}" 2> /dev/null; then
+  stale="could not fetch $ref, so this checkout's templates can't be checked"
+elif ! git -C "$repo" cat-file -e "$ref:$rel/jobs/$template.yaml" 2> /dev/null; then
+  stale="jobs/$template.yaml is not on $ref (a private copy)"
+elif ! git -C "$repo" diff --quiet "$ref" -- "$rel"; then
+  stale="$rel differs from $ref ($(git -C "$repo" diff --name-only "$ref" -- "$rel" | sed "s|^$rel/||" | tr '\n' ' '))"
+fi
+if [ -n "$stale" ]; then
+  echo "submit.sh: STALE TEMPLATES: $stale." >&2
+  echo "  $ref is $(git -C "$repo" log -1 --format='%h %s' "$ref" 2> /dev/null || echo '?'): git fetch $remote && git merge $ref" >&2
+  if [ "$allow_stale" = 1 ]; then
+    echo "  --allow-stale: submitting anyway" >&2
+  else
+    echo "  refused (pass --allow-stale to submit anyway)" >&2
+    exit 3
+  fi
+fi
 machine=${VY_MACHINE:-vy-nebius-1}
 lane=${VY_LANE:-$(git -C "$repo" rev-parse --abbrev-ref HEAD | tr '/' '-')}
 pool=${VY_POOL:-vy-nebius}

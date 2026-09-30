@@ -190,6 +190,56 @@ def test_submit_names_the_tools_it_is_missing(tmp_path):
     for tool in ("bash", "git", "python3", "ssh", "curl", "dirname", "sed", "cat", "tr", "head", "awk", "grep"):
         if path := shutil.which(tool):
             os.symlink(path, bin_dir / tool)
-    r = subprocess.run(["bash", str(SKY / "submit.sh"), "prover-dev", "x"], capture_output=True, text=True,
+    r = subprocess.run(["bash", str(SKY / "submit.sh"), "prover-dev", "x", "--allow-stale"], capture_output=True, text=True,
                        env={"PATH": str(bin_dir), "HOME": str(tmp_path)})
     assert r.returncode == 2 and "missing on this machine: uv rsync" in r.stderr
+
+
+def test_submit_refuses_templates_that_differ_from_infra_nebius(tmp_path):
+    import os
+    import shutil
+    import subprocess
+    rel = "tools/research/src/research/pods/nebius/sky"
+    git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], check=True, capture_output=True, text=True).stdout  # noqa: E731
+    work = tmp_path / "work"
+    shutil.copytree(SKY, work / rel, ignore=shutil.ignore_patterns("__pycache__"))
+    git(tmp_path, "init", "-q", "--bare", "origin.git")
+    git(work.parent, "init", "-q", "-b", "infra/nebius", str(work))
+    for k, v in (("user.email", "t@example.com"), ("user.name", "t")):
+        git(work, "config", k, v)
+    git(work, "add", "-A")
+    git(work, "commit", "-qm", "shared infra")
+    git(work, "remote", "add", "origin", str(tmp_path / "origin.git"))
+    git(work, "push", "-q", "origin", "infra/nebius")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("bash", "git", "python3", "ssh", "curl", "dirname", "sed", "cat", "tr", "head", "awk", "grep", "realpath", "ls", "uv"):
+        if path := shutil.which(tool):
+            os.symlink(path, bin_dir / tool)
+    env = {"PATH": str(bin_dir), "HOME": str(tmp_path)}                    # no rsync: a submission that passes the check stops at it
+
+    def submit(*args):
+        return subprocess.run(["bash", str(work / rel / "submit.sh"), "prover-dev", "x", *args], capture_output=True, text=True, env=env)
+
+    r = submit()
+    assert r.returncode == 2 and "missing on this machine" in r.stderr and "STALE" not in r.stderr, r.stderr
+    tip = git(work, "log", "-1", "--format=%h").strip()
+    template = work / rel / "jobs" / "prover-dev.yaml"
+    template.write_text(template.read_text().replace("cpus: 8", "cpus: 9"))
+    r = submit()
+    assert r.returncode == 3 and "STALE TEMPLATES" in r.stderr and "jobs/prover-dev.yaml" in r.stderr and tip in r.stderr
+    r = submit("--allow-stale")
+    assert r.returncode == 2 and "--allow-stale: submitting anyway" in r.stderr
+    git(work, "checkout", "-q", "--", ".")
+    (work / rel / "jobs" / "mine.yaml").write_text("name: mine\n")
+    r = subprocess.run(["bash", str(work / rel / "submit.sh"), "mine", "x"], capture_output=True, text=True, env=env)
+    assert r.returncode == 3 and "not on origin/infra/nebius (a private copy)" in r.stderr
+    other = tmp_path / "other"                                            # the shared branch moves on: this checkout is behind
+    git(tmp_path, "clone", "-q", "-b", "infra/nebius", str(tmp_path / "origin.git"), str(other))
+    for k, v in (("user.email", "t@example.com"), ("user.name", "t")):
+        git(other, "config", k, v)
+    (other / rel / "jobs" / "prover-bench.yaml").write_text("changed upstream\n")
+    git(other, "commit", "-qam", "a newer template")
+    git(other, "push", "-q", "origin", "infra/nebius")
+    r = submit()
+    assert r.returncode == 3 and "a newer template" in r.stderr and "git merge origin/infra/nebius" in r.stderr
