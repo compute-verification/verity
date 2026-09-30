@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Verity's vLLM Commits (config-run task 1) on vy-nebius-2's idle GPUs, as `gpus=1 project=verity` fill guests: node 2's fill runner
 # starts one only when no PoUW GPU job is ready and at least 2 GPUs are free, preempts it first, and stops it in every timed window
-# (it is requeued and reruns from the top). The Build stays where it ran; the CPU replay goes back to node 1's dispatcher.
+# (it is requeued and reruns from the top). The Build stays where it ran; the CPU replay runs on node 2's
+# Verity CPUs (48-95) as a `gpus=0` guest.
 #
 #   on node 1:  n2_commit.sh submit KEY ITEM.json|- [NODE1_JOB]   (ITEM: the config-run item, as in a Job's verity.dev/item-json;
 #                                                                 NODE1_JOB: its queued Commit Job, deleted once node 2 has it)
 #   on node 1:  n2_commit.sh item NODE1_JOB                       (prints that Job's item)
-#   on node 2:  n2_commit.sh run KEY                              (the fill job's body; submit writes it)
+#   on node 1:  n2_commit.sh offload [--loop|--list]             (every Commit Kueue has held 2 min whose checkpoint node 2 has)
+#   on node 2:  n2_commit.sh run KEY | replay KEY                 (the fill jobs' bodies; submit and run write them)
 # Installed at /workspace/verity-guest/bin/n2_commit.sh on both nodes; n2_build.sh's sibling.
 #
 # submit (as research on node 1) refuses a row that isn't TP1, whose Build hasn't passed on node 1 (no manifest.json or Build run),
@@ -14,11 +16,13 @@
 # read: its snapshot is copied into /workspace/jobs/hf). It stages the job tree, the Build row (Programs, manifest), the bootstrap
 # stamps and the tree's Triton/vLLM caches on node 2 at node 1's paths, never while node 2 has a timed window running or waiting,
 # resolves the Build's artifact in node 1's store, and writes the fill job.
-# run (as research on node 2, inside the fill job) runs config-run.yaml's gpu task with REPLAY_DEFERRED=1, then sends the row and
-# the run dir back to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2
-# environment and the run dir is under 64 MiB, else from a pod on node 1 with the Secret research-r2), and submits the replay with
-# node 1's dispatcher (`dispatch.py submit config-run COMMIT_KEY --task 2`). A Commit that fails on node 2 goes back to node 1's
-# queue (`--task 1`) after its Attempt is custodied. A rerun after the Commit passed (the .n2-commit marker) only redoes the return.
+# run (as research on node 2, inside the fill job) runs config-run.yaml's gpu task with REPLAY_DEFERRED=1, records the GPU's
+# driver, clocks and vLLM version in the row (n2_gpu_env.json), then sends the row (without the replay bundle) and the run dir back
+# to node 1, publishes the Attempt into node 1's store, preserves it in R2 (from node 2 when node 2 has the R2 environment and the
+# run dir is under 64 MiB, else from a pod on node 1 with the Secret research-r2), and queues the replay on node 2. replay runs
+# config-run.yaml's replay task there and custodies it the same way. A Commit or replay that fails on node 2 goes back to node 1's
+# dispatcher (`dispatch.py submit config-run COMMIT_KEY --task 1|2`) with the whole row; VY_N2_REPLAY=n1 sends every replay there.
+# A rerun after a stage finished (the .n2-commit / .n2-replay marker) only redoes the return.
 set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
 GUEST=/workspace/verity-guest
@@ -153,32 +157,32 @@ EOF
   echo "$run_id: pushed to R2 from node 1 ($name)"
 }
 
-run() {
-  # the manifests pin every checkpoint at /workspace/hf/hub/..., node 1's cache; node 2's /workspace/hf is PoUW's, so the Commit sees
-  # /workspace/jobs/hf there in a private mount namespace (as n2_build.sh's Build). sudo drops the environment: the lease's GPU goes along
-  if [ -z "${VY_N2_NS:-}" ]; then
-    exec sudo -n unshare --mount --propagation private env VY_N2_NS=1 HOME="$HOME" PATH="$PATH" USER="$USER" \
-      CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-}" CUDA_DEVICE_ORDER="${CUDA_DEVICE_ORDER:-PCI_BUS_ID}" \
-      FILL="${FILL:-}" FILL_JOB="${FILL_JOB:-}" GPU_LEASE_WHO="${GPU_LEASE_WHO:-}" OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}" \
-      bash -c 'mount --bind /workspace/jobs/hf /workspace/hf && exec setpriv --reuid="$SUDO_UID" --regid="$SUDO_GID" --init-groups bash "$0" run "$1"' \
-      "$(readlink -f "$0")" "$1"
-  fi
-  local key=$1 item=$GUEST/items/commit-$1.json
-  [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "no GPU leased (CUDA_VISIBLE_DEVICES is empty)" >&2; exit 2; }
-  # config-run.yaml's gpu envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
+# node 2's side runs in a private mount namespace: the manifests pin every checkpoint at /workspace/hf/hub/..., node 1's cache, and
+# node 2's /workspace/hf is PoUW's, so the job sees /workspace/jobs/hf there (as n2_build.sh's Build). sudo drops the environment, so
+# the lease's GPU and the fill runner's variables go along by name
+in_ns() {  # in_ns MODE KEY
+  [ -z "${VY_N2_NS:-}" ] || return 0
+  exec sudo -n unshare --mount --propagation private env VY_N2_NS=1 HOME="$HOME" PATH="$PATH" USER="$USER" \
+    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-}" CUDA_DEVICE_ORDER="${CUDA_DEVICE_ORDER:-PCI_BUS_ID}" \
+    FILL="${FILL:-}" FILL_JOB="${FILL_JOB:-}" GPU_LEASE_WHO="${GPU_LEASE_WHO:-}" OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}" \
+    bash -c 'mount --bind /workspace/jobs/hf /workspace/hf && exec setpriv --reuid="$SUDO_UID" --regid="$SUDO_GID" --init-groups bash "$0" "$1" "$2"' \
+    "$(readlink -f "$0")" "$1" "$2"
+}
+
+load_item() {  # load_item ITEM.json: config-run.yaml's task envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own
   export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
     TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python \
     RESEARCH_PY=/workspace/jobs/bin/py312 RESEARCH_RUNS=/workspace/jobs/runs RESEARCH_STORE=/workspace/jobs/store \
     HOT_ROOT=/workspace/jobs/hot HOT_RELEASING_MARKER=/workspace/jobs/hot/releasing HOT_RELEASE_JSON=/workspace/jobs/hot/release.json \
-    GUARD_PRESERVE_FILE=/workspace/jobs/dm/guard.preserve OV_NOISY=true \
+    GUARD_PRESERVE_FILE=/workspace/jobs/dm/guard.preserve VERITY_UNIT_RULE_CACHE=/workspace/jobs/cache/unit-rules \
     UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python CAMPAIGN=nebius-sweep
-  eval "$(python3 - "$item" << 'EOF'
+  eval "$(python3 - "$1" << 'EOF'
 import json, shlex, sys
 d = json.load(open(sys.argv[1]))
 env = {k: str(v) for k, v in (d.get("env") or {}).items() if k != "HF_HOME"}
 n2 = d["n2"]
 env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2["commit_key"], BUILD_ART=n2.get("build_art") or "",
-           REPLAY_DEFERRED="1")
+           COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="1")
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
 print("ITEM_ARGS=(" + " ".join(shlex.quote(a) for a in
       [x for k, v in {**(d.get("env") or {}), "REPLAY_DEFERRED": "1"}.items() for x in ("--env", f"{k}={v}")]
@@ -187,15 +191,59 @@ print("ITEM_ARGS=(" + " ".join(shlex.quote(a) for a in
       + (["--queue", d["queue"]] if d.get("queue") else []) + (["--priority", d["priority"]] if d.get("priority") else [])) + ")")
 EOF
 )"
-  local row_dir=$SWEEP_DIR/$ROW marker=$SWEEP_DIR/$ROW/.n2-commit run_id rc=0 research
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
-  mkdir -p /workspace/jobs/hot /workspace/jobs/dm
-  nvidia-smi --query-gpu=index,name,driver_version,clocks.gr,clocks.sm,clocks.mem,clocks.applications.graphics,power.limit \
-    --format=csv -i "$CUDA_VISIBLE_DEVICES" || true
+  mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules
+  [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
+}
+
+# the GPU's environment, for a guest Commit's record to be checked against node 1's (circuits, 2:41 PM PDT): the driver, the vLLM pin,
+# the clocks and their lock state as nvidia-smi reports them while the lease holds the GPU
+gpu_env() {  # gpu_env OUT.json
+  local q
+  q=$(nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.gr,clocks.sm,clocks.mem,clocks.applications.graphics,clocks.max.gr,power.limit,clocks_event_reasons.active \
+    --format=csv,noheader -i "$CUDA_VISIBLE_DEVICES" 2>&1 || true)
+  NV_Q=$q NV_CLOCK=$(nvidia-smi -q -d CLOCK,PERFORMANCE -i "$CUDA_VISIBLE_DEVICES" 2>&1 || true) \
+    VLLM=$("$PY" -c 'import vllm; print(vllm.__version__)' 2> /dev/null || echo unknown) python3 - "$1" << 'EOF'
+import json, os, socket, sys, time
+f = ["index", "uuid", "name", "driver_version", "clocks_gr_mhz", "clocks_sm_mhz", "clocks_mem_mhz", "clocks_app_gr_mhz", "clocks_max_gr_mhz",
+     "power_limit", "clocks_event_reasons_active"]
+row = dict(zip(f, [x.strip() for x in os.environ["NV_Q"].split(",")]))
+json.dump({"schema": "n2-gpu-env/v0", "host": socket.gethostname(), "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "gpu": row, "vllm_version": os.environ["VLLM"],
+           "nvidia_smi_clock": os.environ["NV_CLOCK"]}, open(sys.argv[1], "w"), indent=1)
+EOF
+}
+
+# the row, the run dir and the Attempt back to node 1 (its store, then R2: from node 2 when node 2 has the R2 environment and the run
+# dir is under 64 MiB, else from a pod on node 1)
+home() {  # home RUN_ID [RSYNC-ARG...]
+  local run_id=$1 sudo_rsync=(--rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath)
+  shift
+  rsync -a "${sudo_rsync[@]}" "$@" "$SWEEP_DIR/$ROW/" "$N1:$SWEEP_DIR/$ROW/"
+  rsync -a "${sudo_rsync[@]}" "/workspace/jobs/runs/$run_id/" "$N1:/workspace/jobs/runs/$run_id/"
+  ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
+  if [ -n "${R2_ENDPOINT:-}" ] && [ "$(du -sm "/workspace/jobs/runs/$run_id" | cut -f1)" -lt 64 ]; then
+    PYTHONPATH=$SRC/tools/research/src "${research[@]}" data push "$run_id" && echo "$run_id: pushed to R2 from node 2"
+  else
+    push_attempt "$run_id" "$SRC"
+  fi
+}
+
+dispatch_n1() {  # dispatch_n1 TASK: node 1's dispatcher takes the item from TASK on
+  ssh "$N1" "$KUBE_DISPATCH /workspace/jobs/venv312/bin/python $DISPATCH submit config-run $COMMIT_KEY --tree $TREE --task $1 \
+    $(printf '%q ' "${ITEM_ARGS[@]}")"
+}
+
+run() {
+  in_ns run "$1"
+  local key=$1 item=$GUEST/items/commit-$1.json run_id rc=0 research
+  [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "no GPU leased (CUDA_VISIBLE_DEVICES is empty)" >&2; exit 2; }
+  load_item "$item"
+  export OV_NOISY=true
+  local row_dir=$SWEEP_DIR/$ROW marker=$SWEEP_DIR/$ROW/.n2-commit
   if [ -s "$marker" ]; then
     read -r run_id rc < "$marker"
   else
-    [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
     (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" \
       --out "/workspace/jobs/bootstrap/$ROLE")
     export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
@@ -203,6 +251,8 @@ EOF
     if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
       export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
     fi
+    gpu_env "$row_dir/n2_gpu_env.json"
+    cat "$row_dir/n2_gpu_env.json" | head -20
     echo "commit cites the Build: artifact ${BUILD_ART:-none}"
     run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
     echo "$run_id" > "$row_dir/pipeline-commit-run"
@@ -211,25 +261,112 @@ EOF
       --config-run 1 --replay-k 460 --replay-deferred 1 || rc=$?
     # a stop (the lease's max_min, a waiter, a window) is requeued and reruns the Commit from the top
     case "$rc" in 124 | 137 | 143) exit 143 ;; esac
+    cp "$row_dir/n2_gpu_env.json" "/workspace/jobs/runs/$run_id/" 2> /dev/null || true
     echo "$run_id $rc" > "$marker"
   fi
-  # back to node 1: the row, the run dir, the Attempt in node 1's store and in R2, then the replay (or, on failure, the Commit) there
-  local sudo_rsync=(--rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath)
-  rsync -a "${sudo_rsync[@]}" "$row_dir/" "$N1:$row_dir/"
-  rsync -a "${sudo_rsync[@]}" "/workspace/jobs/runs/$run_id/" "$N1:/workspace/jobs/runs/$run_id/"
-  ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
-  if [ -n "${R2_ENDPOINT:-}" ] && [ "$(du -sm "/workspace/jobs/runs/$run_id" | cut -f1)" -lt 64 ]; then
-    PYTHONPATH=$SRC/tools/research/src "${research[@]}" data push "$run_id" && echo "$run_id: pushed to R2 from node 2"
-  else
-    push_attempt "$run_id" "$SRC"
+  if [ "$rc" != 0 ] || [ "${VY_N2_REPLAY:-n2}" = n1 ]; then
+    # node 1 takes it from here: the Commit again (task 1) after a failure here, else the replay (task 2), with the whole row
+    home "$run_id"
+    if [ "$rc" = 0 ]; then dispatch_n1 2; else dispatch_n1 1; fi
+    rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
+    echo "n2-commit $KEY: Commit $run_id on node 2 rc $rc; node 1 has it now"
+    return 0
   fi
-  local task=2
-  [ "$rc" = 0 ] || task=1
-  ssh "$N1" "$KUBE_DISPATCH /workspace/jobs/venv312/bin/python $DISPATCH submit config-run $COMMIT_KEY --tree $TREE --task $task \
-    $(printf '%q ' "${ITEM_ARGS[@]}")"
-  # node 1 holds the row, the run and the Attempt now; the tree stays for reuse
+  # the replay runs here, on the Verity CPUs, from the sealed bundle, which stays on node 2 unless that replay fails
+  home "$run_id" --exclude='/commit/replay_bundle_p*'
+  local commit_art
+  commit_art=$(ssh "$N1" "$RESEARCH_N1 PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show $run_id --json" 2> /dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("verdict", ""))' 2> /dev/null || true)
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["n2"]["commit_art"]=sys.argv[2]; d["n2"]["commit_run"]=sys.argv[3]; json.dump(d, open(sys.argv[1]+".tmp","w"))' \
+    "$item" "$commit_art" "$run_id" && mv "$item.tmp" "$item"
+  local mem
+  mem=$(python3 -c 'import json,sys; m=((json.load(open(sys.argv[1])).get("resources") or {}).get("replay") or {}).get("memory") or 96; print(min(256, max(64, int(m))))' "$item")
+  local f=/workspace/pouw/fill/queue/verity-replay-$key.sh
+  cat > "$f.tmp" <<EOF
+#!/usr/bin/env bash
+# fill: owner=$OWNER gpus=0 max_min=120 cpus=8 project=verity mem_gb=$mem
+# Verity vLLM replay $ROW (node 1 key $COMMIT_KEY) of the node-2 Commit $run_id: n2_commit.sh on infra/nebius.
+exec bash $GUEST/bin/n2_commit.sh replay $key
+EOF
+  chmod +x "$f.tmp" && mv "$f.tmp" "$f"
+  echo "n2-commit $KEY: Commit $run_id on node 2 rc 0 (verdict ${commit_art:-none}); its replay is queued here"
+}
+
+replay() {
+  in_ns replay "$1"
+  local key=$1 item=$GUEST/items/commit-$1.json run_id rc=0 research
+  load_item "$item"
+  local row_dir=$SWEEP_DIR/$ROW marker=$SWEEP_DIR/$ROW/.n2-replay
+  if [ -s "$marker" ]; then
+    read -r run_id rc < "$marker"
+  else
+    (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu \
+      --out "/workspace/jobs/bootstrap/$ROLE-cpu")
+    export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+    export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+    echo "replay cites the Build ${BUILD_ART:-none} and the Commit ${COMMIT_ART:-none}"
+    run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
+    "${research[@]}" run --id "$run_id" --tool vllm.replay --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
+      ${BUILD_ART:+--input "build=$BUILD_ART"} ${COMMIT_ART:+--input "commit=$COMMIT_ART"} \
+      -- "$PY" -m verity_vllm.pipeline.cli row stage replay "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 || rc=$?
+    case "$rc" in 137 | 143) exit 143 ;; esac
+    if [ "$rc" = 0 ] && [ -s "$row_dir/config_record.json" ]; then rm -rf "$row_dir"/commit/replay_bundle_p*; fi
+    echo "$run_id $rc" > "$marker"
+  fi
+  home "$run_id"
+  [ "$rc" = 0 ] || dispatch_n1 2
   rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
-  echo "n2-commit $KEY: Commit $run_id on node 2 rc $rc; task $task submitted on node 1"
+  echo "n2-commit $KEY: replay $run_id on node 2 rc $rc"
+}
+
+# node 1's Commits that Kueue has held at least VY_OFFLOAD_WAIT_S, on a checkpoint staged on node 2, one per line: JOB KEY N2KEY,
+# their items in $1/N2KEY.json
+held_commits() {
+  KUBECONFIG=$HOME/.kube/config kubectl get jobs -l verity.dev/dispatch=node1 -o json > "$1/k8s.json"
+  ssh -n "$N2" 'cd /workspace/jobs/hf/hub && for m in models--*; do for s in "$m"/snapshots/*; do [ -f "$s/config.json" ] && echo "$s"; done; done
+    cd /workspace/hf/hub && for m in models--*; do for s in "$m"/snapshots/*; do [ -f "$s/config.json" ] && echo "$s"; done; done' > "$1/staged.txt" || true
+  python3 - "$1" "${VY_OFFLOAD_WAIT_S:-120}" << 'EOF'
+import calendar, json, os, re, sys, time
+d, wait = sys.argv[1], int(sys.argv[2])
+staged = set(open(f"{d}/staged.txt").read().split())
+for j in json.load(open(f"{d}/k8s.json"))["items"]:
+    a, lab, st = j["metadata"]["annotations"], j["metadata"]["labels"], j.get("status") or {}
+    if lab.get("verity.dev/task") != "1" or not j["spec"].get("suspend") or st.get("succeeded") or st.get("failed"):
+        continue
+    if time.time() - calendar.timegm(time.strptime(j["metadata"]["creationTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) < wait:
+        continue
+    item = json.loads(a["verity.dev/item-json"])
+    e = item.get("env") or {}
+    if item.get("template") != "config-run" or "__tp1__" not in e.get("ROW", ""):
+        continue
+    if f"models--{e.get('REPO', '').replace('/', '--')}/snapshots/{e.get('REVISION')}" not in staged:
+        continue
+    row = os.path.join(e.get("SWEEP_DIR") or "/workspace/cp/sweep", e["ROW"])
+    if not os.path.exists(f"{row}/manifest.json"):
+        continue
+    n2key = re.sub(r"[^a-z0-9-]+", "-", a["verity.dev/item"].lower()).strip("-")[-55:].strip("-")
+    json.dump(item, open(f"{d}/{n2key}.json", "w"))
+    print(j["metadata"]["name"], a["verity.dev/item"], n2key)
+EOF
+}
+
+# move each held Commit on a staged checkpoint to node 2 while node 2 has fewer than VY_N2_MAX_COMMITS Verity Commits queued;
+# `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1, as research)
+offload() {
+  case "${1:-}" in
+    --loop) while :; do offload || true; sleep "${VY_OFFLOAD_EVERY_S:-120}"; done ;;
+    --list) (tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; held_commits "$tmp"); return ;;
+  esac
+  (
+    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+    n2_quiet || exit 0
+    while read -r job key n2key; do
+      queued=$(ssh -n "$N2" 'ls /workspace/pouw/fill/queue/ | grep -c "^verity-commit-"' || true)
+      [ "${queued:-0}" -lt "${VY_N2_MAX_COMMITS:-16}" ] || { echo "node 2 has $queued Verity Commits waiting; $job stays"; break; }
+      VY_COMMIT_KEY=$key bash "$0" submit "$n2key" "$tmp/$n2key.json" "$job" < /dev/null 2> >(grep -v '^rsync' >&2) \
+        || echo "$job: not moved" >&2
+    done < <(held_commits "$tmp")
+  )
 }
 
 cmd=${1:-}; shift || true
@@ -237,6 +374,8 @@ case "$cmd" in
   submit) submit "$@" ;;
   item) item "$@" ;;
   run) run "$@" ;;
+  replay) replay "$@" ;;
+  offload) offload "$@" ;;
   check) check_item "$@" ;;
-  *) sed -n '5,9p' "$0" >&2; exit 2 ;;
+  *) sed -n '5,10p' "$0" >&2; exit 2 ;;
 esac
