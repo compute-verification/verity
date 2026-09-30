@@ -113,6 +113,13 @@ EOF
 }
 
 run() {
+  # the vLLM manifests pin every checkpoint at /workspace/hf/hub/..., node 1's cache; node 2's /workspace/hf is PoUW's, so the Build
+  # sees /workspace/jobs/hf there in a private mount namespace: nothing is written to PoUW's cache, and the job keeps its scope
+  if [ -z "${VY_N2_NS:-}" ]; then
+    exec sudo -n unshare --mount --propagation private env VY_N2_NS=1 HOME="$HOME" PATH="$PATH" USER="$USER" \
+      bash -c 'mount --bind /workspace/jobs/hf /workspace/hf && exec setpriv --reuid="$SUDO_UID" --regid="$SUDO_GID" --init-groups bash "$0" run "$1"' \
+      "$(readlink -f "$0")" "$1"
+  fi
   local key=$1 item=$GUEST/items/$1.json
   # config-run.yaml's build envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
   export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
