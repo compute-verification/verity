@@ -67,3 +67,35 @@ def test_ready_files_rank_first_then_workstreams_take_turns(dispatch, tmp_path):
     key, _, f = dispatch.ready_items()[0]
     dispatch.set_aside(f, key, "taken")
     assert not f.exists() and len(list((tmp_path / "dispatch" / "taken" / "b").glob("b2.*.json"))) == 1
+
+
+def test_a_leased_class_renders_a_zero_gpu_pod_whose_run_takes_its_gpu_from_gpu_lease(dispatch, monkeypatch, tmp_path):
+    import subprocess
+    monkeypatch.setenv("VY_LEASE_CLASSES", "backend-sweep-2/prover-bench")
+    item = {"id": "b1", "template": "prover-bench", "tree": "/t", "queue": "provers", "priority": "dev",
+            "resources": {"prover-bench": {"cpus": 4, "gpus": 1, "memory": 48}}, "env": {"CMD": "echo hi"}}
+    job = dispatch.render(item, "backend-sweep-2/b1", 0, 0)
+    spec = job["spec"]["template"]["spec"]
+    c = spec["containers"][0]
+    assert c["resources"]["requests"] == {"cpu": "4", "memory": "48G"} and "limits" not in c["resources"]
+    assert spec["hostPID"] is True and spec["runtimeClassName"] == "nvidia" and job["metadata"]["labels"]["verity.dev/lease"] == "wrap"
+    assert {"name": "gpu-lease", "mountPath": "/run/gpu-lease"} in c["volumeMounts"]
+    env = {e["name"]: e["value"] for e in c["env"]}
+    assert env["NVIDIA_VISIBLE_DEVICES"] == "all" and env["GPU_LEASE_ALLOWED_FILE"] == "/run/gpu-lease/pool.gpus"
+    script = c["command"][-1]
+    assert '"$GPU_LEASE" 1 --wait --max-min 120 --mem-gb 0 -- bash -c ' in script
+    assert subprocess.run(["bash", "-n", "-c", script]).returncode == 0
+    fake = tmp_path / "gpu-lease"
+    fake.write_text('#!/bin/bash\necho "lease $1 $2 $3 $4 $5 $6 $7 $8"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
+                    'CUDA_VISIBLE_DEVICES=5 exec "$@"\n')
+    fake.chmod(0o755)
+    run = script.split("umask 000\n", 1)[1]
+    out = subprocess.run(["bash", "-c", run.replace("nvidia-smi", "true").replace("/workspace/jobs/bin/uv run", "echo")],
+                         env={**os.environ, "GPU_LEASE": str(fake), "CMD": "x", "CAMPAIGN": "c"}, capture_output=True, text=True)
+    assert out.stdout.splitlines()[0] == "lease 1 --wait --max-min 120 --mem-gb 0 -- bash"
+    assert "cd: /workspace/jobs/src/" in out.stderr and out.returncode != 0     # the run itself ran, under set -e
+    assert dispatch.render({**item, "lease": "self"}, "other/b1", 0, 0)["metadata"]["labels"]["verity.dev/lease"] == "self"
+    plain = dispatch.render(item, "other/b1", 0, 0)["spec"]["template"]["spec"]
+    assert plain["containers"][0]["resources"]["limits"] == {"nvidia.com/gpu": "1"} and "hostPID" not in plain
+    with pytest.raises(ValueError, match="wrap or self"):
+        dispatch.render({**item, "lease": "yes"}, "other/b1", 0, 0)

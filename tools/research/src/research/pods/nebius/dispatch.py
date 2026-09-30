@@ -29,6 +29,14 @@ first; within a rank the workstreams take turns, each oldest file first. A queue
 pending workloads (anyone's; VY_DISPATCH_DEPTH, default circuits=4,provers=2,backfill=4). A chain's next task is submitted
 regardless of depth.
 
+**GPU leases.** An item with `"lease": "wrap"` (or whose `workstream/template` is in VY_LEASE_CLASSES, comma-separated) leases its
+GPUs per process instead of binding them to its pod (n1_lease.py): the pod requests no `nvidia.com/gpu`, so Kueue books only its CPU
+and memory, and runs with hostPID, runtime class nvidia, `NVIDIA_VISIBLE_DEVICES=all` and `/run/gpu-lease` mounted; the task's
+`setup` runs first, then its `run` under `gpu-lease N --wait --max-min M --mem-gb 0` (M: the item's `lease_max_min`, else
+VY_LEASE_MAX_MIN, 120), which sets CUDA_VISIBLE_DEVICES. `"lease": "self"` sets the pod up the same way and leaves the leasing to
+the job (`"$GPU_LEASE" 1 --wait -- ...` around each GPU phase), so it can release the GPU for a CPU phase and lease one again.
+At most VY_LEASE_DEPTH (5) leased tasks per queue are in flight, since an admitted one may wait for a GPU while Kueue holds its CPUs.
+
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
 Inside the Job, the template's own `research run` writes the Attempt.
 """
@@ -40,6 +48,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -61,6 +70,8 @@ DEFAULT_DEPTH = "circuits=4,provers=2,backfill=4"
 DEFAULT_PRIORITY = {"backfill": "backfill"}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 LABEL = "verity.dev/dispatch"
+LEASE_DIR = "/run/gpu-lease"
+LEASE_BIN = os.environ.get("VY_GPU_LEASE", "/workspace/verity-guest/bin/gpu-lease")
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -152,8 +163,20 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
     ours = {LABEL: "node1", "verity.dev/key": khash, "verity.dev/task": str(idx), "verity.dev/try": str(tries),
             "verity.dev/workstream": dns(key.split("/")[0], 63)}
     labels = {**pod_labels, **ours}
+    lease = lease_mode(item, key) if gpus else None
+    run = task["run"]
+    if lease:
+        labels["verity.dev/lease"] = lease
+        envs.update({"NVIDIA_VISIBLE_DEVICES": "all", "NVIDIA_DRIVER_CAPABILITIES": "compute,utility", "GPU_LEASE_DIR": LEASE_DIR,
+                     "GPU_LEASE_ALLOWED_FILE": f"{LEASE_DIR}/pool.gpus", "GPU_LEASE_WHO": dns(key.split("/")[0], 63),
+                     "GPU_LEASE_N": str(gpus), "GPU_LEASE": LEASE_BIN})
+        if lease == "wrap":
+            m = int(item.get("lease_max_min") or os.environ.get("VY_LEASE_MAX_MIN", "120"))
+            run = f'"$GPU_LEASE" {gpus} --wait --max-min {m} --mem-gb 0 -- bash -c {shlex.quote("set -euo pipefail; " + run)}'
+        run = "umask 000\n" + run
+        gpus = 0
     script = "set -euo pipefail\nexport HOME=/tmp/home && mkdir -p $HOME\n" \
-             f"( {task.get('setup') or 'true'}\n)\n{task['run']}"
+             f"( {task.get('setup') or 'true'}\n)\n{run}"
     requests = {"cpu": str(cpus), "memory": f"{mem}G"}
     limits = {}
     if gpus:
@@ -176,8 +199,12 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
         "volumes": [{"name": "workspace", "hostPath": {"path": "/workspace", "type": "Directory"}},
                     {"name": "dshm", "emptyDir": {"medium": "Memory"}}],
     }
-    if gpus:
+    if gpus or lease:
         pod_spec["runtimeClassName"] = "nvidia"
+    if lease:
+        pod_spec["hostPID"] = True
+        pod_spec["volumes"].append({"name": "gpu-lease", "hostPath": {"path": LEASE_DIR, "type": "Directory"}})
+        pod_spec["containers"][0]["volumeMounts"].append({"name": "gpu-lease", "mountPath": LEASE_DIR})
     return {
         "apiVersion": "batch/v1", "kind": "Job",
         "metadata": {"name": name, "labels": labels,
@@ -188,6 +215,16 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
                  "template": {"metadata": {"labels": {k: v for k, v in labels.items() if not k.startswith("kueue.x-k8s.io/")}},
                               "spec": pod_spec}},
     }
+
+
+def lease_mode(item: dict, key: str) -> str | None:
+    """"wrap", "self" or None: the item's `lease`, else wrap when its workstream/template is in VY_LEASE_CLASSES."""
+    if item.get("lease"):
+        if item["lease"] not in ("wrap", "self"):
+            raise ValueError(f"lease {item['lease']!r}: wrap or self")
+        return item["lease"]
+    classes = {c.strip() for c in os.environ.get("VY_LEASE_CLASSES", "").split(",") if c.strip()}
+    return "wrap" if f"{key.split('/')[0]}/{item['template']}" in classes else None
 
 
 def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False) -> str:
@@ -270,9 +307,13 @@ def tick(dry: bool = False) -> None:
         pods.setdefault((p["metadata"].get("labels") or {}).get("job-name", ""), []).append(p)
     done = done_keys()
     inflight: set[str] = set()
+    leased: dict[str, int] = {}
     for j in jobs:
         key = j["metadata"]["annotations"]["verity.dev/item"]
         state, rc = job_state(j, pods)
+        if state in ("pending", "running") and j["metadata"]["labels"].get("verity.dev/lease"):
+            q = j["metadata"]["labels"].get("kueue.x-k8s.io/queue-name", "")
+            leased[q] = leased.get(q, 0) + 1
         if state in ("pending", "running") or j["metadata"]["labels"].get("verity.dev/seen") != "1":
             inflight.add(key)
         if state not in ("succeeded", "failed") or j["metadata"]["labels"].get("verity.dev/seen") == "1":
@@ -313,7 +354,8 @@ def tick(dry: bool = False) -> None:
                 raise ValueError("duplicate id: this item was already submitted (a changed item needs a new id)")
             if "_error" in item:
                 raise ValueError(item["_error"])
-            q = render(item, key, 0, 0)["metadata"]["labels"]["kueue.x-k8s.io/queue-name"]
+            job0 = render(item, key, 0, 0)
+            q = job0["metadata"]["labels"]["kueue.x-k8s.io/queue-name"]
             if not Path(item["tree"]).is_dir():
                 raise ValueError(f"no tree {item['tree']}")
         except (ValueError, KeyError, OSError, IndexError) as e:
@@ -327,6 +369,9 @@ def tick(dry: bool = False) -> None:
             continue
         if pending.get(q, 0) >= int(depth.get(q, 0)):
             continue
+        is_leased = bool(job0["metadata"]["labels"].get("verity.dev/lease"))
+        if is_leased and leased.get(q, 0) >= int(os.environ.get("VY_LEASE_DEPTH", "5")):
+            continue
         try:
             submit(item, key, dry=dry)
         except RuntimeError as e:
@@ -338,6 +383,8 @@ def tick(dry: bool = False) -> None:
         if not dry:
             set_aside(f, key, "taken")
         pending[q] = pending.get(q, 0) + 1
+        if is_leased:
+            leased[q] = leased.get(q, 0) + 1
         inflight.add(key)
 
 
