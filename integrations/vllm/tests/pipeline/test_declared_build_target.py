@@ -80,6 +80,10 @@ class NvmlCudaPlatform:
     def is_cuda(self):
         return True
 
+    @classmethod
+    def device_count(cls):
+        return 0
+
 
 def resolve_current_platform_cls_qualname():
     return "vllm.platforms.UnspecifiedPlatform"   # the NVML probe of a GPU-free host
@@ -102,6 +106,10 @@ ENV_AT_IMPORT = {"VLLM_USE_LAYERNAME": os.environ.get("VLLM_USE_LAYERNAME")}   #
 class NonNvmlCudaPlatform:
     def is_cuda(self):
         return True
+
+    @classmethod
+    def device_count(cls):
+        return 0   # the GPU-free host's visible count (`CUDA_VISIBLE_DEVICES=`)
 
 
 CudaPlatform = NonNvmlCudaPlatform
@@ -127,22 +135,25 @@ def vllm_without_nvml(tmp_path, monkeypatch):
         monkeypatch.delenv(k)
     yield
     for p in hooks.live():
-        if getattr(getattr(p, "owner", None), "__name__", "").startswith("vllm"):
+        o = getattr(p, "owner", None)
+        if (getattr(o, "__module__", None) or getattr(o, "__name__", "")).startswith("vllm"):
             p.uninstall()
     for name in [m for m in sys.modules if m == "vllm" or m.startswith("vllm.")]:
         del sys.modules[name]
 
 
-def _build(tmp_path, monkeypatch, target):
-    seen = {}
+def _build(tmp_path, monkeypatch, target, tp=1, rank=0, seen=None):
+    seen = {} if seen is None else seen
 
     def construct(out, res, *a, **k):
         from vllm.platforms import current_platform
         seen["platform"] = type(current_platform).__name__
+        if hasattr(current_platform, "device_count"):
+            seen["device_count"] = current_platform.device_count()
     monkeypatch.setattr(B, "_construct", construct)
     monkeypatch.setattr(B.engine_env, "apply_target", lambda env: None)
     monkeypatch.setattr(B, "_cuda_available", lambda: False)
-    B.run(str(tmp_path / "out"), 1, 8, "b1-eager-v3", "gloo", target=target)
+    B.run(str(tmp_path / "out"), 1, 8, "b1-eager-v3", "gloo", target=target, tp=tp, rank=rank)
     return seen["platform"]
 
 
@@ -167,3 +178,22 @@ def test_the_selection_answers_an_imported_but_unresolved_vllm_keeps_a_cuda_plat
     P._current_platform = P.UnspecifiedPlatform()
     with pytest.raises(RuntimeError, match="UnspecifiedPlatform"):
         select_cuda_platform()
+
+
+ROW_TP2 = "llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager"
+
+
+@pytest.mark.parametrize("rank", [0, 1])
+def test_a_declared_tp2_target_s_rank_build_counts_the_declared_world_not_the_host_s_devices(tmp_path, monkeypatch, vllm_without_nvml, rank):
+    """vLLM's `ParallelConfig` refuses a world larger than `current_platform.device_count()` ("World size (2) is larger than the number
+    of available GPUs (0)"); a declared target of world W is W devices, whatever the Build host shows."""
+    target = parse_target_arg(R.declared_target(_wl(tmp_path), row=ROW_TP2))
+    seen: dict = {}
+    assert _build(tmp_path, monkeypatch, target, tp=2, rank=rank, seen=seen) == "NonNvmlCudaPlatform"
+    assert seen["device_count"] == 2
+
+
+def test_a_tp2_build_without_a_declared_target_counts_the_host_s_devices(tmp_path, monkeypatch, vllm_without_nvml):
+    assert _build(tmp_path, monkeypatch, None, tp=2) == "UnspecifiedPlatform"
+    from vllm.platforms.cuda import CudaPlatform
+    assert CudaPlatform.device_count() == 0, "no declared target: the host's count, as before"
