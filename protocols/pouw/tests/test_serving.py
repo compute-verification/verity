@@ -79,9 +79,16 @@ def test_hash_format_reads_a_name_an_id_or_a_scheme_object():
 
 
 def test_the_serial_and_deferred_schedules_run_under_every_format():
-    assert SCHEDULES == {"serial": SERIAL, "deferred": DEFERRED}
+    assert set(SCHEDULES) == {"serial", "deferred", "deferred-caller"}
     for f in HASH_FORMATS.values():
-        assert schedule_refusals(f, SERIAL) == [] and schedule_refusals(f, DEFERRED) == []
+        assert all(schedule_refusals(f, s) == [] for s in SCHEDULES.values())
+
+
+def test_the_deferred_schedule_is_the_measured_one():
+    """The chain at the greatest priority and the side lane at the least, as panel attempt 57's chains ran; the caller's own
+    priority is a separate schedule, so a row says which one it timed."""
+    assert (DEFERRED.main_priority, DEFERRED.side_priority, DEFERRED.ring) == ("greatest", "least", 2)
+    assert SCHEDULES["deferred-caller"].main_priority == "caller" and SCHEDULES["deferred-caller"].side == DEFERRED.side
 
 
 def test_a_trees_leave_the_main_lane_only_where_forming_seeds_per_row():
