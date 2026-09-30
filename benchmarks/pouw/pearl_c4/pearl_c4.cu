@@ -107,15 +107,6 @@ DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); 
 // peel rows are 128 bytes (64 BF16): chunk c of row r at r * 128 + ((c ^ (r & 7)) << 4)
 DEV uint32_t swz128(int r, int c) { return r * 128 + ((c ^ (r & 7)) << 4); }
 
-// lane t' of each quad gets byte t' of the quad's four words, in lane order: y.byte[s] = x(lane s).byte[t']
-DEV uint32_t quad_transpose(uint32_t x, int lane) {
-  const int t = lane & 3, base = lane & 28;
-  uint32_t y = 0;
-#pragma unroll
-  for (int s = 0; s < 4; s++) y |= ((__shfl_sync(FULL, x, base | s) >> (8 * t)) & 0xFFu) << (8 * s);
-  return y;
-}
-
 // ---------------------------------------------------------------- noise lines and F's transpose
 // line(seed, role, index) = TurboSHAKE128(seed (32 B) | role | index u32 LE, 0x24, 16 bytes)
 DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
@@ -434,49 +425,47 @@ template <int FMT> DEV void form_body(const Args& a) {
   const uint16_t* x0 = X + (size_t)(r0 + g) * K;
   const uint16_t* x1 = X + (size_t)(r0 + g + 8) * K;
   const int run = K / 64 / gridDim.y;
+  // Column n of atom jb is position 16(n >> 1) + 2 jb + (n & 1) of the chunk, so lane (g, t) forms positions 16t ... 16t + 15
+  // of rows g and g + 8: its codes are two whole words per row, and an NVFP4 block (MXFP4: half a block) is its own
   for (int c = blockIdx.y * run + warp; c < (blockIdx.y + 1) * run; c += blockDim.x / 32) {
+    const uint4* pg = reinterpret_cast<const uint4*>(x0 + 64 * c + 16 * t);
+    const uint4* ph = reinterpret_cast<const uint4*>(x1 + 64 * c + 16 * t);
+    const uint4 g0 = pg[0], g1 = pg[1], h0 = ph[0], h1 = ph[1];
+    const uint32_t xg[8] = {g0.x, g0.y, g0.z, g0.w, g1.x, g1.y, g1.z, g1.w};
+    const uint32_t xh[8] = {h0.x, h0.y, h0.z, h0.w, h1.x, h1.y, h1.z, h1.w};
+    const uint8_t* fl = F + (size_t)(64 * c + 16 * (g >> 1) + (g & 1)) * 16 + 4 * t;
     float d[8][4];
 #pragma unroll
     for (int jb = 0; jb < 8; jb++) {
-      const int pos = 64 * c + 8 * jb + 2 * t;
-      const uint32_t u0 = *reinterpret_cast<const uint32_t*>(x0 + pos), u1 = *reinterpret_cast<const uint32_t*>(x1 + pos);
-      const float cf[4] = {__fmul_rn(al0, bf2f(u0)), __fmul_rn(al0, bf2f(u0 >> 16)), __fmul_rn(al1, bf2f(u1)),
-                           __fmul_rn(al1, bf2f(u1 >> 16))};
-      const uint32_t fb = *reinterpret_cast<const uint32_t*>(F + (size_t)(64 * c + 8 * jb + g) * 16 + 4 * t);
+      const float cf[4] = {__fmul_rn(al0, bf2f(xg[jb])), __fmul_rn(al0, bf2f(xg[jb] >> 16)), __fmul_rn(al1, bf2f(xh[jb])),
+                           __fmul_rn(al1, bf2f(xh[jb] >> 16))};
+      const uint32_t fb = *reinterpret_cast<const uint32_t*>(fl + 32 * jb);
       mma_fp4<NVFP4>(d[jb], ea, fb, 0u, cf, sfa, NOISE_F_SCALE);
     }
-    constexpr int NB = 64 / BLK, PER = BLK / 8;
-    float rg[NB], rh[NB];
-    uint32_t sg = 0, sh = 0;
+    uint32_t m0 = 0, m1 = 0;
 #pragma unroll
-    for (int b = 0; b < NB; b++) {
-      uint32_t m0 = 0, m1 = 0;
-#pragma unroll
-      for (int jj = 0; jj < PER; jj++) {
-        const int jb = PER * b + jj;
-        m0 = max(m0, max(__float_as_uint(d[jb][0]) & 0x7FFFFFFFu, __float_as_uint(d[jb][1]) & 0x7FFFFFFFu));
-        m1 = max(m1, max(__float_as_uint(d[jb][2]) & 0x7FFFFFFFu, __float_as_uint(d[jb][3]) & 0x7FFFFFFFu));
-      }
+    for (int jb = 0; jb < 8; jb++) {
+      m0 = max(m0, max(__float_as_uint(d[jb][0]) & 0x7FFFFFFFu, __float_as_uint(d[jb][1]) & 0x7FFFFFFFu));
+      m1 = max(m1, max(__float_as_uint(d[jb][2]) & 0x7FFFFFFFu, __float_as_uint(d[jb][3]) & 0x7FFFFFFFu));
+    }
+    if constexpr (BLK == 32) {
       m0 = max(m0, __shfl_xor_sync(FULL, m0, 1));
-      m0 = max(m0, __shfl_xor_sync(FULL, m0, 2));
       m1 = max(m1, __shfl_xor_sync(FULL, m1, 1));
-      m1 = max(m1, __shfl_xor_sync(FULL, m1, 2));
-      const float v0 = __fmul_rn(__uint_as_float(m0), __uint_as_float(SIXTH_BITS)),
-                  v1 = __fmul_rn(__uint_as_float(m1), __uint_as_float(SIXTH_BITS));
-      uint32_t c0, c1;
-      if constexpr (FMT == NVFP4) {
-        c0 = max(ue4m3(v0), 1u);
-        c1 = max(ue4m3(v1), 1u);
-        rg[b] = s_rcp[c0];
-        rh[b] = s_rcp[c1];
-      } else {
-        c0 = ue8m0_up(__float_as_uint(v0));
-        c1 = ue8m0_up(__float_as_uint(v1));
-        rg[b] = pow2f(127 - (int)c0);
-        rh[b] = pow2f(127 - (int)c1);
-      }
-      sg |= c0 << (8 * b);
-      sh |= c1 << (8 * b);
+    }
+    const float v0 = __fmul_rn(__uint_as_float(m0), __uint_as_float(SIXTH_BITS)),
+                v1 = __fmul_rn(__uint_as_float(m1), __uint_as_float(SIXTH_BITS));
+    uint32_t c0, c1;
+    float rg, rh;
+    if constexpr (FMT == NVFP4) {
+      c0 = max(ue4m3(v0), 1u);
+      c1 = max(ue4m3(v1), 1u);
+      rg = s_rcp[c0];
+      rh = s_rcp[c1];
+    } else {
+      c0 = ue8m0_up(__float_as_uint(v0));
+      c1 = ue8m0_up(__float_as_uint(v1));
+      rg = pow2f(127 - (int)c0);
+      rh = pow2f(127 - (int)c1);
     }
     uint32_t w[4];
 #pragma unroll
@@ -484,27 +473,21 @@ template <int FMT> DEV void form_body(const Args& a) {
       float vg[8], vh[8];
 #pragma unroll
       for (int jj = 0; jj < 4; jj++) {
-        const int jb = 4 * h + jj, b = jb / PER;
-        vg[2 * jj] = __fmul_rn(d[jb][0], rg[b]);
-        vg[2 * jj + 1] = __fmul_rn(d[jb][1], rg[b]);
-        vh[2 * jj] = __fmul_rn(d[jb][2], rh[b]);
-        vh[2 * jj + 1] = __fmul_rn(d[jb][3], rh[b]);
+        const int jb = 4 * h + jj;
+        vg[2 * jj] = __fmul_rn(d[jb][0], rg);
+        vg[2 * jj + 1] = __fmul_rn(d[jb][1], rg);
+        vh[2 * jj] = __fmul_rn(d[jb][2], rh);
+        vh[2 * jj + 1] = __fmul_rn(d[jb][3], rh);
       }
-      w[2 * h] = quad_transpose(e2m1x8(vg), lane);
-      w[2 * h + 1] = quad_transpose(e2m1x8(vh), lane);
+      w[h] = e2m1x8(vg);
+      w[2 + h] = e2m1x8(vh);
     }
-    uint8_t* cg = codes + (size_t)(r0 + g) * (K / 2) + 32 * c + 4 * t;
-    uint8_t* ch = codes + (size_t)(r0 + g + 8) * (K / 2) + 32 * c + 4 * t;
-    *reinterpret_cast<uint32_t*>(cg) = w[0];
-    *reinterpret_cast<uint32_t*>(cg + 16) = w[2];
-    *reinterpret_cast<uint32_t*>(ch) = w[1];
-    *reinterpret_cast<uint32_t*>(ch + 16) = w[3];
-    if (t < 2) {
-      const int row = r0 + g + 8 * t;
-      const uint32_t sw = t ? sh : sg;
-      uint8_t* sp = scales + ((size_t)(c >> 1) * a.i[0] + row) * (128 / BLK) + (c & 1) * (64 / BLK);
-      if constexpr (FMT == NVFP4) *reinterpret_cast<uint32_t*>(sp) = sw;
-      else *reinterpret_cast<uint16_t*>(sp) = (uint16_t)sw;
+    *reinterpret_cast<uint2*>(codes + (size_t)(r0 + g) * (K / 2) + 32 * c + 8 * t) = make_uint2(w[0], w[1]);
+    *reinterpret_cast<uint2*>(codes + (size_t)(r0 + g + 8) * (K / 2) + 32 * c + 8 * t) = make_uint2(w[2], w[3]);
+    if (BLK == 16 || !(t & 1)) {
+      uint8_t* sp = scales + ((size_t)(c >> 1) * a.i[0] + r0 + g) * (128 / BLK) + (c & 1) * (64 / BLK) + t * 16 / BLK;
+      sp[0] = (uint8_t)c0;
+      sp[8 * (128 / BLK)] = (uint8_t)c1;
     }
   }
 }
