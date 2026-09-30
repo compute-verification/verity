@@ -79,7 +79,7 @@ config:
       metadata:
         labels:
           kueue.x-k8s.io/queue-name: circuits
-          kueue.x-k8s.io/priority-class: circuits
+          kueue.x-k8s.io/priority-class: circuits-gpu      # holds a GPU: ahead of queued 0-GPU Builds
           verity.dev/build: "true"
       spec:
         terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
