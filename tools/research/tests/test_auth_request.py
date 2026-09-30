@@ -9,7 +9,7 @@ import pytest
 from research import auth
 from research.jobs.client import Unreachable
 
-TOKEN, SECRET = "tok-9f3a2c-not-for-printing", "poll-5e1d-not-for-printing"
+TOKEN, SECRET = "dummy-token-value", "dummy-poll-secret"
 CREATED = {"id": "req1", "approve_url": "https://site.example/auth/requests/req1", "user_code": "WXYZ-2345",
            "poll_secret": SECRET, "interval_s": 5, "expires_at": "2026-09-30T00:30:00Z"}
 START = auth._seconds("2026-09-30T00:00:00Z")
