@@ -50,6 +50,8 @@ __all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_w
 
 #: `--jobs`'s variable
 JOBS_ENV = "VERITY_MANIFEST_JOBS"
+#: `--ram-budget-gb`'s variable: the memory a run was admitted with, which the sweep sets for each of its cells
+RAM_BUDGET_ENV = "BUILD_RAM_BUDGET_GB"
 
 #: the tap policies whose identities are Call-interior values, by name (`request_manifest(taps=...)`)
 TAPS = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
@@ -226,15 +228,22 @@ def _send(conn: Any, program_dir: str, kw: dict[str, Any]) -> None:
 
 
 def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, after: Callable[[int, dict[str, Any]], None] | None = None,
-                     log=None) -> list[dict[str, Any]]:
+                     log=None, ram_budget: int | None = None) -> list[dict[str, Any]]:
     """`build(program_dir, **kw)` of every `(program_dir, kw)`, each followed by `after(i, manifest)`, in order.  With `jobs` > 1 (and
     `fork`, and a readable memory headroom) each build runs in a process of its own, largest first, while their estimated peaks
     (`_peak`) fit `HEADROOM_SHARE` of the headroom; a Build without a histogram runs alone.  A build is a function of its Build dir, so
-    the manifests are those one process builds, and the first build or `after` to fail in `tasks` order raises, as one after another."""
+    the manifests are those one process builds, and the first build or `after` to fail in `tasks` order raises, as one after another.
+
+    `ram_budget` (bytes): the memory the run was admitted with (the sweep's `BUILD_RAM_BUDGET_GB`).  The pool then budgets from the
+    smaller of it and the headroom and takes no host-wide lock, since the admission already keeps concurrent runs within the host; a
+    run without one shares the host's headroom with every other pool, one pool at a time (`_pool_lock`)."""
     import multiprocessing
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
         return _build_in_turn(tasks, after)
+    if ram_budget is not None:
+        head = _headroom()
+        return _build_forked(tasks, jobs, after, ram_budget if head is None else min(head, ram_budget), log)
     with _pool_lock():
         head = _headroom()
         if head is None:
@@ -345,7 +354,7 @@ def _declared(fixture: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, wds: list[str | None], *, guarded_max: bool, jobs: int,
-            log, **kw: Any) -> list[dict[str, Any]]:
+            log, ram_budget: int | None = None, **kw: Any) -> list[dict[str, Any]]:
     """The global manifest of each rank's Program set (`roots[i]` is rank `ranks[i]`'s): every component built by `build_components`,
     checked and composed in declaration order."""
     reqs = _declared(fixture)
@@ -372,7 +381,7 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
             out.append(g)
             parts.clear()
 
-    build_components(tasks, jobs=jobs, after=after, log=log)
+    build_components(tasks, jobs=jobs, after=after, log=log, ram_budget=ram_budget)
     return out
 
 
@@ -389,17 +398,18 @@ def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest
 def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
                        profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
                        guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
-                       word_max_gates: str | None = None, jobs: int = 1,
+                       word_max_gates: str | None = None, jobs: int = 1, ram_budget: int | None = None,
                        log=None) -> dict[str, Any]:
     """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP; `jobs`
-    processes build the components (`build_components`)."""
+    processes build the components (`build_components`, within `ram_budget` bytes when the run has one)."""
     wds = list(workload_digests or [None] * len(roots))
     if len(ranks) != len(roots) or len(wds) != len(roots):
         raise ValueError(f"build-global: {len(roots)} --programs-root, {len(ranks)} --rank, {len(wds)} --workload-digest: give one per rank")
     if world > 1 and sorted(ranks) != list(range(world)):
         raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
     parts = _global(fixture, roots, ranks, world, wds, profile=profile, return_slots=return_slots, word=word, norm_scales=norm_scales,
-                    guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query, word_max_gates=word_max_gates, jobs=jobs, log=log)
+                    guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query, word_max_gates=word_max_gates, jobs=jobs,
+                    ram_budget=ram_budget, log=log)
     return merge_ranks(parts) if world > 1 else parts[0]
 
 
@@ -476,6 +486,8 @@ GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-m
                     "scale; the Commit then needs the guarded-max tap build")
 JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-global, the component builds (build_components, within "
              "the memory headroom); the manifest is the same under any.  0 (the default): the CPUs this process may use; 1: one process")
+RAM_BUDGET_HELP = ("the memory (GB) this run was admitted with: the component builds budget from the smaller of it and the headroom, "
+                   "and take no host-wide lock.  Unset (the default): they share the host's headroom, one run's pool at a time")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -521,6 +533,7 @@ class BuildGlobalOptions:
     vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
     jobs: int = option("--jobs", type=int, env=JOBS_ENV, default=0, help=JOBS_HELP)
+    ram_budget_gb: float | None = option("--ram-budget-gb", type=float, env=RAM_BUDGET_ENV, default=None, help=RAM_BUDGET_HELP)
     out: str = option("--out")
     cmd: str = field(default="build-global", init=False)
 
@@ -586,7 +599,8 @@ def main(a: Any) -> int:
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
                                  profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales,
                                  guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
-                                 cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(), log=log)
+                                 cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(),
+                                 ram_budget=None if a.ram_budget_gb is None else int(a.ram_budget_gb * 2**30), log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],

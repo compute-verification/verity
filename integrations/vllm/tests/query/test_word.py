@@ -394,14 +394,15 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     fx = {"fixture": "t", "requests": [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]}
     (tmp_path / "wl.json").write_text(json.dumps(fx))
 
-    def build_global(jobs: int, out: str) -> subprocess.CompletedProcess:
+    def build_global(jobs: int, out: str, *extra: str) -> subprocess.CompletedProcess:
         return subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(tmp_path / "wl.json"),
-                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), "--out", str(tmp_path / out)],
+                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), *extra, "--out", str(tmp_path / out)],
                               cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
 
     for jobs in (1, 3):
         assert build_global(jobs, f"m{jobs}.json").returncode == 0
-    assert (tmp_path / "m1.json").read_bytes() == (tmp_path / "m3.json").read_bytes()
+    assert build_global(3, "m3b.json", "--ram-budget-gb", "4").returncode == 0        # a run's own budget, no host lock
+    assert (tmp_path / "m1.json").read_bytes() == (tmp_path / "m3.json").read_bytes() == (tmp_path / "m3b.json").read_bytes()
     shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
     fx["requests"][1]["max_tokens"] = T
     (tmp_path / "wl.json").write_text(json.dumps(fx))
