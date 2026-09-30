@@ -23,9 +23,10 @@ K and one V run of every earlier token (#11: 7.5e5 Calls, 3.4e8 operand runs, 99
 read as a Python object (the decoded JSON run lists, a `ValueRef` tuple, a `CallView.reads` tuple) is tens of GB.  Both readers
 therefore build ONE columnar body (:class:`_Columns`): flat `array` columns of Call ids and port-name indices with per-Call offsets
 for the reads (6 bytes per read), per-Call indices into small tables for the spec / form / ports, the names as one list of strings.
-`ProgramView.calls` is a lazy `Sequence[CallView]` (:class:`_Calls`) that materializes a `CallView` when indexed or iterated, and a
-`CallView`'s `reads` from that body is a lazy `Sequence[ValueRef]` (:class:`_Reads`) that materializes `ValueRef`s when iterated --
-a consumer holds a Call's reads only while it looks at them.  `from_instances` streams the rows of `instances.json.gz` one at a
+`ProgramView.calls` is a lazy `Sequence[CallView]` (:class:`_Calls`) that materializes each `CallView` once, when it is first indexed
+or iterated (a Program's many passes over its Calls reuse it, at about 150 bytes per Call), and a `CallView`'s `reads` from that body
+is a lazy `Sequence[ValueRef]` (:class:`_Reads`) that materializes `ValueRef`s when iterated -- a consumer holds a Call's reads only
+while it looks at them.  `from_instances` streams the rows of `instances.json.gz` one at a
 time (never the `rows` list).  A `ProgramView` built by hand from a tuple of `CallView`s (tests, synthetic Programs) is unchanged.
 """
 
@@ -156,7 +157,7 @@ class _Columns:
     prescribed inputs alone (`pread_*`), so a pass over the weights a body reads never touches the Call reads."""
 
     __slots__ = ("n", "specs", "families", "port_tables", "spec_idx", "forms", "form_idx", "names", "port_names",
-                 "read_off", "read_call", "read_port", "pread_off", "pread_call", "pread_port")
+                 "read_off", "read_call", "read_port", "pread_off", "pread_call", "pread_port", "views")
 
     def __init__(self) -> None:
         self.n = 0
@@ -174,10 +175,18 @@ class _Columns:
         self.pread_off = array("q", [0])
         self.pread_call = array("i")
         self.pread_port = array("H")
+        self.views: list[CallView | None] = []
 
     def call(self, k: int) -> "CallView":
-        s = self.spec_idx[k]
-        return CallView(k, self.specs[s], self.families[s], self.forms[self.form_idx[k]], self.names[k], self.port_tables[s], _Reads(self, k))
+        views = self.views
+        if len(views) < self.n:
+            views.extend([None] * (self.n - len(views)))
+        v = views[k]
+        if v is None:
+            s = self.spec_idx[k]
+            v = views[k] = CallView(k, self.specs[s], self.families[s], self.forms[self.form_idx[k]], self.names[k], self.port_tables[s],
+                                    _Reads(self, k))
+        return v
 
     def family_of(self, k: int) -> str:
         return self.families[self.spec_idx[k]]

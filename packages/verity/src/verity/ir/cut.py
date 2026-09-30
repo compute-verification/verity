@@ -20,7 +20,7 @@ specified in `verity/ir/PROTOCOL.md` (pinned by `tests/ir/format_vectors.json`);
 3. **CallGraph(fn)**, over the Call's gates `j = 0..n-1` in layout order:
    * operands: the gate's operand ids (one inside the Call must come before the gate, or the query is inapplicable: the Call is not
      topological); a gate with more than `WIDE_FAN_IN` (4096) operands is *wide*: its operands are
-     enumerated per argument (`_wide_operands`), skipping an argument that is a whole parameter of the Call; an operand outside the
+     enumerated per argument (`_wide_operands`), skipping the Call's own parameters; an operand outside the
      Call is an input, numbered by first read, and marks the gate *external*; a wide gate's outside operands are not listed;
    * structure: a gate is a constant when its primitive has no parameters, wiring when its id is in `WIRING`; then, j ascending, a
      non-structure, non-external gate with at least one operand, all of them constants, is a constant too;
@@ -64,7 +64,7 @@ from typing import Any, Iterable, Iterator, Sequence
 
 from .layout import resolve
 from .partition import INPUT_UNIT, CutVerdict, validate_unit_cut
-from .refs import Affine
+from .refs import Affine, Strided
 
 #: primitives that only rearrange bits (each output bit a constant or a copy of one input bit): wiring, like constants, is
 #: computed in no unit, may be read by any, and is never committed
@@ -109,7 +109,8 @@ def member_refs(a: Any, ax: int | None, m: int) -> Any:
 
 
 def _wide_operands(gate: Any, call: Any) -> Iterator[int]:
-    """A wide fan-in gate's operands, skipping whole arguments that are the Call's own parameters (Input gates, outside the Call)."""
+    """A wide fan-in gate's operands, skipping those that are the Call's own parameters (Input gates, outside the Call, which a
+    wide gate never lists) without resolving them."""
     s = gate.scope
     body = s.spec.body
     k = body.node_at(gate.index - s.offset)
@@ -118,10 +119,13 @@ def _wide_operands(gate: Any, call: Any) -> Iterator[int]:
     at_call = s.spec is call.spec and s.offset == call.offset
     for a, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
         refs = member_refs(a, ax, m)
-        if at_call and isinstance(refs, Affine) and refs.space == "p":
+        if at_call and isinstance(refs, (Affine, Strided)) and refs.space == "p":
             continue
         for j in range(len(refs)):
-            yield resolve(s, refs[j])
+            r = refs[j]
+            if at_call and r[0] == "p":
+                continue
+            yield resolve(s, r)
 
 
 class _Interner(dict):
