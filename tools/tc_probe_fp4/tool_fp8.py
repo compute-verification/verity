@@ -1,4 +1,5 @@
-"""Store declarations for the sm_120 FP8 rows (``fp8.py``) and the W1 price microbenchmarks (``w1.py``) (research.store README §6.1).
+"""Store declarations for the sm_120 FP8 rows (``fp8.py``), the W1 price microbenchmarks (``w1.py``) and the GPU step check's gate
+(``fp8_gpucheck.py``) (research.store README §6.1).
 
     research run --on SERVER --project verity --campaign pouw --tool tc_probe_fp8 --source . --env CUDA_VISIBLE_DEVICES=0 -- \
         python tools/tc_probe_fp4/fp8.py --row chain --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-...
@@ -78,6 +79,26 @@ def parse_w1(argv: list[str]) -> dict:
     return out
 
 
+def parse_gpucheck(argv: list[str]) -> dict:
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("--phase", default=None)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--seed", type=int, default=20261001)
+    ap.add_argument("--capture-root", default="/workspace/pouw/fill-out")
+    ap.add_argument("--max-units", type=int, default=0)
+    ap.add_argument("--workers", type=int, default=16)
+    ap.add_argument("--budget-s", type=float, default=330.0)
+    ap.add_argument("--lease-via-fill", default=None)
+    ap.add_argument("--lease-max-min", type=int, default=8)
+    ap.add_argument("--max-leases", type=int, default=12)
+    ap.add_argument("--expect-gpu-uuid", default=None)
+    ns, unknown = ap.parse_known_args(_argv_after(argv, "fp8_gpucheck.py"))
+    out = vars(ns)
+    if unknown:
+        out["_unknown"] = unknown
+    return out
+
+
 TC_PROBE_FP8 = Tool(
     name="tc_probe_fp8", version="1",
     command=["python", "tools/tc_probe_fp4/fp8.py"],
@@ -98,4 +119,15 @@ W1_PRICES = Tool(
     caches=["nvcc"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_w1,
+)
+
+TC_PROBE_FP8_GPUCHECK = Tool(
+    name="tc_probe_fp8_gpucheck", version="1",
+    command=["python", "tools/tc_probe_fp4/fp8_gpucheck.py"],
+    closure=_CLOSURE,
+    key_params=["phase", "seed", "capture_root", "max_units"],
+    key_conditions=["hw.family"],
+    caches=["nvcc"],
+    produces=["tc-evidence/v1", "run-files/v1"],
+    parse=parse_gpucheck,
 )
