@@ -219,6 +219,29 @@ def module_registrations(module) -> tuple[set[str], dict[str, str]]:
     return paths, canon
 
 
+class _Storage(dict):
+    """node -> storage base node, and `aliases[base]`: the nodes currently mapped to `base` (the group `Ctx.rebind` reads)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aliases: dict[Any, dict[Any, None]] = {}
+
+    def __setitem__(self, node, base) -> None:
+        self.pop(node, None)
+        super().__setitem__(node, base)
+        self.aliases.setdefault(base, {})[node] = None
+
+    def setdefault(self, node, base=None):
+        if node not in self:
+            self[node] = base
+        return self[node]
+
+    def pop(self, node, *default):
+        if node in self:
+            self.aliases[dict.__getitem__(self, node)].pop(node, None)
+        return super().pop(node, *default)
+
+
 class Ctx:
     """State of one derivation. Rules read the graph through it and emit through `call` / `define` / `rebind`."""
 
@@ -230,7 +253,7 @@ class Ctx:
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
         self.placeholder_to_weight, self.lifted_constants = placeholder_to_weight, lifted_constants
         self.env: dict[Any, Any] = {}
-        self.storage: dict[Any, Any] = {}  # node -> storage base node (alias groups); absent: own storage
+        self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
         self.written_allocs: set = set()
         self.mutation_effects: list[dict] = []
@@ -437,7 +460,7 @@ class Ctx:
             if isinstance(old, Coll):
                 # every other alias whose references overlap the written region can no longer be read
                 base = self.storage_base(node)
-                group = [n for n, b in self.storage.items() if b is base and n is not node]
+                group = [n for n in self.storage.aliases.get(base, ()) if n is not node]
                 if base is not node:
                     group.append(base)
                 old_runs = _runs(old.refs)
