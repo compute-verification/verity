@@ -4,7 +4,7 @@
 #                      (hash_rows_w, hash_tree_small, hash_leaf_p, hash_msg_v), refused on a ptxas warning, spill or stack frame
 #   h1_standin.cubin   h1_standin.cu: the decode GEMM's weight traffic (not a GEMM), derive_rows and the read-only L2 flush
 #   h1_vectors.json    the device gates, from the verifier's reference (h1_vectors.py; needs verity and blake3)
-#   h1_bench.py, run.py, MANIFEST.sha256
+#   h1_bench.py, prefill_fused.py (GPU 1's GEMM at prefill; GPU 1's own ship beside it), run.py, MANIFEST.sha256
 # Usage: bash benchmarks/pouw/pearl_c/h1_ship.sh [OUT]   (default /tmp/h1-ship; C9 names CUDA 12.9.1, default /tmp/cuda-12.9.1)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
@@ -26,7 +26,7 @@ if bad:
     sys.exit(f"refused: {bad}")
 EOF
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c/h1_vectors.py "$OUT/h1_vectors.json")
-cp "$HERE/h1_bench.py" "$HERE/run.py" "$OUT/"
-(cd "$OUT" && sha256sum hash_sm120a.cubin h1_standin.cubin h1_vectors.json h1_bench.py run.py > MANIFEST.sha256)
+cp "$HERE/h1_bench.py" "$HERE/prefill_fused.py" "$HERE/run.py" "$OUT/"
+(cd "$OUT" && sha256sum hash_sm120a.cubin h1_standin.cubin h1_vectors.json h1_bench.py prefill_fused.py run.py > MANIFEST.sha256)
 tar -cf "$OUT.tar" -C "$(dirname "$OUT")" "$(basename "$OUT")"
 echo "$OUT.tar"

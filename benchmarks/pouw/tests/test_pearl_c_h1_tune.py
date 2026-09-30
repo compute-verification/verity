@@ -315,3 +315,72 @@ def test_the_verifier_checks_h3_row_seeds_and_the_unit_seed(tmp_path, section):
                        ("bare", dict(seed_bytes=seeds, with_seed=False))):
         r = write(name, **args)
         assert r.returncode == 1 and r.stdout.startswith(f"{fmt} verifier reject:"), (name, r.stdout, r.stderr)
+
+
+def test_the_verifier_regenerates_prefill_fused_a_and_splits_the_tiles(tmp_path):
+    """A prefill_fused.py-style -h3 transcript made from the reference: A regenerated from its y tag (`a_half` twice a row;
+    every word a finite normal), its row seeds and the unit's seed_A, then C~, U, digests, leaves and the tile tree over two
+    tile rows (the second partial), checked by 3 processes. Accepted; rejected with a digest, a tile leaf or a row seed of the
+    second tile row flipped, and with A's tree poisoned as the negative control leaves it."""
+    import json as J
+
+    from verity.commitments.merkle import tree_levels
+    from verity_pouw.audit import activation_binding
+    from verity_pouw.protocol import Context, Matmul, Shape
+    from verity_pouw.schemes import pearl_c as PC
+    sys.path.insert(0, str(HERE))
+    from prefill_fused import a_half, y_rows
+
+    m, rb, n, index, tag = 96, 1024, 128, 5, "test prefill A {r}"
+    salt, root_b = hashlib.sha256(b"pf salt").digest(), hashlib.sha256(b"pf root_B").digest()
+    rows = [a_half(tag, r, rb // 2) * 2 for r in range(m)]
+    y = y_rows(tag, 2, rb // 2)
+    assert y[:rb // 2] == bytes(b ^ (0x3C if i % 2 else 0) for i, b in enumerate(rows[0][:rb // 2]))
+    assert all(0x78 <= ((w >> 23) & 0xFF) <= 0x7F for w in struct.unpack(f"<{m * rb // 4}I", b"".join(rows)))
+    ctx = Context(salt, Matmul(index, Shape(m, 256, n), 0), bytes(32), root_b)
+    d = PC.activation_domain(ctx, "h3")
+    a_levels = tree_levels(d, [d.leaf(r, r, ROW, rows[r]) for r in range(m)])
+    root = a_levels[-1][0]
+    ctx = Context(salt, Matmul(index, Shape(m, 256, n), 0), root, root_b)
+    seeds = b"".join(PC.row_seed(ctx, r, rows[r]) for r in range(m))
+    c, u = data("pf c", 4 * m * n), data("pf u", 4 * m * n)
+    per, tn = n // 32, n // 64
+    dgs = b"".join(keyed(H1_KEYS["message"], c[4 * (r * n + 32 * h):4 * (r * n + 32 * h + 32)] + u[4 * (r * n + 32 * h):4 * (r * n + 32 * h + 32)])
+                   for r in range(m) for h in range(per))
+    leaves = [keyed(H1_KEYS["leaf"], b"".join(dgs[32 * (r * per + 2 * tj + h):32 * (r * per + 2 * tj + h + 1)]
+                                              for r in range(64 * ti, min(m, 64 * ti + 64)) for h in range(2)))
+              for ti in range(2) for tj in range(tn)]
+    tb = hashlib.sha256(b"pf tiles").digest()
+    dt = CommitmentDomain(tb, 0, RangeIndexedDomain(len(leaves)), hash="blake3-s256")
+    t_levels = tree_levels(dt, [dt.leaf(t, t, TILE, v) for t, v in enumerate(leaves)])
+    flat = lambda levels: b"".join(b"".join(lv) for lv in levels)  # noqa: E731
+    parts = {"a_tree": flat(a_levels), "row_seeds": seeds, "unit_seed": PC.unit_seed_a(salt, root, root_b, index), "c": c, "u": u,
+             "digests": dgs, "leaves": b"".join(leaves), "tile_tree": flat(t_levels)}
+    a = {"binding": activation_binding(salt, index).hex(), "owner": index, "count": m, "domain": d.domain_id.hex(),
+         "seed": {"salt": salt.hex(), "root_b": root_b.hex(), "index": index, "k": 256, "n": n}}
+    t = {"binding": tb.hex(), "owner": 0, "count": len(leaves), "domain": dt.domain_id.hex()}
+
+    def write(name, **changes):
+        body = {**parts}
+        for k, (off, v) in changes.items():
+            b = bytearray(body[k])
+            if v is None:
+                b[:] = bytes([0xA5]) * len(b)
+            else:
+                b[off] ^= v
+            body[k] = bytes(b)
+        head = {"run": "test", "arm": f"prefill {name}", "m": m, "rb": rb, "n": n, "hashing": "h3", "a": a, "t": t,
+                "a_rows_y": {"tag": tag, "half": rb // 2}, "sections": [[k, len(v)] for k, v in body.items()]}
+        path = tmp_path / f"{name}.bin"
+        path.write_bytes(J.dumps(head).encode() + b"\n" + b"".join(body.values()))
+        return verifier(path, "--jobs", "3")
+
+    r = write("good")
+    assert r.returncode == 0 and r.stdout.startswith("h3 verifier accept:"), r.stdout + r.stderr
+    assert "regenerated from their tag" in r.stdout and f"{m} row seeds" in r.stdout and "4 tile leaves" in r.stdout
+    for name, change, why in (("digest", {"digests": (32 * (70 * per + 3) + 5, 1)}, "message digest (70, 3) differs"),
+                              ("leaf", {"leaves": (32 * 3 + 1, 1)}, "tile 3's leaf differs"),
+                              ("seed", {"row_seeds": (32 * 70, 1)}, "row 70's seed differs"),
+                              ("poisoned", {"a_tree": (0, None)}, "A's commitment differs")):
+        r = write(name, **change)
+        assert r.returncode == 1 and r.stdout.startswith("h3 verifier reject:") and why in r.stdout, (name, r.stdout, r.stderr)

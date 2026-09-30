@@ -177,7 +177,8 @@ def lat_chain_case(n: int = 512) -> dict:
 
 
 def decode_domains() -> dict:
-    """The decode chain's two frame-b3 domains (A's 32 rows and the 128 tiles' tree), so that h1_bench's kernels hash under
+    """The decode chain's domains (A's 32 rows and the 128 tiles' tree, each format), and prefill_fused.py's at 8,192^3 (A's
+    8,192 rows under the -h3 unit's activation domain, the 16,384 tiles' frame-b3s tree), so that the kernels hash under
     domain ids the verifier (verify_h1.py) rebuilds from the same binding and owner."""
     out = {}
     for name, tag, count, h in (("a", b"h1_bench decode A rows", M, "blake3"), ("t", b"h1_bench decode tiles", 128, "blake3"),
@@ -187,9 +188,13 @@ def decode_domains() -> dict:
         d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash=h)
         out[name] = {"binding": binding.hex(), "owner": 0, "count": count, "hash": h, "domain": d.domain_id.hex()}
     binding = activation_binding(H3_SALT, H3_INDEX)
-    d = CommitmentDomain(binding, H3_INDEX, RangeIndexedDomain(M), hash="blake3-s256")
-    out["a3"] = {"binding": binding.hex(), "owner": H3_INDEX, "count": M, "hash": "blake3-s256", "domain": d.domain_id.hex(),
-                 "seed": {"salt": H3_SALT.hex(), "root_b": H3_ROOT_B.hex(), "index": H3_INDEX, "k": N, "n": N}}
+    for name, count in (("a3", M), ("prefill_a3", 8192)):
+        d = CommitmentDomain(binding, H3_INDEX, RangeIndexedDomain(count), hash="blake3-s256")
+        out[name] = {"binding": binding.hex(), "owner": H3_INDEX, "count": count, "hash": "blake3-s256", "domain": d.domain_id.hex(),
+                     "seed": {"salt": H3_SALT.hex(), "root_b": H3_ROOT_B.hex(), "index": H3_INDEX, "k": N, "n": N}}
+    binding = hashlib.sha256(b"h1_bench prefill tiles").digest()
+    d = CommitmentDomain(binding, 0, RangeIndexedDomain(128 * 128), hash="blake3-s256")
+    out["prefill_t2"] = {"binding": binding.hex(), "owner": 0, "count": 128 * 128, "hash": "blake3-s256", "domain": d.domain_id.hex()}
     return out
 
 
@@ -199,7 +204,7 @@ def main() -> None:
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
            "tiles": {"m32": tile}, "blk": blk, "seg": seg_cases(blk), "h2": h2_cases(tile), "h3": h3_case(), "lat_chain": lat_chain_case(),
-           "decode": decode_domains()}
+           "decode": decode_domains(), "h1_keys": {r: k.hex() for r, k in H1_KEYS.items()}}
     Path(sys.argv[1]).write_text(json.dumps(out))
     print(f"{len(out['rows']['cases'])} row cases, {len(out['trees'])} trees, {len(out['tiles'])} tile case(s) -> {sys.argv[1]}")
 
