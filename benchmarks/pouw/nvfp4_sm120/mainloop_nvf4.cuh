@@ -22,9 +22,14 @@
 // 128 bytes (a warp's 16-byte store 4 lines, not 16: the epilogue's stores made 2,048 L1 tag requests a tile and SM, on the
 // pipe the other warps' ldmatrix take); its scale words then take four 8-byte loads a step, not two 16-byte ones.
 //
-// Host side: two CUtensorMaps (A, B), each UINT8, rank 2, globalDim {K / 2, rows}, globalStrides {K / 2}, box {64, TM} for A
-// and {64, 128} for B, SWIZZLE_64B, contiguous (64-byte aligned), passed by pointer; the scale buffers by address (16-byte
-// aligned).  M a multiple of TM, N of 128, K of 128.
+// FP8 1: the plain E4M3 GEMM on the same schedule.  A and B one code a byte, K-major; each accumulator the chain of
+// mma.sync kind::f8f6f4 m16n8k32 E4M3 atoms from +0 in ascending k, BLACKWELL_SM120_E4M3_M16N8K32's chain; no scales.  An
+// E4M3 atom's fragments are an NVFP4 atom's bytes (A 16 rows and B 8 columns of 32 bytes, the same ldmatrix), and it takes
+// the tensor pipe as long, so everything above holds with each stage's 64-byte rows 64 deep, not 128, and no scale loads.
+//
+// Host side: two CUtensorMaps (A, B), each UINT8, rank 2, globalDim {K / 2 (FP8: K), rows}, globalStrides the same, box
+// {64, TM} for A and {64, 128} for B, SWIZZLE_64B, contiguous (64-byte aligned), passed by pointer; the scale buffers by
+// address (16-byte aligned; FP8 none).  M a multiple of TM, N of 128, K of 128 (FP8: 64).
 #pragma once
 #include <cstdint>
 
@@ -116,6 +121,13 @@ NV_DEV void omma(float* d, const uint32_t* a, const uint32_t* b, uint32_t sfa, u
       : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
       : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(sfa), "r"(sfb));
 }
+// d = a b + d, one E4M3 atom (k = 32)
+NV_DEV void qmma(float* d, const uint32_t* a, const uint32_t* b) {
+  asm("mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32 {%0, %1, %2, %3}, {%4, %5, %6, %7}, {%8, %9}, "
+      "{%0, %1, %2, %3};"
+      : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
+      : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
+}
 
 // The tile order both roles walk: groups of `group` tile rows, column by column inside a group.
 NV_DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
@@ -136,13 +148,13 @@ struct Maps { uint8_t a[128], b[128]; };
 // late, so that the two warps of an SMSP would reach their epilogues apart, gained nothing: the full barriers they share pull
 // them back within a few hundred cycles, r20260930-114329-edb6.  Folding each tile's BF16 store into the next tile's first
 // step, each group's 4 blocks stored just before the group overwrites them, measured 2.2% slower: fill job
-// nvf4-fold-3f7b3edf.)  WIDE: each warp's 64 columns contiguous (above).
-template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int WIDE = 0> struct Mainloop {
-  static constexpr int BN = 128, BK = 128, ROW = BK / 2, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
+// nvf4-fold-3f7b3edf.)  WIDE: each warp's 64 columns contiguous (above).  FP8: E4M3 (above).
+template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int WIDE = 0, int FP8 = 0> struct Mainloop {
+  static constexpr int BN = 128, BK = FP8 ? 64 : 128, ROW = 64, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
   static constexpr int REGS_P = RP, REGS_LAUNCH = 65536 / NT / 8 * 8, REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
                        REGS_C = REGS_FIT < 256 ? REGS_FIT : 256;
-  static constexpr uint32_t A_BYTES = TM * ROW, B_BYTES = BN * ROW, SFA_BYTES = TM * BK / 16, SFB_BYTES = BN * BK / 16,
-                            SF_OFF = A_BYTES + B_BYTES, STAGE = SF_OFF + SFA_BYTES + SFB_BYTES;
+  static constexpr uint32_t A_BYTES = TM * ROW, B_BYTES = BN * ROW, SFA_BYTES = FP8 ? 0 : TM * BK / 16,
+                            SFB_BYTES = FP8 ? 0 : BN * BK / 16, SF_OFF = A_BYTES + B_BYTES, STAGE = SF_OFF + SFA_BYTES + SFB_BYTES;
   // store_bf16's scratch: SLOTS 512-byte slots a consumer warp (as many as fit, up to 4)
   static constexpr int SLOTS_FIT = (99 * 1024 - STAGES * STAGE - 16 * STAGES) / (512 * NCW), SLOTS = SLOTS_FIT < 4 ? SLOTS_FIT : 4;
   static constexpr uint32_t SCRATCH = STAGES * STAGE, SCR_WARP = 512 * SLOTS;
@@ -197,17 +209,19 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int
     for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
       int tm, tn;
       raster(t, tiles_m, tiles_n, group, tm, tn);
-      const uint8_t* sa = sfa + (size_t)tm * (TM / 128) * KA * 512;
-      const uint8_t* sb = sfb + (size_t)tn * KA * 512;
+      const uint8_t* sa = FP8 ? nullptr : sfa + (size_t)tm * (TM / 128) * KA * 512;
+      const uint8_t* sb = FP8 ? nullptr : sfb + (size_t)tn * KA * 512;
       for (int kt = 0; kt < KT; kt++) {
         mbar_wait(empty(s), ph ^ 1);
         mbar_expect_tx(full(s), STAGE);
         const uint32_t st = stage(s);
         tma_load(st, maps->a, full(s), kt * ROW, tm * TM);
         tma_load(st + A_BYTES, maps->b, full(s), kt * ROW, tn * BN);
+        if constexpr (!FP8) {
 #pragma unroll
-        for (int h = 0; h < TM / 128; h++) bulk_load(st + SF_OFF + h * 1024, sa + ((size_t)h * KA + 2 * kt) * 512, 1024, full(s));
-        bulk_load(st + SF_OFF + SFA_BYTES, sb + (size_t)2 * kt * 512, 1024, full(s));
+          for (int h = 0; h < TM / 128; h++) bulk_load(st + SF_OFF + h * 1024, sa + ((size_t)h * KA + 2 * kt) * 512, 1024, full(s));
+          bulk_load(st + SF_OFF + SFA_BYTES, sb + (size_t)2 * kt * 512, 1024, full(s));
+        }
         advance();
       }
     }
@@ -265,9 +279,13 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int
     }
   }
   NV_DEV void load(Frag& f, uint32_t st, int j) const {
-    load_scales(f, st, j);
+    if constexpr (!FP8) load_scales(f, st, j);
 #pragma unroll
     for (int g = 0; g < 4; g++) load_part(f, st, j, g);
+  }
+  NV_DEV static void mma(float* d, const Frag& f, int mi, int i, int jl) {
+    if constexpr (FP8) qmma(d, f.a[mi], f.b[i][jl]);
+    else omma(d, f.a[mi], f.b[i][jl], f.sa[mi], f.sb[jl][i]);
   }
   // group g of a step's 32 MMAs, the last reads of one of its fragments: BORDER 0 A's m16 block g (its 8 n8 blocks), 1 B's
   // n8 blocks (g, 0) and (g, 1) (with the 4 m16 blocks each)
@@ -276,12 +294,12 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int
 #pragma unroll
       for (int i = 0; i < 4; i++)
 #pragma unroll
-        for (int jl = 0; jl < 2; jl++) omma(acc[g][i][jl], f.a[g], f.b[i][jl], f.sa[g], f.sb[jl][i]);
+        for (int jl = 0; jl < 2; jl++) mma(acc[g][i][jl], f, g, i, jl);
     } else {
 #pragma unroll
       for (int jl = 0; jl < 2; jl++)
 #pragma unroll
-        for (int mi = 0; mi < 4; mi++) omma(acc[mi][g][jl], f.a[mi], f.b[g][jl], f.sa[mi], f.sb[jl][g]);
+        for (int mi = 0; mi < 4; mi++) mma(acc[mi][g][jl], f, mi, g, jl);
     }
   }
   // cur's MMAs, with nxt (step j of stage st, if `on`) loaded behind them part by part, each part after the group that
@@ -294,7 +312,7 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int
   }
   // step() after its group 0 and mid
   NV_DEV void rest(float (&acc)[4][4][2][4], const Frag& cur, Frag& nxt, uint32_t st, int j, bool on) const {
-    if (on) load_scales(nxt, st, j);
+    if (!FP8 && on) load_scales(nxt, st, j);
 #pragma unroll
     for (int g = 0; g < 4; g++) {
       if (g) group(acc, cur, g);
