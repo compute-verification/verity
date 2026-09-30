@@ -144,14 +144,15 @@ class Dev:
     def copy(self, dst: int, src: int, n: int, stream: int = 0) -> None:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, vp(stream or None))
 
-    def launch(self, name: str, grid: int, block: int, smem: int = 0, p=(), i=(), stream: int = 0) -> None:
+    def launch(self, name: str, grid: int | tuple[int, int], block: int, smem: int = 0, p=(), i=(), stream: int = 0) -> None:
         a = Args()
         for j, v in enumerate(p):
             a.p[j] = v
         for j, v in enumerate(i):
             a.i[j] = v
         params = (vp * 1)(C.addressof(a))
-        self.ck("cuLaunchKernel", self.fn(name), grid, 1, 1, block, 1, 1, smem, vp(stream or None), params, None)
+        gx, gy = grid if isinstance(grid, tuple) else (grid, 1)
+        self.ck("cuLaunchKernel", self.fn(name), gx, gy, 1, block, 1, 1, smem, vp(stream or None), params, None)
 
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
@@ -176,14 +177,22 @@ class Dev:
 def buffer_sizes(fmt: str, m: int, n: int, k: int) -> dict[str, int]:
     blk = FMTS[fmt][1]
     return {
-        "xa": 2 * m * k, "xb": 2 * n * k, "seed_a": 32, "seed_b": 32, "key": 32,
+        "xa": 2 * m * k, "xb": 2 * n * k, "seed_a": 32, "seed_b": 32,
         "lines_ea": 16 * m, "lines_eb": 16 * n, "lines_fa": 16 * k, "lines_fb": 16 * k, "fat": 16 * k, "fbt": 16 * k,
         "rows_a": m * (2 * k // SEGMENT) * 32, "rows_b": n * (2 * k // SEGMENT) * 32,
         "a_codes": m * k // 2, "a_scales": m * k // blk, "a_alpha": 4 * m, "a_inv": 4 * m, "a_ae": m,
         "b_codes": n * k // 2, "b_scales": n * k // blk, "b_alpha": 4 * n, "b_inv": 4 * n, "b_ae": n,
         "pa": 128 * m, "pb": 128 * n, "g": 4096, "bf": 128 * n,
-        "y": 2 * m * n, "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "tickets": (m // 16) * (n // 16) * 32,
+        "y": 2 * m * n, "digests": m * n, "leaves": (m // 64) * (n // 64) * 32,
     }
+
+
+def form_split(rows: int, k: int, sms: int) -> int:
+    """Forming's k-split S (a power of two): enough (rows/16) x S CTAs to reach every SM, at least 8 k64 chunks each."""
+    s = 1
+    while (rows // 16) * s < sms and k // 64 // (2 * s) >= 8:
+        s *= 2
+    return s
 
 
 def domain(m: int, n: int, k: int) -> str | None:
@@ -199,11 +208,13 @@ class Pipeline:
     device pointers the caller owns (the harness's operand sets); the rest are allocated here."""
 
     def __init__(self, dev: Dev, fmt: str, m: int, n: int, k: int, bm: int | None = None, store_cu: bool = False,
-                 external: dict[str, int] | None = None):
+                 external: dict[str, int] | None = None, split: int | None = None):
         why = domain(m, n, k)
         if why:
             raise ValueError(f"{m}x{n}x{k} outside pearl_c4.cu's domain: {why}")
         self.dev, self.fmt, self.m, self.n, self.k = dev, fmt, m, n, k
+        self.split_a = split or form_split(m, k, dev.sms)
+        self.split_b = split or form_split(n, k, dev.sms)
         self.tag, self.blk = FMTS[fmt]
         self.bm = bm or (128 if m % 128 == 0 else 64)
         self.sizes = buffer_sizes(fmt, m, n, k)
@@ -217,18 +228,21 @@ class Pipeline:
         return f"gemm_{self.tag}_{mode}" + ("" if self.bm == 128 else "_m64")
 
     def weight_side(self, stream: int = 0, hashing: bool = True) -> None:
-        """Per (weight, epoch): F_A, F_B and E_B's lines, F's transposes, B's commitment (modeled), B's forming, G, B~F_A, P_B."""
+        """Per (weight, epoch): F_A and F_B's lines, F's transposes, B's commitment (modeled), B's forming (with E_B's lines),
+        G, B~F_A, P_B."""
         d, b, n, k = self.dev, self.buf, self.n, self.k
         L = lambda *a, **kw: d.launch(*a, stream=stream, **kw)  # noqa: E731
         L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fa"]], i=[ROLE_FA, k])
         L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fb"]], i=[ROLE_FB, k])
-        L("lines", cdiv(n, 128), 128, p=[b["seed_b"], b["lines_eb"]], i=[ROLE_EB, n])
+        if not hashing:
+            L("lines", cdiv(n, 128), 128, p=[b["seed_b"], b["lines_eb"]], i=[ROLE_EB, n])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fa"], b["fat"]], i=[k])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fb"], b["fbt"]], i=[k])
         if hashing:
             L("hash_rows", cdiv(n * (2 * k // SEGMENT), 128), 128, p=[b["xb"], b["rows_b"]], i=[n, 2 * k])
-        L(f"form_{self.tag}", n // 16, 256, p=[b["xb"], b["lines_eb"], b["lines_fb"], b["b_codes"], b["b_scales"], b["b_alpha"],
-                                               b["b_inv"], b["b_ae"], b["pb"]], i=[n, k, 32, 1])
+        L(f"form_{self.tag}", (n // 16, self.split_b), 256, p=[
+            b["xb"], b["lines_eb"], b["lines_fb"], b["b_codes"], b["b_scales"], b["b_alpha"], b["b_inv"], b["b_ae"], b["pb"],
+            b["seed_b"] if hashing else 0], i=[n, k, 32, 1, ROLE_EB])
         L(f"chain32_{self.tag}", 2, 128, p=[b["fbt"], 0, b["fat"], b["g"]], i=[32, k, 0])
         L(f"chain32_{self.tag}", n // 16, 128, p=[b["b_codes"], b["b_scales"], b["fat"], b["bf"]], i=[n, k, 0])
         L("pb", cdiv(32 * n, 256), 256, p=[b["pb"], b["g"], b["bf"]], i=[n])
@@ -239,21 +253,21 @@ class Pipeline:
                         stream=stream)
 
     def steps(self, mode: str = "hash") -> list[tuple[str, tuple, dict]]:
-        """One call's launches: A's commitment (modeled) and E_A's lines (hash only), A's forming, A'F_B into P_A, the chain
-        with the peel and (hash) the epilogue's digests and tickets, then (hash) the tile leaves."""
+        """One call's launches: A's commitment (modeled; hash only), A's forming (with E_A's lines in the hash mode; the
+        others read the primed ones), A'F_B into P_A, the chain with the peel and (hash) the epilogue's digests, then (hash)
+        the tile leaves."""
         b, m, n, k = self.buf, self.m, self.n, self.k
         out = []
         if mode == "hash":
             out.append(("hash_rows", (cdiv(m * (2 * k // SEGMENT), 128), 128), dict(p=[b["xa"], b["rows_a"]], i=[m, 2 * k])))
-            out.append(("lines", (cdiv(m, 128), 128), dict(p=[b["seed_a"], b["lines_ea"]], i=[ROLE_EA, m])))
-        out.append((f"form_{self.tag}", (m // 16, 256), dict(
-            p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"], b["a_inv"], b["a_ae"], b["pa"]],
-            i=[m, k, 0, 0])))
+        out.append((f"form_{self.tag}", ((m // 16, self.split_a), 256), dict(
+            p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"], b["a_inv"], b["a_ae"], b["pa"],
+               b["seed_a"] if mode == "hash" else 0], i=[m, k, 0, 0, ROLE_EA])))
         out.append((f"chain32_{self.tag}", (m // 16, 128), dict(p=[b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], i=[m, k, 1])))
         g = self.gemm(mode)
         out.append((g, ((m // self.bm) * (n // 128), self.threads, self.dev.dyn_smem(g)), dict(
             p=[b["a_codes"], b["a_scales"], b["b_codes"], b["b_scales"], b["pa"], b["pb"], b["a_inv"], b["b_inv"], b["y"],
-               b["digests"], b["tickets"], b["key"], b.get("c", 0), b.get("u", 0)], i=[m, n, k])))
+               b["digests"], b.get("c", 0), b.get("u", 0)], i=[m, n, k])))
         if mode == "hash":
             out.append(("leaves", (cdiv((m // 64) * (n // 64), 64), 64), dict(p=[b["digests"], b["leaves"]], i=[m, n])))
         return out
@@ -273,13 +287,12 @@ class Pipeline:
 WRITTEN = {
     "weight": ("lines_fa", "lines_fb", "lines_eb", "fat", "fbt", "b_codes", "b_scales", "b_alpha", "b_inv", "b_ae", "pb", "g",
                "bf"),
-    "hash": ("rows_a", "lines_ea", "a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "c", "u", "y", "digests", "leaves",
-             "tickets"),
+    "hash": ("rows_a", "lines_ea", "a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "c", "u", "y", "digests", "leaves"),
     "nohash": ("a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "y"),
     "plain": ("a_codes", "a_scales", "y_plain"),
 }
 WORD = {"a_alpha": 4, "a_inv": 4, "b_alpha": 4, "b_inv": 4, "g": 4, "bf": 4, "c": 4, "u": 4, "pa": 2, "pb": 2, "y": 2,
-        "y_plain": 2, "digests": 32, "leaves": 32, "tickets": 32, "rows_a": 32}
+        "y_plain": 2, "digests": 32, "leaves": 32, "rows_a": 32}
 
 
 def diff(name: str, got: bytes, want: bytes) -> dict:
@@ -303,8 +316,9 @@ def check_fmt(dev: Dev, d: Path) -> bool:
     for bm in (128, 64):
         if m % bm:
             continue
-        pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, store_cu=True)
-        for name in ("xa", "xb", "seed_a", "seed_b", "key"):
+        split = k // 64 // 8 if bm == 64 else 1
+        pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, store_cu=True, split=split)
+        for name in ("xa", "xb", "seed_a", "seed_b"):
             dev.write(pl.buf[name], want[name])
         pl.weight_side()
         dev.sync()
@@ -317,7 +331,7 @@ def check_fmt(dev: Dev, d: Path) -> bool:
                 rows.append(diff(name, dev.read(pl.buf[src], len(want[name])), want[name]) | {"mode": mode})
         pl.free()
         for r in rows:
-            r.update(fmt=mf["fmt"], bm=bm, shape=[m, n, k])
+            r.update(fmt=mf["fmt"], bm=bm, split=[pl.split_a, pl.split_b], shape=[m, n, k])
             emit(r)
             ok &= r["mismatches"] == 0
     return ok

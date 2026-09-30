@@ -10,7 +10,8 @@
 //   P        rows x 64 BF16 (P_A = [Ẽ_A | bf16(A'F_B)], P_B = [bf16(Ẽ_B G - B~F_A) | -Ẽ_B])
 //   alpha, inv  rows FP32 (α and RN(1/α));  ae  rows bytes (a_E, UE4M3)
 //   y        m x n BF16, RN(RN(U · inv_A) · inv_B)       digests  m x n/32 x 32 bytes: TurboSHAKE128(C~ chunk | U chunk, 0x21)
-//   leaves   m/64 x n/64 x 32 bytes (0x22)                tickets  m/16 x n/16 x 32 bytes: Pearl's lottery over C~
+//   leaves   m/64 x n/64 x 32 bytes (0x22)
+// Pearl's lottery tickets are not computed: no PoUW check reads them (the coordinator's 06:35Z ruling for pearl-c-sm120).
 #include <cstdint>
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
@@ -113,21 +114,23 @@ DEV uint32_t quad_transpose(uint32_t x, int lane) {
 }
 
 // ---------------------------------------------------------------- noise lines and F's transpose
-// line(seed, role, index) = TurboSHAKE128(seed (32 B) | role | index u32 LE, 0x24, 16 bytes).  p0 seed, p1 out; i0 role,
-// i1 count
-extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
-  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx >= a.i[1]) return;
-  const uint64_t* seed = reinterpret_cast<const uint64_t*>(a.p[0]);
+// line(seed, role, index) = TurboSHAKE128(seed (32 B) | role | index u32 LE, 0x24, 16 bytes)
+DEV ulonglong2 line16(const uint64_t* seed, int role, int idx) {
   uint64_t s[25];
 #pragma unroll
   for (int i = 0; i < 25; i++) s[i] = 0;
 #pragma unroll
   for (int i = 0; i < 4; i++) s[i] = seed[i];
-  s[4] = (uint64_t)(uint8_t)a.i[0] | (uint64_t)(uint32_t)idx << 8 | (uint64_t)D_LINE << 40;
+  s[4] = (uint64_t)(uint8_t)role | (uint64_t)(uint32_t)idx << 8 | (uint64_t)D_LINE << 40;
   s[ph::TS_RATE - 1] ^= 0x8000000000000000ull;
   ph::keccak_p<12>(s);
-  reinterpret_cast<ulonglong2*>(a.p[1])[idx] = make_ulonglong2(s[0], s[1]);
+  return make_ulonglong2(s[0], s[1]);
+}
+// p0 seed, p1 out; i0 role, i1 count
+extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= a.i[1]) return;
+  reinterpret_cast<ulonglong2*>(a.p[1])[idx] = line16(reinterpret_cast<const uint64_t*>(a.p[0]), a.i[0], idx);
 }
 
 // ft[p][b] = code p of line 2b | code p of line 2b + 1 << 4.  p0 lines (k x 16 B), p1 ft (32 x k/2); i0 k
@@ -159,21 +162,35 @@ extern "C" __global__ void __launch_bounds__(128) hash_rows(const Args a) {
 // accumulates positions 8(l + 32j) by FMA, then the xor butterfly 16 ... 1), σ = ρ/4, t = s + 4σ, α = 2688/max(t, 2^-32)
 // (MXFP4: floored to a power of two), β = (σα)·f32(16/√2346.125), a_E = ue4m3(β).  (2) Ẽ = bf16(E·a_E·2^-4) into P at
 // column eoff (negated for B).  (3) Warps take k64 chunks: per element one noise atom D = NVF4 mma(C = α·x, E | 0 at a_E,
-// F_t | 0 at 2^-4), then per block of BLK the noisy scale and one E2M1 cast of D·r_b.
-// p0 x, p1 E lines (rows x 16 B), p2 noise basis lines (k x 16 B), p3 codes, p4 scales, p5 alpha, p6 inv, p7 ae, p8 P;
-// i0 rows, i1 k, i2 eoff, i3 negate Ẽ
+// F_t | 0 at 2^-4), then per block of BLK the noisy scale and one E2M1 cast of D·r_b.  Grid (rows/16, S): CTA y takes
+// the y-th of S equal runs of k64 chunks, and every y computes its rows' statistics (their order is pinned; y = 0 writes
+// α, 1/α, a_E and Ẽ).  E's 16 lines come from p9's seed (then y = 0 writes them to p1) or, when p9 is null, from p1.
+// p0 x, p1 E lines (rows x 16 B), p2 noise basis lines (k x 16 B), p3 codes, p4 scales, p5 alpha, p6 inv, p7 ae, p8 P,
+// p9 seed or null; i0 rows, i1 k, i2 eoff, i3 negate Ẽ, i4 E's role
 template <int FMT> DEV void form_body(const Args& a) {
   constexpr int BLK = Fmt<FMT>::BLK;
   const uint16_t* X = reinterpret_cast<const uint16_t*>(a.p[0]);
-  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[1]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[2]);
   uint8_t* codes = reinterpret_cast<uint8_t*>(a.p[3]);
   uint8_t* scales = reinterpret_cast<uint8_t*>(a.p[4]);
   const int K = a.i[1];
   __shared__ float s_alpha[16];
   __shared__ uint32_t s_ae[16];
+  __shared__ __align__(16) uint8_t E[16 * 16];
   const int r0 = blockIdx.x * 16, warp = threadIdx.x / 32, lane = threadIdx.x % 32;
+  const bool lead = blockIdx.y == 0;
 
+  if (threadIdx.x < 16) {
+    ulonglong2* eg = reinterpret_cast<ulonglong2*>(a.p[1]) + r0 + threadIdx.x;
+    ulonglong2 l;
+    if (a.p[9]) {
+      l = line16(reinterpret_cast<const uint64_t*>(a.p[9]), a.i[4], r0 + threadIdx.x);
+      if (lead) *eg = l;
+    } else {
+      l = *eg;
+    }
+    reinterpret_cast<ulonglong2*>(E)[threadIdx.x] = l;
+  }
   for (int rr = warp; rr < 16; rr += 8) {
     const uint16_t* x = X + (size_t)(r0 + rr) * K;
     uint32_t mx = 0;
@@ -197,18 +214,20 @@ template <int FMT> DEV void form_body(const Args& a) {
       const uint32_t ae = ue4m3(__fmul_rn(__fmul_rn(sigma, alpha), __uint_as_float(K_BETA_BITS)));
       s_alpha[rr] = alpha;
       s_ae[rr] = ae;
-      reinterpret_cast<float*>(a.p[5])[r0 + rr] = alpha;
-      reinterpret_cast<float*>(a.p[6])[r0 + rr] = __fdiv_rn(1.0f, alpha);
-      reinterpret_cast<uint8_t*>(a.p[7])[r0 + rr] = (uint8_t)ae;
+      if (lead) {
+        reinterpret_cast<float*>(a.p[5])[r0 + rr] = alpha;
+        reinterpret_cast<float*>(a.p[6])[r0 + rr] = __fdiv_rn(1.0f, alpha);
+        reinterpret_cast<uint8_t*>(a.p[7])[r0 + rr] = (uint8_t)ae;
+      }
     }
   }
   __syncthreads();
 
-  {
+  if (lead) {
     uint16_t* P = reinterpret_cast<uint16_t*>(a.p[8]);
     for (int i = threadIdx.x; i < 16 * 32; i += blockDim.x) {
       const int rr = i >> 5, p = i & 31;
-      const uint32_t e = (E[(size_t)(r0 + rr) * 16 + p / 2] >> (4 * (p & 1))) & 0xF;
+      const uint32_t e = (E[rr * 16 + p / 2] >> (4 * (p & 1))) & 0xF;
       const float v = __fmul_rn(__fmul_rn(e2m1f(e), ue4m3f(s_ae[rr])), 0.0625f);
       const uint16_t w = (uint16_t)(__float_as_uint(v) >> 16) | (e & 8 ? 0x8000 : 0);
       P[(size_t)(r0 + rr) * 64 + a.i[2] + p] = w ^ (a.i[3] ? 0x8000 : 0);
@@ -216,13 +235,14 @@ template <int FMT> DEV void form_body(const Args& a) {
   }
 
   const int g = lane >> 2, t = lane & 3;
-  const uint32_t ea[4] = {*reinterpret_cast<const uint32_t*>(E + (size_t)(r0 + g) * 16 + 4 * t),
-                          *reinterpret_cast<const uint32_t*>(E + (size_t)(r0 + g + 8) * 16 + 4 * t), 0u, 0u};
+  const uint32_t ea[4] = {*reinterpret_cast<const uint32_t*>(E + g * 16 + 4 * t),
+                          *reinterpret_cast<const uint32_t*>(E + (g + 8) * 16 + 4 * t), 0u, 0u};
   const uint32_t sfa = s_ae[8 * (lane & 1) + (lane >> 2)] * 0x01010101u;
   const float al0 = s_alpha[g], al1 = s_alpha[g + 8];
   const uint16_t* x0 = X + (size_t)(r0 + g) * K;
   const uint16_t* x1 = X + (size_t)(r0 + g + 8) * K;
-  for (int c = warp; c < K / 64; c += blockDim.x / 32) {
+  const int run = K / 64 / gridDim.y;
+  for (int c = blockIdx.y * run + warp; c < (blockIdx.y + 1) * run; c += blockDim.x / 32) {
     float d[8][4];
 #pragma unroll
     for (int jb = 0; jb < 8; jb++) {
@@ -367,16 +387,16 @@ extern "C" __global__ void __launch_bounds__(256) pb(const Args a) {
 // One CTA per BM x 128 output block (BM = 128: 8 warps, 64: 4), warps 32 x 64 (two m16 x n64 regions each), BK = 128 codes,
 // STAGES deep cp.async.  C~ = the atom chained from +0 over k/64 steps, no promotion.  Modes: PLAIN y = bf16(C~ inv inv);
 // NOHASH C~, U = C~ + four BF16 m16n8k16 steps of P_A P_B^T, y from U; HASH as NOHASH, plus per region
-// ph::quad_msg_digest<2> over C~ | U (0x21) and Pearl's tickets over its four 16 x 16 subtiles of C~.
-// p0 A codes, p1 A scales, p2 B codes, p3 B scales, p4 P_A, p5 P_B, p6 inv_A, p7 inv_B, p8 y, p9 digests, p10 tickets,
-// p11 ticket key (8 words), p12 C~ out and p13 U out (FP32, m x n; null: not stored); i0 m, i1 n, i2 k
+// ph::quad_msg_digest<2> over C~ | U (0x21).
+// p0 A codes, p1 A scales, p2 B codes, p3 B scales, p4 P_A, p5 P_B, p6 inv_A, p7 inv_B, p8 y, p9 digests, p10 C~ out and
+// p11 U out (FP32, m x n; null: not stored); i0 m, i1 n, i2 k
 enum { M_PLAIN, M_NOHASH, M_HASH };
-constexpr int BN = 128, BK = 128, STAGES = 4, CS = 65;
+constexpr int BN = 128, BK = 128, STAGES = 4;
 template <int FMT, int BM> struct Geo {
   static constexpr int WARPS = BM / 32 * 2, THREADS = 32 * WARPS, SFB = BK / Fmt<FMT>::BLK;
   static constexpr int A_BYTES = BM * 64, B_BYTES = BN * 64, SA_BYTES = BM * SFB, SB_BYTES = BN * SFB;
   static constexpr int STAGE = A_BYTES + B_BYTES + SA_BYTES + SB_BYTES;
-  static constexpr int WARP_EPI = 16 * CS * 4 + 1024 + 256;
+  static constexpr int WARP_EPI = 1024;
   static constexpr int EPI = BM * 128 + BN * 128 + WARPS * WARP_EPI;
   static constexpr int SMEM = STAGES * STAGE > EPI ? STAGES * STAGE : EPI;
 };
@@ -469,8 +489,8 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
   const float* inv_a = reinterpret_cast<const float*>(a.p[6]);
   const float* inv_b = reinterpret_cast<const float*>(a.p[7]);
   uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[8]);
-  float* Cout = reinterpret_cast<float*>(a.p[12]);
-  float* Uout = reinterpret_cast<float*>(a.p[13]);
+  float* Cout = reinterpret_cast<float*>(a.p[10]);
+  float* Uout = reinterpret_cast<float*>(a.p[11]);
   const int wrow = m0 + wm * 32, wcol = n0 + wn * 64;
 
   if constexpr (MODE != M_PLAIN) {
@@ -484,10 +504,7 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
     cp_wait<0>();
     __syncthreads();
   }
-  uint8_t* wepi = smem + BM * 128 + BN * 128 + warp * G::WARP_EPI;
-  float* cs = reinterpret_cast<float*>(wepi);
-  uint64_t* scratch = reinterpret_cast<uint64_t*>(wepi + 16 * CS * 4);
-  uint32_t* zs = reinterpret_cast<uint32_t*>(wepi + 16 * CS * 4 + 1024);
+  uint64_t* scratch = reinterpret_cast<uint64_t*>(smem + BM * 128 + BN * 128 + warp * G::WARP_EPI);
 
   // c: region mi's C~ by selects, so that nothing indexes acc by mi when ptxas keeps this loop rolled (the hash mode's)
   for (int mi = 0; mi < 2; mi++) {
@@ -520,38 +537,6 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
                                                                wcol / 32 + ph::quad_chunk(lane)) * 32);
       dst[0] = make_ulonglong2(dg[0], dg[1]);
       dst[1] = make_ulonglong2(dg[2], dg[3]);
-
-#pragma unroll
-      for (int j = 0; j < 8; j++) {
-        cs[g * CS + 8 * j + 2 * t] = c[j][0];
-        cs[g * CS + 8 * j + 2 * t + 1] = c[j][1];
-        cs[(g + 8) * CS + 8 * j + 2 * t] = c[j][2];
-        cs[(g + 8) * CS + 8 * j + 2 * t + 1] = c[j][3];
-      }
-      __syncwarp();
-#pragma unroll
-      for (int h = 0; h < 2; h++) {
-        const int l = lane + 32 * h, st = l >> 4, rb = (l >> 2) & 3, cb = l & 3;
-        uint32_t v = 0;
-#pragma unroll
-        for (int f = 0; f < 16; f++) {
-          v = v * 0x9E3779B1u + __float_as_uint(cs[(4 * rb + f / 4) * CS + 16 * st + 4 * cb + f % 4]);
-          v = __funnelshift_l(v, v, 13);
-        }
-        zs[l] = v;
-      }
-      __syncwarp();
-      if (lane < 4) {
-        const uint32_t* kp = reinterpret_cast<const uint32_t*>(a.p[11]);
-        uint32_t key[8], out[8];
-#pragma unroll
-        for (int i = 0; i < 8; i++) key[i] = kp[i];
-        ph::blake3_keyed_block(key, zs + 16 * lane, out);
-        uint4* dst4 = reinterpret_cast<uint4*>(a.p[10] + ((size_t)((wrow + mi * 16) / 16) * (N / 16) + wcol / 16 + lane) * 32);
-        dst4[0] = make_uint4(out[0], out[1], out[2], out[3]);
-        dst4[1] = make_uint4(out[4], out[5], out[6], out[7]);
-      }
-      __syncwarp();
     }
     const float ia0 = inv_a[row], ia1 = inv_a[row + 8];
 #pragma unroll

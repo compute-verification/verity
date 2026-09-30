@@ -23,7 +23,6 @@ from verity.commitments.turboshake import turboshake128
 from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c4 as F
-from verity_pouw.schemes import pearl_kw as P
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import twin as T  # noqa: E402
@@ -114,22 +113,16 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
             digests[i, hc] = np.frombuffer(turboshake128(c[i, cols].astype("<u4").tobytes() + u[i, cols].astype("<u4").tobytes(),
                                                          C.D_MESSAGE, 32), np.uint8)
     leaves = np.empty((m // F.TILE, n // F.TILE, 32), np.uint8)
-    tickets = np.empty((m // P.TILE, n // P.TILE, 32), np.uint8)
     for ti_ in range(m // F.TILE):
         for tj_ in range(n // F.TILE):
             rs, cs = slice(F.TILE * ti_, F.TILE * (ti_ + 1)), slice(F.TILE * tj_, F.TILE * (tj_ + 1))
-            checked = C.Checked(c[rs, cs].tolist(), u[rs, cs].tolist())
-            leaves[ti_, tj_] = np.frombuffer(C.leaf(checked), np.uint8)
-            per = F.TILE // P.TILE
-            for idx, tk in enumerate(s.tickets(noise, checked)):
-                tickets[per * ti_ + idx // per, per * tj_ + idx % per] = np.frombuffer(tk, np.uint8)
+            leaves[ti_, tj_] = np.frombuffer(C.leaf(C.Checked(c[rs, cs].tolist(), u[rs, cs].tolist())), np.uint8)
     row_hash = np.frombuffer(b"".join(turboshake128(xa[i].astype("<u2").tobytes()[o:o + SEGMENT], D_ROWS, 32)
                                       for i in range(m) for o in range(0, 2 * k, SEGMENT)), np.uint8)
 
     le = lambda arr, dt: np.ascontiguousarray(arr, dt).tobytes()  # noqa: E731
     files = {
         "xa": le(xa, "<u2"), "xb": le(xb, "<u2"), "seed_a": seed_a, "seed_b": seed_b,
-        "key": P.subkey("jackpot", seed_a),
         "lines_ea": le(lea, np.uint8), "lines_eb": le(leb, np.uint8),
         "lines_fa": le(lfa, np.uint8), "lines_fb": le(lfb, np.uint8),
         "fat": le(pack(fa.T.copy()), np.uint8), "fbt": le(pack(fb.T.copy()), np.uint8),
@@ -140,7 +133,7 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
         "b_inv": le(inv_b, "<u4"), "b_ae": le(b.ae, np.uint8),
         "pa": le(pa, "<u2"), "pb": le(pb, "<u2"), "g": le(g, "<u4"), "bf": le(bf, "<u4"),
         "c": le(c, "<u4"), "u": le(u, "<u4"), "y": le(unscale(u), "<u2"), "y_plain": le(unscale(c), "<u2"),
-        "digests": le(digests, np.uint8), "leaves": le(leaves, np.uint8), "tickets": le(tickets, np.uint8),
+        "digests": le(digests, np.uint8), "leaves": le(leaves, np.uint8),
     }
     manifest = {
         "scheme": s.name, "fmt": fmt_name, "shape": {"m": m, "n": n, "k": k}, "block": fmt.block,
