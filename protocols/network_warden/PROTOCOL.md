@@ -70,10 +70,17 @@ A link-window is accepted if:
 - its status is complete;
 - every slot equals the Program's grid (for a committed record: its digest equals the Program grid's digest);
 - its declared clock sync is in the set;
-- its record is present by the verdict deadline.
+- it has exactly one record, present by the verdict deadline.
 
-Anything else is a violation: `status:<reason>`, `advice`, `mismatch` or `no-verdict`. It is **recorded, and the run is
-rejected**, as a policy signal. There is no halt: later windows are still checked.
+Anything else is a violation, and the first that applies names it:
+- `no-verdict`: no record by the deadline;
+- `duplicate`: more than one record for the link-window, whatever they say (the audit never picks one);
+- `status:<reason>`: the status is not complete;
+- `advice`: the declared clock sync is outside Σ_sync;
+- `mismatch`: a slot differs from the Program's grid (for a committed record, the digest differs).
+
+A violation is **recorded, and the run is rejected**, as a policy signal. There is no halt: later windows are still
+checked.
 
 A declared sync outside Σ_sync is an `advice` violation in its own window only. The Program's grids are computed from
 the syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives a schedule), and every other window is

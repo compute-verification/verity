@@ -59,6 +59,18 @@ def test_status_advice_and_missing_record_are_violations():
     assert bad[0].violation == "advice"
 
 
+def test_more_than_one_record_for_a_window_is_a_violation():
+    """A second record for window 1 makes it a duplicate, whichever comes first and even if the two agree. Another
+    link's record for the same window is not a duplicate."""
+    records = run_shaper(FRAMES, honest_ready(), SYNCS, Warden("responses", P))
+    bad = Record("responses", 1, records[0].grid, records[1].status)
+    for recs in ([bad] + records, records + [bad], records + [records[1]]):
+        verdicts = Audit().check_link("responses", recs, FRAMES, SYNCS, SYNC_SET, P)
+        assert [v.violation for v in verdicts] == [None, "duplicate", None]
+    other = Record("requests", 1, records[1].grid, records[1].status)
+    assert Audit().check_link("responses", records + [other], FRAMES, SYNCS, SYNC_SET, P)[1].accepted
+
+
 def test_an_out_of_set_sync_flags_only_its_own_window():
     """Window 1 declares δ = 3, outside the set. Only window 1 is an advice violation. Window 0's grid doesn't read
     window 1's sync, and window 2 is checked against the grid the declared syncs give it, so tampering with it is a

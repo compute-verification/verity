@@ -5,7 +5,8 @@ A link-window is **accepted** if three things hold:
 - every slot of its grid equals the Program's grid;
 - the window's declared clock sync is in the protocol's set.
 
-It must also be settled by the verdict deadline. Anything else is a **violation**. It is recorded and the run is
+It must also have exactly one record, settled by the verdict deadline: a link-window with more than one record is a
+`duplicate` violation, whatever the records say. Anything else is a **violation**. It is recorded and the run is
 rejected, as a policy signal. There is no halt: later windows are still checked and recorded. Every bound in
 `capacity` holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
 was rejected.
@@ -20,6 +21,7 @@ compares its digest with the digest of the Program's grid, which is exact up to 
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -32,7 +34,8 @@ from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, exp
 class Verdict:
     link: str
     window: int
-    violation: str | None  # None when accepted; otherwise "status:<reason>", "advice", "mismatch" or "no-verdict"
+    # None when accepted; otherwise "status:<reason>", "advice", "mismatch", "duplicate" or "no-verdict"
+    violation: str | None
 
     @property
     def accepted(self) -> bool:
@@ -56,13 +59,18 @@ class Audit:
     ) -> list[Verdict]:
         """Check one link's records for windows 0 … len(syncs) − 1 against the Program's grids for the declared syncs."""
         expected = expected_grids(frames, syncs, params)
-        by_window = {r.window: r for r in records if r.link == link}
+        by_window: dict[int, list[Record | CommittedRecord]] = defaultdict(list)
+        for r in records:
+            if r.link == link:
+                by_window[r.window].append(r)
         out = []
         for w, sync in enumerate(syncs):
-            record = by_window.get(w)
-            if record is None:
+            found = by_window.get(w, [])
+            if not found:
                 violation = "no-verdict"
-            elif not record.status.complete:
+            elif len(found) > 1:
+                violation = "duplicate"
+            elif not (record := found[0]).status.complete:
                 violation = f"status:{record.status.reason.value}"
             elif sync not in sync_set:
                 violation = "advice"

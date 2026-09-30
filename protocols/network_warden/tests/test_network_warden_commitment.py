@@ -50,7 +50,7 @@ def verdicts(records):
 
 
 def test_committed_audit_matches_raw_audit():
-    """Honest, late, tampered and faulted runs get the same verdicts committed as raw."""
+    """Honest, late, tampered, faulted and duplicated runs get the same verdicts committed as raw."""
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Warden("responses", P))
     late_ready = honest_ready()
     late_ready[3] = 7
@@ -64,10 +64,12 @@ def test_committed_audit_matches_raw_audit():
     for _ in range(P.buckets):
         w.tick()
     faulted.append(w.close_window())
-    for records in (honest, late, tampered, faulted):
+    duplicated = tampered[:1] + honest
+    for records in (honest, late, tampered, faulted, duplicated):
         assert verdicts([commit(r, P) for r in records]) == verdicts(records)
     assert verdicts([commit(r, P) for r in honest]) == [None, None, None]
     assert verdicts([commit(r, P) for r in late])[1] == "mismatch"
+    assert verdicts([commit(r, P) for r in duplicated])[0] == "duplicate"
 
 
 def test_a_status_the_digest_disagrees_with_is_a_mismatch():
