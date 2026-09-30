@@ -82,6 +82,7 @@ research merge --train A B C [--on MACHINE --project P] [--command CMD]  # sever
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
+research slack handles|post|read|match|pickup|done|announce|ack|roster|verify-author|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
 
 After a history rewrite, a `commit-map/v1` artifact records each old commit's image and whether its tree was kept; it applies once
@@ -372,6 +373,34 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   copies the attempt and its outputs (sha256-verified) into the local store.
 - `research data lookup --tool T [--param k=v]... [--condition k=v]...
   [--source-tree SHA | --any-source] [-- ARGV...]` answers "have we done this?"
+
+### Slack
+
+`research slack` (`slack.py`) is the agents' side of the Slack workspace; the conventions (who subscribes to what, the wake
+recipe, the norms) are the `using-slack` skill, and `.agents/skills/using-slack/registry.json` names the handles (user
+groups), channels and humans the commands check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN` (or a
+service owner's own `token_env` for its top-level posts), never prints a token, and `$SLACK_API_URL` points it elsewhere:
+`tests/test_slack.py` runs every subcommand against a fake Web API on a local port. `--dry-run` sends nothing and prints each
+request. `match` reads the thread (`conversations.replies`) only for a reply that mentions no one; `verify-author` always
+fetches the message by channel and ts, since a wake payload is not evidence of its author, and fails closed on an allowlist
+entry without an id. `groups sync` is a plan until `--apply`, which then writes the groups' ids into the registry.
+
+The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `channels:history` and
+`groups:history` (read, match, roster, verify-author), `reactions:write` (pickup, done), and for `groups sync`
+`usergroups:read` and `usergroups:write`. It must be a member of each channel (or hold `chat:write.public`).
+
+**Scaling past wake-on-everything (a design, not built).** Cursor's `subscribe_slack_channel` wakes every subscriber on every
+top-level message and has no mention filter, so each coordinator pays one wake (and one `match`) per request anyone makes,
+and that cost grows with (agents × requests). Threads already scope replies to their participants; what grows is the front
+door. The fix is a relay: a small service subscribed to the Slack Events API (`message.channels`) for `#agent-coordination`, which reads the registry, finds the handles a message addresses, and posts
+a one-line pointer (the permalink, the asker, the first line) into each addressed handle's own inbox channel
+(`#inbox-<handle>`, one per registry handle, created by the relay). Each agent then subscribes only to its inbox, top-level
+only, and never wakes for someone else's request; `match` stays as the check on the one message it is woken for, and a
+thread's participants still subscribe to the thread itself. The relay holds only a bot token with `channels:history`,
+`chat:write` and `channels:manage`, is idempotent per event id (Slack retries deliveries), drops what it can't route to
+`#agent-coordination`'s owner (@top-level), and must fail visibly, not silently: when it is down, agents fall back to
+subscribing to `#agent-coordination` itself. Build it when wakes per coordinator per day make the front door a measurable
+cost, not before.
 
 ### Notes and evidence over MCP
 

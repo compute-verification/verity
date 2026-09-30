@@ -9,8 +9,8 @@ import pytest
 
 #: a cloud VM's Cursor secrets stand in for the laptop's config files (pods/runpod.py, store/remote.py), a recorded check's step
 #: holds its run's variables, and a pod's shell its own: no test may reach the real account or bucket, or act as a run, through them
-#: (nor extend or read a real machine's lease: a Nebius host exports LEASE_DIR)
-CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_")
+#: (nor extend or read a real machine's lease: a Nebius host exports LEASE_DIR; nor post to the real Slack workspace)
+CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_", "SLACK_")
 
 
 @pytest.fixture(autouse=True)

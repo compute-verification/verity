@@ -233,6 +233,8 @@ Push your branch after every commit: `research notes push <you>` (never `main`, 
 coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work
 origin lacks.
 
+Slack (workspace "compute": handles, channels, threads, who subscribes, the wake recipe): `.agents/skills/using-slack/SKILL.md`.
+
 ## Skills
 
 When creating or modifying a skill in `.agents/skills/`, use

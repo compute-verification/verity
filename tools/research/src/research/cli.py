@@ -39,6 +39,8 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
+  research slack handles|post|read|match|pickup|done|announce|ack|roster|verify-author|groups sync ... [--dry-run]
+                                                 # agents on Slack: handles, channels, threads (research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -868,6 +870,10 @@ def main(argv: list[str] | None = None) -> int:
         from .commitmap import main as git_main
 
         return git_main(rest)
+    if cmd == "slack":
+        from .slack import main as slack_main
+
+        return slack_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 
