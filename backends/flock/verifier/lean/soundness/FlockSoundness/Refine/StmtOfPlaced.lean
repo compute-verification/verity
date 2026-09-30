@@ -113,7 +113,6 @@ theorem lkCnt_cast (lk : LookupTable) (hb : lk.bits ≤ 32) (i c : ℕ) :
       obtain ⟨-, -, hj, hh'⟩ := fwd h j hh hjb hi
       exact ⟨hh'.symm, by omega, hj.symm⟩
     · rintro ⟨rfl, rfl, rfl⟩
-      dsimp only
       refine ⟨⟨Nat.mod_lt _ hnh, by omega, by omega⟩, by omega, hbit, hq, ?_⟩
       rw [Nat.mul_comm] at hdm
       omega
@@ -190,7 +189,11 @@ theorem dCnt_cast (d : Array (ℕ × ℕ)) (i c : ℕ) : ((dCnt d i c : ℕ) : Z
   congr 2
   apply List.filter_congr
   intro x _
-  simp
+  by_cases hx : x = (i, c)
+  · subst hx
+    simp
+  · rw [decide_eq_false hx]
+    exact beq_eq_false_iff_ne.2 hx
 
 /-- **`stmtOf`'s `A₀` is `placedA`**, under `PlacedWF`. -/
 theorem stmtOf_A₀ (st : Stmt) (h : StmtWF st) (hw : PlacedWF st)
@@ -215,5 +218,6 @@ theorem stmtOf_eq_placed (st : Stmt) (h : StmtWF st) (hw : PlacedWF st)
     Model.Statement.mk st.m st.c.kLog h.hk h.hk6 ⟨st.pin, h.pin⟩ (placedA st) (placedB st) regions =
       stmtOf st h regions := by
   rw [← stmtOf_A₀ st h hw regions, ← stmtOf_B₀ st h hw regions]
+  rfl
 
 end FlockSoundness.Refine
