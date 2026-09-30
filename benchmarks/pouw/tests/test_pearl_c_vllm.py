@@ -201,7 +201,7 @@ def test_a_call_over_whole_128_row_tiles_runs_gpu_1s_fused_path(device_run):
     kernel.dev.log.clear()
     y = run.gemm(0, torch.randn(128, 1024).to(torch.bfloat16), weights[0], None)
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-    assert run.pipes[(0, 128, frozenset(), True, "serial")][0].fused and "hash_msg_v" not in names
+    assert run.pipes[(0, 128, frozenset(), True, "serial", False)][0].fused and "hash_msg_v" not in names
     assert names[-2:] == ["gemm_pearlc_b", "hash_leaf_p"] and {n: p for n, _, p, _ in kernel.dev.log}["gemm_pearlc_b"][4] == y.data_ptr()
 
 
