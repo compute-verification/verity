@@ -210,3 +210,38 @@ def test_the_fused_producer_writes_derive_rows_wides_a_and_hashes_those_bytes(m,
                   T.buffer(blake3(b"pearl-c/v0/seed-A")), T.buffer(salt), T.buffer(root_b), seeds2], [m, rb, n, tlen, mode, index])
         assert a2.raw == wide.raw and leaves2.raw == row_leaves.raw
         assert (seeds2.raw == seeds.raw) if mode == 2 else not any(seeds2.raw)
+
+
+@pytest.mark.parametrize("m,rb,n,block", [(2, 32768, 8192, 1024), (3, 768, 256, 32), (2, 1024, 256, 64)])
+def test_the_coalesced_producer_stores_the_rows_and_commits_those_bytes(m, rb, n, block):
+    """derive_rows_b3s_coal (16-byte coalesced stores, segments staged in padded shared memory, then hashed): its A equals
+    derive_rows_wide's byte for byte, and its row leaves and -h3 row seeds are the reference's over those stored bytes (3
+    segments: an odd level); derive_rows_coal and derive_rows_v16 store the same bytes without hashing."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "protocols" / "pouw"))
+    from verity.commitments.blake3 import blake3
+    from verity_pouw.protocol import Context, Matmul, Shape
+    from verity_pouw.schemes import pearl_c as PC
+
+    index = 5
+    salt, root_b = hashlib.sha256(b"coal salt").digest(), hashlib.sha256(b"coal root_B").digest()
+    ctx = Context(salt, Matmul(index, Shape(m, rb // 4, 64), 0), bytes(32), root_b)
+    d = PC.activation_domain(ctx, "h3")
+    y = T.buffer(data(f"coal y {m} {rb} {n}", 2 * m * n))
+    wide = T.buffer(m * rb)
+    T.launch("derive_rows_wide", -(-m * rb // 2 // 256), 256, [y, wide], [m, rb, n])
+    rows = [wide.raw[r * rb:(r + 1) * rb] for r in range(m)]
+    tmpl, tlen = template(ROW)
+    for mode in (1, 2):
+        a2, leaves, seeds = T.buffer(m * rb), T.buffer(32 * m), T.buffer(32 * m)
+        T.launch("derive_rows_b3s_coal", m, block,
+                 [y, a2, leaves, T.buffer(d.domain_id), T.buffer(tmpl), T.buffer(level_keys(d.domain_id)),
+                  T.buffer(blake3(b"pearl-c/v0/seed-A")), T.buffer(salt), T.buffer(root_b), seeds], [m, rb, n, tlen, mode, index])
+        assert a2.raw == wide.raw
+        assert [leaves.raw[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(r, r, ROW, rows[r]) for r in range(m)]
+        want = b"".join(PC.row_seed(ctx, r, rows[r]) for r in range(m)) if mode == 2 else bytes(32 * m)
+        assert seeds.raw == want
+    for kernel, grid, blk in (("derive_rows_coal", m, block), ("derive_rows_v16", -(-m * rb // 16 // 256), 256)):
+        out = T.buffer(m * rb)
+        T.launch(kernel, grid, blk, [y, out], [m, rb, n])
+        assert out.raw == wide.raw, kernel

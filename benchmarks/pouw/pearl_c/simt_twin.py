@@ -20,7 +20,7 @@ KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "h
            "hash_tree_leaves", "hash_tree_small", "hash_rows_wt", "lat_chain", "derive_rows_hash", "derive_rows_wide",
            "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm",
            "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s", "b3_seeds",
-           "b3s_seg_trees", "derive_rows_b3s", "derive_rows_vec")
+           "b3s_seg_trees", "derive_rows_b3s", "derive_rows_vec", "derive_rows_b3s_coal", "derive_rows_coal", "derive_rows_v16")
 
 PRELUDE = r"""
 #include <condition_variable>
@@ -34,6 +34,7 @@ PRELUDE = r"""
 #define __host__
 #define __constant__ static
 #define __shared__ static
+#define __align__(n) __attribute__((aligned(n)))
 #define __global__
 #define __launch_bounds__(...)
 #define __forceinline__ inline

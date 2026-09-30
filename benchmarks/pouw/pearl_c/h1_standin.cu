@@ -281,3 +281,112 @@ extern "C" __global__ void __launch_bounds__(128) derive_rows_vec(const Args a) 
   uint32_t w[64];
   derive_segment(a, t / segs, (uint32_t)(t % segs), w);
 }
+
+// ---- A's producer, coalesced: the chain's store layout with the -h2 / -h3 commitment fused ----------------------------
+// derive_rows_b3s_coal: a CTA a row (1,024 threads).  Every thread derives and stores 16-byte pieces of the row, consecutive
+// threads consecutive pieces (coalesced, as a plain producer stores), and stages each piece in shared memory, one 256-byte
+// segment every 272 bytes (the pad spreads a segment's 16-byte reads over all banks).  Then thread j < rb / 256 reads
+// segment j back, hashes it under its key (computed while the loads were in flight) with b3s_segment_regs, and the block builds
+// the row's segment tree; i4 = 2 adds -h3's row seed.  The hashed words are the stored words.  Arguments as derive_rows_b3s's
+// mode 1 and 2 (p0 y, p1 A, p2 row leaves, p3 domain id, p4 key template, p5 segment level keys, p6 seed key, p7 salt, p8
+// root_B, p9 row seeds; i0 m, i1 rb at most 32 KB, a multiple of 256 with 128 | n, i2 n, i3 template length, i4 mode, i5 index).
+constexpr int COAL_SEGS = 128, COAL_PAD = 68;
+extern "C" __global__ void __launch_bounds__(1024) derive_rows_b3s_coal(const Args a) {
+  __shared__ __align__(16) uint32_t seg[COAL_SEGS * COAL_PAD];
+  __shared__ uint32_t lv[COAL_SEGS][8];
+  const uint64_t r = blockIdx.x;
+  const uint32_t rb = (uint32_t)a.i[1], n = (uint32_t)a.i[2], segs = rb / B3S_SEG, pieces = rb / 16;
+  const uint32_t tid = threadIdx.x;
+  const uint4* y = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n);
+  uint4* dst = reinterpret_cast<uint4*>(a.p[1] + r * rb);
+  uint4 v[2];
+#pragma unroll
+  for (int p = 0; p < 2; p++) {
+    const uint32_t q = tid + p * blockDim.x;
+    if (q < pieces) v[p] = y[(8 * q % n) / 8];
+  }
+  uint32_t key[8];
+  if (tid < segs) {
+    uint32_t dom[8], tmpl[16];
+    load_key(a.p[3], dom);
+#pragma unroll
+    for (int w = 0; w < 16; w++) tmpl[w] = reinterpret_cast<const uint32_t*>(a.p[4])[w];
+    b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], r, r, rb, tid, key);
+  }
+#pragma unroll
+  for (int p = 0; p < 2; p++) {
+    const uint32_t q = tid + p * blockDim.x;
+    if (q < pieces) {
+      const uint4 x = make_uint4(v[p].x ^ 0x3C003C00u, v[p].y ^ 0x3C003C00u, v[p].z ^ 0x3C003C00u, v[p].w ^ 0x3C003C00u);
+      dst[q] = x;
+      *reinterpret_cast<uint4*>(&seg[(q / 16) * COAL_PAD + (q % 16) * 4]) = x;
+    }
+  }
+  __syncthreads();
+  if (tid < segs) {
+    uint32_t w[64], h[8];
+#pragma unroll
+    for (int q = 0; q < 16; q++) {
+      const uint4 x = *reinterpret_cast<const uint4*>(&seg[tid * COAL_PAD + 4 * q]);
+      w[4 * q] = x.x; w[4 * q + 1] = x.y; w[4 * q + 2] = x.z; w[4 * q + 3] = x.w;
+    }
+    b3s_segment_regs(key, w, h);
+#pragma unroll
+    for (int i = 0; i < 8; i++) lv[tid][i] = h[i];
+  }
+  __syncthreads();
+  int level = 0;
+  for (uint32_t wd = segs; wd > 1; wd = (wd + 1) / 2, level++) {
+    const uint32_t half = wd / 2;
+    uint32_t h[8];
+    if (tid < half) {
+      uint32_t lk[8], m[16];
+      load_key(a.p[5] + 32ull * level, lk);
+#pragma unroll
+      for (int q = 0; q < 8; q++) { m[q] = lv[2 * tid][q]; m[8 + q] = lv[2 * tid + 1][q]; }
+      blake3_block(lk, m, h);
+    } else if (tid == half && (wd & 1)) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) h[q] = lv[wd - 1][q];
+    }
+    __syncthreads();
+    if (tid < half || (tid == half && (wd & 1))) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) lv[tid][q] = h[q];
+    }
+    __syncthreads();
+  }
+  if (tid == 0) {
+    store_cv(a.p[2] + 32 * r, lv[0]);
+    if (a.i[4] == 2) {
+      uint32_t sd[8];
+      b3_seed(a.p[6], a.p[7], lv[0], a.p[8], (uint64_t)(uint32_t)a.i[5] << 32 | r, sd);
+      store_cv(a.p[9] + 32 * r, sd);
+    }
+  }
+}
+
+// The same producer without the hashing (its matched baseline): a CTA a row, 1,024 threads, 16-byte coalesced stores.  p0 y,
+// p1 A; i0 m, i1 rb, i2 n
+extern "C" __global__ void __launch_bounds__(1024) derive_rows_coal(const Args a) {
+  const uint64_t r = blockIdx.x;
+  const uint32_t rb = (uint32_t)a.i[1], n = (uint32_t)a.i[2], pieces = rb / 16;
+  const uint4* y = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n);
+  uint4* dst = reinterpret_cast<uint4*>(a.p[1] + r * rb);
+  for (uint32_t q = threadIdx.x; q < pieces; q += blockDim.x) {
+    const uint4 v = y[(8 * q % n) / 8];
+    dst[q] = make_uint4(v.x ^ 0x3C003C00u, v.y ^ 0x3C003C00u, v.z ^ 0x3C003C00u, v.w ^ 0x3C003C00u);
+  }
+}
+
+// The fastest plain whole-row producer here: a thread a 16-byte piece over the whole of A, 256-thread CTAs.  p0 y, p1 A; i0 m,
+// i1 rb, i2 n
+extern "C" __global__ void __launch_bounds__(256) derive_rows_v16(const Args a) {
+  const uint64_t t = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const uint32_t rb = (uint32_t)a.i[1], n = (uint32_t)a.i[2], pieces = rb / 16;
+  if (t >= (uint64_t)a.i[0] * pieces) return;
+  const uint64_t r = t / pieces;
+  const uint32_t q = (uint32_t)(t % pieces);
+  const uint4 v = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n)[(8 * q % n) / 8];
+  reinterpret_cast<uint4*>(a.p[1] + r * rb)[q] = make_uint4(v.x ^ 0x3C003C00u, v.y ^ 0x3C003C00u, v.z ^ 0x3C003C00u, v.w ^ 0x3C003C00u);
+}
