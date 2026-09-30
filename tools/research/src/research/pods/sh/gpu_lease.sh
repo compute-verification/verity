@@ -360,6 +360,7 @@ until { [ -z "$(ahead)" ] || may_backfill; } && take "$n"; do
     echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&"$wfd"
     MYWAIT="$dir/wait.$(date -u +%s%N).$$"
     mv "$dir/.wait.$$" "$MYWAIT"
+    echo "gpu-lease: waiting for $n GPU(s)${on:+ in --on $on}, queued as $(basename "$MYWAIT")" >&2
   fi
   sleep "${GPU_LEASE_POLL_S:-15}"
 done

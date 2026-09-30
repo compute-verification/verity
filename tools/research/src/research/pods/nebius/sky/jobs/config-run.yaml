@@ -1,5 +1,8 @@
-# A vLLM deployment (a config run, --config-run 1) on the Nebius cluster: two chained managed-job tasks, the Build in queue
-# deployments-cpu and the Commit in deployments-gpu (kueue.yaml: GPU generation and CPU checking in separate queues). Interface agreed with the vLLM coordinator
+# A vLLM deployment (a config run, --config-run 1) on the Nebius cluster: three chained managed-job tasks, the Build and the replay
+# in queue deployments-cpu and the Commit in deployments-gpu (kueue.yaml: GPU generation and CPU checking in separate queues).
+# With --env REPLAY_DEFERRED=1 (a tree with the vLLM coordinator's PR A and PR B) the Commit seals a replay bundle in
+# <sweep>/<row>/commit/replay_bundle_p1/ and the replay task replays it on CPU; with the default 0 the Commit replays on its GPU and
+# the replay task exits at once. Interface agreed with the vLLM coordinator
 # (lanes/nebius-infra/20260930T0729Z-answer-from-vllm-coordinator-config-run-split.md):
 #   build: CPU only (0 GPU)   `row stage build  ROW ROLE REPO REV --config-run 1 --replay-k 460`   Build + the strict word check
 #   gpu:   1 GPU (TP2: 2)     `row stage commit ROW ROLE REPO REV --config-run 1 --replay-k 460`   one instrumented engine run, the
@@ -153,6 +156,7 @@ envs:
   HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
   GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
   OV_NOISY: "true"
+  REPLAY_DEFERRED: "0"      # 1: the Commit seals a replay bundle and the replay task replays it on CPU (needs PR A and PR B)
   UV_CACHE_DIR: /workspace/jobs/cache/uv
   UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
 
@@ -192,8 +196,13 @@ run: |
     | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("build", ""))' \
     2> /dev/null || true)
   echo "commit cites the Build: run ${build_run:-none}, artifact ${build_art:-none}"
-  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
-    ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
+  # the replay task reads this run id back to cite the Commit, as this task cites the Build
+  run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
+  echo "$run_id" > "$SWEEP_DIR/$ROW/pipeline-commit-run"
+  deferred=()
+  [ "${REPLAY_DEFERRED:-0}" != 1 ] || deferred=(--replay-deferred 1)
+  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --id "$run_id" --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
+    ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"}
 
 config:
   ssh:
@@ -204,6 +213,107 @@ config:
           kueue.x-k8s.io/queue-name: deployments-gpu
           kueue.x-k8s.io/priority-class: circuits-gpu      # ahead of queued 0-GPU Builds
           ov.noisy: "true"
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
+
+---
+
+name: replay
+
+resources:
+  infra: ssh/vy-nebius
+  cpus: 8          # a batch-8 replay runs 6-16 min of CPU (vLLM coordinator 16:09Z); it bursts onto idle cores
+  labels:
+    budget-line: nebius-config-run
+  memory: 64         # the sealed bundle plus the weight fields it opens; VY_REPLAY_MEMORY overrides
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "8"
+  REPLAY_DEFERRED: "0"      # the Commit's setting: 0 means the Commit replayed on the GPU, so this task has nothing to do
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  SWEEP_DIR: /workspace/cp/sweep
+  PY: /workspace/jobs/venv312/bin/python
+  PY312: /workspace/jobs/venv312/bin/python
+  RESEARCH_PY: /workspace/jobs/bin/py312
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  HOT_ROOT: /workspace/jobs/hot
+  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
+  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
+  GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
+  VERITY_UNIT_RULE_CACHE: /workspace/jobs/cache/unit-rules
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  [ "${REPLAY_DEFERRED:-0}" = 1 ] || exit 0          # nothing deferred: no tree copy, no bootstrap
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
+  chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
+  mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
+  cd "$SRC/integrations/vllm"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"     # skipped, without the lock, once this tree, role and venv passed
+
+run: |
+  set -euo pipefail
+  if [ "${REPLAY_DEFERRED:-0}" != 1 ]; then echo "replay: not deferred (REPLAY_DEFERRED=0), the Commit replayed on its GPU"; exit 0; fi
+  export PATH=/workspace/jobs/venv312/bin:$PATH
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
+  export PATH=$CUDA_HOME/bin:$PATH
+  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}   # as the build task: no GPU, the host's libcuda
+  # one Attempt citing the Build's and the Commit's artifacts (research tool vllm.replay, from PR B)
+  art() {   # outputs[$2] of the published Attempt whose run id is in $1, "" when none
+    local run; run=$(cat "$1" 2> /dev/null || true)
+    [ -n "$run" ] || return 0
+    /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$run" --json 2> /dev/null \
+      | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get(sys.argv[1], ""))' "$2" \
+      2> /dev/null || true
+  }
+  build_art=$(art "$SWEEP_DIR/$ROW/two-task-build-run" build)
+  commit_art=$(art "$SWEEP_DIR/$ROW/pipeline-commit-run" verdict)
+  echo "replay cites the Build ${build_art:-none} and the Commit ${commit_art:-none}"
+  rc=0
+  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --tool vllm.replay --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
+    ${build_art:+--input "build=$build_art"} ${commit_art:+--input "commit=$commit_art"} \
+    -- "$PY" -m verity_vllm.pipeline.cli row stage replay "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 || rc=$?
+  # the sealed bundle (several GB at batch 8) goes once its replay has written the record; a failed replay keeps it for a retry
+  if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*; fi
+  exit "$rc"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-cpu
+          kueue.x-k8s.io/priority-class: circuits
+          verity.dev/build: "true"
       spec:
         terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
         containers:

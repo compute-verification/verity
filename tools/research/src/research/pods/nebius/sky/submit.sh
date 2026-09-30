@@ -91,18 +91,18 @@ dest=/workspace/research/trees/$lane
 research pods sync "$machine" "$repo" --dest "$dest"
 secrets=()
 for s in R2_ENDPOINT R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do secrets+=(--secret "$s"); done
-if [ -n "${VY_ROW_CLASS:-}${VY_BUILD_MEMORY:-}${VY_GPU_MEMORY:-}" ]; then   # config-run: its two tasks' memory (and TP2's GPUs)
+if [ -n "${VY_ROW_CLASS:-}${VY_BUILD_MEMORY:-}${VY_GPU_MEMORY:-}${VY_REPLAY_MEMORY:-}" ]; then   # config-run: its tasks' memory (and TP2's GPUs)
   rendered=$(mktemp --suffix=.yaml)
-  python3 - "$yaml" "${VY_ROW_CLASS:-}" "${VY_BUILD_MEMORY:-}" "${VY_GPU_MEMORY:-}" > "$rendered" <<'PY'
+  python3 - "$yaml" "${VY_ROW_CLASS:-}" "${VY_BUILD_MEMORY:-}" "${VY_GPU_MEMORY:-}" "${VY_REPLAY_MEMORY:-}" > "$rendered" <<'PY'
 import re, sys
-text, cls, build_gb, gpu_gb = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4]
+text, cls, build_gb, gpu_gb, replay_gb = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 table = {"small": (64, 64, 1), "dense": (160, 170, 1), "long": (160, 170, 1), "moe": (256, 170, 1), "b64": (256, 170, 1),
          "tp2": (160, 340, 2)}                          # the gpu task: batch 8+ Commits use ~130 GiB (epoch-run 16:35Z)
 if cls and cls not in table:
     sys.exit(f"VY_ROW_CLASS={cls}: one of {sorted(table)}")
 parts = text.split("\n---\n")
-if len(parts) != 3:
-    sys.exit("VY_ROW_CLASS / VY_BUILD_MEMORY / VY_GPU_MEMORY apply to a two-task pipeline template (config-run)")
+if len(parts) not in (3, 4):
+    sys.exit("VY_ROW_CLASS / VY_BUILD_MEMORY / VY_GPU_MEMORY / VY_REPLAY_MEMORY apply to a pipeline template (config-run)")
 build, gpu, n = table.get(cls) or (None, None, None)
 build, gpu = int(build_gb or build or 0), int(gpu_gb or gpu or 0)
 if build:
@@ -113,6 +113,8 @@ if gpu:
 if n:
     parts[2] = re.sub(r"(?m)^  accelerators: RTXPRO6000:\d+$", f"  accelerators: RTXPRO6000:{n}", parts[2])
     parts[2] = re.sub(r"(?m)^  cpus: \d+", f"  cpus: {4 * n}", parts[2])                           # the GPU queue's 4 vCPU per GPU
+if replay_gb and len(parts) == 4:
+    parts[3] = re.sub(r"(?m)^  memory: \d+", f"  memory: {int(replay_gb)}", parts[3])
 sys.stdout.write("\n---\n".join(parts))
 PY
   yaml=$rendered
