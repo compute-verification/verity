@@ -4,13 +4,17 @@ checkpoints, and the next run finishes the tile's replayed debit under the cap."
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import importlib.util
 import json
+import multiprocessing
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 def _load(name: str, file: str):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / "pearl_c4" / file)
@@ -22,6 +26,14 @@ def _load(name: str, file: str):
 
 R = _load("pearl_c4_real", "real.py")
 RT = _load("pearl_c4_real_table", "real_table.py")
+
+
+@pytest.fixture(autouse=True)
+def forked_workers(monkeypatch):
+    """real.py's pool with forked workers, which inherit `pearl_c4_real` from this process.  A forkserver's workers (Python
+    3.14's default on Linux) import the pool's callable by module name, and this module's name is importable only here."""
+    fork = multiprocessing.get_context("fork")
+    monkeypatch.setattr(R, "ProcessPoolExecutor", functools.partial(ProcessPoolExecutor, mp_context=fork))
 
 NAME, K, M, N = "model.layers.0.self_attn.q_proj", 1024, 128, 128
 
