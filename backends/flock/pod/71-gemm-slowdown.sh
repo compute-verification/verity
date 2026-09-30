@@ -21,10 +21,22 @@ if [ -d /run/gpu-lease ] && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
   done
   [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "no free GPU among ${GPUS:-4 5 6 7}"; exit 75; }
 fi
-# a machine whose /workspace the run's user can't write (vy-nebius-1): the builds and venvs go under its cache
-[ -w /workspace ] || export FLOCK_WORK=${FLOCK_WORK:-/workspace/cache/flock}
+# a machine whose /workspace the run's user can't write (vy-nebius-1): the builds and venvs go under its cache, or under
+# /workspace/jobs in a Kueue job (another uid); staged statements are kept there for the next attempt (FLOCK_STAGE_CACHE)
+if [ ! -w /workspace ] && [ -z "${FLOCK_WORK:-}" ]; then
+  if mkdir -p /workspace/cache/flock 2>/dev/null && [ -w /workspace/cache/flock ]; then export FLOCK_WORK=/workspace/cache/flock
+  else export FLOCK_WORK=/workspace/jobs/flock-m0; mkdir -p $FLOCK_WORK; fi
+fi
+export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-${FLOCK_WORK:-/workspace}/stage-cache}
+# a Kueue job's template sets its own cargo target dir; the builds here keep theirs. Its pod has no CPU limit: the prover's
+# threads are the job's vCPUs
+unset CARGO_TARGET_DIR
+[ -n "${RAYON_NUM_THREADS:-}" ] || export RAYON_NUM_THREADS=${OMP_NUM_THREADS:-$(nproc)}
 # CUDA 13.3 (upstream Flock's clmad needs its ptxas) where it isn't installed and can't be, without root: its packages unpacked
 # under FLOCK_WORK (apt-get download needs no root); no compat library: an R580 driver runs 13.3 by minor-version compatibility
+for c in ${FLOCK_WORK:-/workspace}/cuda-root /workspace/cache/flock/cuda-root; do
+  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
+done
 if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
   CR=${FLOCK_WORK:-/workspace}/cuda-root; export CUDA_TK=$CR/usr/local/cuda-13.3
   if [ ! -x $CUDA_TK/bin/nvcc ]; then
