@@ -503,8 +503,72 @@ def auto_batch(ands: int, row_units: int) -> int:
     return max(16, 1 << max(0, cap.bit_length() - 1))
 
 
+def _source_digest() -> str:
+    """The staging code's digest: every Python file of the packages a staged statement is a function of (with the program, the
+    shape, the batch parameters and the seed)."""
+    import importlib.util
+    h = hashlib.sha256()
+    for name in ("verity", "verity_flock", "circuit_check", "verity_vllm", "verity_pouw"):
+        spec = importlib.util.find_spec(name)
+        for root in (spec.submodule_search_locations or []) if spec else []:
+            for f in sorted(Path(root).rglob("*.py")):
+                h.update(f"{name}/{f.relative_to(root).as_posix()}\0".encode() + hashlib.sha256(f.read_bytes()).digest())
+    return h.hexdigest()
+
+
+def _stage_cache(s: str) -> Path | None:
+    """FLOCK_STAGE_CACHE: where a staged shape is kept for the next run of the same code, program, shape, batch and seed."""
+    root, c = os.environ.get("FLOCK_STAGE_CACHE"), _CTX
+    if not root:
+        return None
+    if "source_digest" not in c:
+        c["source_digest"] = _source_digest()
+    a = c["a"]
+    ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
+             a.seed, a.partition, a.max_ands, a.select]
+    return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
+
+
 def _stage_job(s: str) -> dict:
-    """Lower, lift the lanes of and stage one shape: its record, with ``stage`` when it staged, else ``broke``."""
+    """Lower, lift the lanes of and stage one shape: its record, with ``stage`` when it staged, else ``broke`` (a shape staged
+    before by the same code, program, batch and seed is taken from FLOCK_STAGE_CACHE)."""
+    c = _CTX
+    units, cl, a = c["units"], c["classes"][s], c["a"]
+    cache = _stage_cache(s)
+    if cache is not None and (cache / "rec.json").exists():
+        t0 = time.time()
+        d = c["out"] / s[:16]
+        d.mkdir(parents=True, exist_ok=True)
+        for f in cache.iterdir():
+            if f.name != "rec.json":
+                (d / f.name).unlink(missing_ok=True)
+                try:
+                    os.link(f, d / f.name)
+                except OSError:
+                    import shutil
+                    shutil.copyfile(f, d / f.name)
+        rec = json.loads((cache / "rec.json").read_text())
+        rec["stage_cached"] = cache.name
+        rec["stage_s"] = rec["stage_wall_s"] = round(time.time() - t0, 3)
+        return rec
+    rec = _stage_job_fresh(s)
+    if cache is not None and "stage" in rec:
+        import shutil
+        tmp = cache.with_name(f"{cache.name}.tmp{os.getpid()}")
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        for f in (c["out"] / s[:16]).iterdir():
+            if f.is_file():
+                shutil.copyfile(f, tmp / f.name)
+        (tmp / "rec.json").write_text(json.dumps(rec, default=str))
+        try:
+            os.rename(tmp, cache)
+        except OSError:
+            shutil.rmtree(tmp, ignore_errors=True)
+    return rec
+
+
+def _stage_job_fresh(s: str) -> dict:
     c = _CTX
     units, cl, a = c["units"], c["classes"][s], c["a"]
     uc = cl.representative
@@ -670,7 +734,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     jobs = [s for s, _cl in order if not (s in done or (a.only and not any(s.startswith(p) for p in a.only.split(",")))
                                           or (wanted is not None and not any(s.startswith(p) for p in wanted)))]
     _CTX.update(units=units, classes=classes, row_units=row_units, shared=broadcast_params(units), key=key, salt_key=salt_key,
-                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits)
+                out=out, a=a, batch_ands=a.batch_ands, max_statement_bits=a.max_statement_bits, program_sha512=PO.program_sha512(program))
     partition_binding(units, a.partition)
     for rec in _staged(jobs, a.jobs):
         s, cl = rec["shape"], classes[rec["shape"]]
