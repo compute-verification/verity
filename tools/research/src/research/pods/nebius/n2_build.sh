@@ -30,11 +30,12 @@ DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 n2_quiet() { ssh -o ConnectTimeout=10 "$N2" head -1 /workspace/pouw/fill/status.txt | grep -q "timed False, window waiting False"; }
 
 # rsync to node 2, only outside a window; a window that starts stops the transfer, which resumes after it (--partial)
-push() {
+push() {  # push SRC DST [RSYNC-ARG...]
   local src=$1 dst=$2 pid
+  shift 2
   while :; do
     until n2_quiet; do sleep 30; done
-    nice -n 19 ionice -c3 rsync -a --partial --mkpath --bwlimit=300m "$src" "$N2:$dst" & pid=$!
+    nice -n 19 ionice -c3 rsync -a --partial --mkpath --bwlimit=300m "$@" "$src" "$N2:$dst" & pid=$!
     while kill -0 "$pid" 2> /dev/null; do n2_quiet || kill "$pid"; sleep 10; done
     wait "$pid" && return 0
     n2_quiet || continue
@@ -72,9 +73,8 @@ submit() {
   model=/workspace/hf/hub/models--${repo//\//--}
   [ -d "$model/snapshots/$rev" ] || { echo "no checkpoint $model/snapshots/$rev on node 1" >&2; exit 2; }
   push "$src/" "$src/"
-  # links are copied as links: the weights stay in node 1's shared /workspace/hf/hub/blobs, which a Build doesn't read (cov-g188
-  # built and matched node 1's digests without them), and a Build that did would fail on the dangling link, not silently
-  push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/"
+  # the weights themselves (-L: node 1's snapshots link into its shared blobs/): the CPU bootstrap's checkpoint check reads them
+  push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/" -L
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
   push "$0" "$GUEST/bin/n2_build.sh"
