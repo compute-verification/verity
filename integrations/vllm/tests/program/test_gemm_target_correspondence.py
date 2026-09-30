@@ -50,10 +50,19 @@ def _bf16(rng, shape, scale=1.0) -> np.ndarray:
     return (f.view(np.uint32) >> 16).astype(np.uint16)
 
 
-def _capture(tmp_path, cc, *, bias_mode=None, flip=False, M=6, K=64, N=40):
+def _bits(rng, shape, lo, hi) -> np.ndarray:
+    s = rng.integers(0, 2, shape, dtype=np.uint16)
+    e = rng.integers(lo, hi + 1, shape).astype(np.uint16)
+    m = rng.integers(0, 128, shape, dtype=np.uint16)
+    return (s << 15) | (e << 7) | m
+
+
+def _capture(tmp_path, cc, *, bias_mode=None, flip=False, M=6, K=64, N=40, x=None, w=None):
     """A capture directory whose GPU words are the Hopper k16 chain's (cpu_model), as a correct sm_120 device would write them."""
     rng = np.random.default_rng(7)
-    x, w = _bf16(rng, (M, K)), _bf16(rng, (N, K), 0.02)
+    if x is None:
+        x, w = _bf16(rng, (M, K)), _bf16(rng, (N, K), 0.02)
+    (M, K), N = x.shape, w.shape[0]
     b = _bf16(rng, (N,), 0.02) if bias_mode is not None else None
     _, hopper = G.step_model("HopperBF16WgmmaDot16")
     gpu, _ = CM.gemm_model(hopper, x, w, b, CM.GemmModelSpec(hopper.name, bias_mode=bias_mode or 0), want_f32=False)
@@ -85,9 +94,14 @@ def test_check_refuses_one_flipped_word(tmp_path):
 
 
 def test_hopper_words_are_not_the_ampere_chain(tmp_path):
-    """The same words checked as an A100 capture (cc 8.0, the Ampere step) are refused: the data tell the two pipelines apart."""
-    assert G.check(_capture(tmp_path, (8, 0), M=16, K=256, N=64)) == 1
-    assert json.loads((tmp_path / "report.json").read_text())["gemm_target"]["key"] == "ampere"
+    """The Hopper step's words checked as an A100 capture (cc 8.0, the Ampere step) are refused.  Rounding to bf16 hides nearly every
+    difference between the two chains; these wide-exponent operands keep one coordinate apart."""
+    rng = np.random.default_rng(44)
+    x, w = _bits(rng, (8, 64), 100, 150), _bits(rng, (32, 64), 100, 150)
+    assert G.check(_capture(tmp_path, (12, 0), x=x, w=w)) == 0
+    assert G.check(_capture(tmp_path, (8, 0), x=x, w=w)) == 1
+    r = json.loads((tmp_path / "report.json").read_text())
+    assert r["gemm_target"]["key"] == "ampere" and r["results"][0]["first_mismatch"]["mismatching_coordinates"] == 1
 
 
 def test_a_bias_case_reports_the_epilogue_that_holds(tmp_path):
