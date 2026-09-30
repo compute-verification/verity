@@ -7,13 +7,14 @@ The rows go under ``pearl-c-sm120`` at the scheme's version (v1-h1), with the co
 row's slowdown is ``pearlc`` over stock vLLM ``fp8`` in the same window, interleaved rep by rep, or in ABAB blocks when the two
 engines could not stay resident, which the row's description then says; ``--hash-free`` is ``pearlc-nohash`` over ``fp8``.  The clocks
 are every rep's SM clock, the arm's and the ``fp8`` baseline's.  Refused, with the reason, unless every gate held, both verify
-passes repeated their timed commitments and were accepted, and the negative control was rejected.  Without ``--append`` it
-prints the commands.
+passes repeated their timed commitments and were accepted, and the negative control was rejected.  The decode row is the
+prefill row's attempt, another phase of it (``--attempt``).  Without ``--append`` it prints the commands.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -75,11 +76,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--append", action="store_true")
     a = p.parse_args(argv)
     verdicts = {x: json.loads((a.verify_dir / f"{x}-verify.json").read_text()) for x in ("prefill", "decode", "control")}
-    for cmd in rows(json.loads(a.e2e.read_text()), verdicts, a.panel):
-        if a.append:
-            subprocess.run(cmd, check=True)
-        else:
-            print(shlex.join(cmd))
+    first, second = rows(json.loads(a.e2e.read_text()), verdicts, a.panel)
+    if not a.append:
+        print(shlex.join(first))
+        print(shlex.join([*second, "--attempt", "<the prefill row's attempt>"]))
+        return 0
+    out = subprocess.run(first, check=True, capture_output=True, text=True).stdout
+    print(out, end="")
+    attempt = re.search(r"appended attempt (\d+)", out)
+    if not attempt:
+        raise SystemExit("panel.py did not say which attempt it appended; append the decode row with --attempt by hand")
+    subprocess.run([*second, "--attempt", attempt.group(1)], check=True)
     return 0
 
 
