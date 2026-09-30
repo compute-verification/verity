@@ -57,7 +57,12 @@ sys.path.insert(0, str(HERE.parent))
 SCHEME = "pearl-c-sm120-v1-h1"
 MODES = ("bf16", "fp8", "pearlc-nohash", "pearlc")
 PEARLC = ("pearlc-nohash", "pearlc")
-GROUP = {"fp8": "base", "bf16": "arm", "pearlc-nohash": "arm", "pearlc": "arm"}
+GROUP = {"fp8": "base", "fp8-graphs": "base-graphs", "bf16": "arm", "pearlc-nohash": "arm", "pearlc": "arm"}
+#: ``--fp8-graphs``: stock vLLM FP8 as vLLM serves it, compiled with its CUDA graphs (the decode headline's baseline, the
+#: 19:58Z ruling), in an engine of its own beside the eager one, timed after each eager ``fp8`` rep
+GRAPHED = ("fp8-graphs",)
+#: the graphed engine's CUDA-graph batch sizes: the decode batch and below
+CAPTURE_SIZES = [1, 2, 4, 8, 16, 24, 32]
 #: one rep of every mode, the baseline between each other mode's
 CYCLE = ("fp8", "pearlc", "fp8", "pearlc-nohash", "fp8", "bf16")
 #: the fallback's engine lifetimes: base, arm, base, arm, each timing its share of the reps
@@ -82,14 +87,18 @@ SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-l
 
 def engine(args, group: str):
     from vllm import LLM
-    kw = {"model": args.model, "enforce_eager": True, "gpu_memory_utilization": args.mem_base if group == "base" else args.mem_arm,
+    kw = {"model": args.model, "enforce_eager": True,
+          "gpu_memory_utilization": args.mem_base if group in ("base", "base-graphs") else args.mem_arm,
           "max_num_seqs": BATCH, "max_model_len": PREFILL + 64,
           "max_num_batched_tokens": getattr(args, "batch_tokens", None) or PREFILL, "enable_prefix_caching": False,
           "seed": 0}
     if args.revision:
         kw["revision"] = args.revision
-    if group == "base":
+    if group in ("base", "base-graphs"):
         kw["quantization"] = "fp8"
+    if group == "base-graphs":
+        kw["enforce_eager"] = False
+        return LLM(**kw, compilation_config={"cudagraph_capture_sizes": CAPTURE_SIZES})
     try:
         return LLM(**kw, compilation_config={"mode": 0})
     except TypeError:
@@ -447,11 +456,13 @@ def prompts(reps: int) -> dict:
     return {"warm": ids(PREFILL), "prefill": [ids(PREFILL) for _ in range(reps)], "decode": [ids(PROMPT) for _ in range(BATCH)]}
 
 
-def schedule(reps: int, interleave: str) -> list[list[str]]:
+def schedule(reps: int, interleave: str, graphed: bool = False) -> list[list[str]]:
     """The timed modes in order, as one segment per engine lifetime: with both engines resident one segment, the reps
-    alternating by `CYCLE`; in ``blocks``, `BLOCKS` segments alternating base and arm, each with its share of the reps."""
+    alternating by `CYCLE` (with `graphed`, each ``fp8`` rep followed by an ``fp8-graphs`` one); in ``blocks``, `BLOCKS`
+    segments alternating base and arm, each with its share of the reps."""
     if interleave == "rep":
-        return [list(CYCLE) * reps]
+        cycle = [x for m in CYCLE for x in ((m, "fp8-graphs") if graphed and m == "fp8" else (m,))]
+        return [cycle * reps]
     share = [reps // 2 + reps % 2, reps // 2]
     arm = [m for m in CYCLE if GROUP[m] == "arm"]
     return [["fp8"] * share[i // 2] if i % 2 == 0 else arm * share[i // 2] for i in range(BLOCKS)]
@@ -460,7 +471,7 @@ def schedule(reps: int, interleave: str) -> list[list[str]]:
 def timing(records: list[dict]) -> dict:
     """Each mode's medians over its reps, and its reps, from the controller's records."""
     out = {}
-    for mode in MODES:
+    for mode in MODES + GRAPHED:
         pre = [r for r in records if r["mode"] == mode and r["phase"] == "prefill"]
         dec = [r for r in records if r["mode"] == mode and r["phase"] == "decode"]
         if not pre or not dec:
@@ -497,6 +508,9 @@ def split(results: dict) -> dict:
         full, nohash, gemm = t["pearlc"][f"{key}_s"], t["pearlc-nohash"][f"{key}_s"], t["pearlc-nohash"][f"{key}_gemm_s"]
         row = {"bf16_s": t["bf16"][f"{key}_s"], "fp8_s": t["fp8"][f"{key}_s"], "pearlc_s": full, "nohash_s": nohash, "gemm_s": gemm,
                "hashing_s": full - nohash, "else_s": nohash - gemm}
+        if "fp8-graphs" in t:
+            row["fp8_graphs_s"] = t["fp8-graphs"][f"{key}_s"]
+            row["slowdown_vs_fp8_graphs"] = full / row["fp8_graphs_s"]
         for base in ("fp8", "bf16"):
             b = row[f"{base}_s"]
             row.update({f"slowdown_vs_{base}": full / b, f"gemm_x_{base}": gemm / b, f"hashing_x_{base}": (full - nohash) / b,
@@ -652,6 +666,8 @@ def main() -> None:
     ap.add_argument("--schedule", choices=sorted(SCHEDULES), default="serial",
                     help="deferred: each call's tile hashing on a side lane at the least priority and the rest at the greatest, "
                          "as measured (the decode plan's step 2); deferred-caller: the rest on vLLM's stream at its own")
+    ap.add_argument("--fp8-graphs", action="store_true",
+                    help="also time stock FP8 as vLLM serves it (compiled, CUDA graphs), a third engine, beside the eager one")
     ap.add_argument("--graphs", action="store_true", help="decode's calls (m <= GRAPH_ROWS) replay their steps as one CUDA graph each")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
@@ -665,7 +681,7 @@ def main() -> None:
         sys.exit(perplexity(args))
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
-    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs,
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
                  "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}
@@ -698,6 +714,10 @@ def run_workers(ctx, args, beacon: bytes, p: dict, records: list[dict], out: dic
     base = Worker(ctx, args, "base", beacon)
     tokens_fp8 = base.ask(op="chat", mode="fp8")
     out["tokens_fp8"] = tokens_fp8
+    graphed = None
+    if getattr(args, "fp8_graphs", False):
+        graphed = Worker(ctx, args, "base-graphs", beacon)
+        out["tokens_fp8_graphs"] = graphed.ask(op="chat", mode="fp8-graphs")
     arm = None
     if args.interleave == "rep":
         try:
@@ -706,10 +726,13 @@ def run_workers(ctx, args, beacon: bytes, p: dict, records: list[dict], out: dic
             out["interleave"], out["resident_failure"] = "blocks", str(ex).splitlines()[0]
     if out["interleave"] == "rep":
         arm_steps(arm, last=False)
-        measure({"base": base, "arm": arm}, schedule(args.reps, "rep")[0], p, records, warm)
+        measure({"base": base, "base-graphs": graphed, "arm": arm}, schedule(args.reps, "rep", graphed is not None)[0], p,
+                records, warm)
         arm_steps(arm, last=True)
         arm.close()
         base.close()
+        if graphed is not None:
+            graphed.close()
     else:
         segments = schedule(args.reps, "blocks")
         for i, segment in enumerate(segments):
@@ -726,6 +749,8 @@ def run_workers(ctx, args, beacon: bytes, p: dict, records: list[dict], out: dic
 
 def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, verify: dict) -> None:
     tokens["fp8"] = out.pop("tokens_fp8", {})
+    if "tokens_fp8_graphs" in out:
+        tokens["fp8-graphs"] = out.pop("tokens_fp8_graphs")
     results = timing(records)
     for mode, r in results.items():
         r.update(tokens.get(mode, {}))

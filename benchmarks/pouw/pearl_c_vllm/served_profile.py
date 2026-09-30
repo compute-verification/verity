@@ -38,8 +38,8 @@ _LOG: list = []
 
 
 def _mode() -> str:
-    if _CTX.get("group") == "base":
-        return "fp8"
+    if _CTX.get("group") in ("base", "base-graphs"):
+        return "fp8" if _CTX["group"] == "base" else "fp8-graphs"
     stack = _CTX.get("stack")
     if stack is not None:
         return stack.active.name if stack.active is not None else "bf16"
