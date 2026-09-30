@@ -200,11 +200,12 @@ def DotE4m3V2(B, S, xq, wq):
 @composite("ScaledMmFp8NoSwapCoordinate", 1, ["K", "BIAS", "DOT"],
            lambda S: (((("xq", Array(S.K, E4M3)), ("sx", F32), ("wrow", Array(S.K, E4M3)), ("sw", F32))
                        + ((("b", BF16),) if S.BIAS else ())), BF16),
-           conformance="exact-model-tested; without a bias, the RTX PRO 6000's _C.cutlass_scaled_mm (cc 12.0) against this order over "
-                       "the cc 12.0 step's chain: 15,728,640 of 15,728,640 coordinates exact at K = 4096, per-row/per-column and "
-                       "scalar scales (run r20260930-041842-76a2); the swapped order (ScaledMmFp8Coordinate_v1) misses 89 of its 125 "
-                       "discriminating ones.  The bias form is ScaledEpilogueBias's single FMA (the CUTLASS source at d9105ea80), "
-                       "not yet measured")
+           conformance="exact-model-tested; the RTX PRO 6000's _C.cutlass_scaled_mm (cc 12.0) against this order over the cc 12.0 "
+                       "step's chain at K = 4096, per-row/per-column and scalar scales: without a bias 15,728,640 of 15,728,640 "
+                       "coordinates exact (run r20260930-041842-76a2; the swapped order misses 89 of the 125 discriminating ones); "
+                       "with a bias 786,432 of 786,432 (run r20260930-090150-a42a: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
+                       "miss 8, 9 and 13 of the 17 discriminating ones), and this Definition by the IR reference on 576 sampled "
+                       "coordinates, every discriminating one included, exact")
 def ScaledMmFp8NoSwapCoordinate(B, S, xq, sx, wrow, sw, *bias):
     """One output word of `_C.cutlass_scaled_mm` dispatched WITHOUT swap_ab, so ScaleA = `s_x` (per token) and ScaleB = `s_w`
     (per tensor): `bf16(s_x * (s_w * acc))` (ScaledEpilogue) or `bf16(fma(s_x, s_w * acc, f32(b)))` (ScaledEpilogueBias),
