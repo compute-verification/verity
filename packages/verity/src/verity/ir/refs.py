@@ -12,6 +12,7 @@ weight arrays O(1) in the descriptor.
 
 from __future__ import annotations
 
+import bisect
 from typing import Iterator
 
 from .types import Array, Record, Tuple, Type, Value, remove_axis
@@ -131,9 +132,11 @@ class Strided(Refs):
 
 
 class Concat(Refs):
-    """Concatenation of reference sequences (binary search on `[j]`); descriptor size = number of parts."""
+    """Concatenation of reference sequences (binary search on `[j]`); descriptor size = number of parts.
 
-    __slots__ = ("parts", "starts", "count")
+    `prefix` is `(log, j)` when the first `j` parts are `log.parts[:j]` (a `Concat` cut from a `PartLog`), else None."""
+
+    __slots__ = ("parts", "starts", "count", "prefix")
 
     def __init__(self, parts: list[Refs]) -> None:
         self.parts = list(parts)
@@ -143,23 +146,27 @@ class Concat(Refs):
             self.starts.append(pos)
             pos += p.count
         self.count = pos
+        self.prefix = None
 
     def __getitem__(self, j: int) -> Ref:
         if j < 0:
             j += self.count
         if not (0 <= j < self.count):
             raise IndexError(j)
-        import bisect
         k = bisect.bisect_right(self.starts, j) - 1
         return self.parts[k][j - self.starts[k]]
 
     def slice(self, lo: int, hi: int) -> Refs:
         lo, hi = max(lo, 0), min(hi, self.count)
         out: list[Refs] = []
-        for st, p in zip(self.starts, self.parts):
+        starts, parts = self.starts, self.parts
+        k, n = max(bisect.bisect_right(starts, lo) - 1, 0), len(parts)
+        while k < n and starts[k] < hi:
+            st, p = starts[k], parts[k]
             a, b = max(lo, st) - st, min(hi, st + p.count) - st
             if b > a:
                 out.append(p.slice(a, b))
+            k += 1
         return concat(out)
 
     def to_json(self):
