@@ -143,8 +143,11 @@ without `dump` still writes its own transcripts, and its record says the harness
 `--tier 2b` for a timed whole-node run (the default, 2a, is a screen that never plots), `--hypothesis`, `--parent`, and
 `--publish` to put the records into the evidence store. The arm's build record names its `variant`
 (`ledger.variant_record`: the sources' digest, the binary's, the priced path) and its `lineage` (parent, approach,
-mechanism tags, hypothesis, panel line and version). γ is looked up from `price_twins.json` on the variant's priced path, at
-both FP32 prices, the larger published; a lineage that types γ in gets no record.
+mechanism tags, hypothesis, panel line and version). A knob that picks code at run time (`PEARLC_A_FORMS`) is part of the
+variant: pass it as `variant_record(..., config={...})`. γ is looked up from `price_twins.json` on the variant's priced path, at
+both FP32 prices, the larger published; a lineage that types γ in gets no record. The records are also declared in the run's
+`outputs.json`, so under `research run --on`, whose workload holds no store key, the runner publishes them with the Attempt;
+`ledger.py publish RUN_DIR --by LANE` afterwards only asserts their outcome labels.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
 consistency gate rejected an arm; 7 the SASS gate refused a binary. The JSON is written in every case, with every rep, and
