@@ -3620,11 +3620,25 @@ fn main() {
             // host witness is a few lane groups, so several share the cores (FC_PIPELINE=0: each session builds its own when it starts)
             let pipeline = tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
             let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
+            // FC_HOST_PREPIN=1: the first session's witness is built before any other's and pins `depth` more buffers of its mapped
+            // host slots' size, so the next sessions' builds meet a warm buffer pool and a deep unit's flat forms built, as they do
+            // past a prover's first sessions
+            let prepin = pipeline && std::env::var("FC_HOST_PREPIN").as_deref() == Ok("1");
             let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
             let mut ahead: std::collections::VecDeque<(usize, std::thread::JoinHandle<Prebuilt>)> = std::collections::VecDeque::new();
             for run in 0..warm + runs {
                 let mut plan = base.clone();
                 if pipeline {
+                    if run == 0 && prepin {
+                        let p = prebuild(&st, &inst, &base, seeds[0]).join().expect("the first session's witness");
+                        #[cfg(feature = "gpu")]
+                        if let WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) = &p.wt0 {
+                            if h.zab.is_mapped() {
+                                flock_live::gpu_circuit::HostBuf::prepin(h.zab.len(), depth);
+                            }
+                        }
+                        ahead.push_back((0, std::thread::spawn(move || p)));
+                    }
                     if ahead.front().is_some_and(|(r, _)| *r == run) {
                         let (_, h) = ahead.pop_front().expect("this run's witness");
                         plan.prebuilt = Some(Arc::new(Mutex::new(Some(h))));

@@ -285,6 +285,12 @@ impl HostBuf {
     pub fn is_mapped(&self) -> bool {
         matches!(self, HostBuf::Mapped { .. })
     }
+
+    /// `count` buffers of `len` words pinned into the pool (or taken from it and put back), for witnesses built ahead
+    pub fn prepin(len: usize, count: usize) {
+        let held: Vec<HostBuf> = (0..count).map_while(|_| HostBuf::mapped(len)).collect();
+        drop(held);
+    }
 }
 
 impl std::ops::Deref for HostBuf {
