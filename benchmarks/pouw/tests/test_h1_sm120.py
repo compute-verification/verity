@@ -2,7 +2,9 @@
 verifier's bytes, through pearl_c's thread-for-thread host build (simt_twin) with what h1_tree adds (the grid, 16-byte and L2 loads, the fence and the last-CTA counter; blocks run one after
 another): A's row leaves at every alignment against `verity.commitments`' frame-b3 leaves, and whole trees in one launch (pads,
 level keys, the tile tree's own leaves, the levels above the CTAs' roots in the last CTA) against #449's kernels level for
-level and `MerkleTree`'s root, with seed_A at A's root against the scheme's derivation."""
+level and `MerkleTree`'s root, with seed_A at A's root against the scheme's derivation; and decode's commitments in one
+launch each (h1_commit: A's row leaves, tree, seed_A and E_A's line key; h1_tiles: the message digests, tile leaves and tile
+tree) against the same references and hash_msg_v's and hash_leaf_p's."""
 from __future__ import annotations
 
 import ctypes as C
@@ -65,7 +67,7 @@ def build() -> C.CDLL:
         f"  for (int b = 0; b < grid; b++) {{\n"
         f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
         f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"
-        f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in ("h1_rows", "h1_rows_p", "h1_tree"))
+        f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in ("h1_rows", "h1_rows_p", "h1_tree", "h1_commit", "h1_tiles"))
     out = Path(tempfile.mkdtemp(prefix="h1-sm120-simt-"))
     (out / "twin.cpp").write_text(T._source().replace(T.PRELUDE, T.PRELUDE + EXTRA, 1) + body + runs)
     subprocess.run([cxx, "-O1", "-std=c++20", "-pthread", "-shared", "-fPIC", "-o", str(out / "twin.so"), str(out / "twin.cpp")],
@@ -167,3 +169,54 @@ def test_h1_tree_is_the_frame_b3_tree_in_one_launch(count, cta, tile):
     assert tree.raw[-32:] == root
     if not tile:
         assert out.raw == seed_a_keys(salt, root, root_b, 9)
+
+
+@pytest.mark.parametrize("count,rb,warps", [(1, 36, 1), (3, 4096, 1), (5, 987, 2), (32, 32768, 1), (33, 4096, 1), (64, 64, 1),
+                                            (100, 1040, 2)])
+def test_h1_commit_is_a_s_tree_and_seed_in_one_launch(count, rb, warps):
+    """A's rows (one to 100, decode's 32 of k = 8,192, unaligned lengths, pads) hashed, built into the tree by the last CTA
+    and seed_A and E_A's line key derived at its root in one launch: every node equal to #449's kernels' over the frame-b3
+    row leaves, the root to MerkleTree's, seed_A and the line key the scheme's, and the counter back at zero."""
+    width = 1 << max(0, (count - 1).bit_length())
+    grid, block = -(-count // warps), 32 * warps
+    assert width <= 2 * block
+    rows = data(f"commit rows {count} {rb}", count * rb)
+    _keep, src = aligned(count * rb)
+    C.memmove(src, rows, len(rows))
+    d = CommitmentDomain(BINDING, 3, RangeIndexedDomain(count), hash="blake3")
+    vals = [rows[r * rb:(r + 1) * rb] for r in range(count)]
+    level0 = b"".join(d.leaf(r, r, ROW, vals[r]) for r in range(count))
+    want, _ = reference(level0 + bytes(32 * (2 * width - 1) - len(level0)), count, width, d.domain_id, None)
+    salt, root_b, index = data("salt", 32), data("root-B", 32), 11
+    tree, dom, ctr, line, seed = T.buffer(32 * (2 * width - 1)), T.buffer(d.domain_id), T.buffer(4), T.buffer(32), T.buffer(32)
+    unit = T.buffer(salt + root_b + index.to_bytes(8, "little") + SEED_KEY)
+    smem = max(4 * warps * T.rows_w_words(rb), 32 * (width + 32))
+    launch("h1_commit", grid, block, [src, tree, dom, ctr, line, unit, seed], [count, rb, width], smem=smem)
+    root = MerkleTree(d, dict(enumerate(vals)), lambda _: ROW).commitment.root
+    assert tree.raw == want and tree.raw[-32:] == root and ctr.raw[:4] == bytes(4)
+    keys = seed_a_keys(salt, root, root_b, index)
+    assert seed.raw == keys[:32] and line.raw == keys[32:64]
+
+
+@pytest.mark.parametrize("rows,cols", [(17, 64), (5, 256), (40, 128), (32, 1024), (64, 512), (1, 16384)])
+def test_h1_tiles_is_the_tile_tree_in_one_launch(rows, cols):
+    """Decode's hashing in one launch, a CTA a tile (one tile to 256, full tiles of 64 rows and partial ones of 1, 5, 17,
+    32 and 40 rows, so one to four chunks a leaf): the digests hash_msg_v's, the tile leaves hash_leaf_p's, the tile tree
+    #449's kernels' over them and its root MerkleTree's, and the counter back at zero."""
+    tiles = -(-rows // 64) * (cols // 64)
+    width = 1 << max(0, (tiles - 1).bit_length())
+    words = data(f"tiles {rows} {cols}", 8 * rows * cols)
+    c, u = T.buffer(words[:4 * rows * cols]), T.buffer(words[4 * rows * cols:])
+    k_msg, k_leaf = T.buffer(data("k_msg", 32)), T.buffer(data("k_leaf", 32))
+    ref_dg, ref_leaves = T.buffer(rows * cols), T.buffer(32 * tiles)
+    T.launch("hash_msg_v", -(-rows * cols // 32 // 128), 128, [c, u, ref_dg, k_msg], [rows, cols])
+    T.launch("hash_leaf_p", -(-tiles // 32), 128, [ref_dg, ref_leaves, k_leaf], [rows, cols])
+    d = CommitmentDomain(BINDING, 5, RangeIndexedDomain(tiles), hash="blake3")
+    want, _ = reference(bytes(32 * (2 * width - 1)), tiles, width, d.domain_id, ref_leaves.raw)
+    dg, leaves, tree = T.buffer(rows * cols), T.buffer(32 * tiles), T.buffer(32 * (2 * width - 1))
+    dom, ctr = T.buffer(d.domain_id), T.buffer(4)
+    launch("h1_tiles", tiles, 128, [c, u, dg, k_msg, leaves, k_leaf, tree, dom, ctr], [rows, cols, width],
+           smem=32 * max(132, width + 32))
+    root = MerkleTree(d, {t: ref_leaves.raw[32 * t:32 * t + 32] for t in range(tiles)}, lambda _: TILE).commitment.root
+    assert dg.raw == ref_dg.raw and leaves.raw == ref_leaves.raw
+    assert tree.raw == want and tree.raw[-32:] == root and ctr.raw[:4] == bytes(4)

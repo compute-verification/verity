@@ -1,6 +1,6 @@
 // h1_sm120.cuh: -h1's commitments of A and of the tiles in fewer launches on sm_120, committing exactly what hash.cuh's
-// hash_rows, hash_pad, hash_node_keys, hash_nodes and hash_tree_leaves write (#449's frame-b3 at 6a1a051f) and what
-// pearl_c_sm120.cu's seed_line_a derives.  pearl_c_sm120.cu includes it.
+// hash_rows, hash_pad, hash_node_keys, hash_nodes and hash_tree_leaves and hash_sm120.cuh's hash_msg_v and hash_leaf_p write
+// (#449's frame-b3 at 6a1a051f) and what pearl_c_sm120.cu's seed_line_a derives.  pearl_c_sm120.cu includes it.
 #pragma once
 #include "../pearl_c/hash_sm120.cuh"
 
@@ -228,4 +228,154 @@ extern "C" __global__ void __launch_bounds__(1024) h1_tree(const Args a) {
   b3c(seed, m, 0, sizeof jackpot - 1, B3_KEYED | B3_START | B3_END | B3_ROOT, h);
 #pragma unroll
   for (int i = 0; i < 8; i++) out[16 + i] = h[i];
+}
+
+// ---------------------------------------------------------------- decode: a commitment in one launch, its tree by the last CTA
+// Whether this CTA is the grid's last to arrive at counter p (u32, zero between launches: atomicInc wraps it back), after
+// every thread's global stores; the last CTA then reads the others' through L2 (ld_cv_cg).
+DEV bool h1_arrive(uint64_t p) {
+  __shared__ bool last;
+  __threadfence();
+  __syncthreads();
+  if (threadIdx.x == 0) last = atomicInc(reinterpret_cast<unsigned*>(p), gridDim.x - 1) == gridDim.x - 1;
+  __syncthreads();
+  if (last) __threadfence();
+  return last;
+}
+
+// A frame-b3 tree of `width` (a power of two, <= 2 blockDim) over level 0's first `count` nodes, which the grid wrote: the
+// pads, the level keys and every level above (h1_levels), in one CTA.  The root ends in nodes[0].
+DEV void h1_top(uint64_t tree, const uint32_t* dom, uint64_t count, uint64_t width, uint32_t (*nodes)[8], uint32_t (*keys)[8]) {
+  const int depth = 63 - __clzll((long long)width);
+  for (int l = threadIdx.x; l < depth; l += blockDim.x)
+    b3_short<2>(dom, [&](int j) { return j == 0 ? 2u : (uint32_t)l; }, keys[l]);
+  for (uint64_t j = threadIdx.x; j < width; j += blockDim.x) {
+    uint32_t h[8];
+    if (j >= count) {
+      b3_short<9>(dom, [&](int q) { return q == 0 ? 3u : word_le(j, q - 1); }, h);
+      store_cv(tree + 32 * j, h);
+    } else {
+      ld_cv_cg(tree + 32 * j, h);
+    }
+#pragma unroll
+    for (int q = 0; q < 8; q++) nodes[j][q] = h[q];
+  }
+  __syncthreads();
+  h1_levels(nodes, keys, tree, width, 0, 0, (int)width);
+}
+
+// A's commitment in one launch, for a tree of width <= 2 blockDim (decode): h1_rows_p's row leaves (a warp a row), then in
+// the last CTA by p3's counter the tree (h1_top), and from its root seed_A and E_A's line key as seed_line_a derives them.
+// Dynamic shared memory: max(4 warps rows_w_words(rb), 32 (width + 32)) bytes.
+// p0 A's rows, p1 the tree (level 0 at offset 0), p2 the domain id, p3 the counter (u32), p4 E_A's line key out, p5 the unit
+// (salt ‖ root_B ‖ u64 index ‖ blake3("pearl-c/v0/seed-A"), 104 B), p6 seed_A out (0: none); i0 rows, i1 row bytes, i2 width
+extern "C" __global__ void __launch_bounds__(1024) h1_commit(const Args a) {
+  extern __shared__ uint32_t sh[];
+  const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
+  const uint64_t count = (uint64_t)a.i[0], width = (uint64_t)a.i[2], row = (uint64_t)blockIdx.x * (blockDim.x / 32) + warp;
+  const uint32_t rb = (uint32_t)a.i[1];
+  uint32_t dom[8];
+  load_key(a.p[2], dom);
+  if (row < count) {
+    uint32_t h[8];
+    row_leaf_v<true>(reinterpret_cast<const uint8_t*>(a.p[0]) + row * rb, rb, row, dom,
+                     reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words((int)rb)), lane, h);
+    if (lane == 0) store_cv(a.p[1] + row * 32, h);
+  }
+  if (!h1_arrive(a.p[3])) return;
+  uint32_t (*keys)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
+  uint32_t (*nodes)[8] = keys + 32;
+  h1_top(a.p[1], dom, count, width, nodes, keys);
+  if (threadIdx.x) return;
+  const uint8_t* unit = reinterpret_cast<const uint8_t*>(a.p[5]);
+  uint32_t key[8], seed[8], h[8], m[16];
+  load_key(a.p[5] + 72, key);
+  b3_short<104>(key, [&](int j) { return j < 32 ? (uint32_t)unit[j] : j < 64 ? cv_byte(nodes[0], j - 32) : (uint32_t)unit[j - 32]; },
+                seed);
+  const char line[] = "pearl/v4/FP8/noise-line";
+  h1_label(line, sizeof line - 1, m);
+  b3c(seed, m, 0, sizeof line - 1, B3_KEYED | B3_START | B3_END | B3_ROOT, h);
+  store_cv(a.p[4], h);
+  if (a.p[6]) store_cv(a.p[6], seed);
+}
+
+// The tile tree in one launch, for m_real <= 64 and a tree of width <= 256 (decode): a CTA of 128 a tile of r real rows,
+// its 2r message digests a thread each (hash_msg_v's), its leaf a thread a chunk of 32 of them (hash_leaf_p's), its node at
+// level 0 (h1_tree's from p3), and in the last CTA by p8's counter the levels above (h1_top).  The digests and the tile
+// leaves are written too.  Launch one CTA a tile; dynamic shared memory 32 max(132, width + 32) bytes.
+// p0 C~ (rows x cols FP32), p1 U, p2 digests out, p3 the message key, p4 tile leaves out, p5 the leaf key, p6 the tile tree
+// (level 0 at offset 0), p7 its domain id, p8 the counter (u32); i0 rows, i1 cols, i2 the tree's width
+extern "C" __global__ void __launch_bounds__(128) h1_tiles(const Args a) {
+  extern __shared__ uint32_t sh[];
+  uint32_t (*dg)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
+  uint32_t (*cvs)[8] = dg + 128;
+  const int rows = a.i[0], cols = a.i[1], tn = cols / 64, per = cols / 32;
+  const int t = blockIdx.x, ti = t / tn, tj = t % tn, d = threadIdx.x;
+  const int r = min(64, rows - 64 * ti), nd = 2 * r, nch = (nd + 31) / 32;
+  if (d < nd) {
+    const size_t g = (size_t)(64 * ti + d / 2) * per + 2 * tj + d % 2;
+    const uint4* c4 = reinterpret_cast<const uint4*>(a.p[0]) + g * 8;
+    const uint4* u4 = reinterpret_cast<const uint4*>(a.p[1]) + g * 8;
+    uint32_t c[32], u[32], key[8], h[8];
+#pragma unroll
+    for (int q = 0; q < 8; q++) {
+      const uint4 x = c4[q], y = u4[q];
+      c[4 * q] = x.x; c[4 * q + 1] = x.y; c[4 * q + 2] = x.z; c[4 * q + 3] = x.w;
+      u[4 * q] = y.x; u[4 * q + 1] = y.y; u[4 * q + 2] = y.z; u[4 * q + 3] = y.w;
+    }
+    load_key(a.p[3], key);
+    b3_msg_digest(c, u, key, h);
+    store_cv(a.p[2] + g * 32, h);
+#pragma unroll
+    for (int i = 0; i < 8; i++) dg[d][i] = h[i];
+  }
+  __syncthreads();
+  uint32_t lk[8];
+  load_key(a.p[5], lk);
+  if (d < nch) {
+    const int d0 = 32 * d, dn = min(32, nd - d0), blocks = (dn + 1) / 2;
+    uint32_t cv[8];
+#pragma unroll
+    for (int i = 0; i < 8; i++) cv[i] = lk[i];
+#pragma unroll 1
+    for (int b = 0; b < blocks; b++) {
+      uint32_t m[16];
+#pragma unroll
+      for (int w = 0; w < 16; w++) {
+        const int e = d0 + 2 * b + w / 8;
+        m[w] = e < nd ? dg[e][w % 8] : 0u;
+      }
+      const bool last = b == blocks - 1;
+      const uint32_t f = B3_KEYED | (b == 0 ? B3_START : 0) | (last ? B3_END | (nch == 1 ? B3_ROOT : 0) : 0);
+      b3c(cv, m, (uint64_t)d, last && (dn & 1) ? 32 : 64, f, cv);
+    }
+#pragma unroll
+    for (int i = 0; i < 8; i++) cvs[d][i] = cv[i];
+  }
+  __syncthreads();
+  uint32_t dom[8];
+  load_key(a.p[7], dom);
+  if (d == 0) {
+    uint32_t l[8], h[8];
+    if (nch == 1) {
+#pragma unroll
+      for (int i = 0; i < 8; i++) h[i] = cvs[0][i];
+    } else if (nch == 2) {
+      b3_parent(lk, cvs[0], cvs[1], B3_ROOT, h);
+    } else if (nch == 3) {
+      b3_parent(lk, cvs[0], cvs[1], 0, l);
+      b3_parent(lk, l, cvs[2], B3_ROOT, h);
+    } else {
+      uint32_t r2[8];
+      b3_parent(lk, cvs[0], cvs[1], 0, l);
+      b3_parent(lk, cvs[2], cvs[3], 0, r2);
+      b3_parent(lk, l, r2, B3_ROOT, h);
+    }
+    store_cv(a.p[4] + (size_t)t * 32, h);
+    b3_short<96>(dom, [&](int q) { return q < 64 ? header_byte(q, (uint64_t)t, TILE_SCHEMA, 19) : cv_byte(h, q - 64); }, l);
+    store_cv(a.p[6] + (size_t)t * 32, l);
+  }
+  if (!h1_arrive(a.p[8])) return;
+  uint32_t (*keys)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
+  h1_top(a.p[6], dom, gridDim.x, (uint64_t)a.i[2], keys + 32, keys);
 }
