@@ -493,3 +493,22 @@ def test_requests_at_other_local_steps_of_one_engine_step_are_refused_by_name(pa
     why = " ".join(plan.uncovered)
     assert plan.uncovered and "@ engine step 0" not in why and "@ engine step 1" in why and "commit other targets" in why
     assert {e for e, _m in plan.bodies} == {0}
+
+
+def test_a_warm_up_requests_rows_are_its_workload_requests_and_commit_the_same_layout(pair):
+    """Gemma-2-2B B8 (m006, r20260930-190524-cd72): the bounded warm-up runs `warmup-<i>` stand-ins, which no workload id resolves, so
+    every warm-up step refused ('engine step 0 ran (request, rows) [('warmup-0-aec3dda0', 11), ...]'), the learned plans held no
+    call-boundary tensor, and record step 0 ran 7,392,522,240 bytes against a 4,134,862,080-byte plan.  Warm-up request i is workload
+    request i's stand-in (same prompt length and schedule): it takes that request's rows and the step commits the same names and shapes."""
+    idx = {"r0": 0, "r1": 1}
+    com, src = _dense_source(pair, pair.man, pair.root)
+    _drive_pair(pair, com, src, ["r1", "r0"])
+    ref = [(s, n, tuple(t.shape), t.dtype) for s, n, t in com.acquired]
+    warm, wsrc = _dense_source(pair, pair.man, pair.root)
+    _drive_pair(pair, warm, wsrc, ["r1", "r0"],
+                lambda e, rows: [(f"warmup-{idx[rid.split('-')[1]]}" + ("-aec3dda0" if e else ""), lo, hi) for rid, lo, hi in rows])
+    assert not warm.errors, warm.errors
+    assert [(s, n, tuple(t.shape), t.dtype) for s, n, t in warm.acquired] == ref
+    stray, ssrc = _dense_source(pair, pair.man, pair.root)
+    _drive_pair(pair, stray, ssrc, ["r1", "r0"], lambda e, rows: [("warmup-7-aec3dda0", *rows[0][1:]), *rows[1:]])
+    assert not stray.acquired and "('warmup-7-aec3dda0', 4)" in stray.errors[0]
