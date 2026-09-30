@@ -12,10 +12,16 @@ from pathlib import Path
 
 import numpy as np
 
-_spec = importlib.util.spec_from_file_location("pearl_c4_real", Path(__file__).resolve().parents[1] / "pearl_c4" / "real.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
+def _load(name: str, file: str):
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / "pearl_c4" / file)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+R = _load("pearl_c4_real", "real.py")
+RT = _load("pearl_c4_real_table", "real_table.py")
 
 NAME, K, M, N = "model.layers.0.self_attn.q_proj", 1024, 128, 128
 
@@ -60,6 +66,26 @@ def test_real_activation_replay(tmp_path):
     assert t["rejected"] == "" and t["credited"] == [64, 64] and t["k_kept"] == K - K // 100 and t["k_unit"] == K
     assert s["tiles_debited"] == 1 and s["over_cap_tiles"] == 0 and 0 <= t["ratio"] < 1
     assert {"forming_elements", "screened_only_elements", "salt_dead_a", "unneeded_positions"} <= set(t["debit"]["counts"])
+    (row,) = RT.rows([s], RT.Fraction(1, 1000))
+    assert row["x_rows"] == M and row["x_dnf_fail_split"] == 0 and row["w_rows"] == N and row["debited"] == 1
+    assert abs(sum(row["mean_share"].values()) - t["ratio"]) < 1e-9 and "flag" not in row
+    assert NAME in RT.markdown([row], RT.Fraction(1, 1000))
+
+
+def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_caps():
+    """A tile's cap scales with ρ: at ρ = 1/1,000 it is over when its ratio at 1/400 exceeds 0.4."""
+    def tile(ratio: float) -> dict:
+        debit = {term: "0" for term in RT.TERMS} | {"forming": str(RT.Fraction(ratio).limit_denominator(10 ** 6)),
+                                                    "counts": {}}
+        return {"ratio": ratio, "cap": "1", "debit": debit, "rejected": ""}
+
+    names = [f"model.layers.{i}.mlp.down_proj" for i in (0, 8, 72)] + ["model.layers.0.self_attn.q_proj"]
+    s = {"capture": "x.npz", "model": "m", "inputs": {}, "weights": {},
+         "tiles": {n: [tile(0.3), tile(0.5 if "72" in n else 0.1)] for n in names}}
+    rows = {r["linear"]: r for r in RT.rows([s], RT.Fraction(1, 1000))}
+    assert rows[names[0]]["flag"] == "first down_proj" and rows[names[2]]["flag"] == "last down_proj"
+    assert "flag" not in rows[names[1]] and "flag" not in rows[names[3]]
+    assert rows[names[2]]["over_cap"] == 0 and rows[names[2]]["over_cap_tight"] == 1 and rows[names[0]]["over_cap_tight"] == 0
 
 
 def test_an_npz_capture_is_read_as_its_linears(tmp_path):
