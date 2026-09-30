@@ -508,8 +508,11 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
         fa = v.get("vllm_flash_attn_version")
         break
     if profile is None:
+        from verity_vllm.program.frontend.target_profile import TargetProfile
+
         cc = ((res.get("target") or {}).get("declared") or {}).get("compute_capability") or [8, 9]
-        profile = "hopper" if (fa == 3 or (fa is None and int(cc[0]) >= 9)) else "ampere"
+        fa3 = TargetProfile(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
+        profile = "hopper" if (fa == 3 or (fa is None and fa3)) else "ampere"
     return profile, fa, attn_obs
 
 
