@@ -171,7 +171,7 @@ def test_the_e2m1_cast_rounds_to_nearest_even_and_saturates() -> None:
         assert tuple(P.F32ToE2m1Sat.evaluate(f(v) + d) for d in (-1, 0, 1)) == codes, v
     assert P.F32ToE2m1Sat.evaluate(f(1e30)) == 7 and P.F32ToE2m1Sat.evaluate(PINF32) == 7 and P.F32ToE2m1Sat.evaluate(NINF32) == 0xF
     assert P.F32ToE2m1Sat.evaluate(0x00000001) == 0 and P.F32ToE2m1Sat.evaluate(0x80000000) == 0x8
-    assert P.F32ToE2m1Sat.evaluate(NAN32) == P.E2M1_NAN_CODE
+    assert P.F32ToE2m1Sat.evaluate(NAN32) == P.F32ToE2m1Sat.evaluate(0xFFFF0000) == P.E2M1_NAN_CODE == 0x7   # +6, sign dropped
 
 
 def test_the_e4m3_widening_is_exact_on_every_finite_byte() -> None:
