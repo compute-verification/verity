@@ -1,6 +1,6 @@
 {
- "version": "sass-pins/v1",
- "note": "Each toolkit's ptxas (its .note.nv.tkinfo version, build and arguments, -v aside) and the signature (sass_gate.signature) of each subroutine it builds for ftz_probe.cu, with the numeric run (native/ieee_pin.cu via jobs/ieee-pin.sh) that found each pinned sequence exact as that ptxas builds it; a toolkit without one exempts nothing. Regenerate with: python sass_gate.py --pin CUBIN... --toolkit NAME, the cubins ftz_probe.cu built with that toolkit with and without -fmad=false (POUW_CUDA_BIN naming its bin/).",
+ "version": "sass-pins/v2",
+ "note": "Each toolkit's ptxas (its .note.nv.tkinfo version, build and arguments, -v aside), every signature (sass_gate.signature) of each subroutine with a flagged instruction that it builds for ieee_pin.cu (ptxas specializes a body to its call sites, so one name may have several), and the numeric run (ieee_pin.py) that gated and ran those builds and found every sequence exact; a toolkit without one exempts nothing. Regenerate with: python sass_gate.py --pin BINARY... --toolkit NAME, ieee_pin.cu built with that toolkit with and without -fmad=false (POUW_CUDA_BIN naming its bin/); ieee_pin.py refuses to run when the entry isn't what its builds pin.",
  "toolkits": {
   "12.9.1": {
    "version": "Cuda compilation tools, release 12.9, V12.9.86",
@@ -10,12 +10,24 @@
     "-arch sm_120a -m 64 -fmad false"
    ],
    "subroutines": {
-    "__cuda_sm20_div_u16": "2ada2310b05d870e",
-    "__cuda_sm20_div_u64": "5158ef90e4234a25",
-    "__cuda_sm20_rcp_rn_f32_slowpath": "737c44ee88a60d48",
-    "__cuda_sm20_rem_s64": "1cdbf45ebf9ff2ed",
-    "__cuda_sm20_sqrt_rn_f32_slowpath": "be72a56c38542422",
-    "__cuda_sm3x_div_rn_noftz_f32_slowpath": "400b10e3dbb2f1e2"
+    "__cuda_sm20_div_u16": [
+     "2ada2310b05d870e"
+    ],
+    "__cuda_sm20_div_u64": [
+     "5158ef90e4234a25"
+    ],
+    "__cuda_sm20_rcp_rn_f32_slowpath": [
+     "737c44ee88a60d48"
+    ],
+    "__cuda_sm20_rem_s64": [
+     "1cdbf45ebf9ff2ed"
+    ],
+    "__cuda_sm20_sqrt_rn_f32_slowpath": [
+     "be72a56c38542422"
+    ],
+    "__cuda_sm3x_div_rn_noftz_f32_slowpath": [
+     "400b10e3dbb2f1e2"
+    ]
    },
    "numeric": null
   },
@@ -27,12 +39,25 @@
     "-arch sm_120a -m 64 -fmad false"
    ],
    "subroutines": {
-    "__cuda_sm20_div_u16": "f28777dafff5f987",
-    "__cuda_sm20_div_u64": "5158ef90e4234a25",
-    "__cuda_sm20_rcp_rn_f32_slowpath": "737c44ee88a60d48",
-    "__cuda_sm20_rem_s64": "1cdbf45ebf9ff2ed",
-    "__cuda_sm20_sqrt_rn_f32_slowpath": "be72a56c38542422",
-    "__cuda_sm3x_div_rn_noftz_f32_slowpath": "400b10e3dbb2f1e2"
+    "__cuda_sm20_div_u16": [
+     "2ada2310b05d870e",
+     "f28777dafff5f987"
+    ],
+    "__cuda_sm20_div_u64": [
+     "5158ef90e4234a25"
+    ],
+    "__cuda_sm20_rcp_rn_f32_slowpath": [
+     "737c44ee88a60d48"
+    ],
+    "__cuda_sm20_rem_s64": [
+     "1cdbf45ebf9ff2ed"
+    ],
+    "__cuda_sm20_sqrt_rn_f32_slowpath": [
+     "be72a56c38542422"
+    ],
+    "__cuda_sm3x_div_rn_noftz_f32_slowpath": [
+     "400b10e3dbb2f1e2"
+    ]
    },
    "numeric": null
   }

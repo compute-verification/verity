@@ -105,7 +105,7 @@ def test_every_refused_kernel_fails():
     assert {o["function"] for o in v["offending"]} == {"frsqrt_k", "rsqrtf_k", "expf_k", "fdividef_k", "sqrt_approx_k",
                                                        "add_ftz_k", "min_ftz_k", "setp_ftz_k", "cvt_ftz_k", "cdiv1_k"}
     assert [SG.opcode(i)[:2] for f, i in sorted(offending(v)) if f == "frsqrt_k"] == [["MUFU", "RSQ"]] * 2
-    assert any("isn't its pin" in o.get("why", "") for o in v["offending"] if o["function"] == "cdiv1_k")
+    assert any("isn't a pinned one" in o.get("why", "") for o in v["offending"] if o["function"] == "cdiv1_k")
 
 
 @pytest.mark.parametrize("text", ["FADD.FTZ R0, R2, R3", "@!P0 FFMA.FTZ R0, R1, R2, R3", "FFMA.RZ.FTZ R0, R1, R2, R3",
@@ -159,11 +159,15 @@ def test_a_toolkit_pinned_without_a_numeric_run_exempts_nothing():
 
 
 def test_a_subroutine_is_exempt_only_as_its_own_toolkit_builds_it():
-    """ptxas 13.0 builds __cuda_sm20_div_u16 differently: 12.9.1's body under 13.0.1's notes is refused, and back."""
-    for name, other in (("plain", "plain13"), ("plain13", "plain")):
-        v = verdict(name, notes=NOTES[other])
-        assert {o["function"] for o in v["offending"]} == {"udiv16_k"}
-        assert all("__cuda_sm20_div_u16's body" in o["why"] for o in v["offending"])
+    """ptxas 13.0 builds __cuda_sm20_div_u16 two ways, as its call site lets it (ieee_pin.cu's u16 and u16_call): the one
+    12.9 builds too, and one that converts the dividend as a u32, which 12.9.1 exempts nowhere."""
+    v = verdict("plain13", notes=NOTES["plain"])
+    assert {o["function"] for o in v["offending"]} == {"udiv16_k"}
+    assert all("__cuda_sm20_div_u16's body" in o["why"] for o in v["offending"])
+    assert verdict("plain", notes=NOTES["plain13"])["offending_n"] == 0
+    tk = SG.load_pins()["toolkits"]
+    assert tk["12.9.1"]["subroutines"]["__cuda_sm20_div_u16"] == ["2ada2310b05d870e"]
+    assert tk["13.0.1"]["subroutines"]["__cuda_sm20_div_u16"] == ["2ada2310b05d870e", "f28777dafff5f987"]
 
 
 # ---- the sequences --------------------------------------------------------------------------------------------------------
@@ -211,6 +215,38 @@ def test_a_constant_numerator_must_be_the_constant_fchk_checks():
     assert "FCHK's numerator R8 isn't the constant 3" in v["offending"][0]["why"]
 
 
+PIPE = ("ISETP.GT.U32.AND P0, PT, R4, 0x727fffff, PT ;\n"
+        "        /*0094*/               @P1 BRA `(.L_x_90) ;\n"
+        "        /*0098*/                   {arm} ;\n"
+        ".L_x_90:\n")
+
+
+def pipelined(arm: str, text: str | None = None) -> str:
+    """sqrt_k with a branch between its range check (and seed) and the branch to the slow path, as ptxas schedules a loop
+    that records the last iteration's result there (ieee_pin.cu's sqrt_all)."""
+    return in_function(listing("plain") if text is None else text, "sqrt_k",
+                       "ISETP.GT.U32.AND P0, PT, R4, 0x727fffff, PT ;\n", PIPE.format(arm=arm))
+
+
+def test_a_range_check_and_seed_in_an_earlier_block_are_found_on_every_path():
+    assert verdict("plain", text=pipelined("STG.E desc[UR4][R2.64], R7"))["covered"] == PLAIN_COVERED
+
+
+@pytest.mark.parametrize("arm,why", [("MOV R0, R7", "$x changes between the range check and the branch"),
+                                     ("MOV R5, R7", "the fast block's $r isn't MUFU.RSQ $r, $x"),
+                                     ("ISETP.NE.AND P0, PT, R7, RZ, PT", "the range check's $P isn't")])
+def test_a_write_on_one_path_between_the_check_and_the_branch_is_not_exempt(arm, why):
+    v = verdict("plain", text=pipelined(arm))
+    assert offending(v) == SQRT_K and any(why in m for m in v["unmatched_calls"])
+
+
+def test_a_path_to_the_branch_that_misses_the_range_check_is_not_exempt():
+    text = after(pipelined("STG.E desc[UR4][R2.64], R7"), "sqrt_k", "LDG.E R0, desc[UR4][R2.64]", "@P2 BRA `(.L_x_90)",
+                 0x58)
+    v = verdict("plain", text=text)
+    assert offending(v) == SQRT_K and any("the range check's $P isn't" in m for m in v["unmatched_calls"])
+
+
 def test_integer_division_seed_must_round_up_by_two_ulps():
     text = in_function(listing("plain"), "udiv_k", "IADD3 R6, PT, PT, R0, 0xffffffe, RZ", "IADD3 R6, PT, PT, R0, 0xfffffff, RZ")
     v = verdict("plain", text=text)
@@ -241,7 +277,7 @@ def test_a_read_the_gate_cant_tell_from_a_merge_passes_and_is_listed():
     assert v["merged_reads"] == [{"function": "merge_k", "sequence": "int-seed", "value": "R0 from 0x0010",
                                   "reader": "0x0060 STG.E desc[UR4][R2.64], R0"}]
     v = SG.cubin_verdict(SG.parse_nvdisasm(MERGE.replace("MOV R0, 0x5", "MOV R9, 0x5")), NOTES["plain"], pins())
-    assert v["offending_n"] == 2 and "R0 from 0x0010 is read outside the sequence at 0x0060" in v["offending"][0]["why"]
+    assert v["offending_n"] == 2 and "the seed has no one next step" in v["offending"][0]["why"]
 
 
 def test_moves_after_a_call_may_be_either_spelling_and_nothing_else():
@@ -287,13 +323,18 @@ def records(tmp_path, monkeypatch):
     return record
 
 
-def test_pinning_a_toolkit_from_its_builds_reproduces_its_entry(tmp_path, records):
+def test_the_probe_pins_a_part_of_each_entry(tmp_path, records):
+    """The pins come from ieee_pin.cu's builds (ieee_pin.py checks they are what those builds pin); the probe's bodies are
+    among them, and pinning the probe alone gives the same entry with those bodies."""
     shipped = SG.load_pins()
     out = tmp_path / "pins.json"
     for tk, name in (("12.9.1", "plain"), ("13.0.1", "plain13")):
         entry = SG.update_pins(records(name), tk, out)
-        assert entry == {**shipped["toolkits"][tk], "args": ["-arch sm_120a -m 64"], "numeric": None}
-    assert json.loads(out.read_text())["signatures"] == shipped["signatures"]
+        want = shipped["toolkits"][tk]
+        assert entry == {**want, "args": ["-arch sm_120a -m 64"], "numeric": None, "subroutines": entry["subroutines"]}
+        assert entry["subroutines"].keys() == want["subroutines"].keys()
+        assert all(set(s) <= set(want["subroutines"][n]) for n, s in entry["subroutines"].items())
+    assert json.loads(out.read_text())["signatures"].items() <= shipped["signatures"].items()
 
 
 def test_a_numeric_run_survives_a_repin_only_while_the_subroutines_are_unchanged(tmp_path, records):
@@ -309,20 +350,28 @@ def test_a_numeric_run_survives_a_repin_only_while_the_subroutines_are_unchanged
     assert SG.update_pins(other, "12.9.1", out)["numeric"] is None
 
 
-def test_pinning_refuses_two_ptxas_builds_or_two_bodies_of_one_subroutine(tmp_path, records):
+def test_pinning_refuses_two_ptxas_builds_and_keeps_every_body_of_a_subroutine(tmp_path, records):
     a, b = records("plain"), records("plain13")
     with pytest.raises(SG.SassGateFailed, match="the builds name 2 ptxas builds, not one"):
         SG.update_pins(a + b, "x", tmp_path / "pins.json")
-    with pytest.raises(SG.SassGateFailed, match="__cuda_sm20_div_u16 has two signatures across the builds"):
-        SG.update_pins(a + [{**r, "tool_notes": NOTES["plain"]} for r in b], "x", tmp_path / "pins.json")
+    entry = SG.update_pins(a + [{**r, "tool_notes": NOTES["plain"]} for r in b], "x", tmp_path / "pins.json")
+    assert entry["subroutines"]["__cuda_sm20_div_u16"] == ["2ada2310b05d870e", "f28777dafff5f987"]
 
 
 def test_the_shipped_pins_are_consistent():
     """Every pinned subroutine has its signature's blocks, and every signature is some toolkit's."""
     p = SG.load_pins()
-    live = {sid for tk in p["toolkits"].values() for sid in tk["subroutines"].values()}
+    live = {sid for tk in p["toolkits"].values() for sids in tk["subroutines"].values() for sid in sids}
     assert live == set(p["signatures"])
     assert all(SG.signature_id(p["signatures"][sid]) == sid for sid in live)
+
+
+def test_pins_of_another_format_are_refused(tmp_path):
+    """v1 named one signature per subroutine as a string, which `in` would read as a substring."""
+    p = tmp_path / "pins.json"
+    p.write_text(json.dumps({**SG.load_pins(), "version": "sass-pins/v1"}))
+    with pytest.raises(SG.SassGateFailed, match="is 'sass-pins/v1', not sass-pins/v2"):
+        SG.load_pins(p)
 
 
 # ---- tool notes -----------------------------------------------------------------------------------------------------------

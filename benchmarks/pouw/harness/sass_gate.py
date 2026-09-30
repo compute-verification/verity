@@ -12,26 +12,27 @@ ptxas builds div.rn, sqrt.rn, rcp.rn and integer division from flagged instructi
 passes only inside one of these sequences, and only in a cubin whose .note.nv.tkinfo names a ptxas pinned in `sass_pins.json`
 with its arguments (-v aside) and a numeric run; any other ptxas, other arguments, no note (12.9's sm_90a cubins have none)
 or no numeric run, and nothing is exempt:
-- a subroutine whose body has its toolkit's pinned signature (each basic block's instruction shapes, registers, moves
-  between them and the way an immediate is loaded aside): ``__cuda_sm20_rcp_rn_f32_slowpath``,
-  ``__cuda_sm20_sqrt_rn_f32_slowpath``, ``__cuda_sm3x_div_rn_noftz_f32_slowpath``, ``__cuda_sm20_div_u16``,
-  ``__cuda_sm20_div_u64``, ``__cuda_sm20_rem_s64``. ptxas folds a constant numerator into a function's copy of the div slow
-  path when it is the function's only division; that body isn't the pin;
+- a subroutine whose body has one of its toolkit's pinned signatures (each basic block's instruction shapes, registers,
+  moves between them and the way an immediate is loaded aside): ``__cuda_sm20_rcp_rn_f32_slowpath``,
+  ``__cuda_sm20_sqrt_rn_f32_slowpath``, ``__cuda_sm3x_div_rn_noftz_f32_slowpath``, ``__cuda_sm20_div_u16`` (two at 13.0:
+  ptxas specializes it to its call sites), ``__cuda_sm20_div_u64``, ``__cuda_sm20_rem_s64``. ptxas folds a constant
+  numerator into a function's copy of the div slow path when it is the function's only division; that body isn't pinned;
 - rcp.rn's and sqrt.rn's fast path around a call into a pinned body (`FAST`): the range check, the branch, the call and the
   four-instruction fast block;
 - div.rn's fast path (`DIV`): MUFU.RCP b, its five FFMAs and FCHK, and the branch around a call into a pinned body; a
   constant numerator is an immediate in the FFMAs, and FCHK's numerator register must hold the same bits;
 - integer division's seed (`match_int_seed`): I2F.RP d, MUFU.RCP, +2 ulp (IADD3 0xffffffe, or 0x1ffffffe at 64 bits), then
-  F2I(.FTZ).U32/U64.TRUNC, each step the one reader of the last in its block; the F2I's input is a normal float, so .FTZ
-  can't change it.
+  F2I(.FTZ).U32/U64.TRUNC, each step the one reader of the last that only its value reaches; the F2I's input is a normal
+  float, so .FTZ can't change it.
 rsqrt has no entry: at default flags ptxas builds __frsqrt_rn from bare MUFU.RSQ, so it's refused.
-Every operand of a matched sequence is its reaching definition in the basic block, and every value the sequence computes
-other than its result is read only by the sequence until overwritten, on every path through branches (whose predicates it
-follows), calls (into the subroutine's body) and returns (to every call site) (`readers`). A read outside the sequence
-that another write of the register also reaches passes as a merge the gate can't rule out, such as a read on a path it
-can't show infeasible, and is listed (``merged_reads``). The numeric evidence that each sequence is exact on subnormal inputs
-and outputs, as each pinned ptxas builds it, is `native/ieee_pin.cu` (``jobs/ieee-pin.sh``), whose run `sass_pins.json`
-names.
+Every operand of a matched sequence is the one definition that reaches it on every path (a sequence may straddle blocks, as
+when ptxas hoists a loop's next range check and seed above the last iteration's tail), inputs unchanged between their
+readers on every path, and every value the sequence computes other than its result is read only by the sequence until
+overwritten, on every path through branches (whose predicates it follows), calls (into the subroutine's body) and returns
+(to every call site) (`readers`). A read outside the sequence that another write of the register also reaches passes as a
+merge the gate can't rule out, such as a read on a path it can't show infeasible, and is listed (``merged_reads``). The
+numeric evidence that each sequence is exact on subnormal inputs and outputs, as each pinned ptxas builds it, is
+`ieee_pin.cu`, run by `ieee_pin.py`, whose run each toolkit's ``numeric`` names; its builds are where the pins come from.
 
 The cubins come from a .cubin, a fatbin, or a host ELF's .nv_fatbin section (parsed here, since ``cuobjdump -xelf`` writes
 same-named cubins over each other), each disassembled by nvdisasm; ``cuobjdump -sass`` of the whole binary must list the same
@@ -61,7 +62,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-VERSION = "sass-gate/v3"
+VERSION = "sass-gate/v4"
 EXIT_FAIL = 7
 PINS = Path(__file__).with_name("sass_pins.json")
 NVIDIA_LIB = re.compile(r"lib(cublas|cublasLt|cudart|cuda|nvrtc|nvrtc-builtins|nvJitLink|cufft|cufftw|curand|cusparse|cusolver"
@@ -259,8 +260,10 @@ class Function:
             end = fn["sizes"].get(lab)
             if m and end in self.labels and self.labels[end] > i:
                 self.subroutines[lab] = (m.group(1), i, self.labels[end])
+        self.sub_starts = frozenset(s for _, s, _ in self.subroutines.values())
         self._effects: dict[tuple[str, str], tuple[bool, bool] | None] = {}
         self._preds: dict[int, list[int]] | None = None
+        self._preds_built = False
         self._guards: dict[str, set[str]] = {}
         for ins in self.insns:
             if ins.guard:
@@ -287,28 +290,78 @@ class Function:
             return []
         return [k + 1]
 
+    def _pred_map(self) -> dict[int, list[int]] | None:
+        """Each instruction's possible predecessors; None when a branch is indirect."""
+        if not self._preds_built:
+            self._preds_built = True
+            preds: dict[int, list[int]] = {}
+            for k in range(len(self.insns)):
+                s = self.succ(k)
+                if s is None:
+                    return None
+                for t in s:
+                    preds.setdefault(t, []).append(k)
+            self._preds = preds
+        return self._preds
+
+    def before(self, i: int) -> list[int] | None:
+        """The instructions that may run just before i: [] at the function's or a subroutine's entry; None when unknown (a
+        label, in a function with an indirect branch)."""
+        if i in self.sub_starts:
+            return []
+        preds = self._pred_map()
+        if preds is not None:
+            return preds.get(i, [])
+        if i in self.label_at or i == 0:
+            return None
+        s = self.succ(i - 1)
+        return [i - 1] if s is not None and i in s else []
+
     def reach(self, k: int, reg: str) -> int | None:
-        """The instruction whose result `reg` holds at k, searched back through k's basic block: None when a label, a call,
-        the block's start, or a guarded or partial write comes first."""
-        i = k
-        while i not in self.label_at and i > 0:
-            j = i - 1
-            p = self.insns[j]
-            if p.op[0] in ("CALL", "EXIT", "RET") or p.op[0] in INDIRECT or (p.op[0] == "BRA" and p.unconditional()):
+        """The instruction whose result `reg` holds at k on every path to k: None when paths differ, or one meets a call, an
+        entry, a guarded or partial write, or a label it can't see behind (a function with an indirect branch)."""
+        found, seen, stack = None, set(), [k]
+        while stack:
+            ps = self.before(stack.pop())
+            if not ps:
                 return None
-            if reg in p.maydef:
-                return j if reg in p.kills else None
-            i = j
-        return None
+            for j in ps:
+                if j in seen:
+                    continue
+                seen.add(j)
+                p = self.insns[j]
+                if p.op[0] == "CALL" or p.op[0] in INDIRECT:
+                    return None
+                if reg in p.maydef:
+                    if reg not in p.kills or found not in (None, j):
+                        return None
+                    found = j
+                else:
+                    stack.append(j)
+        return found
 
     def steady(self, reg: str, i: int, j: int) -> bool:
-        """`reg` holds the same value when j reads it as when i does (i <= j, one basic block)."""
-        return all(t not in self.label_at for t in range(i + 1, j + 1)) and all(
-            reg not in self.insns[t].maydef and self.insns[t].op[0] != "CALL" for t in range(i, j))
+        """`reg` holds the same value when j reads it as when i does: every path to j passes i, and nothing from i on writes
+        `reg` or calls."""
+        seen, stack = set(), [j] if i != j else []
+        while stack:
+            ps = self.before(stack.pop())
+            if not ps:
+                return False
+            for t in ps:
+                if t in seen:
+                    continue
+                seen.add(t)
+                p = self.insns[t]
+                if reg in p.maydef or p.op[0] == "CALL" or p.op[0] in INDIRECT:
+                    return False
+                if t != i:
+                    stack.append(t)
+        return True
 
     def holds(self, reg: str, d: int, j: int) -> bool:
-        """`reg` still holds, when j reads it, the value d wrote (d < j, one basic block)."""
-        return d < j and self.steady(reg, d + 1, j) and d + 1 not in self.label_at
+        """`reg` still holds, when j reads it, the value d wrote."""
+        return self.reach(j, reg) == d
 
     def callee_effect(self, k: int, reg: str) -> tuple[bool, bool] | None:
         """For the subroutine CALL k enters: (whether it may read `reg` before writing it, whether it writes `reg` on every
@@ -324,18 +377,9 @@ class Function:
     def defined_elsewhere(self, u: int, reg: str, d: int) -> bool:
         """Whether a write of `reg` besides d reaches u, so that u reads a merge of d's value and another: an unguarded
         write, or a call into a subroutine that writes it on every path. False when a branch is indirect."""
-        if self._preds is None:
-            preds: dict[int, list[int]] = {}
-            for k in range(len(self.insns)):
-                s = self.succ(k)
-                if s is None:
-                    preds = {}
-                    break
-                for t in s:
-                    preds.setdefault(t, []).append(k)
-            self._preds = preds
+        preds = self._pred_map() or {}
         seen: set[int] = set()
-        stack = list(self._preds.get(u, ()))
+        stack = list(preds.get(u, ()))
         while stack:
             j = stack.pop()
             if j in seen or j == d:
@@ -344,7 +388,7 @@ class Function:
             ins = self.insns[j]
             if reg in ins.kills or (ins.op[0] == "CALL" and ins.guard is None and self.must_write(j, reg)):
                 return True
-            stack.extend(self._preds.get(j, ()))
+            stack.extend(preds.get(j, ()))
         return False
 
     def return_sites(self, i: int) -> list[int]:
@@ -643,19 +687,16 @@ def match_fast(fn: Function, c: int, kind: str, bodies: frozenset[str]) -> Match
         members.add(d)
     if not fn.steady(env["x"], at, g):
         return "$x changes between the range check and the branch"
-    if "seed" in spec:
-        d = g - 1
-        while d >= 0 and unify(spec["seed"][0], fn.insns[d], env) is None and d not in fn.label_at:
-            d -= 1
-        env = unify(spec["seed"][0], fn.insns[d], env) if d >= 0 else None
-        if env is None or fn.reach(g, env["r"]) != d or not fn.steady(env["x"], d, g):
-            return "no MUFU.RSQ $r, $x before the branch"
-        members.add(d)
-        inner.append((d, env["r"]))
     hit = _block(fn, fast, spec["block"], env)
     if hit is None:
         return f"the fast block at 0x{fn.insns[fast].addr:04x} isn't {kind}.rn's"
     env, pats = hit
+    if "seed" in spec:
+        d = fn.reach(fast, env["r"])
+        if d is None or unify(spec["seed"][0], fn.insns[d], env) is None or not fn.steady(env["x"], d, g):
+            return "the fast block's $r isn't MUFU.RSQ $r, $x of the branch's $x"
+        members.add(d)
+        inner.append((d, env["r"]))
     defs = {_defines(p): t for t, p in pats.items()}
     if (e := _flows(fn, defs, env, pats)) is not None:
         return e
@@ -694,7 +735,7 @@ def _immediate(ins: Insn) -> int | None:
 
 
 def constant(fn: Function, k: int, reg: str) -> int | None:
-    """The 32 bits `reg` holds at k when a load of an immediate within k's basic block set them, else None."""
+    """The 32 bits `reg` holds at k when a load of an immediate set them on every path to k, else None."""
     d = fn.reach(k, reg)
     if d is None:
         return None
@@ -770,8 +811,8 @@ def match_int_seed(fn: Function, k0: int) -> Match | str:
     members, inner = {d, k0}, [(k0, r)]
 
     def link(k: int, reg: str) -> int | None:
-        """The one reader of k's `reg` that k's value reaches within the block (the chain's next step); `_escape` then
-        judges the others."""
+        """The one reader of k's `reg` that only k's value reaches (the chain's next step); `_escape` then judges the
+        others."""
         uses = fn.readers(k, reg)
         near = [u for u in uses or () if fn.reach(u, reg) == k]
         return near[0] if len(near) == 1 else None
@@ -779,7 +820,7 @@ def match_int_seed(fn: Function, k0: int) -> Match | str:
     at, val = k0, r
     u = link(k0, r)
     if u is None:
-        return "the seed has no one next step in its block"
+        return "the seed has no one next step"
     ui = fn.insns[u]
     if ui.name == "R2UR" and not ui.guard and ui.args[1:] == [r]:
         members.add(u)
@@ -787,7 +828,7 @@ def match_int_seed(fn: Function, k0: int) -> Match | str:
         at, val = u, ui.args[0]
         u = link(at, val)
         if u is None:
-            return "the uniform seed has no one next step in its block"
+            return "the uniform seed has no one next step"
         ui = fn.insns[u]
     pt, zero = ("UPT", "URZ") if ui.name == "UIADD3" else ("PT", "RZ")
     if ui.guard or ui.name not in ("IADD3", "UIADD3") or ui.args[1:3] != [pt, pt] or ui.args[3:] != [val, ui.args[4], zero] \
@@ -884,8 +925,18 @@ def tool_notes(cubin: bytes) -> list[dict]:
     return out
 
 
+PINS_VERSION = "sass-pins/v2"
+
+
+def parse_pins(data: bytes | str, where: str) -> dict:
+    pins = json.loads(data)
+    if pins.get("version") != PINS_VERSION:
+        raise SassGateFailed(f"{where} is {pins.get('version')!r}, not {PINS_VERSION}")
+    return pins
+
+
 def load_pins(path: Path = PINS) -> dict:
-    return json.loads(path.read_text())
+    return parse_pins(path.read_bytes(), str(path))
 
 
 def toolkit_of(notes: list[dict], pins: dict) -> tuple[str | None, str | None]:
@@ -924,12 +975,12 @@ def cubin_verdict(funcs: list[dict], notes: list[dict], pins: dict) -> dict:
         for lab, (name, s, e) in fn.subroutines.items():
             if name in pinned:
                 sid = signature_id(signature(fn, s, e))
-                good |= {lab} if sid == pinned[name] else set()
+                good |= {lab} if sid in pinned[name] else set()
                 for k in range(s, e):
-                    if sid == pinned[name]:
+                    if sid in pinned[name]:
                         covered[(fi, k)] = name
                     else:
-                        hints[(fi, k)] = f"{name}'s body (signature {sid}) isn't its pin {pinned[name]}"
+                        hints[(fi, k)] = f"{name}'s body (signature {sid}) isn't a pinned one ({', '.join(pinned[name])})"
         bodies = frozenset(good)
         found: list[Match] = []
         for k, ins in enumerate(fn.insns):
@@ -1164,7 +1215,7 @@ def scan(path: str | Path, tools: dict, cache: Path | None = None, pins_path: Pa
         raise SassGateFailed(f"{path}: no SASS (PTX only: the driver would JIT it); ship sm_120a SASS")
     rec = {"path": str(path), "sha256": sha, "bytes": len(data), "pins_sha256": hashlib.sha256(pins_bytes).hexdigest(),
            **judge(_disassemble(cubins, tools), _run([tools["cuobjdump"]["path"], "-sass", str(path)]), ptx,
-                   json.loads(pins_bytes)), "cached": False}
+                   parse_pins(pins_bytes, str(pins_path))), "cached": False}
     if rec["ok"] and hit:
         hit.parent.mkdir(parents=True, exist_ok=True)
         tmp = hit.with_suffix(f".{os.getpid()}.tmp")
@@ -1277,30 +1328,31 @@ def pin_record(paths: list[Path], tools: dict) -> list[dict]:
 
 def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
     """Pin `toolkit` from `pin_record`s of its builds: the one ptxas version and build their notes name, the arguments
-    (-v aside), and the signature of each subroutine with a flagged instruction, one per name. Its numeric run is kept
-    while those signatures are unchanged."""
+    (-v aside), and every signature of each subroutine with a flagged instruction (ptxas specializes a body to its
+    callers, so one name may have several). Its numeric run is kept while those signatures are unchanged."""
     notes = [n for r in records for n in r["tool_notes"] if n["tool"] == "ptxas"]
     builds = {(n["version"], n["branch"]) for n in notes}
     if len(builds) != 1:
         raise SassGateFailed(f"the builds name {len(builds)} ptxas builds, not one")
     (version, branch), = builds
-    subs: dict[str, str] = {}
+    subs: dict[str, set[str]] = {}
     blocks: dict[str, list] = {}
     for r in records:
         for name, sigs in r["subroutines"].items():
             for sid, b in sigs.items():
                 if any(flagged(opcode(t.split(" ", 1)[1] if t.startswith("@") else t)) for blk in b for t in blk):
-                    if subs.setdefault(name, sid) != sid:
-                        raise SassGateFailed(f"{name} has two signatures across the builds ({subs[name]}, {sid})")
+                    subs.setdefault(name, set()).add(sid)
                     blocks[sid] = b
-    pins = load_pins(path) if path.exists() else {"version": "sass-pins/v1", "toolkits": {}, "signatures": {}}
+    pinned = {name: sorted(s) for name, s in sorted(subs.items())}
+    pins = load_pins(path) if path.exists() else {"version": "sass-pins/v2", "toolkits": {}, "signatures": {}}
     old = pins["toolkits"].get(toolkit, {})
+    pins["version"] = "sass-pins/v2"
     pins["toolkits"][toolkit] = {
         "version": version, "branch": branch,
         "args": sorted({" ".join(a for a in n["args"].split() if a != "-v") for n in notes}),
-        "subroutines": dict(sorted(subs.items())),
-        "numeric": old.get("numeric") if old.get("subroutines") == dict(sorted(subs.items())) else None}
-    live = {sid for t in pins["toolkits"].values() for sid in t["subroutines"].values()}
+        "subroutines": pinned,
+        "numeric": old.get("numeric") if old.get("subroutines") == pinned else None}
+    live = {sid for t in pins["toolkits"].values() for sids in t["subroutines"].values() for sid in sids}
     pins["signatures"] = {sid: b for sid, b in sorted({**pins["signatures"], **blocks}.items()) if sid in live}
     path.write_text(json.dumps(pins, indent=1) + "\n")
     return pins["toolkits"][toolkit]
