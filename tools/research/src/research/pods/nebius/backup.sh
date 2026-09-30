@@ -50,8 +50,13 @@ pack() {   # pack NAME LABEL TAR-ARGS...: one deterministic tarball in 60 MiB ch
            # previous backup's chunks when the whole tarball is identical.  Every object stays a single PUT: multipart uploads of
            # larger files stalled from node 2 (connections left in CLOSE-WAIT at 0 B/s)
   local name=$1 label=$2; shift 2
-  local tmp="$DEST/tars/.$name.tmp"
-  "${TAR[@]}" -cf - "$@" 2> /dev/null | zstd -q -3 -T1 > "$tmp"
+  local tmp="$DEST/tars/.$name.tmp" try
+  # a unit a running job rewrites can change or lose a file mid-read (tar exits non-zero): retry it, and after three misses
+  # leave it to the next hour's backup (skipped.txt) rather than lose every unit after it
+  for try in 1 2 3; do
+    if "${TAR[@]}" -cf - "$@" 2> /dev/null | zstd -q -3 -T1 > "$tmp"; then break; fi
+    if [ "$try" = 3 ]; then rm -f "$tmp"; echo "$label" >> "$DEST/skipped.txt"; return 0; fi
+  done
   local sum size prev n
   sum=$(sha256sum "$tmp" | cut -d' ' -f1)
   size=$(stat -c %s "$tmp")
@@ -77,7 +82,8 @@ done < "$DEST/units.txt"
 [ -s "$DEST/loose.txt" ] && pack loose "(loose files)" --no-recursion -T "$DEST/loose.txt"
 units=$(($(wc -l < "$DEST/MANIFEST.tsv") - 1))
 bytes=$(awk -F'\t' 'NR > 1 {s += $4} END {print s + 0}' "$DEST/MANIFEST.tsv")
-printf '{"schema": "pouw-backup/v2", "source": "%s", "units": %d, "bytes": %d, "large_units_left_out": %d, "linked_to": "%s", "at": "%s"}\n' \
-  "$SRC" "$units" "$bytes" "$(grep -c . "$DEST/large.txt" || true)" "$PREV" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEST/summary.json"
+printf '{"schema": "pouw-backup/v2", "source": "%s", "units": %d, "bytes": %d, "large_units_left_out": %d, "skipped_units": %d, "linked_to": "%s", "at": "%s"}\n' \
+  "$SRC" "$units" "$bytes" "$(grep -c . "$DEST/large.txt" || true)" "$(cat "$DEST/skipped.txt" 2> /dev/null | grep -c . || true)" "$PREV" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$DEST/summary.json"
 ln -sfn "$DEST" "$LAST"
 cat "$DEST/summary.json"

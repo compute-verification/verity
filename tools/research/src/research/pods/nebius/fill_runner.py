@@ -28,7 +28,7 @@ Every POLL_S seconds the runner:
   - stops a job past its max_min (not counting time paused) and requeues it;
   - starts GPU jobs on every free GPU beyond RESERVE when nobody waits, except the GPUs listed in FILL_DIR/keep-free
     (e.g. `1`, or `0,1`, with an optional `# reason`), and CPU jobs up to CPU_SLOTS, pinned
-    to CPU_SET at nice 19.
+    to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits.
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 """
 from __future__ import annotations
@@ -65,6 +65,9 @@ VERITY_DISK_PCT = float(os.environ.get("FILL_VERITY_DISK_PCT", "55"))
 VERITY_UNTIL = datetime.fromisoformat(os.environ.get("FILL_VERITY_UNTIL", "2026-10-07T12:00:00+00:00"))
 VERITY_STOP = datetime.fromisoformat(os.environ.get("FILL_VERITY_STOP", "2026-10-07T13:00:00+00:00"))
 VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
+# the pool lends its idle slots to queued pous CPU jobs (Daniel 19:12Z: borrowing goes both ways); a Verity job that can't start
+# takes a slot back by requeueing the newest lent job (143, as a preempted job)
+VERITY_LEND = os.environ.get("FILL_VERITY_LEND", "1") == "1"
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
@@ -176,19 +179,22 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     env = {**os.environ, "FILL": "1", "FILL_JOB": name, "GPU_LEASE_WHO": f"fill:{h['owner']}",
            "OMP_NUM_THREADS": str(h["cpus"])}
     verity = h["project"] == "verity" and not h["gpus"]
+    in_pool = verity or h.get("lent")
     unit_name = None
-    cmd = ["nice", "-n", "19", "taskset", "-c", VERITY_CPU_SET if verity else CPU_SET, "bash", str(run)]
+    cmd = ["nice", "-n", "19", "taskset", "-c", VERITY_CPU_SET if in_pool else CPU_SET, "bash", str(run)]
     if h["gpus"]:
         pin = ["--on", str(h["on"])] if h.get("on") is not None else []
         cmd = [GPU_LEASE, "1", *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
     elif shutil.which("systemd-run"):
-        unit_name = f"fill-verity-{int(time.time() * 1000)}" if verity else None
+        unit_name = f"fill-{'verity' if verity else 'lent'}-{int(time.time() * 1000)}" if in_pool else None
         unit = ["--unit", unit_name] if unit_name else []
         cmd = ["systemd-run", "--user", "--scope", "--quiet", "--collect", *unit, "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G",
                "-p", "MemorySwapMax=0", "--", *cmd]
     proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, cwd=str(FILL), start_new_session=True)
     log.close()
     (FILL / "running" / f".{name}.pgid").write_text(f"{proc.pid}\n")
+    if unit_name:
+        (FILL / "running" / f".{name}.unit").write_text(f"{unit_name}\n")
     running[name] = {"pid": proc.pid, "proc": proc, "h": h, "t0": time.monotonic(), "started": now(), "paused": False,
                      "unit": unit_name}
     event("start", name, owner=h["owner"], gpus=h["gpus"], project=h["project"], backfill=backfill)
@@ -251,6 +257,7 @@ def reap() -> None:
         mins = round((time.monotonic() - j["t0"]) / 60, 1)
         paused_min = round((j.get("paused_s", 0.0) + (time.monotonic() - j["paused_at"] if j["paused"] else 0.0)) / 60, 1)
         (FILL / "running" / f".{name}.pgid").unlink(missing_ok=True)
+        (FILL / "running" / f".{name}.unit").unlink(missing_ok=True)
         if rc == "adopted-exit":
             dest, kind = "queue", "adopted-exit"      # its own checkpoint makes the rerun a no-op if it finished
         elif j.get("stopping") and j.get("requeue"):
@@ -280,6 +287,7 @@ def disk_pct(path: str) -> float:
 def verity_pool(queued: list) -> None:
     t = datetime.now(timezone.utc)
     jobs = {k: j for k, j in running.items() if not j["h"]["gpus"] and j["h"]["project"] == "verity"}
+    lent = {k: j for k, j in running.items() if j["h"].get("lent") and not j.get("stopping")}
     if t >= VERITY_STOP:
         for k, j in jobs.items():
             if not j.get("stopping"):
@@ -287,18 +295,38 @@ def verity_pool(queued: list) -> None:
         return
     if t >= VERITY_UNTIL or disk_pct(VERITY_DISK_PATH) >= VERITY_DISK_PCT:
         return
-    mem = sum(int(j["h"].get("mem_gb", CPU_MEM_GB)) for j in jobs.values())
+    mem = sum(int(j["h"].get("mem_gb", CPU_MEM_GB)) for j in [*jobs.values(), *lent.values()])
     left = [x for x in queued if not x[1]["gpus"] and x[1]["project"] == "verity"]
     counts = Counter(j["h"]["owner"] for j in jobs.values())
-    slots = VERITY_CPU_SLOTS - len(jobs)
-    while left and slots > 0:
+    slots = VERITY_CPU_SLOTS - len(jobs) - len(lent)
+    held = False
+    while left:
         best = next_job(left, counts)
         left.remove(best)
         p, h, _ = best
         need = min(int(h.get("mem_gb", CPU_MEM_GB)), VERITY_MEM_MAX_GB)
-        if mem + need > VERITY_MEM_TOTAL_GB:
+        if slots <= 0 or mem + need > VERITY_MEM_TOTAL_GB:
+            held = True
             continue
         start(p, {**h, "mem_gb": need})
+        counts[h["owner"]] += 1
+        mem += need
+        slots -= 1
+    if held and lent:
+        stop(max(lent, key=lambda k: lent[k]["t0"]), "the Verity pool takes its slot back")
+        return
+    if held or not VERITY_LEND:
+        return
+    borrow = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity" and x[0].exists()]
+    counts = Counter(j["h"]["owner"] for j in lent.values())
+    while borrow and slots > 0:
+        best = next_job(borrow, counts)
+        borrow.remove(best)
+        p, h, _ = best
+        need = min(int(h.get("mem_gb", CPU_MEM_GB)), VERITY_MEM_MAX_GB)
+        if mem + need > VERITY_MEM_TOTAL_GB:
+            continue
+        start(p, {**h, "mem_gb": need, "lent": True})
         counts[h["owner"]] += 1
         mem += need
         slots -= 1
@@ -381,7 +409,7 @@ def tick(n: int) -> str:
             slots -= 1
             started = True
     if not timed:
-        pous_cpu = [j for j in running.values() if not j["h"]["gpus"] and j["h"]["project"] != "verity"]
+        pous_cpu = [j for j in running.values() if not j["h"]["gpus"] and j["h"]["project"] != "verity" and not j["h"].get("lent")]
         left = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity"]
         counts = Counter(j["h"]["owner"] for j in pous_cpu)
         cpu_running = len(pous_cpu)
@@ -422,8 +450,15 @@ def main() -> None:
             stopped = Path(f"/proc/{pgid}/stat").read_text().rsplit(")", 1)[1].split()[0] == "T"
         except OSError:
             stopped = False
-        running[p.name] = {"pid": pgid, "proc": None, "h": header(p), "t0": time.monotonic(), "started": now(),
-                           "paused": stopped, "paused_at": time.monotonic()}
+        try:
+            unit = (FILL / "running" / f".{p.name}.unit").read_text().strip() or None
+        except OSError:
+            unit = None
+        h = header(p)
+        if unit and unit.startswith("fill-lent-"):
+            h["lent"] = True
+        running[p.name] = {"pid": pgid, "proc": None, "h": h, "t0": time.monotonic(), "started": now(),
+                           "paused": stopped, "paused_at": time.monotonic(), "unit": unit}
         event("adopted", p.name, pgid=pgid)
     n = gpu_count()
     while True:
