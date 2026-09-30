@@ -45,6 +45,15 @@
 # --timed (or GPU_LEASE_TIMED=1) tags a timed window: the lease records timed=1, and the server's ops daemon keeps the machine quiet
 # while it is held (it pauses other CPU-heavy work; on vy-nebius-2, node_ops.py).  A lease of every GPU by one holder counts as one
 # too.
+#
+# Usage, report only: when CMD exits (any status), gpu-lease releases the GPUs and then tells the holder on stderr, per GPU, how long
+# it held it and how much of that the node's utilisation sampler saw busy (util > 0 or SM activity >= 1%), with a hint to prepare
+# on the CPU outside the lease when the GPU was busy under half of at least 5 sampled minutes.  It appends a gpu-lease/usage/v1
+# record to $RESEARCH_RUN_DIR/gpu-lease-usage.jsonl (published with the run) and to $GPU_LEASE_USAGE_LOG (default
+# /workspace/research/lease-usage.jsonl).  The readings come from $GPU_LEASE_UTIL_LOG, a glob of JSONL lines {"t", "gpus": [{"i",
+# "uuid", "util", "smact"}]} each covering $GPU_LEASE_UTIL_CADENCE_S seconds (default /workspace/pouw/infra/util/*.jsonl, every 10 s),
+# never from NVML, so a timed window stays quiet; with no log a lease records its held time alone.  Nothing is refused or stopped
+# on it, and CMD's exit status is gpu-lease's.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -95,7 +104,10 @@ stop_lease() {
     sig=KILL
   fi
   [ -n "$pid" ] || return 0
-  if [ -z "$unit" ] || ! systemctl --user kill --signal="$sig" "$unit.scope" 2> /dev/null; then kill -s "$sig" "$pid" 2> /dev/null; fi
+  if [ -z "$unit" ] || ! systemctl --user kill --signal="$sig" "$unit.scope" 2> /dev/null; then
+    pkill -"$sig" -P "$pid" 2> /dev/null
+    kill -s "$sig" "$pid" 2> /dev/null
+  fi
   echo "${owner% preempted=*} preempted=$(date -u +%s)" > "$dir/$1.owner"
   echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) SIG$sig GPU $1 for pid $$ (n=$n, who=${who// /_}): $owner" >> "$dir/preempted.log"
 }
@@ -205,6 +217,81 @@ take() {
   fi
 }
 
+report_usage() {
+  # report only (the lease's status never depends on it): each leased GPU's held time, and its busy time over the node sampler's
+  # readings inside the lease; never NVML, so a timed window stays quiet
+  command -v python3 > /dev/null 2>&1 || return 0
+  GL_RC=$1 GL_END=$(date -u +%Y-%m-%dT%H:%M:%SZ) GL_SINCE=$started GL_IDX="${TAKEN[*]}" GL_UUID="${uuids[*]}" GL_WHO=$who \
+    GL_PID=$$ GL_SCOPE=${scope:+gpu-lease-$$} GL_TIMED=$timed GL_PRE=$preempt GL_CMD=$cmdline timeout 30 python3 - <<'PY' || true
+import glob, json, os, socket, sys
+from datetime import datetime
+
+e = os.environ
+since, end = e["GL_SINCE"], e["GL_END"]
+pattern = e.get("GPU_LEASE_UTIL_LOG", "/workspace/pouw/infra/util/*.jsonl")
+cadence = float(e.get("GPU_LEASE_UTIL_CADENCE_S", "10"))
+uuids = e["GL_UUID"].split()
+gpus = [{"index": int(i), "uuid": uuids[k] if k < len(uuids) else "-", "busy": 0.0, "sampled": 0.0}
+        for k, i in enumerate(e["GL_IDX"].split())]
+files = sorted(glob.glob(pattern))
+if not files and "GPU_LEASE_UTIL_LOG" in e:
+    print(f"gpu-lease: no sampler log matches {pattern}, so the usage record has sampled_s 0", file=sys.stderr)
+for f in files:
+    name = os.path.basename(f)
+    if name[:4].isdigit() and name[:10] < since[:10]:
+        continue
+    try:
+        fh = open(f, errors="replace")
+    except OSError:
+        continue
+    with fh:
+        for line in fh:
+            k = line.find('"t"')
+            if k < 0:
+                continue
+            q = line.find('"', line.find(":", k) + 1)
+            if not since <= line[q + 1:q + 21] <= end:
+                continue
+            try:
+                s = json.loads(line)
+            except ValueError:
+                continue
+            for g in s.get("gpus") or []:
+                util, smact = g.get("util"), g.get("smact")
+                if util is None and smact is None:
+                    continue
+                for v in gpus:
+                    if (v["uuid"] != "-" and g.get("uuid") == v["uuid"]) or (v["uuid"] == "-" and g.get("i", g.get("index")) == v["index"]):
+                        v["sampled"] += cadence
+                        v["busy"] += cadence if (util or 0) > 0 or (smact or 0) >= 0.01 else 0
+held = max(0, int((datetime.strptime(end, "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ")).total_seconds()))
+
+
+def hms(x: float) -> str:
+    x = int(x)
+    return f"{x // 3600}h{x % 3600 // 60:02d}m{x % 60:02d}s" if x >= 3600 else f"{x // 60}m{x % 60:02d}s"
+
+
+for v in gpus:
+    share = f" ({100 * v['busy'] / v['sampled']:.0f}%)" if v["sampled"] else ""
+    hint = "; prepare on the CPU outside the lease" if v["sampled"] >= 300 and v["busy"] < 0.5 * v["sampled"] else ""
+    print(f"gpu-lease: GPU {v['index']} ({v['uuid'][:12]}) held {hms(held)}, busy {hms(v['busy'])} of {hms(v['sampled'])} sampled"
+          f"{share}{hint}", file=sys.stderr)
+rec = {"schema": "gpu-lease/usage/v1", "host": socket.gethostname(), "pid": int(e["GL_PID"]), "scope": e.get("GL_SCOPE") or None,
+       "who": e["GL_WHO"], "run": e.get("RESEARCH_RUN_ID") or None, "timed": e.get("GL_TIMED") == "1",
+       "preemptible": e.get("GL_PRE") == "1", "since": since, "end": end, "rc": int(e["GL_RC"]), "cmd": e.get("GL_CMD", ""),
+       "gpus": [{"index": v["index"], "uuid": v["uuid"], "held_s": held, "busy_s": int(v["busy"]), "sampled_s": int(v["sampled"])}
+                for v in gpus]}
+outs = [os.path.join(e["RESEARCH_RUN_DIR"], "gpu-lease-usage.jsonl")] if e.get("RESEARCH_RUN_DIR") else []
+for path in outs + [e.get("GPU_LEASE_USAGE_LOG", "/workspace/research/lease-usage.jsonl")]:
+    try:
+        with open(path, "a") as out:
+            out.write(json.dumps(rec) + "\n")
+    except OSError:
+        pass
+PY
+}
+
 [ $# -ge 1 ] || usage
 if [ "$1" = status ]; then status; exit 0; fi
 n=$1; shift
@@ -273,6 +360,7 @@ until { [ -z "$(ahead)" ] || may_backfill; } && take "$n"; do
     echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&"$wfd"
     MYWAIT="$dir/wait.$(date -u +%s%N).$$"
     mv "$dir/.wait.$$" "$MYWAIT"
+    echo "gpu-lease: waiting for $n GPU(s)${on:+ in --on $on}, queued as $(basename "$MYWAIT")" >&2
   fi
   sleep "${GPU_LEASE_POLL_S:-15}"
 done
@@ -305,5 +393,16 @@ CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
 GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
 export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID
 echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES ($GPU_LEASE_UUID) for $who, pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}${ends:+,$ends}" >&2
-[ -n "$maxmin" ] && exec "${scope[@]}" timeout -k 20 "$((maxmin * 60))" "$@"
-exec "${scope[@]}" "$@"
+cmdline=$(echo "$*" | cut -c1-200)
+[ -n "$maxmin" ] && set -- timeout -k 20 "$((maxmin * 60))" "$@"
+# CMD runs as a child, not exec'd, so the lease can report its usage once CMD is done.  `0<&0` keeps CMD's stdin (a background job's
+# is /dev/null otherwise); a SIGTERM, SIGINT or SIGHUP to gpu-lease is passed on to CMD; gpu-lease exits with CMD's status.
+"${scope[@]}" "$@" 0<&0 &
+child=$!
+trap 'kill -TERM "$child" 2> /dev/null' TERM INT HUP
+rc=0; wait "$child" || rc=$?
+while kill -0 "$child" 2> /dev/null; do rc=0; wait "$child" || rc=$?; done
+trap - TERM INT HUP
+for fd in "${FDS[@]}"; do exec {fd}>&-; done
+report_usage "$rc"
+exit "$rc"

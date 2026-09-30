@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import importlib.util
 import json
 import os
 import re
@@ -99,7 +100,84 @@ needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("
 
 
 def gpu_env(tmp_path: Path, count: int = 3) -> dict[str, str]:
-    return {**os.environ, "GPU_LEASE_DIR": str(tmp_path / "gl"), "GPU_LEASE_COUNT": str(count), "RESEARCH_RUN_ID": "r-test"}
+    env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
+    return {**env, "GPU_LEASE_DIR": str(tmp_path / "gl"), "GPU_LEASE_COUNT": str(count), "RESEARCH_RUN_ID": "r-test",
+            "GPU_LEASE_USAGE_LOG": str(tmp_path / "lease-usage.jsonl"), "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl")}
+
+
+@needs_flock
+def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and_keeps_cmds_status(tmp_path):
+    env = {**gpu_env(tmp_path, count=2), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1", "GPU_LEASE_WHO": "bc-test",
+           "RESEARCH_RUN_DIR": str(tmp_path / "run")}
+    (tmp_path / "run").mkdir()
+    # CMD writes the node sampler's readings as it runs, stamped inside the lease: GPU 0 busy (util), busy (SM activity 2%), idle;
+    # the GPU it doesn't hold is busy throughout and must not count
+    rows = [("50", "0.3"), ("0", "0.02"), ("0", "0")]
+    lines = "; ".join(
+        f'echo "{{\\"t\\":\\"$t\\",\\"gpus\\":[{{\\"i\\":0,\\"uuid\\":\\"GPU-a0\\",\\"util\\":{u},\\"smact\\":{s}}},'
+        f'{{\\"i\\":1,\\"uuid\\":\\"GPU-b1\\",\\"util\\":99,\\"smact\\":1}}]}}" >> {tmp_path / "util-1.jsonl"}' for u, s in rows)
+    script = f"t=$(date -u +%Y-%m-%dT%H:%M:%SZ); {lines}; exit 3"
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "0", "--mem-gb", "0", "--", "sh", "-c", script], env=env,
+                       capture_output=True, text=True)
+    assert r.returncode == 3, r.stderr
+    assert "gpu-lease: GPU 0 (GPU-a0) held" in r.stderr and "busy 0m20s of 0m30s sampled (67%)" in r.stderr
+    for log in (tmp_path / "lease-usage.jsonl", tmp_path / "run" / "gpu-lease-usage.jsonl"):
+        (rec,) = [json.loads(ln) for ln in log.read_text().splitlines()]
+        assert rec["schema"] == "gpu-lease/usage/v1" and rec["rc"] == 3 and rec["who"] == "bc-test" and rec["run"] == "r-test"
+        assert rec["gpus"] == [{"index": 0, "uuid": "GPU-a0", "held_s": rec["gpus"][0]["held_s"], "busy_s": 20, "sampled_s": 30}]
+    free = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout
+    assert [ln.split()[:2] for ln in free.splitlines() if ln and not ln.startswith("#")] == [["0", "free"], ["1", "free"]]
+
+
+FILL_RUNNER = GPU_LEASE.parent.parent / "nebius" / "fill_runner.py"
+
+
+@needs_flock
+def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_with_wait_in_its_argv(tmp_path, monkeypatch):
+    """A `gpu-lease 1 --wait` that holds its GPU keeps `--wait` in its argv. Counting it as a waiter froze fill across node 2 for as
+    long as any such lease ran (bc-2aa33ad8, 17:56Z); only a request queued in gpu-lease's own wait files is a waiter."""
+    env = gpu_env(tmp_path, count=1)
+    lease = tmp_path / "bin" / "gpu-lease"
+    lease.parent.mkdir()
+    lease.symlink_to(GPU_LEASE)
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    holder = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", *pause], env=env,
+                              stdout=subprocess.PIPE, text=True)
+    waiter = None
+    try:
+        assert holder.stdout.readline().strip() == "ready"
+        monkeypatch.setenv("GPU_LEASE_DIR", env["GPU_LEASE_DIR"])
+        monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
+        spec = importlib.util.spec_from_file_location("fill_runner_under_test", FILL_RUNNER)
+        fr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fr)
+        (tmp_path / "gl" / "wait.1.99999").write_text("pid=99999 n=4 run=- who=gone since=2026-09-30T00:00:00Z\n")
+        assert fr.waiters() == []
+        waiter = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", "true"],
+                                  env={**env, "GPU_LEASE_POLL_S": "3600"}, stderr=subprocess.PIPE, text=True)
+        line = waiter.stderr.readline()
+        assert line.startswith("gpu-lease: waiting for 1 GPU(s), queued as wait."), line
+        assert fr.waiters() == [1]
+    finally:
+        for p in (waiter, holder):
+            if p is not None:
+                p.terminate()
+                p.wait()
+
+
+@needs_flock
+def test_gpu_lease_passes_stdin_to_cmd_and_a_sigterm_on_to_it_and_records_the_stop(tmp_path):
+    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_UTIL_LOG": str(tmp_path / "absent-*.jsonl")}
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", "cat"], env=env, input="through\n",
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout == "through\n" and "no sampler log matches" in r.stderr
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    held = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", *pause], env=env, stdout=subprocess.PIPE, text=True)
+    assert held.stdout.readline().strip() == "ready"
+    held.terminate()
+    assert held.wait() == 143
+    recs = [json.loads(ln) for ln in (tmp_path / "lease-usage.jsonl").read_text().splitlines()]
+    assert [x["rc"] for x in recs] == [0, 143] and recs[1]["gpus"][0]["sampled_s"] == 0
 
 
 @needs_flock
