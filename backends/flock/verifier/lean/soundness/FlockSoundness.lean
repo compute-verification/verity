@@ -131,3 +131,4 @@ import FlockSoundness.ZK.CoinBinding
 import FlockSoundness.ZK.Complete
 import FlockSoundness.ZK.Hiding
 import FlockSoundness.ZK.RealLeaves
+import FlockSoundness.ZK.Session

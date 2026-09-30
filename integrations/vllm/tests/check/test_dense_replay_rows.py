@@ -1,0 +1,71 @@
+"""The replay row kernel of the dense Definitions (`program.kernels.ir_rows`): on a Gemma-2-style dense Program every row is an evaluable
+unit of the replay population, and each dense row's words are the IR reference's (edge words included)."""
+from __future__ import annotations
+
+import numpy as np
+
+from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
+from verity.evaluation import evaluate
+from verity.ir.defs import bind
+from verity_vllm.check.replay.driver import manifest_query
+from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.check.replay.population import population
+from verity_vllm.program.kernels import ir_rows
+from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
+from verity_vllm.program.registry import dense
+from verity_vllm.query.call_scope import specialization
+from verity_vllm.query.manifest.format import spec_family
+from verity_vllm.query.program_view import spec_statics
+
+PROMPT = [0, 1, 2, 3, 4, 5, 9]
+
+
+def _fields(rng, V=16, H=8):
+    def bf16(n, s=1.0):
+        return (np.asarray(rng.standard_normal(n) * s, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    table = bf16(V * H).reshape(V, H)
+    table[:4] = [[0x7FC0, 0xFFC1, 0x7F80, 0xFF80, 0x0000, 0x8000, 0x0001, 0x7F7F]] * 4
+    return {n: (table.reshape(-1) if c == V * H else bf16(c, 0.5)) for n, c, _b, _t in DENSE}
+
+
+def test_every_row_of_a_dense_program_is_an_evaluable_unit(tmp_path):
+    b, _at = dense_program()
+    doc = b.doc(LP)
+    pdir, man = build_dir(tmp_path, doc, [PF[len("model."):]])
+    vus, ne, nef = population(ProgramIndex(doc, program_dir=pdir, query=manifest_query(man)), "r0")
+    assert not [w for w in ne if "no registered evaluator" in w], dict(ne)
+    fams = {v["family"] for v in vus}
+    assert set(ir_rows.FAMILIES) - {"GeluTanhMul_v1"} <= fams and fams <= set(EVALUATORS)
+
+
+def test_each_dense_row_is_the_ir_reference():
+    b, _at = dense_program()
+    doc = b.doc(LP)
+    fields = _fields(np.random.default_rng(5))
+    weights = [int(w) for n, *_ in DENSE for w in fields[n]]
+    vals, seen = {}, set()
+    for r in doc["rows"]:
+        args = [[v for kind, a, lo, hi in g for v in (PROMPT[lo:hi] if kind == "p" and a == 0 else weights[lo:hi] if kind == "p" else vals[a][lo:hi])]
+                for g in r["args"]]
+        fam, st = spec_family(r["spec"]), spec_statics(r["spec"])
+        vals[r["i"]] = list(evaluate(specialization(fam, st), *args))
+        if fam in ir_rows.FAMILIES:
+            got = ROWS[fam].fn(st, [np.asarray(a, dtype=np.uint64) for a in args])
+            assert [int(w) for m in got.values() for w in m] == vals[r["i"]], r["name"]
+            seen.add(fam)
+    assert seen == set(ir_rows.FAMILIES) - {"GeluTanhMul_v1"}
+
+
+def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
+    rng = np.random.default_rng(6)
+    I = 9216
+    gu = (np.asarray(rng.standard_normal(2 * I) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    gu[:6] = [0x7FC0, 0xFF80, 0x7F80, 0x8000, 0x0001, 0x7F7F]
+    got = ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu])
+    assert list(got) == ["out"] and got["out"].dtype == np.uint16
+    assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=I), gu.tolist()))
+    import pytest
+    with pytest.raises(ir_rows.Declined, match="arg words"):
+        ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu[:-1]])
+    with pytest.raises(ir_rows.Declined, match="past"):
+        ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
