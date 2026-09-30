@@ -2,7 +2,7 @@
 // it reads the n x k FP8 weights once (16 bytes a load, a warp per weight row) and writes C~, U (m x n FP32 words) and y
 // (m x n BF16), each a function of the weight row read and of A's rows, so that every output depends on both; and
 // derive_rows, the next call's A (m x k BF16, k = n) from y, which makes the calls a dependent chain.
-#include "hash_sm120.cuh"
+#include "hash_h2.cuh"
 
 // p0 W (n x k bytes), p1 A (m x k BF16), p2 C~ (m x n words), p3 U, p4 y (m x n BF16); i0 m, i1 n, i2 k
 extern "C" __global__ void __launch_bounds__(256) standin_gemm(const Args a) {
@@ -196,4 +196,33 @@ extern "C" __global__ void __launch_bounds__(256) derive_rows_wide(const Args a)
   if (t >= (uint64_t)a.i[0] * per) return;
   const uint64_t r = t / per, e = t % per;
   reinterpret_cast<uint16_t*>(a.p[1])[t] = reinterpret_cast<const uint16_t*>(a.p[0])[r * a.i[2] + e % a.i[2]] ^ 0x3C00u;
+}
+
+// derive_rows_b3s: A's producer with -h2's segment leaves fused (P1 in the producer).  It writes derive_rows_wide's A (row r
+// is y's row r, n BF16 words cycled, ^ 0x3C00, over rb / 2 words) a 256-byte segment a thread, and hashes each segment from
+// the very words it stores (b3s_segment_regs), so the leaves bind the bytes forming reads.  The segment's key comes first:
+// it needs the domain only.  p0 y (m x n BF16), p1 A (m x rb bytes), p2 the segment leaves (32 B each, row-major), p3 domain id,
+// p4 the key template; i0 m, i1 rb (a multiple of 256 with 256 | 2n), i2 n, i3 the template's length.  A thread a segment.
+extern "C" __global__ void __launch_bounds__(128) derive_rows_b3s(const Args a) {
+  const uint64_t t = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const uint32_t rb = (uint32_t)a.i[1], segs = rb / B3S_SEG, n = (uint32_t)a.i[2];
+  if (t >= (uint64_t)a.i[0] * segs) return;
+  const uint64_t r = t / segs;
+  const uint32_t j = (uint32_t)(t % segs);
+  uint32_t dom[8], tmpl[16], key[8], w[64], h[8];
+  load_key(a.p[3], dom);
+#pragma unroll
+  for (int q = 0; q < 16; q++) tmpl[q] = reinterpret_cast<const uint32_t*>(a.p[4])[q];
+  b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], r, r, rb, j, key);
+  const uint4* y = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n + (128u * j) % n);
+#pragma unroll
+  for (int q = 0; q < 16; q++) {
+    const uint4 v = y[q];
+    w[4 * q] = v.x ^ 0x3C003C00u; w[4 * q + 1] = v.y ^ 0x3C003C00u; w[4 * q + 2] = v.z ^ 0x3C003C00u; w[4 * q + 3] = v.w ^ 0x3C003C00u;
+  }
+  uint4* dst = reinterpret_cast<uint4*>(a.p[1] + r * rb + (uint64_t)B3S_SEG * j);
+#pragma unroll
+  for (int q = 0; q < 16; q++) dst[q] = make_uint4(w[4 * q], w[4 * q + 1], w[4 * q + 2], w[4 * q + 3]);
+  b3s_segment_regs(key, w, h);
+  store_cv(a.p[2] + 32 * t, h);
 }

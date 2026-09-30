@@ -403,7 +403,21 @@ def gates(d: Bench, V: dict) -> dict:
               "root": d.read(tp + 32 * (2 * M - 2), 32).hex() == h3["root"], "unit seed": d.read(useed, 32).hex() == h3["unit_seed"]}
     out["trees"].update({f"h3 {k}": v for k, v in checks.items()})
     bad += [f"h3 {k}" for k, v in checks.items() if not v]
-    for p_ in (d3, k3, sk3, skey, salt, rootb, rp, tp, seeds, useed, *[t[0] for t in tmpl.values()]):
+    y = d.put(shake("gate y", 2 * M * N))
+    a1, a2, l1, l2, s1_, s2_ = (d.alloc(M * ROW_F32), d.alloc(M * ROW_F32), d.alloc(32 * M), d.alloc(32 * M), d.alloc(32 * M),
+                                d.alloc(32 * M))
+    segl = d.alloc(32 * M * (ROW_F32 // 256))
+    d.go(None, "derive_rows_wide", -(-M * ROW_F32 // 2 // 256), 256, (y, a1), (M, ROW_F32, N))
+    launch_rows_h2(d, None, a1, l1, d3, sk3, tmpl[ROW], M, ROW_F32)
+    d.go(None, "b3_seeds", 1, 128, (l1, s1_, skey, salt, rootb), (M, a3["index"], 1))
+    d.go(None, "derive_rows_b3s", -(-M * (ROW_F32 // 256) // 128), 128, (y, a2, segl, d3, tmpl[ROW][0]), (M, ROW_F32, N, tmpl[ROW][1]))
+    d.go(None, "b3s_seg_trees", M, ROW_F32 // 256, (segl, l2, sk3, skey, salt, rootb, s2_), (M, ROW_F32 // 256, a3["index"], 1))
+    d.sync()
+    checks = {"A": d.read(a1, M * ROW_F32) == d.read(a2, M * ROW_F32), "row leaves": d.read(l1, 32 * M) == d.read(l2, 32 * M),
+              "row seeds": d.read(s1_, 32 * M) == d.read(s2_, 32 * M)}
+    out["trees"].update({f"fused producer {k} as unfused": v for k, v in checks.items()})
+    bad += [f"fused producer {k}" for k, v in checks.items() if not v]
+    for p_ in (d3, k3, sk3, skey, salt, rootb, rp, tp, seeds, useed, y, a1, a2, l1, l2, s1_, s2_, segl, *[t[0] for t in tmpl.values()]):
         d.free(p_)
     lc, p = V["lat_chain"], d.alloc(64)
     for mode, threads, name in ((0, 1, "b3c"), (1, 4, "b3c4")):
@@ -528,6 +542,42 @@ def h2_rates(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict
     return out
 
 
+def fused_rates(d: Bench, nv: R.Nvml, reps: int, V: dict) -> dict:
+    """Prefill's producer at 8,192 rows of 32 KB (y 8,192 x 8,192 BF16): whole rows alone (derive_rows_wide), then -h2's row
+    leaves after it (hash_rows_b3s), against the producer with the segment leaves fused (derive_rows_b3s) and the segment trees
+    after it; interleaved in each rep (order rotated), an L2 flush before each timing, the SM clock after it."""
+    fl, sink = d.alloc(512 << 20), d.alloc(16)
+    m, n, rb = 8192, N, ROW_F32
+    y, ap, leaves, segl = d.put(shake("prefill y", 2 * m * n)), d.alloc(m * rb), d.alloc(32 * m), d.alloc(32 * m * (rb // 256))
+    pa = V["decode"]["prefill_a2"]
+    dom, sk = d.put(bytes.fromhex(pa["domain"])), d.alloc(32 * 16)
+    d.go(None, "b3s_level_keys", 1, 32, (sk, dom), (9,))
+    t = b3s_template(ROW)
+    tr = (d.put(t[0]), t[1])
+    wide = lambda: d.go(None, "derive_rows_wide", -(-m * rb // 2 // 256), 256, (y, ap), (m, rb, n))  # noqa: E731
+    fused = lambda: d.go(None, "derive_rows_b3s", -(-m * (rb // 256) // 128), 128, (y, ap, segl, dom, tr[0]), (m, rb, n, tr[1]))  # noqa: E731
+    trees = lambda: d.go(None, "b3s_seg_trees", m, rb // 256, (segl, leaves, sk, 0, 0, 0, 0), (m, rb // 256, 0, 0))  # noqa: E731
+    forms = {"producer, whole rows": wide,
+             "producer, then -h2's row leaves": lambda: (wide(), launch_rows_h2(d, None, ap, leaves, dom, sk, tr, m, rb)),
+             "producer with the segment leaves (h2f)": fused,
+             "producer with the segment leaves, then the segment trees": lambda: (fused(), trees())}
+    for body in forms.values():
+        body()
+    d.sync()
+    ms: dict = {k: [] for k in forms}
+    clk: dict = {k: [] for k in forms}
+    order = list(forms)
+    for rep in range(reps):
+        for name in order[rep % len(order):] + order[:rep % len(order)]:
+            flush(d, fl, sink)
+            ms[name] += d.timed(forms[name], 1)
+            clk[name].append(nv.read()["sm_mhz"])
+    out = {name: {"ms": statistics.median(ms[name]), "raw_ms": ms[name], "sm_mhz": clk[name]} for name in forms}
+    for p in (fl, sink, y, ap, leaves, segl, dom, sk, tr[0]):
+        d.free(p)
+    return out
+
+
 def rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
     """Bytes hashed per second at prefill size, each form, after an L2 flush (a 256 MB device copy) before each rep."""
     fl, sink = d.alloc(512 << 20), d.alloc(16)
@@ -610,7 +660,21 @@ ARMS = [
     ("h2 with its seed, deferred side stream, priorities", ROW_F32, "h2s", "deferred"),
     ("h3 A alone, tree on its own stream, priorities", ROW_F32, "h3", "none"),
     ("h3, deferred side stream, priorities", ROW_F32, "h3", "deferred"),
+    ("plain fp32 rows, whole-row producer", ROW_F32, "plainw", "none"),
+    ("h2 with its seed, whole-row producer, A alone", ROW_F32, "h2sw", "none"),
+    ("h2 with its seed, whole-row producer, deferred side stream, priorities", ROW_F32, "h2sw", "deferred"),
+    ("h2f: leaves in the producer, with its seed, A alone", ROW_F32, "h2f", "none"),
+    ("h2f: leaves in the producer, with its seed, deferred side stream, priorities", ROW_F32, "h2f", "deferred"),
+    ("h3, whole-row producer, A alone, priorities", ROW_F32, "h3w", "none"),
+    ("h3, whole-row producer, deferred side stream, priorities", ROW_F32, "h3w", "deferred"),
+    ("h3f: leaves in the producer, A alone, priorities", ROW_F32, "h3f", "none"),
+    ("h3f: leaves in the producer, deferred side stream, priorities", ROW_F32, "h3f", "deferred"),
 ]
+#: A's producer: derive_rows over the first rb / 2 bytes' halves (the chain's), derive_rows_wide over whole rows, or
+#: derive_rows_b3s (whole rows with -h2's segment leaves hashed as they are written); the whole-row arms' baseline
+WHOLE_ROW, FUSED = ("plainw", "h2sw", "h3w"), ("h2f", "h3f")
+WHOLE_ROW_PLAIN = "plain fp32 rows, whole-row producer"
+SEEDED = ("h2s", "h2sw", "h2f", "h3", "h3w", "h3f")
 
 
 #: --preset p1: P1's prototype (hash_rows_seg, timing only) and its baselines, interleaved rep by rep
@@ -629,7 +693,14 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
            "h3": ["plain fp32 rows", "h1 tuned, keys precomputed, side stream, priorities", "h2 A alone",
                   "h2, deferred side stream, priorities", "h2 A alone, with its seed",
                   "h2 with its seed, deferred side stream, priorities", "h3 A alone, tree on its own stream, priorities",
-                  "h3, deferred side stream, priorities"]}
+                  "h3, deferred side stream, priorities"],
+           "fused": ["plain fp32 rows", "plain fp32 rows, whole-row producer",
+                     "h2 with its seed, whole-row producer, A alone",
+                     "h2 with its seed, whole-row producer, deferred side stream, priorities",
+                     "h2f: leaves in the producer, with its seed, A alone",
+                     "h2f: leaves in the producer, with its seed, deferred side stream, priorities",
+                     "h3, whole-row producer, A alone, priorities", "h3, whole-row producer, deferred side stream, priorities",
+                     "h3f: leaves in the producer, A alone, priorities", "h3f: leaves in the producer, deferred side stream, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -673,6 +744,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
     dom_a3, a3_keys, a3_skeys = d.put(bytes.fromhex(a3["domain"])), d.alloc(32 * 16), d.alloc(32 * 16)
     skey, salt3, rootb3 = (d.put(bytes.fromhex(x)) for x in (V["h3"]["seed_key"], a3["seed"]["salt"], a3["seed"]["root_b"]))
     seeds, useed = d.alloc(32 * m), d.alloc(32)
+    segleaves = d.alloc(32 * m * (ROW_F32 // 256))
     w = [d.put(shake(f"weights {s}", n * k)) for s in range(WSETS)]
     y = d.alloc(2 * m * n)
     rows = {rb: d.alloc(m * rb) for rb in (ROW_F32, ROW_BF16)}
@@ -699,7 +771,11 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
         elif amode == "h2":
             launch_rows_h2(d, s, rows[rb], a_tree, h2d["a2"], a2_skeys, tmpl[ROW], m, rb)
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a2_keys), (m,))
-        elif amode == "h2s":                                 # -h2 and its unit's seed_A over the root, as forming needs
+        elif amode == "h2f":                                 # the producer hashed the segments: the segment trees, A's tree, the seed
+            d.go(s, "b3s_seg_trees", m, rb // 256, (segleaves, a_tree, a3_skeys, skey, salt3, rootb3, seeds), (m, rb // 256, 0, 0))
+            d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a3_keys), (m,))
+            d.go(s, "b3_seeds", 1, 128, (a_tree + 32 * (2 * m - 2), useed, skey, salt3, rootb3), (1, a3["seed"]["index"], 0))
+        elif amode in ("h2s", "h2sw"):                       # -h2 and its unit's seed_A over the root, as forming needs
             launch_rows_h2(d, s, rows[rb], a_tree, dom_a3, a3_skeys, tmpl[ROW], m, rb)
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a3_keys), (m,))
             d.go(s, "b3_seeds", 1, 128, (a_tree + 32 * (2 * m - 2), useed, skey, salt3, rootb3), (1, a3["seed"]["index"], 0))
@@ -727,17 +803,26 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                  smem=4 * 4 * rows_w_words(rb))
         else:
             d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_BF16]), (m * k,))
-            if rb == ROW_F32:
+            if rb == ROW_F32 and amode in WHOLE_ROW:
+                d.go(s1, "derive_rows_wide", -(-m * rb // 2 // 256), 256, (y, rows[ROW_F32]), (m, rb, n))
+            elif rb == ROW_F32 and amode in FUSED:           # A's producer writes the rows and hashes their segments
+                d.go(s1, "derive_rows_b3s", -(-m * (rb // 256) // 128), 128, (y, rows[ROW_F32], segleaves, dom_a3, tmpl[ROW][0]),
+                     (m, rb, n, tmpl[ROW][1]))
+            elif rb == ROW_F32:
                 d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_F32]), (m * k,))
             if amode == "overlap":
                 d.wait(s2, d.event(s1))
                 commit_a(s2, amode, rb)
                 st["a_done"] = d.event(s2)
-            elif amode == "h3":                              # -h3: the GEMM waits for the row leaves and their seeds only
+            elif amode in ("h3", "h3w", "h3f"):              # -h3: the GEMM waits for the row leaves and their seeds only
                 if st.get("tree_done") is not None:
                     d.wait(s1, st.pop("tree_done"))
-                launch_rows_h2(d, s1, rows[rb], a_tree, dom_a3, a3_skeys, tmpl[ROW], m, rb)
-                d.go(s1, "b3_seeds", 1, 128, (a_tree, seeds, skey, salt3, rootb3), (m, a3["seed"]["index"], 1))
+                if amode == "h3f":                           # the producer hashed the segments: the segment trees and seeds
+                    d.go(s1, "b3s_seg_trees", m, rb // 256, (segleaves, a_tree, a3_skeys, skey, salt3, rootb3, seeds),
+                         (m, rb // 256, a3["seed"]["index"], 1))
+                else:
+                    launch_rows_h2(d, s1, rows[rb], a_tree, dom_a3, a3_skeys, tmpl[ROW], m, rb)
+                    d.go(s1, "b3_seeds", 1, 128, (a_tree, seeds, skey, salt3, rootb3), (m, a3["seed"]["index"], 1))
                 d.wait(d.h3, d.event(s1))
                 d.go(d.h3, "hash_tree_small", 1, max(1, m // 2), (a_tree, a3_keys), (m,))
                 st["tree_done"] = d.event(d.h3)
@@ -832,13 +917,13 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                 parts += [("c", d.read(sl["c"], 4 * m * n)), ("u", d.read(sl["u"], 4 * m * n)), ("digests", d.read(sl["dg"], 32 * m * per)),
                           ("leaves", d.read(sl["lv"], 32 * tiles)), ("tile_tree", d.read(sl["tree"], 32 * (2 * tiles - 1)))]
             h2 = amode.startswith(("h2", "h3"))
-            if amode == "h3":
+            if amode in ("h3", "h3w", "h3f"):
                 parts.append(("row_seeds", d.read(seeds, 32 * m)))
-            elif amode == "h2s":
+            elif amode in ("h2s", "h2sw", "h2f"):
                 parts.append(("unit_seed", d.read(useed, 32)))
-            fmt = "h3" if amode == "h3" else "h2" if h2 else "h1"
+            fmt = "h3" if amode.startswith("h3") else "h2" if h2 else "h1"
             head = {"run": run, "arm": name, "m": m, "rb": rb, "n": n, "hashing": fmt,
-                    "a": a3 if amode in ("h2s", "h3") else V["decode"]["a2" if h2 else "a"], "t": V["decode"]["t2" if h2 else "t"],
+                    "a": a3 if amode in SEEDED else V["decode"]["a2" if h2 else "a"], "t": V["decode"]["t2" if h2 else "t"],
                     "sections": [[k, len(v)] for k, v in parts]}
             blob = json.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts)
             path = os.path.join(tdir, slug(name) + ".bin")
@@ -846,7 +931,9 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             out[name]["transcript"] = {"path": path, "sha256": hashlib.sha256(blob).hexdigest()}
     for name, r in out.items():
         if isinstance(r, dict) and "per_call_us" in r:
-            plain = out[f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"]["per_call_us"]  # every preset has its plain arm
+            plain = out[WHOLE_ROW_PLAIN if r["a"] in WHOLE_ROW + FUSED else
+                        f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"]["per_call_us"]  # every preset has its plain arm
+            r["baseline"] = WHOLE_ROW_PLAIN if r["a"] in WHOLE_ROW + FUSED else f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"
             r["hashing_us"] = r["per_call_us"] - plain
             r["x_plain_standin"] = r["per_call_us"] / plain
     return out
@@ -885,7 +972,8 @@ def main() -> None:
         sys.exit(4)
     res["preset"] = args.preset
     res["rates"] = (seg_rates(d, nv, args.reps) if args.preset == "p1" else
-                    h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset in ("h2", "h3") else rates(d, nv, args.reps))
+                    h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset in ("h2", "h3") else
+                    fused_rates(d, nv, args.reps, V) if args.preset == "fused" else rates(d, nv, args.reps))
     save()
     res["latency"] = latency(d) if args.preset == "all" else {}
     save()

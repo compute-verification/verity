@@ -166,3 +166,37 @@ def test_seed_kernel_is_the_schemes_row_and_unit_seeds():
     one = T.buffer(32)
     T.launch("b3_seeds", 1, 128, [T.buffer(root), one, key, T.buffer(salt), T.buffer(root_b)], [1, index, 0])
     assert one.raw == PC.unit_seed_a(salt, root, root_b, index)
+
+
+@pytest.mark.parametrize("m,rb,n", [(3, 1024, 256), (2, 768, 256), (2, 32768, 8192)])
+def test_the_fused_producer_writes_derive_rows_wides_a_and_hashes_those_bytes(m, rb, n):
+    """derive_rows_b3s (A's producer with the -h2 segment leaves fused): its A equals derive_rows_wide's byte for byte, and its
+    leaves are frame-b3s's segment hashes of the bytes it stored, so they bind what forming reads. b3s_seg_trees over them
+    then gives the reference row leaves and, with seeds on, `pearl_c.row_seed` (3 segments: an odd level)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "protocols" / "pouw"))
+    from verity.commitments.blake3 import blake3
+    from verity.commitments.merkle import b3s_levels
+    from verity_pouw.protocol import Context, Matmul, Shape
+    from verity_pouw.schemes import pearl_c as PC
+
+    index = 5
+    salt, root_b = hashlib.sha256(b"fused salt").digest(), hashlib.sha256(b"fused root_B").digest()
+    ctx = Context(salt, Matmul(index, Shape(m, rb // 4, 64), 0), bytes(32), root_b)
+    d = PC.activation_domain(ctx, "h3")
+    y = T.buffer(data(f"fused y {m} {rb} {n}", 2 * m * n))
+    wide = T.buffer(m * rb)
+    T.launch("derive_rows_wide", -(-m * rb // 2 // 256), 256, [y, wide], [m, rb, n])
+    nseg = rb // 256
+    fused, leaves = T.buffer(m * rb), T.buffer(32 * m * nseg)
+    tmpl, tlen = template(ROW)
+    T.launch("derive_rows_b3s", -(-m * nseg // 128), 128, [y, fused, leaves, T.buffer(d.domain_id), T.buffer(tmpl)], [m, rb, n, tlen])
+    assert fused.raw == wide.raw
+    rows = [fused.raw[r * rb:(r + 1) * rb] for r in range(m)]
+    assert leaves.raw == b"".join(b"".join(b3s_levels(d.domain_id, r, r, ROW, rows[r])[0]) for r in range(m))
+    row_leaves, seeds = T.buffer(32 * m), T.buffer(32 * m)
+    T.launch("b3s_seg_trees", m, 32 * -(-nseg // 32),
+             [leaves, row_leaves, T.buffer(level_keys(d.domain_id)), T.buffer(blake3(b"pearl-c/v0/seed-A")), T.buffer(salt),
+              T.buffer(root_b), seeds], [m, nseg, index, 1])
+    assert [row_leaves.raw[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(r, r, ROW, rows[r]) for r in range(m)]
+    assert [seeds.raw[32 * r:32 * r + 32] for r in range(m)] == [PC.row_seed(ctx, r, rows[r]) for r in range(m)]

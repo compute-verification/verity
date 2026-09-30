@@ -69,6 +69,15 @@ DEV void b3s_segment(const uint8_t* v, uint32_t L, uint32_t j, const uint32_t* k
   for (int i = 0; i < 8; i++) out[i] = cv[i];
 }
 
+// A whole 256-byte segment's hash from the 64 words a producer holds in registers, exactly as it stores them (after every
+// cast and packing, in the row's byte order), under its key from b3s_segment_key: the leaves then bind the stored bytes.
+DEV void b3s_segment_regs(const uint32_t* key, const uint32_t* w, uint32_t* out) {
+#pragma unroll
+  for (int i = 0; i < 8; i++) out[i] = key[i];
+#pragma unroll
+  for (int b = 0; b < 4; b++) b3c(out, w + 16 * b, 0, 64, B3_KEYED | (b == 0 ? B3_START : 0) | (b == 3 ? B3_END | B3_ROOT : 0), out);
+}
+
 // The segment tree's level keys: keyed(domain id, 0x06 ‖ u8 l) into p0 + 32 l for l < i0.  p0 out, p1 domain id; i0 levels
 extern "C" __global__ void __launch_bounds__(32) b3s_level_keys(const Args a) {
   const int l = threadIdx.x;
@@ -149,19 +158,71 @@ extern "C" __global__ void __launch_bounds__(128) hash_leaves_b3s(const Args a) 
 // leaf (p0 + 32 r) and ι = i1 · 2^32 + r (`pearl_c.row_seed`, the one-row unit's seed_A); i2 = 0: the unit's, root p0 and
 // ι = i1 (`pearl_c.unit_seed_a`).  p0 leaves or the root, p1 out (32 B a seed), p2 the key, p3 salt, p4 root_B; i0 rows,
 // i1 the unit index, i2 the mode
+DEV void b3_seed(uint64_t key_p, uint64_t salt_p, const uint32_t* root, uint64_t root_b_p, uint64_t iota, uint32_t* out) {
+  uint32_t key[8], m[16], m2[16] = {0};
+  load_key(key_p, key);
+  load_key(salt_p, m);
+#pragma unroll
+  for (int i = 0; i < 8; i++) m[8 + i] = root[i];
+  b3c(key, m, 0, 64, B3_KEYED | B3_START, out);
+  load_key(root_b_p, m2);
+  m2[8] = (uint32_t)iota;
+  m2[9] = (uint32_t)(iota >> 32);
+  b3c(out, m2, 0, 40, B3_KEYED | B3_END | B3_ROOT, out);
+}
 extern "C" __global__ void __launch_bounds__(128) b3_seeds(const Args a) {
   const uint64_t r = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (r >= (uint64_t)a.i[0]) return;
-  uint32_t key[8], m[16], cv[8];
-  load_key(a.p[2], key);
-  load_key(a.p[3], m);
-  load_key(a.p[0] + 32 * r, m + 8);
-  b3c(key, m, 0, 64, B3_KEYED | B3_START, cv);
+  uint32_t root[8], cv[8];
+  load_key(a.p[0] + 32 * r, root);
   const uint64_t iota = a.i[2] ? ((uint64_t)(uint32_t)a.i[1] << 32 | r) : (uint64_t)(uint32_t)a.i[1];
-  uint32_t m2[16] = {0};
-  load_key(a.p[4], m2);
-  m2[8] = (uint32_t)iota;
-  m2[9] = (uint32_t)(iota >> 32);
-  b3c(cv, m2, 0, 40, B3_KEYED | B3_END | B3_ROOT, cv);
+  b3_seed(a.p[2], a.p[3], root, a.p[4], iota, cv);
   store_cv(a.p[1] + 32 * r, cv);
+}
+
+// Rows' segment trees over segment leaves already hashed (by A's producer, derive_rows_b3s), a CTA a row, a thread a segment,
+// hash_rows_b3s's levels and odd-node rule; row r's leaf into p1 + 32 r, and with i3 = 1 its -h3 row seed (b3_seeds' mode 1,
+// the unit index i2) into p6 + 32 r.  p0 the segment leaves (32 B each, row-major), p1 the row leaves, p2 the segment level
+// keys, p3 the seed key, p4 salt, p5 root_B, p6 the row seeds; i0 rows, i1 segments a row (at most 512), i2 unit index, i3
+extern "C" __global__ void __launch_bounds__(512) b3s_seg_trees(const Args a) {
+  __shared__ uint32_t lv[B3S_MAX_SEGS][8];
+  const uint64_t row = blockIdx.x;
+  const uint32_t nseg = (uint32_t)a.i[1];
+  const int j = threadIdx.x;
+  if ((uint32_t)j < nseg) {
+    uint32_t h[8];
+    load_key(a.p[0] + 32 * (row * nseg + j), h);
+#pragma unroll
+    for (int i = 0; i < 8; i++) lv[j][i] = h[i];
+  }
+  __syncthreads();
+  int level = 0;
+  for (uint32_t w = nseg; w > 1; w = (w + 1) / 2, level++) {
+    const uint32_t half = w / 2;
+    uint32_t h[8];
+    if ((uint32_t)j < half) {
+      uint32_t lk[8], m[16];
+      load_key(a.p[2] + 32ull * level, lk);
+#pragma unroll
+      for (int q = 0; q < 8; q++) { m[q] = lv[2 * j][q]; m[8 + q] = lv[2 * j + 1][q]; }
+      blake3_block(lk, m, h);
+    } else if ((uint32_t)j == half && (w & 1)) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) h[q] = lv[w - 1][q];
+    }
+    __syncthreads();
+    if ((uint32_t)j < half || ((uint32_t)j == half && (w & 1))) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) lv[j][q] = h[q];
+    }
+    __syncthreads();
+  }
+  if (j == 0) {
+    store_cv(a.p[1] + row * 32, lv[0]);
+    if (a.i[3]) {
+      uint32_t sd[8];
+      b3_seed(a.p[3], a.p[4], lv[0], a.p[5], (uint64_t)(uint32_t)a.i[2] << 32 | row, sd);
+      store_cv(a.p[6] + row * 32, sd);
+    }
+  }
 }
