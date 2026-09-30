@@ -35,6 +35,7 @@ Inside the Job, the template's own `research run` writes the Attempt.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -58,9 +59,6 @@ REQUEUE_RC = 99
 MAX_TRIES = 50
 DEFAULT_DEPTH = "circuits=4,provers=2,backfill=4"
 DEFAULT_PRIORITY = {"backfill": "backfill"}
-# submit.sh's VY_ROW_CLASS table: (build GB, gpu GB, GPUs) for config-run's two tasks
-CLASSES = {"small": (64, 64, 1), "dense": (160, 192, 1), "long": (160, 256, 1), "moe": (256, 384, 1), "b64": (256, 512, 1),
-           "tp2": (160, 384, 2)}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 LABEL = "verity.dev/dispatch"
 
@@ -96,6 +94,14 @@ def dns(s: str, n: int) -> str:
     return re.sub(r"[^a-z0-9-]", "-", s.lower()).strip("-")[:n].strip("-") or "x"
 
 
+def classes() -> dict[str, tuple[int, int, int]]:
+    """submit.sh's VY_ROW_CLASS table, {class: (build GB, gpu GB, GPUs)} for config-run's two tasks, read from submit.sh itself."""
+    m = re.search(r"(?ms)^table = (\{.*?\})\s*(#[^\n]*)?\n(?!\s)", (HERE / "sky" / "submit.sh").read_text())
+    if not m:
+        raise ValueError("no VY_ROW_CLASS table in sky/submit.sh")
+    return ast.literal_eval(re.sub(r"#[^\n]*", "", m.group(1)))
+
+
 def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, int, int]:
     res = task.get("resources") or {}
     cpus, mem = int(res.get("cpus", 8)), int(res.get("memory", 32))
@@ -103,13 +109,14 @@ def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, 
     gpus = int(acc.split(":")[1]) if ":" in acc else 0
     cls = item.get("class")
     if cls:
-        if cls not in CLASSES or ntasks != 2:
-            raise ValueError(f"class {cls!r}: one of {sorted(CLASSES)}, for a two-task template")
-        build, gpu, n = CLASSES[cls]
+        table = classes()
+        if cls not in table or ntasks != 2:
+            raise ValueError(f"class {cls!r}: one of {sorted(table)}, for a two-task template")
+        build, gpu, n = table[cls]
         if idx == 0:
             mem = build
         else:
-            mem, gpus = gpu, n
+            mem, gpus, cpus = gpu, n, 4 * n          # submit.sh: the GPU queue's fixed 4 vCPU per GPU
     o = (item.get("resources") or {}).get(task.get("name") or str(idx)) or {}
     return int(o.get("cpus", cpus)), int(o.get("memory", mem)), int(o.get("gpus", gpus))
 
@@ -370,6 +377,8 @@ def main(argv: list[str]) -> int:
     s.add_argument("--class", dest="cls")
     s.add_argument("--env", action="append", default=[])
     s.add_argument("--resources", type=json.loads, help='JSON: {"<task>": {"cpus": N, "memory": GB, "gpus": N}}')
+    s.add_argument("--task", type=int, default=0, help="start the chain at this task (resume after an earlier task succeeded)")
+    s.add_argument("--try", dest="tries", type=int, default=0, help="the try number in the Job name (a resubmission)")
     s.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("tick")
     t.add_argument("--dry-run", action="store_true")
@@ -383,7 +392,7 @@ def main(argv: list[str]) -> int:
         for k, v in (("queue", ns.queue), ("priority", ns.priority), ("class", ns.cls), ("resources", ns.resources)):
             if v:
                 item[k] = v
-        submit(item, ns.key, dry=ns.dry_run)
+        submit(item, ns.key, ns.task, ns.tries, dry=ns.dry_run)
     elif ns.cmd == "tick":
         tick(ns.dry_run)
     elif ns.cmd == "loop":

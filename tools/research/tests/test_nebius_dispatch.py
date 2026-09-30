@@ -29,9 +29,10 @@ def dispatch(tmp_path, monkeypatch):
 def test_config_run_renders_two_chained_jobs(dispatch):
     item = {"id": "c1", "template": "config-run", "tree": "/t", "class": "small", "env": CELL}
     build, gpu = (dispatch.render(item, "lane/c1", i, 0) for i in (0, 1))
+    assert build["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "deployments-cpu"
+    assert gpu["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "deployments-gpu"
     for job in (build, gpu):
         assert job["spec"]["suspend"] is True and job["spec"]["backoffLimit"] == 0
-        assert job["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "circuits"
         pod = job["spec"]["template"]
         assert not any(k.startswith("kueue.x-k8s.io/") for k in pod["metadata"]["labels"])
         c = pod["spec"]["containers"][0]
@@ -43,6 +44,8 @@ def test_config_run_renders_two_chained_jobs(dispatch):
     assert gpu["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"] == {"nvidia.com/gpu": "1"}
     assert gpu["spec"]["template"]["spec"]["runtimeClassName"] == "nvidia"
     assert build["metadata"]["name"] != gpu["metadata"]["name"] and len(gpu["metadata"]["name"]) <= 63
+    tp2 = dispatch.render({**item, "class": "tp2"}, "lane/c1", 1, 0)["spec"]["template"]["spec"]["containers"][0]["resources"]
+    assert tp2["requests"]["cpu"] == "8" and tp2["limits"] == {"nvidia.com/gpu": "2"}
 
 
 def test_backfill_item_gets_backfill_priority_and_missing_env_is_refused(dispatch):
