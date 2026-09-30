@@ -69,6 +69,9 @@ EVALUATORS = {
     "Attention_v4": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
                     "with block b guarding a running max of -inf only when b >= MASKED_FROM -- FA3's per-iteration Check_inf, "
                     "registry.fa3_check_inf; TargetProfile.fa3_construction)",
+    "Attention_v5": "verity_vllm.program.kernels.derived_rows.attention_rows (Attention_v5{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
+                    "with block b guarding the rescale's running max of -inf only when b >= MASKED_FROM, max * scale in every block -- FA2's "
+                    "per-iteration Check_inf, registry.fa2_check_inf; targets.fa2_check_inf)",
     "RMSNormTriton_v1": "verity_vllm.program.kernels.derived_rows.rmsnorm_triton_rows",
     "RMSNormFusedCuda_v2": "verity_vllm.program.kernels.derived_rows.rmsnorm_fused_v2_rows",
     "SiluMul_v1": "verity_vllm.program.kernels.derived_rows.silu_mul_rows",
@@ -301,11 +304,11 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
     T, NH, KVH, Dh, BN = (int(statics[k]) for k in ("T", "NH", "KVH", "D", "BN"))
     if len(ops) != 3:                                                        # [R17-14] the Definition's arity (q, kc, vc): a row wiring another is by name
         raise Declined(f"{family}: the row wires {len(ops)} args, the registered Definition takes 3 (q, K history, V history)")
-    if family in ("Attention_v2", "Attention_v4"):
+    if family in ("Attention_v2", "Attention_v4", "Attention_v5"):
         dot_id, inv_id = prim_static(statics, "DOT", family), prim_static(statics, "INV", family)
     else:
         dot_id, inv_id = "AmpereBF16TcDot16_v2", "Fa2InvSum_v1"
-    masked_from = int(statics["MASKED_FROM"]) if family == "Attention_v4" else None
+    masked_from = int(statics["MASKED_FROM"]) if family in ("Attention_v4", "Attention_v5") else None
     if dot_id not in D.TC_DOT16_BY_PRIM or inv_id not in D.INV_SUM_BY_PRIM:
         raise Declined(f"no registered evaluator for {family} with DOT={dot_id}, INV={inv_id} "
                        f"(twins: {sorted(D.TC_DOT16_BY_PRIM)} x {sorted(D.INV_SUM_BY_PRIM)})")
@@ -316,7 +319,7 @@ def attention(family: str, statics: dict[str, Any], ops: Sequence[np.ndarray]) -
         raise Declined(f"{family}: K history {kc.size} / V history {vc.size} words != T*KVH*D = {T}*{KVH}*{Dh}")
     try:
         out, nonfin = D.attention_rows(q, kc.reshape(T, KVH, Dh), vc.reshape(T, KVH, Dh), BN, dot_prim=dot_id, inv_prim=inv_id,
-                                       masked_from=masked_from)
+                                       masked_from=masked_from, rescale_only=family == "Attention_v5")
     except ValueError as e:                                                  # a geometry outside the registered relation: by name
         raise Declined(f"{family}: {e}") from None
     if nonfin.any():
@@ -715,7 +718,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
+    from verity_vllm.program.registry import b1, fa2_check_inf, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -729,6 +732,8 @@ def _check_targets() -> dict[str, list]:
         "Attention_v2": [bind(b1.AttentionV2, **attn, **fa2), bind(b1.AttentionV2, **attn, **fa3)],
         # T = 40, BN = 16: three blocks; MASKED_FROM 2 leaves blocks 1 and 0 unguarded, 0 guards every block (= Attention_v2)
         "Attention_v4": [bind(fa3_check_inf.AttentionV4, **dict(attn, T=40), **fa3, MASKED_FROM=m) for m in (2, 0)],
+        "Attention_v5": [bind(fa2_check_inf.AttentionV5, **dict(attn, T=40), DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=m)
+                         for m in (2, 0)],
         "RMSNormTriton_v1": [bind(b1.RMSNormTriton, N=16, EPS=1e-6)],
         "RMSNormFusedCuda_v2": [bind(b1.RMSNormFusedCuda, N=16, EPS=1e-6)],
         "SiluMul_v1": [bind(b1.SiluMul, I=8)],
@@ -767,6 +772,7 @@ _row("RoPE_v1", rope, ("0",))
 _row("Attention_v3", partial(attention, "Attention_v3"), ("out",))
 _row("Attention_v2", partial(attention, "Attention_v2"), ("out",))
 _row("Attention_v4", partial(attention, "Attention_v4"), ("out",))
+_row("Attention_v5", partial(attention, "Attention_v5"), ("out",))
 _row("RMSNormTriton_v1", rmsnorm_triton, ("out",))
 _row("RMSNormFusedCuda_v2", rmsnorm_fused, ("0", "1"))
 _row("SiluMul_v1", silu_mul, ("out",))
