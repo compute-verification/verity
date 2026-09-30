@@ -120,7 +120,7 @@ def main() -> int:
         if whole:
             for p_ in (w, f):
                 for nm, size in p_.size.items():
-                    if nm in p_.b and nm not in ("xa", "xb"):
+                    if nm in p_.b and nm not in ("xa", "xb", "tma"):         # tma: the GEMMs' tensor maps, encoded once
                         d.ck("cuMemsetD8_v2", C.c_uint64(p_.b[nm]), POISON, size)
                 p_.run_all()
             names = [nm for nm in w.size if nm in w.b and nm in f.b and nm not in ("xa", "xb", "tma")]
