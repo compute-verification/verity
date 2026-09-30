@@ -1,8 +1,8 @@
 # A vLLM deployment (a config run, --config-run 1) on the Nebius cluster: three chained managed-job tasks, the Build and the replay
 # in queue deployments-cpu and the Commit in deployments-gpu (kueue.yaml: GPU generation and CPU checking in separate queues).
-# With --env REPLAY_DEFERRED=1 (a tree with the vLLM coordinator's PR A and PR B) the Commit seals a replay bundle in
-# <sweep>/<row>/commit/replay_bundle_p1/ and the replay task replays it on CPU; with the default 0 the Commit replays on its GPU and
-# the replay task exits at once. Interface agreed with the vLLM coordinator
+# When the tree has the CPU replay (PR B registers vllm.replay; REPLAY_DEFERRED=auto, the default) the Commit seals a replay bundle
+# in <sweep>/<row>/commit/replay_bundle_p1/ and the replay task replays it on CPU; an older tree's Commit replays on its GPU and the
+# replay task exits at once. --env REPLAY_DEFERRED=1 or 0 forces either. Interface agreed with the vLLM coordinator
 # (lanes/nebius-infra/20260930T0729Z-answer-from-vllm-coordinator-config-run-split.md):
 #   build: CPU only (0 GPU)   `row stage build  ROW ROLE REPO REV --config-run 1 --replay-k 460`   Build + the strict word check
 #   gpu:   1 GPU (TP2: 2)     `row stage commit ROW ROLE REPO REV --config-run 1 --replay-k 460`   one instrumented engine run, the
@@ -156,7 +156,7 @@ envs:
   HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
   GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
   OV_NOISY: "true"
-  REPLAY_DEFERRED: "0"      # 1: the Commit seals a replay bundle and the replay task replays it on CPU (needs PR A and PR B)
+  REPLAY_DEFERRED: auto     # auto: defer when the tree has the CPU replay (PR B); 1 or 0 forces it
   UV_CACHE_DIR: /workspace/jobs/cache/uv
   UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
 
@@ -199,8 +199,11 @@ run: |
   # the replay task reads this run id back to cite the Commit, as this task cites the Build
   run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
   echo "$run_id" > "$SWEEP_DIR/$ROW/pipeline-commit-run"
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
+    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  fi
   deferred=()
-  [ "${REPLAY_DEFERRED:-0}" != 1 ] || deferred=(--replay-deferred 1)
+  [ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)
   /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --id "$run_id" --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
     ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"}
 
@@ -235,7 +238,7 @@ resources:
 envs:
   SRC: /workspace/research/checkout
   OMP_NUM_THREADS: "8"
-  REPLAY_DEFERRED: "0"      # the Commit's setting: 0 means the Commit replayed on the GPU, so this task has nothing to do
+  REPLAY_DEFERRED: auto     # resolved as the gpu task resolves it, from the same tree: 0 means the Commit replayed on its GPU
   ROW: null
   ROLE: null
   REPO: null
@@ -267,7 +270,10 @@ secrets:
 
 setup: |
   set -euo pipefail
-  [ "${REPLAY_DEFERRED:-0}" = 1 ] || exit 0          # nothing deferred: no tree copy, no bootstrap
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
+    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  fi
+  [ "$REPLAY_DEFERRED" = 1 ] || exit 0          # nothing deferred: no tree copy, no bootstrap
   # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
   # every job of the tree compiles its taps at the same paths, so they are built once
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
@@ -280,7 +286,10 @@ setup: |
 
 run: |
   set -euo pipefail
-  if [ "${REPLAY_DEFERRED:-0}" != 1 ]; then echo "replay: not deferred (REPLAY_DEFERRED=0), the Commit replayed on its GPU"; exit 0; fi
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
+    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  fi
+  if [ "$REPLAY_DEFERRED" != 1 ]; then echo "replay: not deferred (REPLAY_DEFERRED=0), the Commit replayed on its GPU"; exit 0; fi
   export PATH=/workspace/jobs/venv312/bin:$PATH
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   export PATH=$CUDA_HOME/bin:$PATH

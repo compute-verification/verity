@@ -63,6 +63,14 @@ def meminfo() -> dict[str, int]:
     return {l.split(":")[0]: int(l.split()[1]) * 1024 for l in Path("/proc/meminfo").read_text().splitlines() if l.split()[1:]}
 
 
+def in_verity_scope(pid: int) -> bool:
+    """Verity's guest CPU jobs run in `fill-verity-*` scopes (fill_runner.py); the OOM guard stops them before any pous work."""
+    try:
+        return "fill-verity-" in Path(f"/proc/{pid}/cgroup").read_text()
+    except OSError:
+        return False
+
+
 def oom_kills() -> int:
     for line in Path("/proc/vmstat").read_text().splitlines():
         if line.startswith("oom_kill "):
@@ -123,7 +131,8 @@ class Guard:
         gs = {k: v for k, v in groups().items() if k != os.getpgid(ME) and not PROTECT.search(" ".join(v["cmds"][:1]))}
         if not gs:
             return
-        pgid, g = max(gs.items(), key=lambda kv: kv[1]["rss"])
+        guests = {k: v for k, v in gs.items() if in_verity_scope(k)}
+        pgid, g = max((guests or gs).items(), key=lambda kv: kv[1]["rss"])
         try:
             os.killpg(pgid, signal.SIGTERM)
         except ProcessLookupError:
