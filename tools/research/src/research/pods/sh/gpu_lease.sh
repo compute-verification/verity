@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Share one machine's GPUs between concurrent runs: one lock file per GPU, held with flock(1).
 #
-#   gpu-lease N [--wait] [--on LIST] [--max-min M] [--mem-gb G] [--preemptible] -- CMD...
+#   gpu-lease N [--wait] [--on LIST] [--max-min M] [--mem-gb G] [--preemptible] [--timed] -- CMD...
 #                                                take N free GPUs and run CMD with CUDA_VISIBLE_DEVICES naming them
 #   gpu-lease status                             one line per GPU: index, free or held, and the holder: minutes held, pid, run
 #                                                id, who, UUID, start and command
@@ -41,6 +41,10 @@
 # The oldest waiter, when the free GPUs and the preemptible leases together cover what it needs, stops the newest preemptible
 # leases: SIGTERM to the whole scope (else the pid), SIGKILL 30 s later, each logged to $GPU_LEASE_DIR/preempted.log.  The stopped
 # job exits 143 and restarts however its launcher restarts it.  A request without --wait preempts nothing.
+#
+# --timed (or GPU_LEASE_TIMED=1) tags a timed window: the lease records timed=1, and the server's ops daemon keeps the machine quiet
+# while it is held (it pauses other CPU-heavy work; on vy-nebius-2, node_ops.py).  A lease of every GPU by one holder counts as one
+# too.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -74,7 +78,8 @@ uuid_table() {
 }
 
 usage() {
-  echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--max-min M] [--mem-gb G] [--preemptible] -- CMD... | gpu-lease status" >&2
+  echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--max-min M] [--mem-gb G] [--preemptible] [--timed] -- CMD... |" \
+    "gpu-lease status" >&2
   exit 2
 }
 
@@ -204,11 +209,13 @@ take() {
 if [ "$1" = status ]; then status; exit 0; fi
 n=$1; shift
 case $n in ''|*[!0-9]*|0) usage ;; esac
-wait=0 on="" maxmin="" memgb="" preempt=""
+wait=0 on="" maxmin="" memgb="" preempt="" timed=${GPU_LEASE_TIMED:-}
+[ "$timed" = 1 ] || timed=""
 while [ $# -gt 0 ] && [ "$1" != -- ]; do
   case $1 in
     --wait) wait=1 ;;
     --preemptible) preempt=1 ;;
+    --timed) timed=1 ;;
     --on) [ $# -ge 2 ] || usage; on=$2; shift ;;
     --max-min) [ $# -ge 2 ] || usage; maxmin=$2; shift; case $maxmin in ''|*[!0-9]*|0) usage ;; esac ;;
     --mem-gb) [ $# -ge 2 ] || usage; memgb=$2; shift; case $memgb in ''|*[!0-9]*) usage ;; esac ;;
@@ -292,7 +299,7 @@ for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
   uuids+=("${u:--}")
   echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
-    "${preempt:+preempt=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
+    "${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
 done
 CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
 GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
