@@ -11,7 +11,9 @@ operands, the salt (a label of the operand set) and the two domain ids (verity.c
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
 ``plain`` (the forming and the chain alone: y from C̃).  The scheme's domain is m a multiple of 64 (its 64 x 64 tile), so
 an m that isn't is the scheme's matmul of A padded with zero filler rows: the call first copies A into the padded buffer;
-the padded rows are committed, computed and hashed, and not credited.
+the padded rows are committed, computed and hashed, and not credited.  A call's ``phases``: ``before`` (the padding copy,
+A's commitment and seed_a, A's forming, A′F_B), ``gemm`` (the chain with the peel and the digests) and ``after`` (the tile
+leaves; nothing without hashing).
 
 The gate: every output byte-equal to a second pipeline launched on the same operands into its own buffers (``all``); A's
 and B's roots equal to `audit.commit_rows` over the rows on the host and both seeds to the scheme's `noise` of that
@@ -73,6 +75,7 @@ class _Call:
         self.d.sync()
         self.seed_a, self.seed_b = (self.d.read(self.pl.buf[nm], 32) for nm in ("seed_a", "seed_b"))
         self.outputs = {n: Buffer(self.pl.buf[n], self.pl.sizes[n]) for n in OUTPUTS[mode_of(flags)]}
+        self.phases = {part: (lambda stream, part=part: self._part(part, stream)) for part in ("before", "gemm", "after")}
 
     def _pipeline(self, operands, store_cu: bool = False) -> D.Pipeline:
         ext = {"xb": operands.b.ptr}
@@ -90,6 +93,14 @@ class _Call:
     def launch(self, stream: int) -> None:
         self.pad(self.pl, stream)
         self.pl.launch(stream, self.mode)
+
+    def _part(self, part: str, stream: int) -> None:
+        steps = self.pl.steps(self.mode)
+        g = next(i for i, (name, _, _) in enumerate(steps) if name.startswith("gemm_"))
+        if part == "before":
+            self.pad(self.pl, stream)
+        for name, geo, kw in {"before": steps[:g], "gemm": steps[g:g + 1], "after": steps[g + 1:]}[part]:
+            self.d.launch(name, *geo, stream=stream, **kw)
 
     def weight_side(self, stream: int) -> None:
         self.pl.weight_side(stream)
