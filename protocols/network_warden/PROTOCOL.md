@@ -146,7 +146,7 @@ every frame), the capacity per day, and the K charge by span.
 
 ## Tests
 
-`uv run pytest protocols/network_warden`. The tests enumerate small horizons, so they check the Lean statements on
+`uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean statements on
 examples and prove nothing. By name, they mirror 15 of the Lean package's 31 pins and its three proved but unpinned
 lemmas:
 - **`test_network_warden_grid.py`:**

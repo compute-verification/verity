@@ -7,7 +7,8 @@ A spec-level reference for network transparency's timing channel:
 - the capacity counts;
 - the calibration of honest runs.
 
-It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256`.
+It is pure Python. It imports only the standard library and `verity`, for the record digest's `tagged_sha256` and
+`canonical_json_bytes`.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean package.
 
 ~~~python
@@ -31,4 +32,4 @@ Calibration, from a JSON trace of honest runs:
 uv run network-warden-calibrate trace.json --ingress-bucket-ms 100
 ~~~
 
-Tests: `uv run pytest protocols/network_warden` (under a second).
+Tests: `uv run tools/check/suites.py verity-network-warden`.
