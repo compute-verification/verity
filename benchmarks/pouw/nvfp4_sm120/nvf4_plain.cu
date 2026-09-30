@@ -18,10 +18,10 @@ namespace {
 
 constexpr int TM = 256, STAGES = 3, RP = 40, GROUP = 8;
 
-template <int BO, int LATE>
-__global__ void __launch_bounds__(nvf4::Mainloop<TM, STAGES, RP, BO, LATE>::NT, 1)
+template <int BO, int LATE, int WIDE>
+__global__ void __launch_bounds__(nvf4::Mainloop<TM, STAGES, RP, BO, LATE, WIDE>::NT, 1)
     nvf4_plain(const nvf4::Maps* maps, const uint8_t* sfa, const uint8_t* sfb, uint16_t* D, int M, int N, int K) {
-  using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE>;
+  using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE, WIDE>;
   extern __shared__ __align__(1024) uint8_t smem[];
   L ml(smem);
   ml.roles(maps, sfa, sfb, M, N, K, GROUP);
@@ -61,14 +61,14 @@ bool tmap(CUtensorMap* m, const void* ptr, int k, int rows, int box_rows) {
                   CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE) == CUDA_SUCCESS;
 }
 
-template <int BO, int LATE>
+template <int BO, int LATE, int WIDE>
 struct Prepared : phc_prepared {
-  using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE>;
+  using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE, WIDE>;
   const nvf4::Maps* maps;
   phc_args a;
   int grid;
   int launch(void* stream) override {
-    nvf4_plain<BO, LATE><<<grid, L::NT, L::SMEM, static_cast<cudaStream_t>(stream)>>>(
+    nvf4_plain<BO, LATE, WIDE><<<grid, L::NT, L::SMEM, static_cast<cudaStream_t>(stream)>>>(
         maps, static_cast<const uint8_t*>(a.sfa), static_cast<const uint8_t*>(a.sfb), static_cast<uint16_t*>(a.D), a.m, a.n, a.k);
     return 0;
   }
@@ -82,7 +82,7 @@ int query(int m, int n, int k, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes)
   return 0;
 }
 
-template <int BO, int LATE>
+template <int BO, int LATE, int WIDE>
 int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prepared** out) {
   size_t need, sa, sb;
   if (query(a->m, a->n, a->k, &need, &sa, &sb) || ws_bytes < need || (reinterpret_cast<uintptr_t>(ws) & 63) ||
@@ -95,12 +95,12 @@ int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prep
   cudaStream_t s = static_cast<cudaStream_t>(stream);
   if (cudaMemcpyAsync(ws, host, sizeof(host), cudaMemcpyHostToDevice, s) != cudaSuccess || cudaStreamSynchronize(s) != cudaSuccess)
     return 4;
-  using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE>;
-  if (cudaFuncSetAttribute(nvf4_plain<BO, LATE>, cudaFuncAttributeMaxDynamicSharedMemorySize, L::SMEM) != cudaSuccess) return 5;
+  using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE, WIDE>;
+  if (cudaFuncSetAttribute(nvf4_plain<BO, LATE, WIDE>, cudaFuncAttributeMaxDynamicSharedMemorySize, L::SMEM) != cudaSuccess) return 5;
   int dev = 0, sms = 0;
   if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess)
     return 6;
-  auto* p = new Prepared<BO, LATE>;
+  auto* p = new Prepared<BO, LATE, WIDE>;
   p->maps = static_cast<const nvf4::Maps*>(ws);
   p->a = *a;
   const int tiles = (a->m / TM) * (a->n / 128);
@@ -110,12 +110,15 @@ int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prep
 }
 
 // _o: B-major MMA order inside a 64-deep step (CUTLASS's); the other A-major.  _e: LATE (a warp that finds the next stage
-// not yet full issues its step's other MMAs before it waits).  The harness times them all and keeps the fastest.
+// not yet full issues its step's other MMAs before it waits); _ew: LATE and WIDE (a warp's 64 columns contiguous, its BF16
+// stores 128-byte rows).  The harness times them all and keeps the fastest.
 const phc_entry TABLE[] = {
-    {"verity_nvf4_256x128", 5, 0, query, prepare<0, 0>},
-    {"verity_nvf4_256x128_o", 5, 0, query, prepare<1, 0>},
-    {"verity_nvf4_256x128_e", 5, 0, query, prepare<0, 1>},
-    {"verity_nvf4_256x128_o_e", 5, 0, query, prepare<1, 1>},
+    {"verity_nvf4_256x128", 5, 0, query, prepare<0, 0, 0>},
+    {"verity_nvf4_256x128_o", 5, 0, query, prepare<1, 0, 0>},
+    {"verity_nvf4_256x128_e", 5, 0, query, prepare<0, 1, 0>},
+    {"verity_nvf4_256x128_o_e", 5, 0, query, prepare<1, 1, 0>},
+    {"verity_nvf4_256x128_ew", 5, 0, query, prepare<0, 1, 1>},
+    {"verity_nvf4_256x128_o_ew", 5, 0, query, prepare<1, 1, 1>},
 };
 
 }  // namespace
