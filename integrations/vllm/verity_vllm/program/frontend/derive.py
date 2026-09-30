@@ -517,10 +517,11 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-                  check_registry: bool = True, rank: tuple[int, int] | None = None) -> DeriveReport:
+                  check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None) -> DeriveReport:
     """`rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it."""
+    (`program_digest`) does not depend on it.  `exported`: the caller's `torch.export` of `source` on `example_inputs` under the same
+    shims, derived from instead of exporting again."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -539,7 +540,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     holder: list = []
     try:
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
-                                    name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder)
+                                    name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported)
         prov["weights"] = [w.to_json() for w in ctx.weights]
         prov["weight_roles"] = ctx.weight_roles
         prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual (global M-0595 (3))
@@ -677,9 +678,9 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
 
 
 def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims, name, ruleset, vocab,
-                 _ctx_holder: list | None = None) -> tuple[SpecializedDefinition, Ctx]:
+                 _ctx_holder: list | None = None, exported=None) -> tuple[SpecializedDefinition, Ctx]:
     module = source if isinstance(source, torch.nn.Module) else None
-    ep = _export(source, example_inputs)
+    ep = exported if exported is not None else _export(source, example_inputs)
     sig = ep.graph_signature
     leaves, fqn_to_leaf = _weights_of(module)
     placeholder_to_weight: dict[str, int] = {}

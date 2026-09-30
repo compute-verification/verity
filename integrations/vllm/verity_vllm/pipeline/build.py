@@ -489,14 +489,13 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "export", "hint": "; ".join(bad)}
                 raise _Refused()
             res["declared_derived"] = declared_derived_accounting(target, applied)
-            del ep
-            # derive: the wrapper module IS the source (derive re-exports it identically: same module, same example input)
+            # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
             names = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
             with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{names[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True, rank=(tp, rank) if tp > 1 else None)
+                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep)
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
