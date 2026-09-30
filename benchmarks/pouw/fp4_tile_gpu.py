@@ -433,8 +433,8 @@ def _worker_init(tree: str) -> None:
 
 def cmd_gate(args) -> int:
     """The port against the reference: pinned vectors, --tiles-per-family 16 x 16 tiles and --big-per-family 64 x 64
-    tiles per family, and long chains word by word; one JSON per task in OUT/gate (the checkpoints), exit 99 while tasks
-    remain once --budget-min is spent, 0 with OUT/gate/summary.json."""
+    tiles per family, and long chains word by word, after the batches `gpu-check` reads; one JSON per task in OUT/gate
+    (the checkpoints), exit 99 while tasks remain once --budget-min is spent, 0 with OUT/gate/summary.json."""
     sys.path.insert(0, str(HERE))
     import fp4_census as FC
     families = args.families.split(",") if args.families else [f for f in FC.FAMILIES if f != "coherent"] + list(PLANTED)
@@ -443,13 +443,12 @@ def cmd_gate(args) -> int:
     t_start = time.monotonic()
     if not (out / "pinned.json").exists():
         (out / "pinned.json").write_text(json.dumps(gate_pinned(Replay("cpu")), indent=1))
-    tasks = []
+    n = args.tiles_per_family
+    tasks = [("batch", (fam, k, str(out.resolve()))) for fam in families for k in (3584, 18944) if args.batches]
+    tasks += [("words", (fam, k, r)) for fam in families for k, r in ((3584, 4), (18944, 2)) if args.words]
     for fam in families:
-        n = args.tiles_per_family
-        tasks += [("tiles", (fam, False, t, min(t + args.chunk, n))) for t in range(0, n, args.chunk)]
         tasks += [("tiles", (fam, True, t, t + 1)) for t in range(args.big_per_family)]
-        tasks += [("words", (fam, k, r)) for k, r in ((3584, 4), (18944, 2)) if args.words]
-        tasks += [("batch", (fam, k, str(out.resolve()))) for k in (3584, 18944) if args.batches]
+        tasks += [("tiles", (fam, False, t, min(t + args.chunk, n))) for t in range(0, n, args.chunk)]
 
     def name(kind: str, a: tuple) -> str:
         return f"{kind}-" + "-".join(str(v) for v in a if not str(v).startswith("/")) + ".json"
