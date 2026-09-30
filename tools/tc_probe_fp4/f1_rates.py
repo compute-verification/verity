@@ -757,14 +757,17 @@ def build(out: Path, names: list[str] | None = None, jobs: int = 8) -> dict:
 _E4M3_FINITE = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint32)
 
 
-#: FP6 / FP4 codes (sign, exponent field, mantissa bits) and, for the FP16-accumulate forms, the small exponent fields (|x| < 1,
-#: < 2, <= 1.5) that keep a chain of millions of MMAs finite
-_NARROW = {"e3m2": (3, 2, 3), "e2m3": (2, 3, 2), "e2m1": (2, 1, 2)}
+#: FP6 / FP4 codes (sign, exponent field, mantissa bits) and, for the FP16-accumulate forms, the small exponent fields (|x| < 0.5,
+#: < 1, <= 1.5) that keep a chain of millions of MMAs finite
+_NARROW = {"e3m2": (3, 2, 2), "e2m3": (2, 3, 1), "e2m1": (2, 1, 2)}
+#: where kind::f8f6f4 / kind::mxf8f6f4 read a code in its 8-bit container (PTX ISA: E2M1 in the central 4 bits, E3M2 and E2M3
+#: in the low 6)
+_CONTAINER_SHIFT = {"e3m2": 0, "e2m3": 0, "e2m1": 2}
 
 
 def _small_fp8(rng, fmt: str, shape, small: bool = False) -> np.ndarray:
     """Bytes of an FP8 value (small magnitudes) or an FP6/FP4 code (uniform, or small exponents with ``small``) in its 8-bit
-    container (E3M2 / E2M3 / E2M1 codes at bits [2, 8))."""
+    container (``_CONTAINER_SHIFT``)."""
     s = rng.integers(0, 2, size=shape, dtype=np.uint32) << 7
     if fmt == "e4m3":  # exponent field 1..5: |x| < 0.5
         return s | (rng.integers(1, 6, size=shape, dtype=np.uint32) << 3) | rng.integers(0, 8, size=shape, dtype=np.uint32)
@@ -772,10 +775,10 @@ def _small_fp8(rng, fmt: str, shape, small: bool = False) -> np.ndarray:
         return s | (rng.integers(9, 14, size=shape, dtype=np.uint32) << 2) | rng.integers(0, 4, size=shape, dtype=np.uint32)
     ebits, mbits, ecap = _NARROW[fmt]
     if not small:
-        return rng.integers(0, 1 << (1 + ebits + mbits), size=shape, dtype=np.uint32) << 2
+        return rng.integers(0, 1 << (1 + ebits + mbits), size=shape, dtype=np.uint32) << _CONTAINER_SHIFT[fmt]
     code = ((s >> 7) << (ebits + mbits)) | (rng.integers(0, ecap, size=shape, dtype=np.uint32) << mbits) \
         | rng.integers(0, 1 << mbits, size=shape, dtype=np.uint32)
-    return code << 2
+    return code << _CONTAINER_SHIFT[fmt]
 
 
 def _pack4(b: np.ndarray) -> np.ndarray:

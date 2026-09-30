@@ -619,10 +619,12 @@ def test_f1_operands_stay_in_each_forms_domain():
             b = (w[..., 0, None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF
             assert (((b >> 3) & 0xF) <= 5).all() and (((b >> 3) & 0xF) >= 1).all()
         if f.fa in ("e2m1", "e2m3", "e3m2"):
+            # PTX ISA: E2M1 in the container's central 4 bits, E3M2 and E2M3 in its low 6, zeros elsewhere
             b = (w[..., 0, None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF
-            assert not (b & 0b11).any() and (b >> (2 + {"e2m1": 4, "e2m3": 6, "e3m2": 6}[f.fa]) == 0).all(), f.name
+            sh = {"e2m1": 2, "e2m3": 0, "e3m2": 0}[f.fa]
+            assert not (b & ((1 << sh) - 1)).any() and (b >> 6 == 0).all(), f.name
             ebits, mbits, ecap = F1._NARROW[f.fa]
-            exp = (b >> (2 + mbits)) & ((1 << ebits) - 1)
+            exp = (b >> (sh + mbits)) & ((1 << ebits) - 1)
             # an FP16 accumulator gets small exponents (a chain of millions of MMAs stays finite); FP32 the whole code range
             assert (exp.max() < ecap) == (f.acc[0] == "h"), f.name
     for op in F1.OPS:
