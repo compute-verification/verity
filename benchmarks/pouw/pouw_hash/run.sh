@@ -7,8 +7,9 @@
 # Env: POUW_EXPECT_UUID (required): the GPU's UUID from internal/pouw/rtx-pro/server.md; "pod" on a one-GPU pod (refused
 # if more than one GPU is visible); or "lease" under `gpu-lease 1` (CUDA_VISIBLE_DEVICES one index in PCI bus order, whose
 # UUID the bench then requires of its CUDA device); LOCK_MHZ: lock this GPU's SM clock there (nvidia-smi -i UUID -lgc, reset
-# on exit); else CLOCK_LABEL labels the rows (default unlocked; node 2's clocks are fixed node-wide: locked-2100), and every
-# row records its clocks; MS: each row's target milliseconds (default 100).
+# on exit); else CLOCK_LABEL labels the rows (default locked-2100 under "lease", node 2's node-wide lock, else unlabelled), and
+# every row records its clocks, the summary flagging a row more than 2% off a locked-N label; MS: each row's target
+# milliseconds (default 100).
 # Exit: 3 the wrong device; 5 the tree does not match its manifest; 4 a gate failed (nothing timed); else the bench's.
 # Outputs under $RESEARCH_RUN_DIR/out (or ./out): device.txt, env.txt, inputs.check, clocks.txt, smi_trace.csv,
 # check_device.jsonl, check_summary.jsonl, rates.jsonl, epi.jsonl, summary.txt.
@@ -19,6 +20,7 @@ OUT=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$OUT"
 if ! sha256sum -c MANIFEST.sha256 > "$OUT/inputs.check" 2>&1; then echo "REFUSED: the tree does not match MANIFEST.sha256"; exit 5; fi
 chmod +x pouw_hash_bench   # a shipped repo (pearl_c/ship.sh) checks every file out 100644
 WANT=${POUW_EXPECT_UUID:-}
+DEFAULT_LABEL=unlabelled
 if [ "$WANT" = pod ]; then
   [ "$(nvidia-smi --query-gpu=uuid --format=csv,noheader | wc -l)" = 1 ] || { echo "REFUSED: POUW_EXPECT_UUID=pod with more than one GPU"; exit 3; }
   WANT=$(nvidia-smi --query-gpu=uuid --format=csv,noheader | head -1)
@@ -26,6 +28,7 @@ elif [ "$WANT" = lease ]; then
   case "${CUDA_VISIBLE_DEVICES:-}" in ''|*[!0-9]*) echo "REFUSED: POUW_EXPECT_UUID=lease needs CUDA_VISIBLE_DEVICES to be one index"; exit 3 ;; esac
   [ "${CUDA_DEVICE_ORDER:-}" = PCI_BUS_ID ] || { echo "REFUSED: POUW_EXPECT_UUID=lease needs CUDA_DEVICE_ORDER=PCI_BUS_ID"; exit 3; }
   WANT=$(nvidia-smi -i "$CUDA_VISIBLE_DEVICES" --query-gpu=uuid --format=csv,noheader | head -1)
+  DEFAULT_LABEL=locked-2100
 fi
 [ -n "$WANT" ] || { echo "REFUSED: POUW_EXPECT_UUID is not set"; exit 3; }
 export POUW_EXPECT_UUID=$WANT
@@ -33,7 +36,7 @@ NAME=$(nvidia-smi -i "$WANT" --query-gpu=name --format=csv,noheader 2> /dev/null
 echo "$NAME $WANT CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}" > "$OUT/device.txt"
 case "$NAME" in *"RTX PRO 6000"*) ;; *) echo "REFUSED: GPU $WANT is '$NAME', not an RTX PRO 6000"; exit 3 ;; esac
 { nvidia-smi -i "$WANT"; nvidia-smi -i "$WANT" -q -d CLOCK,PERFORMANCE,POWER; cat toolchain.txt source.txt; lscpu | grep -E "Model name|^CPU\(s\)"; grep PRETTY /etc/os-release; } > "$OUT/env.txt" 2>&1
-LOCKED=${CLOCK_LABEL:-unlocked}
+LOCKED=${CLOCK_LABEL:-$DEFAULT_LABEL}
 if [ -n "${LOCK_MHZ:-}" ] && nvidia-smi -i "$WANT" -lgc "$LOCK_MHZ,$LOCK_MHZ" >> "$OUT/env.txt" 2>&1; then
   LOCKED="locked $LOCK_MHZ MHz"
   trap 'nvidia-smi -i "$WANT" -rgc > /dev/null 2>&1' EXIT
@@ -54,8 +57,10 @@ cat "$OUT/check_summary.jsonl" >> "$OUT/summary.txt"
 [ $RC = 0 ] || { echo "rates: exited $RC" >> "$OUT/summary.txt"; finish $RC; }
 ./pouw_hash_bench epi "${MS:-100}" > "$OUT/epi.jsonl" 2>> "$OUT/summary.txt"; RC=$?
 python3 - "$OUT" "$LOCKED" >> "$OUT/summary.txt" <<'EOF'
-import json, sys
+import json, re, sys
 out, locked = sys.argv[1], sys.argv[2]
+lock = re.match(r"locked[- ](\d+)", locked)
+lock_ghz = int(lock.group(1)) / 1e3 if lock else None
 # the W1 unit is one dense FP8 mma.sync MAC: a rate row's price per byte is the mma row's MACs per SM per clock over its bytes
 w1 = None
 for f in ("rates", "epi"):
@@ -77,6 +82,8 @@ for f in ("rates", "epi"):
             mac = f" {r['cyc_per_iter'] / r['f_eff_ghz'] / 1e3:.2f} us/iter"
         print(f"{r['group']:8} {r['name'][:60]:60} {r['per_sm_clk']:9.3f} {unit}/SM/clk {r['gb_s']:10.1f} GB/s"
               f" {r['cyc_per_iter']:10.1f} cyc/iter{mac} regs {r['regs']}{extra} f {r['f_eff_ghz']:.3f} GHz ({locked})")
+        if lock_ghz and abs(r["f_eff_ghz"] / lock_ghz - 1) > 0.02:
+            print(f"CLOCK MISMATCH: {r['name']} ran at {r['f_eff_ghz']:.3f} GHz, labelled {locked}")
 EOF
 [ $RC = 4 ] && echo "GATE FAILED: the epilogue's digests; nothing timed in epi" >> "$OUT/summary.txt"
 finish $RC
