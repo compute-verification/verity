@@ -16,7 +16,8 @@ equal to `_v1` on every finite input.  A registered id denotes one function, so 
 (same ids, same functions).  `BlackwellE4m3QmmaDot32_v1` is the consumer-Blackwell (sm_120) FP8 `mma.sync` step,
 `tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`, and `BlackwellE5m2QmmaDot32_v1` the same with E5M2 operands
 (`tc_dot_total_e5m2`); `BlackwellNvf4OmmaDot64_v1` its NVFP4 step
-(`models.BLACKWELL_SM120_NVF4`), with the two casts NVFP4 quantization uses, `F32ToE2m1Sat_v1` and `E4m3ToF32_v1`.
+(`models.BLACKWELL_SM120_NVF4`), with the two casts NVFP4 quantization uses, `F32ToE2m1Sat_v1` and `E4m3ToF32_v1`, and
+`BlackwellMxf4OmmaDot64_v1` its MXFP4 step (`models.BLACKWELL_SM120_MXF4`).
 """
 from __future__ import annotations
 
@@ -24,7 +25,9 @@ from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
 
 from .tc import cast
-from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_NVF4
+from .tc import models as _tc_models
+from .tc.errors import InvalidArtifact
+from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4
 from .tc.silicon import AMPERE_BF16_M16N8K16
 from .tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from .tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3, tc_dot_total_e5m2
@@ -35,12 +38,13 @@ A32_8 = Array(32, E4M3)
 A32_E5M2 = Array(32, E5M2)       # the same type as A32_8: an encoding type carries only its width
 A64_4 = Array(64, E2M1)
 A4_8 = Array(4, E4M3)            # four UE4M3 block-scale bytes (the E4M3 encoding with the sign bit clear)
+A2_8 = Array(2, Value(8))        # two UE8M0 block-scale bytes
 #: `cvt.rn.satfinite.e2m1x2.f32`'s code for a NaN input (E2M1 has none): +6, measured on the RTX PRO 6000 for every NaN element
 #: of `cvt_fp16_to_fp4` (whose FMUL hands it the canonical +NaN; the sign of a NaN input is not observable there, and dropped)
 E2M1_NAN_CODE = 0x7
 
-__all__ = ["A16", "A32_8", "A32_E5M2", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "AmpereBF16TcDot16", "Bf16ToF32",
-           "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
+__all__ = ["A16", "A2_8", "A32_8", "A32_E5M2", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "AmpereBF16TcDot16", "Bf16ToF32",
+           "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellMxf4OmmaDot64", "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
            "HopperE4m3QgmmaDot32", "const"]
 
 
@@ -159,6 +163,45 @@ def BlackwellNvf4OmmaDot64(acc: int, *ab: int) -> int:
     return BLACKWELL_SM120_NVF4.step_scaled(acc, list(ab[:64]), list(ab[64:128]), [s & 0x7F for s in sa], [s & 0x7F for s in sb])
 
 
+def _block_scaled_sum_negative(model, acc: int, a: list[int], b: list[int], sa: list[int], sb: list[int]) -> bool:
+    """Whether ``model``'s align-add sum (`BlockScaledAlignAdd._transducer`: the truncated addends on the common grid) is
+    negative; read only where that sum leaves binary32."""
+    terms = model.group_terms(a, b, sa, sb)
+    acc_m, acc_e = _tc_models._fp32_dyadic(acc)
+    anchors = [unit - model.frac_bits for _, unit, participates in terms if participates]
+    if acc_m:
+        anchors.append(max((acc >> 23) & 0xFF, 1) - 127 - (model.acc_window - 1))
+    lsb = max(*anchors, model.grid_floor)
+    total = sum(_tc_models._trunc_rz_to_grid(m, unit, lsb) for m, unit, _ in terms if m)
+    return total + (_tc_models._trunc_rz_to_grid(acc_m, acc_e, lsb) if acc_m else 0) < 0
+
+
+@primitive("BlackwellMxf4OmmaDot64", 1, [("acc", F32), ("a", A64_4), ("b", A64_4), ("sa", A2_8), ("sb", A2_8)], F32,
+           conformance="exact-model-tested; pinned on sm_120 (dossier art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92: "
+                       "RTX 5090, lane fp4-re's 7,389,184 words and lane fp4-proof's 9,658,368, 0 mismatches); rules 2 and 3 below "
+                       "are those runs' record-only specials family; rule 1 is BlackwellNvf4OmmaDot64_v1's for the UE8M0 NaN byte, "
+                       "documented, not measured; not yet swept on the RTX PRO 6000")
+def BlackwellMxf4OmmaDot64(acc: int, *ab: int) -> int:
+    """One accumulator coordinate of `mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64 ... e2m1.e2m1.f32.ue8m0`
+    on sm_120a (SASS `OMMA.SF.16864.F32.E2M1.E2M1.E8`): 64 E2M1 codes per operand in two blocks of 32, one UE8M0 scale byte
+    (2^(code-127)) per block.  Total on every encoding:
+
+    1. a scale byte 0xFF (the UE8M0 NaN) -> 0x7FFFFFFF, whatever the accumulator;
+    2. else a NaN accumulator -> 0x7FFFFFFF, and ±inf -> itself;
+    3. else `models.BLACKWELL_SM120_MXF4.step_scaled` (`BlockScaledAlignAdd`, as for `BlackwellNvf4OmmaDot64_v1`), and a sum
+       that leaves binary32 (UE8M0 scales reach it; UE4M3 scales cannot) -> ±inf of the sum's sign."""
+    a, b, sa, sb = list(ab[:64]), list(ab[64:128]), list(ab[128:130]), list(ab[130:132])
+    if 0xFF in sa or 0xFF in sb:
+        return 0x7FFFFFFF
+    acc &= 0xFFFFFFFF
+    if (acc & 0x7F800000) == 0x7F800000:
+        return 0x7FFFFFFF if acc & 0x7FFFFF else acc
+    try:
+        return BLACKWELL_SM120_MXF4.step_scaled(acc, a, b, sa, sb)
+    except InvalidArtifact:
+        return 0xFF800000 if _block_scaled_sum_negative(BLACKWELL_SM120_MXF4, acc, a, b, sa, sb) else 0x7F800000
+
+
 @primitive("F32ToE2m1Sat", 1, [("x", F32)], E2M1,
            conformance="exact-model-tested; every element of vllm::cvt_fp16_to_fp4 on the RTX PRO 6000 (run r20260930-091510-b35b: "
                        "NaN, +-inf, signed zeros and the E2M1 rounding midpoints included)")
@@ -223,6 +266,8 @@ def _register_kernels() -> None:
                     domain=every, sample=K.sample_tc_e5m2)
     register_kernel(BlackwellNvf4OmmaDot64, lambda acc, a, b, sa, sb: K.nvf4_step_total_batch(BLACKWELL_SM120_NVF4, acc, a, b, sa, sb),
                     domain=every, sample=K._sample_block_scaled(BLACKWELL_SM120_NVF4))
+    register_kernel(BlackwellMxf4OmmaDot64, lambda acc, a, b, sa, sb: K.mxf4_step_total_batch(BLACKWELL_SM120_MXF4, acc, a, b, sa, sb),
+                    domain=every, sample=K._sample_block_scaled(BLACKWELL_SM120_MXF4))
     register_kernel(F32ToE2m1Sat, lambda x: K.f32_to_e2m1_sat_batch(x, E2M1_NAN_CODE), domain=every)
     register_kernel(E4m3ToF32, K.e4m3_to_f32_batch, domain=every)
 
