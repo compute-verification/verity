@@ -1,5 +1,5 @@
 """Vectorized reference evaluator of `Serve@3`'s padding layer — the inactive transition and its outputs
-(lane PAD-IMPL; semantics: PAD-SPEC `docs/vllm-poc/serve3-spec.md` v1 §4–§8).
+(lane PAD-IMPL; semantics: PAD-SPEC v1 §4–§8).
 
 The padded circuit adds one semantic layer over the `Serve_v2` skeleton: the flag chain, the guards, and
 the row muxes.  Everything in that layer is a word computation on the raw samples `y_0..y_{D_MAX}` (the

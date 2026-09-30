@@ -301,7 +301,7 @@ HAWKEYE_AMPERE_GROUPSUM_E4M3_V0 = GroupSum(
     groups=(8, 8),
     width=25,
     zero_exponent=-132,
-    validated="synthetic; see docs/hardware-semantics.md for the Ada comparison",
+    validated="synthetic; the measured Ada E4M3 model is ADA_E4M3_M16N8K32",
 )
 
 # Ada Lovelace (RTX 4090, sm_89) as measured in this repository with one

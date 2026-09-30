@@ -347,8 +347,18 @@ extern "C" __global__ void __launch_bounds__(32) commit_rows(const Args a) {
 // α, 1/α, a_E and Ẽ).  E's 16 lines come from p9's seed (then y = 0 writes them to p1) or, when p9 is null, from p1.
 // p0 x, p1 E lines (rows x 16 B), p2 noise basis lines (k x 16 B), p3 codes, p4 scales, p5 alpha, p6 inv, p7 ae, p8 P,
 // p9 seed or null; i0 rows, i1 k, i2 eoff, i3 negate Ẽ, i4 E's role
-template <int FMT> DEV void form_body(const Args& a) {
+// NVFP4's block step, V (the same bytes out; handoffs/ue4m3-scale-lut.md): 0 the amax as an integer max over |D|'s bits,
+// ue4m3 then the floor as an integer max, r_b from a 128-entry table; 1 the amax by FMNMX on |D|, the floor in FP32 and one
+// packed e4m3x2 encode of the thread's two blocks; 2 as 1, with r_b from lut256 (FORM_LUT_BYTES of dynamic shared memory:
+// per byte b, 32 lane copies of RN(1/s_b) at a 256-byte stride, one PRMT and one conflict-free LDS per scale)
+constexpr int FORM_LUT_BYTES = 128 * 256;
+DEV float lut256(const float* tab, uint32_t pair, int k, uint32_t lane4) {
+  const uint32_t addr = __byte_perm(pair, lane4, 0x5504u | ((uint32_t)k << 4));
+  return *reinterpret_cast<const float*>(reinterpret_cast<const char*>(tab) + addr);
+}
+template <int FMT, int V = 0> DEV void form_body(const Args& a) {
   constexpr int BLK = Fmt<FMT>::BLK;
+  static_assert(V == 0 || FMT == NVFP4, "the block-step variants are NVFP4's");
   const uint16_t* X = reinterpret_cast<const uint16_t*>(a.p[0]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[2]);
   uint8_t* codes = reinterpret_cast<uint8_t*>(a.p[3]);
@@ -357,11 +367,15 @@ template <int FMT> DEV void form_body(const Args& a) {
   __shared__ float s_alpha[16];
   __shared__ uint32_t s_ae[16];
   __shared__ __align__(16) uint8_t E[16 * 16];
-  __shared__ float s_rcp[128];
+  __shared__ float s_rcp[V == 2 ? 1 : 128];
+  extern __shared__ __align__(128) uint8_t smem[];
+  float* tab = reinterpret_cast<float*>(smem);
   const int r0 = blockIdx.x * 16, warp = threadIdx.x / 32, lane = threadIdx.x % 32;
   const bool lead = blockIdx.y == 0;
 
-  if constexpr (FMT == NVFP4)
+  if constexpr (V == 2)
+    for (int i = threadIdx.x; i < 128 * 32; i += blockDim.x) tab[(i >> 5) * 64 + (i & 31)] = i >> 5 ? div_rn(1.0f, ue4m3f(i >> 5)) : 512.0f;
+  else if constexpr (FMT == NVFP4)
     for (int c = threadIdx.x; c < 128; c += blockDim.x) s_rcp[c] = div_rn(1.0f, ue4m3f(c));
   if (threadIdx.x < 16) {
     ulonglong2* eg = reinterpret_cast<ulonglong2*>(a.p[1]) + r0 + threadIdx.x;
@@ -443,10 +457,21 @@ template <int FMT> DEV void form_body(const Args& a) {
       mma_fp4<NVFP4>(d[jb], ea, fb, 0u, cf, sfa, NOISE_F_SCALE);
     }
     uint32_t m0 = 0, m1 = 0;
+    if constexpr (V == 0) {
 #pragma unroll
-    for (int jb = 0; jb < 8; jb++) {
-      m0 = max(m0, max(__float_as_uint(d[jb][0]) & 0x7FFFFFFFu, __float_as_uint(d[jb][1]) & 0x7FFFFFFFu));
-      m1 = max(m1, max(__float_as_uint(d[jb][2]) & 0x7FFFFFFFu, __float_as_uint(d[jb][3]) & 0x7FFFFFFFu));
+      for (int jb = 0; jb < 8; jb++) {
+        m0 = max(m0, max(__float_as_uint(d[jb][0]) & 0x7FFFFFFFu, __float_as_uint(d[jb][1]) & 0x7FFFFFFFu));
+        m1 = max(m1, max(__float_as_uint(d[jb][2]) & 0x7FFFFFFFu, __float_as_uint(d[jb][3]) & 0x7FFFFFFFu));
+      }
+    } else {
+      float f0 = 0.0f, f1 = 0.0f;
+#pragma unroll
+      for (int jb = 0; jb < 8; jb++) {
+        f0 = fmaxf(f0, fmaxf(fabsf(d[jb][0]), fabsf(d[jb][1])));
+        f1 = fmaxf(f1, fmaxf(fabsf(d[jb][2]), fabsf(d[jb][3])));
+      }
+      m0 = __float_as_uint(f0);
+      m1 = __float_as_uint(f1);
     }
     if constexpr (BLK == 32) {
       m0 = max(m0, __shfl_xor_sync(FULL, m0, 1));
@@ -456,7 +481,18 @@ template <int FMT> DEV void form_body(const Args& a) {
                 v1 = __fmul_rn(__uint_as_float(m1), __uint_as_float(SIXTH_BITS));
     uint32_t c0, c1;
     float rg, rh;
-    if constexpr (FMT == NVFP4) {
+    if constexpr (V != 0) {
+      const uint32_t pair = __nv_cvt_float2_to_fp8x2(make_float2(fmaxf(v0, 0x1p-9f), fmaxf(v1, 0x1p-9f)), __NV_SATFINITE, __NV_E4M3);
+      c0 = pair & 0xFFu;
+      c1 = pair >> 8;
+      if constexpr (V == 2) {
+        rg = lut256(tab, pair, 0, (uint32_t)lane << 2);
+        rh = lut256(tab, pair, 1, (uint32_t)lane << 2);
+      } else {
+        rg = s_rcp[c0];
+        rh = s_rcp[c1];
+      }
+    } else if constexpr (FMT == NVFP4) {
       c0 = max(ue4m3(v0), 1u);
       c1 = max(ue4m3(v1), 1u);
       rg = s_rcp[c0];
@@ -493,6 +529,9 @@ template <int FMT> DEV void form_body(const Args& a) {
 }
 extern "C" __global__ void __launch_bounds__(256) form_nv(const Args a) { form_body<NVFP4>(a); }
 extern "C" __global__ void __launch_bounds__(256) form_mx(const Args a) { form_body<MXFP4>(a); }
+extern "C" __global__ void __launch_bounds__(256) form_nv_v1(const Args a) { form_body<NVFP4, 1>(a); }
+extern "C" __global__ void __launch_bounds__(256) form_nv_v2(const Args a) { form_body<NVFP4, 2>(a); }
+extern "C" __global__ void form_nv_v2_smem(int* out) { *out = FORM_LUT_BYTES; }
 
 // ---------------------------------------------------------------- the fused products: rows x 32 chains against F
 // out[row][q] = the atom chained from +0 over k/64 steps of codes[row] . ft[q] (ft at scale 1.0).  One CTA per 16·RB rows,
