@@ -5,13 +5,14 @@
 # and circuits may borrow up to 2 of provers' idle GPUs (with the CPU and memory two cells need). Borrowing never preempts
 # (borrowWithinCohort: Never), so a running capture or M0 bench is never evicted for it; when provers' own jobs queue, provers
 # reclaims its quota by preempting circuits' borrowers (reclaimWithinCohort: Any), which SkyPilot requeues. provers borrows the same
-# way from circuits' idle quota. Within a queue, only lower priorities are preempted.
+# way from circuits' idle quota. Nothing is preempted within a queue (withinClusterQueue: Never; root 09:09Z, after captures threw
+# away cov-k09-3's Build twice): capture, sweep-night and the other priorities set admission order only.
 # quiet_hour.sh holds circuits' admissions 12:30-13:30Z (stopPolicy: Hold) so benches can re-measure without new Builds.
 #
 # Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
 # ~1,690 GiB), or it admits pods that stay Pending.
-# CPU: the node's 192 vCPU less the merge-check slots' 88 cores (8-95, pinned direct work since 08:09Z): 104, as circuits 80
-# (5 GPU cells x 16 vCPU) and provers 24. Kueue's quota is accounting; the slots' own pinning keeps checks on their cores.
+# CPU: circuits 112, provers 64 (the steward's 09:20Z set). The merge checks and pinned benches run outside Kueue on their own
+# cores, so a Kueue cut protects nothing for them.
 # The split is circuits 5 GPUs, provers 3. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
 # holds those with a placeholder pod and applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs
 # borrow circuits' idle GPUs meanwhile. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
@@ -31,14 +32,14 @@ spec:
   preemption:
     reclaimWithinCohort: Any
     borrowWithinCohort: {policy: Never}
-    withinClusterQueue: LowerPriority
+    withinClusterQueue: Never
   resourceGroups:
   - coveredResources: [nvidia.com/gpu, cpu, memory]
     flavors:
     - name: vy-nebius-1
       resources:
       - {name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}
-      - {name: cpu, nominalQuota: 80, borrowingLimit: 32}
+      - {name: cpu, nominalQuota: 112, borrowingLimit: 32}
       - {name: memory, nominalQuota: 1280Gi, borrowingLimit: 384Gi}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
@@ -50,15 +51,15 @@ spec:
   queueingStrategy: BestEffortFIFO
   preemption:
     reclaimWithinCohort: Any
-    borrowWithinCohort: {policy: LowerPriority}
-    withinClusterQueue: LowerPriority
+    borrowWithinCohort: {policy: Never}
+    withinClusterQueue: Never
   resourceGroups:
   - coveredResources: [nvidia.com/gpu, cpu, memory]
     flavors:
     - name: vy-nebius-1
       resources:
       - {name: nvidia.com/gpu, nominalQuota: 3}
-      - {name: cpu, nominalQuota: 24}
+      - {name: cpu, nominalQuota: 64}
       - {name: memory, nominalQuota: 384Gi}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
