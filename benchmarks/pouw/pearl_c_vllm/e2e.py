@@ -67,6 +67,9 @@ PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
+#: the verify's no-write controls, each a retained pass the verifier must reject: every commitment write omitted, and (under
+#: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
+CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_msg", "hash_leaf"})}
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h1", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h1"}
 #: WikiText-2 (raw), its test split, at the revision cached on node 2
@@ -353,9 +356,18 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
                     want = cmd["want"][name]
                     same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
                     out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same}
-                _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / "control"),
-                                     controls=(Control("omit", CONTROL_OMITS),))
-                out["control"] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(CONTROL_OMITS)}
+                    if run.graphs:
+                        run.graphs = False
+                        try:
+                            _, _, eager, _ = timed([{"prompt_token_ids": x} for x in prompts], sp)
+                        finally:
+                            run.graphs = True
+                        out[name]["same_commitment_eager"] = all(eager.get(k) == want.get(k) for k in
+                                                                 ("transcript_root", "activation_roots", "units", "tiles"))
+                for label, omits in CONTROLS.items():
+                    _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / label),
+                                         controls=(Control("omit", omits),))
+                    out[label] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(omits)}
                 conn.send(out)
             else:
                 raise ValueError(f"unknown command {op!r}")
@@ -721,14 +733,16 @@ def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, veri
                "token_agreement_vs_bf16": {m: agree(r["tokens"], results["bf16"]["tokens"]) for m, r in results.items()
                                            if "tokens" in r and "tokens" in results.get("bf16", {})},
                "gates": {"arm": all(g["ok"] for g in ready.get("arm", {}).get("gate", [{"ok": False}]))},
-               "verify_pass": {k: {"manifest": v["manifest"], "same_commitment_as_timed": v.get("same_commitment_as_timed")}
+               "verify_pass": {k: {"manifest": v["manifest"], "same_commitment_as_timed": v.get("same_commitment_as_timed"),
+                                   "same_commitment_eager": v.get("same_commitment_eager")}
                                for k, v in verify.items()}}
     out.update(summary=summary, arm=ready.get("arm"), results=results)
     args.out.write_text(json.dumps(out, indent=1))
     print(json.dumps(summary), flush=True)
     import run_result
     ok = (not out.get("error") and all(m in results for m in MODES) and summary["gates"]["arm"]
-          and all(v["same_commitment_as_timed"] for k, v in summary["verify_pass"].items() if k != "control"))
+          and all(v["same_commitment_as_timed"] and v.get("same_commitment_eager") is not False
+                  for k, v in summary["verify_pass"].items() if not k.startswith("control")))
     ms = [(f"{m}.{k}", v, "s") for m, r in results.items() for k, v in r["timing"].items()]
     run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass repeats "
                      "its timed commitment", json.dumps(summary), ms)
