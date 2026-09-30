@@ -14,7 +14,8 @@ The greedy, per item: start from every directed k pair of --k-search indices; ad
 side for the joint search) that keeps the most k pairs, from --cands candidates (random pairs of admitted rows, and pairs of
 the rows that share the most codes); after each step, a greedy matching (lowest degree first) gives the k pairs usable at
 once. It stops at the fragment's size (16 A pairs, 8 B pairs) or when fewer than 32 k pairs remain, and restarts from the
---seeds first pairs that keep the most k pairs and the --seeds that share the most codes, keeping the best run. Candidates
+--seeds first pairs that keep the most k pairs and the --seeds that share the most codes, keeping the best run (or the first
+to reach a fragment). Candidates
 are ranked on samples (the first step on 512 x 512 of its index pairs, later steps on 65,536 of the surviving k pairs) and the
 chosen one is applied exactly. The report per item: each step's pairs, surviving k pairs and matching, the largest block
 (pairs x matched k pairs), and whether a fragment was reached. A lower bound on the adversary: greedy, over --rows sampled
@@ -97,13 +98,17 @@ def matching(edges, k: int) -> int:
     if not len(e1):
         return 0
     deg = np.bincount(e1, minlength=k) + np.bincount(e2, minlength=k)
+    order = np.argsort(deg[e1] + deg[e2], kind="stable")
+    a, b = e1[order], e2[order]
     used = np.zeros(k, bool)
     n = 0
-    for e in np.argsort(deg[e1] + deg[e2], kind="stable"):
-        a, b = e1[e], e2[e]
-        if not used[a] and not used[b]:
-            used[a] = used[b] = True
-            n += 1
+    for i in range(0, len(a), 1 << 16):
+        ca, cb = a[i:i + (1 << 16)], b[i:i + (1 << 16)]
+        live = ~used[ca] & ~used[cb]
+        for x, y in zip(ca[live].tolist(), cb[live].tolist()):
+            if not used[x] and not used[y]:
+                used[x] = used[y] = True
+                n += 1
     return n
 
 
@@ -143,6 +148,8 @@ def search(sides: dict, ks: np.ndarray, k: int, which: tuple[str, ...], cands: i
         res = grow(sides, ks, k, which, cands, rng, sim, s, p)
         if best is None or rank(res) > rank(best):
             best = res
+        if best["fragment"]:
+            break
     return {**(best or grow(sides, ks, k, which, cands, rng, sim, None, None)), "starts": len(starts)}
 
 
