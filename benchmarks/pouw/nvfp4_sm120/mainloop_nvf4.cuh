@@ -7,11 +7,12 @@
 // ((r / 128) (K / 64) + c / 4) 512 + (r % 32) 16 + ((r % 128) / 32) 4 + c % 4, so each 512-byte atom holds 128 rows' scales of
 // one 64-deep step.
 //
-// The schedule is mainloop_sm120.cuh's (the FP8 one): a producer warpgroup whose first lane loads each 128-deep stage (A's TM
-// and B's 128 rows of 64 bytes by TMA, SWIZZLE_64B, and their scale atoms by bulk copy) into STAGES stages counted on
-// mbarriers; consumer warps wait on a stage, ldmatrix their fragments one 64-deep step ahead, and each release it on a second
-// mbarrier after the MMAs that read its last fragments.  No block-wide barrier (CUTLASS v4.8.0's sm_120 block-scaled mainloop
-// syncs its 256 MMA threads on a named barrier every stage, before the stage's last step's MMAs).
+// The schedule is mainloop_sm120.cuh's (the FP8 one): a producer warpgroup whose first lane loads each BK-deep stage (A's TM
+// and B's 128 rows of BK / 2 bytes by TMA, SWIZZLE_64B at BK = 128 and SWIZZLE_32B at 64, and their scale atoms by bulk
+// copy) into STAGES stages counted on mbarriers; consumer warps wait on a stage, ldmatrix their fragments one 64-deep step
+// ahead, and each release it on a second mbarrier after the MMAs that read its last fragments (at BK = 64, two stages at a
+// time).  No block-wide barrier (CUTLASS v4.8.0's sm_120 block-scaled mainloop syncs its 256 MMA threads on a named barrier
+// every stage, before the stage's last step's MMAs).
 //
 // Consumer warp w (8 at TM = 256, 4 at 128) owns 64 rows and 64 columns, chosen so that one 16-byte load gives a lane its
 // scale words for four MMAs: rows 128 h + 16 q + 32 mi + [0, 16) (m16 block mi = 0..3; wm = w / 2 = 2 h + q) and columns
@@ -19,9 +20,9 @@
 // m16n8 accumulator of that block: element e at row + lane / 4 + 8 (e / 2), column + 2 (lane % 4) + e % 2 (Mainloop::row_of,
 // col_of).
 //
-// Host side: two CUtensorMaps (A, B), each UINT8, rank 2, globalDim {K / 2, rows}, globalStrides {K / 2}, box {64, TM} for A
-// and {64, 128} for B, SWIZZLE_64B, contiguous (64-byte aligned), passed by pointer; the scale buffers by address (16-byte
-// aligned).  M a multiple of TM, N of 128, K of 128 (and K / 64 whole atoms, so of 64 too).
+// Host side: two CUtensorMaps (A, B), each UINT8, rank 2, globalDim {K / 2, rows}, globalStrides {K / 2}, box {BK / 2, TM}
+// for A and {BK / 2, 128} for B, SWIZZLE_64B (BK = 128) or SWIZZLE_32B (64), contiguous (64-byte aligned), passed by
+// pointer; the scale buffers by address (16-byte aligned).  M a multiple of TM, N of 128, K of 128.
 #pragma once
 #include <cstdint>
 
@@ -41,6 +42,13 @@ NV_DEV void mbar_expect_tx(uint32_t bar, uint32_t bytes) {
 // (async proxy) that refill it (mainloop_sm120.cuh: without the fence an arrive overtakes a queued ldmatrix)
 NV_DEV void mbar_release(uint32_t bar) {
   asm volatile("fence.proxy.async.shared::cta;\n mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(bar) : "memory");
+}
+NV_DEV void mbar_release2(uint32_t bar0, uint32_t bar1) {
+  asm volatile(
+      "fence.proxy.async.shared::cta;\n mbarrier.arrive.shared::cta.b64 _, [%0];\n mbarrier.arrive.shared::cta.b64 _, [%1];" ::"r"(
+          bar0),
+      "r"(bar1)
+      : "memory");
 }
 NV_DEV void mbar_wait(uint32_t bar, uint32_t parity) {
   asm volatile(
@@ -80,6 +88,19 @@ NV_DEV void ldsm4(uint32_t* r, uint32_t addr) {
 NV_DEV void lds128(uint32_t* r, uint32_t addr) {
   asm volatile("ld.shared.v4.b32 {%0, %1, %2, %3}, [%4];" : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3]) : "r"(addr));
 }
+NV_DEV void stsm4(uint32_t addr, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3) {
+  asm volatile("stmatrix.sync.aligned.m8n8.x4.shared.b16 [%0], {%1, %2, %3, %4};" ::"r"(addr), "r"(r0), "r"(r1), "r"(r2), "r"(r3)
+               : "memory");
+}
+NV_DEV void stg128(void* p, const uint32_t* r) {
+  asm volatile("st.global.v4.b32 [%0], {%1, %2, %3, %4};" ::"l"(p), "r"(r[0]), "r"(r[1]), "r"(r[2]), "r"(r[3]) : "memory");
+}
+// two FP32 values to BF16 (lo in the low half), round to nearest even, as the plain GEMMs' epilogues
+NV_DEV uint32_t bf16x2(float lo, float hi) {
+  uint32_t r;
+  asm("cvt.rn.bf16x2.f32 %0, %1, %2;" : "=r"(r) : "f"(hi), "f"(lo));
+  return r;
+}
 // d = a b + d, one NVFP4 atom (k = 64): sfa's byte b scales k-block b of this lane's A row (8 (lane & 1) + lane / 4 of the
 // m16 block), sfb's of its B column (lane / 4)
 NV_DEV void omma(float* d, const uint32_t* a, const uint32_t* b, uint32_t sfa, uint32_t sfb) {
@@ -102,16 +123,20 @@ struct Maps { uint8_t a[128], b[128]; };
 // gives the producer RP registers a thread and the consumers the rest (232 at TM = 256 and RP = 40, as in CUTLASS; 240 at
 // RP = 24).  Launch NT threads with __launch_bounds__(NT, 1) and SMEM bytes of dynamic shared memory at a 1,024-byte-aligned
 // address (`extern __shared__ __align__(1024)`).  BORDER: the MMA order inside a 64-deep step, 0 A-major (each A fragment's
-// 8 MMAs in a row), 1 B-major (each B fragment's 4, as CUTLASS).
-template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
-  static constexpr int BN = 128, BK = 128, ROW = BK / 2, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
+// 8 MMAs in a row), 1 B-major (each B fragment's 4, as CUTLASS).  BK: a stage's depth, 128 (two 64-deep steps) or 64 (one;
+// released in pairs).
+template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int BK = 128> struct Mainloop {
+  static constexpr int BN = 128, ROW = BK / 2, J = BK / 64, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
   static constexpr int REGS_P = RP, REGS_LAUNCH = 65536 / NT / 8 * 8, REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
                        REGS_C = REGS_FIT < 256 ? REGS_FIT : 256;
   static constexpr uint32_t A_BYTES = TM * ROW, B_BYTES = BN * ROW, SFA_BYTES = TM * BK / 16, SFB_BYTES = BN * BK / 16,
                             SF_OFF = A_BYTES + B_BYTES, STAGE = SF_OFF + SFA_BYTES + SFB_BYTES;
-  static constexpr int SMEM = STAGES * STAGE + 16 * STAGES;
+  static constexpr uint32_t SCRATCH = STAGES * STAGE;   // store_bf16's 512 bytes a consumer warp
+  static constexpr int SMEM = SCRATCH + 512 * NCW + 16 * STAGES;
   static_assert(TM == 128 || TM == 256, "TM x 128 tiles of 64 x 64 warp tiles");
-  static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0 && SF_OFF % 1024 == 0, "boxes on SWIZZLE_64B's 512-byte period");
+  static_assert(BK == 128 || (BK == 64 && STAGES >= 4), "128-deep stages, or 64-deep ones released in pairs");
+  static_assert(STAGE % (8 * ROW) == 0 && A_BYTES % (8 * ROW) == 0 && SF_OFF % (8 * ROW) == 0,
+                "boxes on the swizzle's 8-row period");
   static_assert(SMEM <= 99 * 1024, "sm_120's 99 KB a block");
 
   uint32_t base, bars;   // the stages; full[s] at bars + 8 s, empty[s] at bars + 8 (STAGES + s)
@@ -121,7 +146,7 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
   NV_DEV explicit Mainloop(uint8_t* smem) {
     base = smem_u32(smem);
     if (base & 1023) __trap();
-    bars = base + STAGES * STAGE;
+    bars = base + SCRATCH + 512 * NCW;
   }
   NV_DEV uint32_t full(int i) const { return bars + 8 * i; }
   NV_DEV uint32_t empty(int i) const { return bars + 8 * (STAGES + i); }
@@ -167,8 +192,9 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
         tma_load(st, maps->a, full(s), kt * ROW, tm * TM);
         tma_load(st + A_BYTES, maps->b, full(s), kt * ROW, tn * BN);
 #pragma unroll
-        for (int h = 0; h < TM / 128; h++) bulk_load(st + SF_OFF + h * 1024, sa + ((size_t)h * KA + 2 * kt) * 512, 1024, full(s));
-        bulk_load(st + SF_OFF + SFA_BYTES, sb + (size_t)2 * kt * 512, 1024, full(s));
+        for (int h = 0; h < TM / 128; h++)
+          bulk_load(st + SF_OFF + h * J * 512, sa + ((size_t)h * KA + J * kt) * 512, J * 512, full(s));
+        bulk_load(st + SF_OFF + SFA_BYTES, sb + (size_t)J * kt * 512, J * 512, full(s));
         advance();
       }
     }
@@ -176,19 +202,23 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
 
   // ---- the consumers
   int wm, wn, lane_;
-  uint32_t a_off[2], b_off[2], sfa_off, sfb_off;
+  uint32_t a_off[J], b_off[J], sfa_off, sfb_off, scr;
   NV_DEV void consumer_init(int warp, int lane) {
     wm = warp / 2;
     wn = warp % 2;
     lane_ = lane;
     const int h = wm >> 1, q = wm & 1;
+    // the 16-byte chunk of a row that holds logical chunk c: SWIZZLE_64B's c ^ (row / 2) % 4, SWIZZLE_32B's c ^ (row / 4) % 2
+    // (every row a lane addresses is lane-determined mod 8 by 2 and mod 16 by 4)
+    const int swz = ROW == 64 ? (lane >> 1) & 3 : (lane >> 2) & 1;
 #pragma unroll
-    for (int j = 0; j < 2; j++) {
-      a_off[j] = (128 * h + 16 * q + (lane & 15)) * ROW + (((2 * j + (lane >> 4)) ^ ((lane >> 1) & 3)) << 4);
-      b_off[j] = A_BYTES + (16 * wn + (lane & 7) + 8 * (lane >> 4)) * ROW + (((2 * j + ((lane >> 3) & 1)) ^ ((lane >> 1) & 3)) << 4);
+    for (int j = 0; j < J; j++) {
+      a_off[j] = (128 * h + 16 * q + (lane & 15)) * ROW + (((2 * j + (lane >> 4)) ^ swz) << 4);
+      b_off[j] = A_BYTES + (16 * wn + (lane & 7) + 8 * (lane >> 4)) * ROW + (((2 * j + ((lane >> 3) & 1)) ^ swz) << 4);
     }
-    sfa_off = SF_OFF + h * 1024 + (16 * q + 8 * (lane & 1) + (lane >> 2)) * 16;
+    sfa_off = SF_OFF + h * J * 512 + (16 * q + 8 * (lane & 1) + (lane >> 2)) * 16;
     sfb_off = SF_OFF + SFA_BYTES + ((lane >> 2) + 16 * wn) * 16;
+    scr = base + SCRATCH + 512 * warp;
   }
   // the accumulator element e of block (mi, i, jl) sits at (row_of(mi, e), col_of(i, jl, e)) of the tile
   NV_DEV int row_of(int mi, int e) const { return 128 * (wm >> 1) + 16 * (wm & 1) + 32 * mi + (lane_ >> 2) + 8 * (e >> 1); }
@@ -241,8 +271,9 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
       if (on) load_part(nxt, st, j, g);
     }
   }
-  // one tile's chain into acc (from +0): step 1's fragments load behind step 0's MMAs and the next stage's step 0 behind
-  // step 1's; a stage is released after step 1's first group (its last fragments were read behind step 0)
+  // one tile's chain into acc (from +0), each 64-deep step's fragments loaded behind the previous step's MMAs.  BK = 128: a
+  // stage is released after its step 1's first group (its last fragments were read behind step 0).  BK = 64: stages in
+  // pairs, both released after the second's first group
   NV_DEV void tile(int K, float (&acc)[4][4][2][4]) {
     const int KT = K / BK;
 #pragma unroll
@@ -256,16 +287,71 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
     Frag f0, f1;
     mbar_wait_warp(full(s), ph);
     load(f0, stage(s), 0);
+    if constexpr (J == 2) {
 #pragma unroll 1
-    for (int kt = 0; kt < KT; kt++) {
-      const uint32_t done = empty(s);
-      step(acc, f0, f1, stage(s), 1, true, [] {});
-      advance();
-      const bool more = kt + 1 < KT;
-      step(acc, f1, f0, stage(s), 0, more, [&] {
-        mbar_release(done);
-        if (more) mbar_wait_warp(full(s), ph);
-      });
+      for (int kt = 0; kt < KT; kt++) {
+        const uint32_t done = empty(s);
+        step(acc, f0, f1, stage(s), 1, true, [] {});
+        advance();
+        const bool more = kt + 1 < KT;
+        step(acc, f1, f0, stage(s), 0, more, [&] {
+          mbar_release(done);
+          if (more) mbar_wait_warp(full(s), ph);
+        });
+      }
+    } else {
+#pragma unroll 1
+      for (int kt = 0; kt < KT; kt += 2) {
+        advance();
+        step(acc, f0, f1, stage(s), 0, true, [&] { mbar_wait_warp(full(s), ph); });
+        advance();
+        const bool more = kt + 2 < KT;
+        step(acc, f1, f0, stage(s), 0, more, [&] {
+          // the pair: the two stages before s (recomputed here, not carried through the step)
+          const int d1 = s ? s - 1 : STAGES - 1, d0 = d1 ? d1 - 1 : STAGES - 1;
+          mbar_release2(empty(d0), empty(d1));
+          if (more) mbar_wait_warp(full(s), ph);
+        });
+      }
+    }
+  }
+
+  // ---- epilogues: tile (tm, tn) of C, row-major with ldc elements a row
+  NV_DEV void store_f32(float* C, int ldc, int tm, int tn, const float (&acc)[4][4][2][4]) const {
+    float* p = C + ((size_t)tm * TM + row_of(0, 0)) * ldc + (size_t)tn * BN + col_of(0, 0, 0);
+#pragma unroll
+    for (int mi = 0; mi < 4; mi++)
+#pragma unroll
+      for (int hf = 0; hf < 2; hf++) {
+        float* r = p + (size_t)(32 * mi + 8 * hf) * ldc;
+#pragma unroll
+        for (int i = 0; i < 4; i++)
+#pragma unroll
+          for (int jl = 0; jl < 2; jl++)
+            *reinterpret_cast<float2*>(r + 32 * i + 8 * jl) = make_float2(acc[mi][i][jl][2 * hf], acc[mi][i][jl][2 * hf + 1]);
+      }
+  }
+  // BF16 (bf16x2), each 16 x 16 block (mi, i) of the warp's through its scratch: stmatrix writes the block's four 8 x 8
+  // matrices as 16 rows of 32 bytes (chunk c of row r at c ^ (r / 4) % 2, bank-conflict free), then each lane reads 16 bytes
+  // of row lane / 2 and stores them, so a warp's store is 16 rows' 32 contiguous bytes
+  NV_DEV void store_bf16(uint16_t* C, int ldc, int tm, int tn, const float (&acc)[4][4][2][4]) const {
+    const int l = lane_, mm = l >> 3, r = (l & 7) + 8 * (mm >> 1);
+    const uint32_t st_addr = scr + r * 32 + (((mm & 1) ^ ((r >> 2) & 1)) << 4);
+    const uint32_t ld_addr = scr + (l >> 1) * 32 + (((l & 1) ^ ((l >> 3) & 1)) << 4);
+    uint16_t* p = C + ((size_t)tm * TM + 128 * (wm >> 1) + 16 * (wm & 1) + (l >> 1)) * ldc + (size_t)tn * BN + 16 * wn + 8 * (l & 1);
+#pragma unroll
+    for (int mi = 0; mi < 4; mi++) {
+      uint16_t* row = p + (size_t)32 * mi * ldc;
+#pragma unroll
+      for (int i = 0; i < 4; i++) {
+        const float(&x)[2][4] = acc[mi][i];
+        stsm4(st_addr, bf16x2(x[0][0], x[0][1]), bf16x2(x[1][0], x[1][1]), bf16x2(x[0][2], x[0][3]), bf16x2(x[1][2], x[1][3]));
+        __syncwarp();
+        uint32_t v[4];
+        lds128(v, ld_addr);
+        __syncwarp();
+        stg128(row + 32 * i, v);
+      }
     }
   }
 };
