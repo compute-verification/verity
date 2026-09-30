@@ -8,6 +8,8 @@ the required-value manifest derives.  Torch-free; the commit and match tooling i
     Gumbel[TopP]TokenSelectSharedGreedy_v1{V}   the two above with `temp == 0` computed once (`sampler_construction = shared-greedy`)
     GumbelTopPTokenSelect_v2{V,S}         GumbelTopPTokenSelect_v1 at a constant split count S, its keep word as word gates
                                           (registry.topp_words; a single-request workload)
+    GumbelTopPSplitSelect_v1{V}           the last Call of GumbelTopPTokenSelect_v3{V,S}, v2 as the split kernels' Calls
+                                          (registry.topp_split_calls; above v2's gate limit)
 
 Greedy is not stochastic: the families are distinct Definitions with distinct digests; this module only says which families are
 "the sampling event of a step".  A spec may carry a `prefix:` (the fold's `spec` strings) and statics `{...}`.
@@ -15,7 +17,7 @@ Greedy is not stochastic: the families are distinct Definitions with distinct di
 from __future__ import annotations
 
 SAMPLING_EVENT_FAMILIES = ("TokenSelect_v1", "GumbelTopPTokenSelect_v1", "GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v2",
-                           "GumbelTopPTokenSelectSharedGreedy_v1", "GumbelTokenSelectSharedGreedy_v1")
+                           "GumbelTopPSplitSelect_v1", "GumbelTopPTokenSelectSharedGreedy_v1", "GumbelTokenSelectSharedGreedy_v1")
 
 
 def family_of(spec: str) -> str:
@@ -31,7 +33,7 @@ def is_sampling_event(spec: str) -> bool:
 #: restatement is `shared-greedy`; a plain select, and the one specialised on a constant split count, which has no shared-greedy form, are
 #: `greedy-check-per-stage` (tests/check/test_fold_sampler_construction.py pins this against the registry)
 CONSTRUCTION_OF = {"GumbelTopPTokenSelect_v1": "greedy-check-per-stage", "GumbelTokenSelect_v1": "greedy-check-per-stage",
-                   "GumbelTopPTokenSelect_v2": "greedy-check-per-stage",
+                   "GumbelTopPTokenSelect_v2": "greedy-check-per-stage", "GumbelTopPSplitSelect_v1": "greedy-check-per-stage",
                    "GumbelTopPTokenSelectSharedGreedy_v1": "shared-greedy", "GumbelTokenSelectSharedGreedy_v1": "shared-greedy"}
 
 

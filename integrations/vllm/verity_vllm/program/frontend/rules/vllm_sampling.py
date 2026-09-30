@@ -33,6 +33,7 @@ from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.registry import topp_split_calls as _topp_calls
 
 BF16 = torch.bfloat16
 
@@ -50,7 +51,9 @@ class GumbelTopPTokenSelectRule(OpRule):
     pos, a `splits` that is not a 32-bit 1-element value collection (S is the workload's derived value, read from the request's `splits`
     Input per event: `SplitsFor_v1(|live(t)|, num_SMs)`; a literal S is not a policy and not a geometry the Program may assume) unless
     `splits` is None and `S` is a launched split count: the single-request constant, where each row is
-    `GumbelTopPTokenSelect_v2{V,S}(row, ..., Const32[S])` instead (the same operands; its top-p keep word as word gates at S)."""
+    `GumbelTopPTokenSelect_v2{V,S}(row, ..., Const32[S])` instead (the same operands; its top-p keep word as word gates at S), and
+    above `topp_split_calls.V2_MAX_V[S]` (v2 over the word check's gate limit) `GumbelTopPTokenSelect_v3{V,S}` as its pieces' Calls on
+    those operands, the last `GumbelTopPSplitSelect_v1{V}` the row's sampled token."""
     modes = frozenset({"profile"})
     info = RuleInfo("GumbelTopPTokenSelect[vllm]", 3, "op-binding",
                     applies_to="vllm_iface.gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
@@ -122,8 +125,11 @@ class GumbelTopPTokenSelectRule(OpRule):
         from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile  # noqa: PLC0415  (vllm_bindings imports the rule modules)
         # a constant split count (a single-request workload): the select specialised on it, its keep word as word gates, the same
         # six operands (the Const32[S] still read, in operand order)
+        # above v2's gate limit the select is GumbelTopPTokenSelect_v3{V,S}, called as its pieces (registry.topp_split_calls)
+        calls = splits is None and _topp_calls.uses_v3(V, int(S))
         fn = ctx.kind("token_select_stochastic", node, V=V, CONSTRUCTION=active_target_profile().effective_sampler_construction()) \
-            if splits is not None else ctx.kind("token_select_stochastic_split", node, V=V, S=int(S))
+            if splits is not None else ctx.kind("token_select_stochastic_split_calls" if calls else "token_select_stochastic_split", node,
+                                                V=V, S=int(S))
         hint = ctx.hint_name(node)
         seed_c = ctx.coll(seed).reshape(Array(1, Value(64)))[0]
         splits_c = None if splits is None else ctx.coll(splits).reshape(Array(1, Value(32)))[0]   # the event's S: the `splits` Input entry
@@ -138,6 +144,12 @@ class GumbelTopPTokenSelectRule(OpRule):
             pos_c = ctx.call(ctx.kind("const", node, W=64, BITS=int(pos) & 0xFFFFFFFFFFFFFFFF), node=node, rule=self, name=f"{hint}/pos")
             temp_c = ctx.call(ctx.kind("const", node, W=32, BITS=tbits), node=node, rule=self, name=f"{hint}/temperature")
             s_c = splits_c if splits_c is not None else ctx.call(ctx.kind("const", node, W=32, BITS=int(S)), node=node, rule=self, name=f"{hint}/splits")
+            if calls:
+                call = lambda d, *a, i=i: ctx.call(d, *a, node=node, rule=self,
+                                                   name=f"{hint}[{i}]" if d.id.startswith("GumbelTopPSplitSelect") else f"{hint}[{i}]/{d.id.split('{')[0]}")
+                outs.append(_topp_calls.chain(call, V, int(S), r, topp_c, seed_c, pos_c, temp_c, s_c,
+                                              kind=lambda role, **st: ctx.kind(role, node, **st)))
+                continue
             outs.append(ctx.call(fn, r, topp_c, seed_c, pos_c, temp_c, s_c, node=node, rule=self, name=f"{hint}[{i}]"))
         from verity.ir.refs import array_of
         out = array_of(outs).reshape(_tensor_type(lead, 32)) if lead else outs[0]
@@ -148,7 +160,7 @@ class GumbelTopPTokenSelectRule(OpRule):
                                 "rows": len(rows), "temperature": float(temperature), "temperature_bits": f"0x{tbits:08x}",
                                 "top_p": float(top_p), "top_p_bits": f"0x{pbits:08x}", "pos": int(pos), "seed": "Program input (runtime)",
                                 "torch_dtype": str(ctx.dtype_of(node)), "carried_as": "I32"},
-                   emitted=f"{fn.id} x{len(rows)} (+ per row: Const32[top_p], Const64[pos], Const32[temperature]"
+                   emitted=f"{fn.id}{' as the Calls of its pieces' if calls else ''} x{len(rows)} (+ per row: Const32[top_p], Const64[pos], Const32[temperature]"
                            + (", in operand order; splits = the Input entry)" if splits_c is not None else ", Const32[S], in operand order)"))
 
 

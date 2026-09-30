@@ -137,6 +137,7 @@ from verity_vllm.program.registry import pad_prims as PP
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import sampling as _sampling  # [R15 stoch]
 from verity_vllm.program.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
+from verity_vllm.program.registry import topp_split_calls as _topp_calls  # the same select as Calls, above v2's gate limit
 
 
 def _norm_v2(role: str):
@@ -291,6 +292,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # the same select at a constant split count S (a single-request workload): its top-p keep word as word gates
            # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
+           # above `topp_split_calls.V2_MAX_V` v2 is over the word check's gate limit: the same select as `GumbelTopPTokenSelect_v3{V,S}`,
+           # whose pieces (the `topp_*` kinds, one Call per slice / merge) the rule calls at the Program's root
+           "token_select_stochastic_split_calls": lambda V, S: ir_bind(_topp_calls.GumbelTopPTokenSelectV3, V=V, S=S),
+           **_topp_calls.KINDS,
            # [R15 fp8] the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
@@ -300,6 +305,17 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
+           "token_select_stochastic_split_calls": "GumbelTopPTokenSelect_v3{V,S}: GumbelTopPTokenSelect_v2{V,S} as the split kernels' Calls "
+                                                  "(registry.topp_split_calls), bound where V > V2_MAX_V[S]; the same six operands and token",
+           "topp_split_temperature": "TemperatureScale_v1{V}: the chain's first Call",
+           "topp_split_stats": "TopPSplitStats_v1{N,SPT}: _topp_sb_stats_kernel on one slice",
+           "topp_row_stats": "TopPRowStats_v1{S}: _topp_sb_row_stats over the S slices, the initial state and round 0's pivots",
+           "topp_split_probs": "TopPSplitProbs_v1{N,SPT,S}: exp(x - M) / Z of the lane's warp half on one slice",
+           "topp_split_step": "TopPSplitStep_v1{N,S}: _topp_sb_step_kernel on one slice for one round",
+           "topp_combine": "TopPCombine_v1{S,ROUND}: topp_split.combine of one round's S partials",
+           "topp_mask_setup": "TopPMaskSetup_v1{S}: the mask kernel's per-half scalars and each slice's preceding ties",
+           "topp_split_mask": "TopPSplitMask_v1{N,SPT,S}: _topp_sb_mask_kernel on one slice, each lane or -inf",
+           "topp_split_select": "GumbelTopPSplitSelect_v1{V}: GumbelSelectF32_v1{V} over the masked row, the sampling event",
            "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
                                       "widening, div.full.f32 temperature, the S-split top-p mask (_topp_sb_{stats,step,mask}; S = the splits operand "
                                       "= SplitsFor_v1(|live|, num_SMs)), Gumbel-max with key tl.randint(seed, pos), first global maximum "
