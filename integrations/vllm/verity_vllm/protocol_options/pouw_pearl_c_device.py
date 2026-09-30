@@ -141,18 +141,6 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
     return s
 
 
-def variant(name: str) -> str:
-    """The scheme's device record, which is GPU 1's pipeline variant (``sm120``, ``sm120-unpromoted``)."""
-    if name not in SCHEMES:
-        raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
-    return SchemeId.parse(name).device
-
-
-def tree_hash(name: str) -> str:
-    """The scheme's tree hash (`CommitmentDomain.hash` of A's, B's and the transcript's trees), from its hashing format."""
-    return scheme_of(name).commitment_hash
-
-
 def _format_keys(scheme: C.PearlC) -> bytes:
     """The message and leaf keys of the scheme's hashing format, as the kernels read them (``k_msg`` ‖ ``k_leaf``)."""
     fmt = hash_format(scheme)
@@ -401,10 +389,12 @@ class _Pass:
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
 
 
-def weight_roots(kernel: Kernel, weights: dict[int, Any], variant: str = "sm120", hash: str = "blake3") -> dict[int, bytes]:
-    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase.  `variant` is
-    the scheme's pipeline variant and `hash` its tree hash (`tree_hash`)."""
+def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0]) -> dict[int, bytes]:
+    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
+    `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash."""
     import torch
+    s = scheme_of(scheme)
+    variant, hash = s.device.name, hash_format(s).tree_hash
     R, out = kernel.run, {}
     for w, weight in weights.items():
         n, k = weight.shape
@@ -531,7 +521,7 @@ class PearlCDeviceRun:
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
                  schedule: str | Schedule = SERIAL):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
-        self.variant = variant(scheme.name)
+        self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
         self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
@@ -547,7 +537,7 @@ class PearlCDeviceRun:
         self.leaves = _zeros(32 * capacity, self.device)
         self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
-        self.tree_hash = scheme.commitment_hash
+        self.tree_hash = hash_format(scheme).tree_hash
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.fused_screen = self.device.type == "cuda" and fused_screen_available()
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
