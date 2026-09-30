@@ -29,7 +29,7 @@ from typing import Any
 from verity.ir.codec import _spec_id, decode_program, encode_program, program_digest
 from verity.ir.defs import Body, CompositeDefinition, Node, SpecializedDefinition
 from verity.ir.program import Program
-from verity.ir.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat
+from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
 from verity.ir.types import Tuple as TupleT, Type
 from verity_vllm.program.sampling_event import is_sampling_event
 
@@ -269,8 +269,9 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         names.append(g if groups.count(g) == 1 else f"{g}[{counts.get(g, 0)}]")
         counts[g] = counts.get(g, 0) + 1
     params = tuple((names[j], body.nodes[j].out) for j in range(K))
-    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs, name=n.name)
-             for n in body.nodes[K:]]
+    logs: dict = {}
+    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K, logs)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs,
+                  name=n.name) for n in body.nodes[K:]]
     offsets = [0]
     for n in nodes:
         offsets.append(offsets[-1] + n.gates)
