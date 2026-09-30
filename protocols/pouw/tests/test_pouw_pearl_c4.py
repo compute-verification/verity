@@ -17,6 +17,7 @@ import pytest
 
 import pearl_c4_vectors as V
 from verity.commitments.turboshake import turboshake128
+from verity.errors import InvalidArtifact
 from verity.ml.tc import fp32
 from verity_pouw.audit import Epoch, Prover, Workload
 from verity_pouw.protocol import DomainError, Matmul, Shape
@@ -163,7 +164,9 @@ def test_domain_and_registry():
     mx = F.PearlC4("mxfp4")
     assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
     s.check(Matmul(0, Shape(64, 1024, 64), 0))
-    for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64)):
+    s.check(Matmul(0, Shape(64, 1024, 1 << 18), 0))
+    for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64),
+                Shape(64, 1024, 1 << 19)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 0))
 
@@ -209,8 +212,9 @@ def test_row_rules_and_debit(fmt):
     clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
     # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare draws (a trace, under
-    # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 1% of this tile's cap)
-    assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 1)
+    # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's cap
+    # with B̃'s overfit factor; MXFP4 is contrast only)
+    assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 3)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
     # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
@@ -250,49 +254,50 @@ def witness_elements(s, ops) -> int:
                for p, u in zip(F.salt_dead(s.fmt, ops.a.x[i], ops.a.alpha[i], ops.a.ae[i]), unneeded))
 
 
-def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness():
-    """Two screened blocks in 64, past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only
-    the witness's salt-dead elements (not every element of a screened block, server.md 11:32Z), no block pair is
-    screened, and the tile stays under ρ."""
-    s, record, tile, a_rows, b_rows, ops, x = screened_tile(2)
-    assert sum(F.dead_blocks(s.fmt, x)) == 2 > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
-    assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:2 * s.fmt.block]) <= 2
+@pytest.mark.parametrize("blocks", (2, 4))
+def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(blocks):
+    """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
+    witness's salt-dead and unneeded elements (not every element of a screened block, server.md 11:32Z), no block pair
+    is screened, and the tile stays under ρ."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
+    assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
+    assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:blocks * s.fmt.block]) <= blocks
     assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
     d = s.last_debit
-    assert d.counts["screened_blocks_a"] == 2 and d.dead_pairs == 0
-    assert d.counts["forming_elements"] == witness_elements(s, ops) < 2 * s.fmt.block
+    assert d.counts["screened_blocks_a"] == blocks and d.dead_pairs == 0
+    assert d.counts["forming_elements"] == witness_elements(s, ops) < blocks * s.fmt.block
+    assert d.counts["screened_only_elements"] > 0
     assert d.forming == Fraction(F.FORMING_CREDITED * witness_elements(s, ops) * 4, 1024)
     assert 0 < d.total <= s.tile_cap(record, ops, range(4), range(4))[1]
 
 
-def test_a_row_whose_screened_blocks_pass_r1_is_rejected():
-    """Sixteen screened, otherwise salt-live blocks on A alone: item 4 stays on the witness, but F1′ charges the blocks'
-    codes, which next to a 9.75ρ max change rarely (σ' ≈ 0.15 E2M1 units), so the row's own F1′ passes R1's bound and,
-    declared credited, it fails the tile."""
+def test_a_row_whose_screened_blocks_pass_r1_is_rejected_by_f1_prime():
+    """Sixteen screened, otherwise salt-live blocks on A alone: item 4 on the witness is far under ρ, and F1′ charges the
+    blocks' near-certain codes (next to a 9.75ρ max they change rarely, σ' ≈ 0.15 E2M1 units), which puts the row's own
+    F1′ past R1's bound, so declared credited it fails the tile."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(16)
     assert F.row_passes(s.fmt, x) and sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:16 * s.fmt.block]) <= 16
     reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
     assert reason is not None and "R1's bound" in reason
-    assert s.row_over_debit(record, ops, "A", 0) and not any(s.row_over_debit(record, ops, "A", p) for p in (1, 2, 3))
-    s.tile_cap(record, ops, range(4), range(4))
+    assert s.row_debit_ratio(record, ops, "A", 0) > 1
+    cap = s.tile_cap(record, ops, range(4), range(4))[1]
     d = s.last_debit
-    assert d.counts["screened_blocks_a"] == 16 and d.dead_pairs == 0 and d.split > 0
-    assert d.counts["forming_elements"] == witness_elements(s, ops) < 16 * s.fmt.block
+    assert d.counts["screened_blocks_a"] == 16 and d.dead_pairs == 0 and d.total > cap
+    assert d.counts["forming_elements"] == witness_elements(s, ops) and d.forming + d.int8 + d.identity + d.subgrid < cap
+    assert d.split > cap
 
 
 def test_blocks_both_operands_screen_push_the_tile_past_rho_by_item_3():
-    """Four blocks screened on A row 0 and B row 0 alike: 4 pairs on word (0, 0), 16 units each, pass the tile's cap (16
-    cells' share of creditOf at ρ = 1/400, about 56 units) by item 3 alone, so the tile is rejected; the same four on A
-    alone leave item 3 at zero and item 4 on the witness."""
+    """Four blocks screened on A row 0 and B row 0 alike: 4 pairs on word (0, 0), 16 units each, pass the tile's cap
+    (16 cells' share of creditOf at ρ = 1/400, about 56 units), so the tile is rejected; the same four on A alone pass."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
-    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is not None
-    cap = s.tile_cap(record, ops, range(4), range(4))[1]
-    d = s.last_debit
-    assert d.counts["dead_pairs"] == 4 and d.dead_pairs == 4 * s.fmt.block > cap
+    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
+    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
+    assert d.counts["dead_pairs"] == 4 and d.dead_pairs == 4 * s.fmt.block and d.total > cap
     assert d.counts["forming_elements"] == witness_elements(s, ops)
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4)
-    s.tile_cap(record, ops, range(4), range(4))
-    assert s.last_debit.dead_pairs == 0 and s.last_debit.counts["forming_elements"] == witness_elements(s, ops)
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None and s.last_debit.dead_pairs == 0
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
@@ -360,10 +365,42 @@ def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
     d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b)
     cap = F.CAP * Fraction(F.PearlC4().credit_of(Shape(1, k, n)), n) * 16
     assert d.split > 50 * cap
-    gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k) for j in range(4)]
+    gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k, b.scales[j]) for j in range(4)]
     assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) < Fraction(1, 10 ** 4)
     if family is spike_row:
         assert d.counts["salt_dead_a"] == 0
+
+
+@pytest.mark.parametrize("family", [spike_row, narrow_cell_row, None], ids=["spike", "narrow-cell", "gaussian"])
+def test_c_charges_at_least_the_first_reading(family):
+    """C (`change_probabilities`, the rule: certified modal byte, 4-lookup lower bound) charges at least the reading it
+    bounds (`change_probabilities_exact`: every cell, the modal byte over the ±6σ bytes) on every row, with no block
+    uncertified on these rows."""
+    f, k = F.NVFP4, 1024
+    rows = [family(i) for i in range(3)] if family else [F.parse_row(r, k) for r in V.rows("rules", "A", 3, k)]
+    a, e = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
+    for i in range(3):
+        dead = F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i])
+        p, modes = F.change_probabilities(f, a.x[i], a.alpha[i], e[i], a.ae[i], dead, a.scales[i])
+        q, exact = F.change_probabilities_exact(f, a.x[i], a.alpha[i], e[i], a.ae[i], dead)
+        assert None not in modes and all(x <= y + 1e-15 for x, y in zip(p, q))
+        assert F.split_units(f, p, modes, a.scales[i]) >= F.split_units(f, q, exact, a.scales[i]) * (1 - 1e-12)
+
+
+def test_b_tilde_rows_are_charged_at_the_overfit_factor():
+    """B̃'s F1′ is charged at F1_B_OVERFIT = 10 times its expectation per window, capped at the window's MACs (a layout
+    chosen after the salt for B̃'s residual is shared by all n weight rows and gains up to 6.8× on narrow weights,
+    theory §6.10); A′'s at 1×.  R1 reads B rows the same way."""
+    f, k, n = F.NVFP4, 1024, 4096
+    assert F.F1_B_OVERFIT == 10
+    a, e_a = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "A", 2, k)], F.ROLE_EA, F.ROLE_FA, k)
+    b, e_b = formed(f, [narrow_cell_row(i) for i in range(2)], F.ROLE_EB, F.ROLE_FB, k)
+    d = F.tile_debit(f, a, b, range(2), range(2), n, e_a, e_b)
+    per_b = [F.row_f1(f, b, e_b, j, F.salt_dead(f, b.x[j], b.alpha[j], b.ae[j]), F.F1_B_OVERFIT)[0] for j in range(2)]
+    once = [F.row_f1(f, b, e_b, j, F.salt_dead(f, b.x[j], b.alpha[j], b.ae[j]))[0] for j in range(2)]
+    per_a = [F.row_f1(f, a, e_a, i, F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i]))[0] for i in range(2)]
+    assert d.split == 2 * sum(per_a) + 2 * sum(per_b)
+    assert all(once[j] < per_b[j] <= min(10 * once[j], k) for j in range(2))
 
 
 def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
@@ -425,14 +462,14 @@ def atom_words(c: int, e, ae: int, at) -> list[int]:
 @pytest.mark.parametrize("fmt", FMTS)
 def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
     """The law against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
-    words, so its p_t is enumerable.  `change_probabilities`' p_t at the block's modal byte is 1 − the most common code
-    value's share of the atom's words there, to 1e-12 (the law leaves out the atom's one RZ rounding, which moves no word
-    across a cell edge here), and 0 on salt-dead codes."""
+    words, so its p_t is enumerable.  `change_probabilities_exact`' p_t at the block's modal byte is 1 − the most common
+    code value's share of the atom's words there, to 1e-12 (the law leaves out the atom's one RZ rounding, which moves no
+    word across a cell edge here), and 0 on salt-dead codes."""
     f = F.FORMATS[fmt]
     x, e, at = two_draw_row()
     _, _, alpha, _, ae = F.stats(f, x)
     dead = F.salt_dead(f, x, alpha, ae)
-    p, modes = F.change_probabilities(f, x, alpha, e, ae, dead)
+    p, modes = F.change_probabilities_exact(f, x, alpha, e, ae, dead)
     for t in range(0, len(x), 3):
         byte = modes[t // f.block]
         r = fp32.div(F.ONE, F.ue4m3_word(byte)) if f is F.NVFP4 else F.pow2_word(127 - byte)
@@ -482,6 +519,45 @@ def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
     reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0, 1)), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("A row 1 is excluded but passes the per-row rules")
     assert s.r1_rows(ctx, a_rows, b_rows, k) == ({0}, set())
+
+
+def test_r1_allows_either_declaration_inside_its_tolerance_band():
+    """R1's tolerance band (the assessor's condition 3, 16:10Z): a row within `R1_TOLERANCE` of its bound may be declared
+    credited or excluded, so implementations that differ in the last bits agree on the audit."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k = ctx.matmul.shape.k
+
+    class Near(F.PearlC4):
+        def row_debit_ratio(self, record, ops, side, pos):
+            return {("A", 0): Fraction(10), ("A", 1): 1 + Fraction(1, 10 ** 10)}.get((side, pos), Fraction(0))
+
+    near = Near("nvfp4")
+    assert near.r1_tolerance == F.R1_TOLERANCE > Fraction(1, 10 ** 10)
+    for excluded in ((0,), (0, 1)):
+        reason = W.check_opened(near, W.UnitRecord(ctx.matmul, 4, k, excluded), tile, a_rows, b_rows, ops)
+        assert reason is None or ("R1" not in reason and "per-row rules" not in reason)
+
+
+def test_a_drawn_tile_evaluates_each_rows_f1_once():
+    """R1 on every row and the debit over the credited words read one evaluation of each row's F1′ per encoded tile (F1′
+    is most of the verifier's per-tile cost), and the debit is the uncached one; other operands start afresh."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k, shape = ctx.matmul.shape.k, ctx.matmul.shape
+    calls: list[tuple[int, int]] = []
+
+    def counted(fmt, side, e_rows, pos, dead, overfit=1):
+        calls.append((id(side), pos))
+        return F.row_f1(fmt, side, e_rows, pos, dead, overfit)
+
+    s.f1 = counted
+    record = W.UnitRecord(ctx.matmul, 4, k, (0,))
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+    assert sorted(calls) == sorted((id(side), p) for side in (ops.a, ops.b) for p in range(4))
+    s.tile_cap(record, ops, range(4), range(4))
+    assert len(calls) == 8
+    assert s.last_debit == F.tile_debit(s.fmt, ops.a, ops.b, range(4), range(4), shape.n, ops.e_a, ops.e_b, shape.m)
+    s.tile_cap(record, copy.copy(ops), [1], [0])
+    assert len(calls) == 10
 
 
 def test_f2_depth_cost_is_the_pinned_formula():
@@ -546,6 +622,39 @@ def test_scale_bytes_have_one_encoding_and_no_zero():
     assert F.scale_bytes_ok(F.MXFP4, [F.block_scale(F.MXFP4, w)[0] for w in sweep])
     counts = R.device_scales(f, bytes([0x38, 0x00, 0x80, 0xB8, 0x7F, 0x01]))
     assert counts == {"bytes": 6, "outside_range": 4, "min": 0, "max": 0xB8, "bit7": 2, "zero": 1, "nan": 1}
+
+
+#: The four rows the decode's 28-row `nvf4Specials` table adds (bc-5a715b19's review, research store
+#: internal/pouw-fp8/pearl-c4-scale-decode/): (accumulator, a, b, sa, sb), codes and bytes packed little-endian, as the
+#: Lean `Vec`.  Each is a NaN accumulator with one scale byte that sets bit 7.
+NAN_BIT7_SPECIALS = (
+    (0xFFACB8FF, 0xD012B2233DC6403271C58AC78DFF95B32950DA366B5B32A97D33B2DECE69A903,
+     0x932E07AB6589BD2774DC10686F6F47C3F71883659810A8DEEA135E394A8BA32E, 0x28DB5712, 0x4F2C4D74),
+    (0x7F8163AC, 0x8C723EEE523093DAF5F775033AA7D281B9FB908BBBE1EF1F462490252D508333,
+     0x357A39B4614523259FAFD800A9D93ABA65E1E668F3DD38A4AD9D9E120FCA114E, 0x384E2E0F, 0x578E342B),
+    (0xFF9F8CAE, 0x4BC3E89FB7E108A21C2DDF27D95A2F8F9792EC8E966FFC2CD96ADEDA5AAF81D9,
+     0xFC1D14F7D95984BAD926475BE192F56E9577D5A73A914EE07411125B44C4EC14, 0x3551142B, 0x74E13924),
+    (0x7FFEAA77, 0xC1E2F0693F03C513B5FCA39B949062349E45A9E1FC2EA0E0E25E1D9F6D905825,
+     0x2311785E72C70F5C98D86F50B5CB5856F42807A0191C155683D3ABAFE7F2C6F4, 0x5CF25B71, 0x3B501375),
+)
+
+
+@pytest.mark.parametrize("row", NAN_BIT7_SPECIALS, ids=lambda r: f"{r[0]:08X}")
+def test_nan_accumulator_specials_read_their_scales_as_the_hardware(row):
+    """The decode's 28-row specials table: a NaN accumulator whose scale bytes set bit 7.  Read as sm_120 reads them
+    (low 7 bits: `hw_scales`, and the pinned model's own decode since GPU 4's replay, r20260930-161935-83a8), the bytes
+    are valid scales, so the vector is outside the model only through its accumulator (the step raises, Lean's `none`;
+    the card writes 0x7FFFFFFF).  D-SB keeps such bytes off every formed side."""
+    from verity.ml.tc.models import BLACKWELL_SM120_NVF4 as atom
+    acc, a, b, sa, sb = row
+    codes_a, codes_b = [(a >> 4 * i) & 15 for i in range(64)], [(b >> 4 * i) & 15 for i in range(64)]
+    sa, sb = [(sa >> 8 * i) & 255 for i in range(4)], [(sb >> 8 * i) & 255 for i in range(4)]
+    assert (acc >> 23) & 0xFF == 0xFF and acc & 0x7FFFFF and any(s & 0x80 for s in sa + sb)
+    assert atom.group_terms(codes_a, codes_b, sa, sb) == atom.group_terms(codes_a, codes_b, F.hw_scales(F.NVFP4, sa),
+                                                                          F.hw_scales(F.NVFP4, sb))
+    with pytest.raises(InvalidArtifact):
+        atom.step_scaled(acc, codes_a, codes_b, F.hw_scales(F.NVFP4, sa), F.hw_scales(F.NVFP4, sb))
+    assert not F.scale_bytes_ok(F.NVFP4, sa + sb)
 
 
 def scales_side() -> F.Formed:

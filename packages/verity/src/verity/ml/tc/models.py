@@ -415,9 +415,11 @@ def _scale_dyadic(scale: str, code: int) -> tuple[int, int]:
             raise InvalidArtifact("UE8M0 NaN scale")
         return 8, code - 130                        # 2^(code-127) written with a 4-bit mantissa like UE4M3's
     if scale == "ue4m3":
-        if code & 0x80:
-            raise InvalidArtifact("UE4M3 scale with the padding bit set (PTX ISA: invalid)")
-        e, m = (code >> 3) & 0xF, code & 7
+        # sm_120 reads a UE4M3 scale from its low 7 bits and ignores bit 7 (all 256 bytes, r20260930-093120-b2f2; the
+        # 17 bit-7 vectors of the Lean scale-decode review replayed on the RTX PRO 6000, r20260930-161935-83a8), so
+        # 0x80 is a zero scale like 0x00 and 0xFF is NaN like 0x7F
+        code &= 0x7F
+        e, m = code >> 3, code & 7
         if e == 15 and m == 7:
             raise InvalidArtifact("UE4M3 NaN scale")
         return (m, -9) if e == 0 else (8 + m, e - 10)

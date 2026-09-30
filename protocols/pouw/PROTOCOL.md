@@ -469,8 +469,9 @@ useful    U/(α_A·α_B), glue
 - **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
   (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Item 3 below charges a block
   screened on both operands per pair-word, so a row with many screened blocks is rejected only when its tile's debit
-  passes the cap. Item 4 charges the reference's witness (`salt_dead`) alone, not every element of a screened block.
-  This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
+  passes the cap. Item 4 charges the reference's witness (`salt_dead`) alone, not every element of a screened block
+  (`server.md` 11:32Z); F1′ charges a screened block's near-certain codes at their own p_t. This replaces D-SS's
+  one-in-64 row cap, which rejected about half of real activation rows.
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units. Items 1 and 1b and R1
   are the base-split and flatness fix: research store `internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §6.2, §6.3 and
   §6.8, under the assessor's FP4 conditions (`internal/pouw/red-team/ratings.md` 15:18Z).
@@ -512,6 +513,13 @@ useful    U/(α_A·α_B), glue
     (`parse_row`). An a_E of 0x00 is D-NF's exclusion, not a rejection, since a zero row (decode's filler) forms it. The
     verifier forms every scale itself from the committed rows, and every replayed step reads a UE4M3 byte as the hardware
     does (`hw_scales`).
+    The decode is the Lean `scaleDyadic` proposal's.
+    - Its `nvf4Specials` table has 28 rows: research store `internal/pouw-fp8/pearl-c4-scale-decode/`, bc-5a715b19's
+      review.
+    - Four of those rows are NaN accumulators whose scale bytes set bit 7. They are valid scales under the hardware
+      decode, and outside the model through the accumulator (a test); the card writes 0x7FFFFFFF.
+    - The pinned model (`verity.ml.tc.models._scale_dyadic`) reads the low 7 bits too. GPU 4 replayed all 17 bit-7
+      vectors on the RTX PRO 6000 (run `r20260930-161935-83a8`), and every word matched.
   - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
   - W_ref = mnk + 32·mk + 256·mn + 117·mk;
@@ -528,8 +536,9 @@ useful    U/(α_A·α_B), glue
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
-  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, twice over
-  since R1 and the debit each evaluate it (about 1.5 CPU-minutes per tile; measured on a cloud-agent VM). Its shortcuts
+  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, evaluated
+  once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
+  sharing, at twice that). Its shortcuts
   are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
   the transcript tree and the records are built on the host after timing, and the records declare D-NF's exclusions but
   not R1's (the verifier checks R1 on every opened row, so an undeclared row over it rejects its tile).

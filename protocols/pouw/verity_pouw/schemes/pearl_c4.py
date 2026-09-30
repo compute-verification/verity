@@ -48,12 +48,13 @@ as Pearl-C's H100 argument had it.  The design rests instead on every code and e
 UE4M3, one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
 and its block is charged per word where both operands screen it (item 3), so a row with many screened blocks is rejected
 only when its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  Item 4 charges the
-reference's witness alone, not every element of a screened block (server.md 11:32Z).  A drawn tile's debit is replayed
+reference's witness alone, not every element of a screened block (server.md 11:32Z): F1′ charges a screened block's
+near-certain codes at their own p_t.  A drawn tile's debit is replayed
 over its credited words (`tile_debit`):
 
 ~~~text
-1  F1′ split     per row and aligned 128 of k: 128·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]),
-                 κ = min(c·M_w, 0.125), on every word the row feeds (below)
+1  F1′ split     per row and aligned 128 of k: 128·S_w, κ = min(c·M_w, 0.125) inside S_w's expectation, on every word
+                the row feeds (below)
 1b F2 int8      per tile: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain MAC, f the realised scale bytes' flatness (below)
 2  identity      per atom whose lone skip leaves the word unchanged: 64 per atom-word
 3  dead pairs    per block screened on both the A row and the B row: `block` per pair-word
@@ -351,7 +352,12 @@ def clean(fmt: Fmt, x: Sequence[int]) -> tuple[list[int], list[int], int]:
 def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
     """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (the
     assessor's run of all 256 bytes, ``r20260930-093120-b2f2``); UE8M0 bytes as written.  Every replayed step reads
-    scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one."""
+    scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one.  It is the decode the Lean
+    `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows (research store
+    ``internal/pouw-fp8/pearl-c4-scale-decode/``, bc-5a715b19's review).  Four of them are NaN accumulators whose scale
+    bytes set bit 7: valid scales under this decode, which the pinned model (`verity.ml.tc.models._scale_dyadic`) now
+    shares after GPU 4 replayed all 17 bit-7 vectors on the card (r20260930-161935-83a8), and outside the model through
+    the accumulator (the card writes 0x7FFFFFFF)."""
     return [s & 0x7F for s in scales] if fmt is NVFP4 else list(scales)
 
 
@@ -597,12 +603,11 @@ def modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], sigm
     return max(edges, key=lambda s: (_below(v, cdf, edges[s][1]) - _below(v, cdf, edges[s][0]), -s))
 
 
-def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int,
-                         dead: Sequence[bool]) -> tuple[list[float], list[int]]:
-    """Per element, P(its code ≠ its modal code) at its block's modal scale byte, under the exact noise law given this
-    salt's E line (`noise_law`; the Gaussian at σα under-charges some families up to 20×), and 0 on salt-dead codes;
-    with the blocks' modal bytes (F1′'s p_t, theory-pearl-c4-domain.md §6.2).  The atom's one RZ rounding of C + noise,
-    2^-23 relative, is not modelled."""
+def change_probabilities_exact(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int,
+                               dead: Sequence[bool]) -> tuple[list[float], list[int]]:
+    """F1′'s p_t as first written (the reading C bounds): P(code ≠ modal code) over all 15 cells, at the modal byte by the
+    product formula over the bytes the clean amax ± 6σ reaches.  Kept to check that `change_probabilities` charges at
+    least it; the rule is `change_probabilities`."""
     e = tuple(e_row)
     cdf = _below_law(e, _scale_value(NVFP4, ae) / 64)
     sigma = noise_sigma(e_row, ae)
@@ -620,6 +625,88 @@ def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence
             c = [0.0] + [cdf(e - vt) for e in edges] + [1.0]
             p.append(1.0 - max(c[i + 1] - c[i] for i in range(len(c) - 1)))
     return p, modes
+
+
+#: The float margin on every comparison C's evaluation decides (the pmf's error is about 10^-16), and the slack its
+#: lower bound on p_t gives up; both on the charging side.
+F1_EPS = 1e-12
+#: R1's tolerance band (the assessor's condition 3, 16:10Z): a row within this relative distance of its bound may be
+#: declared either way, and a tile's debit is compared with its cap at the same margin.  Soundness cost ≤ 10^-9·ρ.
+R1_TOLERANCE = 1e-9
+#: B̃'s overfit factor (theory-pearl-c4-domain.md §6.10, the assessor's 16:00Z mirror): a layout chosen after the salt for
+#: B̃'s residual is shared by all n weight rows and re-lays no A′, so it gains up to 6.8× F1′'s expectation on narrow
+#: weights (the hill-climb at G = n = 256, net of its gather and search).  B̃'s F1′ is charged at 10× that expectation,
+#: per window, capped at the window's MACs; A′'s at 1× (its layout must re-gather B̃, which doesn't pay at n ≤ 2^18).
+F1_B_OVERFIT = 10
+
+
+def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
+    """The noisy amax interval [lo, hi) whose block takes scale byte s."""
+    if fmt is MXFP4:
+        return 3 * _scale_value(fmt, s), 6 * _scale_value(fmt, s)
+    lo = 3 * (_scale_value(fmt, s - 1) + _scale_value(fmt, s)) if s > UE4M3_MIN else 0.0
+    hi = 3 * (_scale_value(fmt, s) + _scale_value(fmt, s + 1)) if s < UE4M3_TOP else math.inf
+    return lo, hi
+
+
+def certified_modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], realised: int) -> int | None:
+    """A block's modal scale byte by a certified local search around its realised byte r (bc-f5bf55c8's C,
+    pearl-c4-fix.md §7.2; the assessor's B, ratings.md 16:10Z): from the product formula at the edges of bytes
+    r − w … r + w, the byte probabilities there and the mass outside them.  The largest certifies when it beats the
+    outside mass and the runner-up by more than `F1_EPS` (no other byte can then win, and no float near-tie decides).
+    w = 1, then 4, then 16; None if still uncertified (the caller charges the block on the safe side)."""
+    top = UE4M3_TOP if fmt is NVFP4 else 254
+    for w in (1, 4, 16):
+        lo_b, hi_b = max(realised - w, UE4M3_MIN if fmt is NVFP4 else 0), min(realised + w, top)
+        edges = [_byte_edges(fmt, s)[0] for s in range(lo_b, hi_b + 1)] + [_byte_edges(fmt, hi_b)[1]]
+        below = [1.0 if math.isinf(u) else _below(v, cdf, u) for u in edges]
+        probs = [below[j + 1] - below[j] for j in range(len(edges) - 1)]
+        outside = below[0] + 1.0 - below[-1]
+        order = sorted(range(len(probs)), key=lambda j: (-probs[j], j))
+        best = probs[order[0]]
+        runner = max(outside, probs[order[1]] if len(order) > 1 else 0.0)
+        if best > runner + F1_EPS:
+            return lo_b + order[0]
+    return None
+
+
+def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int,
+                         dead: Sequence[bool], scales: Sequence[int]) -> tuple[list[float], list[int | None]]:
+    """F1′'s p_t, C's evaluation, normative for prover and verifier alike (the assessor's condition 1, 16:10Z), under
+    the exact noise law given this salt's E line (`noise_law`):
+    - each block's modal byte certified around its realised byte (`certified_modal_byte`); a block left uncertified is
+      charged on the safe side, p = 0 on its codes and no κ relief (its mode is None);
+    - p_t from 4 lookups, a lower bound: the element's own cell and its two neighbours exactly, each tail beyond them
+      as one cell, so 1 − max(three cells, two tails) − `F1_EPS` ≤ p_t; S_w only grows as any p_t falls;
+    - 0 on salt-dead codes.
+    It charges at least `change_probabilities_exact` in every window.  The atom's one RZ rounding of C + noise, 2^-23
+    relative, is not modelled."""
+    cdf = _below_law(tuple(e_row), _scale_value(NVFP4, ae) / 64)
+    hw = hw_scales(fmt, scales)
+    p: list[float] = []
+    modes: list[int | None] = []
+    for bi, b in enumerate(range(0, len(x), fmt.block)):
+        v = [P.f32_of_bits(fp32.mul(alpha, w)) for w in x[b:b + fmt.block]]
+        mode = certified_modal_byte(fmt, v, cdf, hw[bi])
+        modes.append(mode)
+        if mode is None:
+            p.extend([0.0] * len(v))
+            continue
+        vs = _scale_value(fmt, mode)
+        edges = [-math.inf] + [-m * vs for m in reversed(_E2M1_MIDPOINTS)] + [m * vs for m in _E2M1_MIDPOINTS] + [math.inf]
+        for t, vt in enumerate(v):
+            if dead[b + t]:
+                p.append(0.0)
+                continue
+            c = sum(1 for e in edges[1:-1] if e <= vt)              # own cell, 0 … 14: [edges[c], edges[c + 1])
+            f = [_edge_cdf(cdf, edges[j], vt) for j in (max(c - 1, 0), c, c + 1, min(c + 2, 15))]
+            cells = (f[1] - f[0], f[2] - f[1], f[3] - f[2], f[0], 1.0 - f[3])
+            p.append(max(0.0, 1.0 - max(cells) - F1_EPS))
+    return p, modes
+
+
+def _edge_cdf(cdf: Callable[[float], float], edge: float, v: float) -> float:
+    return 0.0 if edge == -math.inf else 1.0 if edge == math.inf else cdf(edge - v)
 
 
 _EXCESS_MAX = 4                    # 0.5 − c·x < 0 from x = 4 on
@@ -691,7 +778,8 @@ def split_saving(fmt: Fmt, p: Sequence[float], kappa: float = 0.0) -> float:
     return min(1.0, s)
 
 
-def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int], scales: Sequence[int]) -> Fraction:
+def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int | None], scales: Sequence[int],
+                overfit: float = 1) -> Fraction:
     """F1′ per word the row feeds, in FP4 units: 128·`split_saving` per window at κ = min(c·M_w, 0.125), M_w the window's
     blocks whose realised scale byte is not their modal byte (each costs A0's part one correction FFMA per word; a dense
     correction GEMM over k/16 in FP8 costs at least 0.125 per MAC)."""
@@ -700,8 +788,8 @@ def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int], scales: Sequ
     total = 0.0
     for w in range(0, len(p) - len(p) % SPAN_K, SPAN_K):
         b0 = w // fmt.block
-        moved = sum(hw[b] != modes[b] for b in range(b0, b0 + per))
-        total += SPAN_K * split_saving(fmt, p[w:w + SPAN_K], min(c * moved, DENSE_CORRECTION))
+        moved = sum(modes[b] is not None and hw[b] != modes[b] for b in range(b0, b0 + per))
+        total += SPAN_K * min(1.0, overfit * split_saving(fmt, p[w:w + SPAN_K], min(c * moved, DENSE_CORRECTION)))
     return Fraction(total)
 
 
@@ -832,17 +920,48 @@ class Debit:
                 "windows": self.windows, "counts": dict(self.counts)}
 
 
+#: A row's F1′ per word: (format, formed side, its E lines, the row's position, its salt-dead codes, the overfit factor)
+#: -> (FP4 units, uncertified blocks).  An implementation other than `row_f1` must compute the same C to float rounding.
+RowF1 = Callable[[Fmt, Formed, Sequence[Sequence[int]], int, Sequence[bool], float], tuple[Fraction, int]]
+
+
+def row_f1(fmt: Fmt, side: Formed, e_rows: Sequence[Sequence[int]], pos: int, dead: Sequence[bool],
+           overfit: float = 1) -> tuple[Fraction, int]:
+    """The rule's evaluation of a row's F1′ (`change_probabilities`, `split_units`), with its uncertified blocks."""
+    p, modes = change_probabilities(fmt, side.x[pos], side.alpha[pos], e_rows[pos], side.ae[pos], dead, side.scales[pos])
+    return split_units(fmt, p, modes, side.scales[pos], overfit), sum(m is None for m in modes)
+
+
+#: Per row of one tile's formed operands, by ("A" | "B", tile position): its salt-dead codes, its F1′ per word and its
+#: uncertified blocks.  Valid for one (operands, E lines, F1′ evaluation) only.
+RowTerms = dict[tuple[str, int], tuple[list[bool], Fraction, int]]
+
+
+def row_terms(fmt: Fmt, memo: RowTerms, label: str, side: Formed, e_rows: Sequence[Sequence[int]], pos: int,
+              f1: RowF1 = row_f1) -> tuple[list[bool], Fraction, int]:
+    """A row of A′ ("A") or B̃ ("B"): its salt-dead codes and its F1′ (B̃'s at `F1_B_OVERFIT` times its expectation),
+    evaluated once per `memo`, so R1 and the debit read the same evaluation."""
+    if (label, pos) not in memo:
+        dead = salt_dead(fmt, side.x[pos], side.alpha[pos], side.ae[pos])
+        memo[label, pos] = (dead, *f1(fmt, side, e_rows, pos, dead, 1 if label == "A" else F1_B_OVERFIT))
+    return memo[label, pos]
+
+
 def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int,
-               e_a: Sequence[Sequence[int]], e_b: Sequence[Sequence[int]], m: int | None = None) -> Debit:
+               e_a: Sequence[Sequence[int]], e_b: Sequence[Sequence[int]], m: int | None = None,
+               f1: RowF1 | None = None, memo: RowTerms | None = None) -> Debit:
     """The debit over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
-    this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n)."""
+    this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n).  `f1` evaluates a row's F1′; a verifier
+    may pass a faster evaluation that charges at least the rule's (`benchmarks/pouw/pearl_c4/f1_fast.py`).  `memo` holds
+    rows already evaluated on these operands with this `f1` (`row_terms`)."""
     m = n if m is None else m
-    dead_a = {i: salt_dead(fmt, a.x[i], a.alpha[i], a.ae[i]) for i in rows}
-    dead_b = {j: salt_dead(fmt, b.x[j], b.alpha[j], b.ae[j]) for j in cols}
-    law_a = {i: change_probabilities(fmt, a.x[i], a.alpha[i], e_a[i], a.ae[i], dead_a[i]) for i in rows}
-    law_b = {j: change_probabilities(fmt, b.x[j], b.alpha[j], e_b[j], b.ae[j], dead_b[j]) for j in cols}
-    split = (len(cols) * sum(split_units(fmt, *law_a[i], a.scales[i]) for i in rows)
-             + len(rows) * sum(split_units(fmt, *law_b[j], b.scales[j]) for j in cols))
+    f1 = row_f1 if f1 is None else f1
+    memo = {} if memo is None else memo
+    t_a = {i: row_terms(fmt, memo, "A", a, e_a, i, f1) for i in rows}
+    t_b = {j: row_terms(fmt, memo, "B", b, e_b, j, f1) for j in cols}
+    dead_a, dead_b = {i: t[0] for i, t in t_a.items()}, {j: t[0] for j, t in t_b.items()}
+    split = len(cols) * sum(t[1] for t in t_a.values()) + len(rows) * sum(t[1] for t in t_b.values())
+    uncertified = sum(t[2] for t in t_a.values()) + sum(t[2] for t in t_b.values())
     k = len(a.codes[0])
     int8 = Fraction(int8_saving(fmt, [a.scales[i] for i in rows], [b.scales[j] for j in cols], m, n)) * len(rows) * len(cols) * k
     win_a = {i: two_four_windows(a.codes[i]) for i in range(len(a.codes))}
@@ -862,6 +981,7 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
     spans = sum(all(win_a[i][w] for i in range(r, r + 16)) for r in range(0, len(a.codes) - 15, 16)
                 for w in range(len(win_a[0])))
     counts = {"salt_dead_a": sum(sum(dead_a[i]) for i in rows), "salt_dead_b": sum(sum(dead_b[j]) for j in cols),
+              "uncertified_blocks": uncertified,
               "two_four_windows_a": sum(sum(win_a[i]) for i in rows), "two_four_windows_b": sum(sum(win_b[j]) for j in cols),
               "d24_spans_a": spans, "identity_atom_words": identity, "subgrid_block_words": subgrid, "dead_pairs": pairs,
               "screened_blocks_a": sum(sum(blocks_a[i]) for i in rows), "screened_blocks_b": sum(sum(blocks_b[j]) for j in cols),
@@ -880,18 +1000,24 @@ class PearlC4:
 
     tickets = C.PearlC.tickets
 
-    def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE)):
+    def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
+                 f1: RowF1 | None = None):
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         self.fmt = FORMATS[fmt]
+        #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending the
+        #: assessor's rating of its bounds)
+        self.f1 = row_f1 if f1 is None else f1
         self.name = NAMES[fmt]
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
         #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
         #: D on honest coverage and Pearl-C4 claims NVFP4 alone (ratings.md 15:12Z; Daniel, 15:34Z).
         self.contrast = self.fmt is MXFP4
+        self.r1_tolerance = R1_TOLERANCE
         self.k_min, self.tile = k_min, tile
         self.last_debit: Debit | None = None
         self._encoded: tuple | None = None
+        self._rows: tuple[C.Ops | None, RowF1 | None, RowTerms] = (None, None, {})
         self.certificate = Certificate(
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
@@ -934,9 +1060,9 @@ class PearlC4:
     def check(self, matmul: Matmul) -> None:
         s = matmul.shape
         if not (self.k_min <= s.k <= 1 << 16 and s.k % ALIGN_K == 0 and s.m % self.tile[0] == 0
-                and s.n % self.tile[1] == 0 and s.m <= 1 << 24 and s.n <= 1 << 24):
+                and s.n % self.tile[1] == 0 and s.m <= 1 << 24 and s.n <= 1 << 18):
             raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 128 | k, tiles of "
-                              f"{self.tile}, m, n <= 2^24")
+                              f"{self.tile}, m <= 2^24, n <= 2^18")
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
@@ -973,25 +1099,33 @@ class PearlC4:
         """(debit, cap) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times the
         credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in `last_debit`."""
         s = record.matmul.shape
-        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m)
+        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m, self.f1,
+                                     self._memo(ops))
         cell = Fraction(self.credit_of(Shape(1, record.k_kept, s.n)), s.n)
         return self.last_debit.total, CAP * cell * len(rows) * len(cols)
 
-    def _row_f1(self, side: Formed, e_rows: Sequence[Sequence[int]], pos: int) -> Fraction:
-        x = side.x[pos]
-        dead = salt_dead(self.fmt, x, side.alpha[pos], side.ae[pos])
-        p, modes = change_probabilities(self.fmt, x, side.alpha[pos], e_rows[pos], side.ae[pos], dead)
-        return split_units(self.fmt, p, modes, side.scales[pos])
+    def _memo(self, ops: C.Ops) -> RowTerms:
+        """The encoded tile's `row_terms`, shared by R1 (`row_debit_ratio`) and the debit (`tile_cap`), so a drawn tile's
+        rows are evaluated once; a new tile or a new `f1` starts a new one."""
+        if self._rows[0] is not ops or self._rows[1] is not self.f1:
+            self._rows = (ops, self.f1, {})
+        return self._rows[2]
 
     def _r1_cap(self, k_kept: int, n: int) -> Fraction:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
 
-    def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
-        """R1 (theory-pearl-c4-domain.md §6.8; ratings.md 15:18Z condition 4): whether the row at tile position `pos` of
-        A′ ("A") or B̃ ("B") carries an F1′ per word above ρ·(its cell credit), and so must be declared excluded.  An
-        excluded row is still formed, checked and hashed; it earns nothing."""
+    def row_debit_ratio(self, record, ops: C.Ops, side: str, pos: int) -> Fraction:
+        """R1's reading (theory-pearl-c4-domain.md §6.8; ratings.md 15:18Z condition 4): the F1′ per word of the row at
+        tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
+        excluded; `pearl_c_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
+        still formed, checked and hashed; it earns nothing."""
         formed, e_rows = (ops.a, ops.e_a) if side == "A" else (ops.b, ops.e_b)
-        return self._row_f1(formed, e_rows, pos) > self._r1_cap(record.k_kept, record.matmul.shape.n)
+        units = row_terms(self.fmt, self._memo(ops), side, formed, e_rows, pos, self.f1)[1]
+        return units / self._r1_cap(record.k_kept, record.matmul.shape.n)
+
+    def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
+        """Whether R1 requires the row excluded (its ratio over 1)."""
+        return self.row_debit_ratio(record, ops, side, pos) > 1
 
     def r1_rows(self, ctx: Context, a_rows: Sequence[bytes], b_rows: Sequence[bytes], k_kept: int) -> tuple[set[int], set[int]]:
         """R1 over a whole unit, for an honest prover's declaration (`pearl_c_work.declare`): the A rows and the weight's
@@ -999,13 +1133,14 @@ class PearlC4:
         noise, k, n = self.noise(ctx), ctx.matmul.shape.k, ctx.matmul.shape.n
         cap = self._r1_cap(k_kept, n)
         out: tuple[set[int], set[int]] = (set(), set())
-        for rows, role_e, role_f, seed_e, dest in ((a_rows, ROLE_EA, ROLE_FA, noise.seed_a, out[0]),
-                                                   (b_rows, ROLE_EB, ROLE_FB, noise.seed_b, out[1])):
+        for label, rows, role_e, role_f, seed_e, dest in (("A", a_rows, ROLE_EA, ROLE_FA, noise.seed_a, out[0]),
+                                                          ("B", b_rows, ROLE_EB, ROLE_FB, noise.seed_b, out[1])):
             live = [i for i, row in enumerate(rows) if row_passes(self.fmt, parse_row(row, k))]
             if not live:
                 continue
             side, e = self._side([rows[i] for i in live], live, role_e, role_f, seed_e, noise.seed_b, k)
-            dest.update(i for p, i in enumerate(live) if self._row_f1(side, e, p) > cap)
+            memo: RowTerms = {}
+            dest.update(i for p, i in enumerate(live) if row_terms(self.fmt, memo, label, side, e, p, self.f1)[1] > cap)
         return out
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,

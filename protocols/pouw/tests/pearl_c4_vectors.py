@@ -69,7 +69,7 @@ def case_vector(case, fmt, shape, index, weight, test) -> dict:
     useful = s.useful(ctx, noise, ops, checked)
     _, cap = s.tile_cap(W.UnitRecord(ctx.matmul, shape[0], shape[1]), ops, range(len(tile.rows)), range(len(tile.cols)))
     dead = F.salt_dead(s.fmt, ops.a.x[0], ops.a.alpha[0], ops.a.ae[0])
-    p, modes = F.change_probabilities(s.fmt, ops.a.x[0], ops.a.alpha[0], ops.e_a[0], ops.a.ae[0], dead)
+    p, modes = F.change_probabilities(s.fmt, ops.a.x[0], ops.a.alpha[0], ops.e_a[0], ops.a.ae[0], dead, ops.a.scales[0])
     lo, pmf = F.noise_law(tuple(ops.e_a[0]))
     return {
         "case": case, "scheme": s.name, "shape": list(shape),

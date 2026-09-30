@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import random
 import re
 import sys
@@ -176,11 +177,15 @@ def tile(job: Job, name: str, t: int) -> dict:
     rng = random.Random(f"{job.seed}/{name}/{t}")
     ti, tj = rng.randrange(m // TILE), rng.randrange(n // TILE)
     rows, cols = list(range(ti * TILE, (ti + 1) * TILE)), list(range(tj * TILE, (tj + 1) * TILE))
-    s = F.PearlC4("nvfp4")
+    fast = os.environ.get("PEARL_C4_F1") == "fast"
+    if fast:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import f1_fast
+    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None)
     unit = Matmul(0, Shape(m, k_unit, n), 0)
     lab = lambda part: hashlib.sha256(f"pearl-c4-real/{name}/{t}/{part}".encode()).digest()  # noqa: E731
     noise = s.noise(Context(lab("salt"), unit, lab("root_a"), lab("root_b")))
-    got = {"tile": [ti, tj], "m": m, "n": n, "k_kept": len(keep), "k_unit": k_unit}
+    got = {"tile": [ti, tj], "m": m, "n": n, "k_kept": len(keep), "k_unit": k_unit, "f1": "fast" if fast else "exact"}
     try:
         a, e_a = s._side(unit_rows(x[rows], keep, k_unit), rows, F.ROLE_EA, F.ROLE_FA, noise.seed_a, noise.seed_b, k_unit)
         b, e_b = s._side(unit_rows(np.asarray(w[cols]), keep, k_unit), cols, F.ROLE_EB, F.ROLE_FB, noise.seed_b,
@@ -240,8 +245,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--budget-min", type=float, default=12.0)
     ap.add_argument("--seed", type=int, default=20261930)
+    ap.add_argument("--f1", choices=("exact", "fast"), default="exact",
+                    help="F1′'s evaluation: the rule's own, or f1_fast's cheap sound one (staged, pending the assessor's rating)")
     args = ap.parse_args(argv)
     t0 = time.monotonic()
+    os.environ["PEARL_C4_F1"] = args.f1
     args.out.mkdir(parents=True, exist_ok=True)
     job = Job(args.capture, args.out, args.seed)
     names = [n for n in job.man["inputs"] if re.search(args.layers, n)]
