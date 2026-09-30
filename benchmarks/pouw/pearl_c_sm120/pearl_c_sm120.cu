@@ -338,7 +338,9 @@ DEV void mbar_arrive(uint32_t bar) { asm volatile("mbarrier.arrive.shared::cta.b
 // PEARLC_W's hash warps (W_HT threads, h their index): each tile's 512 messages, (row r, 32 columns c) at 4 r + c, hashed as
 // hash_msg_v does (the last warp takes the odd sixth message, the first warp the leaves after), then each leaf's chunk ch
 // (rows 16 ch .. 16 ch + 15 of the leaf, both of its 32-column digests a row, 16 blocks) on lane 4 (2 lti + ltj) + ch of the
-// first warp, and its parents as hash_leaf_p builds them.
+// first warp, and its parents as hash_leaf_p builds them.  The slot is read through L1 (__ldca): a thread reads each 32-byte
+// sector in two 16-byte halves, which L2-only loads (__ldcg) fetch from L2 twice, and at 8,192^3 the call runs at the L2's
+// sector rate.
 DEV void w_hash(const Args& a, uint32_t wbar) {
   const int h = threadIdx.x - (ML_NT - W_HT);
   uint32_t j = 0;
@@ -359,7 +361,7 @@ DEV void w_hash(const Args& a, uint32_t wbar) {
         uint32_t m[16];
 #pragma unroll
         for (int q = 0; q < 4; q++) {
-          const uint4 x = __ldcg((b < 2 ? c4 : u4) + 4 * (b & 1) + q);
+          const uint4 x = __ldca((b < 2 ? c4 : u4) + 4 * (b & 1) + q);
           m[4 * q] = x.x; m[4 * q + 1] = x.y; m[4 * q + 2] = x.z; m[4 * q + 3] = x.w;
         }
         b3c(hh, m, 0, 64, B3_KEYED | (b == 0 ? B3_START : 0) | (b == 3 ? B3_END | B3_ROOT : 0), hh);
@@ -384,7 +386,7 @@ DEV void w_hash(const Args& a, uint32_t wbar) {
           uint32_t m[16];
 #pragma unroll
           for (int q = 0; q < 4; q++) {
-            const uint4 x = __ldcg(d4 + 8 * b + q);
+            const uint4 x = __ldca(d4 + 8 * b + q);
             m[4 * q] = x.x; m[4 * q + 1] = x.y; m[4 * q + 2] = x.z; m[4 * q + 3] = x.w;
           }
           b3c(cv, m, (uint64_t)ch, 64, B3_KEYED | (b == 0 ? B3_START : 0) | (b == 15 ? B3_END : 0), cv);
