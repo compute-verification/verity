@@ -45,6 +45,8 @@ def dispatch(tmp_path, monkeypatch):
     monkeypatch.setenv("VY_READY", str(tmp_path / "ready"))
     monkeypatch.delenv("PACK_SPOOL", raising=False)
     monkeypatch.delenv("PACK_COMMITS", raising=False)
+    monkeypatch.setenv("PACK_DISK_PATH", str(tmp_path))
+    monkeypatch.setenv("PACK_DISK_PAUSE", "1.01")
     mod = _load(NEBIUS / "dispatch.py", "dispatch", monkeypatch)
     mod.calls = []
 
@@ -89,12 +91,17 @@ def test_the_build_an_unpacked_item_and_a_tree_without_deferred_replay_never_pac
     assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), 1)
 
 
-def test_route_spools_only_under_the_flag(dispatch, tmp_path):
+def test_route_spools_only_under_the_flag_and_below_the_disk_pause(dispatch, tmp_path):
     item = _item(_tree(tmp_path / "t"))
     dispatch.route(item, "lane/c1", 1)
     assert [a[0] for a, _ in dispatch.calls] == ["create"] and not list(dispatch.PACK.glob("queue/*"))
     dispatch.calls.clear()
     dispatch.PACK_COMMITS = True
+    dispatch.PACK_DISK_PAUSE = 0.0
+    dispatch.route(item, "lane/c1", 1)
+    assert [a[0] for a, _ in dispatch.calls] == ["create"] and not list(dispatch.PACK.glob("queue/*"))
+    dispatch.calls.clear()
+    dispatch.PACK_DISK_PAUSE = 1.01
     name = dispatch.route(item, "lane/c1", 1)
     entry = json.loads((dispatch.PACK / "queue" / f"{name}.json").read_text())
     assert not dispatch.calls and entry["key"] == "lane/c1" and entry["idx"] == 1
@@ -169,17 +176,18 @@ def pilot(tmp_path, monkeypatch):
     monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
     monkeypatch.setenv("HOSTNAME", "pod-a")
     for k, v in {"PACK_SPOOL": tmp_path / "spool", "PACK_POLL_S": 0.01, "PACK_IDLE_S": 0, "PACK_STATS_S": 0,
-                 "PACK_STOP_GRACE_S": 5}.items():
+                 "PACK_STOP_GRACE_S": 5, "PACK_DISK_PATH": tmp_path, "PACK_DISK_PAUSE": 1.01,
+                 "PACK_BUNDLE_GLOBS": f"{tmp_path}/cov/*/commit/replay_bundle_p*"}.items():
         monkeypatch.setenv(k, str(v))
     mod = _load(NEBIUS / "sky" / "commit_pack.py", "commit_pack", monkeypatch)
     monkeypatch.setattr(mod, "quiet", lambda t: False)
     return mod
 
 
-def _queue(spool: Path, name: str, script: str) -> None:
+def _queue(spool: Path, name: str, script: str, row: str = "") -> None:
     (spool / "queue").mkdir(parents=True, exist_ok=True)
     (spool / "queue" / f"{name}.json").write_text(json.dumps({"key": f"lane/{name}", "idx": 1, "tries": 0, "job": name,
-                                                               "env": {}, "script": script}))
+                                                               "env": {"ROW": row}, "script": script}))
 
 
 def test_the_pilot_runs_commits_as_mps_clients_and_cleans_up(pilot, tmp_path):
@@ -205,6 +213,21 @@ def test_a_fault_in_one_client_stops_the_others_and_claims_nothing_more(pilot, t
     a = json.loads((spool / "results" / "a-stuck.json").read_text())
     assert b["fault"] and "illegal memory access" in b["reason"] and a["fault"] and a["rc"] is None
     assert (spool / "queue" / "c-later.json").exists()
+
+
+def test_no_claims_at_the_disk_pause_and_no_b8_while_bundles_pass_the_cap(pilot, tmp_path):
+    spool = tmp_path / "spool"
+    _queue(spool, "b8", "exit 0", LLAMA_B8)
+    _queue(spool, "b1", "exit 0", LLAMA_B8.replace("__b8__", "__b1__"))
+    pilot.DISK_PAUSE = 0.0
+    assert pilot.main() == 0 and not (spool / "results").exists()
+    pilot.DISK_PAUSE = 1.01
+    bundle = tmp_path / "cov" / "row" / "commit" / "replay_bundle_p1"
+    bundle.mkdir(parents=True)
+    (bundle / "part").write_bytes(b"x" * 10)
+    pilot.BUNDLE_CAP = 5
+    assert pilot.main() == 0
+    assert (spool / "results" / "b1.json").exists() and (spool / "queue" / "b8.json").exists()
 
 
 def test_claim_has_one_winner(pilot, tmp_path):

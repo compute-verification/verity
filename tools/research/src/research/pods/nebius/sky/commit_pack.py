@@ -8,6 +8,8 @@ The dispatcher (dispatch.py, PACK_COMMITS=1) spools each eligible Commit, config
 `results/<name>.json` when it ends; the dispatcher reads that back into the item's chain. It takes the next entry as each one
 finishes, and stops claiming at PACK_CLAIM_UNTIL_S, in the quiet hour (12:30-13:30Z), or after an MPS fault; it exits once
 nothing runs and the queue has been empty for PACK_IDLE_S, or at PACK_MAX_WALL_S, when whatever still runs is stopped.
+Storage (infra and circuits, 3:25-3:36 PM PDT Sep 30): it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
+and no Commit of batch 8 or more while the sealed replay bundles waiting on the node pass PACK_BUNDLE_CAP_GB (300).
 
 **MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
 exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit
@@ -49,6 +51,13 @@ CLIENT_ENV = {
     "GPU_UTIL": os.environ.get("PACK_GPU_UTIL", "0.28"),
     "REPLAY_DEFERRED": "1",
 }
+DISK = os.environ.get("PACK_DISK_PATH", "/workspace")
+DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
+BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/commit/replay_bundle_p*,"
+                              "/workspace/cp/sweep/*/commit/replay_bundle_p*,"
+                              "/workspace/jobs/dispatch/pack/golden/*/commit/replay_bundle_p*").split(",")
+BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "300")) * 1e9
+BUNDLE_BATCH = 8
 FAULT_EXIT = 87
 QUIET = ((12, 30), (13, 30))
 CLIENT_FAULT = re.compile(r"illegal memory access|unspecified launch failure|CUDA_ERROR_MPS|cudaErrorMps|MPS server|"
@@ -72,8 +81,34 @@ def write_json(path: Path, obj: dict) -> None:
     tmp.rename(path)
 
 
-def claim(spool: Path, pod: str) -> tuple[str, dict] | None:
-    """The oldest queued entry, renamed into claimed/<pod>/, or None when the queue is empty."""
+def batch(entry: dict) -> int:
+    parts = str((entry.get("env") or {}).get("ROW", "")).split("__")
+    return next((int(p[1:]) for p in parts if re.fullmatch(r"b\d+", p)), 0)
+
+
+def bundle_bytes(globs: list[str]) -> int:
+    """Bytes of the sealed replay bundles waiting on the node (a Commit's replay deletes its own)."""
+    total = 0
+    for g in globs:
+        for d in Path("/").glob(g.lstrip("/")):
+            for root, _, files in os.walk(d):
+                for name in files:
+                    try:
+                        total += os.lstat(os.path.join(root, name)).st_size
+                    except OSError:
+                        continue
+    return total
+
+
+def _accepts(f: Path, accept) -> bool:
+    try:
+        return bool(accept(json.loads(f.read_text())))
+    except (OSError, ValueError):
+        return False
+
+
+def claim(spool: Path, pod: str, accept=lambda entry: True) -> tuple[str, dict] | None:
+    """The oldest queued entry that `accept`s, renamed into claimed/<pod>/, or None when there is none."""
     mine = spool / "claimed" / pod
     mine.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -83,6 +118,8 @@ def claim(spool: Path, pod: str) -> tuple[str, dict] | None:
         except OSError:
             continue
     for _, f in sorted(entries):
+        if not _accepts(f, accept):
+            continue
         dst = mine / f.name
         try:
             f.rename(dst)
@@ -213,6 +250,7 @@ def main() -> int:
     finished: list[str] = []
     fault: str | None = None
     idle_since, last_stats = time.time(), 0.0
+    gates_at, disk_ok, big_ok = 0.0, True, True
     print(f"{now_utc()} commit-pack {POD}: slots {SLOTS}, max wall {MAX_WALL_S}s, client env {CLIENT_ENV}", flush=True)
 
     def report(c: Client, rc: int | None, fault_: bool, reason: str) -> None:
@@ -263,8 +301,17 @@ def main() -> int:
                     report(c, None, True, f"stopped: max wall {MAX_WALL_S}s")
                 running.clear()
                 break
-            while (len(running) < SLOTS and age < CLAIM_UNTIL_S and not quiet(time.time())
-                   and (got := claim(SPOOL, POD))):
+            if len(running) < SLOTS and time.time() - gates_at >= 60:
+                gates_at = time.time()
+                u = shutil.disk_usage(DISK)
+                disk_ok = u.used / u.total < DISK_PAUSE
+                big_ok = bundle_bytes(BUNDLE_GLOBS) <= BUNDLE_CAP
+                if not disk_ok or not big_ok:
+                    print(f"{now_utc()} holding claims: disk {u.used / u.total:.1%} (pause at {DISK_PAUSE:.0%}), "
+                          f"batch >= {BUNDLE_BATCH} {'allowed' if big_ok else 'refused: bundles over the cap'}", flush=True)
+            accept = (lambda e: True) if big_ok else (lambda e: batch(e) < BUNDLE_BATCH)
+            while (len(running) < SLOTS and age < CLAIM_UNTIL_S and disk_ok and not quiet(time.time())
+                   and (got := claim(SPOOL, POD, accept))):
                 name, entry = got
                 slot = min(set(range(SLOTS)) - {c.slot for c in running.values()})
                 log = logs / f"{name}.log"
@@ -275,7 +322,7 @@ def main() -> int:
                                             start_new_session=True)
                 running[name] = Client(name, entry, proc, log, slot)
                 print(f"{now_utc()} started {name} ({entry['key']}) in slot {slot}, pid {proc.pid}", flush=True)
-            if running or any((SPOOL / "queue").glob("*.json")):
+            if running or (disk_ok and any(_accepts(f, accept) for f in (SPOOL / "queue").glob("*.json"))):
                 idle_since = time.time()
             elif time.time() - idle_since >= IDLE_S:
                 break
