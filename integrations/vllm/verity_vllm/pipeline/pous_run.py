@@ -1,22 +1,24 @@
-"""`verity-vllm pous`: POUS end to end on one GPU, each role in its own process.
+"""`verity-vllm pous`: POUS end to end on one GPU through the protocol option (`protocol_options.pous`), each role in its own
+process.
 
-    verity-vllm pous e2e --out DIR --case QWEN05 --build-dir DIR [--codec NAME] [--audits N] [--drop-fraction F] [--result FILE]
+    verity-vllm pous e2e --out DIR --case QWEN05 --build-dir DIR [--scheme ID] [--audits N] [--drop-fraction F] [--result FILE]
 
-runs the reference lifecycle (`protocols/pous/PROTOCOL.md`) of the reference codec ``--codec`` (`engine/pous/twins.reference`:
-``p3/v1``, the default, ``dense-chain/v1`` or ``band-chain/d12/v1``), at the geometry it is served at, in every role:
+runs the protocol's lifecycle (`protocols/pous/PROTOCOL.md`) for the scheme ``--scheme`` (a `verity_pous.schemes` id with a GPU
+twin, `engine/pous/twins.py`; ``band-chain/d12/v1`` by default; ``--codec`` is the same flag), in every role:
 
-1. `commit` (server): `verity_pous.setup.commit` of `W`, the checkpoint's data section (`engine/pous/layout.py`);
-2. `vk` (verifier): `setup.draw_salt` from its own secret after the commitment, then its own reference encoding of `W`
-   (`pipeline/pous_verifier.encode`, per segment) and `vk`; it also decodes layer 0's tensors with the reference
-   `layout.decode_tensor`;
-3. `plain`: the plaintext model under the integration's engine (`engine.vllm_adapter.build_engine`, case `QWEN05`), greedy, with
-   logprobs;
-4. `serve`: the same engine with `quantization="pous"` (`engine/pous/quant.py`): `C` encoded on the GPU under the salt, every
-   weight decoded per layer at every use; the same generation; the server's leaves and root; then the native responder
-   (`engine/pous/worker.py`) and a serving loop until the verifier is done;
-5. `verify`: a separate verifier process checks the server's root against `vk` (`setup.check_server_root`), calibrates its round
-   trip to the responder, and runs the reference's timed audits (`pipeline/pous_verifier.run`);
-6. the negative control: `serve` with a fraction of `C`'s blocks dropped, and `verify` against it.
+1. `plain` (the server's plaintext): the model under the integration's engine (`engine.vllm_adapter.build_engine`, case
+   `QWEN05`), greedy, with logprobs; and `W` of record as the option lays it out (`pous.weights_of_record`: every linear weight,
+   deduplicated), with the commitment to it (`protocol.commit`), before any salt exists;
+2. `vk` (verifier): the salt drawn from its own secret after the commitment (`protocol.draw_salt`), its own reference encoding of
+   `W` (`pipeline/pous_verifier.encode`, per segment) and `vk` (`protocol.verifier_key`); it also decodes layer 0's tensors with
+   the reference;
+3. `serve`: the same engine with ``protocols = pous:<scheme>`` and ``codec: gpu``: `C` encoded on the GPU under the verifier's
+   salt by the scheme's twin once it reproduced its pinned vector, every weight decoded on the GPU at every use; the same
+   generation; the server's leaves and root; the native responder on its own core and port; a serving loop until the verifier
+   is done;
+4. `verify`: a separate verifier process checks the server's root against `vk` (`setup.check_server_root`), calibrates its round
+   trip to the responder, and runs the protocol's timed audits (`pipeline/pous_verifier.run`);
+5. the negative control: `serve` with a fraction of `C`'s blocks dropped, and `verify` against it.
 
 `pous_e2e.json` in DIR (and `result.json` under `research run`) carries the verdicts.
 """
@@ -50,33 +52,28 @@ def _read(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
-def reference_codec(name: str):
-    """The reference codec ``name`` and the geometry it is served at (`engine/pous/twins.reference`, no torch)."""
-    from verity_vllm.engine.pous import twins
+def geometry(name: str):
+    """The scheme's served geometry before `W` sizes it (`verity_pous.schemes`), the one `protocol_options.pous` lays `W` out at."""
+    from verity_pous import schemes
 
-    return twins.reference(name)
-
-
-def checkpoint_files(case: str) -> list[str]:
-    """The pinned checkpoint's `.safetensors` files, in name order (the shard order)."""
-    from verity_vllm import config
-    from verity_vllm.engine import engine_profile as prof
-
-    cp = prof.checkpoint_for(case, config.CHECKPOINTS)
-    return [str(Path(cp["local_path"]) / name) for name in sorted(cp["safetensors_sha256"])]
+    return schemes.get(name).params
 
 
-def build(case: str, pous_spec: Path | None, max_num_seqs: int = 8, engine_args: dict[str, Any] | None = None):
+def build(case: str, protocols: str | None = None, protocols_config: dict[str, Any] | None = None, max_num_seqs: int = 8,
+          engine_args: dict[str, Any] | None = None):
+    """The engine of the case, and the installed composition when ``protocols`` is set (as `verity_vllm.LLM` installs it)."""
     from verity_vllm import config
     from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.pipeline import llm as L
 
+    ctx = L.protocol_context(L.resolve_options({"protocols": protocols, "protocols_config": protocols_config or {}})) if protocols else None
     args: dict[str, Any] = {"gpu_memory_utilization": GPU_MEMORY_UTILIZATION, **(engine_args or {})}
-    if pous_spec is not None:
-        from verity_vllm.engine.pous import quant, worker  # noqa: F401  (registers quantization="pous")
-
-        args.update(quantization="pous", worker_extension_cls=worker.EXTENSION,
-                    hf_overrides={"quantization_config_file": str(pous_spec)})
-    return va.build_engine(config.CHECKPOINTS, max_num_seqs=max_num_seqs, case=case, engine_args=args)
+    engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=max_num_seqs, case=case, engine_args=args,
+                             execution=va.execution_label_of(True))
+    if ctx is None:
+        return engine, None
+    from verity_vllm import protocol_options as PO
+    return engine, PO.install(engine.model, ctx)
 
 
 def generate(engine, max_tokens: int) -> list[dict[str, Any]]:
@@ -93,66 +90,75 @@ def generate(engine, max_tokens: int) -> list[dict[str, Any]]:
     return [{"wall_s": wall}] + rows
 
 
-def cmd_commit(a) -> None:
-    from verity_pous import setup
+def record_w(scheme: str, model: Any, out: Path) -> dict[str, Any]:
+    """`W` of record (`pous.weights_of_record`) into ``w.bin`` and its commitment into ``commit.json``: what the server commits to
+    before any salt exists, and what the verifier encodes."""
+    from verity_vllm.protocol_options import pous
 
-    from verity_vllm.engine.pous import layout
+    layout, sch, w, commitment = pous.weights_of_record(scheme, model)
+    (out / "w.bin").write_bytes(w)
+    doc = {"commitment": commitment.hex(), "scheme": sch.name, "params": sch.params.manifest(),
+           "tensors": [[t.name, t.size] for t in layout.tensors], "w_sha256": hashlib.sha256(w).hexdigest()}
+    _write(out / "commit.json", doc)
+    return doc
 
-    ref, base = reference_codec(a.codec)
-    ck = layout.read(checkpoint_files(a.case), base)
-    commitment = setup.commit(ck.params, ck.read_w())
-    _write(Path(a.out) / "commit.json", {"commitment": commitment.hex(), "codec": ref.name, "params": ck.params.manifest(),
-                                         "checkpoint": [x.path for x in ck.sections]})
+
+def committed_w(out: Path) -> tuple[dict[str, Any], Any, Any, bytes]:
+    """``commit.json``, the layout it names, the scheme at its size, and ``w.bin`` checked against it."""
+    from verity_pous import protocol
+    from verity_pous.layout import Layout
+
+    from verity_vllm.pipeline import pous_verifier as pv
+
+    doc = _read(out / "commit.json")
+    layout = Layout.of(geometry(doc["scheme"]), [(n, int(size)) for n, size in doc["tensors"]])
+    scheme = pv.scheme_at(doc["scheme"], layout.params)
+    w = (out / "w.bin").read_bytes()
+    if layout.params.manifest() != doc["params"] or protocol.commit(scheme, w).hex() != doc["commitment"]:
+        raise SystemExit("w.bin and its layout do not give commit.json's parameters and commitment")
+    return doc, layout, scheme, w
 
 
 def cmd_vk(a) -> None:
-    from verity_pous import setup
+    from verity_pous import protocol
 
-    from verity_vllm.engine.pous import layout
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
-    committed = _read(out / "commit.json")
-    commitment = bytes.fromhex(committed["commitment"])
-    ref_codec, base = reference_codec(a.codec)
-    if committed.get("codec", ref_codec.name) != ref_codec.name:
-        raise SystemExit(f"the server committed under {committed['codec']}, not {ref_codec.name}")
-    salt = setup.draw_salt(os.urandom(32), commitment)
-    ck = layout.read(checkpoint_files(a.case), base)
-    w = ck.read_w()
-    if setup.commit(ck.params, w) != commitment:
-        raise SystemExit("W does not match the server's commitment")
+    doc, layout, scheme, w = committed_w(out)
+    if doc["scheme"] != a.scheme:
+        raise SystemExit(f"the server committed under {doc['scheme']}, not {a.scheme}")
+    commitment = bytes.fromhex(doc["commitment"])
+    salt = protocol.draw_salt(os.urandom(32), commitment)
     _write(out / "salt.json", {"salt": salt.hex()})
     t0 = time.perf_counter()
-    scheme = pv.scheme_at(ref_codec.name, ck.params)
     segments = pv.encode(scheme, w, salt, a.workers)
     vk = pv.verifier_key(scheme, commitment, salt, w, segments)
     enc_s = time.perf_counter() - t0
     (out / "vk-leaves.bin").write_bytes(b"".join(vk.leaves))
     t1 = time.perf_counter()
-    names = sorted(n for n in ck.dtypes if n.startswith(LAYER0))
-    ref = {n: hashlib.sha256(b).hexdigest()
-           for n, b in pv.reference_decode(scheme, ck.layout, segments, salt, names, a.workers).items()}
-    plain = {n: hashlib.sha256(ck.layout.unpack(w, n)).hexdigest() for n in names}
-    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "codec": ref_codec.name,
-                             "encode_s": enc_s,
-                             "workers": a.workers, "reference_decode_s": time.perf_counter() - t1,
+    names = [t.name for t in layout.tensors if t.name.startswith(LAYER0)]
+    ref = {n: hashlib.sha256(b).hexdigest() for n, b in pv.reference_decode(scheme, layout, segments, salt, names, a.workers).items()}
+    plain = {n: hashlib.sha256(layout.unpack(w, n)).hexdigest() for n in names}
+    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": scheme.params.manifest(), "scheme": scheme.name,
+                             "encode_s": enc_s, "workers": a.workers, "reference_decode_s": time.perf_counter() - t1,
                              "reference_decode_layer0": ref, "reference_decode_matches_w": ref == plain})
 
 
 def load_vk(out: Path):
     from verity_pous.verifier import VerifierKey
 
+    from verity_vllm.pipeline import pous_verifier as pv
+
     doc = _read(out / "vk.json")
-    _, base = reference_codec(doc["codec"])
-    params = base.with_segments(doc["params"]["segments"])
+    params = geometry(doc["scheme"]).with_segments(doc["params"]["segments"])
     if params.manifest() != doc["params"]:
-        raise ValueError(f"vk.json's params {doc['params']} are not {doc['codec']}'s served geometry {params.manifest()}")
+        raise ValueError(f"vk.json's params {doc['params']} are not {doc['scheme']}'s served geometry {params.manifest()}")
     raw = (out / "vk-leaves.bin").read_bytes()
     vk = VerifierKey.from_leaves(params, bytes.fromhex(doc["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
     if vk.root.hex() != doc["root"]:
         raise ValueError("vk-leaves.bin does not have the root vk.json records")
-    return doc, vk
+    return doc, pv.scheme_at(doc["scheme"], params), vk
 
 
 def engine_args(a) -> dict[str, Any] | None:
@@ -162,8 +168,8 @@ def engine_args(a) -> dict[str, Any] | None:
 
 def throughput(engine, a, info) -> list[dict[str, Any]]:
     """pous-bench's prefill configurations (``--prefill``) and decode at batch 1 on this role's engine (`pipeline/pous_timing.py`):
-    prefill tokens/s over the time to every first token, decode tokens/s over the steps after it.  A POUS forward pays the
-    whole model's decode, so the served engine times ``--decode-tokens`` steps and the plain one `PLAIN_DECODE_TOKENS`."""
+    prefill tokens/s over the time to every first token, decode tokens/s over the steps after it.  A POUS forward pays every
+    layer's decode, so the served engine times ``--decode-tokens`` steps and the plain one `PLAIN_DECODE_TOKENS`."""
     from verity_vllm.pipeline import pous_timing as pb
 
     rows = []
@@ -186,54 +192,60 @@ def slowdowns(plain: list[dict[str, Any]], pous: list[dict[str, Any]]) -> dict[s
 
 
 def cmd_plain(a) -> None:
-    engine = build(a.case, None, engine_args=engine_args(a))
+    out = Path(a.out)
+    engine, _ = build(a.case, engine_args=engine_args(a))
+    record_w(a.scheme, engine.model, out)
     doc = {"outputs": generate(engine, a.max_tokens)}
     if a.prefill or a.decode_tokens:
         doc["throughput"] = throughput(engine, a, lambda: None)
-    _write(Path(a.out) / "plain.json", doc)
+    _write(out / "plain.json", doc)
 
 
-def serve_spec(a, out: Path) -> dict[str, Any]:
-    """The `engine/pous/quant.py` spec of the served store: the codec, the checkpoint, the verifier's salt, the drop."""
-    return {"codec": reference_codec(a.codec)[0].name, "safetensors": checkpoint_files(a.case), "build_dir": a.build_dir,
-            "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction, "drop_source": os.urandom(32).hex(),
-            "layers_per_decode": a.layers_per_decode, **(json.loads(a.kernels) if a.kernels else {})}
+def serve_config(a, out: Path) -> dict[str, Any]:
+    """The option's settings for the served store: the GPU codec, the verifier's salt, the native responder, the drop."""
+    own: dict[str, Any] = {"codec": "gpu", "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "host": "127.0.0.1",
+                           "port": 0, "drop_fraction": a.drop_fraction, "drop_source": os.urandom(32).hex()}
+    if a.responder_cpu is not None:
+        own["responder_cpu"] = a.responder_cpu
+    return {"pous": own}
+
+
+def _stats(opt) -> dict[str, Any]:
+    return dict(opt.info()["stats"], dropped=opt.info()["dropped"])
 
 
 def cmd_serve(a) -> None:
-    from verity_pous.verifier import MerkleTree
-
     reserved = {c for c in (a.responder_cpu, a.verifier_cpu) if c is not None}
     if reserved:
         os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - reserved)
     out = Path(a.out)
-    spec = serve_spec(a, out)
-    spec_path = out / f"pous-{a.tag}.json"
-    _write(spec_path, spec)
+    settings = serve_config(a, out)
     t0 = time.perf_counter()
-    engine = build(a.case, spec_path, engine_args=engine_args(a))
-    llm = engine.llm
-    doc: dict[str, Any] = {"build_s": time.perf_counter() - t0, "spec": spec, "info_after_load": llm.collective_rpc("pous_info")[0]}
+    engine, comp = build(a.case, f"pous:{a.scheme}", settings, engine_args=engine_args(a))
+    opt = comp.get("pous")
+    names = [t.name for t in opt.store.layout.tensors if t.name.startswith(LAYER0)]
+    doc: dict[str, Any] = {"build_s": time.perf_counter() - t0, "settings": {k: v for k, v in settings["pous"].items() if k != "drop_source"},
+                           "commitment": opt.commitment(), "info_after_load": {**_stats(opt), "scheme": a.scheme,
+                           "digests": {n: hashlib.sha256(opt.store.decode(n)).hexdigest() for n in names}}}
     if not a.drop_fraction:
         doc["outputs"] = generate(engine, a.max_tokens)
         if a.prefill or a.decode_tokens:
-            doc["throughput"] = throughput(engine, a, lambda: llm.collective_rpc("pous_info")[0])
-    raw = llm.collective_rpc("pous_leaves")[0]
-    (out / f"leaves-{a.tag}.bin").write_bytes(raw)
-    doc["root"] = MerkleTree([raw[i:i + 32] for i in range(0, len(raw), 32)]).root.hex()
-    port = llm.collective_rpc("pous_start_responder", args=("127.0.0.1", 0, -1 if a.responder_cpu is None else a.responder_cpu))[0]
-    _write(out / f"ready-{a.tag}.json", {"port": port, "pid": os.getpid(), "root": doc["root"]})
+            doc["throughput"] = throughput(engine, a, lambda: _stats(opt))
+    (out / f"leaves-{a.tag}.bin").write_bytes(opt.leaves())
+    doc["root"] = opt.commitment()["storage_root"]
+    _write(out / f"ready-{a.tag}.json", {"port": opt.info()["responder"]["port"], "pid": os.getpid(), "root": doc["root"]})
     stop = out / f"stop-{a.tag}"
     loops = []
     from vllm import SamplingParams
 
     while not stop.exists():
         t = time.perf_counter()
-        llm.generate(PROMPTS, SamplingParams(temperature=0.0, max_tokens=a.load_tokens), use_tqdm=False)
+        engine.llm.generate(PROMPTS, SamplingParams(temperature=0.0, max_tokens=a.load_tokens), use_tqdm=False)
         loops.append(time.perf_counter() - t)
-    doc["responder"] = llm.collective_rpc("pous_stop_responder")[0]
+    doc["info_end"] = _stats(opt)
+    comp.close()
+    doc["responder"] = opt.responder.result
     doc["serving_loops_during_audit_s"] = loops
-    doc["info_end"] = llm.collective_rpc("pous_info")[0]
     _write(out / f"serve-{a.tag}.json", doc)
 
 
@@ -243,14 +255,14 @@ def cmd_verify(a) -> None:
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
-    doc_vk, vk = load_vk(out)
-    scheme = pv.scheme_at(doc_vk["codec"], vk.params)
+    _, scheme, vk = load_vk(out)
     ready = _read(out / f"ready-{a.tag}.json")
     served = (out / f"leaves-{a.tag}.bin").read_bytes()
     doc: dict[str, Any] = {"server_root_matches_vk": setup.check_server_root(vk, bytes.fromhex(ready["root"])),
                            "blocks_differing": sum(served[32 * i:32 * i + 32] != leaf for i, leaf in enumerate(vk.leaves))}
     try:
-        doc.update(pv.run("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu, allowance=a.allowance))
+        doc.update(pv.run("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu,
+                          allowance=a.allowance))
     finally:
         (out / f"stop-{a.tag}").write_text("")
     _write(out / f"verify-{a.tag}.json", doc)
@@ -268,8 +280,8 @@ def _step(out: Path, name: str, args: list[str]) -> None:
 
 
 def _base(a) -> list[str]:
-    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--codec", a.codec, "--prefill", a.prefill,
-            "--decode-tokens", str(a.decode_tokens), "--kernels", a.kernels]
+    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--scheme", a.scheme, "--prefill", a.prefill,
+            "--decode-tokens", str(a.decode_tokens)]
 
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
@@ -278,8 +290,8 @@ def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
     for flag, cpu in (("--verifier-cpu", a.verifier_cpu), ("--responder-cpu", a.responder_cpu)):
         if cpu is not None:
             cpus += [flag, str(cpu)]
-    srv = _sub(["serve", *common, "--max-tokens", str(a.max_tokens), "--load-tokens", str(a.load_tokens),
-                "--layers-per-decode", str(a.layers_per_decode), *cpus, *extra], out / f"serve-{tag}.log")
+    srv = _sub(["serve", *common, "--max-tokens", str(a.max_tokens), "--load-tokens", str(a.load_tokens), *cpus, *extra],
+               out / f"serve-{tag}.log")
     t0 = time.time()
     while not (out / f"ready-{tag}.json").exists():
         if srv.poll() is not None or time.time() - t0 > a.timeout:
@@ -310,18 +322,18 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
     exact = compare(plain, hs.get("outputs") or [{}])
     served = load_info.get("digests") or {}
     ref = vk["reference_decode_layer0"]
-    keys = ("audit_of_record", "audits", "audits_accepted", "answers", "late", "wrong", "server_root_matches_vk", "blocks_differing")
+    keys = ("audit_of_record", "audits", "audits_accepted", "answers", "late", "wrong", "server_root_matches_vk", "blocks_differing",
+            "k", "research_mode", "gaps", "profile")
     result = {
-        "kind": "pous-vllm-e2e/v1", "model": a.case, "codec": load_info.get("codec"),
+        "kind": "pous-vllm-e2e/v2", "model": a.case, "scheme": load_info.get("scheme"),
         "setup": {"commit": _read(out / "commit.json"), "salt": vk["salt"], "vk_root": vk["root"], "verifier_encode_s": vk["encode_s"],
-                  "server_encode_s": load_info.get("encode_s"), "server_root": hs.get("root")},
-        "bit_exact": {**exact, "load_checks": load_info.get("checks"),
-                      "layer0_decoded_by_gpu": sorted(n for n in ref if n in served),
-                      "gpu_decode_equals_reference_decode_layer0": bool(set(ref) & set(served))
-                      and all(served[n] == d for n, d in ref.items() if n in served),
+                  "server_encode_s": load_info.get("encode_s"), "server_root": hs.get("root"), "gate": load_info.get("gate")},
+        "bit_exact": {**exact, "layer0_decoded_by_gpu": sorted(n for n in ref if n in served),
+                      "gpu_decode_equals_reference_decode_layer0": bool(ref) and set(ref) <= set(served)
+                      and all(served[n] == d for n, d in ref.items()),
                       "reference_decode_matches_w": vk["reference_decode_matches_w"]},
-        "in_process_responder": {"device_s": hv.get("device_s"), "server_s": hv.get("server_s"),
-                                 "device_over_deadline": hv.get("device_over_deadline"), "counts": hs.get("responder")},
+        "native_responder": {"device_s": hv.get("device_s"), "server_s": hv.get("server_s"),
+                             "device_over_deadline": hv.get("device_over_deadline"), "counts": hs.get("responder")},
         "verifier_round_trip_s": {"before": hv.get("rtt"), "after": hv.get("rtt_after")},
         "deadline": {k: hv.get(k) for k in ("deadline_ns", "allowance", "rtt_allowance_ns", "limit_ns", "k",
                                             "audits_accepted_under_allowance")},
@@ -337,7 +349,7 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
     rec = hv.get("audit_of_record") or {}
     result["verdicts"] = {
         "outputs_bit_exact": bool(exact["token_ids_equal"] and exact["logprobs_equal"]),
-        "load_checks_passed": bool(load_info.get("checks")) and all(load_info["checks"].values()),
+        "twin_reproduced_pinned_vector": bool((load_info.get("gate") or {}).get("digest")),
         "gpu_encode_equals_reference": bool(hv.get("server_root_matches_vk")),
         "gpu_decode_equals_reference_layer0": result["bit_exact"]["gpu_decode_equals_reference_decode_layer0"],
         "responder_device_within_deadline": hv.get("device_over_deadline") == 0 and bool(hv.get("answers")),
@@ -350,7 +362,7 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
 def research_result(result: dict[str, Any], a, passed: bool) -> dict[str, Any]:
     """`result.json` of `tools/research` (`research/result/v0.1`); the details stay in `pous/pous_e2e.json`."""
     rtt, el = result["verifier_round_trip_s"]["before"] or {}, result["honest"]["elapsed_s"] or {}
-    dev = result["in_process_responder"]["device_s"] or {}
+    dev = result["native_responder"]["device_s"] or {}
     rows = [("rtt_p50", rtt.get("p50"), "s"), ("rtt_p99.9", rtt.get("p99.9"), "s"), ("rtt_max", rtt.get("max"), "s"),
             ("answer_p50", el.get("p50"), "s"), ("answer_p99.9", el.get("p99.9"), "s"), ("answer_max", el.get("max"), "s"),
             ("device_max", dev.get("max"), "s"), ("limit", (result["deadline"]["limit_ns"] or 0) / 1e9, "s"),
@@ -364,7 +376,7 @@ def research_result(result: dict[str, Any], a, passed: bool) -> dict[str, Any]:
                  (f"pous_{tag}", s["pous_tokens_per_s"], "token/s")]
     failed = sorted(k for k, v in result["verdicts"].items() if not v)
     return {"schema": "research/result/v0.1", "run_id": a.run_id,
-            "workload_fingerprint": {"case": a.case, "codec": result["codec"], "salt": result["setup"]["salt"],
+            "workload_fingerprint": {"case": a.case, "scheme": result["scheme"], "salt": result["setup"]["salt"],
                                      "vk_root": result["setup"]["vk_root"], "commitment": result["setup"]["commit"]["commitment"]},
             "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous e2e",
                            "detail": "all verdicts hold" if passed else "failed: " + ", ".join(failed),
@@ -377,9 +389,8 @@ def cmd_e2e(a) -> None:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    _step(out, "commit", ["commit", *_base(a)])
-    _step(out, "vk", ["vk", *_base(a), "--workers", str(a.workers)])
     _step(out, "plain", ["plain", *_base(a), "--max-tokens", str(a.max_tokens)])
+    _step(out, "vk", ["vk", *_base(a), "--workers", str(a.workers)])
     honest = _audit_round(out, "honest", [], a)
     negative = _audit_round(out, "dropped", ["--drop-fraction", str(a.drop_fraction or 0.1)], a)
     result = summarize(out, honest, negative, a)
@@ -401,10 +412,8 @@ class _Common:
                           help="prefill configurations the plain and honest serve roles time, length x batch, comma separated (e.g. 2048x4)")
     decode_tokens: int = option("--decode-tokens", type=int, default=0,
                                 help="decode steps the honest serve role times at batch 1 (plain: 64); 0 times no decode")
-    kernels: str = option("--kernels", default="",
-                          help="GPU kernel flags merged into the serve spec (engine/pous/quant.py's keys), as JSON; default the kernels' defaults")
-    codec: str = option("--codec", default="p3/v1",
-                        help="the reference codec served and audited (engine/pous/twins.reference): p3/v1, dense-chain/v1, band-chain/d12/v1")
+    scheme: str = option("--scheme", "--codec", default="band-chain/d12/v1",
+                         help="the verity_pous scheme served and audited, one with a GPU twin (engine/pous/twins.py)")
     tag: str = option("--tag", default="honest", help="the server round: honest or dropped")
     max_tokens: int = option("--max-tokens", type=int, default=6, help="tokens per prompt of the compared generation")
     load_tokens: int = option("--load-tokens", type=int, default=2, help="tokens per prompt of the serving loop during the audit")
@@ -416,8 +425,6 @@ class _Common:
     verifier_cpu: int | None = option("--verifier-cpu", type=int, default=None, help="pin the timed audit to this core")
     responder_cpu: int | None = option("--responder-cpu", type=int, default=None,
                                        help="pin the native responder to this core; the server's other threads avoid it and the verifier's")
-    layers_per_decode: int = option("--layers-per-decode", type=int, default=1,
-                                    help="transformer layers decoded together at their first use in a forward pass")
     result: str | None = option("--result", default=None, help="also write the research result.json here (e2e)")
     run_id: str | None = option("--run-id", default=None, help="the research run id result.json names (e2e)")
     allowance: str = option("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
@@ -432,14 +439,13 @@ def _cmd(name: str, doc: str):
 
 
 COMMANDS = {
-    "commit": _cmd("commit", "server: commit to W before any salt exists"),
+    "plain": _cmd("plain", "the server's plaintext: the generation, and W of record with its commitment before any salt"),
     "vk": _cmd("vk", "verifier: draw the salt, encode W with the reference, keep vk"),
-    "plain": _cmd("plain", "the plaintext model's generation"),
-    "serve": _cmd("serve", "server: quantization='pous', the generation, then the native responder under serving load"),
+    "serve": _cmd("serve", "server: protocols pous:<scheme> on the GPU codec, the generation, then the native responder under serving load"),
     "verify": _cmd("verify", "verifier: root check, round-trip calibration, timed audits"),
     "e2e": _cmd("e2e", "every role in order, the negative control, and the verdicts"),
 }
 
 
 def main(a) -> int:
-    return {"commit": cmd_commit, "vk": cmd_vk, "plain": cmd_plain, "serve": cmd_serve, "verify": cmd_verify, "e2e": cmd_e2e}[a.cmd](a) or 0
+    return {"plain": cmd_plain, "vk": cmd_vk, "serve": cmd_serve, "verify": cmd_verify, "e2e": cmd_e2e}[a.cmd](a) or 0

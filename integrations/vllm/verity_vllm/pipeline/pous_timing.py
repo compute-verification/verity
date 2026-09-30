@@ -1,5 +1,5 @@
-"""Timing through vLLM's engine, shared by `verity-vllm pous-bench` and `verity-vllm pous e2e`: fixed-token prompts, each engine
-step timed, and the two configurations POUS slowdowns are reported for: prefill tokens/s over the time to every first token,
+"""Timing through vLLM's engine for `verity-vllm pous e2e` (pous-bench's method): fixed-token prompts, each engine step
+timed, and the two configurations POUS slowdowns are reported for: prefill tokens/s over the time to every first token,
 decode tokens/s over the steps after it."""
 from __future__ import annotations
 

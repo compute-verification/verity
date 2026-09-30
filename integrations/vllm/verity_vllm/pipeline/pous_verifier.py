@@ -169,7 +169,7 @@ def run(host: str, port: int, scheme: protocol.Scheme, vk: VerifierKey, *, audit
     under = {q: sum(all(a.correct and a.elapsed_ns <= audit.DEADLINE_NS + int(rtt[q] * 1e9) for a in res.answers) for _, res in results)
              for q in ("p50", "p99.9", "max")}
     return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "allowance": allowance, "rtt_allowance_ns": allowance_ns,
-            "limit_ns": first_v.limit_ns, "k": first_v.k, "scheme": scheme.name, "research": research, "gaps": list(first_v.gaps),
+            "limit_ns": first_v.limit_ns, "k": first_v.k, "scheme": scheme.name, "research_mode": research, "gaps": list(first_v.gaps),
             "profile": first_v.profile().to_json() if first.accepted else None,
             "audits_accepted_under_allowance": under,
             "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()},

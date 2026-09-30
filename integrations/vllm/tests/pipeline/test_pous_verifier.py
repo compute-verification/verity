@@ -63,7 +63,7 @@ def test_honest_passes_and_dropped_fails(name):
     blocks = [b for seg in segments for b in seg]
     honest = _run(blocks, scheme, vk)
     assert honest["audit_of_record"]["accepted"] and honest["wrong"] == 0 and honest["rtt"]["n"] == 20
-    assert honest["scheme"] == name and honest["k"] == 16 and honest["research"] and honest["profile"]["gaps"]
+    assert honest["scheme"] == name and honest["k"] == 16 and honest["research_mode"] and honest["profile"]["gaps"]
     assert honest["rtt_allowance_ns"] == int(honest["rtt"]["p99.9"] * 1e9)
     assert honest["device_s"]["max"] == 1e-6 and honest["server_s"]["max"] == 2e-6
     dropped = _run([bytes(len(b)) if i % 2 else b for i, b in enumerate(blocks)], scheme, vk)

@@ -1,5 +1,5 @@
 """POUS as a protocol option: the served model's linear weights live only as their encoding ``C``, decoded on every use,
-with an in-process responder for the timed audit (`verity_pous`, `protocols/pous/PROTOCOL.md`).
+with a responder for the timed audit (`verity_pous`, `protocols/pous/PROTOCOL.md`).
 
 Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
 
@@ -8,27 +8,35 @@ Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
   in module order (`verity_pous.layout.Layout`).  Linears only: whether the embedding and the tied head are encoded too
   is open with Daniel, and `commitment` says what is covered.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): the commitment to ``W`` before any
-  salt exists (`protocol.commit`), recorded in the composition record's ``weights``.
-* **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt, drawn after it from
-  the settings' ``salt_source`` (the verifier's secret or a beacon round; without one a local random, recorded as
-  such); ``C = Enc(W, salt)`` with the scheme's reference codec, on the CPU; the storage root over ``C``; then, through
-  the option's tagged `Hooks`, the plaintext released (a service whose stop restores ``W`` from ``C``), each layer's
-  ``quant_method.apply`` wrapped (decode the layer's weight from ``C`` and call the inner ``apply`` with a proxy layer
-  holding it), and the responder started last.  Uninstall runs newest first: responder, wrappers, then ``W`` restored.
+  salt exists (`protocol.commit`), recorded in the composition record's ``weights``.  `weights_of_record` is the same
+  ``W`` for a verifier that holds the plaintext model.
+* **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt, the settings'
+  ``salt`` (drawn by the verifier after the commitment), else drawn after it from ``salt_source`` (the verifier's secret or
+  a beacon round; without either a local random, recorded as such); ``C = Enc(W, salt)``; the storage root over ``C``;
+  then, through the option's tagged `Hooks`, the plaintext released (a service whose stop restores ``W`` from ``C``), each
+  layer's ``quant_method.apply`` wrapped (decode the layer's weight from ``C`` and call the inner ``apply`` with a proxy
+  layer holding it), and the responder started last.  Uninstall runs newest first: responder, wrappers, then ``W`` restored.
+* **The codec** (settings ``codec``): ``reference`` encodes and decodes with the scheme's reference on the CPU, and answers
+  in process; ``gpu`` keeps ``C`` in device memory and uses the scheme's GPU twin (`engine/pous/twins.py`, keyed by the
+  scheme id), which must first reproduce the scheme's pinned vector (`twins.gate`); a layer's weight is decoded on the
+  device from the segments it overlaps, and with ``port`` set the native responder (`engine/pous/pous_native.cu`) answers
+  challenges from ``C`` in device memory on its own socket and core (``host``, ``port``, ``responder_cpu``).
+  ``drop_fraction`` (the negative control) zeroes that fraction of ``C``'s blocks after encoding, drawn through
+  `verity.randomness` from ``drop_source``.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
   only ``C``.
 * **Weights of record:** `Installed.weights` (``decoded``) returns the released plaintext by ``named_parameters`` name,
   tied names mapped to one tensor, which the Commit's replay reads (`protocol_options.weights_view`).
 
-What is not here yet: the GPU codec and the batched decode once per forward (#172, #188's kernels), the native
-responder on its own core and port, and TP.
+What is not here yet: the batched decode once per forward (the band kernels), and TP.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import time
 from collections.abc import Callable, Hashable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -37,8 +45,12 @@ from verity_vllm.protocol_options.interface import Context, Option, Target
 
 NAME = "pous"
 DEFAULT_SCHEME = "band-chain/d12/v1"
-SETTINGS = ("salt_source", "responder_cpu", "port", "decode_group", "experimental")
+SETTINGS = ("salt_source", "salt", "codec", "build_dir", "host", "port", "responder_cpu", "drop_fraction", "drop_source",
+            "decode_group", "experimental")
+CODECS = ("reference", "gpu")
 COVERS = "linears"
+SALT_BYTES = 24
+DROP_DOMAIN = "verity/pous-vllm/negative-control-drop/v1"
 
 
 def schemes() -> tuple[str, ...]:
@@ -60,6 +72,26 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
         out.append(f"{scheme} is experimental ({reason}); settings pous.experimental = true runs it anyway")
     if own.get("decode_group", "all") != "all":
         out.append(f"decode_group {own['decode_group']!r}: only 'all' is built (each layer decodes on its own use)")
+    codec = own.get("codec", "reference")
+    if codec not in CODECS:
+        out.append(f"codec {codec!r}: one of {', '.join(CODECS)}")
+    if codec == "gpu":
+        from verity_vllm.engine.pous import twins
+        try:
+            twins.of(scheme)
+        except NotImplementedError as e:
+            out.append(str(e))
+        if not own.get("build_dir"):
+            out.append("codec gpu needs build_dir, where the native kernels are built")
+    elif own.get("port") is not None:
+        out.append("port: the native responder serves C from device memory, so it needs codec gpu")
+    salt = own.get("salt")
+    if salt is not None and (not isinstance(salt, str) or len(salt) != 2 * SALT_BYTES
+                             or any(c not in "0123456789abcdef" for c in salt.lower())):
+        out.append(f"salt: {SALT_BYTES} bytes as hex")
+    frac = own.get("drop_fraction", 0.0)
+    if not isinstance(frac, (int, float)) or isinstance(frac, bool) or not 0.0 <= frac < 1.0:
+        out.append("drop_fraction: a number in [0, 1)")
     return tuple(out)
 
 
@@ -109,7 +141,7 @@ def _base(scheme: str) -> Any:
 
 @dataclass
 class _Store:
-    """``W`` laid out over the unique weights, its commitment, the salt and ``C``'s blocks."""
+    """``W`` laid out over the unique weights, its commitment, the salt and ``C``'s blocks, on the CPU."""
 
     scheme: Any
     layout: Any
@@ -118,11 +150,20 @@ class _Store:
     blocks: list[bytes]
     salt_source: str
     storage_root: bytes = b""
+    leaves: list[bytes] = field(default_factory=list)
+    dropped: list[int] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
+    stats: dict[str, Any] = field(default_factory=lambda: {"codec": "reference"})
 
     def decode(self, name: str) -> bytes:
         from verity_pous import protocol
         return protocol.decode_tensor(self.scheme, self.layout, self.salt, name, self.blocks.__getitem__)
+
+    def tensor(self, name: str, meta: Any) -> Any:
+        return TENSORS.from_bytes(self.decode(name), meta)
+
+    def block(self, i: int) -> bytes:
+        return self.blocks[i]
 
 
 def _layers(model: Any) -> list[tuple[str, Any]]:
@@ -170,16 +211,133 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
             "layout": hashlib.sha256(json.dumps(layout.manifest(), sort_keys=True).encode()).hexdigest()}
 
 
-def _encode(layout: Any, scheme: Any, w: bytes, commitment: bytes, source: bytes | None) -> _Store:
-    from verity_pous import protocol
-    from verity_pous.verifier import VerifierKey, leaf_hash
+def weights_of_record(scheme: str, model: Any) -> tuple[Any, Any, bytes, bytes]:
+    """``W`` as `install` lays it out, for a verifier that holds the plaintext model: the layout, the scheme at its size, ``W``
+    and the commitment to it."""
+    _, _, weights, _ = _plaintext(f"{NAME}:{scheme}", model)
+    return _commit(scheme, weights)
 
-    salt = protocol.draw_salt(source if source is not None else os.urandom(32), commitment)
+
+def _salt(salt: bytes | None, source: bytes | None, commitment: bytes) -> tuple[bytes, str]:
+    """The salt and where it came from: the verifier's, else drawn after the commitment from the settings' source, else local."""
+    from verity_pous import protocol
+    if salt is not None:
+        return salt, "settings (the verifier's salt)"
+    if source is not None:
+        return protocol.draw_salt(source, commitment), "settings"
+    return protocol.draw_salt(os.urandom(32), commitment), "local-random (placeholder)"
+
+
+def _drop(n_blocks: int, salt: bytes, frac: float, source: str | None) -> list[int]:
+    """The negative control's blocks: ``frac`` of ``C``'s, drawn through `verity.randomness` from ``source``."""
+    if frac <= 0:
+        return []
+    from verity.randomness import derive
+    key = derive(bytes.fromhex(source) if source else os.urandom(32), DROP_DOMAIN, {"salt": salt})
+    return sorted(key.subset(int(round(frac * n_blocks)), n_blocks, ()))
+
+
+def _root(params: Any, salt: bytes, blocks: list[bytes]) -> tuple[list[bytes], bytes]:
+    from verity_pous.verifier import VerifierKey, leaf_hash
+    leaves = [leaf_hash(params, salt, i, b) for i, b in enumerate(blocks)]
+    return leaves, VerifierKey.from_leaves(params, salt, leaves).root
+
+
+def _encode(layout: Any, scheme: Any, w: bytes, commitment: bytes, source: bytes | None, salt: bytes | None = None,
+            frac: float = 0.0, drop_source: str | None = None) -> _Store:
+    from verity_pous import protocol
+
+    salt, how = _salt(salt, source, commitment)
     blocks = [b for seg in protocol.encode(scheme, w, salt) for b in seg]
+    dropped = _drop(len(blocks), salt, frac, drop_source)
+    for i in dropped:
+        blocks[i] = bytes(len(blocks[i]))
+    leaves, root = _root(scheme.params, salt, blocks)
+    return _Store(scheme, layout, salt, commitment, blocks, how, root, leaves, dropped)
+
+
+@dataclass
+class _DeviceStore:
+    """``C`` in device memory (``[segments, blocks per segment, block bytes]``) under the scheme's GPU twin, its segment tags,
+    and the per-tensor decode on the device."""
+
+    scheme: Any
+    layout: Any
+    salt: bytes
+    commitment: bytes
+    salt_source: str
+    c: Any
+    tags: Any
+    decode_fn: Callable[[Any, Any], Any]
+    storage_root: bytes = b""
+    leaves: list[bytes] = field(default_factory=list)
+    dropped: list[int] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
+    stats: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def n_blocks(self) -> int:
+        return self.scheme.params.blocks
+
+    def tensor(self, name: str, meta: Any) -> Any:
+        """The tensor `name`, decoded on the device from the segments it overlaps."""
+        import torch
+
+        t0 = time.perf_counter()
+        p = self.layout.params
+        r, pl = self.layout.segments(name), self.layout.placement(name)
+        segs = torch.arange(r.start, r.stop, device=self.c.device)
+        flat = self.decode_fn(self.c[segs], self.tags[segs]).reshape(-1)
+        start = pl.offset - r.start * p.segment_bytes
+        shape, dtype, device = meta
+        out = flat[start:start + pl.size].clone().view(dtype).reshape(shape).to(device)
+        self.stats["decodes"] += 1
+        self.stats["decode_s"] += time.perf_counter() - t0
+        self.stats["decoded_bytes"] += len(r) * p.segment_bytes
+        return out
+
+    def decode(self, name: str) -> bytes:
+        import torch
+        size = self.layout.placement(name).size
+        return self.tensor(name, ((size,), torch.uint8, self.c.device)).cpu().numpy().tobytes()
+
+    def block(self, i: int) -> bytes:
+        return self.c.view(self.n_blocks, -1)[i].cpu().numpy().tobytes()
+
+
+def _device_store(layout: Any, scheme: Any, w: bytes, commitment: bytes, own: Mapping[str, Any], *, device: Any = None,
+                  twin: tuple[Callable, Callable] | None = None, tags: Callable | None = None,
+                  gate: Callable[[str, Any], dict[str, Any]] | None = None) -> _DeviceStore:
+    """``C = Enc(W, salt)`` on the device with the scheme's GPU twin, once the twin reproduced its pinned vector; the negative
+    control's drop; the leaves and the storage root from one host copy of ``C``.  `device`, `twin`, `tags` and `gate` replace
+    the CUDA device, the kernels (`twins.of(...).load()`), `codec.segment_tags` and `twins.gate` (the CPU tests)."""
+    import torch
+
+    if twin is None:
+        from verity_vllm.engine.pous import codec, native, twins
+        native.load(own["build_dir"])
+        device = torch.device("cuda", torch.cuda.current_device())
+        twin, tags, gate = twins.of(scheme.name).load(), codec.segment_tags, twins.gate
+    gated = gate(scheme.name, device)
+    salt, how = _salt(bytes.fromhex(own["salt"]) if own.get("salt") else None,
+                      bytes.fromhex(own["salt_source"]) if own.get("salt_source") else None, commitment)
     p = scheme.params
-    root = VerifierKey.from_leaves(p, salt, [leaf_hash(p, salt, i, b) for i, b in enumerate(blocks)]).root
-    return _Store(scheme, layout, salt, commitment, blocks, "settings" if source is not None else "local-random (placeholder)",
-                  root)
+    t0 = time.perf_counter()
+    seg_tags = tags(salt, list(range(p.segments)), device)
+    wt = torch.frombuffer(bytearray(w), dtype=torch.uint8).to(device).view(p.segments, p.blocks_per_segment, p.block_bytes)
+    c = twin[0](wt, seg_tags)
+    del wt
+    if device is not None and torch.device(device).type == "cuda":
+        torch.cuda.synchronize()
+    encode_s = time.perf_counter() - t0
+    dropped = _drop(p.blocks, salt, float(own.get("drop_fraction") or 0.0), own.get("drop_source"))
+    if dropped:
+        c.view(p.blocks, -1)[torch.tensor(dropped, dtype=torch.long, device=c.device)] = 0
+    host = c.contiguous().view(p.blocks, -1).cpu().numpy()
+    leaves, root = _root(p, salt, [host[i].tobytes() for i in range(p.blocks)])
+    stats = {"codec": f"GPU twin of {scheme.name}", "gate": gated, "encode_s": encode_s, "dropped": len(dropped),
+             "decodes": 0, "decode_s": 0.0, "decoded_bytes": 0}
+    return _DeviceStore(scheme, layout, salt, commitment, how, c, seg_tags, twin[1], root, leaves, dropped, stats=stats)
 
 
 class _Proxy:
@@ -195,19 +353,24 @@ class _Proxy:
 
 @dataclass(eq=False)
 class PousOption(Option):
-    """The installed option: `answer` is the responder's reply to a challenge; ``weights()`` (`Option.decoded`) is the
-    released plaintext decoded from ``C``."""
+    """The installed option: `answer` is the in-process reply to a challenge; ``weights()`` (`Option.decoded`) is the
+    released plaintext decoded from ``C``; `leaves` is every block's leaf digest in block order; with the native responder,
+    ``info()["responder"]`` names its host and port."""
 
-    store: _Store | None = None
+    store: Any = None
     names: dict[int, str] = field(default_factory=dict)
     answered: int = 0
+    responder: Any = None
 
     def answer(self, index: int) -> bytes:
         if self.closed or self.store is None:
             raise RuntimeError(f"{self.name} is closed: its responder is stopped")
         self.answered += 1
         from verity_pous import protocol
-        return protocol.responder(self.store.scheme, self.store.blocks.__getitem__)(index)
+        return protocol.responder(self.store.scheme, self.store.block)(index)
+
+    def leaves(self) -> bytes:
+        return b"".join(self.store.leaves)
 
 
 def _qualnames(entry: str, model: Any, layers: list[tuple[str, Any]], names: dict[int, str]) -> dict[str, list[str]]:
@@ -231,6 +394,22 @@ def _wrapper(decoded: Callable[[Any], Any]) -> Callable[[Any], Any]:
     return make
 
 
+def _native_responder(store: _DeviceStore, own: Mapping[str, Any]) -> tuple[Callable[[], Any], Callable[[Any], Any]]:
+    """The native responder's start and stop: challenges answered from ``C`` in device memory, on its own socket and core."""
+    def start() -> Any:
+        from verity_vllm.engine.pous import native
+        p = store.scheme.params
+        r = native.ext().Responder(store.c.data_ptr(), p.blocks, p.block_bytes, store.c.device.index, own.get("host", "127.0.0.1"),
+                                   int(own["port"]), int(own.get("responder_cpu", -1)))
+        r.start()
+        return r
+
+    def stop(r: Any) -> dict[str, int]:
+        r.stop()
+        return {"answered": int(r.answered()), "pings": int(r.pings())}
+    return start, stop
+
+
 def install(scheme: str, target: Target) -> PousOption:
     entry = f"{NAME}:{scheme}"
     own = target.context.settings_of(NAME)
@@ -240,14 +419,18 @@ def install(scheme: str, target: Target) -> PousOption:
     committed = target.weight_commitments.get(entry)
     if committed is not None and committed.get("commitment") != commitment.hex():
         raise ValueError(f"{entry}: the weights changed after the composition committed to them (commit_weights)")
-    source = own.get("salt_source")
-    store = _encode(layout, sch, w, commitment, bytes.fromhex(source) if source else None)
+    if own.get("codec", "reference") == "gpu":
+        store = _device_store(layout, sch, w, commitment, own)
+    else:
+        source, salt = own.get("salt_source"), own.get("salt")
+        store = _encode(layout, sch, w, commitment, bytes.fromhex(source) if source else None,
+                        bytes.fromhex(salt) if salt else None, float(own.get("drop_fraction") or 0.0), own.get("drop_source"))
     store.meta = meta
 
     def plaintext() -> dict[str, Any]:
         out: dict[str, Any] = {}
         for name, qs in qualnames.items():
-            out.update(dict.fromkeys(qs, TENSORS.from_bytes(store.decode(name), meta[name])))
+            out.update(dict.fromkeys(qs, store.tensor(name, meta[name])))
         return out
 
     hooks = target.hooks(entry)
@@ -261,20 +444,28 @@ def install(scheme: str, target: Target) -> PousOption:
 
     def restore(held: list[Any]) -> None:
         for (_, m), p in zip(layers, held):
-            TENSORS.restore(p, TENSORS.from_bytes(store.decode(names[id(m)]), meta[names[id(m)]]))
+            TENSORS.restore(p, store.tensor(names[id(m)], meta[names[id(m)]]))
 
     hooks.service("plaintext released", release, restore)
-    decoded = lambda layer: TENSORS.from_bytes(store.decode(names[id(layer)]), meta[names[id(layer)]])  # noqa: E731
+    decoded = lambda layer: store.tensor(names[id(layer)], meta[names[id(layer)]])  # noqa: E731
     for qm in {id(m.quant_method): m.quant_method for _, m in layers}.values():
         hooks.wrap(qm, "apply", _wrapper(decoded))
-    hooks.service("responder", lambda: opt.answer, lambda handle: {"answered": opt.answered})
+    if own.get("port") is not None:
+        opt.responder = hooks.service("responder", *_native_responder(store, own))
+        responder: Any = {"kind": "native", "host": own.get("host", "127.0.0.1"), "port": int(opt.responder.handle.port()),
+                          "cpu": own.get("responder_cpu")}
+    else:
+        opt.responder = hooks.service("responder", lambda: opt.answer, lambda handle: {"answered": opt.answered})
+        responder = "in-process (placeholder)"
     opt.commits = {"scheme": store.scheme.name, "commitment": store.commitment.hex(), "segments": store.scheme.params.segments,
                    "salt": store.salt.hex(), "storage_root": store.storage_root.hex()}
     cert = store.scheme.certificate
-    opt.details = {"salt_source": store.salt_source, "blocks": len(store.blocks), "layers": len(layers),
+    opt.details = {"salt_source": store.salt_source, "blocks": store.scheme.params.blocks, "layers": len(layers),
                    "certificate": None if cert is None else cert.theorem, "experimental": store.scheme.experimental,
-                   "responder": "in-process (placeholder)", "codec": "verity_pous reference, CPU (placeholder)"}
+                   "responder": responder, "dropped": len(store.dropped), "stats": store.stats,
+                   "codec": store.stats["codec"] if own.get("codec") == "gpu" else "verity_pous reference, CPU (placeholder)"}
     return opt
 
 
-__all__ = ["DEFAULT_SCHEME", "NAME", "PousOption", "SETTINGS", "TENSORS", "install", "linear_types", "refusals", "schemes"]
+__all__ = ["DEFAULT_SCHEME", "NAME", "PousOption", "SETTINGS", "TENSORS", "install", "linear_types", "refusals", "schemes",
+           "weights_of_record"]

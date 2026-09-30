@@ -1,11 +1,10 @@
 """The GPU P3 codec (`engine/pous/codec.py`) against the reference `verity_pous` (its `reference` backend), piece by piece and
-on a whole 14.4 MB segment.  CUDA-only; the layout test runs anywhere.
+on a whole 14.4 MB segment.  CUDA-only; the twin registry and its gate run anywhere.
 """
 from __future__ import annotations
 
 import hashlib
 import json
-import struct
 
 import pytest
 from verity_pous.labels import from_bytes, salt_value, tag, to_bytes
@@ -14,8 +13,6 @@ from verity_pous.oracle import run as run_prog
 from verity_pous.params import OPERATING_POINT
 from verity_pous.primitives import key_program, key_query, reference
 from verity_pous.scheme import P3
-
-from verity_vllm.engine.pous import layout
 
 torch = pytest.importorskip("torch")
 needs_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="the P3 kernel needs a CUDA device")
@@ -32,29 +29,6 @@ M = P.block_bytes
 
 def _rows(t) -> list[bytes]:
     return [bytes(r) for r in t.cpu().tolist()]
-
-
-def test_layout_is_the_reference_layout_of_the_data_section(tmp_path):
-    body = bytes(range(256)) * 3
-    header = {"b": {"dtype": "BF16", "shape": [256], "data_offsets": [256, 768]},
-              "a": {"dtype": "BF16", "shape": [2, 64], "data_offsets": [0, 256]}, "__metadata__": {"format": "pt"}}
-    raw = json.dumps(header).encode()
-    path = tmp_path / "m.safetensors"
-    path.write_bytes(struct.pack("<Q", len(raw)) + raw + body)
-    ck = layout.read(path)
-    assert [(p.name, p.offset, p.size) for p in ck.layout.tensors] == [("a", 0, 256), ("b", 256, 512)]
-    assert ck.read_w() == ck.layout.pack({"a": body[:256], "b": body[256:]})
-    assert ck.segment_range(["a", "b"]) == (0, 1) and ck.shapes["a"] == (2, 64)
-    raw2 = json.dumps({"c": {"dtype": "BF16", "shape": [8], "data_offsets": [0, 16]}}).encode()
-    second = tmp_path / "m2.safetensors"
-    second.write_bytes(struct.pack("<Q", len(raw2)) + raw2 + bytes(range(16)))
-    two = layout.read([path, second])
-    assert two.layout.placement("c").offset == 768 and two.read_w()[:784] == body + bytes(range(16))
-    with pytest.raises(ValueError, match="two checkpoint files"):
-        layout.read([path, path])
-    path.write_bytes(struct.pack("<Q", len(raw)) + raw + body + b"x")
-    with pytest.raises(ValueError, match="trailing"):
-        layout.read(path)
 
 
 @needs_cuda

@@ -61,6 +61,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
+    "pous": ("verity_vllm.pipeline.pous_run", "POUS end to end through the protocol option: serve from C on the GPU, audit the live server"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
