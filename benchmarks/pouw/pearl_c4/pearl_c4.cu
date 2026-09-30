@@ -489,13 +489,13 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
   uint64_t* scratch = reinterpret_cast<uint64_t*>(wepi + 16 * CS * 4);
   uint32_t* zs = reinterpret_cast<uint32_t*>(wepi + 16 * CS * 4 + 1024);
 
-#pragma unroll
+  // c: region mi's C~ by selects, so that nothing indexes acc by mi when ptxas keeps this loop rolled (the hash mode's)
   for (int mi = 0; mi < 2; mi++) {
-    float u[8][4];
+    float c[8][4], u[8][4];
 #pragma unroll
     for (int j = 0; j < 8; j++)
 #pragma unroll
-      for (int i = 0; i < 4; i++) u[j][i] = acc[mi][j][i];
+      for (int i = 0; i < 4; i++) u[j][i] = c[j][i] = mi ? acc[1][j][i] : acc[0][j][i];
     if constexpr (MODE != M_PLAIN) {
       const uint32_t sPA = sa(smem), sPB = sa(smem + BM * 128);
 #pragma unroll
@@ -514,7 +514,7 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
     const int row = wrow + mi * 16 + g;
     if constexpr (MODE == M_HASH) {
       uint64_t dg[4];
-      ph::quad_msg_digest<2>([&](int arr, int j, int i) { return arr ? u[j][i] : acc[mi][j][i]; }, ph::pearlc::D_MESSAGE,
+      ph::quad_msg_digest<2>([&](int arr, int j, int i) { return arr ? u[j][i] : c[j][i]; }, ph::pearlc::D_MESSAGE,
                              scratch, dg);
       ulonglong2* dst = reinterpret_cast<ulonglong2*>(a.p[9] + ((size_t)(wrow + mi * 16 + ph::quad_row(lane)) * (N / 32) +
                                                                wcol / 32 + ph::quad_chunk(lane)) * 32);
@@ -523,10 +523,10 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
 
 #pragma unroll
       for (int j = 0; j < 8; j++) {
-        cs[g * CS + 8 * j + 2 * t] = acc[mi][j][0];
-        cs[g * CS + 8 * j + 2 * t + 1] = acc[mi][j][1];
-        cs[(g + 8) * CS + 8 * j + 2 * t] = acc[mi][j][2];
-        cs[(g + 8) * CS + 8 * j + 2 * t + 1] = acc[mi][j][3];
+        cs[g * CS + 8 * j + 2 * t] = c[j][0];
+        cs[g * CS + 8 * j + 2 * t + 1] = c[j][1];
+        cs[(g + 8) * CS + 8 * j + 2 * t] = c[j][2];
+        cs[(g + 8) * CS + 8 * j + 2 * t + 1] = c[j][3];
       }
       __syncwarp();
 #pragma unroll
@@ -563,8 +563,8 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
       *reinterpret_cast<uint32_t*>(Y + (size_t)(row + 8) * N + col) =
           f2bf(__fmul_rn(__fmul_rn(u[j][2], ia1), ib0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(u[j][3], ia1), ib1)) << 16;
       if (Cout) {
-        *reinterpret_cast<float2*>(Cout + (size_t)row * N + col) = make_float2(acc[mi][j][0], acc[mi][j][1]);
-        *reinterpret_cast<float2*>(Cout + (size_t)(row + 8) * N + col) = make_float2(acc[mi][j][2], acc[mi][j][3]);
+        *reinterpret_cast<float2*>(Cout + (size_t)row * N + col) = make_float2(c[j][0], c[j][1]);
+        *reinterpret_cast<float2*>(Cout + (size_t)(row + 8) * N + col) = make_float2(c[j][2], c[j][3]);
       }
       if (Uout) {
         *reinterpret_cast<float2*>(Uout + (size_t)row * N + col) = make_float2(u[j][0], u[j][1]);
