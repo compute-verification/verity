@@ -3,6 +3,7 @@
     research run --on <server> --project verity --campaign pouw --env CUDA_VISIBLE_DEVICES=7 \
         --tool benchmarks.pouw.fp4_redteam_tool:POUW_FP4_QUALITY -- python benchmarks/pouw/fp4_quality.py --device cuda ...
     research run ... --tool benchmarks.pouw.fp4_redteam_tool:POUW_FP4_CENSUS -- python benchmarks/pouw/fp4_census.py synth ...
+    research run ... --tool benchmarks.pouw.fp4_redteam_tool:POUW_FP4_ATTACK -- python benchmarks/pouw/kernels/fp4_attack.py peak ...
 
 Imports nothing but ``research.store.tool``.
 """
@@ -52,6 +53,17 @@ def parse_quality(argv: list[str]) -> dict:
             "variants": ns.variants, "sigma_c": ns.sigma_c, "device": ns.device, "seed": ns.seed}
 
 
+def parse_attack(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("cmd", nargs="?", default="peak")
+    ap.add_argument("--expect-uuid", default=None)
+    ap.add_argument("--warmup", type=int, default=3)
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--sustain-s", type=float, default=2.0)
+    ns, _ = ap.parse_known_args(argv)
+    return {"cmd": ns.cmd, "expect_uuid": ns.expect_uuid or "", "warmup": ns.warmup, "reps": ns.reps, "sustain_s": ns.sustain_s}
+
+
 POUW_FP4_CENSUS = Tool(name="pouw_fp4_census", version="1", command=["python", "benchmarks/pouw/fp4_census.py"],
                        closure=["benchmarks/pouw/fp4_census.py", "benchmarks/pouw/run_result.py", "packages/verity/src/verity/ml/tc/**",
                                 "packages/verity/src/verity/errors.py"],
@@ -61,3 +73,8 @@ POUW_FP4_QUALITY = Tool(name="pouw_fp4_quality", version="1", command=["python",
                         closure=["benchmarks/pouw/fp4_quality.py", "benchmarks/pouw/run_result.py"],
                         key_params=["model", "seqlen", "eval_windows", "variants", "sigma_c", "device", "seed"],
                         produces=["bench-result/v1", "run-files/v1"], parse=parse_quality)
+POUW_FP4_ATTACK = Tool(name="pouw_fp4_attack", version="1", command=["python", "benchmarks/pouw/kernels/fp4_attack.py"],
+                       closure=["benchmarks/pouw/kernels/fp4_attack.py", "benchmarks/pouw/kernels/fp4_attack.cu",
+                                "benchmarks/pouw/run_result.py"],
+                       key_params=["cmd", "expect_uuid", "warmup", "reps", "sustain_s"],
+                       produces=["bench-result/v1", "run-files/v1"], parse=parse_attack)

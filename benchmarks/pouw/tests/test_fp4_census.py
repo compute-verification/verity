@@ -60,3 +60,18 @@ def test_breakeven_has_no_paying_dense_rewrite():
     doc = C.breakeven(C.PRICES)
     dense = [r for r in doc["strassen"] if "sparse" not in r["sub_products"] and "hypothetical" not in r["sub_products"]]
     assert dense and not any(r["pays"] for r in dense)
+
+
+def test_attack_kernel_tables_and_fragments_are_consistent():
+    """fp4_attack's opcode/flop/word tables cover the three routes and the fragment layout matches the kernel's stride."""
+    from kernels import fp4_attack as A
+
+    assert set(A.KINDS) == set(A.OPCODES) == set(A.FLOP_PER_MMA) == set(A.WORDS_PER_SET) == set(A.PUBLIC_PRICE)
+    assert "SP" in A.OPCODES["sparse"] and "168128" in A.OPCODES["sparse"]      # the 2:4 m16n8k128 route
+    assert A.FLOP_PER_MMA == {"dense": 2 * 16 * 8 * 64, "sparse": 2 * 16 * 8 * 128, "int8": 2 * 16 * 8 * 32}
+    for kind in A.KINDS:
+        frag = A.fragments(kind, 2)
+        assert frag.shape[0] == 2 * 32 * A.NSETS * A.WORDS_PER_SET[kind]
+        assert frag.dtype == np.uint32
+    sp = A.fragments("sparse", 1).reshape(32, A.NSETS, A.WORDS_PER_SET["sparse"])
+    assert (sp[:, :, 8] == 0x44444444).all()                                   # valid 2:4 ordered metadata everywhere
