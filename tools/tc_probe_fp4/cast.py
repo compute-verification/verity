@@ -283,11 +283,11 @@ def main(args) -> int:
     corrupted = False
     for name, inp in sets.items():
         got = dev.run(op, inp)
-        if args.corrupt_word and not corrupted:
-            got = got.copy()
-            got[0] ^= 1
-            corrupted = True
         want, gated = reference(op, inp)
+        if args.corrupt_word and not corrupted and gated.any():  # a gated word: a record-only one would leave the gate untested
+            got = got.copy()
+            got[int(np.argmax(gated))] ^= 1
+            corrupted = True
         mism = gated & (got != want)
         rec_only = ~gated
         fam = {"outputs": int(len(got)), "gated": int(gated.sum()), "mismatches": int(mism.sum()),
