@@ -75,6 +75,15 @@ SELFTEST = (("near-cap", 128), ("rank1", 64), ("aligned-spikes-r64", 64))
 REF_FILES = ("pearlc_hot_start.py", "pearlc_exact_runs.py", "pearlc_promotion_fusion.py", "pearlc_row_compat.py")
 
 
+def jdump(x, **kw) -> str:
+    """json.dumps that writes numpy scalars as the Python numbers they hold."""
+    def scalar(o):
+        if isinstance(o, np.generic):
+            return o.item()
+        raise TypeError(f"{type(o).__name__} is not JSON serializable")
+    return json.dumps(x, default=scalar, **kw)
+
+
 def load_ref(ref: str, mode: str = "v2hot") -> dict:
     global HS, HV, C, D, P
     sys.path.insert(0, ref)
@@ -359,7 +368,7 @@ def unit(dev: Dev, pool: Pool, fh, out_dir: Path, u: dict, seed: int, mode: str)
         f = side["F"]
         for q in range(len(r)):
             w = C._check_finite(atom.step(int(side["C"][r[q], l[q]].view(np.uint32)), side["ep"][r[q]].tolist(), f[l[q]].tolist()))
-            bad += P.f32_to_fp8(P.f32_of_bits(w)) != codes[r[q], l[q]]
+            bad += int(P.f32_to_fp8(P.f32_of_bits(w)) != int(codes[r[q], l[q]]))
     res["form_gate"] = {"rows": 4, "elements": 8192, "mismatches": bad}
     res["H_closed_form_mismatches"] = closed_form_h(A["alpha"], A["rho"], u["H"], u["below_floor"])
     if grouped:
@@ -501,12 +510,12 @@ def main() -> None:
                     "clock_label": args.clock_label})
         stem = item.replace(":", "-")
         if not res["ok"]:
-            (out_dir / f"{stem}.failed.json").write_text(json.dumps(res, indent=1) + "\n")
+            (out_dir / f"{stem}.failed.json").write_text(jdump(res, indent=1) + "\n")
             emit(fh, {"gate_failed": {x: res[x] for x in res if x not in ("identity", "code")}})
             sys.exit(4)
         if item != "selftest":
-            (out_dir / "units" / item.split(":", 1)[1] / "unit.json").write_text(json.dumps(res, indent=1) + "\n")
-        (out_dir / f"{stem}.json").write_text(json.dumps(res, indent=1) + "\n")
+            (out_dir / "units" / item.split(":", 1)[1] / "unit.json").write_text(jdump(res, indent=1) + "\n")
+        (out_dir / f"{stem}.json").write_text(jdump(res, indent=1) + "\n")
         emit(fh, {"done": {x: res.get(x) for x in ("item", "rows_admitted", "H_exponents", "seconds")} |
                   {c: res["chains"][c]["planes_exact"] for c in res.get("chains", {})}})
         state["done"].append(item)
@@ -527,7 +536,7 @@ def write_summary(out_dir: Path, items: list[str], fh, mode: str) -> None:
     doc = {"tool": "pouw_sm120_exact_hot", "mode": mode, "rows": rows,
            "selftest": json.loads((out_dir / "selftest.json").read_text())["gates"]}
     path = out_dir / "summary.json"
-    path.write_text(json.dumps(doc, indent=1) + "\n")
+    path.write_text(jdump(doc, indent=1) + "\n")
     emit(fh, {"summary": len(rows)})
     run_result.write(path, True, "sm120-exact-hot", f"{len(rows)} units of both chains written for hot_search.py",
                      [("units", len(rows), "count")])

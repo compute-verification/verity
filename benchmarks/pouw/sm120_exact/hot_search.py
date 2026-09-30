@@ -43,7 +43,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(1, str(HERE.parent))
 import run_result  # noqa: E402
-from hot import FAMILIES, MODE_CHAINS  # noqa: E402
+from hot import FAMILIES, MODE_CHAINS, jdump  # noqa: E402
 
 PRICED = {8: [(2000, 2048), (1024, 4000), (1440, 2304), (1152, 2880), (960, 5184)],
           9: [(720, 1728), (864, 1440), (432, 2880), (360, 3456), (1152, 1152), (576, 2304), (288, 4608)],
@@ -285,8 +285,8 @@ def main() -> None:
         summary, arrays = search_item(pool, src / "units" / nm, chain, args.procs, args.mode)
         summary["seconds"] = round(time.time() - ts, 1)
         np.savez_compressed(out_dir / "search" / f"{key}.npz", **arrays)
-        (out_dir / "search" / f"{key}.json").write_text(json.dumps(summary, indent=1) + "\n")
-        fh.write(json.dumps({"done": key, "t0": {f: summary[f]["t0"] for f in ("priced", "free")},
+        (out_dir / "search" / f"{key}.json").write_text(jdump(summary, indent=1) + "\n")
+        fh.write(jdump({"done": key, "t0": {f: summary[f]["t0"] for f in ("priced", "free")},
                              "closest": {f: summary[f]["closest"] for f in ("priced", "free")},
                              "seconds": summary["seconds"]}) + "\n")
         fh.flush()
@@ -327,8 +327,8 @@ def write_summary(out_dir: Path, names: list[str], fh, mode: str = "v2hot") -> N
            "passed": hot_free == 0, "hot_units_with_free_shape": hot_free, "hot_units_with_priced_shape": hot_priced,
            "families": table, "shapes": {str(w): shapes_of[w] for w in widths}}
     path = out_dir / "summary.json"
-    path.write_text(json.dumps(doc, indent=1) + "\n")
-    fh.write(json.dumps({"summary": {x: doc[x] for x in ("passed", "hot_units_with_free_shape", "hot_units_with_priced_shape")}}) + "\n")
+    path.write_text(jdump(doc, indent=1) + "\n")
+    fh.write(jdump({"summary": {x: doc[x] for x in ("passed", "hot_units_with_free_shape", "hot_units_with_priced_shape")}}) + "\n")
     fam0 = "priced" if mode == "v2hot" else "free"
     zero_t0 = max(table[f"{f}.{zero}"][fam0]["t0"] for f in fams)
     run_result.write(path, True, "sm120-exact-hot-search",
