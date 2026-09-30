@@ -298,6 +298,13 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     columns inside their width, a lookup's low minterms inside its net's `B` width, at most 32 output bits),
     `stmtOf st`'s `A₀` and `B₀` are `placedA st` and `placedB st` (`stmtOf_A₀`, `stmtOf_B₀`, `stmtOf_eq_placed`). So a
     table class built over the placement's model is one over the refinement's (`setupH_templateTableClass_stmtOf`).
+  - **`PlacedWF` from the accept step** (`ExecPlacedWF.lean`). Every matrix `Sparse.ofRows` builds keeps its columns
+    inside its width (`ofRows_col_lt`). An accepted template's nets are its root and placed layouts (`netOfD`,
+    `placedNet`) and the rest of the circuit's (`Net.parse`, `Lookup.build`); all hold `Sparse.ofRows` outputs, and
+    `Lookup.build`'s lookup is inside its net (`build_placed`, from `decode_top`). A placed generated read's low minterms
+    stay inside its callee (`partReadsOk`), and the leaf is `default` (`setupH_leaf_typed`). So `setupH_placedWF` gives
+    `PlacedWF`, given that each generated read has at most 32 output bits, and `setupH_templateTableClass_ofSetup` is the
+    template's class over `stmtOf` (with `Refine.setupH_wf`'s `StmtWF`).
   - Still to prove:
     - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`).
 
