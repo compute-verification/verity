@@ -149,6 +149,16 @@
     "about": "A3 (UniformRandomBytes, uniform/io-getrandombytes): the operating system's bytes, which the live draw reads through IO.getRandomBytes, are independent and uniform",
     "mentions": ["IO.getRandomBytes"],
     "ack": []
+   },
+   "hm96-hiding": {
+    "about": "Assumptions.Hm96Hiding (zero knowledge's T1, hash-derived-key): (M·y, H(sp‖y)) is δ₁-close to (U, H(sp‖y)), the leftover hash lemma at the pinned key",
+    "mentions": ["PMF.tvDist", "Matrix.mulVec"],
+    "ack": []
+   },
+   "pad-nonvanishing": {
+    "about": "Assumptions.PadNonvanishing (zero knowledge): X_L + κ ≠ 0 on the level-0 domain, since Ŵ_cols(ω_q) is bit cols of q",
+    "mentions": ["AdditiveNTT.normalizedW", "Polynomial.eval"],
+    "ack": []
    }
   }
  },
@@ -3831,7 +3841,15 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  }
+  },
+  "FlockSoundness.ZK.Table.table_shvzk": {},
+  "FlockSoundness.ZK.Table.table_prefinal_translate": {},
+  "FlockSoundness.ZK.Table.table_prefinal_indep": {},
+  "FlockSoundness.ZK.Table.star": {},
+  "FlockSoundness.ZK.Table.inner_complete": {},
+  "FlockSoundness.ZK.padColumn_honest": {},
+  "FlockSoundness.ZK.padOnto_M1": {},
+  "FlockSoundness.ZK.ideal_leaf_swap": {}
  },
  "reads": {
   "Flock.CircuitType": {

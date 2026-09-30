@@ -305,6 +305,60 @@ noncomputable def sim (w0 : W) (σ : T.SimRand) : T.View :=
     ch, cm
     leavesP := fun r => (fun k => T.leafP (ch r k, cm r k) (d.saltsP r k), (d.leavesP r).2) }
 
+/-! ## What the theorems assume of the coins, the codes and the witness -/
+
+/-- The inverse of `W^r`, where it is invertible. -/
+noncomputable def Winv (r : Fin 2) : K → F × F := Function.invFun fun p : F × F => T.Wr r p.1 p.2
+
+/-- (★) solved for rep `r`'s extra lanes at opened position `q`: `Enc(y₁'^r)(q) + Pad(ȳ^r)(q) − Σ_l eq(r̄^r, l)·row_q[l]`. -/
+def xTarget (rows : Fin T.nS → Fin T.nL → F) (y1 : Fin 2 → Fin T.L → K) (yb : Fin 2 → Fin T.tpad → K) (q : Fin T.nS)
+    (r : Fin 2) : K :=
+  ∑ c, y1 r c * T.embed (T.E q c) + ∑ j, yb r j * T.embed (T.Gp q j) - ∑ l, T.rbar r l * T.embed (rows q l)
+
+/-- The level-0 padding reaches every vector of values at the opened positions (T4: at most `t_pad` distinct positions,
+where `X_L + κ` vanishes at none; `pad_onto_M1` for M1's code). -/
+def PadOnto : Prop := Function.Surjective fun μ : Fin T.tpad → F => fun q => ∑ j, μ j * T.Gp q j
+
+/-- Rep `r`'s pads-code padding reaches every vector of values at its opened positions (T4 with the monomials: at most
+192 distinct nonzero points). -/
+def PadsOnto : Prop := ∀ r, Function.Surjective fun p : Fin T.nPad → F => fun k => ∑ j, T.Cp r k j * p j
+
+/-- **The honest prover's pads satisfy the inner proof's constraint** (§2.4 line 16): `⟨λ, h⟩ = θ` in every run, `λ` and
+`θ` the verifier's replay on the prover's messages. Each of the ten constraints is affine in `h` and holds for an honest
+prover's `h` because its clear values pass the clear checks. This is where a valid witness is needed; Lemma A needs
+none. -/
+def InnerHolds (w : W) : Prop :=
+  ∀ (ω : T.Rand) (r : Fin 2), ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view w ω).pre
+
+/-! ## The pre-final view -/
+
+/-- **The pre-final view in world `W₀`** (§4.2): every message up to the last coin opening, with every level-0 leaf,
+every pads-tree leaf and every `τ`-commitment ideal. It holds `final_c + h_fc` too, which Lemma A's translation matches
+as well. -/
+@[ext] structure PreView where
+  sHat : Fin T.nC → Fin 128 → F
+  sReg : Fin T.nR → Fin 128 → F
+  masked : Fin 2 → Fin T.nE → F
+  y1 : Fin 2 → Fin T.L → K
+  ybar : Fin 2 → Fin T.tpad → K
+  lig : Fin 2 → VL
+  inner : Fin 2 → F × F
+  Y1 : Fin 2 → PadIdx T.nE → F
+  Y2 : Fin 2 → Fin T.nPad → F
+  leaves0 : (Fin T.nS → D) × (Fin T.nU → D)
+  tauCom : Fin 2 → D
+  leavesP : Fin 2 → (Fin T.nQ → D) × (Fin T.nPU → D)
+
+/-- The prover's pre-final messages in world `W₀`, on witness `w` and randomness `ω`. -/
+noncomputable def preView (w : W) (ω : T.Rand) : T.PreView :=
+  let v := T.view w ω
+  let s := ω.2.2.2.2.2.2
+  { sHat := v.sHat, sReg := v.sReg, masked := v.masked, y1 := v.y1, ybar := v.ybar, lig := v.lig, inner := v.inner
+    Y1 := v.Y1, Y2 := v.Y2
+    leaves0 := (fun q => T.ideal (s.2.1 q), fun q => T.ideal (s.2.2.1 q))
+    tauCom := fun r => T.ideal (s.2.2.2.2.2.2.2.1 r)
+    leavesP := fun r => (fun k => T.ideal (s.2.2.2.2.1 r k), fun k => T.ideal (s.2.2.2.2.2.1 r k)) }
+
 end Table
 
 end FlockSoundness.ZK

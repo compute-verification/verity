@@ -1,6 +1,7 @@
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import FlockSoundness.Game.Expect
 import FlockSoundness.Randomness
+import FlockSoundness.Model.Basic
 
 /-!
 # Named assumptions
@@ -10,9 +11,11 @@ uses one takes it as a hypothesis: the development declares no `axiom`, so `#pri
 lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
 vacuous but can never make Lean prove something false.
 
-There are four. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term. Assumption 3 is a
-hypothesis about the byte source the verifier draws its units from. Assumption 4 is a hypothesis about one test of
-`verity.randomness`'s keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret.
+There are four for soundness and two for zero knowledge. Assumption 2 is a hypothesis about one explicit finder, for the
+audit's link term. Assumption 3 is a hypothesis about the byte source the verifier draws its units from. Assumption 4 is a
+hypothesis about one test of `verity.randomness`'s keyed streams, for the PoUW window draw, and Assumption 5 one about the
+window's secret. Zero knowledge's are hm96 leaf hiding (T1, `Hm96Hiding`) and `X_L + κ ≠ 0` on the level-0 domain
+(`PadNonvanishing`).
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved
 (`mcaError_le_bchks25`, from DKT26). Merkle binding is proved too (VCVio's binding theorem,
 `Merkle`), and SHA-256's collision resistance enters the compiled theorem as an explicit
@@ -110,5 +113,30 @@ in a hardware RNG. The CSPRNG is idealized as exactly uniform; the true bound ca
 advantage. Re-read this on any other platform. -/
 def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
   ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
+
+/-- **Zero knowledge's T1 (`hash-derived-key`): hm96 leaves hide**, up to `δ₁` per leaf
+(`docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1).
+
+An hm96 leaf of digest `x` under salt `y` is `H(lp ‖ b ‖ c)` with `b = x ⊕ M·y` and `c = H(sp ‖ y)`: `My y` is `M(K*)·y` for
+the pinned key `K*`, and `c y` is the salt's own hash. An ideal leaf replaces `b` by a fresh uniform `U`. `δ₁` is the
+statistical distance between `(M·y, H(sp ‖ y))` and `(U, H(sp ‖ y))` for uniform `y` and `U`: no test tells them apart
+with advantage above `δ₁`. hm96 §3 proves `E_K[δ₁(K)] ≤ 2^-257` by the leftover hash lemma, and so `δ₁(K) ≤ 2^-193` for
+all but `2^-64` of keys; that the pinned key is one of them is the common-reference-string step (`hash-derived-key`),
+which a per-session key would remove. It is statistical: no random oracle.
+
+It is a predicate on one pair of functions, `M(K*)·` and `H(sp ‖ ·)`. `Table.view` takes the leaves the final message
+doesn't open as ideal (world `W₁`); this assumption, through §4.1's T1, is what moves the real prover there, at `δ₁` per
+leaf, and so gives Lemma B's `2·δ₁·N_hid`. -/
+def Hm96Hiding {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) (δ₁ : ℝ≥0∞) : Prop :=
+  ∀ E : B × C → Prop, prCoin (fun y : Y => E (My y, c y)) ≤ prCoin (fun p : B × Y => E (p.1, c p.2)) + δ₁
+
+/-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2, gap 12).
+
+M1 pads a level-0 lane with `(X_L + κ)·μ`, where `X_L = Ŵ_cols` and `κ` is the element `PAD_C`. On the domain `X_L(ω_q)` is
+bit `cols` of `q`, so it is 0 or 1, and `κ` lies outside GF(2); so `X_L + κ` is `κ` or `1 + κ`, never 0. M1's lane checked it
+on upstream's NTT. It is a fact about the concrete arithmetic that `Arith.Correct` doesn't list, stated here for the
+`2^(cols+1)` positions of a level-0 codeword; `ZK.padOnto_M1` takes it for Lemma B's row (ii). -/
+def PadNonvanishing {F K : Type} [Field F] [Field K] (A : Model.Arith F K) (cols : ℕ) (κ : F) : Prop :=
+  ∀ q < 2 ^ (cols + 1), A.What cols (A.omega q) + κ ≠ 0
 
 end FlockSoundness.Assumptions

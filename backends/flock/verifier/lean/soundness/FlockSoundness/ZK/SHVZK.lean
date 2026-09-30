@@ -38,9 +38,6 @@ variable {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W S
 
 /-! ## The identity (★) -/
 
-/-- The inverse of `W^r`, where it is invertible. -/
-noncomputable def Winv (r : Fin 2) : K → F × F := Function.invFun fun p : F × F => T.Wr r p.1 p.2
-
 theorem Wr_add (r : Fin 2) (a b a' b' : F) : T.Wr r (a + a') (b + b') = T.Wr r a b + T.Wr r a' b' := by
   simp only [Wr, map_add]
   ring
@@ -52,11 +49,6 @@ theorem Winv_Wr {r : Fin 2} (hW : Function.Bijective fun p : F × F => T.Wr r p.
 theorem Wr_Winv {r : Fin 2} (hW : Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (x : K) :
     T.Wr r (T.Winv r x).1 (T.Winv r x).2 = x :=
   Function.rightInverse_invFun hW.2 x
-
-/-- (★) solved for rep `r`'s extra lanes at opened position `q`: `Enc(y₁'^r)(q) + Pad(ȳ^r)(q) − Σ_l eq(r̄^r, l)·row_q[l]`. -/
-def xTarget (rows : Fin T.nS → Fin T.nL → F) (y1 : Fin 2 → Fin T.L → K) (yb : Fin 2 → Fin T.tpad → K) (q : Fin T.nS)
-    (r : Fin 2) : K :=
-  ∑ c, y1 r c * T.embed (T.E q c) + ∑ j, yb r j * T.embed (T.Gp q j) - ∑ l, T.rbar r l * T.embed (rows q l)
 
 /-- **The identity (★)** (§4.3): at every opened position, the folded witness lanes, rep `r`'s extra lanes weighted by
 `ρ^r` and the padding of `ȳ^r` give the codeword of `y₁'^r`. Solved for the extra lanes: `W^r` of them is `xTarget`. -/
@@ -149,14 +141,6 @@ def mask2 : (Fin 2 → (Fin T.nE → F) × F × F) →+ (Fin 2 → (Fin T.nE →
     simp only [Pi.add_apply, Prod.fst_add, Prod.snd_add, Prod.mk_add_mk]
     refine Prod.ext rfl (Prod.ext ?_ ?_) <;> simp only [] <;> ring
 
-/-- The level-0 padding reaches every vector of values at the opened positions (T4: at most `t_pad` distinct positions,
-where `X_L + κ` vanishes at none; `pad_onto_M1` for M1's code). -/
-def PadOnto : Prop := Function.Surjective fun μ : Fin T.tpad → F => fun q => ∑ j, μ j * T.Gp q j
-
-/-- Rep `r`'s pads-code padding reaches every vector of values at its opened positions (T4 with the monomials: at most
-192 distinct nonzero points). -/
-def PadsOnto : Prop := ∀ r, Function.Surjective fun p : Fin T.nPad → F => fun k => ∑ j, T.Cp r k j * p j
-
 variable [CharP F 2] in
 theorem maskHom_surjective (hrank : T.Rank) : Function.Surjective T.maskHom := by
   intro s
@@ -228,13 +212,6 @@ theorem mask3_surjective (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) : Func
 
 variable [CharP F 2]
 
-/-- **The honest prover's pads satisfy the inner proof's constraint** (§2.4 line 16): `⟨λ, h⟩ = θ` in every run, `λ` and
-`θ` the verifier's replay on the prover's messages. Each of the ten constraints is affine in `h` and holds for an honest
-prover's `h` because its clear values pass the clear checks. This is where a valid witness is needed; Lemma A needs
-none. -/
-def InnerHolds (w : W) : Prop :=
-  ∀ (ω : T.Rand) (r : Fin 2), ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view w ω).pre
-
 /-- **The prover's view in Lemma B's sampling order**: each component is a function of the earlier blocks plus a mask of
 its own block. -/
 noncomputable def realCore (w : W) (ω : T.Rand) : T.Core :=
@@ -258,43 +235,6 @@ noncomputable def simCore (w0 : W) (σ : T.SimRand) : T.Core :=
     (fun q l => ∑ c, T.lanes w0 σ.1.1 l c * T.E q c, fun r => T.y1 w0 σ.1.1 r, 0) + T.mask1 σ.2.1,
     0 + AddMonoidHom.snd _ _ σ.2.2.1,
     0 + T.simMask3 σ.2.2.2)
-
-variable [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed]
-  [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
-
-instance : DecidableEq T.Seeds := inferInstance
-instance : Fintype T.Seeds := inferInstance
-instance : DecidableEq T.Core := inferInstance
-instance : Fintype T.Core := inferInstance
-instance : DecidableEq T.Rand := inferInstance
-instance : Fintype T.Rand := inferInstance
-instance : DecidableEq T.SimRand := inferInstance
-instance : Fintype T.SimRand := inferInstance
-
-/-- **Lemma B's rows (i)–(iii) and (vi)–(x)**: the prover's view takes every value of its components equally often. -/
-theorem card_realCore (hrank : T.Rank) (hpad : T.PadOnto)
-    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
-    (w : W) (v : T.Core) :
-    #{ω | T.realCore w ω = v} = #{κ : T.Rand | T.maskHom κ.1 = 0 ∧ T.mask1 κ.2.1 = 0 ∧ T.mask2 κ.2.2.1 = 0 ∧
-      T.mask3 κ.2.2.2 = 0} :=
-  card_seq_masked4 T.maskHom T.mask1 T.mask2 T.mask3 (T.maskHom_surjective hrank) (T.mask1_surjective hpad hW)
-    T.mask2_surjective (T.mask3_surjective hpads hβ) (T.nu w)
-    (fun u => (fun q l => ∑ c, T.lanes w u l c * T.E q c, fun r => T.y1 w u r, 0))
-    (fun u b => fun r => (T.vals r w u b.2.1, 0, 0))
-    (fun _ _ h => (fun r k => ∑ i, T.Ch r k i * T.hFull (h r) i, 0, fun r => T.hFull (h r), 0)) v
-
-/-- **`S_shvzk` in the same form**: its output takes every value of the components equally often. -/
-theorem card_simCore (hpad : T.PadOnto) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
-    (w0 : W) (v : T.Core) :
-    #{σ | T.simCore w0 σ = v} = #{κ : T.SimRand | AddMonoidHom.snd _ _ κ.1 = 0 ∧ T.mask1 κ.2.1 = 0 ∧
-      AddMonoidHom.snd _ _ κ.2.2.1 = 0 ∧ T.simMask3 κ.2.2.2 = 0} :=
-  card_seq_masked4 (AddMonoidHom.snd T.Mask (Fin T.nC → Fin 128 → F)) T.mask1
-    (AddMonoidHom.snd (Fin 2 → (Fin T.nE → F) × F × F) (Fin 2 → (Fin T.nE → F) × F × F)) T.simMask3
-    (fun b => ⟨(0, b), rfl⟩) (T.mask1_surjective hpad hW) (fun b => ⟨(0, b), rfl⟩)
-    (fun b => ⟨((0, 0, 0, b.2.2.2), b.1, b.2.1, b.2.2.1), rfl⟩) 0
-    (fun u : T.Mask × (Fin T.nC → Fin 128 → F) =>
-      (fun q l => ∑ c, T.lanes w0 u.1 l c * T.E q c, fun r => T.y1 w0 u.1 r, 0)) (fun _ _ => 0)
-    (fun _ _ _ => 0) v
 
 /-- **The real view is `psi` of its components**: the determined rows are what the prover computes. The extra-lane
 entries by (★), `τ` by `⟨λ, h⟩ = θ`, `C_μ` by the linearity of the pads code; the region `ŝ` by H_reg. -/
@@ -374,48 +314,7 @@ theorem psi_simCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1
   · refine Prod.ext (funext fun q => ?_) rfl
     exact congrArg (fun x => T.leaf0 (T.rows w0 u μ0 q, x) (s.1 q)) (congrFun hxr q)
 
-/-- **Lemma B in world `W₁`** (`docs/zk-proof-public.md` §4.3; `table_shvzk`): at a fixed non-degenerate coin vector,
-for a witness `w` whose region claims send the public values (H_reg) and whose pads satisfy the inner proof's constraint
-(`InnerHolds`), the reference prover's view (`view`: the pre-final messages and the final message, hm96 leaves opened or
-ideal) and `S_shvzk(x, e)` (`sim`, on any dummy witness `w₀`) have the same distribution.
-
-Non-degenerate means the prover refuses nothing: the rank check passes (`Rank`), each `ρ^r` is independent over `F`
-(`W^r` bijective), and `β^r ≠ 0`. `PadOnto` and `PadsOnto` are T4 for the two codes at their opened positions. -/
-theorem table_shvzk (hrank : T.Rank) (hpad : T.PadOnto)
-    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
-    (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (w0 : W) :
-    SameDist (T.view w) (T.sim w0) :=
-  ((SameDist.of_const (T.card_realCore hrank hpad hW hpads hβ w) (T.card_simCore hpad hW w0)).comp T.psi).of_eq
-    (T.psi_realCore hW hβ w hreg hinner) (T.psi_simCore hW w0)
-
 /-! ## Lemma A: the pre-final view doesn't depend on the witness -/
-
-/-- **The pre-final view in world `W₀`** (§4.2): every message up to the last coin opening, with every level-0 leaf,
-every pads-tree leaf and every `τ`-commitment ideal. It holds `final_c + h_fc` too, which Lemma A's translation matches
-as well. -/
-@[ext] structure PreView where
-  sHat : Fin T.nC → Fin 128 → F
-  sReg : Fin T.nR → Fin 128 → F
-  masked : Fin 2 → Fin T.nE → F
-  y1 : Fin 2 → Fin T.L → K
-  ybar : Fin 2 → Fin T.tpad → K
-  lig : Fin 2 → VL
-  inner : Fin 2 → F × F
-  Y1 : Fin 2 → PadIdx T.nE → F
-  Y2 : Fin 2 → Fin T.nPad → F
-  leaves0 : (Fin T.nS → D) × (Fin T.nU → D)
-  tauCom : Fin 2 → D
-  leavesP : Fin 2 → (Fin T.nQ → D) × (Fin T.nPU → D)
-
-/-- The prover's pre-final messages in world `W₀`, on witness `w` and randomness `ω`. -/
-noncomputable def preView (w : W) (ω : T.Rand) : T.PreView :=
-  let v := T.view w ω
-  let s := ω.2.2.2.2.2.2
-  { sHat := v.sHat, sReg := v.sReg, masked := v.masked, y1 := v.y1, ybar := v.ybar, lig := v.lig, inner := v.inner
-    Y1 := v.Y1, Y2 := v.Y2
-    leaves0 := (fun q => T.ideal (s.2.1 q), fun q => T.ideal (s.2.2.1 q))
-    tauCom := fun r => T.ideal (s.2.2.2.2.2.2.2.1 r)
-    leavesP := fun r => (fun k => T.ideal (s.2.2.2.2.1 r k), fun k => T.ideal (s.2.2.2.2.2.1 r k)) }
 
 /-- **Lemma A's translation** (§4.2): for witnesses `w`, `w'` that carry the public region data, a translation of the
 prover's randomness maps `w`'s pre-final view to `w'`'s. Block by block, each amount reads only earlier blocks:
@@ -456,7 +355,6 @@ theorem table_prefinal_translate (hrank : T.Rank)
   have hy' : T.y1' w u R = T.y1' w' (u + Δ) (R + dR u) := funext fun r => funext fun c => hy r c
   apply PreView.ext
   all_goals simp only [preView, view, d₁, d₂, d₃, dv, Prod.mk_add_mk, Pi.add_apply, add_zero]
-  all_goals (try rfl)
   case sHat =>
     rw [map_add, hΔ]
     abel
@@ -476,6 +374,62 @@ theorem table_prefinal_translate (hrank : T.Rank)
     field_simp [hβ r]
     ring
 
+/-! ## Counting -/
+
+variable [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed]
+  [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
+
+instance : DecidableEq T.Seeds := inferInstance
+instance : Fintype T.Seeds := inferInstance
+instance : DecidableEq T.Core := inferInstance
+instance : Fintype T.Core := inferInstance
+instance : DecidableEq T.Rand := inferInstance
+instance : Fintype T.Rand := inferInstance
+instance : DecidableEq T.SimRand := inferInstance
+instance : Fintype T.SimRand := inferInstance
+
+omit [Fintype K] in
+/-- **Lemma B's rows (i)–(iii) and (vi)–(x)**: the prover's view takes every value of its components equally often. -/
+theorem card_realCore (hrank : T.Rank) (hpad : T.PadOnto)
+    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
+    (w : W) (v : T.Core) :
+    #{ω | T.realCore w ω = v} = #{κ : T.Rand | T.maskHom κ.1 = 0 ∧ T.mask1 κ.2.1 = 0 ∧ T.mask2 κ.2.2.1 = 0 ∧
+      T.mask3 κ.2.2.2 = 0} :=
+  card_seq_masked4 T.maskHom T.mask1 T.mask2 T.mask3 (T.maskHom_surjective hrank) (T.mask1_surjective hpad hW)
+    T.mask2_surjective (T.mask3_surjective hpads hβ) (T.nu w)
+    (fun u => (fun q l => ∑ c, T.lanes w u l c * T.E q c, fun r => T.y1 w u r, 0))
+    (fun u b => fun r => (T.vals r w u b.2.1, 0, 0))
+    (fun _ _ h => (fun r k => ∑ i, T.Ch r k i * T.hFull (h r) i, 0, fun r => T.hFull (h r), 0)) v
+
+omit [CharP F 2] [Fintype K] in
+/-- **`S_shvzk` in the same form**: its output takes every value of the components equally often. -/
+theorem card_simCore (hpad : T.PadOnto) (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2)
+    (w0 : W) (v : T.Core) :
+    #{σ | T.simCore w0 σ = v} = #{κ : T.SimRand | AddMonoidHom.snd _ _ κ.1 = 0 ∧ T.mask1 κ.2.1 = 0 ∧
+      AddMonoidHom.snd _ _ κ.2.2.1 = 0 ∧ T.simMask3 κ.2.2.2 = 0} :=
+  card_seq_masked4 (AddMonoidHom.snd T.Mask (Fin T.nC → Fin 128 → F)) T.mask1
+    (AddMonoidHom.snd (Fin 2 → (Fin T.nE → F) × F × F) (Fin 2 → (Fin T.nE → F) × F × F)) T.simMask3
+    (fun b => ⟨(0, b), rfl⟩) (T.mask1_surjective hpad hW) (fun b => ⟨(0, b), rfl⟩)
+    (fun b => ⟨((0, 0, 0, b.2.2.2), b.1, b.2.1, b.2.2.1), rfl⟩) 0
+    (fun u : T.Mask × (Fin T.nC → Fin 128 → F) =>
+      (fun q l => ∑ c, T.lanes w0 u.1 l c * T.E q c, fun r => T.y1 w0 u.1 r, 0)) (fun _ _ => 0)
+    (fun _ _ _ => 0) v
+
+/-- **Lemma B in world `W₁`** (`docs/zk-proof-public.md` §4.3; `table_shvzk`): at a fixed non-degenerate coin vector,
+for a witness `w` whose region claims send the public values (H_reg) and whose pads satisfy the inner proof's constraint
+(`InnerHolds`), the reference prover's view (`view`: the pre-final messages and the final message, hm96 leaves opened or
+ideal) and `S_shvzk(x, e)` (`sim`, on any dummy witness `w₀`) have the same distribution.
+
+Non-degenerate means the prover refuses nothing: the rank check passes (`Rank`), each `ρ^r` is independent over `F`
+(`W^r` bijective), and `β^r ≠ 0`. `PadOnto` and `PadsOnto` are T4 for the two codes at their opened positions. -/
+theorem table_shvzk (hrank : T.Rank) (hpad : T.PadOnto)
+    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
+    (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (w0 : W) :
+    SameDist (T.view w) (T.sim w0) :=
+  ((SameDist.of_const (T.card_realCore hrank hpad hW hpads hβ w) (T.card_simCore hpad hW w0)).comp T.psi).of_eq
+    (T.psi_realCore hW hβ w hreg hinner) (T.psi_simCore hW w0)
+
+omit [Fintype K] [DecidableEq K] in
 /-- **Lemma A** (§4.2, `card_fiber_eq_of_triShift` applied to its translation): at a fixed non-degenerate coin vector, in
 world `W₀`, the pre-final views on any two witnesses carrying the public region data take every value equally often.
 Lemma A needs no other property of the witnesses, so it holds for the dummy one. -/
