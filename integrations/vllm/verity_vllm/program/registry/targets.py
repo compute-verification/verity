@@ -63,8 +63,14 @@ TARGETS: dict[str, dict[str, Any]] = {
                            "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (Triton tl.dot on cc 12.0, which has no wgmma)",
                            "pipeline": "verity.ml.tc.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
                                        "verity.ml.tc.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
-                           "flash_attn_versions": (),
-                           "evidence": {}},
+                           "flash_attn_versions": (2,),
+                           "evidence": {"attention_fa2": "lane vllm-sm120-attention, RTX PRO 6000 (cc 12.0, 188 SMs, driver 595.91): property "
+                                                         "fa2_target_capture ef4b2584 (r20260930-033258-f611, art:d342a748): vLLM selects FLASH_ATTN "
+                                                         "FA2; _vllm_fa2_C carries sm_80 SASS + compute_80 PTX, so the kernel is the driver's JIT; "
+                                                         "kBlockM 64, kBlockN fa2_kblock_n(D) at D 64/96/128/256; MUFU ex2/rcp = core's tables on all "
+                                                         "2^32 inputs; 19,232 rows (122,228 heads) equal Attention_v2 with this DOT and Fa2InvSum on "
+                                                         "every finite head (Attention_v3: 997 differ); fa_tap_exactness 9dee6b6f / 9403e9fe guarded "
+                                                         "(r20260930-030755-9aab, art:592bc0ae)"}},
 }
 
 
