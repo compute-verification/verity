@@ -532,6 +532,7 @@ PH_HD void row_segment(const Lane& lane, uint64_t d[4]) {
 }
 // Pearl's ticket of a 16 x 16 subtile of C~: lane (rb, cb) folds its 4 x 4 block row-major, lane <- rotl32(lane·0x9E3779B1 +
 // bits, 13), and the 16 lanes are one keyed BLAKE3 block under key = subkey("jackpot", seed_A). word(r, c): C~'s bits.
+PH_HD uint32_t ticket_fold(uint32_t v, uint32_t w) { return rotr32(v * 0x9E3779B1u + w, 19); }
 template <class Word>
 PH_HD void ticket(const uint32_t key[8], const Word& word, uint32_t out[8]) {
   uint32_t z[16];
@@ -539,13 +540,91 @@ PH_HD void ticket(const uint32_t key[8], const Word& word, uint32_t out[8]) {
   for (int l = 0; l < 16; ++l) {
     uint32_t v = 0;
 #pragma unroll
-    for (int f = 0; f < 16; ++f) {
-      v = v * 0x9E3779B1u + word(4 * (l >> 2) + (f >> 2), 4 * (l & 3) + (f & 3));
-      v = rotr32(v, 19);
-    }
+    for (int f = 0; f < 16; ++f) v = ticket_fold(v, word(4 * (l >> 2) + (f >> 2), 4 * (l & 3) + (f & 3)));
     z[l] = v;
   }
   blake3_keyed_block(key, z, out);
+}
+
+// Pearl's tickets in an epilogue: a warp tile of 16·MI rows x 32 columns of C~ as m16n8 FP32 accumulators (frag(mi, j, i):
+// c[i] of m16 block mi, n8 block j) holds 2·MI subtiles, subtile s at rows 16(s >> 1) …, columns 16(s & 1) …. The warp writes
+// the tile to scratch (16·MI x 32 words of shared memory, 16-byte aligned; ticket_slot's swizzle: the fragment writes and the
+// folds' 4-word reads are both conflict-free), lane folds block lane % 16 of subtiles 2k + lane / 16 (k < MI), and lanes 0 … 2·MI - 1 hash one subtile each
+// into out(s, h[8]). Every lane of the warp calls it, converged.
+constexpr int TICKET_STRIDE = 20;   // the folded subtiles in scratch: 16 words each at a stride whose 8 reads miss each other
+PH_HD int ticket_slot(int row, int col) { return 32 * row + (col ^ (row & 3) << 3 ^ (row >> 2 & 1) << 4); }
+PH_HD uint32_t ticket_block(const uint32_t* scratch, int k, int lane) {
+  const int rb = (lane >> 2) & 3, cb = lane & 3, sc = lane >> 4;
+  uint32_t v = 0;
+#pragma unroll
+  for (int fr = 0; fr < 4; ++fr) {
+    const uint32_t* p = scratch + ticket_slot(16 * k + 4 * rb + fr, 16 * sc + 4 * cb);
+#ifdef __CUDA_ARCH__
+    const uint4 w = *reinterpret_cast<const uint4*>(p);
+#else
+    const struct { uint32_t x, y, z, w; } w = {p[0], p[1], p[2], p[3]};
+#endif
+    v = ticket_fold(ticket_fold(ticket_fold(ticket_fold(v, w.x), w.y), w.z), w.w);
+  }
+  return v;
+}
+template <int MI, class Frag>
+PH_HD void ticket_put(const Frag& frag, int lane, uint32_t* scratch) {
+  const int g = lane >> 2, t = lane & 3;
+#pragma unroll
+  for (int mi = 0; mi < MI; ++mi)
+#pragma unroll
+    for (int j = 0; j < 4; ++j)
+#pragma unroll
+      for (int h = 0; h < 2; ++h) {
+        uint32_t* p = scratch + ticket_slot(16 * mi + g + 8 * h, 8 * j + 2 * t);
+#ifdef __CUDA_ARCH__
+        *reinterpret_cast<uint2*>(p) = make_uint2(f32_bits(frag(mi, j, 2 * h)), f32_bits(frag(mi, j, 2 * h + 1)));
+#else
+        p[0] = f32_bits(frag(mi, j, 2 * h)), p[1] = f32_bits(frag(mi, j, 2 * h + 1));
+#endif
+      }
+}
+#ifdef __CUDACC__
+template <int MI, class Frag, class Out>
+__device__ __forceinline__ void warp_tickets(const Frag& frag, const uint32_t key[8], uint32_t* scratch, const Out& out) {
+  const int lane = threadIdx.x & 31;
+  ticket_put<MI>(frag, lane, scratch);
+  __syncwarp();
+  uint32_t z[MI];
+#pragma unroll
+  for (int k = 0; k < MI; ++k) z[k] = ticket_block(scratch, k, lane);
+  __syncwarp();
+#pragma unroll
+  for (int k = 0; k < MI; ++k) scratch[TICKET_STRIDE * (2 * k + (lane >> 4)) + (lane & 15)] = z[k];
+  __syncwarp();
+  if (lane < 2 * MI) {
+    uint32_t m[16], h[8];
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      const uint4 q = reinterpret_cast<const uint4*>(scratch + TICKET_STRIDE * lane)[i];
+      m[4 * i] = q.x, m[4 * i + 1] = q.y, m[4 * i + 2] = q.z, m[4 * i + 3] = q.w;
+    }
+    blake3_keyed_block(key, m, h);
+    out(lane, h);
+  }
+  __syncwarp();
+}
+#endif
+// The same, one warp emulated on the host: frag(lane, mi, j, i).
+template <int MI, class Frag, class Out>
+inline void warp_tickets_warp(const Frag& frag, const uint32_t key[8], const Out& out) {
+  uint32_t scratch[16 * MI * 32], z[32][MI];
+  for (int lane = 0; lane < 32; ++lane) ticket_put<MI>([&](int mi, int j, int i) { return frag(lane, mi, j, i); }, lane, scratch);
+  for (int lane = 0; lane < 32; ++lane)
+    for (int k = 0; k < MI; ++k) z[lane][k] = ticket_block(scratch, k, lane);
+  for (int lane = 0; lane < 32; ++lane)
+    for (int k = 0; k < MI; ++k) scratch[TICKET_STRIDE * (2 * k + (lane >> 4)) + (lane & 15)] = z[lane][k];
+  for (int s = 0; s < 2 * MI; ++s) {
+    uint32_t h[8];
+    blake3_keyed_block(key, scratch + TICKET_STRIDE * s, h);
+    out(s, h);
+  }
 }
 }  // namespace pearlc
 

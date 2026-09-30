@@ -23,6 +23,16 @@ PH_HD uint32_t mix32(uint32_t x) {
 PH_HD uint32_t tile_word(int which, int r, int c) { return mix32(2u * (64u * r + c) + which) & 0xBFFFFFFFu; }
 PH_HD uint32_t quad_word(int a, int row, int col) { return mix32(0xA5000000u ^ (uint32_t)(a << 16 | row << 8 | col)); }
 PH_HD uint8_t ptn(size_t i) { return (uint8_t)(i % 251); }
+// the tickets' key, subkey("jackpot", seed_A) = keyed BLAKE3 of "pearl/v4/FP8/jackpot" under seed_A = C0 C1 … DF
+PH_HD void ticket_key(uint32_t tk[8]) {
+  uint8_t label[20], sub[32];
+  const char* L = "pearl/v4/FP8/jackpot";
+  uint32_t sk[8];
+  for (int i = 0; i < 20; ++i) label[i] = (uint8_t)L[i];
+  for (int i = 0; i < 8; ++i) sk[i] = (0xC0u + 4 * i) | (0xC1u + 4 * i) << 8 | (0xC2u + 4 * i) << 16 | (0xC3u + 4 * i) << 24;
+  ph::blake3_chunk(sk, label, 20, sub);
+  for (int i = 0; i < 8; ++i) tk[i] = (uint32_t)sub[4 * i] | (uint32_t)sub[4 * i + 1] << 8 | (uint32_t)sub[4 * i + 2] << 16 | (uint32_t)sub[4 * i + 3] << 24;
+}
 
 // ---------------------------------------------------------------- the check vectors
 constexpr int NTS = 11, NTSL = 12, NSH = 6, NSHA = 10, NSHAW = 7, NB3 = 8;
@@ -57,7 +67,7 @@ struct CheckOut {
   uint8_t ts[NTS][200], tsl[NTSL][32], tss[3][32], shake128[NSH][32], shake256[NSH][32], sha[NSHA][32], shaw[NSHAW][32];
   uint8_t b3[NB3][32], b3k[NB3][32], b3block[32];
   uint64_t pc_d0[4], pc_d127[4], pc_leaf[4], pc_leaf_stream[4], pc_leaf_quad[4], pc_leaf_narrow[4], pc_rows[4];
-  uint32_t pc_ticket[2][8];
+  uint32_t pc_ticket[2][8], pc_ticket_warp[16][8];
   uint64_t quad[32][4], msg_stream[4], ts_shf[4];
   uint32_t sha_stream[8], b3_stream[8];
 };
@@ -218,14 +228,8 @@ PH_HD void run_checks(uint8_t* buf, CheckOut* o) {
     ph::tss_final(st, ph::pearlc::D_LEAF, o->pc_leaf_stream);
   }
   if constexpr (PART == 5) {
-    uint8_t seed[32], label[20], sub[32];
-    const char* L = "pearl/v4/FP8/jackpot";
-    for (int i = 0; i < 32; ++i) seed[i] = (uint8_t)(0xC0 + i);
-    for (int i = 0; i < 20; ++i) label[i] = (uint8_t)L[i];
-    uint32_t sk[8], tk[8];
-    for (int i = 0; i < 8; ++i) sk[i] = (uint32_t)seed[4 * i] | (uint32_t)seed[4 * i + 1] << 8 | (uint32_t)seed[4 * i + 2] << 16 | (uint32_t)seed[4 * i + 3] << 24;
-    ph::blake3_chunk(sk, label, 20, sub);
-    for (int i = 0; i < 8; ++i) tk[i] = (uint32_t)sub[4 * i] | (uint32_t)sub[4 * i + 1] << 8 | (uint32_t)sub[4 * i + 2] << 16 | (uint32_t)sub[4 * i + 3] << 24;
+    uint32_t tk[8];
+    ticket_key(tk);
 #pragma unroll 1
     for (int k = 0; k < 2; ++k)
       ph::pearlc::ticket(tk, [k](int r, int c) { return tile_word(0, 48 * k + r, 32 * k + c); }, o->pc_ticket[k]);
@@ -265,6 +269,16 @@ PH_HD float narrow_frag(int chunk, int p, int lane, int a, int j, int i) {
   memcpy(&f, &w, 4);
   return f;
 }
+// the check tile's C~ as a narrow warp tile's fragments for warp_tickets: warp `chunk`, m16 block mi, n8 block j
+PH_HD float ticket_frag(int chunk, int lane, int mi, int j, int i) {
+  const int row = 16 * mi + (lane >> 2) + 8 * (i >> 1), col = 32 * chunk + 8 * j + 2 * (lane & 3) + (i & 1);
+  const uint32_t w = tile_word(0, row, col);
+  float f;
+  memcpy(&f, &w, 4);
+  return f;
+}
+// where warp `chunk`'s subtile s goes in pc_ticket_warp: the check tile's 16 subtiles row-major
+PH_HD int ticket_warp_index(int chunk, int s) { return 4 * (s >> 1) + 2 * chunk + (s & 1); }
 
 static void hex(const char* where, const char* what, int len, int d, const uint8_t* p, int n) {
   printf("{\"group\":\"hash_check\",\"where\":\"%s\",\"what\":\"%s\",\"len\":%d,\"d\":%d,\"out\":\"", where, what, len, d);
@@ -290,6 +304,11 @@ static void print_checks(const CheckOut& o, const char* w) {
   put_lanes(b, o.pc_rows, 4), hex(w, "pearl-c row segment", 1024, 0x23, b, 32);
   put_le(b, o.pc_ticket[0]), hex(w, "pearl-c ticket 0 0", 64, 0, b, 32);
   put_le(b, o.pc_ticket[1]), hex(w, "pearl-c ticket 48 32", 64, 0, b, 32);
+  for (int t = 0; t < 16; ++t) {
+    char what[40];
+    snprintf(what, sizeof what, "pearl-c ticket warp %d %d", 16 * (t >> 2), 16 * (t & 3));
+    put_le(b, o.pc_ticket_warp[t]), hex(w, what, 64, 0, b, 32);
+  }
   for (int l = 0; l < 32; ++l) {
     char what[32];
     snprintf(what, sizeof what, "quad lane %d", l);

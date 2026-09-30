@@ -130,9 +130,13 @@ def expected() -> dict[tuple, str]:
         out[what, 4096, 0x22] = leaf
     out["pearl-c row segment", 1024, 0x23] = turboshake128(ptn(1024), 0x23, 32).hex()
     seed_a = bytes(0xC0 + i for i in range(32))
-    for r0, c0 in ((0, 0), (48, 32)):
-        sub = [[P.f32_of_bits(c[r0 + r][c0 + j]) for j in range(16)] for r in range(16)]
-        out[f"pearl-c ticket {r0} {c0}", 64, 0] = P.hash_labelled(P.extract(sub), "jackpot", seed_a).hex()
+    for r0 in range(0, 64, 16):
+        for c0 in range(0, 64, 16):
+            sub = [[P.f32_of_bits(c[r0 + r][c0 + j]) for j in range(16)] for r in range(16)]
+            ticket = P.hash_labelled(P.extract(sub), "jackpot", seed_a).hex()
+            out[f"pearl-c ticket warp {r0} {c0}", 64, 0] = ticket
+            if (r0, c0) in ((0, 0), (48, 32)):
+                out[f"pearl-c ticket {r0} {c0}", 64, 0] = ticket
 
     for lane in range(32):
         row, chunk = (lane >> 2) + 8 * (lane & 1), (lane >> 1) & 1
