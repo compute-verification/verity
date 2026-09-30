@@ -546,26 +546,9 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 CK(cudaMemcpy(d_hat, N->host0_at, n * sizeof(long long), cudaMemcpyHostToDevice));
                 CK(cudaMemcpy(d_hoff, off.data(), n * sizeof(long long), cudaMemcpyHostToDevice));
                 CK(cudaMemcpy(d_hw, N->host0_words, n * sizeof(int), cudaMemcpyHostToDevice));
-                // mapped host slots are copied to device memory first, by the copy engine (FC_HOST_SLOTS_DMA=0: the kernel reads
-                // them over PCIe itself, which holds SMs the compressions beside it need); the buffer is kept, since a cudaFree
-                // would wait on the whole device
-                static const bool dma = [] { const char* e = std::getenv("FC_HOST_SLOTS_DMA"); return !(e && e[0] == '0'); }();
-                static uint64_t* d_stage = nullptr;
-                static size_t stage_words = 0;
-                const uint64_t* src = zab_dev;
-                const size_t words = (size_t)(n ? off[n - 1] + (N->host0_ab ? 4LL : 6LL) * N->host0_words[n - 1] : 0);
-                if (dma && words && !fc_on_device(N->host0_zab)) {
-                    if (words > stage_words) {
-                        if (d_stage) CK(cudaFree(d_stage));
-                        CK(cudaMalloc(&d_stage, words * 8));
-                        stage_words = words;
-                    }
-                    CK(cudaMemcpyAsync(d_stage, N->host0_zab, words * 8, cudaMemcpyHostToDevice, hs_stream));
-                    src = d_stage;
-                }
                 CK(cudaEventRecord(hs_zeroed, 0));
                 CK(cudaStreamWaitEvent(hs_stream, hs_zeroed, 0));
-                fc_host_slots<<<(unsigned)std::min(n, 2LL * n_sm), 256, 0, hs_stream>>>(src, d_hat, d_hoff, d_hw, n, N->host0_ab,
+                fc_host_slots<<<(unsigned)std::min(n, 2LL * n_sm), 256, 0, hs_stream>>>(zab_dev, d_hat, d_hoff, d_hw, n, N->host0_ab,
                     (uint4*)df, (uint4*)d_a, (uint4*)d_b);
                 CK(cudaGetLastError());
                 CK(cudaEventRecord(hs_done, hs_stream));
