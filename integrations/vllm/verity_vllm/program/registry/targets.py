@@ -323,11 +323,22 @@ def gemv_bias_spec(profile, K: int, N: int):
     return bind(gemv_bias.GemvBiasF32, K=int(K), N=int(N), V=vt[0], T=vt[1])
 
 
-def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None):
+def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
+                   cap: float | None = None):
     """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
     construction the row's index among its sequence's query rows in the launch (`row`) selects its tile (FA3, `fa3_check_inf`); FA2
-    (`fa2_check_inf`) also reads how many query rows the sequence has there (`own_rows`)."""
+    (`fa2_check_inf`) also reads how many query rows the sequence has there (`own_rows`).  A logit soft cap `cap` selects the softcapped
+    chain: `AttentionSoftcap_v1` on the accepted target, `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`, nothing elsewhere."""
     g = attention_geometry(profile, D, seqlen_q, NH, KVH)
+    if cap is not None:
+        from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
+        if uses_accepted_kinds(profile):
+            return bind(DN.AttentionSoftcap, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap))
+        if not fa2_check_inf(profile) or row is None or own_rows is None:
+            raise UnregisteredTarget("a softcapped row off the accepted target is registered only under FA2's per-iteration Check_inf, "
+                                     "with the row's index among its sequence's query rows and their number")
+        return bind(F2S.AttentionSoftcapV2, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"], CAP=float(cap), DOT=g["DOT"],
+                    INV=g["INV"], MASKED_FROM=fa2_masked_from(profile, T, D, seqlen_q, row, own_rows))
     if uses_accepted_kinds(profile):
         return bind(b1.AttentionV3, T=int(T), NH=int(NH), KVH=int(KVH), D=int(D), BN=g["BN"])
     if fa3_check_inf(profile):
