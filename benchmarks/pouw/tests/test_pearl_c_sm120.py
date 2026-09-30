@@ -322,6 +322,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
     if name == "eprime":
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
+    if name == "form_rows":
+        rows, k = i[:2]
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 32, 6: 32 * rows, 7: 32 * rows, 8: 4 * rows}
     if name.startswith("form_"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
@@ -398,7 +401,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
 
 def threads(name: str, i: list[int]) -> int:
     """Threads the launch must cover."""
-    return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
+    return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "form_rows": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "h1_rows_p": lambda: 32 * i[0],
@@ -471,6 +474,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         assert set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
         assert t["form_rate"]["blocks"] == 2 * 188 and set(form_rates()) <= set(t["form_rate"])
         assert {"form_a_scalar", "form_b_scalar"} <= set(t["ms"])
+        assert set(t["call_e2e_ms_by_form"]) == {f"{','.join(f)}/{g}" for f in RUN.FORMS for g in RUN.FORMINGS}
+        assert {"stats_a@forming=fold", "form_a@forming=fold"} <= set(t["alt_ms"])
         assert set(t["deferral"]["ms"]) == {"gemm_alone", "hashing_alone", "pair_same_priority", "pair_main_greatest",
                                             "fused_gemm", "y_only_gemm"}
 
@@ -511,7 +516,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6)}:
+            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6), ("form_rows", 8)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]

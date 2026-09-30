@@ -552,18 +552,21 @@ DEV int k32(int t) { return (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | 
 // p0 the line key (8 words), p1 codes (count x 32, row-major), p2 transposed (32 x count) or 0, p3 transposed into 128 x count
 // (rows 32-127 left as they are) or 0, both in K32 order along count (the F lines, count = k); i0 side, i1 factor, i2 count,
 // i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16
-extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
-  const int line = blockIdx.x * blockDim.x + threadIdx.x, count = a.i[2];
-  if (line >= count) return;
-  const uint32_t* key = reinterpret_cast<const uint32_t*>(a.p[0]);
-  uint32_t kw[8], msg[16], h[8];
+// the keyed line hash of (side, factor, line) under the line key p (`lines`' one block)
+DEV void line_hash(uint64_t p, uint32_t side, uint32_t factor, uint32_t line, uint32_t* h) {
+  const uint32_t* key = reinterpret_cast<const uint32_t*>(p);
+  uint32_t kw[8], msg[16];
 #pragma unroll
   for (int i = 0; i < 8; i++) kw[i] = key[i];
 #pragma unroll
   for (int i = 0; i < 16; i++) msg[i] = 0;
-  msg[0] = (uint32_t)a.i[0] | (uint32_t)a.i[1] << 8 | ((uint32_t)line & 0xFFFF) << 16;
-  msg[1] = (uint32_t)line >> 16;
+  msg[0] = side | factor << 8 | (line & 0xFFFF) << 16;
+  msg[1] = line >> 16;
   blake3_block(kw, msg, h);
+}
+
+// a line's 32 codes from its hash, as 8 little-endian words; norm as `lines`' i3
+DEV void line_codes(const uint32_t* h, uint16_t norm, uint8_t* c) {
   int xs[32];
   uint32_t sumsq = 0;
 #pragma unroll
@@ -572,16 +575,28 @@ extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
     xs[j] = (b >> 7 ? -1 : 1) * (int)((b & 0x7F) + 1);
     sumsq += xs[j] * xs[j];
   }
-  const uint16_t scale = bdiv((uint16_t)a.i[3], f2bf((float)isqrt(sumsq * 1024)));
-  uint8_t c[32];
+  const uint16_t scale = bdiv(norm, f2bf((float)isqrt(sumsq * 1024)));
 #pragma unroll
   for (int j = 0; j < 32; j++) c[j] = e4m3(bf2f(bmul(f2bf((float)xs[j]), scale)));
+}
+
+DEV void store_codes(uint64_t p, const uint8_t* c) {
   uint32_t w[8];
 #pragma unroll
   for (int i = 0; i < 8; i++) w[i] = c[4 * i] | c[4 * i + 1] << 8 | c[4 * i + 2] << 16 | (uint32_t)c[4 * i + 3] << 24;
-  uint4* out = reinterpret_cast<uint4*>(a.p[1] + (size_t)line * 32);
+  uint4* out = reinterpret_cast<uint4*>(p);
   out[0] = make_uint4(w[0], w[1], w[2], w[3]);
   out[1] = make_uint4(w[4], w[5], w[6], w[7]);
+}
+
+extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
+  const int line = blockIdx.x * blockDim.x + threadIdx.x, count = a.i[2];
+  if (line >= count) return;
+  uint32_t h[8];
+  line_hash(a.p[0], (uint32_t)a.i[0], (uint32_t)a.i[1], (uint32_t)line, h);
+  uint8_t c[32];
+  line_codes(h, (uint16_t)a.i[3], c);
+  store_codes(a.p[1] + (size_t)line * 32, c);
 #pragma unroll
   for (int s = 2; s < 4; s++)
     if (a.p[s]) {
@@ -599,12 +614,10 @@ constexpr float S5_FLOOR = 0x1p-32f;
 // then the xor butterfly), alpha, beta_row.  Lane l reads x[256i + 4l ..] and x[256i + 128 + 4l ..], so chain c's position is
 // the first (c < 16) or second (c >= 16) vector's x of lane 2 (c mod 16).  p0 rows (rows x k words), p1 alpha, p2 beta,
 // p3 1/alpha (glue), p4 (s, rho) per row; i0 rows, i1 k (a multiple of 256)
-extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
-  const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
-  if (row >= rows) return;
-  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
+// a row's s and rho's sum of squares by its warp (every lane gets both: the butterfly's adds are commutative)
+DEV void row_stats(const float4* x, int k, int lane, float& s, float& part) {
   const int src = 2 * (lane & 15);
-  float s = 0.0f, part = 0.0f;
+  s = 0.0f, part = 0.0f;
 #pragma unroll 4
   for (int j = lane; j < k / 4; j += 64) {
     const float4 v = x[j], w = x[j + 32];
@@ -615,13 +628,27 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   }
 #pragma unroll
   for (int o = 16; o; o >>= 1) { s = fmaxf(s, __shfl_xor_sync(~0u, s, o)); part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o)); }
-  if (lane) return;
+}
+
+// stats_s5's words of a row from (s, part): p1 alpha, p2 beta, p3 1/alpha, p4 (s, rho); returns alpha, rho and beta
+DEV float3 put_stats(const Args& a, int row, int k, float s, float part) {
   const float rho = __fsqrt_rn(__fdiv_rn(part, (float)((k + 7) / 8)));
   const float alpha = __fdiv_rn(448.0f, fmaxf(__fadd_rn(s, __fmul_rn(4.0f, rho)), S5_FLOOR));
+  const float beta = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
   reinterpret_cast<float*>(a.p[1])[row] = alpha;
-  reinterpret_cast<float*>(a.p[2])[row] = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
+  reinterpret_cast<float*>(a.p[2])[row] = beta;
   reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
   reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
+  return make_float3(alpha, rho, beta);
+}
+
+extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
+  const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
+  if (row >= rows) return;
+  float s, part;
+  row_stats(reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4), k, lane, s, part);
+  if (lane) return;
+  put_stats(a, row, k, s, part);
 }
 
 // v2-hot's H_i (v2-hot-start-rule.md, the public constant c0 = 64): bit 31 and bits 0-22 of the first word of the keyed line
@@ -629,35 +656,55 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
 // rho_i), e_i = E(t) + 10 + [M(t) >= 0x3504F4] (floor(log2(sqrt(32 16) 64 t))).  e_i is in [10, 16] on the domain (t in
 // [1, 448 / 5]); off it (a row the scheme rejects) the field is taken mod 256.  p0 E_A's line key, p1 alpha, p2 (s, rho) per
 // row (stats_s5's p4), p3 out H (FP32 words); i0 rows
+DEV uint32_t hot_word(uint64_t key, uint32_t row, float alpha, float rho) {
+  uint32_t h[8];
+  line_hash(key, 0, 2, row, h);
+  const uint32_t tb = __float_as_uint(__fmul_rn(alpha, rho)), e = (tb >> 23 & 0xFF) + 10 + ((tb & 0x7FFFFF) >= 0x3504F4);
+  return (h[0] & 0x807FFFFFu) | (e & 0xFF) << 23;
+}
+
 extern "C" __global__ void __launch_bounds__(128) hot_a(const Args a) {
   const int row = blockIdx.x * blockDim.x + threadIdx.x;
   if (row >= a.i[0]) return;
-  const uint32_t* key = reinterpret_cast<const uint32_t*>(a.p[0]);
-  uint32_t kw[8], msg[16], h[8];
+  reinterpret_cast<uint32_t*>(a.p[3])[row] = hot_word(a.p[0], (uint32_t)row, reinterpret_cast<const float*>(a.p[1])[row],
+                                                     reinterpret_cast<const float*>(a.p[2])[2 * row + 1]);
+}
+
+// E' = e4m3(beta_row E) of a row's 32 codes
+DEV void eprime_codes(const uint8_t* E, float beta, uint8_t* c) {
 #pragma unroll
-  for (int i = 0; i < 8; i++) kw[i] = key[i];
-#pragma unroll
-  for (int i = 0; i < 16; i++) msg[i] = 0;
-  msg[0] = 2u << 8 | ((uint32_t)row & 0xFFFF) << 16;
-  msg[1] = (uint32_t)row >> 16;
-  blake3_block(kw, msg, h);
-  const float t = __fmul_rn(reinterpret_cast<const float*>(a.p[1])[row], reinterpret_cast<const float*>(a.p[2])[2 * row + 1]);
-  const uint32_t tb = __float_as_uint(t), e = (tb >> 23 & 0xFF) + 10 + ((tb & 0x7FFFFF) >= 0x3504F4);
-  reinterpret_cast<uint32_t*>(a.p[3])[row] = (h[0] & 0x807FFFFFu) | (e & 0xFF) << 23;
+  for (int j = 0; j < 32; j++) c[j] = e4m3(__fmul_rn(beta, e4m3f(E[j])));
 }
 
 // E' = e4m3(beta_row E) per row.  p0 E codes (rows x 32), p1 beta (f32), p2 out E' codes (rows x 32); i0 rows
 extern "C" __global__ void eprime(const Args a) {
   const int row = blockIdx.x * blockDim.x + threadIdx.x;
   if (row >= a.i[0]) return;
-  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)row * 32;
-  const float beta = reinterpret_cast<const float*>(a.p[1])[row];
-  uint32_t w[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-#pragma unroll
-  for (int j = 0; j < 32; j++) w[j / 4] |= (uint32_t)e4m3(__fmul_rn(beta, e4m3f(E[j]))) << (8 * (j % 4));
-  uint4* out = reinterpret_cast<uint4*>(a.p[2] + (size_t)row * 32);
-  out[0] = make_uint4(w[0], w[1], w[2], w[3]);
-  out[1] = make_uint4(w[4], w[5], w[6], w[7]);
+  uint8_t c[32];
+  eprime_codes(reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)row * 32, reinterpret_cast<const float*>(a.p[1])[row], c);
+  store_codes(a.p[2] + (size_t)row * 32, c);
+}
+
+// forming's per-row steps of one side in one launch, a warp a row: stats_s5 (p1 .. p4), the row's line of E (`lines` at side
+// i2, factor 0, line = row, under the line key p5: its codes to p6), E' = e4m3(beta E) (eprime, to p7) and, with p8, v2-hot's
+// H (hot_a, to p8): the bytes those kernels write.  p0 rows (rows x k words); i0 rows, i1 k (a multiple of 256), i2 side, i3
+// `lines`' norm
+extern "C" __global__ void __launch_bounds__(256) form_rows(const Args a) {
+  const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
+  if (row >= rows) return;
+  float s, part;
+  row_stats(reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4), k, lane, s, part);
+  if (lane == 0) {
+    const float3 st = put_stats(a, row, k, s, part);
+    uint32_t h[8];
+    line_hash(a.p[5], (uint32_t)a.i[2], 0, (uint32_t)row, h);
+    uint8_t e[32], ep[32];
+    line_codes(h, (uint16_t)a.i[3], e);
+    store_codes(a.p[6] + (size_t)row * 32, e);
+    eprime_codes(e, st.z, ep);
+    store_codes(a.p[7] + (size_t)row * 32, ep);
+    if (a.p[8]) reinterpret_cast<uint32_t*>(a.p[8])[row] = hot_word(a.p[5], (uint32_t)row, st.x, st.y);
+  }
 }
 
 // four E4M3 codes in memory order (a at the lowest byte): two cvt.rn.satfinite.e4m3x2.f32 on live pairs, each converting its
