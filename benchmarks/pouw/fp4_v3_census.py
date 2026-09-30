@@ -18,6 +18,7 @@ For each design and census family, over S independent salts, per formed element 
 Designs (δ = 1/4 row-relative noise unless named; the noise std is δ·ρ·α₀ per element on average):
 
   v1            rank-32 real-unit noise (uniform E2M1 lines, as `fp4-design.md` §2) and block scales from the noisy amax
+  v1-rR         the same at rank R (R FFMAs per element instead of the k64 atom), same variance
   v3-gauss      rank-1 e_i·f_t with Gaussian e, f; clean-path block scales (v-c as written)
   v3-sign       rank-1 with fixed magnitude: e_i = ±1, f_t = ±1 (noise exactly ±δρα₀); clean scales
   v3-sign-d2    the same at δ = 1/2
@@ -80,17 +81,18 @@ def form(x: np.ndarray, design: str, rng: np.random.Generator, scales: bool = Fa
     alpha, sig = row_stats(x, delta)
     ax = alpha * x
     r, k = x.shape
-    if design == "v1":
-        codes_e = rng.integers(0, 16, (r, 32))
-        codes_f = rng.integers(0, 16, (k, 32))
-        noise = sig * (value_of(codes_e) @ value_of(codes_f).T) / np.sqrt(2346.125)
+    if design.startswith("v1"):
+        rank = int(design[4:]) if design.startswith("v1-r") else 32
+        codes_e = rng.integers(0, 16, (r, rank))
+        codes_f = rng.integers(0, 16, (k, rank))
+        noise = sig * (value_of(codes_e) @ value_of(codes_f).T) / np.sqrt(2346.125 * rank / 32)
     elif design == "v3-gauss":
         noise = sig * rng.standard_normal((r, 1)) * rng.standard_normal((1, k))
     else:
         mag = 1.0 + rng.uniform(0, 0.25, (r, 1)) if design.endswith("m") else 1.0
         noise = sig * mag * rng.choice([-1.0, 1.0], (r, 1)) * rng.choice([-1.0, 1.0], (1, k))
     d = ax + noise
-    src = np.abs(d) if design in ("v1", "v3-sign-nm") else np.abs(ax)   # the noisy amax, or the clean quantizer's
+    src = np.abs(d) if design.startswith("v1") or design == "v3-sign-nm" else np.abs(ax)   # the noisy amax, or the clean quantizer's
     amax = src.reshape(r, k // 16, 16).max(axis=2)
     if "-h" in design:
         amax = amax + sig * (1.25 if design.endswith("m") else 1.0)   # the noise's headroom: its largest magnitude
