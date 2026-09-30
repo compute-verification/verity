@@ -319,6 +319,28 @@ __global__ void fc_sha_tape(const uint64_t* __restrict__ inputs, int in_words, l
     for (int j = 0; j < 24; j++) t.push(out[j]);
 }
 
+// a compression's tape words: its schedule's 64 x 3 additions, its 80 rounds' 32 words each, its feed-forward's 8 additions
+constexpr int FC_SHA_COMP_WORDS = 64 * 3 * 4 + 80 * 32 + 8 * 4;
+
+// fc_sha_tape's words, a thread per compression (three a slot, compression-major so a warp's lanes write adjacent slots):
+// compression c's words start at 2 in_words + c FC_SHA_COMP_WORDS on its slot's tape, its outputs at 2 in_words +
+// 3 FC_SHA_COMP_WORDS + 8c (tape_words must be 2 in_words + 3 FC_SHA_COMP_WORDS + 24)
+__global__ void fc_sha_tape3(const uint64_t* __restrict__ inputs, int in_words, long long n, uint64_t* __restrict__ tape) {
+    const long long g = blockIdx.x * (long long)blockDim.x + threadIdx.x;
+    if (g >= 3 * n) return;
+    const int c = (int)(g / n);
+    const long long s = g - c * n;
+    const uint64_t* in = inputs + 2LL * in_words * s;
+    FcTape t{tape, n, s, 0};
+    if (c == 0)
+        for (int j = 0; j < 2 * in_words; j++) t.push(in[j]);
+    t.k = 2 * in_words + c * FC_SHA_COMP_WORDS;
+    uint64_t out[8];
+    fc_sha_compression(t, in + 24 * c, in + 24 * c + 8, out);
+    t.k = 2 * in_words + 3 * FC_SHA_COMP_WORDS + 8 * c;
+    for (int j = 0; j < 8; j++) t.push(out[j]);
+}
+
 // one thread per slot (consecutive lanes, consecutive slots: each tape word is read coalesced) and per 8 row blocks of 32 rows:
 // it writes words 8g..8g+7 of its slot's z, a and b, the words fc_unit_witness writes (rows from `useful` on are 0, and a
 // slot's 2^(slot_log - 5) >= 8 words hold them; s0: the batch's first slot over every block)
@@ -568,6 +590,9 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                     plan_of = N->h_plan;
                 }
                 if (hl < 8) { printf("FFI circuit: the native compression witness needs slots of at least 2^8 rows\n"); return 210; }
+                // a thread per compression where the tape has sha512x3's layout (FC_SHA_TAPE1=1: a thread per slot)
+                static const bool tape1 = [] { const char* e = std::getenv("FC_SHA_TAPE1"); return e && e[0] == '1'; }();
+                const bool tape3 = !tape1 && 2 * N->h_in_words >= 3 * 24 && N->h_tape_words == 2 * N->h_in_words + 3 * FC_SHA_COMP_WORDS + 24;
                 const long long per = (long long)N->h_tape_words * 8;
                 const long long batch = std::max(1LL, std::min(n_h, (2LL << 30) / per));
                 uint64_t* d_tape;
@@ -576,7 +601,8 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 if (const int e = host_slots()) return e;
                 for (long long s0 = 0; s0 < n_h; s0 += batch) {
                     const long long nb = std::min(batch, n_h - s0);
-                    fc_sha_tape<<<(unsigned)((nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
+                    if (tape3) fc_sha_tape3<<<(unsigned)((3 * nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
+                    else fc_sha_tape<<<(unsigned)((nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
                     fc_sha_rows<<<dim3((unsigned)nrg, (unsigned)((nb + 255) / 256)), 256>>>(d_tape, nb, s0, d_plan, N->h_useful, (int)hper,
                         N->r_pos0[hr], hl, k_log, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b);
                     CK(cudaGetLastError());
