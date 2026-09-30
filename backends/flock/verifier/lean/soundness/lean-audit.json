@@ -3422,6 +3422,227 @@
    "assumptions": [],
    "type_hash": "af5a8e45b86549673e2b52f94630df0c977da99c288e14619ce02f8126933936"
   },
+  "FlockSoundness.ZK.card_fiber_eq_of_triShift": {
+   "signature": [
+    "FlockSoundness.ZK.card_fiber_eq_of_triShift.{u_1, u_2} {K : Nat} {G : Fin K → Type u_1} [(k : Fin K) → AddGroup (G k)]",
+    "  [(k : Fin K) → Fintype (G k)] [(k : Fin K) → DecidableEq (G k)] {V : Type u_2} [DecidableEq V]",
+    "  (view view' : ((j : Fin K) → G j) → V) {δ : (k : Fin K) → ((j : Fin K) → G j) → G k}",
+    "  (hδ : FlockSoundness.ZK.Triangular δ)",
+    "  (h : ∀ (ω : (j : Fin K) → G j), Eq (view ω) (view' (FlockSoundness.ZK.triShift δ ω))) (v : V) :",
+    "  Eq (Finset.filter (fun ω => Eq (view ω) v) Finset.univ).card",
+    "    (Finset.filter (fun ω => Eq (view' ω) v) Finset.univ).card"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000017200e58"
+  },
+  "FlockSoundness.ZK.card_run_eq": {
+   "signature": [
+    "FlockSoundness.ZK.card_run_eq.{u_1, u_2, u_3} {Ω : Type u_1} {M : Type u_2} {C : Type u_3} {n : Nat} [Inhabited M]",
+    "  [Fintype Ω] [DecidableEq M] (P P' : FlockSoundness.ZK.Strategy Ω M C n) (V : FlockSoundness.ZK.Responder M C n)",
+    "  (h :",
+    "    ∀ (c : Fin n → C) (τ : Fin n → M),",
+    "      Eq (Finset.filter (fun ω => Eq (P.msg ω c) τ) Finset.univ).card",
+    "        (Finset.filter (fun ω => Eq (P'.msg ω c) τ) Finset.univ).card)",
+    "  (τ : Fin n → M) :",
+    "  Eq (Finset.filter (fun ω => Eq (FlockSoundness.ZK.run P V ω) τ) Finset.univ).card",
+    "    (Finset.filter (fun ω => Eq (FlockSoundness.ZK.run P' V ω) τ) Finset.univ).card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bfe026df"
+  },
+  "FlockSoundness.ZK.card_run_eq_of_triShift": {
+   "signature": [
+    "FlockSoundness.ZK.card_run_eq_of_triShift.{u_2, u_3, u_4} {M : Type u_2} {C : Type u_3} {n K : Nat}",
+    "  {G : Fin K → Type u_4} [(k : Fin K) → AddGroup (G k)] [(k : Fin K) → Fintype (G k)] [(k : Fin K) → DecidableEq (G k)]",
+    "  [Inhabited M] [DecidableEq M] (P P' : FlockSoundness.ZK.Strategy ((k : Fin K) → G k) M C n)",
+    "  (V : FlockSoundness.ZK.Responder M C n) (δ : (Fin n → C) → (k : Fin K) → ((j : Fin K) → G j) → G k)",
+    "  (hδ : ∀ (c : Fin n → C), FlockSoundness.ZK.Triangular (δ c))",
+    "  (h : ∀ (c : Fin n → C) (ω : (k : Fin K) → G k), Eq (P.msg ω c) (P'.msg (FlockSoundness.ZK.triShift (δ c) ω) c))",
+    "  (τ : Fin n → M) :",
+    "  Eq (Finset.filter (fun ω => Eq (FlockSoundness.ZK.run P V ω) τ) Finset.univ).card",
+    "    (Finset.filter (fun ω => Eq (FlockSoundness.ZK.run P' V ω) τ) Finset.univ).card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000cd3228e1"
+  },
+  "FlockSoundness.ZK.card_seq_masked": {
+   "signature": [
+    "FlockSoundness.ZK.card_seq_masked.{u_2, u_3} {K : Nat} {G : Fin K → Type u_2} {B : Fin K → Type u_3}",
+    "  [(k : Fin K) → AddCommGroup (G k)] [(k : Fin K) → Fintype (G k)] [(k : Fin K) → DecidableEq (G k)]",
+    "  [(k : Fin K) → AddCommGroup (B k)] [(k : Fin K) → DecidableEq (B k)] (φ : (k : Fin K) → AddMonoidHom (G k) (B k))",
+    "  (hφ : ∀ (k : Fin K), Function.Surjective (AddMonoidHom.instFunLike.coe (φ k)))",
+    "  (f : (k : Fin K) → ((j : Fin K) → G j) → B k)",
+    "  (hf :",
+    "    ∀ (k : Fin K) (ω ω' : (j : Fin K) → G j), (∀ (j : Fin K), instLTFin.lt j k → Eq (ω j) (ω' j)) → Eq (f k ω) (f k ω'))",
+    "  (v : (k : Fin K) → B k) :",
+    "  Eq",
+    "    (Finset.filter (fun ω => ∀ (k : Fin K), Eq (instHAdd.hAdd (f k ω) (AddMonoidHom.instFunLike.coe (φ k) (ω k))) (v k))",
+    "        Finset.univ).card",
+    "    (Finset.filter (fun κ => ∀ (k : Fin K), Eq (AddMonoidHom.instFunLike.coe (φ k) (κ k)) 0) Finset.univ).card"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bfe2a0d5"
+  },
+  "FlockSoundness.ZK.card_translate_fiber": {
+   "signature": [
+    "FlockSoundness.ZK.card_translate_fiber.{u_1, u_2} {A : Type u_1} {B : Type u_2} [AddCommGroup A] [Fintype A]",
+    "  [AddCommGroup B] [Fintype B] [DecidableEq B] (Φ : AddMonoidHom A B)",
+    "  (hΦ : Function.Surjective (AddMonoidHom.instFunLike.coe Φ)) (base y : B) :",
+    "  Eq",
+    "    (instHMul.hMul",
+    "      (Finset.filter (fun a => Eq (instHAdd.hAdd base (AddMonoidHom.instFunLike.coe Φ a)) y) Finset.univ).card",
+    "      (Fintype.card B))",
+    "    (Fintype.card A)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000cece4880"
+  },
+  "FlockSoundness.ZK.coin_opening_binding": {
+   "signature": [
+    "FlockSoundness.ZK.coin_opening_binding {D Coin Salt : Type} (H : List UInt8 → D)",
+    "  (E : FlockSoundness.ZK.CoinEnc D Coin Salt) (mix : D → Salt → D)",
+    "  (hmix : ∀ (y : Salt), Function.Injective fun x => mix x y) (chainTag roundTag pos lp sp : List UInt8) (root : D)",
+    "  (idx : Nat) (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) (hlen : Eq cs.length cs'.length)",
+    "  (hne : Ne cs cs') (hsibs : Eq sibs.length sibs'.length) (MerkleE : FlockSoundness.Merkle.Enc Unit D)",
+    "  (h :",
+    "    Eq",
+    "      (FlockSoundness.Merkle.walk H MerkleE idx (FlockSoundness.ZK.coinLeaf H E mix chainTag roundTag pos lp sp Tn cs y)",
+    "        sibs)",
+    "      root)",
+    "  (h' :",
+    "    Eq",
+    "      (FlockSoundness.Merkle.walk H MerkleE idx",
+    "        (FlockSoundness.ZK.coinLeaf H E mix chainTag roundTag pos lp sp Tn' cs' y') sibs')",
+    "      root) :",
+    "  FlockSoundness.Merkle.Collision H"
+   ],
+   "assumptions": [],
+   "type_hash": "000000001b21e2ca"
+  },
+  "FlockSoundness.ZK.coin_opening_binding_keyed": {
+   "signature": [
+    "FlockSoundness.ZK.coin_opening_binding_keyed {D Coin Salt : Type} (H : List UInt8 → D)",
+    "  (E : FlockSoundness.ZK.CoinEnc D Coin Salt) (ν : List UInt8) (mix : D → Salt → D)",
+    "  (hmix : ∀ (y : Salt), Function.Injective fun x => mix x y) (chainTag roundTag pos lp sp : List UInt8) (root : D)",
+    "  (idx : Nat) (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) (hlen : Eq cs.length cs'.length)",
+    "  (hne : Ne cs cs') (hsibs : Eq sibs.length sibs'.length) (MerkleE : FlockSoundness.Merkle.Enc Unit D)",
+    "  (h :",
+    "    Eq",
+    "      (FlockSoundness.Merkle.walk (fun m => H (instHAppendOfAppend.hAppend ν m)) MerkleE idx",
+    "        (FlockSoundness.ZK.coinLeaf (fun m => H (instHAppendOfAppend.hAppend ν m)) E mix chainTag roundTag pos lp sp Tn",
+    "          cs y)",
+    "        sibs)",
+    "      root)",
+    "  (h' :",
+    "    Eq",
+    "      (FlockSoundness.Merkle.walk (fun m => H (instHAppendOfAppend.hAppend ν m)) MerkleE idx",
+    "        (FlockSoundness.ZK.coinLeaf (fun m => H (instHAppendOfAppend.hAppend ν m)) E mix chainTag roundTag pos lp sp Tn'",
+    "          cs' y')",
+    "        sibs')",
+    "      root) :",
+    "  Exists fun m =>",
+    "    Exists fun m' => And (Ne m m') (Eq (H (instHAppendOfAppend.hAppend ν m)) (H (instHAppendOfAppend.hAppend ν m')))"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000029cf704f"
+  },
+  "FlockSoundness.ZK.gk_ratio_le_third": {
+   "signature": [
+    "FlockSoundness.ZK.gk_ratio_le_third (p : Real) (hp1 : Real.instLE.le p 1) :",
+    "  Real.instLE.le (instHMul.hMul 3 (instHMul.hMul p (instHPow.hPow (instHSub.hSub 1 (instHDiv.hDiv p 2)) 4)))",
+    "    (instHSub.hSub 1 (instHMul.hMul (instHSub.hSub 1 p) (instHPow.hPow (instHSub.hSub 1 (instHDiv.hDiv p 2)) 4)))"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000080cb634"
+  },
+  "FlockSoundness.ZK.level0_openings_uniform": {
+   "signature": [
+    "FlockSoundness.ZK.level0_openings_uniform {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
+    "  [DecidableEq K] (A : FlockSoundness.Model.Arith F K) (hA : A.Correct) (L : Nat) (hL : instLENat.le L 40) (t : Nat)",
+    "  (ht : instLENat.le t (instHPow.hPow 2 L)) {ι : Type} [Fintype ι] [DecidableEq ι]",
+    "  (hι : instLENat.le (Fintype.card ι) t) (x : ι → F) (hx : Function.Injective x) (g : ι → F)",
+    "  (hg : ∀ (i : ι), Ne (g i) 0) (base y : ι → F) :",
+    "  Eq",
+    "    (instHMul.hMul",
+    "      (Finset.filter",
+    "          (fun μ =>",
+    "            ∀ (i : ι),",
+    "              Eq",
+    "                (instHAdd.hAdd (base i)",
+    "                  (instHMul.hMul (g i)",
+    "                    (Polynomial.eval (x i)",
+    "                      (Finset.univ.sum fun k =>",
+    "                        instHMul.hMul (RingHom.instFunLike.coe Polynomial.C (μ k))",
+    "                          (FlockSoundness.xP A hA L hL (Fin.castLE ht k))))))",
+    "                (y i))",
+    "          Finset.univ).card",
+    "      (instHPow.hPow (Fintype.card F) (Fintype.card ι)))",
+    "    (instHPow.hPow (Fintype.card F) t)"
+   ],
+   "assumptions": [],
+   "type_hash": "000000007f400662"
+  },
+  "FlockSoundness.ZK.padded_openings_uniform": {
+   "signature": [
+    "FlockSoundness.ZK.padded_openings_uniform.{u_1, u_2} {F : Type u_1} {ι : Type u_2} [Field F] [Fintype F] [DecidableEq F]",
+    "  [Fintype ι] [DecidableEq ι] {t : Nat} (b : Fin t → Polynomial F) (x : ι → F) (hx : Function.Injective x) (g : ι → F)",
+    "  (hg : ∀ (i : ι), Ne (g i) 0)",
+    "  (hspan :",
+    "    ∀ (P : Polynomial F),",
+    "      WithBot.instPreorder.lt P.degree (Fintype.card ι).cast →",
+    "        Exists fun m =>",
+    "          Eq (Finset.univ.sum fun k => instHMul.hMul (RingHom.instFunLike.coe Polynomial.C (m k)) (b k)) P)",
+    "  (base y : ι → F) :",
+    "  Eq",
+    "    (instHMul.hMul",
+    "      (Finset.filter",
+    "          (fun μ =>",
+    "            ∀ (i : ι),",
+    "              Eq",
+    "                (instHAdd.hAdd (base i)",
+    "                  (instHMul.hMul (g i)",
+    "                    (Polynomial.eval (x i)",
+    "                      (Finset.univ.sum fun k => instHMul.hMul (RingHom.instFunLike.coe Polynomial.C (μ k)) (b k)))))",
+    "                (y i))",
+    "          Finset.univ).card",
+    "      (instHPow.hPow (Fintype.card F) (Fintype.card ι)))",
+    "    (instHPow.hPow (Fintype.card F) t)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000006d8bd7"
+  },
+  "FlockSoundness.ZK.padding_surjective": {
+   "signature": [
+    "FlockSoundness.ZK.padding_surjective.{u_1, u_2} {F : Type u_1} {ι : Type u_2} [Field F] [Fintype ι] [DecidableEq ι]",
+    "  {t : Nat} (b : Fin t → Polynomial F) (x : ι → F) (hx : Function.Injective x) (g : ι → F) (hg : ∀ (i : ι), Ne (g i) 0)",
+    "  (hspan :",
+    "    ∀ (P : Polynomial F),",
+    "      WithBot.instPreorder.lt P.degree (Fintype.card ι).cast →",
+    "        Exists fun m =>",
+    "          Eq (Finset.univ.sum fun k => instHMul.hMul (RingHom.instFunLike.coe Polynomial.C (m k)) (b k)) P) :",
+    "  Function.Surjective (AddMonoidHom.instFunLike.coe (FlockSoundness.ZK.paddingMap b x g))"
+   ],
+   "assumptions": [],
+   "type_hash": "000000005a260fa1"
+  },
+  "FlockSoundness.ZK.run_eq_iff": {
+   "signature": [
+    "FlockSoundness.ZK.run_eq_iff.{u_1, u_2, u_3} {Ω : Type u_1} {M : Type u_2} {C : Type u_3} {n : Nat} [Inhabited M]",
+    "  (P : FlockSoundness.ZK.Strategy Ω M C n) (V : FlockSoundness.ZK.Responder M C n) (ω : Ω) (τ : Fin n → M) :",
+    "  Iff (Eq (FlockSoundness.ZK.run P V ω) τ) (Eq (P.msg ω (V.ans τ)) τ)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000f9168bdc"
+  },
+  "FlockSoundness.ZK.triShift_bijective": {
+   "signature": [
+    "FlockSoundness.ZK.triShift_bijective.{u_1} {K : Nat} {G : Fin K → Type u_1} [(k : Fin K) → AddGroup (G k)]",
+    "  [∀ (k : Fin K), Finite (G k)] {δ : (k : Fin K) → ((j : Fin K) → G j) → G k} (hδ : FlockSoundness.ZK.Triangular δ) :",
+    "  Function.Bijective (FlockSoundness.ZK.triShift δ)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000bd1525e4"
+  },
   "FlockSoundness.execArith_correct": {
    "signature": ["FlockSoundness.execArith_correct : FlockSoundness.execArith.Correct"],
    "assumptions": [],
@@ -5109,6 +5330,7 @@
     "FlockSoundness.Audit.Partition.flock_e2e_count_exec",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn",
     "FlockSoundness.Audit.Partition.flock_e2e_drawn_exec",
+    "FlockSoundness.ZK.level0_openings_uniform",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -5599,6 +5821,13 @@
     "FlockSoundness.table_sound_fast100_34_35"
    ]
   },
+  "FlockSoundness.ListSize": {
+   "digest": "1eee190fa8bc553a76257284331e74f0",
+   "definitions": {
+    "FlockSoundness.xP": "1eee190fa8bc553a"
+   },
+   "pins": ["FlockSoundness.ZK.level0_openings_uniform"]
+  },
   "FlockSoundness.Lowering": {
    "digest": "300cfcddf01cfd75c902099508ede5eda1f3111bef134fde557af61bb05a4263",
    "definitions": {
@@ -5684,6 +5913,8 @@
     "FlockSoundness.Refine.verify_refines_ofCircuit",
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
     "FlockSoundness.Refine.verify_tableAfter",
+    "FlockSoundness.ZK.coin_opening_binding",
+    "FlockSoundness.ZK.coin_opening_binding_keyed",
     "FlockSoundness.table_sound_compiled"
    ]
   },
@@ -5729,6 +5960,7 @@
     "FlockSoundness.Refine.verify_refines_ofCircuit_hm96",
     "FlockSoundness.Refine.verify_tableAfter",
     "FlockSoundness.Refine.zerocheck_refines",
+    "FlockSoundness.ZK.level0_openings_uniform",
     "FlockSoundness.execArith_correct",
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_compiled",
@@ -6816,6 +7048,45 @@
     "FlockSoundness.Types.Flatten.unitGates": "6f47887a50a4a4e8e692ff9907070ed4124809166a05a34e2eb6418e3776f1e7"
    },
    "pins": ["FlockSoundness.UProg.rowsL1"]
+  },
+  "FlockSoundness.ZK.Adaptivity": {
+   "digest": "83c34553880ed9e11d15c4d574fb15b0",
+   "definitions": {
+    "FlockSoundness.ZK.Responder": "4aa2f3a01a5d09ec",
+    "FlockSoundness.ZK.Responder.ans": "07b5b9bfb9f5ef23",
+    "FlockSoundness.ZK.Strategy": "c7dd3954f1023096",
+    "FlockSoundness.ZK.Strategy.msg": "2449cb009ff38b7d",
+    "FlockSoundness.ZK.Strategy.step": "15d4e86eb1261c99",
+    "FlockSoundness.ZK.Triangular": "598221542c8b5d3d",
+    "FlockSoundness.ZK.run": "921dafe3b24e3c0d",
+    "FlockSoundness.ZK.triShift": "cd67f9bff9028668"
+   },
+   "pins": [
+    "FlockSoundness.ZK.card_fiber_eq_of_triShift",
+    "FlockSoundness.ZK.card_run_eq",
+    "FlockSoundness.ZK.card_run_eq_of_triShift",
+    "FlockSoundness.ZK.run_eq_iff",
+    "FlockSoundness.ZK.triShift_bijective"
+   ]
+  },
+  "FlockSoundness.ZK.CoinBinding": {
+   "digest": "6b4de28d91345543b823c2cfc66e3b1b",
+   "definitions": {
+    "FlockSoundness.ZK.CoinEnc": "31469e43941e8915",
+    "FlockSoundness.ZK.CoinEnc.coin": "a19db01635fe23d4",
+    "FlockSoundness.ZK.CoinEnc.dig": "e5ff9e6a9c629ad8",
+    "FlockSoundness.ZK.CoinEnc.salt": "48e17e94244927c3",
+    "FlockSoundness.ZK.chainTop": "36060f6fb53d446b",
+    "FlockSoundness.ZK.coinLeaf": "a9b43e35d9ec4419"
+   },
+   "pins": ["FlockSoundness.ZK.coin_opening_binding", "FlockSoundness.ZK.coin_opening_binding_keyed"]
+  },
+  "FlockSoundness.ZK.Masking": {
+   "digest": "a85b27f6b49288a085d1c5c6976cab6a",
+   "definitions": {
+    "FlockSoundness.ZK.paddingMap": "a85b27f6b49288a0"
+   },
+   "pins": ["FlockSoundness.ZK.padding_surjective"]
   }
  },
  "dependencies": {
