@@ -21,6 +21,8 @@ if [ -d /run/gpu-lease ] && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
   done
   [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "no free GPU among ${GPUS:-4 5 6 7}"; exit 75; }
 fi
+# a machine whose /workspace the run's user can't write (vy-nebius-1): the builds and venvs go under its cache
+[ -w /workspace ] || export FLOCK_WORK=${FLOCK_WORK:-/workspace/cache/flock}
 # a toolkit the driver runs natively when CUDA 13.3 isn't installed (and can't be, without root)
 [ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { [ -x /usr/local/cuda/bin/nvcc ] && export CUDA_TK=$(readlink -f /usr/local/cuda); }
 { nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv; nproc; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-}"; } | tee $R/out/host.txt
@@ -34,7 +36,7 @@ if [ "${GATE:-1}" = 1 ]; then
 fi
 OUT=$R/out/m34 bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=auto BATCH_ANDS=${BATCH_ANDS:-4294967296} \
   MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-17179869184} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 || exit 1
-W=/workspace/flock-circuit; UV=$(command -v uv || echo $HOME/.local/bin/uv)
+W=${FLOCK_WORK:-/workspace}/flock-circuit; UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/torch/bin/python ] || { $UV venv -q --python 3.12 $W/torch && $UV pip install -q --python $W/torch/bin/python 'torch>=2.7' \
   --index-url https://download.pytorch.org/whl/cu128; } || exit 1
 $W/torch/bin/python backends/flock/pod/gemm_slowdown.py native --out $R/out/native.json --iters ${ITERS:-100} || exit 1
