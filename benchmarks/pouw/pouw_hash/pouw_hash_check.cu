@@ -27,6 +27,13 @@ int main(int argc, char** argv) {
       for (int i = 0; i < 4; ++i) dg[4 * ph::pearlc::digest_index(region, lane) + i] = d[lane][i];
   }
   ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o.pc_leaf_quad);
+  for (int chunk = 0; chunk < 2; ++chunk)
+    for (int p = 0; p < 2; ++p) {
+      ph::quad_msg_digest_warp<2>([&](int lane, int a, int j, int i) { return narrow_frag(chunk, p, lane, a, j, i); }, 0x21, d);
+      for (int lane = 0; lane < 32; ++lane)
+        for (int i = 0; i < 4; ++i) dg[4 * (2 * ph::pearlc::narrow_row(p, lane) + chunk) + i] = d[lane][i];
+    }
+  ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o.pc_leaf_narrow);
   print_checks(o, "host");
   return 0;
 }
@@ -58,6 +65,14 @@ __global__ void k_check_quad(CheckOut* o, uint64_t* dg) {
   }
   __syncwarp();
   if (lane == 0) ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o->pc_leaf_quad);
+  __syncwarp();
+  for (int chunk = 0; chunk < 2; ++chunk)
+    for (int p = 0; p < 2; ++p) {
+      ph::quad_msg_digest<2>([&](int a, int j, int i) { return narrow_frag(chunk, p, lane, a, j, i); }, 0x21, scratch, d);
+      for (int i = 0; i < 4; ++i) dg[4 * (2 * ph::pearlc::narrow_row(p, lane) + chunk) + i] = d[i];
+    }
+  __syncwarp();
+  if (lane == 0) ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o->pc_leaf_narrow);
 }
 
 void device_checks(CheckOut* h) {

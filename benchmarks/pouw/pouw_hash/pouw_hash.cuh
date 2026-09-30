@@ -521,6 +521,10 @@ PH_HD void tile_leaf(const Lane& lane, uint64_t leaf[4]) {
 }
 // Where a region's digests go: region ρ (tile rows 16ρ … 16ρ + 15) of a 64 x 64 tile, lane's message.
 PH_HD int digest_index(int region, int lane) { return 2 * (16 * region + quad_row(lane)) + quad_chunk(lane); }
+// A warp tile one chunk wide (16·MI rows x 32 columns, MI even; GPU 1's sm_120 GEMM holds 64 x 32) pairs its m16 blocks into
+// regions: region p's chunk h is m16 block 2p + h, so frag(a, j, i) is array a's c[i] of m16 block 2p + (j >> 2), n8 block
+// j & 3, and lane's digest is of the warp's row narrow_row(p, lane) and its one chunk.
+PH_HD int narrow_row(int p, int lane) { return 16 * (2 * p + quad_chunk(lane)) + quad_row(lane); }
 // A's commitment, modeled: TurboSHAKE128 of one row segment of NL lanes (FP32 rows: 128, FP10 rows: 160), 0x23.
 template <int NL, class Lane>
 PH_HD void row_segment(const Lane& lane, uint64_t d[4]) {

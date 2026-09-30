@@ -126,7 +126,7 @@ def expected() -> dict[tuple, str]:
     out["pearl-c digest 0", 256, 0x21] = turboshake128(le32(c[0][:32]) + le32(u[0][:32]), C.D_MESSAGE, 32).hex()
     out["pearl-c digest 127", 256, 0x21] = turboshake128(le32(c[63][32:]) + le32(u[63][32:]), C.D_MESSAGE, 32).hex()
     leaf = C.leaf(C.Checked(c, u)).hex()
-    for what in ("pearl-c leaf", "pearl-c leaf stream", "pearl-c leaf quad"):
+    for what in ("pearl-c leaf", "pearl-c leaf stream", "pearl-c leaf quad", "pearl-c leaf narrow"):
         out[what, 4096, 0x22] = leaf
     out["pearl-c row segment", 1024, 0x23] = turboshake128(ptn(1024), 0x23, 32).hex()
     seed_a = bytes(0xC0 + i for i in range(32))

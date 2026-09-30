@@ -56,7 +56,7 @@ PH_HD int b3_case(int i) {
 struct CheckOut {
   uint8_t ts[NTS][200], tsl[NTSL][32], tss[3][32], shake128[NSH][32], shake256[NSH][32], sha[NSHA][32], shaw[NSHAW][32];
   uint8_t b3[NB3][32], b3k[NB3][32], b3block[32];
-  uint64_t pc_d0[4], pc_d127[4], pc_leaf[4], pc_leaf_stream[4], pc_leaf_quad[4], pc_rows[4];
+  uint64_t pc_d0[4], pc_d127[4], pc_leaf[4], pc_leaf_stream[4], pc_leaf_quad[4], pc_leaf_narrow[4], pc_rows[4];
   uint32_t pc_ticket[2][8];
   uint64_t quad[32][4], msg_stream[4], ts_shf[4];
   uint32_t sha_stream[8], b3_stream[8];
@@ -256,6 +256,15 @@ PH_HD float tile_frag(int region, int lane, int a, int j, int i) {
   memcpy(&f, &w, 4);
   return f;
 }
+// the same leaf through narrow warp tiles (64 x 32, GPU 1's): warp `chunk` holds columns 32·chunk …, and region p pairs its
+// m16 blocks 2p and 2p + 1
+PH_HD float narrow_frag(int chunk, int p, int lane, int a, int j, int i) {
+  const int row = 16 * (2 * p + (j >> 2)) + (lane >> 2) + 8 * (i >> 1), col = 32 * chunk + 8 * (j & 3) + 2 * (lane & 3) + (i & 1);
+  const uint32_t w = tile_word(a, row, col);
+  float f;
+  memcpy(&f, &w, 4);
+  return f;
+}
 
 static void hex(const char* where, const char* what, int len, int d, const uint8_t* p, int n) {
   printf("{\"group\":\"hash_check\",\"where\":\"%s\",\"what\":\"%s\",\"len\":%d,\"d\":%d,\"out\":\"", where, what, len, d);
@@ -277,6 +286,7 @@ static void print_checks(const CheckOut& o, const char* w) {
   put_lanes(b, o.pc_leaf, 4), hex(w, "pearl-c leaf", 4096, 0x22, b, 32);
   put_lanes(b, o.pc_leaf_stream, 4), hex(w, "pearl-c leaf stream", 4096, 0x22, b, 32);
   put_lanes(b, o.pc_leaf_quad, 4), hex(w, "pearl-c leaf quad", 4096, 0x22, b, 32);
+  put_lanes(b, o.pc_leaf_narrow, 4), hex(w, "pearl-c leaf narrow", 4096, 0x22, b, 32);
   put_lanes(b, o.pc_rows, 4), hex(w, "pearl-c row segment", 1024, 0x23, b, 32);
   put_le(b, o.pc_ticket[0]), hex(w, "pearl-c ticket 0 0", 64, 0, b, 32);
   put_le(b, o.pc_ticket[1]), hex(w, "pearl-c ticket 48 32", 64, 0, b, 32);
