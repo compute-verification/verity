@@ -29,6 +29,7 @@ TREE = os.environ.get("SWEEP_TREE", f"/workspace/research/trees/{LANE}")
 SELFTEST_EVERY = 25
 STAGE_RES = {"cpus": 2, "memory": 32, "gpus": 0}                 # the K = 2048 GEMM coordinate's stage: 10.7 GiB
 PROVE_RES = {"cpus": 4, "memory": 48, "gpus": 1}
+WHOLEROW_RES = {"cpus": 24, "memory": 48, "gpus": 1}      # 4 CPUs starved the host witness build (GPU 6-13% busy, 3:02 PM PDT)
 SELFTEST_RES = {"cpus": 8, "memory": 128, "gpus": 1}              # its 43-case GPU selftest at the full batch: 101.5 GiB
 CUT_RES = {"cpus": 8, "memory": 96, "gpus": 0}                   # Llama-3.2-1B's: 28 min
 SAMPLED_STAGE_RES = {"cpus": 8, "memory": 64, "gpus": 0}        # the draw (137 s, 5.9 GB for Llama-3.2-1B) and 4 shapes staged at once
@@ -72,7 +73,16 @@ def written() -> set[str]:
     return set(p.read_text().split()) if p.exists() else set()
 
 
+QUESTIONS = {  # Daniel 2:53 PM PDT: every overnight job names the research question it answers (approved by @proofs' research owner)
+    "a": "is each passing deployment's 460-unit sampled audit provable, and at what cost?",
+    "b": "does the per-shape extrapolation predict whole-row cost within 5%?",
+    "sweep": "does every served shape prove, with GPU bytes = CPU bytes, and at what per-shape cost?",
+}
+
+
 def write(item_id: str, item: dict) -> None:
+    q = QUESTIONS.get(item_id.split("-", 1)[0], QUESTIONS["sweep"])
+    item = dict(item, question=q, env=dict(item.get("env") or {}, RESEARCH_QUESTION=q))
     READY.mkdir(parents=True, exist_ok=True)
     tmp = READY / f".{item_id}.tmp"
     tmp.write_text(json.dumps(item, sort_keys=True))
@@ -88,7 +98,7 @@ def item(row: str, sh: list[str], mode: str, i: int) -> dict:
     st = [s for j, s in enumerate(sh, i) if j % SELFTEST_EVERY == 0]
     if mode == "shape" and st:
         env, res = env + f" SELFTEST_SHAPES={','.join(st)} SELFTEST_GPU=1", SELFTEST_RES
-    return {"template": "prover-bench", "tree": TREE, "queue": "provers", "priority": "dev", "resources": {"prover-bench": res},
+    return {"template": "prover-bench", "tree": TREE, "queue": "backfill", "priority": "backfill", "resources": {"prover-bench": res},
             "env": {"CAMPAIGN": "backend-sweep", "CMD": f"bash backends/flock/pod/73-sweep-shape.sh {env}"}}
 
 
@@ -99,7 +109,7 @@ def jobs(t: str, n: int, chunk_from: int) -> list[tuple[int, int, str]]:
 
 
 def cut_item(row: str, build: str) -> dict:
-    return {"template": "prover-dev", "tree": TREE, "queue": "provers", "priority": "dev", "resources": {"prover-dev": CUT_RES},
+    return {"template": "prover-dev", "tree": TREE, "queue": "backfill", "priority": "backfill", "resources": {"prover-dev": CUT_RES},
             "env": {"CAMPAIGN": "backend-sweep", "CMD": f"bash backends/flock/pod/73-sweep-shape.sh MODE=cut ROW={row} BUILD={build}"}}
 
 
@@ -178,12 +188,17 @@ def wholerow(b: dict, d: dict, w: set) -> tuple[list[tuple[str, dict]], dict]:
           "measured_gpu_held_h": round(job_s / n * total / 3600, 3) if n else None,
           "runs": [x.get("run") for x in ok]}
     st["gap"] = round(st["measured_gpu_h"] / st["extrapolated_gpu_h"] - 1, 4) if n else None
+    agreed = STATE / "b-agreed.json"
+    if n and not agreed.exists() and len(ok) >= int(b["min_chunks"]) and abs(st["gap"]) <= float(b["tol"]):
+        agreed.write_text(json.dumps(dict(st, t=time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime())), indent=1))
+    if agreed.exists():
+        st["agreed"] = json.loads(agreed.read_text()).get("t")
     stopped = STATE / "b-stop.json"
     if stopped.exists():
         return [], json.loads(stopped.read_text())
     if len(ended) > len(ok):
         st["stop"] = "a chunk failed"
-    elif len(ok) >= int(b["min_chunks"]) and abs(st["gap"]) <= float(b["tol"]):
+    elif len(ok) >= int(b["min_chunks"]) and abs(st["gap"]) <= float(b["tol"]) and b.get("stop_on_agree", True):
         st["stop"] = f"agrees within {float(b['tol']):.0%}"
     elif len(ok) == len(ids):
         st["stop"] = "the whole row proved"
@@ -194,10 +209,10 @@ def wholerow(b: dict, d: dict, w: set) -> tuple[list[tuple[str, dict]], dict]:
     inflight = sum(1 for x in ids if x[0] in w and x[0] not in d)
     todo = []
     for item_id, i, m in ids:
-        if item_id not in w and inflight < int(b["parallel"]):
+        if item_id not in w and inflight < int(b["parallel"]) and i <= int(b.get("last_start", total)):
             env = (f"MODE=shape ROW={row} SHAPES={digest} RUNS={m} WARM=1 FLOCK_KEEP_SESSIONS=3 "
                    f"SUMMARY={SWEEP}/wholerow/{item_id}.json")
-            todo.append((item_id, shape_item(env, PROVE_RES)))
+            todo.append((item_id, shape_item(env, WHOLEROW_RES)))
             inflight += 1
     return todo, st
 
@@ -208,6 +223,7 @@ def sampled(deps: list[tuple[str, str]], d: dict, w: set, ahead: int = 2) -> tup
     GPU cases (the device's proofs and transcripts against the CPU's) all pass."""
     todo, st = [], {"deployments": len(deps), "staged": 0, "queued": 0, "done": 0, "failed": 0, "first": None}
     gate = None
+    first_ended = False
     staging = 0
     for j, (slug, ev) in enumerate(deps):
         t = f"a-{tag(slug)}"
@@ -226,16 +242,18 @@ def sampled(deps: list[tuple[str, str]], d: dict, w: set, ahead: int = 2) -> tup
             s0 = summary(f"sampled/{slug}/summary.json") if pid in d else None
             st["first"] = s0 and {k: s0.get(k) for k in ("run", "shapes", "proved", "statements", "accepted_statements", "units", "prove_total_s",
                                                           "job_s", "selftests", "selftests_pass", "gpu_cases", "gpu_cases_pass", "gpu_case_names")}
+            first_ended = pid in d
             gate = bool(s0 and s0.get("rc") == 0 and s0["selftests"] and s0["selftests_pass"] == s0["selftests"]
                         and s0["gpu_cases"] and s0["gpu_cases_pass"] == s0["gpu_cases"])
-        elif not gate:
+        elif not gate and first_ended:
             continue
         if failed:
             continue
+        hold = j > 0 and not gate  # stage on CPU before the gate; prove only after it
         if sid not in w and staging < ahead:
             todo.append((sid, shape_item(f"MODE=sampled-stage ROW={slug} EV={ev} JOBS=4", SAMPLED_STAGE_RES)))
             staging += 1
-        elif d.get(sid, {}).get("state") == "succeeded" and pid not in w:
+        elif d.get(sid, {}).get("state") == "succeeded" and pid not in w and not hold:
             env = f"MODE=sampled ROW={slug} EV={ev} SUMMARY={SWEEP}/sampled/{slug}/summary.json FLOCK_KEEP_SESSIONS=3"
             if j == 0:
                 env += f" SELFTEST={SAMPLED_SELFTEST} SELFTEST_GPU=1"
@@ -264,7 +282,7 @@ def main() -> int:
             todo += t
         if a.deployments:
             deps = [tuple(ln.split("=", 1)) for ln in Path(a.deployments).read_text().splitlines() if "=" in ln]
-            t, out["a"] = sampled(deps, d, w)
+            t, out["a"] = sampled(deps, d, w, ahead=4)
             todo += t
         # (a) and (b) first; the shape sweep only fills in, one file a tick, while they have nothing to write
         if todo and a.cmd != "status" and clear_to_write():
