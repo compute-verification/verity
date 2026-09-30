@@ -42,8 +42,8 @@ off) is `clean`: the same α and block rule on α·x, no noise.
 as Pearl-C's H100 argument had it.  The design rests instead on every code and every block scale depending on the salt.
 
 **The domain and the debit** are the theory lane's (research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
-§1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (a_E a normal
-UE4M3, one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
+§1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β
+and a_E's E4M3 byte v in 8 ≤ v < 128, a normal UE4M3 with bit 7 clear; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
 and every element of it is charged as salt-dead (items 3 and 4), so a row with many screened blocks is rejected only when
 its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  A drawn tile's debit is replayed
 over its credited words (`tile_debit`):
@@ -426,14 +426,23 @@ def dead_blocks(fmt: Fmt, x: Sequence[int]) -> list[bool]:
             for b in range(0, len(x), fmt.block)]
 
 
+def dnf(beta: int) -> bool:
+    """D-NF on a row's β_row word: 0 ≤ β, and a_E's E4M3 byte v, the cast with its sign, has 8 ≤ v < 128 (a normal
+    UE4M3, at least 2^-6).  The pinned `stats` never makes β negative, but the rule states both: a negative β casts to a
+    byte with bit 7 set, which a check of 8 ≤ v alone admits and sm_120 reads from its low 7 bits, so at β = −1/4096 the
+    byte 0x80 would be a zero scale and the row's noise zero (bc-824e54a2's post-M4 rebuild)."""
+    v = P.f32_to_fp8(P.f32_of_bits(beta))
+    return not beta >> 31 and UE4M3_NORMAL <= v < 0x80
+
+
 def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
-    """Admission, per row and salt-free: D-NF (a_E is a normal UE4M3, at least 2^-6).  A row's screened blocks are
-    charged in its tiles' debit (`tile_debit`), and the tile's cap rejects them."""
+    """Admission, per row and salt-free: D-NF (`dnf`).  A row's screened blocks are charged in its tiles' debit
+    (`tile_debit`), and the tile's cap rejects them."""
     try:
-        ae = stats(fmt, x)[4]
+        beta = stats(fmt, x)[3]
     except P.Reject:
         return False
-    return ae >= UE4M3_NORMAL
+    return dnf(beta)
 
 
 def scale_dyadic(fmt: Fmt, byte: int) -> tuple[int, int]:
@@ -730,5 +739,5 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "e2m1", "form", "hw_scales", "line",
+__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "dnf", "e2m1", "form", "hw_scales", "line",
            "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]

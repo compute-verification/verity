@@ -460,7 +460,10 @@ useful    U/(α_A·α_B), glue
   (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
   stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
-  strictly row-relative).
+  strictly row-relative). It reads (`dnf`) 0 ≤ β and 8 ≤ v < 128, where v is β's E4M3 byte with its sign. The pinned
+  stats never make β negative, but a negative β would cast to a byte with bit 7 set: at β = −1/4096 the byte 0x80
+  passes 8 ≤ v alone, and sm_120 reads it from its low 7 bits as a zero scale, so the row would carry no noise.
+  (bc-824e54a2's post-M4 rebuild.)
 - **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
   (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Items 3 and 4 below charge every
   element of a screened block as salt-dead, so a row with many screened blocks is rejected only when its tile's debit

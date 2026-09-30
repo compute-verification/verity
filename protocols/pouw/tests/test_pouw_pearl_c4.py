@@ -170,6 +170,26 @@ def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 25
     return F.bf16_row(w)
 
 
+def test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise():
+    """D-NF with bc-824e54a2's two fixes: 0 ≤ β, and a_E's E4M3 byte v < 128.  At β = −1/4096 the cast gives 0x80, which
+    a check of 8 ≤ v alone admits and sm_120 reads from its low 7 bits as a zero scale, so the row's noise would be zero.
+    A larger negative β (−1.0, byte 0xB8) would read as +1.0; D-NF rejects both.  The pinned stats never make β negative,
+    and every honest row's verdict is unchanged."""
+    neg = P.f32_bits(-1 / 4096)
+    assert P.f32_to_fp8(P.f32_of_bits(neg)) == 0x80 and F.scale_dyadic(F.NVFP4, 0x80)[0] == 0
+    assert not F.dnf(neg) and not F.dnf(P.f32_bits(-1.0)) and not F.dnf(P.f32_bits(-0.0))
+    assert F.dnf(P.f32_bits(2.0 ** -6)) and F.dnf(P.f32_bits(448.0)) and F.dnf(P.f32_bits(1e30))
+    assert not F.dnf(P.f32_bits(2.0 ** -7)) and not F.dnf(P.f32_bits(0.0))
+    for fmt in FMTS:
+        f = F.FORMATS[fmt]
+        rows = [F.parse_row(r, 1024) for r in V.rows("dnf", "A", 8, 1024)] + [[0] * 1024]
+        rows.append(F.parse_row(spiked(V.rows("dnf", "A", 1, 1024)[0], 1024, value=2.0 ** 16), 1024))
+        for x in rows:
+            beta, ae = F.stats(f, x)[3:]
+            assert not beta >> 31
+            assert F.row_passes(f, x) == (ae >= F.UE4M3_NORMAL)
+
+
 @pytest.mark.parametrize("fmt", FMTS)
 def test_dead_screen_is_90_rho_squared(fmt):
     """ρ = 1 (every 8th position at 1.0): a block whose |max| is 9.4375 is live, 9.5 (just past √90) and 10 (live under the
