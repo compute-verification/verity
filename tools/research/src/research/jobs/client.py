@@ -48,18 +48,20 @@ def load_token(environ: dict[str, str] | None = None, path: Path | None = None, 
 
 
 class HTTPClient:
-    def __init__(self, url: str | None = None, token: str | None = None):
+    def __init__(self, url: str | None = None, token: str | None = None, anonymous: bool = False):
+        """`anonymous`: send no token (asking for one, `research auth request`)."""
         self.url = (url or os.environ.get(URL_ENV) or DEFAULT_URL).rstrip("/")
-        self._token = token if token is not None else load_token()
+        self._token = None if anonymous else token if token is not None else load_token()
 
     def __repr__(self) -> str:
         return f"HTTPClient({self.url!r})"
 
     def call(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(self.url + path, data=data, method=method,
-                                     headers={"Authorization": f"Bearer {self._token}", "Content-Type": "application/json",
-                                              "User-Agent": "research-jobs"})
+        headers = {"Content-Type": "application/json", "User-Agent": "research-jobs"}
+        if self._token:
+            headers["Authorization"] = f"Bearer {self._token}"
+        req = urllib.request.Request(self.url + path, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
                 raw = r.read()
