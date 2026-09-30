@@ -15,7 +15,7 @@ products.  The lemma's region is 1,024 rows x 512 columns of a unit's output, al
    on every word at k = 1,024 and on the first 64 x 64 tile at k = 8,192; `window_bits` equals the windows recomputed from
    the flags, both orientations; and on that tile the vectorized greedy equals a line-for-line port of
    `internal/pouw/cheap-binding/pearlc_exact_runs.py`'s metrics (steps, run32, tile, frag, win, rect), which are reported.
-4. `unit:<family>`, per census family: A and B, 8,192 x 8,192 codes each, formed on the card by §5 (the host draws X, s,
+4. `unit:<family>`, per census family (`unit:<family>@<run>` for the census's draw `run`, --runs): A and B, 8,192 x 8,192 codes each, formed on the card by §5 (the host draws X, s,
    rho, alpha, C and E' exactly as `form_s5` does; `formed` in sm120_chain/run.py at 8,192 rows), gated on 4,096 sampled
    elements; the unpromoted chain with flags (2 GB), gated on 512 sampled words over all 256 atoms (and `window_bits` on the
    same words over every window, both orientations); then for every one of
@@ -30,7 +30,7 @@ products.  The lemma's region is 1,024 rows x 512 columns of a unit's output, al
    the worst admitted row beside P3's 1/64 bound; `dead_mask` on the card, gated on 2,048 elements per screen against
    census.step.  The same A and B give the merge rates: Strassen's diagonal pair (sum and difference both E4M3, as pearlc_merge_rate.py)
    and each of Strassen's 10 pre-adds, per element and per whole fragment (16 x 32 on A, 32 x 8 on B), and random pairs;
-   and the largest block where the diagonal pair's sum and difference are both E4M3 (`greedy` and `intersect_greedy` on
+   the (A fragment, B fragment) pairs at one k block where all 10 are exact (one Strassen step's condition); and the largest block where the diagonal pair's sum and difference are both E4M3 (`greedy` and `intersect_greedy` on
    A11, A22 and B11, B22 in place: rows and columns are not permuted across quadrants).
 5. `acts:<linear>` with --acts DIR (a pearlc_capture directory; --acts-layers filters by regex): the same measurements with
    A = the linear's captured token rows (the first multiple of 64) and B = its weight rows, formed as in 4; the region
@@ -481,9 +481,13 @@ LUT_DIFF = _OKF & _is_e4m3(np.where(_OKF, _VA - _VB, 0.0))
 LUT_BOTH = LUT_SUM & LUT_DIFF
 
 
-def frag_count(ok: np.ndarray, fr: int, fc: int) -> tuple[int, int]:
+def frag_mask(ok: np.ndarray, fr: int, fc: int) -> np.ndarray:
     r, c = ok.shape
-    f = ok[: r - r % fr, : c - c % fc].reshape(r // fr, fr, c // fc, fc).all(axis=(1, 3))
+    return ok[: r - r % fr, : c - c % fc].reshape(r // fr, fr, c // fc, fc).all(axis=(1, 3))
+
+
+def frag_count(ok: np.ndarray, fr: int, fc: int) -> tuple[int, int]:
+    f = frag_mask(ok, fr, fc)
     return int(f.sum()), int(f.size)
 
 
@@ -497,14 +501,19 @@ def merge_stats(A: np.ndarray, Bs: np.ndarray, seed: int) -> dict:
     # in Bs's layout (rows j of n, columns l of k): B11 = Bs[:nh, :kh], B12 = Bs[nh:, :kh], B21 = Bs[:nh, kh:], B22 = Bs[nh:, kh:]
     B11, B12, B21, B22 = Bs[:nh, :kh], Bs[nh:, :kh], Bs[:nh, kh:], Bs[nh:, kh:]
     out = {}
+    all5 = {"A": None, "B": None}
     for name, x, y, lut, fr in (("A11+A22", A11, A22, LUT_SUM, 16), ("A21+A22", A21, A22, LUT_SUM, 16),
                                 ("A11+A12", A11, A12, LUT_SUM, 16), ("A21-A11", A21, A11, LUT_DIFF, 16),
                                 ("A12-A22", A12, A22, LUT_DIFF, 16), ("B11+B22", B11, B22, LUT_SUM, 8),
                                 ("B12-B22", B12, B22, LUT_DIFF, 8), ("B21-B11", B21, B11, LUT_DIFF, 8),
                                 ("B11+B12", B11, B12, LUT_SUM, 8), ("B21+B22", B21, B22, LUT_SUM, 8)):
         ok = lut[x, y]
-        hits, total = frag_count(ok, fr, 32)
-        out[name] = {"element": round(float(ok.mean()), 6), "frag_hits": hits, "frags": total}
+        f = frag_mask(ok, fr, 32)
+        all5[name[0]] = f if all5[name[0]] is None else all5[name[0]] & f
+        out[name] = {"element": round(float(ok.mean()), 6), "frag_hits": int(f.sum()), "frags": int(f.size)}
+    # one Strassen step on a (16-row A fragment, 8-column B fragment) pair at one 32-deep k block needs all 10 pre-adds exact
+    per_kb = all5["A"].sum(0).astype(np.int64) * all5["B"].sum(0)
+    strassen = [int(per_kb.sum()), all5["A"].shape[0] * all5["B"].shape[0] * all5["A"].shape[1]]
     both_a = LUT_BOTH[A11, A22]
     both_b = LUT_BOTH[B11, B22]
     blocks = {}
@@ -523,6 +532,8 @@ def merge_stats(A: np.ndarray, Bs: np.ndarray, seed: int) -> dict:
     return {"pair_A": round(float(both_a.mean()), 6), "pair_B": round(float(both_b.mean()), 6),
             "rand_A": round(float(ra.mean()), 6), "frag_both_A": [fa, fna], "frag_both_B": [fb, fnb],
             "preadds": out, "preadd_frag_hits": hits, "preadd_frags": frags, "pair_blocks": blocks,
+            "all5_A": [int(all5["A"].sum()), int(all5["A"].size)], "all5_B": [int(all5["B"].sum()), int(all5["B"].size)],
+            "strassen_frag_pairs": strassen,
             "zero_share_A": round(float(((A & 0x7F) == 0).mean()), 6), "zero_share_B": round(float(((Bs & 0x7F) == 0).mean()), 6)}
 
 
@@ -588,10 +599,13 @@ def refcheck(dev: Dev, fh) -> dict:
     return res
 
 
-def unit(dev: Dev, fh, fam: str, k: int, rows: int, seed: int) -> dict:
+def unit(dev: Dev, fh, item: str, k: int, rows: int, seed: int) -> dict:
+    fam, _, run = item.split(":", 1)[1].partition("@")
     t_start = time.time()
-    sides = operands(dev, fam, k, rows)
-    return measure(dev, fh, f"unit:{fam}", fam, sides, k, seed, t_start, mask=False)
+    sides = operands(dev, fam, k, rows, int(run or 1))
+    res = measure(dev, fh, item, fam, sides, k, seed, t_start, mask=False)
+    res["run"] = int(run or 1)
+    return res
 
 
 def acts_unit(dev: Dev, fh, rd: Path, name: str, seed: int) -> dict:
@@ -728,6 +742,7 @@ def main() -> None:
     ap.add_argument("--expect-uuid", required=True)
     ap.add_argument("--clock-label", default="unlocked")
     ap.add_argument("--families", default=",".join(UNIT_FAMILIES))
+    ap.add_argument("--runs", default="1", help="the census draws per family: run 1 is unit:<family>, run r unit:<family>@r")
     ap.add_argument("--k", type=int, default=8192)
     ap.add_argument("--rows", type=int, default=8192)
     ap.add_argument("--budget-min", type=float, default=5.5)
@@ -742,7 +757,8 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     fh = open(out_dir / "log.jsonl", "a")
     census.set_atom(ATOM)
-    items = ["refcheck", *(f"unit:{f}" for f in args.families.split(",") if f)]
+    items = ["refcheck", *(f"unit:{f}" if r == "1" else f"unit:{f}@{r}"
+                           for r in args.runs.split(",") for f in args.families.split(",") if f)]
     if args.acts:
         names = json.loads((Path(args.acts) / "manifest.json").read_text())["inputs"]
         items += [f"acts:{x}" for x in names if re.search(args.acts_layers, x)]
@@ -795,7 +811,7 @@ def main() -> None:
         elif item.startswith("acts:"):
             res = acts_unit(dev, fh, Path(args.acts), item.split(":", 1)[1], args.seed)
         else:
-            res = unit(dev, fh, item.split(":", 1)[1], args.k, args.rows, args.seed)
+            res = unit(dev, fh, item, args.k, args.rows, args.seed)
         res.update({"identity": ident, "build_cubin_sha256": rec["cubin_sha256"], "clocks": nvml.read(),
                     "clock_label": args.clock_label})
         if not res["ok"]:
@@ -825,13 +841,16 @@ def write_summary(out_dir: Path, items: list[str], fh) -> None:
             continue
         r = json.loads((out_dir / f"{item.replace(':', '-')}.json").read_text())
         w, mg = r["windows"], r["merge"]
-        rows.append({"family": r["family"], "rules_ok": r["rules_ok"], "steps_exact": r["steps_exact"],
+        rows.append({"item": item, "family": r["family"], "run": r.get("run"), "rules_ok": r["rules_ok"],
+                     "rows_admitted": r["rows_admitted"], "steps_exact": r["steps_exact"],
                      "density": [w["density_min"], w["density_max"]], "frags16x8_max": w["frags16x8_max"],
                      "best_by_rows": w["best_by_rows"]["rows_x_cols"], "best_by_cols": w["best_by_cols"]["cols_x_rows"],
                      "intersect_best": max([x for s in w["intersect_greedy"] for x in (s["rows_x_cols"], s["cols_x_rows"][::-1])],
                                            key=lambda x: x[0] * x[1], default=[0, 0]),
                      "lemma_block_found": w["lemma_block_found"], "tile64": r["tile64"]["row"],
                      "merge_pair_A": mg["pair_A"], "merge_frag_hits": mg["preadd_frag_hits"], "merge_frags": mg["preadd_frags"],
+                     "merge_hits_by_preadd": {n: v["frag_hits"] for n, v in mg["preadds"].items() if v["frag_hits"]},
+                     "strassen_frag_pairs": mg["strassen_frag_pairs"], "pair_blocks": mg["pair_blocks"],
                      "salt_dead": {s: {n: [v["share"], v["share_admitted"], v["worst_row_admitted"]]
                                        for n, v in r["salt_dead"][s].items() if n != "gate_mismatches"} for s in "AB"}})
     doc = {"tool": "pouw_sm120_exact", "rows": rows,
@@ -839,15 +858,19 @@ def write_summary(out_dir: Path, items: list[str], fh) -> None:
     path = out_dir / "summary.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")
     emit(fh, {"summary": rows})
-    hits = sum(r["merge_frag_hits"] for r in rows)
-    frags = sum(r["merge_frags"] for r in rows)
-    found = sum(r["lemma_block_found"] for r in rows)
-    biggest = max((x[0] * x[1] for r in rows for x in (r["best_by_rows"], r["best_by_cols"], r["intersect_best"])), default=0)
+    dom = [r for r in rows if r["rules_ok"] or r["item"].startswith("acts:")]
+    hits = sum(r["merge_frag_hits"] for r in dom)
+    frags = sum(r["merge_frags"] for r in dom)
+    sp = [sum(r["strassen_frag_pairs"][i] for r in dom) for i in (0, 1)]
+    found = sum(r["lemma_block_found"] for r in dom)
+    biggest = max((x[0] * x[1] for r in dom for x in (r["best_by_rows"], r["best_by_cols"], r["intersect_best"])), default=0)
     run_result.write(path, True, "sm120-exact",
-                     f"{len(rows)} units; lemma block found in {found}; largest block {biggest} words; merge frags {hits}/{frags}",
-                     [("units", len(rows), "count"), ("lemma_block_units", found, "count"),
+                     f"{len(rows)} units, {len(dom)} admitted; there: lemma block found in {found}, largest block {biggest} "
+                     f"words, pre-add fragments exact {hits}/{frags}, Strassen fragment pairs {sp[0]}/{sp[1]}",
+                     [("units", len(rows), "count"), ("units_admitted", len(dom), "count"), ("lemma_block_units", found, "count"),
                       ("largest_block_words", biggest, "words"), ("merge_fragment_hits", hits, "count"),
-                      ("merge_fragments", frags, "count")])
+                      ("merge_fragments", frags, "count"), ("strassen_frag_pair_hits", sp[0], "count"),
+                      ("strassen_frag_pairs", sp[1], "count")])
 
 
 if __name__ == "__main__":
