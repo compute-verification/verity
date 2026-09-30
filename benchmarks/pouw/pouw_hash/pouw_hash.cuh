@@ -62,6 +62,19 @@ PH_HD uint64_t le64(const uint8_t* p) {
 // ---- Keccak-p[1600, n_r] ----------------------------------------------------------------------------------------------------
 
 PH_HD uint64_t rol64(uint64_t x, int n) { return n ? (x << n) | (x >> (64 - n)) : x; }
+// The same as two funnel shifts (SHF.L.W), which ptxas doesn't choose on its own for every rotation: on sm_120a it lowers some
+// plain rotations to IMAD.SHL + LOP3 + SHF (Keccak-p12: 2,976 instructions, 324 of them IMAD.SHL, against about 2,200 as SHF).
+PH_HD uint64_t rol64_shf(uint64_t x, int n) {
+#ifdef __CUDA_ARCH__
+  const uint32_t lo = (uint32_t)x, hi = (uint32_t)(x >> 32);
+  if (n == 0) return x;
+  if (n == 32) return lane_u32x2(hi, lo);
+  if (n < 32) return lane_u32x2(__funnelshift_l(hi, lo, n), __funnelshift_l(lo, hi, n));
+  return lane_u32x2(__funnelshift_l(lo, hi, n - 32), __funnelshift_l(hi, lo, n - 32));
+#else
+  return rol64(x, n);
+#endif
+}
 // one LOP3 per 32-bit half; the host evaluates the same truth table (bit a·4 + b·2 + c of LUT)
 template <int LUT>
 PH_HD uint32_t lop3(uint32_t a, uint32_t b, uint32_t c) {
@@ -86,9 +99,18 @@ PH_HD uint64_t chi(uint64_t a, uint64_t b, uint64_t c) { return lop3_64<0xD2>(a,
 
 // Rounds 24 − ROUNDS … 23 of Keccak-f[1600] on 25 lanes (index x + 5y): ROUNDS = 12 is TurboSHAKE128's permutation, 24
 // Keccak-f (SHAKE). Theta's parity, theta's apply and chi are three-input LOP3s (hash90: 4,309 instructions per Keccak-f on
-// sm_90a against 4,651 for ptxas's own fusion of the plain expressions).
-template <int ROUNDS>
-PH_HD void keccak_p(uint64_t s[25]) {
+// sm_90a against 4,651 for ptxas's own fusion of the plain expressions). SHF: rotations as funnel shifts (rol64_shf), the
+// default (PH_KECCAK_SHF): on sm_120a with CUDA 12.9, 2,320 instructions per Keccak-p12 (1,509 LOP3, 696 SHF) against 2,976
+// (1,833 LOP3, 696 SHF, 329 IMAD) as ptxas lowers the plain rotations; the rates' p12s / p12i rows time both. PH_KECCAK_INLINE: define it (before this header)
+// as __host__ __device__ __noinline__ where code size matters more than speed (the check kernels).
+#ifndef PH_KECCAK_SHF
+#define PH_KECCAK_SHF true
+#endif
+#ifndef PH_KECCAK_INLINE
+#define PH_KECCAK_INLINE PH_HD
+#endif
+template <int ROUNDS, bool SHF = PH_KECCAK_SHF>
+PH_KECCAK_INLINE void keccak_p(uint64_t s[25]) {
   const uint64_t RC[24] = {0x0000000000000001ull, 0x0000000000008082ull, 0x800000000000808aull, 0x8000000080008000ull,
                            0x000000000000808bull, 0x0000000080000001ull, 0x8000000080008081ull, 0x8000000000008009ull,
                            0x000000000000008aull, 0x0000000000000088ull, 0x0000000080008009ull, 0x000000008000000aull,
@@ -104,7 +126,7 @@ PH_HD void keccak_p(uint64_t s[25]) {
     for (int i = 0; i < 5; ++i) bc[i] = xor3(xor3(s[i], s[i + 5], s[i + 10]), s[i + 15], s[i + 20]);
 #pragma unroll
     for (int i = 0; i < 5; ++i) {
-      const uint64_t p = bc[(i + 4) % 5], q = rol64(bc[(i + 1) % 5], 1);
+      const uint64_t p = bc[(i + 4) % 5], q = SHF ? rol64_shf(bc[(i + 1) % 5], 1) : rol64(bc[(i + 1) % 5], 1);
 #pragma unroll
       for (int j = 0; j < 25; j += 5) s[j + i] = xor3(s[j + i], p, q);
     }
@@ -113,7 +135,7 @@ PH_HD void keccak_p(uint64_t s[25]) {
     for (int i = 0; i < 24; ++i) {
       const int j = PI[i];
       const uint64_t x = s[j];
-      s[j] = rol64(t, ROT[i]);
+      s[j] = SHF ? rol64_shf(t, ROT[i]) : rol64(t, ROT[i]);
       t = x;
     }
 #pragma unroll

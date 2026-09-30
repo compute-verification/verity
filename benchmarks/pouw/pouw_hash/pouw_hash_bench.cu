@@ -1,6 +1,5 @@
 // pouw_hash.cuh's vectors, rates and epilogue cost, as JSON lines.
-//   pouw_hash_host check                  (g++ -x c++, no CUDA) the vectors from the host build
-//   pouw_hash_bench check                 the same vectors from the device (one thread; the quad transpose on one warp)
+//   pouw_hash_bench check                 the vectors from the device (pouw_hash_check.cu; the host build prints the same)
 //   pouw_hash_bench rates [ms] [filter]   every lane busy, then one thread's latency, then the concurrency sweep
 //   pouw_hash_bench epi [ms] [filter]     an FP8 mma.sync GEMM tile loop with Pearl-C's epilogue, hashed and not
 // The device build refuses to run (exit 3) unless the visible device's UUID is $POUW_EXPECT_UUID. check.py holds the check
@@ -8,295 +7,7 @@
 //
 // Rates are message bytes per SM per SM clock (per_sm_clk, from each block's clock64 span on its SM) and GB/s (CUDA events
 // over the launch). The units per byte that the accounting uses are the device's MACs per SM per clock over per_sm_clk:
-// check.py's summary divides by a measured GEMM rate; nothing here assumes one.
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "pouw_hash.cuh"
-
-constexpr uint64_t PHI = 0x9E3779B97F4A7C15ull;
-constexpr uint32_t PHI32 = 0x9E3779B9u;
-
-PH_HD uint32_t mix32(uint32_t x) {
-  x ^= x >> 16;
-  x *= 0x7feb352du;
-  x ^= x >> 15;
-  x *= 0x846ca68bu;
-  x ^= x >> 16;
-  return x;
-}
-// the check tile's words (finite FP32: bit 30 clear), and the quad check's fragment words
-PH_HD uint32_t tile_word(int which, int r, int c) { return mix32(2u * (64u * r + c) + which) & 0xBFFFFFFFu; }
-PH_HD uint32_t quad_word(int a, int row, int col) { return mix32(0xA5000000u ^ (uint32_t)(a << 16 | row << 8 | col)); }
-PH_HD uint8_t ptn(size_t i) { return (uint8_t)(i % 251); }
-
-// ---------------------------------------------------------------- the check vectors
-constexpr int NTS = 11, NTSL = 12, NSH = 6, NSHA = 10, NSHAW = 7, NB3 = 8;
-struct TsCase { int n, d, out; };
-PH_HD TsCase ts_case(int i) {
-  const TsCase C[NTS] = {{0, 0x1F, 32}, {0, 0x1F, 200}, {1, 0x1F, 32}, {17, 0x01, 32}, {167, 0x06, 32}, {168, 0x1F, 32},
-                         {169, 0x21, 64}, {255, 0x21, 32}, {256, 0x21, 32}, {289, 0x0B, 32}, {4096, 0x22, 32}};
-  return C[i];
-}
-PH_HD int tsl_case(int i) {
-  const int C[NTSL] = {0, 1, 20, 21, 22, 32, 41, 42, 63, 128, 160, 512};
-  return C[i];
-}
-PH_HD int sh_case(int i) {
-  const int C[NSH] = {0, 135, 136, 137, 168, 1000};
-  return C[i];
-}
-PH_HD int sha_case(int i) {
-  const int C[NSHA] = {0, 1, 55, 56, 63, 64, 65, 119, 120, 1000};
-  return C[i];
-}
-PH_HD int shaw_case(int i) {
-  const int C[NSHAW] = {0, 1, 13, 14, 16, 30, 64};
-  return C[i];
-}
-PH_HD int b3_case(int i) {
-  const int C[NB3] = {0, 1, 63, 64, 65, 104, 1023, 1024};
-  return C[i];
-}
-
-struct CheckOut {
-  uint8_t ts[NTS][200], tsl[NTSL][32], tss[3][32], shake128[NSH][32], shake256[NSH][32], sha[NSHA][32], shaw[NSHAW][32];
-  uint8_t b3[NB3][32], b3k[NB3][32], b3block[32];
-  uint64_t pc_d0[4], pc_d127[4], pc_leaf[4], pc_leaf_stream[4], pc_leaf_quad[4], pc_rows[4];
-  uint32_t pc_ticket[2][8];
-  uint64_t quad[32][4], msg_stream[4];
-  uint32_t sha_stream[8], b3_stream[8];
-};
-
-template <class Lane>
-PH_HD void tsl_dispatch(int i, uint8_t D, const Lane& lane, uint64_t out[4]) {
-  switch (tsl_case(i)) {
-    case 0: ph::ts128<0>(D, lane, out); break;
-    case 1: ph::ts128<1>(D, lane, out); break;
-    case 20: ph::ts128<20>(D, lane, out); break;
-    case 21: ph::ts128<21>(D, lane, out); break;
-    case 22: ph::ts128<22>(D, lane, out); break;
-    case 32: ph::ts128<32>(D, lane, out); break;
-    case 41: ph::ts128<41>(D, lane, out); break;
-    case 42: ph::ts128<42>(D, lane, out); break;
-    case 63: ph::ts128<63>(D, lane, out); break;
-    case 128: ph::ts128<128>(D, lane, out); break;
-    case 160: ph::ts128<160>(D, lane, out); break;
-    default: ph::ts128<512>(D, lane, out); break;
-  }
-}
-template <class Word>
-PH_HD void shaw_dispatch(int i, const Word& word, uint32_t h[8]) {
-  switch (shaw_case(i)) {
-    case 0: ph::sha256<0>(word, h); break;
-    case 1: ph::sha256<1>(word, h); break;
-    case 13: ph::sha256<13>(word, h); break;
-    case 14: ph::sha256<14>(word, h); break;
-    case 16: ph::sha256<16>(word, h); break;
-    case 30: ph::sha256<30>(word, h); break;
-    default: ph::sha256<64>(word, h); break;
-  }
-}
-PH_HD uint8_t tsl_domain(int i) { return (uint8_t)(0x21 + i % 3); }
-PH_HD void put_lanes(uint8_t* out, const uint64_t* x, int n) {
-  for (int i = 0; i < 8 * n; ++i) out[i] = (uint8_t)(x[i / 8] >> (8 * (i % 8)));
-}
-PH_HD void put_be(uint8_t* out, const uint32_t* h) {
-  for (int i = 0; i < 32; ++i) out[i] = (uint8_t)(h[i >> 2] >> (24 - 8 * (i & 3)));
-}
-PH_HD void put_le(uint8_t* out, const uint32_t* h) {
-  for (int i = 0; i < 32; ++i) out[i] = (uint8_t)(h[i >> 2] >> (8 * (i & 3)));
-}
-PH_HD uint64_t ptn_lane(int j) {
-  uint64_t x = 0;
-  for (int b = 7; b >= 0; --b) x = x << 8 | ptn(8 * j + b);
-  return x;
-}
-PH_HD uint32_t ptn_be_word(int j) {
-  return (uint32_t)ptn(4 * j) << 24 | (uint32_t)ptn(4 * j + 1) << 16 | (uint32_t)ptn(4 * j + 2) << 8 | ptn(4 * j + 3);
-}
-// the timed streams' first iteration of thread 0 (seed z = PHI): msg's lanes z + j PHI; sha's and blake3's chains of 3 blocks
-PH_HD void msg_stream(uint64_t z, uint64_t d[4]) {
-  ph::pearlc::msg_digest([z](int j) { return z + (uint64_t)j * PHI; }, d);
-}
-PH_HD void sha_chain(uint32_t h[8], uint32_t z32, long long n) {
-#pragma unroll 1
-  for (long long b = 0; b < n; ++b) {
-    uint32_t m[16];
-    const uint32_t base = z32 + (uint32_t)(b * 16) * PHI32;
-#pragma unroll
-    for (int i = 0; i < 16; ++i) m[i] = base + (uint32_t)i * PHI32;
-    ph::sha256_compress(h, m);
-  }
-}
-PH_HD void b3_chain(uint32_t cv[8], uint32_t z32, long long n) {
-#pragma unroll 1
-  for (long long b = 0; b < n; ++b) {
-    uint32_t m[16];
-    const uint32_t base = z32 + (uint32_t)(b * 16) * PHI32;
-#pragma unroll
-    for (int i = 0; i < 16; ++i) m[i] = base + (uint32_t)i * PHI32;
-    ph::blake3_compress(cv, m, 0, 64, 0, cv);
-  }
-}
-
-// Everything but the quad transpose (which the device runs on a whole warp): buf holds 4,096 bytes of scratch.
-PH_HD void run_checks(uint8_t* buf, CheckOut* o) {
-  for (int i = 0; i < 4096; ++i) buf[i] = ptn(i);
-  for (int i = 0; i < NTS; ++i) {
-    const TsCase c = ts_case(i);
-    ph::sponge_bytes<12, 168>(buf, c.n, (uint8_t)c.d, o->ts[i], c.out);
-  }
-  for (int i = 0; i < NTSL; ++i) {
-    uint64_t d[4];
-    tsl_dispatch(i, tsl_domain(i), [](int j) { return ptn_lane(j); }, d);
-    put_lanes(o->tsl[i], d, 4);
-  }
-  for (int i = 0; i < 3; ++i) {
-    const int nl = i == 0 ? 21 : i == 1 ? 42 : 512;
-    ph::Ts128Stream st;
-    ph::tss_init(st);
-    for (int j = 0; j < nl; ++j) ph::tss_lane(st, ptn_lane(j));
-    uint64_t d[4];
-    ph::tss_final(st, 0x22, d);
-    put_lanes(o->tss[i], d, 4);
-  }
-  for (int i = 0; i < NSH; ++i) {
-    ph::sponge_bytes<24, 168>(buf, sh_case(i), 0x1F, o->shake128[i], 32);
-    ph::sponge_bytes<24, 136>(buf, sh_case(i), 0x1F, o->shake256[i], 32);
-  }
-  for (int i = 0; i < NSHA; ++i) ph::sha256_bytes(buf, sha_case(i), o->sha[i]);
-  for (int i = 0; i < NSHAW; ++i) {
-    uint32_t h[8];
-    shaw_dispatch(i, [](int j) { return ptn_be_word(j); }, h);
-    put_be(o->shaw[i], h);
-  }
-  uint32_t key[8];
-  for (int i = 0; i < 8; ++i) key[i] = (uint32_t)(4 * i) | (uint32_t)(4 * i + 1) << 8 | (uint32_t)(4 * i + 2) << 16 | (uint32_t)(4 * i + 3) << 24;
-  for (int i = 0; i < NB3; ++i) {
-    ph::blake3_chunk(nullptr, buf, b3_case(i), o->b3[i]);
-    ph::blake3_chunk(key, buf, b3_case(i), o->b3k[i]);
-  }
-  {
-    uint32_t m[16], h[8];
-    for (int i = 0; i < 16; ++i) m[i] = (uint32_t)ptn(4 * i) | (uint32_t)ptn(4 * i + 1) << 8 | (uint32_t)ptn(4 * i + 2) << 16 | (uint32_t)ptn(4 * i + 3) << 24;
-    ph::blake3_keyed_block(key, m, h);
-    put_le(o->b3block, h);
-  }
-  // Pearl-C on the check tile: digests into buf (128 x 32 B), the leaf three ways, a row segment, two tickets
-  uint64_t* dg = reinterpret_cast<uint64_t*>(buf);
-  for (int r = 0; r < 64; ++r)
-    for (int h = 0; h < 2; ++h)
-      ph::pearlc::msg_digest(
-          [&](int j) {
-            const int arr = j >> 4, col = 32 * h + 2 * (j & 15);
-            return ph::lane_u32x2(tile_word(arr, r, col), tile_word(arr, r, col + 1));
-          },
-          dg + 4 * (2 * r + h));
-  for (int i = 0; i < 4; ++i) o->pc_d0[i] = dg[i], o->pc_d127[i] = dg[4 * 127 + i];
-  ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o->pc_leaf);
-  {
-    ph::Ts128Stream st;
-    ph::tss_init(st);
-    for (int i = 0; i < ph::pearlc::LEAF_LANES; ++i) ph::tss_lane(st, dg[i]);
-    ph::tss_final(st, ph::pearlc::D_LEAF, o->pc_leaf_stream);
-  }
-  {
-    uint8_t seed[32], label[20], sub[32];
-    const char* L = "pearl/v4/FP8/jackpot";
-    for (int i = 0; i < 32; ++i) seed[i] = (uint8_t)(0xC0 + i);
-    for (int i = 0; i < 20; ++i) label[i] = (uint8_t)L[i];
-    uint32_t sk[8], tk[8];
-    for (int i = 0; i < 8; ++i) sk[i] = (uint32_t)seed[4 * i] | (uint32_t)seed[4 * i + 1] << 8 | (uint32_t)seed[4 * i + 2] << 16 | (uint32_t)seed[4 * i + 3] << 24;
-    ph::blake3_chunk(sk, label, 20, sub);
-    for (int i = 0; i < 8; ++i) tk[i] = (uint32_t)sub[4 * i] | (uint32_t)sub[4 * i + 1] << 8 | (uint32_t)sub[4 * i + 2] << 16 | (uint32_t)sub[4 * i + 3] << 24;
-    ph::pearlc::ticket(tk, [](int r, int c) { return tile_word(0, r, c); }, o->pc_ticket[0]);
-    ph::pearlc::ticket(tk, [](int r, int c) { return tile_word(0, 48 + r, 32 + c); }, o->pc_ticket[1]);
-  }
-  for (int i = 0; i < 4096; ++i) buf[i] = ptn(i);
-  ph::pearlc::row_segment<128>([&](int j) { return ph::le64(buf + 8 * j); }, o->pc_rows);
-  msg_stream(PHI, o->msg_stream);
-  ph::sha256_iv(o->sha_stream);
-  sha_chain(o->sha_stream, (uint32_t)(PHI >> 32), 3);
-  for (int i = 0; i < 8; ++i) o->b3_stream[i] = (uint32_t)PHI + (uint32_t)i * PHI32;
-  b3_chain(o->b3_stream, (uint32_t)(PHI >> 32), 3);
-}
-// lane's fragment word for the quad check: array a, n8 block j, c[i] of the m16n8 layout on quad_word's grid
-PH_HD float quad_frag(int lane, int a, int j, int i) {
-  const int row = (lane >> 2) + 8 * (i >> 1), col = 8 * j + 2 * (lane & 3) + (i & 1);
-  const uint32_t w = quad_word(a, row, col);
-  float f;
-  memcpy(&f, &w, 4);
-  return f;
-}
-// the check tile's leaf through the quad transpose: region ρ's fragments are tile rows 16ρ …, columns 0 … 63
-PH_HD float tile_frag(int region, int lane, int a, int j, int i) {
-  const int row = 16 * region + (lane >> 2) + 8 * (i >> 1), col = 8 * j + 2 * (lane & 3) + (i & 1);
-  const uint32_t w = tile_word(a, row, col);
-  float f;
-  memcpy(&f, &w, 4);
-  return f;
-}
-
-static void hex(const char* where, const char* what, int len, int d, const uint8_t* p, int n) {
-  printf("{\"group\":\"hash_check\",\"where\":\"%s\",\"what\":\"%s\",\"len\":%d,\"d\":%d,\"out\":\"", where, what, len, d);
-  for (int i = 0; i < n; ++i) printf("%02x", p[i]);
-  printf("\"}\n");
-}
-static void print_checks(const CheckOut& o, const char* w) {
-  uint8_t b[64];
-  for (int i = 0; i < NTS; ++i) hex(w, "turboshake128 bytes", ts_case(i).n, ts_case(i).d, o.ts[i], ts_case(i).out);
-  for (int i = 0; i < NTSL; ++i) hex(w, "turboshake128 lanes", tsl_case(i), tsl_domain(i), o.tsl[i], 32);
-  for (int i = 0; i < 3; ++i) hex(w, "turboshake128 stream", i == 0 ? 21 : i == 1 ? 42 : 512, 0x22, o.tss[i], 32);
-  for (int i = 0; i < NSH; ++i) hex(w, "shake128", sh_case(i), 0x1F, o.shake128[i], 32), hex(w, "shake256", sh_case(i), 0x1F, o.shake256[i], 32);
-  for (int i = 0; i < NSHA; ++i) hex(w, "sha256 bytes", sha_case(i), 0, o.sha[i], 32);
-  for (int i = 0; i < NSHAW; ++i) hex(w, "sha256 words", shaw_case(i), 0, o.shaw[i], 32);
-  for (int i = 0; i < NB3; ++i) hex(w, "blake3", b3_case(i), 0, o.b3[i], 32), hex(w, "blake3 keyed", b3_case(i), 0, o.b3k[i], 32);
-  hex(w, "blake3 keyed block", 64, 0, o.b3block, 32);
-  put_lanes(b, o.pc_d0, 4), hex(w, "pearl-c digest 0", 256, 0x21, b, 32);
-  put_lanes(b, o.pc_d127, 4), hex(w, "pearl-c digest 127", 256, 0x21, b, 32);
-  put_lanes(b, o.pc_leaf, 4), hex(w, "pearl-c leaf", 4096, 0x22, b, 32);
-  put_lanes(b, o.pc_leaf_stream, 4), hex(w, "pearl-c leaf stream", 4096, 0x22, b, 32);
-  put_lanes(b, o.pc_leaf_quad, 4), hex(w, "pearl-c leaf quad", 4096, 0x22, b, 32);
-  put_lanes(b, o.pc_rows, 4), hex(w, "pearl-c row segment", 1024, 0x23, b, 32);
-  put_le(b, o.pc_ticket[0]), hex(w, "pearl-c ticket 0 0", 64, 0, b, 32);
-  put_le(b, o.pc_ticket[1]), hex(w, "pearl-c ticket 48 32", 64, 0, b, 32);
-  for (int l = 0; l < 32; ++l) {
-    char what[32];
-    snprintf(what, sizeof what, "quad lane %d", l);
-    put_lanes(b, o.quad[l], 4), hex(w, what, 256, 0x21, b, 32);
-  }
-  put_lanes(b, o.msg_stream, 4), hex(w, "msg stream", 256, 0x21, b, 32);
-  put_be(b, o.sha_stream), hex(w, "sha stream 3 blocks", 192, 0, b, 32);
-  put_le(b, o.b3_stream), hex(w, "blake3 stream 3 blocks", 192, 0, b, 32);
-  fflush(stdout);
-}
-
-#ifndef __CUDACC__
-// ---------------------------------------------------------------- the host build
-int main(int argc, char** argv) {
-  if (argc < 2 || strcmp(argv[1], "check")) {
-    fprintf(stderr, "usage: pouw_hash_host check\n");
-    return 2;
-  }
-  static uint8_t buf[4096];
-  static CheckOut o;
-  run_checks(buf, &o);
-  ph::quad_msg_digest_warp<2>([](int lane, int a, int j, int i) { return quad_frag(lane, a, j, i); }, 0x21, o.quad);
-  uint64_t dg[4 * ph::pearlc::DIGESTS], d[32][4];
-  for (int region = 0; region < 4; ++region) {
-    ph::quad_msg_digest_warp<2>([&](int lane, int a, int j, int i) { return tile_frag(region, lane, a, j, i); }, 0x21, d);
-    for (int lane = 0; lane < 32; ++lane)
-      for (int i = 0; i < 4; ++i) dg[4 * ph::pearlc::digest_index(region, lane) + i] = d[lane][i];
-  }
-  ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o.pc_leaf_quad);
-  print_checks(o, "host");
-  return 0;
-}
-#else
-// ---------------------------------------------------------------- the device build
+// divide by a GEMM rate measured on the same card (GPU 6's baselines); nothing here assumes one.
 #include <cuda_bf16.h>
 #include <cuda_runtime.h>
 #include <nvml.h>
@@ -307,6 +18,10 @@ int main(int argc, char** argv) {
 #include <map>
 #include <string>
 #include <vector>
+
+#include "vectors.cuh"
+
+void device_checks(CheckOut* h);   // pouw_hash_check.cu
 
 #define CK(x)                                                                                 \
   do {                                                                                        \
@@ -338,25 +53,9 @@ __device__ __forceinline__ unsigned get_smid() {
   __syncthreads();                                                                                            \
   if (threadIdx.x == 0) (rec)[blockIdx.x] = Rec{_c0, (unsigned long long)clock64(), _t0, gtimer(), get_smid(), 0};
 
-// ---- the check kernels
-__global__ void k_check(uint8_t* buf, CheckOut* o) { run_checks(buf, o); }
-__global__ void k_check_quad(CheckOut* o, uint64_t* dg) {
-  __shared__ uint64_t scratch[128];
-  const int lane = threadIdx.x;
-  uint64_t d[4];
-  ph::quad_msg_digest<2>([&](int a, int j, int i) { return quad_frag(lane, a, j, i); }, 0x21, scratch, d);
-  for (int i = 0; i < 4; ++i) o->quad[lane][i] = d[i];
-  for (int region = 0; region < 4; ++region) {
-    ph::quad_msg_digest<2>([&](int a, int j, int i) { return tile_frag(region, lane, a, j, i); }, 0x21, scratch, d);
-    for (int i = 0; i < 4; ++i) dg[4 * ph::pearlc::digest_index(region, lane) + i] = d[i];
-  }
-  __syncwarp();
-  if (lane == 0) ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o->pc_leaf_quad);
-}
-
 // ---- every lane busy, and one thread's latency (the same kernels on one thread)
 PH_HD uint64_t seed(uint32_t t, long long it) { return (uint64_t)(t + 1) * PHI ^ (uint64_t)it << 32; }
-template <int ROUNDS>
+template <int ROUNDS, bool SHF = PH_KECCAK_SHF>
 __global__ void k_perm(long long iters, Rec* rec, uint64_t* out) {
   const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
   uint64_t s[25];
@@ -364,7 +63,7 @@ __global__ void k_perm(long long iters, Rec* rec, uint64_t* out) {
   for (int i = 0; i < 25; ++i) s[i] = seed(t, i);
   BEGIN_REC
 #pragma unroll 1
-  for (long long it = 0; it < iters; ++it) ph::keccak_p<ROUNDS>(s);
+  for (long long it = 0; it < iters; ++it) ph::keccak_p<ROUNDS, SHF>(s);
   END_REC(rec)
   uint64_t x = 0;
 #pragma unroll
@@ -437,6 +136,53 @@ __global__ void k_leaf(long long iters, const uint64_t* dg, int nleaf, Rec* rec,
   out[t] = acc;
 }
 
+// ---- per-instruction throughput: 8 dependent chains in a ring, 16 rounds unrolled, OP_ROUND x 8 = 128 ops per iteration.
+// sass.py holds each kernel's SASS to its opcode (ptxas 12.9 emits add.u32 as IADD3 with RZ, even through volatile inline PTX,
+// and fuses two adds into one IADD3: "iadd2" is IADD3 with RZ, "iadd3" is IADD3 with three sources).
+enum { OP_IADD2, OP_IADD3, OP_LOP3, OP_SHF, OP_PRMT, OP_IMAD, OP_IDP4A, OP_FFMA, OP_LOP3_IMAD, OP_LOP3_SHF, NOPS };
+constexpr int OP_ROUNDS = 16, OP_PER_ITER = 8 * OP_ROUNDS;
+template <int OP>
+__device__ __forceinline__ uint32_t op1(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t d;
+  if constexpr (OP == OP_IADD2) asm volatile("add.u32 %0, %1, %2;" : "=r"(d) : "r"(a), "r"(b));
+  if constexpr (OP == OP_IADD3) d = a + b + c;
+  if constexpr (OP == OP_LOP3) asm volatile("lop3.b32 %0, %1, %2, %3, 0x96;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  if constexpr (OP == OP_SHF) asm volatile("shf.l.wrap.b32 %0, %1, %2, 7;" : "=r"(d) : "r"(a), "r"(b));
+  if constexpr (OP == OP_PRMT) asm volatile("prmt.b32 %0, %1, %2, 0x6543;" : "=r"(d) : "r"(a), "r"(b));
+  if constexpr (OP == OP_IMAD) asm volatile("mad.lo.u32 %0, %1, %2, %3;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  if constexpr (OP == OP_IDP4A) asm volatile("dp4a.u32.u32 %0, %1, %2, %3;" : "=r"(d) : "r"(b), "r"(c), "r"(a));
+  if constexpr (OP == OP_FFMA) {
+    float f;
+    asm volatile("fma.rn.f32 %0, %1, %2, %3;" : "=f"(f) : "f"(__uint_as_float(a)), "f"(0.5f), "f"(__uint_as_float(b)));
+    d = __float_as_uint(f);
+  }
+  return d;
+}
+template <int OP>
+__global__ void k_op(long long iters, Rec* rec, uint64_t* out) {
+  const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t x[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) x[i] = (uint32_t)seed(t, i) | 0x3F800000u * (OP == OP_FFMA);
+  BEGIN_REC
+#pragma unroll 1
+  for (long long it = 0; it < iters; ++it)
+#pragma unroll
+    for (int r = 0; r < OP_ROUNDS; ++r)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) {
+        // the mixes alternate their two opcodes by chain: whether the two share a pipe
+        constexpr int A = OP == OP_LOP3_IMAD || OP == OP_LOP3_SHF ? OP_LOP3 : OP;
+        constexpr int B = OP == OP_LOP3_IMAD ? OP_IMAD : OP == OP_LOP3_SHF ? OP_SHF : OP;
+        x[i] = i & 1 ? op1<B>(x[i], x[(i + 1) & 7], x[(i + 2) & 7]) : op1<A>(x[i], x[(i + 1) & 7], x[(i + 2) & 7]);
+      }
+  END_REC(rec)
+  uint64_t acc = 0;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) acc = acc * 31 + x[i];
+  out[t] = acc;
+}
+
 // ---- the epilogue: an FP8 mma.sync tile loop with Pearl-C's checked words
 // Each warp owns a 32 x 64 output tile (2 regions of m16 x n64: 16 FP8 m16n8k32 per k-step, 64 FP32 accumulators) and runs
 // `tiles` tiles of `ksteps` k-steps (k = 32 ksteps), operands from a shared-memory ring (lane-major, conflict-free, the same
@@ -456,8 +202,12 @@ __device__ __forceinline__ void mma_bf16(float (&d)[4], const uint32_t (&a)[4], 
                : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
                : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
 }
+template <int N>
+struct Int {
+  static constexpr int value = N;
+};
 template <int HASH, int WARPS>
-__global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* rec, uint64_t* digests, uint32_t* y) {
+__global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* rec, uint64_t* digests, uint32_t* y, uint32_t* cap) {
   extern __shared__ uint32_t sm[];
   uint32_t* ring = sm;                                                                       // EPI_STAGES x (EPI_A + EPI_B)
   uint64_t* scratch = reinterpret_cast<uint64_t*>(sm + EPI_STAGES * (EPI_A + EPI_B)) + (threadIdx.x >> 5) * 128;
@@ -516,15 +266,30 @@ __global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* 
         yt[(r * 8 + j) * 64 + lane] = *reinterpret_cast<uint32_t*>(&v2);
         yt[(r * 8 + j) * 64 + 32 + lane] = *reinterpret_cast<uint32_t*>(&w2);
       }
-    if (HASH) {
+    if (HASH && cap && warp == 0 && tile == 0) {   // the gate's copy of warp 0's first tile: [C~, U][row][col]
 #pragma unroll
-      for (int r = 0; r < 2; ++r) {
+      for (int r = 0; r < 2; ++r)
+#pragma unroll
+        for (int j = 0; j < 8; ++j)
+#pragma unroll
+          for (int i = 0; i < 4; ++i) {
+            const int row = 16 * r + (lane >> 2) + 8 * (i >> 1), col = 8 * j + 2 * (lane & 3) + (i & 1);
+            cap[row * 64 + col] = __float_as_uint(ct[r][j][i]);
+            cap[2048 + row * 64 + col] = __float_as_uint(acc[r][j][i]);
+          }
+    }
+    if (HASH) {
+      // one call per region with r fixed at compile time: a rolled loop over r indexes acc and ct at run time (local memory)
+      auto region = [&](auto rc) {
+        constexpr int r = decltype(rc)::value;
         uint64_t d[4];
         ph::quad_msg_digest<2>([&](int arr, int j, int i) { return arr ? acc[r][j][i] : ct[r][j][i]; }, ph::pearlc::D_MESSAGE,
                                scratch, d);
         uint64_t* out = digests + (((size_t)warp * 2 + (tile & 1)) * 64 + r * 32 + lane) * 4;
         out[0] = d[0], out[1] = d[1], out[2] = d[2], out[3] = d[3];
-      }
+      };
+      region(Int<0>{});
+      region(Int<1>{});
     }
   }
   END_REC(rec)
@@ -579,10 +344,10 @@ static RecStats rec_stats(const std::vector<Rec>& r, double per_block) {
 }
 static float time_launch(const std::function<void(long long)>& launch, long long iters) {
   cudaEvent_t a, b;
-  CK(cudaEventCreate(&a)), CK(cudaEventCreate(&b));
+  CK(cudaEventCreate(&a)); CK(cudaEventCreate(&b));
   CK(cudaEventRecord(a));
   launch(iters);
-  CK(cudaEventRecord(b)), CK(cudaEventSynchronize(b)), CK(cudaGetLastError());
+  CK(cudaEventRecord(b)); CK(cudaEventSynchronize(b)); CK(cudaGetLastError());
   float ms;
   CK(cudaEventElapsedTime(&ms, a, b));
   cudaEventDestroy(a), cudaEventDestroy(b);
@@ -658,17 +423,8 @@ int main(int argc, char** argv) {
   if (int rc = check_uuid(prop)) return rc;
   const char* mode = argc > 1 ? argv[1] : "";
   if (!strcmp(mode, "check")) {
-    uint8_t* buf;
-    CheckOut* o;
-    uint64_t* dg;
-    CK(cudaMalloc(&buf, 4096)), CK(cudaMalloc(&o, sizeof(CheckOut))), CK(cudaMalloc(&dg, 4096));
-    CK(cudaDeviceSetLimit(cudaLimitStackSize, 32768));
-    k_check<<<1, 1>>>(buf, o);
-    CK(cudaDeviceSynchronize());
-    k_check_quad<<<1, 32>>>(o, dg);
-    CK(cudaDeviceSynchronize());
-    CheckOut h;
-    CK(cudaMemcpy(&h, o, sizeof h, cudaMemcpyDeviceToHost));
+    static CheckOut h;
+    device_checks(&h);
     print_checks(h, "device");
     return 0;
   }
@@ -687,6 +443,8 @@ int main(int argc, char** argv) {
       const char* g = single ? "latency" : "rate";
       row(filter, g, "p12: Keccak-p[1600, 12] (TurboSHAKE128), 168 B per permutation", k_perm<12>, 168, th, 0, 0,
           [&](int b, int t, size_t, long long it, Rec* r) { k_perm<12><<<b, t>>>(it, r, out); });
+      row(filter, g, "p12x: Keccak-p[1600, 12], the other rotations (not PH_KECCAK_SHF's)", k_perm<12, !PH_KECCAK_SHF>, 168, th,
+          0, 0, [&](int b, int t, size_t, long long it, Rec* r) { k_perm<12, !PH_KECCAK_SHF><<<b, t>>>(it, r, out); });
       row(filter, g, "f24: Keccak-f[1600] (SHAKE128's rate), 168 B per permutation", k_perm<24>, 168, th, 0, 0,
           [&](int b, int t, size_t, long long it, Rec* r) { k_perm<24><<<b, t>>>(it, r, out); });
       row(filter, g, "sha: SHA-256 compressions, chained, 64 B each", k_sha, 64, th, 0, 0,
@@ -701,6 +459,17 @@ int main(int argc, char** argv) {
       row(filter, g, "leaf: Pearl-C tile leaf from L2, 4,096 B, 25 permutations", k_leaf, 4096, th, 0, 0,
           [&](int b, int t, size_t, long long it, Rec* r) { k_leaf<<<b, t>>>(it, dg, nleaf, r, out); });
     }
+    // per-instruction throughput (thread-ops per SM per clock: per_sm_clk with bytes_per_iter = ops per iteration)
+    const char* opn[NOPS] = {"op iadd2: IADD3 with RZ (add.u32)", "op iadd3: IADD3, three sources", "op lop3", "op shf: SHF.L.W",
+                             "op prmt", "op imad", "op idp4a", "op ffma", "op lop3+imad (half each)", "op lop3+shf (half each)"};
+    auto op_row = [&](int k, auto kern) {
+      row(filter, "op", opn[k], kern, OP_PER_ITER, 128, 0, 0,
+          [&, kern](int b, int t, size_t, long long it, Rec* r) { kern<<<b, t>>>(it, r, out); }, ",\"unit\":\"thread-ops\"");
+    };
+    op_row(OP_IADD2, k_op<OP_IADD2>), op_row(OP_IADD3, k_op<OP_IADD3>), op_row(OP_LOP3, k_op<OP_LOP3>);
+    op_row(OP_SHF, k_op<OP_SHF>), op_row(OP_PRMT, k_op<OP_PRMT>), op_row(OP_IMAD, k_op<OP_IMAD>);
+    op_row(OP_IDP4A, k_op<OP_IDP4A>), op_row(OP_FFMA, k_op<OP_FFMA>);
+    op_row(OP_LOP3_IMAD, k_op<OP_LOP3_IMAD>), op_row(OP_LOP3_SHF, k_op<OP_LOP3_SHF>);
     // chains in flight: one block per SM of 1 … 32 warps (Keccak-p12, SHA-256, the quad digest)
     for (int w : {1, 2, 4, 8, 12, 16, 24, 32}) {
       char ex[64];
@@ -718,8 +487,50 @@ int main(int argc, char** argv) {
     // per warp 32 x 64 outputs per tile; bytes hashed per tile per thread: 2 regions x 256 B / 32 lanes x 32 = 512 B per lane
     uint64_t* dg;
     uint32_t* y;
-    CK(cudaMalloc(&dg, (size_t)g_sms * 64 * 2 * 64 * 32)), CK(cudaMalloc(&y, (size_t)g_sms * 64 * 2 * 32 * 64 * 2));
+    CK(cudaMalloc(&dg, (size_t)g_sms * 64 * 2 * 64 * 32)); CK(cudaMalloc(&y, (size_t)g_sms * 64 * 2 * 32 * 64 * 2));
     const size_t base = EPI_STAGES * (EPI_A + EPI_B) * 4;
+    // the gate: warp 0's first tile, hashed in the kernel, against the header's msg_digest on the host over the same words
+    uint32_t* cap;
+    CK(cudaMalloc(&cap, 4096 * 4));
+    bool ok = true;
+    for (int w : {4, 8}) {
+      CK(cudaMemset(cap, 0, 4096 * 4)); CK(cudaMemset(dg, 0, 64 * 32 * 2));
+      Rec* r;
+      CK(cudaMalloc(&r, sizeof(Rec)));
+      if (w == 4) {
+        CK(cudaFuncSetAttribute(k_epi<1, 4>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)(base + 4096)));
+        k_epi<1, 4><<<1, 128, base + 4096>>>(1, 8, r, dg, y, cap);
+      } else {
+        CK(cudaFuncSetAttribute(k_epi<1, 8>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)(base + 8192)));
+        k_epi<1, 8><<<1, 256, base + 8192>>>(1, 8, r, dg, y, cap);
+      }
+      CK(cudaDeviceSynchronize());
+      std::vector<uint32_t> hc(4096);
+      std::vector<uint64_t> hd(64 * 4);
+      CK(cudaMemcpy(hc.data(), cap, 4096 * 4, cudaMemcpyDeviceToHost));
+      CK(cudaMemcpy(hd.data(), dg, 64 * 32, cudaMemcpyDeviceToHost));
+      int bad = 0, nonzero = 0;
+      for (int x : hc) nonzero += x != 0;
+      for (int reg = 0; reg < 2; ++reg)
+        for (int lane = 0; lane < 32; ++lane) {
+          const int row = 16 * reg + ph::quad_row(lane), h = ph::quad_chunk(lane);
+          uint64_t d[4];
+          ph::pearlc::msg_digest([&](int j) {
+            const int a = j >> 4, col = 32 * h + 2 * (j & 15);
+            return ph::lane_u32x2(hc[a * 2048 + row * 64 + col], hc[a * 2048 + row * 64 + col + 1]);
+          }, d);
+          for (int i = 0; i < 4; ++i) bad += d[i] != hd[(reg * 32 + lane) * 4 + i];
+        }
+      printf("{\"group\":\"epi_gate\",\"name\":\"epi w%d\",\"messages\":64,\"bad_words\":%d,\"nonzero_words\":%d,\"ok\":%s}\n", w,
+             bad, nonzero, bad || nonzero < 4000 ? "false" : "true");
+      ok = ok && !bad && nonzero >= 4000;
+      cudaFree(r);
+    }
+    fflush(stdout);
+    if (!ok) {
+      fprintf(stderr, "epi gate failed: nothing timed\n");
+      return 4;
+    }
     for (int ks : {32, 64, 128, 256}) {
       const double macs = 2048.0 * ks;   // per thread per tile: 32 x 64 x k per warp
       char ex[96], nm[64];
@@ -727,7 +538,7 @@ int main(int argc, char** argv) {
         snprintf(ex, sizeof ex, ",\"k\":%d,\"hash\":%d", 32 * ks, hash);
         const double bytes = hash ? 512 : 0;   // 2 regions x 32 messages x 256 B per warp, per lane
         auto launch = [&](auto kern) {
-          return [&, kern](int b, int t, size_t s, long long it, Rec* r) { kern<<<b, t, s>>>((int)it, ks, r, dg, y); };
+          return [&, kern](int b, int t, size_t s, long long it, Rec* r) { kern<<<b, t, s>>>((int)it, ks, r, dg, y, nullptr); };
         };
         snprintf(nm, sizeof nm, "epi w4 k%d %s", 32 * ks, hash ? "hash" : "nohash");
         if (hash) row(filter, "epi", nm, k_epi<1, 4>, bytes, 128, 0, base + 4 * 1024, launch(k_epi<1, 4>), ex, macs);
@@ -742,4 +553,3 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: pouw_hash_bench check | rates [ms] [filter] | epi [ms] [filter]\n");
   return 2;
 }
-#endif
