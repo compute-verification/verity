@@ -70,6 +70,8 @@ submit() {
   model=/workspace/hf/hub/models--${repo//\//--}
   [ -d "$model/snapshots/$rev" ] || { echo "no checkpoint $model/snapshots/$rev on node 1" >&2; exit 2; }
   push "$src/" "$src/"
+  # links are copied as links: the weights stay in node 1's shared /workspace/hf/hub/blobs, which a Build doesn't read (cov-g188
+  # built and matched node 1's digests without them), and a Build that did would fail on the dangling link, not silently
   push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/"
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
