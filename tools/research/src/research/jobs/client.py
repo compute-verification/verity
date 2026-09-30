@@ -1,9 +1,10 @@
 """Talking to the Job queue: `HTTPClient` for the site, `ModelClient` for the reference model (tests, and trying a change).
 
-Both answer `call(method, path, body) -> (status, body)` and raise `Unreachable` when no answer came.  `research jobs` reads its
-token from `$JOBS_TOKEN` (the coordinator's, which adds jobs), else `~/.research/jobs/token`.  `research worker` reads only
-`$JOBS_WORKER_TOKEN`, else `~/.research/jobs/token` (the worker's `jobs:work` token, one line, mode 600), never `$JOBS_TOKEN`, so
-the two can live on one VM as the site spec places them.  A token is sent as `Authorization: Bearer`, never printed, and never put
+Both answer `call(method, path, body) -> (status, body)` and raise `Unreachable` when no answer came.  The two tokens a VM can
+hold have their own variables and files, so they can't collide:
+    research jobs     `$JOBS_TOKEN`, else ~/.research/jobs/token: the coordinator's, which adds jobs
+    research worker   `$JOBS_WORKER_TOKEN`, else ~/.research/jobs/dispatch-{name}.token: the dispatcher's `jobs:work` token
+Each file is one line, mode 600.  A token is sent as `Authorization: Bearer`, never printed, and never put
 in an argv.  The site is `$JOBS_URL`, default the production control app.
 """
 from __future__ import annotations
@@ -21,6 +22,11 @@ from . import model
 DEFAULT_URL = "https://website-docs-sage.vercel.app"
 URL_ENV, TOKEN_ENV, WORKER_TOKEN_ENV = "JOBS_URL", "JOBS_TOKEN", "JOBS_WORKER_TOKEN"
 TOKEN_FILE = Path.home() / ".research" / "jobs" / "token"
+
+
+def worker_token_file(name: str, workdir: Path | None = None) -> Path:
+    """The dispatcher `dispatch:{name}`'s own token file, never `research jobs`' TOKEN_FILE."""
+    return (workdir or TOKEN_FILE.parent) / f"dispatch-{name}.token"
 TIMEOUT_S = 30
 
 

@@ -642,25 +642,37 @@ def test_audit_main_is_a_cold_check_of_mains_tip_with_every_path_changed(tmp_pat
 
 
 def test_the_worker_claims_with_its_own_token_even_beside_the_coordinators(tmp_path, monkeypatch):
-    """The site spec puts the coordinator's token in $JOBS_TOKEN and dispatch-rc's in ~/.research/jobs/token on one VM."""
+    """Daniel's layout on the RC's VM: ~/.research/jobs/token is the coordinator's, ~/.research/jobs/dispatch-rc.token the
+    dispatcher's. Each command takes its own, whatever else is set."""
     from research import remote
     from research.jobs import cli as J
-    from research.jobs.client import WORKER_TOKEN_ENV, load_token
+    from research.jobs.client import WORKER_TOKEN_ENV, load_token, worker_token_file
 
-    token = tmp_path / "token"
-    token.write_text("dispatch-rc-secret\n")
-    token.chmod(0o600)
-    assert load_token({"JOBS_TOKEN": "coordinator-secret"}, token, var=WORKER_TOKEN_ENV) == "dispatch-rc-secret"
-    assert load_token({"JOBS_TOKEN": "coordinator-secret"}, token) == "coordinator-secret"
-    seen = {}
+    jobs = tmp_path / "jobs"
+    jobs.mkdir()
+    for name, value in (("token", "coordinator-secret"), ("dispatch-rc.token", "dispatch-rc-secret")):
+        (jobs / name).write_text(value + "\n")
+        (jobs / name).chmod(0o600)
+    monkeypatch.setattr("research.jobs.client.TOKEN_FILE", jobs / "token")
+    assert worker_token_file("rc") == jobs / "dispatch-rc.token"
+    assert load_token({}) == "coordinator-secret"
+    seen = []
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"name": name})
+    monkeypatch.setattr(J, "HTTPClient", lambda token=None: seen.append(token) or SimpleNamespace(url="u", token=token))
+    monkeypatch.setattr(D.Dispatcher, "run", lambda self, once=False: None)
     monkeypatch.setenv("JOBS_TOKEN", "coordinator-secret")
     monkeypatch.delenv(WORKER_TOKEN_ENV, raising=False)
-    monkeypatch.setattr("research.jobs.client.TOKEN_FILE", token)
-    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"name": name})
-    monkeypatch.setattr(J, "HTTPClient", lambda token=None: seen.setdefault("client", SimpleNamespace(url="u", token=token)))
-    monkeypatch.setattr(D.Dispatcher, "run", lambda self, once=False: None)
-    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(tmp_path / "jobs")]) == 0
-    assert seen["client"].token == "dispatch-rc-secret"
+    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs)]) == 0
+    monkeypatch.setenv(WORKER_TOKEN_ENV, "from-the-environment")
+    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs)]) == 0
+    (jobs / "other.token").write_text("given-file\n")
+    (jobs / "other.token").chmod(0o600)
+    assert J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs), "--token-file", str(jobs / "other.token")]) == 0
+    assert seen == ["dispatch-rc-secret", "from-the-environment", "given-file"]      # an explicit file wins over the variable
+    monkeypatch.delenv(WORKER_TOKEN_ENV)
+    (jobs / "dispatch-rc.token").unlink()
+    with pytest.raises(SystemExit, match="dispatch-rc.token"):
+        J.worker_main(["--dispatch", "--pods", "t1", "--workdir", str(jobs)])
     assert "JOBS_WORKER_TOKEN" not in D.ResearchRunner(environ={"JOBS_WORKER_TOKEN": "x", "JOBS_TOKEN": "y"}).env()
 
 

@@ -3,7 +3,8 @@ and runs each with today's `research run --on` onto one of the pods it was given
 
     research worker --dispatch --pods vy-coord-t1,vy-coord-t2 [--name rc] [--kinds merge-check,lean-regen,audit-main] [--once]
 
-It is one worker, `dispatch:{name}`, whose `jobs:work` token the Console mints (`$JOBS_TOKEN` or ~/.research/jobs/token); it
+It is one worker, `dispatch:{name}`, whose `jobs:work` token the Console mints: --token-file, else `$JOBS_WORKER_TOKEN`, else
+~/.research/jobs/dispatch-{name}.token, and never `research jobs`' `$JOBS_TOKEN` or ~/.research/jobs/token.  It
 runs where `research run --on` with custody works today, the research coordinator's VM.  Each pod it holds is a slot:
 
     host        no claim while this host's runs root or workdir has less free space than `research run`'s floor
