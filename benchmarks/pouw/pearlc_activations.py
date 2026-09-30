@@ -60,8 +60,11 @@ def main() -> None:
     ap.add_argument("--transfer", action="store_true", help="the reviewer's transfer test on the cross-group sample words")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--threads", type=int, default=3)
+    ap.add_argument("--atom", choices=tuple(C.ATOMS), default="hopper", help="the accumulator step (pearlc_census --atom)")
+    ap.add_argument("--G", type=int, default=4, help="promotion period in atoms; 0: no promotion (sm_120 v2)")
     ap.add_argument("--out", default="pearlc_activations.json")
     args = ap.parse_args()
+    C.set_atom(args.atom)
     torch.set_num_threads(args.threads)
     tok = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16)
@@ -95,13 +98,20 @@ def main() -> None:
                 ii, jj = np.meshgrid(np.arange(64), np.arange(8), indexing="ij")
                 A, B = a[ii.ravel()], b[jj.ravel()]
                 T = k // 32
-                tid, tex, _, _ = C.chain(A, B, 4)
-                flags, eF = C.debit(A, B, 4)
-                per_word = flags.sum(1)
+                tid, tex, _, _ = C.chain(A, B, args.G)
                 sample = np.unique(np.linspace(0, len(A) - 1, args.cross_words).astype(int))
-                size, beyond = C.cross_group(A, B, flags, sample, 4)
+                if args.G:
+                    flags, eF = C.debit(A, B, args.G)
+                    size, beyond = C.cross_group(A, B, flags, sample, args.G)
+                else:
+                    flags = C.debit_pure(A, B)
+                    eF = flags.sum(1)
+                    sets = [C.greedy_pure(A[p:p + 1], B[p:p + 1]) for p in sample]
+                    size = np.array([len(S) for S in sets])
+                    beyond = np.array([sum(1 for t in S if not flags[p, t]) for S, p in zip(sets, sample)])
+                per_word = flags.sum(1)
                 tr = {}
-                if args.transfer:
+                if args.transfer and args.G:
                     a_sim = C.form_s5(XA, FcA, args.delta, args.line_norm, rng)[0]
                     b_sim = C.form_s5(XB, FcB, args.delta, args.line_norm, rng)[0]
                     tr = C.transfer(a_sim[ii.ravel()], b_sim[jj.ravel()], A, B, flags, sample, 4)
@@ -135,7 +145,7 @@ def main() -> None:
         model(chunk)
     measured = [r for r in layers if r.get("tiles")]
     worst_resid = max((r["residual_share_max"] for r in measured), default=0.0)
-    doc = {"tool": "pouw_pearlc_activations", "model": args.model, "dataset": "wikitext-2-raw-v1:test", "window": args.window,
+    doc = {"tool": "pouw_pearlc_activations", "atom": args.atom, "G": args.G, "model": args.model, "dataset": "wikitext-2-raw-v1:test", "window": args.window,
            "seqlen": args.seqlen, "delta": args.delta, "line_norm": args.line_norm, "layers": layers,
            "summary": {"layers": len(layers), "layers_measured": len(measured),
                        "A_rows_inadmissible_max": max(max(r["A_floor_fail"], r["A_live_fail"]) for r in layers),
