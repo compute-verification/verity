@@ -36,19 +36,12 @@ def test_exact_pool_rss_equals_its_accounting_and_is_released():
     # RSS grows by the page-rounded request (touched by the registration), not by the power of two above it
     assert abs(grew - pool.bytes_total) < (64 << 20), (grew, pool.bytes_total)
     assert grew < (2048 << 20) - (256 << 20)
-    # torch's `is_pinned()` only knows ITS allocator's blocks (False here) -- page-locking is the driver's: an async D2H copy into the
-    # block issues without blocking (a pageable destination makes copy_ synchronous: 1.5 GiB at ~1.6 GB/s ~ 1 s) and lands at PCIe speed
+    # torch's `is_pinned()` only knows ITS allocator's blocks (False here) -- page-locking is the driver's: the exact mode exists only
+    # after `cudaHostRegister` succeeded (`_pinned_block` raises otherwise); an async D2H copy into the block lands the device's bytes
     src = torch.arange(0, 4096, dtype=torch.uint8, device="cuda").repeat(n // 4096 + 1)[:n]
     torch.cuda.synchronize()
-    import time
-
-    t0 = time.perf_counter()
     v.copy_(src, non_blocking=True)
-    issue_s = time.perf_counter() - t0
     torch.cuda.synchronize()
-    total_s = time.perf_counter() - t0
-    assert issue_s < 0.05, f"copy_ blocked for {issue_s:.3f}s: the destination is not page-locked"
-    assert total_s < 0.5, f"{n / total_s / 1e9:.1f} GB/s: pageable-speed D2H"
     assert int(v[4095]) == 255 and int(v[4096]) == 0 and torch.equal(v[:8192].cuda(), src[:8192])
     freed = pool.release()
     assert freed == (n + 4095) // 4096 * 4096 and pool.bytes_total == 0 and pool.mode is None
@@ -76,7 +69,6 @@ def test_exact_pool_blocks_are_shared_across_fork_not_copied():
     shared-registered -> +336 (the child's RssShmem 2,048 = the shared pages).  Here: a child that reads a 1 GiB block adds far less
     than the block to the cgroup's anon, and sees the block as RssShmem, not RssAnon."""
     import os
-    import time
 
     torch.zeros(1, device="cuda")
     n = 1 << 30
@@ -85,19 +77,23 @@ def test_exact_pool_blocks_are_shared_across_fork_not_copied():
     v.fill_(5)
     before = _cgroup_anon_shmem()
     r, w = os.pipe()
+    sampled_r, sampled_w = os.pipe()
     pid = os.fork()
     if pid == 0:                                   # the child: read the block in pure Python (a torch op after fork deadlocks on OMP)
         try:
+            os.close(sampled_w)
             mv = memoryview(v.numpy())
             s = sum(mv[::4096])
             st = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/self/status") if l.startswith(("RssAnon", "RssShmem"))}
             os.write(w, f"{s} {st['RssAnon']} {st['RssShmem']}".encode())
-            time.sleep(1.0)                       # stay alive while the parent samples the cgroup
+            os.read(sampled_r, 1)                 # stay alive until the parent has sampled the cgroup and closed its end
         finally:
             os._exit(0)
     os.close(w)
+    os.close(sampled_r)
     msg = os.read(r, 200).decode().split()
     after = _cgroup_anon_shmem()
+    os.close(sampled_w)
     os.waitpid(pid, 0)
     s, child_anon_kb, child_shmem_kb = int(msg[0]), int(msg[1]), int(msg[2])
     assert s == 5 * (n // 4096), "the child read the parent's block in place"

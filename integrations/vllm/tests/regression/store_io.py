@@ -14,9 +14,16 @@ Transport: the CLI (`python -m research.cli data ...`) in a subprocess -- the st
 `<repo>/tools/research/src` on PYTHONPATH is enough; the CLI's printed contract (`put` / `snapshot` print the art id, `fetch` prints the
 path, `select --ids` prints ids, `show --json` dumps the manifest document) is what is parsed here.  Credentials for a remote put come
 from the environment (`set -a; source ~/.config/verity/r2.env; set +a` on the control machine; a pod uses a minted temporary credential,
-README §7.1) -- nothing here reads or copies a secret.
+README §7.1).  Inside a `research run --custody-r2` job on a machine with no store config of its own (a pod: no `~/.research/store.toml`,
+`$RESEARCH_STORE_CONFIG` unset), the CLI subprocess's environment gets the run's custody key -- `<root>/requests/<run id>/custody/`
+store.toml + cred.json, whose actions include GetObject -- so the frozen reference trees are fetched from the remote there too; the key
+goes into that environment only, never onto disk or into a log.
 
-`reachable()` answers "can this machine use the store at all" (package importable + a local store root): the tests skip on False.
+`tools/check/check.py` drops `RESEARCH_*` from its steps, so a recorded check passes the custody dir as `$CHECK_STORE_CUSTODY` instead.
+
+`reachable()` answers "can the tests use the store here": the CLI answers and a remote is configured.  The tests skip on False, so a
+laptop or dev pod with no remote skips cleanly; a recorded check sets VERITY_STORE_REQUIRED=1, under which a missing remote is
+reachable and the tests fail on its real error instead of skipping.
 """
 from __future__ import annotations
 
@@ -49,11 +56,31 @@ def _research_src() -> Path | None:
     return None
 
 
+def _custody_dir() -> Path | None:
+    """The custody dir of the `research run` job this process runs in (`<root>/requests/<run id>/custody/`, beside `<root>/runs/<run id>/`)
+    when it holds a key and no store config is set here; else None.  Inside `check.py`'s steps, `$CHECK_STORE_CUSTODY` names it."""
+    if os.environ.get("RESEARCH_STORE_CONFIG") or (Path.home() / ".research" / "store.toml").is_file():
+        return None
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if os.environ.get("CHECK_STORE_CUSTODY"):
+        d = Path(os.environ["CHECK_STORE_CUSTODY"])
+    elif run_dir and run_id:
+        d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
+    else:
+        return None
+    return d if (d / "store.toml").is_file() and (d / "cred.json").is_file() else None
+
+
 def _env() -> dict[str, str]:
     env = dict(os.environ)
     src = _research_src()
     if src is not None:
         env["PYTHONPATH"] = str(src) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    custody = _custody_dir()
+    if custody is not None:
+        cred = json.loads((custody / "cred.json").read_text())
+        env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
+        env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
     return env
 
 
@@ -71,13 +98,22 @@ def _cli(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return p
 
 
-def reachable() -> bool:
-    """True iff the store CLI answers here (package present and a local store root usable).  Never raises."""
+#: an id no artifact has: `where` on it names the remote it looked on, or says none is configured
+_NO_ART = "art:" + "0" * 64
+NO_REMOTE = "no remote configured"
+
+
+def reachable(*, need_remote: bool = True) -> bool:
+    """True iff the store CLI answers here and (with `need_remote`) a remote is configured; always True under VERITY_STORE_REQUIRED=1
+    (a recorded check: the store-backed tests fail on the real error rather than skip).  Never raises."""
+    if os.environ.get("VERITY_STORE_REQUIRED") == "1":
+        return True
     try:
-        p = _cli("select", "--kind", SNAPSHOT_KIND, "--ids", check=False)
+        if _cli("select", "--kind", SNAPSHOT_KIND, "--ids", check=False).returncode != 0:
+            return False
+        return not need_remote or NO_REMOTE not in _cli("where", _NO_ART, check=False).stderr
     except StoreUnavailable:
         return False
-    return p.returncode == 0
 
 
 def fetch(artifact_id: str, to: Path | None = None) -> Path:

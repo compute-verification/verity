@@ -9,28 +9,42 @@ from __future__ import annotations
 import pytest
 
 KNOWN_FAILURES = {
-    "tests/engine/test_gen_ov_easy.py::test_serve_untied_is_not_registered_and_binds_from_the_profile_config":
-        "ServeV4's signature now ends with lm_head after cos_sin",
-    "tests/engine/test_gen_ov_easy.py::test_serve_untied_differs_from_serve_v4_only_at_the_lm_head_operands":
-        "no operand differs from ServeV4's; the test expects three at the lm_head",
-    "tests/program/test_derive.py::test_s3_untied_lm_head_loses_sharing_and_is_refused_by_family":
-        "the untied lm_head adds no input gates (7,158,595 either way)",
-    "tests/pipeline/test_research_tools.py::test_closure_covers_every_core_file":
-        "research_tools.CLOSURE lacks verity.claims, verity.evaluation and verity.randomness, so the vLLM Tools' identity"
-        " misses them; adding them changes that identity, so stored attempts stop being reused",
+    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[None-expect0]":
+        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
+    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[-expect1]":
+        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
+    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[default-None]":
+        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
+    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[OFF-None]":
+        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
+    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[700,10,10-expect4]":
+        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
+    "tests/pipeline/test_gc_tuning.py::test_env_contract_in_a_fresh_interpreter[50000, 20, 100-expect5]":
+        "the check pod's CPython gives gc thresholds (2000, 10, 10), where the test expects CPython's older default (700, 10, 10) (owner vllm-coordinator)",
+    "tests/acquire/test_compiled_source.py::test_renumber_assigns_invocations_per_call_site":
+        "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
+    "tests/pipeline/test_source_identity.py::test_negative_requested_sha_mismatch_fails_by_name":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[integration]":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[repo]":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/pipeline/test_source_identity.py::test_repo_root_resolution_prefers_export_json_then_git_then_markers":
+        "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
+    "tests/program/test_twins.py::test_check_writes_the_evidence_schema":
+        "the evidence schema's `openmp` key depends on whether the C++ twins were built in this tree (environmental; owner vllm-epoch-prep)",
+    "tests/pipeline/test_row.py::test_the_commit_flags_the_row_arms_exist":
+        "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
+    "tests/check/test_compiled_autotune.py::test_unknown_kernel_is_not_shown_and_does_not_raise":
+        "fails on the torch-less CPU check pod only (passes with CPU torch); needs importorskip where torch is required (owner vllm-epoch-prep)",
     "tests/program/test_analytic.py::test_check_cos_sin_against_the_captured_b0_table":
         "torch CPU cos/sin against the captured b0 table: max ulp 29,154, the bound 2",
     "tests/engine/test_gen_dense2.py::test_inv_freq_models_cuda_reciprocal_multiply_and_is_identity_for_power_of_two_D":
         "15 inv_freq elements differ at D=96; the model expects 14",
-    "tests/program/test_sampling_rows.py::test_nv_logf_and_nv_log1pf_are_word_equal_to_the_libdevice_transcriptions_on_every_non_nan_word":
-        "nv_logf of a negative word gives NaN 0x7fc00000; the libdevice transcription gives 0xffc00000",
     "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-bf16]":
         "exact GELU against torch CPU: max ulp 128, normalised error inf",
     "tests/program/test_ref_prims.py::test_gelu_ref_vs_torch[none-f32]":
         "exact GELU against torch CPU: max ulp 875,646,710, normalised error nan",
-    "tests/program/test_lifted_tiny.py::test_specified_list_is_closed":
-        "passes alone; fails once another test in the process has resolved Lifted[GatherBf16x64_v1]_v2{ORD=3}, which"
-        " registers it as specified",
 }
 
 

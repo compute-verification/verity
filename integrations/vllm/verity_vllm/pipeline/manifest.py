@@ -10,7 +10,9 @@ a row dir holds one such dir per request shape, `*LP<prompt_len>_T<max_tokens-1>
 are the bridge's (`required.request_manifest` / `compose.compose_global`; a TP row's rank manifests merged by `merge_ranks`).  `--no-return-slots`
 builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  The header names the Program's partition
 (`verity/partition/v1`, Q_word v1 {16, 32}: `required.partition_of`) and the Build fails by name on any violation of it (`--word-check`,
-default 16/32: widths, recomputes, a Call boundary not committed); `--query Q_module_body_v1` (with `--word-check off`) is for A/B only.
+default 16/32: widths, recomputes, a Call boundary not committed); the check that passed is recorded in the header (`query.word_check`,
+`word_record`; never in the identities, so the rows digest is the same) and the Commit refuses a Q_word manifest without it
+(`commit.partition.word_check_refusal`).  `--query Q_module_body_v1` (with `--word-check off`) is for A/B only.
 Four tap policies are on by default, each with a `--no-...` for A/B only: `--norm-scales` (`query.norm_scales`), `--guarded-max`
 (`query.guarded_max`: the query header states it, and every attention hidden-stream identity gains the MS class), `--router-softmax` and
 `--vocab-range` (`query.router_softmax`, `query.vocab_range`); the scale-products policy (`query.scale_products`) applies to every manifest
@@ -42,7 +44,7 @@ from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 from verity_vllm.query import word as word_query
 
-__all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "build", "build_global", "build_global_ranks", "cross_call_check", "main"]
+__all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "build", "build_global", "build_global_ranks", "cross_call_check", "main"]
 
 #: the tap policies whose identities are Call-interior values, by name (`request_manifest(taps=...)`)
 TAPS = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
@@ -83,6 +85,14 @@ def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict
     return r
 
 
+def word_record(r: dict[str, Any], *, strict: bool, max_gates: str | None = None) -> dict[str, Any]:
+    """The header's record of a word check (`query.word_check`): its query, whether it was strict and passed, its totals and the gate
+    limits it ran under; the per-Definition groups stay in the Build's manifest.log."""
+    return {"query": r["query"], "strict": bool(strict), "ok": bool(r["ok"]), "violations": len(r["violations"]),
+            **{k: r[k] for k in ("calls", "units", "gates", "committed_interior_words", "acquired_interior_words") if k in r},
+            "max_gates": word_query.gate_limits(max_gates)}
+
+
 def program_sha512(program_dir: str, res: dict[str, Any]) -> str | None:
     """The Program's SHA-512 (`verity.ir.partition_object.program_sha512`): the Build's record (`result.json` program.sha512), else
     recomputed from its `descriptor.json.gz`; None when the Build has neither."""
@@ -121,7 +131,8 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
     if word and word != "off":
         sp = SP.policy_of(r.manifest)
         acquired = {**(NS.TAP_WORDS if norm_scales else {}), **{f: w for t in taps for f, w in TAPS[t].tap_words.items()}, **(SP.TAP_WORDS if sp else {})}
-        word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps or sp) else None, max_gates=word_max_gates, log=log)
+        wc = word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps or sp) else None, max_gates=word_max_gates, log=log)
+        r.manifest["query"]["word_check"] = word_record(wc, strict=True, max_gates=word_max_gates)
     if guarded_max:
         r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P), GM.max_scaled_words(P))
         r.manifest.update(GM.with_ms(r.manifest))
@@ -343,6 +354,17 @@ class CheckCorrespondenceOptions:
     cmd: str = field(default="check-correspondence", init=False)
 
 
+def incomplete_rc(man: dict[str, Any]) -> int:
+    """0 for a complete manifest; 4 for an incomplete one, named on stderr (the file is still written, for diagnosis): the Commit refuses
+    an incomplete manifest, so the row's Build fails here instead of passing with it."""
+    if man.get("complete") is not False:
+        return 0
+    um = man.get("unmodelled") or {}
+    print(f"manifest INCOMPLETE: {len(um)} unmodelled key(s), first {sorted(um)[:3]}; tp_peer_binding n_unbound "
+          f"{(man.get('tp_peer_binding') or {}).get('n_unbound')}", file=sys.stderr)
+    return 4
+
+
 COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions, "compare": CompareOptions, "check-correspondence": CheckCorrespondenceOptions}
 
 
@@ -363,7 +385,7 @@ def main(a: Any) -> int:
                     cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
-        return 0
+        return incomplete_rc(man)
     if a.cmd == "build-global":
         fx = _load_json(a.fixture)
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
@@ -374,7 +396,7 @@ def main(a: Any) -> int:
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
                           "tp_peer_binding_n_unbound": (man.get("tp_peer_binding") or {}).get("n_unbound"), "out": a.out}))
-        return 0
+        return incomplete_rc(man)
     if a.cmd == "compare":
         m1, m2 = _load_json(a.v1), _load_json(a.v2)
         cmp = compare(m1["identities"], m2["identities"], ignore_program_digest=a.ignore_program_digest)

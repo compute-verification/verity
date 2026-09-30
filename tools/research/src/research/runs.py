@@ -20,12 +20,41 @@ from . import record, result
 DEFAULT_ROOT = Path.home() / ".research" / "runs"
 TERMINAL = ("done", "failed", "cancelled")
 ACTIVE = ("submitted", "admitted", "running", "preserving")
+DISK_FLOOR_ENV = "RESEARCH_DISK_FLOOR_GB"
+DISK_FLOOR_GB = 1.5                 # `research run` and `research fetch` refuse below this much free space (0 turns the floor off)
 
 
 def runs_root(explicit: str | os.PathLike[str] | None = None) -> Path:
     if explicit:
         return Path(explicit).expanduser()
     return Path(os.environ.get("RESEARCH_RUNS", DEFAULT_ROOT)).expanduser()
+
+
+def free_bytes(path: Path) -> int:
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize
+
+
+def disk_floor_refusal(path: Path, environ: dict[str, str] | None = None) -> str | None:
+    """Why a run or a fetch into `path` must not start: the free space on its filesystem is under the floor (`$RESEARCH_DISK_FLOOR_GB`,
+    default DISK_FLOOR_GB).  A full disk on the control pod ended every spending guard there (2026-09-28); new run files must not be
+    what fills it.  None when there is room, or the floor is 0."""
+    env = os.environ if environ is None else environ
+    try:
+        floor_gb = float(env.get(DISK_FLOOR_ENV, DISK_FLOOR_GB))
+    except ValueError:
+        floor_gb = DISK_FLOOR_GB
+    if floor_gb <= 0:
+        return None
+    probe = Path(path).expanduser().absolute()
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    free = free_bytes(probe)
+    if free >= floor_gb * 1e9:
+        return None
+    return (f"{free / 1e9:.2f} GB free on the filesystem of {probe}, under the {floor_gb:g} GB floor (${DISK_FLOOR_ENV}). Free space first: "
+            f"`research data evict --target-free-gb {max(3.0, 2 * floor_gb):g} --runs` removes only local copies already preserved on the "
+            f"remote; `research data custody --triage` lists the runs to publish (`research data custody RUN --publish`) before they can go")
 
 
 def new_run_id(now: float | None = None) -> str:

@@ -280,3 +280,160 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     assert cli.main([fp8, "-q"]) == 0                                            # a known failure: named, not failing
     assert f"known partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([fp8, "-q", "--strict"]) == 1
+
+
+def test_the_cache_reuses_a_targets_result_only_while_every_read_is_unchanged(tmp_path):
+    """Two runs of one target: the second reuses it.  An entry whose recorded digest of one file it read no longer matches (as
+    after an edit) is not reused, and the run records a new entry."""
+    import subprocess
+    import sys
+
+    def run(*targets):
+        r = subprocess.run([sys.executable, "-m", "circuit_check", *targets, "-q", "--cache", str(tmp_path)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        return r.stdout
+
+    assert "0 of 1 targets reused" in run("F32Mul_v1") and "1 of 1 targets reused" in run("F32Mul_v1")
+    assert "1 of 2 targets reused" in run("F32Mul_v1", "rope-head")           # per target: the new one runs, the old one is reused
+    (entry,) = [p for p in tmp_path.glob("*/*/*.json") if json.loads(p.read_text())["key"]["request"]["target"][1] == "F32Mul_v1"]
+    e = json.loads(entry.read_text())
+    assert "packages/verity/src/verity/ir/defs.py" in e["reads"]["files"] and e["reads"]["dirs"]
+    assert e["key"]["version"] == entry.parent.parent.name and e["key"]["request"]["target"] == ["definition", "F32Mul_v1"]
+    e["reads"]["files"]["packages/verity/src/verity/ir/defs.py"] = "0" * 64
+    entry.write_text(json.dumps(e))
+    assert "0 of 1 targets reused" in run("F32Mul_v1") and len(list(entry.parent.glob("*.json"))) == 2
+
+
+def test_a_result_after_a_read_the_tracer_cannot_see_is_not_stored(tmp_path):
+    """A check that starts a program (its reads are untraced) is not stored, nor is any later one in that process; a library
+    built in the tree and loaded by the dynamic loader is an input by its bytes."""
+    import subprocess
+    import sys
+
+    script = f"""
+import json, ctypes.util
+from pathlib import Path
+from circuit_check import cache as CC, checks as CK, cli
+CC.trace(cli.REPO)
+ok = lambda: {{"failures": [], "warnings": []}}
+def spawns():
+    import subprocess
+    subprocess.run(["true"])
+    return ok()
+cli._tasks = lambda *a: [("definition", "A", ok), ("definition", "B", spawns), ("definition", "C", ok)]
+rep = cli.run([], CK.Options(), log=None, cache=Path({str(tmp_path)!r}))
+print(json.dumps(rep["cache"]))
+"""
+    r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=REPO)
+    assert r.returncode == 0, r.stderr
+    stats = json.loads(r.stdout.strip().splitlines()[-1])
+    assert stats["stored"] == 1 and [u["target"] for u in stats["untraced"]] == ["B", "C"]
+    assert "subprocess.Popen" in stats["untraced"][0]["because"][0]
+
+
+def test_a_check_that_raised_or_read_another_trees_module_is_not_stored(tmp_path):
+    """A check that raised is no verdict (T11: an ImportError from a tree a concurrent run was rewriting, replayed on the next
+    tree); a module imported from outside the tree is a read no key holds, so that result and later ones are not stored."""
+    import subprocess
+    import sys
+
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "elsewhere" / "other_tree_mod.py").write_text("X = 1\n")
+    script = f"""
+import json, sys
+from pathlib import Path
+from circuit_check import cache as CC, checks as CK, cli
+CC.trace(cli.REPO)
+ok = lambda: {{"failures": [], "warnings": []}}
+def broken():
+    from verity_numerical.bench import no_such_module  # noqa: F401
+def outside():
+    sys.path.insert(0, {str(tmp_path / 'elsewhere')!r})
+    import other_tree_mod  # noqa: F401
+    return ok()
+cli._tasks = lambda *a: [("definition", "A", ok), ("definition", "B", broken), ("definition", "C", outside), ("definition", "D", ok)]
+rep = cli.run([], CK.Options(), log=None, cache=Path({str(tmp_path / 'cache')!r}))
+print(json.dumps(rep["cache"]))
+"""
+    r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=REPO)
+    assert r.returncode == 0, r.stderr
+    stats = json.loads(r.stdout.strip().splitlines()[-1])
+    assert stats["stored"] == 1 and stats["errors"] == ["B"] and [u["target"] for u in stats["untraced"]] == ["C", "D"]
+    assert "imported other_tree_mod from" in stats["untraced"][0]["because"][0] and "outside the tree" in stats["untraced"][0]["because"][0]
+
+
+def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
+    """The run remembers each read's digest from its first look; the process that ran the check digests its reads again right
+    after it. When they differ (a concurrent run rewrote the tree), nothing is stored: the report may be of a tree no digest names."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "m.py").write_text("")
+    got = {"files": ["a.txt"], "dirs": ["pkg"], "probes": [], "libs": []}
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    k, rep = {"version": "v", "request": {}}, {"failures": [], "warnings": []}
+    CC._digests(tmp_path, got)                                          # the run's first look, before the check
+    (tmp_path / "pkg" / "m.py").unlink()                                # a concurrent run removes a file while it runs
+    CC._VISIBLE.clear()
+    assert CC.store(tmp_path / "cache", k, tmp_path, got, rep, CC.seen(tmp_path, got)) is None
+    assert not list((tmp_path / "cache").rglob("*.json"))
+    (tmp_path / "pkg" / "m.py").write_text("")
+    CC._VISIBLE.clear()
+    assert CC.store(tmp_path / "cache", k, tmp_path, got, rep, CC.seen(tmp_path, got))    # the same tree: stored
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+
+
+def test_parallel_jobs_give_the_serial_report(tmp_path):
+    from circuit_check import cli
+
+    specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
+    strip = lambda rep: [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]  # noqa: E731
+    assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
+
+
+def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
+    """A build or bytecode inside the tree (ignored by git) changes no recorded read; a new file git sees does."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("build/\n")
+    (tmp_path / "a.txt").write_text("a")
+    got = {"files": ["a.txt", "build/lib.so"], "dirs": ["."], "probes": ["build/lib.so", "b.txt"]}
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    before = CC._digests(tmp_path, got)
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "lib.so").write_bytes(b"built")
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    assert CC._digests(tmp_path, got) == before
+    (tmp_path / "b.txt").write_text("b")
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    after = CC._digests(tmp_path, got)
+    assert after["dirs"] != before["dirs"] and after["probes"]["b.txt"] == "file"
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+
+
+def test_the_cache_key_is_the_same_on_hosts_that_differ_only_in_their_kernel(monkeypatch):
+    """Pods of one image run on hosts with different kernels; a report one pod stored must count on another."""
+    import platform
+
+    from circuit_check import cache as CC
+
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setattr(platform, "release", lambda: "0.0.0-another-host")
+    monkeypatch.setattr(platform, "version", lambda: "#1 SMP another build")
+    monkeypatch.setattr(platform, "platform", lambda *a, **k: "Linux-0.0.0-another-host-x86_64")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
