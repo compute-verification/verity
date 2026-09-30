@@ -106,7 +106,7 @@ def _instrument() -> None:
 
         model.register_forward_pre_hook(pre, with_kwargs=True)
         model.register_forward_hook(post)
-        out = Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / f"generates-{group}.json"
+        out = Path(os.environ.get("OUT") or os.environ.get("RESEARCH_RUN_DIR", ".")) / f"generates-{group}.json"
         atexit.register(lambda: out.write_text(json.dumps(_LOG)))
         return llm
 

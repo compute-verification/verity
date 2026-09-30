@@ -5,9 +5,10 @@
 #     --env SHIP_TAR=<ship> [--env SCHEDULE=deferred] --send served_profile.sh --send served_profile.py -- \
 #     bash "$RESEARCH_RUN_DIR"/inputs/served_profile.sh
 # The GPU part runs in a one-GPU preemptible lease (window.sh's identity, ship and device checks first); the SQLite export and
-# the analysis run after it, off the GPU.  NSYS=0 runs the same without the profiler (the diagnostic timing alone).
+# the analysis run after it, off the GPU.  NSYS=0 runs the same without the profiler (the diagnostic timing alone); OUT names
+# the output directory (default the run's); GRAPHS=1 passes --graphs.
 set -euo pipefail
-OUT=${RESEARCH_RUN_DIR:?run this under research run}
+OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}}; mkdir -p "$OUT"; export OUT
 HERE=$(cd "$(dirname "$0")" && pwd)
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 if [ "${1:-}" != gpu ]; then
