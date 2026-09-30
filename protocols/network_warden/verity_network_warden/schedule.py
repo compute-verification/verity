@@ -99,7 +99,9 @@ def handing_buckets(frames: Sequence[LogicalFrame], syncs: Sequence[ClockSync], 
 def expected_grids(frames: Sequence[LogicalFrame], syncs: Sequence[ClockSync], params: GridParams) -> list[Grid]:
     """The Program's grids for windows 0 … len(syncs) − 1: the warden's rule applied to the logical handing times.
 
-    Frames still queued, or handed after the horizon, appear in no grid."""
+    Frames still queued, or handed after the horizon, appear in no grid. Window w's grid reads only syncs[0 … w]: a
+    frame is eligible no earlier than its anchor, so a frame handed by the end of window w, and every frame before it
+    in canonical order, is anchored in window w or earlier."""
     horizon = len(syncs) * params.buckets
     enqueued = [0] * horizon
     for h in handing_buckets(frames, syncs, params.buckets):

@@ -1,7 +1,7 @@
 """The verifier's exact check with record-and-reject, and an honest shaper that meets the logical schedule."""
 
 from verity_network_warden.audit import Audit
-from verity_network_warden.grid import GridParams, Reason, Warden
+from verity_network_warden.grid import GridParams, Reason, Record, Warden
 from verity_network_warden.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 
 P = GridParams(buckets=4, allocation=2, frame_bytes=1)
@@ -57,3 +57,22 @@ def test_status_advice_and_missing_record_are_violations():
     assert verdicts[2].violation == "no-verdict"
     bad = Audit().check_link("responses", records, FRAMES, [ClockSync(7, 1)] + SYNCS[1:], SYNC_SET, P)
     assert bad[0].violation == "advice"
+
+
+def test_an_out_of_set_sync_flags_only_its_own_window():
+    """Window 1 declares δ = 3, outside the set. Only window 1 is an advice violation. Window 0's grid doesn't read
+    window 1's sync, and window 2 is checked against the grid the declared syncs give it, so tampering with it is a
+    mismatch."""
+    declared = [SYNCS[0], ClockSync(3, 1), SYNCS[2]]
+    assert declared[1] not in SYNC_SET
+    expected = expected_grids(FRAMES, declared, P)
+    assert expected[0] == expected_grids(FRAMES, SYNCS, P)[0] and expected[1] != expected_grids(FRAMES, SYNCS, P)[1]
+    records = run_shaper(FRAMES, honest_ready(), declared, Warden("responses", P))
+    assert [r.grid for r in records] == expected
+    verdicts = Audit().check_link("responses", records, FRAMES, declared, SYNC_SET, P)
+    assert [v.violation for v in verdicts] == [None, "advice", None]
+    rows = [list(row) for row in records[2].grid]
+    rows[2][0] = b"\xff"
+    tampered = records[:2] + [Record("responses", 2, tuple(tuple(r) for r in rows), records[2].status)]
+    verdicts = Audit().check_link("responses", tampered, FRAMES, declared, SYNC_SET, P)
+    assert [v.violation for v in verdicts] == [None, "advice", "mismatch"]

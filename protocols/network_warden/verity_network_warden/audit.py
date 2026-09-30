@@ -10,6 +10,10 @@ rejected, as a policy signal. There is no halt: later windows are still checked 
 `capacity` holds on accepted runs only; a rejected window may already have carried up to its unbound capacity before it
 was rejected.
 
+The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
+set is an `advice` violation in its own window only. A window's grid reads only the syncs of its own and earlier
+windows (`schedule.expected_grids`), so an out-of-set sync never changes an earlier window's verdict.
+
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
 compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
 """
@@ -50,8 +54,8 @@ class Audit:
         sync_set: SyncSet,
         params: GridParams,
     ) -> list[Verdict]:
-        """Check one link's records for windows 0 … len(syncs) − 1 against the Program's grids."""
-        expected = expected_grids(frames, syncs, params) if all(s in sync_set for s in syncs) else None
+        """Check one link's records for windows 0 … len(syncs) − 1 against the Program's grids for the declared syncs."""
+        expected = expected_grids(frames, syncs, params)
         by_window = {r.window: r for r in records if r.link == link}
         out = []
         for w, sync in enumerate(syncs):
@@ -60,7 +64,7 @@ class Audit:
                 violation = "no-verdict"
             elif not record.status.complete:
                 violation = f"status:{record.status.reason.value}"
-            elif sync not in sync_set or expected is None:
+            elif sync not in sync_set:
                 violation = "advice"
             elif isinstance(record, CommittedRecord):
                 violation = None if record.digest == record_digest(link, w, expected[w], COMPLETE, params) else "mismatch"

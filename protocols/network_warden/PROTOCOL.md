@@ -75,6 +75,13 @@ A link-window is accepted if:
 Anything else is a violation: `status:<reason>`, `advice`, `mismatch` or `no-verdict`. It is **recorded, and the run is
 rejected**, as a policy signal. There is no halt: later windows are still checked.
 
+A declared sync outside Σ_sync is an `advice` violation in its own window only. The Program's grids are computed from
+the syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives a schedule), and every other window is
+checked against them. A window's grid reads only the syncs of its own and earlier windows: a frame is eligible no
+earlier than its anchor, hand times only rise in canonical order, and the queue carries forward. So a window before the
+out-of-set one gets the verdict it would get under any declaration, and a later one is checked against the grid the
+declared advice gives it.
+
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
 about T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`.
 
