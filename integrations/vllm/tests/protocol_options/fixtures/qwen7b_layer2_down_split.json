@@ -1,0 +1,171 @@
+{
+ "source": "Qwen/Qwen2.5-7B layer 2 mlp.down_proj: its input on 512 WikiText-2 test tokens (float32, the cheap-binding lane's recipe, research store code/pearl-c-h100/qwen7b/fetch_layer_down.py) and its weight (BF16 as float32)",
+ "x_shape": [
+  512,
+  18944
+ ],
+ "w_shape": [
+  3584,
+  18944
+ ],
+ "x_sha256": "b9491d2799a8200ef91e194d58c45efb56c7b8dde47e81b0217d6a26132a6cf1",
+ "w_sha256": "850783555d5a8a93cbeb7f6aab1eb88e29fd5f6d58a2116ad69b2555eb835971",
+ "rows": [
+  20,
+  25,
+  33,
+  36,
+  40,
+  53,
+  58,
+  67,
+  72,
+  79,
+  83,
+  92,
+  114,
+  123,
+  126,
+  127,
+  132,
+  133,
+  138,
+  147,
+  154,
+  165,
+  174,
+  176,
+  187,
+  196,
+  197,
+  200,
+  207,
+  227,
+  231,
+  244,
+  247,
+  250,
+  260,
+  268,
+  286,
+  290,
+  311,
+  312,
+  322,
+  323,
+  324,
+  327,
+  329,
+  357,
+  360,
+  362,
+  367,
+  370,
+  373,
+  378,
+  392,
+  394,
+  399,
+  418,
+  422,
+  468,
+  476,
+  479,
+  484,
+  485,
+  502
+ ],
+ "rows_file_sha256": "ab0a6f1f4bcb72c894e8b54c8381ec63dbd91ce64c40c5b0bfac67d00857e1d6",
+ "note": "every activation row that fails the rules at some step of split_channels on the full data; no weight row fails at any step, so the rule run on these rows alone takes the same steps",
+ "budget": 186,
+ "S": [
+  497,
+  2588,
+  2715,
+  2880,
+  3176,
+  3295,
+  3643,
+  4092,
+  4652,
+  4929,
+  5293,
+  5474,
+  6188,
+  6243,
+  6278,
+  6338,
+  7494,
+  8225,
+  8380,
+  9030,
+  9311,
+  9956,
+  10093,
+  10419,
+  12225,
+  12490,
+  13225,
+  14038,
+  15299,
+  16666,
+  17407,
+  17711,
+  17805,
+  17900,
+  18030,
+  18182,
+  18627,
+  18662
+ ],
+ "trace": [
+  {
+   "moved": 0,
+   "failing_rows": 42
+  },
+  {
+   "moved": 4,
+   "failing_rows": 22
+  },
+  {
+   "moved": 8,
+   "failing_rows": 16
+  },
+  {
+   "moved": 12,
+   "failing_rows": 13
+  },
+  {
+   "moved": 16,
+   "failing_rows": 8
+  },
+  {
+   "moved": 20,
+   "failing_rows": 19
+  },
+  {
+   "moved": 24,
+   "failing_rows": 4
+  },
+  {
+   "moved": 28,
+   "failing_rows": 7
+  },
+  {
+   "moved": 32,
+   "failing_rows": 1
+  },
+  {
+   "moved": 33,
+   "failing_rows": 3
+  },
+  {
+   "moved": 36,
+   "failing_rows": 2
+  },
+  {
+   "moved": 38,
+   "failing_rows": 0
+  }
+ ]
+}

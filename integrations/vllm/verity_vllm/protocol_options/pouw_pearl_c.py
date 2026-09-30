@@ -2,10 +2,12 @@
 
 The plan is the project store's ``docs/pouw/pearl-c-vllm-plan.md``.  This module is the part that runs without a GPU:
 
-* `Split`, `calibrate_split`: the channel split (the cheap-binding lane's recommendation).  Per layer, a fixed set S of input
-  channels goes to a BF16 side GEMM outside the unit.  S is chosen from calibration activations by the lane's greedy rule,
-  and stops when every row passes the scheme's pinned domain rules on the kept channels.  The unit reads the kept channels,
-  zero-padded to a multiple of 128.
+* `Split`, `split_channels`, `split_layer`, `split_check`: the channel split (the cheap-binding lane's recommendation).
+  - Per layer, a fixed set S of at most ⌊k/100⌋ input channels goes to a BF16 side GEMM outside the unit.
+  - S comes from calibration activations by the lane's `split_channels`, the one rule, with its tie-break and budget
+    pinned. `split_check` is the verifier's S check, by the same rule.
+  - The unit reads the kept channels, zero-padded to a multiple of 128. Rows that still fail the scheme's exact rules are
+    excluded rows (`pearl_c_work`'s per-row rule).
 * `twin_call`: one call's unit as #449's kernels compute it, on the CPU:
   - §5's forming, its noise atoms batched;
   - the chains and the peel, batched with `verity.ml.kernels.group_sum_total_batch`;
@@ -13,7 +15,8 @@ The plan is the project store's ``docs/pouw/pearl-c-vllm-plan.md``.  This module
   - the unscaled y part, RN_f32(RN_f32(U·(1/α_A))·(1/α_B)).
   The tests hold it to `pearl_c`'s scalar reference.  It is the host path and the device gate's oracle.
 * `PearlCRun`: `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) over the twin.  Per call it widens x to FP32,
-  splits it, pads m to a multiple of 128 with admissible filler rows (1.0), commits the unit's rows, and serves
+  splits it, pads m to a multiple of 128 with zero filler rows, records the rows that fail the rules as excluded, commits
+  the unit's rows, and serves
   y = RN_bf16(RN_f32(y_unit + y_side) + bias).
 
 It is not wired into `pouw.py` yet.  That takes one `EXECUTED` entry and one branch in `install`, after the hashing-cut work
@@ -36,6 +39,7 @@ from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_u as U
+from verity_pouw.schemes import pearl_c_work as PW
 from verity_pouw.schemes import pearl_kw as P
 
 from verity.commitments import MerkleTree
@@ -44,32 +48,23 @@ from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
 
 SCHEME = C.NAME_V1
 #: the kernels' granularity in m, n and the unit's k
-ALIGN = 128
-#: an admissible filler row's value (1.0): σ·α ≈ 89.6, nothing at 8σ
-FILLER = 0x3F800000
-SPLIT_DOMAIN = b"verity/pouw/pearl-c/split/v1\0"
+ALIGN = PW.ALIGN
+CALIBRATION_DOMAIN = b"verity/pouw/pearl-c/calibration/v1\0"
+#: the split rule's batch: channels moved per step
+BATCH = 4
 
 
 # ---- the channel split --------------------------------------------------------------------------------------------
 
 def row_ok(words: Sequence[int] | np.ndarray) -> bool:
-    """The pinned domain rules on one row of FP32 words: the noise floor σ·α ≥ 1 and liveness (at most len/64 entries at
-    |x| ≥ 8σ), with s, ρ and α as `pearl_c.s5_stats` computes them."""
-    words = np.asarray(words, np.uint32)
-    _, rho, alpha, _ = C.s5_stats([int(v) for v in words])
-    r, a = P.f32_of_bits(rho), P.f32_of_bits(alpha)
-    if r * a < P.SIGMA_MIN:
-        return False
-    dead = int((np.abs(words.view(np.float32).astype(np.float64)) >= P.TAU_IDLE * r).sum())
-    return dead <= P.EPS_IDLE * len(words)
+    """The scheme's per-row rules on one row of FP32 words (`pearl_c_work.row_passes`: the noise floor ρ·α ≥ 1 and TT_OUT's
+    liveness on the exact every-8th statistic)."""
+    return PW.row_passes([int(v) for v in np.asarray(words, np.uint32)])
 
 
 @dataclass(frozen=True)
-class Split:
-    """One layer's split: its input width k and the side channels S (ascending)."""
-
-    k: int
-    side: tuple[int, ...] = ()
+class Split(PW.Split):
+    """One layer's split (`pearl_c_work.Split`: |S| ≤ ⌊k/100⌋, the calibration digest), with the executor's numpy views."""
 
     @property
     def kept(self) -> np.ndarray:
@@ -77,68 +72,87 @@ class Split:
         mask[list(self.side)] = False
         return np.flatnonzero(mask)
 
-    @property
-    def k_unit(self) -> int:
-        return -(-len(self.kept) // ALIGN) * ALIGN
-
     def unit_words(self, words: np.ndarray) -> np.ndarray:
         """The unit's rows: the kept channels' FP32 words, zero-padded to `k_unit`."""
         out = np.zeros((words.shape[0], self.k_unit), np.uint32)
-        out[:, :len(self.kept)] = words[:, self.kept]
+        out[:, :self.k_kept] = words[:, self.kept]
         return out
 
     def side_values(self, values: np.ndarray) -> np.ndarray:
         return values[:, list(self.side)]
 
     def digest(self) -> bytes:
-        return hashlib.sha256(SPLIT_DOMAIN + struct.pack(f"<II{len(self.side)}I", self.k, len(self.side), *self.side)).digest()
+        return hashlib.sha256(self.encode()).digest()
 
 
-def _rules(vals: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """The cheap-binding lane's float64 statement of the rules (`pearlc_headline.rules`): floor ok, live ok and σ per row."""
-    s = np.abs(vals).max(1)
-    sig = np.sqrt((vals[:, ::8].astype(np.float64) ** 2).mean(1))
+def rules(X: np.ndarray, delta: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Per row: floor ok, live ok, σ, and s/ρ, on float32 rows.  The cheap-binding lane's, verbatim."""
+    k = X.shape[1]
+    s = np.abs(X).max(1)
+    sig = delta * np.sqrt((X[:, ::8].astype(np.float64) ** 2).mean(1))
     alpha = np.where(s + 4 * sig > 0, 448.0 / np.maximum(s + 4 * sig, 1e-300), 0.0)
-    return sig * alpha >= 1.0, (np.abs(vals) >= 8 * sig[:, None]).sum(1) * 64 <= vals.shape[1], sig
+    floor = sig * alpha >= 1.0
+    live = (np.abs(X) >= 8 * sig[:, None]).sum(1) * 64 <= k
+    return floor, live, sig, s / np.maximum(sig, 1e-300)
 
 
-def calibrate_split(x: np.ndarray, w: np.ndarray, budget: int = 512, batch: int = 4) -> Split:
-    """S for one layer from calibration rows x (tokens x k) and its weight w (n x k), both FP32 values.
-    - The ranking is the cheap-binding lane's `split_channels`, in its float64 statement: move the `batch` channels that offend
-      the most failing rows, an entry at or above 8σ of a row failing liveness or above 444ρ of a row failing the floor.
-    - When no row fails that statement, every row is checked exactly by `row_ok` on the unit's padded channels; a row that
-      fails there joins the ranking as failing, and the loop goes on.
-    - It stops when every row passes `row_ok`, or at `budget`."""
-    k = x.shape[1]
-    side: list[int] = []
-    forced: list[set[int]] = [set(), set()]
+def split_budget(k: int) -> int:
+    """The rule's budget: a step moves up to `BATCH` channels once fewer than the budget are moved, so ⌊k/100⌋ − 3 keeps
+    |S| ≤ ⌊k/100⌋."""
+    return max(k // 100 - (BATCH - 1), 0)
+
+
+def split_channels(X: np.ndarray, W: np.ndarray, delta: float, budget: int, batch: int = BATCH) -> tuple[list[int], list[dict]]:
+    """Greedy: move the input channels that offend the most failing rows (entries at or above 8σ of a row failing liveness,
+    or above 444ρ of a row failing the floor) until every row passes or the budget is spent.
+
+    The cheap-binding lane's `split_channels`, the one split rule, with its tie-break pinned: channels are ranked by
+    descending offence count and, among equal counts, by descending channel index.  The lane's `np.argsort(-off)` left
+    ties to numpy's unstable sort, whose order depends on its SIMD dispatch; on the machines both lanes ran this rule gives
+    the lane's result (Qwen2.5-7B's layer-2 `down_proj`: 38 channels, the same trace)."""
+    k = X.shape[1]
+    keep = np.ones(k, dtype=bool)
+    S: list[int] = []
+    trace = []
     while True:
-        split = Split(k, tuple(sorted(side)))
-        kept = split.kept
-        off = np.zeros(len(kept))
-        failing = 0
-        for vals, extra in zip((x, w), forced):
-            vk = vals[:, kept]
-            fl, lv, sig = _rules(vk)
+        idx = np.flatnonzero(keep)
+        Xk, Wk = X[:, idx], W[:, idx]
+        off = np.zeros(len(idx))
+        fails = 0
+        for M in (Xk, Wk):
+            fl, lv, sig, _ = rules(M, delta)
             bad = ~(fl & lv)
-            bad[list(extra)] = True
-            failing += int(bad.sum())
+            fails += int(bad.sum())
             if bad.any():
-                mags, sb = np.abs(vk[bad]).astype(np.float64), sig[bad][:, None]
-                floor_bad = ~fl[bad][:, None] | (fl[bad] & lv[bad])[:, None]
-                off += ((floor_bad & (mags > 444 * sb)) | (~lv[bad][:, None] & (mags >= 8 * sb))).sum(0)
-        if failing == 0:
-            exact = [{i for i, row in enumerate(split.unit_words(np.ascontiguousarray(v, np.float32).view(np.uint32)))
-                      if not row_ok(row)} for v in (x, w)]
-            if not any(exact):
-                return split
-            forced = exact
-            continue
-        if len(side) >= budget:
-            return split
-        order = np.argsort(-off, kind="stable")
-        top = [int(kept[j]) for j in order[:batch] if off[j] > 0] or [int(kept[order[0]])]
-        side.extend(top)
+                Mb, sb = np.abs(M[bad]), sig[bad][:, None]
+                off += ((~fl[bad][:, None] & (Mb > 444 * sb)) | (~lv[bad][:, None] & (Mb >= 8 * sb))).sum(0)
+        trace.append({"moved": len(S), "failing_rows": fails})
+        if fails == 0 or len(S) >= budget:
+            return S, trace
+        top = idx[np.lexsort((-np.arange(len(idx)), -off))[:batch]]
+        top = [int(c) for c in top if off[np.searchsorted(idx, c)] > 0] or [int(idx[np.argmax(off)])]
+        for c in top:
+            keep[c] = False
+            S.append(c)
+
+
+def calibration_digest(x: np.ndarray) -> bytes:
+    """The calibration rows' digest (tokens x k, FP32), which the split records."""
+    return hashlib.sha256(CALIBRATION_DOMAIN + struct.pack("<II", *x.shape) + np.ascontiguousarray(x, "<f4").tobytes()).digest()
+
+
+def split_layer(x: np.ndarray, w: np.ndarray) -> Split:
+    """One layer's split from its calibration rows x and its weight w (FP32 values), by `split_channels`."""
+    side, _ = split_channels(x, w, 1.0, split_budget(x.shape[1]))
+    return Split(x.shape[1], tuple(sorted(side)), calibration_digest(x))
+
+
+def split_check(calibration: Mapping[int, np.ndarray], weights: Mapping[int, np.ndarray]):
+    """The verifier's S check for `pearl_c_work.audit`: S is `split_layer`'s on the committed calibration rows and weight."""
+    def check(w: int, split: PW.Split) -> bool:
+        honest = split_layer(calibration[w], weights[w])
+        return (split.k, split.side, split.calibration) == (honest.k, honest.side, honest.calibration)
+    return check
 
 
 # ---- the CPU twin -------------------------------------------------------------------------------------------------
@@ -317,8 +331,8 @@ def unit_weight_rows(weight: Any, split: Split) -> list[bytes]:
 
 
 def commit_weights(weights: Mapping[int, Any], splits: Mapping[int, Split]) -> dict[str, Any]:
-    """Each layer's weight root over its unit rows, and its split's digest.  How S binds into the weights root before the
-    salt is a statement-review item (the plan's §7); the digests are recorded beside the roots until it is decided."""
+    """Each layer's weight root over its unit rows, and its split's digest.  The splits bind in the records root
+    (`pearl_c_work.records_root`), and the verifier recomputes S (`split_check`)."""
     roots = {w: commit_rows(weight_binding(w), -2, unit_weight_rows(wt, splits[w])).commitment.root.hex()
              for w, wt in weights.items()}
     return {"weight_roots": {str(w): r for w, r in roots.items()},
@@ -339,7 +353,8 @@ class PearlCRun:
     units: list[Matmul] = field(default_factory=list)
     roots_a: list[bytes] = field(default_factory=list)
     leaves: list[bytes] = field(default_factory=list)
-    uncredited: list[int] = field(default_factory=list)
+    records: list[PW.UnitRecord] = field(default_factory=list)
+    excluded_b: dict[int, tuple[int, ...]] = field(default_factory=dict)
     sides: dict[int, WeightSide] = field(default_factory=dict)
     commits: dict[str, Any] = field(default_factory=dict)
     details: dict[str, Any] = field(default_factory=dict)
@@ -349,7 +364,7 @@ class PearlCRun:
                         "splits": {str(w): s.digest().hex() for w, s in self.splits.items()},
                         "transcript_root": None, "units": 0, "tiles": 0}
         self.details = {"scheme": self.scheme.name, "committer": "pouw_pearl_c twin (host)", "units": 0, "tiles": 0,
-                        "padded_rows": 0, "uncredited_units": 0,
+                        "padded_rows": 0, "excluded_rows": 0,
                         "side_channels": {str(w): len(s.side) for w, s in self.splits.items()},
                         "uncovered": "every GEMM outside LinearBase (lm_head, attention)"}
 
@@ -362,22 +377,21 @@ class PearlCRun:
         a = split.unit_words(xs.view(np.uint32))
         mp = max(ALIGN, -(-m // ALIGN) * ALIGN)
         if mp > m:
-            filler = np.zeros((mp - m, split.k_unit), np.uint32)
-            filler[:, :len(split.kept)] = FILLER
-            a = np.concatenate([a, filler])
+            a = np.concatenate([a, np.zeros((mp - m, split.k_unit), np.uint32)])
         ws_ = np.ascontiguousarray(_host(weight), np.float32)
         b = split.unit_words(ws_.view(np.uint32))
         n = b.shape[0]
         u = Matmul(len(self.units), Shape(mp, split.k_unit, n), w)
         self.scheme.check(u)
+        if w not in self.excluded_b:
+            self.excluded_b[w] = tuple(j for j in range(n) if not row_ok(b[j]))
+        record = PW.UnitRecord(u, m, split.k_kept, tuple(i for i in range(m) if not row_ok(a[i])), self.excluded_b[w])
         rows = [r.tobytes() for r in a]
         root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows).commitment.root
         ctx = UnitContext(self.salt, u, root_a, self.weight_roots[w])
         noise = self.scheme.noise(ctx)
         unit, self.sides[w] = twin_call(self.scheme, ctx, noise, a, b, self.sides.get(w))
-        ops = C.Ops(unit.a.formed(), unit.b.formed(), [], [], unit.pa.tolist(), unit.pb.tolist())
-        if not self.scheme.admissible(ctx, ops):
-            self.uncredited.append(u.index)
+        self.records.append(record)
         for tile in self.scheme.tiles(u.shape):
             self.leaves.append(unit.leaves[(tile.rows[0], tile.cols[0])])
         self.units.append(u)
@@ -386,7 +400,7 @@ class PearlCRun:
         bias_bits = None if bias is None else (np.ascontiguousarray(_host(bias), np.float32).view(np.uint32) >> 16)
         y = merge(unit.y_unit[:m], y_side, bias_bits)
         self.details.update(units=len(self.units), tiles=len(self.leaves), padded_rows=self.details["padded_rows"] + mp - m,
-                            uncredited_units=len(self.uncredited))
+                            excluded_rows=self.details["excluded_rows"] + len(record.excluded_a))
         return _like(((y.astype(np.uint32) << 16).view(np.float32)).reshape(*lead, n), x)
 
     def finish(self) -> None:
@@ -395,12 +409,15 @@ class PearlCRun:
             epoch = Epoch(Workload(tuple(self.units)), dict(self.weight_roots), self.salt)
             tree = MerkleTree(transcript_domain(epoch, len(self.leaves)), dict(enumerate(self.leaves)), lambda _: TILE_SCHEMA)
             self.commits["transcript_root"] = tree.commitment.root.hex()
+            splits = {w: self.splits[w] for w in {u.weight for u in self.units}}
+            self.commits["records_root"] = PW.records_root(self.salt, epoch.weights_root, splits, self.records).hex()
         self.commits.update(units=len(self.units), tiles=len(self.leaves))
         if self.transcript_dir:
             d = Path(self.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
-            units = [{"index": u.index, "shape": [u.shape.m, u.shape.k, u.shape.n], "weight": u.weight, "root_a": r.hex()}
-                     for u, r in zip(self.units, self.roots_a)]
+            units = [{"index": u.index, "shape": [u.shape.m, u.shape.k, u.shape.n], "weight": u.weight, "root_a": r.hex(),
+                      "real_rows": rec.real_rows, "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a),
+                      "excluded_b": list(rec.excluded_b)} for u, r, rec in zip(self.units, self.roots_a, self.records)]
             (d / "pouw-pearl-c-transcript.json").write_text(json.dumps(
-                {"entry": self.entry, "commitment": self.commits, "units": units, "uncredited": self.uncredited,
+                {"entry": self.entry, "commitment": self.commits, "units": units,
                  "leaves": [x.hex() for x in self.leaves]}, indent=1) + "\n")
