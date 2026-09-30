@@ -454,6 +454,17 @@ def test_the_record_s_slowdown_is_instrumented_over_control_per_phase(tmp_path):
     assert rec["timing"]["control"]["decode_mean_s"] == 0.010
 
 
+def test_the_record_carries_the_engine_s_cublas_workspace_pin(tmp_path):
+    d = _row_dir(tmp_path)
+    assert CR.record(d, ROW)["engine"] is None, "no engine facts recorded: none claimed"
+    run = json.loads((d / "commit" / "runs.jsonl").read_text())
+    run["commit"]["sampled_replay"]["engine_of_record"] = {"VLLM_BATCH_INVARIANT": "1", "CUBLAS_WORKSPACE_CONFIG": ":16:8",
+                                                           "CUBLASLT_WORKSPACE_SIZE": "1", "rule": "measured in the engine's process"}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    eng = CR.record(d, ROW)["engine"]
+    assert eng["CUBLAS_WORKSPACE_CONFIG"] == ":16:8" and eng["CUBLASLT_WORKSPACE_SIZE"] == "1" and "rule" not in eng
+
+
 def test_a_config_baseline_keeps_the_control_arm(tmp_path):
     r = _row(tmp_path, "--config-run", "1", "--config-baseline", "1")
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
