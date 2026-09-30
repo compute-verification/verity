@@ -5,3 +5,4 @@ import Verity.TC.Proofs.Fold
 import Verity.TC.Proofs.Group
 import Verity.TC.Proofs.SemGroup
 import Verity.TC.Proofs.Prod
+import Verity.TC.Proofs.Complete

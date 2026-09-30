@@ -3,6 +3,7 @@ import Verity.TC.Relation
 import Verity.Assumptions
 import Verity.TC.Proofs.Step
 import Verity.TC.Proofs.Words
+import Verity.TC.Proofs.Complete
 
 /-!
 # The step relation is the step semantics
@@ -92,7 +93,37 @@ theorem hopper_step_sound (align : Align) (acc : Nat) (a b : List Nat)
 theorem hopper_step_complete (align : Align) (acc : Nat) (a b : List Nat)
     (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) :
     ∃ w, StepHolds HOPPER_BF16_WGMMA_K16 align (decodeState acc HOPPER_BF16_WGMMA_K16) a b w := by
-  sorry
+  obtain ⟨hacc, hla, hlb, ha16, hb16⟩ := hin
+  have hk : HOPPER_BF16_WGMMA_K16.k = 16 := rfl
+  rw [hk] at hla hlb
+  have hab : ∀ x ∈ a.zip b, x.1 < 2 ^ 16 ∧ x.2 < 2 ^ 16 := fun x hx =>
+    ⟨ha16 _ (List.of_mem_zip hx).1, hb16 _ (List.of_mem_zip hx).2⟩
+  have hlen : (a.zip b).length = 16 := by simp [hla, hlb]
+  obtain ⟨hdec, hadm⟩ := decode_eq acc hacc
+  obtain ⟨hg, hgl⟩ := group_complete align (fp32Value acc) hadm (a.zip b) hlen hab
+  refine ⟨⟨(a.zip b).map (fun x => prodCols (-133) x.1 x.2),
+    [honestGroup (stateOf (-133) (fp32Value acc)) ((a.zip b).map (fun x => prodCols (-133) x.1 x.2))]⟩, ?_, ?_, ?_⟩
+  · refine ⟨by simp [hlen, hk], rfl, ?_⟩
+    intro i h h'
+    have : i = 0 := by simp at h; omega
+    subst this
+    simpa [HOPPER_BF16_WGMMA_K16] using hgl
+  · intro j hj
+    rw [params_hopper]
+    have hj' : j < 16 := by simpa [hlen] using hj
+    have hja : j < a.length := by omega
+    have hjb : j < b.length := by omega
+    rw [getElem!_pos a j hja, getElem!_pos b j hjb]
+    simp only [List.getElem_map, List.getElem_zip]
+    exact prodHolds_prodCols HP _ _ (ha16 _ (List.getElem_mem hja)) (hb16 _ (List.getElem_mem hjb))
+  · rw [params_hopper]
+    simp only [HOPPER_BF16_WGMMA_K16, groupsHold]
+    refine ⟨?_, trivial⟩
+    rw [List.take_of_length_le (by simp [hlen])]
+    have hdec2 : decodeState acc { groups := [16], width := 26, zeroExponent := -133 } =
+        stateOf (-133) (fp32Value acc) := hdec
+    rw [hdec2]
+    exact hg
 
 theorem hopper_step_iff (align : Align) (acc : Nat) (a b : List Nat)
     (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) (out : State) :
