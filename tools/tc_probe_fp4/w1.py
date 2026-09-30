@@ -56,14 +56,15 @@ OPS = [
     ("fadd", "FADD", NCHAIN * SUNROLL, 32, "register"),
     ("ffma", "FFMA", NCHAIN * SUNROLL, 32, "register"),
     ("f2fp_e4m3x2", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
+    ("f2fp_e4m3x2_u16", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
 ]
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
-           "fadd_rate", "ffma_rate", "f2fp_rate"]  # w1_prices.cu's KERNELS, in op order
+           "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate"]  # w1_prices.cu's KERNELS, in op order
 _WATCHED = re.compile(r"^(?:[A-Z]*MMA|F2FP|F2F|FADD|FFMA|FMUL|UF2FP|UFADD|UFFMA)(?:\.|$)")
 # Public (datasheet) dense rates per SM per clock, the fake device's cycles: RTX PRO 6000 Blackwell, 188 SMs.  Estimated, never output.
 _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 1024, "omma_nvf4": 2048, "hmma_bf16_f32": 512,
-              "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64}
+              "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64, "f2fp_e4m3x2_u16": 64}
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
@@ -180,19 +181,23 @@ def _f16_bits(x: float) -> int:
     return int(np.float16(x).view(np.uint16))
 
 
-def f2fp_model(iters: int, rows: np.ndarray) -> np.ndarray:
-    """h[lane][8] of f2fp_rate: per iteration and constant x_k, chain k % 8 adds the words P(f, x_k) | P(x_k, f) << 16 and the same
-    for g, mod 2^32; P(hi, lo) = code(hi) << 8 | code(lo)."""
+def f2fp_model(iters: int, rows: np.ndarray, packed: bool = True) -> np.ndarray:
+    """h[lane][8] of f2fp_rate (packed): per iteration and constant x_k, chain k % 8 adds the words P(f, x_k) | P(x_k, f) << 16 and
+    the same for g; of f2fp_u16_rate: chain k % 8 adds P(f, x_k) + P(x_k, f) and chain (k + 1) % 8 the same for g.  Mod 2^32, with
+    P(hi, lo) = code(hi) << 8 | code(lo)."""
     rows = np.asarray(rows, np.uint32).reshape(32, 8)
     h = np.zeros((32, NCHAIN), np.uint32)
     xs = rows[:, 1:2] + (np.arange(2 * NCHAIN, dtype=np.uint32) << 20)
     cx = F8.cvt_ref("e4m3", xs).astype(np.uint32)
     for it in range(iters):
-        for off in (0, 1 << 21):
+        for s, off in ((0, 0), (1, 1 << 21)):
             c = F8.cvt_ref("e4m3", rows[:, 0] + np.uint32(it + off)).astype(np.uint32)[:, None]
-            v = ((c << 8) | cx) | (((cx << 8) | c) << 16)
+            if packed:
+                v, s = ((c << 8) | cx) | (((cx << 8) | c) << 16), 0
+            else:
+                v = ((c << 8) | cx) + ((cx << 8) | c)
             for k in range(2 * NCHAIN):
-                h[:, k % NCHAIN] += v[:, k]
+                h[:, (k + s) % NCHAIN] += v[:, k]
     return h
 
 
@@ -210,7 +215,7 @@ def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     elif op in (6, 7):
         w[:, :NCHAIN] = np.float32(SUNROLL * iters).view(np.uint32)
     else:
-        w[:, :NCHAIN] = np.tile(f2fp_model(iters, rows), (THREADS // 32, 1))
+        w[:, :NCHAIN] = np.tile(f2fp_model(iters, rows, packed=op == 8), (THREADS // 32, 1))
     return w
 
 

@@ -13,6 +13,7 @@
 //    6  fadd_rate              add.rn.f32                                                                         32 lanes
 //    7  ffma_rate              fma.rn.f32                                                                         32 lanes
 //    8  f2fp_rate              cvt.rn.satfinite.e4m3x2.f32 (+ one 3-input add per four converts)                64 elements
+//    9  f2fp_u16_rate          the same, each result zero-extended (+ one 3-input add per two converts)            64 elements
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -192,9 +193,37 @@ __global__ void __launch_bounds__(THREADS) f2fp_rate(const uint32_t* __restrict_
     for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
 }
 
+__device__ __forceinline__ uint32_t cvt_e4m3x2_u32(float hi, float lo) {
+    uint32_t r;
+    asm volatile("{ .reg .b16 t; cvt.rn.satfinite.e4m3x2.f32 t, %1, %2; cvt.u32.u16 %0, t; }" : "=r"(r) : "f"(hi), "f"(lo));
+    return r;
+}
+
+// The same 64 converts per iteration, each zero-extended to its own word and folded two at a time: a second mix of support
+// instructions per F2FP, so two loops pin F2FP's own cost apart from theirs.
+__global__ void __launch_bounds__(THREADS) f2fp_u16_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                         long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint32_t h[NCHAIN] = {};
+    float xs[2 * NCHAIN];
+    for (int k = 0; k < 2 * NCHAIN; k++) xs[k] = __uint_as_float(row[1] + ((uint32_t)k << 20));
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+        const float f = __uint_as_float(row[0] + (uint32_t)it);
+        const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
+#pragma unroll
+        for (int k = 0; k < 2 * NCHAIN; k++) {
+            h[k % NCHAIN] += cvt_e4m3x2_u32(f, xs[k]) + cvt_e4m3x2_u32(xs[k], f);
+            h[(k + 1) % NCHAIN] += cvt_e4m3x2_u32(g, xs[k]) + cvt_e4m3x2_u32(xs[k], g);
+        }
+    }
+    RATE_EPILOGUE
+    for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
+}
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
-                          fadd_rate, ffma_rate, f2fp_rate};
+                          fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace

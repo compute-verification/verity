@@ -48,9 +48,10 @@ def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
     assert "timing" not in res and "prices" not in res
 
 
-def test_gate_words_are_not_vacuous():
-    rows = w1.timing_rows(8, np.random.default_rng(w1.F8.SEED_DEFAULT))
-    assert w1.expected_words(8, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
+@pytest.mark.parametrize("op", [8, 9])
+def test_gate_words_are_not_vacuous(op):
+    rows = w1.timing_rows(op, np.random.default_rng(w1.F8.SEED_DEFAULT))
+    assert w1.expected_words(op, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
 
 
 def test_vacuous_gate_fails(tmp_path, no_nvcc, monkeypatch):
