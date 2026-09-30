@@ -134,6 +134,50 @@ def test_every_server_script_parses():
         assert r.returncode == 0, f"{f.name}: {r.stderr}"
 
 
+def test_the_disk_guard_holds_every_queue_at_90_and_releases_only_its_own_holds(tmp_path):
+    """vy-disk-guard: at 90% it holds every queue that isn't held already and writes one alert note; while the disk stays full it
+    re-holds a queue someone released; under 85% it releases only its own holds, and not inside the quiet hour. `df`, `date` and
+    `kubectl` are fakes (the policy of each queue is a file)."""
+    import subprocess
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "disk_guard.sh\" /usr/local/bin/vy-disk-guard" in up and "vy-disk-guard.timer" in up and "OnUnitActiveSec=1min" in up
+    bin_dir, kq, outbox = tmp_path / "bin", tmp_path / "cq", tmp_path / "outbox"
+    for d in (bin_dir, kq):
+        d.mkdir()
+    (bin_dir / "df").write_text('#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted"\n'
+                                'echo "/dev/vdc 100 $DF_USED $((100 - DF_USED)) x /workspace"\n')
+    (bin_dir / "date").write_text('#!/bin/sh\n[ "$2" = +%H%M ] && { echo "$HM"; exit 0; }\nexec /bin/date "$@"\n')
+    (bin_dir / "kubectl").write_text('#!/bin/sh\ncase $1 in\n  get) cat "$KQ/$3" ;;\n'
+                                     '  patch) echo "$6" | sed \'s/.*stopPolicy":"\\([A-Za-z]*\\)".*/\\1/\' > "$KQ/$3" ;;\nesac\n')
+    for f in bin_dir.iterdir():
+        f.chmod(0o755)
+    queues = ["deployments-cpu", "deployments-gpu", "provers", "backfill", "circuits"]
+    for q in queues:
+        (kq / q).write_text("Hold" if q == "circuits" else "None")     # circuits is in its quiet hour
+
+    def tick(used: int, hm: str = "1400") -> str:
+        env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "KQ": str(kq), "DF_USED": str(used), "HM": hm, "VY_KUBECTL": str(bin_dir / "kubectl"),
+               "VY_DISK_STATE": str(tmp_path / "held"), "VY_DISK_OUTBOX": str(outbox)}
+        r = subprocess.run(["sh", str(SKY / "disk_guard.sh"), "check"], env=env, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+        return r.stdout
+
+    def policies() -> dict:
+        return {q: (kq / q).read_text().strip() for q in queues}
+
+    assert tick(89) == "" and set(policies().values()) == {"None", "Hold"} and not outbox.exists()
+    assert "held deployments-cpu deployments-gpu provers backfill" in tick(90)
+    assert set(policies().values()) == {"Hold"} and len(list(outbox.iterdir())) == 1
+    note = next(outbox.iterdir()).read_text()
+    assert "lane: infra" in note and "nothing was deleted" in note and "provers" in note
+    (kq / "provers").write_text("None")                                   # released by hand while the disk is still full
+    assert tick(91) == "" and policies()["provers"] == "Hold" and len(list(outbox.iterdir())) == 1
+    assert tick(87) == "" and set(policies().values()) == {"Hold"}        # between the marks: nothing changes
+    assert tick(80, hm="1245") == "" and set(policies().values()) == {"Hold"}   # the quiet hour releases its own
+    assert "released deployments-cpu deployments-gpu provers backfill" in tick(80)
+    assert policies() == {**{q: "None" for q in queues}, "circuits": "Hold"} and len(list(outbox.iterdir())) == 2
+
+
 def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
     for f in sorted((SKY / "jobs").glob("*.yaml")):
         t = f.read_text()
