@@ -83,8 +83,8 @@ try:
 except ImportError:              # a harness before arm interface v0.5 (#583): the build names no variant, so nothing records
     ledger = None
 try:
-    import refs                           # the harness's process pool for gate references
-except ImportError:                       # an older harness: the twin runs inline
+    import refs  # the harness's process pool for gate references
+except ImportError:              # an older harness: the twin runs inline
     refs = None
 
 HERE = Path(__file__).resolve().parent
