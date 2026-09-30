@@ -113,7 +113,7 @@ DEV uint64_t globaltimer() {
 // the tile's start, after its mainloop and after its epilogue, and globaltimer after the epilogue, to the u64s at
 // p3 + ((blockIdx.x NCW + warp) 16 + j) 4
 constexpr int NV_STAMP_TILES = 16;
-template <int TM, int ST, int RP, int BO, int LATE, bool BF16, bool STAMP>
+template <int TM, int ST, int RP, int BO, int LATE, bool BF16, bool STAMP, bool FUSE = false>
 DEV void nv_gemm_body(const Args& a) {
   using L = nvf4::Mainloop<TM, ST, RP, BO, LATE>;
   extern __shared__ __align__(1024) uint8_t nv_smem[];
@@ -125,36 +125,65 @@ DEV void nv_gemm_body(const Args& a) {
   uint64_t* stamp = STAMP ? reinterpret_cast<uint64_t*>(a.p[3]) + (size_t)(blockIdx.x * L::NCW + threadIdx.x / 32) * NV_STAMP_TILES * 4
                           : nullptr;
   const bool stamping = STAMP && threadIdx.x % 32 == 0;
-  for (int t = blockIdx.x, j = 0; t < tiles_m * tiles_n; t += gridDim.x, j++) {
-    int tm, tn;
-    nvf4::raster(t, tiles_m, tiles_n, group, tm, tn);
+  if constexpr (FUSE) {
+    // each tile's store folded into the next tile's first step (tile_bf16), the last one's after the loop; a tile's stamps:
+    // its start, after tile_bf16 (which stores the previous tile), the same again, and globaltimer
+    static_assert(BF16, "the folded store is store_bf16's");
+    uint16_t* C = reinterpret_cast<uint16_t*>(a.p[2]);
     float acc[4][4][2][4];
-    const bool st = stamping && j < NV_STAMP_TILES;
-    if (st) stamp[4 * j] = clock64();
-    ml.tile(K, acc, t + (int)gridDim.x < tiles_m * tiles_n);
-    if (st) stamp[4 * j + 1] = clock64();
-    if constexpr (BF16) ml.store_bf16(reinterpret_cast<uint16_t*>(a.p[2]), N, tm, tn, acc);
-    else ml.store_f32(reinterpret_cast<float*>(a.p[2]), N, tm, tn, acc);
-    if (st) {
-      stamp[4 * j + 2] = clock64();
-      stamp[4 * j + 3] = globaltimer();
+    int ptm = 0, ptn = 0, j = 0;
+    for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x, j++) {
+      int tm, tn;
+      nvf4::raster(t, tiles_m, tiles_n, group, tm, tn);
+      const bool st = stamping && j < NV_STAMP_TILES;
+      if (st) stamp[4 * j] = clock64();
+      ml.tile_bf16(K, acc, t + (int)gridDim.x < tiles_m * tiles_n, j > 0, C, N, ptm, ptn);
+      if (st) {
+        stamp[4 * j + 1] = stamp[4 * j + 2] = clock64();
+        stamp[4 * j + 3] = globaltimer();
+      }
+      ptm = tm;
+      ptn = tn;
+    }
+    if (j) ml.store_bf16(C, N, ptm, ptn, acc);
+  } else {
+    for (int t = blockIdx.x, j = 0; t < tiles_m * tiles_n; t += gridDim.x, j++) {
+      int tm, tn;
+      nvf4::raster(t, tiles_m, tiles_n, group, tm, tn);
+      float acc[4][4][2][4];
+      const bool st = stamping && j < NV_STAMP_TILES;
+      if (st) stamp[4 * j] = clock64();
+      ml.tile(K, acc, t + (int)gridDim.x < tiles_m * tiles_n);
+      if (st) stamp[4 * j + 1] = clock64();
+      if constexpr (BF16) ml.store_bf16(reinterpret_cast<uint16_t*>(a.p[2]), N, tm, tn, acc);
+      else ml.store_f32(reinterpret_cast<float*>(a.p[2]), N, tm, tn, acc);
+      if (st) {
+        stamp[4 * j + 2] = clock64();
+        stamp[4 * j + 3] = globaltimer();
+      }
     }
   }
 }
 
-#define NV_GEMM(NAME, TM, ST, RP, BO, LATE, BF16, STAMP)                                                           \
+#define NV_GEMM(NAME, TM, ST, RP, BO, LATE, BF16, STAMP, FUSE)                                                     \
   extern "C" __global__ void __launch_bounds__((nvf4::Mainloop<TM, ST, RP, BO, LATE>::NT), 1) NAME(const Args a) {      \
-    nv_gemm_body<TM, ST, RP, BO, LATE, BF16, STAMP>(a);                                                                 \
+    nv_gemm_body<TM, ST, RP, BO, LATE, BF16, STAMP, FUSE>(a);                                                           \
   }                                                                                                                     \
   extern "C" __global__ void NAME##_smem(int* out) { *out = nvf4::Mainloop<TM, ST, RP, BO, LATE>::SMEM; }
 // NAME_w (FP32 words), NAME_b (BF16) and NAME_t (NAME_b with STAMP)
 #define NV_PAIR(NAME, TM, ST, RP, BO, LATE)                                                                             \
-  NV_GEMM(NAME##_w, TM, ST, RP, BO, LATE, false, false)                                                                 \
-  NV_GEMM(NAME##_b, TM, ST, RP, BO, LATE, true, false) NV_GEMM(NAME##_t, TM, ST, RP, BO, LATE, true, true)
+  NV_GEMM(NAME##_w, TM, ST, RP, BO, LATE, false, false, false)                                                          \
+  NV_GEMM(NAME##_b, TM, ST, RP, BO, LATE, true, false, false) NV_GEMM(NAME##_t, TM, ST, RP, BO, LATE, true, true, false)
+// the same with each tile's BF16 store folded into the next tile's first step (tile_bf16); NAME_w is NV_PAIR's
+#define NV_FUSED(NAME, TM, ST, RP, BO, LATE)                                                                            \
+  NV_GEMM(NAME##_w, TM, ST, RP, BO, LATE, false, false, false)                                                          \
+  NV_GEMM(NAME##_b, TM, ST, RP, BO, LATE, true, false, true) NV_GEMM(NAME##_t, TM, ST, RP, BO, LATE, true, true, true)
 
 // nv256: 256 x 128 tiles, 3 stages, the producer at 40 registers (232 to each consumer), A-major MMA order; _o: B-major
-// order (CUTLASS's); _e: LATE (a late stage's wait after the step's other MMAs)
+// order (CUTLASS's); _e: LATE (a late stage's wait after the step's other MMAs); _ef: _e with the folded store
 NV_PAIR(nv256, 256, 3, 40, 0, 0)
 NV_PAIR(nv256_o, 256, 3, 40, 1, 0)
 NV_PAIR(nv256_e, 256, 3, 40, 0, 1)
 NV_PAIR(nv256_o_e, 256, 3, 40, 1, 1)
+NV_FUSED(nv256_ef, 256, 3, 40, 0, 1)
+NV_FUSED(nv256_o_ef, 256, 3, 40, 1, 1)
