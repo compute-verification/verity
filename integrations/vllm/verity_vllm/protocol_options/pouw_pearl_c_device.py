@@ -395,9 +395,11 @@ class _Pass:
 @dataclass
 class _Graph:
     """One pipeline's call steps captured as a CUDA graph, over buffers of its own where a call's differ: y, and the call's
-    tile leaves, which are copied to the pass's leaf buffer at the call's offset after each replay."""
+    tile leaves, which are copied to the pass's leaf buffer at the call's offset after each replay; with hashing and no filler
+    rows, the screen's flags too (``flags``), copied likewise."""
     y: Any
     leaves: Any
+    flags: Any = None
     graph: Any = None
 
 
@@ -726,8 +728,8 @@ class PearlCDeviceRun:
         if self.graphs and not side and main is None and m16 <= GRAPH_ROWS:
             if self.hashing:
                 self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), caller)
-            y = self._replay(w, sh, pipe, raw, tiles)
-            return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias)
+            y, screened = self._replay(w, sh, pipe, raw, tiles, m)
+            return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened)
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
         lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
@@ -765,21 +767,28 @@ class PearlCDeviceRun:
             self._launching = None
         return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias)
 
-    def _replay(self, w: int, sh: _Shape, pipe: Any, raw: int, tiles: int) -> Any:
+    def _replay(self, w: int, sh: _Shape, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
         """The call's steps as one CUDA graph on the caller's stream (`graphs`): captured at the pipeline's first call, after
         one eager run of the same steps (their first use syncs: the GEMMs' shared-memory probes), on buffers of the graph's
-        own for y and the leaves.  Returns y; the leaves go to the pass's buffer at the call's offset."""
+        own for y and the leaves.  Returns y, and whether the graph screened the call (with hashing, when it has no filler
+        rows); the leaves, and the flags when it did, go to the pass's buffers at the call's offsets."""
         import torch
-        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name)
+        screen = self.hashing and m == sh.m16
+        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, screen)
         names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
         g = self._graphs.get(key)
         if g is None:
             g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(32 * tiles, self.device))
+            if screen:
+                g.flags = _zeros(2 * m, self.device)[:2 * m].view(m, 2)
             if self.cur.poison is not None:
-                g.y.view(torch.uint8).fill_(self.cur.poison)
-                g.leaves.fill_(self.cur.poison)
+                for t in (g.y.view(torch.uint8), g.leaves, g.flags):
+                    if t is not None:
+                        t.fill_(self.cur.poison)
             pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
             steps = _steps(pipe, names)
+            if screen:
+                steps = [*steps, lambda: screen_into(g.flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)]
             self.kernel.dev.stream = raw
             try:
                 for f in steps:
@@ -803,17 +812,21 @@ class PearlCDeviceRun:
             g.graph.replay()
         if self.hashing:
             self.leaves[32 * self.cur.tiles:32 * (self.cur.tiles + tiles)].copy_(g.leaves[:32 * tiles])
-        return g.y.clone()
+        if screen:
+            self.flag_buf[self.cur.flag_rows:self.cur.flag_rows + m].copy_(g.flags)
+        return g.y.clone(), screen
 
     def _after(self, cur: _Pass, w: int, wt: _Weight, sh: _Shape, pipe: Any, index: int, m: int, k: int, m16: int, tiles: int,
-               y: Any, lead: Any, bias: Any) -> Any:
-        """A call's records after its steps: its matmul, A's root, the screen, the retained files, and y."""
+               y: Any, lead: Any, bias: Any, screened: bool = False) -> Any:
+        """A call's records after its steps: its matmul, A's root, the screen (unless a graph `screened` it), the retained
+        files, and y."""
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
         if self.hashing:
             size = pipe.size["tree_a"]
             self.roots_buf[32 * index:32 * index + 32].copy_(sh.b["tree_a"][size - 32:size])
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
-            screen_into(flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
+            if not screened:
+                screen_into(flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
             cur.flag_rows += m
             if cur.retain is not None:
                 cur.records.append(PW.UnitRecord(cur.matmuls[-1], m, k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), sh.xa[:m]),
@@ -856,8 +869,9 @@ class PearlCDeviceRun:
                 for t in self._buffers(sh):
                     t.fill_(value)
             for g in self._graphs.values():
-                g.y.view(torch.uint8).fill_(value)
-                g.leaves.fill_(value)
+                for t in (g.y.view(torch.uint8), g.leaves, g.flags):
+                    if t is not None:
+                        t.fill_(value)
 
     def end(self) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
