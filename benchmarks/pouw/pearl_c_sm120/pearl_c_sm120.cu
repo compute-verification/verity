@@ -71,9 +71,10 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control for a fused epilogue's digests
 //   PEARLC_B  PEARLC_S with the -h1 message digests of C~ and U from registers (ml_body only)
+//   PEARLC_W  PEARLC_S with the -h1 tile leaves, hashed a tile behind by the producer warpgroup's idle warps (ml_body only)
 // HOT (v2-hot, G = 0; the _hu kernels): row i's words start their accumulator at H_i (p12, one FP32 word a row: hot_a's)
 // instead of +0, C~ is that chain's word, and U is the peel of fl(C~ - H_i) (nearest even), H_i removed before the peel.
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_B };
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_B, M_PEARLC_W };
 constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
   return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
@@ -317,22 +318,131 @@ template <int MODE, int TM, int BN, int G, bool HOT = false> DEV void gemm_body(
 // pouw_hash's quad_msg_digest_b3, BLAKE3 keyed by blake3("pearl-c/h1/message"), into p9 in hash_msg_v's layout), its 1 KB of
 // scratch per warp in the tail stage's P_A rows once every consumer has read its peel fragments.  p10 the four tensor maps
 // (ml::Maps; P_A, P_B the peel's, else A, B again), p11 the message key, p12 H (HOT).
+//
+// PEARLC_W's epilogue stores C~ and U into one of two slots of its CTA's scratch (p13 + W_SLOT (2 blockIdx + slot): C~ and U
+// as 128 x 128 row-major words, then the tile's 512 message digests) and goes on to the next tile; the producer warpgroup's
+// warps 1-3 (w_hash), idle in the mainloop, hash the slot meanwhile: hash_msg_v's digests into the slot, then hash_leaf_p's
+// four 64 x 64 leaves (key p15) into p14, each chunk of a leaf on a thread and its parents by shuffles.  No digest leaves
+// the CTA.  The slots are a ring on two mbarrier pairs after the mainloop's (full: every consumer's stores;
+// empty: every hash thread's reads), and each line is discarded from L2 once read, never written back.  The producer
+// warpgroup keeps ML_RP_W registers a thread for the hashing.
 constexpr int ML_NT = 384;
 template <int G> constexpr int ML_RP = G ? 24 : 40;   // the producer's registers: the mainloop's recommended v1 and v2
+constexpr int ML_RP_W = 56;                           // PEARLC_W's: the hash warps'
+template <int MODE> constexpr int ML_EXTRA = MODE == M_PEARLC_W ? 32 : 0;   // PEARLC_W's slot barriers
+constexpr int W_WORDS = 128 * 128, W_DIGESTS = 8 * W_WORDS, W_SLOT = W_DIGESTS + 512 * 32, W_HT = 96;
 template <int G> constexpr int ML_U = G ? 1 : 2;      // stages per K-loop iteration (v1 at 2 spills under nvcc 13.0)
+DEV void discard_l2(const void* p) { asm volatile("discard.global.L2 [%0], 128;" ::"l"(p) : "memory"); }
+DEV void mbar_arrive(uint32_t bar) { asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(bar) : "memory"); }
+
+// PEARLC_W's hash warps (W_HT threads, h their index): each tile's 512 messages, (row r, 32 columns c) at 4 r + c, hashed as
+// hash_msg_v does (the last warp takes the odd sixth message, the first warp the leaves after), then each leaf's chunk ch
+// (rows 16 ch .. 16 ch + 15 of the leaf, both of its 32-column digests a row, 16 blocks) on lane 4 (2 lti + ltj) + ch of the
+// first warp, and its parents as hash_leaf_p builds them.
+DEV void w_hash(const Args& a, uint32_t wbar) {
+  const int h = threadIdx.x - (ML_NT - W_HT);
+  uint32_t j = 0;
+  for (int t = blockIdx.x; t < a.i[0] / 128 * (a.i[1] / 128); t += gridDim.x, j++) {
+    uint8_t* const s = reinterpret_cast<uint8_t*>(a.p[13]) + ((size_t)2 * blockIdx.x + (j & 1)) * W_SLOT;
+    ml::mbar_wait(wbar + 8 * (j & 1), j >> 1 & 1);
+#pragma unroll 1
+    for (int msg = W_HT - 1 - h; msg < 512; msg += W_HT) {
+      const int r = msg >> 2, c = msg & 3;
+      const uint4* c4 = reinterpret_cast<const uint4*>(s + 4 * (r * 128 + 32 * c));
+      const uint4* u4 = c4 + W_WORDS / 4;
+      uint32_t key[8], hh[8];
+      load_key(a.p[11], key);
+#pragma unroll
+      for (int i = 0; i < 8; i++) hh[i] = key[i];
+#pragma unroll
+      for (int b = 0; b < 4; b++) {
+        uint32_t m[16];
+#pragma unroll
+        for (int q = 0; q < 4; q++) {
+          const uint4 x = __ldcg((b < 2 ? c4 : u4) + 4 * (b & 1) + q);
+          m[4 * q] = x.x; m[4 * q + 1] = x.y; m[4 * q + 2] = x.z; m[4 * q + 3] = x.w;
+        }
+        b3c(hh, m, 0, 64, B3_KEYED | (b == 0 ? B3_START : 0) | (b == 3 ? B3_END | B3_ROOT : 0), hh);
+      }
+      discard_l2(c4);
+      discard_l2(u4);
+      uint4* o = reinterpret_cast<uint4*>(s + W_DIGESTS + 32 * msg);
+      o[0] = make_uint4(hh[0], hh[1], hh[2], hh[3]);
+      o[1] = make_uint4(hh[4], hh[5], hh[6], hh[7]);
+    }
+    asm volatile("bar.sync 2, %0;" ::"n"(W_HT) : "memory");   // every digest of the slot written
+    if (h < 32) {
+      const int lt = h >> 2, ch = h & 3, lti = lt >> 1, ltj = lt & 1;
+      uint32_t key[8], cv[8], o[8];
+      load_key(a.p[15], key);
+#pragma unroll
+      for (int i = 0; i < 8; i++) cv[i] = key[i];
+      if (h < 16) {
+        const uint4* d4 = reinterpret_cast<const uint4*>(s + W_DIGESTS + 32 * (4 * (64 * lti + 16 * ch) + 2 * ltj));
+#pragma unroll 1
+        for (int b = 0; b < 16; b++) {
+          uint32_t m[16];
+#pragma unroll
+          for (int q = 0; q < 4; q++) {
+            const uint4 x = __ldcg(d4 + 8 * b + q);
+            m[4 * q] = x.x; m[4 * q + 1] = x.y; m[4 * q + 2] = x.z; m[4 * q + 3] = x.w;
+          }
+          b3c(cv, m, (uint64_t)ch, 64, B3_KEYED | (b == 0 ? B3_START : 0) | (b == 15 ? B3_END : 0), cv);
+        }
+      }
+#pragma unroll
+      for (int i = 0; i < 8; i++) o[i] = __shfl_down_sync(0xffffffffu, cv[i], 1);
+      if (h < 16 && !(h & 1)) b3_parent(key, cv, o, 0, cv);   // lane 4 lt: chunks 0 and 1; 4 lt + 2: chunks 2 and 3
+#pragma unroll
+      for (int i = 0; i < 8; i++) o[i] = __shfl_down_sync(0xffffffffu, cv[i], 2);
+      if (h < 16 && !(h & 3)) {
+        b3_parent(key, cv, o, B3_ROOT, cv);
+        int tm, tn;
+        ml::raster(t, a.i[0] / 128, a.i[1] / 128, a.i[3], tm, tn);
+        store_cv(a.p[14] + (size_t)((2 * tm + lti) * (a.i[1] / 64) + 2 * tn + ltj) * 32, cv);
+      }
+      __syncwarp();
+#pragma unroll
+      for (int x = h; x < 128; x += 32) discard_l2(s + W_DIGESTS + 128 * x);
+    }
+    mbar_arrive(wbar + 16 + 8 * (j & 1));
+  }
+}
+
 template <int MODE, int G, bool HOT = false> DEV void ml_body(const Args& a) {
-  constexpr bool PEEL = MODE >= M_PEARLC, HASH = MODE == M_PEARLC_B;
+  constexpr bool PEEL = MODE >= M_PEARLC, HASH = MODE == M_PEARLC_B, W = MODE == M_PEARLC_W;
   constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
-  using L = ml::Mainloop<128, 128, G, 3, PEEL, 1, ML_RP<G>>;
+  using L = ml::Mainloop<128, 128, G, 3, PEEL, 1, W ? ML_RP_W : ML_RP<G>>;
   constexpr int MI = L::MI, NI = L::NI;
   static_assert(L::NT == ML_NT && MI == 4 && NI == 4, "gemm_body's 128 x 128 fragments: 8 warps of 64 x 32");
   static_assert(!HOT || (G == 0 && MODE != M_PLAIN), "v2-hot is the unpromoted chain");
+  static_assert(!W || (L::SPLIT && L::NT - L::NCT == 32 + W_HT), "the hash warps are the producer warpgroup's last three");
   extern __shared__ __align__(1024) uint8_t ml_smem[];
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
   const int tiles_m = M / 128, tiles_n = N / 128;
   L ml(ml_smem);
-  ml.roles(reinterpret_cast<const ml::Maps*>(a.p[10]), M, N, K, group);
-  for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
+  const uint32_t wbar = ml.base + L::SMEM;   // PEARLC_W: full[slot] at wbar + 8 slot, empty[slot] at wbar + 16 + 8 slot
+  if constexpr (W) {
+    if (threadIdx.x == 0)
+      for (int i = 0; i < 2; i++) { ml::mbar_init(wbar + 8 * i, L::NCT); ml::mbar_init(wbar + 16 + 8 * i, W_HT); }
+    ml.init(threadIdx.x);
+    const int warp = threadIdx.x / 32;
+    if (warp >= L::NCW) {
+      ml::regs_dec<L::REGS_P>();
+      if (warp == L::NCW) {
+        if (threadIdx.x % 32 == 0) ml.produce(reinterpret_cast<const ml::Maps*>(a.p[10]), M, N, K, group);
+      } else {
+        w_hash(a, wbar);
+      }
+      asm volatile("exit;");
+    }
+    ml::regs_inc<L::REGS_C>();
+    ml.consumer_init(warp, threadIdx.x % 32);
+  } else {
+    ml.roles(reinterpret_cast<const ml::Maps*>(a.p[10]), M, N, K, group);
+  }
+  uint32_t wj = 0;
+  for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x, wj++) {
     int tm, tn;
     ml::raster(t, tiles_m, tiles_n, group, tm, tn);
     float acc[MI][NI][4], total[MI][NI][4];
@@ -379,6 +489,19 @@ template <int MODE, int G, bool HOT = false> DEV void ml_body(const Args& a) {
           store2(C + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
         }
     }
+    // PEARLC_W: this tile's slot, once the hash warps have read it two tiles ago; C~ (the chain's word) into it
+    float* const ws = reinterpret_cast<float*>(a.p[13] + ((size_t)2 * blockIdx.x + (wj & 1)) * W_SLOT) +
+                      (wm * L::WM + g) * 128 + wn * L::WN + 2 * q;
+    if constexpr (W) {
+      ml::mbar_wait(wbar + 16 + 8 * (wj & 1), (wj >> 1 & 1) ^ 1);
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          store2(ws + 16 * mi * 128 + 8 * ni, total[mi][ni][0], total[mi][ni][1]);
+          store2(ws + (16 * mi + 8) * 128 + 8 * ni, total[mi][ni][2], total[mi][ni][3]);
+        }
+    }
     if constexpr (PEEL) {
       if constexpr (HASH) {
 #pragma unroll
@@ -420,10 +543,15 @@ template <int MODE, int G, bool HOT = false> DEV void ml_body(const Args& a) {
             store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
             store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
           }
+          if constexpr (W) {
+            store2(ws + W_WORDS + 16 * mi * 128 + 8 * ni, total[mi][ni][0], total[mi][ni][1]);
+            store2(ws + W_WORDS + (16 * mi + 8) * 128 + 8 * ni, total[mi][ni][2], total[mi][ni][3]);
+          }
           store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
           store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
         }
       }
+      if constexpr (W) mbar_arrive(wbar + 8 * (wj & 1));
       if constexpr (HASH) {
         asm volatile("bar.sync 1, %0;" ::"n"(L::NCT) : "memory");   // every consumer's peel reads of the tail are done
         uint64_t* scratch = reinterpret_cast<uint64_t*>(ml_smem + (pa0 - ml.base)) + 128 * warp;
@@ -451,10 +579,11 @@ template <int MODE, int G, bool HOT = false> DEV void ml_body(const Args& a) {
 }
 
 // G4: pearl-c-sm120-v1 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted;
-// _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile; ML_GEMM: the 128 x 128 tile on the mainloop, _s y alone, _b fused
+// _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile; ML_GEMM: the 128 x 128 tile on the mainloop, _s y alone, _b fused,
+// _w y and the tile leaves by the hash warps (G = 0 only: v1's consumers spill at ML_RP_W)
 #define ML_GEMM(NAME, MODE, G)                                                                                \
   extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, G>(a); } \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM; }
+  extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM + ML_EXTRA<MODE>; }
 #define GEMM(NAME, MODE, TM, BN, G)                                                                                 \
   extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN>(); }
@@ -468,6 +597,7 @@ ML_GEMM(gemm_pearlc_s, M_PEARLC_S, 4)
 ML_GEMM(gemm_pearlc_s_u, M_PEARLC_S, 0)
 ML_GEMM(gemm_pearlc_b, M_PEARLC_B, 4)
 ML_GEMM(gemm_pearlc_b_u, M_PEARLC_B, 0)
+ML_GEMM(gemm_pearlc_w_u, M_PEARLC_W, 0)
 GEMM(gemm_ct_d, M_CT, 64, 64, 4)
 GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
@@ -477,7 +607,7 @@ GEMM(gemm_words_u, M_CT, 128, 32, 0)
 // _hu: v2-hot (HOT, G = 0), p12 H (one FP32 word per row of A); its 32-column words are the _u kernels'
 #define ML_GEMM_HOT(NAME, MODE)                                                                                    \
   extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, 0, true>(a); } \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, 0, 3, true, 1, ML_RP<0>>::SMEM; }
+  extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, 0, 3, true, 1, ML_RP<0>>::SMEM + ML_EXTRA<MODE>; }
 #define GEMM_HOT(NAME, MODE, TM, BN)                                                                                \
   extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, 0, true>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN>(); }
@@ -485,6 +615,7 @@ ML_GEMM_HOT(gemm_ct_hu, M_CT)
 ML_GEMM_HOT(gemm_pearlc_hu, M_PEARLC)
 ML_GEMM_HOT(gemm_pearlc_s_hu, M_PEARLC_S)
 ML_GEMM_HOT(gemm_pearlc_b_hu, M_PEARLC_B)
+ML_GEMM_HOT(gemm_pearlc_w_hu, M_PEARLC_W)
 GEMM_HOT(gemm_ct_d_hu, M_CT, 64, 64)
 GEMM_HOT(gemm_pearlc_d_hu, M_PEARLC, 64, 64)
 // The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8

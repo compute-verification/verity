@@ -106,18 +106,22 @@ def test_gemms_fit_sm120_shared_memory():
     sm_120's 99 KB, and the gate knows every one."""
     assert "STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
     assert "SMEM = STAGES * STAGE + 16 * STAGES" in MAINLOOP and "STAGE = (TM + BN) * BK" in MAINLOOP
-    assert "*out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM;" in SOURCE
+    assert "*out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM + ML_EXTRA<MODE>;" in SOURCE
+    assert "ML_EXTRA = MODE == M_PEARLC_W ? 32 : 0;" in SOURCE and "W_SLOT = W_DIGESTS + 512 * 32" in SOURCE
+    assert "W_WORDS = 128 * 128, W_DIGESTS = 8 * W_WORDS" in SOURCE and RUN.W_SLOT == 8 * 128 * 128 + 512 * 32
     names = {n for n, *_ in gemms()}
     ml = {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u",
-          "gemm_pearlc_b", "gemm_pearlc_b_u", "gemm_ct_hu", "gemm_pearlc_hu", "gemm_pearlc_s_hu", "gemm_pearlc_b_hu"}
+          "gemm_pearlc_b", "gemm_pearlc_b_u", "gemm_ct_hu", "gemm_pearlc_hu", "gemm_pearlc_s_hu", "gemm_pearlc_b_hu",
+          "gemm_pearlc_w_u", "gemm_pearlc_w_hu"}
     assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u",
                           "gemm_ct_d_hu", "gemm_pearlc_d_hu"}
-    assert "*out = ml::Mainloop<128, 128, 0, 3, true, 1, ML_RP<0>>::SMEM;" in SOURCE
+    assert "*out = ml::Mainloop<128, 128, 0, 3, true, 1, ML_RP<0>>::SMEM + ML_EXTRA<MODE>;" in SOURCE
     for name in names:
         if name.endswith("_hu"):
             assert S.WANT[name] == S.WANT[name.removesuffix("_hu") + "_u"], name   # the unpromoted chain's atoms and peel
     for name, mode, tm, bn, g in gemms():
-        assert (ML_SMEM if name in ml else gemm_smem(mode, tm, bn)) <= SM120_MAX_DYN, name
+        assert (ML_SMEM + 32 * (mode == "M_PEARLC_W") if name in ml else gemm_smem(mode, tm, bn)) <= SM120_MAX_DYN, name
+        assert mode != "M_PEARLC_W" or g == 0, name   # v1's consumers spill at the hash warps' register split
         assert (tm, bn) == gemm_tile(name) and (name in ml) == ((tm, bn) == (128, 128))
         assert g in (0, 4) and (g == 0) == (name.endswith(("_u", "_hu")) or name == "gemm_fast")
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
@@ -367,12 +371,14 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
             assert base == "gemm_ct" or N == 32, name
             need[2] = 4 * M * N
         else:
-            assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_b"), name
+            assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_b", "gemm_pearlc_w"), name
             need.update({4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
             if base == "gemm_pearlc":
                 need.update({2: 4 * M * N, 3: 4 * M * N})
             if base == "gemm_pearlc_b":
                 need.update({9: M * N, 11: 32})       # a 32-byte digest per row and 32 columns; the message key
+            if base == "gemm_pearlc_w":               # two slots a CTA; a leaf per 64 x 64 tile; the message and leaf keys
+                need.update({11: 32, 13: 2 * RUN.W_SLOT * min(188, M // 128 * (N // 128)), 14: M // 64 * (N // 64) * 32, 15: 32})
         if gemm_tile(name) == (128, 128):
             need[10] = 4 * 128                        # ml::Maps: A, B, P_A, P_B
         return need
@@ -503,8 +509,12 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         assert {"form_a_scalar", "form_b_scalar"} <= set(t["ms"])
         assert set(t["call_e2e_ms_by_form"]) == {f"{','.join(f)}/{g}" for f in RUN.FORMS for g in RUN.FORMINGS}
         assert {"stats_a@forming=fold", "form_a@forming=fold"} <= set(t["alt_ms"])
+        warps = RUN.VARIANT_G[t["variant"]] == 0
         assert set(t["deferral"]["ms"]) == {"gemm_alone", "hashing_alone", "pair_same_priority", "pair_main_greatest",
-                                            "fused_gemm", "y_only_gemm"}
+                                            "fused_gemm", "y_only_gemm"} | ({"hash_warps_gemm"} if warps else set())
+        assert set(t.get("call_e2e_ms_by_epilogue", ())) == (set(RUN.EPILOGUES) if warps else set())
+        hw = {"y_hash_warps_vs_unfused_words_differing", "leaves_hash_warps_vs_unfused_words_differing"}
+        assert (hw <= set(t["consistency"])) == warps and not t["hash_warps"]
 
     allocs: dict[int, int] = {}
     seen, maps = set(), set()
@@ -547,7 +557,8 @@ def test_bound_steps_launch_what_unbound_steps_do(monkeypatch):
     """Pipeline.steps binds each step's launches at its first call: every call after launches the same kernels with the
     same words as building them at the call would, on the device's stream at the call, after the caller repoints buffers
     (as #540 does y and leaves each call), under every form and forming, at decode's tile and at 128 x 128 with the fused
-    chain; the GEMMs' shared-memory probe still runs while a step records."""
+    chain under each epilogue (the hash warps' drops hash_msg and hash_leaf); the GEMMs' shared-memory probe still runs while
+    a step records."""
     monkeypatch.setattr(RUN.Pipeline, "GEMM_SMEM", {})
     dev = RUN.Dev.__new__(RUN.Dev)
     cu = dev.cu = LaunchLog()
@@ -563,23 +574,28 @@ def test_bound_steps_launch_what_unbound_steps_do(monkeypatch):
             out.append([x for x in cu.log if not x[0].endswith("_smem")])
         return out
 
-    for m, m_real, variant in ((64, 32, "sm120"), (128, 128, F.HOT)):
-        for forms in RUN.FORMS:
-            for forming in RUN.FORMINGS:
-                pipe = RUN.Pipeline(dev, m, 128, k, variant, keys, dev.alloc(4 * m * k), dev.alloc(4 * 128 * k), m_real=m_real)
-                pipe.rows_form, pipe.tree_form = forms
-                pipe.forming_form = forming
-                bound, unbound = pipe.steps(), pipe.steps(bound=False)
-                assert [nm for nm, _, _ in bound] == [nm for nm, _, _ in unbound]
-                first = calls(bound)
-                assert first == calls(unbound) == calls(bound), (m, forms, forming)
-                dev.stream = 77
-                pipe.b["y"], pipe.b["leaves"] = dev.alloc(pipe.size["y"]), dev.alloc(pipe.size["leaves"] + 64) + 32
-                pipe.b.update(digests=dev.alloc(pipe.size["digests"]))
-                again = calls(bound)
-                assert again == calls(unbound) != first and {x[3] for c in again for x in c} == {77}
-                assert all(w >> 56 != RUN.BOUND_TAG for c in again for x in c for w in x[4])
-                dev.stream = None
+    configs = [(64, 32, "sm120", forms, forming, "b") for forms in RUN.FORMS for forming in RUN.FORMINGS]
+    configs += [(128, 128, F.HOT, forms, forming, ep) for forms in RUN.FORMS for forming in RUN.FORMINGS for ep in RUN.EPILOGUES]
+    for m, m_real, variant, forms, forming, epilogue in configs:
+        pipe = RUN.Pipeline(dev, m, 128, k, variant, keys, dev.alloc(4 * m * k), dev.alloc(4 * 128 * k), m_real=m_real)
+        pipe.rows_form, pipe.tree_form = forms
+        pipe.forming_form, pipe.epilogue = forming, epilogue
+        bound, unbound = pipe.steps(), pipe.steps(bound=False)
+        names = [nm for nm, _, _ in bound]
+        assert pipe.hash_warps == (epilogue == "w" and m == 128)
+        assert m != 128 or ("hash_leaf" in names) != pipe.hash_warps and "hash_msg" not in names
+        assert [x[0] for c in calls(bound) for x in c if x[0].startswith("gemm_pearlc")] == (
+            ["gemm_pearlc_w_hu"] if pipe.hash_warps else ["gemm_pearlc_b_hu"] if m == 128 else ["gemm_pearlc_d"])
+        assert [nm for nm, _, _ in bound] == [nm for nm, _, _ in unbound]
+        first = calls(bound)
+        assert first == calls(unbound) == calls(bound), (m, forms, forming)
+        dev.stream = 77
+        pipe.b["y"], pipe.b["leaves"] = dev.alloc(pipe.size["y"]), dev.alloc(pipe.size["leaves"] + 64) + 32
+        pipe.b.update(digests=dev.alloc(pipe.size["digests"]))
+        again = calls(bound)
+        assert again == calls(unbound) != first and {x[3] for c in again for x in c} == {77}
+        assert all(w >> 56 != RUN.BOUND_TAG for c in again for x in c for w in x[4])
+        dev.stream = None
     assert set(RUN.Pipeline.GEMM_SMEM) >= {"gemm_ct_d", "gemm_pearlc_b_hu"}
 
 
