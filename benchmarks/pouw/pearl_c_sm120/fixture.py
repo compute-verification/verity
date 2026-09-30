@@ -1,5 +1,6 @@
 """Pearl-C's sm_120 GPU check fixture, built off the card (needs verity and numpy): inputs at a small shape and every buffer
-pearl_c_sm120.cu's kernels write, in its row-major layout, for forming v1 on `pearl_c_device.SM120` (G = 4) and
+pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and the transposed F lines in K32 order along k,
+`k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
 `SM120_UNPROMOTED`.  Forming, lines and hashes come from `verity_pouw.schemes.pearl_c` on the device record; the products
 over every cell are batched in numpy (the chains by the twin, `benchmarks/pouw/pearl_c/twin.py`, the peel with
 `verity.ml.kernels.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
@@ -89,6 +90,14 @@ def rowmajor(x: np.ndarray) -> bytes:
     return np.ascontiguousarray(x, np.uint8).tobytes()
 
 
+def k32(x: np.ndarray) -> np.ndarray:
+    """pearl_c_sm120.cu's K32 order along the last axis (form_s5's codes, the lines' transposed F lines): within each
+    aligned 32, position 8q + 2b + s holds column 8b + 2q + s, the transpose of the 4 x 4 grid of column pairs (an
+    involution, so the same gather undoes it)."""
+    t = np.arange(x.shape[-1])
+    return x[..., (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | (t & 1)]
+
+
 def product(device: Device, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """C.chain on `device` for every cell of codes a (rows x k) and b, through the twin's batched chain."""
     ii, jj = H.grid(a.shape[0], b.shape[0])
@@ -135,7 +144,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     noise = scheme.noise(ctx)
     keys = keys_of(scheme, epoch, mm, noise.seed_b)
     dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), "blake3")
-    manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v2", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
+    manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v3", "shape": [m, n, k], "case": CASE, "layout": "rowmajor, k32",
                 "hashing": "h1", "beacon": BEACON.hex(), "keys": {name: x.hex() for name, x in keys.items()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
                           "root_a": tree_a[-32:].hex(), "root_b": root_b.hex()}, "variants": {}}
@@ -152,9 +161,9 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         o.put(f"{name}_codes", x, "u8")
     faT, fbT = lines["fa"].T.copy(), lines["fb"].T.copy()
     fbT128 = H.padded(fbT, 128)
-    o.put("faT32", faT, "u8")
-    o.put("fbT32", fbT, "u8")
-    o.put("fbT128", fbT128, "u8")
+    o.put("faT32", k32(faT), "u8")
+    o.put("fbT32", k32(fbT), "u8")
+    o.put("fbT128", k32(fbT128), "u8")
     o.put("xa", b"".join(ra), "u8")
     o.put("xb", b"".join(rb), "u8")
     with Pool() as pool:
@@ -169,8 +178,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         inv[tag] = H.recip(np.array(side.alpha, np.uint32))
         o.put(f"ia_{tag}", inv[tag], "u32")
     at, bt = np.array(a.codes, np.uint8), np.array(b.codes, np.uint8)
-    o.put("at", rowmajor(at), "u8")
-    o.put("bt", rowmajor(bt), "u8")
+    o.put("at", rowmajor(k32(at)), "u8")
+    o.put("bt", rowmajor(k32(bt)), "u8")
     fa_vals = np.frombuffer(b"".join(ra), "<f4").reshape(m, k)
     fb_vals = np.frombuffer(b"".join(rb), "<f4").reshape(n, k)
     qa, sa = H.plain(fa_vals)
