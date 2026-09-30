@@ -20,7 +20,10 @@ over the 32 real rows, then hash_leaf_p (32-row tiles), the frame-b3s tile tree 
    - h3o: A's tree and seed on a side stream beside forming (E_A's lines from a fixed stand-in key, not seed_line_a's),
      and each call's tile hashing (hash_msg_v, leaves, tile tree) on a low-priority side stream once its GEMM is done;
    - h3g: h3o with each call's tile hashing launched with the next call's GEMM (a single-wave GEMM: 128 CTAs of 188 SMs);
-   - h2o, h2g: the same tile hashing placements; -h2's forming needs A's root, so A's tree stays in series.
+   - h2o, h2g: the same tile hashing placements; -h2's forming needs A's root, so A's tree stays in series;
+   - h3p, h2p: h3g and h2g with the producer split. The chain's usual producer writes A, then stats_a (which needs only A)
+     runs on the chain while a side stream hashes A's rows (hash_rows_b3s, reading A from L2) and makes -h3's row seeds
+     (b3_seeds) or -h2's tree and seed_A. lines waits for them, and under -h3 A's tree and seed_A follow on the side.
    Call i + 4's GEMM (the same pipeline's C~, U and tile buffers) waits for call i's tile hashing; the graph ends when the
    side streams have joined, so the last call's tile hashing counts. Graphs honour their nodes' priorities.
 2. The baseline: cuBLASLt's FP8 E4M3 GEMM (TN, BF16 out, FP32 compute) at m = 32 on the same weights, CALLS calls cycling the
@@ -47,10 +50,13 @@ from prefill_fused import ATTR_PRIORITY, POISON, ROW, TILE, USE_NODE_PRIORITY, K
 
 M_REAL, M, N, K = 32, 64, 8192, 8192
 RB, WSETS = 4 * K, 4
-#: (format, A's tree and seed beside forming, the tile hashing's placement: None in series, "next" after its own GEMM,
-#: "tail" launched with the next call's GEMM)
+#: (format, A's tree and seed beside forming, or "split": the chain's usual producer writes A, and A's leaves (hash_rows_b3s,
+#: reading A from L2), -h3's row seeds (b3_seeds) or -h2's tree and seed run on a side stream beside stats_a, which needs
+#: only A, while lines waits for them; the tile hashing's placement: None in series, "next" after its own GEMM, "tail"
+#: launched with the next call's GEMM)
 ARMS = {"nohash": (None, False, None), "h3s": ("h3", False, None), "h3o": ("h3", True, "next"), "h3g": ("h3", True, "tail"),
-        "h2s": ("h2", False, None), "h2o": ("h2", False, "next"), "h2g": ("h2", False, "tail")}
+        "h2s": ("h2", False, None), "h2o": ("h2", False, "next"), "h2g": ("h2", False, "tail"),
+        "h3p": ("h3", "split", "tail"), "h2p": ("h2", "split", "tail")}
 #: references, not rows: nohashc is nohash with the coalesced producer's plain twin (derive_rows_coal), which splits the
 #: fused producer's cost into its layout and its hashing
 REFS = {"nohashc": (None, False, None)}
@@ -224,7 +230,7 @@ def main() -> None:
         return x
 
     s, side_a, side_lo = stream(greatest.value), stream(greatest.value), stream(least.value)
-    evs = {k: vp() for k in ("p", "g", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3")}
+    evs = {k: vp() for k in ("p", "g", "s", "a0", "a1", "a2", "a3", "t0", "t1", "t2", "t3")}
     for e in evs.values():
         dev.ck("cuEventCreate", C.byref(e), 2)
 
@@ -289,6 +295,28 @@ def main() -> None:
                 dev.ck("cuStreamWaitEvent", s, evs[f"a{w}"], 0)
             if arm == "nohashc":
                 Kn.go("derive_rows_coal", M_REAL, 1024, (y_prev, xa), (M_REAL, RB, N))
+            elif a_side == "split":
+                Kn.go("derive_rows", -(-M_REAL * RB // 2 // 256), 256, (y_prev, xa), (M_REAL * RB // 2,))
+                dev.ck("cuEventRecord", evs["p"], s)
+                dev.ck("cuStreamWaitEvent", side_a, evs["p"], 0)
+                root_a = b["tree_a"] + pipe.size["tree_a"] - 32
+                leaves = [lambda b=b: Kn.go("hash_rows_b3s", M_REAL, 128, (xa, b["tree_a"], keys["dom_a"], segkeys, rtmpl), (M_REAL, RB, 0, rt[1]))]
+                tree = [lambda b=b: levels(b["tree_a"], b["keys_a"], M_REAL, 1024),
+                        lambda b=b, root_a=root_a: dev.launch("seed_line_a", 1, 32, p=(root_a, keys["unit"], b["line_a"], b["seed_a"]))]
+                if fmt == "h3":                              # lines needs the row seeds; A's tree and seed_A only the tickets
+                    on(side_a, leaves + [lambda b=b: Kn.go("b3_seeds", 1, 128, (b["tree_a"], seeds, seedk, saltp, rootbp), (M_REAL, index, 1))])
+                    dev.ck("cuEventRecord", evs["s"], side_a)
+                    on(side_a, tree)
+                    dev.ck("cuEventRecord", evs[f"a{w}"], side_a)
+                    a_rec[w] = True
+                else:                                        # -h2's lines needs A's root and seed_A
+                    on(side_a, leaves + tree)
+                    dev.ck("cuEventRecord", evs["s"], side_a)
+                on(s, [st["stats_a"]])
+                dev.ck("cuStreamWaitEvent", s, evs["s"], 0)
+                lines = (lambda b=b: dev.launch("lines", -(-M // 128), 128, p=(line_h3, b["ea_codes"], 0, 0), i=(0, 0, M, R.NORM_256))) \
+                    if fmt == "h3" else st["lines_ea"]
+                on(s, [lines, st["eprime_a"], st["form_a"], st["af"], st["pa"]])
             elif fmt is None:
                 Kn.go("derive_rows", -(-M_REAL * RB // 2 // 256), 256, (y_prev, xa), (M_REAL * RB // 2,))
             else:
@@ -305,9 +333,10 @@ def main() -> None:
                     a_rec[w] = True
                 else:
                     on(s, commit)
-            lines = (lambda b=b: dev.launch("lines", -(-M // 128), 128, p=(line_h3, b["ea_codes"], 0, 0), i=(0, 0, M, R.NORM_256))) \
-                if a_side else st["lines_ea"]
-            on(s, [lines, st["stats_a"], st["eprime_a"], st["form_a"], st["af"], st["pa"]])
+            if a_side != "split":
+                lines = (lambda b=b: dev.launch("lines", -(-M // 128), 128, p=(line_h3, b["ea_codes"], 0, 0), i=(0, 0, M, R.NORM_256))) \
+                    if a_side else st["lines_ea"]
+                on(s, [lines, st["stats_a"], st["eprime_a"], st["form_a"], st["af"], st["pa"]])
             if t_rec[w]:
                 dev.ck("cuStreamWaitEvent", s, evs[f"t{w}"], 0)
             if t_place == "tail" and pending:
