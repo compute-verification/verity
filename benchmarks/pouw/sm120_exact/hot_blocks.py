@@ -182,20 +182,19 @@ def at(st: list[list[int]], K: int) -> int:
     return st[i][1] if i < len(st) else 0
 
 
-def envelope(curves: list[list[list[int]]]) -> list[list[int]]:
-    """The pointwise maximum of step curves, as steps."""
-    ends = sorted({k for st in curves for k, _ in st})
-    if not ends:
-        return []
-    E = np.array(ends)
+def envelope(a: np.ndarray, st: list[list[int]]) -> np.ndarray:
+    """The pointwise maximum of two step curves (an (n, 2) array and a list of steps), as an (n, 2) array of steps."""
+    b = np.array(st, np.int64).reshape(-1, 2)
+    E = np.union1d(a[:, 0], b[:, 0])
+    if len(E) == 0:
+        return a
     best = np.zeros(len(E), np.int64)
-    for st in curves:
-        if st:
-            a = np.array(st)
-            i = np.searchsorted(a[:, 0], E, "left")
-            best = np.maximum(best, np.where(i < len(a), a[np.minimum(i, len(a) - 1), 1], 0))
-    keep = np.append(best[:-1] != best[1:], True)
-    return [[int(k), int(w)] for k, w in zip(E[keep], best[keep]) if w > 0]
+    for c in (a, b):
+        if len(c):
+            i = np.searchsorted(c[:, 0], E, "left")
+            best = np.maximum(best, np.where(i < len(c), c[np.minimum(i, len(c) - 1), 1], 0))
+    keep = np.append(best[:-1] != best[1:], True) & (best > 0)
+    return np.stack([E[keep], best[keep]], 1)
 
 
 def unit_curves(task) -> dict:
@@ -382,7 +381,7 @@ def main() -> None:
 def write_summary(out: Path, names: list[str], starts: list[int], fh, tasks: list[tuple],
                   table: dict[int, list[tuple[int, int]]], ident: dict) -> None:
     best: dict[tuple, dict] = {}
-    curves: dict[tuple, dict[str, list]] = {}
+    curves: dict[tuple, dict[str, np.ndarray]] = {}
     gates = 0
     liveness, seconds = {}, {"and": 0.0, "count": 0.0, "isect": 0.0}
     for nm, _, tag in tasks:
@@ -399,9 +398,9 @@ def write_summary(out: Path, names: list[str], starts: list[int], fh, tasks: lis
                 if r is None and not L >= d["dead_from"].get(str(t), 10**9):
                     sys.exit(f"{tag}: no record at (t, L) = ({t}, {L})")
                 if r is not None:
-                    cv = curves.setdefault((t, L), {"rows": [], "cols": []})
+                    cv = curves.setdefault((t, L), {"rows": np.zeros((0, 2), np.int64), "cols": np.zeros((0, 2), np.int64)})
                     for side in cv:
-                        cv[side] += [r[side]["count"], r[side]["isect"]]
+                        cv[side] = envelope(envelope(cv[side], r[side]["count"]), r[side]["isect"])
                 for M, N in table.get(L, []):
                     wc, wi = (at(r["rows"]["count"], M), at(r["rows"]["isect"], M)) if r else (0, 0)
                     rn = max(at(r["cols"]["count"], N), at(r["cols"]["isect"], N)) if r else 0
@@ -426,7 +425,7 @@ def write_summary(out: Path, names: list[str], starts: list[int], fh, tasks: lis
         by_start[str(t)] = {"judged": len(rs), "found": sum(not b["passed"] for b in rs), "tightest_pass": tight}
     fails = [b for b in rows if not b["passed"]]
     tight = min((b for b in rows if b["passed"]), key=lambda b: b["margin"] / b["required"], default=None)
-    env = [{"t": t, "L": L, "rows": envelope(cv["rows"]), "cols": envelope(cv["cols"])} for (t, L), cv in sorted(curves.items())]
+    env = [{"t": t, "L": L, "rows": cv["rows"].tolist(), "cols": cv["cols"].tolist()} for (t, L), cv in sorted(curves.items())]
     (out / "envelope.json").write_text(jdump({"units": names, "curves": env}) + "\n")
     doc = {"tool": "pouw_sm120_exact_hot_blocks", "units": names, "starts": starts, "inputs": ident,
            "gate_mismatches": gates, "blocks_judged": len(rows), "blocks_found": len(fails), "tightest_pass": tight,
@@ -443,7 +442,8 @@ def write_summary(out: Path, names: list[str], starts: list[int], fh, tasks: lis
 def selftest() -> None:
     """On a 1,024² unit of 14 atoms (words exact with probability 0.97, a 300 × 500 block exact over atoms 2 .. 9, and
     runs of duplicate rows, so the greedy paths meet ties): isect_path against isect_greedy at every K, a task run
-    straight and one stopped and resumed at every other plane (the same records), its gates, and the table's verdicts."""
+    straight and one stopped and resumed every few planes (the same records), its gates, and the planted block; and
+    envelope against the pointwise maximum."""
     global clock
     import tempfile
     rng = np.random.default_rng(7)
@@ -469,6 +469,11 @@ def selftest() -> None:
             for batch in (16, 256):
                 widths, _ = isect_path(bits, cnt, K, batch)
                 bad += [("isect", t, L, batch, k + 1) for k in range(K) if ref[k] != widths[k]]
+    env, cs = np.zeros((0, 2), np.int64), []
+    for _ in range(6):
+        cs.append(steps(np.sort(rng.integers(0, 40, int(rng.integers(0, 30))))[::-1]))
+        env = envelope(env, cs[-1])
+    bad += [("envelope", k) for k in range(1, 32) if at(env.tolist(), k) != max(at(c, k) for c in cs)]
     with tempfile.TemporaryDirectory() as d:
         ud = Path(d) / "units" / "syn@1"
         ud.mkdir(parents=True)
