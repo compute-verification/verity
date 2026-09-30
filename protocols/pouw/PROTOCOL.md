@@ -521,7 +521,17 @@ useful    U/(α_A·α_B), glue
   1b. **F2, the masked int8 route's saving,** per tile on both operands: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain
       MAC.
       - f is read at the tile's modal byte, per row and per block-column class, taking the largest reading.
-      - c_L = min over 1 ≤ L ≤ log₂(k/16) of 2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75, at W1's int8 leaf.
+      - c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form (the assessor's
+        20:00Z ruling; `fast-matmul-catalogue-audit.md` §4). It is pinned per shape (`pearl_c4_c_L`), and a shape
+        between table points reads the next point up in m, k and n, whose c_L is the lower.
+        - The routes: Perminov's catalogue at `ac13ca88`, every orientation, rational levels included, nested with
+          Strassen–Winograd levels; W1's int8 leaf 2.0; 4.25 FP4 slots per pre-add element-op; A′'s pre-adds amortised
+          over n and B's over m.
+        - The table is never above the Strassen formula pinned before (min over 1 ≤ L ≤ log₂(k/16) of
+          2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75).
+        - Values: 0.661, 0.579, 0.507 and 0.408 at 8,192³ to 65,536³, where the formula gave 0.808 to 0.542.
+        - Honest tiles are unaffected: F2 fires only past f_A + f_B = 2 − (1 − c_L)/4, 1.915 at 8,192³, against their
+          0.13–0.30.
 
   R1. **A row whose own F1′ per word passes ρ·(its cell credit) is uncredited.**
       - The prover declares it (`pearl_c_work.declare` with the transcript).

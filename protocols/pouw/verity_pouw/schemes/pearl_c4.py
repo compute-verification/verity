@@ -72,7 +72,8 @@ byte (`change_probabilities`); per window, min(1, E[max(0, R_24 − κ)] + E[max
 plus a CUDA-core patch of the excess, R_skip a skip or patch per k64 atom, at the cheater's best layout inside each block,
 and κ inside the expectation, A0's scale corrections: one FFMA per word for each of the M_w blocks whose realised byte
 is not their modal byte (`split_saving`, `split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at
-one tile byte, per row, and per block-column class (`int8_saving`), with c_L bc-d9842080's formula at W1's int8 leaf (`int8_depth_cost`).
+one tile byte, per row, and per block-column class (`int8_saving`), with c_L the fast-matmul catalogue's minimum at its
+lower-bound add count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`; the assessor's 20:00Z ruling).
 They are the rows `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2
 charges the masked int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain
 claim `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
@@ -101,6 +102,7 @@ from __future__ import annotations
 import itertools
 import math
 import struct
+from bisect import bisect_left
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
@@ -114,6 +116,7 @@ from verity.ml.tc.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPP
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from . import pearl_c as C
+from . import pearl_c4_c_L as CL
 from . import pearl_kw as P
 
 R = 32
@@ -822,13 +825,20 @@ def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int | None], scale
 
 
 def int8_depth_cost(fmt: Fmt, m: int, k: int, n: int) -> float:
-    """F2's c_L (bc-d9842080, nvfp4-int8-flatness-break.md 13:35Z; ratings.md 15:18Z): the masked int8-Strassen
-    route's cost per honest MAC before its patch, min over 1 ≤ L ≤ log2(k/block) of `INT8_LEAF_SLOTS`·(7/8)^L +
-    4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75 (int8 leaves, Strassen–Winograd's pre-adds on both sides, every post-add a free
-    merge: the adversary's best, which measured kernels don't approach); 2 (no route) below one level."""
-    levels = (k // fmt.block).bit_length() - 1
-    return min((INT8_LEAF_SLOTS * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75 for L in range(1, levels + 1)),
-               default=2.0)
+    """F2's c_L: the masked int8 route's least cost per honest MAC before its patch over the fast-matmul catalogue, at
+    each scheme's lower-bound add count (`pearl_c4_c_L`; the assessor's 20:00Z ruling), read at the smallest tabled m, k
+    and n at least the shape's.  c_L falls as any of them grows, so a shape between table points takes the lower c_L.
+    A route's depth is capped by k/block, so a 32-block format reads the table at half its k.  The claimed domain is
+    inside the table (`PearlC4.check`); a shape beyond it raises."""
+    kk = k * NVFP4.block // fmt.block
+
+    def at(grid: tuple[int, ...], v: int) -> int:
+        i = bisect_left(grid, v)
+        if i == len(grid):
+            raise ValueError(f"c_L: {v} is past the pinned table's {grid[-1]}")
+        return i
+
+    return CL.C_L[at(CL.MS, m)][at(CL.KS, max(kk, 1))][at(CL.NS, n)] / 10_000
 
 
 def _share(rows: Sequence[Sequence[int]]) -> float:
