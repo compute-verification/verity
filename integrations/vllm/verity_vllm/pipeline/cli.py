@@ -103,7 +103,14 @@ COMMANDS: dict[str, tuple[str, str]] = {
 
 #: The pod layout's machine paths: the default of an option (``Class.field``) that neither its flag nor its
 #: environment variable sets.
-MACHINE: dict[str, str] = {
+def pod_path(path: str) -> str:
+    """A pod-layout path (``/workspace/cp/...``, ``/root/dm``) on this machine, or under ``$VERITY_POD_ROOT`` when that names
+    another root: the test runner's clean host (``tools/check/suites.py`` ``CLEAN_HOST``), where none of a pod's state exists."""
+    root = os.environ.get("VERITY_POD_ROOT")
+    return os.path.join(root, path.lstrip("/")) if root and path.startswith(("/workspace/", "/root/")) else path
+
+
+MACHINE: dict[str, str] = {k: pod_path(v) for k, v in {
     "RunEnv.py": "/workspace/venv312/bin/python",
     "RunEnv.sweep_dir": "/workspace/cp/sweep",
     "RunEnv.hf_home": "/workspace/hf",
@@ -119,7 +126,7 @@ MACHINE: dict[str, str] = {
     "RunEnv.hot_root": "/workspace/cp/hot",
     "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",
     "RunEnv.pod_guard": "/root/dm/pod_guard.sh",
-}
+}.items()}
 
 
 def usage() -> str:

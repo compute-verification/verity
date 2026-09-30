@@ -1098,7 +1098,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
         # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
         from verity_vllm.pipeline import hot as _HC
-        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(os.environ.get("HOT_ROOT", "/workspace/cp/hot")),
+        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(os.environ.get("HOT_ROOT", _HC.pod_path("/workspace/cp/hot"))),
                             idle_s=float(os.environ.get("HOT_IDLE", "900")),
                             timeout_s=float(os.environ["HOT_TIMEOUT"]) if os.environ.get("HOT_TIMEOUT") else None))
     TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's

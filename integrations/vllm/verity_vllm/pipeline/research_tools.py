@@ -36,9 +36,10 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from research.store.tool import Tool
+from verity_vllm.pipeline.cli import pod_path
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
-DEFAULT_PY = "/workspace/venv312/bin/python"
+DEFAULT_PY = pod_path("/workspace/venv312/bin/python")
 
 COMMAND = ["verity-vllm", "row", "stage"]
 _CLI_MODULE = "verity_vllm.pipeline.cli"

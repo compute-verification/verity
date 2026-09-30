@@ -13,6 +13,9 @@ It also traces what a per-test key narrowed to the files the tests use (`suites.
 - `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a machine probe (`PROBES`)
   or a Python that loads this tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`,
   and no `-I`, `-E` or `-S`).
+
+And what no test may reach, a machine's own state (`HOST`), opened, listed, loaded or looked up (`os.stat`, `os.lstat`,
+`os.access`, which `os.path` and `pathlib` go through): `H` with the path, which fails the suite (`suites.py`).
 """
 from __future__ import annotations
 
@@ -24,6 +27,19 @@ import sys
 #: a module's cached bytecode, by its source's directory and name
 _PYC = re.compile(r"^(.*?)(?:^|/)__pycache__/([^/]+?)\.[^/]+\.pyc$")
 _PYTHON = re.compile(r"^python(\d+(\.\d+)?)?$")
+#: A machine's own state, which no test may reach: the pod layout (`/workspace/cp`, and the model cache, venvs, jobs, caches and RAM
+#: reservations beside it), the research machine root, the lease and its deadline, the GPU and CPU splits. `suites.py` points the
+#: variables that name them into an empty directory for the tests (`CLEAN_HOST`), so a test that still reaches one reads a default
+#: no variable moved, and passes or fails with the machine it runs on.
+HOST = tuple(os.path.join(p, "") for p in ("/workspace/cp", "/workspace/hf", "/workspace/jobs", "/workspace/ramlock", "/workspace/cache",
+                                           "/workspace/usage", "/workspace/research", "/workspace/venv312", "/workspace/src",
+                                           "/workspace/pouw", "/etc/research", "/etc/vy", "/root/dm", "/root/.research/lease",
+                                           "/root/.research/lease.log", "/root/.research/lease.pid", "/root/.research/lease.sh",
+                                           "/root/.research/pod_guard.sh", "/root/.research/pods", "/run/gpu-lease"))
+#: what a check reads there by design: the machine's content-addressed store and its bytecode cache
+HOST_NOT = tuple(os.path.join(p, "") for p in ("/workspace/research/store", "/workspace/research/cache/pycache"))
+#: the calls that look a path up without opening it
+LOOKUPS = ("stat", "lstat", "access")
 #: programs that read no repository file, whatever they're given: they report on the machine (`platform` runs `uname`)
 PROBES = frozenset({"uname", "true", "false", "nproc", "getconf", "hostname", "id", "whoami", "ldconfig", "lscpu", "nvidia-smi"})
 
@@ -39,6 +55,14 @@ class Reads:
         self.allowed += (*self.prefix, self.here)                                       # the tracer itself
         self.allowed_files = frozenset(p for p in paths if not os.path.isdir(p))
         self.inside = os.path.join(self.root, "")
+        self.own = tuple(os.path.join(os.path.dirname(os.path.abspath(env[k])), "") for k in
+                         ("VERITY_SUITE_REPORT", "VERITY_SUITE_READS", "VERITY_SUITE_REUSE", "VERITY_SUITE_HEAVY") if env.get(k))
+        self.own += tuple(os.path.join(os.path.abspath(env[k]), "") for k in ("VERITY_SUITE_HOST",) if env.get(k))   # the runner's files
+        # ... and what a recorded check hands its tests: the run's custody, the store, the bytecode cache
+        self.own += tuple(os.path.join(os.path.abspath(p), "") for p in (env.get("CHECK_STORE_CUSTODY"), env.get("RESEARCH_STORE"),
+                                                                         getattr(sys, "pycache_prefix", None)) if p)
+        self.own += HOST_NOT
+        self.own += tuple(os.path.join(os.path.abspath(p), "") for p in sys.path if p)          # where code is imported from
         self.log = env.get("VERITY_SUITE_READS")
         self.busy = False
         self.sent: set[tuple[str, str, str]] = set()
@@ -65,6 +89,37 @@ class Reads:
         rel = os.path.relpath(path, self.root)
         m = _PYC.match(rel)
         return f"{m.group(1)}/{m.group(2)}.py".lstrip("/") if m else rel
+
+    def host(self, path) -> str | None:
+        """``path`` when it is a machine's own state (`HOST`) outside the repository, the interpreter's environment and the
+        runner's files; else None."""
+        if path is None or isinstance(path, int):
+            return None
+        try:
+            p = self._abs(os.fsdecode(path))
+        except (TypeError, ValueError):
+            return None
+        q = os.path.join(p, "")
+        keep = (self.inside, *self.prefix, self.here, *self.own)
+        if not q.startswith(HOST) or q.startswith(keep) or any(k.startswith(q) for k in keep):   # a parent of those: `realpath` walks it
+            return None
+        return p
+
+    def watch(self, note) -> None:
+        """Call ``note(path)`` before each lookup (`LOOKUPS`) this process makes through `os`, which has no audit event."""
+        for name in LOOKUPS:
+            real = getattr(os, name)
+            if getattr(real, "_verity_suite_watched", False):
+                continue
+
+            def looked(path, *args, _real=real, **kwargs):
+                note(path)
+                return _real(path, *args, **kwargs)
+            looked._verity_suite_watched = True
+            for support in (os.supports_dir_fd, os.supports_fd, os.supports_follow_symlinks, os.supports_effective_ids):
+                if real in support:                  # `shutil` and `os` ask these sets which calls take a descriptor
+                    support.add(looked)
+            setattr(os, name, looked)
 
     def seeable(self, argv, env) -> bool:
         """Whether a program started with ``argv`` (and ``env``, None when inherited) is a Python that traces itself here."""
@@ -121,9 +176,20 @@ class Reads:
         finally:
             self.busy = False
 
+    def hit(self, kind: str, module: str, rel: str) -> None:
+        if (kind, module, rel) not in self.sent:
+            self.sent.add((kind, module, rel))
+            self.write(kind, module, rel)
+
+    def looked(self, path, module: str) -> None:
+        if not self.busy and (h := self.host(path)) is not None:
+            self.hit("H", module, h)
+
     def seen(self, event: str, args: tuple, module: str) -> None:
         if self.busy:
             return
+        if event in ("open", "os.listdir", "os.scandir", "ctypes.dlopen") and args:
+            self.looked(args[0], module)
         if event == "open" and args and not isinstance(args[0], int):
             try:
                 path = os.fsdecode(args[0])
@@ -135,11 +201,11 @@ class Reads:
             hit = self.trace(event, args)
         except (TypeError, ValueError):
             hit = None
-        if hit is not None and (hit[0], module, hit[1]) not in self.sent:
-            self.sent.add((hit[0], module, hit[1]))
-            self.write(hit[0], module, hit[1])
+        if hit is not None:
+            self.hit(hit[0], module, hit[1])
 
     def install(self) -> None:
         """Trace this process (a child a test started): every open, attributed to the module it inherited."""
         module = os.environ.get("VERITY_SUITE_MODULE", "*")
         sys.addaudithook(lambda event, args: self.seen(event, args, module))
+        self.watch(lambda path: self.looked(path, module))

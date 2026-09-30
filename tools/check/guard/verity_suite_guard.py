@@ -27,6 +27,7 @@ trace their own reads (`child/`), and in a child this process forks it writes ea
 It traces, too, what a per-test key narrowed to the files the tests use holds (`suites.py`, `Traced`): each repository file its
 process opens or loads and each repository directory it lists (`traced`), and, per test module, each program started that no
 tracer sees into (`untraced`), as `child/verity_suite_reads.py` classifies them; its children write theirs to the reads file.
+And, per test module, each path of a machine's own state the tests opened, listed or looked up (`host`), which fails the suite.
 """
 from __future__ import annotations
 
@@ -64,6 +65,7 @@ _outcomes: dict[str, float | None] = {}                          # node id -> ca
 _failed: set[str] = set()
 _traced: set[str] = set()                                        # "F<tab>file" / "L<tab>directory" this process read
 _untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
+_host: dict[str, set[str]] = {}                                  # test module (or "*") -> machine state it reached
 _workers_untraced: dict[str, set[str]] | None = None             # in an xdist controller: its workers', which start its tests' programs
 _pid = os.getpid()
 
@@ -80,6 +82,18 @@ _forked = _child_reads() if _ACTIVE and os.environ.get("VERITY_SUITE_READS") els
 _tracer = _child_reads() if _ACTIVE else None
 
 
+def _looked(path) -> None:
+    if os.getpid() != _pid:
+        if _forked is not None:
+            _forked.looked(path, _current)
+    elif _tracer is not None and (h := _tracer.host(path)) is not None:
+        _host.setdefault(_current, set()).add(h)
+
+
+if _tracer is not None:
+    _tracer.watch(_looked)
+
+
 def _audit(event: str, args: tuple) -> None:
     if os.getpid() != _pid:                          # a fork of this process: what it reads must reach the file now
         if _forked is not None:
@@ -89,6 +103,8 @@ def _audit(event: str, args: tuple) -> None:
         hit = _tracer.trace(event, args) if _tracer is not None else None
     except (TypeError, ValueError):
         hit = None
+    if event in ("open", "os.listdir", "os.scandir", "ctypes.dlopen") and args and _tracer is not None:
+        _looked(args[0])
     if hit is not None:
         if hit[0] == "X":
             _untraced.setdefault(_current, set()).add(hit[1])
@@ -250,6 +266,8 @@ def pytest_testnodedown(node, error) -> None:
         _workers_untraced = _workers_untraced or {}
         for m, progs in record.get("untraced", {}).items():
             _workers_untraced.setdefault(m, set()).update(progs)
+        for m, paths in record.get("host", {}).items():
+            _host.setdefault(m, set()).update(paths)
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:
@@ -260,14 +278,16 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     reads = {m: sorted(files) for m, files in sorted(_reads.items())}
     if hasattr(config, "workerinput"):
         config.workeroutput[_KEY] = {"outside": sorted(_outside), "watched": sorted(_watched), "reads": reads, **used,
-                                     "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())}}
+                                     "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())},
+                                     "host": {m: sorted(v) for m, v in sorted(_host.items())}}
         return
     used = {k: sorted(set(v) | _record[k]) for k, v in used.items()}
     passed = {n: round(s, 3) for n, s in sorted(_outcomes.items()) if s is not None}
     untraced = _untraced if _workers_untraced is None else _workers_untraced     # a controller's own programs are its workers
     payload = json.dumps({"counts": _counts, "outside": sorted(_outside), "unguarded": _unguarded, "unmarked_slow": _slow,
                           "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
-                          "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())}},
+                          "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())},
+                          "host": {m: sorted(v) for m, v in sorted(_host.items())}},
                          indent=1)
     with open(os.environ["VERITY_SUITE_REPORT"], "w") as f:
         f.write(payload)

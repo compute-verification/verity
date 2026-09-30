@@ -902,9 +902,10 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
     (row / "build_request_LP1024_T127").mkdir()            # beside the artifact: the component the Build named
     present = tmp_path / "elsewhere" / "build_request_LP7_T3"   # a recorded path that DOES exist here: untouched
     present.mkdir(parents=True)
-    derived = {"1024,127": "/workspace/cp/sweep-v2-5a/row/build_request_LP1024_T127",   # dangling -> relocated
-               "7,3": str(present),                                                       # exists -> kept
-               "5,1": "/workspace/cp/sweep-v2-5a/row/build_request_LP5_T1"}              # missing at both places -> kept as recorded
+    gone = tmp_path / "build-machine" / "sweep-v2-5a" / "row"       # where the Build ran: absent here (a pod path can exist on a host)
+    derived = {"1024,127": str(gone / "build_request_LP1024_T127"),    # dangling -> relocated
+               "7,3": str(present),                                   # exists -> kept
+               "5,1": str(gone / "build_request_LP5_T1")}            # missing at both places -> kept as recorded
     art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": program_digest(desc), "requests": [],
            "inputs": {"derived": derived}, "address_map": {"requests": [], "convention": "toy"}, "chronology": {"requests": []}}
     p = bw / "workload_program.json"

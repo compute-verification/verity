@@ -24,7 +24,10 @@ adds the ids of those under its inputs, since git's tree ids leave ignored files
 fails without running.
 
 Every run loads `guard/verity_suite_guard.py`, which fails the suite if its tests open a repository file outside its inputs,
-so a cached pass never hides a change to something the tests read. It also records what the key leaves out but the tests
+so a cached pass never hides a change to something the tests read. The tests run on a clean host (`CLEAN_HOST`): the variables
+naming a machine's own state (the lease and its deadline, the GPU and CPU splits, the model cache, the vLLM pod layout) point into
+an empty directory, and the guard fails a suite whose tests still reach that state (the guard's `HOST`, looked up or opened) or
+write into the empty directory, since such a test passes or fails with the machine it runs on. It also records what the key leaves out but the tests
 used: the workspace metadata files they opened, the installed distributions they imported outside their resolved
 dependencies, and the imports that found nothing. A pass is reused only while each of those is as it was. Programs a test
 starts as a subprocess are not traced: list what they read under `inputs`.
@@ -682,7 +685,7 @@ class PerTest:
             by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[1][node] = when
         self.dir.mkdir(parents=True, exist_ok=True)
         n = 0
-        blind = r.child_outside or {}
+        blind = {**(r.child_outside or {}), **(r.host or {})}       # what a module reached on this machine answers for no other
         untraced = r.untraced or {}
         run_reads = self.trace(r.traced) if self.narrow and r.traced is not None and "*" not in untraced else None
         for m, (passed, failed) in sorted(by_module.items()):
@@ -908,6 +911,7 @@ class Result:
     child_outside: dict | None = None    # test module (or "*") -> what a process its tests started read outside the inputs
     traced: set | None = None        # "F<tab>file" / "L<tab>directory" every process of the run read (None: the guard traced nothing)
     untraced: dict | None = None     # test module (or "*") -> programs its tests started that no tracer sees into
+    host: dict | None = None         # test module (or "*") -> the machine's own state its tests reached (the guard's `HOST`)
 
 
 #: pytest with the guard loaded by name (`-p`), which xdist repeats in each worker, from `guard/`: appended to sys.path, and
@@ -915,6 +919,24 @@ class Result:
 _PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest.main(sys.argv[1:]))"
 #: xdist's scheduling: an idle worker takes queued tests from a busy one, which evens out suites whose tests differ in length.
 DIST = ["--dist", "worksteal"]
+
+
+#: A clean host for every suite's tests, as a fresh container has it: the variables that name a machine's own state (the guard's
+#: `HOST`) unset, and those whose default is a file of that state pointed into an empty directory, where nothing exists. The guard
+#: fails a suite whose tests still reach that state, through a default no variable here moves.
+CLEAN_HOST_UNSET = ("LEASE_", "GUARD_LEASE_", "GPU_LEASE_", "VY_", "HOT_", "TELEMETRY_CANCEL_", "DIRECT_CPUS_FILE", "HF_HUB_CACHE",
+                    "HUGGINGFACE_HUB_CACHE", "TRANSFORMERS_CACHE", "HF_DATASETS_CACHE")
+CLEAN_HOST = {"LEASE_DIR": "root/.research", "LEASE_DEADLINE_FILE": "etc/research/deadline", "GUARD_LEASE_FILE": "root/.research/lease",
+              "GPU_LEASE_DIR": "run/gpu-lease", "GPU_LEASE_ALLOWED_FILE": "etc/vy/direct-gpus", "DIRECT_CPUS_FILE": "etc/vy/direct-cpus",
+              "TELEMETRY_CANCEL_FALLBACK": "root/dm/cancel.jsonl", "HF_HOME": "workspace/hf", "VERITY_POD_ROOT": "."}
+
+
+def clean_host(env: dict[str, str], host: Path) -> dict[str, str]:
+    """``env`` as a clean host has it, its machine state in ``host`` (created empty)."""
+    shutil.rmtree(host, ignore_errors=True)
+    host.mkdir(parents=True)
+    out = {k: v for k, v in env.items() if not k.startswith(CLEAN_HOST_UNSET)}
+    return {**out, **{k: os.path.normpath(host / rel) for k, rel in CLEAN_HOST.items()}, "VERITY_SUITE_HOST": str(host)}
 
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
@@ -939,6 +961,8 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     if workers > 1 and (first := longest(suite, workers)):
         (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
+    host = logs / f"{slug}.host"
+    env = clean_host(env, host)
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     start = time.monotonic()
     with log.open("w") as out:
@@ -949,6 +973,11 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
     passed = ran_all and rep is not None and not rep["outside"] and not rep["unguarded"]
     rep = rep or {}
+    reached = {m: set(v) for m, v in (rep.get("host") or {}).items()}
+    wrote = sorted(str(p.relative_to(host)) for p in host.rglob("*") if not p.is_dir()) if host.is_dir() else []
+    if wrote:
+        reached.setdefault("*", set()).update(f"(written) {host_path}" for host_path in wrote)
+    shutil.rmtree(host, ignore_errors=True)
     reported = bool(rep)
     reads, child_outside = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}
     traced = set(rep["traced"]) if isinstance(rep.get("traced"), list) else None
@@ -963,13 +992,15 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
             traced.add(f"{kind}\t{rel}")
         elif kind == "X":
             untraced.setdefault(module, set()).add(rel)
+        elif kind == "H":
+            reached.setdefault(module, set()).add(rel)
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
-    return Result(suite, "passed" if passed else "failed", seconds, rep.get("counts"), rep.get("outside"),
+    return Result(suite, "passed" if passed and not reached else "failed", seconds, rep.get("counts"), rep.get("outside"),
                   rep.get("unmarked_slow"), log, workers=workers, unguarded=rep.get("unguarded"), reported=reported,
                   watched=rep.get("watched"), distributions=rep.get("distributions"), missing=rep.get("missing"),
                   passed=rep.get("passed"), failed_tests=rep.get("failed"), reads=rep.get("reads"), reused=len(reuse),
                   child_outside={m: sorted(set(fs)) for m, fs in child_outside.items()}, traced=traced,
-                  untraced={m: sorted(v) for m, v in untraced.items()})
+                  untraced={m: sorted(v) for m, v in untraced.items()}, host={m: sorted(v) for m, v in sorted(reached.items())})
 
 
 class Slots:
@@ -1124,6 +1155,11 @@ def main(argv: list[str] | None = None) -> int:
         r.nondeterministic = sorted(set(per[s].nondeterministic)) if s in per else []
         print(f"{r.status:7} {s.name:28} {_count(r)} in {r.seconds:.0f} s" + (f" on {r.workers} workers" if r.workers > 1 else "")
               + (f"; {kept} per-test passes kept" if kept and per[s].narrow else f"; {kept} outcomes recorded" if kept else ""))
+        if r.host:
+            where = sorted({p for ps in r.host.values() for p in ps})
+            print(f"        its tests reached this machine's own state, which a clean host doesn't have: {', '.join(where[:4])}"
+                  f"{' ...' if len(where) > 4 else ''} (in {', '.join(sorted(r.host)[:3])}): give the path a fixture override "
+                  "(under tmp_path), or name its variable in suites.CLEAN_HOST")
         if r.child_outside:
             gone = sorted({f for fs in r.child_outside.values() for f in fs})
             print(f"        processes its tests started read {len(gone)} files outside its inputs ({', '.join(gone[:3])}): no per-test "

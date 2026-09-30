@@ -11,9 +11,12 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm.pipeline.cli import pod_path
 from verity_vllm.pipeline import release_json as rj
 
 HERE = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
+#: the pod layout's root, which the test runner's clean host moves (`pod_path`): the release paths below are looked up
+CP = pod_path("/workspace/cp")
 EXPORT = {"commit": "a2dabe49314ec6d85d1d62096551cf76751c7ea0", "branch": "lane/r16-int", "dirty_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "dirty_patch_bytes": 0, "exported_utc": "2026-09-20T10:08:00Z"}
 HG = "HIDDEN-GPU-OK 1111 /root/.cache/torch_extensions/hidden_gpu_tree/hidden_gpu_tree.so sm_89"
@@ -63,12 +66,12 @@ def test_parse_artifacts_fa3_optional_and_fail_closed():
 
 def test_m0477_shape_does_not_name_the_own_tree():
     """The R16 record as measured (exec M-0477 08:06Z / M-0709 10:10Z): tag + commit of the own tree, tree field = the default tree."""
-    bad = {"tag": "r16-int-3", "commit": EXPORT["commit"], "tree": "/workspace/cp/veritor"}
-    assert rj.release_names_tree(bad, "/workspace/cp/veritor")
-    assert not rj.release_names_tree(bad, "/workspace/cp/r16-int-3")
+    bad = {"tag": "r16-int-3", "commit": EXPORT["commit"], "tree": f"{CP}/veritor"}
+    assert rj.release_names_tree(bad, f"{CP}/veritor")
+    assert not rj.release_names_tree(bad, f"{CP}/r16-int-3")
     legacy = {"tag": "r15-int-6", "commit": "x"}          # pre-R16 record without a tree field: the default tree only
-    assert rj.release_names_tree(legacy, "/workspace/cp/veritor") and not rj.release_names_tree(legacy, "/workspace/cp/lane-moe")
-    assert not rj.release_names_tree({}, "/workspace/cp/veritor")
+    assert rj.release_names_tree(legacy, f"{CP}/veritor") and not rj.release_names_tree(legacy, f"{CP}/lane-moe")
+    assert not rj.release_names_tree({}, f"{CP}/veritor")
 
 
 def test_write_then_check_pod_wide_and_tree_local(tmp_path):
@@ -79,7 +82,7 @@ def test_write_then_check_pod_wide_and_tree_local(tmp_path):
     assert json.load(open(pod))["tree"] == os.path.realpath(str(own)) == json.load(open(own / "RELEASE.json"))["tree"]
     assert rj.check_installed(str(own), "r16-int-3", EXPORT["commit"][:9], str(pod)) == []
     # the ship's read-back check catches the M-0477 shape: a pod-wide record that names another tree
-    json.dump({**json.load(open(pod)), "tree": "/workspace/cp/veritor"}, open(pod, "w"))
+    json.dump({**json.load(open(pod)), "tree": f"{CP}/veritor"}, open(pod, "w"))
     probs = rj.check_installed(str(own), "r16-int-3", EXPORT["commit"][:9], str(pod))
     assert len(probs) == 1 and "pod-wide" in probs[0] and "M-0477" in probs[0]
     # wrong tag / commit / missing file are problems too
@@ -120,9 +123,9 @@ def test_release_line_pod_wide_fallback_and_unreleased(tmp_path):
     line, src = rj.release_line(str(own), pod_path=str(pod))
     assert line.startswith("r16-int-3|") and src == str(pod)
     # the M-0477 shape: pod-wide names the default tree -> this tree is UNRELEASED, by name
-    json.dump({**_rec(own), "tree": "/workspace/cp/veritor"}, open(pod, "w"))
+    json.dump({**_rec(own), "tree": f"{CP}/veritor"}, open(pod, "w"))
     line, src = rj.release_line(str(own), pod_path=str(pod))
-    assert line.startswith("UNRELEASED|commit=a2dabe493 ") and "is the tree /workspace/cp/veritor, not this one" in line and src == "-"
+    assert line.startswith("UNRELEASED|commit=a2dabe493 ") and f"is the tree {CP}/veritor, not this one" in line and src == "-"
     # a tree-local record whose commit no longer matches EXPORT (lane ship.sh over the tree) never cites the stale release
     rj.write_record(_rec(own), str(own), str(pod))
     json.dump({**EXPORT, "commit": "f" * 40}, open(own / "EXPORT.json", "w"))
@@ -135,10 +138,10 @@ def test_release_line_pod_wide_fallback_and_unreleased(tmp_path):
 
 
 def test_native_collect_build_dir_per_tree():
-    assert rj.native_collect_build_dir("/workspace/cp/veritor") == "/workspace/cp/nc_build"
-    assert rj.native_collect_build_dir("/workspace/cp/veritor/") == "/workspace/cp/nc_build"
-    assert rj.native_collect_build_dir("/workspace/cp/r16-int-3") == "/workspace/cp/nc_build-r16-int-3"
-    assert rj.native_collect_build_dir("/workspace/cp/r17-int-1/") == "/workspace/cp/nc_build-r17-int-1"
+    assert rj.native_collect_build_dir(f"{CP}/veritor") == f"{CP}/nc_build"
+    assert rj.native_collect_build_dir(f"{CP}/veritor/") == f"{CP}/nc_build"
+    assert rj.native_collect_build_dir(f"{CP}/r16-int-3") == f"{CP}/nc_build-r16-int-3"
+    assert rj.native_collect_build_dir(f"{CP}/r17-int-1/") == f"{CP}/nc_build-r17-int-1"
 
 
 def test_cli_check_and_line_as_a_process(tmp_path):
@@ -157,8 +160,8 @@ def test_cli_check_and_line_as_a_process(tmp_path):
     r = subprocess.run(py + ["line", str(own), "--pod-path", str(pod)], capture_output=True, text=True, cwd=cwd)
     line, src = r.stdout.rstrip("\n").split("\t")
     assert r.returncode == 0 and line.startswith("r16-int-3|commit=a2dabe493 ") and src.endswith("/r16-int-3/RELEASE.json")
-    r = subprocess.run(py + ["nc-build", "/workspace/cp/r16-int-3"], capture_output=True, text=True, cwd=cwd)
-    assert r.stdout.strip() == "/workspace/cp/nc_build-r16-int-3"
+    r = subprocess.run(py + ["nc-build", f"{CP}/r16-int-3"], capture_output=True, text=True, cwd=cwd)
+    assert r.stdout.strip() == f"{CP}/nc_build-r16-int-3"
 
 
 def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):

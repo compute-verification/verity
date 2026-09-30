@@ -661,3 +661,43 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
         worker, node = line.split(" ", 1)
         first.setdefault(worker, node)
     assert "tests/test_z.py::test_zz" in first.values(), log.read_text()
+
+
+def test_a_test_that_reaches_the_machine_s_own_state_fails_its_suite(tmp_path):
+    """The tests run on a clean host: the lease's deadline variable names a file in an empty directory, so code that honours it
+    finds nothing whatever the machine has. A test that still looks up the default (`/etc/research/deadline`, which a Nebius host
+    has), or writes into the clean host, fails its suite, on every machine alike."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (tests / "test_lease.py").write_text("import os\n\ndef test_the_deadline_is_the_clean_host_s():\n"
+                                         "    p = os.environ['LEASE_DEADLINE_FILE']\n    assert not os.path.exists(p) and 'LEASE_ENVIRON' not in os.environ\n")
+    p = _run_suite(root, tmp_path, extra={"LEASE_ENVIRON": "/root/.research/environ"})
+    assert p.returncode == 0, p.stdout
+    (tests / "test_host.py").write_text("import os\n\ndef test_default():\n    assert os.path.exists('/etc/research/deadline') in (True, False)\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 1 and "reached this machine's own state, which a clean host doesn't have: /etc/research/deadline" in p.stdout, p.stdout
+    assert "pkg/tests/test_host.py" in p.stdout, p.stdout
+    (tests / "test_host.py").write_text("import os, pathlib\n\ndef test_writes():\n"
+                                        "    pathlib.Path(os.environ['LEASE_DIR']).mkdir(parents=True)\n"
+                                        "    (pathlib.Path(os.environ['LEASE_DIR']) / 'lease').write_text('1')\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 1 and "(written) root/.research/lease" in p.stdout, p.stdout
+
+
+def test_the_tracer_names_the_machine_s_own_state_outside_the_repository_and_the_runner(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("reads_host_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    monkeypatch.setenv("VERITY_SUITE_ROOT", "/workspace/research/src/abc")
+    monkeypatch.setenv("VERITY_SUITE_HOST", "/workspace/research/runs/r1/suites/pkg.host")
+    monkeypatch.setenv("VERITY_SUITE_REPORT", "/workspace/research/runs/r1/suites/pkg.json")
+    monkeypatch.setenv("VERITY_SUITE_ALLOW", "[]")                  # nothing to look up: Reads() stats each allowed path
+    with monkeypatch.context() as m:                               # ... and resolves the root, which a pod path here isn't
+        m.setattr(R.os.path, "realpath", os.path.abspath)
+        r = R.Reads()
+    assert r.host("/workspace/cp/norm_tap/build/verity_norm_tap.so") == "/workspace/cp/norm_tap/build/verity_norm_tap.so"
+    assert r.host("/etc/research/deadline") and r.host("/etc/vy") and r.host("/workspace/research/runs/r2/x")
+    assert r.host("/workspace/research/src/abc/pkg/x.py") is None                 # the repository, under a pod's machine root
+    assert r.host("/workspace/research/runs/r1/suites/pkg.host/etc/research/deadline") is None     # the clean host itself
+    assert r.host("/workspace/cpx") is None and r.host("/etc/passwd") is None and r.host(3) is None and r.host(None) is None

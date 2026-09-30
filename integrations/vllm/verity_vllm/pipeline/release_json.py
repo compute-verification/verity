@@ -32,11 +32,12 @@ import time
 from dataclasses import dataclass, field
 
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import pod_path as on_pod
 
 SCHEMA = "verity-sweep/release/v1"
-POD_RELEASE_JSON = "/workspace/cp/RELEASE.json"
-DEFAULT_TREE = "/workspace/cp/veritor"
-DEFAULT_NC_BUILD = "/workspace/cp/nc_build"
+POD_RELEASE_JSON = on_pod("/workspace/cp/RELEASE.json")
+DEFAULT_TREE = on_pod("/workspace/cp/veritor")
+DEFAULT_NC_BUILD = on_pod("/workspace/cp/nc_build")
 TREE_LOCAL_NAME = "RELEASE.json"
 
 
@@ -246,7 +247,7 @@ def main(a: WriteOptions | CheckOptions | LineOptions | NcBuildOptions) -> int:
         bd = {"native_collect": a.nc_build} if a.nc_build else None
         rel = release_record(tag=a.tag, export=export, tree=a.tree, cwd=os.getcwd(), artifacts=arts, env=env, gpu=gpu, build_dirs=bd)
         paths = write_record(rel, a.tree, a.out)
-        fo = a.freeze_out or f"/workspace/cp/release-logs/pip_freeze_{a.tag}.txt"
+        fo = a.freeze_out or on_pod(f"/workspace/cp/release-logs/pip_freeze_{a.tag}.txt")
         os.makedirs(os.path.dirname(fo), exist_ok=True)
         open(fo, "w").write(freeze)
         print("  RELEASE.json written:", json.dumps({"tag": rel["tag"], "commit": rel["commit"], "tree": rel["tree"]}), "->", " + ".join(paths))

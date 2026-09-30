@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import pod_path
 
 SCHEMA = "verity-sweep/hot-commit/v1"
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
@@ -58,7 +59,7 @@ ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CU
 ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH"}
 WORKLOAD_ENGINE_KEYS = ("case", "model", "repo", "revision", "engine_args_required", "target", "execution", "row", "tokenizer", "dtype", "max_model_len")
 RC_HOT_INFRA = 70          # the worker died / refused before running the job (client falls back to cold)
-RELEASING_MARKER = Path(os.environ.get("HOT_RELEASING_MARKER", "/workspace/cp/RELEASING"))     # pod_release.sh holds it while it ships
+RELEASING_MARKER = Path(os.environ.get("HOT_RELEASING_MARKER", pod_path("/workspace/cp/RELEASING")))     # pod_release.sh holds it while it ships
 RELEASING_STALE_S = float(os.environ.get("RELEASING_STALE_S", "900"))    # pod_release.sh refreshes the marker per step; older = that ship died
 
 
@@ -69,7 +70,7 @@ def releasing_live() -> bool:
         return time.time() - RELEASING_MARKER.stat().st_mtime < RELEASING_STALE_S
     except OSError:
         return False
-RELEASE_JSON = Path(os.environ.get("HOT_RELEASE_JSON", "/workspace/cp/RELEASE.json"))
+RELEASE_JSON = Path(os.environ.get("HOT_RELEASE_JSON", pod_path("/workspace/cp/RELEASE.json")))
 
 
 def release_json_sig() -> str | None:
@@ -633,7 +634,7 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
 @dataclass(frozen=True, kw_only=True)
 class SubmitOptions:
-    root: str = option("--root", env="HOT_ROOT", default="/workspace/cp/hot")
+    root: str = option("--root", env="HOT_ROOT", default=pod_path("/workspace/cp/hot"))
     idle: float = option("--idle", type=float, env="HOT_IDLE", default=900.0)
     timeout: float | None = option("--timeout", type=float, default=None)
     no_spawn: bool = option("--no-spawn", default=False, action="store_true",
@@ -659,7 +660,7 @@ class KeyOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class StopOptions:
-    root: str = option("--root", env="HOT_ROOT", default="/workspace/cp/hot")
+    root: str = option("--root", env="HOT_ROOT", default=pod_path("/workspace/cp/hot"))
     idle_only: bool = option("--idle-only", default=False, action="store_true",
                              help="stop idle workers only; a worker running a job is left alone (release ships)")
     cmd: str = field(default="stop", init=False)
