@@ -67,6 +67,28 @@ def test_the_build_dir_is_the_source_set_s_child_of_the_parent(tmp_path):
     assert other != bd, "another source set never shares the dir"
 
 
+def test_two_trees_with_one_source_set_compile_the_same_staged_files(tmp_path):
+    parent, seen = str(tmp_path / "jit"), []
+
+    def loader(**kw):
+        seen.append([(p, os.stat(p).st_mtime_ns, open(p, "rb").read()) for p in kw["sources"]])
+
+    for tree in ("tree-a", "tree-b", "tree-a"):
+        (tmp_path / tree).mkdir(exist_ok=True)
+        _, bd, _ = nj.jit_load("ext", _sources(tmp_path / tree), parent=parent, loader=loader, **VERSIONS)
+    assert seen[0] == seen[1] == seen[2], "same paths, bytes and mtimes: build.ninja and ninja's view are the same for every tree"
+    assert seen[0][0][0] == os.path.join(bd, "src", "ext.cu") and seen[0][0][2] == b"__global__ void k(){}"
+
+
+def test_a_staged_source_that_differs_from_the_source_is_rewritten(tmp_path):
+    src, parent = _sources(tmp_path), str(tmp_path / "jit")
+    bd = nj.keyed_build_dir(parent, nj.source_set_digest(src, cflags=(), cuda_cflags=(), **VERSIONS))
+    os.makedirs(os.path.join(bd, "src"))
+    (tmp_path / "jit" / os.path.basename(bd) / "src" / "ext.cu").write_bytes(b"partial")
+    nj.jit_load("ext", src, parent=parent, loader=_loader, **VERSIONS)
+    assert open(os.path.join(bd, "src", "ext.cu"), "rb").read() == b"__global__ void k(){}"
+
+
 def test_a_torch_lock_left_by_a_killed_build_is_removed_under_the_build_lock(tmp_path):
     src, parent = _sources(tmp_path), str(tmp_path / "jit")
     bd = nj.keyed_build_dir(parent, nj.source_set_digest(src, cflags=(), cuda_cflags=(), **VERSIONS))
