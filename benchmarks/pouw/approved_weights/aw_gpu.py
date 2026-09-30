@@ -171,7 +171,7 @@ def rot_dtype(d, dev, seed, dtype):
 
 def install_act(model, rung, seed, dev):
     """Deploy every linear with the fork's activation path: y = Q_act(x R_in) W_q^T (then R_out^T), W_q the deployed weights
-    in the deployed basis. The bf16 rung keeps BF16 weights and activations (the reference)."""
+    in the deployed basis. The bf16 rung keeps BF16 weights and activations (the reference), with the same glue."""
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
     gam = {}
