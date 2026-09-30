@@ -4,8 +4,9 @@
 #
 #   on node 1:  n2_build.sh submit KEY ITEM.json|-   (ITEM: the config-run item a lane gives dispatch.py, as in its ready files;
 #                                                    `-` reads it from stdin)
-# Installed at /workspace/verity-guest/bin/n2_build.sh on both nodes.
+#   on node 1:  n2_build.sh offload [--loop|--list] (every dispatcher Build Kueue has held 2 min for memory or CPU quota)
 #   on node 2:  n2_build.sh run KEY                (the fill job's body; submit writes it)
+# Installed at /workspace/verity-guest/bin/n2_build.sh on both nodes.
 #
 # ITEM is {"template": "config-run", "tree": ..., "env": {ROW, ROLE, REPO, REVISION, SWEEP_DIR, CAMPAIGN, ...},
 # "resources": {"build": {"memory": GB}, "gpu": {...}} or "class", optional "queue"/"priority"}. The Build gets the template's
@@ -29,11 +30,12 @@ DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 n2_quiet() { ssh -o ConnectTimeout=10 "$N2" head -1 /workspace/pouw/fill/status.txt | grep -q "timed False, window waiting False"; }
 
 # rsync to node 2, only outside a window; a window that starts stops the transfer, which resumes after it (--partial)
-push() {
+push() {  # push SRC DST [RSYNC-ARG...]
   local src=$1 dst=$2 pid
+  shift 2
   while :; do
     until n2_quiet; do sleep 30; done
-    nice -n 19 ionice -c3 rsync -a --partial --mkpath --bwlimit=300m "$src" "$N2:$dst" & pid=$!
+    nice -n 19 ionice -c3 rsync -a --partial --mkpath --bwlimit=300m "$@" "$src" "$N2:$dst" & pid=$!
     while kill -0 "$pid" 2> /dev/null; do n2_quiet || kill "$pid"; sleep 10; done
     wait "$pid" && return 0
     n2_quiet || continue
@@ -63,22 +65,22 @@ submit() {
   { read -r tree; read -r row; read -r repo; read -r rev; read -r mem; read -r max_min; } < <(item_get "$item" tree ROW REPO REVISION mem max_min)
   [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("template"))' "$item")" = config-run ] \
     || { echo "ITEM: a config-run item" >&2; exit 2; }
-  # node 2 caps a guest with MemoryMax, node 1 only requests: a Build has used 2-3x its request (the steward, 18:05Z), so 3x, in 64-256
-  mem=${VY_N2_MEM_GB:-$(( ${mem:-32} * 3 < 64 ? 64 : ${mem:-32} * 3 > 256 ? 256 : ${mem:-32} * 3 ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
+  # node 2 caps a guest with MemoryMax at the item's request, in 64-256: node 1's Builds peaked at 4-29 GB against 47-108 GB requests
+  # (container_memory_working_set_bytes over 6 h, 2026-09-30 21:15Z)
+  mem=${VY_N2_MEM_GB:-$(( ${mem:-96} < 64 ? 64 : ${mem:-96} > 256 ? 256 : ${mem:-96} ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
   local src model
   src=$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")
   model=/workspace/hf/hub/models--${repo//\//--}
   [ -d "$model/snapshots/$rev" ] || { echo "no checkpoint $model/snapshots/$rev on node 1" >&2; exit 2; }
   push "$src/" "$src/"
-  # links are copied as links: the weights stay in node 1's shared /workspace/hf/hub/blobs, which a Build doesn't read (cov-g188
-  # built and matched node 1's digests without them), and a Build that did would fail on the dangling link, not silently
-  push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/"
+  # the weights themselves (-L: node 1's snapshots link into its shared blobs/): the CPU bootstrap's checkpoint check reads them
+  push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/" -L
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
   push "$0" "$GUEST/bin/n2_build.sh"
   local cpus=16
-  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"mem_gb":int(sys.argv[4]),"cpus":int(sys.argv[5])}; print(json.dumps(d))' \
-    "$item" "$key" "$src" "$mem" "$cpus" | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/$key.json"
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"mem_gb":int(sys.argv[4]),"cpus":int(sys.argv[5]),"commit_key":sys.argv[6]}; print(json.dumps(d))' \
+    "$item" "$key" "$src" "$mem" "$cpus" "${VY_COMMIT_KEY:-n2-build/$key}" | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-build-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
 # fill: owner=kueue-fold gpus=0 max_min=$max_min cpus=$cpus project=verity mem_gb=$mem
@@ -125,7 +127,8 @@ import json, shlex, sys
 d = json.load(open(sys.argv[1]))
 env = {k: str(v) for k, v in (d.get("env") or {}).items() if k != "HF_HOME"}
 n2 = d["n2"]
-env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], BUILD_RAM_BUDGET_GB=str(n2["mem_gb"]), OMP_NUM_THREADS=str(n2["cpus"]))
+env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2.get("commit_key") or f"n2-build/{n2['key']}",
+           BUILD_RAM_BUDGET_GB=str(n2["mem_gb"]), OMP_NUM_THREADS=str(n2["cpus"]))
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
 print("COMMIT_ARGS=(" + " ".join(shlex.quote(a) for a in
       [x for k, v in (d.get("env") or {}).items() for x in ("--env", f"{k}={v}")]
@@ -159,16 +162,74 @@ EOF
     UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
     /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
   push_attempt "$run_id"
-  ssh "$N1" "KUBECONFIG=\$HOME/.kube/config /workspace/jobs/venv312/bin/python $DISPATCH submit config-run n2-build/$KEY --tree $TREE --task 1 \
+  ssh "$N1" "KUBECONFIG=\$HOME/.kube/config /workspace/jobs/venv312/bin/python $DISPATCH submit config-run $COMMIT_KEY --tree $TREE --task 1 \
     $(printf '%q ' "${COMMIT_ARGS[@]}")"
   # node 1 holds the row, the run and the Attempt now (node2-ops: delete a Build's outputs once they're back); the tree stays for reuse
   rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
   echo "n2-build $KEY: Build $run_id on node 2, Commit submitted on node 1"
 }
 
+# the dispatcher's Builds that Kueue holds for memory or CPU quota, one per line: JOB KEY N2KEY, their items in $1/N2KEY.json
+held_builds() {
+  KUBECONFIG=$HOME/.kube/config kubectl get jobs -l verity.dev/dispatch=node1 -o json > "$1/k8s.json"
+  KUBECONFIG=$HOME/.kube/config kubectl get workloads -o json > "$1/wl.json"
+  python3 - "$1" "${VY_OFFLOAD_WAIT_S:-120}" << 'EOF'
+import calendar, json, re, sys, time
+d, wait = sys.argv[1], int(sys.argv[2])
+jobs = {j["metadata"]["name"]: j for j in json.load(open(f"{d}/k8s.json"))["items"]}
+for w in json.load(open(f"{d}/wl.json"))["items"]:
+    st = {c["type"]: c for c in (w.get("status") or {}).get("conditions") or []}
+    held = st.get("QuotaReserved", {})
+    if st.get("Finished", {}).get("status") == "True" or held.get("status") != "False":
+        continue
+    if not re.search(r"insufficient unused quota for (memory|cpu)\b", held.get("message", "")):
+        continue
+    since = calendar.timegm(time.strptime(w["metadata"]["creationTimestamp"], "%Y-%m-%dT%H:%M:%SZ"))
+    job = jobs.get(next((o["name"] for o in w["metadata"].get("ownerReferences") or [] if o["kind"] == "Job"), ""))
+    if job is None or time.time() - since < wait or not job["spec"].get("suspend"):
+        continue
+    a, lab = job["metadata"]["annotations"], job["metadata"]["labels"]
+    item = json.loads(a["verity.dev/item-json"])
+    if item.get("template") != "config-run" or lab.get("verity.dev/task") != "0":
+        continue
+    n2key = re.sub(r"[^a-z0-9-]+", "-", a["verity.dev/item"].lower()).strip("-")[:63]
+    json.dump(item, open(f"{d}/{n2key}.json", "w"))
+    print(job["metadata"]["name"], a["verity.dev/item"], n2key)
+EOF
+}
+
+# move each held Build to node 2 (the Commit comes back under the dispatcher's own key), while node 2 has fewer than
+# VY_N2_MAX_QUEUED Verity Builds waiting; `offload --loop` repeats every minute (tmux `n2-offload` on node 1, as research)
+offload() {
+  case "${1:-}" in
+    --loop) while :; do offload || true; sleep "${VY_OFFLOAD_EVERY_S:-60}"; done ;;
+    --list) (tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; held_builds "$tmp"); return ;;
+  esac
+  (
+    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+    n2_quiet || exit 0
+    while read -r job key n2key; do
+      queued=$(ssh -n "$N2" 'ls /workspace/pouw/fill/queue/ | grep -c "^verity-build-"' || true)
+      [ "${queued:-0}" -lt "${VY_N2_MAX_QUEUED:-6}" ] || { echo "node 2 has $queued Verity Builds waiting; $job stays"; break; }
+      VY_COMMIT_KEY=$key bash "$0" submit "$n2key" "$tmp/$n2key.json" < /dev/null \
+        || { echo "$job: submit failed, left on node 1" >&2; continue; }
+      if [ "$(KUBECONFIG=$HOME/.kube/config kubectl get job "$job" -o jsonpath='{.spec.suspend}')" = true ] \
+        && KUBECONFIG=$HOME/.kube/config kubectl delete job "$job" > /dev/null; then
+        printf '{"ev": "moved", "job": "%s", "key": "%s", "to": "vy-nebius-2", "n2_key": "%s", "t": "%s"}\n' \
+          "$job" "$key" "$n2key" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> /workspace/jobs/dispatch/log.jsonl
+        echo "moved $key ($job) to node 2"
+      else
+        ssh -n "$N2" "rm -f /workspace/pouw/fill/queue/verity-build-$n2key.sh $GUEST/items/$n2key.json"
+        echo "$job was admitted meanwhile; it stays on node 1"
+      fi
+    done < <(held_builds "$tmp")
+  )
+}
+
 cmd=${1:-}; shift || true
 case "$cmd" in
   submit) submit "$@" ;;
   run) run "$@" ;;
+  offload) offload "$@" ;;
   *) sed -n '2,6p' "$0" >&2; exit 2 ;;
 esac
