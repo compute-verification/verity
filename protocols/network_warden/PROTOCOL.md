@@ -89,6 +89,11 @@ earlier than its anchor, hand times only rise in canonical order, and the queue 
 out-of-set one gets the verdict it would get under any declaration, and a later one is checked against the grid the
 declared advice gives it.
 
+**Ingress statuses are not audited yet.** Lean's `Accepted` needs every boundary link's status to be complete, ingress
+links included, since an ingress status is itself an egress channel (`lean/README.md`, modelling choice 6). This
+reference checks a link against the Program's egress frames only, so it has no check of an ingress link's status, and
+an accepted verdict here says nothing about one.
+
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
 about T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`.
 

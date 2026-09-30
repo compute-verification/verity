@@ -17,6 +17,9 @@ windows (`schedule.expected_grids`), so an out-of-set sync never changes an earl
 
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
 compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
+
+Only egress links are checked: ingress links' statuses, which Lean's `Accepted` also requires complete, are not audited
+yet (PROTOCOL.md).
 """
 
 from __future__ import annotations
