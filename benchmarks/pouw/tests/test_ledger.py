@@ -503,3 +503,20 @@ def test_an_arm_that_dumps_its_own_transcripts_has_no_harness_poisoning_to_its_n
     assert code == V.EXIT_OK and "control" not in res["verification"]["rows"][0]
     m = records(run_dir)[PREFILL]["meta"]
     assert m["verify"]["accepted"] and not m["gate"]["poisoned_accepted"] and "negative control" in m["missing"]
+
+
+def test_a_run_time_choice_of_code_is_part_of_the_variant_s_id(tmp_path):
+    """GPU 2's pilot finding (18:00Z): PEARLC_A_FORMS picks kernels from one binary at run time, so the forms shared an id."""
+    d = kernel_dir(tmp_path)
+    base = dict(family="pearl-c", device="sm120", schemes={"s"}, sources=["run.py", "k.cu"], root=d, binaries=[d / "k.cubin"])
+    plain, fold, nodes = (L.variant_record(**base, config=c) for c in (None, {"PEARLC_A_FORMS": "p,fold"},
+                                                                          {"PEARLC_A_FORMS": "w,nodes"}))
+    assert len({plain["id"], fold["id"], nodes["id"]}) == 3 and fold["config"] == {"PEARLC_A_FORMS": "p,fold"}
+    assert L.variant_record(**base)["id"] == plain["id"] == variant(tmp_path)["id"] and plain["config"] is None
+    two = {"PEARLC_A_FORMS": "p,fold", "PEARLC_EPILOGUE": "b"}
+    assert L.variant_record(**base, config=two)["id"] == L.variant_record(**base, config=dict(reversed(two.items())))["id"]
+    (d / L.CONFIG_PATH).write_text("x")
+    with pytest.raises(L.LedgerError, match="may not be named"):
+        L.source_sha256([L.CONFIG_PATH], d)
+    with pytest.raises(L.LedgerError, match="names to strings"):
+        L.source_sha256(["k.cu"], d, {"PEARLC_A_FORMS": 1})
