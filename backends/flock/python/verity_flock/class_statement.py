@@ -421,6 +421,74 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
 
 
+#: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
+#: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
+#: hashed once per tile rather than once per coordinate (internal/gemm-column-batch-tiles-layout-scope.md)
+GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
+
+
+def tile_lowering(low1: IL.Lowering, P: int, C: int, name: str) -> IL.Lowering:
+    """A two-port class lowering as a P x C tile: the same unit circuit and layout, P * C units over C + P row ports."""
+    pw, w1 = low1.definition.port_words, low1.definition.w_out
+    ports = (pw[0],) * C + (pw[1],) * P
+    off = [sum(ports[:i]) for i in range(len(ports))]
+    in_src = [[("leaf", off[b] + j) for j in range(pw[0])] + [("leaf", off[C + a] + j) for j in range(pw[1])] for a in range(P) for b in range(C)]
+    out_src = [[("ret", u * w1 + j) for j in range(w1)] for u in range(P * C)]
+    U1 = low1.units
+    U = IL.Units(target=None, in_widths=U1.in_widths, out_widths=U1.out_widths, in_src=in_src, out_src=out_src, signature=U1.signature,
+                 gates=[], arg_gates=[], ret_gates=[])
+    return IL.Lowering(name, ClassDefinition(name, ports, w1 * P * C), U, low1.circuit, low1.layout)
+
+
+def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_dir: Path, salt_key: bytes, P: int, C: int,
+                n: int) -> dict:
+    """As `stage`, for ``n`` P x C tiles of a two-port class: every row of every tile a distinct lane's port-0 row (a valid word
+    vector; a dot product's two ports are alike), each unit's output the class lowering's own on its pair, checked through the
+    tile's leaf maps."""
+    act = units.activation(cl.definition)
+    uc = cl.representative
+    name = shape[:16]
+    ins, want = lanes_[0], lanes_[1]
+    partition, program = partition_binding(units, spec)
+    groups = sources(act, uc, owners_of(units, cl.definition.id))
+    low1 = class_lowering(act, uc, f"unit-class/{name}", groups)
+    pw, w1 = low1.definition.port_words, low1.definition.w_out
+    if len(pw) != 2 or pw[0] != pw[1]:
+        raise ValueError(f"class {name}: a tile needs two row ports of one width, not {pw}")
+    w = pw[0]
+    _rows1, _outs1, per1 = pack(uc, ins, want, low1.definition.w_in, w1, groups, pw)
+    if len(per1["p0"]) < n * (P + C):
+        raise ValueError(f"class {name}: {n} tiles need {n * (P + C)} lanes, not {len(per1['p0'])}")
+    R = np.ascontiguousarray(per1["p0"][:n * (P + C)]).reshape(n, P + C, w)
+    R0, R1 = R[:, :C], R[:, C:]
+    pairs = np.concatenate([np.broadcast_to(R0[:, None, :, :], (n, P, C, w)), np.broadcast_to(R1[:, :, None, :], (n, P, C, w))], axis=3)
+    got, _cut, ok = low1.evaluate(pairs.reshape(n * P * C, 2 * w).astype(np.uint64))
+    if not int(ok) == (1 << (n * P * C)) - 1:
+        raise AssertionError(f"class {name}: a tile's unit is unsatisfied on its rows")
+    outs = got.astype(np.uint16).reshape(n, P * C * w1)
+    low = tile_lowering(low1, P, C, f"unit-class/{name}-tile{P}x{C}")
+    per_port = {f"p{b}": np.ascontiguousarray(R0[:, b]) for b in range(C)} | {f"p{C + a}": np.ascontiguousarray(R1[:, a]) for a in range(P)}
+    got_t, _c, ok_t = low.evaluate(np.concatenate([per_port[f"p{i}"] for i in range(P + C)], axis=1).astype(np.uint64))
+    if not int(ok_t) == (1 << (n * P * C)) - 1 or not np.array_equal(got_t.astype(np.uint16), outs):
+        raise AssertionError(f"class {name}: the tile's leaf maps disagree with its units")
+    sub, iset = _shims(f"{name}-t{P}x{C}", uc.form.encode() + f"/tile{P}x{C}".encode(), P + C)
+    text = FC.compose(low, sub, partition=partition, program=program)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "circuit.txt").write_text(text)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    per_instance = (1 << meta["k_log"]) // meta["vus_per_block"]
+    cap_bits = _CTX.get("max_statement_bits", MAX_STATEMENT_BITS)
+    if n * per_instance > cap_bits:
+        n = max(meta["vus_per_block"], 1 << ((cap_bits // per_instance).bit_length() - 1))
+        outs, per_port = outs[:n], {k: v[:n] for k, v in per_port.items()}
+    FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
+             share_rows=True)
+    return {"n": n, "tile": [P, C], "coords_per_instance": P * C, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"],
+            "circuit_bytes": len(text), "w_in": low.definition.w_in, "w_out": low.definition.w_out, "unit_rows": low.layout.useful,
+            "ports": list(low.definition.port_words), "ands": low.layout.counts["ands"] * P * C, "k_log": meta["k_log"],
+            "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)}
+
+
 def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
           warm: int = 0, runs: int = 1) -> dict:
     """A loopback session (``serve`` on 127.0.0.1 and ``prove``), or ``selftest``: the LIVE or SELFTEST record."""
@@ -503,6 +571,11 @@ def auto_batch(ands: int, row_units: int) -> int:
     return max(16, 1 << max(0, cap.bit_length() - 1))
 
 
+def _tile_fits(cc, P: int, C: int) -> bool:
+    """Whether a P x C tile of this class's unit fits the largest block (K = 2048 at 4 x 4; K = 8192 needs 2^27)."""
+    return cc.counts["ands"] * P * C <= 1 << 25
+
+
 def _source_digest() -> str:
     """The staging code's digest: every Python file of the packages a staged statement is a function of (with the program, the
     shape, the batch parameters and the seed)."""
@@ -525,7 +598,7 @@ def _stage_cache(s: str) -> Path | None:
         c["source_digest"] = _source_digest()
     a = c["a"]
     ident = [c["source_digest"], c["program_sha512"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
-             a.seed, a.partition, a.max_ands, a.select]
+             a.seed, a.partition, a.max_ands, a.select, GEMM_TILE]
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 
@@ -589,9 +662,17 @@ def _stage_job_fresh(s: str) -> dict:
         try:
             rec["ands"] = cc.counts["ands"]
             rec["table_reads"] = dict(Counter(t for t, _i, _w in cc.circuit.lookups))
-            n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
-            lanes_ = class_lanes(units, cl, c["key"], n, c["shared"])
-            rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"])
+            tile = GEMM_TILE if GEMM_TILE and str(uc.definition).startswith("GemmCoordinate") and _tile_fits(cc, *GEMM_TILE) else None
+            if tile:
+                P, C = tile
+                n = (auto_batch(P * C * cc.counts["ands"], max(1, (c["row_units"].get(s) or cl.units) // (P * C)))
+                     if a.batch == "auto" else a.n)
+                lanes_ = class_lanes(units, cl, c["key"], n * (P + C), c["shared"])
+                rec["stage"] = stage_tiled(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"], P, C, n)
+            else:
+                n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
+                lanes_ = class_lanes(units, cl, c["key"], n, c["shared"])
+                rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"])
             rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
         except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
             rec.pop("stage", None)
