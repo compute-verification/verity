@@ -179,8 +179,10 @@ useful    U/(α_A·α_B), glue
     partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite.
     - Only ρ depends on A alone. The model adopts s, ρ and α as its own FP8 quantizer, so W_ref counts 68 units per
       element of forming, 64 of them credited (the lane's `Costs.adopted`).
-    - Its domain rules are Pearl's with σ for δ·l2: σ·α ≥ 1 on every row, and at most 1/64 of each side's entries at
-      |x| ≥ 8σ.
+    - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), and on every row of both operands the noise floor ρ·α ≥ 1
+      (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
+      ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
+    - It shares v0's seed labels (`pearl-c/v0/seed-*`).
 - **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
 - **U's exact order, CPU-pinned** (`schemes/pearl_c_u.py`), for the Lean model of the clean-up.
