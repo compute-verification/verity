@@ -697,6 +697,12 @@ def test_an_enumerated_configuration_is_named_by_its_config_and_deduplicated_by_
     assert "_sk4_r1" in B._enum_name("lt", "nvfp4", 0, cfg | {"splitk": 4, "reduction": 1})
 
 
+def test_the_help_formats(capsys):
+    with pytest.raises(SystemExit) as ex:
+        H.parse(["--help"])
+    assert ex.value.code == 0 and "--lt-enumerate-range" in capsys.readouterr().out
+
+
 def test_a_slice_of_the_enumeration_takes_its_range_and_keeps_enough_to_reach_it(tmp_path):
     a = argparse.Namespace
     whole = H.lt_pick(a())

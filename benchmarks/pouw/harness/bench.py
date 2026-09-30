@@ -881,7 +881,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")
     p.add_argument("--warmup-s", type=float, default=WARMUP_MS / 1e3,
                    help="per shape, before its reps: rounds of the timed schedule for at least this much device time, and "
-                        f"until a round's median SM clock is within {STEADY:.1%} of the round before")
+                        f"until a round's median SM clock is within {STEADY * 100:.1f}%% of the round before")
     p.add_argument("--warmup-max-s", type=float, default=WARMUP_MAX_MS / 1e3, help="the warm-up's bound (then not steady)")
     p.add_argument("--item-ms", type=float, default=ITEM_MS,
                    help="every timed item (entry, method, rep) is sized to about the same device time, at least this")
