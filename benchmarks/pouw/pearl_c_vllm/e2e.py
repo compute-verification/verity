@@ -31,7 +31,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
 - **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
 
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
-engines resident, the arm's install and gates, and each engine's first sampling calls.
+engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
+the untimed quality run: WikiText-2's test split through bf16, stock fp8, and Pearl-C v1 and v2.
 """
 from __future__ import annotations
 
@@ -65,6 +66,12 @@ PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
 CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
+#: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
+QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h1", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h1"}
+#: WikiText-2 (raw), its test split, at the revision cached on node 2
+WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
+#: the quality run's windows: BOS and 2,047 tokens each, non-overlapping; its batch budget, one window a step
+WINDOW, PPL_BATCH, PPL_WINDOWS_A_PASS = 2048, 2048, 8
 #: the panel's shape names for the two phases
 SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
 
@@ -72,7 +79,8 @@ SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-l
 def engine(args, group: str):
     from vllm import LLM
     kw = {"model": args.model, "enforce_eager": True, "gpu_memory_utilization": args.mem_base if group == "base" else args.mem_arm,
-          "max_num_seqs": BATCH, "max_model_len": PREFILL + 64, "max_num_batched_tokens": PREFILL, "enable_prefix_caching": False,
+          "max_num_seqs": BATCH, "max_model_len": PREFILL + 64,
+          "max_num_batched_tokens": getattr(args, "batch_tokens", None) or PREFILL, "enable_prefix_caching": False,
           "seed": 0}
     if args.revision:
         kw["revision"] = args.revision
@@ -94,12 +102,12 @@ def install(model, args, beacon: bytes, state: dict):
 
     layers = [m for m in model.modules() if isinstance(m, LinearBase)]
     weights = {w: layer.weight.data for w, layer in enumerate(layers)}
-    scheme = getattr(args, "scheme", SCHEME)
+    scheme = getattr(args, "scheme", None) or SCHEME
     bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
     if bad:
         raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    roots = PPD.weight_roots(kernel, weights, PPD.tree_hash(scheme))
+    roots = PPD.weight_roots(kernel, weights, PPD.SCHEMES[scheme][1], PPD.tree_hash(scheme))
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
@@ -277,6 +285,8 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
                 t1, g1, _, _ = timed(p, one)
                 tn, gn, cn, _ = timed(p, many)
                 conn.send({"step_s": (tn - t1) / STEPS, "gemm_step_s": (gn - g1) / STEPS, "t1_s": t1, "tn_s": tn, "commitment": cn})
+            elif op == "ppl":
+                conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
                 state["active"], run.hashing = True, True
                 out = {}
@@ -294,6 +304,23 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
                 raise ValueError(f"unknown command {op!r}")
     except Exception as ex:  # noqa: BLE001 - the controller reports it
         conn.send({"error": f"{group}: {type(ex).__name__}: {ex}", "trace": traceback.format_exc()[-4000:]})
+
+
+def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> dict:
+    """Each window's prompt log-probs (vLLM's ``prompt_logprobs=1``), a pass per `PPL_WINDOWS_A_PASS` windows: the summed
+    negative log-likelihood of every token after the window's first, their count, and each position's top-1 token."""
+    sp = sampling_params(temperature=0.0, max_tokens=1, prompt_logprobs=1)
+    nll, count, top1 = 0.0, 0, []
+    for i in range(0, len(windows), PPL_WINDOWS_A_PASS):
+        batch = windows[i:i + PPL_WINDOWS_A_PASS]
+        *_, outs = timed([{"prompt_token_ids": w} for w in batch], sp)
+        for w, o in zip(batch, outs, strict=True):
+            for pos in range(1, len(w)):
+                d = o.prompt_logprobs[pos]
+                nll -= d[w[pos]].logprob
+                top1.append(next(t for t, lp in d.items() if lp.rank == 1))
+                count += 1
+    return {"nll": nll, "tokens": count, "top1": top1}
 
 
 class Worker:
@@ -457,6 +484,82 @@ def smoke(args) -> None:
                      json.dumps({k: v for k, v in out.items() if k != "gate"}), [(s["step"], s["s"], "s") for s in out["steps"]])
 
 
+def wikitext_windows(model: str, limit: int | None) -> list[list[int]]:
+    """WikiText-2's test split (`WIKITEXT`, from the Hugging Face cache) joined with blank lines, tokenized, and cut into
+    non-overlapping windows of BOS and `WINDOW` − 1 tokens; the last partial window is dropped, and `limit` keeps the first."""
+    import pyarrow.parquet as pq
+    from huggingface_hub import hf_hub_download
+    from transformers import AutoTokenizer
+    repo, rev, name = WIKITEXT
+    text = "\n\n".join(pq.read_table(hf_hub_download(repo, name, repo_type="dataset", revision=rev)).column("text").to_pylist())
+    tok = AutoTokenizer.from_pretrained(model)
+    ids = tok(text, add_special_tokens=False)["input_ids"]
+    body = WINDOW - 1
+    out = [[tok.bos_token_id, *ids[i:i + body]] for i in range(0, len(ids) - body + 1, body)]
+    return out[:limit] if limit else out
+
+
+def quality_summary(parts: dict) -> dict:
+    """Each mode's perplexity, and its agreement with bf16: top-1 teacher-forced over WikiText-2, and greedy on the chat prompts."""
+    import math
+    ref = parts.get("bf16", {})
+    out = {}
+    for mode, r in parts.items():
+        row = {"scheme": r.get("scheme"), "perplexity": math.exp(r["nll"] / r["tokens"]), "tokens": r["tokens"]}
+        if ref:
+            row["top1_agreement_vs_bf16"] = sum(a == b for a, b in zip(r["top1"], ref["top1"], strict=True)) / len(ref["top1"])
+            row["greedy_token_agreement_vs_bf16"] = agree(r["chat"]["tokens"], ref["chat"]["tokens"])
+        out[mode] = row
+    return out
+
+
+def perplexity(args) -> int:
+    """The untimed quality run, in groups (one engine each) whose results are kept beside --out as they finish, so a
+    restart (a preempted or a continued fill chunk) skips them: stock fp8; bf16 and Pearl-C v1 in one arm engine (bf16 with the
+    wrapper off); Pearl-C v2 (`QUALITY`).  Each mode's WikiText-2 prompt log-probs and its greedy tokens on the chat prompts;
+    Pearl-C's arm is gated first.  A chunk runs at least one group, and starts no other once --chunk-min has passed.  Returns
+    0 when every group is done, 99 when groups remain."""
+    import copy
+    ctx, beacon, t0 = mp.get_context("spawn"), os.urandom(32), time.perf_counter()
+    d = args.out.parent
+    windows = wikitext_windows(args.model, args.ppl_windows)
+    groups = [("fp8", "base", None, ("fp8",)), ("v1", "arm", QUALITY["pearlc-v1"], ("bf16", "pearlc-v1")),
+              ("v2", "arm", QUALITY["pearlc-v2"], ("pearlc-v2",))]
+    ran = False
+    for name, group, scheme, modes in groups:
+        path = d / f"quality-{name}.json"
+        if path.exists():
+            continue
+        if ran and time.perf_counter() - t0 > 60 * args.chunk_min:
+            return 99
+        ran = True
+        a = copy.copy(args)
+        a.scheme, a.batch_tokens = scheme, PPL_BATCH
+        w = Worker(ctx, a, group, beacon)
+        try:
+            res = {"gate": w.ready.get("gate"), "committer": w.ready.get("committer"), "modes": {}}
+            if group == "arm" and not all(g["ok"] for g in w.ready["gate"]):
+                raise SystemExit(f"{scheme}: the arm's gate failed")
+            for mode in modes:
+                engine_mode = "pearlc" if mode.startswith("pearlc") else mode
+                got = w.ask(op="ppl", mode=engine_mode, windows=windows)
+                got["chat"] = w.ask(op="chat", mode=engine_mode)
+                res["modes"][mode] = {"scheme": scheme if engine_mode == "pearlc" else None, **got}
+        finally:
+            w.close()
+        path.write_text(json.dumps(res))
+    parts = {m: r for name, *_ in groups for m, r in json.loads((d / f"quality-{name}.json").read_text())["modes"].items()}
+    summary = quality_summary(parts)
+    gates = {name: all(g["ok"] for g in (json.loads((d / f"quality-{name}.json").read_text())["gate"] or [{"ok": True}]))
+             for name, *_ in groups}
+    doc = {"schema": "verity-pouw/pearl-c-vllm-quality/v1", "run": os.environ.get("RESEARCH_RUN_ID") or os.environ.get("FILL_JOB"),
+           "model": args.model, "dataset": {"repo": WIKITEXT[0], "revision": WIKITEXT[1], "file": WIKITEXT[2]},
+           "windows": len(windows), "window_tokens": WINDOW, "gates": gates, "summary": summary}
+    args.out.write_text(json.dumps(doc, indent=1))
+    print(json.dumps({"summary": summary, "gates": gates}), flush=True)
+    return 0
+
+
 def agree(a, b) -> float:
     same = sum(x == y for s, u in zip(a, b) for x, y in zip(s, u))
     return same / max(1, sum(min(len(s), len(u)) for s, u in zip(a, b)))
@@ -479,10 +582,15 @@ def main() -> None:
     ap.add_argument("--schedule", choices=["serial", "deferred"], default="serial",
                     help="deferred: each call's tile hashing on a low-priority side stream (the decode plan's step 2)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
+    ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
+    ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
+    ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
     if args.smoke:
         smoke(args)
         return
+    if args.perplexity:
+        sys.exit(perplexity(args))
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule,

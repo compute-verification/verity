@@ -65,9 +65,11 @@ from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
 from verity_pouw.schemes import pearl_kw as P
 
-#: scheme name -> (forming, device record, hashing format).  The format is a switch: ``-h2`` (frame-b3s) or ``-h3`` joins as
-#: one entry here and one in `TREE_HASH` once GPU 1's pipeline commits with it (which of them is Daniel's call).
-SCHEMES = {"pearl-c-sm120-v1-h1": ("v1", "sm120", "h1")}
+#: scheme name -> (forming, device record, hashing format); the device record is GPU 1's pipeline variant too.  v1 is
+#: ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is ``sm120-unpromoted`` (no promotion, the panel's v2, counted once
+#: the theory and Lean lanes restate it).  The format is a switch: ``-h2`` (frame-b3s) or ``-h3`` joins as one entry here and
+#: one in `TREE_HASH` once GPU 1's pipeline commits with it (which of them is Daniel's call).
+SCHEMES = {"pearl-c-sm120-v1-h1": ("v1", "sm120", "h1"), "pearl-c-sm120-unpromoted-v1-h1": ("v1", "sm120-unpromoted", "h1")}
 #: each hashing format's tree hash (`CommitmentDomain.hash`): A's, B's and the transcript's trees
 TREE_HASH = {"h1": "blake3"}
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
@@ -351,9 +353,9 @@ class _Pass:
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
 
 
-def weight_roots(kernel: Kernel, weights: dict[int, Any], hash: str = "blake3") -> dict[int, bytes]:
-    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase.  `hash` is
-    the scheme's tree hash (`tree_hash`)."""
+def weight_roots(kernel: Kernel, weights: dict[int, Any], variant: str = "sm120", hash: str = "blake3") -> dict[int, bytes]:
+    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase.  `variant` is
+    the scheme's pipeline variant and `hash` its tree hash (`tree_hash`)."""
     import torch
     R, out = kernel.run, {}
     for w, weight in weights.items():
@@ -364,7 +366,7 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], hash: str = "blake3") 
         _put(keys[32:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32})
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32}, variant=variant)
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
         out[w] = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
     return out
@@ -447,9 +449,9 @@ def _weight_binding(w: int) -> bytes:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None) -> Any:
+              m_real: int | None = None, variant: str = "sm120") -> Any:
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "unit": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, "sm120", full, xa, xb, bufs=bufs, m_real=m_real)
+    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real)
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
@@ -481,6 +483,7 @@ class PearlCDeviceRun:
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
                  defer: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
+        self.variant = SCHEMES[scheme.name][1]
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
         self.defer, self.side = defer, _Side(next(iter(weights.values())).device) if defer else None
@@ -528,7 +531,7 @@ class PearlCDeviceRun:
         _put(keys, kk["line_b"] + kk["dom_b"])
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32})
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32}, variant=self.variant)
         stream = _stream(weight.device)
         _run(K, pipe, EPOCH_STEPS, stream)
         root = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
@@ -573,7 +576,7 @@ class PearlCDeviceRun:
                     "leaves": 0}
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": sh.keys.data_ptr(),
                     "unit": sh.keys.data_ptr() + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
-            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16)
+            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant)
             names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)

@@ -17,12 +17,16 @@
 # MODE=smoke (untimed, `gpu-lease 1`): the same checks, then `e2e.py --smoke` (both engines resident and each one's first
 # sampling calls) into smoke.json.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
 # nsys (the capture is its steady-state pass) into profile.json, with nsys's per-kernel sums merged in.  SHIP_TAR names a
-# ship already on the node instead of the sent one.  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C
-# scheme, and so its hashing format) pass to e2e.py and profile_decode.py.
+# ship already on the node instead of the sent one.  MODE=perplexity (untimed, as node-2 fill or `gpu-lease 1`): the same
+# checks, GPU 1's for both variants (v2 runs the unpromoted kernels), then `e2e.py --perplexity` into quality.json, a scheme
+# group a chunk with CHUNK_MIN=0, exiting 99 while groups remain.  OUT names the output directory where there is no research
+# run (a fill job).  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C scheme, and so its hashing format)
+# pass to e2e.py and profile_decode.py; the quality run names its own schemes.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
-OUT=${RESEARCH_RUN_DIR:?run this under research run}
+OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
+mkdir -p "$OUT"
 MODE=${MODE:-window}
 SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"})
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
@@ -46,12 +50,16 @@ SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
 (cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) || fail SHIP "MANIFEST.sha256 does not hold"
 cmp -s "$SHIP/run.py" benchmarks/pouw/pearl_c_sm120/run.py || fail SHIP "the ship's run.py is not the run tree's"
 
-PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl" \
+VARIANTS="sm120"; [ "$MODE" = perplexity ] && VARIANTS="sm120 sm120-unpromoted"
+PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl" \
   || fail GPU1_CHECK "run.py's device check failed (exit $?); see gpu1-check.jsonl"
 
 if [ "$MODE" = smoke ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
     --out "$OUT/smoke.json" --smoke "${SWITCHES[@]}"
+elif [ "$MODE" = perplexity ]; then
+  "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
+    --out "$OUT/quality.json" --perplexity --chunk-min "${CHUNK_MIN:-7}"
 elif [ "$MODE" = profile ]; then
   nsys profile -o "$OUT/decode" -f true -t cuda,nvtx --capture-range=cudaProfilerApi --capture-range-end=stop \
     "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 \
