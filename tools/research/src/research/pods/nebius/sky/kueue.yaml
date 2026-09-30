@@ -35,7 +35,9 @@ metadata: {name: deployments-gpu}
 spec:
   cohortName: nebius
   namespaceSelector: {}
-  queueingStrategy: BestEffortFIFO
+  # StrictFIFO: a 2-GPU TP2 config-run-row at the head waits for its second GPU instead of every freed GPU going to the next
+  # 1-GPU Commit at the same priority (under BestEffortFIFO the TP2 head waited 55 min, 20:15-21:10Z, and never saw 2 free).
+  queueingStrategy: StrictFIFO
   preemption:
     reclaimWithinCohort: LowerPriority
     borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}
