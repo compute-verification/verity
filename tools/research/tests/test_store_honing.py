@@ -619,7 +619,7 @@ def test_multipart_upload_is_aborted_when_the_local_file_changes_under_it(tmp_pa
         def __exit__(self, *a):
             return False
 
-    def fake_request(method, key, query=None, body=None, headers=None, payload_hash=None):
+    def fake_request(method, key, query=None, body=None, headers=None, payload_hash=None, stall_window=None):
         calls.append((method, key, dict(query or {})))
         if method == "POST" and "uploads" in (query or {}):
             return _Resp(b'<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><UploadId>U1</UploadId></InitiateMultipartUploadResult>')
@@ -641,7 +641,7 @@ def test_multipart_upload_is_aborted_when_the_local_file_changes_under_it(tmp_pa
     f.write_bytes(b"x" * 10)
     calls.clear()
 
-    def bad_etag(method, key, query=None, body=None, headers=None, payload_hash=None):
+    def bad_etag(method, key, query=None, body=None, headers=None, payload_hash=None, stall_window=None):
         calls.append((method, key, dict(query or {})))
         if method == "POST" and "uploads" in (query or {}):
             return _Resp(b"<InitiateMultipartUploadResult><UploadId>U2</UploadId></InitiateMultipartUploadResult>")

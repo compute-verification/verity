@@ -9,7 +9,7 @@ tables it needs (``MUFU.SQRT`` and ``MUFU.RSQ`` measured by ``cuda/rms_probe.cu`
 * :func:`rms_norm_rows` -- the model: BF16 rows + BF16 weight + eps -> BF16 rows (and the fp32 scalars);
 * :func:`gate` -- the measured domain (kernel specialisation, dtype, n_cols family, contiguity).
 
-Kernel identities (docs/vllm-poc/rmsnorm-model.md): ``vllm/model_executor/determinism/batch_invariant.py::
+Kernel identities: ``vllm/model_executor/determinism/batch_invariant.py::
 _rms_norm_kernel`` specialised ``BLOCK_SIZE=1024, HAS_WEIGHT=True``, ``num_warps=4``, Triton 3.7.1 for sm_89,
 launched by ``rms_norm_batch_invariant`` for every RMSNorm call without a residual (``layers.0.input_layernorm``
 in the pinned Qwen2.5-1.5B profile); ``csrc/libtorch_stable/layernorm_kernels.cu::vllm::rms_norm_kernel<c10::BFloat16,

@@ -102,7 +102,7 @@ def test_x01_num_sms_is_the_one_target_profile_fact():
     from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
     assert GEMM_PINS["NUM_SMS"] == DEFAULT_TARGET.num_sms
     try:
-        for sms in (142, 108, 132):
+        for sms in (142, 108, 132, 188):
             observe_target_profile(TargetProfile(num_sms=sms))
             pins, _ = gemm_pins_for(8, 960, 576)
             assert pins["NUM_SMS"] == sms and pins["constexprs"] == GEMM_PINS["constexprs"]
@@ -113,6 +113,9 @@ def test_x01_num_sms_is_the_one_target_profile_fact():
         assert tp == TargetProfile(compute_capability=(8, 9), num_sms=142)
         observe_target_profile(tp)
         assert gemm_pins_for(1, 960, 576)[0]["NUM_SMS"] == 142
+        pro = TargetProfile.from_gpu_document({"name": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "compute_capability": "12.0",
+                                               "multi_processor_count": 188})
+        assert (pro.compute_capability, pro.num_sms) == ((12, 0), 188)
     finally:
         observe_target_profile(None)
     assert gemm_pins_for(8, 2048, 2048)[0]["NUM_SMS"] == GEMM_PINS["NUM_SMS"]

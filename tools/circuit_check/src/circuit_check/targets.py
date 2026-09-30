@@ -199,7 +199,8 @@ def _core_roots() -> list[Any]:
 
     A, H = P.AmpereBF16TcDot16, P.HopperBF16WgmmaDot16
     return [bind(G.DotBf16, K=64, DOT=A), bind(G.DotBf16, K=48, DOT=H), bind(G.GemmCoordinate, K=64, DOT=A),
-            bind(G.GemmCoordinate, K=64, DOT=H), bind(G.Gemm, K=32, N=3, DOT=A), K.HOPPER_E4M3_STEP, K.HOPPER_E4M3_DOT.bind(K=128),
+            bind(G.GemmCoordinate, K=64, DOT=H), bind(G.Gemm, K=32, N=3, DOT=A), P.BlackwellE4m3QmmaDot32,
+            P.BlackwellE5m2QmmaDot32, P.BlackwellNvf4OmmaDot64, P.F32ToE2m1Sat, P.E4m3ToF32, K.HOPPER_E4M3_STEP, K.HOPPER_E4M3_DOT.bind(K=128),
             K.ADA_E4M3_STEP, K.ADA_E4M3_DOT.bind(K=128), K.SM120_NVF4_STEP, K.SM120_NVF4_DOT.bind(K=256), K.SM120_MXF4_STEP,
             K.SM120_MXF4_DOT.bind(K=256)]
 
@@ -267,7 +268,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
-             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0,
+             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4,
              "CONSTRUCTION": "shared-greedy"}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization

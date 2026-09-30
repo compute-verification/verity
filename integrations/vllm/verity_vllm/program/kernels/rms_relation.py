@@ -24,18 +24,16 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from importlib import resources
 from typing import Any
 
 import numpy as np
 
+from verity.ml import mufu
 from verity_vllm.program.kernels import rms_triton_model as RM
 from verity_vllm.program.kernels.fa2_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
 
 MODEL_VERSION = "rmsnorm-triton-sm89-bf16.v1"
 CUDA_MODEL_VERSION = "rmsnorm-cuda-sm89-bf16.v1"
-FIXTURE_ID = "W11R-40f0cebeb670-20260907T1802Z"  # MUFU.SQRT + MUFU.RCP tables (Triton)
-CUDA_FIXTURE_ID = "W11C-40f0cebeb670-20260907T1900Z"  # + MUFU.RSQ (CUDA); a superset of the W11R tables
 _SQRT_SHA256 = "c5859583cdad12c5f5a6b75061417715a8489870d47216156c2f94b7479a6538"
 _RCP_SHA256 = "291d1c9cc1beed5152e3805c279aa0b34d9d15cbe7ece084c6237ca5d44e7ebc"
 TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin
@@ -58,7 +56,8 @@ _TABLES: dict[str, RM.RmsTables] = {}
 
 
 def tables_dir(kernel: str = "triton") -> str:
-    return str(resources.files(__package__) / "tables" / (CUDA_FIXTURE_ID if kernel == "cuda" else FIXTURE_ID))
+    """Where both kernels' MUFU.SQRT / MUFU.RCP / MUFU.RSQ delta tables live: core's (``verity.ml.mufu.TABLE_DIR``)."""
+    return mufu.TABLE_DIR
 
 
 def tables(kernel: str = "triton") -> RM.RmsTables:
