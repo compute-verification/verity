@@ -99,7 +99,8 @@ def select_cuda_platform() -> str:
     from vllm.platforms.cuda import CudaPlatform
     resolved = P.__dict__.get("current_platform") or P._current_platform   # the lazy `current_platform` getter returns `_current_platform`
     if resolved is None:
-        P._current_platform = resolved = CudaPlatform()
+        resolved = CudaPlatform()
+        hooks.patch(P, "_current_platform", resolved)
     elif not resolved.is_cuda():
         raise RuntimeError(f"vLLM resolved {type(resolved).__qualname__} before the declared CUDA target could select its platform")
     return type(resolved).__qualname__
