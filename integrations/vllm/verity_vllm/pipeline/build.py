@@ -44,7 +44,7 @@ def _instance_rows(program):
     from verity.ir.codec import descriptor_id
     from verity.ir.refs import runs
     for k, n in enumerate(program.fn.body.nodes):
-        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [[list(r) for r in runs(a.refs)] for a in n.args]}
+        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
 
 
 def _instance_sequence(program) -> list[dict]:
