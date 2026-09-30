@@ -208,7 +208,8 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
     assert not problems, problems
     for name in ("gemm_pearlc", "gemm_pearlc_u"):
         assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
-    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "hot_a"} <= set(funcs)
+    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "h1_rows_p", "h1_level_keys", "h1_tree",
+            "h1_commit", "h1_tiles", "hot_a"} <= set(funcs)
     # v2-hot's honest cost: the unpromoted chain's atoms and peel, and one FADD (H_i's removal) a word of the peeled modes
     fadds = {}
     for f, body in re.findall(r"Function : (\w+)\n(.*?)(?=\n\s+Function : |\Z)", sass.read_text(), re.S):
@@ -280,10 +281,16 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
 KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
-HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm120.cuh"))
-#: the -h1 kernels (#449's hash.cuh and hash_sm120.cuh) the pipeline launches at the dry run's shapes: no pads (every count a
-#: power of two) and no level wider than hash_tree_small's
-H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
+HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm120.cuh")) + \
+    (HERE.parent / "pouw_hash" / "h1_sm120.cuh").read_text()
+#: the -h1 kernels (#449's hash.cuh, hash_sm120.cuh and h1_sm120.cuh) the pipeline launches at the dry run's shapes, the
+#: trees under every form: no pads (every count a power of two) and no level wider than hash_tree_small's. h1_commit is
+#: not among them: A's 1024-row tree is wider than one CTA folds (width <= 2 * blockDim), and the arm's dry run (m = 32)
+#: launches it
+H1_LAUNCHED = {"h1_rows_p", "h1_tree", "h1_tiles", "seed_line_a", "hash_rows_w", "hash_tree_small", "hash_node_keys",
+               "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
+#: the one-launch tree kernels' (domain id, level keys) pointer slots
+LEVEL_KEYS = {"h1_tree": (1, 9), "h1_commit": (2, 7), "h1_tiles": (7, 9)}
 
 
 def form_kernels() -> list[str]:
@@ -351,8 +358,17 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], 3: 32}
     if name == "hash_leaf_p":
         return {0: i[0] * i[1], 1: -(-i[0] // 64) * (i[1] // 64) * 32, 2: 32}
-    if name == "hash_rows_w":
+    if name in ("hash_rows_w", "h1_rows_p"):
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
+    levels = lambda width: 32 * (width.bit_length() - 1)  # noqa: E731
+    if name == "h1_tree":
+        return {0: 32 * (2 * i[1] - 1), 1: 32, 2: 4, 3: 32 * i[0], 9: levels(i[1])}
+    if name == "h1_commit":
+        return {0: i[0] * i[1], 1: 32 * (2 * i[2] - 1), 2: 32, 3: 4, 4: 32, 5: 104, 6: 32, 7: levels(i[2])}
+    if name == "h1_tiles":
+        tiles = -(-i[0] // 64) * (i[1] // 64)
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], 3: 32, 4: 32 * tiles, 5: 32, 6: 32 * (2 * i[2] - 1), 7: 32,
+                8: 4, 9: levels(i[2])}
     if name == "hash_tree_small":
         return {0: 32 * (2 * i[0] - 1), 1: 32 * (i[0].bit_length() - 1)}
     if name == "hash_tree_leaves":
@@ -385,7 +401,9 @@ def threads(name: str, i: list[int]) -> int:
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
-            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "hash_tree_leaves": lambda: i[0],
+            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "h1_rows_p": lambda: 32 * i[0],
+            "h1_tree": lambda: i[1] // 2, "hash_tree_leaves": lambda: i[0], "h1_commit": lambda: 32 * i[0],
+            "h1_tiles": lambda: 128 * -(-i[0] // 64) * (i[1] // 64),
             "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1, "hot_a": lambda: i[0],
             "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
 
@@ -493,7 +511,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            if not p[slot] and (name, slot) == ("seed_line_a", 3):
+            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
@@ -574,6 +592,9 @@ class Gate:
     detail: dict[str, Any] = field(default_factory=dict)
 '''
 ARMS = ["PearlCSm120", "PearlCSm120Unpromoted"]
+#: the arm's call under run.py's default forms (GPU 1's kernels) and under h1_sm120.cuh's one-launch kernels
+FOLD = "p,fold"
+ARM_FORMS = [None, FOLD]
 
 
 @pytest.fixture(scope="module")
@@ -640,10 +661,12 @@ def test_arm_accounting_is_the_schemes(A):
     assert arm.domain(Shape("x", 24, 1024, 128))       # the scheme's own rule: 16 | m
 
 
-def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str) -> list[dict]:
-    """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows; its JSON lines."""
+def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str, forms: str | None = None) -> list[dict]:
+    """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows, the call under run.py's `forms`
+    (PEARLC_A_FORMS, None its default); its JSON lines."""
     r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, mode, str(tmp / "run"),
-                        *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows")),
+                        *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows"),
+                                            PEARLC_A_FORMS=forms),
                        capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stderr
     return [json.loads(x) for x in r.stdout.splitlines()]
@@ -671,15 +694,17 @@ def transcript(run: Path, arm: str, label: str, root: str = "transcripts") -> tu
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
 @pytest.mark.parametrize("cls", ARMS)
-def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
+def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls, forms):
     """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy, the
-    kernels each role's step needs and no others (nohash: no tree of A, no seed_A, no E_A lines, no hashes), E_A's line key
-    seed_line_a's from A's root, each operand set's E_A lines and call buffers its own, the phases the call's launches split
-    before, at and after the chain, every footprint allocated; the gate fails (the stand-in computes nothing, so seed_A isn't
-    the scheme's and no twin tile matches) naming every output in full; freeing set 0's gated hash calls launches each once
-    more, synchronously, and writes its transcript with the trees' frame-b3 sizes; nothing leaks."""
-    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry")
+    kernels each role's step needs under the call's forms and no others (nohash: no tree of A, no seed_A, no E_A lines, no
+    hashes), E_A's line key seed_line_a's (h1_commit's under `fold`) from A's root, each operand set's E_A lines and call
+    buffers its own, the phases the call's launches split before, at and after the chain, every footprint allocated; the gate
+    fails (the stand-in computes nothing, so seed_A isn't the scheme's and no twin tile matches) naming every output in full;
+    freeing set 0's gated hash calls launches each once more, synchronously, and writes its transcript with the trees'
+    frame-b3 sizes; nothing leaks."""
+    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry", forms=forms)
     arm = getattr(A, cls)()
     sx = "" if arm.device.g else "_u"
     end = rows[-1]
@@ -698,10 +723,16 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     def chain(shape: str, role: str = "hash") -> str:
         return ("gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_b") + sx if fused[shape] else "gemm_pearlc_d" + sx
 
-    commit = ["hash_rows_w", "hash_tree_small", "seed_line_a", "lines"]
+    if forms == FOLD:
+        commit = ["h1_commit", "lines"]              # A's trees (256 and 32 rows) fit h1_commit's last CTA
+        hashes = lambda shape: ["hash_leaf_p", "h1_tree"] if fused[shape] else ["h1_tiles"]  # noqa: E731
+        tree = ["h1_rows_p", "h1_tree"]
+    else:
+        commit = ["hash_rows_w", "hash_tree_small", "seed_line_a", "lines"]
+        hashes = lambda shape: ([] if fused[shape] else ["hash_msg_v"]) + ["hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]  # noqa: E731
+        tree = ["hash_rows_w", "hash_tree_small"]
     forming = lambda shape: ["stats_s5", "eprime", "form_s5", words[shape] + sx, "pa"]  # noqa: E731
-    hashes = lambda shape: ([] if fused[shape] else ["hash_msg_v"]) + ["hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]  # noqa: E731
-    weight = (["hash_node_keys", "hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
+    weight = (["hash_node_keys", *tree, "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
               + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"])
     got, allocs = windows(tmp_path / "dry.jsonl")
     assert not allocs
@@ -715,6 +746,13 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
             call = copy + commit + forming(sh) + [chain(sh)] + hashes(sh)
             assert all(ev["stream"] == 0 for ev in evs)
             assert names == weight + call + copy + forming(sh) + [chain(sh, "nohash")] + weight + call
+            keys_of: dict[int, int] = {}
+            for ev in evs:      # each one-launch tree reads the level keys hash_node_keys last wrote under its domain
+                if ev.get("name") == "hash_node_keys":
+                    keys_of[ev["p"][1]] = ev["p"][0]
+                elif ev.get("name") in LEVEL_KEYS:
+                    dom, lk = LEVEL_KEYS[ev["name"]]
+                    assert ev["p"][lk] == keys_of[ev["p"][dom]], ev["name"]
             man, _ = transcript(tmp_path / "run", arm.name, mark["shape"])
             neg, _ = transcript(tmp_path / "run", arm.name, mark["shape"], root="negative")
             m, n = man["shape"]["m"], man["shape"]["n"]
@@ -751,12 +789,19 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         assert names == want, mark
         by = {ev.get("name"): ev for ev in evs}
         if mark["role"] != "nohash":
-            seed, lines, gemm = by["seed_line_a"], by["lines"], by[chain(sh)]
-            assert lines["p"][0] == seed["p"][2] and seed["p"][1] == mark["keys"]["unit"]
+            lines, gemm = by["lines"], by[chain(sh)]
+            if forms == FOLD:
+                seed = by["h1_commit"]
+                assert lines["p"][0] == seed["p"][4] and seed["p"][5] == mark["keys"]["unit"]
+            else:
+                seed = by["seed_line_a"]
+                assert lines["p"][0] == seed["p"][2] and seed["p"][1] == mark["keys"]["unit"]
             assert lines["i"][2] == A.padded({"pre": 256, "dec": 32}[sh])
             assert by["eprime"]["p"][0] == lines["p"][1]
             if fused[sh]:        # the digests gemm_pearlc_b writes under the message key are those the tile leaves read
                 assert gemm["p"][9] == by["hash_leaf_p"]["p"][0] and gemm["p"][11] == mark["keys"]["k_msg"] and not gemm["p"][2]
+            elif forms == FOLD:
+                assert by["h1_tiles"]["p"][:2] == gemm["p"][2:4]
             else:
                 assert by["hash_msg_v"]["p"][:2] == gemm["p"][2:4] and by["hash_msg_v"]["p"][2] == by["hash_leaf_p"]["p"][0]
         e = by["eprime"]["p"][0]
@@ -768,8 +813,9 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
 @pytest.mark.parametrize("cls", ARMS)
-def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls):
+def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls, forms):
     """The fixture's bytes (the scheme's, at its epoch and seeds) where the kernels would have written them pass the gate, the
     device's seed_A and E_A's line key the scheme's from its root_A.  At the fixture's 128 rows the call is fused, so it stores
     y and the digests, no C̃ or U: the twin reads the second (unfused) launch's C̃ and U, and one message digest flipped in the
@@ -777,7 +823,7 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     leaf, there alone).  Restored, it passes again and freeing the call writes the transcript, which the reference verifier
     (verify.py, `verity_pouw.audit.Verifier`) accepts, and its negative control, whose trees and leaves are all poison (the
     stand-in writes nothing) and which the verifier rejects."""
-    first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"))
+    first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"), forms=forms)
     arm = getattr(A, cls)()
     assert first["ok"] and first["checked"] == {name: "all" for name in ("y",) + A.HASHED}
     assert not any(first["detail"]["words_differing_from_relaunch"].values())

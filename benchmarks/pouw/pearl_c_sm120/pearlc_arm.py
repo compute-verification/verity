@@ -20,8 +20,8 @@ buffers and weight side (its flag sets share them: the harness runs one call of 
 has per-shape buffers.
 
 The gate, at the exact shape and flag set: a second, unfused launch into the gate's own buffers (with hashing A's tree and
-seed_A; C̃ by gemm_ct, another kernel; C̃, U and y by gemm_pearlc on 3 CTAs, another tile schedule; hash_msg_v and the other
-hashes over those) must equal every output word for word, so the fused call's digests are held to hash_msg_v's, and gemm_ct's
+seed_A, the trees by other kernels, run.ALT_FORMS; C̃ by gemm_ct, another kernel; C̃, U and y by gemm_pearlc on 3 CTAs,
+another tile schedule; hash_msg_v and the other hashes over those) must equal every output word for word, so the fused call's digests are held to hash_msg_v's, and gemm_ct's
 C̃ the call's (or, where it stores none, the second launch's); with hashing, seed_A and E_A's line key must be the scheme's
 from the device's root_A; and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes (the twin's in
 the kernels' K32 order, `fixture.k32`) and α, C̃, U (the second launch's where the call stores none) and y must equal #449's
@@ -93,10 +93,10 @@ from verity_pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
 T = W.T
 KEYS = R.TIMING_KEYS
 WEIGHT = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b", "epb_codes",
-          "bt", "bf", "pb_t", "tree_b", "keys_b", "keys_a", "keys_t")
+          "bt", "bf", "pb_t", "tree_b", "keys_b", "keys_a", "keys_t", "ctr_b")
 OWN = WEIGHT + ("ea_codes", "line_a", "seed_a")   # E_A's lines and their seed are the set's: nohash reads the last call's
 CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y", "digests", "leaves", "tree_a",
-        "tree_t", "tma")
+        "tree_t", "ctr_a", "ctr_t", "tma")
 HASHED = ("digests", "leaves", "tree_a", "tree_t")
 REF = ("c2", "c", "u", "y", "line_a", "seed_a") + HASHED
 REF_BUFS = REF + ("tma",)                 # the second launch's own tensor maps
@@ -285,10 +285,11 @@ class _Call:
     def relaunch(self) -> dict[str, int]:
         """Words differing between each output and the second launch's, which is unfused (gemm_pearlc stores C̃ and U,
         hash_msg digests them); `c@gemm_ct` is gemm_ct's C̃ against the call's, or the second launch's where the call stores
-        none; with hashing, seed_A and E_A's line key too."""
+        none; with hashing, seed_A and E_A's line key too.  Its trees are run.ALT_FORMS'."""
         rd, s, w = self.arm.rd, self.scratch.b, self.own.b
         ref = R.Pipeline(rd, self.m, self.n, self.k, self.arm.variant, self.keys, self.xa, self.ops.b.ptr,
                          bufs={**self.pipe.b, **{b: s["ref_" + b] for b in REF_BUFS}}, m_real=self.shape.m, fused=False)
+        ref.rows_form, ref.tree_form = R.ALT_FORMS
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
         steps = {name: f for name, _, f in ref.steps()}

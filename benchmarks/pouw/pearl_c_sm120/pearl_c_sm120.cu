@@ -15,6 +15,7 @@
 #include <cuda_fp8.h>
 
 #include "../pearl_c/hash_sm120.cuh"
+#include "../pouw_hash/h1_sm120.cuh"
 #include "../pouw_hash/pouw_hash.cuh"
 #include "mainloop_sm120.cuh"
 
