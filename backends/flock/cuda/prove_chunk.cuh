@@ -159,6 +159,28 @@ __global__ void chunk_ring_combine_basis_split(const F128* __restrict__ ab_lo, c
     }
 }
 
+// build_quirky_eq_device's table, the same elements: the eq over the rest's challenges once (a doubling, 2^d_rest entries), then
+// each entry one product with its Lagrange weight (build_quirky_equality_table takes d_rest products an entry)
+__global__ void chunk_quirky_expand(int k_skip, long long n, const F128* __restrict__ rest, F128* __restrict__ out) {
+    const long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (x >= n) return;
+    out[x] = ghash_mul_karatsuba(g_qeq_lambda[x & ((1LL << k_skip) - 1)], rest[x >> k_skip]);
+}
+
+static int chunk_quirky_eq_device(F128* d_out, F128 z_skip, const std::vector<F128>& x_inner_rest, int k_skip) {
+    const std::vector<F128> lambda = lagrange_weights_host(k_skip, z_skip);
+    CK(cudaMemcpyToSymbol(g_qeq_lambda, lambda.data(), lambda.size() * sizeof(F128)));
+    const int d = (int)x_inner_rest.size();
+    F128* d_rest;
+    CK(ffi_malloc(&d_rest, (1LL << d) * sizeof(F128)));
+    build_eq_device(d_rest, x_inner_rest.data(), d);
+    const long long n = (long long)lambda.size() << d;
+    chunk_quirky_expand<<<(unsigned)((n + 255) / 256), 256>>>(k_skip, n, d_rest, d_out);
+    CK(cudaGetLastError());
+    CK(ffi_free(d_rest));
+    return 0;
+}
+
 // FC_RING_GROUPED=1: the ring switch's former kernels (the same sums), for a same-job control
 static bool chunk_ring_grouped() {
     static const bool v = [] { const char* e = std::getenv("FC_RING_GROUPED"); return e && e[0] == '1'; }();
@@ -1090,7 +1112,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         CK(ffi_malloc(&d_p1, LC_MAX_BLOCKS * sizeof(F128))); CK(ffi_malloc(&d_pinf, LC_MAX_BLOCKS * sizeof(F128)));
         CK(ffi_malloc(&d_e1, sizeof(F128))); CK(ffi_malloc(&d_einf, sizeof(F128)));
 
-        build_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip);
+        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));
         CK(cudaGetLastError());
         // eq_inner = e_hi (sub-block bits) ⊗ e_lo (in-block bits): fold sub-block 0's slice, scale per sub-block.
         if (pure) {

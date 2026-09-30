@@ -46,8 +46,8 @@ body = cut(body, "    if (pure ? ((C->host_z", "{ printf(\"FFI chunk: bad shape\
            "    if (fc_bad_shape(P, N)) { printf(\"FFI circuit: bad shape\\n\"); return 201; }", keep_b=False)
 body = cut(body, "    if (pure && C->host_z) {", "    CKI(phase(0));",
            "    std::vector<F128> fc_zk_comb(64);\n    CKI(fc_witness(P, N, m, k_log, len, df, d_a, d_b, d_zlin));\n")
-body = cut(body, "        build_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip);", "        if (C->n_delta_a) chunk_delta_scatter",
-           "        build_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip);\n        CK(cudaGetLastError());\n"
+body = cut(body, "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));", "        if (C->n_delta_a) chunk_delta_scatter",
+           "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));\n        CK(cudaGetLastError());\n"
            "        CKI(fc_fold(P, N, d_eq_inner, alpha, k_log, d_comb));\n")
 # M1: level 0's commitment with its hiding, lincheck's folded comb, the ladder's zk argument, the zk section
 body = put(body, "    std::vector<MHash> l0_cap;\n    {\n        int k_code = (log_n - P->initial_k) + P->log_inv_rates[0];",
