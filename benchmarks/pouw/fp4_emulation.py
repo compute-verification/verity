@@ -368,9 +368,11 @@ def hot_accumulator(p: Problem, hot_bits: int, rule: str = "word") -> np.ndarray
 
 
 def merged_k128(p: Problem, c0: np.ndarray) -> np.ndarray:
-    """The chain with each pair of atoms merged into one align-add over 8 groups: the 2:4-sparse m16n8k128 route on a 2:4
-    span, which merges two atoms' align-adds (GPU 4's measured merged-vs-chained differences rule out two internal k64 steps;
-    the one-add-over-8-groups form is this model's hypothesis)."""
+    """The chain with each pair of atoms merged into one align-add over 8 groups, on the problem's dense operands.
+
+    It is not the 2:4-sparse m16n8k128 instruction: that takes only 2:4 spans, and on those GPU 4's capture
+    (r20260930-084518-2674) finds it reproduces 97-100% of chained words under the hot accumulator, where this model gives
+    0-0.5% on dense operands."""
 
     c = c0.copy()
     for t in range(p.nblk // 8):
