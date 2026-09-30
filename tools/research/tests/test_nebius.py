@@ -274,6 +274,11 @@ def test_check_slot_pins_a_check_to_a_free_slot_with_the_pods_python(tmp_path):
     r = subprocess.run(["bash", str(slot), "bash", "-c", show], env={**env, "VY_CHECK_SLOTS": "", "VY_CHECK_SLOTS_FILE": str(slots_file),
                        "UV_PYTHON": "3.12"}, capture_output=True, text=True)
     assert r.stdout.split() == ["3.12", "0"]
+    path_file = tmp_path / "check-path"
+    path_file.write_text("/opt/check-toolchain/bin\n")
+    r = subprocess.run(["bash", str(slot), "bash", "-c", "echo $PATH"], env={**env, "VY_CHECK_PATH_FILE": str(path_file)},
+                       capture_output=True, text=True)
+    assert r.stdout.startswith("/opt/check-toolchain/bin:")
 
 
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------

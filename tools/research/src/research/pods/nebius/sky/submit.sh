@@ -5,6 +5,7 @@
 #   e.g.  .../submit.sh prover-dev fri-sweep-1 --env CMD='cargo test --release -p flock'
 #         .../submit.sh config-run row-23 --env ROW=... --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
 #
+# It needs uv, rsync, ssh, git, python3 and curl on this machine (it checks, and names what's missing).
 # TEMPLATE is a file in jobs/ (config-run, config-run-row, port-capture, prover-dev, prover-bench). It:
 #   1. installs the SkyPilot 0.13.0 client if missing, and opens the ssh tunnel to the API server on vy-nebius-1
 #      (127.0.0.1:46580, through the research key) unless one answers;
@@ -32,6 +33,13 @@ unset KUBECONFIG
 export PATH=$HOME/.local/bin:$PATH
 research() { PYTHONPATH=$repo/tools/research/src python3 -m research "$@"; }
 
+missing=()
+for tool in uv rsync ssh git python3 curl; do command -v "$tool" > /dev/null || missing+=("$tool"); done
+if [ "${#missing[@]}" -gt 0 ]; then
+  echo "submit.sh: missing on this machine: ${missing[*]}. Install them first, e.g." >&2
+  echo "  sudo apt-get install -y rsync openssh-client git python3 curl   # and uv: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+  exit 2
+fi
 tunnel() {
   # the ssh tunnel to the API server, (re)opened unless it answers. A dropped tunnel whose ssh still holds the port is closed
   # first (ExitOnForwardFailure would refuse the new one), and keepalives end a dead connection within ~45 s
