@@ -25,7 +25,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pearlc_census as C  # noqa: E402
@@ -87,6 +86,7 @@ def gamma(n: int, k: int, rho: float, side_mac_units: float = 0.0, merge: float 
 
 
 def main() -> None:
+    import torch
     from datasets import load_dataset
     from huggingface_hub import snapshot_download
     from safetensors import safe_open
