@@ -47,7 +47,7 @@ _GNU_TIMEOUT = shutil.which("timeout") is not None and b"GNU" in subprocess.run(
 
 def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str = ROW):
     env = {k: v for k, v in os.environ.items()
-           if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITOR_REPO", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
+           if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
     env.update(environ or {})
     # `prepare` creates the collector's build dir, whose default is a pod path (`/workspace/cp/...`) a non-root check can't create
     return cli.parse("row", ["run", row, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp), "--py", sys.executable,
@@ -112,8 +112,8 @@ def test_the_commit_flags_the_row_arms_exist():
     assert "--supersedes" in {fl for f in weights_of_record.Options.__dataclass_fields__.values() for fl in f.metadata.get("flags", ())}
 
 
-def test_a_foreign_veritor_repo_is_refused_by_name(tmp_path, capsys):
-    r = _row(tmp_path, environ={"VERITOR_REPO": str(tmp_path)})
+def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
+    r = _row(tmp_path, environ={"VERITY_TREE": str(tmp_path)})
     with pytest.raises(Stop) as e:
         r.setup({})
     assert e.value.rc == 3 and "PRECHECK_FAIL_SOURCE_IDENTITY" in capsys.readouterr().err
@@ -535,9 +535,9 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
 
 
-def _tp_row(tmp_path: Path, row: str, **kw):
+def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
     from verity_vllm.pipeline.row_tp import TpRow
-    o = _opts(tmp_path, row=row, **kw)
+    o = _opts(tmp_path, *argv, row=row, **kw)
     t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None, nccl_p2p_disable="1",
               build=o.build, match=o.match, commit=o.commit)
     t.hidden_so, t.B, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, [], "/ck", ""

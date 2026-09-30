@@ -130,6 +130,26 @@ def test_the_capture_compare_accepts_the_definitions_own_rows(tanh_table, tmp_pa
     assert S.compare({**job, "out": out})["mismatch_finite"] == 1
 
 
+@pytest.mark.parametrize("masked_from", [2, 0])
+def test_the_replay_row_kernel_is_the_definition(masked_from):
+    from verity_vllm.program.kernels import rows as R
+    from verity_vllm.program.kernels import softcap_rows as SR
+
+    rng = np.random.default_rng(20 + masked_from)
+    T, NH, KVH, D, BN = 40, 4, 2, 16, 16
+    q, k, v = _bf16(rng, NH * D, 30.0), _bf16(rng, (T, KVH * D), 30.0), _bf16(rng, (T, KVH * D))
+    spec = bind(F2S.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, MASKED_FROM=masked_from, **FA2)
+    statics = {"T": T, "NH": NH, "KVH": KVH, "D": D, "BN": BN, "CAP": CAP, "MASKED_FROM": masked_from,
+               "DOT": "HopperBF16WgmmaDot16_v1", "INV": "Fa2InvSum_v1"}
+    got = R.attention_softcap(statics, [q, k.reshape(-1), v.reshape(-1)])["out"]
+    assert got.tolist() == list(evaluate(spec, *_args(q, k, v)))
+    q[0] = 0x7FC0
+    with pytest.raises(SR.Declined, match="non-finite"):
+        R.attention_softcap(statics, [q, k.reshape(-1), v.reshape(-1)])
+    with pytest.raises(SR.Declined, match="no registered evaluator"):
+        R.attention_softcap(dict(statics, INV="Fa3InvSum_v2"), [q, k.reshape(-1), v.reshape(-1)])
+
+
 def test_the_target_binds_attention_softcap_v2_under_fa2_check_inf_only():
     spec = TG.attention_spec(PRO6000, 287, 8, 4, 256, 1, row=0, own_rows=1, cap=CAP)
     assert spec.id == bind(F2S.AttentionSoftcapV2, T=287, NH=8, KVH=4, D=256, BN=64, CAP=CAP, MASKED_FROM=4, **FA2).id
