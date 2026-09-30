@@ -74,7 +74,7 @@ submit() {
   [ -d "$model/snapshots/$rev" ] || { echo "no checkpoint $model/snapshots/$rev on node 1" >&2; exit 2; }
   push "$src/" "$src/"
   # the weights themselves (-L: node 1's snapshots link into its shared blobs/): the CPU bootstrap's checkpoint check reads them
-  push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/" -L
+  push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/" -L --exclude=/blobs/
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
   push "$0" "$GUEST/bin/n2_build.sh"
