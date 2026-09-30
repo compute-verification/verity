@@ -324,3 +324,7 @@ def test_the_vllm_split_adds_up_to_the_slowdown():
     assert (p["gemm_s"], p["hashing_s"]) == (0.3, 1.5) and p["lowbyte_slowdown"] == 50.0
     assert p["lowbyte_status"] == "gamma unproved: not a result"
     assert out["decode_b32"]["slowdown"] == 30.0 and abs(out["decode_b32"]["hashing_x_bf16"] - 26.0) < 1e-12
+    exact = {"prefill_2048_s": 1.2, "prefill_2048_serve_s": 0.03, "decode_b32_s": 4.0, "decode_b32_serve_s": 0.6}
+    got = V.split(bf16, full, nohash, low, exact)
+    assert got["prefill_2048"]["async_slowdown"] == 60.0 and got["decode_b32"]["async_s"] == 4.0
+    assert abs(got["decode_b32"]["async_serve_x_bf16"] - 0.6) < 1e-12 and "async_s" not in out["decode_b32"]

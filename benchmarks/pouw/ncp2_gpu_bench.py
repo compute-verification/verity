@@ -169,6 +169,35 @@ def gate_fused() -> list[dict]:
     return out
 
 
+def gate_async(torch) -> list[dict]:
+    """The hashing cut's change 1 (`pouw_device.AsyncCommitter`) against `pouw_native` on every gate call, the calls spread over
+    two side streams: each served y (from the exact int8 product) equal to `pouw_native`'s, no served word different from its
+    committed y, and each call's units root after the drain equal to `pouw_native`'s."""
+    import dataclasses
+
+    salt = bytes(range(32))
+    calls = [(name, dataclasses.replace(call, salt=salt)) for name, call in PD.gate_calls(QWEN05)]
+    c = PD.AsyncCommitter("ncp-v2", salt, PD.HASH, streams=2)
+    cuda = lambda v, dt: torch.from_numpy(np.ascontiguousarray(v).view(dt)).cuda()  # noqa: E731
+    served = []
+    for _name, call in calls:
+        b, t = call.b.rows(0, call.b.n)
+        served.append(c(cuda(call.a, np.int8), cuda(call.s, np.int32), cuda(b, np.int8), cuda(t, np.int32), cuda(call.bias, np.int16),
+                        call.forward, call.position, call.weight, cuda(call.rowids, np.int32), cuda(call.colids, np.int32)))
+    drained = c.drain()
+    c.close()
+    out = []
+    for (name, call), y, root in zip(calls, served, drained["roots"]):
+        ref = PN.commit_call(0, "ncp-v2", call)
+        row = {"call": name, "y_equal": bool(np.array_equal(y.cpu().numpy().view(np.uint16), ref.y)), "root_equal": root == ref.root}
+        out.append(row)
+        if not (row["y_equal"] and row["root_equal"]):
+            raise SystemExit(f"async path: {name}: {row}")
+    if drained["mismatched_words"] or drained["calls"] != len(calls):
+        raise SystemExit(f"async path: {drained['mismatched_words']} served words differ from the committed y over {drained['calls']} calls")
+    return out
+
+
 #: the fused kernel's timed shapes: decode at 16 and 32 rows, and prefill
 FUSED_ROWS = (16, 32, 256, 2048)
 #: its modes: no hashing at all (the control), the committed word leaves, the low-byte variant (its γ is unproved: timed only,
@@ -394,6 +423,7 @@ def main() -> None:
         if args.fused_only:
             save("gates", {"hashes": gate_hashes()})
             res["gates"]["fused"] = gate_fused()
+            res["gates"]["async"] = gate_async(torch)
             save("gates", res["gates"])
             save("fused", fused_timings(torch, args.reps, save=lambda part: save("fused", part)))
             _report(res)

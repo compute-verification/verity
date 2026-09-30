@@ -242,3 +242,16 @@ extern "C" int ncp2_tile_lowbyte(const uint8_t* xs, const uint8_t* ys, const uin
   tile_fused_lowbyte(xs, ys, k3, steps, ArrRun{run}, leaf);
   return 0;
 }
+
+// The served y without the commitment, the way change 1's serve computes it: Z = A·Bᵀ as an exact integer product (the noise
+// cancels in the circuit's Z) and the committed dequantization (`dequant`), row-major into ``y``.
+extern "C" int ncp2_serve_host(int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b, const uint32_t* t,
+                               const uint16_t* bias, uint16_t* y) {
+  for (int i = 0; i < m; ++i)
+    for (int j = 0; j < n; ++j) {
+      int32_t z = 0;
+      for (int l = 0; l < k; ++l) z += (int32_t)a[(size_t)i * k + l] * (int32_t)b[(size_t)j * k + l];
+      y[(size_t)i * n + j] = dequant((uint32_t)z, s[i], t[j], bias[j]);
+    }
+  return 0;
+}

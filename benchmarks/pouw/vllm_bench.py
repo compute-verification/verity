@@ -20,7 +20,10 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
   noise from SHAKE256, X and Y, the tiles hashed as they are made, the exact dequantization, which is the served y, and the
   units root; Y's leaves cached per weight. ``ncp2-nohash`` is the same with every hash and XOF left out (a stand-in noise):
   the difference is hashing. ``ncp2-lowbyte`` swaps the tiles' word leaves for the low-byte variant (timed, not committed; its
-  γ is unproved, so its numbers are never results).
+  γ is unproved, so its numbers are never results). ``ncp2-async`` is the hashing cut's change 1
+  (`pouw_device.AsyncCommitter`): y served from an exact int8 GEMM and the committed dequantization, each call committed as
+  in ``ncp2`` on side streams, every served y compared with its committed y, and each timed phase drained before its clock
+  stops (the window's receipt waits for every commit).
   Each ncp2 mode first checks its device path against `pouw_native` on one call, and each timing phase records the tile
   kernel's summed time (the GEMM, in ``ncp2-nohash``).
 
@@ -62,7 +65,7 @@ def int7(x, dim):
     return torch.clamp(torch.round(x.float() / s), -64, 63).to(torch.int8), s
 
 
-NCP2_MODES = ("ncp2", "ncp2-nohash", "ncp2-lowbyte")
+NCP2_MODES = ("ncp2", "ncp2-nohash", "ncp2-lowbyte", "ncp2-async")
 #: what every low-byte number carries: the variant's γ has no proof, so it is timed and never reported as a result
 LOWBYTE_STATUS = "gamma unproved: not a result"
 
@@ -70,8 +73,15 @@ LOWBYTE_STATUS = "gamma unproved: not a result"
 def ncp2_committer(mode: str):
     from verity_vllm.protocol_options import pouw_device as PD
     PD.configure(build_dir=os.environ.get("VERITY_POUW_CUDA_BUILD"), arch=os.environ.get("VERITY_POUW_CUDA_ARCH"))
+    if mode == "ncp2-async":
+        return PD.AsyncCommitter("ncp-v2", bytes(range(32)), PD.HASH | PD.CACHE_Y)
     flags = {"ncp2": PD.HASH | PD.CACHE_Y, "ncp2-nohash": 0, "ncp2-lowbyte": PD.HASH | PD.CACHE_Y | PD.LOWBYTE}[mode]
     return PD.FusedCommitter("ncp-v2", bytes(range(32)), flags | PD.TIME_TILES)
+
+
+def drain(committer) -> dict | None:
+    """The async committer's drain (its calls and the served words that differed), None for the others."""
+    return {k: v for k, v in committer.drain().items() if k != "roots"} if hasattr(committer, "drain") else None
 
 
 def ncp2_self_check(committer) -> dict:
@@ -86,6 +96,17 @@ def ncp2_self_check(committer) -> dict:
     ref = PN.commit_call(0, "ncp-v2", call)
     b, t = call.b.rows(0, call.b.n)
     cuda = lambda v, dt: torch.from_numpy(np.ascontiguousarray(v).view(dt)).cuda()
+    if isinstance(committer, PD.AsyncCommitter):
+        c = PD.AsyncCommitter("ncp-v2", call.salt, PD.HASH, streams=1)
+        y = c(cuda(call.a, np.int8), cuda(call.s, np.int32), cuda(b, np.int8), cuda(t, np.int32), cuda(call.bias, np.int16), call.forward,
+              call.position, call.weight, cuda(call.rowids, np.int32), cuda(call.colids, np.int32))
+        d = c.drain()
+        c.close()
+        ok = {"y": bool(np.array_equal(y.cpu().numpy().view(np.uint16), ref.y)), "root": d["roots"] == [ref.root],
+              "mismatched_words": d["mismatched_words"]}
+        if not (ok["y"] and ok["root"]) or ok["mismatched_words"]:
+            raise SystemExit(f"ncp2-async self-check failed: {ok}")
+        return ok
     word = committer.flags & PD.HASH and not committer.flags & PD.LOWBYTE
     c, root = PD.FusedCommitter("ncp-v2", call.salt, committer.flags & ~PD.CACHE_Y), np.zeros(32, np.uint8)
     y = c(cuda(call.a, np.int8), cuda(call.s, np.int32), cuda(b, np.int8), cuda(t, np.int32), cuda(call.bias, np.int16), call.forward,
@@ -289,17 +310,27 @@ def run_mode(args, mode: str) -> dict:
     outs = llm.generate(msgs, greedy, use_tqdm=False)
     result = {"mode": mode, "tokens": [list(o.outputs[0].token_ids) for o in outs],
               "texts": [o.outputs[0].text for o in outs[:4]]}
+    drains = {"greedy": drain(committer)}
     timing = {}
+
+    def timed(phase: str, run) -> float:
+        """``run``'s wall time to the end of its commits: an async committer is drained before the clock stops."""
+        t0 = time.perf_counter()
+        run()
+        torch.cuda.synchronize()
+        served = time.perf_counter() - t0
+        drains[phase] = drain(committer)
+        if drains[phase] is not None:
+            timing[f"{phase}_serve_s"] = served
+        return time.perf_counter() - t0
     for bs in args.decode_batches:
         sp = SamplingParams(temperature=0.0, max_tokens=64, ignore_eos=True)
         prompts = [{"prompt_token_ids": [int(t) for t in torch.randint(100, 20000, (64,))]} for _ in range(bs)]
         llm.generate(prompts[:1], SamplingParams(max_tokens=4), use_tqdm=False)
         torch.cuda.synchronize()
+        drain(committer)
         tiles(timing, "warm")
-        t0 = time.perf_counter()
-        llm.generate(prompts, sp, use_tqdm=False)
-        torch.cuda.synchronize()
-        dt = time.perf_counter() - t0
+        dt = timed(f"decode_b{bs}", lambda: llm.generate(prompts, sp, use_tqdm=False))
         timing[f"decode_b{bs}_tok_s"], timing[f"decode_b{bs}_s"] = bs * 64 / dt, dt
         tiles(timing, f"decode_b{bs}")
     for plen in args.prefill_tokens:
@@ -307,16 +338,16 @@ def run_mode(args, mode: str) -> dict:
         sp = SamplingParams(temperature=0.0, max_tokens=1)
         llm.generate(prompts[:1], sp, use_tqdm=False)
         torch.cuda.synchronize()
+        drain(committer)
         tiles(timing, "warm")
-        t0 = time.perf_counter()
-        llm.generate(prompts, sp, use_tqdm=False)
-        torch.cuda.synchronize()
-        dt = time.perf_counter() - t0
+        dt = timed(f"prefill_{plen}", lambda: llm.generate(prompts, sp, use_tqdm=False))
         timing[f"prefill_{plen}_tok_s"], timing[f"prefill_{plen}_s"] = 2 * plen / dt, dt
         tiles(timing, f"prefill_{plen}")
     timing.pop("warm_tile_ms", None)
     timing.pop("warm_calls", None)
     result["timing"] = timing
+    if any(d is not None for d in drains.values()):
+        result["drains"] = drains
     if check:
         result["self_check"] = check
     if stats:
@@ -327,10 +358,10 @@ def run_mode(args, mode: str) -> dict:
     return result
 
 
-def split(bf16: dict, full: dict, nohash: dict, lowbyte: dict | None) -> dict:
+def split(bf16: dict, full: dict, nohash: dict, lowbyte: dict | None, async_: dict | None = None) -> dict:
     """Per timed phase: the slowdown of ``ncp2`` against BF16 vLLM, and its time split into the GEMM (the no-hash control's
     tile kernel), hashing (``ncp2`` less the control) and everything else (the control less its tile kernel); with the
-    low-byte variant's slowdown and hashing beside it."""
+    low-byte variant's slowdown and hashing beside it, and ``ncp2-async``'s slowdown (to its drain) and serve time."""
     out = {}
     for key in [k[:-2] for k in full if k.endswith("_s") and not k.endswith("_tok_s")]:
         if f"{key}_s" not in bf16 or f"{key}_s" not in nohash:
@@ -343,6 +374,10 @@ def split(bf16: dict, full: dict, nohash: dict, lowbyte: dict | None) -> dict:
             t_l = lowbyte[f"{key}_s"]
             row.update(lowbyte_s=t_l, lowbyte_slowdown=t_l / t_b, lowbyte_hashing_s=t_l - t_n, lowbyte_hashing_x_bf16=(t_l - t_n) / t_b,
                        lowbyte_status=LOWBYTE_STATUS)
+        if async_ and f"{key}_s" in async_:
+            t_a = async_[f"{key}_s"]
+            row.update(async_s=t_a, async_slowdown=t_a / t_b, async_serve_s=async_.get(f"{key}_serve_s"),
+                       async_serve_x_bf16=async_.get(f"{key}_serve_s", 0.0) / t_b)
         out[key] = row
     return out
 
@@ -390,11 +425,17 @@ def main() -> None:
             summary[m]["token_agreement_vs_w7a7"] = agree(results[m]["tokens"], results["w7a7"]["tokens"])
     if "ncp2" in results and "ncp2-nohash" in results and ref:
         summary["split"] = split(ref["timing"], results["ncp2"]["timing"], results["ncp2-nohash"]["timing"],
-                                 results.get("ncp2-lowbyte", {}).get("timing"))
+                                 results.get("ncp2-lowbyte", {}).get("timing"), results.get("ncp2-async", {}).get("timing"))
+    if "ncp2-async" in results and "ncp2" in results:
+        summary["ncp2-async"]["tokens_equal_ncp2"] = results["ncp2-async"]["tokens"] == results["ncp2"]["tokens"]
+        summary["ncp2-async"]["mismatched_words"] = sum((d or {}).get("mismatched_words", 0)
+                                                        for d in results["ncp2-async"].get("drains", {}).values())
     args.out.write_text(json.dumps({"schema": "verity-pouw/vllm-bench/v1", "summary": summary, "results": results}, indent=1))
     print(json.dumps(summary), flush=True)
     import run_result
-    ok = summary.get("ncp", {}).get("tokens_equal_w7a7", True) is not False and len(results) == len(args.modes.split(","))
+    exact = summary.get("ncp2-async", {})
+    ok = (summary.get("ncp", {}).get("tokens_equal_w7a7", True) is not False and len(results) == len(args.modes.split(","))
+          and exact.get("tokens_equal_ncp2", True) is not False and not exact.get("mismatched_words", 0))
     ms = [(f"{m}.{k}", v, "tok/s" if k.endswith("tok_s") else "s" if k.endswith("_s") else "ms" if k.endswith("_ms") else "calls")
           for m, r in results.items() for k, v in r["timing"].items()]
     run_result.write(args.out, ok, "vllm_bench: every mode ran, and NCP's greedy tokens equal W7A7's", json.dumps(summary), ms)

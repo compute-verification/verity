@@ -149,6 +149,13 @@ def test_the_serving_kernels_functions_on_the_cpu_commit_what_pouw_native_commit
     assert PD.first_difference(PN.commit_call(0, "ncp-v2", call), PD.commit_call(0, "ncp-v2", call, on="twin")) is None
 
 
+@pytest.mark.parametrize("name, call", PD.gate_calls(), ids=[n for n, _c in PD.gate_calls()])
+def test_the_y_served_from_the_exact_product_is_the_committed_y(name, call):
+    """Change 1's serve (`AsyncCommitter.serve`; `serve_twin` on the CPU): the committed dequantization of A·Bᵀ is the y the
+    call commits, the special encodings and Z past 2²⁴ included."""
+    assert np.array_equal(PD.serve_twin(call), PN.commit_call(0, "ncp-v2", call).y)
+
+
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 16, 17, 1000])
 def test_the_fast_units_tree_is_pouw_circuits(count):
     leaves = np.random.default_rng(count).bytes(32 * count)

@@ -18,6 +18,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cache
@@ -133,7 +134,9 @@ def host() -> ctypes.CDLL:
     dll.ncp2_tree_plan.argtypes = [ctypes.c_int, np.ctypeslib.ndpointer(np.int32, flags="C_CONTIGUOUS"),
                                    np.ctypeslib.ndpointer(np.int32, flags="C_CONTIGUOUS")]
     dll.ncp2_tile_lowbyte.argtypes = [_u8, _u8, _u32, ctypes.c_int, ctypes.c_int, _u8]
-    for f in (dll.ncp2_commit_fast, dll.ncp2_units_root_fast, dll.ncp2_units_root_tree8, dll.ncp2_tree_plan, dll.ncp2_tile_lowbyte):
+    dll.ncp2_serve_host.argtypes = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u16]
+    for f in (dll.ncp2_commit_fast, dll.ncp2_units_root_fast, dll.ncp2_units_root_tree8, dll.ncp2_tree_plan, dll.ncp2_tile_lowbyte,
+              dll.ncp2_serve_host):
         f.restype = ctypes.c_int
     return dll
 
@@ -163,7 +166,13 @@ def fused() -> ctypes.CDLL:
     dll.ncp2_fused_host.argtypes = _COMMIT + [_u8, fp, ctypes.c_int]
     dll.ncp2_fused_tile_ms.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint64)]
     dll.ncp2_fused_reset_cache.argtypes = []
-    for f in (dll.ncp2_fused, dll.ncp2_fused_host, dll.ncp2_fused_tile_ms, dll.ncp2_fused_reset_cache):
+    dll.ncp2_ctx_create.argtypes, dll.ncp2_ctx_create.restype = [], vp
+    dll.ncp2_ctx_destroy.argtypes = [vp]
+    dll.ncp2_fused_ctx.argtypes = [vp] + dll.ncp2_fused.argtypes[:17] + [ctypes.c_uint64, vp, vp]
+    dll.ncp2_dequant.argtypes = [ctypes.c_int, ctypes.c_int] + [vp] * 5 + [ctypes.c_uint64]
+    dll.ncp2_count_diff.argtypes = [ctypes.c_uint64, vp, vp, vp, ctypes.c_uint64]
+    for f in (dll.ncp2_fused, dll.ncp2_fused_host, dll.ncp2_fused_tile_ms, dll.ncp2_fused_reset_cache, dll.ncp2_ctx_destroy,
+              dll.ncp2_fused_ctx, dll.ncp2_dequant, dll.ncp2_count_diff):
         f.restype = ctypes.c_int
     return dll
 
@@ -179,6 +188,17 @@ def lowbyte_leaf(words: np.ndarray) -> bytes:
     blocks = [low[i:i + LOWBYTE_BLOCK] for i in range(0, len(low), LOWBYTE_BLOCK)]
     msg = b"".join(bl + bytes(TS128_RATE - LOWBYTE_BLOCK) for bl in blocks[:-1]) + blocks[-1]
     return hash_many("turboshake128", [msg], 32, LOWBYTE_DS)[0]
+
+
+def serve_twin(call: PC.Call) -> np.ndarray:
+    """The served y the way `AsyncCommitter` serves it, on the CPU (`ncp2_serve_host`): the exact product Z = A·Bᵀ and the
+    committed dequantization, (m, n) BF16 encodings."""
+    (m, k), n = call.a.shape, call.b.n
+    b, t = call.b.rows(0, n)
+    c = lambda v, dt: np.ascontiguousarray(v, dt)
+    y = np.zeros((m, n), np.uint16)
+    host().ncp2_serve_host(m, k, n, c(call.a, np.int8), c(call.s, np.uint32), c(b, np.int8), c(t, np.uint32), c(call.bias, np.uint16), y)
+    return y
 
 
 def tile_lowbyte_host(xs: np.ndarray, ys: np.ndarray, c0: np.ndarray, steps: int) -> bytes:
@@ -317,6 +337,84 @@ class FusedCommitter:
         return total.value, calls.value
 
 
+class AsyncCommitter(FusedCommitter):
+    """`FusedCommitter` with each call served at once and committed beside the serving: the served y is the committed
+    dequantization (`ncp2_dequant`) of Z = A·Bᵀ from an exact int8 product (``torch._int_mm``; the noise cancels in the
+    circuit's Z), and `ncp2_fused_ctx` commits the call from the same inputs on one of ``streams`` side streams, each with its
+    own workspace, round robin. A call of more than `BIG_UNITS` units always goes to the first, so only its workspace grows to
+    a prefill call's. Every call's committed y is compared with its served y on the side stream. At most ``backlog`` calls are
+    in flight; a call beyond that waits for the oldest. `drain` waits for every commit, so a window's receipt comes after it,
+    and gives each call's units root, in call order, and the number of served words that differed from the committed y."""
+
+    BIG_UNITS = 1 << 21
+
+    def __init__(self, scheme: str, salt: bytes, flags: int, streams: int = 4, backlog: int = 512) -> None:
+        import torch
+        super().__init__(scheme, salt, flags)
+        self.ctx = [self.lib.ncp2_ctx_create() for _ in range(streams)]
+        self.streams = [torch.cuda.Stream() for _ in range(streams)]
+        self.backlog, self.calls = backlog, 0
+        self.diff = torch.zeros(1, dtype=torch.int64, device="cuda")
+        self.roots: list = []
+        self.pending: deque = deque()
+
+    def serve(self, a, s, b, t, bias):
+        """The served y alone, on the current stream."""
+        import torch
+        (m, k), n = a.shape, b.shape[0]
+        wide = a if m > 16 else torch.cat([a, a.new_zeros((32 - m, k))])          # torch._int_mm takes more than 16 rows
+        z = torch._int_mm(wide, b.T)[:m].contiguous()
+        y = torch.empty((m, n), dtype=torch.int16, device=a.device)
+        rc = self.lib.ncp2_dequant(m, n, z.data_ptr(), s.data_ptr(), t.data_ptr(), bias.data_ptr(), y.data_ptr(),
+                                   torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"ncp2_dequant {m}x{n}: CUDA error {rc}")
+        return y
+
+    def __call__(self, a, s, b, t, bias, forward: int, position: int, weight: int, rowids, colids, root: np.ndarray | None = None,
+                 yleaves: np.ndarray | None = None):
+        import torch
+        (m, k), n = a.shape, b.shape[0]
+        y = self.serve(a, s, b, t, bias)
+        units = 3 * (m // 16) + (m // 16) * (n // 16) * 257
+        i = 0 if units > self.BIG_UNITS else self.calls % len(self.ctx)
+        side, (pi, inv) = self.streams[i], self.perm(k)
+        side.wait_stream(torch.cuda.current_stream())
+        committed, root_dev = torch.empty_like(y), torch.empty(32, dtype=torch.uint8, device=a.device)
+        rc = self.lib.ncp2_fused_ctx(self.ctx[i], m, k, n, a.data_ptr(), s.data_ptr(), b.data_ptr(), t.data_ptr(), bias.data_ptr(),
+                                     self.salt, forward, position, weight, rowids.data_ptr(), colids.data_ptr(), pi.data_ptr(),
+                                     inv.data_ptr(), self.flags, side.cuda_stream, committed.data_ptr(), root_dev.data_ptr())
+        rc = rc or self.lib.ncp2_count_diff(m * n, y.data_ptr(), committed.data_ptr(), self.diff.data_ptr(), side.cuda_stream)
+        if rc:
+            raise RuntimeError(f"ncp2_fused_ctx {m}x{k}x{n}: " + ("outside the strips" if rc == 1 else f"CUDA error {rc}"))
+        done = torch.cuda.Event()
+        done.record(side)
+        self.pending.append((done, (a, s, bias, rowids, y, committed)))
+        self.roots.append(root_dev)
+        self.calls += 1
+        while self.pending and (len(self.pending) > self.backlog or self.pending[0][0].query()):
+            self.pending.popleft()[0].synchronize()
+        return y
+
+    def drain(self) -> dict:
+        """Wait for every commit: the calls since the last drain, their roots and the served words that differed."""
+        import torch
+        for st in self.streams:
+            st.synchronize()
+        self.pending.clear()
+        roots = [bytes(r) for r in torch.stack(self.roots).cpu().numpy()] if self.roots else []
+        out = {"calls": len(roots), "mismatched_words": int(self.diff.item()), "roots": roots}
+        self.roots = []
+        self.diff.zero_()
+        return out
+
+    def close(self) -> None:
+        self.drain()
+        for c in self.ctx:
+            self.lib.ncp2_ctx_destroy(c)
+        self.ctx = []
+
+
 # ---- the gate ------------------------------------------------------------------------------------------------------------
 
 def lowbyte_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
@@ -429,6 +527,7 @@ def gate_calls(shapes: Sequence[tuple[int, int]] = ()) -> list[tuple[str, PC.Cal
 
 
 __all__ = [
+    "AsyncCommitter",
     "BF16_EDGES",
     "CACHE_Y",
     "CFLAGS",
@@ -463,6 +562,7 @@ __all__ = [
     "lowbyte_difference",
     "lowbyte_leaf",
     "nvcc",
+    "serve_twin",
     "source_digest",
     "tile_lowbyte_host",
     "tree_plan",

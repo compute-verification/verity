@@ -10,6 +10,8 @@
 // Flag 1 hashes; without it every hash and XOF is left out and the noise is a counter-based stand-in (the no-hash control).
 // Flag 2 times the tile kernel with CUDA events, read by `ncp2_fused_tile_ms` without a synchronization per call. Flag 8
 // swaps the tiles' word leaves for the low-byte variant (`tile_fused_lowbyte`), for timing only: its γ is unproved.
+// A context (`ncp2_ctx_create`) is a workspace of its own, so calls on different streams commit at once (`ncp2_fused_ctx`), and
+// `ncp2_dequant` serves y from a given Z = A·Bᵀ with the same dequantization (`pouw_device.AsyncCommitter`).
 #include <cuda_runtime.h>
 
 #include <vector>
@@ -193,14 +195,22 @@ struct Grow {
   }
   template <class T>
   T* as() const { return (T*)p; }
+  void release() {
+    if (p) cudaFree(p);
+    p = nullptr;
+    cap = 0;
+  }
 };
 
-static struct {
+// One committer's workspace: a call's buffers, its second stream and events. `ncp2_fused` uses `W0`; each context
+// (`ncp2_ctx_create`) is another, so calls on different streams run at once.
+struct Work {
   Grow rows, strips, nodes, key, e, f, x, y, c0, z, leaves, yleaves, lv2, lv3, root;
   const uint8_t* ylast = nullptr;  // the last call's Y leaves: ``yleaves`` or its weight's cached copy
   cudaStream_t aux = nullptr;
   cudaEvent_t xy = nullptr, formed = nullptr;
-} W;
+};
+static Work W0;
 
 struct YCache {
   uint64_t weight;
@@ -248,15 +258,15 @@ static YCache* ycache_find(uint64_t weight, int n, int k, const uint8_t* salt) {
 
 // ---- the call ----------------------------------------------------------------------------------------------------------------
 
-// One call from device inputs on ``stream``: y (m × n BF16 encodings) into ``y_out``; with flag 1, every unit leaf of the call
-// and its units root in the workspace, and its weight side's Y unit leaves, copied to ``root_host`` / ``leaves_host`` /
-// ``yleaves_host`` when they are given (host memory; the stream is then synchronized). Returns 0, 1 for a shape outside the
-// strips, or a CUDA error code.
-extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b, const uint32_t* t,
-                          const uint16_t* bias, const uint8_t* salt_host, uint64_t forward, uint64_t position, uint64_t weight,
-                          const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv, int flags,
-                          uint64_t stream_handle, uint16_t* y_out, uint8_t* root_host, uint8_t* leaves_host,
-                          uint8_t* yleaves_host) {
+// One call from device inputs on ``stream`` in workspace ``W``: y (m × n BF16 encodings) into ``y_out``; with flag 1, every
+// unit leaf of the call and its units root in the workspace, and its weight side's Y unit leaves, the root also to
+// ``root_dev`` (device memory, on the stream) and copied to ``root_host`` / ``leaves_host`` / ``yleaves_host`` when they are
+// given (host memory; the stream is then synchronized). Returns 0, 1 for a shape outside the strips, or a CUDA error code.
+static int fused_call(Work& W, int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b, const uint32_t* t,
+                      const uint16_t* bias, const uint8_t* salt_host, uint64_t forward, uint64_t position, uint64_t weight,
+                      const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv, int flags,
+                      uint64_t stream_handle, uint16_t* y_out, uint8_t* root_host, uint8_t* leaves_host, uint8_t* yleaves_host,
+                      uint8_t* root_dev) {
   if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D || m / D > (1 << 19)) return 1;
   const bool hash = flags & 1, timed = flags & 2, cache = flags & 4, lowbyte = flags & 8;
   cudaStream_t st = (cudaStream_t)stream_handle;
@@ -265,13 +275,18 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
   const size_t tile_base = 3 * (size_t)ms, deq_base = tile_base + tiles;
   Salt salt;
   for (int i = 0; i < 32; ++i) salt.b[i] = salt_host[i];
+  static bool ready = false;
+  if (!ready) {
+    CK(tiles_setup());
+    CK(cudaDeviceSetLimit(cudaLimitStackSize, 2048));
+    ready = true;
+  }
   if (!W.aux) {
     CK(cudaStreamCreateWithFlags(&W.aux, cudaStreamNonBlocking));
     CK(cudaEventCreateWithFlags(&W.xy, cudaEventDisableTiming));
     CK(cudaEventCreateWithFlags(&W.formed, cudaEventDisableTiming));
-    CK(tiles_setup());
-    CK(cudaDeviceSetLimit(cudaLimitStackSize, 2048));
   }
+  const size_t blocks8 = (population + TREE_BLOCK - 1) / TREE_BLOCK;
   CK(W.e.need((size_t)m * k));
   CK(W.f.need((size_t)n * k));
   CK(W.x.need((size_t)m * k3));
@@ -285,8 +300,8 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
     CK(W.nodes.need((size_t)(ms > 1 ? ms - 1 : 1) * 64));
     CK(W.leaves.need(population * 32));
     CK(W.yleaves.need((size_t)ns * 32));
-    CK(W.lv2.need((population + 1) / 2 * 32));
-    CK(W.lv3.need(((population + 1) / 2 + 1) / 2 * 32 + 32));
+    CK(W.lv2.need(blocks8 * 32));
+    CK(W.lv3.need((blocks8 + 1) / 2 * 32 + 32));
     CK(W.root.need(32));
   }
   uint8_t* lv = W.leaves.as<uint8_t>();
@@ -344,7 +359,6 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
   if (!hash) return 0;
 
   CK(cudaStreamWaitEvent(st, W.formed, 0));
-  const size_t blocks8 = (population + TREE_BLOCK - 1) / TREE_BLOCK;
   kf_tree8<<<(unsigned)blocks8, TREE_BLOCK, 0, st>>>(population, deq_base, ns, n, y_out, lv, W.lv2.as<uint8_t>());
   const uint8_t* in = W.lv2.as<uint8_t>();
   uint8_t* out = W.lv3.as<uint8_t>();
@@ -355,6 +369,7 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
   }
   CK(cudaGetLastError());
   CK(cudaMemcpyAsync(W.root.p, in, 32, cudaMemcpyDeviceToDevice, st));
+  if (root_dev) CK(cudaMemcpyAsync(root_dev, in, 32, cudaMemcpyDeviceToDevice, st));
   if (root_host || leaves_host || yleaves_host) {
     if (root_host) CK(cudaMemcpyAsync(root_host, in, 32, cudaMemcpyDeviceToHost, st));
     if (leaves_host) CK(cudaMemcpyAsync(leaves_host, lv, population * 32, cudaMemcpyDeviceToHost, st));
@@ -362,6 +377,62 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
     CK(cudaStreamSynchronize(st));
   }
   return 0;
+}
+
+extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b, const uint32_t* t,
+                          const uint16_t* bias, const uint8_t* salt_host, uint64_t forward, uint64_t position, uint64_t weight,
+                          const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv, int flags,
+                          uint64_t stream_handle, uint16_t* y_out, uint8_t* root_host, uint8_t* leaves_host,
+                          uint8_t* yleaves_host) {
+  return fused_call(W0, m, k, n, a, s, b, t, bias, salt_host, forward, position, weight, rowids, colids, pi, inv, flags,
+                    stream_handle, y_out, root_host, leaves_host, yleaves_host, nullptr);
+}
+
+// ---- contexts, the served y from an exact product, and its check ------------------------------------------------------------
+
+extern "C" void* ncp2_ctx_create() { return new Work(); }
+
+extern "C" int ncp2_ctx_destroy(void* ctx) {
+  Work* w = (Work*)ctx;
+  for (Grow* g : {&w->rows, &w->strips, &w->nodes, &w->key, &w->e, &w->f, &w->x, &w->y, &w->c0, &w->z, &w->leaves,
+                  &w->yleaves, &w->lv2, &w->lv3, &w->root})
+    g->release();
+  if (w->aux) cudaStreamDestroy(w->aux);
+  if (w->xy) cudaEventDestroy(w->xy);
+  if (w->formed) cudaEventDestroy(w->formed);
+  delete w;
+  return 0;
+}
+
+// `ncp2_fused` in context ``ctx``, its root also to ``root_dev`` on the stream: a committer that doesn't wait for it.
+extern "C" int ncp2_fused_ctx(void* ctx, int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b,
+                              const uint32_t* t, const uint16_t* bias, const uint8_t* salt_host, uint64_t forward,
+                              uint64_t position, uint64_t weight, const uint32_t* rowids, const uint32_t* colids,
+                              const uint32_t* pi, const uint32_t* inv, int flags, uint64_t stream_handle, uint16_t* y_out,
+                              uint8_t* root_dev) {
+  return fused_call(*(Work*)ctx, m, k, n, a, s, b, t, bias, salt_host, forward, position, weight, rowids, colids, pi, inv,
+                    flags, stream_handle, y_out, nullptr, nullptr, nullptr, root_dev);
+}
+
+// y from a given Z (m × n int32, row-major) on ``stream``: the committed dequantization, which is the circuit's y whenever Z is
+// A·Bᵀ (mod 2³²), as an exact int8 product gives it.
+extern "C" int ncp2_dequant(int m, int n, const int32_t* z, const uint32_t* s, const uint32_t* t, const uint16_t* bias,
+                            uint16_t* y_out, uint64_t stream_handle) {
+  kf_dequant<<<nblocks((size_t)m * n, 128), 128, 0, (cudaStream_t)stream_handle>>>(m, n, (const uint32_t*)z, s, t, bias, y_out);
+  return (int)cudaGetLastError();
+}
+
+__global__ void kf_count_diff(size_t count, const uint16_t* a, const uint16_t* b, unsigned long long* counter) {
+  const size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const unsigned diff = __ballot_sync(0xFFFFFFFFu, i < count && a[i] != b[i]);
+  if ((threadIdx.x & 31) == 0 && diff) atomicAdd(counter, (unsigned long long)__popc(diff));
+}
+
+// Adds to ``counter`` (device) the number of the ``count`` entries where ``a`` and ``b`` differ, on ``stream``.
+extern "C" int ncp2_count_diff(uint64_t count, const uint16_t* a, const uint16_t* b, unsigned long long* counter,
+                               uint64_t stream_handle) {
+  kf_count_diff<<<nblocks(count, 256), 256, 0, (cudaStream_t)stream_handle>>>(count, a, b, counter);
+  return (int)cudaGetLastError();
 }
 
 // The tile kernel's time summed over the calls timed since the last read (flag 2), and their count; the events are released.
@@ -434,9 +505,9 @@ extern "C" int ncp2_fused_host(int m, int k, int n, const int8_t* a, const uint3
   if (flags & 1) {
     const int ms = m / D, ns = n / D;
     const size_t tiles = (size_t)ms * ns, population = 3 * (size_t)ms + tiles + tiles * D * D;
-    CK(cudaMemcpy(leaves, W.leaves.p, population * 32, cudaMemcpyDeviceToHost));
-    CK(cudaMemcpy(yleaves, W.ylast, 32 * (size_t)ns, cudaMemcpyDeviceToHost));
-    CK(cudaMemcpy(root, W.root.p, 32, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(leaves, W0.leaves.p, population * 32, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(yleaves, W0.ylast, 32 * (size_t)ns, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(root, W0.root.p, 32, cudaMemcpyDeviceToHost));
   }
   CK(cudaMemcpy(y_out, dy.p, (size_t)m * n * sizeof(uint16_t), cudaMemcpyDeviceToHost));
   return 0;
