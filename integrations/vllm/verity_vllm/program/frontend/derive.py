@@ -47,6 +47,7 @@ from verity.ir.liveness import DeadGateReport
 from verity.ir.liveness import dead_gates as _dead_gates
 from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.provenance import registry_version
+from verity_vllm.program.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
@@ -756,52 +757,11 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
                   "profile": profile or "", "inputs": [list(shape_of(t)[0]) for _, t in params[:len(user_names)]],
                   "config_sha256": hashlib.sha256(canonical_json(_jsonable(config))).hexdigest()[:16]}
     # the flat program never carries a registered name: identity is claimed only through a verified family match
-    defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (tuple(params), out.type), _replayer(body),
+    defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (tuple(params), out.type), replayer(body),
                                doc=f"derived ({mode}) from {src_static['class']}", conformance="derived: see provenance", register=False)
     sd = ir_bind(defn, SRC=src_static)
     sd.set_body(body)
     return sd, ctx
-
-
-def _substitute(refs, env: dict[tuple[str, int], Any], logs: dict[int, tuple[Any, Any]] | None = None):
-    """`refs` with every `(space, idx)` run replaced by the corresponding run of `env[(space, idx)]`.
-
-    `logs` (one per `env`) maps a `PartLog` the flat body cut `refs` from to the log of its substituted shared runs, so the
-    runs every longer cut shares are substituted once."""
-    from verity.ir.refs import PartLog, concat, prefix_runs
-    rs, log, s = prefix_runs(refs)
-    if log is None or logs is None or s == 0:
-        parts = [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in rs]
-        return concat(parts) if parts else refs
-    hit = logs.get(id(log))
-    if hit is None or hit[0] is not log:
-        hit = logs[id(log)] = (log, PartLog())
-    sub = hit[1]
-    if len(sub) < s:
-        for space, idx, lo, hi in log.shared_runs(len(sub), s):
-            sub.append(env[(space, idx)].slice(lo, hi))
-    return sub.cut(s, [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in rs[s:]])
-
-
-def _replayer(body):
-    """A body builder that re-emits a recorded flat body over new argument collections (used when the program
-    function is inlined into the root: `Program` calls `defn.body(B, S, *inputs)`)."""
-
-    def replay(B: Builder, S, *args: Coll) -> Coll:
-        env: dict[tuple[str, int], Any] = {("p", i): a.refs for i, a in enumerate(args)}
-        logs: dict[int, tuple[Any, Any]] = {}
-        for k, node in enumerate(body.nodes):
-            colls = [Coll(a.type, _substitute(a.refs, env, logs)) for a in node.args]
-            if node.form in ("call", "primitive"):
-                out = B.call(node.fn, *colls, name=node.name)
-            elif node.form == "batch":
-                out = B.batch(node.fn, *colls, axes=node.axes, n=node.n, name=node.name)
-            else:
-                out = B.scan(node.fn, colls[0], xs=colls[1:1 + node.n_xs], shared=colls[1 + node.n_xs:], n=node.n, name=node.name)
-            env[("n", k)] = out.refs
-        return Coll(body.ret_type, _substitute(body.ret, env))
-
-    return replay
 
 
 def _translate(ctx: Ctx) -> Coll:

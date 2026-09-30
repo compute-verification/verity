@@ -393,8 +393,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         occ_outputs.append(out_index)
 
     # -- calls: Call k -> occurrence + return slots + argument slots --------------------------------------------------------------
-    calls: list[dict] = []
-    located: dict = {}   # (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
+    calls, located = [], {}   # located: (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
     for k, nd in enumerate(body.nodes):
         fx = node_fx.get(k)
         if fx is None:
