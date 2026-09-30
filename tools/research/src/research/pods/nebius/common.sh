@@ -76,7 +76,11 @@ print(hits[0] if hits else "")' "$1"
 resolve_project() {
   TENANT_ID=${NEBIUS_TENANT_ID:-}
   PROJECT_ID=${NEBIUS_PROJECT_ID:-}
-  [ -n "$PROJECT_ID" ] && return 0
+  if [ -n "$PROJECT_ID" ]; then
+    nb compute instance list --parent-id "$PROJECT_ID" > /dev/null 2>&1 \
+      || die "cannot list VMs in $PROJECT_ID: check that NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID and NEBIUS_SA_PRIVATE_KEY are one current key pair"
+    return 0
+  fi
   if [ -z "$TENANT_ID" ]; then
     local tenants
     tenants=$(nb iam v2 tenant list --all) || die "cannot list tenants (is the service account's key right?)"
