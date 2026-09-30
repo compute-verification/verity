@@ -15,9 +15,10 @@ binds) on every head.  The device gate runs first and nothing else runs when it 
   cases    at head dims 128 and 256, `fa_tap_exactness.cases(2)` with a softcap (the sliding window (4095, 0) is wider than every key
            length, so the kernel runs causal), a `wide` case (every operand word scaled by 2^U(-8, 8)), and a mixed and a decode launch at
            each pinned Gemma-2 shape.  Every output row, run twice, against `AttentionSoftcap_v2{T,NH,KVH,D,BN=fa2_kblock_n(D),CAP,
-           DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,MASKED_FROM}` by its vectorised twin (`softcap_head_states`), by the reference
-           evaluator on every head the twin flags non-finite and on a sample of finite ones (where the twin must agree), and the target's
-           own binding of every row (`targets.attention_spec(..., cap=)`).
+           DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,MASKED_FROM}` by its vectorised twin (`softcap_rows.softcap_head_states`), by the
+           reference evaluator on every head the twin flags non-finite and on a sample of finite ones (where the twin must agree), by the
+           replay row kernel (`rows.attention_softcap`, on the row's q / K / V words; it declines rows with a non-finite head), and
+           the target's own binding of every row (`targets.attention_spec(..., cap=)`).
 
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/fa2_softcap_capture_gpu.py --out DIR --want-cc 12.0 --want-sms 188 --min-driver 575
@@ -40,6 +41,8 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.program.kernels import rows as RK
+from verity_vllm.program.kernels import softcap_rows as SR
 from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
@@ -94,93 +97,7 @@ def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -
     return rec
 
 
-def mufu_tanh(x: np.ndarray, table: np.ndarray, lo: int) -> np.ndarray:
-    """`MufuTanh_v1` vectorised: NaN -> nan_out, |x| >= saturate_from -> +-1, |x| < identity_below -> x, else the table (odd symmetry)."""
-    from verity_vllm.program.registry import prims as P
-
-    R = P.MUFU_TANH_RULES
-    u = np.asarray(x, dtype=np.uint32)
-    a, sign = u & np.uint32(0x7FFFFFFF), u & np.uint32(0x80000000)
-    out = u.copy()
-    tab = (a >= R["identity_below"]) & (a < R["saturate_from"])
-    out[tab] = np.asarray(table[(a[tab] - np.uint32(lo)).astype(np.int64)], dtype=np.uint32) | sign[tab]
-    sat = (a >= R["saturate_from"]) & (a <= 0x7F800000)
-    out[sat] = np.uint32(0x3F800000) | sign[sat]
-    out[a > 0x7F800000] = np.uint32(R["nan_out"])
-    return out
-
-
-# ------------------------------------------------------------------------------------------------------------------------ twin
-def softcap_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16, check: bool, softcap_mul: int,
-                  scale_log2: int, tanh):
-    """`AttnBlockSoftcap_v2{D, NVIS, FIRST, BN, CAP, DOT, CHECK}` vectorised over rows (`derived_rows.attn_block` with
-    ``rescale_only`` and stage A' in front).  Returns (m_new, l, o, nonfinite)."""
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry import b1
-
-    BN = kb.shape[1]
-    R = q.shape[0]
-    s, f = DR._dot_bf16_chain(q[:, None, :], kb[:, :NVIS, :], dot16)
-    nf = f.any(axis=-1)
-    s = tanh(DR.mul_ftz(s, np.uint32(softcap_mul))).reshape(R, NVIS)
-    bmax = s[:, 0]
-    for c in range(1, NVIS):
-        bmax = DR.max_fmnmx(bmax, s[:, c])
-    m_new = bmax if FIRST else DR.max_fmnmx(m_prev, bmax)
-    m_use = DR.guard_neg_inf_zero(m_new)
-    scale = np.full(R, scale_log2, dtype=np.uint32)
-    if not FIRST:
-        scores_scale = DR.mufu_ex2_ftz(DR.mul_ftz(DR.sub_ftz(m_prev, m_use if check else m_new), scale))
-    max_scaled = DR.mul_ftz(m_use, scale)
-    p = DR.mufu_ex2_ftz(DR.fma_sub_ftz(s, scale[:, None], max_scaled[:, None]))
-    lanes = []
-    for ln in range(4):
-        cols = [c for c in range(NVIS) if b1._lane(c) == ln]
-        first_p = p[:, cols[0]] if cols else np.zeros(R, dtype=np.uint32)
-        acc = first_p if FIRST else DR.fma_ftz(scores_scale, l_prev[:, ln], first_p)
-        for c in cols[1:]:
-            acc = DR.add_ftz(acc, p[:, c])
-        lanes.append(acc)
-    pb = DR.f2fp_bf16(p)
-    if NVIS < BN:
-        pb = np.concatenate([pb, np.zeros((R, BN - NVIS), dtype=np.uint16)], axis=1)
-    o = np.zeros((R, D), dtype=np.uint32) if FIRST else DR.mul_ftz(o_prev, scores_scale[:, None])
-    for ks in range(BN // 16):
-        k0 = 16 * ks
-        if k0 >= NVIS:
-            break
-        vt = np.swapaxes(vb[:, k0:k0 + 16, :], 1, 2)
-        o, f = dot16(o, np.broadcast_to(pb[:, k0:k0 + 16][:, None, :], (R, D, 16)), vt)
-        nf |= f.any(axis=-1)
-    return m_new, np.stack(lanes, axis=1), o, nf
-
-
-def softcap_head_states(q, k, v, BN: int, *, cap: float, masked_from: int, dot16, inv, tanh) -> dict[str, np.ndarray]:
-    """`AttentionHeadSoftcap_v2{T, D, BN, CAP, DOT, INV, MASKED_FROM}` vectorised over rows: q (R, D), k / v (R, T, D) bf16 words.
-    Returns ``out`` (R, D) bf16 words and ``nonfinite`` (R,)."""
-    from verity_vllm.program.kernels import derived_rows as DR
-    from verity_vllm.program.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
-
-    q, k, v = (np.ascontiguousarray(x, dtype=np.uint16) for x in (q, k, v))
-    R, T, D = k.shape
-    nb = -(-T // BN)
-    sm, sl2 = softcap_mul_bits(D, cap), softcap_scale_log2_bits(cap)
-    nf = np.zeros(R, dtype=bool)
-    m = l = o = None
-    for b in range(nb - 1, -1, -1):
-        lo, hi = b * BN, min(T, (b + 1) * BN)
-        kb, vb = k[:, lo:hi], v[:, lo:hi]
-        if hi - lo < BN:
-            pad = np.zeros((R, BN - (hi - lo), D), dtype=np.uint16)
-            kb, vb = np.concatenate([kb, pad], axis=1), np.concatenate([vb, pad], axis=1)
-        first = b == nb - 1
-        z = np.zeros(R, dtype=np.uint32)
-        m, l, o, f = softcap_block(q, kb, vb, z if first else m, np.zeros((R, 4), np.uint32) if first else l,
-                                   np.zeros((R, D), np.uint32) if first else o, D=D, NVIS=hi - lo, FIRST=first, dot16=dot16,
-                                   check=b >= masked_from, softcap_mul=sm, scale_log2=sl2, tanh=tanh)
-        nf |= f
-    total = DR.add_ftz(DR.add_ftz(l[:, 0], l[:, 2]), DR.add_ftz(l[:, 1], l[:, 3]))
-    return {"out": DR.f2fp_bf16(DR.mul_ftz(o, inv(total)[:, None])), "nonfinite": nf}
+mufu_tanh, softcap_head_states = SR.mufu_tanh, SR.softcap_head_states
 
 
 # ----------------------------------------------------------------------------------------------------------------------- cases
@@ -217,7 +134,8 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     sq_max = max(c["seqlens_q"])
     dot16, inv = DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], DR.INV_SUM_BY_PRIM["Fa2InvSum_v1"]
     rec: dict[str, Any] = {"rows": 0, "heads": 0, "nonfinite_heads": 0, "reference_heads": 0, "finite_reference_heads": 0,
-                           "mismatch": 0, "mismatch_finite": 0, "twin_mismatch": 0, "binding_mismatch": 0, "first_mismatch": None}
+                           "mismatch": 0, "mismatch_finite": 0, "twin_mismatch": 0, "binding_mismatch": 0, "first_mismatch": None,
+                           "row_kernel_rows": 0, "row_kernel_declined": 0, "row_kernel_mismatch": 0}
     sampled = 0
     tok = 0
     for seq, (sq, sk) in enumerate(zip(c["seqlens_q"], c["seqlens_k"])):
@@ -235,6 +153,14 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
             head = bind(F2S.AttentionHeadSoftcapV2, T=T, D=D, BN=BN, CAP=cap, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum,
                         MASKED_FROM=gfrom)
             spec = TG.attention_spec(tp, T, H, Hk, D, sq_max, row=r, own_rows=sq, cap=cap)
+            try:
+                rk = RK.attention_softcap({"T": T, "NH": H, "KVH": Hk, "D": D, "BN": BN, "CAP": cap, "MASKED_FROM": gfrom,
+                                           "DOT": hopper.HopperBF16WgmmaDot16.id, "INV": P.Fa2InvSum.id},
+                                          [q[tok + r].reshape(-1), kseq[:T].reshape(-1), vseq[:T].reshape(-1)])["out"]
+                rec["row_kernel_rows"] += 1
+                rec["row_kernel_mismatch"] += int(not np.array_equal(rk, got.reshape(-1)))
+            except SR.Declined:
+                rec["row_kernel_declined"] += 1
             rec["binding_mismatch"] += spec.id != bind(F2S.AttentionSoftcapV2, T=T, NH=H, KVH=Hk, D=D, BN=BN, CAP=cap,
                                                        DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=gfrom).id
             ref_heads = list(np.flatnonzero(nonfinite))
@@ -281,7 +207,8 @@ def _verdict(doc: dict[str, Any]) -> bool:
     return (doc["gate"]["ok"] and doc["mufu"].get("ok") is True and doc["tanh"]["table"].get("ok") is True
             and doc["tanh"]["probe"].get("ok") is True
             and bool(launches) and all(x["ok"] and x["deterministic"] for x in launches)
-            and bool(rows) and all(x.get("mismatch") == 0 and x.get("twin_mismatch") == 0 and x.get("binding_mismatch") == 0 for x in rows)
+            and bool(rows) and all(x.get("mismatch") == 0 and x.get("twin_mismatch") == 0 and x.get("binding_mismatch") == 0
+                                   and x.get("row_kernel_mismatch") == 0 for x in rows)
             and sum(x["nonfinite_heads"] for x in rows) > 0 and sum(x["finite_reference_heads"] for x in rows) > 0)
 
 
@@ -343,10 +270,12 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
                 doc["cases"].append(rec)
                 print(f"[softcap-capture] rows hd{rec['D']} {rec['case']:30s} rows={rec['rows']} heads={rec['heads']} "
                       f"nonfinite={rec['nonfinite_heads']} ref={rec['reference_heads']} !={rec['mismatch']}(finite {rec['mismatch_finite']}) "
-                      f"twin!={rec['twin_mismatch']} bind!={rec['binding_mismatch']}", flush=True)
+                      f"twin!={rec['twin_mismatch']} bind!={rec['binding_mismatch']} row={rec['row_kernel_rows']} "
+                      f"row!={rec['row_kernel_mismatch']} declined={rec['row_kernel_declined']}", flush=True)
     doc["totals"] = {k: sum(x[k] for x in doc["cases"]) for k in ("rows", "heads", "nonfinite_heads", "reference_heads",
                                                                   "finite_reference_heads", "mismatch", "mismatch_finite",
-                                                                  "twin_mismatch", "binding_mismatch")}
+                                                                  "twin_mismatch", "binding_mismatch", "row_kernel_rows",
+                                                                  "row_kernel_declined", "row_kernel_mismatch")}
     doc = seal_record(doc, _verdict(doc))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1) + "\n")
     print(f"FA2-SOFTCAP-CAPTURE {'OK' if doc['ok'] else 'FAIL'} {doc['digest']} totals={json.dumps(doc['totals'])}", flush=True)

@@ -91,6 +91,8 @@ def summarize(run_dir: Path) -> dict[str, Any]:
     remote_rec = _read(run_dir / "remote.json")
     if not status and (run_dir / "refused.json").exists():
         state = "refused"                        # the machine refused it (launch-request, or the runner before the workload)
+    elif remote_rec and not status and remote_rec.get("launcher_exited"):
+        state = "launcher-exited"                # the machine's runner exited before writing status.json (launcher.log says why)
     elif remote_rec and not status:
         phase = remote_rec.get("phase")
         state = {"launched": "submitted", "refused": "refused", "unknown": "unknown"}.get(phase, "submitted")

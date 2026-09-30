@@ -18,7 +18,8 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
     commit  -> vllm-verdict/v1        verdict.json (the verdict of record, vllm-verdict/v1), commit/ (commit_delta's verdict.json,
                                       sampled_replay_p*.json, versions.json, manifest_verify.json, ...; small files), weights_of_record.log,
                                       manifest.log, manifest_verify.log; meta {row, stage, program_digest, verdict, outcome, stage_status};
-                                      refs.build, refs.match  (commit_summary.json and the finalize board are retired: F-r19-int-21 / P5)
+                                      refs.build, refs.match  (commit_summary.json and the finalize board are retired: F-r19-int-21 / P5);
+                                      a config run (`config` verdict line) decides in config_record.json instead, at TP1 and TP
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
@@ -205,10 +206,10 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         present, skipped = _collect(d, COMMIT_FILES, ["commit"])
         # the Commit's decision document: verdict.json (vllm-verdict/v1) at TP1; tp.commit's commit/summary.json on a TP row (no
         # vllm-verdict/v1 grades a tp.commit record: commit.verdict reads commit_delta's documents).  A PASS stage without it is refused
-        # by name; a stage that did not pass records the absence (`decision_record_missing`), never an empty document
-        # a config run (`--config-run 1`) has no verdict.json: its decision document is config_record.json (verity-vllm/config-record/v1)
-        config_run = not tp and not (d / "verdict.json").exists() and (d / "config_record.json").exists()
-        rel = "commit/summary.json" if tp else "config_record.json" if config_run else "verdict.json"
+        # by name; a stage that did not pass records the absence (`decision_record_missing`), never an empty document.  A config run
+        # (a `config` verdict line: no Match, no verdict of record) decides in config_record.json, at TP1 and TP alike
+        config = "config" in v
+        rel = "config_record.json" if config else ("commit/summary.json" if tp else "verdict.json")
         doc = _read_json(d / rel)
         if not isinstance(doc, dict):
             if passed:
@@ -218,6 +219,9 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         meta = {**base_meta, "verdict": (vd.get("verdict") if isinstance(vd, dict) else None) or status, "decision_record": rel}
         if doc is None:
             meta["decision_record_missing"] = rel
+        elif config:
+            rp = doc.get("replay") or {}
+            meta.update(outcome=doc.get("outcome"), why=doc.get("why"), replay_equal=rp.get("equal"), replay_k=rp.get("k"))
         elif tp:
             meta.update(tp_pass=doc.get("pass"), tokens_equal=doc.get("tokens_equal"), pairs=doc.get("pairs"))
         else:
