@@ -32,12 +32,15 @@ hashing the tile's leaf the scheme's over its real rows, that leaf's in the tile
 between the product and the hashes.  `build` names the cubin (`binaries`) and the verifier the harness runs after the lease
 (`verify.py` over the run's transcripts).
 
-The transcript: when the harness frees a gated hash call of operand set 0, the arm launches it once more on the set's
-operands and writes what the prover publishes and opens: `transcripts/<arm>/<shape>/manifest.json` in the run's directory
-(the scheme, the matmul, the beacon, the salt, the weight root, A's root, the tile tree's commitment, and every file with its
-SHA-256), the levels of A's, B's and the tile tree and the tile leaves beside it, and A's and B's rows (up to 512 MB at
-8,192²) under PEARLC_ROWS (default: a temporary directory).  `verify.py` runs `verity_pouw.audit.Verifier` on it after the
-lease.
+The transcript: when the harness frees a gated hash call of operand set 0, the arm fills every buffer of the set but its
+tensor maps with 0xA5 (the trees, the tile leaves and what the weight side wrote among them), runs the weight side and the
+call once more on the set's operands, and writes what the prover publishes and opens: `transcripts/<arm>/<shape>/manifest.json`
+in the run's directory (the scheme, the matmul, the beacon, the salt, the weight root, A's root, the tile tree's commitment,
+and every file with its SHA-256), the levels of A's, B's and the tile tree and the tile leaves beside it, and the harness's
+A and B rows (up to 512 MB at 8,192²) under PEARLC_ROWS (default: a temporary directory).  Then the negative control, the
+same dump into `negative/<arm>/<shape>/` after the buffers are poisoned again and the call runs without its commitment or
+the weight side (`NEGATIVE`).  `verify.py` runs `verity_pouw.audit.Verifier` on both after the lease, and passes only if it
+accepts the transcript and rejects its negative control.
 
 Shortcuts, flagged: m is padded to 64 rows (decode's m = 32 issues 2x its tensor work on 64 x 64 tiles, and `work` counts
 issued MACs); the prices (SM120_PRICES) and G are the device record's (its stand-ins listed in the build record), so W_ref,
@@ -100,6 +103,10 @@ REF_BUFS = REF + ("tma",)                 # the second launch's own tensor maps
 REF_HASH_STEPS = ("pad_a", "pad_t", "hash_rows_a", "tree_a", "seed_a")
 REF_GRID = 3
 TRANSCRIPT_SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v1"
+POISON = 0xA5
+NEGATIVE = ("the negative control: the call's buffers poisoned (0xA5) as before the transcript's call, then the call with A's "
+            "row tree, seed_A, E_A's lines and every hash omitted and without the weight side, so it writes y (and C~ and U "
+            "unfused) and nothing the transcript reads; the verifier must reject it")
 GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and the debit cap ρ (statement parameters, cheap-binding.md §1)
 
 
@@ -192,6 +199,8 @@ class _Call:
         flip = [lambda: hdev.xor_byte(w["c" if self.stored else "digests"], 0, 0x01, rd.stream)] if corrupt else []
         self.parts = {"before": copy + (commit if self.hashing else []) + forming + cleanup, "gemm": [y_only or by["gemm_pearlc"]],
                       "after": flip + (phase("hashing") if self.hashing else [])}
+        extra = self.pipe.extra()
+        self.uncommitted = copy + forming + cleanup + [extra.get("gemm_pearlc_s") or extra["gemm_pearlc_cu"]]
         self.phases = {name: (lambda stream, fs=fs: self.enqueue(fs, stream)) for name, fs in self.parts.items()}
         names = ("y",) + self.stored + (HASHED if self.hashing else ())
         self.outputs = {name: Buffer(w[name], size[name]) for name in names}
@@ -240,6 +249,18 @@ class _Call:
 
     def weight_side(self, stream) -> None:
         self.enqueue(self.weight, stream)
+
+    def poison(self) -> None:
+        """Every buffer of the set but its tensor maps, and a padded A's real rows, filled with POISON: what the weight side
+        and a launch write, the transcript's trees and leaves among them."""
+        rd, w = self.arm.rd, self.own.b
+        rd.sync()
+        for name in OWN + CALL:
+            if name != "tma":
+                rd.ck("cuMemsetD8_v2", R.u64(w[name]), POISON, self.size[name])
+        if self.xa != self.ops.a.ptr:
+            rd.ck("cuMemsetD8_v2", R.u64(self.xa), POISON, 4 * self.shape.m * self.k)
+        rd.sync()
 
     def free(self) -> None:
         if self.freed:
@@ -405,8 +426,11 @@ class PearlCSm120:
                        "key the scheme's from the device's root_A; sampled: benchmarks/pouw/pearl_c/twin.py at twin.samples' "
                        "tiles (C~ and U the second launch's where the call stores none), the tile leaf the scheme's over the "
                        "real rows, its tile-tree leaf and row r0's leaf the verifier's",
-               "transcript": "operand set 0's hash call, launched again when the harness frees it: transcripts/<arm>/<shape>/ "
-                             "(manifest.json, tree_a, tree_b, tree_t, leaves); A's and B's rows under PEARLC_ROWS; verify.py",
+               "transcript": "operand set 0's hash call, when the harness frees it: every set buffer but the tensor maps "
+                             "poisoned (0xA5), then the weight side and the call again, into transcripts/<arm>/<shape>/ "
+                             "(manifest.json, tree_a, tree_b, tree_t, leaves), the harness's A and B rows under PEARLC_ROWS; "
+                             "then poisoned again and the call without its commitment or the weight side into "
+                             "negative/<arm>/<shape>/; verify.py accepts the first and must reject the second",
                "shortcuts": ["m padded to 64 rows (64 x 64 tiles below 128 rows); work counts issued MACs",
                              "prices and G are the device record's (stand-ins listed); W_ref, credit and gamma Derived at those"]}
         for name in ("sass.json", "toolchain.txt", "source.txt"):
@@ -456,39 +480,53 @@ class PearlCSm120:
 
     def transcript(self, call: _Call) -> None:
         """Operand set 0's hash call once more, and what the verifier reads: `transcripts/<arm>/<shape>/` beside the run's
-        output (small), A's and B's rows under PEARLC_ROWS.  Once per shape; with no run directory, nothing."""
+        output (small), A's and B's rows (the harness's operands) under PEARLC_ROWS.  Every buffer of the set is poisoned
+        first, so the weight side and the call run again and the dump holds only what they wrote.  Then the negative control
+        (NEGATIVE) into `negative/<arm>/<shape>/`, which verify.py requires rejected; then the weight side and the call once
+        more, so the set is left as an honest call leaves it.  Once per shape; with no run directory, nothing."""
         sh = call.shape
         if self.out_dir is None or sh.label in self.transcribed:
             return
         out = self.out_dir / "transcripts" / self.name / sh.label
         rows = Path(os.environ.get("PEARLC_ROWS") or tempfile.mkdtemp(prefix="pearlc-rows-")) / self.name / sh.label
-        out.mkdir(parents=True, exist_ok=True)
         rows.mkdir(parents=True, exist_ok=True)
         self.transcribed[sh.label] = str(out)
-        rd, w, ep, size = self.rd, call.own.b, call.own.epoch, call.size
-        rd.sync()                          # the harness's stream is non-blocking: nothing of it may still run under this launch
+        rd = self.rd
+        call.poison()                      # syncs first: the harness's stream is non-blocking
+        call.weight_side(None)
         call.launch(None)
         rd.sync()
         files = {}
+        for name, ptr, count in (("rows_a", call.ops.a.ptr, sh.m), ("rows_b", call.ops.b.ptr, sh.n)):
+            data = rd.read(ptr, 4 * count * sh.k)
+            (rows / f"{name}.bin").write_bytes(data)
+            files[name] = {"path": str(rows / f"{name}.bin"), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        self.dump(call, out, files, None)
+        call.poison()
+        call.enqueue(call.uncommitted, None)
+        rd.sync()
+        self.dump(call, self.out_dir / "negative" / self.name / sh.label, files, NEGATIVE)
+        call.weight_side(None)
+        call.launch(None)
+        rd.sync()
 
-        def put(where: Path, name: str, data: bytes) -> bytes:
-            (where / f"{name}.bin").write_bytes(data)
-            files[name] = {"path": f"{name}.bin" if where == out else str(where / f"{name}.bin"), "bytes": len(data),
-                           "sha256": hashlib.sha256(data).hexdigest()}
-            return data
-
-        tree_a, tree_t = (put(out, name, rd.read(w[name], size[name])) for name in ("tree_a", "tree_t"))
-        put(out, "tree_b", rd.read(w["tree_b"], size["tree_b"]))
-        put(out, "leaves", rd.read(w["leaves"], size["leaves"]))
-        put(rows, "rows_a", rd.read(call.xa, 4 * sh.m * sh.k))
-        put(rows, "rows_b", rd.read(call.ops.b.ptr, 4 * sh.n * sh.k))
+    def dump(self, call: _Call, out: Path, rows: dict, negative: str | None) -> None:
+        """The set's trees and tile leaves as they are on the device, and the manifest over them and `rows`."""
+        rd, w, ep, size, sh = self.rd, call.own.b, call.own.epoch, call.size, call.shape
+        out.mkdir(parents=True, exist_ok=True)
+        files, data = dict(rows), {}
+        for name in ("tree_a", "tree_t", "tree_b", "leaves"):
+            data[name] = rd.read(w[name], size[name])
+            (out / f"{name}.bin").write_bytes(data[name])
+            files[name] = {"path": f"{name}.bin", "bytes": len(data[name]), "sha256": hashlib.sha256(data[name]).hexdigest()}
         mm, epoch = ep["matmul"], ep["epoch"]
         man = {"schema": TRANSCRIPT_SCHEMA, "arm": self.name, "scheme": self.scheme.name,
                "scheme_args": {"forming": "v1", "device": self.device.name, "hashing": "h1"},
                "shape": {"label": sh.label, "m": sh.m, "k": sh.k, "n": sh.n}, "matmul": {"index": mm.index, "weight": mm.weight},
                "beacon": ep["beacon"].hex(), "salt": epoch.salt.hex(), "weight_root": ep["root_b"].hex(),
-               "activation_root": tree_a[-32:].hex(), "commitment": {"root": tree_t[-32:].hex(), "count": call.pipe.tiles},
-               "files": files}
+               "activation_root": data["tree_a"][-32:].hex(),
+               "commitment": {"root": data["tree_t"][-32:].hex(), "count": call.pipe.tiles},
+               "poisoned": f"0x{POISON:02X}", **({"negative_control": negative} if negative else {}), "files": files}
         (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
 
 

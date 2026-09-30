@@ -10,7 +10,10 @@ directory the arm writes its transcripts under (`build`'s out_dir); PEARLC_ROWS 
   accept:  at the fixture's shape on its inputs and epoch (its beacon, matmul index and weight, B's root), the fixture's bytes
            written where the device would have put them (the call's buffers and the gate's second launch), the gate; then one
            C~ word flipped (a message digest's where the call stores no C~, the fused call), the gate again; then the word
-           restored, the gate, and the call freed, which writes its transcript.
+           restored, the gate, and the call freed, which writes its transcript and its negative control.  Each later launch
+           of the whole call writes the fixture's bytes again, as the device would; the negative control's launches don't.
+  stale:   accept, but no launch writes the fixture's bytes again: the transcript's call, like the negative control's,
+           leaves the poisoned buffers as they are, as a kernel that skipped its writes would.
 """
 
 from __future__ import annotations
@@ -100,7 +103,7 @@ def dry(arm) -> None:
                       "work": {s: vars(arm.work(Shape(s, *d))) for s, d in (("pre", (256, 1024, 128)), ("dec", (32, 1024, 128)))}}))
 
 
-def accept(arm, check: Path) -> None:
+def accept(arm, check: Path, rewrite: bool = True) -> None:
     man = json.loads(check.read_text())
     m, n, k = man["shape"]
     base = check.parent
@@ -116,9 +119,15 @@ def accept(arm, check: Path) -> None:
     call = arm.prepare(HarnessDev(), shape, arm.flag_sets["hash"], op)
     call.launch(STREAM)
     s, w = call.scratch.b, call.own.b
-    for name in ("at", "alpha_a", "c", "u", "y", "digests", "leaves", "tree_a", "tree_b", "tree_t", "seed_a", "line_a", "bt",
-                 "alpha_b"):
-        write(rd, w[name], load(name))
+
+    def written() -> None:
+        for name in ("at", "alpha_a", "c", "u", "y", "digests", "leaves", "tree_a", "tree_b", "tree_t", "seed_a", "line_a", "bt",
+                     "alpha_b"):
+            write(rd, w[name], load(name))
+    written()
+    if rewrite:
+        launch = call.launch
+        call.launch = lambda stream: (launch(stream), written())
     for name in A.REF:
         write(rd, s["ref_" + name], load("c" if name == "c2" else name))
     flags = arm.flag_sets["hash"]
@@ -143,4 +152,4 @@ if __name__ == "__main__":
     s = A.R.C.c_void_p()
     arm.rd.ck("cuStreamCreate", A.R.C.byref(s), 1)
     STREAM = s.value
-    dry(arm) if sys.argv[3] == "dry" else accept(arm, Path(sys.argv[5]))
+    dry(arm) if sys.argv[3] == "dry" else accept(arm, Path(sys.argv[5]), rewrite=sys.argv[3] == "accept")

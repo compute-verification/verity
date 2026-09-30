@@ -6,11 +6,14 @@ from the transcript's files (the device's tree levels, the tile leaves, A's and 
 first).  The verifier checks every path against the published roots and recomputes every drawn tile through the scheme on the
 CPU (about 11 s per tile per 1,024 of k).
 
-  python verify.py RUN_DIR [--draws T] [--jobs J] [--commit SHA]
+  python verify.py RUN_DIR [--draws T] [--jobs J] [--commit SHA] [--run ID]
 
-Prints one line per transcript under RUN_DIR/transcripts/*/*/manifest.json, `ACCEPT ...` or `REJECT ...`, and writes
-RUN_DIR/verify.json.  Exit 0 only if at least one transcript was found and every one was accepted.  --commit (default
-RESEARCH_SOURCE_SHA) names the verifier's tree.
+Prints one line per transcript under RUN_DIR/transcripts/*/*/manifest.json and per negative control under
+RUN_DIR/negative/*/*/manifest.json (the arm's dump of the call that writes none of the commitment into its poisoned
+buffers), `ACCEPT ...` or `REJECT ...`, and writes RUN_DIR/verify.json.  Exit 0 only if at least one transcript was found,
+every one was accepted, and each has a negative control beside it that was rejected; otherwise a `REJECT` line names the
+transcript's SHA-256 with the reason.  --commit (default RESEARCH_SOURCE_SHA) names the verifier's tree and --run (default
+RESEARCH_RUN_ID, else RUN_DIR's name) the run, in every line.
 """
 
 from __future__ import annotations
@@ -80,12 +83,14 @@ def load(base: Path, spec: dict):
     return data
 
 
-def verify(path: Path, draws: int, commit: str) -> dict:
+def verify(path: Path, draws: int, commit: str, run: str = "") -> dict:
     raw = path.read_bytes()
     man, digest = json.loads(raw), hashlib.sha256(raw).hexdigest()
     s, label = man["shape"], f"{man.get('arm')}/{man['shape']['label']}"
+    negative = "negative_control" in man
+    tag, tail = "negative control " if negative else "", f"; transcript sha256:{digest}; verifier {commit}" + (f"; run {run}" if run else "")
     out = {"manifest": str(path), "transcript_sha256": digest, "arm": man.get("arm"), "shape": s, "verifier_commit": commit,
-           "draws": draws}
+           "draws": draws, "negative_control": negative}
     try:
         if man.get("schema") != SCHEMA:
             raise ValueError(f"schema {man.get('schema')!r}, not {SCHEMA}")
@@ -108,13 +113,11 @@ def verify(path: Path, draws: int, commit: str) -> dict:
                    profile=audit.profile.to_json() if audit.profile else None)
         tiles = ", ".join(str(t) for t in audit.selected)
         bad = "; ".join(f"tile {v.tile}: {v.reason}" for v in audit.verdicts if not v.ok)
-        out["line"] = (f"{'ACCEPT' if audit.accepted else 'REJECT'} {scheme.name} {s['label']}: verity_pouw.audit.Verifier, "
+        out["line"] = (f"{'ACCEPT' if audit.accepted else 'REJECT'} {tag}{scheme.name} {s['label']}: verity_pouw.audit.Verifier, "
                        f"Sampled({draws}) drew tiles {tiles} of {c['count']}{'' if audit.accepted else ' (' + bad + ')'}; "
-                       f"root_A {man['activation_root'][:16]}, tile root {c['root'][:16]}, source {source.hex()[:16]}; "
-                       f"transcript sha256:{digest}; verifier {commit}")
+                       f"root_A {man['activation_root'][:16]}, tile root {c['root'][:16]}, source {source.hex()[:16]}{tail}")
     except Exception as ex:  # noqa: BLE001 - a transcript that can't be checked is rejected, with the reason
-        out.update(accepted=False, error=f"{type(ex).__name__}: {ex}",
-                   line=f"REJECT {label}: {type(ex).__name__}: {ex}; transcript sha256:{digest}; verifier {commit}")
+        out.update(accepted=False, error=f"{type(ex).__name__}: {ex}", line=f"REJECT {tag}{label}: {type(ex).__name__}: {ex}{tail}")
     return out
 
 
@@ -128,18 +131,33 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--draws", type=int, default=DRAWS)
     p.add_argument("--jobs", type=int, default=8)
     p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
+    p.add_argument("--run", default=os.environ.get("RESEARCH_RUN_ID"))
     a = p.parse_args(argv)
+    run = a.run or a.run_dir.resolve().name
     found = sorted(a.run_dir.glob("transcripts/*/*/manifest.json"))
+    negatives = sorted(a.run_dir.glob("negative/*/*/manifest.json"))
     errors = sorted(str(e.parent.relative_to(a.run_dir)) for e in a.run_dir.glob("transcripts/*/*/error.txt"))
-    with Pool(max(1, min(a.jobs, len(found)))) as pool:
-        results = pool.map(_one, [(f, a.draws, a.commit) for f in found], chunksize=1)
-    for r in results:
+    with Pool(max(1, min(a.jobs, len(found) + len(negatives)))) as pool:
+        results = pool.map(_one, [(f, a.draws, a.commit, run) for f in found + negatives], chunksize=1)
+    results, controls = results[:len(found)], results[len(found):]
+    for r in results + controls:
         print(r["line"], flush=True)
     for e in errors:
-        print(f"REJECT {e}: the arm wrote no transcript ({(a.run_dir / e / 'error.txt').read_text().strip()})", flush=True)
-    ok = bool(results) and not errors and all(r["accepted"] for r in results)
-    (a.run_dir / "verify.json").write_text(json.dumps({"verifier_commit": a.commit, "draws": a.draws, "ok": ok,
-                                                       "transcripts": results, "missing": errors}, indent=1) + "\n")
+        print(f"REJECT {e}: the arm wrote no transcript ({(a.run_dir / e / 'error.txt').read_text().strip()}); run {run}", flush=True)
+    by = {(c["arm"], c["shape"]["label"]): c for c in controls}
+    uncontrolled = []
+    for r in results:
+        c = by.get((r["arm"], r["shape"]["label"]))
+        why = "no negative control beside it" if c is None else "its negative control was accepted" if c["accepted"] else None
+        if why:
+            uncontrolled.append(r["manifest"])
+            print(f"REJECT {r['arm']}/{r['shape']['label']}: {why}; transcript sha256:{r['transcript_sha256']}; "
+                  f"verifier {a.commit}; run {run}", flush=True)
+    ok = (bool(results) and not errors and all(r["accepted"] for r in results) and not uncontrolled
+          and not any(c["accepted"] for c in controls))
+    (a.run_dir / "verify.json").write_text(json.dumps({"verifier_commit": a.commit, "draws": a.draws, "run": run, "ok": ok,
+                                                       "transcripts": results, "negative_controls": controls,
+                                                       "uncontrolled": uncontrolled, "missing": errors}, indent=1) + "\n")
     if not found:
         print(f"REJECT: no transcript under {a.run_dir}/transcripts", flush=True)
     return 0 if ok else 1

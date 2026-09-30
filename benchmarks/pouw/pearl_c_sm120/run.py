@@ -370,6 +370,7 @@ class Pipeline:
         self.size = sizes
         self.owned = bufs is None
         self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
+        self.allocated: list[str] = []
         self.b["xa"], self.b["xb"] = xa, xb
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
         if self.bm == BM:
@@ -377,10 +378,15 @@ class Pipeline:
 
     def encode_maps(self) -> None:
         """The tensor maps into `tma`, a set per operand pair of ML_MAPS whose buffers the pipeline has: P_A and P_B the
-        peel's for the chain's pair, A and B again for the plain GEMMs' (which load no tail)."""
+        peel's for the chain's pair, A and B again for the plain GEMMs' (which load no tail).  A caller's buffers without
+        `tma` get the pipeline's own, freed with it: the maps hold these operands' addresses, so no other pipeline may share
+        them."""
         d, b, m, n, k = self.dev, self.b, self.m, self.n, self.k
         for (x, y), slot in ML_MAPS.items():
             if x in b and y in b:
+                if "tma" not in b:
+                    b["tma"] = d.alloc(self.size["tma"])
+                    self.allocated.append("tma")
                 ab = d.tmap(b[x], k, m) + d.tmap(b[y], k, n)
                 tail = d.tmap(b["pa_t"], 128, m) + d.tmap(b["pb_t"], 128, n) if slot == 0 else ab
                 d.ck("cuMemcpyHtoD_v2", u64(b["tma"] + ML_SET * slot), C.c_char_p(ab + tail), ML_SET)
@@ -484,7 +490,7 @@ class Pipeline:
 
     def free(self) -> None:
         for name, p in self.b.items():
-            if self.owned and name not in ("xa", "xb"):
+            if self.owned and name not in ("xa", "xb") or name in self.allocated:
                 self.dev.free(p)
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
@@ -513,15 +519,15 @@ class Pipeline:
         and where fusable `gemm_pearlc_b` (y and the message digests from registers)."""
         d, b, m, n, mr, sx, kk = self.dev, self.b, self.m, self.n, self.m_real, self.suffix, self.keys
         tile = "_d" if self.bm == BM_D else ""
-        peel = {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}
-        out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}{sx}", "at", "bt", m, n, out=("c", "u", "y"), **peel),
+        peel = lambda: {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}  # noqa: E731
+        out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}{sx}", "at", "bt", m, n, out=("c", "u", "y"), **peel()),
                "hash_msg": lambda: d.launch("hash_msg_v", cdiv(mr * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"], kk["k_msg"]),
                                             i=(mr, n))}
         if self.bm == BM:
-            out["gemm_pearlc_s"] = lambda: self.gemm("gemm_pearlc_s" + sx, "at", "bt", m, n, out=(None, None, "y"), **peel)
+            out["gemm_pearlc_s"] = lambda: self.gemm("gemm_pearlc_s" + sx, "at", "bt", m, n, out=(None, None, "y"), **peel())
         if self.fusable:
             out["gemm_pearlc_b"] = lambda: self.gemm("gemm_pearlc_b" + sx, "at", "bt", m, n, out=(None, None, "y"), dg=b["digests"],
-                                                     key=kk["k_msg"], **peel)
+                                                     key=kk["k_msg"], **peel())
         return out
 
     def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
