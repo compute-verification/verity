@@ -219,7 +219,7 @@ def test_each_coverage_task_is_one_stage_attempt_whose_tool_reads_the_row():
     _, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
     for stage, task in (("build", build), ("commit", gpu)):
         run = task[task.index("\nrun: |"):task.index("\nconfig:")].replace("\\\n", " ")
-        line = next(ln for ln in run.splitlines() if "-m research run" in ln)
+        line = next(ln for ln in run.splitlines() if "-m research run" in ln or '"${research[@]}" run ' in ln)
         assert f'--tool vllm.{stage} --project verity --cwd "$SRC"' in line and "bash -c" not in line
         argv = line.split(" -- ", 1)[1].replace('${deferred[@]+"${deferred[@]}"}', '')
         for k, v in env.items():
@@ -420,3 +420,56 @@ def test_backfill_takes_its_credentials_on_stdin_only():
     assert "head -n 4 > \"$creds\"" in text and "R2_ENDPOINT=" not in text.replace("export R2_ENDPOINT", "")
     r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True)
     assert r.returncode == 2 and "want the 4 credential lines on stdin" in r.stderr
+
+
+def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):
+    """The Commit's watchdog: when commit.log hasn't changed for COMMIT_STALL_S (Gemma-2-2B Commits held GPUs 50-90 min silent) it
+    lowers the run's timeout through `research tele set-timeout`, whose harness stops the workload's session and records the attempt
+    as cancelled, and exits 86; a run the harness doesn't stop is killed with its workload's group (status.json `pgid`) after
+    COMMIT_STALL_GRACE_S; a Commit whose log keeps changing runs to its own exit. Clocks are shims (each `date +%s` call advances
+    400 s, `sleep` returns at once, `stat` reads the log's mtime from a file), and each Commit exits on a FIFO or a kill, so nothing
+    here waits on wall-clock time."""
+    import os
+    import subprocess
+    gpu = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")[2]
+    fn = "\n".join(ln[2:] for ln in gpu[gpu.index("\n  # >>> commit watchdog") + 1:gpu.index("  # <<< commit watchdog")].splitlines())
+    assert 'watch_commit "$SWEEP_DIR/$ROW/commit.log" "$RESEARCH_RUNS/$run_id" "${research[@]}" run --id "$run_id"' in gpu
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "sleep").write_text("#!/bin/sh\nexit 0\n")
+    (bin_dir / "date").write_text('#!/bin/sh\nn=$(cat "$CLOCK"); echo $((n + 400)) > "$CLOCK"; [ "$1" = +%s ] && echo "$n" || echo T\n')
+    # a progressing log (CALLS set) has the clock's next reading as its mtime, and its Commit exits at the 5th poll (the FIFO it reads);
+    # a quiet one has mtime 0
+    (bin_dir / "stat").write_text('#!/bin/sh\nif [ -n "$CALLS" ]; then c=$(($(cat "$CALLS") + 1)); echo $c > "$CALLS"\n'
+                                  '[ $c -eq 5 ] && echo > "$FIFO"; cat "$CLOCK"; else echo 0; fi\n')
+    # the runner's harness, stopping the workload (the FIFO it reads) when HARNESS_FIFO is set
+    (bin_dir / "research").write_text('#!/bin/sh\necho "$*" >> "$CALLED"\n[ -z "$HARNESS_FIFO" ] || echo > "$HARNESS_FIFO"\n')
+    for f in bin_dir.iterdir():
+        f.chmod(0o755)
+    log, run_dir, called = tmp_path / "row" / "commit.log", tmp_path / "runs" / "r1", tmp_path / "called"
+    log.parent.mkdir()
+    run_dir.mkdir(parents=True)
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "CLOCK": str(tmp_path / "clock"), "CALLED": str(called), "COMMIT_STALL_S": "900",
+           "COMMIT_STALL_POLL_S": "0"}
+
+    def watch(cmd: str, **extra: str) -> tuple[str, str]:
+        (tmp_path / "clock").write_text("1000\n")
+        for f in (called, log.parent / "row.log"):
+            f.unlink(missing_ok=True)
+        r = subprocess.run(["bash", "-c", f"research=({bin_dir}/research)\n{fn}\nwatch_commit {log} {run_dir} {cmd}; echo rc=$?"],
+                           capture_output=True, text=True, env=env | extra)
+        return r.stdout.strip().splitlines()[-1], (log.parent / "row.log").read_text() if (log.parent / "row.log").exists() else ""
+
+    fifo = tmp_path / "workload"
+    os.mkfifo(fifo)
+    rc, row_log = watch(f"cat {fifo}", HARNESS_FIFO=str(fifo), COMMIT_STALL_GRACE_S="1000000000")
+    assert rc == "rc=86" and "stopping the Commit" in row_log and "killing it" not in row_log
+    assert called.read_text().split() == ["tele", "set-timeout", "--attempt-dir", str(run_dir), "--timeout-s", "1", "--actor", "guardian",
+                                          "--reason", "commit", "watchdog:", "commit.log", "unchanged", "for", "1200", "s"]
+    workload = subprocess.Popen(["tail", "-f", "/dev/null"], start_new_session=True)
+    (run_dir / "status.json").write_text(f'{{"pgid": {workload.pid}}}')
+    rc, row_log = watch("tail -f /dev/null", COMMIT_STALL_GRACE_S="0")
+    assert rc == "rc=86" and "killing it" in row_log and workload.wait() == -9
+    (tmp_path / "calls").write_text("0\n")
+    rc, row_log = watch(f"cat {fifo}", CALLS=str(tmp_path / "calls"), FIFO=str(fifo), COMMIT_STALL_GRACE_S="0")
+    assert rc == "rc=0" and row_log == "" and not called.exists()
