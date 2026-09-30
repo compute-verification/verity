@@ -358,6 +358,15 @@ impl HostSlots {
 
     /// With `mapped` (a device-readable buffer of n words, or None), a, b per slot when every z is a & b; else z, a, b in heap memory
     fn pack_in(slots: &[HostSlot], mapped: impl Fn(usize) -> Option<HostBuf>) -> Self {
+        let t = Instant::now();
+        let h = Self::pack_slots(slots, mapped);
+        if crate::circuit::unit_profile() {
+            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "pack", "slots": slots.len(), "layout": h.layout(), "wall_s": t.elapsed().as_secs_f64()}));
+        }
+        h
+    }
+
+    fn pack_slots(slots: &[HostSlot], mapped: impl Fn(usize) -> Option<HostBuf>) -> Self {
         let words: Vec<i32> = slots.iter().map(|s| s.1.len() as i32).collect();
         let at = slots.iter().map(|s| s.0 as i64).collect();
         let total: usize = words.iter().map(|&w| w as usize).sum();
@@ -566,7 +575,12 @@ pub fn device_inputs(st: &Stmt, rows: &[u8], salts: &[u8]) -> (Vec<F128>, Vec<Ho
 pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
     let r = st.c.range_of(ni);
     let wpb = 1usize << (st.c.k_log - 7);
-    st.slot_zab(ni, &st.c.nets[ni].1, ins).into_iter().map(|(x, z, a, b)| ((x / r.count) * wpb + r.slot(x % r.count) / 128, z, a, b)).collect()
+    let t = Instant::now();
+    let h: Vec<HostSlot> = st.slot_zab(ni, &st.c.nets[ni].1, ins).into_iter().map(|(x, z, a, b)| ((x / r.count) * wpb + r.slot(x % r.count) / 128, z, a, b)).collect();
+    if crate::circuit::unit_profile() {
+        eprintln!("UNITPROF\t{}", serde_json::json!({"part": "host_slots", "circuit": ni, "slots": ins.len(), "wall_s": t.elapsed().as_secs_f64()}));
+    }
+    h
 }
 
 /// One rep on the GPU: proof, commitment, and the phase split (witness, commit, link, zerocheck, lincheck, ring switch,
