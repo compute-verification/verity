@@ -319,55 +319,93 @@ extern "C" __global__ void __launch_bounds__(256) form_nv(const Args a) { form_b
 extern "C" __global__ void __launch_bounds__(256) form_mx(const Args a) { form_body<MXFP4>(a); }
 
 // ---------------------------------------------------------------- the fused products: rows x 32 chains against F
-// out[row][q] = the atom chained from +0 over k/64 steps of codes[row] . ft[q] (ft at scale 1.0).  One warp per 16 rows and
-// n8 block of q.  p0 codes, p1 scales (null: every scale 1.0), p2 ft, p3 out; i0 rows, i1 k, i2 mode (0: FP32 rows x 32,
+// out[row][q] = the atom chained from +0 over k/64 steps of codes[row] . ft[q] (ft at scale 1.0).  One CTA per 16·RB rows,
+// one warp per 16 rows and n8 block of q.  Codes, ft and scales stream through a CH_STAGES-deep cp.async ring of CH_U k64
+// chunks (256 bytes per row: 16-byte chunk j of stage row r at r·256 + (j ^ (r & 7))·16), so a chain waits on its MMAs
+// alone.  p0 codes, p1 scales (null: every scale 1.0), p2 ft, p3 out; i0 rows, i1 k (512 | k), i2 mode (0: FP32 rows x 32,
 // 1: bf16 into P[row][32 + q])
-template <int FMT> DEV void chain32_body(const Args& a) {
-  constexpr int BLK = Fmt<FMT>::BLK, SB = 64 / BLK;
+constexpr int CH_STAGES = 4, CH_U = 8;
+template <int FMT, int RB> struct ChGeo {
+  static constexpr int ROWS = 16 * RB, THREADS = 128 * RB, SROW = CH_U * 64 / Fmt<FMT>::BLK;
+  static constexpr int A_BYTES = ROWS * 256, F_BYTES = 32 * 256, STAGE = A_BYTES + F_BYTES + ROWS * SROW;
+  static constexpr int SMEM = CH_STAGES * STAGE;
+};
+template <int FMT, int RB> DEV void chain32_body(const Args& a) {
+  using G = ChGeo<FMT, RB>;
+  constexpr int BLK = Fmt<FMT>::BLK, PER = G::SROW / 16;
+  extern __shared__ __align__(128) uint8_t smem[];
   const uint8_t* A = reinterpret_cast<const uint8_t*>(a.p[0]);
   const uint8_t* S = reinterpret_cast<const uint8_t*>(a.p[1]);
   const uint8_t* FT = reinterpret_cast<const uint8_t*>(a.p[2]);
-  const int K = a.i[1], warp = threadIdx.x / 32, lane = threadIdx.x % 32, g = lane >> 2, t = lane & 3;
-  const int r0 = blockIdx.x * 16, q0 = 8 * warp;
-  const uint8_t* ag = A + (size_t)(r0 + g) * (K / 2) + 4 * t;
-  const uint8_t* ah = A + (size_t)(r0 + g + 8) * (K / 2) + 4 * t;
-  const uint8_t* bq = FT + (size_t)(q0 + g) * (K / 2) + 4 * t;
-  const uint8_t* sr = S ? S + (size_t)(r0 + 8 * (lane & 1) + (lane >> 2)) * (K / BLK) : nullptr;
+  const int K = a.i[1], NB = K / 64 / CH_U, tid = threadIdx.x, warp = tid / 32, lane = tid % 32, g = lane >> 2, t = lane & 3;
+  const int r0 = blockIdx.x * G::ROWS, ra = (warp / 4) * 16 + g, rq = 8 * (warp % 4) + g;
+  const int rs = (warp / 4) * 16 + 8 * (lane & 1) + (lane >> 2);
+
+  auto load = [&](int b, int st) {
+    uint8_t* s = smem + st * G::STAGE;
+    for (int i = tid; i < G::ROWS * 16; i += G::THREADS)
+      cp16(s + (i >> 4) * 256 + (((i & 15) ^ ((i >> 4) & 7)) << 4),
+           A + (size_t)(r0 + (i >> 4)) * (K / 2) + b * 256 + (i & 15) * 16);
+    for (int i = tid; i < 32 * 16; i += G::THREADS)
+      cp16(s + G::A_BYTES + (i >> 4) * 256 + (((i & 15) ^ ((i >> 4) & 7)) << 4),
+           FT + (size_t)(i >> 4) * (K / 2) + b * 256 + (i & 15) * 16);
+    if (S)
+      for (int i = tid; i < G::ROWS * PER; i += G::THREADS)
+        cp16(s + G::A_BYTES + G::F_BYTES + (i / PER) * G::SROW + (i % PER) * 16,
+             S + (size_t)(r0 + i / PER) * (K / BLK) + b * G::SROW + (i % PER) * 16);
+  };
+
   float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-  constexpr int U = 8;
-  for (int c0 = 0; c0 < K / 64; c0 += U) {
-    uint32_t af[U][4], bf[U][2], sf[U];
 #pragma unroll
-    for (int u = 0; u < U; u++) {
-      const int c = c0 + u;
-      if (c < K / 64) {
-        af[u][0] = *reinterpret_cast<const uint32_t*>(ag + 32 * c);
-        af[u][1] = *reinterpret_cast<const uint32_t*>(ah + 32 * c);
-        af[u][2] = *reinterpret_cast<const uint32_t*>(ag + 32 * c + 16);
-        af[u][3] = *reinterpret_cast<const uint32_t*>(ah + 32 * c + 16);
-        bf[u][0] = *reinterpret_cast<const uint32_t*>(bq + 32 * c);
-        bf[u][1] = *reinterpret_cast<const uint32_t*>(bq + 32 * c + 16);
-        if constexpr (FMT == NVFP4) sf[u] = sr ? *reinterpret_cast<const uint32_t*>(sr + SB * c) : Fmt<FMT>::ONE;
-        else sf[u] = sr ? (uint32_t)*reinterpret_cast<const uint16_t*>(sr + SB * c) : Fmt<FMT>::ONE;
-      }
-    }
-#pragma unroll
-    for (int u = 0; u < U; u++)
-      if (c0 + u < K / 64) mma_fp4<FMT>(acc, af[u], bf[u][0], bf[u][1], acc, sf[u], Fmt<FMT>::ONE);
+  for (int st = 0; st < CH_STAGES - 1; st++) {
+    if (st < NB) load(st, st);
+    cp_commit();
   }
-  const int col = q0 + 2 * t;
+  for (int b = 0; b < NB; b++) {
+    cp_wait<CH_STAGES - 2>();
+    __syncthreads();
+    if (b + CH_STAGES - 1 < NB) load(b + CH_STAGES - 1, (b + CH_STAGES - 1) % CH_STAGES);
+    cp_commit();
+    const uint8_t* sA = smem + (b % CH_STAGES) * G::STAGE;
+    const uint8_t* sF = sA + G::A_BYTES;
+    const uint8_t* sS = sF + G::F_BYTES;
+#pragma unroll
+    for (int u = 0; u < CH_U; u++) {
+      // ra, ra + 8 and rq are all g mod 8, so every read's chunk is swizzled by g
+      const int lo = ((2 * u) ^ g) << 4, hi = ((2 * u + 1) ^ g) << 4;
+      const uint32_t af[4] = {*reinterpret_cast<const uint32_t*>(sA + ra * 256 + lo + 4 * t),
+                              *reinterpret_cast<const uint32_t*>(sA + (ra + 8) * 256 + lo + 4 * t),
+                              *reinterpret_cast<const uint32_t*>(sA + ra * 256 + hi + 4 * t),
+                              *reinterpret_cast<const uint32_t*>(sA + (ra + 8) * 256 + hi + 4 * t)};
+      const uint32_t b0 = *reinterpret_cast<const uint32_t*>(sF + rq * 256 + lo + 4 * t);
+      const uint32_t b1 = *reinterpret_cast<const uint32_t*>(sF + rq * 256 + hi + 4 * t);
+      uint32_t sf = Fmt<FMT>::ONE;
+      if (S) {
+        if constexpr (FMT == NVFP4) sf = *reinterpret_cast<const uint32_t*>(sS + rs * G::SROW + 4 * u);
+        else sf = *reinterpret_cast<const uint16_t*>(sS + rs * G::SROW + 2 * u);
+      }
+      mma_fp4<FMT>(acc, af, b0, b1, acc, sf, Fmt<FMT>::ONE);
+    }
+  }
+  cp_wait<0>();
+  const int row = r0 + ra, col = 8 * (warp % 4) + 2 * t;
   if (a.i[2] == 0) {
     float* out = reinterpret_cast<float*>(a.p[3]);
-    *reinterpret_cast<float2*>(out + (size_t)(r0 + g) * 32 + col) = make_float2(acc[0], acc[1]);
-    *reinterpret_cast<float2*>(out + (size_t)(r0 + g + 8) * 32 + col) = make_float2(acc[2], acc[3]);
+    *reinterpret_cast<float2*>(out + (size_t)row * 32 + col) = make_float2(acc[0], acc[1]);
+    *reinterpret_cast<float2*>(out + (size_t)(row + 8) * 32 + col) = make_float2(acc[2], acc[3]);
   } else {
     uint16_t* P = reinterpret_cast<uint16_t*>(a.p[3]);
-    *reinterpret_cast<uint32_t*>(P + (size_t)(r0 + g) * 64 + 32 + col) = f2bf(acc[0]) | (uint32_t)f2bf(acc[1]) << 16;
-    *reinterpret_cast<uint32_t*>(P + (size_t)(r0 + g + 8) * 64 + 32 + col) = f2bf(acc[2]) | (uint32_t)f2bf(acc[3]) << 16;
+    *reinterpret_cast<uint32_t*>(P + (size_t)row * 64 + 32 + col) = f2bf(acc[0]) | (uint32_t)f2bf(acc[1]) << 16;
+    *reinterpret_cast<uint32_t*>(P + (size_t)(row + 8) * 64 + 32 + col) = f2bf(acc[2]) | (uint32_t)f2bf(acc[3]) << 16;
   }
 }
-extern "C" __global__ void __launch_bounds__(128) chain32_nv(const Args a) { chain32_body<NVFP4>(a); }
-extern "C" __global__ void __launch_bounds__(128) chain32_mx(const Args a) { chain32_body<MXFP4>(a); }
+#define CHAIN32(NAME, FMT, RB)                                                                                  \
+  extern "C" __global__ void __launch_bounds__(128 * RB) NAME(const Args a) { chain32_body<FMT, RB>(a); } \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = ChGeo<FMT, RB>::SMEM; }
+CHAIN32(chain32_nv, NVFP4, 1)
+CHAIN32(chain32_nv_r2, NVFP4, 2)
+CHAIN32(chain32_mx, MXFP4, 1)
+CHAIN32(chain32_mx_r2, MXFP4, 2)
 
 // P_B[j][q] = bf16(FP32 add(Σ_p fma(Ẽ_B[j][p], G[p][q]) from +0 in p order, −BF[j][q])), Ẽ_B = −P_B[j][32 + p] (form_*
 // wrote it negated).  p0 P_B, p1 G (32 x 32 FP32), p2 BF (n x 32 FP32); i0 n

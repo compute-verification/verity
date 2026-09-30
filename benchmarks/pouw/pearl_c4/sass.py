@@ -47,7 +47,7 @@ def want(name: str) -> dict[str, tuple[int, int]] | None:
     if name.startswith("gemm_") and not name.endswith("_smem"):
         peel = (0, 0) if "_plain" in name else (32, 32)
         return {f"OMMA_{fmt}": (32, 32), f"OMMA_{other}": (0, 0), "HMMA": peel, "E2M1": (0, 0)}
-    if name.startswith("chain32_"):
+    if name.startswith("chain32_") and not name.endswith("_smem"):
         return {f"OMMA_{fmt}": (8, 8), f"OMMA_{other}": (0, 0), "HMMA": (0, 0), "E2M1": (0, 0)}
     if name.startswith("form_"):
         return {"OMMA_NV": (8, 8), "OMMA_MX": (0, 0), "HMMA": (0, 0), "E2M1": (16, 16)}
@@ -64,7 +64,7 @@ def problems(ptxas: str, funcs: dict[str, dict]) -> list[str]:
             if (mult == 0 and n) or (mult and (n < least or n % mult)):
                 out.append(f"{name}: {n} {op} (want " + (f"a multiple of {mult}, at least {least})" if mult else "none)"))
     expected = {f"gemm_{f}_{m}{h}" for f in ("nv", "mx") for m in ("hash", "nohash", "plain") for h in ("", "_m64")}
-    expected |= {f"{k}_{f}" for k in ("form", "chain32") for f in ("nv", "mx")}
+    expected |= {f"{k}_{f}{r}" for k, r in (("form", ""), ("chain32", ""), ("chain32", "_r2")) for f in ("nv", "mx")}
     expected |= {"lines", "transpose", "hash_rows", "pb", "leaves"}
     out += [f"{name}: missing" for name in sorted(expected - set(funcs))]
     return out

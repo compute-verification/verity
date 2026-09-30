@@ -208,13 +208,14 @@ class Pipeline:
     device pointers the caller owns (the harness's operand sets); the rest are allocated here."""
 
     def __init__(self, dev: Dev, fmt: str, m: int, n: int, k: int, bm: int | None = None, store_cu: bool = False,
-                 external: dict[str, int] | None = None, split: int | None = None):
+                 external: dict[str, int] | None = None, split: int | None = None, chain_h: int | None = None):
         why = domain(m, n, k)
         if why:
             raise ValueError(f"{m}x{n}x{k} outside pearl_c4.cu's domain: {why}")
         self.dev, self.fmt, self.m, self.n, self.k = dev, fmt, m, n, k
         self.split_a = split or form_split(m, k, dev.sms)
         self.split_b = split or form_split(n, k, dev.sms)
+        self.chain_h = chain_h
         self.tag, self.blk = FMTS[fmt]
         self.bm = bm or (128 if m % 128 == 0 else 64)
         self.sizes = buffer_sizes(fmt, m, n, k)
@@ -226,6 +227,12 @@ class Pipeline:
 
     def gemm(self, mode: str) -> str:
         return f"gemm_{self.tag}_{mode}" + ("" if self.bm == 128 else "_m64")
+
+    def chain32(self, rows: int, p: list[int], i: list[int]) -> tuple[str, tuple, dict]:
+        """The launch of a rows x 32 chain: two 16-row blocks per CTA where that still fills every SM."""
+        h = self.chain_h or (32 if rows % 32 == 0 and rows >= 32 * self.dev.sms else 16)
+        name = f"chain32_{self.tag}" + ("_r2" if h == 32 else "")
+        return name, (rows // h, 8 * h, self.dev.dyn_smem(name)), dict(p=p, i=i)
 
     def weight_side(self, stream: int = 0, hashing: bool = True) -> None:
         """Per (weight, epoch): F_A and F_B's lines, F's transposes, B's commitment (modeled), B's forming (with E_B's lines),
@@ -243,8 +250,9 @@ class Pipeline:
         L(f"form_{self.tag}", (n // 16, self.split_b), 256, p=[
             b["xb"], b["lines_eb"], b["lines_fb"], b["b_codes"], b["b_scales"], b["b_alpha"], b["b_inv"], b["b_ae"], b["pb"],
             b["seed_b"] if hashing else 0], i=[n, k, 32, 1, ROLE_EB])
-        L(f"chain32_{self.tag}", 2, 128, p=[b["fbt"], 0, b["fat"], b["g"]], i=[32, k, 0])
-        L(f"chain32_{self.tag}", n // 16, 128, p=[b["b_codes"], b["b_scales"], b["fat"], b["bf"]], i=[n, k, 0])
+        for name, geo, kw in (self.chain32(32, [b["fbt"], 0, b["fat"], b["g"]], [32, k, 0]),
+                              self.chain32(n, [b["b_codes"], b["b_scales"], b["fat"], b["bf"]], [n, k, 0])):
+            L(name, *geo, **kw)
         L("pb", cdiv(32 * n, 256), 256, p=[b["pb"], b["g"], b["bf"]], i=[n])
 
     def prime(self, stream: int = 0) -> None:
@@ -263,7 +271,7 @@ class Pipeline:
         out.append((f"form_{self.tag}", ((m // 16, self.split_a), 256), dict(
             p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"], b["a_inv"], b["a_ae"], b["pa"],
                b["seed_a"] if mode == "hash" else 0], i=[m, k, 0, 0, ROLE_EA])))
-        out.append((f"chain32_{self.tag}", (m // 16, 128), dict(p=[b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], i=[m, k, 1])))
+        out.append(self.chain32(m, [b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], [m, k, 1]))
         g = self.gemm(mode)
         out.append((g, ((m // self.bm) * (n // 128), self.threads, self.dev.dyn_smem(g)), dict(
             p=[b["a_codes"], b["a_scales"], b["b_codes"], b["b_scales"], b["pa"], b["pb"], b["a_inv"], b["b_inv"], b["y"],
@@ -316,8 +324,9 @@ def check_fmt(dev: Dev, d: Path) -> bool:
     for bm in (128, 64):
         if m % bm:
             continue
-        split = k // 64 // 8 if bm == 64 else 1
-        pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, store_cu=True, split=split)
+        wide = bm == 64 and m % 32 == 0 and n % 32 == 0
+        pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, store_cu=True, split=k // 64 // 8 if bm == 64 else 1,
+                      chain_h=32 if wide else 16)
         for name in ("xa", "xb", "seed_a", "seed_b"):
             dev.write(pl.buf[name], want[name])
         pl.weight_side()
@@ -331,7 +340,7 @@ def check_fmt(dev: Dev, d: Path) -> bool:
                 rows.append(diff(name, dev.read(pl.buf[src], len(want[name])), want[name]) | {"mode": mode})
         pl.free()
         for r in rows:
-            r.update(fmt=mf["fmt"], bm=bm, split=[pl.split_a, pl.split_b], shape=[m, n, k])
+            r.update(fmt=mf["fmt"], bm=bm, split=[pl.split_a, pl.split_b], chain_h=pl.chain_h, shape=[m, n, k])
             emit(r)
             ok &= r["mismatches"] == 0
     return ok
