@@ -96,9 +96,11 @@ def test_an_unpinned_nvcc_fails_closed_and_ftz_free_code_needs_no_pin():
 
 
 def test_the_pins_are_the_test_kernels_under_cuda_12_9():
-    pins = G.load_pins()
-    assert list(pins) == ["V12.9.86/sm_90a"] and G.TEST_KERNELS == ("ieee_ops", "ieee_q")
-    entry = pins["V12.9.86/sm_90a"]
+    pins, build = G.load_pins(), (HERE / "build.sh").read_text()
+    flags = re.search(r'^FLAGS="([^"]+)"$', build, re.M).group(1)
+    assert list(pins) == [f"V12.9.86/sm_90a {flags}"] and G.TEST_KERNELS == ("ieee_ops", "ieee_q")
+    assert "ftz" not in flags and "fast" not in flags and 'release 12.9' in build and '"$NV/sm_90a $FLAGS"' in build
+    entry = pins[f"V12.9.86/sm_90a {flags}"]
     assert set(entry["slow"]) == {"__cuda_sm20_rcp_rn_f32_slowpath", "__cuda_sm20_sqrt_rn_f32_slowpath",
                                   "__cuda_sm3x_div_rn_noftz_f32_slowpath"}
     assert set(entry["fast"]) == {"__cuda_sm20_rcp_rn_f32_slowpath", "__cuda_sm20_sqrt_rn_f32_slowpath"}
@@ -106,7 +108,6 @@ def test_the_pins_are_the_test_kernels_under_cuda_12_9():
     for d in (entry["slow"], entry["fast"]):
         for seqs in d.values():
             assert all(any(G.gated_ftz(re.sub(r"^@!?p ", "", s)) for s in seq) for seq in seqs)
-    assert "V12.9" in (HERE / "build.sh").read_text() or "release 12.9" in (HERE / "build.sh").read_text()
     source = (HERE / "pearl_c.cu").read_text()
     assert all(f"__global__ void __launch_bounds__(128) {k}(const Args a)" in source for k in G.TEST_KERNELS)
 

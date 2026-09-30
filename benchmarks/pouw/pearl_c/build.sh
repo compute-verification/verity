@@ -18,9 +18,11 @@ C9=${C9:-/tmp/cuda-12.9.1}; OUT=${1:-/tmp/pearl-c-ship}
 [ -x "$C9/bin/nvcc" ] || { echo "no nvcc at $C9 (CUDA 12.9.1)" >&2; exit 1; }
 "$C9/bin/nvcc" --version | grep -q "release 12.9" || { echo "$C9 is not CUDA 12.9" >&2; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"
-"$C9/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -fmad=false -Xptxas -v -cubin -I "$HERE" \
+# every shipped cubin is built with these flags alone (no FTZ, no fast math); the .FTZ gate's pins are keyed to them
+FLAGS="-O3 -std=c++17 -fmad=false"
+"$C9/bin/nvcc" $FLAGS -gencode arch=compute_90a,code=sm_90a -Xptxas -v -cubin -I "$HERE" \
   -o "$OUT/pearl_c.cubin" "$HERE/pearl_c.cu" 2> "$OUT/ptxas.txt"
-"$C9/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxas -v -cubin -I "$HERE" \
+"$C9/bin/nvcc" $FLAGS -gencode arch=compute_120a,code=sm_120a -Xptxas -v -cubin -I "$HERE" \
   -o "$OUT/hash_sm120a.cubin" "$HERE/hash.cu" 2> "$OUT/ptxas_sm120a.txt"
 "$C9/bin/cuobjdump" -sass "$OUT/pearl_c.cubin" > "$OUT/pearl_c.sass"
 python3 - "$OUT" <<'EOF'
@@ -74,12 +76,12 @@ rm "$OUT/pearl_c.sass"
 NV=$("$C9/bin/nvcc" --version | grep -o 'V[0-9][0-9.]*' | head -1)
 "$C9/bin/nvdisasm" "$OUT/pearl_c.cubin" > "$OUT/pearl_c.nvdisasm"
 "$C9/bin/nvdisasm" "$OUT/hash_sm120a.cubin" > "$OUT/hash_sm120a.nvdisasm"
-python3 "$HERE/ftz_gate.py" "$OUT/pearl_c.nvdisasm" "$NV/sm_90a" || { echo "REFUSED: the .FTZ gate (pearl_c.cubin)" >&2; exit 1; }
-python3 "$HERE/ftz_gate.py" "$OUT/hash_sm120a.nvdisasm" "$NV/sm_120a" || { echo "REFUSED: the .FTZ gate (hash_sm120a.cubin)" >&2; exit 1; }
-"$C9/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -fmad=false --use_fast_math -cubin -I "$HERE" \
+python3 "$HERE/ftz_gate.py" "$OUT/pearl_c.nvdisasm" "$NV/sm_90a $FLAGS" || { echo "REFUSED: the .FTZ gate (pearl_c.cubin)" >&2; exit 1; }
+python3 "$HERE/ftz_gate.py" "$OUT/hash_sm120a.nvdisasm" "$NV/sm_120a $FLAGS" || { echo "REFUSED: the .FTZ gate (hash_sm120a.cubin)" >&2; exit 1; }
+"$C9/bin/nvcc" $FLAGS --use_fast_math -gencode arch=compute_90a,code=sm_90a -cubin -I "$HERE" \
   -o "$OUT/fast_math.cubin" "$HERE/pearl_c.cu" 2> /dev/null
 "$C9/bin/nvdisasm" "$OUT/fast_math.cubin" > "$OUT/fast_math.nvdisasm"
-if python3 "$HERE/ftz_gate.py" "$OUT/fast_math.nvdisasm" "$NV/sm_90a" 2> "$OUT/fast_math.gate"; then
+if python3 "$HERE/ftz_gate.py" "$OUT/fast_math.nvdisasm" "$NV/sm_90a $FLAGS" 2> "$OUT/fast_math.gate"; then
   echo "REFUSED: the .FTZ gate passed a --use_fast_math build" >&2; exit 1
 fi
 grep -q '^ieee_ops: \|^ieee_q: ' "$OUT/fast_math.gate" || { echo "REFUSED: the fast-math control did not fail in the test kernels" >&2; exit 1; }
@@ -87,7 +89,7 @@ rm "$OUT/pearl_c.nvdisasm" "$OUT/hash_sm120a.nvdisasm" "$OUT/fast_math.cubin" "$
 echo ".FTZ gate: only nvcc $NV's pinned div, rcp and sqrt sequences; the --use_fast_math control fails in the test kernels"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$HERE/bench.py" "$HERE/bench.json" "$HERE/run.sh" "$HERE/vendor.py" "$OUT/"
-"$C9/bin/nvcc" --version | tail -2 > "$OUT/toolchain.txt"
+{ "$C9/bin/nvcc" --version | tail -2; echo "flags: $FLAGS (sm_90a pearl_c.cubin, sm_120a hash_sm120a.cubin)"; } > "$OUT/toolchain.txt"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c protocols/pouw packages/verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"

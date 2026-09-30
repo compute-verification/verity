@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The `.FTZ` gate on Pearl-C's shipped SASS (build.sh): no FP32 FADD, FFMA or FMUL with `.FTZ`, except inside nvcc's correctly
 rounded divide, reciprocal and square root, matched as whole sequences against the ones the pinned test kernels (pearl_c.cu's
-`ieee_ops` and `ieee_q`) produce, under an nvcc whose sequences `ftz_pins.json` pins.  Any other nvcc fails closed.  run.py's
-check holds the test kernels' words to the correctly rounded values on subnormal inputs and outputs.
+`ieee_ops` and `ieee_q`) produce, under an nvcc and flags whose sequences `ftz_pins.json` pins.  Any other nvcc or flags fail
+closed.  run.py's check holds the test kernels' words to the correctly rounded values on subnormal inputs and outputs.
 
 * **A sequence** is nvcc's out-of-line slow path (nvdisasm names it `__cuda_sm…_slowpath`), or the inline fast path that goes
   with it: the divergent block holding its `.FTZ` ops, inside a convergence region (BSSY … BSYNC) that also calls that slow path.
@@ -11,8 +11,10 @@ check holds the test kernels' words to the correctly rounded values on subnormal
   immediates and guard polarity, and with registers erased.  ptxas picks registers and equivalent integer and move forms per
   kernel; the floating-point work is the routine.
 
-  python3 ftz_gate.py NVDISASM_TEXT NVCC_VERSION        exit 1 with the problems on stderr
-  python3 ftz_gate.py NVDISASM_TEXT NVCC_VERSION --pin  print the test kernels' sequences as ftz_pins.json's entry
+A pin is keyed by the build: 'nvcc version/arch flags', as build.sh passes it (the flags carry no FTZ or fast math).
+
+  python3 ftz_gate.py NVDISASM_TEXT BUILD        exit 1 with the problems on stderr
+  python3 ftz_gate.py NVDISASM_TEXT BUILD --pin  print the test kernels' sequences as ftz_pins.json's entry for BUILD
 """
 
 from __future__ import annotations
@@ -139,7 +141,7 @@ def sequences(fns: dict[str, list[str]], kernel: str) -> tuple[dict[str, set], d
 
 
 def load_pins(path: str = PINS) -> dict:
-    """ftz_pins.json's entries, by 'nvcc version/arch' (keys starting with _ are notes)."""
+    """ftz_pins.json's entries, by 'nvcc version/arch flags' (keys starting with _ are notes)."""
     return {k: v for k, v in json.load(open(path)).items() if not k.startswith("_")}
 
 
@@ -149,7 +151,7 @@ def pinned_of(entry: dict) -> tuple[dict[str, set], dict[str, set]]:
 
 
 def check(text: str, nvcc: str, pins: dict) -> list[str]:
-    """The gate's problems for one cubin's nvdisasm text built by `nvcc` (its `V…` version); empty when it passes."""
+    """The gate's problems for one cubin's nvdisasm text built as `nvcc` ('V…/arch flags'); empty when it passes."""
     kernels = functions(text)
     found = {k: sequences(fns, k) for k, fns in kernels.items()}
     problems = [p for _, _, ps in found.values() for p in ps]
