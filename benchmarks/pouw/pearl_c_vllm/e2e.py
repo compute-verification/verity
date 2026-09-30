@@ -141,11 +141,40 @@ def gate(run, weights: dict) -> list[dict]:
             err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
             same = len(commits) == 1 or commits[0] == commits[1]
             control = len(commits) == 1 or commits[2]["transcript_root"] != commits[0]["transcript_root"]
-            out.append({"weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing, "rel_rms": err,
+            out.append({"check": "call", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "hashing": run.hashing, "rel_rms": err,
                         "commitment_repeats": same, "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+    if run.hashing:
+        out.append(screen_check(run, weights))
     run.details["passes"].clear()
     run.gemm_ms()
     return out
+
+
+def screen_check(run, weights: dict) -> dict:
+    """The records' screen on the card, at the rules' edges: one call of 16 rows (a zero row, rows with 16, 17 and 40 dead
+    entries, one over the noise floor's bound, the rest ordinary) whose flags, from the run's screen, must be the torch
+    screen's on the same rows and the kernel's own α and ρ."""
+    import torch
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    w, W = next(iter(weights.items()))
+    k = W.shape[1]
+    gen = torch.Generator(device=W.device).manual_seed(20260931)
+    x = torch.randn(16, k, device=W.device, generator=gen)
+    x[1] = 0
+    odd = [p for p in range(k) if p % 8]
+    for r, count in ((2, 17), (3, 16), (4, 40)):
+        x[r, odd[:count]] = 1e4
+    x[5, 3] = 200.0
+    run.begin()
+    run.gemm(w, x.to(torch.bfloat16), W, None)
+    sh = run.shapes[(16, W.shape[0], k)]
+    got = run.flag_buf[:16].clone()
+    ref = torch.zeros_like(got)
+    PPD.screen_into(ref, sh.xa[:16], sh.b["alpha_a"], sh.b["aux_a"], fused=False)
+    same = PPD.excluded(got[:, 0].bool(), got[:, 1].bool(), sh.xa[:16]) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), sh.xa[:16])
+    run.end()
+    return {"check": "screen", "screen": run.details["host"]["screen"], "flags_equal": bool(torch.equal(got, ref)),
+            "excluded_equal": same, "ok": same}
 
 
 def gpu() -> str:

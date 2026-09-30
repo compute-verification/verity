@@ -254,8 +254,11 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     make, _, weights, *_ = device_run
     E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
     rows = E2E.gate(make(), weights)
-    assert [(r["n"], r["m"]) for r in rows] == [(256, 8192), (256, 32), (128, 8192), (128, 32)]
-    assert all(r["commitment_repeats"] and not r["omitted_leaves_rejected"] and not r["ok"] for r in rows)
+    calls = [r for r in rows if r["check"] == "call"]
+    assert [(r["n"], r["m"]) for r in calls] == [(256, 8192), (256, 32), (128, 8192), (128, 32)]
+    assert all(r["commitment_repeats"] and not r["omitted_leaves_rejected"] and not r["ok"] for r in calls)
+    (check,) = [r for r in rows if r["check"] == "screen"]
+    assert check["ok"] and check["flags_equal"] and check["screen"] == "torch"
 
 
 # ---- the verifier on an honest pass -------------------------------------------------------------------------------
@@ -495,3 +498,80 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
     host = rep["decode"]["host_ms"]
     assert {"call_keys", "_put", "screen", "launch gemm", "launch forming", "launch hashing", "gemm wrapper (all of it)"} <= set(host)
     assert set(rep["decode"]["split_ms"]) == {"gemm", "forming", "hashing", "other"}
+
+
+# ---- step 1 of the decode plan: the host path, byte for byte the reference's ---------------------------------------
+
+def test_native_keys_are_call_keys_byte_for_byte():
+    import random
+    rng = random.Random(5)
+    for _ in range(40):
+        salt, root = rng.randbytes(32), rng.randbytes(32)
+        keys = PPD._Keys(F, salt)
+        assert keys.native is not None
+        for index, m16 in ((0, 16), (1, 32), (127, 8192), (rng.randrange(1 << 20), 16 * rng.randrange(1, 600)), ((1 << 40) + 3, 48)):
+            assert keys(root, index, m16) == PPD.call_keys(F, salt, root, index, m16)
+    keys.native = None
+    assert keys(root, 9, 64) == PPD.call_keys(F, salt, root, 9, 64)
+
+
+def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
+    ring = PPD._Uploads(torch.device("cpu"), slots=4, width=16)
+    dst = torch.zeros(16, dtype=torch.uint8)
+    for i in range(11):
+        data = bytes([i]) * (5 + i % 3)
+        ring.put(dst, data)
+        assert bytes(dst[:len(data)].tolist()) == data
+    assert ring.i == 11 % 4
+
+
+def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_path):
+    """The same calls through native keys and through `call_keys` itself (the pure path): the same keys uploaded for every
+    call, the same launches, and the same retained manifest (records, roots, commitment)."""
+    make, kernel, weights, *_ = device_run
+    xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(20 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for i, (w, m) in enumerate(((0, 20), (1, 32), (0, 128), (1, 16)))]
+    got = {}
+    for name, native in (("native", True), ("reference", False)):
+        run = make()
+        if not native:
+            run.keys.native = None
+        kernel.dev.log.clear()
+        run.begin(retain=str(tmp_path / name), run=RUN)
+        keys = []
+        for w, x in xs:
+            run.gemm(w, x, weights[w], None)
+            sh = run.shapes[(-(-x.shape[0] // 16) * 16, weights[w].shape[0], 1024)]
+            keys.append(PPD._bytes(sh.keys[:136]))
+        out = run.end()
+        man = json.loads(Path(out["manifest"]).read_text())
+        launches = [(n, i) for n, _, _, i in kernel.dev.log]
+        got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
+                     [{k: u[k] for k in ("root_a", "excluded_a", "real_rows")} for u in man["matmuls"]])
+    assert got["native"] == got["reference"]
+    assert got["native"][0][0] == PPD.call_keys(F, make().salt, make().roots[0], 0, 32)
+
+
+def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(monkeypatch):
+    """The Triton kernel under Triton's CPU interpreter, on rows at the rules' edges: its excluded rows are `screen`'s and
+    `pearl_c_work.row_passes`'s."""
+    import os
+    if "triton" in sys.modules and os.environ.get("TRITON_INTERPRET") != "1":
+        pytest.skip("triton is already imported without its interpreter")
+    monkeypatch.setenv("TRITON_INTERPRET", "1")
+    pytest.importorskip("triton")
+    rng, k = np.random.default_rng(7), 1024
+    words = bf16_words(rng, 12, k)
+    words[1] = 0
+    for r, count in ((2, 17), (3, 16), (4, 40)):
+        words[r, [p for p in range(k) if p % 8][:count]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
+    words[5, 3] = np.float32(200.0).view(np.uint32)
+    x = torch.from_numpy(words.view(np.float32).copy())
+    alpha, aux = stats(words)
+    fused = torch.zeros((12, 2), dtype=torch.uint8)
+    PPD.screen_into(fused, x, alpha, aux, fused=True)
+    ref = torch.zeros((12, 2), dtype=torch.uint8)
+    PPD.screen_into(ref, x, alpha, aux, fused=False)
+    want = tuple(i for i, row in enumerate(words) if not PW.row_passes([int(v) for v in row]))
+    assert PPD.excluded(fused[:, 0].bool(), fused[:, 1].bool(), x) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), x) == want
+    assert torch.equal(fused, ref)

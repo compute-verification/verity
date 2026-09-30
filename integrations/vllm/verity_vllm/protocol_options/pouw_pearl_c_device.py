@@ -31,6 +31,11 @@ device's primary context:
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
 
+The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
+the keys by native BLAKE3 (`_Keys`, byte for byte `call_keys`), their upload through a pinned ring (`_Uploads`), the records'
+screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
+and the stream read from torch's raw accessor.
+
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
 records.  What is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
 passes, never within one.
@@ -46,6 +51,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.commitments import RangeIndexedDomain
+from verity.commitments.merkle import _FRAME, _uint
 from verity_pouw.audit import Epoch, Workload, activation_binding, rows_domain, transcript_domain
 from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
@@ -60,6 +67,11 @@ ROW_ALIGN = 16
 LEAF_CAPACITY = 1 << 23
 #: the liveness screen's relative band, far wider than its FP32 error (2⁻²³)
 BAND = 2.0 ** -10
+#: calls one pass's A-root buffer holds, and rows its screen-flag buffer holds
+CALL_CAPACITY = 1 << 16
+FLAG_ROWS = 1 << 22
+#: the pinned ring's key slots (each call's dom_a ‖ unit, 136 bytes)
+UPLOAD_SLOTS = 1024
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b")
@@ -143,8 +155,11 @@ def _put(t: Any, data: bytes) -> None:
 
 
 def _stream(device: Any) -> int:
+    """The current stream's handle: torch's raw accessor, not `torch.cuda.current_stream`, which costs about 15 µs a call."""
     import torch
-    return torch.cuda.current_stream(device).cuda_stream if device.type == "cuda" else 0
+    if device.type != "cuda":
+        return 0
+    return torch._C._cuda_getCurrentRawStream(device.index if device.index is not None else torch.cuda.current_device())
 
 
 def _bytes(t: Any) -> bytes:
@@ -174,6 +189,72 @@ def screen(x: Any, alpha: Any, aux: Any, chunk: int = 1 << 26) -> tuple[Any, Any
         fails[r0:r0 + step] = f | sure_fail
         unsure[r0:r0 + step] = ~f & ~sure_fail & ~sure_pass
     return fails, unsure
+
+
+_SCREEN_KERNEL: list = []
+
+
+def _screen_kernel():
+    """`screen` as one Triton program a row: FP64 sum of the squares at positions ≡ 0 (mod 8), the band's bounds rounded to
+    FP32 as `screen` rounds them, the dead and in-band counts, and the noise floor from the row's α and ρ.  Its sum's order is
+    not torch's, so a row can come out unsure in one and decided in the other; both leave only rows within the band undecided,
+    and `excluded` decides those exactly, so the records are the same."""
+    if not _SCREEN_KERNEL:
+        import triton
+        import triton.language as tl
+
+        @triton.jit
+        def kernel(x, alpha, aux, out, k, k8, sigma, band, BLOCK: tl.constexpr):
+            row = tl.program_id(0)
+            base = x + row.to(tl.int64) * k
+            acc = tl.zeros([BLOCK], dtype=tl.float64)
+            for s in range(0, k, BLOCK):
+                offs = s + tl.arange(0, BLOCK)
+                v = tl.load(base + offs, mask=offs < k, other=0.0)
+                acc += tl.where(offs % 8 == 0, (v * v).to(tl.float64), 0.0)
+            thr = 64.0 * tl.sum(acc, axis=0) / k8
+            hi = (thr * (1.0 + band)).to(tl.float32)
+            lo = (thr * (1.0 - band)).to(tl.float32)
+            dead = tl.zeros([BLOCK], dtype=tl.int32)
+            near = tl.zeros([BLOCK], dtype=tl.int32)
+            for s in range(0, k, BLOCK):
+                offs = s + tl.arange(0, BLOCK)
+                live = offs < k
+                v = tl.load(base + offs, mask=live, other=0.0)
+                sq = v * v
+                dead += tl.where(live & (sq > hi), 1, 0)
+                near += tl.where(live & (sq >= lo) & (sq <= hi), 1, 0)
+            d = tl.sum(dead, axis=0)
+            b = tl.sum(near, axis=0)
+            floor = tl.where(tl.load(aux + 2 * row + 1).to(tl.float64) * tl.load(alpha + row).to(tl.float64) < sigma, 1, 0)
+            sure_fail = tl.where(64 * d > k, 1, 0)
+            sure_pass = tl.where(64 * (d + b) <= k, 1, 0)
+            tl.store(out + 2 * row, tl.maximum(floor, sure_fail).to(tl.uint8))
+            tl.store(out + 2 * row + 1, ((1 - floor) * (1 - sure_fail) * (1 - sure_pass)).to(tl.uint8))
+        _SCREEN_KERNEL.append(kernel)
+    return _SCREEN_KERNEL[0]
+
+
+def fused_screen_available() -> bool:
+    try:
+        import triton  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
+    """`screen`'s two flags per row of x (fails, unsure) into `out` (uint8, rows x 2): one fused kernel with `fused`, else
+    `screen`'s torch operations."""
+    import torch
+    rows, k = x.shape
+    if fused:
+        _screen_kernel()[(rows,)](x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)),
+                                  P.SIGMA_MIN, BAND, BLOCK=1024)
+    else:
+        fails, unsure = screen(x, alpha, aux)
+        out[:, 0].copy_(fails)
+        out[:, 1].copy_(unsure)
 
 
 def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:
@@ -216,8 +297,7 @@ class _Pass:
     retain: Path | None
     run: str | None = None          # the run id a retained pass's manifest names
     matmuls: list[Matmul] = field(default_factory=list)
-    roots_a: list[Any] = field(default_factory=list)
-    flags: list[tuple[Any, Any]] = field(default_factory=list)
+    flag_rows: int = 0               # rows of the pass's screen flags so far
     records: list[PW.UnitRecord] = field(default_factory=list)
     files: list[dict] = field(default_factory=list)
     tiles: int = 0
@@ -245,6 +325,56 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any]) -> dict[int, bytes]:
 def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int) -> bytes:
     """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows."""
     return rows_domain(activation_binding(salt, index), index, m16, "blake3").domain_id + fixture.unit_block(salt, root_b, index)
+
+
+class _Keys:
+    """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `CommitmentDomain.domain_id`'s framed message hashed
+    natively, and unit's label hash is a constant.  Without the package, `call_keys` itself."""
+
+    def __init__(self, fixture: Any, salt: bytes):
+        try:
+            import blake3 as native
+        except ImportError:
+            native = None
+        self.native, self.fixture, self.salt = native, fixture, salt
+        self.label = fixture.unit_block(salt, bytes(32), 0)[-32:]
+        self.positions: dict[int, bytes] = {}
+
+    def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
+        if self.native is None:
+            return call_keys(self.fixture, self.salt, root_b, index, m16)
+        pos = self.positions.get(m16)
+        if pos is None:
+            pos = self.positions[m16] = bytes.fromhex(RangeIndexedDomain(m16).identity_digest)
+        parts = (activation_binding(self.salt, index), _uint(index + 2), pos, _uint(m16))
+        msg = _FRAME + (6).to_bytes(4, "big") + b"domain" + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+        return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
+
+
+class _Uploads:
+    """Small host-to-device copies through a pinned ring allocated once: each is one copy on the current stream, and a slot is
+    written again only once its last copy is done (its event)."""
+
+    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 144):
+        import torch
+        self.cuda, self.slots, self.i = device.type == "cuda", slots, 0
+        self.host = torch.zeros((slots, width), dtype=torch.uint8, pin_memory=self.cuda)
+        self.view = self.host.numpy()
+        self.events: list[Any] = [None] * slots
+
+    def put(self, dst: Any, data: bytes) -> None:
+        import numpy as np
+        import torch
+        i, n = self.i, len(data)
+        self.i = (i + 1) % self.slots
+        if self.events[i] is not None:
+            self.events[i].synchronize()
+        self.view[i, :n] = np.frombuffer(data, np.uint8)
+        dst[:n].copy_(self.host[i, :n], non_blocking=self.cuda)
+        if self.cuda:
+            if self.events[i] is None:
+                self.events[i] = torch.cuda.Event()
+            self.events[i].record()
 
 
 def _weight_binding(w: int) -> bytes:
@@ -294,6 +424,10 @@ class PearlCDeviceRun:
         self.const = _zeros(64, self.device)
         _put(self.const, C.H1_KEYS["message"] + C.H1_KEYS["leaf"])
         self.leaves = _zeros(32 * capacity, self.device)
+        self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
+        self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
+        self.keys, self.uploads = _Keys(kernel.fixture, salt), _Uploads(self.device)
+        self.fused_screen = self.device.type == "cuda" and fused_screen_available()
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
         self.pipes: dict[tuple[int, int, frozenset, bool], tuple[Any, list[Any]]] = {}
@@ -303,6 +437,8 @@ class PearlCDeviceRun:
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]})",
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
+            "host": {"keys": "native blake3" if self.keys.native else "verity.commitments.blake3 (pure Python)",
+                     "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -402,8 +538,9 @@ class PearlCDeviceRun:
         sh = self._shape(m16, wt.n, k)
         index = len(cur.matmuls)
         tiles = self.kernel.run.cdiv(m16, self.kernel.run.TILE) * (wt.n // self.kernel.run.TILE)
-        if self.hashing and cur.tiles + tiles > self.capacity:
-            raise RuntimeError(f"{self.entry}: the pass is over {self.capacity} tiles; end it and begin another")
+        if self.hashing and (cur.tiles + tiles > self.capacity or index >= CALL_CAPACITY or cur.flag_rows + m > FLAG_ROWS):
+            raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
+                               f"{FLAG_ROWS} screened rows); end it and begin another")
         sh.xa[:m].copy_(x2)
         if m16 > m:
             sh.xa[m:m16].zero_()
@@ -411,7 +548,7 @@ class PearlCDeviceRun:
         pipe, steps = self._pipe(w, sh)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
         if self.hashing:
-            _put(sh.keys, call_keys(self.kernel.fixture, self.salt, self.roots[w], index, m16))
+            self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16))
         self.kernel.dev.stream = self.stream()
         try:
             for f in steps:
@@ -421,13 +558,14 @@ class PearlCDeviceRun:
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
         if self.hashing:
             size = pipe.size["tree_a"]
-            cur.roots_a.append(sh.b["tree_a"][size - 32:size].clone())
-            fails, unsure = screen(sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"])
+            self.roots_buf[32 * index:32 * index + 32].copy_(sh.b["tree_a"][size - 32:size])
+            flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
+            screen_into(flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
+            cur.flag_rows += m
             if cur.retain is not None:
-                cur.records.append(PW.UnitRecord(cur.matmuls[-1], m, k, excluded(fails, unsure, sh.xa[:m]), wt.excluded))
+                cur.records.append(PW.UnitRecord(cur.matmuls[-1], m, k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), sh.xa[:m]),
+                                                 wt.excluded))
                 cur.files.append(self._retain_call(cur, index, sh, size))
-            else:
-                cur.flags.append((fails, unsure))
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias
         return out.reshape(*lead, wt.n)
@@ -484,11 +622,12 @@ class PearlCDeviceRun:
                 R.Pipeline.levels(ns, "t", count)
             finally:
                 K.dev.stream = None
-            roots_a = _bytes(torch.stack(cur.roots_a))
+            roots_a = _bytes(self.roots_buf[:32 * len(cur.matmuls)])
+            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0).tolist() if cur.flag_rows else [0, 0]
             out.update(transcript_root=_bytes(tree[-32:]).hex(),
                        activation_roots=hashlib.sha256(roots_a).hexdigest(),
-                       unresolved_rows=int(sum(int(u.sum()) for _, u in cur.flags)),
-                       excluded_rows=int(sum(int(f.sum()) for f, _ in cur.flags)) + sum(len(r.excluded_a) for r in cur.records))
+                       screened_rows=cur.flag_rows, failing_rows=int(flags[0]), unsure_rows=int(flags[1]),
+                       excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
             if cur.retain is not None:
                 out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
             self.commits.update(transcript_root=out["transcript_root"], units=len(cur.matmuls), tiles=count)
