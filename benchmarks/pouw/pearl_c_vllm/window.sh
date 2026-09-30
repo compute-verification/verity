@@ -17,12 +17,14 @@
 # MODE=smoke (untimed, `gpu-lease 1`): the same checks, then `e2e.py --smoke` (both engines resident and each one's first
 # sampling calls) into smoke.json.  MODE=profile (untimed, `gpu-lease 1`): the same checks, then `profile_decode.py` under
 # nsys (the capture is its steady-state pass) into profile.json, with nsys's per-kernel sums merged in.  SHIP_TAR names a
-# ship already on the node instead of the sent one.
+# ship already on the node instead of the sent one.  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C
+# scheme, and so its hashing format) pass to e2e.py and profile_decode.py.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
 OUT=${RESEARCH_RUN_DIR:?run this under research run}
 MODE=${MODE:-window}
+SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"})
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
@@ -49,15 +51,15 @@ PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/ch
 
 if [ "$MODE" = smoke ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
-    --out "$OUT/smoke.json" --smoke
+    --out "$OUT/smoke.json" --smoke "${SWITCHES[@]}"
 elif [ "$MODE" = profile ]; then
   nsys profile -o "$OUT/decode" -f true -t cuda,nvtx --capture-range=cudaProfilerApi --capture-range-end=stop \
     "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 \
-    --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/profile.json"
+    --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/profile.json" "${SWITCHES[@]}"
   nsys stats -q -f csv -r cuda_gpu_kern_sum -o "$OUT/decode" "$OUT/decode.nsys-rep"
   "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --nsys-kernels "$(ls "$OUT"/decode*cuda_gpu_kern_sum*.csv | head -1)" \
     --out "$OUT/profile.json"
 else
   "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
-    --out "$OUT/e2e.json" --retain "$WORK/passes/${RESEARCH_RUN_ID:?}"
+    --out "$OUT/e2e.json" --retain "$WORK/passes/${RESEARCH_RUN_ID:?}" "${SWITCHES[@]}"
 fi
