@@ -82,13 +82,13 @@ theorem netCols_of_ofRows {net : Net} {u : ℕ} (ha : ∃ ra, Sparse.ofRows ra (
 theorem decode_mono (fuel : ℕ) : ∀ (bd : Lookup.Builder) (bits : List ℕ),
     bd.a.size ≤ (Lookup.decode bd bits fuel).1.a.size := by
   induction fuel with
-  | zero => intro bd bits; unfold Lookup.decode; split <;> exact le_refl _
+  | zero => intro bd bits; unfold Lookup.decode; split <;> exact Nat.le_refl _
   | succ fuel ih =>
     intro bd bits
     unfold Lookup.decode
     split
-    · exact le_refl _
-    · exact le_refl _
+    · exact Nat.le_refl _
+    · exact Nat.le_refl _
     · rename_i heq _
       obtain rfl := Nat.succ.inj heq
       dsimp only
@@ -152,7 +152,7 @@ theorem build_placed {name : String} {table : ByteArray} {n lo bits : ℕ} {net 
     have := decode_sizes (n - lo) bd1 ((List.range (n - lo)).map (lo + ·)) hb1; rwa [hd2] at this
   have e2a := forIn_range_nested (fun r : Lookup.Builder => r.a.size) (fun i r => by simp) hs2
   have e2b := forIn_range_nested (fun r : Lookup.Builder => r.b.size) (fun i r => by simp) hs2
-  have e3 := while_pad (X := s2.a.size) ⟨le_refl _, by omega⟩ hs3
+  have e3 := @while_pad s2.a.size _ _ ⟨Nat.le_refl _, by omega⟩ hs3
   have e4a := forIn_range_pure (fun r : Lookup.Builder => r.a.size) (fun i r => by split <;> simp) hs4
   refine ⟨⟨_, ha⟩, ⟨_, hb⟩, fun lk hlk => ?_⟩
   cases hlk
