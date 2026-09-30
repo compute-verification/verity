@@ -1,0 +1,22 @@
+[project]
+name = "verity-tc-probe-fp4"
+version = "0.0.0"
+description = "Blackwell tensor-core probes (FP4; the sm_120 FP8 rows and W1 price microbenchmarks) compared bit for bit with verity.ml.tc."
+requires-python = ">=3.12"
+dependencies = ["research", "verity", "numpy"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+research = { workspace = true }
+verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# tools/tc_probe: fp8.py takes the FP8 families and encoders of the sm_120 single-step capture from tc_probe.py.
+inputs = ["tools/tc_probe"]
