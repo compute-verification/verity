@@ -134,10 +134,12 @@ theorem _root_.FlockSoundness.UProg.zeroCols_of_classes
   · have hv := congrArg Fin.val hc
     rw [p.instOf_wire hone u c hc1] at hv
     have hs : p.srcOf u c.val = .input zer := p.srcGate_inj (p.srcOf_valid hone u hc1) ⟨hzk, hz1⟩ hv
+    have hcol := RowsAt.cast_col (UnitSpec.R_eq_of_reads (hrd S R u h)).symm
+      ((cls S R u h).atSlot (slot S R u h) (blk S R u h)) c
     change (tabOf plan tab S R u).S.block z
         (((cls S R u h).atSlot (slot S R u h) (blk S R u h)).cast (UnitSpec.R_eq_of_reads (hrd S R u h)).symm).o
         ((((cls S R u h).atSlot (slot S R u h) (blk S R u h)).cast (UnitSpec.R_eq_of_reads (hrd S R u h)).symm).col c) = 0
-    rw [RowsAt.cast_o, RowsAt.cast_col]
+    rw [RowsAt.cast_o, hcol]
     change (tabOf plan tab S R u).S.block z (blk S R u h) ((cls S R u h).col (slot S R u h) _) = 0
     rw [(cls S R u h).copy (slot S R u h) _ (by rw [Fin.val_cast, ← hn, hi]; exact hc1) z hz (blk S R u h),
       Fin.val_cast]
@@ -156,7 +158,7 @@ theorem _root_.FlockSoundness.UProg.zeroCols_of_classes
       rw [hci, hc] at hm
       change (p.toRows hone).unit ⟨zer, _⟩ = some u at hm
       rw [UProg.toRows_unit_of_lt hone p ⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩ hzk] at hm
-      exact Option.noConfusion hm
+      cases hm
 
 /-- **The end-to-end count curve on a program of units, from its tables' classes.** `UProg.flock_e2e_count` with `dp`
 built from each drawn unit's table class: unit `u`, drawn in `S` under `R`, sits at slot `slot` of block `blk` of its
