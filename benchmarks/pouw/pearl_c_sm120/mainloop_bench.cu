@@ -55,11 +55,11 @@ DEV void ml_ct_body(const Args& a) {
     float acc[L::MI][L::NI][4], total[L::MI][L::NI][4];
     if constexpr (U == 0) ml.tile_skew(K, acc, total);
     else ml.template tile<U, LATE>(K, acc, total);
-    if constexpr (TL) {   // i5 (the negative control): check the tail against depth [128, 256) instead
+    if constexpr (TL) {   // i5: 1 checks the tail against depth [128, 256) instead (the negative control), 2 skips the check
       const uint32_t p = ml.tail_wait();
-      const int off = a.i[5] ? 128 : 0;
-      if (ml_tail_bad<TM, BN, L::NCT>(p, reinterpret_cast<const uint8_t*>(a.p[0]) + off, reinterpret_cast<const uint8_t*>(a.p[1]) + off, K,
-                                      tm, tn))
+      const int off = a.i[5] == 1 ? 128 : 0;
+      if (a.i[5] != 2 && ml_tail_bad<TM, BN, L::NCT>(p, reinterpret_cast<const uint8_t*>(a.p[0]) + off,
+                                                     reinterpret_cast<const uint8_t*>(a.p[1]) + off, K, tm, tn))
         total[0][0][0] = __uint_as_float(0x7fc0deadu);
     }
     const int row0 = tm * TM + wm * L::WM + g, col0 = tn * BN + wn * L::WN + 2 * q;

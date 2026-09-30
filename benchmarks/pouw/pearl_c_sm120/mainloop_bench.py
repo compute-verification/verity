@@ -150,9 +150,9 @@ class Bench:
     def gemm(self, name: str, a: int, b: int, c: int, m: int, n: int, k: int, maps: int = 0, grid: int | None = None,
              y: int = 0, rs: int = 0, cs: int = 0) -> None:
         # ml_ct@s512: warp rows of the second half start 512 cycles late; ml_ct_x2r_tail@bad: the tail checked against depth
-        # [128, 256) (must fail every gate)
+        # [128, 256) (must fail every gate); @nochk: the tail held but not checked (its cost in the pipeline alone)
         name, _, tag = name.partition("@")
-        skew, bad = (tag[1:] if tag.startswith("s") else 0), int(tag == "bad")
+        skew, bad = (tag[1:] if tag.startswith("s") else 0), {"bad": 1, "nochk": 2}.get(tag, 0)
         smem = self.prep(name)
         if name.startswith("ml_"):
             tm, bn, ctas, wm = ml_tile(name)
