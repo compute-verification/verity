@@ -13,8 +13,8 @@
 // only overwrite the accumulator once the FADD has read it.  After a tile's last stage the producer loads the peel's rows (P_A,
 // P_B) into the next stage (the tail), which the consumers hold through the epilogue and release when it is done.
 //
-// Host side: four CUtensorMaps (A, B, P_A, P_B), each UINT8, rank 2 {128-byte box, rows}, globalDim {depth, rows}, box {128, 128},
-// SWIZZLE_128B, contiguous in global memory (64-byte aligned), passed by pointer.
+// Host side: four CUtensorMaps (A, B, P_A, P_B), each UINT8, rank 2, globalDim {depth, rows}, box {128, TM} for A and P_A and
+// {128, BN} for B and P_B, SWIZZLE_128B, contiguous in global memory (64-byte aligned), passed by pointer.
 #pragma once
 #include <cstdint>
 
@@ -90,19 +90,24 @@ ML_DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn)
 
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 
-// TM x BN tile, 8 consumer warps of WM x 32 (warpgroups 0 and 1) plus a producer warpgroup (2), whose first lane issues every
-// TMA: 384 threads, so each sub-partition holds two consumer warps and one producer warp, and `setmaxnreg` moves the producer's
-// registers to the consumers (40 and 232 a thread, CUTLASS's split).  STAGES stages of 128 bytes of depth; G = 4 or 0; TAIL: the
-// producer loads P_A's TM and P_B's BN rows (128 bytes each) into a stage after each tile's last, for the epilogue.
-template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
-  static constexpr int BK = 128, NCW = 8, NCT = NCW * 32, NT = NCT + 128, REGS_P = 40, REGS_C = 232, WN = 32, WARPS_N = BN / WN,
-                       WARPS_M = NCW / WARPS_N,
-                       WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8, APS = BK / 32;
+// TM x BN tile, one consumer warp per 64 x 32 warp tile (NCW: 8 at 128 x 128, 4 at 128 x 64, 2 at 64 x 64 and 128 x 32), then
+// the producer, whose first lane issues every TMA.  When the consumers are whole warpgroups (SPLIT) the producer is a warpgroup
+// and `setmaxnreg` moves its registers to the consumers (REGS_P and REGS_C a thread; 40 and 232 at 128 x 128, CUTLASS's split);
+// otherwise it is one warp and registers stay as launched.  Launch NT threads with __launch_bounds__(NT, CTAS), CTAS blocks per
+// SM.  STAGES stages of 128 bytes of depth; G = 4 or 0; TAIL: the producer loads P_A's TM and P_B's BN rows (128 bytes each)
+// into a stage after each tile's last, for the epilogue.
+template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1> struct Mainloop {
+  static constexpr int BK = 128, WM = 64, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
+                       MI = WM / 16, NI = WN / 8, APS = BK / 32;
+  static constexpr bool SPLIT = NCW % 4 == 0;
+  static constexpr int NT = NCT + (SPLIT ? 128 : 32), REGS_P = 40, REGS_LAUNCH = 65536 / (CTAS * NT) / 8 * 8,
+                       REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
+                       REGS_C = !SPLIT ? 0 : REGS_FIT < 232 ? REGS_FIT : 232;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES;   // 1024: room to align the stages to 1,024 bytes
   static_assert(G == 0 || G == APS, "a promotion window is one stage");
-  static_assert(WARPS_M * WARPS_N == NCW && MI >= 1 && NI % 2 == 0, "8 consumer warps of 16 k x 32 columns");
-  static_assert(STAGE % 1024 == 0, "every stage 1,024-byte aligned for SWIZZLE_128B");
+  static_assert(TM % WM == 0 && BN % WN == 0 && NCW >= 1, "whole 64 x 32 warp tiles");
+  static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0, "every box 1,024-byte aligned for SWIZZLE_128B");
 
   uint32_t base, bars;   // the stages; full[s] at bars + 8 s, empty[s] at bars + 8 (STAGES + s)
   int s = 0;
@@ -125,6 +130,21 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
       asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
     }
     __syncthreads();
+  }
+  // every thread of the block: init, then the producer's warps produce every tile's stages and exit; the consumer warps take
+  // their registers and fragment offsets and return, to run tile() per tile in the same raster order.  The producer exits
+  // rather than returns: a path back to the caller would join the two register budgets, and ptxas would compile the
+  // consumers' code under the producer's.
+  ML_DEV void roles(const Maps* maps, int M, int N, int K, int group) {
+    init(threadIdx.x);
+    const int warp = threadIdx.x / 32, lane = threadIdx.x % 32;
+    if (warp >= NCW) {
+      if constexpr (SPLIT) regs_dec<REGS_P>();
+      if (warp == NCW && lane == 0) produce(maps, M, N, K, group);
+      asm volatile("exit;");
+    }
+    if constexpr (SPLIT) regs_inc<REGS_C>();
+    consumer_init(warp, lane);
   }
 
   // the producer warp's lane 0: every tile's stages (and tails) in the consumers' order
