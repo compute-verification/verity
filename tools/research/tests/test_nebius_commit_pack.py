@@ -45,6 +45,8 @@ def dispatch(tmp_path, monkeypatch):
     monkeypatch.setenv("VY_READY", str(tmp_path / "ready"))
     monkeypatch.delenv("PACK_SPOOL", raising=False)
     monkeypatch.delenv("PACK_COMMITS", raising=False)
+    monkeypatch.setenv("PACK_DISK_PATH", str(tmp_path))
+    monkeypatch.setenv("PACK_DISK_PAUSE", "1.01")
     mod = _load(NEBIUS / "dispatch.py", "dispatch", monkeypatch)
     mod.calls = []
 
@@ -68,6 +70,17 @@ def test_commit_pack_renders_one_gpu_workload_in_deployments_gpu(dispatch):
     assert "sky/commit_pack.py" in c["command"][-1] and (NEBIUS / "sky" / "commit_pack.py").exists()
 
 
+def test_a_class_sizes_each_of_config_runs_three_tasks(dispatch, tmp_path):
+    """A `class` item on config-run's three tasks (build, gpu, replay) used to raise in render, which failed every dispatcher tick."""
+    item = _item(_tree(tmp_path / "t"), "llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager", **{"class": "tp2"})
+    build, gpu, n = dispatch.classes()["tp2"]
+    want = [(None, build, 0), (4 * n, gpu, n), (8, 64, 0)]
+    for idx, (cpus, mem, gpus) in enumerate(want):
+        c = dispatch.render(item, "lane/tp2", idx, 0)["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
+        assert c["memory"] == f"{mem}G" and int(c.get("nvidia.com/gpu", 0)) == gpus, (idx, c)
+        assert cpus is None or c["cpu"] == str(cpus), (idx, c)
+
+
 @pytest.mark.parametrize("row, why", [
     (LLAMA_B8, None),
     ("smollm2-135m__bf16__rtxpro6000__tp1__b1__i1024__o128__mixed__greedy__bi-eager", None),
@@ -78,27 +91,34 @@ def test_commit_pack_renders_one_gpu_workload_in_deployments_gpu(dispatch):
     ("mistral-7b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "packing list"),
 ])
 def test_only_small_tp1_commits_pack(dispatch, tmp_path, row, why):
-    got = dispatch.packable(_item(_tree(tmp_path / "t"), row), 1)
+    got = dispatch.packable(_item(_tree(tmp_path / "t"), row), "lane/c1", 1)
     assert got is None if why is None else why in got
 
 
-def test_the_build_an_unpacked_item_and_a_tree_without_deferred_replay_never_pack(dispatch, tmp_path):
+def test_the_build_an_unpacked_or_leased_item_and_a_tree_without_deferred_replay_never_pack(dispatch, tmp_path):
     tree = _tree(tmp_path / "t")
-    assert "gpu task" in dispatch.packable(_item(tree), 0)
-    assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), 1)
-    assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), 1)
+    assert "gpu task" in dispatch.packable(_item(tree), "lane/c1", 0)
+    assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), "lane/c1", 1)
+    assert "leased" in dispatch.packable(_item(tree, lease="wrap"), "lane/c1", 1)
+    assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), "lane/c1", 1)
 
 
-def test_route_spools_only_under_the_flag(dispatch, tmp_path):
+def test_route_spools_only_under_the_flag_and_below_the_disk_pause(dispatch, tmp_path):
     item = _item(_tree(tmp_path / "t"))
     dispatch.route(item, "lane/c1", 1)
     assert [a[0] for a, _ in dispatch.calls] == ["create"] and not list(dispatch.PACK.glob("queue/*"))
     dispatch.calls.clear()
     dispatch.PACK_COMMITS = True
+    dispatch.PACK_DISK_PAUSE = 0.0
+    dispatch.route(item, "lane/c1", 1)
+    assert [a[0] for a, _ in dispatch.calls] == ["create"] and not list(dispatch.PACK.glob("queue/*"))
+    dispatch.calls.clear()
+    dispatch.PACK_DISK_PAUSE = 1.01
     name = dispatch.route(item, "lane/c1", 1)
     entry = json.loads((dispatch.PACK / "queue" / f"{name}.json").read_text())
     assert not dispatch.calls and entry["key"] == "lane/c1" and entry["idx"] == 1
     assert entry["env"]["ROW"] == LLAMA_B8 and "row stage commit" in entry["script"]
+    assert all((dispatch.PACK / d).stat().st_mode & 0o777 == 0o777 for d in ("", "queue", "claimed", "results/done", "logs", "stats"))
     assert dispatch.pack_keys() == {"lane/c1"}
 
 
@@ -169,26 +189,32 @@ def pilot(tmp_path, monkeypatch):
     monkeypatch.setenv("TMPDIR", str(tmp_path / "tmp"))
     monkeypatch.setenv("HOSTNAME", "pod-a")
     for k, v in {"PACK_SPOOL": tmp_path / "spool", "PACK_POLL_S": 0.01, "PACK_IDLE_S": 0, "PACK_STATS_S": 0,
-                 "PACK_STOP_GRACE_S": 5}.items():
+                 "PACK_STOP_GRACE_S": 5, "PACK_DISK_PATH": tmp_path, "PACK_DISK_PAUSE": 1.01,
+                 "PACK_BUNDLE_GLOBS": f"{tmp_path}/cov/*/commit/replay_bundle_p*"}.items():
         monkeypatch.setenv(k, str(v))
     mod = _load(NEBIUS / "sky" / "commit_pack.py", "commit_pack", monkeypatch)
     monkeypatch.setattr(mod, "quiet", lambda t: False)
-    return mod
+    umask = os.umask(0o022)
+    yield mod
+    os.umask(umask)
 
 
-def _queue(spool: Path, name: str, script: str) -> None:
+def _queue(spool: Path, name: str, script: str, row: str = "") -> None:
     (spool / "queue").mkdir(parents=True, exist_ok=True)
     (spool / "queue" / f"{name}.json").write_text(json.dumps({"key": f"lane/{name}", "idx": 1, "tries": 0, "job": name,
-                                                               "env": {}, "script": script}))
+                                                               "env": {"ROW": row}, "script": script}))
 
 
 def test_the_pilot_runs_commits_as_mps_clients_and_cleans_up(pilot, tmp_path):
     spool = tmp_path / "spool"
     _queue(spool, "ok", 'test "$CUDA_MPS_PINNED_DEVICE_MEM_LIMIT" = 0=28G && test "$GPU_UTIL" = 0.28 && '
-                        'test "$REPLAY_DEFERRED" = 1 && test -S "$CUDA_MPS_PIPE_DIRECTORY/control" -o -p "$CUDA_MPS_PIPE_DIRECTORY/control"')
+                        'test "$REPLAY_DEFERRED" = 1 && test "$(umask)" = 0022 && '
+                        'test -S "$CUDA_MPS_PIPE_DIRECTORY/control" -o -p "$CUDA_MPS_PIPE_DIRECTORY/control"')
     assert pilot.main() == 0
     res = json.loads((spool / "results" / "ok.json").read_text())
     assert res["rc"] == 0 and res["fault"] is False and res["pod"] == "pod-a"
+    for p in (spool / "claimed" / "pod-a", spool / "results", spool / "results" / "ok.json", spool / "logs" / "pod-a"):
+        assert p.stat().st_mode & 0o002, p        # the dispatcher runs as another uid
     assert not list((spool / "claimed" / "pod-a").iterdir()) and not (tmp_path / "tmp" / "commit-pack-pod-a").exists()
 
 
@@ -205,6 +231,21 @@ def test_a_fault_in_one_client_stops_the_others_and_claims_nothing_more(pilot, t
     a = json.loads((spool / "results" / "a-stuck.json").read_text())
     assert b["fault"] and "illegal memory access" in b["reason"] and a["fault"] and a["rc"] is None
     assert (spool / "queue" / "c-later.json").exists()
+
+
+def test_no_claims_at_the_disk_pause_and_no_b8_while_bundles_pass_the_cap(pilot, tmp_path):
+    spool = tmp_path / "spool"
+    _queue(spool, "b8", "exit 0", LLAMA_B8)
+    _queue(spool, "b1", "exit 0", LLAMA_B8.replace("__b8__", "__b1__"))
+    pilot.DISK_PAUSE = 0.0
+    assert pilot.main() == 0 and not (spool / "results").exists()
+    pilot.DISK_PAUSE = 1.01
+    bundle = tmp_path / "cov" / "row" / "commit" / "replay_bundle_p1"
+    bundle.mkdir(parents=True)
+    (bundle / "part").write_bytes(b"x" * 10)
+    pilot.BUNDLE_CAP = 5
+    assert pilot.main() == 0
+    assert (spool / "results" / "b1.json").exists() and (spool / "queue" / "b8.json").exists()
 
 
 def test_claim_has_one_winner(pilot, tmp_path):

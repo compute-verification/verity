@@ -53,6 +53,10 @@ RESERVE = int(os.environ.get("FILL_RESERVE", "0"))
 CPU_SLOTS = int(os.environ.get("FILL_CPU_SLOTS", "4"))
 CPU_SET = os.environ.get("FILL_CPU_SET", "96-127")
 CPU_MEM_GB = int(os.environ.get("FILL_CPU_MEM_GB", "128"))
+# PoUW's terms for CPU fill on NUMA 0 (bc-2aa33ad8, 30 Sep): CPU jobs freeze from the moment a window waits, not only once it is
+# timed, and pous and lent CPU jobs keep their memory off NUMA 0 (numactl --membind=<node>).
+FREEZE_ON_WAIT = os.environ.get("FILL_FREEZE_ON_WAIT", "0") == "1"
+CPU_MEMBIND = os.environ.get("FILL_CPU_MEMBIND", "")
 MAX_TRIES = 2
 # Verity's CPU-only jobs (project=verity, gpus=0) get their own pool, so they never take pous's CPU slots (the terms agreed with
 # the nebius-infra steward): their CPU set, a job count, a per-job and a total memory cap, no start once the disk reaches
@@ -182,6 +186,8 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     in_pool = verity or h.get("lent")
     unit_name = None
     cmd = ["nice", "-n", "19", "taskset", "-c", VERITY_CPU_SET if in_pool else CPU_SET, "bash", str(run)]
+    if CPU_MEMBIND and not h["gpus"] and not verity:
+        cmd = ["numactl", f"--membind={CPU_MEMBIND}", *cmd]
     if h["gpus"]:
         pin = ["--on", str(h["on"])] if h.get("on") is not None else []
         cmd = [GPU_LEASE, "1", *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
@@ -332,6 +338,10 @@ def verity_pool(queued: list) -> None:
         slots -= 1
 
 
+def cpu_frozen(timed: bool, window: bool) -> bool:
+    return timed or (FREEZE_ON_WAIT and window)
+
+
 def tick(n: int) -> str:
     global backoff_until
     reap()
@@ -361,10 +371,10 @@ def tick(n: int) -> str:
     for k, j in running.items():
         if not j["h"]["gpus"] and not j.get("stopping"):
             try:
-                if timed and not j["paused"]:
+                if cpu_frozen(timed, window) and not j["paused"]:
                     scope(j, "freeze")
                     os.killpg(j["pid"], signal.SIGSTOP); j["paused"], j["paused_at"] = True, time.monotonic(); event("pause", k)
-                elif not timed and j["paused"]:
+                elif not cpu_frozen(timed, window) and j["paused"]:
                     scope(j, "thaw")
                     os.killpg(j["pid"], signal.SIGCONT)
                     j["paused_s"] = j.get("paused_s", 0.0) + time.monotonic() - j["paused_at"]; j["paused"] = False

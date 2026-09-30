@@ -1032,3 +1032,39 @@ def test_n1_lease_holds_agent_lock_while_the_brain_answers_and_falls_back_when_i
     fcntl.flock(probe, fcntl.LOCK_SH | fcntl.LOCK_NB)
     os.close(probe)
     os.close(fd)
+
+
+def test_fill_runner_on_numa_0_terms_freezes_cpu_jobs_while_a_window_waits_and_binds_their_memory(tmp_path, monkeypatch):
+    """PoUW's terms for CPU fill on 0-47 (bc-2aa33ad8): frozen from the moment a window waits, and memory kept off NUMA 0. Both are
+    off unless set, so the runner behaves as before."""
+    fill = tmp_path / "fill"
+    for d in ("running", "logs"):
+        (fill / d).mkdir(parents=True)
+    monkeypatch.setenv("FILL_DIR", str(fill))
+
+    def load(**env):
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
+        spec = importlib.util.spec_from_file_location("fill_runner_numa0", FILL_RUNNER)
+        fr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fr)
+        cmds = []
+        monkeypatch.setattr(fr.shutil, "which", lambda name: None)
+        monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: cmds.append(cmd) or type("P", (), {"pid": 1})())
+        monkeypatch.setattr(fr, "event", lambda *a, **kw: None)
+        return fr, cmds
+
+    def started(fr, cmds, name, head):
+        p = tmp_path / name
+        p.write_text(f"# fill: owner=o {head}\n")
+        fr.start(p, fr.header(p))
+        return cmds[-1]
+
+    fr, cmds = load()
+    assert not fr.cpu_frozen(False, True) and fr.cpu_frozen(True, False)
+    assert started(fr, cmds, "a.sh", "gpus=0")[0] == "nice"
+    fr, cmds = load(FILL_FREEZE_ON_WAIT="1", FILL_CPU_MEMBIND="1")
+    assert fr.cpu_frozen(False, True) and not fr.cpu_frozen(False, False)
+    assert started(fr, cmds, "b.sh", "gpus=0")[:2] == ["numactl", "--membind=1"]
+    assert started(fr, cmds, "c.sh", "gpus=0 project=verity")[0] == "nice"
+    assert started(fr, cmds, "d.sh", "gpus=1")[0] == fr.GPU_LEASE

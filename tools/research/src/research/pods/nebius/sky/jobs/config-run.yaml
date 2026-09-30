@@ -362,7 +362,7 @@ config:
       metadata:
         labels:
           kueue.x-k8s.io/queue-name: deployments-cpu
-          kueue.x-k8s.io/priority-class: circuits
+          kueue.x-k8s.io/priority-class: circuits-gpu      # ahead of queued Builds, so bundles drain first (circuits, 3:53 PM PDT)
           verity.dev/build: "true"
       spec:
         terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
