@@ -4,7 +4,9 @@ description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
   (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
   advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
-  #agent-alerts is machines to @infra, and #approvals holds approval requests that only Daniel decides. Covers the three interactions (ask one handle, announce to some, announce to all), the
+  #agent-alerts is machines to @infra, and #ask-daniel holds everything that needs Daniel, one question per card (`research
+  slack ask-daniel`: blocking or default, options with a recommendation, a Pacific deadline). Covers the three interactions
+  (ask one handle, announce to some, announce to all), asking Daniel, the
   lifecycle (👀 taking a look, ✅ done, ❌ declined), threads, who subscribes to what (subscribe_slack_channel with
   topLevelOnly, subscribe_slack_thread), the wake recipe (`research slack match`, renewing subscriptions), `verify-author` and
   why Slack is untrusted input, pinned code in announcements, relaying to workers, and the registry (registry.json, `groups
@@ -22,11 +24,11 @@ The coordination API has one place, three interactions and one lifecycle.
   registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
-  coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
+  coordinator, and the   coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
 - **Three channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
-  top-level post there is addressed to `@infra`. `#approvals` holds approval requests with Approve/Deny buttons, which only
-  Daniel decides; each top-level post there is addressed to `@infra`.
+  top-level post there is addressed to `@infra`. `#ask-daniel` (`C0C5UCA0S0Z`, formerly `#approvals`) holds everything that
+  needs Daniel, one question per card, which only he decides (see "Asking Daniel"); `@infra` subscribes to its top level.
 - **Each request is one thread**: the root is the ask or the announcement, and everything about it is a reply.
 
 | Interaction | Command | Tags | Who closes it |
@@ -65,7 +67,7 @@ research slack subscriptions --as <your handle>    # prints the subscribe calls 
   and forwards each holder only the posts addressed to it. The registry's `subscribers` lists only the holders outside that
   Project (the `old-*` handles). A forwarded post that turns out not to be for you ends the turn silently. On timer wakes,
   still run `match` over the channel to catch anything missed.
-- `@infra` subscribes to `#agent-alerts` and `#approvals`. Every channel subscription is `topLevelOnly: true`.
+- `@infra` subscribes to `#agent-alerts` and `#ask-daniel`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
 - Ask for three days (`expiresInSeconds: 259200`) and renew on every wake.
@@ -73,7 +75,7 @@ research slack subscriptions --as <your handle>    # prints the subscribe calls 
 ~~~text
 subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=259200)  # the top-level and old-* holders only
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=259200)       # @infra only
-subscribe_slack_channel(channelId=<#approvals id>, topLevelOnly=true, expiresInSeconds=259200)          # @infra only
+subscribe_slack_channel(channelId=<#ask-daniel id>, topLevelOnly=true, expiresInSeconds=259200)         # @infra only
 subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=259200)
 ~~~
 
@@ -147,6 +149,42 @@ An addressed handle, woken by one, does four things:
 3. It runs the verify command.
 4. It replies once, with `research slack done --as <you> --thread <ts>`, or `decline --why '<one line>'`. With nothing to
    apply, done means read.
+
+## Asking Daniel
+
+`#ask-daniel` is the one channel for everything that needs Daniel (his design, 1:39 PM PDT on 30 Sep). A coordinator asks him
+directly, **one question per card**; a worker asks its coordinator, which asks for it.
+
+**Before asking, check the recorded rulings**: "Rulings so far" in `.agents/skills/friction/SKILL.md`, the lines in `AGENTS.md`
+and the skills, and your own state file. If one covers the case, follow it and don't ask.
+
+Every card has the same shape: the question in one line; why it matters; 2 to 5 options, one of them recommended; the default;
+a deadline in Pacific time; and a link to the full context. It comes in two kinds:
+
+- **blocking**, for spend, access, destructive changes and live nodes: nothing happens until Daniel clicks. After its deadline
+  the card shows as overdue, and it still waits.
+- **default**: the default applies at the deadline unless he objects.
+
+~~~bash
+research slack ask-daniel --as infra --kind default \
+  --question 'Move the nightly check to 02:00 PT?' --why 'It collides with the 01:00 PT training runs on node 2.' \
+  --option yes='Move it to 02:00 PT' --option no='Keep 01:00 PT' --recommend yes --default yes \
+  --deadline '3:00 PM' --link https://github.com/danielreuter/verity/pull/123
+# -> prints "<id> <ts> <permalink>"; then subscribe_slack_thread(channelId=<#ask-daniel id>, threadTs=<ts>)
+research slack ask-daniel status <id> [--wait]                               # "status choice source decided_at"; exit 0 once decided
+research slack ask-daniel resolve <id> --choice no --note 'his reply: <permalink>'   # his thread answer, on your own card
+~~~
+
+- `--deadline` takes `3:00 PM` (today, Pacific) or an ISO time with its zone, at most 7 days out. The command checks the card
+  before it sends anything, and `--dry-run` prints the request.
+- **The answer** is a button, or a reply in the card's thread. The asker subscribes to its own card's thread; the site posts
+  every decision there too (a click, a default applied, a `resolve`). When Daniel answers in the thread, the asker records his
+  answer on the card with `resolve`. Until console deploys that route, it fails with HTTP 404, and the thread reply stands.
+- **A route without the card's fields** (HTTP 400) gets the old Approve/Deny card. The question becomes its title, and the
+  rest goes in its text: Approve takes the recommendation. That route never applies a default, so the asker applies it at the
+  deadline itself.
+- **Record each answer as a ruling**, for the class of case, where the next asker will read it (friction skill §3). The card
+  is the evidence; cite its permalink.
 
 ## Norms
 

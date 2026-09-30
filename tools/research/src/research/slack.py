@@ -18,6 +18,13 @@ handle, an announcement tags some (or none, for every handle), and each is one t
   research slack verify-author --event JSON|@PATH|- [--why]        # exit 0 only for our bot, a channel's bot or a named human
   research slack read --thread TS | --since TS [--limit N] [--json]
   research slack groups sync [--apply]                             # one user group per handle, and the bot's id; a plan unless --apply
+  research slack ask-daniel --as HANDLE --kind blocking|default --question Q --why W --option VALUE=LABEL... --recommend V
+                            --default V --deadline '3:00 PM'|ISO --link URL [--wait]   # a card in #ask-daniel; prints `<id> <ts> <permalink>`
+  research slack ask-daniel status ID [--wait] [--json]            # its decision; exit 0 once decided
+  research slack ask-daniel resolve ID --choice V [--note T]       # record Daniel's thread answer on your own card
+
+#ask-daniel's cards go through the site's route (ASK_DANIEL, Cursor OIDC with the route as audience), not the Slack API; a route
+that refuses the card's fields (HTTP 400) gets the old Approve/Deny shape `{title, text, link, requested_by}` instead.
 
 Every subcommand takes `--dry-run` (no request reaches Slack; each one it would send is printed, the token never),
 `--registry PATH` (default $RESEARCH_SLACK_REGISTRY, else the checkout's) and `--channel KEY` (default agent-coordination);
@@ -37,15 +44,19 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import math
 import os
 import re
 import socket
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 from .timefmt import both, slack_dates
 
@@ -74,6 +85,18 @@ SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
 EXPIRES_S = 259200
 PAGE = 200
+ASK_DANIEL = "https://website-docs-sage.vercel.app/api/agent-approvals"   # the cards' route, and its OIDC token's audience
+ASK_CHANNEL = "ask-daniel"
+PACIFIC = ZoneInfo("America/Los_Angeles")
+KINDS = ("blocking", "default")
+OPTION_RE = re.compile(r"^([a-z0-9][a-z0-9_-]{0,31})=(.+)$")
+OPTIONS_MIN, OPTIONS_MAX = 2, 5
+LABEL_MAX = 75                                                   # Slack's button text limit
+DEADLINE_MAX = timedelta(days=7)
+CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$")
+DECIDED = ("decided", "approved", "denied")                      # new cards, then old-shape Approve/Deny cards
+WAIT_EVERY_S = 30
+WAIT_GRACE = timedelta(minutes=5)                                # the site's default cron runs every minute
 
 
 class SlackError(RuntimeError):
@@ -114,10 +137,15 @@ def load_registry(path: Path) -> dict:
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
+    names = set(chans)
     for key, ch in chans.items():
         subs = ch.get("subscribers")
         if not NAME_RE.match(key) or not ch.get("purpose") or not (subs == EVERY or (isinstance(subs, list) and set(subs) <= handles)):
             raise SlackError(f"registry {path}: #{key} needs a purpose and subscribers ({EVERY!r} or a list of handles)")
+        for alias in ch.get("aliases", []):
+            if not NAME_RE.match(alias) or alias in names:
+                raise SlackError(f"registry {path}: #{key}'s alias {alias!r} is malformed or names another channel")
+            names.add(alias)
     return reg
 
 
@@ -138,8 +166,13 @@ def _env(key: str) -> str:
     return "SLACK_CHANNEL_" + key.upper().replace("-", "_").replace(".", "_")
 
 
+def resolve_key(reg: dict, key: str) -> str:
+    """A channel's registry key, from its key or an old name it keeps as an alias (`approvals` for `ask-daniel`)."""
+    return next((k for k, c in reg["channels"].items() if key in c.get("aliases", [])), key)
+
+
 def channel_key(ns: argparse.Namespace, reg: dict) -> str:
-    key = (ns.channel or FRONT_DOOR).lstrip("#")
+    key = resolve_key(reg, (ns.channel or FRONT_DOOR).lstrip("#"))
     if key not in reg["channels"]:
         raise SlackError(f"no channel #{key} in the registry (it has {', '.join(sorted(reg['channels']))})")
     return key
@@ -195,12 +228,14 @@ def oidc_token(aud: str) -> str:
         conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud}), {"Content-Type": "application/json"})
         r = conn.getresponse()
         if r.status == 403:
-            raise SlackError("Cursor refused this agent's identity (the broker needs a Cursor agent's OIDC token)")
+            raise SlackError(f"Cursor refused this agent's identity ({aud} needs a Cursor agent's OIDC token)")
         if r.status != 200:
             raise SlackError(f"the Cursor identity service is unavailable (HTTP {r.status})")
         token = json.loads(r.read(32768)).get("token")
     except (OSError, http.client.HTTPException, ValueError, AttributeError):
-        raise SlackError("the Cursor identity socket the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)") from None
+        hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
+            f"{aud} needs is unavailable (only a Cursor agent has one)"
+        raise SlackError(f"the Cursor identity socket {hint}") from None
     finally:
         conn.close()
     if not isinstance(token, str) or not token or any(c.isspace() for c in token):
@@ -663,6 +698,232 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     return 0
 
 
+# --- #ask-daniel ------------------------------------------------------------------------------------------------------------
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+def pacific(t: datetime) -> str:
+    """How a person reads a time: `3:00 PM PDT, Wed 30 Sep`."""
+    return t.astimezone(PACIFIC).strftime("%I:%M %p %Z, %a %d %b").lstrip("0")
+
+
+def _iso(t: datetime) -> str:
+    return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_deadline(raw: str, now: datetime) -> datetime:
+    """`3:00 PM` (today, Pacific) or an ISO time with its zone, in UTC."""
+    raw = raw.strip()
+    if m := CLOCK_RE.match(raw):
+        hour, minute = int(m[1]), int(m[2])
+        if not (1 <= hour <= 12 and minute < 60):
+            raise SlackError(f"--deadline {raw!r}: not a clock time")
+        hour = hour % 12 + (12 if m[3].lower() == "pm" else 0)
+        return now.astimezone(PACIFIC).replace(hour=hour, minute=minute, second=0, microsecond=0).astimezone(timezone.utc)
+    try:
+        t = datetime.fromisoformat(raw)
+    except ValueError:
+        raise SlackError(f"--deadline {raw!r}: give `3:00 PM` (today, Pacific) or an ISO time such as 2026-09-30T23:00:00Z") from None
+    if t.tzinfo is None:
+        raise SlackError(f"--deadline {raw!r}: an ISO time needs its zone (Z, or an offset such as -07:00)")
+    return t.astimezone(timezone.utc)
+
+
+def card(ns: argparse.Namespace, reg: dict, now: datetime) -> dict:
+    """The card's fields (`note:20260930T2045Z-handoff-from-infra-ask-daniel-card-fields`), checked as the route checks them."""
+    need = {"--as": ns.handle, "--kind": ns.kind, "--question": ns.question, "--why": ns.why, "--recommend": ns.recommend,
+            "--default": ns.default, "--deadline": ns.deadline, "--link": ns.link}
+    if missing := [k for k, v in need.items() if not v]:
+        raise SlackError(f"ask-daniel needs {', '.join(missing)}")
+    h = entry(reg, ns.handle)
+    question = ns.question.strip()
+    if not question or "\n" in question:
+        raise SlackError("--question is one line: one question per card, and the context goes behind --link")
+    if not ns.why.strip():
+        raise SlackError("--why is empty")
+    options: list[dict] = []
+    for raw in ns.option:
+        m = OPTION_RE.match(raw)
+        if not m or not m[2].strip() or len(m[2].strip()) > LABEL_MAX:
+            raise SlackError(f"--option {raw!r}: give value=label, the value [a-z0-9_-] (at most 32), the label 1 to {LABEL_MAX} characters")
+        if any(o["value"] == m[1] for o in options):
+            raise SlackError(f"--option {m[1]!r} appears twice")
+        options.append({"value": m[1], "label": m[2].strip()})
+    if not OPTIONS_MIN <= len(options) <= OPTIONS_MAX:
+        raise SlackError(f"a card has {OPTIONS_MIN} to {OPTIONS_MAX} options (--option value=label); this one has {len(options)}")
+    values = [o["value"] for o in options]
+    for flag, v in (("--recommend", ns.recommend), ("--default", ns.default)):
+        if v not in values:
+            raise SlackError(f"{flag} {v!r} is not an option ({', '.join(values)})")
+    for o in options:
+        if o["value"] == ns.recommend:
+            o["recommended"] = True
+    deadline = parse_deadline(ns.deadline, now)
+    if deadline <= now:
+        raise SlackError(f"--deadline {pacific(deadline)} has passed (it is {pacific(now)})")
+    if deadline - now > DEADLINE_MAX:
+        raise SlackError(f"--deadline {pacific(deadline)} is more than {DEADLINE_MAX.days} days away")
+    if not ns.link.startswith("https://"):
+        raise SlackError(f"--link {ns.link!r}: an https URL to the full context")
+    url = ns.agent_url or os.environ.get("RESEARCH_AGENT_URL")
+    if not url:
+        raise SlackError("no --agent-url (or $RESEARCH_AGENT_URL): every card links the agent that asked it")
+    return {"kind": ns.kind, "question": question, "why": ns.why.strip(), "options": options, "default": ns.default,
+            "deadline": _iso(deadline), "link": ns.link, "requested_by": h["handle"], "agent_url": url}
+
+
+def fallback(body: dict) -> dict:
+    """The card in the route's old shape (`{title, text, link, requested_by}`, an Approve/Deny card), for a route that refuses
+    the new fields: the question is the title, and the text carries the rest, its times in Pacific."""
+    labels = {o["value"]: o["label"] for o in body["options"]}
+    rec = next(o["value"] for o in body["options"] if o.get("recommended"))
+    dflt = body["default"]
+    lines = [f"*{body['kind'].upper()}*", f"*Why:* {body['why']}", "*Options:*",
+             *(f"\u2022 `{o['value']}`: {o['label']}" + (" (recommended)" if o.get("recommended") else "") for o in body["options"]),
+             f"*Default:* {labels[dflt]} (`{dflt}`)" + (", which applies at the deadline unless you object" if body["kind"] == "default"
+                                                         else "; this card waits for your answer"),
+             f"*Deadline:* {pacific(datetime.fromisoformat(body['deadline']))}",
+             f"Approve takes the recommendation ({labels[rec]}) and Deny declines it; to choose another option, reply in the thread.",
+             f"_asked by <{body['agent_url']}|@{body['requested_by']}'s agent>_"]
+    return {"title": body["question"], "text": "\n".join(lines), "link": body["link"], "requested_by": body["requested_by"]}
+
+
+class RouteError(SlackError):
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
+def http_json(method: str, url: str, data: bytes | None, headers: dict[str, str]) -> dict:
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+        return json.load(r)
+
+
+def route_error(what: str, e: urllib.error.HTTPError) -> str:
+    why = f"HTTP {e.code}{_code(e)}"
+    if e.code == 401:
+        return f"{what}: the route rejected this agent's Cursor identity ({why}): it takes managed agents on danielreuter/verity only"
+    if e.code == 403:
+        return f"{what}: the route refused ({why}): only a card's own asker may resolve it"
+    if e.code == 429:
+        return f"{what}: the route is rate limiting ({why}; retry after {e.headers.get('Retry-After')} s)"
+    if e.code >= 500:
+        return f"{what}: the route is down ({why}); ask @console"
+    return f"{what}: the route answered {why}"
+
+
+class AskDaniel:
+    """The #ask-daniel cards' route: JSON with this agent's Cursor OIDC token (audience ASK_DANIEL). $RESEARCH_ASK_DANIEL_URL
+    points it at another server (the tests' fake); the audience stays the route's."""
+
+    def __init__(self):
+        self.base = (os.environ.get("RESEARCH_ASK_DANIEL_URL") or ASK_DANIEL).rstrip("/")
+        self._oidc: str | None = None
+
+    def call(self, method: str, path: str = "", body: dict | None = None) -> dict:
+        self._oidc = self._oidc or oidc_token(ASK_DANIEL)
+        data = None if body is None else json.dumps(body).encode()
+        headers = {"Authorization": f"Bearer {self._oidc}", **({"Content-Type": "application/json"} if data else {})}
+        what = f"{method} {ASK_DANIEL}{path}"
+        try:
+            out = http_json(method, self.base + path, data, headers)
+        except urllib.error.HTTPError as e:
+            raise RouteError(route_error(what, e), e.code) from None
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            raise SlackError(f"{what}: the route is unreachable: {getattr(e, 'reason', e)}") from None
+        if not isinstance(out, dict):
+            raise SlackError(f"{what}: the answer is not a JSON object")
+        return out
+
+
+def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: float, polls: int) -> dict:
+    """GET a card until it leaves `pending` (decided, or a blocking card overdue), at most `polls` times, `every` s apart."""
+    for i in range(max(1, polls)):
+        out = get()
+        if out.get("status") != "pending" or i == polls - 1:
+            return out
+        sleep(every)
+    return out
+
+
+def _show(out: dict, as_json: bool) -> int:
+    if as_json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+    else:
+        print(" ".join(str(out.get(k) or "-") for k in ("status", "choice", "source", "decided_at")))
+    return 0 if out.get("status") in DECIDED else 1
+
+
+def permalink(reg: dict, ch: str, ts: str) -> str:
+    return f"https://{reg['workspace']}/archives/{ch}/p{ts.replace('.', '')}"
+
+
+def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
+    if ns.verb:
+        if not ns.id:
+            raise SlackError(f"ask-daniel {ns.verb} needs the card's ID")
+        path = "/" + urllib.parse.quote(str(ns.id), safe="")
+        if ns.verb == "resolve":
+            if not ns.choice:
+                raise SlackError("ask-daniel resolve needs --choice VALUE: the option Daniel chose in the thread")
+            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {})}
+            if ns.dry_run:
+                print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
+                return 0
+            try:
+                return _show(AskDaniel().call("POST", f"{path}/resolve", body), ns.json)
+            except RouteError as e:
+                if e.status == 404:
+                    raise SlackError(f"ask-daniel resolve {ns.id}: HTTP 404: the resolve route isn't deployed yet (console is building it), "
+                                     "or there is no such card; until it is, the thread reply is the answer: record it as a ruling") from None
+                raise
+        if ns.dry_run:
+            print(f"dry-run: GET {ASK_DANIEL}{path}", file=sys.stderr)
+            return 0
+        route = AskDaniel()
+        polls = math.ceil((DEADLINE_MAX + WAIT_GRACE).total_seconds() / ns.every) if ns.wait else 1
+        return _show(wait_for(lambda: route.call("GET", path), sleep=_sleep, every=ns.every, polls=polls), ns.json)
+
+    now = _now()
+    body = card(ns, reg, now)
+    old = fallback(body)
+    if ns.dry_run:
+        print(f"dry-run: POST {ASK_DANIEL} {json.dumps(body, sort_keys=True, ensure_ascii=False)}", file=sys.stderr)
+        print(f"dry-run: on HTTP 400, the old shape: POST {ASK_DANIEL} {json.dumps(old, sort_keys=True, ensure_ascii=False)}", file=sys.stderr)
+        return 0
+    route = AskDaniel()
+    fell_back = False
+    try:
+        out = route.call("POST", "", body)
+    except RouteError as e:
+        if e.status != 400:
+            raise
+        print(f"research slack: the route refused the card's fields ({e}); posting the old shape", file=sys.stderr)
+        out, fell_back = route.call("POST", "", old), True
+    cid, ts = out.get("id"), out.get("ts")
+    if not cid or not ts:
+        raise SlackError("the route's answer has no id or ts")
+    ch = out.get("channel") or channel_id_for(reg, ASK_CHANNEL)
+    print(f"{cid} {ts} {permalink(reg, ch, ts)}")
+    shape = "the old shape (the route predates the card's fields)" if fell_back else "the card's fields"
+    print(f"posted as {shape}; now subscribe_slack_thread(channelId={ch}, threadTs={ts}, expiresInSeconds={EXPIRES_S})", file=sys.stderr)
+    if fell_back and body["kind"] == "default":
+        print(f"the old shape never applies a default: if Daniel hasn't answered by {pacific(datetime.fromisoformat(body['deadline']))}, "
+              f"`{body['default']}` applies, and you record it", file=sys.stderr)
+    if not ns.wait:
+        return 0
+    polls = math.ceil((datetime.fromisoformat(body["deadline"]) - now + WAIT_GRACE).total_seconds() / ns.every)
+    return _show(wait_for(lambda: route.call("GET", f"/{urllib.parse.quote(str(cid), safe='')}"), sleep=_sleep, every=ns.every,
+                          polls=polls), ns.json)
+
+
 def main(argv: list[str]) -> int:
     c = argparse.ArgumentParser(add_help=False)
     c.add_argument("--dry-run", action="store_true", help="send nothing to Slack; print each request instead")
@@ -713,6 +974,23 @@ def main(argv: list[str]) -> int:
     g.add_argument("--since", default=None, metavar="TS")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--json", action="store_true")
+    p = cmd("ask-daniel", "a card for Daniel in #ask-daniel; `status ID` reads its answer, `resolve ID` records a thread answer", url=True)
+    p.add_argument("verb", nargs="?", choices=("status", "resolve"), help="read a card's decision, or record Daniel's answer from its thread")
+    p.add_argument("id", nargs="?", metavar="ID", help="the card's id, as posting it printed")
+    p.add_argument("--as", dest="handle", default=None, metavar="HANDLE", help="the asking coordinator's handle (workers ask through theirs)")
+    p.add_argument("--kind", choices=KINDS, default=None, help="blocking waits for Daniel; default proceeds at the deadline unless he objects")
+    p.add_argument("--question", default=None, help="one line")
+    p.add_argument("--why", default=None, help="why it matters")
+    p.add_argument("--option", action="append", default=[], metavar="VALUE=LABEL", help=f"{OPTIONS_MIN} to {OPTIONS_MAX} of them")
+    p.add_argument("--recommend", default=None, metavar="VALUE")
+    p.add_argument("--default", default=None, metavar="VALUE")
+    p.add_argument("--deadline", default=None, help="`3:00 PM` (today, Pacific) or an ISO time with its zone")
+    p.add_argument("--link", default=None, metavar="URL", help="the full context")
+    p.add_argument("--wait", action="store_true", help="poll until the card is decided (or overdue); exit 0 once decided")
+    p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
+    p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
+    p.add_argument("--note", default=None, help="resolve: his words, or a link to them")
+    p.add_argument("--json", action="store_true", help="status: the route's whole answer")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
     gsub.add_parser("sync", parents=[c], help="create or update a user group per handle; a plan unless --apply").add_argument("--apply", action="store_true")
@@ -725,7 +1003,7 @@ def main(argv: list[str]) -> int:
             return cmd_groups_sync(ns, reg, path)
         return {"handles": cmd_handles, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
                 "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
-                "verify-author": cmd_verify_author, "read": cmd_read}[ns.cmd](ns, reg)
+                "verify-author": cmd_verify_author, "read": cmd_read, "ask-daniel": cmd_ask_daniel}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"research slack: {e}", file=sys.stderr)
         return 2

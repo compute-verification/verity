@@ -15,6 +15,7 @@ import tempfile
 import threading
 import urllib.error
 import urllib.parse
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -150,9 +151,20 @@ def match(capsys, handle, ev) -> tuple[int, str]:
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
-    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "approvals"}
+    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
     assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs"]
-    assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "approvals") == ["infra"]
+    assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
+    assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
+
+
+def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shadow_a_channel(fake, registry, capsys):
+    assert run(capsys, "pickup", "--channel", "approvals", "--thread", "1.0")[0] == 0
+    assert fake.calls == [("reactions.add", {"channel": "C0C5UCA0S0Z", "timestamp": "1.0", "name": "eyes"})]
+    reg = json.loads(registry.read_text())
+    reg["channels"]["ask-daniel"]["aliases"] = ["agent-alerts"]
+    registry.write_text(json.dumps(reg))
+    with pytest.raises(slack.SlackError, match="alias"):
+        slack.load_registry(registry)
 
 
 def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
@@ -221,6 +233,7 @@ DRY_RUNS = [
     ["roster", "--thread", "1.0"], ["read", "--since", "1.0"],
     ["match", "--as", "memory-accounting", "--event", '{"text":"x","ts":"2.0","thread_ts":"1.0","channel":"CCOORD"}'],
     ["verify-author", "--event", '{"ts":"1.0","channel":"CCOORD"}'], ["groups", "sync", "--apply"],
+    ["ask-daniel", "status", "7", "--wait"], ["ask-daniel", "resolve", "7", "--choice", "yes"],
 ]
 
 
@@ -236,7 +249,7 @@ def test_every_dry_run_via_the_broker_sends_nothing_and_fetches_no_identity(brok
     slack.main([*argv, "--dry-run"])
     err = capsys.readouterr().err
     assert not broker.requests and not broker.identities and not broker.state.calls
-    assert ("(via the broker)" in err or argv[0] == "verify-author") and OIDC not in err     # verify-author's dry run calls nothing
+    assert ("(via the broker)" in err or argv[0] in ("verify-author", "ask-daniel")) and OIDC not in err   # neither calls Slack
 
 
 # --- the broker transport ----------------------------------------------------------------------------------------------------
@@ -610,3 +623,199 @@ def test_research_slack_is_a_cli_subcommand(registry, capsys):
 
     assert main(["slack", "handles", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["schema"] == slack.SCHEMA
+
+
+# --- #ask-daniel -------------------------------------------------------------------------------------------------------------
+
+NOW = datetime(2026, 9, 30, 20, 45, tzinfo=timezone.utc)                  # 1:45 PM PDT
+ASK = "C0C5UCA0S0Z"
+
+
+class FakeRoute:
+    """The site's /api/agent-approvals: `fields` (the card's fields are deployed) or `old` (only {title, text, link, requested_by},
+    and a 400 for anything without a title); `resolve` is deployed or answers 404. `statuses` are what successive GETs return."""
+
+    def __init__(self):
+        self.mode, self.resolve, self.requests, self.statuses, self.answer = "fields", False, [], [], None
+
+    def handle(self, method: str, path: str, body: dict | None, auth: str) -> tuple[int, dict]:
+        self.requests.append((method, path, body))
+        if self.answer:
+            return self.answer
+        if auth != f"Bearer {OIDC}":
+            return 401, {"error": "invalid_identity"}
+        if method == "POST" and path == "/api/agent-approvals":
+            if self.mode == "old" and not body.get("title"):
+                return 400, {"error": "title_required"}
+            return 200, {"id": "42", "ts": "1790800000.000100", **({"channel": ASK} if self.mode == "fields" else {})}
+        if method == "POST" and path.endswith("/resolve"):
+            return (200, {"status": "decided", "choice": body["choice"], "source": "thread"}) if self.resolve else (404, {"error": "not_found"})
+        if method == "GET":
+            return 200, self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+        return 404, {"error": "not_found"}
+
+
+@pytest.fixture
+def route(identity_socket, monkeypatch):
+    state = FakeRoute()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def _answer(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n)) if n else None
+            status, out = state.handle(self.command, self.path, body, self.headers.get("Authorization", ""))
+            raw = json.dumps(out).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        do_GET = do_POST = _answer
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
+    monkeypatch.setenv("RESEARCH_ASK_DANIEL_URL", f"http://127.0.0.1:{srv.server_address[1]}/api/agent-approvals")
+    monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-test")
+    monkeypatch.setattr(slack, "_now", lambda: NOW)
+    state.identity = identity_socket
+    yield state
+    srv.shutdown()
+    srv.server_close()
+
+
+def card_argv(*extra: str, kind: str = "default", deadline: str = "3:00 PM") -> list[str]:
+    return ["ask-daniel", "--as", "infra", "--kind", kind, "--question", "Test: does the #ask-daniel card render correctly?",
+            "--why", "First live card; checks the format.", "--option", "yes=Looks right", "--option", "no=Needs changes",
+            "--recommend", "yes", "--default", "yes", "--deadline", deadline, "--link", "https://github.com/x/note.md", *extra]
+
+
+def test_ask_daniel_posts_the_cards_fields_with_the_routes_identity(route, registry, capsys):
+    rc, out, err = run(capsys, *card_argv())
+    assert rc == 0 and out.split() == ["42", "1790800000.000100", f"https://computeverification.slack.com/archives/{ASK}/p1790800000000100"]
+    (method, path, body), = route.requests
+    assert (method, path) == ("POST", "/api/agent-approvals")
+    assert body == {"kind": "default", "question": "Test: does the #ask-daniel card render correctly?", "why": "First live card; checks the format.",
+                    "options": [{"value": "yes", "label": "Looks right", "recommended": True}, {"value": "no", "label": "Needs changes"}],
+                    "default": "yes", "deadline": "2026-09-30T22:00:00Z", "link": "https://github.com/x/note.md", "requested_by": "infra",
+                    "agent_url": "https://cursor.com/agents/bc-test"}
+    assert route.identity["seen"] == [("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})]
+    assert "the card's fields" in err and f"threadTs=1790800000.000100" in err and OIDC not in out + err
+
+
+def test_a_route_without_the_fields_gets_the_old_shape_with_the_card_in_its_text(route, registry, capsys):
+    route.mode = "old"
+    rc, out, err = run(capsys, *card_argv())
+    assert rc == 0 and out.split()[:2] == ["42", "1790800000.000100"] and ASK in out            # the registry's channel id
+    assert [r[2].get("title") for r in route.requests] == [None, "Test: does the #ask-daniel card render correctly?"]
+    old = route.requests[1][2]
+    assert set(old) == {"title", "text", "link", "requested_by"} and old["requested_by"] == "infra"
+    assert old["text"].splitlines()[:5] == ["*DEFAULT*", "*Why:* First live card; checks the format.", "*Options:*",
+                                            "\u2022 `yes`: Looks right (recommended)", "\u2022 `no`: Needs changes"]
+    assert "*Default:* Looks right (`yes`), which applies at the deadline" in old["text"]
+    assert "*Deadline:* 3:00 PM PDT, Wed 30 Sep" in old["text"] and "reply in the thread" in old["text"]
+    assert "HTTP 400 title_required" in err and "the old shape" in err and "`yes` applies, and you record it" in err
+
+
+def test_only_a_400_falls_back(route, registry, capsys):
+    route.answer = (401, {"error": "invalid_identity"})
+    rc, _, err = run(capsys, *card_argv())
+    assert rc == 2 and "rejected this agent's Cursor identity (HTTP 401 invalid_identity)" in err and len(route.requests) == 1
+
+
+@pytest.mark.parametrize("change, says", [
+    ({"--question": "two\nlines"}, "one line"),
+    ({"--option": None}, "2 to 5 options"),
+    ({"--recommend": "maybe"}, "--recommend 'maybe' is not an option"),
+    ({"--default": "maybe"}, "--default 'maybe' is not an option"),
+    ({"--deadline": "1:00 PM"}, "has passed"),
+    ({"--deadline": "2026-10-08T21:00:00Z"}, "more than 7 days"),
+    ({"--deadline": "2026-09-30T23:00:00"}, "needs its zone"),
+    ({"--deadline": "tomorrow"}, "give `3:00 PM`"),
+    ({"--deadline": "13:00 PM"}, "not a clock time"),
+    ({"--link": "http://x"}, "an https URL"),
+    ({"--link": None}, "needs --link"),
+    ({"--as": "pous-worker-3"}, "unknown handle"),
+])
+def test_ask_daniel_checks_the_card_before_sending_anything(route, registry, capsys, change, says):
+    argv = card_argv()
+    for flag, value in change.items():
+        i = argv.index(flag)
+        if flag == "--option":
+            del argv[argv.index("--option", i + 1):argv.index("--option", i + 1) + 2]
+        elif value is None:
+            del argv[i:i + 2]
+        else:
+            argv[i + 1] = value
+    rc, _, err = run(capsys, *argv)
+    assert rc == 2 and says in err and not route.requests and not route.identity["seen"]
+
+
+def test_options_are_two_to_five_unique_values_with_button_sized_labels(route, registry, capsys):
+    many = [x for v in "abcde" for x in ("--option", f"{v}=Option {v}")]
+    assert run(capsys, *card_argv(*many))[0] == 2                                           # 7 with the two defaults
+    rc, _, err = run(capsys, *card_argv("--option", "yes=Again"))
+    assert rc == 2 and "appears twice" in err
+    rc, _, err = run(capsys, *card_argv("--option", "c=" + "x" * (slack.LABEL_MAX + 1)))
+    assert rc == 2 and "the label 1 to 75" in err and not route.requests
+
+
+def test_deadlines_are_pacific_clock_times_today_or_zoned_iso():
+    assert slack.parse_deadline("3:00 PM", NOW) == datetime(2026, 9, 30, 22, 0, tzinfo=timezone.utc)
+    assert slack.parse_deadline("11:59 pm", NOW) == datetime(2026, 10, 1, 6, 59, tzinfo=timezone.utc)
+    assert slack.parse_deadline("12:00 AM", NOW) == datetime(2026, 9, 30, 7, 0, tzinfo=timezone.utc)
+    assert slack.parse_deadline("2026-09-30T16:00:00-07:00", NOW) == datetime(2026, 9, 30, 23, 0, tzinfo=timezone.utc)
+    winter = datetime(2026, 12, 1, 18, 0, tzinfo=timezone.utc)                              # PST, UTC-8
+    assert slack.parse_deadline("3:00 PM", winter) == datetime(2026, 12, 1, 23, 0, tzinfo=timezone.utc)
+    assert slack.pacific(winter) == "10:00 AM PST, Tue 01 Dec"
+
+
+def test_wait_polls_with_the_injected_sleeper_until_decided(route, registry, capsys, monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", slept.append)
+    route.statuses = [{"status": "pending"}, {"status": "pending"},
+                      {"status": "decided", "choice": "yes", "source": "default", "decided_at": "2026-09-30T22:00:05Z"}]
+    rc, out, _ = run(capsys, *card_argv("--wait", "--every", "60"))
+    assert rc == 0 and out.splitlines()[1] == "decided yes default 2026-09-30T22:00:05Z" and slept == [60, 60]
+    assert [r[:2] for r in route.requests] == [("POST", "/api/agent-approvals")] + [("GET", "/api/agent-approvals/42")] * 3
+
+
+def test_wait_gives_up_after_the_deadline_and_its_grace(route, registry, capsys, monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", slept.append)
+    route.statuses = [{"status": "pending"}]
+    rc, out, _ = run(capsys, *card_argv("--wait", "--every", "600", kind="blocking", deadline="2:45 PM"))
+    assert rc == 1 and out.splitlines()[1].startswith("pending")
+    assert len(slept) == 6 and sum(r[0] == "GET" for r in route.requests) == 7                   # (60 + 5) min in 10-minute polls
+
+
+def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry, capsys):
+    route.statuses = [{"status": "overdue"}]
+    assert run(capsys, "ask-daniel", "status", "42")[:2] == (1, "overdue - - -\n")
+    route.statuses = [{"status": "approved", "decided_at": "2026-09-30T21:00:00Z"}]
+    rc, out, _ = run(capsys, "ask-daniel", "status", "42", "--json")
+    assert rc == 0 and json.loads(out)["status"] == "approved"
+    assert run(capsys, "ask-daniel", "status")[0] == 2
+
+
+def test_resolve_records_a_thread_answer_and_says_clearly_when_the_route_is_missing(route, registry, capsys):
+    rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "Daniel in the thread: needs changes")
+    assert rc == 2 and "HTTP 404: the resolve route isn't deployed yet" in err and "record it as a ruling" in err
+    route.resolve = True
+    rc, out, _ = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no", "--note", "needs changes")
+    assert rc == 0 and out == "decided no thread -\n"
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve", {"choice": "no", "note": "needs changes"})
+    assert run(capsys, "ask-daniel", "resolve", "42")[0] == 2
+    route.answer = (403, {"error": "not_your_card"})
+    rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "no")
+    assert rc == 2 and "only a card's own asker" in err
+
+
+def test_ask_daniels_dry_run_prints_both_shapes_and_sends_nothing(route, registry, capsys):
+    rc, out, err = run(capsys, *card_argv("--dry-run"))
+    assert rc == 0 and not out and not route.requests and not route.identity["seen"]
+    new, old = [json.loads(line[line.index("{"):]) for line in err.splitlines()]
+    assert new["kind"] == "default" and old["title"] == new["question"]

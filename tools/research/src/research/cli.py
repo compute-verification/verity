@@ -39,7 +39,7 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
-  research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync [--dry-run]
+  research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync|ask-daniel [--dry-run]
                                                  # the coordination API on Slack (research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution

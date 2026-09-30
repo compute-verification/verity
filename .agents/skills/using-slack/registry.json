@@ -31,11 +31,14 @@
         }
       ]
     },
-    "approvals": {
+    "ask-daniel": {
       "id": "C0C5UCA0S0Z",
-      "purpose": "Approval requests with Approve/Deny buttons; only Daniel (U0BEN96ES8Y) decides. Every top-level post is addressed to the subscribers.",
+      "purpose": "Everything that needs Daniel: one question per card (blocking or default); only Daniel (U0BEN96ES8Y) decides.",
       "subscribers": [
         "infra"
+      ],
+      "aliases": [
+        "approvals"
       ]
     }
   },
