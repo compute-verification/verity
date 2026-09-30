@@ -43,6 +43,9 @@ read-only L2 flush.
      The next producer waits for A's tree (it rewrites A's leaves); the graph ends when every side stream has joined;
    - h3oe: h3o with the tile hashing at the chain's priority;
    - h2o, h2oe: the same tile hashing beside the next call; -h2's forming needs A's root, so A's tree stays in series;
+   - h3g, h2g: each call's tile hashing launched with the next call's GEMM at low priority, so it fills that GEMM's last
+     wave (4,096 tiles on 188 persistent CTAs leave 40 SMs idle for the last tile, with DRAM quiet) before spilling beside
+     the producer and forming; the slot wait moves with it;
    - h3oL, h3oeL, h2oL, h2oeL: those with the GEMM's digests kept in L2 for the tile hashing. The GEMM's graph node gets
      an access-policy window over the digests it writes (persisting, within a persisting set-aside of the digests' size),
      so hash_leaf_p reads them from L2, not DRAM, beside the memory-bound producer and forming. Every replay starts from
@@ -74,15 +77,17 @@ X3C = bytes(b ^ 0x3C for b in range(256))
 POISON = 0xA5
 ARMS = ("nohash", "h2", "h3", "h2u", "h3u")
 DUMPS = ("h2", "h3", "h2u", "h3u", "nc")
-#: --chain's arms: (format, A's tree and seed on a side stream beside forming, each call's tile hashing on a side stream
-#: beside the next call's producer and forming, that side stream's priority, the GEMM's digests kept in L2 for the tile
+#: --chain's arms: (format, A's tree and seed on a side stream beside forming, each call's tile hashing on a side stream:
+#: "next" once its GEMM is done, beside the next call's producer and forming, or "tail" launched with the next call's GEMM,
+#: filling that GEMM's last-wave idle SMs first; that side stream's priority, the GEMM's digests kept in L2 for the tile
 #: hashing: an access-policy window on the GEMM node marks its digest writes persisting)
-CHAIN_ARMS = {"nohash": (None, False, False, None, False), "h3s": ("h3", False, False, None, False),
-              "h3o": ("h3", True, True, "low", False), "h3oe": ("h3", True, True, "high", False),
-              "h3oL": ("h3", True, True, "low", True), "h3oeL": ("h3", True, True, "high", True),
-              "h2s": ("h2", False, False, None, False), "h2o": ("h2", False, True, "low", False),
-              "h2oe": ("h2", False, True, "high", False), "h2oL": ("h2", False, True, "low", True),
-              "h2oeL": ("h2", False, True, "high", True)}
+CHAIN_ARMS = {"nohash": (None, False, None, None, False), "h3s": ("h3", False, None, None, False),
+              "h3o": ("h3", True, "next", "low", False), "h3oe": ("h3", True, "next", "high", False),
+              "h3oL": ("h3", True, "next", "low", True), "h3oeL": ("h3", True, "next", "high", True),
+              "h3g": ("h3", True, "tail", "low", False),
+              "h2s": ("h2", False, None, None, False), "h2o": ("h2", False, "next", "low", False),
+              "h2oe": ("h2", False, "next", "high", False), "h2oL": ("h2", False, "next", "low", True),
+              "h2oeL": ("h2", False, "next", "high", True), "h2g": ("h2", False, "tail", "low", False)}
 #: the CUDA driver's attribute, limit and property numbers the L2 window uses
 L2_SIZE, MAX_PERSISTING_L2, MAX_WINDOW, LIMIT_PERSISTING_L2, ATTR_WINDOW, PERSISTING, STREAMING = 38, 108, 109, 6, 1, 2, 1
 USE_NODE_PRIORITY, ATTR_PRIORITY = 8, 8   # CUDA_GRAPH_INSTANTIATE_FLAG_USE_NODE_PRIORITY, CU_LAUNCH_ATTRIBUTE_PRIORITY
@@ -381,9 +386,16 @@ def main() -> None:
             lines = (lambda: dev.launch("lines", -(-M // 128), 128, p=(line_h3, b["ea_codes"], 0, 0), i=(0, 0, M, R.NORM_256))) \
                 if a_side else st["lines_ea"]
             forming = [lines, st["stats_a"], st["eprime_a"], st["form_a"], st["af"], st["pa"]]
+            def side_hashing(fns, slot) -> None:
+                dev.ck("cuEventRecord", evs["g"], s)
+                dev.ck("cuStreamWaitEvent", t_stream, evs["g"], 0)
+                on(t_stream, fns)
+                dev.ck("cuEventRecord", evs[f"t{slot}"], t_stream)
+                t_rec[slot] = True
+
             dev.stream = s
             dev.ck("cuStreamBeginCapture_v2", s, 0)
-            a_rec, t_rec = False, [False, False]
+            a_rec, t_rec, pending = False, [False, False], None
             for i in range(calls):
                 yp = y_in + i * yb
                 dg, lv, tr = slots[v][i % 2]
@@ -408,20 +420,22 @@ def main() -> None:
                 if fmt is None:
                     ex["gemm_pearlc_s"]()
                     continue
+                if t_side == "tail" and pending:              # call i - 1's tile hashing, ready with this call's GEMM
+                    side_hashing(*pending)
                 pipe.gemm("gemm_pearlc_b" + sx, "at", "bt", M, N, out=(None, None, "y"), dg=dg, key=keys["k_msg"], pa=b["pa_t"],
                           pb=b["pb_t"], rs=b["ia_a"], cs=b["ia_b"])
                 hashing = [lambda dg=dg, lv=lv: dev.launch("hash_leaf_p", -(-tiles // 32), 128, p=(dg, lv, keys["k_leaf"]), i=(M, N)),
                            lambda lv=lv, tr=tr: Kn.go("hash_leaves_b3s", -(-tiles // 128), 128, (lv, tr, keys["dom_t"], ttmpl),
                                                       (tiles, 32, 0, tt[1])),
                            lambda tr=tr: levels(tr, b["keys_t"], tiles, *t_cfg)]
-                if t_side:
-                    dev.ck("cuEventRecord", evs["g"], s)
-                    dev.ck("cuStreamWaitEvent", t_stream, evs["g"], 0)
-                    on(t_stream, hashing)
-                    dev.ck("cuEventRecord", evs[f"t{i % 2}"], t_stream)
-                    t_rec[i % 2] = True
+                if t_side == "next":
+                    side_hashing(hashing, i % 2)
+                elif t_side == "tail":
+                    pending = (hashing, i % 2)
                 else:
                     on(s, hashing)
+            if pending:
+                side_hashing(*pending)
             if a_rec:
                 dev.ck("cuStreamWaitEvent", s, evs["a"], 0)
             for k in (0, 1):
@@ -447,8 +461,10 @@ def main() -> None:
         l2 = {"l2_bytes": dev.get("cuDeviceGetAttribute", L2_SIZE, dev.dev),
               "max_persisting": dev.get("cuDeviceGetAttribute", MAX_PERSISTING_L2, dev.dev),
               "max_window": dev.get("cuDeviceGetAttribute", MAX_WINDOW, dev.dev)}
-        l2["persisting_limit"] = min(l2["max_persisting"], M * N)
-        dev.ck("cuCtxSetLimit", LIMIT_PERSISTING_L2, l2["persisting_limit"])
+        chosen = ["nohash"] + [a for a in (args.arms.split(",") if args.arms else CHAIN_ARMS) if a != "nohash"]
+        l2["persisting_limit"] = min(l2["max_persisting"], M * N) if any(CHAIN_ARMS[a][4] for a in chosen) else 0
+        if l2["persisting_limit"]:
+            dev.ck("cuCtxSetLimit", LIMIT_PERSISTING_L2, l2["persisting_limit"])
         res["l2"], windows = l2, {}
 
         def keep_digests(g, gemm) -> int:
@@ -477,7 +493,6 @@ def main() -> None:
                 marked += 1
             return marked
 
-        chosen = ["nohash"] + [a for a in (args.arms.split(",") if args.arms else CHAIN_ARMS) if a != "nohash"]
         graphs = {f"{v} {arm}": chain_graph(v, arm) for v in R.VARIANT_G for arm in chosen}
         res["l2_windows"] = windows
         graphs.update({f"plain {arm}": graph(seq) for arm, seq in seqs["plain"].items()})
