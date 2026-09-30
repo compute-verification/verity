@@ -191,7 +191,8 @@ def unit_lines(n: int, rng: np.random.Generator) -> np.ndarray:
     return v / np.sqrt((v ** 2).mean(1, keepdims=True))
 
 
-def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: np.random.Generator, chunk: int = 1 << 17):
+def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: np.random.Generator, chunk: int = 1 << 17,
+            lines_out: list | None = None):
     """§5's forming of rows X against F's codes Fc (k x 32). Returns codes, a second draw's codes (for the collision rate),
     the share of E' codes that are zero or subnormal, and the rows' domain verdicts (noise floor, liveness)."""
     rows, k = X.shape
@@ -205,6 +206,8 @@ def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: 
     out, sub = [], []
     for _draw in range(2):
         Ec = enc(unit_lines(rows, rng) * (sig * alpha / line_norm)[:, None])
+        if lines_out is not None and _draw == 0:
+            lines_out.append(Ec)
         sub.append(float(((Ec & 0x7F) < 8).mean()))
         codes = np.empty((rows, k), dtype=np.uint8)
         idx = np.arange(rows * k)

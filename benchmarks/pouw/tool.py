@@ -77,9 +77,21 @@ def parse_pearlc_census(argv: list[str]) -> dict:
     ap.add_argument("--run", type=int, default=1)
     ap.add_argument("--forming", default="census")
     ap.add_argument("--line-norm", type=float, default=256.0)
+    ap.add_argument("--atom", default="hopper")
     ns, _ = ap.parse_known_args(argv)
     return {"ks": ns.ks, "deltas": ns.deltas, "tile": ns.tile, "families": ns.families, "run": ns.run,
-            "forming": ns.forming, "line_norm": ns.line_norm}
+            "forming": ns.forming, "line_norm": ns.line_norm, "atom": ns.atom}
+
+
+def parse_pearlc_u_only(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("--atom", default="sm120")
+    ap.add_argument("--k", type=int, default=8192)
+    ap.add_argument("--families", default=None)
+    ap.add_argument("--run", type=int, default=1)
+    ap.add_argument("--skip-words", type=int, default=32)
+    ns, _ = ap.parse_known_args(argv)
+    return {"atom": ns.atom, "k": ns.k, "families": ns.families, "run": ns.run, "skip_words": ns.skip_words}
 
 
 def parse_pearlc_quality(argv: list[str]) -> dict:
@@ -104,8 +116,11 @@ def parse_pearlc_activations(argv: list[str]) -> dict:
     ap.add_argument("--line-norm", type=float, default=16.0)
     ap.add_argument("--tiles", type=int, default=2)
     ap.add_argument("--seed", type=int, default=20260930)
+    ap.add_argument("--atom", default="hopper")
+    ap.add_argument("--G", type=int, default=4)
     ns, _ = ap.parse_known_args(argv)
-    return {"model": ns.model, "window": ns.window, "delta": ns.delta, "line_norm": ns.line_norm, "tiles": ns.tiles, "seed": ns.seed}
+    return {"model": ns.model, "window": ns.window, "delta": ns.delta, "line_norm": ns.line_norm, "tiles": ns.tiles, "seed": ns.seed,
+            "atom": ns.atom, "G": ns.G}
 
 
 def parse_pearlc_headline(argv: list[str]) -> dict:
@@ -142,6 +157,11 @@ POUW_PEARLC_CENSUS = Tool(name="pouw_pearlc_census", version="1", command=["pyth
                                    "packages/verity/src/verity/ml/tc/**"],
                           key_params=["ks", "deltas", "tile", "families", "run", "forming", "line_norm", "atom"],
                           produces=["bench-result/v1", "run-files/v1"], parse=parse_pearlc_census)
+POUW_PEARLC_UONLY = Tool(name="pouw_pearlc_u_only", version="1", command=["python", "benchmarks/pouw/pearlc_u_only.py"],
+                         closure=["benchmarks/pouw/pearlc_u_only.py", "benchmarks/pouw/pearlc_census.py",
+                                  "benchmarks/pouw/run_result.py", "packages/verity/src/verity/ml/tc/**"],
+                         key_params=["atom", "k", "families", "run", "skip_words"],
+                         produces=["bench-result/v1", "run-files/v1"], parse=parse_pearlc_u_only)
 POUW_PEARLC_ACTIVATIONS = Tool(name="pouw_pearlc_activations", version="1", command=["python", "benchmarks/pouw/pearlc_activations.py"],
                                closure=["benchmarks/pouw/pearlc_activations.py", "benchmarks/pouw/pearlc_census.py",
                                         "benchmarks/pouw/run_result.py", "packages/verity/src/verity/ml/tc/**"],
