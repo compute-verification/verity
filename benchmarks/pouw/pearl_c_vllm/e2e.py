@@ -30,6 +30,9 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   `verify_run.py` after the window: the first two must be accepted and the control rejected (the panel's rule of 11:50Z).
 - **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
 
+``--rows-form s`` (-h2 only) serves A's rows form ``s``: forming's statistics come from the row-leaf kernel's own pass over A
+(`run.Pipeline`'s ``rows_form``), the same bytes as ``stats_s5``'s.  The quality run keeps its schemes' form, ``w``.
+
 Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
 engines resident, the arm's install and gates, and each engine's first sampling calls.  ``--perplexity`` (`perplexity`) is
 the untimed quality run: WikiText-2's test split through bf16, stock fp8, and Pearl-C v1 and v2.
@@ -127,7 +130,8 @@ def install(model, args, beacon: bytes):
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
-                              schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False))
+                              schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False),
+                              rows_form=getattr(args, "rows_form", "w"))
     stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
@@ -534,7 +538,7 @@ def smoke(args) -> None:
     Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16."""
     ctx, beacon = mp.get_context("spawn"), os.urandom(32)
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": getattr(args, "scheme", SCHEME),
-                 "schedule": getattr(args, "schedule", "serial"),
+                 "schedule": getattr(args, "schedule", "serial"), "rows_form": getattr(args, "rows_form", "w"),
                  "run": os.environ.get("RESEARCH_RUN_ID"),
                  "steps": [], "resident": False}
 
@@ -617,7 +621,7 @@ def perplexity(args) -> int:
             return 99
         ran = True
         a = copy.copy(args)
-        a.scheme, a.batch_tokens = scheme, PPL_BATCH
+        a.scheme, a.batch_tokens, a.rows_form = scheme, PPL_BATCH, "w"
         w = Worker(ctx, a, group, beacon)
         try:
             res = {"gate": w.ready.get("gate"), "committer": w.ready.get("committer"), "modes": {}}
@@ -669,11 +673,15 @@ def main() -> None:
     ap.add_argument("--fp8-graphs", action="store_true",
                     help="also time stock FP8 as vLLM serves it (compiled, CUDA graphs), a third engine, beside the eager one")
     ap.add_argument("--graphs", action="store_true", help="decode's calls (m <= GRAPH_ROWS) replay their steps as one CUDA graph each")
+    ap.add_argument("--rows-form", choices=("w", "s"), default="w",
+                    help="A's rows form: s takes forming's statistics from -h2's row-leaf pass over A (-h2 schemes only)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
     ap.add_argument("--chunk-min", type=float, default=7.0, help="the quality run starts no group after this many minutes")
     args = ap.parse_args()
+    if args.rows_form == "s" and not args.perplexity and PPD.scheme_of(args.scheme).hashing != "h2":
+        ap.error(f"--rows-form s is -h2's, and {args.scheme} is {PPD.scheme_of(args.scheme).hashing}")
     if args.smoke:
         smoke(args)
         return
@@ -682,6 +690,7 @@ def main() -> None:
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs, "fp8_graphs": args.fp8_graphs,
+                 "rows_form": args.rows_form,
                  "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}

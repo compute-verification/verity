@@ -22,13 +22,15 @@
 # group a chunk with CHUNK_MIN=0, exiting 99 while groups remain.  OUT names the output directory where there is no research
 # run (a fill job).  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C scheme, and so its hashing format)
 # pass to e2e.py and profile_decode.py; the quality run names its own schemes.  GRAPHS=1 passes --graphs to e2e.py, FP8_GRAPHS=1 --fp8-graphs.
+# ROWS_FORM=s (an -h2 SCHEME only) passes --rows-form s to e2e.py and profile_decode.py: forming's statistics from -h2's row-leaf pass.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
 mkdir -p "$OUT"
 MODE=${MODE:-window}
-SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs})
+SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs}
+          ${ROWS_FORM:+--rows-form "$ROWS_FORM"})
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
 export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f

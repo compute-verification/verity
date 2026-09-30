@@ -69,7 +69,8 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
                  "split: the GEMM runs inside the call's graph" if graphs else
                  f"GEMM {s['gemm_x_fp8']:.3f}, hashing and records {s['hashing_x_fp8']:.3f}, else {s['else_x_fp8']:.3f}")
         desc = (f"PoUW MVP e2e: Llama-3.1-8B-Instruct in vLLM (BF16, TP 1, eager) with every linear committed by "
-                f"pouw_pearl_c_device{' (--graphs: each decode call one CUDA graph, #593)' if e2e.get('graphs') else ''}; "
+                f"pouw_pearl_c_device{' (--graphs: each decode call one CUDA graph, #593)' if e2e.get('graphs') else ''}"
+                f"{' (rows form s: forming statistics from the -h2 row-leaf pass, #610)' if e2e.get('rows_form') == 's' else ''}; "
                 f"{phase} {'one 8,192-token prompt' if phase == 'prefill' else '32 sequences, per step'}; "
                 f"over stock vLLM FP8 {s['slowdown_vs_fp8']:.3f}x ({split}), over BF16 {s['slowdown_vs_bf16']:.3f}x; "
                 + (f"over stock FP8 as vLLM serves it (compiled, CUDA graphs) {s['slowdown_vs_fp8_graphs']:.3f}x; "
