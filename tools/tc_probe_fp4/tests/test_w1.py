@@ -7,12 +7,17 @@ nibble) and the E2M1 reference's grid, ties and saturation are pinned; the cast-
 are pinned; timing samples nvidia-smi every few rounds, not every rep; the three-loop split recovers known costs; the tool
 declarations resolve their key params.  The E4M3-to-FP16 reference is pinned to the registered decode, its timing rows never feed a
 chain a NaN code, and its loops are pinned whole; unwritten words must keep the poison, and a device whose no-write control passes
-the gate fails the run;  With nvcc on the PATH, the real build's loops are checked.
+the gate fails the run; the fill lease writes a header the runner parses, records the child's exit status (no retry turns a failed
+gate into a pass), waits out the runner's move-then-log order and withdraws a job that never starts.  With nvcc on the PATH, the
+real build's loops are checked.
 """
 from __future__ import annotations
 
 import collections
+import json
+import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -197,6 +202,8 @@ def test_smi_sampled_every_few_rounds(monkeypatch):
 def test_lease_needs_a_real_build(tmp_path, capsys):
     assert w1.main(["--out", str(tmp_path), "--fake-silicon", "--lease-max-min", "5"]) == 2
     assert "--lease-max-min" in capsys.readouterr().err
+    assert w1.main(["--out", str(tmp_path), "--lease-via-fill", "bc-x"]) == 2
+    assert "--lease-via-fill needs --lease-max-min" in capsys.readouterr().err
 
 
 def test_e4m3_f16_decode_pinned():
@@ -278,6 +285,73 @@ def test_sass_gate_pins_the_f16_loops(monkeypatch, kernel, name, body, ok):
     assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"][name]["ok"] is ok
 
 
+@pytest.fixture
+def fill_dir(tmp_path, monkeypatch):
+    d = tmp_path / "fill"
+    for sub in ("queue", "running", "done", "failed", "logs"):
+        (d / sub).mkdir(parents=True)
+    (d / "events.jsonl").write_text("")
+    monkeypatch.setattr(w1, "FILL_DIR", d)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    return d
+
+
+def _runner(fill: Path, logged_late: bool):
+    """A stand-in for fill_runner.py's step, called in place of sleep: start the queued job (bash, as the runner does), move it to
+    done/, then append its events, on the same call or (logged_late) on the next one."""
+    state = {"calls": 0}
+
+    def event(kind, **kw):
+        with open(fill / "events.jsonl", "a") as f:
+            f.write(json.dumps({"t": "T", "event": kind, "job": "w1-r-test.sh", **kw}) + "\n")
+
+    def step(_seconds):
+        state["calls"] += 1
+        job = fill / "queue" / "w1-r-test.sh"
+        if job.exists():
+            p = subprocess.run(["bash", str(job)], capture_output=True, text=True, check=False)
+            (fill / "logs" / "w1-r-test.sh.120000.log").write_text(p.stdout + p.stderr)
+            job.rename(fill / "done" / job.name)
+            state["rc"] = p.returncode
+            event("start", owner="bc-x")
+            if not logged_late:
+                event("done", rc=p.returncode)
+        elif logged_late and "logged" not in state:
+            state["logged"] = True
+            event("done", rc=state["rc"])
+    return step, state
+
+
+def test_fill_header_parses_as_the_runner_reads_it(fill_dir):
+    step, _ = _runner(fill_dir, False)
+    seen = {}
+
+    def peek(s):
+        text = (fill_dir / "queue" / "w1-r-test.sh").read_text()
+        seen.update(dict(re.findall(r"(\w+)=(\S+)", re.search(r"#\s*fill:\s*(.*)", text).group(1))))
+        step(s)
+
+    w1.fill_lease([sys.executable, "-c", "pass"], "bc-x", 8, fill_dir.parent / "sub", sleep=peek)
+    assert seen == {"owner": "bc-x", "gpus": "1", "max_min": "8", "cpus": "8", "project": "pous", "prio": "10"}
+
+
+@pytest.mark.parametrize("logged_late", [False, True])
+def test_fill_lease_records_the_child_status(fill_dir, logged_late):
+    """The child exits 3 (a failed gate); its script still exits 0, so the runner files it under done/ with no retry, and the lease
+    returns 3 with the job's events and log, even when the runner logs the exit after the move."""
+    step, state = _runner(fill_dir, logged_late)
+    sub = fill_dir.parent / "sub"
+    rc, info = w1.fill_lease([sys.executable, "-c", "import sys; print('child ran'); sys.exit(3)"], "bc-x", 8, sub, sleep=step)
+    assert rc == 3 and state["rc"] == 0 and (fill_dir / "done" / "w1-r-test.sh").exists()
+    assert [e["event"] for e in info["events"]] == ["start", "done"]
+    assert "child ran" in (sub / "fill-w1-r-test.sh.120000.log").read_text()
+
+
+def test_fill_lease_withdraws_a_job_that_never_starts(fill_dir):
+    rc, info = w1.fill_lease([sys.executable, "-c", "pass"], "bc-x", 8, fill_dir.parent / "sub", wait_min=1, sleep=lambda s: None)
+    assert rc == 124 and "withdrawn" in info and not any((fill_dir / "queue").iterdir())
+
+
 def test_split_recovers_the_costs():
     loops = {"f2fp_e2m1x2": {w1.OPS[12][1]: 64, "IADD3": 10, "UIADD3": 1, "UISETP.NE.AND": 1, "BRA.U": 1},
              "f2fp_e2m1x2_u8": {w1.OPS[13][1]: 64, "LOP3.LUT": 64, "IADD3": 34, "UIADD3": 1, "UISETP.NE.AND": 1, "BRA.U": 1},
@@ -299,7 +373,8 @@ def test_tool_declarations_resolve():
 
     _, k = TC_PROBE_FP8.resolve_params(["python", "tools/tc_probe_fp4/fp8.py", "--row", "chain", "--out", "/x", "--expect-gpu-uuid", "GPU-1"])
     assert k["row"] == "chain" and k["instruction"] is None and k["steps"] == 2048
-    argv = ["python", "tools/tc_probe_fp4/w1.py", "--out", "/x", "--reps", "12", "--lease-max-min", "10", "--smi-every", "5"]
+    argv = ["python", "tools/tc_probe_fp4/w1.py", "--out", "/x", "--reps", "12", "--lease-max-min", "10", "--smi-every", "5",
+            "--lease-via-fill", "bc-x"]
     _, k = W1_PRICES.resolve_params(argv)
     assert k["reps"] == 12 and k["clocks"] == "unlocked" and "_unknown" not in parse_w1(argv)
 

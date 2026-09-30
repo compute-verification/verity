@@ -10,9 +10,11 @@ them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
                                     [--ops qmma_e4m3_f32,qmma_sp_e4m3] [--prebuilt libw1_prices_sm_120a.so] [--lease-max-min 10]
-                                    [--smi-every 5]
+                                    [--lease-via-fill OWNER] [--smi-every 5]
 
-``--lease-max-min M`` builds and SASS-gates here, then runs the rest under ``gpu-lease 1 --wait --max-min M`` on the built library.
+``--lease-max-min M`` builds and SASS-gates here, then runs the rest under ``gpu-lease 1 --wait --max-min M`` on the built library;
+with ``--lease-via-fill OWNER`` that part is instead one GPU fill job of OWNER's on node 2's fill runner (``gpus=1 prio=10``), which
+this run queues and waits for, so it preempts no one's fill chunk and still records its results here.
 
 The unit is W1's: one dense E4M3 MAC with FP32 accumulation, i.e. 1 / (the qmma_e4m3_f32 rate per SM per clock).  A price is that
 rate over an op's rate in its own unit: per MAC for the atoms (the sparse atom per logical MAC, 16 x 8 x 64 an instruction, and per
@@ -44,6 +46,8 @@ import ctypes
 import json
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 import time
@@ -708,6 +712,63 @@ def run(args) -> tuple[int, dict]:
     return finish(out, args, res, failures, ident, t0)
 
 
+FILL_DIR = Path(os.environ.get("FILL_DIR", "/workspace/pouw/fill"))
+FILL_POLL_S = 5
+
+
+def _fill_events(job: str) -> list[dict]:
+    events = []
+    for line in (FILL_DIR / "events.jsonl").read_text().splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if e.get("job") == job:
+            events.append(e)
+    return events
+
+
+def fill_lease(child: list[str], owner: str, max_min: int, sub: Path, wait_min: int = 90, sleep=time.sleep) -> tuple[int, dict]:
+    """Run ``child`` as one GPU fill job of ``owner`` on the fill runner in FILL_DIR (``gpus=1 prio=10``, one chunk of at most
+    ``max_min`` minutes, any GPU) and wait until the runner moves it to done/ or failed/.  The script is staged as a dotfile, which
+    the runner skips, then renamed into queue/.  The runner leases the GPU (``gpu-lease 1 --preemptible``, which sets
+    GPU_LEASE_UUID); a preempted chunk is killed with its script, requeued and rerun from the top, which the child can, since it
+    only gates and times.  The script writes the child's exit status into ``sub`` and exits 0, because the runner retries any other
+    exit once: a failed gate must fail this run, not be retried into a pass.  A job still queued after ``wait_min`` minutes is
+    withdrawn (exit 124).  Returns the child's exit status (the runner's if the child never finished), with the job's events; its
+    logs are copied into ``sub``."""
+    job = f"w1-{os.environ.get('RESEARCH_RUN_ID') or os.getpid()}.sh"
+    queue = FILL_DIR / "queue"
+    stage = queue / f".{job}"
+    sub.mkdir(parents=True, exist_ok=True)
+    rc_file = sub / "fill_child_rc.txt"
+    rc_file.unlink(missing_ok=True)
+    stage.write_text("\n".join(["#!/bin/bash", f"# fill: owner={owner} gpus=1 max_min={max_min} cpus=8 project=pous prio=10",
+                                f"cd {shlex.quote(os.getcwd())} || exit 1", " ".join(shlex.quote(c) for c in child),
+                                f"echo $? > {shlex.quote(str(rc_file))}", "exit 0"]) + "\n")
+    stage.chmod(0o755)
+    os.replace(stage, queue / job)
+    waited = 0
+    while not any((FILL_DIR / d / job).exists() for d in ("done", "failed")):
+        if waited >= wait_min * 60 and (queue / job).exists():
+            (queue / job).unlink(missing_ok=True)
+            return 124, {"job": job, "withdrawn": f"still queued after {wait_min} min", "events": _fill_events(job)}
+        sleep(FILL_POLL_S)
+        waited += FILL_POLL_S
+    for _ in range(12):  # the runner moves a finished job before it appends the event
+        events = _fill_events(job)
+        if events and events[-1]["event"] in ("done", "failed"):
+            break
+        sleep(FILL_POLL_S)
+    for log in sorted((FILL_DIR / "logs").glob(f"{job}.*.log")):
+        shutil.copy(log, sub / f"fill-{log.name}")
+    try:
+        return int(rc_file.read_text()), {"job": job, "events": events}
+    except (OSError, ValueError):
+        rc = next((e["rc"] for e in reversed(events) if isinstance(e.get("rc"), int)), 1)
+        return rc or 1, {"job": job, "events": events, "child_rc": "not written: the child never finished"}
+
+
 def lease_child(out: Path, args, res: dict, so: Path, t0: float) -> tuple[int, dict]:
     """The GPU part under ``gpu-lease 1 --wait --max-min M``: a child run on the library already built and SASS-gated here, so the
     lease holds the GPU only for the identity and numeric gates and the timing.  Its results become this run's."""
@@ -716,10 +777,14 @@ def lease_child(out: Path, args, res: dict, so: Path, t0: float) -> tuple[int, d
              "--reps", str(args.reps), "--target-cycles", str(args.target_cycles), "--clocks", args.clocks, "--smi-every", str(args.smi_every)]
     if args.ops:
         child += ["--ops", args.ops]
-    env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_ID"}
     t = time.time()
-    rc = subprocess.run(["gpu-lease", "1", "--wait", "--max-min", str(args.lease_max_min), "--", *child], env=env, check=False).returncode
-    res["lease"] = {"rc": rc, "seconds": round(time.time() - t, 3), "max_min": args.lease_max_min}
+    if args.lease_via_fill:
+        rc, fill = fill_lease(child, args.lease_via_fill, args.lease_max_min, sub)
+        res["lease"] = {"rc": rc, "seconds": round(time.time() - t, 3), "max_min": args.lease_max_min, "via": "fill", **fill}
+    else:
+        env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_ID"}
+        rc = subprocess.run(["gpu-lease", "1", "--wait", "--max-min", str(args.lease_max_min), "--", *child], env=env, check=False).returncode
+        res["lease"] = {"rc": rc, "seconds": round(time.time() - t, 3), "max_min": args.lease_max_min}
     try:
         got = json.loads((sub / "w1_results.json").read_text())
     except (OSError, ValueError):
@@ -789,6 +854,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--prebuilt", default=None, help="an already built libw1_prices .so (the SASS gate still reads it)")
     ap.add_argument("--lease-max-min", type=int, default=None,
                     help="build and SASS-gate here, then run the GPU part under gpu-lease 1 --wait --max-min M")
+    ap.add_argument("--lease-via-fill", default=None, metavar="OWNER",
+                    help="with --lease-max-min: run the GPU part as one fill job of OWNER (gpus=1 prio=10) on node 2's fill runner and wait")
     ap.add_argument("--expect-gpu-uuid", default=os.environ.get("GPU_LEASE_UUID"),
                     help="the device's UUID (default: gpu-lease's GPU_LEASE_UUID); a mismatch stops the run")
     ap.add_argument("--fake-silicon", action="store_true", help="host models stand in for the device (CPU dry run; never evidence)")
@@ -809,6 +876,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.lease_max_min and (args.fake_silicon or args.prebuilt):
         print("w1.py: --lease-max-min builds here and leases a real GPU; not with --fake-silicon or --prebuilt", file=sys.stderr)
+        return 2
+    if args.lease_via_fill and not args.lease_max_min:
+        print("w1.py: --lease-via-fill needs --lease-max-min (the fill job's max_min)", file=sys.stderr)
         return 2
     code, res = run(args)
     print(json.dumps({"validation": res["validation"], "failures": res["failures"], "prices": (res.get("prices") or {}).get("price_units"),

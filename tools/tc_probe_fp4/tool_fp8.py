@@ -70,6 +70,7 @@ def parse_w1(argv: list[str]) -> dict:
     ap.add_argument("--ops", default=None)
     ap.add_argument("--prebuilt", default=None)
     ap.add_argument("--lease-max-min", type=int, default=None)
+    ap.add_argument("--lease-via-fill", default=None)
     ns, unknown = ap.parse_known_args(_argv_after(argv, "w1.py"))
     out = vars(ns)
     if unknown:
