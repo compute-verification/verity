@@ -95,14 +95,15 @@ struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 // and `setmaxnreg` moves its registers to the consumers (REGS_P and REGS_C a thread; 40 and 232 at 128 x 128, CUTLASS's split);
 // otherwise it is one warp and registers stay as launched.  Launch NT threads with __launch_bounds__(NT, CTAS), CTAS blocks per
 // SM.  STAGES stages of 128 bytes of depth; G = 4 or 0; TAIL: the producer loads P_A's TM and P_B's BN rows (128 bytes each)
-// into a stage after each tile's last, for the epilogue.
-template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1> struct Mainloop {
+// into a stage after each tile's last, for the epilogue.  RP: the producer's registers when SPLIT (24 leaves 240 to each
+// consumer at 128 x 128).
+template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 40> struct Mainloop {
   static constexpr int BK = 128, WM = 64, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8, APS = BK / 32;
   static constexpr bool SPLIT = NCW % 4 == 0;
-  static constexpr int NT = NCT + (SPLIT ? 128 : 32), REGS_P = 40, REGS_LAUNCH = 65536 / (CTAS * NT) / 8 * 8,
+  static constexpr int NT = NCT + (SPLIT ? 128 : 32), REGS_P = RP, REGS_LAUNCH = 65536 / (CTAS * NT) / 8 * 8,
                        REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
-                       REGS_C = !SPLIT ? 0 : REGS_FIT < 232 ? REGS_FIT : 232;
+                       REGS_C = !SPLIT ? 0 : REGS_FIT < 256 ? REGS_FIT : 256;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES;   // 1024: room to align the stages to 1,024 bytes
   static_assert(G == 0 || G == APS, "a promotion window is one stage");
