@@ -13,7 +13,7 @@
 
 #include <vector>
 
-#include "ncp2_fast.cuh"
+#include "ncp2_tiles.cuh"
 
 using namespace ncp2;
 
@@ -98,30 +98,6 @@ __global__ void kf_form_leaves(int ms, int ns, int with_y, int k3, const uint8_t
     wl_block(wl, c0 + (size_t)cs * D);
     wl_final(wl, yleaves + 32 * (size_t)cs);
   }
-}
-
-struct SmemRun {
-  uint32_t* base;
-  __device__ __forceinline__ uint32_t& operator()(int j) const { return base[j * 32]; }
-};
-
-// LEAF 0: no leaf (the no-hash control); 1: the word leaf (committed); 2: the low-byte variant (timed only; γ unproved).
-template <int LEAF>
-__global__ void __launch_bounds__(32) kf_tiles(int ns, size_t tiles, int steps, int k3, int n, const uint8_t* x,
-                                               const uint8_t* y, const uint32_t* c0, uint8_t* tile_leaves, uint32_t* z) {
-  extern __shared__ uint32_t sm[];
-  const int lane = threadIdx.x;
-  const size_t tile = (size_t)blockIdx.x * 32 + lane;
-  if (tile >= tiles) return;
-  const int rs = (int)(tile / ns), cs = (int)(tile % ns);
-  SmemRun run{sm + lane};
-  for (int j = 0; j < D * D; ++j) run(j) = c0[cs * D + (j & 15)];
-  uint8_t leaf[32];
-  if (LEAF == 2) tile_fused_lowbyte(x + (size_t)rs * D * k3, y + (size_t)cs * D * k3, k3, steps, run, leaf);
-  else tile_fused<LEAF == 1>(x + (size_t)rs * D * k3, y + (size_t)cs * D * k3, k3, steps, run, leaf);
-  if (LEAF)
-    for (int i = 0; i < 32; ++i) tile_leaves[32 * tile + i] = leaf[i];
-  for (int j = 0; j < D * D; ++j) z[(size_t)(rs * D + (j >> 4)) * n + cs * D + (j & 15)] = run(j);
 }
 
 template <bool HASH>
@@ -226,9 +202,7 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
     CK(cudaStreamCreateWithFlags(&W.aux, cudaStreamNonBlocking));
     CK(cudaEventCreateWithFlags(&W.xy, cudaEventDisableTiming));
     CK(cudaEventCreateWithFlags(&W.formed, cudaEventDisableTiming));
-    CK(cudaFuncSetAttribute(kf_tiles<0>, cudaFuncAttributeMaxDynamicSharedMemorySize, 32 * D * D * 4));
-    CK(cudaFuncSetAttribute(kf_tiles<1>, cudaFuncAttributeMaxDynamicSharedMemorySize, 32 * D * D * 4));
-    CK(cudaFuncSetAttribute(kf_tiles<2>, cudaFuncAttributeMaxDynamicSharedMemorySize, 32 * D * D * 4));
+    CK(tiles_setup());
     CK(cudaDeviceSetLimit(cudaLimitStackSize, 2048));
   }
   CK(W.e.need((size_t)m * k));
@@ -287,16 +261,8 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
     CK(cudaEventCreate(&t1));
     CK(cudaEventRecord(t0, st));
   }
-  const size_t smem = 32 * D * D * 4;
-  if (hash && lowbyte)
-    kf_tiles<2><<<nblocks(tiles, 32), 32, smem, st>>>(ns, tiles, steps, k3, n, W.x.as<uint8_t>(), W.y.as<uint8_t>(),
-                                                     W.c0.as<uint32_t>(), lv + 32 * tile_base, W.z.as<uint32_t>());
-  else if (hash)
-    kf_tiles<1><<<nblocks(tiles, 32), 32, smem, st>>>(ns, tiles, steps, k3, n, W.x.as<uint8_t>(), W.y.as<uint8_t>(),
-                                                     W.c0.as<uint32_t>(), lv + 32 * tile_base, W.z.as<uint32_t>());
-  else
-    kf_tiles<0><<<nblocks(tiles, 32), 32, smem, st>>>(ns, tiles, steps, k3, n, W.x.as<uint8_t>(), W.y.as<uint8_t>(),
-                                                     W.c0.as<uint32_t>(), nullptr, W.z.as<uint32_t>());
+  launch_tiles(hash ? (lowbyte ? 2 : 1) : 0, ns, tiles, steps, k3, n, W.x.as<uint8_t>(), W.y.as<uint8_t>(),
+               W.c0.as<uint32_t>(), hash ? lv + 32 * tile_base : nullptr, W.z.as<uint32_t>(), st);
   if (timed) {
     CK(cudaEventRecord(t1, st));
     tile_events.emplace_back(t0, t1);

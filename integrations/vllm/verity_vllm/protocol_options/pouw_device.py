@@ -30,10 +30,10 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_native as PN
 
 HERE = Path(__file__).with_name("pouw_cuda")
-SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_host.cpp")
+SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_tiles.cuh", "ncp2_host.cpp")
 CFLAGS = ("-O2", "-std=c++17", "-ffp-contract=off", "-fno-fast-math", "-fno-exceptions", "-fno-rtti", "-fPIC", "-shared")
 CUDA_SOURCES = ("ncp2.cuh", "ncp2_kernels.cu")
-FUSED_SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_fused.cu")
+FUSED_SOURCES = ("ncp2.cuh", "ncp2_fast.cuh", "ncp2_tiles.cuh", "ncp2_fused.cu")
 #: `ncp2_fused`'s flags: hash (1), time the tile kernel (2), cache Y's leaves per weight (4), the tiles' low-byte leaf variant (8;
 #: its γ is unproved, so it is timed only and never a result)
 HASH, TIME_TILES, CACHE_Y, LOWBYTE = 1, 2, 4, 8

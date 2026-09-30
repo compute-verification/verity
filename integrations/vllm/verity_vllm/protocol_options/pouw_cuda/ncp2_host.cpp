@@ -2,7 +2,7 @@
 // the gate against `pouw_native` needs no GPU. It needs only the C library.
 #include <stdlib.h>
 
-#include "ncp2_fast.cuh"
+#include "ncp2_tiles.cuh"
 
 using namespace ncp2;
 
