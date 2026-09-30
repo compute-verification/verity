@@ -1,0 +1,84 @@
+# A full vLLM sweep row (Build, Match, Commit; 5-11 h, one GPU throughout) on the Nebius cluster: queue circuits, priority circuits.
+# Coverage cells (--config-run 1) use config-run.yaml instead: a CPU Build task and a short GPU Commit task. The night sweep submits the same
+# file with the priority label set to sweep-night (the runbook's one-line sed).
+#
+#   sky jobs launch -n row-<id> tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml \
+#     --env ROW=<row-id> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha> \
+#     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# Resources are the measured peak of the 1-7B dense class, B 8-64 (#23, #60, #67, #68): 240-512 GB of host RAM, the Build on 1-4
+# cores (16 vCPU per GPU is the fleet plan's floor), ~200 GB on /workspace. Other classes override on the command line:
+#   small dense, B <= 16 (#4, #101)     --memory 192                                 94-188 GB
+#   long context 4096/512 (#11, #39)    --memory 512                                 the Build alone peaks at ~486 GiB
+#   TP2 (#70, #75)                      --gpus RTXPRO6000:2 --cpus 32 --memory 384   >= 377 GB
+# A row can't be checkpointed yet (5-11 h): circuits never borrows (kueue.yaml), so a row runs on circuits' own quota, which no
+# reclaim takes back. No config run is admitted in the quiet hour, 12:30-13:30Z.
+# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
+#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+name: config-run-row
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 16
+  labels:
+    budget-line: nebius-config-run
+  memory: 512
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "16"     # SkyPilot's runner sets 1; match resources.cpus (--cpus overrides need --env OMP_NUM_THREADS too)
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  RESEARCH_RUNS: /workspace/jobs/runs
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # the task runs from its own copy of $SRC: the job user (uid 1000) can't write the synced tree, which is research's, and a
+  # later `research pods sync` of the same lane can't change the code under a running job (one copy per pod)
+  JOB_SRC=/workspace/jobs/src/$(hostname)
+  rm -rf "$JOB_SRC" && mkdir -p "$JOB_SRC" && cp -a "$SRC"/. "$JOB_SRC"/
+  export SRC=$JOB_SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  cd "$SRC"
+  cd integrations/vllm
+  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"
+
+run: |
+  set -euo pipefail
+  export SRC=/workspace/jobs/src/$(hostname)
+  cd "$SRC"
+  export PATH=$CUDA_HOME/bin:$PATH
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- \
+    bash -c 'cd "$SRC/integrations/vllm" && /workspace/jobs/venv312/bin/python -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REVISION"'
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: circuits
+          kueue.x-k8s.io/priority-class: circuits
+          verity.dev/build: "true"
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

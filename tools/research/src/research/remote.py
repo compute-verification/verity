@@ -121,6 +121,7 @@ FETCHED_SCHEMA = "research/fetched/v0.1"
 CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
+DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -1198,7 +1199,18 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
+    if _kueue_owns_every_gpu():
+        # a direct run must not open CUDA beside the queue's pods, whatever its --env says: GPU work goes through Kueue
+        env["CUDA_VISIBLE_DEVICES"] = ""
+        remote["gpus"] = f"none: {DIRECT_GPUS_FILE} says every GPU is Kueue's (CUDA_VISIBLE_DEVICES='')"
     return env
+
+
+def _kueue_owns_every_gpu(path: str | None = None) -> bool:
+    try:
+        return Path(path or DIRECT_GPUS_FILE).read_text().strip() == "none"
+    except OSError:
+        return False
 
 
 # ---- the control side --------------------------------------------------------------------------------------------------------------------
