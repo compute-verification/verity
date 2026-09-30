@@ -1018,6 +1018,352 @@
    "rows_root_a": "12e54e8e57439da8bf57772dd32106b8f0489d130173b1d11a3cd494f68afa85",
    "row_leaf_a0": "ebaac2a6b5634dee7c15a386d5b268734248b0ce87fbe2d0365e004c4d72e96b",
    "message_00": "52f83095ce878a218b53fddf508bc806ed045e14aa4733ab16def7e51829e836"
+  },
+  {
+   "case": "test-16-v1-h3",
+   "scheme": "pearl-c-h100-v1-h3",
+   "shape": [
+    16,
+    128,
+    16
+   ],
+   "tile": {
+    "rows": [
+     0,
+     16
+    ],
+    "cols": [
+     0,
+     16
+    ]
+   },
+   "index": 3,
+   "weight": 9,
+   "test_instance": true,
+   "seed_a": "d6078d333e17f7a50d3356bdcffc6b55f4d11cc93145f6270427d1d114348942",
+   "seed_b": "b736bd230d1d718e4a11db90cc1c6f94e36e50533f4bb19d79078340d2a0e686",
+   "a_codes_sha256": "50ff542960026a45c7977b80177935eb67a52a5e9f8a9e0095771f643fa5f6d6",
+   "b_codes_sha256": "b86f3ba7162c00120a131450378e2e072fdbeb616b98bf5b04a8f419b83542a0",
+   "alpha_a": [
+    1104997542,
+    1102207026,
+    1102993558,
+    1103489401
+   ],
+   "beta_a": [
+    1034245720,
+    1036200695,
+    1035397541,
+    1035266210
+   ],
+   "alpha_b": [
+    1104354977,
+    1105634904,
+    1104832166,
+    1105194622
+   ],
+   "beta_b": [
+    1034812193,
+    1033625719,
+    1034724231,
+    1034493017
+   ],
+   "pa_sha256": "48d8b01c3622b09e2e2027c6fc8934e0d915175291ed843a428da12e5f65c6c3",
+   "pb_sha256": "a32e566a3c334334b3db4f771ae846af3ef4499f2b4ec76a6dce1e2569fec24f",
+   "pa_0": [
+    49280,
+    16464,
+    16272,
+    16288,
+    48480,
+    16464,
+    15840,
+    16544
+   ],
+   "pb_0": [
+    50357,
+    50235,
+    49989,
+    17694,
+    49718,
+    50516,
+    17531,
+    17593
+   ],
+   "c_sha256": "31d63da3b939b6ea421538aabfa160538f4a7fe18e1c4bb0cf3a56e44eeb6e99",
+   "u_sha256": "d1877c837d69097f7bec8df85a408daf9dbbba23abaf1da4ea6ccc2e522c1312",
+   "c_0": [
+    3360548864,
+    1168343040,
+    3342190592,
+    1195143168
+   ],
+   "u_0": [
+    3355572324,
+    3333811436,
+    1183487416,
+    1195906720
+   ],
+   "leaf": "bfa913ab186a2e4e5eef0e7a461689e0eaf4927286c0f32e0272c1eccd55d222",
+   "tickets": [
+    "850cd3f39977c0ff95600865c26a6e1ad7b6e5bd71099c985b9742b35263c554"
+   ],
+   "useful_sha256": "a714235c9fdaa60434ead2238cba7ee67dbe509bd50bed735b14bc8d2e7f3bf7",
+   "useful_00": -182.6213825654533,
+   "row_seed_0": "3444d30724642a2248c036a817b9f11622b158792b5fb62d1c38daf54642031f",
+   "row_seeds_sha256": "960a6741907f5271adc3fca213bddf2e4b7d23bcf2622dcf783c5db0e61d2468",
+   "e_a_0": [
+    228,
+    98,
+    86,
+    88,
+    179,
+    98,
+    59,
+    103
+   ],
+   "hashing": "h3",
+   "rows_root_a": "c78bd8ce8bb8dead270bfab7e80b27cf4c428f18f4571ee1f750c32d0091ada9",
+   "row_leaf_a0": "2d743b9ee79913cbbc35b1a67eb93433a4e62ef84a4dcdaca106f1f94d9461d3",
+   "message_00": "c699cba263198ac09e1244997ff37cfab3f9cd76a104f9a688687f99bb620c7d"
+  },
+  {
+   "case": "prod-64-v1-h3",
+   "scheme": "pearl-c-h100-v1-h3",
+   "shape": [
+    64,
+    1024,
+    64
+   ],
+   "tile": {
+    "rows": [
+     0,
+     64
+    ],
+    "cols": [
+     0,
+     64
+    ]
+   },
+   "index": 7,
+   "weight": 2,
+   "test_instance": false,
+   "seed_a": "18026c048d6407919761f1ab7bb3d810c4acbfce1c91d4674deb5067be27420d",
+   "seed_b": "745a07a7d9eb6ab3fdbd3a87aa94d77fc2580bf4708d77c391c206c602318f83",
+   "a_codes_sha256": "a476c39193a5dba11e431a3f17ab385a05471015456bb6b80ae102d3839026d3",
+   "b_codes_sha256": "a3ba463c127a6a87caecb9f5d9579773bd6de98f0f4c575256af9ec76a76c9ad",
+   "alpha_a": [
+    1103739490,
+    1104341947,
+    1104796061,
+    1104145862
+   ],
+   "beta_a": [
+    1034954299,
+    1034455892,
+    1034123805,
+    1034581004
+   ],
+   "alpha_b": [
+    1103285702,
+    1105166285,
+    1103213587,
+    1103375645
+   ],
+   "beta_b": [
+    1035202956,
+    1033856739,
+    1035260266,
+    1035116365
+   ],
+   "pa_sha256": "1b8904b30def900b7391720f296448abbb0c379608544166e131da4947214c92",
+   "pb_sha256": "39419dd7b0b33990a66d974e77de07eab2e56c54d62448c2d9ac1a4021a729fd",
+   "pa_0": [
+    16368,
+    16448,
+    48672,
+    16384,
+    16576,
+    16576,
+    49248,
+    49200
+   ],
+   "pb_0": [
+    50489,
+    50653,
+    17908,
+    50578,
+    50595,
+    50595,
+    17691,
+    17395
+   ],
+   "c_sha256": "4902aa4c29b498d3b7b49666049e52083ae7c1db23c8f1da099cdb9073809963",
+   "u_sha256": "8cf20d68dc842a50fa442575bb82498d2d4e506d58785642623946b997325565",
+   "c_0": [
+    3323576320,
+    1202446592,
+    1200825472,
+    3356598656
+   ],
+   "u_0": [
+    3350131936,
+    1211375148,
+    1177146368,
+    1202557776
+   ],
+   "leaf": "fa8283a96780cfd098f6c92256137f116c8395c6da7607813bd68d5de8fb741e",
+   "tickets": [
+    "788584f9f51d8fa60ca9479d097a1fba145015b8d9aac19a492f3b2deec3aeed",
+    "cf41b7d702e42cb671fd0797bb391a9577d7ddc00148c39ea944bfb516d04c3c",
+    "c90199b646198e037e4fcb62373a54429f8fee01cfbebd4c36c77636c2162e13",
+    "6aa3b85ba0b9479ab3020097b9c19eaf74e8b04267bceca55f7aa0bf3dc056d9",
+    "768edba1f2ef1ddff832e0ce39c4b1679feb6c6e261a3a3aea999a0806b5908c",
+    "1b955b2e65c05cc8312c7666420e43223179c12282087ca0721a72fdd2906e02",
+    "55d1f79adbc533e3203e28dce55e6d7de6fea6f4d8ec02bf42079707f47283fc",
+    "2d6cb840732c4e16c80277555b3f33b82c457e74af31ca0eb461415515ea3953",
+    "7e09b088626d5386e62350f65151f0a95a5d7f1d745515f11935e953f9839776",
+    "a78b7fe25ebed5d745ec1bb59bc89f27d132191fd18b05f58cea060d833a084d",
+    "36aab3353a139da44075115912868994b7cf902990d963a080bca9410bfed58a",
+    "836fbbd76dbd1c0091250949591adbae5f9eea6df99c016aa2e82e36146f0881",
+    "377a83036e22e0b6322cf4c91f000dd89613b721c923054b0fd03a4972b642a4",
+    "881bb5840800ef522b81d50dc9ef9e7d6d99b4549c08b7494d5185b922b271f6",
+    "21eae36998ae4801f0281c3808f1a565ea42760ee602ef99ecb6c66079aff50e",
+    "4c4a751f29d1151fb0824d901d0c5932cf2e5a8ce68af1b539dc5ecb3f82b248"
+   ],
+   "useful_sha256": "9e330dc8184cdfcace304eefd59c2bc22424b26370a57aab417b50f2941e4186",
+   "useful_00": -145.88693040982537,
+   "row_seed_0": "02e7e0e5e98a8866e4a9866052233e916864ff694e151faa1bebe0b122d14b36",
+   "row_seeds_sha256": "9a62010bd783fbf715be8d30a8e3198f1885a14af9040351f5c36de1b64cd2cf",
+   "e_a_0": [
+    91,
+    97,
+    190,
+    92,
+    105,
+    105,
+    226,
+    224
+   ],
+   "hashing": "h3",
+   "rows_root_a": "1323e87bddf4236970ea48885fcd775ea1f050baf9cd80d8ed10f8fd93571589",
+   "row_leaf_a0": "a68fe70d299d3efc47888f93d1d6620f153448d5d1ce0baa711416449a554be9",
+   "message_00": "3e1517f77d2955c76d648819c25443fcac0bdac577d414a6436f78151207f45f"
+  },
+  {
+   "case": "decode-32-v1-h3",
+   "scheme": "pearl-c-h100-v1-h3",
+   "shape": [
+    32,
+    1024,
+    64
+   ],
+   "tile": {
+    "rows": [
+     0,
+     32
+    ],
+    "cols": [
+     0,
+     64
+    ]
+   },
+   "index": 7,
+   "weight": 2,
+   "test_instance": false,
+   "seed_a": "dd1c0143832dd61bc8472fcf95df7c07a99996c19579dbc8f0dc168e8cc9715c",
+   "seed_b": "11017d50866eea46e54de489e0daadd71c76f8532c9189da788902b51553eb3e",
+   "a_codes_sha256": "fe45ed60e68a505567b683ebac592b358be1edd06cf81fc6c1578dbab8a03953",
+   "b_codes_sha256": "c89abf729573612980defdbb58781074286ddd9ea71623043a83f836338ad3a5",
+   "alpha_a": [
+    1103614223,
+    1103503044,
+    1103692872,
+    1104809451
+   ],
+   "beta_a": [
+    1034954690,
+    1035037490,
+    1034919894,
+    1034120229
+   ],
+   "alpha_b": [
+    1103839223,
+    1104176333,
+    1103188805,
+    1103907599
+   ],
+   "beta_b": [
+    1034793006,
+    1034638056,
+    1035261851,
+    1034743380
+   ],
+   "pa_sha256": "5e2d01f1d445c26bb607f01e1dd88672dd57ed45644e633a614bfb5820e1da5a",
+   "pb_sha256": "835e79178d84b586322173fc033bc991e72ab3409941e89fd291fdca82347e9d",
+   "pa_0": [
+    49280,
+    49344,
+    49072,
+    16000,
+    49136,
+    49312,
+    49344,
+    16384
+   ],
+   "pb_0": [
+    50515,
+    17823,
+    50633,
+    50471,
+    50379,
+    17664,
+    17690,
+    50645
+   ],
+   "c_sha256": "8849c8b2c710bf38193db978db360ede7544328dfb1e37c3b8117279f584cd81",
+   "u_sha256": "c284f0fd057cba08aaf594cfc1ade36b26ec703414146861efabafaafd26eae9",
+   "c_0": [
+    3367936256,
+    3366890752,
+    1219068768,
+    1193176064
+   ],
+   "u_0": [
+    3364070920,
+    3357548240,
+    1194291088,
+    3341702064
+   ],
+   "leaf": "3b203041c28cd76df3d9ecdc0cd8fd65d0d7bb6c176f7ed738104b20078a18cb",
+   "tickets": [
+    "c5a4883f24cdcf2cf605fda17e64586f91e51d196b2d1d4606f86c9765e5a206",
+    "2e22c437dfb9e690ef866a2e01c9e1957f4eb3fe9659596d4ce3ce9b0dd69ed9",
+    "af87fabdf5055e59cd5214c0c2466e9a0bdbbbdc3400af527c94fafde26ff57e",
+    "b75d9aab767caa31bcc5ef00d50e56cf384aeffbb99ffb724249a52b15678378",
+    "9cfaff17d7d4fe5061390a4184318ffa1a7484d41870a9f0cd221191d98ece39",
+    "b963eb8ef343417b635b035babeda28f63bb90c09a6345f01da15a8e1231fa1d",
+    "10d1720aabadbddc35d3e3ddf71232c957a5d08b52b05ba224f9187609324847",
+    "7054ab75a68082968973be6f92b0cdc75d0ee2d744fde0d6fdfdacaf6eee9475"
+   ],
+   "useful_sha256": "a0dc83343ba74995f873e5c78e292402616b9a2886340b08feaaafc60a2ef9d5",
+   "useful_00": -424.87789408818765,
+   "row_seed_0": "fa728c5bc29be462d81750da8ce98b63b51d02be2b30cc153ee795ebf2958d9d",
+   "row_seeds_sha256": "07789e43fb56e933553613f35e8b3ce1d9699775e1a90a57770bac6abb6740e8",
+   "e_a_0": [
+    228,
+    233,
+    216,
+    68,
+    219,
+    230,
+    233,
+    92
+   ],
+   "hashing": "h3",
+   "rows_root_a": "12e54e8e57439da8bf57772dd32106b8f0489d130173b1d11a3cd494f68afa85",
+   "row_leaf_a0": "ebaac2a6b5634dee7c15a386d5b268734248b0ce87fbe2d0365e004c4d72e96b",
+   "message_00": "eef1b14390507fb78f537d1e560c92b5eaab2c927cb54197607851f61937d627"
   }
  ]
 }

@@ -8,7 +8,9 @@ low 16 mantissa bits replaced by the 16-bit words of SHAKE256(…, "fraction", i
 of their labels.  A ``-h1`` case (hashing format h1) reads its h0 twin's inputs (its label without ``-h1``), and adds A's
 ``frame-b3`` row root over the tile's A rows, row 0's leaf and the first message digest.  ``decode-32-v1-h1`` is decode's
 partial tile: 32 rows of a 64-column tile, its leaf over 64 digests.  A ``-h2`` case is its ``-h1`` twin with the trees
-``frame-b3s``: the same inputs, digests and leaf, another row root and row leaf."""
+``frame-b3s``: the same inputs, digests and leaf, another row root and row leaf.  A ``-h3`` case is its ``-h2`` twin with
+row i's E_A line from row i's own seed (`pearl_c.row_seed`): its tile rows' seeds are pinned, and its C̃, U and leaf
+differ from the twin's."""
 
 from __future__ import annotations
 
@@ -33,7 +35,10 @@ CASES = (("test-16", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v0"),
          ("decode-32-v1-h1", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h1"),
          ("test-16-v1-h2", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1", "h2"),
          ("prod-64-v1-h2", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1", "h2"),
-         ("decode-32-v1-h2", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h2"))
+         ("decode-32-v1-h2", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h2"),
+         ("test-16-v1-h3", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1", "h3"),
+         ("prod-64-v1-h3", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1", "h3"),
+         ("decode-32-v1-h3", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h3"))
 
 
 def shake(case: str, name: str, part: str, i: int, n: int) -> bytes:
@@ -80,7 +85,7 @@ def halves(grid: list[list[int]]) -> bytes:
 
 
 def case_vector(case, shape, r, c, index, weight, test, forming, hashing="h0") -> dict:
-    base = case.removesuffix("-h1").removesuffix("-h2")   # an h1 or h2 case reads its h0 twin's inputs: only the hashing differs
+    base = case.removesuffix("-h1").removesuffix("-h2").removesuffix("-h3")   # its h0 twin's inputs: only the hashing differs
     s, ctx = scheme(test, forming, hashing), ctx_of(base, shape, index, weight)
     s.check(ctx.matmul)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
@@ -103,7 +108,11 @@ def case_vector(case, shape, r, c, index, weight, test, forming, hashing="h0") -
         "leaf": s.digest(ctx, noise, checked).hex(), "tickets": [t.hex() for t in s.tickets(noise, checked)],
         "useful_sha256": sha(json.dumps(useful).encode()), "useful_00": useful[0][0],
     }
-    if hashing in ("h1", "h2"):
+    if hashing == "h3":
+        seeds = [C.row_seed(ctx, i, row) for i, row in zip(tile.rows, a)]
+        out.update({"row_seed_0": seeds[0].hex(), "row_seeds_sha256": sha(b"".join(seeds)),
+                    "e_a_0": ops.e_a[0][:8]})
+    if hashing in ("h1", "h2", "h3"):
         tree = commit_rows(activation_binding(ctx.salt, index), index, a, s.commitment_hash)
         msg = words([checked.c[0][:C.CHUNK]]) + words([checked.u[0][:C.CHUNK]])
         out.update({"hashing": hashing, "rows_root_a": tree.commitment.root.hex(),

@@ -204,3 +204,55 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
         assert out.audit.accepted == accepted
         if not accepted:
             assert "exceeds the cap" in out.audit.verdicts[0].reason
+
+
+
+def one_spiked_tile(hashing: str):
+    """32 A rows (row 0 aligned-spiked, 31 Gaussian) x 4 spiked B rows at k = 1,024, one tile: row 0's replayed debit is
+    about 15x its own share of the cap, the tile's about 0.65x the tile's cap."""
+    k, m, n = 1024, 32, 4
+    s = C.PearlC(k_min=128, tile=(m, n), forming="v1", hashing=hashing)
+    rows_a = spiked_rows(k, 1, 100, 300.0) + spiked_rows(k, m - 1, 200, None)
+    rows_b = spiked_rows(k, n, 900, 300.0)
+    return s, Matmul(3, Shape(m, k, n), 1), rows_a, rows_b
+
+
+@pytest.mark.parametrize("hashing", ["h2", "h3"])
+def test_h3_caps_the_debit_per_row(hashing):
+    """-h3's pin 2 (the reduction's C2): the verifier checks every credited row's debit against that row's share of the
+    cap, so a row over its own cap fails the tile even though the tile's aggregate is under the tile's cap; -h2's
+    aggregate cap accepts the same tile."""
+    from verity_pouw.protocol import Context
+    s, mm, rows_a, rows_b = one_spiked_tile(hashing)
+    ctx = Context(b"\x11" * 32, mm, b"\x22" * 32, b"\x33" * 32)
+    tile = Tile(tuple(range(32)), tuple(range(4)))
+    ops = s.encode(ctx, s.noise(ctx), rows_a, rows_b, tile)
+    rec = W.UnitRecord(mm, 32, 1024)
+    agg_debit, agg_cap = W.tile_cap(s, rec, ops.a.codes, ops.b.codes)
+    row_debit, row_cap = W.tile_cap(s, rec, [ops.a.codes[0]], ops.b.codes)
+    assert agg_debit <= agg_cap and row_debit > 10 * row_cap
+    assert row_cap == D.CAP * s.credit_of(Shape(1, 1024, 4)) and 32 * row_cap == agg_cap
+    reason = W.check_opened(s, rec, tile, rows_a, rows_b, ops)
+    if hashing == "h3":
+        assert reason is not None and reason.startswith("row 0's replayed debit") and "per-row cap" in reason
+    else:
+        assert reason is None
+    clean = spiked_rows(1024, 32, 200, None)
+    ops_c = s.encode(ctx, s.noise(ctx), clean, rows_b, tile)
+    assert W.check_opened(s, rec, tile, clean, rows_b, ops_c) is None
+
+
+@pytest.mark.parametrize("hashing", ["h2", "h3"])
+def test_h3_per_row_cap_through_the_audit(hashing):
+    """The same unit through `pearl_c_work.audit`: -h3 rejects it at the spiked row's cap, -h2 accepts it."""
+    s, mm, rows_a, rows_b = one_spiked_tile(hashing)
+    work = Workload((mm,))
+    prover = Prover(s, {1: rows_b})
+    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    splits = {1: W.Split(1024)}
+    records = W.declare(s, epoch, {3: rows_a}, {1: rows_b}, splits)
+    out = W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 1)
+    assert out.audit.accepted == (hashing == "h2")
+    if hashing == "h3":
+        assert "per-row cap" in out.audit.verdicts[0].reason

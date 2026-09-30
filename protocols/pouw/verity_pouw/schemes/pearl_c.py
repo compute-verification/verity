@@ -10,6 +10,8 @@ reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl PR
 
 ~~~text
 seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE)
+          (-h3: row i's E_A line from row i's own seed, the per-unit seed_A of row i as a one-row unit: root_A its frame-b3s
+          leaf, index its one-row unit ι = index·2^32 + i; seed_A still keys the tickets)
           H_ℓ(x) = BLAKE3(x; key = BLAKE3(ℓ)).  E_A lines by seed_A (row i); E_B lines and the bases F_A, F_B (lines
           0 … k−1) by seed_B: Pearl's line rule (`pearl_kw.sample_line`), so F_A, E_B, F_B are per job (weight)
 forming  v0, #311's as ported (`pearl_kw`): FP10 rows -> BF16 X, exact norms, α, β, N = E·Fᵀ on the H100 atom,
@@ -71,6 +73,7 @@ from verity.commitments.turboshake import turboshake128
 from verity.ml.tc import fp32
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
 
+from ..audit import ROW_SCHEMA, activation_binding, rows_domain
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from . import pearl_kw as P
 
@@ -86,9 +89,12 @@ D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 #: Hashing formats: h0 (TurboSHAKE128 messages and leaf, SHA-256 trees), h1 (BLAKE3 throughout, for decode latency) and h2
 #: (h1's messages and leaf; every tree `frame-b3s`, 256-byte segments under each leaf, for a shallower A commitment)
-HASHINGS = ("h0", "h1", "h2")
+#: and h3 (h2 with P2's row seeds: row i's E_A line from row i's own seed, and the debit cap per row)
+HASHINGS = ("h0", "h1", "h2", "h3")
 #: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`)
-TREE_HASH = {"h0": "sha256", "h1": "blake3", "h2": "blake3-s256"}
+TREE_HASH = {"h0": "sha256", "h1": "blake3", "h2": "blake3-s256", "h3": "blake3-s256"}
+#: -h3: a row's one-row unit packs (unit index, row) into the per-unit seed's u64 index, unit index · 2^32 + row
+ROW_UNIT_SHIFT = 32
 H1_KEYS = {r: blake3(f"pearl-c/h1/{r}".encode()) for r in ("message", "leaf")}
 #: W1 units (1 = one dense FP8 MAC on the H100): FADD 32 per word, a BF16 MAC 2
 FADD_UNITS, BF16_MAC_UNITS = 32, 2
@@ -107,6 +113,35 @@ S5_LINE = P.f32_bits(P.f32((R ** 0.5) / (P.NOISE_NORM * LINE_NORM_V1)))
 
 def _labelled(message: bytes, role: str) -> bytes:
     return keyed(blake3(LABELS[role]), message)
+
+
+def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
+    """A unit's seed_A: H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE)."""
+    return _labelled(salt + root_a + root_b + index.to_bytes(8, "little"), "seed-A")
+
+
+def row_unit_index(index: int, row: int) -> int:
+    """-h3: the index of row `row` of unit `index` as a one-row unit, index · 2^32 + row (both below 2^32, so injective)."""
+    if not (0 <= index < 1 << ROW_UNIT_SHIFT and 0 <= row < 1 << ROW_UNIT_SHIFT):
+        raise DomainError(f"-h3's row seeds need a unit index and a row below 2^{ROW_UNIT_SHIFT}")
+    return index << ROW_UNIT_SHIFT | row
+
+
+def activation_domain(ctx: Context, hashing: str) -> "CommitmentDomain":
+    """The domain of the unit's A tree (`verity_pouw.audit`'s: the activation binding of salt and index, owner the index)."""
+    return rows_domain(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ctx.matmul.shape.m, TREE_HASH[hashing])
+
+
+def row_leaf(ctx: Context, row: int, value: bytes) -> bytes:
+    """Row `row`'s leaf in its unit's frame-b3s A tree: it binds the row's bytes and its position, and through the domain id
+    the salt, the unit index and the row count."""
+    return activation_domain(ctx, "h3").leaf(row, row, ROW_SCHEMA, value)
+
+
+def row_seed(ctx: Context, row: int, value: bytes) -> bytes:
+    """-h3: row `row`'s seed, exactly the per-unit seed_A of that row as a one-row unit: `unit_seed_a` over the salt, the row's
+    leaf (`row_leaf`) as the unit's A root, root_B, and the one-row unit's index (`row_unit_index`)."""
+    return unit_seed_a(ctx.salt, row_leaf(ctx, row, value), ctx.root_b, row_unit_index(ctx.matmul.index, row))
 
 
 def _word(x: float) -> int:
@@ -346,16 +381,19 @@ def leaf(checked: Checked, hashing: str = "h0") -> bytes:
 class PearlC:
     """Pearl-C on the H100: ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles; smaller bounds make a test instance.
     ``hashing`` h1 names the scheme ``…-h1`` and commits with BLAKE3 throughout (`commitment_hash`, `leaf`); h2 names it
-    ``…-h2``, with h1's digests and leaf and every tree `frame-b3s`."""
+    ``…-h2``, with h1's digests and leaf and every tree `frame-b3s`; h3 names it ``…-h3``: h2 with row i's E_A line from
+    `row_seed`, and the debit cap checked per row (`row_cap`, for `pearl_c_work`)."""
 
     def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", hashing: str = "h0"):
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
         if hashing not in HASHINGS:
-            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256), h1 (BLAKE3) or h2 (h1 with frame-b3s trees)")
+            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256), h1 (BLAKE3), h2 (h1 with frame-b3s trees) "
+                             "or h3 (h2 with row seeds)")
         self.name = (NAME if forming == "v0" else NAME_V1) + ("" if hashing == "h0" else f"-{hashing}")
         self.k_min, self.tile, self.forming, self.hashing = k_min, tile, forming, hashing
         self.commitment_hash = TREE_HASH[hashing]
+        self.row_cap = hashing == "h3"
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
@@ -374,7 +412,11 @@ class PearlC:
                 "outputs correct C̃ and U words for less than 99.75% of their honest cost (research store "
                 "docs/pouw/cheap-binding.md §1); a conjecture, not proved by counting",
                 "the H100's FP8 wgmma and BF16 wgmma are reproduced exactly (HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16)",
-            ),
+            ) + ((
+                "under -h3, TT_OUT's per-unit statement gives the row-seeded one at error (q + R)/2^128 over the R declared rows "
+                "(research store internal/pouw/rtx-pro/a-commit-latency.md, row additivity), from (C1) each row's seed the "
+                "one-row unit's (`row_seed`), (C2) the debit cap per row (`pearl_c_work`) and (C3) W1 invariant under "
+                "regrouping rows into units",) if hashing == "h3" else ()),
             allowances=(allowance, "the unscale is glue outside the checked values"),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", WINDOW),
                         ("forming", forming), ("line_norm_f", self.line_norm), ("hashing", hashing)),
@@ -388,6 +430,8 @@ class PearlC:
                 and s.m <= 1 << 24 and s.n <= 1 << 24):
             raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 128 | k (whole promotion groups), "
                               f"{rows} | m, {self.tile[1]} | n, m, n <= 2^24")
+        if self.hashing == "h3" and not 0 <= matmul.index < 1 << ROW_UNIT_SHIFT:
+            raise DomainError(f"{self.name}: unit index {matmul.index} is not below 2^{ROW_UNIT_SHIFT} (the row seeds' one-row units)")
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
@@ -418,13 +462,19 @@ class PearlC:
                 + FADD_UNITS * n * R * R)
 
     def noise(self, ctx: Context) -> Noise:
+        """seed_B, and the unit's seed_A (E_A's lines, and under -h3 only the tickets: its E_A lines are `row_seed`'s)."""
         seed_b = _labelled(ctx.salt + ctx.root_b, "seed-B")
-        seed_a = _labelled(ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little"), "seed-A")
-        return Noise(seed_a, seed_b)
+        return Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index), seed_b)
 
-    def _side(self, rows: Sequence[bytes], idx: Sequence[int], side: int, seed_e: bytes, seed_b: bytes, k: int
-              ) -> tuple[P.Built | Formed, list[list[int]]]:
-        e = [P.sample_line(seed_e, side, 0, i) for i in idx]
+    def e_a_lines(self, ctx: Context, noise: Noise, a_rows: Sequence[bytes], idx: Sequence[int]) -> list[list[int]]:
+        """E_A's lines of rows idx: line i of seed_A, or under -h3 line 0 of row i's own seed (row 0 of its one-row unit)."""
+        if self.hashing == "h3":
+            return [P.sample_line(row_seed(ctx, i, row), 0, 0, 0) for i, row in zip(idx, a_rows, strict=True)]
+        return [P.sample_line(noise.seed_a, 0, 0, i) for i in idx]
+
+    def _side(self, rows: Sequence[bytes], idx: Sequence[int], side: int, seed_e: bytes, seed_b: bytes, k: int,
+              e: list[list[int]] | None = None) -> tuple[P.Built | Formed, list[list[int]]]:
+        e = [P.sample_line(seed_e, side, 0, i) for i in idx] if e is None else e
         f = _basis(seed_b, side, k, self.line_norm)
         if self.forming == "v1":
             return form_v1([parse_f32_row(r, k) for r in rows], e, f), e
@@ -436,7 +486,7 @@ class PearlC:
     def encode(self, ctx: Context, noise: Noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> Ops | None:
         k = ctx.matmul.shape.k
         try:
-            a, e_a = self._side(a_rows, tile.rows, 0, noise.seed_a, noise.seed_b, k)
+            a, e_a = self._side(a_rows, tile.rows, 0, noise.seed_a, noise.seed_b, k, self.e_a_lines(ctx, noise, a_rows, tile.rows))
             b, e_b = self._side(b_rows, tile.cols, 1, noise.seed_b, noise.seed_b, k)
             return Ops(a, b, e_a, e_b, peel_factors_a(a.codes, scaled_noise(a, e_a), noise.seed_b, k, self.line_norm),
                        peel_factors_b(b.codes, scaled_noise(b, e_b), noise.seed_b, k, self.line_norm))

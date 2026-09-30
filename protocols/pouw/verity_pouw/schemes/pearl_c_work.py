@@ -24,7 +24,9 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
   - filler rows are zero;
   - every opened row is zero past |K| (F7);
   - credited rows pass the per-row rules, and excluded rows fail them;
-  - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ·`creditOf` of the tile (F1).
+  - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ·`creditOf` of the tile (F1); under a scheme
+    with `row_cap` (-h3's row seeds), the debit over each credited row's credited words is at most ρ·`creditOf` of that
+    row's cells, its share of the tile (the reduction's (C2): an aggregate cap doesn't transfer to one-row units).
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **The draws (F8)** are keyed by a beacon round published after the verifier recorded the prover's commitment (the
   transcript root and the records root), through `verity.randomness.derive`.
@@ -208,9 +210,17 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
     rows, cols = record.credited(tile)
     if rows and cols:
         pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
-        debit, cap = tile_cap(scheme, record, [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols])
-        if debit > cap:
-            return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·creditOf of the tile)"
+        b_codes = [ops.b.codes[pos_b[j]] for j in cols]
+        if getattr(scheme, "row_cap", False):
+            for i in rows:
+                debit, cap = tile_cap(scheme, record, [ops.a.codes[pos_a[i]]], b_codes)
+                if debit > cap:
+                    return (f"row {i}'s replayed debit {float(debit):.0f} exceeds its cap {float(cap):.0f} "
+                            "(ρ·creditOf of the row's credited cells, the per-row cap)")
+        else:
+            debit, cap = tile_cap(scheme, record, [ops.a.codes[pos_a[i]] for i in rows], b_codes)
+            if debit > cap:
+                return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·creditOf of the tile)"
     return None
 
 

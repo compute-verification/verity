@@ -362,7 +362,7 @@ def test_h1_hashes_with_blake3_throughout():
                        for c, u in zip(checked.c, checked.u) for h in (0, 32))
     assert C.leaf(checked, "h1") == keyed(C.H1_KEYS["leaf"], digests) != C.leaf(checked)
     with pytest.raises(ValueError):
-        C.PearlC(hashing="h3")
+        C.PearlC(hashing="h4")
 
 
 def test_h1_lifecycle_commits_with_frame_b3():
@@ -409,6 +409,81 @@ def test_h2_lifecycle_commits_with_frame_b3s():
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
     h1 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1"), epoch).check_tile(tr, prover.open(epoch, 0))
     assert not h1.ok and h1.reason == "activation opening"
+
+
+def test_h3_row_seed_is_the_one_row_units_seed():
+    """-h3's pin 1: row i's seed is exactly the per-unit seed_A of row i as a one-row unit (the same function and bytes):
+    the seed-A label's key over salt ‖ leaf_i ‖ root_B ‖ u64 LE (index·2^32 + i), leaf_i the row's frame-b3s leaf as that
+    unit's A root; and row i's E_A line is row 0's line of that one-row unit's per-unit noise."""
+    from verity.commitments.blake3 import blake3, keyed
+    from verity_pouw.protocol import Context
+
+    s3, per_unit = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2")
+    ctx = CV.ctx_of("rowseed", (16, 128, 16), 7, 9)
+    rows = CV.rows_f32("rowseed", "A", 16, 128)
+    lines = s3.e_a_lines(ctx, s3.noise(ctx), rows, range(16))
+    for i, row in enumerate(rows):
+        leaf = C.row_leaf(ctx, i, row)
+        one = Context(ctx.salt, Matmul(C.row_unit_index(7, i), Shape(1, 128, 16), 9), leaf, ctx.root_b)
+        assert C.row_seed(ctx, i, row) == per_unit.noise(one).seed_a == s3.noise(one).seed_a
+        assert C.row_seed(ctx, i, row) == keyed(blake3(b"pearl-c/v0/seed-A"),
+                                                ctx.salt + leaf + ctx.root_b + (7 * 2 ** 32 + i).to_bytes(8, "little"))
+        assert lines[i] == per_unit.e_a_lines(one, per_unit.noise(one), [row], [0])[0]
+    assert len({C.row_seed(ctx, i, rows[0]) for i in range(16)}) == 16
+    assert s3.noise(ctx) == per_unit.noise(ctx)
+
+
+def test_h3_row_leaf_binds_the_rows_bytes_and_position():
+    """leaf_i is row i's leaf in its unit's frame-b3s A tree (the tree the prover commits), so it binds the row's bytes and
+    position, and through the domain the salt, the unit index and the row count."""
+    from verity_pouw.audit import activation_binding, commit_rows
+    from verity_pouw.protocol import Context
+
+    ctx = CV.ctx_of("rowleaf", (16, 128, 16), 7, 9)
+    rows = CV.rows_f32("rowleaf", "A", 16, 128)
+    tree = commit_rows(activation_binding(ctx.salt, 7), 7, rows, "blake3-s256")
+    assert [C.row_leaf(ctx, i, r) for i, r in enumerate(rows)] == [tree.domain.leaf(i, i, "verity/pouw/row/v1", r) for i, r in enumerate(rows)]
+    base = C.row_leaf(ctx, 3, rows[3])
+    other = [C.row_leaf(ctx, 3, rows[4]), C.row_leaf(ctx, 4, rows[3]),
+             C.row_leaf(Context(b"\x01" * 32, ctx.matmul, ctx.root_a, ctx.root_b), 3, rows[3]),
+             C.row_leaf(Context(ctx.salt, Matmul(8, ctx.matmul.shape, 9), ctx.root_a, ctx.root_b), 3, rows[3]),
+             C.row_leaf(Context(ctx.salt, Matmul(7, Shape(32, 128, 16), 9), ctx.root_a, ctx.root_b), 3, rows[3])]
+    assert base not in other and len(set(other)) == 5
+
+
+def test_h3_one_row_units_are_bounded_and_injective():
+    assert C.row_unit_index(0, 0) == 0 and C.row_unit_index(1, 0) == 2 ** 32 and C.row_unit_index(2 ** 32 - 1, 2 ** 32 - 1) == 2 ** 64 - 1
+    assert len({C.row_unit_index(u, i) for u in range(4) for i in range(4)}) == 16
+    for bad in ((2 ** 32, 0), (0, 2 ** 32), (-1, 0)):
+        with pytest.raises(DomainError):
+            C.row_unit_index(*bad)
+    s3, s2 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2")
+    s2.check(Matmul(2 ** 32, Shape(16, 128, 16), 1))
+    with pytest.raises(DomainError):
+        s3.check(Matmul(2 ** 32, Shape(16, 128, 16), 1))
+    s3.check(Matmul(2 ** 32 - 1, Shape(16, 128, 16), 1))
+
+
+def test_h3_lifecycle_and_an_h2_transcript_is_rejected():
+    """An honest -h3 prover is accepted; the same rows proved under -h2 (unit seeds) fail -h3's recomputed leaf."""
+    from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+
+    k = 128
+    rows_a, rows_b = CV.rows_f32("life3", "A", 32, k), CV.rows_f32("life3", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    s3, s2 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2")
+    assert get("pearl-c-h100-v1-h3").name == "pearl-c-h100-v1-h3" and s3.row_cap and not s2.row_cap
+    assert s3.commitment_hash == "blake3-s256" and dict(s3.certificate.parameters)["hashing"] == "h3"
+    assert any("(C1)" in h and "(C2)" in h and "(C3)" in h for h in s3.certificate.hypotheses)
+    p3 = Prover(s3, {9: rows_b})
+    epoch = Epoch.start(work, p3.weight_roots, b"beacon")
+    tr3 = p3.prove(epoch, {3: rows_a})
+    assert Verifier(s3, epoch).audit(p3, tr3, Sampled(2), b"verifier").accepted
+    p2 = Prover(s2, {9: rows_b})
+    tr2 = p2.prove(epoch, {3: rows_a})
+    assert tr2.activation_roots == tr3.activation_roots
+    bad = Verifier(s3, epoch).check_tile(tr2, p2.open(epoch, 0))
+    assert not bad.ok
 
 
 def test_v1_domain_rules():

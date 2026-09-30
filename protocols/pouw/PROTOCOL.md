@@ -352,7 +352,7 @@ peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)�
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_WGMMA_K16 steps into C̃'s word
 leaf      TurboSHAKE128 (D = 0x21) per tile row and 32-column chunk over its C̃ then U words, then TurboSHAKE128
           (D = 0x22) over those digests; -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf")
-trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3; -h2: frame-b3s
+trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3; -h2 and -h3: frame-b3s
 tickets   Pearl's lottery over C̃ per 16 × 16 subtile
 useful    U/(α_A·α_B), glue
 ~~~
@@ -398,6 +398,21 @@ useful    U/(α_A·α_B), glue
     1.41× -h1's compressions (767 against 545).
   - Only the trees change: its vectors are the -h1 cases' inputs, digests and leaves, with A's `frame-b3s` root and row
     leaf. The certificate is -h1's.
+- **Hashing format -h3** (`pearl-c-h100-v1-h3`, `hashing="h3"`) is -h2 with P2's row seeds. bc-3006c44a reduced it to
+  the per-unit TT_OUT (research store `internal/pouw/rtx-pro/a-commit-latency.md`, row additivity), at error
+  (q + R)/2^128 over the R declared rows. It needs:
+  - **(C1) Row i's E_A line is row 0's line of row i as a one-row unit** (`e_a_lines`). Its seed (`row_seed`) is
+    `unit_seed_a(salt, leaf_i, root_B, ι)`, the per-unit seed_A function applied with:
+    - leaf_i, row i's leaf in its unit's frame-b3s A tree (`row_leaf`), as the unit's A root. It binds the row's bytes
+      and position, and through the domain the salt, the unit index and m.
+    - ι = index · 2^32 + i as the unit index (`row_unit_index`). The domain adds index < 2^32.
+    seed_A over the whole root still keys the tickets.
+  - **(C2) The debit cap is checked per row.** `pearl_c_work.check_opened` holds each credited row's replayed debit over
+    the tile's credited columns to ρ·`creditOf(1, |K|, cols)`, the row's share of the tile's credit. An aggregate cap
+    doesn't transfer to one-row units.
+  - **(C3) The cost model is invariant under regrouping rows into units**, a hypothesis on W1 (the certificate's third
+    hypothesis).
+  - Its vectors are the -h2 cases' inputs, with the tile rows' seeds pinned. C̃, U and the leaf differ from -h2's.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
