@@ -449,7 +449,7 @@
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "doc-round", "symbol": "mean_dim_override_facts", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "doc-round", "symbol": "probe_collectives", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "doc-round", "symbol": "retie_lm_head_as_the_loader_does", "detail": "R1N"},
-    {"file": "verity_vllm/pipeline/global_program.py", "kind": "doc-board-id", "symbol": "component_provenance", "detail": "M-nnnn"},
+    {"file": "verity_vllm/pipeline/components.py", "kind": "doc-board-id", "symbol": "component_provenance", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "doc-board-id", "symbol": "eos_lag_rows_declared", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "doc-board-id", "symbol": "execution_of_workload", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "doc-board-id", "symbol": "modelled_engine", "detail": "M-nnnn", "count": 2},

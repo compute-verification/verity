@@ -193,7 +193,7 @@
  },
  "reads": {
   "Flock.CircuitType": {
-   "digest": "269a79279167811640cf5a3df70d41dc003277f78bbb8e985a567e41916c6786",
+   "digest": "9914c589c24f68f5a634b61dcc5a41da20e2a1b38ea31cee908b8ad934d3e503",
    "definitions": {
     "Flock.CircuitType": "50df2e540ff492bc367013ba6717966c043fb249a6da8d356d19e8a5eedb5321",
     "Flock.CircuitType.WellFormed": "044fe02dbaec51a659f4ab475f97729bf576586f038762a8c616153a86fd0971",
@@ -243,7 +243,7 @@
    "pins": ["Flock.CircuitType.check_ok", "Flock.Layout.check_ok"]
   },
   "Flock.Layout": {
-   "digest": "55c7715a4ca5a8143cd2a90260c821927a3420f2b99aef585cb4414444e91c69",
+   "digest": "f44d569383de402067a51894721822b6931e025c9dfa216851c40f7c9da330c7",
    "definitions": {
     "Flock.CallE": "59e3821e6d927e891a74adf79976aa50148a45e469911ad0e79847c2284ac0dc",
     "Flock.CallE.item": "c41e144d1a2b7b39586f43f7763d8f54c4fd583d551b3df98ad9f6bd4dc4cecb",
@@ -313,7 +313,7 @@
    "pins": ["Flock.Layout.check_ok"]
   },
   "Flock.Library": {
-   "digest": "228bcb695864ebb653ebe66ef119bdb8dc841a18f3fa6a843e70969c0d8eae48",
+   "digest": "00d347b8ee55dd8a44f3fcc0f4d47af873172df956a1004f35cf92fb3ab8666a",
    "definitions": {
     "Flock.LIBRARY": "da053709b44964b14d2e1bd6d280351dfcced3c322316c724b9edba88e8e7792",
     "Flock.LIBRARY_TABLES": "1a055d63ccffc7e982bc72d4d2296ed9db0b078fa0d56a331c82a4afbf6e7eae",
@@ -327,7 +327,7 @@
    "pins": ["Flock.CircuitType.check_ok", "Flock.Layout.check_ok"]
   },
   "FlockProofs.Hash": {
-   "digest": "38dd6a2cdbcf0da826a3e8cea5d3e305a39656fb86d41cabefef63e1686bb696",
+   "digest": "d6d1e8b248f3eb42f59dc34dc27f0fcfd6283a88ba7e68b82990f6f603201997",
    "definitions": {
     "Flock.Hm96.leafPair": "997d39c354ad64219654310cea9b9b9bd11f12778d004577fb7dc1bc191dd47d",
     "Flock.Hm96.xor64": "c1262f217a81a620077518af4506e65584e53c8ccb6c164730774219a9123902",
@@ -337,7 +337,7 @@
    "pins": ["Flock.MerklePair.hm96_inputs", "Flock.MerkleScheme.collision_hash"]
   },
   "FlockProofs.Merkle": {
-   "digest": "1e190ba7a71217e38704864d9843b7b71a5b78aff26fa0baf7797572600009e1",
+   "digest": "2c1fa23569a986c0c8d6877a21427df24b4c64c5d6271930c2d8c1d4f23e9d40",
    "definitions": {
     "Flock.MerklePair": "293fe39d7c83b19a32d69bbea547dcb764d18dc28a1f6bcdccf7f776122048e4",
     "Flock.MerklePair.Collides": "9b9a66a9061f730e985381721bc02a9f223a3b5966466c60d7570a47581bfab8",

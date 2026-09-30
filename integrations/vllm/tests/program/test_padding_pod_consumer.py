@@ -747,3 +747,22 @@ def test_fix_e_the_identity_check_reads_a_padding_only_step_as_the_identities_of
     com3._layouts[3] = [m for m in com3._layouts[3] if not m.name.startswith("moe/L0/router_ids/")]
     bad3 = com3.identity_check(manifest=man_moe)
     assert not bad3["ok"] and bad3["violations"][0]["step"] == 3 and bad3["violations"][0]["moe_layers_bad"] == {0: 2}
+
+
+def test_the_identity_check_counts_the_router_softmax_tap_as_one_more_moe_tensor_of_each_tapped_layer():
+    """The OLMoE sm_120 config run (r20260930-091912-128d) refused every step with moe_layers_bad {L: 7}: under ROUTER_TAP the
+    router-softmax source commits `moe/L<k>/router_softmax` beside the block's planes, and the per-layer count expected the block's alone."""
+    man_moe = dict(MAN, moe_layers=[0], moe_tensors_per_layer=len(MOE_MEMBERS))
+    executed = {0: ["r0"], 1: ["r0"]}
+    steps = _executed_with_moe(executed)
+    for s, ts in zip(sorted(executed), steps):
+        ts.append((PS.tensor_name("moe/L0", "router_softmax"), bytes((7 + i + s) % 251 for i in range(4 * 33))))
+    com = _committer()
+    com.commit_offline(steps)
+    bad = com.identity_check(manifest=man_moe)
+    assert not bad["ok"] and bad["violations"][0]["moe_layers_bad"] == {0: len(MOE_MEMBERS) + 1}
+    ok = com.identity_check(manifest=dict(man_moe, router_softmax_layers=[0]))
+    assert ok["ok"] and ok["violations_n"] == 0, ok
+    com._layouts[1] = [m for m in com._layouts[1] if not m.name.startswith("moe/L0/router_softmax")]
+    dropped = com.identity_check(manifest=dict(man_moe, router_softmax_layers=[0]))
+    assert not dropped["ok"] and dropped["violations"][0]["step"] == 1 and dropped["violations"][0]["moe_layers_bad"] == {0: len(MOE_MEMBERS)}
