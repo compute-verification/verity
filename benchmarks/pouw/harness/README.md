@@ -64,7 +64,9 @@ cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `a
 `research data put --kind pouw-harness-build/v1 --tree DIR --preserve`), and this tree's `verity` and `verity_pouw` on
 `PYTHONPATH`. On node 2, `gpu-lease 1` picks the GPU, so the run names it `--gpu lease` (the one index the lease set, checked
 against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait --timed` and times on its first GPU
-(`--timed` pauses the fill queue: without it, fill jobs keep running beside the timed run):
+(`--timed` pauses the fill queue: without it, fill jobs keep running beside the timed run). A timed run also passes
+`research run --no-sampler`, so `research`'s own telemetry sampler (`nvidia-smi` every 5 s) stays off the node while it
+times (server.md 17:27Z); the harness records clocks and the UUID itself:
 
 ```bash
 R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
@@ -73,14 +75,14 @@ H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" ben
    --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline
    --arm-path benchmarks/pouw/harness --arm example_arm:ExampleFp8 --out "$RESEARCH_RUN_DIR/bench.json"'
 $R -- gpu-lease 1 --wait -- bash -c "$H"                                                           # untimed: gates, autotune
-$R -- gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
+$R --no-sampler -- gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
 ```
 
 A measured panel row also needs the verify step in the same run, after the lease, so no GPU waits on the CPU verifier:
 
 ```bash
 V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"'
-$R -- bash -c "gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
+$R --no-sampler -- bash -c "gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
 ```
 
 `H` and `V` go to `bash -c`, so each must be one line (`H` is wrapped above for reading).
