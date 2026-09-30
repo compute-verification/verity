@@ -85,6 +85,30 @@ def test_merge_refuses_a_commit_the_target_has_moved_past(tmp_path, monkeypatch,
     assert merge_main(["feat", "--dry-run"]) == 1 and "not main" in capsys.readouterr().err
 
 
+def test_a_train_checked_on_the_one_ahead_lands_after_it_without_a_recheck(tmp_path, monkeypatch, capsys):
+    """B was checked on A's train; A lands as a merge commit B lacks, with A's tree. Merging B then gives B's tree, the checked
+    one, so B's attempt counts; once main gains a change B lacks, it no longer does."""
+    main, _feat, _tip = _repos(tmp_path)
+    _branch(main, "A", "x.txt")
+    _git(main, "checkout", "-q", "-b", "B", "A")
+    (main / "y.txt").write_text("y\n")
+    _git(main, "add", "y.txt")
+    _git(main, "commit", "-q", "-m", "B on A")
+    b = _git(main, "rev-parse", "HEAD")
+    _git(main, "checkout", "-q", "main")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "b"), b)
+    assert _record(tmp_path, tmp_path / "b", monkeypatch, "true") == 0
+    monkeypatch.chdir(main)
+    _git(main, "merge", "-q", "--no-ff", "-m", "A lands", "A")
+    assert merge_main(["B"]) == 0, capsys.readouterr().err
+    assert _git(main, "rev-parse", "HEAD^{tree}") == _git(main, "rev-parse", f"{b}^{{tree}}") and _git(main, "rev-parse", "HEAD^2") == b
+    _git(main, "reset", "-q", "--hard", "HEAD^1")
+    (main / "c.txt").write_text("c\n")
+    _git(main, "add", "c.txt")
+    _git(main, "commit", "-q", "-m", "main moves on its own")
+    assert merge_main(["B"]) == 1 and "main has moved past" in capsys.readouterr().err
+
+
 def _branch(main: Path, name: str, path: str) -> None:
     _git(main, "checkout", "-q", "-b", name, "main")
     (main / path).write_text(name + "\n")
