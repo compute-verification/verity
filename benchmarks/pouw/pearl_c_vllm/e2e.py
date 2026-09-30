@@ -24,8 +24,12 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   each from a fresh pass on poisoned outputs, must give the same A root and tile root, and the negative control, the call
   once more with its tile leaves omitted, must not.
 - **The verify pass** (``pearlc`` with ``--retain``): after the timing, the first timed prefill prompt and the decode prompts
-  are replayed, each as a retained pass (`PearlCDeviceRun.begin(retain=…)`).  Each pass's commitment must equal its timed
-  pass's.  Their manifests go to `verify_run.py`, the reference verifier, after the window.
+  are replayed, each as a retained pass (`PearlCDeviceRun.begin(retain=…)`) on poisoned buffers.  Each pass's commitment
+  must equal its timed pass's.  Then the negative control: one decode prompt as a retained pass that writes none of the
+  commitment (`CONTROL_OMITS`: A's row tree, the message digests, the tile leaves) into the poisoned buffers.  The three
+  manifests go to `verify_run.py`, the reference verifier, after the window: the first two must be accepted and the control
+  rejected (the panel's rule of 11:50Z).
+- **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
 
 Every rep records the SM clock (the panel's clock rule), through run.py's NVML reader.
 """
@@ -50,6 +54,10 @@ PEARLC = ("pearlc-nohash", "pearlc")
 PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 #: the served y's bound against the float product (the scheme's tested bound, protocols/pouw's sm120 useful-output test)
 ERR = 0.08
+#: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
+CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
+#: the panel's shape names for the two phases
+SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
 
 
 def engine(args, mode: str):
@@ -167,7 +175,7 @@ def run_mode(args, mode: str) -> dict:
 
     def phase(prompts, sp, retain=None):
         if run:
-            run.begin(retain)
+            run.begin(retain, os.environ.get("RESEARCH_RUN_ID"))
             run.gemm_ms()
         torch.cuda.synchronize()
         t0 = time.perf_counter()
@@ -206,6 +214,10 @@ def run_mode(args, mode: str) -> dict:
             _, _, got = phase(prompts, sp, retain=str(Path(args.retain) / name))
             same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
             out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same}
+        run.omit = CONTROL_OMITS
+        _, _, got = phase(decode[:1], one, retain=str(Path(args.retain) / "control"))
+        run.omit = frozenset()
+        out["control"] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(CONTROL_OMITS)}
         result["verify_pass"] = out
     return result
 
@@ -225,7 +237,7 @@ def split(results: dict) -> dict:
             b = row[f"{base}_s"]
             row.update({f"slowdown_vs_{base}": full / b, f"gemm_x_{base}": gemm / b, f"hashing_x_{base}": (full - nohash) / b,
                         f"else_x_{base}": (nohash - gemm) / b})
-        out[key] = row
+        out[key] = {"shape": SHAPES[key], **row}
     return out
 
 
@@ -263,14 +275,14 @@ def main() -> None:
     summary = {"split": split(results),
                "token_agreement_vs_bf16": {m: agree(r["tokens"], ref) for m, r in results.items() if ref and "tokens" in r},
                "gates": {m: all(g["ok"] for g in r.get("gate", [])) for m, r in results.items() if m in PEARLC},
-               "verify_pass": {k: {"manifest": v["manifest"], "same_commitment_as_timed": v["same_commitment_as_timed"]}
+               "verify_pass": {k: {"manifest": v["manifest"], "same_commitment_as_timed": v.get("same_commitment_as_timed")}
                                for k, v in results.get("pearlc", {}).get("verify_pass", {}).items()}}
-    args.out.write_text(json.dumps({"schema": "verity-pouw/pearl-c-vllm-e2e/v1", "scheme": SCHEME, "summary": summary,
-                                    "results": results}, indent=1))
+    args.out.write_text(json.dumps({"schema": "verity-pouw/pearl-c-vllm-e2e/v1", "scheme": SCHEME, "run": os.environ.get("RESEARCH_RUN_ID"),
+                                    "summary": summary, "results": results}, indent=1))
     print(json.dumps(summary), flush=True)
     import run_result
     ok = (all("timing" in r for r in results.values()) and all(summary["gates"].values())
-          and all(v["same_commitment_as_timed"] for v in summary["verify_pass"].values()))
+          and all(v["same_commitment_as_timed"] for k, v in summary["verify_pass"].items() if k != "control"))
     ms = [(f"{m}.{k}", v, "s") for m, r in results.items() for k, v in r.get("timing", {}).items()]
     run_result.write(args.out, ok, "pearl-c vLLM e2e: every mode gated and timed, and each verify pass repeats its timed commitment",
                      json.dumps(summary), ms)

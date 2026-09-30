@@ -14,7 +14,9 @@
   processes, since each costs about 11 s of CPU per 1,024 of k.  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
   own verdict.
 
-Prints one line, ``ACCEPT …`` or ``REJECT …``, writes ``verify.json`` beside the manifest, and exits 0 only on acceptance.
+Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
+``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
+``--expect-reject`` (a negative control's pass) only on rejection.
 """
 from __future__ import annotations
 
@@ -120,7 +122,8 @@ def check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
 def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None) -> dict:
     raw = path.read_bytes()
     man, digest = json.loads(raw), hashlib.sha256(raw).hexdigest()
-    out = {"manifest": str(path), "transcript_sha256": digest, "verifier_commit": commit, "draws": draws}
+    named = f"{man.get('run')}:{path} sha256:{digest}"
+    out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws}
     try:
         if man.get("schema") != PD.MANIFEST_SCHEMA:
             raise ValueError(f"schema {man.get('schema')!r}, not {PD.MANIFEST_SCHEMA}")
@@ -166,10 +169,10 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: pearl_c_work's tiles ({draws} drawn, "
                        f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
-                       f"source {source.hex()[:16]}; manifest sha256:{digest}; verifier {commit}")
+                       f"source {source.hex()[:16]}; transcript {named}; verifier {commit}")
     except Exception as ex:  # noqa: BLE001 - a transcript that can't be checked is rejected, with the reason
         out.update(accepted=False, error=f"{type(ex).__name__}: {ex}",
-                   line=f"REJECT {path}: {type(ex).__name__}: {ex}; manifest sha256:{digest}; verifier {commit}")
+                   line=f"REJECT {man.get('scheme')} {man.get('entry')}: {type(ex).__name__}: {ex}; transcript {named}; verifier {commit}")
     return out
 
 
@@ -179,11 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--draws", type=int, default=DRAWS)
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
+    p.add_argument("--expect-reject", action="store_true", help="the pass is a negative control: exit 0 only if it is rejected")
     a = p.parse_args(argv)
     r = verify(a.manifest, a.draws, a.jobs, a.commit)
     print(r["line"], flush=True)
     (a.manifest.parent / "verify.json").write_text(json.dumps(r, indent=1) + "\n")
-    return 0 if r["accepted"] else 1
+    return 0 if r["accepted"] != a.expect_reject else 1
 
 
 if __name__ == "__main__":

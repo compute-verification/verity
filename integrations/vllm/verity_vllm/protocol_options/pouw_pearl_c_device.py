@@ -213,6 +213,7 @@ class _Shape:
 @dataclass
 class _Pass:
     retain: Path | None
+    run: str | None = None          # the run id a retained pass's manifest names
     matmuls: list[Matmul] = field(default_factory=list)
     roots_a: list[Any] = field(default_factory=list)
     flags: list[tuple[Any, Any]] = field(default_factory=list)
@@ -429,10 +430,10 @@ class PearlCDeviceRun:
 
     # ---- passes -----------------------------------------------------------------------------------------------------
 
-    def begin(self, retain: str | None = None) -> None:
+    def begin(self, retain: str | None = None, run: str | None = None) -> None:
         """A new pass: its own transcript under the install's epoch, the call indices from 0.  With `retain`, the pass writes
-        what the prover opens from into that directory, from poisoned outputs."""
-        self.cur = _Pass(Path(retain) if retain else None)
+        what the prover opens from into that directory, from poisoned outputs, and its manifest names `run`."""
+        self.cur = _Pass(Path(retain) if retain else None, run)
         if retain and self.hashing:
             self.poison()
 
@@ -496,7 +497,7 @@ class PearlCDeviceRun:
                     "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
                     "root_a": roots_a[32 * u.index:32 * u.index + 32].hex(), **f}
                    for u, r, f in zip(cur.matmuls, cur.records, cur.files)]
-        head = {"schema": MANIFEST_SCHEMA, "entry": self.entry, "scheme": self.scheme.name,
+        head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": dict(zip(("forming", "device", "hashing"), SCHEMES[self.scheme.name])),
                 "beacon": self.beacon.hex(), "salt": self.salt.hex(), "cubin_sha256": self.kernel.cubin_sha256,
                 "records_root": PW.records_root(self.salt, epoch.weights_root,

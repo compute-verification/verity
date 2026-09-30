@@ -33,6 +33,7 @@ from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 SCHEME = "pearl-c-sm120-v1-h1"
 BEACON = bytes(range(32))
+RUN = "r20260930-120000-test"
 
 
 def load(name: str, path: Path):
@@ -288,7 +289,8 @@ def honest_pass(tmp_path):
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, "blake3")
-    head = {"schema": PPD.MANIFEST_SCHEMA, "entry": f"pouw:{SCHEME}", "scheme": SCHEME, "instance": {"k_min": 32, "tile": [16, 16]},
+    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{SCHEME}", "scheme": SCHEME,
+            "instance": {"k_min": 32, "tile": [16, 16]},
             "beacon": BEACON.hex(), "salt": epoch.salt.hex(),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count},
@@ -307,6 +309,9 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     assert got["accepted"] and want.audit.accepted, got.get("line") or got.get("error")
     assert tuple(got["tiles"]) == want.audit.selected and got["exclusion_tiles"] == 1
     assert got["line"].startswith(f"ACCEPT {SCHEME} pouw:{SCHEME}: pearl_c_work's tiles (3 drawn, 1 for excluded rows)")
+    assert got["transcript"] == f"{RUN}:{path} sha256:{got['transcript_sha256']}" and got["transcript"] in got["line"]
+    assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7]) == 0
+    assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
 
 
 @pytest.mark.slow
@@ -320,9 +325,42 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
         bad[2 * 128 * j + 1] ^= 0x01
     rows.write_bytes(bytes(bad))
     r = VR.verify(path, 3, 1, "test", b"verifier" * 4)
-    assert not r["accepted"] and "weight opening" in r["line"]
+    assert not r["accepted"] and "weight opening" in r["line"] and r["line"].startswith("REJECT") and RUN in r["line"]
+    assert VR.main([str(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 0
     rows.write_bytes(good)
     man["matmuls"][0]["excluded_a"] = []
     path.write_text(json.dumps(man))
     r = VR.verify(path, 3, 1, "test", b"verifier" * 4)
     assert not r["accepted"] and "records are not the ones" in r["line"]
+
+
+# ---- the panel rows -----------------------------------------------------------------------------------------------
+
+def e2e_result(control_accepted: bool = False) -> tuple[dict, dict]:
+    reps = lambda mhz: {"prefill_8192": [{"clock": {"sm_mhz": mhz}}] * 3, "decode_b32": [{"clock": {"sm_mhz": mhz - 3}}] * 3}
+    split = {key: {"shape": shape, "fp8_s": 1.0, "nohash_s": 1.5, "slowdown_vs_fp8": 2.5, "gemm_x_fp8": 1.2, "hashing_x_fp8": 1.0,
+                   "else_x_fp8": 0.3, "slowdown_vs_bf16": 1.6} for key, shape in (("prefill_8192", "e2e-llama31-8b-vllm-m8192"),
+                                                                                 ("decode_b32_step", "e2e-llama31-8b-vllm-m32"))}
+    e2e = {"scheme": SCHEME, "run": RUN, "results": {"pearlc": {"reps": reps(2085)}, "fp8": {"reps": reps(2090)}},
+           "summary": {"gates": {"pearlc": True, "pearlc-nohash": True}, "split": split,
+                       "verify_pass": {"prefill": {"same_commitment_as_timed": True}, "decode": {"same_commitment_as_timed": True}}}}
+    t = lambda p: f"{RUN}:/workspace/pouw/mvp-e2e/passes/{RUN}/{p}/manifest.json sha256:{'ab' * 32}"
+    verdicts = {p: {"accepted": p != "control" or control_accepted, "verifier_commit": "c7033d67", "transcript": t(p),
+                    "line": f"{'ACCEPT' if p != 'control' or control_accepted else 'REJECT'} {SCHEME} pouw:{SCHEME}: ...; transcript {t(p)}"}
+                for p in ("prefill", "decode", "control")}
+    return e2e, verdicts
+
+
+def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
+    PR = load("pearl_c_vllm_panel_rows", KERNEL.parent / "pearl_c_vllm" / "panel_rows.py")
+    rows = PR.rows(*e2e_result(), "panel.py")
+    args = [dict(zip(r[3::2], r[4::2])) for r in (x[:-2] if "--decode-method" in x else x for x in rows)]
+    assert [(a["--phase"], a["--shape"], a["--version"]) for a in args] == [
+        ("prefill", "e2e-llama31-8b-vllm-m8192", "v1-h1"), ("decode", "e2e-llama31-8b-vllm-m32", "v1-h1")]
+    for a in args:
+        assert a["--kind"] == "measured" and a["--run"] == RUN and RUN in a["--transcript"] and "accept" in a["--verifier-accept"].lower()
+        assert "reject" in a["--negative-control"].lower() and RUN in a["--negative-control"]
+        assert a["--sm-clock-arm"] and a["--sm-clock-base"] and a["--slowdown"] == "2.5000" and a["--hash-free"] == "1.5000"
+    assert rows[1][-2:] == ["--decode-method", "dependent-chain"]
+    with pytest.raises(SystemExit, match="negative control was not rejected"):
+        PR.rows(*e2e_result(control_accepted=True), "panel.py")
