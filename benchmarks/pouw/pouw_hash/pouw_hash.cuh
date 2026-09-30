@@ -537,6 +537,8 @@ PH_HD int quad_chunk(int lane) { return (lane >> 1) & 1; }
 // scratch slot of message m (the owner's t), lane e of the group, quad: conflict-free for both halves (writes: fixed m, e = t;
 // reads: m = t, fixed e), 128 slots.
 PH_HD int quad_slot(int m, int e, int quad) { return m * 32 + (quad >> 2) * 16 + ((e ^ m) << 2) + (quad & 3); }
+// the scratch a warp's quad_msg_digest and quad_msg_digest_b3 touch, in bytes: quad_slot's 128 slots of 8
+constexpr int QUAD_SCRATCH = 128 * 8;
 // A lane's writes for group q (message lanes 4q … 4q + 3): its lane of each of the quad's 4 messages.
 template <class Frag>
 PH_HD void quad_put(const Frag& frag, int q, int quad, int t, uint64_t* scratch) {

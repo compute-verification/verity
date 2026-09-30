@@ -71,7 +71,7 @@ __global__ void k_check(uint8_t* buf, CheckOut* o) {
   run_checks<PART>(buf, o);
 }
 __global__ void k_check_quad(CheckOut* o, uint64_t* dg) {
-  __shared__ uint64_t scratch[128];
+  __shared__ uint64_t scratch[ph::QUAD_SCRATCH / 8];
   const int lane = threadIdx.x;
   uint64_t d[4];
   ph::quad_msg_digest<2>([&](int a, int j, int i) { return quad_frag(lane, a, j, i); }, 0x21, scratch, d);
