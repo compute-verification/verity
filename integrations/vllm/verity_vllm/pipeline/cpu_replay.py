@@ -212,7 +212,7 @@ def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict
                            "root": wc["committed_root"], "root_openings": f"{wc['opened']}/{wc['servable']}",
                            "opened_by_source": wc["opened_by_source"], "mismatched": [m["name"] for m in wc["mismatched"]],
                            "unopened": [u["name"] for u in wc["unopened"]], "source": "checkpoint", "why": wc["why"],
-                           "replay": {"where": "cpu", "bundle": b["path"], "manifest_sha256": b["manifest_sha256"], "wall_s": wc["wall_s"]}}
+                           "replay": {"where": "cpu", "bundle": b["path"], "manifest_sha256": b["manifest_sha256"], "open_s": wc["wall_s"]}}
     c["commit_pass"], c["commit_fail_reason"] = commit_verdict(c, row["tokens_equal_ref"], min_openings=ctx["min_openings"],
                                                                declaration=ctx["declaration"], required_classes=ctx["required_classes"])
 
