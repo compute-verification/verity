@@ -35,6 +35,12 @@
 //   26  f2fp_f16_rate          cvt.rn.f16x2.e4m3x2, E4M3 to FP16, each result's low half fed back (nothing else)     64 codes
 //   27  f2fp_f16_half_rate     the same with the lane's constant XORed in before every other convert (one LOP3 each)  64 codes
 //   28  f2fp_f16_xor_rate      the same with it XORed in before every convert                                         64 codes
+//   29  hmma_f16_f32_rate      mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32                                2048 MAC
+//   30  hadd2_rate             add.rn.f16x2 with the addend {y.hi, y.hi} (HADD2 alone)                             32 registers
+//   31  add_f16x2_rate         add.rn.f16x2 as ptxas lowers it: half HADD2, half HFMA2 (x * 1 + y)                 32 registers
+//   32  hfma2_rate             fma.rn.f16x2                                                                        32 registers
+//   33  hadd2_f32_rate         cvt.f32.f16 of each chain's high half (HADD2.F32)                                   32 registers
+//   34  fhadd_rate             add.rn.f32.f16, an FP16 addend into an FP32 chain (FHADD)                           32 registers
 //
 // Every launch poisons chk, cycles and sm with 0xA5 first, so a word a kernel doesn't write reads 0xA5A5A5A5; w1_run's flag 1 is
 // the negative control, which launches nothing, and the gate must reject what it leaves.
@@ -670,13 +676,55 @@ F16_CHAINS(f2fp_f16_rate, 0)
 F16_CHAINS(f2fp_f16_half_rate, 1)
 F16_CHAINS(f2fp_f16_xor_rate, 2)
 
+__device__ __forceinline__ void mma_f16_f32(float c[4], const uint32_t a[4], const uint32_t b[2]) {
+    asm volatile("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};\n"
+                 : "+f"(c[0]), "+f"(c[1]), "+f"(c[2]), "+f"(c[3])
+                 : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
+}
+
+MMA_F32_RATE(hmma_f16_f32_rate, mma_f16_f32(c[j], a, b))
+
+// 16-bit scalar rates, SCALAR_RATE's shape with 32-bit chains: row word 0 is the chains' start (f16x2, or f32 for the f32-output
+// ops), word 1 the addend y, word 2 HFMA2's multiplier m.  ptxas lowers add.rn.f16x2 half to HADD2 and half to HFMA2 (x * 1 + y);
+// the addend {y.hi, y.hi} needs an operand swizzle HFMA2's addend lacks, so hadd2_rate's loop is HADD2 alone.
+#define H16_RATE(KNAME, T, LOAD, STORE, BODY)                                                                          \
+    __global__ void __launch_bounds__(THREADS) KNAME(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,      \
+                                                     long long* __restrict__ cycles, int* __restrict__ sm, int iters) { \
+        RATE_PROLOGUE                                                                                                 \
+        T x[NCHAIN];                                                                                                  \
+        for (int j = 0; j < NCHAIN; j++) x[j] = LOAD(row[0]);                                                         \
+        const uint32_t y = row[1], m = row[2];                                                                        \
+        const unsigned short yh = (unsigned short)y;                                                                  \
+        (void)m; (void)yh;                                                                                            \
+        _Pragma("unroll 1") for (int it = 0; it < iters; it++) {                                                      \
+            _Pragma("unroll") for (int u = 0; u < SUNROLL; u++) {                                                     \
+                _Pragma("unroll") for (int j = 0; j < NCHAIN; j++) BODY;                                              \
+            }                                                                                                         \
+        }                                                                                                             \
+        RATE_EPILOGUE                                                                                                 \
+        for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = STORE(x[j]);                                    \
+    }
+#define H16_BITS(v) (v)
+
+H16_RATE(hadd2_rate, uint32_t, H16_BITS, H16_BITS,
+         asm volatile("{ .reg .b16 l, h; .reg .b32 t; mov.b32 {l, h}, %1; mov.b32 t, {h, h}; add.rn.f16x2 %0, %0, t; }"
+                      : "+r"(x[j]) : "r"(y)))
+H16_RATE(add_f16x2_rate, uint32_t, H16_BITS, H16_BITS, asm volatile("add.rn.f16x2 %0, %0, %1;" : "+r"(x[j]) : "r"(y)))
+H16_RATE(hfma2_rate, uint32_t, H16_BITS, H16_BITS, asm volatile("fma.rn.f16x2 %0, %0, %1, %2;" : "+r"(x[j]) : "r"(m), "r"(y)))
+H16_RATE(hadd2_f32_rate, float, __uint_as_float, __float_as_uint, {
+    const unsigned short h = (unsigned short)(__float_as_uint(x[j]) >> 16);
+    asm volatile("cvt.f32.f16 %0, %1;" : "=f"(x[j]) : "h"(h));
+})
+H16_RATE(fhadd_rate, float, __uint_as_float, __float_as_uint, asm volatile("add.rn.f32.f16 %0, %1, %0;" : "+f"(x[j]) : "h"(yh)))
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
                           fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate,
                           f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate, qmma_sp_e4m3_rate,
                           cs_port_fadd_rate, cs_port_nogen_rate, cs_packed_fadd_rate, cs_packed_nogen_rate,
                           cs_w64_fadd_rate, cs_w64_nogen_rate, cs_w128_fadd_rate, cs_w128_nogen_rate,
-                          cs_w64_nogen_r144_rate, cs_w128_nogen_r144_rate, f2fp_f16_rate, f2fp_f16_half_rate, f2fp_f16_xor_rate};
+                          cs_w64_nogen_r144_rate, cs_w128_nogen_r144_rate, f2fp_f16_rate, f2fp_f16_half_rate, f2fp_f16_xor_rate,
+                          hmma_f16_f32_rate, hadd2_rate, add_f16x2_rate, hfma2_rate, hadd2_f32_rate, fhadd_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace

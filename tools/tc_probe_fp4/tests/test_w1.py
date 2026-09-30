@@ -6,7 +6,10 @@ timed; the SASS loop gate rejects a loop with a missing or an extra watched inst
 nibble) and the E2M1 reference's grid, ties and saturation are pinned; the cast-and-store loops' staged words and exact loop bodies
 are pinned; timing samples nvidia-smi every few rounds, not every rep; the three-loop split recovers known costs; the tool
 declarations resolve their key params.  The E4M3-to-FP16 reference is pinned to the registered decode, its timing rows never feed a
-chain a NaN code, and its loops are pinned whole; unwritten words must keep the poison, and a device whose no-write control passes
+chain a NaN code, and its loops are pinned whole; the 16-bit adds' chains are pinned (HADD2's addend is y's high half in both
+halves, add.rn.f16x2's each half), their timing rows keep every model step exact, their loops (add.rn.f16x2 split 32 / 32 over HADD2
+and HFMA2) and the FP16 leaf's are pinned, and their prices and recorded fractions of FADD's rate are checked; unwritten words must
+keep the poison, and a device whose no-write control passes
 the gate fails the run; the fill lease writes a header the runner parses, records the child's exit status (no retry turns a failed
 gate into a pass), waits out the runner's move-then-log order and withdraws a job that never starts.  With nvcc on the PATH, the
 real build's loops are checked.
@@ -70,7 +73,7 @@ def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
     assert "timing" not in res and "prices" not in res
 
 
-@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, *range(16, 26), *w1.F16_OPS])
+@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, *range(16, 26), *w1.F16_OPS, *w1.H16_OPS])
 def test_gate_words_are_not_vacuous(op):
     rows = w1.timing_rows(op, np.random.default_rng(w1.F8.SEED_DEFAULT))
     assert w1.expected_words(op, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
@@ -283,6 +286,76 @@ def test_sass_gate_pins_the_f16_loops(monkeypatch, kernel, name, body, ok):
     """The FP16 convert loops are exactly 64 converts and their LOP3 feed: a PRMT, a MOV or one LOP3 too many fails."""
     monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body, kernel)})())
     assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"][name]["ok"] is ok
+
+
+def test_h16_chains_pinned():
+    """From 1.0 in both halves, y = 1.5 2^-11 in the high half only: 0.75 of an FP16 ulp, so each step rounds up one ulp and 64
+    steps give 1.0625 (0x3C40).  HADD2's addend is y's high half in both halves; add.rn.f16x2 and HFMA2 (m = 1) add each half's own.
+    The FP32 chains: HADD2.F32 from 1.0f reaches the fixed point 0x3FFFE000 (high half 0x3FFF), FHADD adds y's low half 2^-10."""
+    rows = np.zeros((32, 8), np.uint32)
+    rows[:, 0], rows[:, 1], rows[:, 2] = 0x3C003C00, w1._f16_bits(1.5 * 2**-11) << 16, 0x3C003C00
+    assert [int(w1.h16_chain(op, w1.GATE_ITERS, rows)[0]) for op in (30, 31, 32)] == [0x3C403C40, 0x3C403C00, 0x3C403C00]
+    rows[:, 0], rows[:, 1] = np.float32(1.0).view(np.uint32), 0xFFFF1400
+    assert int(w1.h16_chain(33, w1.GATE_ITERS, rows)[0]) == 0x3FFFE000
+    assert w1.h16_chain(34, w1.GATE_ITERS, rows).view(np.float32)[0] == 1.0625
+    rows[:, 0], rows[:, 1], rows[:, 2] = 0x3C003C00, w1._f16_bits(1.5 * 2**-11) << 16, 0x3C003800  # m = 0.5 low, 1.0 high
+    assert int(w1.h16_chain(32, 1, rows)[0]) == 0x3C08 << 16 | 0x1C00  # 8 steps: 2^-8 low, 1 + 8 ulps high
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_h16_timing_rows_stay_exact(seed):
+    """The gate's chains never need more than float64 before their one rounding (h16_chain raises if they would), and stay finite
+    well past the gate's 64 steps."""
+    rng = np.random.default_rng(seed)
+    for op in w1.H16_OPS:
+        w1.h16_chain(op, 512 if seed == 0 else w1.GATE_ITERS, w1.timing_rows(op, rng))
+
+
+def test_h16_model_refuses_an_inexact_step():
+    rows = np.zeros((32, 8), np.uint32)
+    rows[:, 0], rows[:, 1] = np.float32(2.0**60).view(np.uint32), 0x00000001  # 2^60 + 2^-24 needs 85 bits
+    with pytest.raises(ValueError, match="inexact"):
+        w1.h16_chain(34, 1, rows)
+
+
+_U = ["UIADD3", "UISETP.NE.AND"]
+
+
+@pytest.mark.parametrize("kernel, name, body, ok", [
+    ("hadd2_rate", "hadd2", ["HADD2"] * 64 + _U, True), ("hadd2_rate", "hadd2", ["HADD2"] * 64 + ["PRMT"] + _U, False),
+    ("hadd2_rate", "hadd2", ["HADD2"] * 32 + ["HFMA2"] * 32 + _U, False),
+    ("add_f16x2_rate", "add_f16x2", ["HADD2"] * 32 + ["HFMA2"] * 32 + _U, True),
+    ("add_f16x2_rate", "add_f16x2", ["HADD2"] * 64 + _U, False), ("hfma2_rate", "hfma2", ["HFMA2"] * 64 + _U, True),
+    ("hfma2_rate", "hfma2", ["HFMA2"] * 64 + ["MOV"] + _U, False), ("hadd2_f32_rate", "hadd2_f32", ["HADD2.F32"] * 64 + _U, True),
+    ("hadd2_f32_rate", "hadd2_f32", ["HADD2.F32"] * 64 + ["F2F.F32.F16"] + _U, False),
+    ("fhadd_rate", "fhadd", ["FHADD"] * 64 + _U, True), ("fhadd_rate", "fhadd", ["FADD"] * 64 + _U, False),
+    ("hmma_f16_f32_rate", "hmma_f16_f32", ["HMMA.16816.F32"] * 16 + ["NOP"] * 15 + _U, True),
+    ("hmma_f16_f32_rate", "hmma_f16_f32", ["HMMA.16816.F32.BF16"] * 16 + _U, False)])
+def test_sass_gate_pins_the_16_bit_loops(monkeypatch, kernel, name, body, ok):
+    """Each 16-bit add loop is exactly its 64 instructions, add.rn.f16x2's split 32 HADD2 / 32 HFMA2 as ptxas lowers it (a toolchain
+    that stops splitting it changes the price and fails); the FP16 leaf's loop is 16 HMMA.16816.F32, its NOPs unwatched as the
+    unit's are."""
+    monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body, kernel)})())
+    assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"][name]["ok"] is ok
+
+
+def test_h16_prices_and_recorded_fractions(tmp_path, no_nvcc, monkeypatch):
+    """The fake rates (Public-style guesses: HADD2, HFMA2, HADD2.F32 at 64 registers per SM per clock, the rest at 128) come back as
+    SM-clocks per warp instruction and fractions of FADD's rate, and a recorded run lists them as Derived measurements."""
+    code, res = _run(tmp_path, "--ops", "fadd,hmma_f16_f32,hadd2,add_f16x2,hfma2,hadd2_f32,fhadd")
+    assert code == 0, res["failures"]
+    assert res["prices"]["price_units"]["hmma_f16_f32 per MAC"] == pytest.approx(2.0)
+    fs = res["prices"]["fp16_scalar"]
+    assert {k: v["fraction_of_fadd_rate"] for k, v in fs.items()} == pytest.approx(
+        {"fadd": 1, "hadd2": 0.5, "add_f16x2": 1, "hfma2": 0.5, "hadd2_f32": 0.5, "fhadd": 1})
+    assert fs["hadd2"]["sm_clocks_per_warp_instruction"] == pytest.approx(0.5) and fs["fadd"]["sm_clocks_per_warp_instruction"] == 0.25
+    assert res["numeric_gate"]["ops"]["hadd2"]["unwritten_words_per_thread"] == 16 - w1.NCHAIN
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    w1.finish(tmp_path, w1.parser().parse_args(["--out", str(tmp_path)]), {**res, "clocks": "locked-2100"}, [], {"device": "fake"}, 0.0)
+    meas = {m["name"]: m for m in json.loads((tmp_path / "result.json").read_text())["measurements"]}
+    assert meas["fp16_scalar.hadd2.fraction_of_fadd_rate"]["value"] == pytest.approx(0.5)
+    assert meas["fp16_scalar.hadd2.sm_clocks_per_warp_instruction"]["label"] == "Derived (from Measured locked-2100 rates)"
+    assert meas["price.hmma_f16_f32 per MAC"]["label"] == "Measured, locked-2100 clocks"
 
 
 @pytest.fixture
