@@ -78,7 +78,7 @@ def test_pinned_instructions_and_their_models() -> None:
         assert ins.status == "pinned" and ins.dossier is not None and ins.dossier.startswith("art:")
     # measured on the PRO 6000 only, and no target moves its anchor off the sm_120 default: trust computes HYPOTHESIS
     e5 = INSTRUCTIONS["sm120.mma.m16n8k32.e5m2"]
-    assert e5.status == "hypothesis" and e5.model is BLACKWELL_SM120_E5M2_M16N8K32
+    assert e5.status == "hypothesis" and e5.model is BLACKWELL_SM120_E5M2_M16N8K32 and e5.dossier.startswith("art:")
 
 
 def test_statuses_are_consistent_with_models_and_evidence() -> None:

@@ -371,6 +371,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=BLACKWELL_SM120_E5M2_M16N8K32,
             status="hypothesis",
+            dossier="art:164a66c8084c4afd42d3b4ecb2f30676e6364a17e6e5877bed07cefc8ddd04a5",
             evidence=(_PRO6000_E5M2, "model = sm120.mma.m16n8k32.e4m3's pipeline (groups (32,), width 26, floor -133) with e5m2 products"),
         ),
         _i(
