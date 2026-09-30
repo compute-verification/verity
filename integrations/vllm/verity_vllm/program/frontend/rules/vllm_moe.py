@@ -297,7 +297,7 @@ class FusedMoeKernelRule(InPlaceRule):
                                    "launch geometry == the difftested one (BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages: vLLM's BI default for these stacks at every M)",
                                    "schedule: sorted_token_ids_ptr is a MoeSchedule marker over an i32 [M, TOPK] ids value, or naive_block_assignment with "
                                    "expert_ids_ptr the i32 pair ids value; topk_weights_ptr is the f32 [M, TOPK] routed weights value when MUL_ROUTED_WEIGHT"),
-                    evidence_domain="structural; numerics: MoeExpertGemm_v1 / MoeExpertGemmW_v1 (the same Triton kernel; f32 accumulator, k16 chunks; cp-moe xcheck), _v2{DOT} on registry.targets.MOE_EXPERT_DOT_FAMILIES")
+                    evidence_domain="structural; numerics: MoeExpertGemm_v1 / MoeExpertGemmW_v1 (the same Triton kernel; f32 accumulator, k16 chunks; cp-moe xcheck), _v2{DOT} where registry.targets.moe_expert_dot names a step")
 
     def targets(self):
         return {triton_launch.default}

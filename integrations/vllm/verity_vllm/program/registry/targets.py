@@ -65,6 +65,8 @@ TARGETS: dict[str, dict[str, Any]] = {
                            "pipeline": "verity.ml.tc.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
                                        "verity.ml.tc.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
                            "flash_attn_versions": (),
+                           # the fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`)
+                           "moe_expert_dot": True,
                            "evidence": {}},
 }
 
@@ -92,16 +94,12 @@ def tensor_core_dot(profile):
     return DOTS[name]
 
 
-#: the step families whose fused_moe_kernel correspondence ran on a k16 step other than the Ampere/Ada one: their expert GEMMs bind
-#: `MoeExpertGemm_v2` / `MoeExpertGemmW_v2{E,K,N,DOT}` with the family's step.  Every other registered family keeps the `_v1` records'
-#: binding (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).
-MOE_EXPERT_DOT_FAMILIES = frozenset({"blackwell_consumer"})
-
-
 def moe_expert_dot(profile):
     """The k16 step of the fused-MoE expert GEMMs' Definition on the declared target: None for the `_v1` Definitions, else the
-    target's registered step for the `_v2{E,K,N,DOT}` ones.  An unregistered target raises `UnregisteredTarget`."""
-    return tensor_core_dot(profile) if target_family(profile) in MOE_EXPERT_DOT_FAMILIES else None
+    target's registered step for the `_v2{E,K,N,DOT}` ones.  A family binds them when its record says `moe_expert_dot` (its
+    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one); every other family keeps the `_v1` records' binding
+    (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).  An unregistered target raises `UnregisteredTarget`."""
+    return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("moe_expert_dot") else None
 
 
 def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
@@ -307,7 +305,7 @@ def describe(profile) -> dict[str, Any]:
             "evidence": {"gemm": list(gt.evidence), **t["evidence"]}}
 
 
-__all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "MOE_EXPERT_DOT_FAMILIES",
+__all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
