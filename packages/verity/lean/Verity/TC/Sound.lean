@@ -1,6 +1,8 @@
 import Verity.TC.Spec
 import Verity.TC.Relation
 import Verity.Assumptions
+import Verity.TC.Proofs.Step
+import Verity.TC.Proofs.Words
 
 /-!
 # The step relation is the step semantics
@@ -18,16 +20,74 @@ A verification unit starts from `zero_state = decode_state(+0)` and feeds each s
 step theorem applies to every step of a unit in turn.
 -/
 
-open Verity.TC.Relation Verity.TC.Spec Verity.Assumptions
+open Verity.TC.Relation Verity.TC.Spec Verity.Assumptions Verity.TC.Proofs
 
 namespace Verity.TC
+
+theorem zipWith_eq_map_zip {α β γ : Type} (f : α → β → γ) : ∀ (a : List α) (b : List β),
+    List.zipWith f a b = (a.zip b).map (fun x => f x.1 x.2)
+  | [], _ => rfl
+  | _ :: _, [] => rfl
+  | x :: a, y :: b => by simp [zipWith_eq_map_zip f a b]
+
+/-- The product rows of an accepted witness are the ones `step_witness` builds. -/
+theorem prods_eq (a b : List Nat) (ha : a.length = 16) (hb : b.length = 16) (ha16 : ∀ x ∈ a, x < 2 ^ 16)
+    (hb16 : ∀ x ∈ b, x < 2 ^ 16) (prod : List ProdCols) (hl : prod.length = 16)
+    (h : ∀ j (hj : j < prod.length), prodHolds HP (a[j]!) (b[j]!) prod[j]) :
+    prod = (a.zip b).map (fun x => prodCols (-133) x.1 x.2) := by
+  apply List.ext_getElem (by simp [hl, ha, hb])
+  intro j h1 h2
+  have hja : j < a.length := by omega
+  have hjb : j < b.length := by omega
+  have ea : a[j]! = a[j] := getElem!_pos a j hja
+  have eb : b[j]! = b[j] := getElem!_pos b j hjb
+  have := prodHolds_eq HP _ _ (ha16 _ (List.getElem_mem hja)) (hb16 _ (List.getElem_mem hjb)) _ (ea ▸ eb ▸ h j h1)
+  rw [this]
+  simp [List.getElem_zip, HP]
 
 theorem hopper_step_sound (align : Align) (acc : Nat) (a b : List Nat)
     (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) (w : Witness)
     (h : StepHolds HOPPER_BF16_WGMMA_K16 align (decodeState acc HOPPER_BF16_WGMMA_K16) a b w) :
     stepOut (decodeState acc HOPPER_BF16_WGMMA_K16) w.groups =
       decodeState (tcDotTotal HOPPER_BF16_WGMMA_K16 acc a b) HOPPER_BF16_WGMMA_K16 := by
-  sorry
+  obtain ⟨hacc, hla, hlb, ha16, hb16⟩ := hin
+  obtain ⟨⟨hpl, hgl, hterms⟩, hprod, hgroups⟩ := h
+  rw [params_hopper] at hprod hgroups
+  have hk : HOPPER_BF16_WGMMA_K16.k = 16 := rfl
+  rw [hk] at hpl hla hlb
+  obtain ⟨g, hg⟩ : ∃ g, w.groups = [g] := by
+    cases h : w.groups with
+    | nil => simp [h, HOPPER_BF16_WGMMA_K16] at hgl
+    | cons g gs => cases gs with
+      | nil => exact ⟨g, rfl⟩
+      | cons _ _ => simp [h, HOPPER_BF16_WGMMA_K16] at hgl
+  have hg17 : g.terms.length = 17 := by
+    have := hterms 0 (by simp [hg]) (by simp [HOPPER_BF16_WGMMA_K16])
+    simpa [hg, HOPPER_BF16_WGMMA_K16] using this
+  have hpe := prods_eq a b hla hlb ha16 hb16 w.prod hpl hprod
+  simp only [HOPPER_BF16_WGMMA_K16, hg, groupsHold] at hgroups
+  obtain ⟨hgroup, -⟩ := hgroups
+  rw [List.take_of_length_le (by omega), hpe] at hgroup
+  obtain ⟨hdec, hadm⟩ := decode_eq acc hacc
+  have hdec' : decodeState acc HOPPER_BF16_WGMMA_K16 = stateOf (-133) (fp32Value acc) := hdec
+  have hdec2 : decodeState acc { groups := [16], width := 26, zeroExponent := -133 } =
+      stateOf (-133) (fp32Value acc) := hdec
+  rw [hdec2] at hgroup
+  rw [hdec']
+  have hab : ∀ x ∈ a.zip b, x.1 < 2 ^ 16 ∧ x.2 < 2 ^ 16 := fun x hx =>
+    ⟨ha16 _ (List.of_mem_zip hx).1, hb16 _ (List.of_mem_zip hx).2⟩
+  obtain ⟨hout, hV⟩ := group_sound align (fp32Value acc) hadm (a.zip b) (by simp [hla, hlb]) hab g hg17 hgroup
+  rw [hg]
+  simp only [stepOut]
+  rw [hout]
+  have hsem : tcDotTotal HOPPER_BF16_WGMMA_K16 acc a b =
+      packValue (groupStepTotal (fp32Value acc) ((a.zip b).map (fun x => bf16ProductTotal x.1 x.2)) 26 (-133)) := by
+    simp only [tcDotTotal, HOPPER_BF16_WGMMA_K16, runGroups]
+    rw [List.take_of_length_le (by omega), List.take_of_length_le (by omega), zipWith_eq_map_zip]
+  rw [hsem, decode_pack _ hV]
+  intro t ht hne
+  rw [ht] at hV
+  exact (hV.2 hne).2.1
 
 theorem hopper_step_complete (align : Align) (acc : Nat) (a b : List Nat)
     (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) :
