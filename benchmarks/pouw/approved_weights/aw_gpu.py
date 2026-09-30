@@ -392,7 +392,7 @@ def main():
             rel = {n: relation_skippable(src_w[n], rung, n, args.seed) for n in census_names}
             census = {n: max(census[n], rel[n]) for n in census_names}
         rloss = recover(model, train, args.recover_steps, args.recover_seqlen, args.lr, dev, args.seed) if rec else []
-        nll = eval_ppl(model, test, args.seqlen, args.eval_windows, dev)
+        nll = eval_ppl(model, test, args.seqlen, args.eval_windows if args.eval_windows > 0 else test.numel() // args.seqlen, dev)
         doc = {"variant": v, "source": source, "rung": rung, "recover": rec,
                "ppl": math.exp(sum(nll) / len(nll)) if nll else None, "window_nll": nll,
                "eval_windows": len(nll), "seqlen": args.seqlen, "recover_steps": args.recover_steps if rec else 0,
