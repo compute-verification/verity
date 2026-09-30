@@ -13,6 +13,9 @@ Key params follow probe.py's argparse; `--out` and `--procs` never enter the der
     research run --on vy-nebius-2 --project verity --campaign pouw --tool tc_price_fp4 --source . --cwd source -- \
         gpu-lease 1 -- uv run --no-project --with numpy python tools/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR \
             --expect-uuid GPU-...,GPU-... --locked-mhz 2100
+
+`tc_rates_fp4` is F1 (f1_rates.py): its CPU steps (``build``, ``collect``) run as research runs, its timed families as fill jobs
+(``tools.tc_probe_fp4.tool:TC_RATES_FP4``; paths, ``--jobs`` and guards are not part of the answer).
 """
 from __future__ import annotations
 
@@ -94,6 +97,47 @@ def parse_price(argv: list[str]) -> dict:
     if unknown:
         out["_unknown"] = unknown
     return out
+
+
+def parse_f1(argv: list[str]) -> dict:
+    idx = next((i for i, t in enumerate(argv) if Path(t).name == "f1_rates.py"), 0)
+    rest = argv[idx + 1:]
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("cmd", nargs="?", default=None)
+    for flag in ("--out", "--build", "--runs", "--libscan", "--expect-uuid", "--forms", "--family", "--libs"):
+        ap.add_argument(flag, default=None)
+    ap.add_argument("--jobs", type=int, default=None)
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--target-ms", type=float, default=40.0)
+    ap.add_argument("--sustain-s", type=float, default=2.0)
+    ap.add_argument("--seed", type=int, default=20260930)
+    ap.add_argument("--locked-mhz", type=float, default=None)
+    ap.add_argument("--corrupt-word", action="store_true")
+    ap.add_argument("--fake-silicon", action="store_true")
+    ap.add_argument("--timeout-s", type=float, default=None)
+    ap.add_argument("--tolerance", type=float, default=0.02)
+    ns, unknown = ap.parse_known_args(rest)
+    out = vars(ns)
+    for k in ("out", "build", "runs", "libscan", "expect_uuid", "jobs", "timeout_s"):  # paths and guards, not the answer
+        out.pop(k)
+    if out["forms"]:
+        out["forms"] = ",".join(sorted(f for f in out["forms"].split(",") if f))
+    if unknown:
+        out["_unknown"] = unknown
+    return out
+
+
+TC_RATES_FP4 = Tool(
+    name="tc_rates_fp4", version="1",
+    command=["python", "tools/tc_probe_fp4/f1_rates.py"],
+    closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
+    key_params=["cmd", "forms", "family", "libs", "reps", "target_ms", "sustain_s", "seed", "locked_mhz", "corrupt_word", "fake_silicon",
+                "tolerance"],
+    key_conditions=["hw.family"],
+    caches=["nvcc"],
+    produces=["bench-result/v1", "run-files/v1"],
+    parse=parse_f1,
+)
 
 
 TC_PRICE_FP4 = Tool(

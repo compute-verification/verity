@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 
 import cast  # noqa: E402
+import f1_rates as F1  # noqa: E402
 import fp4_emulation_1ad1aaa2 as E  # noqa: E402
 import k32  # noqa: E402
 import meta_rule as MR  # noqa: E402
@@ -483,6 +484,137 @@ def test_store_declarations_keep_guards_out_of_the_derivation():
                                  "--expect-uuid", "GPU-1", "--max-seconds", "60"])
     assert q["rows"] == "mxf4,nvf4" and not {"out", "expect_uuid", "max_seconds"} & set(q)
     assert set(q) <= set(tool.TC_PRICE_FP4.key_params)
+    r = tool.TC_RATES_FP4.parse(["python", "tools/tc_probe_fp4/f1_rates.py", "run", "--build", "b", "--family", "fp4", "--out", "x",
+                                 "--expect-uuid", "GPU-1", "--locked-mhz", "2100"])
+    assert r["cmd"] == "run" and r["family"] == "fp4" and r["locked_mhz"] == 2100
+    assert not {"out", "build", "expect_uuid"} & set(r) and set(r) <= set(tool.TC_RATES_FP4.key_params)
+
+
+def test_f1_kernels_are_body_chains_of_their_form():
+    for f in F1.FORMS_TENSOR:
+        src = F1.tensor_kernel(f)
+        assert src.count("asm volatile(") == F1.BODY, f.name
+        asm = F1.tensor_asm(f)
+        assert (", 0x0" in asm) == bool(f.sparse) and ("{0, 0}" in asm) == bool(f.scale), f.name
+        assert asm.count('"+') == f.acc[1] and "ftz" not in src.lower()
+        assert f.words_per_set() == (2 if f.a[0] == "d" else 1) * f.a[1] + (2 if f.b[0] == "d" else 1) * f.b[1] + 3
+    for op in F1.OPS:
+        assert "ftz" not in F1.simt_kernel(op).lower() and F1.op_words_per_chain(op) >= 2
+    # one warp instruction of FP16 m8n8k4 is four quad-pair products; every other shape is one
+    assert {f.name for f in F1.FORMS_TENSOR if f.copies != 1} == {"f16_m8n8k4", "f16_m8n8k4_f16acc"}
+    assert F1.BY_NAME["f16_m8n8k4"].logical_macs == 1024 and F1.BY_NAME["sp_nvf4"].products == 16 * 8 * 64
+    assert F1._flags_ok(F1.NVCC_FLAGS) and not F1._flags_ok(["-O2", "--use_fast_math"]) and not F1._flags_ok(["-ftz=true"])
+    assert set(F1.FAMILIES) >= {"fp4", "f8f6f4", "mxf8f6f4", "fp8", "f16", "tf32", "int", "b1", "f64", "simt"}
+
+
+def test_f1_ftz_scan_catches_every_fp32_ftz_form():
+    hits = [m.group(0) for m in F1.FTZ_RE.finditer(
+        "FFMA.FTZ R1, R2, R3, R4 ; FADD.FTZ.RZ R1 ; FMUL.RN.FTZ R2 ; FFMA R1 ; HFMA2.FTZ R1 ; DFMA R2 ; FMUL.FTZ.SAT R3")]
+    assert hits == ["FFMA.FTZ", "FADD.FTZ", "FMUL.RN.FTZ", "FMUL.FTZ"]
+
+
+def test_f1_operands_stay_in_each_forms_domain():
+    for f in F1.FORMS_TENSOR:
+        w = F1.tensor_inputs(f, 64, 1)
+        assert w.shape == (64, F1.NSETS, f.words_per_set()) and w.dtype == np.uint32
+        e = w[..., -3]
+        if f.sparse:
+            nibs = (e[..., None] >> (4 * np.arange(8, dtype=np.uint32))) & 0xF
+            assert np.isin(nibs, F1.META_12 if f.sparse == "1:2" else F1.META_24).all(), f.name
+            assert (len(np.unique(e)) == 1) == (f.meta == "const"), f.name
+        sf = w[..., -2:]
+        if f.scale:
+            b = (sf[..., None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF
+            lo, hi = (0x30, 0x47) if f.scale == "ue4m3" else (124, 131)
+            assert ((b >= lo) & (b <= hi)).all(), f.name
+        if f.fa == "e4m3":
+            b = (w[..., 0, None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF
+            assert (((b >> 3) & 0xF) <= 5).all() and (((b >> 3) & 0xF) >= 1).all()
+        if f.fa in ("e2m1", "e2m3", "e3m2"):
+            b = (w[..., 0, None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF
+            assert not (b & 0b11).any() and (b >> (2 + {"e2m1": 4, "e2m3": 6, "e3m2": 6}[f.fa]) == 0).all(), f.name
+    for op in F1.OPS:
+        w = F1.simt_inputs(op, 32, 1)
+        assert w.shape == (32, F1.SIMT_CH, F1.op_words_per_chain(op))
+        if op.x == "f":
+            assert np.isfinite(w[..., : 3 if op.z else 2].view(np.float32)).all()
+
+
+SASS_EMULATED = """
+        Function : f1_s4_k64
+        /*0000*/                   MOV R1, c[0x0][0x28] ;
+        /*0010*/                   CALL.REL.NOINC 0x40 ;
+        /*0020*/                   UISETP.NE.S64.AND UP0, UPT, UR4, URZ, UPT ;
+        /*0030*/              @UP0 BRA.U 0x10 ;
+        /*0040*/                   LOP3.LUT R3, R3, 0xf, R5, 0x78, !PT ;
+        /*0050*/                   CALL.REL.NOINC 0x80 ;
+        /*0060*/                   IMMA.16832.S8.S8 R4, R8, R12, R4 ;
+        /*0070*/                   RET.REL.NODEC R20 0x0 ;
+        /*0080*/                   IMMA.16832.S8.S8 R4, R8, R12, R4 ;
+        /*0090*/                   RET.REL.NODEC R22 0x0 ;
+"""
+
+
+def test_f1_sass_gate_counts_nested_callees_and_fails_closed(monkeypatch):
+    calls = F1.calls_of(SASS_EMULATED)["f1_s4_k64"]
+    assert calls == [{"LOP3.LUT": 1, "CALL.REL.NOINC": 1, "IMMA.16832.S8.S8": 2}]
+    monkeypatch.setattr(F1, "BODY", 1)
+    s4 = F1.BY_NAME["s4_k64"]
+    g = F1.form_gate(s4, F1.loops_of(SASS_EMULATED)["f1_s4_k64"], calls)
+    assert g["ok"] and g["emulated"] == "tensor" and g["sass_per_ptx"] == 2 and g["callee_mma_opcodes"] == {"IMMA.16832.S8.S8": 2}
+    assert not F1.form_gate(s4, {"CALL.REL.NOINC": 1}, [{"?CALL": 1, "IMMA.16832.S8.S8": 1}])["ok"]
+    assert not F1.form_gate(s4, {"CALL.REL.NOINC": 1}, [{"LOP3.LUT": 4}])["ok"]
+    assert not F1.form_gate(s4, {"CALL.REL.NOINC": 1}, [{"IMMA.16832.S8.S8": 1}, {"IMMA.16832.S8.S8": 1}])["ok"]
+    cuda_core = F1.form_gate(F1.BY_NAME["f16_m8n8k4"], {"CALL.REL.NOINC": 1}, [{"FFMA": 32, "SHFL.IDX": 12}])
+    assert cuda_core["ok"] and cuda_core["emulated"] == "cuda-core"
+    assert F1.form_gate(F1.BY_NAME["nvf4"], {"OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X": 1}, [])["native"]
+    assert not F1.form_gate(F1.BY_NAME["nvf4"], {"MOV": 3}, [])["ok"]
+    monkeypatch.undo()
+    want = F1.SIMT_CH * F1.SIMT_U
+    assert F1.form_gate(F1.BY_NAME["hmul2_f16"], {"HMUL2": want // 2, "HFMA2": want // 2})["ok"]
+    assert not F1.form_gate(F1.BY_NAME["ffma_f32"], {"FFMA": want - 1})["ok"]
+
+
+def _f1_fake_build(d: Path, names: list[str], ok: bool = True) -> Path:
+    d.mkdir(parents=True, exist_ok=True)
+    gate = {n: {"ok": True, "mma_opcodes": {}, "loop_opcodes": {}} for n in names}
+    (d / "build.json").write_text(json.dumps({"kernels": names, "ok": ok, "gate": gate, "refused": {"mxf4nvf4_4x_ue8m0": ["Illegal"]},
+                                              "so": "none.so", "so_sha256": "0" * 64, "source_sha256": "1" * 64, "nvcc": "none",
+                                              "nvcc_flags": F1.NVCC_FLAGS, "ftz_fp32": [], "emulated": [],
+                                              "sass_opcodes_reached": ["OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X"]}))
+    return d
+
+
+def test_f1_dry_run_prices_against_nvfp4_and_its_gates_fail_closed(no_nvcc, tmp_path):
+    names = F1.FAMILIES["fp4"] + F1.FAMILIES["fp8"] + F1.FAMILIES["tf32"]
+    b = _f1_fake_build(tmp_path / "b", names)
+    common = ["--build", str(b), "--fake-silicon", "--reps", "2", "--sustain-s", "0", "--target-ms", "1"]
+    for fam in ("fp4", "fp8", "tf32"):
+        assert F1.main(["run", "--family", fam, "--out", str(tmp_path / "r")] + common) == 0
+    fp8 = json.loads((tmp_path / "r" / "fp8.fake.json").read_text())
+    # the fake: FP8 at half dense NVFP4's products per clock, TF32 at a quarter; the unit is timed in each chunk
+    assert fp8["per_form"]["nvf4"]["fp4_slots_per_product"] == pytest.approx(1.0)
+    assert fp8["per_form"]["fp8_e4m3_k32"]["fp4_slots_per_product"] == pytest.approx(2.0)
+    assert fp8["per_form"]["sp_fp8_e4m3_k64"]["fp4_slots_per_logical_mac"] == pytest.approx(1.0)
+    assert fp8["clocks"] == "unlocked" and not fp8["failures"]
+
+    assert F1.main(["run", "--family", "fp4", "--out", str(tmp_path / "bad"), "--corrupt-word"] + common) == 1
+    bad = json.loads((tmp_path / "bad" / "fp4.fake.json").read_text())
+    assert bad["failures"] and "per_form" not in bad
+    nb = _f1_fake_build(tmp_path / "nb", names, ok=False)
+    assert F1.main(["run", "--family", "fp4", "--out", str(tmp_path / "nb_r"), "--build", str(nb), "--fake-silicon"]) == 1
+    assert "per_form" not in json.loads((tmp_path / "nb_r" / "fp4.fake.json").read_text())
+
+    # collect prices every row, and refuses fake silicon and missing families
+    assert F1.main(["collect", "--build", str(b), "--runs", str(tmp_path / "r"), "--out", str(tmp_path / "t")]) == 1
+    t = json.loads((tmp_path / "t" / "f1_table.json").read_text())
+    assert t["rows"]["tf32_k8"]["fp4_slots_per_product"] == pytest.approx(4.0) and "nvf4@tf32" in t["rows"]
+    assert not t["claim"]["cheaper_like_for_like"] and not t["claim"]["holds_over_measured"]
+    assert "int" in t["missing_families"] and t["refused_by_ptxas"] == {"mxf4nvf4_4x_ue8m0": ["Illegal"]}
+    res = json.loads((tmp_path / "t" / "result.json").read_text())
+    assert res["validation"]["status"] == "failed" and "fake silicon" in res["validation"]["detail"]
+    assert sorted(p.name for p in (tmp_path / "t" / "inputs").iterdir()) == ["build.json", "fp4.fake.json", "fp8.fake.json",
+                                                                             "tf32.fake.json"]
 
 
 @pytest.mark.skipif(os.environ.get("VERITY_TC_PROBE_FP4_NVCC") != "1",
@@ -496,6 +628,7 @@ def test_offline_sass_gates(tmp_path):
                 ["probe.py", "--instruction", "sp_nvf4", "--out", str(tmp_path / "sp"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4_t1", "--out", str(tmp_path / "t1"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
+                ["f1_rates.py", "build", "--out", str(tmp_path / "f1")],
                 ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])
