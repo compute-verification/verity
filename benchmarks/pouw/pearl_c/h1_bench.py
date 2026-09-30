@@ -225,7 +225,7 @@ def launch_rows_h2(d: Bench, s, rows_p: int, out_p: int, dom_p: int, skeys_p: in
 
 
 def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: int, tree_p: int, tkeys_p: int, keys: dict,
-                 dom_t: int, rows: int, n: int, h2: tuple[int, int] | None = None) -> int:
+                 dom_t: int, rows: int, n: int, h2: tuple[int, int] | None = None, msgs: bool = True) -> int:
     """Message digests, tile leaves, the tile tree's leaves and its levels; returns the tile count.  h2: the tile tree is
     -h2's (hash_leaves_b3s under this key template, then the levels under tkeys_p, computed beforehand)."""
     per, tn = n // 32, n // 64
@@ -234,7 +234,8 @@ def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: in
         d.go(s, "hash_msg", -(-rows * per // 128), 128, (c_p, u_p, dg_p, keys["k_msg"]), (rows, n))
         d.go(s, "hash_leaf", -(-tiles // 64), 64, (dg_p, lv_p, keys["k_leaf"]), (rows, n))
     else:
-        d.go(s, "hash_msg_v", -(-rows * per // 128), 128, (c_p, u_p, dg_p, keys["k_msg"]), (rows, n))
+        if msgs:                                             # not when the GEMM's epilogue wrote the digests
+            d.go(s, "hash_msg_v", -(-rows * per // 128), 128, (c_p, u_p, dg_p, keys["k_msg"]), (rows, n))
         d.go(s, "hash_leaf_p", -(-tiles // 32), 128, (dg_p, lv_p, keys["k_leaf"]), (rows, n))
     if h2:
         d.go(s, "hash_leaves_b3s", -(-tiles // 128), 128, (lv_p, tree_p, dom_t, h2[0]), (tiles, 32, 0, h2[1]))
@@ -439,6 +440,22 @@ def gates(d: Bench, V: dict) -> dict:
     out["trees"].update({f"fused producer {k} as unfused": v for k, v in checks.items()})
     bad += [f"fused producer {k}" for k, v in checks.items() if not v]
     for p_ in (d3, k3, sk3, skey, salt, rootb, rp, tp, seeds, useed, y, a1, a2, l1, l2, s1_, s2_, segl, *[t[0] for t in tmpl.values()]):
+        d.free(p_)
+    kg, ka = 2048, 2048
+    wg, ag = d.put(shake("gate gemm w", N * kg)), d.put(shake("gate gemm a", 2 * M * ka))
+    ref = [d.alloc(4 * M * N), d.alloc(4 * M * N), d.alloc(2 * M * N)]
+    tile = [d.alloc(4 * M * N), d.alloc(4 * M * N), d.alloc(2 * M * N)]
+    dgr, dgt, km = d.alloc(32 * M * (N // 32)), d.alloc(32 * M * (N // 32)), d.put(bytes.fromhex(R.H1_KEYS["k_msg"]))
+    d.go(None, "standin_gemm", N * 32 // 256, 256, (wg, ag, *ref), (M, N, kg))
+    d.go(None, "hash_msg_v", -(-M * (N // 32) // 128), 128, (ref[0], ref[1], dgr, km), (M, N))
+    d.go(None, "standin_gemm_tile", N // 32, 256, (wg, ag, *tile, dgt, km), (M, N, kg, 1))
+    d.sync()
+    ok = all(d.read(x, sz) == d.read(y_, sz) for x, y_, sz in zip(ref, tile, (4 * M * N, 4 * M * N, 2 * M * N)))
+    out["tiles"]["tile GEMM words as the stand-in's"] = ok
+    ok2 = d.read(dgr, 32 * M * (N // 32)) == d.read(dgt, 32 * M * (N // 32))
+    out["tiles"]["epilogue digests as hash_msg_v's"] = ok2
+    bad += [x for x, v in (("tile GEMM words", ok), ("epilogue digests", ok2)) if not v]
+    for p_ in (wg, ag, *ref, *tile, dgr, dgt, km):
         d.free(p_)
     lc, p = V["lat_chain"], d.alloc(64)
     for mode, threads, name in ((0, 1, "b3c"), (1, 4, "b3c4")):
@@ -727,6 +744,13 @@ ARMS = [
     ("h2tw: leaves and segment trees in the wide producer, with its seed, deferred side stream, priorities", ROW_F32, "h2tw", "deferred"),
     ("h3tw: leaves, segment trees and row seeds in the wide producer, A alone, priorities", ROW_F32, "h3tw", "none"),
     ("h3tw: leaves, segment trees and row seeds in the wide producer, deferred side stream, priorities", ROW_F32, "h3tw", "deferred"),
+    ("plain fp32 rows, tile GEMM", ROW_F32, "none", "tile"),
+    ("h3t, tile GEMM, deferred side stream, priorities", ROW_F32, "h3t", "tiledef"),
+    ("h3t, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h3t", "epi"),
+    ("h3tc, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h3tc", "epi"),
+    ("h3, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h3", "epi"),
+    ("h2t, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h2t", "epi"),
+    ("h2 with its seed, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h2s", "epi"),
     # the verifier's negative control: an -h3 arm whose kernels write no commitment; its transcript must be rejected
     ("negative control: h3 with no commitment written, deferred side stream, priorities", ROW_F32, "h3nc", "deferred"),
 ]
@@ -805,6 +829,18 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                          "h3tw: leaves, segment trees and row seeds in the wide producer, A alone, priorities",
                          "h3tw: leaves, segment trees and row seeds in the wide producer, deferred side stream, priorities",
                          "negative control: h3 with no commitment written, deferred side stream, priorities"],
+           "epi": ["plain fp32 rows", "plain fp32 rows, tile GEMM", "plain fp32 rows, whole-row producer",
+                   "h3, deferred side stream, priorities", "h3, digests in the GEMM epilogue, deferred leaves, priorities",
+                   "h3t: leaves, segment trees and row seeds in the producer, deferred side stream, priorities",
+                   "h3t, tile GEMM, deferred side stream, priorities",
+                   "h3t, digests in the GEMM epilogue, deferred leaves, priorities",
+                   "h3tc: leaves, segment trees and row seeds in a coalesced producer, deferred side stream, priorities",
+                   "h3tc, digests in the GEMM epilogue, deferred leaves, priorities",
+                   "h2 with its seed, deferred side stream, priorities",
+                   "h2 with its seed, digests in the GEMM epilogue, deferred leaves, priorities",
+                   "h2t: leaves and segment trees in the producer, with its seed, deferred side stream, priorities",
+                   "h2t, digests in the GEMM epilogue, deferred leaves, priorities",
+                   "negative control: h3 with no commitment written, deferred side stream, priorities"],
            "best": ["plain fp32 rows", "plain fp32 rows, row-per-CTA producer", "plain fp32 rows, whole-row producer",
                     "plain fp32 rows, wide whole-row producer",
                     "h2 A alone, with its seed", "h2 with its seed, deferred side stream, priorities",
@@ -898,12 +934,12 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a3_keys), (m,))
             d.go(s, "b3_seeds", 1, 128, (a_tree + 32 * (2 * m - 2), useed, skey, salt3, rootb3), (1, a3["seed"]["index"], 0))
 
-    def tiles_on(s, sl: dict, h2: bool) -> None:
+    def tiles_on(s, sl: dict, h2: bool, msgs: bool = True) -> None:
         if h2:
             launch_tiles(d, s, "tuned", sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], t2_keys, keys, h2d["t2"], m, n,
-                         h2=tmpl[TILE])
+                         h2=tmpl[TILE], msgs=msgs)
         else:
-            launch_tiles(d, s, "tuned", sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
+            launch_tiles(d, s, "tuned", sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n, msgs=msgs)
 
     def call(i: int, rb: int, amode: str, post: str, st: dict) -> None:
         s1, s2 = st["streams"]
@@ -981,15 +1017,19 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             d.wait(s2, d.event(s1))
             tiles_on(s2, *st.pop("pending"))
             st["joins"].append(d.event(s2))
-        if post in ("side", "deferred") and len(st["joins"]) >= 2:   # the side stream's slot from two calls back is free again
+        if post in ("side", "deferred", "tiledef", "epi") and len(st["joins"]) >= 2:   # the slot from two calls back is free again
             d.wait(s1, st["joins"][-2])
         a_in = rows[rb] if amode == "producer" else rows[ROW_BF16]   # the A this call's producer wrote
-        d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], a_in, sl["c"], sl["u"], y), (m, n, k))
-        if post == "none":
+        if post in ("tile", "tiledef", "epi"):               # the tile GEMM; "epi": its epilogue writes the message digests
+            d.go(s1, "standin_gemm_tile", n // 32, 256, (w[i % WSETS], a_in, sl["c"], sl["u"], y, sl["dg"], keys["k_msg"]),
+                 (m, n, k, 1 if post == "epi" else 0))
+        else:
+            d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], a_in, sl["c"], sl["u"], y), (m, n, k))
+        if post in ("none", "tile"):
             return
         h2 = amode.startswith(("h2", "h3"))
-        if post == "deferred":
-            st["pending"] = (sl, h2)
+        if post in ("deferred", "tiledef", "epi"):
+            st["pending"] = (sl, h2, post != "epi")
             return
         if post == "side":
             d.wait(s2, d.event(s1))
@@ -1063,7 +1103,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             d.replay_ms(graphs[name], 1)
             d.sync()
             parts = [("a_rows", d.read(rows[rb], m * rb)), ("a_tree", d.read(a_tree, 32 * (2 * m - 1)))]
-            if post != "none":
+            if post not in ("none", "tile"):
                 parts += [("c", d.read(sl["c"], 4 * m * n)), ("u", d.read(sl["u"], 4 * m * n)), ("digests", d.read(sl["dg"], 32 * m * per)),
                           ("leaves", d.read(sl["lv"], 32 * tiles)), ("tile_tree", d.read(sl["tree"], 32 * (2 * tiles - 1)))]
             h2 = amode.startswith(("h2", "h3"))
@@ -1125,7 +1165,7 @@ def main() -> None:
     res["preset"] = args.preset
     res["rates"] = (seg_rates(d, nv, args.reps) if args.preset == "p1" else
                     h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset in ("h2", "h3") else
-                    fused_rates(d, nv, args.reps, V) if args.preset in ("fused", "coal", "split", "widefused", "best") else rates(d, nv, args.reps))
+                    fused_rates(d, nv, args.reps, V) if args.preset in ("fused", "coal", "split", "widefused", "best", "epi") else rates(d, nv, args.reps))
     save()
     res["latency"] = latency(d) if args.preset == "all" else {}
     save()

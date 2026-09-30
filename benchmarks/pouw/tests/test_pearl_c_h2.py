@@ -283,3 +283,32 @@ def test_the_split_producer_commits_its_stores_and_resets_its_counters(m, rb, n,
         assert a2.raw == wide.raw and counters.raw[:4 * m] == bytes(4 * m)
         assert [leaves.raw[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(r, r, ROW, rows[r]) for r in range(m)]
         assert seeds.raw == b"".join(PC.row_seed(ctx, r, rows[r]) for r in range(m))
+
+
+@pytest.mark.parametrize("m,n,k", [(32, 128, 256), (16, 64, 512)])
+def test_the_tile_gemm_writes_the_stand_ins_words_and_its_epilogue_digests_them(m, n, k):
+    """standin_gemm_tile (a CTA a 32-column block of every row): its C~, U and y equal standin_gemm's word for word in both
+    modes, and mode 1's epilogue digests are hash_msg_v's over those stored words, and `pearl_c.message_digest`'s."""
+    import struct
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "protocols" / "pouw"))
+    from verity_pouw.schemes import pearl_c as PC
+
+    wts, act = T.buffer(data(f"tile w {n} {k}", n * k)), T.buffer(data(f"tile a {m} {k}", 2 * m * k))
+    key = T.buffer(bytes.fromhex(PC.H1_KEYS["message"].hex()) if isinstance(PC.H1_KEYS["message"], bytes) else PC.H1_KEYS["message"])
+    ref = [T.buffer(4 * m * n), T.buffer(4 * m * n), T.buffer(2 * m * n)]
+    T.launch("standin_gemm", n * 32 // 256, 256, [wts, act, *ref], [m, n, k])
+    dg_ref = T.buffer(32 * m * (n // 32))
+    T.launch("hash_msg_v", -(-m * (n // 32) // 128), 128, [ref[0], ref[1], dg_ref, key], [m, n])
+    for mode in (0, 1):
+        out, dg = [T.buffer(4 * m * n), T.buffer(4 * m * n), T.buffer(2 * m * n)], T.buffer(32 * m * (n // 32))
+        T.launch("standin_gemm_tile", n // 32, 256, [wts, act, *out, dg, key], [m, n, k, mode])
+        assert [b.raw for b in out] == [b.raw for b in ref]
+        if mode:
+            assert dg.raw == dg_ref.raw
+            cw = struct.unpack(f"<{m * n}I", ref[0].raw)
+            uw = struct.unpack(f"<{m * n}I", ref[1].raw)
+            msg = struct.pack("<32I", *cw[n + 32:n + 64]) + struct.pack("<32I", *uw[n + 32:n + 64])
+            assert dg.raw[32 * (n // 32 + 1):32 * (n // 32 + 2)] == PC.message_digest(msg, "h2")
+        else:
+            assert not any(dg.raw)

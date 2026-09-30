@@ -582,3 +582,55 @@ extern "C" __global__ void __launch_bounds__(256) derive_rows_b3s_wide(const Arg
     reinterpret_cast<unsigned*>(a.p[11])[r] = 0;
   }
 }
+
+// ---- the decode GEMM's epilogue with -h1's message digests fused ----------------------------------------------------------
+// standin_gemm_tile: standin_gemm's words (the same C~, U and y), with a CTA a 32-column block of every row (8 warps, 4 columns
+// a warp, the four weight rows' loads interleaved), so that one CTA holds whole -h1 messages, as a real epilogue holds its output
+// tile.  i3 = 1 fuses the message digests: the CTA stages its block's C~ and U words, exactly as it stores them, in shared memory
+// (8.4 KB, inside the 32 KB a mainloop's tail stages leave free), and thread r hashes row r's message (b3_msg_digest, the 32 C~
+// words then the 32 U words under the message key) into p5 + 32 (r · n / 32 + block), hash_msg_v's layout.  p0 W, p1 A, p2 C~,
+// p3 U, p4 y, p5 the digests, p6 the message key; i0 m (at most 32), i1 n (a multiple of 32), i2 k, i3 the mode.
+extern "C" __global__ void __launch_bounds__(256) standin_gemm_tile(const Args a) {
+  __shared__ uint32_t cs[32][33], us[32][33];
+  const int m = a.i[0], n = a.i[1], k = a.i[2];
+  const int blk = blockIdx.x, wp = threadIdx.x / 32, lane = threadIdx.x % 32;
+  const int j0 = 32 * blk + 4 * wp;
+  uint32_t acc[4] = {0u, 0u, 0u, 0u};
+  const uint4* w = reinterpret_cast<const uint4*>(a.p[0] + (uint64_t)j0 * k);
+  for (int q = lane; q < k / 16; q += 32) {
+    uint4 v[4];
+#pragma unroll
+    for (int c = 0; c < 4; c++) v[c] = w[(uint64_t)c * (k / 16) + q];
+#pragma unroll
+    for (int c = 0; c < 4; c++) acc[c] ^= (v[c].x * 0x9E3779B1u + v[c].y) ^ (v[c].z * 0x85EBCA77u + v[c].w);
+  }
+#pragma unroll
+  for (int c = 0; c < 4; c++)
+    for (int o = 16; o; o >>= 1) acc[c] ^= __shfl_xor_sync(0xffffffffu, acc[c], o);
+  const uint32_t* A = reinterpret_cast<const uint32_t*>(a.p[1]);
+#pragma unroll
+  for (int c = 0; c < 4; c++) {
+    const int j = j0 + c;
+    for (int r = lane; r < m; r += 32) {
+      const uint32_t x = acc[c] ^ A[(uint64_t)r * (k / 2) + (j % (k / 2))] ^ (uint32_t)r * 0x27D4EB2Du, u = x * 0x165667B1u;
+      reinterpret_cast<uint32_t*>(a.p[2])[(uint64_t)r * n + j] = x;
+      reinterpret_cast<uint32_t*>(a.p[3])[(uint64_t)r * n + j] = u;
+      reinterpret_cast<uint16_t*>(a.p[4])[(uint64_t)r * n + j] = (uint16_t)(x >> 16);
+      if (a.i[3]) {
+        cs[r][4 * wp + c] = x;
+        us[r][4 * wp + c] = u;
+      }
+    }
+  }
+  if (a.i[3] == 0) return;
+  __syncthreads();
+  const int t = threadIdx.x;
+  if (t < m) {
+    uint32_t cw[32], uw[32], key[8], h[8];
+    load_key(a.p[6], key);
+#pragma unroll
+    for (int i = 0; i < 32; i++) { cw[i] = cs[t][i]; uw[i] = us[t][i]; }
+    b3_msg_digest(cw, uw, key, h);
+    store_cv(a.p[5] + 32 * ((uint64_t)t * (n / 32) + blk), h);
+  }
+}
