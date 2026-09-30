@@ -1171,7 +1171,8 @@ esac
 
 def test_forms_fill_exits_4_only_at_the_pass_that_failed(tmp_path):
     """forms_fill.sh under a stub run.py: 99 while chunks remain and 0 once every chunk is done; 4 right after a failed pass,
-    naming the chunk and its error in the log, and the next start runs that chunk again; 1 at a chunk's sixth start.  A
+    naming the chunk and its error in the log, and the next start runs that chunk again; 1 at a chunk's sixth start; with a
+    lease budget (FORMS_FILL_LEASE_S), chunks back to back in one invocation, a failure still exiting 4 at once.  A
     failure never turns into a later exit 4 (the 18:26Z forms jobs: their last chunk passed, then 4 for chunks refused an hour
     earlier, and the retry 4 at once with nothing in the log)."""
     ship, stubs = tmp_path / "ship", tmp_path / "bin"
@@ -1185,10 +1186,11 @@ def test_forms_fill_exits_4_only_at_the_pass_that_failed(tmp_path):
     (stubs / "python3").chmod(0o755)
     env = {**os.environ, "PATH": f"{stubs}:{os.environ['PATH']}", "GPU_LEASE_UUID": "GPU-test", "STUB_SEEN": str(tmp_path / "seen")}
 
-    def starts(out: str, table: str, n: int, *cubin: str) -> list[subprocess.CompletedProcess]:
+    def starts(out: str, table: str, n: int, *cubin: str, lease: int = 0) -> list[subprocess.CompletedProcess]:
         (tmp_path / f"{out}.chunks").write_text(table)
         argv = ["bash", str(HERE / "forms_fill.sh"), str(tmp_path / f"{out}.chunks"), str(tmp_path / out), str(ship), *cubin]
-        return [subprocess.run(argv, env=env, capture_output=True, text=True, check=False) for _ in range(n)]
+        run_env = {**env, "FORMS_FILL_LEASE_S": str(lease)}
+        return [subprocess.run(argv, env=run_env, capture_output=True, text=True, check=False) for _ in range(n)]
 
     ok = starts("ok", "# (shape, form set)\n\na|64|v|1|w,nodes|split|b|0|2\nb|once|v|1|p,one|split|b|0|1\nc|64|v|1|s,one|split|w|0|1\n",
                 5, hashlib.sha256(b"x").hexdigest())
@@ -1204,3 +1206,10 @@ def test_forms_fill_exits_4_only_at_the_pass_that_failed(tmp_path):
     assert "started 5 times" in bad[6].stdout and not (tmp_path / "bad" / "c.starts").exists()
 
     assert [r.returncode for r in starts("wrong", "a|64|v|1|w,nodes|split|b|0|1\n", 1, "0" * 64)] == [1]
+
+    (tmp_path / "seen").unlink()
+    leased = starts("leased", "a|64|v|1|w,nodes|split|b|0|1\nb|once|v|1|p,one|split|b|0|1\nc|64|v|1|s,one|split|w|0|1\n", 3,
+                    lease=3600)
+    assert [r.returncode for r in leased] == [4, 0, 0]
+    assert "chunk a passes=1" in leased[0].stdout and "chunk b failed" in leased[0].stdout
+    assert "chunk b passes=1" in leased[1].stdout and "chunk c passes=1" in leased[1].stdout

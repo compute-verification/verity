@@ -5,8 +5,9 @@
 # (blank and `#` lines skipped); SHIP is build.sh's output, its MANIFEST.sha256 checked (and its cubin's hash when given).
 # An invocation runs the first chunk without OUT/<name>.done: run.py's check against SHIP's fixture, then its timing, under
 # the lease's GPU (PEARLC_EXPECT_UUID = GPU_LEASE_UUID), in fresh processes until `budget` seconds have passed or `max passes`
-# have run (at least one), a "pass" line after each; then OUT/<name>.jsonl and OUT/<name>.done.  Exits 99 while any chunk
-# has no .done and 0 once every chunk has one.  A failed pass exits 4 at once, the chunk's name and its error's tail in the
+# have run (at least one), a "pass" line after each; then OUT/<name>.jsonl and OUT/<name>.done.  It goes on to the next chunk
+# in the same lease until FORMS_FILL_LEASE_S seconds have passed (default 0: one chunk an invocation), then exits 99 while
+# any chunk has no .done, and 0 once every chunk has one.  A failed pass exits 4 at once, the chunk's name and its error's tail in the
 # log and its rows and stderr kept as OUT/<name>.try<N>.*; the fill runner's restart runs that chunk again, and a chunk's sixth
 # start exits 1.  Nothing else exits 4.
 set -uo pipefail
@@ -21,9 +22,14 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID OMP_NUM_THREADS=8
 mapfile -t rows < <(grep -v '^[[:space:]]*\(#\|$\)' "$chunks")
 [ "${#rows[@]}" -gt 0 ] || { echo "no chunks in $chunks"; exit 1; }
 
+lease=${FORMS_FILL_LEASE_S:-0} l0=$SECONDS ran=0
+while :; do
 next=""
 for c in "${rows[@]}"; do [ -e "$O/${c%%|*}.done" ] || { next=$c; break; }; done
 if [ -z "$next" ]; then echo "all ${#rows[@]} chunks done in $O"; exit 0; fi
+if [ "$ran" -gt 0 ] && [ $((SECONDS - l0)) -ge "$lease" ]; then
+  echo "$ran chunks in $((SECONDS - l0)) s of a ${lease} s lease budget; more remain"; exit 99
+fi
 
 IFS='|' read -r name shapes variants reps forms forming epi budget maxp <<< "$next"
 st=$(( $(cat "$O/$name.starts" 2>/dev/null || echo 0) + 1 )); echo "$st" > "$O/$name.starts"
@@ -49,6 +55,5 @@ fi
 mv "$part" "$O/$name.jsonl"
 touch "$O/$name.done"
 echo "chunk $name passes=$p rc=0 end=$(date -u +%FT%TZ)" | tee -a "$O/chunks.txt"
-for c in "${rows[@]}"; do [ -e "$O/${c%%|*}.done" ] || exit 99; done
-echo "all ${#rows[@]} chunks done in $O"
-exit 0
+ran=$((ran + 1))
+done
