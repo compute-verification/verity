@@ -19,8 +19,8 @@ def int7(rng: random.Random, rows: int, k: int) -> list[bytes]:
     return [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(k)]) for _ in range(rows)]
 
 
-def setup(shapes, seed=1, kernel=reference_kernel):
-    s, rng = ncp.NCP(k_min=64, n_min=64), random.Random(seed)
+def setup(shapes, seed=1, kernel=reference_kernel, version=1):
+    s, rng = ncp.NCP(k_min=64, n_min=64, version=version), random.Random(seed)
     work = Workload(tuple(Matmul(i, sh, w) for i, (sh, w) in enumerate(shapes)))
     weights = {w: int7(rng, n, k) for w, (n, k) in work.weights().items()}
     acts = {u.index: int7(rng, u.shape.m, u.shape.k) for u in work.matmuls}
@@ -32,8 +32,9 @@ def signed(rows):
     return [[x - 256 if x >= 128 else x for x in r] for r in rows]
 
 
-def test_honest_run_is_exact_and_accepted():
-    s, work, weights, acts, prover, epoch = setup([(Shape(32, 64, 64), 7), (Shape(16, 64, 64), 7)])
+@pytest.mark.parametrize("version", [1, 2])
+def test_honest_run_is_exact_and_accepted(version):
+    s, work, weights, acts, prover, epoch = setup([(Shape(32, 64, 64), 7), (Shape(16, 64, 64), 7)], version=version)
     tr = prover.prove(epoch, acts)
     for pos, u in enumerate(work.matmuls):
         assert tr.useful[pos] == [[sum(p * q for p, q in zip(a, b)) for b in signed(weights[u.weight])] for a in signed(acts[u.index])]
@@ -43,13 +44,14 @@ def test_honest_run_is_exact_and_accepted():
     assert audit.profile.delta_s(Fraction(1, 2)) == Fraction(1, 64)
 
 
-def test_one_wrong_tile_is_caught():
+@pytest.mark.parametrize("version", [1, 2])
+def test_one_wrong_tile_is_caught(version):
     def kernel(scheme, ctx, noise, a, b, tiles):
         out = reference_kernel(scheme, ctx, noise, a, b, tiles)
         out[2] = (bytes(32), out[2][1])
         return out
 
-    s, work, weights, acts, cheat, epoch = setup([(Shape(32, 64, 64), 1)], kernel=kernel)
+    s, work, weights, acts, cheat, epoch = setup([(Shape(32, 64, 64), 1)], kernel=kernel, version=version)
     tr = cheat.prove(epoch, acts)
     v = Verifier(s, epoch)
     verdicts = [v.check_tile(tr, cheat.open(epoch, t.id)) for t in v.refs]

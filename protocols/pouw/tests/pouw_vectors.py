@@ -1,5 +1,6 @@
 """Regenerate the pinned NCP vectors: ``uv run python protocols/pouw/tests/pouw_vectors.py`` rewrites
-``tests/vectors/ncp.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
+``tests/vectors/ncp.json`` (``ncp-v1``) and ``tests/vectors/ncp_v2.json`` (``ncp-v2``).  A change to either file is a
+change to its scheme and needs a reason in the PR.
 
 Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is SHAKE256("verity/pouw/test-rows/v1", c, name, i)
 read as int7 (each byte mod 128, minus 64)."""
@@ -14,11 +15,16 @@ from verity_pouw.protocol import Context, Matmul, Shape, Tile
 from verity_pouw.schemes import ncp
 
 OUT = Path(__file__).with_name("vectors") / "ncp.json"
+OUT_V2 = Path(__file__).with_name("vectors") / "ncp_v2.json"
 P_KS = (1088, 2048, 4096, 11008)
 #: (case, perm, shape, tile rows, tile cols, index, weight): small test-instance shapes and one lead-domain tile
 CASES = (("small-word", "word", (16, 64, 64), (0, 16), (16, 32), 7, 3),
          ("small-shift24", "shift24", (16, 64, 64), (0, 16), (0, 16), 1 << 40, 2),
          ("lead-word", "word", (16, 1088, 1600), (0, 16), (48, 64), (1 << 64) - 1, 11))
+#: ``ncp-v2``'s cases: the same inputs as ``ncp-v1``'s word cases, plus a tile in the second strip of a two-strip unit
+CASES_V2 = (("small-word", "word", (16, 64, 64), (0, 16), (16, 32), 7, 3),
+            ("small-word-strip1", "word", (32, 64, 64), (16, 32), (0, 16), 9, 4),
+            ("lead-word", "word", (16, 1088, 1600), (0, 16), (48, 64), (1 << 64) - 1, 11))
 
 
 def rows(case: str, name: str, count: int, k: int, first: int = 0) -> list[bytes]:
@@ -31,22 +37,26 @@ def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int) -> C
                    hashlib.sha256(f"root_a/{case}".encode()).digest(), hashlib.sha256(f"root_b/{case}".encode()).digest())
 
 
-def scheme(perm: str, shape: tuple[int, int, int]) -> ncp.NCP:
-    return ncp.NCP(perm) if shape[1] >= 1088 else ncp.NCP(perm, k_min=64, n_min=64)
+def scheme(perm: str, shape: tuple[int, int, int], version: int = 1) -> ncp.NCP:
+    return ncp.NCP(perm, version=version) if shape[1] >= 1088 else ncp.NCP(perm, k_min=64, n_min=64, version=version)
 
 
-def case_vector(case, perm, shape, r, c, index, weight) -> dict:
-    s, ctx = scheme(perm, shape), ctx_of(case, shape, index, weight)
+def case_vector(case, perm, shape, r, c, index, weight, version: int = 1) -> dict:
+    s, ctx = scheme(perm, shape, version), ctx_of(case, shape, index, weight)
     s.check(ctx.matmul)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
-    ops = s.encode(ctx, s.noise(ctx), rows(case, "A", len(tile.rows), shape[1], r[0]), rows(case, "B", len(tile.cols), shape[1], c[0]), tile)
+    a_rows = rows(case, "A", len(tile.rows), shape[1], r[0])
+    ops = s.encode(ctx, s.noise(ctx), a_rows, rows(case, "B", len(tile.cols), shape[1], c[0]), tile)
     checked = s.checked(ctx, ops)
     useful = s.useful(ctx, None, ops, checked)
-    return {"case": case, "scheme": s.name, "shape": list(shape), "tile": {"rows": list(r), "cols": list(c)}, "index": index,
-            "weight": weight, "salt": ctx.salt.hex(), "root_a": ctx.root_a.hex(), "root_b": ctx.root_b.hex(),
-            "x_row0": ops.x[0][:16], "y_col0": ops.y[0][:16],
-            "digest": s.digest(ctx, None, checked).hex(),
-            "useful_sha256": hashlib.sha256(json.dumps(useful).encode()).hexdigest(), "useful_00": useful[0][0]}
+    out = {"case": case, "scheme": s.name, "shape": list(shape), "tile": {"rows": list(r), "cols": list(c)}, "index": index,
+           "weight": weight, "salt": ctx.salt.hex(), "root_a": ctx.root_a.hex(), "root_b": ctx.root_b.hex(),
+           "x_row0": ops.x[0][:16], "y_col0": ops.y[0][:16],
+           "digest": s.digest(ctx, None, checked).hex(),
+           "useful_sha256": hashlib.sha256(json.dumps(useful).encode()).hexdigest(), "useful_00": useful[0][0]}
+    if version == 2:
+        out["strip_digest"] = ncp.strip_digest(a_rows[:ncp.STRIP]).hex()
+    return out
 
 
 def vectors() -> dict:
@@ -55,7 +65,13 @@ def vectors() -> dict:
             "cases": [case_vector(*c) for c in CASES]}
 
 
+def vectors_v2() -> dict:
+    return {"schema": "verity-pouw/ncp-vectors/v1", "scheme": ncp.NAME_V2,
+            "cases": [case_vector(*c, version=2) for c in CASES_V2]}
+
+
 if __name__ == "__main__":
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(json.dumps(vectors(), indent=1) + "\n")
-    print(f"wrote {OUT}")
+    OUT_V2.write_text(json.dumps(vectors_v2(), indent=1) + "\n")
+    print(f"wrote {OUT} and {OUT_V2}")
