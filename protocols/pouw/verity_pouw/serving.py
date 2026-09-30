@@ -145,8 +145,12 @@ class Schedule:
 
 
 SERIAL = Schedule("serial")
-DEFERRED = Schedule("deferred", frozenset({"tile_hash", "screen"}), ring=2)
-SCHEDULES = {s.name: s for s in (SERIAL, DEFERRED)}
+#: the measured deferred schedule (panel attempt 57, `prefill_fused.py`'s and `decode_chain.py`'s chains): the main lane at the
+#: greatest priority, the tile hashing and the screen beside it at the least
+DEFERRED = Schedule("deferred", frozenset({"tile_hash", "screen"}), ring=2, main_priority="greatest")
+#: the same placement with the caller's stream left at its own priority (#564's first cut), kept to time against DEFERRED
+DEFERRED_CALLER = Schedule("deferred-caller", frozenset({"tile_hash", "screen"}), ring=2)
+SCHEDULES = {s.name: s for s in (SERIAL, DEFERRED, DEFERRED_CALLER)}
 
 
 def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
@@ -301,7 +305,7 @@ def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Seque
     return out
 
 
-__all__ = ["DEFERRED", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS", "MAIN_PRIORITIES",
+__all__ = ["DEFERRED", "DEFERRED_CALLER", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS", "MAIN_PRIORITIES",
            "MANIFEST_SCHEMA", "MANIFEST_SCHEMAS_READ", "MOVABLE", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord",
            "HashFormat", "KernelVariant", "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format",
            "schedule_refusals", "variant_refusals"]
