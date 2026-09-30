@@ -331,7 +331,7 @@ def f1_windows(p, off, rows=64, B=16):
             s.reshape(R, W))
 
 
-INT8_LEAF = 1.81   # FP4 slots per int8 leaf MAC, the assessor's measured int8 replay (ratings.md 14:21Z); 2 before
+INT8_LEAF = 2.0    # W1's int8 leaf in FP4 slots (ratings.md 15:18Z); the wall-time 1.81 is a time-only gap there
 
 
 def c_L(m, k, n, B=16, leaf=INT8_LEAF):
@@ -517,7 +517,10 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv"):
     fa_row, fb_row = da.mean(1), db.mean(1)                # share of the row's chain
     cw = k + (32 + FS) * k / n + 256
     ok_all = a["dnf"]
-    rows = []
+    # R1 (theory-pearl-c4-domain.md §6.8, ratings.md 15:18Z): a row of A′ or B̃ whose own F1′ (κ inside) per word
+    # exceeds ρ·(its cell credit) is uncredited; a tile whose credited rows' debit exceeds the cap is rejected
+    exa, exb = uia > CAP * cw, uib > CAP * cw
+    rows, r1 = [], []
     for r in range(m // T):
         I = slice(r * T, (r + 1) * T)
         ok = ok_all[I]
@@ -538,6 +541,16 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv"):
             f1_chain = fa_row[I].mean() + fb_row[J].mean()          # dnc2.py's tile figure (share of chain, all rows)
             rows.append(dict(cred=cred, base=t1 + t3 + t4, f1=f1 + t3 + t4 + f2, f1_in=f1i + t3 + t4 + f2,
                              t_f1=f1, t_f1_in=f1i, t3=t3, t4=t4, f2=f2, f2_cl0=sv0, fAB=fA + fB, f1_chain=f1_chain))
+            okr, okc = ok & ~exa[I], ~exb[J]
+            nr, nc = int(okr.sum()), int(okc.sum())
+            if nr == 0 or nc == 0:
+                r1.append((cred, 0.0, 0.0))
+                continue
+            cr = nr * nc * cw
+            deb = ((nc * uia[I][okr].sum() + nr * uib[J][okc].sum()) / cr
+                   + B * (a["scr"][I][okr] @ b["scr"][J][okc].T).sum() / cr
+                   + nc * FS / n * a["sdw"][I][okr].sum() / cr + sv * nr * nc * k / cr)
+            r1.append((cred, cr if deb <= CAP else 0.0, deb))
     o = {key: np.array([t[key] for t in rows]) for key in rows[0]}
     cred = o["cred"]
     tot = cred.sum()
@@ -556,6 +569,9 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv"):
         out[v] = dict(over=float(cred[d > CAP].sum() / tot), over_half=float(cred[d > CAP / 2].sum() / tot),
                       max=float(d.max()), mean=float((cred * d).sum() / tot), tiles_over=int((d > CAP).sum()),
                       worst_terms={t: float(o[t][iw]) for t in ("t_f1", "t_f1_in", "t3", "t4", "f2")})
+    q = np.array(r1)
+    out["r1"] = dict(uncredited=float(1 - q[:, 1].sum() / q[:, 0].sum()), tiles_rejected=int(((q[:, 1] == 0) & (q[:, 2] > CAP)).sum()),
+                     rows_excluded_a=float(exa[:m].mean()), rows_excluded_b=float(exb.mean()), max_debit=float(q[:, 2].max()))
     return out
 
 
@@ -647,6 +663,11 @@ def summarize(args, res, tokens, t0, fmt):
                    "mean_tile_debit": wavg(lambda r: r[v]["mean"]),
                    "tiles_over_cap": sum(r[v]["tiles_over"] for r in res.values()),
                    "worst_tile": {"linear": worst, "debit": res[worst][v]["max"], "terms": res[worst][v]["worst_terms"]}}
+    summ["r1"] = {"uncredited": wavg(lambda r: r["r1"]["uncredited"]),
+                  "rows_excluded_a": wavg(lambda r: r["r1"]["rows_excluded_a"]),
+                  "rows_excluded_b": wavg(lambda r: r["r1"]["rows_excluded_b"]),
+                  "tiles_rejected": sum(r["r1"]["tiles_rejected"] for r in res.values()),
+                  "max_tile_debit": max(r["r1"]["max_debit"] for r in res.values())}
     summ["f1_chain_tiles_over_cap"] = sum(r["tiles_f1_chain_over"] for r in res.values())
     summ["f1_row_a"] = {"mean": wavg(lambda r: r["f1_row_a"]["mean"]), "max": max(r["f1_row_a"]["max"] for r in res.values())}
     summ["f1_row_w"] = {"mean": wavg(lambda r: r["f1_row_w"]["mean"]), "max": max(r["f1_row_w"]["max"] for r in res.values())}
