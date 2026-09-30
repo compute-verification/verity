@@ -6,6 +6,12 @@
    "run": "r20260929-032531-8f07",
    "sha256": "fa99372dfc2eed5e46de196b3ce940c0026271daea7ca2ffa66e2cfd98f69056"
   },
+  "483052f76381b89dc4aa6d56fe0014f33d228cf04ae237cdeadac02ed5c11cb6": {
+   "bytes": 706752066,
+   "package": "protocols/network_warden/lean",
+   "run": "r20260930-141645-7405",
+   "sha256": "c373ee34dcb8ae27297aab9136a1497f8bacdb6948f2093d0a5fbad7293b4665"
+  },
   "5c2a23bf8634d77a7eb3d07c2d1d82b9a6ceda4eaa0205286857391ba83e863f": {
    "bytes": 700275806,
    "package": "protocols/pous/lean",
