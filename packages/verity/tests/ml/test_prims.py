@@ -111,6 +111,29 @@ def test_fp8_primitives_are_the_tc_functions() -> None:
     assert P.HopperE4m3QgmmaDot32.evaluate(0, *([0x38] * 64)) == 0x42000000  # 32 * (1 * 1)
 
 
+def test_the_sm120_fp8_step_is_the_total_function_of_its_pinned_model() -> None:
+    from verity.ml.tc.models import BLACKWELL_SM120_E4M3_M16N8K32 as SM120
+
+    step = P.BlackwellE4m3QmmaDot32
+    assert step.id == "BlackwellE4m3QmmaDot32_v1" and REGISTRY["BlackwellE4m3QmmaDot32_v1"] is step
+    assert step.signature() == P.HopperE4m3QgmmaDot32.signature()
+    rng = random.Random(7)
+    specials8 = [0x7F, 0xFF, 0x00, 0x80, 0x01, 0x7E, 0xFE, 0x38]
+    cases = [(rng.getrandbits(32), [rng.getrandbits(8) for _ in range(32)], [rng.getrandbits(8) for _ in range(32)])
+             for _ in range(300)]
+    for acc in (0, 0x80000000, ONE32, NAN32, PINF32, NINF32, 0x7F7FFFFF, 0x00000001):
+        for sa in specials8:
+            a, b = [0x38] * 32, [0x38] * 32
+            a[5], b[5] = sa, rng.choice(specials8)
+            cases.append((acc, a, b))
+    for acc, a, b in cases:
+        assert step.evaluate(acc, *a, *b) == tc_dot_total_e4m3(SM120, acc, a, b)
+    assert step.evaluate(0, *([0x38] * 64)) == 0x42000000
+    # the 26-bit adder keeps the accumulator whole; Hopper's 14-bit one truncates it (1 + 2^-23 through zero products)
+    zeros = [0x00] * 64
+    assert step.evaluate(0x3F800001, *zeros) == 0x3F800001 and P.HopperE4m3QgmmaDot32.evaluate(0x3F800001, *zeros) == 0x3F800000
+
+
 def test_const_primitives_are_memoised_and_decodable() -> None:
     from verity.ir.codec import _lookup_primitive
 
