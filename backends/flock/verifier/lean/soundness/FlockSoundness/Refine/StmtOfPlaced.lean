@@ -102,17 +102,19 @@ theorem lkCnt_cast (lk : LookupTable) (hb : lk.bits ≤ 32) (i c : ℕ) :
     omega
   split_ifs with hP
   · obtain ⟨hle, hlt, hlo, hhi, hbit⟩ := hP
-    have hq : (i - lk.prod0) / nh < lk.bits := (Nat.div_lt_iff_lt_mul hnh).2 (by rw [Nat.mul_comm]; omega)
+    have hq : (i - lk.prod0) / nh < lk.bits := (Nat.div_lt_iff_lt_mul hnh).2 (by omega)
     have hdm := Nat.div_add_mod (i - lk.prod0) nh
     rw [Finset.card_eq_one.2 ⟨((i - lk.prod0) % nh, c - lk.loTop, (i - lk.prod0) / nh), ?_⟩]
     · exact Nat.cast_one
     ext ⟨h, l, j⟩
     simp only [Finset.mem_filter, Finset.mem_product, Finset.mem_range, Finset.mem_singleton, Prod.mk.injEq]
+    dsimp only
     constructor
     · rintro ⟨⟨hh, -, -⟩, hlc, -, hjb, hi⟩
       obtain ⟨-, -, hj, hh'⟩ := fwd h j hh hjb hi
       exact ⟨hh'.symm, by omega, hj.symm⟩
     · rintro ⟨rfl, rfl, rfl⟩
+      dsimp only
       refine ⟨⟨Nat.mod_lt _ hnh, by omega, by omega⟩, by omega, hbit, hq, ?_⟩
       rw [Nat.mul_comm] at hdm
       omega
@@ -120,6 +122,7 @@ theorem lkCnt_cast (lk : LookupTable) (hb : lk.bits ≤ 32) (i c : ℕ) :
     · exact Nat.cast_zero
     rintro ⟨h, l, j⟩ hx ⟨hlc, hbit, hjb, hi⟩
     simp only [Finset.mem_product, Finset.mem_range] at hx
+    dsimp only at hx hlc hbit hjb hi
     obtain ⟨hle, hlt, hj, hh'⟩ := fwd h j hx.1 hjb hi
     apply hP
     refine ⟨hle, hlt, by omega, by omega, ?_⟩
