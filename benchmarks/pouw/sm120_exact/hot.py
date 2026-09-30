@@ -20,10 +20,12 @@ public-constant rule (`const`, c0 = 64); the +0 chain starts every word at +0.
    u = 1 .. --units: A and B, 8,192 rows of k = 8,192 each, formed on the card by pearl_c.form_v1's rule (the host computes
    s5_stats, E' and C = α·x with the scheme's own functions; the card runs the atom and Pearl's cast).  Rows: near-cap as
    pearlc_hot_start.units draws them (columns first, then rows; unit 1 at its salt "near-cap/8192/compat-wide", unit u at
-   ".../u"); a census family from census.family_rows(fam, k, 1.0, 8192, 8192, u) at salt "<fam>/8192/hot-full/<u>".  Then
-   both chains, and per chain each atom's exactness as row bitsets and column bitsets:
+   ".../u"); a census family from census.family_rows(fam, k, 1.0, 8192, 8192, u) at salt "<fam>/8192/hot-full/<u>";
+   `cancel-pair@t4` (opt-in) as the assessor's hot_late_start.py draws it, from a generator seeded by that salt's SHA-256.
+   Then both chains, and per chain each atom's exactness as row bitsets and column bitsets:
    `<out>/units/<fam>@<u>/{hot,zero}.{rows,cols}.u32` (T x 8,192 x 256 uint32 each, 2 GiB), `okA.npy`/`okB.npy` (the rows
-   and columns Π admits: noise floor and liveness, pearl_c.PearlC.admissible's per-row rule), `H.npy`.  Gated per unit:
+   and columns Π admits: noise floor and liveness, pearl_c.PearlC.admissible's per-row rule; `unit.json`'s `rows_live`
+   counts liveness alone, pearl_c.live_row), `H.npy`.  Gated per unit:
    2 rows per side and 4,096 elements through form_v1 / the device atom, 64 words over all 256 atoms of both chains through
    pearlc_hot_start.chain (both layouts), and H_i against v2-hot-start-rule.md's closed form (e_i = E(t_i) + 10 +
    [M(t_i) >= 0x3504F4], t_i = fl32(α_i·ρ_i)); `unit.json`, written last, has the per-atom exact counts of both chains.
@@ -68,6 +70,7 @@ from sm120_chain.run import Nvml, emit  # noqa: E402
 
 HS = HV = C = D = P = None  # pearlc_hot_start, pearlc_v1_hot and the scheme's modules, imported from --ref and PYTHONPATH
 FAMILIES = (*census.ACTIVATION_FAMILIES, *census.FREEZE_FAMILIES, "near-cap")
+CANCEL_FAMILIES = ("cancel-pair@t4",)  # opt-in (--families), not in the default set
 CHAINS = ("hot", "zero")
 MODE_CHAINS = {"v2hot": CHAINS, "v1hot": ("v1hot", "v1")}
 GROUP = 128                # v1's group depth: G = 4 atoms of 32
@@ -110,8 +113,24 @@ def words(X: np.ndarray) -> np.ndarray:
     return W
 
 
+def cancel_pair_t4(rng: np.random.Generator, rows: int, k: int) -> tuple[np.ndarray, np.ndarray]:
+    """internal/pouw/red-team/hot_late_start.py's `cancel-pair@t4`: B's columns Student-t(4) with B[2l+1] = B[2l]; A's rows
+    A[2l] = v, A[2l+1] = -v, v's first half random signs and the rest N(0, 0.1²); B drawn first."""
+    B = rng.standard_t(4, (rows, k))
+    v = rng.standard_normal((rows, k // 2)) * 0.1
+    v[:, : k // 4] = np.sign(rng.standard_normal((rows, k // 4)))
+    A = np.empty((rows, k))
+    A[:, 0::2], A[:, 1::2] = v, -v
+    B[:, 1::2] = B[:, 0::2]
+    return A, B
+
+
 def draw(fam: str, k: int, rows: int, u: int) -> tuple[np.ndarray, np.ndarray, str]:
     """X_A and X_B (rows x k FP32 words) and the unit's salt."""
+    if fam in CANCEL_FAMILIES:
+        salt = f"{fam}/{k}/hot-full/{u}"
+        XA, XB = cancel_pair_t4(np.random.default_rng(list(hashlib.sha256(salt.encode()).digest())), rows, k)
+        return words(XA), words(XB), salt
     if fam == "near-cap":
         salt = f"near-cap/{k}/compat-wide" + ("" if u == 1 else f"/{u}")
         rng = random.Random(salt)
@@ -130,8 +149,9 @@ def _row_stats(task):
     for q, x in enumerate(X.tolist()):
         s, rho, alpha, beta = C.s5_stats(x)
         e = P.sample_line(seed, side, 0, i0 + q)
-        ok = P.f32_of_bits(rho) * P.f32_of_bits(alpha) >= P.SIGMA_MIN and C.live_row(x)
-        out.append((s, rho, alpha, beta, C.eprime(beta, e), e, ok))
+        live = bool(C.live_row(x))
+        ok = P.f32_of_bits(rho) * P.f32_of_bits(alpha) >= P.SIGMA_MIN and live
+        out.append((s, rho, alpha, beta, C.eprime(beta, e), e, ok, live))
     return out
 
 
@@ -162,7 +182,8 @@ def prep(pool: Pool, fam: str, k: int, rows: int, u: int, mode: str = "v2hot") -
         sides[name] = {"x": X, "C": Cf, "s": np.array([r[0] for r in st], np.uint32),
                        "rho": np.array([r[1] for r in st], np.uint32), "alpha": alpha,
                        "beta": np.array([r[3] for r in st], np.uint32), "ep": np.array([r[4] for r in st], np.uint8),
-                       "e": np.array([r[5] for r in st], np.uint8), "ok": np.array([r[6] for r in st], bool)}
+                       "e": np.array([r[5] for r in st], np.uint8), "ok": np.array([r[6] for r in st], bool),
+                       "live": np.array([r[7] for r in st], bool)}
     sides["A"]["F"], sides["B"]["F"] = basis.get()
     a = sides["A"]
     # Below the noise floor (α·ρ < 1, e.g. ρ = 0) a row is outside the domain and H_i has no size; such rows are left out of
@@ -353,6 +374,7 @@ def unit(dev: Dev, pool: Pool, fh, out_dir: Path, u: dict, seed: int, mode: str)
            "planes": T, "atoms_per_plane": GROUP // 32 if grouped else 1,
            "forming": "pearl_c.form_v1 on SM120_UNPROMOTED (host: s5_stats, eprime, alpha*x; card: the atom, Pearl's cast)",
            "hot_rule": "const", "c0": u["c0"], "rows_admitted": {"A": int(A["ok"].sum()), "B": int(B["ok"].sum())},
+           "rows_live": {"A": int(A["live"].sum()), "B": int(B["live"].sum())},
            "A_rows_below_floor_sized_at_1": int(u["below_floor"].sum()),
            "H_exponents": [int(x) for x in np.percentile(((u["H"] >> 23) & 0xFF).astype(int) - 127, [0, 50, 100])]}
     da, db = form_side(dev, A), form_side(dev, B)
@@ -531,7 +553,7 @@ def write_summary(out_dir: Path, items: list[str], fh, mode: str) -> None:
     for item in items[1:]:
         r = json.loads((out_dir / f"{item.replace(':', '-')}.json").read_text())
         rows.append({"item": item, "family": r["family"], "unit": r["unit"], "rows_admitted": r["rows_admitted"],
-                     "H_exponents": r["H_exponents"],
+                     "rows_live": r.get("rows_live"), "H_exponents": r["H_exponents"],
                      **{f"planes_exact_{c}": r["chains"][c]["planes_exact"] for c in MODE_CHAINS[mode]}})
     doc = {"tool": "pouw_sm120_exact_hot", "mode": mode, "rows": rows,
            "selftest": json.loads((out_dir / "selftest.json").read_text())["gates"]}
