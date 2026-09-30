@@ -386,6 +386,13 @@ class PearlCDeviceRun:
         return out
 
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
+        """One call, under inference mode as vLLM runs it: a call's buffers may be inference tensors made during a forward,
+        which torch writes only there, and a caller outside a forward (the e2e's gate) runs the same code."""
+        import torch
+        with torch.inference_mode():
+            return self._gemm(w, x, weight, bias)
+
+    def _gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         import torch
         cur, wt = self.cur, self.weights[w]
         lead, k = x.shape[:-1], x.shape[-1]
@@ -444,12 +451,15 @@ class PearlCDeviceRun:
 
     def poison(self, value: int = 0xA5) -> None:
         """Every buffer a call of this pass writes (each shape's, those created later in the pass too, and the leaves) filled
-        with `value`."""
+        with `value`.  Under inference mode: buffers made during a vLLM forward are inference tensors, which torch writes only
+        there."""
+        import torch
         self.cur.poison = value
-        self.leaves.fill_(value)
-        for sh in self.shapes.values():
-            for t in sh.b.values():
-                t.fill_(value)
+        with torch.inference_mode():
+            self.leaves.fill_(value)
+            for sh in self.shapes.values():
+                for t in sh.b.values():
+                    t.fill_(value)
 
     def end(self) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
