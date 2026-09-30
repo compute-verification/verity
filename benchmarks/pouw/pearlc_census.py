@@ -357,6 +357,12 @@ def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndar
     skip leaves the word's final total unchanged. It contains the identities, the groups whose promotion is an identity,
     and every single or joint skip inside one group, however it is absorbed (by a later atom's grid or by a later
     promotion). Returns the (words, atoms) flags and P1's e_F per word (identities plus promotion-identity groups)."""
+    return debit_parts(a, b, G)[:2]
+
+
+def debit_parts(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`debit`, and which flags the group absorbs itself (a skip that leaves the group's accumulator unchanged, the atom's
+    adder); the rest are absorbed only by the FP32 total's rounding in a later promotion."""
     P, k = a.shape
     T = k // 32
     groups = [list(range(g0, min(g0 + G, T))) for g0 in range(0, T, G)]
@@ -371,11 +377,13 @@ def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndar
         total = new
     final = total
     flags = np.zeros((P, T), dtype=bool)
+    inside = np.zeros((P, T), dtype=bool)
     for g, ts in enumerate(groups):
         for mask in range(1, 1 << len(ts)):
             skip = frozenset(t for i, t in enumerate(ts) if mask >> i & 1)
             Cm, _ = group_run(a, b, ts, skip)
-            same = Cm == Cs[g]
+            in_group = Cm == Cs[g]
+            same = in_group
             if not same.all():
                 t32 = (before[g] + Cm.astype(np.float32)).astype(np.float32)
                 for h in range(g + 1, len(groups)):
@@ -383,7 +391,8 @@ def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndar
                 same = same | (t32 == final)
             for t in skip:
                 flags[:, t] |= same
-    return flags, eF
+                inside[:, t] |= in_group
+    return flags, eF, inside
 
 
 def group_sums(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
@@ -595,10 +604,11 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
             row.update({"unpromoted_equal_words": round(float(same.mean()), 6), "unpromoted_equal_tile": bool(same.all()),
                         "tile_exact_groups": round(float(tex[:full].reshape(-1, G).all(1).mean()), 6) if full else 0.0})
         if G and with_debit:
-            flags, eF = debit(A, B, G)
+            flags, eF, inside = debit_parts(A, B, G)
             per_word = flags.sum(1)
             # Every tile identity is flagged in every word, so under the debited credit only exact runs remain skippable.
             row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
+                        "debit_via_promotion_share": round(float((flags & ~inside).mean()), 6),
                         "debit_eF_share": round(float(eF.mean()) / T, 6), "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
                         "tile_all_flagged_share": round(float(flags.all(0).mean()), 6), "residual_share": exact_run_atoms(tex) / T})
             if transfer_words and forming == "s5":

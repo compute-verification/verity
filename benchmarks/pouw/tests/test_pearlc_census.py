@@ -57,6 +57,20 @@ def test_debit_flags_joint_skips_inside_a_group():
     assert eF.tolist() == [0] and flags.tolist() == [[True, True, True, True]]
 
 
+def test_debit_parts_tell_the_adder_from_the_promotion():
+    import numpy as np
+    a, b = np.zeros((1, 384), dtype=np.uint8), np.zeros((1, 384), dtype=np.uint8)
+    a[0, :256], b[0, :256] = 0x7E, 0x7E      # 448^2 everywhere in groups 0 and 1: the FP32 total is 98 * 2^19, its ulp 4
+    a[0, 256], b[0, 256] = 0x38, 0x38        # group 2's word is 1, which the total's nearest-even add absorbs
+    try:
+        C.set_atom("sm120-e4m3-k32")
+        flags, eF, inside = C.debit_parts(a, b, 4)
+    finally:
+        C.set_atom("hopper-e4m3-k32")
+    assert flags[0].tolist() == [False] * 8 + [True] * 4
+    assert inside[0].tolist() == [False] * 9 + [True] * 3 and eF.tolist() == [4]
+
+
 def test_aligned_spikes_pass_the_rules_and_freeze_words():
     g4 = [r for r in C.cell("aligned-spikes-r300", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0) if r["layout"] == "G4"]
     assert g4[0]["rules_ok"] and g4[0]["word_identity"] > 0.5
