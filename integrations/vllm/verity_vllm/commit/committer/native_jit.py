@@ -68,6 +68,32 @@ def default_parent(name: str) -> str:
     return _get_build_directory(name, verbose=False)
 
 
+def staged_sources(build_dir: str, sources: Sequence[str]) -> list[str]:
+    """The sources copied into `<build_dir>/src/` (rewritten only when their bytes differ), the paths torch compiles.  torch writes the
+    source paths into build.ninja and ninja rebuilds when that file changes, so compiling each tree's own copy rebuilt the shared,
+    digest-keyed dir for every job of another tree (~2 min of nvcc under the build lock per GPU job on Nebius, Sep 30).  A digest-keyed
+    dir holds one source set, so its staged copy is the same file for every tree."""
+    sd = os.path.join(build_dir, "src")
+    os.makedirs(sd, exist_ok=True)
+    out = []
+    for p in sources:
+        with open(p, "rb") as f:
+            body = f.read()
+        dst = os.path.join(sd, os.path.basename(p))
+        try:
+            with open(dst, "rb") as f:
+                same = f.read() == body
+        except FileNotFoundError:
+            same = False
+        if not same:
+            tmp = f"{dst}.{os.getpid()}.tmp"
+            with open(tmp, "wb") as f:
+                f.write(body)
+            os.replace(tmp, dst)
+        out.append(dst)
+    return out
+
+
 @contextlib.contextmanager
 def build_lock(build_dir: str):
     """Exclusive fcntl lock on `<build_dir>.build-lock`, beside the build dir: one builder at a time, released by the kernel when its holder
@@ -85,7 +111,8 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
              with_cuda: bool = True, verbose: bool = False, loader: Callable[..., Any] | None = None, torch_version: str | None = None,
              cuda_version: str | None = None) -> tuple[Any, str, str]:
     """torch's `cpp_extension.load` for one extension into `<parent>/<digest12>` (`parent`: the caller's, else torch's default for
-    `name`), under `build_lock`; a torch `lock` found in the dir while holding it is removed.  `loader` and the toolchain versions are
+    `name`), under `build_lock`, compiled from the dir's staged copy of `sources` (`staged_sources`); a torch `lock` found in the dir while
+    holding it is removed.  `loader` and the toolchain versions are
     torch's unless given (tests).  Returns (module, build dir, source-set digest)."""
     if loader is None or torch_version is None or cuda_version is None:
         import torch
@@ -104,7 +131,7 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
             print(f"[jit] removing {stale}: no live build holds {bd}.build-lock, so a killed build left it", file=sys.stderr, flush=True)
             with contextlib.suppress(FileNotFoundError):
                 os.remove(stale)
-        module = loader(name=name, sources=list(sources), extra_cflags=list(cflags), extra_cuda_cflags=list(cuda_cflags),
+        module = loader(name=name, sources=staged_sources(bd, sources), extra_cflags=list(cflags), extra_cuda_cflags=list(cuda_cflags),
                         with_cuda=with_cuda, build_directory=bd, verbose=verbose)
     return module, bd, digest
 
