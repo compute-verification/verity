@@ -368,6 +368,7 @@ def test_lean_vectors_poison_no_write_control_and_collect(no_nvcc, tmp_path, mon
     res = json.loads((tmp_path / "ok" / "result.json").read_text())
     assert doc["vectors"] == rec["vectors"] and res["validation"]["status"] == "passed" and res["run_id"] == "r-test"
     assert res["collected_from"]["dumps_sha256"] == LV.sha256(chunk / "dumps.npz") and res["words"]["nvf4Specials[0]"] == "7fffffff"
+    assert LV.sha256(tmp_path / "ok" / "chunk" / "dumps.npz") == LV.sha256(chunk / "dumps.npz")
     lib.write_bytes(b"another library")
     assert P.main(collect + ["--out", str(tmp_path / "lib")]) == 1
     lib.write_bytes(b"library")

@@ -369,7 +369,10 @@ def main(args) -> int:
         chunk = json.loads((collect_dir / "probe_results.json").read_text())
         identity = dict(chunk.get("identity") or {})
         results["collected_from"] = {"dir": str(collect_dir), "probe_results_sha256": sha256(collect_dir / "probe_results.json"),
-                                     "dumps_sha256": sha256(collect_dir / "dumps.npz")}
+                                     "dumps_sha256": sha256(collect_dir / "dumps.npz"), "kept": "chunk/"}
+        (out / "chunk").mkdir(exist_ok=True)
+        for f in ("probe_results.json", "dumps.npz"):
+            (out / "chunk" / f).write_bytes((collect_dir / f).read_bytes())
         nvcc = (chunk.get("library") or {}).get("nvcc")
         if chunk.get("failures"):
             failures.append(f"the chunk failed: {chunk['failures']}")
@@ -483,7 +486,8 @@ def main(args) -> int:
                                          if chunk is not None else ""),
                            "detail": "; ".join(failures) or f"{s['match_prediction']} of {s['selected']} selected words match "
                                                             "the file's prediction",
-                           "evidence": ["probe_results.json"]},
+                           "evidence": ["probe_results.json"] + (["chunk/probe_results.json", "chunk/dumps.npz"]
+                                                                 if chunk is not None else [])},
             "measurements": [{"name": "selected_matching_prediction", "value": s["match_prediction"], "unit": "vectors"},
                              {"name": "wall", "value": results["seconds"], "unit": "s"}],
             "measurement_files": ["probe_results.json"],
