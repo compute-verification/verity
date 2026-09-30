@@ -33,6 +33,7 @@ members = [
     "verity-gkr",
     "verity-lean-audit",
     "verity-native-peak",
+    "verity-network-warden",
     "verity-numerical",
     "verity-one-stage",
     "verity-pous",
@@ -1520,6 +1521,17 @@ requires-dist = [
 provides-extras = ["torch"]
 
 [[package]]
+name = "verity-network-warden"
+version = "0.1.0"
+source = { editable = "protocols/network_warden" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "packages/verity" }]
+
+[[package]]
 name = "verity-numerical"
 version = "0.1.0"
 source = { editable = "backends/numerical" }
@@ -1670,6 +1682,7 @@ dependencies = [
     { name = "verity" },
     { name = "verity-circuit-check" },
     { name = "verity-flock" },
+    { name = "verity-network-warden" },
     { name = "verity-numerical" },
     { name = "verity-one-stage" },
     { name = "verity-pous" },
@@ -1699,6 +1712,7 @@ requires-dist = [
     { name = "verity", editable = "packages/verity" },
     { name = "verity-circuit-check", editable = "tools/circuit_check" },
     { name = "verity-flock", editable = "backends/flock" },
+    { name = "verity-network-warden", editable = "protocols/network_warden" },
     { name = "verity-numerical", editable = "backends/numerical" },
     { name = "verity-one-stage", editable = "protocols/one_stage" },
     { name = "verity-pous", editable = "protocols/pous" },

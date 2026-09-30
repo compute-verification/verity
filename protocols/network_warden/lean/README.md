@@ -15,14 +15,14 @@ NetTiming/Counting.lean        proved: Theorem 1(b) (the tree lemma on accepted 
 NetTiming/Advice.lean          proved: Theorem 3 (the 2^A cap, one clock-sync value per window, the fixed clock, the block caps)
 NetTiming/Sanity.lean          proved: a satisfiability witness for every named hypothesis, the joint witness, and the toy
 lean-audit.json                the policy and pin records for tools/lean/audit.py
-CheckAxioms.lean               one #print axioms line per pinned theorem
+CheckAxioms.lean               one #print axioms line per pinned theorem, then the three proved but unpinned
 ~~~
 
 ~~~bash
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/lean/audit.py .                      # Verity's Lean audit
-lake env lean CheckAxioms.lean                              # the pinned theorems' axioms
+lake env lean CheckAxioms.lean                              # the axioms of the 31 pins and the 3 unpinned
 ~~~
 
 **Trusted without proof:** the statements in `NetTiming/Model/` and `NetTiming/Assumptions.lean`; Lean's kernel; the Mathlib
@@ -67,9 +67,11 @@ conditions while its timing advice still changes its rows, and `joint_witness` m
 
 ## The pinned theorems
 
-- **Proposition 2** (`NetTiming.Occupancy`): `card_free`, `card_leftPacked`, `occ_fill`, `leftPacked_occ_fill`,
-  `fill_injective`, `exists_fill_of_leftPacked`, `card_counts_eq_le`, `card_counts_le_le`, `sum_released_le`,
-  `encard_fifoGrids_le_of_available`, `released_self`, `leftPacked_fifoGrid`, `encard_fifoGrids`.
+The 31 records in `lean-audit.json`:
+
+- **Proposition 2** (`NetTiming.Occupancy`): `card_free`, `card_leftPacked`, `fill_injective`,
+  `exists_fill_of_leftPacked`, `card_counts_eq_le`, `card_counts_le_le`, `sum_released_le`,
+  `encard_fifoGrids_le_of_available`, `released_self`, `encard_fifoGrids`.
 - **Theorem 1(b)** (`NetTiming.Counting`): `encard_le_prod_of_branching`, `encard_acceptedRuns_le`,
   `encard_obsDecodable_le`, `encard_decodable_le`, `no_fault_of_accepted`.
 - **Theorem 3** (`NetTiming.Advice`): `recorded_row_eq_fill`, `encard_accSeqs_le_advice`, `encard_accSeqs_le_sync`,
@@ -78,6 +80,10 @@ conditions while its timing advice still changes its rows, and `joint_witness` m
 - **Witnesses** (`NetTiming.Sanity`): `witnessWarden_assumptions`, `witnessWarden_jitter_varies`,
   `witnessProgram_conditions`, `witnessProgram_timing_matters`, `joint_witness`, `joint_witness_bound`,
   `zP_accepts_one`, `zP_constOp_accepts_one`, `toy_leftPacked`.
+
+**Proved and audited, not pinned:** `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.Occupancy`).
+The audit checks them like every declaration, and they use only the three axioms. But they have no record in
+`lean-audit.json`, so no citation may call them pinned. Pinning them needs a statement reviewer.
 
 The statements were frozen and reviewed by a red team before their proofs, and a second round's verdict was GO. The
 reference implementation, `protocols/network_warden` (`verity_network_warden`), mirrors them in its tests.
