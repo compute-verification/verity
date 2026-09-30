@@ -335,9 +335,11 @@ def quiet_report(records: list[dict[str, Any]], alloc: str, *, until: int | None
                 lo, hi = max(a0, t0), min(a1, t1)
                 if lo < hi:
                     overlaps.append({"alloc": other.alloc, "state": state, "t0": lo, "t1": hi,
-                                     "quiet_safe": bool(other.job.get("quiet_safe"))})
+                                     "quiet_safe": bool(other.job.get("quiet_safe")), "who": other.job.get("submitter"),
+                                     "gpus": other.gpus, "run": other.job.get("run"),
+                                     "preempt": other.job.get("preempt", "requeue")})
     sessions = [s for s in admin if s["node"] == me.node
                 and any(max(a0, s["t0"]) < min(a1, s["t1"] if s["t1"] is not None else end) for a0, a1 in mine)]
     active = [o for o in overlaps if o["state"] == "running" and not o["quiet_safe"]]
-    return {"alloc": alloc, "node": me.node, "running": mine, "overlaps": overlaps, "admin": sessions,
+    return {"alloc": alloc, "node": me.node, "run": me.job.get("run"), "gpus": me.gpus, "running": mine, "overlaps": overlaps, "admin": sessions,
             "quiet": not active and not sessions}

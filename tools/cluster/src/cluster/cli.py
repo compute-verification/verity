@@ -3,7 +3,7 @@
   cluster validate DESCRIPTION.toml
   cluster plan DESCRIPTION.toml SNAPSHOT.json         # one JSON action per line; the snapshot names the node and `now`
   cluster ledger verify LEDGER.jsonl
-  cluster ledger quiet LEDGER.jsonl ALLOC [--until T]
+  cluster ledger quiet LEDGER.jsonl ALLOC|RUN [--until T]   # what ran beside a window: owner, GPUs, pid (in the id), run
   cluster ledger failures LEDGER.jsonl [--since T]
   cluster ledger usage LEDGER.jsonl [--since T]         # held against busy GPU time per holder, lowest share first
   cluster agent DESCRIPTION.toml --out DIR [--mode shadow|live] [--hours H] [--stop-file P] [--copy-to DIR]
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     lv.add_argument("path")
     lq = lsub.add_parser("quiet")
     lq.add_argument("path")
-    lq.add_argument("alloc")
+    lq.add_argument("alloc", help="an allocation id, or a run id: every quiet allocation of that run")
     lq.add_argument("--until", type=int)
     lf = lsub.add_parser("failures")
     lf.add_argument("path")
@@ -186,9 +186,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{a.path}: {len(records)} records, chain intact")
         return 1 if problems else 0
     if a.lcmd == "quiet":
-        rep = ledger.quiet_report(records, a.alloc, until=a.until)
-        print(json.dumps(rep, indent=1, sort_keys=True))
-        return 0 if rep["quiet"] else 2
+        allocs, _ = ledger.history(records)
+        ids = [a.alloc] if a.alloc in allocs else [h.alloc for h in allocs.values()
+                                                   if h.job.get("run") == a.alloc and h.job.get("quiet")]
+        if not ids:
+            print(f"{a.alloc}: no such allocation, and no quiet allocation of that run", file=sys.stderr)
+            return 1
+        reps = [ledger.quiet_report(records, i, until=a.until) for i in ids]
+        for rep in reps:
+            print(json.dumps(rep, indent=1, sort_keys=True))
+        return 0 if all(rep["quiet"] for rep in reps) else 2
     for row in (ledger.failures if a.lcmd == "failures" else ledger.usage)(records, a.since):
         print(json.dumps(row, sort_keys=True))
     return 0
