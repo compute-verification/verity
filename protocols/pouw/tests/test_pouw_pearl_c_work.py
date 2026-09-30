@@ -4,6 +4,7 @@ excluded rows fail, the debit under the cap), draws keyed by a beacon round afte
 
 from __future__ import annotations
 
+import struct
 from fractions import Fraction
 
 import pytest
@@ -198,6 +199,19 @@ def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     assert not hasattr(S, "tile_cap")
     records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+
+
+def test_v_ex_is_a_no_op_on_pearl_c():
+    """V-EX adds nothing to a declaration without voluntary rows: Pearl-C's records declare none, each encodes byte for
+    byte in the v2 layout (so `records_root` is unchanged), and the audit accepts as before."""
+    epoch, prover, tr, rows_a, rows_b = lifecycle()
+    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    for r in records:
+        u, s, a, b = r.matmul, r.matmul.shape, r.excluded_a, r.excluded_b
+        assert r.voluntary_a == r.voluntary_b == ()
+        assert r.encode() == struct.pack(f"<QQIIIIIII{len(a)}I{len(b)}I", u.index, u.weight, s.m, s.k, s.n, r.real_rows,
+                                         r.k_kept, len(a), len(b), *a, *b)
     assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
 
 

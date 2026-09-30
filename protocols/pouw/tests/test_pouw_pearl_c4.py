@@ -20,7 +20,7 @@ from verity.commitments.turboshake import turboshake128
 from verity.errors import InvalidArtifact
 from verity.ml.tc import fp32
 from verity_pouw.audit import Epoch, Prover, Workload
-from verity_pouw.protocol import DomainError, Matmul, Shape
+from verity_pouw.protocol import Context, DomainError, Matmul, Shape
 from verity_pouw.schemes import get
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c4 as F
@@ -765,6 +765,85 @@ def test_the_work_law_audits_pearl_c4():
     hides = W.audit(s, epoch, prover, tr, splits, [W.UnitRecord(epoch.workload.matmuls[0], 20, K)], BEFORE, AFTER, 8)
     assert not hides.audit.accepted
     assert any("A row 3 is credited but fails" in v.reason for v in hides.audit.verdicts if not v.ok)
+
+
+def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
+    """V-EX (theory §6.13, the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
+    earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row
+    the rules exclude stays excluded."""
+    s = V.scheme("nvfp4", True)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits = {9: W.Split(K)}
+    plain = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a={3: [3, 5]},
+                        voluntary_b={9: [2]})
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), (), (5,), (2,))]
+    assert W.records_root(epoch.salt, epoch.weights_root, splits, records) != \
+        W.records_root(epoch.salt, epoch.weights_root, splits, plain)
+    assert W.exclusion_tiles(s, records) == W.exclusion_tiles(s, plain)
+    out = W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8)
+    assert out.audit.accepted and out.wref == W.cell_wref(s, records[0]) * 18 * 15
+    as_excluded = [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 5), ())]
+    reasons = [v.reason for v in W.audit(s, epoch, prover, tr, splits, as_excluded, BEFORE, AFTER, 8).audit.verdicts]
+    assert any("A row 5 is excluded but passes" in (r or "") for r in reasons)
+
+
+def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
+    """A voluntary row doesn't shelter the others: a credited row over R1's bound still fails its tile, and so does a
+    tile whose credited rows' debit passes the cap.  The spike row itself may be given up instead of excluded."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k = ctx.matmul.shape.k
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (1,)), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("A row 0 is credited") and "R1's bound" in reason
+    assert W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (0,)), tile, a_rows, b_rows, ops) is None
+
+    class NoR1(F.PearlC4):
+        def row_debit_ratio(self, record, ops, side, pos):
+            return Fraction(0)
+
+    s = NoR1("nvfp4")
+    ctx = V.ctx_of("dead", (2, 1024, 1024), 0, 0)
+    a_rows, b_rows = dead_rows(2), dead_rows(2)
+    tile = type(s.tiles(Shape(64, 1024, 64))[0])(range(2), range(2))
+    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 2, 1024, (), (), (0,)), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
+
+
+def test_v_ex_past_its_count_cap_fails_the_audit():
+    """At most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight: one each on 32 x 128 x 16."""
+    s = V.scheme("nvfp4", True)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
+    assert (W.voluntary_cap(32), W.voluntary_cap(16), W.voluntary_cap(65)) == (1, 1, 2)
+    for rec in (W.UnitRecord(u, 20, K, (3,), (), (5, 6)), W.UnitRecord(u, 20, K, (3,), (), (), (1, 2))):
+        out = W.audit(s, epoch, prover, tr, splits, [rec], BEFORE, AFTER, 8)
+        assert not out.audit.accepted and "more voluntary rows than V-EX allows" in out.audit.verdicts[0].reason
+    with pytest.raises(ValueError):
+        W.UnitRecord(u, 20, K, (3,), (), (3,))
+
+
+def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
+    """`volunteer`, the honest prover's remedy: on a scheme whose debit puts tile position 7 at 20 units per word against a
+    cap of 1 per credited word, it gives up A row 7 (not a column, which leaves the tile over), and the audit then
+    accepts; without it the tile fails."""
+
+    class Heavy(F.PearlC4):
+        def tile_cap(self, record, ops, rows, cols):
+            return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
+
+    s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits = {9: W.Split(K)}
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    va, vb = W.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
+    assert (va, vb) == ({3: [7]}, {})
+    fixed = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
+    assert W.audit(s, epoch, prover, tr, splits, fixed, BEFORE, AFTER, 8).audit.accepted
+    tile = s.tiles(epoch.workload.matmuls[0].shape)[0]
+    ctx = Context(epoch.salt, epoch.workload.matmuls[0], tr.activation_roots[0], epoch.weight_roots[9])
+    ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
+    assert "exceeds the cap" in W.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops)
 
 
 def device_dump(path, s: F.PearlC4, swap_leaves=False, flip_root_a=False) -> None:

@@ -231,7 +231,8 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
     workload = au.Workload((unit,))
     epoch = _epoch(t, workload)
     rec = t["records"][0]
-    records = [W.UnitRecord(unit, rec["real_rows"], rec["k_kept"], tuple(rec["excluded_a"]), tuple(rec["excluded_b"]))]
+    records = [W.UnitRecord(unit, rec["real_rows"], rec["k_kept"], tuple(rec["excluded_a"]), tuple(rec["excluded_b"]),
+                            tuple(rec.get("voluntary_a", ())), tuple(rec.get("voluntary_b", ())))]
     splits = {int(w): W.Split(sp["k"], tuple(sp["side"]), bytes.fromhex(sp["calibration"]))
               for w, sp in t["splits"].items()}
     commitment = Commitment(bytes.fromhex(t["transcript"]["root"]), t["transcript"]["count"])

@@ -407,8 +407,21 @@ useful    U/(α_A·α_B), glue
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
+  - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
+    record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
+    the same in every unit of the weight).
+    - They are committed in `records_root` beside the excluded rows, before the draws' beacon. A record without them
+      encodes exactly as before.
+    - A voluntary row earns no credit, and its words are still checked on every drawn tile that holds it.
+    - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
+    - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
+    - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
+      tile under, before the beacon.
   - A cell's draw weight is its row's share of `wrefOf` at the kept width. An accepted unit is credited
     (1 − ρ)·`creditOf` over its credited cells.
+  - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
+    never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
+    which is exactly the bound claimed.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
     is at most ρ times those cells' credit, with ρ = 1/400.
