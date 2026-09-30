@@ -1715,7 +1715,7 @@ fn lanes_into(v: &[u64], n: usize, dst: &mut [u64], stride: usize, off: usize, l
 pub fn unit_ab_into(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64]) -> bool {
     assert_eq!(out.len(), 4 * uw * ins.len(), "unit_ab_into: out is not 4 * uw words per slot");
     let t0 = Instant::now();
-    let one_pass = net.one_pass();
+    let one_pass = unit_flat() && net.one_pass();
     let flat_s = t0.elapsed().as_secs_f64();
     let prof = GroupProf::default();
     let ok = out.par_chunks_mut(64 * 4 * uw).zip(ins.par_chunks(64)).enumerate().all(|(gi, (dst, grp))| {
@@ -1749,14 +1749,19 @@ struct GroupProf {
 impl GroupProf {
     fn eval(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>]) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
         let te = Instant::now();
-        let cols = bit_rows(grp, net.in_words);
-        let got = net.eval64_flat(|col| cols[col]);
+        let lanes_in = |col: usize| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l));
+        let got = if unit_flat() {
+            let cols = bit_rows(grp, net.in_words);
+            net.eval64_flat(|col| cols[col])
+        } else {
+            net.eval64(lanes_in)
+        };
         let e = te.elapsed().as_nanos() as u64;
         self.eval_ns.fetch_add(e, Ordering::Relaxed);
         self.eval_max.fetch_max(e, Ordering::Relaxed);
         if *self.check.get_or_init(|| std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1")) {
             let tr = Instant::now();
-            let want = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
+            let want = net.eval64(lanes_in);
             let r = tr.elapsed().as_nanos() as u64;
             self.ref_ns.fetch_add(r, Ordering::Relaxed);
             self.ref_max.fetch_max(r, Ordering::Relaxed);
@@ -1796,6 +1801,12 @@ fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
         }
     }
     out
+}
+
+/// Whether host unit slots are evaluated by [`IrUnitNet::eval64_flat`]; `FC_UNIT_FLAT=0`: by `eval64`, the path before it.
+pub fn unit_flat() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("FC_UNIT_FLAT").as_deref() != Ok("0"))
 }
 
 /// `FC_UNIT_PROFILE=1`: the host witness's parts as `UNITPROF` lines on stderr.
@@ -2260,7 +2271,7 @@ impl Stmt {
                 }).collect()
             } else {
                 let t0 = Instant::now();
-                let one_pass = net.one_pass();
+                let one_pass = unit_flat() && net.one_pass();
                 let flat_s = t0.elapsed().as_secs_f64();
                 let prof = GroupProf::default();
                 let items = ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
