@@ -12,7 +12,7 @@
 //    5  hmma_f16_f16_rate      mma.sync.aligned.m16n8k16.row.col.f16.f16.f16.f16                                2048 MAC
 //    6  fadd_rate              add.rn.f32                                                                         32 lanes
 //    7  ffma_rate              fma.rn.f32                                                                         32 lanes
-//    8  f2fp_rate              cvt.rn.satfinite.e4m3x2.f32 (+ one 3-input XOR per two converts)                 64 elements
+//    8  f2fp_rate              cvt.rn.satfinite.e4m3x2.f32 (+ one 3-input add per two converts)                 64 elements
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -26,6 +26,7 @@ constexpr int NACC = 4;    // independent MMA accumulators per warp
 constexpr int UNROLL = 4;  // loop-body repeats
 constexpr int NCHAIN = 8;  // independent scalar chains per thread
 constexpr int SUNROLL = 8;
+constexpr int CHK = 16;    // chk words per thread, whatever the op writes (the host reads (blocks, THREADS, CHK))
 
 __device__ __forceinline__ unsigned smid() {
     unsigned r;
@@ -113,7 +114,7 @@ __device__ __forceinline__ void mma_f16_f16(uint32_t c[2], const uint32_t a[4], 
         }                                                                                                             \
         RATE_EPILOGUE                                                                                                 \
         for (int j = 0; j < NACC; j++)                                                                                \
-            for (int i = 0; i < 4; i++) chk[((size_t)tid * NACC + j) * 4 + i] = __float_as_uint(c[j][i]);            \
+            for (int i = 0; i < 4; i++) chk[(size_t)tid * CHK + j * 4 + i] = __float_as_uint(c[j][i]);                 \
     }
 
 #define MMA_F16_RATE(KNAME, CALL)                                                                                     \
@@ -129,7 +130,7 @@ __device__ __forceinline__ void mma_f16_f16(uint32_t c[2], const uint32_t a[4], 
         }                                                                                                             \
         RATE_EPILOGUE                                                                                                 \
         for (int j = 0; j < NACC; j++)                                                                                \
-            for (int i = 0; i < 4; i++) chk[((size_t)tid * NACC + j) * 4 + i] = i < 2 ? c[j][i] : 0u;                  \
+            for (int i = 0; i < 4; i++) chk[(size_t)tid * CHK + j * 4 + i] = i < 2 ? c[j][i] : 0u;                       \
     }
 
 MMA_F32_RATE(qmma_e4m3_f32_rate, mma_e4m3_f32(c[j], a, b))
@@ -155,7 +156,7 @@ MMA_F16_RATE(hmma_f16_f16_rate, mma_f16_f16(c[j], a, b))
             }                                                                                                         \
         }                                                                                                             \
         RATE_EPILOGUE                                                                                                 \
-        for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * NCHAIN + j] = __float_as_uint(x[j]);                       \
+        for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = __float_as_uint(x[j]);                          \
     }
 
 SCALAR_RATE(fadd_rate, asm volatile("add.rn.f32 %0, %0, %1;" : "+f"(x[j]) : "f"(y)))
@@ -169,25 +170,27 @@ __device__ __forceinline__ uint32_t cvt_e4m3x2(float hi, float lo) {
 
 // F2FP: each convert pairs one of the iteration's two values f, g (two integer adds per iteration, so nothing can be hoisted) with
 // one of 16 per-lane constants, in both orders: 64 distinct converts per iteration, folded two at a time into a chain's word by one
-// 3-input XOR.  Row word 0 = f's start word (g = f + 2^11), word 1 = the constants' base word (constant k = base + k).
+// 3-input add (an XOR fold of both orders keeps only hi ^ lo, and f and g cancel out of it).  Row word 0 = f's start word
+// (g = f + 2^21), word 1 = the constants' base word (constant k = base + k * 2^20): the constants sit one E4M3 ulp apart and g two
+// from f, so the gate's check words cover 18 distinct codes per lane.
 __global__ void __launch_bounds__(THREADS) f2fp_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk, long long* __restrict__ cycles,
                                                      int* __restrict__ sm, int iters) {
     RATE_PROLOGUE
     uint32_t h[NCHAIN] = {};
     float xs[2 * NCHAIN];
-    for (int k = 0; k < 2 * NCHAIN; k++) xs[k] = __uint_as_float(row[1] + (uint32_t)k);
+    for (int k = 0; k < 2 * NCHAIN; k++) xs[k] = __uint_as_float(row[1] + ((uint32_t)k << 20));
 #pragma unroll 1
     for (int it = 0; it < iters; it++) {
         const float f = __uint_as_float(row[0] + (uint32_t)it);
-        const float g = __uint_as_float(row[0] + (uint32_t)it + 2048u);
+        const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
 #pragma unroll
         for (int k = 0; k < 2 * NCHAIN; k++) {
-            h[k % NCHAIN] ^= cvt_e4m3x2(f, xs[k]) ^ cvt_e4m3x2(xs[k], f);
-            h[(k + 1) % NCHAIN] ^= cvt_e4m3x2(g, xs[k]) ^ cvt_e4m3x2(xs[k], g);
+            h[k % NCHAIN] += cvt_e4m3x2(f, xs[k]) + cvt_e4m3x2(xs[k], f);
+            h[(k + 1) % NCHAIN] += cvt_e4m3x2(g, xs[k]) + cvt_e4m3x2(xs[k], g);
         }
     }
     RATE_EPILOGUE
-    for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * NCHAIN + j] = h[j];
+    for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
 }
 
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
@@ -208,7 +211,7 @@ int w1_run(int op, int blocks, int smem_bytes, int iters, const uint32_t* in, ui
     if (op < 0 || op >= NOPS) return (int)cudaErrorInvalidValue;
     cudaError_t err = cudaFuncSetAttribute(KERNELS[op], cudaFuncAttributeMaxDynamicSharedMemorySize, smem_bytes);
     if (err != cudaSuccess) return (int)err;
-    const size_t nchk = (size_t)blocks * THREADS * 16;
+    const size_t nchk = (size_t)blocks * THREADS * CHK;
     uint32_t *dIn = nullptr, *dChk = nullptr;
     long long* dCyc = nullptr;
     int* dSm = nullptr;

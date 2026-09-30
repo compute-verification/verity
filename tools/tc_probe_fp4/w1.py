@@ -8,13 +8,14 @@ prices W1 reads off them.
 The unit is W1's: one dense E4M3 MAC with FP32 accumulation, i.e. 1 / (the qmma_e4m3_f32 rate per SM per clock).  A price is that
 rate over an op's rate in its own unit: per MAC for the atoms, per register written for FADD / FFMA, per code (and per instruction,
 two codes) for the cast.  Per-clock rates come from clock64() around each block's loop, so they don't move with the SM clock; the
-clock itself is recorded per rep (cycles over event time, and an ``nvidia-smi --id`` sample), and a run without locked clocks is
-labelled unlocked.
+clock itself is recorded per rep (cycles over event time, and an ``nvidia-smi --id`` sample), and results carry ``--clocks`` as
+their clock label (unlocked unless the operator says otherwise, e.g. locked-2100 on node 2).
 
 Gates, in order, before anything is timed: the device (``fp8.identity_gate``: one visible device, its UUID, sm_120); the SASS gate
 (each op's loop body holds exactly its instruction, NACC x UNROLL MMAs or 64 scalar instructions, and its full loop composition is
 recorded); the numeric gate (all-ones operands give exact integers for every atom and FADD / FFMA; the cast is checked against
-``fp8.cvt_ref`` on the timing data); one block per SM (distinct %smid).  A failed gate writes no measurements.  ``--fake-silicon``
+``fp8.cvt_ref`` on the timing data, and an op whose expected words are all zero fails as vacuous); one block per SM (distinct
+%smid).  A failed gate writes no measurements.  ``--fake-silicon``
 replaces the device with a model that returns the gate's words and cycles from the Public datasheet rates (a CPU dry run of the
 plumbing, refused under research run); ``--corrupt-word I`` flips one bit of one gate word, and the run must then fail.
 """
@@ -180,17 +181,17 @@ def _f16_bits(x: float) -> int:
 
 
 def f2fp_model(iters: int, rows: np.ndarray) -> np.ndarray:
-    """h[lane][8] of f2fp_rate: per iteration 16 constants x {f, g} x both operand orders, XOR-folded; P(hi, lo) = code(hi) << 8 | code(lo)."""
+    """h[lane][8] of f2fp_rate: per iteration 16 constants x {f, g} x both operand orders, summed mod 2^32; P(hi, lo) = code(hi) << 8 | code(lo)."""
     rows = np.asarray(rows, np.uint32).reshape(32, 8)
     h = np.zeros((32, NCHAIN), np.uint32)
-    xs = rows[:, 1:2] + np.arange(2 * NCHAIN, dtype=np.uint32)
+    xs = rows[:, 1:2] + (np.arange(2 * NCHAIN, dtype=np.uint32) << 20)
     cx = F8.cvt_ref("e4m3", xs).astype(np.uint32)
     for it in range(iters):
-        for s, off in ((0, 0), (1, 2048)):
+        for s, off in ((0, 0), (1, 1 << 21)):
             c = F8.cvt_ref("e4m3", rows[:, 0] + np.uint32(it + off)).astype(np.uint32)[:, None]
-            v = ((c << 8) | cx) ^ ((cx << 8) | c)
+            v = ((c << 8) | cx) + ((cx << 8) | c)
             for k in range(2 * NCHAIN):
-                h[:, (k + s) % NCHAIN] ^= v[:, k]
+                h[:, (k + s) % NCHAIN] += v[:, k]
     return h
 
 
@@ -247,10 +248,14 @@ def numeric_gate(dev, rng) -> tuple[dict, dict[int, np.ndarray]]:
         rows = np.array(GATE_ROW[op], np.uint32)[None].repeat(32, 0) if op in GATE_ROW else rows_t[op]
         chk, _, sm, _ = dev.run(op, GATE_ITERS, rows)
         want = expected_words(op, GATE_ITERS, rows)
-        bad = int(np.count_nonzero(chk != want[None]))
-        res[name] = {"iters": GATE_ITERS, "data": "all-ones" if op in GATE_ROW else "timing rows vs fp8.cvt_ref", "mismatches": bad,
+        diff = np.argwhere(chk != want[None])
+        res[name] = {"iters": GATE_ITERS, "data": "all-ones" if op in GATE_ROW else "timing rows vs fp8.cvt_ref",
+                     "mismatches": int(len(diff)), "vacuous": not want[:, :NCHAIN].any(),
                      "distinct_sms": int(len(set(sm.tolist()))), "blocks": int(len(sm))}
-    ok = all(r["mismatches"] == 0 and r["distinct_sms"] == r["blocks"] for r in res.values())
+        if len(diff):
+            b, t, w = (int(v) for v in diff[0])
+            res[name]["first_mismatch"] = {"block": b, "thread": t, "word": w, "got": f"{int(chk[b, t, w]):08x}", "want": f"{int(want[t, w]):08x}"}
+    ok = all(r["mismatches"] == 0 and not r["vacuous"] and r["distinct_sms"] == r["blocks"] for r in res.values())
     return {"ok": ok, "ops": res}, rows_t
 
 
@@ -331,7 +336,7 @@ def run(args) -> tuple[int, dict]:
     res["numeric_gate"], rows_t = numeric_gate(dev, rng)
     if not res["numeric_gate"]["ok"]:
         failures.append("numeric gate: " + ", ".join(k for k, r in res["numeric_gate"]["ops"].items()
-                                                     if r["mismatches"] or r["distinct_sms"] != r["blocks"]))
+                                                     if r["mismatches"] or r["vacuous"] or r["distinct_sms"] != r["blocks"]))
         return finish(out, args, res, failures, ident, t0)
     res["timing"] = timing(dev, rows_t, args.reps, args.target_cycles, ident.get("gpu_uuid"))
     res["prices"] = prices(res["timing"])

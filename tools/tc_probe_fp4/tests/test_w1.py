@@ -48,6 +48,17 @@ def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
     assert "timing" not in res and "prices" not in res
 
 
+def test_gate_words_are_not_vacuous():
+    rows = w1.timing_rows(8, np.random.default_rng(w1.F8.SEED_DEFAULT))
+    assert w1.expected_words(8, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
+
+
+def test_vacuous_gate_fails(tmp_path, no_nvcc, monkeypatch):
+    monkeypatch.setattr(w1, "expected_words", lambda op, iters, rows: np.zeros((w1.THREADS, 16), np.uint32))
+    code, res = _run(tmp_path)
+    assert code == 1 and res["numeric_gate"]["ops"]["fadd"]["vacuous"] and "prices" not in res
+
+
 def _sass(body: list[str]) -> str:
     lines = [f"        /*{16 * i:04x}*/                   {op} R0, R1 ;" for i, op in enumerate(body)]
     lines.append(f"        /*{16 * len(body):04x}*/                   BRA.U UP0, 0x0 ;")
@@ -73,13 +84,15 @@ def test_f2fp_packing_pinned():
     h = w1.f2fp_model(1, rows)
     f = int(w1.F8.cvt_ref("e4m3", np.array([0x3F800000], np.uint32))[0])
     assert f == 0x38
-    xs = w1.F8.cvt_ref("e4m3", rows[0, 1] + np.arange(16, dtype=np.uint32)).astype(int)
-    g = int(w1.F8.cvt_ref("e4m3", np.array([0x3F800000 + 2048], np.uint32))[0])
+    xs = w1.F8.cvt_ref("e4m3", rows[0, 1] + (np.arange(16, dtype=np.uint32) << 20)).astype(int)
+    assert xs.tolist() == list(range(0x40, 0x50))
+    g = int(w1.F8.cvt_ref("e4m3", np.array([0x3F800000 + (1 << 21)], np.uint32))[0])
+    assert g == 0x3A
     want = [0] * 8
     for k in range(16):
-        want[k % 8] ^= ((f << 8) | xs[k]) ^ ((xs[k] << 8) | f)
-        want[(k + 1) % 8] ^= ((g << 8) | xs[k]) ^ ((xs[k] << 8) | g)
-    assert h[0].tolist() == want
+        want[k % 8] += ((f << 8) | xs[k]) + ((xs[k] << 8) | f)
+        want[(k + 1) % 8] += ((g << 8) | xs[k]) + ((xs[k] << 8) | g)
+    assert h[0].tolist() == want and all(want)
 
 
 def test_tool_declarations_resolve():
