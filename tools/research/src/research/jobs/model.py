@@ -1,14 +1,23 @@
-"""The Job queue's reference semantics: what Control's Job queue (the site's `/api/jobs`, on Neon) does, as an in-memory model.
+"""The Scheduler's batch jobs, as an in-memory model: what the site's `/api/jobs` (on Neon) does.
 
-The Job queue holds batch, unattended work on pods: a job is added, claimed by a worker under a lease, renewed while it runs,
-and completed with an outcome.  An agent's interactive session on a pod is a Broker allocation, not a job.
+A job is batch, unattended work on a pod: it's added, claimed by a worker under a lease, renewed while it runs, and completed
+with an outcome.  An agent's interactive pod is the Scheduler's other kind of allocation, built later on these tables.
+
+Four flow rules (site spec §10.1, borrowed from pg-boss, Hatchet and Temporal):
+    dedupe       a `dedupe_key` is held only by a live job or a verdict (HOLDS_KEY); a dead or cancelled job lets it go
+    concurrency  a job with a `concurrency_key` waits while `concurrency_limit` jobs of that key are running
+    deadline     a job still queued `start_within_s` after `not_before` raises `job.unschedulable` once, counting the live
+                 workers that meet each of its requirements; nothing is cancelled
+    retries      an error or a lost lease requeues after RETRY_BASE_S * 2^(attempts - 1) (at most RETRY_CAP_S), and the slot
+                 or worker it erred on skips the job for AVOID_S; a failure is still never retried
 
 This is the executable spec of the job-service design (§2, §3) and of the site spec.  `vectors.json` beside it pins every rule
 as request/response cases; the site's TypeScript runs the same file, and `tests/test_jobs_vectors.py` runs it here.  The
 dispatcher's tests use this model as their server.
 
-`JobService.request(method, path, token, body, now)` is the HTTP contract: it returns `(status, body)`. `tick(now)` is the
-expire-leases cron. Times are seconds since `epoch`, written in responses as ISO 8601 (`iso`).
+`JobService.request(method, path, token, body, now)` is the HTTP contract: it returns `(status, body)`.  `tick(now)` is the
+expire-leases cron, which also raises the start deadlines.  Times are seconds since `epoch`, written in responses as ISO 8601
+(`iso`).
 """
 from __future__ import annotations
 
@@ -30,6 +39,13 @@ DEFAULT_LEASE_S = 900
 #: (min, max) lease_s by kind, checked in code, not by the database, so the interactive kind can carry leases of hours
 LEASE_BOUNDS = {kind: (60, 3600) for kind in KINDS}
 DEFAULT_MAX_ATTEMPTS = 3
+#: the states whose job holds its dedupe key: live ones, and verdicts (a `failed` is final, a `done` is reused); `dead` and
+#: `cancelled` let the key go, so the same work can be added again
+HOLDS_KEY = ("queued", "running", "done", "failed")
+RETRY_BASE_S, RETRY_CAP_S = 60, 1800           # an error's retry waits base * 2^(attempts - 1), at most the cap
+AVOID_S = 1800                                 # and skips the slot or worker that erred, this long
+LIVE_WORKER_S = 600                            # a worker that claimed this recently counts as live for job.unschedulable
+START_BOUNDS = (60, 86400)
 #: a budget line's prefix, as budgets.toml names them (`vy-coord-`)
 LINE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}-")
 
@@ -70,6 +86,11 @@ class Job:
     max_attempts: int
     lease_s: int
     line: str | None = None            # the budget line the job's compute is charged to
+    concurrency_key: str | None = None
+    concurrency_limit: int | None = None
+    start_within_s: int | None = None
+    unschedulable_at: float | None = None
+    avoid: list = field(default_factory=list)   # [{"slot" | "worker": id, "until": seconds}]
     state: str = "queued"
     attempts: int = 0
     lease_worker: str | None = None
@@ -150,7 +171,11 @@ class JobService:
         return {"id": j.id, "kind": j.kind, "state": j.state, "priority": j.priority, "payload": j.payload,
                 "requirements": j.requirements, "dedupe_key": j.dedupe_key, "enqueued_by": j.enqueued_by,
                 "enqueued_at": self.iso(j.enqueued_at), "not_before": self.iso(j.not_before), "attempts": j.attempts,
-                "max_attempts": j.max_attempts, "lease_s": j.lease_s, "line": j.line, "lease_worker": j.lease_worker, "lease_slot": j.lease_slot,
+                "max_attempts": j.max_attempts, "lease_s": j.lease_s, "line": j.line, "concurrency_key": j.concurrency_key,
+                "concurrency_limit": j.concurrency_limit, "start_within_s": j.start_within_s,
+                "unschedulable_at": self.iso(j.unschedulable_at),
+                "avoid": [{**{k: v for k, v in a.items() if k != "until"}, "until": self.iso(a["until"])} for a in j.avoid],
+                "lease_worker": j.lease_worker, "lease_slot": j.lease_slot,
                 "lease_expires_at": self.iso(j.lease_expires), "cancel_requested": j.cancel_requested, "progress": j.progress,
                 "result": j.result, "finished_at": self.iso(j.finished_at)}
 
@@ -253,15 +278,23 @@ class JobService:
         key = body.get("dedupe_key")
         if key is not None and not (isinstance(key, str) and 0 < len(key) <= 200):
             raise Refused(400, "dedupe_key must be a string of 1 to 200 characters")
+        ckey, climit, start = body.get("concurrency_key"), body.get("concurrency_limit"), body.get("start_within_s")
+        if ckey is not None and not (isinstance(ckey, str) and 0 < len(ckey) <= 200):
+            raise Refused(400, "concurrency_key must be a string of 1 to 200 characters")
+        if climit is not None and not (ckey is not None and _int(climit) and 1 <= climit <= 100):
+            raise Refused(400, "concurrency_limit must be an integer from 1 to 100, with a concurrency_key")
+        if start is not None and not (_int(start) and START_BOUNDS[0] <= start <= START_BOUNDS[1]):
+            raise Refused(400, f"start_within_s must be an integer from {START_BOUNDS[0]} to {START_BOUNDS[1]}")
         if key is not None:
             for j in self.jobs.values():
-                if j.dedupe_key == key:
+                if j.dedupe_key == key and j.state in HOLDS_KEY:
                     return 200, {"id": j.id, "created": False, "state": j.state}
         try:
             not_before = self.seconds(body["not_before"]) if body.get("not_before") is not None else now
         except (TypeError, AttributeError, ValueError):
             raise Refused(400, "not_before must be an ISO 8601 time") from None
-        j = Job(len(self.jobs) + 1, kind, payload, prio, req, key, t.name, now, not_before, max_attempts, lease_s, body.get("line"))
+        j = Job(len(self.jobs) + 1, kind, payload, prio, req, key, t.name, now, not_before, max_attempts, lease_s, body.get("line"),
+                ckey, (climit or 1) if ckey is not None else None, start)
         self.jobs[j.id] = j
         self._event(now, "job.added", f"job:{j.id}", t.name, {"kind": kind, "dedupe_key": key})
         return 201, {"id": j.id, "created": True, "state": j.state}
@@ -278,8 +311,14 @@ class JobService:
         if not isinstance(caps, dict):
             raise Refused(400, "capabilities must be an object")
         w.capabilities, w.last_seen = caps, now
+        slot = body.get("slot")
+        running = {}
+        for x in self.jobs.values():
+            if x.state == "running" and x.concurrency_key is not None:
+                running[x.concurrency_key] = running.get(x.concurrency_key, 0) + 1
         ready = [j for j in self.jobs.values() if j.state == "queued" and j.kind in kinds and j.not_before <= now
-                 and meets(j.requirements, caps)]
+                 and meets(j.requirements, caps) and not self._avoids(j, worker, slot, now)
+                 and (j.concurrency_key is None or running.get(j.concurrency_key, 0) < j.concurrency_limit)]
         if not ready:
             return 204, {}
         j = min(ready, key=lambda j: (-j.priority, j.enqueued_at, j.id))
@@ -292,6 +331,19 @@ class JobService:
         return 200, {"job": {"id": j.id, "kind": j.kind, "payload": j.payload, "requirements": j.requirements},
                      "attempt": j.attempts, "lease_token": lease, "lease_s": j.lease_s,
                      "lease_expires_at": self.iso(j.lease_expires), "grants": {}}
+
+    @staticmethod
+    def _avoids(j: Job, worker: str, slot: str | None, now: float) -> bool:
+        """Whether `j` skips this claim: an attempt of it erred on this slot (a dispatcher's pod), or on this worker when that
+        attempt had no slot (a pod worker), within AVOID_S."""
+        return any(a["until"] > now and (a.get("slot") == slot if "slot" in a else a.get("worker") == worker) for a in j.avoid)
+
+    def _retry(self, j: Job, a: Attempt, now: float) -> None:
+        """Back to `queued` after an error or a lost lease: later, and elsewhere."""
+        j.state = "queued"
+        j.not_before = now + min(RETRY_BASE_S * 2 ** (j.attempts - 1), RETRY_CAP_S)
+        j.avoid = [x for x in j.avoid if x["until"] > now] + [{"slot": a.slot, "until": now + AVOID_S} if a.slot else
+                                                               {"worker": a.worker, "until": now + AVOID_S}]
 
     def renew(self, t: Token, j: Job, body: dict, now: float) -> tuple[int, dict]:
         self._lease(j, body.get("lease_token"))
@@ -318,7 +370,8 @@ class JobService:
         elif outcome == "failed":                                       # a failure is a verdict: final, never retried
             j.state, j.result, j.finished_at = "failed", result, now
         elif j.attempts < j.max_attempts:                               # an error is no verdict: another worker tries again
-            j.state, j.result = "queued", result
+            j.result = result
+            self._retry(j, a, now)
         else:
             j.state, j.result, j.finished_at = "dead", result, now
         self._event(now, "job.finished", f"job:{j.id}", t.name, {"attempt": a.n, "outcome": outcome, "state": j.state,
@@ -343,8 +396,10 @@ class JobService:
     # -- the expire-leases cron
 
     def tick(self, now: float) -> list[int]:
-        """Every running job whose lease has passed: `lease-lost`, then queued again, or dead after `max_attempts`, or
-        cancelled when a cancel was asked. Returns the ids it moved."""
+        """Every running job whose lease has passed: `lease-lost`, then queued again (later, elsewhere), or dead after
+        `max_attempts`, or cancelled when a cancel was asked. And each queued job past its start deadline: `job.unschedulable`,
+        once. Returns the ids whose lease it ended."""
+        self._unschedulable(now)
         moved = []
         for j in sorted(self.jobs.values(), key=lambda j: j.id):
             if j.state != "running" or j.lease_expires is None or j.lease_expires >= now:
@@ -355,7 +410,7 @@ class JobService:
             if j.cancel_requested:
                 j.state, j.finished_at = "cancelled", now
             elif j.attempts < j.max_attempts:
-                j.state = "queued"
+                self._retry(j, a, now)
             else:
                 j.state, j.finished_at = "dead", now
             self._event(now, "job.lease_lost", f"job:{j.id}", "cron", {"attempt": a.n, "state": j.state})
@@ -363,6 +418,18 @@ class JobService:
                 self._event(now, "job.dead", f"job:{j.id}", "cron", {"attempts": j.attempts})
             moved.append(j.id)
         return moved
+
+
+    def _unschedulable(self, now: float) -> None:
+        live = [w for w in self.workers.values() if not w.retired and w.last_seen is not None and now - w.last_seen <= LIVE_WORKER_S]
+        for j in sorted(self.jobs.values(), key=lambda j: j.id):
+            if j.state != "queued" or j.start_within_s is None or j.unschedulable_at is not None or now - j.not_before <= j.start_within_s:
+                continue
+            j.unschedulable_at = now
+            seen = [w for w in live if j.kind in w.kinds]
+            meeting = {r: sum(1 for w in seen if meets({r: v}, w.capabilities)) for r, v in sorted(j.requirements.items())}
+            self._event(now, "job.unschedulable", f"job:{j.id}", "cron", {"requirements": j.requirements, "waited_s": int(now - j.not_before),
+                                                                           "workers_seen": len(seen), "workers_meeting": meeting})
 
 
 class Refused(Exception):

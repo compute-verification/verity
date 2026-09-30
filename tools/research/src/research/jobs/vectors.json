@@ -129,24 +129,29 @@
         {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "max_attempts": 2}, "expect": {"status": 201}},
         {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 200, "body": {"attempt": 1}}, "save": {"L1": "lease_token"}},
         {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "error", "summary": "the pod lost its disk"}, "expect": {"status": 200, "body": {"state": "queued"}}},
-        {"at": 3, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
-        {"at": 4, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "error"}, "expect": {"status": 200, "body": {"state": "dead"}}},
-        {"at": 5, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 204}},
-        {"at": 6, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "dead", "attempts": 2, "result": {"outcome": "error"}}}}
+        {"at": 3, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "queued", "not_before": "2026-09-29T00:01:02Z", "avoid": [{"worker": "dispatch:rc", "until": "2026-09-29T00:30:02Z"}]}}},
+        {"at": 61, "req": ["POST", "/api/jobs/claim"], "token": "tok-pod", "body": {"worker": "aaaaaaaaaaaaaa"}, "expect": {"status": 204}},
+        {"at": 62, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 204}},
+        {"at": 62, "req": ["POST", "/api/jobs/claim"], "token": "tok-pod", "body": {"worker": "aaaaaaaaaaaaaa"}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
+        {"at": 63, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-pod", "body": {"lease_token": "$L2", "outcome": "error"}, "expect": {"status": 200, "body": {"state": "dead"}}},
+        {"at": 1900, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 204}},
+        {"at": 1901, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "dead", "attempts": 2, "result": {"outcome": "error"}}}}
       ]
     },
     {
       "name": "a lost lease puts the job back, and the old lease can do nothing",
       "steps": [
         {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "lease_s": 60}, "expect": {"status": 201}},
-        {"at": 0, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 200, "body": {"lease_expires_at": "2026-09-29T00:01:00Z"}}, "save": {"L1": "lease_token"}},
+        {"at": 0, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1"}, "expect": {"status": 200, "body": {"lease_expires_at": "2026-09-29T00:01:00Z"}}, "save": {"L1": "lease_token"}},
         {"at": 30, "tick": true, "expect": {"moved": []}},
         {"at": 60, "tick": true, "expect": {"moved": []}},
         {"at": 61, "tick": true, "expect": {"moved": [1]}},
         {"at": 62, "req": ["POST", "/api/jobs/1/renew"], "token": "tok-dispatch", "body": {"lease_token": "$L1"}, "expect": {"status": 409}},
-        {"at": 63, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc"}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
-        {"at": 64, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed"}, "expect": {"status": 409}},
-        {"at": 65, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "passed"}, "expect": {"status": 200, "body": {"state": "done"}}}
+        {"at": 62, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "queued", "not_before": "2026-09-29T00:02:01Z", "avoid": [{"slot": "vy-coord-t1", "until": "2026-09-29T00:31:01Z"}]}}},
+        {"at": 121, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1"}, "expect": {"status": 204}},
+        {"at": 121, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t2"}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
+        {"at": 122, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed"}, "expect": {"status": 409}},
+        {"at": 123, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "passed"}, "expect": {"status": 200, "body": {"state": "done"}}}
       ]
     },
     {
@@ -252,6 +257,78 @@
         {"at": 18, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": 3}, "expect": {"status": 400}},
         {"at": 18, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": ["merge-check"], "expect": {"status": 400}},
         {"at": 19, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed"}, "expect": {"status": 200, "body": {"state": "done"}}}
+      ]
+    },
+    {
+      "name": "a dedupe key is held only by a live job or a verdict",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "dedupe_key": "k1"}, "expect": {"status": 201, "body": {"id": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs/1/cancel"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "cancelled"}}},
+        {"at": 2, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "dedupe_key": "k1"}, "expect": {"status": 201, "body": {"id": 2, "created": true}}},
+        {"at": 3, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "dedupe_key": "k1"}, "expect": {"status": 200, "body": {"id": 2, "created": false, "state": "queued"}}},
+        {"at": 4, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "lean-regen", "payload": {}, "dedupe_key": "k2", "max_attempts": 1}, "expect": {"status": 201, "body": {"id": 3}}},
+        {"at": 5, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "kinds": ["lean-regen"]}, "expect": {"status": 200, "body": {"job": {"id": 3}}}, "save": {"L3": "lease_token"}},
+        {"at": 6, "req": ["POST", "/api/jobs/3/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L3", "outcome": "error"}, "expect": {"status": 200, "body": {"state": "dead"}}},
+        {"at": 7, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "lean-regen", "payload": {}, "dedupe_key": "k2"}, "expect": {"status": 201, "body": {"id": 4, "created": true}}},
+        {"at": 8, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "kinds": ["lean-regen"]}, "expect": {"status": 200, "body": {"job": {"id": 4}}}, "save": {"L4": "lease_token"}},
+        {"at": 9, "req": ["POST", "/api/jobs/4/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L4", "outcome": "failed"}, "expect": {"status": 200, "body": {"state": "failed"}}},
+        {"at": 10, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "lean-regen", "payload": {}, "dedupe_key": "k2"}, "expect": {"status": 200, "body": {"id": 4, "created": false, "state": "failed"}}},
+        {"at": 11, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "kinds": ["merge-check"]}, "expect": {"status": 200, "body": {"job": {"id": 2}}}, "save": {"L2": "lease_token"}},
+        {"at": 12, "req": ["POST", "/api/jobs/2/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "passed"}, "expect": {"status": 200, "body": {"state": "done"}}},
+        {"at": 13, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "dedupe_key": "k1"}, "expect": {"status": 200, "body": {"id": 2, "created": false, "state": "done"}}}
+      ]
+    },
+    {
+      "name": "a concurrency key lets its limit of jobs run at once, and the rest wait",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {"test": "moe-a"}, "concurrency_key": "test:moe"}, "expect": {"status": 201, "body": {"id": 1}}},
+        {"at": 1, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {"test": "moe-b"}, "concurrency_key": "test:moe"}, "expect": {"status": 201, "body": {"id": 2}}},
+        {"at": 2, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {"test": "other"}}, "expect": {"status": 201, "body": {"id": 3}}},
+        {"at": 3, "req": ["GET", "/api/jobs/2"], "token": "tok-reader", "expect": {"status": 200, "body": {"concurrency_key": "test:moe", "concurrency_limit": 1}}},
+        {"at": 4, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1"}, "expect": {"status": 200, "body": {"job": {"id": 1}}}, "save": {"L1": "lease_token"}},
+        {"at": 5, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t2"}, "expect": {"status": 200, "body": {"job": {"id": 3}}}},
+        {"at": 6, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t3"}, "expect": {"status": 204}},
+        {"at": 7, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "passed"}, "expect": {"status": 200, "body": {"state": "done"}}},
+        {"at": 8, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t3"}, "expect": {"status": 200, "body": {"job": {"id": 2}}}},
+        {"at": 9, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "concurrency_limit": 2}, "expect": {"status": 400}},
+        {"at": 9, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "concurrency_key": "k", "concurrency_limit": 0}, "expect": {"status": 400}},
+        {"at": 9, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "concurrency_key": ""}, "expect": {"status": 400}},
+        {"at": 10, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "concurrency_key": "pair", "concurrency_limit": 2}, "expect": {"status": 201, "body": {"id": 4}}},
+        {"at": 10, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "concurrency_key": "pair", "concurrency_limit": 2}, "expect": {"status": 201, "body": {"id": 5}}},
+        {"at": 11, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t4"}, "expect": {"status": 200, "body": {"job": {"id": 4}}}},
+        {"at": 12, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t5"}, "expect": {"status": 200, "body": {"job": {"id": 5}}}}
+      ]
+    },
+    {
+      "name": "a start deadline raises job.unschedulable once, counting the live workers that meet each requirement",
+      "steps": [
+        {"at": 110, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "requirements": {"avx512": true, "min_mem_gb": 32}, "start_within_s": 600}, "expect": {"status": 201, "body": {"id": 1}}},
+        {"at": 200, "req": ["POST", "/api/jobs/claim"], "token": "tok-pod", "body": {"worker": "aaaaaaaaaaaaaa", "capabilities": {"avx512": false}}, "expect": {"status": 204}},
+        {"at": 200, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"avx512": false, "mem_gb": 64}}, "expect": {"status": 204}},
+        {"at": 710, "tick": true, "expect": {"moved": []}},
+        {"at": 710, "req": ["GET", "/api/events?kind=job.unschedulable"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": []}}},
+        {"at": 711, "tick": true, "expect": {"moved": []}},
+        {"at": 712, "req": ["GET", "/api/events?kind=job.unschedulable"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "job:1", "actor": "cron", "payload": {"requirements": {"avx512": true, "min_mem_gb": 32}, "waited_s": 601, "workers_seen": 2, "workers_meeting": {"avx512": 0, "min_mem_gb": 1}}}]}}},
+        {"at": 1400, "tick": true, "expect": {"moved": []}},
+        {"at": 1401, "req": ["GET", "/api/events?kind=job.unschedulable"], "token": "tok-reader", "expect": {"status": 200, "body": {"next": 2}}},
+        {"at": 1402, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"state": "queued", "start_within_s": 600, "unschedulable_at": "2026-09-29T00:11:51Z"}}},
+        {"at": 1403, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}, "start_within_s": 30}, "expect": {"status": 400}}
+      ]
+    },
+    {
+      "name": "an error's retry backs off and avoids the pod that failed, which may try again later",
+      "steps": [
+        {"at": 0, "req": ["POST", "/api/jobs"], "token": "tok-coordinator", "body": {"kind": "merge-check", "payload": {}}, "expect": {"status": 201, "body": {"id": 1}}},
+        {"at": 0, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1"}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 10, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "error", "summary": "the pod failed check's preflight"}, "expect": {"status": 200, "body": {"state": "queued"}}},
+        {"at": 11, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"not_before": "2026-09-29T00:01:10Z", "avoid": [{"slot": "vy-coord-t1", "until": "2026-09-29T00:30:10Z"}]}}},
+        {"at": 69, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t2"}, "expect": {"status": 204}},
+        {"at": 70, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1"}, "expect": {"status": 204}},
+        {"at": 70, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t2"}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
+        {"at": 80, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "error"}, "expect": {"status": 200, "body": {"state": "queued"}}},
+        {"at": 81, "req": ["GET", "/api/jobs/1"], "token": "tok-coordinator", "expect": {"status": 200, "body": {"not_before": "2026-09-29T00:03:20Z", "avoid": [{"slot": "vy-coord-t1"}, {"slot": "vy-coord-t2", "until": "2026-09-29T00:31:20Z"}]}}},
+        {"at": 1809, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1"}, "expect": {"status": 204}},
+        {"at": 1811, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1"}, "expect": {"status": 200, "body": {"attempt": 3}}}
       ]
     }
   ]

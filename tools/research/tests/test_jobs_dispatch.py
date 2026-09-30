@@ -129,6 +129,8 @@ def test_a_pod_that_fails_checks_preflight_is_benched_and_another_pod_takes_the_
     assert (w.job(j).state, w.job(j).attempts) == ("queued", 1) and "t1 failed check's preflight" in w.job(j).result["summary"]
     assert any("t1: failed check's preflight; benched for 1800 s" in line for line in w.lines)
     w.at(5 + D.CLAIM_S)
+    assert w.runner.started[-1] == (j, 1, "t1")            # the retry waits out its backoff (the Job queue's rule)
+    w.at(5 + 2 * D.CLAIM_S)
     assert w.runner.started[-1] == (j, 2, "t2")
     k = w.add(C2)
     w.at(5 + D.BENCH_S - 1)
@@ -199,7 +201,9 @@ def test_a_failed_check_is_final_and_an_error_is_retried():
     w.at(65 + D.CLAIM_S + 5)
     assert (w.job(b).state, w.job(b).attempts) == ("queued", 1)
     assert "refused: pod is EXITED" in w.job(b).result["summary"]
-    w.at(65 + 2 * D.CLAIM_S)
+    w.at(65 + 3 * D.CLAIM_S)
+    assert w.runner.started[-1] == (b, 1, "t1")            # the one pod erred on it: avoided
+    w.at(65 + D.CLAIM_S + 5 + model.AVOID_S + D.CLAIM_S)
     assert w.runner.started[-1] == (b, 2, "t1")
 
 
@@ -231,6 +235,8 @@ def test_a_lost_lease_stops_the_run_and_drops_the_job():
     w.at(62)
     assert w.runner.stopped == [RUN]
     assert any("the lease is gone (409" in line for line in w.lines)
+    assert w.runner.started == [(j, 1, "t1")] and w.job(j).state == "queued"
+    w.at(61 + model.AVOID_S + D.CLAIM_S)
     assert w.runner.started == [(j, 1, "t1"), (j, 2, "t1")]
 
 
@@ -262,7 +268,7 @@ def test_a_run_past_its_timeout_is_stopped_and_retried():
     assert w.runner.stopped == [RUN]
     first = w.svc.attempts[0]
     assert first.outcome == "error" and "timeout_s (100 s)" in first.detail
-    assert w.runner.started == [(j, 1, "t1"), (j, 2, "t1")]
+    assert w.runner.started == [(j, 1, "t1")] and w.job(j).state == "queued"      # retried later, and elsewhere first
 
 
 def test_a_launch_that_hangs_is_killed():
@@ -698,4 +704,4 @@ def test_a_complete_and_a_renewal_send_no_nulls():
     renew = next(b for m, p, b in rec.calls if p.endswith("/renew"))
     complete = next(b for m, p, b in rec.calls if p.endswith("/complete"))
     assert renew["progress"] == {"pod": "t1", "step": "launching"} and "run_id" not in complete
-    assert isinstance(complete["summary"], str) and w.svc.attempts[0].outcome == "error" and w.job(j).attempts == 2
+    assert isinstance(complete["summary"], str) and w.svc.attempts[0].outcome == "error" and w.job(j).state == "queued"

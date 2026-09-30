@@ -196,15 +196,16 @@
       "name": "a failed check fails the train and leaves main alone, and an error waits for the retry",
       "steps": [
         {"at": 0, "req": ["POST", "/api/trains"], "token": "tok-coordinator", "body": {"prs": [2]}, "expect": {"status": 201}},
-        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
+        {"at": 1, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200}, "save": {"L1": "lease_token"}},
         {"at": 2, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L1", "outcome": "error", "summary": "the pod failed check's preflight"}, "expect": {"status": 200, "body": {"state": "queued"}}},
         {"at": 3, "reconcile": true, "expect": {"moved": []}},
-        {"at": 4, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
-        {"at": 5, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "failed", "run_id": "r9"}, "expect": {"status": 200, "body": {"state": "failed"}}},
-        {"at": 6, "reconcile": true, "expect": {"moved": [1]}},
-        {"at": 7, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "failed", "why": "the check of m0+b1 failed (run r9)", "run_id": "r9"}}},
-        {"at": 7, "expect_github": {"refs": {"main": "m0", "train/1": null}, "prs": {"2": {"state": "open"}}}},
-        {"at": 8, "req": ["GET", "/api/events?kind=train.failed"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "payload": {"tip": "m0+b1", "prs": [2], "run_id": "r9", "why": "the check of m0+b1 failed (run r9)"}}]}}}
+        {"at": 62, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t1", "capabilities": {"lease_s": 36000}}, "expect": {"status": 204}},
+        {"at": 62, "req": ["POST", "/api/jobs/claim"], "token": "tok-dispatch", "body": {"worker": "dispatch:rc", "slot": "vy-coord-t2", "capabilities": {"lease_s": 36000}}, "expect": {"status": 200, "body": {"attempt": 2}}, "save": {"L2": "lease_token"}},
+        {"at": 63, "req": ["POST", "/api/jobs/1/complete"], "token": "tok-dispatch", "body": {"lease_token": "$L2", "outcome": "failed", "run_id": "r9"}, "expect": {"status": 200, "body": {"state": "failed"}}},
+        {"at": 64, "reconcile": true, "expect": {"moved": [1]}},
+        {"at": 65, "req": ["GET", "/api/trains/1"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "failed", "why": "the check of m0+b1 failed (run r9)", "run_id": "r9"}}},
+        {"at": 65, "expect_github": {"refs": {"main": "m0", "train/1": null}, "prs": {"2": {"state": "open"}}}},
+        {"at": 66, "req": ["GET", "/api/events?kind=train.failed"], "token": "tok-reader", "expect": {"status": 200, "body": {"events": [{"subject": "train:1", "payload": {"tip": "m0+b1", "prs": [2], "run_id": "r9", "why": "the check of m0+b1 failed (run r9)"}}]}}}
       ]
     },
     {
