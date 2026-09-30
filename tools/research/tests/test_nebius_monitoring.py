@@ -66,3 +66,86 @@ def test_a_dashboard_is_prepared_for_provisioning():
     assert out["panels"][0]["targets"][0]["expr"] == \
         'avg(DCGM_FI_DEV_GPU_TEMP{service="nvidia-dcgm-exporter", instance=~"${instance}", gpu=~"${gpu}"})'
     assert out["panels"][1]["datasource"] == "${ds_prometheus}"                          # a dashboard's own variable stays
+
+
+def load(name: str):
+    spec = importlib.util.spec_from_file_location(f"nebius_{name}", MON / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_exporter_publishes_each_queue_and_which_pod_is_in_it(tmp_path):
+    ex = load("vy_exporter")
+    assert ex.quantity("500m") == 0.5 and ex.quantity("384Gi") == 384 * 2**30 and ex.quantity(5) == 5
+    cqs = {"items": [{"metadata": {"name": "circuits"},
+                      "spec": {"stopPolicy": "Hold", "resourceGroups": [{"flavors": [{"resources": [
+                          {"name": "nvidia.com/gpu", "nominalQuota": 5, "borrowingLimit": 2}, {"name": "cpu", "nominalQuota": "112"},
+                          {"name": "memory", "nominalQuota": "1280Gi"}]}]}]},
+                      "status": {"pendingWorkloads": 2, "admittedWorkloads": 3,
+                                 "flavorsUsage": [{"resources": [{"name": "nvidia.com/gpu", "total": "3", "borrowed": "0"}]}]}}]}
+    pods = {"items": [{"metadata": {"name": "gpu-7-head", "namespace": "default", "labels": {"kueue.x-k8s.io/queue-name": "circuits"}},
+                       "status": {"phase": "Running"}},
+                      {"metadata": {"name": "gpu-8-head", "namespace": "default", "labels": {"kueue.x-k8s.io/queue-name": "circuits"}},
+                       "status": {"phase": "Pending"}}]}
+    (tmp_path / "coverage").mkdir()
+    for n in ("a.sh", "b.sh", ".tmp"):
+        (tmp_path / "coverage" / n).write_text("#")
+    text = ex.render(cqs, pods, ex.ready_counts(str(tmp_path)))
+    for line in ('vy_queue_nominal{queue="circuits",resource="nvidia.com/gpu"} 5',
+                 'vy_queue_borrowing_limit{queue="circuits",resource="nvidia.com/gpu"} 2',
+                 f'vy_queue_nominal{{queue="circuits",resource="memory"}} {1280 * 2**30:g}',
+                 'vy_queue_usage{queue="circuits",resource="nvidia.com/gpu"} 3', 'vy_queue_pending{queue="circuits"} 2',
+                 'vy_queue_admitted{queue="circuits"} 3', 'vy_queue_stopped{queue="circuits"} 1',
+                 'vy_pod_queue{holder_namespace="default",holder_pod="gpu-7-head",queue="circuits"} 1',
+                 'vy_ready_jobs{lane="coverage"} 2', "vy_exporter_ok{} 1"):
+        assert line in text.splitlines(), line
+    assert "gpu-8-head" not in text and ex.ready_counts(str(tmp_path / "absent")) == {}
+    assert "vy_exporter_ok{} 0" in ex.render({}, {}, {}, ok=False)
+
+
+def test_a_firing_notification_becomes_one_markdown_note_for_root():
+    sink = load("alert_sink")
+    firing = {"commonLabels": {"alertname": "Pod holds a GPU at 0%"},
+              "alerts": [{"status": "firing", "fingerprint": "f1", "startsAt": "2026-09-30T15:40:00.000Z",
+                          "labels": {"alertname": "Pod holds a GPU at 0%", "gpu": "5", "pod": "gpu-209-head", "namespace": "default"},
+                          "annotations": {"description": "Pod default/gpu-209-head has held GPU 5 at 0% for 10 minutes"}},
+                         {"status": "resolved", "fingerprint": "f2", "labels": {"gpu": "1"}}]}
+    name, text = sink.note(firing, 1790783000)
+    assert re.fullmatch(r"\d{8}T\d{4}Z-alert-pod-holds-a-gpu-at-0-[0-9a-f]{8}\.md", name)
+    assert text.startswith("---\nid: " + name[:-3] + "\n") and "\nlane: verity-root\n" in text and "\nkind: finding\n" in text
+    assert "gpu 5, pod gpu-209-head, namespace default" in text and "since 2026-09-30T15:40:00Z" in text and "GPU 1" not in text
+    assert sink.note({"alerts": [{"status": "resolved"}]}, 0) is None and sink.note({}, 0) is None
+
+
+def test_the_idle_rules_deliver_to_the_markdown_sink_and_mute_the_quiet_hour():
+    a = (MON / "alerting.yaml").read_text()
+    assert "url: http://127.0.0.1:9403/grafana" in a and "type: webhook" in a
+    assert 'start_time: "12:30"' in a and 'end_time: "13:30"' in a and "location: UTC" in a and "mute_time_intervals: [quiet-hour]" in a
+    idle, held = a.split("- uid: nebius-gpu-idle-work-waiting")[1].split("- uid: nebius-gpu-held-at-zero")
+    assert "for: 15m" in idle and 'expression: "$B < 5 && $V > 0"' in idle and "DCGM_FI_PROF_GR_ENGINE_ACTIVE" in idle
+    assert "(sum(vy_queue_pending) or vector(0)) + (sum(vy_ready_jobs) or vector(0))" in idle
+    assert "for: 10m" in held and 'pod!=""' in held and "evaluator: {type: lt, params: [1]}" in held
+    assert a.count("datasourceUid: prometheus") == 3 and a.count("noDataState: OK") == 2
+    y = (MON / "grafana.yaml").read_text()
+    assert "mountPath: /etc/grafana/provisioning/alerting" in y and "configMap: {name: grafana-alerting}" in y
+    up = (MON / "grafana_up.sh").read_text()
+    assert 'cp "$here/nebius-overview.json" "$dash/"' in up and "create configmap grafana-alerting" in up
+
+
+def test_the_overview_has_a_busy_panel_per_queue_on_the_provisioned_data_source():
+    d = json.loads((MON / "nebius-overview.json").read_text())
+    assert d["uid"] == "nebius-overview" and d["editable"] is False
+    for p in d["panels"]:
+        assert p["datasource"] == dashboards().DATASOURCE and all(t["datasource"] == p["datasource"] for t in p["targets"])
+    busy = next(p for p in d["panels"] if p["title"].startswith("GPU busy % per Kueue queue"))
+    expr = busy["targets"][0]["expr"]
+    assert "group_left (queue)" in expr and '"pod", "$1", "holder_pod"' in expr and busy["targets"][0]["legendFormat"] == "{{queue}}"
+
+
+def test_the_host_services_listen_privately_and_prometheus_finds_the_exporter():
+    sh = (MON / "host_up.sh").read_text()
+    subprocess.run(["bash", "-n", str(MON / "host_up.sh")], check=True)
+    assert "--listen $ip:9402" in sh and "--listen 127.0.0.1:9403" in sh and "0.0.0.0" not in sh and "User=research" in sh
+    e = (MON / "exporter.yaml").read_text()
+    assert 'prometheus.io/scrape: "true"' in e and "addresses: [{ip: NODE_IP}]" in e and "selector:" not in e
