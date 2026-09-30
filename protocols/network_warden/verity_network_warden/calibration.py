@@ -81,12 +81,14 @@ def fraction_at_most(x: Fraction | float, max_denominator: int = MAX_RHO_DENOMIN
 
 def choose_sync_set(latencies: Sequence[int], low_rates: Sequence[Fraction], typical_rates: Sequence[Fraction],
                     n_delta: int = 16, n_rho: int = 8) -> SyncSet:
-    """The spec's §2:
+    """Σ_sync:
     - **δ** runs from 0 up to the p99.99 first-frame latency, in `n_delta` steps;
-    - **ρ** runs geometrically from the p0.01 production rate up to the p50 rate, in `n_rho` values, each rounded down to
-      a fraction with denominator at most 1024. ρ is below 1 for sessions slower than one frame per bucket.
+    - **ρ** runs geometrically from the p0.01 of `low_rates` up to the p50 of `typical_rates`, in `n_rho` values, each
+      rounded down to a fraction with denominator at most 1024. ρ is below 1 for sessions slower than one frame per
+      bucket.
 
-    `low_rates` should come from the heaviest configuration, and `typical_rates` from the lightest."""
+    `calibrate` passes one rate per configuration in each: its sessions' p0.01 production rate in `low_rates`, and
+    their p50 rate in `typical_rates`."""
     hi = math.ceil(percentile(latencies, 99.99)) if latencies else 0
     step = max(1, math.ceil(hi / max(1, n_delta - 1)))
     deltas = tuple(i * step for i in range(n_delta))

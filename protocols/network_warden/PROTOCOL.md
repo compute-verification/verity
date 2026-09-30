@@ -121,7 +121,8 @@ docstring) and sizes:
 - **Σ_sync:**
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
   - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
-    with denominator at most 1024 (rounding down keeps a value lenient).
+    with denominator at most 1024 (rounding down keeps a value lenient). Both rates are taken per configuration first:
+    the low end is the p0.01 of the configurations' p0.01 rates, and the high end the median of their medians.
 - **The honest prover's choice:** per window, the met value with the least total hand time over the window's frames
   (their total shaping delay). Taking the least δ first would pick a slow ρ to save one bucket, and hold every later
   frame for seconds. Frames are in the Program's canonical order, which is step-major for a batching engine, so a long
@@ -141,8 +142,8 @@ docstring) and sizes:
   compared at the same latency.
 
 The report has the per-link bandwidth, the utilization and padding share, the clock-sync set and its bits, the (δ, ρ)
-range the honest prover declared, the added first-frame latency, the shaping delay (hand time minus ready time, over
-every frame), the capacity per day, and the K charge by span.
+range the honest prover declared, the first-frame latency it declared (the p50 and p99 of its declared δ, in ms), the
+shaping delay (hand time minus ready time, over every frame), the capacity per day, and the K charge by span.
 
 ## Tests
 
