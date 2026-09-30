@@ -31,6 +31,7 @@ import k32  # noqa: E402
 import lean_vectors as LV  # noqa: E402
 import meta_rule as MR  # noqa: E402
 import probe as P  # noqa: E402
+import recheck as RC  # noqa: E402
 import sparse as S  # noqa: E402
 import t1_merged as T  # noqa: E402
 import tool  # noqa: E402
@@ -382,6 +383,39 @@ def test_lean_vectors_poison_no_write_control_and_collect(no_nvcc, tmp_path, mon
     LV.save_dumps(chunk / "dumps.npz", dumps, nowrite)
     assert P.main(collect + ["--out", str(tmp_path / "dumps")]) == 1
     assert "placements disagree" in json.loads((tmp_path / "dumps" / "probe_results.json").read_text())["failures"][0]
+
+
+def test_recheck_capture_resumes_and_verify_derives_every_word(no_nvcc, tmp_path, monkeypatch):
+    """The fill chunk stops at its budget (exit 99) and resumes at the first family without a record; the CPU verify regenerates
+    the operands from the seed and passes, and refuses a fake capture, a changed words file and regenerated operands that differ."""
+    cap = ["capture", "--instruction", "nvf4", "--seeds", "5,6", "--n-random", "16", "--fake-silicon", "verity", "--budget-s", "0",
+           "--out", str(tmp_path / "c")]
+    rcs = [RC.main(cap) for _ in range(60)]
+    assert rcs[0] == 99 and 0 in rcs and rcs.index(0) > 20
+    d = tmp_path / "c" / "nvf4" / "5"
+    ver = ["verify", "--instruction", "nvf4", "--seed", "5", "--n-random", "16", "--capture", str(tmp_path / "c"), "--procs", "1"]
+    assert RC.main(ver + ["--out", str(tmp_path / "fake")]) == 1
+    done = json.loads((d / "done.json").read_text())
+    done.update(fake_silicon=None, expect_uuid="GPU-x")
+    done["identity"].update(backend="mma.sync", gpu_uuid="GPU-x")
+    (d / "done.json").write_text(json.dumps(done))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    assert RC.main(ver + ["--out", str(tmp_path / "ok")]) == 0
+    doc = json.loads((tmp_path / "ok" / "recheck.json").read_text())
+    assert doc["min_gated_family_elements"] == 16 // 8 * 128 and {"specials", "scale_bit7"} <= set(doc["families"])
+    assert json.loads((tmp_path / "ok" / "result.json").read_text())["validation"]["status"] == "passed"
+    assert RC.main(ver[:4] + ["6"] + ver[5:] + ["--out", str(tmp_path / "other")]) == 1  # seed 6 is still a fake capture
+    D = np.load(d / "random_random_scales.npy")
+    D[0, 0, 0] ^= 1
+    np.save(d / "random_random_scales.npy", D)
+    assert RC.main(ver + ["--out", str(tmp_path / "changed")]) == 1
+    assert "changed since the capture" in json.loads((tmp_path / "changed" / "recheck.json").read_text())["failures"][0]
+    assert RC.main(["verify", "--instruction", "nvf4", "--seed", "5", "--n-random", "24", "--capture", str(tmp_path / "c"),
+                    "--procs", "1", "--out", str(tmp_path / "n")]) == 1
+    p = tool.TC_RECHECK_FP4.parse(["python", "tools/tc_probe_fp4/recheck.py", "verify", "--instruction", "nvf4", "--seed", "5",
+                                   "--n-random", "16", "--capture", "/c", "--prebuilt", "/x.so", "--procs", "8", "--out", "x"])
+    assert p == {"cmd": "verify", "instruction": "nvf4", "seeds": None, "expect_model": None, "fake_silicon": None, "seed": 5,
+                 "n_random": 16}
 
 
 def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):

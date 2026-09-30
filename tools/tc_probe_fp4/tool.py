@@ -224,6 +224,37 @@ TC_STRASSEN_FP4 = Tool(
 )
 
 
+def parse_recheck(argv: list[str]) -> dict:
+    idx = next((i for i, t in enumerate(argv) if Path(t).name == "recheck.py"), 0)
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("cmd", nargs="?", default=None)
+    for flag in ("--out", "--capture", "--prebuilt", "--expect-uuid", "--instruction", "--seeds", "--expect-model", "--fake-silicon"):
+        ap.add_argument(flag, default=None)
+    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--n-random", type=int, default=None)
+    ap.add_argument("--procs", type=int, default=None)
+    ap.add_argument("--budget-s", type=float, default=None)
+    ns, unknown = ap.parse_known_args(argv[idx + 1:])
+    out = vars(ns)
+    for k in ("out", "capture", "prebuilt", "expect_uuid", "procs", "budget_s"):  # paths and guards, not the answer
+        out.pop(k)
+    if unknown:
+        out["_unknown"] = unknown
+    return out
+
+
+TC_RECHECK_FP4 = Tool(
+    name="tc_recheck_fp4", version="1",
+    command=["python", "tools/tc_probe_fp4/recheck.py"],
+    closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
+    key_params=["cmd", "instruction", "seed", "seeds", "n_random", "expect_model", "fake_silicon"],
+    key_conditions=["hw.family"],
+    caches=["nvcc"],
+    produces=["tc-evidence/v1", "run-files/v1"],
+    parse=parse_recheck,
+)
+
+
 TC_PRICE_FP4 = Tool(
     name="tc_price_fp4", version="2",
     command=["python", "tools/tc_probe_fp4/w1_price.py"],
