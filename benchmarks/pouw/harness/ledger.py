@@ -469,9 +469,9 @@ def measured_refusal(meta: dict) -> str | None:
 
 def panel_row(art: str, meta: dict, labels: dict) -> dict | None:
     """The record as a `panel.py` row, or None when it isn't one (no panel line, not a headline phase, tier 1 or 3).
-    A tier-2a record is a screen: its shape gets the ``:screen`` suffix, which the panel logs and never plots. A tier-2b
-    record is a measurement, with ``verifier`` only when it meets every rule `panel.py append` enforces; otherwise it stays
-    in the table, unverified. ``attempt`` is the lineage's, or None for `panel.py` to number."""
+    A tier-2a record is a screen: its shape gets the ``:screen`` suffix, which the panel logs and never plots. Either tier
+    carries ``verifier`` only when it meets every rule `panel.py append` enforces; otherwise it stays in the table,
+    unverified, so only a verified 2b record can plot. ``attempt`` is the lineage's, or None for `panel.py` to number."""
     panel, phase, tier = meta.get("panel") or {}, meta.get("phase"), meta.get("tier")
     if not panel.get("line") or not panel.get("version") or phase not in ("prefill", "decode") or tier not in ("2a", "2b"):
         return None
@@ -503,15 +503,14 @@ def panel_row(art: str, meta: dict, labels: dict) -> dict | None:
            "basis": None, "assumptions": [], "hash_free_slowdown": mt.get("hash_free"),
            "decode_method": mt.get("decode_method"), "by": meta.get("by"), "time": (meta.get("time") or "")[:16] + "Z",
            "record": art, "tier": tier, "variant": meta.get("variant")}
-    if tier == "2b":
-        why = measured_refusal(meta)
-        if why:
-            row["store_refused"] = why
-        else:
-            v = meta["verify"]
-            row["verifier"] = {"commit": v["commit"], "accept": v["accept"], "transcript": v["transcript"],
-                               "negative_control": v["negative_control"]}
-            row["sm_clock_mhz"] = {"arm": mt["sm_clock"]["arm"], "baseline": mt["sm_clock"]["base"]}
+    why = measured_refusal(meta)
+    if why:
+        row["store_refused"] = why
+    else:
+        v = meta["verify"]
+        row["verifier"] = {"commit": v["commit"], "accept": v["accept"], "transcript": v["transcript"],
+                           "negative_control": v["negative_control"]}
+        row["sm_clock_mhz"] = {"arm": mt["sm_clock"]["arm"], "baseline": mt["sm_clock"]["base"]}
     if outcome == "voided":
         row["voided"] = reason or "voided by its lane"
     return row
