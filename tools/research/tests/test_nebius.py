@@ -358,3 +358,16 @@ def test_a_direct_run_sees_no_gpu_once_kueue_owns_every_gpu(tmp_path, monkeypatc
         assert ("gpus" in rec) == (want == "")
     split.unlink()
     assert remote._runner_env(req, tmp_path / "runs", None, {})["CUDA_VISIBLE_DEVICES"] == "0"
+
+
+def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhere(tmp_path, monkeypatch):
+    """With /etc/vy/direct-cpus (the Nebius CPU map's non-benchmark CPUs) a direct run's runner, and so its workload, starts on those
+    CPUs, keeping the pinned benchmarks' cores clean; a command's own taskset still moves it. No file: the machine's own affinity."""
+    mine = sorted(os.sched_getaffinity(0))
+    cpus_file = tmp_path / "direct-cpus"
+    monkeypatch.setenv("DIRECT_CPUS_FILE", str(cpus_file))
+    assert remote.direct_cpus() == set()
+    cpus_file.write_text(f"{mine[0]}\n")
+    assert remote.direct_cpus() == {mine[0]} and remote.format_cpus({0, 1, 2, 5, 7, 8}) == "0-2,5,7-8"
+    cpus_file.write_text("100000-100001\n")                   # none of this machine's: no default rather than an empty mask
+    assert remote.direct_cpus() == set()
