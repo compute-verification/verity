@@ -9,7 +9,8 @@ import pytest
 
 #: a cloud VM's Cursor secrets stand in for the laptop's config files (pods/runpod.py, store/remote.py), a recorded check's step
 #: holds its run's variables, and a pod's shell its own: no test may reach the real account or bucket, or act as a run, through them
-CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_")
+#: (nor extend or read a real machine's lease: a Nebius host exports LEASE_DIR)
+CLEARED = ("AWS_", "R2_", "RESEARCH_", "RUNPOD_", "LEASE_")
 
 
 @pytest.fixture(autouse=True)
@@ -24,3 +25,5 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_MACHINES_D", "none")      # the pod registry (pods/registry.py) is each test's explicit choice
     # ... nor the public export: an empty URL is no public source (unset, as the clear above leaves it, would mean fetchset.PUBLIC_URL)
     monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
+    # ... nor the machine's hard deadline: lease.sh defaults to /etc/research/deadline, which a Nebius host has
+    monkeypatch.setenv("LEASE_DEADLINE_FILE", str(tmp_path_factory.mktemp("lease") / "absent-deadline"))
