@@ -53,7 +53,8 @@ near-certain codes at their own p_t.  A drawn tile's debit is replayed
 over its credited words (`tile_debit`):
 
 ~~~text
-1  F1′ split     per row and aligned 128 of k: 128·max(0, S_w − min(c·M_w, 0.125)) on every word the row feeds (below)
+1  F1′ split     per row and aligned 128 of k: 128·S_w, κ = min(c·M_w, 0.125) inside S_w's expectation, on every word
+                the row feeds (below)
 1b F2 int8      per tile: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain MAC, f the realised scale bytes' flatness (below)
 2  identity      per atom whose lone skip leaves the word unchanged: 64 per atom-word
 3  dead pairs    per block screened on both the A row and the B row: `block` per pair-word
