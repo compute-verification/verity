@@ -126,38 +126,50 @@ def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
     return out
 
 
-def _load(name: str, path: Path):
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, path)
-        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+def _load(name: str, path: Path) -> tuple[Any, str]:
+    """`path` as a module and its bytes' SHA-256.  The module is named by the digest, so two kernel directories in one process
+    never share a module, and the same bytes loaded twice are one module."""
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    key = f"{name}_{digest[:16]}"
+    if key not in sys.modules:
+        spec = importlib.util.spec_from_file_location(key, path)
+        mod = sys.modules[key] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-    return sys.modules[name]
+    return sys.modules[key], digest
+
+
+def source_digest(run_sha256: str, fixture_sha256: str) -> str:
+    """The kernel sources' digest: `run.py`'s and `fixture.py`'s, in that order."""
+    return hashlib.sha256(bytes.fromhex(run_sha256) + bytes.fromhex(fixture_sha256)).hexdigest()
 
 
 @dataclass
 class Kernel:
-    """GPU 1's pipeline, loaded once per process: ``run.py`` (as `run`), ``fixture.py`` (as `fixture`), the device (`dev`)."""
+    """GPU 1's pipeline, loaded once per process per (sources, cubin): ``run.py`` (as `run`), ``fixture.py`` (as `fixture`), the
+    device (`dev`), and the digests that name what ran (the manifest records both)."""
 
     run: Any
     fixture: Any
     dev: Any
     cubin_sha256: str
+    source_sha256: str | None = None
 
     @classmethod
     def load(cls, directory: str, cubin: str | None = None) -> Kernel:
-        key = (str(Path(directory).resolve()), cubin)
+        d = Path(directory)
+        run, run_sha = _load("pearl_c_sm120_run", d / "run.py")
+        fixture, fixture_sha = _load("pearl_c_sm120_fixture", d / "fixture.py")
+        raw = Path(cubin or d / "pearl_c_sm120.cubin").read_bytes()
+        key = (source_digest(run_sha, fixture_sha), hashlib.sha256(raw).hexdigest())
         if key not in _KERNELS:
-            d = Path(directory)
-            run = _load("pearl_c_sm120_run", d / "run.py")
-            fixture = _load("pearl_c_sm120_fixture", d / "fixture.py")
-            raw = Path(cubin or d / "pearl_c_sm120.cubin").read_bytes()
             dev = run.Dev(raw)
             dev.open()
-            _KERNELS[key] = cls(run, fixture, dev, hashlib.sha256(raw).hexdigest())
+            _KERNELS[key] = cls(run, fixture, dev, key[1], key[0])
         return _KERNELS[key]
 
 
-_KERNELS: dict[tuple[str, str | None], Kernel] = {}
+#: (source_sha256, cubin_sha256) -> the loaded kernel
+_KERNELS: dict[tuple[str, str], Kernel] = {}
 
 
 def _zeros(n: int, device: Any) -> Any:
@@ -491,7 +503,8 @@ class PearlCDeviceRun:
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                                         "transcript_root": None, "units": 0, "tiles": 0}
         self.details: dict[str, Any] = {
-            "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]})",
+            "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
+                                                f"sources {(kernel.source_sha256 or 'unrecorded')[:16]})",
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native blake3" if self.keys.native else "verity.commitments.blake3 (pure Python)",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
@@ -748,6 +761,7 @@ class PearlCDeviceRun:
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": dict(zip(("forming", "device", "hashing"), SCHEMES[self.scheme.name])),
                 "beacon": self.beacon.hex(), "salt": self.salt.hex(), "cubin_sha256": self.kernel.cubin_sha256,
+                "kernel_source_sha256": self.kernel.source_sha256,
                 "records_root": PW.records_root(self.salt, epoch.weights_root,
                                                 {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
                 "commitment": {"root": _bytes(tree[-32:]).hex(), "count": count},

@@ -167,6 +167,14 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     return tuple(out)
 
 
+def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
+    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
+    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
+    each weight's first call and reused (`_CircuitRun.sides`).  ncp-v1 forms its operands per call from the weight it is
+    handed."""
+    return scheme in PPD.SCHEMES or scheme in pouw_circuit.SCHEMES
+
+
 def linear_types() -> tuple[type, ...]:
     """The hook-site types: vLLM's ``LinearBase`` (qkv, o, gate_up, down).  lm_head is a ``VocabParallelEmbedding``, not
     covered."""
