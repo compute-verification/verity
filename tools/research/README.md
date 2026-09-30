@@ -9,6 +9,18 @@ The user-facing procedure (when to record a run, how to find one, how to hand
 off) is the repo-level skill at `.agents/skills/research/SKILL.md`, once it
 exists. This file is for people changing the tool.
 
+## Getting access
+
+Verity's control app (https://website-docs-sage.vercel.app) hands out the tokens its API takes, for jobs, events, trains and
+PRs; nobody mints them by hand. From any terminal, with or without Cursor, get this package (`uv sync` in a clone of the
+repository, then `uv run research ...`) and ask for a token: `research auth request --name <you>-<purpose> --scopes <scopes>
+--file <path>`, for example `research auth request --name neekon-reader --scopes events:read --file ~/.research/jobs/token`.
+It prints a link and a code. Open the link, sign in with GitHub, and check that the page shows the same code. Once Daniel
+approves the request, or a pre-approval rule for your GitHub login matches, the command writes the token to the file with mode
+600 and exits. `research jobs` reads `~/.research/jobs/token`; a dispatcher reads `~/.research/jobs/dispatch-{name}.token`. Ask
+for the fewest scopes you need (`jobs:enqueue`, `jobs:work`, `events:read`, `trains:write`, `prs:write`). Never paste a token
+into chat, notes, an argv or a pod; to replace one, ask again with `--force`.
+
 ## Layout and provenance
 
 ~~~text
