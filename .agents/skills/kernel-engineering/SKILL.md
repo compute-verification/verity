@@ -22,7 +22,7 @@ found them.
 
 It points at the tools rather than repeating them: the harness's `README.md` (`benchmarks/pouw/harness/`, #491), the
 panel's `add-a-row.md`, and the vLLM integration API (#567). `store:pous/<path>` is the POUS Project store (a Project
-worker has it under `/cursor/stores/`); `kb/` is `~/.research/notes/kb/`, or a clone of `danielreuter/research-notes`. Parts
+worker has it under `/cursor/stores/`). Parts
 marked **(lands with …)** change when that work merges; [When the tooling lands](#when-the-tooling-lands) lists them.
 
 ## The objective
@@ -53,7 +53,8 @@ Ten minutes here saves a GPU window. For your line, version and mechanism:
    (`research data select --kind kernel-attempt/v1`, or `python benchmarks/pouw/harness/ledger.py rows --refresh`),
    the panel's rows for the line (`store:pous/docs/pouw/panel.md`), and the owning lane's latest checkpoints
    (`store:pous/internal/pouw/rtx-pro/workers/*.md`).
-3. **Gotchas:** `kb/sm120-kernels.md`. Read your toolchain's and the node's sections before your first build.
+3. **Gotchas:** `store:pous/docs/pouw/sm120-gotchas.md`, one line per fact with its source. Read your toolchain's and
+   the node's sections before your first build.
 4. **Owner:** every kernel directory, shared module and tool has one owner lane (the table in
    `store:pous/internal/pouw/rtx-pro/brief.md`). A change to someone else's code goes to them, as a PR against their
    branch or a handoff, never as an edit in their tree.
@@ -253,9 +254,9 @@ finish a session:
 - **Tripped over a tool, a command or a doc?** Fix it at the source if it's yours or plainly broken, in a small PR of its
   own (`.agents/skills/friction/SKILL.md`, §1). Otherwise write a friction note, or two lines naming the earlier one under
   `recurs:`.
-- **Learned a fact** about the toolchain, the card, a library or the node? Add one line to `kb/sm120-kernels.md` with its
-  source (a run id, a commit, a status file and time), in its section. When a line is wrong, correct it; don't add a
-  contradiction.
+- **Learned a fact** about the toolchain, the card, a library or the node? Add one line to
+  `store:pous/docs/pouw/sm120-gotchas.md` with its source (a run id, a commit, a status file and time), in its section.
+  When a line is wrong, correct it; don't add a contradiction.
 - **Checked a rule by hand that code could check?** It belongs in the tool, with the fix in its failure message: propose it
   to the tool's owner, pricing it with `.agents/skills/process-design/SKILL.md` if it gates other lanes.
   [What enforces what](#what-enforces-what) lists the known gaps.
@@ -293,7 +294,7 @@ Whoever lands one of these updates this skill in the same PR, and deletes what i
 | #491, the harness, on `main` | harness owner (bc-0de2d624), through a train | commands point at `main`, not a tree assembled from branches | per-kernel copies of the SASS gate and `verify.py` (`pearl_c_sm120/`) |
 | #491's self-recording: on #491 (#583); the runner's publishing on #590 | bc-1a23b70c, with the harness owner and the panel's renderer | done: "What's been tried" step 2, "Name it", "Record it", the γ rows above | hand `panel.py append`, once 90% of tier-2 runs record themselves |
 | the technique catalog: first version `store:pous/docs/pouw/tried-techniques.md`; then generated from the records | bc-1a23b70c | done: "What's been tried" reads it | — |
-| the facts page | bc-1a23b70c | the gotchas come from `fact` records | the hand-kept lines of `kb/sm120-kernels.md` |
+| the facts page: first version `store:pous/docs/pouw/sm120-gotchas.md`, hand-kept; then `fact` records | bc-1a23b70c | done: "Gotchas" and "Learned a fact" point at it; later, it is generated from `fact` records | research-notes `kb/sm120-kernels.md` (now a pointer) |
 | lane benches as tier-2a harness arms | harness owner | tier 2a runs in the harness, gated and recorded | `mainloop_bench`, `nvf4_bench` and `run.py check` as separate benches |
 | #240, the approach registry's CLI, on `main` | the research coordinator | `research notes claim`, `approach`, `approaches` run from `main` | — |
 | #567, then the migration's steps 2 to 4 | bc-f4e8ae34 | "Hooking a kernel into vLLM" | #540's `e2e.install`, `vllm_bench.install`, the fixed-name module cache |
@@ -302,6 +303,6 @@ Whoever lands one of these updates this skill in the same PR, and deletes what i
 
 - Every run you started is in the evidence store (`research data preserved <run|art>` exits 0), fill outputs included.
 - Every attempt has a row or a record, an outcome and a reason, so the next agent finds what you tried and dropped.
-- Every fact you learned is a line in `kb/sm120-kernels.md`; every friction you hit is fixed or noted.
+- Every fact you learned is a line in `store:pous/docs/pouw/sm120-gotchas.md`; every friction you hit is fixed or noted.
 - Your PR description says what you fixed and what you deleted along the way.
 - You hold no GPU lease, and no job of yours reads a tree you are about to change.
