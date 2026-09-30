@@ -492,9 +492,12 @@ DEV uint32_t isqrt(uint32_t v) {
   return r;
 }
 
+// The position of column t of k in form_s5's K32 order (an involution within each aligned 32)
+DEV int k32(int t) { return (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | (t & 1); }
+
 // p0 the line key (8 words), p1 codes (count x 32, row-major), p2 transposed (32 x count) or 0, p3 transposed into 128 x count
-// (rows 32-127 left as they are) or 0; i0 side, i1 factor, i2 count, i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256,
-// 0x4400 for 16
+// (rows 32-127 left as they are) or 0, both in K32 order along count (the F lines, count = k); i0 side, i1 factor, i2 count,
+// i3 bf16(32 x the line's L2 norm): 0x4600 for Pearl's 256, 0x4400 for 16
 extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
   const int line = blockIdx.x * blockDim.x + threadIdx.x, count = a.i[2];
   if (line >= count) return;
@@ -530,7 +533,7 @@ extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
     if (a.p[s]) {
       uint8_t* t = reinterpret_cast<uint8_t*>(a.p[s]);
 #pragma unroll
-      for (int j = 0; j < 32; j++) t[(size_t)j * count + line] = c[j];
+      for (int j = 0; j < 32; j++) t[(size_t)j * count + k32(line)] = c[j];
     }
 }
 
@@ -593,25 +596,28 @@ DEV uint32_t e4m3x4(float a, float b, float c, float d) {
 }
 
 // X~ = e4m3(D), D = the atom with alpha x as its accumulator over E' and the F lines: per warp 16 rows x 128 of depth, sixteen
-// m16n8k32 atoms (A = the rows' E', B = eight F lines, C = alpha x).  p0 rows (FP32), p1 alpha, p2 E' codes (rows x 32), p3 F
-// lines (k x 32), p4 out codes (rows x k); i0 rows, i1 k.  grid (k / 128, rows / 64), 128 threads.  The block's 64 x 128 FP32
-// tile is staged by cp.async first (a warp's copy is one row's 512 bytes), so every row is read whole and at once.
-// form_s5 takes the atoms in pairs over 16 columns: atom 0's B column g is line 4(g / 2) + g % 2 of the pair and atom 1's the
-// line two past it, so a thread's four accumulators of a row are four adjacent columns (each element's atom is unchanged, only
-// which column an atom lane holds), read as one float4 and cast to one word (e4m3x4).  form_s5_scalar is the one-code cast on
-// eight consecutive lines per atom, its gate: both write the same codes.
-constexpr int FORM_ROW = 144;   // shared bytes per staged row: 128 codes, padded so the quads' stores hit distinct banks
-constexpr int FORM_X = 544;     // shared bytes per staged FP32 row: 512, padded so a half-warp's float2 reads hit 32 banks
-constexpr int FORM_X4 = 576;    // form_s5's: 512, padded so a quarter-warp's float4 reads (two rows) hit 32 banks
+// m16n8k32 atoms (A = the rows' E', B = eight consecutive F lines, C = alpha x).  p0 rows (FP32), p1 alpha, p2 E' codes
+// (rows x 32), p3 F lines (k x 32), p4 out codes (rows x k, in K32 order); i0 rows, i1 k.  grid (k / 128, rows / 64), 128
+// threads.  The block's 64 x 128 FP32 tile is staged by cp.async first (a warp's copy is one row's 512 bytes), so every row
+// is read whole and at once.
 //
-// MODE 0 is form_s5's loop and 1 form_s5_scalar's.  With RATE (form_rate*) the block takes tile blockIdx.x of the
+// K32 order: within each aligned 32 of k, byte 8q + 2b + s holds column 8b + 2q + s (b, q < 4, s < 2), the transpose of the
+// 4 x 4 grid of column pairs.  It is the accumulators' order: over an aligned 32, lane q's pairs of atoms b = 0 .. 3 are
+// adjacent, so form_s5 casts a row's 8 codes there (two e4m3x4) and stores them with one 64-bit store.  Each k32 group stays
+// in its own 32 bytes, so a product over k is unchanged when both its operands are in K32 order: A'B~ (form_s5's codes) and
+// A'F_B, B~F_A, F_B F_A (lines' transposed F lines).  form_s5_scalar is the one-code cast with 16-bit stores in the same
+// order, its gate: both write the same codes.
+constexpr int FORM_ROW = 160;   // shared bytes per staged row of codes: 128, padded so a half-warp's 64-bit stores hit 32 banks
+constexpr int FORM_X = 544;     // shared bytes per staged FP32 row: 512, padded so a half-warp's float2 reads hit 32 banks
+//
+// MODE 0 is form_s5's loop and 1 form_s5_scalar's; ROW the staged codes' row stride (form_s5_r144's 144 puts two lanes of a
+// half-warp's 64-bit stores on each bank, timed beside it).  With RATE (form_rate*) the block takes tile blockIdx.x of the
 // (rows / 64) x (k / 128) grid in row-major order and runs the loop i[2] times over it, so the loop's price per code is
 // measured in the mix it runs in without the global traffic that bounds form_s5; an empty asm with a memory clobber per
 // repeat keeps the compiler from hoisting or merging repeats.  Modes 0 and 1 then write the same codes as their kernels;
-// 2 is 0 with each word's cast replaced by one of its floats' bits, and 3 is 2 without x (the atoms, F's loads, the stores).
-template <int MODE, bool RATE> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* sX) {
-  constexpr bool PACKED = MODE != 1;
-  constexpr int FX = PACKED ? FORM_X4 : FORM_X;
+// 2 is 0 with each 32-bit word's cast replaced by one of its floats' bits, and 3 is 2 without x (the atoms, F's loads, the
+// stores).
+template <int MODE, bool RATE, int ROW = FORM_ROW> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* sX) {
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, g = lane / 4, q = lane % 4, k = a.i[1];
   const int bx = RATE ? blockIdx.x % (k / 128) : blockIdx.x, by = RATE ? blockIdx.x / (k / 128) : blockIdx.y;
   const int t0 = bx * 128, r0 = by * 64, rw = r0 + 16 * warp;
@@ -622,7 +628,7 @@ template <int MODE, bool RATE> DEV void form_body(const Args& a, uint8_t* sO, ui
 #pragma unroll
   for (int j = 0; j < 16; j++) {
     const int r = warp + 4 * j;
-    cp16(sX + r * FX + 16 * lane, x + (size_t)r * k * 4 + 16 * lane);
+    cp16(sX + r * FORM_X + 16 * lane, x + (size_t)r * k * 4 + 16 * lane);
   }
   cp_commit();
   const uint32_t fa[4] = {ld32(E + (size_t)(rw + g) * 32 + 4 * q), ld32(E + (size_t)(rw + g + 8) * 32 + 4 * q),
@@ -630,52 +636,52 @@ template <int MODE, bool RATE> DEV void form_body(const Args& a, uint8_t* sO, ui
   const float al0 = alpha[rw + g], al1 = alpha[rw + g + 8];
   cp_wait<0>();
   __syncthreads();
-  uint8_t* o0 = sO + (16 * warp + g) * FORM_ROW;
-  uint8_t* o1 = o0 + 8 * FORM_ROW;
+  uint8_t* o0 = sO + (16 * warp + g) * ROW;
+  uint8_t* o1 = o0 + 8 * ROW;
+  // atom j of the block's 16: B is lines t0 + 8j + g, and lane q's accumulators are columns 8j + 2q, 8j + 2q + 1
+  const uint8_t* x0 = sX + (16 * warp + g) * FORM_X + 8 * q;
+  const uint8_t* x1 = x0 + 8 * FORM_X;
+  const uint8_t* lines = F + (size_t)(t0 + g) * 32 + 4 * q;
   const int reps = RATE ? a.i[2] : 1;
   for (int rep = 0; rep < reps; rep++) {
-    const uint8_t *X = sX, *Fr = F;
     float b0 = al0, b1 = al1;
     if (RATE) asm volatile("" : "+f"(b0), "+f"(b1) : : "memory");
-    if (PACKED) {
-      const uint8_t* x0 = X + (16 * warp + g) * FX + 16 * q;
-      const uint8_t* x1 = x0 + 8 * FX;
-      const uint8_t* lines = Fr + (size_t)(t0 + 4 * (g / 2) + g % 2) * 32 + 4 * q;
+    if (MODE != 1) {
 #pragma unroll 2
-      for (int p = 0; p < 8; p++) {
-        const uint8_t* l0 = lines + (size_t)16 * 32 * p;
-        const uint32_t f0[2] = {ld32(l0), ld32(l0 + 16)}, f1[2] = {ld32(l0 + 64), ld32(l0 + 80)};
-        float d0[4], d1[4];
-        if (MODE == 3) {
-          d0[0] = d0[1] = d1[0] = d1[1] = b0;
-          d0[2] = d0[3] = d1[2] = d1[3] = b1;
-        } else {
-          const float4 v0 = *reinterpret_cast<const float4*>(x0 + 64 * p), v1 = *reinterpret_cast<const float4*>(x1 + 64 * p);
-          d0[0] = __fmul_rn(b0, v0.x); d0[1] = __fmul_rn(b0, v0.y); d0[2] = __fmul_rn(b1, v1.x); d0[3] = __fmul_rn(b1, v1.y);
-          d1[0] = __fmul_rn(b0, v0.z); d1[1] = __fmul_rn(b0, v0.w); d1[2] = __fmul_rn(b1, v1.z); d1[3] = __fmul_rn(b1, v1.w);
+      for (int p = 0; p < 4; p++) {
+        float d[4][4];
+#pragma unroll
+        for (int b = 0; b < 4; b++) {
+          const int j = 4 * p + b;
+          const uint32_t f[2] = {ld32(lines + 256 * j), ld32(lines + 256 * j + 16)};
+          if (MODE == 3) {
+            d[b][0] = d[b][1] = b0;
+            d[b][2] = d[b][3] = b1;
+          } else {
+            const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * j), v1 = *reinterpret_cast<const float2*>(x1 + 32 * j);
+            d[b][0] = __fmul_rn(b0, v0.x); d[b][1] = __fmul_rn(b0, v0.y); d[b][2] = __fmul_rn(b1, v1.x); d[b][3] = __fmul_rn(b1, v1.y);
+          }
+          qmma(d[b], fa, f);
         }
-        qmma(d0, fa, f0);
-        qmma(d1, fa, f1);
-        const int c = 16 * p + 4 * q;
+        const int c = 32 * p + 8 * q;
         if (MODE == 0) {
-          *reinterpret_cast<uint32_t*>(o0 + c) = e4m3x4(d0[0], d0[1], d1[0], d1[1]);
-          *reinterpret_cast<uint32_t*>(o1 + c) = e4m3x4(d0[2], d0[3], d1[2], d1[3]);
+          *reinterpret_cast<uint2*>(o0 + c) = make_uint2(e4m3x4(d[0][0], d[0][1], d[1][0], d[1][1]),
+                                                         e4m3x4(d[2][0], d[2][1], d[3][0], d[3][1]));
+          *reinterpret_cast<uint2*>(o1 + c) = make_uint2(e4m3x4(d[0][2], d[0][3], d[1][2], d[1][3]),
+                                                         e4m3x4(d[2][2], d[2][3], d[3][2], d[3][3]));
         } else {
-          *reinterpret_cast<uint32_t*>(o0 + c) = __float_as_uint(d0[0]);
-          *reinterpret_cast<uint32_t*>(o1 + c) = __float_as_uint(d1[2]);
+          *reinterpret_cast<uint2*>(o0 + c) = make_uint2(__float_as_uint(d[0][0]), __float_as_uint(d[2][0]));
+          *reinterpret_cast<uint2*>(o1 + c) = make_uint2(__float_as_uint(d[1][2]), __float_as_uint(d[3][2]));
         }
       }
     } else {
-      const uint8_t* x0 = X + (16 * warp + g) * FX + 8 * q;
-      const uint8_t* x1 = x0 + 8 * FX;
 #pragma unroll 4
-      for (int nb = 0; nb < 16; nb++) {
-        const uint8_t* line = Fr + (size_t)(t0 + 8 * nb + g) * 32 + 4 * q;
-        const uint32_t fb[2] = {ld32(line), ld32(line + 16)};
-        const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * nb), v1 = *reinterpret_cast<const float2*>(x1 + 32 * nb);
+      for (int j = 0; j < 16; j++) {
+        const uint32_t f[2] = {ld32(lines + 256 * j), ld32(lines + 256 * j + 16)};
+        const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * j), v1 = *reinterpret_cast<const float2*>(x1 + 32 * j);
         float d[4] = {__fmul_rn(b0, v0.x), __fmul_rn(b0, v0.y), __fmul_rn(b1, v1.x), __fmul_rn(b1, v1.y)};
-        qmma(d, fa, fb);
-        const int c = 8 * nb + 2 * q;
+        qmma(d, fa, f);
+        const int c = 32 * (j / 4) + 8 * q + 2 * (j % 4);
         *reinterpret_cast<uint16_t*>(o0 + c) = e4m3(d[0]) | (uint16_t)e4m3(d[1]) << 8;
         *reinterpret_cast<uint16_t*>(o1 + c) = e4m3(d[2]) | (uint16_t)e4m3(d[3]) << 8;
       }
@@ -686,31 +692,26 @@ template <int MODE, bool RATE> DEV void form_body(const Args& a, uint8_t* sO, ui
 #pragma unroll
   for (int j = 0; j < 4; j++) {
     const int idx = tid + 128 * j, r = idx / 8, c = idx % 8;
-    *reinterpret_cast<uint4*>(out + (size_t)(r0 + r) * k + t0 + 16 * c) = *reinterpret_cast<const uint4*>(sO + r * FORM_ROW + 16 * c);
+    *reinterpret_cast<uint4*>(out + (size_t)(r0 + r) * k + t0 + 16 * c) = *reinterpret_cast<const uint4*>(sO + r * ROW + 16 * c);
   }
 }
-extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) {
-  __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
-  __shared__ __align__(16) uint8_t sX[64 * FORM_X4];
-  form_body<0, false>(a, sO, sX);
-}
-extern "C" __global__ void __launch_bounds__(128) form_s5_scalar(const Args a) {
-  __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
-  __shared__ __align__(16) uint8_t sX[64 * FORM_X];
-  form_body<1, false>(a, sO, sX);
-}
-// form_body's loop repeated i[2] times per block (RATE), p0 .. p4 and i0, i1 as form_s5's; grid: any number of blocks up to
-// (rows / 64) * (k / 128), 128 threads
-#define FORM_RATE(NAME, MODE, FX)                                                  \
+// form_body<MODE> as a kernel, p0 .. p4 and i0, i1 as form_s5's; with RATE (form_rate*) its loop repeated i[2] times per block,
+// grid any number of blocks up to (rows / 64) * (k / 128)
+#define FORM_KERNEL(NAME, MODE, RATE, ROW)                                         \
   extern "C" __global__ void __launch_bounds__(128) NAME(const Args a) {          \
-    __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];                            \
-    __shared__ __align__(16) uint8_t sX[64 * FX];                                  \
-    form_body<MODE, true>(a, sO, sX);                                              \
+    __shared__ __align__(16) uint8_t sO[64 * ROW];                                 \
+    __shared__ __align__(16) uint8_t sX[64 * FORM_X];                              \
+    form_body<MODE, RATE, ROW>(a, sO, sX);                                         \
   }
-FORM_RATE(form_rate, 0, FORM_X4)
-FORM_RATE(form_rate_scalar, 1, FORM_X)
-FORM_RATE(form_rate_nocast, 2, FORM_X4)
-FORM_RATE(form_rate_atoms, 3, FORM_X4)
+FORM_KERNEL(form_s5, 0, false, FORM_ROW)
+FORM_KERNEL(form_s5_r144, 0, false, 144)
+FORM_KERNEL(form_s5_scalar, 1, false, FORM_ROW)
+FORM_KERNEL(form_rate, 0, true, FORM_ROW)
+FORM_KERNEL(form_rate_r144, 0, true, 144)
+FORM_KERNEL(form_rate_scalar, 1, true, FORM_ROW)
+FORM_KERNEL(form_rate_nocast, 2, true, FORM_ROW)
+FORM_KERNEL(form_rate_nocast_r144, 2, true, 144)
+FORM_KERNEL(form_rate_atoms, 3, true, FORM_ROW)
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements

@@ -23,8 +23,9 @@ The gate, at the exact shape and flag set: a second, unfused launch into the gat
 seed_A; C̃ by gemm_ct, another kernel; C̃, U and y by gemm_pearlc on 3 CTAs, another tile schedule; hash_msg_v and the other
 hashes over those) must equal every output word for word, so the fused call's digests are held to hash_msg_v's, and gemm_ct's
 C̃ the call's (or, where it stores none, the second launch's); with hashing, seed_A and E_A's line key must be the scheme's
-from the device's root_A; and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes and α, C̃, U (the
-second launch's where the call stores none) and y must equal #449's CPU twin
+from the device's root_A; and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes (the twin's in
+the kernels' K32 order, `fixture.k32`) and α, C̃, U (the second launch's where the call stores none) and y must equal #449's
+CPU twin
 (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the harness's operand rows and the call's seeds, and with
 hashing the tile's leaf the scheme's over its real rows, that leaf's in the tile tree and row r0's in A's tree the verifier's
 (`CommitmentDomain.leaf`).  `known_bad` flips C̃'s first word (the first message digest's, where the call stores no C̃)
@@ -124,8 +125,8 @@ def expected(t, real: int, hashing: bool, ep: dict, tid: int, a_row: bytes) -> d
     """A twin tile's bytes in the kernels' layout, by the names `_Call.tile_bytes` reads; with hashing the leaf over the
     tile's `real` rows (the scheme's `digest`), its leaf in the tile tree and row r0's in A's tree."""
     ia, ib = F.H.recip(t.a.alpha.astype(np.uint32)), F.H.recip(t.b.alpha.astype(np.uint32))
-    out = {"at": t.a.codes.astype(np.uint8).tobytes(), "alpha_a": t.a.alpha.astype("<u4").tobytes(),
-           "bt": t.b.codes.astype(np.uint8).tobytes(), "alpha_b": t.b.alpha.astype("<u4").tobytes(),
+    out = {"at": F.k32(t.a.codes.astype(np.uint8)).tobytes(), "alpha_a": t.a.alpha.astype("<u4").tobytes(),
+           "bt": F.k32(t.b.codes.astype(np.uint8)).tobytes(), "alpha_b": t.b.alpha.astype("<u4").tobytes(),
            "y": F.H.glue_y(t.u.astype(np.uint32), ia, ib).astype("<u2").tobytes(),
            "c": t.c.astype("<u4").tobytes(), "u": t.u.astype("<u4").tobytes()}
     if hashing:

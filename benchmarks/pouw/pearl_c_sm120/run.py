@@ -17,9 +17,11 @@
    tiles, gemm_pearlc_b's time less gemm_pearlc_s's is hashing), the call end to end with and without its hashes (commit and
    hashing; without, the chain is gemm_pearlc_s where it runs), and consistency checks (C~ of gemm_ct equals gemm_pearlc's;
    a second gemm_pearlc gives the same U; gemm_pearlc_s's and gemm_pearlc_b's y and gemm_pearlc_b's digests equal the
-   unfused call's; form_s5_scalar, timed beside form_s5, and the RATE kernels write form_s5's codes).
+   unfused call's; form_s5_scalar and form_s5_r144, timed beside form_s5, and the RATE kernels write form_s5's codes).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
-   within it (form_rate less form_rate_nocast).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
+   within it (form_rate less form_rate_nocast; at the 144-byte row stride, form_rate_r144 less form_rate_nocast_r144).
+   form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
+   it, and every product over k against the unpermuted operands'.  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
    only; the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
@@ -408,14 +410,15 @@ class Pipeline:
                                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
                 (f"tree_{tag}", lambda: self.levels(tag, count))]
 
-    def form_scalar_launch(self, tag: str) -> None:
+    def form_alt_launch(self, tag: str, kernel: str) -> None:
+        """`kernel` (one of FORM_ALTS) over one side's rows into at2."""
         b, rows = self.b, self.m if tag == "a" else self.n
-        self.dev.launch("form_s5_scalar", (self.k // 128, rows // 64), 128,
+        self.dev.launch(kernel, (self.k // 128, rows // 64), 128,
                         p=(b[f"x{tag}"], b[f"alpha_{tag}"], b[f"ep{tag}_codes"], b[f"f{tag}_codes"], b["at2"]), i=(rows, self.k))
 
-    def form_scalar(self, tag: str) -> int:
-        """form_s5_scalar over one side's rows into at2, and the words where form_s5's codes (at or bt) differ from it."""
-        self.form_scalar_launch(tag)
+    def form_alt(self, tag: str, kernel: str) -> int:
+        """`kernel` over one side's rows into at2, and the words where form_s5's codes (at or bt) differ from it."""
+        self.form_alt_launch(tag, kernel)
         self.dev.sync()
         return self.diff(f"{tag}t", "at2")
 
@@ -545,6 +548,8 @@ class Pipeline:
 # ---- the check ----------------------------------------------------------------------------------------------------
 
 PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "qa_s5", "qb_s5", "y_adopt"}
+#: form_s5's gate (the one-code cast) and its 144-byte-stride twin, each run into at2 and held to form_s5's codes
+FORM_ALTS = ("form_s5_scalar", "form_s5_r144")
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
                ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)),
                ("gemm_pearlc_b", ("y", "digests")))
@@ -582,8 +587,9 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
         for tag in ("a", "b"):
-            pipe.form_scalar(tag)
-            res[f"{tag}t@form_s5_scalar"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
+            for kernel in FORM_ALTS:
+                pipe.form_alt(tag, kernel)
+                res[f"{tag}t@{kernel}"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
         small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
         for p_, grids, tag in ((pipe, (None, 1, 3), ""), (small, (None, 3), "bm64")):
             steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
@@ -646,10 +652,11 @@ def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: 
 
 
 #: form_body's RATE kernels (pearl_c_sm120.cu): form_s5's loop, form_s5_scalar's, form_s5's with the cast replaced by a
-#: float's bits, and its atoms, F's loads and stores alone; each run at FORM_REPEATS repeats per block
-FORM_RATES = ("form_rate", "form_rate_scalar", "form_rate_nocast", "form_rate_atoms")
+#: float's bits, and its atoms, F's loads and stores alone; form_s5's loop and its castless one again with the codes staged at
+#: a 144-byte row stride (form_s5_r144's); each run at FORM_REPEATS repeats per block
+FORM_RATES = ("form_rate", "form_rate_scalar", "form_rate_nocast", "form_rate_atoms", "form_rate_r144", "form_rate_nocast_r144")
 FORM_REPEATS = (64, 2112)
-FORM_BLOCKS_PER_SM = 2      # form_s5's occupancy: 46,080 bytes of static shared memory a block, of the SM's 100 KB
+FORM_BLOCKS_PER_SM = 2      # form_s5's occupancy: 45,056 bytes of static shared memory a block, of the SM's 100 KB
 MACS_PER_SM_CLOCK = 1024    # one unit, a dense E4M3 mma.sync MAC: m16n8k32 is 4,096 MACs per 4 SM clocks
 
 
@@ -670,7 +677,7 @@ def form_rates(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int) -> dict:
         def launch(r, name=name):
             dev.launch(name, blocks, 128, p=(b["xb"], b["alpha_b"], b["epb_codes"], b["fb_codes"], b["at2"]), i=(n, k, r))
         row: dict = {}
-        if name in ("form_rate", "form_rate_scalar"):
+        if name in ("form_rate", "form_rate_scalar", "form_rate_r144"):
             dev.ck("cuMemsetD8_v2", u64(b["at2"]), 0xAB, span)
             launch(3)
             dev.sync()
@@ -692,6 +699,8 @@ def form_rates(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int) -> dict:
         out["cast_units_per_code"] = {"packed": round(u_["form_rate"] - u_["form_rate_nocast"], 3)}
         if u_["form_rate_scalar"] is not None:
             out["cast_units_per_code"]["scalar_loop_less_nocast"] = round(u_["form_rate_scalar"] - u_["form_rate_nocast"], 3)
+    if u_["form_rate_r144"] is not None and u_["form_rate_nocast_r144"] is not None:
+        out.setdefault("cast_units_per_code", {})["packed_r144"] = round(u_["form_rate_r144"] - u_["form_rate_nocast_r144"], 3)
     return out
 
 
@@ -708,8 +717,10 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         runs[name], med[name] = [round(x, 4) for x in t], statistics.median(t)
     if gates["pearl_c"]:
         for tag in ("a", "b"):
-            t = dev.timed(lambda tag=tag: pipe.form_scalar_launch(tag), reps)
-            runs[f"form_{tag}_scalar"], med[f"form_{tag}_scalar"] = [round(x, 4) for x in t], statistics.median(t)
+            for kernel in FORM_ALTS:
+                t = dev.timed(lambda tag=tag, kernel=kernel: pipe.form_alt_launch(tag, kernel), reps)
+                nm = f"form_{tag}{kernel.removeprefix('form_s5')}"
+                runs[nm], med[nm] = [round(x, 4) for x in t], statistics.median(t)
         for name, f in extra.items():
             if name not in med:
                 t = dev.timed(f, reps)
@@ -748,10 +759,11 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             extra["gemm_pearlc_b"]()
             out["consistency"]["y_fused_vs_unfused_words_differing"] = pipe.diff("y", "y2")
             out["consistency"]["digests_fused_vs_unfused_words_differing"] = pipe.diff("digests", "digests2")
-        out["consistency"].update({f"{tag}t_form_s5_vs_scalar_words_differing": pipe.form_scalar(tag) for tag in ("a", "b")})
+        out["consistency"].update({f"{tag}t_form_s5_vs_{kernel.removeprefix('form_s5_')}_words_differing": pipe.form_alt(tag, kernel)
+                                   for tag in ("a", "b") for kernel in FORM_ALTS})
         out["form_rate"] = rate = form_rates(dev, nv, pipe, reps)
         out["consistency"].update({f"bt_{nm}_codes_differing": rate[nm]["codes_differing"]
-                                   for nm in ("form_rate", "form_rate_scalar") if nm in rate})
+                                   for nm in ("form_rate", "form_rate_scalar", "form_rate_r144") if nm in rate})
     if gates["plain"] and "gemm_plain" in med:
         out["plain_call_ms"] = round(med["plainq_a"] + med["gemm_plain"], 4)
         out["plain_tflops"] = round(2 * m * n * k / med["gemm_plain"] / 1e9, 1)

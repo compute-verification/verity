@@ -39,6 +39,7 @@ def load(name: str, path: Path):
 
 F = load("pearl_c_sm120_fixture", HERE / "fixture.py")
 S = load("pearl_c_sm120_sass_gate", HERE / "sass_gate.py")
+RUN = load("pearl_c_sm120_run", HERE / "run.py")
 W = F.W
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
@@ -112,8 +113,31 @@ def test_gemms_fit_sm120_shared_memory():
         assert (tm, bn) == gemm_tile(name) and (name in ml) == ((tm, bn) == (128, 128))
         assert g in (0, 4) and (g == 0) == (name.endswith("_u") or name == "gemm_fast")
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
-    assert form_rates() == ["form_rate", "form_rate_scalar", "form_rate_nocast", "form_rate_atoms"]
-    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "words", "words_u", *form_rates()} == names
+    assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
+                              "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
+    assert set(S.WANT) - {"words", "words_u", *form_kernels()} == names
+    assert set(RUN.FORM_RATES) == set(form_rates()) and set(RUN.FORM_ALTS) == {"form_s5_scalar", "form_s5_r144"}
+
+
+
+def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unchanged():
+    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's 10:29Z ruling): within each aligned
+    32, position 8q + 2b + s holds column 8b + 2q + s; the kernel's k32 and the fixture's are the same map, an involution,
+    and a product over k of two operands both in K32 order is the unpermuted one's, word for word, on both device records."""
+    t = np.arange(96)
+    order = F.k32(t)
+    assert (F.k32(order) == t).all()
+    grid = np.arange(32).reshape(4, 4, 2).transpose(1, 0, 2).reshape(32)
+    assert all((order[32 * i:32 * i + 32] == grid + 32 * i).all() for i in range(3))
+    assert "(t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | (t & 1)" in SOURCE
+    assert "t[(size_t)j * count + k32(line)] = c[j]" in SOURCE
+    rng = np.random.default_rng(20260930)
+    a, b = rng.integers(0, 256, (5, 1024), dtype=np.uint8), rng.integers(0, 256, (3, 1024), dtype=np.uint8)
+    for x in (a, b):
+        x[(x & 0x7F) == 0x7F] = 0
+    for device in F.VARIANTS:
+        assert (F.product(device, F.k32(a), F.k32(b)) == F.product(device, a, b)).all()
+        assert (F.product(device, a, F.k32(b)) != F.product(device, a, b)).any()
 
 
 def test_kernel_constants_match_the_reference():
@@ -216,7 +240,7 @@ def small_fixture(tmp_path_factory):
 @pytest.mark.slow
 def test_fixture_agrees_with_the_scheme(small_fixture):
     man = json.loads((small_fixture / "check.json").read_text())
-    assert man["shape"] == [128, 128, 1024] and man["layout"] == "rowmajor"
+    assert man["shape"] == [128, 128, 1024] and man["layout"] == "rowmajor, k32"
     assert set(man["variants"]) == {"sm120", "sm120-unpromoted"}
     cs = {}
     for variant, spec in man["variants"].items():
@@ -240,14 +264,18 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
 
 
+def form_kernels() -> list[str]:
+    return re.findall(r"^FORM_KERNEL\((\w+), \d, (?:true|false), \w+\)", SOURCE, re.M)
+
+
 def form_rates() -> list[str]:
-    return re.findall(r"^FORM_RATE\((\w+), \d, FORM_X4?\)", SOURCE, re.M)
+    return [n for n in form_kernels() if n.startswith("form_rate")]
 
 
 def own_kernels() -> list[str]:
     plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"}
     names = [n for n, *_ in gemms()]
-    return sorted(plain) + names + [g + "_smem" for g in names] + form_rates()
+    return sorted(plain) + names + [g + "_smem" for g in names] + form_kernels()
 
 
 def kernel_names() -> list[str]:
@@ -265,7 +293,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
     if name == "eprime":
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
-    if name in ("form_s5", "form_s5_scalar") or name.startswith("form_rate"):
+    if name.startswith("form_"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
     if name.startswith("gemm_") and not name.endswith("_smem"):
@@ -442,7 +470,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
         assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
-        if name in ("form_s5", "form_s5_scalar"):
+        if name.startswith("form_s5"):
             assert g[:2] == [i[1] // 128, i[0] // 64] and ev["block"] == 128
         if name.startswith("form_rate"):
             assert g[1:] == [1, 1] and 0 < g[0] <= (i[0] // 64) * (i[1] // 128) and ev["block"] == 128 and i[2] > 0
