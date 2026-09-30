@@ -8,6 +8,8 @@
 #
 # Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
 # ~1,690 GiB), or it admits pods that stay Pending.
+# CPU: the node's 192 vCPU less the merge-check slots' 88 cores (8-95, pinned direct work since 08:09Z): 104, as circuits 64
+# (4 GPU cells x 16 vCPU) and provers 40. Kueue's quota is accounting; the slots' own pinning keeps checks on their cores.
 # The split is circuits 4 GPUs, provers 4. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
 # holds those with a placeholder pod and applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs
 # borrow circuits' idle GPUs meanwhile. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
@@ -34,7 +36,7 @@ spec:
     - name: vy-nebius-1
       resources:
       - {name: nvidia.com/gpu, nominalQuota: 4, borrowingLimit: 0}
-      - {name: cpu, nominalQuota: 144, borrowingLimit: 0}
+      - {name: cpu, nominalQuota: 64, borrowingLimit: 0}
       - {name: memory, nominalQuota: 1280Gi, borrowingLimit: 0}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
@@ -54,7 +56,7 @@ spec:
     - name: vy-nebius-1
       resources:
       - {name: nvidia.com/gpu, nominalQuota: 4}
-      - {name: cpu, nominalQuota: 48}
+      - {name: cpu, nominalQuota: 40}
       - {name: memory, nominalQuota: 384Gi}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2

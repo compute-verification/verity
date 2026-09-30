@@ -42,7 +42,7 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"circuits", "provers"}
     assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (4, 4)       # cluster_up lowers provers' while GPUs 4-7 are direct
-    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (144, 48)
+    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (64, 40)            # 192 less the check slots' 88 cores (8-95)
     for res, cap in NODE.items():
         assert sum(x[res] for x in q.values()) <= cap, res
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
