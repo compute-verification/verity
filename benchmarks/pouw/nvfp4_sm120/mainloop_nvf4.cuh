@@ -54,6 +54,15 @@ NV_DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
   mbar_wait(bar, parity);
   __syncwarp();
 }
+// whether the phase of parity `parity` has completed, without waiting; true for every lane or for none
+NV_DEV bool mbar_ready_warp(uint32_t bar, uint32_t parity) {
+  uint32_t r;
+  asm volatile("{\n .reg .pred p;\n mbarrier.test_wait.parity.shared::cta.b64 p, [%1], %2;\n selp.u32 %0, 1, 0, p;\n}\n"
+               : "=r"(r)
+               : "r"(bar), "r"(parity)
+               : "memory");
+  return __all_sync(0xffffffffu, r);
+}
 NV_DEV void tma_acquire(const void* map) {
   asm volatile("fence.proxy.tensormap::generic.acquire.sys [%0], 128;" ::"l"(map) : "memory");
   asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory");
@@ -116,10 +125,12 @@ struct Maps { uint8_t a[128], b[128]; };
 // gives the producer RP registers a thread and the consumers the rest (232 at TM = 256 and RP = 40, as in CUTLASS; 240 at
 // RP = 24).  Launch NT threads with __launch_bounds__(NT, 1) and SMEM bytes of dynamic shared memory at a 1,024-byte-aligned
 // address (`extern __shared__ __align__(1024)`).  BORDER: the MMA order inside a 64-deep step, 0 A-major (each A fragment's
-// 8 MMAs in a row), 1 B-major (each B fragment's 4, as CUTLASS).  (Starting the second 128 rows' warps up to 2,048 cycles
+// 8 MMAs in a row), 1 B-major (each B fragment's 4, as CUTLASS).  LATE 1: a warp that finds the next stage not yet full
+// after its first group issues the step's other 24 MMAs before it waits, and then loads the next step's fragments in one go
+// (0: it waits there, the other groups' loads behind them).  (Starting the second 128 rows' warps up to 2,048 cycles
 // late, so that the two warps of an SMSP would reach their epilogues apart, gained nothing: the full barriers they share pull
 // them back within a few hundred cycles, r20260930-114329-edb6.)
-template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
+template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> struct Mainloop {
   static constexpr int BN = 128, BK = 128, ROW = BK / 2, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
   static constexpr int REGS_P = RP, REGS_LAUNCH = 65536 / NT / 8 * 8, REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
                        REGS_C = REGS_FIT < 256 ? REGS_FIT : 256;
@@ -255,6 +266,10 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
   NV_DEV void step(float (&acc)[4][4][2][4], const Frag& cur, Frag& nxt, uint32_t st, int j, bool on, Mid mid) const {
     group(acc, cur, 0);
     mid();
+    rest(acc, cur, nxt, st, j, on);
+  }
+  // step() after its group 0 and mid
+  NV_DEV void rest(float (&acc)[4][4][2][4], const Frag& cur, Frag& nxt, uint32_t st, int j, bool on) const {
     if (on) load_scales(nxt, st, j);
 #pragma unroll
     for (int g = 0; g < 4; g++) {
@@ -288,10 +303,21 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
       step(acc, f0, f1, stage(s), 1, true, [] {});
       advance();
       const bool more = kt + 1 < KT || next;
-      step(acc, f1, f0, stage(s), 0, more, [&] {
+      if (LATE) {
+        group(acc, f1, 0);
         mbar_release(done);
-        if (more) mbar_wait_warp(full(s), ph);
-      });
+        const bool ready = more && mbar_ready_warp(full(s), ph);
+        rest(acc, f1, f0, stage(s), 0, ready);
+        if (more && !ready) {
+          mbar_wait_warp(full(s), ph);
+          load(f0, stage(s), 0);
+        }
+      } else {
+        step(acc, f1, f0, stage(s), 0, more, [&] {
+          mbar_release(done);
+          if (more) mbar_wait_warp(full(s), ph);
+        });
+      }
     }
     primed = next;
   }
