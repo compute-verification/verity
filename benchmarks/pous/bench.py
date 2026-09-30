@@ -25,9 +25,9 @@ Implementations (`IMPLS`), each adding one class:
 
 * `reference`: `verity_pous` itself, the specification, over CPU processes. W is filled deterministically, since the
   decode's cost does not depend on its bytes.
-* `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous` (#172, #188), from `--impl-tree`.
-  - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
-    record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
+* `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous` (#172, #188; #460 and #463 on `main`), from `--impl-tree`.
+  - It runs through that tree's frozen harness, `verity-vllm pous-decode-bench` (`pous-dense-bench` in #188's tree, the same
+    harness before its rename), with the flags of the band's run of record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
 """
 
@@ -51,7 +51,7 @@ SCHEMA = "verity-pous/bench-result/v1"
 WEIGHT_SETS = HERE / "weight_sets.json"
 FROZEN_FLAGS = ["--reps", "3", "--thread-rows", "500", "--word-io", "--fused", "--pair", "--pair-max-rows", "7500", "--chunked",
                 "--chunked-threads", "64", "--split", "--fused-x", "--whole-chain"]
-"""`pous-dense-bench`'s kernel flags in the band's run of record (`r20260928-032701-b4a1`, #188 at `4e491631`)."""
+"""The harness's kernel flags in the band's run of record (`r20260928-032701-b4a1`, #188 at `4e491631`)."""
 SALT = bytes(range(24))
 BATCHES = ("1", "8", "32")
 
@@ -235,7 +235,9 @@ class VllmGpu:
         paths = [tree / "integrations" / "vllm", tree / "packages" / "verity" / "src", tree / "protocols" / "pous",
                  tree / "protocols" / "sampled_proofs", tree / "tools" / "research" / "src"]
         env = {**os.environ, "PYTHONPATH": ":".join(map(str, paths)), "VLLM_ENABLE_V1_MULTIPROCESSING": "0"}
-        cmd = [a.python, "-m", "verity_vllm.pipeline.cli", "pous-dense-bench", "--codec", a.scheme, "--out", str(impl_out),
+        cli = (tree / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "cli.py").read_text()
+        harness = "pous-decode-bench" if '"pous-decode-bench"' in cli else "pous-dense-bench"
+        cmd = [a.python, "-m", "verity_vllm.pipeline.cli", harness, "--codec", a.scheme, "--out", str(impl_out),
                "--shapes", str(tree / "integrations/vllm/workloads/dense_decode_shapes.json"), "--build-dir", a.build_dir,
                "--models", model, *FROZEN_FLAGS, "--segment-vector", "--audit", str(a.audits)]
         t = time.perf_counter()
@@ -244,7 +246,7 @@ class VllmGpu:
         wall = time.perf_counter() - t
         doc = json.loads((impl_out / "dense-bench.json").read_text()) if (impl_out / "dense-bench.json").exists() else None
         if doc is None:
-            raise SystemExit(f"pous-dense-bench exited {rc} without dense-bench.json (see {out / 'impl.log'})")
+            raise SystemExit(f"{harness} exited {rc} without dense-bench.json (see {out / 'impl.log'})")
         m = doc["models"][model]
         audit = m.get("audit") or {}
         scheme = schemes.get(a.scheme, segments=m["segments"])
@@ -261,7 +263,7 @@ class VllmGpu:
         gates["segment_tags"] = tags_gate([raw[i * 32:(i + 1) * 32] for i in range(n)], n)
         accepted = bool(audit.get("accepted"))
         return {
-            "implementation": {"name": self.name, "commit": a.impl_commit, "harness": "verity-vllm pous-dense-bench",
+            "implementation": {"name": self.name, "commit": a.impl_commit, "harness": f"verity-vllm {harness}",
                                "flags": FROZEN_FLAGS, "rc": rc, "wall_s": wall},
             "device": doc.get("device"), "segments": m["segments"], "blocks": m["blocks"], "weight_bytes": m["weight_bytes"],
             "gates": gates,

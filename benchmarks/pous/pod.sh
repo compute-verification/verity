@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The POUS benchmark on a GPU pod, as a research Attempt:
 #
-#   git -C <tree> archive -o impl.tar <commit>        # the implementation's tree: #188's cursor/dense-decode-opt-6667
+#   git -C <tree> archive -o impl.tar <commit>        # the implementation's tree: #463's (or #188's cursor/dense-decode-opt-6667)
 #   research run --on <pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
 #     -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
 #   research run --on <pod> --project verity --source . --cwd source --campaign pous \
@@ -13,7 +13,7 @@
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
-# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity_pous. reference runs
+# frozen harness (pous-decode-bench, pous-dense-bench in #188's tree) and gates and profiles its result with this tree's verity_pous. reference runs
 # bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail

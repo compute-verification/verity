@@ -21,8 +21,9 @@ scheme's certified parameters.
 Implementations:
 
 - `reference`: `verity_pous` on CPU processes.
-- `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous` (#172, #188), from their own tree, through its frozen
-  harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
+- `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous` (#172, #188; #460 and #463 on `main`), from their own tree,
+  through its frozen harness `verity-vllm pous-decode-bench` (`pous-dense-bench` in #188's tree), with the flags of the
+  band's run of record.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`.
