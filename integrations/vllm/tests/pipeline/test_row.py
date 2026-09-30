@@ -16,6 +16,7 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import json
 import os
@@ -449,6 +450,7 @@ def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_a
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     r = _row(tmp_path)
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.env = dataclasses.replace(r.env, norm_tap_so=str(tmp_path / "absent" / "verity_norm_tap.so"))   # a host with the default build (/workspace/cp/...) has the .so
     man = _tap_manifest(tmp_path / "manifest.json", "norm_scales")
     taps = R.applicable_taps(man, r.ck_)
     assert taps == ["norm_tap"]
