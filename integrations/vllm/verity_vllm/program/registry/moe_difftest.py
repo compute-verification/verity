@@ -6,10 +6,12 @@ weight -> `_moe_C.moe_sum`), bf16, unquantized, routing given:
     # verity venv:      verity-vllm properties-admission check   --adapter verity_vllm.program.registry.moe_difftest --dir DIR --out RUN/moe.json
 
 `production` runs vLLM's own entry and records what each `fused_moe_kernel` launch wrote, by wrapping the module's
-`dispatch_fused_moe_kernel`: the w13 launch's output (`MoeExpertGemm_v1{E,K=H,N=2I}` per (token, slot) pair), the w2 launch's input
-(`SiluMul_v1{I}`) and output (`MoeExpertGemmW_v1{E,K=I,N=H}`), then the block's output (`MoeSum_v1{TOPK,H}` per token).  The launch
-configuration vLLM chose (tile sizes, sorted or naive schedule) is recorded with the case.  H spans several BLOCK_SIZE_K tiles, so
-the k-chain crosses tile boundaries; the token counts take both the naive and the sorted block schedule."""
+`dispatch_fused_moe_kernel`: the w13 launch's output (`MoeExpertGemm{E,K=H,N=2I}` per (token, slot) pair), the w2 launch's input
+(`SiluMul_v1{I}`) and output (`MoeExpertGemmW{E,K=I,N=H}`), then the block's output (`MoeSum_v1{TOPK,H}` per token).  The expert
+GEMMs are the ones a config run binds on the capture's device (`registry.targets.moe_expert_gemm_spec`: `_v1`, or `_v2{DOT}` with the
+device's k16 step).  The launch configuration vLLM chose (tile sizes, sorted or naive schedule) and the device's compute capability are
+recorded with the case.  H spans several BLOCK_SIZE_K tiles, so the k-chain crosses tile boundaries; the token counts take both the
+naive and the sorted block schedule."""
 from __future__ import annotations
 
 import struct
@@ -18,7 +20,7 @@ from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.refs import array_of, tuple_of
 from verity.ir.types import Array, Tuple
 from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
+from verity_vllm.program.registry.moe import MoeExpertGemm, MoeExpertGemmV2, MoeExpertGemmW, MoeExpertGemmWV2, MoeSum
 from verity_vllm.program.registry.prims import BF16, F32, I32
 
 SEMANTIC_ID = "moe/MoeExpertGemm@v1"
@@ -82,21 +84,30 @@ def production(statics: dict, inputs: list) -> list:
     return [up["C"].reshape(-1), down["A"].reshape(-1), down["C"].reshape(-1), out.reshape(-1)]
 
 
-def _difftest_body(B, S, x, w13, w2, ids, g):
-    """Per (token t, slot k): the w13 launch's output, `SiluMul_v1` of it (the w2 launch's input) and the w2 launch's output; per
-    token, `MoeSum_v1` over its slots."""
+def _block(B, S, x, w13, w2, ids, g, up_def, down_def):
     up, act, down, out = [], [], [], []
     for t in range(S.M):
         dt = []
         for k in range(S.TOPK):
-            u = B.call(bind(MoeExpertGemm, E=S.E, K=S.H, N=2 * S.I), x[t], ids[t][k], w13)
+            u = B.call(up_def, x[t], ids[t][k], w13)
             a = B.call(bind(b1.SiluMul, I=S.I), u)
-            d = B.call(bind(MoeExpertGemmW, E=S.E, K=S.I, N=S.H), a, ids[t][k], g[t][k], w2)
+            d = B.call(down_def, a, ids[t][k], g[t][k], w2)
             up.append(u); act.append(a); dt.append(d)
         down += dt
         out.append(B.call(bind(MoeSum, TOPK=S.TOPK, H=S.H), array_of(dt)))
     return tuple_of(array_of(up), array_of(act), array_of(down), array_of(out))
 
+
+def _difftest_body(B, S, x, w13, w2, ids, g):
+    """Per (token t, slot k): the w13 launch's output (`MoeExpertGemm_v1`), `SiluMul_v1` of it (the w2 launch's input) and the w2
+    launch's output (`MoeExpertGemmW_v1`); per token, `MoeSum_v1` over its slots."""
+    return _block(B, S, x, w13, w2, ids, g, bind(MoeExpertGemm, E=S.E, K=S.H, N=2 * S.I), bind(MoeExpertGemmW, E=S.E, K=S.I, N=S.H))
+
+
+def _difftest_body_dot(B, S, x, w13, w2, ids, g):
+    """`FusedMoEDifftest_v1` with the expert GEMMs `MoeExpertGemm_v2` / `MoeExpertGemmW_v2` on the k16 step `DOT`."""
+    return _block(B, S, x, w13, w2, ids, g, bind(MoeExpertGemmV2, E=S.E, K=S.H, N=2 * S.I, DOT=S.DOT),
+                  bind(MoeExpertGemmWV2, E=S.E, K=S.I, N=S.H, DOT=S.DOT))
 
 def _signature(S):
     P = S.M * S.TOPK
@@ -107,7 +118,16 @@ def _signature(S):
 
 FusedMoEDifftest = CompositeDefinition("FusedMoEDifftest", 1, ("E", "TOPK", "H", "I", "M"), _signature, _difftest_body,
                                        doc=_difftest_body.__doc__ or "", conformance="derived: difftest", register=False)
+FusedMoEDifftestDot = CompositeDefinition("FusedMoEDifftestDot", 1, ("E", "TOPK", "H", "I", "M", "DOT"), _signature, _difftest_body_dot,
+                                          doc=_difftest_body_dot.__doc__ or "", conformance="derived: difftest", register=False)
 
 
 def spec(statics: dict):
-    return bind(FusedMoEDifftest, **{k: int(statics[k]) for k in ("E", "TOPK", "H", "I", "M")})
+    """The block as a config run on the capture's device binds it (`registry.targets.moe_expert_dot` of its compute capability,
+    recorded by `production`; none recorded = the default target's `_v1` Definitions)."""
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.program.registry import targets as T
+    st = {k: int(statics[k]) for k in ("E", "TOPK", "H", "I", "M")}
+    cc = statics.get("cc")
+    dot = T.moe_expert_dot(TargetProfile(compute_capability=tuple(cc))) if cc else None
+    return bind(FusedMoEDifftest, **st) if dot is None else bind(FusedMoEDifftestDot, **st, DOT=dot)

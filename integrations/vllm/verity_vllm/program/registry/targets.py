@@ -92,6 +92,28 @@ def tensor_core_dot(profile):
     return DOTS[name]
 
 
+#: the step families whose fused_moe_kernel correspondence ran on a k16 step other than the Ampere/Ada one: their expert GEMMs bind
+#: `MoeExpertGemm_v2` / `MoeExpertGemmW_v2{E,K,N,DOT}` with the family's step.  Every other registered family keeps the `_v1` records'
+#: binding (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).
+MOE_EXPERT_DOT_FAMILIES = frozenset({"blackwell_consumer"})
+
+
+def moe_expert_dot(profile):
+    """The k16 step of the fused-MoE expert GEMMs' Definition on the declared target: None for the `_v1` Definitions, else the
+    target's registered step for the `_v2{E,K,N,DOT}` ones.  An unregistered target raises `UnregisteredTarget`."""
+    return tensor_core_dot(profile) if target_family(profile) in MOE_EXPERT_DOT_FAMILIES else None
+
+
+def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
+    """The registered Definition of one (token, slot) pair of a `fused_moe_kernel` launch on the declared target: the w13 launch
+    (`routed` False) or the w2 launch with the routed weight."""
+    from verity_vllm.program.registry import moe as M
+    dot = moe_expert_dot(profile)
+    if dot is None:
+        return bind(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
+    return bind(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
+
+
 def tuned_gemm_table(profile) -> dict[tuple[int, int], dict[str, Any]]:
     """vLLM's tuned batch-invariant GEMM table of the declared target (`GemmTarget.tuned_table`; empty = default tiling for every shape)."""
     return dict(gemm_target(profile).tuned_table)
@@ -285,6 +307,7 @@ def describe(profile) -> dict[str, Any]:
             "evidence": {"gemm": list(gt.evidence), **t["evidence"]}}
 
 
-__all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "tuned_gemm_table",
+__all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "MOE_EXPERT_DOT_FAMILIES",
+           "moe_expert_dot", "moe_expert_gemm_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
