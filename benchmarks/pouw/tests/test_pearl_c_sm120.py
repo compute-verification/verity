@@ -476,7 +476,7 @@ class Gate:
     checked: dict
     detail: dict[str, Any] = field(default_factory=dict)
 '''
-ARMS = ["PearlCSm120", "PearlCSm120Unpromoted"]
+ARMS = ["PearlCSm120", "PearlCSm120Unpromoted", "PearlCSm120H1", "PearlCSm120UnpromotedH1"]
 
 
 @pytest.fixture(scope="module")
@@ -513,23 +513,46 @@ def test_arm_accounting_is_the_schemes(A):
     Shape = sys.modules["arm"].Shape
     for cls in ARMS:
         arm = getattr(A, cls)()
+        h1 = cls.endswith("H1")
         assert (arm.stream, arm.precision, arm.inputs) == ("fp8", "fp8-e4m3", "f32")
         assert arm.flag_sets == {"hash": {"hash", "xof"}, "nohash": frozenset()} and arm.panel["line"] == "pearl-c-sm120"
+        assert arm.hashing == ("h1" if h1 else "h0") and arm.scheme.name == arm.name
         for shape in (Shape("m8192-n8192-k8192", 8192, 8192, 8192), Shape("m32-n8192-k8192", 32, 8192, 8192)):
             assert arm.domain(shape) is None
             w, s, m = arm.work(shape), MShape(shape.m, shape.k, shape.n), A.padded(shape.m)
             assert (w.w_ref, w.credited) == (str(arm.scheme.wref(s)), str(arm.scheme.credit_of(s)))
             assert w.tensor_macs == {"fp8-e4m3": m * shape.n * shape.k + m * (C.R + arm.device.atom.k) * shape.k,
                                      "bf16": m * shape.n * C.PEEL_K}
-            assert w.hashed_bytes == {"turboshake128/messages": 8 * m * shape.n, "turboshake128/leaves": m * shape.n,
-                                      "turboshake128/rows": 4 * shape.m * shape.k}
+            t, mr = -(-shape.m // 64) * (shape.n // 64), shape.m
+            assert w.hashed_bytes == ({"blake3/messages": 8 * mr * shape.n, "blake3/leaves": mr * shape.n,
+                                       "blake3/rows": 4 * mr * shape.k,
+                                       "blake3/tree-nodes": 64 * (A.R.pow2(mr) - 1 + A.R.pow2(t) - 1) + 32 * t} if h1 else
+                                      {"turboshake128/messages": 8 * m * shape.n, "turboshake128/leaves": m * shape.n,
+                                       "turboshake128/rows": 4 * shape.m * shape.k})
             g = {k: Fraction(v) for k, v in w.gamma.items() if k != "basis"}
-            if cls == "PearlCSm120":
+            if cls in ("PearlCSm120", "PearlCSm120H1"):
                 assert g == B.gamma(shape.n, shape.k)
             assert g["floor"] < g["cap"] < Fraction(1, 100) and g["cap"] < g["cap_chain_only"]
     arm = A.PearlCSm120()
     assert "multiple of 1,024" in arm.domain(Shape("x", 128, 1000, 128))
     assert "multiple of 128" in arm.domain(Shape("x", 128, 1024, 100))
+    assert arm.domain(Shape("x", 40, 1024, 128)) is None and "multiple of 16" in A.PearlCSm120H1().domain(Shape("x", 40, 1024, 128))
+
+
+def test_arm_h1_domains_count_the_matmuls_rows(A):
+    """-h1's A domain and tile tree count the matmul's m rows (decode's partial row tile), where the twin's count its 128-row
+    padding; at a multiple of 128 they are the twin's."""
+    Shape = sys.modules["arm"].Shape
+    arm = A.PearlCSm120H1()
+    for m, same in ((32, False), (256, True)):
+        shape = Shape("x", m, 1024, 128)
+        sd = A.seeds(arm.name, shape, 7)
+        a, t = arm.domains(shape, sd)
+        tw = A.W.Shape("x", m, 128, 1024)
+        assert (a.domain_id == A.W.a_domain(tw, sd).domain_id) == same and (t.domain_id == A.W.t_domain(tw, sd).domain_id) == same
+        keys = arm.keys(shape, sd)
+        assert keys == {**A.W.keys(tw, sd), "dom_a": a.domain_id.hex(), "dom_t": t.domain_id.hex()}
+        assert keys["k_msg"] == A.R.H1_KEYS["k_msg"] and keys["k_leaf"] == A.R.H1_KEYS["k_leaf"]
 
 
 def driver(A, ship: Path, arm_dir: Path, log: Path, cls: str, *args: str) -> list[dict]:
@@ -564,27 +587,40 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     log = tmp_path / "arm.jsonl"
     rows = driver(A, ship, arm_dir, log, cls, "dry")
     arm = getattr(A, cls)()
-    sx = "" if arm.device.g else "_u"
+    sx, h1 = "" if arm.device.g else "_u", arm.hashing == "h1"
     for g in rows[:-1]:
         assert not g["ok"] and set(g["checked"].values()) == {"all"}
-        hashed = {"leaves", "rows"} if g["role"] == "hash" else set()
+        hashed = ({"leaves", "tree_t", "tree_a"} if h1 else {"leaves", "rows"}) if g["role"] == "hash" else set()
         assert set(g["checked"]) == ({"y"} | hashed | ({"digests"} if hashed else set()) if g["shape"] == "pre" else
                                      {"y", "c", "u"} | hashed)
         assert all(t["failed"] for t in g["detail"]["twin_tiles"])
     assert rows[-1]["live"] == []
 
-    # prefill's m = 256 takes 128 x 128 tiles, so its chain is fused (gemm_pearlc_h, or gemm_pearlc_s without hashing)
-    chain = lambda shape, role: {"pre": "gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_h",  # noqa: E731
+    # prefill's m = 256 takes 128 x 128 tiles, so its chain is fused (gemm_pearlc_h, -h1's gemm_pearlc_b, or gemm_pearlc_s
+    # without hashing)
+    chain = lambda shape, role: {"pre": "gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_b" if h1 else "gemm_pearlc_h",  # noqa: E731
                                  "dec": "gemm_pearlc_d"}[shape] + sx
     forming = lambda shape, role: ["stats_s5", "eprime", "form_s5", {"pre": "gemm_words", "dec": "words"}[shape] + sx,  # noqa: E731
                                    "pa", chain(shape, role)]
-    hashes = lambda shape: (["hash_leaf"] if shape == "pre" else ["hash_msg", "hash_leaf"]) + ["hash_rows_f32"]  # noqa: E731
+
+    def tree(count: int) -> list[str]:
+        return ((["hash_pad"] if A.R.pow2(count) > count else []) +
+                (["hash_node_keys"] + ["hash_nodes"] * A.R.depth(count) if count > 1 else []))
+
+    def hashes(shape: str) -> list[str]:
+        m = {"pre": 256, "dec": 32}[shape]
+        tiles = -(-m // 64) * (128 // 64)
+        if not h1:
+            return (["hash_leaf"] if shape == "pre" else ["hash_msg", "hash_leaf"]) + ["hash_rows_f32"]
+        rows, tile_tree = ["hash_rows", *tree(m)], ["hash_tree_leaves", *tree(tiles)]
+        return ["hash_leaf", *tile_tree, *rows] if shape == "pre" else [*rows, "hash_msg", "hash_leaf", *tile_tree]
     got, allocs = windows(log)
     assert not allocs
+    stream = next(ev["ptr"] for ev in map(json.loads, log.read_text().splitlines()) if ev["op"] == "stream")
     ea: dict[tuple, int] = {}
     launched: dict[tuple, list[dict]] = {}
     for mark, evs in got:
-        assert all(ev["stream"] == 0x1234 for ev in evs), mark
+        assert all(ev["stream"] == stream for ev in evs), mark
         names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
         copy = ["copy"] if mark["shape"] == "dec" else []
         if mark["what"] == "weight":
@@ -628,7 +664,8 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     128 x 128 tiles the call is fused, and one message digest's byte flipped in the last sampled tile fails it twice over,
     against the second launch (unfused, hash_msg over gemm_pearlc's C̃ and U) and against the twin."""
     first, flipped = driver(A, ship, arm_dir, tmp_path / "accept.jsonl", cls, "accept", str(small_fixture / "check.json"))
-    assert first["ok"] and first["checked"] == {name: "all" for name in ("leaves", "rows", "digests", "y")}
+    hashed = ("leaves", "tree_t", "tree_a") if cls.endswith("H1") else ("leaves", "rows")
+    assert first["ok"] and first["checked"] == {name: "all" for name in (*hashed, "digests", "y")}, first
     assert not any(first["detail"]["words_differing_from_relaunch"].values())
     assert len(first["detail"]["twin_tiles"]) == 3 and not any(t["failed"] for t in first["detail"]["twin_tiles"])
     assert not flipped["ok"] and flipped["flipped"][0] == "digests"
