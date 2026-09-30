@@ -163,7 +163,9 @@ def test_domain_and_registry():
     mx = F.PearlC4("mxfp4")
     assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
     s.check(Matmul(0, Shape(64, 1024, 64), 0))
-    for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64)):
+    s.check(Matmul(0, Shape(64, 1024, 1 << 18), 0))
+    for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64),
+                Shape(64, 1024, 1 << 19)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 0))
 
@@ -337,10 +339,26 @@ def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
     d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b)
     cap = F.CAP * Fraction(F.PearlC4().credit_of(Shape(1, k, n)), n) * 16
     assert d.split > 50 * cap
-    gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k) for j in range(4)]
+    gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k, b.scales[j]) for j in range(4)]
     assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) < Fraction(1, 10 ** 4)
     if family is spike_row:
         assert d.counts["salt_dead_a"] == 0
+
+
+@pytest.mark.parametrize("family", [spike_row, narrow_cell_row, None], ids=["spike", "narrow-cell", "gaussian"])
+def test_c_charges_at_least_the_first_reading(family):
+    """C (`change_probabilities`, the rule: certified modal byte, 4-lookup lower bound) charges at least the reading it
+    bounds (`change_probabilities_exact`: every cell, the modal byte over the ±6σ bytes) on every row, with no block
+    uncertified on these rows."""
+    f, k = F.NVFP4, 1024
+    rows = [family(i) for i in range(3)] if family else [F.parse_row(r, k) for r in V.rows("rules", "A", 3, k)]
+    a, e = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
+    for i in range(3):
+        dead = F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i])
+        p, modes = F.change_probabilities(f, a.x[i], a.alpha[i], e[i], a.ae[i], dead, a.scales[i])
+        q, exact = F.change_probabilities_exact(f, a.x[i], a.alpha[i], e[i], a.ae[i], dead)
+        assert None not in modes and all(x <= y + 1e-15 for x, y in zip(p, q))
+        assert F.split_units(f, p, modes, a.scales[i]) >= F.split_units(f, q, exact, a.scales[i]) * (1 - 1e-12)
 
 
 def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
@@ -406,6 +424,23 @@ def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
     reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0, 1)), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("A row 1 is excluded but passes the per-row rules")
     assert s.r1_rows(ctx, a_rows, b_rows, k) == ({0}, set())
+
+
+def test_r1_allows_either_declaration_inside_its_tolerance_band():
+    """R1's tolerance band (the assessor's condition 3, 16:10Z): a row within `R1_TOLERANCE` of its bound may be declared
+    credited or excluded, so implementations that differ in the last bits agree on the audit."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k = ctx.matmul.shape.k
+
+    class Near(F.PearlC4):
+        def row_debit_ratio(self, record, ops, side, pos):
+            return {("A", 0): Fraction(10), ("A", 1): 1 + Fraction(1, 10 ** 10)}.get((side, pos), Fraction(0))
+
+    near = Near("nvfp4")
+    assert near.r1_tolerance == F.R1_TOLERANCE > Fraction(1, 10 ** 10)
+    for excluded in ((0,), (0, 1)):
+        reason = W.check_opened(near, W.UnitRecord(ctx.matmul, 4, k, excluded), tile, a_rows, b_rows, ops)
+        assert reason is None or ("R1" not in reason and "per-row rules" not in reason)
 
 
 def test_f2_depth_cost_is_the_pinned_formula():

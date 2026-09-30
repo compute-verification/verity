@@ -205,11 +205,17 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
              for i, row in zip(tile.rows, a_rows, strict=True)]
     kinds += [("B", j, row, "excluded" if j in eb else "credited") for j, row in zip(tile.cols, b_rows, strict=True)]
     pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
-    over = getattr(scheme, "row_over_debit", None)
+    ratio = getattr(scheme, "row_debit_ratio", None)
+    tol = getattr(scheme, "r1_tolerance", 0)
 
-    def r1(side: str, index: int) -> bool:
-        """R1, a scheme's salted per-row credit rule (Pearl-C4's F1′ bound): Pearl-C's schemes bring none."""
-        return over is not None and ops is not None and over(record, ops, side, (pos_a if side == "A" else pos_b)[index])
+    def r1(side: str, index: int, credited: bool) -> bool:
+        """Whether R1, a scheme's salted per-row credit rule (Pearl-C4's F1′ bound), contradicts the declaration: a
+        credited row over its bound, or an excluded row under it, beyond the scheme's tolerance band.  Pearl-C's schemes
+        bring none."""
+        if ratio is None or ops is None:
+            return credited is False
+        r = ratio(record, ops, side, (pos_a if side == "A" else pos_b)[index])
+        return r > 1 + tol if credited else r <= 1 - tol
 
     for side, index, row, kind in kinds:
         try:
@@ -223,9 +229,9 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
         if any(words[record.k_kept:]):
             return f"{side} row {index} is not zero past the kept width"
         ok = passes(words)
-        if (kind == "credited" and not ok) or (kind == "excluded" and ok and not r1(side, index)):
+        if (kind == "credited" and not ok) or (kind == "excluded" and ok and r1(side, index, False)):
             return f"{side} row {index} is {kind} but {'fails' if kind == 'credited' else 'passes'} the per-row rules"
-        if kind == "credited" and r1(side, index):
+        if kind == "credited" and r1(side, index, True):
             return f"{side} row {index} is credited but its own debit passes R1's bound (ρ·its cell credit)"
     rows, cols = record.credited(tile)
     if rows and cols:
@@ -234,7 +240,7 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
         else:
             debit, cap = tile_cap(scheme, record, [ops.a.codes[pos_a[i]] for i in rows],
                                   [ops.b.codes[pos_b[j]] for j in cols])
-        if debit > cap:
+        if debit > cap * (1 + Fraction(getattr(scheme, "r1_tolerance", 0))):
             return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
     return None
 
