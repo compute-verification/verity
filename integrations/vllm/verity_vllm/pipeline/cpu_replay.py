@@ -37,7 +37,8 @@ from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
 
-ATTEST = "verity-vllm/weights-attest/v1"
+ATTESTS = ("every weight field the replay consumed, composed from the checkpoint (or carried in the bundle), has the committed tensor root, "
+           "and the tensor roots fold to the committed weights root")
 #: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
 WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
          "uint8": (8, np.uint8), "int8": (8, np.uint8)}
@@ -119,11 +120,14 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
     return words, check
 
 
-def provider(words: dict[str, np.ndarray], prefix: str) -> Callable[[str, int, int], np.ndarray | None]:
-    """The replay's weights reader over the opened tensors (Program field -> registered name, as `opening.model_weights_provider`)."""
+def provider(words: dict[str, np.ndarray], prefix: str, consumed: set[str]) -> Callable[[str, int, int], np.ndarray | None]:
+    """The replay's weights reader over the opened tensors (Program field -> registered name, as `opening.model_weights_provider`);
+    every field it is asked for lands in ``consumed``."""
     def read(field: str, lo: int, hi: int) -> np.ndarray | None:
         name = field[len(prefix):] if prefix and field.startswith(prefix) else field
-        a = words[name] if name in words else words.get(field)
+        name = name if name in words or field not in words else field
+        consumed.add(name)
+        a = words.get(name)
         return None if a is None or hi > a.size else a[lo:hi]
 
     return read
@@ -196,7 +200,21 @@ def engine_of_record(row: dict[str, Any], ctx: dict[str, Any], art: Path) -> Non
     _write(art, json.dumps(doc, indent=1, default=str) + "\n")
 
 
-def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict[str, Any]) -> None:
+def weights_attest(c: dict[str, Any], wc: dict[str, Any], consumed: set[str], words: dict[str, np.ndarray], extra: Any,
+                   b: dict[str, Any]) -> dict[str, Any]:
+    """What the replay's weights openings attest: ``attests`` is None unless every consumed field opened and the tree folds to the root."""
+    pin = c.get("weights_pin") or {}
+    whole = wc["equal"] and consumed <= words.keys()
+    by = {s: 0 for s in ("checkpoint", "bundle")}
+    for name in consumed & words.keys():
+        by["bundle" if name in extra else "checkpoint"] += 1
+    return {"pin": {"equal": pin.get("result"), "digest": pin.get("root_of_record")},
+            "root_openings": f"{len(consumed & words.keys())}/{len(consumed)}", "sources": by,
+            "attests": ATTESTS if whole else None, "replay": f"cpu, from bundle {b['manifest_sha256']}"}
+
+
+def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict[str, Any], consumed: set[str],
+           words: dict[str, np.ndarray], extra: Any) -> None:
     """The run's value correspondence and verdict with the replay on the record (in the in-process Commit's component order)."""
     from verity_vllm.check.verdict import commit_verdict
 
@@ -208,11 +226,7 @@ def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict
             comps[k] = comps.pop(k)
     fails = [(k, x) for k, x in comps.items() if x.get("result") is False]
     vc["why"] = "; ".join(f"{k}: {x.get('why')}" for k, x in fails) if fails else None
-    c["weights_attest"] = {"schema": ATTEST, "result": wc["equal"], "pin": (c.get("weights_pin") or {}).get("result"),
-                           "root": wc["committed_root"], "root_openings": f"{wc['opened']}/{wc['servable']}",
-                           "opened_by_source": wc["opened_by_source"], "mismatched": [m["name"] for m in wc["mismatched"]],
-                           "unopened": [u["name"] for u in wc["unopened"]], "source": "checkpoint", "why": wc["why"],
-                           "replay": {"where": "cpu", "bundle": b["path"], "manifest_sha256": b["manifest_sha256"], "open_s": wc["wall_s"]}}
+    c["weights_attest"] = weights_attest(c, wc, consumed, words, extra, b)
     c["commit_pass"], c["commit_fail_reason"] = commit_verdict(c, row["tokens_equal_ref"], min_openings=ctx["min_openings"],
                                                                declaration=ctx["declaration"], required_classes=ctx["required_classes"])
 
@@ -259,13 +273,13 @@ def replay(o: Options) -> bool | None:
     print(f"[replay] WEIGHTS (pair {pair}): {'OPENED' if wc['equal'] else 'FAIL'} {wc['opened']}/{wc['servable']} registered tensors against the committed "
           f"weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
           + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
-    vc = row["commit"]["value_correspondence"]
+    vc, consumed = row["commit"]["value_correspondence"], set()
     C2.run(C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
                    manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
-                   components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p),
+                   components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
                    weights_check=lambda: dict(wc), tl=tl), {})
     engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
-    decide(row, ctx, wc, b)
+    decide(row, ctx, wc, b, consumed, words, tree.get("extra") or {})
     record(out, rows, verdict, b, time.perf_counter() - t0)
     c = row["commit"]
     print(f"[replay] COMMIT {'PASS' if c['commit_pass'] else 'FAIL'} (pair {pair}): {c.get('commit_fail_reason') or 'every check on the record'}; "

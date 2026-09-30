@@ -71,10 +71,24 @@ def test_every_servable_tensor_opens_against_the_committed_root_and_is_served_as
     assert wc["equal"] is True and wc["why"] is None, wc
     assert wc["servable"] == 4 and wc["opened"] == 3 and wc["opened_by_source"] == {"checkpoint": 2, "bundle": 1}
     assert [u["name"] for u in wc["unopened"]] == ["model.unknown.weight"] and wc["mismatched_n"] == 0
-    rd = CPU.provider(words, "model.")
+    consumed = set()
+    rd = CPU.provider(words, "model.", consumed)
     assert np.array_equal(rd("model." + QKV, 0, 64), _served()[QKV][1].reshape(-1)) and rd("model." + QKV, 0, 65) is None
     assert np.array_equal(rd("model.rotary_emb.cos_sin_cache", 0, 8), COS_SIN.view(np.uint32))
+    assert consumed == {QKV, "model.rotary_emb.cos_sin_cache"}
     assert rd("model.unknown.weight", 0, 1) is None and rd("model.half.weight", 0, 1) is None
+
+
+def test_the_weights_attest_counts_the_consumed_fields_and_attests_only_when_every_one_opened(world):
+    words, wc = _open(world)
+    c = {"weights_pin": {"result": True, "root_of_record": "ab" * 32}}
+    b = {"manifest_sha256": "cd" * 32}
+    a = CPU.weights_attest(c, wc, {QKV, "model.rotary_emb.cos_sin_cache"}, words, world["tree"]["extra"], b)
+    assert a == {"pin": {"equal": True, "digest": "ab" * 32}, "root_openings": "2/2", "sources": {"checkpoint": 1, "bundle": 1},
+                 "attests": CPU.ATTESTS, "replay": f"cpu, from bundle {'cd' * 32}"}
+    a = CPU.weights_attest(c, wc, {QKV, "model.unknown.weight"}, words, world["tree"]["extra"], b)
+    assert a["root_openings"] == "1/2" and a["attests"] is None, "a consumed field that did not open attests nothing"
+    assert CPU.weights_attest(c, dict(wc, equal=False), {QKV}, words, world["tree"]["extra"], b)["attests"] is None
 
 
 def test_a_flipped_checkpoint_byte_fails_the_opening_by_the_tensors_name(world):

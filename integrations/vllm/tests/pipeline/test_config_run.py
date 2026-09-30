@@ -178,7 +178,7 @@ def test_a_replay_stage_writes_the_record_the_pending_commit_left_unwritten(tmp_
 def test_a_config_record_carries_the_replay_s_weights_attest(tmp_path):
     d = _row_dir(tmp_path)
     run = json.loads((d / "commit" / "runs.jsonl").read_text())
-    run["commit"]["weights_attest"] = {"root_openings": "3/3", "source": "checkpoint", "result": True}
+    run["commit"]["weights_attest"] = {"root_openings": "3/3", "sources": {"checkpoint": 3, "bundle": 0}}
     (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
     assert CR.record(d, ROW)["commit"]["weights_attest"]["root_openings"] == "3/3"
     assert "weights_attest" not in CR.record(_row_dir(tmp_path / "old"), ROW)["commit"], "a record without one is unchanged"
