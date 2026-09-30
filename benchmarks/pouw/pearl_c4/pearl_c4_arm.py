@@ -4,7 +4,8 @@ contrast, not a protocol candidate).
 
   bench.py ... --arm-path benchmarks/pouw/pearl_c4 --arm pearl_c4_arm:PearlC4Nv --arm pearl_c4_arm:PearlC4Mx
   env: PEARLC4_CUBIN (default pearl_c4.cubin beside this file; build.sh makes it), PEARLC4_GATE_TILES (default 2),
-  PEARLC4_VERIFY_WORKERS (the verifier's processes, default 16)
+  PEARLC4_VERIFY_WORKERS (the verifier's processes, default 16), PEARLC4_NOWRITE_CONTROL (when set, each dump's no-write
+  negative control goes beside it, <scheme>-<shape>-nowrite, for the window to verify after the lease; verify.py ignores it)
 
 The prover is dev.py's `Pipeline` on BF16 A and B: per call, A's commitment as the verifier checks it (`audit.commit_rows`,
 SHA-256 whole-row leaves) and seed_a from its root, A's forming with E_A's lines, A′F_B, the chain with the peel and the
@@ -116,7 +117,10 @@ class _Call:
     def free(self) -> None:
         out = self.arm.transcripts
         if out and self.mode == "hash" and self.arm.first_dump(self.shape):
-            self.dump(Path(out) / f"{self.arm.name}-{self.shape.label}")
+            path = Path(out) / f"{self.arm.name}-{self.shape.label}"
+            self.dump(path)
+            if os.environ.get("PEARLC4_NOWRITE_CONTROL"):
+                self.dump(path.with_name(path.name + "-nowrite"), write=False)
         self.pl.free()
 
     def dump(self, path: Path, write: bool = True) -> None:
