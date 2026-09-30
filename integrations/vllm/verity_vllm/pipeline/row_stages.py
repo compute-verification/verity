@@ -256,7 +256,7 @@ class SingleRow(Row):
         cmd_r = self.request_cmd(self.LP, self.T, f"{self.d}/build_request", lctx)
         req = self.cb.build_jobs or "auto"
         shapes = [(self.LP, self.T), *R.extra_shapes(self.path(self.wl), self.LP, self.T)]
-        jobs = str(R.build_jobs_auto(shapes, R.model_layers(self.ck))) if req == "auto" else req
+        jobs = str(R.build_jobs_auto(shapes, R.model_layers(self.ck), budget_gb=self.cb.build_ram_budget_gb)) if req == "auto" else req
         jobs_n = int(jobs) if re.fullmatch(r"[0-9]+", jobs) else 1
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []

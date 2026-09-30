@@ -296,6 +296,9 @@ def test_auto_derives_as_many_as_the_memory_and_cpus_hold_at_the_largest_shape()
     assert R.build_jobs_auto(shapes[:3], 16, headroom=10 * per, cpus=32) == 3
     assert R.build_jobs_auto(shapes, 16, headroom=per, cpus=32) == 1
     assert R.build_jobs_auto(shapes, None, headroom=100 << 30, cpus=32) == 5       # the model's layers unknown: 20 GiB per derive
+    # a sweep's per-config share of a packed host: the budget, not the host's headroom, sizes auto
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=32, budget_gb=5 * per / (1 << 30)) == 4
+    assert R.build_jobs_auto(shapes, 16, headroom=2 * per, cpus=32, budget_gb=100 * per / (1 << 30)) == 1
 
 
 def test_the_model_layers_come_from_the_checkpoints_config(tmp_path):
@@ -306,9 +309,9 @@ def test_the_model_layers_come_from_the_checkpoints_config(tmp_path):
     assert (R.model_layers(str(tmp_path / "a")), R.model_layers(str(tmp_path / "b")), R.model_layers(str(tmp_path / "c"))) == (16, 26, None)
 
 
-def _derive_row(tmp_path, monkeypatch, *argv: str, cpus: int):
+def _derive_row(tmp_path, monkeypatch, *argv: str, cpus: int, environ: dict[str, str] | None = None):
     row = "llama32-1b__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager"
-    r = _row(tmp_path, *argv, row=row)
+    r = _row(tmp_path, *argv, row=row, environ=environ)
     s = R.row_shape(r.path(r.wl), r.path("manifests/checkpoints.json"), str(tmp_path))
     ck = tmp_path / "ck"
     ck.mkdir()
@@ -330,6 +333,10 @@ def test_a_rows_derives_run_in_parallel_by_default(tmp_path, monkeypatch):
     r, _ran = _derive_row(tmp_path / "one", monkeypatch, "--build-jobs", "1", cpus=4)
     r.derive_all(60)
     assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 1
+    budget = 2.6 * R.derive_bytes(r.LP, r.T, 16) / (1 << 30)
+    r, _ran = _derive_row(tmp_path / "budget", monkeypatch, cpus=4, environ={"BUILD_RAM_BUDGET_GB": str(budget)})
+    r.derive_all(60)
+    assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 2
 
 
 def test_the_extra_shapes_derive_longest_first(tmp_path, monkeypatch):

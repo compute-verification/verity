@@ -258,8 +258,10 @@ class BuildConfig:
     """How the Build stage of ``verity-vllm row`` runs.  None = the row's derived default."""
 
     build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
-                                    help="concurrent derives: N, or auto (default): 0.8 x the memory headroom over the largest shape's "
-                                         "planned derive peak, at most one per CPU (TP: ranks x shapes)")
+                                    help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
+                                         "smaller) over the largest shape's planned derive peak, at most one per CPU (TP: ranks x shapes)")
+    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
+                                               help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
                                        help="seconds per derive; default scales with the envelope (TP: 7200)")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
