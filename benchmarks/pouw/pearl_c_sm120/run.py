@@ -30,7 +30,9 @@
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
    it, and every product over k against the unpermuted operands'.  `alt_ms` times the commitment's and hashing's steps under
    OTHER_FORMS and forming's under OTHER_FORMINGS, and `call_e2e_ms_by_form` the call end to end under each of FORMS and
-   FORMINGS.  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic only;
+   FORMINGS.  Every step launches as bound at its first call (Pipeline.bind); `call_e2e_unbound_ms` times the call with
+   each launch's argument block built at the call instead, and `call_host_us` the host's time to enqueue the call either
+   way.  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic only;
    the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
@@ -136,6 +138,29 @@ class Nvml:
                 "temp_c": t.value}
 
 
+class Launch:
+    """One kernel launch bound once: its function, grid, block, dynamic shared memory and argument block (`Args`), on the
+    device's stream at the call unless it names one."""
+
+    __slots__ = ("args", "dev", "dims", "fn", "params", "stream")
+
+    def __init__(self, dev: Dev, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None):
+        g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
+        self.dev, self.fn, self.dims, self.stream = dev, dev.fn(name), (*g, block, 1, 1, smem), stream
+        self.args = Args()
+        for j, v in enumerate(p):
+            self.args.p[j] = v
+        for j, v in enumerate(i):
+            self.args.i[j] = v
+        self.params = (vp * 1)(C.addressof(self.args))
+
+    def __call__(self) -> None:
+        d = self.dev
+        r = d.cu.cuLaunchKernel(self.fn, *self.dims, d.stream if self.stream is None else self.stream, self.params, None)
+        if r:
+            d.fail("cuLaunchKernel", r)
+
+
 class Dev:
     def __init__(self, cubin: bytes):
         self.cu = bind(C.CDLL(os.environ.get("PEARLC_LIBCUDA", "libcuda.so.1")), CUDA)
@@ -154,6 +179,7 @@ class Dev:
         self.fns: dict[str, vp] = {}
         self.live: set[int] = set()
         self.stream = None               # where launch() and copy_async() enqueue unless told otherwise (a harness's stream)
+        self.recording: list[Launch] | None = None   # while a step's launches are bound (Pipeline.bind): kept, not launched
 
     def identity(self, expect_uuid: str | None) -> list[str]:
         """What stops the run before any context or launch: the reasons, empty if this is the expected device."""
@@ -183,9 +209,12 @@ class Dev:
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
         if r:
-            s = C.c_char_p()
-            self.cu.cuGetErrorString(r, C.byref(s))
-            raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
+            self.fail(f, r)
+
+    def fail(self, f: str, r: int) -> None:
+        s = C.c_char_p()
+        self.cu.cuGetErrorString(r, C.byref(s))
+        raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
 
     def get(self, f: str, *a) -> int:
         v = i32()
@@ -228,15 +257,16 @@ class Dev:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, self.stream if stream is None else stream)
 
     def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
-        a = Args()
-        for j, v in enumerate(p):
-            a.p[j] = v
-        for j, v in enumerate(i):
-            a.i[j] = v
-        g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
-        params = (vp * 1)(C.addressof(a))
-        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, self.stream if stream is None else stream,
-                params, None)
+        """A kernel launch; while recording, bound and kept instead (Pipeline.bind)."""
+        bound = Launch(self, name, grid, block, smem, p, i, stream)
+        if self.recording is None:
+            bound()
+        else:
+            self.recording.append(bound)
+
+    def launch_now(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
+        """A launch that runs while recording too: a probe whose result the recorded code reads."""
+        Launch(self, name, grid, block, smem, p, i, stream)()
 
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
@@ -352,6 +382,29 @@ def is_ml(name: str) -> bool:
     return gemm_tile(name) == (BM, BM)
 
 
+#: a bound launch's placeholder words while its step records (Pipeline.record): this tag in the high byte, the buffer's index
+#: at bits 40-55 and the offset into it below
+BOUND_TAG = 0xB5
+
+
+class Buffers(dict):
+    """A pipeline's buffers by name.  Setting one (or `update`) repoints the words of every launch bound from it that name it
+    (Pipeline.bind)."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.slots: dict[str, list] = {}
+
+    def __setitem__(self, name: str, ptr: int) -> None:
+        super().__setitem__(name, ptr)
+        for args, j, off in self.slots.get(name, ()):
+            args.p[j] = ptr + off
+
+    def update(self, *a, **kw) -> None:
+        for name, ptr in dict(*a, **kw).items():
+            self[name] = ptr
+
+
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `epoch` (B's frame-b3 row tree, whose root the epoch's salt and seed_B follow), `unit` (the level keys and pads of A's
@@ -370,7 +423,8 @@ class Pipeline:
     labels `k_msg`, `k_leaf`, and `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
     BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (h1_commit under
     `fold`).  `rows_form` and `tree_form` pick the kernels of the trees' row leaves and levels (ROWS_FORM and TREE_FORM, or
-    one of FORMS) for the steps made after they're set."""
+    one of FORMS) for the steps made after they're set.  `steps` binds each step's launches at its first call (`bind`): a
+    buffer the caller repoints between calls (`b[name] = ptr`) is followed, anything else a step reads is fixed then."""
 
     GEMM_SMEM: dict[str, int] = {}
 
@@ -398,7 +452,7 @@ class Pipeline:
         sizes = self.sizes(m, n, k, self.m_real)
         self.size = sizes
         self.owned = bufs is None
-        self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
+        self.b = Buffers({name: dev.alloc(s) for name, s in sizes.items()} if self.owned else bufs)
         self.allocated: list[str] = []
         self.b["xa"], self.b["xb"] = xa, xb
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
@@ -528,7 +582,7 @@ class Pipeline:
              dg=0, key=0, hot=0):
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
-            self.dev.launch(name + "_smem", 1, 1, p=(probe,))
+            getattr(self.dev, "launch_now", self.dev.launch)(name + "_smem", 1, 1, p=(probe,))
             self.dev.sync()
             self.GEMM_SMEM[name] = int.from_bytes(self.dev.read(probe, 4), "little")
             self.dev.free(probe)
@@ -574,7 +628,7 @@ class Pipeline:
             self.dev.launch("words" + self.wsuffix, cdiv(M // 16 * 4, per_block), 32 * per_block, p=(self.b[a], self.b[b], self.b[out]),
                             i=(M, 32, self.k))
 
-    def steps(self) -> list[tuple[str, str, object]]:
+    def steps(self, bound: bool = True) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
         tile = "_d" if self.bm == BM_D else ""
         ct, chain = f"gemm_ct{tile}{sx}", self.extra()
@@ -651,7 +705,42 @@ class Pipeline:
                + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing))
         if m % BM == 0:
             out += tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job) + tag("adopted", adopted)
-        return out
+        return [(nm, ph, self.bind(f)) for nm, ph, f in out] if bound else out
+
+    def bind(self, f):
+        """`f` with its launches bound at its first call and launched as bound from then on, from prepared argument blocks.
+        The first call records them (`record`); on a device that can't record (a caller's stand-in), `f` itself."""
+        if not hasattr(self.dev, "recording"):
+            return f
+        launches: list[Launch] | None = None
+
+        def run() -> None:
+            nonlocal launches
+            if launches is None:
+                launches = self.record(f)
+            for launch in launches:
+                launch()
+        return run
+
+    def record(self, f) -> list[Launch]:
+        """`f`'s launches, not run, recorded with every buffer a placeholder (BOUND_TAG): a word that named a buffer is set
+        to it and follows it (`Buffers`)."""
+        b, d, names = self.b, self.dev, list(self.b)
+        real = dict(b)
+        dict.update(b, {name: BOUND_TAG << 56 | j << 40 for j, name in enumerate(names)})
+        d.recording = []
+        try:
+            f()
+        finally:
+            launches, d.recording = d.recording, None
+            dict.update(b, real)
+        for launch in launches:
+            for j, v in enumerate(launch.args.p):
+                if v >> 56 == BOUND_TAG:
+                    name, off = names[v >> 40 & 0xFFFF], v & ((1 << 40) - 1)
+                    b.slots.setdefault(name, []).append((launch.args, j, off))
+                    launch.args.p[j] = real[name] + off
+        return launches
 
     def run_all(self) -> None:
         for _, _, f in self.steps():
@@ -733,7 +822,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                 res[f"{tag}t@{kernel}"] = compare(dev, pipe, f"{tag}t", want(f"{tag}t"), alias="at2")
         small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
         for p_, grids, tag in ((pipe, (None, 1, 3), ""), (small, (None, 3), "bm64")):
-            steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps()}}
+            steps = {**p_.extra(), **{nm: fn for nm, _, fn in p_.steps(bound=False)}}
             for grid in grids:
                 for step, outs in SMALL_RERUNS if p_ is small else GEMM_RERUNS:
                     if step not in steps:
@@ -947,6 +1036,19 @@ def deferral(dev: Dev, pipe: Pipeline, reps: int) -> dict:
     return out
 
 
+def host_us(dev: Dev, body, reps: int) -> list[float]:
+    """The host's time to enqueue `body`, in microseconds, `reps` times from an idle device after a warm-up."""
+    body()
+    out = []
+    for _ in range(reps):
+        dev.sync()
+        t0 = time.perf_counter()
+        body()
+        out.append((time.perf_counter() - t0) * 1e6)
+    dev.sync()
+    return out
+
+
 def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
     """The timed part of `timing` on a pipeline whose kernels have run once: medians, phases, ratios, consistency."""
     m, n, k, steps, extra = pipe.m, pipe.n, pipe.k, pipe.steps(), pipe.extra()
@@ -979,6 +1081,10 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         no_hash = [y_only if y_only and nm == "gemm_pearlc" else f for nm, p, f in steps if p in ("forming", "cleanup")]
         e2e = statistics.median(dev.timed(lambda: [f() for f in call], reps))
         e2e_nh = statistics.median(dev.timed(lambda: [f() for f in no_hash], reps))
+        unbound = [f for _, p, f in pipe.steps(bound=False) if p in ("commit", "forming", "cleanup", "hashing")]
+        out["call_e2e_unbound_ms"] = round(statistics.median(dev.timed(lambda: [f() for f in unbound], reps)), 4)
+        out["call_host_us"] = {nm: round(statistics.median(host_us(dev, lambda c=c: [f() for f in c], reps)), 1)
+                               for nm, c in (("bound", call), ("unbound", unbound))}
         # fused, the digests' part of gemm_pearlc_b (its time less gemm_pearlc_s's) is hashing, not clean-up
         chain = med["gemm_pearlc_s"] if pipe.fused else med["gemm_pearlc"]
         split = {"commit": phases["commit"], "forming": phases["forming"], "gemm": med["gemm_ct"],

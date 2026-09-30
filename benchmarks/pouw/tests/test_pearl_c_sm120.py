@@ -514,6 +514,71 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
                                          "digests_fused_vs_unfused_words_differing"}
 
 
+class LaunchLog:
+    """A driver stand-in in the process: device memory is addresses, and each launch is logged as (kernel, grid and block,
+    shared memory, stream, pointer words, integer words)."""
+
+    def __init__(self):
+        self.log, self.names, self.top = [], {}, 1 << 36
+
+    def cuModuleGetFunction(self, ref, mod, name: bytes) -> int:
+        ref._obj.value = len(self.names) + 1
+        self.names[ref._obj.value] = name.decode()
+        return 0
+
+    def cuMemAlloc_v2(self, ref, n: int) -> int:
+        ref._obj.value, self.top = self.top, self.top + (n + 255) // 256 * 256
+        return 0
+
+    def cuLaunchKernel(self, fn, gx, gy, gz, bx, by, bz, smem, stream, params, extra) -> int:
+        a = RUN.Args.from_address(params[0])
+        self.log.append((self.names[fn.value], (gx, gy, gz, bx, by, bz), smem, stream, tuple(a.p), tuple(a.i)))
+        return 0
+
+    def __getattr__(self, name: str):
+        return lambda *a: 0
+
+
+def test_bound_steps_launch_what_unbound_steps_do(monkeypatch):
+    """Pipeline.steps binds each step's launches at its first call: every call after launches the same kernels with the
+    same words as building them at the call would, on the device's stream at the call, after the caller repoints buffers
+    (as #540 does y and leaves each call), under every form and forming, at decode's tile and at 128 x 128 with the fused
+    chain; the GEMMs' shared-memory probe still runs while a step records."""
+    monkeypatch.setattr(RUN.Pipeline, "GEMM_SMEM", {})
+    dev = RUN.Dev.__new__(RUN.Dev)
+    cu = dev.cu = LaunchLog()
+    dev.mod, dev.fns, dev.live, dev.stream, dev.recording, dev.sms = None, {}, set(), None, None, 188
+    k = 1024
+    keys = {nm: dev.alloc(104 if nm == "unit" else 32) for nm in ("dom_a", "dom_b", "dom_t", "line_b", "k_msg", "k_leaf", "unit")}
+
+    def calls(steps) -> list:
+        out = []
+        for _, _, f in steps:
+            cu.log.clear()
+            f()
+            out.append([x for x in cu.log if not x[0].endswith("_smem")])
+        return out
+
+    for m, m_real, variant in ((64, 32, "sm120"), (128, 128, F.HOT)):
+        for forms in RUN.FORMS:
+            for forming in RUN.FORMINGS:
+                pipe = RUN.Pipeline(dev, m, 128, k, variant, keys, dev.alloc(4 * m * k), dev.alloc(4 * 128 * k), m_real=m_real)
+                pipe.rows_form, pipe.tree_form = forms
+                pipe.forming_form = forming
+                bound, unbound = pipe.steps(), pipe.steps(bound=False)
+                assert [nm for nm, _, _ in bound] == [nm for nm, _, _ in unbound]
+                first = calls(bound)
+                assert first == calls(unbound) == calls(bound), (m, forms, forming)
+                dev.stream = 77
+                pipe.b["y"], pipe.b["leaves"] = dev.alloc(pipe.size["y"]), dev.alloc(pipe.size["leaves"] + 64) + 32
+                pipe.b.update(digests=dev.alloc(pipe.size["digests"]))
+                again = calls(bound)
+                assert again == calls(unbound) != first and {x[3] for c in again for x in c} == {77}
+                assert all(w >> 56 != RUN.BOUND_TAG for c in again for x in c for w in x[4])
+                dev.stream = None
+    assert set(RUN.Pipeline.GEMM_SMEM) >= {"gemm_ct_d", "gemm_pearlc_b_hu"}
+
+
 def room(allocs: dict[int, int], ptr: int) -> int:
     """Bytes from ptr to the end of the live allocation holding it (0 if none): a tree's root is its buffer's last node."""
     return next((base + n - ptr for base, n in allocs.items() if base <= ptr < base + n), 0)
