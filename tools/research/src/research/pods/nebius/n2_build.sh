@@ -81,6 +81,28 @@ EOF
   echo "queued verity-build-$key on node 2 ($row, ${mem} GB)"
 }
 
+# custody: push the Attempt to R2 from a one-off pod on node 1 with the Secret research-r2, so the credentials never leave Kubernetes
+push_attempt() {
+  local run_id=$1 name
+  name=n2-push-$(echo "$run_id" | tr -cd 'a-z0-9-' | tail -c 40)
+  ssh "$N1" "KUBECONFIG=\$HOME/.kube/config kubectl delete job $name --ignore-not-found > /dev/null && KUBECONFIG=\$HOME/.kube/config kubectl create -f - > /dev/null \
+    && KUBECONFIG=\$HOME/.kube/config kubectl wait --for=condition=complete --timeout=900s job/$name > /dev/null" << EOF
+{"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": "$name", "labels": {"verity.dev/lane": "kueue-fold", "verity.dev/kind": "custody"}},
+ "spec": {"backoffLimit": 2, "ttlSecondsAfterFinished": 3600, "template": {"metadata": {"labels": {"verity.dev/lane": "kueue-fold"}}, "spec": {
+  "restartPolicy": "Never", "nodeSelector": {"verity.dev/server": "vy-nebius-1"},
+  "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
+  "securityContext": {"runAsUser": 1000, "runAsGroup": 1000},
+  "containers": [{"name": "main", "image": "${VY_DISPATCH_IMAGE:-us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216}",
+   "imagePullPolicy": "IfNotPresent",
+   "command": ["taskset", "-c", "96-127", "bash", "-c", "cd /workspace/jobs && HOME=/tmp UV_NO_CONFIG=1 PYTHONPATH=$SRC/tools/research/src RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=/workspace/jobs/runs UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data push $run_id"],
+   "envFrom": [{"secretRef": {"name": "research-r2"}}],
+   "resources": {"requests": {"cpu": "1", "memory": "2Gi"}},
+   "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]}],
+  "volumes": [{"name": "workspace", "hostPath": {"path": "/workspace", "type": "Directory"}}]}}}}
+EOF
+  echo "$run_id: pushed to R2 ($name)"
+}
+
 run() {
   local key=$1 item=$GUEST/items/$1.json
   # config-run.yaml's build envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
@@ -129,6 +151,7 @@ EOF
   ssh "$N1" "cd /workspace/jobs && sudo -n -u '#1000' env UV_NO_CONFIG=1 RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=/workspace/jobs/runs PYTHONPATH=$SRC/tools/research/src \
     UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
     /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
+  push_attempt "$run_id"
   ssh "$N1" "KUBECONFIG=\$HOME/.kube/config /workspace/jobs/venv312/bin/python $DISPATCH submit config-run n2-build/$KEY --tree $TREE --task 1 \
     $(printf '%q ' "${COMMIT_ARGS[@]}")"
   echo "n2-build $KEY: Build $run_id on node 2, Commit submitted on node 1"
