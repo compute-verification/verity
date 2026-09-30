@@ -93,7 +93,7 @@ theorem decode_mono (fuel : ℕ) : ∀ (bd : Lookup.Builder) (bits : List ℕ),
       obtain rfl := Nat.succ.inj heq
       dsimp only
       exact foldl_inv (fun s : Lookup.Builder × Array Lookup.Form => bd.a.size ≤ s.1.a.size)
-        (fun s x hs => by simp only [Lookup.row, Array.size_push]; omega) (le_trans (ih _ _) (ih _ _)) rfl
+        (fun s x hs => by simp only [Lookup.row, Array.size_push]; omega) (Nat.le_trans (ih _ _) (ih _ _)) rfl
 
 /-- **The low decoder's top block**: for `lo ≥ 2` bits, `decode` returns the first row of the top block it pushed last,
 `2^lo` rows. -/
@@ -111,7 +111,7 @@ theorem decode_top {lo : ℕ} (hlo : 2 ≤ lo) (bd : Lookup.Builder) :
     obtain rfl := Nat.succ.inj heq
     dsimp only
     symm
-    refine (foldl_count (fun s : Lookup.Builder × Array Lookup.Form => s.1.a.size) (fun s x => ?_) _ _).trans ?_
+    refine (foldl_count (fun s : Lookup.Builder × Array Lookup.Form => s.1.a.size) (k := 1) (fun s x => ?_) _ _).trans ?_
     · simp [Lookup.row]
     · simp
 
