@@ -1131,7 +1131,7 @@ def _init_floors(desc, floors):
     import dataclasses
 
     pname, prod, declared, lowering = desc
-    base = S.PIPELINES[pname]
+    base = TCM.MODELS[pname]
     _FLOOR_MODELS = [Model(dataclasses.replace(base, name=f"{base.name}@floor{f}", zero_exponent=f), prod, declared, lowering) for f in floors]
 
 
