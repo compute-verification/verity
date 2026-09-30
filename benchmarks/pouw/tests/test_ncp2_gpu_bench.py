@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 spec = importlib.util.spec_from_file_location("ncp2_gpu_bench", Path(__file__).parents[1] / "ncp2_gpu_bench.py")
 B = importlib.util.module_from_spec(spec)
@@ -301,11 +302,26 @@ def test_the_fused_timings_cover_every_shape_and_mode(monkeypatch):
             n, self.n = self.n, 0
             return 2.0 * n, n
 
-    monkeypatch.setattr(B.PD, "FusedCommitter", Committer)
+    order = []
+
+    class Timed(Committer):
+        def __call__(self, *args):
+            order.append(("time", self.flags, args[7]))
+            return super().__call__(*args)
+
+    monkeypatch.setattr(B.PD, "FusedCommitter", Timed)
+    monkeypatch.setattr(B, "host_call", lambda *args: args[7])
+    monkeypatch.setattr(B, "gate_timed", lambda weight, flags: order.append(("gate", flags, weight)) or {"flags": flags})
     out = B.fused_timings(_FT, 3)
     assert len(out["calls"]) == len(B.FUSED_ROWS) * len(B.QWEN05)
     assert all(r["y_equal"] and r["word_tile_ms"] == 2.0 and r["nohash_ms"] == 10.0 / 3 for r in out["calls"])
-    assert set(out["forward_m2048"]) == {"nohash", "word", "lowbyte", "nohash_tile", "word_tile", "lowbyte_tile"}
+    assert set(out["forward_m2048"]) == {"nohash", "word", "nohash_tile", "word_tile"}
+    word = B.FUSED_MODES["word"]
+    gates = [(f, w) for kind, f, w in order if kind == "gate"]
+    assert gates == [(word, (m << 40) | (k << 20) | n) for m in B.FUSED_ROWS for k, n in B.QWEN05]      # one weight id each
+    for f, w in gates:                                   # every hashing mode is gated at its shape before its first timed call
+        assert order.index(("gate", f, w)) < order.index(("time", f, w))
+    assert all(r["gates"] == [{"flags": word}] for r in out["calls"])
 
 
 def test_the_vllm_split_adds_up_to_the_slowdown():
@@ -330,18 +346,19 @@ def test_the_vllm_split_adds_up_to_the_slowdown():
     assert abs(got["decode_b32"]["async_serve_x_bf16"] - 0.6) < 1e-12 and "async_s" not in out["decode_b32"]
 
 
-def test_the_async_timings_run_one_decode_steps_calls_both_ways(monkeypatch):
+def test_the_async_timings_gate_every_calls_root_then_run_one_decode_steps_calls_both_ways(monkeypatch):
     calls = {"sync": 0, "async": 0, "serve": 0, "drains": 0}
+    per = B.ASYNC_LAYERS * len(B.QWEN05)
 
     class Sync:
         def __init__(self, scheme, salt, flags):
             pass
 
-        def __call__(self, *args):
+        def __call__(self, *args, root=None):
             calls["sync"] += 1
 
     class Exact(Sync):
-        def __call__(self, *args):
+        def __call__(self, *args, root=None):
             calls["async"] += 1
 
         def serve(self, *args):
@@ -349,18 +366,39 @@ def test_the_async_timings_run_one_decode_steps_calls_both_ways(monkeypatch):
 
         def drain(self):
             calls["drains"] += 1
-            return {"calls": 0, "mismatched_words": 0, "roots": []}
+            return {"calls": per, "mismatched_words": 0, "roots": [bytes(32)] * per}
 
         def close(self):
             pass
 
     monkeypatch.setattr(B.PD, "FusedCommitter", Sync)
     monkeypatch.setattr(B.PD, "AsyncCommitter", Exact)
+    monkeypatch.setattr(B, "host_call", lambda *args: args[7])
+    weights = []
+    monkeypatch.setattr(B, "reference", lambda w: weights.append(w) or {"root": bytes(32)})
     out = B.async_timings(_FT, 2)
-    per = B.ASYNC_LAYERS * len(B.QWEN05)
     assert out["calls_per_step"] == per and calls == {"sync": 3 * per, "async": 3 * per, "serve": 2 * per, "drains": 3}
+    assert out["gate"] == {"calls": per, "sync_roots_equal": True, "async_roots_equal": True} and weights == list(range(per))
     assert len(out["sync_step_s"]) == len(out["async_step_s"]) == 2 and out["mismatched_words"] == 0
     assert {"sync_step_mean_s", "async_step_mean_s", "serve_step_mean_s"} <= set(out)
+    monkeypatch.setattr(B, "reference", lambda w: {"root": b"x" * 32})
+    with pytest.raises(SystemExit, match="decode step gate"):
+        B.async_timings(_FT, 1)
+
+
+def test_a_timed_gate_stops_the_run_at_a_wrong_root(monkeypatch):
+    """`gate_timed` against the device build and `pouw_native`: a fused root that differs stops the run."""
+    call = B.PD.gate_call("t", 32, 64, 32)
+    ref = B.PN.commit_call(0, "ncp-v2", call)
+    monkeypatch.setattr(B.PD, "commit_call", lambda i, s, c, on="host", flags=B.PD.HASH, side=None:
+                        ref if on == "device" else dataclasses.replace(ref, root=bytes(32)))
+    B._REFERENCES.clear()
+    with pytest.raises(SystemExit, match="timed gate"):
+        B.gate_timed(call, B.FUSED_MODES["word"])
+    monkeypatch.setattr(B.PD, "commit_call", lambda i, s, c, on="host", flags=B.PD.HASH, side=None: ref)
+    B._REFERENCES.clear()
+    row = B.gate_timed(call, B.FUSED_MODES["word"])
+    assert row["root"] and row["leaves"] and row["native"] and len(row["units_checked"]) == 6
 
 
 def test_each_tile_variant_is_built_with_its_macros_gated_and_only_then_timed(monkeypatch):
