@@ -270,6 +270,11 @@ impl IrUnitNet {
         }
     }
 
+    /// Builds the flat forms [`IrUnitNet::eval64_flat`] reads, if not yet built: whether it evaluates in one pass.
+    pub fn one_pass(&self) -> bool {
+        self.flat.0.get_or_init(|| Flat::of(self)).is_some()
+    }
+
     /// Every output word of a single unit from its input words.
     pub fn outputs(&self, inputs: &[F128]) -> Vec<F128> {
         let (z, _, _) = self.eval64(|col| bit(&inputs[col / WORD], col % WORD) as u64);
