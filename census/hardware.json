@@ -110,7 +110,7 @@
         "href": "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/pdf/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1_1.pdf"
       }
     ],
-    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used. The server page's 2 PFLOPS FP8 is the sparse figure (its 4 PFLOPS FP4 matches the whitepaper's sparse 4030.4), so the dense peak is 1 PFLOPS, and FP32 accumulate runs at the FP16-accumulate rate on this professional part (whitepaper Table 4). The page's figures are rounded and its boost clock unstated: at the 2430 MHz maximum SM clock nvidia-smi reports on vy-nebius-1, the whitepaper's per-clock rate gives 935.6 TFLOPS. To be confirmed by a native-peak/v1 measurement",
+    "methodology": "datasheet peak, dense, FP32 accumulate; not measured on our cards. An FMA counts as two FLOP; sparsity figures never used. The server page's 2 PFLOPS FP8 is the sparse figure (its 4 PFLOPS FP4 matches the whitepaper's sparse 4030.4), so the dense peak is 1 PFLOPS, and FP32 accumulate runs at the FP16-accumulate rate on this professional part (whitepaper Table 4). The page's figures are rounded and its boost clock unstated: at the 2430 MHz maximum SM clock nvidia-smi reports on vy-nebius-1, the whitepaper's per-clock rate gives 935.6 TFLOPS. To be confirmed by a native-peak/v1 measurement",
     "memory_bytes_per_second": 1597e9,
     "memory_sources": [
       {
