@@ -158,6 +158,8 @@ def test_a_record_of_another_program_is_refused():
     doc["calls"] = doc["calls"][:-1]
     with pytest.raises(ValueError, match="another Program"):
         Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))
+    with pytest.raises(ValueError, match="another Program"):
+        Correspondence(P, document=doc)
 
 
 def test_of_reads_the_build_dir_and_picks(tmp_path):
@@ -176,6 +178,9 @@ def test_of_reads_the_build_dir_and_picks(tmp_path):
     a, b, c = Correspondence.of(P, str(new)), Correspondence.of(P, str(old)), Correspondence.of(P, None)
     assert a.source == "correspondence" and a.digest == RC.correspondence_digest(doc) and a.problem is None
     assert b.source == "v1_annotations" and c.source == "v1_annotations"
+    t = Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))       # `of` reads the document's records one at a time: the same reader
+    assert a.names == t.names and a.provenance() == t.provenance() and [a.site_path(k) for k in a.names] == [t.site_path(k) for k in t.names]
+    assert [b.site_path(k) for k in b.names] == [k_.module for k_ in b.names.values()] and b.provenance()["schema"] is None
     (new / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": "0" * 64}}))
     d = Correspondence.of(P, str(new))
     assert d.source == "correspondence" and d.problem and "!=" in d.problem and d.provenance()["problem"] == d.problem

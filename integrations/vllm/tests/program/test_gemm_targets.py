@@ -72,21 +72,34 @@ def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
         GT.gemm_target_for((12, 0), "blackwell")
 
 
-def test_sm120_binds_the_hopper_gemm_and_refuses_attention_until_registered():
-    """The sm_120 step family binds `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`; no attention chain is registered on it yet, so every
-    attention launch is refused by name (FA2 on sm_120 needs its own capture)."""
+def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
+    """The sm_120 step family binds `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}` and FA2 only: vLLM's FA2 on cc 12.0 is the driver's JIT
+    of the compute_80 PTX on the Hopper step, so its attention is the H100 forced-FA2 chain (`BN=fa2_kblock_n(D)`,
+    `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
+    `Attention_v3`; a declared FA3 is refused by name."""
+    from verity_vllm.program.registry import b1
     from verity_vllm.program.registry import targets as TG
 
     assert PRO6000_TP.tensor_core_family == "blackwell_consumer" and PRO6000_TP.effective_flash_attn_version() == 2
     assert TargetProfile(compute_capability=(12, 1)).tensor_core_family == "unregistered:12.1"
     assert TG.tensor_core_dot(PRO6000_TP) is TG.tensor_core_dot(HOPPER_TP) and not TG.uses_accepted_kinds(PRO6000_TP)
     assert TG.gemm_spec(PRO6000_TP, 2048, 3072).id == TG.gemm_spec(HOPPER_TP, 2048, 3072).id
-    with pytest.raises(TG.UnregisteredTarget, match="flash_attn_version 2 on blackwell_consumer"):
-        TG.attention_spec(PRO6000_TP, 33, 32, 8, 64, 1)
+    hopper_fa2 = HOPPER_TP.with_overrides(flash_attn_version=2)
+    for D in (64, 96, 128, 256):
+        BN = b1.fa2_kblock_n(D)
+        spec = TG.attention_spec(PRO6000_TP, 33, 32, 8, D, 1, row=0, own_rows=1)          # a decode row: only its first block guarded
+        assert spec.id == (f"Attention_v5{{T=33,NH=32,KVH=8,D={D},BN={BN},DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,"
+                           f"MASKED_FROM={-(-33 // BN) - 1}}}")
+        assert TG.attention_spec(hopper_fa2, 33, 32, 8, D, 1).id == \
+               f"Attention_v2{{T=33,NH=32,KVH=8,D={D},BN={BN},DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1}}"
+    assert TG.check_flash_attn_registered(PRO6000_TP) == 2
+    with pytest.raises(TG.UnregisteredTarget, match="flash_attn_version 3 on blackwell_consumer"):
+        TG.attention_spec(PRO6000_TP.with_overrides(flash_attn_version=3), 33, 32, 8, 64, 1)
     d = TG.describe(PRO6000_TP)
     assert d["gemm_target"] == "blackwell_consumer" and d["dot"] == "HopperBF16WgmmaDot16_v1" and d["tuned_gemm_arch_family"] is None
-    assert d["gemm_kind"] == "Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}" and d["flash_attn_registered"] is False
-    assert d["evidence"]["gemm"] == list(GT.REGISTERED["blackwell_consumer"].evidence)
+    assert d["gemm_kind"] == "Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}" and d["flash_attn_registered"] is True
+    assert d["attention_kind"] == "Attention_v5{T,NH,KVH,D,BN=fa2_kblock_n(D),DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,MASKED_FROM}"
+    assert d["evidence"]["gemm"] == list(GT.REGISTERED["blackwell_consumer"].evidence) and d["evidence"]["attention_fa2"]
 
 
 @pytest.mark.parametrize("cc, fam", [((10, 0), "blackwell"), ((8, 6), None), ((7, 5), None), ((12, 1), None)])
