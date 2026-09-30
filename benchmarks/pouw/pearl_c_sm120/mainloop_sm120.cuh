@@ -179,26 +179,29 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
         else qmma(acc[mi][ni], fa[mi], fb[ni], acc[mi][ni]);
       }
   }
-  // one stage: FIRST, the tile's first (no window before it); LAST, its last (nothing to load after it)
-  template <bool FIRST, bool LAST>
+  // one stage: FIRST, the tile's first (no window before it); LAST, its last (nothing to load after it).  The stage is released
+  // after the MMAs that read its last fragments have issued, so every ldmatrix of it has completed (LATE; !LATE releases it
+  // with those ldmatrix still in flight)
+  template <bool FIRST, bool LAST, bool LATE>
   ML_DEV void stage_body(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
-    const uint32_t sb = stage(s);
+    const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
     mma<G != 0 || FIRST, G != 0 && !FIRST>(acc, total, fa[0], fb[0]);
     load(fa[0], fb[0], sb, 2);
     mma<false, false>(acc, total, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
     mma<false, false>(acc, total, fa[0], fb[0]);
-    mbar_arrive(empty(s));
+    if (!LATE) mbar_arrive(done);
     advance();
     if (!LAST) {
       mbar_wait(full(s), ph);
       load(fa[0], fb[0], stage(s), 0);
     }
     mma<false, false>(acc, total, fa[1], fb[1]);
+    if (LATE) mbar_arrive(done);
   }
   // U: stages per K-loop iteration
-  template <int U = 1> ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
+  template <int U = 1, bool LATE = true> ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
     const int KT = K / BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
 #pragma unroll
@@ -209,16 +212,108 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
         for (int e = 0; e < 4; e++) total[mi][ni][e] = 0.0f;
     mbar_wait(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
-    stage_body<true, false>(acc, total, fa, fb);
+    stage_body<true, false, LATE>(acc, total, fa, fb);
 #pragma unroll U
-    for (int kt = 1; kt < KT - 1; kt++) stage_body<false, false>(acc, total, fa, fb);
-    stage_body<false, true>(acc, total, fa, fb);
+    for (int kt = 1; kt < KT - 1; kt++) stage_body<false, false, LATE>(acc, total, fa, fb);
+    stage_body<false, true, LATE>(acc, total, fa, fb);
 #pragma unroll
     for (int mi = 0; mi < MI; mi++)
 #pragma unroll
       for (int ni = 0; ni < NI; ni++)
 #pragma unroll
         for (int e = 0; e < 4; e++) total[mi][ni][e] = G ? __fadd_rn(total[mi][ni][e], acc[mi][ni][e]) : acc[mi][ni][e];
+  }
+  // ---- the skewed schedule of the same chain: at step t, row block mi (16 rows) runs atom t - mi, so each step closes one row
+  // block's window and its 16 FADDs sit among the other blocks' MMAs.  B's fragments of four atoms in a ring (slot = atom % 4),
+  // A's double-buffered by step; a stage is released once row block MI - 1's MMAs of its last atom have issued.
+  // One row block's MMAs of step t = 4 kt + J (d = J - mi: its atom relative to the stage; d = 4, the last window's promotion)
+  template <int J, bool FIRST, bool LAST>
+  ML_DEV static void skew_row(int mi, float (&acc)[MI][NI][4], float (&total)[MI][NI][4], const uint32_t (&fa)[2][MI][4],
+                              const uint32_t (&fb)[4][NI][2]) {
+    const int d = J - mi;
+    if ((FIRST && d < 0) || d > 4) return;
+    const bool from0 = G ? (d & 3) == 0 : FIRST && d == 0, fadd = G && from0 && !(FIRST && d == 0);
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+      for (int e = 0; e < 4; e++) {
+        if (fadd) total[mi][ni][e] = __fadd_rn(total[mi][ni][e], acc[mi][ni][e]);
+        if (!G && d == 4) total[mi][ni][e] = acc[mi][ni][e];
+      }
+    if (d == 4) return;
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++) {
+      if (from0) qmma0(acc[mi][ni], fa[J & 1][mi], fb[(d + 4) & 3][ni]);
+      else qmma(acc[mi][ni], fa[J & 1][mi], fb[(d + 4) & 3][ni], acc[mi][ni]);
+    }
+  }
+  template <int J, bool FIRST, bool LAST>
+  ML_DEV void skew_step(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[4][NI][2]) {
+    static_assert(MI == APS, "one row block per atom of a stage");
+    const int sp = s == 0 ? STAGES - 1 : s - 1, sn = s + 1 == STAGES ? 0 : s + 1;
+    skew_row<J, FIRST, LAST>(MI - 1, acc, total, fa, fb);   // first: the next atom's B fragments take its slot
+    if (J == 2 && !FIRST) mbar_arrive(empty(sp));
+    if (LAST && J == 6) {
+      mbar_arrive(empty(s));
+      advance();
+    }
+    if (J == 3 && !LAST) mbar_wait(full(sn), sn == 0 ? ph ^ 1 : ph);
+    if (!(LAST && J + 1 >= APS)) {
+      const uint32_t sb = J + 1 < APS ? stage(s) : stage(sn);
+#pragma unroll
+      for (int nj = 0; nj < NI / 2; nj++) {
+        uint32_t r[4];
+        ldsm4(r, sb + b_off[(J + 1) & 3] + nj * 16 * BK);
+        fb[(J + 1) & 3][2 * nj][0] = r[0]; fb[(J + 1) & 3][2 * nj][1] = r[1];
+        fb[(J + 1) & 3][2 * nj + 1][0] = r[2]; fb[(J + 1) & 3][2 * nj + 1][1] = r[3];
+      }
+    }
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++) {
+      const int d = J + 1 - mi;
+      if ((FIRST && d < 0) || (LAST && d >= APS)) continue;
+      const uint32_t sb = d < 0 ? stage(sp) : d < APS ? stage(s) : stage(sn);
+      ldsm4(fa[(J + 1) & 1][mi], sb + a_off[(d + 4) & 3] + mi * 16 * BK);
+    }
+#pragma unroll
+    for (int mi = 0; mi < MI - 1; mi++) skew_row<J, FIRST, LAST>(mi, acc, total, fa, fb);
+  }
+  template <bool FIRST, bool LAST>
+  ML_DEV void skew_stage(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[4][NI][2]) {
+    skew_step<0, FIRST, LAST>(acc, total, fa, fb);
+    skew_step<1, FIRST, LAST>(acc, total, fa, fb);
+    skew_step<2, FIRST, LAST>(acc, total, fa, fb);
+    skew_step<3, FIRST, LAST>(acc, total, fa, fb);
+    if (LAST) {
+      skew_step<4, FIRST, LAST>(acc, total, fa, fb);
+      skew_step<5, FIRST, LAST>(acc, total, fa, fb);
+      skew_step<6, FIRST, LAST>(acc, total, fa, fb);
+      skew_step<7, FIRST, LAST>(acc, total, fa, fb);
+    } else {
+      advance();
+    }
+  }
+  ML_DEV void tile_skew(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
+    const int KT = K / BK;
+    uint32_t fa[2][MI][4], fb[4][NI][2];
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+        for (int e = 0; e < 4; e++) total[mi][ni][e] = 0.0f;
+    mbar_wait(full(s), ph);
+    ldsm4(fa[0][0], stage(s) + a_off[0]);
+#pragma unroll
+    for (int nj = 0; nj < NI / 2; nj++) {
+      uint32_t r[4];
+      ldsm4(r, stage(s) + b_off[0] + nj * 16 * BK);
+      fb[0][2 * nj][0] = r[0]; fb[0][2 * nj][1] = r[1]; fb[0][2 * nj + 1][0] = r[2]; fb[0][2 * nj + 1][1] = r[3];
+    }
+    skew_stage<true, false>(acc, total, fa, fb);
+#pragma unroll 1
+    for (int kt = 1; kt < KT - 1; kt++) skew_stage<false, false>(acc, total, fa, fb);
+    skew_stage<false, true>(acc, total, fa, fb);
   }
   // the tail stage (TAIL): P_A's rows at the returned address, P_B's at + A_BYTES, both 128-byte rows in the SWIZZLE_128B layout
   ML_DEV uint32_t tail_wait() {
