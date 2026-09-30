@@ -89,7 +89,7 @@ def test_the_serial_and_deferred_schedules_run_under_every_format():
 def test_the_deferred_schedule_is_the_measured_one():
     """The chain at the greatest priority and the side lane at the least, as panel attempt 57's chains ran; the caller's own
     priority is a separate schedule, so a row says which one it timed."""
-    assert (DEFERRED.main_priority, DEFERRED.side_priority, DEFERRED.ring) == ("greatest", "least", 2)
+    assert (DEFERRED.side, DEFERRED.main_priority, DEFERRED.side_priority, DEFERRED.ring) == ({"tile_hash"}, "greatest", "least", 2)
     assert SCHEDULES["deferred-caller"].main_priority == "caller" and SCHEDULES["deferred-caller"].side == DEFERRED.side
 
 
