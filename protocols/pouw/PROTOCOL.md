@@ -368,6 +368,10 @@ useful    U/(α_A·α_B), glue
       element of forming, 64 of them credited (the lane's `Costs.adopted`).
     - `wref` is Lean's `wrefOf` and `credit_of` its `creditOf`, pinned on a grid of shapes. The weight side (B's forming,
       B̃·F_A, G, P_B) is `job_cost`, once per weight and epoch, in neither.
+    - Every W1 price is a device's (`Prices`, the device statement's): `H100_PRICES` for sm_90 (FADD 32, a BF16 MAC 2,
+      forming 64 + 4) and `SM120_PRICES` for sm_120 (8, 2, 40 + 1: each step at its cheapest bit-exact form, as measured
+      on the card). `wref`, `credit_of`, `job_cost` and the debit read the scheme's record; the registered schemes are the
+      H100's, and sm_120's record goes with sm_120's atom.
     - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), and on every row of both operands the noise floor ρ·α ≥ 1
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).

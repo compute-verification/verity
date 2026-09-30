@@ -63,18 +63,21 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
 def test_tile_cap_is_the_cells_share_of_the_units_credit():
     """The per-tile statement's cap (`Tile.lean`'s `pearlCTiles`): ρ·creditOf(unit at |K|)·tileShare, with tileShare =
     |rows|·|cols|/(m·n).  A row's own terms (forming, A′·F_B) count once across its row band, so a unit's tile caps sum to
-    ρ·creditOf of the unit; ρ·creditOf of each tile's own shape would count them once per tile."""
-    for kept in (K, 64):
+    ρ·creditOf of the unit; ρ·creditOf of each tile's own shape would count them once per tile.  At sm_120's prices the cap
+    is sm_120's credit."""
+    sm120 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", prices=C.SM120_PRICES)
+    for scheme, kept in ((S, K), (S, 64), (sm120, K)):
         r = record(real=32, kept=kept)
         s = r.matmul.shape
         total = Fraction(0)
-        for t in S.tiles(s):
+        for t in scheme.tiles(s):
             rows, cols = r.credited(t)
-            _, cap = W.tile_cap(S, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
-            assert cap == D.CAP * S.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
-            assert cap < D.CAP * S.credit_of(Shape(len(rows), kept, len(cols)))
+            _, cap = W.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
+            assert cap == D.CAP * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
+            assert cap < D.CAP * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
-        assert total == D.CAP * S.credit_of(Shape(s.m, kept, s.n))
+        assert total == D.CAP * scheme.credit_of(Shape(s.m, kept, s.n))
+    assert sm120.credit_of(Shape(32, K, 32)) < S.credit_of(Shape(32, K, 32))
     r = record(excluded_a=(3,), excluded_b=(20,))
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)

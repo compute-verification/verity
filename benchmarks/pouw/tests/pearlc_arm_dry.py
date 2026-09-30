@@ -9,7 +9,11 @@ directory the arm writes its transcripts under (`build`'s out_dir); PEARLC_ROWS 
            of set 0 are then taken as gated, so freeing them writes their transcripts (of the stand-in's bytes).
   accept:  at the fixture's shape on its inputs and epoch (its beacon, matmul index and weight, B's root), the fixture's bytes
            written where the device would have put them (the call's buffers and the gate's second launch), the gate; then one
-           C~ word flipped, the gate again; then the word restored, the gate, and the call freed, which writes its transcript.
+           C~ word flipped (a message digest's where the call stores no C~, the fused call), the gate again; then the word
+           restored, the gate, and the call freed, which writes its transcript and its negative control.  Each later launch
+           of the whole call writes the fixture's bytes again, as the device would; the negative control's launches don't.
+  stale:   accept, but no launch writes the fixture's bytes again: the transcript's call, like the negative control's,
+           leaves the poisoned buffers as they are, as a kernel that skipped its writes would.
 """
 
 from __future__ import annotations
@@ -99,7 +103,7 @@ def dry(arm) -> None:
                       "work": {s: vars(arm.work(Shape(s, *d))) for s, d in (("pre", (256, 1024, 128)), ("dec", (32, 1024, 128)))}}))
 
 
-def accept(arm, check: Path) -> None:
+def accept(arm, check: Path, rewrite: bool = True) -> None:
     man = json.loads(check.read_text())
     m, n, k = man["shape"]
     base = check.parent
@@ -115,21 +119,28 @@ def accept(arm, check: Path) -> None:
     call = arm.prepare(HarnessDev(), shape, arm.flag_sets["hash"], op)
     call.launch(STREAM)
     s, w = call.scratch.b, call.own.b
-    for name in ("at", "alpha_a", "c", "u", "y", "digests", "leaves", "tree_a", "tree_b", "tree_t", "seed_a", "line_a", "bt",
-                 "alpha_b"):
-        write(rd, w[name], load(name))
+
+    def written() -> None:
+        for name in ("at", "alpha_a", "c", "u", "y", "digests", "leaves", "tree_a", "tree_b", "tree_t", "seed_a", "line_a", "bt",
+                     "alpha_b"):
+            write(rd, w[name], load(name))
+    written()
+    if rewrite:
+        launch = call.launch
+        call.launch = lambda stream: (launch(stream), written())
     for name in A.REF:
         write(rd, s["ref_" + name], load("c" if name == "c2" else name))
     flags = arm.flag_sets["hash"]
     g = arm.gate(None, call, shape, flags)
     print(json.dumps({"flipped": None, "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
     r0, c0 = A.W.samples(A.W.Shape("fixture", m, n, k))[-1]
-    off = 4 * ((r0 + 5) * n + c0 + 7)
-    word = load("c")[off:off + 4]
-    write(rd, w["c"] + off, bytes([word[0] ^ 1]))
+    what = "c" if "c" in call.outputs else "digests"      # the fused call stores no C~: its row's message digest instead
+    off = 4 * ((r0 + 5) * n + c0 + 7) if what == "c" else 32 * ((r0 + 5) * (n // 32) + (c0 + 7) // 32)
+    word = load(what)[off:off + 4]
+    write(rd, w[what] + off, bytes([word[0] ^ 1]))
     g = arm.gate(None, call, shape, flags)
-    print(json.dumps({"flipped": ["c", r0 + 5, c0 + 7], "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
-    write(rd, w["c"] + off, word)
+    print(json.dumps({"flipped": [what, r0 + 5, c0 + 7], "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
+    write(rd, w[what] + off, word)
     g = arm.gate(None, call, shape, flags)
     call.free()
     print(json.dumps({"restored": True, "ok": g.ok, "transcribed": arm.transcribed}), flush=True)
@@ -141,4 +152,4 @@ if __name__ == "__main__":
     s = A.R.C.c_void_p()
     arm.rd.ck("cuStreamCreate", A.R.C.byref(s), 1)
     STREAM = s.value
-    dry(arm) if sys.argv[3] == "dry" else accept(arm, Path(sys.argv[5]))
+    dry(arm) if sys.argv[3] == "dry" else accept(arm, Path(sys.argv[5]), rewrite=sys.argv[3] == "accept")
