@@ -2,7 +2,9 @@
 compared bit for bit against ``verity.ml.tc.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
 the validation gate) and against ``model5.py`` (autoproof's five-way align-add, kept as the control whose D16/D17/D18 mismatches
 the verity rule must remove).  Families under ``families_fp4_re`` are lane fp4-re's accumulator families; ``specials`` is
-record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted).
+record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted), and so
+are mxf4's ``families_mxf4_edges`` (the UE8M0 NaN scale, overflowing blocks that cancel, the RZ edge at 2^128, infinite
+accumulators against overflows): what a total mxf4 step must decide.
 
     python tools/tc_probe_fp4/probe.py --instruction nvf4 --out $RESEARCH_RUN_DIR --sass-check \
         --replay-autoproof $RESEARCH_RUN_DIR/inputs/probe3_1783788526.json --sweep --n-random 4096
