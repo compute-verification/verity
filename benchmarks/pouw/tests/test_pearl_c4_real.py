@@ -70,6 +70,9 @@ def test_real_activation_replay(tmp_path):
     assert row["x_rows"] == M and row["x_dnf_fail_split"] == 0 and row["w_rows"] == N and row["debited"] == 1
     assert abs(sum(row["mean_share"].values()) - t["ratio"]) < 1e-9 and "flag" not in row
     assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_cap"] == 0
+    elsewhere = s | {"capture": str(tmp_path / "not-here")}
+    assert RT.rows([elsewhere], RT.Fraction(1, 1000))[0]["x_rows"] is None
+    assert RT.rows([elsewhere], RT.Fraction(1, 1000), cap / "manifest.json")[0]["x_rows"] == M
     assert NAME in RT.markdown([row], RT.Fraction(1, 1000))
 
 

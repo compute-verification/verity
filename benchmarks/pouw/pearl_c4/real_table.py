@@ -4,7 +4,7 @@ and each linear's tiles' replayed debit split by item as a share of the cap at �
 the last layer's ``down_proj`` are flagged.  Per model, the share of MACs over the cap at both ρ: each linear's MACs
 (m·n·k over the split unit) times the fraction of its sampled tiles over the cap.
 
-  python real_table.py SUMMARY.json... [--rho 1/1000] [--json OUT]
+  python real_table.py SUMMARY.json... [--rho 1/1000] [--json OUT] [--manifest CAPTURE_MANIFEST.json]
 """
 
 from __future__ import annotations
@@ -20,22 +20,25 @@ RHO = Fraction(1, 400)
 TERMS = ("two_four", "identity", "dead_pairs", "forming", "subgrid", "windows")
 
 
-def x_files(summary: dict) -> dict[str, str]:
-    """Each linear's X file: the capture's manifest for a directory, ``<name>.npy`` for an npz."""
+def x_files(summary: dict, manifest: Path | None = None) -> dict[str, str]:
+    """Each linear's X file: the capture's manifest for a directory (or ``manifest``, a copy of it, where the capture
+    isn't), ``<name>.npy`` for an npz."""
     cap = Path(summary["capture"])
-    if cap.suffix == ".npz" or not (cap / "manifest.json").exists():
+    if cap.suffix != ".npz" and manifest is None and (cap / "manifest.json").exists():
+        manifest = cap / "manifest.json"
+    if cap.suffix == ".npz" or manifest is None:
         return {name: name + ".npy" for name in summary["tiles"]}
-    return {name: e["file"] for name, e in json.loads((cap / "manifest.json").read_text())["inputs"].items()}
+    return {name: e["file"] for name, e in json.loads(manifest.read_text())["inputs"].items()}
 
 
 def layer(name: str) -> int:
     return int(re.search(r"layers\.(\d+)\.", name).group(1))
 
 
-def rows(summaries: list[dict], rho: Fraction) -> list[dict]:
+def rows(summaries: list[dict], rho: Fraction, manifest: Path | None = None) -> list[dict]:
     out = []
     for s in summaries:
-        files = x_files(s)
+        files = x_files(s, manifest)
         for name, tiles in s["tiles"].items():
             x, w = s["inputs"].get(files.get(name, ""), {}), s["weights"].get(name, {})
             debited = [t for t in tiles if "ratio" in t]
@@ -108,8 +111,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("summaries", nargs="+", type=Path)
     ap.add_argument("--rho", type=Fraction, default=Fraction(1, 1000))
     ap.add_argument("--json", type=Path)
+    ap.add_argument("--manifest", type=Path, help="a copy of the capture's manifest.json, where the capture isn't")
     a = ap.parse_args(argv)
-    table = rows([json.loads(p.read_text()) for p in a.summaries], a.rho)
+    table = rows([json.loads(p.read_text()) for p in a.summaries], a.rho, a.manifest)
     if a.json:
         a.json.write_text(json.dumps({"rho": str(RHO), "rho_tight": str(a.rho), "mac_shares": mac_shares(table),
                                       "linears": table}, indent=1) + "\n")
