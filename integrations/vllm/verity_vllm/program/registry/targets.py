@@ -5,7 +5,7 @@ split along them:
 
 * the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.registry.gemm_targets`
   (lane ampere): `TargetProfile.gemm_target()` -> `GemmTarget{key, vllm_arch_family, tuned_table, dot, kind, evidence}`; `ada` / `ampere` /
-  `hopper` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
+  `hopper` / `blackwell_consumer` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
   record's `dot` NAME to the registered step primitive (`DOTS`) and binds the Definition;
 * the *attention chain* is keyed by the effective FA version (`TargetProfile.effective_flash_attn_version()`: the declared knob, else vLLM's
   selector default for the capability — 3 on cc 9.x, 2 below) and by the target's step:
@@ -59,6 +59,13 @@ TARGETS: dict[str, dict[str, Any]] = {
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
+    "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
+                           "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; the bf16 linear is cuBLASLt "
+                                          "with split-K disabled under VLLM_BATCH_INVARIANT=1, as on cc 9.0)",
+                           "pipeline": "verity.ml.tc.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
+                                       "verity.ml.tc.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
+                           "flash_attn_versions": (),
+                           "evidence": {}},
 }
 
 

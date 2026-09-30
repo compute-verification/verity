@@ -17,6 +17,8 @@
 # then REST DELETE, then `runpodctl remove pod`.  The account key is never on a pod.
 # Test seams: LEASE_NOW (epoch), LEASE_ONCE=1 (one tick, exit 0 terminated / 1 not due / 2 failed), LEASE_TERMINATE_CMD (run with the
 # pod id as $1 instead of the API), LEASE_API_GQL / LEASE_API_REST, LEASE_ENVIRON (default /proc/1/environ).
+# A machine that is not a RunPod pod (an ssh machine: pods/nebius/) names itself with LEASE_MACHINE_ID and ends itself through
+# LEASE_TERMINATE_CMD, which is then the production path, not a seam.
 
 LEASE_DIR=${LEASE_DIR:-/root/.research}
 LEASE_FILE=${LEASE_FILE:-$LEASE_DIR/lease}
@@ -122,6 +124,7 @@ lease_loop() {
   exp=${RESEARCH_LEASE_EXPIRES:-}
   case $exp in *[!0-9]*) exp="";; esac
   me=$(lease_env RUNPOD_POD_ID)
+  [ -n "$me" ] || me=${LEASE_MACHINE_ID:-}
   if e=$(lease_read); then exp=$e; fi
   if [ "${LEASE_ONCE:-0}" != 1 ]; then
     if [ -n "$exp" ]; then shown=$(lease_iso "$exp"); else shown="unknown (no lease file, no RESEARCH_LEASE_EXPIRES)"; fi
