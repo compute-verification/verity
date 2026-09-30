@@ -138,6 +138,169 @@ docstring states every parameter.
   signed permutation (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py` on the integrated package, with the Lean
   sources' SHA-256). The scheme's own pinned vectors are `tests/vectors/ncp.json`.
 
+## `fp8-is-h100-*`: fresh FP8 atoms and FP32 running words on the H100 (`schemes/fp8_is.py`)
+
+Genuine FP8 PoUW: the checked computation is the H100's E4M3 tensor-core matmul with FP32 accumulation. The scheme is
+a fixed **core** over a swappable **forming layer**; `fp8-is-h100-<layer>` names the pair. **No certificate names a
+γ_0 yet**: `DistinctLive` is refuted for `fpncp-v0` and `d2-draft`, and for `d3-v0` it is claimed but not yet
+certified (Phase 17c).
+
+~~~text
+rows      k E4M3 codes, one byte each; 0x7F and 0xFF (NaN) are malformed; the layer may narrow the domain (`admits`)
+forming   the layer gives each tile's stacked operands X̃ (rows) and Ỹ (columns), K = blocks·k codes, block-major,
+          and its own checked words for those rows and columns (`Forming.form`)
+atom      I_τ = HOPPER_E4M3_WGMMA_K32.step(+0, X̃[i, S_τ], Ỹ[S_τ, j]), S_τ the τ-th 32-slice of K, ascending
+          (wgmma m64nNk32 f32.e4m3.e4m3, pinned on H100 with nonzero accumulators too)
+running   R_τ = add.rn.f32(R_(τ−1), I_τ)   (`verity.ml.tc.fp32.add`: binary32, ties to even, no FTZ)
+          R_0 = +0 for an unseeded layer, and then R_1 = I_1 is not checked (a duplicate in every output,
+          `c2FirstRunCopy`); a seeded layer gives each cell a salt word R_0, and R_1 is checked
+checked   the layer's words, then every I_τ and every checked R_τ; useful = R_T (less R_0 when seeded, as glue)
+leaf      two-level: the tile's 16 × 16 subtiles, row-major (subtile (a, b) = rows 16a … 16a + 15 and columns
+          16b … 16b + 15 of the tile, before (a, b + 1); a tile under 16 on a side is one subtile), each digested
+          sub(a, b) = SHAKE256("verity/pouw/fp8-is-h100-<tag>/subtile" ‖ 0x00 ‖ layer words of its rows, then columns
+          ‖ its core words)[:32], core words little-endian, step-major, row-major over its cells within a step, I_τ
+          before R_τ; the Merkle leaf is SHAKE256("verity/pouw/fp8-is-h100-<tag>/leaf" ‖ 0x00 ‖ sub(0, 0) ‖ sub(0, 1)
+          ‖ … ‖ sub(3, 3))[:32], so a 64 × 64 leaf holds 16 sub-digests and a proof of one subtile (#380's circuit
+          tile) opens it with the other 15
+tiles     64 × 64 (one m64n64k32 atom per slice: Round 7 measured 32 per word at N ≥ 64, and m64n8 at 22% of peak)
+domain    64 | m, 64 | n, 32 | k, N ≤ m, k, n ≤ 2^16 (N = `mnk_min`: 8,192 by default, or any frontier size)
+wref      ⌈m·n·(32·T + p_FADD·n_R) + f_A·m·k + f_B·n·k⌉: an atom word per cell per slice at 32, an FADD per checked R_τ at
+          the price table's rate (n_R = T − 1 unseeded, T seeded), and the layer's trace
+Ω*        (32T + p_FADD·n_R + f_A + f_B)/(32T + 32·n_R + c_A + c_B) at m = n = k = N (the scheme's `mnk_min`), c being
+          the part of f spent on the layer's checked words
+γ         1 − (1 − γ_core)/Ω*,  γ_core ≤ ε + μ·(32 − c_k8)/32  (ε from `DistinctLive(ε)`, μ the fraction of credited
+          words a sub-32 writer can write, c_k8 its measured price; `distinctWritesMH100`, `distinctWritesLegacy`)
+~~~
+
+- **The core's premise** (the lower-bound lane's cost model, `genuine-fp8-interface.md` §1.3): under `H_32` every
+  checked word that is salt-dependent and distinct from the others costs at least 32 (`distinctWritesMH100`, proved;
+  `distinctWritesAttained`), and the honest schedule pays exactly 32. What is left is a property of the forming layer,
+  `DistinctLive(γ_0)`: for every admitted input, all but a γ_0 fraction of the credited words are salt-dependent and
+  pairwise distinct as functions of the salt. Plus `A2_fp` (branching, routing, grinding) and `AdmitsRef`.
+- **`H_32`** is stated for every writer class, including legacy `mma.sync` small-K shapes, sparse `wgmma`, the b1 paths,
+  conversions, the uniform datapath and memory-side arithmetic (`red`/`atom`, `cp.reduce.async.bulk`, texture
+  filtering), each priced per 32-bit word it writes; it is a measurement on an H100 SXM, not yet made.
+- **The D-3 family** (`D3Family(law, route, prices, sums)`), registered for every cell as
+  `fp8-is-h100-<law>-v0[-y16][-f16]`. It is C-2's three NCP blocks formed on the unit's committed activation input,
+  with one f16 noise field per side and per-entry amplitudes that cover one E4M3 cell of the entry and of its NCP
+  partner.
+  - **`law`:** **`d3s`**, the lead (Phase 17f), with amplitude max(|x|, |x_partner|, rms′)/8, δ = 1/8 and
+    rms′ = max(rms, 2^−6) for all-zero rows. The alternative is `d3m`, with max(σ, cell(x), cell(x_partner)), δ = 1/16
+    and σ ≥ 28/√k.
+  - **`route`:** **`xq`** (the model's FP8 codes: the §0 input and Daniel's target) or `y16`, a comparison row
+    (Y16 = f16(A/s) with the model's own row scale; k little-endian f16 words, finite and at most 448).
+  - **Weights (Daniel, 20:31Z: no extra weight copies, FP16 or f32).** Each unit decodes the offline E4M3 codes and
+    forms their statistic and amplitudes as the activation side does. So on `xq` the two sides' traces are equal.
+    - Nothing per element is registered: an amplitude table is one f16 per weight element, the size of the withdrawn
+      FP16 copy.
+    - Keeping each column's rms′ between units (one word per column) would save 34.46 per weight element. It is a
+      deployment requirement, so it is left to Daniel, not assumed.
+  - **`sums`:** the format of the block values h + e_b.
+    - `f32` (schedule M4): f32(h) + f32(e_b), rounded once, then `cvt.rn.satfinite.e4m3x2.f32`. It costs a widen of h
+      shared by the three blocks, then a widen of each e_b and an FADD.
+    - `f16` (schedule M2): HADD2, then `cvt.rn.satfinite.e4m3x2.f16x2`.
+    - Either way a block value at or beyond ±464 saturates to ±448. The two differ by double rounding, so they are
+      different checked functions with different tags.
+  - **The streams.** E₁'s row i and F₁'s column j are SHAKE256("verity/pouw/fp8-is/<tag>/E1" or "/F1", salt, index,
+    root_A, weight, i or j). They are per unit and per column (r = 1, X-D3-3).
+    - Both read com(A_u), so no stream that forms the unit's operands exists before its activations are committed.
+    - Without that, X-R9-2 applies: with F₁ known from the salt, X-D3-3 recurs at r = 1, ε ≈ 6.8%.
+    - #218's lifecycle order is unchanged.
+  - **The price** is the cell's per-element trace (`d3_trace`) from one `PRICES` row, which prices the forming layer and
+    the core's FADD together (`get(name, prices=…)`). `FP8IS` rejects a layer priced from another row.
+  - **The rows.**
+    - **`round11`**, the default: `round10` with the centre at Round 11's 64.00 (§18.4). That is the split form as
+      compiled, with c in a register, and it issues like the immediate form.
+    - **The step rows** `round11-pipe` and `round11-dflow` price FADD at the §16.3 sweep's prediction for each honest
+      step kernel's loop (`STEPS`):
+      - `pipe` (n128 A = 2 U = 4, as built): a 567-instruction loop, FADD 32.0495, measured at 55.44 per add word;
+      - `dflow` (n64 A = 5 U = 2, the short loop): 371 instructions and bank-clean, FADD 32.0118, measured at 52.67 per
+        add word (§18.3, one run).
+    - **`slowdown(forming, shape, step)`** is Track C's real-time model: T − 1 steps at the measured units per add word,
+      plus one atom, plus the forming at class prices with no overlap, all over a plain FP8 GEMM's time.
+    - **`round10`**: Round 10 (`gpu-constants.md` §16, ptxas 12.9), and the red team's reading of it.
+      - FADD at its class price, 32.00, which holds for honest loops of at most about 390 instructions with
+        bank-clean SASS.
+      - `UNPACK_B` 64.17 per two codes, so the unpack (`.H0` and `.H1`) is 32.1 per code.
+      - The PRMT-free four-code cast is 129.27 per register, 32.3 per code.
+      - `VHMNMX` is 66.50 per two elements, HMNMX2 64.13 and the f32-pair F2FP 64.61.
+      - The centre HFMA2 is 64.02 per two elements, the only form Round 10 timed (both constants immediate, unsplit).
+      - HADD2 36, LOP3 64, HMUL2 a·K 32.17, HADD2.F32 64 and the f16 pack 64 carry over from Round 9.
+    - **`round10-built`**: the same at FADD 32.05, today's 567-instruction honest loop, which is past the knee.
+    - **`round9`** (Round 9 as measured, FADD 32.11) and **`round9-sass`** (ptxas 12.9's code at Round 9's classes,
+      with the centre split at 36), kept for comparison.
+    - Each statistic lane chains min(256, k/64) entries (`units_at(k)`), so rows below k = 16,384 pay more per element
+      for the widen and the FADD.
+  - **γ over the reporting frontier** (Daniel, 20:41Z), N³ with r = 1. The figures are computed from class prices;
+    the honest D-3 kernel has not been run at any size:
+
+    | Cell | Row (FADD) | 2,048³ | 4,096³ | 8,192³ | 16,384³ | 32,768³ |
+    |---|---|---:|---:|---:|---:|---:|
+    | **`d3s-v0-f16`** (X_q, f16 sums; the target) | `round11` (32.00) | 5.688% | 3.030% | 1.656% | **0.957%** | **0.605%** |
+    | `d3s-v0-f16`, the short loop | `round11-dflow` (32.0118) | 5.705% | 3.048% | 1.674% | **0.975%** | **0.623%** |
+    | `d3s-v0-f16`, as built | `round11-pipe` (32.0495) | 5.757% | 3.103% | 1.731% | 1.033% | **0.681%** |
+    | `d3s-v0-f16` | `round10` (32.00) | 5.689% | 3.030% | 1.656% | **0.957%** | **0.605%** |
+    | `d3s-v0-f16` | `round10-built` (32.05) | 5.758% | 3.104% | 1.732% | 1.034% | **0.682%** |
+    | `d3s-v0` (X_q, f32 sums) | `round10` | 9.834% | 5.266% | 2.818% | 1.550% | **0.904%** |
+    | `d3s-v0-y16-f16` (comparison) | `round10` | 5.688% | 3.030% | 1.656% | **0.957%** | **0.605%** |
+    | `d3m-v0-f16` | `round10` | 6.152% | 3.276% | 1.782% | 1.021% | **0.637%** |
+    | `d3s-v0-f16` | `round9` (32.11) | 7.658% | 4.160% | 2.322% | 1.380% | **0.903%** |
+    | `d3s-v0-f16` | `round9-sass` (32.11) | 5.604% | 3.067% | 1.758% | 1.093% | **0.758%** |
+
+    - **The target** clears at FADD 32.00 with threshold 32.028 (every FADD, core and forming, at the class price). As
+      built, at 32.05, it is 1.034%, so it needs the honest loop under the knee.
+    - **This reproduces the red team's Round 10 re-issue** in all 40 D-3 cells, to rounding.
+    - **Nothing clears below 16,384³.**
+    - **The centre is settled** (Round 11): with c in a register it issues at 64.00 per register, not the 36 of
+      Round 8's two-source class.
+    - **The slowdown over a plain FP8 GEMM** (`slowdown`, a prediction):
+
+      | Step | 8,192³ | 16,384³ |
+      |---|---:|---:|
+      | as built (`pipe`) | 5.280× | 5.239× |
+      | the short loop (`dflow`) | 5.021× | **4.979×** |
+
+      At 16,384³ the short loop clears 5× and 1% together. 8,192³ needs 52.45 per add word for 5×.
+    - **γ depends on m and n; k drops out** (under 0.004 points over the frontier's k).
+    - `mnk_min` selects any frontier size as the domain's floor.
+- **The two-level leaf's cost** (Round 11's SHAKE256, 2,290.6 units per byte from registers, per Keccak-f block of
+  136 bytes). The combining hash is 5 Keccak-f per 64 × 64 leaf: 0.046× a plain GEMM at 8,192³ and 0.023× at 16,384³.
+  Splitting each leaf into 16 digests adds 5 and 18 more Keccak-f per leaf (their domain strings and padding), 0.046×
+  and 0.084×. Together that is 0.093× and 0.107×, which is +0.005–0.006% of hashing the words themselves (about 1,717×
+  a plain GEMM, 0.75 bytes per MAC). The kernel, the checked words, W_ref and γ don't change. The step's slowdown
+  excludes the commitment, as before.
+- **`d3-v0`** (`D3`), superseded by D-3m: repaired C-2, track D's D-3. It keeps C-2's three NCP blocks and row-RMS
+  noise, and adds partner-max full-cell noise, s_l·v_l with s_l the larger E4M3 cell of the entry and of the entry that
+  reads the same noise in block 2, which fixes X-C2-B1. Weight streams are keyed per column (X-D2-5).
+  - It is formed in binary16 (`verity.ml.tc.fp16`, the half2 pipe), with a power-of-two row scale α and E4M3 casts by
+    `cvt.rn.satfinite.e4m3x2.f16x2`. The core runs unseeded.
+  - Its op-by-op MH100 trace (`D3_TRACE`) is 372 units per element per side nominal and 494.65 at Round 7's measured
+    prices. Track D claims 192 for a native schedule; `D3(form_units=…)` sets the price the certificate uses.
+- **`fpncp-v0`**: C-2's FP-NCP forming as posted (row-scaled uniform noise, NCP blocks, three `cvt.rn.satfinite.e4m3x2`),
+  with every FP32 operation fixed (`FpNcpV0`). **Refuted:** its noise is row-scaled, so it is rounded away on large
+  entries (X-C2-B1) and alignment erases everything but a spike (X-D1-1). Kept as the negative control; the tests
+  reproduce both attacks bit for bit. Its MH100 trace is 384 units per element per side.
+- **`d2-draft`**: track D's D-2 (`D2Draft`); **fell in Phase 17b** (X-D2-1 … 8), kept as the worked example of a layer
+  with checked forming words. Each NCP block's operand is a checked FP8 Hadamard transform (block 32,
+  α = 1/8 left, β = 1/4 right, αβ·32 = 1), computed as chains of k32 atoms that mix the base and E4M3 noise codes in
+  aligned 4-code words, then converted by `cvt.rn.satfinite.e4m3`; block 3 is the three-part transform, and signs sit in
+  the transform weights. Its checked words are every transform atom word and every converted code (7 words and 3 codes
+  per element: 272 units credited per element per side). The noise-code distribution (`MaxRelativeCodes`, 64 units) is
+  a **placeholder** for track D's repair. The domain is |A| ≤ 64 and |B| ≤ 32, so no transform saturates.
+- **Prices.** `PRICES` holds Round 7 as measured, Round 8 loop-free, Round 9 (`gpu-constants.md` §14), `round9-sass`,
+  and Round 10 (§16: `round10`, the default, and `round10-built`). Rounds 7 and 8 carry the red team's assumptions for
+  the X_q unpack and HADD2.F32.
+- **Vectors.** `tests/vectors/fp8_is.json` (from `tests/fp8_is_vectors.py`):
+  - every layer on a test instance;
+  - `d3-v0` and `d2-draft` at k = 8,192;
+  - the lead cell `d3s-v0-f16` at every frontier size, 2,048³ to 32,768³, one output cell each (bit-exact, CPU);
+  - a full 64 × 64 tile of `d3s-v0-f16` (k = 128), with its 16 sub-digests and the leaf.
+
+  Every case records its sub-digests beside the leaf.
+
+  The core is checked against the total FP8 step and numpy's float32 running sum, and D-2's exact algebra (before any
+  rounding) against A·Bᵀ.
+
 ## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity_pouw/circuit`)
 
 Sampled proofs is PoUW's verifier here: the call is a `verity.ir` Program, drawn units are proved, never recomputed, and
@@ -242,6 +405,9 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
     (`test_the_red_team_s_capped_window_is_refused`).
   - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
+  - `Traced.widen(unit_draw, law)` takes the verifier's own draw (`flock-verify draw --work K_c --work-table F --closure
+    F`, with `plan.closure_map`) over the verifier's own layout, holds it whole to the verifier's law (K_c and floors
+    included, never the draw's), holds its closure to the verifier's, and adds the Y units.
   - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
     (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c
     (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K.
@@ -257,23 +423,40 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     pending its grant): the per-call law with y's floors at
     K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
     at most 2⁻⁴⁰ + ε_ks + δ_link. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
-    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above) and y's floors
-    (`hfy`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify` takes (`1 <= k <= n`),
-    and y's floor K_y. Outside it, the window's use of it rests on four things:
-    - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
-      (`Traced.layout`, `__init__.py:134`; any other is refused by `Traced.check_layout`, `__init__.py:126`). It
-      computes W from them (`plan.py:181`) and N (`plan.py:184`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:187`);
+    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above), y's floors
+    (`hfy`), and a window that does some work and has y cells (`hW`, `hN`: `window_laws` refuses W = 0 or N = 0,
+    `plan.py:190`, `plan.py:195`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify`
+    takes (`1 <= k <= n`), and y's floor K_y. Outside it, the window's use of it rests on four things:
+    - *The verifier derives every number itself.* `window_laws` (`plan.py:168`) takes only the verifier's own layouts
+      (`Traced.layout`, `__init__.py:176`; any other is refused by `Traced.check_layout`, `__init__.py:168`). It
+      computes W from them (`plan.py:189`) and N (`plan.py:194`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:199`);
       `WorkLaw.budget` computes W_c and N_c from the call's own strata and K_c = min(N_c, max(1, ⌈K·W_c/W⌉))
-      (`plan.py:153–157`). No prover-stated number enters (X-SPC-80, 81).
+      (`plan.py:157–161`). No prover-stated number enters (X-SPC-80, 81).
     - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the window's `Ledger`
-      (`__init__.py:103`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:170–174`),
-      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:306`). The index is the
-      verifier's anchors' (`Anchors`, `anchors.py:40`, which `Anchors.check_call` holds the call's inputs to,
-      `anchors.py:81`). This is the pin's M1.
-    - *Every call's commitment precedes the window key.* `plan.draw` and `Traced.draw` take the key as given
-      (`__init__.py:92`); it must be the verifier's randomness derived under `DRAW_DOMAIN` after the receipt that binds
-      every call's commitment, so W, N and each K_c are fixed before any call's draw. Nothing in this package checks the
-      order: the window form of `traced_as` must.
+      (`__init__.py:122`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:386–392`),
+      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:355`). The index is the
+      verifier's anchors' (`Anchors`, `anchors.py:63`, which `Anchors.check_call` holds the call's inputs to,
+      `anchors.py:104`). This is the pin's M1.
+    - *Every call's commitment precedes the window key* (root's C1). A window's `anchors.Receipt` lists every call with
+      its anchors, shape and commitment, and is immutable (`anchors.py:301`); its digest binds each call's full
+      anchors (index, salt, weight id, rows and columns), shape and commitment. `Ledger.open` derives the key from it
+      alone, under `DRAW_DOMAIN` with {"receipt": digest} as its context, and admits only the calls it lists
+      (`anchors.py:370`, `anchors.py:386`). It is the only place a ledger's receipt, key and source are set: a
+      `Ledger` refuses every attribute assignment (`anchors.py:358`), and `Traced.draw` takes the key from the
+      ledger, refusing one not opened from a receipt (`__init__.py:120`). A call's openings are checked against its
+      commitment as the receipt lists it, by call index (`Ledger.commitment`, `Traced.check_openings`,
+      `__init__.py:126`), never one supplied with them. So W, N, each K_c and every commitment the openings answer
+      to are fixed by the receipt before any draw.
+    - *Each window's source is fresh and used once* (root's C2). `Ledger.open` takes no source: it draws 32 bytes from
+      the operating system's CSPRNG (`secrets`, `anchors.py:336`) once the receipt is complete, for that window
+      alone. So A4 (`prf/sha-256`) applies as stated, one fresh uniform source per derivation, with the source's
+      uniformity its own claim, A5 (`uniform/python-secrets`). Once the window's draw is sent (`Ledger.sent`), it draws
+      nothing more, and the audit record keeps its source and receipt digest (`Ledger.record`, `anchors.py:416`),
+      from which anyone re-derives the key and the draw (`replay_key`). The limit: a third party can check that the
+      draw came from the recorded source, not that the source was fresh. A verifier colluding with a prover could pick a
+      source whose draw misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
+      needed for a third party to check it. No protocol or beacon timing changes: the key is still the verifier's own
+      randomness after the receipt.
     - *ε_ks and δ_link are the window's.* The pin's are one window `Analysis`'s (M2). The per-call values are not cited
       as the window's; no statement composes them yet.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
@@ -281,10 +464,12 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
 **The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
 (forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
 under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
-`Traced.draw(key, law, anchors, ledger)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97). It first
-admits the call to the window's `anchors.Ledger` (one per window key), which refuses a call index the window already
-holds before anything is drawn, and then keys each stratum's subset with ("call", forward, position, "stratum",
-template). So each call of a window draws under a context of its own, the product law the window pin takes as M1.
+`Traced.draw(law, anchors, ledger)`, which takes no layout and no key: it draws over `Traced.layout()` (X-SPC-97). The
+window's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`), which derives the window's key from a
+fresh source under the receipt's digest; `Traced.draw` draws only under that key, admits the call first, refusing one
+the receipt doesn't list or the window already holds before anything is drawn, and then keys each stratum's subset
+with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of a
+window draws under a context of its own, the product law the window pin takes as M1.
 
 **The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
 inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
@@ -299,6 +484,123 @@ not a tile unit or is not its closure's first unit: a tile mapped to its X strip
 (`test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused`).
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
+
+## NCP-FP8 (`fp8-is-h100-d3s-v0-f16`, `-d3s-v0`) as a circuit under sampled proofs (`verity_pouw/circuit/fp8.py`)
+
+The same layout (a) as `ncp-v2`, over `fp8-is-*`'s D-3s forming on X_q (above): #295's scheme is the reference, and the
+Program evaluates to it bit for bit (`circuit.fp8_reference`: root_A by `audit.commit_rows`, the forming, words and useful
+output by `FP8IS(D3s(sums))`'s own `encode`, `checked` and `useful` on 16 × 16 tiles). `SUMS` is "f16" (the target cell) or
+"f32". Its shapes: 16 | m, 16 | n, 32 | k with k admissible (π passes the d = 32 rule from k = 96).
+
+**The units.** A weight's h and amplitudes read only its codes, so they are formed once per run and weight:
+`NcpFp8Weight{K,N,SUMS}`'s root body is its `NcpFp8Amp` units (`partition.fp8_weight_query`). `NcpFp8Linear{M,K,N,SUMS,IL,OL,WL}`
+is one linear call, which reads them as committed inputs; its root body holds only these templates' instances.
+`NcpFp8Window{…,C}` is C calls on one weight in one root, the weight's units once, and it passes the invariant
+(`test_calls_on_one_weight_compose_without_recompute`).
+
+~~~text
+template                     per                          reads                                        returns
+NcpFp8Amp{K,SUMS}            16-column weight strip       its 16 weight rows (E4M3)                    h (f16; FP32 under f32 sums), the amplitudes
+  (NcpFp8Weight: once per run and weight)
+NcpFp8Domain{M,K,IL,OL}      call                         its prefix, index                            root_A's domain id, the tree's frontiers
+NcpFp8Digest{K,RL,L0..L3}    16-row strip of A            its 16 rows (E4M3), row ids, frontiers       its 16 leaves' subtree root
+NcpFp8Pad{RL,L0..L3}         16 pad leaves                pad ranks, frontiers                         their subtree root
+NcpFp8Node{L}                tree node above the strips   its children, its (level, index)             the parent; the top is root_A
+NcpFp8Key{K,SUMS,IL,WL,M,N}  call                         its prefix, index, root_A                    E₁'s and F₁'s frontiers
+NcpFp8FormY{K,SUMS,IL,WL,LL} 16-column weight strip       its h and amplitudes, column ids, F₁'s       the Ỹ strip (16 × 3k codes)
+                                                          frontier
+NcpFp8FormX{K,SUMS,IL,WL,LL} 16-row strip of A            16 rows, row ids, E₁'s frontier              the X̃ strip (16 × 3k codes)
+NcpFp8Tile{K}                16 × 16 block                its X̃ strip, its Ỹ strip                     the words, and Z
+NcpFp8Dequant{BIAS}          output entry                 Z, s_i, t_j (and bias_j)                     y, in vLLM's epilogue order
+~~~
+
+- **root_A** is the protocol's commitment to A's rows: `verity.commitments.merkle`'s SHA-256 frame-v3 tree, one leaf per
+  row (the row's k codes), its domain bound to `activation_binding(salt, index)` with owner = index, padded to a power of
+  two. Strips are its aligned 16-leaf subtrees.
+- **E₁ and F₁** are `D3Family.stream`'s SHAKE256 streams over (salt, index, root_A, weight id, line), 2k bytes each.
+- **The served output** is vLLM's `cutlass_scaled_mm` epilogue, bit for bit, as `H-1T`'s is (`NcpFp8Dequant{BIAS}`, as
+  the vLLM integration's exact-tested `ScaledMmFp8Coordinate` pins it): m = RN(s_i·Z), the row scale first under the
+  batch-invariant dispatch's swapped scales, then y = cvt.rn.bf16(RN(t_j·m + f32(bias_j))) in one FFMA, or
+  cvt.rn.bf16(RN(t_j·m)) for a linear without a bias (its own Definition, `NcpFp8Linear{…,BIAS=False}`: the two differ
+  on a −0). `traced_as(…, bias=…)` picks it.
+- **The tile** runs `cell_words`: T = 3k/32 fresh E4M3 k32 atoms from +0 (`HopperE4m3QgmmaDot32`) and the running FP32
+  sums (`F32Add_v1`). Per cell its words are I_1 … I_T and R_2 … R_(T−1), and Z = R_T, the useful output, is field 1.
+- **The arithmetic** is #295's `verity.ml.tc.fp16` and `fp32`, one primitive per operation (`circuit.fp8_words`), and
+  core's FP32 add, mul and div, which equal #295's on every non-NaN word.
+
+**Hoisting** (`circuit.hoist`). Every stream's message and every leaf's and node's hash share call-wide prefixes (the salt,
+the index, root_A and the weight id; the commitment domain). Computed in each row's unit, those gates would be the same
+functions of the same values in many units, which `validate_unit_cut` rejects. So each per-row function is built once as a
+DAG over inputs marked call-wide or the row's own, and split:
+- its call-wide gates run once, in `NcpFp8Domain` (the tree's) or `NcpFp8Key` (the streams'), which return the frontier,
+  the call-wide values a row's gate reads;
+- its row gates are a Definition of their own (`NcpFp8Leaf{K,RL}`, `NcpFp8StripNode{DEPTH,L}`, `NcpFp8UpperNode{L}`,
+  `NcpFp8PadLeaf{RL}`, `NcpFp8XRow` and `NcpFp8YRow{K,SUMS,IL,WL,LL}`) that reads the frontier as committed values.
+
+A hash block whose inputs are all call-wide or all the row's own is one call of its Definition (`PouwKeccakF1600`,
+`PouwSha256Compress`); a mixed block is expanded into primitives. Without the split, two rows recompute the streams'
+prefix (`test_without_hoisting_two_rows_recompute_the_streams_prefix`).
+
+**The prefix** (X-SPC-90). The domain's and the key's gates over the salt and the weight id alone would compute the same
+values in every call of a run, or of a weight: `activation_binding`'s first block and rounds (901 gates) and the streams'
+first-block lanes that hold only the tag, the salt and the weight id (69 per stream). They are functions of the verifier's
+anchors, so the verifier evaluates them natively (`fp8.prefix`, `hoist.public_part`) and the call reads the values its
+remaining gates need as one anchored input, `prefix`; the call has no salt or weight id input of its own. A Ỹ column's part
+over its codes alone (the decode, the rms, the floor and the amplitudes: 35–39% of its forming's ANDs, by the red team's count) is its weight's `NcpFp8Amp`;
+F₁ is keyed per call on root_A, so the rest of the column stays in the call.
+
+**Index binding.** The prefix, the index, the row ranks, the rows' stream lines, the column lines, the pad ranks and the
+upper nodes' (level, index) are Program inputs. The verifier builds every one (`anchors.Fp8Anchors`, X-SPC-89): the prefix
+is its own evaluation from the salt and the weight id, the index is the call's declaration, and the rest are functions of
+the shape (ranks and lines 0 … m−1,
+column lines 0 … n−1, pad ranks m … width−1, `fp8.upper_nodes`), so y is fixed by the committed A, B, the salt and the
+declaration alone. `Traced.call_args` builds them, `Fp8Anchors.check_call` refuses a prover's that differ, and a window's
+`Ledger` refuses a repeated index. A row's rank (the tree's) and its line (E₁'s) are equal but separate inputs, equal by
+construction: read as one, the digest and the X unit place its bytes by the same gate once they take two bytes, and that
+value would be computed in two units. The encodings are minimal big-endian (`frame`, `merkle._uint`), so byte lengths are
+template parameters, and the anchors fix the call's:
+- per call, the index's (IL), index + 2's (OL, the domain's owner) and the weight id's (WL), `fp8.Lengths.of(index, weight)`;
+- per binding, a strip's ranks and its nodes' indices (`fp8.strip_lengths`), an upper node's index, and a row's or
+  column's line. Past 255 they take two bytes, so strips are batched in runs of one byte-length signature, and the domain
+  and key units return one frontier per variant (`fp8.domain_layout`, `fp8.key_layout`).
+
+**The separator and the width rule** are `ncp-v2`'s, read through `partition.Circuit`: the pinned port is the tile's Z
+(field 1), every path from a PoUW unit (the domain, digests, pads, nodes, the key, the forming, the tiles) to y crosses a
+Z, 8,192 bits per tile, and only the dequantization units (16 bits each) are width-checked.
+
+**The leaf** (X-SPC-92). #295's transcript leaf is two-level, its production default: a 64 × 64 tile's leaf is
+SHAKE256 over its 16 subtiles' digests, and a subtile is the circuit's 16 × 16 tile. From a tile's credited words (its
+first field: cell-major, per cell I_1 … I_T and R_2 … R_(T−1)) and each cell's R_T = RN_f32(R_(T−1) + I_T), the tile's own
+`F32Add_v1`, `fp8.subtile_digest` and `fp8.leaf_digest` give #295's bytes:
+
+~~~text
+sub(a, b) = SHAKE256("verity/pouw/fp8-is-h100-<tag>/subtile" ‖ 0x00 ‖ the layer's words ‖ the core words)[:32]
+            the layer's words: its rows' then its columns' (none for D-3s); the core words: little-endian, step-major,
+            row-major over the subtile's cells within a step, I_τ before R_τ, R_1 = I_1 unchecked, R_T = Z included
+leaf      = SHAKE256("verity/pouw/fp8-is-h100-<tag>/leaf" ‖ 0x00 ‖ sub(0, 0) ‖ sub(0, 1) ‖ … ‖ sub(3, 3))[:32]
+            subtile (a, b) is rows 16a … 16a + 15 and columns 16b … 16b + 15 of the 64 × 64 tile, row-major
+~~~
+
+`test_the_subtile_digests_are_295s_leaf_vector` holds this to #295's pinned `leaf-64-d3s-f16` (all 16 sub-digests and the
+leaf), and `test_the_circuit_s_tiles_give_295s_production_leaf` holds a 64 × 128 × 64 call's circuit tiles to #295's
+production leaf on the same call.
+
+**The draw** (`plan.fp8_layout`). A tile's closure is `ncp-v2`'s (its X and Y strips, its strip's digest, the nodes on
+the strip's path, the key) plus the domain unit and the **pad cone**, every pad strip and every node with no row beneath
+it: a pad has no tile beneath it that a wrong one could be charged to. Its Y strip's `NcpFp8Amp`, in the weight's
+Program, is proved once per plan (`Plan.proved_y`), and opens the strip's weight rows. A tile's W_ref is its cells' share of
+`FP8IS.wref`. The strata are one per template, as for `ncp-v2` (every byte-length variant its own), the work table
+gives the tile template its W_ref and every other template 0, floors 1 but y's: in a window each call's
+`NcpFp8Dequant` has option B's floor ⌈K_y·n_c/N⌉ (`window_laws`, as for `ncp-v2`). `WorkLaw()` draws every layout: K is a
+window's, and a call alone is capped at its units (X-SPC-83). Each call's subsets are keyed by its matmul index with the template, as
+`ncp-v2`'s (X-SPC-96), and the verifier draws through `Traced.draw`. The call's h and amplitudes are linked to the weight
+Program as `ncp-v2`'s Y is (X-SPC-101): the plan opens them at each drawn tile's column strip beside the weight Program's
+outputs there, and `Traced.check_link` refuses a difference. A window (`NcpFp8Window`) serves every call's y, C·m·n
+outputs (`partition.Circuit.calls`), and `anchors.fp8_window_inputs` builds its per-call anchored inputs from each call's
+`Fp8Anchors`, refusing a repeated index or calls of another salt or weight id (X-SPC-102, 108); its separator reads
+every call's y too (X-SPC-109). A window form of `traced_as`, with the window's layout and draw, is not here yet. The
+layout is the verifier's, as `ncp-v2`'s: derived from the shape and the declaration's lengths, and any other refused
+(`Traced.check_layout`).
 
 ## H-1T as a circuit under sampled proofs, layout A (`verity_pouw/circuit/h1t.py`)
 
@@ -363,18 +665,31 @@ H1tDequant{BIAS} output entry         Z, s_i, t_j (and bias_j)                  
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
   are gated by these vectors when they land.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- The honest D-3 kernel on an H100 (its forming loop and the checked step together): not run at any frontier size.
+  Round 10 timed the classes and the checked step's harness shapes, not this kernel. The γ figures come from class
+  prices.
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
   - the grant and merge of the window pin, `audit_window_split_of_record`
     ([#418](https://github.com/danielreuter/verity/pull/418));
-  - the check that the window key comes after every call's commitment, with the window form of `traced_as`;
+  - the audit for a draw that depends on the registration: the key's context is the receipt digest, which the pinned
+    `audit` game (the registration before the coin, `L.draw ω`) can't express. Either apply the pins strategy by
+    strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over contexts;
+    the Lean lane's to choose (root's C1);
   - a statement composing the calls' ε_ks and δ_link into the window's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
   - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
-  - NCP-FP8.
+- For NCP-FP8's circuit:
+  - production shapes (k in the thousands, m and n up to the model's) as a recorded run;
+  - C-Flock pieces for its primitives;
+  - the leaf's link in the Program: a unit that hashes a drawn tile's words to its sub-digest and combines it with the
+    opening's 15 siblings (committed inputs) into the transcript's leaf, and its place under the separator and the
+    width rule. Today the tile returns its words unhashed, and `fp8.subtile_digest` computes the sub-digest from them.
+  - a window form of `traced_as`: the verifier's `NcpFp8Window` Program, layout and draw over its C calls. Its width
+    rule, separator and anchored inputs (`fp8_window_inputs`) already cover every call.
 - For H-1T's circuit: an H-1T scheme in `schemes` (its stream derivation pinned), with `traced_as` routing to
   `traced_h1t`; the legal-input check (|x| <= 416) on committed rows; W_ref with the forming's share; and a window form
   of `traced_h1t`: the verifier's `H1tWindow` Program, layout and draw over its C calls (its width rule, separator and

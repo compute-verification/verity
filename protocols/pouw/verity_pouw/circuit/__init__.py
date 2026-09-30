@@ -10,6 +10,8 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds, and the window's refusal of a repeated call index.
 * `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law).
+* `fp8`, `fp8_words`, `hoist`, `fp8_reference`: NCP-FP8 (#295's D-3s, `fp8-is-h100-d3s-v0[-f16]`) under the same layout (a),
+  its per-row hashes split so that their call-wide gates are computed once, and its reference, #295's scheme itself.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
@@ -22,25 +24,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-#: the schemes that have a circuit here, each with the permutation P it pins (as `ncp-v1` and `ncp-v1-shift24` do)
-SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
+#: the schemes that have a circuit here, each with the parameter it pins: `ncp-v2`'s permutation P (as `ncp-v1` and
+#: `ncp-v1-shift24` do), and NCP-FP8's D-3s sums (f16, #295's target cell, and f32)
+NCP_KINDS = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
+FP8_SUMS = {"fp8-is-h100-d3s-v0-f16": "f16", "fp8-is-h100-d3s-v0": "f32"}
+SCHEMES = {**NCP_KINDS, **FP8_SUMS}
 #: H-1T's circuit (`h1t`, layout A) has no registered scheme yet, so `traced_h1t` names it
 H1T = "h1t"
 
 
-#: a call's inputs that are its weight Program's outputs, in that Program's output order
-LINKED = ("ys", "c0s")
+#: a call's inputs that are its weight Program's outputs, in that Program's output order (`ncp-v2`: its Y strips and c₀;
+#: NCP-FP8: its h and amplitudes)
+LINKED = ("ys", "c0s", "hs", "amps")
 
 
 @dataclass(frozen=True)
 class Traced:
     scheme: str
-    shape: Any                  # `ncp2.Shape` or `h1t.Shape`
-    definition: Any             # `NcpLinear_v1{M,K,N,PERM}` or `H1tLinear_v1{M,K,N}`
+    shape: Any                  # `ncp2.Shape`, `fp8.Shape` or `h1t.Shape`
+    definition: Any             # `NcpLinear_v1`, `NcpFp8Linear_v1` or `H1tLinear_v1`
     query: dict                 # `verity/partition/v1`'s query: `Q_template_instances` over the unit templates
     served: int                 # the first `served` root outputs are delivered (y); the credited words are committed only
-    weight: Any = None          # `NcpWeight_v1{K,N,PERM}`: the weight's Y strips and c₀, once per run and weight (H-1T: none)
+    weight: Any = None          # `NcpWeight_v1{K,N,PERM}` (the weight's Y strips and c₀) or `NcpFp8Weight_v1{K,N,SUMS}`
+                                # (its h and amplitudes): once per run and weight (H-1T: none)
     weight_query: dict | None = None
+    lengths: Any = None         # NCP-FP8: `fp8.Lengths`, the call's integer encodings' byte lengths
 
     @property
     def kind(self) -> str | None:
@@ -70,45 +78,79 @@ class Traced:
             raise DomainError(f"{self.scheme}: the descriptor is not the verifier's Program for {self.shape}")
 
     def call_args(self, anchors, *data: Sequence[int]) -> list:
-        """The call's flat inputs: its committed ``data`` in parameter order (`ncp-v2`: a, s, ys, c0s, t, bias; H-1T: a, s,
-        b, t, bias), then its anchored ones, built from the verifier's ``anchors`` (`anchors.Anchors`,
-        `anchors.H1tAnchors`)."""
+        """The call's flat inputs: its committed ``data`` in parameter order (`ncp-v2`: a, s, ys, c0s, t, bias; NCP-FP8: a,
+        s, hs, amps, t, bias; H-1T: a, s, b, t, bias), then its anchored ones, built from the verifier's ``anchors``
+        (`anchors.Anchors`, `anchors.Fp8Anchors`, `anchors.H1tAnchors`)."""
         return self._args(self.definition, anchors, anchors.call_inputs, data)
 
     def weight_args(self, anchors, *data: Sequence[int]) -> list:
-        """The weight Program's flat inputs: B, then its anchored ones (salt, weight id, column ids)."""
+        """The weight Program's flat inputs: B, then its anchored ones (`ncp-v2`: salt, weight id, column ids)."""
         return self._args(self.weight, anchors, anchors.weight_inputs, data)
+
+    def _check_anchors(self, anchors) -> None:
+        from ..protocol import DomainError
+
+        anchors.check(self.shape)
+        if self.lengths is not None and (anchors.lengths, anchors.sums) != (self.lengths, self.kind):
+            raise DomainError(f"{self.scheme}: the anchors take {anchors.lengths}, {anchors.sums} sums, not {self.lengths}")
 
     def _args(self, fn, anchors, inputs, data) -> list:
         from ..protocol import DomainError
 
-        anchors.check(self.shape)
+        self._check_anchors(anchors)
         an = inputs()
         names = [p for p, _t in fn.signature()[0]]
         if sorted(names[len(data):]) != sorted(an):
             raise DomainError(f"{fn.id} takes {len(names) - len(an)} committed inputs, not {len(data)}")
         return [list(d) for d in data] + [an[p] for p in names[len(data):]]
 
-    def draw(self, key, law, anchors, ledger):
+    def draw(self, law, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
-        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96). The call is first
-        admitted to ``ledger``, the window's `anchors.Ledger` (one per window key), so a call index the window already
-        holds is refused before anything is drawn. Each call of a window then draws under a context of its own: the
-        product law root's window pin takes as M1."""
+        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96), under the key of
+        ``ledger``, the window's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
+        the caller. The draw is refused for a ledger not opened from a receipt or whose draw was sent, and for a call the
+        receipt doesn't list or the window already holds, before anything is drawn. So every call's commitment precedes
+        the key (C1), and each call of a window draws under a context of its own: the product law root's window pin takes
+        as M1."""
         from . import plan
         from .anchors import Ledger
 
         if not isinstance(ledger, Ledger):
-            raise TypeError("a call is drawn only once its window's Ledger admits it")
+            raise TypeError("a call is drawn only under its window's Ledger")
+        ledger.check_draw()
+        self._check_anchors(anchors)
         ledger.admit(anchors, self.shape)
         index = anchors.call_index
-        return plan.draw(key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+        return plan.draw(ledger.key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+
+    def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
+        """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under
+        the call's commitment as the window's receipt lists it (`Ledger.commitment`, by call index), never one supplied
+        with the openings. ``domain`` is the verifier's row domain for the call (`audit.rows_domain`)."""
+        from verity.commitments import Commitment, VerificationLimits, verify_opening
+
+        from ..audit import ROW_SCHEMA
+        from ..protocol import DomainError
+
+        root = ledger.commitment(anchors)
+        if sorted(o.position for o in openings) != sorted(r for kind, r in plan.openings if kind == "a"):
+            raise DomainError("the openings are not the plan's A rows, once each")
+        commitment, limits = Commitment(root, domain.count), VerificationLimits() if limits is None else limits
+        if not all(verify_opening(domain, commitment, o, ROW_SCHEMA, limits) for o in openings):
+            raise DomainError("an A row does not open under the call's commitment on the window's receipt")
+
+    def widen(self, unit_draw, law):
+        """The verifier's plan for a work draw its verifier of record issued (`plan.widen`), over its own layout, never a
+        given one, and under its own law (K_c and floors), never the draw's (X-SPC-114, 115)."""
+        from . import plan
+
+        return plan.widen(self.layout(), unit_draw, law)
 
     def check_link(self, plan, call_args: Sequence[Sequence[int]], weight_outputs: Sequence[int]) -> None:
         """Refuse a call whose weight-side inputs differ from the weight Program's outputs at a column strip the plan opens
         (its ("y", strip) leaves, the drawn tiles' column strips): the call's committed inputs opened against the weight
-        Program's output commitment (X-SPC-95). The inputs are the call's parameters the weight Program returns, in its
-        output order (`ncp-v2`: ys, c0s)."""
+        Program's output commitment (X-SPC-95, X-SPC-101). The inputs are the call's parameters the weight Program returns,
+        in its output order (`ncp-v2`: ys, c0s; NCP-FP8: hs, amps)."""
         from ..protocol import DomainError
 
         params = self.definition.signature()[0]
@@ -132,23 +174,38 @@ class Traced:
             raise DomainError(f"{self.scheme}: the layout is not the verifier's for {self.shape}")
 
     def layout(self):
-        """The closure-draw layout (`plan.layout`, `plan.h1t_layout`), from the shape alone."""
+        """The closure-draw layout (`plan.layout`, `plan.fp8_layout`, `plan.h1t_layout`), from the shape (and NCP-FP8's
+        lengths) alone."""
         from . import plan
 
+        if self.scheme in FP8_SUMS:
+            return plan.fp8_layout(self.shape, self.kind, self.lengths, self.definition.S().BIAS)
         if self.scheme == H1T:
             return plan.h1t_layout(self.shape, self.definition.S().BIAS)
         return plan.layout(self.shape, self.kind)
 
 
-def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
+def traced_as(scheme: str, m: int, k: int, n: int, *, index: int = 0, weight: int = 0, bias: bool = True) -> Traced | None:
     """The circuit sampled proofs traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
-    no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (16 | m, 16 | n, 64 | k). P is the
-    scheme's, never the caller's."""
+    no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (`ncp-v2`: 16 | m, 16 | n, 64 | k;
+    NCP-FP8: 16 | m, 16 | n, 32 | k, k admissible, m, n <= 2^24). The scheme pins its parameter, never the caller. NCP-FP8's
+    Definition depends on the byte lengths of the matmul's ``index`` and ``weight`` id (`fp8.Lengths`), the verifier's
+    anchors, and on whether the linear has a ``bias``, which picks vLLM's epilogue (`fp8.NcpFp8Dequant`)."""
     if scheme not in SCHEMES:
         return None
-    from . import ncp2, partition
+    from . import partition
 
-    kind, shape = SCHEMES[scheme], ncp2.Shape(m, k, n)
+    if scheme in FP8_SUMS:
+        from . import fp8
+
+        shape, lengths = fp8.Shape(m, k, n), fp8.Lengths.of(index, weight)
+        sums = FP8_SUMS[scheme]
+        c = partition.fp8_circuit(shape, sums, lengths, bias=bias)
+        return Traced(scheme, shape, c.fn, partition.query_of(c), m * n, fp8.weight(shape, sums),
+                      partition.fp8_weight_query(shape, sums), lengths)
+    from . import ncp2
+
+    kind, shape = NCP_KINDS[scheme], ncp2.Shape(m, k, n)
     return Traced(scheme, shape, ncp2.linear(shape, kind), partition.query(shape, kind), m * n, ncp2.weight(shape, kind),
                   partition.weight_query(shape, kind))
 
@@ -164,4 +221,4 @@ def traced_h1t(m: int, k: int, n: int, bias: bool = True) -> Traced:
     return Traced(H1T, shape, h1t.linear(shape, bias), partition.query_of(partition.h1t_circuit(shape, bias=bias)), m * n)
 
 
-__all__ = ["H1T", "LINKED", "SCHEMES", "Traced", "traced_as", "traced_h1t"]
+__all__ = ["FP8_SUMS", "H1T", "LINKED", "NCP_KINDS", "SCHEMES", "Traced", "traced_as", "traced_h1t"]

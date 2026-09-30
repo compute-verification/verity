@@ -261,27 +261,41 @@ def test_the_width_rule_refuses_an_empty_served_set():
         P.circuit_width_rule(c, served=0, uc=uc)
 
 
+def _window(t, calls, source=bytes(range(32))):
+    """A window over ``calls`` (`H1tAnchors`, commitment) of ``t``'s shape: its `Receipt` and the `Ledger` opened from it,
+    with the fresh source replaced by ``source`` so the draws are reproducible."""
+    from unittest import mock
+
+    from verity_pouw.circuit import anchors as A
+
+    receipt = A.Receipt(tuple((an, t.shape, commitment) for an, commitment in calls))
+    with mock.patch.object(A, "_fresh_source", lambda: source):
+        return receipt, A.Ledger.open(receipt)
+
+
 def test_equal_calls_under_one_key_draw_different_tiles():
     """X-SPC-96 on H-1T: each stratum's subset is keyed by the call's (forward, position) with its template, so equal calls
-    under one key draw different tiles; `Traced.draw` draws over the verifier's own layout (X-SPC-97), and admits each
-    call to the window's `Ledger` first, so a repeated (forward, position) is refused before it draws (M1)."""
-    from verity.randomness import derive
+    under the window's one key draw different tiles; `Traced.draw` draws over the verifier's own layout (X-SPC-97), under
+    the key of the ledger opened from the window's receipt. A call the receipt doesn't list, or one already drawn, is
+    refused before it draws (C1, M1)."""
+    import hashlib
+
     from verity_pouw.circuit import plan as PL
     from verity_pouw.circuit import traced_h1t
-    from verity_pouw.circuit.anchors import H1tAnchors, Ledger
+    from verity_pouw.circuit.anchors import H1tAnchors
 
     c = call(64, 96, 64)
-    t, law, key = traced_h1t(64, 96, 64), PL.WorkLaw(4), derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r"})
-    lay, window = t.layout(), Ledger()
-
-    def tiles(forward, ledger):
-        an = H1tAnchors(c.salt, forward, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(64)))
-        return [u for u in t.draw(key, law, an, ledger).drawn if lay.units[u].role == "tile"]
-
-    first = tiles(3, window)
-    assert first == tiles(3, Ledger()) and all(tiles(f, window) != first for f in (4, 5, 6))
-    with pytest.raises(DomainError, match="repeated"):
-        tiles(3, window)
+    t, law = traced_h1t(64, 96, 64), PL.WorkLaw(4)
+    lay = t.layout()
+    ans = {f: H1tAnchors(c.salt, f, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(64))) for f in (3, 4, 5, 6, 7)}
+    _receipt, window = _window(t, [(ans[f], hashlib.sha256(b"call %d" % f).digest()) for f in (3, 4, 5, 6)])
+    tiles = lambda plan: [u for u in plan.drawn if lay.units[u].role == "tile"]  # noqa: E731
+    drawn = {f: tiles(t.draw(law, ans[f], window)) for f in (3, 4, 5, 6)}
+    assert drawn[3] == tiles(PL.draw(window.key, lay, law, ans[3].call_index))
+    assert all(drawn[f] != drawn[3] for f in (4, 5, 6))
+    for again, match in ((ans[3], "repeated"), (ans[7], "not on the window's receipt")):
+        with pytest.raises(DomainError, match=match):
+            t.draw(law, again, window)
 
 
 # ---- the served output: vLLM's epilogue order --------------------------------------------------------------------------
@@ -346,10 +360,9 @@ def test_a_key_drawn_at_its_floor_opens_its_strip_s_rows():
     """H-1T's key reads its strip's A rows itself, so a key drawn at its own floor for a strip no drawn tile covers is
     proved over rows the plan must open (X-SPC-110): every proved key's and X unit's strip rows are opened, and some of the
     plans here draw such a key."""
-    from verity.randomness import derive
     from verity_pouw.circuit import plan as PL
     from verity_pouw.circuit import traced_h1t
-    from verity_pouw.circuit.anchors import H1tAnchors, Ledger
+    from verity_pouw.circuit.anchors import H1tAnchors
 
     c = call(48, 64, 32)
     t = traced_h1t(48, 64, 32)
@@ -357,7 +370,8 @@ def test_a_key_drawn_at_its_floor_opens_its_strip_s_rows():
     an = H1tAnchors(c.salt, c.forward, c.layer, c.site, c.weight, tuple(c.rowids), tuple(range(32)))
     lonely = 0
     for i in range(60):
-        plan = t.draw(derive(b"verifier-secret", PL.DRAW_DOMAIN, {"receipt": b"r%d" % i}), PL.WorkLaw(2), an, Ledger())
+        _receipt, window = _window(t, [(an, bytes(32))], source=bytes([i]) * 32)
+        plan = t.draw(PL.WorkLaw(2), an, window)
         units = [lay.units[u] for u in plan.proved]
         tile_strips = {u.where[0] for u in units if u.role == "tile"}
         for u in units:

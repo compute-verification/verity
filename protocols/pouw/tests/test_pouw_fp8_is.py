@@ -1,0 +1,750 @@
+"""``fp8-is-h100-*``: the pinned vectors, the core against independent implementations, D-2's exact algebra, the two
+refutations of C-2's forming reproduced bit for bit (negative controls), and the lifecycle on a test instance."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import random
+from fractions import Fraction
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+import fp8_is_vectors as FV
+from verity.ml.tc.term import decode_e4m3
+from verity.ml.tc.total_fp8 import tc_dot_total_e4m3
+from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, reference_kernel
+from verity_pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
+from verity_pouw.schemes import fp8_is as F
+from verity_pouw.schemes import get
+
+PINNED = json.loads((Path(__file__).with_name("vectors") / "fp8_is.json").read_text())
+
+
+def value(code: int) -> Fraction:
+    sign, e, m = decode_e4m3(code)
+    v = Fraction(m) * Fraction(2) ** e
+    return -v if sign else v
+
+
+def ctx_of(shape, salt: bytes = b"salt", index: int = 3, weight: int = 5) -> Context:
+    return Context(hashlib.sha256(salt).digest(), Matmul(index, Shape(*shape), weight),
+                   hashlib.sha256(b"root_a").digest(), hashlib.sha256(b"root_b").digest())
+
+
+def codes(rng: random.Random, k: int, cap: int) -> list[int]:
+    return [(rng.getrandbits(1) << 7) | rng.randint(0, cap) for _ in range(k)]
+
+
+def test_vectors_are_pinned():
+    assert FV.vectors() == PINNED
+
+
+def test_registry_and_certificates():
+    for name, layer in (("fp8-is-h100-d2-draft", F.D2Draft), ("fp8-is-h100-fpncp-v0", F.FpNcpV0)):
+        s = get(name)
+        assert isinstance(s, PoUWScheme) and isinstance(s.forming, F.Forming) and isinstance(s.forming, layer)
+        assert s.name == name and s.certificate.gamma0 is None and s.certificate.gamma is None
+        (f_a, f_b), (c_a, c_b) = s.forming.units, s.forming.credited
+        assert s.prices == "round11" and s.fadd == 32
+        t = 3 * 8192 // 32
+        assert s.certificate.omega == Fraction(32 * t + s.fadd * (t - 1) + f_a + f_b, 32 * (2 * t - 1) + c_a + c_b)
+        sh = Shape(8192, 8192, 16384)
+        t = 3 * sh.k // 32
+        assert s.wref(sh) == -(-(sh.m * sh.n * (32 * t + s.fadd * (t - 1)) + f_a * sh.m * sh.k + f_b * sh.n * sh.k) // 1)
+        old = get(name, prices="round8")
+        assert old.fadd == 32 and old.wref(sh) == 6 * sh.wmm - 32 * sh.m * sh.n + f_a * sh.m * sh.k + f_b * sh.n * sh.k
+    assert get("fp8-is-h100-d2-draft").forming.units == (336, 336)
+    assert get("fp8-is-h100-d2-draft").forming.credited == (272, 272)
+    assert get("fp8-is-h100-fpncp-v0").forming.units == (384, 384)
+
+
+def test_domain():
+    s = get("fp8-is-h100-d2-draft")
+    s.check(Matmul(0, Shape(8192, 8192, 8192), 1))
+    for bad in (Shape(4096, 8192, 8192), Shape(8192, 8192, 8200), Shape(8192, 8192, 8196), Shape(8200, 8192, 8192), Shape(8192, 8208, 8192), Shape(8192, 1 << 17, 8192)):
+        with pytest.raises(DomainError):
+            s.check(Matmul(0, bad, 1))
+
+
+def test_core_against_independent_implementations():
+    """I_τ is the total FP8 step (`tc_dot_total_e4m3`) from +0; R_τ (τ >= 2) is numpy's float32 running sum of the I_τ,
+    and R_1 = I_1 is not a checked word."""
+    rng = random.Random("core")
+    as_f32 = lambda w: np.array([w], dtype=np.uint32).view(np.float32)[0]
+    for _ in range(20):
+        x, y = codes(rng, 32 * 12, 0x7E), codes(rng, 32 * 12, 0x7E)
+        atoms, running = F.cell_words(x, y)
+        assert len(atoms) == len(running) == 12 and running[0] is None
+        assert atoms == [tc_dot_total_e4m3(F.ATOM, 0, x[32 * t:32 * t + 32], y[32 * t:32 * t + 32]) for t in range(12)]
+        r = as_f32(atoms[0])
+        for i, rt in zip(atoms[1:], running[1:]):
+            r = np.float32(r + as_f32(i))
+            assert rt == int(np.array([r], dtype=np.float32).view(np.uint32)[0])
+
+
+def test_d2_exact_algebra_is_the_product():
+    """Before any rounding, D-2's transforms (αH on the left, βHᵀ on the right, the NCP blocks with E2 = E1·P and
+    F2 = −P·F1, block 3 negated) multiply to A·Bᵀ exactly: αβ·32 = 1 and the cross terms cancel."""
+    layer, k = F.D2Draft(), 128
+    pi, inv = F.ncp_perm(k, layer.P_SEED)
+    rng = random.Random("algebra")
+    a, b = codes(rng, k, layer.a_max), codes(rng, k, layer.b_max)
+    ea, eb = rng.randbytes(k), rng.randbytes(k)
+
+    def transformed(row, stream, left):
+        scale = Fraction(1, 8) if left else Fraction(1, 4)
+        out = []
+        for parts, negated in layer.parts(row, stream, pi, inv, left):
+            for g in range(0, k, 32):
+                for c in range(32):
+                    out.append(scale * sum((-1 if F.hadamard_negative(l, c) != n else 1) * value(p[g + l])
+                                           for p, n in zip(parts, negated) for l in range(32)))
+        return out
+
+    u, v = transformed(a, ea, True), transformed(b, eb, False)
+    assert sum(p * q for p, q in zip(u, v)) == sum(value(p) * value(q) for p, q in zip(a, b))
+
+
+def test_d2_useful_output_tracks_the_product():
+    s, k = F.FP8IS(F.D2Draft(), mnk_min=16, tile=(2, 2)), 256
+    rng = random.Random("useful")
+    a = [codes(rng, k, s.forming.a_max) for _ in range(2)]
+    b = [codes(rng, k, s.forming.b_max) for _ in range(2)]
+    ctx, tile = ctx_of((64, k, 16)), Tile((0, 1), (0, 1))
+    ops = s.encode(ctx, s.noise(ctx), [bytes(r) for r in a], [bytes(r) for r in b], tile)
+    got = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    for i in range(2):
+        for j in range(2):
+            want = sum(value(p) * value(q) for p, q in zip(a[i], b[j]))
+            scale = sum(abs(value(p) * value(q)) for p, q in zip(a[i], b[j]))
+            assert abs(Fraction(got[i][j]) - want) < scale / 8
+
+
+def test_d2_input_domain_and_trace_binding():
+    s, k = F.FP8IS(F.D2Draft(), mnk_min=16, tile=(1, 1)), 128
+    ctx, tile = ctx_of((64, k, 16)), Tile((0,), (0,))
+    good_a, good_b = bytes([0x68] * k), bytes([0x60] * k)
+    assert s.encode(ctx, s.noise(ctx), [bytes([0x69] * k)], [good_b], tile) is None      # |A| > 64 would saturate
+    assert s.encode(ctx, s.noise(ctx), [good_a], [bytes([0x61] * k)], tile) is None      # |B| > 32 would saturate
+    assert s.encode(ctx, s.noise(ctx), [bytes([0x7F] * k)], [good_b], tile) is None      # NaN
+    ops = s.encode(ctx, s.noise(ctx), [good_a], [good_b], tile)
+    assert all(c & 0x7F < 0x7E for c in ops.x[0] + ops.y[0])                             # no transform saturates at the cap
+    checked = s.checked(ctx, ops)
+    assert len(ops.trace_x[0]) == len(ops.trace_y[0]) == 7 * k * 4 + 3 * k
+    forged = F.Checked([bytes([checked.trace_x[0][0] ^ 1]) + checked.trace_x[0][1:]], checked.trace_y, checked.cells)
+    assert s.digest(ctx, None, forged) != s.digest(ctx, None, checked)
+
+
+def one_spike(k: int, index: int, code: int) -> list[int]:
+    row = [0] * k
+    row[index] = code
+    return row
+
+
+def spike_slice_words(layer, k: int, spike_a: int, spike_b: int, salts: int):
+    """For the one-spike input (track D, X-D1-1), each block's atom over the spike's slice, and its live products."""
+    index, out = 100, []
+    for s in range(salts):
+        ctx = ctx_of((64, k, 16), salt=bytes([s]))
+        a, b = layer.parse(bytes(one_spike(k, index, spike_a)), k, True), layer.parse(bytes(one_spike(k, index, spike_b)), k, False)
+        st = layer.form(ctx, layer.noise(ctx), [a], [b], Tile((0,), (0,)))
+        sl = [index // 32 + blk * (k // 32) for blk in range(3)]
+        x, y = st.x[0], st.y[0]
+        out.append(tuple((F.ATOM.step(0, x[32 * t:32 * t + 32], y[32 * t:32 * t + 32]),
+                          F.live_products(x[32 * t:32 * t + 32], y[32 * t:32 * t + 32])) for t in sl))
+    return out
+
+
+def test_fpncp_v0_one_spike_is_salt_independent():
+    """Negative control (X-D1-1): under C-2's forming as posted, a legal one-spike row and column make every block's
+    spike-slice atom one live product, the same word for every salt (track D's replay words)."""
+    runs = spike_slice_words(F.FpNcpV0(), 4096, 0x7E, 0x7E, salts=3)
+    assert len(set(runs)) == 1
+    assert runs[0] == ((0x48440000, 1), (0x48440000, 1), (0xC8440000, 1))
+
+
+def test_fpncp_v0_rounds_row_scaled_noise_away():
+    """Negative control (X-C2-B1): one 448 entry and 14 slices of 36 make σ = 1.71 below the half-cell 2 at 36, so blocks
+    1 and 2 of those slices have the same codes for every salt, and so do their atoms."""
+    layer, k = F.FpNcpV0(), 4096
+    row = [0x7E] + [0x61] * (32 * 14 - 1) + [0] * (k - 32 * 14)
+    stacks = []
+    for s in range(3):
+        ctx = ctx_of((64, k, 16), salt=bytes([s]))
+        stacks.append(layer.form(ctx, layer.noise(ctx), [row], [row], Tile((0,), (0,))))
+    for blk in (0, 1):
+        spans = {tuple(st.x[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}
+        assert len(spans) == 1 and set(next(iter(spans))) == {0x61}
+    assert len({tuple(st.x[0][2 * k + 32:2 * k + 32 * 14]) for st in stacks}) > 1                  # block 3: 2σ survives
+
+
+def test_d2_draft_keeps_the_spike_slices_dense_and_salted():
+    runs = spike_slice_words(F.D2Draft(), 1024, 0x68, 0x60, salts=2)
+    assert all(live > 8 for run in runs for _, live in run)
+    assert runs[0][0][0] != runs[1][0][0]
+
+
+def test_lifecycle_on_a_test_instance():
+    s = F.FP8IS(F.FpNcpV0(), mnk_min=16, tile=(64, 32))
+    rng = random.Random("lifecycle")
+    work = Workload((Matmul(0, Shape(64, 128, 64), 7),))
+    weights = {7: [bytes(codes(rng, 128, 0x7E)) for _ in range(64)]}
+    acts = {0: [bytes(codes(rng, 128, 0x7E)) for _ in range(64)]}
+
+    def corrupt(scheme, ctx, noise, a, b, tiles):
+        out = reference_kernel(scheme, ctx, noise, a, b, tiles)
+        out[1] = (bytes(32), out[1][1])
+        return out
+
+    for kernel, ok in ((reference_kernel, True), (corrupt, False)):
+        prover = Prover(s, weights, kernel)
+        epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+        tr = prover.prove(epoch, acts)
+        v = Verifier(s, epoch)
+        assert [v.check_tile(tr, prover.open(epoch, t.id)).ok for t in v.refs] == [True, ok]
+        if ok:
+            audit = v.audit(prover, tr, Sampled(2), b"source")
+            assert audit.accepted and audit.profile.work == s.wref(Shape(64, 128, 64))
+
+
+class SeededNcp(F.FpNcpV0):
+    """A test layer: fpncp-v0 with each cell's R_0 a salt word (a small power of two, so the seed is removed exactly)."""
+
+    name, seeded = "fpncp-v0-seeded", True
+
+    def form(self, ctx, noise, a, b, tile):
+        st = super().form(ctx, noise, a, b, tile)
+        seeds = [[0x3F80_0000 | (F.xof("test/seed", 1, ctx.salt, i, j)[0] << 23 & 0x8000_0000) for j in tile.cols] for i in tile.rows]
+        return F.Stack(st.x, st.y, st.trace_x, st.trace_y, seeds)
+
+
+def test_a_seeded_layer_checks_r1():
+    """Unseeded, R_1 = I_1 is dropped (`c2FirstRunCopy`); a seeded layer checks R_1 = add(R_0, I_1), pays its FADD in wref,
+    and its useful output removes the seed."""
+    rng = random.Random("seeded")
+    k, tile = 128, Tile((0, 1), (0, 1))
+    a, b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)], [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
+    ctx = ctx_of((64, k, 64))
+    plain, seeded = F.FP8IS(F.FpNcpV0(), mnk_min=16, prices="round8"), F.FP8IS(SeededNcp(), mnk_min=16, prices="round8")
+    p_ops, s_ops = plain.encode(ctx, plain.noise(ctx), a, b, tile), seeded.encode(ctx, seeded.noise(ctx), a, b, tile)
+    p_chk, s_chk = plain.checked(ctx, p_ops), seeded.checked(ctx, s_ops)
+    for i in range(2):
+        for j in range(2):
+            (pa, pr), (sa, sr) = p_chk.cells[i][j], s_chk.cells[i][j]
+            assert pa == sa and pr[0] is None and sr[0] == F.fp32.add(s_ops.seeds[i][j], sa[0]) != sa[0]
+            assert None not in pr[1:] and None not in sr
+    for got, want in zip(sum(seeded.useful(ctx, None, s_ops, s_chk), []), sum(plain.useful(ctx, None, p_ops, p_chk), [])):
+        assert abs(got - want) <= 1 + abs(want) / 2 ** 20
+    sh = Shape(64, 128, 64)
+    assert seeded.wref(sh) - plain.wref(sh) == 32 * sh.m * sh.n
+
+    class Mislabelled(SeededNcp):
+        seeded = False
+
+    liar = F.FP8IS(Mislabelled(), mnk_min=16)
+    with pytest.raises(DomainError):
+        liar.encode(ctx, liar.noise(ctx), a, b, tile)
+
+
+# ---- d3-v0: repaired C-2 --------------------------------------------------------------------------------------------
+
+def f16_value(w: int) -> Fraction:
+    neg, m, e = F.fp16.decode(w)
+    v = Fraction(m) * Fraction(2) ** e
+    return -v if neg else v
+
+
+def test_d3_registry_price_and_domain():
+    s = get("fp8-is-h100-d3-v0")
+    assert isinstance(s.forming, F.D3) and not s.forming.seeded
+    assert s.forming.units == (372, 372) and s.forming.measured_units == Fraction(9893, 20)
+    assert dict(s.certificate.parameters)["trace_units"] == 372
+    claimed = F.FP8IS(F.D3(form_units=192), prices="round8")
+    assert claimed.certificate.omega == Fraction(6 * 8192 - 32 + 384, 6 * 8192 - 32)
+    s.check(Matmul(0, Shape(8192, 8192, 16384), 1))
+
+
+def test_d3_exact_algebra_is_the_scaled_product():
+    """Before any rounding: with the scheme's own f16 noise E1 (partner-max, per-entry) and F1 (column-keyed),
+    E2 = E1·P, F2 = −P·F1 and exact E3, F3, the three blocks multiply to (αa)·(βb) exactly."""
+    layer, k = F.D3(), 128
+    pi, inv = F.ncp_perm(k, layer.P_SEED)
+    rng = random.Random("d3-algebra")
+    a, b = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
+    ctx = ctx_of((64, k, 64))
+
+    def noise(row, stream, left):
+        h = [F.fp16.from_e4m3(c) for c in row]
+        alpha, sigma = layer.scale(h)
+        y = [f16_value(F.fp16.mul(alpha, w)) for w in h]
+        st = [F.fp16.max_(F.fp16.mul(alpha, w) & 0x7C00, F.F16_2_POW_M6) for w in h]
+        partner = inv if left else pi
+        s = [F.fp16.max_(st[l], st[partner[l]]) for l in range(k)]
+        two_sigma, c = F.fp16.mul(sigma, 0x4000), F.fp16.mul(sigma, 0xC200)
+        e = []
+        for l in range(k):
+            w = int.from_bytes(stream[4 * l:4 * l + 4], "little")
+            su = F.fp16.fma(two_sigma, F.F16_ONE | (w & 0x3FF), c)
+            e.append(f16_value(F.fp16.fma(s[l], F.fp16.fma(F.F16_TWO_INV4, F.F16_ONE | ((w >> 16) & 0x3FF), F.F16_MINUS_3_8), su)))
+            assert f16_value(s[l]) >= 8 * Fraction(1, 512)          # s·v/8 spans at least one E4M3 cell
+        return y, e
+
+    y, e1 = noise(a, F.xof("verity/pouw/fp8-is/d3/E1", 4 * k, ctx.salt, 3, ctx.root_a, 5, 0), True)
+    z, f1 = noise(b, F.xof("verity/pouw/fp8-is/d3/F1", 4 * k, ctx.salt, 5, 0), False)
+    e2 = [e1[pi[l]] for l in range(k)]
+    f2 = [-f1[inv[l]] for l in range(k)]
+    blocks = ((e1, f1, 1), (e2, f2, 1), ([p + q for p, q in zip(e1, e2)], [p + q for p, q in zip(f1, f2)], -1))
+    total = sum(sign * (y[l] + e[l]) * (z[l] + f[l]) for e, f, sign in blocks for l in range(k))
+    assert total == sum(p * q for p, q in zip(y, z))
+
+
+def test_d3_repairs_both_refuted_inputs():
+    """X-C2-B1's absorbed-noise row and X-D1-1's one spike, which `fpncp-v0` leaves salt-independent, give salt-dependent
+    codes and words under d3-v0."""
+    layer, k = F.D3(), 4096
+    row = [0x7E] + [0x61] * (32 * 14 - 1) + [0] * (k - 32 * 14)
+    stacks = [layer.form(c, layer.noise(c), [row], [row], Tile((0,), (0,)))
+              for c in (ctx_of((64, k, 64), salt=bytes([s])) for s in range(3))]
+    for blk in (0, 1):
+        assert len({tuple(st.x[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}) == 3
+    runs = spike_slice_words(layer, k, 0x7E, 0x7E, salts=3)
+    assert len({tuple(w for w, _ in run) for run in runs}) == 3
+
+
+def test_d3_identical_weight_columns_are_distinct():
+    """X-D2-5: weight noise is keyed per column, so two identical committed weight rows give different formed columns."""
+    layer, k = F.D3(), 128
+    rng = random.Random("d3-columns")
+    w, act = codes(rng, k, 0x7E), codes(rng, k, 0x7E)
+    ctx = ctx_of((64, k, 64))
+    st = layer.form(ctx, layer.noise(ctx), [act], [w, w], Tile((0,), (0, 1)))
+    assert st.y[0] != st.y[1]
+    assert F.cell_words(st.x[0], st.y[0]) != F.cell_words(st.x[0], st.y[1])
+
+
+def test_d3_useful_output_tracks_the_product():
+    s, k = F.FP8IS(F.D3(), mnk_min=16, tile=(2, 2)), 256
+    rng = random.Random("d3-useful")
+    a, b = [codes(rng, k, 0x6E) for _ in range(2)], [codes(rng, k, 0x6E) for _ in range(2)]
+    ctx, tile = ctx_of((64, k, 64)), Tile((0, 1), (0, 1))
+    ops = s.encode(ctx, s.noise(ctx), [bytes(r) for r in a], [bytes(r) for r in b], tile)
+    got = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    for i in range(2):
+        for j in range(2):
+            scale = f16_value(s.forming.scale([F.fp16.from_e4m3(c) for c in a[i]])[0]) * \
+                    f16_value(s.forming.scale([F.fp16.from_e4m3(c) for c in b[j]])[0])
+            want = sum(value(p) * value(q) for p, q in zip(a[i], b[j]))
+            bound = sum(abs(value(p) * value(q)) for p, q in zip(a[i], b[j]))
+            assert abs(Fraction(got[i][j]) / scale - want) < bound / 8
+
+
+# ---- the D-3 family: d3s-v0 (the lead law) and d3m-v0, on X_q or Y16 -------------------------------------------------
+
+def y16_row(rng: random.Random, k: int) -> bytes:
+    """A Y16 row: f16 words of magnitude at most 448 with full 10-bit mantissas."""
+    words = []
+    for _ in range(k):
+        w = (rng.getrandbits(1) << 15) | (rng.randint(1, 23) << 10) | rng.getrandbits(10)
+        words.append(min(w & 0x7FFF, F.F16_448) | (w & 0x8000))
+    return b"".join(w.to_bytes(2, "little") for w in words)
+
+
+def e4m3_cell(v: Fraction) -> Fraction:
+    a = abs(v)
+    if a < Fraction(1, 64):
+        return Fraction(1, 512)
+    e = a.numerator.bit_length() - a.denominator.bit_length()
+    if Fraction(2) ** e > a:
+        e -= 1
+    return Fraction(2) ** (e - 3)
+
+
+FRONTIER = (2048, 4096, 8192, 16384, 32768)                             # Daniel's reporting sizes (20:41Z)
+CELLS = [(law, route, sums) for law in ("d3s", "d3m") for route in ("xq", "y16") for sums in ("f32", "f16")]
+
+
+def cell_name(law: str, route: str, sums: str = "f32") -> str:
+    return f"{law}-v0{'-y16' if route == 'y16' else ''}{'-f16' if sums == 'f16' else ''}"
+
+
+def gamma_at(s, n: int) -> Fraction:
+    return 1 - Fraction(399, 400) / F.FP8IS(s.forming, mnk_min=n, prices=s.prices).certificate.omega
+
+
+@pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])
+def test_d3_family_round8_activation_side(law, route):
+    """At Round 8 the activation side is the strike's schedule M4 (394.27 for D-3s on either route, the committed-Y16
+    statistic of X-R9-3; D-3m adds the cell mask), and the decoded weight side forms the same trace."""
+    s = get(f"fp8-is-h100-{cell_name(law, route)}", prices="round8")
+    assert s.forming.law == law and s.forming.route == route and s.forming.prices == s.prices == "round8"
+    act = Fraction(27281, 64) - (32 if law == "d3s" else 0)
+    assert s.forming.units == (act, act)
+    assert s.forming.tag == cell_name(law, route)
+
+
+def round9_units(law: str, route: str, sums: str, sass: bool) -> tuple[Fraction, Fraction]:
+    """Round 9's per-element trace from §14's figures (not from `PRICES`): FADD 32.11, half2 36, HMNMX2 64, LOP3 64,
+    F2FP 64, HMUL2 a·K 32.17, HADD2.F32 64, the four-code unpack 48 per code, the f16 pack 32 per element, the f16 -> e4m3
+    cast 64 per code (Round 8, F2FP + PRMT).  With ``sass`` (the PRMT-free code ptxas >= 12.9 emits), the unpack and the
+    cast are 32 per code and the amplitude's two maxima one VHMNMX (32 per element).  The weights are decoded and form
+    their statistic and amplitudes every unit (no copy or table, Daniel 20:31Z)."""
+    fadd, half, lop = Fraction(3211, 100), Fraction(18), Fraction(32)
+    unpack = 32 if sass else 48
+    if sums == "f32":
+        blocks, widen = 3 * (64 + fadd) + 3 * 32, Fraction(64)
+    else:
+        blocks, widen = 3 * half + 3 * (32 if sass else 64), Fraction(0)
+    rest = (Fraction(3217, 200) + half + (64 + fadd) / 256 + (32 if law == "d3m" else 0) + (32 if sass else 64)
+            + widen + lop + 3 * half + blocks)
+    return (unpack if route == "xq" else 32) + rest, unpack + rest
+
+
+@pytest.mark.parametrize("law,route,sums", CELLS)
+def test_d3_family_round9_prices(law, route, sums):
+    """Every cell is registered with its Round 9 trace, measured (the default) and with ptxas 12.9's code."""
+    for prices, sass in (("round9", False), ("round9-sass", True)):
+        s = get(f"fp8-is-h100-{cell_name(law, route, sums)}", prices=prices)
+        assert s.forming.sums == sums and s.forming.prices == s.prices == prices
+        assert s.forming.units == round9_units(law, route, sums, sass)
+    assert get(f"fp8-is-h100-{cell_name(law, route, sums)}").prices == "round11"
+
+
+def round10_units(law: str, route: str, sums: str, k: int) -> tuple[Fraction, Fraction]:
+    """Round 10's per-element trace from §16's figures (not from `PRICES`), ptxas 12.9: FADD 32.00 (the class price for
+    loops under the knee), UNPACK_B 64.17 per two codes, the PRMT-free four-code cast 129.27, VHMNMX 66.50 per two
+    elements, the f32-pair F2FP 64.61, the centre HFMA2 with immediates 64.02 per two; Round 9's half2 36, LOP3 64,
+    HMUL2 a·K 32.17, HADD2.F32 64 and f16 pack 64.  Each statistic lane chains min(256, k/64) entries."""
+    fadd, half, lop = Fraction(32), Fraction(18), Fraction(32)
+    unpack, chain = Fraction(6417, 200), min(256, k // 64)
+    if sums == "f32":
+        blocks, widen = 3 * (64 + fadd) + 3 * Fraction(6461, 200), Fraction(64)
+    else:
+        blocks, widen = 3 * half + 3 * Fraction(12927, 400), Fraction(0)
+    rest = (Fraction(3217, 200) + half + (64 + fadd) / chain + (32 if law == "d3m" else 0) + Fraction(133, 4)
+            + widen + lop + Fraction(6402, 200) + 2 * half + blocks)
+    return (unpack if route == "xq" else 32) + rest, unpack + rest
+
+
+@pytest.mark.parametrize("law,route,sums", CELLS)
+def test_d3_family_round10_prices(law, route, sums):
+    for k in FRONTIER:
+        assert F.D3Family(law, route, "round10", sums).units_at(k) == round10_units(law, route, sums, k)
+    assert get(f"fp8-is-h100-{cell_name(law, route, sums)}", prices="round10-built").fadd == Fraction(3205, 100)
+
+
+def fadd_threshold(law: str, route: str, sums: str, prices: str, n: int) -> Fraction:
+    """The FADD class price at which N³ reaches γ = 1%, every FADD (the core's and the forming's) at that price."""
+    def forming(p):
+        row = {**F.PRICES[prices], "fadd": Fraction(p), "block_f32": 64 + Fraction(p)}
+        return sum(u for side in F.d3_trace(law, route, row, min(256, n // 64), sums) for _, u in side)
+    t = 3 * n // 32
+    f0, f1 = forming(0), forming(1) - forming(0)
+    return (Fraction(399, 400) * 32 * (2 * t - 1) / Fraction(99, 100) - 32 * t - f0) / (t - 1 + f1)
+
+
+def test_round10_target_cell():
+    """The red team's target (Round 10 re-issue, 21:13Z): D-3s on X_q with f16 sums at 16,384³ is 0.957% at FADD 32.00
+    with threshold 32.028, and 1.034% at the as-built loop's 32.05."""
+    assert f"{float(100 * gamma_at(get('fp8-is-h100-d3s-v0-f16', prices='round10'), 16384)):.3f}" == "0.957"
+    assert f"{float(fadd_threshold('d3s', 'xq', 'f16', 'round10', 16384)):.3f}" == "32.028"
+    assert f"{float(100 * gamma_at(get('fp8-is-h100-d3s-v0-f16', prices='round10-built'), 16384)):.3f}" == "1.034"
+
+
+#: γ in % at N³ over the frontier, r = 1, decoded weights (no amplitude table, no rms′ cache), every checked word
+#: credited at 32 (the certificate's Ω), at each row's FADD (Round 10: 32.00, and 32.05 as built; Round 9: 32.11).
+#: Computed from class prices; the honest D-3 kernel has not been run at any size.
+FRONTIER_GAMMA = {
+    ("round11", "d3s", "xq", "f16"): ("5.688", "3.030", "1.656", "0.957", "0.605"),
+    ("round11-pipe", "d3s", "xq", "f16"): ("5.757", "3.103", "1.731", "1.033", "0.681"),
+    ("round11-dflow", "d3s", "xq", "f16"): ("5.705", "3.048", "1.674", "0.975", "0.623"),
+    ("round10", "d3s", "xq", "f16"): ("5.689", "3.030", "1.656", "0.957", "0.605"),
+    ("round10", "d3s", "xq", "f32"): ("9.834", "5.266", "2.818", "1.550", "0.904"),
+    ("round10", "d3s", "y16", "f16"): ("5.688", "3.030", "1.656", "0.957", "0.605"),
+    ("round10", "d3m", "xq", "f16"): ("6.152", "3.276", "1.782", "1.021", "0.637"),
+    ("round10-built", "d3s", "xq", "f16"): ("5.758", "3.104", "1.732", "1.034", "0.682"),
+    ("round9", "d3s", "xq", "f16"): ("7.658", "4.160", "2.322", "1.380", "0.903"),
+    ("round9", "d3s", "xq", "f32"): ("10.397", "5.654", "3.104", "1.780", "1.105"),
+    ("round9", "d3s", "y16", "f16"): ("7.546", "4.100", "2.291", "1.364", "0.895"),
+    ("round9", "d3m", "xq", "f16"): ("8.102", "4.399", "2.447", "1.443", "0.935"),
+    ("round9-sass", "d3s", "xq", "f16"): ("5.604", "3.067", "1.758", "1.093", "0.758"),
+    ("round9-sass", "d3s", "xq", "f32"): ("9.762", "5.304", "2.920", "1.685", "1.057"),
+    ("round9-sass", "d3m", "xq", "f16"): ("6.069", "3.312", "1.884", "1.157", "0.790"),
+}
+
+
+@pytest.mark.parametrize("cell", sorted(FRONTIER_GAMMA))
+def test_frontier_gamma(cell):
+    """At Round 10 nothing clears below 16,384³; the target clears at 32.00 only (a loop under the knee), and 32,768³
+    clears in every cell at 32.00."""
+    prices, *rest = cell
+    s = get(f"fp8-is-h100-{cell_name(*rest)}", prices=prices)
+    assert tuple(f"{float(100 * gamma_at(s, n)):.3f}" for n in FRONTIER) == FRONTIER_GAMMA[cell]
+
+
+def test_round11_centre_and_step_rows():
+    """Round 11 times the centre as compiled (c in a register) at 64.00, like the immediate form, and each step row
+    prices FADD at the §16.3 sweep's prediction for its kernel's loop."""
+    r10, r11 = F.D3s(prices="round10", sums="f16"), F.D3s(sums="f16")
+    assert r11.prices == "round11" and r10.units_at(16384)[0] - r11.units_at(16384)[0] == Fraction(1, 100)
+    assert F.STEPS["pipe"] == (Fraction(5544, 100), 567, Fraction(320495, 10000))
+    assert F.STEPS["dflow"] == (Fraction(5267, 100), 371, Fraction(320118, 10000))
+    for step, (_, _, fadd) in F.STEPS.items():
+        assert get("fp8-is-h100-d3s-v0-f16", prices=f"round11-{step}").fadd == fadd
+
+
+#: (γ %, slowdown ×) for D-3s on X_q, f16 sums, at 8,192³ and 16,384³: the step at its measured units per add word
+#: and FADD at its loop's predicted class price.  Slowdown is Track C's model (`slowdown`); both are predictions.
+ROUND11_STEPS = {"pipe": (("1.731", "5.280"), ("1.033", "5.239")),       # as built, 567-instruction loop
+                 "dflow": (("1.674", "5.021"), ("0.975", "4.979"))}      # the short loop, 371 instructions
+
+
+@pytest.mark.parametrize("step", sorted(ROUND11_STEPS))
+def test_round11_gamma_and_slowdown(step):
+    """As built the step misses 5× and 16,384³ misses 1%; the short loop clears both at 16,384³ (by 0.021× and 0.025
+    points) and neither at 8,192³, where 5× needs 52.45 per add word."""
+    s = get("fp8-is-h100-d3s-v0-f16", prices=f"round11-{step}")
+    got = tuple((f"{float(100 * gamma_at(s, n)):.3f}", f"{float(F.slowdown(s.forming, Shape(n, n, n), F.STEPS[step][0])):.3f}")
+                for n in (8192, 16384))
+    assert got == ROUND11_STEPS[step]
+
+
+def test_the_leaf_is_two_level():
+    """A 64 × 64 tile's leaf is SHAKE256("…/leaf" ‖ 0 ‖ 16 sub-digests, row-major over the 16 × 16 subtiles), each
+    SHAKE256("…/subtile" ‖ 0 ‖ its rows' then columns' forming words ‖ its words, step-major, row-major within a step,
+    I before R), rebuilt here from the bytes.  The words do not depend on the leaf."""
+    rng = random.Random("leaf")
+    steps = 3
+    cells = [[([rng.getrandbits(32) for _ in range(steps)], [None] + [rng.getrandbits(32) for _ in range(steps - 1)])
+              for _ in range(64)] for _ in range(64)]
+    tx, ty = [bytes([i]) for i in range(64)], [bytes([100 + j]) for j in range(64)]
+    checked = F.Checked(tx, ty, cells)
+    s = get("fp8-is-h100-d3s-v0-f16")
+    tag = b"verity/pouw/fp8-is-h100-d3s-v0-f16"
+
+    def le(w):
+        return w.to_bytes(4, "little")
+
+    subs = []
+    for a in range(4):
+        for b in range(4):
+            block = [cells[i][j] for i in range(16 * a, 16 * a + 16) for j in range(16 * b, 16 * b + 16)]
+            words = b"".join(le(atoms[t]) + (b"" if running[t] is None else le(running[t]))
+                             for t in range(steps) for atoms, running in block)
+            trace = b"".join(tx[16 * a:16 * a + 16] + ty[16 * b:16 * b + 16])
+            subs.append(hashlib.shake_256(tag + b"/subtile\0" + trace + words).digest(32))
+    assert s.subdigests(checked) == subs
+    assert s.digest(None, None, checked) == hashlib.shake_256(tag + b"/leaf\0" + b"".join(subs)).digest(32)
+    small = F.Checked(tx[:2], ty[:2], [row[:2] for row in cells[:2]])                  # under 16 a side: one subtile
+    assert len(s.subdigests(small)) == 1
+
+
+def test_k_drops_out():
+    """γ depends on m and n: at m = n = 32,768 it moves by less than 0.004 points over the frontier's k (the statistic's
+    shorter chains at small k)."""
+    s = get("fp8-is-h100-d3s-v0-f16")
+    t = lambda k: 3 * k // 32
+    g = [1 - Fraction(399, 400) * 32 * (2 * t(k) - 1) * 32768 ** 2 / s.wref(Shape(32768, k, 32768)) for k in FRONTIER]
+    assert max(g) - min(g) < Fraction(4, 100000)
+
+
+def test_one_price_row_prices_forming_and_core():
+    assert get("fp8-is-h100-d3s-v0", prices="round8").forming.prices == "round8"
+    assert F.FP8IS(F.D3s(prices="round8")).prices == "round8"
+    with pytest.raises(ValueError):
+        F.FP8IS(F.D3s(prices="round8"), prices="round9")
+
+
+def test_frontier_domain_is_selected_by_mnk_min():
+    for n in FRONTIER:
+        s = get("fp8-is-h100-d3s-v0-f16", mnk_min=n)
+        s.check(Matmul(0, Shape(n, n, n), 1))
+        assert dict(s.certificate.parameters)["mnk_min"] == n
+    s = get("fp8-is-h100-d3s-v0-f16", mnk_min=32768)
+    s.check(Matmul(0, Shape(32768, 49152, 40960), 1))
+    for bad in (Shape(16384, 32768, 32768), Shape(32768, 32768, 1 << 17), Shape(32768, 32768, 32800)):
+        with pytest.raises(DomainError):
+            s.check(Matmul(0, bad, 1))
+
+
+def test_f16_sums_round_once_in_f16_then_cast():
+    """With f16 sums each code is cvt.rn.satfinite.e4m3x2.f16x2 of HADD2(h, e_b); it differs from the f32-sums code only
+    by double rounding, and a 448 row still saturates at ±448."""
+    k = 128
+    rng = random.Random("f16-sums")
+    f32, f16 = F.D3s(), F.D3s(sums="f16")
+    pi, inv = F.ncp_perm(k, f32.P_SEED)
+    stream = F.xof("test/f16-sums", 2 * k)
+    for left in (True, False):
+        h = f32.parse(bytes(codes(rng, k, 0x7E)), k, left)
+        u, v = f32.side(h, stream, pi, inv, left), f16.side(h, stream, pi, inv, left)
+        diff = [l for l in range(3 * k) if u[l] != v[l]]
+        assert len(diff) < 3 * k // 16
+        assert all(abs(value(u[l]) - value(v[l])) <= max(e4m3_cell(value(u[l])), e4m3_cell(value(v[l]))) for l in diff)
+    h = [F.fp16.round_to_f16(False, 7, 6)] * k                                    # 448
+    ctx = ctx_of((64, k, 64))
+    st = f16.form(ctx, f16.noise(ctx), [h], [h], Tile((0,), (0,)))
+    assert all(c & 0x7F != 0x7F for c in st.x[0] + st.y[0]) and 0x7E in st.x[0] + st.y[0]
+
+
+def noise_of(layer, h, stream, left, pi, inv):
+    amp = layer.amplitudes(h, inv if left else pi)
+    e = []
+    for l in range(len(h)):
+        t = F.F16_ONE | (int.from_bytes(stream[2 * l:2 * l + 2], "little") & 0x3FF)
+        e.append(f16_value(F.fp16.mul(amp[l], F.fp16.fma(F.F16_TWO_INV4, t, F.F16_MINUS_3_8))))
+    return [f16_value(w) for w in h], e, [f16_value(a) / 8 for a in amp]
+
+
+@pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])
+def test_d3_family_exact_algebra_and_amplitude(law, route):
+    """Before any rounding the three blocks multiply to h·wᵀ exactly, and every amplitude covers one E4M3 cell of the
+    entry and of its NCP partner, on the cast's grid (X-17d-3)."""
+    layer, k = F.D3Family(law, route), 128
+    pi, inv = F.ncp_perm(k, layer.P_SEED)
+    rng = random.Random(f"{law}-{route}-algebra")
+    a = layer.parse(y16_row(rng, k) if route == "y16" else bytes(codes(rng, k, 0x7E)), k, True)
+    b = layer.parse(bytes(codes(rng, k, 0x7E)), k, False)
+    ctx = ctx_of((64, k, 64))
+    x, e1, amp_a = noise_of(layer, a, F.xof(f"verity/pouw/fp8-is/{layer.tag}/E1", 2 * k, ctx.salt, 3, ctx.root_a, 5, 0),
+                            True, pi, inv)
+    y, f1, amp_b = noise_of(layer, b, F.xof(f"verity/pouw/fp8-is/{layer.tag}/F1", 2 * k, ctx.salt, 3, ctx.root_a, 5, 0),
+                            False, pi, inv)
+    for l in range(k):
+        assert amp_a[l] >= max(e4m3_cell(x[l]), e4m3_cell(x[inv[l]])) and amp_b[l] >= max(e4m3_cell(y[l]), e4m3_cell(y[pi[l]]))
+    e2 = [e1[pi[l]] for l in range(k)]
+    f2 = [-f1[inv[l]] for l in range(k)]
+    blocks = ((e1, f1, 1), (e2, f2, 1), ([p + q for p, q in zip(e1, e2)], [p + q for p, q in zip(f1, f2)], -1))
+    assert sum(sign * (x[l] + e[l]) * (y[l] + f[l]) for e, f, sign in blocks for l in range(k)) == sum(p * q for p, q in zip(x, y))
+
+
+@pytest.mark.parametrize("law", ["d3s", "d3m"])
+def test_d3_family_repairs_the_refuted_inputs(law):
+    """X-C2-B1's absorbed row, X-D3m-4's tiny column (one code 2^−9, the rest zero) and X-D1-1's spike all give
+    salt-dependent codes: no free word."""
+    layer, k = F.D3Family(law), 4096
+    for row in ([0x7E] + [0x61] * (32 * 14 - 1) + [0] * (k - 32 * 14), [0x01] + [0] * (k - 1)):
+        h = layer.parse(bytes(row), k, True)
+        stacks = [layer.form(c, layer.noise(c), [h], [h], Tile((0,), (0,)))
+                  for c in (ctx_of((64, k, 64), salt=bytes([s])) for s in range(3))]
+        for blk in range(3):
+            assert len({tuple(st.x[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}) == 3
+            assert len({tuple(st.y[0][blk * k + 32:blk * k + 32 * 14]) for st in stacks}) == 3
+    runs = spike_slice_words(layer, k, 0x7E, 0x7E, salts=3)
+    assert len({tuple(w for w, _ in run) for run in runs}) > 1
+
+
+def test_d3s_zero_row_floor_and_saturation():
+    """D-3s's floor rms′ = max(rms, 2^−6) gives an all-zero row noise of one subnormal cell and a near-zero output; a row of
+    448s saturates at ±448 and never produces a NaN code."""
+    s, k = F.FP8IS(F.D3s(), mnk_min=16, tile=(2, 1)), 1024
+    rng = random.Random("d3s-zero")
+    w = bytes(codes(rng, k, 0x7E))
+    ctx = ctx_of((64, k, 64))
+    assert s.forming.floor([0] * k) == F.F16_2_POW_M6
+    ops = s.encode(ctx, s.noise(ctx), [bytes(k), bytes([0x7E] * k)], [w], Tile((0, 1), (0,)))
+    assert set(ops.x[0][:k]) - {0x00, 0x80} and set(ops.x[0][:k]) <= {0x00, 0x80, 0x01, 0x81}
+    assert all(c & 0x7F != 0x7F for c in ops.x[1]) and (0x7E in ops.x[1] or 0xFE in ops.x[1])
+    useful = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    assert abs(useful[0][0]) < sum(abs(value(c)) for c in w) / 64
+
+
+def test_y16_rows_are_parsed_and_bounded():
+    layer, k = F.D3s(route="y16"), 64
+    ok = F.fp16.round_to_f16(False, 7, 6)                                       # 448
+    assert layer.parse(ok.to_bytes(2, "little") * k, k, True) == [ok] * k
+    for bad in (F.fp16.round_to_f16(False, 449, 0), 0x7C00, 0x7E00):            # above 448, +inf, NaN
+        assert layer.parse(bad.to_bytes(2, "little") * k, k, True) is None
+    assert layer.parse(bytes(k), k, True) is None                               # a Y16 row is 2k bytes
+    assert layer.parse(bytes(k), k, False) == [0] * k                           # weights stay E4M3 codes
+
+
+@pytest.mark.parametrize("law", ["d3s", "d3m"])
+def test_d3_family_weight_noise_is_per_unit(law):
+    """r = 1 (X-D3-3): two units that share a weight form different weight columns."""
+    layer, k = F.D3Family(law), 128
+    rng = random.Random("d3-units")
+    w, act = layer.parse(bytes(codes(rng, k, 0x7E)), k, False), layer.parse(bytes(codes(rng, k, 0x7E)), k, True)
+    one = ctx_of((64, k, 64))
+    two = Context(one.salt, Matmul(4, Shape(64, k, 64), 5), one.root_a, one.root_b)
+    assert layer.form(one, layer.noise(one), [act], [w], Tile((0,), (0,))).y != \
+        layer.form(two, layer.noise(two), [act], [w], Tile((0,), (0,))).y
+
+
+class UnboundF1(F.D3Family):
+    """#295 before X-R9-2: F₁ does not read root_A, so B̃ is known from the salt before the activations are committed."""
+
+    def stream(self, name, ctx, line):
+        if name == "E1":
+            return super().stream(name, ctx, line)
+        u = ctx.matmul
+        return F.xof(f"verity/pouw/fp8-is/{self.tag}/F1", 2 * u.shape.k, ctx.salt, u.index, u.weight, line)
+
+
+def spike_functions(layer, k: int, spikes: int, columns: int, draws: int) -> dict[tuple[int, int], int]:
+    """X-R9-2's witness (red team Round 9 §5.2), scaled down: identical rows and columns with one 288 per spike slice,
+    each spike's NCP partners outside every spike slice; the salt is fixed and only root_A is drawn again.  For each
+    spike slice and block, the number of distinct functions root_A -> atom word over the columns."""
+    pi, inv = F.ncp_perm(k, layer.P_SEED)
+    slices = [t * (k // 32) // spikes for t in range(spikes)]
+    inside = {l for t in slices for l in range(32 * t, 32 * t + 32)}
+    pos = [next(l for l in range(32 * t, 32 * t + 32) if pi[l] not in inside and inv[l] not in inside) for t in slices]
+    row = bytes(0x79 if l in pos else 0 for l in range(k))
+    h, w = layer.parse(row, k, True), layer.parse(row, k, False)
+    words: dict[tuple[int, int], dict[int, list[int]]] = {}
+    for r in range(draws):
+        ctx = Context(hashlib.sha256(b"x-r9-2").digest(), Matmul(7, Shape(64, k, 64), 5),
+                      hashlib.sha256(bytes([r])).digest(), bytes(32))
+        st = layer.form(ctx, layer.noise(ctx), [h], [w] * columns, Tile((0,), tuple(range(columns))))
+        for c in range(columns):
+            for t in slices:
+                for blk in range(3):
+                    o = blk * k + 32 * t
+                    words.setdefault((t, blk), {}).setdefault(c, []).append(F.ATOM.step(0, st.x[0][o:o + 32],
+                                                                                        st.y[c][o:o + 32]))
+    return {key: len({tuple(v) for v in cols.values()}) for key, cols in words.items()}
+
+
+def test_weight_noise_reads_root_a():
+    """X-R9-2: with F₁ keyed on (salt, index, weight, j) alone, identical columns' spike slices in blocks 1 and 2 are at
+    most 3 functions of E₁; keyed on root_A too, every column is its own function in every block."""
+    k, spikes, columns, draws = 1024, 4, 8, 8
+    unbound = spike_functions(UnboundF1("d3s"), k, spikes, columns, draws)
+    assert all(n <= 3 for (t, blk), n in unbound.items() if blk < 2)
+    assert set(spike_functions(F.D3s(), k, spikes, columns, draws).values()) == {columns}
+
+
+@pytest.mark.parametrize("law,route", [(law, route) for law in ("d3s", "d3m") for route in ("xq", "y16")])
+def test_d3_family_sums_are_distinct_checked_functions(law, route):
+    rng = random.Random("d3-sums")
+    k, tile = 128, Tile((0, 1), (0, 1))
+    a = [y16_row(rng, k) if route == "y16" else bytes(codes(rng, k, 0x7E)) for _ in range(2)]
+    b = [bytes(codes(rng, k, 0x7E)) for _ in range(2)]
+    ctx = ctx_of((64, k, 64))
+    digests = []
+    for sums in ("f32", "f16"):
+        s = F.FP8IS(F.D3Family(law, route, sums=sums), mnk_min=16)
+        ops = s.encode(ctx, s.noise(ctx), a, b, tile)
+        digests.append(s.digest(ctx, None, s.checked(ctx, ops)))
+    assert digests[0] != digests[1]
+
+
+@pytest.mark.parametrize("law,route,sums", [(law, route, sums) for law in ("d3s", "d3m") for route in ("xq", "y16")
+                                            for sums in ("f32", "f16")])
+def test_d3_family_useful_output_tracks_the_product(law, route, sums):
+    s, k = F.FP8IS(F.D3Family(law, route, sums=sums), mnk_min=16, tile=(2, 2)), 512
+    rng = random.Random(f"{law}-{route}-useful")
+    a = [y16_row(rng, k) if route == "y16" else bytes(codes(rng, k, 0x6E)) for _ in range(2)]
+    b = [bytes(codes(rng, k, 0x6E)) for _ in range(2)]
+    ctx, tile = ctx_of((64, k, 64)), Tile((0, 1), (0, 1))
+    ops = s.encode(ctx, s.noise(ctx), a, b, tile)
+    got = s.useful(ctx, None, ops, s.checked(ctx, ops))
+    xs = [[f16_value(w) for w in s.forming.parse(r, k, True)] for r in a]
+    ys = [[value(c) for c in r] for r in b]
+    for i in range(2):
+        for j in range(2):
+            want = sum(p * q for p, q in zip(xs[i], ys[j]))
+            bound = sum(abs(p * q) for p, q in zip(xs[i], ys[j]))
+            assert abs(Fraction(got[i][j]) - want) < bound / 8

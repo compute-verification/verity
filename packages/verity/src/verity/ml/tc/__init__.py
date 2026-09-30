@@ -7,7 +7,8 @@
     silicon       the historical entry point; a shim re-exporting `term` and `models` (`silicon.tc_dot` is the frozen target's step)
     total         the total function on every encoding (NaN, infinities, saturation; measured on A100, RTX 4090, H100)
     total_fp8     the same total rules for the Hopper E4M3 k32 step (wgmma m64nNk32 f32.e4m3.e4m3; measured on H100)
-    cast          FP32 <-> BF16 word casts
+    cast          FP32 <-> BF16 word casts, FP32 -> E4M3 (cvt.rn.satfinite)
+    fp32          IEEE binary32 add, mul, fma, div and sqrt on words, ties to even, no FTZ (the scalar FP32 pipe)
     relation      the step as a minimal algebraic relation (witness columns, mul/lin/lookup predicates) and its census
 
 The step is `model.step(acc_word, a_words, b_words) -> acc_word'` (`total.tc_dot_total` on every encoding), with `model`

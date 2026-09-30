@@ -52,6 +52,7 @@ def load_registries() -> None:
             importlib.import_module(f"{R.__name__}.{m.name}")
     from verity_vllm.program.kernels import rows, twins  # noqa: F401  (their kernels register with core)
     import verity_pouw.circuit.ncp2  # noqa: F401  (PoUW's ncp-v2 unit templates and primitives)
+    import verity_pouw.circuit.fp8  # noqa: F401  (PoUW's NCP-FP8 unit templates and primitives)
     import verity_pouw.circuit.h1t  # noqa: F401  (PoUW's H-1T unit templates and primitives)
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
@@ -179,20 +180,27 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _pouw_roots() -> list[Any]:
-    """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
-    it (`verity_pouw.circuit.ncp2`) for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`), and H-1T's templates at k = 96
-    with its smallest whole call and a window of two calls (`verity_pouw.circuit.h1t`); the package's own tests check their
-    template partitions and the Z separator."""
-    from verity_pouw.circuit import h1t, ncp2
+    """PoUW's `ncp-v2` unit templates at k = 64, with the smallest whole call, its weight side and a window of two calls on
+    it (`verity_pouw.circuit.ncp2`) for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); NCP-FP8's at k = 96 (both
+    sums) with its smallest whole call, its weight side and a window of two calls (`verity_pouw.circuit.fp8`); and H-1T's
+    templates at k = 96 with its smallest whole call and a window of two calls (`verity_pouw.circuit.h1t`). The
+    package's own tests check their template partitions and the Z separator."""
+    from verity_pouw.circuit import fp8, h1t, ncp2
 
     shape = ncp2.Shape(16, 64, 16)
     out = []
     for kind in ("shift24", "word"):
         out += [t for t in ncp2.templates(64, kind).values() if t not in out]
         out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
-    small = h1t.Shape(16, 96, 16)
-    return (out + list(h1t.templates(96).values()) + [h1t.dequant_template(False)]
-            + [h1t.linear(small), h1t.linear(small, bias=False), h1t.window(small, 2)])
+    fp8_templates = [t for sums in fp8.SUMS for _role, t in fp8.call_templates(fp8.Shape(48, 96, 32), sums)]
+    fp8_templates += [t for sums in fp8.SUMS for _role, t in fp8.weight_templates(96, sums)]
+    small = fp8.Shape(16, 96, 16)
+    fp8_templates += [fp8.dequant_template(False)]
+    tiny = h1t.Shape(16, 96, 16)
+    return (out + list({t.id: t for t in fp8_templates}.values())
+            + [fp8.linear(small), fp8.linear(small, bias=False), fp8.weight(small), fp8.window(small, 2)]
+            + list(h1t.templates(96).values()) + [h1t.dequant_template(False)]
+            + [h1t.linear(tiny), h1t.linear(tiny, bias=False), h1t.window(tiny, 2)])
 
 
 def _core_roots() -> list[Any]:
