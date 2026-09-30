@@ -62,7 +62,7 @@ MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", 
                "match/capture/versions.json", "match/control/versions.json"]
 TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build/rank*/build_workload/workload_program.json"]
 TP_LOG_GLOBS = ["build/rank*/*.log", "match/*.log"]
-COMMIT_FILES = ["verdict.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
+COMMIT_FILES = ["verdict.json", "config_record.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
 EVIDENCE_FILES = ["timeline.jsonl", "stages.txt", "admission.json", "timeline_report.json"]
 
 
@@ -206,7 +206,9 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         # the Commit's decision document: verdict.json (vllm-verdict/v1) at TP1; tp.commit's commit/summary.json on a TP row (no
         # vllm-verdict/v1 grades a tp.commit record: commit.verdict reads commit_delta's documents).  A PASS stage without it is refused
         # by name; a stage that did not pass records the absence (`decision_record_missing`), never an empty document
-        rel = "commit/summary.json" if tp else "verdict.json"
+        # a config run (`--config-run 1`) has no verdict.json: its decision document is config_record.json (verity-vllm/config-record/v1)
+        config_run = not tp and not (d / "verdict.json").exists() and (d / "config_record.json").exists()
+        rel = "commit/summary.json" if tp else "config_record.json" if config_run else "verdict.json"
         doc = _read_json(d / rel)
         if not isinstance(doc, dict):
             if passed:
