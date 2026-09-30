@@ -24,9 +24,22 @@ arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention
   timed shape, with ``{shape}``, ``{transcript}`` (its absolute path) and ``{dir}`` (the transcript's directory) too; with
   ``per: "run"`` once for the run (identical commands of several arms run once).
 - ``commit`` (optional): the verifier's git commit, when it isn't the run's source commit.
+- ``control`` (optional, v0.5): the negative control's transcript, like ``transcript`` (``{arm}`` and ``{shape}``): what the
+  arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (panel rule, server.md 11:50Z).
 
 A transcript is accepted only by a line of the commands' output that starts with ``ACCEPT`` and names
-``sha256:<the transcript file's sha256>``, with no ``REJECT`` line naming it (and, per shape, every command exiting 0).
+``sha256:<the transcript file's sha256>``, with no ``REJECT`` line naming it (and, per shape, every command exiting 0). A
+control is rejected only by a line that starts with ``REJECT`` and names its sha256, with no ``ACCEPT`` line naming it.
+
+The record may also name the kernel it runs and what the attempt is (v0.5), which `verify.py` writes into the attempt's
+evidence-store record (`ledger.py`, kind ``kernel-attempt/v1``):
+
+- ``variant``: the kernel as `verity_pouw.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
+  schemes, the digest of the sources it was built from, the binary's digest, the priced path).
+- ``lineage``: ``parent`` (the art: id of the attempt it changes, or that attempt's variant id), ``approach``
+  (``<campaign>/<slug>``), ``mechanism`` (namespaced tags such as ``pipeline:tma-ws``), ``hypothesis`` (one line), ``panel``
+  (``{"line", "version", "attempt"?, "change"?}``), ``scheme``, ``schedule``, ``phase_groups`` (each chain phase, before,
+  gemm and after, as `verity_pouw.serving.GROUPS`), and ``gamma`` (γ at both FP32 prices when `Work.gamma` has one).
 """
 
 from __future__ import annotations
@@ -37,7 +50,7 @@ import string
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-VERSION = "v0.4"
+VERSION = "v0.5"
 VERIFIER_FIELDS = {
     "run": ("python", "run_dir", "run_id", "commit", "arm"),
     "shape": ("python", "run_dir", "run_id", "commit", "arm", "shape", "transcript", "dir"),
@@ -183,10 +196,12 @@ def check_verifier(name: str, build: dict) -> dict | None:
     if per not in VERIFIER_FIELDS:
         raise ArmError(f"arm {name}: verifier per {per!r} not in {sorted(VERIFIER_FIELDS)}")
     t = v.get("transcript")
-    if not isinstance(t, str) or not t or t.startswith("/") or ".." in t.split("/"):
-        raise ArmError(f"arm {name}: verifier transcript must be a path inside the run's directory, not {t!r}")
-    if not {"arm", "shape"} <= fields(t) <= {"arm", "shape"}:
-        raise ArmError(f"arm {name}: verifier transcript {t!r} must name {{arm}} and {{shape}}, and nothing else")
+    _check_transcript(name, "transcript", t)
+    control = v.get("control")
+    if control is not None:
+        _check_transcript(name, "control", control)
+        if control == t:
+            raise ArmError(f"arm {name}: verifier control must be another file than its transcript")
     cmds = v.get("commands")
     if not cmds or not all(isinstance(c, list) and c and all(isinstance(x, str) for x in c) for c in cmds):
         raise ArmError(f"arm {name}: verifier commands must be a non-empty list of non-empty argv lists of strings")
@@ -198,7 +213,14 @@ def check_verifier(name: str, build: dict) -> dict | None:
     if commit is not None and not (isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{7,40}", commit)):
         raise ArmError(f"arm {name}: verifier commit must be a git commit (7-40 hex characters), not {commit!r}")
     return {"per": per, "transcript": t, "commands": [list(c) for c in cmds], "commit": commit,
-            "name": v.get("name")}
+            "name": v.get("name"), "control": control}
+
+
+def _check_transcript(name: str, what: str, t: Any) -> None:
+    if not isinstance(t, str) or not t or t.startswith("/") or ".." in t.split("/"):
+        raise ArmError(f"arm {name}: verifier {what} must be a path inside the run's directory, not {t!r}")
+    if not {"arm", "shape"} <= fields(t) <= {"arm", "shape"}:
+        raise ArmError(f"arm {name}: verifier {what} {t!r} must name {{arm}} and {{shape}}, and nothing else")
 
 
 def fields(template: str) -> set[str]:

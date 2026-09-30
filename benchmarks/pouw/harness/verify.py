@@ -11,11 +11,24 @@ per-run command's exit code is recorded, and a nonzero one fails this step witho
 line accepted. Every command's output is kept under ``verify/`` in the run's directory.
 
   python verify.py RESULT_JSON [--run-id ID] [--commit SHA] [--out FILE]
+      [--tier 2a|2b] [--hypothesis TEXT] [--parent ART|VARIANT] [--outcome O --reason TEXT] [--by LANE]
+      [--publish [--push] [--store ROOT]] [--no-ledger]
 
 The run's directory is RESULT_JSON's (bench.py gives it to arms as ``ctx["out_dir"]``); --run-id defaults to
 RESEARCH_RUN_ID and --commit to RESEARCH_SOURCE_SHA. RESULT_JSON is rewritten in place unless --out names another file.
 Exit 0 only if every panel row has an accepted transcript and every command exited 0; 1 otherwise (each row says why);
 2 on a usage error.
+
+A verifier that declares a ``control`` (arm interface v0.5) must reject the negative control's transcript: its REJECT line
+becomes the row's ``negative_control`` and `panel.py append`'s ``--negative-control``; an accepted control rejects the row.
+Per shape, the commands run again on the control, and their exit codes don't fail the step.
+
+Then every arm row of every shape, verified or not, becomes one attempt record (`ledger.py`, ``kernel-attempt/v1``) under
+the run's ``ledger/``: ``--tier`` says what kind of run it was (2a a one-GPU screen, 2b a timed whole-node window; only 2b
+rows can stand on the panel's plots), ``--hypothesis`` is the attempt's one line, ``--parent`` the attempt it changes, and
+``--outcome``/``--reason`` the lane's verdict when it already has one. ``--publish`` puts the records into the evidence store
+(``--push``: onto its remote); a publish that fails is reported and doesn't change the exit code, and ``ledger.py publish
+RUN_DIR`` retries it from wherever the run's files are.
 """
 
 from __future__ import annotations
@@ -33,8 +46,9 @@ import time
 from pathlib import Path
 
 import arm as A
+import ledger as L
 
-VERSION = "verify/v0"
+VERSION = "verify/v1"
 EXIT_OK, EXIT_REJECTED, EXIT_USAGE = 0, 1, 2
 ACCEPT = re.compile(r"^\s*ACCEPT\b")
 REJECT = re.compile(r"^\s*REJECT\b")
@@ -71,7 +85,7 @@ class Runner:
     def __init__(self, run_dir: Path, log):
         self.dir, self.log, self.done = run_dir / "verify", log, {}
 
-    def run(self, argv: list[str]) -> dict:
+    def run(self, argv: list[str], control: bool = False) -> dict:
         key = tuple(argv)
         if key in self.done:
             return self.done[key]
@@ -85,7 +99,7 @@ class Runner:
         except OSError as ex:
             code, out, err = None, "", f"{type(ex).__name__}: {ex}\n"
         rec = {"n": n, "argv": argv, "exit": code, "seconds": round(time.monotonic() - t0, 3),
-               "stdout": f"verify/{n}.out", "stderr": f"verify/{n}.err", "lines": out.splitlines()}
+               "stdout": f"verify/{n}.out", "stderr": f"verify/{n}.err", "lines": out.splitlines(), "control": control}
         (self.dir / f"{n}.out").write_text(out)
         (self.dir / f"{n}.err").write_text(err)
         self.log(f"verify: exit {code}")
@@ -112,6 +126,21 @@ def judge(path: Path, recs: list[dict], per: str) -> dict:
     return out | {"accepted": True, "accept_line": accepts[0]}
 
 
+def judge_control(path: Path, recs: list[dict]) -> dict:
+    """The negative control's verdict: rejected only by a line starting REJECT that names its sha256, with no ACCEPT line
+    naming it; exit codes don't count (a verifier may exit nonzero for rejecting it)."""
+    if not path.is_file():
+        return {"rejected": False, "accepted": False, "why": f"no control transcript at {path}"}
+    sha = sha256_file(path)
+    named = [ln for r in recs for ln in r["lines"] if sha in SHA256.findall(ln)]
+    if any(ACCEPT.match(ln) for ln in named):
+        return {"rejected": False, "accepted": True, "sha256": sha, "why": "the verifier accepted the negative control"}
+    rejects = [ln for ln in named if REJECT.match(ln)]
+    if not rejects:
+        return {"rejected": False, "accepted": False, "sha256": sha, "why": f"no line starting REJECT names sha256:{sha}"}
+    return {"rejected": True, "accepted": False, "sha256": sha, "reject_line": rejects[0]}
+
+
 def fill(template: str, values: dict) -> str:
     return template.format(**values)
 
@@ -127,6 +156,8 @@ def panel_args(run_id: str, stream: str, p: dict) -> tuple[list[str] | None, str
         args += ["--decode-method", p["decode_method"]]
     args += ["--verifier-commit", p["verifier_commit"], "--verifier-accept", p["verifier_accept"],
              "--transcript", p["transcript"], "--sm-clock-arm", p["sm_clock_arm"], "--sm-clock-base", p["sm_clock_base"]]
+    if p.get("negative_control"):
+        args += ["--negative-control", p["negative_control"]]
     return args, None
 
 
@@ -137,7 +168,7 @@ def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log) ->
     for name, label, p in panel_rows(result):
         arm = (result.get("arms") or {}).get(name) or {}
         v = arm.get("verifier")
-        for k in ("verifier_commit", "verifier_accept", "transcript", "panel_args", "verification"):
+        for k in ("verifier_commit", "verifier_accept", "transcript", "negative_control", "panel_args", "verification"):
             p.pop(k, None)
         verdict: dict = {"arm": name, "shape": label}
         if v is None:
@@ -158,9 +189,24 @@ def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log) ->
                 if v["per"] == "shape" and recs[-1]["exit"] != 0:
                     break
             verdict |= judge(path, recs, v["per"]) | {"commit": c, "path": rel, "commands": [r["n"] for r in recs]}
+            if v.get("control"):
+                crel = fill(v["control"], {"arm": name, "shape": label})
+                cpath = run_dir / crel
+                crecs = recs
+                if v["per"] == "shape":
+                    cvals = values | {"transcript": str(cpath), "dir": str(cpath.parent)}
+                    crecs = [runner.run([fill(x, cvals) for x in cmd], control=True) for cmd in v["commands"]]
+                cv = judge_control(cpath, crecs)
+                verdict["control"] = {"path": crel, **{k: cv[k] for k in ("rejected", "why", "sha256") if k in cv}}
+                if cv["accepted"] and verdict["accepted"]:
+                    verdict |= {"accepted": False, "why": cv["why"]}
+                elif cv["rejected"]:
+                    verdict["negative_control"] = cv["reject_line"]
             if verdict["accepted"]:
                 p |= {"verifier_commit": c, "verifier_accept": verdict["accept_line"],
                       "transcript": f"{run_id}:{rel} sha256:{verdict['sha256']}"}
+                if verdict.get("negative_control"):
+                    p["negative_control"] = verdict["negative_control"]
                 args, why = panel_args(run_id, arm.get("stream", ""), p)
                 if args:
                     p["panel_args"] = args
@@ -169,8 +215,34 @@ def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log) ->
         p["verification"] = {k: verdict[k] for k in ("accepted", "why", "reject_line", "not_appendable") if k in verdict}
         rows.append(verdict)
     commands = [{k: v for k, v in r.items() if k != "lines"} for r in runner.done.values()]
-    ok = bool(rows) and all(r["accepted"] for r in rows) and all(c["exit"] == 0 for c in commands)
+    ok = bool(rows) and all(r["accepted"] for r in rows) and all(c["exit"] == 0 for c in commands if not c["control"])
     return {"interface": VERSION, "run_id": run_id, "commit": commit, "rows": rows, "commands": commands, "ok": ok}
+
+
+def ledger(result: dict, a: argparse.Namespace, log) -> dict:
+    """Writes the run's attempt records under ``ledger/`` and, with --publish, puts them into the store; never raises, so
+    the verification's own result and exit code stand whatever happens here."""
+    run_dir = a.result.resolve().parent
+    out: dict = {"kind": L.KIND, "tier": a.tier, "records": [], "published": None}
+    try:
+        recs = L.records(result, run_id=a.run_id, commit=a.commit, tier=a.tier, hypothesis=a.hypothesis, parent=a.parent,
+                         outcome=a.outcome, reason=a.reason, by=a.by)
+        out["records"] = [str(p.relative_to(run_dir)) for p in L.write(run_dir, recs)]
+        for r in recs:
+            if r["meta"]["missing"]:
+                log(f"ledger: {r['meta']['arm']} {r['meta']['shape']} lacks {', '.join(r['meta']['missing'])}")
+    except (L.LedgerError, OSError, ValueError, TypeError) as ex:
+        out["error"] = f"{type(ex).__name__}: {ex}"
+        log(f"ledger: no records: {out['error']}")
+        return out
+    if a.publish:
+        try:
+            out["published"] = L.publish(recs, store=L.open_store(a.store), by=a.by, push=a.push)
+            log(f"ledger: published {len(out['published'])} record(s) as {L.KIND}")
+        except Exception as ex:  # noqa: BLE001 - a store that can't take them leaves the records in ledger/ for later
+            out["publish_error"] = f"{type(ex).__name__}: {ex}"
+            log(f"ledger: not published ({out['publish_error']}); later: python ledger.py publish {run_dir} --by LANE")
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -179,6 +251,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID"))
     p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA"))
     p.add_argument("--out", type=Path, help="write the result here instead of rewriting RESULT_JSON")
+    g = p.add_argument_group("the attempt records (ledger.py)")
+    g.add_argument("--tier", choices=L.TIERS, default=os.environ.get("POUW_TIER", "2a"),
+                   help="2a: a one-GPU screen (the default); 2b: a timed whole-node window, the panel's measurements")
+    g.add_argument("--hypothesis", help="the attempt's one line: what it changes and what it should buy")
+    g.add_argument("--parent", help="the attempt it changes: its record's art: id, or its variant id")
+    g.add_argument("--outcome", choices=L.OUTCOMES, help="the lane's verdict, when it has one already (default: screened)")
+    g.add_argument("--reason", help="the outcome's one-line reason (required unless screened)")
+    g.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"),
+                   help="the lane (default: $GPU_LEASE_WHO)")
+    g.add_argument("--publish", action="store_true", default=os.environ.get("POUW_LEDGER_PUBLISH") == "1",
+                   help="put the records into the evidence store (default when POUW_LEDGER_PUBLISH=1)")
+    g.add_argument("--push", action="store_true", help="with --publish: push them onto the store's remote")
+    g.add_argument("--store", help="the store's root (default: $RESEARCH_STORE or ~/.research/store)")
+    g.add_argument("--no-ledger", action="store_true", help="write no records")
     a = p.parse_args(argv)
 
     def log(s: str) -> None:
@@ -189,13 +275,19 @@ def main(argv: list[str] | None = None) -> int:
             raise UsageError("no run id: pass --run-id or set RESEARCH_RUN_ID (the transcript must name its run)")
         if a.commit is not None and not COMMIT.fullmatch(a.commit):
             raise UsageError(f"--commit must be a git commit (7-40 hex characters), not {a.commit!r}")
+        if a.outcome not in (None, "screened") and not a.reason:
+            raise UsageError(f"--outcome {a.outcome} needs --reason (one line)")
+        L.one_line(a.hypothesis, "--hypothesis")
+        L.one_line(a.reason, "--reason")
         result = json.loads(a.result.read_text())
         started = now()
         rec = verify(result, a.result.resolve().parent, a.run_id, a.commit, log)
-    except (UsageError, A.ArmError, OSError, ValueError, KeyError, TypeError) as ex:
+    except (UsageError, A.ArmError, L.LedgerError, OSError, ValueError, KeyError, TypeError) as ex:
         log(f"verify: {type(ex).__name__}: {ex}")
         return EXIT_USAGE
     result["verification"] = rec | {"started": started, "finished": now()}
+    if not a.no_ledger:
+        result["ledger"] = ledger(result, a, log)
     out = a.out or a.result
     tmp = out.with_name(out.name + ".verify-tmp")
     tmp.write_text(json.dumps(result, indent=1, default=str))
@@ -207,11 +299,13 @@ def main(argv: list[str] | None = None) -> int:
                   f"--description DESCRIPTION {shlex.join(row['panel_args'])}")
         else:
             print(f"{r['arm']} {r['shape']}: not measured: {r.get('why') or r.get('not_appendable')}")
-    bad = [c for c in rec["commands"] if c["exit"] != 0]
+    bad = [c for c in rec["commands"] if c["exit"] != 0 and not c["control"]]
     for c in bad:
         print(f"verifier command exited {c['exit']}: {shlex.join(c['argv'])} (output: {c['stdout']}, {c['stderr']})")
     if not rec["rows"]:
         print("no panel rows in the result: nothing to verify")
+    for x in (result.get("ledger") or {}).get("published") or []:
+        print(f"{x['arm']} {x['shape']}: {L.KIND} {x['art']}")
     log(f"verify: {'ok' if rec['ok'] else 'NOT ok'} -> {out}")
     return EXIT_OK if rec["ok"] else EXIT_REJECTED
 

@@ -70,6 +70,9 @@ HASH = "hash"
 SHARING = "sharing"
 FOLD = "fold"
 PIPELINE = "pipeline"
+KERNEL_OUTCOME = "kernel_outcome"
+KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
+KERNEL_REASON = "kernel_reason"
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -251,6 +254,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SHARING, GROUP_RESULT, TEXT, "how operand rows are shared across VUs in-circuit: none, tile64x64"),
     _k(FOLD, GROUP_RESULT, INT, "columns folded per VU (the relation's -xN)"),
     _k(PIPELINE, GROUP_RESULT, INT, "prover pipeline depth (sub-batches in flight; 1 = sequential)"),
+    _k(KERNEL_OUTCOME, GROUP_RESULT, ENUM, "on a kernel-attempt/v1 record, by its lane: what became of the attempt (screened: recorded, "
+       "not judged; frontier: a distinct route kept for search; kept: adopted; dropped; voided: it didn't measure what it claims; "
+       "superseded); the latest label wins", KERNEL_OUTCOMES),
+    _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
     # verification
     _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
        "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),
