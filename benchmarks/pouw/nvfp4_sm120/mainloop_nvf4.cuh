@@ -123,8 +123,11 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
                        REGS_C = REGS_FIT < 256 ? REGS_FIT : 256;
   static constexpr uint32_t A_BYTES = TM * ROW, B_BYTES = BN * ROW, SFA_BYTES = TM * BK / 16, SFB_BYTES = BN * BK / 16,
                             SF_OFF = A_BYTES + B_BYTES, STAGE = SF_OFF + SFA_BYTES + SFB_BYTES;
-  static constexpr uint32_t SCRATCH = STAGES * STAGE;   // store_bf16's 512 bytes a consumer warp
-  static constexpr int SMEM = SCRATCH + 512 * NCW + 16 * STAGES;
+  // store_bf16's scratch: SLOTS 512-byte slots a consumer warp (as many as fit, up to 4)
+  static constexpr int SLOTS_FIT = (99 * 1024 - STAGES * STAGE - 16 * STAGES) / (512 * NCW), SLOTS = SLOTS_FIT < 4 ? SLOTS_FIT : 4;
+  static constexpr uint32_t SCRATCH = STAGES * STAGE, SCR_WARP = 512 * SLOTS;
+  static constexpr int SMEM = SCRATCH + SCR_WARP * NCW + 16 * STAGES;
+  static_assert(SLOTS >= 1, "a 512-byte scratch slot a consumer warp");
   static_assert(TM == 128 || TM == 256, "TM x 128 tiles of 64 x 64 warp tiles");
   static_assert(STAGE % 512 == 0 && A_BYTES % 512 == 0 && SF_OFF % 512 == 0, "boxes on SWIZZLE_64B's 512-byte period");
   static_assert(SMEM <= 99 * 1024, "sm_120's 99 KB a block");
@@ -136,7 +139,7 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
   NV_DEV explicit Mainloop(uint8_t* smem) {
     base = smem_u32(smem);
     if (base & 1023) __trap();
-    bars = base + SCRATCH + 512 * NCW;
+    bars = base + SCRATCH + SCR_WARP * NCW;
   }
   NV_DEV uint32_t full(int i) const { return bars + 8 * i; }
   NV_DEV uint32_t empty(int i) const { return bars + 8 * (STAGES + i); }
@@ -204,7 +207,7 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
     }
     sfa_off = SF_OFF + h * 1024 + (16 * q + 8 * (lane & 1) + (lane >> 2)) * 16;
     sfb_off = SF_OFF + SFA_BYTES + ((lane >> 2) + 16 * wn) * 16;
-    scr = base + SCRATCH + 512 * warp;
+    scr = base + SCRATCH + SCR_WARP * warp;
   }
   // the accumulator element e of block (mi, i, jl) sits at (row_of(mi, e), col_of(i, jl, e)) of the tile
   NV_DEV int row_of(int mi, int e) const { return 128 * (wm >> 1) + 16 * (wm & 1) + 32 * mi + (lane_ >> 2) + 8 * (e >> 1); }
@@ -300,27 +303,30 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
             *reinterpret_cast<float2*>(r + 32 * i + 8 * jl) = make_float2(acc[mi][i][jl][2 * hf], acc[mi][i][jl][2 * hf + 1]);
       }
   }
-  // BF16 (bf16x2), each 16 x 16 block (mi, i) of the warp's through its scratch: stmatrix writes the block's four 8 x 8
+  // BF16 (bf16x2), each 16 x 16 block (mi, i) of the warp's through a scratch slot: stmatrix writes the block's four 8 x 8
   // matrices as 16 rows of 32 bytes (chunk c of row r at c ^ (r / 4) % 2, bank-conflict free), then each lane reads 16 bytes
-  // of row lane / 2 and stores them, so a warp's store is 16 rows' 32 contiguous bytes
+  // of row lane / 2 and stores them, so a warp's store is 16 rows' 32 contiguous bytes; SLOTS blocks a round, so that their
+  // reads are in flight together
   NV_DEV void store_bf16(uint16_t* C, int ldc, int tm, int tn, const float (&acc)[4][4][2][4]) const {
     const int l = lane_, mm = l >> 3, r = (l & 7) + 8 * (mm >> 1);
     const uint32_t st_addr = scr + r * 32 + (((mm & 1) ^ ((r >> 2) & 1)) << 4);
     const uint32_t ld_addr = scr + (l >> 1) * 32 + (((l & 1) ^ ((l >> 3) & 1)) << 4);
     uint16_t* p = C + ((size_t)tm * TM + 128 * (wm >> 1) + 16 * (wm & 1) + (l >> 1)) * ldc + (size_t)tn * BN + 16 * wn + 8 * (l & 1);
 #pragma unroll
-    for (int mi = 0; mi < 4; mi++) {
-      uint16_t* row = p + (size_t)32 * mi * ldc;
+    for (int g0 = 0; g0 < 16; g0 += SLOTS) {
 #pragma unroll
-      for (int i = 0; i < 4; i++) {
-        const float(&x)[2][4] = acc[mi][i];
-        stsm4(st_addr, bf16x2(x[0][0], x[0][1]), bf16x2(x[1][0], x[1][1]), bf16x2(x[0][2], x[0][3]), bf16x2(x[1][2], x[1][3]));
-        __syncwarp();
-        uint32_t v[4];
-        lds128(v, ld_addr);
-        __syncwarp();
-        stg128(row + 32 * i, v);
+      for (int u = 0; u < SLOTS && g0 + u < 16; u++) {
+        const float(&x)[2][4] = acc[(g0 + u) / 4][(g0 + u) % 4];
+        stsm4(st_addr + 512 * u, bf16x2(x[0][0], x[0][1]), bf16x2(x[1][0], x[1][1]), bf16x2(x[0][2], x[0][3]),
+              bf16x2(x[1][2], x[1][3]));
       }
+      __syncwarp();
+      uint32_t v[SLOTS][4];
+#pragma unroll
+      for (int u = 0; u < SLOTS && g0 + u < 16; u++) lds128(v[u], ld_addr + 512 * u);
+#pragma unroll
+      for (int u = 0; u < SLOTS && g0 + u < 16; u++) stg128(p + (size_t)32 * ((g0 + u) / 4) * ldc + 32 * ((g0 + u) % 4), v[u]);
+      __syncwarp();
     }
   }
 };
