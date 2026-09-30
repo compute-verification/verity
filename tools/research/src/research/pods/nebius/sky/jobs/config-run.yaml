@@ -68,6 +68,11 @@ secrets:
 
 setup: |
   set -euo pipefail
+  # the task runs from its own copy of $SRC: the job user (uid 1000) can't write the synced tree, which is research's, and a
+  # later `research pods sync` of the same lane can't change the code under a running job (one copy per pod)
+  JOB_SRC=/workspace/jobs/src/$(hostname)
+  rm -rf "$JOB_SRC" && mkdir -p "$JOB_SRC" && cp -a "$SRC"/. "$JOB_SRC"/
+  export SRC=$JOB_SRC
   [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
   chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
@@ -78,6 +83,7 @@ setup: |
 
 run: |
   set -euo pipefail
+  export SRC=/workspace/jobs/src/$(hostname)
   cd "$SRC/integrations/vllm"
   export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
@@ -144,6 +150,11 @@ secrets:
 
 setup: |
   set -euo pipefail
+  # the task runs from its own copy of $SRC: the job user (uid 1000) can't write the synced tree, which is research's, and a
+  # later `research pods sync` of the same lane can't change the code under a running job (one copy per pod)
+  JOB_SRC=/workspace/jobs/src/$(hostname)
+  rm -rf "$JOB_SRC" && mkdir -p "$JOB_SRC" && cp -a "$SRC"/. "$JOB_SRC"/
+  export SRC=$JOB_SRC
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm
   cd "$SRC/integrations/vllm"
   flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf \
@@ -151,6 +162,7 @@ setup: |
 
 run: |
   set -euo pipefail
+  export SRC=/workspace/jobs/src/$(hostname)
   cd "$SRC/integrations/vllm"
   export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/tools/research/src
