@@ -15,8 +15,9 @@ nvf4_bench.cubin is nvf4_bench.cu built off the card:
            MODEL_SAMPLES coordinates (every row mod 16 and column mod 8) otherwise.  Needs numpy and verity importable.
    words   each of KERNELS' FP32-word kernel (_w) against nv_ref_words, word for word: full grid, 1 CTA, 3 CTAs, then
            GATE_REPEATS more full-grid runs.
-    bf16    each BF16 kernel (_b) against nv_ref_words rounded to BF16 (nv_to_bf16), and against each CUTLASS kernel's D and
-           cuBLASLt's (HARNESS_LIB, the harness's libpouw_harness.so), element for element.
+    bf16    each BF16 kernel (_b) against nv_ref_words rounded to BF16 (nv_to_bf16) at the words gate's grids (full, 1 CTA,
+           3 CTAs, GATE_REPEATS more full), and at full grid against each CUTLASS kernel's D and cuBLASLt's (HARNESS_LIB,
+           the harness's libpouw_harness.so), element for element.
    plain   each NVFP4 entry of each PLAIN_LIB (a library with the registry's ph_cutlass_* ABI alone, nvf4_plain.cu built with
            -DNVF4_PLAIN_ABI) against nv_ref_words rounded to BF16, once, and GATE_REPEATS more times at SHAPE.
    A kernel or PLAIN_LIB entry is timed only if every gate it is in passed at every shape and scale range, and the references
@@ -500,10 +501,19 @@ def gates(bench: Bench, harness: Harness | None, plains: list[Harness], m: int, 
             dev.free(buf)
             others[name] = {"error": str(e)}
     for name in kernels:
+        grids = {}
+        for label, grid, reps in (("full", None, 1), ("1", 1, 1), ("3", 3, 1), ("repeats", None, repeats)):
+            worst = 0
+            for _ in range(reps):
+                dev.fill(d16, 0xAB, m * n * 2)
+                bench.gemm(name + "_b", ops, d16, m, n, k, grid=grid)
+                dev.sync()
+                worst = max(worst, bench.diff(d16, ref16, m * n, 2))
+            grids[label] = worst
         dev.fill(d16, 0xAB, m * n * 2)
         bench.gemm(name + "_b", ops, d16, m, n, k)
         dev.sync()
-        rec = {"vs_ref": bench.diff(d16, ref16, m * n, 2)}
+        rec = {"vs_ref": max(max(grids.values()), bench.diff(d16, ref16, m * n, 2)), "grids": grids}
         for o, v in others.items():
             if "buf" in v:
                 rec["vs_" + o] = bench.diff(d16, v["buf"], m * n, 2)
