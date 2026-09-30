@@ -2,7 +2,8 @@
 # The host unit evaluation (IrUnitNet::eval64_flat) at the GEMM coordinates' largest statements: one attempt of
 # 71-gemm-slowdown.sh with the UNITPROF profile on (FC_UNIT_PROFILE), then its sweep again with every session building its own
 # witness (NOPIPE: FC_PIPELINE=0, out/nopipe/result.json), then the equality check (CHECK: FC_UNIT_CHECK runs eval64 beside the
-# one pass on every lane group and asserts they agree, its time in the UNITPROF lines). UNITPROF lines: out/unitprof.tsv.
+# one pass on every lane group, and packs the host slots unfused beside the fused ones, and asserts they agree; eval64's time in
+# the UNITPROF lines). FC_UNIT_FUSED=0: the host slots packed from z, a, b vectors. UNITPROF lines: out/unitprof.tsv.
 # Run from the verity tree (research run --cwd source), in a Kueue job (FLOCK_WORK under /workspace/jobs).
 # env: FLOCK_WORK=/workspace/jobs/flock-v2  SEED_CACHE= (a stage cache to hard-link from: statements of the same staging code)
 #      TORCH= (a torch venv for the native GEMMs)  NOPIPE=1  CHECK=1  and any KEY=VALUE for 71-gemm-slowdown.sh
