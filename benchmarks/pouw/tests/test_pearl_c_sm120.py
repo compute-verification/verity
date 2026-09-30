@@ -534,7 +534,8 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert {(p[0], K, M), (p[1], K, N)} <= maps, name
                 assert not p[5] or {(p[5], 128, M), (p[6], 128, N)} <= maps, name
         if name in ("words", "words_u"):
-            assert g[0] == i[0] // 16 and ev["block"] == 128
+            warps = ev["block"] // 32
+            assert ev["block"] % 32 == 0 and g[0] == -(-(i[0] // 16 * i[1] // 8) // warps), (g, ev["block"])
 
 
 # ---- the bench arm (pearlc_arm.py) against the harness's arm interface v0 ---------------------------------------------------

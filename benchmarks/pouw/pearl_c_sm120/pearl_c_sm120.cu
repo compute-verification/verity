@@ -43,6 +43,7 @@ DEV void ldsm4(uint32_t* r, uint32_t addr) {
                : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3]) : "r"(addr));
 }
 DEV uint32_t ld32(const uint8_t* p) { return *reinterpret_cast<const uint32_t*>(p); }
+DEV uint2 ld64(const uint8_t* p) { return *reinterpret_cast<const uint2*>(p); }
 
 // d += a b: one E4M3 atom, k = 32 (A: rows g, g + 8 x k 4t.., 16 + 4t..; B: column g x k 4t.., 16 + 4t..; D: rows g, g + 8 x
 // columns 2t, 2t + 1, with g = lane / 4, t = lane % 4)
@@ -489,23 +490,27 @@ GEMM_HOT(gemm_pearlc_d_hu, M_PEARLC, 64, 64)
 // The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8
 // output tile over all of K, the chain in the GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0),
 // fragments loaded straight from global memory through a ring of D atoms in registers, so D atoms' loads are in flight
-// behind the chain.  A block's 4 warps are one m16 row's 4 n8 tiles and share its A rows.  p0 A (M x K), p1 B (N x K), p2 out
-// (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8, 32 D)
+// behind the chain.  A block's blockDim / 32 warps are consecutive tiles (run.py launches one warp a block, a tile an SM:
+// the loads, 8 rows an instruction, are the bound).  Lane q's k positions 4q.., 16 + 4q.. of an atom are its stored bytes
+// 8q.. and 8q + 4.. (one 8-byte load a row), on A and on B alike: the same permutation within each aligned 32 on both
+// operands, so every product and group of 32 is the natural order's.  p0 A (M x K), p1 B (N x K), p2 out (M x N FP32); i0 M,
+// i1 N, i2 K (multiples of 16, 8, 32 D)
 template <int G> DEV void words_body(const Args& a) {
   constexpr int D = 16;
   static_assert(D % (G > 0 ? G : 1) == 0, "the ring holds whole promotion windows");
   const int M = a.i[0], N = a.i[1], K = a.i[2], tn = N / 8, lane = threadIdx.x % 32, g = lane / 4, q = lane % 4;
-  const int w = blockIdx.x * 4 + threadIdx.x / 32;
+  const int w = blockIdx.x * (blockDim.x / 32) + threadIdx.x / 32;
   if (w >= M / 16 * tn) return;
   const int r0 = w / tn * 16, c0 = w % tn * 8, J = K / 32;
-  const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 4 * q;
+  const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 8 * q;
   const uint8_t* A1 = A0 + (size_t)8 * K;
-  const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 4 * q;
+  const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 8 * q;
   uint32_t fa[D][4], fb[D][2];
   auto load = [&](int j, uint32_t* x, uint32_t* y) {
     const int kk = 32 * j;
-    x[0] = ld32(A0 + kk); x[1] = ld32(A1 + kk); x[2] = ld32(A0 + kk + 16); x[3] = ld32(A1 + kk + 16);
-    y[0] = ld32(B0 + kk); y[1] = ld32(B0 + kk + 16);
+    const uint2 a0 = ld64(A0 + kk), a1 = ld64(A1 + kk), b0 = ld64(B0 + kk);
+    x[0] = a0.x; x[1] = a1.x; x[2] = a0.y; x[3] = a1.y;
+    y[0] = b0.x; y[1] = b0.y;
   };
 #pragma unroll
   for (int d = 0; d < D; d++) load(d, fa[d], fb[d]);

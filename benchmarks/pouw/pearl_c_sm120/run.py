@@ -278,6 +278,7 @@ def cdiv(a: int, b: int) -> int:
 
 
 TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
+WORDS_WARPS = 1                                # the words kernel's warps (m16 x n8 tiles) a block: a tile an SM at decode
 #: the forms of the row leaves and of the trees, all writing the same bytes: ALT_FORMS, hash_rows_w (a warp a row) and
 #: hash_nodes a level a launch down to hash_tree_small, are the call's unless PEARLC_A_FORMS names another; their steps and
 #: buffers are those the vLLM path (#540) runs by name.  `p` is h1_rows_p (h1_sm120.cuh: hash_rows_w's loads under
@@ -551,13 +552,14 @@ class Pipeline:
         """The chain GEMMs' H (p12) under v2-hot, else nothing."""
         return {"hot": self.b["hot_a"]} if self.hot else {}
 
-    def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
+    def words(self, a: str, b: str, M: int, out: str, warps: bool = False, per_block: int = WORDS_WARPS) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
-        tile, a block per m16 row."""
+        tile, `per_block` warps a block."""
         if M % BM == 0 and not warps:
             self.gemm("gemm_words" + self.wsuffix, a, b, M, 32, out=(out,))
         else:
-            self.dev.launch("words" + self.wsuffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
+            self.dev.launch("words" + self.wsuffix, cdiv(M // 16 * 4, per_block), 32 * per_block, p=(self.b[a], self.b[b], self.b[out]),
+                            i=(M, 32, self.k))
 
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
@@ -974,6 +976,9 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             alt.rows_form, alt.tree_form = forms
             out["alt_ms"].update({f"{nm}@{','.join(forms)}": round(statistics.median(dev.timed(f, reps)), 4)
                                   for nm, p, f in alt.steps() if p in ("commit", "hashing")})
+        if pipe.bm == BM_D:
+            out["af_ms_by_warps_a_block"] = {w: round(statistics.median(dev.timed(
+                lambda w=w: pipe.words("at", "fbT32", m, "af", warps=True, per_block=w), reps)), 4) for w in (1, 2, 4)}
     return out
 
 
