@@ -15,24 +15,27 @@
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
+// z_lincheck: byte b of stripe s's word w holds bit b of word w in each of the stripe's 8 rows (bit r from row r). Eight threads
+// share a word, each writing 16 of its 128 bytes as two 8x8 bit transposes, so a warp stores 512 contiguous bytes.
 __global__ void chunk_zlin_transpose(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
-    const long long wpr = (1LL << k_log) / 128;   // F128 words per block row
-    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_stripes * wpr;
+    const int wl = k_log - 7;
+    const long long wpr = 1LL << wl;   // F128 words per block row
+    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_stripes * wpr * 8;
          t += (long long)gridDim.x * blockDim.x) {
-        long long s = t / wpr, w = t % wpr;
-        F128 v[8];
+        const long long i = t >> 3, s = i >> wl, w = i & (wpr - 1);
+        const int q = (int)(t & 7), sh = 16 * (q & 3);
+        const u64* zw = reinterpret_cast<const u64*>(z) + (q >> 2);
+        u64 x0 = 0, x1 = 0;
 #pragma unroll
-        for (int r = 0; r < 8; r++) v[r] = z[(8 * s + r) * wpr + w];
-        uint8_t* o = out + (s << k_log) + w * 128;
-        for (int b = 0; b < 128; b++) {
-            uint8_t byte = 0;
-#pragma unroll
-            for (int r = 0; r < 8; r++) {
-                u64 word = b < 64 ? v[r].lo : v[r].hi;
-                byte |= (uint8_t)(((word >> (b & 63)) & 1) << r);
-            }
-            o[b] = byte;
+        for (int r = 0; r < 8; r++) {
+            const u64 word = zw[2 * ((8 * s + r) * wpr + w)];
+            x0 |= ((word >> sh) & 0xFFull) << (8 * r);
+            x1 |= ((word >> (sh + 8)) & 0xFFull) << (8 * r);
         }
+        x0 = b3_transpose8(x0);
+        x1 = b3_transpose8(x1);
+        reinterpret_cast<uint4*>(out + (s << k_log) + w * 128)[q] =
+            make_uint4((uint32_t)x0, (uint32_t)(x0 >> 32), (uint32_t)x1, (uint32_t)(x1 >> 32));
     }
 }
 
