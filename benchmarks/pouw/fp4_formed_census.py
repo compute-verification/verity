@@ -152,7 +152,8 @@ def main(argv=None) -> None:
     ap.add_argument("--fmt", choices=["nvf4", "mxf4"], default="nvf4")
     ap.add_argument("--rows", type=int, default=128)
     ap.add_argument("--witness-rows", type=int, default=2)
-    ap.add_argument("--fp32-op", type=float, default=8.46, help="a CUDA-core correction's price per changed code, FP4 MACs")
+    ap.add_argument("--fp32-op", type=float, default=16.92,
+                    help="a CUDA-core correction's price per changed code, FP4 MACs (the measured FFMA's 8.46 FP8 MACs x 2)")
     ap.add_argument("--partner-blocks", type=int, default=64)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="")
