@@ -57,16 +57,23 @@ def rotate(X, seed):
     return Y / np.sqrt(k) * d2
 
 
-_HAAR = {}
+_HAAR = {"cache": None}
 
 
 def haar(k, seed):
     """A keyed Haar-random orthogonal k x k matrix (QR of a Gaussian, signs fixed): rung 3's dense rotation. A randomized
     Hadamard keys only signs, so rows the registrant makes sparse at multiples of 128 come out with one magnitude per
-    128-group."""
+    128-group. Kept in FP32 beside the --out directory, so each chunk doesn't redo the QR (minutes at k = 16,384)."""
     if k not in _HAAR:
-        q, r = np.linalg.qr(np.random.default_rng([seed, k, 0x48414152]).standard_normal((k, k)))
-        _HAAR[k] = q * np.sign(np.diag(r))
+        p = _HAAR["cache"] / f"haar_k{k}_s{seed}.npy" if _HAAR["cache"] else None
+        if p is not None and p.exists():
+            _HAAR[k] = np.load(p).astype(np.float64)
+        else:
+            q, r = np.linalg.qr(np.random.default_rng([seed, k, 0x48414152]).standard_normal((k, k)))
+            _HAAR[k] = (q * np.sign(np.diag(r))).astype(np.float32).astype(np.float64)
+            if p is not None:
+                np.save(p.with_name(p.stem + ".tmp.npy"), _HAAR[k].astype(np.float32))
+                os.replace(p.with_name(p.stem + ".tmp.npy"), p)
     return _HAAR[k]
 
 
@@ -148,6 +155,8 @@ def main():
     C.set_atom("sm120")
     t0 = time.time()
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
+    _HAAR["cache"] = out.parent / "cache"             # beside --out, which submit_job.sh copies into the run
+    _HAAR["cache"].mkdir(exist_ok=True)
     fams = [f for f in GROUPS[args.group] if not args.families or f in args.families.split(",")]
     cells = [(f, int(k)) for k in args.ks.split(",") for f in fams]
     name = lambda f, k: f"{f}_k{k}"  # noqa: E731
