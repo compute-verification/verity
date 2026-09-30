@@ -30,7 +30,12 @@ ML_DEV void mbar_init(uint32_t bar, uint32_t count) {
 ML_DEV void mbar_expect_tx(uint32_t bar, uint32_t bytes) {
   asm volatile("mbarrier.arrive.expect_tx.shared::cta.b64 _, [%0], %1;" ::"r"(bar), "r"(bytes) : "memory");
 }
-ML_DEV void mbar_arrive(uint32_t bar) { asm volatile("mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(bar) : "memory"); }
+// a consumer's release of a stage.  Its ldmatrix reads (generic proxy) must be done before the TMA that refills the stage
+// (async proxy) writes it, and the arrive alone doesn't order them: without the fence an arrive overtakes an ldmatrix still
+// queued, and the refill lands under it (seen on the device as one 16-byte row of a fragment from the next tile).
+ML_DEV void mbar_release(uint32_t bar) {
+  asm volatile("fence.proxy.async.shared::cta;\n mbarrier.arrive.shared::cta.b64 _, [%0];" ::"r"(bar) : "memory");
+}
 ML_DEV void mbar_wait(uint32_t bar, uint32_t parity) {
   asm volatile(
       "{\n .reg .pred p;\n ML_WAIT_%=:\n mbarrier.try_wait.parity.shared::cta.b64 p, [%0], %1;\n @!p bra ML_WAIT_%=;\n}\n" ::"r"(bar),
@@ -186,8 +191,8 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
       }
   }
   // one stage: FIRST, the tile's first (no window before it); LAST, its last (nothing to load after it).  The stage is released
-  // after the MMAs that read its last fragments have issued, so every ldmatrix of it has completed (LATE; !LATE releases it
-  // with those ldmatrix still in flight)
+  // after the MMAs that read its last fragments (LATE) or right after its last ldmatrix (!LATE); mbar_release orders it after
+  // them either way
   template <bool FIRST, bool LAST, bool LATE>
   ML_DEV void stage_body(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
     const uint32_t sb = stage(s), done = empty(s);
@@ -197,14 +202,14 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
     mma<false, false>(acc, total, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
     mma<false, false>(acc, total, fa[0], fb[0]);
-    if (!LATE) mbar_arrive(done);
+    if (!LATE) mbar_release(done);
     advance();
     if (!LAST) {
       mbar_wait_warp(full(s), ph);
       load(fa[0], fb[0], stage(s), 0);
     }
     mma<false, false>(acc, total, fa[1], fb[1]);
-    if (LATE) mbar_arrive(done);
+    if (LATE) mbar_release(done);
   }
   // U: stages per K-loop iteration
   template <int U = 1, bool LATE = true> ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
@@ -258,9 +263,9 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
     static_assert(MI == APS, "one row block per atom of a stage");
     const int sp = s == 0 ? STAGES - 1 : s - 1, sn = s + 1 == STAGES ? 0 : s + 1;
     skew_row<J, FIRST, LAST>(MI - 1, acc, total, fa, fb);   // first: the next atom's B fragments take its slot
-    if (J == 2 && !FIRST) mbar_arrive(empty(sp));
+    if (J == 2 && !FIRST) mbar_release(empty(sp));
     if (LAST && J == 6) {
-      mbar_arrive(empty(s));
+      mbar_release(empty(s));
       advance();
     }
     if (J == 3 && !LAST) mbar_wait_warp(full(sn), sn == 0 ? ph ^ 1 : ph);
@@ -327,7 +332,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
     return stage(s);
   }
   ML_DEV void tail_release() {
-    mbar_arrive(empty(s));
+    mbar_release(empty(s));
     advance();
   }
 };
