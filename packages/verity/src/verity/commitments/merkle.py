@@ -65,9 +65,23 @@ def _uint(value: int) -> bytes:
     return value.to_bytes(max(1, (value.bit_length() + 7) // 8), "big")
 
 
-def _hash(tag: bytes, *parts: bytes, hash: str = "sha256") -> bytes:
-    message = _FRAME + len(tag).to_bytes(4, "big") + tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+def _message(tag: bytes, *parts: bytes) -> bytes:
+    return _FRAME + len(tag).to_bytes(4, "big") + tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+
+
+def _digest(message: bytes, hash: str) -> bytes:
     return _blake3.blake3(message) if hash in _BLAKE3_FRAMES else sha(hash)(message).digest()
+
+
+def _hash(tag: bytes, *parts: bytes, hash: str = "sha256") -> bytes:
+    return _digest(_message(tag, *parts), hash)
+
+
+def domain_message(binding: bytes, owner: int, positions: bytes, count: int, hash: str = "sha256") -> bytes:
+    """The framed message whose digest under ``hash``'s frame is `CommitmentDomain.domain_id`, ``positions`` being the
+    positions' identity bytes: for a caller that hashes it with another implementation of the same hash."""
+
+    return _message(b"domain/b3s" if hash == "blake3-s256" else b"domain", binding, _uint(owner + 2), positions, _uint(count))
 
 
 @lru_cache(maxsize=4096)
@@ -208,8 +222,7 @@ class CommitmentDomain:
         object.__setattr__(
             self,
             "domain_id",
-            _hash(b"domain/b3s" if self.hash == "blake3-s256" else b"domain", self.binding, _uint(self.owner + 2), positions,
-                  _uint(self.positions.count), hash=self.hash),
+            _digest(domain_message(self.binding, self.owner, positions, self.positions.count, self.hash), self.hash),
         )
 
     @property

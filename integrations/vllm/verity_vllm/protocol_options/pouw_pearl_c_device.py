@@ -55,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.commitments import RangeIndexedDomain
-from verity.commitments.merkle import _FRAME, _uint
+from verity.commitments.merkle import domain_message
 from verity_pouw.audit import Epoch, Workload, activation_binding, commitment_hash, rows_domain, transcript_domain
 from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
@@ -258,11 +258,7 @@ def _screen_kernel():
 
 
 def fused_screen_available() -> bool:
-    try:
-        import triton  # noqa: F401
-    except ImportError:
-        return False
-    return True
+    return importlib.util.find_spec("triton") is not None
 
 
 def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
@@ -353,18 +349,13 @@ def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, ha
 
 
 class _Keys:
-    """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `CommitmentDomain.domain_id`'s framed message hashed
-    natively (tagged ``domain``, or ``domain/b3s`` under frame-b3s), and unit's label hash is a constant.  The native path
-    is held to `call_keys` once at construction, so a tree hash it doesn't frame (or a framing that moved) fails there.
-    Without the package, `call_keys` itself."""
+    """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `merkle.domain_message` hashed natively, and unit's
+    label hash is a constant.  The native path is held to `call_keys` once at construction, so a tree hash whose domain id
+    isn't BLAKE3 of that message fails there.  Without the package, `call_keys` itself."""
 
     def __init__(self, fixture: Any, salt: bytes, hash: str):
-        try:
-            import blake3 as native
-        except ImportError:
-            native = None
+        native = importlib.import_module("blake3") if importlib.util.find_spec("blake3") is not None else None
         self.native, self.fixture, self.salt, self.hash = native, fixture, salt, hash
-        self.tag = b"domain/b3s" if hash == "blake3-s256" else b"domain"
         self.label = fixture.unit_block(salt, bytes(32), 0)[-32:]
         self.positions: dict[int, bytes] = {}
         if native is not None and self(bytes(32), 0, ROW_ALIGN) != call_keys(fixture, salt, bytes(32), 0, ROW_ALIGN, hash):
@@ -376,8 +367,7 @@ class _Keys:
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = bytes.fromhex(RangeIndexedDomain(m16).identity_digest)
-        parts = (activation_binding(self.salt, index), _uint(index + 2), pos, _uint(m16))
-        msg = _FRAME + len(self.tag).to_bytes(4, "big") + self.tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, self.hash)
         return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
 
 
@@ -430,7 +420,7 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, variant: str = "sm120", hashing: str = "h1") -> Any:
+              m_real: int | None = None, *, variant: str, hashing: str) -> Any:
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "t_row": 0, "t_tile": 0, "unit": 0, **keys}
     return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, hashing=hashing)
 
