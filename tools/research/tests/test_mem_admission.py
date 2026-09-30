@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
 
 import pytest
@@ -17,6 +16,7 @@ from research import remote
 from research import runs as R
 from research.cli import main
 from research.store import attempt as A
+from waits import FakeClock, Gate, wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -76,11 +76,11 @@ def test_without_a_finite_cgroup_limit_the_reading_is_meminfo(machine):
     assert r["cgroup"] is None and r["limit"] == 924131384 * 1024 and r["in_use"] == (924131384 - 731179236) * 1024
 
 
-def _request(machine, run_id: str, gb: float, *, sleep: float = 0.0, wait: float = 0.0) -> Path:
+def _request(machine, run_id: str, gb: float, *, gate: Gate | None = None, wait: float = 0.0) -> Path:
     root = machine["root"]
     (root / "requests" / run_id).mkdir(parents=True)
     req = {"schema": remote.REQUEST_SCHEMA, "run_id": run_id, "runs_root": str(root / "runs"), "tool": SRC, "python": PY, "cwd": str(root),
-           "env": {}, "harness_args": ["--stage", "t", "--no-sampler"], "command": [PY, "-c", f"import time; time.sleep({sleep})"],
+           "env": {}, "harness_args": ["--stage", "t", "--no-sampler"], "command": [PY, "-c", Gate.WAIT, str(gate.path)] if gate else [PY, "-c", "pass"],
            "exclusive": False, "mem_gb": gb, "mem_wait_s": wait, "ramlock_dir": str(machine["ram"]),
            "cost": {"provider": "runpod", "pod_id": "p", "rate_usd_per_hour": 0.1, "rate_observed_utc": "t", "currency": "USD", "reason": None},
            "remote": {"machine": "m", "pod_id": "p", "root": str(root)}}
@@ -90,33 +90,29 @@ def _request(machine, run_id: str, gb: float, *, sleep: float = 0.0, wait: float
 
 
 def _wait(run_dir: Path) -> dict:
-    deadline = time.time() + 30
-    while time.time() < deadline:
-        s = R.summarize(run_dir)
-        if s["state"] in R.TERMINAL:
-            return s
-        time.sleep(0.1)
-    pytest.fail(f"run did not finish: {R.summarize(run_dir)}")
+    wait_runner(run_dir)
+    return R.summarize(run_dir)
 
 
-def test_launch_request_admits_reserves_refuses_by_name_and_the_runner_releases(machine):
-    first = remote.launch_request(_request(machine, "big", 40, sleep=2.0))
-    assert first["started"], first
-    res = machine["ram"] / "research-big.json"
-    doc = json.loads(res.read_text())
-    assert doc["owner"] == "research" and doc["gb"] == 40 and doc["pid"] == first["runner_pid"] and doc["run_id"] == "big"
+def test_launch_request_admits_reserves_refuses_by_name_and_the_runner_releases(machine, tmp_path):
+    gate = Gate(tmp_path / "gate")                                 # "big" runs until the test has seen "more" refused
+    try:
+        first = remote.launch_request(_request(machine, "big", 40, gate=gate))
+        assert first["started"], first
+        res = machine["ram"] / "research-big.json"
+        doc = json.loads(res.read_text())
+        assert doc["owner"] == "research" and doc["gb"] == 40 and doc["pid"] == first["runner_pid"] and doc["run_id"] == "big"
 
-    second = remote.launch_request(_request(machine, "more", 20))
-    assert second["started"] is False and second["fault"] == "MemoryNotAvailable"
-    refused = json.loads((machine["root"] / "runs" / "more" / "refused.json").read_text())
-    assert refused["fault"] == "MemoryNotAvailable" and "asked 20 GB; available 10 GB" in refused["reason"] and "research-big.json 40/40 GB" in refused["reason"]
-    assert not (machine["ram"] / "research-more.json").exists(), "a refused run holds no reservation"
-
-    run_dir = machine["root"] / "runs" / "big"
-    assert _wait(run_dir)["state"] == "done", (run_dir / "launcher.log").read_text()
-    deadline = time.time() + 10
-    while res.exists() and time.time() < deadline:
-        time.sleep(0.1)
+        second = remote.launch_request(_request(machine, "more", 20))
+        assert second["started"] is False and second["fault"] == "MemoryNotAvailable"
+        refused = json.loads((machine["root"] / "runs" / "more" / "refused.json").read_text())
+        assert refused["fault"] == "MemoryNotAvailable" and "asked 20 GB; available 10 GB" in refused["reason"] and "research-big.json 40/40 GB" in refused["reason"]
+        assert not (machine["ram"] / "research-more.json").exists(), "a refused run holds no reservation"
+        gate.release()
+        run_dir = machine["root"] / "runs" / "big"
+        assert _wait(run_dir)["state"] == "done", (run_dir / "launcher.log").read_text()
+    finally:
+        gate.close()
     assert not res.exists(), "the runner removes its reservation at exit"
     mem = json.loads((run_dir / "job.json").read_text())["run"]["remote"]["mem"]
     assert mem["gb"] == 40 and mem["available_gb"] == 50 and mem["reservation"] == str(res)
@@ -127,15 +123,17 @@ def test_launch_request_admits_reserves_refuses_by_name_and_the_runner_releases(
     _wait(machine["root"] / "runs" / "after")
 
 
-def test_mem_wait_admits_when_memory_frees_up_within_the_wait(machine):
+def test_mem_wait_admits_when_memory_frees_up_within_the_wait(machine, monkeypatch):
+    clock = FakeClock()
+    monkeypatch.setattr(M, "time", clock.module)
     blocker = machine["ram"] / "someone.json"
     blocker.write_text(json.dumps({"owner": "someone", "gb": 45}))
-    threading.Timer(0.5, blocker.unlink).start()
-    out = M.admit(20, ramlock_dir=machine["ram"], run_id="w", run_dir=machine["root"] / "w", wait_s=10, poll_s=0.1)
-    assert out["waited_s"] >= 0.4 and out["available_gb"] == 50
+    clock.at(5.0, blocker.unlink)
+    out = M.admit(20, ramlock_dir=machine["ram"], run_id="w", run_dir=machine["root"] / "w", wait_s=10, poll_s=1)
+    assert out["waited_s"] == 5.0 and out["available_gb"] == 50
     blocker.write_text(json.dumps({"owner": "someone", "gb": 45}))
-    with pytest.raises(remote.MemoryNotAvailable, match="waited"):
-        M.admit(20, ramlock_dir=machine["ram"], run_id="w2", run_dir=machine["root"] / "w2", wait_s=0.3, poll_s=0.1)
+    with pytest.raises(remote.MemoryNotAvailable, match="waited 3s"):
+        M.admit(20, ramlock_dir=machine["ram"], run_id="w2", run_dir=machine["root"] / "w2", wait_s=3, poll_s=1)
 
 
 def test_two_simultaneous_admissions_cannot_both_take_the_last_memory(machine):

@@ -1,8 +1,8 @@
 """`TargetProfile.weight_only_calls` (the norm-chain rules of `vllm_bindings`): a Program of several forwards issues GemmaRMSNorm's
-`weight.float() + 1.0` (`AddScalarBf16_v1{N,C=1}`) at every forward by default, as vLLM executes it, and once per norm weight under
-`"once"`, every later forward reading that value.  Unset and `"per-forward"` derive the same Program; `"once"` differs only by the
-repeated adds, its outputs are bit-equal to the per-forward Program's on edge words (NaN, +-inf, +-0, subnormal weights and activations,
-w = -1), and `query.cross_call` finds no recompute in it (per-forward: one Call-level class, the repeated adds).
+`weight.float() + 1.0` (`AddScalarBf16_v1{N,C=1}`) once per norm weight by default (`"once"`), every later forward reading that value, and
+at every forward under a declared `"per-forward"`, as vLLM executes it.  Unset and `"once"` derive the same Program; `"once"` differs from
+`"per-forward"` only by the repeated adds, its outputs are bit-equal to the per-forward Program's on edge words (NaN, +-inf, +-0, subnormal
+weights and activations, w = -1), and `query.cross_call` finds no recompute in it (per-forward: one Call-level class, the repeated adds).
 
 Run (pod venv): `CUDA_VISIBLE_DEVICES="" PYTHONPATH=. python -m pytest -q -p no:cacheprovider tests/program/test_weight_only_once.py`
 """
@@ -66,15 +66,16 @@ def _rows(rep) -> dict:
                      for k, n in enumerate(rep.program.fn.body.nodes)]}
 
 
-def test_unset_and_per_forward_derive_the_same_program_with_an_add_per_forward():
+def test_unset_and_once_derive_the_same_program_and_per_forward_adds_per_forward():
     _m, unset = _derived(None)
+    _m, once = _derived("once")
+    assert program_digest(unset.program) == program_digest(once.program) and _emitted(unset) == _emitted(once)
     _m, per = _derived("per-forward")
-    assert program_digest(unset.program) == program_digest(per.program) and _emitted(unset) == _emitted(per)
-    assert _specs(unset).count(ADD) == 2 * FORWARDS and _emitted(unset).count(f"{ADD} x1") == 2 * FORWARDS
+    assert _specs(per).count(ADD) == 2 * FORWARDS and _emitted(per).count(f"{ADD} x1") == 2 * FORWARDS
 
 
 def test_once_issues_the_add_once_per_norm_weight():
-    _m, per = _derived(None)
+    _m, per = _derived("per-forward")
     _m, once = _derived("once")
     assert _specs(once).count(ADD) == 2 and _emitted(once).count(f"{ADD} x1") == 2
     reads = [e for e in _emitted(once) if e.startswith(f"{ADD} x0 (reads ")]
@@ -97,7 +98,7 @@ def test_once_is_bit_equal_on_edge_words():
         wb = _bf16(EDGE_BF16[::-1] if k == 0 else [EDGE_BF16[i] if rng.random() < 0.5 else int(rng.integers(0, 1 << 16)) for i in range(H)])
         xs = [_bf16([EDGE_BF16[(i + 3 * j + k) % len(EDGE_BF16)] if (i + j) % 3 else int(rng.integers(0, 1 << 16)) for i in range(2 * H)]).reshape(2, H)
               for j in range(FORWARDS)]
-        m, per = _derived(None, (wa, wb))
+        m, per = _derived("per-forward", (wa, wb))
         _m, once = _derived("once", (wa, wb))
         got_per, got_once = _evaluate(per, m, xs), _evaluate(once, m, xs)
         assert got_per.shape == got_once.shape == (FORWARDS * 2 * H,)
@@ -106,7 +107,7 @@ def test_once_is_bit_equal_on_edge_words():
 
 def test_cross_call_finds_the_repeated_adds_only_per_forward():
     X = pytest.importorskip("verity_vllm.query.cross_call")
-    _m, per = _derived(None)
+    _m, per = _derived("per-forward")
     _m, once = _derived("once")
     r = X.check_program(_rows(per), strict=False)
     (a,) = r["recomputes"]
@@ -117,9 +118,9 @@ def test_cross_call_finds_the_repeated_adds_only_per_forward():
 
 def test_the_knob_is_a_declared_static_that_keeps_undeclared_digests():
     e = TargetProfile()
-    assert "weight_only_calls" not in e.to_json() and e.effective_weight_only_calls() == "per-forward"
-    o = e.with_overrides(weight_only_calls="once")
-    assert o.to_json()["weight_only_calls"] == "once" and o.digest() != e.digest() and TargetProfile.from_json(o.to_json()) == o
+    assert "weight_only_calls" not in e.to_json() and e.effective_weight_only_calls() == "once"
+    o = e.with_overrides(weight_only_calls="per-forward")
+    assert o.to_json()["weight_only_calls"] == "per-forward" and o.digest() != e.digest() and TargetProfile.from_json(o.to_json()) == o
     assert o.execution_label == e.execution_label and o.engine_args() == e.engine_args()          # not another execution
     for bad in ("twice", "ONCE", True, 1):
         with pytest.raises(ValueError, match="weight_only_calls"):

@@ -32,8 +32,14 @@ use serde_json::{Value, json};
 pub const STREAM_MASK: u64 = 1;
 pub const STREAM_PAD: u64 = 2;
 pub const STREAM_SALT: u64 = 3;
+/// An injected seed's coin-tree nonce (`coin_tree::SCHEME`); a proving build draws the nonce from the OS.
+pub const STREAM_COIN_NONCE: u64 = 8;
 /// Bytes per `hm96-sha512/v1` leaf salt.
 pub const SALT_BYTES: usize = 192;
+/// A session of several tables gives each its own randomness (the public-circuit ZK proof's §2.2 and gap 1): table `j` reads
+/// stream `purpose` at ChaCha20 stream `purpose | j << TABLE_SHIFT`, and its salt trees are ids `j << TABLE_SHIFT` (level 0)
+/// and up, below the next table's. Table 0's addresses are a one-table session's.
+pub const TABLE_SHIFT: u32 = 32;
 
 /// The prover's seed: an explicit input of every proof, so the prover is a function of (statement, witness, seed, verifier coins).
 /// A proving build can only draw it from the OS; a test harness (feature `seed-injection`, or unit tests) can inject one.
@@ -59,13 +65,29 @@ impl ProverSeed {
 /// The salts of one proof's `hm96-sha512/v1` Merkle leaves: a ChaCha20 expansion of a 256-bit salt key (Daniel, 2026-09-27;
 /// this replaced salts drawn from `getrandom` leaf by leaf, which cost +96% prover time at m = 33). Leaf `i` of tree `id` is
 /// ChaCha20 blocks `3i, 3i + 1, 3i + 2` under the key with nonce `id` ([`chacha20_block`]); the level-0 tree is id 0 (both reps
-/// bind one root) and every later tree takes the next id, so no salt is used twice. The key is a fresh `getrandom` draw per proof
+/// bind one root) and every later tree takes the next id, so no salt is used twice. In a session of several tables, table `j`
+/// ([`LeafSalts::table`]) takes ids from `j << TABLE_SHIFT` instead. The key is a fresh `getrandom` draw per proof
 /// (an injected seed's `STREAM_SALT` bytes in a test harness only), never reused, never written anywhere, and zeroed on drop.
 /// The device expands the same stream (`hm96_finish_leaves`).
 pub struct LeafSalts {
     /// on the heap, so moving a `LeafSalts` copies no key byte
     key: Box<[u8; 32]>,
     next: u64,
+    level0: u64,
+}
+
+/// The coin-tree nonce the prover sends in `Hello` (docs/coin-tree-v2.md §3): 32 fresh bytes from the OS, once per session,
+/// never derived from the verifier's messages; an injected seed (a test harness) derives it, so a harness's sessions repeat.
+pub fn coin_nonce(seed: &ProverSeed) -> [u8; 32] {
+    let mut n = [0u8; 32];
+    if seed.injected {
+        let mut r = ChaCha20Rng::from_seed(seed.seed);
+        r.set_stream(STREAM_COIN_NONCE);
+        r.fill_bytes(&mut n);
+    } else {
+        getrandom::fill(&mut n).expect("the OS random generator failed: refusing to send Hello without a fresh nonce");
+    }
+    n
 }
 
 impl LeafSalts {
@@ -78,7 +100,15 @@ impl LeafSalts {
         } else {
             getrandom::fill(&mut key[..]).expect("the OS random generator failed: refusing to commit without a salt key");
         }
-        LeafSalts { key, next: 1 }
+        LeafSalts { key, next: 1, level0: 0 }
+    }
+
+    /// Table `table`'s salts in a session of several tables: the session's key, the level-0 tree `table << TABLE_SHIFT` and
+    /// every later tree the next id, below the next table's level 0 (table 0: [`Self::for_seed`]'s ids).
+    pub fn table(&self, table: u64) -> LeafSalts {
+        assert!(table < 1 << TABLE_SHIFT, "a table index below 2^{TABLE_SHIFT}");
+        let level0 = table << TABLE_SHIFT;
+        LeafSalts { key: self.key.clone(), next: level0 + 1, level0 }
     }
 
     /// The salt key, for the device to expand; it stays in memory only.
@@ -86,8 +116,14 @@ impl LeafSalts {
         &self.key
     }
 
+    /// The level-0 tree's id (both reps of a table bind its one root).
+    pub fn level0_id(&self) -> u64 {
+        self.level0
+    }
+
     /// The id of the next tree after level 0.
     pub fn next_id(&mut self) -> u64 {
+        assert!(self.next - self.level0 < 1 << TABLE_SHIFT, "a table's salt trees stay below the next table's level 0");
         self.next += 1;
         self.next - 1
     }
@@ -178,11 +214,19 @@ pub fn chacha20_block(key: &[u8; 32], counter: u64, nonce: u64) -> [u8; 64] {
 
 pub struct ProverRng {
     rng: ChaCha20Rng,
+    table: u64,
 }
 
 impl ProverRng {
     pub fn from_seed(seed: ProverSeed) -> Self {
-        ProverRng { rng: ChaCha20Rng::from_seed(seed.seed) }
+        Self::for_table(seed, 0)
+    }
+
+    /// Table `table`'s randomness in a session of several tables: every stream at `purpose | table << TABLE_SHIFT` (table 0:
+    /// [`Self::from_seed`]'s).
+    pub fn for_table(seed: ProverSeed, table: u64) -> Self {
+        assert!(table < 1 << TABLE_SHIFT, "a table index below 2^{TABLE_SHIFT}");
+        ProverRng { rng: ChaCha20Rng::from_seed(seed.seed), table }
     }
 
     /// A fresh proof's randomness from the OS, never from the transcript.
@@ -190,9 +234,11 @@ impl ProverRng {
         Self::from_seed(ProverSeed::from_os())
     }
 
-    /// Bytes `[32 index, 32 index + out.len())` of stream `purpose` (independent of every other `(purpose, index)`).
+    /// Bytes `[32 index, 32 index + out.len())` of stream `purpose` (independent of every other `(purpose, index)`, and of
+    /// every other table's).
     pub fn fill_at(&mut self, purpose: u64, index: u64, out: &mut [u8]) {
-        self.rng.set_stream(purpose);
+        assert!(purpose < 1 << TABLE_SHIFT, "a stream purpose below 2^{TABLE_SHIFT} (the table takes the stream's high bits)");
+        self.rng.set_stream(purpose | self.table << TABLE_SHIFT);
         self.rng.set_word_pos(8 * index as u128);
         self.rng.fill_bytes(out);
     }
@@ -236,7 +282,12 @@ pub struct NoMask {
 
 impl NoMask {
     pub fn new(seed: ProverSeed) -> Self {
-        NoMask { rng: ProverRng::from_seed(seed) }
+        Self::for_table(seed, 0)
+    }
+
+    /// Table `table`'s, in a session of several tables ([`ProverRng::for_table`]).
+    pub fn for_table(seed: ProverSeed, table: u64) -> Self {
+        NoMask { rng: ProverRng::for_table(seed, table) }
     }
 }
 
@@ -274,17 +325,53 @@ mod tests {
         }
     }
 
+    /// Table 0 of a session of several tables reads a one-table session's words and salts; every other table reads none of
+    /// them, and none of another table's.
+    #[test]
+    fn a_table_draws_its_own_words_and_salts() {
+        let seed = ProverSeed::injected([7; 32]);
+        let addrs = [(STREAM_MASK, 0u64, 64usize), (4, 0, 64), (4, 1 << 32, 64), (5, 1 << 24, 64), (6, 3 << 32, 64), (7, 67 << 32, 64)];
+        let draw = |mut r: ProverRng| -> Vec<Vec<F128>> { addrs.iter().map(|&(s, i, n)| r.f128s(s, i, n)).collect() };
+        let one = draw(ProverRng::from_seed(seed));
+        let tables: Vec<Vec<Vec<F128>>> = (0..3).map(|j| draw(ProverRng::for_table(seed, j))).collect();
+        assert_eq!(tables[0], one, "table 0 is a one-table session's randomness");
+        let words = |t: &Vec<Vec<F128>>| -> std::collections::BTreeSet<(u64, u64)> { t.iter().flatten().map(|x| (x.lo, x.hi)).collect() };
+        for a in 0..3 {
+            for b in a + 1..3 {
+                assert!(words(&tables[a]).is_disjoint(&words(&tables[b])), "tables {a} and {b} share a word");
+            }
+        }
+        let s = LeafSalts::for_seed(&seed);
+        let (mut s0, mut s1, mut one) = (s.table(0), s.table(1), LeafSalts::for_seed(&seed));
+        assert_eq!((s0.level0_id(), s0.next_id(), s0.next_id()), (one.level0_id(), one.next_id(), one.next_id()));
+        assert_eq!((s1.level0_id(), s1.next_id()), (1 << TABLE_SHIFT, (1 << TABLE_SHIFT) + 1));
+        assert_eq!(s1.salt(s1.level0_id(), 0), s.salt(1 << TABLE_SHIFT, 0), "one key, the table's own trees");
+        assert_ne!(s1.salt(s1.level0_id(), 0), s0.salt(s0.level0_id(), 0));
+    }
+
     #[test]
     fn two_os_seeds_differ() {
         assert_ne!(ProverRng::from_os().f128s(STREAM_MASK, 0, 2), ProverRng::from_os().f128s(STREAM_MASK, 0, 2));
     }
 
-    /// TODO(M1): two proofs of the same statement share no mask bit: prove one statement twice with masking on, take every
-    /// mask cell, Reed–Solomon padding row and leaf salt of each, and assert the two sets are disjoint as bit positions with
-    /// equal values no more often than chance (a chi-square on the XOR). Needs M1's masks.
+    /// Two proofs' masks share no bit beyond chance: the M1 draws of two OS seeds (the algebraic phase's pads and dot-product
+    /// mask for both reps, the mask slot, Ligerito level 0's padding and extra lanes) XOR to a balanced bit string. The
+    /// protocol-level version is `flock-circuit zkstat`'s cross-run XOR test.
     #[test]
-    #[ignore = "M1: needs the masking hooks implemented"]
     fn two_proofs_share_no_mask_bits() {
-        unimplemented!("M1");
+        let draw = |seed: ProverSeed| -> Vec<u8> {
+            let mut r = ProverRng::from_seed(seed);
+            let mut b = Vec::new();
+            for (stream, index, n) in [(STREAM_MASK, 0u64, 1024usize), (4, 0, 300), (5, 0, 300), (4, 1 << 32, 300), (6, 0, 4096), (7, 5 << 32, 500)] {
+                b.extend(r.f128s(stream, index, n).iter().flat_map(|x| [x.lo.to_le_bytes(), x.hi.to_le_bytes()].concat()));
+            }
+            b
+        };
+        let (a, b) = (draw(ProverSeed::from_os()), draw(ProverSeed::from_os()));
+        let n = (8 * a.len()) as f64;
+        let ones: u64 = a.iter().zip(&b).map(|(x, y)| (x ^ y).count_ones() as u64).sum();
+        let z = (ones as f64 - n / 2.0) / (n / 4.0).sqrt();
+        assert!(z.abs() < 6.0, "the XOR of two proofs' masks is unbalanced: z = {z}");
+        assert!(a.chunks(16).zip(b.chunks(16)).all(|(x, y)| x != y), "two proofs share a mask word");
     }
 }

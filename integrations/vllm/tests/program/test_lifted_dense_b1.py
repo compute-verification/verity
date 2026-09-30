@@ -117,6 +117,7 @@ def test_refusals_fire_eagerly_in_the_builder_and_lazily_on_a_direct_bind_both_b
     assert f"STEPS={D_MAX}" in L.lifted_request(C, LP, CAP, EOS, attention=ATT, lag=0).id
 
 
+@pytest.mark.slow
 def test_program_and_digest_are_functions_of_the_manifest(programs, program_eos2):
     _, p_l = programs
     d = program_digest(p_l)
