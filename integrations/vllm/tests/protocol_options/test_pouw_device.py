@@ -155,6 +155,33 @@ def test_the_fast_units_tree_is_pouw_circuits(count):
     assert PD.units_root_twin(leaves) == PC.units_root(leaves)
 
 
+@pytest.mark.parametrize("count", [1, 2, 3, 255, 256, 257, 511, 512, 513, 1000, 65536 + 257])
+def test_the_units_tree_in_blocks_of_256_is_pouw_circuits(count):
+    """The serving kernel's pass (`kf_tree8`): each aligned block of 256 leaves reduced on its own, then levels."""
+    leaves = np.random.default_rng(count).bytes(32 * count)
+    assert PD.units_root_twin(leaves, tree8=True) == PC.units_root(leaves)
+
+
+@pytest.mark.parametrize("ms", range(1, 71))
+def test_the_key_tree_by_levels_is_rfc6962_in_the_programs_order(ms):
+    """`rfc6962_plan`: pairing each level with an odd last node rising makes RFC 6962's tree, and each node gets the index the
+    Program emits it at, so its unit is the one `ncp2.rfc6962` numbers."""
+    from verity_pouw.circuit import ncp2
+
+    emitted: list = []
+
+    def node(left, right):
+        emitted.append((left, right))
+        return emitted[-1]
+
+    ncp2.rfc6962(0, ms, lambda s: ("strip", s), node)
+    made: dict[int, tuple] = {}
+    for level in PD.tree_plan(ms):
+        for left, right, j in level:
+            made[j] = tuple(("strip", c) if c >= 0 else made[-c - 1] for c in (left, right))
+    assert [made[j] for j in range(ms - 1)] == emitted
+
+
 def test_the_low_byte_variant_hashes_each_checkpoints_low_byte(five_strips):
     """The timed-only variant (cheap binding's row 4): the kernel's function on the CPU equals the reference built from
     `pouw_native`'s own tile words."""

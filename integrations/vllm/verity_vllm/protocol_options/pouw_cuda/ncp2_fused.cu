@@ -2,10 +2,11 @@
 // dequantization output. Every function is `ncp2_fast.cuh`'s, which `ncp2_host.cpp` runs on the CPU against `pouw_native`.
 //   - tiles: a thread per 16 × 16 tile, its 256 running sums in shared memory; each 16-deep step's row of 16 words is one
 //     SHA-256 block of the tile's word leaf, hashed as it is made (dp4a for the products);
-//   - the key (SHA-512 digests, the RFC 6962 tree, K), E₁ and F₁ (SHAKE256 a block at a time), X and Y per call;
+//   - the key (SHA-512 digests, the RFC 6962 tree by levels, K), E₁ and F₁ (SHAKE256 a block at a time), X and Y per call;
 //   - the form strips' leaves on a second stream beside the tiles; Y's leaves, which depend only on the weight, the salt and
 //     the column ids, cached per weight when asked (flag 4);
-//   - the dequantization and its word leaves, and the units tree, a thread per node.
+//   - the dequantization, then its word leaves and the units tree's first 8 levels in one pass (256 leaves a block, reduced
+//     in shared memory), and the tree's other levels a thread per node.
 // Flag 1 hashes; without it every hash and XOF is left out and the noise is a counter-based stand-in (the no-hash control).
 // Flag 2 times the tile kernel with CUDA events, read by `ncp2_fused_tile_ms` without a synchronization per call. Flag 8
 // swaps the tiles' word leaves for the low-byte variant (`tile_fused_lowbyte`), for timing only: its γ is unproved.
@@ -43,23 +44,22 @@ __global__ void kf_strips(const uint8_t* rows, int ms, uint8_t* strips, uint8_t*
   leaf_digest_fast(strips + 64 * (size_t)st, leaves + 32 * (size_t)st);
 }
 
-__global__ void kf_tree_key(const uint8_t* strips, int ms, uint8_t* nodes, Salt salt, uint64_t forward, uint64_t position,
-                            uint64_t weight, uint8_t* key) {
-  int count = 0;
-  const uint8_t* da = rfc6962_fast(strips, 0, ms, nodes, &count);
-  call_key_fast(salt.b, forward, position, weight, da, key);
+// One level of the key's tree (`rfc6962_plan`): a thread per node, each its digest and its unit leaf.
+__global__ void kf_tree_level(const int* entries, int count, const uint8_t* strips, uint8_t* nodes, uint8_t* node_leaves) {
+  int e = blockIdx.x * blockDim.x + threadIdx.x;
+  if (e < count) tree_entry(entries + 3 * (size_t)e, strips, nodes, node_leaves);
 }
 
-// Its own kernel: inlined into `kf_tree_key`, the key's leaf takes nvcc's front end minutes.
+__global__ void kf_key(const uint8_t* strips, const uint8_t* nodes, int ms, Salt salt, uint64_t forward, uint64_t position,
+                       uint64_t weight, uint8_t* key) {
+  call_key_fast(salt.b, forward, position, weight, ms > 1 ? nodes + 64 * (size_t)(ms - 2) : strips, key);
+}
+
+// Its own kernel: inlined into the key's, the key's leaf takes nvcc's front end minutes.
 __global__ void kf_key_leaf(const uint8_t* key, int ms, uint8_t* leaves) {
   uint32_t kw[8];
   for (int i = 0; i < 8; ++i) kw[i] = key[4 * i] | (key[4 * i + 1] << 8) | (key[4 * i + 2] << 16) | ((uint32_t)key[4 * i + 3] << 24);
   unit_leaf(kw, 8, 1, leaves + 32 * (size_t)(2 * ms - 1));
-}
-
-__global__ void kf_node_leaves(const uint8_t* nodes, int count, int ms, uint8_t* leaves) {
-  int j = blockIdx.x * blockDim.x + threadIdx.x;
-  if (j < count) leaf_digest_fast(nodes + 64 * (size_t)j, leaves + 32 * (size_t)(ms + j));
 }
 
 template <bool HASH>
@@ -100,25 +100,66 @@ __global__ void kf_form_leaves(int ms, int ns, int with_y, int k3, const uint8_t
   }
 }
 
-template <bool HASH>
+// y only: the dequantization leaves are made inside the units tree's first pass (`kf_tree8`).
 __global__ void kf_dequant(int m, int n, const uint32_t* z, const uint32_t* s, const uint32_t* t, const uint16_t* bias,
-                           uint16_t* y, uint8_t* leaves) {
+                           uint16_t* y) {
   size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= (size_t)m * n) return;
   const int row = (int)(i / n), col = (int)(i % n);
-  const uint16_t v = dequant(z[i], s[row], t[col], bias[col]);
-  y[i] = v;
-  if (HASH) {
-    const int ns = n / D;
-    const size_t u = ((size_t)(row / D) * ns + col / D) * D * D + (row % D) * D + col % D;
-    leaf_word1(v, leaves + 32 * u);
-  }
+  y[i] = dequant(z[i], s[row], t[col], bias[col]);
 }
 
 __device__ __forceinline__ void load_digest(const uint8_t* p, uint32_t w[8]) {
   const uint4 a = *(const uint4*)p, b = *(const uint4*)(p + 16);
   w[0] = bswap32(a.x); w[1] = bswap32(a.y); w[2] = bswap32(a.z); w[3] = bswap32(a.w);
   w[4] = bswap32(b.x); w[5] = bswap32(b.y); w[6] = bswap32(b.z); w[7] = bswap32(b.w);
+}
+
+__device__ __forceinline__ void store_digest(uint8_t* p, const uint32_t w[8]) {
+  uint4* o = (uint4*)p;
+  o[0] = make_uint4(bswap32(w[0]), bswap32(w[1]), bswap32(w[2]), bswap32(w[3]));
+  o[1] = make_uint4(bswap32(w[4]), bswap32(w[5]), bswap32(w[6]), bswap32(w[7]));
+}
+
+// The units tree's first 8 levels, a block per `TREE_BLOCK` aligned leaves: each lane loads its leaf, or makes it when it is a
+// dequantization unit's (from y, and writes it), then the block reduces in shared memory, word i of node j at
+// ``sm[i * TREE_BLOCK + j]``. The block's node goes to ``out`` (level 8 of the tree).
+__global__ void __launch_bounds__(TREE_BLOCK) kf_tree8(size_t population, size_t deq_base, int ns, int n, const uint16_t* y,
+                                                        uint8_t* leaves, uint8_t* out) {
+  __shared__ uint32_t sm[8 * TREE_BLOCK];
+  const size_t base = (size_t)blockIdx.x * TREE_BLOCK;
+  const int t = threadIdx.x;
+  int c = (int)(population - base < (size_t)TREE_BLOCK ? population - base : TREE_BLOCK);
+  if (t < c) {
+    const size_t u = base + t;
+    uint32_t w[8];
+    if (u >= deq_base) {
+      leaf_word1_h(y[deq_y_index(u - deq_base, ns, n)], w);
+      store_digest(leaves + 32 * u, w);
+    } else {
+      load_digest(leaves + 32 * u, w);
+    }
+#pragma unroll
+    for (int i = 0; i < 8; ++i) sm[i * TREE_BLOCK + t] = w[i];
+  }
+  __syncthreads();
+  while (c > 1) {
+    const int half = (c + 1) / 2;
+    uint32_t o[8];
+    if (t < half) tree_pick(sm, TREE_BLOCK, c, t, o);
+    __syncthreads();
+    if (t < half)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) sm[i * TREE_BLOCK + t] = o[i];
+    __syncthreads();
+    c = half;
+  }
+  if (t == 0) {
+    uint32_t w[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) w[i] = sm[i * TREE_BLOCK];
+    store_digest(out + 32 * (size_t)blockIdx.x, w);
+  }
 }
 
 __global__ void kf_units_level(const uint8_t* in, size_t count, uint8_t* out) {
@@ -169,6 +210,32 @@ struct YCache {
 };
 static std::vector<YCache> ycache;
 static std::vector<std::pair<cudaEvent_t, cudaEvent_t>> tile_events;
+
+// The key's tree by levels for ``ms`` strips (`rfc6962_plan`), on the device once per strip count: made at a strip count's
+// first call, so no call after it copies anything from the host.
+struct Plan {
+  int ms;
+  int* entries;
+  std::vector<int> levels;
+};
+static std::vector<Plan> plans;
+
+static cudaError_t plan_for(int ms, Plan* out) {
+  for (const auto& p : plans)
+    if (p.ms == ms) {
+      *out = p;
+      return cudaSuccess;
+    }
+  std::vector<int> entries(3 * (size_t)(ms > 1 ? ms - 1 : 1)), levels(24), scratch(3 * (size_t)ms);
+  const int nl = rfc6962_plan(ms, entries.data(), levels.data(), scratch.data());
+  Plan p{ms, nullptr, std::vector<int>(levels.begin(), levels.begin() + nl + 1)};
+  cudaError_t e = cudaMalloc((void**)&p.entries, entries.size() * sizeof(int));
+  if (e == cudaSuccess) e = cudaMemcpy(p.entries, entries.data(), entries.size() * sizeof(int), cudaMemcpyHostToDevice);
+  if (e != cudaSuccess) return e;
+  plans.push_back(p);
+  *out = p;
+  return cudaSuccess;
+}
 
 static YCache* ycache_find(uint64_t weight, int n, int k, const uint8_t* salt) {
   for (auto& c : ycache) {
@@ -228,10 +295,15 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
   if (hash) {
     kf_rows<<<nblocks(m, 64), 64, 0, st>>>(a, m, k, W.rows.as<uint8_t>());
     kf_strips<<<nblocks(ms, 64), 64, 0, st>>>(W.rows.as<uint8_t>(), ms, W.strips.as<uint8_t>(), lv);
-    kf_tree_key<<<1, 1, 0, st>>>(W.strips.as<uint8_t>(), ms, W.nodes.as<uint8_t>(), salt, forward, position, weight,
-                                 W.key.as<uint8_t>());
+    Plan plan;
+    CK(plan_for(ms, &plan));
+    for (size_t l = 0; l + 1 < plan.levels.size(); ++l) {
+      const int count = plan.levels[l + 1] - plan.levels[l];
+      kf_tree_level<<<nblocks(count, 64), 64, 0, st>>>(plan.entries + 3 * (size_t)plan.levels[l], count, W.strips.as<uint8_t>(),
+                                                       W.nodes.as<uint8_t>(), lv + 32 * (size_t)ms);
+    }
+    kf_key<<<1, 1, 0, st>>>(W.strips.as<uint8_t>(), W.nodes.as<uint8_t>(), ms, salt, forward, position, weight, W.key.as<uint8_t>());
     kf_key_leaf<<<1, 1, 0, st>>>(W.key.as<uint8_t>(), ms, lv);
-    if (ms > 1) kf_node_leaves<<<nblocks(ms - 1, 64), 64, 0, st>>>(W.nodes.as<uint8_t>(), ms - 1, ms, lv);
     kf_x<true><<<nblocks(m, 64), 64, 0, st>>>(a, m, k, W.key.as<uint8_t>(), rowids, pi, W.e.as<int8_t>(), W.x.as<uint8_t>());
     kf_y<true><<<nblocks(n, 64), 64, 0, st>>>(b, n, k, salt, weight, colids, inv, W.f.as<int8_t>(), W.y.as<uint8_t>(),
                                              W.c0.as<uint32_t>());
@@ -267,17 +339,16 @@ extern "C" int ncp2_fused(int m, int k, int n, const int8_t* a, const uint32_t* 
     CK(cudaEventRecord(t1, st));
     tile_events.emplace_back(t0, t1);
   }
-  if (hash)
-    kf_dequant<true><<<nblocks((size_t)m * n, 128), 128, 0, st>>>(m, n, W.z.as<uint32_t>(), s, t, bias, y_out, lv + 32 * deq_base);
-  else
-    kf_dequant<false><<<nblocks((size_t)m * n, 128), 128, 0, st>>>(m, n, W.z.as<uint32_t>(), s, t, bias, y_out, nullptr);
+  kf_dequant<<<nblocks((size_t)m * n, 128), 128, 0, st>>>(m, n, W.z.as<uint32_t>(), s, t, bias, y_out);
   CK(cudaGetLastError());
   if (!hash) return 0;
 
   CK(cudaStreamWaitEvent(st, W.formed, 0));
-  const uint8_t* in = lv;
-  uint8_t* out = W.lv2.as<uint8_t>();
-  for (size_t count = population; count > 1; count = (count + 1) / 2) {
+  const size_t blocks8 = (population + TREE_BLOCK - 1) / TREE_BLOCK;
+  kf_tree8<<<(unsigned)blocks8, TREE_BLOCK, 0, st>>>(population, deq_base, ns, n, y_out, lv, W.lv2.as<uint8_t>());
+  const uint8_t* in = W.lv2.as<uint8_t>();
+  uint8_t* out = W.lv3.as<uint8_t>();
+  for (size_t count = blocks8; count > 1; count = (count + 1) / 2) {
     kf_units_level<<<nblocks((count + 1) / 2, 128), 128, 0, st>>>(in, count, out);
     in = out;
     out = out == W.lv2.as<uint8_t>() ? W.lv3.as<uint8_t>() : W.lv2.as<uint8_t>();

@@ -97,8 +97,8 @@ HD void wl_final(WordLeaf& s, uint8_t out[32]) {
   for (int i = 0; i < 32; ++i) out[i] = (uint8_t)(s.h[i >> 2] >> (24 - 8 * (i & 3)));
 }
 
-// One word's leaf (a dequantization unit): 31 bytes, one block.
-HD void leaf_word1(uint32_t w, uint8_t out[32]) {
+// One word's leaf (a dequantization unit): 31 bytes, one block; ``h`` its digest as big-endian words.
+HD void leaf_word1_h(uint32_t w, uint32_t h[8]) {
   WordLeaf s;
   wl_init(s);
   uint32_t b[16];
@@ -111,7 +111,14 @@ HD void leaf_word1(uint32_t w, uint8_t out[32]) {
   b[15] = 31 * 8;
   sha256_compress(s.h, b);
 #pragma unroll
-  for (int i = 0; i < 32; ++i) out[i] = (uint8_t)(s.h[i >> 2] >> (24 - 8 * (i & 3)));
+  for (int i = 0; i < 8; ++i) h[i] = s.h[i];
+}
+
+HD void leaf_word1(uint32_t w, uint8_t out[32]) {
+  uint32_t h[8];
+  leaf_word1_h(w, h);
+#pragma unroll
+  for (int i = 0; i < 32; ++i) out[i] = (uint8_t)(h[i >> 2] >> (24 - 8 * (i & 3)));
 }
 
 // A digest's leaf (digest and node units): its 16 big-endian words as the stream.
@@ -331,6 +338,127 @@ HD void units_node_fast(const uint32_t L[8], const uint32_t R[8], uint32_t out[8
   sha256_compress(h, b);
 #pragma unroll
   for (int i = 0; i < 8; ++i) out[i] = h[i];
+}
+
+// ---- the units tree 256 leaves at a time, and the dequantization leaves inside it ------------------------------------------
+// `pouw_circuit.units_root` pairs each level's nodes left to right, an odd last node rising unpaired. A block of 256 leaves
+// starting at a multiple of 256 reduces, over 8 levels, to exactly that tree's level-8 node: every level's block start is even,
+// and only the last block can be partial, where the odd rule is the global one.
+
+constexpr int TREE_BLOCK = 256;
+
+// Lane ``t``'s node at the next level of ``c`` nodes held as big-endian words, word i of node j at ``nodes[i * stride + j]``:
+// the pair (2t, 2t + 1), or node 2t alone when it is the last of an odd count.
+HD void tree_pick(const uint32_t* nodes, int stride, int c, int t, uint32_t out[8]) {
+  if (2 * t + 1 < c) {
+    uint32_t L[8], R[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+      L[i] = nodes[i * stride + 2 * t];
+      R[i] = nodes[i * stride + 2 * t + 1];
+    }
+    units_node_fast(L, R, out);
+  } else {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[i] = nodes[i * stride + 2 * t];
+  }
+}
+
+// The served y entry of dequantization unit ``e`` (counted from the first): tile-major, then row-major within the tile.
+HD size_t deq_y_index(size_t e, int ns, int n) {
+  const size_t tile = e / (D * D);
+  const int j = (int)(e % (D * D));
+  return (size_t)((int)(tile / ns) * D + j / D) * n + (size_t)(tile % ns) * D + j % D;
+}
+
+HD void digest_words(const uint8_t d[32], uint32_t w[8]) {
+#pragma unroll
+  for (int i = 0; i < 8; ++i) w[i] = be32(d + 4 * i);
+}
+
+HD void words_digest(const uint32_t w[8], uint8_t d[32]) {
+#pragma unroll
+  for (int i = 0; i < 32; ++i) d[i] = (uint8_t)(w[i >> 2] >> (24 - 8 * (i & 3)));
+}
+
+// Leaf u's words for the tree pass: a dequantization leaf (u ≥ ``deq_base``) made from its y entry and written to ``leaves``,
+// any other read from it.
+HD void tree_leaf(uint8_t* leaves, size_t u, size_t deq_base, const uint16_t* y, int ns, int n, uint32_t w[8]) {
+  if (u >= deq_base) {
+    leaf_word1_h(y[deq_y_index(u - deq_base, ns, n)], w);
+    words_digest(w, leaves + 32 * u);
+  } else {
+    digest_words(leaves + 32 * u, w);
+  }
+}
+
+// ---- the key's RFC 6962 tree by levels --------------------------------------------------------------------------------------
+// The same tree as `rfc6962_fast`: pairing each level left to right with an odd last node rising builds RFC 6962's tree. Each
+// node keeps its emission index in the Program (post-order), which numbers its unit.
+
+// The emission index of the node over strips [lo, hi) of an RFC 6962 tree over ``ms`` strips: a subtree's nodes come out
+// left subtree first, then the right, then its root.
+HD int rfc6962_id(int ms, int lo, int hi) {
+  int L = 0, H = ms, base = 0;
+  while (!(lo == L && hi == H)) {
+    int split = 1;
+    while (split * 2 < H - L) split *= 2;
+    if (hi <= L + split) {
+      H = L + split;
+    } else {
+      base += split - 1;
+      L += split;
+    }
+  }
+  return base + (H - L) - 2;
+}
+
+// The tree over ``ms`` strips by levels: entry e (``plan[3e..3e+2]``) makes node ``plan[3e+2]`` (its emission index) from two
+// children, each a strip s ≥ 0 or a node −(id + 1); level l is entries ``levels[l]`` to ``levels[l + 1]``. ``scratch`` holds
+// 3·ms ints. Returns the number of levels (0 for one strip); the root is node ms − 2.
+HD int rfc6962_plan(int ms, int* plan, int* levels, int* scratch) {
+  int* ref = scratch;
+  int* lo = scratch + ms;
+  int* hi = scratch + 2 * ms;
+  for (int s = 0; s < ms; ++s) {
+    ref[s] = s;
+    lo[s] = s;
+    hi[s] = s + 1;
+  }
+  int count = ms, e = 0, nl = 0;
+  levels[0] = 0;
+  while (count > 1) {
+    int next = 0;
+    for (int i = 0; i + 1 < count; i += 2) {
+      const int id = rfc6962_id(ms, lo[i], hi[i + 1]);
+      plan[3 * e] = ref[i];
+      plan[3 * e + 1] = ref[i + 1];
+      plan[3 * e + 2] = id;
+      ++e;
+      ref[next] = -(id + 1);
+      lo[next] = lo[i];
+      hi[next] = hi[i + 1];
+      ++next;
+    }
+    if (count % 2) {
+      ref[next] = ref[count - 1];
+      lo[next] = lo[count - 1];
+      hi[next] = hi[count - 1];
+      ++next;
+    }
+    count = next;
+    levels[++nl] = e;
+  }
+  return nl;
+}
+
+// One plan entry: its node's SHA-512 digest into ``nodes`` (64 bytes per emission index) and its unit leaf.
+HD void tree_entry(const int* entry, const uint8_t* strips, uint8_t* nodes, uint8_t* node_leaves) {
+  const uint8_t* L = entry[0] >= 0 ? strips + 64 * (size_t)entry[0] : nodes + 64 * (size_t)(-entry[0] - 1);
+  const uint8_t* R = entry[1] >= 0 ? strips + 64 * (size_t)entry[1] : nodes + 64 * (size_t)(-entry[1] - 1);
+  uint8_t* out = nodes + 64 * (size_t)entry[2];
+  tree_node_fast(L, R, out);
+  leaf_digest_fast(out, node_leaves + 32 * (size_t)entry[2]);
 }
 
 }  // namespace ncp2

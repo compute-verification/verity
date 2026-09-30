@@ -128,10 +128,13 @@ def host() -> ctypes.CDLL:
     """`ncp2_host.cpp` built for this CPU with the system C++ compiler."""
     dll = _build(_need(compiler(), "C++ compiler"), SOURCES, CFLAGS, "libncp2_host.so")
     _bind_hash_commit(dll)
-    dll.ncp2_commit.argtypes = dll.ncp2_commit_fast.argtypes = _COMMIT
-    dll.ncp2_units_root_fast.argtypes = [_u8, ctypes.c_uint64, _u8]
+    dll.ncp2_commit.argtypes, dll.ncp2_commit_fast.argtypes = _COMMIT, _COMMIT + [_u8]
+    dll.ncp2_units_root_fast.argtypes = dll.ncp2_units_root_tree8.argtypes = [_u8, ctypes.c_uint64, _u8]
+    dll.ncp2_tree_plan.argtypes = [ctypes.c_int, np.ctypeslib.ndpointer(np.int32, flags="C_CONTIGUOUS"),
+                                   np.ctypeslib.ndpointer(np.int32, flags="C_CONTIGUOUS")]
     dll.ncp2_tile_lowbyte.argtypes = [_u8, _u8, _u32, ctypes.c_int, ctypes.c_int, _u8]
-    dll.ncp2_commit_fast.restype = dll.ncp2_units_root_fast.restype = dll.ncp2_tile_lowbyte.restype = ctypes.c_int
+    for f in (dll.ncp2_commit_fast, dll.ncp2_units_root_fast, dll.ncp2_units_root_tree8, dll.ncp2_tree_plan, dll.ncp2_tile_lowbyte):
+        f.restype = ctypes.c_int
     return dll
 
 
@@ -186,11 +189,21 @@ def tile_lowbyte_host(xs: np.ndarray, ys: np.ndarray, c0: np.ndarray, steps: int
     return out.tobytes()
 
 
-def units_root_twin(leaves: bytes) -> bytes:
-    """`pouw_circuit.units_root` by the host build's fast node (`ncp2_fast.cuh` `units_node_fast`)."""
-    root = np.zeros(32, np.uint8)
-    host().ncp2_units_root_fast(np.frombuffer(leaves, np.uint8).copy(), len(leaves) // 32, root)
+def units_root_twin(leaves: bytes, tree8: bool = False) -> bytes:
+    """`pouw_circuit.units_root` by the host build's fast node (`ncp2_fast.cuh` `units_node_fast`), level by level, or with
+    ``tree8`` as the serving kernel reduces it (blocks of `ncp2_fast.cuh`'s `TREE_BLOCK` leaves, then levels)."""
+    root, lib = np.zeros(32, np.uint8), host()
+    (lib.ncp2_units_root_tree8 if tree8 else lib.ncp2_units_root_fast)(np.frombuffer(leaves, np.uint8).copy(), len(leaves) // 32, root)
     return root.tobytes()
+
+
+def tree_plan(ms: int) -> list[list[tuple[int, int, int]]]:
+    """The key's RFC 6962 tree over ``ms`` strips by levels, as the twin and the serving kernel build it (`ncp2_fast.cuh`
+    `rfc6962_plan`): each level's entries (left, right, node), a child a strip s ≥ 0 or a node −(id + 1), a node its emission
+    index."""
+    plan, levels = np.zeros(3 * max(1, ms - 1), np.int32), np.zeros(24, np.int32)
+    nl = host().ncp2_tree_plan(ms, plan, levels)
+    return [[tuple(int(v) for v in plan[3 * e:3 * e + 3]) for e in range(levels[i], levels[i + 1])] for i in range(nl)]
 
 
 def hash_many(kind: str, msgs: Sequence[bytes], out: int | None = None, ds: int = 0x1F, on: str = "host") -> list[bytes]:
@@ -235,11 +248,11 @@ def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH,
         rc = lib.ncp2_fused_host(*args, root, ctypes.byref(ms), flags)
     else:
         commit = lib.ncp2_commit_fast if on == "twin" else lib.ncp2_commit
-        rc = commit(*args, *((root, ctypes.byref(ms)) if on == "device" else ()))
+        rc = commit(*args, *((root, ctypes.byref(ms)) if on == "device" else (root,) if on == "twin" else ()))
     if rc:
         raise ValueError(f"{sh}: outside 16-row and 16-column strips" if rc == 1 else f"CUDA error {rc}")
     blob, ylv = leaves.tobytes(), yleaves.tobytes()
-    root_b = root.tobytes() if on in ("device", "fused") else units_root_twin(blob) if on == "twin" else PC.units_root(blob)
+    root_b = root.tobytes() if on in ("device", "fused", "twin") else PC.units_root(blob)
     if side is None:
         side = side_of(scheme, call, ylv, b)
     elif ylv != side.leaves:
@@ -452,5 +465,6 @@ __all__ = [
     "nvcc",
     "source_digest",
     "tile_lowbyte_host",
+    "tree_plan",
     "units_root_twin",
 ]
