@@ -52,6 +52,17 @@ CPU_SLOTS = int(os.environ.get("FILL_CPU_SLOTS", "4"))
 CPU_SET = os.environ.get("FILL_CPU_SET", "96-127")
 CPU_MEM_GB = int(os.environ.get("FILL_CPU_MEM_GB", "128"))
 MAX_TRIES = 2
+# Verity's CPU-only jobs (project=verity, gpus=0) get their own pool, so they never take pous's CPU slots (the terms agreed with
+# the nebius-infra steward): their CPU set, a job count, a per-job and a total memory cap, no start once the disk reaches
+# VERITY_DISK_PCT, and none after VERITY_UNTIL; running ones are stopped at VERITY_STOP, before the node stops itself.
+VERITY_CPU_SET = os.environ.get("FILL_VERITY_CPU_SET", "48-95")
+VERITY_CPU_SLOTS = int(os.environ.get("FILL_VERITY_CPU_SLOTS", "6"))
+VERITY_MEM_MAX_GB = int(os.environ.get("FILL_VERITY_MEM_MAX_GB", "256"))
+VERITY_MEM_TOTAL_GB = int(os.environ.get("FILL_VERITY_MEM_TOTAL_GB", "1024"))
+VERITY_DISK_PCT = float(os.environ.get("FILL_VERITY_DISK_PCT", "55"))
+VERITY_UNTIL = datetime.fromisoformat(os.environ.get("FILL_VERITY_UNTIL", "2026-10-07T12:00:00+00:00"))
+VERITY_STOP = datetime.fromisoformat(os.environ.get("FILL_VERITY_STOP", "2026-10-07T13:00:00+00:00"))
+VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
@@ -74,7 +85,8 @@ def header(p: Path) -> dict:
             for k, v in re.findall(r"(\w+)=(\S+)", m.group(1)):
                 h[k] = int(v) if v.isdigit() else v
     h["gpus"] = 1 if int(h["gpus"]) >= 1 else 0
-    h["max_min"] = min(int(h["max_min"]), 30)
+    # a Verity CPU job has its own CPUs and is frozen through windows, so it may run a whole vLLM Build (2-50 min, some 1-4 h)
+    h["max_min"] = min(int(h["max_min"]), 360 if h["project"] == "verity" and not h["gpus"] else 30)
     return h
 
 
@@ -117,15 +129,24 @@ def waiters() -> list[int]:
     return out
 
 
+def scope(j: dict, *args: str) -> bool:
+    """systemctl --user on a Verity job's scope: freeze and thaw reach every process in it, including a workload that
+    `research run` starts as its own process group, which killpg misses."""
+    unit = j.get("unit")
+    return bool(unit) and subprocess.run(["systemctl", "--user", *args, f"{unit}.scope"], capture_output=True).returncode == 0
+
+
 def stop(name: str, why: str, requeue: bool = True) -> None:
     j = running[name]
     if j.get("stopping"):
         return
     try:
+        scope(j, "thaw")
         os.killpg(j["pid"], signal.SIGCONT)
         os.killpg(j["pid"], signal.SIGTERM)
     except ProcessLookupError:
         pass
+    scope(j, "kill", "--signal=SIGTERM")
     j["stopping"], j["stop_at"], j["requeue"], j["why"] = True, time.monotonic(), requeue, why
     event("stop", name, why=why)
 
@@ -137,17 +158,22 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
     log = open(FILL / "logs" / f"{name}.{datetime.now(timezone.utc):%H%M%S}.log", "w")
     env = {**os.environ, "FILL": "1", "FILL_JOB": name, "GPU_LEASE_WHO": f"fill:{h['owner']}",
            "OMP_NUM_THREADS": str(h["cpus"])}
-    cmd = ["nice", "-n", "19", "taskset", "-c", CPU_SET, "bash", str(run)]
+    verity = h["project"] == "verity" and not h["gpus"]
+    unit_name = None
+    cmd = ["nice", "-n", "19", "taskset", "-c", VERITY_CPU_SET if verity else CPU_SET, "bash", str(run)]
     if h["gpus"]:
         pin = ["--on", str(h["on"])] if h.get("on") is not None else []
         cmd = [GPU_LEASE, "1", *pin, "--preemptible", "--max-min", str(h["max_min"]), "--", *cmd]
     elif shutil.which("systemd-run"):
-        cmd = ["systemd-run", "--user", "--scope", "--quiet", "--collect", "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G",
+        unit_name = f"fill-verity-{int(time.time() * 1000)}" if verity else None
+        unit = ["--unit", unit_name] if unit_name else []
+        cmd = ["systemd-run", "--user", "--scope", "--quiet", "--collect", *unit, "-p", f"MemoryMax={h.get('mem_gb', CPU_MEM_GB)}G",
                "-p", "MemorySwapMax=0", "--", *cmd]
     proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, cwd=str(FILL), start_new_session=True)
     log.close()
     (FILL / "running" / f".{name}.pgid").write_text(f"{proc.pid}\n")
-    running[name] = {"pid": proc.pid, "proc": proc, "h": h, "t0": time.monotonic(), "started": now(), "paused": False}
+    running[name] = {"pid": proc.pid, "proc": proc, "h": h, "t0": time.monotonic(), "started": now(), "paused": False,
+                     "unit": unit_name}
     event("start", name, owner=h["owner"], gpus=h["gpus"], project=h["project"], backfill=backfill)
 
 
@@ -229,6 +255,38 @@ def reap() -> None:
         del running[name]
 
 
+def disk_pct(path: str) -> float:
+    s = os.statvfs(path)
+    return 100.0 * (1 - s.f_bavail / s.f_blocks)
+
+
+def verity_pool(queued: list) -> None:
+    t = datetime.now(timezone.utc)
+    jobs = {k: j for k, j in running.items() if not j["h"]["gpus"] and j["h"]["project"] == "verity"}
+    if t >= VERITY_STOP:
+        for k, j in jobs.items():
+            if not j.get("stopping"):
+                stop(k, "verity cutoff before the node stops")
+        return
+    if t >= VERITY_UNTIL or disk_pct(VERITY_DISK_PATH) >= VERITY_DISK_PCT:
+        return
+    mem = sum(int(j["h"].get("mem_gb", CPU_MEM_GB)) for j in jobs.values())
+    left = [x for x in queued if not x[1]["gpus"] and x[1]["project"] == "verity"]
+    counts = Counter(j["h"]["owner"] for j in jobs.values())
+    slots = VERITY_CPU_SLOTS - len(jobs)
+    while left and slots > 0:
+        best = next_job(left, counts)
+        left.remove(best)
+        p, h, _ = best
+        need = min(int(h.get("mem_gb", CPU_MEM_GB)), VERITY_MEM_MAX_GB)
+        if mem + need > VERITY_MEM_TOTAL_GB:
+            continue
+        start(p, {**h, "mem_gb": need})
+        counts[h["owner"]] += 1
+        mem += need
+        slots -= 1
+
+
 def tick(n: int) -> str:
     global backoff_until
     reap()
@@ -258,8 +316,10 @@ def tick(n: int) -> str:
         if not j["h"]["gpus"] and not j.get("stopping"):
             try:
                 if timed and not j["paused"]:
+                    scope(j, "freeze")
                     os.killpg(j["pid"], signal.SIGSTOP); j["paused"], j["paused_at"] = True, time.monotonic(); event("pause", k)
                 elif not timed and j["paused"]:
+                    scope(j, "thaw")
                     os.killpg(j["pid"], signal.SIGCONT)
                     j["paused_s"] = j.get("paused_s", 0.0) + time.monotonic() - j["paused_at"]; j["paused"] = False
                     event("resume", k)
@@ -303,16 +363,17 @@ def tick(n: int) -> str:
             slots -= 1
             started = True
     if not timed:
-        cpu_running = sum(1 for j in running.values() if not j["h"]["gpus"])
-        pous_cpu = any(x[1]["project"] != "verity" and not x[1]["gpus"] for x in queued)
-        left = [x for x in queued if not x[1]["gpus"] and not (x[1]["project"] == "verity" and pous_cpu)]
-        counts = Counter(j["h"]["owner"] for j in running.values() if not j["h"]["gpus"])
+        pous_cpu = [j for j in running.values() if not j["h"]["gpus"] and j["h"]["project"] != "verity"]
+        left = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity"]
+        counts = Counter(j["h"]["owner"] for j in pous_cpu)
+        cpu_running = len(pous_cpu)
         while left and cpu_running < CPU_SLOTS:
             best = next_job(left, counts)
             left.remove(best)
             start(best[0], best[1])
             counts[best[1]["owner"]] += 1
             cpu_running += 1
+        verity_pool(queued)
     lines = [f"{now()} free GPUs {free}/{n}, kept free {sorted(keep_free(n)) or '-'}, waiters {want or '-'}, timed {timed}, "
              f"window waiting {window}, "
              f"backfill {backfill}, queued {len(queued)} "

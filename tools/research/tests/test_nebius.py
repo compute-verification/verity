@@ -494,3 +494,21 @@ def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhe
     assert remote.direct_cpus() == {mine[0]} and remote.format_cpus({0, 1, 2, 5, 7, 8}) == "0-2,5,7-8"
     cpus_file.write_text("100000-100001\n")                   # none of this machine's: no default rather than an empty mask
     assert remote.direct_cpus() == set()
+
+
+def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_scope(tmp_path, monkeypatch):
+    """A Verity CPU guest (a vLLM Build, 2-50 min and some 1-4 h) may set max_min up to 360; every other job stays capped at 30.
+    Its pause and stop go through its systemd scope, since `research run` starts the workload as its own process group."""
+    monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
+    spec = importlib.util.spec_from_file_location("fill_runner_verity", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    job = tmp_path / "job.sh"
+    for head, want in (("gpus=0 max_min=300 project=verity", 300), ("gpus=0 max_min=900 project=verity", 360),
+                       ("gpus=1 max_min=300 project=verity", 30), ("gpus=0 max_min=300 project=pous", 30)):
+        job.write_text(f"#!/usr/bin/env bash\n# fill: owner=t {head}\n")
+        assert fr.header(job)["max_min"] == want, head
+    calls = []
+    monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    assert fr.scope({"unit": "fill-verity-1"}, "freeze") and calls == [["systemctl", "--user", "freeze", "fill-verity-1.scope"]]
+    assert not fr.scope({"unit": None}, "freeze") and len(calls) == 1
