@@ -288,7 +288,9 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       input field (`unitShape_of`).
     - Each input of VU `g` copies its message bit: the block rows at its position read exactly `copySrc g w`
       (`input_rows`). As a model `CopyRow` (`input_copy`, and `setupH_inputCopy` for an accepted statement), that is a
-      table class's `copy`, when the message bit's position is in the block.
+      table class's `copy`. The message bit is a column of the block (`setupH_copySrc_lt`): it is in a `sha512x3`
+      slot's message port (`msgCol_lt`), and the file has a row, since the instance's inputs are its rows' words
+      (`CheckFactsT.ins`) and the unit's inputs its type's (`unit_inCols_size`, `read_template_ty`).
   - **A typed flat class's unit, placed** (`ExecFlatClass.lean`). A flat class's statement has the layout an untyped
     statement has (`setupH_flatLayout`): `parseTyped` puts the unit's net, `Typed.netOfD` of `derive`'s rows, where the
     untyped file has its `CIRCUIT unit` section, and `Layout` reads it as any net `Net.ofRows` built. The unit's composed
@@ -303,8 +305,6 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     is zero (`Layout.placed_zero`). `setupH_flatTableClass` is then the flat class's `TableClass`: its placement, its
     copies (`setupH_flatCopy`) and its forced-zero rows.
     - An input whose source lies outside the block has zero rows, and its copy position is its slot's forced-zero row.
-  - Still to prove:
-    - the message bit's position in the block, for `setupH_inputCopy`.
 
 ### 1.6 Proved from the libraries, not assumed
 

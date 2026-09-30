@@ -1,8 +1,0 @@
-link x.s y.s s 0 0
-link x.e y.e e 18446744069414584189 0
-link x.M y.M M 0 0
-link x.z y.z z 1 0
-link - g0.norm.leadnorm.ovf ovf[0] 0 1
-link - g1.norm.leadnorm.ovf ovf[1] 0 1
-link - h.groups[0].sum.sgn sgn[0] 0 0
-link - h.groups[1].sum.sgn sgn[1] 0 0
