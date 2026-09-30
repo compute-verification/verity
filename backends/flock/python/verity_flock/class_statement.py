@@ -29,9 +29,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import resource
+import shutil
 import subprocess
 import time
 from collections import Counter
@@ -524,6 +526,10 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         srv.wait()
     out, err = (d / "prove.out").read_text(), (d / "prove.err").read_text()
     live = [json.loads(ln[5:]) for ln in out.splitlines() if ln.startswith("LIVE")]
+    keep = int(os.environ.get("FLOCK_KEEP_SESSIONS", "-1"))   # a long --runs session keeps its first sessions' transcripts (and index.jsonl)
+    if keep >= 0 and (d / "sessions").is_dir():
+        for x in sorted(p for p in (d / "sessions").iterdir() if p.is_dir())[keep:]:
+            shutil.rmtree(x, ignore_errors=True)
     if not live:
         return {"accepted": False, "why": (err or out)[-400:]}
     timed = [x for x in live if not x.get("warm")] or live
@@ -534,6 +540,8 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb,
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
          "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
+         "accepted_runs": sum(1 for x in timed if x.get("accepted") is True),
+         "prove_total_s_sum": sum(x.get("prove_total_s") or 0 for x in timed), "e2e_s_sum": sum(x.get("e2e_s") or 0 for x in timed),
          # per rep: the prover's phase timings (witness: units and row hashing; encoding and commitment; zerocheck, lincheck,
          # ring switch, Ligerito; t.total on the device), and host_s = the rep's wall time less t.total (host work and idle)
          "buckets": _buckets(v), "buckets_runs": [_buckets(x) for x in timed]}
@@ -750,6 +758,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
     ap.add_argument("--warm", type=int, default=0)
     ap.add_argument("--runs", type=int, default=1, help="timed runs per shape; the record is the median")
+    ap.add_argument("--cover", action="store_true", help="timed runs per shape = the statements its row units need (ceil(row units / "
+                    "the statement's units)), so the Calls' every unit is proved, not extrapolated from one statement")
     ap.add_argument("--shapes", default=None, help="a file of shape digests (or prefixes), one per line: prove only these")
     ap.add_argument("--batch", default=None, help="'auto': instances per shape = the least of 1024, the row's units of it and 2^29 / its "
                     "ANDs, as a power of two >= 16 (overrides --n)")
@@ -826,7 +836,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             d = out / s[:16]
             try:
                 if not a.selftest_only:
-                    rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=a.runs)
+                    runs = a.runs
+                    if a.cover:
+                        per = rec["stage"]["n"] * rec["stage"].get("coords_per_instance", 1)
+                        runs = max(1, math.ceil((rec["row_units"] or rec["units"]) / per))
+                        rec["cover"] = {"statements": runs, "units_per_statement": per}
+                    rec["live"] = prove(a.binary, d, rec["stage"]["n"], a.port, gpu=a.gpu, warm=a.warm, runs=runs)
                 if a.selftest and (len(done) % a.selftest == 0 or (a.selftest_largest and s == largest.get(cl.definition.id))):
                     sb, g = a.selftest_binary or a.binary, a.selftest_gpu
                     if rec["table_reads"] or a.selftest_cases:   # a read-bearing circuit re-parses per case: a few cases, one process each

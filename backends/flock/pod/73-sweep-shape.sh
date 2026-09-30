@@ -11,6 +11,10 @@
 #              SELFTEST_GPU=1 for its selftest on the GPU (the device's proofs and transcripts against the CPU's, byte for byte)
 #   SHAPES=<digest>,<digest>,... in place of SHAPE: those shapes one after another in one job, each into out/<k>/ (k from 1);
 #              SELFTEST_SHAPES=<digest>,<digest> selftests only those. The job fails if any shape did
+#   MODE=sampled-stage ROW=<deployment slug> EV=<its evidence dir> (no GPU), then MODE=sampled (one GPU)
+#              the deployment's sampled units (sampled_units.py: its Commit's draw, reproduced and checked against the record), as their
+#              Call Definitions at their counts, into $SWEEP/sampled/$ROW/; staged, then proved with COVER=1: every unit, not one statement
+#   SUMMARY=<path> in any mode but cut: the job's statements, prove time and selftests as one JSON record
 # env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  SM=120  and 70-class-sweep.sh's (SELFTEST=0 here)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -52,7 +56,7 @@ with open(sys.argv[2], "w") as f:
         f.write(f"{sh}\t{s['word_gates']}\t{s['row_units']}\t{json.dumps(sorted(defs.get(sh, [])))}\n")
 print(f"{len(rows)} shapes, {sum(s['row_units'] or 0 for _, s in rows)} row units")
 EOF
-  cp $R/out/program.json $R/out/cut/counts.json $R/out/shapes.tsv $D/ ;;
+  cp $R/out/program.json $R/out/cut/counts.json $R/out/shapes.tsv $D/ || exit 1 ;;
 stage|shape)
   rc=0; k=0; SHAPES=${SHAPES:-$SHAPE}
   for SHAPE in ${SHAPES//,/ }; do
@@ -73,6 +77,45 @@ EOF
   st=${SELFTEST:-0}; case ",${SELFTEST_SHAPES:-}," in *",$SHAPE,"*) st=1 ;; esac
   OUT=$O bash backends/flock/pod/70-class-sweep.sh DEFS=$O/defs.json SHAPES=$O/shapes.txt SELECT=${SELECT:-units} \
     SELFTEST=$st SELFTEST_LARGEST=0 STAGE_ONLY=$([ $MODE = stage ] && echo 1 || echo 0) || rc=1
-  done
-  exit $rc ;;
+  done ;;
+sampled-stage|sampled)
+  A=$SWEEP/sampled/$ROW; mkdir -p $A; rc=0
+  if [ $MODE = sampled-stage ] || [ ! -s $A/defs.json ]; then
+    W=$FLOCK_WORK/flock-circuit; mkdir -p $W; UV=$(command -v uv || echo /workspace/jobs/bin/uv)
+    [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
+    # the draw is the deployment's own: its executing tree's replay code (tree.json), never this tree's
+    T=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["tree"].removesuffix("/integrations/vllm"))' $EV/tree.json) || exit 1
+    [ -d $T/integrations/vllm ] || { echo "the deployment's executing tree $T is gone: its draw can't be reproduced"; exit 1; }
+    PYTHONPATH=$T/packages/verity/src:$T/integrations/vllm:$T/protocols/sampled_proofs:$T/protocols/one_stage \
+      $W/py/bin/python3 backends/flock/pod/sampled_units.py $EV $R/out/draw || exit 1
+    cp $R/out/draw/defs.json $R/out/draw/picks.json $A/
+  fi
+  OUT=$R/out bash backends/flock/pod/70-class-sweep.sh DEFS=$A/defs.json SELECT=${SELECT:-units} COVER=1 SELFTEST=${SELFTEST:-0} \
+    SELFTEST_LARGEST=0 STAGE_ONLY=$([ $MODE = sampled-stage ] && echo 1 || echo 0) || rc=1 ;;
 esac
+# SUMMARY=<path>: the job's proofs in one record (a feeder reads it): statements proved and accepted, their prove time, the selftests
+if [ -n "${SUMMARY:-}" ]; then
+  mkdir -p $(dirname $SUMMARY)
+  $(command -v python3) - $R/out "$SUMMARY" $MODE $SECONDS $rc <<'EOF' || rc=1
+import json, os, sys
+from pathlib import Path
+out, dest, mode, job_s, rc = Path(sys.argv[1]), sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
+recs = [json.loads(ln) for f in sorted(out.rglob("results.jsonl")) for ln in f.read_text().splitlines() if ln.strip()]
+live = [r["live"] for r in recs if r.get("live")]
+st = [r["selftest"] for r in recs if r.get("selftest")]
+gpu = [c for x in st for c in x.get("gpu_cases", [])]
+s = {"run": os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "")), "mode": mode, "rc": rc, "job_s": job_s,
+     "binary_sha256": sorted({ln.split()[0] for f in out.rglob("binary.sha256") for ln in f.read_text().splitlines()[:1]}),
+     "shapes": len(recs), "proved": sum(1 for x in live if x.get("accepted") is True),
+     "not_proved": [{"shape": r["shape"][:16], "why": r.get("broke") or r.get("skipped") or (r.get("live") or {}).get("why")}
+                    for r in recs if (r.get("live") or {}).get("accepted") is not True],
+     "statements": sum(x.get("timed_runs") or 0 for x in live), "accepted_statements": sum(x.get("accepted_runs") or 0 for x in live),
+     "units": sum((r.get("cover") or {}).get("statements", 0) * (r.get("cover") or {}).get("units_per_statement", 0) for r in recs),
+     "prove_total_s": round(sum(x.get("prove_total_s_sum") or 0 for x in live), 3), "e2e_s": round(sum(x.get("e2e_s_sum") or 0 for x in live), 3),
+     "selftests": len(st), "selftests_pass": sum(1 for x in st if x.get("all_pass") is True),
+     "gpu_cases": len(gpu), "gpu_cases_pass": sum(1 for c in gpu if c.get("pass") is True), "gpu_case_names": sorted({c.get("case") for c in gpu})}
+Path(dest).write_text(json.dumps(s, indent=1))
+print(json.dumps(s)[:800])
+EOF
+fi
+exit ${rc:-0}
