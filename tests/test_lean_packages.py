@@ -2,6 +2,7 @@
 `lean-audit` step reads), and all of them build with one toolchain and one Mathlib, so a bump is one change to all of them."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -50,3 +51,28 @@ def test_the_randomness_assumption_cites_this_toolchain():
     version = (soundness / "lean-toolchain").read_text().strip().rpartition(":")[2]
     for doc in ("ASSUMPTIONS.md", "FlockSoundness/Assumptions.lean"):
         assert f"Lean {version}'s runtime" in (soundness / doc).read_text(), doc
+
+
+def test_every_record_merges_with_the_driver():
+    """`.gitattributes` sends every `lean-audit.json` to `tools/lean/merge.py`, and each record's `reads` digests are the ones
+    the driver recomputes from their definitions."""
+    spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "lean" / "merge.py")
+    merge = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(merge)
+    assert f"lean-audit.json merge={merge.NAME}" in (ROOT / ".gitattributes").read_text().splitlines()
+    stale = [f"{p.relative_to(ROOT)}: {m}" for p in lake_packages()
+             for m, g in json.loads((p / "lean-audit.json").read_text()).get("reads", {}).items()
+             if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
+    assert not stale, (f"reads digests that are not the SHA-256 of their definitions (`python tools/lean/merge.py --normalize "
+                       f"FILE` recomputes them): {stale}")
+
+
+CORE = ROOT / "packages" / "verity" / "lean"
+
+
+def test_core_package_has_no_dependencies():
+    """Core's own proofs (`packages/verity/lean`) live in a package of their own that requires nothing: core depends on no
+    backend, and a Lean dependency would put one in its build."""
+    assert CORE in lake_packages()
+    assert "require" not in (CORE / "lakefile.toml").read_text()
+    assert json.loads((CORE / "lake-manifest.json").read_text())["packages"] == []
