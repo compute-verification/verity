@@ -3,7 +3,8 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> -- \
 #     bash <shipped tree>/benchmarks/pouw/approved_weights/submit_job.sh NAME GPUS -- SCRIPT [ARGS...]
 # SCRIPT (in this directory) must checkpoint in --out and exit 0 when done, 99 while chunks remain, 143 when preempted. The
-# research run holds no GPU. With AW_HOLD=1 the job waits in /workspace/pouw/approved-weights/held/ for release_held.sh
+# research run holds no GPU. Chunks are capped at AW_MAXMIN minutes (default 8, the slot table's) at priority AW_PRIO
+# (default 5, below the slot owners' 10, so their chunks start first). With AW_HOLD=1 the job waits in /workspace/pouw/approved-weights/held/ for release_held.sh
 # instead of going straight to the queue. Once the fill job is done, the outputs are copied into $RESEARCH_RUN_DIR/out and SCRIPT runs
 # once more there with nothing left to compute, which writes $RESEARCH_RUN_DIR/result.json (research/result/v0.1).
 set -euo pipefail
