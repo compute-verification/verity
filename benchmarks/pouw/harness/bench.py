@@ -2,13 +2,15 @@
 """The PoUW bench harness: every arm and every plain GEMM baseline gated, then timed the same way, on one GPU.
 
   python bench.py --gpu 5 --expect-uuid GPU-... [--arm module:Class ...] [--arm-path DIR] [--shapes LABEL ... | headline]
-                  [--families bf16 fp8-e4m3 ...] [--reps 20] [--seed N] [--lock-mhz F] --out run.json
+                  [--families bf16 fp8-e4m3 ...] [--reps 20] [--seed N] [--lock-mhz F]
+                  [--decode-method dependent-chain|independent] --out run.json
   python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
 
 The contract with arms (`arm.py`) and the steps are published in the project store's `internal/pouw/rtx-pro/workers/
-6-harness.md` ("Arm interface"). Per run: identity (`identity.py`); per shape: operand sets; gates, with the negative controls
-at the first shape before anything is timed; the baselines' autotune; interleaved timing of everything, the same way; the
-consistency gate; the report (`report.py`). Every failure stops what it guards and writes no timing for it.
+6-harness.md` ("Arm interface"). Per run: identity (`identity.py`), the fill and derive preflights; per shape: operand sets;
+gates, with the negative controls at the first shape before anything is timed; the baselines' autotune; at decode shapes, the
+dependent chains (`chain.py`) and their gates; interleaved timing of everything, the same way; the consistency gate; the
+report (`report.py`). Every failure stops what it guards and writes no timing for it.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its
 gate, or it couldn't run); 6 the consistency gate rejected an arm. The JSON (`--out`) is written in every case.
@@ -30,6 +32,8 @@ from pathlib import Path
 
 import arm as A
 import baselines as B
+import chain as CH
+import derive as DV
 import fill as F
 import identity as I
 import report as R
@@ -38,6 +42,7 @@ import shapes as SH
 
 EXIT_OK, EXIT_USAGE, EXIT_DEVICE, EXIT_NEGATIVE, EXIT_CONSISTENCY = 0, 2, 3, 5, 6
 METHODS = ("graph", "burst")
+DECODE_METHODS = ("dependent-chain", "independent")
 #: an arm's `inputs` -> the operands' fill format, and the family whose scale factors it gets
 INPUT_FORMATS = {"f32": (F.F32, None), "bf16": (F.BF16, None), "e4m3": (F.E4M3, None), "e2m1-nv": (F.E2M1, "nvfp4"),
                  "e2m1-mx": (F.E2M1, "mxfp4"), "int8": (F.INT8, None)}
@@ -53,8 +58,9 @@ class NegativeControlFailed(RuntimeError):
 
 @dataclass
 class Entry:
-    """One timed thing at one shape: a baseline kernel, an arm's flag set, or an arm's weight side. `calls` holds one prepared
-    call per operand set; a burst of B calls cycles them. `gate_key` is the gate it needs (its own key by default)."""
+    """One timed thing at one shape: a baseline kernel, an arm's flag set, an arm's weight side, or a dependent chain of either
+    (`chain.py`). `calls` holds one prepared call per operand set; a burst of B calls cycles them, and a chain (`chain`) is
+    `length` calls. `gate_key` is the gate it needs (its own key by default)."""
 
     key: tuple
     kind: str
@@ -63,8 +69,13 @@ class Entry:
     gate_key: tuple | None = None
     graph: object = None
     meta: dict = field(default_factory=dict)
+    chain: object = None
+    length: int | None = None
 
     def enqueue(self, stream: int, n: int) -> None:
+        if self.chain is not None:
+            self.chain.enqueue(stream, n)
+            return
         for i in range(n):
             getattr(self.calls[i % len(self.calls)], self.op)(stream)
 
@@ -80,7 +91,8 @@ class Timer:
 
     def ensure_graph(self, e: Entry, burst: int) -> None:
         if e.graph is None:
-            e.graph = self.dev.capture(lambda s: e.enqueue(s, burst))
+            n = e.length or burst
+            e.graph = self.dev.capture(lambda s: e.enqueue(s, n))
 
     def drop_graph(self, e: Entry) -> None:
         if e.graph is not None:
@@ -89,6 +101,7 @@ class Timer:
 
     def time(self, e: Entry, method: str, burst: int) -> dict:
         d = self.dev
+        burst = e.length or burst
         (d.write_flush if method.endswith("-wflush") else d.flush)()
         before = self.sensors.sample()
         d.record(self.e0)
@@ -119,6 +132,7 @@ class Bench:
         self.tuning: list[dict] = []
         self.items: list[dict] = []
         self.rejected: list[dict] = []
+        self.chained = False
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
@@ -189,6 +203,8 @@ def free_entries(bench: Bench, entries: list[Entry]) -> None:
     seen = set()
     for e in entries:
         bench.timer.drop_graph(e)
+        if e.chain is not None:
+            e.chain.release()
         for c in e.calls:
             if id(c) not in seen:
                 seen.add(id(c))
@@ -373,6 +389,117 @@ def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst
     return keep
 
 
+# ---- the dependent chain -------------------------------------------------------------------------------------------------------
+
+
+def chain_entries(bench: Bench, dev, shape, timed: list[Entry], arms: list, arm_sets: dict, sets: int,
+                  first: bool) -> tuple[list[Entry], dict]:
+    """A chain (`chain.py`) of every timed baseline kernel and every arm flag set, and each derive kind's derive-only chain,
+    each gated. At the first chain shape, the stale-A control on the first gated chain that launches. Returns the gated chains
+    and what couldn't be chained."""
+    L = CH.length(sets)
+    by_name = {a.name: a for a in arms}
+    todo: list[tuple[Entry, tuple | None, object, frozenset | None]] = []
+    derive_only: dict[str, Entry] = {}
+    unchained: dict = {}
+
+    def add(key, links, kind, variant, base_key, arm=None, flags=None, meta=None):
+        ch = CH.Chain(dev, shape, links, kind, variant)
+        e = Entry(key, "chain", [ln.call for ln in links], gate_key=key, chain=ch, length=L,
+                  meta={"derive": kind, "variant": variant, **(meta or {})})
+        todo.append((e, base_key, arm, flags))
+        if kind not in derive_only:
+            dk = ("chain", shape.label, "derive", kind, "derive-only")
+            derive_only[kind] = Entry(dk, "chain", [ln.call for ln in links], gate_key=dk, length=L,
+                                      chain=CH.Chain(dev, shape, links, kind, "derive-only"),
+                                      meta={"derive": kind, "variant": "derive-only"})
+            todo.append((derive_only[kind], None, None, None))
+
+    for e in timed:
+        if e.kind == "baseline":
+            fam = B.FAMILIES[e.key[2]]
+            add(("chain", shape.label, fam.name, e.key[3], "full"), CH.baseline_links(e, fam), DV.FAMILY_KIND[fam.name],
+                "full", e.key, meta={"source": e.meta.get("source"), "shortcut": DV.FAMILY_SHORTCUT.get(fam.name)})
+        elif e.kind == "arm":
+            a, role = by_name[e.key[2]], e.key[3]
+            links, why = CH.arm_links(e, a, arm_sets[a.name], shape)
+            if links is None:
+                unchained[f"{a.name}/{role}"] = why
+                continue
+            variants = ["full"] + (list(CH.SPLIT_VARIANTS) if role == "hash" and CH.has_phases(links) else [])
+            for v in variants:
+                add(("chain", shape.label, a.name, role, v), links, DV.INPUT_KIND[a.inputs], v, e.key, a,
+                    a.flag_sets[role])
+    kept = []
+    control = first
+    for e, base, a, flags in todo:
+        if bench.gate(e.key, CH.gate(e.chain, bench.ledger, base, a, flags)):
+            kept.append(e)
+            if control and e.meta["variant"] == "full" and a is None:
+                bench.negative(("known-bad", shape.label, *e.key[2:4], "chain-stale-a"), CH.stale_control(e.chain))
+                bench.gate(e.key, CH.gate(e.chain, bench.ledger, base, a, flags))
+                control = False
+        else:
+            e.chain.release()
+    if control and kept:
+        bench.negatives.append({"key": ["known-bad", shape.label, "chain-stale-a"], "rejected": None,
+                                "detail": "no baseline chain passed its gate"})
+    return kept, unchained
+
+
+def chain_report(shape, fams, arms, entries: list[Entry], med: dict, methods: tuple[str, ...], unchained: dict) -> dict:
+    """The chains' medians: per family the fastest chain (f + GEMM: the decode divisor), with its kernel's independent burst
+    and f's own cost; per arm its roles' chains and, with phases, the split (`chain.py`)."""
+    ch = [e for e in entries if e.kind == "chain"]
+    if not ch:
+        return {}
+    first = ch[0]
+    derive_ms = {e.key[3]: med[e.key] for e in ch if e.meta["variant"] == "derive-only"}
+    out: dict = {"method": "dependent-chain", "length": first.length, "sets": len(first.calls),
+                 "derive": {k: DV.KINDS[k].what for k in derive_ms} | {"rule": DV.__doc__.split("\n\n")[1].replace("\n", " ")},
+                 "derive_ms": derive_ms, "baselines": {}, "arms": {}, "unchained": unchained}
+    base_ms: dict = {}
+    for fam in fams:
+        cands = [e for e in ch if e.key[2] == fam.name and e.meta["variant"] == "full"]
+        if not cands:
+            continue
+        b: dict = {"ms": {}, "kernel": {}, "source": {}, "config": {}, "independent_ms": {}, "derive_ms": {}}
+        kind = DV.FAMILY_KIND[fam.name]
+        for m in methods:
+            best = min(cands, key=lambda e: med[e.key].get(m, float("inf")))
+            if m not in med[best.key]:
+                continue
+            b["ms"][m], b["kernel"][m], b["source"][m] = med[best.key][m], best.key[3], best.meta.get("source")
+            b["independent_ms"][m] = med.get(("baseline", shape.label, fam.name, best.key[3]), {}).get(m)
+            b["derive_ms"][m] = derive_ms.get(kind, {}).get(m)
+        rows = R.baseline_rows(shape, {fam.name: b})[fam.name]
+        out["baselines"][fam.name] = {m: rows[m] | {"independent_ms": b["independent_ms"][m], "derive_ms": b["derive_ms"][m]}
+                                      for m in rows} | {"derive": kind, "shortcut": DV.FAMILY_SHORTCUT.get(fam.name)}
+        base_ms[fam.name] = b
+    for a in arms:
+        roles = {e.key[3]: med[e.key] for e in ch if e.key[2] == a.name and e.meta["variant"] == "full"}
+        if not roles:
+            continue
+        r = R.arm_row(shape, a.precision, a.work(shape), roles, None, base_ms)
+        var = {e.meta["variant"]: med[e.key] for e in ch if e.key[2] == a.name and e.key[3] == "hash"}
+        d = derive_ms.get(DV.INPUT_KIND[a.inputs], {})
+        split = {}
+        if set(CH.SPLIT_VARIANTS) <= set(var):
+            for m in methods:
+                full, g, bg, side = (var[v].get(m) for v in ("full", *CH.SPLIT_VARIANTS))
+                if None in (full, g, bg, side):
+                    continue
+                split[m] = {"derive_ms": d.get(m), "before_ms": bg - g, "during_ms": g - (d.get(m) or 0.0),
+                            "after_ms": full - bg, "full_ms": full, "side_ms": side, "after_exposed_side_ms": side - bg,
+                            "hidden_by_side_ms": full - side}
+                if m in r and r[m].get("baseline_ms"):
+                    base = r[m]["baseline_ms"]
+                    split[m] |= {"full_x": full / base, "side_x": side / base}
+        r["split"] = split or "the arm's calls expose no phases (before, gemm, after)"
+        out["arms"][a.name] = r
+    return out
+
+
 # ---- one shape ---------------------------------------------------------------------------------------------------------------
 
 
@@ -424,19 +551,30 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     so = B.allocate(dev, shape, alloc, plan["sets"], args.seed, sf, extra)
     entries: list[Entry] = []
     gated: dict = {}
+    unchained: dict = {}
     try:
         gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed)
-        arm_ents = []
+        arm_ents, arm_sets = [], {}
         for a in arms:
-            arm_ents += arm_entries(bench, dev, a, shape, arm_operand_sets(dev, a, so), first)
+            arm_sets[a.name] = arm_operand_sets(dev, a, so)
+            arm_ents += arm_entries(bench, dev, a, shape, arm_sets[a.name], first)
         entries = tune_baselines(bench, dev, shape, fams, so, gated, lt_ws, plan["burst"], args.tune_reps, args.finalists)
         entries += bench.capture(arm_ents, plan["burst"])
         free_entries(bench, [e for e in arm_ents if e not in entries])
+        if chained(args, shape):
+            chains, unchained = chain_entries(bench, dev, shape, entries, arms, arm_sets, plan["sets"], not bench.chained)
+            bench.chained = True
+            kept = bench.capture(chains, plan["burst"])
+            for e in chains:
+                if all(e is not x for x in kept):
+                    e.chain.release()
+            entries += kept
+            row["decode_method"] = "dependent-chain"
         order_seed = B.hash_seed(f"{args.seed}/{shape.label}/order")
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
         row["summary"] = summarize(per, bench.items)
-        row.update(shape_report(shape, fams, arms, entries, per, bench))
+        row.update(shape_report(shape, fams, arms, entries, per, bench, unchained))
     finally:
         free_entries(bench, entries)
         for g in gated.values():
@@ -447,8 +585,13 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     return row
 
 
-def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Bench) -> dict:
+def chained(args, shape) -> bool:
+    return getattr(args, "decode_method", "independent") == "dependent-chain" and shape.m == SH.DECODE_M
+
+
+def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Bench, unchained: dict | None = None) -> dict:
     med = {e.key: {m: statistics.median(xs) for m, xs in per[e.key].items() if xs} for e in entries}
+    chain = chain_report(shape, fams, arms, entries, med, bench.methods, unchained or {})
     baselines: dict = {}
     for fam in fams:
         keys = [e for e in entries if e.kind == "baseline" and e.key[2] == fam.name]
@@ -479,12 +622,26 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
                 r["rejected"] = "consistency gate (W7)"
                 bench.rejected.append({"shape": shape.label, "arm": a.name, **c})
         phase = SH.phase_of(shape)
-        if phase and "graph" in r and "rejected" not in r:
+        c = chain.get("arms", {}).get(a.name) if chain else None
+        if phase == "decode" and c is not None and "graph" in c:
+            g = c["graph"]
+            r["panel"] = {"phase": phase, "shape": SH.HEADLINE[phase], "decode_method": "dependent-chain",
+                          "slowdown": round(g["total_x"], 4), "hash_free": round(g["hash_free_x"], 4),
+                          "baseline": g["baseline"], "baseline_kernel": chain["baselines"][g["baseline"]]["graph"]["kernel"],
+                          "baseline_ms": g["baseline_ms"], "chain_length": chain["length"]}
+            side = c["split"].get("graph") if isinstance(c["split"], dict) else None
+            if side:
+                r["panel"]["slowdown_side_stream"] = round(side["side_x"], 4)
+        elif phase and "graph" in r and "rejected" not in r:
             g = r["graph"]
             r["panel"] = {"phase": phase, "shape": SH.HEADLINE[phase], "slowdown": round(g["total_x"], 4),
                           "hash_free": round(g["hash_free_x"], 4), "baseline": g["baseline"],
                           "baseline_kernel": baselines[g["baseline"]]["kernel"]["graph"]}
+            if phase == "decode":
+                r["panel"]["decode_method"] = "independent"
         out["arms"][a.name] = r
+    if chain:
+        out["chain"] = chain
     return out
 
 
@@ -507,6 +664,9 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--reps", type=int, default=S.MIN_REPS)
     p.add_argument("--seed", type=int, default=20260930)
     p.add_argument("--methods", nargs="*", default=list(METHODS), choices=[*METHODS, "graph-wflush", "burst-wflush"])
+    p.add_argument("--decode-method", choices=DECODE_METHODS, default="dependent-chain",
+                   help="at decode shapes (m = 32), also time every kernel and arm as a dependent chain (chain.py), the "
+                        "panel's decode method; 'independent' times bursts of independent calls only")
     p.add_argument("--lt-candidates", type=int, default=B.LT_CANDIDATES)
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")
@@ -535,6 +695,40 @@ def print_plan(args) -> int:
 
 
 PREFLIGHT_UNITS = 4099
+#: the derive preflight's y: rows past two 128-row scale tiles, n != k (columns wrap), k past one 4-block scale tile
+PREFLIGHT_DERIVE = (160, 384, 1024)
+
+
+def preflight_derive(dev, seed: int = 11) -> dict:
+    """Every derive kind from every y format, on the device, against `derive.py`'s twin (what the chain gate checks with);
+    the scale buffers are filled with 0xEE first, and no byte outside the scales' places may change."""
+    m, n, k = PREFLIGHT_DERIVE
+    ybuf, abuf, sbuf = dev.alloc(m * n * 4), dev.alloc(m * k * 4), dev.alloc(B.scale_bytes("ue4m3/16", m, k))
+    out, bad = [], []
+    try:
+        for src in DV.SRC:
+            y = DV.preflight_y(src, m, n, seed)
+            dev.write(ybuf.ptr, y)
+            for name, kind in DV.KINDS.items():
+                dev.memset(sbuf.ptr, 0xEE, sbuf.nbytes)
+                dev.derive(DV.SRC[src], ybuf.ptr, m, n, kind.id, abuf.ptr, sbuf.ptr, k)
+                dev.sync()
+                sf = dev.read(sbuf.ptr, sbuf.nbytes)
+                r = DV.check(name, src, y, dev.read(abuf.ptr, DV.a_bytes(kind, m, k)), sf, m, n, k)
+                if kind.block > 1:
+                    used = set(DV.sf_offsets(m, k // kind.block).ravel().tolist())
+                    r["stray_scale_bytes"] = sum(1 for i, b in enumerate(sf) if b != 0xEE and i not in used)
+                    r["ok"] = r["ok"] and r["stray_scale_bytes"] == 0
+                out.append(r)
+                if not r["ok"]:
+                    bad.append(f"{src}->{name}")
+    finally:
+        for b in (ybuf, abuf, sbuf):
+            dev.free(b)
+    if bad:
+        raise RuntimeError(f"the device derive differs from derive.py's twin for {bad}: "
+                           f"{[r for r in out if not r['ok']][:2]}")
+    return {"shape": {"m": m, "n": n, "k": k}, "cases": [{k: r[k] for k in ("src", "kind", "a_bytes", "ok")} for r in out]}
 
 
 def preflight_fill(dev, seed: int = 7) -> dict:
@@ -596,6 +790,11 @@ def main(argv: list[str] | None = None) -> int:
         out["identity"] = {**ident, "card": card, "nvml": nid, "cuda": dev.info}
         out["versions"] = N.versions(dev)
         out["preflight_fill"] = preflight_fill(dev)
+        if any(chained(args, s) for s in SH.select(args.shapes)):
+            if not dev.has_chain:
+                raise RuntimeError("this libpouw_harness.so predates the dependent chain (no ph_derive): rebuild it, or "
+                                   "pass --decode-method independent")
+            out["preflight_derive"] = preflight_derive(dev)
         if args.lock_mhz:
             r = N.smi(uuid, "-lgc", f"{args.lock_mhz},{args.lock_mhz}")
             lock = {"requested_mhz": args.lock_mhz, "locked": r["returncode"] == 0, "smi": r}

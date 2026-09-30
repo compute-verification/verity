@@ -91,6 +91,14 @@ class Device:
         L.ph_event_ms.argtypes = [C.POINTER(C.c_float), vp, vp]
         L.ph_stream_sync.argtypes = [vp]
         L.ph_free.argtypes = [vp]
+        L.ph_event_destroy.argtypes = [vp]
+        #: a library built before the dependent chain has no derive: it still times independent bursts
+        self.has_chain = hasattr(L, "ph_derive") and hasattr(L, "ph_stream_wait_event")
+        if self.has_chain:
+            L.ph_derive.restype = L.ph_stream_wait_event.restype = i32
+            L.ph_derive.argtypes = [i32, vp, i32, i32, i32, vp, vp, i32, vp]
+            L.ph_stream_wait_event.argtypes = [vp, vp]
+        self._side = None
         if C.sizeof(LtCandidate) != L.ph_lt_candidate_size() or C.sizeof(Info) != L.ph_info_size():
             raise NativeError("libpouw_harness.so's structs don't match native.py's")
         count = i32()
@@ -168,6 +176,27 @@ class Device:
 
     def record(self, e: int, stream: int | None = None) -> None:
         self.ck(self.lib.ph_event_record(vp(e), vp(stream or self.stream)))
+
+    def event_destroy(self, e: int) -> None:
+        self.ck(self.lib.ph_event_destroy(vp(e)))
+
+    @property
+    def side_stream(self) -> int:
+        """A second stream (non-blocking), for work a chain forks off its timing stream and joins at the chain's end."""
+        if self._side is None:
+            s = vp()
+            self.ck(self.lib.ph_stream_create(C.byref(s)))
+            self._side = s.value
+        return self._side
+
+    def wait(self, stream: int, e: int) -> None:
+        self.ck(self.lib.ph_stream_wait_event(vp(stream), vp(e)), "stream wait")
+
+    def derive(self, src: int, y: int, m: int, n: int, kind: int, a: int, sf: int | None, k: int,
+               stream: int | None = None) -> None:
+        """The chain's f (derive.py): A (m x k, and its block scales) from y (m x n), in stream order."""
+        self.ck(self.lib.ph_derive(src, vp(y), m, n, kind, vp(a), vp(sf) if sf else None, k, vp(stream or self.stream)),
+                "derive")
 
     def elapsed_ms(self, a: int, b: int) -> float:
         self.ck(self.lib.ph_event_sync(vp(b)))

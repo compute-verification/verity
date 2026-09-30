@@ -1,9 +1,10 @@
 // The PoUW bench harness's device side (libpouw_harness.so): memory, operand fills, the read-only L2 flush, events and CUDA
-// graphs, cuBLASLt's heuristic candidates and their calls, the gates' device helpers, and the card's characterization
-// kernels (tensor-core peak rates, DRAM and L2 bandwidth).  A C ABI for ctypes; every call returns 0 or an error code whose
-// text `ph_last_error` gives.  Build: build.sh (sm_120a).
+// graphs, the dependent chain's derive, cuBLASLt's heuristic candidates and their calls, the gates' device helpers, and the
+// card's characterization kernels (tensor-core peak rates, DRAM and L2 bandwidth).  A C ABI for ctypes; every call returns 0
+// or an error code whose text `ph_last_error` gives.  Build: build.sh (sm_120a).
 #include <cublasLt.h>
 #include <cuda_bf16.h>
+#include <cuda_fp8.h>
 #include <cuda_runtime.h>
 
 #include <cstdint>
@@ -102,6 +103,8 @@ int ph_event_destroy(void* e) { CK(cudaEventDestroy(cudaEvent_t(e))); return 0; 
 int ph_event_record(void* e, void* s) { CK(cudaEventRecord(cudaEvent_t(e), cudaStream_t(s))); return 0; }
 int ph_event_sync(void* e) { CK(cudaEventSynchronize(cudaEvent_t(e))); return 0; }
 int ph_event_ms(float* ms, void* a, void* b) { CK(cudaEventElapsedTime(ms, cudaEvent_t(a), cudaEvent_t(b))); return 0; }
+// Stream s waits for event e's last record (inside a capture: a fork or join between the captured streams).
+int ph_stream_wait_event(void* s, void* e) { CK(cudaStreamWaitEvent(cudaStream_t(s), cudaEvent_t(e), 0)); return 0; }
 
 // ThreadLocal capture: an arm that allocates, syncs or copies inside its timed call fails the capture instead of being timed.
 int ph_capture_begin(void* s) { CK(cudaStreamBeginCapture(cudaStream_t(s), cudaStreamCaptureModeThreadLocal)); return 0; }
@@ -265,6 +268,136 @@ __global__ void k_xor_byte(uint8_t* p, size_t off, uint8_t mask) { p[off] ^= mas
 // The negative control: flips bits `mask` of byte `off` of p, in stream order.
 int ph_xor_byte(void* p, size_t off, int mask, void* stream) {
   k_xor_byte<<<1, 1, 0, cudaStream_t(stream)>>>(static_cast<uint8_t*>(p), off, uint8_t(mask));
+  CK(cudaGetLastError());
+  return 0;
+}
+
+// ---- the dependent chain's derive ----------------------------------------------------------------------------------------
+// The next call's A (m x k) from this call's y (m x n, row-major): row r of A reads row r of y, column c reads column c mod n.
+// Each row is scaled by 2^(T - E), where the row's amax is in [2^(E-1), 2^E) (no scaling for a zero row), so |x| < 2^T and the
+// chain's values stay bounded over any number of calls; then converted to the consumer's format, rounding to nearest even and
+// saturating, with real block scales (UE8M0 per 32, UE4M3 per 16) in the 128 x 4 tiled layout.  derive.py's numpy twin must
+// give the same bytes (checked on the device by the preflight, and on every chain by its gate).
+
+enum { DY_BF16 = 0, DY_INT32 = 1, DY_F32 = 2 };
+enum { DV_F32 = 0, DV_BF16 = 1, DV_E4M3 = 2, DV_MXFP8 = 3, DV_NVFP4 = 4, DV_MXFP4 = 5, DV_INT8 = 6, DV_KINDS = 7 };
+constexpr int DERIVE_THREADS = 256;
+
+__device__ __forceinline__ int derive_t(int kind) {
+  switch (kind) {
+    case DV_E4M3: return 8;
+    case DV_NVFP4: return 11;
+    case DV_INT8: return 7;
+    case DV_MXFP8: case DV_MXFP4: return 0;
+    default: return 2;
+  }
+}
+
+__device__ __forceinline__ float dy_load(int src, const void* y, size_t i) {
+  if (src == DY_BF16) return __uint_as_float(uint32_t(static_cast<const uint16_t*>(y)[i]) << 16);
+  if (src == DY_INT32) return __int2float_rn(static_cast<const int32_t*>(y)[i]);
+  return static_cast<const float*>(y)[i];
+}
+
+__device__ __forceinline__ uint8_t e4m3_rne(float x) {
+  return uint8_t(__nv_cvt_float_to_fp8(x, __NV_SATFINITE, __NV_E4M3));
+}
+
+__device__ __forceinline__ float e4m3_value(uint8_t c) {
+  int e = (c >> 3) & 15, mt = c & 7;
+  float v = e == 0 ? ldexpf(float(mt), -9) : ldexpf(float(8 + mt), e - 10);
+  return (c & 0x80) ? -v : v;
+}
+
+// E2M1 {0, 0.5, 1, 1.5, 2, 3, 4, 6}: nearest, ties to the even code, saturating at 6.
+__device__ __forceinline__ uint8_t e2m1_rne(float x) {
+  float a = fabsf(x);
+  uint8_t c = a <= 0.25f ? 0 : a < 0.75f ? 1 : a <= 1.25f ? 2 : a < 1.75f ? 3 : a <= 2.5f ? 4 : a < 3.5f ? 5 : a <= 5.0f ? 6 : 7;
+  return uint8_t((signbit(x) ? 8 : 0) | c);
+}
+
+__device__ __forceinline__ size_t sf_offset(int row, int col, int cols) {
+  return (size_t(row / 128) * ((cols + 3) / 4) + col / 4) * 512 + (row % 32) * 16 + ((row % 128) / 32) * 4 + (col % 4);
+}
+
+__device__ __forceinline__ float block_max(float v, float* red) {
+  for (int o = 16; o; o >>= 1) v = fmaxf(v, __shfl_xor_sync(0xffffffffu, v, o));
+  if ((threadIdx.x & 31) == 0) red[threadIdx.x >> 5] = v;
+  __syncthreads();
+  if (threadIdx.x < 32) {
+    float w = threadIdx.x < (blockDim.x >> 5) ? red[threadIdx.x] : 0.f;
+    for (int o = 16; o; o >>= 1) w = fmaxf(w, __shfl_xor_sync(0xffffffffu, w, o));
+    if (threadIdx.x == 0) red[0] = w;
+  }
+  __syncthreads();
+  return red[0];
+}
+
+__global__ void k_derive(int src, const void* __restrict__ y, int n, int kind, uint8_t* __restrict__ a,
+                         uint8_t* __restrict__ sf, int k) {
+  __shared__ float red[32];
+  const int r = blockIdx.x;
+  const size_t yr = size_t(r) * n, ar = size_t(r) * k;
+  float amax = 0.f;
+  for (int c = threadIdx.x; c < n; c += blockDim.x) amax = fmaxf(amax, fabsf(dy_load(src, y, yr + c)));
+  amax = block_max(amax, red);
+  int e = 0;
+  if (amax > 0.f && isfinite(amax)) frexpf(amax, &e);
+  const int shift = amax > 0.f && isfinite(amax) ? derive_t(kind) - e : 0;
+  auto x = [&](int c) { return ldexpf(dy_load(src, y, yr + c % n), shift); };
+  switch (kind) {
+    case DV_F32:
+      for (int c = threadIdx.x; c < k; c += blockDim.x) reinterpret_cast<float*>(a)[ar + c] = x(c);
+      break;
+    case DV_BF16:
+      for (int c = threadIdx.x; c < k; c += blockDim.x)
+        reinterpret_cast<uint16_t*>(a)[ar + c] = __bfloat16_as_ushort(__float2bfloat16_rn(x(c)));
+      break;
+    case DV_E4M3:
+      for (int c = threadIdx.x; c < k; c += blockDim.x) a[ar + c] = e4m3_rne(x(c));
+      break;
+    case DV_INT8:
+      for (int c = threadIdx.x; c < k; c += blockDim.x) a[ar + c] = uint8_t(int8_t(fminf(fmaxf(rintf(x(c)), -127.f), 127.f)));
+      break;
+    default: {  // block-scaled: MXFP8 (E4M3, UE8M0 per 32), NVFP4 (E2M1, UE4M3 per 16), MXFP4 (E2M1, UE8M0 per 32)
+      const int bs = kind == DV_NVFP4 ? 16 : 32, cols = k / bs;
+      for (int b = threadIdx.x; b < cols; b += blockDim.x) {
+        float v[32], bmax = 0.f;
+        for (int i = 0; i < bs; ++i) {
+          v[i] = x(b * bs + i);
+          bmax = fmaxf(bmax, fabsf(v[i]));
+        }
+        uint8_t code[32], scale;
+        if (kind == DV_NVFP4) {
+          scale = e4m3_rne(__fdiv_rn(bmax, 6.f));
+          float s = e4m3_value(scale);
+          for (int i = 0; i < bs; ++i) code[i] = s > 0.f ? e2m1_rne(__fdiv_rn(v[i], s)) : 0;
+        } else {
+          int eb = 0;
+          if (bmax > 0.f) frexpf(bmax, &eb);
+          int xs = bmax > 0.f ? eb - 1 - (kind == DV_MXFP8 ? 8 : 2) : -127;
+          xs = xs < -127 ? -127 : xs > 127 ? 127 : xs;
+          scale = uint8_t(xs + 127);
+          for (int i = 0; i < bs; ++i) code[i] = kind == DV_MXFP8 ? e4m3_rne(ldexpf(v[i], -xs)) : e2m1_rne(ldexpf(v[i], -xs));
+        }
+        if (kind == DV_MXFP8) {
+          for (int i = 0; i < bs; ++i) a[ar + size_t(b) * bs + i] = code[i];
+        } else {
+          for (int i = 0; i < bs; i += 2) a[(ar + size_t(b) * bs + i) / 2] = uint8_t(code[i] | (code[i + 1] << 4));
+        }
+        sf[sf_offset(r, b, cols)] = scale;
+      }
+    }
+  }
+}
+
+// A (and its block scales `sf`, for the block-scaled kinds) of m x k from y of m x n (format `src`), on `stream`.
+int ph_derive(int src, const void* y, int m, int n, int kind, void* a, void* sf, int k, void* stream) {
+  if (kind < 0 || kind >= DV_KINDS || src < DY_BF16 || src > DY_F32) return fail_arg("ph_derive: unknown kind or source");
+  const bool blocked = kind == DV_MXFP8 || kind == DV_NVFP4 || kind == DV_MXFP4;
+  if (m <= 0 || n <= 0 || k <= 0 || (blocked && (k % 32 || !sf))) return fail_arg("ph_derive: bad shape or no scale buffer");
+  k_derive<<<m, DERIVE_THREADS, 0, cudaStream_t(stream)>>>(src, y, n, kind, static_cast<uint8_t*>(a),
+                                                          static_cast<uint8_t*>(sf), k);
   CK(cudaGetLastError());
   return 0;
 }

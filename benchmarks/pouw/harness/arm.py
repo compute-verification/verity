@@ -13,7 +13,7 @@ import importlib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-VERSION = "v0"
+VERSION = "v0.2"
 
 STREAMS = ("fp8", "fp4")
 INPUTS = ("f32", "bf16", "e4m3", "e2m1-nv", "e2m1-mx", "int8")
@@ -83,7 +83,15 @@ class Gate:
 class Call(Protocol):
     """One operand set's prepared prover call. `launch` is the timed call: one complete per-call step, enqueued on `stream`,
     with no host sync, allocation or host-device copy (the harness captures it into a CUDA graph). `weight_side` enqueues the
-    per-(weight, epoch) work, under the same rules. `outputs` are the buffers the arm's gate reads."""
+    per-(weight, epoch) work, under the same rules. `outputs` are the buffers the arm's gate reads.
+
+    The dependent chain (`chain.py`, at decode shapes): before each launch the harness overwrites the operand set's `a` (and
+    `a_scale`, for block-scaled inputs) with f of the previous call's y, so `launch` must read A from the operand set every
+    time (a copy made in `prepare` would time a chain that isn't one). y is `outputs["y"]` (else `outputs["d"]`): m x n
+    row-major, its first m rows, BF16 unless the call sets ``y_format`` ("f32" or "int32"). Optional: ``phases``, a dict of
+    ``before``, ``gemm`` and ``after``, each ``fn(stream)``, whose sequence enqueues the same work as `launch`; with it the
+    chain splits the call's decode time, and runs ``after`` on a side stream (it may then overlap the next call; the harness
+    keeps call j from reusing its operand set, or the call object, until call j - S's ``after`` is done)."""
 
     outputs: dict[str, Buffer]
 

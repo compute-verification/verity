@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
 import bench as H  # noqa: E402
+import chain as CH  # noqa: E402
+import derive as DV  # noqa: E402
 import fill as F  # noqa: E402
 import identity as I  # noqa: E402
 import report as R  # noqa: E402
@@ -94,6 +96,31 @@ class FakeDevice:
 
     def read(self, ptr, n):
         return bytes(self.mem[ptr][:n])
+
+    def write(self, ptr, data):
+        self.mem[ptr][:len(data)] = data
+
+    # the chain's: derive by the twin (0.1 ms), events, a side stream that runs in order on the virtual clock
+    side_stream = 2
+
+    def derive(self, src, y, m, n, kind, a, sf, k, stream=None):
+        self.log.append(("derive", y, a, stream))
+
+        def run():
+            name = next(x for x, d in DV.KINDS.items() if d.id == kind)
+            s = next(x for x, i in DV.SRC.items() if i == src)
+            ab, scale, offs = DV.derive(name, s, bytes(self.mem[y][:m * n * CH.Y_BYTES[s]]), m, n, k)
+            self.mem[a][:len(ab)] = ab
+            if scale is not None:
+                np.frombuffer(self.mem[sf], np.uint8)[offs] = scale
+            self.t += 0.1
+        self.enqueue(run)
+
+    def wait(self, stream, e):
+        self.log.append(("wait", stream, e))
+
+    def event_destroy(self, e):
+        self.events.pop(e, None)
 
 
 class FakeSensors:
@@ -533,3 +560,217 @@ def test_set_count_bounds():
     assert S.set_count(64 << 20, 128 << 20) == 4
     rng = random.Random(0)
     assert all(S.burst_len(n) >= S.MIN_BURST for n in (rng.randrange(1, 600) for _ in range(50)))
+
+
+# ---- the dependent chain ----------------------------------------------------------------------------------------------------
+
+DECODE = A.Shape("m32-n8192-k8192", 32, 8192, 8192)
+SMALL = A.Shape("m32-n64-k64", 32, 64, 64)
+
+
+def test_the_derive_twin_rounds_to_nearest_even_and_saturates():
+    pos = F.E4M3_VALUES[:127]
+    mids = (pos[:-1] + pos[1:]) / 2
+    got = DV.e4m3_rne(mids.astype(np.float32))
+    assert np.all(got % 2 == 0) and np.all((got == np.arange(126)) | (got == np.arange(1, 127)))
+    assert DV.e4m3_rne(pos.astype(np.float32)).tolist() == list(range(127))
+    assert DV.e4m3_rne(np.array([1e9, -1e9, -0.0, 0.0, -1e-9], np.float32)).tolist() == [0x7E, 0xFE, 0x80, 0x00, 0x80]
+    vals = np.array([0.25, 0.3, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0, 5.1, 7.0, -0.1, -6.0], np.float32)
+    want = [0, 1, 2, 2, 4, 4, 6, 6, 7, 7, 8, 15]
+    assert DV.e2m1_rne(vals).tolist() == want
+    assert np.array_equal(F.E2M1_VALUES[DV.e2m1_rne(F.E2M1_VALUES.astype(np.float32))], F.E2M1_VALUES)
+
+
+@pytest.mark.parametrize("kind", sorted(DV.KINDS))
+def test_every_derive_stays_bounded_reads_columns_mod_n_and_decodes_close_to_its_input(kind):
+    m, n, k = 8, 96, 128
+    y = DV.preflight_y("bf16", m, n, 5)
+    x = DV.scaled(DV.KINDS[kind], "bf16", y, m, n, k)
+    assert np.all(np.abs(x) < 2.0 ** DV.KINDS[kind].t)
+    assert np.array_equal(x[:, n:], x[:, :k - n])
+    a, scale, offs = DV.derive(kind, "bf16", y, m, n, k)
+    assert len(a) == DV.a_bytes(DV.KINDS[kind], m, k)
+    fmt = {"f32": F.F32, "bf16": F.BF16, "e4m3": F.E4M3, "mxfp8": F.E4M3, "nvfp4": F.E2M1, "mxfp4": F.E2M1, "int8": F.INT8}[kind]
+    v = F.decode(fmt, a).reshape(m, k)
+    if scale is not None:
+        bs = DV.KINDS[kind].block
+        per = F.E4M3_VALUES[scale] if kind == "nvfp4" else 2.0 ** (scale.astype(np.float64) - 127)
+        v = v * np.repeat(per, bs, axis=1)
+    rel = {"f32": 0, "bf16": 2**-8, "e4m3": 2**-4, "mxfp8": 2**-3, "nvfp4": 0.5, "mxfp4": 0.5, "int8": 0}[kind]
+    blk = DV.KINDS[kind].block
+    ref = np.max(np.abs(x.reshape(m, k // blk, blk)), axis=2).repeat(blk, axis=1) if blk > 1 else np.abs(x)
+    floor = {"int8": 0.5, "e4m3": 2.0 ** -9, "nvfp4": 6 * 2.0 ** -9}.get(kind, 0.0)  # what underflows to zero
+    assert np.all(np.abs(v - x) <= rel * ref + floor + 1e-30)
+
+
+def test_block_scales_land_in_the_128x4_tiled_layout():
+    offs = DV.sf_offsets(256, 12)
+    assert offs[0, 0] == 0 and offs[0, 3] == 3 and offs[1, 0] == 16 and offs[32, 0] == 4 and offs[0, 4] == 512
+    assert offs[128, 0] == 512 * 3
+    assert len(set(offs.ravel().tolist())) == offs.size and offs.max() < B.scale_bytes("ue4m3/16", 256, 12 * 16)
+
+
+class FakeGemm:
+    """A GEMM stand-in on the fake device: y (m x n BF16) a function of A's E4M3 codes, `ms` of virtual time; with
+    `phases`, before and after of their own cost."""
+
+    def __init__(self, dev, shape, ms=1.0, phases=False, before=0.2, after=0.3):
+        m, n, k = shape.m, shape.n, shape.k
+        self.dev, self.shape, self.ms = dev, shape, ms
+        self.ops = B.Operands(dev.alloc(m * k), dev.alloc(n * k), None, None, dev.alloc(m * n * 2))
+        dev.write(self.ops.a.ptr, F.fill(F.E4M3, m * k, id(self) & 0xFFFF))
+        self.outputs = {"y": self.ops.d}
+        self.launches = 0
+        if phases:
+            self.phases = {"before": lambda s: self._cost(before), "gemm": self._gemm, "after": lambda s: self._cost(after)}
+            self.launch = lambda s: [self.phases[p](s) for p in CH.PHASES]
+
+    def _cost(self, ms):
+        self.dev.enqueue(lambda: setattr(self.dev, "t", self.dev.t + ms))
+
+    def _gemm(self, stream=None):
+        def run():
+            m, n, k = self.shape.m, self.shape.n, self.shape.k
+            a = F.E4M3_VALUES[np.frombuffer(bytes(self.dev.mem[self.ops.a.ptr][:m * k]), np.uint8)].reshape(m, k)
+            self.dev.write(self.ops.d.ptr, F.bf16_rne(a[:, np.arange(n) % k] * 3 + 1).astype("<u2").tobytes())
+            self.dev.t += self.ms
+            self.launches += 1
+        self.dev.enqueue(run)
+
+    def launch(self, stream):
+        self._gemm(stream)
+
+    def weight_side(self, stream):
+        pass
+
+    def free(self):
+        pass
+
+
+def chain_bench(sets=3, phases=False, ms=1.0):
+    b, dev = bench()
+    calls = [FakeGemm(dev, SMALL, ms, phases) for _ in range(sets)]
+    e = H.Entry(("baseline", SMALL.label, "fp8-e4m3", "k"), "baseline", calls, meta={"source": "fake"})
+    b.gate(e.key, lambda: (True, {}))
+    return b, dev, e
+
+
+def test_the_chain_is_the_least_multiple_of_the_sets_past_its_minimum():
+    assert CH.length(8) == 64 and CH.length(3) == 66 and CH.length(100) == 100
+
+
+def test_a_chain_derives_each_call_from_the_previous_calls_y_and_wraps():
+    b, dev, e = chain_bench()
+    links = CH.baseline_links(e, B.FAMILIES["fp8-e4m3"])
+    ch = CH.Chain(dev, SMALL, links, "e4m3", "full")
+    dev.log.clear()
+    ch.enqueue(dev.stream, 6)
+    derives = [x for x in dev.log if x[0] == "derive"]
+    ys, as_ = [ln.y.ptr for ln in links], [ln.a.ptr for ln in links]
+    assert [(ys.index(y), as_.index(a)) for _, y, a, _ in derives] == [(2, 0), (0, 1), (1, 2), (2, 0), (0, 1), (1, 2)]
+    assert [c.launches for c in e.calls] == [2, 2, 2]
+    for j in (1, 2):
+        assert ch.check(j)["ok"]
+
+
+def test_the_side_stream_chain_guards_set_reuse_and_joins_at_its_end():
+    b, dev, e = chain_bench(phases=True)
+    links = CH.baseline_links(e, B.FAMILIES["fp8-e4m3"])
+    ch = CH.Chain(dev, SMALL, links, "e4m3", "side")
+    dev.log.clear()
+    ch.enqueue(dev.stream, 6)
+    waits = [x for x in dev.log if x[0] == "wait"]
+    main_waits = [ev for _, s, ev in waits if s == dev.stream]
+    assert main_waits == [ch.done[0], ch.done[1], ch.done[2], ch.done[2]]
+    assert [ev for _, s, ev in waits if s == dev.side_stream] == [ch.fork[j % 3] for j in range(6)]
+    into_0 = [i for i, x in enumerate(dev.log) if isinstance(x, tuple) and x[0] == "derive" and x[2] == links[0].a.ptr]
+    assert len(into_0) == 2 and dev.log[into_0[1] - 1] == ("wait", dev.stream, ch.done[0])
+    ch.release()
+    assert ch.fork == ch.done == []
+
+
+def test_a_chain_is_gated_before_it_is_timed_and_a_stale_a_is_rejected():
+    b, dev, e = chain_bench()
+    got, unchained = H.chain_entries(b, dev, SMALL, [e], [], {}, 3, first=True)
+    keys = [x.key for x in got]
+    assert keys == [("chain", SMALL.label, "fp8-e4m3", "k", "full"), ("chain", SMALL.label, "derive", "e4m3", "derive-only")]
+    assert all(b.ledger.passed(k) for k in keys) and unchained == {}
+    stale = [n for n in b.negatives if n["key"][-1] == "chain-stale-a"]
+    assert len(stale) == 1 and stale[0]["rejected"]
+    assert all(x.length == CH.length(3) for x in got)
+    b.capture(got, 4)
+    b.timed(got, 4, seed=1)
+    full = [it for it in b.items if it["key"][-1] == "full"]
+    assert full and all(it["burst"] == 66 for it in full)
+    assert full[0]["ms_per_call"] == pytest.approx(1.1)
+
+
+def test_a_chain_whose_derive_is_wrong_is_not_timed_and_a_chain_needs_its_calls_gate():
+    b, dev, e = chain_bench()
+    real = dev.derive
+
+    def wrong(src, y, m, n, kind, a, sf, k, stream=None):
+        real(src, y, m, n, DV.KINDS["int8"].id if kind == DV.KINDS["e4m3"].id else kind, a, sf, k, stream)
+    dev.derive = wrong
+    got, _ = H.chain_entries(b, dev, SMALL, [e], [], {}, 3, first=False)
+    assert got == [] and not b.ledger.passed(("chain", SMALL.label, "fp8-e4m3", "k", "full"))
+    b2, dev2, e2 = chain_bench()
+    b2.ledger.records.clear()
+    b2.gate(e2.key, lambda: (False, {}))
+    got, _ = H.chain_entries(b2, dev2, SMALL, [e2], [], {}, 3, first=False)
+    assert [x.key[-1] for x in got] == ["derive-only"]
+    assert "did not pass" in b2.ledger.records[("chain", SMALL.label, "fp8-e4m3", "k", "full")]["detail"]["error"]
+
+
+class FakeChainArm(FakeArm):
+    """A decode arm whose calls are FakeGemms on the harness's operand sets, with phases; its gate recomputes y from A."""
+
+    def __init__(self, phases=True):
+        super().__init__()
+        self.phases = phases
+
+    def prepare(self, dev, shape, flags, operands):
+        c = FakeGemm(dev, shape, 1.0 if "h" in flags else 0.9, self.phases)
+        c.ops = B.Operands(operands.a, operands.b, None, None, c.ops.d)
+        c.outputs = {"y": c.ops.d}
+        return c
+
+    def gate(self, dev, call, shape, flags):
+        m, n, k = shape.m, shape.n, shape.k
+        a = F.E4M3_VALUES[np.frombuffer(dev.read(call.ops.a.ptr, m * k), np.uint8)].reshape(m, k)
+        want = F.bf16_rne(a[:, np.arange(n) % k] * 3 + 1).astype("<u2").tobytes()
+        return A.Gate(dev.read(call.outputs["y"].ptr, m * n * 2) == want, {"y": "all"})
+
+
+def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_row(monkeypatch):
+    monkeypatch.setitem(SH.HEADLINE, "decode", SMALL.label)
+    b, dev, e = chain_bench(ms=0.5)
+    arm = FakeChainArm()
+    sets = [A.OperandSet(i, i, i, c.ops.a, c.ops.b) for i, c in enumerate(e.calls)]
+    arm_es = H.arm_entries(b, dev, arm, SMALL, sets, first=False)
+    got, unchained = H.chain_entries(b, dev, SMALL, [e, *arm_es], [arm], {arm.name: sets}, 3, first=False)
+    variants = sorted(x.key[3:] for x in got if x.key[2] == arm.name)
+    assert variants == [("hash", "before-gemm"), ("hash", "full"), ("hash", "gemm"), ("hash", "side"), ("nohash", "full")]
+    assert "arm_gate" in b.ledger.records[("chain", SMALL.label, arm.name, "hash", "full")]["detail"]
+    es = [e, *arm_es, *got]
+    b.capture(es, 4)
+    per = b.timed(es, 4, seed=2)
+    rep = H.shape_report(SMALL, [B.FAMILIES["fp8-e4m3"]], [arm], es, per, b)
+    base = rep["chain"]["baselines"]["fp8-e4m3"]["graph"]
+    assert base["ms"] == pytest.approx(0.6) and base["independent_ms"] == pytest.approx(0.5)
+    assert base["derive_ms"] == pytest.approx(0.1) and base["kernel"] == "k"
+    split = rep["chain"]["arms"][arm.name]["split"]["graph"]
+    assert split["derive_ms"] == pytest.approx(0.1) and split["before_ms"] == pytest.approx(0.2)
+    assert split["during_ms"] == pytest.approx(1.0) and split["after_ms"] == pytest.approx(0.3)
+    panel = rep["arms"][arm.name]["panel"]
+    assert panel["decode_method"] == "dependent-chain" and panel["baseline_kernel"] == "k"
+    assert panel["slowdown"] == pytest.approx(round(1.6 / 0.6, 4)) and panel["hash_free"] == pytest.approx(round(1.5 / 0.6, 4))
+    assert panel["chain_length"] == 66 and "slowdown_side_stream" in panel
+
+
+def test_an_arm_without_a_y_output_is_not_chained():
+    b, dev, e = chain_bench()
+    arm = FakeArm()
+    arm_es = H.arm_entries(b, dev, arm, SMALL, opsets(dev), first=False)
+    got, unchained = H.chain_entries(b, dev, SMALL, arm_es, [arm], {arm.name: opsets(dev)}, 3, first=False)
+    assert got == [] and set(unchained) == {"fake-arm/hash", "fake-arm/nohash"}

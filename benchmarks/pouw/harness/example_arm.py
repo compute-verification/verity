@@ -1,7 +1,8 @@
 """The harness's example arm, **not a PoUW scheme**: cuBLASLt's first heuristic FP8 E4M3 GEMM (per-tensor scales 1, BF16 out)
-as the prover, and one read of D as a stand-in for hashing it. It exists to smoke-test the arm path on the card (prepare,
-gates, the negative controls, graph capture, the weight side, the report) and as a template for the streams' arms; its
-numbers are labelled "example arm" and go on no panel.
+as the prover, and one read of A before it and of D after it as stand-ins for committing A and hashing y (its `phases`).
+It exists to smoke-test the arm path on the card (prepare, gates, the negative controls, graph capture, the weight side, the
+dependent chain's split and side stream, the report) and as a template for the streams' arms; its numbers are labelled
+"example arm" and go on no panel.
 
   python bench.py ... --arm example_arm:ExampleFp8
 
@@ -31,11 +32,19 @@ class _Call:
         self.a, self.b = ops.a, ops.b
         self.outputs = {"d": ops.d}
         self.twin_d = twin_ops.d
+        self.phases = {"before": self._before, "gemm": self.gemm.launch, "after": self._after}
 
-    def launch(self, stream: int) -> None:
-        self.gemm.launch(stream)
+    def _before(self, stream: int) -> None:
+        if self.read_d:
+            self.dev.read_bw(self.a, 1, stream)
+
+    def _after(self, stream: int) -> None:
         if self.read_d:
             self.dev.read_bw(self.outputs["d"], 1, stream)
+
+    def launch(self, stream: int) -> None:
+        for p in ("before", "gemm", "after"):
+            self.phases[p](stream)
 
     def weight_side(self, stream: int) -> None:
         self.dev.read_bw(self.b, 1, stream)
@@ -67,7 +76,7 @@ class ExampleFp8:
 
     def work(self, shape: Shape) -> Work:
         return Work(tensor_macs={"fp8-e4m3": shape.mkn}, w_ref=str(shape.mkn), credited=str(shape.mkn), unit="mac",
-                    hashed_bytes={"stand-in-read-d": shape.m * shape.n * 2},
+                    hashed_bytes={"stand-in-read-a": shape.m * shape.k, "stand-in-read-d": shape.m * shape.n * 2},
                     weight_hashed_bytes={"stand-in-read-b": shape.n * shape.k})
 
     def _ops(self, dev, shape: Shape, ops, owned: list[Buffer]) -> tuple[B.Operands, B.Operands]:
