@@ -27,6 +27,14 @@ arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention
 - ``control`` (optional, v0.5): the negative control's transcript, like ``transcript`` (``{arm}`` and ``{shape}``): what the
   arm's no-write control dumped into the same poisoned buffers. The verifier must reject it (panel rule, server.md 11:50Z).
 
+An arm with ``dump(dev, call, shape, dir)`` (v0.5) lets the harness make its transcripts (`bench.poison_dump`, after the
+timed items): the harness fills every buffer of ``call.transcript_buffers`` (default ``call.outputs``; name what a setup
+step wrote too, such as a root or a seed) with 0xA5, runs the weight side and the call, and has `dump` write the
+transcript under ``transcripts/<arm>/<shape>/``; then it poisons them again, launches nothing, and has `dump` write the
+no-write control under ``negative/<arm>/<shape>/``. `dump` reads the device and computes nothing. With a transcript under
+``transcripts/{arm}/{shape}/``, `verify.py` judges the control at the same path under ``negative/`` unless the
+declaration names another. An arm without `dump` writes its own transcripts, and nothing says the harness poisoned them.
+
 A transcript is accepted only by a line of the commands' output that starts with ``ACCEPT`` and names
 ``sha256:<the transcript file's sha256>``, with no ``REJECT`` line naming it (and, per shape, every command exiting 0). A
 control is rejected only by a line that starts with ``REJECT`` and names its sha256, with no ``ACCEPT`` line naming it.

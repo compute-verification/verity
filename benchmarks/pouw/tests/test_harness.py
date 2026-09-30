@@ -102,6 +102,12 @@ class FakeDevice:
     def write(self, ptr, data):
         self.mem[ptr][:len(data)] = data
 
+    def memset(self, ptr, value, n):
+        self.mem[ptr][:n] = bytes([value]) * n
+
+    def count_eq(self, buf, word_bytes, pattern):
+        return sum(b == pattern for b in self.mem[buf.ptr][:buf.nbytes]) if word_bytes == 1 else 0
+
     # the chain's: derive by the twin (0.1 ms), events, a side stream that runs in order on the virtual clock
     side_stream = 2
 
@@ -1102,3 +1108,62 @@ def test_an_arm_without_a_y_output_is_not_chained():
     arm_es = H.arm_entries(b, dev, arm, SMALL, opsets(dev), first=False)
     got, unchained = H.chain_entries(b, dev, SMALL, arm_es, [arm], {arm.name: opsets(dev)}, 3, first=False)
     assert got == [] and set(unchained) == {"fake-arm/hash", "fake-arm/nohash"}
+
+
+# ---- poisoned transcripts and the no-write control (bench.poison_dump) ---------------------------------------------------------
+
+
+class DumpingArm(FakeArm):
+    """Dumps its root's bytes (and a setup-written seed's, when its call has one) as the transcript."""
+
+    def dump(self, dev, call, shape, out):
+        bufs = H.transcript_buffers(call)
+        (out / "manifest.json").write_text(",".join(f"{n}={dev.read(b.ptr, b.nbytes).hex()}" for n, b in sorted(bufs.items())))
+
+
+class StaleCall(FakeCall):
+    """Its setup wrote the root and a seed; its timed launch writes neither (the stale-output case, server.md 11:50Z)."""
+
+    def __init__(self, dev, ms):
+        super().__init__(dev, ms)
+        self.seed = dev.alloc(8)
+        dev.write(self.outputs["root"].ptr, self.pattern)
+        dev.write(self.seed.ptr, b"\x11" * 8)
+        self.transcript_buffers = {"root": self.outputs["root"], "seed": self.seed}
+
+    def launch(self, stream):
+        self.dev.enqueue(lambda: setattr(self.dev, "t", self.dev.t + self.ms))
+
+
+def test_the_harness_dumps_a_poisoned_transcript_then_a_no_write_control(tmp_path):
+    dev = FakeDevice()
+    call = FakeCall(dev, 1.0)
+    rec = H.poison_dump(dev, DumpingArm(), SHAPE, call, tmp_path)
+    assert rec["by"] == "harness" and rec["poison"] == "0xA5" and rec["written"] == {"root": 32} and "wrote_nothing" not in rec
+    honest = (tmp_path / rec["transcript_dir"] / "manifest.json").read_text()
+    control = (tmp_path / rec["control_dir"] / "manifest.json").read_text()
+    assert honest == "root=" + "5a" * 32 and control == "root=" + "a5" * 32
+    assert rec["transcript_dir"] == f"transcripts/fake-arm/{SHAPE.label}" and rec["control_dir"] == f"negative/fake-arm/{SHAPE.label}"
+
+
+def test_a_stale_output_left_by_setup_is_poison_in_the_dump(tmp_path):
+    dev = FakeDevice()
+    rec = H.poison_dump(dev, DumpingArm(), SHAPE, StaleCall(dev, 1.0), tmp_path)
+    assert rec["wrote_nothing"] and rec["written"] == {"root": 0, "seed": 0} and rec["buffers"] == {"root": 32, "seed": 8}
+    assert (tmp_path / rec["transcript_dir"] / "manifest.json").read_text() == "root=" + "a5" * 32 + ",seed=" + "a5" * 8
+
+
+def test_dump_transcripts_poisons_every_dumping_arm_s_hash_call_and_records_the_rest():
+    b, dev = bench()
+    arm, own = DumpingArm(), FakeArm()
+    own.name = "own-dump"
+    entries = [H.Entry(("arm", SHAPE.label, arm.name, "hash"), "arm", [FakeCall(dev, 1.0)])]
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        recs = H.dump_transcripts(b, dev, SHAPE, [arm, own], entries, Path(d))
+        assert (Path(d) / recs[0]["control_dir"] / "manifest.json").is_file()
+    assert [r["by"] for r in recs] == ["harness", "arm"] and "no dump" in recs[1]["why"]
+    assert b.poisoning == recs
+    lone = DumpingArm()
+    lone.name = "no-hash-call"
+    assert H.dump_transcripts(b, dev, SHAPE, [lone], [], Path("."))[0]["error"] == "no gated hash call at this shape"

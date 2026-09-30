@@ -13,8 +13,9 @@ with the negative controls at the first shape before anything is timed; the base
 dependent chains (`chain.py`) and their gates; the SASS gate again on anything loaded since; a warm-up of the same schedule
 to steady state (`--warmup-s`); every entry's timed item sized to the same device time (`--item-ms`: calls, or a chain's
 replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; the consistency
-gate; the report (`report.py`), whose panel rows carry both sides' reps and clocks (server.md 08:50Z). Every failure stops
-what it guards and writes no timing for it.
+gate; after the timed items, each arm's transcript from poisoned buffers and its no-write control (`poison_dump`, for an arm
+with `dump`: panel rule, server.md 11:50Z); the report (`report.py`), whose panel rows carry both sides' reps and clocks
+(server.md 08:50Z). Every failure stops what it guards and writes no timing for it.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its
 gate, or it couldn't run); 6 the consistency gate rejected an arm; 7 the SASS gate refused a binary (an FP32 .FTZ instruction,
@@ -175,6 +176,7 @@ class Bench:
         self.chained = False
         self.sass: SG.Gate | None = None
         self.warmups: list[dict] = []
+        self.poisoning: list[dict] = []
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
@@ -352,6 +354,75 @@ def _flip_control(dev, arm, shape, flags, call, checked: dict):
         g = arm.gate(dev, call, shape, flags)
         return bool(g.ok), {"output": name, "offset": off, "detail": g.detail}
     return run
+
+
+#: what fills every buffer a transcript reads before the call it dumps (server.md 11:50Z; add-a-row.md)
+POISON = 0xA5
+
+
+def transcript_buffers(call) -> dict[str, A.Buffer]:
+    """The buffers the arm's transcript reads: ``call.transcript_buffers`` (arm interface v0.5), else its gate's outputs.
+    They include what a setup step wrote (a root, a seed, scales), so that the dumped call must write them again."""
+    return dict(getattr(call, "transcript_buffers", None) or call.outputs)
+
+
+def _poison(dev, bufs: dict[str, A.Buffer]) -> None:
+    dev.sync()
+    for b in bufs.values():
+        dev.memset(b.ptr, POISON, b.nbytes)
+    dev.sync()
+    left = {n: b.nbytes - dev.count_eq(b, 1, POISON) for n, b in bufs.items()}
+    if any(left.values()):
+        raise RuntimeError(f"poisoning left bytes unpoisoned: {left}")
+
+
+def poison_dump(dev, arm, shape, call, out_dir: Path) -> dict:
+    """The arm's transcript from poisoned buffers, then its no-write control's. Every buffer the transcript reads is filled
+    with 0xA5; the weight side and the call run; the arm writes its transcript under ``transcripts/<arm>/<shape>/``
+    (`arm.dump`, reading the device, computing nothing). The buffers are poisoned again and, with nothing launched, the
+    arm dumps under ``negative/<arm>/<shape>/``: the verifier must reject that one, so an output an earlier call or a setup
+    step left behind can't pass as this call's. ``written`` is each buffer's bytes the call changed from the poison."""
+    bufs = transcript_buffers(call)
+    rec: dict = {"arm": arm.name, "shape": shape.label, "by": "harness", "poison": f"0x{POISON:02X}",
+                 "buffers": {n: b.nbytes for n, b in bufs.items()},
+                 "transcript_dir": f"transcripts/{arm.name}/{shape.label}", "control_dir": f"negative/{arm.name}/{shape.label}"}
+    _poison(dev, bufs)
+    call.weight_side(dev.stream)
+    call.launch(dev.stream)
+    dev.sync()
+    rec["written"] = {n: b.nbytes - dev.count_eq(b, 1, POISON) for n, b in bufs.items()}
+    if not any(rec["written"].values()):
+        rec["wrote_nothing"] = True
+    honest = out_dir / rec["transcript_dir"]
+    honest.mkdir(parents=True, exist_ok=True)
+    arm.dump(dev, call, shape, honest)
+    _poison(dev, bufs)
+    control = out_dir / rec["control_dir"]
+    control.mkdir(parents=True, exist_ok=True)
+    arm.dump(dev, call, shape, control)
+    return rec
+
+
+def dump_transcripts(bench: Bench, dev, shape, arms: list, entries: list, out_dir: Path) -> list[dict]:
+    """`poison_dump` on each arm's hash call at this shape, after the timed items (nothing here is timed). An arm without
+    `dump` writes its own transcripts, unpoisoned by the harness, and says so in the record."""
+    recs = []
+    for a in arms:
+        if not callable(getattr(a, "dump", None)):
+            recs.append({"arm": a.name, "shape": shape.label, "by": "arm",
+                         "why": "the arm has no dump (arm interface v0.5): it writes its transcripts itself, and the harness "
+                                "poisons nothing for it"})
+            continue
+        e = next((e for e in entries if e.key == ("arm", shape.label, a.name, "hash")), None)
+        if e is None:
+            recs.append({"arm": a.name, "shape": shape.label, "by": "harness", "error": "no gated hash call at this shape"})
+            continue
+        try:
+            recs.append(poison_dump(dev, a, shape, e.calls[0], out_dir))
+        except Exception as ex:  # noqa: BLE001 - recorded; the verifier then finds no transcript and accepts nothing
+            recs.append({"arm": a.name, "shape": shape.label, "by": "harness", "error": f"{type(ex).__name__}: {ex}"})
+    bench.poisoning += recs
+    return recs
 
 
 def arm_entries(bench: Bench, dev, arm, shape, opsets: list[A.OperandSet], first: bool) -> list[Entry]:
@@ -755,6 +826,7 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
         row["summary"] = summarize(per, bench.items)
+        row["poisoning"] = dump_transcripts(bench, dev, shape, arms, entries, args.out.parent)
         row.update(shape_report(shape, fams, arms, entries, per, bench, unchained))
     finally:
         free_entries(bench, entries)
@@ -1086,6 +1158,7 @@ def main(argv: list[str] | None = None) -> int:
         if bench is not None:
             out["gates"] = [{"key": list(k), **v} for k, v in bench.ledger.records.items()]
             out["negative_controls"] = bench.negatives
+            out["poisoning"] = bench.poisoning
             out["dropped"] = bench.dropped
             out["rejected"] = bench.rejected
             out["tuning"] = bench.tuning

@@ -70,7 +70,8 @@ ARM_GAMMA = {"cap": "3/1000", "floor": "1/1000", "basis": "Derived at the device
 V2_HOT_872 = P.lookup(P.load(), "pearl-c-sm120/v2-hot", "cast-8.72", 8192, 8192)
 
 
-def result(run_dir: Path, var: dict | None, *, gamma=ARM_GAMMA, control: bool = True, lineage: dict | None = None) -> Path:
+def result(run_dir: Path, var: dict | None, *, gamma=ARM_GAMMA, control: bool = True, lineage: dict | None = None,
+           poisoned_by: str = "harness") -> Path:
     """A bench.py result for one arm `pc` at both headlines, with gates, controls, the SASS gate and a decode split."""
     shapes = []
     for label, (phase, m) in SHAPES.items():
@@ -111,8 +112,10 @@ def result(run_dir: Path, var: dict | None, *, gamma=ARM_GAMMA, control: bool = 
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_text(text)
     path = run_dir / "bench.json"
+    poisoning = [{"arm": "pc", "shape": label, "by": poisoned_by, "poison": "0xA5", "written": {"root": 32}} for label in SHAPES]
     path.write_text(json.dumps({"harness": {"interface": A.VERSION}, "shapes": shapes, "arms": arms, "gates": gates,
                                 "negative_controls": negatives, "sass_gate": sass, "clocks": {"label": "locked-2100"},
+                                "poisoning": poisoning,
                                 "versions": {"driver": "580.173.02", "nvcc": "12.9.86"}}))
     return path
 
@@ -482,3 +485,21 @@ def test_a_scheme_that_isn_t_the_panel_version_s_device_record_publishes_no_gamm
     assert g["published"] is None and "scheme pearl-c-sm120-v1-h3 isn't pearl-c-sm120/v2-hot's device record" in g["missing"]
     assert L._scheme_conflict("pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120/v2") is None
     assert L._scheme_conflict("pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120/v1")
+
+
+def test_a_harness_poisoned_dump_s_control_is_judged_without_a_declared_one(tmp_path):
+    run_dir = tmp_path / RUN
+    code, res = verify(result(run_dir, variant(tmp_path), control=False), "--tier", "2b")
+    assert code == V.EXIT_OK
+    rows = {r["shape"]: r for r in res["verification"]["rows"]}
+    assert rows[PREFILL]["control"]["path"] == f"negative/pc/{PREFILL}/manifest.json" and rows[PREFILL]["control"]["rejected"]
+    m = records(run_dir)[PREFILL]["meta"]
+    assert m["verify"]["negative_control"].startswith(f"REJECT {RUN}/negative/pc/{PREFILL}/") and m["gate"]["poisoned_accepted"]
+
+
+def test_an_arm_that_dumps_its_own_transcripts_has_no_harness_poisoning_to_its_name(tmp_path):
+    run_dir = tmp_path / RUN
+    code, res = verify(result(run_dir, variant(tmp_path), control=False, poisoned_by="arm"), "--tier", "2b")
+    assert code == V.EXIT_OK and "control" not in res["verification"]["rows"][0]
+    m = records(run_dir)[PREFILL]["meta"]
+    assert m["verify"]["accepted"] and not m["gate"]["poisoned_accepted"] and "negative control" in m["missing"]

@@ -232,7 +232,8 @@ def _clocks(p: dict, side: str) -> list[float]:
 
 def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: dict, run_id: str) -> dict:
     """`verity_pouw.serving.GateRecord`'s fields for this (arm, shape), from what the run checked: every device gate of the
-    arm at the shape passed (``exact``), the poisoned transcript verified, every control of the arm rejected (the harness's
+    arm at the shape passed (``exact``), the transcript the harness dumped from poisoned buffers verified
+    (``poisoned_accepted``: an arm that dumps its own gets False), every control of the arm rejected (the harness's
     known-bad variants and the verifier's negative control), the SASS gate held. ``schedules_equal`` holds trivially for a
     variant with one schedule; the harness doesn't compare schedules, so it is None otherwise."""
     keys = [g for g in result.get("gates") or [] if len(g.get("key", [])) > 2 and g["key"][0] in ("arm", "chain")
@@ -241,10 +242,12 @@ def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: di
     sass = result.get("sass_gate") or {}
     toolkits = sorted({c.get("toolkit") or "unpinned" for b in sass.get("binaries") or [] if b.get("source") == f"arm:{arm}"
                        for c in b.get("cubins") or [] if c.get("functions")})
+    poisoned = any(r.get("arm") == arm and r.get("shape") == shape["label"] and r.get("by") == "harness"
+                   and not r.get("error") and not r.get("wrote_nothing") for r in result.get("poisoning") or [])
     schedules = (variant or {}).get("schedules") or []
     return {"variant": (variant or {}).get("id"), "run": run_id, "gates": GATES, "shapes": [[shape.get("n"), shape.get("k")]],
             "exact": bool(keys) and all(g.get("ok") for g in keys),
-            "poisoned_accepted": bool(verdict.get("accepted")),
+            "poisoned_accepted": bool(verdict.get("accepted")) and poisoned,
             "controls_rejected": bool(negs) and all(x.get("rejected") for x in negs) and bool(verdict.get("negative_control")),
             "schedules_equal": True if len(schedules) <= 1 else None,
             "sass_ok": bool(sass.get("ok")), "toolkit": ",".join(toolkits) or None, "prices": (variant or {}).get("prices")}

@@ -163,13 +163,27 @@ def panel_args(run_id: str, stream: str, p: dict) -> tuple[list[str] | None, str
     return args, None
 
 
+HARNESS_DUMP = "transcripts/{arm}/{shape}/"
+
+
+def harness_control(result: dict, name: str, label: str, v: dict | None) -> dict | None:
+    """The declaration with the harness's no-write control as its ``control``, when the harness dumped this (arm, shape)
+    from poisoned buffers (`bench.poison_dump`) and the declaration names none: the transcript's own path under
+    ``negative/`` instead of ``transcripts/``."""
+    if v is None or v.get("control") or not v["transcript"].startswith(HARNESS_DUMP):
+        return v
+    dumped = any(r.get("arm") == name and r.get("shape") == label and r.get("by") == "harness" and not r.get("error")
+                 for r in result.get("poisoning") or [])
+    return v | {"control": "negative/" + v["transcript"][len("transcripts/"):]} if dumped else v
+
+
 def verify(result: dict, run_dir: Path, run_id: str, commit: str | None, log) -> dict:
     """Runs every arm's verifier and writes each panel row's verdict into it; returns the step's record."""
     runner = Runner(run_dir, log)
     rows = []
     for name, label, p in panel_rows(result):
         arm = (result.get("arms") or {}).get(name) or {}
-        v = arm.get("verifier")
+        v = harness_control(result, name, label, arm.get("verifier"))
         for k in ("verifier_commit", "verifier_accept", "transcript", "negative_control", "panel_args", "verification"):
             p.pop(k, None)
         verdict: dict = {"arm": name, "shape": label}
