@@ -6,7 +6,7 @@ per-class rates are now `Stage`s of the two-stage law (decision 43): a gate-leve
 unit, which is the law's Bernoulli case, and `units` hands those replay units to `law.select_replay_units`.
 
 Prescribed inputs are sampled gates (IR §E): `Input[k] : () -> Value<w_k>` is an ordinary one-output gate of the
-fault model.  It belongs to a verification unit under the selected plan and is sampled like any other gate.  WB's
+fault model.  It belongs to a proof unit under the selected plan and is sampled like any other gate.  WB's
 "model binding" (every committed weight leaf rebuilt from the registered checkpoint) is *a plan whose weight `Input`
 gates have p = 1*; a plan may instead sample them.  There are no trusted sources.
 
@@ -168,7 +168,7 @@ class AuthenticationLocation:
 
 @dataclass
 class Obligation:
-    """One sampled verification unit: a gate selection of the canonical circuit (here always a `FunctionCall` or
+    """One sampled proof unit: a gate selection of the canonical circuit (here always a `FunctionCall` or
     `Region`), its boundary values with their authentication locations, and the plan that selected it."""
 
     selection: GateSelection

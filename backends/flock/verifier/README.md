@@ -5,7 +5,7 @@
 Rust verifier is the cross-validation oracle (§17.1).
 
 Scope today: the circuit statement in strict mode, including lookup slots (built from the pinned MUFU tables), tail stages
-and wires. The default, `verity/flock-circuit`, is M0's format at PR #83 `eb90718f` (§16.10):
+and wires. The default, `verity/flock-circuit`, is the format of C-Flock's circuit prover (M0) at commit `eb90718f` (§16.10):
 - serving rows are `hm96-sha512/row/v1` leaves proved in the circuit;
 - every identity and binding digest is SHA-512;
 - the proof's Merkle leaves are `hm96-sha512/v1`;
@@ -30,7 +30,7 @@ flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public 
   copy of the partition object (§16.10).
   Its verdicts carry `partition = {rule, query, digest, units, note}`: `units` is `as stated` (not derived) until the verifier
   decodes the program and evaluates the query itself (§16.10).
-- `verity/flock-circuit+seed-injection`: the same statement as M0's selftest build pins it, for its recorded cases.
+- `verity/flock-circuit+seed-injection`: the same statement as the circuit prover's (M0) selftest build pins it, for its recorded cases.
 - `verity/flock-circuit@967b8d06` (and `+seed-injection`): PR #83 from `68ae79f2`, whose identity names the round digest,
   statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10). Runs
   staged at `68ae79f2` or later use this name. The unsuffixed name stays `e51e2b86`'s statement for the runs staged before.

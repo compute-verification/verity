@@ -1,6 +1,6 @@
 """[R15 stoch] The frontend binds the seeded temperature + top-p token select: `vllm_iface.gumbel_topp_token_select(logits, seed, T, p,
-pos, splits)` -> `GumbelTopPTokenSelect_v1{V}(row, Const32[p], seed, Const64[pos], Const32[T], splits[s])` per sampled step, the seed
-a Program INPUT and [R16 stoch, coord M-0169] the split count S a request-owned Program INPUT `splits` (int32 [STEPS+1], entry s = the
+pos, splits)` -> `GumbelTopPTokenSelectSharedGreedy_v1{V}(row, Const32[p], seed, Const64[pos], Const32[T], splits[s])` per sampled step
+(`GumbelTopPTokenSelect_v1{V}` under a declared `sampler_construction = "greedy-check-per-stage"`), the seed a Program INPUT and [R16 stoch, coord M-0169] the split count S a request-owned Program INPUT `splits` (int32 [STEPS+1], entry s = the
 derived S_t = SplitsFor_v1(|live(t)|, num_SMs) of sampling event s) -- the 6th operand, never a static of the Definition.
 
 Positive: the stand-in `StochasticServe` (derive_examples) derives under the vLLM ruleset / `b1-eager-v3`: one composite per sampled
@@ -26,7 +26,9 @@ from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
+from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 from verity_vllm.program.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
@@ -73,9 +75,9 @@ def test_stochastic_serve_binds_one_select_per_sample_with_seed_and_splits_as_in
     rep = _derive(C, LP, STEPS, temperature=0.8, top_p=0.95)
     assert rep.ok, rep.unsupported
     fsd = rep.flat_definition
-    sel = [n for n in fsd.body.nodes if _base(n) == "GumbelTopPTokenSelect_v1"]
+    sel = [n for n in fsd.body.nodes if _base(n) == "GumbelTopPTokenSelectSharedGreedy_v1"]
     assert len(sel) == STEPS + 1
-    assert all(n.fn.id == f"GumbelTopPTokenSelect_v1{{V={C['V']}}}" for n in sel), sorted({n.fn.id for n in sel})
+    assert all(n.fn.id == f"GumbelTopPTokenSelectSharedGreedy_v1{{V={C['V']}}}" for n in sel), sorted({n.fn.id for n in sel})
     # the seed is the second PARAMETER of the Program (a runtime input, int64 [1]) and the derived split count the third (int32 [STEPS+1]),
     # never constants
     params, _ret = fsd.signature()
@@ -96,7 +98,7 @@ def test_stochastic_serve_binds_one_select_per_sample_with_seed_and_splits_as_in
     assert f"Const32[{_bits(0.8)}]_v1" in consts and f"Const32[{_bits(0.95)}]_v1" in consts, consts
     for k in range(STEPS + 1):
         assert f"Const64[0x{LP - 1 + k:016x}]_v1" in consts, (k, consts)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v1"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v3"]
     assert len(apps) == STEPS + 1 and all(a["preconditions_checked"]["seed"] == "Program input (runtime)" for a in apps)
     assert [a["preconditions_checked"]["pos"] for a in apps] == [LP - 1 + k for k in range(STEPS + 1)]
     assert rep.provenance["mutation_effects"] == []
@@ -112,8 +114,21 @@ def test_seed_and_splits_are_inputs_policy_is_structure():
     # S is an INPUT: the Program is the same whatever split counts the workload derives (16 at 8 live, 32 at 1 live) -- the values are
     # bound at Match from the split kernels' constexpr and checked against SplitsFor_v1 there (no `{V,S}` static any more)
     ids = [n.fn.id for n in a.flat_definition.body.nodes]
-    assert not any(i.startswith(("GumbelTopPTokenSelect_v1{", "TopPMask_v1{", "TopPMaskWordx")) and ",S=" in i for i in ids), ids
-    assert f"GumbelTopPTokenSelect_v1{{V={C['V']}}}" in ids
+    assert not any(i.startswith(("GumbelTopPTokenSelect", "TopPMask_v1{", "TopPMaskWordx")) and ",S=" in i for i in ids), ids
+    assert f"GumbelTopPTokenSelectSharedGreedy_v1{{V={C['V']}}}" in ids
+
+
+def test_a_declared_greedy_check_per_stage_binds_the_old_select():
+    C = _tiny_config()
+    shared = _derive(C, 3, 1, temperature=0.8, top_p=0.95)
+    observe_target_profile(DEFAULT_TARGET.with_overrides(sampler_construction="greedy-check-per-stage"))
+    try:
+        old = _derive(C, 3, 1, temperature=0.8, top_p=0.95)
+    finally:
+        clear_observations()
+    assert shared.ok and old.ok and shared.digest != old.digest
+    ids = {n.fn.id for n in old.flat_definition.body.nodes}
+    assert f"GumbelTopPTokenSelect_v1{{V={C['V']}}}" in ids and not any(i.startswith("GumbelTopPTokenSelectSharedGreedy") for i in ids)
 
 
 def test_temperature_zero_is_not_a_stochastic_select():
@@ -144,6 +159,50 @@ def test_literal_splits_is_refused_like_a_literal_seed(S):
     r = derive(m, _inputs(3), **PROF, config=C, rules=vllm_ruleset())
     assert isinstance(r, Unsupported), r
     assert r.reason in ("hidden_state", "mutation", "custom_op_without_binding"), (r.reason, r.hint)
+
+
+def _derive_constant(C, LP, STEPS, S, **kw):
+    with torch.device("meta"):
+        m = ex.StochasticServe(C, STEPS, constant_S=S, **kw)
+    return derive_report(m, _inputs(LP, STEPS)[:2], **PROF, config=C, rules=vllm_ruleset(), name="StochServe")
+
+
+@pytest.mark.parametrize("S", [32, 16])
+@pytest.mark.slow
+def test_a_single_request_takes_S_as_a_constant(S):
+    """[single-request workloads] A single-request workload's S = SplitsFor_v1(1, num_SMs) is a constant of its Program: no `splits`
+    parameter, every select `GumbelTopPTokenSelect_v2{V,S}` (its keep word as word gates at S), and its 6th operand a `Const32[S]`
+    emitted as the row's 4th constant (top_p, pos, temperature, S: the fold's operand order), read by that select alone."""
+    C = _tiny_config()
+    LP, STEPS = 3, 2
+    rep = _derive_constant(C, LP, STEPS, S, temperature=0.8, top_p=0.95)
+    assert rep.ok, rep.unsupported
+    fsd = rep.flat_definition
+    names = [n for n, _ in fsd.signature()[0]]
+    assert names[:2] == ["prompt", "seed"] and "splits" not in names, names
+    nodes = fsd.body.nodes
+    sel = [k for k, n in enumerate(nodes) if _base(n) == "GumbelTopPTokenSelect_v2"]
+    assert len(sel) == STEPS + 1 and not [n for n in nodes if _base(n) == "GumbelTopPTokenSelect_v1"]
+    for e, k in enumerate(sel):
+        assert nodes[k].fn.id.endswith(f",S={S}}}"), nodes[k].fn.id      # the select specialised on the constant: its keep word as word gates
+        ref = nodes[k].args[5].refs[0]
+        assert ref[0] == "n" and ref[1] == k - 1, (k, ref)
+        assert [nodes[j].fn.id for j in range(k - 4, k)] == [f"Const32[{_bits(0.95)}]_v1", f"Const64[0x{LP - 1 + e:016x}]_v1",
+                                                             f"Const32[{_bits(0.8)}]_v1", f"Const32[0x{S:08x}]_v1"]
+        assert sum(1 for n in nodes for a in n.args for r in a.refs if r[0] == "n" and r[1] == k - 1) == 1   # read by this select alone
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "GumbelTopPTokenSelect[vllm]_v3"]
+    assert all(a["preconditions_checked"]["S"].startswith(f"Const32[{S}]") for a in apps)
+    assert rep.digest != _derive(C, LP, STEPS, temperature=0.8, top_p=0.95).digest       # another Program than the derived-S form
+    assert rep.digest == _derive_constant(C, LP, STEPS, S, temperature=0.8, top_p=0.95).digest
+
+
+@pytest.mark.parametrize("S", [0, 3, 64, -32])
+def test_a_constant_S_is_a_launched_split_count(S):
+    C = _tiny_config()
+    with torch.device("meta"):
+        m = ex.StochasticServe(C, 1, constant_S=S)
+    r = derive(m, _inputs(3)[:2], **PROF, config=C, rules=vllm_ruleset())
+    assert isinstance(r, Unsupported) and "launched split count" in r.hint, (r.reason, r.hint)
 
 
 def test_default_ruleset_has_no_binding_for_the_op():

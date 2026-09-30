@@ -3,7 +3,8 @@
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
-               [--custody-ttl 6h | --no-custody-r2] [...] -- CMD...   # run custody on the store's remote is the default with --on
+               [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+                                                 # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
   research fetch <run-id> [--all]                # copy the machine's records (or every file, verified) into the local run dir
   research status [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--runs-dir D] [--json]
@@ -12,15 +13,23 @@
   research data <store subcommand...>            # the evidence store: put show where fetch verify select snapshot labels label reindex sql
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
+  research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
+  research queue status|sync|land|eject|ready [--shadow] [--dry-run]    # the merge queue: ready PRs on `next`, `main` fast-forwarded to
+                                                 # the newest commit on it with a passing check (research/queue.py)
+  research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
+  research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
+  research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
+                                                 # rewritten history, the old-history guard, the commit-map/v1 payload (research/commitmap.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
-  research pods create <runpod flags> [--require-reference-part] [--register --project P] [--allow-duplicate]   # at most one live pod per --name (exit 4 exists, 5 no stock, 2 failed), then the same verdict once sshd answers
+  research pods create <runpod flags> --max-hours H [--first-idle-min 20] [--require-reference-part] [--register --project P] [--allow-duplicate]
+                                                 # only under a budget line the guard has read (exit 6); at most one live pod per --name (exit 4
+                                                 # exists, 5 no stock, 2 failed); the lease armed at boot and over ssh (pods/lease.py)
+  research pods extend TARGET --hours H | lease TARGET   # push the pod's lease to at least now + H / show it
   research pods register NAME --pod-id ID --project P | unregister NAME | registry [import]   # the pod registry: one file per machine (pods/registry.py)
   research pods unpreserved <machine|pod-id>     # Attempts recorded on that machine that are NOT `preserved` (same predicate as `data preserved`); exit 1 if any
   research pods drain <machine|pod-id> [--force --reason TEXT]      # the report, then terminate ONLY when nothing is unpreserved (override logged)
-  research pods guard --prefix P [--deadline ISO --cap-usd N --rate-max USD/h --balance-floor USD --pod-max-hours H] [--dry-run] [--detach]
-                                                 # budget guard over pods named P*: trips terminate all (own host last); rate sheds newest first
-  research pods guard status|stop --prefix P     # its state file / SIGTERM to exactly its recorded pid
-  research pods guard reset --prefix P [--by WHO]  # clear a sticky trip (guard stopped), keeping the spend tally; logged
+  research pods guard [--budgets NOTES|FILE] [--dry-run] [--detach]   # the one budgets guard: every line of budgets.toml, re-read each poll
+  research pods guard status|stop                # its state file / SIGTERM to exactly its recorded pid
   research env --source TREE [--rev REV] [--json]  # `export PYTHONPATH=...` from TREE's [tool.uv.workspace] members (research.pythonpath)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
@@ -36,7 +45,9 @@ to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd l
 with --on; `--cwd source` (or `source/SUB`, a relative SUB) runs it in the source root (the invoking directory; with --on, the shipped
 tree other runs of the commit share), an absolute --cwd as given; job.json run.cwd / run.cwd_basis record it.  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
-(--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).
+(--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
+(exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
+eviction that frees it (runs.disk_floor_refusal).
 `--on <machine>` ships the tool (and, with --source, a clean git HEAD), stages the request, and has the machine claim the run id
 and start the same runner detached; see remote.py.  A machine must be listed in ~/.research/machines.toml for the project.
 `--tool` loads a store Tool declaration (research/store/tools_registry.py or dotted.module:NAME): before launch the runner records
@@ -124,6 +135,9 @@ def cmd_run(argv: list[str]) -> int:
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run; else MemoryNotAvailable (research.mem)")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
+    ap.add_argument("--preflight", default=None, metavar="TOOL",
+                    help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
+                         "run does, and refuse the run when it fails")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
@@ -155,6 +169,10 @@ def cmd_run(argv: list[str]) -> int:
     if ns.mem_gb is not None and not ns.on:
         print("research run: --mem-gb admits a run on a shared machine (--on MACHINE); a local run has no reservation to take", file=sys.stderr)
         return 2
+    if ns.preflight and not (ns.on and ns.source):
+        print("research run: --preflight runs a tool's preflight on the machine, from the tree --source ships (--on MACHINE --source GITDIR)",
+              file=sys.stderr)
+        return 2
     if (ns.custody_r2 or ns.custody_ttl) and not ns.on:
         print("research run: --custody-r2 / --custody-ttl are for --on MACHINE (a local run's records are already on this disk: "
               "`research data custody RUN --publish` puts them on the remote)", file=sys.stderr)
@@ -170,6 +188,9 @@ def cmd_run(argv: list[str]) -> int:
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
+    if not ns.claimed and (why := R.disk_floor_refusal(root)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 3
     run_id = ns.id or R.new_run_id()
     run_dir = root / run_id
     if ns.on:
@@ -550,7 +571,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
-                            custody_ttl=(ns.custody_ttl or "6h") if custody else None)
+                            custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
@@ -570,6 +591,9 @@ def cmd_fetch(argv: list[str]) -> int:
     ap.add_argument("--all", action="store_true", help="every file, verified by sha256; writes preserved.json last")
     ns = ap.parse_args(argv)
     root = R.runs_root(ns.runs_dir)
+    if ns.all and (why := R.disk_floor_refusal(root)):          # the records alone are small: observing a run stays possible
+        print(f"research fetch --all: refused: {why}", file=sys.stderr)
+        return 3
     try:
         run_dir = R.resolve(root, ns.ref)
         rec = remote.fetch(run_dir, everything=ns.all)
@@ -828,6 +852,22 @@ def main(argv: list[str] | None = None) -> int:
         from .merge import main as merge_main
 
         return merge_main(rest)
+    if cmd == "queue":
+        from .queue import main as queue_main
+
+        return queue_main(rest)
+    if cmd == "jobs":
+        from .jobs.cli import main as jobs_main
+
+        return jobs_main(rest)
+    if cmd == "worker":
+        from .jobs.cli import worker_main
+
+        return worker_main(rest)
+    if cmd == "git":
+        from .commitmap import main as git_main
+
+        return git_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 

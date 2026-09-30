@@ -1,6 +1,6 @@
 """Queries over a Program and the values they require (vLLM integration v2, Draft 3.1 §12; Phase 2).
 
-A *query* ``Q`` partitions the Calls of a Program ``P`` into *verification units*; the values a verifier must be able to
+A *query* ``Q`` partitions the Calls of a Program ``P`` into *proof units*; the values a verifier must be able to
 open are the values that cross a unit boundary, plus what the protocol prescribes beside them::
 
     Q(P)                      -> a sequence of VerificationUnit (a stable id + a set of Call ids)
@@ -90,7 +90,7 @@ class VerificationUnit:
 
     def __post_init__(self) -> None:
         if not self.calls:
-            raise ValueError(f"unit {self.id!r}: a verification unit has at least one Call")
+            raise ValueError(f"unit {self.id!r}: a proof unit has at least one Call")
 
 
 #: ``Q(P) -> units``.  A ``Query`` is any callable of this shape; :func:`partition_by` builds one from a Call -> unit-id map.
@@ -182,6 +182,10 @@ class Boundary:
     owner: Mapping[int, str]
 
 
+#: `boundary` keeps a Value's readers in a list, and a set beside it once there are this many
+_FEW_READERS = 16
+
+
 def boundary(P: Program, Q: Partition) -> Boundary:
     """One pass over the Program: the crossing Values of ``Q(P)`` with their producing and reading units."""
     units = tuple(Q(P))
@@ -189,6 +193,7 @@ def boundary(P: Program, Q: Partition) -> Boundary:
     _index(P)
     produced_in: dict[ValueRef, str | None] = {}
     read_by: dict[ValueRef, list[str]] = {}
+    many: dict[ValueRef, set[str]] = {}                  # the readers of a Value read by many units, as a set beside the list
     owner_get = owner.get
     for c in P.calls:
         me = owner[c.id]
@@ -200,8 +205,16 @@ def boundary(P: Program, Q: Partition) -> Boundary:
             if rb is None:
                 produced_in[v] = producer
                 read_by[v] = [me]
-            elif me not in rb:
-                rb.append(me)
+            elif len(rb) < _FEW_READERS:
+                if me not in rb:
+                    rb.append(me)
+            else:                                        # a key every later token's attention reads: a scan of the list would be O(T)
+                seen = many.get(v)
+                if seen is None:
+                    seen = many[v] = set(rb)
+                if me not in seen:
+                    seen.add(me)
+                    rb.append(me)
     for v in P.outputs:                                  # a Program output leaves its unit whoever reads it
         if v not in read_by:
             produced_in[v] = owner_get(v[0])

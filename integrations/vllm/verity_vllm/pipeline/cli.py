@@ -38,10 +38,12 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "conformance": ("verity_vllm.program.registry.conformance", "conformance record of the registered library"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
     "descriptor-equivalence": ("verity_vllm.program.descriptor_equivalence", "correspondence of two encodings of one program"),
+    "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
     "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
     "gate": ("verity_vllm.acquire.gate", "CPU acquisition gate of one row"),
+    "gemm-correspondence": ("verity_vllm.program.kernels.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
@@ -78,6 +80,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "rmsnorm-fused-sweep": ("verity_vllm.program.registry.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
     "root-policy": ("verity_vllm.check.root_policy", "root closure check"),
     "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
+    "sweep": ("verity_vllm.pipeline.sweep", "a night's config runs on one host, packed onto its GPUs by RAM and CPU (plan, run)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
     "sampling-rng": ("verity_vllm.program.kernels.sampling_rng", "sampler noise recomputation"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
@@ -132,6 +135,7 @@ def _doc(cls: type) -> str | None:
 
 
 def _add_options(parser: argparse.ArgumentParser, cls: type, environ: Mapping[str, str]) -> None:
+    parser.register("action", "boolean_optional", argparse.BooleanOptionalAction)
     for f in dataclasses.fields(cls):
         if not f.init or "environ" in f.metadata:
             continue

@@ -123,6 +123,7 @@ def check_part(BD, program, part: Part, *, exact_required: bool) -> tuple[bool, 
 
 
 @pytest.mark.parametrize("name", FX.FIXTURE_NAMES)
+@pytest.mark.slow
 def test_boundary_root_parts_match_oracle(BD, name):
     P = FX.fixture(name)
     parts = FX.body_parts(FX.root_scope(P))

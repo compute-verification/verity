@@ -1,7 +1,8 @@
 """Repository invariants (AGENTS.md "Where writing goes"): the tree holds executable code, tests, small fixtures and a
-few maintained current-truth documents.  Lane reports, handoffs, findings, drafts and their evidence (explore JSON,
-plots, gate outputs, run results) live in the notes store (``~/.research/notes``), never in Git.  Experimental evidence,
-run outputs and model weights live in artifact storage: every tracked blob stays under ``BLOB_LIMIT`` bytes.
+few maintained current-truth documents.  Lane reports, handoffs, findings and drafts live in the notes (``~/.research/notes``),
+never in Git.  Generated output (rendered tables, reports, plots, evidence copies, run results) is never tracked: it is
+regenerated from code plus the evidence store, or fetched from the store by ``art:`` id.  Model weights live in artifact
+storage too: every tracked blob stays under ``BLOB_LIMIT`` bytes.
 
 Enforced here rather than remembered.  ``.gitignore`` keeps the report-genre paths out of ``git add``; this test is the
 backstop for anything that slips past it.
@@ -9,9 +10,12 @@ backstop for anything that slips past it.
 
 from __future__ import annotations
 
+import json
+import math
 import os
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,66 +32,62 @@ ALLOWED_EXTRA = (
     "backends/flock/verifier/lean/soundness/ASSUMPTIONS.md",
     "backends/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
-#: The Flock soundness package's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full), one
-#: file each, so that no one document outgrows its cap.
-SOUNDNESS_ASSUMPTIONS = "backends/flock/verifier/lean/soundness/assumptions/"
-#: Evidence files that code still reads (``backends/shared/anchor_a100/report.py`` inputs, ``reprice_v2.py --v1``,
-#: ``tensor/fused/bench.py`` PREVIOUS_RUN).  Pinned until those scripts read from the notes store; nothing else may
-#: live under ``reports/`` or ``results/``.
-PINNED_EVIDENCE = (
-    "backends/numerical/reports/b_measured_4090.json",
-    "backends/numerical/reports/fused_logup_4090.json",
-    "backends/numerical/reports/fused_sumcheck_4090.json",
-    "backends/numerical/reports/packed_sumcheck_h100.json",
-    "backends/numerical/reports/tc_sumcheck_4090.json",
-    "backends/direct/ligero/results/result_unit_b4096.json",
-    "backends/direct/ligero/results/result_vu_42.json",
-    "backends/direct/ligero/results/result_vu_85.json",
-    "backends/gkr/packed/results/r20260922-064917-c293/bench.json",
-    "backends/gkr/packed/results/r20260922-065412-73be/bench.json",
-    "backends/gkr/packed/results/r20260922-073439-1f15/logup_bench.json",
-)
-PINNED_EVIDENCE_DIRS = ("backends/shared/anchor_a100/results/",)
+#: One file per entry behind an index document, so that no one document outgrows its cap: the Flock soundness package's
+#: detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and ligero-verify's discrepancies
+#: (indexed by its ``DISCREPANCIES.md``).
+SPLIT_DOCUMENT_DIRS = ("backends/flock/verifier/lean/soundness/assumptions/", "backends/ligero-verify/discrepancies/")
+#: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
+#: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
+#: scripts compare against) is in the evidence store (``verity_numerical.bench.frozen``).
+PINNED_EVIDENCE = ("fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl",)
+#: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
+GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
+GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})
+#: ``<YYYYMMDDTHHMMZ>-...``: a stamped render (the steward's ``<stamp>-tables.json``) or a lane note.
+STAMPED = re.compile(r"^\d{8}T\d{4}Z[-_.]")
 
-REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status", re.IGNORECASE)
+REPORT_GENRE = re.compile(r"handoff|report|urgent|draft|triage|status|^results?_", re.IGNORECASE)
 #: Source files are exempt from the basename rule (``report.py`` is a script, not a report).
 SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".lock"})
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 128 * 1024
-BLOB_LIMIT = 5 * 1024 * 1024  # 5 MiB; the largest fixture today is 4.5 MB
-#: Must-reject proofs the ligero verifiers' regression tests read from the tree (steps-pin H1/H2, red-team-leaf-2 G1), merged
-#: 2026-09-23 in lane/steps-pin; each is capped at its own size, so they cannot grow and nothing else joins them silently.
-OVERSIZE_FIXTURES = {
-    "backends/ligero-verify/fixtures/fp8-ada-ajtai-n64-g1-decoy/sub_00.proof": 6 * 1024 * 1024,
-    "backends/ligero-verify/fixtures/steps-pin/bf16-hopper-ajtai-n128-collide-P/sub_00.proof": 6 * 1024 * 1024,
-    "backends/ligero-verify/fixtures/steps-pin/bf16-hopper-ajtai-n128-collide-Q/sub_00.proof": 6 * 1024 * 1024,
-    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-ajtai-n64-collide-P/sub_00.proof": 6 * 1024 * 1024,
-    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-ajtai-n64-collide-Q/sub_00.proof": 6 * 1024 * 1024,
-    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-ajtai-n64-steps32/sub_00.proof": 6 * 1024 * 1024,
-    "backends/ligero-verify/fixtures/steps-pin/fp8-ada-poseidon2-steps32/sub_00.proof": 7 * 1024 * 1024,
+BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
+#: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
+CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
+#: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, three vLLM workload
+#: specs and two vLLM logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them
+#: silently. A test fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched
+#: (`research data fetch-fixtures`).
+ALLOWLIST = {
+    "census/workloads.json": 384 * 1024,
+    "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
+    "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
+    "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
+    "integrations/vllm/verity_vllm/program/registry/quarantine/dense/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
+    "integrations/vllm/workloads/olmoe-1b-7b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
+    "integrations/vllm/workloads/qwen25-15b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
 }
+AUDIT_RECORD = "lean-audit.json"
+#: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
+#: what a statement reviewer reads; it grows 3-5 KiB per pin, so this leaves a package room for several hundred more.
+AUDIT_RECORD_LIMIT = 2 * 1024 * 1024
+#: Tracked data (everything but CODE_SUFFIXES) in the whole tree, so that many small files cannot
+#: add up to what one large one may not be.
+DATA_BUDGET = 40 * 1024 * 1024
+REGISTRY = "fixtures/artifacts.json"
 
 
 def _tracked() -> list[str]:
-    if not (ROOT / ".git").exists():                # a shipped `git archive` (research run --source): its files are the commit's,
-        out = []                                    # beside what the machine adds (the runner's READY.json, uv's .venv, bytecode)
-        for d, dirs, files in os.walk(ROOT):
-            dirs[:] = [x for x in dirs if x not in (".venv", "__pycache__")]
-            out += [os.path.relpath(os.path.join(d, f), ROOT) for f in files]
-        return sorted(p for p in out if p != "READY.json")
     out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True).stdout
     return [p.decode() for p in out.split(b"\0") if p]
-
-
-def _is_pinned(path: str) -> bool:
-    return path in PINNED_EVIDENCE or path.startswith(PINNED_EVIDENCE_DIRS)
 
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
-                 and not p.startswith(SOUNDNESS_ASSUMPTIONS)]
+                 and not p.startswith(SPLIT_DOCUMENT_DIRS)]
     assert not offenders, (
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)
@@ -96,28 +96,43 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
 
 def test_no_report_genre_basenames() -> None:
     offenders = [p for p in _tracked() if REPORT_GENRE.search(os.path.basename(p))
-                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES]
+                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES and p not in PINNED_EVIDENCE]
     assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\n" + "\n".join(offenders)
 
 
-def test_no_evidence_under_reports_or_results() -> None:
-    offenders = []
-    for p in _tracked():
-        parts = p.split("/")
-        if "results" in parts[:-1] and not _is_pinned(p):
-            offenders.append(p)
-        elif "reports" in parts[:-1]:
-            if re.fullmatch(r".*/reports/ledger/[^/]+\.jsonl", p) or _is_pinned(p):
-                continue
-            offenders.append(p)
+def generated_output(path: str) -> str | None:
+    """Why ``path`` looks like generated output, or None."""
+    parts = path.split("/")
+    if hit := GENERATED_DIRS.intersection(parts[:-1]):
+        return f"under {sorted(hit)[0]}/"
+    if os.path.splitext(path)[1].lower() in GENERATED_SUFFIXES:
+        return f"a {os.path.splitext(path)[1].lower()} render"
+    if STAMPED.match(parts[-1]):
+        return "a stamped render or note"
+    return None
+
+
+def test_generated_output_patterns() -> None:
+    assert generated_output("backends/numerical/reports/ledger/b-zk.jsonl") == "under reports/"
+    assert generated_output("renders/daily/20260927T0857Z-tables.json") == "under renders/"
+    assert generated_output("lanes/x/evidence/run.log") == "under evidence/"
+    assert generated_output("backends/numerical/plot_overhead.png") == "a .png render"
+    assert generated_output("integrations/vllm/20260929T0300Z-tables.json") == "a stamped render or note"
+    assert generated_output("backends/numerical/python/verity_numerical/bench/tables.py") is None
+    assert generated_output("tools/research/tests/fixtures/run_v0.2/out/result.json") is None
+
+
+def test_no_generated_output() -> None:
+    """Rendered tables, reports, plots, evidence copies and run results are regenerated from code plus the evidence store, or
+    fetched from it by ``art:`` id (``research data put --preserve``); none is tracked."""
+    offenders = [f"{p} ({why})" for p in _tracked() if p not in PINNED_EVIDENCE and (why := generated_output(p))]
     assert not offenders, (
-        "evidence under reports/ or results/ belongs in ~/.research/notes/campaigns/<campaign>/assets/ "
-        "(only reports/ledger/*.jsonl and PINNED_EVIDENCE stay):\n" + "\n".join(offenders)
+        "generated output belongs in the evidence store, not Git (AGENTS.md \"Where writing goes\"):\n" + "\n".join(offenders)
     )
 
 
 def test_pinned_evidence_still_exists() -> None:
-    """Drop entries from PINNED_EVIDENCE when the scripts that read them move to the notes store."""
+    """Drop an entry from PINNED_EVIDENCE when its file leaves the tree."""
     tracked = set(_tracked())
     missing = [p for p in PINNED_EVIDENCE if p not in tracked]
     assert not missing, "PINNED_EVIDENCE lists files that are no longer tracked; remove them:\n" + "\n".join(missing)
@@ -138,16 +153,145 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small; move detail to the notes store:\n" + "\n".join(offenders)
 
 
+#: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (backends/README.md).
+UNSUITED_TEST_DIRS = ("backends/direct/", "backends/gkr/", "backends/shared/")
+
+
+def _testpaths(tracked: list[str]) -> list[str]:
+    """Every suite's testpaths, relative to the root: a suite is a directory whose pyproject.toml configures pytest."""
+    testpaths = []
+    for p in tracked:
+        if os.path.basename(p) == "pyproject.toml":
+            ini = tomllib.loads((ROOT / p).read_text()).get("tool", {}).get("pytest", {}).get("ini_options")
+            if ini is not None:
+                testpaths += [os.path.normpath(os.path.join(os.path.dirname(p), t)) for t in ini.get("testpaths", ["."])]
+    return testpaths
+
+
+def test_every_test_file_is_in_a_suite() -> None:
+    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests."""
+    tracked = _tracked()
+    testpaths = _testpaths(tracked)
+    tests = [p for p in tracked if p.endswith(".py") and (os.path.basename(p).startswith("test_") or p.endswith("_test.py"))]
+    offenders = [p for p in tests if not any(t == "." or p.startswith(t + "/") for t in testpaths) and not p.startswith(UNSUITED_TEST_DIRS)]
+    assert not offenders, "test files that no suite runs:\n" + "\n".join(offenders)
+
+
+#: Credential formats with a fixed shape, as secret scanners (GitGuardian's PR check among them) recognize them.
+CREDENTIAL_FORMATS = {
+    "an AWS access key id": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
+    "a private key": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+    "a GitHub token": r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})",
+    "a Slack token": r"\bxox[abposr]-[A-Za-z0-9-]{10,}",
+    "a JSON web token": r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.",
+    "a RunPod API key": r"\brpa_[A-Za-z0-9]{20,}",
+    "an R2 account endpoint": r"\b[0-9a-f]{32}\.r2\.cloudflarestorage\.com",
+}
+_FORMATS = re.compile("|".join(f"(?P<f{i}>{p})" for i, p in enumerate(CREDENTIAL_FORMATS.values())))
+#: A file can match a format only if it holds one of these.
+_FORMAT_HINTS = ("AKIA", "ASIA", "PRIVATE KEY", "ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "xox", "eyJ", "rpa_",
+                 "r2.cloudflarestorage.com")
+#: A value assigned to a credential name: `name = "value"`, `"name": "value"`, or `NAME=value` inside a string.
+CREDENTIAL_ASSIGNMENTS = (re.compile(r"(?<![\w-])(?P<name>[A-Za-z_][\w-]*)[\"']?\s*[:=]\s*[bru]{0,2}[\"'](?P<value>[^\"'\s]{12,})[\"']"),
+                          re.compile(r"\b(?P<name>[A-Z][A-Z0-9_]*)=(?P<value>[^\"'\s]{12,})"))
+CREDENTIAL_WORDS = {"secret", "token", "password", "passwd", "credential", "credentials"}
+CREDENTIAL_PAIRS = {("api", "key"), ("access", "key"), ("secret", "key"), ("private", "key"), ("auth", "token")}
+#: A file holds a credential name only if its lowercased text holds one of these.
+_NAME_HINTS = ("secret", "token", "passw", "credential", "apikey", "api_key", "api-key", "accesskey", "access_key", "access-key",
+               "privatekey", "private_key", "private-key")
+#: Binary data, never read; and data files (vectors, fixtures), read only for the fixed credential formats.
+_BINARY = frozenset({".bin", ".npy", ".npz", ".lgto", ".neg", ".proof", ".gz", ".png", ".pdf", ".olean", ".ilean", ".tar", ".zip"})
+_DATA = frozenset({".json", ".jsonl", ".csv"})
+#: Values that say they are not real: documented examples (AWS's SigV4 test vector keys contain EXAMPLE) and placeholders.
+PLACEHOLDER = re.compile(r"EXAMPLE|example|dummy|DUMMY|fake|FAKE|placeholder|redacted|xxxx|XXXX|\*\*\*\*|[<{$]")
+
+
+def _credential_name(name: str) -> bool:
+    parts = [p.lower() for p in re.split(r"[_\-.]|(?<=[a-z0-9])(?=[A-Z])", name) if p]
+    return bool(parts) and (parts[-1] in CREDENTIAL_WORDS or tuple(parts[-2:]) in CREDENTIAL_PAIRS)
+
+
+def _looks_random(value: str) -> bool:
+    counts = [value.count(c) for c in set(value)]
+    entropy = -sum(n / len(value) * math.log2(n / len(value)) for n in counts)
+    classes = sum(bool(re.search(p, value)) for p in (r"[a-z]", r"[A-Z]", r"[0-9]", r"[^A-Za-z0-9]"))
+    return entropy >= 3.5 and classes >= 3
+
+
+def test_no_secret_like_literals() -> None:
+    """No tracked file holds something a secret scanner reads as a credential. A dummy credential is short and says what it is
+    (`"dummy"`, `"not-to-be-copied"`); a test that needs a realistic one, to test redaction or scanning, splits it into adjacent
+    string literals, which Python joins and no scanner reads as one."""
+    offenders, formats = [], list(CREDENTIAL_FORMATS)
+    for p in _tracked():
+        path, suffix = ROOT / p, os.path.splitext(p)[1]
+        try:
+            if suffix in _BINARY or path.stat().st_size > 1024 * 1024:
+                continue
+            text = path.read_text()
+        except (FileNotFoundError, IsADirectoryError, UnicodeDecodeError):
+            continue
+        found = [(m, formats[int(m.lastgroup[1:])]) for m in _FORMATS.finditer(text) if not PLACEHOLDER.search(m.group(0))] \
+            if any(h in text for h in _FORMAT_HINTS) else []
+        low = text.lower()
+        if suffix not in _DATA and any(w in low for w in _NAME_HINTS):
+            found += [(m, f"a random-looking {m['name']}") for pattern in CREDENTIAL_ASSIGNMENTS for m in pattern.finditer(text)
+                      if _credential_name(m["name"]) and _looks_random(m["value"]) and not PLACEHOLDER.search(m["value"])]
+        offenders += [f"{p}:{text.count(chr(10), 0, m.start()) + 1}: {what}" for m, what in found]
+    assert not offenders, "credential-like literals (see this test's docstring for what to write instead):\n" + "\n".join(offenders)
+
+
 def test_no_tracked_blob_exceeds_limit() -> None:
     offenders = []
     for p in _tracked():
+        if os.path.splitext(p)[1] in CODE_SUFFIXES:
+            continue
         try:
             size = os.path.getsize(ROOT / p)
         except FileNotFoundError:  # tracked but deleted in the working tree
             continue
-        if size > OVERSIZE_FIXTURES.get(p, BLOB_LIMIT):
-            offenders.append(f"{p}: {size / 1048576:.1f} MiB")
+        limit = ALLOWLIST.get(p, AUDIT_RECORD_LIMIT if os.path.basename(p) == AUDIT_RECORD else BLOB_LIMIT)
+        if size > limit:
+            offenders.append(f"{p}: {size / 1024:.0f} KiB > {limit // 1024} KiB")
     assert not offenders, (
-        "tracked files over the blob limit (evidence and run outputs belong in artifact storage, not Git):\n"
-        + "\n".join(offenders)
+        f"tracked files over {BLOB_LIMIT // 1024} KiB: register a fixture in {REGISTRY} and gitignore its path "
+        "(`research data put --kind fixture/v1 --preserve`, then `research data export`); evidence and run outputs belong in "
+        "artifact storage, not Git:\n" + "\n".join(offenders)
     )
+
+
+def test_allowlists_name_tracked_files() -> None:
+    tracked = set(_tracked())
+    stale = sorted(p for p in ALLOWLIST if p not in tracked)
+    assert not stale, "ALLOWLIST names files that are no longer tracked; remove them:\n" + "\n".join(stale)
+
+
+def test_tracked_data_within_budget() -> None:
+    total = 0
+    for p in _tracked():
+        if os.path.splitext(p)[1] in CODE_SUFFIXES:
+            continue
+        try:
+            total += os.path.getsize(ROOT / p)
+        except FileNotFoundError:
+            continue
+    assert total <= DATA_BUDGET, (f"tracked data is {total / 2**20:.1f} MiB, over the {DATA_BUDGET / 2**20:.0f} MiB budget: register large "
+                                  f"fixtures in {REGISTRY} rather than tracking them")
+
+
+def test_fetched_fixtures_are_gitignored() -> None:
+    """An entry of the fixture registry that git does not track is fetched (`research data fetch-fixtures`), so its path must be
+    ignored: a fetched copy must never be committed back."""
+    if not (ROOT / ".git").exists():
+        return
+    doc = json.loads((ROOT / REGISTRY).read_text(encoding="utf-8"))
+    tracked = set(_tracked())
+    fetched = sorted(v for k, v in doc.items() if k.startswith("art:") and isinstance(v, str)
+                     and v not in tracked and not any(t.startswith(v.rstrip("/") + "/") for t in tracked))
+    if not fetched:
+        return
+    out = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=ROOT, input="\n".join(fetched) + "\n",
+                         capture_output=True, text=True).stdout.split("\n")
+    unignored = sorted(set(fetched) - {x for x in out if x})
+    assert not unignored, "registry entries git does not track must be gitignored (add them to .gitignore):\n" + "\n".join(unignored)

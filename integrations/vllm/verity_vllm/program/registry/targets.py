@@ -5,7 +5,7 @@ split along them:
 
 * the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.registry.gemm_targets`
   (lane ampere): `TargetProfile.gemm_target()` -> `GemmTarget{key, vllm_arch_family, tuned_table, dot, kind, evidence}`; `ada` / `ampere` /
-  `hopper` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
+  `hopper` / `blackwell_consumer` are registered there, anything else is `UnregisteredGemmTarget` (fail closed).  This module holds NO table copy: it resolves the
   record's `dot` NAME to the registered step primitive (`DOTS`) and binds the Definition;
 * the *attention chain* is keyed by the effective FA version (`TargetProfile.effective_flash_attn_version()`: the declared knob, else vLLM's
   selector default for the capability — 3 on cc 9.x, 2 below) and by the target's step:
@@ -46,7 +46,7 @@ DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16Wgm
 
 #: attention-chain registration per tensor-core step family (`TargetProfile.tensor_core_family`).
 TARGETS: dict[str, dict[str, Any]] = {
-    "ampere": {"dot_id": "AmpereBF16TcDot16_v1",
+    "ampere": {"dot_id": "AmpereBF16TcDot16_v2",
                "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (Triton tl.dot on sm_80/sm_89; FA2 CUTLASS)",
                "pipeline": "veritor.core.silicon_total.AMPERE_BF16_DOT16_TOTAL (groups 8+8, width 25, floor -132; A100 + RTX 4090 conform)",
                "flash_attn_versions": (2,),
@@ -59,6 +59,19 @@ TARGETS: dict[str, dict[str, Any]] = {
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
+    "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
+                           "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; the bf16 linear is cuBLASLt "
+                                          "with split-K disabled under VLLM_BATCH_INVARIANT=1, as on cc 9.0)",
+                           "pipeline": "verity.ml.tc.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
+                                       "verity.ml.tc.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
+                           "flash_attn_versions": (2,),
+                           "evidence": {"attention_fa2": "the port's attention lane, RTX PRO 6000 (cc 12.0, 188 SMs, driver 595.91): property "
+                                                         "fa2_target_capture ef4b2584 (r20260930-033258-f611, art:d342a748): vLLM selects FLASH_ATTN "
+                                                         "FA2; _vllm_fa2_C carries cc 8.0 SASS + compute_80 PTX, so the kernel is the driver's JIT; "
+                                                         "kBlockM 64, kBlockN fa2_kblock_n(D) at D 64/96/128/256; MUFU ex2/rcp = core's tables on all "
+                                                         "2^32 inputs; 19,232 rows (122,228 heads) equal Attention_v2 with this DOT and Fa2InvSum on "
+                                                         "every finite head (Attention_v3: 997 differ); fa_tap_exactness 9dee6b6f / 9403e9fe guarded "
+                                                         "(r20260930-030755-9aab, art:592bc0ae)"}},
 }
 
 
@@ -131,7 +144,7 @@ def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
 
 def fa3_check_inf(profile) -> bool:
     """True when the target builds FA3's attention rows with the per-iteration `Check_inf` chain (`Attention_v4`):
-    an effective FA3 target declaring `fa3_construction = "check-inf-per-iteration"`."""
+    an effective FA3 target whose effective `fa3_construction` is `"check-inf-per-iteration"` (the default)."""
     construction = getattr(profile, "effective_fa3_construction", None)
     return profile.effective_flash_attn_version() == 3 and construction is not None and construction() == "check-inf-per-iteration"
 

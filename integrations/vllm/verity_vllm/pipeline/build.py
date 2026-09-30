@@ -20,6 +20,7 @@ import time
 import traceback
 from dataclasses import dataclass
 
+from verity.ir.partition_object import program_sha512
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
@@ -38,15 +39,31 @@ def _spec_histogram(program) -> dict[str, int]:
     return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
-def _instance_sequence(program) -> list[dict]:
-    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py)."""
-    from verity.ir.codec import _spec_id
+def _instance_rows(program):
+    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
+    from verity.ir.codec import descriptor_id
     from verity.ir.refs import runs
-    rows = []
     for k, n in enumerate(program.fn.body.nodes):
-        rows.append({"i": k, "spec": _spec_id(n.fn), "form": n.form, "name": n.name,
-                     "args": [[list(r) for r in runs(a.refs)] for a in n.args]})
-    return rows
+        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [[list(r) for r in runs(a.refs)] for a in n.args]}
+
+
+def _instance_sequence(program) -> list[dict]:
+    return list(_instance_rows(program))
+
+
+def _write_instances(f, head: dict, rows, chunk: int = 4096) -> None:
+    """`json.dump({**head, "rows": list(rows)}, f)`, the same text, written a chunk of rows at a time with `json.dumps` (its C encoder;
+    `json.dump` to a file always runs the Python one) and without the rows list."""
+    f.write(json.dumps(head)[:-1] + (', "rows": [' if head else '"rows": ['))
+    batch, first = [], True
+    for r in rows:
+        batch.append(r)
+        if len(batch) == chunk:
+            f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
+            batch, first = [], False
+    if batch:
+        f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
+    f.write("]}")
 
 
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
@@ -113,8 +130,9 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
                   # `GumbelTopPTokenSelect_v1{V,S}` (registry.sampling: f32 widening -> div.full.f32 temperature -> the S-split top-p mask
                   # `_topp_sb_{stats,step,mask}_kernel` -> Gumbel-max keyed `tl.randint(seed, pos)` -> first maximum).  The seed is a runtime
                   # INPUT of the Program; temperature / top_p / pos are constants; S = SplitsFor_v1(|live(t)|, num_SMs) is a DERIVED input
-                  # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`) -- the 6th operand, never a static.
-                  "stochastic": "GumbelTopPTokenSelect[vllm]_v1 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V}; seed + derived S Program inputs)"}
+                  # (`splits`, request-owned, one entry per sampling event; `sampler_geometry`), or the constant SplitsFor_v1(1, num_SMs)
+                  # of a single-request workload -- the 6th operand, never a static.
+                  "stochastic": "GumbelTopPTokenSelect[vllm]_v3 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v1{V} with seed + derived S Program inputs, or GumbelTopPTokenSelect_v2{V,S} with the seed input and the constant S of a single-request workload: its keep word as word gates)"}
 
 
 def declared_live_counts(reqs: list[dict]) -> list[int]:
@@ -136,20 +154,28 @@ def _cap_of(r: dict) -> int:
 
 def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | None = None) -> dict | None:
     """[R15 stoch; R16 coord M-0169] The launch geometry of the pinned stochastic sampler for this row, or the refusal (`unsupported`
-    dict) when the policy has no Definition.  On success `sampling["splits"] = "derived"` and `sampling["geometry"]` records the
-    RELATION -- {num_sms, relation SplitsFor_v1, live workload-derived, sampler_batch B, pipeline} -- and nothing per request, so every
-    component of a workload declares the same sampler applicability (GP-01 agreement by construction).
+    dict) when the policy has no Definition.  On success `sampling["splits"]` is "derived" (several requests) or the constant S (one
+    request, below) and `sampling["geometry"]` records the RELATION -- {num_sms, relation SplitsFor_v1, live workload-derived,
+    sampler_batch B, pipeline} -- and nothing per request, so every component of a workload declares the same sampler applicability
+    (GP-01 agreement by construction).
 
     vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split` with
     S = splits_for(batch, num_sms) splits (the largest power of two S <= 32 with S * batch <= num_sms; vLLM's doubling loop); the masked
-    row's fp32 value can depend on S (the partials' summation order).  RULING M-0571 (3) / M-0169: S is a WORKLOAD-level DERIVED value --
-    S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the requests with a sampled logits row at engine step t (declared chronology and
-    verified EOS stops) -- and the request Program takes it as a request-owned INPUT `splits` (int32 [T+1], one entry per sampling event;
-    `vllm_meta.StochasticRequest`), the 6th operand of `GumbelTopPTokenSelect_v1{V}`.  The Program declares NO S and NO schedule: the
-    Match binds each event's entry to the split kernels' constexpr and checks the relation per engine step (GM-01 G6 'sampler
-    geometry'; `bench.stoch_recompute --build`).  R15's static S / declared-chronology schedule (`STOCH_DECLARED_CHRONOLOGY_S`) is gone:
-    a Program that declared S could only be right by assumption (every request runs to its cap)."""
-    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for
+    row's fp32 value can depend on S (the partials' summation order).  RULING M-0571 (3) / M-0169, amended for single-request workloads
+    (below): S is a WORKLOAD-level DERIVED value -- S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the requests with a sampled
+    logits row at engine step t (declared chronology and verified EOS stops) -- and the request Program takes it as a request-owned
+    INPUT `splits` (int32 [T+1], one entry per sampling event; `vllm_meta.StochasticRequest`), the 6th operand of
+    `GumbelTopPTokenSelect_v1{V}`.  The Program declares NO S and NO schedule: the Match binds each event's entry to the split kernels'
+    constexpr and checks the relation per engine step (GM-01 G6 'sampler geometry'; `bench.stoch_recompute --build`).  R15's static S /
+    declared-chronology schedule (`STOCH_DECLARED_CHRONOLOGY_S`) is gone: a Program that declared S could only be right by assumption
+    (every request runs to its cap).
+
+    The amendment for single-request workloads (the Project's decision record dates it): a workload of ONE request has |live(t)| = 1
+    at every sampling event it has (a request that stops has no later event), so S = SplitsFor_v1(1, num_SMs) exactly, with no
+    assumption about the schedule.  Its Program takes S as a per-event CONSTANT (`sampling["splits"]` = that int; `Const32[S]` the
+    select's 6th operand, computed here from the target's SM count, never hard-coded) and has no `splits` input; the circuit then
+    anchors S itself.  A workload of several requests keeps the derived input above."""
+    from verity_vllm.program.registry.topp_split import SPLIT_MAX_BATCH, splits_for, splits_for_v1
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -178,6 +204,15 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
         return refuse("the target profile declares no num_sms: S_t = SplitsFor_v1(|live(t)|, num_SMs) has no num_SMs to be derived with",
                       reason="sampler_geometry")
     nsm = int(target.num_sms)
+    if wl and len(reqs) == 1:                      # the manifest's one request: the only live request at every event
+        S = int(splits_for_v1(1, nsm))
+        geom = {"sampler_batch": 1, "num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "SplitsFor_v1",
+                "rule": "S = SplitsFor_v1(1, num_SMs) at every sampling event: the workload's one request is the only live one",
+                "live": "single request", "splits": S, "ruling": "the derived-S ruling, amended for single-request workloads",
+                "constant": f"Const32[{S}]: the select's 6th operand at every sampling event (no `splits` input)"}
+        sampling["splits"] = S
+        sampling["geometry"] = geom
+        return None
     geom = {"sampler_batch": B, "num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "SplitsFor_v1",
             "rule": "S_t = SplitsFor_v1(|live(t)|, num_SMs); |live(t)| = requests with a sampled logits row at engine step t (workload-derived)",
             "live": "workload-derived", "splits_range_1_to_B": [int(splits_for(B, nsm)), int(splits_for(1, nsm))],
@@ -470,14 +505,13 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "export", "hint": "; ".join(bad)}
                 raise _Refused()
             res["declared_derived"] = declared_derived_accounting(target, applied)
-            del ep
-            # derive: the wrapper module IS the source (derive re-exports it identically: same module, same example input)
+            # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
             names = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
             with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{names[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True, rank=(tp, rank) if tp > 1 else None)
+                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep)
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
@@ -499,7 +533,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
                 f.write(raw)
             corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
-            res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
+            res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
                               "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": descriptor_size(desc),
                               "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                               "correspondence_digest": corr_digest,
@@ -519,9 +553,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
             json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
             with gzip.open(os.path.join(out, "instances.json.gz"), "wt") as f:
-                json.dump({"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None,
-                           "rows": _instance_sequence(program)}, f)
+                _write_instances(f, {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
+                                     "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None},
+                                 _instance_rows(program))
             # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
             art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                          applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)

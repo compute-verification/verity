@@ -85,7 +85,7 @@ def _u16(path: Path) -> list[int]:
 
 
 def test_verification_unit_on_captured_gemm_coordinates() -> None:
-    """A VU: zero state, K/16 chained steps, then `pack_relation`; the bf16 word is the committed one (4 coordinates)."""
+    """A proof unit: zero state, K/16 chained steps, then `pack_relation`; the bf16 word is the committed one (4 coordinates)."""
     root = FIXTURES / "gemm-B1-b3eba618b1b5-20260907T1731Z"
     dirs = sorted(p for p in root.iterdir() if p.is_dir())
     picked = [dirs[0], dirs[7], dirs[15], dirs[-1]]
@@ -103,7 +103,7 @@ def test_verification_unit_on_captured_gemm_coordinates() -> None:
             st = R.check_step(AMP, R.step_witness(AMP, st, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16]), c)
         word, bf16 = R.pack_relation(st, AMP, c)
         assert bf16 == f["committed_word"], d.name
-        # the same VU's total against the published census
+        # the same proof unit's total against the published census
         vc = R.vu_census(AMP, K)
         assert c.summary()["mul"] == vc["total"]["mul"] and c.lookup_total == vc["total"]["lookup"]
 
@@ -121,6 +121,38 @@ def test_pack_relation_is_pack_value_then_cvt() -> None:
         c = R.Census()
         w, bf = R.pack_relation(st, AMP, c)
         assert (w, bf) == (canonical, cvt_rn_bf16_f32(canonical)), hex(word)
+
+
+# ---- the witness's shape -------------------------------------------------------------------------------------------------
+
+def test_a_witness_of_the_wrong_shape_is_rejected() -> None:
+    """A witness whose lists are shorter than the relation's is refused, not checked on what it holds.  Before the check,
+    sixteen products of 1.0 were accepted as 1.0: the honest witness of one product and fifteen zeros, truncated to one
+    product row and two term rows, with the real operands."""
+    ones, one_then_zeros = [0x3F80] * 16, [0x3F80] + [0] * 15
+    w = R.step_witness(HOP, R.decode_state(0, HOP), one_then_zeros, one_then_zeros)
+    w["prod"] = w["prod"][:1]
+    w["groups"][0]["terms"] = w["groups"][0]["terms"][:2]
+    w["a"], w["b"] = ones, ones
+    with pytest.raises(R.Violation, match="witness shape"):
+        R.check_step(HOP, w, R.Census())
+    c = R.Census(strict=False)
+    R.check_step(HOP, w, c)
+    assert c.violations and tc_dot_total(HOP, 0, ones, ones) == 0x41800000
+
+    def mutated(pipe, change):
+        w = R.step_witness(pipe, R.zero_state(pipe), ones, ones)
+        change(w)
+        return w
+    for pipe, change in [
+        (HOP, lambda w: w["prod"].append(dict(w["prod"][0]))),                        # an extra product row
+        (HOP, lambda w: w["groups"][0]["terms"].append(dict(w["groups"][0]["terms"][0]))),  # an extra term row
+        (HOP, lambda w: w.update(a=w["a"][:8], b=w["b"][:8])),                        # short operands
+        (AMP, lambda w: w["groups"].pop()),                                           # a missing group
+    ]:
+        with pytest.raises(R.Violation, match="witness shape"):
+            R.check_step(pipe, mutated(pipe, change), R.Census())
+    assert R.witness_shape_error(HOP, R.step_witness(HOP, R.zero_state(HOP), ones, ones)) is None
 
 
 # ---- local soundness: every witness column is constrained ------------------------------------------------------------
@@ -145,6 +177,7 @@ def _flatten(w: dict) -> list[tuple[list, str]]:
 
 
 @pytest.mark.parametrize("name", ["ampere", "hopper"])
+@pytest.mark.slow
 def test_every_column_is_constrained(name: str) -> None:
     """Perturbing any single witness column (or any field of any group's output state) breaks some predicate.  This is
     the local-soundness check the census rests on; it is not a proof of the argument system."""

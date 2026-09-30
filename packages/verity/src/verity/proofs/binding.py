@@ -38,8 +38,8 @@ determined by ``O``), ``lower_eq_iff`` (two well-formed objects with one
 lowering agree on exactly the read fields), ``lowerQuot_injective``.  Nothing is
 re-proved here; the check is the digest comparison the theorems make
 meaningful.  The guest itself carries ``h_O`` through *unchecked*
-(``zk/sp1/common/src/lib.rs::public_values_with_object``); this module, its Rust
-twin ``zk/sp1/common/src/binding.rs`` and the ``binding`` column of the
+(``backends/sp1/common/src/lib.rs::public_values_with_object``); this module, its Rust
+twin ``backends/sp1/common/src/binding.rs`` and the ``binding`` column of the
 conformance vectors are where the relationship is checked.
 """
 
@@ -71,7 +71,7 @@ BOUND_PUBLIC_VALUES_LEN = 65
 #: ``h_L || verdict``: the public values of a proof that binds no typed object.
 UNBOUND_PUBLIC_VALUES_LEN = 33
 #: The verdict byte of an accepted batch in a sound guest build (``VERDICT_ACCEPT`` in
-#: ``zk/sp1/common/src/lib.rs``; a diagnostic build commits ``0xEE`` / ``0xEF``, which
+#: ``backends/sp1/common/src/lib.rs``; a diagnostic build commits ``0xEE`` / ``0xEF``, which
 #: no verifier accepts as a verdict).
 VERDICT_ACCEPT = 1
 

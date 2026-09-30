@@ -64,6 +64,17 @@ def sampler_program() -> ProgramView:
 LITERALS = frozenset({2, 3, 4, 8, 9, 10})
 
 
+def constant_s_program(S: int = 32) -> ProgramView:
+    """A single-request workload's Program: the same two steps with S its own `Const32[S]` literal (`<select node>/splits`, emitted
+    after temperature) in place of the `splits` Input."""
+    calls = []
+    for k0, node, tok, pos in ((0, "gumbel_topp_token_select", R(-2, "out"), 256), (7, "gumbel_topp_token_select_1", R(6, "out"), 257)):
+        *head, sel = _step(k0, node, tok, pos)
+        calls += [*head, _call(k0 + 5, f"Const32[0x{S:08x}]_v1", f"{node}/splits", [], n=1, width=32),
+                  _call(k0 + 6, sel.definition, sel.name, [*sel.reads[:5], R(k0 + 5, "out")], n=1, width=32)]
+    return ProgramView(tuple(calls), _params()[:3], (R(13, "out"),), "synthetic", "synthetic")
+
+
 def columnar(P: ProgramView) -> ProgramView:
     """The same body through the columnar builder (`from_instances`' representation): reads as operand runs."""
     k_of = {p.id: k for k, p in enumerate(P.params)}
@@ -121,6 +132,18 @@ def test_request_manifest_requires_no_literal():
         assert rows == sorted([("weights", "*", EMBED_W, "weight", (0, None)), ("weights", "*", HEAD_W, "weight", (0, None))] + per_step(0) + per_step(1))
         assert man["populations"]["literal_calls"] == 6 and man["populations"]["steps"] == 2
         assert "minus the Program's literals" in man["query"]["query_text"]
+
+
+def test_a_constant_s_program_requires_the_seed_word_and_no_splits_word():
+    """S is a literal of a single-request Program: the manifest keeps `sampler_seed` per step and has no `sampler_splits` family, so
+    Commit neither collects nor links a `runner.sampler/splits` word for it."""
+    P = constant_s_program()
+    lits = literal_calls(P)
+    assert lits == {2, 3, 4, 5, 9, 10, 11, 12} and [p.name for p in P.params] == ["weights", "ids", "seed"]
+    r = request_manifest(P, Correspondence(P), RES, request_id="r0")
+    fams = sorted({(x["family"], x["step"]) for x in r.manifest["identities"] if x["op_path"] == "runner.sampler"})
+    assert r.manifest["complete"] and not any(v.call in lits for v in r.required.values)
+    assert fams == [("sampled_token_ids", 0), ("sampled_token_ids", 1), ("sampler_seed", 0), ("sampler_seed", 1)]
 
 
 def test_a_literal_named_as_a_return_slot_of_a_crossing_node_is_not_required():

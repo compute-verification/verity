@@ -471,7 +471,7 @@ fn server_tables(ch: &Arc<Chain>, tables: Vec<(String, Vec<[u8; 32]>)>) -> Serve
 /// The verifier's configuration and statement verifier; `prime_live`: the route (a) cell's prime coins are served too.
 fn server_cfg(ch: &Arc<Chain>, tables: Vec<(String, Vec<[u8; 32]>)>, prime_live: bool) -> (SessionConfig, Box<dyn StatementVerifier>) {
     let mut cfg = SessionConfig::flock_128_r2(tables.iter().map(|(n, _)| ch.spec_named(n)).collect());
-    cfg.link = Some(LinkSpec { sigma: ch.sigma(&tables.iter().flat_map(|(_, d)| d.clone()).collect::<Vec<_>>()), m: ch.m_link, points: 2 });
+    cfg.link = Some(LinkSpec { sigma: ch.sigma(&tables.iter().flat_map(|(_, d)| d.clone()).collect::<Vec<_>>()).to_vec(), m: ch.m_link, points: 2 });
     cfg.prime_live = prime_live;
     (cfg, Box::new(ChainVerifier { ch: ch.clone(), digests: tables.into_iter().collect() }))
 }
@@ -697,7 +697,7 @@ fn session(ch: &Chain, t: SharedTransport, seed: u64, plan: &Plan) -> (Value, Ve
         let (st, _, _) = instance(ch, seed, plan);
         let mut cfg = SessionConfig::flock_128_r2(vec![ch.spec()]);
         let sigma = ch.sigma(&leaf_digests(ch, &st));
-        cfg.link = Some(LinkSpec { sigma, m: ch.m_link, points: 2 });
+        cfg.link = Some(LinkSpec { sigma: sigma.to_vec(), m: ch.m_link, points: 2 });
         cfg.prime_live = plan.prime_live();
         (cfg.hello(), sigma)
     };
@@ -999,7 +999,7 @@ fn selftest(ch: Arc<Chain>) {
     };
     let e0 = {
         let mut cfg = SessionConfig::flock_128_r2(vec![ch.spec()]);
-        cfg.link = Some(LinkSpec { sigma: [0; 32], m: ch.m_link, points: 2 });
+        cfg.link = Some(LinkSpec { sigma: vec![0; 32], m: ch.m_link, points: 2 });
         cfg.require_link = false;
         Server::try_new(cfg, Box::new(ChainVerifier { ch: ch.clone(), digests: BTreeMap::new() })).err()
     };

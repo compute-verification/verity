@@ -223,6 +223,13 @@ def create(args: argparse.Namespace) -> None:
         body["vcpuCount"] = args.vcpu
         for key in ("gpuTypeIds", "gpuCount", "minVCPUPerGPU", "minRAMPerGPU"):
             body.pop(key, None)
+    if getattr(args, "lease_expires", None):
+        # `research pods create --max-hours`: the lease holds from boot (research.pods.lease.boot_fields)
+        from .lease import boot_fields
+
+        extra = boot_fields(args.image, args.lease_expires, boot=bool(getattr(args, "boot_lease", False)))
+        body["env"].update(extra.pop("env"))
+        body.update(extra)
     pod = _request("POST", "/pods", body)
     print(json.dumps(pod, indent=2))
     return pod
@@ -270,7 +277,7 @@ def ssh_target(pod: dict[str, Any]) -> tuple[str, int] | None:
     return None
 
 
-def ssh_command(host: str, port: int) -> list[str]:
+def ssh_command(host: str, port: int, *, user: str = "root") -> list[str]:
     return [
         "ssh",
         "-i",
@@ -283,7 +290,7 @@ def ssh_command(host: str, port: int) -> list[str]:
         f"UserKnownHostsFile={known_hosts()}",
         "-o",
         "ServerAliveInterval=30",
-        f"root@{host}",
+        f"{user}@{host}",
     ]
 
 

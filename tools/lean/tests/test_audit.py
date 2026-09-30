@@ -1,10 +1,13 @@
-"""`tools/lean/audit.py`: its judgement on the facts `Audit.lean` reports (no Lean needed), and the controls when `lake` is
+"""`tools/lean/audit.py`: its judgement on the facts `Facts.lean` reports (no Lean needed), and the controls when `lake` is
 installed (the fixture package passes clean and fails each check once a violation is added)."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
+import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -17,13 +20,19 @@ spec.loader.exec_module(A)
 STD = ["Classical.choice", "Quot.sound", "propext"]
 
 
+def sha(s: str) -> str:
+    """A stand-in SHA-256 content hash, tied to the stand-in 32-bit one."""
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
 def pin(signature="P.t (h : P.Hyp) (n : Nat) : P.f n = n", hyps=None, reads=None, axioms=STD, kind="theorem", h="00000000000000aa"):
-    return {"kind": kind, "module": "P.Thms", "signature": signature, "axioms": axioms, "type_hash": h,
+    reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+                                             {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
+                                             {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}]
+    return {"kind": kind, "module": "P.Thms", "signature": signature, "axioms": axioms, "type_hash": h, "type_sha256": sha(h),
             "hypotheses": hyps if hyps is not None else [{"binder": "h", "type": "P.Hyp", "closed": True, "named": "P.Hyp",
                                                           "module": "P.Assumptions"}],
-            "reads": reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
-                                                      {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
-                                                      {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}]}
+            "reads": [r | {"sha256": sha(r["hash"])} for r in reads]}
 
 
 def facts(**over):
@@ -47,10 +56,23 @@ def recorded(f=None):
 def test_a_recorded_package_passes_and_its_record_is_the_statement():
     pol = recorded()
     assert pol["pins"]["P.t"] == {"signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"], "assumptions": ["P.Hyp"],
-                                  "type_hash": "00000000000000aa"}
+                                  "type_hash": sha("00000000000000aa")}
+    assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["pins"] == ["P.t"]
+    assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
     assert A.judge(POLICY, facts(), FILES)[0] == ["pins: P.t has no record; run `audit.py --update` and commit the record"]
+
+
+def test_every_field_of_a_reads_record_is_checked():
+    pol = recorded()
+    group = pol["reads"]["P.Defs"]
+    stale = pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}
+    assert A.judge(stale, facts(), FILES)[0] == ["pins: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
+                                                 "`python tools/lean/merge.py --normalize` recomputes it"]
+    readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"pins": ["P.t", "P.u"]}}}
+    assert A.judge(readers, facts(), FILES)[0] == ["pins: the pinned statements that read P.Defs are P.t; the record lists "
+                                                   "P.t, P.u; run `audit.py --update`"]
 
 
 def test_sorry_native_decide_and_other_axioms_are_named():
@@ -101,6 +123,39 @@ def test_a_changed_statement_or_meaning_fails_until_updated():
     assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["pins: the pinned statements now read definitions in P.More (P.t)"]
 
 
+def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
+    new = recorded()
+    old = new | {"pins": {"P.t": new["pins"]["P.t"] | {"type_hash": "00000000000000aa"}},
+                 "reads": A.read_groups(A.pinned_reads(facts()), old=True)}
+    assert len(old["reads"]["P.Defs"]["definitions"]["P.f"]) == 16 and A.old_group(old["reads"]["P.Defs"])
+    assert old["reads"]["P.Defs"]["digest"] == A.module_digest(old["reads"]["P.Defs"]["definitions"])
+    assert A.judge(old, facts(), FILES)[0] == []
+    fails = A.judge(old, facts(pins={"P.t": pin(h="00000000000000bb")}), FILES)[0]
+    assert fails == ["pins: P.t's type hash changed:\n00000000000000aa -> 00000000000000bb"]
+    fails, rehashed = A.judge(old, facts(), FILES, update=True)
+    assert fails == [] and rehashed == new
+    text = A.review(old, rehashed, facts(), {})
+    assert text == [f"pin P.t: {A.REHASHED}", f"reads: 2 {A.REGROUPED}"] and A.statement_changes(text) == []
+    moved = facts(pins={"P.t": pin(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32},
+                                          {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}])})
+    text = A.review(old, A.judge(old, moved, FILES, update=True)[1], moved, {})
+    assert text == [f"pin P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Alpha.lean").write_text(
+        "namespace Control\ntheorem a (x : Nat) : x + 0 = x := rfl\ntheorem b (y : Nat) : y + 0 = y := rfl\n"
+        "theorem c {x : Nat} : x + 0 = x := rfl\ntheorem d (x : Nat) : 0 + x = x := Nat.zero_add x\nend Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Alpha\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    f = A.facts_of(pkg, {"roots": ["Control"], "pins": {f"Control.{n}": {} for n in "abcd"}}, tmp_path)
+    got = {n: f["pins"][f"Control.{n}"]["type_sha256"] for n in "abcd"}
+    assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
+
+
 def test_generated_constants_belong_to_their_declaration():
     assert [A.parent(n) for n in ("P.f.match_1", "P.walk._f", "P.Enc.mk", "P.instDecidableFits", "mk")] == [
         "P.f", "P.walk", "P.Enc", "P.instDecidableFits", "mk"]
@@ -118,7 +173,11 @@ def test_update_prints_what_a_statement_reviewer_reads(tmp_path):
     assert text[:5] == ["pin P.t: changed", "  before:", "    P.t (h : P.Hyp) (n : Nat) : P.f n = n", "  after:",
                         "    P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n"]
     assert text[5] == "definition P.f (P.Defs), read by P.t: changed" and text[-1] == "    def f (n : Nat) : Nat := n"
+    assert A.statement_changes(text) == text
     assert A.review(new, new, now, {}) == []
+    reprinted = dict(new["pins"]["P.t"], signature=["P.t (h : P.Hyp) (n : Nat) : LE.le (P.f n) n"])
+    text = A.review(new, dict(new, pins={"P.t": reprinted}), now, {})
+    assert text == [f"pin P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
 
 
 def test_a_closed_hypothesis_must_be_a_named_assumption():
@@ -138,13 +197,105 @@ def test_a_pin_must_be_a_theorem_with_allowed_axioms():
     assert fails == ["pins: P.t uses sorryAx"]
 
 
-def test_the_source_scan_refuses_kernel_bypasses(tmp_path):
+def test_the_source_scan_refuses_kernel_bypasses_but_not_prose(tmp_path):
     (tmp_path / "P").mkdir()
     (tmp_path / "P" / "A.lean").write_text("theorem a : True := trivial\nset_option debug.skipKernelTC true in\n")
-    (tmp_path / "P" / "B.lean").write_text("-- builds the name at run time: only the replay sees this\n")
-    (tmp_path / "lakefile.toml").write_text("[leanOptions]\ndebug.byAsSorry = true\n")
-    hits = A.unchecked(tmp_path, A.lean_modules(tmp_path))
-    assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:2"]
+    (tmp_path / "P" / "B.lean").write_text("/-- A docstring may name debug.skipKernelTC. /- nested -/ -/\n"
+                                           "-- and so may a comment: set_option debug.skipKernelTC true in\n"
+                                           "def s := \"-- not a comment\" -- debug.byAsSorry\n")
+    (tmp_path / "lakefile.toml").write_text("# debug.skipKernelTC in a comment\n[leanOptions]\ndebug.byAsSorry = true\n")
+    hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
+    assert [h.split(" names ")[0] for h in hits] == ["unchecked: P/A.lean:2", "unchecked: lakefile.toml:3"]
+
+
+def test_the_dependency_scan_reads_what_the_build_takes_from_fetched_packages(tmp_path):
+    dep, other = tmp_path / ".lake" / "packages" / "dep", tmp_path / ".lake" / "packages" / "other"
+    lib = dep / ".lake" / "build" / "lib" / "lean"
+    for path, text in ((dep / "D.lean", "/-- Prose may name debug.skipKernelTC. -/\ndef d := 1\n"),
+                       (dep / "D" / "E.lean", "def e := 1\nset_option debug.skipKernelTC true in\ntheorem t : True := trivial\n"),
+                       (dep / "D" / "F.lean", "set_option debug.byAsSorry true\n"),
+                       (dep / "lakefile.toml", "name = \"dep\"\n[leanOptions]\ndebug.byAsSorry = true\n"),
+                       (other / "lakefile.toml", "# nothing of it is imported\n[leanOptions]\ndebug.byAsSorry = true\n")):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    oleans = [str(lib / "D.olean"), str(lib / "D" / "E.olean"), str(tmp_path / ".lake" / "build" / "lib" / "lean" / "P.olean"),
+              str(tmp_path / "toolchain" / "lib" / "lean" / "Init.olean")]
+    fails, read = A.dependency_scans(tmp_path, oleans, {})
+    assert read == 3 and [f.split(" (")[0] for f in fails] == ["unchecked: .lake/packages/dep/D/E.lean:2",
+                                                               "unchecked: .lake/packages/dep/lakefile.toml:3"]
+    listed = {"D.E": "why", "dep/lakefile.toml": "why", "D.F": "not imported"}
+    assert A.dependency_scans(tmp_path, oleans, {"dependency_unchecked": listed})[0] == [
+        "unchecked: `dependency_unchecked` lists D.F, which the package does not import or which names no such option; "
+        "remove the entry"]
+    (dep / "D.lean").unlink()
+    assert A.dependency_scans(tmp_path, oleans[:1], {"dependency_unchecked": {"dep/lakefile.toml": "why"}})[0] == [
+        "unchecked: the package imports D from dep, whose source .lake/packages/dep/D.lean is missing, so nothing scanned it"]
+
+
+def test_code_run_while_compiling_is_refused_unless_listed(tmp_path):
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "A.lean").write_text("import Lean\n@[simp] theorem t : True := trivial\nopen Lean in\nrun_cmd pure ()\n"
+                                           "/-- #eval in prose -/\nlocal macro \"m\" : term => `(1)\n@[elab_as_elim] def e := 1\n")
+    (tmp_path / "P" / "B.lean").write_text("initialize pure ()\n")
+    hits = A.scans(tmp_path, A.lean_modules(tmp_path), {})
+    assert [h.split(" runs code")[0] for h in hits] == ["compile-time: P/A.lean:4", "compile-time: P/A.lean:6",
+                                                        "compile-time: P/B.lean:1"]
+    assert A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P.A": "why", "P.B": "why"}}) == []
+    assert len(A.scans(tmp_path, A.lean_modules(tmp_path), {"compile_time": {"P": "a prefix lists no module"}})) == 3
+    (tmp_path / "lakefile.lean").write_text("import Lake\n")
+    assert A.scans(tmp_path, {}, {})[0].startswith("compile-time: lakefile.lean runs code")
+
+
+def test_a_compile_time_listing_is_tied_to_its_file_and_kept_out_of_what_pins_read(tmp_path):
+    (tmp_path / "P").mkdir()
+    (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => pure ()\n')
+    (tmp_path / "P" / "Defs.lean").write_text('macro "m" : term => `(1)\ndef f := 1\n')
+    files = A.lean_modules(tmp_path)
+    pins = {"pins": {"P.t": {"module": "P.Thms", "reads": [{"name": "P.f", "module": "P.Defs"}]}}}
+    listed = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
+    fails, now, notes = A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins)
+    assert [f.split(":")[1] for f in fails] == [" the listing of P.Tac records no digest of P/Tac.lean"]
+    assert now == listed and notes[0].startswith("compile_time P.Tac (P/Tac.lean): listed; a reviewer reads")
+    assert A.listings(tmp_path, files, {"compile_time": {"P.Tac": "why"}}, pins, update=True)[0] == []
+    assert A.listings(tmp_path, files, {"compile_time": listed}, pins) == ([], listed, [])
+    (tmp_path / "P" / "Tac.lean").write_text('elab "t" : tactic => do IO.println "now it does IO"\n')
+    fails, _, notes = A.listings(tmp_path, files, {"compile_time": listed}, pins)
+    assert fails[0].startswith("compile-time: the listing of P.Tac was reviewed against another version of P/Tac.lean")
+    assert notes[0].startswith("compile_time P.Tac (P/Tac.lean): the file changed since its listing was reviewed")
+    read = {"P.Defs": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Defs.lean")}}
+    assert A.listings(tmp_path, files, {"compile_time": read}, pins)[0][0].startswith(
+        "compile-time: P.Defs is listed under `compile_time`, and pinned statements are declared or read there (P.t)")
+    declared = {"pins": {"P.t": {"module": "P.Tac", "reads": []}}}
+    tac = {"P.Tac": {"why": "why", "digest": A.sha256(tmp_path / "P" / "Tac.lean")}}
+    assert "(P.t)" in A.listings(tmp_path, files, {"compile_time": tac}, declared)[0][0]
+    assert A.listings(tmp_path, files, {"compile_time": {"P": "a prefix"}}, pins)[0] == [
+        "compile-time: `compile_time` lists P, which is not a module of the package; list modules one by one"]
+
+
+def test_a_package_without_a_policy_gets_a_template(tmp_path):
+    pkg = tmp_path / "p"
+    pkg.mkdir()
+    (pkg / "lakefile.toml").write_text('name = "p"\n[[lean_lib]]\nname = "Alpha"\n[[lean_lib]]\nname = "Beta"\n')
+    assert A.packages(tmp_path) == [pkg]
+    rep = A.audit(pkg, tmp_path / "out")
+    assert rep["failures"][0].startswith(f"policy: {pkg} has no lean-audit.json")
+    assert rep["failures"][0].endswith('{"roots": ["Alpha", "Beta"], "pins": {}}')
+
+
+def test_dependency_digests_cover_every_part_of_the_imported_modules_only(tmp_path):
+    lib = tmp_path / "p" / ".lake" / "packages" / "dep" / ".lake" / "build" / "lib" / "lean"
+    (lib / "D").mkdir(parents=True)
+    for rel, text in (("D.olean", "a"), ("D/E.olean", "b"), ("D/E.olean.private", "c"), ("D/E.ilean", "d")):
+        (lib / rel).write_text(text)
+    loaded = [str(lib / "D.olean"), str(lib / "D" / "E.olean"), str(tmp_path / "p" / ".lake" / "build" / "lib" / "P.olean")]
+    digests = lambda: A.dependency_digests(tmp_path / "p", "none/none:none", loaded)
+    before = digests()
+    assert list(before) == ["dep"]
+    (lib / "D" / "E.ilean").write_text("changed")
+    (lib / "D" / "F.olean").write_text("a module the package does not import, built or not")
+    assert digests() == before
+    (lib / "D" / "E.olean.private").write_text("changed")
+    assert digests()["dep"] != before["dep"]
 
 
 def test_package_files_stop_at_nested_packages_and_lake(tmp_path):
@@ -167,7 +318,7 @@ def test_discovery_skips_the_controls(tmp_path):
 
 
 def test_a_file_changed_during_the_run_is_reported(tmp_path):
-    tool, late = tmp_path / "Audit.lean", tmp_path / "lean"
+    tool, late = tmp_path / "Facts.lean", tmp_path / "lean"
     tool.write_text("a")
     seals = {str(tool): A.sha256(tool)}
     assert A.tampered(seals, [late]) == []
@@ -177,6 +328,37 @@ def test_a_file_changed_during_the_run_is_reported(tmp_path):
     late.write_text("y")
     assert A.tampered(seals, [late]) == [str(tool), str(late)]
     assert A.killed(-9) and A.killed(137) and not A.killed(1)
+
+
+def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
+    """`b` requires `a` by path, and `c` requires nothing. Each fake audit blocks on the event it needs, so the run finishes
+    only when `c` runs beside `a`'s build, and `b`'s build beside the rest of `a`'s audit."""
+    a, b, c = tmp_path / "a", tmp_path / "a" / "b", tmp_path / "c"
+    for p in (a, b, c):
+        p.mkdir(parents=True, exist_ok=True)
+        (p / A.POLICY).write_text("{}")
+    (b / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "a", "dir": ".."}]}))
+    started = {p.name: threading.Event() for p in (a, b, c)}
+    events = []
+
+    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None):
+        events.append(("start", pkg.name))
+        started[pkg.name].set()
+        if pkg.name == "a":
+            started["c"].wait()
+            built()
+            events.append(("built", "a"))
+            started["b"].wait()
+        else:
+            built()
+        return {"package": str(pkg), "seconds": {}, "failures": ["fake"] if pkg.name == "c" else []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    assert A.main([str(a), str(b), str(c), "--out", str(out)]) == 1
+    assert events.index(("built", "a")) < events.index(("start", "b"))
+    doc = json.loads((out / "audit.json").read_text())
+    assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

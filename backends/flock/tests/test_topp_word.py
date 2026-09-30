@@ -82,6 +82,7 @@ def _rows(V, T, rng):
 
 
 @pytest.mark.parametrize("V", [160, 200])
+@pytest.mark.slow
 def test_the_keep_word_is_topp_keep(V):
     from verity_vllm.program.registry import sampling as SM
 
@@ -92,6 +93,7 @@ def test_the_keep_word_is_topp_keep(V):
         assert (keep[i] == SM.topp_keep(x[i], float(p[i]), int(s[i]))).all(), i
 
 
+@pytest.mark.slow
 def test_the_count_is_the_evaluated_circuit():
     rng = np.random.default_rng(1)
     x, p, s = _rows(160, 2, rng)
@@ -102,6 +104,7 @@ def test_the_count_is_the_evaluated_circuit():
     assert not TW.count(160, splits=3) or all(k[0][0] in ("p >= 1", "split count") for k in TW.count(160, splits=3))
 
 
+@pytest.mark.slow
 def test_each_lane_follows_its_own_half_where_the_halves_disagree(monkeypatch):
     """``topp_split``'s own divergent rows (verity PR #169, ``test_topp_split_halves``): ordinary logits, the step kernels'
     partials constructed so that each half's own scalars decide ``nomask``, in both orders. The circuit, given the same partials
