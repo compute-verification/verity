@@ -33,7 +33,7 @@ PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-
     --programs-root (the Build Programs); --match-dir (this attempt's Match record); --weights-of-record | --checkpoint-dir;
     --retain device|host, --openings, --pairs, --window-mb/--window-slots, --bounded-staging.
   Outputs (--out DIR): runs.jsonl, steps.jsonl, summary.json/.md, verdict.json, versions.json, source_identity.json,
-    binding_map_p<k>.json, sampled_replay_p<k>.json, host_admission_<kind>.json, weights_of_record.json, declaration_<committer>.json.
+    binding_map_p<k>.json, sampled_replay_p<k>.json, host_admission_<kind>.json, weights_of_record.json, declaration_<committer>.json, protocols.json.
   Invariants: the Program/source identity precheck (`identity`) runs before any engine (exit 3 PRECHECK_FAIL_SOURCE_IDENTITY); a
     required-value manifest whose program_digest is not the Build's is refused before the engine starts; the population is Q(P) at the CAP shape -- EOS-stopped
     positions are classified not-executed by rule, never cut out; control and instrumented tokens must be equal; PASS only when
@@ -62,7 +62,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm import protocol_options as PO
+from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
@@ -554,7 +556,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B
+    from verity_vllm.commit import binding as B, partition as PT
     from verity_vllm.check import executed_prefix as EP
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
@@ -581,7 +583,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     derived_splits = stochastic and ("sampler_splits" in _man_fams or sampling.get("splits") == "derived")
     structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
-                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree)}
+                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree), **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
     # [R18 tap, F-r17-23] the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
     for _s in getattr(com, "sources", []) or []:
         if hasattr(_s, "tap_cap_bytes"):
@@ -594,16 +596,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     step_rows = getattr(com, "step_rows", None) or {}
 
     def _logical(rid: str) -> str:
-        """Engine row id -> workload `r<i>`.  vLLM v1 suffixes the external request id with `-<8 hex>` internally; match exact, then
-        with the suffix stripped, then by prefix.  Unmapped ids stay raw (-> coverage FAILS for that request, fail-closed)."""
-        rid = str(rid)
-        if rid in order:
-            return order[rid]
-        base = rid.rsplit("-", 1)[0]
-        if base in order:
-            return order[base]
-        hits = [v for k, v in order.items() if rid.startswith(k)]
-        return hits[0] if len(hits) == 1 else rid
+        return B.logical_request(rid, order)
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
     padded = bool(getattr(com, "_padding", None))                                   # [B9.1] finalize materialised padding steps (--padded-finalize)
@@ -743,7 +736,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         ok = [com.verify(rc, o) for o in ops]
     rec = {"rules_version": B.RULES_VERSION, "map_schema": bmap["schema"], "map_digest": bmap["digest"], "map_entries_n": bmap["entries_n"], "layout": bmap["layout"],
            "program_digest": pd, "program_digest_source": ("required-manifest" if man_hdr is not None else "committer"), "root_program_digest": root_pd,
-           "collector": collector, "population": {"source": ("required-manifest (lane manifest: Q_module(P) -- module-boundary population over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
+           "collector": collector, "population": {"source": (f"required-manifest (lane manifest: {((man_hdr or {}).get('query') or {}).get('query_id') or 'Q(P)'} over the Program, families selected by the canonical VU query; R17-9 (ii))" if man_hdr else
                                                              "structure(model modules x MEMBER_RULES) x workload(requests, steps=max_new, ranks)"), "manifest": man_hdr,
                                                   "digest": pop_digest, "n": pop_n, "requests": n_req, "steps": horizon, "ranks": 1, "step_rows_recorded": len(step_rows), "step_rows_why": getattr(com, "step_rows_why", None), "step_rows_src": getattr(com, "step_rows_src", None),
                                                   "modules": len(structure["modules"]), "attention_layers": len(structure["attention_layers"]), "hidden": structure["hidden"]},
@@ -991,15 +984,15 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
 
 def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
                                sampling: dict[str, Any]) -> tuple[dict[tuple[str, str], dict[str, Any]] | None, dict[str, Any]]:
-    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`) for a `v2-query` manifest, which
-    carries none: (facts | None, record).  The Programs are the replay's (same lookup, same of-record digest check); None + the named
-    reason when the manifest is not v2, no Program dir is given or a Program is not of record."""
+    """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
+    manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
+    the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as MF
+    from verity_vllm.query.required import QUERIES
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
-    if not (isinstance(q, dict) and q.get("engine") == SR.V2_QUERY):
-        return None, {"used": False, "why": "manifest is not v2-query: its rows carry the producer annotations"}
+    if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
+        return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
     t0 = time.monotonic()
     labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     if getattr(args, "programs_root", None):
@@ -1019,7 +1012,7 @@ def oracle_producers_of_record(args: Options, required_manifest: dict[str, Any] 
     bad = sorted(k for k, d in digs.items() if d not in of_record)
     if bad:
         return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
-    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"))
+    facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"), query=q["query_id"])
     del loaded
     return facts, {"used": True, "members": len(facts), "with_operand": sum(1 for f in facts.values() if f.get("operand")),
                    "with_consumers": sum(1 for f in facts.values() if f.get("consumers")),
@@ -1054,9 +1047,7 @@ class Options:
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="[R18 tap, F-r17-23] cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, the r17_0738 OOM)")
-    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="opt-in, never the record: the norm-scale tap op (ops/pod_norm_tap.sh) -- commit `<norm module>/norm_scale` for every norm_scales identity of the required manifest (manifest build --norm-scales; acquire.sources.norm_scale_source)")
-    router_tap_so: str | None = option("--router-tap-so", default=None, help="opt-in, never the record: the router-softmax tap op (ops/pod_router_tap.sh) -- commit `moe/L<k>/router_softmax` for every router_softmax identity of the required manifest (manifest build --router-softmax; acquire.sources.router_softmax_source)")
-    vocab_range: bool = option("--vocab-range", default=False, action="store_true", help="opt-in, never the record: commit `<embedding module>/vocab_range` for every vocab_range identity of the required manifest (manifest build --vocab-range; acquire.sources.vocab_range_source)")
+    tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="R10: comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
@@ -1084,6 +1075,7 @@ class Options:
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a VERIFIER-ISSUED post-commitment challenge (hex/string) -- the seed becomes sha256(challenge || run_root) so an " "adaptive prover cannot grind the sample by recommitting (rev-cb M-0572); default = the run root alone (honest-prover measurement)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="[MAN-09, rev-cb M-0610] the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="[MAN-09] derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all, stratified by family (one stratum per family, round-robin, at least one each) in place of the row's per-stratum sample")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
@@ -1113,7 +1105,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if os.environ.get("VERITY_TRACEDUMP"):
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
-
         faulthandler.dump_traceback_later(float(os.environ["VERITY_TRACEDUMP"]), repeat=True)
     # [R18 infra, F-r17-tp-06 / BRIEF Phase 0] source identity precheck BEFORE anything else runs: verity.ir, verity_vllm, vllm-poc,
     # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITOR_REPO must agree).
@@ -1176,9 +1167,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         from verity_vllm.commit.binding import require_build_program_digest
         require_build_program_digest(args.required_manifest, args.program_digest)          # [COORD M-0205 (C1)] named refusal, before any engine
         from verity_vllm.query.manifest.format import coverage_check as manifest_coverage_check
-        required_manifest = json.load(open(args.required_manifest))
-        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities "
-              f"{required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
+        from verity_vllm.commit.partition import require_partition
+        required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
+        print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
         if args.compiled_taps == "kernels":
             compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
             print(f"[delta] compiled kernel taps: argument roles from the manifest's role_maps {compiled_kernels.hooks_info.get('role_maps')} "
@@ -1219,7 +1210,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args,
-                target=va.target_of_workload(wl, args.target), execution=va.execution_of_workload(wl))
+                target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=wl.get("protocols_config")), execution=va.execution_of_workload(wl))
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1395,9 +1386,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] fa2 tap bound (F-r17-23): cap {_hsrc.tap_cap_bytes >> 20} MiB "
                       f"({'ONE bounded device buffer; launches above it are split into sequence groups' if _hsrc.tap_cap_bytes else 'OFF: unbounded per-geometry buffers'}); "
                       f"telemetry {_hsrc.telemetry_path}", flush=True)
-        from verity_vllm.acquire.sources import norm_scale_source as _NSS, taps as _TAPS
-        required_classes = _NSS.attach(com, args, required_manifest, required_classes)     # --norm-tap-so only: the norm scales (opt-in, never the record)
-        required_classes = _TAPS.attach(com, required_manifest, required_classes, router_tap_so=args.router_tap_so, vocab_range=args.vocab_range, explicit_classes=required_classes_cli)
+        required_classes = TAPS.attach(com, required_manifest, required_classes, args.tap_sources, explicit_classes=required_classes_cli, programs=(args.program_dir, args.programs_root))
         # [R17-42 route A, moe: found on the first padded Commit (cp-moe 04:37Z, rc 139)] the MoE block source stages six planes per MoE layer
         # per step by NAME (moe/L<k>/<plane>); the gather collector lays the arena out from the required-value MANIFEST, so a plane the manifest
         # does not name has no slot and the stage is a wild write (SIGSEGV in Collector::push_desc).  Under the PADDED construction the
@@ -1825,11 +1814,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
               f"errors {rc.extra.get('errors')}", flush=True)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
-
+    protocols = PO.at_commit(_ekw["target"], eng.model, versions, wl.get("protocols_config"))   # after every committer registered the weights
     if args.value_check and com is not None and hasattr(com, "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check
-
         vres = run_value_check(com, lambda: run_workload(eng, reqs, sampling), lambda: assert_pristine(eng, base))
         vres.update({"committer": com.name, "case": eng.case, "model": eng.cp["repo"], "gpu": torch.cuda.get_device_name(0), "label": "measured"})
         (out / "value_check.json").write_text(json.dumps(vres, indent=1, default=str) + "\n")
@@ -1966,8 +1954,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                  # fail-closed diagnostics: WHICH positions failed (step, leaf index, identity) -- a failed opening is a Commit FAIL
                                  "failed": [{"step": o.step, "index": o.index, "identity": {k: (v if isinstance(v, (int, str, bool)) else str(v)) for k, v in (o.identity or {}).items()}}
                                             for o, k_ok in zip(ops, ok) if not k_ok][:16]},
-                    "weight_registration": rc.weight_registration,
-                }
+                    "weight_registration": rc.weight_registration}
                 for s in rc.steps:
                     step_rows.append({"pair": pair, "arm": arm, "step": s.step, "wall_s": r["step_wall_s"][s.step] if s.step < len(r["step_wall_s"]) else None,
                                       "n_leaves": s.n_leaves, "n_bytes": s.n_bytes, "n_tensors": s.n_tensors, "hashing_s": s.hashing_s,
@@ -2304,7 +2291,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                             _rc_key = json.dumps({"run_root": rc.run_root.hex(), "manifest_digest": (required_manifest or {}).get("manifest_digest") if isinstance(required_manifest, dict) else None,
                                                   "program_digest": getattr(args, "program_digest", None), "seed": _ks,
                                                   "binding_map_sha256": hashlib.sha256((Path(args.out) / f"binding_map_p{pair}.json").read_bytes()).hexdigest(),
-                                                  "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "targets": list(getattr(args, "replay_target", None) or []),
+                                                  "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "targets": list(getattr(args, "replay_target", None) or []), "k": args.replay_k,
                                                   "code": versions.get("git_head"), "weights_root": _w_ref_k, "committer": com.name, "retain": getattr(args, "retain", None)}, sort_keys=True)
                         except Exception as _ke:  # noqa: BLE001  -- no key, no reuse
                             _rc_key = None
@@ -2357,13 +2344,13 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                             print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
                         _k0 = next(iter(_progs))
                         _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
-                        _wp, _rd = SRW.readers(args.serving_rows, com, rc, SR.model_weights_provider(eng.model, _pi0.prefix), _progs, _bm, _arr, _loaded, required_manifest, args.label)
+                        _wp, _rd = SRW.readers(args.serving_rows, com, rc, SR.model_weights_provider(PO.weights_view(protocols, eng.model), _pi0.prefix), _progs, _bm, _arr, _loaded, required_manifest, args.label)
                         # [O5] the weight slices the relations consume must be the COMMITTED weights: re-register the live parameters now and
                         # compare the root with the run's weights root (registered before the workload; a param swap after it is a named FAIL)
                         _wc: dict[str, Any]
                         try:
                             _w_saved = getattr(com, "weights", None)
-                            _w_now = com.register_weights()
+                            _w_now = PO.register_weights(protocols, com)     # through what a protocol option released
                             if _w_saved is not None:
                                 com.weights = _w_saved
                             _w_ref = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else (_w_saved or {}).get("root")
@@ -2448,7 +2435,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                               served_tokens={_rl[str(k)]: [int(t) for t in v] for k, v in r["tokens"].items() if str(k) in _rl})
                         if hasattr(SR, "executed_prefix_of_record") and "executed_prefix" in inspect.signature(SR.sampled_replay).parameters:
                             _ep_facts = EPX.facts_accepted_by(SR.executed_prefix_of_record, _ep_facts)
-                            _sr_kw["executed_prefix"] = {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
+                            _sr_kw["executed_prefix"] = {} if args.replay_k and not _epr_r["any_eos_stop"] else {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
                             _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
                             if _epr_r["any_eos_stop"] or _flt:
                                 print(f"[delta] not-executed(R17-1) class -> sampled_replay(executed_prefix=): " + ", ".join(
@@ -2459,7 +2446,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                   "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
                         sr = SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                                                seed_challenge=_seed_chal,
-                                               max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []),
+                                               max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []), replay_k=args.replay_k,
                                                workers=getattr(args, "replay_workers", None), retention=_retention,
                                                ring_slots=(int(args.window_slots) if getattr(args, "window_slots", None) and getattr(args, "window_mb", None) else None),
                                                # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
@@ -2850,6 +2837,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                   f"{'under' if _peak <= _b else 'OVER'} by {abs(_b - _peak) >> 20} MiB (measured/predicted {round(_peak / _b, 3) if _b else None}; "
                   f"admission {_a.get('admission_utc')} printed_before_run={_pbr}, first run {(_RUN0 or {}).get('utc')}; "
                   f"admission_of_record {(_a.get('admission_of_record') or {}).get('governing') if isinstance(_a.get('admission_of_record'), dict) else _a.get('admission_of_record')})", flush=True)
+    PO.into_verdict(protocols, verdict, out, _ekw["target"], program_digest=args.program_digest, manifest=required_manifest)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
     # [COORD R17-29 planner, calibration] measured vs predicted for the record-only plan printed before the run: one calibration ENTRY per
     # Commit (VmHWM / footprint peaks / the peak step's staged bytes) -- exec collects these; the table in tests/fixtures/admission grows by name

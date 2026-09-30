@@ -123,6 +123,7 @@ def expected(row: resolver.Row) -> dict:
 
 
 BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags as row_pod.sh)
+POLICIES_OFF = ["--no-norm-scales", "--no-guarded-max", "--no-router-softmax", "--no-vocab-range"]    # the manifests of record predate them
 
 
 def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str]:
@@ -133,11 +134,11 @@ def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str
     if b > 1:
         bs = row.json("build_summary.json")
         wd = ((bs.get("workload") or {}).get("workload_digest")) or None
-        argv = base + ["build-global", "--fixture", str(wl), "--programs-root", str(programs_root), "--out", str(out)]
+        argv = base + ["build-global", "--fixture", str(wl), "--programs-root", str(programs_root), "--out", str(out), *POLICIES_OFF]
         if wd:
             argv += ["--workload-digest", wd]
         return argv
-    return base + ["build", "--program", str(programs_root / "build_request"), "--workload", str(wl), "--out", str(out)]
+    return base + ["build", "--program", str(programs_root / "build_request"), "--workload", str(wl), "--out", str(out), *POLICIES_OFF]
 
 
 def actual(row: resolver.Row) -> dict:

@@ -517,10 +517,10 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-                  check_registry: bool = True, rank: tuple[int, int] | None = None) -> DeriveReport:
+                  check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None) -> DeriveReport:
     """`rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it."""
+    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -539,7 +539,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     holder: list = []
     try:
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
-                                    name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder)
+                                    name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported)
         prov["weights"] = [w.to_json() for w in ctx.weights]
         prov["weight_roles"] = ctx.weight_roles
         prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual (global M-0595 (3))
@@ -573,7 +573,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
             elif family_report is not None:
                 prov.setdefault("families_not_matched", []).append(family_report)
                 family_report = None
-        digest = program_digest(program)
+        digest = flat_digest if program is flat_program else program_digest(program)
         dead = _dead_gates(program, limit=32)
         # a family claim replaces the flat body by the family's: the correspondence describes the FLAT Calls and stays with the flat root
         corr_applies = program is flat_program
@@ -608,8 +608,8 @@ def _record_partial(prov: dict, holder: list) -> None:
 
 def _describe_source(source, example_inputs, mode, profile, config, allowed_dims) -> dict:
     if isinstance(source, torch.nn.Module):
-        cls = type(source)
-        d = {"kind": "nn.Module", "class": f"{cls.__module__}.{cls.__qualname__}",
+        cls = type(source)                               # `DERIVE_SOURCE`: the source's declared, versioned id; SRC's class when present
+        d = {"kind": "nn.Module", "class": getattr(source, "DERIVE_SOURCE", None) or f"{cls.__module__}.{cls.__qualname__}", "python_class": f"{cls.__module__}.{cls.__qualname__}",
              "submodules": [f"{n}: {type(m).__qualname__}" for n, m in source.named_modules() if n]}
     else:
         d = {"kind": "callable", "name": getattr(source, "__qualname__", repr(source))}
@@ -677,9 +677,9 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
 
 
 def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims, name, ruleset, vocab,
-                 _ctx_holder: list | None = None) -> tuple[SpecializedDefinition, Ctx]:
+                 _ctx_holder: list | None = None, exported=None) -> tuple[SpecializedDefinition, Ctx]:
     module = source if isinstance(source, torch.nn.Module) else None
-    ep = _export(source, example_inputs)
+    ep = exported if exported is not None else _export(source, example_inputs)
     sig = ep.graph_signature
     leaves, fqn_to_leaf = _weights_of(module)
     placeholder_to_weight: dict[str, int] = {}

@@ -20,13 +20,38 @@ structure Region where
 
 def PT_LOCAL : Nat := 24
 
-/-- A region of a block of `2^kl` bits: at most `PT_LOCAL` free bits below `kl`, `fixed` inside the non-free bits. -/
+/-- A region of a block of `2^kl` bits: at most `PT_LOCAL` distinct free bits below `kl`, `fixed` inside the non-free
+bits. Distinct free bits are part of the pinned bound's hypothesis (`Statement.LinkLayout`), so a repeat is refused. -/
 def mkRegion (kl : Nat) (name : String) (free : Array Nat) (fixed : Nat) (bytes : Nat → ByteArray) : V Region := do
   let freeMask := free.foldl (fun acc b => acc ||| 2 ^ b) 0
   let mask := (2 ^ kl - 1) &&& ((2 ^ kl - 1) ^^^ freeMask)
   if fixed ≥ 2 ^ kl || fixed &&& freeMask != 0 || free.size > PT_LOCAL || free.any (· ≥ kl) then
     throw s!"{name}: not an aligned region of at most {PT_LOCAL} free bits"
+  if !decide free.toList.Nodup then throw s!"{name}: a free bit repeats; a region's free bits are distinct"
   return ⟨name, free, mask, fixed, bytes⟩
+
+/-- A region `mkRegion` builds has the free bits the soundness bound's `LinkLayout` asks for: the ones given, distinct, at
+most `PT_LOCAL` of them, each below `kl`. -/
+theorem mkRegion_ok {kl : Nat} {name : String} {free : Array Nat} {fixed : Nat} {bytes : Nat → ByteArray} {r : Region}
+    (h : mkRegion kl name free fixed bytes = .ok r) :
+    r.free = free ∧ free.toList.Nodup ∧ free.size ≤ PT_LOCAL ∧ ∀ b ∈ free, b < kl := by
+  unfold mkRegion at h
+  simp only at h
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  rename_i h1
+  split at h
+  · simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  rename_i h2
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  simp only [Bool.or_eq_true, not_or] at h1
+  obtain ⟨⟨⟨-, -⟩, hsize⟩, hany⟩ := h1
+  refine ⟨rfl, by simpa using h2, by simpa using hsize, fun b hb => ?_⟩
+  have := Array.any_eq_false.mp (Bool.eq_false_iff.mpr hany)
+  rw [Array.mem_iff_getElem] at hb
+  obtain ⟨i, hi, rfl⟩ := hb
+  simpa using this i hi
 
 def Circuit.instOf (c : Circuit) (n b g : Nat) : Option Nat :=
   let i := b * c.g + g

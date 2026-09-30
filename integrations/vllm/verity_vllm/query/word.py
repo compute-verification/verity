@@ -14,7 +14,7 @@ The rule (no recomputes):
   * **Width** counts bits (`verity.ir.cut.fits`): a unit's boundary gates (read by another unit, or returned) total at most X declared
     bits (16), or the unit has exactly ONE boundary value, of at most W bits (32: float interiors such as a norm scale, attention's
     max, sum and inverse sum).  No dtype is read.
-  * It refines `Q_module_body_v1` without moving its boundary: a Call's inputs and outputs are the bridge's required values.
+  * It is the query of record (`required.QUERY_OF_RECORD`): a Call's inputs and outputs are the bridge's required values.
 
 The cut of one Call (`partition`), on its computing gates (`Graph`, core's `verity.ir.cut.CallGraph`: wiring and constants removed,
 reads through them re-pointed):
@@ -27,15 +27,24 @@ reads through them re-pointed):
 
 `verity.ir.partition.validate_unit_cut` checks every Call's cut; the committed interior values are what serving must acquire (a tap
 where it does not today).  `unit_rule` summarises one specialization; `check_query` checks a Program and fails by name.
+
+A specialization's unit rule is a function of the Definition, the query and the gate limits alone.  Attention has one specialization
+per key length, each cut in time linear in it, so a long context's rules cost hours; `use_rule_cache(dir)` (the manifest CLI's
+`--unit-rule-cache`, env `RULE_CACHE_ENV`) makes this process and its forked prefetch read and write the rules in that directory.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 from collections import Counter
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ir.cut import WIRING, CallGraph, cut_word, fits
+from verity.ir.codec import canonical_json, definition_entry
+from verity.ir.cut import WIRING, CallGraph, cut_word, fits, separable
 from verity.ir.defs import PrimitiveDefinition
 
 from verity_vllm.query.call_scope import QueryRuleViolation, specialization
@@ -150,28 +159,6 @@ def units(G: Graph, X: int, W: int, extras: int = 0) -> dict[str, Any]:
             "head_scope": np.where(first >= 0, G.scope[np.maximum(first, 0)], -1)}
 
 
-def _separable(fn: Any) -> list[tuple[Any, int]] | None:
-    """[(callee, members)] when `fn`'s body nodes read only its parameters and it returns every leaf they produce: no value crosses
-    between nodes, so its partition is each node member's own (a Gemm's N coordinates, attention's heads).  None otherwise."""
-    from verity.ir.intervals import norm, ref_intervals, total
-    from verity.ir.parts import n_members
-    body = fn.body
-    for n in body.nodes:
-        if n.form == "scan":
-            return None
-        reads: dict = {}
-        for a in n.args:
-            ref_intervals(a.refs, reads)
-        if any(space != "p" for space, _i in reads):
-            return None
-    ret: dict = {}
-    ref_intervals(body.ret, ret)
-    for k, n in enumerate(body.nodes):
-        if total(norm(ret.get(("n", k), ()))) != n.out.leaves:
-            return None
-    return [(n.fn, n_members(n)) for n in body.nodes]
-
-
 def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: int, W: int, extras: int) -> dict[str, Any]:
     agg: dict[tuple, dict[str, Any]] = {}
     interior, ibits = Counter(), Counter()
@@ -203,17 +190,96 @@ def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: i
     return rule
 
 
+#: the environment variable the manifest CLI's `--unit-rule-cache` defaults to
+RULE_CACHE_ENV = "VERITY_UNIT_RULE_CACHE"
+_RULE_CACHE_SCHEMA = "verity-vllm/unit-rule/v1"
+#: the directory of unit rules this process shares (`use_rule_cache`; None: none).  An entry is keyed by the Definition's content (its
+#: entry and its callees', transitively), X, W, extras, the gate limits and the source of the code that cuts (`verity.ir`, this
+#: package's `word`, `cross_call` and `call_scope`); a rule is written only when JSON gives it back equal, so a read rule is the computed one
+_RULE_CACHE: list[str | None] = [None]
+_DIGESTS: dict[str, str] = {}
+_CODE: list[str] = []
+
+
+def use_rule_cache(directory: str | None) -> None:
+    """Share this process's unit rules (and its forked prefetch's) through `directory`; None: no sharing."""
+    _RULE_CACHE[0] = directory or None
+
+
+def _code_version() -> str:
+    if not _CODE:
+        import verity.ir
+        here = Path(__file__).parent
+        h = hashlib.sha256()
+        for p in [*sorted(Path(verity.ir.__file__).parent.glob("*.py")), *(here / f for f in ("word.py", "cross_call.py", "call_scope.py"))]:
+            h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
+        _CODE.append(h.hexdigest())
+    return _CODE[0]
+
+
+def definition_digest(fn: Any) -> str:
+    """SHA-256 of `fn`'s descriptor entry and, sorted, its callees' digests: its whole content, whatever program it is in."""
+    d = _DIGESTS.get(fn.id)
+    if d is None:
+        callees = [] if isinstance(fn, PrimitiveDefinition) else sorted({definition_digest(n.fn) for n in fn.body.nodes})
+        d = _DIGESTS[fn.id] = hashlib.sha256(canonical_json({"definition": definition_entry(fn), "callees": callees})).hexdigest()
+    return d
+
+
+def _rule_entry(fn: Any, X: int, W: int, extras: int, limits: dict[str, int]) -> tuple[Path, dict[str, Any]] | None:
+    root = _RULE_CACHE[0]
+    if not root or isinstance(fn, PrimitiveDefinition):
+        return None
+    key = {"schema": _RULE_CACHE_SCHEMA, "definition": fn.id, "digest": definition_digest(fn), "query": [X, W, extras],
+           "limits": [[k, v] for k, v in sorted(limits.items())], "code": _code_version()}
+    k = hashlib.sha256(canonical_json(key)).hexdigest()
+    return Path(root) / k[:2] / f"{k}.json", key
+
+
+def _cached_rule(fn: Any, X: int, W: int, extras: int, limits: dict[str, int]) -> dict[str, Any] | None:
+    entry = _rule_entry(fn, X, W, extras, limits)
+    if entry is None:
+        return None
+    try:
+        doc = json.loads(entry[0].read_text())
+    except (OSError, ValueError):
+        return None
+    return doc.get("rule") if isinstance(doc, dict) and doc.get("key") == entry[1] else None
+
+
+def _cache_rule(fn: Any, X: int, W: int, extras: int, limits: dict[str, int], rule: dict[str, Any]) -> None:
+    entry = _rule_entry(fn, X, W, extras, limits)
+    if entry is None:
+        return
+    path, key = entry
+    try:
+        text = json.dumps({"key": key, "rule": rule})
+    except (TypeError, ValueError):
+        return
+    if json.loads(text)["rule"] != rule:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
 def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None) -> dict[str, Any]:
     """One Definition specialization under `Q_word_v1{X,W}`: {"definition", "query", "gates", "units_per_call", "by_kind",
     "committed_interior_words", "max_out_bits", "classes", "violations"}.  A class groups units by kind, the primitive and the
     activation of their first boundary gate, gates per unit and |out(S)|; `count` is units per Call, `nodes` the primitives of one
     unit.  `committed_interior` lists the committed interior values by (activation, primitive): what a tap must acquire.  A
-    Definition over its gate limit (`gate_limit` of `max_gates`) is not cut: a `too-large` violation.  One `memo` per `max_gates`."""
+    Definition over its gate limit (`gate_limit` of `max_gates`) is not cut: a `too-large` violation.  One `memo` per `max_gates`;
+    under `use_rule_cache` the rule is read from, or written to, the shared directory."""
     memo = {} if memo is None else memo
     key = (fn.id, X, W, extras)
     if key in memo:
         return memo[key]
     max_gates = gate_limits(max_gates)
+    hit = _cached_rule(fn, X, W, extras, max_gates)
+    if hit is not None:
+        memo[key] = hit
+        return hit
     limit = gate_limit(fn, max_gates)
     cap = X + extras
     if isinstance(fn, PrimitiveDefinition) and (not fn.params or fn.id in WIRING):
@@ -224,7 +290,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
         classes = [] if not fn.params else [{"kind": "output", "head": fn.id, "scope": fn.id, "gates": 1, "out_bits": bits, "count": 1,
                                              "nodes": {fn.id: 1}, "ok": bits <= cap or bits <= W + extras}]
         rule = _finish(fn.id, 1, classes, [], X, W, extras)
-    elif (sep := _separable(fn)) is not None:
+    elif (sep := separable(fn)) is not None:
         from verity_vllm.query.cross_call import members_check
         rule = _combine(fn.id, fn.gates, [(unit_rule(c, X, W, extras, memo=memo, max_gates=max_gates), m) for c, m in sep], X, W, extras)
         across = members_check(fn, memo)                            # the members are cut one by one: a value two of them compute
@@ -267,6 +333,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
         if not cut.ok:
             rule["violations"].append({"definition": fn.id, "class": "cut", "codes": list(cut.codes), "detail": cut.detail})
     memo[key] = rule
+    _cache_rule(fn, X, W, extras, max_gates, rule)
     return rule
 
 
@@ -284,7 +351,7 @@ def _finish(fid: str, gates: int, classes: list[dict], interior: list[dict], X: 
 #: where serving commits each committed interior value today, by (activation family, primitive of the value): the FA2 / FA3 hidden
 #: stream's fields (`commit/hidden_stream.py` StreamLayout; S after the softcap), else None -- a new tap
 _ATTENTION = ("AttnBlock", "AttnBlockSoftcap", "AttnBlockFA3", "DotBf16", "AttentionHead", "AttentionHeadSoftcap")
-_STREAM = {"AmpereBF16TcDot16_v1": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
+_STREAM = {"AmpereBF16TcDot16_v2": "S (scores)", "HopperBF16WgmmaDot16_v1": "S (scores)", "MufuTanh_v1": "S (softcapped scores)",
            "MufuEx2Ftz_v1": "P (f32 probabilities) / ROW rescale", "F2fpBf16_v1": "RP (bf16 probabilities)", "F32Max_v1": "ROW row_max",
            "F32AddFtz_v1": "ROW lane sums / FIN sum", "F32FmaFtz_v1": "ROW lane sums", "Fa2InvSum_v1": "FIN inv_sum", "Fa3InvSum_v1": "FIN inv_sum"}
 #: attention values the stream carries only under an opt-in tap, or not yet, by primitive: the tap each needs (ROW word 2 is the
@@ -316,6 +383,82 @@ def tap_kernel(scope: str | None, head: str | None = None) -> str:
     return _TAP_KERNEL.get(fam, f"the {fam} kernel")
 
 
+#: unit rules by gate limits, then (Definition id, X, W, extras), shared by every check in the process: a row's request Programs share
+#: most specializations
+_RULES: dict = {}
+
+
+def _depth(fn: Any, limits: dict[str, int], depth: dict[str, int], fns: dict[str, Any]) -> int:
+    """`unit_rule`'s recursion under `fn`, by Definition id into `depth`: 0 for a body cut as a whole, one more than its deepest
+    member for a separable body, -1 when there is nothing to cut (a primitive, a body over its gate limit)."""
+    got = depth.get(fn.id)
+    if got is not None:
+        return got
+    if isinstance(fn, PrimitiveDefinition):
+        d = -1
+    elif (sep := separable(fn)) is not None:
+        d = 1 + max((_depth(c, limits, depth, fns) for c, _m in sep), default=-1)
+    else:
+        d = 0 if fn.gates <= gate_limit(fn, limits) else -1
+    depth[fn.id], fns[fn.id] = d, fn
+    return d
+
+
+#: the prefetch's work, set before its workers fork (a Definition need not pickle)
+_PENDING: list[tuple[Any, int, int, int, dict[str, int]]] = []
+
+
+def _rule_of_pending(i: int) -> dict[str, Any] | str:
+    """The unit rule of pending Definition `i`, or what it raised (`repr`): left to `check_calls`, which reports or raises it."""
+    fn, X, W, extras, limits = _PENDING[i]
+    try:
+        return unit_rule(fn, X, W, extras, memo=_RULES[tuple(sorted(limits.items()))], max_gates=limits)
+    except Exception as e:  # noqa: BLE001
+        return repr(e)
+
+
+def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *, max_gates: Limits = None, jobs: int = 1,
+             specialize: Callable[[str, dict], Any] = specialization) -> int:
+    """Memo, `jobs` forked processes at a time, the unit rules `check_calls` would compute one after another for Calls of the
+    Definition ids `specs` (`spec_histogram` keys; a `batch:` / `scan:` prefix is dropped): every Definition under them that the
+    process has not ruled on yet, the bodies cut as a whole first, then each separable body once its members are memoed.  A rule
+    is a function of its Definition, so a check reads what it would have computed; a spec that does not resolve, or a rule that
+    raises, is left to `check_calls`.  Nothing is done for `jobs` <= 1 or without `fork`.  Returns how many rules were memoed."""
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor
+    from verity_vllm.query.program_view import spec_base, spec_statics
+    if jobs <= 1 or "fork" not in multiprocessing.get_all_start_methods():
+        return 0
+    limits = gate_limits(max_gates)
+    memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
+    depth: dict[str, int] = {}
+    fns: dict[str, Any] = {}
+    for s in dict.fromkeys(specs):
+        try:
+            fn = specialize(spec_base(s), spec_statics(s))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue
+        _depth(fn, limits, depth, fns)
+    for i, fn in fns.items():
+        if (i, X, W, extras) not in memo and (hit := _cached_rule(fn, X, W, extras, limits)) is not None:
+            memo[(i, X, W, extras)] = hit
+    done = 0
+    for d in range(max(depth.values(), default=-1) + 1):
+        todo = sorted((fns[i] for i, k in depth.items() if k == d and (i, X, W, extras) not in memo), key=lambda fn: -fn.gates)
+        if not todo:
+            continue
+        _PENDING[:] = [(fn, X, W, extras, limits) for fn in todo]
+        try:
+            with ProcessPoolExecutor(min(jobs, len(todo)), mp_context=multiprocessing.get_context("fork")) as ex:
+                for fn, rule in zip(todo, ex.map(_rule_of_pending, range(len(todo)))):
+                    if isinstance(rule, dict):
+                        memo[(fn.id, X, W, extras)] = rule
+                        done += 1
+        finally:
+            _PENDING.clear()
+    return done
+
+
 def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
                 specialize: Callable[[str, dict], Any] = specialization,
                 acquired: Mapping[str, int | Callable[[dict], int]] | None = None, max_gates: Limits = None) -> dict[str, Any]:
@@ -330,8 +473,8 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
     partition commits another number of interior words per Call is an `interior-not-acquired` violation.
 
     `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any."""
-    memo: dict = {}
     limits = gate_limits(max_gates)
+    memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
     out: list[dict[str, Any]] = []
     agg: dict[tuple[str, str], dict[str, Any]] = {}
 
@@ -409,5 +552,6 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
     return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired, max_gates=max_gates)
 
 
-__all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "committed_today", "tap_kernel", "QueryRuleViolation", "query_id", "parse",
-           "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "unit_rule", "check_calls", "call_groups", "check_query"]
+__all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",
+           "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "use_rule_cache", "unit_rule",
+           "prefetch", "check_calls", "call_groups", "check_query"]

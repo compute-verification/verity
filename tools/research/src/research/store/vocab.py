@@ -64,6 +64,7 @@ ARM = "arm"
 STAGE = "stage"
 SOURCE = "source"
 SUPERSEDED_BY = "superseded_by"
+ABANDONED = "abandoned"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
 HASH = "hash"
 SHARING = "sharing"
@@ -80,6 +81,7 @@ VERIFIED_BY = "verified_by"                           # a ledger row's free-text
 SAME_DEVICE = "same_device"
 BELOW_BAR = "below_bar"                               # verified, but its whole-proof bound misses the tables' 2^-128 bar
 OUTCOME = "outcome"
+COMMIT_MAP = "commit_map"                             # on a commit-map/v1 artifact: whether the history rewrite it records applies
 
 # ---- evidence labels: probe captures and input sets --------------------------------------------------------------------------------
 
@@ -104,17 +106,23 @@ DTYPE = "dtype"
 
 VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS = "accepted", "rejected", "not-transferable", "no-dumps"
 VERIFIED_VALUES = (VERIFIED_ACCEPTED, VERIFIED_REJECTED, VERIFIED_NOT_TRANSFERABLE, VERIFIED_NO_DUMPS)
-#: `verity_numerical.bench.contract.PROOF_CLASSES` + the ledger's `COMPONENT` (a bucket measured alone is no proof class).  The store
-#: imports neither package (the `research` rule), so the spelling is pinned here; the ledger's tests cross-check it.
+COMMIT_MAP_VALUES = ("accepted", "retracted")
+#: Mirrors `PROOF_CLASSES` in `backends/numerical/python/verity_numerical/bench/contract.py` + the `COMPONENT` that
+#: `bench/ledger.py` adds (a bucket measured alone is no proof class).  The store imports neither package (the `research` rule), so
+#: the spelling is copied here; `backends/numerical/tests/bench/test_tables.py` checks the copy against both.
 PROOF_CLASSES = ("NO_PROOF", "ARITHMETIC_DIAGNOSTIC", "NON_ZK_PROOF_DIAGNOSTIC", "NON_ZK_PROOF", "COMPLETE_HVZK_BACKEND", "COMPLETE_ZK_BACKEND",
                  "COMPONENT")
 AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "excluded")
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: One spelling per candidate, the one Table 1 of `bench.tables` uses for its rows (`A-GKR`, `B-Ligero`, `SP1`); `ledger_to_store.candidate`
-#: derives them from the lane name.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
-CANDIDATES = ("A-GKR", "B-AIR", "B-Ligero", "C", "SP1", "shared")
+#: Mirrors the Glossary's backend families (`README.md`, "Backend family"), which `bench/views.py` spells as `FAMILY_NAMES`; the
+#: backends' tests check the copy.  A `candidate` label written today names one of these.
+BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
+#: The backend families, then the values `ledger_to_store.candidate` derives from a frozen ledger lane, which recorded labels carry
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `backends/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
+CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 
 # ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
 
@@ -131,10 +139,22 @@ REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
 #: the artifact's meta at `put`); a label is what a table selects on or a judgement about the result, so these are refused.
 MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "threads", "window", "rtt_ms_path", "native_peak", "accumulate",
                     "replicate", "encoder")
+#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (`note:kb/<name>` for kb/) or the notes
+#: README's `note:<campaign>/<lane>/<name>`, either the same whichever month folder the file has moved to.  Not a bare name (a handoff
+#: sent to several lanes has the same name in each), and not a path (`.md`, a `YYYY-MM` or `DD` folder).
+NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")
+#: Keys whose label is only read with its ref: the form that ref must take, and what it names.
+REF_FORMS: dict[str, tuple[re.Pattern[str], str]] = {
+    ABANDONED: (NOTE_REF_RE, "the note that says why (note:<lane>/<file name without .md>, or note:<campaign>/<lane>/<name>)")}
 #: Label keys that name evidence / findings written by code today (trust dossiers, the ledger's red-team assertions).
 FINDING = "finding"
 LEVEL = "level"
 ANCHOR = "anchor"
+#: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
+GRANT = "grant"
+GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
+#: The owner's word that a pull request is ready at one head (`research queue ready`); the merge queue admits nothing without it.
+READY = "ready"
 
 
 def canonical_key(name: str) -> str:
@@ -194,7 +214,7 @@ def _k(name: str, group: str, form: str, doc: str, values: tuple[str, ...] = (),
 
 VOCAB: dict[str, Key] = {k.name: k for k in (
     # result
-    _k(CANDIDATE, GROUP_RESULT, ENUM, "the candidate proof system the result belongs to", CANDIDATES),
+    _k(CANDIDATE, GROUP_RESULT, ENUM, "the backend family the result belongs to (or the older candidate a ledger row names)", CANDIDATES),
     _k(PROOF_CLASS, GROUP_RESULT, ENUM, "the class claimed for the result (a red-team verdict is another proof_class label, by red-team-*)", PROOF_CLASSES),
     _k(SOUNDNESS, GROUP_RESULT, TEXT, "the soundness target or achieved bound as stated, e.g. 2^-128 (qualifiers allowed)"),
     _k(K, GROUP_RESULT, INT, "the relation's K (1536 for the frozen target)"),
@@ -223,6 +243,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(STAGE, GROUP_RESULT, TEXT, "the pipeline stage the result belongs to (build, match, commit)"),
     _k(SOURCE, GROUP_RESULT, TEXT, "branch@commit the result was produced from, for an artifact no Attempt records; old spellings `tree`, `release`"),
     _k(SUPERSEDED_BY, GROUP_RESULT, TEXT, "the run id or art: id of the result that replaces this one (this one stays in the store)"),
+    _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
+                                      "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
        "the cell it belongs to; the cell lists every attempt with its deviation (IX1)"),
     _k(HASH, GROUP_RESULT, TEXT, "the operand commitment proven in-circuit: none, poseidon2-babybear-w24, or the leaf's name"),
@@ -230,6 +252,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(FOLD, GROUP_RESULT, INT, "columns folded per VU (the relation's -xN)"),
     _k(PIPELINE, GROUP_RESULT, INT, "prover pipeline depth (sub-batches in flight; 1 = sequential)"),
     # verification
+    _k(COMMIT_MAP, GROUP_VERIFICATION, ENUM, "on a commit-map/v1 artifact, by its approver (research.commitmap.ACCEPTORS): whether the rewrite it "
+       "records applies, so that records keyed by an old commit are read for its image; the latest label wins", COMMIT_MAP_VALUES),
     _k(VERIFIED, GROUP_VERIFICATION, ENUM, "an independent verifier's verdict on the result's proof(s)", VERIFIED_VALUES),
     _k(VERIFIER, GROUP_VERIFICATION, TEXT, "which verifier produced the verdict (binary or module + revision)"),
     _k(VERIFIER_SECONDS, GROUP_VERIFICATION, NUMBER, "the verifier's wall seconds for the verdict"),
@@ -241,6 +265,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(SAME_DEVICE, GROUP_VERIFICATION, BOOL, "whether the verifier ran on the prover's machine"),
     _k(BELOW_BAR, GROUP_VERIFICATION, BOOL, "the verified proof's whole-proof bound is below the tables' 2^-128 bar: shown in the below-bar drill-down, never a Table 2 cell"),
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
+    _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
+       GRANT_ROLES),
+    _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it again"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
@@ -258,7 +285,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
-    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (verity.proofs.trust)"),
+    _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (tools/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
 )}
 
@@ -294,6 +321,14 @@ def check(name: str, value: Any) -> str | None:
     if k.form in (INT, NUMBER) and isinstance(value, str):
         return f"{name}={value!r} is not {'an int' if k.form == INT else 'a number'}"
     return k.check(value)
+
+
+def check_ref(name: str, ref: str | None) -> str | None:
+    """Why a `name` label's ref is not the form `REF_FORMS` requires (a missing ref included), as one line, or None."""
+    form = REF_FORMS.get(name)
+    if form is None or (ref is not None and form[0].match(ref)):
+        return None
+    return f"label key {name!r} needs --ref naming {form[1]}" + (f", not {ref!r}" if ref is not None else "")
 
 
 def suggest(name: str) -> list[str]:

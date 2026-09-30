@@ -62,6 +62,10 @@ class WithPeers(nn.Module):
         super().__init__()
         self.inner, self.bus = inner, bus
 
+    @property
+    def DERIVE_SOURCE(self) -> str:
+        return f"verity-vllm/with-peers/v1[{self.inner.DERIVE_SOURCE}]"
+
     def forward(self, prompt: torch.Tensor, *peers: torch.Tensor):
         self.bus.reset("trace", list(peers))
         out = self.inner(prompt)
@@ -206,6 +210,8 @@ class EngineStep(nn.Module):
     Generic: takes any vLLM `*ForCausalLM` (forward(input_ids, positions), compute_logits(hidden)). The row policy
     (`logits of the last row only`) is vLLM's `logits_indices` for one request; it is structure, not architecture."""
 
+    DERIVE_SOURCE = "verity-vllm/engine-step/v1"
+
     def __init__(self, model: nn.Module, pos0: int, M: int, sampled_rows: str = "last") -> None:
         super().__init__()
         self.model = model
@@ -228,6 +234,8 @@ class GreedyRequest(nn.Module):
 
     Generic: any vLLM `*ForCausalLM`; `LP`, `T` and greedy sampling are the request's structural inputs (BRIEF: prompt
     length, max_tokens, sampling kind)."""
+
+    DERIVE_SOURCE = "verity-vllm/greedy-request/v1"
 
     def __init__(self, model: nn.Module, LP: int, T: int) -> None:
         super().__init__()
@@ -260,6 +268,8 @@ class PaddedGreedyRequest(nn.Module):
     engine state (written by `unified_kv_cache_update` inside the attention layer), so the wrapper cannot mux the rows the way
     `PaddedGreedyServe` does with its own `unified_cache_write`; `unified_cache_pad` addresses the state by slot for every
     layer at once — model-agnostic (no layer names, no counts)."""
+
+    DERIVE_SOURCE = "verity-vllm/padded-greedy-request/v1"
 
     def __init__(self, model: nn.Module, LP: int, D_MAX: int, eos_id: int) -> None:
         super().__init__()
@@ -302,6 +312,8 @@ class StochasticEngineStep(nn.Module):
     (int32 [1]) is a forward INPUT too: the event's split count S = SplitsFor_v1(|live|, num_SMs), a DERIVED value of the workload.
     In a single-request workload `S` is the constant SplitsFor_v1(1, num_SMs) and the forward takes no `splits`."""
 
+    DERIVE_SOURCE = "verity-vllm/stochastic-engine-step/v1"
+
     def __init__(self, model: nn.Module, pos0: int, M: int, temperature: float, top_p: float, S: int | None = None) -> None:
         super().__init__()
         self.model = model
@@ -332,6 +344,8 @@ class StochasticRequest(nn.Module):
 
     [single-request workloads] With `S` given (the workload's one request: S = SplitsFor_v1(1, num_SMs) at
     every event) the forward takes [prompt, seed] and every select's split count is that constant (`Const32[S]` in the Program)."""
+
+    DERIVE_SOURCE = "verity-vllm/stochastic-request/v1"
 
     def __init__(self, model: nn.Module, LP: int, T: int, temperature: float, top_p: float, S: int | None = None) -> None:
         super().__init__()
@@ -454,6 +468,16 @@ def consulted_facts(vllm_config) -> dict:
     return facts
 
 
+@contextmanager
+def no_fx_stack_traces():
+    """Export without FX stack traces: nothing reads `node.meta["stack_trace"]`, and recording one per node was a tenth of a derive."""
+    import torch.fx.config as fx_config
+    from verity_vllm.engine import hooks
+    with hooks.Hooks() as h:
+        h.patch(fx_config, "do_not_emit_stack_traces", True)
+        yield
+
+
 def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, strict: bool = False, intercept_triton: bool = True, launch_log=None,
                   profile=None, applied_out: dict | None = None):
     """`torch.export.export(strict=False)` of a wrapper module on meta under vLLM's forward context + the export shims for the
@@ -462,7 +486,7 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile)."""
     from .export_compat import export_compat, read_back_applied
     from .triton_capture import intercept_triton_launches
-    with torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod):
+    with torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces():
         if intercept_triton:
             with intercept_triton_launches(launch_log):
                 ep = torch.export.export(mod, inputs, strict=strict)

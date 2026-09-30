@@ -177,6 +177,8 @@ current flag), `index_attempt(doc)`, `index_label(label, path)`, `set_presence(a
 `select_artifacts(kind=None, where=None, label=None, attempt=None, tool=None, derivation=None)`, `labels(target, key=None)`,
 `replicas(art_id)`, `sql(query, params=())` and `sql_with_columns(...)` on a read-only (`?mode=ro`) connection. Attempt queries
 return the attempt documents; artifact queries return `{id, kind, bytes, payload_type, manifest, local, remote, repo_path}`.
+`compact(src, dst)` (`research data catalog --compact OUT`) copies the catalog for readers that query it but never fetch
+(`research notes mcp --catalog`): the same tables and indexes, `manifest_json` NULL, no `replicas` / `replica_checks`.
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -308,7 +310,7 @@ Inputs come from flags > `store.toml [remote]` (endpoint, bucket, the env var *n
 - **local** (no API call): sign a JWT (HS256) with the parent *secret access key* — Cloudflare's documented client-side signing,
   ported claim for claim from their reference implementation: `{bucket, scope | actions, paths?: {prefixPaths, objectPaths}, sub:
   account id, iss: parent key id, aud: endpoint host, iat, exp}`; the temporary key id is the parent's, the temporary secret is the
-  sha256 hex of the JWT, the session token is `base64("jwt/" + JWT)`. Checked live against `verity-dev` (2026-09-22): a 10-minute
+  sha256 hex of the JWT, the session token is `base64("jwt/" + JWT)`. Checked live against the store's bucket (2026-09-22): a 10-minute
   `object-read-only` credential HEADs a manifest (200) and is refused a PUT (403); `--prefix` + `--actions` are enforced (PUT inside
   the prefix 200, HEAD outside it 403, a GET not in `actions` 403). One deviation from the reference TypeScript: R2 answers 400 to a
   JWT that carries both `scope` and `actions`, so `--actions` *replaces* `--permission` in the claims. Only this path can scope by
@@ -359,7 +361,7 @@ supplies bytes only; the manifest must still be resolvable locally or remotely. 
 cached into `objects/`. A repo fixture is registered bare (`fixture/v1`, `meta {}`, `refs {}`), so its id is its bytes (plus the
 bare file name); when the bytes change on purpose, `research data refresh-fixtures [--preserve]` re-registers it and moves the old
 id into the map's `previous` block (`{"previous": {"art:<new>": ["art:<old>", ...]}}`), which readers skip: `replica_map()` takes
-`art:` keys only. `research data pull --from MACHINE RUN`
+`art:` keys only. A registry entry git does not track is fetched instead (§7.3). `research data pull --from MACHINE RUN`
 copies an attempt manifest plus its outputs' manifests and blobs from a machine's local store over ssh (uses
 `research.remote` helpers) — the same-host tier of the planner until R2 is configured.
 
@@ -385,6 +387,19 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
   and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, every verified replica
   row confirmed by HEAD (manifest + blobs, sizes), and with `--render` the `bench.tables` markdown. Every difference gets a cause
   (`pending here`, `not pulled`, `uploaded during the run`); anything else fails (exit 1). Read-only for the store under test.
+
+### 7.3 Fetched fixtures and the public export
+
+- A registry entry is *tracked* (git holds it; a tracked file is at most 256 KiB) or *fetched* (its path is gitignored).
+- `fetchset.py` fetches any set of ids, `--jobs` at a time: local objects, else the private remote when reachable, else the public
+  export (`HttpRemote`: `GET <url>/manifests/<hex>.json`, `<url>/objects/sha256/<hex>`; `<url>` is `fetchset.PUBLIC_URL`, the
+  site's `/store`, which redirects to the `verity-public` bucket, unless `--public-url` or `$RESEARCH_PUBLIC_URL` names another,
+  and an empty one means none). A manifest must hash to its id and a blob
+  to its sha256 and size, or the next source is tried. The registry is one caller; a snapshot's members can be another.
+- `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
+  tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
+- `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
+  A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
 ## 8. Labels
 
@@ -419,12 +434,16 @@ a table read the same key. One constant per key (`vocab.PROOF_CLASS`, never the 
 value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `text`, `list`. `research data vocab [--json]`
 prints the table; the groups are:
 
-- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: A, B-AIR,
-  B-Ligero, C, SP1, shared), `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
+- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: the backend
+  families A-GKR, B-Ligero, C-Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
+  `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
   `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
-  `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int).
+  `source`, `superseded_by`, `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);
+  `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
+  names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
+  stay valid when the file moves into a month folder).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
@@ -472,6 +491,11 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7): put as a bare
                                               fixture/v1 under the new id (--preserve pushes it), rewrite the entry, keep the old id under
                                               the map's `previous` block; prints old -> new; idempotent; exit 1 on a missing path or conflict
+research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
+                                              make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
+research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+                                              copy every registry entry and its `previous` ids to the export bucket (§7.3)
+research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale (the run is an attempt in this store)
                                               vs REAL (it is not); read-only unless --clean, which deletes the stale files and nothing else
@@ -547,7 +571,7 @@ telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
                          the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
-trust-dossier/v1         the computed trust level of one numerical target (`python -m verity.proofs.trust --publish`): meta =
+trust-dossier/v1         the computed trust level of one numerical target (`python tools/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,
                          instruction, level, anchor
@@ -570,5 +594,5 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 ## 13. Deferred (each arrives with a named failure)
 
 `diff` (F9), `independent` (U3, descriptive not authoritative: shared closure files / lockfiles / inputs), `impact` (F4),
-`export` (F5/U5), `gc` (F11), pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
+`gc` (F11), pod teardown gating on PRESERVED (F7), closure-scoped reuse, replica planner beyond the
 three-tier order above.

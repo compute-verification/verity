@@ -23,9 +23,10 @@ K and one V run of every earlier token (#11: 7.5e5 Calls, 3.4e8 operand runs, 99
 read as a Python object (the decoded JSON run lists, a `ValueRef` tuple, a `CallView.reads` tuple) is tens of GB.  Both readers
 therefore build ONE columnar body (:class:`_Columns`): flat `array` columns of Call ids and port-name indices with per-Call offsets
 for the reads (6 bytes per read), per-Call indices into small tables for the spec / form / ports, the names as one list of strings.
-`ProgramView.calls` is a lazy `Sequence[CallView]` (:class:`_Calls`) that materializes a `CallView` when indexed or iterated, and a
-`CallView`'s `reads` from that body is a lazy `Sequence[ValueRef]` (:class:`_Reads`) that materializes `ValueRef`s when iterated --
-a consumer holds a Call's reads only while it looks at them.  `from_instances` streams the rows of `instances.json.gz` one at a
+`ProgramView.calls` is a lazy `Sequence[CallView]` (:class:`_Calls`) that materializes each `CallView` once, when it is first indexed
+or iterated (a Program's many passes over its Calls reuse it, at about 150 bytes per Call), and a `CallView`'s `reads` from that body
+is a lazy `Sequence[ValueRef]` (:class:`_Reads`) that materializes `ValueRef`s when iterated -- a consumer holds a Call's reads only
+while it looks at them.  `from_instances` streams the rows of `instances.json.gz` one at a
 time (never the `rows` list).  A `ProgramView` built by hand from a tuple of `CallView`s (tests, synthetic Programs) is unchanged.
 """
 
@@ -41,7 +42,7 @@ from typing import Any, Callable, Iterable, Iterator, Sequence
 from verity.proofs.query import ValueRef
 
 __all__ = ["Port", "CallView", "ProgramView", "InputView", "from_instances", "from_descriptor", "definition_ports", "parse_type_repr",
-           "spec_base", "spec_statics", "ports_of_type", "REGISTRY_MODULES", "param_reads", "reads_any_of", "iter_instance_rows"]
+           "spec_base", "spec_statics", "ports_of_type", "param_reads", "reads_any_of", "iter_instance_rows"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +157,7 @@ class _Columns:
     prescribed inputs alone (`pread_*`), so a pass over the weights a body reads never touches the Call reads."""
 
     __slots__ = ("n", "specs", "families", "port_tables", "spec_idx", "forms", "form_idx", "names", "port_names",
-                 "read_off", "read_call", "read_port", "pread_off", "pread_call", "pread_port")
+                 "read_off", "read_call", "read_port", "pread_off", "pread_call", "pread_port", "views")
 
     def __init__(self) -> None:
         self.n = 0
@@ -174,10 +175,18 @@ class _Columns:
         self.pread_off = array("q", [0])
         self.pread_call = array("i")
         self.pread_port = array("H")
+        self.views: list[CallView | None] = []
 
     def call(self, k: int) -> "CallView":
-        s = self.spec_idx[k]
-        return CallView(k, self.specs[s], self.families[s], self.forms[self.form_idx[k]], self.names[k], self.port_tables[s], _Reads(self, k))
+        views = self.views
+        if len(views) < self.n:
+            views.extend([None] * (self.n - len(views)))
+        v = views[k]
+        if v is None:
+            s = self.spec_idx[k]
+            v = views[k] = CallView(k, self.specs[s], self.families[s], self.forms[self.form_idx[k]], self.names[k], self.port_tables[s],
+                                    _Reads(self, k))
+        return v
 
     def family_of(self, k: int) -> str:
         return self.families[self.spec_idx[k]]
@@ -545,28 +554,16 @@ def parse_type_repr(s: str):
     return t
 
 
-#: the integration's registry modules whose Definitions a derived Program names (imported once by `definition_ports`; a module that
-#: fails to import is reported with the port lookup that needed it, never treated as "not registered")
-REGISTRY_MODULES = ("b1", "dense", "fp8", "moe", "sampling", "b1_tp2", "moe_pad", "fa3_check_inf")
-_REGISTRY: dict[str, Any] = {}
-
-
 def _registry():
-    if "reg" not in _REGISTRY:
-        import importlib
-        try:
-            from verity.ir.defs import REGISTRY
-        except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
-            from verity_vllm.query.manifest.format import RegistryUnavailable
-            raise RegistryUnavailable(e) from e
-        errors = []
-        for m in REGISTRY_MODULES:
-            try:
-                importlib.import_module(f"verity_vllm.program.registry.{m}")
-            except Exception as e:  # noqa: BLE001
-                errors.append(f"verity_vllm.program.registry.{m}: {type(e).__name__}: {e}")
-        _REGISTRY["reg"], _REGISTRY["errors"] = REGISTRY, errors
-    return _REGISTRY["reg"], _REGISTRY["errors"]
+    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity_vllm.program.registry.load`); a module that
+    fails to import is reported with the lookup that needed it, never treated as "not registered"."""
+    try:
+        from verity.ir.defs import REGISTRY  # noqa: F401
+    except Exception as e:  # noqa: BLE001  -- the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
+        from verity_vllm.query.manifest.format import RegistryUnavailable
+        raise RegistryUnavailable(e) from e
+    from verity_vllm.program.registry.catalog import load
+    return load()
 
 
 _PORTS_CACHE: dict[str, tuple[Port, ...]] = {}

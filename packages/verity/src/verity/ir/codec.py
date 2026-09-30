@@ -141,7 +141,8 @@ class _BodyEncoder:
     (see `SCHEMA_V1`): the whole reference sequence of every encoded node argument is remembered, and a later
     concatenation whose first `m` parts equal one of them (`m` down to `len - ALIAS_WINDOW`, longest first) is
     written as that argument's alias plus its remaining parts. Aliases point backwards only (to an earlier node
-    of the same body, or from `ret` to any node), so decoding is one forward pass."""
+    of the same body, or from `ret` to any node), so decoding is one forward pass: a node's later argument never
+    aliases its earlier one (`F32Eq(x, x)`), since the decoder has not yet read the node it would name."""
 
     def __init__(self, schema: str = SCHEMA_V0, tables: _Tables | None = None) -> None:
         self.schema = schema
@@ -166,7 +167,7 @@ class _BodyEncoder:
         out: list | None = None
         for m in range(n, max(1, n - ALIAS_WINDOW - 1), -1):  # m >= 2, suffix <= ALIAS_WINDOW parts
             hit = self.seqs.get(keys[:m])
-            if hit is not None:
+            if hit is not None and (at is None or hit[0] < at[0]):
                 out = [{"alias": list(hit)}] + [p.to_json() for p in parts[m:]]
                 break
         if out is None:
@@ -220,6 +221,11 @@ def _encode_definition(fn: FunctionDefinition, schema: str = SCHEMA_V0, tables: 
         "bindings": {k: _static_json(fn.bindings[k]) for k in fn.defn.statics},
         "body": _encode_body(fn.body, schema, tables),
     }
+
+
+def definition_entry(fn: FunctionDefinition) -> dict:
+    """The self-contained (v0) descriptor entry of one definition, callees named by id: what a digest of the definition alone hashes."""
+    return _encode_definition(fn)
 
 
 def _static_functions(v: Any):
