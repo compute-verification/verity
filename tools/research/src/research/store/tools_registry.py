@@ -16,6 +16,8 @@ REGISTRY: dict[str, str] = {
     "tc_probe": "tools.tc_probe.tool:TC_PROBE",
     "instances_hw": "tools.tc_probe.tool:INSTANCES_HW",
     "tc_probe_fp4": "tools.tc_probe_fp4.tool:TC_PROBE_FP4",
+    "tc_probe_fp8": "tools.tc_probe_fp4.tool_fp8:TC_PROBE_FP8",
+    "w1_prices": "tools.tc_probe_fp4.tool_fp8:W1_PRICES",
     "bench_vu": "backends.direct.ligero.tool:BENCH_VU",
     "ligero_verify_batch": "backends.direct.ligero.tool:LIGERO_VERIFY_BATCH",
     "a_gpu_prove": "backends.gkr.gpu.tool:A_GPU_PROVE",
