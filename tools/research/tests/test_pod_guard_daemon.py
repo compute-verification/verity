@@ -10,19 +10,26 @@ import subprocess
 import time
 import tracemalloc
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from research import remote
 from research.pods import workproc
+from waits import Gate
 
 GUARD = remote.GUARD_SCRIPT
 POD = "podfake123"
 
 
 def _env(tmp_path: Path, ps: list[str], *, gpu: list[str] | None = None, apps: int = 0, now: float | None = None,
-         key: bool = True, **extra: str) -> dict[str, str]:
+         key: bool = True, ticks: Gate | None = None, **extra: str) -> dict[str, str]:
+    """With `ticks`, every tick announces itself on that FIFO as it starts (its process listing is the first thing it reads)."""
     (tmp_path / "ps.txt").write_text("".join(f"{line}\n" for line in ps))
+    ps_cmd = f"cat {tmp_path / 'ps.txt'}"
+    if ticks is not None:
+        (tmp_path / "ps.sh").write_text(f"echo tick >> {ticks.path}\n{ps_cmd}\n")
+        ps_cmd = f"sh {tmp_path / 'ps.sh'}"
     nv = tmp_path / "nvidia-smi"
     if gpu is None:
         nv.write_text("#!/bin/sh\nexit 127\n")                      # a CPU pod: no nvidia-smi answer
@@ -33,7 +40,7 @@ def _env(tmp_path: Path, ps: list[str], *, gpu: list[str] | None = None, apps: i
     nv.chmod(0o755)
     environ = tmp_path / "environ"
     environ.write_bytes(b"\0".join([b"HOME=/root", f"RUNPOD_POD_ID={POD}".encode()] + ([b"RUNPOD_API_KEY=pod-scoped-secret"] if key else [])) + b"\0")
-    env = {**os.environ, **workproc.guard_env(), "GUARD_TERMINAL": " ".join(remote.TERMINAL), "GUARD_PS": f"cat {tmp_path / 'ps.txt'}",
+    env = {**os.environ, **workproc.guard_env(), "GUARD_TERMINAL": " ".join(remote.TERMINAL), "GUARD_PS": ps_cmd,
            "GUARD_NVSMI": str(nv), "GUARD_ENVIRON": str(environ), "GUARD_TERMINATE_CMD": f"sh {_recorder(tmp_path)}"}
     env.pop("RUNPOD_POD_ID", None)
     if now is not None:
@@ -49,32 +56,35 @@ def _recorder(tmp_path: Path) -> Path:
 
 
 def tick(root: Path, env: dict[str, str], idle_min: float = 90) -> dict:
-    r = subprocess.run(["bash", "-c", f'. "{GUARD}"; guard_tick "$0" "$1"', str(root), str(idle_min)], env=env, capture_output=True, text=True, timeout=60)
+    r = subprocess.run(["bash", "-c", f'. "{GUARD}"; guard_tick "$0" "$1"', str(root), str(idle_min)], env=env, capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout.startswith("VERDICT"), r.stdout + r.stderr
     return json.loads((root / "guard" / "state.json").read_text())
 
 
-def run_dir(root: Path, rid: str, state: str = "done", pid: int | None = None, age_s: float = 3600) -> Path:
+#: The guard's clock (GUARD_NOW), when a run's files were last written, and when a fetch verified them: fixed, so no test reads
+#: the real clock.
+NOW, WRITTEN, FETCHED = 1_700_000_000.0, 1_600_000_000.0, 1_600_003_600.0
+
+
+def run_dir(root: Path, rid: str, state: str = "done", pid: int | None = None) -> Path:
     d = root / "runs" / rid
     d.mkdir(parents=True)
     (d / "status.json").write_text(json.dumps({"state": state, "pid": pid}))
     (d / "launch.json").write_text(json.dumps({"run_id": rid, "runner_pid": pid}))
     (d / "result.json").write_text("{}")
-    old = time.time() - age_s
     for p in d.iterdir():
-        os.utime(p, (old, old))
+        os.utime(p, (WRITTEN, WRITTEN))
     return d
 
 
-def mark_fetched(d: Path, verified_from: float | None = None) -> None:
-    (d / ".fetched").write_text(json.dumps({"schema": remote.FETCHED_SCHEMA, "verified_from": time.time() if verified_from is None else verified_from}))
+def mark_fetched(d: Path, verified_from: float = FETCHED) -> None:
+    (d / ".fetched").write_text(json.dumps({"schema": remote.FETCHED_SCHEMA, "verified_from": verified_from}))
 
 
 def idle_since(root: Path, env: dict[str, str], minutes: float) -> dict:
     """A first tick seeds the idle clock; a second one `minutes` later decides."""
-    now = time.time()
-    tick(root, {**env, "GUARD_NOW": str(now - 60 * minutes)})
-    return tick(root, {**env, "GUARD_NOW": str(now)})
+    tick(root, {**env, "GUARD_NOW": str(NOW - 60 * minutes)})
+    return tick(root, {**env, "GUARD_NOW": str(NOW)})
 
 
 QUIET = ["/usr/sbin/sshd -D", "sleep 60", "bash /workspace/research/tool/x/research/pods/sh/pod_guard.sh daemon /workspace/research 90",
@@ -155,9 +165,9 @@ def test_a_run_changed_after_its_fetch_is_unfetched_again(tmp_path):
     d = run_dir(root, "r1")
     mark_fetched(d)
     assert idle_since(root, _env(tmp_path, QUIET), 91)["verdict"] == "terminate"
-    time.sleep(0.05)
     (d / "late.log").write_text("written after the verification began")
-    st = tick(root, _env(tmp_path, QUIET))
+    os.utime(d / "late.log", (FETCHED + 1, FETCHED + 1))
+    st = tick(root, _env(tmp_path, QUIET, now=NOW))
     assert st["verdict"] == "refuse" and "changed after its fetch (late.log)" in st["unfetched"][0]["why"]
 
 
@@ -180,15 +190,6 @@ def _daemon(root: Path, env: dict[str, str], idle_min: float) -> subprocess.Pope
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 
-def _wait(pred, timeout: float = 20.0) -> bool:
-    end = time.time() + timeout
-    while time.time() < end:
-        if pred():
-            return True
-        time.sleep(0.05)
-    return False
-
-
 def _state(root: Path) -> dict:
     try:
         return json.loads((root / "guard" / "state.json").read_text())
@@ -199,37 +200,43 @@ def _state(root: Path) -> dict:
 def test_daemon_refuses_while_unfetched_then_terminates_after_the_fetch_and_exits(tmp_path):
     root = tmp_path / "root"
     d = run_dir(root, "r-e2e")
-    env = _env(tmp_path, QUIET, GUARD_TICK_S="0.2", GUARD_RETRY_S="0.2")
-    proc = _daemon(root, env, 0.01)                 # 0.6 s idle limit
+    ticks = Gate(tmp_path / "ticks")
+    env = _env(tmp_path, QUIET, ticks=ticks, GUARD_TICK_S="0.2", GUARD_RETRY_S="0.2")
+    proc = _daemon(root, env, 0)                    # no idle limit: every tick decides
     try:
-        assert _wait(lambda: _state(root).get("verdict") == "refuse"), _state(root)
-        time.sleep(0.6)
+        for _ in range(3):                          # the first two ticks are done once the third starts
+            ticks.readline()
+        assert _state(root).get("verdict") == "refuse", _state(root)
         assert not (tmp_path / "terminated").exists(), "refused: nothing terminated while r-e2e is unfetched"
         log = (root / "guard" / "guard.log").read_text()
         assert "VERDICT refuse" in log and "unfetched=r-e2e" in log and log.count("VERDICT refuse") == 1, "logged once per change, not per tick"
         mark_fetched(d)
-        assert _wait(lambda: (tmp_path / "terminated").exists())
-        assert proc.wait(timeout=20) == 0, "the daemon exits once termination is accepted"
+        assert proc.wait() == 0, "the daemon exits once termination is accepted"
         assert (tmp_path / "terminated").read_text().split() == [POD]
         st = _state(root)
         assert st["verdict"] == "terminated" and st["terminate"]["ok"] and st["terminate"]["rc"] == 0
     finally:
         if proc.poll() is None:
             os.killpg(proc.pid, signal.SIGKILL)
+        ticks.close()
 
 
 def test_a_second_daemon_on_the_same_pod_exits_and_the_first_keeps_guarding(tmp_path):
     root = tmp_path / "root"
-    env = _env(tmp_path, QUIET + ["python busy.py"], GUARD_TICK_S="0.2")
+    ticks = Gate(tmp_path / "ticks")
+    env = _env(tmp_path, QUIET + ["python busy.py"], ticks=ticks, GUARD_TICK_S="0.2")
     first = _daemon(root, env, 90)
     try:
-        assert _wait(lambda: (root / "guard" / "guard.pid").exists() and _state(root).get("verdict") == "busy")
+        ticks.readline()
+        ticks.readline()                            # the first tick is done: the pid file is claimed, the verdict written
+        assert (root / "guard" / "guard.pid").exists() and _state(root).get("verdict") == "busy"
         second = _daemon(root, env, 90)
-        assert second.wait(timeout=20) == 0 and first.poll() is None
+        assert second.wait() == 0 and first.poll() is None
         assert int((root / "guard" / "guard.pid").read_text()) == first.pid
         assert "another guard holds" in (root / "guard" / "guard.log").read_text()
     finally:
         os.killpg(first.pid, signal.SIGKILL)
+        ticks.close()
 
 
 def test_the_daemon_never_uses_the_account_key_path(tmp_path):
@@ -237,7 +244,7 @@ def test_the_daemon_never_uses_the_account_key_path(tmp_path):
     env = _env(tmp_path, QUIET, key=False)
     env.pop("GUARD_TERMINATE_CMD")
     r = subprocess.run(["bash", "-c", f'. "{GUARD}"; GUARD_POD_KEY_ONLY=1 GUARD_LOGF="$0" guard_terminate_self test; echo rc=$?', str(tmp_path / "g.log")],
-                       env=env, capture_output=True, text=True, timeout=60)
+                       env=env, capture_output=True, text=True)
     assert "rc=3" in r.stdout and "no pod-scoped RUNPOD_API_KEY" in (tmp_path / "g.log").read_text()
 
 
@@ -285,7 +292,7 @@ def _terminate(tmp_path: Path, api: FakeRunPod, key: bool = True) -> subprocess.
     import sys
 
     env["GUARD_PY"] = sys.executable
-    return subprocess.run(["bash", "-c", f'. "{GUARD}"; guard_terminate_pod {POD}; echo rc=$?'], env=env, capture_output=True, text=True, timeout=60)
+    return subprocess.run(["bash", "-c", f'. "{GUARD}"; guard_terminate_pod {POD}; echo rc=$?'], env=env, capture_output=True, text=True)
 
 
 def test_terminate_uses_the_pod_key_from_the_environ_file_over_rest(tmp_path):
@@ -321,9 +328,9 @@ def test_daemon_terminates_through_the_real_path_with_the_pod_key(tmp_path):
     mark_fetched(run_dir(root, "r-done"))
     env = {**_env(tmp_path, QUIET, GUARD_TICK_S="0.2", GUARD_RETRY_S="0.2"), **api.env(), "GUARD_PY": sys.executable}
     env.pop("GUARD_TERMINATE_CMD")
-    proc = _daemon(root, env, 0.01)
+    proc = _daemon(root, env, 0)
     try:
-        assert proc.wait(timeout=30) == 0
+        assert proc.wait() == 0
         assert api.calls[:1] == [("DELETE", f"/v1/pods/{POD}", "Bearer pod-scoped-secret", "")]
         st = _state(root)
         assert st["verdict"] == "terminated" and st["terminate"]["ok"] and "REST DELETE" in st["terminate"]["output"]
@@ -350,21 +357,29 @@ def test_not_a_runpod_pod_or_another_pod_means_no_guard(tmp_path):
 
 
 def test_ensure_guard_starts_one_daemon_and_finds_it_the_next_time(tmp_path, monkeypatch):
-    env = _env(tmp_path, QUIET + ["python busy.py"])
+    ticks = Gate(tmp_path / "ticks")
+    env = _env(tmp_path, QUIET + ["python busy.py"], ticks=ticks)
     for k in ("GUARD_PS", "GUARD_NVSMI", "GUARD_TERMINATE_CMD"):
         monkeypatch.setenv(k, env[k])
+    monkeypatch.setenv("GUARD_TICK_S", "0.2")
     monkeypatch.setenv("RUNPOD_API_KEY", "must-not-reach-the-daemon")
+    # ensure_guard polls for the daemon's pid file between sleeps; each of its sleeps lasts until the daemon's next tick starts
+    # (after its claim), not a fixed time
+    monkeypatch.setattr(remote, "time", SimpleNamespace(**{**vars(time), "sleep": lambda s: ticks.readline()}))
     root = tmp_path / "root"
     first = remote.ensure_guard(root, 90, pod_id=POD, environ=env["GUARD_ENVIRON"])
     try:
         assert first["installed"] and first["started"] and first["pid"] and first["state"] == str(root / "guard" / "state.json")
         again = remote.ensure_guard(root, 90, pod_id=POD, environ=env["GUARD_ENVIRON"])
         assert again["installed"] and not again["started"] and again["pid"] == first["pid"]
-        assert _wait(lambda: _state(root).get("verdict") == "busy")
+        ticks.readline()
+        ticks.readline()                            # at least the first tick is done
+        assert _state(root).get("verdict") == "busy"
         daemon_env = subprocess.run(["ps", "eww", "-o", "command=", "-p", str(first["pid"])], capture_output=True, text=True).stdout
         assert "must-not-reach-the-daemon" not in daemon_env
     finally:
         os.killpg(first["pid"], signal.SIGKILL)
+        ticks.close()
 
 
 def test_launch_request_carries_the_guard_answer_and_a_request_without_guard_starts_none(tmp_path, monkeypatch):
@@ -395,9 +410,8 @@ def _fake_machine(tmp_path: Path, monkeypatch, files: dict[str, bytes]) -> tuple
     for name, body in files.items():
         (d / name).parent.mkdir(parents=True, exist_ok=True)
         (d / name).write_bytes(body)
-    old = time.time() - 60
     for p in d.rglob("*"):
-        os.utime(p, (old, old))
+        os.utime(p, (WRITTEN, WRITTEN))
     local = tmp_path / "local" / "r-fetch"
     local.mkdir(parents=True)
     (local / "remote.json").write_text(json.dumps({"run_id": "r-fetch", "host": "h", "port": 22, "remote_run_dir": str(d)}))
@@ -410,7 +424,7 @@ def test_fetch_all_verifies_then_writes_the_marker_the_guard_accepts(tmp_path, m
     rec = remote.fetch(local, everything=True)
     assert rec["preserved"] and rec["fetched_marker"]["written"], rec
     marker = json.loads((d / ".fetched").read_text())
-    assert marker["schema"] == remote.FETCHED_SCHEMA and marker["files"] == 5 and marker["verified_from"] <= time.time()
+    assert marker["schema"] == remote.FETCHED_SCHEMA and marker["files"] == 5 and marker["verified_from"] > WRITTEN
     assert (local / "out" / "proof.bin").read_bytes() == b"p" * 1000 and not (local / ".fetched").exists()
     assert json.loads((local / "preserved.json").read_text())["verified_from_machine_epoch"] == marker["verified_from"]
     env = _env(tmp_path, QUIET)

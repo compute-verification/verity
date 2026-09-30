@@ -1,12 +1,13 @@
 """``bench-instances/v1``: layout, prefixes, seeds, silicon agreement on a fixed subset, negatives, pinned digests.
 
 The fast suite reads only the committed files (indices, ``y``/``out`` words, negatives, seeds, manifest) and the
-generator; the tests that need the 27 MB built arrays skip when they are absent.  ``--slow`` (``pytest -m slow``)
-rechecks every instance and rebuilds the corner tier."""
+generator; the tests that need the 27 MB built arrays skip when they are absent.  ``VERITY_BENCH_FULL=1`` rechecks
+every instance and rebuilds the corner tier (minutes)."""
 
 from __future__ import annotations
 
 import hashlib
+import os
 import json
 from pathlib import Path
 
@@ -332,6 +333,7 @@ def test_fused_row_mapping() -> None:
 
 
 @pytest.mark.slow
+@pytest.mark.skipif(not os.environ.get("VERITY_BENCH_FULL"), reason="minutes: set VERITY_BENCH_FULL=1")
 @needs_built
 def test_full_recheck() -> None:
     rep = I.verify(ROOT, full=True, log=lambda *_: None)

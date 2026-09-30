@@ -251,7 +251,9 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
-             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0}
+             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0,
+             "SCALE": "shared-per-block", "S": 4,
+             "CONSTRUCTION": "shared-greedy"}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization
     vocabularies = [v for v in vars(V).values() if isinstance(v, V.Vocabulary)]
     kinds = [(f"{v.name}/{k}", make) for v in vocabularies for k, make in v.kinds.items()]

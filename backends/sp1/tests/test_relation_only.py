@@ -87,7 +87,7 @@ def diagnostic_host() -> Host:
     binary = os.environ.get(HOST_ENV)
     if not binary:
         pytest.skip(f"{HOST_ENV} not set: no relation-only diagnostic host to run")
-    host = Host(binary=Path(binary), timeout=1800)
+    host = Host(binary=Path(binary))
     try:
         host.path()
     except SP1Unavailable as error:

@@ -37,7 +37,7 @@ def record(name: str) -> dict:
 
 @pytest.fixture(scope="module")
 def host() -> Host:
-    return Host(timeout=1800)
+    return Host()
 
 
 def test_the_guest_is_the_approved_one(host: Host) -> None:

@@ -46,7 +46,7 @@ DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16Wgm
 
 #: attention-chain registration per tensor-core step family (`TargetProfile.tensor_core_family`).
 TARGETS: dict[str, dict[str, Any]] = {
-    "ampere": {"dot_id": "AmpereBF16TcDot16_v1",
+    "ampere": {"dot_id": "AmpereBF16TcDot16_v2",
                "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (Triton tl.dot on sm_80/sm_89; FA2 CUTLASS)",
                "pipeline": "veritor.core.silicon_total.AMPERE_BF16_DOT16_TOTAL (groups 8+8, width 25, floor -132; A100 + RTX 4090 conform)",
                "flash_attn_versions": (2,),
@@ -131,7 +131,7 @@ def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
 
 def fa3_check_inf(profile) -> bool:
     """True when the target builds FA3's attention rows with the per-iteration `Check_inf` chain (`Attention_v4`):
-    an effective FA3 target declaring `fa3_construction = "check-inf-per-iteration"`."""
+    an effective FA3 target whose effective `fa3_construction` is `"check-inf-per-iteration"` (the default)."""
     construction = getattr(profile, "effective_fa3_construction", None)
     return profile.effective_flash_attn_version() == 3 and construction is not None and construction() == "check-inf-per-iteration"
 

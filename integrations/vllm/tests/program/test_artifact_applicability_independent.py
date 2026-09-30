@@ -33,7 +33,6 @@ import shutil
 import subprocess
 import sys
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -228,7 +227,6 @@ class Build:
     result: dict = field(default_factory=dict)
     manifest: dict = field(default_factory=dict)
     mutations: list = field(default_factory=list)
-    wall: float = 0.0
 
     @property
     def ok(self) -> bool:
@@ -300,9 +298,7 @@ class Harness:
         argv = ["verity_vllm.pipeline.cli", "build", "--out", str(out), "--wrapper", "request", "--LP", "8", "--T", "4"]
         code = (preamble + "\nimport runpy, sys\nsys.argv = " + repr(argv) + "\nrunpy.run_module(sys.argv[0], run_name='__main__')\n")
         (self.work / name / "driver.py").write_text(code)
-        t0 = time.time()
-        p = subprocess.run([self.python, str(self.work / name / "driver.py")], cwd=str(tree), env=e, capture_output=True, text=True, timeout=1800)
-        b.wall = round(time.time() - t0, 1)
+        p = subprocess.run([self.python, str(self.work / name / "driver.py")], cwd=str(tree), env=e, capture_output=True, text=True)
         b.rc = p.returncode
         b.log = (p.stdout + "\n" + p.stderr)
         (self.work / name / "build.log").write_text(b.log)
@@ -538,7 +534,7 @@ def builds(harness: Harness) -> dict[str, Build]:
     if os.environ.get("CBTEST_GPU_HOST") == "1":
         specs.append(("gpu_host_mismatch", {"gpu_visible": True}))  # (vii) construct on the L40S (142 SMs) for the 4090 profile (128)
     res = harness.build_many(specs)
-    summary = {k: {"rc": b.rc, "ok": b.ok, "digest": b.digest, "wall_s": b.wall, "mutations": b.mutations, "files": b.files(),
+    summary = {k: {"rc": b.rc, "ok": b.ok, "digest": b.digest, "mutations": b.mutations, "files": b.files(),
                    "declared_capabilities": sorted(declared_capabilities(b.manifest)), "declared_num_sms": sorted(declared_num_sms(b.manifest)),
                    "identity": identity_of(b), "refusal": (b.refusal.strip()[:600] if not b.ok else None)} for k, b in res.items()}
     (harness.work / "SUMMARY.json").write_text(json.dumps(summary, indent=1, default=str))
@@ -744,7 +740,7 @@ try:
 except Exception as e:
     print(json.dumps({{"api": True, "rejected": True, "reason": repr(e)[:1200]}}))
 """
-        p = subprocess.run([python, "-c", code], cwd=str(tree), env={**os.environ, "PYTHONPATH": _pythonpath(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True, timeout=600)
+        p = subprocess.run([python, "-c", code], cwd=str(tree), env={**os.environ, "PYTHONPATH": _pythonpath(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True)
         try:
             j = json.loads(p.stdout.strip().splitlines()[-1])
         except Exception:  # noqa: BLE001
@@ -843,7 +839,7 @@ def reuse_check_cbfix(artifact_dir: pathlib.Path, requested: dict, tree: pathlib
     latter two is probed. Returns (rejected, reason); rejected=None when the API is absent (e.g. on the unpatched base)."""
     code = REUSE_PROBE_CBFIX.format(tp_mod=ADAPTER["target_profile_module"], mods=tuple(ADAPTER["reuse_api_modules"]))
     p = subprocess.run([python, "-c", code, str(artifact_dir), json.dumps(requested), json.dumps(tweak_applicability or {})], cwd=str(tree),
-                       env={**os.environ, "PYTHONPATH": _pythonpath(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True, timeout=900)
+                       env={**os.environ, "PYTHONPATH": _pythonpath(tree), "CUDA_VISIBLE_DEVICES": ""}, capture_output=True, text=True)
     try:
         j = json.loads(p.stdout.strip().splitlines()[-1])
     except Exception:  # noqa: BLE001

@@ -44,7 +44,7 @@ def test_vllm_tools_are_registered_and_loadable_by_name():
         assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
-        assert "integrations/vllm/**" in t.closure and "packages/verity/src/verity/proofs/**" in t.closure
+        assert t.closure == ["integrations/vllm/**", "packages/verity/src/verity/**"]
         for k in t.produces:
             assert k in KINDS, k
         assert "execution-evidence/v1" in t.produces and "run-files/v1" in t.produces
@@ -58,7 +58,7 @@ def test_row_configuration_is_the_key_and_retain_is_not():
     params, key = t.resolve_params(_argv("build", "--retain", "host", "--build-jobs", "4"), REPO)
     assert key["row"] == ROW and key["model"] == "meta-llama/Llama-3.2-1B" and key["revision"] == "4e20da8c" and key["role"] == "LLAMA32_1B"
     assert (key["model_tag"], key["dtype"], key["hw"], key["tp"], key["batch"], key["input"], key["output"]) == ("llama32-1b", "bf16", "l40s", 1, 1, 4096, 512)
-    assert (key["arrivals"], key["sampling"], key["exec"], key["query"]) == ("mixed", "greedy", "bi-eager", "Q_module_body_v1")
+    assert (key["arrivals"], key["sampling"], key["exec"], key["query"]) == ("mixed", "greedy", "bi-eager", "Q_word_v1{X=16,W=32,R=no-recompute}")
     assert "retain" not in key and "build_jobs" not in key, "footprint / schedule knobs are not key params"
     assert params["retain"] == "host" and params["build_jobs"] == "4", "...but they are recorded"
     assert params["argv"][:3] == CMD
@@ -262,6 +262,15 @@ def test_outputs_json_errors_are_publish_errors_not_crashes(env):
     assert A.publish(d, store=st)["published"] is False
 
 
+@pytest.fixture
+def no_dirty_digest(monkeypatch):
+    """This checkout's source identity without its dirty digest, which reads every untracked file of the working tree: the
+    derivations these tests compare don't depend on it, and a suite may not read files outside its inputs."""
+    from research import env as E
+    monkeypatch.setattr(E, "_dirty_digest", lambda root: None)
+
+
+@pytest.mark.usefixtures("no_dirty_digest")
 def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     """`research run --tool vllm.match --input build=art:...`: a store id names the input directly; it lands in `inputs`
     (hence the derivation), not as a hashed path."""
@@ -287,6 +296,7 @@ def test_run_input_by_artifact_id_enters_the_derivation(tmp_path, monkeypatch):
     assert ref["artifact"] == art and ref["sha256"] is None and "store id" in ref["sha256_reason"]
 
 
+@pytest.mark.usefixtures("no_dirty_digest")
 def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch, capsys):
     """`research data lookup --tool vllm.build -- ARGV` fills the Tool's own key conditions (`tool.vllm.build.torch|vllm`, its probe) the
     way `research run --tool` records them, so the derivation it looks up is the one an attempt was published under."""
