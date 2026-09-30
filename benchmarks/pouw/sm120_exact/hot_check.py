@@ -110,7 +110,7 @@ def main() -> None:
             return np.array(P.sample_line(seed, side, 0, i), np.uint8).tolist()
 
         ra, rb = sorted(set(ii.tolist())), sorted(set(jj.tolist()))
-        with Pool(args.procs) as pool:
+        with Pool(args.procs, initializer=hot.load_ref, initargs=(args.ref,)) as pool:
             ca = dict(zip(ra, pool.map(_form, [(xa[i].tolist(), line(seed_a, 0, i), FA) for i in ra])))
             cb = dict(zip(rb, pool.map(_form, [(xb[j].tolist(), line(seed_b, 1, j), FB) for j in rb])))
         H = np.load(ud / "H.npy")
