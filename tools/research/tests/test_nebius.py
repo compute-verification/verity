@@ -611,6 +611,7 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
         {**rec, "who": "fill:bc-a", "cmd": "bash /workspace/pouw/fill/running/kt-e70b-fold-pc.sh", "gpus": [{"held_s": 3600, "busy_s": 1800}]},
         {**rec, "who": "fill:bc-b", "cmd": "bash /workspace/pouw/fill/running/pad-x.sh", "gpus": [{"held_s": 360, "busy_s": 360}]},
         {**rec, "who": "session:bc-c", "cmd": "python3 bench.py", "gpus": [{"held_s": 720, "busy_s": 720}]},
+        {**rec, "who": "bc-d", "timed": True, "cmd": "python3 audit.py", "gpus": [{"held_s": 360, "busy_s": 360}]},
         {**rec, "end": "2026-09-29T20:00:00Z", "who": "fill:bc-a", "cmd": "x", "gpus": [{"held_s": 9999, "busy_s": 0}]},
     ]))
     for k, v in {"UTIL_OUT_DIR": util, "FILL_DIR": fill, "POOL_PROC": proc, "LEASE_USAGE": usage,
@@ -624,7 +625,8 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
     assert n2["monitors"][0]["job_kind"] == "pouw-kt-gpu1" and n2["monitors"][0]["owner"] == "bc-a"
     assert n2["unlabeled_waiting"] == 1
     assert [(k["kind"], k["leased_gpu_h"], k["useful_gpu_h"], k["idle_gpu_h"], k["efficiency"]) for k in n2["kinds"]] == [
-        ("pouw-kt-gpu1", 1.0, 0.5, 0.5, 0.5), ("unlabeled:pad-x", 0.1, 0.0, 0.1, 0.0), ("direct:session:bc-c", 0.2, 0.2, 0.0, 1.0)]
+        ("pouw-kt-gpu1", 1.0, 0.5, 0.5, 0.5), ("unlabeled:pad-x", 0.1, 0.0, 0.1, 0.0), ("direct:session:bc-c", 0.2, 0.2, 0.0, 1.0),
+        ("timed:bc-d", 0.1, 0.1, 0.0, 1.0)]
     pp.alert(n2["monitors"], now)
     pp.alert(n2["monitors"], now + datetime.timedelta(minutes=5))
     assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 2

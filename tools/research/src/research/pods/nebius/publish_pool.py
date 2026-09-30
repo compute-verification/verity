@@ -15,7 +15,7 @@ Monitors, appended to node_ops' `alerts.jsonl` once per lease or process (again 
 - `gpu-unleased`: a process on a GPU that no lease holds, or outside the holding lease's scope and process tree.
 `kinds` is each kind's leases that ended in the last 24 h (`gpu-lease/usage/v1`): leased and useful GPU-h (a filler job's busy
 time counts as leased only). A job's kind is its header's `kind=`, else `unlabeled:<first two words of its name>`, or
-`direct:<who>` outside the fill queue.
+`timed:<who>` or `direct:<who>` outside the fill queue (a timed lease idles the node's other GPUs by design, and is never flagged).
 
     publish_pool.py [--out FILE] [--no-push]
 """
@@ -127,7 +127,7 @@ def kind_of(lease: str, known: dict[str, dict]) -> str:
     m = re.search(r"/fill/running/(\S+)", lease)
     if m:
         return "unlabeled:" + "-".join(m.group(1).removesuffix(".sh").split("-")[:2])
-    return f"direct:{field(lease, 'who') or '?'}"
+    return f"{'timed' if field(lease, 'timed') == '1' else 'direct'}:{field(lease, 'who') or '?'}"
 
 
 def owner_of(lease: str) -> str | None:
@@ -164,7 +164,7 @@ def monitors(r5: list[dict], now: datetime, known: dict[str, dict]) -> list[dict
         lease = g.get("lease") or ""
         pid, since = field(lease, "pid"), field(lease, "since")
         start = ts_or_none(since)
-        if lease and pid and start and start <= now - timedelta(seconds=IDLE_S):
+        if lease and pid and start and start <= now - timedelta(seconds=IDLE_S) and field(lease, "timed") != "1":
             utils = [x.get("util") or 0 for r in r5 for x in r.get("gpus", []) if x.get("i") == g["i"] and field(x.get("lease"), "pid") == pid]
             if utils and sum(utils) / len(utils) < IDLE_UTIL:
                 found.append({"kind": "gpu-idle-in-lease", "key": f"idle:{pid}:{g['i']}", "gpu": g["i"], "owner": owner_of(lease),
@@ -210,7 +210,7 @@ def kinds(now: datetime, known: dict[str, dict]) -> list[dict]:
                 continue
         except (ValueError, KeyError, TypeError):
             continue
-        lease = f"who={r.get('who')} cmd={r.get('cmd') or ''}"
+        lease = f"who={r.get('who')} {'timed=1 ' if r.get('timed') else ''}cmd={r.get('cmd') or ''}"
         k = kind_of(lease, known)
         filler = bool((fill_job(lease, known) or {}).get("filler"))
         e = out.setdefault(k, {"kind": k, "owners": set(), "leases": 0, "leased_gpu_h": 0.0, "useful_gpu_h": 0.0})
