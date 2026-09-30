@@ -46,15 +46,33 @@ def load_desc(d: str) -> dict:
         return json.loads(f.read())
 
 
+def _params_before_rows(path: str) -> list | None:
+    """`params` of an instance sequence that derive_step wrote with `params` before `rows`, read without the rows (a long context's
+    rows are the file); None when the head does not read that way."""
+    dec, head = json.JSONDecoder(), ""
+    with gzip.open(path, "rt") as f:
+        while '"rows":' not in head:
+            chunk = f.read(1 << 16)
+            if not chunk:
+                return None
+            head += chunk
+    i = head.find('"params": ')
+    if i < 0 or i > head.find('"rows":'):
+        return None
+    ps, _end = dec.raw_decode(head, i + len('"params": '))
+    return ps if isinstance(ps, list) else None
+
+
 def wrapper_params(d: str) -> list[tuple[str, str]]:
     """The request wrapper's own parameters [(name, type repr)] (derive_step instances.json.gz `params`): needed to group the
     Input batches (one per weight field) back onto `weights` so it can be shared."""
     p = os.path.join(d, "instances.json.gz")
     if not os.path.exists(p):
         raise ValueError(f"{d}: no instances.json.gz (the wrapper parameters are needed to identify the shared weights)")
-    with gzip.open(p, "rt") as f:
-        head = json.load(f)
-    ps = head.get("params")
+    ps = _params_before_rows(p)
+    if ps is None:
+        with gzip.open(p, "rt") as f:
+            ps = json.load(f).get("params")
     if not ps:
         raise ValueError(f"{d}: instances.json.gz has no params")
     return [(n, t) for n, t in ps]
@@ -731,7 +749,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
         if lc is not None:
             prov["launch_context"] = lc
         comp_provenance[f"{s[0]},{s[1]}"] = prov
-        comps[s] = W.request_component(desc, REGISTRY, wrapper_params(d), canon=canon)
+        comps[s] = W.request_component(desc, REGISTRY, wrapper_params(d), canon=canon, digest=prov["descriptor_digest"])
         comp_secs[f"{s[0]},{s[1]}"] = round(time.time() - t1, 2)
     wreqs = [W.WorkloadRequest(r["request_id"], r["index"], r["prompt_len"], r["cap"], r["arrive_step"], comps[(r["prompt_len"], r["cap"] - 1)],
                                T=r["cap"] - 1) for r in reqs]
@@ -785,8 +803,8 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
             return res
     desc = wl.descriptor
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
-        f.write(canonical_json(desc))
-    art["descriptor"] = {"bytes": descriptor_size(desc), "sha256": hashlib.sha256(canonical_json(desc)).hexdigest(),
+        f.write(cj := canonical_json(desc))
+    art["descriptor"] = {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha256": hashlib.sha256(cj).hexdigest(),
                          "n_definitions": len(desc["definitions"])}
     art["inputs"] = {"manifest": workload_path, "manifest_sha256": mdigest, "derived": {f"{k[0]},{k[1]}": v for k, v in shapes.items() if k in comps},
                      # per component: the descriptor's recomputed digest == the derive's recorded program_digest (checked above), descriptor sha
