@@ -849,6 +849,30 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   if (!lane) put_stats(a, row, s, st);
 }
 
+// stats_s5 and A's -h1 row leaves (h1_rows_p's) in one launch, a warp a row, its stats then its leaf, the grid striding over
+// the rows: on a few CTAs an SM the rows in flight stay in L2, so the leaf's read of a row doesn't go to DRAM again.  p0 .. p5
+// stats_s5's, p6 the tree (the leaves of the rows under i2), p7 the domain id; i0 rows, i1 k (a multiple of 256), i2 the rows
+// committed.  Dynamic shared memory: rows_w_words(4 k) words a warp.
+extern "C" __global__ void __launch_bounds__(256) h1_rows_stats(const Args a) {
+  extern __shared__ uint32_t sh[];
+  const int lane = threadIdx.x % 32, warp = threadIdx.x / 32, warps = blockDim.x / 32, rows = a.i[0], k = a.i[1];
+  const uint32_t rb = 4u * (uint32_t)k;
+  uint32_t(*cvs)[8] = reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words((int)rb));
+  for (int row = blockIdx.x * warps + warp; row < rows; row += gridDim.x * warps) {
+    const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
+    float s;
+    const float3 st = row_s5(x, k, lane, row, reinterpret_cast<uint32_t*>(a.p[5]), s);
+    if (!lane) put_stats(a, row, s, st);
+    if (row < a.i[2]) {
+      uint32_t key[8], h[8];
+      load_key(a.p[7], key);
+      row_leaf_v<true>(reinterpret_cast<const uint8_t*>(x), rb, (uint64_t)row, key, cvs, lane, h);
+      if (!lane) store_cv(a.p[6] + (uint64_t)row * 32, h);
+    }
+    __syncwarp();
+  }
+}
+
 // v2-hot's H_i (v2-hot-start-rule.md, the public constant c0 = 64): bit 31 and bits 0-22 of the first word of the keyed line
 // hash of E_A's line key at (side 0, factor 2, line i), `lines`' block, and the exponent field e_i + 127 with t = fl32(alpha_i
 // rho_i), e_i = E(t) + 10 + [M(t) >= 0x3504F4] (floor(log2(sqrt(32 16) 64 t))).  e_i is in [10, 16] on the domain (t in

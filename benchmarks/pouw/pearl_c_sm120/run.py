@@ -12,7 +12,8 @@
    message digests from registers) and, unpromoted, gemm_pearlc_w (y and the tile leaves from its hash warps), are re-run on
    all, 1 and 3 CTAs and compared again (`<buffer>@<step>/<tile>/grid<n>`), and
    the chain's 64 x 64 kernels (decode's) too, the trees again under every form but the call's (OTHER_FORMS:
-   `<buffer>@<rows>+<trees>`), and forming's per-row words and codes under the other forming (OTHER_FORMINGS:
+   `<buffer>@<rows>+<trees>`, with A's forming under `s`, whose row leaves write stats_a's words), and forming's per-row
+   words and codes under the other forming (OTHER_FORMINGS:
    `<buffer>@forming=<forming>`).  stats_s5's screen of the per-row rules (live_a, live_b: each row passes, fails, or is
    left to the host's exact rule) is held to the fixture's on both sides and on fixture.screen_rows (`live_s@stats_s5`).
    A variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU
@@ -31,7 +32,8 @@
    alternative to fusing the message digests (fuse only if the pair costs more than about 3 us over the GEMM alone).
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
    it, and every product over k against the unpermuted operands'.  `alt_ms` times the commitment's and hashing's steps under
-   OTHER_FORMS and forming's under OTHER_FORMINGS, `call_e2e_ms_by_form` the call end to end under each of FORMS and
+   OTHER_FORMS and forming's under OTHER_FORMINGS, `rows_stats_ms_by_ctas` form `s`'s h1_rows_stats on 1, 2 and 3 CTAs an
+   SM and on a CTA per 8 rows (`all`), `call_e2e_ms_by_form` the call end to end under each of FORMS and
    FORMINGS, and `call_e2e_ms_by_epilogue` under each of EPILOGUES where the variant has gemm_pearlc_w.  Every step
    launches as bound at its first call (Pipeline.bind); `call_e2e_unbound_ms` times the call with each launch's argument
    block built at the call instead, and `call_host_us` the host's time to enqueue the call either way.  The timing's keys
@@ -317,19 +319,24 @@ def cdiv(a: int, b: int) -> int:
 
 
 TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
+#: h1_rows_stats' CTAs an SM: 188 x 8 rows in flight, 48 MB of 32 KB rows (k = 8,192), well inside the 128 MB L2 its second read
+#: of each row counts on
+ROWS_S_CTAS = 1
 WORDS_WARPS = 1                                # the words kernel's warps (m16 x n8 tiles) a block: a tile an SM at decode
 #: the forms of the row leaves and of the trees, all writing the same bytes: ALT_FORMS, hash_rows_w (a warp a row) and
 #: hash_nodes a level a launch down to hash_tree_small, are the call's unless PEARLC_A_FORMS names another; their steps and
 #: buffers are those the vLLM path (#540) runs by name.  `p` is h1_rows_p (h1_sm120.cuh: hash_rows_w's loads under
 #: L2::256B) and `one` h1_tree (a whole tree in one launch); `fold` is `one` with, where the tree fits one CTA's top
 #: (decode), A's commitment in one launch (h1_commit: rows, tree, seed_A and E_A's line key, step `commit_a`) and the unfused
-#: call's hashing in one (h1_tiles: digests, tile leaves and tile tree, step `tiles_t`).  Every form's levels read their keys
-#: from `keys_<tag>`, which tree_setup's `node_keys_<tag>` writes outside the call (the unit's; B's, the epoch's).  The check
-#: reruns every form but the call's against the fixture, the timing prices them as `alt_ms`, and the arm's gate relaunches
-#: under ALT_FORMS.
+#: call's hashing in one (h1_tiles: digests, tile leaves and tile tree, step `tiles_t`).  `s` is `p` with A's row leaves and
+#: forming's stats_a in one pass over A (h1_rows_stats, step `hash_rows_a`, which writes stats_a's words: forming drops
+#: stats_a and runs A's side split under either forming).  Every form's levels read their keys from `keys_<tag>`, which
+#: tree_setup's `node_keys_<tag>` writes outside the call (the unit's; B's, the epoch's).  The check reruns every form but the
+#: call's against the fixture (`s` with forming, and A's forming buffers too), the timing prices them as `alt_ms` (and
+#: h1_rows_stats by its CTAs an SM, `rows_stats_ms_by_ctas`), and the arm's gate relaunches under ALT_FORMS.
 ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "w,nodes").split(",")
 ALT_FORMS = ("w", "nodes")
-FORMS = (ALT_FORMS, ("p", "one"), ("p", "fold"))
+FORMS = (ALT_FORMS, ("p", "one"), ("p", "fold"), ("s", "one"))
 if (ROWS_FORM, TREE_FORM) not in FORMS:
     raise ValueError(f"PEARLC_A_FORMS is one of {[','.join(f) for f in FORMS]}, not {ROWS_FORM},{TREE_FORM}")
 OTHER_FORMS = tuple(f for f in FORMS if f != (ROWS_FORM, TREE_FORM))
@@ -555,17 +562,31 @@ class Pipeline:
 
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A frame-b3 tree over `count` FP32 rows of x, a warp a row (h1_rows_p, a CTA a row per SM when the rows fit; `w`
-        hash_sm120.cuh's hash_rows_w), then its levels."""
+        hash_sm120.cuh's hash_rows_w; `s` A's with stats_a, rows_stats, and B's h1_rows_p), then its levels."""
         d, b, rb = self.dev, self.b, self.row_bytes
-        kernel = "h1_rows_p" if self.rows_form == "p" else "hash_rows_w"
-        warps = 1 if self.rows_form == "p" and count <= d.sms else ROWS_WARPS
+        p = self.rows_form in ("p", "s")
+        kernel = "h1_rows_p" if p else "hash_rows_w"
+        warps = 1 if p and count <= d.sms else ROWS_WARPS
         smem = 4 * warps * rows_w_words(rb)
         if smem > 48 * 1024:
             d.ck("cuFuncSetAttribute", d.fn(kernel), MAX_DYN, smem)
         one = self.tree_form in ("one", "fold")
-        return [(f"hash_rows_{tag}", lambda: d.launch(kernel, cdiv(count, warps), 32 * warps, smem,
-                                                      p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
+        rows = self.rows_stats if tag == "a" and self.rows_form == "s" else (
+            lambda: d.launch(kernel, cdiv(count, warps), 32 * warps, smem, p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb)))
+        return [(f"hash_rows_{tag}", rows),
                 (f"tree_{tag}", (lambda: self.tree_one(tag, count, dom)) if one else (lambda: self.levels(tag, count)))]
+
+    def rows_stats(self, ctas: int | None = None) -> None:
+        """Rows form `s`'s A side: stats_a over A's m rows and the row leaves of its m_real in one pass (h1_rows_stats), a
+        warp a row, on ROWS_S_CTAS CTAs an SM (or `ctas` CTAs) striding over the rows."""
+        d, b, m = self.dev, self.b, self.m
+        warps = 1 if m <= d.sms else ROWS_WARPS
+        smem = 4 * warps * rows_w_words(self.row_bytes)
+        if smem > 48 * 1024:
+            d.ck("cuFuncSetAttribute", d.fn("h1_rows_stats"), MAX_DYN, smem)
+        d.launch("h1_rows_stats", min(cdiv(m, warps), ctas or ROWS_S_CTAS * d.sms), 32 * warps, smem,
+                 p=(b["xa"], b["alpha_a"], b["beta_a"], b["ia_a"], b["aux_a"], b.get("live_a", 0), b["tree_a"], self.keys["dom_a"]),
+                 i=(m, self.k, self.m_real))
 
     def commit_a(self) -> list[tuple[str, object]]:
         """A's commitment: its row tree, then seed_A and E_A's line key from the root (seed_line_a); under `fold`, where the
@@ -671,19 +692,22 @@ class Pipeline:
 
         def form_side(tag, rows, x, e_codes, f_codes, out, key, side):
             """A side's forming as (its E line's step, the rest): split, the kernels by step; fold, form_rows then form_s5.  The
-            per-row rules' verdicts go to live_<tag> where the caller's buffers have it."""
+            per-row rules' verdicts go to live_<tag> where the caller's buffers have it.  Under rows form `s`, A's stats are
+            the commitment's (rows_stats), and A's side is split without stats_a under either forming."""
             ep, hot, live = f"ep{tag}_codes", tag == "a" and self.hot, f"live_{tag}"
+            in_rows = tag == "a" and self.rows_form == "s"
             form = (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
                                                     p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))
-            if self.forming_form == "fold":
+            if self.forming_form == "fold" and not in_rows:
                 return [], [(f"stats_{tag}", lambda: d.launch(
                     "form_rows", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"], b[f"ia_{tag}"], b[f"aux_{tag}"], key,
                                                         b[e_codes], b[ep], b["hot_a"] if hot else 0, b.get(live, 0)),
                     i=(rows, k, side, NORM_256))), form]
             return [lines(f"e{tag}", key, side, 0, rows, e_codes)], [
-                (f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                   b[f"ia_{tag}"], b[f"aux_{tag}"], b.get(live, 0)),
-                                                  i=(rows, k))),
+                *([] if in_rows else [
+                    (f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
+                                                                                       b[f"ia_{tag}"], b[f"aux_{tag}"], b.get(live, 0)),
+                                                      i=(rows, k)))]),
                 *([("hot_a", lambda: d.launch("hot_a", cdiv(m, 128), 128, p=(b["line_a"], b["alpha_a"], b["aux_a"], b["hot_a"]),
                                               i=(m,)))] if hot else []),
                 (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
@@ -803,6 +827,8 @@ FORM_PHASES = ("epoch", "unit", "commit", "hashing")
 #: forming's per-row words and codes of each side, rewritten under OTHER_FORMINGS by those phases' steps and held to the fixture
 FORMING_BUFFERS = (*(f"{x}_{t}" for t in "ab" for x in ("alpha", "beta", "ia", "aux", "live")), "ea_codes", "eb_codes",
                    "epa_codes", "epb_codes", "at", "bt", "hot_a")
+#: A's of them, which a rows form `s` rerun writes from the commitment on (its hash_rows_a writes stats_a's words)
+FORMING_A = tuple(nm for nm in FORMING_BUFFERS if nm.endswith("_a") or nm in ("ea_codes", "epa_codes", "at"))
 #: the screen's gate: fixture.screen_rows (xs) through stats_s5, its verdicts held to the fixture's (live_s)
 SCREEN_FILES = ("xs", "live_s")
 FORMING_PHASES = ("job", "forming")
@@ -885,7 +911,8 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         for forms in OTHER_FORMS:
             alt = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, fused=False)
             alt.rows_form, alt.tree_form = forms
-            rerun(alt, FORM_PHASES, FORM_BUFFERS, "+".join(forms))
+            stats = forms[0] == "s"
+            rerun(alt, FORM_PHASES + (("forming",) if stats else ()), FORM_BUFFERS + (FORMING_A if stats else ()), "+".join(forms))
         for forming in OTHER_FORMINGS:
             alt = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, fused=False)
             alt.forming_form = forming
@@ -1178,6 +1205,8 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             alt.forming_form = forming
             out["alt_ms"].update({f"{nm}@forming={forming}": round(statistics.median(dev.timed(f, reps)), 4)
                                   for nm, p, f in alt.steps() if p == "forming"})
+        out["rows_stats_ms_by_ctas"] = {str(c or "all"): round(statistics.median(dev.timed(
+            lambda c=c: pipe.rows_stats(c * dev.sms if c else m), reps)), 4) for c in (1, 2, 3, 0)}
         out["call_e2e_ms_by_form"] = {}
         for forms in FORMS:
             for forming in FORMINGS:

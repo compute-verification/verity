@@ -347,9 +347,13 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name == "lines":
         count = i[2]
         return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count}
-    if name == "stats_s5":
+    if name in ("stats_s5", "h1_rows_stats"):
         rows, k = i[:2]
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 4 * rows}
+        need = {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 4 * rows}
+        if name == "h1_rows_stats":
+            assert i[2] <= rows, i
+            need.update({6: 32 * i[2], 7: 32})
+        return need
     if name == "eprime":
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
     if name == "form_rows":
@@ -587,6 +591,7 @@ def test_bound_steps_launch_what_unbound_steps_do(monkeypatch):
         assert [x[0] for c in calls(bound) for x in c if x[0].startswith("gemm_pearlc")] == (
             ["gemm_pearlc_w_hu"] if pipe.hash_warps else ["gemm_pearlc_b_hu"] if m == 128 else ["gemm_pearlc_d"])
         assert [nm for nm, _, _ in bound] == [nm for nm, _, _ in unbound]
+        assert ("stats_a" in names) == (forms[0] != "s")
         first = calls(bound)
         assert first == calls(unbound) == calls(bound), (m, forms, forming)
         dev.stream = 77
@@ -625,7 +630,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
             if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6), ("form_rows", 8), ("form_rows", 9),
-                                                ("stats_s5", 5)}:
+                                                ("stats_s5", 5), ("h1_rows_stats", 5)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
