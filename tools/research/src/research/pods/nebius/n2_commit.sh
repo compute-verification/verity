@@ -363,6 +363,30 @@ for j in json.load(open(f"{d}/k8s.json"))["items"]:
 EOF
 }
 
+# a guest Commit that has waited VY_N2_RECLAIM_MIN (60) on node 2 (PoUW's own GPU queue refilled) goes back to node 1's queue, and
+# offload leaves its key alone after that. Taking it out of node 2's queue is a mv, which fails once the runner has started it
+reclaim() {
+  local f key item
+  for f in $(ssh -n "$N2" "find /workspace/pouw/fill/queue -maxdepth 1 -name 'verity-commit-*.sh' -mmin +${VY_N2_RECLAIM_MIN:-60} -printf '%f\n'"); do
+    key=${f#verity-commit-}; key=${key%.sh}
+    ssh -n "$N2" "mkdir -p $GUEST/reclaimed && mv /workspace/pouw/fill/queue/$f $GUEST/reclaimed/$f" || continue
+    item=$(mktemp)
+    ssh -n "$N2" "cat $GUEST/items/commit-$key.json && rm -f $GUEST/items/commit-$key.json" > "$item"
+    python3 - "$item" "$DISPATCH" << 'EOF' | bash
+import json, shlex, sys
+d = json.load(open(sys.argv[1]))
+args = [x for k, v in (d.get("env") or {}).items() for x in ("--env", f"{k}={v}")] + (["--class", d["class"]] if d.get("class") else []) \
+    + (["--resources", json.dumps(d["resources"])] if d.get("resources") else []) + (["--queue", d["queue"]] if d.get("queue") else []) \
+    + (["--priority", d["priority"]] if d.get("priority") else [])
+print(shlex.join(["env", "KUBECONFIG=" + __import__("os").path.expanduser("~/.kube/config"), "/workspace/jobs/venv312/bin/python", sys.argv[2],
+                  "submit", "config-run", d["n2"]["commit_key"], "--tree", d["tree"], "--task", "1", *args]))
+EOF
+    python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["n2"]["commit_key"])' "$item" >> "$GUEST/reclaimed.txt"
+    rm -f "$item"
+    echo "reclaimed $key: waited ${VY_N2_RECLAIM_MIN:-60} min on node 2; back in node 1's queue"
+  done
+}
+
 # move each held Commit on a staged checkpoint to node 2 while node 2 has fewer than VY_N2_MAX_COMMITS Verity Commits queued;
 # `offload --loop` repeats every VY_OFFLOAD_EVERY_S (tmux `n2-commit-offload` on node 1, as research)
 offload() {
@@ -373,7 +397,9 @@ offload() {
   (
     tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
     n2_quiet || exit 0
+    reclaim
     while read -r job key n2key; do
+      grep -qxF "$key" "$GUEST/reclaimed.txt" 2> /dev/null && continue
       queued=$(ssh -n "$N2" 'ls /workspace/pouw/fill/queue/ | grep -c "^verity-commit-"' || true)
       [ "${queued:-0}" -lt "${VY_N2_MAX_COMMITS:-16}" ] || { echo "node 2 has $queued Verity Commits waiting; $job stays"; break; }
       VY_COMMIT_KEY=$key bash "$0" submit "$n2key" "$tmp/$n2key.json" "$job" < /dev/null 2> >(grep -v '^rsync' >&2) \
