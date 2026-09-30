@@ -1,7 +1,8 @@
 """hash.cuh on the host (pearl_c/hash_host.cpp, built with g++): each hashing kernel, launched as run.py launches it, writes
 the bytes the verifier's reference computes.  A's row leaves and frame-b3 trees (pads, level keys, one-compression nodes)
-at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64), Pearl's tickets and
-the tile tree; then run.py's hashing phase end to end."""
+at rows of 1 to 75 chunks, the message digests, the tile leaves full and partial (decode's 32 x 64), Pearl's tickets, the
+tile tree, and a unit's seed_A over its root with its line and jackpot keys; then run.py's commit and hashing phases end to
+end."""
 
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ sys.path.insert(0, str(HERE))
 import fixture as F  # noqa: E402
 import run as R  # noqa: E402
 from verity.commitments import MerkleTree  # noqa: E402
+from verity.commitments.blake3 import blake3  # noqa: E402
 from verity_pouw.audit import ROW_SCHEMA, TILE_SCHEMA, rows_domain  # noqa: E402
 from verity_pouw.schemes import pearl_c as C  # noqa: E402
 from verity_pouw.schemes import pearl_kw as P  # noqa: E402
@@ -144,26 +146,52 @@ def test_tile_tree_is_the_verifiers(host):
     assert got[-32:] == MerkleTree(dom, dict(enumerate(leaves)), lambda _: TILE_SCHEMA).commitment.root
 
 
-def test_run_hashing_phase_is_the_verifiers(host):
-    """run.py's `Pipeline` hashing phase at 128 x 384 x 128 (v1) on given A rows, C̃ and U: A's tree, the digests, the leaves,
-    the tickets and the tile tree (12 tiles, so 4 pads), each equal to the fixture's reference."""
+def test_seeds_are_the_scheme_s(host):
+    """b3_seeds over a unit's root (mode 0) is `pearl_c.unit_seed_a`; over row leaves (mode 1) row r's seed is the one-row unit's,
+    index · 2^32 + r; seed_subkeys gives `pearl_kw.subkey`'s noise-line and jackpot keys of a seed."""
+    salt, root_b, idx = bytes(range(32)), bytes(range(32, 64)), 7
+    leaves = [hashlib.sha256(bytes([r])).digest() for r in range(5)]
+    skey, psalt, prb = host.put(blake3(C.LABELS["seed-A"])), host.put(salt), host.put(root_b)
+    src, out = host.put(b"".join(leaves)), host.alloc(32 * 5)
+    host.launch("b3_seeds", 1, 128, p=(src, out, skey, psalt, prb), i=(1, idx, 0))
+    assert host.read(out, 32) == C.unit_seed_a(salt, leaves[0], root_b, idx)
+    host.launch("b3_seeds", 1, 128, p=(src, out, skey, psalt, prb), i=(5, idx, 1))
+    assert host.read(out, 160) == b"".join(C.unit_seed_a(salt, leaves[r], root_b, idx << 32 | r) for r in range(5))
+    keys = host.alloc(64)
+    host.launch("seed_subkeys", 1, 32, p=(out, keys))
+    seed = host.read(out, 32)
+    assert host.read(keys, 64) == P._line_key(seed) + P.subkey("jackpot", seed)
+    source = (HERE / "hash.cuh").read_text()
+    for name, role in (("NOISE_LINE_LABEL", "noise-line"), ("JACKPOT_LABEL", "jackpot")):
+        chars = re.search(rf"__constant__ uint8_t {name}\[(\d+)\] = \{{([^}}]*)\}}", source)
+        assert "".join(c.strip()[1] for c in chars.group(2).split(",")).encode() == P.LABELS[role]
+
+
+def test_run_commit_and_hashing_phases_are_the_verifiers(host):
+    """run.py's `Pipeline` at 128 x 384 x 128 (v1) on given A rows, C̃ and U: the commit phase (A's tree, the unit's seed_A over its
+    root, and seed_A's line and jackpot keys) and the post-GEMM hashing (the digests, the leaves, the tickets under that jackpot
+    key and the tile tree, 12 tiles, so 4 pads), each equal to the fixture's reference."""
     m, n, k = 128, 384, 128
-    ctx, rng, seed_a = F.context(m, n, k), np.random.default_rng(5), bytes(range(64, 96))
+    ctx, rng = F.context(m, n, k), np.random.default_rng(5)
     tiles = (m // 64) * (n // 64)
     rows = [rng.integers(0, 256, 4 * k, dtype=np.uint8).tobytes() for _ in range(m)]
     c = rng.standard_normal((m, n)).astype(np.float32).view(np.uint32)
     u = rng.integers(0, 2**32, (m, n), dtype=np.uint64).astype(np.uint32)
-    keys = {"line_a": bytes(32), "line_b": bytes(32), "jackpot": P.subkey("jackpot", seed_a), "dom_a": F.a_domain(ctx).domain_id,
-            "dom_t": F.t_domain(ctx, tiles).domain_id, "k_msg": C.H1_KEYS["message"], "k_leaf": C.H1_KEYS["leaf"]}
+    keys = {"salt": ctx.salt, "root_b": ctx.root_b, "seed_key": bytes.fromhex(R.SEED_KEY), "line_b": bytes(32),
+            "dom_a": F.a_domain(ctx).domain_id, "dom_t": F.t_domain(ctx, tiles).domain_id, "k_msg": C.H1_KEYS["message"],
+            "k_leaf": C.H1_KEYS["leaf"]}
     pipe = R.Pipeline(host, m, n, k, "v1", {name: host.put(v) for name, v in keys.items()}, host.put(b"".join(rows)),
-                      host.alloc(n * 4 * k))
+                      host.alloc(n * 4 * k), unit=ctx.matmul.index)
     for name, words in (("c", c), ("u", u)):
         host.bufs[pipe.b[name]][:m * n * 4] = np.frombuffer(words.astype("<u4").tobytes(), np.uint8)
     for _, phase, step in pipe.steps():
-        if phase == "hashing":
+        if phase in ("commit", "hashing"):
             step()
+    tree_a = F.tree_bytes(F.a_domain(ctx), rows, ROW_SCHEMA)
+    seed_a = C.unit_seed_a(ctx.salt, tree_a[-32:], ctx.root_b, ctx.matmul.index)
     digests = F.digests(c, u)
     leaves = F.leaves(digests, m, n)
-    want = {"tree_a": F.tree_bytes(F.a_domain(ctx), rows, ROW_SCHEMA), "digests": b"".join(digests), "leaves": b"".join(leaves),
-            "tickets": b"".join(F.tickets(c, seed_a)), "tree_t": F.tree_bytes(F.t_domain(ctx, tiles), leaves, TILE_SCHEMA)}
+    want = {"tree_a": tree_a, "seed_a": seed_a, "a_keys": P._line_key(seed_a) + P.subkey("jackpot", seed_a),
+            "digests": b"".join(digests), "leaves": b"".join(leaves), "tickets": b"".join(F.tickets(c, seed_a)),
+            "tree_t": F.tree_bytes(F.t_domain(ctx, tiles), leaves, TILE_SCHEMA)}
     assert {name: host.read(pipe.b[name], len(w)) == w for name, w in want.items()} == dict.fromkeys(want, True)

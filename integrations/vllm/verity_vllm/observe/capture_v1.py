@@ -1,6 +1,6 @@
 """Capture format v1: what the adapter writes and everything else reads.
 
-Layout under one run directory (full description in ``docs/vllm-poc/capture-format.md``)::
+Layout under one run directory::
 
     <run>/manifest.json                 contract 2.1, canonical JSON; sha256[:12] = profile_id
     <run>/description.json              contract section 6 (verity_vllm.check.poc_description)
@@ -326,7 +326,7 @@ class RUIndex:
     # revision 2: compact records of derived slot families; ``entries`` holds their expansion
     # (one derived Entry per inactive slot) after the captured entries
     families: list[dict[str, Any]] = field(default_factory=list)
-    # speculative extension (lane SD, docs/vllm-poc/speculative.md §3): a speculative-decoding step
+    # speculative extension (lane SD): a speculative-decoding step
     # commits ``positions`` (the accepted slots) and additionally computed values at ``dead``
     # positions it did not commit — the rejected verification slots' target values and the draft
     # model's proposal rows.  Those leaves carry the ``x=<step>`` qualifier of THIS step and are the
@@ -741,7 +741,7 @@ class StepRecord:
     # canonical ids as the originals (identity is a function of (request, position), never of
     # the scheduler's decisions); the harness requires the recomputed bytes to equal the originals.
     recompute: bool = False
-    # speculative extension (lane SD, docs/vllm-poc/speculative.md §3): a speculative-decoding step
+    # speculative extension (lane SD): a speculative-decoding step
     # verifies k candidates in k+1 slots and commits the accepted prefix — ``positions`` are the
     # committed slots (``accepted + 1`` of them, fewer only when the request terminates inside the
     # block); the record names ``k``, ``accepted``, the ``candidates`` verified, the per-slot
