@@ -354,6 +354,18 @@ class Options:
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (rev-cb M-0610 flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that " "rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="[manbind MAN-06d, M-0608] verifier-issued POST-COMMITMENT challenge (hex/string): each rank's replay " "seed = sha256(challenge | that rank's run root)[:8]; without it the seed is the rank's run root (honest-prover measurement)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units over the world, split across the ranks (rank r: k // W, "
+                                  "one more for r < k % W), each rank's share stratified by family, in place of the per-stratum sample")
+    only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it; the config run: one instrumented run)")
+    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true", help="bounded host staging on every rank (VERITY_STAGING_BOUNDED=1; windowed path only), as the single-GPU Commit's flag")
+    learn_budget_mb: int = option("--learn-budget-mb", type=int, default=4096, help="bounded staging: transient pinned-host budget for a learning step (MiB; default 4096)")
+
+
+def replay_k_per_rank(k: int | None, world: int) -> dict[str, int] | None:
+    """The config run's k units split over the ranks: rank r takes k // W, one more for r < k % W."""
+    if not k:
+        return None
+    return {str(r): k // world + (1 if r < k % world else 0) for r in range(world)}
 
 
 def main(args: Options) -> int:
@@ -387,6 +399,9 @@ def main(args: Options) -> int:
     if args.tp > 1 and args.required_classes is None and "tp_rank_partials" not in required_classes:
         required_classes = required_classes + ("tp_rank_partials",)       # [R14 TP-03] the rank-local collective inputs are required per rank
 
+    if args.bounded_staging:                      # before the engine: the rank processes inherit it
+        os.environ["VERITY_STAGING_BOUNDED"] = "1"
+        os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(args.workload, None)
@@ -420,6 +435,8 @@ def main(args: Options) -> int:
                               "flip_partial": args.flip_partial},
                 "required_manifest": args.required_manifest, "value_check": bool(args.value_check), "rules_version": "r15-tp04-v1",
                 "build_program_digest_kind": None}
+    if args.only_arm or args.bounded_staging:
+        versions.update({"only_arm": args.only_arm, "bounded_staging": bool(args.bounded_staging)})
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     reqs, sampling = wl["requests"], wl["sampling"]
 
@@ -530,6 +547,9 @@ def main(args: Options) -> int:
                       "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": (int(os.environ["VERITY_WINDOW_SLOTS"]) if os.environ.get("VERITY_WINDOW_SLOTS") and os.environ.get("VERITY_WINDOW_MB") else None)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
                                       "challenge": args.replay_challenge, "rule": "manbind MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
+        if args.replay_k:
+            replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = replay_k_per_rank(args.replay_k, world)
+            versions["sampled_replay"]["k"] = int(args.replay_k)
     # [MAN-09 per rank] the weights of record: each rank composes its record from ITS rank Program + the pinned checkpoint shards
     weights_pin_cfg = None
     if args.checkpoint_dir:
@@ -611,6 +631,8 @@ def main(args: Options) -> int:
     xrank_families = _TP2.cross_rank_families(world)      # [lane vllm-tp-n] the cross-rank families of THIS world, from the registry's composites
     for pair in range(args.pairs):
         order = ["control", "instrumented"] if pair % 2 == 0 else ["instrumented", "control"]
+        if args.only_arm:
+            order = [a for a in order if a == args.only_arm]
         for k, arm in enumerate(order):
             gc.collect()
             if arm != "control":
@@ -1091,6 +1113,9 @@ def main(args: Options) -> int:
                                                                 "identities": (man_doc.get("populations") or {}).get("identities"), "program_digest_per_rank": man_doc.get("program_digest_per_rank")}),
             "negatives": versions["negatives"],
             "pass": all_pass and all(r["tokens_equal_ref"] for r in rows), "required_classes": list(required_classes)}
+    if args.only_arm:                             # the single-GPU Commit's only-arm summary: commit_pass is the one decision
+        summ.update({"only_arm": args.only_arm, "runs": len(rows),
+                     "commit_pass": (bool(trt) and all(bool(c) for c in summ["commit_pass"])) if args.only_arm == "instrumented" else None})
     # [R16 tp TP-11, rev F-r16-19] the import-path OF RECORD, from the RUNNING processes: this driver's repo-local sys.modules + every rank
     # process's (after finalize: replay, linkage, pin, partial source all imported) + the collector's JIT C++/CUDA sources -- what ran, not a
     # static closure; the tag-candidate equivalence rule (COORD ruling 24) reads this file when it exists.
