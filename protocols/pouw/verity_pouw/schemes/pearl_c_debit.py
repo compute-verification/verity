@@ -15,7 +15,8 @@
   Until it is relayed, the replayed debit is the chain debit alone.
 * `debit_units(atoms, elements)` is `debitOf` at `Params.pi`, `Costs.adopted`: 40 units per flagged atom-word (its 32
   MACs and a quarter of a promotion add) and 64 per debited element.
-* `CAP` = ρ = 1/400: a tile whose debit exceeds ρ·`creditOf(tile)` is rejected (`capOK`, per tile).
+* `CAP` = ρ = 1/400: a tile whose debit exceeds ρ times its credited cells' credit, their share of the unit's `creditOf`
+  (`pearl_c_work.tile_cap`), is rejected (`capOK`, per tile: `Tile.lean`'s `tileShare`).
 """
 
 from __future__ import annotations

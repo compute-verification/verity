@@ -407,7 +407,11 @@ useful    U/(α_A·α_B), glue
     (1 − ρ)·`creditOf` over its credited cells.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
-    is at most ρ·`creditOf` of the tile, with ρ = 1/400.
+    is at most ρ times those cells' credit, with ρ = 1/400.
+  - That credit is the cells' share of the unit's `creditOf` at the kept width, |rows|·|cols|/(m·n) (the per-tile
+    statement's `tileShare`). A row's forming and A′·F_B are so charged once across its row band, a |cols|/n share in
+    each tile. `creditOf` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
+    the cells' share.
   - The draws are keyed by a beacon round published after the verifier recorded the commitment (the transcript root and
     the records root), through `derive`.
 - **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
