@@ -182,7 +182,6 @@ __global__ void k_op(long long iters, Rec* rec, uint64_t* out) {
   for (int i = 0; i < 8; ++i) acc = acc * 31 + x[i];
   out[t] = acc;
 }
-
 // ---- the epilogue: an FP8 mma.sync tile loop with Pearl-C's checked words
 // Each warp owns a 32 x 64 output tile (2 regions of m16 x n64: 16 FP8 m16n8k32 per k-step, 64 FP32 accumulators) and runs
 // `tiles` tiles of `ksteps` k-steps (k = 32 ksteps), operands from a shared-memory ring (lane-major, conflict-free, the same
@@ -202,6 +201,31 @@ __device__ __forceinline__ void mma_bf16(float (&d)[4], const uint32_t (&a)[4], 
                : "+f"(d[0]), "+f"(d[1]), "+f"(d[2]), "+f"(d[3])
                : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1));
 }
+// ---- the W1 unit: dense FP8 E4M3 mma.sync m16n8k32 from registers, 8 accumulator chains per warp, 16 per iteration
+// (2,048 MACs per thread). Operands are ±0.5–0.94 with random signs, so no accumulator reaches infinity in a row's run.
+constexpr int MMA_PER_ITER = 16, MMA_MACS_PER_ITER = MMA_PER_ITER * 16 * 8 * 32 / 32;
+__global__ void k_mma(long long iters, Rec* rec, uint64_t* out) {
+  const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
+  uint32_t a[4], b[2];
+#pragma unroll
+  for (int i = 0; i < 4; ++i) a[i] = 0x30303030u ^ (mix32(t * 8 + i) & 0x87878787u);
+#pragma unroll
+  for (int i = 0; i < 2; ++i) b[i] = 0x30303030u ^ (mix32(t * 8 + 4 + i) & 0x87878787u);
+  float d[8][4] = {};
+  BEGIN_REC
+#pragma unroll 1
+  for (long long it = 0; it < iters; ++it)
+#pragma unroll
+    for (int r = 0; r < MMA_PER_ITER / 8; ++r)
+#pragma unroll
+      for (int c = 0; c < 8; ++c) mma_fp8(d[c], a, b[0], b[1]);
+  END_REC(rec)
+  float s = 0;
+#pragma unroll
+  for (int c = 0; c < 8; ++c) s += d[c][0] + d[c][1] + d[c][2] + d[c][3];
+  out[t] = __float_as_uint(s);
+}
+
 template <int N>
 struct Int {
   static constexpr int value = N;
@@ -475,6 +499,8 @@ int main(int argc, char** argv) {
     op_row(OP_SHF, k_op<OP_SHF>), op_row(OP_PRMT, k_op<OP_PRMT>), op_row(OP_IMAD, k_op<OP_IMAD>);
     op_row(OP_IDP4A, k_op<OP_IDP4A>), op_row(OP_FFMA, k_op<OP_FFMA>);
     op_row(OP_LOP3_IMAD, k_op<OP_LOP3_IMAD>), op_row(OP_LOP3_SHF, k_op<OP_LOP3_SHF>);
+    row(filter, "mma", "mma e4m3: dense FP8 mma.sync m16n8k32, FP32 accumulate (the W1 unit)", k_mma, MMA_MACS_PER_ITER, 128, 0, 0,
+        [&](int b, int t, size_t, long long it, Rec* r) { k_mma<<<b, t>>>(it, r, out); }, ",\"unit\":\"MACs\"", MMA_MACS_PER_ITER);
     // chains in flight: one block per SM of 1 … 32 warps (Keccak-p12, SHA-256, the quad digest)
     for (int w : {1, 2, 4, 8, 12, 16, 24, 32}) {
       char ex[64];

@@ -84,3 +84,6 @@ def test_sass_census_splits_iadd3_and_gates_the_op_kernels():
     kernels[name]["ops"]["IADD3.RZ"] = S.OP_PER_ITER
     kernels["_Z5k_msgxP3RecPm"] = {"ops": {"LDL": 2}, "stack": 16}
     assert S.gate(kernels) == ["_Z5k_msgxP3RecPm: local memory (stack 16, LDL 2, STL 0)"]
+    del kernels["_Z5k_msgxP3RecPm"]
+    kernels["_Z5k_mmaxP3RecPm"] = {"ops": {"QMMA": S.MMA_PER_ITER - 1}}
+    assert S.gate(kernels) == [f"_Z5k_mmaxP3RecPm: {S.MMA_PER_ITER - 1} QMMA, want at least {S.MMA_PER_ITER}"]

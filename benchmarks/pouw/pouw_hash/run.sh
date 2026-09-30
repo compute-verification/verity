@@ -56,18 +56,25 @@ cat "$OUT/check_summary.jsonl" >> "$OUT/summary.txt"
 python3 - "$OUT" "$LOCKED" >> "$OUT/summary.txt" <<'EOF'
 import json, sys
 out, locked = sys.argv[1], sys.argv[2]
+# the W1 unit is one dense FP8 mma.sync MAC: a rate row's price per byte is the mma row's MACs per SM per clock over its bytes
+w1 = None
 for f in ("rates", "epi"):
     try:
         rows = [json.loads(l) for l in open(f"{out}/{f}.jsonl") if l.startswith("{")]
     except FileNotFoundError:
         continue
+    w1 = w1 or next((r["per_sm_clk"] for r in rows if r["group"] == "mma" and "skipped" not in r), None)
     for r in rows:
         if r["group"] in ("device", "epi_gate") or "skipped" in r:
             print(json.dumps(r))
             continue
         extra = f" warps/SM {r['warps_per_sm']}" + (f" sweep {r['sweep_warps']}" if "sweep_warps" in r else "")
-        unit = "ops" if r["group"] == "op" else "B"
+        unit = {"op": "ops", "mma": "MACs"}.get(r["group"], "B")
         mac = f" MACs/SM/clk {r['macs_per_sm_clk']:.0f}" if r["group"] == "epi" else ""
+        if w1 and r["group"] in ("rate", "sweep"):
+            mac = f" W1/B {w1 / r['per_sm_clk']:.1f}"
+        elif r["group"] == "latency":
+            mac = f" {r['cyc_per_iter'] / r['f_eff_ghz'] / 1e3:.2f} us/iter"
         print(f"{r['group']:8} {r['name'][:60]:60} {r['per_sm_clk']:9.3f} {unit}/SM/clk {r['gb_s']:10.1f} GB/s"
               f" {r['cyc_per_iter']:10.1f} cyc/iter{mac} regs {r['regs']}{extra} f {r['f_eff_ghz']:.3f} GHz ({locked})")
 EOF

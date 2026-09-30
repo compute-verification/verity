@@ -3,7 +3,8 @@
     python sass.py PTXAS.txt SASS.txt OUT.json     exit 1 (REFUSED) on a gate
 
 Gates: no stack frame, spill or local-memory instruction in any timed kernel (the check kernels may use a stack); each
-`k_op<OP>` holds at least OP_PER_ITER of its opcode; `k_epi` holds 16 FP8 and 64 BF16 mma.sync per tile. IADD3 is split in two:
+`k_op<OP>` holds at least OP_PER_ITER of its opcode; `k_mma` at least MMA_PER_ITER FP8 mma.sync (QMMA); `k_epi` holds 16 FP8
+and 64 BF16 mma.sync per tile. IADD3 is split in two:
 `IADD3.RZ` (a zero third source: what add.u32 becomes) and `IADD3` (three sources), since Blackwell's doubled integer rate is
 said to cover the first and not the second.
 """
@@ -16,6 +17,7 @@ import sys
 from collections import Counter
 
 OP_PER_ITER = 128
+MMA_PER_ITER = 16
 OPS = ["IADD3.RZ", "IADD3", "LOP3", "SHF", "PRMT", "IMAD", "IDP", "FFMA",   # k_op<0 … 9>, as pouw_hash_bench.cu's enum
        ("LOP3", "IMAD"), ("LOP3", "SHF")]
 
@@ -73,6 +75,8 @@ def gate(kernels: dict[str, dict]) -> list[str]:
                     problems.append(f"{name}: {ops.get(op, 0)} {op}, want at least {n}")
         if "k_epiILi" in name and (ops.get("QMMA", 0) < 16 or ops.get("HMMA", 0) < 64):
             problems.append(f"{name}: {ops.get('QMMA', 0)} QMMA and {ops.get('HMMA', 0)} HMMA, want 16 and 64 per tile")
+        if name.startswith("_Z5k_mma") and ops.get("QMMA", 0) < MMA_PER_ITER:
+            problems.append(f"{name}: {ops.get('QMMA', 0)} QMMA, want at least {MMA_PER_ITER}")
     return problems
 
 
