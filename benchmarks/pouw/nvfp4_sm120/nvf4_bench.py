@@ -25,7 +25,9 @@ nvf4_bench.cubin is nvf4_bench.cu built off the card:
   python3 nvf4_bench.py CUBIN   (env: NVF4_EXPECT_UUID, SHAPE=8192, SMALL="256x128x128 512x256x1024 768x384x640",
                                  KERNELS="nv256 nv256_r nv256_o", SCALES="0 1", TIME_SCALES=1, GATE_REPEATS=3, REPS=20,
                                  RASTER=8, HARNESS_LIB, CUTLASS="cutlass3x_nvfp4_256x128x128_coop ...", LT=1,
-                                 MODEL_SAMPLES=4096, FULL_MODEL=131072, STEADY, STEADY_ROUNDS=4, ONLY_CHECK)
+                                 MODEL_SAMPLES=4096, FULL_MODEL=131072, STEADY, STEADY_ROUNDS=4, ONLY_CHECK,
+                                 PROFILE=1: after timing, one launch of each timed kernel between cuProfilerStart and
+                                 cuProfilerStop, for ncu --profile-from-start off)
 One JSON object per line on stdout, a summary on stderr.  Exit 3: refused (identity); 4: a gate failed; 0 otherwise.
 """
 
@@ -57,6 +59,7 @@ CUDA = {
     "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp], "cuEventQuery": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
     "cuTensorMapEncodeTiled": [vp, i32, u, vp, P(u64), P(u64), P(u), P(u), i32, i32, i32, i32],
+    "cuProfilerStart": [], "cuProfilerStop": [],
 }
 NVML = {
     "nvmlInit_v2": [], "nvmlDeviceGetHandleByUUID": [C.c_char_p, P(vp)], "nvmlSystemGetDriverVersion": [C.c_char_p, u],
@@ -632,6 +635,13 @@ def main(argv: list[str]) -> int:
         st = steady(dev, nv, s, s, s, bodies, int(os.environ.get("STEADY_ROUNDS", "4")), int(os.environ["STEADY"]))
         emit(st)
         print(f"steady (Measured diagnostic): {st['summary']}", file=sys.stderr)
+    if os.environ.get("PROFILE"):   # one launch of each, between cuProfilerStart and Stop (ncu --profile-from-start off)
+        dev.ck("cuProfilerStart")
+        for nm, body in bodies.items():
+            body()
+            dev.sync()
+        dev.ck("cuProfilerStop")
+        emit({"kind": "profiled", "kernels": list(bodies)})
     for r in releases:
         r()
     return 0 if len(gated) == len(kernels) else 4
