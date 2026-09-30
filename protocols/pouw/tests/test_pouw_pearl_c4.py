@@ -4,7 +4,9 @@ debit, the work law through `pearl_c_work`, and the pinned vectors."""
 
 from __future__ import annotations
 
+import base64
 import json
+import pickle
 from fractions import Fraction
 
 import pytest
@@ -16,6 +18,7 @@ from verity_pouw.audit import Epoch, Prover, Workload
 from verity_pouw.protocol import DomainError, Matmul, Shape
 from verity_pouw.schemes import get
 from verity_pouw.schemes import pearl_c4 as F
+from verity_pouw.schemes import pearl_c4_replay as R
 from verity_pouw.schemes import pearl_c_work as W
 from verity_pouw.schemes import pearl_kw as P
 
@@ -242,6 +245,68 @@ def test_the_work_law_audits_pearl_c4():
     hides = W.audit(s, epoch, prover, tr, splits, [W.UnitRecord(epoch.workload.matmuls[0], 20, K)], BEFORE, AFTER, 8)
     assert not hides.audit.accepted
     assert any("A row 3 is credited but fails" in v.reason for v in hides.audit.verdicts if not v.ok)
+
+
+def device_dump(path, s: F.PearlC4, swap_leaves=False, flip_root_a=False) -> None:
+    """`lifecycle`'s run as a device would dump it (its roots and leaves), optionally with its first two leaves swapped
+    or A's root altered."""
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    leaves = [prover.digest(i) for i in range(2)]
+    root_a = tr.activation_roots[0]
+    call = {"scheme": s.name, "shape": [32, K, 16], "index": 3, "weight": 9, "real_rows": 20, "epoch_beacon": b"beacon".hex()}
+    R.write_dump(path, call, b"".join(rows_a), b"".join(rows_b), bytes([root_a[0] ^ 1]) + root_a[1:] if flip_root_a else root_a,
+                 prover.weight_roots[9], b"".join(leaves[::-1] if swap_leaves else leaves))
+
+
+def test_replay_accepts_the_device_transcript(tmp_path):
+    s = V.scheme("nvfp4", True)
+    device_dump(tmp_path, s)
+    t = json.loads(json.dumps(R.prove(tmp_path, "r-test", 8, scheme=s)))
+    assert t["records"] == [{"real_rows": 20, "k_kept": K, "excluded_a": [3], "excluded_b": []}]
+    assert t["host_roots_match"] == {"a": True, "b": True} and [o["tile"] for o in t["openings"]] == [0, 1]
+    rep = R.verify(t, scheme=s)
+    assert rep["accepted"] and rep["opened"] == 9 and rep["reason"] == ""
+    first = rep["tiles"][0]
+    assert first["credited"] in ([15, 16], [4, 16]) and Fraction(first["debit"]["total"]) <= Fraction(first["cap"])
+    assert pickle.loads(pickle.dumps(s)).fmt is s.fmt and R.verify(t, workers=2, scheme=s)["tiles"] == rep["tiles"]
+    assert R.accept_line(rep, "r-test:t.json", "00", "abc").startswith(f"ACCEPT {R.REPORT} {s.name} r-test:t.json sha256:00 ")
+
+
+def test_replay_rejects(tmp_path):
+    """A wrong leaf, a root the rows don't have, a tampered row, a beacon not the commitment's, hidden exclusions, and a
+    missing opening."""
+    s = V.scheme("nvfp4", True)
+    for name, kw, why in (("swap", {"swap_leaves": True}, "checked values"),
+                          ("root", {"flip_root_a": True}, "activation opening")):
+        device_dump(tmp_path / name, s, **kw)
+        rep = R.verify(R.prove(tmp_path / name, "r-test", 8, scheme=s), scheme=s)
+        assert not rep["accepted"] and rep["reason"] == why
+    device_dump(tmp_path / "ok", s)
+    good = R.prove(tmp_path / "ok", "r-test", 8, scheme=s)
+
+    def bad(edit):
+        t = json.loads(json.dumps(good))
+        edit(t)
+        return R.verify(t, scheme=s)
+
+    def tamper(t):
+        row = bytearray(base64.b64decode(t["openings"][0]["a"][0]["value"]))
+        row[0] ^= 1
+        t["openings"][0]["a"][0]["value"] = base64.b64encode(bytes(row)).decode()
+
+    def hide(t):
+        t["records"][0]["excluded_a"] = []
+        unit = Matmul(3, Shape(32, K, 16), 9)
+        epoch = Epoch.start(Workload((unit,)), {9: bytes.fromhex(t["weight_roots"]["9"])}, b"beacon")
+        rec = W.UnitRecord(unit, 20, K)
+        beacon = R.draw_beacon(bytes.fromhex(t["transcript"]["root"]),
+                               W.records_root(epoch.salt, epoch.weights_root, {9: W.Split(K)}, [rec]))
+        t["draw"]["value"] = beacon.value.hex()
+
+    assert bad(tamper)["reason"] == "activation opening"
+    assert bad(lambda t: t["draw"].update(value="00" * 32))["reason"].startswith("the draws' beacon is not")
+    assert "A row 3 is credited but fails" in bad(hide)["reason"]
+    assert bad(lambda t: t["openings"].pop(0))["reason"] == "'the transcript does not open tile 0'"
 
 
 def test_pinned_vectors_fast():

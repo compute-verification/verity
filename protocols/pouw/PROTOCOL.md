@@ -270,6 +270,17 @@ useful    U/(α_A·α_B), glue
     ρ's accumulate, 2);
   - the weight side is `job_cost`.
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
+- **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that law, which every measured
+  row needs:
+  - the device's dump: A's and B's rows, its roots and its tile leaves;
+  - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
+    per-row rules, the draws and their openings;
+  - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
+    accept line.
+
+  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192. Its shortcuts are in every report: the draws' beacon is
+  Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label, and the transcript tree and the records
+  are built on the host after timing.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
