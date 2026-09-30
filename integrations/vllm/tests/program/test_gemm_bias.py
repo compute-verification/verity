@@ -24,6 +24,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm
 from verity_vllm.program.kernels import rows as RK
 from verity_vllm.program.registry import b1, gemm_bias
 from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.query import required as RQ
 from verity_vllm.query import word as W
 
 BF = torch.bfloat16
