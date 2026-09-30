@@ -545,7 +545,7 @@ def fp4_representable(N: np.ndarray, fmt: str) -> tuple[np.ndarray, np.ndarray]:
     return strict, anyscale
 
 
-def merge_rate(fmt: str, A: np.ndarray, noise: str, delta: float, rng) -> dict:
+def merge_rate(fmt: str, A: np.ndarray, noise: str, delta: float, rng, partner_blocks: int = 256) -> dict:
     """epsilon_R: how often a sum or difference of two salted input blocks is itself one FP4 value (FP4-tile model §2.3).
 
     Per pattern and sign, over the pairs whose two blocks are both nonzero: ``eps_strict`` = the merged block is
@@ -588,7 +588,7 @@ def merge_rate(fmt: str, A: np.ndarray, noise: str, delta: float, rng) -> dict:
         out["patterns"][pat] = row
     out["eps_R_strict_max"] = worst
     out["eps_R_any_scale_max"] = max(out["patterns"][p][s]["eps_any_scale"] for p in MERGE_PATTERNS for s in "+-")
-    out["partners"] = merge_partners(N, E, live, fmt)
+    out["partners"] = merge_partners(N, E, live, fmt, partner_blocks)
     return out
 
 
@@ -604,26 +604,26 @@ def _mergeable(N1, E1, N2, E2, fmt) -> np.ndarray:
 
 
 def merge_partners(N: np.ndarray, E: np.ndarray, live: np.ndarray, fmt: str, max_blocks: int = 256) -> dict:
-    """The adaptive side of epsilon_R: the share of live blocks with at least one mergeable partner (sum or difference
-    one FP4 value), searching every other row at the same k-block, and every other k-block of the same row among the
-    first ``max_blocks``.  A prover free to choose its pairs can merge at most this share of blocks."""
+    """The adaptive side of epsilon_R: over the first ``max_blocks`` k-blocks, the share of live blocks with at least one
+    mergeable partner (sum or difference one FP4 value), searching every other row at the same k-block, and every other
+    of those k-blocks in the same row.  A prover free to choose its pairs can merge at most this share of blocks."""
     rows, nb, _ = N.shape
-    col = np.zeros((rows, nb), bool)
+    kb = min(nb, max_blocks)
+    col = np.zeros((rows, kb), bool)
     i, j = np.triu_indices(rows, 1)
-    for b in range(nb):
+    for b in range(kb):
         ok = _mergeable(N[i, b], E[i, b], N[j, b], E[j, b], fmt) & live[i, b] & live[j, b]
         np.logical_or.at(col[:, b], i[ok], True)
         np.logical_or.at(col[:, b], j[ok], True)
-    kb = min(nb, max_blocks)
     row = np.zeros((rows, kb), bool)
     p, q = np.triu_indices(kb, 1)
     for r in range(rows):
         ok = _mergeable(N[r, p], E[r, p], N[r, q], E[r, q], fmt) & live[r, p] & live[r, q]
         np.logical_or.at(row[r], p[ok], True)
         np.logical_or.at(row[r], q[ok], True)
-    n_live = max(1, int(live.sum()))
-    return {"same_kblock_any_row": float((col & live).sum() / n_live),
-            "same_row_any_kblock": float((row & live[:, :kb]).sum() / max(1, int(live[:, :kb].sum()))),
+    n_live = max(1, int(live[:, :kb].sum()))
+    return {"same_kblock_any_row": float((col & live[:, :kb]).sum() / n_live),
+            "same_row_any_kblock": float((row & live[:, :kb]).sum() / n_live),
             "rows": int(rows), "kblocks_searched": int(kb)}
 
 
@@ -636,7 +636,7 @@ def cmd_merge(args) -> dict:
     for name, (atom, fmt) in atoms_from(args).items():
         for label, A in operands(args, rng):
             for noise in args.noise.split(","):
-                r = merge_rate(fmt, A, noise, args.delta, rng)
+                r = merge_rate(fmt, A, noise, args.delta, rng, args.partner_blocks)
                 res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
                 print(json.dumps({"format": fmt, **label, "noise": noise, "zero_codes": round(r["zero_codes"], 4),
                                   "zero_blocks": round(r["zero_blocks"], 4), "eps_R_strict_max": round(r["eps_R_strict_max"], 5),
@@ -798,6 +798,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--acts", default=None)
     ap.add_argument("--operand", choices=["a", "b"], default="a", help="basesplit/merge: activations (a) or weights (b)")
     ap.add_argument("--max-k", type=int, default=0)
+    ap.add_argument("--partner-blocks", type=int, default=256, help="merge: k-blocks the adaptive partner search covers")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="")
     args = ap.parse_args(argv)

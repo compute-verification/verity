@@ -254,7 +254,9 @@ def main() -> None:
                              **{f"{n}/w": mods[n].weight[: args.dump_rows].detach().float().cpu().numpy() for n in rows})
                     state["capture"] = None
             hid = torch.cat(outs)
-            del layer, cache, outs
+            for mod in mods.values():
+                del mod.forward                                         # the closure holds mod: without this, a layer lives until gc
+            del layer, mods, cache, outs
             print(json.dumps({"variant": mode, "layer": i, "seconds": round(time.time() - t0, 1)}), flush=True)
         per = []
         head = tensor(head_name).to(dev).to(torch.float32)             # 2.2 GB in FP32, so never beside a layer's weights
