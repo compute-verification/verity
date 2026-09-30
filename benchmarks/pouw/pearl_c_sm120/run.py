@@ -28,7 +28,7 @@
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
-                                 HASHING=h1, PEARLC_LIBCUDA, PEARLC_LIBNVML)
+                                 HASHING=h1, PEARLC_A_ROWS=w, PEARLC_LIBCUDA, PEARLC_LIBNVML)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -276,6 +276,10 @@ HASHINGS = ("h1", "h2")
 #: `verity_pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
 ROW_SCHEMA, TILE_SCHEMA = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 B3S_SEG, B3S_MAX_SEGS = 256, 512
+#: A's row-leaf forms: `w`, the format's own kernel (-h1 hash_rows_w, -h2 hash_rows_b3s), then forming's stats_a; `s`, -h2's
+#: hash_rows_b3s_stats, A's row leaves and stats_a's words in one pass over A (step `hash_rows_a`; forming drops stats_a).
+#: GPU 1's `s` for -h1 (h1_rows_stats) is on its forms branch, not here.
+ROWS_FORMS = ("w", "s")
 
 
 def pow2(n: int) -> int:
@@ -302,6 +306,12 @@ def b3s_template_len(schema: str) -> int:
 def b3s_levels(rb: int) -> int:
     """The segment tree's levels over a value of rb bytes (an odd last node promoted, so ⌈log2 segments⌉)."""
     return depth(cdiv(rb, B3S_SEG))
+
+
+def b3s_stats_smem(rb: int) -> int:
+    """hash_rows_b3s_stats' dynamic shared bytes for rows of rb bytes: the segment tree (32 a segment), then the samples
+    (33 floats per 4 segments)."""
+    return (rb // B3S_SEG) * (32 + 33)
 
 
 def spread(count: int, most: int, sms: int, least: int = 1) -> int:
@@ -348,7 +358,8 @@ class Pipeline:
     `hashing` is the trees' format, the message digests and tile leaves being the same in both: -h1 (frame-b3, a row leaf
     through BLAKE3's chunk tree, hash_rows_w) or -h2 (frame-b3s: a row leaf is a tree over its 256-byte segments,
     hash_rows_b3s, under segment level keys it derives itself and its first CTA stores in `skeys_<tree>`; the tile tree's
-    leaves hash_leaves_b3s).  Pads, node keys and every level above the leaves are frame-b3's in both.
+    leaves hash_leaves_b3s).  Pads, node keys and every level above the leaves are frame-b3's in both.  `rows_form` is A's
+    row-leaf form (ROWS_FORMS): under -h2 `s` hashes A's m_real rows and writes stats_a's words for all m in one pass.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
@@ -359,7 +370,7 @@ class Pipeline:
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None,
-                 fused: bool | None = None, hashing: str = "h1"):
+                 fused: bool | None = None, hashing: str = "h1", rows_form: str = "w"):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
@@ -375,6 +386,9 @@ class Pipeline:
             raise ValueError(f"hash_rows_b3s takes rows of at most {B3S_MAX_SEGS} segments (k <= {B3S_MAX_SEGS * B3S_SEG // 4}), "
                              f"not k = {k}")
         self.hashing = hashing
+        if rows_form not in ROWS_FORMS or rows_form == "s" and hashing != "h2":
+            raise ValueError(f"rows_form {rows_form!r}: one of {ROWS_FORMS}, and `s` only under -h2 on this tree")
+        self.rows_form = rows_form
         self.fusable = self.bm == BM and self.m_real == m
         if fused and not self.fusable:
             raise ValueError(f"gemm_pearlc_b digests every row of 128 x 128 tiles: m = {m} rows at bm = {self.bm}, m_real = "
@@ -458,7 +472,13 @@ class Pipeline:
         """A tree over `count` FP32 rows of x, then its levels: -h1 hash_sm120.cuh's hash_rows_w (a warp a row), -h2
         hash_h2.cuh's hash_rows_b3s (a CTA a row, a thread a segment, the segment tree's level keys its own)."""
         d, b, rb = self.dev, self.b, self.row_bytes
-        if self.hashing == "h2":
+        if self.hashing == "h2" and tag == "a" and self.rows_form == "s":
+            threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
+            leaves = lambda: d.launch("hash_rows_b3s_stats", self.m, threads, b3s_stats_smem(rb),  # noqa: E731
+                                      p=(b[x], b[f"tree_{tag}"], self.keys[dom], b[f"skeys_{tag}"], self.keys["t_row"],
+                                         b["alpha_a"], b["beta_a"], b["ia_a"], b["aux_a"]),
+                                      i=(count, rb, 0, b3s_template_len(ROW_SCHEMA), self.m))
+        elif self.hashing == "h2":
             threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
             leaves = lambda: d.launch("hash_rows_b3s", count, threads,  # noqa: E731
                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom], b[f"skeys_{tag}"], self.keys["t_row"]),
@@ -556,12 +576,13 @@ class Pipeline:
 
         def form_side(tag, rows, x, e_codes, f_codes, out):
             ep = f"ep{tag}_codes"
-            return [(f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                       b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
-                    (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
-                                                       i=(rows,))),
-                    (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
-                                                     p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))]
+            steps = [(f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
+                                                                                      b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
+                     (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
+                                                        i=(rows,))),
+                     (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
+                                                      p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))]
+            return steps[1:] if tag == "a" and self.rows_form == "s" else steps
 
         job = [lines("eb", self.keys["line_b"], 1, 0, n, "eb_codes"),
                lines("fa", self.keys["line_b"], 0, 1, k, "fa_codes", b["faT32"]),
@@ -707,7 +728,8 @@ def parse_shape(s: str) -> tuple[int, int, int]:
     return (parts[0],) * 3 if len(parts) == 1 else tuple(parts)
 
 
-def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: int, gates: dict, hashing: str = "h1") -> dict:
+def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: int, gates: dict, hashing: str = "h1",
+           rows_form: str = "w") -> dict:
     m_real, n, k = shape
     m = cdiv(m_real, BM_D) * BM_D
     keys = {name: dev.put(hashlib.shake_256(f"pearl-c-timing/{name}".encode()).digest(size)) for name, size in TIMING_KEYS.items()}
@@ -715,10 +737,10 @@ def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: 
     xa, xb = dev.alloc(m * 4 * k), dev.alloc(n * 4 * k)
     for x, rows, seed in ((xa, m_real, 11), (xb, n, 12)):
         dev.launch("gen_f32", cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))
-    pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, m_real=m_real, hashing=hashing)
+    pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, m_real=m_real, hashing=hashing, rows_form=rows_form)
     pipe.run_all()
     out = measure(dev, nv, pipe, reps, gates)
-    out["hashing"] = hashing
+    out["hashing"], out["rows_form"] = hashing, rows_form
     pipe.free()
     for p_ in (xa, xb, *keys.values()):
         dev.free(p_)
@@ -889,7 +911,7 @@ def main(argv: list[str]) -> int:
             if not (gates["pearl_c"] or gates["plain"]):
                 continue
             t0 = time.time()
-            row = timing(dev, nv, shape, variant, reps, gates, os.environ.get("HASHING", "h1"))
+            row = timing(dev, nv, shape, variant, reps, gates, os.environ.get("HASHING", "h1"), os.environ.get("PEARLC_A_ROWS", "w"))
             row["seconds"] = round(time.time() - t0, 2)
             row["m_real"] = shape[0]
             ok = ok and not any(row.get("consistency", {}).values())
