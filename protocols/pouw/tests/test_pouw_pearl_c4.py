@@ -310,17 +310,16 @@ NAN_BIT7_SPECIALS = (
 @pytest.mark.parametrize("row", NAN_BIT7_SPECIALS, ids=lambda r: f"{r[0]:08X}")
 def test_nan_accumulator_specials_read_their_scales_as_the_hardware(row):
     """The decode's 28-row specials table: a NaN accumulator whose scale bytes set bit 7.  Read as sm_120 reads them
-    (`hw_scales`, low 7 bits), the bytes are valid scales, so the vector is outside the model only through its
-    accumulator (the step raises, Lean's `none`); `verity.ml.tc`'s own decode rejects the raw bytes, which is the row the
-    current Lean decode fails.  D-SB keeps such bytes off every formed side."""
+    (low 7 bits: `hw_scales`, and the pinned model's own decode since GPU 4's replay, r20260930-161935-83a8), the bytes
+    are valid scales, so the vector is outside the model only through its accumulator (the step raises, Lean's `none`;
+    the card writes 0x7FFFFFFF).  D-SB keeps such bytes off every formed side."""
     from verity.ml.tc.models import BLACKWELL_SM120_NVF4 as atom
     acc, a, b, sa, sb = row
     codes_a, codes_b = [(a >> 4 * i) & 15 for i in range(64)], [(b >> 4 * i) & 15 for i in range(64)]
     sa, sb = [(sa >> 8 * i) & 255 for i in range(4)], [(sb >> 8 * i) & 255 for i in range(4)]
     assert (acc >> 23) & 0xFF == 0xFF and acc & 0x7FFFFF and any(s & 0x80 for s in sa + sb)
-    assert atom.group_terms(codes_a, codes_b, F.hw_scales(F.NVFP4, sa), F.hw_scales(F.NVFP4, sb))
-    with pytest.raises(InvalidArtifact):
-        atom.group_terms(codes_a, codes_b, sa, sb)
+    assert atom.group_terms(codes_a, codes_b, sa, sb) == atom.group_terms(codes_a, codes_b, F.hw_scales(F.NVFP4, sa),
+                                                                          F.hw_scales(F.NVFP4, sb))
     with pytest.raises(InvalidArtifact):
         atom.step_scaled(acc, codes_a, codes_b, F.hw_scales(F.NVFP4, sa), F.hw_scales(F.NVFP4, sb))
     assert not F.scale_bytes_ok(F.NVFP4, sa + sb)
