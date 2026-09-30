@@ -510,17 +510,19 @@ def debit_chain(atom: Atom, qa, qb, ia, ib, acc0: np.ndarray, keep: np.ndarray) 
     trajectory for the words ``keep`` indexes."""
     T = qa[0].shape[1] // atom.k
     acc = acc0.astype(np.float64).copy()
-    sub, ident, ss = np.zeros(len(ia), np.int64), np.zeros(len(ia), np.int64), np.zeros(len(ia))
+    sub, ident, lost = (np.zeros(len(ia), np.int64) for _ in range(3))
+    ss = np.zeros(len(ia))
     traj = np.zeros((len(keep), T + 1))
     traj[:, 0] = acc[keep]
     for t in range(T):
         d, fl = atom.step(acc, *_step_inputs(atom, qa, qb, ia, ib, t))
         sub += fl["subgrid"].sum(-1)
         ident += d == acc
+        lost += fl["lost"]
         ss += fl["exact_sum"] ** 2
         acc = d
         traj[:, t + 1] = acc[keep]
-    return {"subgrid": sub, "ident": ident, "rms": np.sqrt(ss / T), "traj": traj, "steps": T, "final": acc}
+    return {"subgrid": sub, "ident": ident, "lost": lost, "rms": np.sqrt(ss / T), "traj": traj, "steps": T, "final": acc}
 
 
 def merged(atom: Atom, factor: int = 2) -> Atom:
@@ -771,6 +773,8 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
                           "lone_skip_identities": float(skip.sum() / (len(w) * r["steps"]))})
         out[name] = {"subgrid_groups": float(r["subgrid"].sum() / (len(ia) * r["steps"] * atom.groups)),
                      "identity_steps": float(r["ident"].sum() / (len(ia) * r["steps"])),
+                     "steps_losing_bits": float(r["lost"].sum() / (len(ia) * r["steps"])),
+                     "words_exact": float((r["lost"] == 0).mean()),
                      "tile_debit_share": {"mean": float(per_tile.mean()), "max": float(per_tile.max()),
                                           "over_rho": float((per_tile > rho).mean())},
                      "tile_debit_exact": exact, "tile_debit_exact_max": max(e["lone_skip_share"] for e in exact),
@@ -1077,7 +1081,7 @@ def cmd_debit(args) -> dict:
                 tot = lambda v, lvl, u: r[v]["tile_debit_total"][lvl][u]["max"] if "tile_debit_total" in r.get(v, {}) else None
                 print(json.dumps({"format": fmt, **label, "noise": noise, **{
                     f"{v}_{q}": round(r[v][key], 6) for v in ("v1", "v2") if v in r
-                    for q, key in (("subgrid", "subgrid_groups"), ("ident", "identity_steps"),
+                    for q, key in (("subgrid", "subgrid_groups"), ("ident", "identity_steps"), ("words_exact", "words_exact"),
                                    ("tile_max", "tile_debit_exact_max"), ("k128_span_equal", "k128_span_words_equal"))
                     if r[v].get(key) is not None},
                     **{f"{v}_k128_equal": r[v]["merged_k128_words_equal"] for v in ("v1", "v2") if v in r},

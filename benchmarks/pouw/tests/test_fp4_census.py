@@ -331,6 +331,8 @@ def test_debit_census_2of4_term_granularity_and_span_words():
     assert all(r["item1"][lvl][u]["max"] == 0.0 for lvl in ("code", "value") for u in ("span_d24", "span_pairs"))
     assert r["operands"]["A"]["value"]["change_density"] >= r["operands"]["A"]["code"]["change_density"]
     assert r["v1"]["k128_span_words_equal"] == 1.0 and 0.5 < r["v2"]["k128_span_words_equal"] < 1.0
+    assert r["v1"]["words_exact"] == 1.0 and r["v1"]["steps_losing_bits"] == 0.0     # from +0 the chains lose nothing
+    assert r["v2"]["words_exact"] < 0.1 < r["v2"]["steps_losing_bits"]               # T1's H floors Gaussians' atoms
     assert r["v1"]["tile_debit_total"]["witness"]["g4"]["max"] >= r["v1"]["tile_debit_share"]["max"]
     assert r["item1"]["witness"]["span_either"]["max"] == 0.0 and r["windows_d24"]["max"] == 0.0
     S = C.debit_census(atom, fmt, *C.family("sparse-2of4", 32, 1024, rng), "none", 0.25, rng, 32)
