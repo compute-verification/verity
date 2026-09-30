@@ -41,17 +41,22 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
 def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"circuits", "provers"}
-    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (4, 0)       # GPUs 4-7 held for direct runs
-    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (144, 48)
+    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 3)       # tonight: coverage is the binding workstream
+    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (112, 64)           # checks and pinned benches run outside Kueue
     for res, cap in NODE.items():
         assert sum(x[res] for x in q.values()) <= cap, res
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
     circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
-    assert circuits.count("borrowingLimit: 0") == 3 and "borrowingLimit" not in text.split("metadata: {name: provers}")[1]
+    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits and "borrowWithinCohort: {policy: Never}" in circuits
+    assert "borrowingLimit" not in text.split("metadata: {name: provers}")[1]                   # borrowing never preempts; provers reclaims
+    assert text.count("    withinClusterQueue: Never") == 2 and "LowerPriority" not in text   # never evict a running Build
     assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["sweep-night", "circuits", "prover-bench", "dev"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
+    # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
+    # file with regexes, so check it here
+    assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
 
 
 def test_every_job_template_names_a_defined_queue_and_priority():
@@ -66,8 +71,32 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert queue in local and prio in priorities, f.name
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
-    assert seen == {"config-run": ("circuits", "circuits"), "port-capture": ("circuits", "circuits"),
-                    "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+    assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits"),
+                    "port-capture": ("circuits", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+
+
+def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
+    import subprocess
+    text = (SKY / "jobs" / "config-run.yaml").read_text()
+    head, build, gpu = text.split("\n---\n")
+    assert "accelerators" not in build and 'verity.dev/build: "true"' in build and "CUDA_VISIBLE_DEVICES=" in build
+    assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
+    assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
+    assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
+    assert build.count("kueue.x-k8s.io/queue-name: circuits") == gpu.count("kueue.x-k8s.io/queue-name: circuits") == 1
+    assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
+    for part in (build, gpu):
+        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part and "HOT_ROOT: /workspace/jobs/hot" in part
+    sub = (SKY / "submit.sh").read_text()
+    (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
+    def render(*args):
+        out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run.yaml"), *args],
+                             capture_output=True, text=True, check=True).stdout
+        return out.split("\n---\n")[1:]
+    b2, g2 = render("tp2", "", "")
+    assert "  memory: 160" in b2 and "  memory: 384" in g2 and "accelerators: RTXPRO6000:2" in g2
+    b3, g3 = render("moe", "300", "")                                                                  # a per-cell figure wins
+    assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 384" in g3
 
 
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
@@ -93,7 +122,8 @@ def test_the_pouw_queue_joins_the_same_cohort_on_its_own_server():
     assert "cohortName: nebius" in text and "nodeLabels: {verity.dev/server: vy-nebius-2}" in text
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
     assert int(values["pouw-timed"]) > int(values["pouw"]) and "withinClusterQueue: LowerPriority" in text
-    assert "kueue-pouw.yaml" not in (SKY / "cluster_up.sh").read_text()
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "VY_QUEUES=kueue-pouw.yaml VY_DIRECT_GPUS=none" in up and "lendingLimit: 0" in text     # node 2: its own cluster, same code
 
 
 def test_usage_report_reads_kueue_objects():
@@ -128,3 +158,119 @@ def test_usage_summary_suggests_the_p90_as_nominal():
     assert mem.split()[-1] == "512"
     assert "work waited in 10% of samples (longest 10 min)" in out[-2] and "GPU utilization of its pods 5%" in out[-2]
     assert ur.summarize(lines, 7, now=10**9) == "no samples in the last 7 days"
+
+
+def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
+    import subprocess
+    up = (SKY / "cluster_up.sh").read_text()
+    render = up[up.index("<<'PY'\n") + len("<<'PY'\n"):up.index("\nPY\n")]
+    (tmp_path / "render.py").write_text(render)
+    for direct, want in ((4, 0), (0, 3), (2, 1)):
+        out = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue.yaml"), str(direct)], capture_output=True, text=True, check=True).stdout
+        provers = out.split("metadata: {name: provers}")[1]
+        assert re.search(r"\{name: nvidia.com/gpu, nominalQuota: (\d+)", provers).group(1) == str(want)
+        assert out.split("metadata: {name: provers}")[0] == (SKY / "kueue.yaml").read_text().split("metadata: {name: provers}")[0]
+    pouw = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue-pouw.yaml"), "0"], capture_output=True, text=True, check=True).stdout
+    assert pouw == (SKY / "kueue-pouw.yaml").read_text()
+
+
+def test_every_template_runs_from_a_job_private_tree_and_bootstraps_outside_it():
+    for f in sorted((SKY / "jobs").glob("*.yaml")):
+        t = f.read_text()
+        tasks = t.count("\nsetup: |")
+        assert t.count('JOB_SRC=/workspace/jobs/src/$(hostname)') == tasks >= 1, f.name        # uid 1000 can't write the synced tree
+        assert t.count("export SRC=/workspace/jobs/src/$(hostname)") == tasks, f.name
+        for line in (ln for ln in t.replace("\\\n", " ").splitlines() if "pod_bootstrap.sh" in ln):
+            assert "env -u REPO" in line and re.search(r'--out "?/workspace/jobs/', line), (f.name, line)
+    capture = (SKY / "jobs" / "port-capture.yaml").read_text()
+    assert "pod_bootstrap.sh --cpu --out" in capture                                           # a capture needs no native taps
+
+
+def test_submit_names_the_tools_it_is_missing(tmp_path):
+    import os
+    import shutil
+    import subprocess
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("bash", "git", "python3", "ssh", "curl", "dirname", "sed", "cat", "tr", "head", "awk", "grep"):
+        if path := shutil.which(tool):
+            os.symlink(path, bin_dir / tool)
+    r = subprocess.run(["bash", str(SKY / "submit.sh"), "prover-dev", "x", "--allow-stale"], capture_output=True, text=True,
+                       env={"PATH": str(bin_dir), "HOME": str(tmp_path)})
+    assert r.returncode == 2 and "missing on this machine: uv rsync" in r.stderr
+
+
+def test_submit_refuses_templates_that_differ_from_infra_nebius(tmp_path):
+    import os
+    import shutil
+    import subprocess
+    rel = "tools/research/src/research/pods/nebius/sky"
+    git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], check=True, capture_output=True, text=True).stdout  # noqa: E731
+    work = tmp_path / "work"
+    shutil.copytree(SKY, work / rel, ignore=shutil.ignore_patterns("__pycache__"))
+    git(tmp_path, "init", "-q", "--bare", "origin.git")
+    git(work.parent, "init", "-q", "-b", "infra/nebius", str(work))
+    for k, v in (("user.email", "t@example.com"), ("user.name", "t")):
+        git(work, "config", k, v)
+    git(work, "add", "-A")
+    git(work, "commit", "-qm", "shared infra")
+    git(work, "remote", "add", "origin", str(tmp_path / "origin.git"))
+    git(work, "push", "-q", "origin", "infra/nebius")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("bash", "git", "python3", "ssh", "curl", "dirname", "sed", "cat", "tr", "head", "awk", "grep", "realpath", "ls", "uv"):
+        if path := shutil.which(tool):
+            os.symlink(path, bin_dir / tool)
+    env = {"PATH": str(bin_dir), "HOME": str(tmp_path)}                    # no rsync: a submission that passes the check stops at it
+
+    def submit(*args):
+        return subprocess.run(["bash", str(work / rel / "submit.sh"), "prover-dev", "x", *args], capture_output=True, text=True, env=env)
+
+    r = submit()
+    assert r.returncode == 2 and "missing on this machine" in r.stderr and "STALE" not in r.stderr, r.stderr
+    tip = git(work, "log", "-1", "--format=%h").strip()
+    template = work / rel / "jobs" / "prover-dev.yaml"
+    template.write_text(template.read_text().replace("cpus: 8", "cpus: 9"))
+    r = submit()
+    assert r.returncode == 3 and "STALE TEMPLATES" in r.stderr and "jobs/prover-dev.yaml" in r.stderr and tip in r.stderr
+    r = submit("--allow-stale")
+    assert r.returncode == 2 and "--allow-stale: submitting anyway" in r.stderr
+    git(work, "checkout", "-q", "--", ".")
+    (work / rel / "jobs" / "mine.yaml").write_text("name: mine\n")
+    r = subprocess.run(["bash", str(work / rel / "submit.sh"), "mine", "x"], capture_output=True, text=True, env=env)
+    assert r.returncode == 3 and "not on origin/infra/nebius (a private copy)" in r.stderr
+    other = tmp_path / "other"                                            # the shared branch moves on: this checkout is behind
+    git(tmp_path, "clone", "-q", "-b", "infra/nebius", str(tmp_path / "origin.git"), str(other))
+    for k, v in (("user.email", "t@example.com"), ("user.name", "t")):
+        git(other, "config", k, v)
+    (other / rel / "jobs" / "prover-bench.yaml").write_text("changed upstream\n")
+    git(other, "commit", "-qam", "a newer template")
+    git(other, "push", "-q", "origin", "infra/nebius")
+    r = submit()
+    assert r.returncode == 3 and "a newer template" in r.stderr and "git merge origin/infra/nebius" in r.stderr
+
+
+def test_every_task_has_the_venvs_tools_on_path_and_captures_skip_the_flashinfer_sampler():
+    for f in sorted((SKY / "jobs").glob("*.yaml")):
+        t = f.read_text()
+        runs = t.split("\nrun: |\n")[1:]
+        assert runs and all("export PATH=/workspace/jobs/venv312/bin:$PATH" in r.split("\nconfig:")[0] for r in runs), f.name
+    capture = (SKY / "jobs" / "port-capture.yaml").read_text()
+    assert 'VLLM_USE_FLASHINFER_SAMPLER: "0"' in capture.split("\nsecrets:")[0]           # an env default, so --env overrides it
+
+
+def test_a_preempted_job_can_still_publish_its_attempt():
+    for f in sorted((SKY / "jobs").glob("*.yaml")):
+        t = f.read_text()
+        tasks = t.count("\nrun: |")
+        assert t.count("terminationGracePeriodSeconds: 300") == tasks, f.name        # the default 30 s killed a publish mid-way
+        assert t.count("RESEARCH_STORE: /workspace/jobs/store") == tasks, f.name    # the pod's own home dies with the pod
+
+
+def test_backfill_takes_its_credentials_on_stdin_only():
+    import subprocess
+    script = SKY / "backfill_attempts.sh"
+    text = script.read_text()
+    assert "head -n 4 > \"$creds\"" in text and "R2_ENDPOINT=" not in text.replace("export R2_ENDPOINT", "")
+    r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True)
+    assert r.returncode == 2 and "want the 4 credential lines on stdin" in r.stderr
