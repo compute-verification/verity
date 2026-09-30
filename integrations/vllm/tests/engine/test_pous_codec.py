@@ -150,6 +150,93 @@ def test_the_gpu_twin_is_chosen_by_reference_codec():
 
 
 @needs_cuda
+def test_band_twin_matches_the_reference_band_codec(ext):
+    """The band GPU twin (`twins.twin(band.BAND12)`) against `verity_pous.band.BAND12` on a short segment past the window
+    (block 13 onwards absorb exactly 12 parents): encode, decode, and decode of arbitrary bytes, at the 64 KiB width."""
+    from verity_pous import band as ref
+
+    from verity_vllm.engine.pous import codec, twins
+
+    params = ref.BandParams(15, 65_536 * 8, 12, segments=4)
+    prims = ref.reference(params)
+    encode, decode = twins.twin(ref.BAND12)
+    g = torch.Generator().manual_seed(8)
+    w = torch.randint(0, 256, (1, 15, 65_536), dtype=torch.uint8, generator=g)
+    salt = bytes(range(13, 13 + codec.SALT_BYTES))
+    tags = codec.segment_tags(salt, [2], "cuda")
+    c = encode(w.cuda(), tags)
+    assert _rows(c[0]) == ref.BAND12.encode_segment(params, prims, salt, 2, w[0].numpy().tobytes())
+    assert decode(c, tags).cpu().numpy().tobytes() == w[0].numpy().tobytes()
+    junk = torch.randint(0, 256, (1, 15, 65_536), dtype=torch.uint8, generator=g)
+    assert (decode(junk.cuda(), tags).cpu().numpy().tobytes()
+            == ref.BAND12.decode_segment(params, prims, salt, 2, [bytes(r) for r in junk[0].tolist()]))
+
+
+@needs_cuda
+def test_band_window_round_trips(ext):
+    """On the band graph (chain over the last `window` blocks), per-block decode inverts the encode, in any block order, and a
+    window of at least B - 1 is the complete DAG."""
+    from verity_vllm.engine.pous import codec, dense
+
+    g = torch.Generator().manual_seed(9)
+    w = torch.randint(0, 256, (2, 8, 64), dtype=torch.uint8, generator=g).cuda()
+    tags = codec.segment_tags(bytes(range(24)), [0, 1], "cuda")
+    band = dense.encode(w, tags, window=3)
+    assert torch.equal(dense.encode(w, tags, window=7), dense.encode(w, tags))
+    assert not torch.equal(band, dense.encode(w, tags))
+    blocks = torch.tensor([7, 0, 3, 5, 1, 6, 2, 4] * 2, device="cuda")
+    segs = torch.tensor([0] * 8 + [1] * 8, device="cuda")
+    got = dense.decode_blocks(band.view(-1, 64), tags, segs, blocks, 8, window=3)
+    assert torch.equal(got, w[segs, blocks])
+
+
+@needs_cuda
+@pytest.mark.parametrize("split,fused_x,whole", [(False, False, False), (True, False, False), (False, True, False),
+                                                 (False, False, True)])
+@pytest.mark.parametrize("window", [None, 12])
+def test_chunked_decode_matches_row_major(ext, window, split, fused_x, whole):
+    """The chunk-major decode (`dense.CHUNKED`) gives the row-major decode's bits at the secure point's width, dense and band."""
+    from verity_vllm.engine.pous import codec, dense
+
+    g = torch.Generator().manual_seed(10)
+    c = torch.randint(0, 256, (2 * 20, 65_536), dtype=torch.uint8, generator=g).cuda()
+    tags = codec.segment_tags(bytes(range(24)), [0, 1], "cuda")
+    blocks = torch.tensor([19, 0, 3, 12, 13, 1, 18, 7] * 2, device="cuda")
+    segs = torch.tensor([0] * 8 + [1] * 8, device="cuda")
+    want = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
+    dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = True, 1, 32, split
+    dense.CHUNKED_FUSED_X[0], dense.CHUNKED_WHOLE[0], dense.CHUNKED_SPLIT_MAX_ROWS[0] = fused_x, whole, 1 if whole else 9_500
+    try:
+        got = dense.decode_blocks(c, tags, segs, blocks, 20, window=window)
+    finally:
+        dense.CHUNKED[0], dense.CHUNKED_MIN_ROWS[0], dense.CHUNKED_THREADS[0], dense.CHUNKED_SPLIT[0] = False, 1024, 128, False
+        dense.CHUNKED_FUSED_X[0], dense.CHUNKED_WHOLE[0], dense.CHUNKED_SPLIT_MAX_ROWS[0] = False, False, 9_500
+    assert torch.equal(got, want)
+
+
+@needs_cuda
+def test_feistel_kernels_agree(ext):
+    """The one-warp, one-thread, word-I/O and fused Feistel kernels give the same bits on Π₂ at both schemes' widths, and at a
+    width whose half is a whole number of Keccak blocks."""
+    from verity_vllm.engine.pous import codec
+
+    g = torch.Generator().manual_seed(6)
+    for width in (2 * 65_536 + 64, 2 * codec.M + 64, 2 * 136 * 8):
+        x = torch.randint(0, 256, (37, width), dtype=torch.uint8, generator=g).cuda()
+        empty = x.new_empty((37, 0))
+        outs = []
+        for thread_rows, words, fused, pair, co in ((0, False, False, False, False), (1, False, False, False, False),
+                                                    (1, True, False, False, False), (1, True, True, False, False),
+                                                    (1, True, True, True, False), (1, True, True, False, True)):
+            y = x.clone()
+            ext.feistel_rows(y, empty, codec.PI_DOMAIN, False, thread_rows, words, fused, pair, 1 << 62, co)
+            outs.append(y)
+        assert all(torch.equal(outs[0], o) for o in outs[1:]), width
+        ext.feistel_rows(outs[2], empty, codec.PI_DOMAIN, True, 1, True, True, True)
+        assert torch.equal(outs[2], x)
+
+
+@needs_cuda
 def test_dense_twin_matches_the_reference_dense_codec(ext):
     """The dense GPU twin against `verity_pous.dense.DENSE` on short segments (the chain is the same at every length): encode,
     decode, and decode of arbitrary bytes, at the 64 KiB width."""
@@ -174,22 +261,20 @@ def test_dense_twin_matches_the_reference_dense_codec(ext):
 
 # --- the twins, keyed by scheme id and gated by the scheme's pinned vector ---------------------------------------------------
 
-def test_twins_are_keyed_by_the_protocols_scheme_ids_and_the_band_has_a_reference():
+def test_twins_are_keyed_by_the_protocols_scheme_ids():
     """Every twin is registered under a `verity_pous.schemes` id whose reference codec it computes, at the scheme's registered
-    geometry; the band's reference and primitives are here, its GPU twin fails closed until the band kernels, and so does
-    every scheme without a twin (P2)."""
+    geometry, with its reference primitives; a scheme without a twin (P2) fails closed."""
     from verity_pous import schemes
 
     from verity_vllm.engine.pous import twins
 
-    assert set(twins.TWINS) == {"p3/v1", "dense-chain/v1"} and set(twins.TWINS) < set(schemes.REGISTRY)
-    for sid in [*twins.TWINS, "band-chain/d12/v1"]:
+    assert set(twins.TWINS) == {"p3/v1", "dense-chain/v1", "band-chain/d12/v1"} and set(twins.TWINS) < set(schemes.REGISTRY)
+    for sid in twins.TWINS:
         ref, geo = twins.reference(sid)
         assert ref.name == sid and schemes.get(sid).params == geo
         assert twins.primitives(ref, geo) is not None
-    for sid in ("band-chain/d12/v1", "p2-16448/v2"):
-        with pytest.raises(NotImplementedError, match="no GPU twin"):
-            twins.of(sid)
+    with pytest.raises(NotImplementedError, match="no GPU twin"):
+        twins.of("p2-16448/v2")
 
 
 def test_the_gate_inputs_are_the_pinned_vectors_generators():
@@ -203,6 +288,9 @@ def test_the_gate_inputs_are_the_pinned_vectors_generators():
     assert (w, salt, n) == (pinned("w/220/2384/12/1", OPERATING_POINT.w_bytes), pinned("salt", 24), OPERATING_POINT.blocks_per_segment)
     w, salt, n = twins.vector_input("dense-chain/v1")
     assert n == 16 and w[:16 * 65_536] == pinned("dense-w", 16 * 65_536) and w[16 * 65_536:] == bytes(496 * 65_536)
+    w, salt, n = twins.vector_input("band-chain/d12/v1")
+    band = twins.reference("band-chain/d12/v1")[1]
+    assert (w, salt, n) == (pinned("band-segment-w", band.segment_bytes), pinned("salt", 24), band.blocks_per_segment)
     vectors = json.loads(twins.VECTORS.read_text())
     assert {t.vector for t in twins.TWINS.values()} <= set(vectors)
 
@@ -229,3 +317,43 @@ def test_the_gate_refuses_a_twin_that_misses_its_pinned_vector():
     assert rep["digest"] == want and rep["blocks"] == 16
     with pytest.raises(twins.GateError, match="does not reproduce"):
         twins.gate("dense-chain/v1", "cpu", encode=lambda seg, tags: encode(seg, tags, flip=True), **kw)
+
+
+def test_the_band_gate_pins_the_whole_segment():
+    """The band's gate on a small band instance, with the reference as a stand-in twin: every block of the segment is pinned,
+    so a flipped bit in the last block refuses as well as one in the first."""
+    from verity_pous import band as ref
+
+    from verity_vllm.engine.pous import twins
+
+    params = ref.BandParams(16, 64 * 8, 12)
+    w, salt, n = twins.vector_input("band-chain/d12/v1", params)
+    want = hashlib.sha256(b"".join(ref.BAND12.encode_segment(params, ref.reference(params), salt, 0, w))).hexdigest()
+
+    def encode(seg, tags, flip=None):
+        blocks = ref.BAND12.encode_segment(params, ref.reference(params), tags, 0, seg[0].numpy().tobytes())
+        out = torch.frombuffer(bytearray(b"".join(blocks)), dtype=torch.uint8).view(1, params.blocks_per_segment, -1).clone()
+        if flip is not None:
+            out[0, flip, 0] ^= 1
+        return out
+
+    kw = {"tags": lambda s, segs, device: s, "params": params, "vectors": {"band/64kb/segment": want}}
+    assert twins.gate("band-chain/d12/v1", "cpu", encode=encode, **kw)["blocks"] == n == 16
+    for block in (0, 15):
+        with pytest.raises(twins.GateError, match="does not reproduce"):
+            twins.gate("band-chain/d12/v1", "cpu", encode=lambda seg, tags, b=block: encode(seg, tags, flip=b), **kw)
+
+
+def test_the_kernel_settings_set_the_dispatch_switches():
+    from verity_vllm.engine.pous import codec, dense, twins
+
+    before = twins.set_kernels({})
+    try:
+        now = twins.set_kernels({"thread_rows": 500, "word_io": 1, "chunked": True, "chunked_threads": 64, "whole_chain": True})
+        assert now["thread_rows"] == codec.THREAD_ROWS[0] == 500 and codec.WORD_IO[0] is True
+        assert dense.CHUNKED[0] is True and dense.CHUNKED_THREADS[0] == 64 and dense.CHUNKED_WHOLE[0] is True
+        with pytest.raises(ValueError, match="unknown kernel settings"):
+            twins.set_kernels({"turbo": True})
+    finally:
+        twins.set_kernels(before)
+    assert twins.set_kernels({}) == before

@@ -18,7 +18,8 @@ Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
   layer holding it), and the responder started last.  Uninstall runs newest first: responder, wrappers, then ``W`` restored.
 * **The codec** (settings ``codec``): ``reference`` encodes and decodes with the scheme's reference on the CPU, and answers
   in process; ``gpu`` keeps ``C`` in device memory and uses the scheme's GPU twin (`engine/pous/twins.py`, keyed by the
-  scheme id), which must first reproduce the scheme's pinned vector (`twins.gate`); a forward's first wrapped use decodes all
+  scheme id; ``kernels`` sets its dispatch switches, `twins.set_kernels`), which must first reproduce the scheme's pinned
+  vector (`twins.gate`); a forward's first wrapped use decodes all
   of ``C`` on the device in one batch, each layer computes with a view of it, and after the forward's last use the decoded
   copy is zeroed (``decode_group: all``); with ``port`` set the native responder (`engine/pous/pous_native.cu`) answers
   challenges from ``C`` in device memory on its own socket and core (``host``, ``port``, ``responder_cpu``).
@@ -30,7 +31,7 @@ Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
 * **Weights of record:** `Installed.weights` (``decoded``) returns the released plaintext by ``named_parameters`` name,
   tied names mapped to one tensor, which the Commit's replay reads (`protocol_options.weights_view`).
 
-What is not here yet: the band's GPU twin (it comes with the band kernels), and TP.
+What is not here yet: TP.
 """
 from __future__ import annotations
 
@@ -46,8 +47,8 @@ from verity_vllm.protocol_options.interface import Context, Option, Target
 
 NAME = "pous"
 DEFAULT_SCHEME = "band-chain/d12/v1"
-SETTINGS = ("salt_source", "salt", "codec", "build_dir", "host", "port", "responder_cpu", "drop_fraction", "drop_source",
-            "decode_group", "experimental")
+SETTINGS = ("salt_source", "salt", "codec", "build_dir", "kernels", "host", "port", "responder_cpu", "drop_fraction",
+            "drop_source", "decode_group", "experimental")
 CODECS = ("reference", "gpu")
 COVERS = "linears"
 SALT_BYTES = 24
@@ -84,8 +85,11 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
             out.append(str(e))
         if not own.get("build_dir"):
             out.append("codec gpu needs build_dir, where the native kernels are built")
-    elif own.get("port") is not None:
-        out.append("port: the native responder serves C from device memory, so it needs codec gpu")
+        kernels = own.get("kernels", {})
+        if not isinstance(kernels, Mapping) or set(kernels) - set(twins.KERNEL_FLAGS):
+            out.append(f"kernels: a mapping of the kernel settings {', '.join(twins.KERNEL_FLAGS)}")
+    elif own.get("port") is not None or own.get("kernels"):
+        out.append("port and kernels: the native responder and the kernels serve C from device memory, so they need codec gpu")
     salt = own.get("salt")
     if salt is not None and (not isinstance(salt, str) or len(salt) != 2 * SALT_BYTES
                              or any(c not in "0123456789abcdef" for c in salt.lower())):
@@ -344,6 +348,7 @@ def _device_store(layout: Any, scheme: Any, w: bytes, commitment: bytes, own: Ma
     if twin is None:
         from verity_vllm.engine.pous import codec, native, twins
         native.load(own["build_dir"])
+        twins.set_kernels(dict(own.get("kernels") or {}))
         device = torch.device("cuda", torch.cuda.current_device())
         twin, tags, gate = twins.of(scheme.name).load(), codec.segment_tags, twins.gate
     gated = gate(scheme.name, device)

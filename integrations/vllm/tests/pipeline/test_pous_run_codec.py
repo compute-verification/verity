@@ -42,7 +42,7 @@ class Model:
 def _args(out, scheme: str = BAND, prefill: str = "", decode_tokens: int = 0, **kw) -> types.SimpleNamespace:
     return types.SimpleNamespace(**{"out": str(out), "case": "TOY", "build_dir": str(out / "build"), "scheme": scheme, "workers": 2,
                                     "tag": "honest", "drop_fraction": 0.0, "responder_cpu": None, "prefill": prefill,
-                                    "decode_tokens": decode_tokens, **kw})
+                                    "decode_tokens": decode_tokens, "kernels": "", **kw})
 
 
 @pytest.fixture
@@ -82,11 +82,12 @@ def test_the_verifier_roles_encode_and_audit_under_the_band(toy):
 def test_the_served_store_is_the_gpu_codec_under_the_verifiers_salt_and_the_default_is_the_band(toy):
     out, _, _ = toy
     (out / "salt.json").write_text(json.dumps({"salt": "00" * 24}))
-    own = pous_run.serve_config(_args(out, drop_fraction=0.1, responder_cpu=3), out)["pous"]
+    own = pous_run.serve_config(_args(out, drop_fraction=0.1, responder_cpu=3, kernels='{"chunked": true, "thread_rows": 500}'), out)["pous"]
     assert own["codec"] == "gpu" and own["salt"] == "00" * 24 and own["port"] == 0 and own["drop_fraction"] == 0.1
     assert own["responder_cpu"] == 3 and own["build_dir"] == str(out / "build") and set(own) <= set(pous.SETTINGS)
-    assert pous_run._base(_args(out, prefill="2048x4", decode_tokens=4))[-6:] == [
-        "--scheme", BAND, "--prefill", "2048x4", "--decode-tokens", "4"]
+    assert own["kernels"] == {"chunked": True, "thread_rows": 500} and "kernels" not in pous_run.serve_config(_args(out), out)["pous"]
+    assert pous_run._base(_args(out, prefill="2048x4", decode_tokens=4))[-8:] == [
+        "--scheme", BAND, "--prefill", "2048x4", "--decode-tokens", "4", "--kernels", ""]
     default = {f.name: f.default for f in dataclasses.fields(pous_run.COMMANDS["e2e"])}["scheme"]
     assert default == BAND == pous.DEFAULT_SCHEME
     common = ["--out", str(out), "--case", "TOY", "--build-dir", str(out)]

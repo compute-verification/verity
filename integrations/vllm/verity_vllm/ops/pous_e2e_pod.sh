@@ -11,6 +11,8 @@ TREE=$(pwd); O=$RESEARCH_RUN_DIR; WORK=${WORK:-/workspace}
 SCHEME=${SCHEME:-band-chain/d12/v1}; CASE=${CASE:-QWEN05}; AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-12}
 # prefill and decode-batch-1 slowdowns against plain serving (pous-bench's method)
 PREFILL=${PREFILL:-2048x4}; DECODE_TOKENS=${DECODE_TOKENS:-4}
+# the band's run of record's kernel settings (r20260928-045955-1d02, pous-decode-bench), engine/pous/twins.KERNEL_FLAGS
+KERNELS=${KERNELS:-'{"thread_rows": 500, "word_io": true, "fused": true, "pair": true, "pair_max_rows": 7500, "chunked": true, "chunked_threads": 64, "split": true, "fused_x": true, "whole_chain": true}'}
 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader || true
 (cd integrations/vllm && bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "$CASE" --out "$O/bootstrap") > "$O/bootstrap.log" 2>&1 \
   || { tail -30 "$O/bootstrap.log"; exit 3; }
@@ -30,4 +32,5 @@ if [ "$DRV" -lt 575 ]; then
 fi
 exec verity-vllm pous e2e --out "$O/pous" --case "$CASE" --scheme "$SCHEME" --build-dir "$WORK/pous_build" \
   --result "$O/result.json" --run-id "$RESEARCH_RUN_ID" --verifier-cpu 3 --responder-cpu 2 --pings 5000 --audits "$AUDITS" \
-  --max-tokens 6 --workers "$WORKERS" --prefill "$PREFILL" --decode-tokens "$DECODE_TOKENS"
+  --max-tokens 6 --workers "$WORKERS" --prefill "$PREFILL" --decode-tokens "$DECODE_TOKENS" \
+  --kernels "$KERNELS"

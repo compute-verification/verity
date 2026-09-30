@@ -205,6 +205,8 @@ def serve_config(a, out: Path) -> dict[str, Any]:
     """The option's settings for the served store: the GPU codec, the verifier's salt, the native responder, the drop."""
     own: dict[str, Any] = {"codec": "gpu", "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "host": "127.0.0.1",
                            "port": 0, "drop_fraction": a.drop_fraction, "drop_source": os.urandom(32).hex()}
+    if a.kernels:
+        own["kernels"] = json.loads(a.kernels)
     if a.responder_cpu is not None:
         own["responder_cpu"] = a.responder_cpu
     return {"pous": own}
@@ -281,7 +283,7 @@ def _step(out: Path, name: str, args: list[str]) -> None:
 
 def _base(a) -> list[str]:
     return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--scheme", a.scheme, "--prefill", a.prefill,
-            "--decode-tokens", str(a.decode_tokens)]
+            "--decode-tokens", str(a.decode_tokens), "--kernels", a.kernels]
 
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
@@ -414,6 +416,8 @@ class _Common:
                                 help="decode steps the honest serve role times at batch 1 (plain: 64); 0 times no decode")
     scheme: str = option("--scheme", "--codec", default="band-chain/d12/v1",
                          help="the verity_pous scheme served and audited, one with a GPU twin (engine/pous/twins.py)")
+    kernels: str = option("--kernels", default="", help="the served kernels' dispatch settings as JSON (engine/pous/twins.KERNEL_FLAGS), "
+                          "e.g. the band's run of record's")
     tag: str = option("--tag", default="honest", help="the server round: honest or dropped")
     max_tokens: int = option("--max-tokens", type=int, default=6, help="tokens per prompt of the compared generation")
     load_tokens: int = option("--load-tokens", type=int, default=2, help="tokens per prompt of the serving loop during the audit")

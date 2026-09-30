@@ -1,10 +1,10 @@
-"""`verity-vllm pous-dense-bench`: the frozen dense-decode benchmark (POUS `docs/dense-decode-benchmark.md`).
+"""`verity-vllm pous-decode-bench`: the frozen decode benchmark (POUS `docs/dense-decode-benchmark.md`).
 
-    verity-vllm pous-dense-bench --out DIR --shapes workloads/dense_decode_shapes.json --build-dir DIR [--models M] [--reps 3]
+    verity-vllm pous-decode-bench --out DIR --shapes workloads/dense_decode_shapes.json --build-dir DIR [--scheme ID] [--models M] [--reps 3]
 
-Scheme: the reference codec `--codec` at its point (`twins.reference`): `dense-chain/v1` (`dense.DENSE` at `dense.POINT_64K`,
-512 blocks of 64 KiB per segment, the complete DAG) or `band-chain/d12/v1` (`band.BAND12` at `band.SECURE_FIRST`, the same
-chain over the band of in-degree 12).  Workload: each model's linear
+Scheme: the `verity_pous.schemes` id `--scheme` (``--codec`` is the same flag) at its registered point (`twins.reference`):
+`band-chain/d12/v1` by default (`band.BAND12` at `band.SECURE_FIRST`, the chain over the band of in-degree 12) or
+`dense-chain/v1` (`dense.DENSE` at `dense.POINT_64K`, 512 blocks of 64 KiB per segment, the complete DAG).  Workload: each model's linear
 weights (vLLM's merged shapes, bf16) laid out back to back into segments; one model pass decodes every tile's blocks of `C`
 (`dense.decode_blocks`, on the device clock), then runs each shape's `y = x W^T` at T = 1, 8, 32 and 2048 tokens on its fresh
 weight, against the same GEMMs from plaintext weights.  `C` is pseudo-random bytes (any `C` is the encoding of its decode) under a fixed salt.
@@ -38,8 +38,9 @@ class Options:
     """the frozen dense-decode microbenchmark: encoded tile -> plaintext -> GEMM, against plaintext GEMMs"""
 
     out: str = option("--out", required=True, help="where dense-bench.json goes")
-    codec: str = option("--codec", default="dense-chain/v1", help="the reference codec benchmarked (twins.reference): its geometry "
-                        "and graph (the complete DAG, or a band of in-degree d) fix the scheme")
+    scheme: str = option("--scheme", "--codec", default="band-chain/d12/v1",
+                         help="the verity_pous scheme benchmarked (twins.reference): its geometry and graph (the complete DAG, "
+                         "or a band of in-degree d)")
     shapes: str = option("--shapes", required=True, help="the workload's shapes (integrations/vllm/workloads/dense_decode_shapes.json)")
     build_dir: str = option("--build-dir", required=True, help="parent directory of the pous_native JIT build")
     models: str = option("--models", default="", help="models of workloads/dense_decode_shapes.json, comma separated (default all)")
@@ -302,7 +303,7 @@ def live_audit(c, segments: int, salt: bytes, decode_pass, out: Path, audits: in
     throttled = [_cgroup_cpu()]
     responder = native.ext().Responder(c.data_ptr(), c.shape[0], c.shape[1], torch.cuda.current_device(), "127.0.0.1", 0, 2)
     responder.start()
-    (out / "audit-ready.json").write_text(json.dumps({"port": responder.port(), "salt": salt.hex(), "codec": SCHEME[0].name,
+    (out / "audit-ready.json").write_text(json.dumps({"port": responder.port(), "salt": salt.hex(), "scheme": SCHEME[0].name,
                                                      "segments": segments}))
     proc = subprocess.Popen([sys.executable, "-m", "verity_vllm.pipeline.cli", "pous-dense-audit", "--ready", str(out / "audit-ready.json"),
                              "--leaves", str(out / "leaves-audit.bin"), "--out", str(out / "audit.json"), "--k", str(k),
@@ -585,9 +586,9 @@ def main(a: Options) -> int:
     dense.CHUNKED_SPLIT[0] = a.split
     dense.CHUNKED_FUSED_X[0] = a.fused_x
     dense.CHUNKED_WHOLE[0] = a.whole
-    SCHEME[:] = [Scheme.of(a.codec)]
+    SCHEME[:] = [Scheme.of(a.scheme)]
     doc: dict[str, Any] = {"options": dataclasses.asdict(a), "device": device_facts(), "gates": {"vectors": gate_vectors(SCHEME[0])},
-                           "scheme": {"codec": a.codec, "geometry": SCHEME[0].geometry.manifest(), "window": SCHEME[0].window}}
+                           "scheme": {"codec": a.scheme, "geometry": SCHEME[0].geometry.manifest(), "window": SCHEME[0].window}}
     if a.segment_vector:
         doc["gates"]["segment_vector"] = gate_segment_vector(SCHEME[0])
     salt = bytes(range(24))
@@ -633,8 +634,8 @@ def main(a: Options) -> int:
                                      "pair": a.pair, "pair_max_rows": a.pair_max_rows, "coalesced": a.coalesced,
                                      "chunked": a.chunked, "chunked_threads": a.chunked_threads, "split": a.split,
                                      "fused_x": a.fused_x, "whole_chain": a.whole,
-                                     "codec": a.codec, "window": SCHEME[0].window},
-            "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-dense-bench gates",
+                                     "codec": a.scheme, "window": SCHEME[0].window},
+            "validation": {"status": "passed" if passed else "failed", "checker": "verity-vllm pous-decode-bench gates",
                            "detail": json.dumps({k: v["passed"] for k, v in doc["gates"].items()}), "evidence": ["dense-bench.json"]},
             "measurements": rows, "measurement_files": ["dense-bench.json"], "artifacts": ["dense-bench.json"]}, indent=1))
     return 0 if passed else 1

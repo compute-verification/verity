@@ -1,14 +1,18 @@
 """The GPU twins, keyed by the protocol's scheme id (`verity_pous.schemes`), each gated by that scheme's pinned vector.
 
 A twin is the GPU `(encode, decode)` of a scheme's reference codec, on `[G, blocks per segment, block bytes]` segments and
-`[G, 32]` tags (`codec.segment_tags`): `engine/pous/codec.py` for ``p3/v1`` and `engine/pous/dense.py` for
-``dense-chain/v1``.  The band (``band-chain/d12/v1``) has a reference here; its twin comes with the band kernels.  Any other
-scheme fails closed.
+`[G, 32]` tags (`codec.segment_tags`): `engine/pous/codec.py` for ``p3/v1``, and `engine/pous/dense.py` for
+``dense-chain/v1`` and for ``band-chain/d12/v1`` (the same chain over the band of in-degree 12).  Any other scheme fails
+closed.
 
 Before a twin serves, `gate` encodes the input of the scheme's pinned vector (`protocols/pous/tests/fixtures/vectors.json`,
 the file `verity_pous`'s own tests check the reference against) on the device and compares the digest: a whole segment at the
-served geometry for ``p3/v1`` (``segment_64kb``), the first 16 blocks of one for ``dense-chain/v1`` (``dense/64kb/prefix16``,
-which depend on those 16 blocks only).  A twin that does not reproduce its vector refuses to serve.
+served geometry for ``p3/v1`` (``segment_64kb``) and for ``band-chain/d12/v1`` (``band/64kb/segment``), the first 16 blocks
+of one for ``dense-chain/v1`` (``dense/64kb/prefix16``, which depend on those 16 blocks only).  A twin that does not reproduce
+its vector refuses to serve.
+
+`set_kernels` sets the kernels' dispatch switches (`KERNEL_FLAGS`, `codec` and `dense`'s); every setting computes the same
+bits, and the gate runs after it.
 
 `reference` and `primitives` import no torch, so the verifier's roles use them too; `twin` and `gate` import the kernels.
 """
@@ -73,6 +77,12 @@ def _dense() -> tuple[Callable, Callable]:
     return dense.encode, dense.decode
 
 
+def _band() -> tuple[Callable, Callable]:
+    from verity_vllm.engine.pous import dense
+    d = band_ref.SECURE_FIRST.d
+    return (lambda w, tags: dense.encode(w, tags, d)), (lambda c, tags: dense.decode_segments(c, tags, d))
+
+
 @dataclass(frozen=True)
 class Twin:
     """A scheme's GPU twin: its kernels (`load`), the pinned vector it must reproduce, how many leading blocks of a segment
@@ -88,7 +98,31 @@ class Twin:
 TWINS: dict[str, Twin] = {
     P3.name: Twin(P3.name, _p3, "segment_64kb", None, lambda p: f"w/{p.n}/{p.wc}/{p.k}/{p.segments}"),
     dense_ref.DENSE.name: Twin(dense_ref.DENSE.name, _dense, "dense/64kb/prefix16", 16, lambda p: "dense-w"),
+    band_ref.BAND12.name: Twin(band_ref.BAND12.name, _band, "band/64kb/segment", None, lambda p: "band-segment-w"),
 }
+
+#: setting -> (module, switch, type): the kernels' dispatch switches a serving run may set (#188's serve-spec keys)
+KERNEL_FLAGS: dict[str, tuple[str, str, type]] = {
+    "thread_rows": ("codec", "THREAD_ROWS", int), "word_io": ("codec", "WORD_IO", bool), "fused": ("codec", "FUSED", bool),
+    "pair": ("codec", "PAIR", bool), "pair_max_rows": ("codec", "PAIR_MAX_ROWS", int), "coalesced": ("codec", "COALESCED", bool),
+    "chunked": ("dense", "CHUNKED", bool), "chunked_threads": ("dense", "CHUNKED_THREADS", int),
+    "split": ("dense", "CHUNKED_SPLIT", bool), "fused_x": ("dense", "CHUNKED_FUSED_X", bool),
+    "whole_chain": ("dense", "CHUNKED_WHOLE", bool),
+}
+
+
+def set_kernels(flags: dict[str, Any]) -> dict[str, Any]:
+    """Set the switches `flags` names (`KERNEL_FLAGS`); every switch as it now is."""
+    from verity_vllm.engine.pous import codec, dense
+
+    unknown = sorted(set(flags) - set(KERNEL_FLAGS))
+    if unknown:
+        raise ValueError(f"unknown kernel settings {unknown} (known: {', '.join(KERNEL_FLAGS)})")
+    mods = {"codec": codec, "dense": dense}
+    for key, value in flags.items():
+        mod, switch, typ = KERNEL_FLAGS[key]
+        getattr(mods[mod], switch)[0] = typ(value)
+    return {key: getattr(mods[mod], switch)[0] for key, (mod, switch, _) in KERNEL_FLAGS.items()}
 
 
 def of(scheme: str) -> Twin:

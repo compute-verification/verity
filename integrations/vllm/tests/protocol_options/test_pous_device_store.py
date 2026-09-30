@@ -157,9 +157,12 @@ def test_codec_gpu_serves_through_the_hooks_and_answers_from_the_device_store(mo
 def test_the_gpu_codec_refuses_what_it_cannot_run():
     got = lambda scheme, **own: pous.refusals(scheme, _ctx(f"pous:{scheme}", settings={"pous": own}))  # noqa: E731
     assert got(DENSE, codec="gpu", build_dir="/b") == ()
-    assert any("no GPU twin of the scheme 'band-chain/d12/v1'" in r for r in got(BAND, codec="gpu", build_dir="/b"))
+    assert got(BAND, codec="gpu", build_dir="/b", kernels={"chunked": True, "thread_rows": 500}) == ()
+    assert any("no GPU twin of the scheme 'p2-16448/v2'" in r for r in got("p2-16448/v2", codec="gpu", build_dir="/b"))
     assert any("needs build_dir" in r for r in got(DENSE, codec="gpu"))
-    assert any("needs codec gpu" in r for r in got(DENSE, port=0))
+    assert any("need codec gpu" in r for r in got(DENSE, port=0))
+    assert any("need codec gpu" in r for r in got(DENSE, kernels={"chunked": True}))
+    assert any("kernels: a mapping" in r for r in got(BAND, codec="gpu", build_dir="/b", kernels={"turbo": 1}))
     assert any("codec 'tpu'" in r for r in got(DENSE, codec="tpu"))
     assert any("salt" in r for r in got(DENSE, salt="00"))
     assert any("drop_fraction" in r for r in got(DENSE, drop_fraction=1.5))

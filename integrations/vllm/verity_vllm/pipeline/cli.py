@@ -62,6 +62,8 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "padding-steps": ("verity_vllm.commit.padding_steps", "inactive rows of a padded Commit"),
     "pous": ("verity_vllm.pipeline.pous_run", "POUS end to end through the protocol option: serve from C on the GPU, audit the live server"),
+    "pous-decode-bench": ("verity_vllm.pipeline.pous_decode_bench", "the frozen decode microbenchmark of a POUS scheme (--scheme)"),
+    "pous-dense-audit": ("verity_vllm.pipeline.pous_dense_audit", "the verifier of a timed audit against pous-decode-bench's live responder"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
