@@ -77,11 +77,12 @@ def setupH_templateTableClass : TableClass ((setupH_templateLayout ht h hr).2.2.
       rw [order_getD_inCols htake hw]
       have hget : (k.done.getD k.unit default).inCols.getD c.val 0 = (k.done.getD k.unit default).inCols[c.val] := by
         generalize k.done.getD k.unit default = u at hw ⊢
+        intro hw
         simp [Array.getD, hw]
       rw [hget]
     have hpos : templateCopyPos ht h hr regs g c.val = ⟨Typed.copySrc st.c g c.val, setupH_copySrc_lt ht h hr g.isLt hw⟩ := by
       unfold templateCopyPos
-      exact dite_cond_eq_true (eq_true hw)
+      exact dite_eq_left_of_eq_true (eq_true hw)
     show ((setupH_templateLayout ht h hr).2.2.model regs).block z o (composePlace _ _ (ofBlock_ordered k.hd)
         (Typed.col st.c (HmRow.blockOf t) g)
         (((setupH_templateLayout ht h hr).2.2.blockFacts k.hd (unit_lt k.hd) (unitShape_of_class k) regs g.isLt
