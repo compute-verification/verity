@@ -12,6 +12,12 @@ mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them. 
 same bytes with SHA-512, so its domain id, leaves, pads, nodes and roots are 64 bytes, and its domain id absorbs the positions'
 SHA-512 identity (``frame_v3/PROTOCOL.md`` §6).  ``binding`` stays the caller's 32-byte SHA-256 identity digest until the
 re-baseline moves identities to SHA-512.
+
+A domain with ``hash="blake3"`` (``frame-b3``) is a tree mode for latency: its domain id is BLAKE3 over the same framed domain
+message, and every leaf, node, pad and empty root is BLAKE3 keyed by that id over a compact message, so that a node is two
+compressions and a leaf streams its value through BLAKE3's own chunk tree (a 32 KB value: 32 chunks in parallel, then 5 parent
+levels).  The messages, integers little-endian: leaf ``0x01 ‖ u64 rank ‖ u64 position ‖ u16 len(schema) ‖ schema ‖ value``,
+node ``0x02 ‖ u8 level ‖ u64 index ‖ left ‖ right``, pad ``0x03 ‖ u64 rank``, empty ``0x04``.  The SP1 kernel does not mirror it.
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ from dataclasses import dataclass, field
 
 from verity.errors import ProtocolError
 
+from . import blake3 as _blake3
 from .identity import JSONValue
 from .indexed import IndexedDomain, iter_members
 from .limits import VerificationLimits
@@ -40,14 +47,14 @@ def _uint(value: int) -> bytes:
 
 
 def _hash(tag: bytes, *parts: bytes, hash: str = "sha256") -> bytes:
-    digest = sha(hash)()
-    digest.update(_FRAME)
-    digest.update(len(tag).to_bytes(4, "big"))
-    digest.update(tag)
-    for part in parts:
-        digest.update(len(part).to_bytes(8, "big"))
-        digest.update(part)
-    return digest.digest()
+    message = _FRAME + len(tag).to_bytes(4, "big") + tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+    return _blake3.blake3(message) if hash == "blake3" else sha(hash)(message).digest()
+
+
+def blake3_node(domain_id: bytes, level: int, index: int, left: bytes, right: bytes) -> bytes:
+    """A ``frame-b3`` node: two compressions (module docstring)."""
+
+    return _blake3.keyed(domain_id, b"\x02" + level.to_bytes(1, "little") + index.to_bytes(8, "little") + left + right)
 
 
 def merkle_depth(count: int) -> int:
@@ -119,8 +126,9 @@ class CommitmentDomain:
             raise ProtocolError(
                 "owner must be -2 (weights), -1 (boundary) or a replay unit"
             )
-        sha(self.hash)
-        if self.hash == "sha256":
+        if self.hash != "blake3":
+            sha(self.hash)
+        if self.hash in ("sha256", "blake3"):
             positions = bytes.fromhex(self.positions.identity_digest)
         elif hasattr(self.positions, "identity_sha512"):
             positions = self.positions.identity_sha512()
@@ -141,6 +149,8 @@ class CommitmentDomain:
         return DIGEST_BYTES[self.hash]
 
     def leaf(self, rank: int, position: int, schema: str, value: bytes) -> bytes:
+        if self.hash == "blake3":
+            return _blake3.keyed(self.domain_id, self.leaf_prefix(rank, position, schema, len(value)) + value)
         return _hash(
             _LEAF,
             self.domain_id,
@@ -152,8 +162,12 @@ class CommitmentDomain:
         )
 
     def leaf_prefix(self, rank: int, position: int, schema: str, value_len: int) -> bytes:
-        """Every byte of :meth:`leaf`'s message before the value: ``leaf == H(prefix || value)``, H the domain's hash."""
+        """Every byte of :meth:`leaf`'s message before the value: ``leaf == H(prefix || value)``, H the domain's hash
+        (for ``frame-b3``, BLAKE3 keyed by the domain id)."""
 
+        if self.hash == "blake3":
+            name = schema.encode("utf-8")
+            return b"\x01" + rank.to_bytes(8, "little") + position.to_bytes(8, "little") + len(name).to_bytes(2, "little") + name
         parts = (self.domain_id, _uint(rank), _uint(position), schema.encode("utf-8"))
         out = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF
         for part in parts:
@@ -161,9 +175,18 @@ class CommitmentDomain:
         return out + value_len.to_bytes(8, "big")
 
     def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
+        if self.hash == "blake3":
+            return blake3_node(self.domain_id, level, index, left, right)
         return _hash(_NODE, self.domain_id, _uint(level), _uint(index), left, right, hash=self.hash)
 
+    def pad(self, rank: int) -> bytes:
+        if self.hash == "blake3":
+            return _blake3.keyed(self.domain_id, b"\x03" + rank.to_bytes(8, "little"))
+        return _hash(_PAD, self.domain_id, _uint(rank), hash=self.hash)
+
     def empty_root(self) -> bytes:
+        if self.hash == "blake3":
+            return _blake3.keyed(self.domain_id, b"\x04")
         return _hash(_EMPTY, self.domain_id, hash=self.hash)
 
 
@@ -175,7 +198,7 @@ def tree_levels(domain: CommitmentDomain, leaves: Sequence[bytes]) -> tuple[tupl
     if not leaves:
         return ()
     width = 1 << merkle_depth(len(leaves))
-    level = [*leaves, *(_hash(_PAD, domain.domain_id, _uint(rank), hash=domain.hash) for rank in range(len(leaves), width))]
+    level = [*leaves, *(domain.pad(rank) for rank in range(len(leaves), width))]
     levels = [tuple(level)]
     depth = 0
     while len(level) > 1:
