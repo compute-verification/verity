@@ -67,6 +67,10 @@ pass plus a CUDA-core patch of the excess and a skip or patch per k64 atom, at t
 (`split_saving`); less A0's scale corrections, one FFMA per word for each of the M_w blocks whose realised byte is not
 their modal byte (`split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at
 one tile byte, per row, and per block-column class (`int8_saving`), with c_L bc-d9842080's formula (`int8_depth_cost`).
+They are the rows `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2
+charges the masked int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain
+claim `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
+and D-SK stays.
 
 A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
 codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
