@@ -18,7 +18,7 @@ namespace {
 
 constexpr int TM = 256, STAGES = 3, RP = 40, GROUP = 8;
 
-template <int BO, int LATE>
+template <int BO, int LATE, bool FUSE>
 __global__ void __launch_bounds__(nvf4::Mainloop<TM, STAGES, RP, BO, LATE>::NT, 1)
     nvf4_plain(const nvf4::Maps* maps, const uint8_t* sfa, const uint8_t* sfb, uint16_t* D, int M, int N, int K) {
   using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE>;
@@ -26,12 +26,27 @@ __global__ void __launch_bounds__(nvf4::Mainloop<TM, STAGES, RP, BO, LATE>::NT, 
   L ml(smem);
   ml.roles(maps, sfa, sfb, M, N, K, GROUP);
   const int tiles_m = M / TM, tiles_n = N / L::BN, tiles = tiles_m * tiles_n;
-  for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
-    int tm, tn;
-    nvf4::raster(t, tiles_m, tiles_n, GROUP, tm, tn);
+  if constexpr (FUSE) {
     float acc[4][4][2][4];
-    ml.tile(K, acc, t + (int)gridDim.x < tiles);
-    ml.store_bf16(D, N, tm, tn, acc);
+    int ptm = 0, ptn = 0;
+    bool prev = false;
+    for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
+      int tm, tn;
+      nvf4::raster(t, tiles_m, tiles_n, GROUP, tm, tn);
+      ml.tile_bf16(K, acc, t + (int)gridDim.x < tiles, prev, D, N, ptm, ptn);
+      ptm = tm;
+      ptn = tn;
+      prev = true;
+    }
+    if (prev) ml.store_bf16(D, N, ptm, ptn, acc);
+  } else {
+    for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
+      int tm, tn;
+      nvf4::raster(t, tiles_m, tiles_n, GROUP, tm, tn);
+      float acc[4][4][2][4];
+      ml.tile(K, acc, t + (int)gridDim.x < tiles);
+      ml.store_bf16(D, N, tm, tn, acc);
+    }
   }
 }
 
@@ -61,14 +76,14 @@ bool tmap(CUtensorMap* m, const void* ptr, int k, int rows, int box_rows) {
                   CU_TENSOR_MAP_FLOAT_OOB_FILL_NONE) == CUDA_SUCCESS;
 }
 
-template <int BO, int LATE>
+template <int BO, int LATE, bool FUSE>
 struct Prepared : phc_prepared {
   using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE>;
   const nvf4::Maps* maps;
   phc_args a;
   int grid;
   int launch(void* stream) override {
-    nvf4_plain<BO, LATE><<<grid, L::NT, L::SMEM, static_cast<cudaStream_t>(stream)>>>(
+    nvf4_plain<BO, LATE, FUSE><<<grid, L::NT, L::SMEM, static_cast<cudaStream_t>(stream)>>>(
         maps, static_cast<const uint8_t*>(a.sfa), static_cast<const uint8_t*>(a.sfb), static_cast<uint16_t*>(a.D), a.m, a.n, a.k);
     return 0;
   }
@@ -82,7 +97,7 @@ int query(int m, int n, int k, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes)
   return 0;
 }
 
-template <int BO, int LATE>
+template <int BO, int LATE, bool FUSE>
 int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prepared** out) {
   size_t need, sa, sb;
   if (query(a->m, a->n, a->k, &need, &sa, &sb) || ws_bytes < need || (reinterpret_cast<uintptr_t>(ws) & 63) ||
@@ -96,11 +111,11 @@ int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prep
   if (cudaMemcpyAsync(ws, host, sizeof(host), cudaMemcpyHostToDevice, s) != cudaSuccess || cudaStreamSynchronize(s) != cudaSuccess)
     return 4;
   using L = nvf4::Mainloop<TM, STAGES, RP, BO, LATE>;
-  if (cudaFuncSetAttribute(nvf4_plain<BO, LATE>, cudaFuncAttributeMaxDynamicSharedMemorySize, L::SMEM) != cudaSuccess) return 5;
+  if (cudaFuncSetAttribute(nvf4_plain<BO, LATE, FUSE>, cudaFuncAttributeMaxDynamicSharedMemorySize, L::SMEM) != cudaSuccess) return 5;
   int dev = 0, sms = 0;
   if (cudaGetDevice(&dev) != cudaSuccess || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) != cudaSuccess)
     return 6;
-  auto* p = new Prepared<BO, LATE>;
+  auto* p = new Prepared<BO, LATE, FUSE>;
   p->maps = static_cast<const nvf4::Maps*>(ws);
   p->a = *a;
   const int tiles = (a->m / TM) * (a->n / 128);
@@ -110,12 +125,15 @@ int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prep
 }
 
 // _o: B-major MMA order inside a 64-deep step (CUTLASS's); the other A-major.  _e: LATE (a warp that finds the next stage
-// not yet full issues its step's other MMAs before it waits).  The harness times them all and keeps the fastest.
+// not yet full issues its step's other MMAs before it waits).  _ef: _e with each tile's store folded into the next tile's
+// first step (tile_bf16).  The harness times them all and keeps the fastest.
 const phc_entry TABLE[] = {
-    {"verity_nvf4_256x128", 5, 0, query, prepare<0, 0>},
-    {"verity_nvf4_256x128_o", 5, 0, query, prepare<1, 0>},
-    {"verity_nvf4_256x128_e", 5, 0, query, prepare<0, 1>},
-    {"verity_nvf4_256x128_o_e", 5, 0, query, prepare<1, 1>},
+    {"verity_nvf4_256x128", 5, 0, query, prepare<0, 0, false>},
+    {"verity_nvf4_256x128_o", 5, 0, query, prepare<1, 0, false>},
+    {"verity_nvf4_256x128_e", 5, 0, query, prepare<0, 1, false>},
+    {"verity_nvf4_256x128_o_e", 5, 0, query, prepare<1, 1, false>},
+    {"verity_nvf4_256x128_ef", 5, 0, query, prepare<0, 1, true>},
+    {"verity_nvf4_256x128_o_ef", 5, 0, query, prepare<1, 1, true>},
 };
 
 }  // namespace
