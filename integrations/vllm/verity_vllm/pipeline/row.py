@@ -97,6 +97,7 @@ class FaVersion:
     """The FlashAttention version a workload's row executes on this device (its declared target over the device's)."""
 
     workload: str = option("workload")
+    target: str | None = option("--target", default=None, help="the row's declared TargetProfile JSON (the Build's --target); with a capability, no device is read")
 
 
 COMMANDS = {"run": Run, "stage": Stage, "chain": Chain, "shed": Shed, "fa-version": FaVersion}
@@ -130,11 +131,11 @@ def _workload(row: str) -> str:
     return str(WORKLOADS / f"{row}.json")
 
 
-def fa_version(workload: str) -> int:
+def fa_version(workload: str, target: str | None = None) -> int:
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    wl = json.load(open(workload))
-    d = TargetProfile.from_device().to_json()
-    d.update({k: v for k, v in (wl.get("target") or {}).items() if v is not None})
+    t = json.loads(target) if target else (json.load(open(workload)).get("target") or {})
+    d = (TargetProfile.default() if t.get("compute_capability") else TargetProfile.from_device()).to_json()
+    d.update({k: v for k, v in t.items() if v is not None})
     return TargetProfile.from_json(d).effective_flash_attn_version()
 
 
@@ -153,6 +154,6 @@ def main(o: Any) -> int:
         return research.chain(o, st.env.sweep_dir)
     if isinstance(o, Shed):
         return research.shed(o)
-    print(fa_version(o.workload))
+    print(fa_version(o.workload, o.target))
     sys.stdout.flush()
     return 0

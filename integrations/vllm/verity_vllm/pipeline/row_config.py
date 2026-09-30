@@ -70,11 +70,19 @@ def config_record(row: Any) -> dict[str, Any]:
 
 
 def device_id(row: Any) -> dict[str, Any] | None:
-    """The GPU model the host derives on (name, compute capability), part of a derive's cache key; None when nvidia-smi cannot say."""
+    """What the derives are for, part of a derive's cache key: the row's declared target when it declares one (the Build derives for it
+    on any host, a GPU-free one included), else the GPU model the host derives on (name, compute capability); None when neither is known."""
     if not hasattr(row, "_device_id"):
-        r = subprocess.run(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader"], capture_output=True, text=True)
-        first = (r.stdout.splitlines() or [""])[0].split(",") if r.returncode == 0 else []
-        row._device_id = {"name": first[0].strip(), "compute_cap": first[1].strip()} if len(first) == 2 else None
+        declared = getattr(row, "tgt", "")
+        first: list[str] = []
+        if not declared:
+            try:
+                r = subprocess.run(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader"], capture_output=True, text=True)
+                first = (r.stdout.splitlines() or [""])[0].split(",") if r.returncode == 0 else []
+            except OSError:
+                first = []
+        row._device_id = ({"declared_target": declared} if declared else
+                          {"name": first[0].strip(), "compute_cap": first[1].strip()} if len(first) == 2 else None)
     return row._device_id
 
 

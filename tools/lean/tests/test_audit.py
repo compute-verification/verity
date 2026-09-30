@@ -7,6 +7,7 @@ import importlib.util
 import json
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -58,8 +59,20 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
                                   "type_hash": sha("00000000000000aa")}
     assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["pins"] == ["P.t"]
+    assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
     assert A.judge(POLICY, facts(), FILES)[0] == ["pins: P.t has no record; run `audit.py --update` and commit the record"]
+
+
+def test_every_field_of_a_reads_record_is_checked():
+    pol = recorded()
+    group = pol["reads"]["P.Defs"]
+    stale = pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}
+    assert A.judge(stale, facts(), FILES)[0] == ["pins: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
+                                                 "`python tools/lean/merge.py --normalize` recomputes it"]
+    readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"pins": ["P.t", "P.u"]}}}
+    assert A.judge(readers, facts(), FILES)[0] == ["pins: the pinned statements that read P.Defs are P.t; the record lists "
+                                                   "P.t, P.u; run `audit.py --update`"]
 
 
 def test_sorry_native_decide_and_other_axioms_are_named():
@@ -114,7 +127,8 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     new = recorded()
     old = new | {"pins": {"P.t": new["pins"]["P.t"] | {"type_hash": "00000000000000aa"}},
                  "reads": A.read_groups(A.pinned_reads(facts()), old=True)}
-    assert len(old["reads"]["P.Defs"]["digest"]) == 32 and len(old["reads"]["P.Defs"]["definitions"]["P.f"]) == 16
+    assert len(old["reads"]["P.Defs"]["definitions"]["P.f"]) == 16 and A.old_group(old["reads"]["P.Defs"])
+    assert old["reads"]["P.Defs"]["digest"] == A.module_digest(old["reads"]["P.Defs"]["definitions"])
     assert A.judge(old, facts(), FILES)[0] == []
     fails = A.judge(old, facts(pins={"P.t": pin(h="00000000000000bb")}), FILES)[0]
     assert fails == ["pins: P.t's type hash changed:\n00000000000000aa -> 00000000000000bb"]
@@ -314,6 +328,37 @@ def test_a_file_changed_during_the_run_is_reported(tmp_path):
     late.write_text("y")
     assert A.tampered(seals, [late]) == [str(tool), str(late)]
     assert A.killed(-9) and A.killed(137) and not A.killed(1)
+
+
+def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
+    """`b` requires `a` by path, and `c` requires nothing. Each fake audit blocks on the event it needs, so the run finishes
+    only when `c` runs beside `a`'s build, and `b`'s build beside the rest of `a`'s audit."""
+    a, b, c = tmp_path / "a", tmp_path / "a" / "b", tmp_path / "c"
+    for p in (a, b, c):
+        p.mkdir(parents=True, exist_ok=True)
+        (p / A.POLICY).write_text("{}")
+    (b / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "a", "dir": ".."}]}))
+    started = {p.name: threading.Event() for p in (a, b, c)}
+    events = []
+
+    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None):
+        events.append(("start", pkg.name))
+        started[pkg.name].set()
+        if pkg.name == "a":
+            started["c"].wait()
+            built()
+            events.append(("built", "a"))
+            started["b"].wait()
+        else:
+            built()
+        return {"package": str(pkg), "seconds": {}, "failures": ["fake"] if pkg.name == "c" else []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    assert A.main([str(a), str(b), str(c), "--out", str(out)]) == 1
+    assert events.index(("built", "a")) < events.index(("start", "b"))
+    doc = json.loads((out / "audit.json").read_text())
+    assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
