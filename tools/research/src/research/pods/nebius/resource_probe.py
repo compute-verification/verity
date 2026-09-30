@@ -163,6 +163,17 @@ def idle_from_series(util: dict, fb: dict, n: dict, gib: float, cover: float = 0
     return [out[g] for g in sorted(out)]
 
 
+def pool_flagged(path: Path, now: float, max_age_s: float = 900.0) -> set[int]:
+    """GPUs that pool_n1's fresh `gpu-idle-in-lease` monitor already flags (job norms own those; the steward doesn't re-alert)."""
+    try:
+        doc = json.loads(Path(path).read_text())
+        if now - calendar.timegm(time.strptime(doc["generated_at"], "%Y-%m-%dT%H:%M:%SZ")) > max_age_s:
+            return set()
+        return {int(m["gpu"]) for n in doc["nodes"].values() for m in n.get("monitors") or [] if m.get("kind") == "gpu-idle-in-lease"}
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+
+
 def idle_gpus_prometheus(window_s: float, gib: float) -> list[dict[str, Any]]:
     def by_series(q: str) -> dict[tuple[int, str], float]:
         url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
