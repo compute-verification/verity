@@ -14,6 +14,8 @@ constant per block); W's columns take gamma / g_keep. Rungs, base[@nvfp4][~w|~a]
   rotxg    the split rotation, gamma kept on S, folded on the rest
   rotbB    S unmixed plus B keyed Haar blocks over the other channels, grouped by their calibrated activation magnitude;
            gamma kept on S and as one scale per block (its RMS over the block), the rest folded
+  ...s     (rotxs, rotbBs) S leaves the chain: on the input side of q/k/v/gate/up its |S| columns become an uncredited BF16
+           side product, so neither the weights' row and block scales nor the activation cast see the massive channels
   ~w       weights quantized only (activations BF16); ~a activations cast only (weights BF16, in the deployed basis)
 Unmixed channels go to keyed positions off the every-8th positions, where Pearl's rule samples the RMS that sets the noise.
 Recovery: 0 none; 1 a per-channel scale and bias after q/k/v/gate/up (glue); 2 that plus a per-position scale after each
@@ -88,6 +90,8 @@ def parse(rung):
 def install(model, rung, cal, seed, dev, cache):
     """Deploy every linear at the rung (see the module docstring) with the fork's activation cast."""
     base, fmt, mode = parse(rung)
+    side = base.startswith("rot") and base.endswith("s")
+    base = base[:-1] if side else base
     d = model.config.hidden_size
     s, prof = cal["channels"], cal["profile"]
     if base in ("none",):
@@ -122,9 +126,12 @@ def install(model, rung, cal, seed, dev, cache):
         for nm, gk in keep.items():
             model.get_submodule(nm).weight.copy_(gk.to(torch.bfloat16))
     quant = G.nvfp4_rows if fmt == "nvfp4" else G.fp8_rows
+    ps = None
+    if side:
+        ps = torch.tensor([int(q[c].argmax()) for c in s], device=dev)
     for n, m in G.linears(model):
         w = m._aw_orig.float()
-        m._rin = m._rout = None
+        m._rin = m._rout = m._ps = m._side = None
         nm = G.norm_of(n)
         if nm:
             w = w * (model.get_submodule(nm)._fold_gamma / keep[nm])[None, :]
@@ -135,6 +142,10 @@ def install(model, rung, cal, seed, dev, cache):
             elif q is not None:
                 w = w @ q
                 m._rin = qb
+                if ps is not None and len(ps):          # S leaves the chain: a BF16 side product, uncredited
+                    m._ps, m._side = ps, w[:, ps].to(torch.bfloat16)
+                    w = w.clone()
+                    w[:, ps] = 0.0
             m.weight.copy_((w if mode == "a" else quant(w)).to(m.weight.dtype))
         m._aq = mode != "w"
         m._fmt = fmt
@@ -147,7 +158,13 @@ def install(model, rung, cal, seed, dev, cache):
                 x = x @ m._rin
             if m._post is not None:
                 x = x * m._post.to(x.dtype)
+            xs = None
+            if m._ps is not None:
+                xs = x[..., m._ps]
+                x = x.index_fill(-1, m._ps, 0.0)
             y = F.linear(G.act_quant(x, m._fmt, m._f, m._g) if m._aq else x, m.weight, m.bias)
+            if xs is not None:
+                y = y + xs @ m._side.T.to(xs.dtype)
             if m._scale is not None:
                 y = y * m._scale.to(y.dtype) + m._shift.to(y.dtype)
             if m._rout is not None:
