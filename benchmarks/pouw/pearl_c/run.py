@@ -32,6 +32,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 H100 = "NVIDIA H100 80GB HBM3"
 SM_COUNT, MAX_DYN = 16, 8
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
+#: hashing format -h1's public label keys, blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf") (`pearl_c.H1_KEYS`)
+H1_KEYS = {"k_msg": "071cf46377a5d6f62e118a6c4d1bcd93d8d781af04ef0bdd84f9011381e801d1",
+           "k_leaf": "0e661b01c2077b147887d1ee19aed2ddb35c2cc459cc62f6af0b05ea9f926169"}
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
 CUDA = {
@@ -192,6 +195,10 @@ def cdiv(a: int, b: int) -> int:
     return -(-a // b)
 
 
+def pow2(n: int) -> int:
+    return 1 << max(n - 1, 0).bit_length()
+
+
 class Pipeline:
     """One (shape, forming) instance: its buffers and its kernels in order, each a (name, phase, launch) step."""
 
@@ -201,10 +208,10 @@ class Pipeline:
         self.dev, self.m, self.n, self.k, self.forming, self.keys = dev, m, n, k, forming, keys
         v1 = forming == "v1"
         rowa, rowb = (4 * k, 4 * k) if v1 else (k + k // 4, k + k // 4)
-        self.row_bytes, self.segment = rowa, 1024 if v1 else 1280
-        k_align = 256 if v1 else 1024      # whole row-hash segments: 1,024 bytes of FP32 words, 1,280 of FP10
-        if m % 128 or n % 128 or k % k_align:
-            raise ValueError(f"the kernels take m, n multiples of 128 and k a multiple of {k_align}, not {(m, n, k)}")
+        self.row_bytes = rowa
+        if m % 128 or n % 128 or k % 128:
+            raise ValueError(f"the kernels take m, n and k multiples of 128, not {(m, n, k)}")
+        self.tiles = (m // 64) * (n // 64)
         sizes = {
             "ea_codes": m * 32, "ea_tiled": m * 32, "eb_codes": n * 32, "eb_tiled": n * 32,
             "fa_codes": k * 32, "fa_tiled": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fb_tiled": k * 32, "fbT32": 32 * k,
@@ -214,7 +221,7 @@ class Pipeline:
             "at": m * k, "bt": n * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
             "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "tickets": (m // 16) * (n // 16) * 32,
-            "rows": m * (rowa // self.segment) * 32,
+            "tree_a": (2 * pow2(m) - 1) * 32, "tree_t": (2 * pow2(self.tiles) - 1) * 32,
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2, "diff": 8,
         }
         if v1:
@@ -247,6 +254,17 @@ class Pipeline:
             ptrs[slot] = self.b[key] if key else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms), 384, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, 8))
+
+    def levels(self, name: str, count: int, dom: str) -> None:
+        """A frame-b3 tree over `count` leaves already at level 0 of buffer `name`: its pads, then each level above."""
+        d, base, width = self.dev, self.b[name], pow2(count)
+        if width > count:
+            d.launch("hash_pad", cdiv(width - count, 128), 128, p=(base, self.keys[dom]), i=(count, width))
+        off, level = 0, 0
+        while width > 1:
+            d.launch("hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), self.keys[dom]),
+                     i=(level, width // 2))
+            off, width, level = off + width, width // 2, level + 1
 
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, v1 = self.dev, self.b, self.m, self.n, self.k, self.forming == "v1"
@@ -288,14 +306,18 @@ class Pipeline:
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b[noise_a], b["beta_a"], b["af"], b["pa_t"]), i=(m, fl))),
                    ("gemm_pearlc", lambda: self.gemm("gemm_pearlc", "at", "bt", m, n, out=("c", "u", "y"), pa=b["pa_t"],
                                                      pb=b["pb_t"], rs=b["ia_a"], cs=b["ia_b"]))]
-        segs = self.row_bytes // self.segment
-        hashing = [("hash_msg", lambda: d.launch("hash_msg", cdiv(m * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"]), i=(m, n))),
-                   ("hash_leaf", lambda: d.launch("hash_leaf", cdiv((m // 64) * (n // 64), 64), 64, p=(b["digests"], b["leaves"]),
-                                                  i=(m, n))),
+        hashing = [("hash_rows", lambda: d.launch("hash_rows", m, 256, p=(b["xa"], b["tree_a"], self.keys["dom_a"]),
+                                                  i=(m, self.row_bytes))),
+                   ("tree_a", lambda: self.levels("tree_a", m, "dom_a")),
+                   ("hash_msg", lambda: d.launch("hash_msg", cdiv(m * n // 32, 128), 128,
+                                                 p=(b["c"], b["u"], b["digests"], self.keys["k_msg"]), i=(m, n))),
+                   ("hash_leaf", lambda: d.launch("hash_leaf", cdiv(self.tiles, 64), 64, p=(b["digests"], b["leaves"],
+                                                                                           self.keys["k_leaf"]), i=(m, n))),
                    ("tickets", lambda: d.launch("tickets", cdiv((m // 16) * (n // 16), 128), 128,
                                                 p=(b["c"], b["tickets"], self.keys["jackpot"]), i=(m, n))),
-                   ("hash_rows", lambda: d.launch("hash_rows_f32" if v1 else "hash_rows_fp10", cdiv(m * segs, 128), 128,
-                                                  p=(b["xa"], b["rows"]), i=(m, self.row_bytes)))]
+                   ("tree_t", lambda: (d.launch("hash_tree_leaves", cdiv(self.tiles, 128), 128,
+                                                p=(b["leaves"], b["tree_t"], self.keys["dom_t"]), i=(self.tiles,)),
+                                       self.levels("tree_t", self.tiles, "dom_t")))]
         plain_in_a, plain_in_b = ("xa", "xb") if v1 else ("xa_bf16", "xb_bf16")
         prep = [] if v1 else [
             ("open_a", lambda: d.launch("open_rows", cdiv(m * k // 8, 256), 256, p=(b["xa"], b["xa_bf16"]), i=(m, k))),
@@ -402,7 +424,9 @@ UNIT_PHASES = ("forming", "gemm", "cleanup", "hashing")
 
 def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) -> dict:
     m = n = k = size
-    keys = {name: dev.put(hashlib.sha256(f"pearl-c-timing/{name}".encode()).digest()) for name in ("line_a", "line_b", "jackpot")}
+    keys = {name: dev.put(hashlib.sha256(f"pearl-c-timing/{name}".encode()).digest())
+            for name in ("line_a", "line_b", "jackpot", "dom_a", "dom_t")}
+    keys.update({name: dev.put(bytes.fromhex(h)) for name, h in H1_KEYS.items()})
     rowb = 4 * k if forming == "v1" else k + k // 4
     xa, xb = dev.alloc(m * rowb), dev.alloc(n * rowb)
     for x, rows, seed in ((xa, m, 11), (xb, n, 12)):
