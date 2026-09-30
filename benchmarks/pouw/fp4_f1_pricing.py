@@ -668,27 +668,66 @@ VARIANTS = ("base", "f1", "f1_in", "f1_in_t3e")
 # witness-dead; theory-pearl-c4-domain.md §6.11's reserve form) in place of per screened block pair
 
 
-def vex_greedy(ua, ub, pairs, sdw, sv, cw, n, k, okr, okc):
-    """V-EX (theory-pearl-c4-domain.md §6.13): the rows an honest prover would volunteer to bring one tile's credited
-    debit under the cap, greedily (each step drops the A or B row whose removal lowers the debit most). ua, ub: the
-    tile's rows' F1′ in FP4 units per word (B̃ at its overfit factor); pairs: (64, 64) dead-dead positions per word;
-    sdw: A rows' witness-dead counts. Returns (A rows, B rows) volunteered, as tile-local indices."""
-    R, Cs = set(np.nonzero(okr)[0].tolist()), set(np.nonzero(okc)[0].tolist())
+VOLUNTARY_PER, R1_TOLERANCE, VOL_STORE = 64, 1e-9, 0.5
 
-    def deb(R, Cs):
-        if not R or not Cs:
-            return 0.0
-        r, c = np.array(sorted(R)), np.array(sorted(Cs))
-        cr = len(r) * len(c) * cw
-        return float((len(c) * ua[r].sum() + len(r) * ub[c].sum() + pairs[np.ix_(r, c)].sum()
-                      + len(c) * FS / n * sdw[r].sum()) / cr + sv * k / cw)
-    vol_a, vol_b = [], []
-    d = deb(R, Cs)
-    while d > CAP and R and Cs:
-        cand = [(deb(R - {i}, Cs), "a", i) for i in R] + [(deb(R, Cs - {j}), "b", j) for j in Cs]
-        d, side, idx = min(cand)
-        (R.discard(idx), vol_a.append(idx)) if side == "a" else (Cs.discard(idx), vol_b.append(idx))
-    return vol_a, vol_b
+
+class VolTile:
+    """One tile's data for `volunteer_rows`: credited-row masks after R1, the rows' F1′ per word (B̃ at its overfit
+    factor), the dead-dead positions per word, A's witness-dead counts, F2's saving, and the rows' indices in the unit."""
+    __slots__ = ("ga", "gb", "okr", "okc", "ua", "ub", "pairs", "sdw", "sv")
+
+    def __init__(self, ga, gb, okr, okc, ua, ub, pairs, sdw, sv):
+        self.ga, self.gb, self.okr, self.okc = ga, gb, okr, okc
+        self.ua, self.ub, self.pairs, self.sdw, self.sv = ua, ub, pairs.astype(np.float32), sdw, sv
+
+    def debit_cap(self, R, Cs, cw, n, k):
+        """(debit, cap) in FP4 units over the credited words R × Cs, as `pearl_c_work._debit_cap` returns them."""
+        if not len(R) or not len(Cs):
+            return 0.0, 0.0
+        r, c = np.asarray(R), np.asarray(Cs)
+        nr, nc = len(r), len(c)
+        d = (nc * self.ua[r].sum() + nr * self.ub[c].sum() + float(self.pairs[np.ix_(r, c)].sum())
+             + nc * FS / n * self.sdw[r].sum() + self.sv * k * nr * nc)
+        return float(d), CAP * nr * nc * cw
+
+
+def volunteer_rows(tiles, m, n, cw, k):
+    """#556's `pearl_c_work.volunteer` (`a1b72fd0`) on the census's tiles: for a tile over the cap, give up the credited
+    row whose removal leaves the least debit over the cap, while the tile is over and V-EX's count caps (⌈m/64⌉ A rows
+    per unit, ⌈n/64⌉ B rows per weight) allow, and repeat over every tile until nothing changes. Returns (A rows,
+    B rows, tiles still over the cap)."""
+    va, vb = set(), set()
+    cap_a, cap_b = -(-m // VOLUNTARY_PER), -(-n // VOLUNTARY_PER)
+    tol = 1 + R1_TOLERANCE
+    changed = True
+    while changed:
+        changed = False
+        for t in tiles:
+            while True:
+                R = [i for i in range(len(t.ga)) if t.okr[i] and t.ga[i] not in va]
+                Cs = [j for j in range(len(t.gb)) if t.okc[j] and t.gb[j] not in vb]
+                if not R or not Cs:
+                    break
+                d, cap = t.debit_cap(R, Cs, cw, n, k)
+                if d <= cap * tol:
+                    break
+                options = []
+                if len(va) < cap_a and len(R) > 1:
+                    options += [(t.debit_cap([x for x in R if x != i], Cs, cw, n, k), "A", t.ga[i]) for i in R]
+                if len(vb) < cap_b and len(Cs) > 1:
+                    options += [(t.debit_cap(R, [x for x in Cs if x != j], cw, n, k), "B", t.gb[j]) for j in Cs]
+                if not options:
+                    break
+                _, side, g = min(options, key=lambda o: o[0][0] - o[0][1])
+                (va if side == "A" else vb).add(g)
+                changed = True
+    left = 0
+    for t in tiles:
+        R = [i for i in range(len(t.ga)) if t.okr[i] and t.ga[i] not in va]
+        Cs = [j for j in range(len(t.gb)) if t.okc[j] and t.gb[j] not in vb]
+        d, cap = t.debit_cap(R, Cs, cw, n, k)
+        left += d > cap * tol
+    return va, vb, left
 
 
 def split_keep(X):
@@ -739,7 +778,7 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
     exa = uia > CAP * cw
     dead_a = a["dead"].astype(np.float32)
     rows, r1, r1e, rn = [], [], [], []
-    vex_a, vex_b = set(), set()
+    vol_tiles, guard = [], []
     wstat = dict(fb=[], sb=[], off=0.0, blocks=0, unc=0, exb=0, nb=0)
     per = max(1, int(chunk_elems // (T * k)))
     for c0 in range(0, len(cols), per):
@@ -796,10 +835,11 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
                     debn = ((nc * uia[I][okr].sum() + nr * uibn[J][okcn].sum() + pairs[np.ix_(okr, okcn)].sum()
                              + nc * FS / n * a["sdw"][I][okr].sum()) / crn + sv * k / cw)
                     rn.append((cred, crn if debn <= CAP else 0.0, debn))
-                    if debn > CAP:
-                        va, vb = vex_greedy(uia[I], uibn[J], pairs, a["sdw"][I], sv, cw, n, k, okr, okcn)
-                        vex_a.update(r * T + i for i in va)
-                        vex_b.update(cc[ci] * T + j for j in vb)
+                    if debn > VOL_STORE * CAP:
+                        vol_tiles.append(VolTile(r * T + np.arange(T), cc[ci] * T + np.arange(T), okr, okcn, uia[I],
+                                                 uibn[J], pairs, a["sdw"][I], sv))
+                    else:
+                        guard.append((r, cc[ci], nr, nc, debn))
                 okc = ~exb[J]
                 nr, nc = int(okr.sum()), int(okc.sum())
                 if nr == 0 or nc == 0:
@@ -841,10 +881,21 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
                      max_debit=float(q[:, 2].max()),
                      tiles_at=dict((str(f), int((q[:, 2] > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)))
     qn = np.array(rn)
+    va, vb, left = volunteer_rows(vol_tiles, m, n, cw, k)
+    # a tile left out of `vol_tiles` sat at most VOL_STORE of the cap; giving up rows scales its debit ratio by at most
+    # nr/(nr − ka)·nc/(nc − kb), so check that the rows given up can't have lifted one over
+    over_guard = 0
+    for r, c, nr, nc, d in guard:
+        ka = sum(1 for g in va if r * T <= g < (r + 1) * T)
+        kb = sum(1 for g in vb if c * T <= g < (c + 1) * T)
+        if ka >= nr or kb >= nc or d * nr / (nr - ka) * nc / (nc - kb) > CAP:
+            over_guard += 1
     out["norm"] = dict(uncredited=float(1 - qn[:, 1].sum() / qn[:, 0].sum()),
                        tiles_rejected=int(((qn[:, 1] == 0) & (qn[:, 2] > CAP)).sum()), max_debit=float(qn[:, 2].max()),
                        tiles_at=dict((str(f), int((qn[:, 2] > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)),
-                       vex_rows_a=len(vex_a), vex_rows_b=len(vex_b), vex_cap_a=-(-m // 64), vex_cap_b=-(-n // 64))
+                       volunteer_a=len(va), volunteer_b=len(vb), volunteer_tiles_left=left,
+                       volunteer_guard_failed=over_guard, volunteer_cap_a=-(-m // VOLUNTARY_PER),
+                       volunteer_cap_b=-(-n // VOLUNTARY_PER))
     qe = np.array(r1e)
     out["r1_t3e"] = dict(uncredited=float(1 - qe[:, 1].sum() / qe[:, 0].sum()),
                          tiles_rejected=int(((qe[:, 1] == 0) & (qe[:, 2] > CAP)).sum()), max_debit=float(qe[:, 2].max()),
@@ -972,10 +1023,12 @@ def summarize(args, res, tokens, t0, fmt):
                         "tiles_rejected": sum(r["norm"]["tiles_rejected"] for r in res.values()),
                         "max_tile_debit": max(r["norm"]["max_debit"] for r in res.values()),
                         "worst_linear": max(res, key=lambda nm: res[nm]["norm"]["max_debit"]),
-                        "vex_rows_a": sum(r["norm"]["vex_rows_a"] for r in res.values()),
-                        "vex_rows_b": sum(r["norm"]["vex_rows_b"] for r in res.values()),
-                        "vex_over_cap_linears": sum(r["norm"]["vex_rows_a"] > r["norm"]["vex_cap_a"]
-                                                    or r["norm"]["vex_rows_b"] > r["norm"]["vex_cap_b"] for r in res.values())}
+                        "volunteer_a": sum(r["norm"].get("volunteer_a", 0) for r in res.values()),
+                        "volunteer_b": sum(r["norm"].get("volunteer_b", 0) for r in res.values()),
+                        "volunteer_tiles_left": sum(r["norm"].get("volunteer_tiles_left", 0) for r in res.values()),
+                        "volunteer_guard_failed": sum(r["norm"].get("volunteer_guard_failed", 0) for r in res.values()),
+                        "volunteer_linears": sum(r["norm"].get("volunteer_a", 0) + r["norm"].get("volunteer_b", 0) > 0
+                                                 for r in res.values())}
     summ["r1_t3e"] = {"uncredited": wavg(lambda r: r.get("r1_t3e", r["r1"])["uncredited"]),
                       "tiles_rejected": sum(r.get("r1_t3e", r["r1"])["tiles_rejected"] for r in res.values()),
                       "max_tile_debit": max(r.get("r1_t3e", r["r1"])["max_debit"] for r in res.values())}
