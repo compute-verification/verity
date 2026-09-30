@@ -15,8 +15,9 @@ Variants (rung:recover), each on the whole WikiText-2 test split:
   recover 1   300 AdamW steps of 1,024 tokens on WikiText-2 train, training only a per-output-channel scale and bias
               after q/k/v/gate/up (their outputs are unrotated, so this is glue in the deployed model for every variant)
 
-Checkpoints: one JSON per variant in --out; exit 0 when all are done, 99 while any remain, 143 when preempted (SIGTERM);
-an interrupted variant is never written. $RESEARCH_RUN_DIR/result.json (research/result/v0.1) when run under research run.
+Checkpoints: one JSON per finished variant in --out, and a state file per unfinished one (recovery step, glue parameters and
+optimizer state, per-window losses), so a run pauses after --max-seconds (about 6 minutes, for holds of 8 minutes or less)
+and the next resumes. Exit 0 when all are done, 99 while any remain, 143 when preempted (SIGTERM). $RESEARCH_RUN_DIR/result.json (research/result/v0.1) when run under research run.
 """
 from __future__ import annotations
 
@@ -134,7 +135,7 @@ class Shards:
         self.files = {f: safe_open(str(Path(snap, f)), framework="pt", device="cpu") for f in set(idx.values())}
 
     def get(self, name):
-        return self.files[self.where[name]].get_tensor(name).to(self.dev)
+        return self.files[self.where[name]].get_tensor(name).to(self.dev, copy=True)     # never alias the mmap'd shard
 
 
 def build(snap, dev):
@@ -177,15 +178,35 @@ def rot_bf16(d, dev, seed):
     return _RB[key]
 
 
+def norm_of(n):
+    """The RMSNorm whose output feeds linear n (q/k/v: input_layernorm; gate/up: post_attention_layernorm), or None."""
+    layer = n.rsplit(".", 2)[0]
+    if n.endswith(("q_proj", "k_proj", "v_proj")):
+        return layer + ".input_layernorm"
+    if n.endswith(("gate_proj", "up_proj")):
+        return layer + ".post_attention_layernorm"
+    return None
+
+
 def project(model, shards, names, rung, seed, dev):
+    """Deploy every linear at the rung. Under the rotation the RMSNorm scale gamma is folded into the linears it feeds
+    (W diag(gamma), the norm's scale set to 1) before rotating, as the transform prescribes: rotating W with gamma unfolded
+    spreads a column that pairs a huge weight with a tiny gamma (Llama-3.1-70B's layer 0: |w| up to 92) into every entry,
+    and rounding then swamps the ordinary channels."""
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
+    norms = {m for m in (norm_of(n) for n in names) if m}
+    for m in norms:
+        model.get_submodule(m).weight.data.copy_(torch.ones_like(model.get_submodule(m).weight) if base == "rot"
+                                                 else shards.get(m + ".weight").to(torch.bfloat16))
     for i, n in enumerate(names):
         if i % 28 == 0:
             torch.cuda.empty_cache()
         mod = model.get_submodule(n)
         w = shards.get(n + ".weight").to(torch.float32)
         mod.rin = mod.rout = None
+        if base == "rot" and norm_of(n):
+            w = w * shards.get(norm_of(n) + ".weight").to(torch.float32)[None, :]
         if base == "rot":
             if n.endswith(("o_proj", "down_proj")):
                 r = G.rot_matrix(w.shape[0], dev, seed)
@@ -272,7 +293,7 @@ def main():
     ap.add_argument("--recover-seqlen", type=int, default=1024)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=20260930)
-    ap.add_argument("--max-seconds", type=float, default=540)
+    ap.add_argument("--max-seconds", type=float, default=360, help="pause (checkpointing recovery and evaluation) after this long")
     ap.add_argument("--precision", choices=("bf16", "fp32"), default="fp32",
                     help="fp32: GEMMs and rotations in FP32 storage on TF32 tensor cores (the rotated 70B needs it); bf16: BF16")
     args = ap.parse_args()
@@ -299,28 +320,68 @@ def main():
     print(json.dumps({"built": args.model, "linears": len(names), "seconds": round(time.time() - t0, 1),
                       "gpu_mem_gb": round(torch.cuda.memory_allocated() / 2 ** 30, 1)}), flush=True)
     want = args.eval_windows if args.eval_windows > 0 else test.numel() // args.seqlen
+    left = False
     for v in remaining:
         if PRE["flag"] or time.time() - t0 > args.max_seconds:
+            left = True
             break
         rung, rec = v.split(":")
+        sp = out / f"{v.replace(':', '_')}.state.pt"
+        st = torch.load(sp, map_location=dev) if sp.exists() else {"step": 0, "trace": [], "nll": [], "tp": None}
         t1 = time.time()
         with torch.no_grad():
             project(model, shards, names, rung, args.seed, dev)
-        tp = time.time() - t1
+        st["tp"] = st["tp"] or round(time.time() - t1, 1)
         params = attach_affine(model, names, rec == "1")
-        trace = recover(model, params, train, args.recover_steps, args.recover_seqlen, args.lr, dev, args.seed) if rec == "1" else []
-        nll = G.eval_ppl(model, test, args.seqlen, want, dev) if not PRE["flag"] else []
-        if PRE["flag"] or len(nll) != want:
+        opt = torch.optim.AdamW(params, lr=args.lr) if params else None
+        if params and "params" in st:
+            with torch.no_grad():
+                for p_, q in zip(params, st["params"]):
+                    p_.copy_(q)
+            opt.load_state_dict(st["opt"])
+
+        def save():
+            if params:
+                st["params"] = [p_.detach().clone() for p_ in params]
+                st["opt"] = opt.state_dict()
+            torch.save(st, sp)
+
+        steps = args.recover_steps if rec == "1" else 0
+        g = torch.Generator().manual_seed(args.seed + st["step"])
+        if st["step"] < steps:
+            model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+            model.train()
+            while st["step"] < steps and not PRE["flag"] and time.time() - t0 < args.max_seconds:
+                start = int(torch.randint(0, train.numel() - args.recover_seqlen - 1, (1,), generator=g))
+                chunk = train[start:start + args.recover_seqlen].unsqueeze(0).to(dev)
+                loss = F.cross_entropy(model(chunk, use_cache=False).logits[0, :-1].float(), chunk[0, 1:])
+                opt.zero_grad(); loss.backward(); opt.step()
+                if st["step"] % 25 == 0:
+                    st["trace"].append(round(loss.item(), 4))
+                    print(json.dumps({"variant": v, "recover_step": st["step"], "loss": st["trace"][-1]}), flush=True)
+                st["step"] += 1
+            model.gradient_checkpointing_disable()
+            model.eval()
+        if st["step"] >= steps:
+            with torch.no_grad():
+                while len(st["nll"]) < want and not PRE["flag"] and time.time() - t0 < args.max_seconds:
+                    w = len(st["nll"])
+                    chunk = test[w * args.seqlen:(w + 1) * args.seqlen].unsqueeze(0).to(dev)
+                    st["nll"].append(F.cross_entropy(model(chunk).logits[0, :-1].float(), chunk[0, 1:]).item())
+        if len(st["nll"]) < want:
+            save()
+            print(json.dumps({"variant": v, "paused_at_step": st["step"], "windows": len(st["nll"])}), flush=True)
+            left = True
             break
+        nll = st["nll"]
         doc = {"variant": v, "model": args.model, "rung": rung, "recover": int(rec), "precision": args.precision,
-               "ppl": math.exp(sum(nll) / len(nll)),
-               "window_nll": nll, "eval_windows": len(nll), "seqlen": args.seqlen,
-               "recover_steps": args.recover_steps if rec == "1" else 0, "recover_loss_trace": trace,
-               "project_seconds": round(tp, 1), "seconds": round(time.time() - t1, 1),
-               "gpu": torch.cuda.get_device_name(0), "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""),
-               "peak_gpu_mem_gb": round(torch.cuda.max_memory_allocated() / 2 ** 30, 1)}
+               "ppl": math.exp(sum(nll) / len(nll)), "window_nll": nll, "eval_windows": len(nll), "seqlen": args.seqlen,
+               "recover_steps": steps, "recover_loss_trace": st["trace"], "project_seconds": st["tp"],
+               "fold_norms_under_rotation": True, "gpu": torch.cuda.get_device_name(0),
+               "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""), "peak_gpu_mem_gb": round(torch.cuda.max_memory_allocated() / 2 ** 30, 1)}
         (out / f"{v.replace(':', '_')}.json").write_text(json.dumps(doc, indent=1))
-        print(json.dumps({k: doc[k] for k in ("variant", "ppl", "project_seconds", "seconds", "peak_gpu_mem_gb")}), flush=True)
+        sp.unlink(missing_ok=True)
+        print(json.dumps({k: doc[k] for k in ("variant", "ppl", "project_seconds", "peak_gpu_mem_gb")}), flush=True)
         attach_affine(model, names, False)
     if rd:
         write_result(Path(rd), out, variants, args.model)
