@@ -222,12 +222,8 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
       ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp).place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty ((p.P hone).Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG ((p.P hone).trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ ((p.P hone).trialStrat H E plan tab vb R τ c k Rw) M) ((p.P hone).outC H E plan tab vb R τ c)
-        (finderCost ((p.P hone).rdT H E plan tab vb R τ c) (cT plan R t')))
-    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         K ≤ ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
@@ -236,7 +232,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
   (p.P hone).flock_e2e_count H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
     (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone} (p.rowsL1 hone)
     (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
-    (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht hCR K σ
+    (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht K σ hCR
 
 /-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes, with its zero public.**
 `UProg.flock_e2e_drawn_classes` with the program input `zer` public at 0, as in `UProg.flock_e2e_count_classes_zero`. -/
@@ -255,12 +251,8 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes_zero
       ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp).place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty ((p.P hone).Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG ((p.P hone).trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ ((p.P hone).trialStrat H E plan tab vb R τ c k Rw) M) ((p.P hone).outC H E plan tab vb R τ c)
-        (finderCost ((p.P hone).rdT H E plan tab vb R τ c) (cT plan R t')))
-    (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         ¬ Disjoint ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
@@ -269,7 +261,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes_zero
   (p.P hone).flock_e2e_drawn H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
     (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone} (p.rowsL1 hone)
     (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) _
-    (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht hCR σ
+    (p.zeroCols_of_classes hone plan tab cls slot blk hrd hcp hzk hz1 hzr) vb hk hRw hM hρ hr ht σ hCR
 
 end Partition
 
