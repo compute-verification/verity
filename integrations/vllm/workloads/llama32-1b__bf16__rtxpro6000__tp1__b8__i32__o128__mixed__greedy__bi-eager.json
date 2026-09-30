@@ -1,0 +1,425 @@
+{
+ "schema": "verity-vllm/workload/v1",
+ "model": "unsloth/Llama-3.2-1B",
+ "case": "LLAMA32_1B",
+ "tokenizer_revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+ "seed": 0,
+ "variants": {
+  "greedy": {
+   "temperature": 0.0,
+   "top_p": 1.0,
+   "top_k": 0
+  }
+ },
+ "seeds": [],
+ "sampling": {
+  "variant": "greedy",
+  "seed": null,
+  "n": 1
+ },
+ "serving_profile": "sweep-B8",
+ "context_class": "I32-O128",
+ "length_seed": "547948f5500702f1f3df492d223671e91cf2ebbacd8a423a292558a62bc8dc72",
+ "prompt_seed": "547948f5500702f1f3df492d223671e91cf2ebbacd8a423a292558a62bc8dc72",
+ "replicate": 0,
+ "length_rule": {
+  "input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] nudged off powers of two; seeded permutation",
+  "output": "same over [2, O]; paired by seeded permutation",
+  "depends_on": "SHA256(row_id) only"
+ },
+ "expected_engine_steps": 128,
+ "engine_args_required": {
+  "max_num_batched_tokens": 2048,
+  "max_model_len": 160
+ },
+ "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 6b9e4e7fb171f92f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
+ "prompt_lengths": [
+  11,
+  12,
+  15,
+  18,
+  22,
+  23,
+  27,
+  32
+ ],
+ "max_tokens": [
+  2,
+  9,
+  27,
+  29,
+  39,
+  89,
+  117,
+  128
+ ],
+ "requests": [
+  {
+   "request_id": "815f7380-bcc1-5dbc-814e-ce7c2d64ac83",
+   "index": 0,
+   "prompt_len": 18,
+   "max_tokens": 89,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    40,
+    20592,
+    304,
+    279,
+    68741,
+    13,
+    1054,
+    11769,
+    9568,
+    2476,
+    8738,
+    386,
+    13,
+    735,
+    1864,
+    375,
+    449,
+    41463
+   ],
+   "prompt_text": "I replied in the affirmative. “Every minute,” continued M. Krempe with warmth",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶14"
+    ]
+   }
+  },
+  {
+   "request_id": "52793c42-e624-5450-9d30-69502be15162",
+   "index": 1,
+   "prompt_len": 32,
+   "max_tokens": 2,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    2118,
+    28622,
+    8964,
+    2476,
+    1364,
+    1071,
+    11,
+    1054,
+    5269,
+    11622,
+    358,
+    1097,
+    25226,
+    13,
+    2030,
+    358,
+    656,
+    539,
+    35840,
+    430,
+    856,
+    8835,
+    811,
+    1288,
+    19830,
+    275,
+    757,
+    26,
+    358,
+    2800,
+    856,
+    57311
+   ],
+   "prompt_text": "“God knows,” she said, “how entirely I am innocent. But I do not pretend that my protestations should acquit me; I rest my innocence",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶29"
+    ]
+   }
+  },
+  {
+   "request_id": "087587e5-0190-5fa0-b6de-7fdb40892db3",
+   "index": 2,
+   "prompt_len": 23,
+   "max_tokens": 128,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    10596,
+    1457,
+    520,
+    279,
+    289,
+    94650,
+    8776,
+    3446,
+    315,
+    1268,
+    420,
+    13218,
+    574,
+    23183,
+    555,
+    279,
+    2579,
+    89069,
+    13,
+    14636,
+    5900,
+    279,
+    13314
+   ],
+   "prompt_text": "Look now at the wondrous traditional story of how this island was settled by the red-men. Thus goes the legend",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶11"
+    ]
+   }
+  },
+  {
+   "request_id": "f6a89080-20af-528e-890a-551c7f1b2f66",
+   "index": 3,
+   "prompt_len": 22,
+   "max_tokens": 117,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    791,
+    4553,
+    4562,
+    5084,
+    264,
+    29050,
+    3566,
+    2788,
+    4950,
+    315,
+    82161,
+    7589,
+    28844,
+    26,
+    719,
+    4018,
+    1139,
+    433,
+    11,
+    323,
+    499,
+    1505
+   ],
+   "prompt_text": "The entire member seems a dense webbed bed of welded sinews; but cut into it, and you find",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶60"
+    ]
+   }
+  },
+  {
+   "request_id": "a0483ac9-4880-5bbe-aeda-9cc675c7afba",
+   "index": 4,
+   "prompt_len": 15,
+   "max_tokens": 39,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    48412,
+    32106,
+    753,
+    14944,
+    315,
+    11689,
+    311,
+    386,
+    727,
+    783,
+    574,
+    539,
+    25565,
+    25,
+    1475
+   ],
+   "prompt_text": "Lydia’s intention of walking to Meryton was not forgotten: every",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶18"
+    ]
+   }
+  },
+  {
+   "request_id": "241af7e8-eb00-5604-86c1-d01f6adbfc98",
+   "index": 5,
+   "prompt_len": 27,
+   "max_tokens": 27,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    14305,
+    2362,
+    893,
+    1047,
+    11,
+    304,
+    279,
+    33953,
+    11,
+    1027,
+    281,
+    4114,
+    11,
+    719,
+    389,
+    279,
+    11341,
+    315,
+    813,
+    41957,
+    568,
+    19655,
+    264,
+    810,
+    71414,
+    3805,
+    11
+   ],
+   "prompt_text": "“The old man had, in the meantime, been pensive, but on the appearance of his companions he assumed a more cheerful air,",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶41"
+    ]
+   }
+  },
+  {
+   "request_id": "34798568-dabd-5a59-9548-d424f02929dc",
+   "index": 6,
+   "prompt_len": 11,
+   "max_tokens": 9,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    2409,
+    1778,
+    35938,
+    369,
+    279,
+    5406,
+    315,
+    279,
+    6762,
+    439,
+    4491
+   ],
+   "prompt_text": "With such rivals for the notice of the fair as Mr",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶19"
+    ]
+   }
+  },
+  {
+   "request_id": "458fdcc7-c879-5a0c-8016-581f61fe1e6c",
+   "index": 7,
+   "prompt_len": 12,
+   "max_tokens": 29,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    4599,
+    279,
+    58909,
+    1047,
+    11096,
+    1124,
+    11,
+    323,
+    15600,
+    574,
+    927,
+    11
+   ],
+   "prompt_text": "When the gentlemen had joined them, and tea was over,",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶44"
+    ]
+   }
+  }
+ ],
+ "sweep": {
+  "schema": "verity-sweep/workload/v1",
+  "row_id": "llama32-1b__bf16__rtxpro6000__tp1__b8__i32__o128__mixed__greedy__bi-eager",
+  "seed": "547948f5500702f1f3df492d223671e91cf2ebbacd8a423a292558a62bc8dc72",
+  "batch": 8,
+  "max_input": 32,
+  "max_output": 128,
+  "min_input": 8,
+  "min_output": 2,
+  "sampling": "greedy",
+  "sampling_params": {
+   "temperature": 0.0,
+   "top_p": 1.0,
+   "top_k": 0
+  },
+  "arrivals": "none",
+  "input_lengths": [
+   18,
+   32,
+   23,
+   22,
+   15,
+   27,
+   11,
+   12
+  ],
+  "output_caps": [
+   89,
+   2,
+   128,
+   117,
+   39,
+   27,
+   9,
+   29
+  ],
+  "sampling_seeds": [],
+  "arrival_offsets_s": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "arrive_steps": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "arrival_rule": {
+   "nominal_step_s": 0.01,
+   "arrive_step": "round(offset_s / nominal_step_s)",
+   "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"
+  },
+  "length_rule": {
+   "input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] nudged off powers of two; seeded permutation",
+   "output": "same over [2, O]; paired by seeded permutation",
+   "depends_on": "SHA256(row_id) only"
+  },
+  "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
+  "lengths_only": false
+ },
+ "note": "R12 sweep llama32-1b__bf16__rtxpro6000__tp1__b8__i32__o128__mixed__greedy__bi-eager: B=8 I<=32 O<=128 greedy arrivals=none; prompt lens [18, 32, 23, 22, 15, 27, 11, 12], caps [89, 2, 128, 117, 39, 27, 9, 29], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
+}

@@ -1,0 +1,416 @@
+{
+ "schema": "verity-vllm/workload/v1",
+ "model": "allenai/OLMoE-1B-7B-0924",
+ "case": "OLMOE",
+ "tokenizer_revision": "6d84c48581ece794365f2b8e9cfb043c68ade9c5",
+ "seed": 0,
+ "variants": {
+  "greedy": {
+   "temperature": 0.0,
+   "top_p": 1.0,
+   "top_k": 0
+  }
+ },
+ "seeds": [],
+ "sampling": {
+  "variant": "greedy",
+  "seed": null,
+  "n": 1
+ },
+ "serving_profile": "sweep-B8",
+ "context_class": "I32-O128",
+ "length_seed": "76afdacd015829f21970eddd6adef669fd0639524682855fd3b3975557142c75",
+ "prompt_seed": "76afdacd015829f21970eddd6adef669fd0639524682855fd3b3975557142c75",
+ "replicate": 0,
+ "length_rule": {
+  "input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] nudged off powers of two; seeded permutation",
+  "output": "same over [2, O]; paired by seeded permutation",
+  "depends_on": "SHA256(row_id) only"
+ },
+ "expected_engine_steps": 128,
+ "engine_args_required": {
+  "max_num_batched_tokens": 2048,
+  "max_model_len": 160
+ },
+ "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 a094266ac6c4982e (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
+ "prompt_lengths": [
+  10,
+  15,
+  17,
+  19,
+  20,
+  29,
+  32
+ ],
+ "max_tokens": [
+  2,
+  7,
+  17,
+  45,
+  69,
+  79,
+  111,
+  128
+ ],
+ "requests": [
+  {
+   "request_id": "b0b3ee91-0d25-55db-aba4-692c2b19f34d",
+   "index": 0,
+   "prompt_len": 15,
+   "max_tokens": 45,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    22427,
+    342,
+    253,
+    4293,
+    358,
+    10317,
+    2221,
+    296,
+    539,
+    273,
+    616,
+    5492,
+    13,
+    285,
+    275
+   ],
+   "prompt_text": "Nor with the immemorial superstition of their race, and in",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶36"
+    ]
+   }
+  },
+  {
+   "request_id": "d138c16a-bc1b-5a64-a24b-7139e4ca1445",
+   "index": 1,
+   "prompt_len": 32,
+   "max_tokens": 17,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    1628,
+    15343,
+    12876,
+    479,
+    13,
+    619,
+    11761,
+    5767,
+    12694,
+    13,
+    326,
+    634,
+    771,
+    14197,
+    13,
+    594,
+    2080,
+    432,
+    2509,
+    368,
+    667,
+    557,
+    10613,
+    13,
+    2581,
+    11323,
+    281,
+    634,
+    643,
+    591,
+    9024,
+    15
+   ],
+   "prompt_text": "“Believe me, my dear Miss Elizabeth, that your modesty, so far from doing you any disservice, rather adds to your other perfections.",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶27"
+    ]
+   }
+  },
+  {
+   "request_id": "a86443fb-aeff-55d9-adef-c7156df15be0",
+   "index": 2,
+   "prompt_len": 29,
+   "max_tokens": 7,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    1628,
+    510,
+    9129,
+    10954,
+    273,
+    436,
+    5859,
+    1806,
+    753,
+    344,
+    13,
+    773,
+    13382,
+    1701,
+    37593,
+    9594,
+    285,
+    2684,
+    2717,
+    15,
+    380,
+    4980,
+    26616,
+    9023,
+    1077,
+    1652,
+    28,
+    597,
+    871
+   ],
+   "prompt_text": "“The ancient teachers of this science,” said he, “promised impossibilities and performed nothing. The modern masters promise very little; they know",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶15"
+    ]
+   }
+  },
+  {
+   "request_id": "2246b9a2-6d8e-502b-b87f-058fef8a239b",
+   "index": 3,
+   "prompt_len": 10,
+   "max_tokens": 69,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    3039,
+    597,
+    497,
+    512,
+    275,
+    253,
+    10263,
+    14,
+    4461,
+    13
+   ],
+   "prompt_text": "When they were all in the drawing-room,",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶75"
+    ]
+   }
+  },
+  {
+   "request_id": "9c40abd9-ca6b-59e4-8c67-36f339b4fee3",
+   "index": 4,
+   "prompt_len": 17,
+   "max_tokens": 111,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    1628,
+    42,
+    452,
+    417,
+    247,
+    5545,
+    273,
+    2305,
+    15,
+    48600,
+    2205,
+    457,
+    84,
+    6868,
+    1209,
+    414,
+    1806
+   ],
+   "prompt_text": "“I have not a doubt of Mr. Bingley’s sincerity,”",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶25"
+    ]
+   }
+  },
+  {
+   "request_id": "e49099af-53da-5eee-85a0-21ea9dfe91aa",
+   "index": 5,
+   "prompt_len": 20,
+   "max_tokens": 128,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    1552,
+    6519,
+    1724,
+    1314,
+    479,
+    15,
+    309,
+    369,
+    18648,
+    13762,
+    275,
+    619,
+    1211,
+    2564,
+    326,
+    3771,
+    460,
+    13,
+    285,
+    6296
+   ],
+   "prompt_text": "This speech calmed me. I was firmly convinced in my own mind that Justine, and indeed",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶28"
+    ]
+   }
+  },
+  {
+   "request_id": "c2524fa5-e691-5eed-b599-2f295ce0a709",
+   "index": 6,
+   "prompt_len": 19,
+   "max_tokens": 2,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    3039,
+    8955,
+    369,
+    689,
+    13,
+    703,
+    4895,
+    3587,
+    281,
+    14884,
+    13,
+    285,
+    5767,
+    48600,
+    2205,
+    3407,
+    490,
+    5302,
+    617
+   ],
+   "prompt_text": "When dinner was over, she returned directly to Jane, and Miss Bingley began abusing her",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶9"
+    ]
+   }
+  },
+  {
+   "request_id": "a2dab7d5-bfa2-54c0-a446-21a8328552ff",
+   "index": 7,
+   "prompt_len": 10,
+   "max_tokens": 79,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    1628,
+    42,
+    588,
+    3517,
+    5513,
+    281,
+    752,
+    841,
+    10450,
+    20845
+   ],
+   "prompt_text": "“I will soon explain to what these feelings tended",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶48"
+    ]
+   }
+  }
+ ],
+ "sweep": {
+  "schema": "verity-sweep/workload/v1",
+  "row_id": "olmoe-1b-7b__bf16__rtxpro6000__tp1__b8__i32__o128__mixed__greedy__bi-eager",
+  "seed": "76afdacd015829f21970eddd6adef669fd0639524682855fd3b3975557142c75",
+  "batch": 8,
+  "max_input": 32,
+  "max_output": 128,
+  "min_input": 8,
+  "min_output": 2,
+  "sampling": "greedy",
+  "sampling_params": {
+   "temperature": 0.0,
+   "top_p": 1.0,
+   "top_k": 0
+  },
+  "arrivals": "none",
+  "input_lengths": [
+   15,
+   32,
+   29,
+   10,
+   17,
+   20,
+   19,
+   10
+  ],
+  "output_caps": [
+   45,
+   17,
+   7,
+   69,
+   111,
+   128,
+   2,
+   79
+  ],
+  "sampling_seeds": [],
+  "arrival_offsets_s": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "arrive_steps": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "arrival_rule": {
+   "nominal_step_s": 0.01,
+   "arrive_step": "round(offset_s / nominal_step_s)",
+   "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"
+  },
+  "length_rule": {
+   "input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] nudged off powers of two; seeded permutation",
+   "output": "same over [2, O]; paired by seeded permutation",
+   "depends_on": "SHA256(row_id) only"
+  },
+  "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
+  "lengths_only": false
+ },
+ "note": "R12 sweep olmoe-1b-7b__bf16__rtxpro6000__tp1__b8__i32__o128__mixed__greedy__bi-eager: B=8 I<=32 O<=128 greedy arrivals=none; prompt lens [15, 32, 29, 10, 17, 20, 19, 10], caps [45, 17, 7, 69, 111, 128, 2, 79], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
+}
