@@ -1158,3 +1158,49 @@ def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_
     assert V.main([str(alone), "--draws", "1", "--jobs", "1", "--run", "r-test"]) == 1
     verdict = json.loads((alone / "verify.json").read_text())
     assert verdict["transcripts"][0]["accepted"] and verdict["uncontrolled"] == [verdict["transcripts"][0]["manifest"]]
+
+
+FILL_STUB = """#!/bin/bash
+echo '{"kind": "timing"}'
+case "$SHAPES" in
+  bad) echo "ValueError: the kernels take m a multiple of 64, n of 128 and k of 1024" >&2; exit 1;;
+  once) [ -e "$STUB_SEEN" ] || { touch "$STUB_SEEN"; echo "transient" >&2; exit 1; };;
+esac
+"""
+
+
+def test_forms_fill_exits_4_only_at_the_pass_that_failed(tmp_path):
+    """forms_fill.sh under a stub run.py: 99 while chunks remain and 0 once every chunk is done; 4 right after a failed pass,
+    naming the chunk and its error in the log, and the next start runs that chunk again; 1 at a chunk's sixth start.  A
+    failure never turns into a later exit 4 (the 18:26Z forms jobs: their last chunk passed, then 4 for chunks refused an hour
+    earlier, and the retry 4 at once with nothing in the log)."""
+    ship, stubs = tmp_path / "ship", tmp_path / "bin"
+    (ship / "check").mkdir(parents=True)
+    stubs.mkdir()
+    files = {"pearl_c_sm120.cubin": "x", "run.py": "", "check/check.json": "{}"}
+    for name, text in files.items():
+        (ship / name).write_text(text)
+    (ship / "MANIFEST.sha256").write_text("".join(f"{hashlib.sha256(t.encode()).hexdigest()}  {n}\n" for n, t in files.items()))
+    (stubs / "python3").write_text(FILL_STUB)
+    (stubs / "python3").chmod(0o755)
+    env = {**os.environ, "PATH": f"{stubs}:{os.environ['PATH']}", "GPU_LEASE_UUID": "GPU-test", "STUB_SEEN": str(tmp_path / "seen")}
+
+    def starts(out: str, table: str, n: int, *cubin: str) -> list[subprocess.CompletedProcess]:
+        (tmp_path / f"{out}.chunks").write_text(table)
+        argv = ["bash", str(HERE / "forms_fill.sh"), str(tmp_path / f"{out}.chunks"), str(tmp_path / out), str(ship), *cubin]
+        return [subprocess.run(argv, env=env, capture_output=True, text=True, check=False) for _ in range(n)]
+
+    ok = starts("ok", "# (shape, form set)\n\na|64|v|1|w,nodes|split|b|0|2\nb|once|v|1|p,one|split|b|0|1\nc|64|v|1|s,one|split|w|0|1\n",
+                5, hashlib.sha256(b"x").hexdigest())
+    assert [r.returncode for r in ok] == [99, 4, 99, 0, 0]
+    assert "chunk b failed" in ok[1].stdout and "transient" in ok[1].stdout and "all 3 chunks done" in ok[3].stdout
+    assert {p.name for p in (tmp_path / "ok").glob("b.*")} == {"b.done", "b.jsonl", "b.err", "b.starts", "b.try1.jsonl", "b.try1.err"}
+    passes = [json.loads(x) for x in (tmp_path / "ok" / "a.jsonl").read_text().splitlines() if '"pass"' in x]
+    assert [(p["pass"], p["rc"], p["gpu_lease_uuid"]) for p in passes] == [(1, 0, "GPU-test")]
+
+    bad = starts("bad", "a|64|v|1|w,nodes|split|b|0|1\nb|bad|v|1|w,nodes|split|b|0|1\nc|64|v|1|w,nodes|split|b|0|1\n", 7)
+    assert [r.returncode for r in bad] == [99, 4, 4, 4, 4, 4, 1]
+    assert all("chunk b failed" in r.stdout and "k of 1024" in r.stdout for r in bad[1:6])
+    assert "started 5 times" in bad[6].stdout and not (tmp_path / "bad" / "c.starts").exists()
+
+    assert [r.returncode for r in starts("wrong", "a|64|v|1|w,nodes|split|b|0|1\n", 1, "0" * 64)] == [1]
