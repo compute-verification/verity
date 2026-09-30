@@ -470,7 +470,7 @@ def family(name: str, rows: int, k: int, rng) -> tuple[np.ndarray, np.ndarray]:
         g = lambda: rng.choice([-1.0, 1.0], (rows, k)) * rng.choice([2 / 3, 1.0], (rows, k))  # noqa: E731
         A, B = g(), g()
         A[:, ::8], B[:, ::8] = (0.1 * rng.choice([-1.0, 1.0], (rows, k // 8)) for _ in range(2))
-        return A, 0.02 * B
+        return A, 2.0 ** -6 * B                             # a power of two keeps B's BF16 rho at A's, on the screen's side
     raise ValueError(name)
 
 
