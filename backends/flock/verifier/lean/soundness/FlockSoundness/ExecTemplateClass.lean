@@ -76,9 +76,8 @@ def setupH_templateTableClass : TableClass ((setupH_templateLayout ht h hr).2.2.
       show Typed.col st.c (HmRow.blockOf t) g ((order k.done (k.done.getD k.unit default)).getD c.val 0) = _
       rw [order_getD_inCols htake hw]
       have hget : (k.done.getD k.unit default).inCols.getD c.val 0 = (k.done.getD k.unit default).inCols[c.val] := by
-        generalize k.done.getD k.unit default = u at hw ⊢
-        intro hw
-        simp [Array.getD, hw]
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hw]
+        rfl
       rw [hget]
     have hpos : templateCopyPos ht h hr regs g c.val = ⟨Typed.copySrc st.c g c.val, setupH_copySrc_lt ht h hr g.isLt hw⟩ := by
       unfold templateCopyPos
