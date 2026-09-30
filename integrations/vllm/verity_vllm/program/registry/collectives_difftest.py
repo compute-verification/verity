@@ -38,7 +38,9 @@ def production(statics: dict, inputs: list) -> list:
 
     if torch.cuda.device_count() < 2:
         raise RuntimeError(f"the two-rank collectives need 2 CUDA devices, found {torch.cuda.device_count()}")
-    parts = [x.detach().to(f"cuda:{r}") for r, x in enumerate(inputs)]
+    parts = [x.detach().to(f"cuda:{r}", copy=True) for r, x in enumerate(inputs)]
+    for r in range(2):                       # the copies to cuda:1 run on cuda:0's stream; NCCL's kernels would not wait for them
+        torch.cuda.synchronize(r)
     if statics["op"] == "all_reduce":
         nccl.all_reduce(parts)
         got = parts
