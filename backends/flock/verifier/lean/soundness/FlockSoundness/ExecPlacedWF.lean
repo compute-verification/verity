@@ -82,7 +82,7 @@ theorem netCols_of_ofRows {net : Net} {u : ℕ} (ha : ∃ ra, Sparse.ofRows ra (
 theorem decode_mono (fuel : ℕ) : ∀ (bd : Lookup.Builder) (bits : List ℕ),
     bd.a.size ≤ (Lookup.decode bd bits fuel).1.a.size := by
   induction fuel with
-  | zero => intro bd bits; unfold Lookup.decode; split <;> exact Nat.le_refl _
+  | zero => intro bd bits; unfold Lookup.decode; split <;> first | exact Nat.le_refl _ | omega
   | succ fuel ih =>
     intro bd bits
     unfold Lookup.decode
@@ -156,6 +156,7 @@ theorem build_placed {name : String} {table : ByteArray} {n lo bits : ℕ} {net 
   have e4a := forIn_range_pure (fun r : Lookup.Builder => r.a.size) (fun i r => by split <;> simp) hs4
   refine ⟨⟨_, ha⟩, ⟨_, hb⟩, fun lk hlk => ?_⟩
   cases hlk
+  dsimp only
   refine ⟨?_, hc'.2⟩
   rw [ofRows_width hb]
   have hu := le_two_pow_log2ceil (s4.a.size + 1)
