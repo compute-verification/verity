@@ -1,0 +1,104 @@
+# Kueue on the Nebius cluster (Kueue v0.19.6, applied by cluster_up.sh). The weekly retune edits only this file: the nominalQuota
+# lines below, from usage_report.py's summary.
+#
+# One cohort (nebius), two ClusterQueues. Tonight (root, 08:33Z) coverage is the binding workstream: circuits has 5 GPUs, provers 3,
+# and circuits may borrow up to 2 of provers' idle GPUs (with the CPU and memory two cells need). Borrowing never preempts
+# (borrowWithinCohort: Never), so a running capture or M0 bench is never evicted for it; when provers' own jobs queue, provers
+# reclaims its quota by preempting circuits' borrowers (reclaimWithinCohort: Any), which SkyPilot requeues. provers borrows the same
+# way from circuits' idle quota. Nothing is preempted within a queue (withinClusterQueue: Never; root 09:09Z, after captures threw
+# away cov-k09-3's Build twice): capture, sweep-night and the other priorities set admission order only.
+# quiet_hour.sh holds circuits' admissions 12:30-13:30Z (stopPolicy: Hold) so benches can re-measure without new Builds.
+#
+# Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
+# ~1,690 GiB), or it admits pods that stay Pending.
+# CPU: circuits 112, provers 64 (the steward's 09:20Z set). The merge checks and pinned benches run outside Kueue on their own
+# cores, so a Kueue cut protects nothing for them.
+# The split is circuits 5 GPUs, provers 3. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
+# holds those with a placeholder pod and applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs
+# borrow circuits' idle GPUs meanwhile. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata: {name: vy-nebius-1}
+spec:
+  nodeLabels: {verity.dev/server: vy-nebius-1}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: circuits}
+spec:
+  cohortName: nebius
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    borrowWithinCohort: {policy: Never}
+    withinClusterQueue: Never
+  resourceGroups:
+  - coveredResources: [nvidia.com/gpu, cpu, memory]
+    flavors:
+    - name: vy-nebius-1
+      resources:
+      - {name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}
+      - {name: cpu, nominalQuota: 112, borrowingLimit: 32}
+      - {name: memory, nominalQuota: 1280Gi, borrowingLimit: 384Gi}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: provers}
+spec:
+  cohortName: nebius
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    borrowWithinCohort: {policy: Never}
+    withinClusterQueue: Never
+  resourceGroups:
+  - coveredResources: [nvidia.com/gpu, cpu, memory]
+    flavors:
+    - name: vy-nebius-1
+      resources:
+      - {name: nvidia.com/gpu, nominalQuota: 3}
+      - {name: cpu, nominalQuota: 64}
+      - {name: memory, nominalQuota: 384Gi}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: circuits, namespace: default}
+spec: {clusterQueue: circuits}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: provers, namespace: default}
+spec: {clusterQueue: provers}
+---
+# Priorities, highest first. A job names one with the pod label kueue.x-k8s.io/priority-class.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: capture}
+value: 1100
+description: short port-lane captures (jobs/port-capture.yaml), first to the next free circuits GPU
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: sweep-night}
+value: 1000
+description: the night's vLLM config sweep
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: circuits}
+value: 500
+description: daytime config runs
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: prover-bench}
+value: 300
+description: timed prover runs, in a quiet window (jobs/prover-bench.yaml)
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: dev}
+value: 100
+description: prover development and anything else that can wait
