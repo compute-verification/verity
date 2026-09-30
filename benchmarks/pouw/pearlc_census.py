@@ -656,6 +656,21 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                             "cross_group_share_max": round(float(size.max()) / T, 6),
                             "cross_group_beyond_debit_mean": round(float(beyond.mean()) / T, 6),
                             "cross_group_beyond_debit_max": round(float(beyond.max()) / T, 6)})
+            if transfer_words and forming == "s5":
+                # The reviewer's transfer test on the unpromoted chain: a set found on a simulated draw, skipped on the real one.
+                sample = np.unique(np.linspace(0, len(A) - 1, transfer_words).astype(int))
+                a_sim = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A", "simulated"))[0][ii.ravel()]
+                b_sim = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B", "simulated"))[0][jj.ravel()]
+                hits = nonempty = 0
+                for p in sample:
+                    S_sim = greedy_pure(a_sim[p:p + 1], b_sim[p:p + 1])
+                    nonempty += bool(S_sim)
+                    C = np.zeros(1)
+                    for t in range(T):
+                        if t not in S_sim:
+                            C, _ = step(C, A[p:p + 1, 32 * t:32 * t + 32], B[p:p + 1, 32 * t:32 * t + 32])
+                    hits += bool(S_sim) and float(C[0]) == float(words[0][p])
+                row.update({"transfer_words": len(sample), "transfer_nonempty_sim_sets": nonempty, "transfer_hits": hits})
         if G and with_debit:
             flags, eF = debit(A, B, G)
             per_word = flags.sum(1)
