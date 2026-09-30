@@ -25,7 +25,9 @@ PH_HD uint32_t quad_word(int a, int row, int col) { return mix32(0xA5000000u ^ (
 PH_HD uint8_t ptn(size_t i) { return (uint8_t)(i % 251); }
 
 // ---------------------------------------------------------------- the check vectors
-constexpr int NTS = 11, NTSL = 12, NSH = 6, NSHA = 10, NSHAW = 7, NB3 = 8;
+constexpr int NTS = 11, NTSL = 12, NSH = 6, NSHA = 10, NSHAW = 7, NB3 = 8, NTREE = 3;
+// the m = 32 tile leaf's two-level form (P6) takes two new domain bytes: these are stand-ins for timing, not a statement's
+constexpr uint8_t D_SUBLEAF = 0x24, D_TOPLEAF = 0x25;
 struct TsCase { int n, d, out; };
 PH_HD TsCase ts_case(int i) {
   const TsCase C[NTS] = {{0, 0x1F, 32}, {0, 0x1F, 200}, {1, 0x1F, 32}, {17, 0x01, 32}, {167, 0x06, 32}, {168, 0x1F, 32},
@@ -52,6 +54,10 @@ PH_HD int b3_case(int i) {
   const int C[NB3] = {0, 1, 63, 64, 65, 104, 1023, 1024};
   return C[i];
 }
+PH_HD int tree_case(int i) {
+  const int C[NTREE] = {2048, 16384, 32768};
+  return C[i];
+}
 
 struct CheckOut {
   uint8_t ts[NTS][200], tsl[NTSL][32], tss[3][32], shake128[NSH][32], shake256[NSH][32], sha[NSHA][32], shaw[NSHAW][32];
@@ -60,6 +66,10 @@ struct CheckOut {
   uint32_t pc_ticket[2][8];
   uint64_t quad[32][4], msg_stream[4], ts_shf[4];
   uint32_t sha_stream[8], b3_stream[8];
+  // BLAKE3's trees (1 KB chunks) and the fine tree (64-byte leaves) of ptn(len), one thread and on a warp or block; the m = 32
+  // tile leaf (64 digests, 2 KB) flat and two-level; the quad digest under keyed BLAKE3
+  uint32_t b3tree[NTREE][8], b3fine[NTREE][8], b3tree_warp[2][8], b3fine_warp[8], b3fine_block[8], quad_b3[32][8];
+  uint64_t leaf32_flat[4], leaf32_two[4];
 };
 
 template <class Lane>
@@ -105,6 +115,20 @@ PH_HD uint64_t ptn_lane(int j) {
   uint64_t x = 0;
   for (int b = 7; b >= 0; --b) x = x << 8 | ptn(8 * j + b);
   return x;
+}
+PH_HD uint32_t ptn_le_word(int j) {
+  return (uint32_t)ptn(4 * j) | (uint32_t)ptn(4 * j + 1) << 8 | (uint32_t)ptn(4 * j + 2) << 16 | (uint32_t)ptn(4 * j + 3) << 24;
+}
+PH_HD void b3_test_key(uint32_t key[8]) {
+  for (int i = 0; i < 8; ++i) key[i] = (uint32_t)(4 * i) | (uint32_t)(4 * i + 1) << 8 | (uint32_t)(4 * i + 2) << 16 | (uint32_t)(4 * i + 3) << 24;
+}
+// The m = 32 tile leaf over 256 lanes (64 digests): flat, TurboSHAKE128 under D_LEAF (13 permutations); two-level, 4 sub-leaves
+// of 64 lanes under D_SUBLEAF (4 each, in parallel), then their 4 digests under D_TOPLEAF (1).
+template <class Lane>
+PH_HD void leaf32_two_level(const Lane& lane, uint64_t out[4]) {
+  uint64_t sub[16];
+  for (int s = 0; s < 4; ++s) ph::ts128<64>(D_SUBLEAF, [&](int j) { return lane(64 * s + j); }, sub + 4 * s);
+  ph::ts128<16>(D_TOPLEAF, [&](int j) { return sub[j]; }, out);
 }
 PH_HD uint32_t ptn_be_word(int j) {
   return (uint32_t)ptn(4 * j) << 24 | (uint32_t)ptn(4 * j + 1) << 16 | (uint32_t)ptn(4 * j + 2) << 8 | ptn(4 * j + 3);
@@ -217,6 +241,15 @@ PH_HD void run_checks(uint8_t* buf, CheckOut* o) {
     for (int i = 0; i < ph::pearlc::LEAF_LANES; ++i) ph::tss_lane(st, dg[i]);
     ph::tss_final(st, ph::pearlc::D_LEAF, o->pc_leaf_stream);
   }
+  if constexpr (PART == 6) {
+    uint32_t iv[8];
+    ph::b3_iv(iv);
+#pragma unroll 1
+    for (int i = 0; i < NTREE; ++i) {
+      ph::blake3_tree<32>(iv, 0, 16, tree_case(i) / 1024, [](int j) { return ptn_le_word(j); }, o->b3tree[i]);
+      ph::blake3_tree<512>(iv, 0, 1, tree_case(i) / 64, [](int j) { return ptn_le_word(j); }, o->b3fine[i]);
+    }
+  }
   if constexpr (PART == 5) {
     uint8_t seed[32], label[20], sub[32];
     const char* L = "pearl/v4/FP8/jackpot";
@@ -231,6 +264,8 @@ PH_HD void run_checks(uint8_t* buf, CheckOut* o) {
       ph::pearlc::ticket(tk, [k](int r, int c) { return tile_word(0, 48 * k + r, 32 * k + c); }, o->pc_ticket[k]);
     ph::pearlc::row_segment<128>([&](int j) { return ph::le64(buf + 8 * j); }, o->pc_rows);
     msg_stream(PHI, o->msg_stream);
+    ph::ts128<256>(ph::pearlc::D_LEAF, [](int j) { return ptn_lane(j); }, o->leaf32_flat);
+    leaf32_two_level([](int j) { return ptn_lane(j); }, o->leaf32_two);
     // TurboSHAKE128(ptn(168), 0x21) with the other rotations (not PH_KECCAK_SHF's)
     uint64_t st[25] = {};
     for (int w = 0; w < ph::TS_RATE; ++w) st[w] ^= ptn_lane(w);
@@ -299,5 +334,18 @@ static void print_checks(const CheckOut& o, const char* w) {
   put_lanes(b, o.ts_shf, 4), hex(w, "turboshake128 other rotations", 21, 0x21, b, 32);
   put_be(b, o.sha_stream), hex(w, "sha stream 3 blocks", 192, 0, b, 32);
   put_le(b, o.b3_stream), hex(w, "blake3 stream 3 blocks", 192, 0, b, 32);
+  for (int i = 0; i < NTREE; ++i)
+    put_le(b, o.b3tree[i]), hex(w, "blake3 tree", tree_case(i), 0, b, 32), put_le(b, o.b3fine[i]), hex(w, "blake3 fine tree", tree_case(i), 0, b, 32);
+  put_le(b, o.b3tree_warp[0]), hex(w, "blake3 tree warp", 2048, 0, b, 32);
+  put_le(b, o.b3tree_warp[1]), hex(w, "blake3 tree warp", 32768, 0, b, 32);
+  put_le(b, o.b3fine_warp), hex(w, "blake3 fine tree warp", 2048, 0, b, 32);
+  put_le(b, o.b3fine_block), hex(w, "blake3 fine tree block", 32768, 0, b, 32);
+  put_lanes(b, o.leaf32_flat, 4), hex(w, "leaf32 flat", 2048, ph::pearlc::D_LEAF, b, 32);
+  put_lanes(b, o.leaf32_two, 4), hex(w, "leaf32 two-level", 2048, D_TOPLEAF, b, 32);
+  for (int l = 0; l < 32; ++l) {
+    char what[32];
+    snprintf(what, sizeof what, "quad b3 lane %d", l);
+    put_le(b, o.quad_b3[l]), hex(w, what, 256, 0, b, 32);
+  }
   fflush(stdout);
 }

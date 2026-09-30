@@ -150,6 +150,27 @@ def expected() -> dict[tuple, str]:
     for b in range(3):
         cv = tuple(B3.compress(cv, le32(_chain_block(b)), 0, 64, 0)[:8])
     out["blake3 stream 3 blocks", 192, 0] = le32(cv).hex()
+
+    def fine(data: bytes) -> bytes:   # BLAKE3's tree over 64-byte leaves (a candidate form, not BLAKE3 of the bytes)
+        cvs = [tuple(B3.compress(B3.IV, data[i:i + 64], i // 64, 64, B3.CHUNK_START | B3.CHUNK_END)[:8]) for i in range(0, len(data), 64)]
+        while len(cvs) > 1:
+            root = B3.ROOT if len(cvs) == 2 else 0
+            cvs = [tuple(B3.compress(B3.IV, le32(cvs[i] + cvs[i + 1]), 0, 64, B3.PARENT | root)[:8]) for i in range(0, len(cvs), 2)]
+        return le32(cvs[0])
+    for n in (2048, 16384, 32768):
+        out["blake3 tree", n, 0] = blake3_pkg.blake3(ptn(n)).hexdigest()
+        out["blake3 fine tree", n, 0] = fine(ptn(n)).hex()
+    for n in (2048, 32768):
+        out["blake3 tree warp", n, 0] = blake3_pkg.blake3(ptn(n)).hexdigest()
+    out["blake3 fine tree warp", 2048, 0] = fine(ptn(2048)).hex()
+    out["blake3 fine tree block", 32768, 0] = fine(ptn(32768)).hex()
+    out["leaf32 flat", 2048, 0x22] = turboshake128(ptn(2048), 0x22, 32).hex()
+    subs = b"".join(turboshake128(ptn(2048)[512 * s:512 * (s + 1)], 0x24, 32) for s in range(4))
+    out["leaf32 two-level", 2048, 0x25] = turboshake128(subs, 0x25, 32).hex()
+    for lane in range(32):
+        row, chunk = (lane >> 2) + 8 * (lane & 1), (lane >> 1) & 1
+        msg = b"".join(le32([quad_word(a, row, 32 * chunk + j) for j in range(32)]) for a in range(2))
+        out[f"quad b3 lane {lane}", 256, 0] = blake3_pkg.blake3(msg, key=key).hexdigest()
     return out
 
 

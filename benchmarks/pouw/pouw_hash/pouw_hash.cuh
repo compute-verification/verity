@@ -426,6 +426,102 @@ PH_HD void blake3_chunk(const uint32_t* key, const uint8_t* m, size_t len, uint8
   for (int i = 0; i < 32; ++i) out[i] = (uint8_t)(cv[i >> 2] >> (8 * (i & 3)));
 }
 
+// BLAKE3's tree over n = 2^j whole chunks (the chunks' chaining values, then parent nodes pairwise in index order, ROOT on the
+// top one; n = 1: the chunk itself is the root). A chunk is `blocks` 64-byte blocks: 16 is BLAKE3 itself (1,024-byte chunks);
+// 1 is the fine tree of 64-byte leaves (a candidate form for decode, not BLAKE3's hash of the bytes). key: blake3_chunk's
+// (IV unkeyed, mode 0; the key with B3_KEYED_HASH). word(i): the i-th little-endian word of the chunk.
+constexpr uint32_t B3_PARENT = 4;
+PH_HD void b3_iv(uint32_t cv[8]) {
+  const uint32_t IV[8] = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};
+  for (int i = 0; i < 8; ++i) cv[i] = IV[i];
+}
+template <class Word>
+PH_HD void blake3_chunk_cv(const uint32_t key[8], uint32_t mode, uint64_t counter, int blocks, uint32_t root, const Word& word,
+                           uint32_t cv[8]) {
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cv[i] = key[i];
+#pragma unroll 1
+  for (int b = 0; b < blocks; ++b) {
+    uint32_t m[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) m[i] = word(16 * b + i);
+    const uint32_t flags = mode | (b == 0 ? B3_CHUNK_START : 0) | (b + 1 == blocks ? B3_CHUNK_END | root : 0);
+    blake3_compress(cv, m, counter, 64, flags, cv);
+  }
+}
+PH_HD void blake3_parent(const uint32_t key[8], uint32_t mode, const uint32_t l[8], const uint32_t r[8], uint32_t root,
+                         uint32_t out[8]) {
+  uint32_t m[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) m[i] = l[i], m[8 + i] = r[i];
+  blake3_compress(key, m, 0, 64, mode | B3_PARENT | root, out);
+}
+// One thread, n <= MAXN chunks; word(i) is the whole input's i-th word.
+template <int MAXN, class Word>
+PH_HD void blake3_tree(const uint32_t key[8], uint32_t mode, int blocks, int n, const Word& word, uint32_t out[8]) {
+  uint32_t cv[MAXN][8];
+  const int per = 16 * blocks;
+#pragma unroll 1
+  for (int c = 0; c < n; ++c) blake3_chunk_cv(key, mode, c, blocks, n == 1 ? B3_ROOT : 0, [&](int i) { return word(per * c + i); }, cv[c]);
+#pragma unroll 1
+  for (int w = n; w > 1; w /= 2)
+#pragma unroll 1
+    for (int i = 0; i < w / 2; ++i) blake3_parent(key, mode, cv[2 * i], cv[2 * i + 1], w == 2 ? B3_ROOT : 0, cv[i]);
+  for (int i = 0; i < 8; ++i) out[i] = cv[0][i];
+}
+
+#ifdef __CUDACC__
+// The same tree on a warp: 32 / N trees of N = 2^j chunks, lane l taking chunk l % N of tree l / N, the tree's lanes reducing
+// through shuffles (depth: blocks compressions, then log2 N parents). Every lane calls it (converged); word(c, i): chunk c's
+// i-th word of this lane's tree. Lane l with l % N == 0 gets its tree's root.
+template <int N, class Word>
+__device__ __forceinline__ void warp_blake3_tree(const uint32_t key[8], uint32_t mode, int blocks, const Word& word, uint32_t out[8]) {
+  static_assert(N >= 1 && N <= 32 && (N & (N - 1)) == 0, "a power of two within a warp");
+  const int c = (threadIdx.x & 31) % N;
+  blake3_chunk_cv(key, mode, c, blocks, N == 1 ? B3_ROOT : 0, [&](int i) { return word(c, i); }, out);
+#pragma unroll
+  for (int s = 1; s < N; s *= 2) {
+    uint32_t r[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) r[i] = __shfl_down_sync(0xffffffffu, out[i], s);
+    if (c % (2 * s) == 0) blake3_parent(key, mode, out, r, 2 * s == N ? B3_ROOT : 0, out);
+  }
+}
+// The fine tree (64-byte leaves, blocks = 1) of N = 2^j leaves on a block of N threads (N a multiple of 32, at most 1,024):
+// thread t compresses leaf t, each warp reduces its 32, and warp 0 the warps' roots; sh: N / 32 x 8 words of shared memory.
+// Every thread calls it; thread 0 gets the root. Depth 1 + log2 N compressions.
+template <int N, class Word>
+__device__ __forceinline__ void block_blake3_fine(const uint32_t key[8], uint32_t mode, const Word& word, uint32_t* sh, uint32_t out[8]) {
+  static_assert(N >= 64 && N <= 1024 && (N & (N - 1)) == 0, "two warps or more, a power of two");
+  const int t = threadIdx.x, lane = t & 31;
+  blake3_chunk_cv(key, mode, t, 1, 0, [&](int i) { return word(t, i); }, out);
+#pragma unroll
+  for (int s = 1; s < 32; s *= 2) {
+    uint32_t r[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) r[i] = __shfl_down_sync(0xffffffffu, out[i], s);
+    if (lane % (2 * s) == 0) blake3_parent(key, mode, out, r, 0, out);
+  }
+  if (lane == 0)
+#pragma unroll
+    for (int i = 0; i < 8; ++i) sh[8 * (t >> 5) + i] = out[i];
+  __syncthreads();
+  if (t < 32) {
+    constexpr int W = N / 32;
+#pragma unroll
+    for (int i = 0; i < 8; ++i) out[i] = sh[8 * (lane % W) + i];
+#pragma unroll
+    for (int s = 1; s < W; s *= 2) {
+      uint32_t r[8];
+#pragma unroll
+      for (int i = 0; i < 8; ++i) r[i] = __shfl_down_sync(0xffffffffu, out[i], s);
+      if (lane % (2 * s) == 0) blake3_parent(key, mode, out, r, 2 * s == W ? B3_ROOT : 0, out);
+    }
+  }
+  __syncthreads();
+}
+#endif
+
 // ---- in a GEMM epilogue: mma.sync's FP32 accumulators, hashed where they sit -------------------------------------------------
 //
 // The m16n8 accumulator fragment of every mma.sync m16n8kK with FP32 accumulation (FP8 k32, FP4 k64, BF16 k16): lane
@@ -487,6 +583,30 @@ __device__ __forceinline__ void quad_msg_digest(const Frag& frag, uint8_t D, uin
     __syncwarp();
   }
   quad_final<A>(s, D, out);
+}
+// The same messages under keyed BLAKE3 (a candidate for hashing format -h1, P5: one chunk of 4·A blocks of 64 bytes, key
+// B3_KEYED_HASH, the message bytes TurboSHAKE128's): two groups of the transpose are one block, compressed as it completes.
+template <int A, class Frag>
+__device__ __forceinline__ void quad_msg_digest_b3(const Frag& frag, const uint32_t key[8], uint64_t* scratch, uint32_t out[8]) {
+  const int lane = threadIdx.x & 31, quad = lane >> 2, t = lane & 3;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) out[i] = key[i];
+  uint32_t w[16];
+#pragma unroll
+  for (int q = 0; q < 4 * A; ++q) {
+    quad_put(frag, q, quad, t, scratch);
+    __syncwarp();
+#pragma unroll
+    for (int e = 0; e < 4; ++e) {
+      const uint64_t x = scratch[quad_slot(t, e, quad)];
+      w[8 * (q & 1) + 2 * e] = (uint32_t)x, w[8 * (q & 1) + 2 * e + 1] = (uint32_t)(x >> 32);
+    }
+    __syncwarp();
+    if (q & 1) {
+      const int b = q >> 1;
+      blake3_compress(out, w, 0, 64, B3_KEYED_HASH | (b == 0 ? B3_CHUNK_START : 0) | (b == 2 * A - 1 ? B3_CHUNK_END | B3_ROOT : 0), out);
+    }
+  }
 }
 #endif
 
