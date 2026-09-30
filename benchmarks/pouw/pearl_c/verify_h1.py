@@ -14,7 +14,8 @@ Standard library only. For each transcript:
   over A's root;
 - when the transcript has the post-GEMM hashing: every (row, 32-column chunk) message digest (`pearl_c.message_digest`), every
   tile leaf (`pearl_c.leaf` over the tile's `Checked` C~ and U words), J processes over blocks of tiles, and every level of the
-  tile tree (the format's tree over the leaves, schema `verity/pouw/tile/v1`), against the kernels'.
+  tile tree (the format's tree over the leaves, schema `verity/pouw/tile/v1`), against the kernels'.  A transcript without a
+  ``digests`` section (tile leaves hashed in the GEMM's epilogue, digests never stored) has its leaves checked the same way.
 
 It prints one line per transcript, `<format> verifier accept: <run>:<path> sha256:<hex> …` or `… reject: …` (format h1, h2
 or h3), and exits 1 if any transcript is rejected.
@@ -94,9 +95,9 @@ def tile_job(job: tuple) -> tuple[str | None, list[bytes]]:
     r0, r1 = 64 * ti, min(m, 64 * ti + 64)
     cw = struct.unpack(f"<{(r1 - r0) * n}I", section(path, where, "c", 4 * r0 * n, 4 * r1 * n))
     uw = struct.unpack(f"<{(r1 - r0) * n}I", section(path, where, "u", 4 * r0 * n, 4 * r1 * n))
-    dg = section(path, where, "digests", 32 * r0 * per, 32 * r1 * per)
+    dg = section(path, where, "digests", 32 * r0 * per, 32 * r1 * per) if "digests" in where else None
     lv = section(path, where, "leaves", 32 * (ti * tn + tj0), 32 * (ti * tn + tj1))
-    for r in range(r1 - r0):
+    for r in range(r1 - r0 if dg is not None else 0):
         for h in range(2 * tj0, 2 * tj1):
             s = r * n + 32 * h
             msg = struct.pack("<32I", *cw[s:s + 32]) + struct.pack("<32I", *uw[s:s + 32])
@@ -195,7 +196,8 @@ def verify(run: str, path: Path, jobs: int = 1) -> tuple[bool, str, str]:
             want_t = laid_out(dt, [dt.leaf(t, t, TILE, leaves[t]) for t in range(tiles)])
             if section(path, where, "tile_tree") != want_t or want_t[-32:] != troot:
                 return False, hashing, f"{run}:{path} sha256:{digest} the tile tree differs from the kernels' (every level checked)"
-            notes.append(f"{m * per} message digests, {tiles} tile leaves, tile root {troot.hex()}")
+            notes.append((f"{m * per} message digests, " if "digests" in where else "no digests section (the leaves from C~ and U), ")
+                         + f"{tiles} tile leaves, tile root {troot.hex()}")
     finally:
         pool.shutdown(cancel_futures=True)
     return True, hashing, f"{run}:{path} sha256:{digest} " + "; ".join(notes)

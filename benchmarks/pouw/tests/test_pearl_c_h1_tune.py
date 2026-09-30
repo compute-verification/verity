@@ -321,7 +321,8 @@ def test_the_verifier_regenerates_prefill_fused_a_and_splits_the_tiles(tmp_path)
     """A prefill_fused.py-style -h3 transcript made from the reference: A regenerated from its y tag (`a_half` twice a row;
     every word a finite normal), its row seeds and the unit's seed_A, then C~, U, digests, leaves and the tile tree over two
     tile rows (the second partial), checked by 3 processes. Accepted; rejected with a digest, a tile leaf or a row seed of the
-    second tile row flipped, and with A's tree poisoned as the negative control leaves it."""
+    second tile row flipped, and with A's tree poisoned as the negative control leaves it. Without its digests section (tile
+    leaves hashed in the epilogue) it is accepted, its leaves checked from C~ and U, and rejected with a leaf flipped."""
     import json as J
 
     from verity.commitments.merkle import tree_levels
@@ -378,6 +379,17 @@ def test_the_verifier_regenerates_prefill_fused_a_and_splits_the_tiles(tmp_path)
     r = write("good")
     assert r.returncode == 0 and r.stdout.startswith("h3 verifier accept:"), r.stdout + r.stderr
     assert "regenerated from their tag" in r.stdout and f"{m} row seeds" in r.stdout and "4 tile leaves" in r.stdout
+    body = {k: v for k, v in parts.items() if k != "digests"}   # leaves hashed in the epilogue: no digests stored
+    head = {"run": "test", "arm": "prefill no digests", "m": m, "rb": rb, "n": n, "hashing": "h3", "a": a, "t": t,
+            "a_rows_y": {"tag": tag, "half": rb // 2}, "sections": [[k, len(v)] for k, v in body.items()]}
+    for name, leaves_ in (("nodigests", body["leaves"]), ("nodigests-bad", body["leaves"][:40] + bytes([body["leaves"][40] ^ 1]) + body["leaves"][41:])):
+        path = tmp_path / f"{name}.bin"
+        path.write_bytes(J.dumps(head).encode() + b"\n" + b"".join({**body, "leaves": leaves_}.values()))
+        r = verifier(path, "--jobs", "3")
+        if name == "nodigests":
+            assert r.returncode == 0 and "no digests section" in r.stdout, r.stdout + r.stderr
+        else:
+            assert r.returncode == 1 and "tile 1's leaf differs" in r.stdout, r.stdout + r.stderr
     for name, change, why in (("digest", {"digests": (32 * (70 * per + 3) + 5, 1)}, "message digest (70, 3) differs"),
                               ("leaf", {"leaves": (32 * 3 + 1, 1)}, "tile 3's leaf differs"),
                               ("seed", {"row_seeds": (32 * 70, 1)}, "row 70's seed differs"),
