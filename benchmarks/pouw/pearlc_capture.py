@@ -63,21 +63,27 @@ class Stream:
         with safe_open(self.path / self.wmap[name], framework="pt") as f:
             return f.get_tensor(name)
 
-    def start(self, ids: torch.Tensor):
-        """The embedded tokens, their positions, rotary embedding and causal mask, as LlamaModel.forward builds them."""
-        h = self.tensor("model.embed_tokens.weight")[ids[0]][None]
-        pos = torch.arange(h.shape[1])[None]
+    def start(self, ids: torch.Tensor, dtype: torch.dtype | None = None):
+        """The embedded tokens (batch × tokens, optionally cast), their positions, rotary embedding and causal mask, as
+        LlamaModel.forward builds them."""
+        h = self.tensor("model.embed_tokens.weight")[ids]
+        h = h if dtype is None else h.to(dtype)
+        pos = torch.arange(h.shape[1])[None].expand(h.shape[0], -1)
         rope = L.LlamaRotaryEmbedding(config=self.cfg)(h, pos)
         mask = create_causal_mask(config=self.cfg, inputs_embeds=h, attention_mask=None, past_key_values=None, position_ids=pos)
         return h, pos, rope, mask
 
-    def layer(self, i: int, h, pos, rope, mask, capture: bool):
-        """Layer i's output and, if `capture`, each role's input (the role's linears must see one tensor)."""
+    def load(self, i: int):
+        """Decoder layer i with the checkpoint's own tensors (its dtype), built without initializing weights."""
         with torch.device("meta"):
             layer = L.LlamaDecoderLayer(self.cfg, i)
         pre = f"model.layers.{i}."
         layer.load_state_dict({k[len(pre):]: self.tensor(k) for k in self.wmap if k.startswith(pre)}, assign=True, strict=True)
-        layer.eval()
+        return layer.eval()
+
+    def layer(self, i: int, h, pos, rope, mask, capture: bool):
+        """Layer i's output and, if `capture`, each role's input (the role's linears must see one tensor)."""
+        layer = self.load(i)
         seen: dict[str, torch.Tensor] = {}
         hooks = [layer.get_submodule(m).register_forward_pre_hook(lambda mod, inp, m=m: seen.setdefault(m, inp[0].detach()))
                  for mods in ROLES.values() for m in mods] if capture else []
