@@ -148,10 +148,11 @@ class BaselineCall:
 
 
 def lt_candidates(dev, fam: Family, shape: Shape, ops: Operands, want: int = LT_CANDIDATES,
-                  ld: int | None = None) -> list[Candidate]:
+                  ld: int | None = None, refused: list[str] | None = None) -> list[Candidate]:
     """cuBLASLt's top `want` heuristic algorithms for the shape (A and B with leading dimension `ld`, default k). Each
-    candidate holds its plan; `release_plans` frees them."""
-    from native import LtCandidate
+    candidate holds its plan; `release_plans` frees them. Where cuBLASLt refuses the family outright (on sm_120, cuBLASLt
+    12.9's heuristic query returns INVALID_VALUE for MXFP4), that is no candidate, and the reason goes to `refused`."""
+    from native import LtCandidate, NativeError
 
     if fam.lt_kind is None:
         return []
@@ -161,8 +162,15 @@ def lt_candidates(dev, fam: Family, shape: Shape, ops: Operands, want: int = LT_
         dev.ck(dev.lib.ph_lt_plan_create_ld(fam.lt_kind, shape.m, shape.n, shape.k, ld or shape.k, LT_WORKSPACE, swap,
                                             C.byref(plan)))
         arr, got = (LtCandidate * want)(), C.c_int()
-        dev.ck(dev.lib.ph_lt_candidates(plan, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None, want, arr,
-                                        C.byref(got)), f"heuristics {fam.name}")
+        try:
+            dev.ck(dev.lib.ph_lt_candidates(plan, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None, want,
+                                            arr, C.byref(got)), f"heuristics {fam.name}")
+        except NativeError as ex:
+            dev.lib.ph_lt_plan_destroy(plan)
+            if refused is None:
+                raise
+            refused.append(str(ex))
+            continue
         if got.value == 0:
             dev.lib.ph_lt_plan_destroy(plan)
         for i in range(got.value):
@@ -344,7 +352,7 @@ def half_k_call(dev, fam: Family, shape: Shape, ops: Operands, lt_ws: Buffer):
     """cuBLASLt over half of k (lda stays k): a GEMM that skips half its MACs, which the gate must reject; None where the
     family has no cuBLASLt path or no algorithm for it."""
     half = Shape(shape.label + "/half-k", shape.m, shape.k // 2, shape.n)
-    cands = lt_candidates(dev, fam, half, ops, want=1, ld=shape.k)
+    cands = lt_candidates(dev, fam, half, ops, want=1, ld=shape.k, refused=[])
     if not cands:
         return None
     return BaselineCall(dev, cands[0], shape, ops, lt_ws)

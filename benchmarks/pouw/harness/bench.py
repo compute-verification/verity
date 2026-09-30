@@ -305,7 +305,8 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
     out = {}
     for fam in fams:
         gops = so.ops(fam, -1)
-        lts = B.lt_candidates(dev, fam, shape, gops, want)
+        refused: list[str] = []
+        lts = B.lt_candidates(dev, fam, shape, gops, want, refused=refused)
         cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels)
         gated = []
         for c in lts + cuts:
@@ -322,7 +323,10 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
                 gated.append(c)
         out[fam.name] = {"gated": gated, "all": lts + cuts,
                          "tried": [{"name": c.name, "source": c.source, "config": c.config} for c in lts + cuts],
-                         "cutlass_unimplementable": unimpl}
+                         "cublaslt_refused": refused, "cutlass_unimplementable": unimpl}
+        if not lts + cuts:
+            bench.log(f"no plain kernel for {fam.name} at {shape.label} (cuBLASLt: {refused or 'no algorithm'}; "
+                      f"CUTLASS: {'none built' if not unimpl else unimpl})")
         if gated and first:
             c0 = gated[0]
 
@@ -457,7 +461,8 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
                 b["ms"][m], b["kernel"][m] = med[best.key][m], best.key[-1]
                 b["source"][m], b["config"][m] = best.meta.get("source"), best.meta.get("config")
         baselines[fam.name] = b
-    out: dict = {"baselines": R.baseline_rows(shape, baselines), "arms": {}}
+    out: dict = {"baselines": R.baseline_rows(shape, baselines), "arms": {},
+                 "no_baseline": [f.name for f in fams if f.name not in baselines]}
     for a in arms:
         work = a.work(shape)
         arm_ms = {role: med[("arm", shape.label, a.name, role)] for role in a.flag_sets
