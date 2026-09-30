@@ -31,7 +31,6 @@ from verity_network_warden.grid import Grid, GridParams, Record, Row, Status, ro
 
 ROW_TAG = "verity-network-warden/row/v1"
 RECORD_TAG = "verity-network-warden/record/v1"
-ASSUMPTION = "cr/sha-256"
 
 
 def row_digest(row: Row, params: GridParams) -> bytes:
