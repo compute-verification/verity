@@ -26,9 +26,9 @@ _BLOCKS: dict[int, np.ndarray] = {}
 def mufu_tanh(x: np.ndarray, table: np.ndarray | None = None, lo: int | None = None) -> np.ndarray:
     """`MufuTanh_v1` on every word of `x`: NaN -> nan_out, |x| >= saturate_from -> +-1, |x| < identity_below -> x, else the measured
     table at |x| with the sign of x.  `table` (the shard's words from `lo`) replaces the lazily decoded blocks."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml import mufu
 
-    rules = P.MUFU_TANH_RULES
+    rules = mufu.MUFU_TANH_RULES
     u = np.asarray(x, dtype=np.uint32)
     a, sign = u & np.uint32(0x7FFFFFFF), u & np.uint32(0x80000000)
     out = u.copy()
@@ -37,7 +37,7 @@ def mufu_tanh(x: np.ndarray, table: np.ndarray | None = None, lo: int | None = N
         if table is not None:
             out[tab] = np.asarray(table[(a[tab] - np.uint32(lo)).astype(np.int64)], dtype=np.uint32) | sign[tab]
         else:
-            (s,) = P._tanh_shards()
+            (s,) = mufu.mufu_tanh_shards()
             i = (a[tab] - np.uint32(s.lo)).astype(np.int64)
             blk, off = i // s.block_words, i % s.block_words
             got = np.empty(i.shape, dtype=np.uint32)
