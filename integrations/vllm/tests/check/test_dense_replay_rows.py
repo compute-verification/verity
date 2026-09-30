@@ -72,3 +72,23 @@ def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
     with pytest.raises(ir_rows.Declined, match="past"):
         ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
 
+
+
+def test_a_norm_scale_manifest_addresses_every_rsqrt_row_where_it_is_committed(tmp_path):
+    """Under the norm-scale policy (a Commit with the norm tap) the ATen norm's `RsqrtF32{N=1}` output is `<norm module>/norm_scale`,
+    family norm_scales: the replay's index spells it so, and every row's address is one the manifest names."""
+    b, _at = dense_program()
+    doc = b.doc(LP)
+    pdir, man = build_dir(tmp_path, doc, [PF[len("model."):]], norm_scales=True)
+    named = {(i["op_path"], i["output_member"]) for i in man["identities"]}
+    scales = {(i["op_path"], i["output_member"]) for i in man["identities"] if i["family"] == "norm_scales"}
+    assert scales and {m for _o, m in scales} == {"norm_scale"}
+
+    def addresses(pi):
+        return {(d["op_path"], m[0]) for r in doc["rows"] if (d := pi.describe(r)) for m in d["members"]}
+
+    q = manifest_query(man)
+    assert addresses(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True)) <= named
+    assert not addresses(ProgramIndex(doc, program_dir=pdir, query=q)) <= named
+    vus, ne, _nef = population(ProgramIndex(doc, program_dir=pdir, query=q, norm_scales=True), "r0")
+    assert "RsqrtF32_v1" in {v["family"] for v in vus} and not [w for w in ne if "no registered evaluator" in w], dict(ne)
