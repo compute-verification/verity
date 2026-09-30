@@ -804,7 +804,19 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                          "h3t: leaves, segment trees and row seeds in the producer, A alone, priorities",
                          "h3tw: leaves, segment trees and row seeds in the wide producer, A alone, priorities",
                          "h3tw: leaves, segment trees and row seeds in the wide producer, deferred side stream, priorities",
-                         "negative control: h3 with no commitment written, deferred side stream, priorities"]}
+                         "negative control: h3 with no commitment written, deferred side stream, priorities"],
+           "best": ["plain fp32 rows", "plain fp32 rows, row-per-CTA producer", "plain fp32 rows, whole-row producer",
+                    "plain fp32 rows, wide whole-row producer",
+                    "h2 A alone, with its seed", "h2 with its seed, deferred side stream, priorities",
+                    "h2tc: leaves and segment trees in a coalesced producer, with its seed, A alone",
+                    "h2tc: leaves and segment trees in a coalesced producer, with its seed, deferred side stream, priorities",
+                    "h3 A alone, tree on its own stream, priorities", "h3, deferred side stream, priorities",
+                    "h3t: leaves, segment trees and row seeds in the producer, A alone, priorities",
+                    "h3t: leaves, segment trees and row seeds in the producer, deferred side stream, priorities",
+                    "h3tc: leaves, segment trees and row seeds in a coalesced producer, A alone, priorities",
+                    "h3tc: leaves, segment trees and row seeds in a coalesced producer, deferred side stream, priorities",
+                    "h3tw: leaves, segment trees and row seeds in the wide producer, A alone, priorities",
+                    "negative control: h3 with no commitment written, deferred side stream, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -1113,7 +1125,7 @@ def main() -> None:
     res["preset"] = args.preset
     res["rates"] = (seg_rates(d, nv, args.reps) if args.preset == "p1" else
                     h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset in ("h2", "h3") else
-                    fused_rates(d, nv, args.reps, V) if args.preset in ("fused", "coal", "split", "widefused") else rates(d, nv, args.reps))
+                    fused_rates(d, nv, args.reps, V) if args.preset in ("fused", "coal", "split", "widefused", "best") else rates(d, nv, args.reps))
     save()
     res["latency"] = latency(d) if args.preset == "all" else {}
     save()

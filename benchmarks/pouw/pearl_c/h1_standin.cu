@@ -287,10 +287,21 @@ extern "C" __global__ void __launch_bounds__(128) derive_rows_vec(const Args a) 
 // threads consecutive pieces (coalesced, as a plain producer stores), and stages each piece in shared memory, one 256-byte
 // segment every 272 bytes (the pad spreads a segment's 16-byte reads over all banks).  Then thread j < rb / 256 reads
 // segment j back, hashes it under its key (computed while the loads were in flight) with b3s_segment_regs, and the block builds
-// the row's segment tree; i4 = 2 adds -h3's row seed.  The hashed words are the stored words.  Arguments as derive_rows_b3s's
+// the row's segment tree; i4 = 2 adds -h3's row seed.  After staging, the warps past the hashers return and the tree's
+// barriers are a named barrier over the hashers' warps.  The hashed words are the stored words.  Arguments as derive_rows_b3s's
 // mode 1 and 2 (p0 y, p1 A, p2 row leaves, p3 domain id, p4 key template, p5 segment level keys, p6 seed key, p7 salt, p8
 // root_B, p9 row seeds; i0 m, i1 rb at most 32 KB, a multiple of 256 with 128 | n, i2 n, i3 template length, i4 mode, i5 index).
 constexpr int COAL_SEGS = 128, COAL_PAD = 68;
+// A barrier over the first `count` threads of the block (a multiple of 32): named barrier 1, so warps that have returned
+// aren't waited for.  The host twin's block barrier drops returned threads, so there it is __syncthreads.
+DEV void hashers_sync(uint32_t count) {
+#ifdef __CUDA_ARCH__
+  asm volatile("bar.sync 1, %0;" ::"r"(count) : "memory");
+#else
+  (void)count;
+  __syncthreads();
+#endif
+}
 extern "C" __global__ void __launch_bounds__(1024) derive_rows_b3s_coal(const Args a) {
   __shared__ __align__(16) uint32_t seg[COAL_SEGS * COAL_PAD];
   __shared__ uint32_t lv[COAL_SEGS][8];
@@ -323,6 +334,8 @@ extern "C" __global__ void __launch_bounds__(1024) derive_rows_b3s_coal(const Ar
     }
   }
   __syncthreads();
+  const uint32_t hashers = 32 * ((segs + 31) / 32);
+  if (tid >= hashers) return;                              // the store-only warps are done; the tree's barriers are the hashers'
   if (tid < segs) {
     uint32_t w[64], h[8];
 #pragma unroll
@@ -334,7 +347,7 @@ extern "C" __global__ void __launch_bounds__(1024) derive_rows_b3s_coal(const Ar
 #pragma unroll
     for (int i = 0; i < 8; i++) lv[tid][i] = h[i];
   }
-  __syncthreads();
+  hashers_sync(hashers);
   int level = 0;
   for (uint32_t wd = segs; wd > 1; wd = (wd + 1) / 2, level++) {
     const uint32_t half = wd / 2;
@@ -349,12 +362,12 @@ extern "C" __global__ void __launch_bounds__(1024) derive_rows_b3s_coal(const Ar
 #pragma unroll
       for (int q = 0; q < 8; q++) h[q] = lv[wd - 1][q];
     }
-    __syncthreads();
+    hashers_sync(hashers);
     if (tid < half || (tid == half && (wd & 1))) {
 #pragma unroll
       for (int q = 0; q < 8; q++) lv[tid][q] = h[q];
     }
-    __syncthreads();
+    hashers_sync(hashers);
   }
   if (tid == 0) {
     store_cv(a.p[2] + 32 * r, lv[0]);
