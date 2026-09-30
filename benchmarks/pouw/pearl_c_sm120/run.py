@@ -7,12 +7,14 @@
    addressed by that UUID, never by index (NVML ignores CUDA_VISIBLE_DEVICES).  A mismatch exits 3 before any launch.
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
    compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`); the GEMMs are re-run
-   persistent on 1 and 3 CTAs and compared again.  A variant is timed only if all of its buffers match (C~ and U bit-exact
-   against the CPU reference), the plain baselines only if theirs do.  Exit 4 if any check fails.
+   persistent on 1 and 3 CTAs and compared again, and the chain's 64 x 64 kernels (decode's) too.  A variant is timed only if
+   all of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if
+   any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
-   (default 8192, m = n = k): each kernel REPS times after a warm-up, its median, the phases (the weight side; the call's
-   forming, GEMM, clean-up and hashing), the call end to end with and without hashing, and consistency checks (C~ of gemm_ct
-   equals gemm_pearlc's; a second gemm_pearlc gives the same U).  NVML's clocks, power and throttle reasons before and after.
+   (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
+   (the weight side; the call's forming, GEMM, clean-up and hashing), the call end to end with and without hashing, and
+   consistency checks (C~ of gemm_ct equals gemm_pearlc's; a second gemm_pearlc gives the same U).  NVML's clocks, power and
+   throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
@@ -37,7 +39,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR = 16, 8, 75, 76
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
-NT, BM, RASTER = 256, 128, 8
+NT, BM, BM_D, RASTER = 256, 128, 64, 8
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
@@ -240,23 +242,31 @@ def cdiv(a: int, b: int) -> int:
     return -(-a // b)
 
 
+def gemm_tile(name: str) -> tuple[int, int]:
+    """A GEMM kernel's CTA tile (rows, columns): 64 x 64 for the _d kernels, else 128 x 128."""
+    return (BM_D, BM_D) if name.endswith(("_d", "_d_u")) else (BM, BM)
+
+
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `job` (the weight side, once per weight and epoch), `forming`, `gemm` (gemm_ct, the chain alone, for the split),
-    `cleanup` and `hashing` (the call), and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted`."""
+    `cleanup` and `hashing` (the call), and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of
+    128 only).  The chain runs on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either)."""
 
     GEMM_SMEM: dict[str, int] = {}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
-                 bufs: dict[str, int] | None = None, m_real: int | None = None):
+                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's and have their rows committed, the rest filler."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
         self.m_real = m if m_real is None else m_real
         self.g = VARIANT_G[variant]
         self.suffix = "" if self.g else "_u"
-        if m % BM or n % BM or k % 1024:
-            raise ValueError(f"the kernels take m, n multiples of 128 and k a multiple of 1024 (row-hash segments), not {(m, n, k)}")
+        self.bm = bm or (BM if m % BM == 0 else BM_D)
+        if m % self.bm or n % BM or k % 1024:
+            raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024 (row-hash segments), "
+                             f"not {(m, n, k)}")
         self.row_bytes, self.segment = 4 * k, 1024
         sizes = self.sizes(m, n, k)
         self.size = sizes
@@ -292,17 +302,22 @@ class Pipeline:
             self.GEMM_SMEM[name] = int.from_bytes(self.dev.read(probe, 4), "little")
             self.dev.free(probe)
             self.dev.ck("cuFuncSetAttribute", self.dev.fn(name), MAX_DYN, self.GEMM_SMEM[name])
-        bn = 32 if name.startswith("gemm_words") else 128
-        tiles = (M // BM) * (N // bn)
+        tm, bn = gemm_tile(name)
+        tiles = (M // tm) * (N // bn)
         ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0]
         for slot, key in zip((2, 3, 4), out):
             ptrs[slot] = self.b[key] if key else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms), NT, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
 
+    def words(self, a: str, b: str, M: int, out: str) -> None:
+        """The FP32 words of an (M x K) by (32 x K) product: one warp per m16 x n8 tile, a block per m16 row."""
+        self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
+
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
-        words, ct, pearlc = "gemm_words" + sx, "gemm_ct" + sx, "gemm_pearlc" + sx
+        tile = "_d" if self.bm == BM_D else ""
+        ct, pearlc = f"gemm_ct{tile}{sx}", f"gemm_pearlc{tile}{sx}"
 
         def lines(tag, key, side, factor, count, codes, t32=0, t128=0):
             norm = NORM_16 if factor == 1 else NORM_256
@@ -322,13 +337,13 @@ class Pipeline:
                lines("fa", self.keys["line_b"], 0, 1, k, "fa_codes", b["faT32"]),
                lines("fb", self.keys["line_b"], 1, 1, k, "fb_codes", b["fbT32"], b["fbT128"]),
                *form_side("b", n, "xb", "eb_codes", "fb_codes", "bt"),
-               ("bf", lambda: self.gemm(words, "bt", "faT32", n, 32, out=("bf",))),
-               ("g", lambda: self.gemm(words, "fbT128", "faT32", 128, 32, out=("g",))),
+               ("bf", lambda: self.words("bt", "faT32", n, "bf")),
+               ("g", lambda: self.words("fbT128", "faT32", 128, "g")),
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b["epb_codes"], 0, b["bf"], b["g"], b["pb_t"]), i=(n,)))]
         forming = [lines("ea", self.keys["line_a"], 0, 0, m, "ea_codes"),
                    *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
-        cleanup = [("af", lambda: self.gemm(words, "at", "fbT32", m, 32, out=("af",))),
+        cleanup = [("af", lambda: self.words("at", "fbT32", m, "af")),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", lambda: self.gemm(pearlc, "at", "bt", m, n, out=("c", "u", "y"), pa=b["pa_t"], pb=b["pb_t"],
                                                      rs=b["ia_a"], cs=b["ia_b"]))]
@@ -349,8 +364,10 @@ class Pipeline:
                    ("gemm_adopt", lambda: self.gemm("gemm_plain", "qa_s5", "qb_s5", m, n, out=(None, None, "y_adopt"), rs=b["ia_a"],
                                                     cs=b["ia_b"]))]
         tag = lambda phase, xs: [(nm, phase, f) for nm, f in xs]  # noqa: E731
-        return (tag("job", job) + tag("forming", forming) + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing)
-                + tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job) + tag("adopted", adopted))
+        out = tag("job", job) + tag("forming", forming) + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing)
+        if m % BM == 0:
+            out += tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job) + tag("adopted", adopted)
+        return out
 
     def run_all(self) -> None:
         for _, _, f in self.steps():
@@ -369,7 +386,7 @@ class Pipeline:
 
 PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "qa_s5", "qb_s5", "y_adopt"}
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
-               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)))
+               ("gemm_adopt", ("y_adopt",)))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -400,22 +417,24 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             res[name] = compare(dev, pipe, name, want(name))
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
-        steps = {nm: fn for nm, _, fn in pipe.steps()}
-        for grid in (1, 3):
-            for step, outs in GEMM_RERUNS:
-                for o in outs:
-                    dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), 0xAB, pipe.size[o])
-                real = pipe.gemm
+        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
+        for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
+            steps = {nm: fn for nm, _, fn in p_.steps()}
+            for grid in grids:
+                for step, outs in GEMM_RERUNS[:2] if p_ is small else GEMM_RERUNS:
+                    for o in outs:
+                        dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), 0xAB, pipe.size[o])
+                    real = p_.gemm
 
-                def pinned(*a, _real=real, _grid=grid, **kw):
-                    kw["grid"] = _grid
-                    return _real(*a, **kw)
-                pipe.gemm = pinned
-                steps[step]()
-                pipe.gemm = real
-                dev.sync()
-                for o in outs:
-                    res[f"{o}@grid{grid}"] = compare(dev, pipe, o, want("c" if o == "c2" else o))
+                    def pinned(*a, _real=real, _grid=grid, **kw):
+                        kw["grid"] = _grid
+                        return _real(*a, **kw)
+                    p_.gemm = pinned
+                    steps[step]()
+                    p_.gemm = real
+                    dev.sync()
+                    for o in outs:
+                        res[f"{o}@{tag}" + (f"grid{grid}" if grid else "")] = compare(dev, pipe, o, want("c" if o == "c2" else o))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
@@ -434,13 +453,20 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
 CALL_PHASES = ("forming", "gemm", "cleanup", "hashing")
 
 
-def timing(dev: Dev, nv: Nvml, size: int, variant: str, reps: int, gates: dict) -> dict:
-    m = n = k = size
+def parse_shape(s: str) -> tuple[int, int, int]:
+    """SHAPES' entries: "8192" (m = n = k) or "MxNxK"."""
+    parts = [int(x) for x in s.lower().split("x")]
+    return (parts[0],) * 3 if len(parts) == 1 else tuple(parts)
+
+
+def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: int, gates: dict) -> dict:
+    m_real, n, k = shape
+    m = cdiv(m_real, BM_D) * BM_D
     keys = {name: dev.put(hashlib.sha256(f"pearl-c-timing/{name}".encode()).digest()) for name in ("line_a", "line_b", "jackpot")}
     xa, xb = dev.alloc(m * 4 * k), dev.alloc(n * 4 * k)
-    for x, rows, seed in ((xa, m, 11), (xb, n, 12)):
+    for x, rows, seed in ((xa, m_real, 11), (xb, n, 12)):
         dev.launch("gen_f32", cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))
-    pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb)
+    pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, m_real=m_real)
     pipe.run_all()
     out = measure(dev, nv, pipe, reps, gates)
     pipe.free()
@@ -479,7 +505,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
         [f for nm, _, f in steps if nm == "gemm_pearlc"][0]()
         out["consistency"]["u_rerun_words_differing"] = pipe.diff("c2", "u")
-    if gates["plain"]:
+    if gates["plain"] and "gemm_plain" in med:
         out["plain_call_ms"] = round(med["plainq_a"] + med["gemm_plain"], 4)
         out["plain_tflops"] = round(2 * m * n * k / med["gemm_plain"] / 1e9, 1)
         out["fast_tflops"] = round(2 * m * n * k / med["gemm_fast"] / 1e9, 1)
@@ -523,19 +549,24 @@ def main(argv: list[str]) -> int:
     print(f"check at {man['shape']}: " + "; ".join(f"{v} {r['buffers']} buffers, failed {r['failed'] or 'none'}" for v, r in res.items()),
           file=sys.stderr)
     reps = int(os.environ.get("REPS", "5"))
-    for size in [int(s) for s in os.environ.get("SHAPES", "8192").split()]:
+    for shape in [parse_shape(s) for s in os.environ.get("SHAPES", "8192").split()]:
         for variant in variants:
             gates = {"pearl_c": res[variant]["pearl_c_ok"] or ungated, "plain": res[variant]["plain_ok"] or ungated,
                      "ungated": ungated}
             if not (gates["pearl_c"] or gates["plain"]):
                 continue
             t0 = time.time()
-            row = timing(dev, nv, size, variant, reps, gates)
+            row = timing(dev, nv, shape, variant, reps, gates)
             row["seconds"] = round(time.time() - t0, 2)
+            row["m_real"] = shape[0]
             emit(row)
+            label = "x".join(map(str, shape))
+            if "split_ms" in row:
+                print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms, no hashing {row['call_e2e_no_hash_ms']:.3f} ms; split "
+                      f"{row['split_ms']}", file=sys.stderr)
             if "ratio_vs_own_plain_gemm" in row:
                 s, r = row["split_ms"], row["ratio_vs_own_plain_gemm"]
-                print(f"{size}^3 {variant}: call {row['call_e2e_ms']:.3f} ms = {r['call_e2e']:.3f}x this build's plain FP8 GEMM "
+                print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms = {r['call_e2e']:.3f}x this build's plain FP8 GEMM "
                       f"({row['plain_tflops']} / {row['fast_tflops']} TFLOPS promoted / not); split GEMM {s['gemm']:.3f}, clean-up "
                       f"{s['cleanup']:.3f}, forming {s['forming']:.3f}, hashing {s['hashing']:.3f}; no hashing {r['no_hash_e2e']:.3f}x; "
                       f"consistency {row['consistency']}", file=sys.stderr)

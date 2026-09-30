@@ -14,9 +14,12 @@ import sys
 QMMA, HMMA = "QMMA.16832.F32.E4M3.E4M3", "HMMA.16816.F32.BF16"
 MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: kernel: (QMMA multiple, HMMA count); a multiple of one stage's atoms: 128 x 128 tiles of 8 warps take 16 atoms per k32, 32
-#: per 64-deep stage; 128 x 32 tiles take 4 per k32, 8 per stage
+#: per 64-deep stage, and 64 of the peel; 64 x 64 tiles (_d) 4 per k32, 8 per stage, and 16 of the peel; the words kernels
+#: one atom per k32 per warp
 WANT = {**{g: (32, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_ct_u")},
-        "gemm_pearlc": (32, 64), "gemm_pearlc_u": (32, 64), "gemm_words": (8, 0), "gemm_words_u": (8, 0), "form_s5": (1, 0)}
+        **{g: (8, 0) for g in ("gemm_ct_d", "gemm_ct_d_u")},
+        "gemm_pearlc": (32, 64), "gemm_pearlc_u": (32, 64), "gemm_pearlc_d": (8, 16), "gemm_pearlc_d_u": (8, 16),
+        "words": (1, 0), "words_u": (1, 0), "form_s5": (1, 0)}
 
 
 def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
@@ -72,7 +75,7 @@ def main(argv: list[str]) -> int:
         return 1
     print(f"pearl_c_sm120.cubin: {len(funcs)} kernels; " + ", ".join(
         f"{n} {funcs[n]['regs']} regs {funcs[n]['QMMA']} QMMA" + (f" {funcs[n]['HMMA']} HMMA" if funcs[n]["HMMA"] else "")
-        for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_u", "gemm_words", "form_s5")) + "; no local memory")
+        for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_d", "words", "form_s5")) + "; no local memory")
     return 0
 
 

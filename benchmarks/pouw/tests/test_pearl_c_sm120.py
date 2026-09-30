@@ -70,24 +70,31 @@ def test_swizzles_are_the_kernels_and_conflict_free():
                 assert len({(swz(base + j, c) // 16) % 8 for j in range(8)}) == 8
 
 
-def gemm_smem(mode: str, bn: int) -> int:
-    bm, bk, stages, peel = const("BM"), const("BK"), const("STAGES"), const("PEEL_ROW")
-    return stages * (bm + bn) * bk + ((bm + bn) * peel if mode == "M_PEARLC" else 0)
+def gemm_smem(mode: str, tm: int, bn: int) -> int:
+    bk, stages, peel = const("BK"), const("STAGES"), const("PEEL_ROW")
+    return stages * (tm + bn) * bk + ((tm + bn) * peel if mode == "M_PEARLC" else 0)
 
 
-def gemms() -> list[tuple[str, str, int, int]]:
-    return [(n, m, int(bn), int(g)) for n, m, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+)\)", SOURCE, re.M)]
+def gemms() -> list[tuple[str, str, int, int, int]]:
+    return [(n, m, int(tm), int(bn), int(g))
+            for n, m, tm, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)]
+
+
+def gemm_tile(name: str) -> tuple[int, int]:
+    return (64, 64) if name.endswith(("_d", "_d_u")) else (128, 128)
 
 
 def test_gemms_fit_sm120_shared_memory():
-    assert "STAGES * (BM + BN) * BK + (MODE == M_PEARLC ? (BM + BN) * PEEL_ROW : 0)" in SOURCE
+    assert "STAGES * (TM + BN) * BK + (MODE == M_PEARLC ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
     names = {n for n, *_ in gemms()}
-    assert names == {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_words", "gemm_ct_u", "gemm_pearlc_u", "gemm_words_u"}
-    for name, mode, bn, g in gemms():
-        assert gemm_smem(mode, bn) <= SM120_MAX_DYN, name
+    assert names == {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u",
+                     "gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u"}
+    for name, mode, tm, bn, g in gemms():
+        assert gemm_smem(mode, tm, bn) <= SM120_MAX_DYN, name
+        assert (tm, bn) == gemm_tile(name)
         assert g in (0, 4) and (g == 0) == (name.endswith("_u") or name == "gemm_fast")
-    assert gemm_smem("M_PEARLC", 128) == 98304
-    assert set(S.WANT) - {"form_s5"} == names
+    assert gemm_smem("M_PEARLC", 128, 128) == 98304 and gemm_smem("M_PEARLC", 64, 64) == 49152
+    assert set(S.WANT) - {"form_s5", "words", "words_u"} == names
 
 
 def test_kernel_constants_match_the_reference():
@@ -104,7 +111,7 @@ def test_kernel_constants_match_the_reference():
         assert f"0x{d:02x}" in SOURCE.lower()
     variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
     assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
-    promoted = {g for name, _, _, g in gemms() if g}
+    promoted = {g for *_, g in gemms() if g}
     assert promoted == {SM120.g} and SM120.window % const("BK") == 0 and SM120_UNPROMOTED.g is None
 
 
@@ -225,17 +232,19 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name.startswith("gemm_") and not name.endswith("_smem"):
         M, N, K = i[:3]
         need = {0: M * K, 1: N * K}
-        base = name.removesuffix("_u")
+        base = name.removesuffix("_u").removesuffix("_d")
         if base in ("gemm_plain", "gemm_fast"):
             need.update({4: 2 * M * N, 7: 4 * M, 8: 4 * N})
         elif base == "gemm_ct":
             need[2] = 4 * M * N
-        elif base == "gemm_pearlc":
-            need.update({2: 4 * M * N, 3: 4 * M * N, 4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
         else:
-            assert N == 32
-            need[2] = 4 * M * N
+            assert base == "gemm_pearlc", name
+            need.update({2: 4 * M * N, 3: 4 * M * N, 4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
         return need
+    if name in ("words", "words_u"):
+        M, N, K = i[:3]
+        assert N == 32 and M % 16 == 0 and K % 128 == 0
+        return {0: M * K, 1: N * K, 2: 4 * M * N}
     if name == "pa":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 128 * i[0]}
     if name == "pb":
@@ -264,7 +273,8 @@ def threads(name: str, i: list[int]) -> int:
     """Threads the launch must cover."""
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32, "hash_leaf": lambda: (i[0] // 64) * (i[1] // 64),
-            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0],
+            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
+            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "quant_s5": lambda: i[0] * i[1] // 16, "hash_rows_f32": lambda: i[0] * (i[1] // 1024)}.get(name, lambda: 0)()
 
 
@@ -284,7 +294,7 @@ def ship(tmp_path_factory):
 def dry_env(ship: Path, log: Path, **kw) -> dict:
     env = dict(os.environ, PEARLC_LIBCUDA=str(ship / "fake_cuda.so"), PEARLC_LIBNVML="/nonexistent", FAKE_LOG=str(log),
                FAKE_KERNELS=",".join(kernel_names()), FAKE_NAME=RTX, FAKE_SMS="188", FAKE_CC="12.0",
-               FAKE_UUID=UUID[4:].replace("-", ""), FAKE_MAXDYN=str(SM120_MAX_DYN), FAKE_SMEM=str(gemm_smem("M_PEARLC", 128)),
+               FAKE_UUID=UUID[4:].replace("-", ""), FAKE_MAXDYN=str(SM120_MAX_DYN), FAKE_SMEM=str(gemm_smem("M_PEARLC", 128, 128)),
                CUDA_VISIBLE_DEVICES="1", CUDA_DEVICE_ORDER="PCI_BUS_ID", PEARLC_EXPECT_UUID=UUID, SHAPES="1024", REPS="2")
     env.update(kw)
     return {k: v for k, v in env.items() if v is not None}
@@ -364,9 +374,11 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
         if name == "lines":
             assert i[3] in (0x4600, 0x4400)
         if name.startswith("gemm_") and not name.endswith("_smem"):
-            bn = 32 if name.startswith("gemm_words") else 128
+            tm, bn = gemm_tile(name)
             assert ev["block"] == 256 and 48 * 1024 < ev["smem"] <= SM120_MAX_DYN
-            assert g[0] <= min(188, (i[0] // 128) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % 128 == 0 and i[1] % bn == 0
+            assert g[0] <= min(188, (i[0] // tm) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
+        if name in ("words", "words_u"):
+            assert g[0] == i[0] // 16 and ev["block"] == 128
 
 
 # ---- the bench arm (pearlc_arm.py) against the harness's arm interface v0 ---------------------------------------------------
@@ -517,7 +529,8 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         assert all(t["failed"] for t in g["detail"]["twin_tiles"])
     assert rows[-1]["live"] == []
 
-    forming = ["stats_s5", "eprime", "form_s5", "gemm_words" + sx, "pa", "gemm_pearlc" + sx]
+    forming = lambda shape: ["stats_s5", "eprime", "form_s5", "words" + sx, "pa",  # noqa: E731
+                             {"pre": "gemm_pearlc", "dec": "gemm_pearlc_d"}[shape] + sx]
     hashes = ["hash_msg", "hash_leaf", "hash_rows_f32"]
     got, allocs = windows(log)
     assert not allocs
@@ -527,10 +540,11 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
         copy = ["copy"] if mark["shape"] == "dec" else []
         if mark["what"] == "weight":
-            assert names == ["lines"] * 3 + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"]
+            assert names == ["lines"] * 3 + ["stats_s5", "eprime", "form_s5"] + ["words" + sx] * 2 + ["pb"]
             continue
-        want = {"hash": copy + ["lines"] + forming + hashes, "nohash": copy + forming,
-                "known_bad": copy + ["lines"] + forming + ["xor_byte"] + hashes}[mark["role"]]
+        f = forming(mark["shape"])
+        want = {"hash": copy + ["lines"] + f + hashes, "nohash": copy + f,
+                "known_bad": copy + ["lines"] + f + ["xor_byte"] + hashes}[mark["role"]]
         assert names == want, mark
         if mark["role"] != "nohash":
             lines = evs[len(copy)]

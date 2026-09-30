@@ -57,18 +57,18 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 }
 
 // ---------------------------------------------------------------- the GEMM
-// A (M x K) and B (N x K) row-major E4M3.  One CTA of 8 warps per 128 x BN tile (warp tile 64 x 32, or 16 x 32 when BN = 32),
-// persistent over tiles in groups of `i[3]` tile rows; a 4-deep cp.async pipeline of 64-byte stages (two atoms each).  G is
-// the promotion period: every 32 G products (G / 2 stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one
-// accumulator over all of K (no promotion).  Modes:
+// A (M x K) and B (N x K) row-major E4M3.  One CTA of 8 warps per TM x BN tile: 128 x 128 (warp tile 64 x 32), or 64 x 64
+// (16 x 32) for decode's few rows, where 128 x 128 tiles leave most SMs idle; persistent over tiles in groups of `i[3]` tile
+// rows; a 4-deep cp.async pipeline of 64-byte stages (two atoms each).  G is the promotion period: every 32 G products (G / 2
+// stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every
+// output's chain is the same at either tile.  Modes:
 //   PLAIN   y = bf16(total sa sb)
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
-//   WORDS   BN = 32, stores the FP32 words (A'F_B, B~F_A, G)
-enum { M_PLAIN, M_CT, M_PEARLC, M_WORDS };
-constexpr int BM = 128, BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
-template <int MODE, int BN> __host__ __device__ constexpr int gemm_smem() {
-  return STAGES * (BM + BN) * BK + (MODE == M_PEARLC ? (BM + BN) * PEEL_ROW : 0);
+enum { M_PLAIN, M_CT, M_PEARLC };
+constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
+template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
+  return STAGES * (TM + BN) * BK + (MODE == M_PEARLC ? (TM + BN) * PEEL_ROW : 0);
 }
 
 DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); }
@@ -102,20 +102,20 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
   *reinterpret_cast<uint32_t*>(p) = f2bf(__fmul_rn(__fmul_rn(a, sr), sc0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(b, sr), sc1)) << 16;
 }
 
-template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
-  constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = BM / WARPS_M, MI = WM / 16, NI = WN / 8;
+template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
+  constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
   constexpr bool PEEL = MODE == M_PEARLC, PROMOTE = G > 0;
   constexpr int PERIOD = PROMOTE ? G / 2 : 1;
   static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
-  constexpr uint32_t A_ST = BM * BK, B_ST = BN * BK;
+  constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
   static_assert(WARPS_M * WARPS_N == 8 && MI >= 1 && NI % 2 == 0, "8 warps of 16k x 32 columns");
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t* sA = smem;
   uint8_t* sB = smem + STAGES * A_ST;
   uint8_t* sPA = sB + STAGES * B_ST;
-  uint8_t* sPB = sPA + BM * PEEL_ROW;
+  uint8_t* sPB = sPA + TM * PEEL_ROW;
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
-  const int tiles_m = M / BM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
+  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wm = warp / WARPS_N, wn = warp % WARPS_N;
   const uint8_t* A = reinterpret_cast<const uint8_t*>(a.p[0]);
   const uint8_t* B = reinterpret_cast<const uint8_t*>(a.p[1]);
@@ -133,16 +133,16 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
   for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
     int tm, tn;
     raster(t, tiles_m, tiles_n, group, tm, tn);
-    const uint8_t* ga = A + (size_t)tm * BM * K;
+    const uint8_t* ga = A + (size_t)tm * TM * K;
     const uint8_t* gb = B + (size_t)tn * BN * K;
     if constexpr (PEEL) {
-      peel_rows<BM>(sPA, reinterpret_cast<const uint8_t*>(a.p[5]) + (size_t)tm * BM * PEEL_ROW, tid);
+      peel_rows<TM>(sPA, reinterpret_cast<const uint8_t*>(a.p[5]) + (size_t)tm * TM * PEEL_ROW, tid);
       peel_rows<BN>(sPB, reinterpret_cast<const uint8_t*>(a.p[6]) + (size_t)tn * BN * PEEL_ROW, tid);
     }
 #pragma unroll
     for (int s = 0; s < STAGES - 1; s++) {
       if (s < KB) {
-        stage_rows<BM>(sA + s * A_ST, ga + s * BK, K, tid);
+        stage_rows<TM>(sA + s * A_ST, ga + s * BK, K, tid);
         stage_rows<BN>(sB + s * B_ST, gb + s * BK, K, tid);
       }
       cp_commit();
@@ -161,7 +161,7 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
       {
         const int nk = kb + STAGES - 1, s = nk % STAGES;
         if (nk < KB) {
-          stage_rows<BM>(sA + s * A_ST, ga + (size_t)nk * BK, K, tid);
+          stage_rows<TM>(sA + s * A_ST, ga + (size_t)nk * BK, K, tid);
           stage_rows<BN>(sB + s * B_ST, gb + (size_t)nk * BK, K, tid);
         }
         cp_commit();
@@ -211,7 +211,7 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
     cp_wait<0>();
     __syncthreads();
 
-    const int row0 = tm * BM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
+    const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
     if constexpr (MODE == M_PLAIN) {
 #pragma unroll
       for (int mi = 0; mi < MI; mi++) {
@@ -272,18 +272,57 @@ template <int MODE, int BN, int G> DEV void gemm_body(const Args& a) {
   }
 }
 
-// G4: pearl-c-sm120-v1 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted
-#define GEMM(NAME, MODE, BN, G)                                                                                 \
-  extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, BN, G>(a); } \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, BN>(); }
-GEMM(gemm_plain, M_PLAIN, 128, 4)
-GEMM(gemm_fast, M_PLAIN, 128, 0)
-GEMM(gemm_ct, M_CT, 128, 4)
-GEMM(gemm_pearlc, M_PEARLC, 128, 4)
-GEMM(gemm_words, M_WORDS, 32, 4)
-GEMM(gemm_ct_u, M_CT, 128, 0)
-GEMM(gemm_pearlc_u, M_PEARLC, 128, 0)
-GEMM(gemm_words_u, M_WORDS, 32, 0)
+// G4: pearl-c-sm120-v1 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted;
+// _d: the 64 x 64 tile
+#define GEMM(NAME, MODE, TM, BN, G)                                                                                 \
+  extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN>(); }
+GEMM(gemm_plain, M_PLAIN, 128, 128, 4)
+GEMM(gemm_fast, M_PLAIN, 128, 128, 0)
+GEMM(gemm_ct, M_CT, 128, 128, 4)
+GEMM(gemm_pearlc, M_PEARLC, 128, 128, 4)
+GEMM(gemm_ct_u, M_CT, 128, 128, 0)
+GEMM(gemm_pearlc_u, M_PEARLC, 128, 128, 0)
+GEMM(gemm_ct_d, M_CT, 64, 64, 4)
+GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
+GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
+GEMM(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0)
+
+// The FP32 words of a 32-column product (A'F_B, B~F_A, G): one warp per m16 x n8 output tile over all of K, the chain in the
+// GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0), fragments loaded straight from global memory,
+// so M / 16 x 4 warps share the work where a 128 x 32 CTA tile gave M / 128 CTAs.  A block's 4 warps are one m16 row's 4 n8
+// tiles and share its A rows.  p0 A (M x K), p1 B (N x K), p2 out (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8, 32 G)
+template <int G> DEV void words_body(const Args& a) {
+  const int M = a.i[0], N = a.i[1], K = a.i[2], tn = N / 8, lane = threadIdx.x % 32, g = lane / 4, q = lane % 4;
+  const int w = blockIdx.x * 4 + threadIdx.x / 32;
+  if (w >= M / 16 * tn) return;
+  const int r0 = w / tn * 16, c0 = w % tn * 8;
+  const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 4 * q;
+  const uint8_t* A1 = A0 + (size_t)8 * K;
+  const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 4 * q;
+  float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f}, total[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+#pragma unroll 16
+  for (int j = 0; j < K / 32; j++) {
+    const int kk = 32 * j;
+    const uint32_t fa[4] = {ld32(A0 + kk), ld32(A1 + kk), ld32(A0 + kk + 16), ld32(A1 + kk + 16)};
+    const uint32_t fb[2] = {ld32(B0 + kk), ld32(B0 + kk + 16)};
+    if constexpr (G > 0) {
+      if (j % G == 0)
+        for (int e = 0; e < 4; e++) acc[e] = 0.0f;
+    }
+    qmma(acc, fa, fb);
+    if constexpr (G > 0) {
+      if (j % G == G - 1)
+        for (int e = 0; e < 4; e++) total[e] = __fadd_rn(total[e], acc[e]);
+    }
+  }
+  float* out = reinterpret_cast<float*>(a.p[2]) + (size_t)(r0 + g) * N + c0 + 2 * q;
+  const float* v = G > 0 ? total : acc;
+  store2(out, v[0], v[1]);
+  store2(out + (size_t)8 * N, v[2], v[3]);
+}
+extern "C" __global__ void __launch_bounds__(128) words(const Args a) { words_body<4>(a); }
+extern "C" __global__ void __launch_bounds__(128) words_u(const Args a) { words_body<0>(a); }
 
 // ---------------------------------------------------------------- noise lines (Pearl's line rule)
 __device__ const uint32_t B3_IV[8] = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};

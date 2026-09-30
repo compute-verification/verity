@@ -3,7 +3,7 @@ kernels as the honest prover on the harness's FP32 operands, on the device recor
 `pearl-c-sm120` v1) or `SM120_UNPROMOTED` (v2, counted only once the theory and Lean lanes restate Pearl-C without promotion).
 
 Per operand set, `weight_side` is the per-(weight, epoch) work: E_B's, F_A's and F_B's lines, B's statistics, E′ and forming,
-B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 128, A's rows into a zero-padded buffer; E_A's lines; A's
+B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 64, A's rows into a zero-padded buffer; E_A's lines; A's
 statistics, E′ and forming; A′·F_B and P_A; the chain with its peel and y; then every hash (the C̃ and U messages, the tile
 leaves, A's row commitments; Pearl's tickets are not part of `pearl-c-sm120`, since no PoUW check reads them).  `nohash` is
 the same call without the hashes and without E_A's XOF (its lines come from `prepare`), so it writes the same C̃, U and y.
@@ -17,8 +17,8 @@ and row r0's commitments must equal #449's CPU twin (`benchmarks/pouw/pearl_c/tw
 harness's operand rows.  `known_bad` flips C̃'s first word between the product and the hashes.
 
 Shortcuts, flagged: the hashing is #449's device code, unfused (the digests read C̃ and U back from memory); m is padded to
-128 rows (decode's m = 32 issues 4x its tensor work, and `work` counts issued MACs); the prices and G are the H100's
-stand-ins, so W_ref, the credit and γ are Derived at stand-in prices.
+64 rows (decode's m = 32 issues 2x its tensor work on 64 x 64 tiles, and `work` counts issued MACs); the prices and G are the
+H100's stand-ins, so W_ref, the credit and γ are Derived at stand-in prices.
 
   python bench.py --arm-path <this directory> --arm pearlc_arm:PearlCSm120 [--arm pearlc_arm:PearlCSm120Unpromoted] ...
 
@@ -70,7 +70,7 @@ GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and the debit cap ρ (s
 
 
 def padded(m: int) -> int:
-    return -(-m // R.BM) * R.BM
+    return -(-m // R.BM_D) * R.BM_D
 
 
 def seeds(arm: str, shape, seed: int) -> dict[str, bytes]:
@@ -302,7 +302,7 @@ class PearlCSm120:
                "gate": f"all: a second launch word for word (gemm_ct, gemm_pearlc on {REF_GRID} CTAs, the hashes); sampled: "
                        "benchmarks/pouw/pearl_c/twin.py at twin.samples' tiles",
                "shortcuts": ["hashing unfused (#449's device code reads C~ and U back from memory)",
-                             "m padded to 128 rows; work counts issued MACs",
+                             "m padded to 64 rows (64 x 64 tiles below 128 rows); work counts issued MACs",
                              "prices and G are the H100's stand-ins; W_ref, credit and gamma Derived at those"]}
         for name in ("sass.json", "toolchain.txt", "source.txt"):
             p = ship / name
