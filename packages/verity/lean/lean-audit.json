@@ -330,7 +330,7 @@
  },
  "reads": {
   "Verity.Assumptions": {
-   "digest": "8900c794bae433c7bcd3eded763de3dc1f3791a19034cef0427cec92ccf5258f",
+   "digest": "a6739d40dc9177f1fbddf58f8eeb5b6bbc3e48309f13f5d8cff87633d60dff15",
    "definitions": {
     "Verity.Assumptions.GemmAmpereStep": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1",
     "Verity.Assumptions.GemmHopperStep": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e",
@@ -348,7 +348,7 @@
    ]
   },
   "Verity.TC.Gadgets": {
-   "digest": "a5add407e1fdb53f98c0d95f7a378b04abc7dc97d7be51f6bd81ea446fa8a728",
+   "digest": "2c13e0555fc412274d2d0ab43e78262600d61d148e82207bee614f7e4a9727c1",
    "definitions": {
     "Verity.TC.Gadgets.Chunks": "1225e390d1c8aacfa814a2badc8fe1439607e75d534dbb55868fb41b0912d43f",
     "Verity.TC.Gadgets.ZeroChunks": "198e3ab557cd5d50f6896f9c691ee6491b4de1caa3d87fa9a816b66ac1d68505",
@@ -358,7 +358,7 @@
    "pins": ["Verity.TC.Gadgets.iszero_gadget", "Verity.TC.Gadgets.range_gadget"]
   },
   "Verity.TC.Pipeline": {
-   "digest": "f10ff7d3adcfbec48c772e52d46c7a94bd43f9e5d1c2a3d4cc10c41b8c56cd4c",
+   "digest": "ac541b047f90ce7cf9efd3f8d0d55ee156cf5796062c2d01baa3d11730190b4e",
    "definitions": {
     "Verity.TC.ADA_BF16_M16N8K16": "28afdcda7b8ff437bf550072da0c4b9cc359460d0b13a74daeb82f196c5a701b",
     "Verity.TC.AMPERE_BF16_M16N8K16": "c9c27e113de6ab0ea8ca4d6d27306a3154645e15a1c7d9127701a0985fa4da1c",
@@ -389,7 +389,7 @@
    ]
   },
   "Verity.TC.Relation": {
-   "digest": "74a0a61b3ac32d1a61324e0e8b2d4493c9de70d016a29c00164a993bfd828cf6",
+   "digest": "90d242aafda6ababbb43bd0ad8be3df35846991619c96de19f75cc343be530a6",
    "definitions": {
     "Verity.TC.Relation.Align": "bd927acbef0f1cebcf242d571b3d07a0ee22ea66a5cfe1edfddfd480b1370818",
     "Verity.TC.Relation.Align.div": "bc18a3a235779005208b11d8ed68f14bf79334374a7493c0a8c892d715d376a1",
@@ -554,7 +554,7 @@
    ]
   },
   "Verity.TC.Spec": {
-   "digest": "5f73a9648008c61d3a436b0a04917e73eb51ff06f7079a4ac9c90c9d0b10711e",
+   "digest": "b26904f29563f400126ead4d2daaaeec7e7a763d1e62634080913ffb06d93c0f",
    "definitions": {
     "Verity.TC.Spec.Cls": "32a69efb9d8f020818f79ecf7874331b6da9974ae1cfd4bd9cef974e02a3e602",
     "Verity.TC.Spec.Cls.finite": "ec657bd6c072f498b499d61a5f8dd9b98fce7391d9794fb5f41ec8db740554c9",
