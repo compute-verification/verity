@@ -47,6 +47,7 @@ setup: |
 
 run: |
   set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
   export SRC=/workspace/jobs/src/$(hostname)
   cd "$SRC"
   nvidia-smi --query-gpu=clocks.sm,clocks.mem,clocks.max.sm --format=csv > clocks-before.csv || true

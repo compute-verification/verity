@@ -243,3 +243,12 @@ def test_submit_refuses_templates_that_differ_from_infra_nebius(tmp_path):
     git(other, "push", "-q", "origin", "infra/nebius")
     r = submit()
     assert r.returncode == 3 and "a newer template" in r.stderr and "git merge origin/infra/nebius" in r.stderr
+
+
+def test_every_task_has_the_venvs_tools_on_path_and_captures_skip_the_flashinfer_sampler():
+    for f in sorted((SKY / "jobs").glob("*.yaml")):
+        t = f.read_text()
+        runs = t.split("\nrun: |\n")[1:]
+        assert runs and all("export PATH=/workspace/jobs/venv312/bin:$PATH" in r.split("\nconfig:")[0] for r in runs), f.name
+    capture = (SKY / "jobs" / "port-capture.yaml").read_text()
+    assert 'VLLM_USE_FLASHINFER_SAMPLER: "0"' in capture.split("\nsecrets:")[0]           # an env default, so --env overrides it

@@ -61,6 +61,7 @@ setup: |
 
 run: |
   set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
   export SRC=/workspace/jobs/src/$(hostname)
   cd "$SRC"
   export PATH=$CUDA_HOME/bin:$PATH

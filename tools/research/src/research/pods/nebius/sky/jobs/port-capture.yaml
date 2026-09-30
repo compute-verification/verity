@@ -21,6 +21,7 @@ resources:
   memory: 192
 
 envs:
+  VLLM_USE_FLASHINFER_SAMPLER: "0"   # the integration's engine env; its warm-up JIT-builds FlashInfer's top_k (--env to override)
   SRC: /workspace/research/checkout
   OMP_NUM_THREADS: "16"     # SkyPilot's runner sets 1; match resources.cpus (--cpus overrides need --env OMP_NUM_THREADS too)
   CMD: null
@@ -55,6 +56,7 @@ setup: |
 
 run: |
   set -euo pipefail
+  export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
   export SRC=/workspace/jobs/src/$(hostname)
   cd "$SRC"
   export PATH=$CUDA_HOME/bin:$PATH
