@@ -1,23 +1,31 @@
-"""Replaying `pouw:ncp-v2`: the run's closure draws over its committed calls, and the model Program's rows at PoUW sites.
+"""Replaying `pouw:ncp-v2`: each call's closure draw under its window's key, and the model Program's rows at PoUW sites.
 
-The verifier reads the commitment (salt, weights root, calls root) and every call's record (its inputs, its inputs'
-digest, its unit leaves, its units root and its served y). `replay` checks:
+The verifier reads the commitment (salt, weights root, calls root), every weight side's record (its inputs, their digest,
+its Y unit leaves and their root) and every call's record (its inputs, its inputs' digest, its unit leaves, its units root,
+its served y and its weight side). `replay` checks:
 
-1. every call's leaf is under the committed root (the root is recomputed over every record, in call order);
-2. each call's anchored inputs are the ones the verifier derives: the commitment's salt; the forward index, counting
-   passes from the calls (a pass starts at linear 0); the position ``w << 32`` and the weight id ``w``; the pass's global
-   row ids (the rows of earlier passes, then its own); and the columns 0 … n − 1;
-3. each call's unit leaves open to its units root, its inputs (the weight's rows as read) to its inputs digest, and its
+1. every call's leaf, which binds its weight side's, is under the committed root (the root is recomputed over every
+   record, in call order);
+2. each call's anchored inputs are the ones the verifier derives (`derived`): the commitment's salt; the forward index,
+   counting passes from the calls (a pass starts at linear 0); the position ``w << 32`` and the weight id ``w``; the pass's
+   global row ids (the rows of earlier passes, then its own); and the columns 0 … n − 1; and its weight side is its
+   weight's, under the same salt and columns;
+3. each weight side's Y unit leaves open to its units root and its inputs (the weight's rows as read) to its inputs digest;
+   each call's unit leaves open to its units root, its inputs (Y and c₀ as the call read them) to its inputs digest, and its
    served y to its dequantization units' leaves;
-4. the run's plan (`draw`): #362's work law (`plan.WorkLaw`) over the run's strata, each template's units across every
-   call, keyed by ``derive(source, DRAW_DOMAIN, {"calls": n})``, each drawn tile with its closure in its call. Every proved
-   unit is opened by the prover (`CallRecord.opening`, regenerated natively), and so is every unit it reads. Each
-   opening must hash to its committed leaf, and the unit's template (`ncp2.templates`) must evaluate, by the IR
-   reference, from its opened inputs to its opened outputs.
+4. the window's draw (`verity_pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
+   on its `anchors.Receipt`, sealed before any key exists; `anchors.Ledger.open` derives the window's key from a fresh
+   source, and each call draws its plan (`Traced.draw`) under #362's work law at its share of the window's budget
+   (`plan.window_laws`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
+   and so is every unit it reads; so is each Y unit its drawn tiles read, in its weight side (once per replay). Each
+   opening must hash to its committed leaf, the unit's template (`ncp2.templates`) must evaluate, by the IR reference,
+   from its opened inputs to its opened outputs, and the call's Y and c₀ at each drawn column strip must be its weight
+   side's outputs there (`Traced.check_link`). The report records the window's source and receipt digest
+   (`Ledger.record`), from which anyone re-derives the draw (`anchors.replay_key`).
 
-K is `RECORD_K` (27,713) capped at the run's units by default. At Qwen2.5-0.5B's shapes that proves every tile and
-its closure, about 26 CPU-hours of IR evaluation per forward at 16 rows. A caller may pass a smaller law (the option's
-``draws`` setting), and the report names it.
+K is `RECORD_K` (27,713) by default, each call's share capped at its units. At Qwen2.5-0.5B's shapes that proves every
+tile and its closure, about 26 CPU-hours of IR evaluation per forward at 16 rows. A caller may pass a smaller K (the
+option's ``draws`` setting), and the report names it.
 
 `linked` installs the delegate for the model Program's `NcpLinearRow_v1` and `NcpLinearRowBias_v1` rows (`delegate`) for
 the length of a sampled replay. It evaluates a sampled row as the int7 linear on the row's committed input and registered
@@ -30,21 +38,21 @@ served y row.
 """
 from __future__ import annotations
 
-import bisect
 import hashlib
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections import Counter
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
 import numpy as np
+from verity_pouw.circuit import anchors as CA
 from verity_pouw.circuit import plan as CPL
-from verity_pouw.circuit.ncp2 import Shape
+from verity_pouw.circuit.ncp2 import D
+from verity_pouw.protocol import DomainError
 
 from verity.evaluation import evaluate
-from verity.randomness import derive
 from verity_vllm.check.replay.delegate import Place, delegated
 from verity_vllm.program.kernels.kernel_registry import Declined
 from verity_vllm.protocol_options import pouw
@@ -56,132 +64,191 @@ M32 = 0xFFFFFFFF
 NEG_ZERO_BF16 = 0x8000
 
 
-def anchors(records: Sequence[PC.CallRecord], salt: bytes) -> list[str]:
-    """What differs between each call's anchored inputs and the verifier's own derivation."""
+def derived(records: Sequence[PC.CallRecord], salt: bytes) -> list[CA.Anchors]:
+    """The verifier's own anchors for each call, from the calls' order alone: a pass starts at linear 0."""
     out, forward, base, seen = [], -1, 0, 0
     for rec in records:
         c, sh = rec.call, rec.shape
         if c.layer == 0:
             forward, base = forward + 1, seen
             seen += sh.m
-        want = {"salt": salt, "forward": forward, "site": 0, "weight": c.layer, "rowids": np.arange(base, base + sh.m),
-                "colids": np.arange(sh.n)}
-        have = {"salt": c.salt, "forward": c.forward, "site": c.site, "weight": c.weight, "rowids": c.rowids, "colids": c.colids}
-        out += [f"call {rec.index}: anchored {k} is not the verifier's" for k in want if not np.array_equal(have[k], want[k])]
+        out.append(CA.Anchors(salt, forward, c.layer, 0, c.layer, tuple(range(base, base + sh.m)), tuple(range(sh.n))))
     return out
 
 
+def anchors(records: Sequence[PC.CallRecord], salt: bytes) -> list[str]:
+    """What differs between each call's anchored inputs, or its weight side's, and the verifier's own derivation."""
+    out = []
+    for rec, an in zip(records, derived(records, salt)):
+        c, side = rec.call, rec.side
+        want = {"salt": salt, "forward": an.forward, "site": an.site, "weight": an.weight, "rowids": np.array(an.rows),
+                "colids": np.array(an.cols)}
+        have = {"salt": c.salt, "forward": c.forward, "site": c.site, "weight": c.weight, "rowids": c.rowids, "colids": c.colids}
+        out += [f"call {rec.index}: anchored {k} is not the verifier's" for k in want if not np.array_equal(have[k], want[k])]
+        if (side.scheme, side.weight, side.salt) != (rec.scheme, an.weight, salt) or not np.array_equal(side.colids, want["colids"]):
+            out.append(f"call {rec.index}: its weight side is not weight {an.weight}'s under the run's salt and columns")
+    return out
+
+
+def check_side(side: PC.WeightRecord) -> list[str]:
+    """The weight side's record against its own commitments: its Y unit leaves under its units root and its inputs as read
+    under its inputs digest."""
+    n, k = side.rows.n, side.rows.k
+    if side.units != n // D:
+        return [f"it has {side.units} Y unit leaves, the weight {n // D}"]
+    why = []
+    if PC.units_root(side.leaves) != side.root:
+        why.append("its Y unit leaves do not open to its units root")
+    rd = PC.RowsDigest(n, k)
+    for lo in range(0, n, PN.BLOCK):
+        rd.update(side.rows.rows(lo, min(n, lo + PN.BLOCK))[0])
+    if PC.weight_inputs_digest(rd.digest(), side.salt, side.weight, side.colids) != side.inputs:
+        why.append("its inputs are not the ones its digest commits")
+    return why
+
+
 def check_call(rec: PC.CallRecord) -> list[str]:
-    """The call's record against its own commitments: the unit leaves under its units root, its inputs as read under its
-    inputs digest, and its served y as its dequantization units' leaves."""
-    nat, why = PN.Native(rec.call), []
+    """The call's record against its own commitments: the unit leaves under its units root, its inputs (Y and c₀ as it
+    read them, `CallRecord.read`) under its inputs digest, and its served y as its dequantization units' leaves."""
+    nat, why, sh = PN.Native(rec.call, rec.scheme), [], rec.shape
     if rec.units != nat.population:
         return [f"it has {rec.units} unit leaves, the partition {nat.population}"]
     if PC.units_root(rec.leaves) != rec.root:
         why.append("its unit leaves do not open to its units root")
-    if PC.inputs_digest(rec.call, PC.weight_digest(rec.call.b)) != rec.inputs:
+    rd, t = PC.Read(sh.n, sh.k), np.asarray(rec.call.b.rows(0, sh.n)[1], np.uint32)
+    for cs in range(nat.ns):
+        rd.update(*rec.read(cs), t[D * cs:D * cs + D])
+    if PC.inputs_digest(rec.call, rd.parts()) != rec.inputs:
         why.append("its inputs are not the ones its digest commits")
     y = np.asarray(rec.y, np.uint16)
-    raw = y.reshape(nat.ms, 16, nat.ns, 16).transpose(0, 2, 1, 3).reshape(-1).astype("<u4").tobytes()
+    raw = y.reshape(nat.ms, D, nat.ns, D).transpose(0, 2, 1, 3).reshape(-1).astype("<u4").tobytes()
     served = b"".join(hashlib.sha256(PC.UNIT_TAG + raw[i:i + 4]).digest() for i in range(0, len(raw), 4))
     if served != rec.leaves[32 * nat.base["dequant"]:]:
         why.append("the served y is not its dequantization units' committed outputs")
     return why
 
 
-@lru_cache(maxsize=16)
-def _layout(shape: Shape) -> CPL.Layout:
-    return CPL.layout(shape, PC.KIND)
-
-
-@dataclass(frozen=True)
-class RunPlan:
-    law: str
-    k: int
-    sizes: Mapping[str, int]
-    drawn: tuple[tuple[int, int], ...]          # (call, unit) the law drew
-    proved: tuple[tuple[int, int], ...]         # the drawn units and every drawn tile's closure in its call, each once
-
-
-def draw(records: Sequence[PC.CallRecord], source: bytes, law: CPL.TileLaw | None = None) -> RunPlan:
-    """The run's plan, as `plan.draw` draws a call's: the law's sizes over the run's strata (a template's units across every
-    call, so one template at one depth is one stratum), a uniform k_s-subset of each from the key, and each drawn tile's
-    closure in its call. The default law is the work law at K = min(`RECORD_K`, the run's units)."""
-    lays = [_layout(r.shape) for r in records]
-    strata: dict[str, list[Any]] = {}
-    for i, lay in enumerate(lays):
-        for st in lay.strata:
-            e = strata.setdefault(st.name, [st.role, [], [], 0])
-            e[1].append(sum(len(u) for _c, u in e[2]))
-            e[2].append((i, st.units))
-            e[3] += st.work
-    specs = [CPL.StratumSpec(name, role, range(sum(len(u) for _c, u in parts)), work)
-             for name, (role, _starts, parts, work) in strata.items()]
-    law = law or CPL.WorkLaw(min(CPL.RECORD_K, sum(len(s.units) for s in specs)))
-    sizes = law.sizes(specs)
-    key = derive(source, CPL.DRAW_DOMAIN, {"calls": len(records)})
-    drawn = []
-    for s in specs:
-        _role, starts, parts, _work = strata[s.name]
-        for p in key.subset(sizes[s.name], len(s.units), ("stratum", s.name)):
-            j = bisect.bisect_right(starts, p) - 1
-            drawn.append((parts[j][0], parts[j][1][p - starts[j]]))
-    proved = set(drawn)
-    for i, u in drawn:
-        proved.update((i, v) for v in lays[i].closure.get(u, ()))
-    return RunPlan(law.name, getattr(law, "k", 0), sizes, tuple(sorted(drawn)), tuple(sorted(proved)))
-
-
-def tamper_drawn_tile(records: Sequence[PC.CallRecord], source: bytes, law: CPL.TileLaw | None = None,
-                      leaf: int = 7) -> tuple[list[PC.CallRecord], dict[str, int]]:
-    """A negative control: the calls as a prover commits and opens them with word ``leaf`` of the first tile the replay draws
-    (`draw` under ``source`` and ``law``) flipped in its low bit. Returns the calls and where the tamper is."""
-    i, u = next((i, u) for i, u in draw(records, source, law).drawn if PN.Native(records[i].call).locate(u)[0] == "tile")
-    rec = records[i]
-    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, leaf): int(rec.opening(u)[leaf]) ^ 1})
-    return [*records[:i], bad, *records[i + 1:]], {"what": "tile", "call": rec.index, "unit": u, "leaf": leaf}
+def tamper_tiles(records: Sequence[PC.CallRecord], leaf: int = 7) -> tuple[list[PC.CallRecord], dict[str, Any]]:
+    """A negative control: the calls as a prover commits and opens them with word ``leaf`` of every tile of the first call
+    flipped in its low bit. Each call's tile stratum draws at least one tile (`plan.WorkLaw`'s floor), so whatever the
+    window's fresh draw, a wrong tile is proved. Returns the calls and where the tamper is."""
+    rec = records[0]
+    nat = PN.Native(rec.call, rec.scheme)
+    tiles = [nat.index("tile", rs, cs) for rs in range(nat.ms) for cs in range(nat.ns)]
+    bad = PN.commit_call(rec.index, rec.scheme, rec.call, tamper={(u, leaf): int(rec.opening(u)[leaf]) ^ 1 for u in tiles},
+                         side=rec.side)
+    return [bad, *records[1:]], {"what": "tile", "call": rec.index, "units": tiles, "leaf": leaf}
 
 
 def unit_holds(rec: PC.CallRecord, nat: PN.Native, u: int, opened) -> str | None:
     """None when unit ``u``'s opening and its producers' hash to their committed leaves and its template evaluates from
-    the opened inputs to the opened outputs; else what fails."""
+    the opened inputs (a tile's Y and c₀ as the call read them) to the opened outputs; else what fails."""
     for v in (u, *nat.producers(u)):
         if PC.unit_leaf(opened(v)) != rec.leaf(v):
             return f"unit {v}'s opening is not its committed leaf"
-    got = evaluate(nat.template(u), *nat.args(u, opened))
+    got = evaluate(nat.template(u), *nat.args(u, opened, rec.read))
     return None if [int(x) for x in got] == [int(x) for x in opened(u)] else "does not hold"
 
 
-def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], source: bytes, law: CPL.TileLaw | None = None) -> dict[str, Any]:
-    """Every call of the run: the root, the anchors, each call's own commitments and the run's plan. ``result`` is True
-    only when all hold."""
+def side_holds(side: PC.WeightRecord, nw: PN.NativeWeight, u: int, opened) -> str | None:
+    """None when the weight side's Y unit ``u`` opens to its committed leaf and `NcpFormY` evaluates from its rows to it."""
+    if PC.unit_leaf(opened(u)) != side.leaf(u):
+        return "its opening is not its committed leaf"
+    got = evaluate(nw.template(u), *nw.args(u))
+    return None if [int(x) for x in got] == [int(x) for x in opened(u)] else "does not hold"
+
+
+class _Flat:
+    """Groups laid end to end, each strip-major, read one column strip at a time: what `Traced.check_link` slices."""
+
+    def __init__(self, *groups: tuple[int, int, Callable[[int], np.ndarray]]) -> None:
+        self.groups = groups                    # (entries, entries per strip, strip -> its entries)
+
+    def __getitem__(self, s: slice) -> np.ndarray:
+        at = 0
+        for size, per, strip in self.groups:
+            if at <= s.start < at + size:
+                cs, off = divmod(s.start - at, per)
+                if off or s.stop - s.start != per:
+                    raise IndexError("read one column strip at a time")
+                return strip(cs)
+            at += size
+        raise IndexError(f"{s} is outside the groups")
+
+
+def link(traced: Any, plan: Any, rec: PC.CallRecord, opened_side) -> str | None:
+    """None when the call's Y and c₀ at every column strip its plan opens are its weight side's outputs there
+    (`Traced.check_link`, which reads only those inputs of the call's); else what fails."""
+    sh = rec.shape
+    per, ys = D * 3 * sh.k, 3 * sh.k * sh.n
+    names = [p for p, _t in traced.definition.signature()[0]]
+    read = {"ys": _Flat((ys, per, lambda cs: rec.read(cs)[0])), "c0s": _Flat((sh.n, D, lambda cs: rec.read(cs)[1]))}
+    outputs = _Flat((ys, per, lambda cs: opened_side(cs)[:per]), (sh.n, D, lambda cs: opened_side(cs)[per:]))
+    try:
+        traced.check_link(plan, [read.get(p) for p in names], outputs)
+    except DomainError as e:
+        return str(e)
+    return None
+
+
+def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: int | None = None) -> dict[str, Any]:
+    """Every call of the run, one window: the root, the anchors, each record's own commitments and each call's plan under
+    the window's fresh key. ``k`` is the window's budget K (`RECORD_K` when None). ``result`` is True only when all hold."""
     t0 = time.monotonic()
     salt, wroot = bytes.fromhex(commitment["salt"]), bytes.fromhex(commitment["weights_root"])
-    why = []
+    k = k or CPL.RECORD_K
+    why: list[str] = []
     if not records:
         why.append("no ncp-v2 call was committed")
     elif commitment.get("calls_root") != PC.calls_root(salt, wroot, records).hex():
         why.append("the calls do not open to the committed calls root")
     why += anchors(records, salt)
+    sides = PC.sides(records)
+    for side in sides:
+        why += [f"weight {side.weight}: {w}" for w in check_side(side)]
     for rec in records:
         why += [f"call {rec.index}: {w}" for w in check_call(rec)]
-    plan = draw(records, source, law) if records else None
-    wrong, roles = [], {}
-    for i in sorted({i for i, _u in plan.proved} if plan else ()):
-        rec = records[i]
-        nat, opened = PN.Native(rec.call), lru_cache(maxsize=None)(rec.opening)
-        for u in (u for j, u in plan.proved if j == i):
+    plans, record = [], None
+    if records:
+        traced = [PC.program(r.scheme, r.shape.m, r.shape.k, r.shape.n).traced for r in records]
+        try:
+            ans = derived(records, salt)
+            ledger = CA.Ledger.open(CA.Receipt(tuple((a, r.shape, PC.call_leaf(r)) for a, r in zip(ans, records))))
+            laws = CPL.window_laws([t.layout() for t in traced], k)
+            plans = [t.draw(law, a, ledger) for t, law, a in zip(traced, laws, ans)]
+            ledger.sent()
+            record = ledger.record()
+        except (DomainError, ValueError) as e:
+            why.append(f"the window's draw is refused: {e}")
+            plans = []
+    wrong, roles, sizes, done = [], Counter(), Counter(), {}
+    openers = {s.weight: (PN.NativeWeight.of(s), lru_cache(maxsize=None)(s.opening)) for s in sides}
+    for rec, t, plan in zip(records, traced if plans else (), plans):
+        nat, opened = PN.Native(rec.call, rec.scheme), lru_cache(maxsize=None)(rec.opening)
+        sizes.update(plan.sizes)
+        for u in plan.proved:
             role, where = nat.locate(u)
-            roles[role] = roles.get(role, 0) + 1
+            roles[role] += 1
             w = unit_holds(rec, nat, u, opened)
             if w:
                 wrong.append([rec.index, u])
                 why.append(f"call {rec.index}: unit {u} ({role} {where}) {w}")
-    return {"schema": "verity-vllm/pouw-ncp-v2-replay/v2", "result": not why, "why": why[:12], "why_n": len(why),
-            "law": f"{plan.law} K={plan.k}" if plan else None, "record_k": CPL.RECORD_K, "sizes": dict(plan.sizes) if plan else {},
-            "calls": len(records), "units": sum(r.units for r in records), "drawn": len(plan.drawn) if plan else 0,
-            "proved_units": len(plan.proved) if plan else 0, "proved_by_role": roles, "wrong_units": wrong,
-            "seconds": round(time.monotonic() - t0, 3),
+        nw, opened_side = openers[rec.side.weight]
+        for cs in plan.proved_y:
+            if (rec.side.weight, cs) not in done:
+                w = done[rec.side.weight, cs] = side_holds(rec.side, nw, cs, opened_side)
+                roles["form_y"] += 1
+                if w:
+                    wrong.append([f"weight {rec.side.weight}", cs])
+                    why.append(f"weight {rec.side.weight}: Y unit {cs} (form_y) {w}")
+        w = link(t, plan, rec, opened_side)
+        if w:
+            why.append(f"call {rec.index}: {w}")
+    return {"schema": "verity-vllm/pouw-ncp-v2-replay/v3", "result": not why, "why": why[:12], "why_n": len(why),
+            "law": f"work K={k}" if plans else None, "record_k": CPL.RECORD_K, "sizes": dict(sizes), "calls": len(records),
+            "weights": len(sides), "units": sum(r.units for r in records) + sum(s.units for s in sides),
+            "drawn": sum(len(p.drawn) for p in plans), "proved_units": sum(roles.values()), "proved_by_role": dict(roles),
+            "wrong_units": wrong, "draw": record, "seconds": round(time.monotonic() - t0, 3),
             "not_of_record": "the quantizer and the int7 linear of the model rows are evaluated natively (no registered Definition yet)"}
 
 
@@ -267,13 +334,12 @@ def linked(records: Sequence[PC.CallRecord], sites: Mapping[str, int]) -> Iterat
 
 
 @contextmanager
-def around(comp: Any, source: bytes) -> Iterator[dict[str, Any] | None]:
+def around(comp: Any) -> Iterator[dict[str, Any] | None]:
     """The Commit's sampled replay under a composition with ``pouw:ncp-v2``: the rows answered by the live run's calls for
     the length of the block. On exit the yielded dict is filled with the circuit replay, whose ``result`` is False when a
-    call's plan, its anchors or its linkage to the model rows fails. The law is the work law at the run's ``draws``
-    setting when it has one. The run's ``tamper`` setting makes it a negative control: ``tile`` replays the calls as
-    `tamper_drawn_tile` commits them, ``bias`` the executor's wrong-bias call (`pouw.Settings.tamper`). Yields None
-    without such an entry."""
+    call's plan, its anchors or its linkage to the model rows fails. The window's budget K is the run's ``draws`` setting
+    when it has one. The run's ``tamper`` setting makes it a negative control: ``tile`` replays the calls as `tamper_tiles`
+    commits them, ``bias`` the executor's wrong-bias call (`pouw.Settings.tamper`). Yields None without such an entry."""
     entry = next((e for e in (getattr(comp, "entries", None) or ()) if e.split(":", 1)[0] == pouw.NAME
                   and e.split(":", 1)[1] in PC.C.SCHEMES), None)
     live = pouw.circuit_run(entry) if entry else None
@@ -281,26 +347,24 @@ def around(comp: Any, source: bytes) -> Iterator[dict[str, Any] | None]:
         yield None
         return
     run, sites = live
-    law = CPL.WorkLaw(run.settings.draws) if run.settings.draws else None
     records, tampered = list(run.records), run.tampered
     if run.settings.tamper == "tile" and records:
-        records, tampered = tamper_drawn_tile(records, source, law)
+        records, tampered = tamper_tiles(records)
     out: dict[str, Any] = {"entry": entry, "tampered": tampered}
     with linked(records, sites) as issues:
         yield out
     commitment = dict(run.commits, calls_root=PC.calls_root(run.salt, bytes.fromhex(run.commits["weights_root"]), records).hex()
                       if records else None)
-    out.update(replay(records, commitment, source, law), linkage=issues[:12], linkage_n=len(issues))
+    out.update(replay(records, commitment, run.settings.draws), linkage=issues[:12], linkage_n=len(issues))
     if issues:
         out["result"] = False
         out["why"] = issues[:12] + out["why"]
 
 
-def replayed(comp: Any, seed_parts: Sequence[Any], run: Any) -> dict[str, Any]:
-    """The Commit's sampled replay (``run()``) under `around`, keyed from the replay's own seed; a failing circuit replay
-    makes the replay's result False, named."""
-    source = hashlib.sha256(("verity-vllm/pouw-ncp-v2/draw-source/v1|" + "|".join(map(str, seed_parts))).encode()).digest()
-    with around(comp, source) as pw:
+def replayed(comp: Any, run: Any) -> dict[str, Any]:
+    """The Commit's sampled replay (``run()``) under `around`; a failing circuit replay makes the replay's result False,
+    named."""
+    with around(comp) as pw:
         sr = run()
     if pw is not None:
         sr["pouw_ncp_v2"] = pw
@@ -309,5 +373,5 @@ def replayed(comp: Any, seed_parts: Sequence[Any], run: Any) -> dict[str, Any]:
     return sr
 
 
-__all__ = ["RunPlan", "anchors", "around", "check_call", "delegate", "dequant", "draw", "int7_linear", "linked", "replay",
-           "replayed", "tamper_drawn_tile", "unit_holds"]
+__all__ = ["anchors", "around", "check_call", "check_side", "delegate", "dequant", "derived", "int7_linear", "link", "linked",
+           "replay", "replayed", "side_holds", "tamper_tiles", "unit_holds"]

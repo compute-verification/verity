@@ -100,7 +100,7 @@ def mint_local(endpoint: str, account_id: str, parent_access_key_id: str, parent
     if not 1 <= ttl_s <= TTL_MAX_S:
         raise MintError(f"ttl must be between 1 and {TTL_MAX_S} s")
     iat = int(time.time()) if now is None else int(now)
-    # `scope` OR `actions`, not both: R2 answers 400 to a JWT carrying both (checked live 2026-09-22 against verity-dev), although the
+    # `scope` OR `actions`, not both: R2 answers 400 to a JWT carrying both (checked live 2026-09-22 against the store's bucket), although the
     # reference TypeScript sets both; the prose ("specify permitted operations using scope or actions") is what the service implements.
     claims: dict[str, Any] = {"bucket": bucket, "actions": list(actions)} if actions else {"bucket": bucket, "scope": scope}
     if prefixes is not None or objects is not None:
@@ -173,8 +173,8 @@ def mint(*, via: str = "auto", scope: str = "object-read-write", ttl_s: int = 36
     account id), `auto` = local when the parent key is present, else api.  Returns the credential + {via, bucket, scope, endpoint, expires_utc}."""
     env = os.environ if environ is None else environ
     cfg = remote_config(config_path)
-    endpoint = endpoint or cfg.get("endpoint") or env.get("R2_ENDPOINT")
-    bucket = bucket or cfg.get("bucket") or env.get("R2_BUCKET")
+    endpoint = endpoint or cfg.get("endpoint") or env.get(cfg.get("endpoint_env") or "R2_ENDPOINT")
+    bucket = bucket or cfg.get("bucket") or env.get(cfg.get("bucket_env") or "R2_BUCKET")
     if not endpoint or not bucket:
         raise MintError("need the R2 endpoint and bucket: store.toml [remote] type s3, or --endpoint/--bucket, or R2_ENDPOINT/R2_BUCKET")
     account_id = account_id or env.get("R2_ACCOUNT_ID") or env.get("CLOUDFLARE_ACCOUNT_ID") or account_id_from_endpoint(endpoint)

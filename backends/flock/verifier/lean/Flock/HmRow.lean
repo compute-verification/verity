@@ -11,6 +11,7 @@ circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and th
 import Flock.Statement
 import Flock.TemplateQuery
 import Flock.Typed
+import Flock.Extract
 
 namespace Flock
 
@@ -101,6 +102,8 @@ private def intLists (j : Json) (k : String) : V (Array (Array Int)) := do
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
 pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
+  -- the rows' circuits are found by name, and the placed layouts are named by digest: no part may be one of them
+  if c.shaNet ≤ t.rangeLogs.size || c.hmNet ≤ t.rangeLogs.size then throw "the rows' circuits are among the template's"
   let root := c.unit
   let nOut := c.outWords
   if c.perVu.getD c.unitNet 0 != 1 then throw "the instance's root is not one slot per VU"
@@ -122,6 +125,7 @@ exactly once, the leaf maps, the pinned dummy values. -/
 def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let mut spans : Array (Nat × Nat) := #[]
   for r in c.ranges do
+    if r.slotLog < 7 || r.slotLog > c.kLog then throw "a range's slots are smaller than a word or larger than the block"
     let (span, align) := if r.packed then (r.count * 2 ^ r.slotLog, 2 ^ r.slotLog)
       else (nextPow2 r.count * 2 ^ r.slotLog, nextPow2 r.count * 2 ^ r.slotLog)
     if r.packed && (r.kind == Kind.net c.hmNet || r.kind == Kind.net c.outNet || r.kind == Kind.mask) then
@@ -229,20 +233,63 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   if let some pinned := tags.pinnedLeafScheme then
     if (← canon leafScheme) != (← canon pinned) then throw "META: leaf_scheme is not the pinned leaf-commitment scheme"
 
-/-- A template's block with its parts placed: each part's layout circuit and its slot among that circuit's slots, counted
-in item order (#273's `TypedBlock`). -/
-def blockOf (t : Typed.Template) (netOf : String → Option Nat) : V TypedBlock := do
-  let mut parts := #[]
-  let mut seen : Array (Nat × Nat) := #[]
-  for (d, base) in t.parts do
-    let some n := netOf d | throw "a part's layout has no circuit"
-    let q := ((seen.find? (·.1 == n)).map (·.2)).getD 0
-    seen := (seen.filter (·.1 != n)).push (n, q + 1)
-    parts := parts.push (n, q, base)
-  let rangeLogs ← t.layouts.mapM fun (d, _, s) => do
-    let some n := netOf d | throw "a placed layout has no circuit"
-    pure (n, s)
-  return { own := t.own, ins := t.ins, outs := t.outs, inCols := t.inCols, parts, rangeLogs, bind := t.bind, cross := t.cross }
+/-- Part `i`'s slot among its layout's circuit's slots in the VU: how many parts before it place the same layout. -/
+def slotOf (ps : Array (Nat × Nat)) (i : Nat) : Nat :=
+  ((ps.toList.take i).filter (·.1 == (ps.getD i default).1)).length
+
+/-- A template's block with its parts placed (#273's `TypedBlock`), by position: `parse` puts the root's circuit first and
+then the placed layouts' in order, so placed layout `k`'s circuit is `1 + k`. Part `i` is its layout's circuit, its slot
+(`slotOf`, in item order) and its base. -/
+def blockOf (t : Typed.Template) : TypedBlock :=
+  { own := t.own, ins := t.ins, outs := t.outs, inCols := t.inCols,
+    parts := (Array.range t.parts.size).map fun i => (1 + (t.parts.getD i default).1, slotOf t.parts i, (t.parts.getD i default).2),
+    rangeLogs := (Array.range t.layouts.size).map fun k => (1 + k, (t.layouts.getD k default).2.2),
+    bind := t.bind, cross := t.cross }
+
+/-- **A template's block, as `blockOf` builds it** (for audit-lean's T3): the root's size, ports, input columns, bound rows
+and cross entries are the template's; part `i` is circuit `1 + k` of its layout's position `k`, its slot `slotOf`, and its
+base; placed layout `k`'s circuit is `1 + k`, with its range's log size. -/
+theorem blockOf_spec (t : Typed.Template) :
+    let tb := blockOf t
+    tb.own = t.own ∧ tb.ins = t.ins ∧ tb.outs = t.outs ∧ tb.inCols = t.inCols ∧ tb.bind = t.bind ∧ tb.cross = t.cross ∧
+      tb.parts.size = t.parts.size ∧
+      (∀ i (hi : i < t.parts.size) (hb : i < tb.parts.size), tb.parts[i] = (1 + t.parts[i].1, slotOf t.parts i, t.parts[i].2)) ∧
+      tb.rangeLogs.size = t.layouts.size ∧
+      ∀ k (hk : k < t.layouts.size) (hb : k < tb.rangeLogs.size), tb.rangeLogs[k] = (1 + k, t.layouts[k].2.2) := by
+  refine ⟨rfl, rfl, rfl, rfl, rfl, rfl, by simp [blockOf], fun i hi hb => ?_, by simp [blockOf], fun k hk hb => ?_⟩
+  · simp [blockOf, Array.getD, hi]
+  · simp [blockOf, Array.getD, hk]
+
+/-- Part `i`'s slot is below the number of parts on its layout: its own place counts. -/
+theorem slotOf_lt {ps : Array (Nat × Nat)} {i : Nat} (hi : i < ps.size) :
+    slotOf ps i < (ps.toList.filter (·.1 == ps[i].1)).length := by
+  have hl : i < ps.toList.length := by simpa using hi
+  have hsplit : ps.toList = ps.toList.take i ++ ps[i] :: ps.toList.drop (i + 1) := by
+    conv => lhs; rw [← List.take_append_drop i ps.toList]
+    rw [List.drop_eq_getElem_cons hl, Array.getElem_toList]
+  have hg : ps.getD i default = ps[i] := by simp [Array.getD, hi]
+  unfold slotOf
+  rw [hg]
+  conv => rhs; rw [hsplit]
+  simp only [List.filter_append, List.filter_cons, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
+  omega
+
+/-- Two parts on one layout have distinct slots: a later part's counts the earlier one. -/
+theorem slotOf_lt_of_lt {ps : Array (Nat × Nat)} {i j : Nat} (hij : i < j) (hj : j < ps.size) (he : ps[i].1 = ps[j].1) :
+    slotOf ps i < slotOf ps j := by
+  have hi : i < ps.size := Nat.lt_trans hij hj
+  have hgi : ps.getD i default = ps[i] := by simp [Array.getD, hi]
+  have hgj : ps.getD j default = ps[j] := by simp [Array.getD, hj]
+  unfold slotOf
+  rw [hgi, hgj, he]
+  obtain ⟨d, hd⟩ : ∃ d, j = i + 1 + d := ⟨j - (i + 1), by omega⟩
+  have hti : ps.toList.take (i + 1) = ps.toList.take i ++ [ps[i]] := by
+    rw [List.take_add_one, List.getElem?_eq_getElem (by simpa using hi), Array.getElem_toList]; rfl
+  have htj : ps.toList.take j = ps.toList.take i ++ ps[i] :: (ps.toList.drop (i + 1)).take d := by
+    rw [hd, List.take_add, hti, List.append_assoc]; rfl
+  rw [htj]
+  simp only [List.filter_append, List.filter_cons, he, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
+  omega
 
 /-- A typed template's META keys that its block derives instead (#273): stating one is refused. -/
 def TEMPLATE_DERIVED : List String :=
@@ -405,7 +452,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, g, kLog := ← J.nat mj "k_log" ctx, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
                        shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
-                       typed := ← tmpl.mapM fun t => blockOf t (fun d => nets.findIdx? (·.1 == d)) }
+                       typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
   return c
 
@@ -420,14 +467,17 @@ def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteA
     | .inl unit => parse tags bytes tables (pre := #[("unit", unit)])
   return { c with cls := some k }
 
-/-- The pinned constant column: the first slot of the first range that is not the mask. -/
-def pin (c : Circuit) : V Nat :=
-  match c.ranges.find? (·.kind != Kind.mask) with
-  | some r => match r.kind with
-    | .net i => if r.count == 0 then throw "circuit: the pin's range has no slot"
-      else pure (r.start + (c.nets.getD i default).2.constPos)
-    | _ => throw "no pin"
-  | none => throw "circuit: no range with a constant"
+/-- The pinned constant column: the first slot of the first range that is not the mask, a column of the block. -/
+def pin (c : Circuit) : V Nat := do
+  let p ← match c.ranges.find? (·.kind != Kind.mask) with
+    | some r => match r.kind with
+      | .net i =>
+        if r.count == 0 then throw "circuit: the pin's range has no slot"
+        else pure (r.start + (c.nets.getD i default).2.constPos)
+      | _ => throw "no pin"
+    | none => throw "circuit: no range with a constant"
+  if p ≥ 2 ^ c.kLog then throw "the pinned constant column is outside the block"
+  return p
 
 /-- Δ (A and B, upstream's `delta`): every slot's constant from the pin; the rows' constants (each row's first `cv` the
 prefix's midstate, its hm96 slot's `pad` the padding block: bit 1 from the pin, bit 0 from the unit range's first slot's
@@ -614,6 +664,39 @@ def deriveTemplateUnits (c : Circuit) (obj : Json) (program : ByteArray) (indice
     | some (_, _, ti) => if ti != t then throw s!"partition: unit {i} is an instance of {ti}, not the circuit's template {t}"
   return s!"units derived: {name} v{version} over the verifier's program ({pop} units); the statement's {indices.size} units are instances of {t}"
 
+/-- `Q_word` v1's units, derived from the verifier's own program: the program is the object's, the query evaluates on it
+(`Flock.Extract`, `Flock.Qword`), and every unit the statement claims (`indices`) is one whole activation of the circuit's
+template; and every Call's cut holds the partition invariant and the width rule on its whole graph (`Extract.checkCalls`, as
+`partition_object.verify` checks them). -/
+def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices : Array Nat) : V String := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  let ps := (q.getObjVal? "params").toOption.getD Json.null
+  let X := (ps.getObjValAs? Nat "X").toOption.getD 0
+  let W := (ps.getObjValAs? Nat "W").toOption.getD 0
+  let P ← Program.decode program
+  if (obj.getObjValAs? String "program").toOption != some (hexOf P.sha512) then
+    throw "partition: the verifier's program is not the one the partition object names"
+  let calls ← match Extract.evaluate P X with
+    | .ok cs => pure cs
+    | .error e => throw s!"partition: {e}"
+  let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
+  let checked ← Extract.checkCalls P calls X W
+  if let some (k, r) := (Extract.cutFailures calls checked)[0]? then
+    throw s!"partition: cut: Call {k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits, values): {(r.wide.extract 0 4).toList})"}"
+  match Extract.claimedUnits P calls t indices with
+  | .ok note => return s!"units derived: Q_word v1 {"{"}X: {X}, W: {W}{"}"} over the verifier's program ({note}); every Call's cut holds the partition invariant and the width rule"
+  | .error e => throw s!"partition: {e}"
+
+/-- The partition finding of a query the template queries don't cover, given the verifier's program: `Q_word` v1's units
+derived (`deriveQwordUnits`), any other query's finding as it stands. -/
+def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray) (f : PartitionFinding) :
+    V (Option PartitionFinding) := do
+  let q := (obj.getObjVal? "query").toOption.getD Json.null
+  if ((q.getObjValAs? String "name").toOption.getD "", (q.getObjValAs? Nat "version").toOption.getD 0) == ("Q_word", 1) then
+    let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+    pure (some { f with derived := true, note := ← deriveQwordUnits c obj program indices })
+  else pure (some f)
+
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
 none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
@@ -633,7 +716,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
     let note := if (TemplateQuery.templatesOf name version Json.null).isSome then
         s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else if EVALUABLE.contains (name, version) then
-        s!"units taken as stated, not derived: {name} v{version} is a query the verifier evaluates (Flock.Qword), but it does not yet decode the program into its Call graphs"
+        s!"units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate {name} v{version}"
       else s!"units taken as stated, not derived: the verifier does not evaluate {name} v{version}"
     return { rule, query := s!"{name} v{version}", digest, derived := false, note }
   | _, some _ => throw "partition: the circuit binds the provisional unit cover, not a verity/partition/v1 object"
@@ -708,24 +791,25 @@ units' indices; the public digest covers that header and the population's public
 stay the statement's, with the drawn units' refs into them. -/
 def drawn (c : Circuit) (pub : Public) (draw : Json) : V Public := do
   let d ← Draw.UnitDraw.ofJson draw
+  let proved := d.proved
   if d.population != pub.n || pub.population.isSome then throw "U: the draw's population is not this registered population"
   let np := c.ports.size
   let nOut := c.outWords
   let pctx := "public file"
   let popIdx ← (← J.arr (← J.get pub.header "units" pctx) "indices" pctx).mapM (J.asNat · "a unit index")
-  let indices := d.units.map fun u => popIdx.getD u 0
-  let header := ((pub.header.setObjVal! "unit_draw" draw).setObjVal! "instances" (Lean.toJson d.units.size)
+  let indices := proved.map fun u => popIdx.getD u 0
+  let header := ((pub.header.setObjVal! "unit_draw" draw).setObjVal! "instances" (Lean.toJson proved.size)
     |>.setObjVal! "population" (Lean.toJson pub.n)).setObjVal! "units" (unitsEntry c indices)
   let mut pubs := pub.digests.foldl (· ++ ·) ByteArray.empty
   if let some t := pub.tables then
     for r in t.refs do pubs := pubs ++ le32 r.toUInt32
   for w in pub.outputs do pubs := pubs.push (w % 256).toUInt8 |>.push (w / 256).toUInt8
-  return { header, n := d.units.size,
+  return { header, n := proved.size,
            digests := if pub.tables.isSome then pub.digests
-             else d.units.foldl (fun acc u => acc ++ pub.digests.extract (u * np) (u * np + np)) #[],
-           outputs := d.units.foldl (fun acc u => acc ++ pub.outputs.extract (u * nOut) (u * nOut + nOut)) #[],
+             else proved.foldl (fun acc u => acc ++ pub.digests.extract (u * np) (u * np + np)) #[],
+           outputs := proved.foldl (fun acc u => acc ++ pub.outputs.extract (u * nOut) (u * nOut + nOut)) #[],
            sha := ← publicDigest header pubs, population := some (pub.n, pub.digests, pub.outputs),
-           tables := pub.tables.map fun t => { t with refs := d.units.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
+           tables := pub.tables.map fun t => { t with refs := proved.foldl (fun acc u => acc ++ t.refs.extract (u * np) (u * np + np)) #[] } }
 
 /-- The strata of the verifier's own program and partition object, and the population: the query applied to the program,
 its units grouped by template descriptor id (`Draw.strataOf`). Only `Q_template_instance` v0 and `Q_template_instances` v0
@@ -752,9 +836,9 @@ def stratifiedLaw (obj : Json) (program : ByteArray) (k : Nat) : V (Draw.Law × 
   | .ok law => return (law, population)
   | .error e => throw s!"stratified: {e}"
 
-/-- `work:K` expanded over the verifier's own program, partition object and work table (`Draw.deriveWork`), and the
-population. -/
-def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat)) : V (Draw.Law × Nat) := do
+/-- `work:K` expanded over the verifier's own program, partition object and work table of works and floors
+(`Draw.deriveWork`), and the population. -/
+def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) : V (Draw.Law × Nat) := do
   let (strata, population) ← templateStrata "work" obj program
   match Draw.deriveWork k strata table with
   | .ok law => return (law, population)
@@ -771,8 +855,8 @@ def checkPublic (c : Circuit) (pub : Public) : V Unit := do
   let (n, bcs, outputs) := pub.population.getD (pub.n, pub.digests, pub.outputs)
   if let .ok d := pub.header.getObjVal? "unit_draw" then
     let u ← Draw.UnitDraw.ofJson d
-    if (← J.nat pub.header "instances" "public file") != u.units.size || pub.n != u.units.size then
-      throw "U3: the statement's instances are not the drawn units"
+    if (← J.nat pub.header "instances" "public file") != u.proved.size || pub.n != u.proved.size then
+      throw "U3: the statement's instances are not the drawn units and their closure"
   let H := Sha512.hash
   for p in [0:np] do
     let port := c.ports[p]!
@@ -901,7 +985,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
       if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         pure (some { f with derived := true, note := ← HmRow.deriveTemplateUnits c obj prog indices })
-      else pure (some f)
+      else HmRow.qwordFinding c pub obj prog f
     | f, _, _ => pure f
   let n := pub.n
   let blocksReal := (n + c.g - 1) / c.g
@@ -929,11 +1013,32 @@ several, the session's units (the draw's, without one the population's) split in
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Every part comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-draw's law is held to. -/
+draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, and `closure` its
+own closure map, which a work draw's closure is held to. -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
-    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat)) := none) :
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none) :
     V (SessionSpec × Array Stmt) := do
+  -- a closure draw proves more units than it draws, so what it adds must be the verifier's own closure of the draw
+  if let some d := draw then
+    if let .ok u := Draw.UnitDraw.ofJson d then
+      if let .work .. := u.law then
+        match closure with
+        | some cm =>
+          if u.closure != Draw.closureOf cm u.units then
+            throw "U3: the draw's closure is not the verifier's own (its closure map)"
+        | none =>
+          if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
+  -- a stratified draw's K and strata set every k_s, so its law must be the verifier's own derivation, never taken as stated
+  if let some d := draw then
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+      let (some obj, some prog, some K) := (partition, program, stratified)
+        | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
+      if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
+      let (law, _) ← HmRow.stratifiedLaw obj prog K
+      if law != Draw.Law.stratified k strata then
+        throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work draw's K and stated work set every k_s, so its law must be the verifier's own derivation, never taken as stated
   if let some d := draw then
     if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then

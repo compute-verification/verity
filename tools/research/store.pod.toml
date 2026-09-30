@@ -1,12 +1,15 @@
 # The research store's remote, for a POD running `research run --tool ...` from a shipped source tree (store README §7).
-# No secrets here: the credential comes from the environment (`research data mint-credential --ttl 6h --env` on the control
-# machine -> `--env AWS_ACCESS_KEY_ID=... --env AWS_SECRET_ACCESS_KEY=...`).  Point the pod at it with
-#     research run --on <pod> --source <tree> --env RESEARCH_STORE_CONFIG=tools/research/store.pod.toml ...
-# (relative to the shipped tree, the runner's cwd; run_row_v2.sh absolutises it before nested runs).  Same bucket as ~/.research/store.toml.
+# No secrets and no account identifiers here: the bucket and endpoint come from the environment (R2_BUCKET, R2_ENDPOINT), and so
+# does the credential (`research data mint-credential --ttl 6h --env` on the control machine). Point the pod at it with
+#     research run --on <pod> --source <tree> --env RESEARCH_STORE_CONFIG=tools/research/store.pod.toml \
+#         --env R2_BUCKET=... --env R2_ENDPOINT=... --env AWS_ACCESS_KEY_ID=... --env AWS_SECRET_ACCESS_KEY=... ...
+# (relative to the shipped tree, the runner's cwd).  `bucket_sha256` pins the store's bucket without naming it: a remote built from
+# this file, or from the R2_* environment on a cloud VM (remote.env_remote_config), refuses any other bucket.
 [remote]
 type = "s3"
-bucket = "verity-dev"
-endpoint = "https://1d4dfa0a7dc0639e19f5d0125f14a634.r2.cloudflarestorage.com"
+bucket_env = "R2_BUCKET"
+endpoint_env = "R2_ENDPOINT"
+bucket_sha256 = "12a14410cbc8cc4d9bb0cf040b831e471de9b8ca3715663348342327814edaff"
 region = "auto"
 access_key_id_env = "AWS_ACCESS_KEY_ID"
 secret_access_key_env = "AWS_SECRET_ACCESS_KEY"

@@ -72,6 +72,7 @@ columns (range chunks and query wires bound by assertions, `PROTOCOL.md` §4.3 `
 Never on a laptop; on the `vy-cpu` pod (`~/.research/machines.toml`):
 
 ~~~sh
+uv run research data fetch-fixtures backends/gkr fixtures/redteam-v2   # large fixtures are fetched (fixtures/artifacts.json)
 CARGO_TARGET_DIR=/workspace/target-gkr cargo test --release        # 9 tests: field, NTT/encode, SHA-256 vectors, honest B=1..64, tampered proof, negatives
 cargo run --release -- negatives fixtures/                          # 52 mutated witnesses, all rejected
 uv run --package verity-numerical python -m verity_numerical.gkr_export   # regenerate circuit + fixtures

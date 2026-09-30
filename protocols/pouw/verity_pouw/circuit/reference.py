@@ -15,6 +15,7 @@ from verity.ir.defs import REGISTRY
 from ..schemes.ncp import assemble, checked_route_u
 from . import ncp2
 from .ncp2 import D, Shape
+from . import words as W
 from .words import M32, i32_to_f32_rn, sx
 
 M64 = (1 << 64) - 1
@@ -45,13 +46,23 @@ class Call:
     def position(self) -> int:
         return (self.layer << 32) | self.site
 
-    def args(self) -> list:
-        """The flat input leaves of `NcpLinear`, in parameter order."""
-        salt = [int.from_bytes(self.salt[4 * i:4 * i + 4], "little") for i in range(8)]
-        lane = lambda v: [v & M32, (v >> 32) & M32]  # noqa: E731
-        return [[x & 0x7F for row in self.a for x in row], list(self.s), [x & 0x7F for row in self.b for x in row], list(self.t),
-                list(self.bias), salt, lane(self.forward), lane(self.position), lane(self.weight), list(self.rowids),
-                list(self.colids)]
+    def _salt_words(self) -> list[int]:
+        return [int.from_bytes(self.salt[4 * i:4 * i + 4], "little") for i in range(8)]
+
+    def weight_args(self) -> list:
+        """The flat input leaves of `NcpWeight`, in parameter order."""
+        return [[x & 0x7F for row in self.b for x in row], self._salt_words(), _lane(self.weight), list(self.colids)]
+
+    def args(self, kind: str = "shift24") -> list:
+        """The flat input leaves of `NcpLinear`, in parameter order: its weight's Y strips and c₀ as `NcpWeight` commits them."""
+        ys, c0s = weight_outputs(self, kind)
+        return [[x & 0x7F for row in self.a for x in row], list(self.s), [v for col in ys for v in col], list(c0s),
+                list(self.t), list(self.bias), self._salt_words(), _lane(self.forward), _lane(self.position),
+                _lane(self.weight), list(self.rowids)]
+
+
+def _lane(v: int) -> list[int]:
+    return [v & M32, (v >> 32) & M32]
 
 
 def _u64le(v: int) -> bytes:
@@ -82,7 +93,7 @@ def _digest_lanes(dg: bytes) -> bytes:
 
 
 def key(call: Call, d_a: bytes) -> bytes:
-    msg = ncp2.TAG_KEY + call.salt + _u64le(call.forward) + _u64le(call.position) + _u64le(call.weight) + _digest_lanes(d_a)
+    msg = _digest_lanes(d_a) + ncp2.TAG_KEY + call.salt + _u64le(call.forward) + _u64le(call.position) + _u64le(call.weight)
     return hashlib.shake_256(msg).digest(32)
 
 
@@ -135,6 +146,15 @@ def evaluate(call: Call, kind: str = "shift24") -> Result:
     return Result(d_a, kc, words, z, y)
 
 
+def weight_outputs(call: Call, kind: str = "shift24") -> tuple[list[list[int]], list[int]]:
+    """What `NcpWeight` commits: each weight column's Y (3k s8 bytes, `schemes.ncp.assemble`'s) and c₀ = −β·Σ_l Y[l][j]
+    mod 2^32, in column order."""
+    k = call.shape.k
+    f1 = [f1_col(call, call.colids[j], k) for j in range(call.shape.n)]
+    ops = assemble([[0] * k], [list(r) for r in call.b], [[0] * k], f1, ncp2.perm(kind, k), (1,) * k)
+    return [[v & 0xFF for v in col] for col in ops.y], [(-W.BETA * sum(col)) & M32 for col in ops.y]
+
+
 def product(call: Call) -> list[list[int]]:
     """A·Bᵀ over the integers, as int32 encodings (Z's value, `checkedU_final`)."""
     return [[sum(x * y for x, y in zip(ar, br)) & M32 for br in call.b] for ar in call.a]
@@ -144,4 +164,5 @@ def signed(v: int) -> int:
     return sx(v, 32)
 
 
-__all__ = ["Call", "Result", "e1_row", "evaluate", "f1_col", "key", "node", "product", "root", "row_digest", "strip_digest"]
+__all__ = ["Call", "Result", "e1_row", "evaluate", "f1_col", "key", "node", "product", "root", "row_digest", "strip_digest",
+           "weight_outputs"]

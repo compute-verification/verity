@@ -10868,7 +10868,7 @@
     "vus": 6664748,
     "template_mix": [
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 1,
           "last": "full",
@@ -10877,7 +10877,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 0
         },
         "vus": 252,
         "subcircuit_template": "attention-head",
@@ -10889,7 +10890,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 1,
           "last": "partial",
@@ -10898,7 +10899,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 0
         },
         "vus": 32652,
         "subcircuit_template": "attention-head",
@@ -10910,7 +10912,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 2,
           "last": "full",
@@ -10919,7 +10921,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 1
         },
         "vus": 180,
         "subcircuit_template": "attention-head",
@@ -10931,7 +10934,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 2,
           "last": "partial",
@@ -10940,7 +10943,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 1
         },
         "vus": 24588,
         "subcircuit_template": "attention-head",
@@ -10952,7 +10956,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 3,
           "last": "full",
@@ -10961,7 +10965,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 2
         },
         "vus": 144,
         "subcircuit_template": "attention-head",
@@ -10973,7 +10978,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 3,
           "last": "partial",
@@ -10982,7 +10987,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 2
         },
         "vus": 20664,
         "subcircuit_template": "attention-head",
@@ -10994,7 +11000,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 4,
           "last": "full",
@@ -11003,7 +11009,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 3
         },
         "vus": 108,
         "subcircuit_template": "attention-head",
@@ -11015,7 +11022,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 4,
           "last": "partial",
@@ -11024,7 +11031,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 3
         },
         "vus": 13788,
         "subcircuit_template": "attention-head",
@@ -11036,7 +11044,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 5,
           "last": "full",
@@ -11045,7 +11053,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 4
         },
         "vus": 108,
         "subcircuit_template": "attention-head",
@@ -11057,7 +11066,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 5,
           "last": "partial",
@@ -11066,7 +11075,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 4
         },
         "vus": 13716,
         "subcircuit_template": "attention-head",
@@ -11078,7 +11088,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 6,
           "last": "full",
@@ -11087,7 +11097,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 5
         },
         "vus": 72,
         "subcircuit_template": "attention-head",
@@ -11099,7 +11110,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 6,
           "last": "partial",
@@ -11108,7 +11119,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 5
         },
         "vus": 12348,
         "subcircuit_template": "attention-head",
@@ -11120,7 +11132,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 7,
           "last": "full",
@@ -11129,7 +11141,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 6
         },
         "vus": 72,
         "subcircuit_template": "attention-head",
@@ -11141,7 +11154,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 7,
           "last": "partial",
@@ -11150,7 +11163,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 6
         },
         "vus": 9144,
         "subcircuit_template": "attention-head",
@@ -11162,7 +11176,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 8,
           "last": "full",
@@ -11171,7 +11185,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 7
         },
         "vus": 36,
         "subcircuit_template": "attention-head",
@@ -11183,7 +11198,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 8,
           "last": "partial",
@@ -11192,7 +11207,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 7
         },
         "vus": 4680,
         "subcircuit_template": "attention-head",
@@ -11204,7 +11220,7 @@
         "subcircuits_per_vu": 32
       },
       {
-        "vu_family": "Attention_v2",
+        "vu_family": "Attention_v4",
         "parameters": {
           "NB": 9,
           "last": "partial",
@@ -11213,7 +11229,8 @@
           "D": 128,
           "BN": 128,
           "DOT": "{\"fn\":\"HopperBF16WgmmaDot16_v1\"}",
-          "INV": "{\"fn\":\"Fa3InvSum_v1\"}"
+          "INV": "{\"fn\":\"Fa3InvSum_v1\"}",
+          "MASKED_FROM": 8
         },
         "vus": 576,
         "subcircuit_template": "attention-head",
@@ -11416,25 +11433,25 @@
       "row": 73,
       "class": "GREEN",
       "expected": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
-      "records": "art:1b095a95f751505055d184a1c9587c1700a8dda9e085b9b8aba0e7ccb4c19d0c",
-      "programs": "art:f94391548214af4edbea90da0bd676d46e853989454e0693e39499f8239e1289",
-      "program_digest": "fffc6132b225b712464ce16859b421d8c2602b9dee4d8fce351c33ed25351882",
+      "records": "art:da7b7474aba6ead45158276697675b0d85a5c8c79e2415e85830963cb6f63d01",
+      "programs": "art:91fac396ce4189b8bbb84e85f0cf62d23f660596e882b73c936b4624292da31d",
+      "program_digest": "357b965dca2497df1cc97c6b45b5d0f773e4aba40ee8ae0bc630469d45d10262",
       "reference": {
-        "branch": "lane/vllm-v2-default",
-        "commit": "972893f636f3d61679e3645aaf46d032c07b827f",
+        "branch": "main",
+        "commit": "269829d84da4a0e4385c561776ba8105398f62e2",
         "frozen": {
           "branch": "lane/vllm-integration",
           "commit": "89af272a8c1d37a44b3e8f3253378d7a152fc281",
           "release": "r19-int-21",
           "tag": "v1-reference"
         },
-        "release": "v2-flip",
+        "release": "rebaseline-epoch-q-word",
         "runs": [
-          "r20260923-174328-34d4"
+          "r20260928-121849-ff8b"
         ],
         "tag": "v2-reference"
       },
-      "read_at_commit": "bda9ea1eafe8d772ae95c325b396d5310c103140"
+      "read_at_commit": "8cdc47c22df075dceded3e1fc927b5abde8c4a0d"
     },
     "sources": [
       {

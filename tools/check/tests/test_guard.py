@@ -68,9 +68,29 @@ def test_a_suite_without_the_guards_report_fails(tmp_path, monkeypatch):
 def test_a_worker_that_sends_no_record_leaves_the_suite_unguarded(monkeypatch):
     monkeypatch.delenv("VERITY_SUITE_REPORT", raising=False)   # load it inert: no second audit hook in this process
     G = _load(monkeypatch, "guard_under_test", HERE / "guard" / "verity_suite_guard.py")
-    G.pytest_testnodedown(SimpleNamespace(gateway=SimpleNamespace(id="gw0"), workeroutput={G._KEY: ["a.txt"]}), None)
+    record = {"outside": ["a.txt"], "watched": ["uv.lock"], "distributions": ["numpy"], "missing": ["torch"]}
+    G.pytest_testnodedown(SimpleNamespace(gateway=SimpleNamespace(id="gw0"), workeroutput={G._KEY: record}), None)
     G.pytest_testnodedown(SimpleNamespace(gateway=SimpleNamespace(id="gw1")), error="crashed")
-    assert (G._outside, G._unguarded) == ({"a.txt"}, ["gw1"])
+    assert (G._outside, G._watched, G._unguarded) == ({"a.txt"}, {"uv.lock"}, ["gw1"])
+    assert G._record == {"distributions": {"numpy"}, "missing": {"torch"}}
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_the_guard_records_what_the_key_leaves_out(tmp_path, monkeypatch, workers):
+    """Metadata files the tests read, distributions they import, and imports nothing installed provides: in any process."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "pyproject.toml").write_text("[project]\nname = 'other'\n")
+    (tmp_path / "pkg" / "tests" / "test_uses.py").write_text(
+        "from pathlib import Path\nROOT = Path(__file__).resolve().parents[2]\n\n"
+        "def test_uses():\n    (ROOT / 'other' / 'pyproject.toml').read_text()\n    import iniconfig  # noqa: F401\n"
+        "    try:\n        import surely_no_such_distribution  # noqa: F401\n    except ImportError:\n        pass\n")
+    r = S.run(suite, ["pkg", "other/pyproject.toml"], [], tmp_path / "logs", workers, ["other/pyproject.toml"])
+    assert r.status == "passed", r.log.read_text()
+    assert r.watched == ["other/pyproject.toml"] and "iniconfig" in r.distributions and "pytest" in r.distributions
+    assert "surely_no_such_distribution" in r.missing and "iniconfig" not in r.missing
 
 
 def test_slots_go_to_the_suites_in_turn(tmp_path, monkeypatch):

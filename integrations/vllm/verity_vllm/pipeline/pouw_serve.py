@@ -1,17 +1,18 @@
-"""`verity-vllm pouw-serve`: a workload served under ``pouw:ncp-v2``, and its calls replayed as committed and with one
-drawn tile tampered.
+"""`verity-vllm pouw-serve`: a workload served under ``pouw:ncp-v2``, and its calls replayed as committed and with the
+first call's tiles tampered.
 
     verity-vllm pouw-serve --workload workloads/workload_qwen05_32x16_1req.json [--draws 16] [--beacon HEX] [--out DIR]
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
 committed natively as it is served (`protocol_options.pouw_native`). Once the engine closes, the circuit replay
-(`check.replay.pouw_circuit.replay`) runs twice, under the work law at K = ``--draws``:
+(`check.replay.pouw_circuit.replay`) runs twice, the run's calls as one window under the work law at a budget of K =
+``--draws``:
 
 - **honest**: the calls as committed;
-- **tampered**: the same calls, except that one drawn tile's credited word is flipped by its prover, committed and
-  opened that way (`check.replay.pouw_circuit.tamper_drawn_tile`), with the calls root recomputed over it.
+- **tampered**: the same calls, except that credited word 7 of every tile of the first call is flipped by its prover,
+  committed and opened that way (`check.replay.pouw_circuit.tamper_tiles`), with the calls root recomputed over it.
 
-Both replays use one draw source, fixed by the beacon before any call exists.
+Each replay's window draws under a fresh source (`verity_pouw.circuit.anchors.Ledger.open`), which its report records.
 
 The command writes ``pouw_serve.json`` under ``--out`` (default ``$RESEARCH_RUN_DIR``), and ``result.json`` beside it
 under a research run (``$RESEARCH_RUN_ID``). They hold
@@ -24,7 +25,6 @@ This is not a Commit of record: the model's own rows are not replayed (there is 
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import threading
@@ -36,30 +36,27 @@ from typing import Any, Sequence
 
 from verity_vllm.config import option
 
-SOURCE_TAG = b"verity-vllm/pouw-serve/draw-source/v1\0"
 ENTRY = "pouw:ncp-v2"
 
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", help="a verity-vllm/workload/v1 file: the pinned model, its revision and the requests")
-    draws: int = option("--draws", type=int, default=16, help="the work law's K over the run (default 16)")
+    draws: int = option("--draws", type=int, default=16, help="the window's work-law budget K (default 16)")
     beacon: str = option("--beacon", default="5a" * 32, help="the epoch beacon, hex (default 0x5a x 32)")
     out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the output directory (default $RESEARCH_RUN_DIR, else .)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="", help="the research run's id: result.json is written when set")
 
 
-def verdicts(records: Sequence[Any], commitment: dict[str, Any], source: bytes, draws: int) -> dict[str, Any]:
+def verdicts(records: Sequence[Any], commitment: dict[str, Any], draws: int) -> dict[str, Any]:
     """Both replays and the verdict."""
-    from verity_pouw.circuit import plan as CPL
     from verity_vllm.check.replay import pouw_circuit as RC
     from verity_vllm.protocol_options import pouw_circuit as PC
 
-    law = CPL.WorkLaw(draws)
-    honest = RC.replay(records, commitment, source, law)
-    bad, where = RC.tamper_drawn_tile(records, source, law)
+    honest = RC.replay(records, commitment, draws)
+    bad, where = RC.tamper_tiles(records)
     salt, wroot = bytes.fromhex(commitment["salt"]), bytes.fromhex(commitment["weights_root"])
-    t = RC.replay(bad, dict(commitment, calls_root=PC.calls_root(salt, wroot, bad).hex()), source, law)
+    t = RC.replay(bad, dict(commitment, calls_root=PC.calls_root(salt, wroot, bad).hex()), draws)
     return {"honest": honest, "tampered": dict(t, tampered=where),
             "verdict": {"honest": "accepted" if honest["result"] else "rejected", "tampered": "accepted" if t["result"] else "rejected"}}
 
@@ -111,9 +108,8 @@ def main(a: Options) -> int:
     pf = per_forward(records, run.seconds)
     print(f"served {len(pf)} forwards, {len(records)} calls, {sum(r.units for r in records)} units in {served:.1f}s "
           f"(engine {built:.1f}s); calls root {commitment['calls_root']}", flush=True)
-    source = hashlib.sha256(SOURCE_TAG + bytes.fromhex(a.beacon)).digest()
     t2 = time.monotonic()
-    v = verdicts(records, commitment, source, a.draws)
+    v = verdicts(records, commitment, a.draws)
     replayed = time.monotonic() - t2
     print(f"replayed twice in {replayed:.1f}s: honest {v['honest']['seconds']}s, tampered {v['tampered']['seconds']}s", flush=True)
     decode = [f["seconds"] for f in pf[1:]]
@@ -123,7 +119,7 @@ def main(a: Options) -> int:
            "forward_s": {"prefill": pf[0]["seconds"] if pf else None, "decode_mean": round(sum(decode) / len(decode), 3) if decode else None,
                          "mean": round(sum(f["seconds"] for f in pf) / len(pf), 3) if pf else None, "serve_mean": round(served / max(1, len(pf)), 3)},
            "calls": len(records), "units": sum(r.units for r in records), "commitment": commitment, "details": run.details,
-           "tokens": [[list(c.token_ids) for c in o.outputs] for o in outs], "draw_source": source.hex(), **v}
+           "tokens": [[list(c.token_ids) for c in o.outputs] for o in outs], **v}
     (out / "pouw_serve.json").write_text(json.dumps(doc, indent=1) + "\n")
     ok = v["verdict"] == {"honest": "accepted", "tampered": "rejected"}
     line = f"POUW-SERVE honest={v['verdict']['honest']} tampered={v['verdict']['tampered']}"

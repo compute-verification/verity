@@ -1,4 +1,5 @@
-"""`pouw_native`: `ncp-v2`'s committed values computed natively are the Program's, unit by unit."""
+"""`pouw_native`: `ncp-v2`'s committed values computed natively are the Programs', unit by unit: each call's and its
+weight side's."""
 from __future__ import annotations
 
 import numpy as np
@@ -36,12 +37,12 @@ def _call(rng, m, k, n):
 def three_strips():
     """A call whose tree has two nodes (three strips), evaluated both ways."""
     call = _call(np.random.default_rng(0), 48, 64, 32)
-    return call, PN.Native(call), PC.evaluate_ir("ncp-v2", call)
+    return call, PN.Native(call, "ncp-v2"), PC.evaluate_ir("ncp-v2", call)
 
 
 def test_every_unit_is_the_programs_outputs_numbering_and_wiring(three_strips):
     call, nat, (c, tr) = three_strips
-    tp, units = c.partition, CP.units(call.shape)
+    tp, units = c.partition, CP.units(call.shape, PC.kind_of("ncp-v2"))
     assert nat.population == tp.population == len(units)
     for u in range(tp.population):
         role, where = nat.locate(u)
@@ -52,25 +53,45 @@ def test_every_unit_is_the_programs_outputs_numbering_and_wiring(three_strips):
         assert flat == [tr[g] for g in tp.inputs(u)], (u, role, where)
 
 
+def test_every_y_unit_is_the_weight_programs_outputs_numbering_and_wiring(three_strips):
+    call = three_strips[0]
+    c, tr = PC.evaluate_weight_ir("ncp-v2", call)
+    nw, tp = PN.NativeWeight(call.b, "ncp-v2", call.salt, call.weight, call.colids), c.weight_partition
+    assert nw.population == tp.population == call.shape.n // 16
+    for u in range(tp.population):
+        assert [int(v) for v in nw.outputs(u)] == [tr[g] for g in tp.outputs(u)], u
+        assert [v for arg in nw.args(u) for v in arg] == [tr[g] for g in tp.inputs(u)], u
+    assert list(evaluate(nw.template(1), *nw.args(1))) == [int(v) for v in nw.outputs(1)]
+
+
 def test_the_commit_is_the_ir_commit_and_the_reference(three_strips):
     call, _nat, _ir = three_strips
     nat, ir = PN.commit_call(0, "ncp-v2", call), PC.commit_call_ir(0, "ncp-v2", call)
     assert (nat.leaves, nat.inputs, nat.root) == (ir.leaves, ir.inputs, ir.root) and np.array_equal(nat.y, ir.y)
-    assert [[int(v) for v in r] for r in nat.y] == CR.evaluate(call.reference()).y
+    assert (nat.side.leaves, nat.side.inputs, nat.side.root) == (ir.side.leaves, ir.side.inputs, ir.side.root)
+    assert PC.call_leaf(nat) == PC.call_leaf(ir)
+    assert all(np.array_equal(a, b) for cs in range(2) for a, b in zip(nat.read(cs), ir.read(cs)))
+    assert [[int(v) for v in r] for r in nat.y] == CR.evaluate(call.reference(), PC.kind_of("ncp-v2")).y
 
 
 def test_each_template_evaluates_from_its_regenerated_inputs_to_its_outputs(three_strips):
     _call_, nat, _ir = three_strips
-    for u in (0, nat.index("node", 1), nat.index("key"), nat.index("form_y", 1), nat.index("form_x", 2), nat.index("tile", 2, 1),
+    for u in (0, nat.index("node", 1), nat.index("key"), nat.index("form_x", 2), nat.index("tile", 2, 1),
               nat.index("dequant", 1, 0, 200)):
         assert list(evaluate(nat.template(u), *nat.args(u, nat.outputs))) == [int(v) for v in nat.outputs(u)], nat.locate(u)
 
 
 def test_the_weight_is_read_once_in_blocks_and_the_block_does_not_change_the_commit():
+    """The weight side reads the rows once, and each call on it once more (for t and its tiles), in blocks."""
     call = _call(np.random.default_rng(3), 16, 64, 80)
-    a = PN.Native(call).commit(0, "ncp-v2", block=32)
+    nw = PN.NativeWeight(call.b, "ncp-v2", call.salt, call.weight, call.colids)
+    side = nw.commit(block=32)
     assert call.b.reads == [(0, 32), (32, 64), (64, 80)]
-    b = PN.Native(call).commit(0, "ncp-v2", block=256)
+    assert (side.leaves, side.inputs, side.root) == (lambda o: (o.leaves, o.inputs, o.root))(nw.commit(block=256))
+    call.b.reads.clear()
+    a = PN.Native(call, "ncp-v2").commit(0, side, block=32)
+    assert call.b.reads == [(0, 32), (32, 64), (64, 80)]
+    b = PN.Native(call, "ncp-v2").commit(0, side, block=256)
     assert (a.leaves, a.inputs, a.root) == (b.leaves, b.inputs, b.root) and np.array_equal(a.y, b.y)
 
 
@@ -78,31 +99,37 @@ def test_the_weight_is_read_once_in_blocks_and_the_block_does_not_change_the_com
 def test_the_pools_threads_and_their_blocks_do_not_change_the_commit(threads, monkeypatch):
     """A pool of one thread per CPU cuts the weight into `block_for` blocks, at least `MIN_BLOCK` rows, so that every thread has
     one: 256 threads read a 400-row weight 64 rows at a time, one thread in `BLOCK`s; either commit is the other's, bit for bit."""
-    ref = PN.Native(_call(np.random.default_rng(5), 16, 64, 400)).commit(0, "ncp-v2", block=PN.BLOCK)
+    call = _call(np.random.default_rng(5), 16, 64, 400)
+    nw = PN.NativeWeight(call.b, "ncp-v2", call.salt, call.weight, call.colids)
+    ref = PN.Native(call, "ncp-v2", side=nw).commit(0, nw.commit(block=PN.BLOCK), block=PN.BLOCK)
     monkeypatch.setattr(PN, "THREADS", threads)
     PN._pool.cache_clear()
     try:
         call = _call(np.random.default_rng(5), 16, 64, 400)
-        got = PN.Native(call).commit(0, "ncp-v2")
+        got = PN.commit_call(0, "ncp-v2", call)
     finally:
         PN._pool.cache_clear()
     assert PN.block_for(400) == {1: 256, 3: 144, 256: 64}[threads]
     assert [hi - lo for lo, hi in call.b.reads][0] == PN.block_for(400)
     assert (got.leaves, got.inputs, got.root) == (ref.leaves, ref.inputs, ref.root) and np.array_equal(got.y, ref.y)
+    assert (got.side.leaves, got.side.root) == (ref.side.leaves, ref.side.root)
 
 
 def test_a_tampered_value_changes_exactly_its_units_leaf_and_its_opening():
     call = _call(np.random.default_rng(4), 32, 64, 16)
     honest = PN.commit_call(0, "ncp-v2", call)
-    nat = PN.Native(call)
-    for u, j in ((nat.index("tile", 1, 0), 7), (nat.index("dequant", 0, 0, 3), 0), (nat.index("form_y", 0), 3000)):
-        rec = PN.commit_call(0, "ncp-v2", call, tamper={(u, j): int(honest.opening(u)[j]) ^ 1})
+    nat = PN.Native(call, "ncp-v2")
+    for u, j in ((nat.index("tile", 1, 0), 7), (nat.index("dequant", 0, 0, 3), 0)):
+        rec = PN.commit_call(0, "ncp-v2", call, tamper={(u, j): int(honest.opening(u)[j]) ^ 1}, side=honest.side)
         diff = [v for v in range(nat.population) if rec.leaf(v) != honest.leaf(v)]
         assert diff == [u] and int(rec.opening(u)[j]) == int(honest.opening(u)[j]) ^ 1
         assert PC.unit_leaf(rec.opening(u)) == rec.leaf(u)
         served = rec.y.astype(np.int64) ^ honest.y.astype(np.int64)
         assert served.tolist() == ([[1 if (i, c) == (0, 3) else 0 for c in range(16)] for i in range(32)]
                                    if nat.locate(u)[0] == "dequant" else np.zeros((32, 16), int).tolist())
+    side = PN.commit_weight("ncp-v2", call, tamper={(0, 3000): int(honest.side.opening(0)[3000]) ^ 1})
+    assert [v for v in range(side.units) if side.leaf(v) != honest.side.leaf(v)] == [0]
+    assert int(side.opening(0)[3000]) == int(honest.side.opening(0)[3000]) ^ 1 and PC.unit_leaf(side.opening(0)) == side.leaf(0)
 
 
 def test_dequant_over_arrays_is_the_primitives_on_every_edge():

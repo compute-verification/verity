@@ -40,10 +40,6 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/check/adversarial.py::run_one": "the mutation harness reports each fold's seconds; no test reads them",
     "integrations/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
-    "integrations/vllm/tests/ops/test_epoch_row.py::_job":
-        "epoch_row.sh reads the real clock (`date +%s`, GNU `timeout`): the job's start and key expiry must be now",
-    "integrations/vllm/tests/ops/test_epoch_row.py::test_a_stage_deadline_stops_the_stage_stores_preserves_and_exits":
-        "a real stage deadline 4 s out; stopped before or during the stage, the row ends `STOP build: deadline` alike",
     "integrations/vllm/tests/program/beyond_gemm.py": "a GPU probe script (not collected) that reports its own wall time",
     "integrations/vllm/tests/program/crosscheck.py::main": "the cross-check script's summary line reports its wall time; no test runs main",
     "integrations/vllm/tests/program/padded_commit_tiny.py": "records build/commit timings in its row; test_padded_commit_tiny asserts none of them",

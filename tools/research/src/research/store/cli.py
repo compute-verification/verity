@@ -27,7 +27,8 @@
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
                                                    writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
                                                    axis -> sweep, candidate A -> A-GKR); REFUSES (exit 2) an unknown key, a measurement, a ref, an
-                                                   off-enum value or a word in a bool/int key -- --off-vocab writes it anyway
+                                                   off-enum value, a word in a bool/int key, or `abandoned` without --ref note:<lane>/<note>
+                                                   -- --off-vocab writes it anyway
   research data vocab [--json]                     the label vocabulary (vocab.py): key, asserter group, value form, enum values
   research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
                                                    refs written as labels; counts, asserters, example targets
@@ -52,6 +53,7 @@
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
+  research data catalog --compact OUT              a copy without the whole manifests or replica records, for readers that query (notes mcp)
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
@@ -73,7 +75,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import ids, vocab
-from .index import IGNORE_VERSION_ENV, CatalogVersionError
+from .index import IGNORE_VERSION_ENV, CatalogVersionError, compact
 from .local import REFRESH_PAYLOAD_MAX, LocalStore, StoreError, store_root
 from .remote import ConfigError, RemoteConflict
 
@@ -474,7 +476,7 @@ def cmd_label(argv: list[str]) -> int:
     value = json.loads(ns.value) if ns.value_json else ns.value
     key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
     value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
-    why = vocab.check(key, value)
+    why = vocab.check(key, value) or vocab.check_ref(key, ns.ref)
     if why and not ns.off_vocab:
         print(f"research data label: refused: {why}.  Nothing written (--off-vocab writes it anyway)", file=sys.stderr)
         return 2
@@ -693,7 +695,15 @@ def cmd_catalog(argv: list[str]) -> int:
     the code -- see `CatalogVersionError`."""
     ap = _ap("catalog")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--compact", type=Path, metavar="OUT", help="write a copy without manifest_json or the replica records (index.compact)")
     ns = ap.parse_args(argv)
+    if ns.compact:
+        rep = compact(LocalStore(ns.store).index.path, ns.compact)
+        if ns.json:
+            _dump(rep)
+        else:
+            print(f"{rep['path']}: {rep['bytes'] / 1e6:.1f} MB; " + ", ".join(f"{t} {n}" for t, n in rep["tables"].items()))
+        return 0
     info = LocalStore(ns.store).index.info()
     if ns.json:
         _dump(info)
@@ -959,7 +969,7 @@ def _blob_list(path: str | None) -> list[tuple[str, int]]:
 def cmd_fetch_fixtures(argv: list[str]) -> int:
     """Make the fetched entries of `fixtures/artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
     manifests and blobs come from the local store, else the private remote when this machine can reach it, else the public export
-    (`--public-url`, `$RESEARCH_FIXTURES_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
+    (`--public-url`, `$RESEARCH_PUBLIC_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
     left alone.  `--check` only reports (exit 1 if any is missing or differs).  `--stubs` also restores the history stubs in
     tracked files (an old commit's checkout)."""
     from . import fetchset, fixtures as F  # noqa: PLC0415
