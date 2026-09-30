@@ -521,29 +521,27 @@ def block_ints(codes: np.ndarray, sc: np.ndarray, fmt: str) -> tuple[np.ndarray,
     return numerators(codes).reshape(rows, k // blk, blk) * m[..., None], e - 1   # value = (n/2) * m * 2^e
 
 
-def fp4_representable(N: np.ndarray, E: np.ndarray, fmt: str) -> tuple[np.ndarray, np.ndarray]:
-    """Per block (P, blk) of values N * 2^E: (on the E2M1 grid under one scale of the format, under any scale > 0).
+def fp4_representable(N: np.ndarray, fmt: str) -> tuple[np.ndarray, np.ndarray]:
+    """Per block (P, blk) of values N * 2^E (E drops out: a power of two is free): (on the E2M1 grid under one scale of the format, under any scale > 0).
 
     The block is q_j/2 * s for codes q_j in E2M1's halves {0,1,2,3,4,6,8,12}; the largest |N_j| = M fixes q_max, hence
     s = 2 M 2^E / q_max, so each of the 7 choices of q_max is one exact integer test.  "One scale of the format" is a
-    UE4M3 value (nvf4, the operand's global g kept) or a power of two 2^-127..2^127 (mxf4).  An all-zero block passes both.
+    UE4M3 value up to a power of two, i.e. s's odd part is at most 15 (nvf4: a prover forming a merged operand sets its
+    own FP32 global scale, so a power-of-two shift is free), or a power of two (mxf4's UE8M0).  An all-zero block passes.
     """
     M = np.abs(N).max(-1)
     zero = M == 0
     Ms = np.where(zero, 1, M)
     strict, anyscale = zero.copy(), zero.copy()
+    odd_max = 15 if fmt == "nvf4" else 1
     for qmax in (1, 2, 3, 4, 6, 8, 12):
         num = N * qmax
         ok = ~zero & (num % Ms[:, None] == 0).all(-1) & np.isin(np.abs(num // Ms[:, None]), E2M1_NUM).all(-1)
         anyscale |= ok
-        dyadic = (qmax % 3 != 0) | (M % 3 == 0)
-        s = np.ldexp(2.0 * Ms / qmax, E)
-        if fmt == "nvf4":
-            fits = np.isin(s, E4M3_FIN[1:])
-        else:
-            mant, ex = np.frexp(s)
-            fits = (mant == 0.5) & (ex - 1 >= -127) & (ex - 1 <= 127)
-        strict |= ok & dyadic & fits
+        three = 3 if qmax % 3 == 0 else 1
+        t = np.where(Ms % three == 0, 2 * Ms // three, 0)             # s = t * 2^(E - log2(qmax / three)); 0: s not dyadic
+        odd = t // np.where(t > 0, t & -t, 1)
+        strict |= ok & (t > 0) & (odd <= odd_max)
     return strict, anyscale
 
 
@@ -578,7 +576,7 @@ def merge_rate(fmt: str, A: np.ndarray, noise: str, delta: float, rng) -> dict:
         dup = both & ~far & ((A1 == A2).all(-1) | (A1 == -A2).all(-1))
         row = {"pairs": int(both.sum())}
         for sign, S in (("+", A1 + A2), ("-", A1 - A2)):
-            strict, anyscale = fp4_representable(S, lo, fmt)
+            strict, anyscale = fp4_representable(S, fmt)
             nz = np.abs(S).max(-1) > 0
             n = max(1, int(both.sum()))
             r = {"eps_strict": float((both & ~far & nz & strict).sum() / n),
@@ -590,7 +588,43 @@ def merge_rate(fmt: str, A: np.ndarray, noise: str, delta: float, rng) -> dict:
         out["patterns"][pat] = row
     out["eps_R_strict_max"] = worst
     out["eps_R_any_scale_max"] = max(out["patterns"][p][s]["eps_any_scale"] for p in MERGE_PATTERNS for s in "+-")
+    out["partners"] = merge_partners(N, E, live, fmt)
     return out
+
+
+def _mergeable(N1, E1, N2, E2, fmt) -> np.ndarray:
+    """Pairs (P, blk) whose sum or difference is one nonzero FP4 value under one scale of the format."""
+    lo = np.minimum(E1, E2)
+    far = np.abs(E1 - E2) > 40
+    A1, A2 = N1 << np.minimum(E1 - lo, 40)[:, None], N2 << np.minimum(E2 - lo, 40)[:, None]
+    ok = np.zeros(len(N1), bool)
+    for S in (A1 + A2, A1 - A2):
+        ok |= fp4_representable(S, fmt)[0] & (np.abs(S).max(-1) > 0)
+    return ok & ~far
+
+
+def merge_partners(N: np.ndarray, E: np.ndarray, live: np.ndarray, fmt: str, max_blocks: int = 256) -> dict:
+    """The adaptive side of epsilon_R: the share of live blocks with at least one mergeable partner (sum or difference
+    one FP4 value), searching every other row at the same k-block, and every other k-block of the same row among the
+    first ``max_blocks``.  A prover free to choose its pairs can merge at most this share of blocks."""
+    rows, nb, _ = N.shape
+    col = np.zeros((rows, nb), bool)
+    i, j = np.triu_indices(rows, 1)
+    for b in range(nb):
+        ok = _mergeable(N[i, b], E[i, b], N[j, b], E[j, b], fmt) & live[i, b] & live[j, b]
+        np.logical_or.at(col[:, b], i[ok], True)
+        np.logical_or.at(col[:, b], j[ok], True)
+    kb = min(nb, max_blocks)
+    row = np.zeros((rows, kb), bool)
+    p, q = np.triu_indices(kb, 1)
+    for r in range(rows):
+        ok = _mergeable(N[r, p], E[r, p], N[r, q], E[r, q], fmt) & live[r, p] & live[r, q]
+        np.logical_or.at(row[r], p[ok], True)
+        np.logical_or.at(row[r], q[ok], True)
+    n_live = max(1, int(live.sum()))
+    return {"same_kblock_any_row": float((col & live).sum() / n_live),
+            "same_row_any_kblock": float((row & live[:, :kb]).sum() / max(1, int(live[:, :kb].sum()))),
+            "rows": int(rows), "kblocks_searched": int(kb)}
 
 
 def cmd_merge(args) -> dict:
@@ -606,7 +640,9 @@ def cmd_merge(args) -> dict:
                 res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
                 print(json.dumps({"format": fmt, **label, "noise": noise, "zero_codes": round(r["zero_codes"], 4),
                                   "zero_blocks": round(r["zero_blocks"], 4), "eps_R_strict_max": round(r["eps_R_strict_max"], 5),
-                                  "eps_R_any_scale_max": round(r["eps_R_any_scale_max"], 5)}), flush=True)
+                                  "eps_R_any_scale_max": round(r["eps_R_any_scale_max"], 5),
+                                  "partner_col": round(r["partners"]["same_kblock_any_row"], 4),
+                                  "partner_row": round(r["partners"]["same_row_any_kblock"], 4)}), flush=True)
     return res
 
 
@@ -679,7 +715,8 @@ def operands(args, rng):
         for fam in FAMILIES if args.families == "all" else tuple(args.families.split(",")):
             yield {"family": fam}, family(fam, max(args.pairs, 64), args.k, rng)[0 if side == "a" else 1]
         return
-    for f in sorted(Path(args.acts).glob("*.npz")):
+    acts = Path(args.acts)
+    for f in [acts] if acts.is_file() else sorted(acts.glob("*.npz")):
         d = np.load(f)
         for lin in sorted({key.rsplit("/", 1)[0] for key in d.files}):
             X = d[f"{lin}/{'x' if side == 'a' else 'w'}"].astype(np.float64)

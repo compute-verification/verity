@@ -158,7 +158,7 @@ def test_fp4_representable_by_hand(fmt):
     {6, 1} and {1.5, 0.5} are already on the grid; {6, 5} is off every grid (6:5 is no ratio of E2M1 values); zero fits."""
     blocks = {"seven": [14], "six_one": [12, 2], "six_five": [12, 10], "zero": [0, 0], "three_halves": [3, 1]}
     N = np.array([(v + [0] * 16)[:16] for v in blocks.values()], dtype=np.int64)
-    strict, anyscale = C.fp4_representable(N, np.full(len(N), -1), fmt)
+    strict, anyscale = C.fp4_representable(N, fmt)
     got = dict(zip(blocks, zip(strict.tolist(), anyscale.tolist())))
     assert got["seven"] == ((fmt == "nvf4"), True)                       # 3.5 is UE4M3, not 2^e; any scale 7/6 works
     assert got["six_one"] == (True, True) and got["zero"] == (True, True) and got["three_halves"] == (True, True)
@@ -175,3 +175,16 @@ def test_merge_rate_sees_duplicates_and_is_small_on_salted_gaussians():
     g = C.merge_rate("nvf4", x, "row", 0.25, rng)
     assert 0.0 < g["zero_codes"] < 0.2 and g["zero_blocks"] == 0.0
     assert g["eps_R_strict_max"] <= g["eps_R_any_scale_max"] < 0.01
+
+
+def test_merge_partners_find_every_duplicate_row():
+    """With every row duplicated, each block has a partner in its k-block column (its twin); a lone Gaussian block rarely does."""
+    rng = np.random.default_rng(6)
+    x = rng.standard_normal((16, 256))
+    codes, sc, _ = C.quantize(np.repeat(x, 2, axis=0), "nvf4")
+    N, E = C.block_ints(codes, sc, "nvf4")
+    p = C.merge_partners(N, E, np.abs(N).max(-1) > 0, "nvf4")
+    assert p["same_kblock_any_row"] == 1.0 and p["rows"] == 32 and p["kblocks_searched"] == 16
+    codes, sc, _ = C.quantize(x, "nvf4")
+    N, E = C.block_ints(codes, sc, "nvf4")
+    assert C.merge_partners(N, E, np.abs(N).max(-1) > 0, "nvf4")["same_kblock_any_row"] < 0.05
