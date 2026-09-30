@@ -135,9 +135,9 @@ def test_every_server_script_parses():
         assert r.returncode == 0, f"{f.name}: {r.stderr}"
 
 
-def test_the_disk_guard_holds_every_queue_at_90_and_releases_only_its_own_holds(tmp_path):
-    """vy-disk-guard: at 90% it holds every queue that isn't held already and writes one alert note; while the disk stays full it
-    re-holds a queue someone released; under 85% it releases only its own holds, and not inside the quiet hour. `df`, `date` and
+def test_the_disk_guard_holds_every_queue_at_80_and_releases_only_its_own_holds(tmp_path):
+    """vy-disk-guard: at 80% it holds every queue that isn't held already and writes one alert note; while the disk stays full it
+    re-holds a queue someone released; under 75% it releases only its own holds, and not inside the quiet hour. `df`, `date` and
     `kubectl` are fakes (the policy of each queue is a file)."""
     import subprocess
     up = (SKY / "cluster_up.sh").read_text()
@@ -166,16 +166,16 @@ def test_the_disk_guard_holds_every_queue_at_90_and_releases_only_its_own_holds(
     def policies() -> dict:
         return {q: (kq / q).read_text().strip() for q in queues}
 
-    assert tick(89) == "" and set(policies().values()) == {"None", "Hold"} and not outbox.exists()
-    assert "held deployments-cpu deployments-gpu provers backfill" in tick(90)
+    assert tick(79) == "" and set(policies().values()) == {"None", "Hold"} and not outbox.exists()
+    assert "held deployments-cpu deployments-gpu provers backfill" in tick(80)
     assert set(policies().values()) == {"Hold"} and len(list(outbox.iterdir())) == 1
     note = next(outbox.iterdir()).read_text()
     assert "lane: infra" in note and "nothing was deleted" in note and "provers" in note
     (kq / "provers").write_text("None")                                   # released by hand while the disk is still full
-    assert tick(91) == "" and policies()["provers"] == "Hold" and len(list(outbox.iterdir())) == 1
-    assert tick(87) == "" and set(policies().values()) == {"Hold"}        # between the marks: nothing changes
-    assert tick(80, hm="1245") == "" and set(policies().values()) == {"Hold"}   # the quiet hour releases its own
-    assert "released deployments-cpu deployments-gpu provers backfill" in tick(80)
+    assert tick(81) == "" and policies()["provers"] == "Hold" and len(list(outbox.iterdir())) == 1
+    assert tick(77) == "" and set(policies().values()) == {"Hold"}        # between the marks: nothing changes
+    assert tick(70, hm="1245") == "" and set(policies().values()) == {"Hold"}   # the quiet hour releases its own
+    assert "released deployments-cpu deployments-gpu provers backfill" in tick(70)
     assert policies() == {**{q: "None" for q in queues}, "circuits": "Hold"} and len(list(outbox.iterdir())) == 2
 
 
