@@ -6,6 +6,8 @@ vllm-sm120-tc-gemm (``tools/tc_probe`` ``sm120.mma.m16n8k32.e4m3``/``.e5m2``, mo
 
 Rows (kernels in ``mma_fp8.cu``, built ``-gencode arch=compute_120a,code=sm_120a``):
     compile   build + SASS gate only (no GPU): every kernel holds exactly its intended tensor-core / F2FP / FADD instructions
+    identity  build + SASS + device gates only, and no result.json: the UUID check in front of another probe in the same run
+              (``--out $RESEARCH_RUN_DIR/identity``)
     step      one mma.sync per tile over families, against a candidate grid (``--instruction``: f8_e4m3, legacy_e4m3, f8_e5m2,
               f8_e4m3e5m2, mxf8_e4m3); the primary model is the registered sm_120 step where one exists, else the hypothesis named
     chain     dependent E4M3 k32 chains in registers up to K = 32 * --steps (2^16 at 2048), every step's word replayed from the
@@ -971,6 +973,9 @@ def run(args) -> tuple[int, dict]:
     identity, id_fail = identity_gate(dev, args.expect_gpu_uuid)
     results["identity"] = identity
     failures += id_fail
+    if args.row == "identity":
+        results["seconds"] = round(time.time() - t0, 3)
+        return finish(out, args, results, failures, identity)
     if not failures:
         results["layout"] = layout_gate(dev, args.row, args.instruction, np.random.default_rng(1))
         if not results["layout"]["ok"]:
@@ -997,7 +1002,7 @@ def finish(out: Path, args, results: dict, failures: list[str], identity: dict |
     results["validation"] = "passed" if not failures else "failed"
     (out / "probe_results.json").write_text(json.dumps(results, indent=1, default=str))
     run_id = os.environ.get("RESEARCH_RUN_ID")
-    if run_id and not args.fake_silicon:
+    if run_id and not args.fake_silicon and args.row != "identity":
         cap = results.get("capture", {})
         instr = TILES[args.instruction][4] if args.row == "step" else ROW_ID.get(args.row, "sm120.fp8.compile")
         doc = {"schema": "research/result/v0.1", "kind": "tc-compile-check/v1" if args.row == "compile" else "tc-evidence/v1", "run_id": run_id,
@@ -1027,7 +1032,7 @@ def finish(out: Path, args, results: dict, failures: list[str], identity: dict |
 
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--row", required=True, choices=["compile", *ROWS])
+    ap.add_argument("--row", required=True, choices=["compile", "identity", *ROWS])
     ap.add_argument("--instruction", default="f8_e4m3", choices=sorted(TILES), help="the step row's tile instruction")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=SEED_DEFAULT)

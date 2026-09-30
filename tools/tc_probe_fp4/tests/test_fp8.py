@@ -102,6 +102,17 @@ def test_fadd_ref_ftz_and_nan():
     assert fp8.fadd_ref(x, y, ftz=True).tolist() == [0, 0x80000000, 0x7FFFFFFF, 0x40000000]
 
 
+def test_identity_row_stops_on_a_wrong_uuid(tmp_path, no_nvcc, monkeypatch):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    code, res = _run(tmp_path / "ok", ["--row", "identity", "--expect-gpu-uuid", "GPU-fake"])
+    assert code == 0 and "capture" not in res and "layout" not in res
+    code, res = _run(tmp_path / "bad", ["--row", "identity", "--expect-gpu-uuid", "GPU-other"])
+    assert code == 1 and res["failures"] == ["device UUID GPU-fake != --expect-gpu-uuid GPU-other"]
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1")
+    code, res = _run(tmp_path / "two", ["--row", "identity"])
+    assert code == 1 and "is not a single device" in res["failures"][0]
+
+
 def test_fake_silicon_refused_under_research_run(monkeypatch, tmp_path):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     assert fp8.main(["--row", "fadd", "--out", str(tmp_path), "--fake-silicon"]) == 2
