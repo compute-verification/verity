@@ -183,6 +183,15 @@ useful    U/(α_A·α_B), glue
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
+- **The work law** (`schemes/pearl_c_work.py`) credits real rows only, and records the rows outside the domain instead
+  of failing on them.
+  - Before the draws the prover declares a record per matmul: its real rows (the rest are filler), its kept width (the
+    rest of k is zero), and the A and B rows that fail the per-row rules. `records_root` binds the records, and the draw
+    key reads it.
+  - A tile weighs its matmul's `wref` at the real rows and the kept width, times its share of the real cells. A tile of
+    filler only, or with a declared failing row, weighs 0 and is never drawn.
+  - On a drawn tile the verifier checks the opened real A rows and the B rows: zero past the kept width, and each passes
+    the per-row rules. Filler rows are unconstrained, so a zero row can pad. A lying record fails its drawn tile.
 - **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
 - **U's exact order, CPU-pinned** (`schemes/pearl_c_u.py`), for the Lean model of the clean-up.
