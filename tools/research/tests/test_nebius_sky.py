@@ -100,6 +100,7 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
     assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
     assert "kueue.x-k8s.io/priority-class: circuits-gpu" in gpu and "kueue.x-k8s.io/priority-class: circuits\n" in build  # Commits first
+    assert "kueue.x-k8s.io/priority-class: circuits-gpu" in replay                                    # replays drain bundles before Builds
     assert build.count("kueue.x-k8s.io/queue-name: deployments-cpu") == gpu.count("kueue.x-k8s.io/queue-name: deployments-gpu") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
