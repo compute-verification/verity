@@ -21,8 +21,15 @@ from . import CANCEL_ACTORS
 from .events import append, events_path, utc_now_ms
 from .procs import stat_fields
 
+def _root_dm() -> bool:
+    try:
+        return Path("/root/dm").is_dir()
+    except PermissionError:       # a machine's non-root user (vy-nebius-1's `research`) cannot stat under /root
+        return False
+
+
 DEFAULT_FALLBACK = os.environ.get("TELEMETRY_CANCEL_FALLBACK") or (
-    "/root/dm/cancel.jsonl" if Path("/root/dm").is_dir() else str(Path.home() / ".veritor" / "telemetry" / "cancel.jsonl"))
+    "/root/dm/cancel.jsonl" if _root_dm() else str(Path.home() / ".veritor" / "telemetry" / "cancel.jsonl"))
 
 
 def identify(pid: int) -> dict[str, Any]:
