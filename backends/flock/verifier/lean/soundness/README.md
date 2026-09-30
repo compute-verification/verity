@@ -290,6 +290,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       table class's `copy`. The message bit is a column of the block (`setupH_copySrc_lt`): it is in a `sha512x3`
       slot's message port (`msgCol_lt`), and the file has a row, since the instance's inputs are its rows' words
       (`CheckFactsT.ins`) and the unit's inputs its type's (`unit_inCols_size`, `read_template_ty`).
+  - **A template's table class** (`ExecTemplateClass.lean`). `setupH_templateTableClass` assembles the accepted
+    template statement's `TableClass`, with no hypothesis. Its slots are the VUs, each placed at `Typed.col st.c tb g`
+    (`TemplateLayout.placement`). Each input copies its message bit (`setupH_inputCopy`), since the composed rows' first
+    columns are the unit's input columns in order (`order_sound`). There are no forced-zero rows.
   - Still to prove:
     - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`).
 
