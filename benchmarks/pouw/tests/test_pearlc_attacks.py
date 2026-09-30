@@ -30,6 +30,8 @@ def test_sparse_and_fp16_tests():
     assert A.sparse24_fragments(z) == 0.0
     assert A._fp16_exact(np.array([2048.0, 2049.0, 2050.0, 65504.0, 65505.0, 2.0 ** -24, 3 * 2.0 ** -25])).tolist() == \
         [True, False, True, True, False, True, False]
+    assert A._e4m3_exact(np.array([448.0, 480.0, 1.125, 1.0625, -2.0 ** -9, 3 * 2.0 ** -10, 0.0])).tolist() == \
+        [True, False, True, False, True, False, True]
 
 
 def test_no_route_undercuts_the_atom_at_public_rates():

@@ -13,6 +13,7 @@ route needs and prices it at the card's rates (W1 unit = one dense E4M3 MAC with
     f16-acc FP8    the atom's exact 32-product sum from +0 fits FP16            p_f16acc + p_fadd/32 (the FP32 combine)
     Strassen       both operands' sums of two E4M3 are exact in FP16            7/8 p_half + 2 p_fadd/128 (one level per
                    (the FP32-accumulate formats that hold them)                 128-product group: 8 post-adds per 4 words)
+    Strassen FP8   ... and exact in E4M3 itself, so the products stay native     7/8 p_fp8 + 2 p_fadd/128 (ties at p_fadd = 8)
     unpromoted     the pure chain's word is the G4 ticket word (census)         saves p_fadd/128 per MAC
 
 A route saves at most `applies * max(0, 1 - cost)` of the chain's W1; `pearlc_census.py` measures the skips (identities, the
@@ -117,6 +118,10 @@ def _bf16_exact(s: np.ndarray) -> np.ndarray:
     return C.bf16(s) == s
 
 
+def _e4m3_exact(s: np.ndarray) -> np.ndarray:
+    return (np.abs(s) <= C.Q_MAX) & (C.val(C.enc(s)) == s)
+
+
 def atom_sums_fp16(a: np.ndarray, b: np.ndarray, words: int = 256) -> float:
     """The share of (word, atom) whose exact 32-product sum from +0 is an FP16 value (float64 sums are exact here: every
     product is a multiple of 2^-18 below 2^17.7, so a sum of 32 needs at most 41 bits)."""
@@ -129,13 +134,13 @@ def atom_sums_fp16(a: np.ndarray, b: np.ndarray, words: int = 256) -> float:
 
 
 def strassen_preadds(a: np.ndarray) -> dict:
-    """The share of one Strassen level's operand pre-adds (A11 + A22 at the same k, rows i and i + r/2) exact in BF16 and
-    in FP16, per element and per whole 32-slice of a row pair."""
+    """The share of one Strassen level's operand pre-adds (A11 + A22 at the same k, rows i and i + r/2) exact in BF16, in
+    FP16 and in E4M3 itself, per element and per whole 32-slice of a row pair."""
     va = C.val(a)
     h = len(va) // 2
     s = va[:h] + va[h:2 * h]
     out = {}
-    for name, f in (("bf16", _bf16_exact), ("fp16", _fp16_exact)):
+    for name, f in (("bf16", _bf16_exact), ("fp16", _fp16_exact), ("e4m3", _e4m3_exact)):
         ok = f(s)
         out[f"strassen_preadd_exact_{name}"] = round(float(ok.mean()), 6)
         out[f"strassen_preadd_slice_exact_{name}"] = round(float(ok.reshape(h, -1, 32).all(-1).mean()), 6)
@@ -155,6 +160,8 @@ def price(meas: dict, p: dict) -> dict:
         "f16acc": (p["f16acc"] + p["fadd"] / 32, meas["atom_sums_fp16"]),
         "strassen-1-level": (7 / 8 * p["half"] + 2 * p["fadd"] / 128,
                              meas["strassen_preadd_slice_exact_fp16"] * meas["strassen_preadd_slice_exact_fp16_B"]),
+        "strassen-fp8": (7 / 8 * p["fp8"] + 2 * p["fadd"] / 128,
+                         meas["strassen_preadd_slice_exact_e4m3"] * meas["strassen_preadd_slice_exact_e4m3_B"]),
     }
     out = {name: {"cost": round(c, 4), "applies": round(s, 6),
                   "saving_ub": round(max(0.0, (p["fp8"] - c) / chain) * s, 6)} for name, (c, s) in routes.items()}
