@@ -41,14 +41,16 @@ class Chain:
     genesis: int
     public_key: bytes
     key: tuple                      # the group key decompressed into G2, checked against `public_key` by the tests
-    threshold: int
-    nodes: int
+    threshold: int                  # t, the trust statement's parameter: predicting a round needs t colluding operators
+    nodes: str                      # n, as the League of Entropy has published it (a reshare can change it)
 
 
-#: drand quicknet, as published at api.drand.sh (chain info, fetched 1:45 PM PDT on 30 Sep 2026 by the assessor and again
-#: at 1:52 PM PDT). The public API doesn't serve the group file. t and n are the League of Entropy's own figures: 12 of
-#: 22 at launch (drand's "quicknet is live", 16 Oct 2023), 12 of 23 later (Filecoin FIP-0063). They need re-checking
-#: after any reshare, which keeps the key but can change t and n.
+#: drand quicknet, as published at api.drand.sh (chain info, fetched 1:45 PM PDT on 30 Sep 2026 by the assessor, again at
+#: 1:52 PM PDT, and confirmed against the live /info by compute-accounting at 2:32 PM PDT). The public API doesn't serve
+#: the group file.
+#: - t = 12 is the League of Entropy's published threshold, and only t enters the trust statement.
+#: - n is 22 at launch (drand's "quicknet is live", 16 Oct 2023) and 23 per Filecoin FIP-0063.
+#: - A reshare keeps the key but can change t and n, so both need re-checking after one.
 QUICKNET = Chain(
     name="quicknet",
     chain_hash="52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971",
@@ -64,7 +66,7 @@ QUICKNET = Chain(
          (2211131032793566610140590394248723125180008851249985816060296934936346156689749396593077297304404280871596812489331,
           254368178680493348045912140930876774076610928954039097415743904368045981295538168002596692724553813124605269104267)),
     threshold=12,
-    nodes=22,
+    nodes="22 at launch, 23 per FIP-0063",
 )
 
 

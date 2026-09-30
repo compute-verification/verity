@@ -26,7 +26,7 @@ def test_the_pins_are_quicknet_as_published():
     assert CHAIN.public_key.hex() == info["public_key"] and info["metadata"]["beaconID"] == CHAIN.name
     assert bls.g2_on_curve(CHAIN.key) and bls.g2_mul(CHAIN.key, bls.R) is None
     assert bls.g2_compress(CHAIN.key) == CHAIN.public_key
-    assert (CHAIN.threshold, CHAIN.nodes) == (12, 22)
+    assert (CHAIN.threshold, CHAIN.nodes) == (12, "22 at launch, 23 per FIP-0063")
 
 
 def test_hash_to_g1_is_rfc_9380s():
@@ -54,6 +54,73 @@ def test_a_bad_signature_does_not_verify():
     for bad in (bytes(flipped), other.signature, bytes([0x80]) + bytes(47), infinity, rnd.signature[:47], b""):
         assert not B.verify(CHAIN, B.Round(rnd.round, bad))
     assert not B.verify(CHAIN, B.Round(0, rnd.signature))
+
+
+def torsion_point():
+    """A point of E(Fp) of order dividing G1's cofactor, not the identity: r·Q for the first curve point Q from x = 1."""
+    x = 1
+    while True:
+        y = bls.sqrt((x ** 3 + 4) % bls.P)
+        if y is not None:
+            t = bls.g1_mul((x, y), bls.R)
+            if t is not None:
+                return t
+        x += 1
+
+
+def test_a_torsion_shifted_signature_does_not_verify():
+    """σ + T, with T of small order outside G1's prime-order subgroup: the point is on the curve, its encoding is
+    well-formed, and decoding refuses it at the subgroup check, so the round fails."""
+    rnd = Q.LATEST
+    sig = bls.g1_decompress(rnd.signature)
+    assert sig is not None and bls.g1_compress(sig) == rnd.signature
+    shifted = bls.g1_add(sig, torsion_point())
+    assert bls.g1_on_curve(shifted) and bls.g1_mul(shifted, bls.R) is not None
+    assert bls.g1_decompress(bls.g1_compress(shifted)) is None
+    assert not B.verify(CHAIN, B.Round(rnd.round, bls.g1_compress(shifted)))
+
+
+def test_an_encoding_with_x_at_least_p_does_not_verify():
+    """A compressed x of p itself, and a signature's x + p where that still fits the 381 bits: both refused, so no
+    residue has a second encoding."""
+    rnd = Q.LATEST
+    at_p = bytearray(bls.P.to_bytes(48, "big"))
+    at_p[0] |= 0x80
+    assert bls.g1_decompress(bytes(at_p)) is None and not B.verify(CHAIN, B.Round(rnd.round, bytes(at_p)))
+    for r in Q.ROUNDS.values():
+        x = int.from_bytes(bytes([r.signature[0] & 0x1F]) + r.signature[1:], "big")
+        if x + bls.P < 1 << 381:
+            alias = bytearray((x + bls.P).to_bytes(48, "big"))
+            alias[0] |= r.signature[0] & 0xE0
+            assert bls.g1_decompress(bytes(alias)) is None and not B.verify(CHAIN, B.Round(r.round, bytes(alias)))
+
+
+def test_the_verifier_agrees_with_py_ecc():
+    """A cross-check against py_ecc, which is not a dependency: skipped where it is absent. Its hash to G1 and its
+    pairing check agree with ours on every recorded round, good and with a flipped bit."""
+    pytest.importorskip("py_ecc")
+    import hashlib
+
+    from py_ecc.bls.hash_to_curve import hash_to_G1
+    from py_ecc.bls.point_compression import decompress_G1
+    from py_ecc.optimized_bls12_381 import FQ2, FQ12, G2, final_exponentiate, neg, normalize
+    from py_ecc.optimized_bls12_381.optimized_pairing import miller_loop
+
+    (x0, x1), (y0, y1) = CHAIN.key
+    pk = (FQ2([x0, x1]), FQ2([y0, y1]), FQ2.one())
+    for rnd in Q.ROUNDS.values():
+        h = normalize(hash_to_G1(B.message(rnd.round), B.DST, hashlib.sha256))
+        assert bls.hash_to_g1(B.message(rnd.round), B.DST) == (int(h[0].n), int(h[1].n))
+        flipped = bytearray(rnd.signature)
+        flipped[30] ^= 0x01
+        for sig in (rnd.signature, bytes(flipped)):
+            try:
+                point = decompress_G1(int.from_bytes(sig, "big"))
+                theirs = final_exponentiate(miller_loop(G2, point) * miller_loop(pk, neg(hash_to_G1(
+                    B.message(rnd.round), B.DST, hashlib.sha256)))) == FQ12.one()
+            except Exception:
+                theirs = False
+            assert B.verify(CHAIN, B.Round(rnd.round, sig)) == theirs
 
 
 def test_the_schedule_is_drands():

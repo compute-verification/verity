@@ -161,6 +161,13 @@ def g1_on_curve(a) -> bool:
     return a is not None and (a[1] * a[1] - a[0] ** 3 - 4) % P == 0
 
 
+def g1_compress(a) -> bytes:
+    """ZCash's 48-byte encoding of an affine G1 point (not infinity)."""
+    head = bytearray(a[0].to_bytes(48, "big"))
+    head[0] |= 0x80 | (0x20 if a[1] > (P - 1) // 2 else 0)
+    return bytes(head)
+
+
 def g1_decompress(data: bytes):
     """A compressed G1 point in the prime-order subgroup, or None (malformed, off the curve, infinity, or outside the
     subgroup)."""
