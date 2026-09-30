@@ -69,7 +69,9 @@ fi
 if [ "${NSYS:-0}" = 1 ]; then
   NR=${FLOCK_WORK:-/workspace}/nsys-root; NS=$NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
   if [ ! -x $NS ]; then
-    mkdir -p $NR/debs && (cd $NR/debs && apt-get download nsight-systems-2026.1.3) || exit 1
+    # a job's image has no CUDA apt source: the package from NVIDIA's repository directly
+    mkdir -p $NR/debs && (cd $NR/debs && { apt-get download nsight-systems-2026.1.3 2>/dev/null || curl -fsSLO \
+      https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/nsight-systems-2026.1.3_2026.1.3.425-1_amd64.deb; }) || exit 1
     for d in $NR/debs/*.deb; do dpkg-deb -x $d $NR; done
   fi
   mkdir -p $R/out/nsys; export WRAP="$NS profile -t cuda --sample=none --cpuctxsw=none -o $R/out/nsys/prove-%p"
