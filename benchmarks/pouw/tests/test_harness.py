@@ -782,6 +782,42 @@ def test_nvfp4_rounds_without_dividing_on_the_preflight_edge_row():
     assert np.isin(a, th * s).sum() > len(blocks)
 
 
+def test_k_derive_scales_by_powers_of_two_as_ldexpf_rounds():
+    """harness.cu's scale2 (x * a * b * c, from scale2_of) and e4m3_value (built from its bits), restated: ldexpf's result
+    for every shift the derive can meet and past it, on zeros, subnormals, both ends of FP32 and random values."""
+    def pow2f(s):
+        return np.int32((s + 127) << 23 if s >= -126 else 1 << (s + 149)).view(np.float32)
+
+    def scale2_of(s):
+        a = b = np.float32(1)
+        if s > 127:
+            a, s = pow2f(127), s - 127
+            if s > 127:
+                b, s = pow2f(127), min(s - 127, 127)
+        elif s < -126:
+            a, s = np.float32(2.0 ** -102), s + 102
+            if s < -126:
+                b, s = np.float32(2.0 ** -102), max(s + 102, -126)
+        return a, b, pow2f(s)
+
+    rng = np.random.default_rng(3)
+    bits = np.concatenate([np.array([0, 1, 2, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x3F800000, 0x3FFFFFFF], np.uint32),
+                           rng.integers(0, 0x7F800000, 4000, dtype=np.uint32)])
+    x = np.concatenate([bits, bits | np.uint32(0x80000000)]).view(np.float32)
+    with np.errstate(over="ignore", under="ignore"):
+        for s in range(-400, 401):
+            a, b, c = scale2_of(s)
+            got = (x * a) * b * c
+            assert np.array_equal(got.view(np.uint32), np.ldexp(x, s).astype(np.float32).view(np.uint32)), s
+    codes = np.arange(256)
+    e, mt = (codes >> 3) & 15, codes & 7
+    v = np.where(e == 0, mt.astype(np.float32) * np.float32(2.0 ** -9),
+                 (((e + 120) << 23) | (mt << 20)).astype(np.int32).view(np.float32))
+    v = np.where(codes & 0x80, -v, v)
+    finite = np.isfinite(F.E4M3_VALUES)
+    assert np.array_equal(v[finite], F.E4M3_VALUES[finite].astype(np.float32))
+
+
 @pytest.mark.parametrize("seed", [11, 0, 1, 2, 3])
 def test_the_derive_preflight_y_is_finite(seed):
     """The device's FMUL canonicalizes a NaN and the twin keeps its bits, so a NaN in y fails the preflight on bytes it

@@ -313,16 +313,28 @@ __device__ __forceinline__ void dy_load8(int src, const void* y, size_t i, bool 
   }
 }
 
-// x * 2^s rounded once, which is ldexpf's result: a multiply by the exact power of two where it is a float, else in double
-// (exact for any float x once s is clamped to +-400, past which every finite x gives 0 or inf alike) and one conversion.
-// Not ldexpf: ptxas builds it from MUFU.EX2, which the SASS gate refuses.
-__device__ __forceinline__ float scale2(float x, int s) {
-  if (s < -149 || s > 127) {
-    s = s < -400 ? -400 : s > 400 ? 400 : s;
-    return __double2float_rn(double(x) * __longlong_as_double((long long)(s + 1023) << 52));
+// 2^s for s in [-149, 127], exactly.
+__device__ __forceinline__ float pow2f(int s) { return __int_as_float(s >= -126 ? (s + 127) << 23 : 1 << (s + 149)); }
+
+// x * 2^s rounded once (ldexpf's result) for any s, as x * a * b * c, powers of two picked once per s (musl's scalbnf): the
+// first two products are exact, or overflow only where x * 2^s does, or are subnormal only where x * 2^s rounds to zero;
+// the last rounds. Not ldexpf, which ptxas builds from MUFU.EX2 (refused by the SASS gate), and all in FP32: a double
+// fallback, however rare, is if-converted into every element's path at a fraction of FP32's rate.
+struct Scale2 {
+  float a, b, c;
+};
+__device__ __forceinline__ Scale2 scale2_of(int s) {
+  float a = 1.f, b = 1.f;
+  if (s > 127) {
+    a = 0x1p127f, s -= 127;
+    if (s > 127) b = 0x1p127f, s = min(s - 127, 127);
+  } else if (s < -126) {
+    a = 0x1p-102f, s += 102;
+    if (s < -126) b = 0x1p-102f, s = max(s + 102, -126);
   }
-  return __fmul_rn(x, s >= -126 ? __int_as_float((s + 127) << 23) : __int_as_float(1 << (s + 149)));
+  return {a, b, pow2f(s)};
 }
+__device__ __forceinline__ float scale2(float x, Scale2 m) { return __fmul_rn(__fmul_rn(__fmul_rn(x, m.a), m.b), m.c); }
 
 __device__ __forceinline__ void put_bytes(uint8_t* p, const uint8_t* b, int nb, bool vec) {
   if (!vec) {
@@ -341,8 +353,8 @@ __device__ __forceinline__ uint8_t e4m3_rne(float x) {
 }
 
 __device__ __forceinline__ float e4m3_value(uint8_t c) {
-  int e = (c >> 3) & 15, mt = c & 7;
-  float v = e == 0 ? scale2(float(mt), -9) : scale2(float(8 + mt), e - 10);
+  const int e = (c >> 3) & 15, mt = c & 7;
+  const float v = e == 0 ? __fmul_rn(float(mt), 0x1p-9f) : __int_as_float(((e + 120) << 23) | (mt << 20));
   return (c & 0x80) ? -v : v;
 }
 
@@ -419,6 +431,7 @@ __global__ void k_derive(int src, const void* __restrict__ y, int n, int kind, u
   int e = 0;
   if (amax > 0.f && isfinite(amax)) frexpf(amax, &e);
   const int shift = amax > 0.f && isfinite(amax) ? derive_t(kind) - e : 0;
+  const Scale2 row = scale2_of(shift);
   const int bs = kind == DV_NVFP4 ? 16 : 32, lanes = bs / 8;
   const size_t elem2 = kind == DV_F32 ? 8 : kind == DV_BF16 ? 4 : kind == DV_NVFP4 || kind == DV_MXFP4 ? 1 : 2;  // 2 x bytes
   for (int base = 0; base < k; base += 8 * blockDim.x) {
@@ -430,7 +443,7 @@ __global__ void k_derive(int src, const void* __restrict__ y, int n, int kind, u
       } else {
         for (int j = 0; j < 8; ++j) v[j] = dy_load(src, y, yr + (c0 + j) % n);
       }
-      for (int j = 0; j < 8; ++j) v[j] = scale2(v[j], shift);
+      for (int j = 0; j < 8; ++j) v[j] = scale2(v[j], row);
     } else {
       for (int j = 0; j < 8; ++j) v[j] = 0.f;
     }
@@ -463,7 +476,8 @@ __global__ void k_derive(int src, const void* __restrict__ y, int n, int kind, u
           int xs = bmax > 0.f ? eb - 1 - (kind == DV_MXFP8 ? 8 : 2) : -127;
           xs = xs < -127 ? -127 : xs > 127 ? 127 : xs;
           scale = uint8_t(xs + 127);
-          for (int j = 0; j < 8; ++j) code[j] = kind == DV_MXFP8 ? e4m3_rne(scale2(v[j], -xs)) : e2m1_rne(scale2(v[j], -xs));
+          const float q = pow2f(-xs);
+          for (int j = 0; j < 8; ++j) code[j] = kind == DV_MXFP8 ? e4m3_rne(__fmul_rn(v[j], q)) : e2m1_rne(__fmul_rn(v[j], q));
         }
         if (kind == DV_MXFP8) {
           for (int j = 0; j < 8; ++j) out[j] = code[j];
