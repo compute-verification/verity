@@ -1,4 +1,4 @@
-"""Calibrating constant-rate release from honest timing traces (the calibration spec; timing-channel doc §3).
+"""Calibrating constant-rate release from honest timing traces.
 
 From honest runs on the target hardware it picks, per boundary link:
 - the egress allocation r;
@@ -6,8 +6,8 @@ From honest runs on the target hardware it picks, per boundary link:
 - the ingress grid.
 
 It reports the honest miss rate, the costs and the capacity. The protocol fixes τ_b, the frame size and the security
-target. The ingress bucket τ_in is 100 ms (decision D, decided); the grid stays configurable, so other buckets can be
-compared.
+target. The ingress bucket τ_in is 100 ms, decided on 29 Sep 2026 from a calibration of honest traces; the grid stays
+configurable, so other buckets can be compared.
 
 The trace is JSON, with one entry per configuration:
 
@@ -222,8 +222,8 @@ def least_allocation(hands: Sequence[int], queue_capacity: int, max_delay: int, 
 
 def size_allocation(hands: Sequence[int], queue_capacity: int, headroom: float = 2.0,
                     max_delay: int = 1) -> dict:
-    """The spec's §3. Start at r = ⌈headroom · p99.9⌉ of per-bucket demand, then raise r until there is no overflow and
-    the p99 queueing delay is at most `max_delay` buckets."""
+    """The egress allocation. Start at r = ⌈headroom · p99.9⌉ of per-bucket demand, then raise r until there is no
+    overflow and the p99 queueing delay is at most `max_delay` buckets."""
     if not hands:
         return {"allocation": 1, "demand": {}, "overflow": False, "p99_delay_buckets": 0, "utilization": 0.0}
     horizon = max(hands) + 1
@@ -245,7 +245,7 @@ def size_allocation(hands: Sequence[int], queue_capacity: int, headroom: float =
 def size_ingress(arrivals: Sequence[int], trace_bucket_ms: int, ingress_bucket_ms: int = 100,
                  queue_capacity: int = 1 << 16, max_delay: int = 1) -> dict:
     """The smallest ingress allocation r_in that carries honest ingress without overflow, with a p99 delay of at most
-    `max_delay` ingress buckets. The ingress bucket τ_in is 100 ms (decision D)."""
+    `max_delay` ingress buckets. The ingress bucket τ_in is 100 ms."""
     if ingress_bucket_ms % trace_bucket_ms:
         raise ValueError("the ingress bucket must be a multiple of the trace bucket")
     k = ingress_bucket_ms // trace_bucket_ms
@@ -276,7 +276,7 @@ def size_ingress_ms(arrival_ms: Sequence[float], ingress_bucket_ms: int = 100, q
 def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n_rho: int = 8,
               headroom: float = 2.0, epsilon: float = 1e-4, target_k_share: float | None = None,
               target_span_s: int = 3600, ingress_max_delay_ms: int | None = None) -> dict:
-    """Size every link of the trace and report as the spec's §5 lays out. The ingress FIFO's p99 delay is at most one
+    """Size every link of the trace and report the costs and the capacity. The ingress FIFO's p99 delay is at most one
     ingress bucket, or `ingress_max_delay_ms` when given."""
     in_delay = 1 if ingress_max_delay_ms is None else max(1, ingress_max_delay_ms // ingress_bucket_ms)
     bucket_ms = trace.get("bucket_ms", 100)
@@ -384,7 +384,8 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="network-warden-calibrate", description=__doc__.splitlines()[0])
     ap.add_argument("trace", help="honest timing trace (JSON)")
-    ap.add_argument("--ingress-bucket-ms", type=int, default=100, help="the ingress bucket τ_in: 100 ms (decision D); other values compare alternatives")
+    ap.add_argument("--ingress-bucket-ms", type=int, default=100,
+                    help="the ingress bucket τ_in: 100 ms; other values compare alternatives")
     ap.add_argument("--deltas", type=int, default=16, help="offsets in Σ_sync")
     ap.add_argument("--rhos", type=int, default=8, help="rates in Σ_sync")
     ap.add_argument("--headroom", type=float, default=2.0)

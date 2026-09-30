@@ -49,7 +49,7 @@ def test_calibrate_honest_trace():
     assert 0 <= egress["padding_share"] <= 1
     assert 0 <= egress["shaping_delay_ms"]["p50"] <= egress["shaping_delay_ms"]["p99"] <= egress["shaping_delay_ms"]["max"]
     (ingress,) = report["ingress"]
-    assert ingress["bucket_ms"] == 100  # decision D
+    assert ingress["bucket_ms"] == 100  # τ_in's default
     assert ingress["rate_bps"] == capacity.ingress_rate(ingress["allocation"], 100)
     assert set(report["k_charge"]["share_of_k_by_span"]) == {"60s", "600s", "3600s", "86400s"}
 

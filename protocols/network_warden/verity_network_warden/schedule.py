@@ -1,4 +1,4 @@
-"""The Program's side: the logical schedule and the clock-sync advice (timing-channel doc §2.4).
+"""The Program's side: the logical schedule and the clock-sync advice.
 
 The Program gives every real frame an **anchor** and a **logical index**:
 - the anchor is the recorded bucket, on the global bucket clock, of the request it answers;

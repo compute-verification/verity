@@ -1,4 +1,4 @@
-"""The counts the Lean package pins, and the capacity bounds built on them (timing-channel doc §2 and §3).
+"""The counts the Lean package pins, and the capacity bounds built on them.
 
 All logarithms are base 2, and all bounds hold on accepted runs unless a docstring says otherwise.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-K_BITS = 9.12e7  # the inference-only policy's budget per IU: α·Γ = 9.6e−11 × 9.5e17 bits, about 11 MB
+K_BITS = 9.12e7  # the inference-only policy's budget per isolation unit: α·Γ = 9.6e−11 × 9.5e17 bits, about 11 MB
 
 
 def free_patterns(buckets: int, allocation: int) -> int:
@@ -52,7 +52,7 @@ def accepted_bound_bits(content_bits: float, sync_bits: float, windows: int, jit
 
 def ingress_rate(allocation: int, bucket_ms: int = 100) -> float:
     """An ingress link's covert rate in bit/s, `log2(r_in + 1)/τ_in`. No clock pins ingress timing, because the outside
-    sender chooses when requests arrive. τ_in is 100 ms (decision D, decided); other values are for comparison."""
+    sender chooses when requests arrive. τ_in is 100 ms; other values are for comparison."""
     return math.log2(allocation + 1) / (bucket_ms / 1000)
 
 

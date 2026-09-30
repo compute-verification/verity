@@ -1,4 +1,4 @@
-"""The verifier's check: exact, slot by slot, with record-and-reject (timing-channel doc §1.2 and §6).
+"""The verifier's check: exact, slot by slot, with record-and-reject.
 
 A link-window is **accepted** if three things hold:
 - its status is complete;
@@ -60,7 +60,8 @@ class Audit:
         sync_set: SyncSet,
         params: GridParams,
     ) -> list[Verdict]:
-        """Check one link's records for windows 0 … len(syncs) − 1 against the Program's grids for the declared syncs."""
+        """Check one link's records for windows 0 … len(syncs) − 1 against the Program's grids under the declared
+        syncs."""
         expected = expected_grids(frames, syncs, params)
         by_window: dict[int, list[Record | CommittedRecord]] = defaultdict(list)
         for r in records:

@@ -110,8 +110,8 @@ about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bound
 | A fixed clock, under J (D = 1) | 0 bits of timing | `encard_accSeqs_le_fixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link | not stated in Lean (`card_leftPacked`'s count) |
 
-The inference-only policy charges an IU the ingress covert capacity from the last wipe before it starts, plus what
-survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
+The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
+plus what survived that wipe. `capacity.k_share` expresses bits as a share of `K = 9.12e7` bits.
 
 ## Calibration (`calibration`)
 
@@ -134,9 +134,9 @@ docstring) and sizes:
   overflow and a p99 queueing delay of at most one bucket. Both improve monotonically in r, so the search doubles and
   then bisects. If one bucket's demand exceeds Q, every r overflows: the tool exits with an error naming the demand and
   Q, for the egress and the ingress grid alike.
-- **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is **100 ms** (decision D,
-  decided 29 Sep, with the timing-channel doc's §3.6 calibration as evidence). The grid stays configurable, so
-  `--ingress-bucket-ms` still compares alternatives. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
+- **The ingress grid:** the smallest r_in that carries honest ingress, at τ_in. τ_in is **100 ms**, decided on 29 Sep
+  2026 from a calibration of honest traces. The grid stays configurable, so `--ingress-bucket-ms` still compares
+  alternatives. With arrival times (`arrival_ms`), τ_in may be finer than the trace bucket, and the report adds the
   delivery delay: a frame waits for the next ingress bucket boundary, then for its FIFO slot. The p99 FIFO delay is at
   most one ingress bucket by default; `--ingress-max-delay-ms` sets the budget in ms instead, so different τ_in are
   compared at the same latency.
@@ -147,9 +147,9 @@ shaping delay (hand time minus ready time, over every frame), the capacity per d
 
 ## Tests
 
-`uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean statements on
-examples and prove nothing. By name, they mirror 15 of the Lean package's 31 pins and its three proved but unpinned
-lemmas:
+`uv run tools/check/suites.py verity-network-warden`. The tests enumerate small horizons, so they check the Lean
+statements on examples and prove nothing. By name, they mirror 15 of the Lean package's 31 pins and its three proved
+but unpinned lemmas:
 - **`test_network_warden_grid.py`:**
   - Proposition 2's ten pins, by enumeration: `card_free`, `card_leftPacked`, `fill_injective`,
     `exists_fill_of_leftPacked`, `card_counts_eq_le`, `card_counts_le_le`, `released_self`, `sum_released_le`,
