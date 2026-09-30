@@ -252,7 +252,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # the linear with a bias where the target's record adds it in cuBLASLt's FP32 epilogue (`GemmTarget.bias_epilogue`): the
            # GEMM at M >= 2, cuBLAS's gemv at M = 1 (`registry.targets.gemm_bias_spec` / `gemv_bias_spec`)
            "gemm_bias_f32": lambda K, N, DOT: ir_bind(_gemm_bias.GemmBiasF32Epilogue, K=K, N=N, DOT=DOT),
-           "gemv_bias_f32": lambda K, N, V, T: ir_bind(_gemv_bias.GemvBiasF32, K=K, N=N, V=V, T=T),
+           "gemv_bias_f32": lambda K, N, VEC, THREADS: ir_bind(_gemv_bias.GemvBiasF32, K=K, N=N, V=VEC, T=THREADS),
            # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`; an optional
            # static, so the role and its note -- and with them this vocabulary's version -- stay as they were)
            "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None:
