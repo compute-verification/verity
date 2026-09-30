@@ -589,17 +589,28 @@ class BlockScaledAlignAdd:
 
         return self._transducer(c_word, self.group_terms(a_codes, b_codes, a_scales, b_scales))
 
+    def align_add(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int:
+        """One firing on its `group_terms`: ``step_scaled(c, a, b, sa, sb) == align_add(c, group_terms(a, b, sa, sb))``."""
+
+        return self._transducer(c_word, terms)
+
+    def grid(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int | None:
+        """The exponent ``lsb`` of one firing's common grid ``2^lsb`` (the class docstring), or None when nothing
+        participates and the accumulator is zero (the firing is then ``+0``)."""
+
+        anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
+        if _fp32_dyadic(c_word)[0]:
+            e_field = (c_word >> 23) & 0xFF                 # the exponent field, not the true msb: subnormals anchor at -126
+            anchors.append((e_field if e_field else 1) - 127 - (self.acc_window - 1))
+        return max(*anchors, self.grid_floor) if anchors else None
+
     def _transducer(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int:
         """The five-way align-add on the common grid and the RZ normalisation."""
 
         acc_m, acc_e = _fp32_dyadic(c_word)
-        anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
-        if acc_m:
-            e_field = (c_word >> 23) & 0xFF                 # the exponent field, not the true msb: subnormals anchor at -126
-            anchors.append((e_field if e_field else 1) - 127 - (self.acc_window - 1))
-        if not anchors:
+        lsb = self.grid(c_word, terms)
+        if lsb is None:
             return 0                                        # nothing participates: +0 (a -0 accumulator included)
-        lsb = max(*anchors, self.grid_floor)
         total = sum(_trunc_rz_to_grid(m, unit, lsb) for m, unit, _ in terms if m)
         if acc_m:
             total += _trunc_rz_to_grid(acc_m, acc_e, lsb)

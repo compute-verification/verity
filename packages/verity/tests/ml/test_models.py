@@ -172,6 +172,35 @@ def test_nvfp4_step_accepts_codes_then_scales_as_one_operand_vector(vectors: dic
         m.step(0, [0] * 64, [0] * 64)  # scale bytes missing
 
 
+def test_fp4_align_add_and_grid_are_the_step_on_its_group_terms(vectors: dict) -> None:
+    """`align_add` on `group_terms` is `step_scaled`; every group term strictly below `grid`'s 2^lsb adds exactly 0."""
+    for m in (BLACKWELL_SM120_NVF4, BLACKWELL_SM120_MXF4):
+        for c in vectors["nvfp4_m16n8k64"]["cases"][:200]:
+            a, b = _nibbles(c["a"]), _nibbles(c["b"])
+            sa, sb = _bytes(c["sa"]), _bytes(c["sb"])
+            ns = m.scales_per_step
+            if m is BLACKWELL_SM120_MXF4:
+                sa, sb = [x % 64 + 100 for x in sa[::2]], [x % 64 + 100 for x in sb[::2]]
+            acc = 0
+            for s in range(len(a) // 64):
+                args = (a[s * 64:(s + 1) * 64], b[s * 64:(s + 1) * 64], sa[s * ns:(s + 1) * ns], sb[s * ns:(s + 1) * ns])
+                terms = m.group_terms(*args)
+                lsb = m.grid(acc, terms)
+                assert lsb is not None or (acc & 0x7FFFFFFF == 0 and not any(p for _, _, p in terms))
+                nxt = m.align_add(acc, terms)
+                for g, (mant, unit, part) in enumerate(terms):
+                    if mant and abs(mant) * 2.0 ** unit < 2.0 ** lsb:
+                        assert m.align_add(acc, terms[:g] + [(0, unit, part)] + terms[g + 1:]) == nxt
+                assert nxt == m.step_scaled(acc, *args)
+                acc = nxt
+    m, one = BLACKWELL_SM120_NVF4, [7] * 16 + [0] * 48
+    big = 0x53800000                                            # 2^40: the accumulator's window ends at 2^5
+    small = m.group_terms(one, one, [0x01] * 4, [0x01] * 4)
+    assert m.grid(big, small) == 40 - 35 and 0 < small[0][0] * 2.0 ** small[0][1] < 2.0 ** 5
+    assert m.align_add(big, small) == big == m.step_scaled(big, one, one, [0x01] * 4, [0x01] * 4)
+    assert m.grid(0, [(0, -2, False)] * 4) is None
+
+
 def _bsaa(**kw) -> BlockScaledAlignAdd:
     base = dict(arch="sm_120", dtype="e2m1", operand_bits=4, scale="ue4m3", k_per_instruction=64, group=16,
                 frac_bits=27, acc_window=36, grid_floor=-174, underflow_zero="positive", validated="test only")
