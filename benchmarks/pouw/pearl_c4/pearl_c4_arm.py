@@ -1,16 +1,21 @@
-"""Pearl-C4's arms for the PoUW harness (benchmarks/pouw/harness, arm interface v0): `PearlC4Nv` (``pearl-c-nvfp4-v0``, the
-FP4 headline, divided by the ``nvfp4`` baseline) and `PearlC4Mx` (``pearl-c-mxfp4-v0``, beside it, by ``mxfp4``).
+"""Pearl-C4's arms for the PoUW harness (benchmarks/pouw/harness, arm interface v0.4): `PearlC4Nv` (``pearl-c-nvfp4-v0``,
+the FP4 headline, divided by the ``nvfp4`` baseline) and `PearlC4Mx` (``pearl-c-mxfp4-v0``, beside it, by ``mxfp4``; a
+contrast, not a protocol candidate).
 
   bench.py ... --arm-path benchmarks/pouw/pearl_c4 --arm pearl_c4_arm:PearlC4Nv --arm pearl_c4_arm:PearlC4Mx
-  env: PEARLC4_CUBIN (default pearl_c4.cubin beside this file; build.sh makes it), PEARLC4_GATE_TILES (default 2)
+  env: PEARLC4_CUBIN (default pearl_c4.cubin beside this file; build.sh makes it), PEARLC4_GATE_TILES (default 2),
+  PEARLC4_VERIFY_WORKERS (the verifier's processes, default 16)
 
 The prover is dev.py's `Pipeline` on BF16 A and B: per call, A's commitment as the verifier checks it (`audit.commit_rows`,
 SHA-256 whole-row leaves) and seed_a from its root, A's forming with E_A's lines, A′F_B, the chain with the peel and the
 fused digests, the tile leaves; per (weight, epoch), `weight_side` (B's commitment and seed_b first).  The host supplies the
 operands, the salt and the two domain ids (verity.commitments', public before A exists).  The salt is the verifier's
 (`audit.Epoch.start` over B's root, committed on the host, and an epoch beacon that is a label of the operand set: a
-shortcut for a public round).  With PEARLC4_TRANSCRIPTS=DIR, the first hash-role call freed at each shape dumps its
-transcript into DIR/<scheme>-<shape> (`dump`), for `verity_pouw.schemes.pearl_c4_replay` to prove and verify after timing.
+shortcut for a public round).  The first hash-role call freed at each shape dumps its transcript into the harness's
+``transcripts_dir``/<scheme>-<shape> (`dump`, relaunched over poisoned outputs, so the transcript carries only what that
+launch wrote), and the build record names the verifier (``verifier``) that proves and
+verifies it after timing: `verity_pouw.schemes.pearl_c4_replay`'s ``prove`` and ``verify``, whose ACCEPT line names the
+transcript's sha256.  The build record's ``binaries`` is the cubin (loaded with ``cuModuleLoadData``, so never mapped).
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
 ``plain`` (the forming and the chain alone: y from C̃).  The scheme's domain is m a multiple of 64 (its 64 x 64 tile), so
 an m that isn't is the scheme's matmul of A padded with zero filler rows: the call first copies A into the padded buffer;
@@ -48,7 +53,7 @@ for _p in (HERE, ROOT / "packages" / "verity" / "src", ROOT / "protocols" / "pou
 
 import dev as D  # noqa: E402
 
-TILE, WEIGHT_BASE = 64, 1
+TILE, WEIGHT_BASE, POISON = 64, 1, 0xA5
 OUTPUTS = {"hash": ("y", "digests", "leaves"), "nohash": ("y",), "plain": ("y",)}
 LINE_IN = 37                           # seed ‖ role ‖ index u32
 
@@ -109,16 +114,23 @@ class _Call:
         self.pl.weight_side(stream)
 
     def free(self) -> None:
-        out = os.environ.get("PEARLC4_TRANSCRIPTS")
+        out = self.arm.transcripts
         if out and self.mode == "hash" and self.arm.first_dump(self.shape):
             self.dump(Path(out) / f"{self.arm.name}-{self.shape.label}")
         self.pl.free()
 
-    def dump(self, path: Path) -> None:
-        """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): the call launched once more on
-        its operands as they stand, then A's and B's rows, both roots, the tile leaves and the formed scale bytes read back."""
+    def dump(self, path: Path, write: bool = True) -> None:
+        """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): every buffer the hash call
+        writes (`dev.WRITTEN`, root_a and seed_a included, which `prime` wrote before timing) poisoned with 0xA5, the call
+        launched once more on its operands as they stand, then A's and B's rows, both roots, the tile leaves and the formed
+        scale bytes read back.  write=False leaves the launch out: the no-write negative control, which the verifier must
+        reject (server.md 11:50Z)."""
         from verity_pouw.schemes import pearl_c4_replay as R
-        self.launch(0)
+        for nm in D.WRITTEN["hash"]:
+            if nm in self.pl.buf:
+                self.d.write(self.pl.buf[nm], bytes([POISON]) * self.pl.sizes[nm])
+        if write:
+            self.launch(0)
         self.d.sync()
         d, b, s = self.d, self.pl.buf, self.shape
         call = {"scheme": self.arm.name, "shape": [self.m_pad, s.k, s.n], "index": 0, "weight": self.weight,
@@ -139,6 +151,7 @@ class _PearlC4:
 
     def __init__(self):
         self.d: D.Dev | None = None
+        self.transcripts: str | None = None
         self._jobs: dict = {}
         self._epochs: dict = {}
         self._dumped: set = set()
@@ -156,8 +169,21 @@ class _PearlC4:
         want = getattr(ctx.get("device"), "info", {}).get("uuid")
         if want and self.d.uuid != want:
             raise RuntimeError(f"pearl_c4's device {self.d.uuid} is not the harness's {want}")
+        self.transcripts = ctx.get("transcripts_dir")
         return {"cubin": str(cubin), "cubin_sha256": hashlib.sha256(data).hexdigest(), "identity": self.d.identity,
-                "scheme": self.name, "gate_tiles": self.gate_tiles()}
+                "scheme": self.name, "gate_tiles": self.gate_tiles(), "binaries": [str(cubin)],
+                "verifier": self.verifier()}
+
+    @staticmethod
+    def verifier() -> dict:
+        """The reference verifier on each shape's dump (arm interface v0.4): ``prove`` makes the transcript from the dump in
+        ``{dir}``, ``verify`` checks it and prints the ACCEPT line naming its sha256."""
+        r = ["{python}", "-m", "verity_pouw.schemes.pearl_c4_replay"]
+        w = ["--workers", os.environ.get("PEARLC4_VERIFY_WORKERS", "16")]
+        return {"name": "verity_pouw.schemes.pearl_c4_replay", "transcript": "transcripts/{arm}-{shape}/transcript.json",
+                "commands": [r + ["prove", "{dir}", "--run", "{run_id}", "--out", "{transcript}"] + w,
+                             r + ["verify", "{transcript}", "--out", "{dir}/verify.json",
+                                  "--path", "{run_id}:transcripts/{arm}-{shape}/transcript.json", "--commit", "{commit}"] + w]}
 
     @staticmethod
     def gate_tiles() -> int:
