@@ -515,6 +515,37 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
     assert not fr.scope({"unit": None}, "freeze") and len(calls) == 1
 
 
+def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(tmp_path, monkeypatch):
+    """With no Verity job waiting, queued pous CPU jobs start in the Verity pool's free slots (its CPUs, a scope, its memory caps);
+    a Verity job that finds no slot requeues the newest lent job, and nothing more is lent while it waits."""
+    monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
+    monkeypatch.setenv("FILL_VERITY_CPU_SLOTS", "2")
+    spec = importlib.util.spec_from_file_location("fill_runner_lend", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr, "disk_pct", lambda path: 0.0)
+    started, stopped = [], []
+    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False: started.append((p.name, h)) or fr.running.__setitem__(
+        p.name, {"h": h, "t0": len(fr.running), "pid": 0}))
+    monkeypatch.setattr(fr, "stop", lambda name, why, requeue=True: stopped.append(name))
+    q = tmp_path / "q"
+    q.mkdir()
+
+    def job(name, head):
+        p = q / name
+        p.write_text(f"# fill: owner=o {head}\n")
+        return (p, fr.header(p), 0.0)
+
+    fr.verity_pool([job("v1.sh", "gpus=0 project=verity mem_gb=64"), job("p1.sh", "gpus=0 mem_gb=500"), job("p2.sh", "gpus=0")])
+    assert [(n, h.get("lent"), h["mem_gb"]) for n, h in started] == [("v1.sh", None, 64), ("p1.sh", True, 256)]
+    started.clear()
+    fr.verity_pool([job("v2.sh", "gpus=0 project=verity"), job("p2.sh", "gpus=0")])
+    assert stopped == ["p1.sh"] and started == []
+    fr.running.pop("p1.sh")
+    fr.verity_pool([job("v2.sh", "gpus=0 project=verity")])
+    assert [n for n, _ in started] == ["v2.sh"]
+
+
 def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quiet_in_a_timed_window(tmp_path, monkeypatch):
     util, fill = tmp_path / "util", tmp_path / "fill"
     util.mkdir()
