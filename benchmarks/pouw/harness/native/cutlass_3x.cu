@@ -1,6 +1,7 @@
 // CUTLASS 3.x sm_120 baselines: TMA warp-specialized kernels on sm_120's mma.sync (f8f6f4, mxf8f6f4, mxf4nvf4), in the
-// tile shapes and schedules CUTLASS's own sm_120 tests and examples (79a/b, 87b) use, plus swapped variants for skinny m.
-// Compiled once per family (-DPH_PART=0..4), since one translation unit of all of them outgrows a 16 GB builder.
+// tile shapes and schedules CUTLASS's own sm_120 tests and examples (79a/b, 87b) use, plus swapped variants for skinny m, and
+// the FP4 search's larger tiles and stream-K (parts 5 and 6). Compiled in parts (-DPH_PART=0..6), since one translation unit
+// of all of them outgrows a 16 GB builder.
 #include <cstdio>
 
 #include "cute/tensor.hpp"
@@ -26,9 +27,10 @@ enum { SF_NONE = 0, SF_BLOCKSCALED = 1, SF_GROUPWISE = 2 };
 
 using Groupwise = cutlass::detail::Sm120BlockwiseScaleConfig<1, 128, 128>;
 
-template <class ElementA, class ElementB, class Tile, class Schedule, bool Swap, int SF, int AlignA>
+template <class ElementA, class ElementB, class Tile, class Schedule, bool Swap, int SF, int AlignA, class TileScheduler>
 struct Kernel {
   static constexpr int kSF = SF;
+  static constexpr bool kStreamK = cute::is_same_v<TileScheduler, cutlass::gemm::StreamKScheduler>;
   using OpClass = cute::conditional_t<SF == SF_BLOCKSCALED, cutlass::arch::OpClassBlockScaledTensorOp,
                                       cutlass::arch::OpClassTensorOp>;
   using ElementD = cutlass::bfloat16_t;
@@ -48,7 +50,7 @@ struct Kernel {
       cutlass::arch::Sm120, OpClass, ElementA, LayoutATag, AlignA, ElementB, LayoutBTag, AlignA, float, Tile, Cluster,
       cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(sizeof(typename Epilogue::SharedStorage))>,
       Schedule>::CollectiveOp;
-  using GemmKernel = cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue, void>;
+  using GemmKernel = cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>, Mainloop, Epilogue, TileScheduler>;
   using Gemm = cutlass::gemm::device::GemmUniversalAdapter<GemmKernel>;
 };
 
@@ -99,10 +101,15 @@ struct Problem {
   }
 };
 
+// Stream-K's fixup counters only ever grow, so each call starts from a zeroed workspace (CUTLASS's initialize does it once):
+// the memset is part of the plain call, and of its time.
 template <class K>
 struct Prepared final : phc_prepared {
   typename K::Gemm gemm;
+  void* ws = nullptr;
+  size_t ws_bytes = 0;
   int launch(void* stream) override {
+    if (ws_bytes && cudaMemsetAsync(ws, 0, ws_bytes, cudaStream_t(stream)) != cudaSuccess) return 3200;
     auto s = gemm.run(cudaStream_t(stream));
     return s == cutlass::Status::kSuccess ? 0 : 3000 + int(s);
   }
@@ -122,12 +129,17 @@ int query(int m, int n, int k, size_t* ws, size_t* sfa, size_t* sfb) {
 template <class K, bool Swap, int SF>
 int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prepared** out) {
   Problem<K> p(a->m, a->n, a->k, a->A, a->B, a->sfa, a->sfb, a->D, Swap);
-  if (K::Gemm::get_workspace_size(p.args) > ws_bytes) return 3100;
+  size_t need = K::Gemm::get_workspace_size(p.args);
+  if (need > ws_bytes) return 3100;
   auto* r = new Prepared<K>();
   auto s = r->gemm.initialize(p.args, ws, cudaStream_t(stream));
   if (s != cutlass::Status::kSuccess) {
     delete r;
     return 3000 + int(s);
+  }
+  if (K::kStreamK) {
+    r->ws = ws;
+    r->ws_bytes = need;
   }
   *out = r;
   return 0;
@@ -139,9 +151,12 @@ using MXF4 = cutlass::mx_float4_t<cutlass::float_e2m1_t>;
 using MXF8 = cutlass::mx_float8_t<cutlass::float_e4m3_t>;
 namespace G = cutlass::gemm;
 
-#define ENTRY(NAME, KIND, EA, TILE, SCHED, SWAP, SF)                                                               \
-  {NAME, KIND, SWAP, &query<Kernel<EA, EA, TILE, SCHED, SWAP, SF, (KIND == 5 || KIND == 6) ? 32 : 16>, SWAP, SF>,  \
-   &prepare<Kernel<EA, EA, TILE, SCHED, SWAP, SF, (KIND == 5 || KIND == 6) ? 32 : 16>, SWAP, SF>}
+#define KERNEL(KIND, EA, TILE, SCHED, SWAP, SF, TS) Kernel<EA, EA, TILE, SCHED, SWAP, SF, (KIND == 5 || KIND == 6) ? 32 : 16, TS>
+// TS: the tile scheduler (void: CUTLASS's default, the persistent CLC scheduler; G::StreamKScheduler)
+#define ENTRY_TS(NAME, KIND, EA, TILE, SCHED, SWAP, SF, TS)                                                          \
+  {NAME, KIND, SWAP, &query<KERNEL(KIND, EA, TILE, SCHED, SWAP, SF, TS), SWAP, SF>,                                 \
+   &prepare<KERNEL(KIND, EA, TILE, SCHED, SWAP, SF, TS), SWAP, SF>}
+#define ENTRY(NAME, KIND, EA, TILE, SCHED, SWAP, SF) ENTRY_TS(NAME, KIND, EA, TILE, SCHED, SWAP, SF, void)
 
 using T128_128_128 = Shape<_128, _128, _128>;
 using T128_128_64 = Shape<_128, _128, _64>;
@@ -150,6 +165,10 @@ using T128_32_128 = Shape<_128, _32, _128>;
 using T128_128_256 = Shape<_128, _128, _256>;
 using T128_64_256 = Shape<_128, _64, _256>;
 using T128_32_256 = Shape<_128, _32, _256>;
+using T128_256_128 = Shape<_128, _256, _128>;
+using T256_128_128 = Shape<_256, _128, _128>;
+using T128_256_64 = Shape<_128, _256, _64>;
+using T256_128_64 = Shape<_256, _128, _64>;
 
 const phc_entry TABLE[] = {
 #if PH_PART == 0
@@ -178,8 +197,25 @@ const phc_entry TABLE[] = {
     ENTRY("cutlass3x_mxfp4_128x128x128_coop", 6, MXF4, T128_128_128, G::KernelTmaWarpSpecializedMxf4Sm120, false, SF_BLOCKSCALED),
     ENTRY("cutlass3x_mxfp4_128x128x128_pingpong", 6, MXF4, T128_128_128, G::KernelTmaWarpSpecializedPingpongMxf4Sm120, false, SF_BLOCKSCALED),
     ENTRY("cutlass3x_mxfp4_128x64x256_coop_swap", 6, MXF4, T128_64_256, G::KernelTmaWarpSpecializedMxf4Sm120, true, SF_BLOCKSCALED),
+#elif PH_PART == 5
+    // NVFP4, the FP4 search: CTA tiles past 128x128 (a quarter fewer L2 bytes per FLOP), pingpong at K 256, and stream-K for
+    // skinny m (64 swapped tiles on 188 SMs at m 32, n 8192)
+    ENTRY("cutlass3x_nvfp4_128x256x128_coop", 5, NVF4, T128_256_128, G::KernelTmaWarpSpecializedNvf4Sm120, false, SF_BLOCKSCALED),
+    ENTRY("cutlass3x_nvfp4_256x128x128_coop", 5, NVF4, T256_128_128, G::KernelTmaWarpSpecializedNvf4Sm120, false, SF_BLOCKSCALED),
+    ENTRY("cutlass3x_nvfp4_128x128x256_pingpong", 5, NVF4, T128_128_256, G::KernelTmaWarpSpecializedPingpongNvf4Sm120, false, SF_BLOCKSCALED),
+    ENTRY_TS("cutlass3x_nvfp4_128x128x128_coop_streamk", 5, NVF4, T128_128_128, G::KernelTmaWarpSpecializedNvf4Sm120, false, SF_BLOCKSCALED, G::StreamKScheduler),
+    ENTRY_TS("cutlass3x_nvfp4_128x32x256_coop_swap_streamk", 5, NVF4, T128_32_256, G::KernelTmaWarpSpecializedNvf4Sm120, true, SF_BLOCKSCALED, G::StreamKScheduler),
+    ENTRY_TS("cutlass3x_nvfp4_128x64x256_coop_swap_streamk", 5, NVF4, T128_64_256, G::KernelTmaWarpSpecializedNvf4Sm120, true, SF_BLOCKSCALED, G::StreamKScheduler),
+#elif PH_PART == 6
+    // MXFP4 as part 5, and FP8 E4M3 (per-tensor) in the same larger CTA tiles, so that FP8's peak fraction is searched alike
+    ENTRY("cutlass3x_mxfp4_128x256x128_coop", 6, MXF4, T128_256_128, G::KernelTmaWarpSpecializedMxf4Sm120, false, SF_BLOCKSCALED),
+    ENTRY("cutlass3x_mxfp4_256x128x128_coop", 6, MXF4, T256_128_128, G::KernelTmaWarpSpecializedMxf4Sm120, false, SF_BLOCKSCALED),
+    ENTRY_TS("cutlass3x_mxfp4_128x64x256_coop_swap_streamk", 6, MXF4, T128_64_256, G::KernelTmaWarpSpecializedMxf4Sm120, true, SF_BLOCKSCALED, G::StreamKScheduler),
+    ENTRY("cutlass3x_fp8_128x256x64_coop", 1, E4M3, T128_256_64, G::KernelTmaWarpSpecializedCooperative, false, SF_NONE),
+    ENTRY("cutlass3x_fp8_256x128x64_coop", 1, E4M3, T256_128_64, G::KernelTmaWarpSpecializedCooperative, false, SF_NONE),
+    ENTRY_TS("cutlass3x_fp8_128x32x128_coop_swap_streamk", 1, E4M3, T128_32_128, G::KernelTmaWarpSpecializedCooperative, true, SF_NONE, G::StreamKScheduler),
 #else
-#error "PH_PART is 0..4"
+#error "PH_PART is 0..6"
 #endif
 };
 

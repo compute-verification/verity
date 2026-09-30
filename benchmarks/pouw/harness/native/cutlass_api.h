@@ -25,10 +25,12 @@ struct phc_entry {
   int (*prepare)(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prepared** out);
 };
 
-// cutlass_3x.cu compiled with -DPH_PART=0..4 (one per family), and cutlass_2x.cu.
+// cutlass_3x.cu compiled with -DPH_PART=0..6, and cutlass_2x.cu.
 const phc_entry* phc_table_3x_0(int* count);
 const phc_entry* phc_table_3x_1(int* count);
 const phc_entry* phc_table_3x_2(int* count);
 const phc_entry* phc_table_3x_3(int* count);
 const phc_entry* phc_table_3x_4(int* count);
+const phc_entry* phc_table_3x_5(int* count);
+const phc_entry* phc_table_3x_6(int* count);
 const phc_entry* phc_table_2x(int* count);

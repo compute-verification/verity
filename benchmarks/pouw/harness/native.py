@@ -44,6 +44,54 @@ def lib_path() -> Path:
     return Path(os.environ.get("POUW_HARNESS_LIB", HERE / "native" / "build" / "libpouw_harness.so"))
 
 
+def lt2_path() -> Path | None:
+    """The second cuBLASLt's library (build.sh with LT2_HOME): POUW_HARNESS_LT2, else libpouw_lt2.so beside the harness's
+    library if the build made one; POUW_HARNESS_LT2=none leaves it out. A named library that can't load is an error."""
+    v = os.environ.get("POUW_HARNESS_LT2")
+    if v == "none":
+        return None
+    if v:
+        return Path(v)
+    p = lib_path().parent / "libpouw_lt2.so"
+    return p if p.exists() else None
+
+
+def bind_lt(L) -> None:
+    L.ph_last_error.restype = C.c_char_p
+    L.ph_lt_run.restype = i32
+    L.ph_lt_run.argtypes = [vp, vp, vp, vp, vp, vp, vp, vp, vp]
+    L.ph_lt_plan_create.argtypes = [i32, i32, i32, i32, sz, i32, C.POINTER(vp)]
+    L.ph_lt_plan_create_ld.argtypes = [i32, i32, i32, i32, i32, sz, i32, C.POINTER(vp)]
+    L.ph_lt_plan_destroy.argtypes = [vp]
+    L.ph_lt_candidates.argtypes = [vp, vp, vp, i32, C.POINTER(LtCandidate), C.POINTER(i32)]
+    if hasattr(L, "ph_lt_enumerate"):
+        L.ph_lt_enumerate.argtypes = [vp, vp, vp, C.POINTER(i32), i32, i32, C.POINTER(LtCandidate), C.POINTER(i32),
+                                      C.POINTER(i32)]
+    if hasattr(L, "ph_lt_version"):
+        L.ph_lt_version.restype = C.c_ulonglong
+    if C.sizeof(LtCandidate) != L.ph_lt_candidate_size():
+        raise NativeError("a cuBLASLt library's ph_lt_candidate doesn't match native.py's")
+
+
+@dataclass
+class LtLib:
+    """One cuBLASLt the harness calls: the one libpouw_harness.so links (candidate names `lt_…`), or a second one
+    (libpouw_lt2.so, names `lt<major>_…`)."""
+
+    lib: object
+    prefix: str
+    version: int
+    path: str
+
+    @property
+    def can_enumerate(self) -> bool:
+        return hasattr(self.lib, "ph_lt_enumerate")
+
+    def ck(self, r: int, what: str = "") -> None:
+        if r:
+            raise NativeError(f"{what} {r}: {self.lib.ph_last_error().decode()}".strip())
+
+
 @dataclass
 class Graph:
     exec: int
@@ -56,10 +104,10 @@ class Device:
     def __init__(self, path: Path | None = None):
         self.lib = C.CDLL(str(path or lib_path()))
         L = self.lib
-        L.ph_last_error.restype = C.c_char_p
+        bind_lt(L)
         L.ph_mma_flops.restype = C.c_longlong
         L.ph_mma_flops.argtypes = [i32]
-        for f in ("ph_fill", "ph_read", "ph_copy", "ph_xor_byte", "ph_lt_run", "ph_cutlass_launch", "ph_graph_launch",
+        for f in ("ph_fill", "ph_read", "ph_copy", "ph_xor_byte", "ph_cutlass_launch", "ph_graph_launch",
                   "ph_event_record", "ph_capture_begin", "ph_count_eq", "ph_d2h", "ph_h2d", "ph_memset", "ph_d2h_2d"):
             getattr(L, f).restype = i32
         L.ph_fill.argtypes = [i32, vp, sz, u64, vp]
@@ -71,16 +119,11 @@ class Device:
         L.ph_d2h.argtypes = [vp, vp, sz]
         L.ph_d2h_2d.argtypes = [vp, sz, vp, sz, sz, sz]
         L.ph_memset.argtypes = [vp, i32, sz]
-        L.ph_lt_run.argtypes = [vp, vp, vp, vp, vp, vp, vp, vp, vp]
         L.ph_cutlass_prepare.argtypes = [i32, i32, i32, i32, vp, vp, vp, vp, vp, vp, sz, vp, C.POINTER(vp)]
         L.ph_cutlass_launch.argtypes = [vp, vp]
         L.ph_cutlass_release.argtypes = [vp]
         L.ph_cutlass_query.argtypes = [i32, i32, i32, i32, C.POINTER(sz), C.POINTER(sz), C.POINTER(sz)]
         L.ph_cutlass_describe.argtypes = [i32, C.POINTER(C.c_char_p), C.POINTER(i32), C.POINTER(i32)]
-        L.ph_lt_plan_create.argtypes = [i32, i32, i32, i32, sz, i32, C.POINTER(vp)]
-        L.ph_lt_plan_create_ld.argtypes = [i32, i32, i32, i32, i32, sz, i32, C.POINTER(vp)]
-        L.ph_lt_plan_destroy.argtypes = [vp]
-        L.ph_lt_candidates.argtypes = [vp, vp, vp, i32, C.POINTER(LtCandidate), C.POINTER(i32)]
         L.ph_mma_peak.argtypes = [i32, i32, i32, i32, vp, C.POINTER(C.c_float), vp]
         L.ph_capture_begin.argtypes = [vp]
         L.ph_capture_end.argtypes = [vp, C.POINTER(vp), C.POINTER(sz)]
@@ -99,7 +142,7 @@ class Device:
             L.ph_derive.argtypes = [i32, vp, i32, i32, i32, vp, vp, i32, vp]
             L.ph_stream_wait_event.argtypes = [vp, vp]
         self._side = None
-        if C.sizeof(LtCandidate) != L.ph_lt_candidate_size() or C.sizeof(Info) != L.ph_info_size():
+        if C.sizeof(Info) != L.ph_info_size():
             raise NativeError("libpouw_harness.so's structs don't match native.py's")
         count = i32()
         self.ck(L.ph_init(C.byref(count)))
@@ -111,6 +154,12 @@ class Device:
                      "smem_optin": info.smem_optin, "mem_bus_width": info.mem_bus_width, "total_mem": info.total_mem,
                      "cuda_runtime": info.runtime_version, "cuda_driver_api": info.driver_version,
                      "cublaslt": info.cublaslt_version}
+        self.lts = [LtLib(L, "lt", info.cublaslt_version, str(path or lib_path()))]
+        if (p2 := lt2_path()) is not None:
+            L2 = C.CDLL(str(p2))
+            bind_lt(L2)
+            v = L2.ph_lt_version()
+            self.lts.append(LtLib(L2, f"lt{v // 10000}", v, str(p2)))
         s = vp()
         self.ck(L.ph_stream_create(C.byref(s)))
         self.stream = s.value
@@ -354,9 +403,19 @@ def versions(dev: Device) -> dict:
     lib_sha = hashlib.sha256(lib.read_bytes()).hexdigest()
     if build is not None and build.get("lib_sha256") != lib_sha:
         raise RuntimeError(f"{build_json} describes another library (sha256 {build.get('lib_sha256')}, loaded {lib_sha})")
+    libs = [{"prefix": t.prefix, "version": t.version, "path": t.path,
+             "sha256": hashlib.sha256(Path(t.path).read_bytes()).hexdigest()} for t in dev.lts]
+    lt2 = (build or {}).get("lt2")
+    for t in libs[1:]:
+        if build is not None and Path(t["path"]).parent == lib.parent and (lt2 or {}).get("lib_sha256") != t["sha256"]:
+            raise RuntimeError(f"{build_json} describes another libpouw_lt2.so ({(lt2 or {}).get('lib_sha256')}, loaded "
+                               f"{t['sha256']})")
     nvcc = shutil.which("nvcc") or (os.environ.get("CUDA_HOME", "/usr/local/cuda") + "/bin/nvcc")
+    maps = Path("/proc/self/maps")
+    loaded = sorted({line.split()[-1] for line in maps.read_text().splitlines() if "libcublasLt" in line}) \
+        if maps.exists() else None
     return {"cuda_runtime": dev.info["cuda_runtime"], "cuda_driver_api": dev.info["cuda_driver_api"],
-            "cublaslt": dev.info["cublaslt"], "numpy": np.__version__, "python": platform.python_version(),
+            "cublaslt": dev.info["cublaslt"], "cublaslt_libs": libs, "cublaslt_loaded": loaded, "numpy": np.__version__, "python": platform.python_version(),
             "nvcc": subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1]
             if os.path.exists(nvcc) else None,
             "lib": str(lib), "lib_sha256": lib_sha, "build": build}

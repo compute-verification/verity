@@ -15,7 +15,8 @@ const phc_entry* entry(int, int* total) {
 #else
 const phc_entry* entry(int i, int* total) {
   using table = const phc_entry* (*)(int*);
-  const table tables[] = {phc_table_3x_0, phc_table_3x_1, phc_table_3x_2, phc_table_3x_3, phc_table_3x_4, phc_table_2x};
+  const table tables[] = {phc_table_3x_0, phc_table_3x_1, phc_table_3x_2, phc_table_3x_3, phc_table_3x_4, phc_table_2x,
+                          phc_table_3x_5, phc_table_3x_6};
   const phc_entry* found = nullptr;
   *total = 0;
   for (table t : tables) {

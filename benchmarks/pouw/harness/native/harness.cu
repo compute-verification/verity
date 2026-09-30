@@ -1,7 +1,7 @@
 // The PoUW bench harness's device side (libpouw_harness.so): memory, operand fills, the read-only L2 flush, events and CUDA
-// graphs, the dependent chain's derive, cuBLASLt's heuristic candidates and their calls, the gates' device helpers, and the
-// card's characterization kernels (tensor-core peak rates, DRAM and L2 bandwidth).  A C ABI for ctypes; every call returns 0
-// or an error code whose text `ph_last_error` gives.  Build: build.sh (sm_120a).
+// graphs, the dependent chain's derive, the gates' device helpers, and the card's characterization kernels (tensor-core peak
+// rates, DRAM and L2 bandwidth); cuBLASLt is lt.cu's.  A C ABI for ctypes; every call returns 0 or an error code whose text
+// `ph_last_error` gives.  Build: build.sh (sm_120a).
 #include <cublasLt.h>
 #include <cuda_bf16.h>
 #include <cuda_fp8.h>
@@ -12,19 +12,15 @@
 #include <cstdio>
 #include <cstring>
 
-namespace {
-thread_local char g_err[512];
+thread_local char ph_err[512];  // lt.cu writes it too
 
+namespace {
 int fail_cuda(cudaError_t e, const char* what) {
-  snprintf(g_err, sizeof g_err, "%s: %s (%d)", what, cudaGetErrorString(e), int(e));
+  snprintf(ph_err, sizeof ph_err, "%s: %s (%d)", what, cudaGetErrorString(e), int(e));
   return 1000 + int(e);
 }
-int fail_lt(cublasStatus_t s, const char* what) {
-  snprintf(g_err, sizeof g_err, "%s: cublasStatus %d", what, int(s));
-  return 2000 + int(s);
-}
 int fail_arg(const char* what) {
-  snprintf(g_err, sizeof g_err, "%s", what);
+  snprintf(ph_err, sizeof ph_err, "%s", what);
   return 9;
 }
 #define CK(x)                                    \
@@ -32,16 +28,11 @@ int fail_arg(const char* what) {
     cudaError_t e_ = (x);                        \
     if (e_ != cudaSuccess) return fail_cuda(e_, #x); \
   } while (0)
-#define LT(x)                                    \
-  do {                                           \
-    cublasStatus_t s_ = (x);                     \
-    if (s_ != CUBLAS_STATUS_SUCCESS) return fail_lt(s_, #x); \
-  } while (0)
 }  // namespace
 
 extern "C" {
 
-const char* ph_last_error() { return g_err; }
+const char* ph_last_error() { return ph_err; }
 
 // ---- device and memory -------------------------------------------------------------------------------------------------
 
@@ -582,142 +573,6 @@ int ph_mma_peak(int kind, int blocks, int threads, int iters, float* out_scratch
   return 0;
 }
 
-// ---- cuBLASLt ------------------------------------------------------------------------------------------------------------
-// The harness's D (m x n, row-major) = A (m x k, row-major) . B^T, B (n x k, row-major): in cuBLASLt's column-major terms
-// D^T = op(B) . A^T with op = T, so cuBLASLt's (m, n, k) is our (n, m, k), its A is our B and its B our A ("TN").
-
-enum { LT_BF16 = 0, LT_FP8 = 1, LT_FP8_ROWWISE = 2, LT_MXFP8 = 3, LT_FP8_BLK128 = 4, LT_NVFP4 = 5, LT_MXFP4 = 6, LT_INT8 = 7,
-       LT_KINDS = 8 };
-
-struct ph_lt_plan {
-  cublasLtHandle_t h;
-  cublasLtMatmulDesc_t op;
-  cublasLtMatrixLayout_t a, b, c, d;
-  cublasLtMatmulPreference_t pref;
-  int kind, m, n, k;
-  size_t ws;
-};
-
-struct ph_lt_candidate {
-  cublasLtMatmulAlgo_t algo;
-  size_t workspace;
-  float waves;
-  int algo_id, tile, stages, splitk, reduction, swizzle, custom, inner_shape, cluster_shape;
-};
-
-static cudaDataType_t lt_in(int kind) {
-  switch (kind) {
-    case LT_BF16: return CUDA_R_16BF;
-    case LT_NVFP4: case LT_MXFP4: return CUDA_R_4F_E2M1;
-    case LT_INT8: return CUDA_R_8I;
-    default: return CUDA_R_8F_E4M3;
-  }
-}
-
-// Creates the plan for our (m, n, k), rows `ld` elements apart (ld = k but for the known-bad half-k plan); `ws` bytes of
-// workspace are allowed.  Scale modes: per kind (see the enum).
-int ph_lt_plan_create_ld(int kind, int m, int n, int k, int ld, size_t ws, int swap_blk, ph_lt_plan** out) {
-  if (kind < 0 || kind >= LT_KINDS) return fail_arg("ph_lt_plan_create: unknown kind");
-  ph_lt_plan* p = new ph_lt_plan();
-  p->kind = kind; p->m = m; p->n = n; p->k = k; p->ws = ws;
-  LT(cublasLtCreate(&p->h));
-  bool i8 = kind == LT_INT8;
-  LT(cublasLtMatmulDescCreate(&p->op, i8 ? CUBLAS_COMPUTE_32I : CUBLAS_COMPUTE_32F, i8 ? CUDA_R_32I : CUDA_R_32F));
-  cublasOperation_t t = CUBLAS_OP_T, nn = CUBLAS_OP_N;
-  LT(cublasLtMatmulDescSetAttribute(p->op, CUBLASLT_MATMUL_DESC_TRANSA, &t, sizeof t));
-  LT(cublasLtMatmulDescSetAttribute(p->op, CUBLASLT_MATMUL_DESC_TRANSB, &nn, sizeof nn));
-  int32_t sa = -1, sb = -1;
-  switch (kind) {
-    case LT_FP8_ROWWISE: sa = sb = CUBLASLT_MATMUL_MATRIX_SCALE_OUTER_VEC_32F; break;
-    case LT_MXFP8: case LT_MXFP4: sa = sb = CUBLASLT_MATMUL_MATRIX_SCALE_VEC32_UE8M0; break;
-    case LT_NVFP4: sa = sb = CUBLASLT_MATMUL_MATRIX_SCALE_VEC16_UE4M3; break;
-    case LT_FP8_BLK128:  // cuBLASLt's A is our weight B: 128x128 blocks on it and 1x128 on our A, or the reverse
-      sa = swap_blk ? CUBLASLT_MATMUL_MATRIX_SCALE_VEC128_32F : CUBLASLT_MATMUL_MATRIX_SCALE_BLK128x128_32F;
-      sb = swap_blk ? CUBLASLT_MATMUL_MATRIX_SCALE_BLK128x128_32F : CUBLASLT_MATMUL_MATRIX_SCALE_VEC128_32F;
-      break;
-  }
-  if (sa >= 0) {
-    LT(cublasLtMatmulDescSetAttribute(p->op, CUBLASLT_MATMUL_DESC_A_SCALE_MODE, &sa, sizeof sa));
-    LT(cublasLtMatmulDescSetAttribute(p->op, CUBLASLT_MATMUL_DESC_B_SCALE_MODE, &sb, sizeof sb));
-  }
-  cudaDataType_t in = lt_in(kind), outt = i8 ? CUDA_R_32I : CUDA_R_16BF;
-  LT(cublasLtMatrixLayoutCreate(&p->a, in, k, n, ld));     // our B, n x k row-major = k x n column-major, op T
-  LT(cublasLtMatrixLayoutCreate(&p->b, in, k, m, ld));     // our A, m x k row-major = k x m column-major
-  LT(cublasLtMatrixLayoutCreate(&p->c, outt, n, m, n));
-  LT(cublasLtMatrixLayoutCreate(&p->d, outt, n, m, n));
-  LT(cublasLtMatmulPreferenceCreate(&p->pref));
-  LT(cublasLtMatmulPreferenceSetAttribute(p->pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &ws, sizeof ws));
-  *out = p;
-  return 0;
-}
-
-int ph_lt_plan_create(int kind, int m, int n, int k, size_t ws, int swap_blk, ph_lt_plan** out) {
-  return ph_lt_plan_create_ld(kind, m, n, k, k, ws, swap_blk, out);
-}
-
-int ph_lt_plan_destroy(ph_lt_plan* p) {
-  cublasLtMatmulPreferenceDestroy(p->pref);
-  cublasLtMatrixLayoutDestroy(p->a);
-  cublasLtMatrixLayoutDestroy(p->b);
-  cublasLtMatrixLayoutDestroy(p->c);
-  cublasLtMatrixLayoutDestroy(p->d);
-  cublasLtMatmulDescDestroy(p->op);
-  cublasLtDestroy(p->h);
-  delete p;
-  return 0;
-}
-
-static int set_scales(ph_lt_plan* p, const void* a_scale, const void* b_scale) {
-  if (p->kind == LT_BF16 || p->kind == LT_INT8) return 0;
-  // cuBLASLt's A is our B: its A scale is our B's
-  LT(cublasLtMatmulDescSetAttribute(p->op, CUBLASLT_MATMUL_DESC_A_SCALE_POINTER, &b_scale, sizeof b_scale));
-  LT(cublasLtMatmulDescSetAttribute(p->op, CUBLASLT_MATMUL_DESC_B_SCALE_POINTER, &a_scale, sizeof a_scale));
-  return 0;
-}
-
-// Up to `want` heuristic candidates (cuBLASLt's order), their ids and configs; *got is how many.
-int ph_lt_candidates(ph_lt_plan* p, const void* a_scale, const void* b_scale, int want, ph_lt_candidate* out, int* got) {
-  if (int r = set_scales(p, a_scale, b_scale)) return r;
-  cublasLtMatmulHeuristicResult_t res[64];
-  if (want > 64) want = 64;
-  *got = 0;
-  cublasStatus_t s = cublasLtMatmulAlgoGetHeuristic(p->h, p->op, p->a, p->b, p->c, p->d, p->pref, want, res, got);
-  if (s == CUBLAS_STATUS_NOT_SUPPORTED) { *got = 0; return 0; }
-  if (s != CUBLAS_STATUS_SUCCESS) return fail_lt(s, "cublasLtMatmulAlgoGetHeuristic");
-  for (int i = 0; i < *got; ++i) {
-    ph_lt_candidate& c = out[i];
-    memset(&c, 0, sizeof c);
-    c.algo = res[i].algo;
-    c.workspace = res[i].workspaceSize;
-    c.waves = res[i].wavesCount;
-    size_t w;
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_ID, &c.algo_id, sizeof c.algo_id, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_TILE_ID, &c.tile, sizeof c.tile, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_STAGES_ID, &c.stages, sizeof c.stages, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_SPLITK_NUM, &c.splitk, sizeof c.splitk, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_REDUCTION_SCHEME, &c.reduction, sizeof c.reduction, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_CTA_SWIZZLING, &c.swizzle, sizeof c.swizzle, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_CUSTOM_OPTION, &c.custom, sizeof c.custom, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_INNER_SHAPE_ID, &c.inner_shape, sizeof c.inner_shape, &w);
-    cublasLtMatmulAlgoConfigGetAttribute(&c.algo, CUBLASLT_ALGO_CONFIG_CLUSTER_SHAPE_ID, &c.cluster_shape, sizeof c.cluster_shape, &w);
-  }
-  return 0;
-}
-
-// D = A . B^T (alpha 1, beta 0) with candidate `c`, on `stream`.  Scale pointers are per operand set.
-int ph_lt_run(ph_lt_plan* p, const ph_lt_candidate* c, const void* A, const void* B, void* D, const void* a_scale,
-              const void* b_scale, void* ws, void* stream) {
-  if (int r = set_scales(p, a_scale, b_scale)) return r;
-  float one = 1.0f, zero = 0.0f;
-  int32_t ione = 1, izero = 0;
-  const void* alpha = p->kind == LT_INT8 ? static_cast<const void*>(&ione) : &one;
-  const void* beta = p->kind == LT_INT8 ? static_cast<const void*>(&izero) : &zero;
-  LT(cublasLtMatmul(p->h, p->op, alpha, B, p->a, A, p->b, beta, D, p->c, D, p->d, &c->algo, ws, p->ws,
-                    cudaStream_t(stream)));
-  return 0;
-}
-
-int ph_lt_candidate_size() { return int(sizeof(ph_lt_candidate)); }
 int ph_info_size() { return int(sizeof(ph_info)); }
 
 }  // extern "C"
