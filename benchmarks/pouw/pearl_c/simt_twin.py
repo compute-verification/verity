@@ -18,7 +18,8 @@ from pathlib import Path
 HERE = Path(__file__).parent
 KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_node_keys", "hash_nodes",
            "hash_tree_leaves", "hash_tree_small", "hash_rows_wt", "lat_chain", "derive_rows_hash", "derive_rows_wide",
-           "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm")
+           "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm",
+           "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s")
 
 PRELUDE = r"""
 #include <condition_variable>
@@ -84,7 +85,8 @@ static std::vector<uint32_t> twin_dyn;
 
 
 def _source() -> str:
-    body = ((HERE / "hash.cuh").read_text() + (HERE / "hash_sm120.cuh").read_text() + (HERE / "h1_standin.cu").read_text()).replace(
+    body = ((HERE / "hash.cuh").read_text() + (HERE / "hash_sm120.cuh").read_text() + (HERE / "hash_h2.cuh").read_text()
+            + (HERE / "h1_standin.cu").read_text()).replace(
         "extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace("#pragma once", "")
     runs = "".join(
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
@@ -93,7 +95,7 @@ def _source() -> str:
         f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
         f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"
         f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in KERNELS)
-    return PRELUDE + re.sub(r'#include "hash(_sm120)?.cuh"', "", body) + runs
+    return PRELUDE + re.sub(r'#include "hash(_sm120|_h2)?.cuh"', "", body) + runs
 
 
 class Args(C.Structure):
