@@ -92,3 +92,18 @@ def test_base_split_sparse_delta_is_cheaper():
     A, _ = C.family("outlier-in-block", 128, 4096, rng)
     r = C.base_split("nvf4", A, "block", 0.0625, rng)
     assert r["cheater_A_cost_per_dense_mac"] < 1.0 and r["beats_honest"]
+
+
+def test_salt_dead_share_tracks_iid_and_falls_with_noise():
+    """The share of 4-groups with >= 2 salt-dead codes (theory §5's debit statistic) matches the iid Binomial of the
+    measured change density, and shrinks as the noise floor rises (more codes change with the salt)."""
+    shares = []
+    for delta in (0.125, 0.25, 1.0):
+        rng = np.random.default_rng(9)
+        A, _ = C.family("gaussian", 128, 4096, rng)
+        r = C.base_split("nvf4", A, "row", delta, rng)
+        assert 0.0 <= r["share_4groups_ge2_salt_dead"] <= 1.0
+        assert abs(r["share_4groups_ge2_salt_dead"] - r["share_4groups_ge2_salt_dead_iid"]) < 0.05
+        assert r["debit_2of4_per_mac"] == 0.5 * r["share_4groups_ge2_salt_dead"]
+        shares.append(r["share_4groups_ge2_salt_dead"])
+    assert shares[0] > shares[1] > shares[2]

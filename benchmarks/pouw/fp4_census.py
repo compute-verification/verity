@@ -476,8 +476,16 @@ def base_split(fmt: str, A: np.ndarray, noise: str, delta: float, rng, tile_rows
     rows, K = delta_map.shape
     nr, nk = rows - rows % tile_rows, K - K % 64
     density = float(delta_map.mean())
+    # Theory §5 Q2/Q3's statistic: per (row, 4-group of k), a code is salt-dead when the base already holds it (Delta = 0).
+    # >= 2 salt-dead <=> <= 2 salt-dependent <=> that group's Delta fits one 2:4 half (the per-4-group 0.5x debit).
+    g4 = delta_map[:, : K - K % 4].reshape(rows, -1, 4).sum(-1)
+    share_ge2_dead = float((g4 <= 2).mean())
+    iid_ge2_dead = sum(math.comb(4, c) * density ** c * (1 - density) ** (4 - c) for c in range(3))
+    salt_dead = {"share_4groups_ge2_salt_dead": share_ge2_dead,
+                 "share_4groups_ge2_salt_dead_iid": float(iid_ge2_dead),
+                 "debit_2of4_per_mac": 0.5 * share_ge2_dead}
     if nr == 0 or nk == 0:
-        return {"code_change_density": density, "fragments": 0}
+        return {"code_change_density": density, "fragments": 0, **salt_dead}
     d = delta_map[:nr, :nk].reshape(nr // tile_rows, tile_rows, nk // 64, 64)
     d = d.transpose(0, 2, 1, 3).reshape(-1, tile_rows, 16, 4)          # [frag, row, group-of-4 along k, 4]
     changed_per_group = d.sum(-1)                                       # [frag, row, group] in 0..4
@@ -492,7 +500,8 @@ def base_split(fmt: str, A: np.ndarray, noise: str, delta: float, rng, tile_rows
             "frag_one_pass_2of4": float(one_pass.mean()),
             "frag_dense": float(dense.mean()),
             "cheater_A_cost_per_dense_mac": float(cost.mean()),
-            "beats_honest": bool(cost.mean() < 0.999)}
+            "beats_honest": bool(cost.mean() < 0.999),
+            **salt_dead}
 
 
 def atoms_from(args) -> dict[str, tuple[Atom, str]]:
@@ -573,6 +582,8 @@ def cmd_basesplit(args) -> dict:
                 print(json.dumps({"format": fmt, "family": fam, "noise": noise, "density": round(r["code_change_density"], 3),
                                   "cheater_A_cost": round(r.get("cheater_A_cost_per_dense_mac", 1.0), 3),
                                   "one_pass_2of4": round(r.get("frag_one_pass_2of4", 0.0), 3),
+                                  "ge2_salt_dead": round(r["share_4groups_ge2_salt_dead"], 3),
+                                  "ge2_salt_dead_iid": round(r["share_4groups_ge2_salt_dead_iid"], 3),
                                   "beats_honest": r.get("beats_honest")}), flush=True)
     return res
 
