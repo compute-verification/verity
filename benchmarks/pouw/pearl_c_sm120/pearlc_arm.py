@@ -20,14 +20,14 @@ call reuse its set before that set's previous hashes are done); the gate's secon
 
 The gate, at the exact shape and flag set: a second launch into the gate's own buffers (C̃ by gemm_ct, another kernel; C̃, U
 and y by gemm_pearlc on 3 CTAs, another tile schedule, unfused; the hashes over those, under -h1 A's rows by #449's hash_rows
-and both trees a level a launch with seed_a, where the call runs h1_rows and h1_tree) must equal every output word for word
+and both trees a level a launch with seed_a, where the call runs h1_rows_p and h1_tree) must equal every output word for word
 (`all`: the fused call's message digests too), and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B
 codes and α, C̃, U (fused: their message digests), y and, with hashing, the leaf and row r0's commitments must equal #449's
 CPU twin (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the harness's operand rows.  `known_bad` flips C̃'s
 first word (fused: the first digest's) between the product and the hashes.
 
 Under -h1 the hashes are #449's hash.cuh through hash_sm120.cuh's and pouw_hash/h1_sm120.cuh's sm_120 entry points
-(hash_sm120a.cubin, `b3:<name>`: h1_rows, h1_tree with seed_A at A's root), and, fused, gemm_pearlc_b's keyed BLAKE3 digests:
+(hash_sm120a.cubin, `b3:<name>`: h1_rows_p, h1_tree with seed_A at A's root), and, fused, gemm_pearlc_b's keyed BLAKE3 digests:
 A's rows as the frame-b3 tree -h1's verifier checks, the keyed digests and tile leaves, and the tile tree, all over the
 matmul's m rows (the scheme's partial last row tile at decode), so A's domain and the tile tree's count m, not the twin's
 128-row padding (`domains`); the twin's tiles are checked on their real rows, and on row r0's leaf in A's tree, and seed_a's

@@ -630,7 +630,7 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
 
     def commit_a(shape: str) -> list[str]:
         """A's commitment, before E_A's lines: its rows, then its tree with seed_A (which keys them) at the root."""
-        return ["h1_rows", "h1_tree"] if h1 else ["hash_rows_f32"]
+        return ["h1_rows_p", "h1_tree"] if h1 else ["hash_rows_f32"]
 
     def hashes(shape: str) -> list[str]:
         """The product's hashes, after the chain."""

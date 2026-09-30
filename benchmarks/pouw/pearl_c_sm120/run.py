@@ -21,12 +21,12 @@
 
 A variant ending in -h1 hashes under -h1 (pearl-c-<device>-v1-h1) with hash_sm120a.cubin's kernels, launched as `b3:<name>`
 (#449's hash.cuh: A's rows as a frame-b3 tree, the digests and leaves as keyed BLAKE3, the tile tree; hash_sm120.cuh's
-hash_msg_v and hash_leaf_p; and pouw_hash/h1_sm120.cuh's h1_rows, A's row leaves with 16-byte loads, and h1_tree, a whole
-tree in one launch: its pads, level keys, levels and, for the tile tree, its frame-b3 leaves, and for A's tree seed_A from the
-root with E_A's line and jackpot keys, as seed_a derives them).  The check holds these against the fixture and re-runs the
-other forms of the same bytes against it too: A's rows by hash_rows_w and #449's hash_rows, both trees by hash_tree_small (up
-to TREE_SMALL leaves) and by hash_nodes a level with seed_a, and by h1_tree from one thread a CTA (its last CTA's levels), and
-the timing times each of them as `alt_ms`.
+hash_msg_v and hash_leaf_p; and pouw_hash/h1_sm120.cuh's h1_rows_p, A's row leaves with 16-byte loads under L2::256B, and
+h1_tree, a whole tree in one launch: its pads, level keys, levels and, for the tile tree, its frame-b3 leaves, and for A's
+tree seed_A from the root with E_A's line and jackpot keys, as seed_a derives them).  The check holds these against the
+fixture and re-runs the other forms of the same bytes against it too: A's rows by h1_rows (plain loads), hash_rows_w and
+#449's hash_rows, both trees by hash_tree_small (up to TREE_SMALL leaves) and by hash_nodes a level with seed_a, and by
+h1_tree from one thread a CTA (its last CTA's levels), and the timing times each of them as `alt_ms`.
 seed_A is checked against the fixture's, which derives it from the tree's root; forming still reads the key it is given.  The
 fused chain is gemm_pearlc_b; the fused call commits A before forming, since seed_A keys E_A.  At decode the tile leaves are
 over the real rows (a partial last row tile), not the padding.  Otherwise h0:
@@ -68,8 +68,8 @@ TREE_SMALL, ROWS_W_WARPS = 2048, 4
 #: h1_tree's threads per CTA before the last CTA's roots need more (h1_sm120.cuh): 64 threads keep a level at one
 #: compression's latency on an SM, and 64 CTAs of them cover A's 8,192 rows, 128 the prefill tile tree's 16,384 leaves
 TREE_CTA = 64
-#: the -h1 forms of A's rows and of the trees (h1_rows and h1_tree the defaults), each checked against the fixture
-ROW_FORMS, TREE_FORMS = ("v", "vp", "w", "cta"), ("one", "small", "nodes")
+#: the -h1 forms of A's rows and of the trees (h1_rows_p and h1_tree the defaults), each checked against the fixture
+ROW_FORMS, TREE_FORMS = ("vp", "v", "w", "cta"), ("one", "small", "nodes")
 #: h1_tree's counter slot (u32) per tree buffer: a tree's launches run in order on one stream, other trees' beside them
 CTR_SLOT = {"tree_a_h1": 0, "tree_t_h1": 1, "tree_t_h": 2}
 A_COMMITMENT = {"h0": "turboshake128 over 1 KB segments of A's FP32 rows (the bench's model; v1's verifier checks the SHA-256 "
