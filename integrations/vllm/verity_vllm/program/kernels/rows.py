@@ -25,6 +25,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from verity.evaluation.batch import type_dtype, type_shape
+from verity_vllm.program.kernels.bias_epilogue_rows import gemm_bias_f32_epilogue
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 
@@ -79,6 +80,7 @@ EVALUATORS = {
     "Embedding_v1": "row gather of the registered embedding field (Embedding_v1)",
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
     "GemmBias_v1": "Gemm_v1's row (dot_bf16 + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate (GemmBiasCoordinate_v1)",
+    "GemmBiasF32Epilogue_v1": "Gemm_v2's f32 chain (the DOT static's k16 twin), the bias slice widened and added in f32, then f2fp_bf16, per coordinate",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
@@ -692,6 +694,8 @@ def _check_targets() -> dict[str, list]:
         "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
         "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
         "GemmBias_v1": [bind(gemm_bias.GemmBias, K=32, N=3)],
+        "GemmBiasF32Epilogue_v1": [bind(gemm_bias.GemmBiasF32Epilogue, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16),
+                                   bind(gemm_bias.GemmBiasF32Epilogue, K=32, N=3, DOT=P.AmpereBF16TcDot16)],
         "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
         "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
@@ -733,6 +737,7 @@ _row("SiluMul_v1", silu_mul, ("out",))
 _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))
 _row("GemmBias_v1", gemm_bias, ("0",))
+_row("GemmBiasF32Epilogue_v1", lambda st, ops: gemm_bias_f32_epilogue(st, ops, prim_static(st, "DOT", "GemmBiasF32Epilogue_v1"), GEMM_CHUNK), ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)

@@ -33,6 +33,7 @@ from verity.ml.prims import HopperBF16WgmmaDot16
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa3_check_inf as F3
+from verity_vllm.program.registry import gemm_bias
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
@@ -296,6 +297,19 @@ def gemm_spec(profile, K: int, N: int):
     return bind(b1.GemmV2, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
 
 
+def gemm_bias_spec(profile, K: int, N: int):
+    """The registered Definition of a bf16 linear WITH a bias on the declared target: `GemmBias_v1{K,N}` on the Ampere family (the Triton
+    linear adds the bias in bf16 after the rounding), `GemmBiasF32Epilogue_v1{K,N,DOT}` where the GEMM target records the bias in
+    cuBLASLt's FP32 epilogue (`GemmTarget.bias_epilogue == "f32"`, M >= 2; at M = 1 cuBLAS runs a gemv, which no registered Definition
+    models), refused by name elsewhere."""
+    fam = target_family(profile)
+    if fam == "ampere":
+        return bind(gemm_bias.GemmBias, K=int(K), N=int(N))
+    if gemm_target(profile).bias_epilogue == "f32":
+        return bind(gemm_bias.GemmBiasF32Epilogue, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
+    raise UnregisteredTarget(f"bf16 linear with a bias on {fam} ({profile.capability_str}): no registered binding")
+
+
 def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None):
     """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
     construction the row's index among its sequence's query rows in the launch (`row`) selects its tile (FA3, `fa3_check_inf`); FA2
@@ -339,4 +353,5 @@ def describe(profile) -> dict[str, Any]:
 __all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
+           "gemm_bias_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]

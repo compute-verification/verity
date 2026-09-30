@@ -115,6 +115,9 @@ class GemmTarget:
     tuned_table: Mapping[tuple[int, int], dict[str, Any]] = field(default_factory=dict)
     evidence: tuple[str, ...] = ()
     kind: str = "Gemm_v1{K,N}"
+    #: how the bf16 linear with a bias adds it at M >= 2, as measured (`evidence`): "f32" = cuBLASLt's GEMM with the bias in its FP32
+    #: epilogue; None = no recorded biased linear (cc 9.0 is very likely "f32" too, cuBLASLt under VLLM_BATCH_INVARIANT=1, unmeasured).
+    bias_epilogue: str | None = None
 
     def launch_config(self, M: int, N: int, K: int) -> tuple[dict[str, Any], int, int, str]:
         """vLLM `_get_matmul_config(M, N, K, bf16, default)` on this target: `(constexprs, num_warps, num_stages, source)`;
@@ -183,7 +186,7 @@ REGISTERED: dict[str, GemmTarget] = {
     # parameters.  vLLM family None: a Triton launch would take the default tiling for every shape.
     "blackwell_consumer": GemmTarget(
         key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
-        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
+        kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", bias_epilogue="f32",
         evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
                   "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
