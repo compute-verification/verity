@@ -4,9 +4,11 @@
 #   bash run.sh          the device's vectors against host_check.jsonl (check.py --against), then `rates` and `epi` (whose own
 #                        gate recomputes warp 0's digests on the host before it times anything)
 #   bash run.sh check    the gates only
-# Env: POUW_EXPECT_UUID (required): the GPU's UUID from internal/pouw/rtx-pro/server.md, or "pod" on a one-GPU pod (refused
-# if more than one GPU is visible); LOCK_MHZ: lock this GPU's SM clock there (nvidia-smi -i UUID -lgc, reset on exit), else
-# the clocks are recorded and the rows labelled unlocked; MS: each row's target milliseconds (default 100).
+# Env: POUW_EXPECT_UUID (required): the GPU's UUID from internal/pouw/rtx-pro/server.md; "pod" on a one-GPU pod (refused
+# if more than one GPU is visible); or "lease" under `gpu-lease 1` (CUDA_VISIBLE_DEVICES one index in PCI bus order, whose
+# UUID the bench then requires of its CUDA device); LOCK_MHZ: lock this GPU's SM clock there (nvidia-smi -i UUID -lgc, reset
+# on exit); else CLOCK_LABEL labels the rows (default unlocked; node 2's clocks are fixed node-wide: locked-2100), and every
+# row records its clocks; MS: each row's target milliseconds (default 100).
 # Exit: 3 the wrong device; 5 the tree does not match its manifest; 4 a gate failed (nothing timed); else the bench's.
 # Outputs under $RESEARCH_RUN_DIR/out (or ./out): device.txt, env.txt, inputs.check, clocks.txt, smi_trace.csv,
 # check_device.jsonl, check_summary.jsonl, rates.jsonl, epi.jsonl, summary.txt.
@@ -20,6 +22,10 @@ WANT=${POUW_EXPECT_UUID:-}
 if [ "$WANT" = pod ]; then
   [ "$(nvidia-smi --query-gpu=uuid --format=csv,noheader | wc -l)" = 1 ] || { echo "REFUSED: POUW_EXPECT_UUID=pod with more than one GPU"; exit 3; }
   WANT=$(nvidia-smi --query-gpu=uuid --format=csv,noheader | head -1)
+elif [ "$WANT" = lease ]; then
+  case "${CUDA_VISIBLE_DEVICES:-}" in ''|*[!0-9]*) echo "REFUSED: POUW_EXPECT_UUID=lease needs CUDA_VISIBLE_DEVICES to be one index"; exit 3 ;; esac
+  [ "${CUDA_DEVICE_ORDER:-}" = PCI_BUS_ID ] || { echo "REFUSED: POUW_EXPECT_UUID=lease needs CUDA_DEVICE_ORDER=PCI_BUS_ID"; exit 3; }
+  WANT=$(nvidia-smi -i "$CUDA_VISIBLE_DEVICES" --query-gpu=uuid --format=csv,noheader | head -1)
 fi
 [ -n "$WANT" ] || { echo "REFUSED: POUW_EXPECT_UUID is not set"; exit 3; }
 export POUW_EXPECT_UUID=$WANT
@@ -27,7 +33,7 @@ NAME=$(nvidia-smi -i "$WANT" --query-gpu=name --format=csv,noheader 2> /dev/null
 echo "$NAME $WANT CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset}" > "$OUT/device.txt"
 case "$NAME" in *"RTX PRO 6000"*) ;; *) echo "REFUSED: GPU $WANT is '$NAME', not an RTX PRO 6000"; exit 3 ;; esac
 { nvidia-smi -i "$WANT"; nvidia-smi -i "$WANT" -q -d CLOCK,PERFORMANCE,POWER; cat toolchain.txt source.txt; lscpu | grep -E "Model name|^CPU\(s\)"; grep PRETTY /etc/os-release; } > "$OUT/env.txt" 2>&1
-LOCKED=unlocked
+LOCKED=${CLOCK_LABEL:-unlocked}
 if [ -n "${LOCK_MHZ:-}" ] && nvidia-smi -i "$WANT" -lgc "$LOCK_MHZ,$LOCK_MHZ" >> "$OUT/env.txt" 2>&1; then
   LOCKED="locked $LOCK_MHZ MHz"
   trap 'nvidia-smi -i "$WANT" -rgc > /dev/null 2>&1' EXIT
@@ -56,7 +62,7 @@ for f in ("rates", "epi"):
     except FileNotFoundError:
         continue
     for r in rows:
-        if r["group"] in ("device", "epi_gate"):
+        if r["group"] in ("device", "epi_gate") or "skipped" in r:
             print(json.dumps(r))
             continue
         extra = f" warps/SM {r['warps_per_sm']}" + (f" sweep {r['sweep_warps']}" if "sweep_warps" in r else "")
