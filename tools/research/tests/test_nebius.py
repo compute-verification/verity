@@ -153,7 +153,11 @@ def test_gpu_lease_pins_by_index_or_uuid_and_status_names_the_holder(tmp_path):
     assert lines[:3] == ["2 GPU-c2", "pinned-busy=75", "3 GPU-d3"]
     held = [ln for ln in lines[3:] if ln.split()[1] == "held"]
     assert len(held) == 1 and held[0].startswith("2 held ") and "who=bc-test" in held[0] and "uuid=GPU-c2" in held[0]
-    assert re.match(r"2 held \d+m pid=", held[0])
+    assert re.match(r"2 held \d+m pid=", held[0]) and "timed=1" not in held[0]
+    for tag, extra in (("flag", ["--timed"]), ("env", [])):
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", *extra, "--mem-gb", "0", "--", "bash", str(GPU_LEASE), "status"],
+                           env={**env, **({"GPU_LEASE_TIMED": "1"} if tag == "env" else {})}, capture_output=True, text=True)
+        assert r.returncode == 0 and any("held" in ln and "timed=1" in ln for ln in r.stdout.splitlines()), (tag, r.stdout)
     for bad in (["--on", "7"], ["--on", "GPU-zz"], ["--on", "x1"]):
         assert subprocess.run(["bash", str(GPU_LEASE), "1", *bad, "--", "true"], env=env, capture_output=True).returncode == 2
     assert subprocess.run(["bash", str(GPU_LEASE), "2", "--on", "1", "--", "true"], env=env, capture_output=True).returncode == 2
