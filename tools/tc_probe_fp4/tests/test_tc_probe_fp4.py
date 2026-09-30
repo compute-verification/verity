@@ -501,8 +501,9 @@ def test_meta_rule_dry_run_measures_the_fake_rule_and_fails_closed(no_nvcc, tmp_
 
 def test_store_declarations_keep_guards_out_of_the_derivation():
     p = tool.TC_PROBE_FP4.parse(["python", "tools/tc_probe_fp4/probe.py", "--instruction", "f8f6f4", "--out", "x",
-                                 "--expect-uuid", "GPU-1", "--chain", "4"])
+                                 "--expect-uuid", "GPU-1", "--chain", "4", "--prebuilt", "/x/libmma_fp4_sm_120a.so"])
     assert p["instruction"] == "f8f6f4" and p["chain"] == 4 and "expect_uuid" not in p and p["arch"] == "sm_120a"
+    assert "prebuilt" not in p and "_unknown" not in p
     assert set(p) <= set(tool.TC_PROBE_FP4.key_params) | {"out", "procs"}
     q = tool.TC_PRICE_FP4.parse(["python", "tools/tc_probe_fp4/w1_price.py", "--out", "x", "--rows", "mxf4,nvf4,",
                                  "--expect-uuid", "GPU-1", "--max-seconds", "60"])

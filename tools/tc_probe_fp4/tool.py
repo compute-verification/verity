@@ -52,8 +52,10 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--sass-only", action="store_true")
     ap.add_argument("--hot-bits", default="14,15,16")            # sp_nvf4_t1: the hot accumulators' h
     ap.add_argument("--model-sample", type=int, default=4096)   # sp_nvf4_t1: words checked against the pinned models
+    ap.add_argument("--prebuilt", default=None)                 # a path to the same source's library (its sha256 is recorded)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
+    out.pop("prebuilt")
     if out["arch"] is None:  # probe.py's default: sm_120a for the mma.sync instructions, sm_100a for the tcgen05 ones
         out["arch"] = "sm_100a" if str(out["instruction"]).startswith("tcgen05") else "sm_120a"
     out["n"] = out.pop("n_random")

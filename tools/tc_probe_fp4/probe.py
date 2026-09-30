@@ -1155,11 +1155,14 @@ def _eval_chunk(args):
         for t in range(n):
             c = C[t]
             e = np.zeros((16, 8), np.bool_)
-            for s in range(steps):
-                ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
-                c, e_s = model5.tile_eval(A[t][:, ks], Bt[t][:, ks], SFA[t][:, bs] if SFA is not None else empty,
-                                          SFB[t][:, bs] if SFB is not None else empty[:8], c, SCALE_KIND[instr], _CTX["group"])
-                e |= e_s
+            try:
+                for s in range(steps):
+                    ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
+                    c, e_s = model5.tile_eval(A[t][:, ks], Bt[t][:, ks], SFA[t][:, bs] if SFA is not None else empty,
+                                              SFB[t][:, bs] if SFB is not None else empty[:8], c, SCALE_KIND[instr], _CTX["group"])
+                    e |= e_s
+            except AssertionError:  # model5 asserts on a scale code outside its domain (scale_bit7): the whole tile is refused
+                c, e = np.zeros((16, 8), np.uint32), np.ones((16, 8), np.bool_)
             out5[t], err5[t] = c, e
         outs["model5"], errs["model5"] = out5, err5
     for name, model in _CTX["verity"].items():
@@ -1323,6 +1326,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fake-silicon", default=None, metavar="MODEL", help="dry run on the CPU: MODEL's words stand in for the device")
     ap.add_argument("--corrupt-word", action="store_true", help="flip one bit of the first gated family's first word (the gate must fail)")
     ap.add_argument("--sass-only", action="store_true", help="build and run the SASS gate only (no device)")
+    ap.add_argument("--prebuilt", default=None, metavar="SO",
+                    help="load this library (an earlier --sass-only run's build of the same source; its sha256 is recorded) instead of "
+                         "running nvcc, so a fill job holds no GPU while compiling")
     ap.add_argument("--hot-bits", default="14,15,16", help="sp_nvf4_t1: the h of each hot accumulator H (C = +0 always runs)")
     ap.add_argument("--model-sample", type=int, default=4096,
                     help="sp_nvf4_t1: span words per accumulator checked against the pinned models (and 1/64 as many whole chains)")
@@ -1360,6 +1366,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.fake_silicon:
         so, nvcc = (None, "not built (fake silicon)") if not shutil.which(nvcc_bin()) else build(args.arch, out, SOURCE[instr])
         probe = FakeProbe(instr, args.fake_silicon)
+    elif args.prebuilt:
+        so = Path(os.path.expandvars(args.prebuilt))
+        nvcc = f"prebuilt {so.name} sha256 {hashlib.sha256(so.read_bytes()).hexdigest()}"
+        probe = None if args.sass_only else Probe(so)
     else:
         so, nvcc = build(args.arch, out, SOURCE[instr])
         probe = None if args.sass_only else Probe(so)
