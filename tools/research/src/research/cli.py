@@ -68,6 +68,7 @@ from pathlib import Path
 from . import compare as C
 from . import record, remote, result
 from . import runs as R
+from .timefmt import both
 
 EX_DATAERR = 65
 
@@ -723,7 +724,7 @@ def cmd_status(argv: list[str]) -> int:
         if ledger.get("error"):
             print(f"ledger    unavailable: {ledger['error']}")
         else:
-            print(f"ledger    runpod balance ${ledger['clientBalance']:.2f}  spend limit ${ledger['spendLimit']}  now ${ledger['currentSpendPerHr']}/h  (observed {ledger['observed_utc']}; the provider's numbers, not a research counter)")
+            print(f"ledger    runpod balance ${ledger['clientBalance']:.2f}  spend limit ${ledger['spendLimit']}  now ${ledger['currentSpendPerHr']}/h  (observed {both(ledger['observed_utc'])}; the provider's numbers, not a research counter)")
         print()
     if not rows:
         print(f"no runs under {root}")

@@ -514,7 +514,9 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
     rows = {r["handle"]: r for r in json.loads(out)}
     assert rc == 1 and set(rows) == {"compute-accounting", "circuits", "proofs"}
-    assert rows["compute-accounting"]["status"] == "done" and rows["circuits"] == {**rows["circuits"], "status": "declined", "detail": "a job runs until 23:00Z"}
+    detail = rows["circuits"]["detail"]                                                  # the date token's fallback: Pacific (UTC)
+    assert rows["compute-accounting"]["status"] == "done" and rows["circuits"]["status"] == "declined"
+    assert detail.startswith("a job runs until ") and detail.endswith(" (23:00Z)") and "<!date" not in detail
     assert rows["proofs"]["status"] == "missing"
     run(capsys, "done", "--as", "circuits", "--thread", t)
     run(capsys, "done", "--as", "proofs", "--thread", t)
@@ -540,6 +542,17 @@ def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys)
     assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second", "third"]
     rc, out, _ = run(capsys, "read", "--thread", a["ts"], "--json")
     assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
+
+
+def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, registry, capsys):
+    text = "freeze 2026-11-01T09:30Z, see note:20260930T2020Z-handoff-infra and `--since 2026-11-01T09:30Z`"
+    assert run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", text)[0] == 0
+    posted = fake.messages[COORD][0]["text"]
+    assert "freeze <!date^1793525400^{date_short_pretty} {time}|1:30 AM PST (09:30Z)>," in posted
+    assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
+    fake.messages[COORD][0]["ts"] = "1793525400.000100"
+    rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
+    assert rc == 0 and out.startswith("1793525400.000100 1:30 AM PST (09:30Z) @infra: @console freeze 1:30 AM PST (09:30Z), see note:")
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):

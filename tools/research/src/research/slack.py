@@ -47,6 +47,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from .timefmt import both, slack_dates
+
 SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 FRONT_DOOR = "agent-coordination"
@@ -62,6 +64,7 @@ EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
+DATE_TOKEN_RE = re.compile(r"<!date\^\d+\^[^|>]*\|([^>]*)>")          # `read` and `roster` show a date token as its fallback
 ANNOUNCE = "\U0001f4e3"                                            # 📣
 DONE, DECLINED, TAKING = "\u2705", "\u274c", "\U0001f440"         # ✅ ❌ 👀
 SHORTCODES = {ANNOUNCE: ":mega:", DONE: ":white_check_mark:", DECLINED: ":x:"}   # Slack stores a posted emoji as its shortcode
@@ -311,6 +314,7 @@ def _footer(handle: str, url: str | None) -> str:
 
 
 def _post(api: Slack, ch: str, handle: str, text: str, url: str | None, thread: str | None = None) -> str:
+    text = slack_dates(text)
     out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=f"{text}\n\n{_footer(handle, url)}",
                    unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"
@@ -399,12 +403,13 @@ def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) 
     root = next((m for m in msgs if m.get("ts") == thread), None)
     if is_status(text):
         return f"a status line on @{handle}'s post" if by_handle(root, handle) else None
+    started = f"thread {thread} (started {both(thread)})"
     if by_handle(root, handle) or any(by_handle(m, handle) for m in msgs if m.get("ts") != ev.get("ts")):
-        return f"thread {thread}: @{handle} posted in it"
+        return f"{started}: @{handle} posted in it"
     if root and mentions(root.get("text", ""), h):
-        return f"thread {thread}: its root addresses @{handle}"
+        return f"{started}: its root addresses @{handle}"
     if key and key != FRONT_DOOR and handle in subscribers(reg, key):
-        return f"thread {thread} in #{key}, which @{handle} subscribes to"
+        return f"{started} in #{key}, which @{handle} subscribes to"
     return None
 
 
@@ -551,7 +556,7 @@ def cmd_roster(ns: argparse.Namespace, reg: dict) -> int:
     status: dict[str, dict] = {}
     for m in msgs:
         if m.get("ts") != ns.thread and m.get("username") in expected and m.get("bot_id") and (mt := STATUS_RE.match(m.get("text", ""))):
-            status[m["username"]] = {"status": mt.group(1).split()[1], "detail": mt.group(2) or "", "ts": m["ts"]}
+            status[m["username"]] = {"status": mt.group(1).split()[1], "detail": DATE_TOKEN_RE.sub(r"\1", mt.group(2) or ""), "ts": m["ts"]}
     rows = [{"handle": n, **status.get(n, {"status": "missing"})} for n in expected]
     if ns.json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))
@@ -607,7 +612,9 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
     for m in msgs:
         thread = f" [thread {m['thread_ts']}]" if m.get("thread_ts") and m.get("thread_ts") != m.get("ts") else ""
         who = "@" + m["username"] if m.get("username") else m.get("user") or m.get("bot_id") or "?"
-        print(f"{m.get('ts')}{thread} {who}: {m.get('text', '')}")
+        when = f" {both(m['ts'])}" if m.get("ts") else ""
+        text = DATE_TOKEN_RE.sub(r"\1", m.get("text", ""))
+        print(f"{m.get('ts')}{when}{thread} {who}: {text}")
     return 0
 
 
