@@ -1,7 +1,7 @@
 """The backend sweep's feeder for vy-nebius-1's dispatcher: each unit shape of a cut row (73-sweep-shape.sh MODE=cut) as two ready
 files, a CPU stage job and then, once that succeeded, a one-GPU prove job, so the GPU is requested only to prove.
 
-    sweep_feed.py tick|loop|status --row ROW [--row ROW ...] [--limit N] [--ahead 6] [--every 60]
+    sweep_feed.py tick|loop|status --row ROW[=BUILD] [--row ...] [--limit N] [--ahead 6] [--every 60] [--chunk-from ROW=N]
 
 M0's pinned benches keep priority: a file is written only while `provers` has no pending workload, M0's ready directory
 (flock-netlist) is empty and this lane's holds nothing unsubmitted, at most PER_TICK stage and prove files a tick (the dispatcher's
@@ -30,6 +30,7 @@ SELFTEST_EVERY = 25
 STAGE_RES = {"cpus": 2, "memory": 32, "gpus": 0}                 # the K = 2048 GEMM coordinate's stage: 10.7 GiB
 PROVE_RES = {"cpus": 4, "memory": 48, "gpus": 1}
 SELFTEST_RES = {"cpus": 8, "memory": 128, "gpus": 1}              # its 43-case GPU selftest at the full batch: 101.5 GiB
+CUT_RES = {"cpus": 8, "memory": 96, "gpus": 0}                   # Llama-3.2-1B's: 28 min
 PER_TICK = 3
 CHUNK = 10                                                       # shapes a job: a one-shape job holds its GPU ~100-250 s to prove < 1 s
 
@@ -95,29 +96,50 @@ def jobs(t: str, n: int, chunk_from: int) -> list[tuple[int, int, str]]:
     return one + [(i, min(CHUNK, n - i), f"c{i}") for i in range(chunk_from, n, CHUNK)]
 
 
-def tick(rows: list[str], limit: int | None, ahead: int, chunk_from: int = 0, dry: bool = False) -> dict:
-    """Counts are shapes: queued (prove job written), done (its job succeeded), failed (its stage or prove job failed)."""
+def cut_item(row: str, build: str) -> dict:
+    return {"template": "prover-dev", "tree": TREE, "queue": "provers", "priority": "dev", "resources": {"prover-dev": CUT_RES},
+            "env": {"CAMPAIGN": "backend-sweep", "CMD": f"bash backends/flock/pod/73-sweep-shape.sh MODE=cut ROW={row} BUILD={build}"}}
+
+
+def tick(rows: list[str], limit: int | None, ahead: int, chunk_from: dict[str, int] | None = None, dry: bool = False) -> dict:
+    """Rows are `ROW` (cut already) or `ROW=BUILD` (cut here first, one cut in flight at a time), taken in order: a row's shape
+    jobs start once every earlier row's prove jobs are written. Counts are shapes: queued (prove job written), done (its job
+    succeeded), failed (its stage or prove job failed)."""
     d, w = done(), written()
-    todo: dict[str, list[tuple[str, dict]]] = {"prove": [], "stage": []}
-    counts = {}
-    for row in rows:
-        t, sh = tag(row), shapes(row)[:limit]
-        js = jobs(t, len(sh), chunk_from)
+    todo: dict[str, list[tuple[str, dict]]] = {"prove": [], "stage": [], "cut": []}
+    counts, open_ = {}, True
+    cutting = any(x.endswith("-cut") and x not in d for x in w)
+    for spec in rows:
+        row, _, build = spec.partition("=")
+        t = tag(row)
+        if not (SWEEP / row / "shapes.tsv").exists():
+            cid = f"{t}-cut"
+            if build and cid not in w and not cutting:
+                todo["cut"].append((cid, cut_item(row, build)))
+                cutting = True
+            failed = cid in d and d[cid].get("state") != "succeeded"
+            counts[row] = {"cut": "failed" if failed else "pending"}
+            open_ = open_ and failed
+            continue
+        sh = shapes(row)[:limit]
+        js = jobs(t, len(sh), (chunk_from or {}).get(row, 0))
         staging = sum(1 for _, _, x in js if f"{t}-s{x}" in w and f"{t}-s{x}" not in d)
         c = {"shapes": len(sh), "queued": 0, "done": 0, "failed": 0}
         for i, m, x in js:
             sid, pid = f"{t}-s{x}", f"{t}-p{x}"
-            if len(todo["prove"]) < PER_TICK and sid in d and d[sid].get("state") == "succeeded" and pid not in w:
+            if open_ and len(todo["prove"]) < PER_TICK and sid in d and d[sid].get("state") == "succeeded" and pid not in w:
                 todo["prove"].append((pid, item(row, sh[i:i + m], "shape", i)))
-            if len(todo["stage"]) < PER_TICK and sid not in w and staging < ahead:
+            if open_ and len(todo["stage"]) < PER_TICK and sid not in w and staging < ahead:
                 todo["stage"].append((sid, item(row, sh[i:i + m], "stage", i)))
                 staging += 1
             c["queued"] += m * (pid in w)
             c["done"] += m * (d.get(pid, {}).get("state") == "succeeded")
             c["failed"] += m * any(y in d and d[y].get("state") != "succeeded" for y in (sid, pid))
         counts[row] = c
-    if (todo["prove"] or todo["stage"]) and not dry and clear_to_write():
-        for item_id, it in todo["prove"] + todo["stage"]:
+        open_ = open_ and all(f"{t}-p{x}" in w or (f"{t}-s{x}" in d and d[f"{t}-s{x}"].get("state") != "succeeded") for _, _, x in js)
+    new = todo["prove"] + todo["stage"] + todo["cut"]
+    if new and not dry and clear_to_write():
+        for item_id, it in new:
             write(item_id, it)
     return counts
 
@@ -129,10 +151,11 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--ahead", type=int, default=6, help="stage jobs written and not yet ended, per row")
     ap.add_argument("--every", type=int, default=60)
-    ap.add_argument("--chunk-from", type=int, default=0, help="shapes below this index are one-shape jobs, from it CHUNK-shape jobs")
+    ap.add_argument("--chunk-from", action="append", default=[], metavar="ROW=N", help="that row's shapes below N are one-shape jobs")
     a = ap.parse_args()
+    chunk_from = {r: int(n) for r, _, n in (x.rpartition("=") for x in a.chunk_from)}
     while True:
-        c = tick(a.row, a.limit, a.ahead, a.chunk_from, dry=a.cmd == "status")
+        c = tick(a.row, a.limit, a.ahead, chunk_from, dry=a.cmd == "status")
         print(time.strftime("%H:%M:%SZ", time.gmtime()), json.dumps(c), flush=True)
         if a.cmd != "loop":
             return 0
