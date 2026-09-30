@@ -43,10 +43,10 @@ from verity.ir.defs import bind as ir_bind
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll
 from verity.ir.refs import runs as _refs_runs
-from verity.ir.liveness import DeadGateReport
-from verity.ir.liveness import dead_gates as _dead_gates
+from verity.ir.liveness import DeadGateReport, dead_gates as _dead_gates
 from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.provenance import registry_version
+from verity_vllm.program.frontend.alias_map import AliasMap
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
@@ -230,7 +230,7 @@ class Ctx:
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
         self.placeholder_to_weight, self.lifted_constants = placeholder_to_weight, lifted_constants
         self.env: dict[Any, Any] = {}
-        self.storage: dict[Any, Any] = {}  # node -> storage base node (alias groups); absent: own storage
+        self.storage: AliasMap = AliasMap()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
         self.written_allocs: set = set()
         self.mutation_effects: list[dict] = []
@@ -437,7 +437,7 @@ class Ctx:
             if isinstance(old, Coll):
                 # every other alias whose references overlap the written region can no longer be read
                 base = self.storage_base(node)
-                group = [n for n, b in self.storage.items() if b is base and n is not node]
+                group = self.storage.aliases(base, node)
                 if base is not node:
                     group.append(base)
                 old_runs = _runs(old.refs)
