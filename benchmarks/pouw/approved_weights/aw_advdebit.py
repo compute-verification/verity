@@ -8,6 +8,7 @@ as the fork forms them (§5's forming, delta 1, norm-16 lines). The weights carr
   rot       the same rows after a keyed rotation (a randomized Hadamard D2 H D1 / sqrt(k)), then per-row E4M3: rung 3
             with the registrant's best attempt at planting matching structure
   real-rot  eight real Llama-3.1-70B q_proj rows (k = 8,192), rotated: rung 3 on real weights
+  haar, real-haar   the same with a keyed Haar-random rotation, rung 3's dense rotation, instead of the Hadamard
 Per 64 x 8 tile: v1 (G = 4) debit share per word (P1's jointFlags), admission at the caps 1/400 and 1/1,000, cross-group
 greedy sets and the transfer test on sample words; v2 (G = 0) lone-skip debit (debit_pure) and pure-chain greedy sets.
 
@@ -56,6 +57,19 @@ def rotate(X, seed):
     return Y / np.sqrt(k) * d2
 
 
+_HAAR = {}
+
+
+def haar(k, seed):
+    """A keyed Haar-random orthogonal k x k matrix (QR of a Gaussian, signs fixed): rung 3's dense rotation. A randomized
+    Hadamard keys only signs, so rows the registrant makes sparse at multiples of 128 come out with one magnitude per
+    128-group."""
+    if k not in _HAAR:
+        q, r = np.linalg.qr(np.random.default_rng([seed, k, 0x48414152]).standard_normal((k, k)))
+        _HAAR[k] = q * np.sign(np.diag(r))
+    return _HAAR[k]
+
+
 def real_rows(k, n=8):
     from safetensors import safe_open
     hf = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
@@ -87,11 +101,13 @@ def cell(C, row_rules, fam, k, modes, words, seed):
             Bm = XB
         elif mode == "rot":
             Bm = rotate(XB, seed)
+        elif mode == "haar":
+            Bm = XB @ haar(k, seed)
         else:
             W = real_rows(k)
             if W is None:
                 continue
-            Bm = rotate(W, seed)
+            Bm = W @ haar(k, seed) if mode == "real-haar" else rotate(W, seed)
         b = C.enc(Bm * (C.Q_MAX / np.maximum(np.abs(Bm).max(1, keepdims=True), 1e-300)))
         B = b[jj.ravel()]
         flags, eF = C.debit(A, B, 4)
@@ -120,7 +136,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--group", choices=tuple(GROUPS), required=True)
     ap.add_argument("--ks", default="8192,16384")
-    ap.add_argument("--modes", default="plain,rot,real-rot")
+    ap.add_argument("--modes", default="plain,rot,real-rot", help="also haar, real-haar: the Haar rotation instead of the Hadamard")
+    ap.add_argument("--families", default="", help="comma list: only these of the group's families")
     ap.add_argument("--words", type=int, default=4)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--max-seconds", type=float, default=300)
@@ -131,7 +148,8 @@ def main():
     C.set_atom("sm120")
     t0 = time.time()
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
-    cells = [(f, int(k)) for k in args.ks.split(",") for f in GROUPS[args.group]]
+    fams = [f for f in GROUPS[args.group] if not args.families or f in args.families.split(",")]
+    cells = [(f, int(k)) for k in args.ks.split(",") for f in fams]
     name = lambda f, k: f"{f}_k{k}"  # noqa: E731
     for f, k in cells:
         if (out / f"{name(f, k)}.json").exists():
@@ -145,7 +163,8 @@ def main():
         rec["seconds"] = round(time.time() - tc, 1)
         (out / f"{name(f, k)}.json").write_text(json.dumps(rec, indent=1))
         print(json.dumps({"cell": name(f, k), **{m: {x: rec[m][x] for x in ("v1_debit_share", "v2_debit_share", "v1_cross_group_mean")}
-                                                    for m in ("plain", "rot", "real-rot") if m in rec}, "seconds": rec["seconds"]}), flush=True)
+                                                    for m in ("plain", "rot", "haar", "real-rot", "real-haar") if m in rec},
+                          "seconds": rec["seconds"]}), flush=True)
     names = [name(f, k) for f, k in cells]
     done = all((out / f"{c}.json").exists() for c in names)
     rd = os.environ.get("RESEARCH_RUN_DIR")
