@@ -9,7 +9,9 @@ The dispatcher (dispatch.py, PACK_COMMITS=1) spools each eligible Commit, config
 finishes, and stops claiming at PACK_CLAIM_UNTIL_S, in the quiet hour (12:30-13:30Z), or after an MPS fault; it exits once
 nothing runs and the queue has been empty for PACK_IDLE_S, or at PACK_MAX_WALL_S, when whatever still runs is stopped.
 Storage (infra and circuits, 3:25-3:36 PM PDT Sep 30): it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
-and no Commit of batch 8 or more while the sealed replay bundles waiting on the node pass PACK_BUNDLE_CAP_GB (150).
+and no Commit of batch 8 or more that would take the replay bundles on the node past PACK_BUNDLE_CAP_GB (150): the bundles waiting,
+plus an estimate for each Commit running here and for the candidate (PACK_BUNDLE_EST_GB, 120, for B8 with 1,024 + 128 tokens,
+scaled by batch and tokens; phi3-mini's was 113 GB, SmolLM2's B16 256-token one 3 GB).
 
 **MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
 exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit
@@ -58,6 +60,7 @@ BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/comm
                               "/workspace/jobs/dispatch/pack/golden/*/commit/replay_bundle_p*").split(",")
 BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "150")) * 1e9
 BUNDLE_BATCH = 8
+BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "120")) * 1e9
 FAULT_EXIT = 87
 QUIET = ((12, 30), (13, 30))
 CLIENT_FAULT = re.compile(r"illegal memory access|unspecified launch failure|CUDA_ERROR_MPS|cudaErrorMps|MPS server|"
@@ -84,6 +87,18 @@ def write_json(path: Path, obj: dict) -> None:
 def batch(entry: dict) -> int:
     parts = str((entry.get("env") or {}).get("ROW", "")).split("__")
     return next((int(p[1:]) for p in parts if re.fullmatch(r"b\d+", p)), 0)
+
+
+def bundle_est(entry: dict) -> float:
+    """Bytes the Commit's sealed replay bundle may take: BUNDLE_EST for B8 with 1,024 + 128 tokens, scaled by batch and tokens."""
+    parts = str((entry.get("env") or {}).get("ROW", "")).split("__")
+    tokens = sum(int(p[1:]) for p in parts if re.fullmatch(r"[io]\d+", p)) or 1152
+    return BUNDLE_EST * max(batch(entry), 1) / 8 * tokens / 1152
+
+
+def bundle_ok(entry: dict, waiting: int, running: list[dict]) -> bool:
+    """Whether the entry may start: below batch 8 always; else only if the bundles stay within the cap."""
+    return batch(entry) < BUNDLE_BATCH or waiting + sum(map(bundle_est, running)) + bundle_est(entry) <= BUNDLE_CAP
 
 
 def bundle_bytes(globs: list[str]) -> int:
@@ -251,7 +266,7 @@ def main() -> int:
     finished: list[str] = []
     fault: str | None = None
     idle_since, last_stats = time.time(), 0.0
-    gates_at, disk_ok, big_ok = 0.0, True, True
+    gates_at, disk_ok, waiting = 0.0, True, 0
     print(f"{now_utc()} commit-pack {POD}: slots {SLOTS}, max wall {MAX_WALL_S}s, client env {CLIENT_ENV}", flush=True)
 
     def report(c: Client, rc: int | None, fault_: bool, reason: str) -> None:
@@ -306,11 +321,12 @@ def main() -> int:
                 gates_at = time.time()
                 u = shutil.disk_usage(DISK)
                 disk_ok = u.used / u.total < DISK_PAUSE
-                big_ok = bundle_bytes(BUNDLE_GLOBS) <= BUNDLE_CAP
-                if not disk_ok or not big_ok:
-                    print(f"{now_utc()} holding claims: disk {u.used / u.total:.1%} (pause at {DISK_PAUSE:.0%}), "
-                          f"batch >= {BUNDLE_BATCH} {'allowed' if big_ok else 'refused: bundles over the cap'}", flush=True)
-            accept = (lambda e: True) if big_ok else (lambda e: batch(e) < BUNDLE_BATCH)
+                waiting = bundle_bytes(BUNDLE_GLOBS)
+                if not disk_ok:
+                    print(f"{now_utc()} holding claims: disk {u.used / u.total:.1%} (pause at {DISK_PAUSE:.0%})", flush=True)
+
+            def accept(e: dict, waiting: int = waiting) -> bool:
+                return bundle_ok(e, waiting, [c.entry for c in running.values()])
             while (len(running) < SLOTS and age < CLAIM_UNTIL_S and disk_ok and not quiet(time.time())
                    and (got := claim(SPOOL, POD, accept))):
                 name, entry = got
