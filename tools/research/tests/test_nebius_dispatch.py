@@ -36,7 +36,7 @@ def test_config_run_renders_two_chained_jobs(dispatch):
         pod = job["spec"]["template"]
         assert not any(k.startswith("kueue.x-k8s.io/") for k in pod["metadata"]["labels"])
         c = pod["spec"]["containers"][0]
-        assert c["command"][:3] == ["taskset", "-c", "96-127"]
+        assert c["command"][:3] == ["taskset", "-c", "96-159"]
         env = {e["name"]: e["value"] for e in c["env"]}
         assert env["SRC"] == "/t" and env["ROW"] == CELL["ROW"] and env["OMP_NUM_THREADS"] == c["resources"]["requests"]["cpu"]
         assert c["resources"]["requests"]["memory"] == "64G"

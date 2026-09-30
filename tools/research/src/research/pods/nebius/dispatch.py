@@ -12,8 +12,8 @@ it by quota and requeues it itself when it is preempted). The Job runs the task'
 image's uid 1000, with /workspace mounted, and the R2 store credentials from the Secret `research-r2` (the templates' `secrets`).
 Tasks of a multi-task template (config-run: build, then gpu) chain: the next task is submitted when the previous one succeeds.
 A task that exits 99 is resubmitted (a chunk that ended early or was told to yield); any other failure ends the item.
-Every task starts under `taskset -c $VY_DISPATCH_CPUS` (96-127): 0-7 are k3s's, 8-95 the RC's three train-check slots, 128-191
-pinned benches (Build 128-159, M0 160-191).
+Every task starts under `taskset -c $VY_DISPATCH_CPUS` (96-159): 0-7 are k3s's, 8-95 the RC's three train-check slots, 160-191
+pinned benches (Build and M0 benches, which run one at a time; infra 21:36Z).
 
 **Ready files.** One JSON file per item, `$VY_READY/<workstream>/<id>.json` (default /workspace/jobs/ready, which the steward's
 exporter counts as `vy_ready_jobs{lane}` for the idle alert), written by the workstream's owner (write a temp name, then rename):
@@ -52,7 +52,7 @@ TEMPLATES = HERE / "sky" / "jobs"
 ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
-CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-127")
+CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-159")
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
 SECRET = "research-r2"
 REQUEUE_RC = 99
