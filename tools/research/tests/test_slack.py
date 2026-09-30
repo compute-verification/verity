@@ -42,7 +42,10 @@ class FakeSlack:
             return {"ok": False, "error": "invalid_auth"}
         ch = p.get("channel")
         if method == "chat.postMessage":
-            m = self.add(ch, text=p["text"], username=p.get("username"), bot_id=BOT, **({"thread_ts": p["thread_ts"]} if p.get("thread_ts") else {}))
+            text = p["text"]
+            for emoji, code in slack.SHORTCODES.items():
+                text = text.replace(emoji, code)
+            m = self.add(ch, text=text, username=p.get("username"), bot_id=BOT, **({"thread_ts": p["thread_ts"]} if p.get("thread_ts") else {}))
             return {"ok": True, "channel": ch, "ts": m["ts"], "message": m}
         if method == "chat.getPermalink":
             return {"ok": True, "permalink": f"https://compute.slack.com/archives/{ch}/p{p['message_ts'].replace('.', '')}"}
@@ -213,7 +216,7 @@ def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
     assert run(capsys, "announce", "--as", "infra", "--text", "Install the broker helper.", "--verify", "git ls-remote origin HEAD",
                "--ships", f"https://x/verity-github.py#sha256={sha}")[0] == 0
     m = fake.messages[COORD][-1]
-    assert m["text"].startswith(f"{slack.ANNOUNCE} *Announcement* from @infra to every handle")
+    assert m["text"].startswith(":mega: *Announcement* from @infra to every handle")
     assert slack.SAFE_POINT in m["text"] and "`git ls-remote origin HEAD`" in m["text"] and sha in m["text"]
     assert run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "circuits", "--text", "node 2 reboots at 22:00Z")[0] == 0
     m = fake.messages[COORD][-1]
@@ -284,7 +287,7 @@ def test_the_ask_lifecycle_pickup_reply_done_and_decline(fake, registry, capsys)
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "buying one needs your OK: $3/h for 6 h")[0] == 0
     assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://github.com/x/pull/1")[0] == 0
     assert fake.reactions == [(COORD, root["ts"], "eyes"), (COORD, root["ts"], "white_check_mark")]
-    assert fake.messages[COORD][-1]["text"].startswith(f"{slack.DONE} done \u2014 https://github.com/x/pull/1")
+    assert fake.messages[COORD][-1]["text"].startswith(":white_check_mark: done \u2014 https://github.com/x/pull/1")
     other = fake.add(COORD, text="<!subteam^SINFRA|@infra> delete node 1", username="compute-accounting", bot_id=BOT)
     assert run(capsys, "decline", "--as", "infra", "--thread", other["ts"], "--why", "a node change needs Daniel")[0] == 0
     assert (COORD, other["ts"], "x") in fake.reactions

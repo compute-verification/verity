@@ -50,7 +50,8 @@ NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 ANNOUNCE = "\U0001f4e3"                                            # 📣
 DONE, DECLINED, TAKING = "\u2705", "\u274c", "\U0001f440"         # ✅ ❌ 👀
-STATUS_RE = re.compile(rf"^({DONE} done|{DECLINED} declined)\b(?: \u2014 (.*?))?(?:\n|$)")
+SHORTCODES = {ANNOUNCE: ":mega:", DONE: ":white_check_mark:", DECLINED: ":x:"}   # Slack stores a posted emoji as its shortcode
+STATUS_RE = re.compile(rf"^((?:{DONE}|{SHORTCODES[DONE]}) done|(?:{DECLINED}|{SHORTCODES[DECLINED]}) declined)\b(?: \u2014 (.*?))?(?:\n|$)")
 PIN_RE = re.compile(r"^(?:https?://\S+#sha256=[0-9a-f]{64}|git:[0-9a-f]{40})$")
 SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (?:pull|merge|checkout|fetch)|install|download|upgrade)\b", re.I)
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
@@ -251,7 +252,7 @@ def tagged(text: str, reg: dict) -> list[str]:
 
 
 def is_announcement(msg: dict | None) -> bool:
-    return bool(msg) and (msg.get("text") or "").startswith(ANNOUNCE)
+    return bool(msg) and (msg.get("text") or "").startswith((ANNOUNCE, SHORTCODES[ANNOUNCE]))
 
 
 def audience(text: str, reg: dict) -> list[str]:
