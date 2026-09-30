@@ -18,7 +18,9 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
-k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
+k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
+``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
+it and writes ``config_record.json``.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
 record incomplete at Commit; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the Commit
@@ -78,6 +80,9 @@ class SingleRow(Row):
                 self.match()
             if stage_on(self.stages, "commit"):
                 self.commit()
+            if stage_on(self.stages, "replay"):
+                RC.replay(self)
+                self.replay_pending = False
         except Stop as s:
             if self.config_run and self.trap:
                 RC.config_record(self)

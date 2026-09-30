@@ -2256,7 +2256,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
                 if args.replay_deferred:
                     row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"], deferred[pair] = RB.defer(
-                        out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes)
+                        out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result)
                 elif getattr(args, "program_dir", None) or getattr(args, "programs_root", None):
                     C2.run(C2.Site(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest,
                                    stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result,

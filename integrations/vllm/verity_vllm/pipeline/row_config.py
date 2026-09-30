@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from typing import Any
 
 from verity_vllm.pipeline import config_record as CR
@@ -20,6 +21,7 @@ from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Stop
 
 WORD_CHECK_TIMEOUT = 14400
+REPLAY_TIMEOUT = 14400
 
 
 def _tail(path: str, n: int = 240) -> str:
@@ -62,6 +64,32 @@ def commit_verdict(row: Any, rck: int, wall: int) -> bool:
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
         raise Stop(12)
     return False
+
+
+def replay(row: Any) -> None:
+    """The deferred C2 of the config run's Commit, on CPU (`commit-replay`), from the one bundle the Commit sealed: the Build's Programs
+    of this row dir, the checkpoint of record opened against the committed weights root.  Its exit decides the stage."""
+    bundles = ((R.load_json(f"{row.d}/commit/verdict.json") or {}).get("replay_deferred") or {}).get("bundles") or []
+    row.tl("stage.replay", "start")
+    why = ("the replay stage decides a config run's deferred Commit (--config-run 1)" if not row.config_run else
+           f"{len(bundles)} replay bundles named in commit/verdict.json (a deferred config-run Commit seals one)" if len(bundles) != 1 else
+           f"no checkpoint dir of record on this host (CK='{row.ck}')" if not (row.ck and os.path.isdir(row.ck)) else None)
+    rc, wall, bundle = 2, 0, ""
+    if why is None:
+        bundle = os.path.join(row.d, "commit", os.path.basename(bundles[0]["path"]))
+        t0 = int(time.time())
+        rc = row.run_tl("replay.commit_replay", REPLAY_TIMEOUT, f"{row.d}/replay.log", row.cli(
+            "commit-replay", bundle, "--row-dir", row.d, "--checkpoint-dir", row.ck, "--checkpoints-manifest", row.path("manifests/checkpoints.json"),
+            "--model", row.repo, "--revision", row.rev))
+        wall = int(time.time()) - t0
+        why = None if rc == 0 else _tail(f"{row.d}/replay.log")
+    ok = "PASS" if rc == 0 else "FAIL"
+    row.verdict("replay", ok, f"rc={rc} wall={wall}s C2 replay on CPU from {bundle or 'no bundle'}" + (f": {why}" if why else ""))
+    row.tl("stage.replay", "end", ("ok", ok), ("wall_s", wall))
+    if ok != "PASS":
+        row.log("REPLAY FAIL -> stop")
+        row.tl("row", "end", ("ok", "false"), ("stopped_at", "replay"))
+        raise Stop(12)
 
 
 def config_record(row: Any) -> dict[str, Any]:

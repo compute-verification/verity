@@ -133,6 +133,56 @@ def test_a_pending_config_run_writes_no_record(tmp_path, monkeypatch):
     assert r.run() == 0 and "config_record" not in calls
 
 
+def test_the_replay_stage_replays_the_one_bundle_beside_the_row_on_cpu(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(r, bundles=1)
+    r.ck = str(tmp_path)
+    seen = {}
+    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd: seen.update(st=st, cmd=cmd) or 0)
+    RC.replay(r)
+    cmd = seen["cmd"]
+    assert seen["st"] == "replay.commit_replay" and cmd[cmd.index("commit-replay") + 1] == f"{r.d}/commit/replay_bundle_p1"
+    assert cmd[cmd.index("--row-dir") + 1] == r.d and cmd[cmd.index("--checkpoint-dir") + 1] == str(tmp_path)
+    assert "replay PASS" in (Path(r.d) / "stages.txt").read_text()
+    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd: 3)
+    with pytest.raises(Stop) as e:
+        RC.replay(r)
+    assert e.value.rc == 12 and "replay FAIL" in (Path(r.d) / "stages.txt").read_text()
+
+
+@pytest.mark.parametrize("config_run,bundles,ck,why", [("0", 1, True, "config run"), ("1", 0, True, "0 replay bundles"),
+                                                       ("1", 1, False, "no checkpoint dir")])
+def test_the_replay_stage_refuses_what_it_cannot_decide(tmp_path, monkeypatch, config_run, bundles, ck, why):
+    r = _row(tmp_path, "--config-run", config_run, "--replay-deferred", "1")
+    _pending_commit(r, bundles=bundles)
+    r.ck = str(tmp_path) if ck else ""
+    monkeypatch.setattr(r, "run_tl", lambda *a: pytest.fail("nothing to replay"))
+    with pytest.raises(Stop):
+        RC.replay(r)
+    assert why in (Path(r.d) / "stages.txt").read_text()
+
+
+def test_a_replay_stage_writes_the_record_the_pending_commit_left_unwritten(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    r.stages = "replay"
+    calls = []
+    for name in ("research_result", "timeline_report"):
+        monkeypatch.setattr(r, name, lambda n=name: calls.append(n))
+    monkeypatch.setattr(r, "prepare", lambda: setattr(r, "trap", True))
+    monkeypatch.setattr(RC, "replay", lambda row: calls.append("replay"))
+    monkeypatch.setattr(RC, "config_record", lambda row: calls.append("config_record"))
+    assert r.run() == 0 and calls == ["replay", "research_result", "config_record", "timeline_report"]
+
+
+def test_a_config_record_carries_the_replay_s_weights_attest(tmp_path):
+    d = _row_dir(tmp_path)
+    run = json.loads((d / "commit" / "runs.jsonl").read_text())
+    run["commit"]["weights_attest"] = {"root_openings": "3/3", "source": "checkpoint", "result": True}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    assert CR.record(d, ROW)["commit"]["weights_attest"]["root_openings"] == "3/3"
+    assert "weights_attest" not in CR.record(_row_dir(tmp_path / "old"), ROW)["commit"], "a record without one is unchanged"
+
+
 def test_the_tp_path_refuses_a_config_run_by_name(tmp_path):
     from verity_vllm.config import UsageError
     from verity_vllm.pipeline import cli, row

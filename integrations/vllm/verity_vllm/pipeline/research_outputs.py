@@ -51,7 +51,7 @@ MAX_FILE = 512 << 20                      # per file; the required-value manifes
 NEVER = ("instances.json.gz", "log.jsonl.gz")
 PLANE_SUFFIXES = (".npy", ".npz", ".pt", ".bin", ".safetensors")
 
-KINDS = {"build": "vllm-build/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1"}
+KINDS = {"build": "vllm-build/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "manifest.json", "target_family.build.json", "target_family.json",
                "admission.json", "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
@@ -223,6 +223,15 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
             meta.update(outcome=doc.get("outcome"),
                         n_runs=(int(runs_.get("instrumented") or 0) + int(runs_.get("control") or 0)) if runs_ else None,
                         runs_failed=runs_.get("failed") if runs_ else None)
+        e = _entry("verdict", KINDS[stage], meta, run_dir, d, present, skipped, refs=refs, optional=not passed)
+    elif stage == "replay":
+        # a config run's deferred C2, decided on CPU: its decision document is config_record.json, beside the rewritten Commit record
+        present, skipped = _collect(d, ["config_record.json", *COMMIT_FILES], ["commit"])
+        doc = _read_json(d / "config_record.json")
+        if not isinstance(doc, dict) and passed:
+            raise ValueError(f"replay stage PASS but its decision document config_record.json is absent or unreadable under {d}")
+        meta = {**base_meta, "verdict": status, "decision_record": "config_record.json",
+                **({"outcome": doc.get("outcome")} if isinstance(doc, dict) else {"decision_record_missing": "config_record.json"})}
         e = _entry("verdict", KINDS[stage], meta, run_dir, d, present, skipped, refs=refs, optional=not passed)
     else:
         raise ValueError(f"unknown stage {stage!r}")

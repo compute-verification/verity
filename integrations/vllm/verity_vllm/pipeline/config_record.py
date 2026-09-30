@@ -73,6 +73,8 @@ def commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
               "tensors": {"expected": c.get("expected_tensors"), "committed": c.get("committed_tensors")},
               "coverage_ok": (c.get("coverage") or {}).get("ok"), "wall_s": r.get("wall_s"), "engine_steps": r.get("engine_steps"),
               "host_mem_kb": r.get("host_mem_kb")}
+    if c.get("weights_attest"):
+        commit["weights_attest"] = c["weights_attest"]
     sr = c.get("sampled_replay") or {}
     smp = sr.get("sample") or {}
     mism = sr.get("mismatch") or []

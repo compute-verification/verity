@@ -68,7 +68,7 @@ def refuse(args: Any) -> None:
 
 
 def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: str, versions: dict, reqs: list[dict], sampling: dict,
-          tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any) -> tuple[dict, dict, dict]:
+          tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None) -> tuple[dict, dict, dict]:
     """At the C2 site of a deferred run: writes the bundle's store and weights tree, and returns the run's deferred sampled-replay and
     linkage records and the bundle's context (sealed once the run's record is final, after the weights pin and the openings)."""
     tl.start("validate.replay_bundle", pair=pair)
@@ -81,7 +81,8 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
            "ids_full": ids_full if any(len(v) < caps.get(str(k), 0) for k, v in tokens.items()) else None,
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
-           "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings)}
+           "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
+           "vc_result": vc_result}
     sr, lk = deferred_records(path(out, pair))
     tl.end("validate.replay_bundle", pair=pair)
     print(f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair {pair}): DEFERRED -- store and weights tree written to {partial(out, pair)}", flush=True)
