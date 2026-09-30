@@ -29,9 +29,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  `imports` prefixes
     pins         a theorem in `pins` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop` hypothesis
                  that is not a constant of an `assumptions` module, or no longer says what its record says: signature,
-                 named assumptions, type hash, and (under `reads`) the definitions the pinned statements read, per module;
-                 the hashes are SHA-256 over a canonical form of the term that ignores what `Expr.hash` ignores (records
-                 written with its 32 bits are checked as they are until `--update` rewrites them)
+                 named assumptions, type hash, and (under `reads`, per module) the definitions the pinned statements read,
+                 the pins that read them and the digest of those definitions; the hashes are SHA-256 over a canonical form
+                 of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are checked as they
+                 are until `--update` rewrites them)
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside: a declaration that skipped the kernel shows no axiom, and
                  only this catches it (the `kernel` control); or the axioms found by walking the replayed environment
@@ -149,9 +150,13 @@ def layout(v, pad: str = "") -> str:
     return "[\n" + ",\n".join(f"{pad} {layout(x, pad + ' ')}" for x in v) + f"\n{pad}]"
 
 
+def text(policy: dict) -> str:
+    """A policy as `lean-audit.json` holds it: its sections in `ORDER`, laid out by `layout`."""
+    return layout({k: policy[k] for k in ORDER if k in policy} | {k: v for k, v in policy.items() if k not in ORDER}) + "\n"
+
+
 def dump(pkg: Path, policy: dict) -> None:
-    doc = {k: policy[k] for k in ORDER if k in policy} | {k: v for k, v in policy.items() if k not in ORDER}
-    (pkg / POLICY).write_text(layout(doc) + "\n")
+    (pkg / POLICY).write_text(text(policy))
 
 
 def under(prefixes, name: str) -> bool:
@@ -336,18 +341,27 @@ def facts_of(pkg: Path, policy: dict, work: Path) -> dict:
     return facts
 
 
-#: records written before SHA-256: a pin's `type_hash` is Lean's 32-bit `Expr.hash` (16 hex digits), and a read group's
-#: `digest` has 32 (its definitions' 16); such a record is still checked against those hashes until `--update` rewrites it
-OLD = {"type_hash": 16, "digest": 32}
+#: hex digits of the hashes in records written before SHA-256: a pin's `type_hash` (Lean's 32-bit `Expr.hash`) and a read
+#: group's definitions (a digest over those, cut short); such a record is checked as it is until `--update` rewrites it
+OLD = 16
 
 
 def digest(entries: list[dict], old: bool = False) -> str:
-    """A SHA-256 digest of definitions by name, kind and content hash: their SHA-256 hashes, or (``old``) the 32-bit ones
-    and the digest's first 32 hex digits, as records written before SHA-256 have it."""
+    """A SHA-256 digest of definitions by name, kind and content hash: their SHA-256 hashes, or (``old``) the 32-bit ones."""
     key = "hash" if old else "sha256"
-    h = hashlib.sha256("".join(f"{e['name']} {e['kind']} {e[key]}\n" for e in sorted(entries, key=lambda e: e["name"]))
-                       .encode()).hexdigest()
-    return h[:32] if old else h
+    return hashlib.sha256("".join(f"{e['name']} {e['kind']} {e[key]}\n" for e in sorted(entries, key=lambda e: e["name"]))
+                          .encode()).hexdigest()
+
+
+def module_digest(defs: dict) -> str:
+    """A `reads` record's `digest`: a SHA-256 of its `definitions` map, which already hashes everything read in the module.
+    The record's other fields determine it, so a merge of two records recomputes it (`merge.py`)."""
+    return hashlib.sha256("".join(f"{d} {h}\n" for d, h in sorted(defs.items())).encode()).hexdigest()
+
+
+def old_group(record: dict) -> bool:
+    """Whether a `reads` record was written before SHA-256 (its definitions' hashes have `OLD` hex digits)."""
+    return any(isinstance(h, str) and len(h) == OLD for h in definitions(record).values())
 
 
 def pinned_reads(facts: dict) -> dict[str, dict[str, dict]]:
@@ -361,15 +375,15 @@ def pinned_reads(facts: dict) -> dict[str, dict[str, dict]]:
 
 
 def read_groups(reads: dict[str, dict[str, dict]], old: bool = False) -> dict:
-    """The `reads` records: per module, a digest of everything read there and one per definition (generated constants with
-    their declaration), with the pins that read it; in SHA-256, or (``old``) as records written before it."""
+    """The `reads` records: per module, a digest per definition read there (generated constants with their declaration), the
+    module's digest of those, and the pins that read it; in SHA-256, or (``old``) as records written before it."""
     out = {}
     for m, es in sorted(reads.items()):
         groups: dict[str, list] = {}
         for n, e in es.items():
             groups.setdefault(parent(n), []).append(e)
-        out[m] = {"digest": digest(list(es.values()), old),
-                  "definitions": {p: digest(g, old)[:16] if old else digest(g) for p, g in sorted(groups.items())},
+        defs = {p: digest(g, old)[:OLD] if old else digest(g) for p, g in sorted(groups.items())}
+        out[m] = {"digest": module_digest(defs), "definitions": defs,
                   "pins": sorted(set().union(*(e["pins"] for e in es.values())))}
     return out
 
@@ -461,7 +475,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             fails.append(f"pins: {name} has no record; run `audit.py --update` and commit the record")
             continue
         for k in ("signature", "assumptions", "type_hash"):
-            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD[k] else now[k]
+            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now[k]
             if rec.get(k) != built:
                 diff = "\n".join(difflib.unified_diff(rec.get("signature", []), now["signature"], "recorded", "built", lineterm="",
                                                       n=1)) if k == "signature" else f"{rec.get(k)} -> {built}"
@@ -473,18 +487,23 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         old = policy.get("reads", {})
         for m in sorted(set(old) | set(now_reads)):
             a = old.get(m)
-            b = (old_reads if a is not None and len(a.get("digest", "")) == OLD["digest"] else now_reads).get(m)
+            b = (old_reads if a is not None and old_group(a) else now_reads).get(m)
             if a is None:
                 fails.append(f"pins: the pinned statements now read definitions in {m} ({', '.join(b['pins'])})")
             elif b is None:
                 fails.append(f"pins: the pinned statements no longer read {m}")
-            elif a["digest"] != b["digest"]:
-                x, y = definitions(a), definitions(b)
+            elif (x := definitions(a)) != (y := b["definitions"]):
                 change = "; ".join(s for s in (
                     f"changed: {', '.join(d for d in sorted(set(x) & set(y)) if x[d] is not None and x[d] != y[d])}",
                     f"new: {', '.join(sorted(set(y) - set(x)))}", f"gone: {', '.join(sorted(set(x) - set(y)))}")
                     if not s.endswith(": ")) or "a definition's content"
                 fails.append(f"pins: definitions in {m} that {', '.join(b['pins'])} read changed ({change})")
+            elif a.get("pins") != b["pins"]:
+                fails.append(f"pins: the pinned statements that read {m} are {', '.join(b['pins'])}; the record lists "
+                             f"{', '.join(a.get('pins', [])) or 'none'}; run `audit.py --update`")
+            elif a.get("digest") != b["digest"]:
+                fails.append(f"pins: the digest recorded for {m} is not the SHA-256 of its definitions; "
+                             f"`python tools/lean/merge.py --normalize` recomputes it")
     out = dict(policy)
     if pins:
         out["pins"], out["reads"] = pins, now_reads
@@ -515,7 +534,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
         a, b = op.get(name) or {}, np.get(name) or {}
         if a == b:
             continue
-        rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD["type_hash"] and \
+        rehashed = bool(a and b) and len(a.get("type_hash", "")) == OLD and \
             a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
         if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and a.get("assumptions") == b.get("assumptions"):
             out.append(f"pin {name}: {REHASHED if rehashed else REPRINTED}")
@@ -532,10 +551,10 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path]) -> list[
     regrouped = 0
     for m in sorted(set(oreads) | set(nreads)):
         a, b = oreads.get(m), nreads.get(m)
-        if a and b and a.get("digest") == b.get("digest"):
+        if a and b and definitions(a) == definitions(b):
             continue
-        c = before.get(m) if a and len(a.get("digest", "")) == OLD["digest"] else b
-        if a and c and a.get("digest") == c.get("digest"):
+        c = before.get(m) if a and old_group(a) else b
+        if a and c and definitions(a) == definitions(c):
             regrouped += 1
             continue
         x, y = definitions(a or {}), definitions(c or {})
@@ -632,7 +651,7 @@ def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str
                        for p in (o, o.with_name(o.name + ".server"), o.with_name(o.name + ".private")) if p.is_file())
         if files:
             out[name] = olean_digest(lib, files)
-    return out
+    return dict(sorted(out.items()))
 
 
 def template(pkg: Path) -> dict:
@@ -744,8 +763,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             else "") + (
             "; a named reviewer must read these changes before the merge:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
-    weak = sum(len((r or {}).get("type_hash", "")) == OLD["type_hash"] for r in policy.get("pins", {}).values()) + \
-        sum(len(g.get("digest", "")) == OLD["digest"] for g in policy.get("reads", {}).values())
+    weak = sum(len((r or {}).get("type_hash", "")) == OLD for r in policy.get("pins", {}).values()) + \
+        sum(old_group(g) for g in policy.get("reads", {}).values())
     if weak and not update:
         rep["notes"] = [f"{weak} pin and read records use Lean's 32-bit hashes, checked as they are; `audit.py --update` "
                         f"rewrites them with SHA-256, without review where the 32-bit hash still matches"]

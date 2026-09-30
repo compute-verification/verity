@@ -74,4 +74,5 @@ never change a `require`, a revision or `lean-toolchain` in a feature PR.
   tools/lean/tests tests/test_lean_packages.py` passes.
 - The PR says which pins changed, if any, and why; the ledger's status rows match the pins.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
-  both sides' rows.
+  both sides' rows. Run `python tools/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
+  rebuild, and only a conflict it refuses needs `audit.py --update` on the merged tree.

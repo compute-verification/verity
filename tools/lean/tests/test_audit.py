@@ -58,8 +58,20 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
                                   "type_hash": sha("00000000000000aa")}
     assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["pins"] == ["P.t"]
+    assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
     assert A.judge(POLICY, facts(), FILES)[0] == ["pins: P.t has no record; run `audit.py --update` and commit the record"]
+
+
+def test_every_field_of_a_reads_record_is_checked():
+    pol = recorded()
+    group = pol["reads"]["P.Defs"]
+    stale = pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}
+    assert A.judge(stale, facts(), FILES)[0] == ["pins: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
+                                                 "`python tools/lean/merge.py --normalize` recomputes it"]
+    readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"pins": ["P.t", "P.u"]}}}
+    assert A.judge(readers, facts(), FILES)[0] == ["pins: the pinned statements that read P.Defs are P.t; the record lists "
+                                                   "P.t, P.u; run `audit.py --update`"]
 
 
 def test_sorry_native_decide_and_other_axioms_are_named():
@@ -114,7 +126,8 @@ def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
     new = recorded()
     old = new | {"pins": {"P.t": new["pins"]["P.t"] | {"type_hash": "00000000000000aa"}},
                  "reads": A.read_groups(A.pinned_reads(facts()), old=True)}
-    assert len(old["reads"]["P.Defs"]["digest"]) == 32 and len(old["reads"]["P.Defs"]["definitions"]["P.f"]) == 16
+    assert len(old["reads"]["P.Defs"]["definitions"]["P.f"]) == 16 and A.old_group(old["reads"]["P.Defs"])
+    assert old["reads"]["P.Defs"]["digest"] == A.module_digest(old["reads"]["P.Defs"]["definitions"])
     assert A.judge(old, facts(), FILES)[0] == []
     fails = A.judge(old, facts(pins={"P.t": pin(h="00000000000000bb")}), FILES)[0]
     assert fails == ["pins: P.t's type hash changed:\n00000000000000aa -> 00000000000000bb"]

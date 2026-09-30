@@ -2,8 +2,8 @@
 
 One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
 library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
-(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `sandbox.sh`, `setup.sh`, `tests/`) and point it
-at its own packages.
+(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `tests/`) and
+point it at its own packages.
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
@@ -15,6 +15,7 @@ python tools/lean/audit.py [--build] PKG...       audit these packages (--build:
 python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
+python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
 ## What it checks
@@ -110,9 +111,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   modules the package imports.
 - `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
   build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
-  definitions the pinned statements read, with a hash each. Without `--update` the audit fails on any difference, so a
-  statement, or a definition it depends on, cannot change without a visible diff of this file. A record holds the
-  statement, not the proof: pin a `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+  definitions the pinned statements read, with a hash each, the pins that read them, and a `digest` of those hashes (which
+  the record therefore determines). Without `--update` the audit fails on any difference, so a statement, or a definition
+  it depends on, cannot change without a visible diff of this file. A record holds the statement, not the proof: pin a
+  `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
@@ -128,6 +130,24 @@ pin reads, with the pins that read it and its source now (also in `review.txt` a
 names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
 and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
 reviewer.
+
+## Merging records: `merge.py`
+
+Two branches that each pin theorems both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
+conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/lean/merge.py --install` has registered
+it in the clone's git config. It merges entry by entry: each side's change to a pin, a module under `reads`, a dependency
+or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
+the digest is recomputed. Pins arrive byte for byte from their branches, and a hand-written section one side extends (a
+module added to `meaning`) is kept.
+
+It refuses when both sides changed one entry differently: a pin restated on both, a definition whose content both changed,
+a dependency both bumped. It also refuses when one side stops reading a definition in a module the other side changed,
+since the record doesn't say which pins read it. A refusal is a conflict in git, with the entries named. Resolve it the
+old way: take either side and run `audit.py --update` on the merged tree.
+
+A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
+so a merge that is clean but wrong (a definition that changed on one side without a pin there reading it, while the other
+side's new pin reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 

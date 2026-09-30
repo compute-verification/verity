@@ -560,7 +560,7 @@
  },
  "reads": {
   "FlockLevel3.ArithFacts": {
-   "digest": "731f9d798a12ec6c157ffdaa1252c61f6ec55b0c84659fccbcca775b49cf1fba",
+   "digest": "714736237d02f50a25d12047ee95fa9ca4761968fb0fb05e89aceb5f6fcbd4af",
    "definitions": {
     "FlockLevel3.f128Equiv": "4b8e4c144d7f5cbb25d4308362c29303aa83155f3882fc1bf463dfac4ec7f07c",
     "FlockLevel3.f256Equiv": "8262b4944342abeeee9594437aae4c603058e7ca68b20a5bd997ca2bccba1c28",
@@ -585,14 +585,14 @@
    ]
   },
   "FlockLevel3.Assembly": {
-   "digest": "5323fcee63528c3660438f9fe55f96b740e5a17fbf7aac02e41acf4d7428e662",
+   "digest": "d17b1f544acea1705aaba9f2294e150cbe34bd79f3f843f607d2e50db890efa2",
    "definitions": {
     "FlockLevel3.eqFactor": "5323fcee63528c3660438f9fe55f96b740e5a17fbf7aac02e41acf4d7428e662"
    },
    "pins": ["FlockLevel3.eqTable_get"]
   },
   "FlockLevel3.Bits": {
-   "digest": "0e4b00ace2f8256e7843c4c596f15c49c9451cf8508961eb74c38dd541548877",
+   "digest": "7b4d6893f62ea734abcddd06ad660a32d568eaf7e81aa4335978a01fa56fc9f5",
    "definitions": {
     "FlockLevel3.P": "4e5d0fcb10cd2f7e91614aedfbf6de7279727d394f57a0dc14a72412372d6cc1",
     "FlockLevel3.natPoly": "111cbf4afcf70249625f67c95ea00b823b4afff592fc0274ac1047bfbf46c941"
@@ -641,14 +641,14 @@
    ]
   },
   "FlockLevel3.Fold": {
-   "digest": "ef6f8012ae6949dc15e63a24224ba32e2975b6ec56d69325d1e90deb76dfc40b",
+   "digest": "f78bbbea3cf7e4eaca5e005c480a47f7496f2ce11fd6d8bdfa8c22fe12170243",
    "definitions": {
     "FlockLevel3.eqAt": "ef6f8012ae6949dc15e63a24224ba32e2975b6ec56d69325d1e90deb76dfc40b"
    },
    "pins": ["FlockLevel3.eqAt_split"]
   },
   "FlockLevel3.FoldStmt": {
-   "digest": "abfdc8a72a23c448c666ababa93b8ae8a8ffdead7e0326364713e1efeea76c98",
+   "digest": "129edeffcaac09f2a58680d7601f18f4b7dcd58a61434760d690b1ac6fec33d1",
    "definitions": {
     "FlockLevel3.baseFor": "240899a259a29128a30fbb7f0e8ff34f8eb3791c88dfb8e346d58738343f1da7",
     "FlockLevel3.covers": "ca36c80c3ec5cbdc5391b969ff54235436c779917fe5d244e9e08c85e42bef2a",
@@ -669,7 +669,7 @@
    ]
   },
   "FlockLevel3.GF128": {
-   "digest": "86a6fc7011e3e085b4e8e95fb68f43b8d450a673336d6d7dfa7b24f1314607e0",
+   "digest": "944b755049e580c96755351591765b2d8c7eed357d52f7539fb00af9ae869dfb",
    "definitions": {
     "FlockLevel3.F128.poly": "195f03fa0f74277a3676ff458d99213d1f94e0ca2ff350814b925bc932286551",
     "FlockLevel3.G": "6535881c32352c0e32d06a80719c1ac69f8c85d33c4e7d14c938ccc53d0252df",
@@ -721,7 +721,7 @@
    ]
   },
   "FlockLevel3.GF128Field": {
-   "digest": "4b7d97f6557c32e63c2c02ee9e0145dade97fd98705c0b0f6930229572ef938f",
+   "digest": "56ea824225b61172e040fdf98d9fa886314a177c1cf3c25099796c8e9183eae9",
    "definitions": {
     "FlockLevel3.GF128": "c9e25ed65c418e06e5c2195937c59cd821d17680d7af3ff093e0afac7800b5e1",
     "FlockLevel3.GF128.of": "5e652ac1ae72dddd973855a651731f6fff62cb0ea0a672dbe779583e0c9639f6",
@@ -767,7 +767,7 @@
    ]
   },
   "FlockLevel3.GF128Ring": {
-   "digest": "75ca9ea88e5b7adc09a3b091583be8511b994bec5a966b92fc81470469f3ccc2",
+   "digest": "57ff86ff44f82d2003a5caaab2e53d9e5aae1d705defae421b23f220ed32ef65",
    "definitions": {
     "FlockLevel3.equivAdj": "05e2b16779c7ee3679d7328c2821ae8ff891885bdde087fd8bf652b46bacfab0",
     "FlockLevel3.toAdj": "3d43ec40ffd40bb80c838bd961cfc60dfffd36a7c5c459a792fa49f89b21fb54"
@@ -810,7 +810,7 @@
    ]
   },
   "FlockLevel3.GF256": {
-   "digest": "b106c39402475f6b835ed5c9984fe58bd26b8bd7fc89b9cc47169fcab517a87c",
+   "digest": "545f3555b6340acd9ead3f2da119cf2a6fc4d30064080a31632db2ca77bb9bd0",
    "definitions": {
     "FlockLevel3.GF256": "0b2c3882de3dec7f5fd11d2448bc76b957de6df0aaa25037d97b01deb6c55433",
     "FlockLevel3.GF256.of": "6cf8ef32b2e1152f331c8ddff346a93f263bb1f1f1517163634dfcccf372f8a6",
@@ -837,7 +837,7 @@
    ]
   },
   "FlockLevel3.LookupFold": {
-   "digest": "c3bbb185ca5cc904d271a22f6d127a41dece6edf65c4fecfd1ff277e8ad891c5",
+   "digest": "c65361f2f0d79d55e988878a265003cca6a2558f5f3767a21fa9bed019104b63",
    "definitions": {
     "FlockLevel3.byteSum": "2ed1b6101867e287660add578bbed94fa5f5f9f65da9b6a9bea585bd3bb291c9",
     "FlockLevel3.wordSum": "b7bb47c0a0ca2a21e427fc9074213f1c4492fd8fce9d1a5595ef9b2678494b29"
@@ -845,7 +845,7 @@
    "pins": ["FlockLevel3.baseOf_get", "FlockLevel3.foldB_get", "FlockLevel3.slot_term", "FlockLevel3.subsetTab_get"]
   },
   "FlockLevel3.LookupRows": {
-   "digest": "86ee7ceebfabb50e796c47cbcb4dd6d0b7bc3d6588fbcb15a2c588ecd164a1f2",
+   "digest": "98cb0c4f56b47ee1a07fc76ac55321604ffa7ce42542a91e4a95e0faf1f8274a",
    "definitions": {
     "FlockLevel3.bitsVal": "46d3e1962d6acc5608afe589771381c3084139b901193ed6f3c9d559ed80607a",
     "FlockLevel3.rowSum": "d96b138ec0fd87dfc4295820dc2335eddc5784ad98054bf7beae30058abf56d1",
@@ -854,7 +854,7 @@
    "pins": ["FlockLevel3.build_computes"]
   },
   "FlockLevel3.Nodes": {
-   "digest": "af94771a9fde22d04e36ac7270d338e9c46a96bde2067d725bd51a05b880a834",
+   "digest": "1d4273a8873c43f74a52956bebb18650535671738702f9f86eaa59cb092f31cb",
    "definitions": {
     "FlockLevel3.combW": "c7ce6f97ccb8952343450e2cfa918c9e7f71795990918ec0871b33df2c7389e6",
     "FlockLevel3.lagS": "53b24cf8e630e7ffdcac160cfa0521086a5a89b65b3e10ebc16c34651a2630fd",
@@ -863,7 +863,7 @@
    "pins": ["FlockLevel3.nodes"]
   },
   "FlockLevel3.NovelBasis": {
-   "digest": "80b105bc130e5cffda7dc4770a7483dd223395a7d22f6d6130af7a2a21712b57",
+   "digest": "63765397defaae2fed0004f9f3fcd078f559b3d84867a0103a447aa503e2907e",
    "definitions": {
     "FlockLevel3.What": "b5856646e5c62ea55d35f1ad6590868f03ed58a7324eb1b2170bc1dce377bd10",
     "FlockLevel3.Xhat": "d82a6e021e265587e456cdeb51961bd87d62cbc359c16383bcf4a4679d7e9cdc",
@@ -873,14 +873,14 @@
    "pins": ["FlockLevel3.xhat_poly"]
   },
   "FlockLevel3.Pinned": {
-   "digest": "f2d1353f742bc78ebccce359b713fa4ebba650e3309ff23614fb29575952cff4",
+   "digest": "963b0faa7fcd8526eacbe06cd42d017498850a7d856c9a8c2dd317bb27a6e200",
    "definitions": {
     "FlockLevel3.eqAtPinned": "f2d1353f742bc78ebccce359b713fa4ebba650e3309ff23614fb29575952cff4"
    },
    "pins": ["FlockLevel3.pinned_indep"]
   },
   "FlockLevel3.Seam": {
-   "digest": "0dfafcca272e54fa94b1f4325020b9d407fc3f0645533e29c00d4b34b8941c47",
+   "digest": "8b148ac1964b8642981b91d2696fb33aa0d43cd9fea308f21d563ed85a6d868f",
    "definitions": {
     "FlockLevel3.GF128.val": "d7e677914640f6328f079e321d9b85ffb76bf58acc2f6a6be6a1cac2c92de4fa",
     "FlockLevel3.embed": "e4732133a4fdbfdcddee2bdce33490c35655efe60ff33b810dfd4233c50102b1",
