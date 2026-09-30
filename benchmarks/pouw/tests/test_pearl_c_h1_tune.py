@@ -21,7 +21,7 @@ sys.modules["simt_twin"] = T
 spec.loader.exec_module(T)
 
 sys.path.insert(0, str(Path(__file__).parents[3] / "protocols" / "pouw"))
-from verity_pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
+from verity_pouw.schemes.pearl_c import H1_KEYS, TREE_HASH  # noqa: E402
 
 ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 BINDING = bytes(range(32))
@@ -180,7 +180,7 @@ def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_by
     doms = {}
     for name, count in (("a", m), ("t", -(-m // 64) * (n // 64))):
         binding = hashlib.sha256(f"verify {name}".encode()).digest()
-        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash={"h1": "blake3", "h2": "blake3-s256"}[hashing])
+        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash=TREE_HASH[hashing])
         doms[name] = {"binding": binding.hex(), "owner": 0, "count": count, "domain": d.domain_id.hex(), "d": d}
     da, dt = doms["a"].pop("d"), doms["t"].pop("d")
     a_levels = tree_levels(da, [da.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])

@@ -34,7 +34,6 @@ from verity.commitments.merkle import tree_levels
 from verity_pouw.schemes import pearl_c
 
 ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
-TREE_HASH = {"h1": "blake3", "h2": "blake3-s256"}
 
 
 def tagged_leaves(job: tuple) -> list[bytes]:
@@ -68,7 +67,7 @@ def verify(run: str, path: Path, jobs: int = 1) -> tuple[bool, str, str]:
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     m, rb, n = head["m"], head["rb"], head["n"]
     hashing = head.get("hashing", "h1")
-    tree_hash, notes = TREE_HASH[hashing], []
+    tree_hash, notes = pearl_c.TREE_HASH[hashing], []
     binding, owner = bytes.fromhex(head["a"]["binding"]), head["a"]["owner"]
     da = CommitmentDomain(binding, owner, RangeIndexedDomain(m), hash=tree_hash)
     if da.domain_id.hex() != head["a"]["domain"]:

@@ -100,6 +100,14 @@ TREE_HASH = {"h0": "sha256", "h1": "blake3", "h2": "blake3-s256"}
 H1_KEYS = {r: blake3(f"pearl-c/h1/{r}".encode()) for r in ("message", "leaf")}
 
 
+def digest_keys(hashing: str) -> dict[str, bytes] | None:
+    """A hashing format's BLAKE3 keys of the message digests and the tile leaf (``message``, ``leaf``): h1's labels under h1
+    and h2, none under h0 (TurboSHAKE128)."""
+    if hashing not in HASHINGS:
+        raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
+    return None if hashing == "h0" else H1_KEYS
+
+
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
 #: of the H100's prices; v0 is priced on the H100 only
 FORMING_V0_UNITS = 320
@@ -338,28 +346,30 @@ def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f:
 
 
 def message_digest(msg: bytes, hashing: str = "h0") -> bytes:
-    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or under h1 and h2 BLAKE3 keyed by its label."""
-    return keyed(H1_KEYS["message"], msg) if hashing in ("h1", "h2") else turboshake128(msg, D_MESSAGE, 32)
+    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or BLAKE3 keyed by the format's message key
+    (`digest_keys`)."""
+    keys = digest_keys(hashing)
+    return keyed(keys["message"], msg) if keys else turboshake128(msg, D_MESSAGE, 32)
 
 
 def leaf(checked: Checked, hashing: str = "h0") -> bytes:
     """The tile leaf over the per-(row, 32-column chunk) message digests, row-major, chunks in order: TurboSHAKE128
-    (D = 0x22), or under h1 and h2 BLAKE3 keyed by its label (a tree over 1 KB chunks of digests)."""
+    (D = 0x22), or BLAKE3 keyed by the format's leaf key (`digest_keys`; a tree over 1 KB chunks of digests)."""
     digests = []
     for crow, urow in zip(checked.c, checked.u):
         for h in range(0, len(crow), CHUNK):
             msg = struct.pack(f"<{len(crow[h:h + CHUNK])}I", *crow[h:h + CHUNK]) + \
                 struct.pack(f"<{len(urow[h:h + CHUNK])}I", *urow[h:h + CHUNK])
             digests.append(message_digest(msg, hashing))
-    joined = b"".join(digests)
-    return keyed(H1_KEYS["leaf"], joined) if hashing in ("h1", "h2") else turboshake128(joined, D_LEAF, 32)
+    joined, keys = b"".join(digests), digest_keys(hashing)
+    return keyed(keys["leaf"], joined) if keys else turboshake128(joined, D_LEAF, 32)
 
 
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles;
     smaller bounds make a test instance.  ``hashing`` names the scheme ``…-<hashing>``: h1 commits with BLAKE3 throughout
     (`commitment_hash`, `leaf`); h2 keeps h1's digests and leaf and makes every tree `frame-b3s`.  The tree hash is
-    `TREE_HASH[hashing]`.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
+    `TREE_HASH[hashing]` and the digests' keys `digest_keys(hashing)`, both on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
@@ -377,7 +387,7 @@ class PearlC:
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
-        self.commitment_hash = TREE_HASH[hashing]
+        self.commitment_hash, self.digest_keys = TREE_HASH[hashing], digest_keys(hashing)
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (

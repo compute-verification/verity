@@ -399,6 +399,21 @@ def test_h1_hashes_with_blake3_throughout():
         C.PearlC(hashing="h3")
 
 
+def test_each_hashing_formats_keys_are_on_the_scheme():
+    """`digest_keys` is what the digests are keyed by, and each instance carries its format's keys and tree hash, so a
+    device path reads them from the scheme."""
+    msg = bytes(range(64))
+    for hashing in C.HASHINGS:
+        s = C.PearlC(forming="v1", hashing=hashing)
+        assert s.digest_keys is C.digest_keys(hashing) and s.commitment_hash == C.TREE_HASH[hashing]
+        if hashing == "h0":
+            assert s.digest_keys is None and C.message_digest(msg, hashing) == C.turboshake128(msg, C.D_MESSAGE, 32)
+        else:
+            assert s.digest_keys == C.H1_KEYS and C.message_digest(msg, hashing) == C.keyed(s.digest_keys["message"], msg)
+    with pytest.raises(ValueError):
+        C.digest_keys("h9")
+
+
 def test_h1_lifecycle_commits_with_frame_b3():
     from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, activation_binding, commit_rows, weight_binding
 
