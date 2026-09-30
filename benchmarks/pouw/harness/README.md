@@ -1,0 +1,160 @@
+# The PoUW bench harness (sm_120)
+
+One harness for every PoUW prover arm on the RTX PRO 6000 Blackwell (sm_120), FP8 and FP4 streams alike: each arm and each
+plain GEMM baseline is gated at the exact shape and flag set it is timed at, then everything is timed the same way,
+interleaved, and reported over the fastest plain GEMM of the arm's precision on the same card and shape.
+
+It is independent of the NCP stack: stdlib, numpy and ctypes (no torch), with a small native library for the device side.
+It takes #475's timing discipline (bursts over distinct operand sets past twice the L2, a read-only L2 flush, per-item
+sensors, versions, the consistency gate) and #449's primary-context ctypes pattern, so driver-API arms plug in.
+
+| File | What |
+|---|---|
+| `arm.py` | the arm interface (v0.x): what an arm provides and what the harness checks; the contract is published in the project store, `internal/pouw/rtx-pro/workers/6-harness.md` |
+| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report, each verified arm's transcript replayed over poisoned outputs and its no-write control; after the lease, `--judge-controls` has the verifier reject each control |
+| `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
+| `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
+| `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, CUTLASS's sm_120 kernels, and the plain NVFP4 and FP8 GEMMs of `../nvfp4_sm120/nvf4_plain.cu` (#543, #570; source `verity`, `verity_nvf4_256x128*` and `verity_fp8_256x128*`: 256×128 tiles, one persistent CTA an SM, m a multiple of 256, n of 128, k of 128 or for FP8 64, one tile order, a workspace of their own for their tensor maps), and the bit-exact gate on ternary operands |
+| `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
+| `sass_gate.py` | the SASS gate, before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` (version, build, arguments, numeric run) builds them; nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`, `--pin`) |
+| `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
+| `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments |
+| `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
+| `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
+
+Build (no GPU needed; nvcc 12.9, about 7 GB of memory per CUTLASS 3.x unit):
+
+```bash
+export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh)"   # prints the library's path, nothing else
+```
+
+The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources, nvcc's version and the
+cuBLAS headers', with `build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is
+reused, and so is each object whose unit, headers and flags are unchanged. A run refuses a library its `build.json` doesn't
+describe. Where there is no CUDA 12.9 (node 2 has 13.0), `. jobs/toolkit.sh` first assembles it from NVIDIA's pinned
+redistributable archives and the cuBLASLt wheel `env.sh` pins. `LT2_HOME` names a second cuBLAS install (node 2's
+`/usr/local/cuda`, whose `libcublasLt.so.13` is 13.1.1.3): `lt.cu` is built alone against it with the host compiler into
+`libpouw_lt2.so`, which a run loads beside the library (`RTLD_LOCAL`; `POUW_HARNESS_LT2` names another, or `none`), so every
+family also gets that cuBLASLt's candidates, named `lt<major>_…`. On node 2 the build is a CPU job, at `nice 19` on the fill
+queue's cores:
+
+```bash
+research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source -- bash -c \
+  '. benchmarks/pouw/harness/jobs/toolkit.sh && export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 LT2_HOME=/usr/local/cuda &&
+   L="$(nice -n 19 taskset -c 96-191 benchmarks/pouw/harness/native/build.sh)" &&
+   cp "${L%/*}"/{libpouw_harness.so,libpouw_lt2.so,build.json} "$RESEARCH_RUN_DIR/"'
+```
+
+`build.json` also records each kernel's registers, stack and local memory (`resources`; a spill shows as local bytes).
+
+Run on your GPU only (`CUDA_VISIBLE_DEVICES` one index; the UUID from `server.md`'s table):
+
+```bash
+cd benchmarks/pouw/harness
+python bench.py --plan                                              # sets, bursts, memory per shape; no GPU
+CUDA_VISIBLE_DEVICES=5 CUDA_DEVICE_ORDER=PCI_BUS_ID python bench.py --gpu 5 --expect-uuid GPU-... \
+    --shapes headline --arm example_arm:ExampleFp8 --out run.json
+CUDA_VISIBLE_DEVICES=5 CUDA_DEVICE_ORDER=PCI_BUS_ID python characterize.py --gpu 5 --expect-uuid GPU-... --out char.json
+```
+
+Where there is no CUDA 12.8+ toolkit, or it isn't the build's (node 2 has 13.0), `jobs/env.sh BUILD` gives the run NVIDIA's
+cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `art:<id>` of one preserved with
+`research data put --kind pouw-harness-build/v1 --tree DIR --preserve`), and this tree's `verity` and `verity_pouw` on
+`PYTHONPATH`. On node 2, `gpu-lease 1` picks the GPU, so the run names it `--gpu lease` (the one index the lease set, checked
+against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait` and times on its first GPU:
+
+```bash
+R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
+   --send BUILD/libpouw_harness.so --send BUILD/libpouw_lt2.so --send BUILD/build.json --send GPUS.md'  # GPUS.md: server.md's table
+H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/bench.py --gpu lease
+   --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline
+   --arm-path benchmarks/pouw/harness --arm example_arm:ExampleFp8 --out "$RESEARCH_RUN_DIR/bench.json"'
+$R -- gpu-lease 1 --wait -- bash -c "$H"                                                           # untimed: gates, autotune
+$R -- gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
+```
+
+A measured panel row also needs the verify step and the negative controls' in the same run, after the lease, so no GPU
+waits on the CPU verifier (`--judge-controls`'s exit code covers both):
+
+```bash
+V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"; "$PY" benchmarks/pouw/harness/bench.py --judge-controls "$RESEARCH_RUN_DIR/bench.json"'
+$R -- bash -c "gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
+```
+
+`H` and `V` go to `bash -c`, so each must be one line (`H` is wrapped above for reading).
+
+An arm on another branch runs from a tree that holds both: its branch with this directory and `../tests/test_harness.py`
+checked out from the harness's commit, `--arm-path` its own directory. `jobs/harness.yaml` and `jobs/harness-timed.yaml` are
+node 2's queue jobs, for when its Kueue is up.
+
+Before a shape's reps, the same interleaved schedule runs as a warm-up (kept apart, in `warmup_items`) for at least
+`--warmup-s` of device time and until a round's median SM clock is within 0.5% of the round before (`--warmup-max-s` bounds
+it; the shape's `warmup` says whether it got steady). Then every entry's timed item is sized to the same device time, at
+least `--item-ms` (40): calls for a baseline or an arm, replays for a chain (`sizing`). Every item samples NVML while the GPU
+runs it (`sensors.during`), and each panel row carries both sides' reps in the same run (`panel.reps`: per-call and item ms
+and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` and `sm_clock_base` for `panel.py`, and
+`clock_gap` (medians more than 0.5% apart; server.md 08:50Z).
+
+Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
+`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6;
+`Arm` is its deprecated alias, since the vLLM API's `Arm` is a serving bench mode) gets the split when its calls expose
+`phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
+`tile_hash`, `screen`, as `verity_pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
+after (tile_hash, screen, the movable groups, which the side-stream variant runs off the main lane as the `deferred`
+schedule does), and the report's `split_groups` names the groups each time covers. v0.4's `before`, `gemm` and `after` still
+work, each as its part, and are deprecated; `arm.py` has the contract.
+
+An arm's `build` names every cubin, fatbin or library its kernels come from in `binaries` (arm interface v0.3; a cubin loaded
+with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
+(`POUW_CUDA_BIN`, `CUDA_HOME/bin`, the PATH or `/usr/local/cuda/bin`) and caches passes by the binary's sha256
+(`POUW_SASS_GATE_CACHE`). To check a build before a run: `python sass_gate.py my_kernels.cubin --json gate.json`. Build
+sm_120a with a pinned toolkit (CUDA 12.9.1 from `jobs/toolkit.sh`, or 13.0.1, node 2's `/usr/local/cuda`) and without
+`-ftz=true`, `--use_fast_math`, `-prec-div=false` or `-prec-sqrt=false`; `-fmad=false` is pinned too. Any other toolkit,
+architecture or ptxas argument fails closed until it is pinned (`--pin ... --toolkit`, from `ieee_pin.cu`'s builds) with a
+numeric run (`ieee_pin.py`).
+
+An arm's `build` also names its reference verifier in `verifier` (arm interface v0.4, `arm.check_verifier`, checked before
+anything is timed): the transcript file per shape, relative to the run's directory (e.g.
+`transcripts/{arm}/{shape}/manifest.json`; the arm writes it under `ctx["transcripts_dir"]`), the commands that check it,
+run once per shape (`per: "shape"`, the default) or once per run (`per: "run"`), and the verifier's `commit` if it isn't the
+run's source commit (`RESEARCH_SOURCE_SHA`). For example, GPU 1's `verify.py` over the whole run directory:
+
+```python
+"verifier": {"per": "run", "transcript": "transcripts/{arm}/{shape}/manifest.json",
+             "commands": [["{python}", str(HERE / "verify.py"), "{run_dir}", "--commit", "{commit}"]]}
+```
+
+`verify.py RESULT_JSON` runs them from the run's working directory, keeps their output under `verify/`, and accepts a
+transcript only by an output line that starts with `ACCEPT` and names `sha256:<hex>` of the transcript file as it hashes it
+itself, with no `REJECT` line naming it (per shape, every command must also exit 0). Each panel row gets `verification`,
+and when accepted `verifier_commit`, `verifier_accept` (the line verbatim), `transcript` and `panel_args`; the result JSON
+gets `verification` with every command's exit code. It exits 0 only if every panel row was accepted and every command
+exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured row.
+
+The harness dumps the transcripts itself, over poisoned outputs (arm interface v0.5, server.md 11:50Z). An arm with a
+verifier gives its calls `transcript(dir, read)`, which writes what the verifier's commands read into `dir` (the transcript
+file's directory), every device byte from `read(name[, offset, nbytes])` (the call's declared `outputs` only) or its operand
+set. After a shape's timing, the harness fills every output of the hash call on operand set 0 with 0xA5, runs its weight side
+and launch once and calls `transcript`; then it poisons them again and calls `transcript` with no launch, the no-write
+negative control, into `<shape>-nowrite` (or the verifier's `control` path, e.g. `negative/{arm}/{shape}/manifest.json` for a
+per-run verifier that scans `transcripts/`). The shape's `transcripts` in the result JSON says what each replay poisoned and
+read, or why the call couldn't be replayed. So `outputs` must hold every buffer the transcript reads that a setup step, the
+weight side or a launch writes (Pearl-C4's `root_a` and `seed_a`, which `prime()` writes before timing), and no operand
+buffer. `bench.py --judge-controls RESULT_JSON`, after `verify.py`, runs the verifier on each control (a per-run command's
+output is read from `verify.py`'s), which passes only by a line starting `REJECT` that names its sha256, with no `ACCEPT`
+naming it, and gives each panel row its reject line (`negative_control`, and `--negative-control` in `panel_args`). It
+exits 0 only if `verify.py`'s step passed and every panel row has a rejected control whose line names the run; 5 if a
+control wasn't rejected (or couldn't be dumped); 1 otherwise; 2 on a usage error.
+
+Every gate's record and every negative control carry `wall_s`, the host's seconds in them (a gate's summed over its runs),
+and each shape its `wall_s` by stage (`operands`, `baseline_gates`, then `screen` alone under `--screen-only`, else
+`arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `report`, `transcripts`), so a lease's idle minutes
+show where they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
+take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job's CPUs (`OMP_NUM_THREADS`, a fill job's
+`cpus=`), for such references, and an arm with `prefetch(dev, call, shape, flags)` is told every call a flag set's gate is
+about to check before the first of them, so their references compute side by side; the gate still compares against the
+inputs as the device holds them at the gate.
+
+Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
+consistency gate rejected an arm; 7 the SASS gate refused a binary. The JSON is written in every case, with every rep, and
+`sass_gate` holds every binary's verdict.

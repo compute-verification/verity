@@ -1,0 +1,509 @@
+{
+ "version": "sass-pins/v2",
+ "note": "Each toolkit's ptxas (its .note.nv.tkinfo version, build and arguments, -v aside), every signature (sass_gate.signature) of each subroutine with a flagged instruction that it builds for ieee_pin.cu (ptxas specializes a body to its call sites, so one name may have several), and the numeric run (ieee_pin.py) that gated and ran those builds and found every sequence exact; a toolkit without one exempts nothing. Regenerate with: python sass_gate.py --pin BINARY... --toolkit NAME, ieee_pin.cu built with that toolkit with and without -fmad=false (POUW_CUDA_BIN naming its bin/); ieee_pin.py refuses to run when the entry isn't what its builds pin.",
+ "toolkits": {
+  "12.9.1": {
+   "version": "Cuda compilation tools, release 12.9, V12.9.86",
+   "branch": "Build cuda_12.9.r12.9/compiler.36037853_0",
+   "args": [
+    "-arch sm_120a -m 64",
+    "-arch sm_120a -m 64 -fmad false"
+   ],
+   "subroutines": {
+    "__cuda_sm20_div_u16": [
+     "2ada2310b05d870e"
+    ],
+    "__cuda_sm20_div_u64": [
+     "5158ef90e4234a25"
+    ],
+    "__cuda_sm20_rcp_rn_f32_slowpath": [
+     "737c44ee88a60d48"
+    ],
+    "__cuda_sm20_rem_s64": [
+     "1cdbf45ebf9ff2ed"
+    ],
+    "__cuda_sm20_sqrt_rn_f32_slowpath": [
+     "be72a56c38542422"
+    ],
+    "__cuda_sm3x_div_rn_noftz_f32_slowpath": [
+     "400b10e3dbb2f1e2"
+    ]
+   },
+   "numeric": {
+    "run": "r20260930-135207-db3e",
+    "source_sha": "5b290af35a1016085025ced2c0780d0f4f8939bd",
+    "card": "NVIDIA RTX PRO 6000 Blackwell Server Edition, sm_120 (vy-nebius-2)",
+    "builds": [
+     "nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --no-compress",
+     "nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --no-compress -fmad=false"
+    ],
+    "result": "both builds exact everywhere: rcp and sqrt on all 2^32 inputs (16777214 subnormal inputs; rcp 33554430 subnormal outputs), div on 2^32 pairs weighted to subnormals (1005716801 subnormal inputs, 213610692 subnormal outputs), 3/b and a/b by a constant numerator on 2^32 each, u16, u16 as a call, u32, s32 and u32 by 64 divisors on 2^32 each, u64 and s64 on 2^30 each, and every subnormal input against the host; the --use_fast_math, -ftz=true and -prec-div=false -prec-sqrt=false controls differ"
+   }
+  },
+  "13.0.1": {
+   "version": "Cuda compilation tools, release 13.0, V13.0.88",
+   "branch": "Build cuda_13.0.r13.0/compiler.36424714_0",
+   "args": [
+    "-arch sm_120a -m 64",
+    "-arch sm_120a -m 64 -fmad false"
+   ],
+   "subroutines": {
+    "__cuda_sm20_div_u16": [
+     "2ada2310b05d870e",
+     "f28777dafff5f987"
+    ],
+    "__cuda_sm20_div_u64": [
+     "5158ef90e4234a25"
+    ],
+    "__cuda_sm20_rcp_rn_f32_slowpath": [
+     "737c44ee88a60d48"
+    ],
+    "__cuda_sm20_rem_s64": [
+     "1cdbf45ebf9ff2ed"
+    ],
+    "__cuda_sm20_sqrt_rn_f32_slowpath": [
+     "be72a56c38542422"
+    ],
+    "__cuda_sm3x_div_rn_noftz_f32_slowpath": [
+     "400b10e3dbb2f1e2"
+    ]
+   },
+   "numeric": {
+    "run": "r20260930-135207-db3e",
+    "source_sha": "5b290af35a1016085025ced2c0780d0f4f8939bd",
+    "card": "NVIDIA RTX PRO 6000 Blackwell Server Edition, sm_120 (vy-nebius-2)",
+    "builds": [
+     "nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --no-compress",
+     "nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --no-compress -fmad=false"
+    ],
+    "result": "both builds exact everywhere: rcp and sqrt on all 2^32 inputs (16777214 subnormal inputs; rcp 33554430 subnormal outputs), div on 2^32 pairs weighted to subnormals (1005716801 subnormal inputs, 213610692 subnormal outputs), 3/b and a/b by a constant numerator on 2^32 each, u16, u16 as a call, u32, s32 and u32 by 64 divisors on 2^32 each, u64 and s64 on 2^30 each, and every subnormal input against the host; the --use_fast_math, -ftz=true and -prec-div=false -prec-sqrt=false controls differ",
+    "independent": "the assessor's check of this nvcc's div.rn, rcp.rn and sqrt.rn (internal/pouw/red-team/fp-model-sm120-scalar.md): exact, r20260930-095650-85ec; __frsqrt_rn builds no .FTZ with default flags, r20260930-101332-226b (27 with -ftz=true, r20260930-101522-345f), so it has no entry"
+   }
+  }
+ },
+ "signatures": {
+  "1cdbf45ebf9ff2ed": [
+   [
+    "@!P MOV R, R",
+    "@!P MOV R, R",
+    "@!P MOV R, R",
+    "@!P MOV R, R",
+    "@P IADD.64 R, -R, R",
+    "@P IADD.64 R, -R, R",
+    "F2I.U64.TRUNC R, R",
+    "I2F.U64.RP R, R",
+    "IADD.64 R, R, -R",
+    "IADD3 R, P, PT, R, R, RZ",
+    "IADD3 R, P, PT, R, R, RZ",
+    "IADD3 R, P, PT, R, R, RZ",
+    "IADD3 R, P, PT, RZ, -R, RZ",
+    "IADD3 R, P, PT, RZ, -R, RZ",
+    "IADD3 R, P, PT, RZ, -R, RZ",
+    "IADD3 R, P, PT, RZ, -R, RZ",
+    "IADD3 R, P, PT, RZ, -R, RZ",
+    "IADD3 R, PT, PT, R, 0x1ffffffe, RZ",
+    "IADD3.X R, PT, PT, R, R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, R, R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, R, RZ, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, RZ, R, P, P",
+    "IADD3.X R, PT, PT, RZ, RZ, R, P, P",
+    "IADD3.X R, PT, PT, RZ, ~R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, ~R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, ~R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, ~R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, ~R, RZ, P, !PT",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, RZ",
+    "IMAD R, R, R, RZ",
+    "IMAD R, R, R, RZ",
+    "IMAD.HI.U32 R, P, R, R, R",
+    "IMAD.HI.U32 R, P, R, R, R",
+    "IMAD.HI.U32 R, P, R, R, R",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.WIDE.U32 R, P, R, R, R",
+    "IMAD.WIDE.U32 R, P, R, R, R",
+    "IMAD.WIDE.U32 R, R, R, R",
+    "IMAD.WIDE.U32 R, R, R, RZ",
+    "IMAD.WIDE.U32 R, R, R, RZ",
+    "IMAD.WIDE.U32 R, R, R, RZ",
+    "ISETP.GE.AND P, PT, R, RZ, PT",
+    "ISETP.GE.AND P, PT, R, RZ, PT",
+    "ISETP.GE.U64.AND P, PT, R, R, PT",
+    "ISETP.GE.U64.AND P, PT, R, R, PT",
+    "ISETP.NE.S64.AND P, PT, R, RZ, PT",
+    "MOV R, 0x00000000",
+    "MOV R, 0x00000000",
+    "MUFU.RCP R, R",
+    "NOP",
+    "NOP",
+    "NOP",
+    "RET.REL.NODEC R `(caller)",
+    "SEL.64 R, R, -0x1, P",
+    "SEL.64 R, R, R, !P"
+   ]
+  ],
+  "2ada2310b05d870e": [
+   [
+    "@!P MOV R, 0xffffffff",
+    "F2I.U32.TRUNC.NTZ R, R",
+    "FMUL R, R, R",
+    "FMUL R, R, R",
+    "FMUL.RZ R, R, R",
+    "FSEL R, R, 0.25, !P",
+    "FSEL R, R, 1, !P",
+    "FSETP.GEU.AND P, PT, |R|, 1.175494350822287508e-38, PT",
+    "FSETP.GT.AND P, PT, |R|, 8.50705917302346158658e+37, PT",
+    "I2F.U16 R, R",
+    "I2F.U16.RZ R, R",
+    "IADD3 R, PT, PT, R, 0x2, RZ",
+    "ISETP.NE.U32.AND P, PT, R, RZ, PT",
+    "LOP3.LUT R, R, 0xffff, RZ, 0xc0, !PT",
+    "MOV R, 0x00000000",
+    "MOV R, 0x4b800000",
+    "MUFU.RCP R, R",
+    "RET.REL.NODEC R `(caller)"
+   ]
+  ],
+  "400b10e3dbb2f1e2": [
+   [
+    "@!P BRA `(B+7)",
+    "@!P MOV R, 0x00000000",
+    "BSSY.RECONVERGENT B, `(B+21)",
+    "IADD3 R, PT, PT, R, -0x1, RZ",
+    "IADD3 R, PT, PT, R, -0x1, RZ",
+    "ISETP.GT.U32.AND P, PT, R, 0xfd, PT",
+    "ISETP.GT.U32.OR P, PT, R, 0xfd, P",
+    "LOP3.LUT R, R, 0xff, RZ, 0xc0, !PT",
+    "LOP3.LUT R, R, 0xff, RZ, 0xc0, !PT",
+    "SHF.R.U32.HI R, RZ, 0x17, R",
+    "SHF.R.U32.HI R, RZ, 0x17, R"
+   ],
+   [
+    "@P BRA `(B+18)",
+    "FSETP.GTU.FTZ.AND P, PT, |R|, +INF, PT",
+    "FSETP.GTU.FTZ.AND P, PT, |R|, +INF, PT",
+    "PLOP3.LUT P, PT, P, P, PT, 0xf8, 0x8f"
+   ],
+   [
+    "@!P BRA `(B+16)",
+    "LOP3.LUT P, RZ, R, 0x7fffffff, R, 0xc8, !PT"
+   ],
+   [
+    "@!P BRA !P, `(B+15)",
+    "FSETP.NEU.FTZ.AND P, PT, |R|, +INF, PT",
+    "FSETP.NEU.FTZ.AND P, PT, |R|, +INF, PT",
+    "FSETP.NEU.FTZ.AND P, PT, |R|, +INF, PT"
+   ],
+   [
+    "@P BRA `(B+13)",
+    "LOP3.LUT P, RZ, R, 0x7fffffff, RZ, 0xc0, !PT",
+    "PLOP3.LUT P, PT, P, P, PT, 0x2f, 0xf2"
+   ],
+   [
+    "@P BRA `(B+11)",
+    "LOP3.LUT P, RZ, R, 0x7fffffff, RZ, 0xc0, !PT",
+    "PLOP3.LUT P, PT, P, P, PT, 0x2f, 0xf2"
+   ],
+   [
+    "@!P FFMA R, R, 1.84467440737095516160e+19, RZ",
+    "@!P FFMA R, R, 1.84467440737095516160e+19, RZ",
+    "@!P IADD3 R, PT, PT, R, 0x40, RZ",
+    "@!P MOV R, 0xffffffc0",
+    "@P MOV R, 0x00000000",
+    "ISETP.GE.AND P, PT, R, RZ, PT",
+    "ISETP.GE.AND P, PT, R, RZ, PT"
+   ],
+   [
+    "@!P BRA `(B+6)",
+    "BSSY.RECONVERGENT B, `(B+8)",
+    "FADD.FTZ R, -R, -RZ",
+    "FFMA R, R, R, 1",
+    "FFMA R, R, R, R",
+    "FFMA R, R, R, R",
+    "FFMA R, R, R, R",
+    "FFMA R, R, R, R",
+    "FFMA R, R, R, R",
+    "FFMA R, R, R, RZ",
+    "IADD3 R, PT, PT, -R, R, RZ",
+    "IADD3 R, PT, PT, R, -0x1, RZ",
+    "IADD3 R, PT, PT, R, -0x7f, RZ",
+    "IADD3 R, PT, PT, R, 0x7f, -R",
+    "IADD3 R, PT, PT, R, R, RZ",
+    "IADD3 R, PT, PT, R, R, RZ",
+    "IMAD R, R, -0x800000, R",
+    "ISETP.GE.U32.AND P, PT, R, 0xfe, PT",
+    "LEA R, R, 0xc0800000, 0x17",
+    "LOP3.LUT R, R, 0xff, RZ, 0xc0, !PT",
+    "MUFU.RCP R, R",
+    "SHF.R.U32.HI R, RZ, 0x17, R"
+   ],
+   [
+    "@P BRA `(B+4)",
+    "ISETP.GT.AND P, PT, R, 0xfe, PT"
+   ],
+   [
+    "@P BRA `(B+5)",
+    "ISETP.GE.AND P, PT, R, 0x1, PT"
+   ],
+   [
+    "@!P BRA `(B+4)",
+    "ISETP.GE.AND P, PT, R, -0x18, PT",
+    "LOP3.LUT R, R, 0x80000000, RZ, 0xc0, !PT"
+   ],
+   [
+    "BRA `(B+3)",
+    "FFMA.RM R, R, R, R",
+    "FFMA.RP R, R, R, R",
+    "FFMA.RZ R, R, R, R",
+    "FSETP.NEU.FTZ.AND P, PT, R, R, PT",
+    "IADD3 R, PT, PT, -R, RZ, RZ",
+    "IADD3 R, PT, PT, R, 0x20, RZ",
+    "IADD3 R, PT, PT, R, R, RZ",
+    "ISETP.NE.AND P, PT, R, RZ, P",
+    "ISETP.NE.AND P, PT, R, RZ, PT",
+    "ISETP.NE.AND P, PT, R, RZ, PT",
+    "LOP3.LUT R, R, 0x1, R, 0xf8, !PT",
+    "LOP3.LUT R, R, 0x7fffff, RZ, 0xc0, !PT",
+    "LOP3.LUT R, R, 0x800000, RZ, 0xfc, !PT",
+    "LOP3.LUT R, R, R, RZ, 0xc0, !PT",
+    "LOP3.LUT R, R, R, RZ, 0xfc, !PT",
+    "PLOP3.LUT P, PT, P, P, PT, 0xf8, 0x8f",
+    "SEL R, R, RZ, P",
+    "SEL R, RZ, 0x1, !P",
+    "SHF.L.U32 R, R, R, RZ",
+    "SHF.R.U32.HI R, RZ, 0x1, R",
+    "SHF.R.U32.HI R, RZ, R, R"
+   ],
+   [
+    "BRA `(B+2)",
+    "LOP3.LUT R, R, 0x7f800000, RZ, 0xfc, !PT",
+    "LOP3.LUT R, R, 0x80000000, RZ, 0xc0, !PT"
+   ],
+   [
+    "IMAD R, R, 0x800000, R"
+   ],
+   [
+    "BSYNC.RECONVERGENT B"
+   ],
+   [
+    "BRA `(B+5)"
+   ],
+   [
+    "BRA `(B+4)",
+    "LOP3.LUT R, R, 0x7f800000, RZ, 0xfc, !PT",
+    "LOP3.LUT R, R, 0x80000000, R, 0x48, !PT"
+   ],
+   [
+    "BRA `(B+3)",
+    "LOP3.LUT R, R, 0x80000000, R, 0x48, !PT"
+   ],
+   [
+    "BRA `(B+2)",
+    "MUFU.RSQ R, -QNAN"
+   ],
+   [
+    "FADD.FTZ R, R, R"
+   ],
+   [
+    "BSYNC.RECONVERGENT B"
+   ],
+   [
+    "MOV R, 0x00000000",
+    "RET.REL.NODEC R `(caller)"
+   ]
+  ],
+  "5158ef90e4234a25": [
+   [
+    "@P IADD.64 R, -R, R",
+    "@P IADD.64 R, R, 0x1",
+    "@P IADD.64 R, R, 0x1",
+    "F2I.U64.TRUNC R, R",
+    "I2F.U64.RP R, R",
+    "IADD.64 R, R, -R",
+    "IADD3 R, P, PT, R, R, RZ",
+    "IADD3 R, P, PT, R, R, RZ",
+    "IADD3 R, P, PT, R, R, RZ",
+    "IADD3 R, P, PT, RZ, -R, RZ",
+    "IADD3 R, P, PT, RZ, -R, RZ",
+    "IADD3 R, PT, PT, R, 0x1ffffffe, RZ",
+    "IADD3.X R, PT, PT, R, R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, R, R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, R, RZ, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, RZ, R, P, P",
+    "IADD3.X R, PT, PT, RZ, RZ, R, P, P",
+    "IADD3.X R, PT, PT, RZ, ~R, RZ, P, !PT",
+    "IADD3.X R, PT, PT, RZ, ~R, RZ, P, !PT",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, R",
+    "IMAD R, R, R, RZ",
+    "IMAD R, R, R, RZ",
+    "IMAD R, R, R, RZ",
+    "IMAD.HI.U32 R, P, R, R, R",
+    "IMAD.HI.U32 R, P, R, R, R",
+    "IMAD.HI.U32 R, P, R, R, R",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.HI.U32 R, R, R, RZ",
+    "IMAD.WIDE.U32 R, P, R, R, R",
+    "IMAD.WIDE.U32 R, P, R, R, R",
+    "IMAD.WIDE.U32 R, R, R, R",
+    "IMAD.WIDE.U32 R, R, R, RZ",
+    "IMAD.WIDE.U32 R, R, R, RZ",
+    "IMAD.WIDE.U32 R, R, R, RZ",
+    "ISETP.GE.U64.AND P, PT, R, R, PT",
+    "ISETP.GE.U64.AND P, PT, R, R, PT",
+    "ISETP.NE.S64.AND P, PT, R, RZ, PT",
+    "MOV R, 0x00000000",
+    "MOV R, 0x00000000",
+    "MUFU.RCP R, R",
+    "NOP",
+    "NOP",
+    "NOP",
+    "RET.REL.NODEC R `(caller)",
+    "SEL.64 R, R, -0x1, P"
+   ]
+  ],
+  "737c44ee88a60d48": [
+   [
+    "@P BRA `(B+2)",
+    "BSSY.RECONVERGENT B, `(B+6)",
+    "IMAD.SHL.U32 R, R, 0x2, RZ",
+    "ISETP.NE.U32.AND P, PT, R, RZ, PT",
+    "SHF.R.U32.HI R, RZ, 0x18, R"
+   ],
+   [
+    "@!P MUFU.RCP R, R",
+    "@P FADD.FTZ R, -R, -RZ",
+    "@P FFMA R, R, 1.84467440737095516160e+19, RZ",
+    "@P FFMA R, R, 1.84467440737095516160e+19, RZ",
+    "@P FFMA R, R, R, -1",
+    "@P FFMA R, R, R, R",
+    "@P MUFU.RCP R, R",
+    "BRA `(B+4)",
+    "IMAD.SHL.U32 R, R, 0x2, RZ",
+    "ISETP.NE.AND P, PT, R, RZ, PT"
+   ],
+   [
+    "@P BRA `(B+2)",
+    "IADD3 R, PT, PT, R, -0xfd, RZ",
+    "ISETP.GT.U32.AND P, PT, R, 0x1, PT"
+   ],
+   [
+    "@!P IADD3 R, PT, PT, R, 0x1, RZ",
+    "@!P IMAD.SHL.U32 R, R, 0x2, RZ",
+    "BRA `(B+2)",
+    "FADD.FTZ R, -R, -RZ",
+    "FFMA R, R, R, -1",
+    "FFMA.RM R, R, R, R",
+    "FFMA.RP R, R, R, R",
+    "FSETP.NEU.FTZ.AND P, PT, R, R, PT",
+    "IADD3 R, PT, PT, -R, RZ, RZ",
+    "IADD3 R, PT, PT, -R, RZ, RZ",
+    "IADD3 R, PT, PT, R, -0xfc, RZ",
+    "ISETP.GE.AND P, PT, R, RZ, PT",
+    "LOP3.LUT P, RZ, R, 0x1, RZ, 0xc0, !PT",
+    "LOP3.LUT P, RZ, R, 0x2, RZ, 0xc0, !PT",
+    "LOP3.LUT P, RZ, R, 0x7fffff, RZ, 0xc0, !PT",
+    "LOP3.LUT P, RZ, R, R, R, 0xf8, !PT",
+    "LOP3.LUT R, R, 0x3f800000, RZ, 0xfc, !PT",
+    "LOP3.LUT R, R, 0x7fffff, RZ, 0xc0, !PT",
+    "LOP3.LUT R, R, 0x7fffff, RZ, 0xc0, !PT",
+    "LOP3.LUT R, R, 0x800000, RZ, 0xfc, !PT",
+    "LOP3.LUT R, R, 0x80000000, R, 0xf8, !PT",
+    "LOP3.LUT R, R, R, RZ, 0xc0, !PT",
+    "MOV R, 0x00000003",
+    "MUFU.RCP R, R",
+    "PLOP3.LUT P, PT, P, P, P, 0xe0, 0x0",
+    "SEL R, RZ, 0x1, !P",
+    "SEL R, RZ, 0xffffffff, !P",
+    "SHF.L.U32 R, R, R, RZ",
+    "SHF.R.U32.HI R, RZ, R, R",
+    "SHF.R.U32.HI R, RZ, R, R"
+   ],
+   [
+    "MUFU.RCP R, R"
+   ],
+   [
+    "BSYNC.RECONVERGENT B"
+   ],
+   [
+    "MOV R, 0x00000000",
+    "RET.REL.NODEC R `(caller)"
+   ]
+  ],
+  "be72a56c38542422": [
+   [
+    "@!P BRA `(B+4)",
+    "@!P MOV R, R",
+    "LOP3.LUT P, RZ, R, 0x7fffffff, RZ, 0xc0, !PT"
+   ],
+   [
+    "@!P BRA `(B+3)",
+    "@!P MOV R, 0x7fffffff",
+    "FSETP.GEU.FTZ.AND P, PT, R, RZ, PT"
+   ],
+   [
+    "@P BRA `(B+2)",
+    "@P FADD.FTZ R, R, 1",
+    "FSETP.GTU.FTZ.AND P, PT, |R|, +INF, PT"
+   ],
+   [
+    "@!P MOV R, R",
+    "@P FADD.FTZ R, -R, -RZ",
+    "@P FFMA R, R, 1.84467440737095516160e+19, RZ",
+    "@P FFMA R, R, R, R",
+    "@P FFMA R, R, R, R",
+    "@P FMUL.FTZ R, R, 0.5",
+    "@P FMUL.FTZ R, R, 2.3283064365386962891e-10",
+    "@P FMUL.FTZ R, R, R",
+    "@P MUFU.RSQ R, R",
+    "FSETP.NEU.FTZ.AND P, PT, |R|, +INF, PT"
+   ],
+   [
+    "MOV R, 0x00000000",
+    "RET.REL.NODEC R `(caller)"
+   ]
+  ],
+  "f28777dafff5f987": [
+   [
+    "@!P MOV R, 0xffffffff",
+    "F2I.U32.TRUNC.NTZ R, R",
+    "FMUL R, R, R",
+    "FMUL R, R, R",
+    "FMUL.RZ R, R, R",
+    "FSEL R, R, 0.25, !P",
+    "FSEL R, R, 1, !P",
+    "FSETP.GEU.AND P, PT, |R|, 1.175494350822287508e-38, PT",
+    "FSETP.GT.AND P, PT, |R|, 8.50705917302346158658e+37, PT",
+    "I2F.U16 R, R",
+    "I2FP.F32.U32.RZ R, R",
+    "IADD3 R, PT, PT, R, 0x2, RZ",
+    "ISETP.NE.U32.AND P, PT, R, RZ, PT",
+    "LOP3.LUT R, R, 0xffff, RZ, 0xc0, !PT",
+    "MOV R, 0x00000000",
+    "MOV R, 0x4b800000",
+    "MUFU.RCP R, R",
+    "RET.REL.NODEC R `(caller)"
+   ]
+  ]
+ }
+}
