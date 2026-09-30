@@ -205,20 +205,16 @@ def test_the_cache_key_is_the_derive_without_its_out_dir_and_workload_path(tmp_p
     assert PC.key(_derive("/x", a), workload=a, tree=None, device=DEV) is None, "no tree commit, no cache"
 
 
-def test_the_derive_key_s_target_is_the_declared_one_and_a_cpu_host_needs_no_nvidia_smi(tmp_path, monkeypatch):
+def test_the_derive_key_s_target_is_the_declared_one_and_a_cpu_host_needs_no_nvidia_smi(monkeypatch):
     from types import SimpleNamespace
 
     def no_nvidia_smi(*a, **k):
         raise FileNotFoundError("nvidia-smi")
 
     monkeypatch.setattr(RC.subprocess, "run", no_nvidia_smi)
-    declared = tmp_path / "declared.json"
-    declared.write_text(json.dumps({"target": {"compute_capability": [12, 0], "num_sms": 188}}))
-    row = SimpleNamespace(wl=str(declared), path=lambda p: p)
-    assert RC.device_id(row) == {"declared_target": {"compute_capability": [12, 0], "num_sms": 188}}
-    plain = tmp_path / "plain.json"
-    plain.write_text(json.dumps({"requests": []}))
-    assert RC.device_id(SimpleNamespace(wl=str(plain), path=lambda p: p)) is None, "no target and no GPU: no key, the plain derive"
+    tgt = json.dumps({"compute_capability": [12, 0], "num_sms": 188})
+    assert RC.device_id(SimpleNamespace(tgt=tgt)) == {"declared_target": tgt}
+    assert RC.device_id(SimpleNamespace(tgt="")) is None, "no target and no GPU: no key, the plain derive"
 
 
 def test_a_published_derive_is_restored_whole_and_the_first_publisher_stands(tmp_path):

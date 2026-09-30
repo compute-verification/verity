@@ -70,11 +70,10 @@ def config_record(row: Any) -> dict[str, Any]:
 
 
 def device_id(row: Any) -> dict[str, Any] | None:
-    """What the derives are for, part of a derive's cache key: the workload's declared target when it declares one (the Build derives
-    for it on any host, a CPU-only one included), else the GPU model the host derives on (name, compute capability); None when neither
-    is known."""
+    """What the derives are for, part of a derive's cache key: the row's declared target when it declares one (the Build derives for it
+    on any host, a GPU-free one included), else the GPU model the host derives on (name, compute capability); None when neither is known."""
     if not hasattr(row, "_device_id"):
-        declared = (R.load_json(row.path(row.wl)) or {}).get("target")
+        declared = getattr(row, "tgt", "")
         first: list[str] = []
         if not declared:
             try:
