@@ -265,6 +265,10 @@ def modal_local(v, delta, cdf, L, rea, widths=(1, 4, 16)):
 
 
 DELTA = {"nv": 0.25, "mx": 0.25}
+ZERO_SCREENED = False
+#: B̃'s F1′ is charged at this multiple of its expectation per window, capped at the window's MACs, in the tile debit
+#: and in R1 (theory §6.12; #556 `546ded09`; ratings.md 17:32Z)
+F1_B_OVERFIT = 10.0
 
 
 def stats_fmt(X, fmt):
@@ -409,7 +413,9 @@ def law_side(X, rng, law="exact", draws=24, fmt="nv", sd=None):
         mod = modal_of([gauss_bytes(X, alpha, rho2, rng) for _ in range(draws)])
         rea = gauss_bytes(X, alpha, rho2, rng)
         p, a0 = p_gauss(X, alpha, rho2)
-    p = np.where(dead | np.repeat(scr, B, axis=1), 0.0, p)
+    # p_t = 0 on witness-dead codes only: a screened block's other codes keep their own p_t (theory §6.2 as corrected,
+    # ratings.md 17:32Z; #556 `2e2f3378`); ZERO_SCREENED restores the earlier census's whole-block zero
+    p = np.where(dead | (np.repeat(scr, B, axis=1) if ZERO_SCREENED else False), 0.0, p)
     return dict(p=p, a0=a0, mod=mod, rea=rea, off=(mod != rea), scr=scr, dead=dead, dnf=dnf,
                 eh=eh if law != "gauss" else None, uncertified=uncertified, blocks=int(rea.size))
 
@@ -662,6 +668,29 @@ VARIANTS = ("base", "f1", "f1_in", "f1_in_t3e")
 # witness-dead; theory-pearl-c4-domain.md §6.11's reserve form) in place of per screened block pair
 
 
+def vex_greedy(ua, ub, pairs, sdw, sv, cw, n, k, okr, okc):
+    """V-EX (theory-pearl-c4-domain.md §6.13): the rows an honest prover would volunteer to bring one tile's credited
+    debit under the cap, greedily (each step drops the A or B row whose removal lowers the debit most). ua, ub: the
+    tile's rows' F1′ in FP4 units per word (B̃ at its overfit factor); pairs: (64, 64) dead-dead positions per word;
+    sdw: A rows' witness-dead counts. Returns (A rows, B rows) volunteered, as tile-local indices."""
+    R, Cs = set(np.nonzero(okr)[0].tolist()), set(np.nonzero(okc)[0].tolist())
+
+    def deb(R, Cs):
+        if not R or not Cs:
+            return 0.0
+        r, c = np.array(sorted(R)), np.array(sorted(Cs))
+        cr = len(r) * len(c) * cw
+        return float((len(c) * ua[r].sum() + len(r) * ub[c].sum() + pairs[np.ix_(r, c)].sum()
+                      + len(c) * FS / n * sdw[r].sum()) / cr + sv * k / cw)
+    vol_a, vol_b = [], []
+    d = deb(R, Cs)
+    while d > CAP and R and Cs:
+        cand = [(deb(R - {i}, Cs), "a", i) for i in R] + [(deb(R, Cs - {j}), "b", j) for j in Cs]
+        d, side, idx = min(cand)
+        (R.discard(idx), vol_a.append(idx)) if side == "a" else (Cs.discard(idx), vol_b.append(idx))
+    return vol_a, vol_b
+
+
 def split_keep(X):
     """GPU 5's stand-in split unit (`benchmarks/pouw/pearl_c4/real.py`): the ⌊k/100⌋ channels with the largest max|x| over
     the captured rows leave the chain as the side product, ties to the lower channel; the kept ones, in order."""
@@ -676,7 +705,7 @@ def unit(Z, keep, k_unit):
     return out
 
 
-def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems=4_000_000):
+def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems=4_000_000, split_from=None):
     """X: (m, k) activations as a float array; W: (n, k) weights as a torch tensor. `max_cols` 64-row weight tiles are
     drawn by `rng` (every tile when it is 0 or at least n/64); they are formed and replayed in chunks of about
     `chunk_elems` elements. With `split`, the census is of the split unit: the kept channels zero-padded to a multiple
@@ -690,7 +719,8 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
     cols = list(range(ntiles)) if max_cols <= 0 or max_cols >= ntiles else sorted(rng.choice(ntiles, max_cols, replace=False))
     side_share, keep = 0.0, None
     if split:
-        keep = split_keep(X)
+        # the split's channels, from these rows or (a crossed census) from another prompt's rows of the same linear
+        keep = split_keep(X if split_from is None else bf16(split_from))
         k_unit = -(-len(keep) // 128) * 128
         X = unit(X, keep, k_unit)
         side_share = 1 - len(keep) / k_full
@@ -708,7 +738,8 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
     # exceeds ρ·(its cell credit) is uncredited; a tile whose credited rows' debit exceeds the cap is rejected
     exa = uia > CAP * cw
     dead_a = a["dead"].astype(np.float32)
-    rows, r1, r1e = [], [], []
+    rows, r1, r1e, rn = [], [], [], []
+    vex_a, vex_b = set(), set()
     wstat = dict(fb=[], sb=[], off=0.0, blocks=0, unc=0, exb=0, nb=0)
     per = max(1, int(chunk_elems // (T * k)))
     for c0 in range(0, len(cols), per):
@@ -722,6 +753,8 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
         db, dib, sb = f1_windows(lb["p"], lb["off"], B=B)
         ub, uib = 128 * db.sum(1), 128 * dib.sum(1)
         exb = uib > CAP * cw
+        uibn = 128 * np.minimum(1.0, F1_B_OVERFIT * dib).sum(1)         # B̃ at its overfit factor
+        exbn = uibn > CAP * cw
         dead_b = b["dead"].astype(np.float32)
         wstat["fb"].append(db.mean(1))
         wstat["sb"].append(float(sb.mean()))
@@ -752,7 +785,22 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
                 rows.append(dict(cred=cred, base=t1 + t3 + t4, f1=f1 + t3 + t4 + f2, f1_in=f1i + t3 + t4 + f2,
                                  f1_in_t3e=f1i + t3e + t4 + f2, t_f1=f1, t_f1_in=f1i, t3=t3, t3e=t3e, t4=t4, f2=f2,
                                  f2_cl0=sv0, fAB=fA + fB, f1_chain=f1_chain))
-                okr, okc = ok & ~exa[I], ~exb[J]
+                # the rule (ratings.md 15:18Z, 17:25Z, 17:32Z): R1 with B̃ at its overfit factor, term 3 per element
+                okr, okcn = ok & ~exa[I], ~exbn[J]
+                nr, nc = int(okr.sum()), int(okcn.sum())
+                if nr == 0 or nc == 0:
+                    rn.append((cred, 0.0, 0.0))
+                else:
+                    crn = nr * nc * cw
+                    pairs = dead_a[I] @ dead_b[J].T
+                    debn = ((nc * uia[I][okr].sum() + nr * uibn[J][okcn].sum() + pairs[np.ix_(okr, okcn)].sum()
+                             + nc * FS / n * a["sdw"][I][okr].sum()) / crn + sv * k / cw)
+                    rn.append((cred, crn if debn <= CAP else 0.0, debn))
+                    if debn > CAP:
+                        va, vb = vex_greedy(uia[I], uibn[J], pairs, a["sdw"][I], sv, cw, n, k, okr, okcn)
+                        vex_a.update(r * T + i for i in va)
+                        vex_b.update(cc[ci] * T + j for j in vb)
+                okc = ~exb[J]
                 nr, nc = int(okr.sum()), int(okc.sum())
                 if nr == 0 or nc == 0:
                     r1.append((cred, 0.0, 0.0))
@@ -792,6 +840,11 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
                      rows_excluded_a=float(exa[:m].mean()), rows_excluded_b=float(wstat["exb"] / max(wstat["nb"], 1)),
                      max_debit=float(q[:, 2].max()),
                      tiles_at=dict((str(f), int((q[:, 2] > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)))
+    qn = np.array(rn)
+    out["norm"] = dict(uncredited=float(1 - qn[:, 1].sum() / qn[:, 0].sum()),
+                       tiles_rejected=int(((qn[:, 1] == 0) & (qn[:, 2] > CAP)).sum()), max_debit=float(qn[:, 2].max()),
+                       tiles_at=dict((str(f), int((qn[:, 2] > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)),
+                       vex_rows_a=len(vex_a), vex_rows_b=len(vex_b), vex_cap_a=-(-m // 64), vex_cap_b=-(-n // 64))
     qe = np.array(r1e)
     out["r1_t3e"] = dict(uncredited=float(1 - qe[:, 1].sum() / qe[:, 0].sum()),
                          tiles_rejected=int(((qe[:, 1] == 0) & (qe[:, 2] > CAP)).sum()), max_debit=float(qe[:, 2].max()),
@@ -858,13 +911,20 @@ def real(args):
     keep = (lambda nm, L: lo_hi[0] <= layer_of(nm) <= lo_hi[-1]) if lo_hi else \
         (lambda nm, L: layer_of(nm) % args.layer_step == 0 or layer_of(nm) == L - 1)
     lins, got, weight, tokens = capture(args, keep)
+    other = {}
+    if args.split_from:
+        import copy
+        a2 = copy.copy(args)
+        a2.text = args.split_from
+        other = capture(a2, keep)[1]
     rng = np.random.default_rng(args.seed)
     allres = {f: {} for f in args.fmts}
     t0 = time.time()
     for i, nm in enumerate(lins):
         x, w = got.pop(nm).float().numpy(), weight(nm)
         for fmt in args.fmts:
-            r = allres[fmt][nm] = linear(x, w, rng, args.law, args.max_cols, args.m_shape, fmt, args.split)
+            r = allres[fmt][nm] = linear(x, w, rng, args.law, args.max_cols, args.m_shape, fmt, args.split,
+                                         split_from=other[nm].float().numpy() if nm in other else None)
             if r["f1"]["over"] > 0 or r["base"]["over"] > 0 or r["f1_in"]["over"] > 0 or i % 20 == 0:
                 print(f"{fmt} {nm:40s} k={r['k']:5d} n={r['n']:5d} over cap: base {100*r['base']['over']:.1f}% F1′ {100*r['f1']['over']:.1f}% "
                       f"κ-in {100*r['f1_in']['over']:.1f}%  worst {100*r['f1']['max']:.3f}% "
@@ -907,10 +967,19 @@ def summarize(args, res, tokens, t0, fmt):
                                   "law": sorted({r.get("law", "exact") for r in res.values()})}
     summ["weight_tiles"] = {"drawn": sum(r.get("weight_tiles", 0) for r in res.values()),
                             "of": sum(r.get("weight_tiles_total", 0) for r in res.values())}
+    if all("norm" in r for r in res.values()):
+        summ["norm"] = {"uncredited": wavg(lambda r: r["norm"]["uncredited"]),
+                        "tiles_rejected": sum(r["norm"]["tiles_rejected"] for r in res.values()),
+                        "max_tile_debit": max(r["norm"]["max_debit"] for r in res.values()),
+                        "worst_linear": max(res, key=lambda nm: res[nm]["norm"]["max_debit"]),
+                        "vex_rows_a": sum(r["norm"]["vex_rows_a"] for r in res.values()),
+                        "vex_rows_b": sum(r["norm"]["vex_rows_b"] for r in res.values()),
+                        "vex_over_cap_linears": sum(r["norm"]["vex_rows_a"] > r["norm"]["vex_cap_a"]
+                                                    or r["norm"]["vex_rows_b"] > r["norm"]["vex_cap_b"] for r in res.values())}
     summ["r1_t3e"] = {"uncredited": wavg(lambda r: r.get("r1_t3e", r["r1"])["uncredited"]),
                       "tiles_rejected": sum(r.get("r1_t3e", r["r1"])["tiles_rejected"] for r in res.values()),
                       "max_tile_debit": max(r.get("r1_t3e", r["r1"])["max_debit"] for r in res.values())}
-    for v in ("f1_in", "r1", "r1_t3e"):
+    for v in ("f1_in", "r1", "r1_t3e") + (("norm",) if "norm" in summ else ()):
         summ[v]["tiles_at_fraction_of_cap"] = {f: sum(r[v].get("tiles_at", {}).get(f, 0) for r in res.values())
                                               for f in ("0.5", "0.8", "0.9", "1.0")}
     summ["f1_chain_tiles_over_cap"] = sum(r["tiles_f1_chain_over"] for r in res.values())
@@ -1003,6 +1072,7 @@ def main(argv=None) -> int:
     r.add_argument("--max-cols", type=int, default=8, help="64-row weight tiles sampled per linear (0: every tile)")
     r.add_argument("--layers", default=None, help="only these decoder layers, e.g. 0-7")
     r.add_argument("--seed", type=int, default=20260930, help="the census's salts and weight-tile draws")
+    r.add_argument("--split-from", default=None, help="choose the split's channels from this prompt's rows (a crossed census)")
     r.add_argument("--layer-step", type=int, default=1, help="decoder layers whose index is a multiple of this, and the last")
     r.add_argument("--m-shape", type=int, default=0, help="the GEMM's m for F2's c_L (default: the tokens captured)")
     r.add_argument("--fmts", nargs="+", choices=("nv", "mx"), default=["nv", "mx"], help="NVFP4 and/or MXFP4 forming")
