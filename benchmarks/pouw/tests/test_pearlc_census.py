@@ -6,6 +6,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import numpy as np
+
 spec = importlib.util.spec_from_file_location("pouw_pearlc_census", Path(__file__).parents[1] / "pearlc_census.py")
 C = importlib.util.module_from_spec(spec)
 sys.modules["pouw_pearlc_census"] = C
@@ -25,6 +27,33 @@ def test_atom_is_parametric_and_census_reruns_under_ada():
         assert rows[0]["rules_ok"] and rows[0]["debit_share"] >= rows[0]["tile_identity_atoms"] / rows[0]["atoms"]
         C.set_atom("16,16:14:-139")
         assert C.ATOM_GROUPS == (16, 16) and C.ATOM_WIDTH == 14
+    finally:
+        C.set_atom("hopper-e4m3-k32")
+
+
+def test_atoms_are_verity_models_and_aliases_resolve():
+    from verity.ml.tc.models import ADA_E4M3_M16N8K32, HOPPER_E4M3_K32
+    for name, model in (("hopper-e4m3-k32", HOPPER_E4M3_K32), ("ada-e4m3-k32", ADA_E4M3_M16N8K32)):
+        assert C.ATOMS[name] == (tuple(model.groups), model.width, model.zero_exponent)
+    try:
+        C.set_atom("sm120")
+        assert (C.ATOM_NAME, C.ATOM_GROUPS, C.ATOM_WIDTH, C.ATOM_ZERO) == ("sm120-e4m3-k32", (32,), 26, -133)
+    finally:
+        C.set_atom("hopper-e4m3-k32")
+
+
+def test_wide_adder_step_is_inexact_when_the_fp32_word_drops_bits():
+    """128 + 2^-18 needs 26 bits: the 26-bit adder holds it, the FP32 word keeps 24, so the step is not exact."""
+    a = np.zeros((1, 32), dtype=np.uint8)
+    b = np.zeros((1, 32), dtype=np.uint8)
+    a[0, :2], b[0, :2] = (0x58, 0x01), (0x50, 0x01)
+    try:
+        C.set_atom("sm120")
+        D, exact = C.step(np.zeros(1), a, b)
+        assert D[0] == 128.0 and not exact[0]
+        a[0, 1] = 0
+        D, exact = C.step(np.zeros(1), a, b)
+        assert D[0] == 128.0 and exact[0]
     finally:
         C.set_atom("hopper-e4m3-k32")
 

@@ -64,14 +64,16 @@ ATOMS = {
     "ada-e4m3-k32": ((16, 16), 14, -139),      # ADA_E4M3_M16N8K32 (RTX 4090)
     "sm120-e4m3-k32": ((32,), 26, -133),       # BLACKWELL_SM120_E4M3_M16N8K32 (RTX PRO 6000, r20260930-031244-ecbc)
 }
+ATOM_ALIASES = {"hopper": "hopper-e4m3-k32", "sm120": "sm120-e4m3-k32"}
 ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO = ATOMS["hopper-e4m3-k32"]
 ATOM_NAME = "hopper-e4m3-k32"
 
 
 def set_atom(name: str) -> None:
-    """Select the atom model the chain and debit replay; `--atom`.  A custom `groups:width:zero` (e.g. `16,16:14:-139`)
-    lets the captured sm_120 step run before it is pinned in `verity.ml.tc`."""
+    """Select the atom model the chain and debit replay; `--atom`: a name in ATOMS or ATOM_ALIASES, or a custom
+    `groups:width:zero` (e.g. `16,16:14:-139`) for a captured step before it is pinned in `verity.ml.tc`."""
     global ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO, ATOM_NAME
+    name = ATOM_ALIASES.get(name, name)
     if name in ATOMS:
         ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO = ATOMS[name]
     else:
@@ -142,6 +144,8 @@ def _group_step(C: np.ndarray, a: np.ndarray, b: np.ndarray, width: int, zero: i
     lost |= sub & ((m & ((np.int64(1) << subsh) - 1)) != 0)
     m = np.where(sub, m >> subsh, m)
     ex = np.where(sub, -126, ex)
+    if rs < 0:
+        lost |= (m & ((np.int64(1) << -rs) - 1)) != 0      # the FP32 word keeps 24 of the adder's bits
     v = np.ldexp((m << rs).astype(np.float64) if rs >= 0 else (m >> -rs).astype(np.float64), (ex - 23).astype(np.int64))
     return np.where(m == 0, 0.0, np.where(neg, -v, v)), ~lost
 
@@ -395,6 +399,91 @@ def debit_parts(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, n
     return flags, eF, inside
 
 
+def debit_pure(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The replayed debit per word with no promotion (one chain over all of k): flag atom t when skipping it alone leaves the
+    word's final value unchanged. It contains the identities. Joint skips of several atoms are the chain's cross-atom hole,
+    which only TT_OUT carries once there are no promotion groups to bound them."""
+    P, k = a.shape
+    T = k // 32
+    Cs, C = [np.zeros(P)], np.zeros(P)
+    for t in range(T):
+        C, _ = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
+        Cs.append(C)
+    final = Cs[-1]
+    flags = np.zeros((P, T), dtype=bool)
+    for t in range(T):
+        C = Cs[t]
+        for h in range(t + 1, T):
+            C, _ = step(C, a[:, 32 * h:32 * h + 32], b[:, 32 * h:32 * h + 32])
+        flags[:, t] = C == final
+    return flags
+
+
+def greedy_pure(ap: np.ndarray, bp: np.ndarray) -> set:
+    """The greedy joint set of one word with no promotion (`ap`, `bp`: (1, k) codes): atom pairs whose joint skip leaves the
+    final value unchanged while neither atom alone does, packed greedily, then every single atom that keeps it unchanged.
+    It lower-bounds the largest jointly skippable set, the unpromoted chain's cross-atom hole. Replayed before return."""
+    T = ap.shape[1] // 32
+    A = [ap[:, 32 * t:32 * t + 32] for t in range(T)]
+    B = [bp[:, 32 * t:32 * t + 32] for t in range(T)]
+
+    def run(S: set) -> float:
+        C = np.zeros(1)
+        for t in range(T):
+            if t not in S:
+                C, _ = step(C, A[t], B[t])
+        return float(C[0])
+
+    final = run(set())
+    alone = np.array([run({t}) == final for t in range(T)])
+    pairs = []
+    for t1 in range(T):
+        if alone[t1]:
+            continue
+        # every second atom t2 > t1 at once: batch b skips t1 and atom t1 + 1 + b
+        nb = T - t1 - 1
+        if nb <= 0:
+            continue
+        C = np.zeros(1)
+        for t in range(t1):
+            C, _ = step(C, A[t], B[t])
+        X = np.repeat(C, nb)
+        for h in range(t1 + 1, T):
+            live = np.arange(nb) != h - t1 - 1
+            D, _ = step(X, np.repeat(A[h], nb, 0), np.repeat(B[h], nb, 0))
+            X = np.where(live, D, X)
+        for b in np.flatnonzero(X == final):
+            t2 = t1 + 1 + int(b)
+            if not alone[t2]:
+                pairs.append((t1, t2))
+    S: set = set()
+    for t1, t2 in pairs:
+        if t1 not in S and t2 not in S and run(S | {t1, t2}) == final:
+            S |= {t1, t2}
+    for t in range(T):
+        if t not in S and run(S | {t}) == final:
+            S.add(t)
+    assert run(S) == final
+    return S
+
+
+def ticket(a: np.ndarray, b: np.ndarray, G: int) -> np.ndarray:
+    """Each word's ticket: the promoted FP32 total (G > 0), or the one unpromoted chain's value (G = 0)."""
+    T = a.shape[1] // 32
+    if G:
+        return group_sums(a, b, G)[1].astype(np.float64)
+    C = np.zeros(a.shape[0])
+    for t in range(T):
+        C, _ = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
+    return C
+
+
+def exact_dot(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The exact dot products of the codes' values: exact in float64, since every product is a multiple of 2^-18 below 2^18
+    and k <= 2^16 keeps every partial sum within 53 bits."""
+    return (val(a) * val(b)).sum(1)
+
+
 def group_sums(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
     """Each word's group accumulators (words, groups) and its final promoted total (the ticket word)."""
     T = a.shape[1] // 32
@@ -586,6 +675,8 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
     A, B = a[ii.ravel()], b[jj.ravel()]
     out = []
     finals = {}
+    exact = exact_dot(A, B)
+    words = {G: ticket(A, B, G) for G in (0, 4)}
     for G in (0, 4):
         tid, tex, word_id, promo, finals[G], word_exact = chain(A, B, G)
         T = k // 32
@@ -596,13 +687,45 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                "tile_exact_atoms": int(tex.sum()), "word_exact_steps": round(word_exact, 6),
                "promotion_identities": promo, "word_identity": round(word_id, 6),
                "noise_free_entries": float(nfA.mean()), "double_rounding_differs": round((drA + drB) / 2, 6),
-               "skippable_share": skip / T}
+               "skippable_share": skip / T, "atom": ATOM_NAME,
+               "word_exact_share": round(float((words[G] == exact).mean()), 6),
+               "promoted_equals_unpromoted_share": round(float((words[0] == words[4]).mean()), 6)}
         if G:
             # The unpromoted attack: the pure chain's word in place of the ticket word, per word and whole tiles.
             same = finals[0] == finals[G]
             full = T // G * G
             row.update({"unpromoted_equal_words": round(float(same.mean()), 6), "unpromoted_equal_tile": bool(same.all()),
                         "tile_exact_groups": round(float(tex[:full].reshape(-1, G).all(1).mean()), 6) if full else 0.0})
+        if not G and with_debit and ATOM_NAME != "hopper-e4m3-k32":
+            flags = debit_pure(A, B)
+            per_word = flags.sum(1)
+            row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
+                        "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
+                        "tile_all_flagged_share": round(float(flags.all(0).mean()), 6)})
+            if cross_words:
+                sample = np.unique(np.linspace(0, len(A) - 1, cross_words).astype(int))
+                sets = [greedy_pure(A[p:p + 1], B[p:p + 1]) for p in sample]
+                size = np.array([len(S) for S in sets])
+                beyond = np.array([sum(1 for t in S if not flags[p, t]) for S, p in zip(sets, sample)])
+                row.update({"cross_group_words": len(sample), "cross_group_share_mean": round(float(size.mean()) / T, 6),
+                            "cross_group_share_max": round(float(size.max()) / T, 6),
+                            "cross_group_beyond_debit_mean": round(float(beyond.mean()) / T, 6),
+                            "cross_group_beyond_debit_max": round(float(beyond.max()) / T, 6)})
+            if transfer_words and forming == "s5":
+                # The reviewer's transfer test on the unpromoted chain: a set found on a simulated draw, skipped on the real one.
+                sample = np.unique(np.linspace(0, len(A) - 1, transfer_words).astype(int))
+                a_sim = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A", "simulated"))[0][ii.ravel()]
+                b_sim = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B", "simulated"))[0][jj.ravel()]
+                hits = nonempty = 0
+                for p in sample:
+                    S_sim = greedy_pure(a_sim[p:p + 1], b_sim[p:p + 1])
+                    nonempty += bool(S_sim)
+                    C = np.zeros(1)
+                    for t in range(T):
+                        if t not in S_sim:
+                            C, _ = step(C, A[p:p + 1, 32 * t:32 * t + 32], B[p:p + 1, 32 * t:32 * t + 32])
+                    hits += bool(S_sim) and float(C[0]) == float(words[0][p])
+                row.update({"transfer_words": len(sample), "transfer_nonempty_sim_sets": nonempty, "transfer_hits": hits})
         if G and with_debit:
             flags, eF, inside = debit_parts(A, B, G)
             per_word = flags.sum(1)
@@ -646,7 +769,7 @@ def main() -> None:
     ap.add_argument("--forming", choices=("census", "s5"), default="census")
     ap.add_argument("--line-norm", type=float, default=256.0)
     ap.add_argument("--atom", default="hopper-e4m3-k32",
-                    help=f"the FP8 atom model: one of {', '.join(ATOMS)}, or groups:width:zero")
+                    help=f"the FP8 atom model: one of {', '.join([*ATOMS, *ATOM_ALIASES])}, or groups:width:zero")
     ap.add_argument("--exact-run-min", type=int, default=EXACT_RUN_MIN,
                     help="atoms in a tile-exact run before an exact rewrite pays (the card's break-even; 14 on the H100)")
     ap.add_argument("--debit", action="store_true",
