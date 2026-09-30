@@ -718,3 +718,17 @@ def test_n2_commit_refuses_before_touching_a_node(tmp_path):
     assert check("cov-g153", template="config-run-row") == 2
     assert check("cov-g153", env={**env["ENV"], "REVISION": ""}) == 2
     assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp2__")}) == 2
+
+
+def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
+    spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
+    pp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pp)
+    now = datetime.datetime(2026, 9, 30, 22, 0, 0, tzinfo=datetime.timezone.utc)
+    doc = lambda: {"nodes": {"n2": {"gpu_busy_5m": 0.9}}}
+    n1 = {"generated_at": "2026-09-30T21:50:00Z", "nodes": {"n1": {"gpu_busy_5m": 0.05}, "n2": {"gpu_busy_5m": 0.0}}}
+    merged = pp.merge(doc(), n1, now)
+    assert merged["nodes"]["n2"] == {"gpu_busy_5m": 0.9}
+    assert merged["nodes"]["n1"] == {"gpu_busy_5m": 0.05, "generated_at": "2026-09-30T21:50:00Z"}
+    assert "n1" not in pp.merge(doc(), {**n1, "generated_at": "2026-09-30T21:40:00Z"}, now)["nodes"]
+    assert pp.merge(doc(), None, now) == doc()

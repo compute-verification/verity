@@ -17,6 +17,8 @@ Monitors, appended to node_ops' `alerts.jsonl` once per lease or process (again 
 time counts as leased only). A job's kind is its header's `kind=`, else `unlabeled:<first two words of its name>`, or
 `timed:<who>` or `direct:<who>` outside the fill queue (a timed lease idles the node's other GPUs by design, and is never flagged).
 
+Node 1's own file (`/workspace/usage/infra-pool-n1.json`, kueue-fold's) is merged in as `nodes.n1` while it is under 15 min old.
+
     publish_pool.py [--out FILE] [--no-push]
 """
 from __future__ import annotations
@@ -35,6 +37,8 @@ FILL = Path(os.environ.get("FILL_DIR", "/workspace/pouw/fill"))
 OUT = Path(os.environ.get("POOL_OUT", "/workspace/pouw/infra/infra-pool.json"))
 DEST_HOST = os.environ.get("POOL_DEST_HOST", "vy-n1")
 DEST = os.environ.get("POOL_DEST", "/workspace/usage/infra-pool.json")
+OTHER = os.environ.get("POOL_OTHER", "/workspace/usage/infra-pool-n1.json")
+OTHER_MAX_AGE_S = 900
 USAGE = Path(os.environ.get("LEASE_USAGE", "/workspace/research/lease-usage.jsonl"))
 ALERTS = Path(os.environ.get("POOL_ALERTS", "/workspace/pouw/infra/alerts.jsonl"))
 STATE = Path(os.environ.get("POOL_STATE", "/workspace/pouw/infra/pool-monitor-state.json"))
@@ -282,6 +286,25 @@ def build(now: datetime) -> dict:
                 "timed_window": False}}}
 
 
+def merge(doc: dict, other: dict | None, now: datetime) -> dict:
+    """Node 1's own file (kueue-fold's `pool_n1.py`) joins `nodes` while it is under 15 min old; node 2's entry always wins."""
+    t = ts_or_none((other or {}).get("generated_at"))
+    if t and now - t <= timedelta(seconds=OTHER_MAX_AGE_S):
+        for name, node in (other.get("nodes") or {}).items():
+            if name != NODE:
+                doc["nodes"][name] = {**node, "generated_at": other["generated_at"]}
+    return doc
+
+
+def fetch_other() -> dict | None:
+    try:
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", DEST_HOST, f"cat {OTHER}"],
+                           capture_output=True, text=True, timeout=30)
+        return json.loads(r.stdout) if r.returncode == 0 else None
+    except (subprocess.SubprocessError, ValueError):
+        return None
+
+
 def push(path: Path) -> None:
     tmp = f"{DEST}.tmp-{NODE}"
     ssh = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
@@ -300,6 +323,7 @@ def main() -> int:
     doc = build(now)
     if not a.no_push:
         alert(doc["nodes"][NODE]["monitors"], now)
+        doc = merge(doc, fetch_other(), now)
     tmp = a.out.with_name(a.out.name + ".tmp")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     tmp.replace(a.out)
