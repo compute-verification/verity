@@ -243,3 +243,10 @@ def test_the_driver_frees_each_share_as_its_run_ends_and_records_it(tmp_path):
     assert started == [("a", [0], (0, 15)), ("b", [1], (16, 31)), ("c", [0], (0, 15))]
     assert [(d["row"], d["outcome"]) for d in doc["done"]] == [("a", "PASS"), ("b", "PASS"), ("c", "FAIL")]
     assert json.loads((tmp_path / "sweep.json").read_text())["done"] == doc["done"] and doc["pending"] == [] and doc["running"] == []
+
+
+def test_each_run_gets_its_share_as_the_build_budget_and_the_host_s_caches(tmp_path):
+    e = SW.child_env({"PATH": "/bin"}, _cfg("a", 300, 16), [1], list(range(16, 32)), tmp_path, "/cache/rules")
+    assert (e["CUDA_VISIBLE_DEVICES"], e["OMP_NUM_THREADS"], e["BUILD_RAM_BUDGET_GB"], e["VERITY_UNIT_RULE_CACHE"]) == ("1", "16", "300", "/cache/rules")
+    assert e["SWEEP_DIR"] == str(tmp_path / "rows") and e["PATH"] == "/bin"
+    assert "VERITY_UNIT_RULE_CACHE" not in SW.child_env({}, _cfg("a", 300), [0], [0], tmp_path, None)
