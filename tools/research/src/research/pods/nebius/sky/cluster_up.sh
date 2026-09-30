@@ -226,7 +226,7 @@ grep -q "metadata: {name: deployments-cpu}" "$QUEUES" && for what in hold:12:30 
   at=${what#*:}
   if [ ! -f "/etc/systemd/system/vy-quiet-$verb.timer" ]; then
     if [ "$mode" = --apply ]; then
-      printf '[Unit]\nDescription=quiet hour: %s the vLLM deployments queues' admissions\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-quiet-hour %s\n' "$verb" "$verb" \
+      printf '[Unit]\nDescription=quiet hour: %s admissions to the vLLM deployments queues\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-quiet-hour %s\n' "$verb" "$verb" \
         | sudo tee "/etc/systemd/system/vy-quiet-$verb.service" > /dev/null
       printf '[Unit]\nDescription=quiet hour %s at %sZ\n\n[Timer]\nOnCalendar=*-*-* %s:00 UTC\n\n[Install]\nWantedBy=timers.target\n' "$verb" "$at" "$at" \
         | sudo tee "/etc/systemd/system/vy-quiet-$verb.timer" > /dev/null

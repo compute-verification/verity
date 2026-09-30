@@ -126,6 +126,14 @@ def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
     assert "hold:12:30 release:13:30" in up and "quiet_hour.sh" in up
 
 
+def test_every_server_script_parses():
+    """A quoting slip in cluster_up.sh (an apostrophe inside a single-quoted printf) broke the whole file and nothing ran it."""
+    import subprocess
+    for f in sorted([*SKY.glob("*.sh"), *SKY.parent.glob("*.sh"), *(SKY.parent.parent / "sh").glob("*.sh")]):
+        r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
+        assert r.returncode == 0, f"{f.name}: {r.stderr}"
+
+
 def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
     for f in sorted((SKY / "jobs").glob("*.yaml")):
         t = f.read_text()
