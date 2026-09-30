@@ -3,7 +3,7 @@
 //
 // A step of word (i, j) at atom t is exact when the atom's FP32 output equals its accumulator plus the exact sum of its 32
 // products.  Every E4M3 value is an integer times 2^-9, so every product and every accumulator on this chain is an integer
-// times 2^-18 below 2^49: the test is one int64 comparison.
+// times 2^-18 below 2^49: the test is one int64 comparison.  So is a hot start's H[i] (|H| >= 2^10: a multiple of 2^-13).
 #include <cstdint>
 
 __device__ __forceinline__ void mma_e4m3(float (&d)[4], const uint32_t (&a)[4], uint32_t b0, uint32_t b1, const float (&c)[4]) {
@@ -13,21 +13,27 @@ __device__ __forceinline__ void mma_e4m3(float (&d)[4], const uint32_t (&a)[4], 
                : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b0), "r"(b1), "f"(c[0]), "f"(c[1]), "f"(c[2]), "f"(c[3]));
 }
 
-// Two FP32 values to two E4M3 codes (RNE, saturating), `lo` in the low byte; -0 and negative underflow give 0x00, as the
-// census twin's `enc` does.
+// Two FP32 values to two E4M3 codes (RNE, saturating), `lo` in the low byte.  With PEARL, Pearl's `f32_to_fp8_e4m3`
+// (pearl_kw.f32_to_fp8): -0 and negative underflow keep the sign, 0x80; without, they give 0x00, as the census twin's
+// `enc` does.
+template <bool PEARL>
 __device__ __forceinline__ uint32_t e4m3x2(float lo, float hi) {
   uint16_t r;
   asm("cvt.rn.satfinite.e4m3x2.f32 %0, %1, %2;" : "=h"(r) : "f"(hi), "f"(lo));
   uint32_t v = r;
-  if ((v & 0xFFu) == 0x80u) v &= 0xFF00u;
-  if ((v & 0xFF00u) == 0x8000u) v &= 0x00FFu;
+  if (!PEARL) {
+    if ((v & 0xFFu) == 0x80u) v &= 0xFF00u;
+    if ((v & 0xFF00u) == 0x8000u) v &= 0x00FFu;
+  }
   return v;
 }
 
 // §5's forming: out[r][l] = E4M3(atom(C[r][l]; E[r] . F[l])), E rows x 32 and F k x 32 codes, one m16n8k32 per 16 x 8
-// block of the output and one warp per block.  rows % 16 == 0, k % 8 == 0.
-extern "C" __global__ void form_codes(const float* __restrict__ C, const uint8_t* __restrict__ E, const uint8_t* __restrict__ F,
-                                      uint8_t* __restrict__ out, int rows, int k) {
+// block of the output and one warp per block.  rows % 16 == 0, k % 8 == 0.  form_codes casts as the census does,
+// form_codes_pearl as pearl_c.form_v1 does.
+template <bool PEARL>
+__device__ __forceinline__ void form_impl(const float* __restrict__ C, const uint8_t* __restrict__ E,
+                                          const uint8_t* __restrict__ F, uint8_t* __restrict__ out, int rows, int k) {
   const int lane = threadIdx.x & 31, gid = lane >> 2, tig = lane & 3;
   const long long blk = static_cast<long long>(blockIdx.x) * (blockDim.x >> 5) + (threadIdx.x >> 5);
   const int kb = k >> 3;
@@ -45,8 +51,20 @@ extern "C" __global__ void form_codes(const float* __restrict__ C, const uint8_t
   const float c[4] = {c01.x, c01.y, c23.x, c23.y};
   float d[4];
   mma_e4m3(d, a, b0, b1, c);
-  *reinterpret_cast<uint16_t*>(out + static_cast<size_t>(r0 + gid) * k + l0 + tig * 2) = static_cast<uint16_t>(e4m3x2(d[0], d[1]));
-  *reinterpret_cast<uint16_t*>(out + static_cast<size_t>(r0 + gid + 8) * k + l0 + tig * 2) = static_cast<uint16_t>(e4m3x2(d[2], d[3]));
+  *reinterpret_cast<uint16_t*>(out + static_cast<size_t>(r0 + gid) * k + l0 + tig * 2) =
+      static_cast<uint16_t>(e4m3x2<PEARL>(d[0], d[1]));
+  *reinterpret_cast<uint16_t*>(out + static_cast<size_t>(r0 + gid + 8) * k + l0 + tig * 2) =
+      static_cast<uint16_t>(e4m3x2<PEARL>(d[2], d[3]));
+}
+
+extern "C" __global__ void form_codes(const float* __restrict__ C, const uint8_t* __restrict__ E, const uint8_t* __restrict__ F,
+                                      uint8_t* __restrict__ out, int rows, int k) {
+  form_impl<false>(C, E, F, out, rows, k);
+}
+
+extern "C" __global__ void form_codes_pearl(const float* __restrict__ C, const uint8_t* __restrict__ E,
+                                            const uint8_t* __restrict__ F, uint8_t* __restrict__ out, int rows, int k) {
+  form_impl<true>(C, E, F, out, rows, k);
 }
 
 __device__ __forceinline__ int dec(uint32_t c) {
@@ -81,7 +99,7 @@ extern "C" __global__ void dead_mask(const float* __restrict__ C, const uint8_t*
     }
     float d[4];
     mma_e4m3(d, a, b0, b1, c);
-    const uint32_t p = e4m3x2(d[0], d[1]), q = e4m3x2(d[2], d[3]);
+    const uint32_t p = e4m3x2<false>(d[0], d[1]), q = e4m3x2<false>(d[2], d[3]);
     const int v[4] = {dec(p & 0xFFu), dec(p >> 8), dec(q & 0xFFu), dec(q >> 8)};
 #pragma unroll
     for (int x = 0; x < 4; ++x) {
@@ -101,10 +119,11 @@ constexpr int FM = 64, FN = 64, FK = 128;
 
 // The unpromoted chain (one FP32 accumulator over all of k, as sm120_chain's chain_unpromoted) on a 64 x 64 tile per CTA,
 // 4 warps of 32 x 32, and each step's exactness: flags[w][i][j] bit b is atom 32w + b of word (i, j); out[i][j] is the
-// final word.  m, n % 64 == 0, k % 1024 == 0.
+// final word.  Every word of row i starts at the FP32 word H[i] (v2-hot's salted start), or at +0 when H is null.
+// m, n % 64 == 0, k % 1024 == 0.
 extern "C" __global__ void __launch_bounds__(128) chain_flags(const uint8_t* __restrict__ A, const uint8_t* __restrict__ B,
                                                               uint32_t* __restrict__ flags, uint32_t* __restrict__ out, int m,
-                                                              int n, int k) {
+                                                              int n, int k, const uint32_t* __restrict__ H) {
   __shared__ __align__(16) uint8_t sA[FM * FK];
   __shared__ __align__(16) uint8_t sB[FN * FK];
   const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5, wm = warp >> 1, wn = warp & 1, gid = lane >> 2, tig = lane & 3;
@@ -112,11 +131,14 @@ extern "C" __global__ void __launch_bounds__(128) chain_flags(const uint8_t* __r
   float acc[2][4][4];
   uint32_t fl[2][4][4];
 #pragma unroll
-  for (int i = 0; i < 2; ++i)
+  for (int i = 0; i < 2; ++i) {
+    const int r = m0 + wm * 32 + i * 16 + gid;
+    const float h0 = H ? __uint_as_float(H[r]) : 0.f, h1 = H ? __uint_as_float(H[r + 8]) : 0.f;
 #pragma unroll
     for (int j = 0; j < 4; ++j)
 #pragma unroll
-      for (int e = 0; e < 4; ++e) { acc[i][j][e] = 0.f; fl[i][j][e] = 0u; }
+      for (int e = 0; e < 4; ++e) { acc[i][j][e] = e < 2 ? h0 : h1; fl[i][j][e] = 0u; }
+  }
 
   for (int kt = 0; kt < k / FK; ++kt) {
     __syncthreads();
@@ -234,5 +256,21 @@ extern "C" __global__ void window_bits(const uint32_t* __restrict__ flags, uint3
     }
     const uint32_t mask = __ballot_sync(0xFFFFFFFFu, ok);
     if ((threadIdx.x & 31) == 0) M[static_cast<size_t>(t - t0) * plane + dst] = mask;
+  }
+}
+
+// Each atom's exactness as bitsets, for atoms t0 .. t0 + nt - 1 (all within flag plane t0 / 32): with tr = 0, row bitsets,
+// M[t - t0][i][j / 32] bit j % 32; with tr = 1, column bitsets, M[t - t0][j][i / 32] bit i % 32.  One warp per 32
+// consecutive words of a row (tr = 0) or a column (tr = 1).  m, n % 32 == 0, m * n % blockDim == 0, t0 % 32 + nt <= 32.
+extern "C" __global__ void atom_bits(const uint32_t* __restrict__ flags, uint32_t* __restrict__ M, int m, int n, int t0, int nt,
+                                     int tr) {
+  const size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (idx >= static_cast<size_t>(m) * n) return;
+  const size_t i = tr ? idx % m : idx / n, j = tr ? idx / m : idx % n;
+  const uint32_t f = flags[static_cast<size_t>(t0 >> 5) * m * n + i * n + j];
+  const size_t dst = tr ? j * (m >> 5) + (i >> 5) : i * (n >> 5) + (j >> 5), plane = static_cast<size_t>(m) * (n >> 5);
+  for (int q = 0; q < nt; ++q) {
+    const uint32_t mask = __ballot_sync(0xFFFFFFFFu, (f >> ((t0 + q) & 31)) & 1u);
+    if ((threadIdx.x & 31) == 0) M[static_cast<size_t>(q) * plane + dst] = mask;
   }
 }

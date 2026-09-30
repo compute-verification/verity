@@ -64,7 +64,7 @@ import run_result  # noqa: E402
 from sm120_chain.run import Dev as ChainDev, Nvml, emit, i32, u64, vp  # noqa: E402
 
 ATOM = "sm120-e4m3-k32"
-KERNELS = ("form_codes", "chain_flags", "window_bits", "dead_mask")
+KERNELS = ("form_codes", "form_codes_pearl", "chain_flags", "window_bits", "atom_bits", "dead_mask")
 DEAD_BETA = np.float32(np.sqrt(32) / (256 * 16))  # Π's β_row = σα·f32(√32/(256·16)) (#449's pearl_c.py, LINE_NORM_V1 = 16)
 DEAD_SCREENS = {  # (E side, F's flat code): SaltDead.support before and after bc-3006c44a's Ruling on F2 (10:00Z)
     "old_F44": ("scheme", 44.0), "new_F11/4": ("scheme", 2.75), "census_line_F11/4": ("census", 2.75)}
@@ -97,13 +97,15 @@ class Dev(ChainDev):
         self.ck("cuMemcpyDtoH_v2", out.ctypes.data_as(vp), u64(p + offset), out.nbytes)
         return out
 
-    def form(self, Cf: np.ndarray, Ec: np.ndarray, Fc: np.ndarray) -> tuple[int, int]:
-        """A' on the card; returns the codes' and C's device pointers."""
+    def form(self, Cf: np.ndarray, Ec: np.ndarray, Fc: np.ndarray, pearl: bool = False) -> tuple[int, int]:
+        """A' on the card, cast as the census does (pearl: as pearl_c.form_v1 does); returns the codes' and C's device
+        pointers."""
         rows, k = Cf.shape
         dc, de, df = self.put(Cf.astype(np.float32)), self.put(Ec), self.put(Fc)
         out = self.alloc(rows * k)
         warps = (rows // 16) * (k // 8)
-        self.launch("form_codes", ((warps + 7) // 8, 1, 1), 256, 0, [u64(dc), u64(de), u64(df), u64(out), i32(rows), i32(k)])
+        self.launch("form_codes_pearl" if pearl else "form_codes", ((warps + 7) // 8, 1, 1), 256, 0,
+                    [u64(dc), u64(de), u64(df), u64(out), i32(rows), i32(k)])
         self.sync()
         for p in (de, df):
             self.free(p)
@@ -119,11 +121,20 @@ class Dev(ChainDev):
         self.free(out)
         return mask
 
-    def chain(self, da: int, db: int, m: int, n: int, k: int) -> tuple[int, int]:
+    def chain(self, da: int, db: int, m: int, n: int, k: int, h: int = 0) -> tuple[int, int]:
+        """The chain's flags and final words; h: a device pointer to m FP32 start words (v2-hot's H_i), 0 for +0."""
         flags, out = self.alloc(4 * (k // 1024) * m * n), self.alloc(4 * m * n)
-        self.launch("chain_flags", (n // 64, m // 64, 1), 128, 0, [u64(da), u64(db), u64(flags), u64(out), i32(m), i32(n), i32(k)])
+        self.launch("chain_flags", (n // 64, m // 64, 1), 128, 0,
+                    [u64(da), u64(db), u64(flags), u64(out), i32(m), i32(n), i32(k), u64(h)])
         self.sync()
         return flags, out
+
+    def atom_bits(self, flags: int, M: int, m: int, n: int, t0: int, nt: int, tr: int) -> None:
+        """Atoms t0 .. t0 + nt - 1 of the flags as bitsets in M (row bitsets, or column bitsets with tr), on the card."""
+        assert t0 % 32 + nt <= 32
+        self.launch("atom_bits", ((m * n + 255) // 256, 1, 1), 256, 0,
+                    [u64(flags), u64(M), i32(m), i32(n), i32(t0), i32(nt), i32(tr)])
+        self.sync()
 
     def windows(self, flags: int, M: int, m: int, n: int, T: int, t0: int, nt: int, tr: int) -> np.ndarray:
         assert (t0 + nt + 30) // 32 < (t0 >> 5) + 16
@@ -161,7 +172,7 @@ def build(out: Path, nvcc: str) -> tuple[bytes, dict]:
                 problems.append(f"{cur}: {op}")
             if ".FTZ" in op:
                 kernels[cur]["ftz:" + op] = kernels[cur].get("ftz:" + op, 0) + 1
-    for name in ("form_codes", "chain_flags"):
+    for name in ("form_codes", "form_codes_pearl", "chain_flags"):
         if not kernels.get(name, {}).get("QMMA.16832.F32.E4M3.E4M3"):
             problems.append(f"{name}: no QMMA.16832.F32.E4M3.E4M3")
     spills = [ln.strip() for ln in ptx.splitlines() if re.search(r"bytes spill", ln)]
