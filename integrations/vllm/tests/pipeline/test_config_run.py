@@ -56,6 +56,10 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
     assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd
     assert cmd[cmd.index("--replay-k") + 1] == "128" and "--vu-export-dir" not in cmd
+    assert cmd[cmd.index("--replay-draw") + 1] == "uniform", "the gate's k units are a uniform draw unless the row asks for family"
+    fam = _row(tmp_path / "fam", "--config-run", "1", "--replay-draw", "family")
+    fam.hidden_so, fam.B = "/x/verity_fa2_matReqG.so", 1
+    assert fam.commit_cmd([])[fam.commit_cmd([]).index("--replay-draw") + 1] == "family"
     row = _row(tmp_path / "row")
     row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
     plain = row.commit_cmd([])
@@ -69,7 +73,8 @@ def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
     cmd = r.commit_cmd([])
     args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
-    assert (args.only_arm, args.bounded_staging, args.replay_k, args.pairs, args.warmup) == ("instrumented", True, 128, 1, 1)
+    assert (args.only_arm, args.bounded_staging, args.replay_k, args.replay_draw, args.pairs, args.warmup) == ("instrumented", True, 128,
+                                                                                                                "uniform", 1, 1)
 
 
 @pytest.mark.parametrize("commit_pass,rc,expect", [(True, 0, None), (False, 0, 12), (True, 3, 12)])
