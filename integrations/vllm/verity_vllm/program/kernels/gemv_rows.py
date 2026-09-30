@@ -1,4 +1,5 @@
-"""The vectorised row of `GemvBiasF32_v1{K,N,V,T}` (`verity_vllm.program.registry.gemv_bias`), registered with its self-check bindings.
+"""The vectorised row of `GemvBiasF32_v1{K,N,V,T}` (`verity_vllm.program.registry.gemv_bias`): a replay row (`rows.ROWS`, `rows.EVALUATORS`)
+registered with its self-check bindings.  Imported at the end of `rows`, whose tables it extends.
 
 One FFMA of two widened bf16 words into an FP32 accumulator is computed as a float64 product plus the accumulator, rounded once to
 float32: the product of two 8-bit significands is exact in float64, and when the sum needs more than 53 bits the smaller term lies below
@@ -11,10 +12,10 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as D
+from verity_vllm.program.kernels import rows as R
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 
-KERNEL = "gemv"
-DOMAIN = "instances whose operand and result words are all finite (the reference computes the others)"
+FAMILY = "GemvBiasF32_v1"
 
 
 def _finite16(a: np.ndarray) -> bool:
@@ -64,6 +65,14 @@ def _targets(_rng) -> list:
             bind(gemv_bias.GemvBiasF32, K=96, N=2, V=1, T=32)]
 
 
-register("GemvBiasF32_v1", gemv_bias_f32, kernel=KERNEL, domain=DOMAIN, sample=_sample, check_targets=_targets)
+def gemv_bias_f32_row(statics: dict[str, Any], ops) -> dict[str, np.ndarray]:
+    """The replay row: `ops` = (x row, W, b) words."""
+    return {"0": gemv_bias_f32(ops[0], ops[1], ops[2], **statics)}
 
-__all__ = ["KERNEL", "gemv_bias_f32"]
+
+R.EVALUATORS[FAMILY] = ("verity_vllm.program.kernels.gemv_rows.gemv_bias_f32 (cuBLAS gemvx at M = 1: T strided f32 FFMA chains over "
+                        "V-wide k chunks from +0, a halving tree of f32 adds, the widened bias added in f32, f2fp_bf16)")
+_ROW = R.ROWS[FAMILY] = R.RowKernel(FAMILY, gemv_bias_f32_row, ("0",))
+register(FAMILY, R._instance(_ROW), kernel=R.KERNEL, domain=R.DOMAIN, sample=_sample, check_targets=_targets)
+
+__all__ = ["FAMILY", "gemv_bias_f32", "gemv_bias_f32_row"]
