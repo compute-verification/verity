@@ -685,11 +685,20 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
     if device && w.flip_z.is_none() && w.cut_flip.is_none() && w.nets.is_empty() && w.regions.is_none() && st.c.out_net == st.c.unit_net && st.c.typed.is_none() {
         use rayon::prelude::*;
         let ur = st.c.unit_range();
+        // FC_WITNESS_TIMES: the host witness's parts on stderr (WITNESS lines)
+        let times = std::env::var_os("FC_WITNESS_TIMES").is_some();
+        let lap = |what: &str, t: &mut Instant, v: &mut serde_json::Map<String, Value>| {
+            v.insert(what.into(), json!(t.elapsed().as_secs_f64()));
+            *t = Instant::now();
+        };
+        let (mut tl, mut parts) = (Instant::now(), serde_json::Map::new());
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
         let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
+        lap("rows", &mut tl, &mut parts);
         let mut host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
         host.extend(mask_slots());
+        lap("hm96", &mut tl, &mut parts);
         let unit_inputs = || (0..st.blocks() * ur.count).into_par_iter().map(|x| (w.inputs)(x / ur.count, x % ur.count));
         if st.c.wires.iter().any(|x| x.dst.0 != st.c.sha_net && x.dst.0 != st.c.hm_net) {
             let inputs: Vec<F128> = unit_inputs().flatten_iter().collect();
@@ -697,8 +706,15 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         }
         if host_units {
             let ins: Vec<Vec<F128>> = unit_inputs().collect();
+            lap("unit_inputs", &mut tl, &mut parts);
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
-            return (WitData::Dev(rows, pack(&host), Vec::new()), t.elapsed().as_secs_f64());
+            lap("units", &mut tl, &mut parts);
+            let packed = pack(&host);
+            lap("pack", &mut tl, &mut parts);
+            if times {
+                eprintln!("WITNESS\t{}", Value::Object(parts));
+            }
+            return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
         }
         return (WitData::Dev(rows, pack(&host), unit_inputs().flatten_iter().collect()), t.elapsed().as_secs_f64());
     }

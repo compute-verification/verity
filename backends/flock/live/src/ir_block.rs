@@ -144,16 +144,22 @@ impl IrUnitNet {
             }
         }
         z[self.const_pos] = !0;
+        // a row's a and b read only earlier rows (the rows are in topological order), so the values z[i] is computed from are
+        // its a and b; the input rows and the constant's are the only ones read again once every z is known
+        let (mut a, mut b) = (vec![0u64; u], vec![0u64; u]);
         for i in first..u {
             if i == self.const_pos {
                 continue;
             }
             let x = self.a[i].iter().fold(0u64, |s, &k| s ^ z[k]);
             let y = self.b[i].iter().fold(0u64, |s, &k| s ^ z[k]);
+            (a[i], b[i]) = (x, y);
             z[i] = x & y;
         }
-        let a: Vec<u64> = (0..u).map(|i| self.a[i].iter().fold(0u64, |s, &k| s ^ z[k])).collect();
-        let b: Vec<u64> = (0..u).map(|i| self.b[i].iter().fold(0u64, |s, &k| s ^ z[k])).collect();
+        for i in (0..first).chain((self.const_pos >= first).then_some(self.const_pos)) {
+            a[i] = self.a[i].iter().fold(0u64, |s, &k| s ^ z[k]);
+            b[i] = self.b[i].iter().fold(0u64, |s, &k| s ^ z[k]);
+        }
         (z, a, b)
     }
 
