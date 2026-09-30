@@ -46,6 +46,7 @@ SELF_CHECKED = [
     (P.BlackwellE4m3QmmaDot32, 20000),
     (P.BlackwellE5m2QmmaDot32, 20000),
     (P.BlackwellNvf4OmmaDot64, 20000),
+    (P.BlackwellMxf4OmmaDot64, 20000),
     (P.F32ToE2m1Sat, 20000),
     (P.E4m3ToF32, 20000),
     (K.HOPPER_E4M3_STEP, 20000),

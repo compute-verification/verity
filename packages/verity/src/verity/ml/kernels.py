@@ -96,6 +96,22 @@ def nvf4_step_total_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: 
     return np.where(nan_scale, np.uint32(0x7FFFFFFF), words), np.asarray(declined, dtype=bool) & ~skip
 
 
+def mxf4_step_total_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: np.ndarray, b_codes: np.ndarray,
+                          a_scales: np.ndarray, b_scales: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`prims.BlackwellMxf4OmmaDot64` on every encoding: a 0xFF scale byte -> 0x7FFFFFFF; else a NaN accumulator ->
+    0x7FFFFFFF and +-inf -> itself; else `block_scaled_batch` with a sum leaving binary32 -> +-inf of its sign."""
+    acc = np.asarray(acc, dtype=np.uint32)
+    sa, sb = np.asarray(a_scales, dtype=np.uint8), np.asarray(b_scales, dtype=np.uint8)
+    nan_scale = (sa == 0xFF).any(axis=1) | (sb == 0xFF).any(axis=1)
+    special = (acc & 0x7F800000) == 0x7F800000
+    skip = nan_scale | special
+    words, declined = block_scaled_batch(model, np.where(skip, np.uint32(0), acc), a_codes, b_codes,
+                                         np.where(skip[:, None], np.uint8(0), sa), np.where(skip[:, None], np.uint8(0), sb),
+                                         overflow_inf=True)
+    words = np.where(special, np.where((acc & 0x7FFFFF) != 0, np.uint32(0x7FFFFFFF), acc), np.asarray(words, dtype=np.uint32))
+    return np.where(nan_scale, np.uint32(0x7FFFFFFF), words), np.asarray(declined, dtype=bool) & ~skip
+
+
 def f32_to_e2m1_sat_batch(a: np.ndarray, nan: int) -> tuple[np.ndarray, None]:
     """`cast.f32_to_e2m1_sat_word` on every word."""
     from .tc.cast import E2M1_UP
@@ -229,9 +245,10 @@ def _trunc_rz(mant: np.ndarray, exp: np.ndarray, lsb: np.ndarray) -> np.ndarray:
 
 
 def block_scaled_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: np.ndarray, b_codes: np.ndarray,
-                       a_scales: np.ndarray, b_scales: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+                       a_scales: np.ndarray, b_scales: np.ndarray, *, overflow_inf: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """`model.step_scaled` on ``(N,)`` FP32 words, ``(N, k)`` E2M1 codes and ``(N, k / block)`` scale bytes per operand.
-    Returns ``(words, declined)``; declined are the instances on which the scalar model raises."""
+    Returns ``(words, declined)``; declined are the instances on which the scalar model raises, except that with
+    ``overflow_inf`` a sum leaving binary32 is ±inf of its sign."""
     n, k, g = acc.shape[0], model.k, model.group
     groups = k // g
     prod = _E2M1_HALVES[a_codes.astype(_I64)] * _E2M1_HALVES[b_codes.astype(_I64)]
@@ -270,13 +287,17 @@ def block_scaled_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: np.
     q = np.where(shift > 0, t_mag >> np.clip(shift, 0, 63), t_mag << np.clip(-shift, 0, 62))
     e = _bitlen(q) - 1 + grid
     live = (anchor != _NONE) & (total != 0)
-    declined |= live & (q != 0) & (e > 127)
+    over = live & (q != 0) & (e > 127)
     bits = np.where(e >= -126, ((e + 127) << 23) | (q & 0x7FFFFF), q)
     word = np.where(t_neg, bits | (1 << 31), bits)
     if model.underflow_zero == "signed":
         word = np.where(q == 0, np.where(t_neg, 1 << 31, 0), word)
     else:
         word = np.where(q == 0, 0, word)
+    if overflow_inf:
+        word = np.where(over, np.where(t_neg, int(_SIGN | _INF_WORD), int(_INF_WORD)), word)
+    else:
+        declined |= over
     return np.where(live & ~declined, word, 0).astype(np.uint32), declined
 
 
