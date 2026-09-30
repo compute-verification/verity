@@ -52,6 +52,9 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
     assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
+    # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
+    # file with regexes, so check it here
+    assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
 
 
 def test_every_job_template_names_a_defined_queue_and_priority():

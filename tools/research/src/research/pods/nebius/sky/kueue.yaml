@@ -74,7 +74,7 @@ apiVersion: kueue.x-k8s.io/v1beta2
 kind: WorkloadPriorityClass
 metadata: {name: capture}
 value: 1100
-description: short port-lane captures (jobs/port-capture.yaml): first to the next free circuits GPU
+description: short port-lane captures (jobs/port-capture.yaml), first to the next free circuits GPU
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: WorkloadPriorityClass
