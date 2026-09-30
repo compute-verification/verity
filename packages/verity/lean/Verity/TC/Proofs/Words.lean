@@ -135,4 +135,24 @@ theorem decode_pack (V : Value) (hV : Admissible V) (hfin : ∀ t, V = .fin t �
         simp only [decodeState, f1, f2, f3, e1, e2, e3, h0, stateOf, hsub, State.mk.injEq]
         simp [hng, FP32_MIN_E, h0]
 
+/-- A group's output packs to a word below `2^32`. -/
+theorem pack_lt (V : Value) (hV : Admissible V) : packValue V < 2 ^ 32 := by
+  cases V with
+  | nan => decide
+  | inf n => cases n <;> decide
+  | fin t =>
+    simp only [Admissible] at hV
+    obtain ⟨hlt, hnz⟩ := hV
+    by_cases h0 : t.magnitude = 0
+    · simp only [packValue, packFp32, h0, ite_true]; decide
+    · obtain ⟨he1, he2, hn⟩ := hnz h0
+      have hsg : (if t.negative then 1 else 0 : Nat) < 2 := by split <;> decide
+      have hx : t.magnitude &&& 0x7FFFFF < 2 ^ 23 := by
+        rw [show (0x7FFFFF : Nat) = 2 ^ 23 - 1 by decide, and_mask]; exact Nat.mod_lt _ (by decide)
+      simp only [packValue, packFp32, h0, ite_false, FP32_MAX_EXPONENT, Int.not_lt.mpr he2]
+      have hE : (if t.magnitude &&& 1 <<< 23 = 0 then t.exponent + 127 - 1 else t.exponent + 127).toNat < 2 ^ 8 := by
+        split <;> omega
+      rw [pack_fields _ _ _ hsg hE hx]
+      omega
+
 end Verity.TC.Proofs

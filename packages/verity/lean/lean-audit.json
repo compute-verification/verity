@@ -81,6 +81,55 @@
    ],
    "assumptions": [],
    "type_hash": "00000000d25ebd45"
+  },
+  "Verity.TC.hopper_unit_sound": {
+   "signature": [
+    "Verity.TC.hopper_unit_sound (align : Verity.TC.Relation.Align) (acc : Nat)",
+    "  (hacc : instLTNat.lt acc (instHPow.hPow 2 32))",
+    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
+    "  (hin :",
+    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
+    "      List.instMembership.mem steps s →",
+    "        And (Eq s.fst.length 16)",
+    "          (And (Eq s.snd.fst.length 16)",
+    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
+    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
+    "  (out : Verity.TC.Relation.State)",
+    "  (h :",
+    "    Verity.TC.Relation.ChainHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
+    "      (Verity.TC.Relation.decodeState acc Verity.TC.HOPPER_BF16_WGMMA_K16) steps out) :",
+    "  Eq out",
+    "    (Verity.TC.Relation.decodeState",
+    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 acc",
+    "        (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))",
+    "      Verity.TC.HOPPER_BF16_WGMMA_K16)"
+   ],
+   "assumptions": [],
+   "type_hash": "00000000df0ecc46"
+  },
+  "Verity.TC.hopper_unit_sound_zero": {
+   "signature": [
+    "Verity.TC.hopper_unit_sound_zero (align : Verity.TC.Relation.Align)",
+    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
+    "  (hin :",
+    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
+    "      List.instMembership.mem steps s →",
+    "        And (Eq s.fst.length 16)",
+    "          (And (Eq s.snd.fst.length 16)",
+    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
+    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
+    "  (out : Verity.TC.Relation.State)",
+    "  (h :",
+    "    Verity.TC.Relation.ChainHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
+    "      (Verity.TC.Relation.zeroState Verity.TC.HOPPER_BF16_WGMMA_K16) steps out) :",
+    "  Eq out",
+    "    (Verity.TC.Relation.decodeState",
+    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 0",
+    "        (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))",
+    "      Verity.TC.HOPPER_BF16_WGMMA_K16)"
+   ],
+   "assumptions": [],
+   "type_hash": "0000000075438cb4"
   }
  },
  "reads": {
@@ -112,11 +161,13 @@
     "Verity.TC.hopper_step_complete",
     "Verity.TC.hopper_step_hw",
     "Verity.TC.hopper_step_iff",
-    "Verity.TC.hopper_step_sound"
+    "Verity.TC.hopper_step_sound",
+    "Verity.TC.hopper_unit_sound",
+    "Verity.TC.hopper_unit_sound_zero"
    ]
   },
   "Verity.TC.Relation": {
-   "digest": "4c26ac3f6b7b83e62333a829959f8f87",
+   "digest": "78eb44ad7200d905624e3d3b35bb9407",
    "definitions": {
     "Verity.TC.Relation.Align": "4b691a7b73099c85",
     "Verity.TC.Relation.Align.div": "4175ff2e534f0d78",
@@ -126,6 +177,7 @@
     "Verity.TC.Relation.CLS_INF": "ec55f9d93eb08c1d",
     "Verity.TC.Relation.CLS_NAN": "2f55f86cdc7ea2af",
     "Verity.TC.Relation.CLS_ZERO": "182caf8d117c6dcd",
+    "Verity.TC.Relation.ChainHolds": "01b57a056f7397af",
     "Verity.TC.Relation.E_OFF": "7d60e36f1afbd23c",
     "Verity.TC.Relation.FP32_MAX_E": "f4defcb536d7916e",
     "Verity.TC.Relation.FP32_MIN_E": "9dc0e306e97f7ffc",
@@ -236,17 +288,20 @@
     "Verity.TC.Relation.tPow": "c7bde0212a00ee3c",
     "Verity.TC.Relation.tShift": "5fc5989edfa0f5da",
     "Verity.TC.Relation.termHolds": "e25fad6fe7703f91",
-    "Verity.TC.Relation.terms": "c8b1f5c56c08cb2e"
+    "Verity.TC.Relation.terms": "c8b1f5c56c08cb2e",
+    "Verity.TC.Relation.zeroState": "589bcbe9262290f6"
    },
    "pins": [
     "Verity.TC.hopper_step_complete",
     "Verity.TC.hopper_step_hw",
     "Verity.TC.hopper_step_iff",
-    "Verity.TC.hopper_step_sound"
+    "Verity.TC.hopper_step_sound",
+    "Verity.TC.hopper_unit_sound",
+    "Verity.TC.hopper_unit_sound_zero"
    ]
   },
   "Verity.TC.Spec": {
-   "digest": "b4ab015b59c9bad724fcf049186a49c5",
+   "digest": "575318d4351c8340022fef3b471fd4a8",
    "definitions": {
     "Verity.TC.Spec.Cls": "3d788e48d3ea7120",
     "Verity.TC.Spec.Cls.finite": "11b09a163eece69c",
@@ -280,9 +335,16 @@
     "Verity.TC.Spec.packFp32": "ebef1807ce5c0505",
     "Verity.TC.Spec.packValue": "68e87a068d392efc",
     "Verity.TC.Spec.runGroups": "314d926fa90bb0c9",
+    "Verity.TC.Spec.tcDotChainTotal": "b9faab6c05e7cf56",
     "Verity.TC.Spec.tcDotTotal": "ef04cb3f3b1b3003"
    },
-   "pins": ["Verity.TC.hopper_step_hw", "Verity.TC.hopper_step_iff", "Verity.TC.hopper_step_sound"]
+   "pins": [
+    "Verity.TC.hopper_step_hw",
+    "Verity.TC.hopper_step_iff",
+    "Verity.TC.hopper_step_sound",
+    "Verity.TC.hopper_unit_sound",
+    "Verity.TC.hopper_unit_sound_zero"
+   ]
   }
  },
  "dependencies": {

@@ -172,4 +172,9 @@ def runGroups (width : Nat) (zeroExponent : Int) : List Nat → Value → List N
 def tcDotTotal (p : Pipeline) (accBits : Nat) (a b : List Nat) : Nat :=
   packValue (runGroups p.width p.zeroExponent p.groups (fp32Value accBits) a b)
 
+/-- `tc_dot_total` folded over a unit's k16 steps in k order: one GEMM output coordinate's accumulator, as
+`models.tc_dot_chain` folds a model's step. -/
+def tcDotChainTotal (p : Pipeline) (accBits : Nat) (steps : List (List Nat × List Nat)) : Nat :=
+  steps.foldl (fun acc s => tcDotTotal p acc s.1 s.2) accBits
+
 end Verity.TC.Spec

@@ -46,11 +46,12 @@ theorem prods_eq (a b : List Nat) (ha : a.length = 16) (hb : b.length = 16) (ha1
   rw [this]
   simp [List.getElem_zip, HP]
 
-theorem hopper_step_sound (align : Align) (acc : Nat) (a b : List Nat)
+/-- The step's value: an accepted witness's output state is the canonical state of the value the semantics packs. -/
+theorem hopper_step_core (align : Align) (acc : Nat) (a b : List Nat)
     (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) (w : Witness)
     (h : StepHolds HOPPER_BF16_WGMMA_K16 align (decodeState acc HOPPER_BF16_WGMMA_K16) a b w) :
-    stepOut (decodeState acc HOPPER_BF16_WGMMA_K16) w.groups =
-      decodeState (tcDotTotal HOPPER_BF16_WGMMA_K16 acc a b) HOPPER_BF16_WGMMA_K16 := by
+    ∃ V, Admissible V ∧ tcDotTotal HOPPER_BF16_WGMMA_K16 acc a b = packValue V ∧
+      stepOut (decodeState acc HOPPER_BF16_WGMMA_K16) w.groups = stateOf (-133) V := by
   obtain ⟨hacc, hla, hlb, ha16, hb16⟩ := hin
   obtain ⟨⟨hpl, hgl, hterms⟩, hprod, hgroups⟩ := h
   rw [params_hopper] at hprod hgroups
@@ -85,7 +86,15 @@ theorem hopper_step_sound (align : Align) (acc : Nat) (a b : List Nat)
       packValue (groupStepTotal (fp32Value acc) ((a.zip b).map (fun x => bf16ProductTotal x.1 x.2)) 26 (-133)) := by
     simp only [tcDotTotal, HOPPER_BF16_WGMMA_K16, runGroups]
     rw [List.take_of_length_le (by omega), List.take_of_length_le (by omega), zipWith_eq_map_zip]
-  rw [hsem, decode_pack _ hV]
+  exact ⟨_, hV, hsem, rfl⟩
+
+theorem hopper_step_sound (align : Align) (acc : Nat) (a b : List Nat)
+    (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) (w : Witness)
+    (h : StepHolds HOPPER_BF16_WGMMA_K16 align (decodeState acc HOPPER_BF16_WGMMA_K16) a b w) :
+    stepOut (decodeState acc HOPPER_BF16_WGMMA_K16) w.groups =
+      decodeState (tcDotTotal HOPPER_BF16_WGMMA_K16 acc a b) HOPPER_BF16_WGMMA_K16 := by
+  obtain ⟨V, hV, hsem, hout⟩ := hopper_step_core align acc a b hin w h
+  rw [hout, hsem, decode_pack _ hV]
   intro t ht hne
   rw [ht] at hV
   exact (hV.2 hne).2.1
@@ -143,5 +152,37 @@ theorem hopper_step_hw (step : Nat → List Nat → List Nat → Nat) (hstep : G
     stepOut (decodeState acc HOPPER_BF16_WGMMA_K16) w.groups = decodeState (step acc a b) HOPPER_BF16_WGMMA_K16 := by
   rw [hstep acc a b hin]
   exact hopper_step_sound align acc a b hin w h
+
+theorem hopper_step_lt (acc : Nat) (a b : List Nat) (hin : StepInputs HOPPER_BF16_WGMMA_K16 acc a b) :
+    tcDotTotal HOPPER_BF16_WGMMA_K16 acc a b < 2 ^ 32 := by
+  obtain ⟨w, hw⟩ := hopper_step_complete .div acc a b hin
+  obtain ⟨V, hV, hsem, -⟩ := hopper_step_core .div acc a b hin w hw
+  rw [hsem]; exact pack_lt V hV
+
+/-- A verification unit: every witness chain the relation accepts from `decode_state(acc)` outputs the decode of the
+semantics' accumulator after the unit's steps. -/
+theorem hopper_unit_sound (align : Align) (acc : Nat) (hacc : acc < 2 ^ 32)
+    (steps : List (List Nat × List Nat × Witness))
+    (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
+    (out : State) (h : ChainHolds HOPPER_BF16_WGMMA_K16 align (decodeState acc HOPPER_BF16_WGMMA_K16) steps out) :
+    out = decodeState (tcDotChainTotal HOPPER_BF16_WGMMA_K16 acc (steps.map (fun s => (s.1, s.2.1))))
+      HOPPER_BF16_WGMMA_K16 := by
+  induction steps generalizing acc with
+  | nil => exact h
+  | cons s rest ih =>
+    obtain ⟨a, b, w⟩ := s
+    obtain ⟨hs, hrest⟩ := h
+    obtain ⟨hla, hlb, ha, hb⟩ := hin (a, b, w) (List.mem_cons_self ..)
+    have hin' : StepInputs HOPPER_BF16_WGMMA_K16 acc a b := ⟨hacc, hla, hlb, ha, hb⟩
+    rw [hopper_step_sound align acc a b hin' w hs] at hrest
+    exact ih _ (hopper_step_lt acc a b hin') (fun s hs => hin s (List.mem_cons_of_mem _ hs)) hrest
+
+/-- The same from the unit's constant initial state `zero_state`, which is `decode_state(+0)`. -/
+theorem hopper_unit_sound_zero (align : Align) (steps : List (List Nat × List Nat × Witness))
+    (hin : ∀ s ∈ steps, s.1.length = 16 ∧ s.2.1.length = 16 ∧ (∀ x ∈ s.1, x < 2 ^ 16) ∧ (∀ x ∈ s.2.1, x < 2 ^ 16))
+    (out : State) (h : ChainHolds HOPPER_BF16_WGMMA_K16 align (zeroState HOPPER_BF16_WGMMA_K16) steps out) :
+    out = decodeState (tcDotChainTotal HOPPER_BF16_WGMMA_K16 0 (steps.map (fun s => (s.1, s.2.1))))
+      HOPPER_BF16_WGMMA_K16 :=
+  hopper_unit_sound align 0 (by decide) steps hin out h
 
 end Verity.TC
