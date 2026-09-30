@@ -117,8 +117,8 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
             cols = slice(C.CHUNK * hc, C.CHUNK * (hc + 1))
             digests[i, hc] = np.frombuffer(turboshake128(c[i, cols].astype("<u4").tobytes() + u[i, cols].astype("<u4").tobytes(),
                                                          C.D_MESSAGE, 32), np.uint8)
-    leaves = np.empty((-(-m // F.TILE), n // F.TILE, 32), np.uint8)
-    for ti_ in range(-(-m // F.TILE)):
+    leaves = np.empty((m // F.TILE, n // F.TILE, 32), np.uint8)
+    for ti_ in range(m // F.TILE):
         for tj_ in range(n // F.TILE):
             rs, cs = slice(F.TILE * ti_, F.TILE * (ti_ + 1)), slice(F.TILE * tj_, F.TILE * (tj_ + 1))
             leaves[ti_, tj_] = np.frombuffer(C.leaf(C.Checked(c[rs, cs].tolist(), u[rs, cs].tolist())), np.uint8)

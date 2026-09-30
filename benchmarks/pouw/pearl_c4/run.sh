@@ -29,7 +29,7 @@ nvidia-smi -i "$IDX" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,tempe
 SMI=$!
 trap 'kill $SMI 2> /dev/null' EXIT
 RC=0
-for d in check check2 check3; do
+for d in check check2; do
   [ -d "$d" ] || continue
   $PY dev.py check "$d" --expect-uuid "$UUID" >> "$OUT/check.jsonl"; RC=$?
   [ "$RC" -eq 0 ] || break

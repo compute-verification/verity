@@ -4,8 +4,7 @@
 #                    pinned at HASH_COMMIT (benchmarks/pouw/pouw_hash/pouw_hash.cuh, its sha256 checked); refused unless
 #                    sass.py passes (no warning, spill, stack or local memory; each kernel's OMMA, HMMA and E2M1 counts)
 #   sass.json        registers and those counts per kernel
-#   check/, check2/, check3/  fixture.py's buffers for NVFP4 and MXFP4 at 128x128x1024, 256x384x2048 and 96x128x1024 (A's
-#                    rows padded to 128: the partial tile's leaf and the commitment of the real rows alone; needs verity and numpy)
+#   check/, check2/  fixture.py's buffers for NVFP4 and MXFP4 at 128x128x1024 and 256x384x2048 (needs verity and numpy)
 #   dev.py, run.sh, toolchain.txt, source.txt (the verity commit and the header's), MANIFEST.sha256
 # Usage: bash benchmarks/pouw/pearl_c4/build.sh [OUT]   (default /tmp/pearl-c4-ship; C9 names CUDA 12.9, default /usr/local/cuda-12.9)
 set -euo pipefail
@@ -26,8 +25,7 @@ echo "$HASH_SHA256  $OUT/inc/pouw_hash.cuh" | sha256sum -c --quiet
 python3 "$HERE/sass.py" "$OUT/ptxas.txt" "$OUT/pearl_c4.sass" "$OUT/sass.json"
 rm -r "$OUT/pearl_c4.sass" "$OUT/inc"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c4/fixture.py "$OUT/check" &&
-  uv run python benchmarks/pouw/pearl_c4/fixture.py "$OUT/check2" --shape 256x384x2048 &&
-  uv run python benchmarks/pouw/pearl_c4/fixture.py "$OUT/check3" --shape 96x128x1024)
+  uv run python benchmarks/pouw/pearl_c4/fixture.py "$OUT/check2" --shape 256x384x2048)
 cp "$HERE/dev.py" "$HERE/run.sh" "$OUT/"
 "$C9/bin/nvcc" --version | tail -2 > "$OUT/toolchain.txt"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c4 protocols/pouw packages/verity

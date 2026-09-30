@@ -207,9 +207,8 @@ class _PearlC4:
         spots = [(0, 0)] + [(rng.randrange(m // TILE), rng.randrange(n // TILE)) for _ in range(self.gate_tiles() - 1)]
         tiles = []
         for ti, tj in spots:
-            r = min(TILE, shape.m - TILE * ti)
-            rows, cols = np.arange(TILE * ti, TILE * ti + r), np.arange(TILE * tj, TILE * tj + TILE)
-            a_rows = np.frombuffer(d.read(xa + TILE * ti * k * 2, r * k * 2), "<u2").reshape(r, k)
+            rows, cols = np.arange(TILE * ti, TILE * ti + TILE), np.arange(TILE * tj, TILE * tj + TILE)
+            a_rows = np.frombuffer(d.read(xa + TILE * ti * k * 2, TILE * k * 2), "<u2").reshape(TILE, k)
             b_rows = np.frombuffer(d.read(call.pl.buf["xb"] + TILE * tj * k * 2, TILE * k * 2), "<u2").reshape(TILE, k)
             t = T.tile(jb, a_rows, b_rows, rows, cols)
             tiles.append(self._compare(call, t, ti, tj, y, mode, T))
@@ -218,8 +217,7 @@ class _PearlC4:
         ok = ok and all(v for key, v in commit.items() if key != "root_a_hex")
         checked = {nm: "all" for nm in call.outputs}
         return Gate(ok, checked, {"all": "byte-equal to a second pipeline on the same operands", "relaunch": relaunch,
-                                  "commitments": commit, "sampled": f"{len(tiles)} whole tiles (A's rows of 64 x 64) "
-                                                                    "against the CPU twin",
+                                  "commitments": commit, "sampled": f"{len(tiles)} whole 64 x 64 tiles against the CPU twin",
                                   "tiles": tiles, "mode": call.mode})
 
     def _compare(self, call: _Call, t, ti: int, tj: int, y: np.ndarray, mode: str, T) -> dict:
@@ -227,11 +225,10 @@ class _PearlC4:
         inv_a, inv_b = (T.u32(np.float32(1) / T.f32(s.alpha)) for s in (t.a, t.b))
         src = t.c if mode == "plain" else t.u
         want_y = T.rne_bf16(T.u32((T.f32(src) * T.f32(inv_a)[:, None]) * T.f32(inv_b)[None, :]))
-        r = len(t.pa)
-        out = {"tile": [ti, tj], "y": bool(np.array_equal(y[TILE * ti:TILE * ti + r, TILE * tj:TILE * tj + TILE], want_y))}
+        out = {"tile": [ti, tj], "y": bool(np.array_equal(y[TILE * ti:TILE * ti + TILE, TILE * tj:TILE * tj + TILE], want_y))}
         if mode == "plain":
             return out
-        pa = np.frombuffer(d.read(pl.buf["pa"] + TILE * ti * 128, r * 128), "<u2").reshape(r, 64)
+        pa = np.frombuffer(d.read(pl.buf["pa"] + TILE * ti * 128, TILE * 128), "<u2").reshape(TILE, 64)
         pb = np.frombuffer(d.read(pl.buf["pb"] + TILE * tj * 128, TILE * 128), "<u2").reshape(TILE, 64)
         out |= {"pa": bool(np.array_equal(pa, t.pa)), "pb": bool(np.array_equal(pb, t.pb))}
         if mode != "hash":
