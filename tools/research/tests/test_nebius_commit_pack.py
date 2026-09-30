@@ -80,15 +80,16 @@ def test_commit_pack_renders_one_gpu_workload_in_deployments_gpu(dispatch):
     ("mistral-7b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "packing list"),
 ])
 def test_only_small_tp1_commits_pack(dispatch, tmp_path, row, why):
-    got = dispatch.packable(_item(_tree(tmp_path / "t"), row), 1)
+    got = dispatch.packable(_item(_tree(tmp_path / "t"), row), "lane/c1", 1)
     assert got is None if why is None else why in got
 
 
-def test_the_build_an_unpacked_item_and_a_tree_without_deferred_replay_never_pack(dispatch, tmp_path):
+def test_the_build_an_unpacked_or_leased_item_and_a_tree_without_deferred_replay_never_pack(dispatch, tmp_path):
     tree = _tree(tmp_path / "t")
-    assert "gpu task" in dispatch.packable(_item(tree), 0)
-    assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), 1)
-    assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), 1)
+    assert "gpu task" in dispatch.packable(_item(tree), "lane/c1", 0)
+    assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), "lane/c1", 1)
+    assert "leased" in dispatch.packable(_item(tree, lease="wrap"), "lane/c1", 1)
+    assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), "lane/c1", 1)
 
 
 def test_route_spools_only_under_the_flag_and_below_the_disk_pause(dispatch, tmp_path):

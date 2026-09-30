@@ -271,10 +271,12 @@ def quiet(t: float | None = None) -> bool:
     return QUIET[0] <= (g.tm_hour, g.tm_min) < QUIET[1]
 
 
-def packable(item: dict, idx: int) -> str | None:
+def packable(item: dict, key: str, idx: int) -> str | None:
     """Why task `idx` of the item isn't packed, or None when it is (the cutover plan's eligibility)."""
     if item.get("template") != "config-run":
         return "not a config-run"
+    if lease_mode(item, key):
+        return "leased (its GPU comes from gpu-lease)"
     tasks, _ = load_template(item["template"])
     if (tasks[idx].get("name") or "") != "gpu":
         return "not the gpu task"
@@ -330,7 +332,7 @@ def disk_full() -> bool:
 
 
 def route(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
-    if PACK_COMMITS and packable(item, idx) is None and not disk_full():
+    if PACK_COMMITS and packable(item, key, idx) is None and not disk_full():
         return spool(item, key, idx, tries, dry)
     return submit(item, key, idx, tries, dry)
 
@@ -405,9 +407,9 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
             continue
         item = json.loads(j["metadata"]["annotations"]["verity.dev/item-json"])
         idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
-        if packable(item, idx) is not None:
-            continue
         name, key = j["metadata"]["name"], j["metadata"]["annotations"]["verity.dev/item"]
+        if packable(item, key, idx) is not None:
+            continue
         if dry:
             print(f"would adopt {name} ({key})")
             room -= 1
@@ -657,7 +659,7 @@ def main(argv: list[str]) -> int:
     elif ns.cmd == "spool":
         item = {"id": ns.key.split("/", 1)[-1], "template": ns.template, "tree": ns.tree,
                 "env": dict(e.split("=", 1) for e in ns.env), **({"priority": ns.priority} if ns.priority else {})}
-        why = packable(item, ns.task)
+        why = packable(item, ns.key, ns.task)
         if why:
             raise SystemExit(f"not packable: {why}")
         spool(item, ns.key, ns.task, dry=ns.dry_run)
