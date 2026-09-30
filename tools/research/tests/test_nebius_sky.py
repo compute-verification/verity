@@ -183,6 +183,36 @@ def test_the_coverage_build_task_has_no_gpu_but_finds_the_hosts_cuda_driver():
     assert "/workspace/jobs/cuda-driver" in (SKY / "cluster_up.sh").read_text()
 
 
+def test_each_coverage_task_is_one_stage_attempt_whose_tool_reads_the_row():
+    """A two-task cell publishes what `row chain` does: each task's `row stage` is the workload of one `research run --tool vllm.<stage>`
+    Attempt, as plain argv (a `bash -c` string hides the row from the Tool's key params), and the Commit cites the Build's artifact."""
+    import shlex
+
+    from research.store import tools_registry
+    repo = Path(__file__).resolve().parents[3]
+    row = "smollm2-135m__bf16__rtxpro6000__tp1__b2__i64__o16__single__greedy__bi-eager"
+    env = {"PY": "/venv/bin/python", "ROW": row, "ROLE": "SMOLLM2", "REPO": "HuggingFaceTB/SmolLM2-135M", "REVISION": "abc123"}
+    _, build, gpu = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
+    for stage, task in (("build", build), ("commit", gpu)):
+        run = task[task.index("\nrun: |"):task.index("\nconfig:")].replace("\\\n", " ")
+        line = next(ln for ln in run.splitlines() if "-m research run" in ln)
+        assert f'--tool vllm.{stage} --project verity --cwd "$SRC"' in line and "bash -c" not in line
+        argv = line.split(" -- ", 1)[1]
+        for k, v in env.items():
+            argv = argv.replace(f'"${k}"', v)
+        _, key = tools_registry.load(f"vllm.{stage}", repo).resolve_params(shlex.split(argv), repo)
+        assert (key["stage"], key["row"], key["batch"], key["revision"]) == (stage, row, 2, "abc123")
+    assert "two-task-build-run" in build and "two-task-build-run" in gpu and '--input "build=$build_art"' in gpu
+
+
+def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host():
+    """Each cell's Commit otherwise JIT-compiles vLLM's batch-invariant Triton kernels again (most of a small cell's warmup)."""
+    for f in ("config-run.yaml", "config-run-row.yaml"):
+        gpu = (SKY / "jobs" / f).read_text().split("\n---\n")[-1]
+        assert "TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$tree VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$tree" in gpu, f
+        assert gpu.index('SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine)') < gpu.index("tree=$(basename"), f
+
+
 def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
     """uid 1000 can't write the synced tree, so every task runs from a copy. vLLM tasks share one copy per tree content (their taps
     then compile once) and bootstrap through vllm_bootstrap.sh; prover tasks, which write into their tree, keep one copy per pod."""
