@@ -7,6 +7,7 @@
 #   research run --on <pod> --project verity --source . --cwd source --campaign pous \
 #     -- bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
+#   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
 #
 # HW, the census id recorded with the result, is the pod's GPU: the H100 SXM and the L40S are known, and any other GPU, or
 # none, needs HW=<census/hardware.json id>.
@@ -14,7 +15,8 @@
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
 # frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity_pous. reference runs
-# bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv.
+# bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv. band-gpu needs no implementation tree: a Python 3.12
+# venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); I=$RESEARCH_RUN_DIR/inputs; O=$RESEARCH_RUN_DIR; W=${WORK:-/workspace}/pous-bench
@@ -23,6 +25,7 @@ GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
 case "$GPU" in                                            # the census id is the device's, never a default another GPU inherits
   *"H100 80GB HBM3"*) HW=${HW:-h100-sxm5-80gb/bf16} ;;
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
+  *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
@@ -59,6 +62,22 @@ if [ "$IMPL" = vllm-gpu ]; then
   export PATH=$(dirname "$PY"):$PATH
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
     --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
+elif [ "$IMPL" = band-gpu ]; then
+  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
+  CUV=$(nvcc --version 2>/dev/null | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/cu\1\2/p')
+  TORCH_CUDA=${TORCH_CUDA:-${CUV:-cu128}}
+  PY=$W/gpu312-$TORCH_CUDA/bin/python
+  [ -x "$PY" ] || { uv venv -q "$W/gpu312-$TORCH_CUDA" --python 3.12 && uv pip install -q --python "$PY" numpy ninja \
+    && uv pip install -q --python "$PY" torch --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"; } || exit 3
+  "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))' || exit 3
+  export PATH=$(dirname "$PY"):$PATH
+  nvidia-smi -q -d CLOCK,PERFORMANCE > "$O/clocks-before.txt" 2>&1 || true
+  "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
+    --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$(nproc)" --verifier-cpu 3 --responder-cpu 2 \
+    ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
+  RC=$?
+  nvidia-smi -q -d CLOCK,PERFORMANCE > "$O/clocks-after.txt" 2>&1 || true
+  exit $RC
 elif [ "$IMPL" = p2-gpu ]; then
   # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for the device's arch
   export PATH=/usr/local/cuda/bin:$PATH

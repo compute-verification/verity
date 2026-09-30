@@ -24,6 +24,19 @@ Implementations:
 - `vllm-gpu`: the GPU kernels of `verity_vllm.engine.pous` (#172, #188), from their own tree, through its frozen
   harness `verity-vllm pous-dense-bench`, with the flags of the band's run of record.
 
+- `band-gpu`: the same band and dense kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only
+  harness `band_gpu/harness.py` (steps and metrics in its docstring):
+  - gates: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity_pous`'s encoding, and the
+    round trip;
+  - encode GB/s, with `C` then resident;
+  - decode overhead on a synthetic loop of the weight set's GEMMs at T = 1, 8, 32 and 2048 tokens, against the same GEMMs
+    on plaintext;
+  - timed audits against the native responder, from a verifier process (`band_gpu/live.py`) while POUS forwards run, with
+    the honest deadline margin and the certificate's headroom, and a negative control;
+  - the `Π₂` step floor against the certificate's 483 µs, over the Feistel kernel variants;
+  - optionally (`--nvme-dir`), one block's read latency from NVMe;
+  - the GPU's clocks and throttle reasons before and after.
+
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`.
   - The measured build expands fresh per-block keys in the timed kernel, by ChaCha8 from one 32-byte seed per
