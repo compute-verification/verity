@@ -475,7 +475,7 @@ def forwards(rows: list[dict], spec: dict) -> dict:
 #: each prover arm's flags; `gate_shape` gates every one at every timed shape
 ARM_FLAGS = {"nohash": PD.TIME_TILES, "sync": PD.HASH | PD.TIME_TILES | PD.CACHE_Y, "async": PD.HASH | PD.CACHE_Y}
 #: a shape's operand sets: enough that their int8 bytes pass twice the L2, at least 2 and at most this many
-MAX_SETS = 128
+MAX_SETS = 512
 #: calls in a burst, at least; with more operand sets, a burst is each of them once
 MIN_BURST = 4
 #: Inductor's GEMM autotuning, for the ``*_tuned`` arms
