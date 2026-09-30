@@ -1,27 +1,32 @@
-"""The reference verifier on h1_bench.py's decode transcripts: -h1's hashing recomputed from the run's own A, C~ and U with the
-verifier's code, each result held to what the kernels wrote.
+"""The reference verifier on h1_bench.py's transcripts: -h1's or -h2's hashing (the header's ``hashing``) recomputed from
+the run's own A, C~ and U with the verifier's code, each result held to what the kernels wrote.
 
-  PYTHONPATH=packages/verity/src:protocols/pouw python3 benchmarks/pouw/pearl_c/verify_h1.py RUN_ID TRANSCRIPT...
+  PYTHONPATH=packages/verity/src:protocols/pouw python3 benchmarks/pouw/pearl_c/verify_h1.py [--jobs J] RUN_ID TRANSCRIPT...
 
 Standard library only. For each transcript:
-- A's commitment: `verity.commitments`' frame-b3 `MerkleTree` over the transcript's rows, under the domain its header names
-  (binding, owner, the row count): every level of it (`tree_levels`) against the tree the kernels wrote;
+- A's commitment: `verity.commitments`' `MerkleTree` over the transcript's rows (frame-b3 under -h1, frame-b3s under -h2),
+  under the domain its header names (binding, owner, the row count): every level of it (`tree_levels`) against the tree the
+  kernels wrote.  A header with ``a_rows_tag`` (prefill's A) carries no rows: row r is SHAKE128 of the tag with r filled in,
+  regenerated here, its leaves computed by J processes;
 - when the transcript has the post-GEMM hashing: every (row, 32-column chunk) message digest (`pearl_c.message_digest`), every
-  tile leaf (`pearl_c.leaf` over the tile's `Checked` C~ and U words) and every level of the tile tree (frame-b3 over the
-  leaves, schema `verity/pouw/tile/v1`), against the kernels'.
+  tile leaf (`pearl_c.leaf` over the tile's `Checked` C~ and U words) and every level of the tile tree (the format's tree
+  over the leaves, schema `verity/pouw/tile/v1`), against the kernels'.
 
-It prints one line per transcript, `h1 verifier accept: <run>:<path> sha256:<hex> …` or `h1 verifier reject: …`, and exits 1
-if any transcript is rejected.
+It prints one line per transcript, `<format> verifier accept: <run>:<path> sha256:<hex> …` or `… reject: …` (format h1 or
+h2), and exits 1 if any transcript is rejected.
 
 A transcript is one JSON header line (the run, the arm, m, the row bytes, n, the two domains, and its sections in order with
 their byte lengths), then the sections' bytes.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import os
 import struct
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
@@ -29,6 +34,14 @@ from verity.commitments.merkle import tree_levels
 from verity_pouw.schemes import pearl_c
 
 ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
+TREE_HASH = {"h1": "blake3", "h2": "blake3-s256"}
+
+
+def tagged_leaves(job: tuple) -> list[bytes]:
+    """Leaves of rows r0 … r1 − 1, each row SHAKE128(tag with r) of rb bytes, under the domain (binding, owner, count, hash)."""
+    binding, owner, count, hash, tag, rb, r0, r1 = job
+    d = CommitmentDomain(binding, owner, RangeIndexedDomain(count), hash=hash)
+    return [d.leaf(r, r, ROW, hashlib.shake_128(tag.format(r=r).encode()).digest(rb)) for r in range(r0, r1)]
 
 
 def read(path: Path) -> tuple[dict, dict[str, bytes]]:
@@ -50,20 +63,30 @@ def laid_out(domain: CommitmentDomain, leaves: list[bytes]) -> bytes:
     return b"".join(b"".join(level) for level in tree_levels(domain, leaves))
 
 
-def verify(run: str, path: Path) -> tuple[bool, str]:
+def verify(run: str, path: Path, jobs: int = 1) -> tuple[bool, str, str]:
     head, p = read(path)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     m, rb, n = head["m"], head["rb"], head["n"]
-    notes = []
-    da = CommitmentDomain(bytes.fromhex(head["a"]["binding"]), head["a"]["owner"], RangeIndexedDomain(m), hash="blake3")
+    hashing = head.get("hashing", "h1")
+    tree_hash, notes = TREE_HASH[hashing], []
+    binding, owner = bytes.fromhex(head["a"]["binding"]), head["a"]["owner"]
+    da = CommitmentDomain(binding, owner, RangeIndexedDomain(m), hash=tree_hash)
     if da.domain_id.hex() != head["a"]["domain"]:
-        return False, f"{run}:{path} sha256:{digest} A's domain id is not its binding's"
-    rows = p["a_rows"]
-    tree = MerkleTree(da, {r: rows[r * rb:(r + 1) * rb] for r in range(m)}, lambda _: ROW)
-    want = laid_out(da, [da.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])
-    if p["a_tree"] != want or want[-32:] != tree.commitment.root:
-        return False, f"{run}:{path} sha256:{digest} A's commitment differs from the kernels' (every level checked)"
-    notes.append(f"A root {tree.commitment.root.hex()} ({m} rows of {rb} B)")
+        return False, hashing, f"{run}:{path} sha256:{digest} A's domain id is not its binding's"
+    if "a_rows_tag" in head:
+        step = -(-m // max(1, jobs))
+        work = [(binding, owner, m, tree_hash, head["a_rows_tag"], rb, r0, min(m, r0 + step)) for r0 in range(0, m, step)]
+        with ProcessPoolExecutor(max(1, jobs)) as pool:
+            leaves = [leaf for part in pool.map(tagged_leaves, work) for leaf in part]
+        want = laid_out(da, leaves)
+        root = want[-32:]
+    else:
+        rows = p["a_rows"]
+        root = MerkleTree(da, {r: rows[r * rb:(r + 1) * rb] for r in range(m)}, lambda _: ROW).commitment.root
+        want = laid_out(da, [da.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])
+    if p["a_tree"] != want or want[-32:] != root:
+        return False, hashing, f"{run}:{path} sha256:{digest} A's commitment differs from the kernels' (every level checked)"
+    notes.append(f"A root {root.hex()} ({m} rows of {rb} B" + (", regenerated from their tag)" if "a_rows_tag" in head else ")"))
     if "c" in p:
         per, tn = n // 32, n // 64
         cw = struct.unpack(f"<{m * n}I", p["c"])
@@ -73,8 +96,8 @@ def verify(run: str, path: Path) -> tuple[bool, str]:
             for h in range(per):
                 s = r * n + 32 * h
                 msg = struct.pack("<32I", *cw[s:s + 32]) + struct.pack("<32I", *uw[s:s + 32])
-                if pearl_c.message_digest(msg, "h1") != dg[32 * (r * per + h):32 * (r * per + h + 1)]:
-                    return False, f"{run}:{path} sha256:{digest} message digest ({r}, {h}) differs"
+                if pearl_c.message_digest(msg, hashing) != dg[32 * (r * per + h):32 * (r * per + h + 1)]:
+                    return False, hashing, f"{run}:{path} sha256:{digest} message digest ({r}, {h}) differs"
         tiles = -(-m // 64) * tn
         leaves = {}
         for t in range(tiles):
@@ -82,26 +105,30 @@ def verify(run: str, path: Path) -> tuple[bool, str]:
             rs = range(64 * ti, min(m, 64 * ti + 64))
             checked = pearl_c.Checked(c=[list(cw[r * n + 64 * tj:r * n + 64 * tj + 64]) for r in rs],
                                       u=[list(uw[r * n + 64 * tj:r * n + 64 * tj + 64]) for r in rs])
-            leaves[t] = pearl_c.leaf(checked, "h1")
+            leaves[t] = pearl_c.leaf(checked, hashing)
             if leaves[t] != p["leaves"][32 * t:32 * t + 32]:
-                return False, f"{run}:{path} sha256:{digest} tile {t}'s leaf differs"
-        dt = CommitmentDomain(bytes.fromhex(head["t"]["binding"]), head["t"]["owner"], RangeIndexedDomain(tiles), hash="blake3")
+                return False, hashing, f"{run}:{path} sha256:{digest} tile {t}'s leaf differs"
+        dt = CommitmentDomain(bytes.fromhex(head["t"]["binding"]), head["t"]["owner"], RangeIndexedDomain(tiles), hash=tree_hash)
         if dt.domain_id.hex() != head["t"]["domain"]:
-            return False, f"{run}:{path} sha256:{digest} the tile tree's domain id is not its binding's"
+            return False, hashing, f"{run}:{path} sha256:{digest} the tile tree's domain id is not its binding's"
         troot = MerkleTree(dt, leaves, lambda _: TILE).commitment.root
         want_t = laid_out(dt, [dt.leaf(t, t, TILE, leaves[t]) for t in range(tiles)])
         if p["tile_tree"] != want_t or want_t[-32:] != troot:
-            return False, f"{run}:{path} sha256:{digest} the tile tree differs from the kernels' (every level checked)"
+            return False, hashing, f"{run}:{path} sha256:{digest} the tile tree differs from the kernels' (every level checked)"
         notes.append(f"{m * per} message digests, {tiles} tile leaves, tile root {troot.hex()}")
-    return True, f"{run}:{path} sha256:{digest} " + "; ".join(notes)
+    return True, hashing, f"{run}:{path} sha256:{digest} " + "; ".join(notes)
 
 
 def main() -> None:
-    run, paths = sys.argv[1], [Path(x) for x in sys.argv[2:]]
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="processes for a tagged A's leaves")
+    ap.add_argument("run")
+    ap.add_argument("paths", nargs="+", type=Path)
+    args = ap.parse_args()
     bad = 0
-    for path in paths:
-        ok, line = verify(run, path)
-        print(f"h1 verifier {'accept' if ok else 'reject'}: {line}", flush=True)
+    for path in args.paths:
+        ok, hashing, line = verify(args.run, path, args.jobs)
+        print(f"{hashing} verifier {'accept' if ok else 'reject'}: {line}", flush=True)
         bad += not ok
     sys.exit(1 if bad else 0)
 

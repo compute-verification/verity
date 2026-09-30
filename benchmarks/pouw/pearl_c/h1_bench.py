@@ -56,6 +56,7 @@ M, N, K = 32, 8192, 8192
 CALLS, WSETS = 32, 4
 MAX_DYN, SMEM_OPTIN = 8, 97
 ROW_F32, ROW_BF16 = 4 * K, 2 * K
+ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
 
 
 def shake(tag: str, n: int) -> bytes:
@@ -207,9 +208,24 @@ def launch_a(d: Bench, s, form: str, rows_p: int, tree_p: int, keys_p: int, dom_
     launch_tree(d, s, form, tree_p, keys_p, dom_p, m)
 
 
+def b3s_template(schema: str) -> tuple[bytes, int]:
+    """Format -h2's segment-key message with the rank, position, L and j left zero (hash_h2.cuh fills them), and its length."""
+    name = schema.encode()
+    head = b"\x05" + bytes(28) + len(name).to_bytes(2, "little") + name
+    return head + bytes(64 - len(head)), len(head)
+
+
+def launch_rows_h2(d: Bench, s, rows_p: int, out_p: int, dom_p: int, skeys_p: int, tmpl: tuple[int, int], m: int, rb: int,
+                   rank0: int = 0) -> None:
+    """-h2's row leaves (hash_rows_b3s): a CTA a row, a thread a 256-byte segment; skeys_p the segment tree's level keys."""
+    nseg = max(1, -(-rb // 256))
+    d.go(s, "hash_rows_b3s", m, 32 * -(-nseg // 32), (rows_p, out_p, dom_p, skeys_p, tmpl[0]), (m, rb, rank0, tmpl[1]))
+
+
 def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: int, tree_p: int, tkeys_p: int, keys: dict,
-                 dom_t: int, rows: int, n: int) -> int:
-    """Message digests, tile leaves, the tile tree's leaves and its levels; returns the tile count."""
+                 dom_t: int, rows: int, n: int, h2: tuple[int, int] | None = None) -> int:
+    """Message digests, tile leaves, the tile tree's leaves and its levels; returns the tile count.  h2: the tile tree is
+    -h2's (hash_leaves_b3s under this key template, then the levels under tkeys_p, computed beforehand)."""
     per, tn = n // 32, n // 64
     tiles = -(-rows // 64) * tn
     if form == "pushed":
@@ -218,6 +234,10 @@ def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: in
     else:
         d.go(s, "hash_msg_v", -(-rows * per // 128), 128, (c_p, u_p, dg_p, keys["k_msg"]), (rows, n))
         d.go(s, "hash_leaf_p", -(-tiles // 32), 128, (dg_p, lv_p, keys["k_leaf"]), (rows, n))
+    if h2:
+        d.go(s, "hash_leaves_b3s", -(-tiles // 128), 128, (lv_p, tree_p, dom_t, h2[0]), (tiles, 32, 0, h2[1]))
+        d.go(s, "hash_tree_small", 1, max(1, min(1024, tiles // 2)), (tree_p, tkeys_p), (tiles,))
+        return tiles
     d.go(s, "hash_tree_leaves", -(-tiles // 128), 128, (lv_p, tree_p, dom_t), (tiles,))
     launch_tree(d, s, form, tree_p, tkeys_p, dom_t, tiles)
     return tiles
@@ -320,6 +340,47 @@ def gates(d: Bench, V: dict) -> dict:
         bad += [f"tiles {form} {k}" for k, v in checks.items() if not v]
         for p in (cp, up, dg, lv, tp, dt, tk):
             d.free(p)
+    h2 = V["h2"]
+    tmpl = {sch: (d.put(t[0]), t[1]) for sch, t in ((ROW, b3s_template(ROW)), (TILE, b3s_template(TILE)))}
+    dom, sk = d.put(bytes.fromhex(h2["rows"]["domain"])), d.alloc(32 * 16)
+    d.go(None, "b3s_level_keys", 1, 32, (sk, dom), (10,))
+    wrong = 0
+    for case in h2["rows"]["cases"]:
+        rb = case["rb"]
+        rp, op = d.put(shake(f"gate h2 rows {rb}", 2 * rb)), d.alloc(64)
+        launch_rows_h2(d, None, rp, op, dom, sk, tmpl[ROW], 2, rb, rank0=3)
+        d.sync()
+        if d.read(op, 64).hex() != case["leaves"][0] + case["leaves"][1]:
+            wrong += 1
+            bad.append(f"h2 rows rb={rb}")
+        d.free(rp)
+        d.free(op)
+    out["rows"]["h2"] = {"cases": len(h2["rows"]["cases"]), "wrong": wrong}
+    da, ka, ska = d.put(bytes.fromhex(h2["tree"]["domain"])), d.alloc(32 * 16), d.alloc(32 * 16)
+    rp, tp = d.put(shake("gate tree fp32", M * ROW_F32)), d.alloc(32 * 2 * M)
+    d.go(None, "hash_node_keys", 1, 32, (ka, da), (5,))
+    d.go(None, "b3s_level_keys", 1, 32, (ska, da), (10,))
+    launch_rows_h2(d, None, rp, tp, da, ska, tmpl[ROW], M, ROW_F32)
+    d.go(None, "hash_tree_small", 1, M // 2, (tp, ka), (M,))
+    d.sync()
+    ok = d.read(tp + 32 * (2 * M - 2), 32).hex() == h2["tree"]["root"]
+    out["trees"]["A m=32 fp32 rows h2"] = ok
+    if not ok:
+        bad.append("h2 A tree root")
+    case = V["tiles"]["m32"]
+    rows, n = case["rows"], case["n"]
+    cp, up = d.put(shake("gate c", 4 * M * n)), d.put(shake("gate u", 4 * M * n))
+    dg, lv, ttp = d.alloc(32 * rows * (n // 32)), d.alloc(32 * 256), d.alloc(32 * 2 * 256)
+    dt2, tk2 = d.put(bytes.fromhex(h2["tiles"]["domain"])), d.alloc(32 * 16)
+    d.go(None, "hash_node_keys", 1, 32, (tk2, dt2), (7,))
+    tiles = launch_tiles(d, None, "tuned", cp, up, dg, lv, ttp, tk2, keys, dt2, rows, n, h2=tmpl[TILE])
+    d.sync()
+    ok = d.read(ttp + 32 * (2 * tiles - 2), 32).hex() == h2["tiles"]["root"]
+    out["tiles"]["h2"] = {"rows": rows, "tiles": tiles, "root": ok}
+    if not ok:
+        bad.append("h2 tile tree root")
+    for p_ in (dom, sk, da, ka, ska, rp, tp, cp, up, dg, lv, ttp, dt2, tk2, *[t[0] for t in tmpl.values()]):
+        d.free(p_)
     lc, p = V["lat_chain"], d.alloc(64)
     for mode, threads, name in ((0, 1, "b3c"), (1, 4, "b3c4")):
         d.go(None, "lat_chain", 1, threads, (p,), (lc["n"], mode))
@@ -369,6 +430,72 @@ def seg_rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
         out[name] = {"bytes": m * rb, "ms": med, "raw_ms": ms[name], "gb_s": m * rb / med / 1e6, "sm_mhz": clk[name],
                      "bytes_per_sm_clk": m * rb / (med * 1e-3) / (d.sms * max(statistics.median(clk[name]), 1) * 1e6)}
     for p in (fl, sink, rp, op, dom, kk, lk):
+        d.free(p)
+    return out
+
+
+def h2_rates(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
+    """Prefill at 8,192^3: A's row leaves under -h1's two kernels and -h2's, -h2's A tree levels, and the message digests and
+    tile leaves (the same kernels under both formats), interleaved in each rep (order rotated) with an L2 flush before each
+    timing and the SM clock after it.  Then -h2's whole A commitment once under the prefill domain, written as a transcript:
+    the tree only, since A's row r is SHAKE128("h2 prefill A {r}") and verify_h1.py regenerates it."""
+    fl, sink = d.alloc(512 << 20), d.alloc(16)
+    m, n, rb = 8192, N, ROW_F32
+    rp, op = d.put(b"".join(shake(f"h2 prefill A {r}", rb) for r in range(m))), d.alloc(32 * m)
+    pa = V["decode"]["prefill_a2"]
+    dom1, dom2, sk2, k2 = d.put(bytes(32)), d.put(bytes.fromhex(pa["domain"])), d.alloc(32 * 16), d.alloc(32 * 16)
+    d.go(None, "b3s_level_keys", 1, 32, (sk2, dom2), (9,))
+    d.go(None, "hash_node_keys", 1, 32, (k2, dom2), (max(0, (m - 1).bit_length()),))
+    t = b3s_template(ROW)
+    tr = (d.put(t[0]), t[1])
+    keys = {kk: d.put(bytes.fromhex(R.H1_KEYS[kk])) for kk in ("k_msg", "k_leaf")}
+    cp, up, dg = d.alloc(4 * m * n), d.alloc(4 * m * n), d.alloc(32 * m * (n // 32))
+    tiles = (m // 64) * (n // 64)
+    lv, tree = d.alloc(32 * tiles), d.alloc(32 * 2 * m)
+
+    def a_tree_levels() -> None:
+        off, w, lvl = 0, m, 0
+        while w > 1:
+            d.go(None, "hash_nodes", -(-(w // 2) // 128), 128, (tree + off, tree + off + 32 * w, k2 + 32 * lvl), (lvl, w // 2))
+            off, w, lvl = off + 32 * w, w // 2, lvl + 1
+
+    forms = {"A rows h1 pushed": lambda: launch_rows(d, None, "pushed", rp, op, dom1, m, rb),
+             "A rows h1 tuned": lambda: launch_rows(d, None, "tuned", rp, op, dom1, m, rb),
+             "A rows h2": lambda: launch_rows_h2(d, None, rp, op, dom2, sk2, tr, m, rb),
+             "A tree levels (both formats)": a_tree_levels,
+             "messages tuned (both formats)": lambda: d.go(None, "hash_msg_v", m * (n // 32) // 128, 128, (cp, up, dg, keys["k_msg"]), (m, n)),
+             "tile leaves tuned (both formats)": lambda: d.go(None, "hash_leaf_p", tiles // 32, 128, (dg, lv, keys["k_leaf"]), (m, n))}
+    for body in forms.values():
+        body()
+    d.sync()
+    ms: dict = {k: [] for k in forms}
+    clk: dict = {k: [] for k in forms}
+    order = list(forms)
+    for rep in range(reps):
+        for name in order[rep % len(order):] + order[:rep % len(order)]:
+            flush(d, fl, sink)
+            ms[name] += d.timed(forms[name], 1)
+            clk[name].append(nv.read()["sm_mhz"])
+    out: dict = {}
+    for name in forms:
+        med = statistics.median(ms[name])
+        out[name] = {"ms": med, "raw_ms": ms[name], "sm_mhz": clk[name]}
+        if name.startswith("A rows"):
+            out[name]["gb_s"] = m * rb / med / 1e6
+    launch_rows_h2(d, None, rp, tree, dom2, sk2, tr, m, rb)
+    a_tree_levels()
+    d.sync()
+    if tdir:
+        os.makedirs(tdir, exist_ok=True)
+        run = os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local"
+        body = d.read(tree, 32 * (2 * m - 1))
+        head = {"run": run, "arm": "prefill A h2", "m": m, "rb": rb, "n": n, "hashing": "h2", "a": pa,
+                "a_rows_tag": "h2 prefill A {r}", "sections": [["a_tree", len(body)]]}
+        blob = json.dumps(head).encode() + b"\n" + body
+        path = os.path.join(tdir, "prefill-A-h2.bin")
+        open(path, "wb").write(blob)
+        out["transcript"] = {"path": path, "sha256": hashlib.sha256(blob).hexdigest()}
+    for p in (fl, sink, rp, op, dom1, dom2, sk2, k2, tr[0], *keys.values(), cp, up, dg, lv, tree):
         d.free(p)
     return out
 
@@ -447,6 +574,10 @@ ARMS = [
     ("candidate: A bf16 rows, keys precomputed", ROW_BF16, "pre", "none"),
     ("candidate: h1 bf16 rows, keys precomputed, side stream", ROW_BF16, "pre", "side"),
     ("candidate: h1 bf16 rows, keys precomputed, side stream, priorities", ROW_BF16, "pre", "side"),
+    ("h2 A alone", ROW_F32, "h2", "none"), ("h2, side stream, priorities", ROW_F32, "h2", "side"),
+    ("h2, deferred side stream, priorities", ROW_F32, "h2", "deferred"),
+    ("P2 prototype: h2 A alone, tree on the side stream, priorities", ROW_F32, "h2p2", "none"),
+    ("P2 prototype: h2, tree on the side stream, deferred side stream, priorities", ROW_F32, "h2p2", "deferred"),
 ]
 
 
@@ -458,7 +589,11 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                   "candidate: h1 A segment layout s=256, side stream, priorities",
                   "h1 tuned, keys precomputed, side stream deferred, priorities",
                   "candidate: h1 A segment layout s=64, side stream deferred, priorities",
-                  "candidate: h1 A segment layout s=256, side stream deferred, priorities"]}
+                  "candidate: h1 A segment layout s=256, side stream deferred, priorities"],
+           "h2": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, keys precomputed, side stream, priorities",
+                  "h2 A alone", "h2, side stream, priorities", "h2, deferred side stream, priorities",
+                  "P2 prototype: h2 A alone, tree on the side stream, priorities",
+                  "P2 prototype: h2, tree on the side stream, deferred side stream, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -495,6 +630,9 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
     keys = {kk: d.put(bytes.fromhex(R.H1_KEYS[kk])) for kk in ("k_msg", "k_leaf")}
     dom_a, dom_t = d.put(bytes.fromhex(V["decode"]["a"]["domain"])), d.put(bytes.fromhex(V["decode"]["t"]["domain"]))
     blk_key, blk_levels = d.put(shake("blk key", 32)), d.put(shake("blk levels", 32 * 9))
+    h2d = {kk: d.put(bytes.fromhex(V["decode"][kk]["domain"])) for kk in ("a2", "t2")}
+    a2_keys, a2_skeys, t2_keys = d.alloc(32 * 16), d.alloc(32 * 16), d.alloc(32 * 16)
+    tmpl = {sch: (d.put(t[0]), t[1]) for sch, t in ((ROW, b3s_template(ROW)), (TILE, b3s_template(TILE)))}
     w = [d.put(shake(f"weights {s}", n * k)) for s in range(WSETS)]
     y = d.alloc(2 * m * n)
     rows = {rb: d.alloc(m * rb) for rb in (ROW_F32, ROW_BF16)}
@@ -518,6 +656,16 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
         elif amode == "blkpre":
             d.go(s, "hash_rows_blk", m, 256, (rows[rb], a_tree, blk_key, blk_levels), (m, rb))
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
+        elif amode == "h2":
+            launch_rows_h2(d, s, rows[rb], a_tree, h2d["a2"], a2_skeys, tmpl[ROW], m, rb)
+            d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a2_keys), (m,))
+
+    def tiles_on(s, sl: dict, h2: bool) -> None:
+        if h2:
+            launch_tiles(d, s, "tuned", sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], t2_keys, keys, h2d["t2"], m, n,
+                         h2=tmpl[TILE])
+        else:
+            launch_tiles(d, s, "tuned", sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
 
     def call(i: int, rb: int, amode: str, post: str, st: dict) -> None:
         s1, s2 = st["streams"]
@@ -541,13 +689,20 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                 d.wait(s2, d.event(s1))
                 commit_a(s2, amode, rb)
                 st["a_done"] = d.event(s2)
+            elif amode == "h2p2":                            # P2: the GEMM waits for the row leaves only, the tree beside it
+                if st.get("tree_done") is not None:
+                    d.wait(s1, st.pop("tree_done"))
+                launch_rows_h2(d, s1, rows[rb], a_tree, h2d["a2"], a2_skeys, tmpl[ROW], m, rb)
+                d.wait(s2, d.event(s1))
+                d.go(s2, "hash_tree_small", 1, max(1, m // 2), (a_tree, a2_keys), (m,))
+                st["tree_done"] = d.event(s2)
             elif amode != "none":
                 if early:
                     d.wait(s1, ek)
                 commit_a(s1, amode, rb)
         if st.get("pending") is not None:                    # "deferred": the previous call's tiles, now A's commitment is done
             d.wait(s2, d.event(s1))
-            launch_tiles(d, s2, "tuned", *tile_args(st.pop("pending")))
+            tiles_on(s2, *st.pop("pending"))
             st["joins"].append(d.event(s2))
         if post in ("side", "deferred") and len(st["joins"]) >= 2:   # the side stream's slot from two calls back is free again
             d.wait(s1, st["joins"][-2])
@@ -555,19 +710,18 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
         d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], a_in, sl["c"], sl["u"], y), (m, n, k))
         if post == "none":
             return
+        h2 = amode.startswith("h2")
         if post == "deferred":
-            st["pending"] = sl
+            st["pending"] = (sl, h2)
             return
-        form = "pushed" if post == "pushed" else "tuned"
         if post == "side":
             d.wait(s2, d.event(s1))
-            launch_tiles(d, s2, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
+            tiles_on(s2, sl, h2)
             st["joins"].append(d.event(s2))
+        elif post == "pushed":
+            launch_tiles(d, s1, "pushed", sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
         else:
-            launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
-
-    def tile_args(sl: dict) -> tuple:
-        return sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n
+            tiles_on(s1, sl, h2)
 
     arms = [a for a in ARMS if only is None or a[0] in only]
     if only is not None and len(arms) != len(only):
@@ -582,15 +736,18 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                 call(i, rb, amode, post, st)
             if st.get("pending") is not None:
                 d.wait(streams[1], d.event(streams[0]))
-                launch_tiles(d, streams[1], "tuned", *tile_args(st.pop("pending")))
+                tiles_on(streams[1], *st.pop("pending"))
                 st["joins"].append(d.event(streams[1]))
-            for e in [st.get("a_done")] + st["joins"][-1:]:
+            for e in [st.get("a_done"), st.get("tree_done")] + st["joins"][-1:]:
                 if e is not None:
                     d.wait(streams[0], e)
             if amode in EARLY:
                 d.wait(streams[0], d.event(streams[1]))
         graphs[name], prios[name] = d.graph(body, streams[0], name.endswith(", priorities"))
     d.go(None, "hash_node_keys", 1, 32, (a_keys, dom_a), (depth,))     # the "pre" arms' table (every arm writes the same keys)
+    d.go(None, "hash_node_keys", 1, 32, (a2_keys, h2d["a2"]), (depth,))  # -h2's tables: A's tree, its segment trees, the tiles'
+    d.go(None, "b3s_level_keys", 1, 32, (a2_skeys, h2d["a2"]), (9,))
+    d.go(None, "hash_node_keys", 1, 32, (t2_keys, h2d["t2"]), (7,))
     d.sync()
     for ge in graphs.values():                               # warm every graph once
         d.replay_ms(ge, 1)
@@ -620,7 +777,9 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             if post != "none":
                 parts += [("c", d.read(sl["c"], 4 * m * n)), ("u", d.read(sl["u"], 4 * m * n)), ("digests", d.read(sl["dg"], 32 * m * per)),
                           ("leaves", d.read(sl["lv"], 32 * tiles)), ("tile_tree", d.read(sl["tree"], 32 * (2 * tiles - 1)))]
-            head = {"run": run, "arm": name, "m": m, "rb": rb, "n": n, "a": V["decode"]["a"], "t": V["decode"]["t"],
+            h2 = amode.startswith("h2")
+            head = {"run": run, "arm": name, "m": m, "rb": rb, "n": n, "hashing": "h2" if h2 else "h1",
+                    "a": V["decode"]["a2" if h2 else "a"], "t": V["decode"]["t2" if h2 else "t"],
                     "sections": [[k, len(v)] for k, v in parts]}
             blob = json.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts)
             path = os.path.join(tdir, slug(name) + ".bin")
@@ -643,7 +802,8 @@ def main() -> None:
     ap.add_argument("--reps", type=int, default=20)
     ap.add_argument("--transcripts", help="a directory for the verified decode arms' transcripts (verify_h1.py)")
     ap.add_argument("--preset", choices=["all", *PRESETS], default="all",
-                    help="p1: only P1's prototype and its baselines (decode arms and prefill row rates), no latency probe")
+                    help="p1: only P1's prototype and its baselines (decode arms and prefill row rates), no latency probe; "
+                         "h2: format -h2, P2's prototype and their baselines, and prefill's -h2 A commitment as a transcript")
     args = ap.parse_args()
     cubin, standin = open(args.cubin, "rb").read(), open(args.standin, "rb").read()
     d = Bench(cubin, standin)
@@ -664,7 +824,8 @@ def main() -> None:
     if res["gates"]["failures"]:
         sys.exit(4)
     res["preset"] = args.preset
-    res["rates"] = seg_rates(d, nv, args.reps) if args.preset == "p1" else rates(d, nv, args.reps)
+    res["rates"] = (seg_rates(d, nv, args.reps) if args.preset == "p1" else
+                    h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset == "h2" else rates(d, nv, args.reps))
     save()
     res["latency"] = latency(d) if args.preset == "all" else {}
     save()
@@ -677,7 +838,8 @@ def main() -> None:
     for name, r in res["latency"].items():
         print(f"latency {name}: {r['cycles_per_compression']:.0f} cycles a compression", flush=True)
     for name, r in res["rates"].items():
-        print(f"rate {name}: {r['gb_s']:.0f} GB/s, {r['bytes_per_sm_clk']:.2f} B/SM/clk", flush=True)
+        if "ms" in r:
+            print(f"rate {name}: {r['ms']:.4f} ms" + (f", {r['gb_s']:.0f} GB/s" if "gb_s" in r else ""), flush=True)
 
 
 if __name__ == "__main__":

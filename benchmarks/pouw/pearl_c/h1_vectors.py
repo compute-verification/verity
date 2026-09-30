@@ -74,9 +74,17 @@ def tile_case(rows: int) -> dict:
         leaves.append(blake3.blake3(joined, key=k_leaf).digest())
     d = domain(9, tiles)
     root = MerkleTree(d, dict(enumerate(leaves)), lambda _: TILE).commitment.root
+    tile_leaves.cache[rows] = leaves
     return {"rows": rows, "n": N, "tiles": tiles, "domain": d.domain_id.hex(),
             "digests_sha256": hashlib.sha256(b"".join(dg)).hexdigest(), "leaves_sha256": hashlib.sha256(b"".join(leaves)).hexdigest(),
             "root": root.hex()}
+
+
+def tile_leaves(case: dict) -> list[bytes]:
+    return tile_leaves.cache[case["rows"]]
+
+
+tile_leaves.cache = {}
 
 
 def blk_case() -> dict:
@@ -116,6 +124,25 @@ def seg_cases(blk: dict) -> dict:
     return out
 
 
+def h2_cases(tile: dict) -> dict:
+    """Format -h2 (frame-b3s, `verity.commitments.merkle`'s own leaf): two rows at each length at ranks 3 and 4 (short last
+    segments, odd levels, a length that isn't a multiple of 16), A's m = 32 tree over FP32 rows, and the m = 32 tile tree
+    over tile_case's leaves."""
+    d = CommitmentDomain(BINDING, 3, RangeIndexedDomain(8), hash="blake3-s256")
+    rows = []
+    for rb in (256, 1000, 1300, 4100, 16384, 32768):
+        v = shake(f"gate h2 rows {rb}", 2 * rb)
+        rows.append({"rb": rb, "leaves": [d.leaf(3 + r, 3 + r, ROW, v[r * rb:(r + 1) * rb]).hex() for r in range(2)]})
+    da = CommitmentDomain(BINDING, 5, RangeIndexedDomain(M), hash="blake3-s256")
+    a = shake("gate tree fp32", M * 4 * N)
+    root_a = MerkleTree(da, {r: a[r * 4 * N:(r + 1) * 4 * N] for r in range(M)}, lambda _: ROW).commitment.root
+    dt = CommitmentDomain(BINDING, 9, RangeIndexedDomain(tile["tiles"]), hash="blake3-s256")
+    return {"rows": {"domain": d.domain_id.hex(), "cases": rows},
+            "tree": {"domain": da.domain_id.hex(), "root": root_a.hex()},
+            "tiles": {"domain": dt.domain_id.hex(), "root": MerkleTree(dt, dict(enumerate(tile_leaves(tile))), lambda _: TILE)
+                      .commitment.root.hex()}}
+
+
 def lat_chain_case(n: int = 512) -> dict:
     """lat_chain's last chaining value after n dependent keyed compressions (h1_bench's latency count), from
     `verity.commitments.blake3.compress`."""
@@ -131,19 +158,21 @@ def decode_domains() -> dict:
     """The decode chain's two frame-b3 domains (A's 32 rows and the 128 tiles' tree), so that h1_bench's kernels hash under
     domain ids the verifier (verify_h1.py) rebuilds from the same binding and owner."""
     out = {}
-    for name, tag, count in (("a", b"h1_bench decode A rows", M), ("t", b"h1_bench decode tiles", 128)):
+    for name, tag, count, h in (("a", b"h1_bench decode A rows", M, "blake3"), ("t", b"h1_bench decode tiles", 128, "blake3"),
+                                ("a2", b"h1_bench decode A rows", M, "blake3-s256"), ("t2", b"h1_bench decode tiles", 128, "blake3-s256"),
+                                ("prefill_a2", b"h1_bench prefill A rows", 8192, "blake3-s256")):
         binding = hashlib.sha256(tag).digest()
-        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash="blake3")
-        out[name] = {"binding": binding.hex(), "owner": 0, "count": count, "domain": d.domain_id.hex()}
+        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash=h)
+        out[name] = {"binding": binding.hex(), "owner": 0, "count": count, "hash": h, "domain": d.domain_id.hex()}
     return out
 
 
 def main() -> None:
-    blk = blk_case()
+    blk, tile = blk_case(), tile_case(M)
     out = {"source": "frame-b3 (verity.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
-           "tiles": {"m32": tile_case(M)}, "blk": blk, "seg": seg_cases(blk), "lat_chain": lat_chain_case(),
+           "tiles": {"m32": tile}, "blk": blk, "seg": seg_cases(blk), "h2": h2_cases(tile), "lat_chain": lat_chain_case(),
            "decode": decode_domains()}
     Path(sys.argv[1]).write_text(json.dumps(out))
     print(f"{len(out['rows']['cases'])} row cases, {len(out['trees'])} trees, {len(out['tiles'])} tile case(s) -> {sys.argv[1]}")

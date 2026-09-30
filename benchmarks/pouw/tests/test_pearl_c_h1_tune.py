@@ -158,11 +158,20 @@ def test_rows_and_tree_in_one_launch_are_merkle_trees(m, rb):
     assert counter.raw[:4] == bytes(4)
 
 
-def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_byte(tmp_path):
-    """verify_h1.py on a transcript made from the reference itself (A's frame-b3 tree, Pearl-C's h1 digests and leaves, the
-    tile tree) accepts it, and rejects it with one byte flipped in A's rows, A's tree, C~, the digests or the tile tree."""
-    import json as J
+def verifier(path, *extra) -> "subprocess.CompletedProcess":
     import subprocess
+    env = {"PYTHONPATH": f"{Path(__file__).parents[3] / 'packages/verity/src'}:{Path(__file__).parents[3] / 'protocols/pouw'}",
+           "PATH": "/usr/bin:/bin"}
+    return subprocess.run([sys.executable, str(HERE / "verify_h1.py"), *extra, "test", str(path)], capture_output=True, text=True,
+                          env=env)
+
+
+@pytest.mark.parametrize("hashing", ["h1", "h2"])
+def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_byte(tmp_path, hashing):
+    """verify_h1.py on a transcript made from the reference itself (A's tree, Pearl-C's digests and leaves, the tile tree;
+    frame-b3 under -h1, frame-b3s under -h2) accepts it, and rejects it with one byte flipped in A's rows, A's tree, C~,
+    the digests or the tile tree, and with its format relabelled."""
+    import json as J
 
     from verity.commitments.merkle import tree_levels
     m, rb, n = 32, 256, 128
@@ -171,7 +180,7 @@ def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_by
     doms = {}
     for name, count in (("a", m), ("t", -(-m // 64) * (n // 64))):
         binding = hashlib.sha256(f"verify {name}".encode()).digest()
-        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash="blake3")
+        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash={"h1": "blake3", "h2": "blake3-s256"}[hashing])
         doms[name] = {"binding": binding.hex(), "owner": 0, "count": count, "domain": d.domain_id.hex(), "d": d}
     da, dt = doms["a"].pop("d"), doms["t"].pop("d")
     a_levels = tree_levels(da, [da.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])
@@ -185,20 +194,20 @@ def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_by
     parts = [("a_rows", rows), ("a_tree", b"".join(b"".join(lv) for lv in a_levels)), ("c", c), ("u", u), ("digests", dgs),
              ("leaves", b"".join(leaves)), ("tile_tree", b"".join(b"".join(lv) for lv in t_levels))]
 
-    def write(parts_, path):
-        head = {"run": "test", "arm": "reference", "m": m, "rb": rb, "n": n, "a": doms["a"], "t": doms["t"],
+    def write(parts_, path, label=hashing):
+        head = {"run": "test", "arm": "reference", "m": m, "rb": rb, "n": n, "hashing": label, "a": doms["a"], "t": doms["t"],
                 "sections": [[k, len(v)] for k, v in parts_]}
         path.write_bytes(J.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts_))
 
-    def run(path) -> subprocess.CompletedProcess:
-        env = {"PYTHONPATH": f"{Path(__file__).parents[3] / 'packages/verity/src'}:{Path(__file__).parents[3] / 'protocols/pouw'}",
-               "PATH": "/usr/bin:/bin"}
-        return subprocess.run([sys.executable, str(HERE / "verify_h1.py"), "test", str(path)], capture_output=True, text=True, env=env)
-
+    run = verifier
     good = tmp_path / "good.bin"
     write(parts, good)
     r = run(good)
-    assert r.returncode == 0 and r.stdout.startswith("h1 verifier accept: test:") and "tile root" in r.stdout, r.stdout + r.stderr
+    assert r.returncode == 0 and r.stdout.startswith(f"{hashing} verifier accept: test:") and "tile root" in r.stdout, r.stdout + r.stderr
+    other = {"h1": "h2", "h2": "h1"}[hashing]
+    write(parts, tmp_path / "relabelled.bin", other)
+    r = run(tmp_path / "relabelled.bin")
+    assert r.returncode == 1 and r.stdout.startswith(f"{other} verifier reject:"), r.stdout + r.stderr
     for i, (name, _v) in enumerate(parts):
         bad = list(parts)
         v = bytearray(bad[i][1])
@@ -207,7 +216,31 @@ def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_by
         path = tmp_path / f"bad-{name}.bin"
         write(bad, path)
         r = run(path)
-        assert r.returncode == 1 and r.stdout.startswith("h1 verifier reject:"), (name, r.stdout, r.stderr)
+        assert r.returncode == 1 and r.stdout.startswith(f"{hashing} verifier reject:"), (name, r.stdout, r.stderr)
+
+
+def test_the_verifier_regenerates_a_tagged_a_and_checks_its_h2_tree(tmp_path):
+    """A prefill-style transcript (the tree only; row r is SHAKE128 of the tag with r): accepted with the rows' leaves
+    split over processes, rejected with one byte of a leaf or of the root flipped."""
+    import json as J
+
+    from verity.commitments.merkle import tree_levels
+    m, rb, tag = 16, 1000, "test tagged A {r}"
+    binding = hashlib.sha256(b"verify tagged").digest()
+    d = CommitmentDomain(binding, 0, RangeIndexedDomain(m), hash="blake3-s256")
+    levels = tree_levels(d, [d.leaf(r, r, ROW, hashlib.shake_128(tag.format(r=r).encode()).digest(rb)) for r in range(m)])
+    tree = b"".join(b"".join(lv) for lv in levels)
+    head = {"run": "test", "arm": "prefill A h2", "m": m, "rb": rb, "n": 64, "hashing": "h2",
+            "a": {"binding": binding.hex(), "owner": 0, "count": m, "domain": d.domain_id.hex()}, "a_rows_tag": tag,
+            "sections": [["a_tree", len(tree)]]}
+    for name, body, ok in (("good", tree, True), ("leaf", tree[:40] + bytes([tree[40] ^ 1]) + tree[41:], False),
+                           ("root", tree[:-1] + bytes([tree[-1] ^ 1]), False)):
+        path = tmp_path / f"{name}.bin"
+        path.write_bytes(J.dumps(head).encode() + b"\n" + body)
+        r = verifier(path, "--jobs", "3")
+        assert (r.returncode == 0) == ok and r.stdout.startswith(f"h2 verifier {'accept' if ok else 'reject'}:"), r.stdout + r.stderr
+        if ok:
+            assert "regenerated from their tag" in r.stdout
 
 
 def segment_roots(rows: bytes, rb: int, s: int, key: bytes, levels: list[bytes]) -> bytes:
