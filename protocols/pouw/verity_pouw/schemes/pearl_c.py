@@ -85,6 +85,7 @@ FADD_UNITS, BF16_MAC_UNITS = 32, 2
 FORMING_V0_UNITS = 320
 #: Forming v1 per operand element (`Costs.adopted`: ρ 4, the noise atom and the cast 64)
 FORMING_V1_UNITS = 68
+FORMING_CREDITED, FORMING_A_ONLY = 64, 4    # `Costs.adopted`'s fs (depends on the salt) and qa (on the activations alone)
 #: F's line norm under v1 (E keeps Pearl's 256)
 LINE_NORM_V1 = 16.0
 S5_STRIDE = 8
@@ -365,14 +366,29 @@ class PearlC:
         return grid_tiles(shape, *self.tile)
 
     def wref(self, shape: Shape) -> int:
-        """The honest W1 cost of one unit: the chain (1 per MAC) with its promotion FADDs, the fused A′·F_B, the peel in
-        BF16 (2 per MAC), B̃·F_A and B's forming (per job, charged here in full) and the forming on both sides.  Hashing is
+        """The honest W1 cost of one unit, Lean's `wrefOf` (`Game.lean`; `Costs.adopted` under v1): the chain (1 per MAC)
+        with its promotion adds (32 per 128 products), the fused A′·F_B (r per element of A), the peel in BF16 (2 per MAC
+        over depth 2r) and A's forming (68 units per element under v1, 320 under v0).  The weight side (B's forming, B̃·F_A,
+        G, P_B) is done once per weight and epoch, not per unit: it is `job_cost`, outside W_ref and the credit.  Hashing is
         the random oracle's."""
         m, k, n = shape.m, shape.k, shape.n
-        windows = -(-k // WINDOW)
-        chain_units = lambda rows, cols: rows * cols * (k + FADD_UNITS * windows)
-        return (chain_units(m, n) + chain_units(m, R) + chain_units(n, R) + BF16_MAC_UNITS * PEEL_K * m * n
-                + (FORMING_V0_UNITS if self.forming == "v0" else FORMING_V1_UNITS) * (m + n) * k)
+        return (m * n * (k + FADD_UNITS * (k // WINDOW)) + m * k * R + BF16_MAC_UNITS * PEEL_K * m * n
+                + (FORMING_V0_UNITS if self.forming == "v0" else FORMING_V1_UNITS) * m * k)
+
+    def credit_of(self, shape: Shape) -> int:
+        """Lean's `creditOf` at `Costs.adopted`: `wref` less ρ's 4 units per element of A, which depend on A alone.  An
+        accepted unit is credited (1 − ρ)·`credit_of` (`PearlCAccounting`).  v0 has no TT_OUT accounting."""
+        if self.forming != "v1":
+            raise ValueError(f"{self.name}: TT_OUT's accounting is stated for forming v1 only")
+        return self.wref(shape) - FORMING_A_ONLY * shape.m * shape.k
+
+    def job_cost(self, n: int, k: int) -> int:
+        """The weight side of an (n, k) weight, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's
+        FP32 FMA chain (r² per row at an add's 32 units).  Neither W_ref nor the credit counts it (`creditOf` leaves it out,
+        which only raises γ)."""
+        chain = lambda rows, cols: rows * cols * (k + FADD_UNITS * (k // WINDOW))  # noqa: E731
+        return ((FORMING_V0_UNITS if self.forming == "v0" else FORMING_V1_UNITS) * n * k + chain(n, R) + chain(R, R)
+                + FADD_UNITS * n * R * R)
 
     def noise(self, ctx: Context) -> Noise:
         seed_b = _labelled(ctx.salt + ctx.root_b, "seed-B")
