@@ -23,6 +23,8 @@ Every POLL_S seconds the runner:
     every GPU, or a waiter for all of them);
   - stops GPU fill jobs, newest first, until the free GPUs cover every waiter plus RESERVE (default 0: waiters with --wait preempt fill leases anyway), and all of them while
     a timed window waits or runs; pauses CPU fill jobs (SIGSTOP) during a timed window and resumes them after;
+    while the node's scheduler agent holds agent.lock it stops nothing for waiters or a waiting window (the agent evicts),
+    and falls back on the next tick once the lock is free;
   - stops a job past its max_min (not counting time paused) and requeues it;
   - starts GPU jobs on every free GPU beyond RESERVE when nobody waits, except the GPUs listed in FILL_DIR/keep-free
     (e.g. `1`, or `0,1`, with an optional `# reason`), and CPU jobs up to CPU_SLOTS, pinned
@@ -103,6 +105,21 @@ def lease(i: int) -> str | None:
         return (LEASE_DIR / f"{i}.owner").read_text().strip() or "held"
     except OSError:
         return "held"
+
+
+def agent_up() -> bool:
+    """Whether the node's scheduler agent (`cluster agent --mode live`) holds LEASE_DIR/agent.lock."""
+    try:
+        fd = os.open(LEASE_DIR / "agent.lock", os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        return False
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
 
 
 def waiters() -> list[int]:
@@ -299,11 +316,12 @@ def tick(n: int) -> str:
     gpu_jobs = sorted((j["t0"], k) for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping"))
     blockers = (n - free) - len(gpu_jobs)
     need = RESERVE + sum(want)
-    if timed or (window and blockers <= 0):
+    agent = agent_up()
+    if timed or (window and blockers <= 0 and not agent):
         # the window is running, or only fill stands between it and the GPUs
         for _, k in gpu_jobs:
             stop(k, "timed window")
-    elif not window:
+    elif not window and not agent:
         # verity jobs go first, then the newest pous jobs
         order = sorted(gpu_jobs, key=lambda x: (running[x[1]]["h"]["project"] != "verity", -x[0]))
         deficit = need - free

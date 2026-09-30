@@ -183,6 +183,49 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
                 p.wait()
 
 
+def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_path, monkeypatch):
+    """node2-ops (21:15Z): while the agent decides, fill_runner stops no GPU fill for a waiter or a waiting window, since the
+    agent evicts; a running window still stops it, and once agent.lock is free the next tick is today's rules."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    (fill / "queue").mkdir(parents=True)
+    gl.mkdir()
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_agent", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    fill_line = "pid=5 run=- who=fill:t since=2026-09-30T20:00:00Z preempt=1 cmd=x"
+    held = {0: fill_line}
+    want: list[int] = []
+    stopped: list[str] = []
+    monkeypatch.setattr(fr, "reap", lambda: None)
+    monkeypatch.setattr(fr, "verity_pool", lambda queued: None)
+    monkeypatch.setattr(fr, "lease", lambda i: held.get(i))
+    monkeypatch.setattr(fr, "waiters", lambda: list(want))
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: stopped.append(why))
+    fr.running["fill-1"] = {"t0": 0, "paused": False, "started": "-",
+                            "h": {"gpus": 1, "project": "pous", "owner": "t", "max_min": 10**9}}
+
+    def stops(waiting: list[int], timed: bool = False) -> list[str]:
+        want[:] = waiting
+        held.pop(1, None)
+        if timed:
+            held[1] = "pid=6 run=- who=w since=2026-09-30T20:00:00Z timed=1 cmd=y"
+        stopped.clear()
+        fr.tick(2)
+        return list(stopped)
+
+    assert stops([2]) == ["timed window"] and stops([1, 1]) == ["free 1 < needed 2"]
+    agent = os.open(gl / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
+    fcntl.flock(agent, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        assert fr.agent_up() and stops([2]) == [] and stops([1, 1]) == []
+        assert stops([], timed=True) == ["timed window"]
+    finally:
+        os.close(agent)
+    assert not fr.agent_up() and stops([2]) == ["timed window"]
+
+
 @needs_flock
 def test_gpu_lease_passes_stdin_to_cmd_and_a_sigterm_on_to_it_and_records_the_stop(tmp_path):
     env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_UTIL_LOG": str(tmp_path / "absent-*.jsonl")}
