@@ -99,7 +99,11 @@ LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 HASHINGS = ("h0", "h1", "h2")
 #: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
-H1_KEYS = {"message": HASH_FORMATS["h1"].message_key(), "leaf": HASH_FORMATS["h1"].leaf_key()}
+#: each hashing format's BLAKE3 keys of the message digests and the tile leaf, from the one table, built once (h2 shares h1's
+#: labels, so their keys are equal)
+_DIGEST_KEYS = {h: None if HASH_FORMATS[h].message_key() is None else
+                {"message": HASH_FORMATS[h].message_key(), "leaf": HASH_FORMATS[h].leaf_key()} for h in HASHINGS}
+H1_KEYS = _DIGEST_KEYS["h1"]
 
 
 def digest_keys(hashing: str) -> dict[str, bytes] | None:
@@ -107,8 +111,7 @@ def digest_keys(hashing: str) -> dict[str, bytes] | None:
     h1's labels under h1 and h2, none under h0 (TurboSHAKE128)."""
     if hashing not in HASHINGS:
         raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
-    f = HASH_FORMATS[hashing]
-    return None if f.message_key() is None else {"message": f.message_key(), "leaf": f.leaf_key()}
+    return _DIGEST_KEYS[hashing]
 
 
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
