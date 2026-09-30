@@ -162,5 +162,33 @@
         "label": "NVIDIA L40S GPU datasheet: GPU memory bandwidth 864 GB/s (48 GB GDDR6 with ECC)"
       }
     ]
+  },
+  {
+    "id": "rtx-pro-6000-blackwell-server/bf16",
+    "name": "RTX PRO 6000 Blackwell Server",
+    "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+    "dtype": "bf16",
+    "rate": "bf16 dense tensor-core peak, fp32 accumulate",
+    "flop_per_second": 500e12,
+    "accumulate": "fp32",
+    "memory_bytes": 103079215104,
+    "sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition product page, Specifications: FP16 | BF16 Tensor Core 1 PFLOP, TF32 Tensor Core 234 TFLOPS, FP32 120 TFLOPS, 96 GB GDDR7. The page gives no dense BF16 figure and marks no sparsity; 1 PFLOP is the 2:4-sparse figure (4 x the dense TF32 234, rounded), so the dense peak is 1 PFLOP / 2",
+        "href": "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/"
+      },
+      {
+        "label": "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4: on GB202's 188 SMs, Peak BF16 Tensor TFLOPS with FP32 Accumulate equals the FP16-accumulate rate (503.8 dense / 1007.6 sparse on the Workstation Edition at its 2617 MHz boost; 438.9 / 877.9 on Max-Q), and dense BF16 is 2 x dense TF32 (503.8 / 251.9)",
+        "href": "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/pdf/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1_1.pdf"
+      }
+    ],
+    "methodology": "datasheet dense tensor-core peak at FP32 accumulate; an FMA counts as two FLOP; sparsity figures never used. Dense = the product page's sparse BF16 figure / 2 (as for H100). FP32 accumulate runs at the full rate on this professional GB202 part (whitepaper Table 4). The page's figures are rounded: its dense TF32 (234 TFLOPS) implies 468 TFLOPS dense BF16, which is also 188 SMs x 1024 FLOP/clock at the 2430 MHz maximum SM clock that nvidia-smi reports on vy-nebius-1's GPUs; this line takes the larger, datasheet-stated 500 TFLOPS, so no overhead computed against it is understated",
+    "memory_bytes_per_second": 1597e9,
+    "memory_sources": [
+      {
+        "label": "NVIDIA RTX PRO 6000 Blackwell Server Edition datasheet (Apr 2025), Technical Specifications: memory bandwidth 1597 GB/s, 96 GB GDDR7 with ECC",
+        "href": "https://www.pny.com/file%20library/company/support/product%20brochures/nvidia%20data%20center%20gpus/english/rtx-pro-6000-blackwell-server-edition-data-sheet.pdf"
+      }
+    ]
   }
 ]
