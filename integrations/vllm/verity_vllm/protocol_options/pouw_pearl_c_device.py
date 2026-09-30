@@ -36,11 +36,16 @@ the keys by native BLAKE3 (`_Keys`, byte for byte `call_keys`), their upload thr
 screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
 and the stream read from torch's raw accessor.
 
-With ``defer`` (the decode plan's step 2, bc-b139c29c's schedule) each call's tile hashing (`SIDE_STEPS`: the message
-digests and the tile leaves) runs on a low-priority side stream behind an event after the GEMM, while the next calls go on:
-A's commitment stays on the call's stream, since forming reads seed_A.  Each shape then rotates `DEFER_SETS` sets of C̃, U
-and the digests, and a call reuses a set only once the side stream has finished with it; the pass's end waits for the side
-stream.  The same kernels read and write the same bytes, so the commitments are the serial schedule's.
+The schedule (`verity_pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2, bc-b139c29c's) places each
+call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile hashing (`SIDE_IO`: the
+message digests and the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
+calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
+stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).  A's commitment stays
+on the main lane, since forming reads seed_A.  Each shape rotates `Schedule.ring` sets of the buffers the side lane touches
+(`rotated`), and a call reuses a set only once the side lane has finished with it; the pass's end, and the next pass's begin,
+wait for the side lane.  The same kernels read and write the same bytes, so the commitments are the serial schedule's.  A
+schedule changes only between passes (`begin`), and one whose placement this path or the scheme's format can't run is refused
+(`schedule_of`).
 
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
 records.  What is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
@@ -64,7 +69,7 @@ from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
 from verity_pouw.schemes import pearl_kw as P
-from verity_pouw.serving import SchemeId, hash_format
+from verity_pouw.serving import SCHEDULES, SERIAL, Schedule, SchemeId, StepIO, hash_format, schedule_refusals
 
 #: the Pearl-C schemes this device path runs, by name (`verity_pouw.serving.SchemeId`: forming, device record, hashing format).
 #: The format is a switch: another joins as one name here once GPU 1's pipeline commits with it (which is Daniel's call); its
@@ -91,10 +96,35 @@ JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b"
 CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
               "gemm_pearlc", "hash_msg", "hash_leaf")
 HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg", "hash_leaf"})
-#: the deferred schedule's side-stream steps, and the buffers they read that each shape rotates
-SIDE_STEPS = ("hash_msg", "hash_leaf")
-ROTATED = ("c", "u", "digests")
-DEFER_SETS = 2
+#: each call step's group (`verity_pouw.serving.GROUPS`), which a schedule places on a lane
+STEP_GROUPS = {"pad_a": "a_tree", "node_keys_a": "a_tree", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
+               "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
+               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_msg": "tile_hash", "hash_leaf": "tile_hash"}
+#: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
+#: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
+#: still reads.  Only the tile hashing moves: A's tree stays on the main lane under -h1, and the screen runs on the caller.
+SIDE_IO = {"hash_msg": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"digests"})),
+           "hash_leaf": StepIO("tile_hash", frozenset({"digests"}), frozenset())}
+SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
+#: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
+PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
+
+
+def rotated(schedule: Schedule) -> tuple[str, ...]:
+    """The per-call buffers each shape rotates under `schedule`: those its side-lane steps read or write."""
+    return tuple(sorted({b for io in SIDE_IO.values() if io.group in schedule.side for b in io.reads | io.writes}))
+
+
+def schedule_of(name: str | Schedule, scheme: C.PearlC) -> Schedule:
+    """`name`'s schedule (`verity_pouw.serving.SCHEDULES`), refused where the scheme's format or this path can't run it."""
+    s = SCHEDULES[name] if isinstance(name, str) else name
+    bad = schedule_refusals(hash_format(scheme), s)
+    if set(s.side) - SIDE_GROUPS:
+        bad.append(f"{s.name}: this path runs only {', '.join(sorted(SIDE_GROUPS))} on a side lane, not "
+                   f"{', '.join(sorted(set(s.side) - SIDE_GROUPS))}")
+    if bad:
+        raise ValueError(f"{scheme.name}: " + "; ".join(bad))
+    return s
 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
@@ -344,9 +374,10 @@ class _Shape:
     b: dict[str, Any]
     xa: Any                        # FP32 (mp x k): rows m16 … mp − 1 stay zero
     keys: Any                      # dom_a ‖ unit
-    sets: list = field(default_factory=list)   # deferred: DEFER_SETS sets of C̃, U and the digests, set 0 b's own
-    done: list = field(default_factory=list)   # deferred: each set's last side-stream use (a CUDA event)
+    sets: list = field(default_factory=list)   # the ring: set 0 b's own, then the schedule's further sets of `rotated` buffers
+    done: list = field(default_factory=list)   # each set's last side-lane use (a CUDA event)
     turn: int = 0
+    size: dict = field(default_factory=dict)   # the pipeline's buffer sizes at this shape
 
 
 @dataclass
@@ -410,18 +441,18 @@ class _Keys:
         return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
 
 
-class _Side:
-    """The deferred schedule's side stream, at the least priority, and its handle (a stand-in handle off the GPU, for the
-    recording device's log).  vLLM's stream keeps its own priority, which is the default and so also the least: the side
-    work fills what the call's stream leaves free."""
+class _Lane:
+    """A stream the run owns, at a schedule's priority, and its handle; off the GPU a stand-in handle (``standin``) for the
+    recording device's log.  ``priority`` is the one the device gave it."""
 
-    def __init__(self, device: Any):
+    def __init__(self, device: Any, priority: str, standin: int):
         import torch
         if device.type == "cuda":
-            self.stream = torch.cuda.Stream(device=device, priority=0)
-            self.raw = self.stream.cuda_stream
+            self.stream = torch.cuda.Stream(device=device, priority=PRIORITY[priority])
+            self.raw, self.priority = self.stream.cuda_stream, self.stream.priority
         else:
-            self.stream, self.raw = None, 1
+            self.stream, self.raw, self.priority = None, standin, PRIORITY[priority]
+        self.event = torch.cuda.Event() if device.type == "cuda" else None
 
 
 class _Uploads:
@@ -489,13 +520,16 @@ class PearlCDeviceRun:
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 defer: bool = False):
+                 schedule: str | Schedule = SERIAL):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
-        self.defer, self.side = defer, _Side(next(iter(weights.values())).device) if defer else None
         self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
         self.device = next(iter(weights.values())).device
+        self.schedule = schedule_of(schedule, scheme)
+        self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
+        self.side: _Lane | None = None      # the side lane, when the schedule has one
+        self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
         self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
                            self.roots, salt)
         self.const = _zeros(64, self.device)
@@ -518,10 +552,29 @@ class PearlCDeviceRun:
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native blake3" if self.keys.native else "verity.commitments.blake3 (pure Python)",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
-            "schedule": "deferred (tile hashing on a side stream)" if defer else "serial",
+            "schedule": None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
+
+    # ---- the schedule -----------------------------------------------------------------------------------------------
+
+    @property
+    def defer(self) -> bool:
+        """Whether the schedule runs a group off the main lane."""
+        return bool(self.schedule.side)
+
+    def _use(self, schedule: Schedule) -> None:
+        """Run the next passes under `schedule`: its lanes made on first use, and what they run at recorded."""
+        self.schedule = schedule
+        if schedule.main_priority == "greatest" and self.main is None:
+            self.main = _Lane(self.device, "greatest", 2)
+        if schedule.side and self.side is None:
+            self.side = _Lane(self.device, schedule.side_priority, 1)
+        self.details["schedule"] = {
+            "name": schedule.name, "side": sorted(schedule.side), "ring": schedule.ring,
+            "main": self.main.priority if schedule.main_priority == "greatest" else "the caller's",
+            "side_lane": self.side.priority if schedule.side else None}
 
     # ---- the weight side --------------------------------------------------------------------------------------------
 
@@ -559,24 +612,35 @@ class PearlCDeviceRun:
             size = R.Pipeline.sizes(mp, n, k, m16)
             sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
                         torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(32 + 104, self.device))
-            sh.sets = [{x: sh.b[x] for x in ROTATED}]
-            if self.defer:
-                sh.sets += [{x: _zeros(size[x], self.device) for x in ROTATED} for _ in range(DEFER_SETS - 1)]
-            sh.done = [None] * len(sh.sets)
+            sh.sets = [dict(sh.b)]
+            sh.size = size
             if self.cur is not None and self.cur.poison is not None:
                 for t in self._buffers(sh):
                     t.fill_(self.cur.poison)
             self.shapes[key] = sh
-        return self.shapes[key]
+        return self._ring(self.shapes[key])
+
+    def _ring(self, sh: _Shape) -> _Shape:
+        """`sh` with the schedule's ring of per-call buffers: set 0 is its own; each further set holds the buffers the side lane
+        touches (`rotated`), made when a schedule first needs them, from poisoned bytes inside a poisoned pass."""
+        names = rotated(self.schedule)
+        while len(sh.sets) < self.schedule.ring:
+            extra = {x: _zeros(sh.size[x], self.device) for x in names}
+            if self.cur is not None and self.cur.poison is not None:
+                for t in extra.values():
+                    t.fill_(self.cur.poison)
+            sh.sets.append(extra)
+        sh.done += [None] * (len(sh.sets) - len(sh.done))
+        return sh
 
     @staticmethod
     def _buffers(sh: _Shape) -> list[Any]:
-        """Every buffer a call of `sh` writes: its own, and the deferred schedule's other sets."""
+        """Every buffer a call of `sh` writes: its own, and the ring's other sets."""
         return [*sh.b.values(), *(t for st in sh.sets[1:] for t in st.values())]
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
-        """The call's pipeline and its steps: those on the call's stream, and (deferred, with hashing) the side stream's."""
-        key = (w, sh.m16, self.omit, self.hashing, self.defer)
+        """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups."""
+        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name)
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
@@ -590,9 +654,9 @@ class PearlCDeviceRun:
             if self.time_gemm and self.device.type == "cuda":
                 at = present.index("gemm_pearlc")
                 steps[at] = self._timed(steps[at])
-            side = self.defer and self.hashing
-            main = [f for x, f in zip(present, steps, strict=True) if not (side and x in SIDE_STEPS)]
-            aside = [f for x, f in zip(present, steps, strict=True) if side and x in SIDE_STEPS]
+            lane = {x: "side" if self.hashing and STEP_GROUPS[x] in self.schedule.side else "main" for x in present}
+            main = [f for x, f in zip(present, steps, strict=True) if lane[x] == "main"]
+            aside = [f for x, f in zip(present, steps, strict=True) if lane[x] == "side"]
             self.pipes[key] = (pipe, main, aside)
         return self.pipes[key]
 
@@ -601,7 +665,7 @@ class PearlCDeviceRun:
 
         def timed():
             a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            stream = self.torch_stream(_stream(self.device))
+            stream = self._launching
             a.record(stream)
             f()
             b.record(stream)
@@ -645,31 +709,41 @@ class PearlCDeviceRun:
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
         raw = self.stream()
         cuda = self.device.type == "cuda"
+        caller = self.torch_stream(raw) if cuda else None
+        main = self.main if self.schedule.main_priority == "greatest" else None
+        lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
         if side:
             j = sh.turn % len(sh.sets)
             sh.turn += 1
             pipe.b.update({x: t.data_ptr() for x, t in sh.sets[j].items()})
-            if cuda and sh.done[j] is not None:
-                self.torch_stream(raw).wait_event(sh.done[j])
         if self.hashing:
-            self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), self.torch_stream(raw) if self.uploads.cuda else None)
-        self.kernel.dev.stream = raw
+            self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), caller if self.uploads.cuda else None)
+        if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
+            main.event.record(caller)
+            lane.wait_event(main.event)
+        if cuda and side and sh.done[j] is not None:  # and rewrites set j only once the side lane is done with it
+            lane.wait_event(sh.done[j])
+        self._launching = lane
+        self.kernel.dev.stream = lane_raw
         try:
             for f in steps:
                 f()
             if side:
                 if cuda:
-                    made = torch.cuda.Event()
-                    made.record(self.torch_stream(raw))
-                    self.side.stream.wait_event(made)
+                    self.side.event.record(lane)
+                    self.side.stream.wait_event(self.side.event)
                 self.kernel.dev.stream = self.side.raw
                 for f in side:
                     f()
                 if cuda:
                     sh.done[j] = sh.done[j] or torch.cuda.Event()
                     sh.done[j].record(self.side.stream)
+            if cuda and main is not None:           # the caller reads A's root and y only after the main lane
+                main.event.record(lane)
+                caller.wait_event(main.event)
         finally:
             self.kernel.dev.stream = None
+            self._launching = None
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
         if self.hashing:
             size = pipe.size["tree_a"]
@@ -695,9 +769,13 @@ class PearlCDeviceRun:
 
     # ---- passes -----------------------------------------------------------------------------------------------------
 
-    def begin(self, retain: str | None = None, run: str | None = None) -> None:
-        """A new pass: its own transcript under the install's epoch, the call indices from 0.  With `retain`, the pass writes
-        what the prover opens from into that directory, from poisoned outputs, and its manifest names `run`."""
+    def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None) -> None:
+        """A new pass: its own transcript under the install's epoch, the call indices from 0, under `schedule` (the last one's
+        when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens from into
+        that directory, from poisoned outputs, and its manifest names `run`."""
+        if self.side is not None and self.side.stream is not None:     # the last pass's side lane is done before anything new
+            self.torch_stream(self.stream()).wait_stream(self.side.stream)
+        self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme))
         self.cur = _Pass(Path(retain) if retain else None, run)
         if retain and self.hashing:
             self.poison()
@@ -719,7 +797,7 @@ class PearlCDeviceRun:
         commitment (also in `commits` and `details["passes"]`)."""
         import torch
         cur, K = self.cur, self.kernel
-        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing}
+        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing, "schedule": self.schedule.name}
         if self.hashing and cur.matmuls:
             if self.side is not None and self.side.stream is not None:
                 self.torch_stream(self.stream()).wait_stream(self.side.stream)
@@ -771,7 +849,7 @@ class PearlCDeviceRun:
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
                 "beacon": self.beacon.hex(), "salt": self.salt.hex(), "cubin_sha256": self.kernel.cubin_sha256,
-                "kernel_source_sha256": self.kernel.source_sha256,
+                "kernel_source_sha256": self.kernel.source_sha256, "schedule": self.details["schedule"],
                 "records_root": PW.records_root(self.salt, epoch.weights_root,
                                                 {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
                 "commitment": {"root": _bytes(tree[-32:]).hex(), "count": count},

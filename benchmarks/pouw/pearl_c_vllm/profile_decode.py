@@ -273,7 +273,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--nsys-kernels", type=Path, help="merge nsys's per-kernel sums into --out, and stop")
     ap.add_argument("--scheme", default="pearl-c-sm120-v1-h1", help="the Pearl-C scheme, and so its hashing format")
-    ap.add_argument("--schedule", choices=["serial", "deferred"], default="serial")
+    ap.add_argument("--schedule", choices=["serial", "deferred", "deferred-caller"], default="serial")
     args = ap.parse_args()
     if args.nsys_kernels:
         doc = json.loads(args.out.read_text())

@@ -103,7 +103,7 @@ def install(model, args, beacon: bytes, state: dict):
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
-                              defer=getattr(args, "schedule", "serial") == "deferred")
+                              schedule=getattr(args, "schedule", "serial"))
 
     def make(original):
         def apply(layer, x, bias=None):
@@ -147,7 +147,7 @@ def gate(run, weights: dict) -> list[dict]:
                         "commitment_repeats": same, "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
     if run.hashing:
         out.append(screen_check(run, weights))
-    if run.hashing and run.defer:
+    if run.hashing and run.schedule.side:
         out.append(schedule_check(run, weights))
     run.details["passes"].clear()
     run.gemm_ms()
@@ -155,22 +155,23 @@ def gate(run, weights: dict) -> list[dict]:
 
 
 def schedule_check(run, weights: dict) -> dict:
-    """The deferred schedule on the card: the same calls (m = 32 on the unfused 64 x 64 path, m = 128 on the fused one), each
-    from a fresh pass on poisoned outputs, serial and deferred, must commit the same A roots and tile roots."""
+    """The run's schedule on the card: the same calls (m = 32 on the unfused 64 x 64 path, m = 128 on the fused one), each
+    from a fresh pass on poisoned outputs, under the serial schedule and under the run's, must commit the same A roots and
+    tile roots.  The run's schedule is its own again after."""
     import torch
     w, W = next(iter(weights.items()))
     gen = torch.Generator(device=W.device).manual_seed(20260932)
     xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
-    commits = {}
-    for defer in (False, True):
-        run.defer = defer
-        run.begin()
+    commits, mine = {}, run.schedule.name
+    for name in ("serial", mine):
+        run.begin(schedule=name)
         run.poison()
         for x in xs:
             run.gemm(w, x, W, None)
-        commits[defer] = {k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots", "tiles")}
-    run.defer = True
-    return {"check": "schedule", "serial": commits[False], "deferred": commits[True], "ok": commits[False] == commits[True]}
+        commits[name] = {k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots", "tiles")}
+    run.begin(schedule=mine)
+    return {"check": "schedule", "schedule": mine, "priorities": run.details["schedule"], "serial": commits["serial"],
+            mine: commits[mine], "ok": commits["serial"] == commits[mine]}
 
 
 def screen_check(run, weights: dict) -> dict:
@@ -463,6 +464,7 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
+    from verity_pouw.serving import SCHEDULES
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
@@ -476,8 +478,9 @@ def main() -> None:
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
     ap.add_argument("--retain", help="the verify passes' directory")
     ap.add_argument("--scheme", default=SCHEME, choices=sorted(PPD.SCHEMES), help="the Pearl-C scheme, and so its hashing format")
-    ap.add_argument("--schedule", choices=["serial", "deferred"], default="serial",
-                    help="deferred: each call's tile hashing on a low-priority side stream (the decode plan's step 2)")
+    ap.add_argument("--schedule", choices=sorted(SCHEDULES), default="serial",
+                    help="deferred: each call's tile hashing on a side lane at the least priority and the rest at the greatest, "
+                         "as measured (the decode plan's step 2); deferred-caller: the rest on vLLM's stream at its own")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     args = ap.parse_args()
     if args.smoke:
