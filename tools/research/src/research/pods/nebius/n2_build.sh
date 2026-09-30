@@ -2,18 +2,22 @@
 # Verity's vLLM CPU Builds on vy-nebius-2's idle CPUs (Daniel 19:12Z: the two nodes are one pool), as `project=verity` fill guests
 # that node 2's fill runner pins to its Verity CPUs and freezes (SIGSTOP) through PoUW's timed windows. The Commit stays on node 1.
 #
-#   on node 1:  n2_build.sh submit KEY TREE SWEEP_DIR ROW ROLE REPO REVISION [MEM_GB] [CLASS]
-#   on node 2:  n2_build.sh run KEY          (the fill job's body; submit writes it)
+#   on node 1:  n2_build.sh submit KEY ITEM.json   (ITEM: the config-run item a lane gives dispatch.py, as in its ready files)
+#   on node 2:  n2_build.sh run KEY                (the fill job's body; submit writes it)
+#
+# ITEM is {"template": "config-run", "tree": ..., "env": {ROW, ROLE, REPO, REVISION, SWEEP_DIR, CAMPAIGN, ...},
+# "resources": {"build": {"memory": GB}, "gpu": {...}} or "class", optional "queue"/"priority"}. The Build gets the template's
+# envs with the item's over them, as dispatch.py gives them; the Commit gets the same item.
 #
 # submit (as research on node 1):
 #   1. materializes the job tree (job_tree.sh, as the job user) and stages it, the checkpoint and the bootstrap stamps on node 2 over
 #      the vy-cluster key, never while node 2 has a timed window running or waiting;
-#   2. writes the fill job, whose arguments live in /workspace/verity-guest/items/KEY.env on node 2.
+#   2. writes the fill job, whose item lives in /workspace/verity-guest/items/KEY.json on node 2.
 # run (as research on node 2, inside the fill job):
 #   1. the Build, exactly as config-run.yaml's build task runs it: same paths, so every path it records holds on node 1. Node 2's
 #      HF_HOME is /workspace/jobs/hf, which on node 1 is a symlink to /workspace/hf; node 2's own /workspace/hf (PoUW's) is untouched;
 #   2. sends the row and the run dir back to node 1, publishes the Attempt into node 1's store, and submits the Commit there with
-#      node 1's dispatcher (`dispatch.py submit config-run KEY --task 1`), which chains the GPU task and supplies R2 custody.
+#      node 1's dispatcher (`dispatch.py submit config-run n2-build/KEY --task 1`), which chains the GPU task and supplies R2 custody.
 # A rerun after the Build passed (the .n2-build marker) only redoes step 2.
 set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
@@ -35,9 +39,26 @@ push() {
   done
 }
 
+item_get() {  # item_get ITEM.json FIELD...: the item's fields, one per line ("" when absent)
+  python3 - "$@" << 'EOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+e = d.get("env") or {}
+for f in sys.argv[2:]:
+    v = {"tree": d.get("tree"), "mem": ((d.get("resources") or {}).get("build") or {}).get("memory"),
+         "max_min": int(e["BUILD_TIMEOUT"]) // 60 + 10 if e.get("BUILD_TIMEOUT") else None}.get(f, e.get(f))
+    print("" if v is None else v)
+EOF
+}
+
 submit() {
-  local key=$1 tree=$2 sweep=$3 row=$4 role=$5 repo=$6 rev=$7 mem=${8:-64} cls=${9:-small}
+  local key=$1 item=$2
   [[ $key =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || { echo "KEY: lowercase letters, digits and dashes" >&2; exit 2; }
+  local tree row repo rev mem max_min
+  { read -r tree; read -r row; read -r repo; read -r rev; read -r mem; read -r max_min; } < <(item_get "$item" tree ROW REPO REVISION mem max_min)
+  [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("template"))' "$item")" = config-run ] \
+    || { echo "ITEM: a config-run item" >&2; exit 2; }
+  mem=${mem:-${VY_N2_MEM_GB:-64}} max_min=${VY_MAX_MIN:-${max_min:-130}}
   local src model
   src=$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")
   model=/workspace/hf/hub/models--${repo//\//--}
@@ -48,22 +69,11 @@ submit() {
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
   push "$0" "$GUEST/bin/n2_build.sh"
   local cpus=16
-  ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/$key.env" <<EOF
-KEY=$key
-SRC=$src
-TREE=$tree
-SWEEP_DIR=$sweep
-ROW=$row
-ROLE=$role
-REPO=$repo
-REVISION=$rev
-MEM_GB=$mem
-CLASS=$cls
-CPUS=$cpus
-EOF
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"mem_gb":int(sys.argv[4]),"cpus":int(sys.argv[5])}; print(json.dumps(d))' \
+    "$item" "$key" "$src" "$mem" "$cpus" | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-build-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=kueue-fold gpus=0 max_min=${VY_MAX_MIN:-30} cpus=$cpus project=verity mem_gb=$mem
+# fill: owner=kueue-fold gpus=0 max_min=$max_min cpus=$cpus project=verity mem_gb=$mem
 # Verity vLLM Build $row (node 1 key $key): n2_build.sh on infra/nebius; its Commit runs on node 1.
 exec bash $GUEST/bin/n2_build.sh run $key
 EOF
@@ -71,16 +81,29 @@ EOF
 }
 
 run() {
-  local key=$1
-  # shellcheck disable=SC1090
-  source "$GUEST/items/$key.env"
-  export SRC HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR CUDA_HOME=/workspace/jobs/cuda-12.9 \
+  local key=$1 item=$GUEST/items/$1.json
+  # config-run.yaml's build envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
+  export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
     TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python \
     RESEARCH_PY=/workspace/jobs/bin/py312 RESEARCH_RUNS=/workspace/jobs/runs RESEARCH_STORE=/workspace/jobs/store \
     HOT_ROOT=/workspace/jobs/hot HOT_RELEASING_MARKER=/workspace/jobs/hot/releasing HOT_RELEASE_JSON=/workspace/jobs/hot/release.json \
-    GUARD_PRESERVE_FILE=/workspace/jobs/dm/guard.preserve BUILD_JOBS=auto BUILD_RAM_BUDGET_GB=$MEM_GB OMP_NUM_THREADS=$CPUS \
+    GUARD_PRESERVE_FILE=/workspace/jobs/dm/guard.preserve BUILD_JOBS=auto \
     VERITY_UNIT_RULE_CACHE=/workspace/jobs/cache/unit-rules UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
-    CAMPAIGN=${CAMPAIGN:-overnight-sep30}
+    CAMPAIGN=nebius-sweep
+  eval "$(python3 - "$item" << 'EOF'
+import json, shlex, sys
+d = json.load(open(sys.argv[1]))
+env = {k: str(v) for k, v in (d.get("env") or {}).items() if k != "HF_HOME"}
+n2 = d["n2"]
+env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], BUILD_RAM_BUDGET_GB=str(n2["mem_gb"]), OMP_NUM_THREADS=str(n2["cpus"]))
+print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
+print("COMMIT_ARGS=(" + " ".join(shlex.quote(a) for a in
+      [x for k, v in (d.get("env") or {}).items() for x in ("--env", f"{k}={v}")]
+      + ([ "--class", d["class"]] if d.get("class") else [])
+      + (["--resources", json.dumps(d["resources"])] if d.get("resources") else [])
+      + (["--queue", d["queue"]] if d.get("queue") else []) + (["--priority", d["priority"]] if d.get("priority") else [])) + ")")
+EOF
+)"
   local row_dir=$SWEEP_DIR/$ROW marker=$SWEEP_DIR/$ROW/.n2-build run_id
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$row_dir"
   if [ -s "$marker" ]; then
@@ -106,7 +129,7 @@ run() {
     UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
     /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
   ssh "$N1" "KUBECONFIG=\$HOME/.kube/config /workspace/jobs/venv312/bin/python $DISPATCH submit config-run n2-build/$KEY --tree $TREE --task 1 \
-    --class $CLASS --env ROW=$ROW --env ROLE=$ROLE --env REPO=$REPO --env REVISION=$REVISION --env SWEEP_DIR=$SWEEP_DIR --env CAMPAIGN=$CAMPAIGN"
+    $(printf '%q ' "${COMMIT_ARGS[@]}")"
   echo "n2-build $KEY: Build $run_id on node 2, Commit submitted on node 1"
 }
 
