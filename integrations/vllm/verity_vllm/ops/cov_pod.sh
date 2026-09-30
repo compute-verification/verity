@@ -6,7 +6,7 @@
 # /workspace/cp/cov/bundles/<run>.small.tgz for the laptop to pull.  The frozen candidate (program.json / instances.jsonl /
 # accesses.jsonl.gz) stays in the run dir on the pod (and is copied to /vol/cp/cov/<run>/ when the volume takes it).
 #
-#   cp verity_vllm/ops/cov_pod.sh /workspace/cp/ && nohup bash /workspace/cp/cov_pod.sh run <case> <workload-name> [driver args…] > … &
+#   cp verity_vllm/ops/cov_pod.sh /workspace/cp/ && COV_REPO=<tree>/integrations/vllm nohup bash /workspace/cp/cov_pod.sh run <case> <workload-name> [driver args…] > … &
 #   bash /workspace/cp/cov_pod.sh gpu <case> <workload-name> [driver args…]   # GPU phase only; COV_RUN_SUFFIX appends to the run name
 #   bash /workspace/cp/cov_pod.sh cpu <run-name> [driver args…]     # CPU phase again over an existing capture
 #   bash /workspace/cp/cov_pod.sh regate <run-name> [--census]      # cheap check stages (+ census GPU stage) + gates again over an existing capture
@@ -18,7 +18,11 @@
 # Env: COV_K (tier A k, default 3), COV_PAR (replay stages in parallel, default 8), COV_SNAP_MB (snapshot cap in MiB for B8 / C1024
 # runs, default 256), COV_CPU_PAR (concurrent CPU phases in `queue`, default 2), COV_EXTRA (extra driver args for every run).
 set -uo pipefail
-cd "${COV_REPO:-/workspace/cp/veritor}"   # COV_REPO: the campaign runner points this at a per-attempt code snapshot
+# COV_REPO: the integrations/vllm directory to run (the campaign runner points it at a per-attempt code snapshot); default: the tree
+# this script sits in when run in place.  A copy outside any tree has no default.
+SELF_TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd -P)
+[ -f "$SELF_TREE/verity_vllm/__init__.py" ] || SELF_TREE=
+cd "${COV_REPO:-${SELF_TREE:?cov_pod.sh is not inside a tree: set COV_REPO to the integrations/vllm directory to run}}" || exit 1
 export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1
 PY312=/workspace/venv-py312/bin/python; PY311=/workspace/venv-cu129/bin/python
 BASE=/workspace/cp/cov; OUT=$BASE/runs; CARDS=$BASE/cards; LOGS=$BASE/logs; BUNDLES=$BASE/bundles

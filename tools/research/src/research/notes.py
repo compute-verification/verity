@@ -1805,7 +1805,10 @@ def push_branch(root: Path, lane: str, repo: Path | None) -> tuple[str, int]:
         return f"REFUSED {lane}: no worktree bound and no repo (--repo, $RESEARCH_REPO, or run inside the checkout)", 2
     tip = (_git(where, "rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}") or "").strip()
     if not tip:
-        return f"REFUSED {lane}: no local branch {branch} in {_tilde(where)}", 2
+        cur = (_git(where, "branch", "--show-current") or "").strip()
+        hint = f"; its worktree is on {cur}: `research notes bind {lane} --branch {cur} --worktree {_tilde(where)} --pod none`" \
+            if cur and cur not in NEVER_PUSH else ""
+        return f"REFUSED {lane}: no local branch {branch} in {_tilde(where)}{hint}", 2
     try:
         r = subprocess.run(["git", "-C", str(where), "push", "origin", f"refs/heads/{branch}:refs/heads/{branch}"],
                            capture_output=True, text=True, timeout=600)
