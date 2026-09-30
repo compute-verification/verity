@@ -42,7 +42,11 @@ read-only L2 flush.
      next call's producer and forming, into slot i % 2 of digests, leaves and tile tree, which call i + 2's GEMM waits for.
      The next producer waits for A's tree (it rewrites A's leaves); the graph ends when every side stream has joined;
    - h3oe: h3o with the tile hashing at the chain's priority;
-   - h2o, h2oe: the same tile hashing beside the next call; -h2's forming needs A's root, so A's tree stays in series.
+   - h2o, h2oe: the same tile hashing beside the next call; -h2's forming needs A's root, so A's tree stays in series;
+   - h3oL, h3oeL, h2oL, h2oeL: those with the GEMM's digests kept in L2 for the tile hashing. The GEMM's graph node gets
+     an access-policy window over the digests it writes (persisting, within a persisting set-aside of the digests' size),
+     so hash_leaf_p reads them from L2, not DRAM, beside the memory-bound producer and forming. Every replay starts from
+     reset persisting lines. A launch attribute only: no kernel changes.
    Beside forming, the trees' hash_tree_small runs on 128 threads above 256 nodes (hash_nodes below): at 1,024 threads of
    64 registers it needs a whole SM. Graphs honour their nodes' priorities (USE_NODE_PRIORITY). Transcripts are the last
    call's, whose y is the arm's own.
@@ -71,10 +75,16 @@ POISON = 0xA5
 ARMS = ("nohash", "h2", "h3", "h2u", "h3u")
 DUMPS = ("h2", "h3", "h2u", "h3u", "nc")
 #: --chain's arms: (format, A's tree and seed on a side stream beside forming, each call's tile hashing on a side stream
-#: beside the next call's producer and forming, that side stream's priority)
-CHAIN_ARMS = {"nohash": (None, False, False, None), "h3s": ("h3", False, False, None), "h3o": ("h3", True, True, "low"),
-              "h3oe": ("h3", True, True, "high"), "h2s": ("h2", False, False, None), "h2o": ("h2", False, True, "low"),
-              "h2oe": ("h2", False, True, "high")}
+#: beside the next call's producer and forming, that side stream's priority, the GEMM's digests kept in L2 for the tile
+#: hashing: an access-policy window on the GEMM node marks its digest writes persisting)
+CHAIN_ARMS = {"nohash": (None, False, False, None, False), "h3s": ("h3", False, False, None, False),
+              "h3o": ("h3", True, True, "low", False), "h3oe": ("h3", True, True, "high", False),
+              "h3oL": ("h3", True, True, "low", True), "h3oeL": ("h3", True, True, "high", True),
+              "h2s": ("h2", False, False, None, False), "h2o": ("h2", False, True, "low", False),
+              "h2oe": ("h2", False, True, "high", False), "h2oL": ("h2", False, True, "low", True),
+              "h2oeL": ("h2", False, True, "high", True)}
+#: the CUDA driver's attribute, limit and property numbers the L2 window uses
+L2_SIZE, MAX_PERSISTING_L2, MAX_WINDOW, LIMIT_PERSISTING_L2, ATTR_WINDOW, PERSISTING, STREAMING = 38, 108, 109, 6, 1, 2, 1
 USE_NODE_PRIORITY, ATTR_PRIORITY = 8, 8   # CUDA_GRAPH_INSTANTIATE_FLAG_USE_NODE_PRIORITY, CU_LAUNCH_ATTRIBUTE_PRIORITY
 
 
@@ -157,6 +167,7 @@ def main() -> None:
                     help="also time each hashing part alone, interleaved with the arms (a diagnostic breakdown; no transcripts)")
     ap.add_argument("--chain", type=int, default=0,
                     help="CALLS dependent calls a graph, the hashing beside forming (CHAIN_ARMS) against it in series")
+    ap.add_argument("--arms", help="comma-separated CHAIN_ARMS to build (default all; nohash always)")
     ap.add_argument("--profile", help="comma-separated graph names: replay each 3 times, each after an L2 flush, then stop "
                                       "(no timing, no transcripts; for nsys)")
     args = ap.parse_args()
@@ -195,7 +206,9 @@ def main() -> None:
                     "cuGraphLaunch": [vp, vp], "cuStreamWaitEvent": [vp, vp, C.c_uint],
                     "cuCtxGetStreamPriorityRange": [P(C.c_int), P(C.c_int)], "cuStreamCreateWithPriority": [P(vp), C.c_uint, C.c_int],
                     "cuGraphGetNodes": [vp, vp, P(C.c_size_t)], "cuGraphNodeGetType": [vp, P(C.c_int)],
-                    "cuGraphKernelNodeGetAttribute": [vp, C.c_int, vp]})
+                    "cuGraphKernelNodeGetAttribute": [vp, C.c_int, vp], "cuGraphKernelNodeSetAttribute": [vp, C.c_int, vp],
+                    "cuGraphKernelNodeGetParams": [vp, vp], "cuCtxSetLimit": [C.c_int, C.c_size_t],
+                    "cuCtxResetPersistingL2Cache": []})
     nv = R.Nvml(dev.uuid)
     res["clocks_idle"] = nv.read()
     man_path = os.path.join(args.gpu1, "check", "check.json")
@@ -353,7 +366,7 @@ def main() -> None:
             dev.stream = old
 
         def chain_graph(v: str, arm: str) -> vp:
-            fmt, a_side, t_side, prio = CHAIN_ARMS[arm]
+            fmt, a_side, t_side, prio, keep = CHAIN_ARMS[arm]
             pipe = pipes[v]
             b = pipe.b
             st = {nm: f for nm, _ph, f in pipe.steps()}
@@ -418,10 +431,55 @@ def main() -> None:
             dev.ck("cuStreamEndCapture", s, C.byref(g))
             dev.stream = None
             prios[f"{v} {arm}"] = node_priorities(g)
+            if keep:
+                windows[f"{v} {arm}"] = keep_digests(g, dev.fn("gemm_pearlc_b" + sx))
             dev.ck("cuGraphInstantiateWithFlags", C.byref(ge), g, USE_NODE_PRIORITY)
             return ge
 
-        graphs = {f"{v} {arm}": chain_graph(v, arm) for v in R.VARIANT_G for arm in CHAIN_ARMS}
+        class KernelNodeParams(C.Structure):              # CUDA_KERNEL_NODE_PARAMS (v1)
+            _fields_ = [("func", vp), ("grid", C.c_uint * 3), ("block", C.c_uint * 3), ("smem", C.c_uint),
+                        ("kernelParams", P(vp)), ("extra", P(vp))]
+
+        class Window(C.Structure):                        # CUaccessPolicyWindow, the head of CUlaunchAttributeValue
+            _fields_ = [("base", vp), ("bytes", C.c_size_t), ("hit_ratio", C.c_float), ("hit", C.c_int), ("miss", C.c_int),
+                        ("pad", C.c_ubyte * 36)]
+
+        l2 = {"l2_bytes": dev.get("cuDeviceGetAttribute", L2_SIZE, dev.dev),
+              "max_persisting": dev.get("cuDeviceGetAttribute", MAX_PERSISTING_L2, dev.dev),
+              "max_window": dev.get("cuDeviceGetAttribute", MAX_WINDOW, dev.dev)}
+        l2["persisting_limit"] = min(l2["max_persisting"], M * N)
+        dev.ck("cuCtxSetLimit", LIMIT_PERSISTING_L2, l2["persisting_limit"])
+        res["l2"], windows = l2, {}
+
+        def keep_digests(g, gemm) -> int:
+            """Each kernel node of `gemm` gets an access-policy window over the digests it writes (its Args p9): persisting
+            hits, up to the persisting limit, so the tile hashing reads them from L2.  Returns the nodes so marked."""
+            n = C.c_size_t()
+            dev.ck("cuGraphGetNodes", g, None, C.byref(n))
+            nodes = (vp * n.value)()
+            dev.ck("cuGraphGetNodes", g, nodes, C.byref(n))
+            marked = 0
+            for node in nodes:
+                kind = C.c_int()
+                dev.ck("cuGraphNodeGetType", node, C.byref(kind))
+                if kind.value != 0:
+                    continue
+                kp = KernelNodeParams()
+                dev.ck("cuGraphKernelNodeGetParams", node, C.byref(kp))
+                if kp.func != gemm.value:
+                    continue
+                a = R.Args.from_address(kp.kernelParams[0])
+                size = min(M * N, l2["max_window"])
+                if not size or not l2["persisting_limit"]:
+                    continue
+                w = Window(vp(a.p[9]), size, min(1.0, l2["persisting_limit"] / size), PERSISTING, STREAMING)
+                dev.ck("cuGraphKernelNodeSetAttribute", node, ATTR_WINDOW, C.byref(w))
+                marked += 1
+            return marked
+
+        chosen = ["nohash"] + [a for a in (args.arms.split(",") if args.arms else CHAIN_ARMS) if a != "nohash"]
+        graphs = {f"{v} {arm}": chain_graph(v, arm) for v in R.VARIANT_G for arm in chosen}
+        res["l2_windows"] = windows
         graphs.update({f"plain {arm}": graph(seq) for arm, seq in seqs["plain"].items()})
         res["calls"], res["node_priorities"] = calls, prios
     else:
@@ -431,6 +489,8 @@ def main() -> None:
         dev.ck("cuEventCreate", C.byref(e), 0)
 
     def replay(ge, flush: bool = True) -> float:
+        if args.chain:                                       # no arm starts with another's persisting L2 lines
+            dev.ck("cuCtxResetPersistingL2Cache")
         if flush:
             Kn.go("l2_flush", 4 * dev.sms, 256, (fl, sink), ((512 << 20) // 4,), stream=s)
         ms = C.c_float()
@@ -467,7 +527,7 @@ def main() -> None:
     res["baseline"] = {"graph": fastest, "ms": round(med[fastest], 5)}
     res["rows"] = {}
     for v in R.VARIANT_G:
-        for arm in (list(CHAIN_ARMS)[1:] if args.chain else ARMS[1:]):   # per call: a chain's graph is `calls` calls
+        for arm in (chosen[1:] if args.chain else ARMS[1:]):   # per call: a chain's graph is `calls` calls
             call, nohash = med[f"{v} {arm}"] / calls, med[f"{v} nohash"] / calls
             h = call - nohash
             res["rows"][f"{v} {arm}"] = {"hashing_ms": round(h, 5), "slowdown_hashing_only": round(1 + h / med[fastest], 4),
@@ -501,7 +561,7 @@ def main() -> None:
         if args.chain:                                       # the last call's outputs, from the last call's own y
             poison += [(slots[v][1][1], 32 * tiles), (slots[v][1][2], sz["tree_t"]), (b["digests2"], sz["digests2"])]
             dg, lv, tr = slots[v][(calls - 1) % 2]
-            specs = [(arm, CHAIN_ARMS[arm][0], arm, True, True) for arm in list(CHAIN_ARMS)[1:]] + [("nc", "h3", "nohash", True, False)]
+            specs = [(arm, CHAIN_ARMS[arm][0], arm, True, True) for arm in chosen[1:]] + [("nc", "h3", "nohash", True, False)]
         else:
             dg, lv, tr = b["digests"], b["leaves"], b["tree_t"]
             specs = [(arm, "h2" if arm in ("h2", "h2u") else "h3", "nohash" if arm == "nc" else arm, arm not in ("h2u", "h3u"),
