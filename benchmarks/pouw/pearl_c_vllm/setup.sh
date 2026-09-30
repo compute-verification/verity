@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # The e2e's environment on node 2, CPU only (no GPU lease), idempotent: vLLM d9105ea80 cu129 and torch in a Python 3.12 venv
-# (pod_bootstrap.sh --cpu, no checkpoint cases), and Llama-3.1-8B-Instruct at its pinned revision.
+# (pod_bootstrap.sh --cpu, no checkpoint cases), Llama-3.1-8B-Instruct at its pinned revision, and FlashInfer's sampling
+# kernels, which vLLM's top-p/top-k sampler would otherwise JIT-compile on its first call inside a window.  They are built
+# for window.sh's FLASHINFER_CUDA_ARCH_LIST (12.0f, what the card's (12, 0) maps to) with the venv's ninja first on PATH, so
+# the window's build flags and cache path are these and nothing rebuilds there.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=bc-dd22acf8 -- bash benchmarks/pouw/pearl_c_vllm/setup.sh
 # Env: WORK (/workspace/pouw/mvp-e2e), HF_HOME (/workspace/hf).  Writes $WORK/ready.json.
@@ -24,4 +27,20 @@ ready = {"model": repo, "revision": rev, "path": str(p), "vllm": vllm.__version_
          "shards": sorted(f.name for f in p.glob("*.safetensors"))}
 (Path(os.environ["WORK"]) / "ready.json").write_text(json.dumps(ready, indent=1) + "\n")
 print(json.dumps(ready))
+EOF
+PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f CUDA_VISIBLE_DEVICES= "$WORK/venv312/bin/python" - <<'EOF'
+import json, os
+from pathlib import Path
+import flashinfer
+from flashinfer.sampling import gen_sampling_module
+spec = gen_sampling_module()
+spec.build()
+if not spec.is_compiled:
+    raise SystemExit("FlashInfer's sampling module did not build")
+ready = Path(os.environ["WORK"]) / "ready.json"
+r = json.loads(ready.read_text())
+r["flashinfer"] = {"version": flashinfer.__version__, "arch_list": os.environ["FLASHINFER_CUDA_ARCH_LIST"],
+                   "prebuilt": {"sampling": str(spec.get_library_path())}}
+ready.write_text(json.dumps(r, indent=1) + "\n")
+print(json.dumps(r["flashinfer"]))
 EOF

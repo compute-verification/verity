@@ -6,7 +6,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -416,3 +418,36 @@ def test_the_controller_runs_each_rep_on_the_same_prompt_and_warms_each_engine_o
     assert [x[0] for x in workers["base"].log if x[2] == 1] == ["prefill", "decode"] and len(warm) == 8
     t = E2E.timing(records)
     assert set(t) == set(E2E.MODES) and t["pearlc"]["timing"]["prefill_8192_s"] == 1.0
+
+
+def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tmp_path, monkeypatch):
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setattr(E2E, "memory_mib", lambda: 30000)
+
+    class Fake:
+        live: ClassVar[list] = []
+        refuse_arm = False
+
+        def __init__(self, ctx, args, group, beacon):
+            if group == "arm" and Fake.refuse_arm:
+                raise RuntimeError("arm: OutOfMemoryError: CUDA out of memory")
+            self.group, self.ready = group, {"gate": [{"ok": True}]} if group == "arm" else {}
+            Fake.live.append(self)
+
+        def ask(self, **cmd):
+            return {"tokens": [[1, 2, 3]] if cmd["mode"] != "pearlc" else [[1, 2, 4]], "texts": [cmd["mode"]]}
+
+        def close(self):
+            Fake.live.remove(self)
+
+    monkeypatch.setattr(E2E, "Worker", Fake)
+    args = types.SimpleNamespace(out=tmp_path / "smoke.json")
+    E2E.smoke(args)
+    got = json.loads(args.out.read_text())
+    assert got["resident"] and got["gate_ok"] and "error" not in got and not Fake.live
+    assert [s["step"].split(":")[0] for s in got["steps"]][1::2] == ["fp8", "bf16"] and len(got["steps"]) == 5
+    assert got["token_agreement_vs_bf16"] == {"fp8": 1.0, "pearlc": 2 / 3}
+    Fake.refuse_arm = True
+    E2E.smoke(args)
+    got = json.loads(args.out.read_text())
+    assert not got["resident"] and "OutOfMemoryError" in got["error"] and len(got["steps"]) == 2 and not Fake.live

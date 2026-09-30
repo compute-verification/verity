@@ -30,7 +30,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   `verify_run.py` after the window: the first two must be accepted and the control rejected (the panel's rule of 11:50Z).
 - **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h1; `panel_rows.py` writes the rows.
 
-Every rep records the SM clock (the panel's clock rule).
+Every rep records the SM clock (the panel's clock rule).  ``--smoke`` (`smoke`) is the untimed check before a window: both
+engines resident, the arm's install and gates, and each engine's first sampling calls.
 """
 from __future__ import annotations
 
@@ -351,6 +352,52 @@ def split(results: dict) -> dict:
     return out
 
 
+def memory_mib() -> int | None:
+    try:
+        q = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", "0"], capture_output=True,
+                           text=True, timeout=10, check=False)
+        return int(q.stdout.strip())
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def smoke(args) -> None:
+    """Untimed: both engines resident on the GPU, and each one's first sampling calls.  The stock FP8 engine starts and
+    samples; then the Pearl-C engine starts beside it (its install and gates) and samples as stock BF16 and as ``pearlc``.
+    Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16."""
+    ctx, beacon = mp.get_context("spawn"), os.urandom(32)
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": SCHEME, "run": os.environ.get("RESEARCH_RUN_ID"),
+                 "steps": [], "resident": False}
+
+    def step(name, f):
+        t0 = time.perf_counter()
+        got = f()
+        out["steps"].append({"step": name, "s": round(time.perf_counter() - t0, 2), "memory_mib": memory_mib()})
+        return got
+
+    try:
+        base = step("start the fp8 engine", lambda: Worker(ctx, args, "base", beacon))
+        fp8 = step("fp8: first sampling calls", lambda: base.ask(op="chat", mode="fp8"))
+        arm = step("start the pearl-c engine beside it (install, gates)", lambda: Worker(ctx, args, "arm", beacon))
+        out["resident"], out["gate"] = True, arm.ready["gate"]
+        out["gate_ok"] = all(g["ok"] for g in arm.ready["gate"])
+        bf16 = step("bf16: first sampling calls", lambda: arm.ask(op="chat", mode="bf16"))
+        pearlc = step("pearlc: first sampling calls", lambda: arm.ask(op="chat", mode="pearlc"))
+        out["texts"] = {"fp8": fp8["texts"][0], "bf16": bf16["texts"][0], "pearlc": pearlc["texts"][0]}
+        out["token_agreement_vs_bf16"] = {"fp8": agree(fp8["tokens"], bf16["tokens"]), "pearlc": agree(pearlc["tokens"], bf16["tokens"])}
+    except (RuntimeError, SystemExit) as ex:
+        out["error"] = str(ex)[:4000]
+    finally:
+        for w in list(Worker.live):
+            w.close()
+    args.out.write_text(json.dumps(out, indent=1))
+    print(json.dumps({k: v for k, v in out.items() if k != "gate"}), flush=True)
+    import run_result
+    ok = "error" not in out and out.get("gate_ok", False)
+    run_result.write(args.out, ok, "pearl-c vLLM e2e smoke: both engines resident, the arm gated, each one's first sampling calls",
+                     json.dumps({k: v for k, v in out.items() if k != "gate"}), [(s["step"], s["s"], "s") for s in out["steps"]])
+
+
 def agree(a, b) -> float:
     same = sum(x == y for s, u in zip(a, b) for x, y in zip(s, u))
     return same / max(1, sum(min(len(s), len(u)) for s, u in zip(a, b)))
@@ -368,7 +415,11 @@ def main() -> None:
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
     ap.add_argument("--retain", help="the verify passes' directory")
+    ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     args = ap.parse_args()
+    if args.smoke:
+        smoke(args)
+        return
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
     out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": SCHEME, "run": os.environ.get("RESEARCH_RUN_ID"),
