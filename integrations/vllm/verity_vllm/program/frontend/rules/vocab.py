@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from verity.ir.defs import bind as ir_bind
-from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias, gemv_bias as _gemv_bias
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
@@ -249,6 +249,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
+           # the linear with a bias where the target's record adds it in cuBLASLt's FP32 epilogue (`GemmTarget.bias_epilogue`): the
+           # GEMM at M >= 2, cuBLAS's gemv at M = 1 (`registry.targets.gemm_bias_spec` / `gemv_bias_spec`)
+           "gemm_bias_f32": lambda K, N, DOT: ir_bind(_gemm_bias.GemmBiasF32Epilogue, K=K, N=N, DOT=DOT),
+           "gemv_bias_f32": lambda K, N, V, T: ir_bind(_gemv_bias.GemvBiasF32, K=K, N=N, V=V, T=T),
            # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`; an optional
            # static, so the role and its note -- and with them this vocabulary's version -- stay as they were)
            "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None:
@@ -306,6 +310,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                       "(registry.sampling; difftest 72/72 bit-exact on L40S; R16 GPU fixture at S = 1..32)",
            "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
            "gemm_dot": "Gemm_v2{K,N,DOT}: the batch-invariant Triton GEMM with the target's registered k16 step (registry.targets.gemm_spec)",
+           "gemm_bias_f32": "GemmBiasF32Epilogue_v1{K,N,DOT}: the linear with a bias at M >= 2 on a cuBLASLt target -- DotBf16_v2{K,DOT} per "
+                            "coordinate, the widened bias added in f32, one cvt.rn.bf16.f32 (registry.targets.gemm_bias_spec)",
+           "gemv_bias_f32": "GemvBiasF32_v1{K,N,V,T}: the linear with a bias at M = 1 on a cuBLASLt target -- cuBLAS gemvx, V-wide k chunks "
+                            "over T threads, the bias added in f32 (registry.targets.gemv_bias_spec)",
            "attention_dot": "Attention_v2{T,NH,KVH,D,BN,DOT,INV}: FA2/FA3 causal GQA with the target's step, block size and epilogue "
                             "(registry.targets.attention_spec)",
            "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",

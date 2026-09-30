@@ -6,6 +6,11 @@ What is under test: the Definition is bit-equal to `BiasAdd_v1(Gemm_v1(x, W), b)
 Triton GEMM launch whose only reader is the linear's bias add (in its module, the next computing node) to it, and leaves every other
 shape as `Gemm_v1` (+ `BiasAdd_v1`); `Q_word_v1` cuts it into one unit per output word with no committed interior word; the replay's
 row kernel agrees.  The launch is the export's carrier (`verity_cba::triton_launch`), built here as in `test_harden_alias.py`.
+
+On a target whose GEMM record adds the bias in cuBLASLt's FP32 epilogue the same pair is one `GemmBiasF32Epilogue_v1` per row at
+M >= 2 and cuBLAS's gemv `GemvBiasF32_v1` at M = 1 (the served `F.linear(x, W, b)` is one kernel, so there is no pre-bias word to
+commit and the module's value is that Call's); one own row under a declared launch context is refused, since the context does not
+declare the launch's M.
 """
 from __future__ import annotations
 
@@ -20,9 +25,13 @@ from verity.evaluation import evaluate
 from verity.ir.defs import bind
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
+from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
+from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry import b1, gemm_bias
+from verity_vllm.program.registry import b1, gemm_bias, gemv_bias
+from verity_vllm.program.registry import gemm_targets as GT
+from verity_vllm.program.registry import targets as TG
 from verity_vllm.program.registry.serve3_reference import materialize
 from verity_vllm.query import word as W
 
@@ -122,8 +131,8 @@ class _OtherOpBetween(_Linear):
         return c + self.bias, h
 
 
-def _derive(m: nn.Module):
-    return derive_report(m, (torch.empty(M, K, dtype=BF),), **PROF, name=type(m).__name__, rules=vllm_ruleset())
+def _derive(m: nn.Module, rows: int = M):
+    return derive_report(m, (torch.empty(rows, K, dtype=BF),), **PROF, name=type(m).__name__, rules=vllm_ruleset())
 
 
 def _hist(program) -> dict[str, int]:
@@ -144,7 +153,7 @@ def test_the_biased_batch_invariant_linear_derives_to_one_gemm_bias_per_row(cls)
     rep = _derive(m)
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == {"GemmBias_v1": M}, _hist(rep.program)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v2"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
     assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] and apps[0]["emitted"] == f"GemmBias_v1{{K={K},N={N}}} x{M}"
     assert not any(a["rule"].startswith("BroadcastBiasAdd") for a in rep.provenance["applications"])
     roles = {w["name"]: w.get("role") for w in rep.provenance["weights"]}
@@ -167,5 +176,107 @@ def test_every_other_shape_keeps_gemm_and_bias_add(cls, want):
     rep = _derive(cls())
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == want, _hist(rep.program)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v2"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
     assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] is None
+
+
+# ---------------------------------------------------------------------------------------------------------
+# a target whose GEMM record adds the bias in cuBLASLt's FP32 epilogue
+# ---------------------------------------------------------------------------------------------------------
+
+F32_EPILOGUE_TP = TargetProfile(compute_capability=(12, 0), num_sms=188)
+NO_BIAS_RECORD_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)
+
+
+def _observing(tp: TargetProfile):
+    saved = dict(VB._OBSERVED)
+    VB.observe_target_profile(tp)
+    return saved
+
+
+@pytest.fixture
+def f32_target():
+    assert F32_EPILOGUE_TP.gemm_target().bias_epilogue == "f32"
+    saved = _observing(F32_EPILOGUE_TP)
+    yield TG.tensor_core_dot(F32_EPILOGUE_TP)
+    VB._OBSERVED.clear()
+    VB._OBSERVED.update(saved)
+
+
+@pytest.fixture
+def gemv_row(monkeypatch):
+    """A (K, N) entry in the target's gemv table for this test's small linear."""
+    monkeypatch.setitem(GT.GEMV_BIAS_TABLES[F32_EPILOGUE_TP.gemm_target().key], (K, N), (1, 8))
+    return bind(gemv_bias.GemvBiasF32, K=K, N=N, V=1, T=8)
+
+
+def _values(rep, m: nn.Module, x: torch.Tensor) -> list[int]:
+    words = [_bits(x), [v for w in rep.provenance["weights"] for v in _bits(dict(m.named_parameters())[w["name"]])]]
+    t = materialize(rep.program, words)
+    return [int(t[gid]) & 0xFFFF for gid in rep.program.circuit.root_outputs()]
+
+
+def _x(rows: int) -> torch.Tensor:
+    return (torch.randn(rows, K, generator=torch.Generator().manual_seed(11)) * 0.8).to(BF)
+
+
+@pytest.mark.parametrize("cls", [_Linear, _BiasFirst])
+def test_on_an_f32_epilogue_target_the_biased_linear_is_one_gemm_bias_f32_epilogue_per_row(cls, f32_target):
+    m = cls()
+    rep = _derive(m)
+    assert rep.ok, rep.unsupported
+    spec = bind(gemm_bias.GemmBiasF32Epilogue, K=K, N=N, DOT=f32_target)
+    assert spec.id == TG.gemm_bias_spec(F32_EPILOGUE_TP, K, N).id
+    assert _hist(rep.program) == {"GemmBiasF32Epilogue_v1": M}, _hist(rep.program)
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
+    assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] and apps[0]["emitted"] == f"{spec.id} x{M}"
+    assert not any(a["rule"].startswith("BroadcastBiasAdd") for a in rep.provenance["applications"])
+    assert rep.provenance["weight_roles"]["bias"]["role"] == "linear.bias"
+    x = _x(M)
+    assert _values(rep, m, x) == [v for r in range(M) for v in evaluate(spec, _bits(x[r]), _bits(m.weight), _bits(m.bias))]
+
+
+def test_on_an_f32_epilogue_target_one_row_is_cublas_gemv(f32_target, gemv_row):
+    m = _Linear()
+    rep = _derive(m, rows=1)
+    assert rep.ok, rep.unsupported
+    assert gemv_row.id == TG.gemv_bias_spec(F32_EPILOGUE_TP, K, N).id
+    assert _hist(rep.program) == {"GemvBiasF32_v1": 1}, _hist(rep.program)
+    x = _x(1)
+    assert _values(rep, m, x) == list(evaluate(gemv_row, _bits(x[0]), _bits(m.weight), _bits(m.bias)))
+
+
+def test_on_an_f32_epilogue_target_one_row_outside_the_gemv_table_is_refused(f32_target):
+    rep = _derive(_Linear(), rows=1)
+    assert not rep.ok and rep.unsupported.reason == "numerics_unregistered", rep.unsupported
+    assert "unsupported:gemv-table" in rep.unsupported.hint, rep.unsupported.hint
+
+
+def test_under_a_declared_launch_context_one_row_is_refused_and_several_rows_are_the_gemm(f32_target, gemv_row):
+    VB.observe_launch_context(TG.parse_launch_context([8, 1]))
+    rep = _derive(_Linear(), rows=1)
+    assert not rep.ok and rep.unsupported.reason == "numerics_unregistered", rep.unsupported
+    assert "max_seqlen_q, not the launch's M" in rep.unsupported.hint, rep.unsupported.hint
+    rep = _derive(_Linear())
+    assert rep.ok and _hist(rep.program) == {"GemmBiasF32Epilogue_v1": M}, rep.unsupported or _hist(rep.program)
+
+
+@pytest.mark.parametrize("cls,want", [(_NoBias, {"Gemm_v2": M}),
+                                      (_PreBiasAlsoReturned, {"Gemm_v2": M, "BiasAdd_v1": M}),
+                                      (_OtherOpBetween, {"Gemm_v2": M, "BiasAdd_v1": M, "ResidualAdd_v1": M})])
+def test_on_an_f32_epilogue_target_every_other_shape_keeps_its_gemm(cls, want, f32_target):
+    rep = _derive(cls())
+    assert rep.ok, rep.unsupported
+    assert _hist(rep.program) == want, _hist(rep.program)
+
+
+def test_a_target_without_a_bias_record_keeps_gemm_and_bias_add():
+    assert NO_BIAS_RECORD_TP.gemm_target().bias_epilogue is None
+    saved = _observing(NO_BIAS_RECORD_TP)
+    try:
+        rep = _derive(_Linear())
+    finally:
+        VB._OBSERVED.clear()
+        VB._OBSERVED.update(saved)
+    assert rep.ok, rep.unsupported
+    assert _hist(rep.program) == {"Gemm_v2": M, "BiasAdd_v1": M}, _hist(rep.program)

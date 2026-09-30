@@ -267,9 +267,9 @@ def gemm_bias_spec(profile, K: int, N: int):
     raise UnregisteredTarget(f"bf16 linear with a bias on {fam} ({profile.capability_str}): no registered binding")
 
 
-def gemv_bias_spec(profile, K: int, N: int):
-    """The registered Definition of a bf16 linear with a bias at M = 1 where the linear is cuBLAS's: `GemvBiasF32_v1{K,N,V,T}` with
-    (V, T) from the target's gemv table; refused by name elsewhere, and `unsupported:gemv-table` for a (K, N) the table lacks."""
+def gemv_bias_geometry(profile, K: int, N: int) -> tuple[int, int]:
+    """(V, T) of cuBLAS's gemv for a bf16 linear with a bias at M = 1 on the declared target, from its gemv table; refused by name
+    elsewhere, and `unsupported:gemv-table` for a (K, N) the table lacks."""
     gt = gemm_target(profile)
     table = GEMV_BIAS_TABLES.get(gt.key)
     if table is None:
@@ -277,7 +277,14 @@ def gemv_bias_spec(profile, K: int, N: int):
     vt = table.get((int(K), int(N)))
     if vt is None:
         raise UnregisteredTarget(f"unsupported:gemv-table: (K={K}, N={N}) is not in {gt.key}'s gemv table (gemm_targets.GEMV_BIAS_TABLES)")
-    return bind(gemv_bias.GemvBiasF32, K=int(K), N=int(N), V=vt[0], T=vt[1])
+    return int(vt[0]), int(vt[1])
+
+
+def gemv_bias_spec(profile, K: int, N: int):
+    """The registered Definition of a bf16 linear with a bias at M = 1 where the linear is cuBLAS's: `GemvBiasF32_v1{K,N,V,T}` with
+    (V, T) = `gemv_bias_geometry`."""
+    V, T = gemv_bias_geometry(profile, K, N)
+    return bind(gemv_bias.GemvBiasF32, K=int(K), N=int(N), V=V, T=T)
 
 
 def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None):
@@ -314,5 +321,5 @@ def describe(profile) -> dict[str, Any]:
 
 __all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "gemm_bias_spec", "gemv_bias_spec", "attention_spec", "describe",
+           "gemm_bias_spec", "gemv_bias_geometry", "gemv_bias_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
