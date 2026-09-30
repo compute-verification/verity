@@ -126,7 +126,7 @@ EOF
   local sudo_rsync=(--rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath)
   rsync -a "${sudo_rsync[@]}" "$row_dir/" "$N1:$row_dir/"
   rsync -a "${sudo_rsync[@]}" "/workspace/jobs/runs/$run_id/" "$N1:/workspace/jobs/runs/$run_id/"
-  ssh "$N1" "sudo -n -u '#1000' env RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=/workspace/jobs/runs PYTHONPATH=$SRC/tools/research/src \
+  ssh "$N1" "cd /workspace/jobs && sudo -n -u '#1000' env UV_NO_CONFIG=1 RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=/workspace/jobs/runs PYTHONPATH=$SRC/tools/research/src \
     UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
     /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data attempt publish /workspace/jobs/runs/$run_id"
   ssh "$N1" "KUBECONFIG=\$HOME/.kube/config /workspace/jobs/venv312/bin/python $DISPATCH submit config-run n2-build/$KEY --tree $TREE --task 1 \
