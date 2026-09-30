@@ -24,7 +24,7 @@ import json
 import mmap
 import os
 import sys
-from multiprocessing import Pool
+import multiprocessing
 from pathlib import Path
 
 from verity.commitments import Commitment, Opening
@@ -137,7 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     found = sorted(a.run_dir.glob("transcripts/*/*/manifest.json"))
     negatives = sorted(a.run_dir.glob("negative/*/*/manifest.json"))
     errors = sorted(str(e.parent.relative_to(a.run_dir)) for e in a.run_dir.glob("transcripts/*/*/error.txt"))
-    with Pool(max(1, min(a.jobs, len(found) + len(negatives)))) as pool:
+    # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+    with multiprocessing.get_context("fork").Pool(max(1, min(a.jobs, len(found) + len(negatives)))) as pool:
         results = pool.map(_one, [(f, a.draws, a.commit, run) for f in found + negatives], chunksize=1)
     results, controls = results[:len(found)], results[len(found):]
     for r in results + controls:

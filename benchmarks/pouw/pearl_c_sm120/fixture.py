@@ -25,8 +25,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import multiprocessing
 import sys
-from multiprocessing import Pool
+from multiprocessing.pool import Pool
 from pathlib import Path
 
 import numpy as np
@@ -268,7 +269,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024, hashing: str
     o.put("fbT128", k32(fbT128), "u8")
     o.put("xa", b"".join(ra), "u8")
     o.put("xb", b"".join(rb), "u8")
-    with Pool() as pool:
+    # fork: the workers unpickle `_side` from this module, which callers load from its path, not by an importable name
+    with multiprocessing.get_context("fork").Pool() as pool:
         a, e_a = form(pool, SM120, ra, 0, noise.seed_a, noise.seed_b, k)
         b, e_b = form(pool, SM120, rb, 1, noise.seed_b, noise.seed_b, k)
     inv = {}
