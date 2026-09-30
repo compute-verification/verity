@@ -541,8 +541,8 @@ def A(arm_dir):
 
 
 def test_arm_accounting_is_the_schemes(A):
-    """Work, W_ref and the credit are the scheme's on the arm's record, and G = 4's γ is #449's `bench.gamma` (the H100's, at
-    the same stand-in prices); the unpromoted record credits no promotion adds, so its γ is its own.  The hashed bytes are
+    """Work, W_ref and the credit are the scheme's on the arm's record, and G = 4's γ is #449's `bench.gamma` (the H100's
+    formula) at SM120_PRICES; the unpromoted record credits no promotion adds, so its γ is its own.  The hashed bytes are
     -h1's: A's rows and B's under their domains, the message digests, the tile leaves and both trees' nodes."""
     from verity_pouw.protocol import Shape as MShape
     from verity_pouw.schemes import pearl_c as C
@@ -552,6 +552,9 @@ def test_arm_accounting_is_the_schemes(A):
         B = load("pearl_c_h100_bench", H100_DIR / "bench.py")
     finally:
         sys.path.remove(str(H100_DIR))
+    p = C.SM120_PRICES
+    B.FADD_PER_MAC, B.PEEL_UNITS = Fraction(p.fadd, C.WINDOW), p.bf16_mac * C.PEEL_K
+    B.FORMING_CREDITED, B.FORMING_A_ONLY = p.forming_credited, p.forming_a_only
     Shape = sys.modules["arm"].Shape
     for cls in ARMS:
         arm = getattr(A, cls)()
