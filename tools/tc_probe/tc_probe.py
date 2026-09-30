@@ -20,8 +20,8 @@ Instructions (``--instruction``; ``--arch`` is derived from the entry and may be
     sm90.mma.m16n8k32.e4m3      sm_90a     mma_e4m3_m16n8k32_tiles      32  HYPOTHESES hopper_e4m3_wgmma_k32, ada_e4m3_m16n8k32 (open question: which
                                                                             agrees) and hopper_bf16_m16n8k16 x2 (see below)
     sm90.mma.m16n8k32.e5m2      sm_90a     mma_e5m2_m16n8k32_tiles      32  HYPOTHESES the three above with e5m2 products
-    sm120.mma.m16n8k32.e4m3     sm_120a    mma_e4m3_m16n8k32_tiles      32  HYPOTHESES ada_e4m3_m16n8k32, hopper_e4m3_wgmma_k32 and hopper_bf16_m16n8k16 x2
-    sm120.mma.m16n8k32.e5m2     sm_120a    mma_e5m2_m16n8k32_tiles      32  HYPOTHESES the three above with e5m2 products
+    sm120.mma.m16n8k32.e4m3     sm_120a    mma_e4m3_m16n8k32_tiles      32  blackwell_sm120_e4m3_m16n8k32; controls ada_e4m3_m16n8k32, hopper_bf16_m16n8k16 x2
+    sm120.mma.m16n8k32.e5m2     sm_120a    mma_e5m2_m16n8k32_tiles      32  blackwell_sm120_e5m2_m16n8k32; the same controls with e5m2 products
     sm90.wgmma.m64n8k32.e4m3    sm_90a     wgmma_e4m3_m64n8k32_tiles    32  hopper_e4m3_wgmma_k32 (pinned)
     sm90.wgmma.m64n8k32.e5m2    sm_90a     wgmma_e5m2_m64n8k32_tiles    32  HYPOTHESIS hopper_e4m3_wgmma_k32 with e5m2 products
     sm90.wgmma.m64n8k16.bf16    sm_90a     wgmma_bf16_m64n8k16_tiles    16  hopper_bf16_wgmma_k16 (total semantics: specials asserted);
@@ -419,11 +419,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _mma("sm90.mma.m16n8k32.e4m3", "sm_90a", E4M3,
              (Model(S.HOPPER_E4M3_K32, declared=False), Model(S.ADA_E4M3_M16N8K32, declared=False), _HOPPER_HMMA_X2_E4M3), sass_mma=2),
         _mma("sm90.mma.m16n8k32.e5m2", "sm_90a", E5M2, (_HOPPER_E5M2, _ADA_E5M2, _HOPPER_HMMA_X2_E5M2), sass_mma=2),
-        # Blackwell consumer: no FP8 model pinned yet.  Hypotheses: Ada's two groups of 16, Hopper wgmma's one group of 32, and the
-        # sm_90a two-HMMA lowering around the BF16 K=16 pipeline sm_120 shares with Hopper.
+        # Blackwell consumer: the fitted one-group-of-32, 26-bit model; Ada's pipeline and the sm_90a two-HMMA lowering stay as controls.
         _mma("sm120.mma.m16n8k32.e4m3", "sm_120a", E4M3,
-             (Model(S.ADA_E4M3_M16N8K32, declared=False), Model(S.HOPPER_E4M3_K32, declared=False), _HOPPER_HMMA_X2_E4M3)),
-        _mma("sm120.mma.m16n8k32.e5m2", "sm_120a", E5M2, (_ADA_E5M2, _HOPPER_E5M2, _HOPPER_HMMA_X2_E5M2)),
+             (Model(TCM.BLACKWELL_SM120_E4M3_M16N8K32), Model(S.ADA_E4M3_M16N8K32, declared=False), _HOPPER_HMMA_X2_E4M3)),
+        _mma("sm120.mma.m16n8k32.e5m2", "sm_120a", E5M2, (Model(TCM.BLACKWELL_SM120_E5M2_M16N8K32), _ADA_E5M2, _HOPPER_HMMA_X2_E5M2)),
         _wgmma("sm90.wgmma.m64n8k32.e4m3", E4M3, (Model(S.HOPPER_E4M3_K32),)),
         _wgmma("sm90.wgmma.m64n8k32.e5m2", E5M2, (_HOPPER_E5M2,)),
         # lane wgmma-bf16: the BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere
