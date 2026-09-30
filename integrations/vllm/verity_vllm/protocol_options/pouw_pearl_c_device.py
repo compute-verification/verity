@@ -263,7 +263,7 @@ def screen(x: Any, alpha: Any, aux: Any, chunk: int = 1 << 26) -> tuple[Any, Any
     fails, unsure = torch.empty_like(floor), torch.empty_like(floor)
     step = max(1, chunk // k)
     for r0 in range(0, rows, step):
-        sq = x[r0:r0 + step].square()
+        sq = x[r0:r0 + step].float().square()
         thr = (64.0 * sq[:, ::C.S5_STRIDE].double().sum(1) / k8)[:, None]
         hi, lo = (thr * (1 + BAND)).float(), (thr * (1 - BAND)).float()
         dead = (sq > hi).sum(1)
@@ -294,7 +294,7 @@ def _screen_kernel():
             acc = tl.zeros([BLOCK], dtype=tl.float64)
             for s in range(0, k, BLOCK):
                 offs = s + tl.arange(0, BLOCK)
-                v = tl.load(base + offs, mask=offs < k, other=0.0)
+                v = tl.load(base + offs, mask=offs < k, other=0.0).to(tl.float32)
                 acc += tl.where(offs % 8 == 0, (v * v).to(tl.float64), 0.0)
             thr = 64.0 * tl.sum(acc, axis=0) / k8
             hi = (thr * (1.0 + band)).to(tl.float32)
@@ -304,7 +304,7 @@ def _screen_kernel():
             for s in range(0, k, BLOCK):
                 offs = s + tl.arange(0, BLOCK)
                 live = offs < k
-                v = tl.load(base + offs, mask=live, other=0.0)
+                v = tl.load(base + offs, mask=live, other=0.0).to(tl.float32)
                 sq = v * v
                 dead += tl.where(live & (sq > hi), 1, 0)
                 near += tl.where(live & (sq >= lo) & (sq <= hi), 1, 0)
@@ -765,7 +765,8 @@ class PearlCDeviceRun:
         finally:
             self.kernel.dev.stream = None
             self._launching = None
-        return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias)
+        return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias,
+                           rows=x2 if x2.is_contiguous() and x2.dtype == torch.bfloat16 else None)
 
     def _replay(self, w: int, sh: _Shape, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
         """The call's steps as one CUDA graph on the caller's stream (`graphs`): captured at the pipeline's first call, after
@@ -817,16 +818,17 @@ class PearlCDeviceRun:
         return g.y.clone(), screen
 
     def _after(self, cur: _Pass, w: int, wt: _Weight, sh: _Shape, pipe: Any, index: int, m: int, k: int, m16: int, tiles: int,
-               y: Any, lead: Any, bias: Any, screened: bool = False) -> Any:
+               y: Any, lead: Any, bias: Any, screened: bool = False, rows: Any = None) -> Any:
         """A call's records after its steps: its matmul, A's root, the screen (unless a graph `screened` it), the retained
-        files, and y."""
+        files, and y.  The screen reads `rows` (the call's BF16 x, whose widening to A's FP32 words is exact) when given, at
+        half the bytes of A's words."""
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
         if self.hashing:
             size = pipe.size["tree_a"]
             self.roots_buf[32 * index:32 * index + 32].copy_(sh.b["tree_a"][size - 32:size])
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
             if not screened:
-                screen_into(flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
+                screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
             cur.flag_rows += m
             if cur.retain is not None:
                 cur.records.append(PW.UnitRecord(cur.matmuls[-1], m, k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), sh.xa[:m]),
