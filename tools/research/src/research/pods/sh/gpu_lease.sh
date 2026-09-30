@@ -10,9 +10,27 @@
 # holding nothing; --wait retries every $GPU_LEASE_POLL_S seconds (default 15) instead.
 # Holding nothing is also how a CPU-only run shares the machine: it simply doesn't call gpu-lease.
 # GPU_LEASE_COUNT overrides the GPU count nvidia-smi reports (tests; a machine without nvidia-smi).
+# On a machine whose other GPUs belong to Kubernetes (the Nebius cluster), $GPU_LEASE_ALLOWED_FILE (default /etc/vy/direct-gpus)
+# names the only indices gpu-lease may hand out, comma-separated, or `none` (every GPU is Kubernetes'): it then refuses. The file
+# is written by the cluster's bring-up (cluster_up.sh), never by hand. Absent, every GPU is gpu-lease's.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
+
+allowed_file=${GPU_LEASE_ALLOWED_FILE:-/etc/vy/direct-gpus}
+
+gpu_indices() {
+  # the indices gpu-lease may use, one per line: the allowed file's list, else 0..count-1
+  local total i a
+  total=$(gpu_count)
+  if [ -r "$allowed_file" ]; then
+    a=$(tr -d ' \n' < "$allowed_file")
+    [ "$a" = none ] && return 0
+    echo "$a" | tr ',' '\n' | while read -r i; do [ -n "$i" ] && [ "$i" -lt "$total" ] && echo "$i"; done
+  else
+    for ((i = 0; i < total; i++)); do echo "$i"; done
+  fi
+}
 
 gpu_count() {
   if [ -n "${GPU_LEASE_COUNT:-}" ]; then echo "$GPU_LEASE_COUNT"; else nvidia-smi -L 2>/dev/null | grep -c '^GPU '; fi
@@ -21,9 +39,9 @@ gpu_count() {
 usage() { echo "usage: gpu-lease N [--wait] -- CMD... | gpu-lease status" >&2; exit 2; }
 
 status() {
-  local total i fd state owner
-  total=$(gpu_count)
-  for ((i = 0; i < total; i++)); do
+  local i fd state owner
+  [ -r "$allowed_file" ] && echo "# direct-run GPUs from $allowed_file: $(tr -d '\n' < "$allowed_file") (the rest are Kubernetes')"
+  for i in $(gpu_indices); do
     owner=$(cat "$dir/$i.owner" 2>/dev/null)
     exec {fd}>>"$dir/$i.lock" || { echo "$i unreadable"; continue; }
     if flock -n -s "$fd"; then state=free; owner=""; else state=held; fi
@@ -34,10 +52,10 @@ status() {
 
 take() {
   # take N: TAKEN = the indices, their lock descriptors left open; 1 (holding nothing) when fewer than N are free
-  local want=$1 total i fd
+  local want=$1 i fd
   TAKEN=() FDS=()
-  total=$(gpu_count)
-  for ((i = 0; i < total && ${#TAKEN[@]} < want; i++)); do
+  for i in $(gpu_indices); do
+    [ "${#TAKEN[@]}" -lt "$want" ] || break
     exec {fd}>>"$dir/$i.lock" || continue
     if flock -n -x "$fd"; then TAKEN+=("$i") FDS+=("$fd"); else exec {fd}>&-; fi
   done
@@ -60,14 +78,17 @@ done
 [ "${1:-}" = -- ] || usage
 shift
 [ $# -ge 1 ] || usage
-total=$(gpu_count)
-if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, this machine has $total" >&2; exit 2; fi
+total=$(gpu_indices | grep -c .)
+if [ "$total" -eq 0 ] && [ -r "$allowed_file" ]; then
+  echo "gpu-lease: no GPU is for direct runs here ($allowed_file: none): submit through the cluster's queues (sky)" >&2; exit 2
+fi
+if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-lease's here" >&2; exit 2; fi
 mkdir -p "$dir" 2>/dev/null
 [ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
 
 until take "$n"; do
   if [ "$wait" != 1 ]; then
-    echo "gpu-lease: fewer than $n of $total GPUs free ($(status | tr '\n' ';'))" >&2
+    echo "gpu-lease: fewer than $n of $total GPUs free ($(status | grep -v '^#' | tr '\n' ';'))" >&2
     exit 75
   fi
   sleep "${GPU_LEASE_POLL_S:-15}"

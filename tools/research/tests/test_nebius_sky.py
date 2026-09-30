@@ -41,7 +41,7 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
 def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"circuits", "provers"}
-    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (4, 0)       # GPUs 4-7 held for direct runs
+    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (4, 4)       # cluster_up lowers provers' while GPUs 4-7 are direct
     assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (144, 48)
     for res, cap in NODE.items():
         assert sum(x[res] for x in q.values()) <= cap, res
@@ -93,7 +93,8 @@ def test_the_pouw_queue_joins_the_same_cohort_on_its_own_server():
     assert "cohortName: nebius" in text and "nodeLabels: {verity.dev/server: vy-nebius-2}" in text
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
     assert int(values["pouw-timed"]) > int(values["pouw"]) and "withinClusterQueue: LowerPriority" in text
-    assert "kueue-pouw.yaml" not in (SKY / "cluster_up.sh").read_text()
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "VY_QUEUES=kueue-pouw.yaml VY_DIRECT_GPUS=none" in up and "lendingLimit: 0" in text     # node 2: its own cluster, same code
 
 
 def test_usage_report_reads_kueue_objects():
@@ -128,3 +129,17 @@ def test_usage_summary_suggests_the_p90_as_nominal():
     assert mem.split()[-1] == "512"
     assert "work waited in 10% of samples (longest 10 min)" in out[-2] and "GPU utilization of its pods 5%" in out[-2]
     assert ur.summarize(lines, 7, now=10**9) == "no samples in the last 7 days"
+
+
+def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
+    import subprocess
+    up = (SKY / "cluster_up.sh").read_text()
+    render = up[up.index("<<'PY'\n") + len("<<'PY'\n"):up.index("\nPY\n")]
+    (tmp_path / "render.py").write_text(render)
+    for direct, want in ((4, 0), (0, 4), (6, 0)):
+        out = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue.yaml"), str(direct)], capture_output=True, text=True, check=True).stdout
+        provers = out.split("metadata: {name: provers}")[1]
+        assert re.search(r"\{name: nvidia.com/gpu, nominalQuota: (\d+)", provers).group(1) == str(want)
+        assert out.split("metadata: {name: provers}")[0] == (SKY / "kueue.yaml").read_text().split("metadata: {name: provers}")[0]
+    pouw = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue-pouw.yaml"), "0"], capture_output=True, text=True, check=True).stdout
+    assert pouw == (SKY / "kueue-pouw.yaml").read_text()

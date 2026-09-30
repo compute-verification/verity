@@ -8,9 +8,9 @@
 #
 # Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
 # ~1,690 GiB), or it admits pods that stay Pending.
-# While lanes still run GPU work directly on GPUs 4-7 (research run --on, outside Kubernetes), the device plugin offers
-# Kubernetes GPUs 0-3 only (cluster_up.sh, VY_K8S_GPUS), so provers' GPU quota is 0 and its GPU jobs borrow circuits' idle
-# GPUs. When direct GPU runs stop: VY_K8S_GPUS=all, and provers' nvidia.com/gpu nominalQuota back to 4.
+# The split is circuits 4 GPUs, provers 4. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
+# holds those with a placeholder pod and applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs
+# borrow circuits' idle GPUs meanwhile. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata: {name: vy-nebius-1}
@@ -53,7 +53,7 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 0}
+      - {name: nvidia.com/gpu, nominalQuota: 4}
       - {name: cpu, nominalQuota: 48}
       - {name: memory, nominalQuota: 384Gi}
 ---
