@@ -9,9 +9,13 @@
 # on the NUMA node away from its pinned or timed benchmarks (vy-nebius-2: "128-159 160-191", since its timed windows run on
 # GPU 0, which is NUMA node 0's).  Slot k's lock is $VY_CHECK_LOCKS/check-<a|b|c|d>.lock (default /workspace/research/locks), the
 # same locks a hand-run `flock ... taskset` check takes.  Every slot busy: wait (VY_CHECK_WAIT=0 exits 75 instead).
-# UV_PYTHON defaults to 3.14.7, the pods' Python; set it to override.
+# UV_PYTHON defaults to 3.14.7, the pods' Python; set it to override.  The check toolchain (tools/check/pod_setup.sh's pinned uv,
+# elan and lake, cargo), where a server keeps it outside the default PATH, is named by the first line of $VY_CHECK_PATH_FILE
+# (default /workspace/research/check-path) and goes first on CMD's PATH.
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: check_slot.sh CMD..." >&2; exit 2; }
+toolchain=$(head -1 "${VY_CHECK_PATH_FILE:-/workspace/research/check-path}" 2>/dev/null || true)
+[ -z "$toolchain" ] || export PATH="$toolchain:$PATH"
 slots=${VY_CHECK_SLOTS:-$(head -1 "${VY_CHECK_SLOTS_FILE:-/workspace/research/check-slots}" 2>/dev/null || true)}
 slots=${slots:-0-31 32-63}
 locks=${VY_CHECK_LOCKS:-/workspace/research/locks}
