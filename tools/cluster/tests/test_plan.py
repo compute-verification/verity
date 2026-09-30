@@ -133,6 +133,16 @@ def test_guest_share_caps_and_cpus():
     assert "share of jobs" in w["g-2"].reason and "share of" in w["g-3"].reason
 
 
+def test_reserved_pools_go_only_to_jobs_naming_them_even_while_idle():
+    c = one(pools={"checks": "8-15"})
+    acts = plan(c, "n1", [], [job("t-1", cpus=8, pool="checks"), job("o-1", cpus=24), job("o-2", cpus=1, submitted=T0 + 1)], T0)
+    got = by_job(acts, Start)
+    assert got["t-1"].alloc.cpus == cpuset.parse("8-15")
+    assert not got["o-1"].alloc.cpus & cpuset.parse("8-15") and len(got["o-1"].alloc.cpus) == 24
+    assert by_job(acts, Wait)["o-2"].reason == "no CPUs free"
+    assert "has no CPU pool 'lean'" in plan(c, "n1", [], [job("x-1", pool="lean")], T0)[0].reason
+
+
 def test_named_locks_are_exclusive_here_and_across_the_cluster():
     lean = dict(locks=frozenset({"lean-store"}))
     acts = plan(one(), "n1", [], [job("a-1", **lean), job("b-1", **lean, submitted=T0 + 1)], T0)

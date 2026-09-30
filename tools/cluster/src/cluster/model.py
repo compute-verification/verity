@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import tomllib
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -56,11 +56,17 @@ class Node:
     stops_at: int | None = None
     drain_s: int = 0
     smt_pairs: bool = True
+    pools: dict[str, frozenset[int]] = field(default_factory=dict)
 
     @property
     def cpus(self) -> frozenset[int]:
         """The CPUs jobs may be given: every NUMA node's, less the system's."""
         return frozenset().union(*self.numa.values()) - self.system_cpus
+
+    @property
+    def pooled_cpus(self) -> frozenset[int]:
+        """CPUs reserved to named pools: only a job naming its pool gets them, even while they sit idle."""
+        return frozenset().union(*self.pools.values())
 
     @property
     def admission_ends(self) -> int | None:
@@ -127,6 +133,7 @@ class Job:
     locks: frozenset[str] = frozenset()
     inputs: frozenset[str] = frozenset()
     after: tuple[str, ...] = ()
+    pool: str | None = None
     submitted: int = 0
 
     def problems(self, cluster: Cluster) -> list[str]:
@@ -197,7 +204,8 @@ def from_dict(d: dict[str, Any]) -> Cluster:
             gpus=tuple(Gpu(int(g["index"]), int(g["numa"]), g.get("uuid", "")) for g in nd.get("gpus", [])),
             numa=numa, system_cpus=cpuset.parse(nd.get("system_cpus", "")), memory_gib=int(nd["memory_gib"]),
             stops_at=instant(nd.get("stops_at")), drain_s=int(nd.get("drain_s", meta.get("drain_s", 0))),
-            smt_pairs=bool(nd.get("smt_pairs", True)))
+            smt_pairs=bool(nd.get("smt_pairs", True)),
+            pools={k: cpuset.parse(v) for k, v in nd.get("pools", {}).items()})
     shares = tuple(
         Share(project=s["project"], node=s["node"], cpus=cpuset.parse(s["cpus"]) if "cpus" in s else None,
               max_gpus=s.get("max_gpus"), max_cpus=s.get("max_cpus"), max_memory_gib=s.get("max_memory_gib"),
@@ -230,6 +238,13 @@ def validate(cluster: Cluster) -> list[str]:
                 out.append(f"{n.name}: GPU {g.index} is on unknown NUMA node {g.numa}")
         if n.memory_gib < 1:
             out.append(f"{n.name}: memory_gib must be >= 1")
+        pooled: set[int] = set()
+        for k, cs in sorted(n.pools.items()):
+            if not cs <= n.cpus:
+                out.append(f"{n.name}: pool {k} holds CPUs {cpuset.format(cs - n.cpus)} that aren't the node's to give")
+            if pooled & cs:
+                out.append(f"{n.name}: pool {k} overlaps another pool ({cpuset.format(pooled & cs)})")
+            pooled |= cs
     for s in cluster.shares:
         if s.node not in cluster.nodes:
             out.append(f"share for {s.project} names unknown node {s.node!r}")

@@ -27,6 +27,7 @@ tests/          one scenario per rule (test_plan.py), and random workloads check
 
 `plan.py`'s docstring states them, and `tests/test_simulation.py` checks them on every tick of seeded random workloads over
 the Nebius description and a small two-node cluster: no GPU, CPU or lock in two allocations and no memory overcommitted;
+a node's reserved CPU pools (node 1's check slots) only for jobs naming them;
 owner before guest, then priority, and only a strictly higher rank evicts, and only a `requeue` allocation; a quiet job
 runs with everything else on its node evicted (GPU work) or frozen (CPU work); the highest-ranked blocked job reserves its
 node and lower jobs backfill only around it; no job admitted past its node's admission end or its share's end, and frozen

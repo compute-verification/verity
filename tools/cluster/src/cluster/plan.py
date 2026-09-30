@@ -7,7 +7,7 @@ the same call decides on the node, in a simulation, or in a shadow run against t
 The rules, each enforced here and checked by `tests/test_simulation.py` on random workloads:
 
 1. **Exclusive resources.** A GPU, a CPU or a named lock is in at most one allocation; memory is never overcommitted; a
-   guest's CPUs come from its share.
+   guest's CPUs come from its share; a node's reserved CPU pools go only to jobs naming them, even while idle.
 2. **Standing, then priority.** A job displaces an allocation only when its rank (`Cluster.rank`: owner before guest, then
    priority class) is strictly higher, and only a `requeue` allocation is evicted. A guest must be preemptible and may not be
    quiet, so an owner's work always gets its node back.
@@ -110,6 +110,8 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
     ends = n.admission_ends
     if ends is not None and (now >= ends or (job.max_s is not None and now + job.max_s > ends)):
         return f"would run past {node}'s admission end {ends}"
+    if job.pool is not None and job.pool not in n.pools:
+        return f"{node} has no CPU pool {job.pool!r}"
     allowed = _allowed_cpus(cluster, n, job)
     if job.gpus > len(n.gpus) or job.cpus > len(allowed) or job.memory_gib > n.memory_gib:
         return f"larger than {node} allows ({job.gpus} GPUs, {job.cpus} CPUs, {job.memory_gib} GiB)"
@@ -335,8 +337,11 @@ def _without(occ, gone):
 
 
 def _allowed_cpus(cluster: Cluster, n: Node, job: Job) -> frozenset[int]:
+    """A job naming a pool gets that pool's CPUs; any other job gets the CPUs outside every pool. A guest's share narrows
+    either."""
+    base = n.pools.get(job.pool, frozenset()) if job.pool is not None else n.cpus - n.pooled_cpus
     share = cluster.share(job.project, n.name) if n.owner != job.project else None
-    return n.cpus & share.cpus if share is not None and share.cpus is not None else n.cpus
+    return base & share.cpus if share is not None and share.cpus is not None else base
 
 
 def _pick_gpus(n: Node, free: list[int], count: int) -> tuple[int, ...]:

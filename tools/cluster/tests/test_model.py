@@ -29,17 +29,20 @@ def test_the_nebius_description_loads():
     assert c.standing("verity", "vy-nebius-2") == model.GUEST and c.standing("pous", "vy-nebius-1") is None
     share = c.share("verity", "vy-nebius-2")
     assert cpuset.format(share.cpus) == "48-95" and share.max_job_memory_gib == 256
+    assert cpuset.format(n1.pools["checks"]) == "8-95" and n2.pools == {}
 
 
 def test_validation_names_each_problem():
     d = {"priorities": {"work": 1},
          "nodes": {"a": {"owner": "p", "memory_gib": 8, "numa": {"0": "0-3", "1": "3-5"}, "system_cpus": "9",
-                         "gpus": [{"index": 0, "numa": 2}, {"index": 0, "numa": 0}]}},
+                         "gpus": [{"index": 0, "numa": 2}, {"index": 0, "numa": 0}],
+                         "pools": {"x": "0-1", "y": "1-2", "z": "40"}}},
          "shares": [{"project": "p", "node": "a"}, {"project": "q", "node": "b"}, {"project": "r", "node": "a", "cpus": "7"}]}
     problems = model.validate(model.Cluster("x", {}, {}, ())) + [str(e) for e in _errors(d)]
     text = " | ".join(problems)
     for want in ("no priority classes", "overlaps another", "system CPUs 9", "duplicate GPU index", "unknown NUMA node 2",
-                 "the project owns that node", "unknown node 'b'", "CPUs 7 aren't the node's"):
+                 "the project owns that node", "unknown node 'b'", "CPUs 7 aren't the node's",
+                 "pool y overlaps another pool (1)", "pool z holds CPUs 40"):
         assert want in text
 
 

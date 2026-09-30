@@ -34,6 +34,10 @@ def workload(c, rng, n, t0):
                       memory_gib=rng.choice([16, 64]), max_s=rng.choice([300, 900, 1500]), preempt="requeue")
         elif shape < 0.6:
             kw.update(priority="work", cpus=16, memory_gib=48, max_s=1800, preempt="freeze", locks=frozenset({"lean-store"}))
+        elif shape < 0.66 and any(nd.pools for nd in c.nodes.values() if nd.owner == project):
+            home = next(nd for nd in c.nodes.values() if nd.owner == project and nd.pools)
+            kw.update(priority="work", cpus=32, memory_gib=64, max_s=1800, preempt="never", node=home.name,
+                      pool=sorted(home.pools)[0])
         else:
             kw.update(priority=rng.choice(["work", "dev", "fill"]), cpus=rng.choice([4, 8, 32]),
                       memory_gib=rng.choice([8, 32, 128]), max_s=rng.choice([300, 1200, 3600]),
@@ -50,6 +54,8 @@ def check(c, live, acts_by_node, now):
         assert len(gpus) == len(set(gpus)), "a GPU is in two allocations"
         assert len(cpus) == len(set(cpus)), "a CPU is in two allocations"
         assert set(cpus) <= nd.cpus and sum(a.memory_gib for a in mine) <= nd.memory_gib
+        for a in mine:
+            assert a.cpus <= nd.pools[a.job.pool] if a.job.pool else not a.cpus & nd.pooled_cpus, "a pool's CPUs went astray"
         quiet = [a for a in mine if a.job.quiet and a.state == "running"]
         assert len(quiet) <= 1
         if quiet:

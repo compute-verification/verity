@@ -9,10 +9,11 @@ PRIO = {"service": 1000, "timed": 900, "session": 700, "work": 500, "dev": 100, 
 
 
 def node(name: str, owner: str, *, gpus: int = 8, memory: int = 256, stops_at: int | None = None, drain_s: int = 0,
-         system: str = "") -> Node:
+         system: str = "", pools: dict[str, str] | None = None) -> Node:
     return Node(name=name, owner=owner, gpus=tuple(Gpu(i, 0 if i < gpus // 2 or gpus == 1 else 1) for i in range(gpus)),
                 numa={0: cpuset.parse("0-15"), 1: cpuset.parse("16-31")}, system_cpus=cpuset.parse(system),
-                memory_gib=memory, stops_at=stops_at, drain_s=drain_s)
+                memory_gib=memory, stops_at=stops_at, drain_s=drain_s,
+                pools={k: cpuset.parse(v) for k, v in (pools or {}).items()})
 
 
 def cluster(*nodes: Node, shares: tuple[Share, ...] = ()) -> Cluster:
