@@ -7,17 +7,20 @@ from pathlib import Path
 
 import pytest
 
-from research.jobs import model, trains
+from research.jobs import model, prs, trains
 
 VECTORS = json.loads(Path(model.__file__).with_name("vectors.json").read_text())
 TRAINS = json.loads(Path(model.__file__).with_name("train_vectors.json").read_text())
+PRS = json.loads(Path(model.__file__).with_name("pr_vectors.json").read_text())
 
 
 def service(vectors: dict = VECTORS) -> model.JobService:
-    s = model.JobService(epoch=vectors["epoch"]) if "github" not in vectors["setup"] else trains.TrainService(epoch=vectors["epoch"])
+    setup = vectors["setup"]
+    s = (prs.PRService(epoch=vectors["epoch"], coordinators=json.loads(json.dumps(setup["coordinators"]))) if "coordinators" in setup
+         else trains.TrainService(epoch=vectors["epoch"]) if "github" in setup else model.JobService(epoch=vectors["epoch"]))
     for t in vectors["setup"]["tokens"]:
         s.mint(t["secret"], t["name"], t["scopes"])
-    for w in vectors["setup"]["workers"]:
+    for w in vectors["setup"].get("workers", []):
         s.register(w["id"], w["kind"], w["token"], w["kinds"])
     if gh := vectors["setup"].get("github"):
         s.github = trains.FakeGitHub(commits=json.loads(json.dumps(gh["commits"])), refs=dict(gh["refs"]),
@@ -63,6 +66,12 @@ def run_case(case: dict, s: model.JobService | None = None, vectors: dict = VECT
             assert s.tick(step["at"]) == step["expect"]["moved"], where
         elif step.get("reconcile"):
             assert s.reconcile(step["at"]) == step["expect"]["moved"], where
+        elif step.get("sync"):
+            assert s.sync(step["at"]) == step["expect"]["changed"], where
+        elif "github_pr" in step:
+            g = dict(step["github_pr"])
+            n = g.pop("pr")
+            s.github.prs.setdefault(n, {"number": n, "base": "main", "head_ref": f"pr-{n}", "labels": [], "state": "open"}).update(g)
         elif "store" in step:
             s.store.attempts.update(json.loads(json.dumps(step["store"].get("attempts", {}))))
             s.store.manifests.update(json.loads(json.dumps(step["store"].get("manifests", {}))))
@@ -103,10 +112,10 @@ def test_train_case(case):
     run_case(case, vectors=TRAINS)
 
 
-FORMS = {"req", "tick", "revoke", "retire", "reconcile", "store", "github_push", "github_label", "expect_github"}
+FORMS = {"req", "tick", "revoke", "retire", "reconcile", "sync", "store", "github_push", "github_label", "github_pr", "expect_github"}
 
 
-@pytest.mark.parametrize("vectors", [VECTORS, TRAINS], ids=["jobs", "trains"])
+@pytest.mark.parametrize("vectors", [VECTORS, TRAINS, PRS], ids=["jobs", "trains", "prs"])
 def test_the_cases_have_unique_names_and_one_form_per_step(vectors):
     names = [c["name"] for c in vectors["cases"]]
     assert len(names) == len(set(names))
@@ -114,6 +123,26 @@ def test_the_cases_have_unique_names_and_one_form_per_step(vectors):
         for step in c["steps"]:
             assert len(FORMS & set(step)) == 1, step
             assert isinstance(step["at"], int), step
+
+
+@pytest.mark.parametrize("case", PRS["cases"], ids=[c["name"] for c in PRS["cases"]])
+def test_pr_case(case):
+    run_case(case, vectors=PRS)
+
+
+def test_the_pr_cases_reach_every_pr_state_route_and_owner_source():
+    states, routes, sources = set(), set(), set()
+    for c in PRS["cases"]:
+        s = service(PRS)
+        for req, body in run_case(c, s, PRS):
+            method, path = req.split(" ", 1)
+            routes.add(f"{method} " + "/".join("{n}" if p.isdigit() else p for p in path.split("?")[0].split("/")))
+            for r in [body, *body.get("prs", [])]:
+                states.add(r.get("state"))
+                sources.add(r.get("owner_from"))
+    assert set(prs.PR_STATES) <= states
+    assert {"body", "lane", "agent", "set", None} <= sources
+    assert {"GET /api/prs", "GET /api/prs/{n}", "POST /api/prs/{n}", "POST /api/prs/{n}/close"} <= routes
 
 
 def test_the_train_cases_reach_every_train_state_and_route():

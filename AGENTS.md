@@ -143,6 +143,9 @@ alone, and skipped by name elsewhere): record it with
 `check` reuses a pass (a test suite, a circuit-check target, a Lean package's audit) only while every input it read is
 unchanged, and keeps each pod's Lean dependencies warm under their manifest and toolchain.
 
+Every PR body carries one line `Owner: <coordinator>/<lane>`, such as `Owner: pous/pous-circuits`: the merge queue admits
+no PR without an owner, and sends its notices there.
+
 ## Lean
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs

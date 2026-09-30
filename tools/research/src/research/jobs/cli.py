@@ -11,8 +11,12 @@ reference).  The Job queue holds batch, unattended work on pods; an interactive 
     research jobs events [--after ID] [--kind K] [--subject S] [--limit N] [--json]
     research worker --dispatch --pods A,B,... [--name rc] [--kinds merge-check,lean-regen] [--once] [--workdir DIR] [--token-file F]
                     [--repo OWNER/NAME]
+    research pr show N [--json] | list [--coordinator C] [--lane L] [--state S] [--limit N] [--json]
+    research pr own N COORDINATOR/LANE | blocker N TEXT [--ref REF] | blocker N --clear | renew N [--blocker TEXT [--ref REF]]
+    research pr close N --reason TEXT      PR owners, blockers and the clock (`research.jobs.prs`; docs/pr-ownership-plan.md)
 
-The tokens: `research jobs` uses `$JOBS_TOKEN`, else ~/.research/jobs/token (the coordinator's); `research worker` uses
+The tokens: `research jobs` and `research pr` use `$JOBS_TOKEN`, else ~/.research/jobs/token (the coordinator's, which needs
+`prs:write` for `research pr`'s writes); `research worker` uses
 --token-file, else `$JOBS_WORKER_TOKEN`, else ~/.research/jobs/dispatch-{name}.token (the dispatcher's), never the coordinator's.
 `add` resolves --commit in the current checkout, and --base (for `merge_requires`) defaults to `main`'s tip on GitHub, read
 with `git ls-remote` rather than a local ref that may be stale.  --timeout-s defaults to the dispatcher's DEFAULT_TIMEOUT_S, and
@@ -275,6 +279,95 @@ def main(argv: list[str], client=None) -> int:
         print(f"research jobs: the Job queue is unreachable: {e}", file=sys.stderr)
         return 4
     print(f"research jobs: {status} {body.get('error', body)}", file=sys.stderr)
+    return 1
+
+
+def _pr_row(p: dict) -> str:
+    who = p.get("touched_by") or "a push"
+    return (f"#{p['number']:<5} {p['state']:<8} {p.get('owner') or '-':<28} touched {p['touched_at']} by {who:<12} "
+            f"{p.get('blocker') or ''}").rstrip()
+
+
+def _pr_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="research pr", description="PR owners, blockers and the clock (research/jobs/prs.py)")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    show = sub.add_parser("show")
+    show.add_argument("number", type=int)
+    show.add_argument("--json", action="store_true")
+    ls = sub.add_parser("list")
+    ls.add_argument("--coordinator")
+    ls.add_argument("--lane")
+    ls.add_argument("--state", help="unowned, owned, stale, closed or merged (default: every open PR)")
+    ls.add_argument("--limit", type=int, default=100)
+    ls.add_argument("--json", action="store_true")
+    own = sub.add_parser("own")
+    own.add_argument("number", type=int)
+    own.add_argument("owner", help="COORDINATOR/LANE")
+    blk = sub.add_parser("blocker")
+    blk.add_argument("number", type=int)
+    blk.add_argument("text", nargs="?", help="what the PR waits on that the queue can't see")
+    blk.add_argument("--ref", help="a run id, PR, note:… or friction note it's recorded in")
+    blk.add_argument("--clear", action="store_true", help="it no longer waits on anything")
+    rn = sub.add_parser("renew")
+    rn.add_argument("number", type=int)
+    rn.add_argument("--blocker")
+    rn.add_argument("--ref")
+    close = sub.add_parser("close")
+    close.add_argument("number", type=int)
+    close.add_argument("--reason", required=True, help='why, e.g. "superseded by #M"; it becomes the closing comment')
+    return ap
+
+
+def pr_main(argv: list[str], client=None) -> int:
+    """`research pr`: reads need any valid token, writes `prs:write`, and closing acts as the owner's coordinator."""
+    ns = _pr_parser().parse_args(argv)
+    if ns.cmd == "blocker" and (ns.clear == bool(ns.text) or (ns.clear and ns.ref)):
+        print("research pr: blocker takes TEXT [--ref REF], or --clear", file=sys.stderr)
+        return 2
+    if ns.cmd == "renew" and ns.ref and not ns.blocker:
+        print("research pr: --ref goes with --blocker", file=sys.stderr)
+        return 2
+    c = client or HTTPClient()
+    n = getattr(ns, "number", None)
+    try:
+        if ns.cmd == "list":
+            status, body = c.call("GET", "/api/prs" + _query(coordinator=ns.coordinator, lane=ns.lane, state=ns.state, limit=ns.limit))
+            if status == 200:
+                print(json.dumps(body["prs"], indent=1) if ns.json else "\n".join(_pr_row(p) for p in body["prs"]) or "no PRs")
+                return 0
+        elif ns.cmd == "show":
+            status, body = c.call("GET", f"/api/prs/{n}")
+            if status == 200:
+                if ns.json:
+                    print(json.dumps(body, indent=1))
+                    return 0
+                print(_pr_row(body) + f"\n        {body['title']}  (head {body['head'][:12]}; owner from {body.get('owner_from') or '-'})")
+                if body.get("blocker"):
+                    print(f"        blocker: {body['blocker']}" + (f"  [{body['ref']}]" if body.get("ref") else "")
+                          + f"  ({body['blocker_by']}, {body['blocker_at']})")
+                if body.get("closed_at"):
+                    print(f"        {body['state']} {body['closed_at']}" + (f" by {body['closed_by']}: {body['close_reason']}" if body.get("closed_by") else ""))
+                for e in body.get("events", []):
+                    print(f"        {e['at']}  {e['kind']:<12} {e['actor']:<12} {json.dumps(e['payload'])}")
+                return 0
+        elif ns.cmd == "close":
+            status, body = c.call("POST", f"/api/prs/{n}/close", {"reason": ns.reason})
+            if status == 200:
+                print(f"#{n} closed, with the comment: {body['close_reason']}")
+                return 0
+        else:
+            req = ({"owner": ns.owner} if ns.cmd == "own" else
+                   {"blocker": None} if ns.cmd == "blocker" and ns.clear else
+                   {"blocker": ns.text, **({"ref": ns.ref} if ns.ref else {})} if ns.cmd == "blocker" else
+                   {"renew": True, **({"blocker": ns.blocker} if ns.blocker else {}), **({"ref": ns.ref} if ns.ref else {})})
+            status, body = c.call("POST", f"/api/prs/{n}", req)
+            if status == 200:
+                print(_pr_row(body))
+                return 0
+    except Unreachable as e:
+        print(f"research pr: the API server is unreachable: {e}", file=sys.stderr)
+        return 4
+    print(f"research pr: {status} {body.get('error', body)}", file=sys.stderr)
     return 1
 
 

@@ -81,6 +81,7 @@ research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the mer
 research merge --train A B C [--on MACHINE --project P] [--command CMD]  # several refs, one checked candidate
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research queue status|sync|land|eject [--shadow] [--dry-run]       # the merge queue on `next` (queue.py)
+research pr show|list|own|blocker|renew|close ...                    # PR owners, blockers and the clock (jobs/prs.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 ~~~
 
@@ -119,11 +120,18 @@ needs.
 
 `research queue` is the merge queue: `next` is `main` plus every admitted PR, one `--no-ff` merge commit each, and `land`
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (draft state is ignored),
-names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
+names its owner (an `Owner: {coordinator}/{lane}` line, else a `Lane {name}` line, else its Cursor agent id), has no hold label, is marked ready at its head (`research queue
 ready PR`, a `ready` label on `pr:{n}@{head}`, which replaces the merge-request note), and has the grants the rules file
 (`ci/queue.toml`) requires of its change: `grant` labels on `pr:{n}@{head}` in the store. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+
+`research pr` reads and writes each PR's row on the API server (`/api/prs`; `jobs/prs.py` is the reference, `jobs/pr_vectors.json`
+its shared cases). The row holds the PR's owner, read once from its body and then changed only with `research pr own N
+coordinator/lane`; the owner's blocker (`research pr blocker N TEXT --ref REF`, for what the queue can't see); and when the owner last
+touched it. A day without owner activity (a push, `own`, `blocker` or `renew`) makes the PR `stale`. `research pr close N --reason
+TEXT` closes it with that comment, and only the owner's coordinator may (RC for an unowned PR); nothing closes a PR by itself. Writes
+need `prs:write` on the coordinator's token (`research auth request`).
 
 The workload receives `RESEARCH_RUN_ID` and `RESEARCH_RUN_DIR` and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local

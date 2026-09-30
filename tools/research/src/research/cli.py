@@ -17,6 +17,7 @@
                                                  # the newest commit on it with a passing check (research/queue.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
+  research pr show|list|own|blocker|renew|close ...  # PR owners, blockers and the clock, on the API server (research/jobs/cli.py)
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
                                                  # rewritten history, the old-history guard, the commit-map/v1 payload (research/commitmap.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
@@ -856,6 +857,10 @@ def main(argv: list[str] | None = None) -> int:
         from .jobs.cli import worker_main
 
         return worker_main(rest)
+    if cmd == "pr":
+        from .jobs.cli import pr_main
+
+        return pr_main(rest)
     if cmd == "git":
         from .commitmap import main as git_main
 

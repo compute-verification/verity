@@ -1,0 +1,214 @@
+{
+  "schema": "verity/job-service-pr-vectors/v1",
+  "about": "The PR routes (docs/pr-ownership-plan.md, slice 1) as request/response cases. research.jobs.prs runs them (tools/research/tests/test_jobs_vectors.py); the site's TypeScript runs the same file. Everything in vectors.json's and train_vectors.json's `about` holds here too. `setup.coordinators` is the coordinators table: each coordinator's lanes, agent ids and the token names it acts through. `setup.github.prs` carry a `title` and a `body`, read once when the sync first sees a PR. Further step forms: `sync` runs the prs-sync cron at `at` and expects the PR numbers it changed, in order; `github_pr` sets fields of a PR on GitHub (`head`, `state` open | closed | merged, `body`), making the PR when it's new.",
+  "epoch": "2026-09-29T00:00:00Z",
+  "setup": {
+    "tokens": [
+      {"secret": "tok-coordinator", "name": "coordinator", "scopes": ["jobs:enqueue", "events:read", "prs:write"]},
+      {"secret": "tok-pous", "name": "pous", "scopes": ["events:read", "prs:write"]},
+      {"secret": "tok-root", "name": "root", "scopes": ["events:read", "prs:write"]},
+      {"secret": "tok-reader", "name": "reader", "scopes": ["events:read"]},
+      {"secret": "tok-stray", "name": "stray", "scopes": ["prs:write"]}
+    ],
+    "coordinators": {
+      "rc": {"lanes": ["merge-queue", "lane-1"], "agents": ["bc-605d7c89-ca73-5a32-a582-ee77c49e762a"], "tokens": ["coordinator"]},
+      "pous": {"lanes": ["pous-circuits"], "agents": [], "tokens": ["pous"]},
+      "root": {"lanes": [], "agents": [], "tokens": ["root"]}
+    },
+    "github": {
+      "commits": {"m0": {"parents": [], "files": {"README.md": "verity"}}},
+      "refs": {"main": "m0"},
+      "prs": [
+        {"number": 10, "head": "h10", "base": "main", "head_ref": "pous-a", "labels": [], "state": "open", "title": "POUS circuits",
+         "body": "Owner: pous/pous-circuits\n\nThe circuits."},
+        {"number": 11, "head": "h11", "base": "main", "head_ref": "lane-1-a", "labels": [], "state": "open", "title": "A lane's PR", "body": "Lane lane-1\n"},
+        {"number": 12, "head": "h12", "base": "main", "head_ref": "new-a", "labels": [], "state": "open", "title": "A new lane's PR", "body": "**Lane:** new-lane"},
+        {"number": 13, "head": "h13", "base": "main", "head_ref": "agent-a", "labels": [], "state": "open", "title": "An agent's PR",
+         "body": "[Open in Web](https://cursor.com/agents/bc-605d7c89-ca73-5a32-a582-ee77c49e762a)"},
+        {"number": 14, "head": "h14", "base": "main", "head_ref": "stray-a", "labels": [], "state": "open", "title": "Nobody's", "body": "no owner here"},
+        {"number": 15, "head": "h15", "base": "main", "head_ref": "pous-b", "labels": [], "state": "open", "title": "A misnamed owner",
+         "body": "Owner: nobody/x\nLane pous-circuits"}
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "the sync gives each open PR a row, with its owner read once from its body",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 1, "req": ["GET", "/api/prs"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"prs": [
+           {"number": 15, "state": "owned", "owner": "pous/pous-circuits", "coordinator": "pous", "lane": "pous-circuits", "owner_from": "lane"},
+           {"number": 14, "state": "unowned", "owner": null, "coordinator": null, "lane": null, "owner_from": null},
+           {"number": 13, "state": "owned", "owner": "rc", "coordinator": "rc", "lane": null, "owner_from": "agent"},
+           {"number": 12, "state": "owned", "owner": "rc/new-lane", "coordinator": "rc", "lane": "new-lane", "owner_from": "lane"},
+           {"number": 11, "state": "owned", "owner": "rc/lane-1", "coordinator": "rc", "lane": "lane-1", "owner_from": "lane"},
+           {"number": 10, "head": "h10", "title": "POUS circuits", "state": "owned", "owner": "pous/pous-circuits", "owner_from": "body",
+            "blocker": null, "ref": null, "touched_at": "2026-09-29T00:00:00Z", "touched_by": null, "first_seen_at": "2026-09-29T00:00:00Z",
+            "closed_at": null, "closed_by": null, "close_reason": null}]}}},
+        {"at": 2, "req": ["GET", "/api/prs?coordinator=pous"], "token": "tok-reader", "expect": {"status": 200, "body": {"prs": [{"number": 15}, {"number": 10}]}}},
+        {"at": 3, "req": ["GET", "/api/prs?state=unowned"], "token": "tok-reader", "expect": {"status": 200, "body": {"prs": [{"number": 14}]}}},
+        {"at": 4, "req": ["GET", "/api/prs?lane=lane-1"], "token": "tok-reader", "expect": {"status": 200, "body": {"prs": [{"number": 11}]}}},
+        {"at": 5, "req": ["GET", "/api/prs?limit=2"], "token": "tok-reader", "expect": {"status": 200, "body": {"prs": [{"number": 15}, {"number": 14}]}}},
+        {"at": 6, "sync": true, "expect": {"changed": []}},
+        {"at": 7, "github_pr": {"pr": 16, "head": "h16", "title": "Root's", "body": "Owner: root/merge-queue"}},
+        {"at": 8, "sync": true, "expect": {"changed": [16]}},
+        {"at": 9, "req": ["GET", "/api/prs/16"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"owner": "root/merge-queue", "owner_from": "body", "first_seen_at": "2026-09-29T00:00:08Z",
+                                            "events": [{"kind": "pr.seen", "subject": "pr:16", "actor": "cron", "payload": {"owner": "root/merge-queue", "from": "body"}}]}}}
+      ]
+    },
+    {
+      "name": "once seen, the row wins over the body, and own changes it",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 1, "github_pr": {"pr": 14, "body": "Owner: pous/pous-circuits"}},
+        {"at": 2, "sync": true, "expect": {"changed": []}},
+        {"at": 2, "req": ["GET", "/api/prs/14"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "unowned", "owner": null}}},
+        {"at": 3, "req": ["POST", "/api/prs/14"], "token": "tok-pous", "body": {"owner": "pous/pous-circuits"},
+         "expect": {"status": 200, "body": {"number": 14, "state": "owned", "owner": "pous/pous-circuits", "owner_from": "set", "touched_by": "pous",
+                                            "touched_at": "2026-09-29T00:00:03Z"}}},
+        {"at": 4, "req": ["POST", "/api/prs/10"], "token": "tok-coordinator", "body": {"owner": "rc/merge-queue"},
+         "expect": {"status": 200, "body": {"owner": "rc/merge-queue", "coordinator": "rc", "lane": "merge-queue", "owner_from": "set", "touched_by": "coordinator"}}},
+        {"at": 5, "req": ["GET", "/api/prs/14"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"events": [
+           {"kind": "pr.seen", "actor": "cron", "payload": {"owner": null, "from": null}},
+           {"kind": "pr.owner", "actor": "pous", "payload": {"owner": "pous/pous-circuits", "was": null}}]}}},
+        {"at": 6, "req": ["GET", "/api/prs/10"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"events": [
+           {"kind": "pr.seen", "actor": "cron"},
+           {"kind": "pr.owner", "actor": "coordinator", "payload": {"owner": "rc/merge-queue", "was": "pous/pous-circuits"}}]}}}
+      ]
+    },
+    {
+      "name": "writes need prs:write and a well-formed body",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "body": {"renew": true}, "expect": {"status": 401}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-reader", "body": {"renew": true}, "expect": {"status": 403, "body": {"error": "the token lacks prs:write"}}},
+        {"at": 1, "req": ["GET", "/api/prs"], "expect": {"status": 401}},
+        {"at": 1, "req": ["POST", "/api/prs/99"], "token": "tok-coordinator", "body": {"renew": true},
+         "expect": {"status": 404, "body": {"error": "no such PR: the site hasn't seen it open"}}},
+        {"at": 1, "req": ["GET", "/api/prs/x"], "token": "tok-reader", "expect": {"status": 404}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {}, "expect": {"status": 400, "body": {"error": "name at least one of owner, blocker or renew"}}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {"state": "closed"},
+         "expect": {"status": 400, "body": {"error": "the body may only name owner, blocker, ref, renew"}}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {"owner": "pous"}, "expect": {"status": 400, "body": {"error": "owner must be {coordinator}/{lane}"}}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {"owner": "nobody/x"}, "expect": {"status": 400, "body": {"error": "no coordinator nobody"}}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {"renew": true, "ref": "note:x"}, "expect": {"status": 400, "body": {"error": "ref goes with blocker"}}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {"renew": false}, "expect": {"status": 400, "body": {"error": "renew must be true"}}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {"blocker": "   "},
+         "expect": {"status": 400, "body": {"error": "blocker must be null or 1 to 500 characters"}}},
+        {"at": 1, "req": ["POST", "/api/prs/11"], "token": "tok-coordinator", "body": {"blocker": "x", "ref": ""},
+         "expect": {"status": 400, "body": {"error": "ref must be null or 1 to 200 characters"}}},
+        {"at": 1, "req": ["GET", "/api/prs?state=bogus"], "token": "tok-reader",
+         "expect": {"status": 400, "body": {"error": "state must be one of unowned, owned, stale, closed, merged"}}},
+        {"at": 2, "req": ["GET", "/api/prs/11"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"owner": "rc/lane-1", "touched_by": null, "touched_at": "2026-09-29T00:00:00Z", "events": [{"kind": "pr.seen"}]}}}
+      ]
+    },
+    {
+      "name": "the owner sets a blocker with a reference, and clears it",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 100, "req": ["POST", "/api/prs/10"], "token": "tok-pous",
+         "body": {"blocker": "  RC's rerun of #364's check on vy-coord-t4 ", "ref": "note:pous/20260929T2035Z-handoff-from-coordinator-364-rerun-on-ci"},
+         "expect": {"status": 200, "body": {"state": "owned", "blocker": "RC's rerun of #364's check on vy-coord-t4",
+                                            "ref": "note:pous/20260929T2035Z-handoff-from-coordinator-364-rerun-on-ci", "blocker_by": "pous",
+                                            "blocker_at": "2026-09-29T00:01:40Z", "touched_by": "pous", "touched_at": "2026-09-29T00:01:40Z"}}},
+        {"at": 150, "req": ["POST", "/api/prs/10"], "token": "tok-pous", "body": {"blocker": "red-team's grant on #10", "renew": true},
+         "expect": {"status": 200, "body": {"blocker": "red-team's grant on #10", "ref": null, "blocker_at": "2026-09-29T00:02:30Z"}}},
+        {"at": 200, "req": ["POST", "/api/prs/10"], "token": "tok-pous", "body": {"blocker": null},
+         "expect": {"status": 200, "body": {"blocker": null, "ref": null, "blocker_by": null, "blocker_at": null, "touched_at": "2026-09-29T00:03:20Z"}}},
+        {"at": 201, "req": ["GET", "/api/prs/10"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"events": [
+           {"kind": "pr.seen"},
+           {"kind": "pr.blocker", "actor": "pous", "payload": {"blocker": "RC's rerun of #364's check on vy-coord-t4",
+                                                              "ref": "note:pous/20260929T2035Z-handoff-from-coordinator-364-rerun-on-ci"}},
+           {"kind": "pr.blocker", "actor": "pous", "payload": {"blocker": "red-team's grant on #10", "ref": null}},
+           {"kind": "pr.renewed", "actor": "pous", "payload": {}},
+           {"kind": "pr.blocker", "actor": "pous", "payload": {"blocker": null, "ref": null}}]}}}
+      ]
+    },
+    {
+      "name": "a day without owner activity is stale, and renew, a blocker or a push restarts the clock",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 86399, "req": ["GET", "/api/prs/10"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "owned"}}},
+        {"at": 86400, "req": ["GET", "/api/prs?state=stale"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"prs": [{"number": 15}, {"number": 13}, {"number": 12}, {"number": 11}, {"number": 10}]}}},
+        {"at": 86401, "req": ["POST", "/api/prs/10"], "token": "tok-pous", "body": {"renew": true},
+         "expect": {"status": 200, "body": {"state": "owned", "touched_by": "pous", "touched_at": "2026-09-30T00:00:01Z"}}},
+        {"at": 86402, "req": ["POST", "/api/prs/15"], "token": "tok-pous", "body": {"blocker": "the POUS audit"}, "expect": {"status": 200, "body": {"state": "owned"}}},
+        {"at": 90000, "github_pr": {"pr": 11, "head": "h11b"}},
+        {"at": 90000, "sync": true, "expect": {"changed": [11]}},
+        {"at": 90001, "req": ["GET", "/api/prs/11"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"head": "h11b", "state": "owned", "touched_by": null, "touched_at": "2026-09-30T01:00:00Z",
+                                            "events": [{"kind": "pr.seen"}, {"kind": "pr.pushed", "actor": "cron", "payload": {"head": "h11b"}}]}}},
+        {"at": 90001, "req": ["GET", "/api/prs?state=stale"], "token": "tok-reader", "expect": {"status": 200, "body": {"prs": [{"number": 13}, {"number": 12}]}}},
+        {"at": 200000, "req": ["GET", "/api/prs/14"], "token": "tok-reader", "expect": {"status": 200, "body": {"state": "unowned"}}}
+      ]
+    },
+    {
+      "name": "the owner's coordinator closes a PR through the App, with its reason",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 10, "req": ["POST", "/api/prs/10/close"], "token": "tok-pous", "body": {"reason": "superseded by #16 "},
+         "expect": {"status": 200, "body": {"number": 10, "state": "closed", "closed_at": "2026-09-29T00:00:10Z", "closed_by": "pous", "close_reason": "superseded by #16"}}},
+        {"at": 10, "expect_github": {"prs": {"10": {"state": "closed"}}, "comments": [{"pr": 10, "body": "Closed by pous (pous): superseded by #16"}]}},
+        {"at": 11, "req": ["GET", "/api/prs"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"prs": [{"number": 15}, {"number": 14}, {"number": 13}, {"number": 12}, {"number": 11}]}}},
+        {"at": 11, "req": ["GET", "/api/prs?state=closed"], "token": "tok-reader", "expect": {"status": 200, "body": {"prs": [{"number": 10, "closed_by": "pous"}]}}},
+        {"at": 12, "req": ["POST", "/api/prs/10"], "token": "tok-pous", "body": {"renew": true}, "expect": {"status": 409, "body": {"error": "#10 is closed"}}},
+        {"at": 12, "req": ["POST", "/api/prs/10/close"], "token": "tok-pous", "body": {"reason": "again"}, "expect": {"status": 409, "body": {"error": "#10 is closed"}}},
+        {"at": 13, "sync": true, "expect": {"changed": []}},
+        {"at": 14, "req": ["GET", "/api/prs/10"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"events": [{"kind": "pr.seen"}, {"kind": "pr.closed", "actor": "pous", "payload": {"reason": "superseded by #16", "as": "pous"}}]}}}
+      ]
+    },
+    {
+      "name": "only the owner's coordinator closes, RC closes an unowned PR, and a takeover comes first",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 1, "req": ["POST", "/api/prs/10/close"], "token": "tok-coordinator", "body": {"reason": "stale"},
+         "expect": {"status": 403, "body": {"error": "#10 is pous's to close; take it first with `research pr own 10 rc/{lane}`"}}},
+        {"at": 1, "req": ["POST", "/api/prs/10/close"], "token": "tok-stray", "body": {"reason": "stale"},
+         "expect": {"status": 403, "body": {"error": "the token stray acts for no coordinator"}}},
+        {"at": 1, "req": ["POST", "/api/prs/10/close"], "token": "tok-pous", "body": {},
+         "expect": {"status": 400, "body": {"error": "reason is needed, 1 to 500 characters: why it's closed (superseded by #M, …)"}}},
+        {"at": 1, "req": ["POST", "/api/prs/10/close"], "token": "tok-reader", "body": {"reason": "stale"}, "expect": {"status": 403}},
+        {"at": 1, "req": ["POST", "/api/prs/14/close"], "token": "tok-pous", "body": {"reason": "abandoned"},
+         "expect": {"status": 403, "body": {"error": "#14 is rc's to close; take it first with `research pr own 14 pous/{lane}`"}}},
+        {"at": 2, "req": ["POST", "/api/prs/14/close"], "token": "tok-coordinator", "body": {"reason": "unowned for a day, and nobody claims it"},
+         "expect": {"status": 200, "body": {"state": "closed", "closed_by": "coordinator", "owner": null}}},
+        {"at": 3, "req": ["POST", "/api/prs/11"], "token": "tok-root", "body": {"owner": "root/merge-queue"}, "expect": {"status": 200, "body": {"owner": "root/merge-queue"}}},
+        {"at": 4, "req": ["POST", "/api/prs/11/close"], "token": "tok-root", "body": {"reason": "superseded by #16"},
+         "expect": {"status": 200, "body": {"state": "closed", "closed_by": "root"}}},
+        {"at": 4, "expect_github": {"prs": {"10": {"state": "open"}, "11": {"state": "closed"}, "14": {"state": "closed"}},
+                                    "comments": [{"pr": 14, "body": "Closed by rc (coordinator): unowned for a day, and nobody claims it"},
+                                                 {"pr": 11, "body": "Closed by root (root): superseded by #16"}]}}
+      ]
+    },
+    {
+      "name": "a PR merged, closed or reopened on GitHub follows at the next sync",
+      "steps": [
+        {"at": 0, "sync": true, "expect": {"changed": [10, 11, 12, 13, 14, 15]}},
+        {"at": 5, "github_pr": {"pr": 12, "state": "merged"}},
+        {"at": 5, "github_pr": {"pr": 13, "state": "closed"}},
+        {"at": 10, "sync": true, "expect": {"changed": [12, 13]}},
+        {"at": 11, "req": ["GET", "/api/prs?state=merged"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"prs": [{"number": 12, "state": "merged", "closed_at": "2026-09-29T00:00:10Z", "closed_by": null}]}}},
+        {"at": 11, "req": ["GET", "/api/prs?state=closed"], "token": "tok-reader", "expect": {"status": 200, "body": {"prs": [{"number": 13}]}}},
+        {"at": 12, "req": ["POST", "/api/prs/12/close"], "token": "tok-coordinator", "body": {"reason": "done"}, "expect": {"status": 409, "body": {"error": "#12 is merged"}}},
+        {"at": 20, "github_pr": {"pr": 13, "state": "open", "head": "h13b"}},
+        {"at": 20, "sync": true, "expect": {"changed": [13]}},
+        {"at": 21, "req": ["GET", "/api/prs/13"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"state": "owned", "head": "h13b", "closed_at": null, "touched_at": "2026-09-29T00:00:20Z",
+                                            "events": [{"kind": "pr.seen"}, {"kind": "pr.closed", "actor": "cron"},
+                                                       {"kind": "pr.reopened", "actor": "cron", "payload": {"head": "h13b"}}]}}},
+        {"at": 22, "req": ["GET", "/api/events?subject=pr:12"], "token": "tok-reader",
+         "expect": {"status": 200, "body": {"events": [{"kind": "pr.seen", "source": "jobs"}, {"kind": "pr.merged", "actor": "cron", "payload": {}}]}}}
+      ]
+    }
+  ]
+}
