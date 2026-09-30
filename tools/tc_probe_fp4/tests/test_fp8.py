@@ -195,8 +195,33 @@ def test_verify_refuses_another_workload_or_no_capture(tmp_path, no_nvcc):
     assert json.loads((tmp_path / "empty" / "probe_results.json").read_text())["validation"] == "failed"
 
 
+CHAIN = ["--row", "chain", "--steps", "40", "--chain-tiles", "2", "--seed", "13"]
+
+
+def test_split_chain_equals_one_process(tmp_path, no_nvcc):
+    code, one = _run(tmp_path / "one", CHAIN)
+    assert code == 0 and one["validation"] == "passed", one["failures"]
+    code, gpu = _run(tmp_path / "split", [*CHAIN, "--phase", "gpu"])
+    assert code == 0 and gpu["validation"] == "gpu phase passed" and "capture" not in gpu
+    assert not (tmp_path / "split" / "probe_results.json").exists()
+    assert json.loads((tmp_path / "split" / "chain_gpu.json").read_text())["steps"] == 40
+    code, ver = _verify(tmp_path / "split", CHAIN)
+    assert code == 0 and ver["validation"] == "passed", ver["failures"]
+    assert ver["capture"] == {k: v for k, v in one["capture"].items() if k != "device"}
+    assert {k: v["steps"] for k, v in ver["gpu_phase"]["device"].items()} == {k: 40 for k in one["capture"]["families"]}
+    code, ver = _verify(tmp_path / "split", [*CHAIN[:3], "80", *CHAIN[4:]])
+    assert code == 1 and ver["failures"][0].startswith("the capture in --out is")
+
+
+def test_split_chain_corruption_fails_in_verify(tmp_path, no_nvcc):
+    code, gpu = _run(tmp_path, [*CHAIN, "--phase", "gpu", "--corrupt-word", "7"])
+    assert code == 0 and gpu["validation"] == "gpu phase passed"
+    code, ver = _verify(tmp_path, CHAIN)
+    assert code == 1 and any(f.startswith("primary") for f in ver["failures"]), ver["failures"]
+
+
 def test_phase_and_prebuilt_refused_where_they_do_nothing(tmp_path):
-    assert fp8.main(["--row", "chain", "--phase", "gpu", "--out", str(tmp_path), "--fake-silicon"]) == 2
+    assert fp8.main(["--row", "mixed", "--phase", "gpu", "--out", str(tmp_path), "--fake-silicon"]) == 2
     assert fp8.main(["--row", "sparse", "--phase", "verify", "--out", str(tmp_path)]) == 2
     assert fp8.main(["--row", "sparse", "--prebuilt", "x.so", "--out", str(tmp_path)]) == 2
 
