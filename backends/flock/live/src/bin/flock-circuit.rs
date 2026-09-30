@@ -2262,9 +2262,26 @@ fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed
     std::thread::spawn(move || {
         let mode = witness_mode(&st, &plan);
         let w0 = wit(&st, &inst, &plan, plan.zero_witness, seed, 0);
-        let (wt0, built_s) = witness(&st, &w0, mode.0, mode.1, mode.2);
+        let (wt0, built_s) = witness_uploaded(&st, &w0, mode);
         Prebuilt { st, seed, mode, w0, wt0, built_s }
     })
+}
+
+/// [`witness`], and with `FC_DEV_PREFETCH=1` its host slots and compression rows copied to device memory
+/// (`HostSlots::upload`), which the session's device then reads. Built ahead (`prebuild`), the copies run beside the previous
+/// session's device work; either way their time counts as the build's.
+fn witness_uploaded(st: &Stmt, w: &Wit, mode: (bool, bool, bool)) -> (WitData, f64) {
+    #[allow(unused_mut)]
+    let (mut wt, mut s) = witness(st, w, mode.0, mode.1, mode.2);
+    #[cfg(feature = "gpu")]
+    if std::env::var("FC_DEV_PREFETCH").as_deref() == Ok("1") {
+        if let WitData::Dev(rows, h, _) = &mut wt {
+            let t = Instant::now();
+            h.upload(rows);
+            s += t.elapsed().as_secs_f64();
+        }
+    }
+    (wt, s)
 }
 
 fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> (Value, Vec<Vec<u8>>) {
@@ -2343,7 +2360,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
             }
             None => {
                 let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
-                let (wt0, tw0) = witness(&tb.st, &w0, device, host_units, mapped);
+                let (wt0, tw0) = witness_uploaded(&tb.st, &w0, (device, host_units, mapped));
                 (w0, wt0, tw0)
             }
         };

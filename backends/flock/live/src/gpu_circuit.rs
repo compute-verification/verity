@@ -189,6 +189,8 @@ unsafe extern "C" {
     fn flock_cuda_hm96_salts(key: *const u8, nonce: u64, idx: *const i64, n: i32, out: *mut u8) -> i32;
     fn flock_cuda_circuit_kept(tag: u64) -> i32;
     fn flock_cuda_host_alloc(bytes: usize) -> *mut c_void;
+    fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
+    fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
 }
 
 /// Rep 1 proves from rep 0's witness and level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps them on the
@@ -339,20 +341,116 @@ impl Default for HostBuf {
     }
 }
 
+/// Device memory holding a copy of host words ([`HostSlots::upload`]). Dropped buffers go back to a pool, not to `cudaFree`,
+/// which would synchronize the device under the session proving there; a process allocates at most `FC_DEV_PREFETCH_GB`
+/// (default 16) of them.
+pub struct DevBuf {
+    ptr: usize,
+    len: usize,
+    cap: usize,
+}
+
+/// Device buffers dropped by earlier witnesses (address, capacity in u64), and the bytes allocated
+static DEV_POOL: std::sync::Mutex<(Vec<(usize, usize)>, usize)> = std::sync::Mutex::new((Vec::new(), 0));
+
+impl DevBuf {
+    /// A device copy of `words`, from the pool or newly allocated; None where the runtime refuses or the bound is reached
+    pub fn copy_of(words: &[u64]) -> Option<Self> {
+        let len = words.len();
+        if len == 0 {
+            return None;
+        }
+        let bound = std::env::var("FC_DEV_PREFETCH_GB").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(16) << 30;
+        let mut pool = DEV_POOL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let best = pool.0.iter().enumerate().filter(|(_, e)| e.1 >= len).min_by_key(|(_, e)| e.1).map(|(i, _)| i);
+        let (ptr, cap) = match best {
+            Some(i) => pool.0.swap_remove(i),
+            None if pool.1 + 8 * len <= bound => {
+                let p = unsafe { flock_cuda_dev_alloc(8 * len) } as usize;
+                if p == 0 {
+                    return None;
+                }
+                pool.1 += 8 * len;
+                (p, len)
+            }
+            None => return None,
+        };
+        drop(pool);
+        let d = DevBuf { ptr, len, cap };
+        (unsafe { flock_cuda_copy(ptr as *mut c_void, words.as_ptr() as *const c_void, 8 * len) } == 0).then_some(d)
+    }
+
+    pub fn as_ptr(&self) -> *const u64 {
+        self.ptr as *const u64
+    }
+
+    /// its length in u64 words
+    pub fn words(&self) -> usize {
+        self.len
+    }
+
+    /// Whether the device holds `words`
+    pub fn holds(&self, words: &[u64]) -> bool {
+        let mut v = vec![0u64; self.len];
+        words.len() == self.len
+            && unsafe { flock_cuda_copy(v.as_mut_ptr() as *mut c_void, self.ptr as *const c_void, 8 * self.len) } == 0
+            && v == words
+    }
+}
+
+impl Drop for DevBuf {
+    fn drop(&mut self) {
+        DEV_POOL.lock().unwrap_or_else(std::sync::PoisonError::into_inner).0.push((self.ptr, self.cap));
+    }
+}
+
 /// Host slots as the device takes them (`host0`): each slot's absolute F128 word offset and word count, and every slot's words
 /// back to back. In mapped memory a slot is its a, b words when its z is a & b word for word (an honest witness's, since each
 /// row's output is its own bit), and the device forms z; otherwise, and in heap memory, its z, a, b words. Packed once per
 /// witness, so a rep hands the device pointers rather than a copy.
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct HostSlots {
     pub at: Vec<i64>,
     pub words: Vec<i32>,
     pub zab: HostBuf,
     /// `zab` holds a, b per slot (z = a & b)
     pub ab: bool,
+    /// device copies of `zab` and of the compressions' input rows ([`HostSlots::upload`]), which the device reads instead
+    pub dev_zab: Option<DevBuf>,
+    pub dev_rows: Option<DevBuf>,
+}
+
+impl Clone for HostSlots {
+    /// The host words only: a clone may be changed, so it takes no device copy
+    fn clone(&self) -> Self {
+        HostSlots { at: self.at.clone(), words: self.words.clone(), zab: self.zab.clone(), ab: self.ab, dev_zab: None, dev_rows: None }
+    }
 }
 
 impl HostSlots {
+    fn of(at: Vec<i64>, words: Vec<i32>, zab: HostBuf, ab: bool) -> Self {
+        HostSlots { at, words, zab, ab, dev_zab: None, dev_rows: None }
+    }
+
+    /// Copy the a, b host slots and `rows` (the compressions' input rows the device takes beside them) to device memory, which
+    /// the device then reads in place of the mapped host memory and the pageable rows. For a witness built ahead of its session
+    /// (`FC_DEV_PREFETCH=1`), the copies run beside the previous session's device work. Whatever the device has no room for
+    /// stays on the host.
+    pub fn upload(&mut self, rows: &[F128]) {
+        if !(self.zab.is_mapped() && self.ab) {
+            return;
+        }
+        let t = Instant::now();
+        // SAFETY: an F128 is two u64 words (lo, hi), as the device takes the rows
+        let r: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
+        self.dev_zab = DevBuf::copy_of(&self.zab);
+        self.dev_rows = DevBuf::copy_of(r);
+        if crate::circuit::unit_profile() {
+            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "upload", "zab_bytes": 8 * self.zab.len(), "rows_bytes": 8 * r.len(),
+                "zab": self.dev_zab.is_some(), "rows": self.dev_rows.is_some(), "wall_s": t.elapsed().as_secs_f64()}));
+        }
+    }
+
     pub fn pack(slots: &[HostSlot]) -> Self {
         Self::pack_in(slots, HostBuf::mapped)
     }
@@ -389,7 +487,7 @@ impl HostSlots {
             drop(zab);
             return unfused();
         }
-        let got = HostSlots { at, words, zab, ab: true };
+        let got = HostSlots::of(at, words, zab, true);
         if crate::circuit::unit_profile() {
             eprintln!("UNITPROF\t{}", serde_json::json!({"part": "pack_units", "slots": got.words.len(), "layout": got.layout(), "wall_s": t.elapsed().as_secs_f64()}));
         }
@@ -417,16 +515,16 @@ impl HostSlots {
         let total: usize = words.iter().map(|&w| w as usize).sum();
         if let Some(mut zab) = mapped(4 * total) {
             if Self::fill(&mut zab, &words, slots, true) {
-                return HostSlots { at, words, zab, ab: true };
+                return HostSlots::of(at, words, zab, true);
             }
             if let Some(mut zab) = mapped(6 * total) {
                 Self::fill(&mut zab, &words, slots, false);
-                return HostSlots { at, words, zab, ab: false };
+                return HostSlots::of(at, words, zab, false);
             }
         }
         let mut zab = HostBuf::Heap(vec![0u64; 6 * total]);
         Self::fill(&mut zab, &words, slots, false);
-        HostSlots { at, words, zab, ab: false }
+        HostSlots::of(at, words, zab, false)
     }
 
     /// Every slot's words into `out` (a, b with `ab`, else z, a, b); with `ab`, whether every z word is a & b
@@ -452,9 +550,11 @@ impl HostSlots {
         })
     }
 
-    /// How the device takes them: `mapped-ab` (read directly, z formed there), `mapped` (read directly), `pageable` (copied)
+    /// How the device takes them: `device-ab` (from its copy, z formed there), `mapped-ab` (read directly, z formed there),
+    /// `mapped` (read directly), `pageable` (copied)
     pub fn layout(&self) -> &'static str {
         match (self.zab.is_mapped(), self.ab) {
+            _ if self.dev_zab.is_some() => "device-ab",
             (true, true) => "mapped-ab",
             (true, false) => "mapped",
             _ => "pageable",
@@ -675,7 +775,7 @@ pub fn prove_circuit(
     let mut phase = [0f64; 8];
     let mut wphase = [0f64; 3];
     let (mut hz, mut ha, mut hb): (*const u64, *const u64, *const u64) = (null(), null(), null());
-    let (mut uin, mut hin): (*const u64, *const u64) = (null(), null());
+    let (mut uin, mut hin, mut hzab): (*const u64, *const u64, *const u64) = (null(), null(), null());
     let mut host0: Option<&HostSlots> = None;
     let mut src = src;
     let mut mctx: Option<MidCtx<'_>> = None;
@@ -703,6 +803,18 @@ pub fn prove_circuit(
             }
             assert_eq!(rows.len(), st.blocks() * st.c.range_of(st.c.sha_net).count * st.c.nets[st.c.sha_net].1.in_words);
             hin = rows.as_ptr() as *const u64;
+            hzab = host.zab.as_ptr();
+            // SAFETY: an F128 is two u64 words (lo, hi)
+            let rw: &[u64] = unsafe { std::slice::from_raw_parts(hin, 2 * rows.len()) };
+            let check = std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1");
+            if let Some(d) = host.dev_rows.as_ref().filter(|d| d.words() == rw.len()) {
+                assert!(!check || d.holds(rw), "the device's copy of the compression rows is not the host's");
+                hin = d.as_ptr();
+            }
+            if let Some(d) = host.dev_zab.as_ref().filter(|d| d.words() == host.zab.len()) {
+                assert!(!check || d.holds(&host.zab), "the device's copy of the host slots is not the host's");
+                hzab = d.as_ptr();
+            }
             host0 = Some(*host);
         }
     }
@@ -751,7 +863,7 @@ pub fn prove_circuit(
         n_host0: host0.map_or(0, |h| h.at.len() as i64),
         host0_at: host0.map_or(null(), |h| h.at.as_ptr()),
         host0_words: host0.map_or(null(), |h| h.words.as_ptr()),
-        host0_zab: host0.map_or(null(), |h| h.zab.as_ptr()),
+        host0_zab: hzab,
         host0_ab: host0.map_or(0, |h| h.ab as i32),
         u_range: t.u_range as i32,
         u_useful: unit.useful as i32,
