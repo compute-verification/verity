@@ -169,6 +169,8 @@ if [ ! -f ~/.sky/config.yaml ]; then
 elif ! cmp -s "$SRC/sky-config.yaml" ~/.sky/config.yaml; then
   echo "   ~/.sky/config.yaml differs from sky-config.yaml: left as it is"
 fi
+# Jobs run as the image's user (uid 1000), not research: /workspace/jobs is where they write (runs, uv, the vLLM venv, caches).
+run sudo install -d -m 1777 /workspace/jobs /workspace/jobs/cache
 run sudo install -m 755 "$SRC/usage_report.py" /usr/local/bin/vy-usage
 run sudo install -d -o "$USER" -g "$USER" /workspace/usage
 if [ ! -f /etc/systemd/system/vy-usage.timer ]; then

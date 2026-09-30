@@ -7,6 +7,8 @@
 # Resources: one GPU (a TP2 capture: --gpus RTXPRO6000:2), and the small-dense class's host peak, 94-188 GB, since a capture
 # serves a model without a Build. No capture has a recorded peak on the PRO 6000 yet: take the first run's peak from its Attempt's
 # telemetry and lower --memory.
+# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
+#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
 name: port-capture
 
 resources:
@@ -17,14 +19,16 @@ resources:
     budget-line: nebius-port-capture
   memory: 192
 
-workdir: .
-
 envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "16"     # SkyPilot's runner sets 1; match resources.cpus (--cpus overrides need --env OMP_NUM_THREADS too)
   CMD: null
   CAMPAIGN: vllm-sm120-port
   HF_HOME: /workspace/hf
   HF_HUB_OFFLINE: "1"
-  RESEARCH_RUNS: /workspace/research/runs
+  RESEARCH_RUNS: /workspace/jobs/runs
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
 
 secrets:
   R2_ENDPOINT: null
@@ -34,12 +38,15 @@ secrets:
 
 setup: |
   set -euo pipefail
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  cd "$SRC"
   cd integrations/vllm
-  flock /workspace/.vllm-bootstrap.lock env WORK=/workspace bash verity_vllm/ops/pod_bootstrap.sh
+  flock /workspace/jobs/.vllm-bootstrap.lock env WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh
 
 run: |
   set -euo pipefail
-  PYTHONPATH=$PWD/tools/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source -- bash -c "$CMD"
+  cd "$SRC"
+  PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- bash -c "cd \"$SRC\" && $CMD"
 
 config:
   ssh:

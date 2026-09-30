@@ -34,18 +34,22 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
     for d in documents(path):
         if "kind: ClusterQueue" in d:
             name = re.search(r"metadata: \{name: (\S+)\}", d).group(1)
-            out[name] = {m[0]: ur.quantity(m[1]) for m in re.findall(r"\{name: (\S+), nominalQuota: (\S+)\}", d)}
+            out[name] = {m[0]: ur.quantity(m[1]) for m in re.findall(r"\{name: (\S+), nominalQuota: ([^,}]+)", d)}
     return out
 
 
-def test_the_queues_fit_the_server_with_room_for_the_controller():
+def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"circuits", "provers"}
-    assert q["circuits"]["nvidia.com/gpu"] == q["provers"]["nvidia.com/gpu"] == 4
+    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (4, 0)       # GPUs 4-7 held for direct runs
+    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (144, 48)
     for res, cap in NODE.items():
-        assert sum(x[res] for x in q.values()) + CONTROLLER.get(res, 0) <= cap, res
+        assert sum(x[res] for x in q.values()) <= cap, res
+    assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
-    assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2 and "  borrowingLimit:" not in text
+    circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
+    assert circuits.count("borrowingLimit: 0") == 3 and "borrowingLimit" not in text.split("metadata: {name: provers}")[1]
+    assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
     assert sorted(values, key=lambda k: -int(values[k])) == ["sweep-night", "circuits", "prover-bench", "dev"]
 
@@ -66,16 +70,29 @@ def test_every_job_template_names_a_defined_queue_and_priority():
                     "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
-def test_the_quiet_window_keys_on_the_label_config_runs_carry():
+def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
     bench = (SKY / "jobs" / "prover-bench.yaml").read_text()
-    assert "requiredDuringSchedulingIgnoredDuringExecution" in bench and 'matchLabels: {verity.dev/build: "true"}' in bench
-    assert 'verity.dev/build: "true"' in (SKY / "jobs" / "config-run.yaml").read_text()
-    assert "verity.dev/build" not in (SKY / "jobs" / "port-capture.yaml").read_text()
+    assert 'ov.noisy: "true"' in bench and 'OV_NOISY: "true"' in bench and "podAntiAffinity" not in bench
+    quiet = (SKY / "quiet_hour.sh").read_text()
+    assert "clusterqueue circuits" in quiet and '"stopPolicy\\":\\"$policy' in quiet
+    up = (SKY / "cluster_up.sh").read_text()
+    assert "hold:12:30 release:13:30" in up and "quiet_hour.sh" in up
+
+
+def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
+    for f in sorted((SKY / "jobs").glob("*.yaml")):
+        t = f.read_text()
+        cpus = re.search(r"^  cpus: (\d+)", t, re.M).group(1)
+        assert f'OMP_NUM_THREADS: "{cpus}"' in t, f.name                                  # SkyPilot's runner sets 1
+        assert "RESEARCH_RUNS: /workspace/jobs/runs" in t and "workdir" not in t, f.name
+        assert "--python 3.12" in t, f.name                                               # the image's python is 3.10
 
 
 def test_the_pouw_queue_joins_the_same_cohort_on_its_own_server():
     text = (SKY / "kueue-pouw.yaml").read_text()
     assert "cohortName: nebius" in text and "nodeLabels: {verity.dev/server: vy-nebius-2}" in text
+    values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
+    assert int(values["pouw-timed"]) > int(values["pouw"]) and "withinClusterQueue: LowerPriority" in text
     assert "kueue-pouw.yaml" not in (SKY / "cluster_up.sh").read_text()
 
 
