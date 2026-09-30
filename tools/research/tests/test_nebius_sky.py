@@ -67,7 +67,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
     assert seen == {"config-run": ("circuits", "circuits"), "config-run-split": ("circuits", "circuits"),
-                    "port-capture": ("circuits", "circuits"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+                    "port-capture": ("circuits", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
 def test_the_split_config_run_holds_a_gpu_only_in_its_second_task(tmp_path):

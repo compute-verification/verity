@@ -3,7 +3,9 @@
 #
 # One cohort (nebius), two ClusterQueues. provers may borrow circuits' idle capacity, and circuits reclaiming it preempts the
 # borrower whatever its priority (reclaimWithinCohort: Any). circuits never borrows (borrowingLimit 0): a config run can't be
-# checkpointed, so it must never sit on quota a reclaim could take back. Within a queue, only lower priorities are preempted.
+# checkpointed, so it must never sit on quota a reclaim could take back. Within provers only lower priorities are preempted;
+# within circuits nothing is (withinClusterQueue: Never): its rows run 5-11 h uncheckpointed, so a priority there only orders the
+# queue. A short capture (priority capture) takes the next free GPU ahead of queued rows and is never evicted by a later row.
 # quiet_hour.sh holds circuits' admissions 12:30-13:30Z (stopPolicy: Hold) so benches can re-measure without new Builds.
 #
 # Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
@@ -27,7 +29,7 @@ spec:
   preemption:
     reclaimWithinCohort: Any
     borrowWithinCohort: {policy: LowerPriority}
-    withinClusterQueue: LowerPriority
+    withinClusterQueue: Never
   resourceGroups:
   - coveredResources: [nvidia.com/gpu, cpu, memory]
     flavors:
@@ -70,6 +72,12 @@ spec: {clusterQueue: provers}
 # Priorities, highest first. A job names one with the pod label kueue.x-k8s.io/priority-class.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: WorkloadPriorityClass
+metadata: {name: capture}
+value: 1100
+description: short port-lane captures (jobs/port-capture.yaml): first to the next free circuits GPU
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
 metadata: {name: sweep-night}
 value: 1000
 description: the night's vLLM config sweep
@@ -78,7 +86,7 @@ apiVersion: kueue.x-k8s.io/v1beta2
 kind: WorkloadPriorityClass
 metadata: {name: circuits}
 value: 500
-description: daytime config runs and port-lane captures
+description: daytime config runs
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: WorkloadPriorityClass
