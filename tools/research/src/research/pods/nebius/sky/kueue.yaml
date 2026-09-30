@@ -8,7 +8,7 @@
 #   provers          the provers' 3 GPUs; never borrows (borrowingLimit 0; root 14:34Z): a bench admitted on borrowed quota was
 #                    evicted mid-run by a reclaim, twice (fv2-a8's GPU, m0-v3-a14's CPU), and benches pinned to 160-191 run one at a time.
 #   backfill         the dispatcher's standing tier (root via RC, 15:36Z): nominal quota 0, so everything it runs is borrowed idle quota,
-#                    evicted first. It preempts nobody.
+#                    evicted first. It preempts nobody. LocalQueues backfill (the dispatcher) and pous-overflow (PoUW's untimed work).
 #   circuits         draining since 16:10Z: nominal quota 0, and its in-flight vLLM deployments finish on borrowed idle quota. Delete it
 #                    once it is empty.
 # The deployments queues borrow idle quota (the GPU queue up to 2 of provers' GPUs), may evict backfill to borrow
@@ -147,6 +147,13 @@ spec: {clusterQueue: circuits}
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata: {name: backfill, namespace: default}
+spec: {clusterQueue: backfill}
+---
+# PoUW's overflow on node 1's idle GPUs (Daniel 19:12Z: one pool, borrowing both ways): work that neither ranks nor times sm_120,
+# so it runs as backfill, on borrowed quota, evicted first.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: pous-overflow, namespace: default}
 spec: {clusterQueue: backfill}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
