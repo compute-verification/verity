@@ -72,6 +72,16 @@ def test_a_fast_path_is_exempt_only_when_its_arithmetic_is_the_intrinsics():
     assert "sqrt-fast-path" not in r["exempt"]
 
 
+def test_sm90s_move_after_the_call_is_a_move_and_nothing_else_is():
+    """sm_90a moves the slow path's result with IMAD.MOV.U32 (#449's pearl_c.cubin); any other instruction there ends the
+    idiom, so the fast path after it is not exempt."""
+    n, _ = listings("plain")
+    assert "MOV R7, R3 ;" in n
+    assert judge("plain", nvdisasm=n.replace("MOV R7, R3 ;", "IMAD.MOV.U32 R7, RZ, RZ, R3 ;")) == judge("plain")
+    r = judge("plain", nvdisasm=n.replace("MOV R7, R3 ;", "IMAD R7, R3, R4, RZ ;"))
+    assert not r["ok"] and "sqrt-fast-path" not in r["exempt"]
+
+
 def test_an_ftz_slow_path_is_not_exempt_nor_the_fast_path_around_it():
     n, _ = listings("plain")
     r = judge("plain", nvdisasm=n.replace("__cuda_sm20_sqrt_rn_f32_slowpath", "__cuda_sm20_sqrt_rn_ftz_f32_slowpath"))
@@ -87,6 +97,15 @@ def test_the_two_disassemblies_must_agree():
     assert r["offending_n"] == 0 and not r["ok"]
     assert r["cross_check"] == {"cuobjdump_ftz_fp32": 11, "agree": False}
     assert "disagree" in SG.why_failed(r)
+
+
+def test_a_sections_flags_line_keeps_its_function():
+    """nvdisasm writes `.sectionflags` after `.section` for a kernel that uses barriers (#449's sm_90a plainq)."""
+    n, _ = listings("plain")
+    flagged = "".join(ln + ('\t.sectionflags\t@"SHF_BARRIERS=1"\n' if ln.lstrip().startswith(".section\t.text.") else "")
+                      for ln in n.splitlines(keepends=True))
+    assert flagged.count(".sectionflags") >= 3
+    assert judge("plain", nvdisasm=flagged) == judge("plain")
 
 
 def test_ftz_f32_ptx_fails():
@@ -221,12 +240,13 @@ def test_this_process_maps_the_python_interpreter():
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("arch", ["sm_120a", "sm_90a"])
 @pytest.mark.parametrize("flags,ok", [((), True), (("-fmad=false",), True), (("--use_fast_math",), False),
                                       (("-ftz=true",), False)])
-def test_a_real_build_passes_without_fast_math_or_ftz_and_fails_with_either(tmp_path, flags, ok):
+def test_a_real_build_passes_without_fast_math_or_ftz_and_fails_with_either(tmp_path, arch, flags, ok):
     """Compiles `ftz_probe.cu` as a cubin and as a shared library with the toolkit the gate finds (CUDA_HOME, POUW_CUDA_BIN or
-    /usr/local/cuda) and gates both; skipped without nvcc, cuobjdump and nvdisasm. It catches what the listings can't: a
-    toolkit whose expansions changed, and the fatbin of a real host ELF."""
+    /usr/local/cuda) and gates both, for sm_120a and #449's sm_90a; skipped without nvcc, cuobjdump and nvdisasm. It catches
+    what the listings can't: a toolkit or an architecture whose expansions differ, and the fatbin of a real host ELF."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -234,7 +254,7 @@ def test_a_real_build_passes_without_fast_math_or_ftz_and_fails_with_either(tmp_
     nvcc = Path(tools["cuobjdump"]["path"]).with_name("nvcc")
     if not nvcc.exists():
         pytest.skip(f"no nvcc beside {tools['cuobjdump']['path']}")
-    base = [str(nvcc), "-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", *flags]
+    base = [str(nvcc), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", *flags]
     for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared"])):
         subprocess.run([*base, *extra, "-o", str(tmp_path / out), str(FIX / "ftz_probe.cu")], check=True)
         rec = SG.scan(tmp_path / out, tools, None)

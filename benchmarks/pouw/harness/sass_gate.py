@@ -36,7 +36,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-VERSION = "sass-gate/v1"
+VERSION = "sass-gate/v2"
 EXIT_FAIL = 7
 FP32_ARITH = frozenset({"FADD", "FFMA", "FMUL", "FADD2", "FFMA2", "FMUL2", "FADD32I", "FFMA32I", "FMUL32I"})
 EXEMPT_SUBROUTINES = {
@@ -176,7 +176,7 @@ def parse_nvdisasm(text: str) -> list[dict]:
     cur = None
     for line in text.splitlines():
         s = line.strip()
-        if s.startswith(".section"):
+        if re.match(r"\.section\s", s):
             m = re.match(r"\.section\s+\.text\.([^,\s]+)", s)
             cur = {"name": m.group(1), "insns": [], "labels": {}, "sizes": {}} if m else None
             if cur is not None:
@@ -219,7 +219,7 @@ def classify(fn: dict) -> list[tuple[int, str, str | None]]:
             continue
         kind = EXEMPT_SUBROUTINES[m.group(1)]
         k = i + 1
-        while k < len(insns) and opcode(insns[k][1]) == ["MOV"]:
+        while k < len(insns) and (opcode(insns[k][1]) == ["MOV"] or shape(insns[k][1]) == "IMAD.MOV.U32 R, RZ, RZ, R"):
             k += 1
         b = re.fullmatch(r"BRA `\((\S+)\)", insns[k][1]) if k < len(insns) else None
         j = labels.get(b.group(1)) if b else None
