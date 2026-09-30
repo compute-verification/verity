@@ -294,6 +294,13 @@ def gates(d: Bench, V: dict) -> dict:
     out["trees"]["block layout (candidate)"] = ok
     if not ok:
         bad.append("block layout")
+    for sz, roots in V["seg"].items():
+        d.go(None, "hash_rows_seg", 2, max(32, b["rb"] // int(sz)), (rp, op, kk, lk), (2, b["rb"], int(sz)))
+        d.sync()
+        ok = d.read(op, 64).hex() == roots[0] + roots[1]
+        out["trees"][f"segment layout s={sz} (P1 prototype)"] = ok
+        if not ok:
+            bad.append(f"segment layout {sz}")
     for p_ in (rp, op, kk, lk):
         d.free(p_)
     keys = {k: d.put(bytes.fromhex(R.H1_KEYS[k])) for k in ("k_msg", "k_leaf")}
@@ -332,6 +339,38 @@ def gates(d: Bench, V: dict) -> dict:
 def flush(d: Bench, fl: int, sink: int) -> None:
     """A read of 512 MB (4x the L2) that writes nothing: no dirty line left behind."""
     d.go(None, "l2_flush", 4 * d.sms, 256, (fl, sink), ((512 << 20) // 4,))
+
+
+def seg_rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
+    """Prefill's A-row leaves at 8,192 rows of 32 KB: -h1's two row kernels against P1's prototype at s = 64 and 256, the
+    forms interleaved in each rep (order rotated), an L2 flush before each timing, the SM clock after it."""
+    fl, sink = d.alloc(512 << 20), d.alloc(16)
+    m, rb = 8192, ROW_F32
+    rp, op, dom = d.alloc(m * rb), d.alloc(32 * m), d.put(bytes(32))
+    kk, lk = d.put(shake("rate seg key", 32)), d.put(shake("rate seg levels", 32 * 9))
+    forms = {"rows 32768 B pushed": lambda: launch_rows(d, None, "pushed", rp, op, dom, m, rb),
+             "rows 32768 B tuned": lambda: launch_rows(d, None, "tuned", rp, op, dom, m, rb)}
+    for sz in (64, 256):
+        forms[f"rows 32768 B segment s={sz} (P1)"] = lambda sz=sz: d.go(None, "hash_rows_seg", m, rb // sz, (rp, op, kk, lk), (m, rb, sz))
+    for body in forms.values():
+        body()
+    d.sync()
+    ms: dict = {k: [] for k in forms}
+    clk: dict = {k: [] for k in forms}
+    order = list(forms)
+    for rep in range(reps):
+        for name in order[rep % len(order):] + order[:rep % len(order)]:
+            flush(d, fl, sink)
+            ms[name] += d.timed(forms[name], 1)
+            clk[name].append(nv.read()["sm_mhz"])
+    out = {}
+    for name in forms:
+        med = statistics.median(ms[name])
+        out[name] = {"bytes": m * rb, "ms": med, "raw_ms": ms[name], "gb_s": m * rb / med / 1e6, "sm_mhz": clk[name],
+                     "bytes_per_sm_clk": m * rb / (med * 1e-3) / (d.sms * max(statistics.median(clk[name]), 1) * 1e6)}
+    for p in (fl, sink, rp, op, dom, kk, lk):
+        d.free(p)
+    return out
 
 
 def rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
@@ -398,11 +437,21 @@ ARMS = [
     ("candidate: A block layout", ROW_F32, "blkpre", "none"),
     ("candidate: h1 A block layout, side stream", ROW_F32, "blkpre", "side"),
     ("candidate: h1 A block layout, side stream, priorities", ROW_F32, "blkpre", "side"),
+    ("candidate: A segment layout s=64", ROW_F32, "seg64", "none"), ("candidate: A segment layout s=256", ROW_F32, "seg256", "none"),
+    ("candidate: h1 A segment layout s=64, side stream, priorities", ROW_F32, "seg64", "side"),
+    ("candidate: h1 A segment layout s=256, side stream, priorities", ROW_F32, "seg256", "side"),
     ("candidate: A bf16 rows, keys precomputed", ROW_BF16, "pre", "none"),
     ("candidate: h1 bf16 rows, keys precomputed, side stream", ROW_BF16, "pre", "side"),
     ("candidate: h1 bf16 rows, keys precomputed, side stream, priorities", ROW_BF16, "pre", "side"),
 ]
 
+
+#: --preset p1: P1's prototype (hash_rows_seg, timing only) and its baselines, interleaved rep by rep
+PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, keys precomputed, side stream, priorities",
+                  "candidate: A block layout", "candidate: A segment layout s=64", "candidate: A segment layout s=256",
+                  "candidate: h1 A block layout, side stream, priorities",
+                  "candidate: h1 A segment layout s=64, side stream, priorities",
+                  "candidate: h1 A segment layout s=256, side stream, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -425,14 +474,14 @@ def latency(d: Bench) -> dict:
 
 
 #: the decode arms whose last call's output verify_h1.py checks (every arm on -h1's format; the block layout is not)
-VERIFY = [name for name, _rb, amode, _post in ARMS if not amode.startswith("blk") and not name.startswith("plain")]
+VERIFY = [name for name, _rb, amode, _post in ARMS if not amode.startswith(("blk", "seg")) and not name.startswith("plain")]
 
 
 def slug(name: str) -> str:
     return "".join(ch if ch.isalnum() else "-" for ch in name).strip("-").replace("--", "-")
 
 
-def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
+def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: list[str] | None = None) -> dict:
     """Per call of the dependent chain at m = 32, n = k = 8,192, each arm replayed as one graph of CALLS calls."""
     n, k, m = N, K, M
     depth = max(0, (m - 1).bit_length())
@@ -455,6 +504,10 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
         elif amode in ("one", "onepre", "overlap"):
             d.go(s, "hash_rows_wt", -(-m // 4), 128, (rows[rb], a_tree, dom_a, a_keys, counter), (m, rb, m), smem=4 * 4 * rows_w_words(rb))
+        elif amode in ("seg64", "seg256"):
+            sz = int(amode[3:])
+            d.go(s, "hash_rows_seg", m, max(32, rb // sz), (rows[rb], a_tree, blk_key, blk_levels), (m, rb, sz))
+            d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
         elif amode == "blkpre":
             d.go(s, "hash_rows_blk", m, 256, (rows[rb], a_tree, blk_key, blk_levels), (m, rb))
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
@@ -499,8 +552,11 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
         else:
             launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
 
+    arms = [a for a in ARMS if only is None or a[0] in only]
+    if only is not None and len(arms) != len(only):
+        raise SystemExit(f"preset names no arm: {sorted(set(only) - {x[0] for x in arms})}")
     graphs, prios = {}, {}
-    for name, rb, amode, post in ARMS:
+    for name, rb, amode, post in arms:
         streams = (d.h1, d.h2) if name.endswith(", priorities") else (d.s1, d.s2)
 
         def body(rb=rb, amode=amode, post=post, streams=streams):
@@ -525,7 +581,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
         for name in order:
             raw[name] += d.replay_ms(graphs[name], 1)
             clk[name].append(nv.read()["sm_mhz"])
-    for name, rb, amode, post in ARMS:
+    for name, rb, amode, post in arms:
         ms = raw[name]
         out[name] = {"rows_bytes": rb, "a": amode, "post": post, "per_call_us": statistics.median(ms) * 1e3 / CALLS, "raw_ms": ms,
                      "sm_mhz": clk[name], "node_priorities": prios[name]}
@@ -534,7 +590,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
         run = os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local"
         sl = slots[(CALLS - 1) % 2]
         per, tiles = n // 32, (-(-m // 64)) * (n // 64)
-        for name, rb, amode, post in ARMS:
+        for name, rb, amode, post in arms:
             if name not in VERIFY:
                 continue
             d.replay_ms(graphs[name], 1)
@@ -551,7 +607,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
             out[name]["transcript"] = {"path": path, "sha256": hashlib.sha256(blob).hexdigest()}
     for name, r in out.items():
         if isinstance(r, dict) and "per_call_us" in r:
-            plain = out[f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"]["per_call_us"]
+            plain = out[f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"]["per_call_us"]  # every preset has its plain arm
             r["hashing_us"] = r["per_call_us"] - plain
             r["x_plain_standin"] = r["per_call_us"] / plain
     return out
@@ -565,6 +621,8 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--reps", type=int, default=20)
     ap.add_argument("--transcripts", help="a directory for the verified decode arms' transcripts (verify_h1.py)")
+    ap.add_argument("--preset", choices=["all", *PRESETS], default="all",
+                    help="p1: only P1's prototype and its baselines (decode arms and prefill row rates), no latency probe")
     args = ap.parse_args()
     cubin, standin = open(args.cubin, "rb").read(), open(args.standin, "rb").read()
     d = Bench(cubin, standin)
@@ -584,11 +642,12 @@ def main() -> None:
     print(json.dumps({"gates": res["gates"]["failures"], "rows": res["gates"]["rows"]}), flush=True)
     if res["gates"]["failures"]:
         sys.exit(4)
-    res["rates"] = rates(d, nv, args.reps)
+    res["preset"] = args.preset
+    res["rates"] = seg_rates(d, nv, args.reps) if args.preset == "p1" else rates(d, nv, args.reps)
     save()
-    res["latency"] = latency(d)
+    res["latency"] = latency(d) if args.preset == "all" else {}
     save()
-    res["decode"] = decode(d, nv, args.reps, V, args.transcripts)
+    res["decode"] = decode(d, nv, args.reps, V, args.transcripts, PRESETS.get(args.preset))
     res["clocks_after"] = nv.read()
     save()
     for name, r in res["decode"].items():

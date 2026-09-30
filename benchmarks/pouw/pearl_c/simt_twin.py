@@ -18,7 +18,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_node_keys", "hash_nodes",
            "hash_tree_leaves", "hash_tree_small", "hash_rows_wt", "lat_chain", "derive_rows_hash", "derive_rows_wide",
-           "hash_rows_blk", "derive_rows", "standin_gemm")
+           "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm")
 
 PRELUDE = r"""
 #include <condition_variable>

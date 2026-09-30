@@ -208,3 +208,26 @@ def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_by
         write(bad, path)
         r = run(path)
         assert r.returncode == 1 and r.stdout.startswith("h1 verifier reject:"), (name, r.stdout, r.stderr)
+
+
+def segment_roots(rows: bytes, rb: int, s: int, key: bytes, levels: list[bytes]) -> bytes:
+    out = b""
+    for r in range(len(rows) // rb):
+        level = [keyed(key, rows[r * rb + j:r * rb + j + s]) for j in range(0, rb, s)]
+        lv = 0
+        while len(level) > 1:
+            level = [keyed(levels[lv], level[2 * i] + level[2 * i + 1]) for i in range(len(level) // 2)]
+            lv += 1
+        out += level[0]
+    return out
+
+
+@pytest.mark.parametrize("rb,s", [(32768, 256), (32768, 64), (16384, 256), (4096, 1024), (1024, 1024)])
+def test_the_segment_layout_prototype_is_keyed_blake3_over_segments(rb, s):
+    """hash_rows_seg (P1's prototype, not -h1): each s-byte segment's standard keyed BLAKE3 under the row-leaf key, then
+    one-block nodes under the level keys, equal to `verity.commitments.blake3.keyed` composed the same way."""
+    rows, key = data(f"seg rows {rb} {s}", 2 * rb), data("seg key", 32)
+    levels = [data(f"seg level {l}", 32) for l in range(9)]
+    out = T.buffer(64)
+    T.launch("hash_rows_seg", 2, max(32, rb // s), [T.buffer(rows), out, T.buffer(key), T.buffer(b"".join(levels))], [2, rb, s])
+    assert out.raw == segment_roots(rows, rb, s, key, levels)

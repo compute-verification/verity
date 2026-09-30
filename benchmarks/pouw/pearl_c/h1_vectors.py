@@ -96,6 +96,26 @@ def blk_case() -> dict:
     return {"rb": rb, "key": key.hex(), "levels": [k.hex() for k in levels], "roots": roots}
 
 
+def seg_cases(blk: dict) -> dict:
+    """P1's prototype (hash_rows_seg; not -h1): blk_case's rows, keys and levels, each s-byte segment's leaf the standard keyed
+    BLAKE3 of the segment. At s = 64 it is the block layout, so its roots must be blk_case's."""
+    rb, key, levels = blk["rb"], bytes.fromhex(blk["key"]), [bytes.fromhex(k) for k in blk["levels"]]
+    rows = shake("gate blk rows", 2 * rb)
+    out = {}
+    for sz in (64, 256):
+        roots = []
+        for r in range(2):
+            level = [blake3.blake3(rows[r * rb + j:r * rb + j + sz], key=key).digest() for j in range(0, rb, sz)]
+            lv = 0
+            while len(level) > 1:
+                level = [blake3.blake3(level[2 * i] + level[2 * i + 1], key=levels[lv]).digest() for i in range(len(level) // 2)]
+                lv += 1
+            roots.append(level[0].hex())
+        out[str(sz)] = roots
+    assert out["64"] == blk["roots"]
+    return out
+
+
 def lat_chain_case(n: int = 512) -> dict:
     """lat_chain's last chaining value after n dependent keyed compressions (h1_bench's latency count), from
     `verity.commitments.blake3.compress`."""
@@ -119,10 +139,11 @@ def decode_domains() -> dict:
 
 
 def main() -> None:
+    blk = blk_case()
     out = {"source": "frame-b3 (verity.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
-           "tiles": {"m32": tile_case(M)}, "blk": blk_case(), "lat_chain": lat_chain_case(),
+           "tiles": {"m32": tile_case(M)}, "blk": blk, "seg": seg_cases(blk), "lat_chain": lat_chain_case(),
            "decode": decode_domains()}
     Path(sys.argv[1]).write_text(json.dumps(out))
     print(f"{len(out['rows']['cases'])} row cases, {len(out['trees'])} trees, {len(out['tiles'])} tile case(s) -> {sys.argv[1]}")

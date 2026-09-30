@@ -135,6 +135,60 @@ extern "C" __global__ void __launch_bounds__(256) hash_rows_blk(const Args a) {
   if (threadIdx.x == 0) store_cv(a.p[1] + row * 32, lv[0]);
 }
 
+// hash_rows_seg: P1's prototype (a-commit-latency.md §4.1), not -h1's, timing only.  hash_rows_blk with s-byte segments
+// (s = 64 b, b blocks): segment j's leaf is the standard keyed BLAKE3 of the segment under the row-leaf key (one chunk of b
+// blocks, chunk counter 0), then hash_rows_blk's levels; a row is b + log2(rb / s) compressions deep.  One thread a segment,
+// the next block's words loaded while this one compresses; launched with rb / s threads (a multiple of 32).  p0 rows, p1
+// out (32 B a row), p2 the row-leaf key, p3 level keys; i0 rows, i1 row bytes, i2 s (at most 1,024: one chunk; rb / s a
+// power of two, at most 512)
+extern "C" __global__ void __launch_bounds__(512) hash_rows_seg(const Args a) {
+  __shared__ uint32_t lv[512][8];
+  const uint64_t row = blockIdx.x;
+  const int nb = a.i[2] / 64, segs = a.i[1] / a.i[2], j = threadIdx.x;
+  uint32_t key[8];
+  load_key(a.p[2], key);
+  if (j < segs) {
+    const uint4* src = reinterpret_cast<const uint4*>(a.p[0] + row * (uint64_t)a.i[1] + (uint64_t)j * a.i[2]);
+    uint4 nx[4];
+#pragma unroll
+    for (int w = 0; w < 4; w++) nx[w] = src[w];
+    uint32_t cv[8];
+#pragma unroll
+    for (int i = 0; i < 8; i++) cv[i] = key[i];
+    for (int b = 0; b < nb; b++) {
+      uint32_t m[16];
+#pragma unroll
+      for (int w = 0; w < 4; w++) { m[4 * w] = nx[w].x; m[4 * w + 1] = nx[w].y; m[4 * w + 2] = nx[w].z; m[4 * w + 3] = nx[w].w; }
+      if (b + 1 < nb) {
+#pragma unroll
+        for (int w = 0; w < 4; w++) nx[w] = src[4 * (b + 1) + w];
+      }
+      const uint32_t fl = B3_KEYED | (b == 0 ? B3_START : 0) | (b + 1 == nb ? B3_END | B3_ROOT : 0);
+      b3c(cv, m, 0, 64, fl, cv);
+    }
+#pragma unroll
+    for (int i = 0; i < 8; i++) lv[j][i] = cv[i];
+  }
+  __syncthreads();
+  int level = 0;
+  for (int w = segs; w > 1; w >>= 1, level++) {
+    uint32_t lk[8], m[16], h[8];
+    load_key(a.p[3] + 32ull * level, lk);
+    if (j < w / 2) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) { m[q] = lv[2 * j][q]; m[8 + q] = lv[2 * j + 1][q]; }
+      blake3_block(lk, m, h);
+    }
+    __syncthreads();
+    if (j < w / 2) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) lv[j][q] = h[q];
+    }
+    __syncthreads();
+  }
+  if (j == 0) store_cv(a.p[1] + row * 32, lv[0]);
+}
+
 // derive_rows_hash's A alone (its reference in the gate): row r of the next A is y's row r (n BF16 words, cycled) ^ 0x3C00 over
 // rb / 2 words.  p0 y, p1 A; i0 m, i1 rb, i2 n
 extern "C" __global__ void __launch_bounds__(256) derive_rows_wide(const Args a) {
