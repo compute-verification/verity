@@ -12,12 +12,19 @@ P1's greedy cross-group joint set on --cross-words words per tile (`pearlc_censu
 
     python benchmarks/pouw/pearlc_activations.py --tiles 2 --out pearlc_activations.json
 
+A larger model runs as parallel shards, one process per --layers regex over the module names (each runs the whole forward
+pass and measures only its layers), e.g. Qwen2.5-7B's down_proj four layers at a time:
+
+    python benchmarks/pouw/pearlc_activations.py --model Qwen/Qwen2.5-7B --atom sm120 --G 0 \
+        --layers 'layers\\.([0-3])\\.mlp\\.down_proj$' --out down-0-3.json
+
 Under `research run` it writes result.json: passed when every sampled tile's residual is at most 1/400.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -62,6 +69,7 @@ def main() -> None:
     ap.add_argument("--threads", type=int, default=3)
     ap.add_argument("--atom", choices=tuple(C.ATOMS), default="hopper", help="the accumulator step (pearlc_census --atom)")
     ap.add_argument("--G", type=int, default=4, help="promotion period in atoms; 0: no promotion (sm_120 v2)")
+    ap.add_argument("--layers", default="", help="measure only the linear layers whose module name this regex matches (a shard)")
     ap.add_argument("--out", default="pearlc_activations.json")
     args = ap.parse_args()
     C.set_atom(args.atom)
@@ -139,13 +147,13 @@ def main() -> None:
         layers.append(measure(name, X, W))
 
     for name, mod in model.named_modules():
-        if isinstance(mod, torch.nn.Linear):
+        if isinstance(mod, torch.nn.Linear) and re.search(args.layers, name):
             mod.register_forward_pre_hook(lambda m, i, name=name: hook(m, i, name))
     with torch.no_grad():
         model(chunk)
     measured = [r for r in layers if r.get("tiles")]
     worst_resid = max((r["residual_share_max"] for r in measured), default=0.0)
-    doc = {"tool": "pouw_pearlc_activations", "atom": args.atom, "G": args.G, "model": args.model, "dataset": "wikitext-2-raw-v1:test", "window": args.window,
+    doc = {"tool": "pouw_pearlc_activations", "atom": args.atom, "G": args.G, "layers_regex": args.layers, "model": args.model, "dataset": "wikitext-2-raw-v1:test", "window": args.window,
            "seqlen": args.seqlen, "delta": args.delta, "line_norm": args.line_norm, "layers": layers,
            "summary": {"layers": len(layers), "layers_measured": len(measured),
                        "A_rows_inadmissible_max": max(max(r["A_floor_fail"], r["A_live_fail"]) for r in layers),
