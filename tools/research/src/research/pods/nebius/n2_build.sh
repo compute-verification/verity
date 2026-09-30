@@ -4,6 +4,7 @@
 #
 #   on node 1:  n2_build.sh submit KEY ITEM.json|-   (ITEM: the config-run item a lane gives dispatch.py, as in its ready files;
 #                                                    `-` reads it from stdin)
+#   on node 1:  n2_build.sh stage REPO REV [REPO REV...]   (a checkpoint for node 2's Builds and Commits, staged as submit does)
 #   on node 1:  n2_build.sh offload [--loop|--list] (every dispatcher Build Kueue has held 2 min for memory or CPU quota)
 #   on node 2:  n2_build.sh run KEY                (the fill job's body; submit writes it)
 # Installed at /workspace/verity-guest/bin/n2_build.sh on both nodes.
@@ -55,6 +56,18 @@ for f in sys.argv[2:]:
 EOF
 }
 
+# the pinned snapshot's files (-L: node 1's snapshots link into its shared blobs/, which stay behind), then a check that node 2 has
+# every file as a plain file: the CPU bootstrap's checkpoint check reads the weights
+stage_model() {
+  local repo=$1 rev=$2 dir
+  dir=hub/models--${repo//\//--}/snapshots/$rev
+  [ -d "/workspace/hf/$dir" ] || { echo "no checkpoint $repo@$rev on node 1" >&2; return 2; }
+  push "/workspace/hf/$dir/" "/workspace/jobs/hf/$dir/" -L
+  ssh -n "$N2" "[ -f /workspace/jobs/hf/$dir/config.json ] && [ -z \"\$(find /workspace/jobs/hf/$dir -type l -print -quit)\" ]" \
+    || { echo "checkpoint $repo@$rev isn't staged on node 2" >&2; return 3; }
+  echo "staged $repo@${rev:0:10} ($(du -sL "/workspace/hf/$dir" | awk '{printf "%.1f GB", $1 / 1e6}'))"
+}
+
 submit() {
   local key=$1 item=$2
   [[ $key =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || { echo "KEY: lowercase letters, digits and dashes" >&2; exit 2; }
@@ -68,13 +81,11 @@ submit() {
   # node 2 caps a guest with MemoryMax at the item's request, in 64-256: node 1's Builds peaked at 4-29 GB against 47-108 GB requests
   # (container_memory_working_set_bytes over 6 h, 2026-09-30 21:15Z)
   mem=${VY_N2_MEM_GB:-$(( ${mem:-96} < 64 ? 64 : ${mem:-96} > 256 ? 256 : ${mem:-96} ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
-  local src model
+  local src
   src=$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")
-  model=/workspace/hf/hub/models--${repo//\//--}
-  [ -d "$model/snapshots/$rev" ] || { echo "no checkpoint $model/snapshots/$rev on node 1" >&2; exit 2; }
+  [ -d "/workspace/hf/hub/models--${repo//\//--}/snapshots/$rev" ] || { echo "no checkpoint $repo@$rev on node 1" >&2; exit 2; }
   push "$src/" "$src/"
-  # the weights themselves (-L: node 1's snapshots link into its shared blobs/): the CPU bootstrap's checkpoint check reads them
-  push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/" -L
+  stage_model "$repo" "$rev" || { echo "not queued" >&2; exit 3; }
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
   push "$0" "$GUEST/bin/n2_build.sh"
@@ -113,6 +124,13 @@ EOF
 }
 
 run() {
+  # the vLLM manifests pin every checkpoint at /workspace/hf/hub/..., node 1's cache; node 2's /workspace/hf is PoUW's, so the Build
+  # sees /workspace/jobs/hf there in a private mount namespace: nothing is written to PoUW's cache, and the job keeps its scope
+  if [ -z "${VY_N2_NS:-}" ]; then
+    exec sudo -n unshare --mount --propagation private env VY_N2_NS=1 HOME="$HOME" PATH="$PATH" USER="$USER" \
+      bash -c 'mount --bind /workspace/jobs/hf /workspace/hf && exec setpriv --reuid="$SUDO_UID" --regid="$SUDO_GID" --init-groups bash "$0" run "$1"' \
+      "$(readlink -f "$0")" "$1"
+  fi
   local key=$1 item=$GUEST/items/$1.json
   # config-run.yaml's build envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
   export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
@@ -229,6 +247,7 @@ offload() {
 cmd=${1:-}; shift || true
 case "$cmd" in
   submit) submit "$@" ;;
+  stage) while [ $# -ge 2 ]; do stage_model "$1" "$2" || true; shift 2; done ;;
   run) run "$@" ;;
   offload) offload "$@" ;;
   *) sed -n '2,6p' "$0" >&2; exit 2 ;;
