@@ -557,6 +557,10 @@ def test_f1_operands_stay_in_each_forms_domain():
         if f.fa in ("e2m1", "e2m3", "e3m2"):
             b = (w[..., 0, None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF
             assert not (b & 0b11).any() and (b >> (2 + {"e2m1": 4, "e2m3": 6, "e3m2": 6}[f.fa]) == 0).all(), f.name
+            ebits, mbits, ecap = F1._NARROW[f.fa]
+            exp = (b >> (2 + mbits)) & ((1 << ebits) - 1)
+            # an FP16 accumulator gets small exponents (a chain of millions of MMAs stays finite); FP32 the whole code range
+            assert (exp.max() < ecap) == (f.acc[0] == "h"), f.name
     for op in F1.OPS:
         w = F1.simt_inputs(op, 32, 1)
         assert w.shape == (32, F1.SIMT_CH, F1.op_words_per_chain(op))
@@ -621,6 +625,7 @@ def test_f1_dry_run_prices_against_nvfp4_and_its_gates_fail_closed(no_nvcc, tmp_
     assert fp8["per_form"]["fp8_e4m3_k32"]["fp4_slots_per_product"] == pytest.approx(2.0)
     assert fp8["per_form"]["sp_fp8_e4m3_k64"]["fp4_slots_per_logical_mac"] == pytest.approx(1.0)
     assert fp8["clocks"] == "unlocked" and not fp8["failures"]
+    assert set(fp8["timed_length_gate"]) == set(fp8["per_form"]) and all(v["finite"] for v in fp8["timed_length_gate"].values())
 
     assert F1.main(["run", "--family", "fp4", "--out", str(tmp_path / "bad"), "--corrupt-word"] + common) == 1
     bad = json.loads((tmp_path / "bad" / "fp4.fake.json").read_text())

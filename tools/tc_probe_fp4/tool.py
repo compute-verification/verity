@@ -108,7 +108,7 @@ def parse_f1(argv: list[str]) -> dict:
         ap.add_argument(flag, default=None)
     ap.add_argument("--jobs", type=int, default=None)
     ap.add_argument("--reps", type=int, default=5)
-    ap.add_argument("--target-ms", type=float, default=40.0)
+    ap.add_argument("--target-ms", type=float, default=100.0)
     ap.add_argument("--sustain-s", type=float, default=2.0)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--locked-mhz", type=float, default=None)

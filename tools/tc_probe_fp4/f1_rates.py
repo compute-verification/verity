@@ -20,7 +20,8 @@ table: dense NVFP4 1, FP8 2, BF16 4, TF32 8, FFMA about 17), where a sparse form
 Gates, before any timing (a failed gate writes no measurements): the device UUID and compute capability 12.0; the build's SASS
 gate (each timed loop holds its form's instruction count, and no kernel in the library has an FP32 ``FADD``/``FFMA``/``FMUL``
 with ``.FTZ``, the 09:34Z rule; the build passes no ``-ftz``/fast-math flag); every kernel's outputs finite and bit-identical
-across two launches; every launch one wave.  ``--corrupt-word`` flips one gate word: the run must then fail.  A form ptxas
+across two launches; every launch one wave; and, after timing, every kernel's outputs finite at its timed length (a failure there
+publishes no measurements either).  ``--corrupt-word`` flips one gate word: the run must then fail.  A form ptxas
 emulates (s4, u4, b1 and FP16 m8n8k4 on sm_120a: one ``CALL`` per PTX instruction to a subroutine of unpacking and other MMAs)
 passes the SASS gate as ``emulated``, with its callee's MMAs recorded, and is timed as that route: its price is the emulation's.
 
@@ -268,6 +269,9 @@ FORMS_TENSOR = _forms()
 
 OPS = [
     Op("ffma_f32", "fma.rn.f32", "fma.rn.f32 %0, %0, %1, %2;", "f", "f", "f", "ffma", "FFMA", 1, 1),
+    # an immediate addend: two register sources, so no three-operand register-bank conflict (the op's best form)
+    Op("ffma_f32_imm", "fma.rn.f32 (immediate addend 2^-4)", "fma.rn.f32 %0, %0, %1, 0f3D800000;", "f", "f", None, "ffma_imm", "FFMA",
+       1, 1),
     Op("fmul_f32", "mul.rn.f32", "mul.rn.f32 %0, %0, %1;", "f", "f", None, "fmul", "FMUL", 1, 1),
     Op("ffma_f32x2", "fma.rn.f32x2", "fma.rn.f32x2 %0, %0, %1, %2;", "l", "l", "l", "ffma2", "FFMA", 2, 2),
     Op("hfma2_f16", "fma.rn.f16x2", "fma.rn.f16x2 %0, %0, %1, %2;", "r", "r", "r", "hfma2", "HFMA2", 1, 2),
@@ -276,6 +280,7 @@ OPS = [
     Op("hmul2_f16", "mul.rn.f16x2", "mul.rn.f16x2 %0, %0, %1;", "r", "r", None, "hmul2", ("HMUL2", "HFMA2"), 1, 2),
     Op("dfma_f64", "fma.rn.f64", "fma.rn.f64 %0, %0, %1, %2;", "d", "d", "d", "dfma", "DFMA", 1, 1),
     Op("imad_s32", "mad.lo.s32", "mad.lo.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD", 1, 1),
+    Op("imad_s32_imm", "mad.lo.s32 (immediate addend)", "mad.lo.s32 %0, %0, %1, 12345;", "r", "r", None, "int", "IMAD", 1, 1),
     Op("imad_hi_u32", "mad.hi.u32", "mad.hi.u32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD.HI", 1, 1),
     Op("imad_wide_u32", "mad.wide.u32", "{\n.reg .b32 lo, hi;\nmov.b64 {lo, hi}, %0;\nmad.wide.u32 %0, lo, %1, %0;\n}", "l", "r", None,
        "int", "IMAD.WIDE", 1, 1),
@@ -752,15 +757,25 @@ def build(out: Path, names: list[str] | None = None, jobs: int = 8) -> dict:
 _E4M3_FINITE = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint32)
 
 
-def _small_fp8(rng, fmt: str, shape) -> np.ndarray:
-    """Bytes of a small-magnitude FP8/FP6/FP4 value in its 8-bit container (a code of E2M1 / E2M3 / E3M2 at bits [2, 8))."""
+#: FP6 / FP4 codes (sign, exponent field, mantissa bits) and, for the FP16-accumulate forms, the small exponent fields (|x| < 1,
+#: < 2, <= 1.5) that keep a chain of millions of MMAs finite
+_NARROW = {"e3m2": (3, 2, 3), "e2m3": (2, 3, 2), "e2m1": (2, 1, 2)}
+
+
+def _small_fp8(rng, fmt: str, shape, small: bool = False) -> np.ndarray:
+    """Bytes of an FP8 value (small magnitudes) or an FP6/FP4 code (uniform, or small exponents with ``small``) in its 8-bit
+    container (E3M2 / E2M3 / E2M1 codes at bits [2, 8))."""
     s = rng.integers(0, 2, size=shape, dtype=np.uint32) << 7
     if fmt == "e4m3":  # exponent field 1..5: |x| < 0.5
         return s | (rng.integers(1, 6, size=shape, dtype=np.uint32) << 3) | rng.integers(0, 8, size=shape, dtype=np.uint32)
     if fmt == "e5m2":  # exponent field 9..13
         return s | (rng.integers(9, 14, size=shape, dtype=np.uint32) << 2) | rng.integers(0, 4, size=shape, dtype=np.uint32)
-    width = {"e3m2": 6, "e2m3": 6, "e2m1": 4}[fmt]
-    return rng.integers(0, 1 << width, size=shape, dtype=np.uint32) << 2
+    ebits, mbits, ecap = _NARROW[fmt]
+    if not small:
+        return rng.integers(0, 1 << (1 + ebits + mbits), size=shape, dtype=np.uint32) << 2
+    code = ((s >> 7) << (ebits + mbits)) | (rng.integers(0, ecap, size=shape, dtype=np.uint32) << mbits) \
+        | rng.integers(0, 1 << mbits, size=shape, dtype=np.uint32)
+    return code << 2
 
 
 def _pack4(b: np.ndarray) -> np.ndarray:
@@ -774,12 +789,12 @@ def _half_bits(rng, shape, bf16: bool, lo: int, hi: int) -> np.ndarray:
     return (s << 15) | (rng.integers(lo, hi, size=shape, dtype=np.uint32) << 10) | rng.integers(0, 1024, size=shape, dtype=np.uint32)
 
 
-def operand_words(fmt: str, rng, shape) -> np.ndarray:
+def operand_words(fmt: str, rng, shape, small: bool = False) -> np.ndarray:
     """u32 words of one operand register (or a double's two words interleaved lo, hi) in a form's input format."""
     if fmt == "e2m1x8" or fmt == "b32":
         return rng.integers(0, 2**32, size=shape, dtype=np.uint64).astype(np.uint32)
     if fmt in F8:
-        return _pack4(_small_fp8(rng, fmt, shape + (4,)))
+        return _pack4(_small_fp8(rng, fmt, shape + (4,), small))
     if fmt in ("f16", "bf16"):
         lo, hi = (10, 15) if fmt == "f16" else (122, 127)
         h = _half_bits(rng, shape + (2,), fmt == "bf16", lo, hi)
@@ -811,18 +826,19 @@ def _scale(rng, kind: str | None, shape) -> np.ndarray:
     return _pack4(rng.integers(lo, hi, size=shape + (4,), dtype=np.uint32))
 
 
-def _reg_words(t: tuple[str, int], fmt: str, rng, lanes: int) -> np.ndarray:
+def _reg_words(t: tuple[str, int], fmt: str, rng, lanes: int, small: bool = False) -> np.ndarray:
     if t[0] == "d":
         v = operand_words("f64", rng, (lanes, NSETS, t[1]))
         return v.view(np.uint32).reshape(lanes, NSETS, 2 * t[1])
-    return operand_words(fmt, rng, (lanes, NSETS, t[1]))
+    return operand_words(fmt, rng, (lanes, NSETS, t[1]), small)
 
 
 def tensor_inputs(form: Form, threads: int, seed: int) -> np.ndarray:
     """u32[threads][NSETS][words_per_set]: a, b, metadata, sfa, sfb per operand set per thread."""
     rng = np.random.default_rng([seed, _seed(form.name)])
-    a = _reg_words(form.a, form.fa, rng, threads)
-    b = _reg_words(form.b, form.fb, rng, threads)
+    small = form.acc[0] == "h"
+    a = _reg_words(form.a, form.fa, rng, threads, small)
+    b = _reg_words(form.b, form.fb, rng, threads, small)
     e = _meta(rng, form, (threads, NSETS, 1)) if form.sparse else np.zeros((threads, NSETS, 1), np.uint32)
     sf = _scale(rng, form.scale, (threads, NSETS, 2))
     out = np.concatenate([a, b, e, sf], axis=-1).astype(np.uint32)
@@ -847,6 +863,8 @@ def simt_inputs(op: Op, threads: int, seed: int) -> np.ndarray:
     pm = lambda: rng.choice([-1.0, 1.0], size=sh)  # noqa: E731
     if op.fmt == "ffma":
         cols = [_f32w(rng.uniform(1, 2, sh)), _f32w(rng.uniform(0.5, 0.99, sh)), _f32w(rng.uniform(2**-4, 2**-3, sh))]
+    elif op.fmt == "ffma_imm":
+        cols = [_f32w(rng.uniform(1, 2, sh)), _f32w(rng.uniform(0.5, 0.99, sh))]
     elif op.fmt == "fmul":
         cols = [_f32w(rng.uniform(1, 2, sh) * pm()), _f32w(pm())]
     elif op.fmt == "ffma2":
@@ -1089,7 +1107,16 @@ def run_family(args) -> int:
             ms, _, cyc = dev.run(n, slot[n], g["blocks"], g["threads_per_block"], iters[n])
             launches[n].append({"rep": rep, "ms": ms, "cycles_max": int(cyc.max()), "sm_mhz": float(cyc.max()) / (ms * 1e3)})
         samples.append(dev.clocks(identity.get("gpu_uuid")))
+    post = {}
+    for n in names:
+        g = geo[n]
+        _, s, _ = dev.run(n, slot[n], g["blocks"], g["threads_per_block"], iters[n], want=True)
+        post[n] = {"iterations": iters[n], "finite": int(s[1::2].sum()) == 0}
     dev.teardown()
+    rec["timed_length_gate"] = post
+    failures += [f"timed-length gate {n}: outputs not finite after {v['iterations']} iterations" for n, v in post.items() if not v["finite"]]
+    if failures:
+        return finish(out, rec, failures, args, None, t_all)
     per = {}
     for n in names:
         f, g, ls = BY_NAME[n], geo[n], launches[n]
@@ -1187,7 +1214,20 @@ def scan_libs(args) -> int:
     doc = {"schema": SCHEMA + "/libscan", "cuobjdump": _cuobjdump(), "libraries": recs, "multiply_opcodes_all": seen}
     (out / "libscan.json").write_text(json.dumps(doc, indent=1) + "\n")
     print("LIBSCAN", [(r["path"], r.get("functions"), r.get("complete"), len(r.get("multiply_opcodes", {}))) for r in recs], flush=True)
-    return 0 if all(r.get("complete") for r in recs if "error" not in r) else 1
+    ok = all(r.get("complete") for r in recs if "error" not in r)
+    if os.environ.get("RESEARCH_RUN_ID"):
+        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+               "label": "Measured (the sm_120 SASS of NVIDIA's libraries; no device)",
+               "method": "cuobjdump -arch sm_120 -sass of each library, every opcode counted; the multiply-family ones kept",
+               "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "step": "scan-libs",
+                                        "libraries": {r["path"]: r.get("sha256") for r in recs}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+               "validation": {"status": "passed" if ok else "failed", "checker": "every present library's SASS dumped to the end",
+                              "detail": "; ".join(f"{r['path']}: {r.get('error') or r.get('functions')}" for r in recs),
+                              "evidence": ["libscan.json"]},
+               "measurements": [{"name": "multiply_opcodes", "value": len(seen), "unit": "opcodes"}],
+               "measurement_files": ["libscan.json"], "artifacts": []}
+        (out / "result.json").write_text(json.dumps(res, indent=1) + "\n")
+    return 0 if ok else 1
 
 
 # ---------------------------------------------------------------------------------------------------------------------- collect
@@ -1335,7 +1375,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--family", required=True, choices=sorted(FAMILIES) + ["_all"])
     r.add_argument("--out", required=True)
     r.add_argument("--reps", type=int, default=5)
-    r.add_argument("--target-ms", type=float, default=40.0)
+    r.add_argument("--target-ms", type=float, default=100.0)
     r.add_argument("--sustain-s", type=float, default=2.0)
     r.add_argument("--seed", type=int, default=20260930)
     r.add_argument("--expect-uuid", default=None)
