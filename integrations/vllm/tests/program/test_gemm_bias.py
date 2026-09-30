@@ -79,12 +79,15 @@ def test_gemm_bias_v2_is_bit_equal_to_gemm_v2_then_bias_add_on_edge_and_random_v
     vecs = _vectors(24, 7)
     for x, w, b in vecs:
         assert list(evaluate(gb, x, w, b)) == list(evaluate(ba, list(evaluate(g, x, w)), b)), (x[:2], w[:2], b[:2])
+    # Gemm_v2's row declines a non-finite word by raising, so only finite vectors reach it
+    compared = 0
     for x, w, b in vecs[len(EDGES):]:
-        got = RK.gemm_bias_dot({"K": K, "N": N, "DOT": dot}, (np.array(x, np.uint16), np.array(w, np.uint16), np.array(b, np.uint16)))["0"]
         want = np.array(evaluate(gb, x, w, b), dtype=np.uint16)
-        fin = [(v & 0x7F80) != 0x7F80 for v in list(x) + list(w) + list(b) + want.tolist()]
-        if all(fin):
+        if all((v & 0x7F80) != 0x7F80 for v in list(x) + list(w) + list(b) + want.tolist()):
+            got = RK.gemm_bias_dot({"K": K, "N": N, "DOT": dot}, (np.array(x, np.uint16), np.array(w, np.uint16), np.array(b, np.uint16)))["0"]
             assert got.tolist() == want.tolist()
+            compared += 1
+    assert compared >= 24
 
 
 def test_q_word_cuts_gemm_bias_v2_into_one_unit_per_output_word_with_no_committed_interior():

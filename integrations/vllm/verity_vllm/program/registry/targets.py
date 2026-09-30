@@ -81,8 +81,8 @@ TARGETS: dict[str, dict[str, Any]] = {
                                                          "every finite head (Attention_v3: 997 differ); fa_tap_exactness 9dee6b6f / 9403e9fe guarded "
                                                          "(r20260930-030755-9aab, art:592bc0ae)",
                                         "gemm_bias": "RTX PRO 6000 (driver 580.173.02), torch 2.13.0+cu129, vLLM d9105ea80 under "
-                                                     "VLLM_BATCH_INVARIANT=1: linear_batch_invariant(x, W, b) on Qwen2.5-0.5B's qkv (K 896, "
-                                                     "N 1152) launches matmul_kernel_persistent, then a bf16 add, at M 1, 2, 7 and 256; all "
+                                                     "VLLM_BATCH_INVARIANT=1: linear_batch_invariant(x, W, b) on a biased qkv linear of the bf16 "
+                                                     "sweep (K 896, N 1152) launches matmul_kernel_persistent, then a bf16 add, at M 1, 2, 7 and 256; all "
                                                      "306,432 words equal BiasAdd_v1(Gemm_v2{DOT=HopperBF16WgmmaDot16_v1}), and 80,572 of them "
                                                      "differ from the bias added before the rounding (F.linear's cuBLASLt epilogue), run "
                                                      "r20260930-140739-7974"}},
