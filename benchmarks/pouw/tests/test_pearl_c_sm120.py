@@ -561,6 +561,9 @@ class Gate:
     detail: dict[str, Any] = field(default_factory=dict)
 '''
 ARMS = ["PearlCSm120", "PearlCSm120Unpromoted"]
+#: the arm's call under run.py's default forms (GPU 1's kernels) and under h1_sm120.cuh's one-launch kernels
+FOLD = "p,fold"
+ARM_FORMS = [None, FOLD]
 
 
 @pytest.fixture(scope="module")
@@ -627,10 +630,12 @@ def test_arm_accounting_is_the_schemes(A):
     assert arm.domain(Shape("x", 24, 1024, 128))       # the scheme's own rule: 16 | m
 
 
-def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str) -> list[dict]:
-    """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows; its JSON lines."""
+def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str, forms: str | None = None) -> list[dict]:
+    """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows, the call under run.py's `forms`
+    (PEARLC_A_FORMS, None its default); its JSON lines."""
     r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, mode, str(tmp / "run"),
-                        *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows")),
+                        *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows"),
+                                            PEARLC_A_FORMS=forms),
                        capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stderr
     return [json.loads(x) for x in r.stdout.splitlines()]
@@ -658,15 +663,17 @@ def transcript(run: Path, arm: str, label: str, root: str = "transcripts") -> tu
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
 @pytest.mark.parametrize("cls", ARMS)
-def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
+def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls, forms):
     """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy, the
-    kernels each role's step needs and no others (nohash: no tree of A, no seed_A, no E_A lines, no hashes), E_A's line key
-    h1_commit's from A's root, each operand set's E_A lines and call buffers its own, the phases the call's launches split
-    before, at and after the chain, every footprint allocated; the gate fails (the stand-in computes nothing, so seed_A isn't
-    the scheme's and no twin tile matches) naming every output in full; freeing set 0's gated hash calls launches each once
-    more, synchronously, and writes its transcript with the trees' frame-b3 sizes; nothing leaks."""
-    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry")
+    kernels each role's step needs under the call's forms and no others (nohash: no tree of A, no seed_A, no E_A lines, no
+    hashes), E_A's line key seed_line_a's (h1_commit's under `fold`) from A's root, each operand set's E_A lines and call
+    buffers its own, the phases the call's launches split before, at and after the chain, every footprint allocated; the gate
+    fails (the stand-in computes nothing, so seed_A isn't the scheme's and no twin tile matches) naming every output in full;
+    freeing set 0's gated hash calls launches each once more, synchronously, and writes its transcript with the trees'
+    frame-b3 sizes; nothing leaks."""
+    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry", forms=forms)
     arm = getattr(A, cls)()
     sx = "" if arm.device.g else "_u"
     end = rows[-1]
@@ -685,10 +692,16 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     def chain(shape: str, role: str = "hash") -> str:
         return ("gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_b") + sx if fused[shape] else "gemm_pearlc_d" + sx
 
-    commit = ["h1_commit", "lines"]                  # A's trees (256 and 32 rows) fit h1_commit's last CTA
+    if forms == FOLD:
+        commit = ["h1_commit", "lines"]              # A's trees (256 and 32 rows) fit h1_commit's last CTA
+        hashes = lambda shape: ["hash_leaf_p", "h1_tree"] if fused[shape] else ["h1_tiles"]  # noqa: E731
+        tree = ["h1_rows_p", "h1_tree"]
+    else:
+        commit = ["hash_rows_w", "hash_tree_small", "seed_line_a", "lines"]
+        hashes = lambda shape: ([] if fused[shape] else ["hash_msg_v"]) + ["hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]  # noqa: E731
+        tree = ["hash_rows_w", "hash_tree_small"]
     forming = lambda shape: ["stats_s5", "eprime", "form_s5", words[shape] + sx, "pa"]  # noqa: E731
-    hashes = lambda shape: ["hash_leaf_p", "h1_tree"] if fused[shape] else ["h1_tiles"]  # noqa: E731
-    weight = (["hash_node_keys", "h1_rows_p", "h1_tree", "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
+    weight = (["hash_node_keys", *tree, "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
               + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"])
     got, allocs = windows(tmp_path / "dry.jsonl")
     assert not allocs
@@ -738,14 +751,21 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         assert names == want, mark
         by = {ev.get("name"): ev for ev in evs}
         if mark["role"] != "nohash":
-            seed, lines, gemm = by["h1_commit"], by["lines"], by[chain(sh)]
-            assert lines["p"][0] == seed["p"][4] and seed["p"][5] == mark["keys"]["unit"]
+            lines, gemm = by["lines"], by[chain(sh)]
+            if forms == FOLD:
+                seed = by["h1_commit"]
+                assert lines["p"][0] == seed["p"][4] and seed["p"][5] == mark["keys"]["unit"]
+            else:
+                seed = by["seed_line_a"]
+                assert lines["p"][0] == seed["p"][2] and seed["p"][1] == mark["keys"]["unit"]
             assert lines["i"][2] == A.padded({"pre": 256, "dec": 32}[sh])
             assert by["eprime"]["p"][0] == lines["p"][1]
             if fused[sh]:        # the digests gemm_pearlc_b writes under the message key are those the tile leaves read
                 assert gemm["p"][9] == by["hash_leaf_p"]["p"][0] and gemm["p"][11] == mark["keys"]["k_msg"] and not gemm["p"][2]
-            else:
+            elif forms == FOLD:
                 assert by["h1_tiles"]["p"][:2] == gemm["p"][2:4]
+            else:
+                assert by["hash_msg_v"]["p"][:2] == gemm["p"][2:4] and by["hash_msg_v"]["p"][2] == by["hash_leaf_p"]["p"][0]
         e = by["eprime"]["p"][0]
         assert ea.setdefault((mark["shape"], mark["set"]), e) == e
     for shape in ("pre", "dec"):
@@ -755,8 +775,9 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
 @pytest.mark.parametrize("cls", ARMS)
-def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls):
+def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls, forms):
     """The fixture's bytes (the scheme's, at its epoch and seeds) where the kernels would have written them pass the gate, the
     device's seed_A and E_A's line key the scheme's from its root_A.  At the fixture's 128 rows the call is fused, so it stores
     y and the digests, no C̃ or U: the twin reads the second (unfused) launch's C̃ and U, and one message digest flipped in the
@@ -764,7 +785,7 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     leaf, there alone).  Restored, it passes again and freeing the call writes the transcript, which the reference verifier
     (verify.py, `verity_pouw.audit.Verifier`) accepts, and its negative control, whose trees and leaves are all poison (the
     stand-in writes nothing) and which the verifier rejects."""
-    first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"))
+    first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"), forms=forms)
     arm = getattr(A, cls)()
     assert first["ok"] and first["checked"] == {name: "all" for name in ("y",) + A.HASHED}
     assert not any(first["detail"]["words_differing_from_relaunch"].values())

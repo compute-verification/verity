@@ -9,8 +9,8 @@
    compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`), on the unfused call
    (C~ and U stored, hash_msg's digests); the GEMMs, with gemm_pearlc_s (y alone) and the fused gemm_pearlc_b (y and the
    message digests from registers), are re-run on all, 1 and 3 CTAs and compared again (`<buffer>@<step>/<tile>/grid<n>`), and
-   the chain's 64 x 64 kernels (decode's) too, and the trees again under ALT_FORMS (A's rows by hash_rows_w, the levels by
-   hash_nodes and hash_tree_small).  A variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU
+   the chain's 64 x 64 kernels (decode's) too, and the trees again under every form but the call's (OTHER_FORMS:
+   `<buffer>@<rows>+<trees>`).  A variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU
    reference), the plain baselines only if theirs do.  Exit 4 if any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
@@ -23,13 +23,13 @@
    within it (form_rate less form_rate_nocast; at the 144-byte row stride, form_rate_r144 less form_rate_nocast_r144).
    form_s5's codes and the lines' transposed F lines are in K32 order (pearl_c_sm120.cu); the check's fixture holds them in
    it, and every product over k against the unpermuted operands'.  `alt_ms` times the commitment's and hashing's steps under
-   TIMED_FORMS (ALT_FORMS and `p,one`).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic only;
+   OTHER_FORMS.  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic only;
    the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML)
+                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_A_FORMS="w,nodes")
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
 times regardless of the check and marks every row ungated.
@@ -271,15 +271,19 @@ def cdiv(a: int, b: int) -> int:
 
 
 TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
-#: the forms of the row leaves and of the trees: `p` h1_rows_p (h1_sm120.cuh: hash_rows_w's warp a row, its loads under
+#: the forms of the row leaves and of the trees, all writing the same bytes: ALT_FORMS, hash_rows_w (a warp a row) and
+#: hash_nodes a level a launch down to hash_tree_small, are the call's unless PEARLC_A_FORMS names another; their steps and
+#: buffers are those the vLLM path (#540) runs by name.  `p` is h1_rows_p (h1_sm120.cuh: hash_rows_w's loads under
 #: L2::256B) and `one` h1_tree (a whole tree in one launch); `fold` is `one` with, where the tree fits one CTA's top
-#: (decode), A's commitment in one launch (h1_commit: rows, tree, seed_A and E_A's line key) and the unfused call's hashing in
-#: one (h1_tiles: digests, tile leaves and tile tree).  ALT_FORMS, hash_rows_w and hash_nodes a level a launch down to
-#: hash_tree_small, write the same bytes: the check reruns them against the fixture, the timing prices them and `one` as
-#: `alt_ms`, and the arm's gate relaunches under them.  PEARLC_A_FORMS=w,nodes makes those the call's.
-ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "p,fold").split(",")
+#: (decode), A's commitment in one launch (h1_commit: rows, tree, seed_A and E_A's line key, step `commit_a`) and the unfused
+#: call's hashing in one (h1_tiles: digests, tile leaves and tile tree, step `tiles_t`).  The check reruns every form but the
+#: call's against the fixture, the timing prices them as `alt_ms`, and the arm's gate relaunches under ALT_FORMS.
+ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "w,nodes").split(",")
 ALT_FORMS = ("w", "nodes")
-TIMED_FORMS = (ALT_FORMS, ("p", "one"))
+FORMS = (ALT_FORMS, ("p", "one"), ("p", "fold"))
+if (ROWS_FORM, TREE_FORM) not in FORMS:
+    raise ValueError(f"PEARLC_A_FORMS is one of {[','.join(f) for f in FORMS]}, not {ROWS_FORM},{TREE_FORM}")
+OTHER_FORMS = tuple(f for f in FORMS if f != (ROWS_FORM, TREE_FORM))
 TILES_CTA = 128                                # h1_tiles' threads a CTA: a tile's 2 x 64 digests
 #: h1_tree's threads a CTA before the last CTA's roots need more: 64 CTAs of 64 cover A's 8,192 rows, 128 the tile tree's 16,384
 TREE_CTA = 64
@@ -342,7 +346,7 @@ class Pipeline:
     labels `k_msg`, `k_leaf`, and `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
     BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (h1_commit under
     `fold`).  `rows_form` and `tree_form` pick the kernels of the trees' row leaves and levels (ROWS_FORM and TREE_FORM, or
-    ALT_FORMS) for the steps made after they're set."""
+    one of FORMS) for the steps made after they're set."""
 
     GEMM_SMEM: dict[str, int] = {}
 
@@ -413,21 +417,10 @@ class Pipeline:
         """The device address of a tree's root, its last node."""
         return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - 32
 
-    def levels(self, tag: str, count: int, dom: str, leaves: str | None = None) -> None:
-        """A frame-b3 tree's levels above level 0 (its leaves written, or from `leaves` the tile tree's).  `one`: h1_tree, the
-        whole tree in one launch (it writes level 0's pads, and the tile tree's frame-b3 leaves, too; its counter `ctr_<tag>`
-        is zero between launches).  `nodes` (level 0 written, pads included): hash_nodes a level at a time down to TREE_SMALL
-        nodes, then hash_tree_small for the rest in one launch."""
+    def levels(self, tag: str, count: int) -> None:
+        """A frame-b3 tree's levels above level 0 (leaves and pads written): hash_nodes a level at a time down to
+        TREE_SMALL nodes, then hash_tree_small for the rest in one launch."""
         d, base, lk = self.dev, self.b[f"tree_{tag}"], self.b[f"keys_{tag}"]
-        if self.tree_form in ("one", "fold"):
-            width = pow2(count)
-            grid, t = tree_grid(width, leaves is not None)
-            smem = 32 * (min(width, 2 * t) + 32)
-            if smem > 48 * 1024:
-                d.ck("cuFuncSetAttribute", d.fn("h1_tree"), MAX_DYN, smem)
-            d.launch("h1_tree", grid, t, smem, p=(base, self.keys[dom], self.b[f"ctr_{tag}"], self.b[leaves] if leaves else 0),
-                     i=(count, width))
-            return
         width, off, level = pow2(count), 0, 0
         while width > TREE_SMALL:
             d.launch("hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), lk + 32 * level),
@@ -435,6 +428,17 @@ class Pipeline:
             off, width, level = off + width, width // 2, level + 1
         if width > 1:
             d.launch("hash_tree_small", 1, min(1024, width // 2), p=(base + 32 * off, lk + 32 * level), i=(width,))
+
+    def tree_one(self, tag: str, count: int, dom: str, leaves: str | None = None) -> None:
+        """The `one` and `fold` forms' levels: h1_tree, the whole tree in one launch over its leaves (or, from `leaves`, the
+        tile tree's frame-b3 leaves too), level 0's pads included; its counter `ctr_<tag>` is zero between launches."""
+        d, width = self.dev, pow2(count)
+        grid, t = tree_grid(width, leaves is not None)
+        smem = 32 * (min(width, 2 * t) + 32)
+        if smem > 48 * 1024:
+            d.ck("cuFuncSetAttribute", d.fn("h1_tree"), MAX_DYN, smem)
+        d.launch("h1_tree", grid, t, smem, p=(self.b[f"tree_{tag}"], self.keys[dom], self.b[f"ctr_{tag}"],
+                                              self.b[leaves] if leaves else 0), i=(count, width))
 
     def tree_setup(self, tag: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree's pads and level keys (hash_pad, hash_node_keys): its domain's alone, so once per unit."""
@@ -457,9 +461,10 @@ class Pipeline:
         smem = 4 * warps * rows_w_words(rb)
         if smem > 48 * 1024:
             d.ck("cuFuncSetAttribute", d.fn(kernel), MAX_DYN, smem)
+        one = self.tree_form in ("one", "fold")
         return [(f"hash_rows_{tag}", lambda: d.launch(kernel, cdiv(count, warps), 32 * warps, smem,
                                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
-                (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
+                (f"tree_{tag}", (lambda: self.tree_one(tag, count, dom)) if one else (lambda: self.levels(tag, count)))]
 
     def commit_a(self) -> list[tuple[str, object]]:
         """A's commitment: its row tree, then seed_A and E_A's line key from the root (seed_line_a); under `fold`, where the
@@ -581,7 +586,8 @@ class Pipeline:
                    *([] if one else [
                        ("tree_leaves_t", lambda: d.launch("hash_tree_leaves", cdiv(tiles, 128), 128,
                                                           p=(b["leaves"], b["tree_t"], kk["dom_t"]), i=(tiles,)))]),
-                   ("tree_t", lambda: self.levels("t", tiles, "dom_t", leaves="leaves" if one else None))]
+                   ("tree_t", (lambda: self.tree_one("t", tiles, "dom_t", leaves="leaves")) if one
+                    else (lambda: self.levels("t", tiles)))]
         if self.tree_form == "fold" and not self.fused and tw <= 2 * TILES_CTA:
             hashing = [("tiles_t", lambda: d.launch("h1_tiles", tiles, TILES_CTA, 32 * max(132, tw + 32),
                                                     p=(b["c"], b["u"], b["digests"], kk["k_msg"], b["leaves"], kk["k_leaf"],
@@ -684,17 +690,18 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                     dev.sync()
                     for o in outs:
                         res[f"{o}@{step}/{tag or 'bm128'}/grid{grid or 'all'}"] = compare(dev, pipe, o, want(ALIASES.get(o, o)))
-        alt = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, fused=False)
-        alt.rows_form, alt.tree_form = ALT_FORMS
         hashed = [nm for nm in FORM_BUFFERS if nm in common or nm in files]
-        for nm in hashed:
-            dev.ck("cuMemsetD8_v2", u64(pipe.b[nm]), 0xAB, pipe.size[nm])
-        for _, phase, fn in alt.steps():
-            if phase in FORM_PHASES:
-                fn()
-        dev.sync()
-        for nm in hashed:
-            res[f"{nm}@{'+'.join(ALT_FORMS)}"] = compare(dev, pipe, nm, want(nm))
+        for forms in OTHER_FORMS:
+            alt = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, fused=False)
+            alt.rows_form, alt.tree_form = forms
+            for nm in hashed:
+                dev.ck("cuMemsetD8_v2", u64(pipe.b[nm]), 0xAB, pipe.size[nm])
+            for _, phase, fn in alt.steps():
+                if phase in FORM_PHASES:
+                    fn()
+            dev.sync()
+            for nm in hashed:
+                res[f"{nm}@{'+'.join(forms)}"] = compare(dev, pipe, nm, want(nm))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
@@ -860,7 +867,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
                                               "chain_only": round(med["gemm_ct"] / fastest, 4)}
     if gates["pearl_c"]:
         out["alt_ms"] = {}
-        for forms in TIMED_FORMS:
+        for forms in OTHER_FORMS:
             alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
             alt.rows_form, alt.tree_form = forms
             out["alt_ms"].update({f"{nm}@{','.join(forms)}": round(statistics.median(dev.timed(f, reps)), 4)
