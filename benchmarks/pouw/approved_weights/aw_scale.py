@@ -204,8 +204,9 @@ def split_rot(d, dev, seed):
 def massive_channels(model, shards, names, ids, dev, seed, cap, ratio=20.0):
     """S: the residual-stream channels whose largest magnitude, in some layer, is at least `ratio` times that layer's
     median channel's, on one calibration window through the registered checkpoint (FP8, as registered); at most `cap`,
-    the largest first. Returns S and the top scores."""
-    project(model, shards, names, "none", seed, dev)
+    the largest first. Returns S and the top scores, or None when preempted."""
+    if not project(model, shards, names, "none", seed, dev):
+        return None
     amax = []
     hooks = [m.register_forward_pre_hook(lambda mod, a: amax.append(a[0].detach().abs().amax(dim=(0, 1)).float()))
              for n, m in model.named_modules() if n.endswith(("input_layernorm", "post_attention_layernorm"))]
@@ -253,6 +254,8 @@ def project(model, shards, names, rung, seed, dev):
         return G.rot_matrix(d, dev, seed), rot_bf16(d, dev, seed)
 
     for i, n in enumerate(names):
+        if PRE["flag"]:
+            return False                        # the fill runner kills a job that hasn't yielded within about 10 s
         if i % 28 == 0:
             torch.cuda.empty_cache()
         mod = model.get_submodule(n)
@@ -270,6 +273,13 @@ def project(model, shards, names, rung, seed, dev):
         set_codes(mod, w, fmt)
         del w
     torch.cuda.empty_cache()
+    return True
+
+
+def atomic_write(path, text):
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
 
 
 def attach_affine(model, names, on):
@@ -377,9 +387,11 @@ def main():
         if not sf.exists():
             cap = args.split_cap or cfg.hidden_size // 1024
             with torch.no_grad():
-                s, top = massive_channels(model, shards, names, train[:args.seqlen], dev, args.seed, cap, args.split_ratio)
-            sf.write_text(json.dumps({"channels": s, "cap": cap, "ratio": args.split_ratio, "top_scores": top,
-                                      "calibration": f"WikiText-2 train, tokens 0-{args.seqlen}, FP8 as registered"}, indent=1))
+                found = massive_channels(model, shards, names, train[:args.seqlen], dev, args.seed, cap, args.split_ratio)
+            if found is None:
+                return 143
+            atomic_write(sf, json.dumps({"channels": found[0], "cap": cap, "ratio": args.split_ratio, "top_scores": found[1],
+                                         "calibration": f"WikiText-2 train, tokens 0-{args.seqlen}, FP8 as registered"}, indent=1))
         SPLIT["channels"] = json.loads(sf.read_text())["channels"]
         print(json.dumps({"split_channels": SPLIT["channels"]}), flush=True)
     want = args.eval_windows if args.eval_windows > 0 else test.numel() // args.seqlen
@@ -393,7 +405,9 @@ def main():
         st = torch.load(sp, map_location=dev) if sp.exists() else {"step": 0, "trace": [], "nll": [], "tp": None}
         t1 = time.time()
         with torch.no_grad():
-            project(model, shards, names, rung, args.seed, dev)
+            if not project(model, shards, names, rung, args.seed, dev):
+                left = True
+                break
         st["tp"] = st["tp"] or round(time.time() - t1, 1)
         params = attach_affine(model, names, rec == "1")
         opt = torch.optim.AdamW(params, lr=args.lr) if params else None
@@ -407,7 +421,8 @@ def main():
             if params:
                 st["params"] = [p_.detach().clone() for p_ in params]
                 st["opt"] = opt.state_dict()
-            torch.save(st, sp)
+            torch.save(st, sp.with_name(sp.name + ".tmp"))
+            os.replace(sp.with_name(sp.name + ".tmp"), sp)
 
         steps = args.recover_steps if rec == "1" else 0
         g = torch.Generator().manual_seed(args.seed + st["step"])
@@ -443,7 +458,7 @@ def main():
                "fold_norms_under_rotation": True,
                "split_channels": SPLIT["channels"] if rung.split("@")[0] == "rotx" else None, "gpu": torch.cuda.get_device_name(0),
                "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""), "peak_gpu_mem_gb": round(torch.cuda.max_memory_allocated() / 2 ** 30, 1)}
-        (out / f"{v.replace(':', '_')}.json").write_text(json.dumps(doc, indent=1))
+        atomic_write(out / f"{v.replace(':', '_')}.json", json.dumps(doc, indent=1))
         sp.unlink(missing_ok=True)
         print(json.dumps({k: doc[k] for k in ("variant", "ppl", "project_seconds", "peak_gpu_mem_gb")}), flush=True)
         attach_affine(model, names, False)
