@@ -617,3 +617,23 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
         got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
                      [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]])
     assert got["deferred"] == got["serial"]
+
+
+# ---- the hashing format, from the one table --------------------------------------------------------------------------
+
+def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
+    """The message and leaf keys the kernels read and every tree's hash are the scheme's format's
+    (`verity_pouw.serving.HASH_FORMATS`), not literals, and -h1's bytes are what they were."""
+    from verity.commitments.blake3 import blake3
+    from verity_pouw.serving import HASH_FORMATS, SchemeId, hash_format
+
+    make, *_ = device_run
+    run = make()
+    fmt = hash_format(run.scheme)
+    assert fmt is HASH_FORMATS["h1"] and run.tree_hash == fmt.tree_hash == run.scheme.commitment_hash == "blake3"
+    assert PPD._bytes(run.const[:64]) == fmt.message_key() + fmt.leaf_key()
+    assert C.H1_KEYS == {"message": blake3(b"pearl-c/h1/message"), "leaf": blake3(b"pearl-c/h1/leaf")}
+    assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
+    assert PPD.tree_hash(SCHEME) == "blake3" and C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
+    with pytest.raises(KeyError, match="this device path runs"):
+        PPD.scheme_of("pearl-c-sm120-v1-h2")

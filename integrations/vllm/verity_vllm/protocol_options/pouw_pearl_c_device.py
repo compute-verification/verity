@@ -64,12 +64,12 @@ from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
 from verity_pouw.schemes import pearl_kw as P
+from verity_pouw.serving import SchemeId, hash_format
 
-#: scheme name -> (forming, device record, hashing format).  The format is a switch: ``-h2`` (frame-b3s) or ``-h3`` joins as
-#: one entry here and one in `TREE_HASH` once GPU 1's pipeline commits with it (which of them is Daniel's call).
-SCHEMES = {"pearl-c-sm120-v1-h1": ("v1", "sm120", "h1")}
-#: each hashing format's tree hash (`CommitmentDomain.hash`): A's, B's and the transcript's trees
-TREE_HASH = {"h1": "blake3"}
+#: the Pearl-C schemes this device path runs, by name (`verity_pouw.serving.SchemeId`: forming, device record, hashing format).
+#: The format is a switch: another joins as one name here once GPU 1's pipeline commits with it (which is Daniel's call); its
+#: keys and tree hash come from `verity_pouw.serving.HASH_FORMATS`, the one table, through the scheme.
+SCHEMES = ("pearl-c-sm120-v1-h1",)
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -100,16 +100,26 @@ DEFER_SETS = 2
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
     """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
     from verity_pouw.schemes.pearl_c_device import DEVICES
-    forming, device, hashing = SCHEMES[name]
-    s = C.PearlC(forming=forming, device=DEVICES[device], hashing=hashing, **instance)
+    if name not in SCHEMES:
+        raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
+    sid = SchemeId.parse(name)
+    s = C.PearlC(forming=sid.forming, device=DEVICES[sid.device], hashing=sid.hashing, **instance)
     if s.name != name:
         raise ValueError(f"the scheme built for {name!r} names itself {s.name!r}")
     return s
 
 
 def tree_hash(name: str) -> str:
-    """The scheme's tree hash, from its hashing format."""
-    return TREE_HASH[SCHEMES[name][2]]
+    """The scheme's tree hash (`CommitmentDomain.hash` of A's, B's and the transcript's trees), from its hashing format."""
+    return scheme_of(name).commitment_hash
+
+
+def _format_keys(scheme: C.PearlC) -> bytes:
+    """The message and leaf keys of the scheme's hashing format, as the kernels read them (``k_msg`` ‖ ``k_leaf``)."""
+    fmt = hash_format(scheme)
+    if fmt.message_key() is None:
+        raise ValueError(f"{scheme.name}: hashing {fmt.name} has no keyed-BLAKE3 message and leaf, which the kernels hash with")
+    return fmt.message_key() + fmt.leaf_key()
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
@@ -489,11 +499,11 @@ class PearlCDeviceRun:
         self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
                            self.roots, salt)
         self.const = _zeros(64, self.device)
-        _put(self.const, C.H1_KEYS["message"] + C.H1_KEYS["leaf"])
+        _put(self.const, _format_keys(scheme))
         self.leaves = _zeros(32 * capacity, self.device)
         self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
-        self.tree_hash = TREE_HASH[scheme.hashing]
+        self.tree_hash = scheme.commitment_hash
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.fused_screen = self.device.type == "cuda" and fused_screen_available()
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
@@ -759,7 +769,7 @@ class PearlCDeviceRun:
                     "root_a": roots_a[32 * u.index:32 * u.index + 32].hex(), **f}
                    for u, r, f in zip(cur.matmuls, cur.records, cur.files)]
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
-                "scheme_args": dict(zip(("forming", "device", "hashing"), SCHEMES[self.scheme.name])),
+                "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
                 "beacon": self.beacon.hex(), "salt": self.salt.hex(), "cubin_sha256": self.kernel.cubin_sha256,
                 "kernel_source_sha256": self.kernel.source_sha256,
                 "records_root": PW.records_root(self.salt, epoch.weights_root,

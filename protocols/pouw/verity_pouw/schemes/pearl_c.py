@@ -77,6 +77,7 @@ from verity.commitments.turboshake import turboshake128
 from verity.ml.tc import fp32
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..serving import HASH_FORMATS
 from . import pearl_kw as P
 from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Prices  # noqa: F401 - re-exported
 
@@ -90,9 +91,10 @@ TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
-#: Hashing formats: h0 (TurboSHAKE128 messages and leaf, SHA-256 trees) and h1 (BLAKE3 throughout, for decode latency)
+#: The hashing formats this scheme implements, of the one table (`verity_pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
+#: messages and leaf, SHA-256 trees) and h1 (BLAKE3 throughout, for decode latency)
 HASHINGS = ("h0", "h1")
-H1_KEYS = {r: blake3(f"pearl-c/h1/{r}".encode()) for r in ("message", "leaf")}
+H1_KEYS = {"message": HASH_FORMATS["h1"].message_key(), "leaf": HASH_FORMATS["h1"].leaf_key()}
 
 
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
@@ -371,7 +373,7 @@ class PearlC:
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("-h1" if hashing == "h1" else "")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
-        self.commitment_hash = "blake3" if hashing == "h1" else "sha256"
+        self.commitment_hash = HASH_FORMATS[hashing].tree_hash
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
