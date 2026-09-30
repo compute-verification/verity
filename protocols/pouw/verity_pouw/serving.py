@@ -9,12 +9,17 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   says which placements a format forbids (A's tree stays on the main lane unless the format seeds forming per row).
 * `PassCommitment`: what one pass on one rank publishes before any draw; `MANIFEST_SCHEMA` names the retained pass the
   verifier reads.
+* `KernelVariant`, `StepIO`, `ShapeRule` and `GateRecord`: a kernel as content-addressed data, what each of its call steps
+  reads and writes, the shapes it takes, and the device gate that admits it to serving (`variant_refusals`).  Loading a
+  kernel directory is the runtime's; naming, gating and selecting one is here, so a bench or a ledger names a variant
+  without importing a runtime.
 
 Stdlib and `verity` only (the repository's ``tests/test_protocol_boundaries.py``).
 """
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -197,6 +202,106 @@ class PassCommitment:
                 for k, v in self.__dict__.items()}
 
 
+@dataclass(frozen=True)
+class StepIO:
+    """One call step of a kernel's pipeline: its group (`GROUPS`) and the buffers it reads and writes.  A schedule rotates
+    the per-call buffers its side lane reads, so a call never overwrites what the side lane still reads."""
+
+    group: str
+    reads: frozenset[str] = frozenset()
+    writes: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class ShapeRule:
+    """The shapes a kernel takes: k and n multiples, k's range, and the row granularity m is padded to."""
+
+    k_multiple: int = 1
+    n_multiple: int = 1
+    m_align: int = 1
+    k_min: int = 1
+    k_max: int = 1 << 24
+
+    def refusal(self, n: int, k: int) -> str | None:
+        if k % self.k_multiple or n % self.n_multiple or not self.k_min <= k <= self.k_max:
+            return (f"(n, k) = ({n}, {k}): the kernel takes k a multiple of {self.k_multiple} in [{self.k_min}, {self.k_max}] "
+                    f"and n a multiple of {self.n_multiple}")
+        return None
+
+
+@dataclass(frozen=True)
+class KernelVariant:
+    """A kernel, named by what it was built from: ``id`` is ``{family}-{device}/{source_sha256[:12]}``, so a tuned choice
+    that changes a source is a new variant.  ``prices`` names the priced path it implements (the cast and store the
+    published γ reads), ``loader`` how the runtime loads it."""
+
+    family: str
+    device: str
+    schemes: frozenset[str]
+    schedules: frozenset[str]
+    shapes: ShapeRule
+    source_sha256: str
+    binary_sha256: str
+    loader: str
+    prices: str | None = None
+    steps: Mapping[str, StepIO] = field(default_factory=dict, compare=False)
+
+    @property
+    def id(self) -> str:
+        return f"{self.family}-{self.device}/{self.source_sha256[:12]}"
+
+
+@dataclass(frozen=True)
+class GateRecord:
+    """The device gate's result for one variant: bit-exact at ``shapes`` against the scheme's reference, poisoned
+    transcripts accepted, controls rejected, every declared schedule committing the serial schedule's bytes, and the SASS
+    rule held under the pinned ``toolkit``.  ``gates`` is the gate code's version, so a row's validity is derived from it."""
+
+    variant: str
+    run: str
+    gates: str
+    shapes: tuple[tuple[int, int], ...]
+    exact: bool
+    poisoned_accepted: bool
+    controls_rejected: bool
+    schedules_equal: bool
+    sass_ok: bool
+    toolkit: str
+    prices: str | None = None
+
+    @property
+    def passed(self) -> bool:
+        return self.exact and self.poisoned_accepted and self.controls_rejected and self.schedules_equal and self.sass_ok
+
+
+def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Sequence[tuple[int, int]],
+                     gate: GateRecord | None) -> list[str]:
+    """Why `v` can't serve `scheme` under `schedule` at every (n, k) of `shapes` (empty: it can): it must compute both, take
+    every shape, and hold a passing gate of its own that covers every shape."""
+    out = []
+    if scheme not in v.schemes:
+        out.append(f"{v.id} computes {', '.join(sorted(v.schemes))}, not {scheme}")
+    if schedule not in v.schedules:
+        out.append(f"{v.id} runs {', '.join(sorted(v.schedules))}, not {schedule}")
+    out.extend(f"{v.id}: {r}" for n, k in shapes if (r := v.shapes.refusal(n, k)))
+    if gate is None:
+        out.append(f"{v.id} has no device gate")
+    else:
+        if gate.variant != v.id:
+            out.append(f"{v.id}: the gate is {gate.variant}'s")
+        if not gate.passed:
+            failed = [f for f in ("exact", "poisoned_accepted", "controls_rejected", "schedules_equal", "sass_ok")
+                      if not getattr(gate, f)]
+            out.append(f"{v.id}: its gate ({gate.run}) failed {', '.join(failed)}")
+        missing = sorted(set(map(tuple, shapes)) - set(gate.shapes))
+        if missing:
+            out.append(f"{v.id}: its gate didn't cover {missing}")
+        if v.prices is not None and gate.prices != v.prices:
+            out.append(f"{v.id}: gated on priced path {gate.prices}, declares {v.prices}")
+    return out
+
+
 __all__ = ["DEFERRED", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS", "MAIN_PRIORITIES",
-           "MANIFEST_SCHEMA", "MANIFEST_SCHEMAS_READ", "MOVABLE", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "HashFormat",
-           "PassCommitment", "Schedule", "SchemeId", "hash_format", "schedule_refusals"]
+           "MANIFEST_SCHEMA", "MANIFEST_SCHEMAS_READ", "MOVABLE", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord",
+           "HashFormat", "KernelVariant", "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format",
+           "schedule_refusals", "variant_refusals"]
