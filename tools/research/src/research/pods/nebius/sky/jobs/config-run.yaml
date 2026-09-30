@@ -5,7 +5,8 @@
 #   gpu:   1 GPU (TP2: 2)     `row stage commit ROW ROLE REPO REV --config-run 1 --replay-k 460`   one instrumented engine run, the
 #                              460-unit host replay, config_record.json: about 5-15 min for a small or medium cell
 # Config runs have no Match stage. Both tasks use the same row directory on the host (SWEEP_DIR/<row>): the Commit reads the Build's
-# Programs and manifest there. Each `row stage` publishes its own Attempt; the gpu task's carries ov.noisy (it runs beside Builds).
+# Programs and manifest there. Each task runs its `row stage` as one `research run --tool vllm.<stage>` Attempt (the Commit citing the
+# Build's artifact); the gpu task's carries ov.noisy (it runs beside Builds).
 # Full rows (Build, Match, Commit) use config-run-row.yaml. This is the coverage default: the GPU is held only for the Commit.
 # Needs #536 in the submitted tree: without it the GPU-less Build fails with "Device string must not be empty". Its build task
 # finds libcuda.so.1 in /workspace/jobs/cuda-driver, which cluster_up.sh keeps in step with the host's driver.
@@ -85,13 +86,18 @@ run: |
   set -euo pipefail
   export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
-  cd "$SRC/integrations/vllm"
   export PATH=$CUDA_HOME/bin:$PATH
-  export PYTHONPATH=$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
   # a pod with no GPU has no driver libraries, but importing vLLM's CUDA platform (#536) loads libcuda.so.1: the host's copy, which
   # can't reach a GPU without the /dev/nvidia* devices a GPU-less pod lacks (cluster_up.sh keeps it in step with the driver)
   export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-  "$PY" -m verity_vllm.pipeline.cli row stage build "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
+  # one Attempt per task, as `row chain` runs a stage: the workload is plain argv, from which the Tool reads the row's key params.
+  # The gpu task reads this run id back from the row directory to cite the Build's artifact
+  mkdir -p "$SWEEP_DIR/$ROW"
+  run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
+  echo "$run_id" > "$SWEEP_DIR/$ROW/two-task-build-run"
+  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --id "$run_id" --tool vllm.build --project verity --cwd "$SRC" \
+    --campaign "$CAMPAIGN" -- "$PY" -m verity_vllm.pipeline.cli row stage build "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
 
 config:
   ssh:
@@ -167,10 +173,23 @@ run: |
   set -euo pipefail
   export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
-  cd "$SRC/integrations/vllm"
   export PATH=$CUDA_HOME/bin:$PATH
-  export PYTHONPATH=$SRC/tools/research/src
-  "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
+  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
+  # compiled kernels persist per tree on the host: every cell of a tree after the first skips Triton's JIT (vLLM's batch-invariant
+  # kernels). A compiled engine still gets a fresh Inductor dir and no vLLM compile cache (engine/env.py), so its record keeps its
+  # evidence of compilation
+  tree=$(basename "$SRC")
+  export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$tree VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$tree
+  mkdir -p "$TRITON_CACHE_DIR" "$VLLM_CACHE_ROOT"
+  # the Commit's Attempt cites the Build task's artifact (--input build=art:...), as `row chain` does
+  build_run=$(cat "$SWEEP_DIR/$ROW/two-task-build-run" 2> /dev/null || true)
+  build_art=""
+  [ -z "$build_run" ] || build_art=$(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$build_run" --json 2> /dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("build", ""))' \
+    2> /dev/null || true)
+  echo "commit cites the Build: run ${build_run:-none}, artifact ${build_art:-none}"
+  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
+    ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
 
 config:
   ssh:
