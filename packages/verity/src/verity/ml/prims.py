@@ -203,9 +203,8 @@ def _register_kernels() -> None:
                     domain=every, sample=K.sample_tc)
     register_kernel(BlackwellE4m3QmmaDot32, lambda acc, a, b: K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b),
                     domain=every, sample=K.sample_tc)
-    register_kernel(BlackwellNvf4OmmaDot64, lambda acc, a, b, sa, sb: K.block_scaled_batch(BLACKWELL_SM120_NVF4, acc, a, b, sa, sb),
-                    domain="finite accumulators and valid scale codes (the rest declined, computed by the reference)",
-                    sample=K._sample_block_scaled(BLACKWELL_SM120_NVF4))
+    register_kernel(BlackwellNvf4OmmaDot64, lambda acc, a, b, sa, sb: K.nvf4_step_total_batch(BLACKWELL_SM120_NVF4, acc, a, b, sa, sb),
+                    domain=every, sample=K._sample_block_scaled(BLACKWELL_SM120_NVF4))
     register_kernel(F32ToE2m1Sat, lambda x: K.f32_to_e2m1_sat_batch(x, E2M1_NAN_CODE), domain=every)
     register_kernel(E4m3ToF32, K.e4m3_to_f32_batch, domain=every)
 
