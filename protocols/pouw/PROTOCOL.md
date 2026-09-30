@@ -257,23 +257,40 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
     pending its grant): the per-call law with y's floors at
     K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
     at most 2⁻⁴⁰ + ε_ks + δ_link. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
-    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above) and y's floors
-    (`hfy`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify` takes (`1 <= k <= n`),
-    and y's floor K_y. Outside it, the window's use of it rests on four things:
+    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above), y's floors
+    (`hfy`), and a window that does some work and has y cells (`hW`, `hN`: `window_laws` refuses W = 0 or N = 0,
+    `plan.py:186`, `plan.py:191`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify`
+    takes (`1 <= k <= n`), and y's floor K_y. Outside it, the window's use of it rests on four things:
     - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
-      (`Traced.layout`, `__init__.py:125`; any other is refused by `Traced.check_layout`, `__init__.py:117`). It
-      computes W from them (`plan.py:181`) and N (`plan.py:184`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:187`);
+      (`Traced.layout`, `__init__.py:144`; any other is refused by `Traced.check_layout`, `__init__.py:136`). It
+      computes W from them (`plan.py:185`) and N (`plan.py:190`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:195`);
       `WorkLaw.budget` computes W_c and N_c from the call's own strata and K_c = min(N_c, max(1, ⌈K·W_c/W⌉))
       (`plan.py:153–157`). No prover-stated number enters (X-SPC-80, 81).
     - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the window's `Ledger`
-      (`__init__.py:94`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:100–104`),
-      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:283`). The index is the
-      verifier's anchors' (`Anchors`, `anchors.py:34`, which `Anchors.check_call` holds the call's inputs to,
-      `anchors.py:75`). This is the pin's M1.
-    - *Every call's commitment precedes the window key.* `plan.draw` and `Traced.draw` take the key as given
-      (`__init__.py:83`); it must be the verifier's randomness derived under `DRAW_DOMAIN` after the receipt that binds
-      every call's commitment, so W, N and each K_c are fixed before any call's draw. Nothing in this package checks the
-      order: the window form of `traced_as` must.
+      (`__init__.py:97`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:215–221`),
+      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:291`). The index is the
+      verifier's anchors' (`Anchors`, `anchors.py:42`, which `Anchors.check_call` holds the call's inputs to,
+      `anchors.py:83`). This is the pin's M1.
+    - *Every call's commitment precedes the window key* (root's C1). A window's `anchors.Receipt` lists every call with
+      its anchors, shape and commitment, and is immutable (`anchors.py:130`); its digest binds each call's full
+      anchors (index, salt, weight id, rows and columns), shape and commitment. `Ledger.open` derives the key from it
+      alone, under `DRAW_DOMAIN` with {"receipt": digest} as its context, and admits only the calls it lists
+      (`anchors.py:199`, `anchors.py:215`). It is the only place a ledger's receipt, key and source are set: a
+      `Ledger` refuses every attribute assignment (`anchors.py:187`), and `Traced.draw` takes the key from the
+      ledger, refusing one not opened from a receipt (`__init__.py:96`). A call's openings are checked against its
+      commitment as the receipt lists it, by call index (`Ledger.commitment`, `Traced.check_openings`,
+      `__init__.py:101`), never one supplied with them. So W, N, each K_c and every commitment the openings answer
+      to are fixed by the receipt before any draw.
+    - *Each window's source is fresh and used once* (root's C2). `Ledger.open` takes no source: it draws 32 bytes from
+      the operating system's CSPRNG (`secrets`, `anchors.py:165`) once the receipt is complete, for that window
+      alone. So A4 (`prf/sha-256`) applies as stated, one fresh uniform source per derivation, with the source's
+      uniformity its own claim, A5 (`uniform/python-secrets`). Once the window's draw is sent (`Ledger.sent`), it draws
+      nothing more, and the audit record keeps its source and receipt digest (`Ledger.record`, `anchors.py:245`),
+      from which anyone re-derives the key and the draw (`replay_key`). The limit: a third party can check that the
+      draw came from the recorded source, not that the source was fresh. A verifier colluding with a prover could pick a
+      source whose draw misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
+      needed for a third party to check it. No protocol or beacon timing changes: the key is still the verifier's own
+      randomness after the receipt.
     - *ε_ks and δ_link are the window's.* The pin's are one window `Analysis`'s (M2). The per-call values are not cited
       as the window's; no statement composes them yet.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
@@ -281,10 +298,12 @@ at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratu
 **The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
 (forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
 under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
-`Traced.draw(key, law, anchors, ledger)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97). It first
-admits the call to the window's `anchors.Ledger` (one per window key), which refuses a call index the window already
-holds before anything is drawn, and then keys each stratum's subset with ("call", forward, position, "stratum",
-template). So each call of a window draws under a context of its own, the product law the window pin takes as M1.
+`Traced.draw(law, anchors, ledger)`, which takes no layout and no key: it draws over `Traced.layout()` (X-SPC-97). The
+window's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`), which derives the window's key from a
+fresh source under the receipt's digest; `Traced.draw` draws only under that key, admits the call first, refusing one
+the receipt doesn't list or the window already holds before anything is drawn, and then keys each stratum's subset
+with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of a
+window draws under a context of its own, the product law the window pin takes as M1.
 
 **The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
 inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
@@ -311,7 +330,10 @@ The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref
   - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
   - the grant and merge of the window pin, `audit_window_split_of_record`
     ([#418](https://github.com/danielreuter/verity/pull/418));
-  - the check that the window key comes after every call's commitment, with the window form of `traced_as`;
+  - the audit for a draw that depends on the registration: the key's context is the receipt digest, which the pinned
+    `audit` game (the registration before the coin, `L.draw ω`) can't express. Either apply the pins strategy by
+    strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over contexts;
+    the Lean lane's to choose (root's C1);
   - a statement composing the calls' ε_ks and δ_link into the window's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;

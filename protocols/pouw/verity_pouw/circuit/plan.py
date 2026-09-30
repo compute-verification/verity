@@ -175,13 +175,21 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     The other zero-work templates keep their floors (1 unless ``floors`` names them, X-SPC-84). Per call these are pinned
     (`audit_work_floor`); over the window, the per-call split (X-SPC-83, 106) and B (X-SPC-105) are root's window pin
     `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`, #418), which takes each call's work
-    in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`)."""
+    in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`).
+    It also takes a window that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): a window with
+    either empty is refused here, so none is ever drawn or accepted."""
+    if not layouts:
+        raise ValueError("a window has at least one call")
     for lay in layouts:
         check_work_strata(lay.strata)
     total = sum(lay.work() for lay in layouts)
+    if total <= 0:
+        raise ValueError("a window does some work (0 < W, the window pin's hW): this one does none")
     k_y = k if k_y is None else k_y
     ys = [[s for s in lay.strata if s.role == "dequant"] for lay in layouts]
     n = sum(len(s.units) for ss in ys for s in ss)
+    if n <= 0:
+        raise ValueError("a window has y cells (0 < N, the window pin's hN): this one has none")
     out = []
     for ss in ys:
         f = dict(floors) | {s.name: -(-k_y * len(s.units) // n) for s in ss}
