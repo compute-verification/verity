@@ -138,8 +138,182 @@ docstring states every parameter.
   signed permutation (`tests/vectors/ncp_lean.json`, from `tests/ncp_lean.py` on the integrated package, with the Lean
   sources' SHA-256). The scheme's own pinned vectors are `tests/vectors/ncp.json`.
 
+## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity_pouw/circuit`)
+
+Sampled proofs is PoUW's verifier here: the call is a `verity.ir` Program, drawn units are proved, never recomputed, and
+the audit's integrity profile carries the work bound (Project design note `docs/pouw/sampled-proofs-circuit.md`, §12; its
+Lean statements are the store's `lean/submissions/pouw-accountable-compute`). This package has NCP-INT at small shapes
+(16 | m, 16 | n, 64 | k); the certificate's domain is still `ncp-v1`'s.
+
+**The units.** A weight's Y strips and c₀ read only B, the salt, the weight id and the column ids, so they are formed once
+per run and weight: `NcpWeight{K,N,PERM}`'s root body is its `NcpFormY` units (`partition.weight_query`). One linear call
+is `NcpLinear{M,K,N,PERM}`, which reads its weight's Y strips and c₀ as committed inputs. Each root body holds only
+template instances, so each partition is `Q_template_instances` over them (`circuit.partition.query`); every value is
+computed in exactly one unit. `NcpWindow{M,K,N,PERM,C}` is C calls on one weight in one root, the Y units once
+(`partition.window_cut`): the composition passes the invariant too (`test_calls_on_one_weight_compose_without_recompute`).
+
+~~~text
+template            per                          reads                                         returns
+NcpFormY{K,PERM}    16-column weight strip       16 weight rows, salt, weight id, column ids   the Y strip (s8), c₀
+  (NcpWeight: once per run and weight)
+NcpDigest{K}        16-row strip of A            its 16 A rows                                 D_s
+NcpNode             node of the call's tree      its two children                              the parent (the root is D_A)
+NcpKey              call                         D_A, salt, forward, position, weight id       K
+NcpFormX{K,PERM}    16-row strip of A            16 A rows, K, row ids                         the X strip (X + β, u8)
+NcpTile{K}          16 × 16 block                its X strip, its Y strip, c₀                  the credited words, and Z
+NcpDequant          output entry                 Z, s_i, t_j, bias_j                           y = bf16(fp32(s_i)·fp32(t_j)·Z) + bias_j
+~~~
+
+**The formats.** Every hashed field is a 64-bit word: big-endian for SHA-512 (a digest word is its big-endian value) and
+little-endian for SHAKE256. Tags are 8 ASCII bytes. `noise(b) = (b mod 64) − 31`.
+
+~~~text
+r_i = SHA-512("ncp2-row" ‖ row i's int7 bytes)            D_s = SHA-512("ncp2-stp" ‖ r_16s ‖ … ‖ r_16s+15)
+D_A = RFC 6962 tree over D_1 … D_(m/16), node = SHA-512("ncp2-nod" ‖ left ‖ right); one leaf's root is the leaf
+K   = SHAKE256(D_A ‖ "ncp2-key" ‖ salt ‖ forward ‖ position ‖ weight id)[:32],   position = layer << 32 | site
+E₁ row i    = noise(SHAKE256(ι(i) ×5 ‖ "ncp2-E1\0" ‖ K)[:k])
+F₁ column j = noise(SHAKE256(ι(j) ×5 ‖ "ncp2-F1\0" ‖ salt ‖ weight id)[:k]),        ι(i) = i << 32 | i
+~~~
+
+X, Y, c₀ and the checked values are `ncp-v1`'s (`schemes.ncp.assemble`, `checked_route_u`) on this noise: the tile returns
+checkpoints 1 … 3k/16 − 1, step-major and row-major within a step, and Z, the last (A·Bᵀ exactly, mod 2^32). A and the
+weight are committed a leaf per row, so a proved unit opens exactly the rows it reads.
+
+**Why the formats look this way.** Each is forced by the partition, and each is checked by a test.
+- **D_s is its own unit.** An IR node is one call, placed after its arguments, so one unit can't both write D_s and read
+  D_A, which depends on it. The design note's X unit is two here: the digest unit and the forming unit. Both read the
+  strip's rows, which are committed inputs, and they compute different functions.
+- **K is per call, and each row's XOF begins with the row's own index in all five of Keccak's columns.** A row's XOF over
+  (salt, forward, D_A, …, i) would compute round 1's values of the call-wide fields alone in every X unit: the same
+  function of the same values in two units. The recompute check rejects that layout
+  (`test_the_index_in_every_column_is_what_keeps_the_xof_recompute_free`). F₁ carries the column index the same way,
+  and K's message begins with D_A's eight lanes, so that no two calls' key units compute a common value (X-SPC-71).
+- **c₀ is the Y unit's.** Every tile of a column would otherwise compute −β·Σ Y[:, j] again.
+- **The index binding is anchored inputs.** `Q_template_instances` admits no constant node at the root, so the forward
+  index, the position, the weight id and the global row and column indices are Program inputs. Each has an anchor the
+  verifier owns (`circuit.anchors`, the red team's X-SPC-72):
+
+  ~~~text
+  salt        the run's salt
+  forward     the verifier's own enumeration of the window's forwards
+  position    (layer, site) from the registered layout
+  weight id   the registered id of the matrix whose rows B opens under the weights root
+  row ids     the call's global row indices, distinct
+  column ids  the weight's global column indices, shards included, distinct
+  ~~~
+
+  The verifier builds these inputs itself (`Traced.call_args`, `Traced.weight_args`) or refuses a prover's that differ
+  (`Anchors.check_call`), and a window's `Ledger` refuses a repeated call index (forward, position), A11's
+  `UniqueCallIndices`.
+- **Every primitive returns at most 32 bits.** SHA-512 words are carried as (hi, lo) halves and Keccak lanes as
+  (lo, hi).
+
+**The verifier builds the Program** (X-SPC-73). `traced_as(scheme, m, k, n)` gives the call's and the weight's
+Definitions from the scheme and the shape alone; the scheme pins P (`ncp-v2`: the word-granular P, as `ncp-v1`;
+`ncp-v2-shift24`: the shift by 24). The verifier never takes a prover's descriptor: `Traced.check_descriptor` refuses one
+whose digest isn't its own Program's. So the width rule is a property of that Definition, checked on it
+(`partition.width_rule(shape, kind)` takes no Definition and no served count; a test's variant goes through
+`width_rule_of`, which refuses an empty served set).
+
+**The separator** (decision 4: option (a), Z stays in the tile). The protocol pins the separator port: the tile's Z, the
+second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant can't choose it.
+- `partition.width_rule` removes the pinned ports' values, then width-checks every unit from which a served output (y)
+  is still reachable, under `cut.WIDTH_RULE`. Only the dequantization units are, and each returns 16 bits. Every other
+  unit is behind the separator.
+- A tile whose word leaf reached y would itself be reachable, and would fail, along with every PoUW unit upstream of it
+  (`test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule`).
+- `partition.separator` checks the topology. Every path from a PoUW unit (digest, node, key, form-X, tile; and form-Y in a
+  window) to y passes through a pinned Z. What crosses is m·n values of 32 bits, 8,192 bits per tile, and no credited word is
+  delivered.
+
+**The draw** (`plan`). The strata are the verifier's own, as `verify` derives them (root's ruling on X-SPC-84): one per
+template of the call's partition, in the order of its first unit (`Flock/Draw.lean` `strataOf`). The law draws each
+stratum, and each drawn tile is proved with its closure: its X unit, strip digest, the node units on that strip's path and
+the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. Every other template is drawn
+at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratum`). The law is a seam:
+- `WorkLaw` is Verity root's work law (#362 with #374's floors, `Flock/Draw.lean`): k_s = min(n_s, max(f_s,
+  ⌈K·w_s·n_s/W⌉)), with K = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`plan.record_k`; 27,712 misses). Only the tile template does
+  PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
+  - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
+    W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
+    others' 1 unless POUS sets them. A call's work is in one stratum (0 < w_s·n_s in one only) and its tiles are of one
+    template: `work_table`, `WorkLaw.budget` and `window_laws` refuse any other (`plan.check_work_strata`), since the
+    window pin takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is under-drawn:
+    in the red team's window ten wrong units escape with 0.156 against a claimed 2.4·10⁻⁴
+    (`test_the_red_team_s_capped_window_is_refused`).
+  - `plan.law_object` is the law `verify` derives from it, each stratum `{template, units, work, floor, k}`.
+  - K is a **window's** budget (X-SPC-83): a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
+    (`plan.window_laws`). That is the law `verify` enforces when each call is its own statement with its own K_c
+    (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K.
+  - **y's floors** (root's option B, which closes X-SPC-105). No tile's closure holds a dequantization unit, so y is
+    drawn at its floor: each call's table gives `dequant` `{"work": 0, "floor": f_c}`, f_c = ⌈K_y·n_c/N⌉, n_c its y
+    cells and N the window's, with K_y = K = 27,713 (`plan.window_laws`). So k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c
+    or proves the call's y, and a window draws at most K_y + C y cells. δ stays 2⁻⁴⁰: a tile-bad and a y-bad wrong set
+    are one family of the one window audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
+    sum. Per call the floor is pinned (`audit_work_floor`); `flock-verify draw --work` derives the same law from these
+    tables.
+  - **X-SPC-105 and X-SPC-106 are closed by the window pin**, `audit_window_split_of_record` in
+    `FlockSoundness/Audit/Window.lean` ([#418](https://github.com/danielreuter/verity/pull/418), proved at `f06327bd`,
+    pending its grant): the per-call law with y's floors at
+    K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
+    at most 2⁻⁴⁰ + ε_ks + δ_link. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
+    their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above) and y's floors
+    (`hfy`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify` takes (`1 <= k <= n`),
+    and y's floor K_y. Outside it, the window's use of it rests on four things:
+    - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
+      (`Traced.layout`, `__init__.py:125`; any other is refused by `Traced.check_layout`, `__init__.py:117`). It
+      computes W from them (`plan.py:181`) and N (`plan.py:184`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:187`);
+      `WorkLaw.budget` computes W_c and N_c from the call's own strata and K_c = min(N_c, max(1, ⌈K·W_c/W⌉))
+      (`plan.py:153–157`). No prover-stated number enters (X-SPC-80, 81).
+    - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the window's `Ledger`
+      (`__init__.py:94`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:100–104`),
+      and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:283`). The index is the
+      verifier's anchors' (`Anchors`, `anchors.py:34`, which `Anchors.check_call` holds the call's inputs to,
+      `anchors.py:75`). This is the pin's M1.
+    - *Every call's commitment precedes the window key.* `plan.draw` and `Traced.draw` take the key as given
+      (`__init__.py:83`); it must be the verifier's randomness derived under `DRAW_DOMAIN` after the receipt that binds
+      every call's commitment, so W, N and each K_c are fixed before any call's draw. Nothing in this package checks the
+      order: the window form of `traced_as` must.
+    - *ε_ks and δ_link are the window's.* The pin's are one window `Analysis`'s (M2). The per-call values are not cited
+      as the window's; no statement composes them yet.
+- `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
+
+**The draw is per call** (X-SPC-96). Each stratum's subset is drawn from the verifier's key under the call's index,
+(forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
+under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
+`Traced.draw(key, law, anchors, ledger)`, which takes no layout: it draws over `Traced.layout()` (X-SPC-97). It first
+admits the call to the window's `anchors.Ledger` (one per window key), which refuses a call index the window already
+holds before anything is drawn, and then keys each stratum's subset with ("call", forward, position, "stratum",
+template). So each call of a window draws under a context of its own, the product law the window pin takes as M1.
+
+**The call's Y is linked to the weight Program** (X-SPC-95). The call reads its weight's Y strips and c₀ as committed
+inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
+the call's Y and c₀ there beside the weight Program's output there, a ("y", strip) leaf, and `Traced.check_link` refuses
+any strip where they differ (`test_the_call_s_y_is_linked_to_the_weight_program`: another weight's Y, or one c₀ changed).
+A wrong Y input on a strip no drawn tile reads spoils only undrawn tiles, which the law charges like any unsound tile.
+
+**The layout is the verifier's.** The Layout theorems (`Layout.accountable_compute` and the rest) hold only for the
+window's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
+Program it builds (`Traced.layout`), and refuses any other (`Traced.check_layout`). `draw` refuses a layout whose tile is
+not a tile unit or is not its closure's first unit: a tile mapped to its X strip is C1 again
+(`test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused`).
+
+The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
   are gated by these vectors when they land.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- For `ncp-v2`:
+  - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
+  - C-Flock pieces for the PoUW primitives;
+  - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
+  - the grant and merge of the window pin, `audit_window_split_of_record`
+    ([#418](https://github.com/danielreuter/verity/pull/418));
+  - the check that the window key comes after every call's commitment, with the window form of `traced_as`;
+  - a statement composing the calls' ε_ks and δ_link into the window's (M2);
+  - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
+  - the vLLM adapter's `traced_as`;
+  - the reuse of a weight's Y proofs across a run's windows (X-SPC-51), which needs its commitments linked across windows;
+  - NCP-FP8 and H-1T.
