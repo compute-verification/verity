@@ -1,10 +1,11 @@
 """RELEASE.json of a shipped worker package (schema verity-sweep/release/v1) -- writer, reader and the REL-09 release line.
 
 [R17 rel, exec M-0477 / M-0709 (R16)] The `tree` field names the tree THIS ship installed.  Twice in R16 a pod's RELEASE.json said
-tag r16-int-N but `"tree": "/workspace/cp/veritor"` while the release had been installed as its OWN tree (/workspace/cp/r16-int-2 on
+tag r16-int-N but named the pod's shared default tree while the release had been installed as its OWN tree (/workspace/cp/r16-int-2 on
 cp-h100 07:49Z, /workspace/cp/r16-int-3 on cp-r1 10:08Z): a row from the own tree read UNRELEASED by row_pod's REL-09 rule ("pod release
-... is the tree /workspace/cp/veritor, not this one") and a row from /workspace/cp/veritor would have cited the release falsely.  The
-first time the field was a constant; the second time an older tag's pod_release.sh (which still had the constant) was shipped.  Rules:
+... is the tree <default tree>, not this one") and a row from the default tree would have cited the release falsely.  The first time
+the field was a constant; the second time an older tag's pod_release.sh (which still had the constant) was shipped.  There is no
+default tree: a record names its tree or none.  Rules:
 
   * the writer takes the tree EXPLICITLY (the REMOTE_TREE the ship installed into) and refuses when it is not the process cwd;
   * the record is written pod-wide (/workspace/cp/RELEASE.json, the latest ship on the pod) AND tree-local (<tree>/RELEASE.json), so a
@@ -35,7 +36,6 @@ from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/release/v1"
 POD_RELEASE_JSON = "/workspace/cp/RELEASE.json"
-DEFAULT_TREE = "/workspace/cp/veritor"
 DEFAULT_NC_BUILD = "/workspace/cp/nc_build"
 TREE_LOCAL_NAME = "RELEASE.json"
 
@@ -45,11 +45,9 @@ def _real(p: str) -> str:
 
 
 def native_collect_build_dir(tree: str) -> str:
-    """[R17 rel] the collector JIT build dir of a tree: the pod-wide default for the default tree (rows default to it), a per-tree
-    directory for an own tree (/workspace/cp/nc_build-<name>) so two ships / two trees never build in one directory."""
+    """[R17 rel] the collector JIT build dir of a tree: one directory per tree (/workspace/cp/nc_build-<name>) so two ships / two trees
+    never build in one directory."""
     t = _real(tree)
-    if t == _real(DEFAULT_TREE):
-        return DEFAULT_NC_BUILD
     return f"{DEFAULT_NC_BUILD}-{os.path.basename(t.rstrip('/')) or 'tree'}"
 
 
@@ -94,11 +92,11 @@ def release_record(*, tag: str, export: dict, tree: str, cwd: str, artifacts: di
 
 
 def release_names_tree(rel: dict, tree: str) -> bool:
-    """row_pod REL-09: a RELEASE.json applies to a tree only when its `tree` is that tree.  A record without a tree field is the
-    pre-R16 pod-wide form and names the default tree only."""
-    if not rel:
+    """row_pod REL-09: a RELEASE.json applies to a tree only when its `tree` is that tree.  A record without a tree field (the
+    pre-R16 pod-wide form) names no tree."""
+    if not rel or not rel.get("tree"):
         return False
-    return _real(rel.get("tree") or DEFAULT_TREE) == _real(tree)
+    return _real(rel["tree"]) == _real(tree)
 
 
 def release_matches_export(rel: dict, export: dict) -> bool:
@@ -226,7 +224,7 @@ class LineOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class NcBuildOptions:
-    "the collector JIT build dir of <tree> (pod-wide default for the default tree, per-tree otherwise)"
+    "the collector JIT build dir of <tree> (one per tree)"
 
     tree: str = option("tree")
     cmd: str = field(default="nc-build", init=False)

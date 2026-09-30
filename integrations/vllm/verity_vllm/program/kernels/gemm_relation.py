@@ -4,11 +4,11 @@
 ``independent_gemm(node, opened_inputs) -> bytes`` predicts the committed bytes of one GEMM
 output row (the default VU: one node instance at one position) from the description node and
 the authenticated openings of its inputs, using nothing but the explicit numerical model
-measured in this lane (``docs/vllm-poc/numerics.md``):
+measured in this lane:
 
 * per instruction: Ampere ``mma.sync.m16n8k16`` BF16 x BF16 -> FP32 semantics
   (``veritor.core.silicon.AMPERE_BF16_M16N8K16`` == ``verity_vllm.program.kernels.mma.AMPERE_BF16``;
-  Ada's BF16 instruction is parameter-identical, ``docs/hardware-semantics.md``);
+  Ada's BF16 instruction is parameter-identical, ``verity.ml.tc.models.ADA_BF16_M16N8K16``);
 * across K: one chain over the K/16 tiles in ascending k order from a zero FP32 accumulator
   (vLLM's batch-invariant ``matmul_kernel_persistent``) -- or the slice/split-K description the
   node carries for a cuBLAS kernel that needs one;
@@ -247,7 +247,7 @@ def per_instruction_model(node_or_inst: Any, inputs: Mapping[str, Any]) -> TCMod
     arch = _const(node, inputs, "arch") or "sm_80"
     if arch not in ("sm_80", "sm_86", "sm_89"):
         raise GemmRelationError(f"no validated per-instruction model for arch {arch!r} in this relation")
-    # Ada BF16 mma.sync is parameter-identical to Ampere's (docs/hardware-semantics.md), so the
+    # Ada BF16 mma.sync is parameter-identical to Ampere's (verity.ml.tc.models.ADA_BF16_M16N8K16), so the
     # same chain model applies on sm_89; the arch is recorded in the row, not in the arithmetic.
     return AMPERE_BF16
 
@@ -328,7 +328,7 @@ VALIDATED_BI_FAMILIES: dict[tuple[int, int], dict[str, Any]] = {
 BI_KERNEL_MARKERS = ("matmul_kernel_persistent", "matmul_persistent", "batch_invariant", "verity.bi_mm")
 BI_RUNTIME_OPS = ("verity.bi_mm", "aten.mm", "aten.addmm", "aten.linear", "aten.matmul")
 VALIDATED_ARCHS = ("sm_80",)  # where the production GEMM itself was measured
-ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (docs/hardware-semantics.md); production GEMM not measured by this lane
+ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.ml.tc.models.ADA_BF16_M16N8K16); production GEMM not measured by this lane
 
 
 def _runtime_impl_of(node: Any) -> str:

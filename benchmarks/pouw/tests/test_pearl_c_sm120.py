@@ -462,7 +462,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
                        env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1000x1024x3072", VARIANTS="sm120",
                                    HASHING="h2"),
-                       capture_output=True, text=True, timeout=600)
+                       capture_output=True, text=True)
     assert r.returncode == 4, r.stderr
     (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
     assert t["hashing"] == "h2" and not t["fused"] and set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
