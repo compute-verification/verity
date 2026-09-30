@@ -5,8 +5,9 @@
 #   2. add its private address under vy-nebius's hosts in ~/.sky/ssh_node_pools.yaml, and rerun `sky ssh up --infra vy-nebius`;
 #   3. label its node verity.dev/server=vy-nebius-2 skypilot.co/accelerator=rtxpro6000, then `kubectl apply -f kueue-pouw.yaml`;
 #   4. PoUW jobs use the provers or circuits templates with kueue.x-k8s.io/queue-name: pouw.
-# The flavor pins pouw's quota to its own server. To let circuits and provers borrow its idle GPUs too, add this flavor under their
-# resourceGroups with nominalQuota 0: borrowing needs the flavor listed in the borrower's ClusterQueue.
+# The flavor pins pouw's quota to its own server, and pouw lends nothing (lendingLimit 0): node 2 stays a quiet machine for
+# slowdown measurements, and node 1 never depends on it. To lend node 2's idle GPUs outside benchmark windows later, raise the
+# lendingLimits and add this flavor, at nominalQuota 0, under circuits' and provers' resourceGroups.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata: {name: vy-nebius-2}
@@ -29,9 +30,9 @@ spec:
     flavors:
     - name: vy-nebius-2
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 8}
-      - {name: cpu, nominalQuota: 188}
-      - {name: memory, nominalQuota: 1664Gi}
+      - {name: nvidia.com/gpu, nominalQuota: 8, lendingLimit: 0}
+      - {name: cpu, nominalQuota: 188, lendingLimit: 0}
+      - {name: memory, nominalQuota: 1664Gi, lendingLimit: 0}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
