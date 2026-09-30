@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """A bit-exact torch port of Pearl-C4's NVFP4 forming (``verity_pouw.schemes.pearl_c4.form``'s noise atom and block
-cast, on ``verity.ml.tc.BlockScaledAlignAdd`` for ``blackwell_sm120_nvf4_m16n8k64``), batched over rows.  Every op is
+cast, on ``verity.ml.tc.BlockScaledAlignAdd`` for ``blackwell_sm120_nvf4_m16n8k64``) and of its salt-dead witness
+(``pearl_c4.salt_dead``), batched over rows.  Every op is
 exact integer arithmetic on FP32/FP4 encodings or an IEEE single-rounded FP32 multiply/divide (the same on CPU and
 CUDA), so the codes and scales equal the reference's on any IEEE device; `fp4_tile_gpu.py`'s gate holds them to it.
 
@@ -254,3 +255,46 @@ class Engine:
         s, recip = self.block_scale(amax)
         codes = self.e2m1(self.f32_mul(d, recip.repeat_interleave(BLOCK, dim=1)))
         return codes, s
+
+    # ---- salt_dead (pearl_c4.salt_dead: the element's code at three witness draws) ---------------------------------
+
+    def salt_dead(self, x: torch.Tensor, alpha: torch.Tensor, ae: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """(dead bool[R, k], ok bool[R]): whether each element's code is one value at the draws E ≡ +6 and F_t ≡ +6, 0,
+        −6 (the block's other F_u ≡ 0, so its amax is the element's or the largest other clean magnitude), −0 counted as
+        0; and the rows where every α·x and every firing is finite (elsewhere the reference raises, and `dead` is not
+        its answer)."""
+        R, k = x.shape
+        B = R * k
+        c = self.f32_mul(alpha.unsqueeze(1).expand(R, k).reshape(-1), x.reshape(-1))
+        bad = (c >> 23) & 0xFF == 0xFF
+        ma, ea = self.scale_dyadic(ae)
+        mb, eb = self.scale_dyadic(torch.full_like(ae, 0x18))
+        live = ((ma != 0) & (mb != 0)).unsqueeze(1).expand(R, k).reshape(-1)
+        mab = (ma * mb).unsqueeze(1).expand(R, k).reshape(-1)
+        unit1 = (-2 + ea + eb).unsqueeze(1).expand(R, k).reshape(-1)
+
+        def fire(gd: int) -> torch.Tensor:
+            nonlocal bad
+            mant = torch.zeros(B, 4, dtype=torch.int64, device=self.dev)
+            unit = torch.zeros(B, 4, dtype=torch.int64, device=self.dev)
+            part = torch.zeros(B, 4, dtype=torch.bool, device=self.dev)
+            if gd:                                  # groups 0 and 1: 16 products of E's 12 quarters by F's ±12
+                for g in range(2):
+                    mant[:, g], unit[:, g], part[:, g] = gd * mab, unit1, live
+            out, over = self.align_add(c, mant, unit, part)
+            bad = bad | over
+            return out
+
+        clean = fire(0)
+        mags = (clean & 0x7FFFFFFF).reshape(R, k // BLOCK, BLOCK)
+        zero = torch.zeros_like(mags[..., :1])
+        before = torch.cat([zero, mags.cummax(dim=2).values[..., :-1]], dim=2)
+        after = torch.cat([mags.flip(2).cummax(dim=2).values.flip(2)[..., 1:], zero], dim=2)
+        rest = torch.maximum(before, after).reshape(-1)
+        codes = []
+        for v in (fire(GROUP_MAX), clean, fire(-GROUP_MAX)):
+            _, recip = self.block_scale(torch.maximum(v & 0x7FFFFFFF, rest))
+            cd = self.e2m1(self.f32_mul(v, recip))
+            codes.append(torch.where(cd & 7 == 0, torch.zeros_like(cd), cd))
+        dead = ((codes[0] == codes[1]) & (codes[1] == codes[2])).reshape(R, k)
+        return dead, ~bad.reshape(R, k).any(dim=1)

@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Pearl-C4's per-tile check on the GPU, bit for bit: #580's `PearlC4.tile_cap` under `pearl_c_work.check_opened`'s tile
-rule (F1′ with κ inside, F2 at c_L = 2.0, R1, the 1/400 reject), with its two integer-heavy parts ported.
+rule (F1′ with κ inside, F2 at c_L = 2.0, R1, the 1/400 reject), with its integer-heavy parts ported.
 
   forming      fp4_tc_torch.Engine.form: the noise atom per element and the block cast (exact integer align-add, IEEE
                single-rounded FP32 multiply and divide)
+  salt_dead    fp4_tc_torch.Engine.salt_dead: the witness's three draws per element, on the same ops
   word_replay  fp4_replay.cu: each word's chain from +0, identity atoms and sub-grid blocks (CUDA; or its CPU build,
                the same functions under g++)
   the rest     the reference's own code, unchanged and on the CPU: stats (FP32 FMA), lines and bases, D-SB, D-NF,
-               salt_dead, F1′ and R1, F2, the D-24 windows, the debit's assembly and the cap
+               F1′ and R1, F2, the D-24 windows, the debit's assembly and the cap
 
 The enforced outcome of a tile (`judge`): D-SB's reject while forming; the credited rows, those passing D-NF whose own
 F1′ per word is within R1's bound (as an honest prover declares them, `r1_rows`, and `check_opened` accepts); the
@@ -17,7 +18,7 @@ The reference is #580's tree, named by --rule-tree or PEARL_C4_RULE_TREE (its `p
 `packages/verity/src` go first on sys.path, so import this module before anything imports verity).
 
     python fp4_tile_gpu.py gate --rule-tree TREE --out DIR --tiles-per-family 1000 --workers 32   (CPU: the port vs the reference)
-    python fp4_tile_gpu.py gpu-check --rule-tree TREE --out DIR                                      (GPU: CUDA vs the CPU build)
+    python fp4_tile_gpu.py gpu-check --rule-tree TREE --out DIR                                      (GPU: CUDA vs the CPU)
 """
 from __future__ import annotations
 
@@ -155,25 +156,44 @@ def sides(s, ctx, a_rows, b_rows, tile, port: bool, device: str = "cpu"):
 
 # ---- the tile rule ------------------------------------------------------------------------------------------------
 
+def salt_dead_rows(fo, device: str = "cpu", chunk: int = 16) -> list:
+    """Each row's salt-dead codes on `Engine` (None for a row the port leaves to the reference)."""
+    import torch
+    eng = engine(device)
+    out = []
+    for r0 in range(0, len(fo.x), chunk):
+        dead, ok = eng.salt_dead(*(torch.tensor(v[r0:r0 + chunk], dtype=torch.int64, device=eng.dev)
+                                   for v in (fo.x, fo.alpha, fo.ae)))
+        out += [d if o else None for d, o in zip(dead.cpu().tolist(), ok.cpu().tolist())]
+    return out
+
+
 @contextmanager
-def replayed(a, b, words):
-    """`pearl_c4.word_replay` answered from precomputed (identity, sub-grid) matrices over a's and b's rows."""
-    if words is None:
-        yield
-        return
-    ident, sub = words
-    ra, rb = {id(r): i for i, r in enumerate(a.codes)}, {id(r): j for j, r in enumerate(b.codes)}
-    orig = F.word_replay
+def ported(a, b, words=None, dead=None):
+    """`pearl_c4.word_replay` and `salt_dead` answered from the port's results over a's and b's rows: (identity,
+    sub-grid) matrices, and each side's salt-dead codes per row (a row without them goes to the reference)."""
+    saved = F.word_replay, F.salt_dead
+    if words is not None:
+        ident, sub = words
+        ra, rb = {id(r): i for i, r in enumerate(a.codes)}, {id(r): j for j, r in enumerate(b.codes)}
 
-    def lookup(fmt, ac, bc, sa, sb):
-        i, j = ra[id(ac)], rb[id(bc)]
-        return None, int(ident[i, j]), int(sub[i, j])
+        def replay(fmt, ac, bc, sa, sb):
+            i, j = ra[id(ac)], rb[id(bc)]
+            return None, int(ident[i, j]), int(sub[i, j])
 
-    F.word_replay = lookup
+        F.word_replay = replay
+    if dead is not None:
+        rows = {id(x): d for fo, ds in zip((a, b), dead) for x, d in zip(fo.x, ds) if d is not None}
+
+        def salt(fmt, x, alpha, ae):
+            d = rows.get(id(x)) if fmt is F.NVFP4 else None
+            return saved[1](fmt, x, alpha, ae) if d is None else list(d)
+
+        F.salt_dead = salt
     try:
         yield
     finally:
-        F.word_replay = orig
+        F.word_replay, F.salt_dead = saved
 
 
 def operand_digest(a, b) -> str:
@@ -185,22 +205,22 @@ def operand_digest(a, b) -> str:
     return h.hexdigest()
 
 
-def judge(s, unit, k_kept: int, a, e_a, b, e_b, words=None, memo=None) -> dict:
-    """The enforced tile rule on formed operands (module docstring).  `words` answers word_replay (the port's), and
-    `memo` is `row_terms`'s memo when rows were evaluated already."""
+def judge(s, unit, k_kept: int, a, e_a, b, e_b, words=None, dead=None, memo=None) -> dict:
+    """The enforced tile rule on formed operands (module docstring).  `words` and `dead` answer word_replay and
+    salt_dead (the port's, `ported`), and `memo` is `row_terms`'s memo when rows were evaluated already."""
     record = W.UnitRecord(unit, unit.shape.m, k_kept)
     ops = SimpleNamespace(a=a, b=b, e_a=e_a, e_b=e_b)
     s._rows = (ops, s.f1, {} if memo is None else memo)
-    dnf_a = [p for p, x in enumerate(a.x) if F.row_passes(F.NVFP4, x)]
-    dnf_b = [p for p, x in enumerate(b.x) if F.row_passes(F.NVFP4, x)]
-    r1_a = [p for p in dnf_a if s.row_over_debit(record, ops, "A", p)]
-    r1_b = [p for p in dnf_b if s.row_over_debit(record, ops, "B", p)]
-    cred_a, cred_b = sorted(set(dnf_a) - set(r1_a)), sorted(set(dnf_b) - set(r1_b))
-    got = {"rejected": "", "dnf_fail": [len(a.x) - len(dnf_a), len(b.x) - len(dnf_b)], "r1": [r1_a, r1_b],
-           "credited": [len(cred_a), len(cred_b)]}
-    if not (cred_a and cred_b):
-        return got
-    with replayed(a, b, words):
+    with ported(a, b, words, dead):
+        dnf_a = [p for p, x in enumerate(a.x) if F.row_passes(F.NVFP4, x)]
+        dnf_b = [p for p, x in enumerate(b.x) if F.row_passes(F.NVFP4, x)]
+        r1_a = [p for p in dnf_a if s.row_over_debit(record, ops, "A", p)]
+        r1_b = [p for p in dnf_b if s.row_over_debit(record, ops, "B", p)]
+        cred_a, cred_b = sorted(set(dnf_a) - set(r1_a)), sorted(set(dnf_b) - set(r1_b))
+        got = {"rejected": "", "dnf_fail": [len(a.x) - len(dnf_a), len(b.x) - len(dnf_b)], "r1": [r1_a, r1_b],
+               "credited": [len(cred_a), len(cred_b)]}
+        if not (cred_a and cred_b):
+            return got
         debit, cap = s.tile_cap(record, ops, cred_a, cred_b)
     return got | {"debit": s.last_debit.to_json(), "cap": str(cap), "ratio": str(debit / cap),
                   "reject": bool(debit > cap * (1 + Fraction(s.r1_tolerance)))}
@@ -213,10 +233,11 @@ def tile_outcome(s, ctx, a_rows, b_rows, tile, k_kept: int, port: bool, replay: 
         a, e_a, b, e_b = sides(s, ctx, a_rows, b_rows, tile, port, device)
     except P.Reject as e:
         return {"rejected": str(e)}
-    words = None
+    words = dead = None
     if port:
         words = replay(np.array(a.codes), np.array(a.scales), np.array(b.codes), np.array(b.scales))
-    return {"operands": operand_digest(a, b)} | judge(s, ctx.matmul, k_kept, a, e_a, b, e_b, words)
+        dead = salt_dead_rows(a, device), salt_dead_rows(b, device)
+    return {"operands": operand_digest(a, b)} | judge(s, ctx.matmul, k_kept, a, e_a, b, e_b, words, dead)
 
 
 # ---- the gate -----------------------------------------------------------------------------------------------------
@@ -282,7 +303,7 @@ def gate_case(fam: str, t: int, big: bool):
     a, b = family_rows(fam, m, k, f"{fam}/{t}/{big}")
     a[:, k_kept:] = 0.0
     b[:, k_kept:] = 0.0
-    lab = lambda part: hashlib.sha256(f"fp4-tile-gpu/gate/{fam}/{t}/{big}/{part}".encode()).digest()  # noqa: E731
+    lab = lambda part: hashlib.sha256(f"fp4-tile-gpu/gate/{fam}/{t}/{big}/{part}".encode()).digest()
     ctx = Context(lab("salt"), Matmul(rng.randrange(1 << 20), Shape(m, k, n), rng.randrange(1 << 20)), lab("root_a"),
                   lab("root_b"))
     s.check(ctx.matmul)
@@ -323,7 +344,7 @@ def gate_words(task: tuple) -> list[dict]:
     from verity_pouw.protocol import Context, Matmul, Shape
     s = F.PearlC4("nvfp4")
     a, b = family_rows(fam, rows, k, f"{fam}/words/{k}")
-    lab = lambda part: hashlib.sha256(f"fp4-tile-gpu/gate-words/{fam}/{k}/{part}".encode()).digest()  # noqa: E731
+    lab = lambda part: hashlib.sha256(f"fp4-tile-gpu/gate-words/{fam}/{k}/{part}".encode()).digest()
     ctx = Context(lab("salt"), Matmul(0, Shape(64, k, 3584), 0), lab("root_a"), lab("root_b"))
     tile = SimpleNamespace(rows=range(rows), cols=range(rows))
     try:
@@ -341,31 +362,42 @@ def gate_words(task: tuple) -> list[dict]:
 
 
 def gate_batch(task: tuple) -> list[dict]:
-    """A census-shaped batch (64 A rows x 128 B rows at the census's k), formed by the port, with the CPU build's
-    (identity, sub-grid): what `gpu-check` holds the CUDA build to."""
+    """A census-shaped batch (64 A rows x 128 B rows at the census's k), formed by the port on the CPU, with its
+    salt-dead codes and the CPU build's (identity, sub-grid), and the forming's inputs: what `gpu-check` holds CUDA to.
+    Every row of a batch is salt-dead where the reference says so (checked here, row by row)."""
     fam, k, out = task
     from verity_pouw.protocol import Context, Matmul, Shape
     s = F.PearlC4("nvfp4")
     a, b = family_rows(fam, 64, k, f"{fam}/batch/{k}/a")[0], family_rows(fam, 128, k, f"{fam}/batch/{k}/b")[1]
-    lab = lambda part: hashlib.sha256(f"fp4-tile-gpu/gate-batch/{fam}/{k}/{part}".encode()).digest()  # noqa: E731
+    lab = lambda part: hashlib.sha256(f"fp4-tile-gpu/gate-batch/{fam}/{k}/{part}".encode()).digest()
     ctx = Context(lab("salt"), Matmul(0, Shape(64, k, 3584), 0), lab("root_a"), lab("root_b"))
     try:
-        fa, _, fb, _ = sides(s, ctx, bf16_rows(a), bf16_rows(b), SimpleNamespace(rows=range(64), cols=range(128)),
-                             port=True)
+        fa, e_a, fb, e_b = sides(s, ctx, bf16_rows(a), bf16_rows(b), SimpleNamespace(rows=range(64), cols=range(128)),
+                                 port=True)
     except P.Reject as e:
         return [{"kind": "batch", "family": fam, "k": k, "rejected": str(e), "diff": []}]
+    noise = s.noise(ctx)
     arrs = {"a_codes": np.array(fa.codes, np.uint8), "a_scales": np.array(fa.scales, np.uint8),
             "b_codes": np.array(fb.codes, np.uint8), "b_scales": np.array(fb.scales, np.uint8)}
+    for tag, fo, e, role in (("a", fa, e_a, F.ROLE_FA), ("b", fb, e_b, F.ROLE_FB)):
+        dead = salt_dead_rows(fo)
+        ref = [F.salt_dead(F.NVFP4, x, al, ae) for x, al, ae in zip(fo.x, fo.alpha, fo.ae)]
+        if dead != ref:
+            return [{"kind": "batch", "family": fam, "k": k, "diff": [f"{tag}_dead"]}]
+        arrs |= {f"{tag}_x": np.array(fo.x, np.uint32), f"{tag}_alpha": np.array(fo.alpha), f"{tag}_ae": np.array(fo.ae),
+                 f"{tag}_e": np.array(e, np.uint8), f"{tag}_dead": np.array(dead, bool),
+                 f"{tag}_f": np.array(F.basis(noise.seed_b, role, k), np.uint8)}
     c0 = time.perf_counter()
     ident, sub = Replay("cpu")(arrs["a_codes"], arrs["a_scales"], arrs["b_codes"], arrs["b_scales"])
     dt = time.perf_counter() - c0
-    np.savez(Path(out) / f"batch-{fam}-{k}.npz", **arrs, ident=ident, sub=sub)
+    np.savez_compressed(Path(out) / f"batch-{fam}-{k}.npz", **arrs, ident=ident, sub=sub)
     return [{"kind": "batch", "family": fam, "k": k, "batch": [64, 128], "identity": int(ident.sum()), "subgrid": int(sub.sum()),
-             "cpu_seconds": round(dt, 2), "diff": []}]
+             "salt_dead": [int(arrs["a_dead"].sum()), int(arrs["b_dead"].sum())], "cpu_seconds": round(dt, 2), "diff": []}]
 
 
-def gate_pinned(rep: Replay) -> list[dict]:
-    """The pinned NVFP4 vectors (tests/vectors/pearl_c4.json): operand hashes, α/β/a_E, the debit and the cap."""
+def gate_pinned(rep: Replay, device: str = "cpu") -> list[dict]:
+    """The pinned NVFP4 vectors (tests/vectors/pearl_c4.json) through the port on `device`: operand hashes, α/β/a_E, the
+    debit and the cap."""
     tree = Path(F.__file__).resolve().parents[2]
     sys.path.insert(0, str(tree / "tests"))
     import pearl_c4_vectors as V
@@ -377,9 +409,9 @@ def gate_pinned(rep: Replay) -> list[dict]:
         s, ctx = V.scheme(fmt, test), V.ctx_of(case, shape, index, weight)
         tile = s.tiles(ctx.matmul.shape)[0]
         a, e_a, b, e_b = sides(s, ctx, V.rows(case, "A", len(tile.rows), shape[1]), V.rows(case, "B", len(tile.cols),
-                                                                                           shape[1]), tile, port=True)
+                                                                                           shape[1]), tile, True, device)
         words = rep(np.array(a.codes), np.array(a.scales), np.array(b.codes), np.array(b.scales))
-        with replayed(a, b, words):
+        with ported(a, b, words, (salt_dead_rows(a, device), salt_dead_rows(b, device))):
             _, cap = s.tile_cap(W.UnitRecord(ctx.matmul, shape[0], shape[1]), SimpleNamespace(a=a, b=b, e_a=e_a, e_b=e_b),
                                 range(len(tile.rows)), range(len(tile.cols)))
         got = {"a_codes_sha256": V.sha(bytes(x for row in a.codes for x in row)),
@@ -388,7 +420,7 @@ def gate_pinned(rep: Replay) -> list[dict]:
                "b_scales_sha256": V.sha(bytes(x for row in b.scales for x in row)),
                "alpha_a": a.alpha[:4], "beta_a": a.beta[:4], "ae_a": a.ae[:4], "alpha_b": b.alpha[:4],
                "beta_b": b.beta[:4], "ae_b": b.ae[:4], "debit": s.last_debit.to_json(), "cap": str(cap)}
-        out.append({"case": case, "replay": rep.kind, "diff": sorted(kk for kk, v in got.items() if pinned[case][kk] != v)})
+        out.append({"case": case, "replay": rep.kind, "device": device, "diff": sorted(kk for kk, v in got.items() if pinned[case][kk] != v)})
     return out
 
 
@@ -443,7 +475,7 @@ def cmd_gate(args) -> int:
     summary = gate_summary(out, [name(kind, a) for kind, a in tasks], families)
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps({kk: summary[kk] for kk in ("pinned_mismatches", "tiles", "tile_mismatches", "words",
-                                                  "word_mismatches")}), flush=True)
+                                                  "word_mismatches", "batch_mismatches")}), flush=True)
     return 0
 
 
@@ -451,13 +483,14 @@ def gate_summary(out: Path, files: list[str], families: list[str]) -> dict:
     pinned = json.loads((out / "pinned.json").read_text())
     per: dict = {f: {"tiles": 0, "big": 0, "mismatches": 0, "fields": {}, "dsb_rejected": 0, "nothing_credited": 0,
                      "r1_rows": 0, "debited": 0, "over_cap": 0, "raised": 0, "words": 0, "word_mismatches": 0,
-                     "batches": []}
+                     "batches": [], "batch_mismatches": 0}
                  for f in families}
     for fname in files:
         for r in json.loads((out / fname).read_text()):
             p = per[r["family"]]
             if r["kind"] == "batch":
-                p["batches"].append({kk: r[kk] for kk in r if kk not in ("kind", "family", "diff")})
+                p["batches"].append({kk: r[kk] for kk in r if kk not in ("kind", "family")})
+                p["batch_mismatches"] += bool(r["diff"])
                 continue
             if r["kind"] == "word":
                 p["words"] += "word" in r
@@ -479,7 +512,8 @@ def gate_summary(out: Path, files: list[str], families: list[str]) -> dict:
             "pinned_mismatches": sum(bool(c["diff"]) for c in pinned),
             "tiles": sum(p["tiles"] for p in per.values()), "tile_mismatches": sum(p["mismatches"] for p in per.values()),
             "words": sum(p["words"] for p in per.values()),
-            "word_mismatches": sum(p["word_mismatches"] for p in per.values()), "families": per}
+            "word_mismatches": sum(p["word_mismatches"] for p in per.values()),
+            "batch_mismatches": sum(p["batch_mismatches"] for p in per.values()), "families": per}
 
 
 def gpu_name() -> dict:
@@ -492,22 +526,44 @@ def gpu_name() -> dict:
     return {"cuda_visible_devices": vis, "gpu": q}
 
 
+def cuda_forming(z) -> tuple[dict, float]:
+    """A gate batch's forming and salt-dead codes again on CUDA (`Engine`), against the CPU's: mismatched elements per
+    array."""
+    import torch
+    eng = engine("cuda")
+    diff, c0 = {}, time.perf_counter()
+    for tag in ("a", "b"):
+        x, alpha, ae, e, f = (torch.tensor(z[f"{tag}_{name}"].astype(np.int64), device=eng.dev)
+                              for name in ("x", "alpha", "ae", "e", "f"))
+        codes, scales = eng.form(x, alpha, ae, e, f)
+        dead, ok = eng.salt_dead(x, alpha, ae)
+        got = {"codes": codes.cpu().numpy(), "scales": scales.cpu().numpy(), "dead": dead.cpu().numpy()}
+        diff |= {f"{tag}_{name}": int((got[name] != z[f"{tag}_{name}"]).sum()) for name in got}
+        diff[f"{tag}_unmodelled_rows"] = int((~ok).sum())
+    torch.cuda.synchronize()
+    return diff, time.perf_counter() - c0
+
+
 def cmd_gpu_check(args) -> int:
-    """The CUDA build against the CPU build on the gate's census-shaped batches (OUT/gate/batch-*.npz) and the pinned
-    vectors through CUDA; then a census-sized call (64 x 1024 words) per k, timed, for the GPU-hour estimate."""
+    """CUDA against the CPU on the gate's census-shaped batches (OUT/gate/batch-*.npz: the forming and salt-dead codes
+    on torch, the replay's CUDA build) and the pinned vectors through CUDA; then a census-sized replay (64 x 1024 words)
+    per k, timed, for the GPU-hour estimate."""
     rep = Replay("cuda")
     out = Path(args.out) / "gate"
     res: dict = {"schema": "pouw/fp4-tile-gpu-check/v0", "replay": str(rep.path), **gpu_name(),
-                 "pinned": gate_pinned(rep), "batches": [], "timing": []}
+                 "pinned": gate_pinned(rep, "cuda"), "batches": [], "timing": []}
     big = {}
     for f in sorted(out.glob("batch-*.npz")):
         z = np.load(f)
+        forming, dt_form = cuda_forming(z)
         c0 = time.perf_counter()
         ident, sub = rep(z["a_codes"], z["a_scales"], z["b_codes"], z["b_scales"])
         dt = time.perf_counter() - c0
         k = z["a_codes"].shape[1]
         res["batches"].append({"file": f.name, "k": k, "words": int(ident.size), "seconds": round(dt, 3),
-                               "mismatches": int((ident != z["ident"]).sum() + (sub != z["sub"]).sum())})
+                               "forming_seconds": round(dt_form, 3), "forming": forming,
+                               "mismatches": int((ident != z["ident"]).sum() + (sub != z["sub"]).sum())
+                               + sum(forming.values())})
         big.setdefault(k, z)
     for k, z in sorted(big.items()):
         b_codes, b_scales = np.tile(z["b_codes"], (8, 1)), np.tile(z["b_scales"], (8, 1))
