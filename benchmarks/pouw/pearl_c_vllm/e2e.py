@@ -115,7 +115,7 @@ def install(model, args, beacon: bytes):
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
-                              schedule=getattr(args, "schedule", "serial"))
+                              schedule=getattr(args, "schedule", "serial"), graphs=getattr(args, "graphs", False))
     stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
     bad = stack.refusals()
     if bad:
@@ -594,6 +594,7 @@ def main() -> None:
     ap.add_argument("--schedule", choices=sorted(SCHEDULES), default="serial",
                     help="deferred: each call's tile hashing on a side lane at the least priority and the rest at the greatest, "
                          "as measured (the decode plan's step 2); deferred-caller: the rest on vLLM's stream at its own")
+    ap.add_argument("--graphs", action="store_true", help="decode's calls (m <= GRAPH_ROWS) replay their steps as one CUDA graph each")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     ap.add_argument("--perplexity", action="store_true", help="untimed: WikiText-2 perplexity and agreement for bf16, fp8, v1, v2")
     ap.add_argument("--ppl-windows", type=int, help="the quality run's first N windows (default all)")
@@ -606,7 +607,7 @@ def main() -> None:
         sys.exit(perplexity(args))
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
-    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule,
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule, "graphs": args.graphs,
                  "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}

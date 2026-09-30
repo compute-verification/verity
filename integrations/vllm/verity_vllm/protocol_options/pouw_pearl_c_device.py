@@ -88,6 +88,9 @@ CALL_CAPACITY = 1 << 16
 FLAG_ROWS = 1 << 22
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 136 bytes)
 UPLOAD_SLOTS = 1024
+#: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
+#: a small share of the call, and a graph's own y would cost m x n of memory per weight
+GRAPH_ROWS = 256
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b")
@@ -389,6 +392,15 @@ class _Pass:
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
 
 
+@dataclass
+class _Graph:
+    """One pipeline's call steps captured as a CUDA graph, over buffers of its own where a call's differ: y, and the call's
+    tile leaves, which are copied to the pass's leaf buffer at the call's offset after each replay."""
+    y: Any
+    leaves: Any
+    graph: Any = None
+
+
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0]) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
     `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash."""
@@ -519,8 +531,10 @@ class PearlCDeviceRun:
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL):
+                 schedule: str | Schedule = SERIAL, graphs: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
+        self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
+        self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
@@ -552,7 +566,7 @@ class PearlCDeviceRun:
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native blake3" if self.keys.native else "verity.commitments.blake3 (pure Python)",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
-            "schedule": None,
+            "schedule": None, "graphs": f"calls of at most {GRAPH_ROWS} rows, serial schedule" if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -704,13 +718,18 @@ class PearlCDeviceRun:
         sh.xa[:m].copy_(x2)
         if m16 > m:
             sh.xa[m:m16].zero_()
-        y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe, steps, side = self._pipe(w, sh)
-        pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
         raw = self.stream()
         cuda = self.device.type == "cuda"
         caller = self.torch_stream(raw) if cuda else None
         main = self.main if self.schedule.main_priority == "greatest" else None
+        if self.graphs and not side and main is None and m16 <= GRAPH_ROWS:
+            if self.hashing:
+                self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), caller)
+            y = self._replay(w, sh, pipe, raw, tiles)
+            return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias)
+        y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
+        pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
         lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
         if side:
             j = sh.turn % len(sh.sets)
@@ -744,6 +763,51 @@ class PearlCDeviceRun:
         finally:
             self.kernel.dev.stream = None
             self._launching = None
+        return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias)
+
+    def _replay(self, w: int, sh: _Shape, pipe: Any, raw: int, tiles: int) -> Any:
+        """The call's steps as one CUDA graph on the caller's stream (`graphs`): captured at the pipeline's first call, after
+        one eager run of the same steps (their first use syncs: the GEMMs' shared-memory probes), on buffers of the graph's
+        own for y and the leaves.  Returns y; the leaves go to the pass's buffer at the call's offset."""
+        import torch
+        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name)
+        names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
+        g = self._graphs.get(key)
+        if g is None:
+            g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(32 * tiles, self.device))
+            if self.cur.poison is not None:
+                g.y.view(torch.uint8).fill_(self.cur.poison)
+                g.leaves.fill_(self.cur.poison)
+            pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
+            steps = _steps(pipe, names)
+            self.kernel.dev.stream = raw
+            try:
+                for f in steps:
+                    f()
+                capture = torch.cuda.Stream(device=self.device)
+                capture.wait_stream(self.torch_stream(raw))
+                g.graph = torch.cuda.CUDAGraph()
+                with torch.cuda.stream(capture):
+                    g.graph.capture_begin(capture_error_mode="thread_local")
+                    self.kernel.dev.stream = capture.cuda_stream
+                    try:
+                        for f in steps:
+                            f()
+                    finally:
+                        g.graph.capture_end()
+                self.torch_stream(raw).wait_stream(capture)
+            finally:
+                self.kernel.dev.stream = None
+            self._graphs[key] = g
+        else:
+            g.graph.replay()
+        if self.hashing:
+            self.leaves[32 * self.cur.tiles:32 * (self.cur.tiles + tiles)].copy_(g.leaves[:32 * tiles])
+        return g.y.clone()
+
+    def _after(self, cur: _Pass, w: int, wt: _Weight, sh: _Shape, pipe: Any, index: int, m: int, k: int, m16: int, tiles: int,
+               y: Any, lead: Any, bias: Any) -> Any:
+        """A call's records after its steps: its matmul, A's root, the screen, the retained files, and y."""
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
         if self.hashing:
             size = pipe.size["tree_a"]
@@ -791,6 +855,9 @@ class PearlCDeviceRun:
             for sh in self.shapes.values():
                 for t in self._buffers(sh):
                     t.fill_(value)
+            for g in self._graphs.values():
+                g.y.view(torch.uint8).fill_(value)
+                g.leaves.fill_(value)
 
     def end(self) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
