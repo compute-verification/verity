@@ -654,6 +654,9 @@ def test_arm_accounting_is_the_schemes(A):
             g = {k: Fraction(v) for k, v in w.gamma.items() if k != "basis"}
             if cls == "PearlCSm120":
                 assert g == B.gamma(shape.n, shape.k)
+            else:    # v2's debit cap is 1/1,000 under TT_OUT's γ0 = 1/400: about 0.3616% (GPU 2's Derived figure)
+                assert arm.rho == Fraction(1, 1000) and round(float(g["cap"]) * 100, 4) == 0.3616
+            assert f"ρ = {arm.rho}" in w.gamma["basis"]
             assert g["floor"] < g["cap"] < Fraction(1, 100) and g["cap"] < g["cap_chain_only"]
     arm = A.PearlCSm120()
     assert "multiple of 1,024" in arm.domain(Shape("x", 128, 1000, 128))

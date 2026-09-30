@@ -107,25 +107,26 @@ POISON = 0xA5
 NEGATIVE = ("the negative control: the call's buffers poisoned (0xA5) as before the transcript's call, then the call with A's "
             "row tree, seed_A, E_A's lines and every hash omitted and without the weight side, so it writes y (and C~ and U "
             "unfused) and nothing the transcript reads; the verifier must reject it")
-GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and the debit cap ρ (statement parameters, cheap-binding.md §1)
+GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and v1's debit cap ρ (statement parameters, cheap-binding.md §1)
+RHO_CAP_V2 = Fraction(1, 1000)            # v2's debit cap ρ, the panel's pearl-c-sm120 v2 line (the RTX PRO coordinator's 13:52Z)
 
 
 def padded(m: int) -> int:
     return -(-m // R.BM_D) * R.BM_D
 
 
-def gamma(scheme: C.PearlC, shape) -> dict[str, str]:
+def gamma(scheme: C.PearlC, shape, rho: Fraction = RHO_CAP) -> dict[str, str]:
     """γ at `shape` from the scheme's W_ref and credit (`bench.gamma`'s four readings on the H100): `cap`, the worst case under
-    the debit cap; `floor`, a zero debit; `*_chain_only`, TT_OUT crediting no forming."""
+    the debit cap ρ; `floor`, a zero debit; `*_chain_only`, TT_OUT crediting no forming."""
     s = MShape(shape.m, shape.k, shape.n)
     wref, credit = Fraction(scheme.wref(s)), Fraction(scheme.credit_of(s))
     forming = scheme.prices.forming_credited * s.m * s.k
-    out = {"cap": 1 - (1 - GAMMA0) * (1 - RHO_CAP) * credit / wref,
-           "cap_chain_only": 1 - (1 - GAMMA0) * (credit - forming - RHO_CAP * credit) / wref,
+    out = {"cap": 1 - (1 - GAMMA0) * (1 - rho) * credit / wref,
+           "cap_chain_only": 1 - (1 - GAMMA0) * (credit - forming - rho * credit) / wref,
            "floor": 1 - (1 - GAMMA0) * credit / wref,
            "floor_chain_only": 1 - (1 - GAMMA0) * (credit - forming) / wref}
     return {**{k: str(v) for k, v in out.items()},
-            "basis": f"Derived: TT_OUT γ0 = ρ = 1/400 on {scheme.device.name} at its record's prices, G = {scheme.device.g}"}
+            "basis": f"Derived: TT_OUT γ0 = {GAMMA0}, ρ = {rho} on {scheme.device.name} at its record's prices, G = {scheme.device.g}"}
 
 
 def expected(t, real: int, hashing: bool, ep: dict, tid: int, a_row: bytes) -> dict[str, bytes]:
@@ -373,6 +374,7 @@ class PearlCSm120:
     flag_sets = {"hash": frozenset({"hash"}), "nohash": frozenset()}
     variant = "sm120"
     panel = {"line": "pearl-c-sm120", "version": "v1-h1"}
+    rho = RHO_CAP
     index = 0
 
     def __init__(self):
@@ -462,7 +464,7 @@ class PearlCSm120:
                                   "blake3/tree_nodes": 64 * (R.pow2(mr) - 1 + R.pow2(tiles) - 1),
                                   "blake3/tile_leaves": tiles * (64 + 32)},
                     weight_hashed_bytes={"blake3/rows": n * (64 + 4 * k), "blake3/tree_nodes": 64 * (R.pow2(n) - 1)},
-                    gamma=gamma(self.scheme, shape))
+                    gamma=gamma(self.scheme, shape, self.rho))
 
     def prepare(self, dev, shape, flags: frozenset[str], operands, corrupt: bool = False) -> _Call:
         return _Call(self, dev, shape, frozenset(flags), operands, corrupt)
@@ -534,3 +536,4 @@ class PearlCSm120Unpromoted(PearlCSm120):
     name = "pearl-c-sm120-unpromoted-v1-h1"
     variant = "sm120-unpromoted"
     panel = {"line": "pearl-c-sm120", "version": "v2-h1"}
+    rho = RHO_CAP_V2
