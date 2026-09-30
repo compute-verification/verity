@@ -426,6 +426,26 @@ def test_identity_reads_the_server_table_and_refuses_any_other_gpu():
     assert not I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, UUID5, None, pod=True)["uuid_checked"]
 
 
+def test_a_lease_names_the_index_and_the_table_names_its_uuid():
+    assert I.resolve_gpu("5", {}) == 5
+    assert I.resolve_gpu("lease", {"CUDA_VISIBLE_DEVICES": "3"}) == 3
+    for bad in ("0,1", "", "GPU-x"):
+        with pytest.raises(I.IdentityError, match="one index"):
+            I.resolve_gpu("lease", {"CUDA_VISIBLE_DEVICES": bad})
+    assert I.expected_for("lease", None, SERVER_MD, {"CUDA_VISIBLE_DEVICES": "5"}) == (5, UUID5)
+    assert I.expected_for("5", "GPU-given", SERVER_MD, {}) == (5, "GPU-given")
+    with pytest.raises(I.IdentityError, match="no GPU 9"):
+        I.expected_for("9", None, SERVER_MD, {})
+
+
+def test_timed_clocks_summarize_every_items_after_sample():
+    items = [{"sensors": {"after": {"sm_mhz": f, "mem_mhz": 12481}}} for f in (2092, 2085, 2100)] + [{"sensors": {}}]
+    got = H.timed_clocks(items)
+    assert got["sm_mhz"] == {"n": 3, "min": 2085, "median": 2092, "max": 2100}
+    assert got["mem_mhz"]["min"] == got["mem_mhz"]["max"] == 12481
+    assert H.timed_clocks([]) == {"sm_mhz": {"n": 0}, "mem_mhz": {"n": 0}}
+
+
 def test_a_queue_job_accepts_any_listed_gpu_and_records_it():
     table = I.parse_server_md(SERVER_MD)
     node = ",".join(table.values())

@@ -3,11 +3,12 @@
 precision (FP8 with FP32 against FP16 accumulation among them), its DRAM read and copy bandwidth, its L2's size and
 bandwidth, and how much the operands' entropy moves a GEMM's time and power.
 
-  python characterize.py --gpu 5 --expect-uuid GPU-... [--pod] --out char.json
-         [--sections identity mma dram l2 entropy lock] [--lock-candidates 2600 2500 ...] [--sustain-s 30]
+  python characterize.py --gpu 5|lease --expect-uuid GPU-...|--server-md FILE [--pod] [--clock-label L] --out char.json
+         [--sections identity mma dram l2 entropy hold [lock]] [--lock-candidates 2600 2500 ...] [--sustain-s 30]
 
 The dense GEMM rates per precision (autotuned cuBLASLt and CUTLASS, gated) are `bench.py`'s baselines at the headline
-shapes, without arms. Every GEMM this script times is gated first, like the bench's. `lock` locks this GPU only
+shapes, without arms. Every GEMM this script times is gated first, like the bench's. `hold` holds an FP8 and an NVFP4 GEMM
+for `--sustain-s` each at the machine's clocks and records them. `lock`, only when asked, locks this GPU only
 (`nvidia-smi -i <UUID> -lgc F,F`), holds an FP8 and an NVFP4 GEMM for `--sustain-s` at each candidate clock from the top
 down, and publishes the highest clock both hold with no power, thermal or board throttle and the SM clock at the lock for at
 least 99% of the samples; it resets the clock (`-rgc`) at exit. Where the clock can't be locked (a container) it records
@@ -31,7 +32,8 @@ import bench as H
 import identity as I
 from arm import Buffer, Shape
 
-SECTIONS = ("identity", "mma", "dram", "l2", "entropy", "lock")
+SECTIONS = ("identity", "mma", "dram", "l2", "entropy", "hold", "lock")
+DEFAULT_SECTIONS = SECTIONS[:-1]  # `lock` changes the GPU's clocks: only where that's allowed, and only when asked
 MMA_KINDS = {0: "bf16.f32", 1: "f16.f16", 2: "e4m3.f32", 3: "e4m3.f16", 4: "f8f6f4.e4m3.f32", 5: "f8f6f4.e2m1.f32",
              6: "mxf8f6f4.e4m3.ue8m0.f32", 7: "mxf4nvf4.e2m1.ue4m3.f32 (nvfp4)", 8: "mxf4nvf4.e2m1.ue8m0.f32 (mxfp4)",
              9: "s8.s32"}
@@ -186,6 +188,22 @@ def sustain(bench, dev, entry, burst: int, seconds: float, lock_mhz: int | None)
             "throttle_seen": sorted({s["throttle"] for s in tail})}
 
 
+def hold(bench, dev, lt_ws, kernels, seed: int, seconds: float) -> dict:
+    """An FP8 and an NVFP4 GEMM, each held for `seconds` at whatever clocks the machine sets (node 2 fixes them node-wide);
+    nothing here changes a clock."""
+    out = {}
+    for fam_name in ("fp8-e4m3", "nvfp4"):
+        entry, so, gated, burst = gated_gemm(bench, dev, fam_name, LOAD_SHAPE, seed, lt_ws, kernels)
+        try:
+            sustain(bench, dev, entry, burst, min(5.0, seconds / 4), None)
+            out[fam_name] = {"kernel": entry.key[-1], **sustain(bench, dev, entry, burst, seconds, None)}
+        finally:
+            H.free_entries(bench, [entry])
+            B.release_plans(dev, gated[fam_name]["all"])
+            so.free(dev)
+    return out
+
+
 def lock_sweep(bench, dev, nvml, lt_ws, kernels, seed: int, candidates: list[int], seconds: float) -> dict:
     import native as N
 
@@ -238,16 +256,19 @@ def default_candidates(nvml, floor_share: float = 0.7, step: int = 90) -> list[i
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--gpu", type=int, required=True)
+    p.add_argument("--gpu", required=True, help="an index, or 'lease': the one index a lease set")
     p.add_argument("--expect-uuid")
+    p.add_argument("--server-md", type=Path, help="read --expect-uuid from this copy of server.md's table")
     p.add_argument("--pod", action="store_true")
-    p.add_argument("--sections", nargs="*", default=list(SECTIONS), choices=SECTIONS)
+    p.add_argument("--sections", nargs="*", default=list(DEFAULT_SECTIONS), choices=SECTIONS)
     p.add_argument("--lock-candidates", nargs="*", type=int)
     p.add_argument("--sustain-s", type=float, default=30.0)
+    p.add_argument("--clock-label", help="the clocks' label where the machine fixes them (node 2: locked-2100)")
     p.add_argument("--seed", type=int, default=20260930)
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args(argv)
-    out: dict = {"argv": sys.argv if argv is None else argv, "started": H.now(), "sections": {}}
+    out: dict = {"argv": sys.argv if argv is None else argv, "started": H.now(), "sections": {},
+                 "clock_label": args.clock_label or "unlocked"}
     code = H.EXIT_DEVICE
 
     def log(s: str) -> None:
@@ -257,7 +278,9 @@ def main(argv: list[str] | None = None) -> int:
         import native as N
 
         dev = N.Device()
-        ident = I.check(dict(os.environ), args.gpu, dev.device_count, dev.info["uuid"], args.expect_uuid, pod=args.pod)
+        gpu, expected = I.expected_for(args.gpu, args.expect_uuid,
+                                       args.server_md.read_text() if args.server_md else None, dict(os.environ))
+        ident = I.check(dict(os.environ), gpu, dev.device_count, dev.info["uuid"], expected, pod=args.pod)
         nvml = N.Nvml(ident["uuid"])
         nid = nvml.identity()
         out["identity"] = {**ident, "card": I.check_card(dev.info["name"], dev.info["capability"], dev.info["sms"],
@@ -280,6 +303,8 @@ def main(argv: list[str] | None = None) -> int:
                     r = l2(dev, nvml)
                 elif sec == "entropy":
                     r = entropy(bench, dev, nvml, lt_ws, kernels, args.seed)
+                elif sec == "hold":
+                    r = hold(bench, dev, lt_ws, kernels, args.seed, args.sustain_s)
                 else:
                     r = lock_sweep(bench, dev, nvml, lt_ws, kernels, args.seed,
                                    args.lock_candidates or default_candidates(nvml), args.sustain_s)

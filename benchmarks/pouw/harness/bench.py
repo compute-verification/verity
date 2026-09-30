@@ -488,10 +488,12 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
 
 def parse(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--gpu", type=int, help="the GPU index CUDA_VISIBLE_DEVICES must name (yours, from the brief)")
+    p.add_argument("--gpu", help="the GPU index CUDA_VISIBLE_DEVICES must name, or 'lease': the one index a lease set")
     p.add_argument("--expect-uuid", help="that GPU's UUID, from server.md's table (a queue job that can't pin an index: "
                                          "the node's UUIDs, comma-separated)")
     p.add_argument("--server-md", type=Path, help="read --expect-uuid from this copy of server.md's table")
+    p.add_argument("--clock-label", help="the clocks' label where the machine fixes them (node 2: locked-2100); the clocks "
+                                         "are still sampled at every timed item")
     p.add_argument("--pod", action="store_true", help="a single-GPU pod: the UUID is recorded, matched only if given")
     p.add_argument("--arm", action="append", default=[], help="an arm, module:Class (repeatable)")
     p.add_argument("--arm-path", action="append", default=[], type=Path, help="a directory to import arms from")
@@ -511,8 +513,8 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
         return a
     if a.gpu is None or a.out is None:
         p.error("--gpu and --out are required")
-    if a.server_md and not a.expect_uuid:
-        a.expect_uuid = I.parse_server_md(a.server_md.read_text()).get(a.gpu)
+    if a.lock_mhz and a.clock_label:
+        p.error("--lock-mhz and --clock-label are exclusive")
     if a.reps < S.MIN_REPS:
         p.error(f"--reps is at least {S.MIN_REPS}")
     return a
@@ -549,6 +551,15 @@ def preflight_fill(dev, seed: int = 7) -> dict:
     return {"formats": fmts, "units": PREFLIGHT_UNITS, "ok": True}
 
 
+def timed_clocks(items: list[dict]) -> dict:
+    """The SM and memory clocks sampled right after every timed item: what the clock label claims, checked."""
+    out = {}
+    for k in ("sm_mhz", "mem_mhz"):
+        got = sorted(s[k] for it in items if (s := (it.get("sensors") or {}).get("after")) and s.get(k))
+        out[k] = {"n": len(got), "min": got[0], "median": got[len(got) // 2], "max": got[-1]} if got else {"n": 0}
+    return out
+
+
 def now() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -570,7 +581,9 @@ def main(argv: list[str] | None = None) -> int:
         import native as N
 
         dev = N.Device()
-        ident = I.check(dict(os.environ), args.gpu, dev.device_count, dev.info["uuid"], args.expect_uuid, pod=args.pod)
+        gpu, expected = I.expected_for(args.gpu, args.expect_uuid,
+                                       args.server_md.read_text() if args.server_md else None, dict(os.environ))
+        ident = I.check(dict(os.environ), gpu, dev.device_count, dev.info["uuid"], expected, pod=args.pod)
         uuid = ident["uuid"]
         nvml = N.Nvml(uuid)
         nid = nvml.identity()
@@ -582,7 +595,7 @@ def main(argv: list[str] | None = None) -> int:
             r = N.smi(uuid, "-lgc", f"{args.lock_mhz},{args.lock_mhz}")
             lock = {"requested_mhz": args.lock_mhz, "locked": r["returncode"] == 0, "smi": r}
         out["clocks"] = lock or {"locked": False}
-        out["clocks"]["label"] = "locked" if (lock or {}).get("locked") else "unlocked"
+        out["clocks"]["label"] = "locked" if (lock or {}).get("locked") else args.clock_label or "unlocked"
         arms = [A.load(s) for s in args.arm]
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
@@ -617,6 +630,7 @@ def main(argv: list[str] | None = None) -> int:
             out["rejected"] = bench.rejected
             out["tuning"] = bench.tuning
             out["items"] = bench.items
+            out.setdefault("clocks", {})["timed"] = timed_clocks(bench.items)
         out["harness"]["finished"] = now()
         out["exit"] = code
         args.out.parent.mkdir(parents=True, exist_ok=True)

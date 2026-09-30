@@ -32,6 +32,28 @@ def parse_server_md(text: str) -> dict[int, str]:
     return out
 
 
+def resolve_gpu(arg: str, env: dict[str, str]) -> int:
+    """`--gpu`: an index, or `lease`, the one index a lease put in `CUDA_VISIBLE_DEVICES` (node 2's `gpu-lease 1` takes the
+    first free GPU, so the index is known only inside the lease)."""
+    if arg != "lease":
+        return int(arg)
+    cvd = (env.get("CUDA_VISIBLE_DEVICES") or "").strip()
+    if not cvd.isdigit():
+        raise IdentityError(f"--gpu lease needs CUDA_VISIBLE_DEVICES to be one index, is {cvd!r}")
+    return int(cvd)
+
+
+def expected_for(gpu_arg: str, expect_uuid: str | None, server_md: str | None, env: dict[str, str]) -> tuple[int, str | None]:
+    """The run's GPU index and the UUID(s) it must have: `--expect-uuid`, else that index's row of the server table."""
+    gpu = resolve_gpu(gpu_arg, env)
+    if expect_uuid or server_md is None:
+        return gpu, expect_uuid
+    table = parse_server_md(server_md)
+    if gpu not in table:
+        raise IdentityError(f"the server table has no GPU {gpu}")
+    return gpu, table[gpu]
+
+
 def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_uuid: str | None,
           pod: bool = False) -> dict:
     """Refuses the run unless it is on GPU `gpu` alone and that GPU is `expected_uuid`. `expected_uuid` may list several,
