@@ -273,6 +273,8 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 #: power of two) and no level wider than hash_tree_small's; and -h2's (hash_h2.cuh) in place of the leaves'
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
 H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"hash_rows_b3s", "hash_leaves_b3s"}
+#: pearl_c_sm120.cu's kernels that run under -h2 only: rows form `s`, A's row leaves and stats_s5's outputs in one pass
+H2_ONLY = {"hash_rows_b3s_stats"}
 
 
 def form_kernels() -> list[str]:
@@ -350,6 +352,10 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64}
     if name == "hash_leaves_b3s":
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 64}
+    if name == "hash_rows_b3s_stats":
+        rows = i[4]
+        return {0: rows * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64, 5: 4 * rows, 6: 4 * rows,
+                7: 4 * rows, 8: 8 * rows}
     if name == "hash_node_keys":
         return {0: 32 * i[0], 1: 32}
     if name == "hash_pad":
@@ -452,7 +458,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         track(ev, allocs, maps)
         if ev["op"] == "launch":
             seen.add(ev["name"])
-    assert seen == set(own_kernels()) | H1_LAUNCHED
+    assert seen == set(own_kernels()) - H2_ONLY | H1_LAUNCHED
     for t in rows[3:]:
         assert t["fused"] and t["hashing"] == "h1"
         assert set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
@@ -473,7 +479,29 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
             timed = timed or ev["name"] == "gen_f32"
             if timed:
                 seen.add(ev["name"])
-    assert H2_LAUNCHED | {"hash_pad"} <= seen and not seen & {"hash_rows_w", "hash_tree_leaves", "b3s_level_keys"}
+    assert H2_LAUNCHED | {"hash_pad"} <= seen and not seen & {"hash_rows_w", "hash_tree_leaves", "b3s_level_keys", *H2_ONLY}
+
+    log = tmp_path / "launches_h2s.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1000x2048x3072", VARIANTS="sm120",
+                                   HASHING="h2", PEARLC_A_ROWS="s"),
+                       capture_output=True, text=True)
+    assert r.returncode == 4, r.stderr
+    (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
+    assert t["hashing"] == "h2" and t["rows_form"] == "s" and "stats_a" not in t["ms"] and "hash_rows_a" in t["ms"]
+    allocs, launched, timed = {}, [], False
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs)
+        if ev["op"] == "launch":
+            timed = timed or ev["name"] == "gen_f32"
+            if timed:
+                launched.append(ev)
+    names = {ev["name"] for ev in launched}
+    assert H2_LAUNCHED - {"hash_rows_b3s"} | H2_ONLY <= names
+    stats = [ev for ev in launched if ev["name"] == "hash_rows_b3s_stats"]
+    assert stats and all(ev["i"][:2] == [1000, 4 * 3072] and ev["i"][4] == ev["grid"][0] == 1024 for ev in stats)
+    assert {ev["i"][0] for ev in launched if ev["name"] == "hash_rows_b3s"} == {2048}     # B's rows alone
+    assert {ev["i"][0] for ev in launched if ev["name"] == "stats_s5"} == {2048}          # B's stats alone
 
 
 def room(allocs: dict[int, int], ptr: int) -> int:
@@ -501,7 +529,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("hash_rows_b3s", 3)}:
+            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("hash_rows_b3s", 3), ("hash_rows_b3s_stats", 3)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
@@ -529,6 +557,9 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert g[0] == i[0] and -(-i[1] // 256) <= ev["block"] <= 512 and ev["block"] % 32 == 0 and i[3] <= 64
         if name == "hash_leaves_b3s":
             assert i[1] <= 256 and i[3] <= 64
+        if name == "hash_rows_b3s_stats":
+            assert g[0] == i[4] >= i[0] and i[1] % 1024 == 0 and ev["block"] == 32 * -(-i[1] // 256 // 32) <= 512 and i[3] <= 64
+            assert ev["smem"] == RUN.b3s_stats_smem(i[1]) <= 48 * 1024
 
 
 # ---- the bench arm (pearlc_arm.py) against the harness's arm interface v0 ---------------------------------------------------
