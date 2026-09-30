@@ -694,9 +694,11 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     each span, on all spans and on 2:4 spans.  ``tile_debit_total`` adds items 2 and 5 (identity steps), 3, 4 and the
     D-24 windows to item 1 at each level and unit; the reference's total is ``witness``/``g4``.  Dead blocks are D-SS's at
     ``dead_rho``. With ``screen="cap"`` a tile is admitted when every row of both its sides passes the reference's row
-    rule at 5f0a1529 (``rows_admitted``: D-NF and at most one dead block in 64). With ``screen="debit"`` (the 10:35Z rule)
-    the cap is gone: every element of a dead block counts as salt-dead in item 4, a tile is admitted when every row
-    passes D-NF, and ``tiles_admitted_under_rho`` is the share whose total stays within rho (the rest are rejected).
+    rule at 5f0a1529 (``rows_admitted``: D-NF and at most one dead block in 64). With ``screen="debit"`` (the 10:35Z rule,
+    item 4 on the witness since 11:32Z) the cap is gone and the screen is charged in item 3 alone: a tile is admitted when
+    every row passes D-NF, and ``tiles_admitted_under_rho`` is the share whose total stays within rho (the rest are
+    rejected).  ``tiles`` keeps each tile's admission and item 4, and each version's ``tile_total_ref`` the reference's
+    total per tile, so another cap, or another n (item 4 scales as 1/n, no other term reads n), is exact offline.
     Each side's dead share and row admission at 12 rho is reported beside."""
     ya, yb = noisy(A, fmt, noise, delta, rng), noisy(B, fmt, noise, delta, rng)
     ca, sa, _ = quantize(ya, fmt)
@@ -747,8 +749,7 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     admitted = (admit["A"].reshape(-1, tile).all(1)[:, None] & admit["B"].reshape(-1, tile).all(1)[None, :]).ravel()
     dA, dB = (dead[x].reshape(-1, tile, dead[x].shape[1]).sum(1).astype(np.float64) for x in "AB")
     item3 = (dA @ dB.T) * blk / (tile * tile * K)
-    sd_a = sdead["A"] | np.repeat(dead["A"], blk, 1) if screen == "debit" else sdead["A"]
-    sd = sd_a.reshape(nta, tile, K).sum(1).astype(np.float64)                       # salt-dead A elements per position
+    sd = sdead["A"].reshape(nta, tile, K).sum(1).astype(np.float64)                 # salt-dead A elements per position
     unneeded = ((cb[:rb] & 7) == 0).reshape(ntb, tile, K).all(1).astype(np.float64)   # no B' row of the tile needs t
     item4 = F_S * (sd.sum(1)[:, None] + (tile - sd) @ unneeded.T) * tile / n / (tile * tile * K)
     win = {p: 4.0 * (windows["A"][p].reshape(nta, tile).sum(1)[:, None]
@@ -759,6 +760,7 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     out["item3"], out["item4"] = _tile_stats(item3.ravel(), rho), _tile_stats(item4.ravel(), rho)
     out["windows_d24"], out["windows_pairs"] = _tile_stats(win["g4"].ravel(), rho), _tile_stats(win["p8"].ravel(), rho)
     out["tiles_admitted"] = float(admitted.mean())
+    out["tiles"] = {"admitted": admitted.tolist(), "item4": item4.ravel().tolist()}
     operand_units = {lvl: {u: (terms["A"][lvl][u][:, None] + terms["B"][lvl][u][None, :] + item3 + item4
                                + win["g4"]).ravel() for u in TWO_FOUR_UNITS} for lvl in levels}
     cold = None
@@ -804,6 +806,7 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
                 "over_rho_admitted": float((x[admitted] > rho).mean()) if admitted.any() else None,
                 "tiles_admitted_under_rho": float((admitted & (x <= rho)).mean())}
                 for u, x in d.items()} for lvl, d in tot.items()}
+            out[name]["tile_total_ref"] = tot["witness"]["g4"].tolist()
     return out
 
 
@@ -1208,7 +1211,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--dead-rho", type=float, default=DEAD_RHO,
                     help="debit: D-SS's dead block is clean amax_b^2 > dead_rho^2 * rho^2 (default sqrt(90))")
     ap.add_argument("--screen", choices=["debit", "cap"], default="debit",
-                    help="debit: dead blocks charged in item 4, no row cap (10:35Z); cap: at most one dead block in 64")
+                    help="debit: no row cap, the screen charged in item 3 (10:35Z; item 4 on the witness, 11:32Z); "
+                         "cap: at most one dead block in 64")
     ap.add_argument("--n", type=int, default=0,
                     help="debit: output width for the forming term (default: Qwen2.5-7B's per linear with --acts, else k)")
     ap.add_argument("--seed", type=int, default=20260930)

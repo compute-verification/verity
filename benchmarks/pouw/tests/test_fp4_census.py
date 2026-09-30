@@ -341,21 +341,30 @@ def test_debit_census_2of4_term_granularity_and_span_words():
     assert S["operands"]["A"]["formed_span_d24"] == 1.0 and S["v1"]["k128_span_words_equal_on_2of4"]["span_d24"]["equal"] == 1.0
 
 
-def test_debit_screen_charges_dead_blocks_where_the_cap_rejected_rows():
-    """The 10:35Z rule on one A row with two dead blocks of 64 (spread magnitudes off the every-8th grid, so rho stays
-    the row's and the blocks' codes stay salt-live): the cap rejects the row's tiles, the debit screen admits them and
-    counts the blocks' elements as salt-dead in item 4, and the noise and every other term are the same."""
+def test_debit_screen_admits_rows_the_cap_rejected_and_charges_the_screen_in_item_3():
+    """The 10:35Z rule (item 4 on the witness, 11:32Z) on one A row with two dead blocks of 64 (spread magnitudes off the
+    every-8th grid, so rho stays the row's and the blocks' codes stay salt-live) and one B row dead at the same k-block:
+    the cap rejects the A row's tiles and the debit screen admits them, with items 1, 3 and 4 the same under both (item 3
+    charging the dead pair); per-tile item 4 scales exactly as 1/n, and the reference's per-tile totals with it."""
     atom, fmt = C.atoms_from(C.parse_args(["debit", "--atom", "blackwell_sm120_nvf4_m16n8k64"]))["blackwell_sm120_nvf4_m16n8k64"]
     A, B = C.family("gaussian", 32, 1024, np.random.default_rng(12))
     off_grid = np.r_[17:24, 25:32, 33:40, 41:48]
     A[3, off_grid] = np.random.default_rng(11).uniform(8.0, 12.0, off_grid.size) * np.resize([1, -1, -1], off_grid.size)
+    B[5, off_grid[:14]] = 0.02 * A[3, off_grid[:14]]
     assert C.dss_dead(A[3:4], fmt)[0, :4].tolist() == [False, True, True, False]
+    assert C.dss_dead(B[5:6], fmt)[0, :4].tolist() == [False, True, False, False]
     assert not C.witness_salt_dead(A[3:4], fmt)[0, off_grid].all()
-    cap, deb = (C.debit_census(atom, fmt, A, B, "row", 0.25, np.random.default_rng(10), 32, screen=s) for s in ("cap", "debit"))
+    run = lambda s, n=None: C.debit_census(atom, fmt, A, B, "row", 0.25, np.random.default_rng(10), 32, screen=s, n=n)  # noqa: E731
+    cap, deb, wide = run("cap"), run("debit"), run("debit", 2048)
     assert cap["tiles_admitted"] == 0.5 and deb["tiles_admitted"] == 1.0
-    assert deb["item4"]["max"] > cap["item4"]["max"] and deb["item3"] == cap["item3"] and deb["item1"] == cap["item1"]
+    assert deb["item1"] == cap["item1"] and deb["item3"] == cap["item3"] and deb["item4"] == cap["item4"]
+    assert deb["item3"]["max"] == 16 / (16 * 16 * 1024)                 # one dead pair: one block's MACs of the tile's
     t = deb["v1"]["tile_debit_total"]["witness"]["g4"]
     assert t["tiles_admitted_under_rho"] == deb["tiles_admitted"] * (1 - t["over_rho_admitted"])
+    i4, w4 = np.array(deb["tiles"]["item4"]), np.array(wide["tiles"]["item4"])
+    assert np.allclose(w4, i4 / 2, rtol=1e-12, atol=0)
+    tot, wtot = np.array(deb["v1"]["tile_total_ref"]), np.array(wide["v1"]["tile_total_ref"])
+    assert np.allclose(wtot, tot - i4 + w4, rtol=1e-12, atol=1e-18)
 
 
 def test_debit_census_exact_tiles_bound_the_step_count_from_above():
