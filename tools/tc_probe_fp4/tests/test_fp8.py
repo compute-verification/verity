@@ -37,6 +37,7 @@ ROWS = {
 def no_nvcc(monkeypatch):
     monkeypatch.setattr(fp8.P4, "nvcc_bin", lambda: "/nonexistent/nvcc")
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
 
 
 def _run(tmp_path, argv):
@@ -111,6 +112,13 @@ def test_identity_row_stops_on_a_wrong_uuid(tmp_path, no_nvcc, monkeypatch):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,1")
     code, res = _run(tmp_path / "two", ["--row", "identity"])
     assert code == 1 and "is not a single device" in res["failures"][0]
+
+
+def test_identity_row_checks_the_lease_uuid(tmp_path, no_nvcc, monkeypatch):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    monkeypatch.setenv("GPU_LEASE_UUID", "GPU-other")
+    code, res = _run(tmp_path, ["--row", "identity"])
+    assert code == 1 and res["failures"] == ["device UUID GPU-fake != --expect-gpu-uuid GPU-other"]
 
 
 def test_identity_gate_bootstrap_checks(monkeypatch):

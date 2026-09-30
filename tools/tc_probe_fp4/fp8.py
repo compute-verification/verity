@@ -17,7 +17,8 @@ Rows (kernels in ``mma_fp8.cu``, built ``-gencode arch=compute_120a,code=sm_120a
               (``verity.ml.tc.cast``) and its E5M2 analogue
     fadd      add.rn.f32 and add.rn.ftz.f32 over structured pairs (subnormals, ties, cancellation, overflow) + random words
 
-Gates, in order, before anything is measured: the device (exactly one visible, its UUID equal to ``--expect-gpu-uuid``), the SASS
+Gates, in order, before anything is measured: the device (exactly one visible, its UUID equal to ``--expect-gpu-uuid``, which
+defaults to ``gpu-lease``'s ``GPU_LEASE_UUID``), the SASS
 gate, the exact small-integer layout check of every kernel the row uses.  A failed gate writes the gate report and no
 measurements.  Non-finite results (NaN / inf operands or accumulators, sums leaving binary32, NaN adds and casts) are recorded and
 never gate.  ``--fake-silicon`` replaces the device with the row's primary model (a CPU dry run; refused under research run) and
@@ -1067,7 +1068,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--steps", type=int, default=2048, help="chain row: dependent k32 steps per chain (2048 = K 2^16)")
     ap.add_argument("--chain-tiles", type=int, default=16, help="chain and mixed rows: tiles (chains of 128 elements) per family")
     ap.add_argument("--families", default=None, type=lambda s: set(filter(None, s.split(","))), help="comma list (default all)")
-    ap.add_argument("--expect-gpu-uuid", default=None, help="the device's UUID from internal/pouw/rtx-pro/server.md; a mismatch stops the run")
+    ap.add_argument("--expect-gpu-uuid", default=os.environ.get("GPU_LEASE_UUID"),
+                    help="the device's UUID (default: gpu-lease's GPU_LEASE_UUID); a mismatch stops the run")
     ap.add_argument("--fake-silicon", action="store_true", help="the primary model stands in for the device (CPU dry run; never evidence)")
     ap.add_argument("--corrupt-word", type=int, default=None, help="with --fake-silicon: flip one bit of this output word once; the run must fail")
     return ap
