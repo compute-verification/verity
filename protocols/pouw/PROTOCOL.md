@@ -43,7 +43,15 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
 `frame-b3` (`verity.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
 leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression
-of left ‖ right under its level's key, keyed(domain id, 0x02 ‖ u8 level).
+of left ‖ right under its level's key, keyed(domain id, 0x02 ‖ u8 level). `"blake3-s256"` is `frame-b3s`, `frame-b3` with a
+shallower leaf. A leaf over L bytes is a tree over its ⌈L/256⌉ segments (one empty segment when L = 0):
+
+- each segment is the standard keyed BLAKE3 of its exact bytes, the last at its true length;
+- segment j's key is keyed(domain id, 0x05 ‖ u64 rank ‖ u64 position ‖ u64 L ‖ u32 j ‖ u16 len ‖ schema), so it binds the
+  segment's position, the length and the schema;
+- nodes are one compression under keyed(domain id, 0x06 ‖ u8 level);
+- the odd last node of a level is promoted unchanged;
+- the domain id's tag is `domain/b3s`.
 
 7. **Profile.** When every selected tile passes, `WorkProfile`: for every ε_s in (0, 1] and every operator whose online cost
    is at most T, `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η` (Lean `endToEnd`), with γ = 1 − (1 − γ_0)/Ω*,
@@ -344,7 +352,7 @@ peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)�
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_WGMMA_K16 steps into C̃'s word
 leaf      TurboSHAKE128 (D = 0x21) per tile row and 32-column chunk over its C̃ then U words, then TurboSHAKE128
           (D = 0x22) over those digests; -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf")
-trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3
+trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3; -h2: frame-b3s
 tickets   Pearl's lottery over C̃ per 16 × 16 subtile
 useful    U/(α_A·α_B), glue
 ~~~
@@ -383,6 +391,13 @@ useful    U/(α_A·α_B), glue
   - The certificate cites `xof/blake3`, `cr/blake3` and `cr/sha-256`. TurboSHAKE128 no longer backs anything. SHA-256
     still does: the bindings that name each tree's domain and the epoch's `weights_root` are SHA-256 (`tagged`), and the
     salt and the draw's `derive` (`prf/sha-256`) are unchanged.
+- **Hashing format -h2** (`pearl-c-h100-v1-h2`, `hashing="h2"`) is -h1 with every tree `frame-b3s`. It is P1 of research
+  store `internal/pouw/rtx-pro/a-commit-latency.md`, which the theory sign-off there rules sound under four format
+  conditions. `tests/commitments/test_frame_b3s.py` tests each condition.
+  - A 32 KB row's leaf is 1 + 4 + 7 serial compressions (segment key, segment, segment tree) in place of -h1's 17 + 6, with
+    1.41× -h1's compressions (767 against 545).
+  - Only the trees change: its vectors are the -h1 cases' inputs, digests and leaves, with A's `frame-b3s` root and row
+    leaf. The certificate is -h1's.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.

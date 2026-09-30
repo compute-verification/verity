@@ -15,7 +15,8 @@
 The protocol owns every outer coin (the salt and the draw).  A scheme's noise is its own derivation from the salt and the
 prover's roots, Fiat-Shamir inside the scheme.  Commitments are `verity.commitments.merkle` trees, framed SHA-256 unless the
 scheme names another frame hash in ``commitment_hash`` (`commitment_hash`): ``"blake3"`` is ``frame-b3``, the tree mode whose
-row leaves stream through BLAKE3's chunk tree, for schemes whose rows must be committed within a decode step.
+row leaves stream through BLAKE3's chunk tree, for schemes whose rows must be committed within a decode step, and
+``"blake3-s256"`` is ``frame-b3s``, ``frame-b3`` with each leaf a tree over its value's 256-byte segments (a shallower leaf).
 """
 
 from __future__ import annotations
