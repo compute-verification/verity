@@ -545,7 +545,7 @@ def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_p
             keys.append(PPD._bytes(sh.keys[:136]))
         out = run.end()
         man = json.loads(Path(out["manifest"]).read_text())
-        launches = [(n, i) for n, _, _, i in kernel.dev.log]
+        launches = [(n, i) for n, _, _, i in kernel.dev.log if not n.endswith("_smem")]   # run.py probes once a process
         got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
                      [{k: u[k] for k in ("root_a", "excluded_a", "real_rows")} for u in man["matmuls"]])
     assert got["native"] == got["reference"]
