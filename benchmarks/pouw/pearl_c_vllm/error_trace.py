@@ -171,8 +171,11 @@ def fp8_child(conn, args, scratch: str, names: list[str], window: list[int], cou
         if [n for n, _ in layers] != names:
             raise ValueError("the FP8 engine's linears are not the BF16 engine's")
         seen: dict = {}
-        hook = layers[0][1].register_forward_pre_hook(
-            lambda _m, a: seen.setdefault("x", a[0].detach().reshape(-1, a[0].shape[-1]).cpu()))
+
+        def first(_m, a):
+            seen.setdefault("x", a[0].detach().reshape(-1, a[0].shape[-1]).cpu())
+
+        hook = layers[0][1].register_forward_pre_hook(first)
         llm.generate([{"prompt_token_ids": window}], SamplingParams(temperature=0.0, max_tokens=1), use_tqdm=False)
         hook.remove()
         d = Path(scratch)
