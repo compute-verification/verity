@@ -34,13 +34,13 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
     for d in documents(path):
         if "kind: ClusterQueue" in d:
             name = re.search(r"metadata: \{name: (\S+)\}", d).group(1)
-            out[name] = {m[0]: ur.quantity(m[1]) for m in re.findall(r"\{name: (\S+), nominalQuota: ([^,}]+)", d)}
+            out[name] = {m[0]: ur.quantity(m[1].strip("\"")) for m in re.findall(r"\{name: (\S+), nominalQuota: ([^,}]+)", d)}
     return out
 
 
 def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
-    assert set(q) == {"circuits", "provers"}
+    assert set(q) == {"circuits", "provers", "backfill"} and set(q["backfill"].values()) == {0}          # backfill only borrows
     assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 3)       # tonight: coverage is the binding workstream
     assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (112, 64)           # checks and pinned benches run outside Kueue
     for res, cap in NODE.items():
@@ -48,13 +48,16 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
     circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
-    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits and "borrowWithinCohort: {policy: Never}" in circuits
+    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits
+    assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in circuits          # it evicts only backfill to borrow
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
     assert provers.count("borrowingLimit: 0") == 3 == provers.count("nominalQuota")              # a borrowed bench is evicted by reclaim
-    assert text.count("    withinClusterQueue: Never") == 2 and "LowerPriority" not in text   # never evict a running Build
-    assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
+    assert text.count("    withinClusterQueue: Never") == 3 and text.count("policy: LowerPriority") == 1   # never evict a running Build
+    assert text.count("cohortName: nebius") == 3 and text.count("    reclaimWithinCohort: Any") == 2
+    backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
+    assert "reclaimWithinCohort: Never" in backfill and "borrowWithinCohort: {policy: Never}" in backfill and "borrowingLimit" not in backfill
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev", "backfill"]
     # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
     # file with regexes, so check it here
     assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
