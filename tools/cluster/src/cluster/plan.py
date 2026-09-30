@@ -301,16 +301,17 @@ def in_share(cluster: Cluster, node: str, allocations: Iterable[Allocation]) -> 
     out = set()
     for a in sorted(allocations, key=lambda a: (a.started, a.id)):
         w = cluster.workstream(a.job.workstream, node)
-        if w is not None and used.get(w.name, 0) + len(a.gpus) <= w.gpus:
+        if w is not None and a.gpus and used.get(w.name, 0) + len(a.gpus) <= w.gpus:
             used[w.name] = used.get(w.name, 0) + len(a.gpus)
             out.add(a.id)
     return frozenset(out)
 
 
 def job_in_share(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allocation]) -> bool:
-    """Whether `job` would start within its workstream's own GPUs beside `occupants`."""
+    """Whether `job` would start within its workstream's own GPUs beside `occupants`. A share is GPUs, so a job asking none
+    has no standing from it."""
     w = cluster.workstream(job.workstream, node)
-    if w is None:
+    if w is None or job.gpus == 0:
         return False
     occ = list(occupants)
     shared = in_share(cluster, node, occ)

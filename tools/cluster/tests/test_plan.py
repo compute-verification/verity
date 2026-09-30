@@ -195,6 +195,16 @@ def test_a_workstream_reclaims_its_own_gpus_from_a_borrower_whatever_the_borrowe
     assert "benches may hold" in by_job(w, Refuse)["b-3"].reason
 
 
+def test_a_workstreams_share_is_gpus_so_a_job_asking_none_reclaims_nothing_with_it():
+    """kueue-fold's divergence on vy-nebius-1: two CPU-only sweeps evicted borrowing GPU Builds for memory."""
+    from cluster.model import Workstream
+    c = cluster(node("n1", "p", gpus=4, memory=64), workstreams=(Workstream("benches", "n1", 1, borrow_gpus=0),
+                                                                  Workstream("deploy", "n1", 3, borrow_gpus=1)))
+    borrowed = alloc(job("d-1", gpus=4, priority="work", workstream="deploy", max_s=3000, memory_gib=60), (0, 1, 2, 3), "0-1")
+    sweep = job("b-1", gpus=0, priority="fill", workstream="benches", memory_gib=8)
+    assert by_job(plan(c, "n1", [borrowed], [sweep], T0), Wait)["b-1"].reason == "no memory free"
+
+
 def test_a_session_with_only_an_expected_length_plans_backfill_but_is_never_expired():
     session = alloc(job("s-1", gpus=1, cpus=0, kind="session", priority="session", preempt="never", max_s=None,
                         expected_s=900), (0,), "")
