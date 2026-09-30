@@ -1,0 +1,9 @@
+name = "verity"
+defaultTargets = ["Verity"]
+
+[leanOptions]
+autoImplicit = false
+
+# Verity core's Lean: statements about `verity`'s own definitions (`verity.ml.tc`), with no dependency beyond Lean's core.
+[[lean_lib]]
+name = "Verity"

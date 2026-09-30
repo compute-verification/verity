@@ -1373,6 +1373,7 @@ dependencies = [
     { name = "verity" },
     { name = "verity-flock" },
     { name = "verity-numerical" },
+    { name = "verity-pouw" },
     { name = "verity-vllm" },
 ]
 
@@ -1382,6 +1383,7 @@ requires-dist = [
     { name = "verity", editable = "packages/verity" },
     { name = "verity-flock", editable = "backends/flock" },
     { name = "verity-numerical", editable = "backends/numerical" },
+    { name = "verity-pouw", editable = "protocols/pouw" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
 

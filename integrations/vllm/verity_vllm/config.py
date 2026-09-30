@@ -88,7 +88,13 @@ TARGETS: dict[str, tuple[int, int]] = {
     "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
     "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
     "b200": (10, 0), "gb200": (10, 0),
+    "rtxpro6000": (12, 0),
 }
+
+#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
+#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
+#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
@@ -258,13 +264,19 @@ class BuildConfig:
     """How the Build stage of ``verity-vllm row`` runs.  None = the row's derived default."""
 
     build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
-                                    help="concurrent derives: N, or auto (cgroup headroom / 20 GiB, 1..8); default 1 (TP: ranks x shapes)")
+                                    help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
+                                         "smaller) over the largest shape's planned derive peak, at most one per CPU (TP: ranks x shapes)")
+    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
+                                               help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
                                        help="seconds per derive; default scales with the envelope (TP: 7200)")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
                             help="request wrapper prompt length (default: the longest prompt; a stochastic row: r0's)")
     t: int | None = option("--t", env="T", type=int, default=None,
                            help="request wrapper decode steps (default: the largest cap - 1; a stochastic row: r0's)")
+    program_cache: str | None = option("--program-cache", env="PROGRAM_CACHE", default=None,
+                                       help="a directory of derived Programs shared by the host's runs (pipeline.program_cache): each derive "
+                                            "restores a cached entry of the same key or publishes its own; default off")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -300,6 +312,11 @@ class CommitConfig:
     """How the Commit stage of ``verity-vllm row`` runs.  None = the row's derived default."""
 
     pairs: int = option("--pairs", env="PAIRS", type=int, default=3, help="instrumented/control pairs")
+    config_run: str = option("--config-run", env="CONFIG_RUN", default="0",
+                             help="1 = the config run (docs/vllm-config-sweep-plan.md §2): Build and the strict word check, ONE instrumented "
+                                  "Commit (no control arm, no pairs) under bounded staging, a k-unit replay stratified by family, then "
+                                  "config_record.json; no Match, no manifest-verify rebuild, no VU export")
+    replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")

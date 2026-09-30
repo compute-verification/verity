@@ -98,10 +98,14 @@ import FlockSoundness.Audit.Extraction
 import FlockSoundness.Audit.FlockCompiled
 import FlockSoundness.Audit.FlockBatched
 import FlockSoundness.Audit.Stratified
-import FlockSoundness.Audit.StratifiedMiss
 import FlockSoundness.ExecDraw
 import FlockSoundness.ExecStratified
 import FlockSoundness.ExecDrawOS
+import FlockSoundness.Randomness
+import FlockSoundness.PlanDraw
+import FlockSoundness.KeyedDraw
+import FlockSoundness.Audit.RegDraw
+import FlockSoundness.Audit.StratifiedMiss
 import FlockSoundness.Audit.Work
 import FlockSoundness.Audit.FlockWork
 import FlockSoundness.Audit.Closure
@@ -109,6 +113,7 @@ import FlockSoundness.Audit.Window
 import FlockSoundness.Audit.FlockBatchedAcc
 import FlockSoundness.Audit.FlockLink
 import FlockSoundness.Audit.FlockLinked
+import FlockSoundness.Audit.FlockPublic
 import FlockSoundness.Audit.Harm
 import FlockSoundness.Audit.Influence
 import FlockSoundness.Audit.InfluenceWitness
@@ -119,3 +124,10 @@ import FlockSoundness.Types.Program
 import FlockSoundness.Types.ProgramPlaces
 import FlockSoundness.Types.ProgramE2E
 import FlockSoundness.ComposePlace
+import FlockSoundness.Binding
+import FlockSoundness.ZK.Masking
+import FlockSoundness.ZK.Adaptivity
+import FlockSoundness.ZK.CoinBinding
+import FlockSoundness.ZK.Complete
+import FlockSoundness.ZK.Hiding
+import FlockSoundness.ZK.RealLeaves
