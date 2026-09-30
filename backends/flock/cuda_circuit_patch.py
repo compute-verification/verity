@@ -68,7 +68,7 @@ body = put(body, "    CKI(phase(6));\n", "    if (N->zk_on) fc_write_zk(W, fc_zk
 # rep 1 from rep 0's witness and level-0 commitment (FlockCircuitParams.rep_reuse), not under M1 (its level 0 and lane phase
 # are its own): keeping holds z, a and b to the end of rep 0 and gives its Ligerito a copy of z (the folds overwrite it), three
 # more witness-sized arena buffers; rep 1 transposes z for the lincheck again
-W3 = "3 * packed_witness_bytes"
+W3 = "fc_keep_extra(packed_witness_bytes)"
 body = put(body, "    CK(device_arena.begin(arena_bytes));\n",
            "    const bool take = N->rep_reuse == 2 && !N->zk_on && g_fc_kept.live && g_fc_kept.tag == N->reuse_tag;\n"
            "    if (take && (g_fc_kept.m != m || g_fc_kept.k_log != k_log)) { printf(\"FFI circuit: the kept witness is another shape's\\n\"); return 207; }\n"

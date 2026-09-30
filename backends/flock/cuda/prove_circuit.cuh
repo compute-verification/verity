@@ -240,6 +240,13 @@ static void fc_kept_drop() {
     g_fc_kept = FcKept{};
 }
 
+// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 3, z, a and b held past the zerocheck and
+// Ligerito's copy of z counted on top of the arena's own peak; the zerocheck's buffers, the peak, are gone by then)
+static size_t fc_keep_extra(size_t w) {
+    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 3L; }();
+    return (size_t)k * w;
+}
+
 // whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free (FC_KEEP_MARGIN)
 static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
     size_t free_b = 0, total_b = 0;
