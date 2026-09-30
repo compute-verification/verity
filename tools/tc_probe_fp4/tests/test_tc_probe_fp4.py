@@ -172,6 +172,23 @@ def test_sparse_fake_capture_singles_out_the_truth(no_nvcc, tmp_path, instr, tru
     assert finding["agreeing"] == [truth], finding["mismatches"]
 
 
+def test_sparse_dense_twins_are_the_identities_each_truth_implies(no_nvcc, tmp_path):
+    """The dense twins compare hardware words (here the fake's): each candidate as the truth makes its own identity exact."""
+    fams = "random_random_scales,noise_atom_single,noise_atom_pair"
+
+    def twins(truth):
+        out = tmp_path / truth
+        assert P.main(["--instruction", "sp_nvf4", "--out", str(out), "--fake-silicon", truth, "--sweep", "--n-random", "16",
+                       "--procs", "1", "--families", fams]) == 0
+        return {k: v["differing_words"] for k, v in json.loads((out / "probe_results.json").read_text())["dense_twin_finding"].items()
+                if k != "note"}
+
+    assert twins("gather_dense")["dense_on_compressed"] == 0
+    assert twins("logical_g16")["dense_atom"] == 0
+    halves = twins("two_halves")
+    assert halves["dense_two_atoms"] == 0 and halves["dense_atom"] == 0 and halves["dense_on_compressed"] > 0
+
+
 def test_expect_uuid_takes_one_uuid_or_a_list():
     assert P.uuid_allowed("GPU-a", "GPU-a") and P.uuid_allowed("GPU-a", "GPU-b, GPU-a")
     assert not P.uuid_allowed("GPU-a", "GPU-b") and not P.uuid_allowed(None, "GPU-a") and not P.uuid_allowed("", ",")

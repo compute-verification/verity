@@ -24,6 +24,10 @@ Gates, in order, before any family is captured: the device UUID (``--expect-uuid
 with exactly one ``OMMA.SF.SP.168128`` of the row's type, every kernel of the build one MMA), and the layout check on exact small
 integers (random valid metadata per row and chunk, nonzero filler in the B rows no metadata selects, distinct power-of-two scales
 per block).  A failed layout check names which alternative metadata layouts would have reproduced it and dumps its operands.
+
+Beside the models, every family with a dense twin also runs the DENSE ``mma.sync`` row on twin operands in the same process
+(``dense_twin_finding``, hardware against hardware; see ``families``): whether the sparse word equals the dense instruction's word
+on the compressed operands, on the noise atom (a k64 NVF4 atom with 32 zero lanes on both operands), and on two atoms chained.
 """
 from __future__ import annotations
 
@@ -51,6 +55,8 @@ NBLK = {"sp_nvf4": 4, "sp_mxf4": 2}
 KERNEL = {"sp_nvf4": "sparse_tiles_kernelILi0EE", "sp_mxf4": "sparse_tiles_kernelILi1EE"}
 SASS_OPCODE = {"sp_nvf4": "OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X", "sp_mxf4": "OMMA.SF.SP.168128.F32.E2M1.E2M1.E8"}
 PINNED = {"sp_nvf4": M.BLACKWELL_SM120_NVF4, "sp_mxf4": M.BLACKWELL_SM120_MXF4}
+#: the dense mma.sync row (probe.py) whose hardware words the sparse ones are compared with
+DENSE = {"sp_nvf4": "nvf4", "sp_mxf4": "mxf4"}
 K_LOGICAL, K_STORED, CHUNKS = 128, 64, 16
 
 #: the metadata nibbles mma.sp::ordered_metadata accepts: pairs p0 < p1 as (p1 << 2) | p0
@@ -280,18 +286,30 @@ def layout_check(dev, instr: str, debug_dir: Path | None) -> str:
 
 
 def families(rng, n_random: int, instr: str):
-    """Yield (name, As (n,16,64), B (n,8,128), META (n,16,16), SFA, SFB, C).  The dense families of ``probe.families_nvf4`` carry
-    over whole: each tile's A is the stored A under one metadata row shared by its 16 rows, the dense B fills the selected logical
-    rows of B and random codes the rest; so ``gather_dense`` on these tiles is the pinned dense model on the dense family.  Then
-    families with metadata drawn per row and chunk (the shared metadata never exercises the per-row gather)."""
+    """Yield (name, As (n,16,64), B (n,8,128), META (n,16,16), SFA, SFB, C, twins).  ``twins`` names operand sets
+    (A, Bt, SFA, SFB, C, steps) for the DENSE instruction (``DENSE[instr]``) whose hardware words the sparse words are compared
+    with, word for word.
+
+    The dense families of ``probe.families_nvf4`` carry over whole: each tile's A is the stored A under one metadata row shared by
+    its 16 rows, the dense B fills the selected logical rows of B and random codes the rest; their twin ``dense_on_compressed`` is
+    the dense family itself, so ``gather_dense`` on these tiles is the pinned dense model on the dense family.  The noise-atom
+    families are k64 NVF4 atoms with 32 zero lanes on both operands (A's and B's zeros on the unselected pairs; one scale per 32
+    logical columns, so each atom's four 16-column scales come in equal pairs): ``noise_atom_single`` holds one atom in logical
+    columns 0..63 and zeros after it (twin ``dense_atom``: the dense instruction on the atom), ``noise_atom_pair`` two atoms
+    (twin ``dense_two_atoms``: two dense MMAs, the atoms in order).  Then families with metadata drawn per row and chunk (the shared
+    metadata never exercises the per-row gather)."""
     sk = SCALE_KIND[instr]
     nb = NBLK[instr]
+
+    def shared_meta(n):
+        return np.repeat(META_VALID[rng.integers(0, len(META_VALID), (n, 1, CHUNKS))], 16, axis=1)
+
     for name, A, Bt, SFA, SFB, C in P.families_nvf4(rng, n_random, sk):
         n = A.shape[0]
-        meta = np.repeat(META_VALID[rng.integers(0, len(META_VALID), (n, 1, CHUNKS))], 16, axis=1)
+        meta = shared_meta(n)
         B = rng.integers(0, 16, (n, 8, K_LOGICAL)).astype(np.uint8)
         np.put_along_axis(B, np.broadcast_to(logical_columns(meta[:, :1, :]), (n, 8, K_STORED)), Bt, axis=-1)
-        yield name, A, B, meta, SFA, SFB, C
+        yield name, A, B, meta, SFA, SFB, C, {"dense_on_compressed": (A, Bt, SFA, SFB, C, 1)}
 
     def scales(shape):
         if sk == "ue4m3":
@@ -301,25 +319,47 @@ def families(rng, n_random: int, instr: str):
     def acc(n, lo, hi):
         return P.f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
+    for name, atoms in (("noise_atom_single", 1), ("noise_atom_pair", 2)):
+        n = n_random // 4
+        meta = shared_meta(n)
+        As = rng.integers(0, 16, (n, 16, K_STORED)).astype(np.uint8)
+        Bs = rng.integers(0, 16, (n, 8, K_STORED)).astype(np.uint8)
+        if atoms == 1:
+            As[:, :, K_STORED // 2:] = 0
+            Bs[:, :, K_STORED // 2:] = 0
+        B = expand(Bs, meta[:, :8, :])
+        SFA, SFB = scales((n, 16, nb)), scales((n, 8, nb))
+        C = acc(n, -20, 20)
+        C[: n // 2] = 0
+        A = expand(As, meta)
+        sa, sb = model_scales(SFA), model_scales(SFB)
+        h, s = K_LOGICAL // 2, sa.shape[2] // 2
+        twins = {"dense_on_compressed": (As, Bs, SFA, SFB, C, 1)}
+        if atoms == 1:
+            twins["dense_atom"] = (A[:, :, :h], B[:, :, :h], sa[:, :, :s], sb[:, :, :s], C, 1)
+        else:
+            twins["dense_two_atoms"] = (A, B, sa, sb, C, 2)
+        yield name, As, B, meta, SFA, SFB, C, twins
+
     def per_row(n):
         return (rng.integers(0, 16, (n, 16, K_STORED)).astype(np.uint8), rng.integers(0, 16, (n, 8, K_LOGICAL)).astype(np.uint8),
                 META_VALID[rng.integers(0, len(META_VALID), (n, 16, CHUNKS))], scales((n, 16, nb)), scales((n, 8, nb)))
 
     n = n_random // 2
-    yield ("per_row_metadata", *per_row(n), acc(n, -30, 40))
+    yield ("per_row_metadata", *per_row(n), acc(n, -30, 40), {})
     n = n_random // 4
-    yield ("per_row_metadata_zero_acc", *per_row(n), np.zeros((n, 16, 8), np.uint32))
+    yield ("per_row_metadata_zero_acc", *per_row(n), np.zeros((n, 16, 8), np.uint32), {})
     # large accumulators over the products: the accumulator window sets the grid and the group dots are truncated onto it, the
     # regime where the grouping (16 / 32 / 64 logical columns) and a rounding between the halves show
     n = n_random // 4
-    yield ("per_row_acc_window", *per_row(n), acc(n, 10, 40))
+    yield ("per_row_acc_window", *per_row(n), acc(n, 10, 40), {})
     # scales near 1 (products in quarters, group dots up to 2^8) under accumulators +-2^30..2^42, whose window puts the grid
     # 2^(E-35) across the group dots: each dot is truncated onto it on its own
     n = n_random // 4
     As, B, meta, _, _ = per_row(n)
     lo, hi = (0x30, 0x41) if sk == "ue4m3" else (126, 129)
     yield ("grid_straddle", As, B, meta, rng.integers(lo, hi, (n, 16, nb)).astype(np.uint8),
-           rng.integers(lo, hi, (n, 8, nb)).astype(np.uint8), P._signed_pow2_acc(rng, (n, 16, 8), 30, 42))
+           rng.integers(lo, hi, (n, 8, nb)).astype(np.uint8), P._signed_pow2_acc(rng, (n, 16, 8), 30, 42), {})
 
 
 # --- driver ----------------------------------------------------------------------------------------------------------------------
@@ -349,10 +389,12 @@ def main(args) -> int:
     else:
         so, nvcc = P.build(arch, out, "mma_fp4.cu")
     dev = FakeSparse(instr, args.fake_silicon) if args.fake_silicon else (None if args.sass_only else SparseDevice(so))
+    # the dense twin: the same build's dense kernels (a fake run: the pinned dense model's words)
+    dense = P.FakeProbe(DENSE[instr], "verity") if args.fake_silicon else (None if args.sass_only else P.Probe(so))
     identity = dev.identity() if dev is not None else {"device": None, "gpu_uuid": None, "driver": None, "compute_capability": None,
                                                        "backend": "none (--sass-only)"}
     identity.update(nvcc=nvcc, arch=arch)
-    if args.expect_uuid and dev is not None and not args.fake_silicon and identity.get("gpu_uuid") != args.expect_uuid:
+    if args.expect_uuid and dev is not None and not args.fake_silicon and not P.uuid_allowed(identity.get("gpu_uuid"), args.expect_uuid):
         msg = f"device UUID {identity.get('gpu_uuid')} != expected {args.expect_uuid}: stopped before any measurement"
         (out / "probe_results.json").write_text(json.dumps({"identity": identity, "failures": [msg]}, indent=1))
         print("FAILURES", [msg], flush=True)
@@ -404,11 +446,13 @@ def main(args) -> int:
         corrupted = False
         pool = mp.Pool(args.procs, initializer=_init, initargs=(instr,)) if args.procs > 1 else None
         try:
-            for name, As, B, META, SFA, SFB, C in families(rng, args.n_random, instr):
+            for name, As, B, META, SFA, SFB, C, twins in families(rng, args.n_random, instr):
                 if only is not None and name not in only:
                     continue
                 t0 = time.time()
                 D = dev.tiles(instr, As, B, META, SFA, SFB, C)
+                twin_words = {label: dense.tiles(DENSE[instr], a, bt, c, sa, sb, steps=steps)
+                              for label, (a, bt, sa, sb, c, steps) in twins.items()}
                 if args.corrupt_word and not corrupted and name not in P.RECORD_ONLY_FAMILIES:
                     D = D.copy()
                     D[0, 0, 0] ^= 1
@@ -428,8 +472,15 @@ def main(args) -> int:
                         {**_hexrec(C[t, i, j], As[t, i], META[t, i], B[t, j], D[t, i, j], SFA[t, i], SFB[t, j]),
                          "model": "error" if errs[m][t, i, j] else f"{int(w[t, i, j]):08x}"}
                         for t, i, j in list(zip(*np.nonzero(mism)))[:20]]
+                fam["dense_twins"] = {}
+                for label, w in twin_words.items():
+                    diff = w != D
+                    fam["dense_twins"][label] = {
+                        "differing_words": int(diff.sum()),
+                        "first": [{**_hexrec(C[t, i, j], As[t, i], META[t, i], B[t, j], D[t, i, j], SFA[t, i], SFB[t, j]),
+                                   "dense_word": f"{int(w[t, i, j]):08x}"} for t, i, j in list(zip(*np.nonzero(diff)))[:10]]}
                 np.savez_compressed(out / f"tiles_{name}.npz", As=As, B=B, META=META, SFA=SFA, SFB=SFB, C=C, D=D,
-                                    **{f"model_{m}": w for m, w in words.items()})
+                                    **{f"model_{m}": w for m, w in words.items()}, **{f"dense_{k}": w for k, w in twin_words.items()})
                 for f in sorted(rng.choice(As.shape[0] * 128, size=min(args.golden_per_family, As.shape[0] * 128), replace=False).tolist()):
                     t, i, j = f // 128, (f % 128) // 8, f % 8
                     capture["records"].append({**_hexrec(C[t, i, j], As[t, i], META[t, i], B[t, j], D[t, i, j], SFA[t, i], SFB[t, j]),
@@ -450,11 +501,22 @@ def main(args) -> int:
                             "record_only_mismatches_vs_model": {m: sum(f["mismatches_vs_model"][m] for f in fams.values() if f["record_only"])
                                                                 for m in models}}
         results["candidate_finding"] = {"agreeing": sorted(m for m, c in totals.items() if c == 0), "mismatches": totals}
+        labels = sorted({k for f in gated.values() for k in f["dense_twins"]})
+        results["dense_twin_finding"] = {
+            k: {"elements": sum(f["elements"] for f in gated.values() if k in f["dense_twins"]),
+                "differing_words": sum(f["dense_twins"][k]["differing_words"] for f in gated.values() if k in f["dense_twins"]),
+                "families": sorted(n for n, f in gated.items() if k in f["dense_twins"])} for k in labels}
+        results["dense_twin_finding"]["note"] = (
+            "hardware against hardware: the sparse word against the dense mma.sync " + DENSE[instr] + " word on the twin operands "
+            "(dense_on_compressed: the stored A and the selected B; dense_atom: the k64 atom in logical columns 0..63; "
+            "dense_two_atoms: the two atoms as two dense MMAs)")
         (out / "capture_sample.json").write_text(json.dumps(capture, separators=(",", ":")))
         if primary is not None and totals[primary]:
             failures.append(f"sweep mismatches vs {primary}={totals[primary]} (record-only families excluded)")
         print("sweep TOTAL", results["sweep"]["total_elements"], "elements,", totals, flush=True)
         print("candidates reproducing every word:", results["candidate_finding"]["agreeing"], flush=True)
+        print("sparse vs dense hardware words:", json.dumps({k: v for k, v in results["dense_twin_finding"].items() if k != "note"}),
+              flush=True)
 
     results["clocks_end"] = dev.clocks(identity.get("gpu_uuid"))
     rc = finish()
@@ -478,6 +540,7 @@ def main(args) -> int:
                        "record_only_mismatches": sweep.get("record_only_mismatches_vs_model", {})},
             "model": results["model"], "primary_model": primary, "expected_model": primary,
             "model_agrees": agree.get(primary) if primary else None, "agreement": agree, "candidate_finding": finding,
+            "dense_twin_finding": results.get("dense_twin_finding"),
             "first_mismatches": first, "seed": args.seed, "n": args.n_random, "layout_check": results.get("layout_check"),
             "clocks": {"start": results.get("clocks_start"), "end": results.get("clocks_end"),
                        "note": "recorded, not locked: a capture's words do not depend on the clock"},
