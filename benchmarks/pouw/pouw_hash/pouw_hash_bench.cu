@@ -333,15 +333,22 @@ template <int N>
 struct Int {
   static constexpr int value = N;
 };
-template <int HASH, int WARPS>
+__device__ __forceinline__ void bar_sync(int id, int n) { asm volatile("bar.sync %0, %1;" ::"r"(id), "r"(n) : "memory"); }
+__device__ __forceinline__ void bar_arrive(int id, int n) { asm volatile("bar.arrive %0, %1;" ::"r"(id), "r"(n) : "memory"); }
+// PP (K3 in the stand-in, 8 warps as two groups of 4): 1 ping-pong, named barriers 1 and 2 handing the tensor cores to one
+// group's mainloop while the other runs its epilogue (group 0 first); 2 the groups staggered by half a tile (group 1's first
+// tile has half the k-steps), no barriers. The gate reads warp 0, whose tiles are whole in either.
+template <int HASH, int WARPS, int PP = 0>
 __global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* rec, uint64_t* digests, uint32_t* y, uint32_t* cap) {
+  static_assert(!PP || WARPS == 8, "two groups of 4 warps");
   extern __shared__ uint32_t sm[];
   uint32_t* ring = sm;                                                                       // EPI_STAGES x (EPI_A + EPI_B)
   uint64_t* scratch = reinterpret_cast<uint64_t*>(sm + EPI_STAGES * (EPI_A + EPI_B)) + (threadIdx.x >> 5) * 128;
-  const int lane = threadIdx.x & 31, warp = blockIdx.x * WARPS + (threadIdx.x >> 5);
+  const int lane = threadIdx.x & 31, warp = blockIdx.x * WARPS + (threadIdx.x >> 5), group = (threadIdx.x >> 5) / 4;
   for (int i = threadIdx.x; i < EPI_STAGES * (EPI_A + EPI_B); i += blockDim.x) ring[i] = 0x38303830u ^ (mix32(i) & 0x07070707u);
   uint32_t pa[4] = {0x3F803F80u, 0x3F003F00u, 0x3E803E80u, 0x3F403F40u}, pb0 = 0x3F803F80u, pb1 = 0x3C003C00u;
   BEGIN_REC
+  if (PP == 1 && group == 1) bar_arrive(1, 256);
 #pragma unroll 1
   for (int tile = 0; tile < tiles; ++tile) {
     float acc[2][8][4];
@@ -351,8 +358,10 @@ __global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* 
       for (int j = 0; j < 8; ++j)
 #pragma unroll
         for (int i = 0; i < 4; ++i) acc[r][j][i] = 0.f;
+    if (PP == 1) bar_sync(1 + group, 256);
+    const int kn = PP == 2 && group == 1 && tile == 0 ? ksteps / 2 : ksteps;
 #pragma unroll 1
-    for (int ks = 0; ks < ksteps; ++ks) {
+    for (int ks = 0; ks < kn; ++ks) {
       const uint32_t* st = ring + (ks % EPI_STAGES) * (EPI_A + EPI_B);
       uint32_t a[2][4];
 #pragma unroll
@@ -370,6 +379,7 @@ __global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* 
         }
       }
     }
+    if (PP == 1 && !(group == 1 && tile == tiles - 1)) bar_arrive(2 - group, 256);
     float ct[2][8][4];
 #pragma unroll
     for (int r = 0; r < 2; ++r)
@@ -558,13 +568,13 @@ static int check_uuid(const cudaDeviceProp& prop) {
 
 // epi's gate: warp 0's first tile, hashed in the kernel, against the header on the host over the same words (HASH 1:
 // pearlc::msg_digest; 2: blake3_chunk under b3_test_key, over the message's 256 bytes)
-template <int HASH, int W>
+template <int HASH, int W, int PP = 0>
 static bool epi_gate(uint64_t* dg, uint32_t* y, uint32_t* cap, size_t base) {
   CK(cudaMemset(cap, 0, 4096 * 4)); CK(cudaMemset(dg, 0, 64 * 32 * 2));
   Rec* r;
   CK(cudaMalloc(&r, sizeof(Rec)));
-  CK(cudaFuncSetAttribute(k_epi<HASH, W>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)(base + W * 1024)));
-  k_epi<HASH, W><<<1, 32 * W, base + W * 1024>>>(1, 8, r, dg, y, cap);
+  CK(cudaFuncSetAttribute(k_epi<HASH, W, PP>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)(base + W * 1024)));
+  k_epi<HASH, W, PP><<<1, 32 * W, base + W * 1024>>>(1, 8, r, dg, y, cap);
   CK(cudaDeviceSynchronize());
   std::vector<uint32_t> hc(4096);
   std::vector<uint64_t> hd(64 * 4);
@@ -592,8 +602,8 @@ static bool epi_gate(uint64_t* dg, uint32_t* y, uint32_t* cap, size_t base) {
       for (int i = 0; i < 4; ++i) bad += d[i] != hd[(reg * 32 + lane) * 4 + i];
     }
   const bool ok = !bad && nonzero >= 4000;
-  printf("{\"group\":\"epi_gate\",\"name\":\"epi w%d %s\",\"hash\":%d,\"messages\":64,\"bad_words\":%d,\"nonzero_words\":%d,\"ok\":%s}\n",
-         W, HASH == 1 ? "ts128" : "b3", HASH, bad, nonzero, ok ? "true" : "false");
+  printf("{\"group\":\"epi_gate\",\"name\":\"epi w%d %s%s\",\"hash\":%d,\"messages\":64,\"bad_words\":%d,\"nonzero_words\":%d,\"ok\":%s}\n",
+         W, HASH == 1 ? "ts128" : "b3", PP == 1 ? " pp" : PP == 2 ? " stagger" : "", HASH, bad, nonzero, ok ? "true" : "false");
   cudaFree(r);
   return ok;
 }
@@ -804,7 +814,8 @@ int main(int argc, char** argv) {
     uint32_t* cap;
     CK(cudaMalloc(&cap, 4096 * 4));
     const bool ok = epi_gate<1, 4>(dg, y, cap, base) & epi_gate<1, 8>(dg, y, cap, base) & epi_gate<2, 4>(dg, y, cap, base) &
-                    epi_gate<2, 8>(dg, y, cap, base);
+                    epi_gate<2, 8>(dg, y, cap, base) & epi_gate<1, 8, 1>(dg, y, cap, base) & epi_gate<2, 8, 1>(dg, y, cap, base) &
+                    epi_gate<1, 8, 2>(dg, y, cap, base);
     fflush(stdout);
     if (!ok) {
       fprintf(stderr, "epi gate failed: nothing timed\n");
@@ -813,18 +824,26 @@ int main(int argc, char** argv) {
     for (int ks : {32, 64, 128, 256}) {
       const double macs = 2048.0 * ks;   // per thread per tile: 32 x 64 x k per warp
       // hash 0 none, 1 TurboSHAKE128 ("hash"), 2 keyed BLAKE3 ("b3"); bytes: 2 regions x 32 messages x 256 B per warp, per lane
-      auto epi_row = [&](auto hc, auto wc, int one) {
-        constexpr int H = decltype(hc)::value, W = decltype(wc)::value;
+      auto epi_row = [&](auto hc, auto wc, int one, auto pc) {
+        constexpr int H = decltype(hc)::value, W = decltype(wc)::value, PP = decltype(pc)::value;
         char ex[96], nm[64];
-        snprintf(ex, sizeof ex, ",\"k\":%d,\"hash\":%d", 32 * ks, H);
-        snprintf(nm, sizeof nm, "epi w%d k%d %s%s", W, 32 * ks, H == 0 ? "nohash" : H == 1 ? "hash" : "b3", one ? " 1cta" : "");
-        row(filter, "epi", nm, k_epi<H, W>, H ? 512 : 0, 32 * W, one, base + (H ? W * 1024 : 0),
-            [&](int b, int t, size_t s, long long it, Rec* r) { k_epi<H, W><<<b, t, s>>>((int)it, ks, r, dg, y, nullptr); }, ex, macs);
+        snprintf(ex, sizeof ex, ",\"k\":%d,\"hash\":%d,\"pp\":%d", 32 * ks, H, PP);
+        snprintf(nm, sizeof nm, "epi w%d k%d %s%s%s", W, 32 * ks, H == 0 ? "nohash" : H == 1 ? "hash" : "b3", one ? " 1cta" : "",
+                 PP == 1 ? " pp" : PP == 2 ? " stagger" : "");
+        row(filter, "epi", nm, k_epi<H, W, PP>, H ? 512 : 0, 32 * W, one, base + (H ? W * 1024 : 0),
+            [&](int b, int t, size_t s, long long it, Rec* r) { k_epi<H, W, PP><<<b, t, s>>>((int)it, ks, r, dg, y, nullptr); }, ex,
+            macs);
       };
       // w4 at every resident block, then at one block per SM: the difference is how much a second block's tile loop hides
       // the first one's hashing
-      for (int one : {0, 1}) epi_row(Int<0>{}, Int<4>{}, one), epi_row(Int<1>{}, Int<4>{}, one), epi_row(Int<2>{}, Int<4>{}, one);
-      epi_row(Int<0>{}, Int<8>{}, 0), epi_row(Int<1>{}, Int<8>{}, 0), epi_row(Int<2>{}, Int<8>{}, 0);
+      for (int one : {0, 1})
+        epi_row(Int<0>{}, Int<4>{}, one, Int<0>{}), epi_row(Int<1>{}, Int<4>{}, one, Int<0>{}), epi_row(Int<2>{}, Int<4>{}, one, Int<0>{});
+      epi_row(Int<0>{}, Int<8>{}, 0, Int<0>{}), epi_row(Int<1>{}, Int<8>{}, 0, Int<0>{}), epi_row(Int<2>{}, Int<8>{}, 0, Int<0>{});
+      // K3 at GPU 1's shape (8 warps, one block per SM; the hashed w8 rows above hold one by their registers): ping-pong and
+      // stagger, each hashed and not (the schedule's own cost), against 8 unhashed warps at one block per SM
+      epi_row(Int<0>{}, Int<8>{}, 1, Int<0>{});
+      epi_row(Int<0>{}, Int<8>{}, 1, Int<1>{}), epi_row(Int<1>{}, Int<8>{}, 1, Int<1>{}), epi_row(Int<2>{}, Int<8>{}, 1, Int<1>{});
+      epi_row(Int<0>{}, Int<8>{}, 1, Int<2>{}), epi_row(Int<1>{}, Int<8>{}, 1, Int<2>{}), epi_row(Int<2>{}, Int<8>{}, 1, Int<2>{});
     }
     return 0;
   }
