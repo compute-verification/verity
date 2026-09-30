@@ -419,7 +419,15 @@
    "depends_on": "SHA256(row_id) only"
   },
   "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
-  "lengths_only": false
+  "lengths_only": false,
+  "execution": "bi-eager"
  },
- "note": "R12 sweep llama32-1b__bf16__rtxpro6000__tp1__b8__i32__o128__mixed__greedy__bi-eager: B=8 I<=32 O<=128 greedy arrivals=none; prompt lens [18, 32, 23, 22, 15, 27, 11, 12], caps [89, 2, 128, 117, 39, 27, 9, 29], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
+ "note": "R12 sweep llama32-1b__bf16__rtxpro6000__tp1__b8__i32__o128__mixed__greedy__bi-eager: B=8 I<=32 O<=128 greedy arrivals=none; prompt lens [18, 32, 23, 22, 15, 27, 11, 12], caps [89, 2, 128, 117, 39, 27, 9, 29], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
+ "target": {
+  "compute_capability": [
+   12,
+   0
+  ],
+  "num_sms": 188
+ }
 }
