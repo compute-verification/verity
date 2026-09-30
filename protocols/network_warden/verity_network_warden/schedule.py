@@ -49,6 +49,8 @@ class SyncSet:
         object.__setattr__(self, "rhos", tuple(Fraction(r) for r in self.rhos))
         if min(self.deltas) < 0 or min(self.rhos) <= 0:
             raise ValueError("clock sync needs delta ≥ 0 and rho > 0")
+        if len(set(self.deltas)) < len(self.deltas) or len(set(self.rhos)) < len(self.rhos):
+            raise ValueError("a sync set lists each delta and each rho once")
 
     def __iter__(self) -> Iterator[ClockSync]:
         return (ClockSync(d, r) for d in self.deltas for r in self.rhos)
@@ -58,7 +60,7 @@ class SyncSet:
 
     @property
     def size(self) -> int:
-        return len(set(self.deltas)) * len(set(self.rhos))
+        return len(self.deltas) * len(self.rhos)
 
     @property
     def bits(self) -> float:

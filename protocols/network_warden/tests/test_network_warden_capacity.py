@@ -11,6 +11,8 @@ import math
 import random
 from fractions import Fraction
 
+import pytest
+
 from verity_network_warden import capacity
 from verity_network_warden.audit import Audit
 from verity_network_warden.grid import GridParams, Warden, fill, occupancy
@@ -175,6 +177,16 @@ def test_block_bound_random_programs():
         for x in adv:
             bound *= min(2 ** x, 2 ** T)
         assert len(seqs) <= bound
+
+
+def test_sync_set_lists_each_value_once():
+    """A repeated δ or ρ (1 and 2/2 are one ρ) is rejected, so iterating Σ_sync yields exactly #Σ_sync values."""
+    with pytest.raises(ValueError, match="each delta and each rho once"):
+        SyncSet((0, 1, 1), (1,))
+    with pytest.raises(ValueError, match="each delta and each rho once"):
+        SyncSet((0,), (1, Fraction(2, 2)))
+    s = SyncSet((0, 1), (1, Fraction(1, 2)))
+    assert len(set(s)) == len(list(s)) == s.size == 4
 
 
 def test_doc_numbers():
