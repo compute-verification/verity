@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import importlib.util
 import json
 import os
 import re
@@ -126,6 +127,42 @@ def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and
         assert rec["gpus"] == [{"index": 0, "uuid": "GPU-a0", "held_s": rec["gpus"][0]["held_s"], "busy_s": 20, "sampled_s": 30}]
     free = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout
     assert [ln.split()[:2] for ln in free.splitlines() if ln and not ln.startswith("#")] == [["0", "free"], ["1", "free"]]
+
+
+FILL_RUNNER = GPU_LEASE.parent.parent / "nebius" / "fill_runner.py"
+
+
+@needs_flock
+def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_with_wait_in_its_argv(tmp_path, monkeypatch):
+    """A `gpu-lease 1 --wait` that holds its GPU keeps `--wait` in its argv. Counting it as a waiter froze fill across node 2 for as
+    long as any such lease ran (bc-2aa33ad8, 17:56Z); only a request queued in gpu-lease's own wait files is a waiter."""
+    env = gpu_env(tmp_path, count=1)
+    lease = tmp_path / "bin" / "gpu-lease"
+    lease.parent.mkdir()
+    lease.symlink_to(GPU_LEASE)
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    holder = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", *pause], env=env,
+                              stdout=subprocess.PIPE, text=True)
+    waiter = None
+    try:
+        assert holder.stdout.readline().strip() == "ready"
+        monkeypatch.setenv("GPU_LEASE_DIR", env["GPU_LEASE_DIR"])
+        monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
+        spec = importlib.util.spec_from_file_location("fill_runner_under_test", FILL_RUNNER)
+        fr = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fr)
+        (tmp_path / "gl" / "wait.1.99999").write_text("pid=99999 n=4 run=- who=gone since=2026-09-30T00:00:00Z\n")
+        assert fr.waiters() == []
+        waiter = subprocess.Popen(["bash", str(lease), "1", "--wait", "--mem-gb", "0", "--", "true"],
+                                  env={**env, "GPU_LEASE_POLL_S": "3600"}, stderr=subprocess.PIPE, text=True)
+        line = waiter.stderr.readline()
+        assert line.startswith("gpu-lease: waiting for 1 GPU(s), queued as wait."), line
+        assert fr.waiters() == [1]
+    finally:
+        for p in (waiter, holder):
+            if p is not None:
+                p.terminate()
+                p.wait()
 
 
 @needs_flock
