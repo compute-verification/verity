@@ -14,7 +14,9 @@
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
    (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing, hashing format -h1), the call end to
    end with and without its hashes (commit and hashing), and consistency checks (C~ of gemm_ct equals gemm_pearlc's; a
-   second gemm_pearlc gives the same U).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
+   second gemm_pearlc gives the same U; form_s5_scalar, timed beside form_s5, and the RATE kernels write form_s5's codes).
+   `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
+   within it (form_rate less form_rate_nocast).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
    only; the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
@@ -359,11 +361,14 @@ class Pipeline:
                                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
                 (f"tree_{tag}", lambda: self.levels(tag, count))]
 
-    def form_scalar(self, tag: str) -> int:
-        """form_s5_scalar over one side's rows into at2, and the words where form_s5's codes (at or bt) differ from it."""
+    def form_scalar_launch(self, tag: str) -> None:
         b, rows = self.b, self.m if tag == "a" else self.n
         self.dev.launch("form_s5_scalar", (self.k // 128, rows // 64), 128,
                         p=(b[f"x{tag}"], b[f"alpha_{tag}"], b[f"ep{tag}_codes"], b[f"f{tag}_codes"], b["at2"]), i=(rows, self.k))
+
+    def form_scalar(self, tag: str) -> int:
+        """form_s5_scalar over one side's rows into at2, and the words where form_s5's codes (at or bt) differ from it."""
+        self.form_scalar_launch(tag)
         self.dev.sync()
         return self.diff(f"{tag}t", "at2")
 
@@ -572,6 +577,56 @@ def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: 
     return out
 
 
+#: form_body's RATE kernels (pearl_c_sm120.cu): form_s5's loop, form_s5_scalar's, form_s5's with the cast replaced by a
+#: float's bits, and its atoms, F's loads and stores alone; each run at FORM_REPEATS repeats per block
+FORM_RATES = ("form_rate", "form_rate_scalar", "form_rate_nocast", "form_rate_atoms")
+FORM_REPEATS = (64, 2112)
+FORM_BLOCKS_PER_SM = 2      # form_s5's occupancy: 46,080 bytes of static shared memory a block, of the SM's 100 KB
+MACS_PER_SM_CLOCK = 1024    # one unit, a dense E4M3 mma.sync MAC: m16n8k32 is 4,096 MACs per 4 SM clocks
+
+
+def form_rates(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int) -> dict:
+    """The forming loop's price per code in the mix it runs in, in units (one dense E4M3 MAC): each RATE kernel on B's side,
+    2 blocks per SM of 64 x 128 codes each, timed at both FORM_REPEATS; the slope over the repeats' codes at the NVML SM
+    clock.  form_rate and form_rate_scalar must write bt's codes on their tiles (the gate); the cast's price in the mix is
+    form_rate's less form_rate_nocast's."""
+    b, n, k = pipe.b, pipe.n, pipe.k
+    blocks, per_row = FORM_BLOCKS_PER_SM * dev.sms, k // 128
+    if blocks > (n // 64) * per_row:
+        return {"skipped": f"{blocks} blocks need more than B's {(n // 64) * per_row} tiles"}
+    full, rem = divmod(blocks, per_row)
+    span = 64 * (full + (rem > 0)) * k
+    want = dev.read(b["bt"], span)
+    out: dict = {"blocks": blocks, "repeats": list(FORM_REPEATS), "codes_per_repeat": blocks * 64 * 128}
+    for name in FORM_RATES:
+        def launch(r, name=name):
+            dev.launch(name, blocks, 128, p=(b["xb"], b["alpha_b"], b["epb_codes"], b["fb_codes"], b["at2"]), i=(n, k, r))
+        row: dict = {}
+        if name in ("form_rate", "form_rate_scalar"):
+            dev.ck("cuMemsetD8_v2", u64(b["at2"]), 0xAB, span)
+            launch(3)
+            dev.sync()
+            got = dev.read(b["at2"], span)
+            spans = [(0, 64 * full * k)] + [(64 * full * k + r * k, 64 * full * k + r * k + 128 * rem) for r in range(64 * (rem > 0))]
+            row["codes_differing"] = sum(x != y for s, e in spans for x, y in zip(got[s:e], want[s:e]))
+        before = nv.read()
+        t = {r: dev.timed(lambda r=r: launch(r), reps) for r in FORM_REPEATS}
+        after = nv.read()
+        mhz = [c["sm_mhz"] for c in (before, after) if "sm_mhz" in c]
+        lo, hi = (statistics.median(t[r]) for r in FORM_REPEATS)
+        row.update({"ms": {str(r): [round(x, 5) for x in t[r]] for r in FORM_REPEATS}, "sm_mhz": mhz})
+        if mhz and hi > lo:
+            codes = out["codes_per_repeat"] * (FORM_REPEATS[1] - FORM_REPEATS[0])
+            row["units_per_code"] = round((hi - lo) * 1e-3 * statistics.mean(mhz) * 1e6 * dev.sms * MACS_PER_SM_CLOCK / codes, 3)
+        out[name] = row
+    u_ = {nm: out[nm].get("units_per_code") for nm in FORM_RATES}
+    if u_["form_rate"] is not None and u_["form_rate_nocast"] is not None:
+        out["cast_units_per_code"] = {"packed": round(u_["form_rate"] - u_["form_rate_nocast"], 3)}
+        if u_["form_rate_scalar"] is not None:
+            out["cast_units_per_code"]["scalar_loop_less_nocast"] = round(u_["form_rate_scalar"] - u_["form_rate_nocast"], 3)
+    return out
+
+
 def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
     """The timed part of `timing` on a pipeline whose kernels have run once: medians, phases, ratios, consistency."""
     m, n, k, steps = pipe.m, pipe.n, pipe.k, pipe.steps()
@@ -583,6 +638,10 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             continue
         t = dev.timed(f, reps)
         runs[name], med[name] = [round(x, 4) for x in t], statistics.median(t)
+    if gates["pearl_c"]:
+        for tag in ("a", "b"):
+            t = dev.timed(lambda tag=tag: pipe.form_scalar_launch(tag), reps)
+            runs[f"form_{tag}_scalar"], med[f"form_{tag}_scalar"] = [round(x, 4) for x in t], statistics.median(t)
     after = nv.read()
     phases = {ph: sum(med.get(nm, 0.0) for nm, p, _ in steps if p == ph) for ph in ("job",) + CALL_PHASES}
     out = {"kind": "timing", "label": "diagnostic, unlocked unless the clock record says so", "shape": [m, n, k],
@@ -603,6 +662,9 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         [f for nm, _, f in steps if nm == "gemm_pearlc"][0]()
         out["consistency"]["u_rerun_words_differing"] = pipe.diff("c2", "u")
         out["consistency"].update({f"{tag}t_form_s5_vs_scalar_words_differing": pipe.form_scalar(tag) for tag in ("a", "b")})
+        out["form_rate"] = rate = form_rates(dev, nv, pipe, reps)
+        out["consistency"].update({f"bt_{nm}_codes_differing": rate[nm]["codes_differing"]
+                                   for nm in ("form_rate", "form_rate_scalar") if nm in rate})
     if gates["plain"] and "gemm_plain" in med:
         out["plain_call_ms"] = round(med["plainq_a"] + med["gemm_plain"], 4)
         out["plain_tflops"] = round(2 * m * n * k / med["gemm_plain"] / 1e9, 1)

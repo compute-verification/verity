@@ -460,10 +460,18 @@ DEV uint32_t e4m3x4(float a, float b, float c, float d) {
 constexpr int FORM_ROW = 144;   // shared bytes per staged row: 128 codes, padded so the quads' stores hit distinct banks
 constexpr int FORM_X = 544;     // shared bytes per staged FP32 row: 512, padded so a half-warp's float2 reads hit 32 banks
 constexpr int FORM_X4 = 576;    // form_s5's: 512, padded so a quarter-warp's float4 reads (two rows) hit 32 banks
-template <bool PACKED> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* sX) {
+//
+// MODE 0 is form_s5's loop and 1 form_s5_scalar's.  With RATE (form_rate*) the block takes tile blockIdx.x of the
+// (rows / 64) x (k / 128) grid in row-major order and runs the loop i[2] times over it, so the loop's price per code is
+// measured in the mix it runs in without the global traffic that bounds form_s5; an empty asm with a memory clobber per
+// repeat keeps the compiler from hoisting or merging repeats.  Modes 0 and 1 then write the same codes as their kernels;
+// 2 is 0 with each word's cast replaced by one of its floats' bits, and 3 is 2 without x (the atoms, F's loads, the stores).
+template <int MODE, bool RATE> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* sX) {
+  constexpr bool PACKED = MODE != 1;
   constexpr int FX = PACKED ? FORM_X4 : FORM_X;
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, g = lane / 4, q = lane % 4, k = a.i[1];
-  const int t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, rw = r0 + 16 * warp;
+  const int bx = RATE ? blockIdx.x % (k / 128) : blockIdx.x, by = RATE ? blockIdx.x / (k / 128) : blockIdx.y;
+  const int t0 = bx * 128, r0 = by * 64, rw = r0 + 16 * warp;
   const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]);
   const uint8_t* x = reinterpret_cast<const uint8_t*>(a.p[0]) + ((size_t)r0 * k + t0) * 4;
@@ -481,36 +489,53 @@ template <bool PACKED> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* s
   __syncthreads();
   uint8_t* o0 = sO + (16 * warp + g) * FORM_ROW;
   uint8_t* o1 = o0 + 8 * FORM_ROW;
-  if (PACKED) {
-    const uint8_t* x0 = sX + (16 * warp + g) * FX + 16 * q;
-    const uint8_t* x1 = x0 + 8 * FX;
-    const uint8_t* lines = F + (size_t)(t0 + 4 * (g / 2) + g % 2) * 32 + 4 * q;
+  const int reps = RATE ? a.i[2] : 1;
+  for (int rep = 0; rep < reps; rep++) {
+    const uint8_t *X = sX, *Fr = F;
+    float b0 = al0, b1 = al1;
+    if (RATE) asm volatile("" : "+f"(b0), "+f"(b1) : : "memory");
+    if (PACKED) {
+      const uint8_t* x0 = X + (16 * warp + g) * FX + 16 * q;
+      const uint8_t* x1 = x0 + 8 * FX;
+      const uint8_t* lines = Fr + (size_t)(t0 + 4 * (g / 2) + g % 2) * 32 + 4 * q;
 #pragma unroll 2
-    for (int p = 0; p < 8; p++) {
-      const uint8_t* l0 = lines + (size_t)16 * 32 * p;
-      const uint32_t f0[2] = {ld32(l0), ld32(l0 + 16)}, f1[2] = {ld32(l0 + 64), ld32(l0 + 80)};
-      const float4 v0 = *reinterpret_cast<const float4*>(x0 + 64 * p), v1 = *reinterpret_cast<const float4*>(x1 + 64 * p);
-      float d0[4] = {__fmul_rn(al0, v0.x), __fmul_rn(al0, v0.y), __fmul_rn(al1, v1.x), __fmul_rn(al1, v1.y)};
-      float d1[4] = {__fmul_rn(al0, v0.z), __fmul_rn(al0, v0.w), __fmul_rn(al1, v1.z), __fmul_rn(al1, v1.w)};
-      qmma(d0, fa, f0);
-      qmma(d1, fa, f1);
-      const int c = 16 * p + 4 * q;
-      *reinterpret_cast<uint32_t*>(o0 + c) = e4m3x4(d0[0], d0[1], d1[0], d1[1]);
-      *reinterpret_cast<uint32_t*>(o1 + c) = e4m3x4(d0[2], d0[3], d1[2], d1[3]);
-    }
-  } else {
-    const uint8_t* x0 = sX + (16 * warp + g) * FX + 8 * q;
-    const uint8_t* x1 = x0 + 8 * FX;
+      for (int p = 0; p < 8; p++) {
+        const uint8_t* l0 = lines + (size_t)16 * 32 * p;
+        const uint32_t f0[2] = {ld32(l0), ld32(l0 + 16)}, f1[2] = {ld32(l0 + 64), ld32(l0 + 80)};
+        float d0[4], d1[4];
+        if (MODE == 3) {
+          d0[0] = d0[1] = d1[0] = d1[1] = b0;
+          d0[2] = d0[3] = d1[2] = d1[3] = b1;
+        } else {
+          const float4 v0 = *reinterpret_cast<const float4*>(x0 + 64 * p), v1 = *reinterpret_cast<const float4*>(x1 + 64 * p);
+          d0[0] = __fmul_rn(b0, v0.x); d0[1] = __fmul_rn(b0, v0.y); d0[2] = __fmul_rn(b1, v1.x); d0[3] = __fmul_rn(b1, v1.y);
+          d1[0] = __fmul_rn(b0, v0.z); d1[1] = __fmul_rn(b0, v0.w); d1[2] = __fmul_rn(b1, v1.z); d1[3] = __fmul_rn(b1, v1.w);
+        }
+        qmma(d0, fa, f0);
+        qmma(d1, fa, f1);
+        const int c = 16 * p + 4 * q;
+        if (MODE == 0) {
+          *reinterpret_cast<uint32_t*>(o0 + c) = e4m3x4(d0[0], d0[1], d1[0], d1[1]);
+          *reinterpret_cast<uint32_t*>(o1 + c) = e4m3x4(d0[2], d0[3], d1[2], d1[3]);
+        } else {
+          *reinterpret_cast<uint32_t*>(o0 + c) = __float_as_uint(d0[0]);
+          *reinterpret_cast<uint32_t*>(o1 + c) = __float_as_uint(d1[2]);
+        }
+      }
+    } else {
+      const uint8_t* x0 = X + (16 * warp + g) * FX + 8 * q;
+      const uint8_t* x1 = x0 + 8 * FX;
 #pragma unroll 4
-    for (int nb = 0; nb < 16; nb++) {
-      const uint8_t* line = F + (size_t)(t0 + 8 * nb + g) * 32 + 4 * q;
-      const uint32_t fb[2] = {ld32(line), ld32(line + 16)};
-      const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * nb), v1 = *reinterpret_cast<const float2*>(x1 + 32 * nb);
-      float d[4] = {__fmul_rn(al0, v0.x), __fmul_rn(al0, v0.y), __fmul_rn(al1, v1.x), __fmul_rn(al1, v1.y)};
-      qmma(d, fa, fb);
-      const int c = 8 * nb + 2 * q;
-      *reinterpret_cast<uint16_t*>(o0 + c) = e4m3(d[0]) | (uint16_t)e4m3(d[1]) << 8;
-      *reinterpret_cast<uint16_t*>(o1 + c) = e4m3(d[2]) | (uint16_t)e4m3(d[3]) << 8;
+      for (int nb = 0; nb < 16; nb++) {
+        const uint8_t* line = Fr + (size_t)(t0 + 8 * nb + g) * 32 + 4 * q;
+        const uint32_t fb[2] = {ld32(line), ld32(line + 16)};
+        const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * nb), v1 = *reinterpret_cast<const float2*>(x1 + 32 * nb);
+        float d[4] = {__fmul_rn(b0, v0.x), __fmul_rn(b0, v0.y), __fmul_rn(b1, v1.x), __fmul_rn(b1, v1.y)};
+        qmma(d, fa, fb);
+        const int c = 8 * nb + 2 * q;
+        *reinterpret_cast<uint16_t*>(o0 + c) = e4m3(d[0]) | (uint16_t)e4m3(d[1]) << 8;
+        *reinterpret_cast<uint16_t*>(o1 + c) = e4m3(d[2]) | (uint16_t)e4m3(d[3]) << 8;
+      }
     }
   }
   __syncthreads();
@@ -524,13 +549,25 @@ template <bool PACKED> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* s
 extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) {
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
   __shared__ __align__(16) uint8_t sX[64 * FORM_X4];
-  form_body<true>(a, sO, sX);
+  form_body<0, false>(a, sO, sX);
 }
 extern "C" __global__ void __launch_bounds__(128) form_s5_scalar(const Args a) {
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
   __shared__ __align__(16) uint8_t sX[64 * FORM_X];
-  form_body<false>(a, sO, sX);
+  form_body<1, false>(a, sO, sX);
 }
+// form_body's loop repeated i[2] times per block (RATE), p0 .. p4 and i0, i1 as form_s5's; grid: any number of blocks up to
+// (rows / 64) * (k / 128), 128 threads
+#define FORM_RATE(NAME, MODE, FX)                                                  \
+  extern "C" __global__ void __launch_bounds__(128) NAME(const Args a) {          \
+    __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];                            \
+    __shared__ __align__(16) uint8_t sX[64 * FX];                                  \
+    form_body<MODE, true>(a, sO, sX);                                              \
+  }
+FORM_RATE(form_rate, 0, FORM_X4)
+FORM_RATE(form_rate_scalar, 1, FORM_X)
+FORM_RATE(form_rate_nocast, 2, FORM_X4)
+FORM_RATE(form_rate_atoms, 3, FORM_X4)
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements

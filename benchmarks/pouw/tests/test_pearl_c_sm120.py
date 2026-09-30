@@ -97,7 +97,8 @@ def test_gemms_fit_sm120_shared_memory():
         assert (tm, bn) == gemm_tile(name)
         assert g in (0, 4) and (g == 0) == (name.endswith("_u") or name == "gemm_fast")
     assert gemm_smem("M_PEARLC", 128, 128) == 98304 and gemm_smem("M_PEARLC", 64, 64) == 49152
-    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "words", "words_u"} == names
+    assert form_rates() == ["form_rate", "form_rate_scalar", "form_rate_nocast", "form_rate_atoms"]
+    assert set(S.WANT) - {"form_s5", "form_s5_scalar", "words", "words_u", *form_rates()} == names
 
 
 def test_kernel_constants_match_the_reference():
@@ -224,10 +225,14 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
 
 
+def form_rates() -> list[str]:
+    return re.findall(r"^FORM_RATE\((\w+), \d, FORM_X4?\)", SOURCE, re.M)
+
+
 def own_kernels() -> list[str]:
     plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"}
     names = [n for n, *_ in gemms()]
-    return sorted(plain) + names + [g + "_smem" for g in names]
+    return sorted(plain) + names + [g + "_smem" for g in names] + form_rates()
 
 
 def kernel_names() -> list[str]:
@@ -245,7 +250,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
     if name == "eprime":
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
-    if name in ("form_s5", "form_s5_scalar"):
+    if name in ("form_s5", "form_s5_scalar") or name.startswith("form_rate"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
     if name.startswith("gemm_") and not name.endswith("_smem"):
@@ -363,7 +368,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
 
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
-                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1"), capture_output=True, text=True, timeout=600)
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1024x1024x3072"),
+                       capture_output=True, text=True, timeout=600)
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     kinds = [x["kind"] for x in rows]
@@ -372,6 +378,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     for t in rows[3:]:
         assert t["gates"]["ungated"] and {"split_ms", "call_e2e_ms", "ratio_vs_own_plain_gemm", "consistency", "job_ms"} <= set(t)
         assert set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
+        assert t["form_rate"]["blocks"] == 2 * 188 and set(form_rates()) <= set(t["form_rate"])
+        assert {"form_a_scalar", "form_b_scalar"} <= set(t["ms"])
 
     allocs: dict[int, int] = {}
     seen = set()
@@ -409,6 +417,8 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
         assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
         if name in ("form_s5", "form_s5_scalar"):
             assert g[:2] == [i[1] // 128, i[0] // 64] and ev["block"] == 128
+        if name.startswith("form_rate"):
+            assert g[1:] == [1, 1] and 0 < g[0] <= (i[0] // 64) * (i[1] // 128) and ev["block"] == 128 and i[2] > 0
         if name == "plainq":
             assert g[0] == i[0]
         if name == "lines":
