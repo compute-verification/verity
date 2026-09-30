@@ -32,7 +32,7 @@ SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
 (cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" benchmarks/pouw/pearl_c_sm120/run.py || { echo "ship"; exit 3; }
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl"
 ARGS=(--model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/e2e.json"
-      --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${GRAPHS:+--graphs})
+      --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs})
 if [ "${NSYS:-1}" = 1 ]; then
   nsys profile -o "$OUT/served" -f true -t cuda,nvtx -s none --cpuctxsw=none ${NSYS_ARGS:-} \
     "$PY" "$HERE/served_profile.py" -- "${ARGS[@]}"
