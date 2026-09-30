@@ -66,7 +66,9 @@ spec:
         - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasources.yaml, subPath: datasources.yaml}
         - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml}
         - {name: dashboards, mountPath: /etc/grafana/dashboards, readOnly: true}
+        - {name: alerting, mountPath: /etc/grafana/provisioning/alerting, readOnly: true}
       volumes:
       - {name: data, hostPath: {path: /workspace/monitoring/grafana, type: Directory}}
       - {name: provisioning, configMap: {name: grafana-provisioning}}
       - {name: dashboards, configMap: {name: grafana-dashboards}}
+      - {name: alerting, configMap: {name: grafana-alerting}}      # alerting.yaml: the idle-GPU rules and their markdown contact point
