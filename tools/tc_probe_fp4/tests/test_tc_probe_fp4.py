@@ -261,7 +261,8 @@ def test_scale_bit7_twins_differ_only_in_bit_7_and_the_model_refuses_those_bytes
 
 def _lean_vectors_file(path: Path, rng) -> None:
     """A small ``Fp4Vectors.lean``: nvf4P7's entries 0-5 in the model (5 carries a bit-7 byte, ``d`` its low-7-bit twin's word),
-    6 a bit-7 entry with ``none``; nvf4Chains' entry 0 in the model, entry 1 a bit-7 chain of 2."""
+    6 a bit-7 entry with ``none``; nvf4Chains' entry 0 in the model, entry 1 a bit-7 chain of 2; nvf4Specials' entry 0 a
+    signalling-NaN accumulator with a bit-7 byte and the record-only word 0x7FFFFFFF."""
     def pack(xs, bits):
         return sum(int(x) << (bits * i) for i, x in enumerate(xs))
 
@@ -285,8 +286,10 @@ def _lean_vectors_file(path: Path, rng) -> None:
 
     p7 = [entry(1, False) for _ in range(5)] + [entry(1, True), entry(1, True, known=False)]
     ch = [entry(2, False), entry(2, True)]
+    sp = [{**entry(1, True), "acc": 0xFFACB8FF, "d": 0x7FFFFFFF}]
     path.write_text("import Pouw.PearlC.Fp4Chain\n\n/-- vectors -/\ndef nvf4P7 : List Vec := [\n" + ",\n".join(lean(v, False) for v in p7)
-                    + "]\n\n/-- chains -/\ndef nvf4Chains : List ChainVec := [\n" + ",\n".join(lean(v, True) for v in ch) + "]\n")
+                    + "]\n\n/-- chains -/\ndef nvf4Chains : List ChainVec := [\n" + ",\n".join(lean(v, True) for v in ch) + "]\n"
+                    + "\n/-- specials -/\ndef nvf4Specials : List Vec := [\n" + ",\n".join(lean(v, False) for v in sp) + "]\n")
 
 
 def test_lean_vectors_capture_gates_the_layout_and_reports_the_prediction(no_nvcc, tmp_path):
@@ -298,10 +301,16 @@ def test_lean_vectors_capture_gates_the_layout_and_reports_the_prediction(no_nvc
     base = ["--instruction", "nvf4_lean_vectors", "--vectors", str(vec), "--vector-ids", "5", "--chain-ids", "1"]
     assert P.main(base + ["--fake-silicon", "low7", "--out", str(tmp_path / "low7")]) == 0
     doc = json.loads((tmp_path / "low7" / "probe_results.json").read_text())
-    assert doc["summary"] == {"selected": 2, "match_prediction": 2, "match_low7_twin": 2, "pinned_model_refuses": 2}
+    assert doc["summary"] == {"selected": 2, "match_prediction": 2, "match_low7_twin": 2, "match_low7_decode": 2,
+                              "pinned_model_refuses": 2, "outside_model": 0}
     assert doc["gates"]["controls"]["vectors"] == 6 and doc["gates"]["controls"]["chains"] == 1
     assert doc["gates"]["background"]["mismatches"] == 0 and doc["gates"]["background"]["checked"] > 0
+    assert doc["gates"]["poison"]["words_reading_poison"] == 0 and doc["gates"]["no_write_control"]["rejected"]
     assert [v["vector"] for v in doc["vectors"]] == ["nvf4P7[5]", "nvf4Chains[1]"] and doc["vectors"][1]["n"] == 2
+    assert P.main(base + ["--special-ids", "0", "--fake-silicon", "low7", "--out", str(tmp_path / "special")]) == 0
+    sp = json.loads((tmp_path / "special" / "probe_results.json").read_text())["vectors"][2]
+    assert (sp["vector"], sp["outside_model"], sp["pinned_model_low7_twin"], sp["low7_decode_predicts"], sp["device"]) == \
+        ("nvf4Specials[0]", "NaN accumulator", None, "7fffffff", "7fffffff") and sp["matches_low7_decode"]
     assert P.main(base + ["--fake-silicon", "verity", "--out", str(tmp_path / "refuses")]) == 0
     doc = json.loads((tmp_path / "refuses" / "probe_results.json").read_text())
     assert doc["summary"]["match_prediction"] == 0 and {v["device"] for v in doc["vectors"]} == {"7fffffff"}
@@ -315,6 +324,63 @@ def test_lean_vectors_capture_gates_the_layout_and_reports_the_prediction(no_nvc
     assert P.main(base + ["--fake-silicon", "low7", "--out", str(tmp_path / "control")]) == 1
     doc = json.loads((tmp_path / "control" / "probe_results.json").read_text())
     assert doc["gates"]["controls"]["mismatches"][0]["vector"] == "nvf4P7[0]" and "vectors" not in doc
+
+
+def test_lean_vectors_poison_no_write_control_and_collect(no_nvcc, tmp_path, monkeypatch):
+    """A kernel that leaves a word unwritten, or a launch switch that does not stop the launch, fails the capture; ``--collect``
+    derives a chunk's gates and words again from its dumps and publishes them, and refuses a fake chunk, another library, and
+    dumps or records that were changed."""
+    vec = tmp_path / "Fp4Vectors.lean"
+    _lean_vectors_file(vec, np.random.default_rng(3))
+    base = ["--instruction", "nvf4_lean_vectors", "--vectors", str(vec), "--vector-ids", "5", "--chain-ids", "1", "--special-ids", "0"]
+    rows = LV.FakeLow7.rows
+
+    def unwritten(self, *a, **kw):
+        D = rows(self, *a, **kw).copy()
+        D[0, 5, 5] = LV.POISON
+        return D
+
+    monkeypatch.setattr(LV.FakeLow7, "rows", unwritten)
+    assert P.main(base + ["--fake-silicon", "low7", "--out", str(tmp_path / "unwritten")]) == 1
+    doc = json.loads((tmp_path / "unwritten" / "probe_results.json").read_text())
+    assert doc["gates"]["poison"]["words_reading_poison"] > 0 and "vectors" not in doc
+    monkeypatch.setattr(LV.FakeLow7, "rows", rows)
+    monkeypatch.setattr(LV.FakeLow7, "set_launch", lambda self, on: LV.POISON & 0xFF)
+    assert P.main(base + ["--fake-silicon", "low7", "--out", str(tmp_path / "switch")]) == 1
+    doc = json.loads((tmp_path / "switch" / "probe_results.json").read_text())
+    assert not doc["gates"]["no_write_control"]["rejected"] and doc["gates"]["no_write_control"]["words_reading_poison"] == 0
+    monkeypatch.undo()
+
+    chunk, lib = tmp_path / "chunk", tmp_path / "libmma_fp4_sm_120a.so"
+    assert P.main(base + ["--fake-silicon", "low7", "--out", str(chunk)]) == 0
+    assert (chunk / "dumps.npz").exists()
+    lib.write_bytes(b"library")
+    collect = base + ["--collect", str(chunk), "--prebuilt", str(lib)]
+    assert P.main(collect + ["--out", str(tmp_path / "fake")]) == 1
+    assert "fake silicon" in json.loads((tmp_path / "fake" / "probe_results.json").read_text())["failures"][0]
+    rec = json.loads((chunk / "probe_results.json").read_text())
+    rec.update(fake_silicon=None, expect_uuid="GPU-x", library={"path": str(lib), "sha256": LV.sha256(lib), "nvcc": "prebuilt"})
+    rec["identity"].update(backend="mma.sync", gpu_uuid="GPU-x")
+    (chunk / "probe_results.json").write_text(json.dumps(rec))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    assert P.main(collect + ["--out", str(tmp_path / "ok")]) == 0
+    doc = json.loads((tmp_path / "ok" / "probe_results.json").read_text())
+    res = json.loads((tmp_path / "ok" / "result.json").read_text())
+    assert doc["vectors"] == rec["vectors"] and res["validation"]["status"] == "passed" and res["run_id"] == "r-test"
+    assert res["collected_from"]["dumps_sha256"] == LV.sha256(chunk / "dumps.npz") and res["words"]["nvf4Specials[0]"] == "7fffffff"
+    lib.write_bytes(b"another library")
+    assert P.main(collect + ["--out", str(tmp_path / "lib")]) == 1
+    lib.write_bytes(b"library")
+    rec["vectors"][0]["device"] = "00000000"
+    (chunk / "probe_results.json").write_text(json.dumps(rec))
+    assert P.main(collect + ["--out", str(tmp_path / "record")]) == 1
+    assert "differ from the ones derived again" in json.loads((tmp_path / "record" / "probe_results.json").read_text())["failures"][0]
+    dumps, nowrite = LV.load_dumps(chunk / "dumps.npz")
+    dumps["n1_r0_c0"]["D_rows"][0, 0, 0] ^= 1
+    dumps["n1_r0_c0"]["D_tile"][0, 0, 0] ^= 1
+    LV.save_dumps(chunk / "dumps.npz", dumps, nowrite)
+    assert P.main(collect + ["--out", str(tmp_path / "dumps")]) == 1
+    assert "placements disagree" in json.loads((tmp_path / "dumps" / "probe_results.json").read_text())["failures"][0]
 
 
 def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):
@@ -570,7 +636,11 @@ def test_store_declarations_keep_guards_out_of_the_derivation():
     v = tool.TC_PROBE_FP4.parse(["python", "tools/tc_probe_fp4/probe.py", "--instruction", "nvf4_lean_vectors", "--out", "x",
                                  "--vectors", "in/Fp4Vectors.lean", "--vector-ids", "31,34", "--chain-ids", "9"])
     assert (v["vectors"], v["vector_list"], v["vector_ids"], v["chain_ids"]) == ("in/Fp4Vectors.lean", "nvf4P7", "31,34", "9")
-    assert "_unknown" not in v and "vectors" in tool.TC_PROBE_FP4.param_artifacts
+    assert "_unknown" not in v and "vectors" in tool.TC_PROBE_FP4.param_artifacts and v["collect"] is False
+    c = tool.TC_PROBE_FP4.parse(["python", "tools/tc_probe_fp4/probe.py", "--instruction", "nvf4_lean_vectors", "--out", "x",
+                                 "--vectors", "in/Fp4Vectors.lean", "--special-ids", "12,19", "--collect", "/fill-out/run"])
+    assert c["special_ids"] == "12,19" and c["collect"] is True and "_unknown" not in c
+    assert set(c) <= set(tool.TC_PROBE_FP4.key_params) | {"out", "procs"}
     q = tool.TC_PRICE_FP4.parse(["python", "tools/tc_probe_fp4/w1_price.py", "--out", "x", "--rows", "mxf4,nvf4,",
                                  "--expect-uuid", "GPU-1", "--max-seconds", "60"])
     assert q["rows"] == "mxf4,nvf4" and not {"out", "expect_uuid", "max_seconds"} & set(q)

@@ -357,11 +357,16 @@ __global__ void sparse_tiles_kernel(const uint8_t* __restrict__ As, const uint8_
     store_d(D + (size_t)warp * 128, df, lane);
 }
 
-// Host-side plumbing shared by every entry point: upload, launch (4 warps per block), download, free.
+// Host-side plumbing shared by every entry point: upload, poison D, launch (4 warps per block), download, free.
 struct Buf {
     void* p = nullptr;
     size_t n = 0;
 };
+
+// Every D buffer is filled with this byte before the launch, so a word no kernel wrote reads 0xA5A5A5A5 and never a stale result.
+constexpr int D_POISON = 0xA5;
+// set_kernel_launch(0) skips every launch (the no-write control): the caller must then see the poison and reject the dump.
+int g_launch = 1;
 
 static int run_tiles(int which, const void* A, size_t a_bytes, const void* Bt, size_t b_bytes, const void* SFA, size_t sfa_bytes,
                      const void* SFB, size_t sfb_bytes, const uint32_t* C, uint32_t* D, int ntiles) {
@@ -380,8 +385,9 @@ static int run_tiles(int which, const void* A, size_t a_bytes, const void* Bt, s
     if (sfa_bytes) cudaMemcpy(dSFA, SFA, sfa_bytes, cudaMemcpyHostToDevice);
     if (sfb_bytes) cudaMemcpy(dSFB, SFB, sfb_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(dC, C, c_bytes, cudaMemcpyHostToDevice);
+    if ((err = cudaMemset(dD, D_POISON, c_bytes)) != cudaSuccess) return (int)err;
     const int wpb = 4, blocks = (ntiles + wpb - 1) / wpb;
-    switch (which) {
+    if (g_launch) switch (which) {
         case 0: nvfp4_tiles_kernel<<<blocks, 32 * wpb>>>((const uint8_t*)dA, (const uint8_t*)dB, (const uint8_t*)dSFA, (const uint8_t*)dSFB, dC, dD, ntiles); break;
 #ifndef NO_MXF4
         case 1: mxfp4_tiles_kernel<<<blocks, 32 * wpb>>>((const uint8_t*)dA, (const uint8_t*)dB, (const uint8_t*)dSFA, (const uint8_t*)dSFB, dC, dD, ntiles); break;
@@ -439,8 +445,9 @@ static int run_rows(int kind, const uint8_t* A, const uint8_t* Bt, const uint8_t
     if (sfa_bytes) cudaMemcpy(dSFA, SFA, sfa_bytes, cudaMemcpyHostToDevice);
     if (sfb_bytes) cudaMemcpy(dSFB, SFB, sfb_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(dC, C, c_bytes, cudaMemcpyHostToDevice);
+    if ((err = cudaMemset(dD, D_POISON, c_bytes)) != cudaSuccess) return (int)err;
     const int wpb = 4, blocks = (ntiles + wpb - 1) / wpb, threads = 32 * wpb;
-    switch (kind) {
+    if (g_launch) switch (kind) {
         case R_NVF4: launch_rows<R_NVF4>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
         case R_MXF4: launch_rows<R_MXF4>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
         case R_F8F6F4_E2M1: launch_rows<R_F8F6F4_E2M1>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
@@ -484,8 +491,10 @@ static int run_sparse(int kind, const uint8_t* As, const uint8_t* Bt, const uint
     cudaMemcpy(dSFA, SFA, sfa_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(dSFB, SFB, sfb_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(dC, C, c_bytes, cudaMemcpyHostToDevice);
+    if ((err = cudaMemset(dD, D_POISON, c_bytes)) != cudaSuccess) return (int)err;
     const int wpb = 4, blocks = (ntiles + wpb - 1) / wpb, threads = 32 * wpb;
-    if (kind == SP_NVF4)
+    if (!g_launch) {
+    } else if (kind == SP_NVF4)
         sparse_tiles_kernel<SP_NVF4><<<blocks, threads>>>(dA, dB, dM, dSFA, dSFB, dC, dD, ntiles);
     else
         sparse_tiles_kernel<SP_MXF4><<<blocks, threads>>>(dA, dB, dM, dSFA, dSFB, dC, dD, ntiles);
@@ -543,6 +552,11 @@ int mma_sparse_tiles(int kind, const uint8_t* As, const uint8_t* Bt, const uint8
                      const uint32_t* C, uint32_t* D, int n) {
     return run_sparse(kind, As, Bt, META, SFA, SFB, C, D, n);
 }
+
+// 0 skips every kernel launch until it is set back to 1: D comes back as the 0xA5 poison (the no-write control).
+void set_kernel_launch(int on) { g_launch = on != 0; }
+
+int d_poison_byte(void) { return D_POISON; }
 
 // The device's UUID as nvidia-smi prints it ("GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"): the one CUDA sees, whatever the host lists.
 int device_uuid(char* out, int out_len) {

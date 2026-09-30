@@ -74,7 +74,8 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
     the sparse rows' metadata rule (``--instruction sp_nvf4_meta | sp_mxf4_meta``, ``meta_rule.py``: where each of the 16
     nibbles puts a chunk's stored codes, the pinned step on that gather, and the zero patterns the hardware can write);
     named vectors of a generated Lean vector file (``--instruction nvf4_lean_vectors --vectors F``, ``lean_vectors.py``: each
-    selected word against the file's prediction, gated by the file's other in-model vectors).
+    selected word against the file's prediction, gated by the file's other in-model vectors, a 0xA5-poisoned D and a no-write
+    control; ``--collect DIR`` derives a fill chunk's capture again on the CPU and publishes it).
   * ``scale_bit7`` (nvf4, record only): tile pairs whose UE4M3 scale bytes differ only in bit 7, which the pinned model refuses;
     ``bit7`` counts the words the pair's members differ in on the device, and checks the low-7-bit members against the model.
   * ``scale_split_twins`` (nvf4, mxf4): tile pairs with equal scaled products and accumulators but A's scale halved into its
@@ -281,11 +282,23 @@ class Probe:
         if hasattr(self.lib, "device_uuid"):
             self.lib.device_uuid.restype = ctypes.c_int
             self.lib.device_uuid.argtypes = [ctypes.c_char_p, ctypes.c_int]
+        if hasattr(self.lib, "set_kernel_launch"):
+            self.lib.set_kernel_launch.restype = None
+            self.lib.set_kernel_launch.argtypes = [ctypes.c_int]
+            self.lib.d_poison_byte.restype = ctypes.c_int
         self.debug_dir = None  # set by main(): where a failing layout check dumps its operands
         self.lib.has_mxf4.restype = ctypes.c_int
         ident = self.lib.device_identity
         ident.restype = ctypes.c_int
         ident.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.c_char_p, ctypes.c_int]
+
+    def set_launch(self, on: bool) -> int:
+        """mma_fp4.cu's no-write switch: off, every entry point uploads, poisons D and downloads it without launching a kernel.
+        Returns the poison byte; a library built without the switch raises (the control cannot run on it)."""
+        if not hasattr(self.lib, "set_kernel_launch"):
+            raise RuntimeError("this library has no set_kernel_launch (built before the 0xA5 poison): rebuild mma_fp4.cu")
+        self.lib.set_kernel_launch(1 if on else 0)
+        return int(self.lib.d_poison_byte())
 
     def tcgen05_tiles(self, instr: str, A, Bt, SFA, SFB, C, steps: int = 1, force_tmem: bool = False) -> np.ndarray:
         """sm_100 backend: one 128x8x(64 steps) ``tcgen05.mma`` chain per tile.  ``A`` (n,16,64 steps), ``Bt`` (n,8,64 steps),
@@ -1340,6 +1353,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--vector-list", default="nvf4P7", help="nvf4_lean_vectors: the Vec list --vector-ids index")
     ap.add_argument("--vector-ids", default=None, help="nvf4_lean_vectors: comma list of 0-based entries of --vector-list")
     ap.add_argument("--chain-ids", default=None, help="nvf4_lean_vectors: comma list of 0-based entries of nvf4Chains")
+    ap.add_argument("--special-ids", default=None,
+                    help="nvf4_lean_vectors: comma list of 0-based entries of nvf4Specials (outside the model; record-only words)")
+    ap.add_argument("--collect", default=None, metavar="DIR",
+                    help="nvf4_lean_vectors: no device; re-derive every gate and word on the CPU from DIR, a fill chunk's capture "
+                         "(its probe_results.json and dumps.npz), and publish them")
     args = ap.parse_args(argv)
     if args.instruction in LEAN_VECTOR_INSTRUCTIONS:
         import lean_vectors

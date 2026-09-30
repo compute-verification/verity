@@ -58,9 +58,12 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--vector-list", default="nvf4P7")
     ap.add_argument("--vector-ids", default=None)
     ap.add_argument("--chain-ids", default=None)
+    ap.add_argument("--special-ids", default=None)
+    ap.add_argument("--collect", default=None)                  # a fill chunk's capture directory: a path, so only its presence
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     out.pop("prebuilt")
+    out["collect"] = out["collect"] is not None
     if out["arch"] is None:  # probe.py's default: sm_120a for the mma.sync instructions, sm_100a for the tcgen05 ones
         out["arch"] = "sm_100a" if str(out["instruction"]).startswith("tcgen05") else "sm_120a"
     out["n"] = out.pop("n_random")
@@ -240,7 +243,7 @@ TC_PROBE_FP4 = Tool(
     closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
     key_params=["instruction", "arch", "families", "seed", "n", "group", "sweep", "golden_per_family", "replay_autoproof", "sass_check",
                 "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only", "hot_bits",
-                "model_sample", "vectors", "vector_list", "vector_ids", "chain_ids"],
+                "model_sample", "vectors", "vector_list", "vector_ids", "chain_ids", "special_ids", "collect"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_autoproof", "vectors"],
     caches=["nvcc"],
