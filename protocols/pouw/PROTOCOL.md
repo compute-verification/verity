@@ -260,8 +260,11 @@ useful    U/(α_A·α_B), glue
   - A code is salt-dead unless two draws in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
     F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
     high.
-  - D-SS's scale-byte range and its spread bound (2^15.8, implied by D-NF) are counted, not enforced: items 2 and 5
-    charge what they would exclude.
+  - D-SS's spread bound (2^15.8, implied by D-NF) is counted, not enforced: items 2 and 5 charge what it would exclude.
+  - D-SS's scale-byte range is enforced on every formed side (`scale_bytes_ok`): no UE4M3 byte with bit 7 set, which
+    sm_120 reads from its low 7 bits (a second encoding of the same C̃), no zero scale, and no NaN. The verifier forms
+    every scale itself from the committed rows, and every replayed step reads a UE4M3 byte as the hardware does
+    (`hw_scales`).
   - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
   - W_ref = mnk + 32·mk + 256·mn + 117·mk;
@@ -272,9 +275,9 @@ useful    U/(α_A·α_B), glue
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that law, which every measured
   row needs:
-  - the device's dump: A's and B's rows, its roots and its tile leaves;
+  - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
   - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
-    per-row rules, the draws and their openings;
+    per-row rules, the draws and their openings, and a count of device scale bytes outside D-SS's range;
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
