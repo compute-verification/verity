@@ -18,7 +18,8 @@ Each `step` takes one observation of the node (`nebius2.read` live, `nebius2.fro
 
 `gpu-lease` takes a GPU's lock before it writes the owner line, so for an instant a held lock shows the last holder's
 line. An owner line whose allocation has already ended is that: the GPU is planned as held by nobody the planner may move
-(`nebius2.unowned`), and nothing is recorded until the new line is written.
+(`nebius2.unowned`), and nothing is recorded until the new line is written. So is a lock held under a line naming a pid
+that doesn't hold it (`Observation.held`: the take in progress, or a dead holder's child still holding the descriptor).
 
 It reads no clock (the observation carries `t`) and writes only its output directory.
 """
@@ -111,6 +112,7 @@ class Shadow:
                 self.unowned.append(nebius2.unowned(self.cluster, a.gpus, self.node))
             else:
                 allocs[a.id] = a
+        self.unowned += [nebius2.unowned(self.cluster, (i,), self.node) for i in obs.held]
         waiting = {j.id: (j, h) for j, h in nebius2.queue(self.cluster, obs, self.node)} if obs.waits_known else None
         for p in preemptions:
             f = p["victim"]

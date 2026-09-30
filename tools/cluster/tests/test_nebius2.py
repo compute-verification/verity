@@ -92,7 +92,45 @@ def test_a_lock_is_read_from_its_holders_fdinfo_and_a_stale_owner_line_is_not_a_
         (proc / str(pid) / "fdinfo" / "10").write_text("pos:\t0\nflags:\t0102001\n" +
                                                          ("lock:\t1: FLOCK  ADVISORY  WRITE 0 fe:20:1 0 EOF\n" if locked else ""))
     obs = nebius2.read(0, gl, proc)
-    assert list(obs.leases) == [0] and obs.waits == ()
+    assert list(obs.leases) == [0] and obs.waits == () and obs.held == ()
+
+
+def _lock_id(path: Path) -> str:
+    st = os.stat(path)
+    return f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+
+
+def test_a_lock_held_under_a_dead_owners_line_is_held_not_free(c, tmp_path):
+    """2.owner names pid 9, which is gone, but /proc/locks still lists 2.lock (a child kept the descriptor): the GPU is busy
+    and nobody's to move, never free. A blocked request (`->`) on 1.lock holds nothing."""
+    gl, proc = tmp_path / "gl", tmp_path / "proc"
+    gl.mkdir()
+    proc.mkdir()
+    for i in (1, 2):
+        (gl / f"{i}.lock").touch()
+        (gl / f"{i}.owner").write_text("pid=9 run=- who=w9 since=2026-09-30T08:00:00Z\n")
+    (proc / "locks").write_text(f"1: POSIX  ADVISORY  WRITE 5 {_lock_id(gl / '1.lock')} 0 EOF\n"
+                                f"2: FLOCK  ADVISORY  WRITE 4242 {_lock_id(gl / '2.lock')} 0 EOF\n"
+                                f"2: -> FLOCK  ADVISORY  WRITE 4243 {_lock_id(gl / '1.lock')} 0 EOF\n")
+    obs = nebius2.read(0, gl, proc)
+    assert obs.leases == {} and obs.held == (2,)
+    sh = shadow.Shadow(c, tmp_path / "out")
+    sh.step(obs)
+    assert [a.gpus for a in sh.unowned] == [(2,)]
+
+
+@pytest.mark.skipif(not Path("/proc/locks").exists(), reason="needs /proc/locks")
+def test_locked_reads_the_kernels_proc_locks(tmp_path):
+    p, q = tmp_path / "0.lock", tmp_path / "1.lock"
+    p.touch()
+    q.touch()
+    fd = os.open(p, os.O_RDWR)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert nebius2.locked({p, q}) == {p}
+    finally:
+        os.close(fd)
+    assert nebius2.locked({p, q}) == set()
 
 
 def test_a_sampler_line_is_an_observation():
