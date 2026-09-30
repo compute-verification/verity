@@ -50,6 +50,18 @@ KNOWN_FAILURES = {
 }
 
 
+def pytest_configure(config) -> None:
+    """Make this process's first MKL VML call on one thread, before any test.  torch's CPU `exp`, `log`, `tanh`, `erf` and the
+    other VML functions run in the MKL it links statically, whose first-call initialisation races when several threads call at
+    once: one intra-op thread then computes its whole chunk at about 2e-4 relative error (the `exp` reference against torch,
+    max ULP 1771, in some 6% of fresh processes).  Any VML call initialises all of them."""
+    try:
+        import torch
+    except ImportError:
+        return
+    torch.exp(torch.zeros(1))
+
+
 def pytest_collection_modifyitems(items) -> None:
     for item in items:
         if reason := KNOWN_FAILURES.get(item.nodeid):
