@@ -41,8 +41,9 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf.
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
-`frame-b3` (`verity.commitments.merkle`): BLAKE3 keyed by the domain id over compact messages, so a node is two
-compressions and a row leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step.
+`frame-b3` (`verity.commitments.merkle`), BLAKE3 keyed by the domain id. A leaf's header fills one 64-byte block, so a row
+leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step. A node is one compression
+of left ‖ right under its level's key, keyed(domain id, 0x02 ‖ u8 level).
 
 7. **Profile.** When every selected tile passes, `WorkProfile`: for every ε_s in (0, 1] and every operator whose online cost
    is at most T, `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η` (Lean `endToEnd`), with γ = 1 − (1 − γ_0)/Ω*,
@@ -376,11 +377,14 @@ useful    U/(α_A·α_B), glue
   - Its motivation: decode can't wait for A's commitment under SHA-256 over whole rows, a serial chain of 513
     compressions per 32 KB row.
   - The message digests and the tile leaf are BLAKE3 keyed by public labels, and every tree is `frame-b3`. A row's leaf
-    streams through BLAKE3's 1 KB chunk tree (about 22 serial compressions for a 32 KB row), and a node is two.
+    streams through BLAKE3's 1 KB chunk tree (about 22 serial compressions for a 32 KB row), and a node is one.
   - Only the hashing changes: its vectors are the h0 cases' inputs, with the same C̃ and U words, a new leaf, and A's
-    `frame-b3` root, one row leaf and one message digest pinned.
-  - The certificate cites `xof/blake3` and `cr/blake3`. `cr/sha-256` and TurboSHAKE128 no longer back its commitments;
-    the draw's `derive` is unchanged.
+    `frame-b3` root, one row leaf and one message digest pinned. A decode case (m = 32) pins the partial tile's leaf.
+  - The certificate cites `xof/blake3`, `cr/blake3` and `cr/sha-256`. TurboSHAKE128 no longer backs anything. SHA-256
+    still does: the bindings that name each tree's domain and the epoch's `weights_root` are SHA-256 (`tagged`), and the
+    salt and the draw's `derive` (`prf/sha-256`) are unchanged.
+- **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
+  Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
   - `word_flags` flags an atom when some set of its promotion group's atoms containing it, skipped jointly, leaves the
     word's output unchanged. The later promotions are tested by intervals found backward by bisection.
