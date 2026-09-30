@@ -73,7 +73,6 @@ def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
         ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
 
 
-
 def test_a_norm_scale_manifest_addresses_every_rsqrt_row_where_it_is_committed(tmp_path):
     """Under the norm-scale policy (a Commit with the norm tap) the ATen norm's `RsqrtF32{N=1}` output is `<norm module>/norm_scale`,
     family norm_scales: the replay's index spells it so, and every row's address is one the manifest names."""
