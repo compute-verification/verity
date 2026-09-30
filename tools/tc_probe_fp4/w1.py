@@ -10,8 +10,9 @@ accumulation (the leaf beside the E4M3 atom), the 16-bit adds (HADD2 alone, add.
 HFMA2, the widening HADD2.F32 and the mixed FHADD, each in SM-clocks per warp instruction and as a fraction of FADD's rate), their
 co-issue (the leaf's 16 MMAs with N = 4 ... 256 HADD2 per loop iteration: both rates per N, each as a fraction of its loop alone),
 the FP8 v1 rewrite's per-MMA instruction mix (64 HMMA.16816.F32 a loop iteration among its packed-half adds, FADDs, ldmatrix,
-converts and a shared-memory round trip, 8 warps an SM at 232-240 registers: t_mix / t_solo against the leaf), and the prices W1
-reads off them.
+converts and a shared-memory round trip, 8 warps an SM at 232-240 registers: t_mix / t_solo against the leaf; beside it the
+deciding point's ldmatrix alone, feeding the MMAs, with and without its FADDs, and the deciding point with fresh forms, which
+ptxas builds with no register copy), and the prices W1 reads off them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
                                     [--ops qmma_e4m3_f32,qmma_sp_e4m3] [--prebuilt libw1_prices_sm_120a.so] [--lease-max-min 10]
@@ -33,7 +34,8 @@ their clock label (unlocked unless the operator says otherwise, e.g. locked-2100
 Gates, in order, before anything is timed: the device (``fp8.identity_gate``: one visible device, its UUID, sm_120); the SASS gate
 (each op's loop body holds exactly its instruction, NACC x UNROLL MMAs or 64 scalar instructions, and for the cast-and-store loops
 exactly their FADD feed, support and stores too; the FP16 converts' and 16-bit adds' loops are pinned whole, the mix loops whole
-but their MOVs, with no spill or FTZ in the kernel and their registers in the window; its full loop composition is recorded); the
+but their MOVs (MIX_NO_MOV's with none), with no spill or FTZ in the kernel and their registers in the window; its full loop
+composition is recorded); the
 numeric gate (the mix loops against ``mix_model`` in exact integers on per-lane rows of the FP16 1/4 grid; all-ones operands give
 exact integers for every atom and FADD / FFMA, and for the packed and paired adds 1 in the low word and 2 in the high, so a swapped
 half shows; the casts are checked against ``fp8.cvt_ref`` and ``e2m1_ref`` on the timing data, the cast-and-store loops on the words
@@ -129,10 +131,17 @@ HADD2_PER_LOOP = dict(zip(COISSUE_OPS, COISSUE_N))
 #: loop iteration 64 HMMA.16816.F32 among (packed-half adds, FADD, ldmatrix, E4M3-to-FP16 converts), w1_prices.cu's MixP
 MIX = {"r1_lb_flat": (120, 76, 30, 3), "r1_lb_br": (120, 248, 30, 3), "r2_lb_flat": (352, 84, 28, 3), "r2_lb_br": (352, 144, 28, 3),
        "r2_con_flat": (992, 84, 28, 3), "h0_f0": (0, 0, 0, 0), "h0_f17": (0, 68, 0, 0),
-       **{f"h{n}_f17": (4 * n, 68, 28, 0) for n in (32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 256)}}
+       **{f"h{n}_f17": (4 * n, 68, 28, 0) for n in (32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 256)},
+       "h0_f0_l7": (0, 0, 28, 0), "h0_f17_l7": (0, 68, 28, 0), "h48_f17_cf": (192, 68, 28, 0)}
+#: the mixes whose forms are fresh, one add each from two resident sub-blocks, so ptxas builds them without register copies (MixP's
+#: FRESH); the mixes with no adds but loads (the l7 points) feed the loaded sub-blocks to the MMAs themselves (DIRECT)
+MIX_FRESH = ("h48_f17_cf",)
 MIX_OPS = tuple(range(len(OPS), len(OPS) + len(MIX)))
 OPS += [(f"mix_{name}", "HMMA.16816.F32", 64, 16 * 8 * 16, "MAC") for name in MIX]
 MIX_COUNTS = dict(zip(MIX_OPS, MIX.values()))
+#: mix loops the SASS gate holds to no MOV at all: the copy-free deciding point, and the loads alone, which add nothing else
+MIX_NO_MOV = ("mix_h0_f0_l7", "mix_h0_f17_l7", "mix_h48_f17_cf")
+MIX_MATRICES = 17  # w1_prices.cu's: each warp's tile
 MIX_WARPS = 8
 #: the rewrite's registers per thread, which __maxnreg__(240) and each kernel's ballast hold; h256_f17 and r2_con_flat land at 226
 #: with two ballast words and spill with four, so their floor is lower
@@ -260,7 +269,8 @@ def sass_gate(so: Path, out: Path | None) -> dict:
         ok = True
         if i in MIX_OPS:  # the whole loop but those and the register copies (MOV), recorded; no spill or FTZ in the kernel
             expected = mix_loop(i)
-            watched = {k: v for k, v in body.items() if not (k.startswith(("U", "BRA")) or k in ("NOP", "MOV"))}
+            copies = () if name in MIX_NO_MOV else ("MOV",)
+            watched = {k: v for k, v in body.items() if not (k.startswith(("U", "BRA")) or k in ("NOP", *copies))}
             reg, lo = usage.get(_KERNEL[i], {}), MIX_REG_FLOOR.get(name, MIX_REG[0])
             bad = sorted({op for _, op, _ in ins.get(_KERNEL[i], []) if ".FTZ" in op or op.startswith(("LDL", "STL"))})
             rec |= {"registers": reg, "register_window": [lo, MIX_REG[1]], "forbidden_in_kernel": bad, "movs": body.get("MOV", 0)}
@@ -568,8 +578,14 @@ def mix_params(op: int) -> dict:
     na_ = 2 * (nh // 12)
     nb_ = (nh - 4 * na_) // 2
     return {"NH": nh, "NF": nf, "NL": nl, "NC": nc, "NA": na_, "NB": nb_, "NSA": (nl + 1) // 2 if nl else 1, "NSB": nl // 2 if nl else 1,
-            "M": (nf - 64) // 4 if nf else 0, "restart": nh > 0 and nf > 0,
+            "M": (nf - 64) // 4 if nf else 0, "restart": nh > 0 and nf > 0, "fresh": OPS[op][0][4:] in MIX_FRESH,
+            "direct": nh == 0 and nl > 0,
             "na": [(u + 1) * na_ // 4 - u * na_ // 4 for u in range(4)], "nb": [(u + 1) * nb_ // 4 - u * nb_ // 4 for u in range(4)]}
+
+
+def fresh_pair(f: int, ns: int) -> int:
+    """MixP::pair: fresh form f's second sub-block, f % ns + 1, then + 3, + 5, ... as f passes each multiple of ns."""
+    return (f % ns + 2 * (f // ns) + 1) % ns
 
 
 @functools.cache
@@ -577,8 +593,10 @@ def mix_schedule(op: int) -> tuple[tuple[tuple, ...], ...]:
     """A mix loop iteration's 64 slots, each its steps in mix_slot's order: ("ldsm", role, t, matrices) loads sub-block t of the A
     pool (role 0, an x4) or the B pool (1, an x2), register q from the warp's matrix matrices[q]; ("cvt", t) converts word 1 of B
     sub-block t; ("add", role, c, lhs, rhs) is a block-add on chain c's form (role 0: words 0..3 from the A pool, 1: words 4 and 5
-    from the B pool), X = pool[lhs] + pool[rhs], or X + pool[rhs] when lhs is None; ("mma", c, zero) is chain c's MMA on its
-    form, from zero or from acc[c]; ("merge", c) is acc[c] += acc[(c + 2) % 4]; ("promote", c, q) is tot[4q + i] += acc[c][i]."""
+    from the B pool), X = pool[lhs] + pool[rhs], or X + pool[rhs] when lhs is None; ("feed", c, ta, tb) makes chain c's form A
+    sub-block ta and B sub-block tb, which a DIRECT mix's MMA reads as they are (no instruction); ("mma", c, zero) is chain c's
+    MMA on its form, from zero or from acc[c]; ("merge", c) is acc[c] += acc[(c + 2) % 4]; ("promote", c, q) is tot[4q + i] +=
+    acc[c][i]."""
     p = mix_params(op)
     slots = []
     for k in range(64):
@@ -586,15 +604,20 @@ def mix_schedule(op: int) -> tuple[tuple[tuple, ...], ...]:
         steps: list[tuple] = []
         for ld in range(k * p["NL"] // 64, (k + 1) * p["NL"] // 64):
             j = ld // 2
-            steps.append(("ldsm", 0, j % p["NSA"], tuple(4 * (j % 4) + q for q in range(4))) if ld % 2 == 0 else
-                         ("ldsm", 1, j % p["NSB"], tuple(2 * (j % 8) + q for q in range(2))))
+            ma, mb = (j, j) if p["direct"] else (4 * (j % 4), 2 * (j % 8))
+            steps.append(("ldsm", 0, j % p["NSA"], tuple(ma + q for q in range(4))) if ld % 2 == 0 else
+                         ("ldsm", 1, j % p["NSB"], tuple(mb + q for q in range(2))))
         for i in range(p["NC"]):
             j = i * p["NSB"] // p["NC"]
             if ((2 * j + 2) * 64 + p["NL"] - 1) // p["NL"] - 1 == k:  # the slot that loads B sub-block j (ldmatrix 2j + 1)
                 steps.append(("cvt", j))
         for role, n, ns in ((0, p["na"][c], p["NSA"]), (1, p["nb"][c], p["NSB"])):
             for a in range((r * n + 15) // 16, ((r + 1) * n + 15) // 16):
-                steps.append(("add", role, c, c % ns if a == 0 else None, (4 * (a + 1) + c) % ns))
+                f = 4 * a + c
+                steps.append(("add", role, c, f % ns, fresh_pair(f, ns)) if p["fresh"] else
+                             ("add", role, c, c % ns if a == 0 else None, (4 * (a + 1) + c) % ns))
+        if p["direct"]:
+            steps.append(("feed", c, k % p["NSA"], k % p["NSB"]))
         steps.append(("mma", c, p["restart"] and w < 4))
         if p["NF"] and 4 <= w < 12:
             e = 8 * (k // 16) + w - 4
@@ -639,12 +662,13 @@ def mma16816(x: np.ndarray, acc: np.ndarray | None) -> np.ndarray:
 def mix_model(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     """(32, 32) chk words per lane of a mix loop after ``iters`` iterations of mix_schedule, in exact integers: words 0..15 acc[c][i]
     at 4c + i (the ballast's XOR into word 0 is zero), 16 + q the sum tot[q] + tot[q + 16] + tot[q + 32] + tot[q + 48].  Matrix m
-    of a warp is its lanes' row words m % 8, their halves swapped for m >= 8, so ldmatrix hands each lane its own words; the forms
-    start at row words 0..5 and the pools and sums at 0.  Rows whose values leave the FP16 1/4 grid, or the exact range of any step,
-    raise (mix_gate_rows keeps them in)."""
+    of a warp is its lanes' row words m % 8, their halves swapped for m / 8 odd, so ldmatrix hands each lane its own words; the
+    forms start at row words 0..5 and the pools and sums at 0.  Rows whose values leave the FP16 1/4 grid, or the exact range of any
+    step, raise (mix_gate_rows keeps them in)."""
     p = mix_params(op)
     rows = np.asarray(rows, np.uint32).reshape(32, 8)
-    tile = [rows[:, m] if m < 8 else (rows[:, m - 8] >> np.uint32(16)) | (rows[:, m - 8] << np.uint32(16)) for m in range(16)]
+    tile = [(rows[:, m % 8] >> np.uint32(16)) | (rows[:, m % 8] << np.uint32(16)) if m // 8 % 2 else rows[:, m % 8]
+            for m in range(MIX_MATRICES)]
     pools = [np.zeros((p["NSA"], 4, 32), np.uint32), np.zeros((p["NSB"], 2, 32), np.uint32)]
     x = np.stack([_quarters(rows[:, :6].T)] * 4)
     acc, tot = np.zeros((4, 4, 32), np.int64), np.zeros((64, 32), np.int64)
@@ -663,6 +687,9 @@ def mix_model(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
                     off, nr = (0, 4) if role == 0 else (4, 2)
                     left = x[c, off:off + nr] if lhs is None else _quarters(pools[role][lhs])
                     x[c, off:off + nr] = _bounded(left + _quarters(pools[role][rhs]), F16_QUARTERS, "a packed-half add")
+                elif step[0] == "feed":
+                    _, c, ta, tb = step
+                    x[c, 0:4], x[c, 4:6] = _quarters(pools[0][ta]), _quarters(pools[1][tb])
                 elif step[0] == "mma":
                     acc[step[1]] = mma16816(x[step[1]], None if step[2] else acc[step[1]])
                 elif step[0] == "merge":
@@ -1090,9 +1117,10 @@ def fill_lease(child: list[str], owner: str, max_min: int, sub: Path, wait_min: 
     """Run ``child`` as one GPU fill job of ``owner`` on the fill runner in FILL_DIR (``gpus=1 prio=10``, one chunk of at most
     ``max_min`` minutes, any GPU) and wait until the runner moves it to done/ or failed/.  The script is staged as a dotfile, which
     the runner skips, then renamed into queue/.  The runner leases the GPU (``gpu-lease 1 --preemptible``, which sets
-    GPU_LEASE_UUID); a preempted chunk is killed with its script, requeued and rerun from the top, which the child can, since it
-    only gates and times.  The script writes the child's exit status into ``sub`` and exits 0, because the runner retries any other
-    exit once: a failed gate must fail this run, not be retried into a pass.  A job still queued after ``wait_min`` minutes is
+    GPU_LEASE_UUID); a preempted chunk exits 99 (its script's SIGTERM, or the child's 143 or 137) and is requeued and rerun from
+    the top, which the child can, since it only gates and times.  Otherwise the script writes the child's exit status into ``sub``
+    and exits 0, because the runner retries any other exit once: a failed gate must fail this run, not be retried into a pass, and a
+    preempted chunk must not be read as one.  A job still queued after ``wait_min`` minutes is
     withdrawn (exit 124).  Returns the child's exit status (the runner's if the child never finished), with the job's events; its
     logs are copied into ``sub``."""
     job = f"w1-{os.environ.get('RESEARCH_RUN_ID') or os.getpid()}.sh"
@@ -1102,8 +1130,9 @@ def fill_lease(child: list[str], owner: str, max_min: int, sub: Path, wait_min: 
     rc_file = sub / "fill_child_rc.txt"
     rc_file.unlink(missing_ok=True)
     stage.write_text("\n".join(["#!/bin/bash", f"# fill: owner={owner} gpus=1 max_min={max_min} cpus=8 project=pous prio=10",
-                                f"cd {shlex.quote(os.getcwd())} || exit 1", " ".join(shlex.quote(c) for c in child),
-                                f"echo $? > {shlex.quote(str(rc_file))}", "exit 0"]) + "\n")
+                                "trap 'exit 99' TERM", f"cd {shlex.quote(os.getcwd())} || exit 1",
+                                " ".join(shlex.quote(c) for c in child), "rc=$?", "[ $rc -eq 143 ] || [ $rc -eq 137 ] && exit 99",
+                                f"echo $rc > {shlex.quote(str(rc_file))}", "exit 0"]) + "\n")
     stage.chmod(0o755)
     os.replace(stage, queue / job)
     waited = 0

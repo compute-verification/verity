@@ -424,7 +424,8 @@ def test_mix_schedule_issues_the_loop_counts(op):
 
 def _mix_symbolic(op: int):
     """Two iterations of the schedule over value numbers from opaque loop-carried starts: the first iteration's MMAs as (form,
-    accumulator-in) keys, and the loads (and converted loads) that no block-add reads before their sub-block is reloaded."""
+    accumulator-in) keys and its block-adds' words as unordered operand pairs, and the loads (and converted loads) that no
+    block-add or fed MMA reads before their sub-block is reloaded."""
     table: dict = {}
 
     def vn(*key):
@@ -434,7 +435,7 @@ def _mix_symbolic(op: int):
     pools = [[[vn("sa", t, r) for r in range(4)] for t in range(p["NSA"])], [[vn("sb", t, q) for q in range(2)] for t in range(p["NSB"])]]
     x = [[vn("x", c, r) for r in range(6)] for c in range(4)]
     acc = [[vn("acc", c, i) for i in range(4)] for c in range(4)]
-    mmas, live, unread = [], {}, []
+    mmas, adds, live, unread = [], [], {}, []
     for it in range(2):
         for k, slot in enumerate(w1.mix_schedule(op)):
             for s in slot:
@@ -453,7 +454,16 @@ def _mix_symbolic(op: int):
                         if (role, t) in live:
                             live[(role, t)]["read"] = True
                     left = x[c][off:off + nr] if lhs is None else pools[role][lhs]
-                    x[c][off:off + nr] = [vn("add", left[q], pools[role][rhs][q]) for q in range(nr)]
+                    words = [frozenset((left[q], pools[role][rhs][q])) for q in range(nr)]
+                    if it == 0:
+                        adds += words
+                    x[c][off:off + nr] = [vn("add", w) for w in words]
+                elif s[0] == "feed":
+                    _, c, ta, tb = s
+                    for key in ((0, ta), (1, tb)):
+                        if key in live:
+                            live[key]["read"] = True
+                    x[c] = pools[0][ta] + pools[1][tb]
                 elif s[0] == "mma":
                     key = ("mma", tuple(x[s[1]]), "zero" if s[2] else tuple(acc[s[1]]))
                     if it == 0:
@@ -461,17 +471,28 @@ def _mix_symbolic(op: int):
                     acc[s[1]] = [vn(*key, i) for i in range(4)]
                 elif s[0] == "merge":
                     acc[s[1]] = [vn("fadd", acc[s[1]][i], acc[(s[1] + 2) % 4][i]) for i in range(4)]
-    return mmas, [u for u in unread if u["iteration"] == 0]
+    return mmas, adds, [u for u in unread if u["iteration"] == 0]
 
 
 @pytest.mark.parametrize("op", w1.MIX_OPS)
-def test_mix_schedule_has_no_equal_mmas_and_reads_every_load(op):
-    """ptxas merges MMAs with equal operands and deletes dead loads, which would change the counts timed: within an iteration no
-    two MMAs share their form and accumulator-in, and every sub-block loaded (a converted one too) is read by a block-add before
-    its reload."""
-    mmas, unread = _mix_symbolic(op)
+def test_mix_schedule_has_no_equal_mmas_or_adds_and_reads_every_load(op):
+    """ptxas merges MMAs and adds with equal operands and deletes dead loads, which would change the counts timed: within an
+    iteration no two MMAs share their form and accumulator-in, no two HADD2 add the same pair of words, and every sub-block
+    loaded (a converted one too) is read by a block-add or a fed MMA before its reload."""
+    mmas, adds, unread = _mix_symbolic(op)
     assert len(set(mmas)) == len(mmas) == 64
+    assert len(set(adds)) == len(adds) == w1.MIX_COUNTS[op][0]
     assert unread == []
+
+
+def test_mix_new_points_read_distinct_loads_and_fresh_forms():
+    """The ldmatrix points load 28 distinct windows of the tile (ptxas merges two loads of one address with no store between),
+    and the copy-free point's forms are one add each of two resident sub-blocks, never an earlier form."""
+    for name in ("h0_f0_l7", "h0_f17_l7"):
+        loads = [s[1:4:2] for slot in w1.mix_schedule(_mix(name)) for s in slot if s[0] == "ldsm"]
+        assert len(set(loads)) == len(loads) == 28 and max(m for _, ms in loads for m in ms) < w1.MIX_MATRICES
+    adds = [s for slot in w1.mix_schedule(_mix("h48_f17_cf")) for s in slot if s[0] == "add"]
+    assert len(adds) == 64 and all(s[3] is not None and s[3] != s[4] for s in adds)
 
 
 def test_mma16816_follows_the_fragment_layout():
@@ -530,10 +551,14 @@ _MIX48 = (["LDSM.16.M88.4"] * 14 + ["LDSM.16.M88.2"] * 14 + ["HADD2"] * 192 + ["
     ("mix_h48_f17_rate", _MIX48, [], 240, 8, False), ("mix_h48_f17_rate", _MIX48, [], 230, 0, False),
     ("mix_h48_f17_rate", _MIX48, [], 241, 0, False), ("mix_h48_f17_rate", _MIX48[1:], [], 236, 0, False),
     ("mix_h48_f17_rate", _MIX48 + ["PRMT"], [], 236, 0, False), ("mix_h48_f17_rate", _MIX48 + ["HADD2"], [], 236, 0, False),
-    ("mix_h256_f17_rate", _MIX48[:28] + ["HADD2"] * 1024 + _MIX48[220:], [], 226, 0, True)])
+    ("mix_h256_f17_rate", _MIX48[:28] + ["HADD2"] * 1024 + _MIX48[220:], [], 226, 0, True),
+    ("mix_h48_f17_cf_rate", [o for o in _MIX48 if o != "MOV"], [], 236, 0, True), ("mix_h48_f17_cf_rate", _MIX48, [], 236, 0, False),
+    ("mix_h0_f0_l7_rate", _MIX48[:28] + ["HMMA.16816.F32"] * 64 + ["NOP"] * 40 + _U, [], 236, 0, True),
+    ("mix_h0_f0_l7_rate", _MIX48[:28] + ["HMMA.16816.F32"] * 64 + ["MOV"] + _U, [], 236, 0, False)])
 def test_sass_gate_pins_the_mix_loop(monkeypatch, kernel, body, outside, reg, stack, ok):
-    """A mix loop is exactly its MMAs, adds, FADDs, converts, ldmatrix and STS / LDS, whatever MOVs and NOPs ptxas adds; the kernel
-    has no FTZ, no local-memory spill and no stack, and its registers are in the rewrite's window (h256_f17's floor lower)."""
+    """A mix loop is exactly its MMAs, adds, FADDs, converts, ldmatrix and STS / LDS, whatever MOVs and NOPs ptxas adds (the
+    copy-free point and the loads alone: no MOV); the kernel has no FTZ, no local-memory spill and no stack, and its registers are
+    in the rewrite's window (h256_f17's floor lower)."""
     sass, usage = _mix_sass(body, kernel, outside), _usage(kernel, reg, stack)
     monkeypatch.setattr(w1.subprocess, "run", lambda cmd, **k: type("P", (), {"stdout": usage if "-res-usage" in cmd else sass})())
     rec = w1.sass_gate(Path("/nonexistent.so"), None)["kernels"][kernel.removesuffix("_rate")]
@@ -543,13 +568,16 @@ def test_sass_gate_pins_the_mix_loop(monkeypatch, kernel, body, outside, reg, st
 def test_mix_table(tmp_path, no_nvcc, monkeypatch):
     """With fake rates whose adds and FADDs overlap the MMAs, the deciding point runs at the leaf's rate and h256_f17 at the adds'
     (0.5 SM-clocks each over 256): t_mix / t_solo 1 and 529 / 256, recorded as Derived."""
-    code, res = _run(tmp_path, "--ops", "hmma_f16_f32,mix_h0_f0,mix_h48_f17,mix_h256_f17")
+    code, res = _run(tmp_path, "--ops", "hmma_f16_f32,mix_h0_f0,mix_h48_f17,mix_h256_f17,mix_h0_f0_l7,mix_h0_f17_l7,mix_h48_f17_cf")
     assert code == 0, res["failures"]
-    g = res["numeric_gate"]["ops"]["mix_h48_f17"]
-    assert g["mismatches"] == 0 and g["negative_control"]["rejected"] and g["data"].startswith("per-lane FP16 halves")
+    for name in ("mix_h48_f17", "mix_h0_f0_l7", "mix_h0_f17_l7", "mix_h48_f17_cf"):
+        g = res["numeric_gate"]["ops"][name]
+        assert g["mismatches"] == 0 and g["negative_control"]["rejected"] and g["data"].startswith("per-lane FP16 halves")
     t = res["prices"]["rewrite_mix"]
-    assert t["mix_h48_f17"]["per_16_hmma"] == {"hadd2": 48, "fadd": 17, "ldmatrix": 7, "cvt": 0, "sts_lds_pairs": 1}
-    assert [t[k]["t_mix_over_t_solo"] for k in ("mix_h0_f0", "mix_h48_f17", "mix_h256_f17")] == pytest.approx([1, 1, 529 / 256])
+    assert t["mix_h48_f17"]["per_16_hmma"] == t["mix_h48_f17_cf"]["per_16_hmma"] == {"hadd2": 48, "fadd": 17, "ldmatrix": 7, "cvt": 0,
+                                                                                    "sts_lds_pairs": 1}
+    assert t["mix_h0_f0_l7"]["per_16_hmma"] == {"hadd2": 0, "fadd": 0, "ldmatrix": 7, "cvt": 0, "sts_lds_pairs": 0}
+    assert [t[k]["t_mix_over_t_solo"] for k in ("mix_h0_f0", "mix_h48_f17", "mix_h256_f17", "mix_h48_f17_cf")] == pytest.approx([1, 1, 529 / 256, 1])
     assert t["mix_h256_f17"]["t_mix_over_t_h0_f0"] == pytest.approx(529 / 256)
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     w1.finish(tmp_path, w1.parser().parse_args(["--out", str(tmp_path)]), {**res, "clocks": "locked-2100"}, [], {"device": "fake"}, 0.0)
@@ -617,6 +645,14 @@ def test_fill_lease_records_the_child_status(fill_dir, logged_late):
     assert rc == 3 and state["rc"] == 0 and (fill_dir / "done" / "w1-r-test.sh").exists()
     assert [e["event"] for e in info["events"]] == ["start", "done"]
     assert "child ran" in (sub / "fill-w1-r-test.sh.120000.log").read_text()
+
+
+def test_fill_lease_requeues_a_preempted_chunk(fill_dir):
+    """A child killed by the preemption (143) makes the script exit 99, which the runner requeues, and writes no exit status."""
+    step, state = _runner(fill_dir, False)
+    sub = fill_dir.parent / "sub"
+    _, info = w1.fill_lease([sys.executable, "-c", "import sys; sys.exit(143)"], "bc-x", 8, sub, sleep=step)
+    assert state["rc"] == 99 and not (sub / "fill_child_rc.txt").exists() and info["child_rc"].startswith("not written")
 
 
 def test_fill_lease_withdraws_a_job_that_never_starts(fill_dir):

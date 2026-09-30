@@ -42,8 +42,9 @@
 //   33  hadd2_f32_rate         cvt.f32.f16 of each chain's high half (HADD2.F32)                                   32 registers
 //   34  fhadd_rate             add.rn.f32.f16, an FP16 addend into an FP32 chain (FHADD)                           32 registers
 //   35-49  coissue_h<N>_rate   hmma_f16_f32_rate's 16 MMAs with N HADD2 among them, N = 4 ... 256                    2048 MAC
-//   50-68  mix_<point>_rate    the FP8 v1 rewrite's per-MMA mix: 64 HMMA.16816.F32 with its adds, FADDs, ldmatrix,     2048 MAC
-//                              converts and STS/LDS, one block of 8 warps per SM (MIX_THREADS)
+//   50-71  mix_<point>_rate    the FP8 v1 rewrite's per-MMA mix: 64 HMMA.16816.F32 with its adds, FADDs, ldmatrix,     2048 MAC
+//                              converts and STS/LDS, one block of 8 warps per SM (MIX_THREADS); 69-71 the loads alone and
+//                              the copy-free deciding point
 //
 // Every launch poisons chk, cycles and sm with 0xA5 first, so a word a kernel doesn't write reads 0xA5A5A5A5; w1_run's flag 1 is
 // the negative control, which launches nothing, and the gate must reject what it leaves.
@@ -782,37 +783,46 @@ COISSUE_RATE(coissue_h256_rate, 256)
 //     ceil((r + 1) na(c) / 16)) (so a = 0 is in round 0) is X = S(0) + S(1) for a = 0 and X + S(a + 1) after, S(t) the sub-block
 //     sa[(4t + c) % NSA] (B's the same with nb(c) and
 //     sb[(4t + c) % NSB]).  A form is next rewritten four slots after the HMMA that reads it (with two buffers, two slots after,
-//     ptxas copied each form to a staging quad);
-//   - the HMMA of chain c on x[c], from 0 at the group's start (k % 16 < 4) when NH, NF > 0, so nothing outlives its group;
+//     ptxas copied each form to a staging quad).  FRESH forms are one add each, from two resident sub-blocks: form f = 4a + c is
+//     X = pool[f % NS] + pool[pair(f)], the pairs distinct, so no form is equal to another (ptxas merges equal adds) and none
+//     chains from the last: ptxas then builds each in its HMMA's operand quad, with no copies;
+//   - the HMMA of chain c on x[c], from 0 at the group's start (k % 16 < 4) when NH, NF > 0, so nothing outlives its group; with
+//     no adds and NL > 0 (DIRECT), on the sub-blocks themselves, sa[k % NSA] and sb[k % NSB], and ldmatrix l then loads the
+//     matrices from l / 2 on, so no two loads of an iteration read the same address (ptxas merges those between stores);
 //   - when NF > 0: after slot k % 16 in [4, 12), eligible slot e = 8 (k / 16) + k % 16 - 4, (e + 1) M / 32 - e M / 32 merges
 //     acc[c] += acc[(c + 2) % 4] (4 FADD each), M = (NF - 64) / 4; after a group's fourth HMMA (k % 16 >= 12) its promotion
 //     tot[4 (4 (k / 16) + c) + i] += acc[c][i] (4 FADD), chain 0's word 0 through an STS/LDS round trip.
 // No two HMMAs of an iteration have the same operands (ptxas merges equal ones), and every sub-block loaded is read before its
 // reload; w1.py's tests check both on the schedule.  The NSA x 4 + NSB x 2 ldmatrix registers, the 64 totals, the 16 accumulators
 // and the 24 form registers are touched every iteration, about 200 live (R2's split instance is about 182); NBAL ballast words,
-// loaded before the loop and folded into chk after it, hold the allocation at the rewrite's 232-240.  Each warp's 16 matrices are
-// its lanes' row words (matrix m word l = lane l's word m % 8, its halves swapped for m >= 8: negated, a form's sub-blocks could
+// loaded before the loop and folded into chk after it, hold the allocation at the rewrite's 232-240.  Each warp's 17 matrices are
+// its lanes' row words (matrix m word l = lane l's word m % 8, its halves swapped for m / 8 odd: negated, a form's sub-blocks could
 // cancel to zero), so ldmatrix hands each lane its own words; the forms start at row words 0..5 and the rest at 0.  chk: thread
 // t's 32 words (the host's rows 2t and 2t + 1) are acc[c][i] at
 // 4c + i, word 0 XORed with the ballast's XOR (zero: each word is loaded twice), then tot[q] + tot[q + 16] + tot[q + 32] +
 // tot[q + 48] at 16 + q.
 constexpr int MIX_THREADS = 256;
 constexpr int MIX_K = 64;
-constexpr int MIX_TILE = 1024, MIX_WARP_TILE = 16 * 128, MIX_SCRATCH = MIX_TILE + 8 * MIX_WARP_TILE;
+constexpr int MIX_MATRICES = 17, MIX_TILE = 1024, MIX_WARP_TILE = MIX_MATRICES * 128, MIX_SCRATCH = MIX_TILE + 8 * MIX_WARP_TILE;
 
-template <int NH_, int NF_, int NL_, int NC_, int NBAL_>
+template <int NH_, int NF_, int NL_, int NC_, int NBAL_, bool FRESH_ = false>
 struct MixP {
     static constexpr int NH = NH_, NF = NF_, NL = NL_, NC = NC_, NBAL = NBAL_;
-    static constexpr bool RESTART = NH > 0 && NF > 0;
+    static constexpr bool FRESH = FRESH_, DIRECT = NH == 0 && NL > 0, RESTART = NH > 0 && NF > 0;
     static constexpr int NA = 2 * (NH / 12), NB = (NH - 4 * NA) / 2;
     static constexpr int NSA = NL > 0 ? (NL + 1) / 2 : 1, NSB = NL > 0 ? NL / 2 : 1, M = NF > 0 ? (NF - 64) / 4 : 0;
     static_assert(NH % 4 == 0 && (NH == 0 || (NL >= 2 && NA >= 16)), "whole block-adds, both pools, an A-add between restarts");
+    static_assert(!FRESH || (NH > 0 && NA <= 64 && NB <= 64 && 4 * ((NA - 1) / NSA) + 2 < NSA && 4 * ((NB - 1) / NSB) + 2 < NSB),
+                  "a fresh form at most once a round per chain, each pair's difference odd and under half the pool: all distinct");
+    static_assert(!DIRECT || (NL % 2 == 0 && NL / 2 + 2 < MIX_MATRICES), "each of a direct loop's loads its own matrices");
     static_assert(NF == 0 || (NF >= 64 && NF % 4 == 0 && M <= 64), "16 promotions of 4 FADD, then at most two merges a slot");
     static_assert((NC == 0 || NH > 0) && NBAL % 2 == 0, "a convert feeds the adds; the ballast in pairs");
     __host__ __device__ static constexpr int na(int u) { return (u + 1) * NA / 4 - u * NA / 4; }
     __host__ __device__ static constexpr int nb(int u) { return (u + 1) * NB / 4 - u * NB / 4; }
     __host__ __device__ static constexpr int ldsm_slot(int l) { return ((l + 1) * 64 + NL - 1) / NL - 1; }
     __host__ __device__ static constexpr int cvt_block(int i) { return i * NSB / NC; }
+    // the fresh form f's second sub-block: f % ns + 1, then + 3, + 5, ... as f passes each multiple of ns, a pair not seen before
+    __host__ __device__ static constexpr int pair(int f, int ns) { return (f % ns + 2 * (f / ns) + 1) % ns; }
 };
 
 template <class P>
@@ -852,9 +862,10 @@ __device__ __forceinline__ float sts_lds(uint32_t addr, float v) {
 // Block-add a of chain U's A form (AROLE: x[U][0..3] from sa) or B form (x[U][4..5] from sb).
 template <class P, int U, int A, bool AROLE>
 __device__ __forceinline__ void mix_badd(MixState<P>& s) {
-    constexpr int NR = AROLE ? 4 : 2, OFF = AROLE ? 0 : 4, NS = AROLE ? P::NSA : P::NSB;
-    const uint32_t* rhs = AROLE ? s.sa[(4 * (A + 1) + U) % NS] : s.sb[(4 * (A + 1) + U) % NS];
-    const uint32_t* lhs = A > 0 ? s.x[U] + OFF : AROLE ? s.sa[U % NS] : s.sb[U % NS];
+    constexpr int NR = AROLE ? 4 : 2, OFF = AROLE ? 0 : 4, NS = AROLE ? P::NSA : P::NSB, f = 4 * A + U;
+    constexpr int L = P::FRESH ? f % NS : U % NS, R = P::FRESH ? P::pair(f, NS) : (4 * (A + 1) + U) % NS;
+    const uint32_t* rhs = AROLE ? s.sa[R] : s.sb[R];
+    const uint32_t* lhs = A > 0 && !P::FRESH ? s.x[U] + OFF : AROLE ? s.sa[L] : s.sb[L];
 #pragma unroll
     for (int r = 0; r < NR; r++) s.x[U][OFF + r] = add_f16x2(lhs[r], rhs[r]);
 }
@@ -867,8 +878,8 @@ __device__ __forceinline__ void mix_badds(MixState<P>& s, std::integer_sequence<
 template <class P, int K, int... I>
 __device__ __forceinline__ void mix_ldsms(MixState<P>& s, std::integer_sequence<int, I...>) {
     constexpr int L0 = K * P::NL / 64;
-    (((L0 + I) % 2 == 0 ? ldsm4(s.sa[(L0 + I) / 2 % P::NSA], s.a4 + 512 * ((L0 + I) / 2 % 4))
-                        : ldsm2(s.sb[(L0 + I) / 2 % P::NSB], s.a2 + 256 * ((L0 + I) / 2 % 8))), ...);
+    (((L0 + I) % 2 == 0 ? ldsm4(s.sa[(L0 + I) / 2 % P::NSA], s.a4 + (P::DIRECT ? 128 * ((L0 + I) / 2) : 512 * ((L0 + I) / 2 % 4)))
+                        : ldsm2(s.sb[(L0 + I) / 2 % P::NSB], s.a2 + (P::DIRECT ? 128 * ((L0 + I) / 2) : 256 * ((L0 + I) / 2 % 8)))), ...);
 }
 
 template <class P, int K, int I>
@@ -890,6 +901,7 @@ __device__ __forceinline__ void mix_slot(MixState<P>& s) {
     mix_badds<P, c, (r * na + 15) / 16, true>(s, std::make_integer_sequence<int, ((r + 1) * na + 15) / 16 - (r * na + 15) / 16>{});
     mix_badds<P, c, (r * nb + 15) / 16, false>(s, std::make_integer_sequence<int, ((r + 1) * nb + 15) / 16 - (r * nb + 15) / 16>{});
     if constexpr (P::RESTART && w < 4) mma_f16_f32_zero(s.acc[c], s.x[c], s.x[c] + 4);
+    else if constexpr (P::DIRECT) mma_f16_f32(s.acc[c], s.sa[K % P::NSA], s.sb[K % P::NSB]);
     else mma_f16_f32(s.acc[c], s.x[c], s.x[c] + 4);
     if constexpr (P::NF > 0 && w >= 4 && w < 12) {
         constexpr int e = 8 * (K / 16) + w - 4;
@@ -917,7 +929,7 @@ __device__ __forceinline__ void mix_body(const uint32_t* __restrict__ in, uint32
     const int tid = blockIdx.x * blockDim.x + threadIdx.x, lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
     const uint32_t* row = in + lane * 8;
     uint32_t* tile = reinterpret_cast<uint32_t*>(smem_pad + MIX_TILE + warp * MIX_WARP_TILE);
-    for (int m = 0; m < 16; m++) tile[m * 32 + lane] = m < 8 ? row[m] : row[m - 8] >> 16 | row[m - 8] << 16;
+    for (int m = 0; m < MIX_MATRICES; m++) tile[m * 32 + lane] = m / 8 % 2 ? row[m % 8] >> 16 | row[m % 8] << 16 : row[m % 8];
     MixState<P> s;
     const uint32_t base = (uint32_t)__cvta_generic_to_shared(smem_pad), wt = base + MIX_TILE + warp * MIX_WARP_TILE;
     s.a4 = wt + (lane >> 3) * 128 + (lane & 7) * 16;
@@ -951,10 +963,10 @@ __device__ __forceinline__ void mix_body(const uint32_t* __restrict__ in, uint32
     for (int q = 0; q < 16; q++) out[16 + q] = __float_as_uint(((s.tot[q] + s.tot[q + 16]) + s.tot[q + 32]) + s.tot[q + 48]);
 }
 
-#define MIX_RATE(KNAME, NH, NF, NL, NC, NBAL)                                                                          \
+#define MIX_RATE(KNAME, NH, NF, NL, NC, NBAL, ...)                                                                     \
     __global__ void __maxnreg__(240) KNAME(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,                    \
                                                             long long* __restrict__ cycles, int* __restrict__ sm, int iters) { \
-        mix_body<MixP<NH, NF, NL, NC, NBAL>>(in, chk, cycles, sm, iters);                                              \
+        mix_body<MixP<NH, NF, NL, NC, NBAL, ##__VA_ARGS__>>(in, chk, cycles, sm, iters);                               \
     }
 
 // five of the six route points (per 16 HMMA: R1 7.5 ldmatrix, R2 6.9 run as 7; 0.65 / 0.81 converts, 3 per 64 for both; R1's
@@ -980,6 +992,11 @@ MIX_RATE(mix_h128_f17_rate, 512, 68, 28, 0, 0)
 MIX_RATE(mix_h160_f17_rate, 640, 68, 28, 0, 6)
 MIX_RATE(mix_h192_f17_rate, 768, 68, 28, 0, 12)
 MIX_RATE(mix_h256_f17_rate, 1024, 68, 28, 0, 2)
+// the deciding point's 7 ldmatrix alone, and with h0_f17's FADDs and STS / LDS, each load feeding the MMAs (DIRECT); the deciding
+// point with fresh forms, which ptxas builds without a register copy
+MIX_RATE(mix_h0_f0_l7_rate, 0, 0, 28, 0, 130)
+MIX_RATE(mix_h0_f17_l7_rate, 0, 68, 28, 0, 18)
+MIX_RATE(mix_h48_f17_cf_rate, 192, 68, 28, 0, 6, true)
 
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
@@ -995,10 +1012,11 @@ const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate
                           mix_r1_lb_flat_rate, mix_r1_lb_br_rate, mix_r2_lb_flat_rate, mix_r2_lb_br_rate,
                           mix_r2_con_flat_rate, mix_h0_f0_rate, mix_h0_f17_rate, mix_h32_f17_rate,
                           mix_h40_f17_rate, mix_h48_f17_rate, mix_h56_f17_rate, mix_h64_f17_rate, mix_h80_f17_rate, mix_h96_f17_rate,
-                          mix_h112_f17_rate, mix_h128_f17_rate, mix_h160_f17_rate, mix_h192_f17_rate, mix_h256_f17_rate};
+                          mix_h112_f17_rate, mix_h128_f17_rate, mix_h160_f17_rate, mix_h192_f17_rate, mix_h256_f17_rate,
+                          mix_h0_f0_l7_rate, mix_h0_f17_l7_rate, mix_h48_f17_cf_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 constexpr int FIRST_MIX_OP = 50;  // the mix kernels, from here to the end, run MIX_THREADS
-static_assert(NOPS == FIRST_MIX_OP + 19, "KERNELS' mix kernels start at FIRST_MIX_OP");
+static_assert(NOPS == FIRST_MIX_OP + 22, "KERNELS' mix kernels start at FIRST_MIX_OP");
 
 int op_threads(int op) { return op >= FIRST_MIX_OP ? MIX_THREADS : THREADS; }
 
