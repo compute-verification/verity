@@ -30,6 +30,11 @@ multiples of 32 and 16; its own seeds, so the tiles are unchanged) and reports `
 (`sm120_exact/run.py`'s `merge_stats`: Strassen's 10 pre-adds per element and per 16 x 32 / 32 x 8 fragment, the fragment
 pairs where all 10 are E4M3, and the diagonal pair's largest all-E4M3 block).
 
+Each tile reports its rows' debit (a token row's share over its words of the tile, a weight row's over its 64). A 64x8 tile sees
+a token row through 8 words, so one flagged atom is 1/(8T) of it; --tile-cols N widens the tile to 64 x N, and --rows-by ratio
+takes the first tile's token rows as the 64 admissible rows with the largest max|x|/σ, the rows with outlier channels, to test
+whether a row's debit persists across its columns.
+
 Under `research run` it writes result.json: passed when every sampled tile's residual is at most 1/400.
 """
 from __future__ import annotations
@@ -111,6 +116,11 @@ def main() -> None:
     ap.add_argument("--delta", type=float, default=1.0)
     ap.add_argument("--line-norm", type=float, default=16.0)
     ap.add_argument("--tiles", type=int, default=2, help="sampled 64x8 tiles of admissible rows per layer")
+    ap.add_argument("--tile-cols", type=int, default=8, help="weight rows (output columns) per sampled tile: a token row's "
+                    "debit is over this many words")
+    ap.add_argument("--rows-by", choices=("random", "ratio"), default="random",
+                    help="ratio: the first tile's 64 token rows are the admissible rows with the largest max|x|/σ (outlier "
+                    "channels), the other tiles' random")
     ap.add_argument("--cross-words", type=int, default=4, help="words per tile for P1's greedy cross-group search; 0: none (the debit only)")
     ap.add_argument("--transfer", action="store_true", help="the reviewer's transfer test on the cross-group sample words")
     ap.add_argument("--seed", type=int, default=20260930)
@@ -145,7 +155,7 @@ def main() -> None:
             S, trace = H.split_channels(X.astype(np.float32), W.astype(np.float32), args.delta, k // 100)
             keep = np.setdiff1d(np.arange(k), S)
             X, W = X[:, keep], W[:, keep]
-            fA, lA, _ = row_rules(X, args.delta)
+            fA, lA, rA = row_rules(X, args.delta)
             fB, lB, _ = row_rules(W, args.delta)
             okA, okB = fA & lA, fB & lB
             kpad = -(-len(keep) // 128) * 128
@@ -166,17 +176,19 @@ def main() -> None:
             b = C.form_s5(XB, FmB, args.delta, args.line_norm, mr)[0]
             rec["merge"] = {"rows": [len(ra), len(rb)], **merge_stats(a, b, args.seed)}
             del XA, XB, a, b
-        tiles = []
-        if kpad % 128 == 0 and len(ia) >= 64 and len(ib) >= 8:
+        tiles, nc = [], args.tile_cols
+        if kpad % 128 == 0 and len(ia) >= 64 and len(ib) >= nc:
             FcA = C.enc(C.unit_lines(kpad, rng) * (args.line_norm / np.sqrt(32)))
             FcB = C.enc(C.unit_lines(kpad, rng) * (args.line_norm / np.sqrt(32)))
-            for _ in range(args.tiles):
-                XA, XB = np.zeros((64, kpad)), np.zeros((8, kpad))
-                XA[:, :X.shape[1]] = X[rng.choice(ia, 64, replace=False)]
-                XB[:, :W.shape[1]] = W[rng.choice(ib, 8, replace=False)]
+            for ti in range(args.tiles):
+                by = "ratio" if args.rows_by == "ratio" and ti == 0 else "random"
+                pick = ia[np.argsort(-rA[ia], kind="stable")[:64]] if by == "ratio" else rng.choice(ia, 64, replace=False)
+                XA, XB = np.zeros((64, kpad)), np.zeros((nc, kpad))
+                XA[:, :X.shape[1]] = X[pick]
+                XB[:, :W.shape[1]] = W[rng.choice(ib, nc, replace=False)]
                 a, _, _, flA, lvA = C.form_s5(XA, FcA, args.delta, args.line_norm, rng)
                 b, _, _, flB, lvB = C.form_s5(XB, FcB, args.delta, args.line_norm, rng)
-                ii, jj = np.meshgrid(np.arange(64), np.arange(8), indexing="ij")
+                ii, jj = np.meshgrid(np.arange(64), np.arange(nc), indexing="ij")
                 A, B = a[ii.ravel()], b[jj.ravel()]
                 T = kpad // 32
                 tid, tex = C.chain(A, B, args.G)[:2]
@@ -197,11 +209,14 @@ def main() -> None:
                     a_sim = C.form_s5(XA, FcA, args.delta, args.line_norm, rng)[0]
                     b_sim = C.form_s5(XB, FcB, args.delta, args.line_norm, rng)[0]
                     tr = C.transfer(a_sim[ii.ravel()], b_sim[jj.ravel()], A, B, flags, sample, 4)
-                # A row's debit over its 8 words of the tile, a B row's over its 64: the tile's sample of each row's unit words
-                per_cell = per_word.reshape(64, 8)
+                # A row's debit over its nc words of the tile, a B row's over its 64: the tile's sample of each row's unit words
+                per_cell = per_word.reshape(64, nc)
                 tiles.append({"debit_share": float(per_word.mean()) / T, "debit_eF_share": float(eF.mean()) / T,
-                              "debit_max_word_share": float(per_word.max()) / T, "not_needed_share": C.not_needed_share(flags, 64, 8),
-                              "row_debit_A": [round(float(x), 6) for x in per_cell.sum(1) / (8 * T)],
+                              "debit_max_word_share": float(per_word.max()) / T, "not_needed_share": C.not_needed_share(flags, 64, nc),
+                              **({} if nc == 8 and args.rows_by == "random" else
+                                 {"tile_cols": nc, "rows_by": by, "row_ratio": [round(float(rA[pick].min()), 2),
+                                                                                round(float(rA[pick].max()), 2)]}),
+                              "row_debit_A": [round(float(x), 6) for x in per_cell.sum(1) / (nc * T)],
                               "row_debit_B": [round(float(x), 6) for x in per_cell.sum(0) / (64 * T)],
                               "tile_identity_share": float(tid.sum()) / T, "residual_share": C.exact_run_atoms(tex) / T,
                               **({"cross_group_share_mean": float(size.mean()) / T, "cross_group_share_max": float(size.max()) / T,
