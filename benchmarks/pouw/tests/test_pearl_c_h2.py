@@ -200,3 +200,13 @@ def test_the_fused_producer_writes_derive_rows_wides_a_and_hashes_those_bytes(m,
               T.buffer(root_b), seeds], [m, nseg, index, 1])
     assert [row_leaves.raw[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(r, r, ROW, rows[r]) for r in range(m)]
     assert [seeds.raw[32 * r:32 * r + 32] for r in range(m)] == [PC.row_seed(ctx, r, rows[r]) for r in range(m)]
+    vec = T.buffer(m * rb)
+    T.launch("derive_rows_vec", -(-m * nseg // 128), 128, [y, vec], [m, rb, n])
+    assert vec.raw == wide.raw
+    for mode in (1, 2):
+        a2, leaves2, seeds2 = T.buffer(m * rb), T.buffer(32 * m), T.buffer(32 * m)
+        T.launch("derive_rows_b3s", m, nseg,
+                 [y, a2, leaves2, T.buffer(d.domain_id), T.buffer(tmpl), T.buffer(level_keys(d.domain_id)),
+                  T.buffer(blake3(b"pearl-c/v0/seed-A")), T.buffer(salt), T.buffer(root_b), seeds2], [m, rb, n, tlen, mode, index])
+        assert a2.raw == wide.raw and leaves2.raw == row_leaves.raw
+        assert (seeds2.raw == seeds.raw) if mode == 2 else not any(seeds2.raw)

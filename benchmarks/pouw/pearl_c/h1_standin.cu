@@ -201,19 +201,14 @@ extern "C" __global__ void __launch_bounds__(256) derive_rows_wide(const Args a)
 // derive_rows_b3s: A's producer with -h2's segment leaves fused (P1 in the producer).  It writes derive_rows_wide's A (row r
 // is y's row r, n BF16 words cycled, ^ 0x3C00, over rb / 2 words) a 256-byte segment a thread, and hashes each segment from
 // the very words it stores (b3s_segment_regs), so the leaves bind the bytes forming reads.  The segment's key comes first:
-// it needs the domain only.  p0 y (m x n BF16), p1 A (m x rb bytes), p2 the segment leaves (32 B each, row-major), p3 domain id,
-// p4 the key template; i0 m, i1 rb (a multiple of 256 with 256 | 2n), i2 n, i3 the template's length.  A thread a segment.
-extern "C" __global__ void __launch_bounds__(128) derive_rows_b3s(const Args a) {
-  const uint64_t t = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
-  const uint32_t rb = (uint32_t)a.i[1], segs = rb / B3S_SEG, n = (uint32_t)a.i[2];
-  if (t >= (uint64_t)a.i[0] * segs) return;
-  const uint64_t r = t / segs;
-  const uint32_t j = (uint32_t)(t % segs);
-  uint32_t dom[8], tmpl[16], key[8], w[64], h[8];
-  load_key(a.p[3], dom);
-#pragma unroll
-  for (int q = 0; q < 16; q++) tmpl[q] = reinterpret_cast<const uint32_t*>(a.p[4])[q];
-  b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], r, r, rb, j, key);
+// it needs the domain only.  i4 = 0: segment j of row r's leaf into p2 + 32 (r · segs + j) (any launch, a thread a segment);
+// i4 = 1: a CTA a row (launched with exactly segs threads, at most 512), which then builds the row's segment tree in shared
+// memory (hash_rows_b3s's levels) and writes the row leaf into p2 + 32 r; i4 = 2: and -h3's row seed into p9 + 32 r
+// (b3_seeds' mode 1, the unit index i5).  p0 y (m x n BF16), p1 A (m x rb bytes), p2 leaves, p3 domain id, p4 the key template,
+// p5 the segment level keys, p6 the seed key, p7 salt, p8 root_B, p9 the row seeds; i0 m, i1 rb (a multiple of 256 with
+// 128 | n), i2 n, i3 the template's length, i4 the mode, i5 the unit index.
+DEV void derive_segment(const Args& a, uint64_t r, uint32_t j, uint32_t* w) {
+  const uint32_t rb = (uint32_t)a.i[1], n = (uint32_t)a.i[2];
   const uint4* y = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n + (128u * j) % n);
 #pragma unroll
   for (int q = 0; q < 16; q++) {
@@ -223,6 +218,66 @@ extern "C" __global__ void __launch_bounds__(128) derive_rows_b3s(const Args a) 
   uint4* dst = reinterpret_cast<uint4*>(a.p[1] + r * rb + (uint64_t)B3S_SEG * j);
 #pragma unroll
   for (int q = 0; q < 16; q++) dst[q] = make_uint4(w[4 * q], w[4 * q + 1], w[4 * q + 2], w[4 * q + 3]);
+}
+
+extern "C" __global__ void __launch_bounds__(512) derive_rows_b3s(const Args a) {
+  __shared__ uint32_t lv[B3S_MAX_SEGS][8];
+  const uint64_t t = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const uint32_t rb = (uint32_t)a.i[1], segs = rb / B3S_SEG;
+  const int mode = a.i[4];
+  if (mode == 0 && t >= (uint64_t)a.i[0] * segs) return;
+  const uint64_t r = mode ? blockIdx.x : t / segs;
+  const uint32_t j = mode ? threadIdx.x : (uint32_t)(t % segs);
+  uint32_t dom[8], tmpl[16], key[8], w[64], h[8];
+  load_key(a.p[3], dom);
+#pragma unroll
+  for (int q = 0; q < 16; q++) tmpl[q] = reinterpret_cast<const uint32_t*>(a.p[4])[q];
+  b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], r, r, rb, j, key);
+  derive_segment(a, r, j, w);
   b3s_segment_regs(key, w, h);
-  store_cv(a.p[2] + 32 * t, h);
+  if (mode == 0) {
+    store_cv(a.p[2] + 32 * t, h);
+    return;
+  }
+#pragma unroll
+  for (int i = 0; i < 8; i++) lv[j][i] = h[i];
+  __syncthreads();
+  int level = 0;
+  for (uint32_t wd = segs; wd > 1; wd = (wd + 1) / 2, level++) {
+    const uint32_t half = wd / 2;
+    if (j < half) {
+      uint32_t lk[8], m[16];
+      load_key(a.p[5] + 32ull * level, lk);
+#pragma unroll
+      for (int q = 0; q < 8; q++) { m[q] = lv[2 * j][q]; m[8 + q] = lv[2 * j + 1][q]; }
+      blake3_block(lk, m, h);
+    } else if (j == half && (wd & 1)) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) h[q] = lv[wd - 1][q];
+    }
+    __syncthreads();
+    if (j < half || (j == half && (wd & 1))) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) lv[j][q] = h[q];
+    }
+    __syncthreads();
+  }
+  if (j == 0) {
+    store_cv(a.p[2] + 32 * r, lv[0]);
+    if (mode == 2) {
+      uint32_t sd[8];
+      b3_seed(a.p[6], a.p[7], lv[0], a.p[8], (uint64_t)(uint32_t)a.i[5] << 32 | r, sd);
+      store_cv(a.p[9] + 32 * r, sd);
+    }
+  }
+}
+
+// derive_rows_b3s's producer without the hashing: the same words, a 256-byte segment a thread (16-byte loads and stores), so
+// the fused producer's cost over it is the hashing alone.  p0 y, p1 A; i0 m, i1 rb, i2 n
+extern "C" __global__ void __launch_bounds__(128) derive_rows_vec(const Args a) {
+  const uint64_t t = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  const uint32_t segs = (uint32_t)a.i[1] / B3S_SEG;
+  if (t >= (uint64_t)a.i[0] * segs) return;
+  uint32_t w[64];
+  derive_segment(a, t / segs, (uint32_t)(t % segs), w);
 }
