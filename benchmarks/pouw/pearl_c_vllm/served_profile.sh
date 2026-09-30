@@ -6,7 +6,7 @@
 #     bash "$RESEARCH_RUN_DIR"/inputs/served_profile.sh
 # The GPU part runs in a one-GPU preemptible lease (window.sh's identity, ship and device checks first); the SQLite export and
 # the analysis run after it, off the GPU.  NSYS=0 runs the same without the profiler (the diagnostic timing alone); OUT names
-# the output directory (default the run's); GRAPHS=1 passes --graphs.
+# the output directory (default the run's); GRAPHS=1 passes --graphs; NSYS_ARGS adds to nsys profile (--cuda-graph-trace=node).
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}}; mkdir -p "$OUT"; export OUT
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -34,7 +34,7 @@ PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/ch
 ARGS=(--model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/e2e.json"
       --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${GRAPHS:+--graphs})
 if [ "${NSYS:-1}" = 1 ]; then
-  nsys profile -o "$OUT/served" -f true -t cuda,nvtx -s none --cpuctxsw=none \
+  nsys profile -o "$OUT/served" -f true -t cuda,nvtx -s none --cpuctxsw=none ${NSYS_ARGS:-} \
     "$PY" "$HERE/served_profile.py" -- "${ARGS[@]}"
 else
   "$PY" "$HERE/served_profile.py" -- "${ARGS[@]}"
