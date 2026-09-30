@@ -22,6 +22,10 @@ its tests ran (under `"*"` when neither: a session fixture, a conftest). It dese
 whose passes `suites.py` reuses. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
+
+It traces, too, what a per-test key narrowed to the files the tests use holds (`suites.py`, `Traced`): each repository file its
+process opens or loads and each repository directory it lists (`traced`), and, per test module, each program started that no
+tracer sees into (`untraced`), as `child/verity_suite_reads.py` classifies them; its children write theirs to the reads file.
 """
 from __future__ import annotations
 
@@ -57,6 +61,9 @@ _current = "*"                                                   # the test modu
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
 _outcomes: dict[str, float | None] = {}                          # node id -> call seconds, None once a phase did not pass
 _failed: set[str] = set()
+_traced: set[str] = set()                                        # "F<tab>file" / "L<tab>directory" this process read
+_untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
+_workers_untraced: dict[str, set[str]] | None = None             # in an xdist controller: its workers', which start its tests' programs
 _pid = os.getpid()
 
 
@@ -69,6 +76,7 @@ def _child_reads():
 
 
 _forked = _child_reads() if _ACTIVE and os.environ.get("VERITY_SUITE_READS") else None
+_tracer = _child_reads() if _ACTIVE else None
 
 
 def _audit(event: str, args: tuple) -> None:
@@ -76,6 +84,15 @@ def _audit(event: str, args: tuple) -> None:
         if _forked is not None:
             _forked.seen(event, args, _current)
         return
+    try:
+        hit = _tracer.trace(event, args) if _tracer is not None else None
+    except (TypeError, ValueError):
+        hit = None
+    if hit is not None:
+        if hit[0] == "X":
+            _untraced.setdefault(_current, set()).add(hit[1])
+        else:
+            _traced.add(f"{hit[0]}\t{hit[1]}")
     if event == "import":
         if args and isinstance(args[0], str):
             _tried.add(args[0].partition(".")[0])
@@ -192,6 +209,7 @@ def pytest_runtest_logreport(report) -> None:
 @pytest.hookimpl(optionalhook=True)
 def pytest_testnodedown(node, error) -> None:
     """In the controller, for each xdist worker as it finishes: take the files it read outside the inputs."""
+    global _workers_untraced
     record = (getattr(node, "workeroutput", None) or {}).get(_KEY)
     if record is None:
         _unguarded.append(node.gateway.id)
@@ -202,6 +220,10 @@ def pytest_testnodedown(node, error) -> None:
             _record[k].update(record[k])
         for m, files in record.get("reads", {}).items():
             _reads.setdefault(m, set()).update(files)
+        _traced.update(record.get("traced", []))
+        _workers_untraced = _workers_untraced or {}
+        for m, progs in record.get("untraced", {}).items():
+            _workers_untraced.setdefault(m, set()).update(progs)
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:
@@ -211,12 +233,15 @@ def pytest_sessionfinish(session, exitstatus) -> None:
     used = _used()
     reads = {m: sorted(files) for m, files in sorted(_reads.items())}
     if hasattr(config, "workerinput"):
-        config.workeroutput[_KEY] = {"outside": sorted(_outside), "watched": sorted(_watched), "reads": reads, **used}
+        config.workeroutput[_KEY] = {"outside": sorted(_outside), "watched": sorted(_watched), "reads": reads, **used,
+                                     "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(_untraced.items())}}
         return
     used = {k: sorted(set(v) | _record[k]) for k, v in used.items()}
     passed = {n: round(s, 3) for n, s in sorted(_outcomes.items()) if s is not None}
+    untraced = _untraced if _workers_untraced is None else _workers_untraced     # a controller's own programs are its workers
     payload = json.dumps({"counts": _counts, "outside": sorted(_outside), "unguarded": _unguarded, "unmarked_slow": _slow,
-                          "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used},
+                          "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
+                          "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())}},
                          indent=1)
     with open(os.environ["VERITY_SUITE_REPORT"], "w") as f:
         f.write(payload)
