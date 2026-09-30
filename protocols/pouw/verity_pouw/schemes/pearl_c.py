@@ -49,7 +49,8 @@ peel      P_A = [bf16(E′_A) ‖ RNE_bf16(A′·F_B)],  P_B = [RNE_bf16(Σ_p fm
 
 Only ρ depends on A alone (about 4 units per element).  The model adopts s, ρ and α as its own FP8 quantizer (e4m3(α·x)
 with PoUW off), and the accounting is the cheap-binding lane's ``Costs.adopted``: 68 units per element, 64 of them credited
-(the noise atom and the cast).  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings draw the same seeds.
+(the noise atom and the cast), at the H100's prices.  Every price is a device's (`Prices`): `H100_PRICES` (sm_90) for
+the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120`, measured) for sm_120's atom.  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings draw the same seeds.
 
 **The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
@@ -85,13 +86,34 @@ LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
 #: Hashing formats: h0 (TurboSHAKE128 messages and leaf, SHA-256 trees) and h1 (BLAKE3 throughout, for decode latency)
 HASHINGS = ("h0", "h1")
 H1_KEYS = {r: blake3(f"pearl-c/h1/{r}".encode()) for r in ("message", "leaf")}
-#: W1 units (1 = one dense FP8 MAC on the H100): FADD 32 per word, a BF16 MAC 2
-FADD_UNITS, BF16_MAC_UNITS = 32, 2
+
+
+@dataclass(frozen=True, slots=True)
+class Prices:
+    """A device's W1 prices, in units of one dense FP8 MAC on that device (the device statement's `Prices`: `add`,
+    `bf16`, `Costs`'s `fs` and `qa`).  Each credited step is at its cheapest bit-exact implementation on the device."""
+
+    device: str
+    fadd: int                # one FP32 add per word: a promotion, and P_B's FMA chain per step
+    bf16_mac: int            # one BF16 MAC (the peel)
+    forming_credited: int    # fs per activation element: the noise atom and the cast (depend on the salt)
+    forming_a_only: int      # qa per activation element: ρ's squared accumulate (reads the activations alone)
+
+    @property
+    def forming(self) -> int:
+        return self.forming_credited + self.forming_a_only
+
+
+#: sm_90, the H100 (Rounds 10–11, `Prices.h100`): FADD 32, a BF16 MAC 2, and `Costs.adopted`'s forming, 64 + 4
+H100_PRICES = Prices("sm_90", fadd=32, bf16_mac=2, forming_credited=64, forming_a_only=4)
+#: sm_120, the RTX PRO 6000 (`Prices.sm120`; node 2, locked 2,100 MHz, `r20260930-063213-c94a` and
+#: `r20260930-061717-3e84`): FADD 8, issue-bound (8.38 in the measured 64-add loop); a BF16 MAC 2; the k32 noise atom
+#: (32) and the E4M3 cast alone (8; 12.31 in the packing loop), 40; ρ's one FFMA per 8 elements, 1
+SM120_PRICES = Prices("sm_120", fadd=8, bf16_mac=2, forming_credited=40, forming_a_only=1)
+PRICES = {p.device: p for p in (H100_PRICES, SM120_PRICES)}
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
+#: of the H100's prices; v0 is priced on the H100 only
 FORMING_V0_UNITS = 320
-#: Forming v1 per operand element (`Costs.adopted`: ρ 4, the noise atom and the cast 64)
-FORMING_V1_UNITS = 68
-FORMING_CREDITED, FORMING_A_ONLY = 64, 4    # `Costs.adopted`'s fs (depends on the salt) and qa (on the activations alone)
 #: F's line norm under v1 (E keeps Pearl's 256)
 LINE_NORM_V1 = 16.0
 S5_STRIDE = 8
@@ -340,15 +362,22 @@ def leaf(checked: Checked, hashing: str = "h0") -> bytes:
 
 class PearlC:
     """Pearl-C on the H100: ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles; smaller bounds make a test instance.
-    ``hashing`` h1 names the scheme ``…-h1`` and commits with BLAKE3 throughout (`commitment_hash`, `leaf`)."""
+    ``hashing`` h1 names the scheme ``…-h1`` and commits with BLAKE3 throughout (`commitment_hash`, `leaf`).  ``prices``
+    is the device's W1 price record that `wref`, `credit_of`, `job_cost` and the debit read: the H100's for every
+    registered scheme.  A record other than the H100's belongs with that device's atom (the sm_120 scheme's), and marks
+    the name ``…@<device>``."""
 
-    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", hashing: str = "h0"):
+    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", hashing: str = "h0",
+                 prices: Prices = H100_PRICES):
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
         if hashing not in HASHINGS:
             raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h1 (BLAKE3)")
-        self.name = (NAME if forming == "v0" else NAME_V1) + ("-h1" if hashing == "h1" else "")
-        self.k_min, self.tile, self.forming, self.hashing = k_min, tile, forming, hashing
+        if forming == "v0" and prices != H100_PRICES:
+            raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
+        self.name = ((NAME if forming == "v0" else NAME_V1) + ("-h1" if hashing == "h1" else "")
+                     + ("" if prices == H100_PRICES else f"@{prices.device}"))
+        self.k_min, self.tile, self.forming, self.hashing, self.prices = k_min, tile, forming, hashing, prices
         self.commitment_hash = "blake3" if hashing == "h1" else "sha256"
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
@@ -371,7 +400,7 @@ class PearlC:
             ),
             allowances=(allowance, "the unscale is glue outside the checked values"),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", WINDOW),
-                        ("forming", forming), ("line_norm_f", self.line_norm), ("hashing", hashing)),
+                        ("forming", forming), ("line_norm_f", self.line_norm), ("hashing", hashing), ("prices", prices.device)),
         )
 
     def check(self, matmul: Matmul) -> None:
@@ -386,30 +415,32 @@ class PearlC:
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
 
+    def _forming(self) -> int:
+        return FORMING_V0_UNITS if self.forming == "v0" else self.prices.forming
+
     def wref(self, shape: Shape) -> int:
-        """The honest W1 cost of one unit, Lean's `wrefOf` (`Game.lean`; `Costs.adopted` under v1): the chain (1 per MAC)
-        with its promotion adds (32 per 128 products), the fused A′·F_B (r per element of A), the peel in BF16 (2 per MAC
-        over depth 2r) and A's forming (68 units per element under v1, 320 under v0).  The weight side (B's forming, B̃·F_A,
-        G, P_B) is done once per weight and epoch, not per unit: it is `job_cost`, outside W_ref and the credit.  Hashing is
-        the random oracle's."""
-        m, k, n = shape.m, shape.k, shape.n
-        return (m * n * (k + FADD_UNITS * (k // WINDOW)) + m * k * R + BF16_MAC_UNITS * PEEL_K * m * n
-                + (FORMING_V0_UNITS if self.forming == "v0" else FORMING_V1_UNITS) * m * k)
+        """The honest W1 cost of one unit at the scheme's prices, Lean's `wrefOf` (`Game.lean`; `wrefDev` at a device's
+        `Prices`): the chain (1 per MAC) with its promotion adds (one FADD per 128 products), the fused A′·F_B (r per
+        element of A), the peel in BF16 (a BF16 MAC per product over depth 2r) and A's forming (fs + qa per element under
+        v1, 320 under v0).  The weight side (B's forming, B̃·F_A, G, P_B) is done once per weight and epoch, not per unit:
+        it is `job_cost`, outside W_ref and the credit.  Hashing is the random oracle's."""
+        m, k, n, p = shape.m, shape.k, shape.n, self.prices
+        return m * n * (k + p.fadd * (k // WINDOW)) + m * k * R + p.bf16_mac * PEEL_K * m * n + self._forming() * m * k
 
     def credit_of(self, shape: Shape) -> int:
-        """Lean's `creditOf` at `Costs.adopted`: `wref` less ρ's 4 units per element of A, which depend on A alone.  An
-        accepted unit is credited (1 − ρ)·`credit_of` (`PearlCAccounting`).  v0 has no TT_OUT accounting."""
+        """Lean's `creditOf` (`creditDev` at a device's `Prices`): `wref` less ρ's qa per element of A, which depends on A
+        alone.  An accepted unit is credited (1 − ρ)·`credit_of` (`PearlCAccounting`).  v0 has no TT_OUT accounting."""
         if self.forming != "v1":
             raise ValueError(f"{self.name}: TT_OUT's accounting is stated for forming v1 only")
-        return self.wref(shape) - FORMING_A_ONLY * shape.m * shape.k
+        return self.wref(shape) - self.prices.forming_a_only * shape.m * shape.k
 
     def job_cost(self, n: int, k: int) -> int:
         """The weight side of an (n, k) weight, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's
-        FP32 FMA chain (r² per row at an add's 32 units).  Neither W_ref nor the credit counts it (`creditOf` leaves it out,
+        FP32 FMA chain (r² per row at an add's price).  Neither W_ref nor the credit counts it (`creditOf` leaves it out,
         which only raises γ)."""
-        chain = lambda rows, cols: rows * cols * (k + FADD_UNITS * (k // WINDOW))  # noqa: E731
-        return ((FORMING_V0_UNITS if self.forming == "v0" else FORMING_V1_UNITS) * n * k + chain(n, R) + chain(R, R)
-                + FADD_UNITS * n * R * R)
+        fadd = self.prices.fadd
+        chain = lambda rows, cols: rows * cols * (k + fadd * (k // WINDOW))  # noqa: E731
+        return self._forming() * n * k + chain(n, R) + chain(R, R) + fadd * n * R * R
 
     def noise(self, ctx: Context) -> Noise:
         seed_b = _labelled(ctx.salt + ctx.root_b, "seed-B")

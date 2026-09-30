@@ -183,7 +183,7 @@ def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[in
     the credited cells' credit, the unit's `creditOf` at |K| times their share |rows|·|cols|/(m·n) (the per-tile
     statement's `tileShare`).  A row's own terms (its forming and A′·F_B) so count once across its row band, a
     |cols|/n share in each tile, not whole in every tile."""
-    debit = D.debit_units(D.chain_atoms(a_codes, b_codes), D.forming_elements(a_codes, b_codes))
+    debit = D.debit_units(D.chain_atoms(a_codes, b_codes), D.forming_elements(a_codes, b_codes), scheme.prices)
     return debit, D.CAP * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 

@@ -20,6 +20,7 @@ from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16
 from verity_pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get
 from verity_pouw.schemes import pearl_c as C
+from verity_pouw.schemes import pearl_c_debit as D
 from verity_pouw.schemes import pearl_kw as P
 
 PINNED = json.loads((Path(__file__).with_name("vectors") / "pearl_c.json").read_text())
@@ -300,17 +301,50 @@ def test_v1_registry_and_cost():
     assert dict(get("pearl-c-h100-v0").certificate.parameters)["forming"] == "v0"
     sh = Shape(128, 2048, 256)
     v0, v1 = get("pearl-c-h100-v0").wref(sh), s.wref(sh)
-    assert v0 - v1 == (C.FORMING_V0_UNITS - C.FORMING_V1_UNITS) * 128 * 2048
+    assert v0 - v1 == (C.FORMING_V0_UNITS - C.H100_PRICES.forming) * 128 * 2048
     with pytest.raises(ValueError):
         C.PearlC(forming="v2")
     with pytest.raises(ValueError):
         get("pearl-c-h100-v0").credit_of(sh)
 
 
-def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4) -> Fraction:
-    """`Game.lean`'s `wrefOf Params.pi Costs.adopted` (r = 32, G = 4): `creditOf` + qa·m·k."""
+def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4, add: int = 32, bf16: int = 2) -> Fraction:
+    """`Game.lean`'s `wrefOf Params.pi Costs.adopted` (r = 32, G = 4), `creditOf` + qa·m·k; at other prices the device
+    statement's `wrefDev`: mkn + mkn·add/(32·G) + m·k·r + 2·bf16·r·m·n + fs·m·k + qa·m·k."""
     mkn = Fraction(m * k * n)
-    return mkn + mkn / 4 + m * k * 32 + 4 * 32 * m * n + fs * m * k + qa * m * k
+    return mkn + mkn * add / 128 + m * k * 32 + 2 * bf16 * 32 * m * n + fs * m * k + qa * m * k
+
+
+#: sm_120's measured W1 rates (node 2, locked 2,100 MHz; `r20260930-063213-c94a`, `r20260930-061717-3e84`; research store
+#: `internal/pouw/rtx-pro/workers/0-fp8-capture.md`), per SM per clock: the unit, a dense E4M3 `mma.sync` MAC with FP32
+#: accumulation; FADD in the measured 64-add loop, and alone (issue-bound, from the two-loop fit); FFMA alone; and the
+#: BF16 MAC's and the E4M3 cast's prices (alone, and in the packing loop)
+SM120_MEASURED = {"fp8_mac": 1023.98, "fadd_loop": 122.26, "fadd_alone": 128, "ffma_alone": 128, "bf16_mac": 2.000,
+                  "cast_alone": 8.0, "cast_loop": 12.31}
+
+
+def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
+    """sm_90's prices are the H100's (`Prices.h100`); sm_120's are the device statement's `Prices.sm120`, each step at its
+    cheapest bit-exact form on the card, and none above what the card measures in the loop.  Crediting sm_120 at the
+    H100's FADD of 32 (and forming of 64 + 4) overstates the credit; at sm_120's prices the scheme is `wrefDev`, and the
+    debit per flagged atom-word and element follows the same record."""
+    h, s, m = C.PRICES["sm_90"], C.PRICES["sm_120"], SM120_MEASURED
+    assert (h, s) == (C.H100_PRICES, C.SM120_PRICES)
+    assert (h.fadd, h.bf16_mac, h.forming_credited, h.forming_a_only) == (32, 2, 64, 4)
+    assert (s.fadd, s.bf16_mac, s.forming_credited, s.forming_a_only) == (8, 2, 40, 1)
+    assert s.fadd == round(m["fp8_mac"] / m["fadd_alone"]) and s.fadd <= m["fp8_mac"] / m["fadd_loop"] < 8.38
+    assert s.bf16_mac == m["bf16_mac"]
+    assert s.forming_credited == 32 + m["cast_alone"] <= 32 + m["cast_loop"]
+    assert s.forming_a_only == round(m["fp8_mac"] / m["ffma_alone"]) / 8
+    sm120 = C.PearlC(forming="v1", hashing="h1", prices=s)
+    assert sm120.name == "pearl-c-h100-v1-h1@sm_120" and dict(sm120.certificate.parameters)["prices"] == "sm_120"
+    assert dict(get("pearl-c-h100-v1-h1").certificate.parameters)["prices"] == "sm_90"
+    for sh in (Shape(32, 1024, 64), Shape(2048, 3584, 18944), Shape(8192, 8192, 8192)):
+        assert sm120.wref(sh) == wref_of(sh.m, sh.k, sh.n, fs=40, qa=1, add=8, bf16=2)
+        assert sm120.credit_of(sh) == sm120.wref(sh) - sh.m * sh.k < get("pearl-c-h100-v1").credit_of(sh)
+    assert D.debit_units(1, 0, s) == 34 and D.debit_units(0, 1, s) == 40 and D.debit_units(1, 1) == 40 + 64
+    with pytest.raises(ValueError):
+        C.PearlC(forming="v0", prices=s)
 
 
 @pytest.mark.parametrize("m", [1, 32, 128, 2048])

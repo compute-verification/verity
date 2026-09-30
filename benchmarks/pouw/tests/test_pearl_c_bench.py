@@ -147,8 +147,9 @@ def test_gamma_reproduces_the_lanes_pins():
     assert B.gamma(8192, 8192)["floor_chain_only"] == Fraction(47, 5234)
     g = B.gamma(8192, 8192)
     assert round(float(g["cap"]) * 100, 3) == 0.537 and round(float(g["cap_chain_only"]) * 100, 3) == 1.147
-    assert B.FORMING_CREDITED + B.FORMING_A_ONLY == C.FORMING_V1_UNITS and B.RANK == C.R
-    assert B.PEEL_UNITS == C.BF16_MAC_UNITS * C.PEEL_K and B.FADD_PER_MAC == Fraction(C.FADD_UNITS, C.WINDOW)
+    h100 = C.H100_PRICES
+    assert (B.FORMING_CREDITED, B.FORMING_A_ONLY) == (h100.forming_credited, h100.forming_a_only) and B.RANK == C.R
+    assert B.PEEL_UNITS == h100.bf16_mac * C.PEEL_K and B.FADD_PER_MAC == Fraction(h100.fadd, C.WINDOW)
     assert B.T == C.TILE == W.T
 
 
