@@ -1,0 +1,55 @@
+# LATER, not applied by cluster_up.sh: the PoUW server's queue, once a second server joins the vy-nebius pool.
+# To add it:
+#   1. launch it (NEBIUS_VM_NAME=vy-nebius-2 launch.sh ...) and add a security rule letting the two servers reach each other
+#      (ingress from the security group itself, any protocol: k3s, flannel and the kubelet);
+#   2. add its private address under vy-nebius's hosts in ~/.sky/ssh_node_pools.yaml, and rerun `sky ssh up --infra vy-nebius`;
+#   3. label its node verity.dev/server=vy-nebius-2 skypilot.co/accelerator=rtxpro6000, then `kubectl apply -f kueue-pouw.yaml`;
+#   4. PoUW jobs use the provers or circuits templates with kueue.x-k8s.io/queue-name: pouw.
+# The flavor pins pouw's quota to its own server, and pouw lends nothing (lendingLimit 0): node 2 stays a quiet machine for
+# slowdown measurements, and node 1 never depends on it. To lend node 2's idle GPUs outside benchmark windows later, raise the
+# lendingLimits and add this flavor, at nominalQuota 0, under circuits' and provers' resourceGroups.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata: {name: vy-nebius-2}
+spec:
+  nodeLabels: {verity.dev/server: vy-nebius-2}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: pouw}
+spec:
+  cohortName: nebius
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    borrowWithinCohort: {policy: LowerPriority}
+    withinClusterQueue: LowerPriority
+  resourceGroups:
+  - coveredResources: [nvidia.com/gpu, cpu, memory]
+    flavors:
+    - name: vy-nebius-2
+      resources:
+      - {name: nvidia.com/gpu, nominalQuota: 8, lendingLimit: 0}
+      - {name: cpu, nominalQuota: 188, lendingLimit: 0}
+      - {name: memory, nominalQuota: 1664Gi, lendingLimit: 0}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: pouw, namespace: default}
+spec: {clusterQueue: pouw}
+---
+# PoUW's priorities. A timed run (all 8 GPUs, released within ~20 min) preempts pouw's own lower-priority jobs, such as the red
+# team's, through withinClusterQueue: LowerPriority above; preempted SkyPilot managed jobs are requeued and restart afterwards.
+# pouw has no flavor on vy-nebius-1, so these values never preempt anything there.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: pouw-timed}
+value: 800
+description: PoUW timed runs that need the whole node quiet
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: pouw}
+value: 200
+description: PoUW streams, harness and red-team jobs
