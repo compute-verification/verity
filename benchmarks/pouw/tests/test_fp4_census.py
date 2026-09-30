@@ -232,3 +232,21 @@ def test_subgrid_groups_add_nothing_whatever_their_codes():
         assert np.array_equal(d, d2)
         acc = d
     assert flagged > 0
+
+
+def test_merged_atom_is_the_pinned_align_add_over_eight_groups():
+    """``merged`` is BlockScaledAlignAdd with k = 128: one align-add over 8 groups, word for word against the pinned model
+    widened by dataclasses.replace, from +0 and from a hot accumulator."""
+    import dataclasses
+
+    from verity.ml.tc.models import BLACKWELL_SM120_NVF4
+
+    ref = dataclasses.replace(BLACKWELL_SM120_NVF4, k_per_instruction=128)
+    atom, qa, qb, ia, ib, cold = _nvf4_words("gaussian", 4, 1024, 12)
+    (ca, sa, _), (cb, sb, _) = (C.quantize(M, "nvf4") for M in C.family("gaussian", 4, 1024, np.random.default_rng(12)))
+    for acc0 in (np.zeros(len(ia)), C.hot_start(cold["rms"], ia, 4, 14)):
+        got = C.debit_chain(C.merged(atom), qa, qb, ia, ib, acc0, np.arange(0))["final"]
+        for w in range(len(ia)):
+            word = ref.chain(C.f32_word(acc0[w]), [int(v) for v in ca[ia[w]]], [int(v) for v in cb[ib[w]]],
+                             [int(v) for v in sa[ia[w]]], [int(v) for v in sb[ib[w]]])
+            assert word == C.f32_word(got[w])

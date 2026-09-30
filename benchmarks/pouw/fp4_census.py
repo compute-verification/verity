@@ -20,11 +20,13 @@ sigma_c code units per block, after the block scale).
     python benchmarks/pouw/fp4_census.py real --acts acts_dir --out real.json      # npz files from fp4_quality.py --dump-acts
     python benchmarks/pouw/fp4_census.py basesplit --noise row --delta 0.25 [--acts acts_dir] --out split.json
     python benchmarks/pouw/fp4_census.py merge --noise none,row --delta 0.25 [--acts acts_dir] --out merge.json
+    python benchmarks/pouw/fp4_census.py debit --atom blackwell_sm120_nvf4_m16n8k64 --noise row --delta 0.25 [--acts acts_dir] --out debit.json
     python benchmarks/pouw/fp4_census.py breakeven
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import sys
@@ -491,7 +493,17 @@ def debit_chain(atom: Atom, qa, qb, ia, ib, acc0: np.ndarray, keep: np.ndarray) 
         ss += fl["exact_sum"] ** 2
         acc = d
         traj[:, t + 1] = acc[keep]
-    return {"subgrid": sub, "ident": ident, "rms": np.sqrt(ss / T), "traj": traj, "steps": T}
+    return {"subgrid": sub, "ident": ident, "rms": np.sqrt(ss / T), "traj": traj, "steps": T, "final": acc}
+
+
+def merged(atom: Atom, factor: int = 2) -> Atom:
+    """``factor`` atoms merged into one align-add over all their groups: the 2:4-sparse m16n8k128 route on a 2:4 span as
+    ``fp4_emulation.py merged_k128`` models it (a hypothesis until GPU 4's capture)."""
+    m = copy.copy(atom)
+    m.name, m.k = f"{atom.name}[merged x{factor}]", atom.k * factor
+    m.groups = m.k // m.group
+    m._gidx = (np.arange(m.groups) * m.group) // m.block
+    return m
 
 
 def hot_start(rms: np.ndarray, ia: np.ndarray, rows: int, hot_bits: int) -> np.ndarray:
@@ -542,6 +554,7 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
         acc0 = np.zeros(len(ia)) if name == "v1" else hot_start(cold["rms"], ia, ra, hot_bits)
         r = debit_chain(atom, qa, qb, ia, ib, acc0, keep)
         cold = r if name == "v1" else cold
+        k128 = debit_chain(merged(atom), qa, qb, ia, ib, acc0, keep[:0])["final"] if K % (2 * atom.k) == 0 else None
         skip = lone_skip_identities(atom, qa, qb, ia[keep], ib[keep], r["traj"])
         units = SUBGRID_UNITS * r["subgrid"] + IDENTITY_UNITS * r["ident"]
         per_tile = units.reshape(ra // tile, tile, rb // tile, tile).sum((1, 3)) / (tile * tile * K)
@@ -550,7 +563,8 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
                      "identity_steps_on_skip_words": float(r["ident"][keep].sum() / (len(keep) * r["steps"])),
                      "lone_skip_identities_on_skip_words": float(skip.sum() / (len(keep) * r["steps"])),
                      "tile_debit_share": {"mean": float(per_tile.mean()), "max": float(per_tile.max()),
-                                          "over_rho": float((per_tile > rho).mean())}}
+                                          "over_rho": float((per_tile > rho).mean())},
+                     "merged_k128_words_equal": None if k128 is None else float((k128 == r["final"]).mean())}
     return out
 
 
@@ -832,7 +846,8 @@ def cmd_debit(args) -> dict:
                     f"{v}_{q}": round(r[v][key], 6) for v in ("v1", "v2") if v in r
                     for q, key in (("subgrid", "subgrid_groups"), ("ident", "identity_steps"),
                                    ("skip_ident", "lone_skip_identities_on_skip_words"))},
-                    **{f"{v}_tile_max": round(r[v]["tile_debit_share"]["max"], 6) for v in ("v1", "v2") if v in r}}), flush=True)
+                    **{f"{v}_tile_max": round(r[v]["tile_debit_share"]["max"], 6) for v in ("v1", "v2") if v in r},
+                    **{f"{v}_k128_equal": r[v]["merged_k128_words_equal"] for v in ("v1", "v2") if v in r}}), flush=True)
     return res
 
 
