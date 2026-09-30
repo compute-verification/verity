@@ -1,8 +1,9 @@
 ---
 name: using-slack
 description: >
-  The coordination API: how Verity's coordinators and service agents talk on Slack (workspace "compute"). Handles (user groups
-  @lead, @infra, @console, @pouw, @circuit, @proof) are roles; everything between them happens in #agent-coordination, and
+  The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console) are roles;
+  everything between them happens in #agent-coordination, and
   #agent-alerts is machines to @infra. Covers the three interactions (ask one handle, announce to some, announce to all), the
   lifecycle (👀 taking a look, ✅ done, ❌ declined), threads, who subscribes to what (subscribe_slack_channel with
   topLevelOnly, subscribe_slack_thread), the wake recipe (`research slack match`, renewing subscriptions), `verify-author` and
@@ -15,8 +16,10 @@ description: >
 
 The coordination API has one place, three interactions and one lifecycle.
 
-- **Handles** are roles, each held by one agent: `@lead` (the top-level coordinator), `@infra`, `@console`, `@pouw`,
-  `@circuit`, `@proof`. They are Slack user groups, so a tag notifies the holder and a human's composer autocompletes them.
+- **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network warden) and `@console`. The registry names
+  each one's holder; one agent may hold several, and posts as whichever it acts for (`--as`). They are Slack user groups, so
+  a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
   coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
@@ -99,7 +102,7 @@ subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expires
 
 ~~~bash
 # ask: one thread per request with the ask, the deadline, and links to the content
-research slack ask --as pouw --to @infra --text 'can node 2 take a 4-GPU job for 6 h by 20:00Z? spec: https://github.com/.../pull/123'
+research slack ask --as compute-accounting --to @infra --text 'can node 2 take a 4-GPU job for 6 h by 20:00Z? spec: https://github.com/.../pull/123'
 # -> prints "<ts> <permalink>"; then subscribe_slack_thread(channelId, threadTs=<ts>)
 
 # the owner, on an ask that matched
@@ -119,7 +122,7 @@ An alert in `#agent-alerts` takes the same `pickup`, `done` and `decline` from `
 research slack announce --as infra --text 'The GitHub broker helper replaces personal tokens.' \
   --verify 'git ls-remote origin HEAD' \
   --ships 'https://website-docs-sage.vercel.app/agent-tools/verity-github.py#sha256=<64 hex>'      # to all
-research slack announce --as infra --to @pouw @circuit --text 'node 2 reboots at 22:00Z'           # to some
+research slack announce --as infra --to @compute-accounting @circuits --text 'node 2 reboots at 22:00Z'   # to some
 research slack roster --thread <ts>            # each addressed handle's status; exit 0 when all are done
 ~~~
 
@@ -157,7 +160,8 @@ Add or change a handle in `registry.json` (the tests check it loads). Then, with
 
 ~~~bash
 research slack groups sync            # the plan: which user groups it would create, update or re-enable
-research slack groups sync --apply    # makes the changes and writes each group's id into registry.json; commit that
+research slack groups sync --apply    # makes the changes; writes each group's id, and the bot's, into registry.json; commit that
 ~~~
 
-Channel ids, bot ids and the humans' Slack user ids are recorded by hand. An entry without an id allows nobody.
+A sync sets each group's name to its handle and its description to the remit, and leaves its members alone. Channel ids,
+alert bots' ids and the humans' Slack user ids are recorded by hand. An entry without an id allows nobody.

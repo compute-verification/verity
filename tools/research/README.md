@@ -403,7 +403,7 @@ one-line pointer (the permalink, the asker, the first line) into each addressed 
 (`#inbox-<handle>`, one per registry handle, created by the relay). Each holder then subscribes only to its inbox, top-level
 only, and never wakes for someone else's ask; `match` stays as the check on the one message it is woken for, and a thread's
 participants still subscribe to the thread itself. The relay holds only a bot token with `groups:history`, `chat:write` and
-`groups:write`, is idempotent per event id (Slack retries deliveries), sends what it can't route to `@lead`, and must fail
+`groups:write`, is idempotent per event id (Slack retries deliveries), sends what it can't route to `@infra`, and must fail
 visibly, not silently: when it is down, holders fall back to subscribing to `#agent-coordination` itself. Build it when
 wakes per holder per day make the top level a measurable cost, not before.
 

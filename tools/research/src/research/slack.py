@@ -1,6 +1,6 @@
 """`research slack`: the coordination API on Slack (the conventions are `.agents/skills/using-slack/SKILL.md`).
 
-Handles (Slack user groups: @infra, @pouw, ...) are roles, each held by one agent; only handle holders and named humans are on
+Handles (Slack user groups: @infra, @proofs, ...) are roles, each held by one agent; only handle holders and named humans are on
 Slack, and a coordinator relays to its own workers. Everything between handles happens in #agent-coordination: an ask tags one
 handle, an announcement tags some (or none, for every handle), and each is one thread. #agent-alerts is machines to infra.
 `.agents/skills/using-slack/registry.json` names the handles, channels and humans.
@@ -17,7 +17,7 @@ handle, an announcement tags some (or none, for every handle), and each is one t
   research slack match --as HANDLE --event JSON|TEXT|@PATH|- [--why]            # exit 0 addressed, 1 not, 2 error
   research slack verify-author --event JSON|@PATH|- [--why]        # exit 0 only for our bot, a channel's bot or a named human
   research slack read --thread TS | --since TS [--limit N] [--json]
-  research slack groups sync [--apply]                             # one user group per handle; a plan unless --apply
+  research slack groups sync [--apply]                             # one user group per handle, and the bot's id; a plan unless --apply
 
 Every subcommand takes `--dry-run` (no request reaches Slack; each one it would send is printed, the token never),
 `--registry PATH` (default $RESEARCH_SLACK_REGISTRY, else the checkout's) and `--channel KEY` (default agent-coordination);
@@ -503,11 +503,16 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
 
 def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     """One user group per registry handle (`handle` = its handle, `name` = its handle, `description` = its remit), created,
-    re-enabled or updated; with --apply the groups' ids are written back into the registry, which the caller commits."""
+    re-enabled or updated; with --apply the groups' ids, and the bot's own id when the registry lacks it, are written back into
+    the registry, which the caller commits. Existing groups keep their members."""
     api = client(ns)
-    live = {g.get("handle"): g for g in api.call("usergroups.list", include_disabled="true").get("usergroups", [])}
     write = ns.apply and not ns.dry_run
     changed = False
+    bot = api.call("auth.test").get("bot_id")
+    if bot and reg.get("bot_id") != bot:
+        print(f"record  bot {bot} in {path}")
+        reg["bot_id"], changed = bot, True
+    live = {g.get("handle"): g for g in api.call("usergroups.list", include_disabled="true").get("usergroups", [])}
     for h in reg["handles"]:
         name, desc = h["handle"], h["remit"][:250]
         g = live.get(name)
