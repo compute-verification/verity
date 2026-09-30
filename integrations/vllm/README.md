@@ -61,7 +61,7 @@ per-iteration `Check_inf` chain (`Attention_v4`), bound under `TargetProfile.fa3
 
 **`query/`** implements the *verification query*: `word.py` (`Q_word_v1{X=16,W=32}`, the query of record: every Call's circuit cut
 into proof units of bounded committed width, on core's `verity.ir.cut`; `verity/partition/v1` names the partition; its unit rules are
-shared across processes and runs through the directory `VERITY_UNIT_RULE_CACHE` names), `module_body.py`
+shared across processes and runs through `manifest build --unit-rule-cache DIR`, env `VERITY_UNIT_RULE_CACHE`), `module_body.py`
 (Q_module_body_v1, for A/B), `cross_call.py` (the opt-in cross-Call recompute check, `manifest build --cross-call-check`),
 `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),

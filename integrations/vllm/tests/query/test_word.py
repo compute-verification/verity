@@ -1,7 +1,7 @@
 """`Q_word_v1{X,W,R=no-recompute}` (`verity_vllm.query.word`): every computation gate certified by exactly one unit, cross-unit reads
 only through committed values (`verity.ir.partition.validate_unit_cut`), wiring and constants as structure, the widths as the IR's own
 |out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, failures by name, and
-the rule cache (`VERITY_UNIT_RULE_CACHE`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
+the rule cache (`word.use_rule_cache`, the manifest CLI's `--unit-rule-cache`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
 the code, and the manifest is the same with it."""
 from __future__ import annotations
 
@@ -419,14 +419,14 @@ def _no_cut(fn):
 
 def test_a_cached_rule_is_the_rule_computed_and_a_later_process_reads_it_back(tmp_path, monkeypatch, attn):
     computed = W.unit_rule(attn, memo={})
-    monkeypatch.setenv(W.RULE_CACHE_ENV, str(tmp_path))
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
     assert W.unit_rule(attn, memo={}) == computed and list(tmp_path.rglob("*.json"))
     monkeypatch.setattr(W, "Graph", _no_cut)
     assert W.unit_rule(attn, memo={}) == computed
 
 
 def test_an_entry_is_keyed_by_the_definitions_content_the_query_the_limits_and_the_code(tmp_path, monkeypatch, norm):
-    monkeypatch.setenv(W.RULE_CACHE_ENV, str(tmp_path))
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
     limits = W.gate_limits(None)
 
     def at(fn, X=16, lim=limits):
@@ -440,7 +440,7 @@ def test_an_entry_is_keyed_by_the_definitions_content_the_query_the_limits_and_t
 
 def test_an_entry_under_another_key_or_unreadable_is_not_read(tmp_path, monkeypatch, norm):
     import json
-    monkeypatch.setenv(W.RULE_CACHE_ENV, str(tmp_path))
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
     rule = W.unit_rule(norm, memo={})
     path, key = W._rule_entry(norm, 16, 32, 0, W.gate_limits(None))
     path.write_text(json.dumps({"key": {**key, "digest": "0" * 64}, "rule": {**rule, "units_per_call": 0}}))
@@ -450,7 +450,7 @@ def test_an_entry_under_another_key_or_unreadable_is_not_read(tmp_path, monkeypa
 
 
 def test_a_rule_json_would_not_give_back_equal_is_not_written(tmp_path, monkeypatch, norm):
-    monkeypatch.setenv(W.RULE_CACHE_ENV, str(tmp_path))
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
     W._cache_rule(norm, 16, 32, 0, W.gate_limits(None), {"violations": [("tuple", 1)]})
     W._cache_rule(norm, 16, 32, 0, W.gate_limits(None), {"gates": np.int64(3)})
     assert not list(tmp_path.rglob("*.json"))
@@ -464,7 +464,15 @@ def test_the_manifest_is_the_same_without_the_cache_as_with_it_cold_and_read_bac
         monkeypatch.setattr(W, "_RULES", {})
         return M.build(d, request_id="r0", word="16/32")
     plain = build()
-    monkeypatch.setenv(W.RULE_CACHE_ENV, str(tmp_path / "rules"))
+    monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path / "rules")])
     cold = build()
     monkeypatch.setattr(W, "Graph", _no_cut)
     assert plain == cold == build() and plain["query"]["word_check"]["units"] > 0
+
+
+def test_the_manifest_cli_takes_the_cache_directory_from_its_flag_or_the_environment():
+    from verity_vllm.pipeline import cli
+    argv = ["build", "--program", "p", "--out", "o"]
+    assert cli.parse("manifest", [*argv, "--unit-rule-cache", "/r"], {}).unit_rule_cache == "/r"
+    assert cli.parse("manifest", argv, {W.RULE_CACHE_ENV: "/e"}).unit_rule_cache == "/e"
+    assert cli.parse("manifest", ["build-global", "--fixture", "f", "--programs-root", "p", "--out", "o"], {}).unit_rule_cache is None

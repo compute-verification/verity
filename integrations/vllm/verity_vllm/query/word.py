@@ -29,8 +29,8 @@ reads through them re-pointed):
 where it does not today).  `unit_rule` summarises one specialization; `check_query` checks a Program and fails by name.
 
 A specialization's unit rule is a function of the Definition, the query and the gate limits alone.  Attention has one specialization
-per key length, each cut in time linear in it, so a long context's rules cost hours; with `VERITY_UNIT_RULE_CACHE` set to a directory,
-every process (the manifest build, its forked prefetch, the config run's word check) reads and writes the rules there (`RULE_CACHE_ENV`).
+per key length, each cut in time linear in it, so a long context's rules cost hours; `use_rule_cache(dir)` (the manifest CLI's
+`--unit-rule-cache`, env `RULE_CACHE_ENV`) makes this process and its forked prefetch read and write the rules in that directory.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ir.codec import _encode_definition, canonical_json
+from verity.ir.codec import canonical_json, definition_entry
 from verity.ir.cut import WIRING, CallGraph, cut_word, fits, separable
 from verity.ir.defs import PrimitiveDefinition
 
@@ -190,13 +190,20 @@ def _combine(fid: str, gates: int, parts: list[tuple[dict[str, Any], int]], X: i
     return rule
 
 
-#: a directory of unit rules shared by processes and runs (unset: none).  An entry is keyed by the Definition's content (its entry and
-#: its callees', transitively), X, W, extras, the gate limits and the source of the code that cuts (`verity.ir`, this package's
-#: `word`, `cross_call` and `call_scope`); a rule is written only when JSON gives it back equal, so a read rule is the computed one
+#: the environment variable the manifest CLI's `--unit-rule-cache` defaults to
 RULE_CACHE_ENV = "VERITY_UNIT_RULE_CACHE"
 _RULE_CACHE_SCHEMA = "verity-vllm/unit-rule/v1"
+#: the directory of unit rules this process shares (`use_rule_cache`; None: none).  An entry is keyed by the Definition's content (its
+#: entry and its callees', transitively), X, W, extras, the gate limits and the source of the code that cuts (`verity.ir`, this
+#: package's `word`, `cross_call` and `call_scope`); a rule is written only when JSON gives it back equal, so a read rule is the computed one
+_RULE_CACHE: list[str | None] = [None]
 _DIGESTS: dict[str, str] = {}
 _CODE: list[str] = []
+
+
+def use_rule_cache(directory: str | None) -> None:
+    """Share this process's unit rules (and its forked prefetch's) through `directory`; None: no sharing."""
+    _RULE_CACHE[0] = directory or None
 
 
 def _code_version() -> str:
@@ -215,12 +222,12 @@ def definition_digest(fn: Any) -> str:
     d = _DIGESTS.get(fn.id)
     if d is None:
         callees = [] if isinstance(fn, PrimitiveDefinition) else sorted({definition_digest(n.fn) for n in fn.body.nodes})
-        d = _DIGESTS[fn.id] = hashlib.sha256(canonical_json({"definition": _encode_definition(fn), "callees": callees})).hexdigest()
+        d = _DIGESTS[fn.id] = hashlib.sha256(canonical_json({"definition": definition_entry(fn), "callees": callees})).hexdigest()
     return d
 
 
 def _rule_entry(fn: Any, X: int, W: int, extras: int, limits: dict[str, int]) -> tuple[Path, dict[str, Any]] | None:
-    root = os.environ.get(RULE_CACHE_ENV)
+    root = _RULE_CACHE[0]
     if not root or isinstance(fn, PrimitiveDefinition):
         return None
     key = {"schema": _RULE_CACHE_SCHEMA, "definition": fn.id, "digest": definition_digest(fn), "query": [X, W, extras],
@@ -263,7 +270,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
     activation of their first boundary gate, gates per unit and |out(S)|; `count` is units per Call, `nodes` the primitives of one
     unit.  `committed_interior` lists the committed interior values by (activation, primitive): what a tap must acquire.  A
     Definition over its gate limit (`gate_limit` of `max_gates`) is not cut: a `too-large` violation.  One `memo` per `max_gates`;
-    under `RULE_CACHE_ENV` the rule is read from, or written to, the shared directory."""
+    under `use_rule_cache` the rule is read from, or written to, the shared directory."""
     memo = {} if memo is None else memo
     key = (fn.id, X, W, extras)
     if key in memo:
@@ -546,5 +553,5 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
 
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",
-           "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "unit_rule",
+           "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "use_rule_cache", "unit_rule",
            "prefetch", "check_calls", "call_groups", "check_query"]
