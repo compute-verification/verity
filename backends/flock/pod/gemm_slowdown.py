@@ -1,0 +1,202 @@
+"""GEMM proving slowdown: the prover's seconds for a served model's GEMMs over their native time on the same GPU.
+
+The prover's cost is per output coordinate: a class sweep of `GemmCoordinate_v1{K}` (70-class-sweep.sh) gives each K's seconds
+per coordinate at its largest statement, the witness build plus both reps (`witness_s + prove_total_s`, over the statement's
+instances). A GEMM of M x N x K costs M * N of them. Its native time is torch's bf16 `linear` (cuBLAS, as vLLM serves it), the
+weights rotated through copies that overflow L2 so every call reads them from memory.
+
+The model is Llama-3.2-1B, #101's: 16 layers of qkv (3072 x 2048), o (2048 x 2048), gate_up (16384 x 2048) and down (2048 x 8192),
+fused as vLLM runs them, and the LM head (128256 x 2048). Prefill is #101's 256 prompt tokens through every layer and the LM head
+at M = 1 (vLLM computes only the last token's logits); decode is every GEMM at M = 1, 2, 4 and 8, summed over the four.
+
+    python gemm_slowdown.py native --out native.json [--iters 100] [--trials 5]
+    python gemm_slowdown.py compute --sweep m34/results.jsonl [--gate gate/results.jsonl] --native native.json --result result.json
+    python gemm_slowdown.py sample --pgid PGID --out others.txt [--every 30]   # cores busy outside process group PGID (overlapping Builds)
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import re
+import statistics
+import time
+from pathlib import Path
+
+LAYERS = 16
+LAYER = [("qkv", 3072, 2048), ("o", 2048, 2048), ("gate_up", 16384, 2048), ("down", 2048, 8192)]
+LM_HEAD = ("lm_head", 128256, 2048)
+PREFILL_M = 256
+DECODE_M = (1, 2, 4, 8)
+GATE_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu")
+
+
+def phases() -> dict[str, list[tuple[str, int, int, int, int]]]:
+    """Per phase, its GEMMs: (name, M, N, K, count)."""
+    pre = [(n, PREFILL_M, nn, k, LAYERS) for n, nn, k in LAYER] + [(LM_HEAD[0], 1, LM_HEAD[1], LM_HEAD[2], 1)]
+    dec = [(n, m, nn, k, LAYERS) for m in DECODE_M for n, nn, k in LAYER] + [(LM_HEAD[0], m, LM_HEAD[1], LM_HEAD[2], 1) for m in DECODE_M]
+    return {"prefill": pre, "decode": dec}
+
+
+def native(a) -> None:
+    import torch
+
+    dev = torch.device("cuda")
+    props = torch.cuda.get_device_properties(dev)
+    l2 = getattr(props, "L2_cache_size", 128 << 20) or (128 << 20)
+    shapes = sorted({(m, n, k) for ph in phases().values() for _, m, n, k, _ in ph})
+    out = {"gpu": props.name, "sm": f"{props.major}{props.minor}", "l2_bytes": l2, "torch": torch.__version__,
+           "cuda": torch.version.cuda, "cublas": torch.backends.cuda.preferred_blas_library().name if hasattr(torch.backends.cuda, "preferred_blas_library") else None,
+           "iters": a.iters, "trials": a.trials, "times_s": {}}
+    torch.manual_seed(0)
+    for m, n, k in shapes:
+        copies = max(2, math.ceil(4 * l2 / (n * k * 2)))
+        ws = [torch.randn(n, k, device=dev, dtype=torch.bfloat16) for _ in range(copies)]
+        x = torch.randn(m, k, device=dev, dtype=torch.bfloat16)
+        for i in range(20):
+            torch.nn.functional.linear(x, ws[i % copies])
+        torch.cuda.synchronize()
+        trials = []
+        for _ in range(a.trials):
+            s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            s.record()
+            for i in range(a.iters):
+                torch.nn.functional.linear(x, ws[i % copies])
+            e.record()
+            e.synchronize()
+            trials.append(s.elapsed_time(e) / 1e3 / a.iters)
+        out["times_s"][f"{m}x{n}x{k}"] = statistics.median(trials)
+        del ws, x
+        torch.cuda.empty_cache()
+    Path(a.out).write_text(json.dumps(out, indent=1))
+
+
+def per_coordinate(sweep: Path) -> dict[int, dict]:
+    """K -> the sweep's record for GemmCoordinate_v1{K}: seconds per coordinate, full (witness + prove) and prove only."""
+    out = {}
+    for ln in sweep.read_text().splitlines():
+        if not ln.startswith("{"):
+            continue
+        r = json.loads(ln)
+        mk = re.match(r"GemmCoordinate_v1\{K=(\d+)\}", r.get("definition") or "")
+        lv = r.get("live") or {}
+        if not mk or not lv.get("accepted"):
+            continue
+        n = (r.get("stage") or {}).get("n") or lv.get("instances")
+        full = (lv.get("witness_s") or 0.0) + lv["prove_total_s"]
+        out[int(mk.group(1))] = {"n": n, "m": lv.get("dense_m"), "s_per_coord": full / n, "prove_s_per_coord": lv["prove_total_s"] / n,
+                                 "witness_s": lv.get("witness_s"), "prove_total_s": lv["prove_total_s"], "shape": r["shape"],
+                                 "statement_digest": lv.get("statement_digest"), "proof_bytes": lv.get("proof_bytes"),
+                                 "buckets": lv.get("buckets")}
+    return out
+
+
+def gate(path: Path | None) -> dict:
+    """Byte identity: every GEMM coordinate's GPU cases pass (equal proofs and transcripts)."""
+    if path is None or not path.exists():
+        return {"status": "not_run"}
+    shapes, ok = {}, True
+    for ln in path.read_text().splitlines():
+        if not ln.startswith("{"):
+            continue
+        r = json.loads(ln)
+        st = r.get("selftest") or {}
+        cases = {c.get("case"): c for c in st.get("gpu_cases", [])}
+        good = all((cases.get(c) or {}).get("pass") is True for c in GATE_CASES)
+        shapes[r.get("definition")] = {"pass": good, "digest": ((r.get("live") or {}).get("statement_digest")),
+                                       "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal")} for c in GATE_CASES}}
+        ok &= good
+    ok &= len(shapes) >= 2
+    return {"status": "passed" if ok else "failed", "shapes": shapes}
+
+
+def compute(a) -> None:
+    pc = per_coordinate(Path(a.sweep))
+    nat = json.loads(Path(a.native).read_text())
+    g = gate(Path(a.gate) if a.gate else None)
+    res = {}
+    for ph, gemms in phases().items():
+        prover = prove_only = nat_s = 0.0
+        missing = sorted({k for _, _, _, k, _ in gemms if k not in pc})
+        if missing:
+            res[ph] = {"missing_K": missing}
+            continue
+        for _, m, n, k, count in gemms:
+            prover += count * m * n * pc[k]["s_per_coord"]
+            prove_only += count * m * n * pc[k]["prove_s_per_coord"]
+            nat_s += count * nat["times_s"][f"{m}x{n}x{k}"]
+        res[ph] = {"slowdown": prover / nat_s, "slowdown_prove_only": prove_only / nat_s, "prover_s": prover, "native_s": nat_s}
+    out = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+           "workload_fingerprint": {"gpu": nat.get("gpu"), "sm": nat.get("sm"), "torch": nat.get("torch"),
+                                    "digests": {k: v["statement_digest"] for k, v in pc.items()}},
+           "validation": {"status": g["status"], "checker": "byte identity: " + ", ".join(GATE_CASES),
+                          "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/gate/classes/results.jsonl"]},
+           "measurements": [{"name": f"{ph}_slowdown", "value": v["slowdown"], "unit": "x"} for ph, v in res.items() if "slowdown" in v]
+                           + [{"name": f"{ph}_slowdown_prove_only", "value": v["slowdown_prove_only"], "unit": "x"} for ph, v in res.items() if "slowdown" in v]
+                           + [{"name": f"s_per_coord_K{k}", "value": v["s_per_coord"], "unit": "s"} for k, v in pc.items()],
+           "measurement_files": ["out/slowdown.json", "out/native.json", "out/m34/classes/results.jsonl"]}
+    Path(a.result).parent.mkdir(parents=True, exist_ok=True)
+    (Path(a.result).parent / "out" / "slowdown.json").write_text(json.dumps({"phases": res, "per_coordinate": pc, "native": nat, "gate": g}, indent=1))
+    tmp = Path(a.result).with_suffix(".tmp")
+    tmp.write_text(json.dumps(out, indent=1))
+    os.replace(tmp, a.result)
+    print(json.dumps({ph: {k: v for k, v in r.items() if k != "missing_K"} for ph, r in res.items()}), g["status"])
+
+
+def sample(a) -> None:
+    """Every `every` seconds: the machine's busy cores (/proc/stat) less those of process group `pgid`, one line each."""
+    tick = os.sysconf("SC_CLK_TCK")
+
+    def busy() -> float:
+        f = [int(x) for x in open("/proc/stat").readline().split()[1:]]
+        return (sum(f) - f[3] - f[4]) / tick
+
+    def group() -> float:
+        t = 0
+        for d in os.listdir("/proc"):
+            if d.isdigit():
+                try:
+                    f = open(f"/proc/{d}/stat").read().rsplit(")", 1)[1].split()
+                except OSError:
+                    continue
+                if int(f[2]) == a.pgid:
+                    t += int(f[11]) + int(f[12]) + int(f[13]) + int(f[14])
+        return t / tick
+
+    b0, g0, t0 = busy(), group(), time.time()
+    with open(a.out, "a") as out:
+        while True:
+            time.sleep(a.every)
+            b1, g1, t1 = busy(), group(), time.time()
+            dt = t1 - t0
+            out.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(t1))} others_cores={max(0.0, (b1 - b0) - max(0.0, g1 - g0)) / dt:.1f} "
+                      f"own_cores={max(0.0, g1 - g0) / dt:.1f}\n")
+            out.flush()
+            b0, g0, t0 = b1, g1, t1
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    n = sub.add_parser("native")
+    n.add_argument("--out", required=True)
+    n.add_argument("--iters", type=int, default=100)
+    n.add_argument("--trials", type=int, default=5)
+    c = sub.add_parser("compute")
+    c.add_argument("--sweep", required=True)
+    c.add_argument("--gate")
+    c.add_argument("--native", required=True)
+    c.add_argument("--result", required=True)
+    sm = sub.add_parser("sample")
+    sm.add_argument("--pgid", type=int, required=True)
+    sm.add_argument("--out", required=True)
+    sm.add_argument("--every", type=float, default=30)
+    a = ap.parse_args()
+    t = time.time()
+    {"native": native, "compute": compute, "sample": sample}[a.cmd](a)
+    print(f"{a.cmd}: {time.time() - t:.1f} s")
+
+
+if __name__ == "__main__":
+    main()
