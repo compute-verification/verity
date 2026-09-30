@@ -141,6 +141,13 @@ def mask2 : (Fin 2 → (Fin T.nE → F) × F × F) →+ (Fin 2 → (Fin T.nE →
     simp only [Pi.add_apply, Prod.fst_add, Prod.snd_add, Prod.mk_add_mk]
     refine Prod.ext rfl (Prod.ext ?_ ?_) <;> simp only [] <;> ring
 
+theorem mask1_apply (b : (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad) :
+    T.mask1 b = (fun q l => ∑ j, b.1 l j * T.Gp q j, fun r c => T.Wr r (b.2.1 r 0 c) (b.2.1 r 1 c),
+      fun r j => ∑ l, T.rbar r l * T.embed (b.1 l j) + T.Wr r (b.2.2 r 0 j) (b.2.2 r 1 j)) := rfl
+
+theorem mask2_apply (h : Fin 2 → (Fin T.nE → F) × F × F) :
+    T.mask2 h = fun r => ((h r).1, T.ζ r * (h r).1 T.ia + (h r).2.1, (h r).1 T.ib + (h r).2.2) := rfl
+
 variable [CharP F 2] in
 theorem maskHom_surjective (hrank : T.Rank) : Function.Surjective T.maskHom := by
   intro s
@@ -194,6 +201,10 @@ def mask3 : ((Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fi
       simp only [Prod.fst_add, Prod.snd_add, Pi.add_apply]
       ring
 
+theorem mask3_apply (b : (Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F) × T.Seeds) :
+    T.mask3 b = (fun r k => ∑ j, T.Cp r k j * b.1 r j, fun r j => b.1 r j + T.β r * b.2.1 r j,
+      fun r i => T.β r * b.2.2.1 r i, b.2.2.2) := rfl
+
 theorem mask3_surjective (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0) : Function.Surjective T.mask3 := by
   rintro ⟨a, b, y, s⟩
   choose p hp using fun r => hpads r (a r)
@@ -230,6 +241,10 @@ def simMask3 : (((Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) ×
 
 /-- **`S_shvzk`'s output in the same order**: fresh values where the prover's are masked, the dummy run's where they are
 kept. -/
+theorem simMask3_apply (b : ((Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F) × T.Seeds)
+      × (Fin 2 → Fin T.nQ → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F)) :
+    T.simMask3 b = (b.2.1, b.2.2.1, b.2.2.2, b.1.2.2.2) := rfl
+
 noncomputable def simCore (w0 : W) (σ : T.SimRand) : T.Core :=
   (0 + AddMonoidHom.snd _ _ σ.1,
     (fun q l => ∑ c, T.lanes w0 σ.1.1 l c * T.E q c, fun r => T.y1 w0 σ.1.1 r, 0) + T.mask1 σ.2.1,
@@ -276,8 +291,8 @@ theorem psi_realCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.
     rw [hx q r]
     fin_cases i <;> rfl
   apply View.ext
-  all_goals simp only [psi, view, realCore, mask1, mask2, mask3, AddMonoidHom.coe_mk, ZeroHom.coe_mk,
-    Pi.add_apply, zero_add, Prod.mk_add_mk]
+  all_goals simp only [psi, view, realCore, mask1_apply, mask2_apply, mask3_apply, Pi.add_apply, zero_add,
+    Prod.mk_add_mk]
   all_goals (try rfl)
   · exact hreg.symm
   · funext r
@@ -307,8 +322,8 @@ theorem psi_simCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1
     rw [hx q r]
     fin_cases i <;> rfl
   apply View.ext
-  all_goals simp only [psi, sim, view, simCore, dummyOf, mask1, simMask3, AddMonoidHom.coe_mk, ZeroHom.coe_mk,
-    Pi.add_apply, zero_add, Prod.mk_add_mk]
+  all_goals simp only [psi, sim, view, simCore, dummyOf, mask1_apply, simMask3_apply, Pi.add_apply, zero_add,
+    Prod.mk_add_mk]
   all_goals (try rfl)
   · exact hxr
   · refine Prod.ext (funext fun q => ?_) rfl

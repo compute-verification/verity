@@ -123,8 +123,8 @@ theorem padOnto_M1 {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi 
     rw [← xP_eval A hA cols hL (Fin.castLE ht j)]
     simp only [Fin.val_castLE]
     ring
-  have := congrFun hμ q
-  simp only [paddingMap, AddMonoidHom.coe_mk, ZeroHom.coe_mk, eval_finsetSum, eval_mul, eval_C] at this
+  have : g q * (∑ k, C (μ k) * b k).eval (x q) = y q := congrFun hμ q
+  simp only [eval_finsetSum, eval_mul, eval_C] at this
   rw [← this, Finset.mul_sum]
   exact Finset.sum_congr rfl fun j _ => by rw [e]; ring
 
