@@ -3412,6 +3412,8 @@
    "assumptions": [],
    "type_hash": "27deca41bd6e216fed9785c34f41454c8c74f26cf9defb15abaad7efead0eb8f"
   },
+  "FlockSoundness.UProg.flock_e2e_count_classes": {},
+  "FlockSoundness.UProg.flock_e2e_drawn_classes": {},
   "FlockSoundness.UProg.rowsL1": {
    "signature": [
     "FlockSoundness.UProg.rowsL1 {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
