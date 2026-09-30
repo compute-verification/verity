@@ -751,6 +751,10 @@ ARMS = [
     ("h3, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h3", "epi"),
     ("h2t, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h2t", "epi"),
     ("h2 with its seed, digests in the GEMM epilogue, deferred leaves, priorities", ROW_F32, "h2s", "epi"),
+    ("h3tc, tile GEMM, deferred side stream, priorities", ROW_F32, "h3tc", "tiledef"),
+    ("h3, tile GEMM, deferred side stream, priorities", ROW_F32, "h3", "tiledef"),
+    ("h2t, tile GEMM, deferred side stream, priorities", ROW_F32, "h2t", "tiledef"),
+    ("h2 with its seed, tile GEMM, deferred side stream, priorities", ROW_F32, "h2s", "tiledef"),
     # the verifier's negative control: an -h3 arm whose kernels write no commitment; its transcript must be rejected
     ("negative control: h3 with no commitment written, deferred side stream, priorities", ROW_F32, "h3nc", "deferred"),
 ]
@@ -829,6 +833,16 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                          "h3tw: leaves, segment trees and row seeds in the wide producer, A alone, priorities",
                          "h3tw: leaves, segment trees and row seeds in the wide producer, deferred side stream, priorities",
                          "negative control: h3 with no commitment written, deferred side stream, priorities"],
+           "epi2": ["plain fp32 rows", "plain fp32 rows, tile GEMM",
+                    "h3t: leaves, segment trees and row seeds in the producer, deferred side stream, priorities",
+                    "h3t, tile GEMM, deferred side stream, priorities", "h3t, digests in the GEMM epilogue, deferred leaves, priorities",
+                    "h3tc, tile GEMM, deferred side stream, priorities", "h3tc, digests in the GEMM epilogue, deferred leaves, priorities",
+                    "h3, deferred side stream, priorities",
+                    "h3, tile GEMM, deferred side stream, priorities", "h3, digests in the GEMM epilogue, deferred leaves, priorities",
+                    "h2t, tile GEMM, deferred side stream, priorities", "h2t, digests in the GEMM epilogue, deferred leaves, priorities",
+                    "h2 with its seed, tile GEMM, deferred side stream, priorities",
+                    "h2 with its seed, digests in the GEMM epilogue, deferred leaves, priorities",
+                    "negative control: h3 with no commitment written, deferred side stream, priorities"],
            "epi": ["plain fp32 rows", "plain fp32 rows, tile GEMM", "plain fp32 rows, whole-row producer",
                    "h3, deferred side stream, priorities", "h3, digests in the GEMM epilogue, deferred leaves, priorities",
                    "h3t: leaves, segment trees and row seeds in the producer, deferred side stream, priorities",
@@ -1165,7 +1179,7 @@ def main() -> None:
     res["preset"] = args.preset
     res["rates"] = (seg_rates(d, nv, args.reps) if args.preset == "p1" else
                     h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset in ("h2", "h3") else
-                    fused_rates(d, nv, args.reps, V) if args.preset in ("fused", "coal", "split", "widefused", "best", "epi") else rates(d, nv, args.reps))
+                    fused_rates(d, nv, args.reps, V) if args.preset in ("fused", "coal", "split", "widefused", "best", "epi", "epi2") else rates(d, nv, args.reps))
     save()
     res["latency"] = latency(d) if args.preset == "all" else {}
     save()
