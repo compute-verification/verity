@@ -136,6 +136,20 @@ def _part_key(p: Refs) -> tuple:
     return ("e", p.items)
 
 
+def _flat_keys(r: Concat) -> tuple[list[Refs], tuple]:
+    """`_flat_parts(r)` and their `_part_key`s. A `Concat` cut from a `PartLog` reuses the keys of the log's parts."""
+    if r.prefix is not None:
+        log, j = r.prefix
+        tail = r.parts[j:]
+        if log.leaf_parts(j) and not any(isinstance(p, Concat) for p in tail):
+            memo = log.memo.setdefault("codec.part_keys", [])
+            if len(memo) < j:
+                memo.extend(_part_key(p) for p in log.parts[len(memo):j])
+            return r.parts, tuple(memo[:j]) + tuple(_part_key(p) for p in tail)
+    parts = _flat_parts(r)
+    return parts, tuple(_part_key(p) for p in parts)
+
+
 class _BodyEncoder:
     """Reference encoding within one body. v0: `Refs.to_json` verbatim. v1: flat `concat`s and the alias rule
     (see `SCHEMA_V1`): the whole reference sequence of every encoded node argument is remembered, and a later
@@ -161,8 +175,7 @@ class _BodyEncoder:
     def refs(self, r: Refs, at: tuple[int, int] | None = None) -> Any:
         if self.schema == SCHEMA_V0 or not isinstance(r, Concat):
             return r.to_json()
-        parts = _flat_parts(r)
-        keys = tuple(_part_key(p) for p in parts)
+        parts, keys = _flat_keys(r)
         n = len(keys)
         out: list | None = None
         for m in range(n, max(1, n - ALIAS_WINDOW - 1), -1):  # m >= 2, suffix <= ALIAS_WINDOW parts

@@ -740,11 +740,24 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     return sd, ctx
 
 
-def _substitute(refs, env: dict[tuple[str, int], Any]):
-    """`refs` with every `(space, idx)` run replaced by the corresponding run of `env[(space, idx)]`."""
-    from verity.ir.refs import concat
-    parts = [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in _runs(refs)]
-    return concat(parts) if parts else refs
+def _substitute(refs, env: dict[tuple[str, int], Any], logs: dict[int, tuple[Any, Any]] | None = None):
+    """`refs` with every `(space, idx)` run replaced by the corresponding run of `env[(space, idx)]`.
+
+    `logs` (one per `env`) maps a `PartLog` the flat body cut `refs` from to the log of its substituted shared runs, so the
+    runs every longer cut shares are substituted once."""
+    from verity.ir.refs import PartLog, concat, prefix_runs
+    rs, log, s = prefix_runs(refs)
+    if log is None or logs is None or s == 0:
+        parts = [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in rs]
+        return concat(parts) if parts else refs
+    hit = logs.get(id(log))
+    if hit is None or hit[0] is not log:
+        hit = logs[id(log)] = (log, PartLog())
+    sub = hit[1]
+    if len(sub) < s:
+        for space, idx, lo, hi in log.shared_runs(len(sub), s):
+            sub.append(env[(space, idx)].slice(lo, hi))
+    return sub.cut(s, [env[(space, idx)].slice(lo, hi) for space, idx, lo, hi in rs[s:]])
 
 
 def _replayer(body):
@@ -753,8 +766,9 @@ def _replayer(body):
 
     def replay(B: Builder, S, *args: Coll) -> Coll:
         env: dict[tuple[str, int], Any] = {("p", i): a.refs for i, a in enumerate(args)}
+        logs: dict[int, tuple[Any, Any]] = {}
         for k, node in enumerate(body.nodes):
-            colls = [Coll(a.type, _substitute(a.refs, env)) for a in node.args]
+            colls = [Coll(a.type, _substitute(a.refs, env, logs)) for a in node.args]
             if node.form in ("call", "primitive"):
                 out = B.call(node.fn, *colls, name=node.name)
             elif node.form == "batch":

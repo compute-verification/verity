@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import torch
 
-from verity.ir.refs import Coll, array_of, concat
+from verity.ir.refs import Coll, array_of
 from verity.ir.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import kv_logs, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
                                                                            active_target_profile, attn_kind_for, attn_lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
@@ -166,6 +166,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         for i in range(T):
             krow_list.append(krows[i])
             vrow_list.append(vrows[i])
+        klog, vlog = kv_logs(ctx, layer_name, krow_list, vrow_list)
         ctx.check_dim("T", T, node)
         ctx.check_dim("CONTEXT", P0 + T, node)
         outs = []
@@ -224,8 +225,8 @@ class UnifiedAttentionWithOutputRule(StateRule):
             else:
                 fn = ctx.kind("attention_dot", node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
                               **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if P0 == 0 else 0)} if check_inf else {}))
-            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in krow_list[:P]]))
-            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), concat([r.refs for r in vrow_list[:P]]))
+            kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), klog.cut(P))
+            vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), vlog.cut(P))
             outs.append(ctx.call(fn, qrows[i], kcat, vcat, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
         ctx.rebind(out, array_of(outs).reshape(_tensor_type(qs, 16)), self, what="output")
         obs = (_OBSERVED["attention_impls"] or {}).get(layer_name, {})
