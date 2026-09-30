@@ -44,7 +44,7 @@ def test_the_red_teams_counterexamples_take_the_unswapped_word(case):
     assert _word(bind(fp8.DotE4m3V2, K=K, DOT=DOT), xq, wq) == acc
     assert _word(bind(fp8.ScaledMmFp8NoSwapCoordinate, K=K, BIAS=False, DOT=DOT), xq, sx, wq, sw) == unswapped
     assert _word(bind(fp8.ScaledMmFp8Coordinate, K=K, BIAS=False), xq, sx, wq, sw) == swapped != unswapped
-    row = evaluate(bind(fp8.ScaledMmFp8NoSwap, K=K, N=1, BIAS=False, DOT=DOT), xq, sx, [wq], sw)
+    row = evaluate(bind(fp8.ScaledMmFp8NoSwap, K=K, N=1, BIAS=False, DOT=DOT), xq, sx, wq, sw)   # w [1, K], flat
     assert [int(v) for v in np.asarray(row).reshape(-1)] == [unswapped]
 
 
@@ -59,7 +59,7 @@ def test_each_word_is_the_step_chain_then_the_weight_scale_then_the_activation_s
             w = [rng.integers(0, 0x7F, K).tolist() for _ in range(N)]
             sx, sw = (int(np.float32(rng.uniform(2.0 ** -12, 2.0 ** -2)).view(np.uint32)) for _ in range(2))
             b = rng.integers(0x3E00, 0x4040, N).tolist()
-            got = [int(v) for v in np.asarray(evaluate(spec, xq, sx, w, sw, *((b,) if bias else ()))).reshape(-1)]
+            got = [int(v) for v in np.asarray(evaluate(spec, xq, sx, sum(w, []), sw, *((b,) if bias else ()))).reshape(-1)]
             want = []
             for j in range(N):
                 t = P.F32Mul.evaluate(sw, _word(chain, xq, w[j]))
