@@ -11,7 +11,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | File | What |
 |---|---|
 | `arm.py` | the arm interface (v0.x): what an arm provides and what the harness checks; the contract is published in the project store, `internal/pouw/rtx-pro/workers/6-harness.md` |
-| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report, each verified arm's transcript replayed over poisoned outputs and its no-write control; after the lease, `--judge-controls` has the verifier reject each control |
+| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report |
 | `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
 | `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune; a space too big for one run is searched in slices, `--lt-enumerate-range START:STOP`, and its best tuned together, `--lt-enumerate-names FILE`), from each cuBLASLt loaded, CUTLASS's sm_120 kernels, and the plain NVFP4 and FP8 GEMMs of `../nvfp4_sm120/nvf4_plain.cu` (#543, #570; source `verity`, `verity_nvf4_256x128*` and `verity_fp8_256x128*`: 256×128 tiles, one persistent CTA an SM, m a multiple of 256, n of 128, k of 128 or for FP8 64, one tile order, a workspace of their own for their tensor maps), and the bit-exact gate on ternary operands |
@@ -73,11 +73,10 @@ $R -- gpu-lease 1 --wait -- bash -c "$H"                                        
 $R -- gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
 ```
 
-A measured panel row also needs the verify step and the negative controls' in the same run, after the lease, so no GPU
-waits on the CPU verifier (`--judge-controls`'s exit code covers both):
+A measured panel row also needs the verify step in the same run, after the lease, so no GPU waits on the CPU verifier:
 
 ```bash
-V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"; "$PY" benchmarks/pouw/harness/bench.py --judge-controls "$RESEARCH_RUN_DIR/bench.json"'
+V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"'
 $R -- bash -c "gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
 ```
 
@@ -96,7 +95,7 @@ and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` 
 `clock_gap` (medians more than 0.5% apart; server.md 08:50Z).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
-`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6;
+`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.5;
 `Arm` is its deprecated alias, since the vLLM API's `Arm` is a serving bench mode) gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
 `tile_hash`, `screen`, as `verity_pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
@@ -131,25 +130,10 @@ and when accepted `verifier_commit`, `verifier_accept` (the line verbatim), `tra
 gets `verification` with every command's exit code. It exits 0 only if every panel row was accepted and every command
 exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured row.
 
-The harness dumps the transcripts itself, over poisoned outputs (arm interface v0.5, server.md 11:50Z). An arm with a
-verifier gives its calls `transcript(dir, read)`, which writes what the verifier's commands read into `dir` (the transcript
-file's directory), every device byte from `read(name[, offset, nbytes])` (the call's declared `outputs` only) or its operand
-set. After a shape's timing, the harness fills every output of the hash call on operand set 0 with 0xA5, runs its weight side
-and launch once and calls `transcript`; then it poisons them again and calls `transcript` with no launch, the no-write
-negative control, into `<shape>-nowrite` (or the verifier's `control` path, e.g. `negative/{arm}/{shape}/manifest.json` for a
-per-run verifier that scans `transcripts/`). The shape's `transcripts` in the result JSON says what each replay poisoned and
-read, or why the call couldn't be replayed. So `outputs` must hold every buffer the transcript reads that a setup step, the
-weight side or a launch writes (Pearl-C4's `root_a` and `seed_a`, which `prime()` writes before timing), and no operand
-buffer. `bench.py --judge-controls RESULT_JSON`, after `verify.py`, runs the verifier on each control (a per-run command's
-output is read from `verify.py`'s), which passes only by a line starting `REJECT` that names its sha256, with no `ACCEPT`
-naming it, and gives each panel row its reject line (`negative_control`, and `--negative-control` in `panel_args`). It
-exits 0 only if `verify.py`'s step passed and every panel row has a rejected control whose line names the run; 5 if a
-control wasn't rejected (or couldn't be dumped); 1 otherwise; 2 on a usage error.
-
 Every gate's record and every negative control carry `wall_s`, the host's seconds in them (a gate's summed over its runs),
 and each shape its `wall_s` by stage (`operands`, `baseline_gates`, then `screen` alone under `--screen-only`, else
-`arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `report`, `transcripts`), so a lease's idle minutes
-show where they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
+`arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `report`), so a lease's idle minutes show where
+they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
 take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job's CPUs (`OMP_NUM_THREADS`, a fill job's
 `cpus=`), for such references, and an arm with `prefetch(dev, call, shape, flags)` is told every call a flag set's gate is
 about to check before the first of them, so their references compute side by side; the gate still compares against the
