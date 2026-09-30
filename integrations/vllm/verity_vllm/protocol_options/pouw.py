@@ -48,9 +48,12 @@ DEFAULT_SCHEME = "ncp-v1"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
 #: The schemes this adapter's executor computes; Pearl's FP10 / FP8 operands are not wired.
-EXECUTED = ("ncp-v1", "ncp-v1-shift24")
+EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
 UNQUANTIZED = ("bfloat16", "float16", "float32")
+#: A quantized linear's parameters beside (or instead of) its weight: a layer carrying one is refused whatever its weight's
+#: dtype, and a packed one (compressed-tensors' ``weight_packed``) has no ``weight`` to read at all.
+QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_point", "weight_packed")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("beacon", "retain_steps", "transcript_dir")
@@ -157,7 +160,7 @@ def stack_y(scheme: Any, salt: bytes, w: int, b: np.ndarray, noise: tuple, first
     F₂ = −P·F₁ and F₃ = F₁ + F₂ (`ncp.assemble`)."""
     n, k = b.shape
     pi, sigma = np.asarray(noise[0]), np.asarray(noise[1], dtype=np.int64)
-    f1 = _noise("verity/pouw/ncp/F1/v1", n, k, lambda j: (salt, w, first + j))
+    f1 = _noise(scheme.f1_tag, n, k, lambda j: (salt, w, first + j))
     f2 = np.empty_like(f1)
     f2[:, pi] = -(f1 * sigma)
     b = b.astype(np.int64)
@@ -182,12 +185,16 @@ def ncp_tiles(scheme: Any, ctx: UnitContext, noise: tuple, a: np.ndarray, ops: O
     """One unit's tiles as the scheme's Prover kernel contract gives them: (first row, first column) -> (digest, int32
     output tile), for int7 ``a`` (m x k) and the weight's `Operands`.  X + β is formed as `ncp.assemble` forms X, the
     accumulator starts at c₀ (Lean `mmWU β`), and a tile's digest covers every depth-16 checkpoint, step-major and
-    row-major within a step (`NCP.digest`).  Float64 products are exact here: every partial sum is an integer under 2^53."""
+    row-major within a step (`NCP.digest`).  Under ``ncp-v2`` each strip of 16 rows derives its E₁ rows from its own
+    digest (`ncp.strip_digest`), once per strip.  Float64 products are exact here: every partial sum is an integer under
+    2^53."""
     u = ctx.matmul
     (m, k), n = a.shape, ops.y.shape[0]
     pi, sigma = np.asarray(noise[0]), np.asarray(noise[1], dtype=np.int64)
+    strips = ({s: ncp.strip_digest([a[r].tobytes() for r in range(s * ncp.STRIP, (s + 1) * ncp.STRIP)])
+               for s in range(m // ncp.STRIP)} if scheme.version == 2 else {})
     a = a.astype(np.int64)
-    e1 = _noise("verity/pouw/ncp/E1/v1", m, k, lambda i: (ctx.salt, u.index, ctx.root_a, u.weight, i))
+    e1 = _noise(scheme.e1_tag, m, k, lambda i: ncp.e1_parts(scheme.version, ctx, i, strips.get(i // ncp.STRIP)))
     e2 = e1[:, pi] * sigma
     x = np.concatenate([a + e1, a + e2, -(a + e1 + e2)], axis=1) + scheme.beta
     y, c0 = ops.y, ops.c0
@@ -201,7 +208,7 @@ def ncp_tiles(scheme: Any, ctx: UnitContext, noise: tuple, a: np.ndarray, ops: O
             words = (run.astype(np.int64) & _M32).astype("<u4")                                  # [T, 16, w]
             for j in range(0, words.shape[2], 16):
                 block = np.ascontiguousarray(words[:, :, j:j + 16])
-                digest = hashlib.shake_256(b"verity/pouw/ncp/tile/v1\0" + block.tobytes()).digest(32)
+                digest = hashlib.shake_256(scheme.tile_tag.encode() + b"\0" + block.tobytes()).digest(32)
                 out[(r, c + j)] = (digest, block[-1].astype(np.int64) - ((block[-1].astype(np.int64) >> 31) << 32))
     return out
 
@@ -315,6 +322,11 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
         raise ValueError(f"{entry}: the model has no linear layer to execute")
     bad, seen, shapes = [], set(), {}
     for w, layer in enumerate(layers):
+        params = [p for p in QUANT_PARAMS if getattr(layer, p, None) is not None]
+        if params:
+            bad.append(f"linear {w}: it carries {', '.join(params)}, a quantized layer's parameters: a quantized (e.g. FP8) "
+                       "layer is refused, not misread")
+            continue
         dtype = str(getattr(layer.weight, "dtype", None)).removeprefix("torch.")
         if dtype not in UNQUANTIZED:
             bad.append(f"linear {w}: its weight is {dtype}, and the executor reads an unquantized weight: a quantized (e.g. FP8) "
