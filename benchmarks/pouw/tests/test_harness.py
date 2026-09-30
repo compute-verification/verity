@@ -778,6 +778,63 @@ def test_a_cutlass_tile_order_is_a_candidate_of_its_own_where_the_grid_tells_it_
                          sched_fams=frozenset({"mxfp4"}))
 
 
+def test_a_verity_registry_entry_is_its_own_source_in_one_tile_order_with_a_workspace_of_its_own():
+    native = Path(__file__).parents[1] / "harness" / "native"
+    plain = (native.parents[1] / "nvfp4_sm120" / "nvf4_plain.cu").read_text()
+    entries = re.findall(r'\{"(verity_[^"]+)", (\d), 0, (query\w*),', plain)
+    assert {(n, int(k)) for n, k, _ in entries} >= {("verity_nvf4_256x128_o_ew", 5), ("verity_fp8_256x128_o_ew", 1)}
+    assert {q for *_, q in entries} == {"query", "query_fp8"}  # the (m, n, k) form: query_fixed
+    registry = (native / "cutlass_registry.cu").read_text()
+    assert re.search(r"#endif\s+phc_table_nvf4, phc_table_fp8\}", registry)  # in a no-CUTLASS build too
+    assert '"$PLAIN - nvf4_plain 0"' in (native / "build.sh").read_text()
+
+    kernels = [{"index": 0, "name": "cutlass3x_nvfp4_256x128x128_coop", "kind": 5, "swap": 0},
+               {"index": 1, "name": "verity_nvf4_256x128_o_ew", "kind": 5, "swap": 0},
+               {"index": 2, "name": "verity_fp8_256x128_o_ew", "kind": 1, "swap": 0}]
+
+    class Lib(FakeCutlassLib):
+        def ph_cutlass_prepare(self, i, m, n, k, a, b, sa, sb, d, ws, ws_bytes, stream, h):
+            self.calls.append(("prepare", i, ws, ws_bytes))
+            return 0 if i != 2 or ws_bytes < 1 << 20 else 2
+
+    lib, mem = Lib(kernels), {}
+
+    def alloc(n):
+        buf = A.Buffer(0x100000 * (len(mem) + 1), n)
+        mem[buf.ptr] = buf
+        return buf
+
+    def ck(r, what):
+        if r:
+            raise RuntimeError(what)
+
+    dev = argparse.Namespace(lib=lib, ck=ck, stream=7, alloc=alloc, free=lambda b: mem.pop(b.ptr))
+    big = A.Shape("big", 8192, 8192, 8192)
+    ok, no = B.cutlass_candidates(dev, B.FAMILIES["nvfp4"], big, kernels, sched=True)
+    got = {c.name: c for c in ok}
+    assert not no and got["verity_nvf4_256x128_o_ew"].source == "verity"
+    assert {c.source for c in ok if c.cutlass == 0} == {"cutlass"} and [c.name for c in ok if c.cutlass == 1] == [
+        "verity_nvf4_256x128_o_ew"]
+    assert not any(call[2:] != (0, 0) for call in lib.calls if call[0] == "query" and call[1] == 1)
+
+    lt_ws = A.Buffer(0x1000, B.LT_WORKSPACE)
+    ops = B.Operands(lt_ws, lt_ws, None, None, lt_ws)
+    cut = B.BaselineCall(dev, got["cutlass3x_nvfp4_256x128x128_coop"], big, ops, lt_ws)
+    own = B.BaselineCall(dev, got["verity_nvf4_256x128_o_ew"], big, ops, lt_ws)
+    (_, _, ws_cut, _), (_, _, ws_own, own_bytes) = lib.calls[-2:]
+    assert ws_cut == lt_ws.ptr and ws_own != lt_ws.ptr and own_bytes >= B.PLAIN_WORKSPACE and list(mem) == [ws_own]
+    own.free()
+    cut.free()
+    assert not mem and own._own_ws is None
+
+    fp8 = B.cutlass_candidates(dev, B.FAMILIES["fp8-e4m3"], big, kernels)[0]
+    assert [(c.name, c.source) for c in fp8] == [("verity_fp8_256x128_o_ew", "verity")]
+    fp8[0].ws = 1 << 20  # the fake refuses a workspace this large: the call frees its own before it raises
+    with pytest.raises(RuntimeError, match="verity prepare verity_fp8_256x128_o_ew"):
+        B.BaselineCall(dev, fp8[0], big, ops, lt_ws)
+    assert not mem
+
+
 def test_the_help_formats(capsys):
     with pytest.raises(SystemExit) as ex:
         H.parse(["--help"])
