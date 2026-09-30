@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -697,10 +698,91 @@ def test_an_enumerated_configuration_is_named_by_its_config_and_deduplicated_by_
     assert "_sk4_r1" in B._enum_name("lt", "nvfp4", 0, cfg | {"splitk": 4, "reduction": 1})
 
 
+class FakeCutlassLib:
+    """The registry's query and prepare (cutlass_registry.cu): a 2.x kernel refuses every order but the default, and
+    `refuse` names the (kernel, swizzle, raster) a 3.x kernel can't implement."""
+
+    def __init__(self, kernels, refuse=()):
+        self.kernels, self.refuse, self.calls = kernels, set(refuse), []
+
+    def _query(self, i, sw, r, ws):
+        self.calls.append(("query", i, sw, r))
+        if (sw or r) and not self.kernels[i]["name"].startswith("cutlass3x_") or (i, sw, r) in self.refuse:
+            return 3000 + 11
+        ws._obj.value = 4096 * (i + 1) + 16 * sw + r
+        return 0
+
+    def ph_cutlass_query(self, i, m, n, k, ws, sfa, sfb):
+        return self._query(i, 0, 0, ws)
+
+    def ph_cutlass_query_sched(self, i, m, n, k, sw, r, ws, sfa, sfb):
+        return self._query(i, sw, r, ws)
+
+    def ph_cutlass_prepare(self, i, m, n, k, *rest):
+        self.calls.append(("prepare", i, m, n, k))
+        return 0
+
+    def ph_cutlass_prepare_sched(self, i, m, n, k, sw, r, *rest):
+        self.calls.append(("prepare_sched", i, m, n, k, sw, r))
+        return 0
+
+
+def test_a_cutlass_tile_order_is_a_candidate_of_its_own_where_the_grid_tells_it_apart():
+    src = (Path(__file__).parents[1] / "harness" / "native" / "cutlass_3x.cu").read_text()
+    names = re.findall(r'ENTRY(?:_TS)?\("(cutlass3x_[^"]+)"', src)
+    assert len(names) > 20 and all(B.cutlass_tile(n) for n in names)
+    assert B.cutlass_tile("cutlass3x_nvfp4_128x32x256_coop_swap") == (128, 32)
+    assert B.cutlass_tile("cutlass2x_int8_128x128x64_s4") is None
+    big, decode = A.Shape("big", 8192, 8192, 8192), A.Shape("decode", 32, 8192, 8192)
+    assert B.cutlass_swizzles((128, 128), big, 0) == [2, 4, 8]
+    assert [B.cutlass_swizzles((128, 128), A.Shape("s", m, 8192, 8192), 0) for m in (128, 256, 384, 640, 768)] == [
+        [], [2], [2, 4], [2, 4], [2, 4, 8]]
+    assert B.cutlass_swizzles((128, 32), decode, 1) == []  # swapped: the kernel's N is our m, one CTA wide
+    assert B.cutlass_swizzles((128, 32), A.Shape("s", 8192, 8192, 256), 1) == [2]  # and its M our n
+
+    kernels = [{"index": 0, "name": "cutlass3x_mxfp4_128x128x128_coop", "kind": 6, "swap": 0},
+               {"index": 1, "name": "cutlass3x_mxfp4_128x64x256_coop_swap", "kind": 6, "swap": 1},
+               {"index": 2, "name": "cutlass2x_int8_128x128x64_s4", "kind": 7, "swap": 0}]
+    lib = FakeCutlassLib(kernels, refuse={(1, 8, 2)})
+    dev = argparse.Namespace(lib=lib, ck=lambda r, what: r, stream=7)
+    mx = B.FAMILIES["mxfp4"]
+    plain, no = B.cutlass_candidates(dev, mx, big, kernels)
+    assert [c.name for c in plain] == [k["name"] for k in kernels[:2]] and not no
+    assert all(c.config.keys() == {"swap", "workspace"} and not H.searched(c) for c in plain)
+    assert all(call[2:] == (0, 0) for call in lib.calls)
+
+    ok, no = B.cutlass_candidates(dev, mx, big, kernels, sched=True)
+    assert len(ok) == 2 * 12 - 1 and no == [{"name": "cutlass3x_mxfp4_128x64x256_coop_swap_rasterN_sw8", "status": 3011}]
+    got = {c.name: c for c in ok}
+    assert len(got) == len(ok) and {"cutlass3x_mxfp4_128x128x128_coop_sw2", "cutlass3x_mxfp4_128x128x128_coop_rasterN_sw8",
+                                    "cutlass3x_mxfp4_128x64x256_coop_swap_rasterM"} <= got.keys()
+    v = got["cutlass3x_mxfp4_128x128x128_coop_rasterM_sw4"]
+    assert v.config == {"swap": 0, "workspace": 4096 + 64 + 1, "swizzle": 4, "raster": 1} and v.cutlass == 0
+    assert H.searched(v) and not H.searched(got["cutlass3x_mxfp4_128x128x128_coop"])
+
+    ok, _ = B.cutlass_candidates(dev, mx, decode, kernels, sched=True)
+    assert [c.name for c in ok if c.cutlass == 1] == ["cutlass3x_mxfp4_128x64x256_coop_swap",
+                                                      "cutlass3x_mxfp4_128x64x256_coop_swap_rasterM",
+                                                      "cutlass3x_mxfp4_128x64x256_coop_swap_rasterN"]
+    assert [c.name for c in B.cutlass_candidates(dev, B.FAMILIES["int8"], big, kernels, sched=True)[0]] == [
+        "cutlass2x_int8_128x128x64_s4"]
+
+    buf = A.Buffer(0x1000, 64)
+    ops = B.Operands(buf, buf, None, None, buf)
+    B.BaselineCall(dev, got["cutlass3x_mxfp4_128x128x128_coop"], big, ops, buf)
+    B.BaselineCall(dev, v, big, ops, buf)
+    assert lib.calls[-2:] == [("prepare", 0, 8192, 8192, 8192), ("prepare_sched", 0, 8192, 8192, 8192, 4, 1)]
+
+    with pytest.raises(SystemExit, match="tile orders"):
+        H.gate_baselines(None, argparse.Namespace(has_cutlass_sched=False), big, [], None, [], None, False, 1, 0,
+                         sched_fams=frozenset({"mxfp4"}))
+
+
 def test_the_help_formats(capsys):
     with pytest.raises(SystemExit) as ex:
         H.parse(["--help"])
-    assert ex.value.code == 0 and "--lt-enumerate-range" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert ex.value.code == 0 and "--lt-enumerate-range" in out and "--cutlass-sched" in out
 
 
 def test_a_slice_of_the_enumeration_takes_its_range_and_keeps_enough_to_reach_it(tmp_path):

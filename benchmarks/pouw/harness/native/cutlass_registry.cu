@@ -28,6 +28,10 @@ const phc_entry* entry(int i, int* total) {
   return found;
 }
 #endif
+
+bool sched_ok(int swizzle, int raster) {
+  return (swizzle == 0 || swizzle == 1 || swizzle == 2 || swizzle == 4 || swizzle == 8) && raster >= 0 && raster <= 2;
+}
 }  // namespace
 
 extern "C" {
@@ -49,24 +53,39 @@ int ph_cutlass_describe(int i, const char** name, int* kind, int* swap) {
   return 0;
 }
 
-int ph_cutlass_query(int i, int m, int n, int k, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes) {
+// swizzle and raster as phc_args has them; -2 for a value outside those.
+int ph_cutlass_query_sched(int i, int m, int n, int k, int swizzle, int raster, size_t* ws, size_t* sfa_bytes,
+                           size_t* sfb_bytes) {
   int total = 0;
   const phc_entry* e = entry(i, &total);
   if (!e) return -1;
-  return e->query(m, n, k, ws, sfa_bytes, sfb_bytes);
+  if (!sched_ok(swizzle, raster)) return -2;
+  phc_args a{m, n, k, nullptr, nullptr, nullptr, nullptr, nullptr, swizzle, raster};
+  return e->query(&a, ws, sfa_bytes, sfb_bytes);
+}
+
+int ph_cutlass_query(int i, int m, int n, int k, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes) {
+  return ph_cutlass_query_sched(i, m, n, k, 0, 0, ws, sfa_bytes, sfb_bytes);
 }
 
 // Initializes kernel i for one operand set; *out is a handle for ph_cutlass_launch and ph_cutlass_release.
-int ph_cutlass_prepare(int i, int m, int n, int k, const void* A, const void* B, const void* sfa, const void* sfb, void* D,
-                       void* ws, size_t ws_bytes, void* stream, void** out) {
+int ph_cutlass_prepare_sched(int i, int m, int n, int k, int swizzle, int raster, const void* A, const void* B,
+                             const void* sfa, const void* sfb, void* D, void* ws, size_t ws_bytes, void* stream,
+                             void** out) {
   int total = 0;
   const phc_entry* e = entry(i, &total);
   if (!e) return -1;
-  phc_args a{m, n, k, A, B, sfa, sfb, D};
+  if (!sched_ok(swizzle, raster)) return -2;
+  phc_args a{m, n, k, A, B, sfa, sfb, D, swizzle, raster};
   phc_prepared* p = nullptr;
   int r = e->prepare(&a, ws, ws_bytes, stream, &p);
   *out = p;
   return r;
+}
+
+int ph_cutlass_prepare(int i, int m, int n, int k, const void* A, const void* B, const void* sfa, const void* sfb, void* D,
+                       void* ws, size_t ws_bytes, void* stream, void** out) {
+  return ph_cutlass_prepare_sched(i, m, n, k, 0, 0, A, B, sfa, sfb, D, ws, ws_bytes, stream, out);
 }
 
 int ph_cutlass_launch(void* h, void* stream) {

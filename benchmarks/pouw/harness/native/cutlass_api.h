@@ -8,6 +8,10 @@ struct phc_args {
   int m, n, k;
   const void *A, *B, *sfa, *sfb;  // ours: A m x k and B n x k, both K-major; their scale factors, or null
   void* D;                        // m x n row-major, BF16 (INT8: int32)
+  // The 3.x tile scheduler's order of output tiles: raster 0 CUTLASS's heuristic, 1 along our m, 2 along our n (a swapped
+  // kernel's N and M); swizzle 0 CUTLASS's default (which orders as 1 does), else its max_swizzle_size (1, 2, 4 or 8),
+  // which CUTLASS lowers where the grid is too small for it. 2.x kernels fix both at compile time and take only 0, 0.
+  int swizzle = 0, raster = 0;
 };
 
 // An initialized kernel for one operand set: `launch` enqueues it (params cached, nothing built per call).
@@ -20,8 +24,9 @@ struct phc_entry {
   const char* name;
   int kind;
   int swap;  // 1: computes D^T = B . A^T (M-tile over n), for skinny m
-  // 0 if implementable at (m, n, k), with the workspace and scale-factor bytes it needs; else a nonzero status
-  int (*query)(int m, int n, int k, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes);
+  // 0 if implementable at a's (m, n, k, swizzle, raster; pointers unused), with the workspace and scale-factor bytes it
+  // needs; else a nonzero status
+  int (*query)(const phc_args* a, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes);
   int (*prepare)(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prepared** out);
 };
 

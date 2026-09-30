@@ -124,6 +124,11 @@ class Device:
         L.ph_cutlass_release.argtypes = [vp]
         L.ph_cutlass_query.argtypes = [i32, i32, i32, i32, C.POINTER(sz), C.POINTER(sz), C.POINTER(sz)]
         L.ph_cutlass_describe.argtypes = [i32, C.POINTER(C.c_char_p), C.POINTER(i32), C.POINTER(i32)]
+        #: a library built before the tile orders (cutlass_api.h's swizzle and raster) has only CUTLASS's default order
+        self.has_cutlass_sched = hasattr(L, "ph_cutlass_query_sched")
+        if self.has_cutlass_sched:
+            L.ph_cutlass_query_sched.argtypes = [i32] * 6 + [C.POINTER(sz)] * 3
+            L.ph_cutlass_prepare_sched.argtypes = [i32] * 6 + [vp, vp, vp, vp, vp, vp, sz, vp, C.POINTER(vp)]
         L.ph_mma_peak.argtypes = [i32, i32, i32, i32, vp, C.POINTER(C.c_float), vp]
         L.ph_capture_begin.argtypes = [vp]
         L.ph_capture_end.argtypes = [vp, C.POINTER(vp), C.POINTER(sz)]

@@ -423,10 +423,14 @@ def lt_pick(args) -> B.LtPick:
 
 
 def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
-                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.LtPick()) -> dict:
+                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.LtPick(),
+                   sched_fams: frozenset = frozenset()) -> dict:
     """Every family's candidates, each gated on the gate set (cuBLASLt's configurations enumerated for the families in
-    `enumerate_fams`, those `pick` takes); at the first shape, the known-bad variants. Returns per family the gated
-    candidates and what was tried."""
+    `enumerate_fams`, those `pick` takes; the CUTLASS 3.x kernels in every tile order for those in `sched_fams`); at the
+    first shape, the known-bad variants. Returns per family the gated candidates and what was tried."""
+    if sched_fams and not dev.has_cutlass_sched:
+        raise SystemExit("--cutlass-sched needs a harness library built with CUTLASS's tile orders "
+                         "(ph_cutlass_query_sched); this one has only the default order")
     out = {}
     for fam in fams:
         gops = so.ops(fam, -1)
@@ -445,7 +449,7 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
             missing = sorted({n for n in pick.names if n.split("_", 2)[1:2] == [fam.name]} - {c.name for c in lts})
             if missing:
                 bench.log(f"{len(missing)} named {fam.name} configurations aren't in this enumeration, e.g. {missing[0]}")
-        cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels)
+        cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels, fam.name in sched_fams)
         gated = []
         for c in lts + cuts:
             key = ("baseline", shape.label, fam.name, c.name)
@@ -491,6 +495,12 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
     return out
 
 
+def searched(c: B.Candidate) -> bool:
+    """A candidate of the wide search, which the screen thins: an enumerated cuBLASLt configuration, or a CUTLASS kernel in
+    a tile order other than its default."""
+    return "enumerated" in c.config or "raster" in c.config
+
+
 def screened(ms: dict[str, float], names: list[str], keep: int) -> list[str]:
     """The `keep` fastest of `names` by their screen times (one never screened, or whose screen failed, is slowest)."""
     return sorted(names, key=lambda n: (ms.get(n, float("inf")), n))[:keep]
@@ -521,17 +531,18 @@ def screen(bench: Bench, dev, shape, fam, so, cands: list, lt_ws, burst: int) ->
 def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst: int, reps: int, finalists: int,
                    screen_keep: int = SCREEN_KEEP) -> list[Entry]:
     """Each family's gated candidates on every timing set, a short graph sweep, and the fastest `finalists` per family. The
-    enumerated cuBLASLt configurations are screened first (`screen`), and only the `screen_keep` fastest are tuned."""
+    wide search's candidates (enumerated cuBLASLt configurations, CUTLASS kernels in a tile order of their own) are screened
+    first (`screen`), and only the `screen_keep` fastest are tuned."""
     keep = []
     for fam in fams:
         entries = []
         cands = gated[fam.name]["gated"]
-        wide = [c for c in cands if "enumerated" in c.config]
+        wide = [c for c in cands if searched(c)]
         if len(wide) > screen_keep:
             ms = screen(bench, dev, shape, fam, so, wide, lt_ws, burst)
             kept = set(screened(ms, [c.name for c in wide], screen_keep))
             gated[fam.name]["screen_ms"] = dict(sorted(ms.items(), key=lambda kv: kv[1]))
-            cands = [c for c in cands if "enumerated" not in c.config or c.name in kept]
+            cands = [c for c in cands if not searched(c) or c.name in kept]
         for c in cands:
             key = ("baseline", shape.label, fam.name, c.name)
             try:
@@ -714,7 +725,8 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     unchained: dict = {}
     try:
         gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed,
-                               frozenset(getattr(args, "lt_enumerate", None) or ()), lt_pick(args))
+                               frozenset(getattr(args, "lt_enumerate", None) or ()), lt_pick(args),
+                               frozenset(getattr(args, "cutlass_sched", None) or ()))
         arm_ents, arm_sets = [], {}
         for a in arms:
             arm_sets[a.name] = arm_operand_sets(dev, a, so)
@@ -876,6 +888,10 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                    help="take only the enumerated configurations named in FILE, one per line (a slice search's best)")
     p.add_argument("--lt-enumerate-max", type=int, default=B.LT_ENUMERATED_MAX, metavar="N",
                    help="how many configurations the enumeration keeps (it counts all it accepts); STOP raises it")
+    p.add_argument("--cutlass-sched", nargs="*", default=[], choices=list(B.FAMILIES), metavar="FAMILY",
+                   help="for these families, also every CUTLASS 3.x kernel in each tile order its scheduler takes (raster "
+                        "along m or n, max swizzle 2, 4 or 8, where the grid is big enough for it), each gated and screened "
+                        "with the enumerated configurations")
     p.add_argument("--screen-keep", type=int, default=SCREEN_KEEP)
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")

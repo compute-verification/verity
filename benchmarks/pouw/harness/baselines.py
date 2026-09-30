@@ -1,7 +1,7 @@
 """The plain GEMM baselines: per family (precision), every cuBLASLt heuristic candidate (up to 32) from each cuBLASLt loaded
 (`native.LtLib`), with `enumerate` every configuration cuBLASLt's capabilities admit (`lt_enumerated`), and every CUTLASS
-sm_120 kernel that implements the shape, each gated bit-exactly, then autotuned; the fastest per family is what the arms
-divide by.
+sm_120 kernel that implements the shape (with `sched` the 3.x ones in each tile order too), each gated bit-exactly, then
+autotuned; the fastest per family is what the arms divide by.
 
 GEMM alone on pre-quantized operands, TN (A m x k and B n x k, both K-major), D m x n row-major in BF16 (int8: int32),
 alpha 1, beta 0. Scale factors are all 1 (their values don't change a kernel's time; their bytes are read as usual).
@@ -131,9 +131,11 @@ class BaselineCall:
         self._h = None
         if cand.source == "cutlass":
             h = C.c_void_p()
-            dev.ck(dev.lib.ph_cutlass_prepare(cand.cutlass, shape.m, shape.n, shape.k, ops.a.ptr, ops.b.ptr,
-                                              ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None, ops.d.ptr,
-                                              lt_ws.ptr, lt_ws.nbytes, dev.stream, C.byref(h)), f"cutlass prepare {cand.name}")
+            sw, r = cand.config.get("swizzle", 0), cand.config.get("raster", 0)
+            dims = (cand.cutlass, shape.m, shape.n, shape.k) + ((sw, r) if sw or r else ())
+            prepare = dev.lib.ph_cutlass_prepare_sched if sw or r else dev.lib.ph_cutlass_prepare
+            dev.ck(prepare(*dims, ops.a.ptr, ops.b.ptr, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None,
+                           ops.d.ptr, lt_ws.ptr, lt_ws.nbytes, dev.stream, C.byref(h)), f"cutlass prepare {cand.name}")
             self._h = h.value
         self._ws = lt_ws
 
@@ -308,19 +310,63 @@ def cutlass_kernels(dev) -> list[dict]:
     return out
 
 
-def cutlass_candidates(dev, fam: Family, shape: Shape, kernels: list[dict]) -> tuple[list[Candidate], list[dict]]:
-    """The CUTLASS kernels of this family that implement the shape, and the ones that don't (with why)."""
+#: the 3.x tile scheduler's max_swizzle_size values past its default (0, which orders as 1)
+CUTLASS_SWIZZLES = (2, 4, 8)
+#: raster 1 along our m, 2 along our n (cutlass_api.h)
+CUTLASS_RASTERS = (1, 2)
+
+
+def cutlass_tile(name: str) -> tuple[int, int] | None:
+    """A 3.x kernel's CTA tile (M, N) from its name (`cutlass3x_<family>_<M>x<N>x<K>_...`); None for a 2.x kernel, whose
+    tile order is fixed at compile time."""
+    parts = name.split("_")
+    if parts[0] != "cutlass3x":
+        return None
+    for dims in (p.split("x") for p in parts[1:]):
+        if len(dims) == 3 and all(d.isdigit() for d in dims):
+            return int(dims[0]), int(dims[1])
+    return None
+
+
+def cutlass_swizzles(tile: tuple[int, int], shape: Shape, swap: int) -> list[int]:
+    """The swizzles that order this shape's tiles differently from each other and from the default: CUTLASS lowers
+    max_swizzle_size to 4 unless the grid is at least 6 CTAs on its short side, to 2 below 3, and to 1 below 2
+    (`get_log_swizzle_size`, tile_scheduler_params.h), so a small grid's larger swizzles repeat a smaller one's order."""
+    rows, cols = (shape.n, shape.m) if swap else (shape.m, shape.n)
+    short = min(-(-rows // tile[0]), -(-cols // tile[1]))
+    return [s for s, need in zip(CUTLASS_SWIZZLES, (2, 3, 6)) if short >= need]
+
+
+def cutlass_sched_name(name: str, swizzle: int, raster: int) -> str:
+    return name + (f"_raster{'MN'[raster - 1]}" if raster else "") + (f"_sw{swizzle}" if swizzle else "")
+
+
+def cutlass_candidates(dev, fam: Family, shape: Shape, kernels: list[dict],
+                       sched: bool = False) -> tuple[list[Candidate], list[dict]]:
+    """The CUTLASS kernels of this family that implement the shape, and the ones that don't (with why). With `sched`, also
+    each 3.x kernel in every tile order its scheduler takes (`CUTLASS_RASTERS` x swizzles, as `cutlass_swizzles` leaves
+    them, less the default), each a candidate of its own with config `raster` and `swizzle`."""
     ok, no = [], []
     for kr in kernels:
         if fam.cutlass_kind is None or kr["kind"] != fam.cutlass_kind:
             continue
-        ws, sfa, sfb = C.c_size_t(), C.c_size_t(), C.c_size_t()
-        r = dev.lib.ph_cutlass_query(kr["index"], shape.m, shape.n, shape.k, C.byref(ws), C.byref(sfa), C.byref(sfb))
-        if r:
-            no.append({"name": kr["name"], "status": r})
-            continue
-        ok.append(Candidate(fam.name, "cutlass", kr["name"], {"swap": kr["swap"], "workspace": ws.value},
-                            cutlass=kr["index"], sf_bytes=(sfa.value, sfb.value), ws=ws.value))
+        tile = cutlass_tile(kr["name"])
+        orders = [(0, 0)]
+        if sched and tile is not None:
+            sws = [0, *cutlass_swizzles(tile, shape, kr["swap"])]
+            orders += [(sw, r) for r in (0, *CUTLASS_RASTERS) for sw in sws if (sw, r) != (0, 0)]
+        for sw, r in orders:
+            name = cutlass_sched_name(kr["name"], sw, r)
+            ws, sfa, sfb = C.c_size_t(), C.c_size_t(), C.c_size_t()
+            args = (kr["index"], shape.m, shape.n, shape.k)
+            st = (dev.lib.ph_cutlass_query_sched(*args, sw, r, C.byref(ws), C.byref(sfa), C.byref(sfb)) if (sw, r) != (0, 0)
+                  else dev.lib.ph_cutlass_query(*args, C.byref(ws), C.byref(sfa), C.byref(sfb)))
+            if st:
+                no.append({"name": name, "status": st})
+                continue
+            cfg = {"swap": kr["swap"], "workspace": ws.value} | ({"swizzle": sw, "raster": r} if (sw, r) != (0, 0) else {})
+            ok.append(Candidate(fam.name, "cutlass", name, cfg, cutlass=kr["index"], sf_bytes=(sfa.value, sfb.value),
+                                ws=ws.value))
     return ok, no
 
 

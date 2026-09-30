@@ -47,8 +47,9 @@ struct Prepared final : phc_prepared {
 };
 
 template <class G>
-int query(int m, int n, int k, size_t* ws, size_t* sfa, size_t* sfb) {
-  auto args = arguments<G>(m, n, k, nullptr, nullptr, nullptr);
+int query(const phc_args* a, size_t* ws, size_t* sfa, size_t* sfb) {
+  if (a->swizzle || a->raster) return 3000 + int(cutlass::Status::kErrorNotSupported);
+  auto args = arguments<G>(a->m, a->n, a->k, nullptr, nullptr, nullptr);
   auto s = G::can_implement(args);
   if (s != cutlass::Status::kSuccess) return 3000 + int(s);
   *ws = G::get_workspace_size(args);
@@ -58,6 +59,7 @@ int query(int m, int n, int k, size_t* ws, size_t* sfa, size_t* sfb) {
 
 template <class G>
 int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prepared** out) {
+  if (a->swizzle || a->raster) return 3000 + int(cutlass::Status::kErrorNotSupported);
   auto args = arguments<G>(a->m, a->n, a->k, a->A, a->B, a->D);
   if (G::get_workspace_size(args) > ws_bytes) return 3100;
   auto* r = new Prepared<G>();

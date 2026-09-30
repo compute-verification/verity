@@ -81,7 +81,10 @@ struct Problem {
   size_t sfa_bytes = 0, sfb_bytes = 0;
 
   // Our (m, n, k) and pointers; swapped kernels compute D^T = B . A^T.
-  Problem(int m, int n, int k, const void* A, const void* B, const void* sfa, const void* sfb, void* D, bool swap) {
+  Problem(const phc_args& g, bool swap) {
+    const int m = g.m, n = g.n, k = g.k;
+    const void *A = g.A, *B = g.B, *sfa = g.sfa, *sfb = g.sfb;
+    void* D = g.D;
     int M = swap ? n : m, N = swap ? m : n;
     const void *pa = swap ? B : A, *pb = swap ? A : B, *psa = swap ? sfb : sfa, *psb = swap ? sfa : sfb;
     auto sA = cutlass::make_cute_packed_stride(typename GK::StrideA{}, {M, k, 1});
@@ -119,6 +122,9 @@ struct Problem {
     if constexpr (K::kStreamK) {
       args.scheduler.reduction_mode = decltype(args.scheduler.reduction_mode)::Deterministic;
     }
+    using RO = decltype(args.scheduler.raster_order);
+    if (g.swizzle) args.scheduler.max_swizzle_size = g.swizzle;
+    if (g.raster) args.scheduler.raster_order = (g.raster == 1) != swap ? RO::AlongM : RO::AlongN;
   }
 };
 
@@ -137,8 +143,8 @@ struct Prepared final : phc_prepared {
 };
 
 template <class K, bool Swap, int SF>
-int query(int m, int n, int k, size_t* ws, size_t* sfa, size_t* sfb) {
-  Problem<K> p(m, n, k, nullptr, nullptr, nullptr, nullptr, nullptr, Swap);
+int query(const phc_args* a, size_t* ws, size_t* sfa, size_t* sfb) {
+  Problem<K> p(*a, Swap);
   auto s = K::Gemm::can_implement(p.args);
   if (s != cutlass::Status::kSuccess) return 3000 + int(s);
   *ws = K::Gemm::get_workspace_size(p.args);
@@ -149,7 +155,7 @@ int query(int m, int n, int k, size_t* ws, size_t* sfa, size_t* sfb) {
 
 template <class K, bool Swap, int SF>
 int prepare(const phc_args* a, void* ws, size_t ws_bytes, void* stream, phc_prepared** out) {
-  Problem<K> p(a->m, a->n, a->k, a->A, a->B, a->sfa, a->sfb, a->D, Swap);
+  Problem<K> p(*a, Swap);
   size_t need = K::Gemm::get_workspace_size(p.args);
   if (need > ws_bytes) return 3100;
   auto* r = new Prepared<K>();
