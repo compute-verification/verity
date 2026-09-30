@@ -137,7 +137,7 @@ def test_a_firing_notification_becomes_markdown_notes_naming_the_job_and_its_lan
     assert re.fullmatch(r"\d{8}T\d{4}Z-alert-pod-holds-a-gpu-at-0-[0-9a-f]{8}\.md", stall_name)
     assert re.fullmatch(r"\d{8}T\d{4}Z-alert-replay-on-gpu-[0-9a-f]{8}\.md", replay_name)
     for name, text in ((stall_name, stall), (replay_name, replay)):
-        assert text.startswith("---\nid: " + name[:-3] + "\n") and "\nlane: verity-root\n" in text and "\nkind: finding\n" in text
+        assert text.startswith("---\nid: " + name[:-3] + "\n") and "\nlane: infra\n" in text and "\nkind: finding\n" in text
     assert "gpu 3, pod gpu-214-ce1b86e4-head, namespace default** (job cov-k23-2; lane vllm-epoch-run; row q__b1)" in stall
     assert "gpu-209" not in stall and "GPU 1" not in stall and "tags:" not in stall
     assert "\ntags: [replay-on-gpu]\n" in replay and "[replay-on-gpu]: 1 firing" in replay and "gpu 5, pod gpu-209-ce1b86e4-head" in replay
