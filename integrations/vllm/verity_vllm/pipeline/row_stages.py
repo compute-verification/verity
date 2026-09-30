@@ -19,7 +19,7 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
-k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
+k-unit replay (uniform by default, ``--replay-draw``), and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
 ``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
 it and writes ``config_record.json``.  The **plan** stage (``row_plan``, on CPU) derives what the Commit needs before the GPU is held.
 
@@ -537,8 +537,8 @@ class SingleRow(Row):
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
-        if self.config_run:                           # one instrumented run, bounded staging, k units stratified by family
-            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
+        if self.config_run:                           # one instrumented run, bounded staging, k units
+            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k), "--replay-draw", ck.replay_draw]
             if ck.replay_deferred in ("1", "slim"):
                 cmd += ["--replay-deferred", *(["slim"] if ck.replay_deferred == "slim" else [])]
         if self.protocols:

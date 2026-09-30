@@ -314,12 +314,15 @@ class CommitConfig:
     pairs: int = option("--pairs", env="PAIRS", type=int, default=3, help="instrumented/control pairs")
     config_run: str = option("--config-run", env="CONFIG_RUN", default="0",
                              help="1 = the config run (docs/vllm-config-sweep-plan.md §2): Build and the strict word check, ONE instrumented "
-                                  "Commit (no control arm, no pairs) under bounded staging, a k-unit replay stratified by family, then "
+                                  "Commit (no control arm, no pairs) under bounded staging, a k-unit replay (--replay-draw), then "
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
     replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
                                   help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
                                        "stays pending until `row stage replay` (CPU) replays the bundle; slim = a slim bundle")
+    replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
+                              help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
+                                   "stratified by family (each family at least once, the rest split evenly)")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")
