@@ -298,11 +298,6 @@ def b3s_template_len(schema: str) -> int:
     return 31 + len(schema.encode())
 
 
-def b3s_levels(rb: int) -> int:
-    """The segment tree's levels over a value of rb bytes (an odd last node promoted, so ⌈log2 segments⌉)."""
-    return depth(cdiv(rb, B3S_SEG))
-
-
 def rows_w_words(rb: int) -> int:
     """hash_sm120.cuh's shared words per warp of hash_rows_w for rows of rb bytes."""
     return 8 * ((64 + rb + 1023) // 1024)
@@ -335,8 +330,8 @@ class Pipeline:
 
     `hashing` is the trees' format, the message digests and tile leaves being the same in both: -h1 (frame-b3, a row leaf
     through BLAKE3's chunk tree, hash_rows_w) or -h2 (frame-b3s: a row leaf is a tree over its 256-byte segments,
-    hash_rows_b3s, under segment level keys b3s_level_keys writes once per domain, step `seg_keys_<tree>`; the tile tree's
-    leaves hash_leaves_b3s).  Pads, node keys and every level above the leaves are frame-b3's in both.
+    hash_rows_b3s, which derives the segment tree's level keys in each CTA; the tile tree's leaves hash_leaves_b3s).  Pads,
+    node keys and every level above the leaves are frame-b3's in both.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
@@ -409,7 +404,6 @@ class Pipeline:
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
             "line_a": 32, "seed_a": 32, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
-            **{f"skeys_{t}": 32 * max(b3s_levels(4 * k), 1) for t in ("a", "b")},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
         }
@@ -442,13 +436,6 @@ class Pipeline:
                                                              p=(b[f"keys_{tag}"], self.keys[dom]), i=(depth(count),))))
         return out
 
-    def seg_setup(self, tag: str, dom: str) -> list[tuple[str, object]]:
-        """-h2's segment level keys of a row tree (b3s_level_keys): its domain's alone, so once per unit; none under -h1."""
-        if self.hashing != "h2":
-            return []
-        d, b, levels = self.dev, self.b, b3s_levels(self.row_bytes)
-        return [(f"seg_keys_{tag}", lambda: d.launch("b3s_level_keys", 1, 32, p=(b[f"skeys_{tag}"], self.keys[dom]), i=(levels,)))]
-
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree over `count` FP32 rows of x, then its levels: -h1 hash_sm120.cuh's hash_rows_w (a warp a row), -h2
         hash_h2.cuh's hash_rows_b3s (a CTA a row, a thread a segment)."""
@@ -456,7 +443,7 @@ class Pipeline:
         if self.hashing == "h2":
             threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
             leaves = lambda: d.launch("hash_rows_b3s", count, threads,  # noqa: E731
-                                      p=(b[x], b[f"tree_{tag}"], self.keys[dom], b[f"skeys_{tag}"], self.keys["t_row"]),
+                                      p=(b[x], b[f"tree_{tag}"], self.keys[dom], 0, self.keys["t_row"]),
                                       i=(count, rb, 0, b3s_template_len(ROW_SCHEMA)))
         else:
             smem = 4 * ROWS_WARPS * rows_w_words(rb)
@@ -571,8 +558,8 @@ class Pipeline:
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", chain["gemm_pearlc_b" if self.fused else "gemm_pearlc_cu"])]
         mr, kk, tiles = self.m_real, self.keys, self.tiles
-        epoch = self.tree_setup("b", n, "dom_b") + self.seg_setup("b", "dom_b") + self.row_tree("b", "xb", n, "dom_b")
-        unit = self.tree_setup("a", mr, "dom_a") + self.seg_setup("a", "dom_a") + self.tree_setup("t", tiles, "dom_t")
+        epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
+        unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
         commit = self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
         hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + [

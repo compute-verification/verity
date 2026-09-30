@@ -119,9 +119,10 @@ def buffer(data: bytes | int):
 
 
 def launch(kernel: str, grid: int, block: int, ptrs, ints, smem: int = 0) -> None:
+    """`ptrs` are host buffers, or None for a null pointer."""
     a = Args()
     for j, p in enumerate(ptrs):
-        a.p[j] = C.addressof(p)
+        a.p[j] = 0 if p is None else C.addressof(p)
     for j, v in enumerate(ints):
         a.i[j] = v
     getattr(build(), f"run_{kernel}")(C.byref(a), grid, block, smem)

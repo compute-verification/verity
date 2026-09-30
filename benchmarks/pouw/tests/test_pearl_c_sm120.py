@@ -263,7 +263,7 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 #: the -h1 kernels (#449's hash.cuh and hash_sm120.cuh) the pipeline launches at the dry run's shapes: no pads (every count a
 #: power of two) and no level wider than hash_tree_small's; and -h2's (hash_h2.cuh) in place of the leaves'
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
-H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s"}
+H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"hash_rows_b3s", "hash_leaves_b3s"}
 
 
 def form_kernels() -> list[str]:
@@ -338,7 +338,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name == "b3s_level_keys":
         return {0: 32 * i[0], 1: 32}
     if name == "hash_rows_b3s":
-        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64}
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(1, (max(-(-i[1] // 256), 1) - 1).bit_length()), 4: 64}
     if name == "hash_leaves_b3s":
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 64}
     if name == "hash_node_keys":
@@ -464,7 +464,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
             timed = timed or ev["name"] == "gen_f32"
             if timed:
                 seen.add(ev["name"])
-    assert H2_LAUNCHED | {"hash_pad"} <= seen and not seen & {"hash_rows_w", "hash_tree_leaves"}
+    assert H2_LAUNCHED | {"hash_pad"} <= seen and not seen & {"hash_rows_w", "hash_tree_leaves", "b3s_level_keys"}
 
 
 def room(allocs: dict[int, int], ptr: int) -> int:
@@ -492,7 +492,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            if not p[slot] and (name, slot) == ("seed_line_a", 3):
+            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("hash_rows_b3s", 3)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
