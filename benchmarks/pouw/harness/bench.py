@@ -33,6 +33,7 @@ import random
 import signal
 import statistics
 import sys
+import time
 import traceback
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -161,11 +162,24 @@ def bad_throttle(sample: dict) -> int:
     return int(sample.get("throttle", "0x0"), 16) & sum(BAD_THROTTLE)
 
 
-class Bench:
-    """The run's gates, negative controls and timings. `require` stands before every timed item."""
+class Stages:
+    """A shape's host seconds by stage: each `mark(name)` is the time since the last (`clock` is the Bench's)."""
 
-    def __init__(self, dev, sensors, reps: int, methods: tuple[str, ...], log=None):
-        self.dev, self.timer, self.ledger = dev, Timer(dev, sensors), S.GateLedger()
+    def __init__(self, clock):
+        self.clock, self.t, self.wall_s = clock, clock(), {}
+
+    def mark(self, name: str) -> None:
+        t = self.clock()
+        self.wall_s[name] = self.wall_s.get(name, 0.0) + t - self.t
+        self.t = t
+
+
+class Bench:
+    """The run's gates, negative controls and timings. `require` stands before every timed item. `clock` (seconds) times
+    the host's part of each gate, control and stage (`wall_s`), where a lease can sit idle."""
+
+    def __init__(self, dev, sensors, reps: int, methods: tuple[str, ...], log=None, clock=time.monotonic):
+        self.dev, self.timer, self.ledger, self.clock = dev, Timer(dev, sensors), S.GateLedger(), clock
         self.reps, self.methods, self.log = reps, tuple(methods), log or (lambda s: None)
         self.negatives: list[dict] = []
         self.dropped: list[dict] = []
@@ -178,24 +192,27 @@ class Bench:
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
+        t0 = self.clock()
         try:
             ok, detail = fn()
         except S.GateError:
             raise
         except Exception as ex:  # noqa: BLE001 - a crashing gate is a failed gate, recorded with its error
             ok, detail = False, {"error": f"{type(ex).__name__}: {ex}"}
-        self.ledger.record(key, ok, detail)
+        self.ledger.record(key, ok, detail, wall_s=self.clock() - t0)
         self.log(f"gate {'pass' if ok else 'FAIL'} {'/'.join(map(str, key))}")
         return ok
 
     def negative(self, key: tuple, fn) -> None:
         """A known-bad variant (`fn() -> (ok, detail)`): its gate must reject it, or the run stops."""
+        t0 = self.clock()
         try:
             ok, detail = fn()
         except Exception as ex:  # noqa: BLE001 - a control that can't run shows nothing; the run stops
-            self.negatives.append({"key": list(key), "rejected": None, "error": f"{type(ex).__name__}: {ex}"})
+            self.negatives.append({"key": list(key), "rejected": None, "error": f"{type(ex).__name__}: {ex}",
+                                   "wall_s": self.clock() - t0})
             raise NegativeControlFailed(f"{'/'.join(map(str, key))} couldn't run: {ex}") from ex
-        self.negatives.append({"key": list(key), "rejected": not ok, "detail": detail})
+        self.negatives.append({"key": list(key), "rejected": not ok, "detail": detail, "wall_s": self.clock() - t0})
         self.log(f"negative control {'rejected' if not ok else 'PASSED'} {'/'.join(map(str, key))}")
         if ok:
             raise NegativeControlFailed(f"{'/'.join(map(str, key))} passed its gate")
@@ -718,11 +735,13 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     if plan["memory_bytes"] > MEMORY_SHARE * free_bytes:
         row["skipped"] = f"operands need {plan['memory_bytes']} bytes; {free_bytes} free"
         return row
+    st = Stages(bench.clock)
     sf: dict[str, tuple[int, int]] = {}
     for f in alloc:
         ok, _ = B.cutlass_candidates(dev, f, shape, kernels)
         sf[f.name] = (max([c.sf_bytes[0] for c in ok], default=0), max([c.sf_bytes[1] for c in ok], default=0))
     so = B.allocate(dev, shape, alloc, plan["sets"], args.seed, sf, extra)
+    st.mark("operands")
     entries: list[Entry] = []
     gated: dict = {}
     unchained: dict = {}
@@ -730,14 +749,17 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed,
                                frozenset(getattr(args, "lt_enumerate", None) or ()), lt_pick(args),
                                frozenset(getattr(args, "cutlass_sched", None) or ()))
+        st.mark("baseline_gates")
         arm_ents, arm_sets = [], {}
         for a in arms:
             arm_sets[a.name] = arm_operand_sets(dev, a, so)
             arm_ents += arm_entries(bench, dev, a, shape, arm_sets[a.name], first)
+        st.mark("arm_gates")
         entries = tune_baselines(bench, dev, shape, fams, so, gated, lt_ws, plan["burst"], args.tune_reps, args.finalists,
                                  getattr(args, "screen_keep", SCREEN_KEEP))
         entries += bench.capture(arm_ents, plan["burst"])
         free_entries(bench, [e for e in arm_ents if e not in entries])
+        st.mark("tune")
         if chained(args, shape):
             chains, unchained = chain_entries(bench, dev, shape, entries, arms, arm_sets, plan["sets"], not bench.chained)
             bench.chained = True
@@ -747,19 +769,25 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
                     e.chain.release()
             entries += kept
             row["decode_method"] = "dependent-chain"
+            st.mark("chain_gates")
         if bench.sass is not None:
             bench.sass.check(bench.sass.discover(), "mapped")
+        st.mark("sass_gate")
         warm = bench.warmup(entries, plan["burst"], B.hash_seed(f"{args.seed}/{shape.label}/warmup"),
                             1e3 * getattr(args, "warmup_s", WARMUP_MS / 1e3),
                             1e3 * getattr(args, "warmup_max_s", WARMUP_MAX_MS / 1e3))
         row["warmup"] = {k: v for k, v in warm.items() if k != "per_call"}
         row["sizing"] = bench.equalize(entries, warm["per_call"], plan["burst"], getattr(args, "item_ms", ITEM_MS))
+        st.mark("warmup")
         order_seed = B.hash_seed(f"{args.seed}/{shape.label}/order")
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
+        st.mark("timed")
         row["summary"] = summarize(per, bench.items)
         row.update(shape_report(shape, fams, arms, entries, per, bench, unchained))
+        st.mark("report")
     finally:
+        row["wall_s"] = st.wall_s
         free_entries(bench, entries)
         for g in gated.values():
             B.release_plans(dev, g["all"])

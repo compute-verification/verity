@@ -196,7 +196,34 @@ def opsets(dev, n=3):
 
 def bench(reps=S.MIN_REPS, methods=H.METHODS):
     dev = FakeDevice()
-    return H.Bench(dev, FakeSensors(), reps, methods), dev
+    return H.Bench(dev, FakeSensors(), reps, methods, clock=lambda: dev.t / 1e3), dev
+
+
+def test_the_host_seconds_of_each_gate_control_and_stage_are_recorded_where_a_lease_can_sit_idle():
+    b, dev = bench()
+
+    def costs(ms, ok=True):
+        def run():
+            dev.t += ms
+            return ok, {"x": 1}
+        return run
+
+    key = ("arm", "s", "a", "hash")
+    assert b.gate(key, costs(1500.0)) and b.ledger.records[key] == {"ok": True, "detail": {"x": 1}, "wall_s": 1.5}
+    assert b.gate(key, costs(500.0)) and b.ledger.records[key]["wall_s"] == pytest.approx(2.0)
+    b.negative(("known-bad", "s", "a", "flip"), costs(250.0, ok=False))
+    assert b.negatives[-1]["rejected"] and b.negatives[-1]["wall_s"] == pytest.approx(0.25)
+    with pytest.raises(H.NegativeControlFailed):
+        b.negative(("known-bad", "s", "a", "raise"), lambda: (dev.__setattr__("t", dev.t + 100.0), 1 / 0))
+    assert b.negatives[-1]["rejected"] is None and b.negatives[-1]["wall_s"] == pytest.approx(0.1)
+    st = H.Stages(b.clock)
+    dev.t += 3000.0
+    st.mark("operands")
+    dev.t += 7000.0
+    st.mark("arm_gates")
+    dev.t += 1000.0
+    st.mark("arm_gates")
+    assert st.wall_s == pytest.approx({"operands": 3.0, "arm_gates": 8.0})
 
 
 def entry(dev, key, ms, sets=3):
