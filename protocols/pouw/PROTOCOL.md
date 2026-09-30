@@ -243,5 +243,6 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
-  are gated by these vectors when they land. Pearl-C's H100 kernel is `benchmarks/pouw/pearl_c/`.
+  are gated by these vectors when they land. Pearl-C's H100 kernel is `benchmarks/pouw/pearl_c/`, its sm_120 kernel
+  `benchmarks/pouw/pearl_c_sm120/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
