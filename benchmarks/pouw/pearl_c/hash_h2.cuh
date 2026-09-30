@@ -143,3 +143,25 @@ extern "C" __global__ void __launch_bounds__(128) hash_leaves_b3s(const Args a) 
   b3s_segment(reinterpret_cast<const uint8_t*>(a.p[0]) + t * L, L, 0, key, (L % 16 == 0) && ((a.p[0] & 15) == 0), h);
   store_cv(a.p[1] + t * 32, h);
 }
+
+// Seeds: -h3's row seeds and a unit's seed_A, each the standard keyed BLAKE3 under the seed-A label's key (p2,
+// blake3("pearl-c/v0/seed-A")) of salt ‖ root ‖ root_B ‖ u64 LE ι (104 bytes: two blocks).  i2 = 1: row r of i0 rows, root its
+// leaf (p0 + 32 r) and ι = i1 · 2^32 + r (`pearl_c.row_seed`, the one-row unit's seed_A); i2 = 0: the unit's, root p0 and
+// ι = i1 (`pearl_c.unit_seed_a`).  p0 leaves or the root, p1 out (32 B a seed), p2 the key, p3 salt, p4 root_B; i0 rows,
+// i1 the unit index, i2 the mode
+extern "C" __global__ void __launch_bounds__(128) b3_seeds(const Args a) {
+  const uint64_t r = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (r >= (uint64_t)a.i[0]) return;
+  uint32_t key[8], m[16], cv[8];
+  load_key(a.p[2], key);
+  load_key(a.p[3], m);
+  load_key(a.p[0] + 32 * r, m + 8);
+  b3c(key, m, 0, 64, B3_KEYED | B3_START, cv);
+  const uint64_t iota = a.i[2] ? ((uint64_t)(uint32_t)a.i[1] << 32 | r) : (uint64_t)(uint32_t)a.i[1];
+  uint32_t m2[16] = {0};
+  load_key(a.p[4], m2);
+  m2[8] = (uint32_t)iota;
+  m2[9] = (uint32_t)(iota >> 32);
+  b3c(cv, m2, 0, 40, B3_KEYED | B3_END | B3_ROOT, cv);
+  store_cv(a.p[1] + 32 * r, cv);
+}

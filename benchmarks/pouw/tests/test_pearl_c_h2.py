@@ -140,3 +140,29 @@ def test_kernel_keys_follow_the_domain():
         assert [got[32 * r:32 * r + 32] for r in range(3)] == [d.leaf(r, r, ROW, rows[1300 * r:1300 * (r + 1)]) for r in range(3)]
         outs.add(got)
     assert len(outs) == 3
+
+
+def test_seed_kernel_is_the_schemes_row_and_unit_seeds():
+    """b3_seeds: in mode 1 each row's seed is `pearl_c.row_seed` (the one-row unit's seed_A over the row's frame-b3s leaf in
+    its unit's A tree, index·2^32 + row), in mode 0 the unit's `unit_seed_a` over its root; the kernel only ever sees the
+    leaves, so the leaves come from the kernels too."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "protocols" / "pouw"))
+    from verity.commitments.blake3 import blake3
+    from verity_pouw.protocol import Context, Matmul, Shape
+    from verity_pouw.schemes import pearl_c as PC
+
+    m, rb, index = 8, 1024, 5
+    salt, root_b = hashlib.sha256(b"seed salt").digest(), hashlib.sha256(b"seed root_B").digest()
+    ctx = Context(salt, Matmul(index, Shape(m, rb // 4, 64), 0), bytes(32), root_b)
+    dom = PC.activation_domain(ctx, "h3")
+    rows = data("seed rows", m * rb)
+    leaves = rows_b3s(rows, m, rb, dom)
+    key = T.buffer(blake3(b"pearl-c/v0/seed-A"))
+    out = T.buffer(32 * m)
+    T.launch("b3_seeds", 1, 128, [T.buffer(leaves), out, key, T.buffer(salt), T.buffer(root_b)], [m, index, 1])
+    assert [out.raw[32 * r:32 * r + 32] for r in range(m)] == [PC.row_seed(ctx, r, rows[r * rb:(r + 1) * rb]) for r in range(m)]
+    root = hashlib.sha256(b"a root").digest()
+    one = T.buffer(32)
+    T.launch("b3_seeds", 1, 128, [T.buffer(root), one, key, T.buffer(salt), T.buffer(root_b)], [1, index, 0])
+    assert one.raw == PC.unit_seed_a(salt, root, root_b, index)

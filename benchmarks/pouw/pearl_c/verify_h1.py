@@ -7,7 +7,9 @@ Standard library only. For each transcript:
 - A's commitment: `verity.commitments`' `MerkleTree` over the transcript's rows (frame-b3 under -h1, frame-b3s under -h2),
   under the domain its header names (binding, owner, the row count): every level of it (`tree_levels`) against the tree the
   kernels wrote.  A header with ``a_rows_tag`` (prefill's A) carries no rows: row r is SHAKE128 of the tag with r filled in,
-  regenerated here, its leaves computed by J processes;
+  regenerated here, its leaves computed by J processes.  A header whose A names a seed (salt, root_B, unit index) must
+  have the audit's activation domain for them; then a ``row_seeds`` section (-h3) is every row's `pearl_c.row_seed`
+  and a ``unit_seed`` section (-h2 with its seed) is `pearl_c.unit_seed_a` over A's root;
 - when the transcript has the post-GEMM hashing: every (row, 32-column chunk) message digest (`pearl_c.message_digest`), every
   tile leaf (`pearl_c.leaf` over the tile's `Checked` C~ and U words) and every level of the tile tree (the format's tree
   over the leaves, schema `verity/pouw/tile/v1`), against the kernels'.
@@ -31,10 +33,12 @@ from pathlib import Path
 
 from verity.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.commitments.merkle import tree_levels
+from verity_pouw.audit import activation_binding
+from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c
 
 ROW, TILE = "verity/pouw/row/v1", "verity/pouw/tile/v1"
-TREE_HASH = {"h1": "blake3", "h2": "blake3-s256"}
+TREE_HASH = {"h1": "blake3", "h2": "blake3-s256", "h3": "blake3-s256"}
 
 
 def tagged_leaves(job: tuple) -> list[bytes]:
@@ -87,6 +91,23 @@ def verify(run: str, path: Path, jobs: int = 1) -> tuple[bool, str, str]:
     if p["a_tree"] != want or want[-32:] != root:
         return False, hashing, f"{run}:{path} sha256:{digest} A's commitment differs from the kernels' (every level checked)"
     notes.append(f"A root {root.hex()} ({m} rows of {rb} B" + (", regenerated from their tag)" if "a_rows_tag" in head else ")"))
+    seed = head["a"].get("seed")
+    if seed:
+        salt, root_b, index = bytes.fromhex(seed["salt"]), bytes.fromhex(seed["root_b"]), seed["index"]
+        if binding != activation_binding(salt, index) or owner != index:
+            return False, hashing, f"{run}:{path} sha256:{digest} A's domain is not the activation domain of its seed's unit"
+        if "row_seeds" in p:
+            ctx = Context(salt, Matmul(index, Shape(m, seed["k"], seed["n"]), 0), root, root_b)
+            for r in range(m):
+                if pearl_c.row_seed(ctx, r, p["a_rows"][r * rb:(r + 1) * rb]) != p["row_seeds"][32 * r:32 * r + 32]:
+                    return False, hashing, f"{run}:{path} sha256:{digest} row {r}'s seed differs"
+            notes.append(f"{m} row seeds (one-row units {index}·2^32 + r)")
+        if "unit_seed" in p:
+            if pearl_c.unit_seed_a(salt, root, root_b, index) != p["unit_seed"]:
+                return False, hashing, f"{run}:{path} sha256:{digest} the unit's seed_A differs"
+            notes.append("the unit's seed_A")
+    elif "row_seeds" in p or "unit_seed" in p:
+        return False, hashing, f"{run}:{path} sha256:{digest} seeds without their unit's salt, root_B and index"
     if "c" in p:
         per, tn = n // 32, n // 64
         cw = struct.unpack(f"<{m * n}I", p["c"])

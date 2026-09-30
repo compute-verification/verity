@@ -20,7 +20,13 @@ from verity.commitments.merkle import b3s_level_key
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "protocols" / "pouw"))
+from verity_pouw.audit import activation_binding  # noqa: E402
+from verity_pouw.protocol import Context, Matmul, Shape  # noqa: E402
+from verity_pouw.schemes import pearl_c as PC  # noqa: E402
 from verity_pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
+
+#: the decode chain's -h3 unit: a salt, root_B and unit index, so its A domain is the audit's activation domain
+H3_SALT, H3_ROOT_B, H3_INDEX = hashlib.sha256(b"h1_bench salt").digest(), hashlib.sha256(b"h1_bench root_B").digest(), 5
 
 ROW, TILE, M, N = "verity/pouw/row/v1", "verity/pouw/tile/v1", 32, 8192
 BINDING = bytes(range(32))
@@ -145,6 +151,20 @@ def h2_cases(tile: dict) -> dict:
                       .commitment.root.hex()}}
 
 
+def h3_case() -> dict:
+    """-h3 (P2's row seeds, `pearl_c.row_seed`): A's m = 32 FP32 gate rows under the -h3 unit's activation domain, their
+    row seeds, the tree's root and the unit's seed_A over it (-h2's), and the seed-A label's key."""
+    ctx = Context(H3_SALT, Matmul(H3_INDEX, Shape(M, N, N), 0), bytes(32), H3_ROOT_B)
+    d = PC.activation_domain(ctx, "h3")
+    a = shake("gate tree fp32", M * 4 * N)
+    rows = [a[r * 4 * N:(r + 1) * 4 * N] for r in range(M)]
+    root = MerkleTree(d, dict(enumerate(rows)), lambda _: ROW).commitment.root
+    seeds = b"".join(PC.row_seed(ctx, r, rows[r]) for r in range(M))
+    return {"domain": d.domain_id.hex(), "root": root.hex(), "seeds_sha256": hashlib.sha256(seeds).hexdigest(),
+            "unit_seed": PC.unit_seed_a(H3_SALT, root, H3_ROOT_B, H3_INDEX).hex(),
+            "seed_key": blake3.blake3(b"pearl-c/v0/seed-A").digest().hex()}
+
+
 def lat_chain_case(n: int = 512) -> dict:
     """lat_chain's last chaining value after n dependent keyed compressions (h1_bench's latency count), from
     `verity.commitments.blake3.compress`."""
@@ -166,6 +186,10 @@ def decode_domains() -> dict:
         binding = hashlib.sha256(tag).digest()
         d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash=h)
         out[name] = {"binding": binding.hex(), "owner": 0, "count": count, "hash": h, "domain": d.domain_id.hex()}
+    binding = activation_binding(H3_SALT, H3_INDEX)
+    d = CommitmentDomain(binding, H3_INDEX, RangeIndexedDomain(M), hash="blake3-s256")
+    out["a3"] = {"binding": binding.hex(), "owner": H3_INDEX, "count": M, "hash": "blake3-s256", "domain": d.domain_id.hex(),
+                 "seed": {"salt": H3_SALT.hex(), "root_b": H3_ROOT_B.hex(), "index": H3_INDEX, "k": N, "n": N}}
     return out
 
 
@@ -174,7 +198,7 @@ def main() -> None:
     out = {"source": "frame-b3 (verity.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
-           "tiles": {"m32": tile}, "blk": blk, "seg": seg_cases(blk), "h2": h2_cases(tile), "lat_chain": lat_chain_case(),
+           "tiles": {"m32": tile}, "blk": blk, "seg": seg_cases(blk), "h2": h2_cases(tile), "h3": h3_case(), "lat_chain": lat_chain_case(),
            "decode": decode_domains()}
     Path(sys.argv[1]).write_text(json.dumps(out))
     print(f"{len(out['rows']['cases'])} row cases, {len(out['trees'])} trees, {len(out['tiles'])} tile case(s) -> {sys.argv[1]}")

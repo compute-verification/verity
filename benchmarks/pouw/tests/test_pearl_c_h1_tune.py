@@ -264,3 +264,54 @@ def test_the_segment_layout_prototype_is_keyed_blake3_over_segments(rb, s):
     out = T.buffer(64)
     T.launch("hash_rows_seg", 2, max(32, rb // s), [T.buffer(rows), out, T.buffer(key), T.buffer(b"".join(levels))], [2, rb, s])
     assert out.raw == segment_roots(rows, rb, s, key, levels)
+
+
+@pytest.mark.parametrize("section", ["row_seeds", "unit_seed"])
+def test_the_verifier_checks_h3_row_seeds_and_the_unit_seed(tmp_path, section):
+    """An A-only -h3 transcript (row seeds) or -h2 one with its unit's seed_A, made from the reference under the audit's
+    activation domain: accepted; rejected with a seed byte flipped, with the seed's unit index changed, under a domain that
+    isn't the activation domain, and with the seed but no salt, root_B or index in its header."""
+    import json as J
+
+    from verity.commitments.merkle import tree_levels
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "protocols" / "pouw"))
+    from verity_pouw.audit import activation_binding
+    from verity_pouw.protocol import Context, Matmul, Shape
+    from verity_pouw.schemes import pearl_c as PC
+
+    m, rb, index = 16, 1024, 5
+    salt, root_b = hashlib.sha256(b"v salt").digest(), hashlib.sha256(b"v root_B").digest()
+    rows = data("verify h3 rows", m * rb)
+    ctx = Context(salt, Matmul(index, Shape(m, 256, 64), 0), bytes(32), root_b)
+    d = PC.activation_domain(ctx, "h3")
+    levels = tree_levels(d, [d.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])
+    root = levels[-1][0]
+    seeds = (b"".join(PC.row_seed(ctx, r, rows[r * rb:(r + 1) * rb]) for r in range(m)) if section == "row_seeds"
+             else PC.unit_seed_a(salt, root, root_b, index))
+    fmt = "h3" if section == "row_seeds" else "h2"
+
+    def write(name, seed_bytes, a_extra=None, binding=None, with_seed=True):
+        a = {"binding": (binding or activation_binding(salt, index)).hex(), "owner": index, "count": m,
+             "domain": CommitmentDomain(binding or activation_binding(salt, index), index, RangeIndexedDomain(m),
+                                        hash="blake3-s256").domain_id.hex()}
+        if with_seed:
+            a["seed"] = {"salt": salt.hex(), "root_b": root_b.hex(), "index": index, "k": 256, "n": 64, **(a_extra or {})}
+        parts = [("a_rows", rows), ("a_tree", b"".join(b"".join(lv) for lv in levels)), (section, seed_bytes)]
+        if binding is not None:
+            dd = CommitmentDomain(binding, index, RangeIndexedDomain(m), hash="blake3-s256")
+            parts[1] = ("a_tree", b"".join(b"".join(lv) for lv in tree_levels(dd, [dd.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])))
+        head = {"run": "test", "arm": "reference", "m": m, "rb": rb, "n": 64, "hashing": fmt, "a": a,
+                "sections": [[k, len(v)] for k, v in parts]}
+        path = tmp_path / f"{name}.bin"
+        path.write_bytes(J.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts))
+        return verifier(path)
+
+    r = write("good", seeds)
+    assert r.returncode == 0 and r.stdout.startswith(f"{fmt} verifier accept:"), r.stdout + r.stderr
+    flipped = bytearray(seeds)
+    flipped[len(flipped) // 2] ^= 1
+    for name, args in (("flip", dict(seed_bytes=bytes(flipped))), ("index", dict(seed_bytes=seeds, a_extra={"index": 6})),
+                       ("domain", dict(seed_bytes=seeds, binding=hashlib.sha256(b"not the activation binding").digest())),
+                       ("bare", dict(seed_bytes=seeds, with_seed=False))):
+        r = write(name, **args)
+        assert r.returncode == 1 and r.stdout.startswith(f"{fmt} verifier reject:"), (name, r.stdout, r.stderr)

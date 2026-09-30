@@ -386,7 +386,24 @@ def gates(d: Bench, V: dict) -> dict:
     out["tiles"]["h2"] = {"rows": rows, "tiles": tiles, "root": ok}
     if not ok:
         bad.append("h2 tile tree root")
-    for p_ in (dom, sk, da, ka, ska, rp, tp, cp, up, dg, lv, ttp, dt2, tk2, *[t[0] for t in tmpl.values()]):
+    for p_ in (dom, sk, da, ka, ska, rp, tp, cp, up, dg, lv, ttp, dt2, tk2):
+        d.free(p_)
+    h3, a3 = V["h3"], V["decode"]["a3"]["seed"]
+    d3, k3, sk3 = d.put(bytes.fromhex(h3["domain"])), d.alloc(32 * 16), d.alloc(32 * 16)
+    skey, salt, rootb = (d.put(bytes.fromhex(x)) for x in (h3["seed_key"], a3["salt"], a3["root_b"]))
+    rp, tp, seeds, useed = d.put(shake("gate tree fp32", M * ROW_F32)), d.alloc(32 * 2 * M), d.alloc(32 * M), d.alloc(32)
+    d.go(None, "hash_node_keys", 1, 32, (k3, d3), (5,))
+    d.go(None, "b3s_level_keys", 1, 32, (sk3, d3), (10,))
+    launch_rows_h2(d, None, rp, tp, d3, sk3, tmpl[ROW], M, ROW_F32)
+    d.go(None, "b3_seeds", 1, 128, (tp, seeds, skey, salt, rootb), (M, a3["index"], 1))
+    d.go(None, "hash_tree_small", 1, M // 2, (tp, k3), (M,))
+    d.go(None, "b3_seeds", 1, 128, (tp + 32 * (2 * M - 2), useed, skey, salt, rootb), (1, a3["index"], 0))
+    d.sync()
+    checks = {"row seeds": hashlib.sha256(d.read(seeds, 32 * M)).hexdigest() == h3["seeds_sha256"],
+              "root": d.read(tp + 32 * (2 * M - 2), 32).hex() == h3["root"], "unit seed": d.read(useed, 32).hex() == h3["unit_seed"]}
+    out["trees"].update({f"h3 {k}": v for k, v in checks.items()})
+    bad += [f"h3 {k}" for k, v in checks.items() if not v]
+    for p_ in (d3, k3, sk3, skey, salt, rootb, rp, tp, seeds, useed, *[t[0] for t in tmpl.values()]):
         d.free(p_)
     lc, p = V["lat_chain"], d.alloc(64)
     for mode, threads, name in ((0, 1, "b3c"), (1, 4, "b3c4")):
@@ -459,6 +476,9 @@ def h2_rates(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict
     cp, up, dg = d.alloc(4 * m * n), d.alloc(4 * m * n), d.alloc(32 * m * (n // 32))
     tiles = (m // 64) * (n // 64)
     lv, tree = d.alloc(32 * tiles), d.alloc(32 * 2 * m)
+    seedp = d.alloc(32 * m)
+    skey, salt3, rootb3 = (d.put(bytes.fromhex(x)) for x in (V["h3"]["seed_key"], V["decode"]["a3"]["seed"]["salt"],
+                                                             V["decode"]["a3"]["seed"]["root_b"]))
 
     def a_tree_levels() -> None:
         off, w, lvl = 0, m, 0
@@ -471,7 +491,8 @@ def h2_rates(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict
              "A rows h2": lambda: launch_rows_h2(d, None, rp, op, dom2, sk2, tr, m, rb),
              "A tree levels (both formats)": a_tree_levels,
              "messages tuned (both formats)": lambda: d.go(None, "hash_msg_v", m * (n // 32) // 128, 128, (cp, up, dg, keys["k_msg"]), (m, n)),
-             "tile leaves tuned (both formats)": lambda: d.go(None, "hash_leaf_p", tiles // 32, 128, (dg, lv, keys["k_leaf"]), (m, n))}
+             "tile leaves tuned (both formats)": lambda: d.go(None, "hash_leaf_p", tiles // 32, 128, (dg, lv, keys["k_leaf"]), (m, n)),
+             "row seeds h3 (8,192 rows)": lambda: d.go(None, "b3_seeds", m // 128, 128, (op, seedp, skey, salt3, rootb3), (m, 5, 1))}
     for body in forms.values():
         body()
     d.sync()
@@ -502,7 +523,7 @@ def h2_rates(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict
         path = os.path.join(tdir, "prefill-A-h2.bin")
         open(path, "wb").write(blob)
         out["transcript"] = {"path": path, "sha256": hashlib.sha256(blob).hexdigest()}
-    for p in (fl, sink, rp, op, dom1, dom2, sk2, k2, tr[0], *keys.values(), cp, up, dg, lv, tree):
+    for p in (fl, sink, rp, op, dom1, dom2, sk2, k2, tr[0], *keys.values(), cp, up, dg, lv, tree, seedp, skey, salt3, rootb3):
         d.free(p)
     return out
 
@@ -585,6 +606,10 @@ ARMS = [
     ("h2, deferred side stream, priorities", ROW_F32, "h2", "deferred"),
     ("P2 prototype: h2 A alone, tree on its own stream, priorities", ROW_F32, "h2p2", "none"),
     ("P2 prototype: h2, tree on its own stream, deferred side stream, priorities", ROW_F32, "h2p2", "deferred"),
+    ("h2 A alone, with its seed", ROW_F32, "h2s", "none"),
+    ("h2 with its seed, deferred side stream, priorities", ROW_F32, "h2s", "deferred"),
+    ("h3 A alone, tree on its own stream, priorities", ROW_F32, "h3", "none"),
+    ("h3, deferred side stream, priorities", ROW_F32, "h3", "deferred"),
 ]
 
 
@@ -600,7 +625,11 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
            "h2": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, keys precomputed, side stream, priorities",
                   "h2 A alone", "h2, side stream, priorities", "h2, deferred side stream, priorities",
                   "P2 prototype: h2 A alone, tree on its own stream, priorities",
-                  "P2 prototype: h2, tree on its own stream, deferred side stream, priorities"]}
+                  "P2 prototype: h2, tree on its own stream, deferred side stream, priorities"],
+           "h3": ["plain fp32 rows", "h1 tuned, keys precomputed, side stream, priorities", "h2 A alone",
+                  "h2, deferred side stream, priorities", "h2 A alone, with its seed",
+                  "h2 with its seed, deferred side stream, priorities", "h3 A alone, tree on its own stream, priorities",
+                  "h3, deferred side stream, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -640,6 +669,10 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
     h2d = {kk: d.put(bytes.fromhex(V["decode"][kk]["domain"])) for kk in ("a2", "t2")}
     a2_keys, a2_skeys, t2_keys = d.alloc(32 * 16), d.alloc(32 * 16), d.alloc(32 * 16)
     tmpl = {sch: (d.put(t[0]), t[1]) for sch, t in ((ROW, b3s_template(ROW)), (TILE, b3s_template(TILE)))}
+    a3 = V["decode"]["a3"]
+    dom_a3, a3_keys, a3_skeys = d.put(bytes.fromhex(a3["domain"])), d.alloc(32 * 16), d.alloc(32 * 16)
+    skey, salt3, rootb3 = (d.put(bytes.fromhex(x)) for x in (V["h3"]["seed_key"], a3["seed"]["salt"], a3["seed"]["root_b"]))
+    seeds, useed = d.alloc(32 * m), d.alloc(32)
     w = [d.put(shake(f"weights {s}", n * k)) for s in range(WSETS)]
     y = d.alloc(2 * m * n)
     rows = {rb: d.alloc(m * rb) for rb in (ROW_F32, ROW_BF16)}
@@ -666,6 +699,10 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
         elif amode == "h2":
             launch_rows_h2(d, s, rows[rb], a_tree, h2d["a2"], a2_skeys, tmpl[ROW], m, rb)
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a2_keys), (m,))
+        elif amode == "h2s":                                 # -h2 and its unit's seed_A over the root, as forming needs
+            launch_rows_h2(d, s, rows[rb], a_tree, dom_a3, a3_skeys, tmpl[ROW], m, rb)
+            d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a3_keys), (m,))
+            d.go(s, "b3_seeds", 1, 128, (a_tree + 32 * (2 * m - 2), useed, skey, salt3, rootb3), (1, a3["seed"]["index"], 0))
 
     def tiles_on(s, sl: dict, h2: bool) -> None:
         if h2:
@@ -696,6 +733,14 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                 d.wait(s2, d.event(s1))
                 commit_a(s2, amode, rb)
                 st["a_done"] = d.event(s2)
+            elif amode == "h3":                              # -h3: the GEMM waits for the row leaves and their seeds only
+                if st.get("tree_done") is not None:
+                    d.wait(s1, st.pop("tree_done"))
+                launch_rows_h2(d, s1, rows[rb], a_tree, dom_a3, a3_skeys, tmpl[ROW], m, rb)
+                d.go(s1, "b3_seeds", 1, 128, (a_tree, seeds, skey, salt3, rootb3), (m, a3["seed"]["index"], 1))
+                d.wait(d.h3, d.event(s1))
+                d.go(d.h3, "hash_tree_small", 1, max(1, m // 2), (a_tree, a3_keys), (m,))
+                st["tree_done"] = d.event(d.h3)
             elif amode == "h2p2":                            # P2: the GEMM waits for the row leaves only, the tree beside it
                 if st.get("tree_done") is not None:
                     d.wait(s1, st.pop("tree_done"))
@@ -717,7 +762,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
         d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], a_in, sl["c"], sl["u"], y), (m, n, k))
         if post == "none":
             return
-        h2 = amode.startswith("h2")
+        h2 = amode.startswith(("h2", "h3"))
         if post == "deferred":
             st["pending"] = (sl, h2)
             return
@@ -755,6 +800,8 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
     d.go(None, "hash_node_keys", 1, 32, (a2_keys, h2d["a2"]), (depth,))  # -h2's tables: A's tree, its segment trees, the tiles'
     d.go(None, "b3s_level_keys", 1, 32, (a2_skeys, h2d["a2"]), (9,))
     d.go(None, "hash_node_keys", 1, 32, (t2_keys, h2d["t2"]), (7,))
+    d.go(None, "hash_node_keys", 1, 32, (a3_keys, dom_a3), (depth,))
+    d.go(None, "b3s_level_keys", 1, 32, (a3_skeys, dom_a3), (9,))
     d.sync()
     for ge in graphs.values():                               # warm every graph once
         d.replay_ms(ge, 1)
@@ -784,9 +831,14 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             if post != "none":
                 parts += [("c", d.read(sl["c"], 4 * m * n)), ("u", d.read(sl["u"], 4 * m * n)), ("digests", d.read(sl["dg"], 32 * m * per)),
                           ("leaves", d.read(sl["lv"], 32 * tiles)), ("tile_tree", d.read(sl["tree"], 32 * (2 * tiles - 1)))]
-            h2 = amode.startswith("h2")
-            head = {"run": run, "arm": name, "m": m, "rb": rb, "n": n, "hashing": "h2" if h2 else "h1",
-                    "a": V["decode"]["a2" if h2 else "a"], "t": V["decode"]["t2" if h2 else "t"],
+            h2 = amode.startswith(("h2", "h3"))
+            if amode == "h3":
+                parts.append(("row_seeds", d.read(seeds, 32 * m)))
+            elif amode == "h2s":
+                parts.append(("unit_seed", d.read(useed, 32)))
+            fmt = "h3" if amode == "h3" else "h2" if h2 else "h1"
+            head = {"run": run, "arm": name, "m": m, "rb": rb, "n": n, "hashing": fmt,
+                    "a": a3 if amode in ("h2s", "h3") else V["decode"]["a2" if h2 else "a"], "t": V["decode"]["t2" if h2 else "t"],
                     "sections": [[k, len(v)] for k, v in parts]}
             blob = json.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts)
             path = os.path.join(tdir, slug(name) + ".bin")
@@ -810,7 +862,8 @@ def main() -> None:
     ap.add_argument("--transcripts", help="a directory for the verified decode arms' transcripts (verify_h1.py)")
     ap.add_argument("--preset", choices=["all", *PRESETS], default="all",
                     help="p1: only P1's prototype and its baselines (decode arms and prefill row rates), no latency probe; "
-                         "h2: format -h2, P2's prototype and their baselines, and prefill's -h2 A commitment as a transcript")
+                         "h2: format -h2, P2's prototype and their baselines, and prefill's -h2 A commitment as a transcript; "
+                         "h3: format -h3 (row seeds) against -h2 with its unit seed, and the same prefill")
     args = ap.parse_args()
     cubin, standin = open(args.cubin, "rb").read(), open(args.standin, "rb").read()
     d = Bench(cubin, standin)
@@ -832,7 +885,7 @@ def main() -> None:
         sys.exit(4)
     res["preset"] = args.preset
     res["rates"] = (seg_rates(d, nv, args.reps) if args.preset == "p1" else
-                    h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset == "h2" else rates(d, nv, args.reps))
+                    h2_rates(d, nv, args.reps, V, args.transcripts) if args.preset in ("h2", "h3") else rates(d, nv, args.reps))
     save()
     res["latency"] = latency(d) if args.preset == "all" else {}
     save()
