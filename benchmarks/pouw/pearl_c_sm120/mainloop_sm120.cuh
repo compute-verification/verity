@@ -197,7 +197,8 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
     }
     mma<false, false>(acc, total, fa[1], fb[1]);
   }
-  ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
+  // U: stages per K-loop iteration
+  template <int U = 1> ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
     const int KT = K / BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
 #pragma unroll
@@ -209,7 +210,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
     mbar_wait(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
     stage_body<true, false>(acc, total, fa, fb);
-#pragma unroll 1
+#pragma unroll U
     for (int kt = 1; kt < KT - 1; kt++) stage_body<false, false>(acc, total, fa, fb);
     stage_body<false, true>(acc, total, fa, fb);
 #pragma unroll
