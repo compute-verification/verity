@@ -2444,7 +2444,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         elif _epr_r["any_eos_stop"]:
                             print("[delta] WARNING: this tree's sampled_replay has no executed_prefix= (reqval R17-26/R17-27 not in the tree): the EOS-stopped "
                                   "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
-                        sr = _PWC.replayed(protocols, (_seed_src, _seed, _seed_chal), lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
+                        sr = _PWC.replayed(protocols, lambda: SR.sampled_replay(_progs, _bm, _rd, _wp, arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                                                seed_challenge=_seed_chal,
                                                max_evaluate=int(args.replay_max), weights_check=_wc, targets=list(getattr(args, "replay_target", None) or []),
                                                workers=getattr(args, "replay_workers", None), retention=_retention,
