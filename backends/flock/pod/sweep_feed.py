@@ -94,7 +94,7 @@ def write(item_id: str, item: dict) -> None:
 
 def item(row: str, sh: list[str], mode: str, i: int) -> dict:
     """The job for shapes i, i+1, ... (sh, their digests): each selftested whose index is a multiple of SELFTEST_EVERY."""
-    env, res = f"MODE={mode} ROW={row} SHAPES={','.join(sh)}", STAGE_RES if mode == "stage" else PROVE_RES
+    env, res = f"MODE={mode} ROW={row} SHAPES={','.join(sh)}" + (" PRUNE=1" if mode == "shape" else ""), STAGE_RES if mode == "stage" else PROVE_RES
     st = [s for j, s in enumerate(sh, i) if j % SELFTEST_EVERY == 0]
     if mode == "shape" and st:
         env, res = env + f" SELFTEST_SHAPES={','.join(st)} SELFTEST_GPU=1", SELFTEST_RES
@@ -224,11 +224,11 @@ def sampled(deps: list[tuple[str, str]], d: dict, w: set, ahead: int = 2) -> tup
     todo, st = [], {"deployments": len(deps), "staged": 0, "queued": 0, "done": 0, "failed": 0, "first": None}
     gate = None
     first_ended = False
-    staging = 0
+    staging = 0   # deployments on disk: staged or staging, their prove job not ended (50-60 GB each; PRUNE frees them)
     for j, (slug, ev) in enumerate(deps):
         t = f"a-{tag(slug)}"
         sid, pid = f"{t}-s", f"{t}-p"
-        if sid in w and sid not in d:
+        if sid in w and d.get(sid, {}).get("state", "succeeded") == "succeeded" and pid not in d:
             staging += 1
     for j, (slug, ev) in enumerate(deps):
         t = f"a-{tag(slug)}"
@@ -254,7 +254,7 @@ def sampled(deps: list[tuple[str, str]], d: dict, w: set, ahead: int = 2) -> tup
             todo.append((sid, shape_item(f"MODE=sampled-stage ROW={slug} EV={ev} JOBS=4", SAMPLED_STAGE_RES)))
             staging += 1
         elif d.get(sid, {}).get("state") == "succeeded" and pid not in w and not hold:
-            env = f"MODE=sampled ROW={slug} EV={ev} SUMMARY={SWEEP}/sampled/{slug}/summary.json FLOCK_KEEP_SESSIONS=3"
+            env = f"MODE=sampled ROW={slug} EV={ev} SUMMARY={SWEEP}/sampled/{slug}/summary.json FLOCK_KEEP_SESSIONS=3 PRUNE=1"
             if j == 0:
                 env += f" SELFTEST={SAMPLED_SELFTEST} SELFTEST_GPU=1"
             todo.append((pid, shape_item(env, SELFTEST_RES if j == 0 else PROVE_RES)))
@@ -282,7 +282,7 @@ def main() -> int:
             todo += t
         if a.deployments:
             deps = [tuple(ln.split("=", 1)) for ln in Path(a.deployments).read_text().splitlines() if "=" in ln]
-            t, out["a"] = sampled(deps, d, w, ahead=4)
+            t, out["a"] = sampled(deps, d, w, ahead=2)
             todo += t
         # (a) and (b) first; the shape sweep only fills in, one file a tick, while they have nothing to write
         if todo and a.cmd != "status" and clear_to_write():

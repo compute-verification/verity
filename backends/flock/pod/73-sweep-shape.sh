@@ -15,6 +15,7 @@
 #              the deployment's sampled units (sampled_units.py: its Commit's draw, reproduced and checked against the record), as their
 #              Call Definitions at their counts, into $SWEEP/sampled/$ROW/; staged, then proved with COVER=1: every unit, not one statement
 #   SUMMARY=<path> in any mode but cut: the job's statements, prove time and selftests as one JSON record
+#   PRUNE=1 in a proving mode: once it succeeded, its staged circuits are deleted from the run and from FLOCK_STAGE_CACHE
 # env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  SM=120  and 70-class-sweep.sh's (SELFTEST=0 here)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -116,6 +117,24 @@ s = {"run": os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "")), "mode": mo
      "gpu_cases": len(gpu), "gpu_cases_pass": sum(1 for c in gpu if c.get("pass") is True), "gpu_case_names": sorted({c.get("case") for c in gpu})}
 Path(dest).write_text(json.dumps(s, indent=1))
 print(json.dumps(s)[:800])
+EOF
+fi
+# PRUNE=1, after a proving job succeeded: its staged circuits (1-3 GB each; their digests are in the live records) leave the disk,
+# the run's copies and the FLOCK_STAGE_CACHE entries they are hardlinks of
+if [ "${PRUNE:-0}" = 1 ] && [ "${rc:-0}" = 0 ] && [ $MODE != stage ] && [ $MODE != sampled-stage ]; then
+  $(command -v python3) - $R/out "$FLOCK_STAGE_CACHE" <<'EOF'
+import shutil, sys
+from pathlib import Path
+out, cache = Path(sys.argv[1]), Path(sys.argv[2])
+staged = [f for f in out.glob("**/classes/*/*") if f.is_file() and (f.name == "circuit.txt" or f.name.endswith(".bin"))]
+inodes, freed = {f.stat().st_ino for f in staged}, 0
+for e in (cache.iterdir() if cache.is_dir() else []):
+    if (e / "circuit.txt").exists() and (e / "circuit.txt").stat().st_ino in inodes:
+        shutil.rmtree(e, ignore_errors=True)
+for f in staged:
+    freed += f.stat().st_size if f.stat().st_nlink == 1 else 0
+    f.unlink()
+print(f"PRUNE: {len(staged)} staged files removed, {freed / 1e9:.1f} GB freed")
 EOF
 fi
 exit ${rc:-0}
