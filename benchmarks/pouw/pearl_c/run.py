@@ -277,7 +277,7 @@ class Pipeline:
         job = [lines("eb", self.keys["line_b"], 1, 0, n, "eb_codes", "eb_tiled"),
                lines("fa", self.keys["line_b"], 0, 1, k, "fa_codes", "fa_tiled", b["faT32"]),
                lines("fb", self.keys["line_b"], 1, 1, k, "fb_codes", "fb_tiled", b["fbT32"], b["fbT128"]),
-               *form_side("b", n, "xb", "eb_codes", "eb_tiled", "fa_tiled", "bt"),
+               *form_side("b", n, "xb", "eb_codes", "eb_tiled", "fb_tiled", "bt"),
                ("bf", lambda: self.gemm("gemm_words", "bt", "faT32", n, 32, out=("bf",))),
                ("g", lambda: self.gemm("gemm_words", "fbT128", "faT32", 128, 32, out=("g",))),
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b[noise_b], b["beta_b"], b["bf"], b["g"], b["pb_t"]), i=(n, fl)))]
