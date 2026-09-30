@@ -8,7 +8,9 @@ neither `verity` nor `research` (`tests/test_boundaries.py`).
 On vy-nebius-2 the agent (`cluster agent`) runs beside today's tools. In shadow mode it observes `gpu-lease` through
 `nebius2` (owner lines, wait files and `preempted.log`, reading locks from their holders' `/proc/<pid>/fdinfo`, never
 through a lock), mirrors what it did into the ledger, and records what the planner would have done (`shadow.py`). In live
-mode it holds `/run/gpu-lease/agent.lock` and carries the plan out. `cluster shadow replay` runs the shadow over a day's
+mode it holds `/run/gpu-lease/agent.lock` and carries the plan out: it evicts by signal and grants by writing
+`grant.<pid>`, which `gpu-lease`'s agent mode (on `infra/nebius`, 49238797 in fixtures/) takes; a free `agent.lock` puts
+`gpu-lease` back on its own rules. `cluster shadow replay` runs the shadow over a day's
 copied logs, and `cluster shadow evaluate` is the pass bar. Node 1 has nothing yet: its executor under the one queue is
 kueue-fold's.
 
@@ -29,7 +31,8 @@ src/cluster/
 └── cli.py      cluster validate | plan | ledger … | agent | shadow replay | shadow evaluate
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
-                and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3)
+                and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
+                the agent-mode gpu-lease 49238797 held for deploy)
 ~~~
 
 ## The rules

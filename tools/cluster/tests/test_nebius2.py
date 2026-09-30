@@ -2,6 +2,7 @@
 live from the lock files (never through a lock) or from the node's sampler log."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import os
 import shutil
@@ -11,12 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from cluster import model, nebius2
+from cluster import agent, model, nebius2, shadow
 from cluster.ledger import epoch
 
 DESC = Path(__file__).parents[1] / "descriptions" / "nebius.toml"
 FIX = Path(__file__).parent / "fixtures"
 GPU_LEASE = FIX / "gpu-lease-0d172cf3"
+AGENT_GPU_LEASE = FIX / "gpu-lease-49238797"
 
 FILL = ("pid=448349 run=- who=fill:bc-2aa33ad8 uuid=GPU-af0b since=2026-09-30T08:15:12Z until=2026-09-30T08:40:12Z mem=193G "
         "preempt=1 scope=gpu-lease-448349 cmd=nice -n 19 taskset -c 96-127 bash /workspace/pouw/fill/running/x.sh a=b")
@@ -140,3 +142,43 @@ def test_a_lease_holding_its_gpu_with_wait_in_its_argv_is_an_allocation_and_only
             if p is not None:
                 p.terminate()
                 p.wait()
+
+
+@needs_flock
+def test_live_mode_grants_through_gpu_lease_agent_mode_and_observes_the_lease_it_granted(c, tmp_path):
+    """The agent-mode protocol end to end, against the gpu-lease held for deploy: the request's wait file is the planner's
+    job (max= as max_s), the agent's grant is the lease gpu-lease takes, and its next reading is that allocation."""
+    assert hashlib.sha256(AGENT_GPU_LEASE.read_bytes()).hexdigest().startswith("49238797233d96ec")
+    gl = tmp_path / "gl"
+    gl.mkdir()
+    lock = os.open(gl / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
+    env.update(GPU_LEASE_DIR=str(gl), GPU_LEASE_COUNT="8", GPU_LEASE_AGENT_POLL_S="0.05", RESEARCH_RUN_ID="r-test",
+               GPU_LEASE_WHO="bc-asker", GPU_LEASE_USAGE_LOG=str(tmp_path / "usage.jsonl"),
+               GPU_LEASE_UTIL_LOG=str(tmp_path / "util-*.jsonl"))
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    p = subprocess.Popen(["bash", str(AGENT_GPU_LEASE), "2", "--wait", "--max-min", "5", "--mem-gb", "0", "--", *pause], env=env,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        assert "from the node's agent, queued as wait." in p.stderr.readline()
+        obs = nebius2.read(0, gl)
+        [(j, _)] = nebius2.queue(c, obs)
+        assert (j.id, j.gpus, j.max_s, j.priority) == (f"gl-{p.pid}", 2, 300, "session")
+        t = j.submitted + 1
+        sh = shadow.Shadow(c, tmp_path / "out")
+        sh.step(nebius2.read(t, gl))
+        agent._carry_out(c, sh, obs, agent.Executor(gl), t)
+        granted = tuple(int(x) for x in (gl / f"grant.{p.pid}").read_text().split(","))
+        assert len(granted) == 2
+        assert p.stdout.readline().strip() == "ready"
+        obs = nebius2.read(t + 1, gl)
+        [a] = nebius2.allocations(c, obs)
+        assert a.job.id == j.id and a.gpus == granted and a.job.max_s == 300 and nebius2.queue(c, obs) == []
+        assert not (gl / f"grant.{p.pid}").exists()
+        sh.step(obs)
+        assert sh.state.allocations[a.id].gpus == granted
+    finally:
+        p.terminate()
+        p.wait()
+        os.close(lock)

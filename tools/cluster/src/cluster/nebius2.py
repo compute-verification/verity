@@ -155,7 +155,7 @@ def job_of(cluster: Cluster, f: dict[str, str], gpus: int, gpu_ids: tuple[int, .
     until = epoch(f["until"]) if f.get("until") else None
     timed = f.get("timed") == "1" or whole_node
     pre = f.get("preempt") == "1" and not timed
-    max_s = until - since if until is not None else None
+    max_s = until - since if until is not None else 60 * int(f["max"]) if f.get("max", "").isdigit() else None
     mem = f.get("mem", "")
     return Job(id=f"gl-{f['pid']}", project=f.get("project", cluster.nodes[node].owner), submitter=f.get("who", "-"),
                priority="timed" if timed else "fill" if pre else "session",
