@@ -43,7 +43,7 @@ if [[ -z "${PH_NO_CUTLASS:-}" ]]; then
 fi
 
 ARCH=(-gencode arch=compute_120a,code=sm_120a)
-FLAGS=(-O3 -std=c++17 "${ARCH[@]}" -Xcompiler -fPIC --expt-relaxed-constexpr -lineinfo)
+FLAGS=(-O3 -std=c++17 "${ARCH[@]}" -Xcompiler -fPIC --expt-relaxed-constexpr)  # ptxas gets -arch sm_120a -m 64, as pinned
 CUT=(-I"$CUTLASS_DIR/include" -I"$CUTLASS_DIR/tools/util/include" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
 
 rm -f "$OUT"/*.o "$OUT/libpouw_harness.so" "$OUT/libpouw_lt2.so" "$OUT/build.json"
