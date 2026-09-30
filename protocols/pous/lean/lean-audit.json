@@ -397,14 +397,14 @@
  },
  "reads": {
   "Pous.Accounting.Numbers": {
-   "digest": "e802c685f5ab6bb824b25ff883d46174",
+   "digest": "4a9ba0f9daf4ff259b46f9ce4de57b0d14c6d1be5ed662336e1fdce95060ff5e",
    "definitions": {
     "Pous.Accounting.reportP₀": "e802c685f5ab6bb8"
    },
    "pins": ["Pous.Accounting.p₀_at_report", "Pous.Accounting.report_k214"]
   },
   "Pous.Accounting.Params": {
-   "digest": "422c42d8777c2813f0539d327e921aa5",
+   "digest": "3025397501097eb80df29aafc3d3a90aec29bc6b84ec18299a267ee321d8e119",
    "definitions": {
     "Pous.Meets": "f0df90d41028230a",
     "Pous.Params.expansion": "a0dd1ff06cebe85a",
@@ -428,14 +428,14 @@
    ]
   },
   "Pous.Assumptions": {
-   "digest": "d2b41d7a6687c022dc93f70bbc48905d",
+   "digest": "1edc556cf555d2b26a67ad7b996be320b0d469e3e83b63f98ce9937348cb9611",
    "definitions": {
     "Pous.Assumptions.LemmaA": "d2b41d7a6687c022"
    },
    "pins": ["PousProofs.A3Prime", "PousProofs.A3PrimeLam"]
   },
   "Pous.Game.Oracle": {
-   "digest": "502e0f64627a906f03120f72a5b80d13",
+   "digest": "9bdb2af7bf2df8d71a3ad0d8c90a47930ea07c8d0cc42183a1bde3180f3f438c",
    "definitions": {
     "Pous.IdealModel": "0d994494fe5a5d64",
     "Pous.IdealModel.Ans": "54fb3940cf556f99",
@@ -496,7 +496,7 @@
    ]
   },
   "Pous.Game.Prob": {
-   "digest": "847dff32577d5175eb4f0ca7e676cb80",
+   "digest": "99c60b9c0a79cc25d90f2993c5ce4afe2bcebe5ee6d9c2cbed716188d28b3e91",
    "definitions": {
     "Pous.Bits": "1697837f97bdb8cb",
     "Pous.pr": "b8ad6159fbd1ff9a"
@@ -545,7 +545,7 @@
    ]
   },
   "Pous.Model.Audit": {
-   "digest": "3f53d4b563b4b2c2b6385063e67e18e8",
+   "digest": "a59e2994e4cdd3ff802a96131fcac7b327af3010603e3cc932352b263e30db52",
    "definitions": {
     "Pous.AuditSecure": "e41161286e1d4201",
     "Pous.Outcome": "3fefd5bf7ac6bf61",
@@ -592,7 +592,7 @@
    ]
   },
   "Pous.Model.ColumnGame": {
-   "digest": "c8676692be005ec98ad2163455f6b797",
+   "digest": "6c62a2dc4432c9ac4a6e57b29b1f416cdfbe232e350bd5cd9f22d1592fcd2472",
    "definitions": {
     "Pous.ColumnGame.ColState": "1b6f70c594b629b5",
     "Pous.ColumnGame.ColState.lowerCol": "7f594f1ad0ec875c",
@@ -611,7 +611,7 @@
    ]
   },
   "Pous.Model.Dense": {
-   "digest": "83b9920272e6b01313d5b8c806a2fc15",
+   "digest": "af368c63f2f97e7bbcc520add197d45cb0c399f3768c4071ab07c983b631c595",
    "definitions": {
     "Pous.Dense.blocks": "a6725d1c65c0d10a",
     "Pous.Dense.completeDAG": "19f00178376f9067",
@@ -637,14 +637,14 @@
    ]
   },
   "Pous.Model.HashChain": {
-   "digest": "28053bfcb0e1511c0f202d7657c5a04b",
+   "digest": "57a937513c76dbc57dce300313291c9c1dc3ac69fb44d04d9d7b47034d55a697",
    "definitions": {
     "Pous.HashChain.chain": "28053bfcb0e1511c"
    },
    "pins": ["PousProofs.B3Chain"]
   },
   "Pous.Model.Inc": {
-   "digest": "945134e92fcff1e04072e06043eacde7",
+   "digest": "f977cb505535bce2a1fdbee1afc73857f0f991910579290d6eb64382aced0d41",
    "definitions": {
     "Pous.INC": "39e93f49d411be27",
     "Pous.ProdResponder": "1f2e575cd2e66cb5",
@@ -670,7 +670,7 @@
    ]
   },
   "Pous.Model.Invertible": {
-   "digest": "2abec15afe0def514c49b8458a48b472",
+   "digest": "5d2877d72a867424550a1e46f9763f3f120f4bcc331cc117494660828b4939b8",
    "definitions": {
     "Pous.Invertible.KQ": "461f7b0a39856e2a",
     "Pous.Invertible.Lab": "6451b092562337e1",
@@ -691,7 +691,7 @@
    "pins": ["PousProofs.N10Refuted", "PousProofs.ReverseNeedsAllChildren", "PousProofs.TransposeMixing"]
   },
   "Pous.Model.Labelling": {
-   "digest": "87014ea01a3960638825602f360a2d5a",
+   "digest": "c58bc75afd05a5a3f6f9cdc7700592dce1b39a7c9d955d03c0c7cf82e921a4bf",
    "definitions": {
     "Pous.Labelling.LabelQry": "64606d3ddcdcbb28",
     "Pous.Labelling.PebblingHard": "ba7be739c06c6dc7",
@@ -721,7 +721,7 @@
    ]
   },
   "Pous.Model.M1": {
-   "digest": "dc5b93fbe58f63e1f6ac7f958606d6d6",
+   "digest": "793949814dfb209f8ed9a2f363a5f9c74a07ce83ed2e6bec82b192a8dd106cda",
    "definitions": {
     "Pous.codeEquiv": "dc5b93fbe58f63e1"
    },
@@ -738,7 +738,7 @@
    ]
   },
   "Pous.Model.Pebbling": {
-   "digest": "2b4fdde28b3d8e45b712de9c22ec0417",
+   "digest": "154f766786cf975e0d391cec3e774aeb16d456758f943e54ed435afc258bc4fc",
    "definitions": {
     "Pous.DRG.Available": "fc66daf74c73af86",
     "Pous.DRG.DepthRobust": "f439aabeba4ed14e",
@@ -759,14 +759,14 @@
    ]
   },
   "Pous.Model.SampledAudit": {
-   "digest": "f9de76ea049c7379dad94ff96741c8aa",
+   "digest": "1c8d1564b69446b5d96a70d3f21b39745d2c3f0188442f08f751c2b89a4d22d2",
    "definitions": {
     "Pous.Sampled.seqState": "f9de76ea049c7379"
    },
    "pins": ["PousProofs.SampledAuditSeq"]
   },
   "Pous.Model.Scheme": {
-   "digest": "c347e5e7e52d538afcc1636f6f592a4a",
+   "digest": "57b2200ba2b02d939c913b1ec789db07725e0ae4c8aafbed16cfde558c81ba8b",
    "definitions": {
     "Pous.Scheme": "6b729c75f9905ada",
     "Pous.Scheme.B": "a99a1ddc524df829",
@@ -815,7 +815,7 @@
    ]
   },
   "Pous.Pinned": {
-   "digest": "9b0983614419049154753d21057dbdb7",
+   "digest": "5534ef0d11b896ba1cacf8c38325163fcaae657be3858cf014332bd550a2061d",
    "definitions": {
     "Pous.Pinned.A1CompressionCard": "b667ed132ea5f354",
     "Pous.Pinned.A1CompressionPr": "9af3f56c0d1d520f",
@@ -881,7 +881,7 @@
    ]
   },
   "Pous.Sanity": {
-   "digest": "ff50ba1c8b19241064aa122914936d21",
+   "digest": "1793a5d9bef5139d1fe284fa97f5f5b0f00be40bbaab1c095a8859bcc7e4f443",
    "definitions": {
     "Pous.honestPre": "1daf42b059d89bc7",
     "Pous.honestSeq": "b283a8502f9b0d6a",
@@ -905,14 +905,14 @@
    ]
   },
   "PousProofs.Dense.SegTagged": {
-   "digest": "f84373ab1e9bd60e8881e36ec8ae687f",
+   "digest": "91049b0fade7d958d3e3380c33e76999e5824d9760a954590ea6e32aa509335b",
    "definitions": {
     "PousDenseReCert.liftPar": "f84373ab1e9bd60e"
    },
    "pins": ["PousDenseReCert.segTag_auditSecure"]
   },
   "PousProofs.P3.Column.BandComb": {
-   "digest": "88b5ece951ec73b38003348121ad3c79",
+   "digest": "30052fd1809960d5b8d00f630e0bf6e2073dcbfa36d9d52e4f4d65c6d24f75e2",
    "definitions": {
     "PousP3Column.bandExtra": "d5dcdcd0a57a8678",
     "PousP3Column.bandGraph": "ea6c1c38260c4410"

@@ -2,7 +2,7 @@
 numpy twin gate for gate, and the twin reproduces every fused-norm row of the B0 commit store (v1 does not).
 
 Needs the numerics lane's MUFU.RSQ model (`verity_vllm.program.kernels`: `librms_triton_model.so`, built on demand into the
-gitignored `cpp/build/`); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable."""
+`_jit` cache outside the checkout); skipped when it cannot be built here (no C++ compiler) or its tables are unavailable."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def _numerics():
     except Exception as e:  # pragma: no cover
         pytest.skip(f"verity_vllm.program.kernels not importable: {e}")
     try:
-        RM.build()                                     # into cpp/build/ (gitignored); a no-op when fresh
+        RM.build()                                     # into the _jit cache; a no-op when fresh
     except Exception as e:  # noqa: BLE001  -- no compiler / compile failure: skip, do not fail
         pytest.skip(f"librms_triton_model.so not buildable here: {type(e).__name__}: {e}")
     try:
