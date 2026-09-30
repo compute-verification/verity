@@ -13,12 +13,20 @@ GPU and CPU Workloads. `ready_gpu_h`, `lease_waiters` and `kinds` are left out: 
     running pod holds (a GPU whose DCGM pod has just finished is a handover, not flagged);
   - `template-drift`: the dispatcher's templates (`$DISPATCH_SKY`) differ from `infra/nebius` as last pushed into node 1's bare repo
     (`refs/kueue-fold/infra-nebius`; neither node can read GitHub, so an agent pushes it and writes `ref.json` with the time).
+
+`delivered_by_hour` is the delivered-output metric (Daniel, 3:22 PM PDT Sep 30), one entry per UTC hour for the last 4, oldest first:
+{hour, leased_gpu_s, delivered_gpu_s, delivered_share, provisional}. Leased is each GPU Workload's admitted-to-finished time (or to
+now) × its GPUs, split across the hours it spans. It is delivered when its Job is not labelled `verity.dev/filler` and one of the
+Attempts its pods launched (the store's `attempts.host` is the pod) is `done` with validation `passed`, or with no validation and
+rc 0 and declared outputs. A verdict lands up to ~30 min after the lease ends, so an hour is provisional until an hour after it
+ends. `gpu-pool-*` holder Jobs count as leased; the leases inside them are not yet attributed, so they deliver nothing.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import sqlite3
 import subprocess
 import time
 import urllib.parse
@@ -37,6 +45,8 @@ REPO_SKY = "tools/research/src/research/pods/nebius/sky"
 IDLE_UTIL, IDLE_S, UNLEASED_FB_MIB = 10.0, 300, 1024
 CLASS_OF_QUEUE = {"pous-overflow": "pous"}
 LEASE_STATE = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease")) / "n1-lease.json"
+STORE_DB = Path(os.environ.get("POOL_N1_STORE_DB", "/workspace/jobs/store/catalog.sqlite"))
+HOURS = 4                                                   # Jobs are deleted 6 h after they finish (ttlSecondsAfterFinished)
 
 
 def iso(t: float) -> str:
@@ -84,7 +94,58 @@ def observe() -> dict:
         "workloads": kubectl("get", "workloads")["items"],
         "lease_pool": lease_pool(),
     }
+    obs["attempts"] = attempts_by_job(iso(obs["t"] - (HOURS + 4) * 3600))
     return obs
+
+
+def attempts_by_job(since: str) -> dict[str, list[tuple]]:
+    """Job name -> (state, rc, validation, outputs) of each Attempt its pods launched since `since`, from node 1's store."""
+    try:
+        with sqlite3.connect(f"file:{STORE_DB}?mode=ro", uri=True) as c:
+            rows = c.execute("select a.host, a.state, a.rc, a.validation, (select count(*) from attempt_outputs o where o.attempt = a.id)"
+                             " from attempts a where a.start_utc >= ?", (since,)).fetchall()
+    except sqlite3.Error:
+        return {}
+    out: dict[str, list[tuple]] = {}
+    for host, *rest in rows:
+        if host:
+            out.setdefault(host.rsplit("-", 1)[0], []).append(tuple(rest))   # a Job's pod is <job>-<5 chars>
+    return out
+
+
+def _delivered(a: tuple) -> bool:
+    state, rc, validation, outputs = a
+    return state == "done" and (validation == "passed" or (validation in (None, "not_run") and rc == 0 and outputs > 0))
+
+
+def _at(w: dict, kind: str) -> float | None:
+    for c in (w.get("status") or {}).get("conditions") or []:
+        if c.get("type") == kind and c.get("status") == "True" and c.get("lastTransitionTime"):
+            return datetime.strptime(c["lastTransitionTime"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    return None
+
+
+def delivery(obs: dict) -> list[dict]:
+    """`delivered_by_hour` (see the module docstring) from the Workloads, the Jobs' labels and the store's Attempts."""
+    t = obs["t"]
+    now_h = int(t // 3600) * 3600
+    hours = {now_h - 3600 * k: [0.0, 0.0] for k in range(HOURS)}
+    labels = {j["metadata"]["name"]: j["metadata"].get("labels") or {} for j in obs["jobs"]}
+    attempts = obs.get("attempts") or {}
+    for w in obs["workloads"]:
+        n, start = _gpu_request(w), _at(w, "QuotaReserved") or _at(w, "Admitted")
+        if not n or start is None:
+            continue
+        end = _at(w, "Finished") or t
+        job = next((o["name"] for o in w["metadata"].get("ownerReferences") or []), "")
+        ok = "verity.dev/filler" not in labels.get(job, {}) and any(_delivered(a) for a in attempts.get(job, []))
+        for h, acc in hours.items():
+            s = max(0.0, min(end, h + 3600) - max(start, h)) * n
+            acc[0] += s
+            acc[1] += s if ok else 0.0
+    return [{"hour": iso(h), "leased_gpu_s": round(l), "delivered_gpu_s": round(d),
+             "delivered_share": round(d / l, 4) if l else None, "provisional": t < h + 7200}
+            for h, (l, d) in sorted(hours.items())]
 
 
 def lease_pool() -> dict[int, dict]:
@@ -184,7 +245,7 @@ def build(obs: dict, drift: dict | None = None) -> dict:
             "useful_share_1h": round(held / all_busy, 4) if held is not None and all_busy else None,
             "cpu_busy_5m": None if obs.get("cpu_busy_5m") is None else round(obs["cpu_busy_5m"], 4),
             "gpus": gpus, "waiting": waiting_gpu + waiting_cpu, "waiting_gpu": waiting_gpu, "waiting_cpu": waiting_cpu,
-            "monitors": monitors}
+            "delivered_by_hour": delivery(obs), "monitors": monitors}
 
 
 def git(*args: str) -> str:

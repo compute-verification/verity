@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tomllib
@@ -708,6 +709,42 @@ def test_pool_n1_flags_an_idle_admitted_gpu_and_an_unleased_one_and_counts_waiti
     assert (n1["gpu_busy_5m"], n1["useful_share_1h"], n1["waiting"], n1["waiting_gpu"], n1["waiting_cpu"]) == (0.4, 0.9, 2, 1, 1)
     assert [(x["kind"], x["gpu"]) for x in n1["monitors"]] == [("gpu-idle-in-lease", 0), ("gpu-unleased", 3)]
     assert n1["monitors"][0]["job_kind"] == "config-run@9c6a" and n1["monitors"][0]["owner"] == "deployments-gpu"
+
+
+def test_pool_n1_splits_leased_gpu_seconds_by_hour_and_counts_them_delivered_only_on_a_passing_attempt(tmp_path, monkeypatch):
+    db = tmp_path / "catalog.sqlite"
+    with sqlite3.connect(db) as c:
+        c.execute("create table attempts(id text, host text, state text, rc integer, validation text, start_utc text)")
+        c.execute("create table attempt_outputs(attempt text, name text, artifact text)")
+        c.executemany("insert into attempts values (?, ?, ?, ?, ?, ?)", [
+            ("r1", "commit-ok-ab1cd", "done", 0, "passed", "2026-09-30T20:40:00Z"),
+            ("r2", "commit-bad-ab1cd", "done", 0, "failed", "2026-09-30T21:10:00Z"),
+            ("r3", "chunk-ab1cd", "done", 0, "not_run", "2026-09-30T21:20:00Z"),
+            ("r4", "filler-ab1cd", "done", 0, "passed", "2026-09-30T21:20:00Z")])
+        c.execute("insert into attempt_outputs values ('r3', 'result', 'art:x')")
+    m = _pool_n1(monkeypatch, POOL_N1_STORE_DB=db)
+    t = datetime.datetime(2026, 9, 30, 22, 30, tzinfo=datetime.timezone.utc).timestamp()
+
+    def wl(job, admitted, finished=None, gpus=1):
+        conds = [{"type": "QuotaReserved", "status": "True", "lastTransitionTime": admitted}]
+        conds += [{"type": "Finished", "status": "True", "lastTransitionTime": finished}] if finished else []
+        return {"metadata": {"ownerReferences": [{"kind": "Job", "name": job}]}, "status": {"conditions": conds},
+                "spec": {"podSets": [{"count": 1, "template": {"spec": {"containers": [
+                    {"resources": {"requests": {"nvidia.com/gpu": str(gpus)} if gpus else {}}}]}}}]}}
+
+    obs = {"t": t, "attempts": m.attempts_by_job("2026-09-30T00:00:00Z"),
+           "jobs": [{"metadata": {"name": "filler", "labels": {"verity.dev/filler": "true"}}}],
+           "workloads": [wl("commit-ok", "2026-09-30T20:30:00Z", "2026-09-30T21:30:00Z"),       # 30 + 30 min, delivered
+                         wl("commit-bad", "2026-09-30T21:00:00Z", "2026-09-30T21:30:00Z", gpus=2),
+                         wl("chunk", "2026-09-30T21:15:00Z", "2026-09-30T21:45:00Z"),          # no validation, rc 0, an output
+                         wl("filler", "2026-09-30T21:00:00Z", "2026-09-30T21:10:00Z"),
+                         wl("running", "2026-09-30T22:00:00Z"),                                # no Attempt yet: leased only
+                         wl("cpu-build", "2026-09-30T21:00:00Z", "2026-09-30T22:00:00Z", gpus=0)]}
+    hours = m.delivery(obs)
+    assert [h["hour"] for h in hours] == ["2026-09-30T19:00:00Z", "2026-09-30T20:00:00Z", "2026-09-30T21:00:00Z", "2026-09-30T22:00:00Z"]
+    assert [(h["leased_gpu_s"], h["delivered_gpu_s"], h["provisional"]) for h in hours] == [
+        (0, 0, False), (1800, 1800, False), (1800 + 3600 + 1800 + 600, 1800 + 1800, True), (1800, 0, True)]
+    assert hours[0]["delivered_share"] is None and hours[2]["delivered_share"] == round(3600 / 7800, 4)
 
 
 def test_pool_n1_reports_template_drift_against_the_pushed_infra_nebius_ref(tmp_path, monkeypatch):
