@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """pearl_c4.cubin's offline gate, from ptxas's -v log and cuobjdump -sass: no warning, spill, stack frame or local-memory
-access in any kernel, and the tensor-core and cast instructions each kernel is meant to issue.
+access in any kernel, no FP32 FADD, FFMA or FMUL with .FTZ (it breaks the scalar model on subnormals; FP32 division and
+square root's slow paths hold them), and the tensor-core and cast instructions each kernel is meant to issue.
 
   python3 sass.py PTXAS_LOG SASS OUT_JSON      exit 1 (with the reasons) when a kernel fails
 
@@ -17,7 +18,8 @@ import re
 import sys
 
 OPS = {"OMMA_NV": r"OMMA\.SF\.16864\.F32\.E2M1\.E2M1\.UE4M3\.4X", "OMMA_MX": r"OMMA\.SF\.16864\.F32\.E2M1\.E2M1\.E8\b",
-       "HMMA": r"HMMA\.16816\.F32\.BF16", "E2M1": r"F2FP\.SATFINITE\.E2M1", "LDL": r"\bLDL\b", "STL": r"\bSTL\b"}
+       "HMMA": r"HMMA\.16816\.F32\.BF16", "E2M1": r"F2FP\.SATFINITE\.E2M1", "LDL": r"\bLDL\b", "STL": r"\bSTL\b",
+       "FTZ": r"\bF(ADD|FMA|MUL)(\.\w+)*\.FTZ\b"}
 
 
 def census(ptxas: str, sass: str) -> dict[str, dict]:
@@ -59,6 +61,8 @@ def problems(ptxas: str, funcs: dict[str, dict]) -> list[str]:
     for name, r in funcs.items():
         if r.get("stack") or r.get("spill_stores") or r.get("spill_loads") or r.get("LDL") or r.get("STL"):
             out.append(f"{name}: local memory {r}")
+        if r.get("FTZ"):
+            out.append(f"{name}: {r['FTZ']} FP32 FADD, FFMA or FMUL with .FTZ (server.md 09:34Z: none in a shipped kernel)")
         for op, (mult, least) in (want(name) or {}).items():
             n = r.get(op, 0)
             if (mult == 0 and n) or (mult and (n < least or n % mult)):
