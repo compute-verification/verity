@@ -268,6 +268,34 @@ def chain(a: np.ndarray, b: np.ndarray, G: int):
     return tid, tex, words / (P * T), promo
 
 
+def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
+    """The replayed debit per word (P1's form), for groups of G atoms from +0 promoted into an FP32 total: `eF`, the atoms
+    that are identities (D == C) plus every atom of a group whose promotion is an identity (total' == total); and `extra`,
+    the atoms outside that set whose skipping alone leaves the promoted total unchanged (the skip-one replay)."""
+    P, k = a.shape
+    T = k // 32
+    total = np.zeros(P, dtype=np.float32)
+    eF, extra = np.zeros(P, dtype=np.int64), np.zeros(P, dtype=np.int64)
+    for g0 in range(0, T, G):
+        ts = list(range(g0, min(g0 + G, T)))
+        C, ids = np.zeros(P), []
+        for t in ts:
+            D, _ = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
+            ids.append(D == C)
+            C = D
+        new = (total + C.astype(np.float32)).astype(np.float32)
+        F = np.stack(ids, 1) | (new == total)[:, None]
+        for i, t in enumerate(ts):
+            Cs = np.zeros(P)
+            for t2 in ts:
+                if t2 != t:
+                    Cs, _ = step(Cs, a[:, 32 * t2:32 * t2 + 32], b[:, 32 * t2:32 * t2 + 32])
+            extra += ((total + Cs.astype(np.float32)).astype(np.float32) == new) & ~F[:, i]
+        eF += F.sum(1)
+        total = new
+    return eF, extra
+
+
 def exact_run_mask(tex: np.ndarray, min_run: int = 14) -> np.ndarray:
     mask, start = np.zeros(len(tex), bool), None
     for i, e in enumerate(list(tex) + [False]):
@@ -295,7 +323,7 @@ def val(codes: np.ndarray) -> np.ndarray:
 
 
 def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming: str = "census",
-         line_norm: float = 256.0) -> list[dict]:
+         line_norm: float = 256.0, with_debit: bool = False) -> list[dict]:
     rng = _rng(run, fam, k, delta)
     FA, FB = lines(k, _rng(run, "FA", k)), lines(k, _rng(run, "FB", k))
     XA, XB = family(fam, rows, cols, k, FA, rng)
@@ -322,12 +350,19 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
         tid, tex, word_id, promo = chain(A, B, G)
         T = k // 32
         skip = int((tid | exact_run_mask(tex)).sum()) + promo
-        out.append({**extra, "family": fam, "k": k, "delta": delta, "layout": "G4" if G else "pure",
-                    "in_domain": in_domain(G, k, delta) and ok,
-                    "atoms": T, "tile_identity_atoms": int(tid.sum()), "exact_run_atoms": exact_run_atoms(tex),
-                    "tile_exact_atoms": int(tex.sum()), "promotion_identities": promo, "word_identity": round(word_id, 6),
-                    "noise_free_entries": float(nfA.mean()), "double_rounding_differs": round((drA + drB) / 2, 6),
-                    "skippable_share": skip / T})
+        row = {**extra, "family": fam, "k": k, "delta": delta, "layout": "G4" if G else "pure",
+               "in_domain": in_domain(G, k, delta) and ok,
+               "atoms": T, "tile_identity_atoms": int(tid.sum()), "exact_run_atoms": exact_run_atoms(tex),
+               "tile_exact_atoms": int(tex.sum()), "promotion_identities": promo, "word_identity": round(word_id, 6),
+               "noise_free_entries": float(nfA.mean()), "double_rounding_differs": round((drA + drB) / 2, 6),
+               "skippable_share": skip / T}
+        if G and with_debit:
+            eF, ex = debit(A, B, G)
+            # Tile identities are in every word's eF, so under the debited credit only exact runs remain skippable.
+            row.update({"debit_eF_share": round(float(eF.mean()) / T, 6), "debit_extra_share": round(float(ex.mean()) / T, 6),
+                        "debit_share": round(float((eF + ex).mean()) / T, 6), "debit_max_word_share": round(float((eF + ex).max()) / T, 6),
+                        "residual_share": exact_run_atoms(tex) / T})
+        out.append(row)
     return out
 
 
@@ -341,6 +376,8 @@ def main() -> None:
     ap.add_argument("--run", type=int, default=1)
     ap.add_argument("--forming", choices=("census", "s5"), default="census")
     ap.add_argument("--line-norm", type=float, default=256.0)
+    ap.add_argument("--debit", action="store_true",
+                    help="replay each word's debit (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()
     bad = selftest()
@@ -352,18 +389,20 @@ def main() -> None:
     for delta in map(float, args.deltas.split(",")):
         for k in map(int, args.ks.split(",")):
             for fam in args.families.split(","):
-                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm):
+                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm, args.debit):
                     rows_out.append(r)
                     print(json.dumps(r), flush=True)
-    worst = max((r["skippable_share"] for r in rows_out if r["in_domain"]), default=0.0)
-    worst_row = max((r for r in rows_out if r["in_domain"]), key=lambda r: r["skippable_share"], default=None)
+    key = "residual_share" if args.debit else "skippable_share"
+    scored = [r for r in rows_out if r["in_domain"] and key in r]
+    worst = max((r[key] for r in scored), default=0.0)
+    worst_row = max(scored, key=lambda r: r[key], default=None)
     doc = {"tool": "pouw_pearlc_census", "tile": args.tile, "forming": args.forming, "line_norm": args.line_norm, "selftest_mismatches": bad, "cells": rows_out,
-           "worst_in_domain_skippable_share": worst, "worst_in_domain_cell": worst_row, "threshold": 1 / 400,
+           "criterion": key, "worst_in_domain_skippable_share": worst, "worst_in_domain_cell": worst_row, "threshold": 1 / 400,
            "seconds": round(time.time() - t0, 1)}
     out = Path(args.out)
     out.write_text(json.dumps(doc, indent=1) + "\n")
     ok = bad == 0 and worst <= 1 / 400
-    run_result.write(out, ok, "pearlc-census", f"worst in-domain skippable share {worst:.5f} (threshold 0.0025)",
+    run_result.write(out, ok, "pearlc-census", f"worst in-domain {key} {worst:.5f} (threshold 0.0025)",
                      [("worst_in_domain_skippable_share", worst, "fraction"),
                       ("max_double_rounding_differs", max(r["double_rounding_differs"] for r in rows_out), "fraction")])
     print(json.dumps({k: v for k, v in doc.items() if k != "cells"}))

@@ -96,12 +96,29 @@ def parse_pearlc_quality(argv: list[str]) -> dict:
             "seed": ns.seed, "line_norm": ns.line_norm}
 
 
+def parse_pearlc_activations(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("--model", default="Qwen/Qwen2.5-0.5B")
+    ap.add_argument("--window", type=int, default=0)
+    ap.add_argument("--delta", type=float, default=1.0)
+    ap.add_argument("--line-norm", type=float, default=16.0)
+    ap.add_argument("--tiles", type=int, default=2)
+    ap.add_argument("--seed", type=int, default=20260930)
+    ns, _ = ap.parse_known_args(argv)
+    return {"model": ns.model, "window": ns.window, "delta": ns.delta, "line_norm": ns.line_norm, "tiles": ns.tiles, "seed": ns.seed}
+
+
 # Pearl-C (docs/pouw/cheap-binding.md in the research store): TT_OUT's falsification census, and the quality of U.
 POUW_PEARLC_CENSUS = Tool(name="pouw_pearlc_census", version="1", command=["python", "benchmarks/pouw/pearlc_census.py"],
                           closure=["benchmarks/pouw/pearlc_census.py", "benchmarks/pouw/run_result.py",
                                    "packages/verity/src/verity/ml/tc/**"],
                           key_params=["ks", "deltas", "tile", "families", "run", "forming", "line_norm"], produces=["bench-result/v1", "run-files/v1"],
                           parse=parse_pearlc_census)
+POUW_PEARLC_ACTIVATIONS = Tool(name="pouw_pearlc_activations", version="1", command=["python", "benchmarks/pouw/pearlc_activations.py"],
+                               closure=["benchmarks/pouw/pearlc_activations.py", "benchmarks/pouw/pearlc_census.py",
+                                        "benchmarks/pouw/run_result.py", "packages/verity/src/verity/ml/tc/**"],
+                               key_params=["model", "window", "delta", "line_norm", "tiles", "seed"],
+                               produces=["bench-result/v1", "run-files/v1"], parse=parse_pearlc_activations)
 POUW_PEARLC_QUALITY = Tool(name="pouw_pearlc_quality", version="1", command=["python", "benchmarks/pouw/pearlc_quality.py"],
                            closure=["benchmarks/pouw/pearlc_quality.py", "benchmarks/pouw/run_result.py"],
                            key_params=["model", "variant", "delta", "seqlen", "max_windows", "seed", "line_norm"],
