@@ -56,6 +56,15 @@ def p_change(X, alpha, ae, salts, rng):
     return 1 - same
 
 
+def not_block_max(X):
+    """False on each block's clean |max| element (its first occurrence), True elsewhere."""
+    R, k = X.shape
+    at = np.abs(X).reshape(R, k // 16, 16).argmax(2)
+    keep = np.ones((R, k // 16, 16), bool)
+    np.put_along_axis(keep, at[:, :, None], False, axis=2)
+    return keep.reshape(R, k)
+
+
 def units_of(dead):
     d4 = dead.reshape(len(dead), -1, 4).sum(2)
     return np.where(d4 == 4, 4, np.where(d4 >= 2, 2, 0)).sum(1).astype(np.float64)
@@ -115,7 +124,7 @@ def attack(args):
 FS, CAPS = 107.34, (0.0025, 0.001)
 
 
-def linear(X, W, rng, salts, max_cols=24):
+def linear(X, W, rng, salts, max_cols=24, a_only=False, exclude_max=False):
     from fp4_v4_coverage import DESIGNS
     p = DESIGNS["v1"]
     X, W = bf16(X), bf16(W)
@@ -126,12 +135,17 @@ def linear(X, W, rng, salts, max_cols=24):
     Wj = np.concatenate([W[c * T:(c + 1) * T] for c in cols])
     a, b = side(X[:m], p), side(Wj, p)
     pa = p_change(X[:m], *stats(X[:m], KB1)[:2], salts, rng)
-    pb = p_change(Wj, *stats(Wj, KB1)[:2], salts, rng)
+    pb = None if a_only else p_change(Wj, *stats(Wj, KB1)[:2], salts, rng)
+    if exclude_max:
+        pa = np.where(not_block_max(X[:m]), pa, 1.0)
+        if pb is not None:
+            pb = np.where(not_block_max(Wj), pb, 1.0)
     cw = k + (32 + FS) * k / n + 256
     rows_ok = a["dnf"]
     res = {"k": k, "n": n, "macs": float(m * n * k), "eps": {}}
     for eps in EPS:
-        ua, ub = units_of(pa < eps), units_of(pb < eps)
+        ua = units_of(pa < eps)
+        ub = b["units"] if a_only else units_of(pb < eps)   # a_only: B's term 1 stays on the witness
         deb, cred = [], []
         for r in range(m // T):
             I = slice(r * T, (r + 1) * T)
@@ -172,9 +186,14 @@ def real(args):
     rng = np.random.default_rng(20260930)
     res = {}
     for nm, mod in lins.items():
-        res[nm] = linear(got.pop(nm).float().numpy(), mod.weight.detach().float().numpy(), rng, args.salts)
+        x = got.pop(nm)
+        if int(nm.split(".")[2]) % args.layer_step:
+            continue
+        res[nm] = linear(x.float().numpy(), mod.weight.detach().float().numpy(), rng, args.salts, a_only=args.a_only,
+                         exclude_max=args.exclude_max)
     macs = sum(r["macs"] for r in res.values())
-    summ = {"model": args.model, "tokens": int(ids.shape[1]), "salts": args.salts, "eps": {}}
+    summ = {"model": args.model, "tokens": int(ids.shape[1]), "salts": args.salts, "a_only": args.a_only,
+            "layer_step": args.layer_step, "exclude_max": args.exclude_max, "linears": len(res), "eps": {}}
     for eps in EPS:
         e = str(eps)
         summ["eps"][e] = {"worst_tile": max(r["eps"][e]["max"] for r in res.values()),
@@ -202,6 +221,9 @@ def main(argv=None) -> int:
     r.add_argument("--tokens", type=int, default=256)
     r.add_argument("--salts", type=int, default=48)
     r.add_argument("--text", default=str(Path(__file__).resolve().parents[2] / "README.md"))
+    r.add_argument("--a-only", action="store_true", help="probabilistic salt-deadness on A only; B's term 1 on the witness")
+    r.add_argument("--layer-step", type=int, default=1, help="only decoder layers whose index is a multiple of this")
+    r.add_argument("--exclude-max", action="store_true", help="never count a block's clean maximum as ε-dead")
     r.add_argument("--out", default=None)
     args = ap.parse_args(argv)
     attack(args) if args.cmd == "attack" else real(args)
