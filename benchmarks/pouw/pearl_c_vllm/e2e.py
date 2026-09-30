@@ -37,6 +37,7 @@ the untimed quality run: WikiText-2's test split through bf16, stock fp8, and Pe
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import multiprocessing as mp
 import os
@@ -92,16 +93,19 @@ def engine(args, group: str):
         return LLM(**kw)
 
 
-def install(model, args, beacon: bytes, state: dict):
-    """Every LinearBase layer's apply, found by type, through a `PearlCDeviceRun` over the layers' own weights while
-    ``state["active"]``, else stock."""
+def install(model, args, beacon: bytes):
+    """Every LinearBase layer's apply, found by type (`verity_vllm.linear.vllm_site`), through one `Stack` whose executor is a
+    `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  Returns the run, the weights by id and
+    the stack; the stack starts inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity_pouw.audit import Epoch, Workload
     from verity_pouw.protocol import Matmul, Shape
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.linear import vllm_site
+    from verity_vllm.linear.api import Stack
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
-    from vllm.model_executor.layers.linear import LinearBase
 
-    layers = [m for m in model.modules() if isinstance(m, LinearBase)]
-    weights = {w: layer.weight.data for w, layer in enumerate(layers)}
+    sites = vllm_site.discover(model)
+    weights = {site.weight_id: layer.weight.data for site, layer in sites}
     scheme = getattr(args, "scheme", None) or SCHEME
     bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
     if bad:
@@ -112,18 +116,22 @@ def install(model, args, beacon: bytes, state: dict):
     salt = Epoch.start(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
                               schedule=getattr(args, "schedule", "serial"))
+    stack = Stack([site for site, _ in sites], PPD.PearlCExecutor(run))
+    bad = stack.refusals()
+    if bad:
+        raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
+    vllm_site.attach(stack, sites, Hooks(tag=f"pouw:{scheme}"))
+    return run, weights, stack
 
-    def make(original):
-        def apply(layer, x, bias=None):
-            w = getattr(layer, "_pouw_w", None)
-            return run.gemm(w, x, layer.weight, bias) if state["active"] and w is not None else original(layer, x, bias)
-        return apply
 
-    for w, layer in enumerate(layers):
-        layer._pouw_w = w
-    for qm in {id(layer.quant_method): layer.quant_method for layer in layers}.values():
-        qm.apply = make(type(qm).apply.__get__(qm))
-    return run, weights
+def arm_of(mode: str, run, args):
+    """The arm engine's arm for `mode`: ``bf16`` is vLLM's own apply with the stack attached (so the wrapper's cost is inside
+    the baseline), ``pearlc-nohash`` and ``pearlc`` the run without and with hashing, under the run's schedule."""
+    from verity_vllm.linear.api import Arm, PassSpec
+    if mode not in PEARLC:
+        return Arm(mode, "bf16")
+    return Arm(mode, "bf16", run.entry, spec=PassSpec(hashing=mode == "pearlc", schedule=getattr(args, "schedule", "serial"),
+                                                      run_id=os.environ.get("RESEARCH_RUN_ID")))
 
 
 def gate(run, weights: dict) -> list[dict]:
@@ -235,10 +243,10 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
         from vllm_bench import PROMPTS, find_model
 
         llm = engine(args, group)
-        state, run = {"active": False}, None
+        run = stack = None
         ready: dict = {"group": group}
         if group == "arm":
-            run, weights = install(find_model(llm), args, beacon, state)
+            run, weights, stack = install(find_model(llm), args, beacon)
             ready["gate"] = gate(run, weights)
             run.hashing = False
             ready["gate"] += gate(run, weights)
@@ -250,15 +258,18 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
         tok = llm.get_tokenizer()
         chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
 
-        def timed(prompts, sp, retain=None):
-            pearl = state["active"]
-            if pearl:
-                run.begin(retain, os.environ.get("RESEARCH_RUN_ID"))
-                run.gemm_ms()
-            torch.cuda.synchronize()
-            t0 = time.perf_counter()
-            outs = llm.generate(prompts, sp, use_tqdm=False)
-            commit = run.end() if pearl else {}
+        def timed(prompts, sp, retain=None, controls=()):
+            """One timed generate; under a Pearl-C arm it is one pass (`Stack.pass_`), whose end is inside the time."""
+            import dataclasses
+            pearl = stack is not None and stack.executing
+            spec = dataclasses.replace(stack.active.spec, retain=retain, controls=tuple(controls)) if pearl else None
+            with stack.pass_(spec) if pearl else contextlib.nullcontext():
+                if pearl:
+                    run.gemm_ms()
+                torch.cuda.synchronize()
+                t0 = time.perf_counter()
+                outs = llm.generate(prompts, sp, use_tqdm=False)
+            commit = stack.passes[-1] if pearl else {}
             torch.cuda.synchronize()
             dt = time.perf_counter() - t0
             return dt, (run.gemm_ms()[0] / 1e3 if pearl else 0.0), commit, outs
@@ -272,9 +283,8 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
             if mode is not None:
                 if GROUP[mode] != group:
                     raise ValueError(f"mode {mode} is not the {group} engine's")
-                state["active"] = mode in PEARLC
-                if run:
-                    run.hashing = mode == "pearlc"
+                if stack is not None:
+                    stack.activate(arm_of(mode, run, args))
             if op == "chat":
                 *_, outs = timed(chat, SamplingParams(temperature=0.0, max_tokens=48))
                 conn.send({"tokens": [list(o.outputs[0].token_ids) for o in outs], "texts": [o.outputs[0].text for o in outs[:4]]})
@@ -289,16 +299,16 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
             elif op == "ppl":
                 conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
-                state["active"], run.hashing = True, True
+                from verity_vllm.linear.api import Control
+                stack.activate(arm_of("pearlc", run, args))
                 out = {}
                 for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
                     _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     want = cmd["want"][name]
                     same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
                     out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same}
-                run.omit = CONTROL_OMITS
-                _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / "control"))
-                run.omit = frozenset()
+                _, _, got, _ = timed([{"prompt_token_ids": cmd["decode"][0]}], one, retain=str(Path(args.retain) / "control"),
+                                     controls=(Control("omit", CONTROL_OMITS),))
                 out["control"] = {"manifest": got.get("manifest"), "commitment": got, "omitted": sorted(CONTROL_OMITS)}
                 conn.send(out)
             else:

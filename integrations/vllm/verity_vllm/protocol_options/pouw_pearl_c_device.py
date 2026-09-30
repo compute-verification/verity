@@ -863,6 +863,59 @@ class PearlCDeviceRun:
             self.cur = _Pass(None)
 
 
+class PearlCExecutor:
+    """A `PearlCDeviceRun` behind `verity_vllm.linear.api.LinearExecutor`, the one object a `Stack` computes a site's y with.
+    Its weight state is B̃, formed once per install, so it can't sit behind a source that forbids weight state (POUS); it reads
+    BF16 weights; its controls are the poison byte and omitted step groups (by step name, as `PearlCDeviceRun.omit` takes
+    them); its schedules are those `schedule_of` admits for its scheme."""
+
+    keeps_weight_state = True
+    accepts = frozenset({"bf16"})
+    controls = frozenset({"poison", "omit"})
+
+    def __init__(self, run: PearlCDeviceRun) -> None:
+        self.run, self.name = run, run.entry
+        ok = set()
+        for name in SCHEDULES:
+            try:
+                schedule_of(name, run.scheme)
+            except ValueError:
+                continue
+            ok.add(name)
+        self.schedules = frozenset(ok)
+
+    def refusals(self, sites: Any) -> list[str]:
+        return refusals(self.run.scheme.name, {s.weight_id: (s.n, s.k) for s in sites})
+
+    def begin(self, spec: Any) -> _ExecutorPass:
+        return _ExecutorPass(self.run, spec)
+
+    def close(self) -> None:
+        self.run.finish()
+
+
+class _ExecutorPass:
+    """One `PassSpec` on the run: its hashing, schedule and retain directory, a poison byte and omitted steps for its length."""
+
+    def __init__(self, run: PearlCDeviceRun, spec: Any) -> None:
+        self.run, self.spec = run, spec
+        run.hashing = spec.hashing
+        run.begin(spec.retain, spec.run_id, schedule=spec.schedule)
+        run.omit = frozenset(x for c in spec.controls if c.kind == "omit" for x in c.arg)
+        for c in spec.controls:
+            if c.kind == "poison":
+                run.poison(0xA5 if c.arg is None else c.arg)
+
+    def call(self, site: Any, x: Any, weight: Any, bias: Any) -> Any:
+        return self.run.gemm(site.weight_id, x, weight, bias)
+
+    def end(self) -> dict[str, Any]:
+        try:
+            return self.run.end()
+        finally:
+            self.run.omit = frozenset()
+
+
 def _write(path: Path, data: bytes, digest: bool = True) -> dict:
     """A transcript file.  Row files carry no digest: the committed roots bind them, and the verifier checks every opened row
     against them."""

@@ -25,6 +25,7 @@ the sections itemize.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import cProfile
 import csv
 import io
@@ -196,10 +197,9 @@ def run(args) -> dict:
     prof = Profile()
     instrument(prof)
     llm = e2e.engine(args, "arm")
-    state = {"active": False}
     model = find_model(llm)
     t0 = time.perf_counter()
-    run_, weights = e2e.install(model, args, os.urandom(32), state)
+    run_, weights, stack = e2e.install(model, args, os.urandom(32))
     install_s = time.perf_counter() - t0
     gate = e2e.gate(run_, weights)
 
@@ -214,17 +214,14 @@ def run(args) -> dict:
     walls = {}
 
     def chat_pass(phase: str, pearl: bool, nvtx: bool = False, cprof: cProfile.Profile | None = None) -> None:
-        state["active"] = pearl
+        stack.activate(e2e.arm_of("pearlc" if pearl else "bf16", run_, args))
         prof.begin(phase, pearl, nvtx)
-        if pearl:
-            run_.begin()
-        torch.cuda.synchronize()
-        t = time.perf_counter()
-        if cprof:
-            cprof.enable()
-        llm.generate(chat, sp, use_tqdm=False)
-        if pearl:
-            run_.end()
+        with stack.pass_() if pearl else contextlib.nullcontext():
+            torch.cuda.synchronize()
+            t = time.perf_counter()
+            if cprof:
+                cprof.enable()
+            llm.generate(chat, sp, use_tqdm=False)
         if cprof:
             cprof.disable()
         prof.end()

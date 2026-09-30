@@ -757,3 +757,68 @@ def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, 
     monkeypatch.setattr(E2E, "Worker", Ungated)
     with pytest.raises(SystemExit, match="gate failed"):
         E2E.perplexity(args)
+
+
+# ---- one install path: the run behind the Stack ------------------------------------------------------------------------
+
+def _stack_sites(weights):
+    from verity_vllm.linear.api import LinearSite
+    return [LinearSite(w, w, f"model.layers.{w}", t.shape[0], t.shape[1], "bf16") for w, t in weights.items()]
+
+
+class _Layer:
+    def __init__(self, weight):
+        self.weight = weight
+
+
+def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run, tmp_path):
+    """e2e's install path (`Stack` + `PearlCExecutor`, the arm from `arm_of`) retains the same manifest and files as the run
+    driven directly, byte for byte."""
+    import dataclasses
+
+    from verity_vllm.linear.api import Stack
+    make, _, weights, *_ = device_run
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(60 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for i, (w, m) in enumerate(((0, 32), (1, 16), (0, 128), (1, 20)))]
+    direct = make()
+    direct.begin(retain=str(tmp_path / "direct"), run=RUN)
+    for w, x in xs:
+        direct.gemm(w, x, weights[w], None)
+    want = direct.end()
+    run = make()
+    sites = _stack_sites(weights)
+    stack = Stack(sites, PPD.PearlCExecutor(run))
+    assert stack.refusals() == [] and stack.executor.schedules == {"serial", "deferred", "deferred-caller"}
+    stack.activate(E2E.arm_of("pearlc", run, types.SimpleNamespace(schedule="serial")))
+    with stack.pass_(dataclasses.replace(stack.active.spec, retain=str(tmp_path / "stack"), run_id=RUN)):
+        for w, x in xs:
+            stack.apply(sites[w], _Layer(weights[w]), x, None, lambda *a: pytest.fail("the stack called vLLM's own apply"))
+    got = stack.passes[-1]
+    assert {k: v for k, v in got.items() if k != "manifest"} == {k: v for k, v in want.items() if k != "manifest"}
+    a, b = Path(want["manifest"]).parent, Path(got["manifest"]).parent
+    assert (a / "manifest.json").read_text() == (b / "manifest.json").read_text()
+    assert all((a / f).read_bytes() == (b / f).read_bytes() for f in ("leaves", "tree_t", "calls/0.rows.bf16", "weights/0.tree"))
+
+
+def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_run):
+    from verity_vllm.linear.api import Control, Stack
+    make, kernel, weights, *_ = device_run
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    run, args = make(), types.SimpleNamespace(schedule="deferred")
+    arms = {m: E2E.arm_of(m, run, args) for m in ("bf16", "pearlc-nohash", "pearlc")}
+    assert arms["bf16"].executor is None and arms["pearlc"].executor == arms["pearlc-nohash"].executor == run.entry
+    assert (arms["pearlc"].spec.hashing, arms["pearlc-nohash"].spec.hashing) == (True, False)
+    assert {a.spec.schedule for m, a in arms.items() if m != "bf16"} == {"deferred"}
+    sites = _stack_sites(weights)
+    stack = Stack(sites, PPD.PearlCExecutor(run))
+    stack.activate(arms["bf16"])
+    assert stack.apply(sites[0], _Layer(weights[0]), "x", None, lambda layer, x, bias: ("stock", x)) == ("stock", "x")
+    stack.activate(arms["pearlc"])
+    kernel.dev.log.clear()
+    spec = arms["pearlc"].spec.__class__(controls=(Control("omit", E2E.CONTROL_OMITS),), schedule="deferred")
+    with stack.pass_(spec):
+        assert run.omit == E2E.CONTROL_OMITS
+        stack.apply(sites[0], _Layer(weights[0]), torch.randn(32, 1024).to(torch.bfloat16), None, None)
+    names = {n for n, *_ in kernel.dev.log}
+    assert "hash_leaf_p" not in names and "hash_rows_w" not in names and run.omit == frozenset()
