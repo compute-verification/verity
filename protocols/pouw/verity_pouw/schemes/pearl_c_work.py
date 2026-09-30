@@ -24,7 +24,8 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
   - filler rows are zero;
   - every opened row is zero past |K| (F7);
   - credited rows pass the per-row rules, and excluded rows fail them;
-  - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ·`creditOf` of the tile (F1).
+  - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ times the credited cells' credit, their
+    share of the unit's `creditOf` (F1; `tile_cap`).
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **The draws (F8)** are keyed by a beacon round published after the verifier recorded the prover's commitment (the
   transcript root and the records root), through `verity.randomness.derive`.
@@ -178,11 +179,13 @@ def row_passes(words: Sequence[int]) -> bool:
 
 def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[int]], b_codes: Sequence[Sequence[int]]
              ) -> tuple[Fraction, Fraction]:
-    """(debit, cap) over credited words given as their A′ and B̃ code rows: `debitOf` of the replayed debit, and
-    ρ·`creditOf` of the tile at |K|."""
+    """(debit, cap) over credited words given as their A′ and B̃ code rows: `debitOf` of the replayed debit, and ρ times
+    the credited cells' credit, the unit's `creditOf` at |K| times their share |rows|·|cols|/(m·n) (the per-tile
+    statement's `tileShare`).  A row's own terms (its forming and A′·F_B) so count once across its row band, a
+    |cols|/n share in each tile, not whole in every tile."""
     d = scheme.device
     debit = D.debit_units(D.chain_atoms(a_codes, b_codes, d), D.forming_elements(a_codes, b_codes), d)
-    return debit, D.CAP * scheme.credit_of(Shape(len(a_codes), record.k_kept, len(b_codes)))
+    return debit, D.CAP * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
 def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
@@ -211,7 +214,7 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
         pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
         debit, cap = tile_cap(scheme, record, [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols])
         if debit > cap:
-            return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·creditOf of the tile)"
+            return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·the credited cells' credit)"
     return None
 
 
