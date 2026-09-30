@@ -87,7 +87,11 @@ def test_every_job_template_names_a_defined_queue_and_priority():
 def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     import subprocess
     text = (SKY / "jobs" / "config-run.yaml").read_text()
-    head, build, gpu = text.split("\n---\n")
+    head, build, gpu, replay = text.split("\n---\n")
+    assert "accelerators" not in replay and "queue-name: deployments-cpu" in replay and "row stage replay" in replay
+    assert 'if [ "${REPLAY_DEFERRED:-0}" != 1 ]; then' in replay and 'REPLAY_DEFERRED: "0"' in replay and 'REPLAY_DEFERRED: "0"' in gpu
+    assert '[ "${REPLAY_DEFERRED:-0}" != 1 ] || deferred=(--replay-deferred 1)' in gpu and '"${deferred[@]}"' in gpu
+    assert 'if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*' in replay
     assert "accelerators" not in build and 'verity.dev/build: "true"' in build and "CUDA_VISIBLE_DEVICES=" in build
     assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
     assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
@@ -100,13 +104,14 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
     def render(*args):
-        out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run.yaml"), *args],
+        out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run.yaml"), *args, *[""] * (4 - len(args))],
                              capture_output=True, text=True, check=True).stdout
         return out.split("\n---\n")[1:]
-    b2, g2 = render("tp2", "", "")
+    b2, g2, r2 = render("tp2", "", "")
     assert "  memory: 160" in b2 and "  memory: 340" in g2 and "accelerators: RTXPRO6000:2" in g2 and "  cpus: 8 " in g2
-    b3, g3 = render("moe", "300", "")                                                                  # a per-cell figure wins
+    b3, g3, r3 = render("moe", "300", "", "96")                                                                  # a per-cell figure wins
     assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 170 " in g3
+    assert "  memory: 96 " in r3 and "  memory: 64 " in r2                                                  # VY_REPLAY_MEMORY
 
 
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
@@ -194,7 +199,7 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
 def test_the_coverage_build_task_has_no_gpu_but_finds_the_hosts_cuda_driver():
     """A GPU-less pod has no driver libraries, yet vLLM's CUDA platform (#536) loads libcuda.so.1 at import: the build task puts the
     host's copy, which cluster_up.sh maintains, on LD_LIBRARY_PATH."""
-    head, build, gpu = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
+    head, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
     assert "accelerators" not in build and "LD_LIBRARY_PATH=/workspace/jobs/cuda-driver" in build
     assert "accelerators: RTXPRO6000:1" in gpu and "cuda-driver" not in gpu
     assert "/workspace/jobs/cuda-driver" in (SKY / "cluster_up.sh").read_text()
@@ -209,12 +214,12 @@ def test_each_coverage_task_is_one_stage_attempt_whose_tool_reads_the_row():
     repo = Path(__file__).resolve().parents[3]
     row = "smollm2-135m__bf16__rtxpro6000__tp1__b2__i64__o16__single__greedy__bi-eager"
     env = {"PY": "/venv/bin/python", "ROW": row, "ROLE": "SMOLLM2", "REPO": "HuggingFaceTB/SmolLM2-135M", "REVISION": "abc123"}
-    _, build, gpu = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
+    _, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
     for stage, task in (("build", build), ("commit", gpu)):
         run = task[task.index("\nrun: |"):task.index("\nconfig:")].replace("\\\n", " ")
         line = next(ln for ln in run.splitlines() if "-m research run" in ln)
         assert f'--tool vllm.{stage} --project verity --cwd "$SRC"' in line and "bash -c" not in line
-        argv = line.split(" -- ", 1)[1]
+        argv = line.split(" -- ", 1)[1].replace('${deferred[@]+"${deferred[@]}"}', '')
         for k, v in env.items():
             argv = argv.replace(f'"${k}"', v)
         _, key = tools_registry.load(f"vllm.{stage}", repo).resolve_params(shlex.split(argv), repo)
@@ -228,7 +233,7 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
     #561's staged sources."""
     import subprocess
     for f in ("config-run.yaml", "config-run-row.yaml"):
-        gpu = (SKY / "jobs" / f).read_text().split("\n---\n")[-1]
+        gpu = next(p for p in (SKY / "jobs" / f).read_text().split("\n---\n") if "accelerators:" in p)
         run = gpu[gpu.index("\nrun: |"):gpu.index("\nconfig:")]
         start = run.index('  case "$ROW" in *__bi-eager)')
         block = "\n".join(ln[2:] for ln in run[start:].split("\n")[:4])
