@@ -931,20 +931,36 @@ def row_f1(fmt: Fmt, side: Formed, e_rows: Sequence[Sequence[int]], pos: int, de
     return split_units(fmt, p, modes, side.scales[pos], overfit), sum(m is None for m in modes)
 
 
+#: Per row of one tile's formed operands, by ("A" | "B", tile position): its salt-dead codes, its F1′ per word and its
+#: uncertified blocks.  Valid for one (operands, E lines, F1′ evaluation) only.
+RowTerms = dict[tuple[str, int], tuple[list[bool], Fraction, int]]
+
+
+def row_terms(fmt: Fmt, memo: RowTerms, label: str, side: Formed, e_rows: Sequence[Sequence[int]], pos: int,
+              f1: RowF1 = row_f1) -> tuple[list[bool], Fraction, int]:
+    """A row of A′ ("A") or B̃ ("B"): its salt-dead codes and its F1′ (B̃'s at `F1_B_OVERFIT` times its expectation),
+    evaluated once per `memo`, so R1 and the debit read the same evaluation."""
+    if (label, pos) not in memo:
+        dead = salt_dead(fmt, side.x[pos], side.alpha[pos], side.ae[pos])
+        memo[label, pos] = (dead, *f1(fmt, side, e_rows, pos, dead, 1 if label == "A" else F1_B_OVERFIT))
+    return memo[label, pos]
+
+
 def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int,
                e_a: Sequence[Sequence[int]], e_b: Sequence[Sequence[int]], m: int | None = None,
-               f1: RowF1 | None = None) -> Debit:
+               f1: RowF1 | None = None, memo: RowTerms | None = None) -> Debit:
     """The debit over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
     this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n).  `f1` evaluates a row's F1′; a verifier
-    may pass a faster evaluation that charges at least the rule's (`benchmarks/pouw/pearl_c4/f1_fast.py`)."""
+    may pass a faster evaluation that charges at least the rule's (`benchmarks/pouw/pearl_c4/f1_fast.py`).  `memo` holds
+    rows already evaluated on these operands with this `f1` (`row_terms`)."""
     m = n if m is None else m
     f1 = row_f1 if f1 is None else f1
-    dead_a = {i: salt_dead(fmt, a.x[i], a.alpha[i], a.ae[i]) for i in rows}
-    dead_b = {j: salt_dead(fmt, b.x[j], b.alpha[j], b.ae[j]) for j in cols}
-    f1_a = {i: f1(fmt, a, e_a, i, dead_a[i], 1) for i in rows}
-    f1_b = {j: f1(fmt, b, e_b, j, dead_b[j], F1_B_OVERFIT) for j in cols}
-    split = len(cols) * sum(u for u, _ in f1_a.values()) + len(rows) * sum(u for u, _ in f1_b.values())
-    uncertified = sum(c for _, c in f1_a.values()) + sum(c for _, c in f1_b.values())
+    memo = {} if memo is None else memo
+    t_a = {i: row_terms(fmt, memo, "A", a, e_a, i, f1) for i in rows}
+    t_b = {j: row_terms(fmt, memo, "B", b, e_b, j, f1) for j in cols}
+    dead_a, dead_b = {i: t[0] for i, t in t_a.items()}, {j: t[0] for j, t in t_b.items()}
+    split = len(cols) * sum(t[1] for t in t_a.values()) + len(rows) * sum(t[1] for t in t_b.values())
+    uncertified = sum(t[2] for t in t_a.values()) + sum(t[2] for t in t_b.values())
     k = len(a.codes[0])
     int8 = Fraction(int8_saving(fmt, [a.scales[i] for i in rows], [b.scales[j] for j in cols], m, n)) * len(rows) * len(cols) * k
     win_a = {i: two_four_windows(a.codes[i]) for i in range(len(a.codes))}
@@ -1000,6 +1016,7 @@ class PearlC4:
         self.k_min, self.tile = k_min, tile
         self.last_debit: Debit | None = None
         self._encoded: tuple | None = None
+        self._rows: tuple[C.Ops | None, RowF1 | None, RowTerms] = (None, None, {})
         self.certificate = Certificate(
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
@@ -1081,13 +1098,17 @@ class PearlC4:
         """(debit, cap) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times the
         credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in `last_debit`."""
         s = record.matmul.shape
-        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m, self.f1)
+        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m, self.f1,
+                                     self._memo(ops))
         cell = Fraction(self.credit_of(Shape(1, record.k_kept, s.n)), s.n)
         return self.last_debit.total, CAP * cell * len(rows) * len(cols)
 
-    def _row_f1(self, side: Formed, e_rows: Sequence[Sequence[int]], pos: int, overfit: float = 1) -> Fraction:
-        dead = salt_dead(self.fmt, side.x[pos], side.alpha[pos], side.ae[pos])
-        return self.f1(self.fmt, side, e_rows, pos, dead, overfit)[0]
+    def _memo(self, ops: C.Ops) -> RowTerms:
+        """The encoded tile's `row_terms`, shared by R1 (`row_debit_ratio`) and the debit (`tile_cap`), so a drawn tile's
+        rows are evaluated once; a new tile or a new `f1` starts a new one."""
+        if self._rows[0] is not ops or self._rows[1] is not self.f1:
+            self._rows = (ops, self.f1, {})
+        return self._rows[2]
 
     def _r1_cap(self, k_kept: int, n: int) -> Fraction:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
@@ -1097,8 +1118,9 @@ class PearlC4:
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `pearl_c_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
         still formed, checked and hashed; it earns nothing."""
-        formed, e_rows, overfit = (ops.a, ops.e_a, 1) if side == "A" else (ops.b, ops.e_b, F1_B_OVERFIT)
-        return self._row_f1(formed, e_rows, pos, overfit) / self._r1_cap(record.k_kept, record.matmul.shape.n)
+        formed, e_rows = (ops.a, ops.e_a) if side == "A" else (ops.b, ops.e_b)
+        units = row_terms(self.fmt, self._memo(ops), side, formed, e_rows, pos, self.f1)[1]
+        return units / self._r1_cap(record.k_kept, record.matmul.shape.n)
 
     def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
         """Whether R1 requires the row excluded (its ratio over 1)."""
@@ -1110,14 +1132,14 @@ class PearlC4:
         noise, k, n = self.noise(ctx), ctx.matmul.shape.k, ctx.matmul.shape.n
         cap = self._r1_cap(k_kept, n)
         out: tuple[set[int], set[int]] = (set(), set())
-        for rows, role_e, role_f, seed_e, dest in ((a_rows, ROLE_EA, ROLE_FA, noise.seed_a, out[0]),
-                                                   (b_rows, ROLE_EB, ROLE_FB, noise.seed_b, out[1])):
+        for label, rows, role_e, role_f, seed_e, dest in (("A", a_rows, ROLE_EA, ROLE_FA, noise.seed_a, out[0]),
+                                                          ("B", b_rows, ROLE_EB, ROLE_FB, noise.seed_b, out[1])):
             live = [i for i, row in enumerate(rows) if row_passes(self.fmt, parse_row(row, k))]
             if not live:
                 continue
             side, e = self._side([rows[i] for i in live], live, role_e, role_f, seed_e, noise.seed_b, k)
-            overfit = 1 if dest is out[0] else F1_B_OVERFIT
-            dest.update(i for p, i in enumerate(live) if self._row_f1(side, e, p, overfit) > cap)
+            memo: RowTerms = {}
+            dest.update(i for p, i in enumerate(live) if row_terms(self.fmt, memo, label, side, e, p, self.f1)[1] > cap)
         return out
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,

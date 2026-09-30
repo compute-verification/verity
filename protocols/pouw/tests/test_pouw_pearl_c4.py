@@ -484,6 +484,28 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
         assert reason is None or ("R1" not in reason and "per-row rules" not in reason)
 
 
+def test_a_drawn_tile_evaluates_each_rows_f1_once():
+    """R1 on every row and the debit over the credited words read one evaluation of each row's F1′ per encoded tile (F1′
+    is most of the verifier's per-tile cost), and the debit is the uncached one; other operands start afresh."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k, shape = ctx.matmul.shape.k, ctx.matmul.shape
+    calls: list[tuple[int, int]] = []
+
+    def counted(fmt, side, e_rows, pos, dead, overfit=1):
+        calls.append((id(side), pos))
+        return F.row_f1(fmt, side, e_rows, pos, dead, overfit)
+
+    s.f1 = counted
+    record = W.UnitRecord(ctx.matmul, 4, k, (0,))
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+    assert sorted(calls) == sorted((id(side), p) for side in (ops.a, ops.b) for p in range(4))
+    s.tile_cap(record, ops, range(4), range(4))
+    assert len(calls) == 8
+    assert s.last_debit == F.tile_debit(s.fmt, ops.a, ops.b, range(4), range(4), shape.n, ops.e_a, ops.e_b, shape.m)
+    s.tile_cap(record, copy.copy(ops), [1], [0])
+    assert len(calls) == 10
+
+
 def test_f2_depth_cost_is_the_pinned_formula():
     """c_L (bc-d9842080, 13:35Z) at W1's int8 leaf of 2 slots, the FP4 conditions' (ratings.md 15:18Z), with depth capped
     only by log2(k/block): 0.808 / 0.707 / 0.619 / 0.542 at 8k–64k³."""
