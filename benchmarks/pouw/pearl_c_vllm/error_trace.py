@@ -158,7 +158,7 @@ def summarize(parts: list[dict]) -> dict:
 
 # ---- the stock FP8 engine, in a child process ----------------------------------------------------------------------------
 
-def fp8_child(conn, args, scratch: str, names: list[str], window: list[int]) -> None:
+def fp8_child(conn, args, scratch: str, names: list[str], window: list[int], count: int) -> None:
     """The stock FP8 engine: its first linear's input on `window` against the captured one, then each linear's own
     ``quant_method.apply`` on the captured inputs, into scratch/fp8-<w>.pt."""
     try:
@@ -178,7 +178,7 @@ def fp8_child(conn, args, scratch: str, names: list[str], window: list[int]) -> 
         d = Path(scratch)
         x0 = torch.load(d / "x-0.pt")
         with torch.inference_mode():
-            for w, (_, layer) in enumerate(layers):
+            for w, (_, layer) in enumerate(layers[:count]):
                 y = layer.quant_method.apply(layer, torch.load(d / f"x-{w}.pt").cuda(), None)
                 torch.save(y.cpu(), d / f"fp8-{w}.pt")
         qm = layers[0][1].quant_method
@@ -288,6 +288,7 @@ def trace(args) -> int:
     run, weights = e2e.install(model, args, BEACON, state)
     layers = linears(model)
     names = [n for n, _ in layers]
+    count = min(args.linears or len(layers), len(layers))
     meta_path = d / "trace-meta.json"
     meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
     if "gate" not in meta:
@@ -296,7 +297,7 @@ def trace(args) -> int:
         if not meta["gate"]["ok"]:
             meta_path.write_text(json.dumps(meta, indent=1))
             raise SystemExit("the arm's gate failed")
-    if not (scratch / f"x-{len(layers) - 1}.pt").exists():
+    if not (scratch / f"x-{count - 1}.pt").exists():
         got: dict = {}
         hooks = [layer.register_forward_pre_hook(
                      lambda _m, a, w=w: got.__setitem__(w, a[0].detach().reshape(-1, a[0].shape[-1]).to("cpu", copy=True)))
@@ -309,10 +310,10 @@ def trace(args) -> int:
         for w, x in got.items():
             torch.save(x, scratch / f"x-{w}.pt")
         meta.update(window_tokens=len(window), linears=len(layers))
-    if not (scratch / f"fp8-{len(layers) - 1}.pt").exists():
+    if not (scratch / f"fp8-{count - 1}.pt").exists():
         ctx = mp.get_context("spawn")
         parent, child = ctx.Pipe()
-        proc = ctx.Process(target=fp8_child, args=(child, args, str(scratch), names, window))
+        proc = ctx.Process(target=fp8_child, args=(child, args, str(scratch), names, window, count))
         proc.start()
         if not parent.poll(1200):
             proc.terminate()
@@ -328,7 +329,7 @@ def trace(args) -> int:
     torch.set_float32_matmul_precision("highest")
     run.begin()
     with parts_path.open("a") as out:
-        for w, (name, layer) in enumerate(layers):
+        for w, (name, layer) in enumerate(layers[:count]):
             if w in done:
                 continue
             if time.perf_counter() - t0 > 60 * args.chunk_min and len(done) > 0:
@@ -365,6 +366,7 @@ def main() -> None:
     ap.add_argument("--mem-base", type=float, default=0.2)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--chunk-min", type=float, default=6.0, help="start no linear after this many minutes (the fill chunk)")
+    ap.add_argument("--linears", type=int, help="trace the first N linears only (a smoke)")
     sys.exit(trace(ap.parse_args()))
 
 

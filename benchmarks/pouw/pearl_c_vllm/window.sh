@@ -21,7 +21,7 @@
 # checks, GPU 1's for both variants (v2 runs the unpromoted kernels), then `e2e.py --perplexity` into quality.json, a scheme
 # group a chunk with CHUNK_MIN=0, exiting 99 while groups remain.  OUT names the output directory where there is no research
 # run (a fill job).  MODE=trace (untimed, as node-2 fill or `gpu-lease 1`): the same checks, then `error_trace.py` into
-# trace.json, exiting 99 while linears remain (CHUNK_MIN, default 6, is when a chunk starts no more).
+# trace.json, exiting 99 while linears remain (CHUNK_MIN, default 6, is when a chunk starts no more; LINEARS=N, the first N).
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
@@ -61,7 +61,7 @@ elif [ "$MODE" = perplexity ]; then
     --out "$OUT/quality.json" --perplexity --chunk-min "${CHUNK_MIN:-7}"
 elif [ "$MODE" = trace ]; then
   "$PY" benchmarks/pouw/pearl_c_vllm/error_trace.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 \
-    --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/trace.json" --chunk-min "${CHUNK_MIN:-6}"
+    --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/trace.json" --chunk-min "${CHUNK_MIN:-6}" ${LINEARS:+--linears "$LINEARS"}
 elif [ "$MODE" = profile ]; then
   nsys profile -o "$OUT/decode" -f true -t cuda,nvtx --capture-range=cudaProfilerApi --capture-range-end=stop \
     "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 \
