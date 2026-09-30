@@ -336,6 +336,37 @@ def recover(model, train_ids, steps, seqlen, lr, dev, seed):
     return losses
 
 
+def write_result(run, out, variants):
+    """$RESEARCH_RUN_DIR/result.json in research/result/v0.1: each variant's perplexity and skippable fraction, validated for
+    completeness (present, every window evaluated, recovery run to the end)."""
+    meas, files, bad = [], [], []
+    for v in variants:
+        f = out / f"{v.replace(':', '_')}.json"
+        if not f.exists():
+            bad.append(f"{v}: missing")
+            continue
+        d = json.loads(f.read_text())
+        try:
+            files.append(str(f.resolve().relative_to(run.resolve())))
+        except ValueError:
+            pass
+        if d["eval_windows"] != len(d["window_nll"]) or not d["window_nll"]:
+            bad.append(f"{v}: incomplete")
+        meas.append({"name": f"{v}/ppl", "value": d["ppl"], "unit": "perplexity"})
+        if d.get("skippable_fraction_mean") is not None:
+            meas.append({"name": f"{v}/skippable_fraction", "value": d["skippable_fraction_mean"], "unit": "fraction of the v1 chain"})
+    doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+           "workload_fingerprint": {"workload": "approved-weights/gpu-tradeoff/v1", "source_sha": os.environ.get("RESEARCH_SOURCE_SHA", ""),
+                                    "model": "Qwen/Qwen2.5-7B", "data": "wikitext-2-raw-v1:test", "variants": variants},
+           "validation": {"status": "failed" if bad else "passed", "checker": "approved-weights/gpu-completeness/v1",
+                          "detail": "; ".join(bad) if bad else f"all {len(variants)} variants present and fully evaluated",
+                          "evidence": files},
+           "measurements": meas, "measurement_files": files}
+    tmp = run / "result.json.tmp"
+    tmp.write_text(json.dumps(doc, indent=1) + "\n")
+    os.replace(tmp, run / "result.json")
+
+
 def main():
     signal.signal(signal.SIGTERM, on_term)
     ap = argparse.ArgumentParser()
@@ -410,15 +441,7 @@ def main():
     done = all((out / f"{v.replace(':', '_')}.json").exists() for v in variants)
     rd = os.environ.get("RESEARCH_RUN_DIR")
     if rd:
-        summary = {}
-        for v in variants:
-            f = out / f"{v.replace(':', '_')}.json"
-            if f.exists():
-                d = json.loads(f.read_text())
-                summary[v] = {"ppl": d["ppl"], "skippable_fraction_mean": d["skippable_fraction_mean"],
-                              "eval_windows": d["eval_windows"], "recover_steps": d["recover_steps"]}
-        Path(rd, "result.json").write_text(json.dumps({"kind": "approved-weights/gpu-tradeoff/v1", "done": done,
-                                                         "variants": summary}, indent=1))
+        write_result(Path(rd), out, variants)
     if PREEMPTED["flag"] and not done:
         return 143
     return 0 if done else 99

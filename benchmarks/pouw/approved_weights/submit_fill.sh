@@ -46,17 +46,33 @@ while [ "$(missing)" != 0 ]; do
   sleep 60
 done
 cp -r "$D/out" "$RESEARCH_RUN_DIR/out"
-python3 - "$D/out" "$VARIANTS" "$RESEARCH_RUN_DIR/result.json" << 'PY'
-import json, sys, pathlib
-out, vs, dest = pathlib.Path(sys.argv[1]), sys.argv[2].split(","), sys.argv[3]
-res = {}
+python3 - "$RESEARCH_RUN_DIR" "$VARIANTS" "$SHA" << 'PY'
+import json, os, sys, pathlib
+run, vs, sha = pathlib.Path(sys.argv[1]), sys.argv[2].split(","), sys.argv[3]
+out = run / "out"
+meas, files, bad = [], [], []
 for v in vs:
     f = out / (v.replace(":", "_") + ".json")
-    if f.exists():
-        d = json.loads(f.read_text())
-        res[v] = {k: d[k] for k in ("ppl", "skippable_fraction_mean", "eval_windows", "recover_steps", "seconds")}
-done = len(res) == len(vs)
-json.dump({"kind": "approved-weights/gpu-tradeoff/v1", "done": done, "variants": res}, open(dest, "w"), indent=1)
-print(json.dumps({"done": done, "variants": len(res)}))
-sys.exit(0 if done else 1)
+    if not f.exists():
+        bad.append(f"{v}: missing")
+        continue
+    d = json.loads(f.read_text())
+    files.append(str(f.relative_to(run)))
+    if d["eval_windows"] != len(d["window_nll"]) or not d["window_nll"] or (d["recover"] and len(d["recover_loss_trace"]) * 25 < d["recover_steps"]):
+        bad.append(f"{v}: incomplete")
+    meas.append({"name": f"{v}/ppl", "value": d["ppl"], "unit": "perplexity"})
+    if d.get("skippable_fraction_mean") is not None:
+        meas.append({"name": f"{v}/skippable_fraction", "value": d["skippable_fraction_mean"], "unit": "fraction of the v1 chain"})
+doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+       "workload_fingerprint": {"workload": "approved-weights/gpu-tradeoff/v1", "source_sha": sha, "model": "Qwen/Qwen2.5-7B",
+                                "data": "wikitext-2-raw-v1:test", "variants": vs},
+       "validation": {"status": "failed" if bad else "passed", "checker": "approved-weights/gpu-completeness/v1",
+                      "detail": "; ".join(bad) if bad else f"all {len(vs)} variants present, fully evaluated and recovered",
+                      "evidence": files},
+       "measurements": meas, "measurement_files": files, "artifacts": ["out"]}
+tmp = run / "result.json.tmp"
+tmp.write_text(json.dumps(doc, indent=1) + "\n")
+os.replace(tmp, run / "result.json")
+print(json.dumps({"done": not bad, "variants": len(files)}))
+sys.exit(1 if bad else 0)
 PY
