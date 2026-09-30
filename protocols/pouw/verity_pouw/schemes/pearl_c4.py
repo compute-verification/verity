@@ -3,7 +3,7 @@
 The design is research store ``internal/pouw/rtx-pro/fp4-design.md`` (GPU 5's lane).  It is Pearl-C (`pearl_c`) with the
 FP8 product replaced by the E2M1 one: the noise enters inside one atom per element, one noisy cast forms the operand,
 Pearl's tickets are drawn on C̃, the BF16 clean-up U is checked, and every C̃ and U word is hashed into the tile's leaf
-(`pearl_c.leaf`).  γ rests on a conjecture the theory lane has not stated yet (TT_OUT for this Π); nothing here is proved.
+(`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which the theory lane has stated and nobody has proved.
 
 **Per row x** of either operand (k BF16 words, the model's activation and weight dtype):
 
@@ -40,9 +40,26 @@ off) is `clean`: the same α and block rule on α·x, no noise.
 
 **Why the chain's exactness matters.**  On the domain the chain is exact, so rounding does not tie a word to its order,
 as Pearl-C's H100 argument had it.  The design rests instead on every code and every block scale depending on the salt.
-A block whose noise is below τ = 1/8 of its code step is *dead*: its codes barely depend on the salt.  `tile_cap` debits
-dead blocks, and the per-row rules bound them (``fp4-design.md`` §6, §7; δ, τ and the bounds are placeholders for the
-theory lane).
+
+**The domain and the debit** are the theory lane's (research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
+§1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (a_E a normal
+UE4M3, one a_E per row) and D-SS's dead share (a block is dead when its clean |max| exceeds 12ρ; at most one in 64).  A
+drawn tile's debit is replayed over its credited words (`tile_debit`):
+
+~~~text
+1  2:4 groups    per row and 4-group with ≥ 2 salt-dead codes: 0.5 per MAC (1 when all 4 are), on every word the row feeds
+2  identity      per atom whose lone skip leaves the word unchanged: 64 per atom-word
+3  dead pairs    per block dead on both the A row and the B row: `block` per pair-word
+4  forming       per salt-dead or unneeded A element: f_s · |cols|/n
+5  sub-grid      per (word, block) with 2304·m_a·m_b·2^(e_a+e_b−2) below its step's grid (it adds exactly 0): `block`
+D-24 windows     per row and aligned 128 of k whose every 4-group has ≤ 2 nonzero codes: 0.5 per MAC, on every word it feeds
+cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
+~~~
+
+A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
+codes, not on the atom's word.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
+gather any 16 such rows), and the literal spans are counted.  D-SS's scale-byte range and spread bound (2^15.8, implied by
+D-NF) are counted, not enforced: items 2 and 5 charge what they would exclude.
 
 **Stand-ins.**  The atoms are the RTX 5090 pins (`BLACKWELL_SM120_NVF4`, `_MXF4`, `HOPPER_BF16_M16N8K16`), pending GPU 4's
 RTX PRO recheck.  The E2M1, UE4M3 and UE8M0 casts are modelled from the PTX ISA, not captured.  A negative value that
@@ -59,6 +76,7 @@ from functools import lru_cache
 
 from verity.commitments.blake3 import blake3, keyed
 from verity.commitments.turboshake import turboshake128
+from verity.errors import InvalidArtifact
 from verity.ml.tc import fp32
 from verity.ml.tc.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 
@@ -89,13 +107,17 @@ UE4M3_NORMAL = 0x08                # 2^-6
 TAU_SQ_INV = 144                   # dead block: amax_b > 12ρ, i.e. δ·6/τ = 12 with δ = 1/4, τ = 1/8
 DEAD_SHARE = 64                    # a row passes with at most one dead block in 64
 
-#: W1 in FP4 units (1 = one dense FP4 MAC on sm_120).  Placeholder prices from public peak rates until GPU 4's
-#: microbenchmarks: a BF16 MAC 4, an FP32 instruction 16.
+#: W1 in FP4 units (1 = one dense FP4 MAC on sm_120): a BF16 MAC 4, an FP32 instruction 16 (placeholders from public peak
+#: rates; the measured FADD is 16.9).
 BF16_MAC_UNITS, FP32_UNITS = 4, 16
-#: Forming per operand element: the noise atom 64, the noisy block amax and scale about 19, the cast 32 (credited, they
-#: read the salt); ρ, one FP32 FMA every 8th element, 2 (A alone, not credited).
-FORMING_CREDITED, FORMING_A_ONLY = 115, 2
+#: Forming per operand element (theory-pearl-c4-domain.md §2).  Credited, each step that reads the salt at its cheapest
+#: bit-exact price: f_s = 98 (the noise atom 64, the dense k64's full shape; the block-scale operations about 1; the cast
+#: 32.8, FMUL and F2FP).  Uncredited, 19: the noisy amax (one FMNMX, 17) and ρ's every-8th accumulate (2), in W_ref alone.
+FORMING_CREDITED, FORMING_UNCREDITED = 98, 19
 CAP = Fraction(1, 400)
+SPAN_K = 128                       # D-24: one mma.sp m16n8k128 takes 16 rows x 128 of k
+SPREAD_X5 = 79                     # D-SS: spread ≤ 2^15.8, as spread^5 ≤ 2^79
+GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 products of 6 x 6
 
 _E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
 _E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
@@ -334,7 +356,7 @@ def peel(c_word: int, pa: Sequence[int], pb: Sequence[int]) -> int:
     return acc
 
 
-# ---- the per-row rules and the debit (placeholders for the theory lane) -------------------------------------------
+# ---- the domain rules and the debit (theory-pearl-c4-domain.md §1, §2) --------------------------------------------
 
 def _exact_rho_sq(x: Sequence[int]) -> Fraction:
     positions = range(0, len(x), C.S5_STRIDE)
@@ -350,7 +372,8 @@ def dead_blocks(fmt: Fmt, x: Sequence[int]) -> list[bool]:
 
 
 def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
-    """The per-row rules: a_E is a normal UE4M3 (at least 2^-6), and at most one scale block in 64 is dead."""
+    """Admission, per row and salt-free: D-NF (a_E is a normal UE4M3, at least 2^-6) and D-SS's dead share (at most one
+    scale block in 64 is dead)."""
     try:
         ae = stats(fmt, x)[4]
     except P.Reject:
@@ -358,14 +381,171 @@ def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
     return ae >= UE4M3_NORMAL and DEAD_SHARE * sum(dead_blocks(fmt, x)) <= len(x) // fmt.block
 
 
-def tile_debit(fmt: Fmt, a_x: Sequence[Sequence[int]], b_x: Sequence[Sequence[int]], n: int) -> Fraction:
-    """The debit over a tile's credited words (rows a_x of A, b_x of B, as FP32 words), in FP4 units: `fmt.block` MACs
-    per word and dead x dead block pair, and each dead A element's credited forming by the tile's share of its n columns."""
-    da = [dead_blocks(fmt, x) for x in a_x]
-    db = [dead_blocks(fmt, x) for x in b_x]
-    pairs = sum(sum(p and q for p, q in zip(ra, rb)) for ra in da for rb in db)
-    elements = fmt.block * sum(sum(r) for r in da)
-    return fmt.block * pairs + Fraction(FORMING_CREDITED * elements * len(b_x), n)
+def scale_dyadic(fmt: Fmt, byte: int) -> tuple[int, int]:
+    """A scale byte's value as m·2^e (the atom's scaleDyadic): UE4M3 (8 + m, e − 10), or (m, −9) at exponent field 0;
+    UE8M0 (8, byte − 130)."""
+    if fmt is MXFP4:
+        return 8, byte - 130
+    e, m = byte >> 3, byte & 7
+    return (8 + m, e - 10) if e else (m, -9)
+
+
+def _witness(ae: int, f: Sequence[int]) -> list[tuple[int, int, bool]]:
+    """The noise atom's group terms under E ≡ +6 and F_t = f."""
+    pad = [0] * (ATOM - R)
+    return BLACKWELL_SM120_NVF4.group_terms([0x7] * R + pad, list(f) + pad, [ae] * 4, [NOISE_F_SCALE] * 4)
+
+
+def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
+    """Per element of one row: whether its E2M1 code may be the same at every noise draw (P3's saltDead, on codes).
+
+    An element is salt-live when two draws in the support (every pair of 32-code E2M1 lines) give its code two values;
+    every other element counts as salt-dead, the sound side.  The draws: E ≡ +6 on the row, the element's F_t ≡ +6, 0 or
+    −6, and every other F_u of its block ≡ 0, so the block's other elements are the atom on α·x_u alone and its amax is
+    theirs or the element's."""
+    atom = BLACKWELL_SM120_NVF4
+    up, zero, down = (_witness(ae, [f] * R) for f in (0x7, 0x0, 0xF))
+    recip: dict[int, int] = {}
+
+    def code(v: int, amax: int) -> int:
+        """The element's code at one draw, with −0 (0x8) as 0: salt-deadness compares values."""
+        if amax not in recip:
+            recip[amax] = block_scale(fmt, amax)[1]
+        c = e2m1(fp32.mul(v, recip[amax]))
+        return c if c & 7 else 0
+
+    dead = []
+    for b in range(0, len(x), fmt.block):
+        c = [fp32.mul(alpha, w) for w in x[b:b + fmt.block]]
+        clean = [_finite(atom.align_add(w, zero)) for w in c]
+        mags = [w & 0x7FFFFFFF for w in clean]
+        top = max(mags)
+        at = mags.index(top)
+        second = max(mags[:at] + mags[at + 1:], default=0)
+        for t, (ct, dt) in enumerate(zip(c, clean)):
+            rest = second if t == at else top
+            draws = (_finite(atom.align_add(ct, up)), dt, _finite(atom.align_add(ct, down)))
+            dead.append(len({code(v, max(v & 0x7FFFFFFF, rest)) for v in draws}) == 1)
+    return dead
+
+
+def two_four_units(dead: Sequence[bool]) -> int:
+    """Item 1's charge per word the row feeds: 2 (0.5 per MAC) per 4-group with ≥ 2 salt-dead codes, 4 when all 4 are."""
+    units = 0
+    for q in range(0, len(dead), 4):
+        d = sum(dead[q:q + 4])
+        units += 4 if d == 4 else 2 if d >= 2 else 0
+    return units
+
+
+def two_four_windows(codes: Sequence[int]) -> list[bool]:
+    """D-24, per aligned 128 of k: every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0)."""
+    return [all(sum(1 for c in codes[q:q + 4] if c & 7) <= 2 for q in range(w, w + SPAN_K, 4))
+            for w in range(0, len(codes), SPAN_K)]
+
+
+def spread_ok(fmt: Fmt, scales: Sequence[int]) -> bool:
+    """D-SS's spread: max_b val(s_b) / min_b val(s_b) ≤ 2^15.8."""
+    vals = [Fraction(m) * Fraction(2) ** e for m, e in (scale_dyadic(fmt, s) for s in scales)]
+    return min(vals) > 0 and (max(vals) / min(vals)) ** 5 <= 2 ** SPREAD_X5
+
+
+def scale_bytes_ok(fmt: Fmt, scales: Sequence[int]) -> bool:
+    """D-SS's range: never zero, never saturated (UE4M3 in [0x01, 0x7E]; UE8M0 short of its NaN, 0xFF)."""
+    return all(UE4M3_MIN <= s <= 0x7E for s in scales) if fmt is NVFP4 else all(s < 0xFF for s in scales)
+
+
+def word_replay(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scales: Sequence[int],
+                b_scales: Sequence[int]) -> tuple[int, int, int]:
+    """One word's chain replayed from +0: (C̃, identity atoms, sub-grid blocks).
+
+    An atom is an identity atom when its lone skip (its incoming word passed through) leaves the final word unchanged
+    (item 2; a skipped chain that leaves the model's range counts, the sound side).  A block is sub-grid when its largest
+    possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid `atom.grid`, so it adds exactly 0
+    (item 5)."""
+    atom, ns = fmt.atom, ATOM // fmt.block
+    steps = len(a_codes) // ATOM
+    da, db = [scale_dyadic(fmt, s) for s in a_scales], [scale_dyadic(fmt, s) for s in b_scales]
+    terms, w, subgrid = [], [0], 0
+    for s in range(steps):
+        tm = atom.group_terms(a_codes[s * ATOM:(s + 1) * ATOM], b_codes[s * ATOM:(s + 1) * ATOM],
+                              a_scales[s * ns:(s + 1) * ns], b_scales[s * ns:(s + 1) * ns])
+        lsb = atom.grid(w[-1], tm)
+        if lsb is not None:
+            for blk in range(s * ns, (s + 1) * ns):
+                (ma, ea), (mb, eb) = da[blk], db[blk]
+                top, e = GROUP_MAX * ma * mb, lsb - ea - eb + 2
+                subgrid += top == 0 or (e > 0 and top < 1 << e)
+        terms.append(tm)
+        w.append(_finite(atom.align_add(w[-1], tm)))
+    identity = 0
+    for t in range(steps):
+        c, s = w[t], t + 1
+        try:
+            while s < steps and c != w[s]:
+                c = atom.align_add(c, terms[s])
+                s += 1
+        except InvalidArtifact:
+            identity += 1
+            continue
+        identity += c == w[s]
+    return w[-1], identity, subgrid
+
+
+@dataclass(frozen=True)
+class Debit:
+    """A drawn tile's replayed debit over its credited words in FP4 units, by item (module docstring), and the counts
+    behind it and behind the domain checks."""
+
+    two_four: int
+    identity: int
+    dead_pairs: int
+    forming: Fraction
+    subgrid: int
+    windows: int
+    counts: dict
+
+    @property
+    def total(self) -> Fraction:
+        return self.two_four + self.identity + self.dead_pairs + self.forming + self.subgrid + self.windows
+
+    def to_json(self) -> dict:
+        return {"total": str(self.total), "two_four": self.two_four, "identity": self.identity,
+                "dead_pairs": self.dead_pairs, "forming": str(self.forming), "subgrid": self.subgrid,
+                "windows": self.windows, "counts": dict(self.counts)}
+
+
+def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int) -> Debit:
+    """The debit over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b)."""
+    dead_a = {i: salt_dead(fmt, a.x[i], a.alpha[i], a.ae[i]) for i in rows}
+    dead_b = {j: salt_dead(fmt, b.x[j], b.alpha[j], b.ae[j]) for j in cols}
+    two_four = (len(cols) * sum(two_four_units(dead_a[i]) for i in rows)
+                + len(rows) * sum(two_four_units(dead_b[j]) for j in cols))
+    win_a = {i: two_four_windows(a.codes[i]) for i in range(len(a.codes))}
+    win_b = {j: two_four_windows(b.codes[j]) for j in cols}
+    windows = SPAN_K // 2 * (len(cols) * sum(sum(win_a[i]) for i in rows) + len(rows) * sum(sum(win_b[j]) for j in cols))
+    identity = subgrid = 0
+    for i in rows:
+        for j in cols:
+            _, idn, sg = word_replay(fmt, a.codes[i], b.codes[j], a.scales[i], b.scales[j])
+            identity, subgrid = identity + idn, subgrid + sg
+    blocks_a, blocks_b = {i: dead_blocks(fmt, a.x[i]) for i in rows}, {j: dead_blocks(fmt, b.x[j]) for j in cols}
+    pairs = sum(p and q for i in rows for j in cols for p, q in zip(blocks_a[i], blocks_b[j]))
+    unneeded = [all(b.codes[j][t] & 7 == 0 for j in cols) for t in range(len(a.codes[0]))]
+    elements = sum(d or u for i in rows for d, u in zip(dead_a[i], unneeded))
+    spans = sum(all(win_a[i][w] for i in range(r, r + 16)) for r in range(0, len(a.codes) - 15, 16)
+                for w in range(len(win_a[0])))
+    counts = {"salt_dead_a": sum(sum(dead_a[i]) for i in rows), "salt_dead_b": sum(sum(dead_b[j]) for j in cols),
+              "two_four_windows_a": sum(sum(win_a[i]) for i in rows), "two_four_windows_b": sum(sum(win_b[j]) for j in cols),
+              "d24_spans_a": spans, "identity_atom_words": identity, "subgrid_block_words": subgrid, "dead_pairs": pairs,
+              "forming_elements": elements, "unneeded_positions": sum(unneeded),
+              "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
+              + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
+              "dss_scale_rows": sum(not scale_bytes_ok(fmt, a.scales[i]) for i in rows)
+              + sum(not scale_bytes_ok(fmt, b.scales[j]) for j in cols),
+              "words": len(rows) * len(cols)}
+    return Debit(two_four, ATOM * identity, fmt.block * pairs, Fraction(FORMING_CREDITED * elements * len(cols), n),
+                 fmt.block * subgrid, windows, counts)
 
 
 # ---- the scheme ---------------------------------------------------------------------------------------------------
@@ -381,23 +561,26 @@ class PearlC4:
         self.fmt = FORMATS[fmt]
         self.name = NAMES[fmt]
         self.k_min, self.tile = k_min, tile
+        self.last_debit: Debit | None = None
+        self._encoded: tuple | None = None
         self.certificate = Certificate(
-            conjecture="tt-out-fp4",
+            conjecture="tt-out/fp4-sm120",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out-fp4", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability"),
+            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability"),
             hypotheses=(
-                "TT_OUT(1/400) for this Π and domain, not yet stated by the theory lane: no sm_120 W1 program outputs "
-                "correct C̃ and U words for less than 99.75% of their honest cost; with exact chains it rests on the "
-                "salt-dependence of every code and block scale, not on rounding (research store "
-                "internal/pouw/rtx-pro/fp4-design.md §6)",
+                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS), as the theory lane states it, proposed and "
+                "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
+                "the cap for less than their credit less the debit (research store "
+                "internal/pouw/rtx-pro/theory-pearl-c4-domain.md §2)",
                 f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
                 "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090",
                 "the E2M1, UE4M3 and UE8M0 casts are as modelled (from the PTX ISA, not captured)",
             ),
             allowances=(
-                "ρ over every 8th position depends on A alone (2 units per element) and is not credited",
-                "dead blocks are debited by a threshold rule (τ = 1/8); zero-sum atoms are not debited",
+                "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
+                "savings no replay reaches (salt-live codes that happen not to change, cross-atom cancellation) are "
+                "TT_OUT-FP4's; the replayed debit charges the rest (tile_debit)",
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
@@ -418,15 +601,15 @@ class PearlC4:
         """The honest W1 cost of one unit in FP4 units: the chain (1 per MAC, no promotion), the fused A′·F_B (r per element
         of A), the BF16 peel (4 per MAC over depth 2r) and A's forming (117 per element).  The weight side is `job_cost`."""
         m, k, n = shape.m, shape.k, shape.n
-        return m * n * k + m * k * R + BF16_MAC_UNITS * PEEL_K * m * n + (FORMING_CREDITED + FORMING_A_ONLY) * m * k
+        return m * n * k + m * k * R + BF16_MAC_UNITS * PEEL_K * m * n + (FORMING_CREDITED + FORMING_UNCREDITED) * m * k
 
     def credit_of(self, shape: Shape) -> int:
-        """`wref` less ρ's 2 units per element of A (A alone)."""
-        return self.wref(shape) - FORMING_A_ONLY * shape.m * shape.k
+        """`wref` less A's uncredited forming, 19 units per element: creditOf = mnk + 32·mk + 256·mn + f_s·mk."""
+        return self.wref(shape) - FORMING_UNCREDITED * shape.m * shape.k
 
     def job_cost(self, n: int, k: int) -> int:
         """The weight side, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's FP32 FMA chain."""
-        return (FORMING_CREDITED + FORMING_A_ONLY) * n * k + n * R * k + R * R * k + FP32_UNITS * n * R * R
+        return (FORMING_CREDITED + FORMING_UNCREDITED) * n * k + n * R * k + R * R * k + FP32_UNITS * n * R * R
 
     def noise(self, ctx: Context) -> C.Noise:
         lab = lambda m, r: keyed(blake3(LABELS[r]), m)  # noqa: E731
@@ -440,12 +623,12 @@ class PearlC4:
         return row_passes(self.fmt, words)
 
     def tile_cap(self, record, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
-        """(debit, cap) over the credited words at tile positions rows x cols: `tile_debit`, and ρ times the credited
-        cells' credit (each row's `credit_of` share at |K|)."""
+        """(debit, cap) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times the
+        credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in `last_debit`."""
         s = record.matmul.shape
-        debit = tile_debit(self.fmt, [ops.a.x[i] for i in rows], [ops.b.x[j] for j in cols], s.n)
+        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n)
         cell = Fraction(self.credit_of(Shape(1, record.k_kept, s.n)), s.n)
-        return debit, CAP * cell * len(rows) * len(cols)
+        return self.last_debit.total, CAP * cell * len(rows) * len(cols)
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
               k: int) -> tuple[Formed, list[list[int]]]:
@@ -453,14 +636,21 @@ class PearlC4:
         return form(self.fmt, [parse_row(r, k) for r in rows], e, basis(seed_b, role_f, k)), e
 
     def encode(self, ctx: Context, noise: C.Noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> C.Ops | None:
+        """The tile's formed operands and peel factors; the last tile's are kept, since the work law encodes a drawn tile
+        twice (its digest, then its tile rule)."""
+        key = (ctx, noise, tuple(a_rows), tuple(b_rows), tile)
+        if self._encoded is not None and self._encoded[0] == key:
+            return self._encoded[1]
         k = ctx.matmul.shape.k
         try:
             a, e_a = self._side(a_rows, tile.rows, ROLE_EA, ROLE_FA, noise.seed_a, noise.seed_b, k)
             b, e_b = self._side(b_rows, tile.cols, ROLE_EB, ROLE_FB, noise.seed_b, noise.seed_b, k)
-            return C.Ops(a, b, e_a, e_b, peel_factors_a(self.fmt, a, e_a, noise.seed_b, k),
-                         peel_factors_b(self.fmt, b, e_b, noise.seed_b, k))
+            ops = C.Ops(a, b, e_a, e_b, peel_factors_a(self.fmt, a, e_a, noise.seed_b, k),
+                        peel_factors_b(self.fmt, b, e_b, noise.seed_b, k))
         except P.Reject:
-            return None
+            ops = None
+        self._encoded = (key, ops)
+        return ops
 
     def admissible(self, ctx: Context, ops: C.Ops) -> bool:
         """Every row of both operands passes `row_passes`."""
@@ -482,4 +672,5 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "PearlC4", "clean", "e2m1", "form", "line", "row_passes", "tile_debit"]
+__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "e2m1", "form", "line", "row_passes",
+           "salt_dead", "tile_debit", "word_replay"]

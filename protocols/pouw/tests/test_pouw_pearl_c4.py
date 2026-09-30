@@ -138,10 +138,10 @@ def test_accounting_at_8192():
     shape = Shape(8192, 8192, 8192)
     wref, credit = s.wref(shape), s.credit_of(shape)
     assert wref == shape.wmm + 32 * 8192 ** 2 + 256 * 8192 ** 2 + 117 * 8192 ** 2
-    assert credit == wref - 2 * 8192 ** 2
+    assert credit == shape.wmm + 32 * 8192 ** 2 + 256 * 8192 ** 2 + 98 * 8192 ** 2 == wref - 19 * 8192 ** 2
     assert round(wref / shape.wmm, 3) == 1.049
     gamma = 1 - Fraction(399, 400) * (1 - F.CAP) * Fraction(credit, wref)
-    assert round(float(gamma) * 100, 3) == 0.523
+    assert round(float(gamma) * 100, 3) == 0.719
     assert s.job_cost(8192, 8192) == 117 * 8192 ** 2 + 32 * 8192 ** 2 + 1024 * 8192 + 16 * 8192 * 1024
 
 
@@ -172,8 +172,37 @@ def test_row_rules_and_debit(fmt):
     two = F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024, (1, 2 * f.block + 1)), 1024)
     assert F.row_passes(f, one) == (fmt == "nvfp4")             # one dead block in 64 (nvfp4), in 32 (mxfp4)
     assert sum(F.dead_blocks(f, one)) == 1 and not F.row_passes(f, two)
-    assert F.tile_debit(f, [one], [one, rows[0]], 4096) == f.block + Fraction(F.FORMING_CREDITED * f.block * 2, 4096)
-    assert F.tile_debit(f, rows, rows, 4096) == 0
+    e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
+    a = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FA, 1024))
+    b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
+    clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096)
+    assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0
+    # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
+    # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
+    assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
+    assert clean.total == clean.forming + clean.identity and (clean.identity == 0) == (fmt == "nvfp4")
+    # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
+    # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
+    dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
+    assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
+    d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096)
+    assert d.dead_pairs == f.block and d.two_four == 4 * F.two_four_units(dead) and d.identity == d.subgrid == d.windows == 0
+    assert d.counts["forming_elements"] >= f.block
+    assert d.forming == Fraction(F.FORMING_CREDITED * d.counts["forming_elements"] * 2, 4096)
+    assert d.total == d.dead_pairs + d.two_four + d.forming
+
+
+def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
+    """An atom whose products cancel is an identity atom; after an atom at the largest scales, a block at the smallest
+    scale lies below the accumulator's grid (it adds exactly 0), and its atom is then an identity atom too."""
+    f = F.NVFP4
+    one, minus = [0x2] * 16 + [0] * 48, [0x2] * 8 + [0xA] * 8 + [0] * 48
+    a, b = one + one + one, one + minus + one
+    assert F.word_replay(f, a, b, [0x38] * 12, [0x38] * 12) == (F.chain(f, a, b, [0x38] * 12, [0x38] * 12), 1, 0)
+    top, low = [0x7] * 64, [0x2] * 16 + [0] * 48
+    word, identity, subgrid = F.word_replay(f, top + low, top + low, [0x7E] * 4 + [0x01] * 4, [0x7E] * 4 + [0x01] * 4)
+    assert (identity, subgrid) == (1, 4) and word == F.chain(f, top, top, [0x7E] * 4, [0x7E] * 4)
+    assert F.two_four_windows([0x1, 0x9, 0, 0] * 32 + [0x1] * 128) == [True, False]
 
 
 def lifecycle(s: F.PearlC4, real=20):

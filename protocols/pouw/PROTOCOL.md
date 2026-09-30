@@ -222,8 +222,9 @@ useful    U/(α_A·α_B), glue
 
 GPU 5's RTX PRO 6000 design (research store `internal/pouw/rtx-pro/fp4-design.md`). It is Pearl-C with the FP8 product
 replaced by `mma.sync kind::mxf4nvf4`: NVFP4 (UE4M3 scales per 16) is the headline, MXFP4 (UE8M0 per 32) is beside it.
-The conjecture it would rest on, TT_OUT for this Π, is not stated yet, so the certificate names no γ_0. The module's
-docstring states every step and rounding.
+The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane
+(`internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §2) and proposed, not proved, so the certificate names no γ_0. The
+module's docstring states every step and rounding.
 
 ~~~text
 rows      k BF16 words per row of either operand
@@ -242,13 +243,31 @@ useful    U/(α_A·α_B), glue
 - **The chain is exact on the domain:** each C̃ word is the exact dot product rounded once toward zero (a test). So rounding
   binds no word to its order. The design's defense against a salt-free precomputation is that every code and every
   block scale depends on the salt.
-- **Per-row rules (placeholders for the theory lane):** a_E is a normal UE4M3, and at most one scale block in 64 is dead.
-  A block is dead when its clean |max| exceeds 12ρ (noise under τ = 1/8 of a code step). The tile debit (`tile_cap`)
-  charges each dead × dead block pair's MACs and each dead A element's credited forming by the tile's share of its row.
-  The cap is ρ = 1/400 of the tile's credited cells' credit. Zero-sum atoms are not debited.
+- **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
+  strictly row-relative); and D-SS's dead share, at most one scale block in 64 is dead. A block is dead when its clean
+  |max| exceeds 12ρ (noise under τ = 1/8 of a code step).
+- **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units:
+  1. per row and 4-group with at least 2 salt-dead codes, 0.5 per MAC (1 when all 4 are), on every word the row feeds,
+     for A′ and for B̃;
+  2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
+  3. per block dead on both the A row and the B row, one block of MACs per pair-word;
+  4. per salt-dead or unneeded A element (every credited B code at its position is zero), f_s·|cols|/n;
+  5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it
+     adds exactly 0), one block of MACs;
+  - and D-24: per row and aligned 128 of k whose every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0), 0.5 per MAC
+    on every word it feeds. It is charged per row window rather than per 16-row span, since a cheaper computation may
+    gather any 16 such rows; the literal spans are counted.
+  - A code is salt-dead unless two draws in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
+    F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
+    high.
+  - D-SS's scale-byte range and its spread bound (2^15.8, implied by D-NF) are counted, not enforced: items 2 and 5
+    charge what they would exclude.
+  - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
   - W_ref = mnk + 32·mk + 256·mn + 117·mk;
-  - creditOf = W_ref − 2·mk (ρ is A-only);
+  - creditOf = mnk + 32·mk + 256·mn + f_s·mk, f_s = 98 (the steps that read the salt at their cheapest bit-exact price:
+    the noise atom 64, the block scale about 1, the cast 32.8), so W_ref − creditOf = 19·mk (the noisy amax, 17, and
+    ρ's accumulate, 2);
   - the weight side is `job_cost`.
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
