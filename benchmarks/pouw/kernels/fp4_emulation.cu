@@ -22,10 +22,11 @@
 //                table), then imma_fast's int64 step
 //
 // Operands are register-resident for every route (no loads in the loop), so each rate is an upper bound on a GEMM built from
-// that route.  The sets repeat, so a route whose per-atom work starts from zero (every route but native, native_hot and
-// bf16_fold, which accumulate into the chain) would let the compiler merge identical work across chains and iterations;
-// `asm volatile("" : "+r"(x))` on the operand words before each use forbids that and emits nothing.  Raw instruction peaks for
-// the same harness: peak_omma, peak_imma16, peak_hmma16, peak_dp4a.
+// that route.  The sets repeat, so the per-atom work of a route that starts from zero (every route but native, native_hot and
+// bf16_fold, which accumulate into the chain) is loop-invariant and ptxas would hoist it.  Each such route therefore folds a
+// runtime zero z into its first operation per atom (the IMMA's C, the first IDP4A's accumulator, the scale product's addend, a
+// LOP3 input, the HMMA's C), and z is loop-carried through one real add per iteration, so nothing per atom leaves the loop.
+// Raw instruction peaks for the same harness: peak_omma, peak_imma16, peak_hmma16, peak_dp4a.
 //
 // Build: nvcc -O3 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared -o libfp4_emulation_sm_120a.so fp4_emulation.cu
 
@@ -54,8 +55,6 @@ template <> struct Shape<R_LUT> { static constexpr int NSETS = 1, NACC = 1, WORD
 // Per-lane constants, 8 words: E0 of the 4 words (the exponent of the int64 accumulators' unit), then H of the 4 words (bits).
 #define LANEC 8
 
-__device__ __forceinline__ void keep(uint32_t& x) { asm volatile("" : "+r"(x)); }
-
 // ---- instructions ----------------------------------------------------------------------------------------------------------------
 
 __device__ __forceinline__ void omma(float d[4], const uint32_t* a, const uint32_t* b, uint32_t sfa, uint32_t sfb) {
@@ -66,12 +65,12 @@ __device__ __forceinline__ void omma(float d[4], const uint32_t* a, const uint32
         : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(sfa), "r"(sfb));
 }
 
-// D = A (16 x 16 s8) . B (16 x 8 s8) from C = 0: one block's exact group dots.
-__device__ __forceinline__ void imma16(int d[4], uint32_t a0, uint32_t a1, uint32_t b0) {
+// D = A (16 x 16 s8) . B (16 x 8 s8) + z, z the runtime zero: one block's exact group dots.
+__device__ __forceinline__ void imma16(int d[4], uint32_t a0, uint32_t a1, uint32_t b0, uint32_t z) {
     asm volatile(
         "mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6}, {%7,%7,%7,%7};\n"
         : "=r"(d[0]), "=r"(d[1]), "=r"(d[2]), "=r"(d[3])
-        : "r"(a0), "r"(a1), "r"(b0), "r"(0));
+        : "r"(a0), "r"(a1), "r"(b0), "r"(z));
 }
 
 __device__ __forceinline__ void imma16_acc(int d[4], uint32_t a0, uint32_t a1, uint32_t b0) {
@@ -154,7 +153,7 @@ __device__ __forceinline__ float pow2f(int e) { return __int_as_float((e + 127) 
 
 template <int R>
 __global__ void route_kernel(const uint32_t* __restrict__ frags, const uint32_t* __restrict__ lanec, long long iters,
-                             uint32_t* __restrict__ out, long long* __restrict__ cycles) {
+                             uint32_t zero, uint32_t* __restrict__ out, long long* __restrict__ cycles) {
     constexpr int NSETS = Shape<R>::NSETS, NACC = Shape<R>::NACC, W = Shape<R>::WORDS;
     const int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
     const int lane = threadIdx.x & 31;
@@ -204,16 +203,14 @@ __global__ void route_kernel(const uint32_t* __restrict__ frags, const uint32_t*
     __syncthreads();
     const long long t0 = clock64();
     static_assert(NSETS == NACC, "chain c owns operand set c");
+    uint32_t z = zero;
 #pragma unroll 1
     for (long long it = 0; it < iters; it++) {
+        asm volatile("add.u32 %0, %0, %1;" : "+r"(z) : "r"(zero));
         {
 #pragma unroll
             for (int c = 0; c < NACC; c++) {
-                uint32_t* x = f[c];
-                if constexpr (R != R_NATIVE && R != R_NATIVE_HOT && R != R_BF16_FOLD) {
-#pragma unroll
-                    for (int w = 0; w < W; w++) keep(x[w]);
-                }
+                const uint32_t* x = f[c];
                 if constexpr (R == R_NATIVE || R == R_NATIVE_HOT) {
                     omma(fa[c], x, x + 4, x[6], x[7]);
                 } else if constexpr (R == R_IMMA_EXACT) {
@@ -222,16 +219,16 @@ __global__ void route_kernel(const uint32_t* __restrict__ frags, const uint32_t*
                     int gd[4][4], nz[4][4];
 #pragma unroll
                     for (int b = 0; b < 4; b++) {
-                        imma16(gd[b], x[2 * b], x[2 * b + 1], x[8 + b]);
-                        imma16(nz[b], x[12 + 2 * b], x[12 + 2 * b + 1], x[20 + b]);
+                        imma16(gd[b], x[2 * b], x[2 * b + 1], x[8 + b], z);
+                        imma16(nz[b], x[12 + 2 * b], x[12 + 2 * b + 1], x[20 + b], z);
                     }
 #pragma unroll
                     for (int o = 0; o < 4; o++) {
                         const int r = o >> 1, q = o & 1;
                         const int g4[4] = {gd[0][o], gd[1][o], gd[2][o], gd[3][o]};
                         const int n4[4] = {nz[0][o], nz[1][o], nz[2][o], nz[3][o]};
-                        const uint32_t nb = atom_step(__float_as_uint(fa[c][o]), g4, n4, x[24 + 2 * r], x[25 + 2 * r],
-                                                      x[28 + 2 * q], x[29 + 2 * q]);
+                        const uint32_t nb = atom_step(__float_as_uint(fa[c][o]), g4, n4, x[24 + 2 * r] ^ z, x[25 + 2 * r] ^ z,
+                                                      x[28 + 2 * q] ^ z, x[29 + 2 * q] ^ z);
                         fa[c][o] = __uint_as_float(nb);
                     }
                 } else if constexpr (R == R_IMMA_FAST || R == R_IMMA_FLOOR) {
@@ -240,10 +237,10 @@ __global__ void route_kernel(const uint32_t* __restrict__ frags, const uint32_t*
 #pragma unroll
                     for (int b = 0; b < 4; b++) {
                         int gd[4];
-                        imma16(gd, x[2 * b], x[2 * b + 1], x[8 + b]);
+                        imma16(gd, x[2 * b], x[2 * b + 1], x[8 + b], z);
 #pragma unroll
                         for (int o = 0; o < 4; o++) {
-                            const int ab = (int)x[12 + 4 * (o >> 1) + b] * (int)x[20 + 4 * (o & 1) + b];
+                            const int ab = (int)x[12 + 4 * (o >> 1) + b] * (int)x[20 + 4 * (o & 1) + b] + (int)z;
                             if constexpr (R == R_IMMA_FAST) ia[c][o] += (long long)gd[o] * ab;
                             else st[o] += (long long)gd[o] * ab;
                         }
@@ -257,7 +254,8 @@ __global__ void route_kernel(const uint32_t* __restrict__ frags, const uint32_t*
 #pragma unroll
                     for (int b = 0; b < 4; b++) hmma16(fa[c], x + 6 * b, x + 6 * b + 4);
                 } else if constexpr (R == R_BF16_FLOOR) {
-                    float st[4] = {0.f, 0.f, 0.f, 0.f};
+                    const float zf = __uint_as_float(z);                                // +0
+                    float st[4] = {zf, zf, zf, zf};
 #pragma unroll
                     for (int b = 0; b < 4; b++) hmma16(st, x + 6 * b, x + 6 * b + 4);
 #pragma unroll
@@ -273,10 +271,10 @@ __global__ void route_kernel(const uint32_t* __restrict__ frags, const uint32_t*
                         const uint32_t* bc = x + 32 + 16 * (o & 1);
 #pragma unroll
                         for (int b = 0; b < 4; b++) {
-                            int gd = 0;
+                            int gd = (int)z;
 #pragma unroll
                             for (int w = 0; w < 4; w++) gd = dp4a(ar[4 * b + w], bc[4 * b + w], gd);
-                            const int ab = (int)x[64 + 4 * (o >> 1) + b] * (int)x[72 + 4 * (o & 1) + b];
+                            const int ab = (int)x[64 + 4 * (o >> 1) + b] * (int)x[72 + 4 * (o & 1) + b] + (int)z;
                             ia[c][o] += (long long)gd * ab;
                         }
                     }
@@ -291,12 +289,12 @@ __global__ void route_kernel(const uint32_t* __restrict__ frags, const uint32_t*
                             int gd = 0;
 #pragma unroll
                             for (int w = 2 * b; w < 2 * b + 2; w++) {
-                                const uint32_t lo = ((ar[w] & 0x0F0F0F0Fu) << 4) | (bc[w] & 0x0F0F0F0Fu);
-                                const uint32_t hi = (ar[w] & 0xF0F0F0F0u) | ((bc[w] >> 4) & 0x0F0F0F0Fu);
+                                const uint32_t lo = ((ar[w] & 0x0F0F0F0Fu) << 4) | (bc[w] & 0x0F0F0F0Fu) | z;
+                                const uint32_t hi = (ar[w] & 0xF0F0F0F0u) | ((bc[w] >> 4) & 0x0F0F0F0Fu) | z;
 #pragma unroll
                                 for (int i = 0; i < 4; i++) gd += vlut[(lo >> (8 * i)) & 0xFF] + vlut[(hi >> (8 * i)) & 0xFF];
                             }
-                            const int ab = (int)x[32 + 4 * (o >> 1) + b] * (int)x[40 + 4 * (o & 1) + b];
+                            const int ab = (int)x[32 + 4 * (o >> 1) + b] * (int)x[40 + 4 * (o & 1) + b] + (int)z;
                             ia[c][o] += (long long)gd * ab;
                         }
                     }
@@ -370,7 +368,7 @@ __global__ void peak_kernel(const uint32_t* __restrict__ frags, long long iters,
     if (threadIdx.x == 0) cycles[blockIdx.x] = t1 - t0;
 }
 
-typedef void (*RouteFn)(const uint32_t*, const uint32_t*, long long, uint32_t*, long long*);
+typedef void (*RouteFn)(const uint32_t*, const uint32_t*, long long, uint32_t, uint32_t*, long long*);
 typedef void (*PeakFn)(const uint32_t*, long long, uint32_t*, long long*);
 
 RouteFn route_fn(int r) {
@@ -464,7 +462,7 @@ int emu_run(int r, const uint32_t* frags_h, size_t frag_words, const uint32_t* l
     cudaEventCreate(&s);
     cudaEventCreate(&t);
     cudaEventRecord(s);
-    fn<<<nblocks, 32 * warps_per_block>>>(f, l, iters, o, cy);
+    fn<<<nblocks, 32 * warps_per_block>>>(f, l, iters, 0u, o, cy);
     cudaEventRecord(t);
     e = cudaEventSynchronize(t);
     if (e == cudaSuccess) e = cudaGetLastError();
