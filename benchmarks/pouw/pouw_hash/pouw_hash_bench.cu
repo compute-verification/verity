@@ -107,7 +107,7 @@ __global__ void k_msg(long long iters, Rec* rec, uint64_t* out) {
 // the same messages from mma.sync fragments in registers, through the quad transpose (1 KB of shared memory per warp)
 __global__ void k_quad(long long iters, Rec* rec, uint64_t* out) {
   extern __shared__ uint64_t smem[];
-  uint64_t* scratch = smem + (threadIdx.x >> 5) * 128;
+  uint64_t* scratch = smem + (threadIdx.x >> 5) * (ph::QUAD_SCRATCH / 8);
   const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
   uint64_t acc = 0;
   BEGIN_REC
@@ -343,7 +343,7 @@ __global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* 
   static_assert(!PP || WARPS == 8, "two groups of 4 warps");
   extern __shared__ uint32_t sm[];
   uint32_t* ring = sm;                                                                       // EPI_STAGES x (EPI_A + EPI_B)
-  uint64_t* scratch = reinterpret_cast<uint64_t*>(sm + EPI_STAGES * (EPI_A + EPI_B)) + (threadIdx.x >> 5) * 128;
+  uint64_t* scratch = reinterpret_cast<uint64_t*>(sm + EPI_STAGES * (EPI_A + EPI_B)) + (threadIdx.x >> 5) * (ph::QUAD_SCRATCH / 8);
   const int lane = threadIdx.x & 31, warp = blockIdx.x * WARPS + (threadIdx.x >> 5), group = (threadIdx.x >> 5) / 4;
   for (int i = threadIdx.x; i < EPI_STAGES * (EPI_A + EPI_B); i += blockDim.x) ring[i] = 0x38303830u ^ (mix32(i) & 0x07070707u);
   uint32_t pa[4] = {0x3F803F80u, 0x3F003F00u, 0x3E803E80u, 0x3F403F40u}, pb0 = 0x3F803F80u, pb1 = 0x3C003C00u;
@@ -573,8 +573,8 @@ static bool epi_gate(uint64_t* dg, uint32_t* y, uint32_t* cap, size_t base) {
   CK(cudaMemset(cap, 0, 4096 * 4)); CK(cudaMemset(dg, 0, 64 * 32 * 2));
   Rec* r;
   CK(cudaMalloc(&r, sizeof(Rec)));
-  CK(cudaFuncSetAttribute(k_epi<HASH, W, PP>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)(base + W * 1024)));
-  k_epi<HASH, W, PP><<<1, 32 * W, base + W * 1024>>>(1, 8, r, dg, y, cap);
+  CK(cudaFuncSetAttribute(k_epi<HASH, W, PP>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)(base + W * ph::QUAD_SCRATCH)));
+  k_epi<HASH, W, PP><<<1, 32 * W, base + W * ph::QUAD_SCRATCH>>>(1, 8, r, dg, y, cap);
   CK(cudaDeviceSynchronize());
   std::vector<uint32_t> hc(4096);
   std::vector<uint64_t> hd(64 * 4);
@@ -765,7 +765,7 @@ int main(int argc, char** argv) {
           [&](int b, int t, size_t, long long it, Rec* r) { k_msg<<<b, t>>>(it, r, out); });
       if (!single)
         row(filter, g, "quad: Pearl-C message digest from mma.sync fragments via the quad transpose, 256 B", k_quad, 256, th, 0,
-            (size_t)th / 32 * 1024, [&](int b, int t, size_t s, long long it, Rec* r) { k_quad<<<b, t, s>>>(it, r, out); });
+            (size_t)th / 32 * ph::QUAD_SCRATCH, [&](int b, int t, size_t s, long long it, Rec* r) { k_quad<<<b, t, s>>>(it, r, out); });
       row(filter, g, "leaf: Pearl-C tile leaf from L2, 4,096 B, 25 permutations", k_leaf, 4096, th, 0, 0,
           [&](int b, int t, size_t, long long it, Rec* r) { k_leaf<<<b, t>>>(it, dg, nleaf, r, out); });
       // the m = 32 leaf, a warp per leaf (bytes per lane: 2,048 / 32); latency: one warp
@@ -800,7 +800,7 @@ int main(int argc, char** argv) {
           [&](int b, int t, size_t, long long it, Rec* r) { k_perm<12><<<b, t>>>(it, r, out); }, ex);
       row(filter, "sweep", "sha", k_sha, 64, 32 * w, 1, 0,
           [&](int b, int t, size_t, long long it, Rec* r) { k_sha<<<b, t>>>(it, r, out); }, ex);
-      row(filter, "sweep", "quad", k_quad, 256, 32 * w, 1, (size_t)w * 1024,
+      row(filter, "sweep", "quad", k_quad, 256, 32 * w, 1, (size_t)w * ph::QUAD_SCRATCH,
           [&](int b, int t, size_t s, long long it, Rec* r) { k_quad<<<b, t, s>>>(it, r, out); }, ex);
     }
     return 0;
@@ -830,7 +830,7 @@ int main(int argc, char** argv) {
         snprintf(ex, sizeof ex, ",\"k\":%d,\"hash\":%d,\"pp\":%d", 32 * ks, H, PP);
         snprintf(nm, sizeof nm, "epi w%d k%d %s%s%s", W, 32 * ks, H == 0 ? "nohash" : H == 1 ? "hash" : "b3", one ? " 1cta" : "",
                  PP == 1 ? " pp" : PP == 2 ? " stagger" : "");
-        row(filter, "epi", nm, k_epi<H, W, PP>, H ? 512 : 0, 32 * W, one, base + (H ? W * 1024 : 0),
+        row(filter, "epi", nm, k_epi<H, W, PP>, H ? 512 : 0, 32 * W, one, base + (H ? W * ph::QUAD_SCRATCH : 0),
             [&](int b, int t, size_t s, long long it, Rec* r) { k_epi<H, W, PP><<<b, t, s>>>((int)it, ks, r, dg, y, nullptr); }, ex,
             macs);
       };
