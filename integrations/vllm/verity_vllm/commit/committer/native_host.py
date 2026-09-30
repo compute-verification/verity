@@ -2075,8 +2075,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
     @staticmethod
     def _module_of(name: str) -> str:
         """Committed tensor name -> the producing module name (tuple slot `/k`, acquired input `/in`, sampler ids stripped)."""
-        base = name.split("/", 1)[0]
-        return base
+        return name.split("/", 1)[0]
 
     def expected_manifest(self) -> dict[str, Any]:
         """The identities every committed step MUST cover, derived from the INSTALL-TIME module set (the acquired Instance-output modules of
@@ -2121,7 +2120,6 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         from collections import Counter
 
         from verity_vllm.acquire import fa2_plane_classes as FP
-
         man = manifest or self.expected_manifest()
         expected_modules = set(man["modules"])
         if not expected_modules:
@@ -2141,6 +2139,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         padded_run = bool(getattr(self, "_padding", None))
         padding_only_steps: list[int] = []
         padding_tensors_n = 0
+        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names")), None)   # per-step fx names: its targets, not rule (4)
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
@@ -2216,16 +2215,17 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            if ref_names is None:
-                ref_names = mod_names
+            mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
+            ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity
                 diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) ^ set(ref_names)}
             else:
                 diff = {n: (mod_names.get(n, 0), ref_names.get(n, 0)) for n in set(mod_names) | set(ref_names) if mod_names.get(n, 0) != ref_names.get(n, 0)}
-            if missing or unknown or fa2_bad or moe_bad or tp_bad or sampler_bad or diff:
+            if missing or unknown or fa2_bad or moe_bad or tp_bad or sampler_bad or diff or cb_bad:
                 violations.append({"step": step, "missing_modules": missing[:8], "unknown_modules": unknown[:8], "fa2_layers_bad": fa2_bad,
                                    "moe_layers_bad": moe_bad, "tp_sites_bad": dict(list(tp_bad.items())[:8]), "tp_sites_bad_n": len(tp_bad),
                                    "sampler_ids": n_ids, "multiplicity_vs_step0": dict(sorted(diff.items())[:8]),
+                                   **({"call_boundaries_bad": dict(sorted(cb_bad.items())[:8]), "call_boundaries_bad_n": len(cb_bad)} if cb_bad else {}),
                                    **({"fa2_detail": fa2_detail} if fa2_detail else {}),
                                    **({"padding_only": padding_only, "padding_tensors": len(pad_metas)} if pad_metas else {})})
         return {"ok": not violations, "steps_checked": len(self._layouts),
