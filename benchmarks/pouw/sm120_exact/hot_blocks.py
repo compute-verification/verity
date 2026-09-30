@@ -158,13 +158,23 @@ def isect_path(bits: np.ndarray, cnt: np.ndarray, K: int, batch: int = 256, stop
     return widths, chosen
 
 
-def count_curve(bits: np.ndarray, cnt: np.ndarray) -> np.ndarray:
-    """widths[k - 1]: the partners shared by the k lines with most partners (stable order), for k up to the lines with any."""
+def count_curve(bits: np.ndarray, cnt: np.ndarray, chunk: int = 256) -> np.ndarray:
+    """widths[k - 1]: the partners shared by the k lines with most partners (stable order), for k up to the lines with any;
+    ANDed `chunk` lines at a time until they share none."""
     order = np.argsort(-cnt, kind="stable")
     nz = int((cnt > 0).sum())
-    if nz == 0:
-        return np.zeros(0, np.int64)
-    return popc(np.bitwise_and.accumulate(bits[order[:nz]], axis=0)).sum(1, dtype=np.int64)
+    widths = np.zeros(nz, np.int64)
+    acc = None
+    for i in range(0, nz, chunk):
+        blk = bits[order[i:min(i + chunk, nz)]]
+        if acc is not None:
+            blk[0] &= acc
+        blk = np.bitwise_and.accumulate(blk, axis=0)
+        widths[i:i + len(blk)] = popc(blk).sum(1, dtype=np.int64)
+        acc = blk[-1]
+        if widths[i + len(blk) - 1] == 0:
+            break
+    return widths
 
 
 def steps(w: np.ndarray) -> list[list[int]]:
