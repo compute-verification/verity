@@ -122,6 +122,22 @@ def test_gpu_lease_refuses_more_gpus_than_the_machine_has_and_bad_arguments(tmp_
     assert subprocess.run(["bash", str(GPU_LEASE), "1", "true"], env=env, capture_output=True).returncode == 2
 
 
+@needs_flock
+def test_gpu_lease_hands_out_only_the_direct_gpus_when_kubernetes_owns_the_rest(tmp_path):
+    allowed = tmp_path / "direct-gpus"
+    allowed.write_text("1,2\n")
+    env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_ALLOWED_FILE": str(allowed)}
+    r = subprocess.run(["bash", str(GPU_LEASE), "2", "--", "sh", "-c", "echo $CUDA_VISIBLE_DEVICES"], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 0 and r.stdout.strip() == "1,2"
+    assert subprocess.run(["bash", str(GPU_LEASE), "3", "--", "true"], env=env, capture_output=True).returncode == 2
+    status = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout.splitlines()
+    assert status[0].startswith("# direct-run GPUs") and [ln.split()[0] for ln in status[1:]] == ["1", "2"]
+    allowed.write_text("none\n")
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True, text=True)
+    assert r.returncode == 2 and "submit through the cluster's queues" in r.stderr
+
+
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------
 
 def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
