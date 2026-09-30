@@ -2,7 +2,9 @@
 ptxas warning, a stack frame, a spill or local memory, and on any kernel whose tensor-core instructions aren't the intended
 ones: the FP8 atom as QMMA.16832.F32.E4M3.E4M3 in the counts `WANT` states, the peel as HMMA.16816.F32.BF16, no other MMA.
 
-  python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON
+  python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON [--no-mma]
+
+--no-mma gates hash_sm120a.cubin (#449's hash.cu): the same local-memory and ptxas refusals, and no MMA of any form.
 """
 
 from __future__ import annotations
@@ -19,12 +21,13 @@ MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 WANT = {**{g: (32, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_ct_u")},
         **{g: (8, 0) for g in ("gemm_ct_d", "gemm_ct_d_u", "gemm_words", "gemm_words_u")},
         **{g: (32, 64) for g in ("gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u", "gemm_pearlc_h",
-                                 "gemm_pearlc_h_u")},
+                                 "gemm_pearlc_h_u", "gemm_pearlc_b", "gemm_pearlc_b_u")},
         "gemm_pearlc_d": (8, 16), "gemm_pearlc_d_u": (8, 16),
         "words": (1, 0), "words_u": (1, 0), "form_s5": (1, 0)}
 
 
-def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
+def gate(ptxas: str, sass: str, want: dict | None = None) -> tuple[dict, list[str]]:
+    want = WANT if want is None else want
     problems = [line for line in ptxas.splitlines() if re.search(r"warning|error|C7514|serializ", line, re.I)]
     funcs: dict[str, dict] = {}
     for m in re.finditer(r"Compiling entry function '(\w+)' for 'sm_120a'(.*?)(?=Compiling entry function|\Z)", ptxas, re.S):
@@ -59,25 +62,31 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
             problems.append(f"{name}: local memory {r}")
         if r.get("other_mma"):
             problems.append(f"{name}: MMA forms other than {QMMA} and {HMMA}: {sorted(set(r['other_mma']))}")
-        q, h = WANT.get(name, (0, 0))
+        q, h = want.get(name, (0, 0))
         if (r.get("QMMA", 0) < q or (q and r["QMMA"] % q) or (not q and r.get("QMMA"))) or r.get("HMMA", 0) != h:
             problems.append(f"{name}: {r.get('QMMA')} {QMMA}, {r.get('HMMA')} {HMMA} (want a multiple of {q}, and {h})")
-    missing = sorted(set(WANT) - set(funcs))
+    missing = sorted(set(want) - set(funcs))
     if missing:
         problems.append(f"kernels missing from the cubin: {missing}")
     return funcs, problems
 
 
 def main(argv: list[str]) -> int:
-    ptxas, sass, out = argv[1:4]
-    funcs, problems = gate(open(ptxas).read(), open(sass).read())
-    json.dump({"want": {k: list(v) for k, v in WANT.items()}, "kernels": funcs, "problems": problems}, open(out, "w"), indent=1)
+    ptxas, sass, out, *mode = argv[1:]
+    want = {} if mode == ["--no-mma"] else WANT
+    funcs, problems = gate(open(ptxas).read(), open(sass).read(), want)
+    json.dump({"want": {k: list(v) for k, v in want.items()}, "kernels": funcs, "problems": problems}, open(out, "w"), indent=1)
     if problems:
         print("REFUSED: " + "; ".join(problems), file=sys.stderr)
         return 1
+    if not want:
+        print(f"{len(funcs)} kernels, no MMA; " + ", ".join(f"{n} {r['regs']} regs" for n, r in sorted(funcs.items()) if "regs" in r)
+              + "; no local memory")
+        return 0
     print(f"pearl_c_sm120.cubin: {len(funcs)} kernels; " + ", ".join(
         f"{n} {funcs[n]['regs']} regs {funcs[n]['QMMA']} QMMA" + (f" {funcs[n]['HMMA']} HMMA" if funcs[n]["HMMA"] else "")
-        for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_h", "gemm_pearlc_d", "words", "form_s5"))
+        for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_h", "gemm_pearlc_b", "gemm_pearlc_d", "words",
+                  "form_s5"))
         + "; no local memory")
     return 0
 

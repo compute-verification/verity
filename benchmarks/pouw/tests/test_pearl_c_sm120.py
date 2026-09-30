@@ -72,7 +72,7 @@ def test_swizzles_are_the_kernels_and_conflict_free():
 
 def gemm_smem(mode: str, tm: int, bn: int) -> int:
     bk, stages, peel = const("BK"), const("STAGES"), const("PEEL_ROW")
-    return stages * (tm + bn) * bk + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S", "M_PEARLC_H") else 0)
+    return stages * (tm + bn) * bk + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S", "M_PEARLC_H", "M_PEARLC_B") else 0)
 
 
 def gemms() -> list[tuple[str, str, int, int, int]]:
@@ -87,12 +87,12 @@ def gemm_tile(name: str) -> tuple[int, int]:
 
 
 def test_gemms_fit_sm120_shared_memory():
-    assert ("STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S || MODE == M_PEARLC_H ? (TM + BN) * PEEL_ROW : 0)"
-            in SOURCE)
+    assert "STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE >= M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
+    assert "enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_H, M_PEARLC_B };" in SOURCE
     names = {n for n, *_ in gemms()}
     assert names == {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u",
                      "gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u",
-                     "gemm_pearlc_s", "gemm_pearlc_s_u", "gemm_pearlc_h", "gemm_pearlc_h_u"}
+                     "gemm_pearlc_s", "gemm_pearlc_s_u", "gemm_pearlc_h", "gemm_pearlc_h_u", "gemm_pearlc_b", "gemm_pearlc_b_u"}
     for name, mode, tm, bn, g in gemms():
         assert gemm_smem(mode, tm, bn) <= SM120_MAX_DYN, name
         assert (tm, bn) == gemm_tile(name)
@@ -156,7 +156,7 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
                                    env=env).stdout)
     funcs, problems = S.gate(ptxas.read_text(), sass.read_text())
     assert not problems, problems
-    for name in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_h"):
+    for name in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_h", "gemm_pearlc_b"):
         assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
 
 
@@ -244,12 +244,14 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
             assert base == "gemm_ct" or N == 32, name
             need[2] = 4 * M * N
         else:
-            assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_h"), name
+            assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_h", "gemm_pearlc_b"), name
             need.update({4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
             if base == "gemm_pearlc":
                 need.update({2: 4 * M * N, 3: 4 * M * N})
-            if base == "gemm_pearlc_h":
+            if base in ("gemm_pearlc_h", "gemm_pearlc_b"):
                 need[9] = M * N
+            if base == "gemm_pearlc_b":
+                need[10] = 32
         return need
     if name in ("words", "words_u"):
         M, N, K = i[:3]

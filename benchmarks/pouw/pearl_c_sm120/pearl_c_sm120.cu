@@ -73,10 +73,12 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //             digest of C~ and U (TurboSHAKE128, D = 0x21, into p9 in hash_msg's layout). C~ is kept in the promotion
 //             accumulators through the peel; each warp's scratch is its share of the pipeline's stages, free after the main
 //             loop.  128 x 128 tiles only (a 64 x 32 warp tile)
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_H };
+//   PEARLC_B  PEARLC_H under hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") (32 bytes at p10), one chunk of
+//             four blocks per message, into p9 in hash.cuh's hash_msg layout
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_H, M_PEARLC_B };
 constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
-  return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S || MODE == M_PEARLC_H ? (TM + BN) * PEEL_ROW : 0);
+  return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE >= M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
 }
 
 DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); }
@@ -114,7 +116,7 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
 
 template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
-  constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S || MODE == M_PEARLC_H, HASH = MODE == M_PEARLC_H;
+  constexpr bool PEEL = MODE == M_PEARLC || MODE >= M_PEARLC_S, HASH = MODE == M_PEARLC_H || MODE == M_PEARLC_B;
   constexpr bool STORE_CU = MODE == M_PEARLC || MODE == M_CT, PROMOTE = G > 0;
   constexpr int PERIOD = PROMOTE ? G / 2 : 1;
   static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
@@ -297,12 +299,21 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
       const int per = N / 32, row = tm * TM + wm * WM;
       auto region = [&](auto pc) {
         constexpr int p = decltype(pc)::value;
-        uint64_t h[4];
-        ph::quad_msg_digest<2>([&](int arr, int j, int i) { return arr ? total[2 * p + (j >> 2)][j & 3][i] : acc[2 * p + (j >> 2)][j & 3][i]; },
-                               ph::pearlc::D_MESSAGE, reinterpret_cast<uint64_t*>(scratch), h);
-        ulonglong2* o = reinterpret_cast<ulonglong2*>(dg + (size_t)(row + ph::pearlc::narrow_row(p, lane)) * per * 32);
-        o[0] = make_ulonglong2(h[0], h[1]);
-        o[1] = make_ulonglong2(h[2], h[3]);
+        auto frag = [&](int arr, int j, int i) { return arr ? total[2 * p + (j >> 2)][j & 3][i] : acc[2 * p + (j >> 2)][j & 3][i]; };
+        uint8_t* const o = dg + (size_t)(row + ph::pearlc::narrow_row(p, lane)) * per * 32;
+        if constexpr (MODE == M_PEARLC_H) {
+          uint64_t h[4];
+          ph::quad_msg_digest<2>(frag, ph::pearlc::D_MESSAGE, reinterpret_cast<uint64_t*>(scratch), h);
+          reinterpret_cast<ulonglong2*>(o)[0] = make_ulonglong2(h[0], h[1]);
+          reinterpret_cast<ulonglong2*>(o)[1] = make_ulonglong2(h[2], h[3]);
+        } else {
+          const uint4 k0 = reinterpret_cast<const uint4*>(a.p[10])[0], k1 = reinterpret_cast<const uint4*>(a.p[10])[1];
+          const uint32_t key[8] = {k0.x, k0.y, k0.z, k0.w, k1.x, k1.y, k1.z, k1.w};
+          uint32_t h[8];
+          ph::quad_msg_digest_b3<2>(frag, key, reinterpret_cast<uint64_t*>(scratch), h);
+          reinterpret_cast<uint4*>(o)[0] = make_uint4(h[0], h[1], h[2], h[3]);
+          reinterpret_cast<uint4*>(o)[1] = make_uint4(h[4], h[5], h[6], h[7]);
+        }
       };
       region(Int<0>{});
       region(Int<1>{});
@@ -332,6 +343,8 @@ GEMM(gemm_pearlc_s, M_PEARLC_S, 128, 128, 4)
 GEMM(gemm_pearlc_s_u, M_PEARLC_S, 128, 128, 0)
 GEMM(gemm_pearlc_h, M_PEARLC_H, 128, 128, 4)
 GEMM(gemm_pearlc_h_u, M_PEARLC_H, 128, 128, 0)
+GEMM(gemm_pearlc_b, M_PEARLC_B, 128, 128, 4)
+GEMM(gemm_pearlc_b_u, M_PEARLC_B, 128, 128, 0)
 
 // The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8
 // output tile over all of K, the chain in the GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0),
