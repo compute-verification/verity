@@ -86,7 +86,7 @@ A declared sync outside Σ_sync is an `advice` violation in its own window only.
 the syncs as declared, out-of-set values included (any δ ≥ 0 and ρ > 0 gives a schedule), and every other window is
 checked against them. A window's grid reads only the syncs of its own and earlier windows: a frame is eligible no
 earlier than its anchor, hand times only rise in canonical order, and the queue carries forward. So a window before the
-out-of-set one gets the verdict it would get under any declaration, and a later one is checked against the grid the
+out-of-set one gets the same verdict whatever that window declared, and a later one is checked against the grid the
 declared advice gives it.
 
 **Ingress statuses are not audited yet.** Lean's `Accepted` needs every boundary link's status to be complete, ingress
