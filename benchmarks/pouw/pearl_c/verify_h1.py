@@ -26,6 +26,7 @@ import json
 import os
 import struct
 import sys
+import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -75,7 +76,8 @@ def verify(run: str, path: Path, jobs: int = 1) -> tuple[bool, str, str]:
     if "a_rows_tag" in head:
         step = -(-m // max(1, jobs))
         work = [(binding, owner, m, tree_hash, head["a_rows_tag"], rb, r0, min(m, r0 + step)) for r0 in range(0, m, step)]
-        with ProcessPoolExecutor(max(1, jobs)) as pool:
+        # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+        with ProcessPoolExecutor(max(1, jobs), mp_context=multiprocessing.get_context("fork")) as pool:
             leaves = [leaf for part in pool.map(tagged_leaves, work) for leaf in part]
         want = laid_out(da, leaves)
         root = want[-32:]

@@ -22,7 +22,7 @@ import json
 import sys
 from dataclasses import dataclass, field
 from functools import partial
-from multiprocessing import Pool
+import multiprocessing
 from pathlib import Path
 
 import numpy as np
@@ -294,7 +294,8 @@ def _tile_job(args) -> dict:
 
 
 def build(shapes: list[Shape], processes: int | None = None, device: Device = H100) -> dict:
-    with Pool(processes) as pool:
+    # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+    with multiprocessing.get_context("fork").Pool(processes) as pool:
         jobs = pool.map(partial(job, device=device), shapes)
         work = [(jb, r0, c0) for jb in jobs for r0, c0 in samples(jb.shape)]
         done = pool.map(_tile_job, work, chunksize=1)
