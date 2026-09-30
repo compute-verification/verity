@@ -9,8 +9,8 @@ row kernel agrees.  The launch is the export's carrier (`verity_cba::triton_laun
 
 On a target whose GEMM record adds the bias in cuBLASLt's FP32 epilogue the same pair is one `GemmBiasF32Epilogue_v1` per row at
 M >= 2 and cuBLAS's gemv `GemvBiasF32_v1` at M = 1 (the served `F.linear(x, W, b)` is one kernel, so there is no pre-bias word to
-commit and the module's value is that Call's); one own row under a declared launch context is refused, since the context does not
-declare the launch's M.
+commit and the module's value is that Call's); one own row under a declared launch context takes the context's rows at its request
+step (the sampling events before it), and is refused where the context declares none.
 """
 from __future__ import annotations
 
@@ -23,10 +23,12 @@ import torch.nn as nn
 
 from verity.evaluation import evaluate
 from verity.ir.defs import bind
+from verity_vllm.pipeline.build import applicability_conditions
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_launch_context, launch_rows_read
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import rows as RK
 from verity_vllm.program.registry import b1, gemm_bias, gemv_bias
@@ -153,7 +155,7 @@ def test_the_biased_batch_invariant_linear_derives_to_one_gemm_bias_per_row(cls)
     rep = _derive(m)
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == {"GemmBias_v1": M}, _hist(rep.program)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v4"]
     assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] and apps[0]["emitted"] == f"GemmBias_v1{{K={K},N={N}}} x{M}"
     assert not any(a["rule"].startswith("BroadcastBiasAdd") for a in rep.provenance["applications"])
     roles = {w["name"]: w.get("role") for w in rep.provenance["weights"]}
@@ -176,7 +178,7 @@ def test_every_other_shape_keeps_gemm_and_bias_add(cls, want):
     rep = _derive(cls())
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == want, _hist(rep.program)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v4"]
     assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] is None
 
 
@@ -228,7 +230,7 @@ def test_on_an_f32_epilogue_target_the_biased_linear_is_one_gemm_bias_f32_epilog
     spec = bind(gemm_bias.GemmBiasF32Epilogue, K=K, N=N, DOT=f32_target)
     assert spec.id == TG.gemm_bias_spec(F32_EPILOGUE_TP, K, N).id
     assert _hist(rep.program) == {"GemmBiasF32Epilogue_v1": M}, _hist(rep.program)
-    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v3"]
+    apps = [a for a in rep.provenance["applications"] if a["rule"] == "TritonGemm[vllm-bi]_v4"]
     assert len(apps) == 1 and apps[0]["preconditions_checked"]["bias_add"] and apps[0]["emitted"] == f"{spec.id} x{M}"
     assert not any(a["rule"].startswith("BroadcastBiasAdd") for a in rep.provenance["applications"])
     assert rep.provenance["weight_roles"]["bias"]["role"] == "linear.bias"
@@ -252,13 +254,44 @@ def test_on_an_f32_epilogue_target_one_row_outside_the_gemv_table_is_refused(f32
     assert "unsupported:gemv-table" in rep.unsupported.hint, rep.unsupported.hint
 
 
-def test_under_a_declared_launch_context_one_row_is_refused_and_several_rows_are_the_gemm(f32_target, gemv_row):
+class _Steps(_Linear):
+    """Three request steps of one row each, as the request wrapper runs them: the step's biased linear, then its sampling event."""
+
+    def forward(self, x):
+        return tuple(torch.argmax(self.gemm(x) + self.bias, dim=-1) for _ in range(3))
+
+
+def _families(program) -> list[str]:
+    return [n.fn.id.split("{")[0] for n in program.fn.body.nodes]
+
+
+def test_under_a_declared_launch_context_one_own_row_takes_the_launch_rows_of_its_step(f32_target, gemv_row):
+    VB.observe_launch_context(TG.parse_launch_context({"max_seqlen_q_by_step": [1, 1, 1], "rows_by_step": [3, 1, 2]}))
+    rep = _derive(_Steps(), rows=1)
+    assert rep.ok, rep.unsupported
+    assert _families(rep.program) == ["GemmBiasF32Epilogue_v1", "TokenSelect_v1", "GemvBiasF32_v1", "TokenSelect_v1",
+                                      "GemmBiasF32Epilogue_v1", "TokenSelect_v1"], _families(rep.program)
+    assert launch_rows_read()
+    cond = applicability_conditions(F32_EPILOGUE_TP, {}, {}, {}, None, None, active_launch_context())
+    assert cond["launch_context"]["rows_by_step"] == {"0": 3, "1": 1, "2": 2}
+
+
+def test_several_own_rows_do_not_read_the_launch_rows(f32_target):
     VB.observe_launch_context(TG.parse_launch_context([8, 1]))
-    rep = _derive(_Linear(), rows=1)
-    assert not rep.ok and rep.unsupported.reason == "numerics_unregistered", rep.unsupported
-    assert "max_seqlen_q, not the launch's M" in rep.unsupported.hint, rep.unsupported.hint
     rep = _derive(_Linear())
     assert rep.ok and _hist(rep.program) == {"GemmBiasF32Epilogue_v1": M}, rep.unsupported or _hist(rep.program)
+    assert not launch_rows_read()
+    assert "rows_by_step" not in applicability_conditions(F32_EPILOGUE_TP, {}, {}, {}, None, None, active_launch_context())["launch_context"]
+
+
+@pytest.mark.parametrize("spec,why", [([8, 1, 1], "declares max_seqlen_q only"),
+                                      ({"max_seqlen_q_by_step": [1, 1, 1], "rows_by_step": "conflict"}, "'conflict'"),
+                                      ({"max_seqlen_q_by_step": [1, 1, 1], "rows_by_step": [3]}, "names rows for steps [0]")])
+def test_one_own_row_under_a_context_without_its_rows_is_refused(spec, why, f32_target, gemv_row):
+    VB.observe_launch_context(TG.parse_launch_context(spec))
+    rep = _derive(_Steps(), rows=1)
+    assert not rep.ok and rep.unsupported.reason == "numerics_unregistered", rep.unsupported
+    assert why in rep.unsupported.hint and "request step" in rep.unsupported.hint, rep.unsupported.hint
 
 
 @pytest.mark.parametrize("cls,want", [(_NoBias, {"Gemm_v2": M}),

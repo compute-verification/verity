@@ -11,7 +11,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_launch_context, active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_launch_context, active_target_profile, note_launch_rows_read
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_pins_for,
                                                                    lookup_key)
@@ -97,7 +97,7 @@ class TritonGemmRule(InPlaceRule):
     FP32 epilogue (`GemmTarget.bias_epilogue == "f32"`: the served linear is cuBLAS's `F.linear(x, W, b)`, one kernel) the launch's
     M picks it (`_f32_bias_kind`)."""
     modes = frozenset({"profile"})
-    info = RuleInfo("TritonGemm[vllm-bi]", 3, "in-place-binding",
+    info = RuleInfo("TritonGemm[vllm-bi]", 4, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",
                     preconditions=("kernel qualified name is the profile's `matmul_kernel_persistent`; source sha256 pinned",
                                    "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.registry.gemm_targets: ada cc 8.9 with "
@@ -110,9 +110,9 @@ class TritonGemmRule(InPlaceRule):
                                    "fused bias (Gemm_v1 targets, and targets whose GEMM record has bias_epilogue 'f32'): c's only other reader is "
                                    "aten.add.Tensor(c, b) (either order, alpha 1), the next computing node, in the launch's module; b bf16 [N] or "
                                    "[1, N]; the sum bf16 [M, N]",
-                                   "bias_epilogue 'f32': the launch's M >= 2 -> GemmBiasF32Epilogue_v1; M = 1 (own rows 1, no declared launch "
-                                   "context) -> GemvBiasF32_v1 with (K, N) in the target's gemv table; own rows 1 under a declared launch context "
-                                   "(M not declared) -> refused"),
+                                   "bias_epilogue 'f32': the launch's M >= 2 -> GemmBiasF32Epilogue_v1; M = 1 -> GemvBiasF32_v1 with (K, N) in the "
+                                   "target's gemv table; M = own rows without a declared launch context, else the context's rows at the request "
+                                   "step (the sampling events before the launch); a context without rows for the step -> refused"),
                     evidence_domain="structural; numerics: Gemm_v1{K,N} (the same Triton kernel; f32 accumulator over BLOCK_SIZE_K tiles); "
                                     "GemmBias_v1{K,N} = BiasAdd_v1 of that word (linear_batch_invariant's `output + bias` in bf16); "
                                     "GemmBiasF32Epilogue_v1 / GemvBiasF32_v1 = the GEMM record's cuBLASLt correspondence (gemm_targets)")
@@ -199,20 +199,39 @@ class TritonGemmRule(InPlaceRule):
 def _f32_bias_kind(ctx, add, K: int, N: int, own_rows: int, dot):
     """The linear with a bias on a target whose record adds it in cuBLASLt's FP32 epilogue: `GemmBiasF32Epilogue_v1{K,N,DOT}` when the
     launch has M >= 2 rows, cuBLAS's gemv `GemvBiasF32_v1{K,N,V,T}` at M = 1.  A request Program's launch holds its own rows and, under a
-    declared launch context (a batch of several), every co-scheduled sequence's too: own rows >= 2 put M >= 2 either way, but one own
-    row leaves M undeclared there (the context declares max_seqlen_q, not the launch's rows), so that is refused, not guessed."""
+    declared launch context (a batch of several), every co-scheduled sequence's too: own rows >= 2 put M >= 2 either way; at one own row
+    M is the context's rows at this request step (`targets.launch_rows`), and a context without them is refused, not guessed."""
     if own_rows >= 2:
         return ctx.kind("gemm_bias_f32", add, K=K, N=N, DOT=dot)
-    if active_launch_context() is not None:
-        refuse("numerics_unregistered", add, ctx.module_path(add),
-               f"bf16 linear with a bias (K={K}, N={N}) at one own row under a declared launch context: cuBLAS runs a gemv at M = 1 and "
-               f"the FP32-epilogue GEMM at M >= 2, and the context declares max_seqlen_q, not the launch's M")
     from verity_vllm.program.registry import targets as TG
+    launch = active_launch_context()
+    step = _request_step(ctx)
+    try:
+        M, _src = TG.launch_rows(own_rows, step, launch)
+    except (TG.LaunchContextConflict, TG.LaunchContextInvalid) as e:
+        refuse("numerics_unregistered", add, ctx.module_path(add),
+               f"bf16 linear with a bias (K={K}, N={N}) at one own row, request step {step}: cuBLAS runs a gemv at M = 1 and the "
+               f"FP32-epilogue GEMM at M >= 2, and the launch's M is not known -- {e}", request_step=step)
+    if launch is not None:
+        note_launch_rows_read()
+    if M >= 2:
+        return ctx.kind("gemm_bias_f32", add, K=K, N=N, DOT=dot)
     try:
         V, T = TG.gemv_bias_geometry(active_target_profile(), K, N)
     except TG.UnregisteredTarget as e:
         refuse("numerics_unregistered", add, ctx.module_path(add), str(e))
     return ctx.kind("gemv_bias_f32", add, K=K, N=N, V=V, T=T)
+
+
+def _request_step(ctx) -> int:
+    """The request step the launch being bound runs in: the sampling events (`program.sampling_event`) emitted before it -- the Build's
+    own step segmentation (a request step ends at its sampling event).  Counted incrementally over the Builder's nodes."""
+    from verity_vllm.program.sampling_event import is_sampling_event
+    seen, n = ctx.state.get("sampling_events_seen", (0, 0))
+    nodes = ctx.B.nodes
+    n += sum(1 for node in nodes[seen:] if is_sampling_event(node.fn.id))
+    ctx.state["sampling_events_seen"] = (len(nodes), n)
+    return n
 
 
 def _bias_add_reader(launch, c, ctx, M: int, N: int):

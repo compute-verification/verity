@@ -168,7 +168,11 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         list [n0, n1, ...]   -> {s: n_s}                  per request step s: the launch's max_seqlen_q at that engine step (1 = decode-only step)
         dict {"s": n}        -> same, string or int keys
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
-    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True}."""
+        dict {"max_seqlen_q_by_step": list | dict | "conflict", "rows_by_step": list | dict | "conflict"}
+                             -> both, per request step: the launch's max_seqlen_q and its ROWS (every co-scheduled sequence's rows at that
+                                engine step: the M cuBLAS picks its kernel by, `launch_rows`)
+    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True}, plus {"rows_by_step": {int: int}, "rows_conflict":
+    bool} when the spec declares rows."""
     if spec is None or spec == "":
         return None
     if isinstance(spec, str):
@@ -189,15 +193,30 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     elif isinstance(spec, list):
         by = {i: int(v) for i, v in enumerate(spec)}
     elif isinstance(spec, dict):
-        if spec.get("conflict"):
-            return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
+        rows = spec.get("rows_by_step")
+        extra = {} if rows is None else {"rows_by_step": {}, "rows_conflict": True} if rows == "conflict" else \
+            {"rows_by_step": _by_step("rows", rows), "rows_conflict": False}
         src = spec.get("max_seqlen_q_by_step", spec)
-        by = {int(k): int(v) for k, v in src.items()}
+        if spec.get("conflict") or src == "conflict":
+            return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True, **extra}
+        return {"max_seqlen_q_by_step": _by_step("max_seqlen_q", {k: v for k, v in src.items() if k != "rows_by_step"}
+                                                 if isinstance(src, dict) else src), "conflict": False, "declared": True, **extra}
     else:
         raise ValueError(f"launch context: unsupported spec {type(spec).__name__}")
-    if any(v < 1 for v in by.values()) or any(k < 0 for k in by):
-        raise ValueError(f"launch context: steps and max_seqlen_q must be >= 0 / >= 1: {by}")
-    return {"max_seqlen_q_by_step": by, "conflict": False, "declared": True}
+    return {"max_seqlen_q_by_step": _by_step("max_seqlen_q", by), "conflict": False, "declared": True}
+
+
+def _by_step(what: str, v: list | dict) -> dict[int, int]:
+    """A per-step declaration (list: step = index; dict: string or int step keys) -> {step: value}, every step >= 0 and value >= 1."""
+    if isinstance(v, list):
+        by = {i: int(x) for i, x in enumerate(v)}
+    elif isinstance(v, dict):
+        by = {int(k): int(x) for k, x in v.items()}
+    else:
+        raise ValueError(f"launch context: {what} is a {type(v).__name__}, not a per-step list or dict")
+    if any(x < 1 for x in by.values()) or any(k < 0 for k in by):
+        raise ValueError(f"launch context: steps and {what} must be >= 0 / >= 1: {by}")
+    return by
 
 
 class LaunchContextInvalid(ValueError):
@@ -228,6 +247,30 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
     if int(v) < own:
         raise LaunchContextInvalid(f"the declared launch context says max_seqlen_q {int(v)} at step {int(step)} but this request alone has {own} "
                                    f"query rows there: the launch contains the request, so the declaration is another shape's context")
+    return int(v), "declared launch context"
+
+
+def launch_rows(own_rows: int, step: int, launch: dict[str, Any] | None) -> tuple[int, str]:
+    """The rows of the launch a request's step runs in -- every co-scheduled sequence's rows at that engine step, the M by which cuBLAS
+    picks its kernel -- never fewer than this request's own.  Returns (rows, source), as `launch_seqlen_q`: own rows when no context is
+    declared (a batch of one), else the declared rows.  A declared context that declares no rows, conflicting rows, no rows for the
+    step, or fewer than the request's own is refused (`LaunchContextConflict` / `LaunchContextInvalid`)."""
+    own = int(own_rows)
+    if not launch:
+        return own, "own rows"
+    if launch.get("rows_conflict"):
+        raise LaunchContextConflict("the launch rows of this request shape are not one value ('conflict'): requests of the same (LP, T) are "
+                                    "co-scheduled with different batches")
+    by = launch.get("rows_by_step")
+    if by is None:
+        raise LaunchContextInvalid("the declared launch context declares max_seqlen_q only, not the launch's rows (rows_by_step; "
+                                   "verity_vllm.pipeline.launch_context declares both)")
+    v = by.get(int(step))
+    if v is None:
+        raise LaunchContextInvalid(f"the declared launch context names rows for steps {sorted(by)} but the request runs step {int(step)}")
+    if int(v) < own:
+        raise LaunchContextInvalid(f"the declared launch context says {int(v)} rows at step {int(step)} but this request alone has {own} "
+                                   f"rows there: the launch contains the request, so the declaration is another shape's context")
     return int(v), "declared launch context"
 
 
@@ -322,4 +365,4 @@ def describe(profile) -> dict[str, Any]:
 __all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "gemm_bias_spec", "gemv_bias_geometry", "gemv_bias_spec", "attention_spec", "describe",
-           "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
+           "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q", "launch_rows"]

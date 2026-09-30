@@ -30,6 +30,29 @@ def test_parse_launch_context_forms():
         TG.parse_launch_context(0)
     with pytest.raises(ValueError):
         TG.parse_launch_context("[1024,0]")
+    both = TG.parse_launch_context('{"max_seqlen_q_by_step":[1024,1],"rows_by_step":[1032,2]}')
+    assert both == {"max_seqlen_q_by_step": {0: 1024, 1: 1}, "conflict": False, "declared": True, "rows_by_step": {0: 1032, 1: 2},
+                    "rows_conflict": False}
+    assert TG.parse_launch_context({"max_seqlen_q_by_step": "conflict", "rows_by_step": [9, 2]}) == \
+        {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True, "rows_by_step": {0: 9, 1: 2}, "rows_conflict": False}
+    assert TG.parse_launch_context({"max_seqlen_q_by_step": [8], "rows_by_step": "conflict"})["rows_conflict"] is True
+    with pytest.raises(ValueError):
+        TG.parse_launch_context({"max_seqlen_q_by_step": [8], "rows_by_step": [0]})
+
+
+def test_launch_rows_are_the_declared_rows_of_the_step_never_below_own_rows():
+    assert TG.launch_rows(1, 4, None) == (1, "own rows")
+    ctx = TG.parse_launch_context({"max_seqlen_q_by_step": [8, 1, 1], "rows_by_step": [16, 2, 1]})
+    assert [TG.launch_rows(own, s, ctx) for own, s in ((8, 0), (1, 1), (1, 2))] == [(16, "declared launch context"), (2, "declared launch context"),
+                                                                                  (1, "declared launch context")]
+    with pytest.raises(TG.LaunchContextInvalid, match="declares max_seqlen_q only"):
+        TG.launch_rows(1, 1, TG.parse_launch_context([8, 1, 1]))
+    with pytest.raises(TG.LaunchContextInvalid, match="runs step 3"):
+        TG.launch_rows(1, 3, ctx)
+    with pytest.raises(TG.LaunchContextInvalid, match="another shape's context"):
+        TG.launch_rows(32, 0, ctx)
+    with pytest.raises(TG.LaunchContextConflict):
+        TG.launch_rows(1, 1, TG.parse_launch_context({"max_seqlen_q_by_step": [8, 1], "rows_by_step": "conflict"}))
 
 
 def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
@@ -86,16 +109,21 @@ def test_shape_contexts_co_arrival_and_staggered():
     assert ctx[(8, 14)] == [1024] + [1] * 14
     assert ctx[(1024, 68)] == [1024] + [1] * 68
     assert ctx[(155, 127)] == [1024] + [1] * 127
-    assert LC.spec_for(_wl(reqs), 8, 14) == json.dumps([1024] + [1] * 14, separators=(",", ":"))
+    # the launch's rows: every prompt at step 0, then one row per request still decoding (a cap-c request decodes at steps 1..c-1)
+    rows = LC.shape_rows(_wl(reqs))
+    assert rows[(8, 14)] == [3408, 8] + [7] * 5 + [6] * 8
+    assert rows[(155, 127)][69:121] == [2] * 52 and rows[(155, 127)][121:] == [1] * 7      # the cap-128 request alone: cuBLAS's gemv
+    assert json.loads(LC.spec_for(_wl(reqs), 8, 14)) == {"max_seqlen_q_by_step": [1024] + [1] * 14, "rows_by_step": rows[(8, 14)]}
     assert LC.spec_for(_wl(reqs), 1024, 127) == ""                # not a request shape (the row's default build_request): no context
     # staggered: r1 (300 rows) arrives at engine step 2 while r0 decodes -> r0's step 2 launch has max_seqlen_q 300; r1's own step 0 = 300
     st = LC.shape_contexts(_wl([(64, 6, 0), (300, 3, 2)]))
     assert st[(64, 5)] == [64, 1, 300, 1, 1, 1]
     assert st[(300, 2)] == [300, 1, 1]
+    assert LC.shape_rows(_wl([(64, 6, 0), (300, 3, 2)])) == {(64, 5): [64, 1, 301, 2, 2, 1], (300, 2): [301, 2, 2]}
     # two requests of ONE shape co-scheduled differently -> 'conflict' (fail closed under FA3)
     cf = LC.shape_contexts(_wl([(8, 3, 0), (8, 3, 1), (1024, 2, 0)]))
     assert cf[(8, 2)] == "conflict"
-    assert LC.spec_for(_wl([(8, 3, 0), (8, 3, 1), (1024, 2, 0)]), 8, 2) == "conflict"
+    assert json.loads(LC.spec_for(_wl([(8, 3, 0), (8, 3, 1), (1024, 2, 0)]), 8, 2)) == {"max_seqlen_q_by_step": "conflict", "rows_by_step": "conflict"}
     # the sweep-block form of the workload (input_lengths / output_caps / arrive_steps) is read too
     sw = {"sweep": {"input_lengths": [8, 1024], "output_caps": [3, 2], "arrive_steps": [0, 0]}}
     assert LC.shape_contexts(sw)[(8, 2)] == [1024, 1, 1]
@@ -108,7 +136,7 @@ def test_measured_workload_file():
     if not os.path.exists(p):
         pytest.skip("workload file not in this checkout")
     w = json.load(open(p))
-    assert LC.spec_for(w, 8, 14) == json.dumps([1024] + [1] * 14, separators=(",", ":"))
+    assert json.loads(LC.spec_for(w, 8, 14))["max_seqlen_q_by_step"] == [1024] + [1] * 14
     assert all(v[0] == 1024 for v in LC.shape_contexts(w).values())
 
 

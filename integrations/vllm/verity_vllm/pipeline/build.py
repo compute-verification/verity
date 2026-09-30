@@ -313,6 +313,10 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
         cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
                                   "conflict": bool(launch.get("conflict"))}
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_rows_read
+        if launch_rows_read():
+            # the launch's rows picked a Definition (cuBLAS's gemv at M = 1): present ONLY then, so no other identity moves
+            cond["launch_context"]["rows_by_step"] = {str(k): v for k, v in sorted((launch.get("rows_by_step") or {}).items())}
     return cond
 
 
@@ -736,8 +740,9 @@ class Options:
                                              help="[R15 hopper HOP-03] the LAUNCH CONTEXT this request Program is built under (structural input): the varlen launch's "
                                              "max_seqlen_q over every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt "
                                              "has N rows), JSON list [n0, n1, ...] (per step), or 'conflict' (requests of this shape are co-scheduled differently: "
-                                             "refused under FA3, whose tile reads it; recorded and inert under FA2).  Omitted = own rows (a batch of one).  "
-                                             "row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+                                             "refused under FA3, whose tile reads it; recorded and inert under FA2), or JSON {\"max_seqlen_q_by_step\": ..., "
+                                             "\"rows_by_step\": ...} (with the launch's rows per step: cuBLAS's gemv at M = 1).  Omitted = own rows (a batch of "
+                                             "one).  row_pod.sh derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
 
 
 def main(a: Options) -> int:

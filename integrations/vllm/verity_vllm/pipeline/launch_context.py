@@ -9,13 +9,16 @@ prefill launch ran 128 (192 x 128 tile, `max_seqlen_q` 1024) -- X-09 batch_decom
 For request r (arrive_step a_r, prompt_len L_r, max_tokens c_r) at its request step s (engine step e = a_r + s, s in 0..c_r-1):
     rows_q(e) = L_q if a_q == e (q prefills at e) ; 1 if a_q < e <= a_q + c_q - 1 (q decodes at e) ; 0 otherwise
     launch_max_seqlen_q(r, s) = max_q rows_q(a_r + s)          (>= rows_r, since r is in the launch)
+    launch_rows(r, s)         = sum_q rows_q(a_r + s)          (the launch's M: cuBLAS runs a gemv at M = 1, `targets.launch_rows`)
 The request Programs are built per distinct (prompt_len, max_tokens - 1) shape; when every request of a shape has the same per-step list the
 shape's context is that list, otherwise it is 'conflict' (derive_step refuses it under FA3 -- one Program cannot carry two tiles -- and
-records it inert under FA2, whose tile does not read seqlen_q).  Chunked prefill / preemption are not modelled here (the panel's rows run
-`enable_chunked_prefill=False`; the row's expected_engine_steps assume no preemption) -- a scheduler that does either changes the launches
-and the Match would show it.
+records it inert under FA2, whose tile does not read seqlen_q; the rows likewise, where a rule reads them).  Chunked prefill / preemption are
+not modelled here (the panel's rows run `enable_chunked_prefill=False`; the row's expected_engine_steps assume no preemption) -- a scheduler
+that does either changes the launches and the Match would show it.  The rows also assume every request runs to its cap: a request that
+stops early leaves fewer rows in the launches after it.
 
-    verity-vllm launch-context <workload.json> [<LP> <T>]      -> the shape's JSON list (or 'conflict'); no shape: all shapes
+    verity-vllm launch-context <workload.json> [<LP> <T>]      -> the shape's JSON {"max_seqlen_q_by_step", "rows_by_step"}, each a
+                                                                  per-step list or 'conflict'; no shape: all shapes
 """
 from __future__ import annotations
 
@@ -45,13 +48,28 @@ def request_launch_context(reqs: list[dict[str, Any]], r: dict[str, Any]) -> lis
     return out
 
 
+def request_launch_rows(reqs: list[dict[str, Any]], r: dict[str, Any]) -> list[int]:
+    """Per request step s of r: the launch's rows at engine step arrive_step(r) + s."""
+    a, c = int(r["arrive_step"]), int(r["max_tokens"])
+    return [sum(rows_at(q, a + s) for q in reqs) for s in range(c)]
+
+
 def shape_contexts(workload: dict[str, Any]) -> dict[tuple[int, int], list[int] | str]:
     """{(LP, T): [max_seqlen_q per step] | 'conflict'} for every request shape of the workload (T = max_tokens - 1, the derive's --T)."""
+    return _per_shape(workload, request_launch_context)
+
+
+def shape_rows(workload: dict[str, Any]) -> dict[tuple[int, int], list[int] | str]:
+    """{(LP, T): [launch rows per step] | 'conflict'} for every request shape of the workload."""
+    return _per_shape(workload, request_launch_rows)
+
+
+def _per_shape(workload: dict[str, Any], per_request) -> dict[tuple[int, int], list[int] | str]:
     reqs = _requests(workload)
     by: dict[tuple[int, int], set[tuple[int, ...]]] = {}
     for r in reqs:
         key = (int(r["prompt_len"]), int(r["max_tokens"]) - 1)
-        by.setdefault(key, set()).add(tuple(request_launch_context(reqs, r)))
+        by.setdefault(key, set()).add(tuple(per_request(reqs, r)))
     return {k: (list(next(iter(v))) if len(v) == 1 else "conflict") for k, v in by.items()}
 
 
@@ -66,13 +84,14 @@ def _requests(workload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def spec_for(workload: dict[str, Any], LP: int, T: int) -> str:
-    """The `--launch-max-seqlen-q` argument for the (LP, T) shape: a JSON list, 'conflict', or '' when the workload has no such shape
-    (the row's default `build_request` of the longest prompt / largest cap is a shape too)."""
-    ctxs = shape_contexts(workload)
-    v = ctxs.get((int(LP), int(T)))
+    """The `--launch-max-seqlen-q` argument for the (LP, T) shape: JSON {"max_seqlen_q_by_step", "rows_by_step"}, each a per-step list or
+    'conflict', or '' when the workload has no such shape (the row's default `build_request` of the longest prompt / largest cap is a
+    shape too)."""
+    key = (int(LP), int(T))
+    v = shape_contexts(workload).get(key)
     if v is None:
         return ""
-    return v if isinstance(v, str) else json.dumps(v, separators=(",", ":"))
+    return json.dumps({"max_seqlen_q_by_step": v, "rows_by_step": shape_rows(workload)[key]}, separators=(",", ":"))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -87,6 +106,6 @@ def main(a: Options) -> int:
     if a.LP is not None and a.T is not None:
         print(spec_for(w, a.LP, a.T))
         return 0
-    for (lp, t), v in sorted(shape_contexts(w).items()):
-        print(f"LP{lp}_T{t} {v if isinstance(v, str) else json.dumps(v, separators=(',', ':'))}")
+    for lp, t in sorted(shape_contexts(w)):
+        print(f"LP{lp}_T{t} {spec_for(w, lp, t)}")
     return 0

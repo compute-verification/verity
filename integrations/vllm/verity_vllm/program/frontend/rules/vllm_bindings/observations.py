@@ -47,7 +47,7 @@ def attn_kind_for(obs: dict) -> tuple[str, dict, int | None]:
 
 FUSED_NORM_DISPATCH_PIN = "batch_invariant"
 
-_OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None}
+_OBSERVED: dict = {"attention_impls": None, "export_facts": None, "target_profile": None, "launch_context": None, "launch_rows_read": False}
 
 
 def clear_observations() -> None:
@@ -55,17 +55,28 @@ def clear_observations() -> None:
     _OBSERVED["export_facts"] = None
     _OBSERVED["target_profile"] = None
     _OBSERVED["launch_context"] = None
+    _OBSERVED["launch_rows_read"] = False
 
 
 def observe_launch_context(launch: dict | None) -> None:
     """[R15 hopper HOP-03] The LAUNCH CONTEXT the request Program is built under (`registry.targets.parse_launch_context`: per request step
-    the varlen launch's max_seqlen_q over ALL co-scheduled sequences).  The attention rule's FA3 tile selection reads it: a request's
-    own rows are the launch's value only for a batch of one.  None = no declared context (own rows; B1 semantics, digests unchanged)."""
+    the varlen launch's max_seqlen_q over ALL co-scheduled sequences, and its rows).  The attention rule's FA3 tile selection reads the
+    first, the GEMM rule's gemv-or-GEMM choice on a cuBLASLt target the second: a request's own rows are the launch's value only for a
+    batch of one.  None = no declared context (own rows; B1 semantics, digests unchanged)."""
     _OBSERVED["launch_context"] = dict(launch) if launch else None
 
 
 def active_launch_context() -> dict | None:
     return _OBSERVED.get("launch_context")
+
+
+def note_launch_rows_read() -> None:
+    """A rule's Definition selection read the declared context's rows (`registry.targets.launch_rows`): they are a condition of reuse."""
+    _OBSERVED["launch_rows_read"] = True
+
+
+def launch_rows_read() -> bool:
+    return bool(_OBSERVED.get("launch_rows_read"))
 
 
 def observe_target_profile(profile: TargetProfile | None) -> None:
