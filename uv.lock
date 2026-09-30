@@ -23,6 +23,7 @@ conflicts = [[
 
 [manifest]
 members = [
+    "cluster",
     "research",
     "verity",
     "verity-check",
@@ -113,6 +114,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/e5/b44c230108745ff9c70c7bbafe22563772bc0c22322a8d15c10455f6ca02/blake3-1.0.9-cp314-cp314t-win32.whl", hash = "sha256:021309d760b390706fecf13498f9a25aa8f689bbb65a0896029b8fa223aae18b", size = 229481, upload-time = "2026-06-22T18:01:45.307Z" },
     { url = "https://files.pythonhosted.org/packages/ec/a6/ac03f37dc9aeebf398d42089720648b3bc8438e733d3e522196c5d12ab39/blake3-1.0.9-cp314-cp314t-win_amd64.whl", hash = "sha256:5ea0c60dd9c1e3d05610606579e4bf80f562854c46ed55f9ee8545e18987a480", size = 217979, upload-time = "2026-06-22T18:01:46.629Z" },
 ]
+
+[[package]]
+name = "cluster"
+version = "0.1.0"
+source = { editable = "tools/cluster" }
 
 [[package]]
 name = "colorama"
@@ -1666,6 +1672,7 @@ name = "verity-workspace"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "cluster" },
     { name = "research" },
     { name = "verity" },
     { name = "verity-circuit-check" },
@@ -1694,6 +1701,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cluster", editable = "tools/cluster" },
     { name = "research", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch-cpu'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "verity-workspace", extra = "torch-cpu" } },
     { name = "verity", editable = "packages/verity" },

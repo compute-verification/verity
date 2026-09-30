@@ -1,0 +1,47 @@
+# vy-nebius-1 and vy-nebius-2 as one cluster, as their owners describe them on 30 Sep 2026. Nothing on a node reads this
+# yet; `cluster validate` checks it and the tests plan against it. GPU UUIDs stay out: each lease records its own.
+
+[cluster]
+name = "nebius"
+drain_s = 7200  # admissions end 2 h before the stop, leaving the final backups (13:30Z) and custody before 14:55Z
+
+[priorities]
+service = 1000  # the node's own daemons: sampler, exporters, the node agent
+timed = 900     # quiet whole-node windows
+session = 700   # a lease taken by hand: a kernel inner loop, a debugger
+work = 500      # a lane's queued work
+dev = 100
+fill = 10       # backfill: sweeps, censuses, anything that resumes from checkpoints
+
+[nodes.vy-nebius-1]
+owner = "verity"
+memory_gib = 1690
+stops_at = "2026-10-07T15:00:00Z"
+system_cpus = "0-7"  # k3s and the system (the steward's CPU map, 07:13Z)
+numa = { 0 = "0-95", 1 = "96-191" }
+gpus = [
+  { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
+  { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },
+]
+
+[nodes.vy-nebius-2]
+owner = "pous"
+memory_gib = 1690
+stops_at = "2026-10-07T15:00:00Z"
+numa = { 0 = "0-95", 1 = "96-191" }
+# GPU topology assumed to match vy-nebius-1's (`nvidia-smi topo -m` there, 08:08Z); not yet read on this node.
+gpus = [
+  { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
+  { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },
+]
+
+# pous infra's interim terms for Verity's CPU-only work on node 2 (research-notes, 20260930T1629Z).
+[[shares]]
+project = "verity"
+node = "vy-nebius-2"
+cpus = "48-95"
+max_gpus = 0
+max_memory_gib = 1024
+max_job_memory_gib = 256
+max_jobs = 6
+until = "2026-10-07T12:00:00Z"
