@@ -10,9 +10,11 @@ The contract with arms (`arm.py`) and the steps are published in the project sto
 6-harness.md` ("Arm interface"). Per run: identity (`identity.py`), the fill and derive preflights; the SASS gate
 (`sass_gate.py`) on every arm's declared binaries and every mapped library with device code; per shape: operand sets; gates,
 with the negative controls at the first shape before anything is timed; the baselines' autotune; at decode shapes, the
-dependent chains (`chain.py`) and their gates; the SASS gate again on anything loaded since; interleaved timing of
-everything, the same way; the consistency gate; the report (`report.py`). Every failure stops what it guards and writes no
-timing for it.
+dependent chains (`chain.py`) and their gates; the SASS gate again on anything loaded since; a warm-up of the same schedule
+to steady state (`--warmup-s`); every entry's timed item sized to the same device time (`--item-ms`: calls, or a chain's
+replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; the consistency
+gate; the report (`report.py`), whose panel rows carry both sides' reps and clocks (server.md 08:50Z). Every failure stops
+what it guards and writes no timing for it.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its
 gate, or it couldn't run); 6 the consistency gate rejected an arm; 7 the SASS gate refused a binary (an FP32 .FTZ instruction,
@@ -27,6 +29,7 @@ import datetime as dt
 import inspect
 import json
 import os
+import random
 import signal
 import statistics
 import sys
@@ -58,6 +61,10 @@ TUNE_REPS, FINALISTS = 3, 2
 SCREEN_KEEP, SCREEN_CHUNK = 8, 16
 #: operands may take at most this share of the free device memory
 MEMORY_SHARE = 0.85
+#: the warm-up (device ms: at least, at most) before a shape's reps, and a steady round's SM clock change at most
+WARMUP_MS, WARMUP_MAX_MS, STEADY = 10_000.0, 60_000.0, 0.005
+#: a timed item's device ms at least (every entry's sized to the same); the panel's "clock gap" between the sides' medians
+ITEM_MS, CLOCK_GAP = 40.0, 0.005
 
 
 class NegativeControlFailed(RuntimeError):
@@ -76,7 +83,8 @@ def _terminated(signum, frame):
 class Entry:
     """One timed thing at one shape: a baseline kernel, an arm's flag set, an arm's weight side, or a dependent chain of either
     (`chain.py`). `calls` holds one prepared call per operand set; a burst of B calls cycles them, and a chain (`chain`) is
-    `length` calls. `gate_key` is the gate it needs (its own key by default)."""
+    `length` calls. `gate_key` is the gate it needs (its own key by default). `burst` (B, when set) and `replays` (a chain's
+    replays per timed item) are what `Bench.equalize` sets so that every entry's timed item lasts about the same."""
 
     key: tuple
     kind: str
@@ -87,6 +95,8 @@ class Entry:
     meta: dict = field(default_factory=dict)
     chain: object = None
     length: int | None = None
+    burst: int | None = None
+    replays: int = 1
 
     def enqueue(self, stream: int, n: int) -> None:
         if self.chain is not None:
@@ -98,16 +108,21 @@ class Entry:
 
 class Timer:
     """Times an entry: a read-only L2 flush, NVML, an event, the burst (`burst`: B calls enqueued from Python; `graph`: the
-    same B calls replayed from one CUDA graph), an event, NVML. A `-wflush` method uses the write flush instead (the W5
-    control). Per-call time is the burst's over B."""
+    same B calls replayed from one CUDA graph; a chain's `replays` replays of its `length` calls), an event, NVML while the
+    GPU runs it (`during`), NVML once it is done. A `-wflush` method uses the write flush instead (the W5 control). Per-call
+    time is the item's over its calls."""
 
     def __init__(self, dev, sensors):
         self.dev, self.sensors = dev, sensors
         self.e0, self.e1 = dev.event(), dev.event()
 
+    @staticmethod
+    def unit(e: Entry, burst: int) -> int:
+        return e.length or e.burst or burst
+
     def ensure_graph(self, e: Entry, burst: int) -> None:
         if e.graph is None:
-            n = e.length or burst
+            n = self.unit(e, burst)
             e.graph = self.dev.capture(lambda s: e.enqueue(s, n))
 
     def drop_graph(self, e: Entry) -> None:
@@ -117,18 +132,27 @@ class Timer:
 
     def time(self, e: Entry, method: str, burst: int) -> dict:
         d = self.dev
-        burst = e.length or burst
+        unit = self.unit(e, burst)
         (d.write_flush if method.endswith("-wflush") else d.flush)()
         before = self.sensors.sample()
         d.record(self.e0)
-        if method.startswith("graph"):
-            d.graph_launch(e.graph)
-        else:
-            e.enqueue(d.stream, burst)
+        for _ in range(e.replays):
+            if method.startswith("graph"):
+                d.graph_launch(e.graph)
+            else:
+                e.enqueue(d.stream, unit)
         d.record(self.e1)
+        during = self.sensors.sample()
         ms = d.elapsed_ms(self.e0, self.e1)
-        return {"ms_per_call": ms / burst, "burst_ms": ms, "burst": burst,
-                "sensors": {"before": before, "after": self.sensors.sample()}}
+        calls = unit * e.replays
+        return {"ms_per_call": ms / calls, "burst_ms": ms, "burst": calls,
+                "sensors": {"before": before, "during": during, "after": self.sensors.sample()}}
+
+
+def clock_of(item: dict) -> int | None:
+    """A timed item's SM clock: NVML's while the GPU ran it, else right after."""
+    s = item.get("sensors") or {}
+    return (s.get("during") or {}).get("sm_mhz") or (s.get("after") or {}).get("sm_mhz")
 
 
 def bad_throttle(sample: dict) -> int:
@@ -150,6 +174,7 @@ class Bench:
         self.rejected: list[dict] = []
         self.chained = False
         self.sass: SG.Gate | None = None
+        self.warmups: list[dict] = []
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
@@ -214,6 +239,55 @@ class Bench:
                 self.items.append({"key": list(e.key), "method": m, "rep": r, "pos": pos, **t})
                 per[e.key][m].append(t["ms_per_call"])
         return per
+
+    def warmup(self, entries: list[Entry], burst: int, seed: int, min_ms: float = WARMUP_MS,
+               max_ms: float = WARMUP_MAX_MS) -> dict:
+        """Rounds of the timed schedule (every entry and method once, in a seeded order), kept apart from the reps, until the
+        GPU is at steady state: at least `min_ms` of device time, and a round's median SM clock within STEADY of the round's
+        before. `max_ms` bounds it (`steady` False). `per_call`: each entry's median per-call ms in the last round."""
+        pairs = [(e, m) for e in entries for m in self.methods]
+        rng = random.Random(seed)
+        total, clocks, per, steady = 0.0, [], {}, False
+        while pairs:
+            order = list(range(len(pairs)))
+            rng.shuffle(order)
+            per, mhz = {}, []
+            for i in order:
+                e, m = pairs[i]
+                self.ledger.require(e.gate_key or e.key)
+                t = self.timer.time(e, m, burst)
+                self.warmups.append({"key": list(e.key), "method": m, "round": len(clocks), **t})
+                total += t["burst_ms"]
+                per.setdefault(e.key, []).append(t["ms_per_call"])
+                if (c := clock_of(t)) is not None:
+                    mhz.append(c)
+            clocks.append(statistics.median(mhz) if mhz else None)
+            steady = len(clocks) >= 2 and None not in clocks[-2:] and abs(clocks[-1] - clocks[-2]) <= STEADY * clocks[-2]
+            if (steady and total >= min_ms) or total >= max_ms:
+                break
+        return {"rounds": len(clocks), "device_ms": total, "round_sm_mhz": clocks, "steady": steady, "min_ms": min_ms,
+                "max_ms": max_ms, "per_call": {k: statistics.median(v) for k, v in per.items()}}
+
+    def equalize(self, entries: list[Entry], per_call: dict, burst: int, item_ms: float = ITEM_MS) -> dict:
+        """Sizes every entry's timed item to about the same device time, the larger of `item_ms` and the longest item at the
+        shape's burst: in calls for a burst or a graph (re-captured), in replays for a chain."""
+        unit = self.timer.unit
+        natural = {e.key: per_call[e.key] * unit(e, burst) for e in entries if per_call.get(e.key, 0) > 0}
+        target = max([item_ms, *natural.values()])
+        graphs = "graph" in {m.split("-")[0] for m in self.methods}
+        out = []
+        for e in entries:
+            ms = per_call.get(e.key, 0)
+            if ms > 0 and e.length:
+                e.replays = max(1, round(target / natural[e.key]))
+            elif ms > 0 and (n := max(burst, round(target / ms))) != unit(e, burst):
+                self.timer.drop_graph(e)
+                e.burst = n
+                if graphs:
+                    self.timer.ensure_graph(e, burst)
+            out.append({"key": list(e.key), "ms_per_call": ms, "calls": unit(e, burst) * e.replays, "replays": e.replays,
+                        "item_ms": ms * unit(e, burst) * e.replays})
+        return {"target_ms": target, "entries": out}
 
 
 def free_entries(bench: Bench, entries: list[Entry]) -> None:
@@ -639,6 +713,11 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
             row["decode_method"] = "dependent-chain"
         if bench.sass is not None:
             bench.sass.check(bench.sass.discover(), "mapped")
+        warm = bench.warmup(entries, plan["burst"], B.hash_seed(f"{args.seed}/{shape.label}/warmup"),
+                            1e3 * getattr(args, "warmup_s", WARMUP_MS / 1e3),
+                            1e3 * getattr(args, "warmup_max_s", WARMUP_MAX_MS / 1e3))
+        row["warmup"] = {k: v for k, v in warm.items() if k != "per_call"}
+        row["sizing"] = bench.equalize(entries, warm["per_call"], plan["burst"], getattr(args, "item_ms", ITEM_MS))
         order_seed = B.hash_seed(f"{args.seed}/{shape.label}/order")
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
@@ -658,10 +737,34 @@ def chained(args, shape) -> bool:
     return getattr(args, "decode_method", "independent") == "dependent-chain" and shape.m == SH.DECODE_M
 
 
+def panel_reps(items: list[dict], arm_key: tuple, base_key: tuple, method: str = "graph") -> dict:
+    """The panel row's two sides, rep by rep (server.md 08:50Z): per-call ms, item ms and SM clock of the arm's and the
+    baseline's items, interleaved in the same reps on this die; `panel.py`'s --sm-clock-arm and --sm-clock-base; each side's
+    median clock and "clock gap" (medians more than CLOCK_GAP apart)."""
+    out: dict = {"reps": {}}
+    for side, key in (("arm", arm_key), ("baseline", base_key)):
+        its = sorted((it for it in items if tuple(it["key"]) == tuple(key) and it["method"] == method),
+                     key=lambda it: it["rep"])
+        out["reps"][side] = {"key": list(key), "method": method, "ms_per_call": [it["ms_per_call"] for it in its],
+                             "item_ms": [it["burst_ms"] for it in its], "calls": [it["burst"] for it in its],
+                             "sm_mhz": [clock_of(it) for it in its]}
+    a, b = out["reps"]["arm"], out["reps"]["baseline"]
+    if a["sm_mhz"] and b["sm_mhz"] and None not in a["sm_mhz"] + b["sm_mhz"]:
+        ma, mb = statistics.median(a["sm_mhz"]), statistics.median(b["sm_mhz"])
+        out |= {"sm_clock_arm": ",".join(map(str, a["sm_mhz"])), "sm_clock_base": ",".join(map(str, b["sm_mhz"])),
+                "sm_clock_median_mhz": {"arm": ma, "baseline": mb}, "clock_gap": abs(ma - mb) > CLOCK_GAP * mb}
+    else:
+        out["sm_clock_missing"] = "an item without an SM clock: no --sm-clock-arm/--sm-clock-base for this row"
+    if a["item_ms"] and b["item_ms"]:
+        out["item_ms_ratio"] = statistics.median(a["item_ms"]) / statistics.median(b["item_ms"])
+    return out
+
+
 def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Bench, unchained: dict | None = None) -> dict:
     med = {e.key: {m: statistics.median(xs) for m, xs in per[e.key].items() if xs} for e in entries}
     chain = chain_report(shape, fams, arms, entries, med, bench.methods, unchained or {})
     baselines: dict = {}
+    best_key: dict = {}
     for fam in fams:
         keys = [e for e in entries if e.kind == "baseline" and e.key[2] == fam.name]
         if not keys:
@@ -672,6 +775,7 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
             if m in med[best.key]:
                 b["ms"][m], b["kernel"][m] = med[best.key][m], best.key[-1]
                 b["source"][m], b["config"][m] = best.meta.get("source"), best.meta.get("config")
+                best_key[(fam.name, m)] = best.key
         baselines[fam.name] = b
     out: dict = {"baselines": R.baseline_rows(shape, baselines), "arms": {},
                  "no_baseline": [f.name for f in fams if f.name not in baselines]}
@@ -701,6 +805,8 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
             side = c["split"].get("graph") if isinstance(c["split"], dict) else None
             if side:
                 r["panel"]["slowdown_side_stream"] = round(side["side_x"], 4)
+            r["panel"] |= panel_reps(bench.items, ("chain", shape.label, a.name, "hash", "full"),
+                                     ("chain", shape.label, g["baseline"], r["panel"]["baseline_kernel"], "full"))
         elif phase and "graph" in r and "rejected" not in r:
             g = r["graph"]
             r["panel"] = {"phase": phase, "shape": SH.HEADLINE[phase], "slowdown": round(g["total_x"], 4),
@@ -708,6 +814,7 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
                           "baseline_kernel": baselines[g["baseline"]]["kernel"]["graph"]}
             if phase == "decode":
                 r["panel"]["decode_method"] = "independent"
+            r["panel"] |= panel_reps(bench.items, ("arm", shape.label, a.name, "hash"), best_key[(g["baseline"], "graph")])
         out["arms"][a.name] = r
     if chain:
         out["chain"] = chain
@@ -744,6 +851,12 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--screen-keep", type=int, default=SCREEN_KEEP)
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")
+    p.add_argument("--warmup-s", type=float, default=WARMUP_MS / 1e3,
+                   help="per shape, before its reps: rounds of the timed schedule for at least this much device time, and "
+                        f"until a round's median SM clock is within {STEADY:.1%} of the round before")
+    p.add_argument("--warmup-max-s", type=float, default=WARMUP_MAX_MS / 1e3, help="the warm-up's bound (then not steady)")
+    p.add_argument("--item-ms", type=float, default=ITEM_MS,
+                   help="every timed item (entry, method, rep) is sized to about the same device time, at least this")
     p.add_argument("--lock-mhz", type=int, help="lock this GPU's graphics clock (nvidia-smi -i UUID -lgc F,F); reset at exit")
     p.add_argument("--plan", action="store_true", help="print each shape's operand sets, burst and memory, and exit")
     p.add_argument("--out", type=Path)
@@ -832,10 +945,12 @@ def preflight_fill(dev, seed: int = 7) -> dict:
 
 
 def timed_clocks(items: list[dict]) -> dict:
-    """The SM and memory clocks sampled right after every timed item: what the clock label claims, checked."""
+    """The SM and memory clocks sampled while every timed item ran (right after, for an item without that sample): what the
+    clock label claims, checked."""
     out = {}
     for k in ("sm_mhz", "mem_mhz"):
-        got = sorted(s[k] for it in items if (s := (it.get("sensors") or {}).get("after")) and s.get(k))
+        got = sorted(s[k] for it in items
+                     if (s := (it.get("sensors") or {}).get("during") or (it.get("sensors") or {}).get("after")) and s.get(k))
         out[k] = {"n": len(got), "min": got[0], "median": got[len(got) // 2], "max": got[-1]} if got else {"n": 0}
     return out
 
@@ -925,6 +1040,7 @@ def main(argv: list[str] | None = None) -> int:
             out["dropped"] = bench.dropped
             out["rejected"] = bench.rejected
             out["tuning"] = bench.tuning
+            out["warmup_items"] = bench.warmups
             out["items"] = bench.items
             out.setdefault("clocks", {})["timed"] = timed_clocks(bench.items)
         out["harness"]["finished"] = now()

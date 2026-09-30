@@ -372,6 +372,108 @@ def test_fewer_than_twenty_reps_is_refused():
         S.rep_orders([1, 2], 19, 0)
 
 
+class DriftSensors(FakeSensors):
+    """Item i's SM clock (the timer samples three times an item) is `clocks[i]`, then the last one."""
+
+    def __init__(self, clocks):
+        self.clocks, self.n = list(clocks), 0
+
+    def sample(self):
+        s = super().sample()
+        s["sm_mhz"] = self.clocks[min(self.n // 3, len(self.clocks) - 1)]
+        self.n += 1
+        return s
+
+
+def warm_bench(clocks):
+    dev = FakeDevice()
+    b = H.Bench(dev, DriftSensors(clocks), S.MIN_REPS, ("graph",))
+    es = [entry(dev, ("baseline", "s", "f", "k"), 1.0), entry(dev, ("arm", "s", "a", "hash"), 1.5)]
+    for e in es:
+        b.gate(e.key, lambda: (True, {}))
+    b.capture(es, 4)
+    return b, es
+
+
+def test_the_warmup_runs_the_schedule_until_the_clock_is_steady_apart_from_the_reps():
+    b, es = warm_bench([2600, 2600, 2500, 2500, 2400, 2400, 2395, 2395])
+    w = b.warmup(es, 4, seed=3, min_ms=0.0, max_ms=1e6)
+    assert w["round_sm_mhz"] == [2600, 2500, 2400, 2395] and w["steady"] and w["rounds"] == 4
+    assert w["per_call"] == {es[0].key: pytest.approx(1.0), es[1].key: pytest.approx(1.5)}
+    assert len(b.warmups) == 8 and {it["round"] for it in b.warmups} == {0, 1, 2, 3} and b.items == []
+
+
+def test_the_warmup_lasts_its_device_time_and_stops_at_its_bound_unsteady():
+    b, es = warm_bench([2400])
+    assert b.warmup(es, 4, seed=3, min_ms=20.0, max_ms=1e6)["rounds"] == 2     # a round is 4 x 1.0 + 4 x 1.5 ms
+    b, es = warm_bench([2400])
+    assert b.warmup(es, 4, seed=3, min_ms=25.0, max_ms=1e6)["rounds"] == 3
+    b, es = warm_bench([2600, 2600, 2400, 2400] * 10)
+    w = b.warmup(es, 4, seed=3, min_ms=0.0, max_ms=35.0)
+    assert not w["steady"] and w["rounds"] == 4 and w["device_ms"] == pytest.approx(40.0)
+
+
+def test_the_warmup_needs_every_gate():
+    b, dev = bench()
+    e = entry(dev, ("baseline", "s", "f", "k"), 1.0)
+    b.capture([e], 4)
+    with pytest.raises(S.GateError, match="not gated"):
+        b.warmup([e], 4, seed=1, min_ms=0.0)
+    assert b.warmups == []
+
+
+class FakeChain:
+    def __init__(self, dev, ms):
+        self.dev, self.ms = dev, ms
+
+    def enqueue(self, stream, n):
+        self.dev.enqueue(lambda: setattr(self.dev, "t", self.dev.t + self.ms * n))
+
+
+def test_every_timed_item_is_sized_to_the_same_device_time():
+    b, dev = bench()
+    fast, slow = entry(dev, ("baseline", "s", "f", "k"), 1.0), entry(dev, ("arm", "s", "a", "hash"), 1.8)
+    ch = H.Entry(("chain", "s", "f", "k", "full"), "chain", fast.calls, chain=FakeChain(dev, 0.5), length=8)
+    es = [fast, slow, ch]
+    for e in es:
+        b.gate(e.key, lambda: (True, {}))
+    b.capture(es, 4)
+    per_call = {fast.key: 1.0, slow.key: 1.8, ch.key: 0.5}
+    sz = b.equalize(es, per_call, 4, item_ms=40.0)
+    assert sz["target_ms"] == 40.0 and [(x["calls"], x["replays"]) for x in sz["entries"]] == [(40, 1), (22, 1), (80, 10)]
+    assert len(fast.graph.work) == 40 and len(slow.graph.work) == 22
+    per = b.timed(es, 4, seed=1)
+    for e, ms in zip(es, (1.0, 1.8, 0.5)):
+        assert all(per[e.key][m] == [pytest.approx(ms)] * S.MIN_REPS for m in H.METHODS)
+    item = {(tuple(it["key"]), it["method"]): it["burst_ms"] for it in b.items}
+    for m in H.METHODS:
+        assert [item[(e.key, m)] for e in es] == [pytest.approx(40.0), pytest.approx(39.6), pytest.approx(40.0)]
+    b2, dev2 = bench()
+    es2 = [entry(dev2, fast.key, 1.0), entry(dev2, slow.key, 1.8)]
+    b2.capture(es2, 4)
+    sz = b2.equalize(es2, per_call, 4, item_ms=5.0)
+    assert sz["target_ms"] == pytest.approx(7.2) and [x["calls"] for x in sz["entries"]] == [7, 4]
+
+
+def test_the_panel_rows_carry_both_sides_reps_and_tag_a_clock_gap():
+    def it(key, rep, ms, mhz):
+        return {"key": list(key), "method": "graph", "rep": rep, "ms_per_call": ms, "burst_ms": 30 * ms, "burst": 30,
+                "sensors": {"during": {"sm_mhz": mhz}, "after": {"sm_mhz": 1}}}
+    arm, base = ("arm", "s", "x", "hash"), ("baseline", "s", "f", "k")
+    items = [it(arm, 1, 1.3, 2092), it(arm, 0, 1.4, 2100), it(base, 0, 1.0, 2090), it(base, 1, 1.0, 2094),
+             {**it(base, 0, 9.0, 1), "method": "burst"}]
+    p = H.panel_reps(items, arm, base)
+    assert p["reps"]["arm"]["ms_per_call"] == [1.4, 1.3] and p["reps"]["baseline"]["calls"] == [30, 30]
+    assert p["sm_clock_arm"] == "2100,2092" and p["sm_clock_base"] == "2090,2094"
+    assert p["sm_clock_median_mhz"] == {"arm": 2096, "baseline": 2092} and not p["clock_gap"]
+    assert p["item_ms_ratio"] == pytest.approx(1.35)
+    items[0]["sensors"]["during"]["sm_mhz"] = 2200
+    assert H.panel_reps(items, arm, base)["clock_gap"]
+    items[0]["sensors"] = {}
+    p = H.panel_reps(items, arm, base)
+    assert "sm_clock_arm" not in p and "sm_clock_missing" in p
+
+
 # ---- the report ----------------------------------------------------------------------------------------------------------------
 
 
@@ -427,9 +529,16 @@ def test_shape_report_rejects_an_arm_that_skips_work_and_gives_panel_numbers_for
         row = H.shape_report(SHAPE, fams, [arm], es, per, b)["arms"][arm.name]
         assert ("rejected" in row) == rejected
         if not rejected:
-            assert row["panel"] == {"phase": "prefill", "shape": "m8192-n8192-k8192", "slowdown": 2.0,
-                                    "hash_free": round(1.2 / 0.9, 4), "baseline": "fp8-e4m3-rowwise",
-                                    "baseline_kernel": "r"}
+            p = row["panel"]
+            assert {k: p[k] for k in ("phase", "shape", "slowdown", "hash_free", "baseline", "baseline_kernel")} == {
+                "phase": "prefill", "shape": "m8192-n8192-k8192", "slowdown": 2.0, "hash_free": round(1.2 / 0.9, 4),
+                "baseline": "fp8-e4m3-rowwise", "baseline_kernel": "r"}
+            reps = p["reps"]
+            assert reps["arm"]["key"] == ["arm", SHAPE.label, arm.name, "hash"]
+            assert reps["baseline"]["key"] == ["baseline", SHAPE.label, "fp8-e4m3-rowwise", "r"]
+            assert len(reps["arm"]["ms_per_call"]) == len(reps["baseline"]["sm_mhz"]) == S.MIN_REPS
+            assert p["sm_clock_arm"] == p["sm_clock_base"] == ",".join(["2400"] * S.MIN_REPS) and not p["clock_gap"]
+            assert p["item_ms_ratio"] == pytest.approx(1.8 / 0.9)
             assert row["w_ref_over_mkn"] == "1" and row["credited_over_mkn"] == "1/2"
     assert len(b.rejected) == 1
 

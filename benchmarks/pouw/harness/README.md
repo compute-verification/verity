@@ -11,7 +11,7 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | File | What |
 |---|---|
 | `arm.py` | the arm interface (v0.x): what an arm provides and what the harness checks; the contract is published in the project store, `internal/pouw/rtx-pro/workers/6-harness.md` |
-| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, interleaved timing, the consistency gate, the report |
+| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, a warm-up to steady state, interleaved timing in items of equal device time, the consistency gate, the report |
 | `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
 | `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (for the families `--lt-enumerate` names, every configuration its capabilities admit at the shape, screened by one graph rep before the tune), from each cuBLASLt loaded, and CUTLASS's sm_120 kernels, and the bit-exact gate on ternary operands |
@@ -74,6 +74,14 @@ $R -- gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${
 An arm on another branch runs from a tree that holds both: its branch with this directory and `../tests/test_harness.py`
 checked out from the harness's commit, `--arm-path` its own directory. `jobs/harness.yaml` and `jobs/harness-timed.yaml` are
 node 2's queue jobs, for when its Kueue is up.
+
+Before a shape's reps, the same interleaved schedule runs as a warm-up (kept apart, in `warmup_items`) for at least
+`--warmup-s` of device time and until a round's median SM clock is within 0.5% of the round before (`--warmup-max-s` bounds
+it; the shape's `warmup` says whether it got steady). Then every entry's timed item is sized to the same device time, at
+least `--item-ms` (40): calls for a baseline or an arm, replays for a chain (`sizing`). Every item samples NVML while the GPU
+runs it (`sensors.during`), and each panel row carries both sides' reps in the same run (`panel.reps`: per-call and item ms
+and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` and `sm_clock_base` for `panel.py`, and
+`clock_gap` (medians more than 0.5% apart; server.md 08:50Z).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
 `--decode-method independent` times the old independent graph with any library. An arm's calls expose `phases` (before, gemm,
