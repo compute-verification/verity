@@ -546,6 +546,69 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     assert [n for n, _ in started] == ["v2.sh"]
 
 
+def _pool_n1(monkeypatch, **env):
+    for k, v in env.items():
+        monkeypatch.setenv(k, str(v))
+    spec = importlib.util.spec_from_file_location("pool_n1_under_test", NEBIUS / "pool_n1.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def test_pool_n1_flags_an_idle_admitted_gpu_and_an_unleased_one_and_counts_waiting_workloads(monkeypatch):
+    m = _pool_n1(monkeypatch)
+    t = datetime.datetime(2026, 9, 30, 22, 0, tzinfo=datetime.timezone.utc).timestamp()
+
+    def wl(owner, queue, admitted, gpus=1, kind="Job"):
+        conds = [{"type": "QuotaReserved", "status": "True" if admitted else "False"}]
+        return {"metadata": {"ownerReferences": [{"kind": kind, "name": owner}]}, "status": {"conditions": conds},
+                "spec": {"queueName": queue, "podSets": [{"count": 1, "template": {"spec": {"containers": [
+                    {"resources": {"requests": {"nvidia.com/gpu": str(gpus)} if gpus else {}}}]}}}]}}
+
+    pod = lambda name, job, start: {"metadata": {"name": name, "labels": {"job-name": job}}, "status": {"startTime": start}}
+    obs = {"t": t, "sampled_at": t - 10, "samples_5m": 20, "samples_1h": 240,
+           "busy_5m": {0: 0.1, 1: 1.0, 2: 0.0, 3: 0.5}, "busy_1h": {0: 0.2, 1: 1.0, 2: 0.0, 3: 0.5},
+           "util_5m": {0: 2.0, 1: 80.0, 2: 0.0, 3: 30.0}, "fb_mib": {0: 9000, 1: 20000, 2: 0, 3: 5000},
+           "held_busy_1h": 540, "all_busy_1h": 600, "cpu_busy_5m": 0.31,
+           "pod_of_gpu": {0: "c-idle-x", 1: "c-busy-x", 2: None, 3: "rogue"},
+           "pods": [pod("c-idle-x", "nd-vllm-commit-1", "2026-09-30T21:40:00Z"), pod("c-busy-x", "nd-po-1", "2026-09-30T21:40:00Z"),
+                    pod("rogue", "rogue-job", "2026-09-30T21:00:00Z")],
+           "jobs": [{"metadata": {"name": "nd-vllm-commit-1", "annotations": {"verity.dev/template": "config-run@9c6a"}}}],
+           "workloads": [wl("nd-vllm-commit-1", "deployments-gpu", True), wl("nd-po-1", "pous-overflow", True),
+                         wl("wait-g", "deployments-gpu", False), wl("wait-c", "deployments-cpu", False, gpus=0)]}
+    n1 = m.build(obs)
+    assert [(g["index"], g["holder"], g["class"]) for g in n1["gpus"]] == [
+        (0, "kueue:nd-vllm-commit-1", "verity"), (1, "kueue:nd-po-1", "pous"), (2, None, "free"), (3, "rogue", "direct")]
+    assert (n1["gpu_busy_5m"], n1["useful_share_1h"], n1["waiting"], n1["waiting_gpu"], n1["waiting_cpu"]) == (0.4, 0.9, 2, 1, 1)
+    assert [(x["kind"], x["gpu"]) for x in n1["monitors"]] == [("gpu-idle-in-lease", 0), ("gpu-unleased", 3)]
+    assert n1["monitors"][0]["job_kind"] == "config-run@9c6a" and n1["monitors"][0]["owner"] == "deployments-gpu"
+
+
+def test_pool_n1_reports_template_drift_against_the_pushed_infra_nebius_ref(tmp_path, monkeypatch):
+    src, bare, sky = tmp_path / "src", tmp_path / "bare.git", tmp_path / "sky"
+    run = lambda *a, cwd=None: subprocess.run(a, cwd=cwd, check=True, capture_output=True)
+    (src / "tools/research/src/research/pods/nebius/sky/jobs").mkdir(parents=True)
+    (src / "tools/research/src/research/pods/nebius/sky/kueue.yaml").write_text("a: 1\n")
+    (src / "tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml").write_text("run: new\n")
+    run("git", "init", "-q", str(src))
+    run("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "x", "--allow-empty", cwd=src)
+    run("git", "add", "-A", cwd=src)
+    run("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "sky", cwd=src)
+    run("git", "init", "-q", "--bare", str(bare))
+    run("git", "push", "-q", str(bare), "HEAD:refs/kueue-fold/infra-nebius", cwd=src)
+    (sky / "jobs").mkdir(parents=True)
+    (sky / "kueue.yaml").write_text("a: 1\n")
+    (sky / "jobs" / "config-run.yaml").write_text("run: old\n")
+    (sky / "jobs" / "config-run.yaml.bak-1").write_text("x\n")
+    ref = tmp_path / "ref.json"
+    ref.write_text(json.dumps({"commit": "abc123", "pushed_at": "2026-09-30T21:50:00Z"}))
+    m = _pool_n1(monkeypatch, POOL_N1_GIT=bare, POOL_N1_REF_JSON=ref, DISPATCH_SKY=sky)
+    d = m.template_drift()
+    assert d["kind"] == "template-drift" and d["files"] == ["changed jobs/config-run.yaml"]
+    (sky / "jobs" / "config-run.yaml").write_text("run: new\n")
+    assert m.template_drift() == {}
+
+
 def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quiet_in_a_timed_window(tmp_path, monkeypatch):
     util, fill = tmp_path / "util", tmp_path / "fill"
     util.mkdir()
