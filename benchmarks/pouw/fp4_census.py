@@ -534,13 +534,77 @@ def lone_skip_identities(atom: Atom, qa, qb, ia, ib, traj: np.ndarray) -> np.nda
     return done.sum(1)
 
 
+F_S = 98.0                                        # A's credited forming per element (theory §2: 64 + 1 + 32.8)
+#: Qwen2.5-7B's output width n per linear: the forming term charges f_s per dead A element times |cols| / n.
+QWEN25_7B_N = {"q_proj": 3584, "k_proj": 512, "v_proj": 512, "o_proj": 3584, "gate_proj": 18944, "up_proj": 18944,
+               "down_proj": 3584}
+
+
+def span_2of4(live: np.ndarray, rows: int = 16, span: int = 128) -> dict:
+    """Both 2:4 predicates on a boolean map (a formed operand's nonzero codes, or a correction's salt-dependent entries):
+    D-24's per 4-group (<= 2 live of 4 consecutive k) and the instruction's per 8 of k (<= 2 live element pairs), each
+    per group and per aligned span (``rows`` rows x ``span`` of k, the A operand of one mma.sp m16n8k128)."""
+    r, K = live.shape
+    nr, nk = r - r % rows, K - K % span
+    z = live[:nr, :nk]
+    g4, p8 = z.reshape(nr, nk // 4, 4).sum(-1), z.reshape(nr, nk // 8, 4, 2).any(-1).sum(-1)
+    spans = lambda ok, per: ok.reshape(nr // rows, rows, nk // span, span // per).all((1, 3))
+    return {"g4": g4 <= 2, "g4_dead": g4 == 0, "p8": p8 <= 2, "p8_dead": p8 == 0,
+            "span_d24": spans(g4 <= 2, 4), "span_pairs": spans(p8 <= 2, 8), "span_dead": spans(g4 == 0, 4)}
+
+
+TWO_FOUR_UNITS = ("g4", "p8", "span_d24", "span_pairs", "span_either")
+
+
+def two_four_term(sp: dict, rows: int = 16) -> dict[str, np.ndarray]:
+    """§2 item 1 per 16-row block, as a share of its MACs: 0.5 per MAC where the correction fits one 2:4 pass, 1.0 where it
+    is all salt-dead, per unit: the 4-group (theory as written), the 8-of-k pair group, or the whole span (D-24's
+    predicate, the instruction's, or either)."""
+    nb = sp["span_d24"].shape[0]
+    per_row = lambda ok, dead: (0.5 * ok + 0.5 * dead).mean(1)[: nb * rows].reshape(nb, rows).mean(1)
+    per_span = lambda ok: (0.5 * ok + 0.5 * sp["span_dead"]).mean(1)
+    return {"g4": per_row(sp["g4"], sp["g4_dead"]), "p8": per_row(sp["p8"], sp["p8_dead"]),
+            "span_d24": per_span(sp["span_d24"]), "span_pairs": per_span(sp["span_pairs"]),
+            "span_either": per_span(sp["span_d24"] | sp["span_pairs"])}
+
+
+def dss_dead(X: np.ndarray, fmt: str) -> np.ndarray:
+    """D-SS's salt-free screen per (row, block): clean amax_b > 12 rho, rho the RMS over every 8th position of the row."""
+    blk = 16 if fmt == "nvf4" else 32
+    rho = np.sqrt((X[:, ::8] ** 2).mean(1))
+    return np.abs(X).reshape(X.shape[0], -1, blk).max(-1) > 12 * rho[:, None]
+
+
+def span_merged_equal(atom: Atom, qa, qb, ia, ib, traj: np.ndarray) -> np.ndarray:
+    """Per (word, span of two atoms): the merged k128 align-add from the chain's state before the span gives the chain's
+    state after it (GPU 4's span-word test)."""
+    m = merged(atom)
+    S = (traj.shape[1] - 1) // 2
+    eq = np.zeros((traj.shape[0], S), bool)
+    for s in range(S):
+        d, _ = m.step(traj[:, 2 * s], *_step_inputs(m, qa, qb, ia, ib, s))
+        eq[:, s] = d == traj[:, 2 * s + 2]
+    return eq
+
+
+def _tile_stats(x: np.ndarray, rho: float) -> dict:
+    return {"mean": float(x.mean()), "max": float(x.max()), "over_rho": float((x > rho).mean())}
+
+
 def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str, delta: float, rng, rows: int,
                  tile: int = 16, skip_tiles: int = 2, hot_bits: int = 14, rho: float = 1 / 400,
-                 hot_rule: str = "row") -> dict:
-    """The per-tile replayed debit of §2's items 2 and 5 on every word of ``rows`` x ``rows`` (A rows x B rows), as a share
-    of the tile's chain MACs against the cap rho: v1's chains from +0 and v2's (T1) from H (``hot_start``).  On every
-    tile, identity atoms are counted as identity steps (a lower bound on the debit's lone-skip test); on ``skip_tiles``
-    whole tiles (the worst by that count, and random ones) by the lone-skip test itself."""
+                 hot_rule: str = "row", n: int | None = None) -> dict:
+    """The per-tile debit of §2 on every word of ``rows`` x ``rows`` (A rows x B rows), as a share of the tile's chain MACs
+    against the cap rho, for v1's chains from +0 and v2's (T1) from H (``hot_start``).
+
+    Replayed per chain version: identity atoms (item 2) and sub-grid groups (item 5).  On every tile identity atoms are
+    counted as identity steps (a lower bound on the debit's lone-skip test); on ``skip_tiles`` whole tiles (the worst by
+    that count, and random ones) by the lone-skip test itself.  Per operand, the same for v1 and v2: the 2:4 term
+    (item 1) at each unit of ``two_four_term``, with salt-dependence read on the codes or on the values the MMA sees
+    (code times block scale; a changed scale changes its whole block); D-SS's dead blocks (``dss_dead``), their
+    dead x dead pairs (item 3, one block's MACs per pair-word) and the forming of A's dead elements (item 4, f_s times
+    |cols| / n, n the output width, default k).  Both 2:4 predicates are counted on the formed spans of A' and B', and per
+    version, whether the merged k128 step reproduces the chain's words over each span, all spans and 2:4 spans."""
     ya, yb = noisy(A, fmt, noise, delta, rng), noisy(B, fmt, noise, delta, rng)
     ca, sa, _ = quantize(ya, fmt)
     cb, sb, _ = quantize(yb, fmt)
@@ -549,8 +613,45 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     ra, rb = min(rows, A.shape[0]) // tile * tile, min(rows, B.shape[0]) // tile * tile
     ia, ib = (x.ravel() for x in np.meshgrid(np.arange(ra), np.arange(rb), indexing="ij"))
     K, nt = ca.shape[1], (ra // tile) * (rb // tile)
-    out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(nt), "k": int(K), "rho": rho,
-           "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles}
+    n = n or K
+    blk = 16 if fmt == "nvf4" else 32
+    out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(nt), "k": int(K), "n": int(n), "rho": rho,
+           "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles, "operands": {}}
+    formed, terms, dead = {}, {}, {}
+    for side, c, s, X, rr in (("A", ca, sa, A, ra), ("B", cb, sb, B, rb)):
+        c0, s0, _ = quantize(X, fmt)
+        c, s, c0, s0 = c[:rr], s[:rr], c0[:rr], s0[:rr]
+        formed[side] = span_2of4((c & 7) != 0, tile)
+        dead[side] = dss_dead(X[:rr], fmt)
+        o = {"spans": int(formed[side]["span_d24"].size), "formed_span_d24": float(formed[side]["span_d24"].mean()),
+             "formed_span_pairs": float(formed[side]["span_pairs"].mean()),
+             "dss_dead_blocks": float(dead[side].mean()),
+             "dss_rows_admitted": float((64 * dead[side].sum(1) <= dead[side].shape[1]).mean())}
+        if noise != "none":
+            (N1, E1), (N0, E0) = block_ints(c, s, fmt), block_ints(c0, s0, fmt)
+            val = lambda N, E: np.ldexp(N.astype(np.float64), E[..., None]).reshape(rr, -1)
+            terms[side] = {}
+            for lvl, live in (("code", c != c0), ("value", val(N1, E1) != val(N0, E0))):
+                sp = span_2of4(live, tile)
+                o[lvl] = {"change_density": float(live.mean()), "g4_ge2_dead": float(sp["g4"].mean()),
+                          "g4_all_dead": float(sp["g4_dead"].mean()), "p8_le2_live_pairs": float(sp["p8"].mean()),
+                          "span_d24": float(sp["span_d24"].mean()), "span_pairs": float(sp["span_pairs"].mean())}
+                terms[side][lvl] = two_four_term(sp, tile)
+        out["operands"][side] = o
+    nta, ntb = ra // tile, rb // tile
+    adm = lambda d: (64 * d.sum(1) <= d.shape[1]).reshape(-1, tile).all(1)
+    admitted = (adm(dead["A"])[:, None] & adm(dead["B"])[None, :]).ravel()
+    dA, dB = (dead[x].reshape(-1, tile, dead[x].shape[1]).sum(1).astype(np.float64) for x in "AB")
+    item3 = (dA @ dB.T) * blk / (tile * tile * K)
+    item4 = np.broadcast_to((F_S * blk * dA.sum(1) * tile / n / (tile * tile * K))[:, None], (nta, ntb))
+    operand_units = {}
+    if noise != "none":
+        out["item1"] = {lvl: {u: _tile_stats((terms["A"][lvl][u][:, None] + terms["B"][lvl][u][None, :]).ravel(), rho)
+                              for u in TWO_FOUR_UNITS} for lvl in ("code", "value")}
+        out["item3"], out["item4"] = _tile_stats(item3.ravel(), rho), _tile_stats(item4.ravel(), rho)
+        out["tiles_admitted"] = float(admitted.mean())
+        operand_units = {lvl: {u: (terms["A"][lvl][u][:, None] + terms["B"][lvl][u][None, :] + item3 + item4).ravel()
+                               for u in TWO_FOUR_UNITS} for lvl in ("code", "value")}
     cold = None
     for name in ("v1", "v2"):
         acc0 = np.zeros(len(ia)) if name == "v1" else hot_start(cold["rms"], ia, ra, hot_bits, hot_rule)
@@ -576,6 +677,21 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
                                           "over_rho": float((per_tile > rho).mean())},
                      "tile_debit_exact": exact, "tile_debit_exact_max": max(e["lone_skip_share"] for e in exact),
                      "merged_k128_words_equal": None if k128 is None else float((k128 == r["final"]).mean())}
+        if k128 is not None:
+            eq = span_merged_equal(atom, qa, qb, ia, ib, r["traj"])
+            out[name]["k128_span_words_equal"] = float(eq.mean())
+            out[name]["k128_span_words_equal_on_2of4"] = {}
+            for pred in ("span_d24", "span_pairs"):
+                sel = formed["A"][pred][ia // tile] | formed["B"][pred][ib // tile]
+                out[name]["k128_span_words_equal_on_2of4"][pred] = {
+                    "span_steps": int(sel.sum()), "equal": float(eq[sel].mean()) if sel.any() else None}
+        if operand_units:
+            tot = {lvl: {u: per_tile + x for u, x in d.items()} for lvl, d in operand_units.items()}
+            out[name]["tile_debit_total"] = {lvl: {u: {
+                "max": float(x.max()), "over_rho": float((x > rho).mean()),
+                "max_admitted": float(x[admitted].max()) if admitted.any() else None,
+                "over_rho_admitted": float((x[admitted] > rho).mean()) if admitted.any() else None}
+                for u, x in d.items()} for lvl, d in tot.items()}
     return out
 
 
@@ -841,24 +957,35 @@ def cmd_debit(args) -> dict:
                 X, W = d[f"{lin}/x"].astype(np.float64), d[f"{lin}/w"].astype(np.float64)
                 if args.max_k:
                     X, W = X[:, : args.max_k], W[:, : args.max_k]
-                cells.append(({"source": f.stem, "linear": lin, "k": int(X.shape[1])}, X, W))
+                cells.append(({"source": f.stem, "linear": lin, "k": int(X.shape[1]),
+                               "n": args.n or QWEN25_7B_N.get(lin.rsplit(".", 1)[-1])}, X, W))
     else:
         fams = FAMILIES if args.families == "all" else tuple(args.families.split(","))
-        cells = [({"family": fam}, *family(fam, args.pairs, args.k, rng)) for fam in fams]
+        cells = [({"family": fam, "n": args.n or args.k}, *family(fam, args.pairs, args.k, rng)) for fam in fams]
     for name, (atom, fmt) in atoms_from(args).items():
         for label, A, B in cells:
             for noise in args.noise.split(","):
                 try:
                     r = debit_census(atom, fmt, A, B, noise, args.delta, rng, args.pairs, hot_bits=args.hot_bits,
-                                     hot_rule=args.hot_rule)
+                                     hot_rule=args.hot_rule, n=label["n"])
                 except OverflowError as e:
                     r = {"outside_model": str(e)}
                 res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
+                tot = lambda v, lvl, u: r[v]["tile_debit_total"][lvl][u]["max"] if "tile_debit_total" in r.get(v, {}) else None
                 print(json.dumps({"format": fmt, **label, "noise": noise, **{
                     f"{v}_{q}": round(r[v][key], 6) for v in ("v1", "v2") if v in r
                     for q, key in (("subgrid", "subgrid_groups"), ("ident", "identity_steps"),
-                                   ("tile_max", "tile_debit_exact_max"))},
-                    **{f"{v}_k128_equal": r[v]["merged_k128_words_equal"] for v in ("v1", "v2") if v in r}}), flush=True)
+                                   ("tile_max", "tile_debit_exact_max"), ("k128_span_equal", "k128_span_words_equal"))
+                    if r[v].get(key) is not None},
+                    **{f"{v}_k128_equal": r[v]["merged_k128_words_equal"] for v in ("v1", "v2") if v in r},
+                    **{f"formed_{p}_{s}": r["operands"][s][f"formed_span_{p}"] for p in ("d24", "pairs") for s in "AB"
+                       if "operands" in r},
+                    **({"item1_g4_code_max": round(r["item1"]["code"]["g4"]["max"], 4),
+                        "item1_span_either_value_max": round(r["item1"]["value"]["span_either"]["max"], 6),
+                        "item3_max": round(r["item3"]["max"], 6), "item4_max": round(r["item4"]["max"], 6),
+                        "tiles_admitted": r["tiles_admitted"],
+                        "v2_total_span_value_max": round(tot("v2", "value", "span_either"), 6)} if "item1" in r else {})}),
+                    flush=True)
     return res
 
 
@@ -956,6 +1083,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--partner-blocks", type=int, default=256, help="merge: k-blocks the adaptive partner search covers")
     ap.add_argument("--hot-bits", type=int, default=14, help="debit: v2's H has its grid at 2^-hot_bits of the RMS atom sum")
     ap.add_argument("--hot-rule", choices=["row", "word"], default="row", help="debit: whose RMS atom sum sets v2's H")
+    ap.add_argument("--n", type=int, default=0,
+                    help="debit: output width for the forming term (default: Qwen2.5-7B's per linear with --acts, else k)")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="")
     args = ap.parse_args(argv)

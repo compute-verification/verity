@@ -252,6 +252,44 @@ def test_merged_atom_is_the_pinned_align_add_over_eight_groups():
             assert word == C.f32_word(got[w])
 
 
+def test_the_two_2of4_predicates_differ_by_hand():
+    """D-24 counts live codes per 4-group; the instruction counts live element pairs per 8 of k.  Neither implies the
+    other: x00x|x00x passes D-24 only, xxxx|0000 passes the pair rule only, and a span fails when one row fails."""
+    d24_only = np.tile(np.array([1, 0, 0, 1, 1, 0, 0, 1], bool), (16, 16))
+    pairs_only = np.tile(np.array([1, 1, 1, 1, 0, 0, 0, 0], bool), (16, 16))
+    for live, d24, pairs in ((d24_only, True, False), (pairs_only, False, True), (np.zeros((16, 128), bool), True, True)):
+        sp = C.span_2of4(live)
+        assert sp["span_d24"].tolist() == [[d24]] and sp["span_pairs"].tolist() == [[pairs]]
+    one_bad = d24_only.copy()
+    one_bad[5, :4] = True
+    assert not C.span_2of4(one_bad)["span_d24"].any()
+    t = C.two_four_term(C.span_2of4(np.zeros((16, 128), bool)))
+    assert all(t[u].tolist() == [1.0] for u in C.TWO_FOUR_UNITS)       # all salt-dead: 1.0 per MAC at every unit
+
+
+def test_dss_dead_reads_the_every_eighth_rms():
+    X = np.ones((2, 64))
+    X[0, 17] = 12.5                                                     # off the every-8th grid: rho stays 1
+    X[1, 16] = 1000.0                                                   # on it: rho = sqrt((1000^2 + 7) / 8), 12 rho > 1000
+    assert C.dss_dead(X, "nvf4").tolist() == [[False, True, False, False], [False, False, False, False]]
+
+
+def test_debit_census_2of4_term_granularity_and_span_words():
+    """On salted Gaussians the per-4-group 2:4 term is hundreds of rho while no span is 2:4, so the span units charge 0;
+    v1's exact chains merge identically on every span, and T1's H makes some spans differ."""
+    atom, fmt = C.atoms_from(C.parse_args(["debit", "--atom", "blackwell_sm120_nvf4_m16n8k64"]))["blackwell_sm120_nvf4_m16n8k64"]
+    rng = np.random.default_rng(14)
+    A, B = C.family("gaussian", 32, 1024, rng)
+    r = C.debit_census(atom, fmt, A, B, "row", 0.25, rng, 32)
+    assert r["item1"]["code"]["g4"]["max"] > 100 * r["rho"]
+    assert all(r["item1"][lvl][u]["max"] == 0.0 for lvl in ("code", "value") for u in ("span_d24", "span_pairs"))
+    assert r["operands"]["A"]["value"]["change_density"] >= r["operands"]["A"]["code"]["change_density"]
+    assert r["v1"]["k128_span_words_equal"] == 1.0 and 0.5 < r["v2"]["k128_span_words_equal"] < 1.0
+    assert r["v1"]["tile_debit_total"]["value"]["span_either"]["max"] == r["v1"]["tile_debit_share"]["max"]
+    S = C.debit_census(atom, fmt, *C.family("sparse-2of4", 32, 1024, rng), "none", 0.25, rng, 32)
+    assert S["operands"]["A"]["formed_span_d24"] == 1.0 and S["v1"]["k128_span_words_equal_on_2of4"]["span_d24"]["equal"] == 1.0
+
+
 def test_debit_census_exact_tiles_bound_the_step_count_from_above():
     """Each tile's lone-skip debit is at least its identity-step count, the worst tile by that count is among those
     replayed, and a freezing family charges v1 and v2 alike while Gaussians charge nearly nothing."""
