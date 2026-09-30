@@ -2135,6 +2135,8 @@ struct Plan {
     /// the host slots in mapped host memory, read by the device beside the compressions (`Some(true)`, the default unless
     /// `FC_HOST_PINNED=0`), or pageable and copied slot by slot (`Some(false)`)
     host_mapped: Option<bool>,
+    /// this session's witness, built beside the previous session (`prebuild`); taken when it is the one the session would build
+    prebuilt: Option<Arc<Mutex<Option<std::thread::JoinHandle<Prebuilt>>>>>,
     /// the session's tables ([`session_tables`]; 0 or 1: one table)
     tables: usize,
     /// those tables over the population, built once for a harness's repeated sessions without a draw
@@ -2229,6 +2231,39 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
     }).collect()
 }
 
+/// How a session builds its witness: on the device (inputs and host slots) or on the host, with the units' slots on the host,
+/// and the host slots in mapped memory.
+fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool) {
+    let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
+    #[cfg(feature = "gpu")]
+    let host_units = device && plan.host_units.unwrap_or_else(|| flock_live::gpu_circuit::deep_unit(st));
+    #[cfg(not(feature = "gpu"))]
+    let host_units = { let _ = st; false };
+    (device, host_units, plan.host_mapped.unwrap_or(true))
+}
+
+/// A one-table session's witness, built ahead of it: for this statement, seed and witness mode only.
+struct Prebuilt {
+    st: Arc<Stmt>,
+    seed: ProverSeed,
+    mode: (bool, bool, bool),
+    w0: Wit,
+    wt0: WitData,
+    built_s: f64,
+}
+
+/// Build the witness a one-table session of `st` with `seed` will take, on a thread of its own (the prover's host work beside the
+/// previous session's device work).
+fn prebuild(st: &Arc<Stmt>, inst: &Arc<Instances>, plan: &Plan, seed: ProverSeed) -> std::thread::JoinHandle<Prebuilt> {
+    let (st, inst, plan) = (st.clone(), inst.clone(), plan.clone());
+    std::thread::spawn(move || {
+        let mode = witness_mode(&st, &plan);
+        let w0 = wit(&st, &inst, &plan, plan.zero_witness, seed, 0);
+        let (wt0, built_s) = witness(&st, &w0, mode.0, mode.1, mode.2);
+        Prebuilt { st, seed, mode, w0, wt0, built_s }
+    })
+}
+
 fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> (Value, Vec<Vec<u8>>) {
     let log = Arc::new(Mutex::new(Vec::new()));
     let names = table_names(plan.tables);
@@ -2261,16 +2296,11 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
         config_of(&tabs).hello()
     };
     let mut commit: Vec<F128> = Vec::new();
-    let device = plan.gpu && !plan.mask_random && std::env::var("FC_HOST_WITNESS").is_err();
-    #[cfg(feature = "gpu")]
-    let host_units = device && plan.host_units.unwrap_or_else(|| flock_live::gpu_circuit::deep_unit(st));
-    #[cfg(not(feature = "gpu"))]
-    let host_units = false;
+    let (device, host_units, mapped) = witness_mode(st, plan);
     // on the device, rep 1 proves from rep 0's witness and level-0 commitment (the session's tag keys what rep 0 keeps); not
     // under M1, whose level 0 and lane phase are its own
     static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let native_sha = plan.native_sha.unwrap_or_else(|| std::env::var("FC_NATIVE_SHA").as_deref() != Ok("0"));
-    let mapped = plan.host_mapped.unwrap_or(true);
     let reuse_tag = (plan.gpu && !plan.rep1_other_witness && !is_zk(st)
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
@@ -2293,10 +2323,27 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
     let mut witness_s = 0.0;
+    let mut witness_prebuilt_s: Option<f64> = None;
     let mut wits = Vec::new();
     for (j, tb) in tabs.list.iter().enumerate() {
-        let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
-        let (wt0, tw0) = witness(&tb.st, &w0, device, host_units, mapped);
+        // a witness built beside the previous session: its wait counts as this session's witness time
+        let tw = Instant::now();
+        let pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
+            .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
+            .flatten()
+            .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
+            .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped));
+        let (w0, wt0, tw0) = match pre {
+            Some(p) => {
+                witness_prebuilt_s = Some(p.built_s);
+                (p.w0, p.wt0, tw.elapsed().as_secs_f64())
+            }
+            None => {
+                let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
+                let (wt0, tw0) = witness(&tb.st, &w0, device, host_units, mapped);
+                (w0, wt0, tw0)
+            }
+        };
         let (wt1, tw1) = if plan.rep1_other_witness {
             let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units, mapped);
             (Some(w), t)
@@ -2571,7 +2618,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
                "prover": if plan.gpu {"flock-cuda-circuit"} else {"flock-cpu"}, "gpu": plan.gpu, "unit": c.name, "set": inst.header["set"],
                "subcircuit": inst.header["subcircuit"], "instances": st.n, "vus_per_block": c.g, "units": st.n * c.upv, "rows_per_vu": rows_per_vu,
                "ands_per_vu": ands_per_vu, "k_log": c.k_log, "nbl": st.nbl,
-               "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
+               "dense_m": st.m, "e2e_s": e2e_s, "witness_s": witness_s, "witness_prebuilt_s": witness_prebuilt_s, "prove_s": prove_s, "prove_total_s": prove_s.iter().sum::<f64>(),
                "buckets": buckets, "wait_s": wait_s, "wait_e2e_s": wait_e2e_s, "calls": calls, "wire_sent": ws, "wire_recv": wr,
                "proof_bytes": proofs.iter().map(|p| p.len()).collect::<Vec<_>>(), "sigma": hex(&sig), "roots": inst.header["frame_v3"]["roots"],
                "circuit_sha512": hex(&c.sha512), "statement_digest": hex(&st.digest), "public_sha512": hex(&inst.public_sha512),
@@ -3358,8 +3405,8 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
 
 /// The device prover's paths against each other: the device's units, a rebuilt rep 1 and the compressions level by level, against
 /// the host's units, rep 1 from rep 0's witness and level-0 commitment, and the compressions natively (host units only where the
-/// device witness takes them, a statement whose units return its outputs; reuse never under M1). Equal seeds and verifier coins
-/// give byte-identical proofs and transcripts.
+/// device witness takes them, a statement whose units return its outputs; reuse never under M1), its witness built ahead of the
+/// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts.
 #[cfg(feature = "seed-injection")]
 fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let run = |plan: Plan| {
@@ -3370,14 +3417,16 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
         (v, proofs, json!({"streams": rec["streams"], "link": rec["link"], "proofs": rec["proof_sha512"]}))
     };
     let a = run(Plan { gpu: true, host_units: Some(false), rep_reuse: Some(false), native_sha: Some(false), host_mapped: Some(false), ..Plan::default() });
-    let b = run(Plan { gpu: true, host_units: Some(true), rep_reuse: Some(true), native_sha: Some(true), host_mapped: Some(true), ..Plan::default() });
+    let mut pb = Plan { gpu: true, host_units: Some(true), rep_reuse: Some(true), native_sha: Some(true), host_mapped: Some(true), ..Plan::default() };
+    pb.prebuilt = Some(Arc::new(Mutex::new(Some(prebuild(st, inst, &pb, ProverSeed::injected([1; 32]))))));
+    let b = run(pb);
     let used = |k: &str| b.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
     let used_a = |k: &str| a.0["buckets"].as_array().map(|x| x.iter().map(|r| r[k].clone()).collect::<Vec<_>>());
     let accepted = a.0["accepted"] == true && b.0["accepted"] == true;
     let (pe, te) = (a.1 == b.1, a.2 == b.2);
     json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
-           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
+           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
            "pass": accepted && pe && te})
 }
 
@@ -3563,14 +3612,32 @@ fn main() {
             let warm: usize = arg("--warm", "0").parse().unwrap();
             let dump = arg("--dump", "");
             let split = (tables > 1).then(|| session_tables(&st, &inst, None, tables).ok()).flatten();
-            let plan = Plan { gpu: flag("--gpu"), tables, split, ..Plan::default() };
+            let base = Plan { gpu: flag("--gpu"), tables, split, ..Plan::default() };
+            // the next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's
+            // host witness is a few lane groups, so several share the cores (FC_PIPELINE=0: each session builds its own when it starts)
+            let pipeline = tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
+            let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
+            let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
+            let mut ahead: std::collections::VecDeque<(usize, std::thread::JoinHandle<Prebuilt>)> = std::collections::VecDeque::new();
             for run in 0..warm + runs {
+                let mut plan = base.clone();
+                if pipeline {
+                    if ahead.front().is_some_and(|(r, _)| *r == run) {
+                        let (_, h) = ahead.pop_front().expect("this run's witness");
+                        plan.prebuilt = Some(Arc::new(Mutex::new(Some(h))));
+                    }
+                    let from = ahead.back().map_or(run + 1, |(r, _)| r + 1);
+                    for r in from..(run + 1 + depth).min(warm + runs) {
+                        ahead.push_back((r, prebuild(&st, &inst, &base, seeds[r])));
+                    }
+                }
                 let mut tcp = TcpTransport::connect(&arg("--verifier", "127.0.0.1:7500")).unwrap();
                 let (rtt, rtt_min, rtt_n) = tcp.ping_rtt(30);
                 let t = shared(tcp);
-                let (mut v, proofs) = session(&st, &inst, t, &plan, ProverSeed::from_os());
+                let (mut v, proofs) = session(&st, &inst, t, &plan, seeds[run]);
                 v["run"] = json!(run);
                 v["warm"] = json!(run < warm);
+                v["pipeline_depth"] = json!(if pipeline { depth } else { 0 });
                 v["open_rtt_ms"] = json!(rtt);
                 v["open_rtt_min_ms"] = json!(rtt_min);
                 v["open_rtt_n"] = json!(rtt_n);

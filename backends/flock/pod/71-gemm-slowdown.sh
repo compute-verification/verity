@@ -21,8 +21,39 @@ if [ -d /run/gpu-lease ] && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
   done
   [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "no free GPU among ${GPUS:-4 5 6 7}"; exit 75; }
 fi
-# a toolkit the driver runs natively when CUDA 13.3 isn't installed (and can't be, without root)
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { [ -x /usr/local/cuda/bin/nvcc ] && export CUDA_TK=$(readlink -f /usr/local/cuda); }
+# a machine whose /workspace the run's user can't write (vy-nebius-1): the builds and venvs go under its cache, or under
+# /workspace/jobs in a Kueue job (another uid); staged statements are kept there for the next attempt (FLOCK_STAGE_CACHE)
+if [ ! -w /workspace ] && [ -z "${FLOCK_WORK:-}" ]; then
+  if mkdir -p /workspace/cache/flock 2>/dev/null && [ -w /workspace/cache/flock ]; then export FLOCK_WORK=/workspace/cache/flock
+  else export FLOCK_WORK=/workspace/jobs/flock-m0; mkdir -p $FLOCK_WORK/home; export HOME=$FLOCK_WORK/home; fi
+fi
+export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-${FLOCK_WORK:-/workspace}/stage-cache}
+# a Kueue job's template sets its own cargo target dir; the builds here keep theirs. Its pod has no CPU limit: the prover's
+# threads are the job's vCPUs
+unset CARGO_TARGET_DIR
+[ -n "${RAYON_NUM_THREADS:-}" ] || export RAYON_NUM_THREADS=${OMP_NUM_THREADS:-$(nproc)}
+# CUDA 13.3 (upstream Flock's clmad needs its ptxas) where it isn't installed and can't be, without root: its packages unpacked
+# under FLOCK_WORK (apt-get download needs no root); no compat library: an R580 driver runs 13.3 by minor-version compatibility
+for c in ${FLOCK_WORK:-/workspace}/cuda-root /workspace/cache/flock/cuda-root; do
+  [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x $c/usr/local/cuda-13.3/bin/nvcc ] && export CUDA_TK=$c/usr/local/cuda-13.3
+done
+if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
+  CR=${FLOCK_WORK:-/workspace}/cuda-root; export CUDA_TK=$CR/usr/local/cuda-13.3
+  if [ ! -x $CUDA_TK/bin/nvcc ]; then
+    # the 13-3 packages' dependency closure, from apt-cache show (a pinned-out package has no candidate for apt-cache depends)
+    todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
+    while [ -n "$todo" ]; do
+      set -- $todo; q=$1; shift; todo="$*"
+      case " $seen " in *" $q "*) continue ;; esac
+      seen="$seen $q"
+      todo="$todo $(apt-cache show $q 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
+        | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
+    done
+    mkdir -p $CR/debs && (cd $CR/debs && apt-get download $(for q in $seen; do echo "$q=$(apt-cache show $q | awk '/^Version:/ {print $2; exit}')"; done)) \
+      && for d in $CR/debs/*.deb; do dpkg-deb -x $d $CR; done
+    [ -x $CUDA_TK/bin/nvcc ] || { echo "CUDA 13.3 unpack failed"; exit 1; }
+  fi
+fi
 { nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv; nproc; echo "cuda_visible=${CUDA_VISIBLE_DEVICES:-}"; } | tee $R/out/host.txt
 # cores busy outside this attempt every 30 s (Builds overlapping it: ov.noisy)
 python3 backends/flock/pod/gemm_slowdown.py sample --pgid $(ps -o pgid= $$ | tr -d ' ') --out $R/out/others_cores.txt &
@@ -34,7 +65,7 @@ if [ "${GATE:-1}" = 1 ]; then
 fi
 OUT=$R/out/m34 bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=auto BATCH_ANDS=${BATCH_ANDS:-4294967296} \
   MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-17179869184} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 || exit 1
-W=/workspace/flock-circuit; UV=$HOME/.local/bin/uv
+W=${FLOCK_WORK:-/workspace}/flock-circuit; UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/torch/bin/python ] || { $UV venv -q --python 3.12 $W/torch && $UV pip install -q --python $W/torch/bin/python 'torch>=2.7' \
   --index-url https://download.pytorch.org/whl/cu128; } || exit 1
 $W/torch/bin/python backends/flock/pod/gemm_slowdown.py native --out $R/out/native.json --iters ${ITERS:-100} || exit 1
