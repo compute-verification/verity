@@ -22,7 +22,8 @@ def vector(name: str) -> dict:
 
 def test_the_target_is_a_draft_on_the_pro_6000_over_the_one_group_26_bit_pipeline():
     assert TARGETS[T.name] is T and T.status == "draft" and T.instruction == "sm120.mma.m16n8k32.e4m3"
-    assert T.anchor_device == "NVIDIA RTX PRO 6000 Blackwell Server Edition" and T.dossier is None
+    assert T.anchor_device == "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+    assert T.dossier == "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89"
     p = T.pipeline
     assert p is BLACKWELL_SM120_E4M3_M16N8K32
     assert (p.dtype, p.operand_bits, p.groups, p.width, p.zero_exponent) == ("e4m3", 8, (32,), 26, -133)
