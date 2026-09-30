@@ -181,8 +181,9 @@ def _acc_near(rng, p: np.ndarray, d_lo: int, d_hi: int) -> np.ndarray:
     return ((s << 31) | (e << 23) | f).reshape(p.shape)
 
 
-def families_k32(rng, n_random: int, instr: str):
-    """Yield (name, A (n,16,32) codes, Bt (n,8,32), SFA (n,16,1) | None, SFB (n,8,1) | None, C (n,16,8)) for a K=32 row."""
+def families_k32(rng, n_random: int, instr: str, fixed_mult: int = 1):
+    """Yield (name, A (n,16,32) codes, Bt (n,8,32), SFA (n,16,1) | None, SFB (n,8,1) | None, C (n,16,8)) for a K=32 row.
+    ``fixed_mult`` multiplies the one gated family of fixed size (``signed_zero``, 256 tiles); 1 keeps every earlier stream."""
     fa, fb, scale = ROWS[instr]
     k = 32
     va, vb = VALUE[fa], VALUE[fb]
@@ -270,7 +271,7 @@ def families_k32(rng, n_random: int, instr: str):
     yield ("tiny_acc", _codes(rng, fa, (n, 16, k)), _codes(rng, fb, (n, 8, k)), scales((n, 16, 1)), scales((n, 8, 1)),
            _uniform_acc(rng, n, 0, 30))
 
-    n = 256
+    n = 256 * fixed_mult
     A = np.where(rng.random((n, 16, k)) < 0.5, 0, SIGN_BIT[fa]).astype(np.uint8)
     Bt = _codes(rng, fb, (n, 8, k))
     one_a = 2 if fa == "e2m1" else 0x38

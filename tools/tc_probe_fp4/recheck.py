@@ -10,8 +10,10 @@ probe.py's ``--sweep`` (the same generators and rng) through the tile kernel.  E
 DIR/<instruction>/<seed>/<family>.npy beside <family>.json (the sha256 of its operands), the seed's done.json last, so a chunk
 resumes at the first (seed, family) without a record; no family starts once ``--budget-s`` has passed (exit 99).
 ``verify``: regenerates the operands from the seed, checks their sha256 against the capture's, evaluates every model on them
-(``probe.model_eval``) and counts each model's mismatches.  The gate: the pinned model (nvf4: ``verity`` = BLACKWELL_SM120_NVF4;
-f8f6f4: ``--expect-model``, default ``bsaa_g16``) reproduces every word of every gated family; record-only families are counted.
+(``probe.model_eval``) and counts each model's mismatches.  The gate: the pinned model (``PINNED``: nvf4 ``verity`` =
+BLACKWELL_SM120_NVF4, f8f6f4 ``gs32_w26_native`` = BLACKWELL_SM120_E2M1_M16N8K32's parameters; ``--expect-model`` overrides)
+reproduces every word of every gated family; record-only families are counted.  ``--fixed-mult`` multiplies the gated families
+of fixed size (probe.py's and k32.py's ``fixed_mult``), so that every gated family reaches the element count a recheck asks for.
 """
 from __future__ import annotations
 
@@ -29,16 +31,19 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe as P  # noqa: E402  (first: it puts verity on the path)
 import k32  # noqa: E402
+from verity.ml.tc import models as M  # noqa: E402
 
 INSTRUCTIONS = ("nvf4", "f8f6f4")
 SCHEMA = "pouw-rtxpro/tc-recheck-fp4/v1"
+#: the registry model each recheck gates on, by its name among probe.verity_models(instr)
+PINNED = {"nvf4": "verity", "f8f6f4": "gs32_w26_native"}
 
 
-def families(instr: str, seed: int, n_random: int):
+def families(instr: str, seed: int, n_random: int, fixed_mult: int = 1):
     rng = np.random.default_rng(seed)
     if instr in k32.ROWS:
-        return k32.families_k32(rng, n_random, instr)
-    return P.families_nvf4(rng, n_random, P.SCALE_KIND[instr])
+        return k32.families_k32(rng, n_random, instr, fixed_mult)
+    return P.families_nvf4(rng, n_random, P.SCALE_KIND[instr], fixed_mult)
 
 
 def operands_sha256(*arrays) -> str:
@@ -49,7 +54,14 @@ def operands_sha256(*arrays) -> str:
 
 
 def primary_model(instr: str, expect: str | None) -> str:
-    return expect or P.PRIMARY_MODEL[instr] or "bsaa_g16"
+    if expect:
+        return expect
+    if instr in k32.ROWS:
+        c, m = k32.candidates(instr)[PINNED[instr]], M.BLACKWELL_SM120_E2M1_M16N8K32
+        if (c.fmt_a, c.fmt_b, tuple(c.groups), c.width, c.zero_exponent, c.e2m1_as_e4m3, c.scale) != \
+                ("e2m1", "e2m1", tuple(m.groups), m.width, m.zero_exponent, False, None):
+            raise SystemExit(f"{PINNED[instr]} no longer has {m.name}'s parameters")
+    return PINNED[instr]
 
 
 def write_json(path: Path, doc: dict) -> None:
@@ -80,7 +92,8 @@ def capture(args) -> int:
         print(f"FAILURES device UUID {uuid} != expected {expect}: stopped before any launch", flush=True)
         return 2
     head = {"schema": SCHEMA, "instruction": args.instruction, "instruction_id": P.INSTRUCTION_ID[args.instruction],
-            "n_random": args.n_random, "identity": identity, "expect_uuid": expect, "fake_silicon": args.fake_silicon,
+            "n_random": args.n_random, "fixed_mult": args.fixed_mult, "identity": identity, "expect_uuid": expect,
+            "fake_silicon": args.fake_silicon,
             "library": None if so is None else {"path": str(so), "sha256": hashlib.sha256(so.read_bytes()).hexdigest()}}
     if so is not None:
         sass = P.sass_check(so)
@@ -98,7 +111,7 @@ def capture(args) -> int:
         d = root / str(seed)
         d.mkdir(exist_ok=True)
         fams = {}
-        for name, A, Bt, SFA, SFB, C in families(args.instruction, seed, args.n_random):
+        for name, A, Bt, SFA, SFB, C in families(args.instruction, seed, args.n_random, args.fixed_mult):
             rec_path = d / f"{name}.json"
             if rec_path.exists():
                 fams[name] = json.loads(rec_path.read_text())
@@ -136,8 +149,9 @@ def verify(args) -> int:
         failures.append("the capture ran on fake silicon (a dry run's invented words)")
     if not done.get("expect_uuid") or not P.uuid_allowed(ident.get("gpu_uuid"), done["expect_uuid"]):
         failures.append(f"the capture's device {ident.get('gpu_uuid')} was not gated on its lease ({done.get('expect_uuid')})")
-    for k, v in (("instruction", args.instruction), ("n_random", args.n_random), ("seed", args.seed), ("schema", SCHEMA)):
-        if done.get(k) != v:
+    for k, v in (("instruction", args.instruction), ("n_random", args.n_random), ("seed", args.seed), ("schema", SCHEMA),
+                 ("fixed_mult", args.fixed_mult)):
+        if done.get(k, 1 if k == "fixed_mult" else None) != v:
             failures.append(f"the capture's {k} {done.get(k)!r} != {v!r}")
     if args.prebuilt and hashlib.sha256(Path(os.path.expandvars(args.prebuilt)).read_bytes()).hexdigest() != \
             (done.get("library") or {}).get("sha256"):
@@ -145,7 +159,7 @@ def verify(args) -> int:
     fams: dict = {}
     if not failures:
         with mp.Pool(args.procs, initializer=P._init, initargs=(args.instruction, 16)) as pool:
-            for name, A, Bt, SFA, SFB, C in families(args.instruction, args.seed, args.n_random):
+            for name, A, Bt, SFA, SFB, C in families(args.instruction, args.seed, args.n_random, args.fixed_mult):
                 rec = done["families"].get(name)
                 if rec is None:
                     failures.append(f"{name}: not in the capture")
@@ -174,7 +188,7 @@ def verify(args) -> int:
                 print(name, json.dumps(fam), flush=True)
     gated = {k: f for k, f in fams.items() if not f["record_only"]}
     doc = {"schema": SCHEMA + "/verify", "instruction": args.instruction, "seed": args.seed, "n_random": args.n_random,
-           "primary_model": primary, "capture": {"dir": str(d), "done_sha256": hashlib.sha256((d / "done.json").read_bytes()).hexdigest()},
+           "fixed_mult": args.fixed_mult, "primary_model": primary, "capture": {"dir": str(d), "done_sha256": hashlib.sha256((d / "done.json").read_bytes()).hexdigest()},
            "identity": ident, "families": fams, "gated_elements": sum(f["elements"] for f in gated.values()),
            "min_gated_family_elements": min((f["elements"] for f in gated.values()), default=0),
            "failures": failures, "seconds": round(time.time() - t_all, 1)}
@@ -208,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--instruction", required=True, choices=INSTRUCTIONS)
     c.add_argument("--seeds", required=True)
     c.add_argument("--n-random", type=int, required=True)
+    c.add_argument("--fixed-mult", type=int, default=1)
     c.add_argument("--prebuilt", default=None)
     c.add_argument("--expect-uuid", default=None)
     c.add_argument("--budget-s", type=float, default=360.0)
@@ -217,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--instruction", required=True, choices=INSTRUCTIONS)
     v.add_argument("--seed", type=int, required=True)
     v.add_argument("--n-random", type=int, required=True)
+    v.add_argument("--fixed-mult", type=int, default=1)
     v.add_argument("--capture", required=True)
     v.add_argument("--prebuilt", default=None)
     v.add_argument("--expect-model", default=None)

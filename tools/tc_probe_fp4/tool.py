@@ -232,6 +232,7 @@ def parse_recheck(argv: list[str]) -> dict:
         ap.add_argument(flag, default=None)
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--n-random", type=int, default=None)
+    ap.add_argument("--fixed-mult", type=int, default=1)
     ap.add_argument("--procs", type=int, default=None)
     ap.add_argument("--budget-s", type=float, default=None)
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
@@ -247,7 +248,7 @@ TC_RECHECK_FP4 = Tool(
     name="tc_recheck_fp4", version="1",
     command=["python", "tools/tc_probe_fp4/recheck.py"],
     closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
-    key_params=["cmd", "instruction", "seed", "seeds", "n_random", "expect_model", "fake_silicon"],
+    key_params=["cmd", "instruction", "seed", "seeds", "n_random", "fixed_mult", "expect_model", "fake_silicon"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
     produces=["tc-evidence/v1", "run-files/v1"],

@@ -415,7 +415,28 @@ def test_recheck_capture_resumes_and_verify_derives_every_word(no_nvcc, tmp_path
     p = tool.TC_RECHECK_FP4.parse(["python", "tools/tc_probe_fp4/recheck.py", "verify", "--instruction", "nvf4", "--seed", "5",
                                    "--n-random", "16", "--capture", "/c", "--prebuilt", "/x.so", "--procs", "8", "--out", "x"])
     assert p == {"cmd": "verify", "instruction": "nvf4", "seeds": None, "expect_model": None, "fake_silicon": None, "seed": 5,
-                 "n_random": 16}
+                 "n_random": 16, "fixed_mult": 1}
+
+
+def test_recheck_gates_e2m1_on_the_registry_model_and_scales_the_fixed_families(no_nvcc, tmp_path):
+    """Unscaled E2M1's verify gates on ``gs32_w26_native`` (BLACKWELL_SM120_E2M1_M16N8K32's parameters) without --expect-model,
+    so a capture of that model passes and one of the refuted block-scaled adder fails; ``--fixed-mult`` scales the fixed-size gated
+    families and must match between capture and verify."""
+    assert RC.primary_model("f8f6f4", None) == "gs32_w26_native" and RC.primary_model("nvf4", None) == "verity"
+    for truth, rc in (("gs32_w26_native", 0), ("bsaa_g16", 1)):
+        out = tmp_path / truth
+        cap = ["capture", "--instruction", "f8f6f4", "--seeds", "7", "--n-random", "16", "--fixed-mult", "2", "--fake-silicon",
+               truth, "--out", str(out)]
+        assert RC.main(cap) == 0
+        done = json.loads((out / "f8f6f4" / "7" / "done.json").read_text())
+        assert done["fixed_mult"] == 2 and done["families"]["signed_zero"]["tiles"] == 512
+        done.update(fake_silicon=None, expect_uuid="GPU-x")
+        done["identity"].update(backend="mma.sync", gpu_uuid="GPU-x")
+        (out / "f8f6f4" / "7" / "done.json").write_text(json.dumps(done))
+        ver = ["verify", "--instruction", "f8f6f4", "--seed", "7", "--n-random", "16", "--capture", str(out), "--procs", "1"]
+        assert RC.main(ver + ["--fixed-mult", "2", "--out", str(out / "v")]) == rc
+        assert json.loads((out / "v" / "recheck.json").read_text())["primary_model"] == "gs32_w26_native"
+        assert RC.main(ver + ["--out", str(out / "v1")]) == 1
 
 
 def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):

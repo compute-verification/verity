@@ -583,8 +583,9 @@ def layout_check(probe: Probe, instr: str) -> str:
 # --- families ------------------------------------------------------------------------------------------------------------------------
 
 
-def families_nvf4(rng, n_random: int, scale_kind: str):
-    """Yield (name, A (n,16,64) codes, Bt (n,8,64), SFA (n,16,nblk), SFB (n,8,nblk), C (n,16,8))."""
+def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
+    """Yield (name, A (n,16,64) codes, Bt (n,8,64), SFA (n,16,nblk), SFB (n,8,nblk), C (n,16,8)).  ``fixed_mult`` multiplies the
+    gated families of fixed size (``signed_zero``, ``signed_zero_matrix``, ``anchor_participation``); 1 keeps every earlier stream."""
     k = 64
     nblk = 4 if scale_kind == "ue4m3" else 2
 
@@ -691,7 +692,7 @@ def families_nvf4(rng, n_random: int, scale_kind: str):
     yield ("tiny_acc", codes((n, 16, k)), codes((n, 8, k)), scales((n, 16, nblk), 100, 120), scales((n, 8, nblk), 100, 120),
            random_f32_bits(rng, (n, 16, 8), 0, 30))
 
-    n = 256
+    n = 256 * fixed_mult
     A = np.where(rng.random((n, 16, k)) < 0.5, 0, 8).astype(np.uint8)  # +-0 operands
     Bt = codes((n, 8, k))
     A[n // 2:, :, :16] = 2  # +1.0
@@ -699,7 +700,7 @@ def families_nvf4(rng, n_random: int, scale_kind: str):
     acc = np.where(rng.random((n, 16, 8)) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
     yield "signed_zero", A, Bt, scales((n, 16, nblk)), scales((n, 8, nblk)), acc
 
-    yield from families_fp4_re(rng, n_random, scale_kind)
+    yield from families_fp4_re(rng, n_random, scale_kind, fixed_mult)
 
 
 # --- lane fp4-re: the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
@@ -724,7 +725,7 @@ def _signed_pow2_acc(rng, shape, e_lo: int, e_hi: int, exact_frac: float = 0.5) 
     return ((s << 31) | (e << 23) | f).reshape(shape)
 
 
-def families_fp4_re(rng, n_random: int, scale_kind: str):
+def families_fp4_re(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     """The fp4-re families, both scale kinds: yield (name, A, Bt, SFA, SFB, C) like ``families_nvf4``."""
     k, nblk = 64, (4 if scale_kind == "ue4m3" else 2)
     gpb = 4 // nblk  # groups (of 16) per scale block
@@ -753,9 +754,9 @@ def families_fp4_re(rng, n_random: int, scale_kind: str):
     # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
     # (c) +-0 against +-0 operands, (d) every product -0 x -0, (e) pairs cancelling exactly inside every group, (f) group 0
     # cancelled exactly by group 1 under equal scales.  Scales random, including the zero UE4M3 code.
-    n = 6 * 96
+    n = 6 * 96 * fixed_mult
     A, Bt = codes((n, 16, k)), codes((n, 8, k))
-    m = np.arange(n) // 96
+    m = np.arange(n) // (96 * fixed_mult)
     A[m == 0] = np.where(rng.random((int((m == 0).sum()), 16, k)) < 0.5, 0, 8)
     Bt[m == 1] = np.where(rng.random((int((m == 1).sum()), 8, k)) < 0.5, 0, 8)
     A[m == 2] = np.where(rng.random((int((m == 2).sum()), 16, k)) < 0.5, 0, 8)
@@ -831,9 +832,9 @@ def families_fp4_re(rng, n_random: int, scale_kind: str):
     # A nibbles, all-zero B nibbles, the largest scales -- no elementwise product, the accumulator must come back exact;
     # (b) a live group 0 whose dot cancels to zero under the largest scales -- the accumulator is truncated away (+0);
     # (c) nvf4 only: a live nonzero group 0 under a zero scale code on A, then on B -- no participation, exact accumulator.
-    n = 3 * 128 if ue4 else 2 * 128
+    n = (3 if ue4 else 2) * 128 * fixed_mult
     A, Bt = np.zeros((n, 16, k), np.uint8), np.zeros((n, 8, k), np.uint8)
-    m = np.arange(n) // 128
+    m = np.arange(n) // (128 * fixed_mult)
     A[:, :, :16] = nz_codes((n, 16, 16))
     Bt[m >= 1, :, :16] = nz_codes((int((m >= 1).sum()), 8, 16))
     sel = m == 1
