@@ -14,8 +14,8 @@ import pytest
 from research import slack
 
 REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
-TOKEN = "xoxb-test-not-a-real-token"
-INFRA_TOKEN = "xoxb-test-infra-not-a-real-token"
+TOKEN = "dummy-shared-bot"
+INFRA_TOKEN = "dummy-infra-bot"
 BOT, INFRA_BOT = "B0SHARED", "B0INFRA"
 
 
