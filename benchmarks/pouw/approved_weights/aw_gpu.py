@@ -150,6 +150,16 @@ def act_quant(x, fmt, f_lines, g):
     return (x2 + (a - x2).detach()).to(x.dtype).reshape(shape)
 
 
+def norm_of(n):
+    """The RMSNorm whose output feeds linear n (q/k/v: input_layernorm; gate/up: post_attention_layernorm), or None."""
+    layer = n.rsplit(".", 2)[0]
+    if n.endswith(("q_proj", "k_proj", "v_proj")):
+        return layer + ".input_layernorm"
+    if n.endswith(("gate_proj", "up_proj")):
+        return layer + ".post_attention_layernorm"
+    return None
+
+
 _RD = {}
 
 
@@ -164,12 +174,23 @@ def install_act(model, rung, seed, dev):
     in the deployed basis. The bf16 rung keeps BF16 weights and activations (the reference)."""
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
+    gam = {}
+    if base == "rot":                                   # fold each RMSNorm scale into the linears it feeds, then rotate
+        for n, _ in linears(model):
+            nm = norm_of(n)
+            if nm and nm not in gam:
+                gam[nm] = model.get_submodule(nm).weight.detach().float().clone()
+        with torch.no_grad():
+            for nm in gam:
+                model.get_submodule(nm).weight.fill_(1.0)
     for n, m in linears(model):
         m._aw_rin = m._aw_rout = None
         if rung == "bf16":
             m.forward = torch.nn.Linear.forward.__get__(m)
             continue
         w = m._aw_orig.to(dev).float()
+        if norm_of(n) in gam:
+            w = w * gam[norm_of(n)].to(dev)[None, :]
         q = nvfp4_rows if fmt == "nvfp4" else fp8_rows
         with torch.no_grad():
             if base == "rot" and n.endswith(("o_proj", "down_proj")):
