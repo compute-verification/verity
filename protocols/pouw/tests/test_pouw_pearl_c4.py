@@ -155,11 +155,25 @@ def test_domain_and_registry():
 
 
 def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,)) -> bytes:
-    """Entries at 256 (well past 12ρ) at unsampled positions: each makes its scale block dead."""
+    """Entries at 256 (well past 10ρ) at unsampled positions: each makes its scale block dead."""
     w = [x >> 16 for x in F.parse_row(row, k)]
     for p in at:
         w[p] = P.f32_to_bf16(256.0)
     return F.bf16_row(w)
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_dead_screen_is_10_rho(fmt):
+    """ρ = 1 (every 8th position at 1.0): a block whose |max| is 10 is live, just past 10 (and 11, live under 12ρ) dead."""
+    f = F.FORMATS[fmt]
+
+    def row(v):
+        x = [P.f32_bits(1.0) if p % 8 == 0 else 0 for p in range(1024)]
+        x[1] = P.f32_bits(v)
+        return x
+    assert F.DEAD_RHO == 10
+    assert [F.dead_blocks(f, row(v))[0] for v in (10.0, 10.0625, 11.0)] == [False, True, True]
+    assert not any(F.dead_blocks(f, row(10.0))[1:])
 
 
 @pytest.mark.parametrize("fmt", FMTS)

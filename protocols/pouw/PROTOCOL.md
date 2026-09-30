@@ -245,7 +245,7 @@ useful    U/(α_A·α_B), glue
   block scale depends on the salt.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
   strictly row-relative); and D-SS's dead share, at most one scale block in 64 is dead. A block is dead when its clean
-  |max| exceeds 12ρ (noise under τ = 1/8 of a code step).
+  |max| exceeds 10ρ (theory §5: past about 10ρ a dominant element keeps its code on every draw of the noise).
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units:
   1. per row and 4-group with at least 2 salt-dead codes, 0.5 per MAC (1 when all 4 are), on every word the row feeds,
      for A′ and for B̃;

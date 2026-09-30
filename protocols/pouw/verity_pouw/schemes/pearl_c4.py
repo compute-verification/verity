@@ -43,7 +43,7 @@ as Pearl-C's H100 argument had it.  The design rests instead on every code and e
 
 **The domain and the debit** are the theory lane's (research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
 §1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (a_E a normal
-UE4M3, one a_E per row) and D-SS's dead share (a block is dead when its clean |max| exceeds 12ρ; at most one in 64).  A
+UE4M3, one a_E per row) and D-SS's dead share (a block is dead when its clean |max| exceeds 10ρ; at most one in 64).  A
 drawn tile's debit is replayed over its credited words (`tile_debit`):
 
 ~~~text
@@ -104,7 +104,7 @@ NOISE_F_SCALE = 0x18               # UE4M3 2^-4: F's scale inside the noise atom
 UE4M3_ONE, UE8M0_ONE = 0x38, 127
 UE4M3_MIN = 0x01                   # 2^-9
 UE4M3_NORMAL = 0x08                # 2^-6
-TAU_SQ_INV = 144                   # dead block: amax_b > 12ρ, i.e. δ·6/τ = 12 with δ = 1/4, τ = 1/8
+DEAD_RHO = 10                      # dead block: amax_b > 10ρ (theory-pearl-c4-domain.md §5, the code-level salt-dead fix)
 DEAD_SHARE = 64                    # a row passes with at most one dead block in 64
 
 #: W1 in FP4 units (1 = one dense FP4 MAC on sm_120): a BF16 MAC 4, an FP32 instruction 16 (placeholders from public peak
@@ -364,10 +364,10 @@ def _exact_rho_sq(x: Sequence[int]) -> Fraction:
 
 
 def dead_blocks(fmt: Fmt, x: Sequence[int]) -> list[bool]:
-    """Per scale block: dead when its clean |max| exceeds 12ρ (exact ρ² over every 8th position), i.e. the noise is
-    below τ = 1/8 of the block's code step."""
+    """Per scale block: dead when its clean |max| exceeds 10ρ (exact ρ² over every 8th position): a salt-free admission
+    screen, below which a dominant element's code still moves on some draw of the noise."""
     rho_sq = _exact_rho_sq(x)
-    return [Fraction(P.f32_of_bits(max(w & 0x7FFFFFFF for w in x[b:b + fmt.block]))) ** 2 > TAU_SQ_INV * rho_sq
+    return [Fraction(P.f32_of_bits(max(w & 0x7FFFFFFF for w in x[b:b + fmt.block]))) ** 2 > DEAD_RHO ** 2 * rho_sq
             for b in range(0, len(x), fmt.block)]
 
 
@@ -584,7 +584,7 @@ class PearlC4:
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
-                        ("delta_inv", 4), ("tau_inv", 8), ("dead_share", DEAD_SHARE)),
+                        ("delta_inv", 4), ("dead_rho", DEAD_RHO), ("dead_share", DEAD_SHARE)),
         )
 
     def check(self, matmul: Matmul) -> None:
