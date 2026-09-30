@@ -8,7 +8,9 @@ are pinned; timing samples nvidia-smi every few rounds, not every rep; the three
 declarations resolve their key params.  The E4M3-to-FP16 reference is pinned to the registered decode, its timing rows never feed a
 chain a NaN code, and its loops are pinned whole; the 16-bit adds' chains are pinned (HADD2's addend is y's high half in both
 halves, add.rn.f16x2's each half), their timing rows keep every model step exact, their loops (add.rn.f16x2 split 32 / 32 over HADD2
-and HFMA2) and the FP16 leaf's are pinned, and their prices and recorded fractions of FADD's rate are checked; unwritten words must
+and HFMA2) and the FP16 leaf's are pinned, and their prices and recorded fractions of FADD's rate are checked; the MMA / HADD2
+co-issue loops' chains, words (accumulators on even warps, chains on odd) and loops are pinned, and their table reads both rates
+per N; unwritten words must
 keep the poison, and a device whose no-write control passes
 the gate fails the run; the fill lease writes a header the runner parses, records the child's exit status (no retry turns a failed
 gate into a pass), waits out the runner's move-then-log order and withdraws a job that never starts.  With nvcc on the PATH, the
@@ -73,7 +75,7 @@ def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
     assert "timing" not in res and "prices" not in res
 
 
-@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, *range(16, 26), *w1.F16_OPS, *w1.H16_OPS])
+@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, *range(16, 26), *w1.F16_OPS, *w1.H16_OPS, w1.COISSUE_OPS[0], w1.COISSUE_OPS[-1]])
 def test_gate_words_are_not_vacuous(op):
     rows = w1.timing_rows(op, np.random.default_rng(w1.F8.SEED_DEFAULT))
     assert w1.expected_words(op, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
@@ -356,6 +358,49 @@ def test_h16_prices_and_recorded_fractions(tmp_path, no_nvcc, monkeypatch):
     assert meas["fp16_scalar.hadd2.fraction_of_fadd_rate"]["value"] == pytest.approx(0.5)
     assert meas["fp16_scalar.hadd2.sm_clocks_per_warp_instruction"]["label"] == "Derived (from Measured locked-2100 rates)"
     assert meas["price.hmma_f16_f32 per MAC"]["label"] == "Measured, locked-2100 clocks"
+
+
+def _coissue(n: int) -> int:
+    return w1.COISSUE_OPS[w1.COISSUE_N.index(n)]
+
+
+def test_coissue_chains_and_words_pinned():
+    """HADD2 number h of an iteration steps chain h % 8: at N = 12 chains 0-3 take two steps an iteration and 4-7 one, at N = 4
+    chains 4-7 none.  Each step here is one FP16 ulp (y = 1.5 2^-11 from 1.0).  Even warps hold the all-ones accumulators (512),
+    odd warps the chains, then the poison."""
+    rows = np.array(w1.GATE_ROW[_coissue(12)], np.uint32)[None].repeat(32, 0)
+    rows[:, 6], rows[:, 7] = 0x3C003C00, w1._f16_bits(1.5 * 2**-11) << 16
+    ulps = {s: (0x3C00 + s) * 0x10001 for s in (0, 8, 16)}
+    assert w1.coissue_chains(_coissue(12), w1.GATE_ITERS, rows)[0].tolist() == [ulps[16]] * 4 + [ulps[8]] * 4
+    assert w1.coissue_chains(_coissue(4), w1.GATE_ITERS, rows)[0].tolist() == [ulps[8]] * 4 + [ulps[0]] * 4
+    w = w1.expected_words(_coissue(12), w1.GATE_ITERS, rows)
+    assert (w[:32] == np.float32(512).view(np.uint32)).all() and (w[64:96] == w[:32]).all()
+    assert w[32, :8].tolist() == [ulps[16]] * 4 + [ulps[8]] * 4 and (w[32:64, 8:] == w1.POISON).all()
+
+
+_CO = ["HMMA.16816.F32"] * 16 + ["NOP"] * 11 + ["HADD2"] * 32 + _U
+
+
+@pytest.mark.parametrize("body, ok", [(_CO, True), ([op for op in _CO if op != "NOP"], True), (_CO[:-3] + _U, False),
+                                      (_CO + ["PRMT"], False), (["HMMA.16816.F32.BF16" if op.startswith("HMMA") else op for op in _CO], False)])
+def test_sass_gate_pins_the_coissue_loop(monkeypatch, body, ok):
+    """A co-issue loop is exactly the leaf's 16 HMMA.16816.F32 and its N HADD2, whatever NOPs ptxas spaces them with: a missing
+    HADD2, a PRMT (the addend swizzle left in the loop) or another MMA fails."""
+    monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body, "coissue_h32_rate")})())
+    assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"]["coissue_h32"]["ok"] is ok
+
+
+def test_coissue_table(tmp_path, no_nvcc):
+    """With fake rates whose HADD2 pipe overlaps the MMAs fully, the table shows the MMA rate flat to N = 128 and halved at 256,
+    HADD2 at its alone rate from 128 on, and both pipes' utilizations summing to 2 at the knee."""
+    code, res = _run(tmp_path, "--ops", "hmma_f16_f32,hadd2,coissue_h4,coissue_h128,coissue_h256")
+    assert code == 0, res["failures"]
+    g = res["numeric_gate"]["ops"]["coissue_h4"]
+    assert g["mismatches"] == 0 and g["negative_control"]["rejected"] and g["data"].startswith("all-ones MMA on even warps")
+    t = res["prices"]["coissue"]
+    assert [t[k]["mma_fraction_of_alone"] for k in ("hmma_f16_f32", "coissue_h4", "coissue_h128", "coissue_h256")] == pytest.approx([1, 1, 1, 0.5])
+    assert [t[k]["hadd2_fraction_of_alone"] for k in ("coissue_h4", "coissue_h128", "coissue_h256")] == pytest.approx([1 / 32, 1, 1])
+    assert t["coissue_h128"]["utilization_sum"] == pytest.approx(2) and t["coissue_h128"]["sm_clocks_per_warp_iteration"] == pytest.approx(64)
 
 
 @pytest.fixture

@@ -41,6 +41,7 @@
 //   32  hfma2_rate             fma.rn.f16x2                                                                        32 registers
 //   33  hadd2_f32_rate         cvt.f32.f16 of each chain's high half (HADD2.F32)                                   32 registers
 //   34  fhadd_rate             add.rn.f32.f16, an FP16 addend into an FP32 chain (FHADD)                           32 registers
+//   35-49  coissue_h<N>_rate   hmma_f16_f32_rate's 16 MMAs with N HADD2 among them, N = 4 ... 256                    2048 MAC
 //
 // Every launch poisons chk, cycles and sm with 0xA5 first, so a word a kernel doesn't write reads 0xA5A5A5A5; w1_run's flag 1 is
 // the negative control, which launches nothing, and the gate must reject what it leaves.
@@ -706,9 +707,11 @@ MMA_F32_RATE(hmma_f16_f32_rate, mma_f16_f32(c[j], a, b))
     }
 #define H16_BITS(v) (v)
 
-H16_RATE(hadd2_rate, uint32_t, H16_BITS, H16_BITS,
-         asm volatile("{ .reg .b16 l, h; .reg .b32 t; mov.b32 {l, h}, %1; mov.b32 t, {h, h}; add.rn.f16x2 %0, %0, t; }"
-                      : "+r"(x[j]) : "r"(y)))
+__device__ __forceinline__ void hadd2_hi(uint32_t& x, uint32_t y) {
+    asm volatile("{ .reg .b16 l, h; .reg .b32 t; mov.b32 {l, h}, %1; mov.b32 t, {h, h}; add.rn.f16x2 %0, %0, t; }" : "+r"(x) : "r"(y));
+}
+
+H16_RATE(hadd2_rate, uint32_t, H16_BITS, H16_BITS, hadd2_hi(x[j], y))
 H16_RATE(add_f16x2_rate, uint32_t, H16_BITS, H16_BITS, asm volatile("add.rn.f16x2 %0, %0, %1;" : "+r"(x[j]) : "r"(y)))
 H16_RATE(hfma2_rate, uint32_t, H16_BITS, H16_BITS, asm volatile("fma.rn.f16x2 %0, %0, %1, %2;" : "+r"(x[j]) : "r"(m), "r"(y)))
 H16_RATE(hadd2_f32_rate, float, __uint_as_float, __float_as_uint, {
@@ -717,6 +720,50 @@ H16_RATE(hadd2_f32_rate, float, __uint_as_float, __float_as_uint, {
 })
 H16_RATE(fhadd_rate, float, __uint_as_float, __float_as_uint, asm volatile("add.rn.f32.f16 %0, %1, %0;" : "+f"(x[j]) : "h"(yh)))
 
+// FP16 MMA and HADD2 co-issue: hmma_f16_f32_rate's 16 MMAs per iteration with N of hadd2_rate's HADD2 among them, the k-th MMA
+// followed by HADD2 number k N / 16 up to (k + 1) N / 16, on the NCHAIN chains in turn.  Row words 0..5 are the MMA operands, 6 the
+// chains' start (f16x2), 7 the addend y.  Every warp runs both; even warps store the accumulators (words 0..15) and odd warps the
+// chains (words 0..7, the rest keep the poison), so the gate reads both outputs at every lane.
+#define COISSUE_RATE(KNAME, N)                                                                                        \
+    __global__ void __launch_bounds__(THREADS) KNAME(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,      \
+                                                     long long* __restrict__ cycles, int* __restrict__ sm, int iters) { \
+        RATE_PROLOGUE                                                                                                 \
+        MMA_OPERANDS                                                                                                  \
+        float c[NACC][4] = {};                                                                                        \
+        uint32_t x[NCHAIN];                                                                                           \
+        for (int j = 0; j < NCHAIN; j++) x[j] = sfa;                                                                  \
+        _Pragma("unroll 1") for (int it = 0; it < iters; it++) {                                                      \
+            _Pragma("unroll") for (int k = 0; k < NACC * UNROLL; k++) {                                               \
+                mma_f16_f32(c[k % NACC], a, b);                                                                       \
+                _Pragma("unroll") for (int h = k * (N) / (NACC * UNROLL); h < (k + 1) * (N) / (NACC * UNROLL); h++)   \
+                    hadd2_hi(x[h % NCHAIN], sfb);                                                                     \
+            }                                                                                                         \
+        }                                                                                                             \
+        RATE_EPILOGUE                                                                                                 \
+        if ((threadIdx.x >> 5) & 1) {                                                                                 \
+            for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = x[j];                                       \
+        } else {                                                                                                      \
+            for (int j = 0; j < NACC; j++)                                                                            \
+                for (int i = 0; i < 4; i++) chk[(size_t)tid * CHK + j * 4 + i] = __float_as_uint(c[j][i]);             \
+        }                                                                                                             \
+    }
+
+COISSUE_RATE(coissue_h4_rate, 4)
+COISSUE_RATE(coissue_h8_rate, 8)
+COISSUE_RATE(coissue_h12_rate, 12)
+COISSUE_RATE(coissue_h16_rate, 16)
+COISSUE_RATE(coissue_h24_rate, 24)
+COISSUE_RATE(coissue_h32_rate, 32)
+COISSUE_RATE(coissue_h48_rate, 48)
+COISSUE_RATE(coissue_h64_rate, 64)
+COISSUE_RATE(coissue_h80_rate, 80)
+COISSUE_RATE(coissue_h96_rate, 96)
+COISSUE_RATE(coissue_h112_rate, 112)
+COISSUE_RATE(coissue_h128_rate, 128)
+COISSUE_RATE(coissue_h160_rate, 160)
+COISSUE_RATE(coissue_h192_rate, 192)
+COISSUE_RATE(coissue_h256_rate, 256)
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
                           fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate,
@@ -724,7 +771,10 @@ const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate
                           cs_port_fadd_rate, cs_port_nogen_rate, cs_packed_fadd_rate, cs_packed_nogen_rate,
                           cs_w64_fadd_rate, cs_w64_nogen_rate, cs_w128_fadd_rate, cs_w128_nogen_rate,
                           cs_w64_nogen_r144_rate, cs_w128_nogen_r144_rate, f2fp_f16_rate, f2fp_f16_half_rate, f2fp_f16_xor_rate,
-                          hmma_f16_f32_rate, hadd2_rate, add_f16x2_rate, hfma2_rate, hadd2_f32_rate, fhadd_rate};
+                          hmma_f16_f32_rate, hadd2_rate, add_f16x2_rate, hfma2_rate, hadd2_f32_rate, fhadd_rate,
+                          coissue_h4_rate, coissue_h8_rate, coissue_h12_rate, coissue_h16_rate, coissue_h24_rate, coissue_h32_rate,
+                          coissue_h48_rate, coissue_h64_rate, coissue_h80_rate, coissue_h96_rate, coissue_h112_rate,
+                          coissue_h128_rate, coissue_h160_rate, coissue_h192_rate, coissue_h256_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace

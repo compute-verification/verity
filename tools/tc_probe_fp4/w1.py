@@ -7,8 +7,9 @@ beside its packed replacement (four codes per 32-bit store) and the packed words
 strides and at the port's), each fed by one FADD per code or by no per-code input, the E4M3-to-FP16 convert cvt.rn.f16x2.e4m3x2
 (alone, and with one LOP3 per two or per one convert, so the loops' differences test that the costs add), FP16 mma.sync with FP32
 accumulation (the leaf beside the E4M3 atom), the 16-bit adds (HADD2 alone, add.rn.f16x2 as ptxas splits it over HADD2 and HFMA2,
-HFMA2, the widening HADD2.F32 and the mixed FHADD, each in SM-clocks per warp instruction and as a fraction of FADD's rate), and the
-prices W1 reads off them.
+HFMA2, the widening HADD2.F32 and the mixed FHADD, each in SM-clocks per warp instruction and as a fraction of FADD's rate), their
+co-issue (the leaf's 16 MMAs with N = 4 ... 256 HADD2 per loop iteration: both rates per N, each as a fraction of its loop alone),
+and the prices W1 reads off them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
                                     [--ops qmma_e4m3_f32,qmma_sp_e4m3] [--prebuilt libw1_prices_sm_120a.so] [--lease-max-min 10]
@@ -115,6 +116,11 @@ OPS = [
     ("hadd2_f32", "HADD2.F32", NCHAIN * SUNROLL, 32, "register"),
     ("fhadd", "FHADD", NCHAIN * SUNROLL, 32, "register"),
 ]
+#: FP16 MMA / HADD2 co-issue: hmma_f16_f32's 16 MMAs with N HADD2 per loop iteration (the rate is the MMAs', per MAC)
+COISSUE_N = (4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 112, 128, 160, 192, 256)
+COISSUE_OPS = tuple(range(len(OPS), len(OPS) + len(COISSUE_N)))
+OPS += [(f"coissue_h{n}", "HMMA.16816.F32", NACC * UNROLL, 16 * 8 * 16, "MAC") for n in COISSUE_N]
+HADD2_PER_LOOP = dict(zip(COISSUE_OPS, COISSUE_N))
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
            "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate", "fadd_f32x2_rate", "fadd_pairs_rate",
@@ -123,7 +129,7 @@ _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_n
            "cs_w64_fadd_rate", "cs_w64_nogen_rate", "cs_w128_fadd_rate", "cs_w128_nogen_rate",
            "cs_w64_nogen_r144_rate", "cs_w128_nogen_r144_rate", "f2fp_f16_rate", "f2fp_f16_half_rate",
            "f2fp_f16_xor_rate", "hmma_f16_f32_rate", "hadd2_rate", "add_f16x2_rate", "hfma2_rate", "hadd2_f32_rate",
-           "fhadd_rate"]  # w1_prices.cu's KERNELS, in op order
+           "fhadd_rate", *(f"coissue_h{n}_rate" for n in COISSUE_N)]  # w1_prices.cu's KERNELS, in op order
 SP_OP = 15
 CS_OPS = tuple(range(16, 26))
 CS_FADD = (16, 18, 20, 22)  # fed by one FADD per code; the others need no per-code input
@@ -154,7 +160,9 @@ _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 10
               "cs_port_fadd": 32, "cs_port_nogen": 43, "cs_packed_fadd": 72, "cs_packed_nogen": 128, "cs_w64_fadd": 100,
               "cs_w64_nogen": 128, "cs_w128_fadd": 100, "cs_w128_nogen": 128, "cs_w64_nogen_r144": 128, "cs_w128_nogen_r144": 128,
               "f2fp_f16_e4m3": 128, "f2fp_f16_e4m3_half": 96, "f2fp_f16_e4m3_xor": 64, "hmma_f16_f32": 512, "hadd2": 64,
-              "add_f16x2": 128, "hfma2": 64, "hadd2_f32": 64, "fhadd": 128}
+              "add_f16x2": 128, "hfma2": 64, "hadd2_f32": 64, "fhadd": 128,
+              # the co-issue loops as if the HADD2 pipe (0.5 SM-clocks each) overlapped the MMAs' 64 SM-clocks per warp iteration
+              **{f"coissue_h{n}": 16 * 2048 / max(64, 0.5 * n) for n in COISSUE_N}}
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
@@ -199,6 +207,9 @@ def sass_gate(so: Path, out: Path | None) -> dict:
         watched = {k: v for k, v in body.items() if _WATCHED.match(k) or k in expected}
         if i in F16_OPS + H16_OPS:  # the whole loop but its uniform-datapath counter and branch
             watched = {k: v for k, v in body.items() if not k.startswith(("U", "BRA"))}
+        if i in COISSUE_OPS:  # the whole loop but those and the NOPs ptxas spaces the MMAs with, recorded in the loop
+            expected = {opcode: per_loop, "HADD2": HADD2_PER_LOOP[i]}
+            watched = {k: v for k, v in body.items() if not k.startswith(("U", "BRA", "NOP"))}
         kernels[name] = {"kernel": _KERNEL[i], "loop": dict(sorted(body.items())), "expected": expected, "ok": watched == expected}
     return {"ok": all(k["ok"] for k in kernels.values()), "kernels": kernels}
 
@@ -274,6 +285,7 @@ GATE_ROW = {  # per op: the all-ones row (a0..a3, b0, b1, scale A, scale B), or 
     10: [0, 0, 0x3F800000, 0x40000000] + [0] * 4, 11: [0, 0, 0x3F800000, 0x40000000] + [0] * 4,  # low half adds 1, high half 2
     SP_OP: [_rep(0x38, 8)] * 6 + [_rep(0b0100, 4), 0],  # every group keeps its first two: 32 products of 1 per output
     29: [_rep(0x3C00, 16)] * 6 + [0, 0],
+    **{op: [_rep(0x3C00, 16)] * 6 + [0, 0] for op in COISSUE_OPS},  # words 6 and 7, the HADD2 chains', from the timing rows
 }
 
 
@@ -451,23 +463,37 @@ def h16_chain(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     row word 2 as f16x2: HADD2 adds y's high half to both halves (30), add.rn.f16x2 and HFMA2 act per half (31: x + y, 32:
     x * m + y), HADD2.F32 widens the FP32 chain's high half, read as FP16 (33), FHADD adds y's low half to the FP32 chain (34)."""
     rows = np.asarray(rows, np.uint32).reshape(32, 8)
-    n = iters * SUNROLL
+    return h16_steps(op, iters * SUNROLL, rows[:, 0], rows[:, 1], rows[:, 2])
+
+
+def h16_steps(op: int, n: int, x0: np.ndarray, y: np.ndarray, m: np.ndarray) -> np.ndarray:
+    """h16_chain's chains after ``n`` steps from the words x0, with addend y and multiplier m."""
+    x0, y, m = (np.asarray(v, np.uint32) for v in (x0, y, m))
     if op == 33:
-        x = rows[:, 0].copy()
+        x = x0.copy()
         for _ in range(n):
             x = (x >> 16).astype(np.uint16).view(np.float16).astype(np.float32).view(np.uint32)
         return x
     if op == 34:
-        x, y = rows[:, 0].view(np.float32).astype(np.float64), _halves(rows[:, 1])[:, 0]
+        x, yl = x0.view(np.float32).astype(np.float64), _halves(y)[:, 0]
         for _ in range(n):
-            x = _exact_sum(x, y).astype(np.float32).astype(np.float64)
+            x = _exact_sum(x, yl).astype(np.float32).astype(np.float64)
         return x.astype(np.float32).view(np.uint32)
-    x, y, m = _halves(rows[:, 0]), _halves(rows[:, 1]), _halves(rows[:, 2])
+    x, yh, mh = _halves(x0), _halves(y), _halves(m)
     if op == 30:
-        y = y[:, 1:].repeat(2, 1)
+        yh = yh[:, 1:].repeat(2, 1)
     for _ in range(n):
-        x = _exact_sum(x * m if op == 32 else x, y).astype(np.float16).astype(np.float64)  # an FP16 product is exact in float64
+        x = _exact_sum(x * mh if op == 32 else x, yh).astype(np.float16).astype(np.float64)  # an FP16 product is exact in float64
     return _f16x2(x)
+
+
+def coissue_chains(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
+    """(32, NCHAIN) HADD2 chains of a co-issue loop: HADD2 number h of an iteration steps chain h % NCHAIN, so chain j takes
+    len(range(j, N, NCHAIN)) steps an iteration, from row word 6 with the addend row word 7's high half."""
+    rows = np.asarray(rows, np.uint32).reshape(32, 8)
+    steps = [len(range(j, HADD2_PER_LOOP[op], NCHAIN)) for j in range(NCHAIN)]
+    by_steps = {s: h16_steps(30, iters * s, rows[:, 6], rows[:, 7], rows[:, 7]) for s in set(steps)}
+    return np.stack([by_steps[s] for s in steps], 1)
 
 
 def gate_words(op: int, iters: int, rows: np.ndarray, blocks: int) -> tuple[np.ndarray, np.ndarray]:
@@ -530,6 +556,11 @@ def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
         w[:] = np.tile(cs_model(op, iters, rows), (THREADS // 32, 1))
     elif op in H16_OPS:
         w[:, :NCHAIN] = np.tile(h16_chain(op, iters, rows)[:, None], (THREADS // 32, NCHAIN))
+    elif op in COISSUE_OPS:  # even warps the all-ones accumulators, odd warps the chains and then the poison
+        w[:] = np.float32(work // 128 * UNROLL * iters).view(np.uint32)
+        odd = (np.arange(THREADS) // 32) % 2 == 1
+        w[odd, :NCHAIN] = np.tile(coissue_chains(op, iters, rows), (THREADS // 64, 1))
+        w[odd, NCHAIN:] = POISON
     else:
         w[:, :NCHAIN] = np.tile(f2fp_model(iters, rows, packed=op == 8), (THREADS // 32, 1))
     return w
@@ -550,11 +581,14 @@ def timing_rows(op: int, rng) -> np.ndarray:
         r[:, :6] = (b << (4 * np.arange(8))).sum(-1)
         s = rng.integers(0x34, 0x3C, (32, 2, 4))
         r[:, 6:] = (s << (8 * np.arange(4))).sum(-1)
-    elif op in (4, 5, 29):
+    elif op in (4, 5, 29, *COISSUE_OPS):
         bias, mb = (127, 7) if op == 4 else (15, 10)
         e = rng.integers(bias - 1, bias + 2, (32, 6, 2))
         b = (rng.integers(0, 2, (32, 6, 2)) << 15) | (e << mb) | rng.integers(0, 1 << mb, (32, 6, 2))
         r[:, :6] = (b << (16 * np.arange(2))).sum(-1)
+        if op in COISSUE_OPS:  # hadd2's chains: from [1, 2), y about 2^-10, random signs
+            r[:, 6] = _f16x2(rng.uniform(1, 2, (32, 2)) * rng.choice([-1, 1], (32, 2)))
+            r[:, 7] = _f16x2(rng.uniform(2**-10, 2**-9, (32, 2)) * rng.choice([-1, 1], (32, 2)))
     elif op in (6, 7):
         r[:, 0] = np.float32(rng.uniform(1, 2, 32)).view(np.uint32)
         r[:, 1] = np.float32(rng.uniform(2**-10, 2**-9, 32) * rng.choice([-1, 1], 32)).view(np.uint32)
@@ -615,12 +649,17 @@ def numeric_gate(dev, rng, ops=None) -> tuple[dict, dict[int, np.ndarray]]:
         if ops is not None and op not in ops:
             continue
         rows = np.array(GATE_ROW[op], np.uint32)[None].repeat(32, 0) if op in GATE_ROW else rows_t[op]
+        if op in COISSUE_OPS:
+            rows[:, 6:] = rows_t[op][:, 6:]
         chk, _, sm, _ = dev.run(op, GATE_ITERS, rows)
         want, nan = gate_words(op, GATE_ITERS, rows, chk.shape[0])
         diff = np.argwhere(gate_mismatches(chk, want, nan))
         ref = ("e2m1_ref" if op in E2M1_OPS else "verity.ml.tc.term.decode_e4m3" if op in F16_OPS
-               else "h16_chain (one rounding per step of an exact float64 result)" if op in H16_OPS else "fp8.cvt_ref")
-        res[name] = {"iters": GATE_ITERS, "data": "all-ones" if op in GATE_ROW else f"timing rows vs {ref}",
+               else "h16_chain (one rounding per step of an exact float64 result)" if op in H16_OPS + COISSUE_OPS else "fp8.cvt_ref")
+        data = f"timing rows vs {ref}" if op not in GATE_ROW else "all-ones"
+        if op in COISSUE_OPS:
+            data = f"all-ones MMA on even warps; odd warps' HADD2 chains on timing rows vs {ref}, their words 8..15 the poison"
+        res[name] = {"iters": GATE_ITERS, "data": data,
                      "mismatches": int(len(diff)), "vacuous": not want[..., :NCHAIN].any(),
                      "distinct_sms": int(len(set(sm.tolist()))), "blocks": int(len(sm)),
                      "unwritten_words_per_thread": 16 - WRITTEN[op]}
@@ -701,6 +740,25 @@ def prices(tim: dict) -> dict:
         out["fp16_scalar"] = {name: {"sm_clocks_per_warp_instruction": 32 / r,
                                      **({"fraction_of_fadd_rate": r / rate["fadd"]} if "fadd" in rate else {})}
                               for name, r in scalar.items()}
+    co = [(0, "hmma_f16_f32")] + [(HADD2_PER_LOOP[op], OPS[op][0]) for op in COISSUE_OPS]
+    if any(name in rate for _, name in co[1:]):  # n = 0 is the leaf's own loop; HADD2's rate is the MMAs' times n 32 / (16 2048)
+        mma0, h_alone = rate.get("hmma_f16_f32"), rate.get("hadd2")
+        tab = {}
+        for n, name in co:
+            if name not in rate:
+                continue
+            mma = rate[name]
+            h = mma * n * 32 / (NACC * UNROLL * 2048)
+            row = {"hadd2_per_iteration": n, "mma_macs_per_sm_per_clock": mma, "hadd2_registers_per_sm_per_clock": h,
+                   "sm_clocks_per_warp_iteration": NACC * UNROLL * 2048 / mma}
+            if mma0:
+                row["mma_fraction_of_alone"] = mma / mma0
+            if h_alone:
+                row["hadd2_fraction_of_alone"] = h / h_alone
+            if mma0 and h_alone:
+                row["utilization_sum"] = mma / mma0 + h / h_alone
+            tab[name] = row
+        out["coissue"] = tab
     if "qmma_sp_e4m3" in rate:  # instructions per SM per clock, sparse over dense (both 16 per loop)
         out["sp_over_dense_instructions"] = rate["qmma_sp_e4m3"] / (2 * unit)
     if "qmma_e4m3_f16" in rate:
@@ -909,6 +967,11 @@ def finish(out: Path, args, res: dict, failures: list[str], ident: dict | None, 
         for name, v in (pr.get("fp16_scalar") or {}).items():
             meas += [{"name": f"fp16_scalar.{name}.{k}", "value": x, "unit": u, "label": derived}
                      for k, u in (("sm_clocks_per_warp_instruction", "SM-clocks/warp instruction"), ("fraction_of_fadd_rate", "1"))
+                     if (x := v.get(k)) is not None]
+        for name, v in (pr.get("coissue") or {}).items():
+            meas += [{"name": f"coissue.{name}.{k}", "value": x, "unit": u, "label": derived}
+                     for k, u in (("hadd2_registers_per_sm_per_clock", "register/SM/clock"), ("mma_fraction_of_alone", "1"),
+                                  ("hadd2_fraction_of_alone", "1"), ("utilization_sum", "1"))
                      if (x := v.get(k)) is not None]
         doc = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": run_id, "arch": F8.ARCH,
                "sku": (ident or {}).get("device"), "driver": (ident or {}).get("driver"), "gpu_uuid": (ident or {}).get("gpu_uuid"),
