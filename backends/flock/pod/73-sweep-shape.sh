@@ -16,6 +16,9 @@ REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/sweep-shape}; mkdir -p $R/out
 SWEEP=${SWEEP:-/workspace/jobs/sweep2}; D=$SWEEP/$ROW; mkdir -p $D
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/flock-sweep2}; mkdir -p $FLOCK_WORK/home; export HOME=$FLOCK_WORK/home
 export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} SM=${SM:-120}
+# the prover as flock-m0-v3 measures it (#554, attempt #15): 4x4 GEMM tiles and m = 35 statements, witnesses built 4 ahead
+export FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} BATCH_ANDS=${BATCH_ANDS:-34359738368} MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-34359738368} \
+  FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 unset CARGO_TARGET_DIR
 [ -n "${RAYON_NUM_THREADS:-}" ] || export RAYON_NUM_THREADS=${OMP_NUM_THREADS:-$(nproc)}
 for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do

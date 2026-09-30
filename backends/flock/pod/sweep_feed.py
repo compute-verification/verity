@@ -26,8 +26,8 @@ DONE = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch")) / "d
 SWEEP = Path(os.environ.get("SWEEP", "/workspace/jobs/sweep2"))
 TREE = os.environ.get("SWEEP_TREE", f"/workspace/research/trees/{LANE}")
 SELFTEST_EVERY = 25
-STAGE_RES = {"cpus": 4, "memory": 64, "gpus": 0}
-PROVE_RES = {"cpus": 8, "memory": 64, "gpus": 1}
+STAGE_RES = {"cpus": 4, "memory": 96, "gpus": 0}
+PROVE_RES = {"cpus": 8, "memory": 48, "gpus": 1}
 
 
 def provers_pending() -> int:
