@@ -98,10 +98,14 @@ import FlockSoundness.Audit.Extraction
 import FlockSoundness.Audit.FlockCompiled
 import FlockSoundness.Audit.FlockBatched
 import FlockSoundness.Audit.Stratified
-import FlockSoundness.Audit.StratifiedMiss
 import FlockSoundness.ExecDraw
 import FlockSoundness.ExecStratified
 import FlockSoundness.ExecDrawOS
+import FlockSoundness.Randomness
+import FlockSoundness.PlanDraw
+import FlockSoundness.KeyedDraw
+import FlockSoundness.Audit.RegDraw
+import FlockSoundness.Audit.StratifiedMiss
 import FlockSoundness.Audit.Work
 import FlockSoundness.Audit.FlockWork
 import FlockSoundness.Audit.Closure
@@ -119,3 +123,6 @@ import FlockSoundness.Types.Program
 import FlockSoundness.Types.ProgramPlaces
 import FlockSoundness.Types.ProgramE2E
 import FlockSoundness.ComposePlace
+import FlockSoundness.ZK.Masking
+import FlockSoundness.ZK.Adaptivity
+import FlockSoundness.ZK.CoinBinding
