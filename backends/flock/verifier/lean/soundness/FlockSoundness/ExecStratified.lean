@@ -18,6 +18,10 @@ units run over `σ`'s stratum.
 * `flock_e2e_drawn_exec`, `flock_e2e_count_exec`: `flock_e2e_drawn` and `flock_e2e_count` (`E2E.lean`) at that law, the
   count curve bounded by `Law.stratified`'s `miss`.
 
+The streams are uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`). The live draw,
+`Flock.Draw.drawOS`, extends a stream that runs out and reruns, rather than drawing every unit; `ExecDrawOS.lean` proves the
+same bounds for it.
+
 `stratumK` is the count law's `k` by `rfl`: `countRule_eq_draw` (`Audit/FlockWork.lean`).
 -/
 
@@ -36,8 +40,9 @@ def ExecStrata (σ : Fin n → Fin m) (k : Fin m → ℕ) (S : Fin m → Flock.D
   ∀ s, (S s).k = k s ∧ (S s).size = (stratum σ s).card ∧
     (range (S s).size).image (S s).unit = (stratum σ s).map Fin.valEmbedding
 
-/-- The verifier's executable stratified draw as a law: stratum `s`'s stream is `L s` uniform bytes, and a draw whose
-stream runs out draws every unit. -/
+/-- The verifier's executable stratified draw as a law: stratum `s`'s stream is `L s` uniform bytes (A3), and a draw
+whose stream runs out draws every unit. The live draw extends such a stream and reruns instead: `execOS`
+(`ExecDrawOS.lean`). -/
 def execStratified (S : Fin m → Flock.Draw.Stratum) (L : Fin m → ℕ) : Law n where
   Ω := (s : Fin m) → Fin (L s) → Fin 256
   draw ω := match Flock.Draw.stratified (Array.ofFn S) (Array.ofFn fun s => streamOf (ω s)) with
@@ -95,7 +100,10 @@ theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array By
   rw [← hD', DrawExec.mem_qsort]
   exact hmem j hj
 
-/-- **The executable stratified draw escapes no more often than the model's.** -/
+/-- **The executable stratified draw escapes no more often than the model's.** Its probability space is independent
+uniform streams: that the verifier's bytes are uniform is A3 (`Assumptions.UniformRandomBytes`,
+`uniform/io-getrandombytes`), which `drawOS_stratified_escape_le` (`ExecDrawOS.lean`) takes for the live draw, reruns
+included. -/
 theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (L : Fin m → ℕ) (B : Finset (Fin n)) :
     prCoin (fun f : (s : Fin m) → Fin (L s) → Fin 256 =>

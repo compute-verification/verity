@@ -287,10 +287,11 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       input field (`unitShape_of`).
     - Each input of VU `g` copies its message bit: the block rows at its position read exactly `copySrc g w`
       (`input_rows`). As a model `CopyRow` (`input_copy`, and `setupH_inputCopy` for an accepted statement), that is a
-      table class's `copy`, when the message bit's position is in the block.
+      table class's `copy`. The message bit is a column of the block (`setupH_copySrc_lt`): it is in a `sha512x3`
+      slot's message port (`msgCol_lt`), and the file has a row, since the instance's inputs are its rows' words
+      (`CheckFactsT.ins`) and the unit's inputs its type's (`unit_inCols_size`, `read_template_ty`).
   - Still to prove:
-    - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
-    - the message bit's position in the block, for `setupH_inputCopy`.
+    - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`).
 
 ### 1.6 Proved from the libraries, not assumed
 

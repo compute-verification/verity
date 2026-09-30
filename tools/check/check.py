@@ -1,6 +1,7 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`).
 
     uv run --extra torch-cpu python tools/check/check.py    run every step here, in the checkout, with CPU-only torch
+    ... [--keep-going]                                      run every step to its end, even after one has failed
     uv run python tools/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -11,7 +12,16 @@
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before
                                                             the steps; with --record --on, the pack travels with the run
 
-Three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
+First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`) and the repository's wall-clock lint and
+blob cap (`LINTS`). The groups start only once it passes, so a check that one of them fails ends in seconds, not hours.
+
+A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
+removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
+step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store.
+The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
+appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run.
+
+Then three independent groups run at once, the cores split between them (`--cores N`, default the CPUs this process may use):
 
     pytest          every test suite (`tools/check/suites.py`) but those that use Lean, half the cores' worth at once: each
                     package's tests in their own process, a pass reused while its inputs are unchanged; each suite's log and the
@@ -68,6 +78,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -96,10 +107,6 @@ def custody_dir() -> Path | None:
     return d if (d / "store.toml").is_file() and (d / "cred.json").is_file() else None
 
 
-def cache_dir() -> Path:
-    return Path(os.environ.get("CHECK_CACHE") or Path.home() / ".cache" / "verity-check")
-
-
 def _load(name: str):
     spec = importlib.util.spec_from_file_location(f"check_{name}", Path(__file__).resolve().parent / f"{name}.py")
     m = importlib.util.module_from_spec(spec)
@@ -109,23 +116,12 @@ def _load(name: str):
 
 #: the verdict packs (`verdicts.py`)
 VERDICTS = _load("verdicts")
-
-
-def cores() -> int:
-    """The CPUs this process may use, bounded by the cgroup quota (a pod's `nproc` can exceed it)."""
-    n = len(os.sched_getaffinity(0))
-    try:
-        q, p = Path("/sys/fs/cgroup/cpu.max").read_text().split()
-        if q != "max":
-            n = min(n, max(1, int(q) // int(p)))
-    except (OSError, ValueError):
-        try:                                           # cgroup v1
-            q = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text())
-            if q > 0:
-                n = min(n, max(1, q // int(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text())))
-        except (OSError, ValueError):
-            pass
-    return n
+#: the helpers `lean_audit.py` shares (`common.py`), kept out of this file so that its audit key doesn't cover this file
+COMMON = _load("common")
+cache_dir = COMMON.cache_dir
+cores = COMMON.cores
+_sha256 = COMMON.sha256
+tracked_files = COMMON.tracked_files
 
 
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
@@ -138,14 +134,6 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
 UPSTREAM_PIN = FLOCK_VERIFIER / "upstream.json"
 #: where check looks for them besides the run's `inputs/` (`--send`): a local recorded run's launcher sets it
 AGREEMENT_DIR_ENV = "FLOCK_AGREEMENT_INPUTS"
-
-
-def _sha256(p: Path) -> str:
-    h = hashlib.sha256()
-    with open(p, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def agreement_files(out: Path) -> dict[str, Path]:
@@ -431,9 +419,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None) -> l
     py = sys.executable
     a = max(1, n // 2)
     b = max(1, n - a)
-    commit = ["--commit", os.environ["RESEARCH_SOURCE_SHA"]] if os.environ.get("RESEARCH_SOURCE_SHA") else []   # a shipped tree has no .git
     suites = [py, str(ROOT / "tools" / "check" / "suites.py")]
-    tail = [*commit, "--jobs", str(a), *([] if cache else ["--fresh"])]
+    tail = ["--jobs", str(a), *([] if cache else ["--fresh"])]
     lean = lean_steps(out, cache, urls)
     after_lean: list[str] = []
     if len(lean) > 1:
@@ -451,12 +438,25 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
     return [s for g in groups(out, n) for s in g]
 
 
+#: What reaches the steps from this process's environment, Turborepo's strict mode being the model: where things are (PATH, HOME,
+#: the temporary and XDG directories, the Rust and Lean toolchains' homes), the locale, how this machine reaches the network (its
+#: proxies and certificate bundles), uv and the environment it runs in, and the switches tests read (`VERITY_*`, `FLOCK_*`).
+#: Nothing else: not the store's, RunPod's or GitHub's credentials, not what the recording run gives its workload (`RESEARCH_*`,
+#: the machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them).
+ENV_PASS = frozenset({"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LANGUAGE", "VIRTUAL_ENV", "CARGO_HOME", "RUSTUP_HOME",
+                      "ELAN_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY"})
+ENV_PASS_PREFIXES = ("LC_", "XDG_", "UV_", "VERITY_", "FLOCK_")
+#: What check sets for its steps from its own state, never from the environment: a check run inside a step (its own tests) would
+#: otherwise pass its parent's on.
+ENV_OWN = frozenset({CUSTODY_ENV, STORE_REQUIRED_ENV})
+
+
 def env() -> dict[str, str]:
-    """The steps' environment, as a plain shell's: none of what the recording run gives its workload (`RESEARCH_*`, the
-    machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them), PYTHONPATH entries inside this
-    tree only (a machine's runner puts its shipped `research` first), and a git identity when none is set.  Inside a recorded run,
-    the store is required and the run's custody dir is passed on (the module docstring's "The evidence store")."""
-    out = {k: v for k, v in os.environ.items() if not k.startswith("RESEARCH_") and k not in ("PYTHONPYCACHEPREFIX", CUSTODY_ENV, STORE_REQUIRED_ENV)}
+    """The steps' environment: this process's variables that `ENV_PASS` and `ENV_PASS_PREFIXES` name, less `ENV_OWN`; PYTHONPATH
+    entries inside this tree only (a machine's runner puts its shipped `research` first); and a git identity.  Inside a recorded
+    run, the store is required and the run's custody dir is passed on (the module docstring's "The evidence store")."""
+    out = {k: v for k, v in os.environ.items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
     if os.environ.get("RESEARCH_RUN_ID"):
         out[STORE_REQUIRED_ENV] = "1"
         if custody := custody_dir():
@@ -471,21 +471,6 @@ def env() -> dict[str, str]:
     for k in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
         out.setdefault(k, "check@localhost")
     return out
-
-
-def tracked_files(root: Path = ROOT) -> list[str] | None:
-    """The tree's files as git has them: tracked and untracked-unignored in a checkout; in a shipped tree (no `.git`), the
-    commit's tree as the machine's bare repository holds it (`READY.json` names it), never what steps have built in it since.
-    None when neither is available."""
-    if (root / ".git").exists():
-        argv = ["git", "-C", str(root), "ls-files", "-z", "-co", "--exclude-standard"]
-    else:
-        ready, bare = root / "READY.json", root.parent.parent / "git" / "verity.git"
-        if not (ready.exists() and bare.exists()):
-            return None
-        argv = ["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", json.loads(ready.read_text())["tree"]]
-    r = subprocess.run(argv, capture_output=True)
-    return sorted(p.decode() for p in r.stdout.split(b"\0") if p) if r.returncode == 0 else None
 
 
 def _env_key(e: dict[str, str]) -> dict[str, str]:
@@ -522,11 +507,107 @@ def agreement_closure(files: list[str]) -> list[str]:
     return [f for f in files if f.startswith(pre) and f != lean + "lean-audit.json" and not f.startswith(nested or ("\0",))]
 
 
-def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -> dict:
+#: the repository-wide lints the preflight runs: each fails a whole check, and together they take seconds
+LINTS = ("tests/test_no_wall_clock.py", "tests/test_repository.py::test_no_tracked_blob_exceeds_limit")
+#: how long a stopped step's processes have after SIGINT before SIGKILL
+STOP_GRACE_S = 60
+#: each step's record, one JSON line appended as the step ends
+STEPS_LOG = "steps.jsonl"
+
+
+def preflight() -> list[tuple[str, list[str] | str, Path]]:
+    """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
+    pytest's cache, so they leave nothing in the tree). Under `uv run`, `$UV` names uv."""
+    uv = os.environ.get("UV") or shutil.which("uv")
+    lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
+    return [("preflight-lock", lock, ROOT),
+            ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT)]
+
+
+def _tree(pid: int) -> list[int]:
+    """``pid`` and its descendants, read from /proc (only ``pid`` where there is none)."""
+    kids: dict[int, list[int]] = {}
+    try:
+        names = os.listdir("/proc")
+    except OSError:
+        return [pid]
+    for d in names:
+        if d.isdigit():
+            try:
+                ppid = int(Path(f"/proc/{d}/stat").read_text().rsplit(")", 1)[1].split()[1])
+            except (OSError, ValueError, IndexError):
+                continue
+            kids.setdefault(ppid, []).append(int(d))
+    out, todo = [], [pid]
+    while todo:
+        p = todo.pop()
+        out.append(p)
+        todo += kids.get(p, [])
+    return out
+
+
+def _signal_tree(pid: int, sig: int) -> None:
+    for p in _tree(pid):
+        try:
+            os.kill(p, sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def _kill_after_grace(p: subprocess.Popen) -> None:
+    try:
+        p.wait(timeout=STOP_GRACE_S)
+    except subprocess.TimeoutExpired:
+        _signal_tree(p.pid, signal.SIGKILL)
+
+
+class Steps:
+    """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``),
+    and each step's record appended to `STEPS_LOG` as it ends."""
+
+    def __init__(self, out: Path, keep_going: bool = False):
+        self.log, self.keep_going = out / STEPS_LOG, keep_going
+        self.lock = threading.Lock()
+        self.running: dict[str, subprocess.Popen] = {}
+        self.stopped: set[str] = set()
+        self.failed: str | None = None
+        self.log.unlink(missing_ok=True)
+
+    @property
+    def stopping(self) -> bool:
+        return self.failed is not None and not self.keep_going
+
+    def start(self, name: str, argv: list[str], cwd: Path, env: dict[str, str], log) -> subprocess.Popen | None:
+        """The step's process; None, and nothing started, once a failure has stopped the run."""
+        with self.lock:
+            if self.stopping:
+                return None
+            self.running[name] = p = subprocess.Popen(argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
+            return p
+
+    def end(self, rec: dict) -> dict:
+        with self.lock:
+            self.running.pop(rec["step"], None)
+            if rec["step"] in self.stopped and rec["status"] != "passed":
+                rec.update(status="stopped", detail=f"stopped: {self.failed} failed")
+            rec["ended_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            with open(self.log, "a") as f:
+                f.write(json.dumps(rec) + "\n")
+            if rec["status"] == "failed" and self.failed is None:
+                self.failed = rec["step"]
+                if not self.keep_going:
+                    for name, p in self.running.items():
+                        self.stopped.add(name)
+                        _signal_tree(p.pid, signal.SIGINT)
+                        threading.Thread(target=_kill_after_grace, args=(p,), daemon=True).start()
+        return rec
+
+
+def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, steps: Steps) -> dict:
     if isinstance(argv, str):
         skipped = argv.startswith("skipped:")
         print(f"check: {name}: {argv}", flush=True)
-        return {"step": name, "status": "skipped" if skipped else "failed", "detail": argv, "seconds": 0.0}
+        return steps.end({"step": name, "status": "skipped" if skipped else "failed", "detail": argv, "seconds": 0.0})
     e = env()
     t0 = time.monotonic()
     hit = None
@@ -535,23 +616,28 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool) -
         entry = cache_dir() / name / f"{key}.json"
         if entry.exists():
             hit = key
+    log = out / f"{name}.log"
     if hit:
         rec = {"step": name, "status": "passed", "rc": 0, "cache": {"hit": hit}}
     else:
-        log = out / f"{name}.log"
         with open(log, "wb") as f:
-            rc = subprocess.run(argv, cwd=cwd, env=e, stdout=f, stderr=subprocess.STDOUT).returncode
-        rec = {"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "log": log.name}
+            p = steps.start(name, argv, cwd, e, f)
+            rc = p.wait() if p is not None else None
+        if rc is None:
+            rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.failed} failed"}
+        else:
+            rec = {"step": name, "status": "passed" if rc == 0 else "failed", "rc": rc, "log": log.name}
         if rc == 0 and key:
             entry.parent.mkdir(parents=True, exist_ok=True)
             entry.write_text(json.dumps({"key": key, "argv": argv, "passed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}))
             rec["cache"] = {"stored": key}
         if name == "circuit-check" and (out / "circuit-check.json").exists():
             rec["cache"] = json.loads((out / "circuit-check.json").read_text()).get("cache")
-        if rc:
-            tail = log.read_bytes().decode(errors="replace").splitlines()[-40:]
-            print("\n".join(f"  {name}| {line}" for line in tail), flush=True)
     rec["seconds"] = round(time.monotonic() - t0, 1)
+    rec = steps.end(rec)
+    if rec["status"] == "failed" and log.exists():
+        tail = log.read_bytes().decode(errors="replace").splitlines()[-40:]
+        print("\n".join(f"  {name}| {line}" for line in tail), flush=True)
     print(f"check: {name}: {rec['status']}{' (cached)' if hit else ''} in {rec['seconds']} s", flush=True)
     return rec
 
@@ -562,26 +648,29 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
             "if twins:\n    twins.preload()\n")
 
 
-def run(out: Path, n: int | None = None, cache: bool = True) -> tuple[bool, list[dict]]:
+def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
-    subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
+    steps = Steps(out, keep_going)
 
     def group(g: list) -> list[dict]:
         done = []
         for name, argv, cwd in g:
-            done.append(_step(name, argv, cwd, out, cache))
-            if done[-1]["status"] == "failed":
+            done.append(_step(name, argv, cwd, out, cache, steps))
+            if done[-1]["status"] in ("failed", "stopped"):
                 break
         return done
 
     try:
-        with ThreadPoolExecutor(max_workers=3) as ex:
-            results = [r for rs in ex.map(group, groups(out, n, cache, urls)) for r in rs]
+        results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
+        if not steps.stopping:
+            subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                results += [r for rs in ex.map(group, groups(out, n, cache, urls)) for r in rs]
     finally:
         if urls and urls.name.startswith("lean-deps-urls-"):
             urls.unlink(missing_ok=True)
-    return not any(r["status"] == "failed" for r in results), results
+    return not any(r["status"] in ("failed", "stopped") for r in results), results
 
 
 def agreement_verdicts(run_dir: Path) -> list[str]:
@@ -592,18 +681,35 @@ def agreement_verdicts(run_dir: Path) -> list[str]:
     return [str(p.relative_to(run_dir)) for p in files if p.is_file()]
 
 
-def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None) -> None:
+def contradictions(out: Path, field: str = "contradicts") -> list[dict]:
+    """What the suites' runs say about the caches (`suites.py`), per suite: ``contradicts``, what a fresh run (`--no-cache`, which the
+    nightly `audit-main` runs on `main`) failed that a cached pass, a suite's or a test's, answers for (a key that misses an input,
+    or a test whose outcome isn't a function of its inputs); ``nondeterministic``, the tests that both passed and failed under one
+    key (their inputs were identical)."""
+    found = []
+    for f in ("suites.json", "suites-lean.json"):
+        if (out / f).is_file():
+            found += [{"suite": d["suite"], field: d[field]} for d in json.loads((out / f).read_text()) if d.get(field)]
+    return found
+
+
+def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
+                 nondeterministic: list[dict] = ()) -> None:
     doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
            "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "passed" if ok else "failed", "checker": "tools/check/check.py",
                           "detail": "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    "verdicts.tar.gz",
+                                                    "verdicts.tar.gz", STEPS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if verdicts:
         doc["verdicts"] = verdicts
+    if contradicted:
+        doc["cache_contradictions"] = list(contradicted)
+    if nondeterministic:
+        doc["nondeterministic"] = list(nondeterministic)
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, run_dir / "result.json")
@@ -632,7 +738,8 @@ def main(argv: list[str]) -> int:
               "\"The evidence store\")", file=sys.stderr)
         return 2
     cache = "--no-cache" not in argv
-    rest = [a for a in argv if a != "--no-cache"]
+    keep_going = "--keep-going" in argv
+    rest = [a for a in argv if a not in ("--no-cache", "--keep-going")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
@@ -648,11 +755,17 @@ def main(argv: list[str]) -> int:
     verdicts = {"in": verdicts_in(pack, run_dir)} if pack and cache else {}
     before = VERDICTS.snapshot() if run_dir is not None and cache else None
     t0 = time.monotonic()
-    ok, done = run(out, n, cache)
+    ok, done = run(out, n, cache, keep_going)
+    bad, flaky = contradictions(out), contradictions(out, "nondeterministic")
+    for c in bad:
+        print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
+              flush=True)
+    for c in flaky:
+        print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key", flush=True)
     if run_dir is not None:
         if before is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
-        write_result(run_dir, ok, done, verdicts)
+        write_result(run_dir, ok, done, verdicts, bad, flaky)
     print(f"check: {'passed' if ok else 'FAILED'} in {time.monotonic() - t0:.1f} s ({', '.join(s['step'] + ' ' + s['status'] for s in done)});"
           f" outputs in {out}")
     return 0 if ok else 1
