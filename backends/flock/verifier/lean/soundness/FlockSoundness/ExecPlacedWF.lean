@@ -1,5 +1,6 @@
 import FlockSoundness.ExecTemplateClass
 import FlockSoundness.ExecLookup
+import FlockSoundness.Refine.Setup
 
 /-!
 # `PlacedWF` from the accepted statement (the layout facts `stmtOf_eq_placed` reads)
@@ -12,7 +13,13 @@ derives them from what the verifier accepted:
   `Lookup.build`'s (`ParseFactsT.pre`); all of them hold `Sparse.ofRows` outputs. `Stmt.setupH` sets the leaf to
   `default`, whose matrices have no rows (`setupH_leaf_typed`).
 - **A lookup inside its net.** `Lookup.build` refuses more than 32 output bits, and its low decoder's top block ends
-  below its product rows (`build_lookup`).
+  below its product rows (`build_placed`). A placed generated read's lookup is its read record's, whose low minterms the
+  unit's part check keeps inside the callee (`partReadsOk`).
+
+`setupH_placedWF` assembles them for an accepted typed template. One fact stays a hypothesis: every generated read of
+the class has at most 32 output bits (`hk32`). `genOk` checks a read's bits against its layout's value bits, which the
+table shapes bound. With `Refine.setupH_wf`, `setupH_templateTableClass_ofSetup` is then the template's class over the
+refinement's `stmtOf`.
 -/
 
 open Flock FlockLevel3
@@ -231,5 +238,139 @@ theorem setupH_leaf_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tab
   have hs := Except.ok.inj h
   subst hs
   rfl
+
+/-! ## The nets of an accepted template statement -/
+
+/-- A net `netOfD` built holds `Sparse.ofRows` outputs at its slot size, and has no lookup. -/
+theorem netOfD_placed {d : DeriveAll.D} {name : String} {n : Net} (h : Typed.netOfD d name = .ok n) :
+    (∃ ra, Sparse.ofRows ra (2 ^ n.unitLog) = .ok n.a) ∧ (∃ rb, Sparse.ofRows rb (2 ^ n.unitLog) = .ok n.b) ∧
+      n.unitLog = max 7 (log2ceil d.size) ∧ n.lookup = none := by
+  obtain ⟨h1, h2, h3, -, -, -, -, -, -, -, -, -, h13, -⟩ := Net.ofRows_ok h
+  exact ⟨⟨_, h2⟩, ⟨_, h3⟩, h1, h13⟩
+
+/-- **A template's placed layout net** is `netOfD`'s, with a generated read's lookup taken from its read record. -/
+theorem placedNet_placed {l : Flock.Layout} {d : DeriveAll.D} {nm : String} {held : Array Typed.Held} {n : Net}
+    (h : Typed.placedNet l d nm held = .ok n) :
+    (∃ ra, Sparse.ofRows ra (2 ^ n.unitLog) = .ok n.a) ∧ (∃ rb, Sparse.ofRows rb (2 ^ n.unitLog) = .ok n.b) ∧
+      n.unitLog = max 7 (log2ceil d.size) ∧
+      ∀ lk, n.lookup = some lk → ∃ r ∈ d.reads.toList, lk.loTop = r.loTop ∧ lk.lo = r.lo ∧ lk.bits = r.k := by
+  obtain ⟨n0, h0, heq, hdl, hgen⟩ := Typed.placedNet_spec h
+  obtain ⟨⟨ra, ha⟩, ⟨rb, hb⟩, hu, -⟩ := netOfD_placed h0
+  have ha' : n.a = n0.a := by rw [← heq]
+  have hb' : n.b = n0.b := by rw [← heq]
+  have hu' : n.unitLog = n0.unitLog := by rw [← heq]
+  refine ⟨⟨ra, by rw [ha', hu']; exact ha⟩, ⟨rb, by rw [hb', hu']; exact hb⟩, hu'.trans hu, fun lk hlk => ?_⟩
+  cases hown : l.own with
+  | derive => rw [hdl hown] at hlk; cases hlk
+  | gen sha nb vb lo =>
+    obtain ⟨r, hd, hr, -, hl⟩ := hgen sha nb vb lo hown
+    rw [hl] at hlk
+    cases hlk
+    exact ⟨r, by rw [hr]; exact List.mem_singleton_self r, rfl, rfl, rfl⟩
+
+variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+  {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+
+/-- **Every net of an accepted typed template** holds `Sparse.ofRows` outputs at its slot size, and its lookup, if any,
+is inside the net with at most 32 output bits, given that every generated read of the class has at most 32. -/
+theorem setupH_nets_placed (ht : tags.typed = true)
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
+    (hr : Typed.read tags cf tables = .ok (k, .inr t))
+    (hk32 : ∀ j, ∀ r ∈ (k.done.getD j default).reads.toList, r.k ≤ 32) :
+    ∀ x ∈ st.c.nets.toList, (∃ ra, Sparse.ofRows ra (2 ^ x.2.unitLog) = .ok x.2.a) ∧
+      (∃ rb, Sparse.ofRows rb (2 ^ x.2.unitLog) = .ok x.2.b) ∧
+      ∀ lk, x.2.lookup = some lk → lk.loTop + 2 ^ lk.lo ≤ x.2.b.width ∧ lk.bits ≤ 32 := by
+  obtain ⟨hp, -, -, -, -, -⟩ := setupH_spec_typed ht h
+  obtain ⟨k', r, hr', hcase⟩ := parseTyped_spec hp
+  rw [hr] at hr'
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hr')
+  rcases hcase with ⟨t', c', hrt, hpc, hc⟩ | ⟨net, c', hrn, -, -⟩
+  swap
+  · cases hrn
+  cases hrt
+  obtain ⟨more, hnets, hmore⟩ := (parse_facts_tmpl hpc).pre
+  obtain ⟨name, ty, htm⟩ := Typed.read_template hr
+  obtain ⟨digests, -, hroot, -, -, -, -, -, -, -, -, hsize, hent⟩ := Typed.templateOf_spec htm
+  have hparts := (Types.Dag.partsChecked_spec (Types.Dag.deriveChecked_parts k.hd)).2.2.2.2.2.2.2
+  intro x hx
+  rw [hc, hnets] at hx
+  simp only [Array.toList_append, List.mem_append, Array.toList_map, List.mem_map, List.mem_cons,
+    List.mem_nil_iff, or_false] at hx
+  rcases hx with (rfl | ⟨e, he, rfl⟩) | hx
+  · obtain ⟨ha, hb, -, hl⟩ := netOfD_placed hroot
+    exact ⟨ha, hb, fun lk hlk => by rw [hl] at hlk; cases hlk⟩
+  · obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem (Array.mem_toList_iff.1 he)
+    have hi' : i < ((List.range k.ls.size).filter fun j => (k.done.getD k.unit default).parts.any (·.1 == j)).length := by
+      rw [← hsize]; exact hi
+    have hpe := hent i hi' hi
+    unfold Typed.placedEntry at hpe
+    obtain ⟨v, hv, he'⟩ := except_bind_ok hpe
+    have hlv : t.layouts[i] = _ := (Except.ok.inj he').symm
+    rw [hlv]
+    obtain ⟨ha, hb, hu, hl⟩ := placedNet_placed hv
+    refine ⟨ha, hb, fun lk hlk => ?_⟩
+    obtain ⟨r0, hr0, hlo, hlo', hbits⟩ := hl lk hlk
+    set j := ((List.range k.ls.size).filter fun j => (k.done.getD k.unit default).parts.any (·.1 == j))[i]
+    have hjm : j ∈ (List.range k.ls.size).filter fun j => (k.done.getD k.unit default).parts.any (·.1 == j) :=
+      List.getElem_mem _
+    obtain ⟨p, hp, hpj⟩ := Array.any_eq_true'.1 (List.mem_filter.1 hjm).2
+    have hpr := hparts p hp
+    unfold partReadsOk at hpr
+    simp only [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem, decide_eq_true_eq] at hpr
+    rw [beq_iff_eq] at hpj
+    rw [hpj] at hpr
+    have hsz := hpr.1 r0 (Array.mem_toList_iff.1 hr0)
+    have hw : (2 : ℕ) ^ log2ceil (k.done.getD j default).size ≤ 2 ^ max 7 (log2ceil (k.done.getD j default).size) :=
+      Nat.pow_le_pow_right (by norm_num) (le_max_right _ _)
+    have hl2 := le_two_pow_log2ceil (k.done.getD j default).size
+    obtain ⟨rb, hrb⟩ := hb
+    rw [ofRows_width hrb, hu, hlo, hlo', hbits]
+    exact ⟨by omega, hk32 j r0 hr0⟩
+  · rcases hmore x hx with ⟨lines, hl⟩ | ⟨nm, tb, n, lo, bits, hb⟩
+    · obtain ⟨hlk, -, -, -, -, ra, rb, -, -, ha, hb⟩ := parse_spec hl
+      exact ⟨⟨ra, ha⟩, ⟨rb, hb⟩, fun lk h' => by rw [hlk] at h'; cases h'⟩
+    · exact build_placed hb
+
+/-- **`PlacedWF` for an accepted typed template**, given that every generated read of its class has at most 32 output
+bits: every net holds `Sparse.ofRows` outputs (so its columns are inside their widths), every lookup is inside its net,
+and the leaf is `default`. -/
+theorem setupH_placedWF (ht : tags.typed = true)
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
+    (hr : Typed.read tags cf tables = .ok (k, .inr t))
+    (hk32 : ∀ j, ∀ r ∈ (k.done.getD j default).reads.toList, r.k ≤ 32) : Refine.PlacedWF st := by
+  have hn := setupH_nets_placed ht h hr hk32
+  have hleaf := setupH_leaf_typed ht h
+  have hnet : ∀ n, n < st.c.nets.size → st.c.nets.getD n default = st.c.nets[n]'(by omega) := by
+    intro n hlt
+    simp [Array.getD_eq_getD_getElem?, hlt]
+  refine ⟨fun n i t hi ht' => ?_, fun n i t hi ht' => ?_, fun i t hi _ => ?_, fun i t hi _ => ?_, fun n lk hlk => ?_⟩
+  · by_cases hlt : n < st.c.nets.size
+    · rw [hnet n hlt] at hi ht' ⊢
+      obtain ⟨⟨_, ha⟩, -, -⟩ := hn _ (Array.getElem_mem_toList hlt)
+      exact ofRows_col_lt ha i t hi ht'
+    · simp [Array.getD_eq_getD_getElem?, hlt] at hi
+  · by_cases hlt : n < st.c.nets.size
+    · rw [hnet n hlt] at hi ht' ⊢
+      obtain ⟨-, ⟨_, hb⟩, -⟩ := hn _ (Array.getElem_mem_toList hlt)
+      exact ofRows_col_lt hb i t hi ht'
+    · simp [Array.getD_eq_getD_getElem?, hlt] at hi
+  · rw [hleaf] at hi
+    simp at hi
+  · rw [hleaf] at hi
+    simp at hi
+  · by_cases hlt : n < st.c.nets.size
+    · rw [hnet n hlt] at hlk ⊢
+      exact (hn _ (Array.getElem_mem_toList hlt)).2.2 lk hlk
+    · simp [Array.getD_eq_getD_getElem?, hlt] at hlk
+
+/-- **A typed template's table class over the refinement's `stmtOf`, from `Stmt.setupH`**: `StmtWF` is
+`Refine.setupH_wf`'s, and `PlacedWF` is `setupH_placedWF`'s, given that every generated read of the class has at most 32
+output bits. -/
+def setupH_templateTableClass_ofSetup (ht : tags.typed = true)
+    (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
+    (hr : Typed.read tags cf tables = .ok (k, .inr t)) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hk32 : ∀ j, ∀ r ∈ (k.done.getD j default).reads.toList, r.k ≤ 32) :
+    TableClass (Refine.stmtOf st (Refine.setupH_wf h).1 regs) :=
+  setupH_templateTableClass_stmtOf ht h hr regs (Refine.setupH_wf h).1 (setupH_placedWF ht h hr hk32)
 
 end FlockSoundness
