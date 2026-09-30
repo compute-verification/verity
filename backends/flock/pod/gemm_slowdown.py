@@ -94,9 +94,14 @@ def per_coordinate(sweep: Path) -> dict[int, dict]:
         if not mk or not lv.get("accepted"):
             continue
         n = ((r.get("stage") or {}).get("n") or lv.get("instances")) * (r.get("stage") or {}).get("coords_per_instance", 1)   # a tile: P * C
+        # a pipelined prover (the next sessions' witnesses built beside this one) runs at the slower of its device and its host
+        # witness builds: witness_s is only the wait, and a loopback verifier's own seconds would hide a build that outruns the GPU
         full = (lv.get("witness_s") or 0.0) + lv["prove_total_s"]
+        if lv.get("witness_prebuilt_s") is not None and lv.get("pipeline_depth"):
+            full = max(full, lv["witness_prebuilt_s"] / lv["pipeline_depth"])
         out[int(mk.group(1))] = {"n": n, "tile": (r.get("stage") or {}).get("tile"), "m": lv.get("dense_m"), "s_per_coord": full / n, "prove_s_per_coord": lv["prove_total_s"] / n,
-                                 "witness_s": lv.get("witness_s"), "prove_total_s": lv["prove_total_s"], "shape": r["shape"],
+                                 "witness_s": lv.get("witness_s"), "witness_prebuilt_s": lv.get("witness_prebuilt_s"),
+                                 "pipeline_depth": lv.get("pipeline_depth"), "prove_total_s": lv["prove_total_s"], "shape": r["shape"],
                                  "statement_digest": lv.get("statement_digest"), "proof_bytes": lv.get("proof_bytes"),
                                  "buckets": lv.get("buckets")}
     return out

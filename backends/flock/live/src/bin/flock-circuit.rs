@@ -3637,6 +3637,7 @@ fn main() {
                 let (mut v, proofs) = session(&st, &inst, t, &plan, seeds[run]);
                 v["run"] = json!(run);
                 v["warm"] = json!(run < warm);
+                v["pipeline_depth"] = json!(if pipeline { depth } else { 0 });
                 v["open_rtt_ms"] = json!(rtt);
                 v["open_rtt_min_ms"] = json!(rtt_min);
                 v["open_rtt_n"] = json!(rtt_n);
