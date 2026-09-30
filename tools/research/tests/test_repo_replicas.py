@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -36,7 +37,18 @@ def _entries() -> dict[str, str]:
 
 
 def _tracked() -> set[str]:
-    return set(subprocess.run(["git", "ls-files", "-z"], cwd=REPO, check=False, capture_output=True).stdout.decode().split("\0")) - {""}
+    """The tree's tracked files: `git ls-files` in a checkout; in a shipped tree (a recorded run's source: no `.git`), the commit's
+    tree as the machine's bare repository holds it."""
+    if (REPO / ".git").exists():
+        argv = ["git", "-C", str(REPO), "ls-files", "-z"]
+    else:
+        # a shipped tree lives at <root>/src/<commit sha>, beside the machine's bare repository; its name is the commit, so this
+        # opens no file (READY.json would be a read outside the suite's inputs, which fails the suite)
+        bare, rev = REPO.parent.parent / "git" / "verity.git", REPO.name
+        if not (re.fullmatch(r"[0-9a-f]{40}", rev) and bare.exists()):
+            return set()
+        argv = ["git", "--git-dir", str(bare), "ls-tree", "-r", "-z", "--name-only", rev]
+    return set(subprocess.run(argv, check=False, capture_output=True).stdout.decode().split("\0")) - {""}
 
 
 def _is_tracked(rel: str, tracked: set[str]) -> bool:
@@ -96,8 +108,8 @@ def test_replica_map_previous_block_is_history_of_current_entries() -> None:
 
 def test_replica_map_paths_are_tracked_or_fetched() -> None:
     tracked = _tracked()
-    if not tracked:
-        pytest.skip("not a git checkout")
+    if not tracked or not (REPO / ".git").exists():
+        pytest.skip("not a git checkout (`git check-ignore` needs one)")
     untracked = sorted(rel for rel in _entries().values() if not _is_tracked(rel, tracked))
     if not untracked:
         return
