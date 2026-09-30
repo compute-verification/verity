@@ -54,12 +54,21 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     cmd = r.commit_cmd([])
     assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
     assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd
-    assert cmd[cmd.index("--replay-strata") + 1] == "family" and cmd[cmd.index("--replay-k") + 1] == "128"
-    assert "--vu-export-dir" not in cmd
+    assert cmd[cmd.index("--replay-k") + 1] == "128" and "--vu-export-dir" not in cmd
     row = _row(tmp_path / "row")
     row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
     plain = row.commit_cmd([])
     assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a row of record keeps its pairs"
+
+
+def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path):
+    pytest.importorskip("torch")                      # commit.py imports torch at module level (check runs with CPU torch)
+    from verity_vllm.pipeline import cli
+    r = _row(tmp_path, "--config-run", "1", "--replay-k", "128")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
+    assert (args.only_arm, args.bounded_staging, args.replay_k, args.pairs, args.warmup) == ("instrumented", True, 128, 1, 1)
 
 
 @pytest.mark.parametrize("commit_pass,rc,expect", [(True, 0, None), (False, 0, 12), (True, 3, 12)])

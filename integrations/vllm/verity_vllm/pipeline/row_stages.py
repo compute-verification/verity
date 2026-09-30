@@ -534,7 +534,7 @@ class SingleRow(Row):
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
         if self.config_run:                           # one instrumented run, bounded staging, k units stratified by family
-            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-strata", "family", "--replay-k", str(ck.replay_k)]
+            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
