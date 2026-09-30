@@ -2,8 +2,9 @@
 # Pearl-C's shipped tree, built off the pod:
 #   pearl_c.cubin    pearl_c.cu with CUDA 12.9.1's nvcc for sm_90a (-fmad=false, no -lineinfo, so the same bytes from any
 #                    directory), refused unless ptxas reports no warning, spill or stack frame and the SASS has 4 QGMMA per
-#                    128-deep block in every GEMM, 4 HGMMA in gemm_pearlc's peel, one QGMMA in each forming kernel, and
-#                    two codes per F2FP in form_s5's and quant_s5's e4m3 casts
+#                    128-deep block in every GEMM, 4 HGMMA in gemm_pearlc's peel, one QGMMA in each forming kernel,
+#                    two codes per F2FP in form_s5's and quant_s5's e4m3 casts, and no .FTZ FADD, FFMA or FMUL outside
+#                    the correctly rounded div, rcp and sqrt sequences ftz_pins.json pins for this nvcc (ftz_gate.py)
 #   hash_sm120a.cubin hash.cu (hash.cuh's BLAKE3 hashing kernels: -h1 messages, leaves and frame-b3 trees, tickets) for
 #                    sm_120a, refused unless ptxas reports no warning, spill or stack frame
 #   sass.json        registers and tensor-core, bulk-copy and local-memory instruction counts per kernel
@@ -68,6 +69,22 @@ print(f"pearl_c.cubin: {len(funcs)} kernels; GEMMs " + ", ".join(f"{n} {funcs[n]
       for n in ("gemm_plain", "gemm_ct", "gemm_pearlc")) + f", peel {funcs['gemm_pearlc']['HGMMA']} HGMMA; no spills")
 EOF
 rm "$OUT/pearl_c.sass"
+# the .FTZ gate (ftz_gate.py), keyed to this nvcc: no .FTZ FADD, FFMA or FMUL outside the correctly rounded div, rcp and sqrt
+# sequences that ieee_ops and ieee_q pin; and the negative control, the same source under --use_fast_math, must fail it in them
+NV=$("$C9/bin/nvcc" --version | grep -o 'V[0-9][0-9.]*' | head -1)
+"$C9/bin/nvdisasm" "$OUT/pearl_c.cubin" > "$OUT/pearl_c.nvdisasm"
+"$C9/bin/nvdisasm" "$OUT/hash_sm120a.cubin" > "$OUT/hash_sm120a.nvdisasm"
+python3 "$HERE/ftz_gate.py" "$OUT/pearl_c.nvdisasm" "$NV/sm_90a" || { echo "REFUSED: the .FTZ gate (pearl_c.cubin)" >&2; exit 1; }
+python3 "$HERE/ftz_gate.py" "$OUT/hash_sm120a.nvdisasm" "$NV/sm_120a" || { echo "REFUSED: the .FTZ gate (hash_sm120a.cubin)" >&2; exit 1; }
+"$C9/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -fmad=false --use_fast_math -cubin -I "$HERE" \
+  -o "$OUT/fast_math.cubin" "$HERE/pearl_c.cu" 2> /dev/null
+"$C9/bin/nvdisasm" "$OUT/fast_math.cubin" > "$OUT/fast_math.nvdisasm"
+if python3 "$HERE/ftz_gate.py" "$OUT/fast_math.nvdisasm" "$NV/sm_90a" 2> "$OUT/fast_math.gate"; then
+  echo "REFUSED: the .FTZ gate passed a --use_fast_math build" >&2; exit 1
+fi
+grep -q '^ieee_ops: \|^ieee_q: ' "$OUT/fast_math.gate" || { echo "REFUSED: the fast-math control did not fail in the test kernels" >&2; exit 1; }
+rm "$OUT/pearl_c.nvdisasm" "$OUT/hash_sm120a.nvdisasm" "$OUT/fast_math.cubin" "$OUT/fast_math.nvdisasm" "$OUT/fast_math.gate"
+echo ".FTZ gate: only nvcc $NV's pinned div, rcp and sqrt sequences; the --use_fast_math control fails in the test kernels"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$HERE/bench.py" "$HERE/bench.json" "$HERE/run.sh" "$HERE/vendor.py" "$OUT/"
 "$C9/bin/nvcc" --version | tail -2 > "$OUT/toolchain.txt"

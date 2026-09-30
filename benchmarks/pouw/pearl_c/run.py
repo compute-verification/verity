@@ -5,7 +5,9 @@ only, nothing built on the pod).
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
    compared byte for byte with the fixture; the GEMMs are re-run persistent on 1 and 3 CTAs and compared again.  A forming's
    timing runs only if all of its buffers match (the gate: C~ and U bit-exact against the CPU reference), the plain
-   baseline's only if its own do.  PEARLC_UNGATED=1 times regardless and says so.
+   baseline's only if its own do, and neither unless ieee_ops and ieee_q (the correctly rounded div, rcp and sqrt, the only
+   `.FTZ` sequences build.sh admits) give the correctly rounded words on subnormal inputs and outputs.  PEARLC_UNGATED=1
+   times regardless and says so.
 2. The timing, at each of SHAPES (default 8192 and 16384, m = n = k), for forming v1 (§5), v0 (#311's, as ported) and the
    FP8 baselines, on generated inputs: each kernel launched REPS times after a warm-up, the median per kernel, the phases
    (per job; the unit's forming, GEMM, clean-up and hashing), the unit end to end with and without hashing, and consistency
@@ -410,10 +412,32 @@ def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None 
             "first": [{"offset": i, "got": got[i:i + 4].hex(), "want": want[i:i + 4].hex()} for i in bad[:6]]}
 
 
+def check_ieee(dev: Dev, man: dict, base: str) -> dict:
+    """The test kernels of the only `.FTZ` sequences build.sh admits (nvcc's correctly rounded div, rcp and sqrt, ieee_ops and
+    ieee_q) against the fixture's correctly rounded words, subnormal inputs and outputs included."""
+    spec = man["ieee"]
+    n, load = spec["count"], lambda f: open(os.path.join(base, f["file"]), "rb").read()  # noqa: E731
+    x, y = dev.put(load(spec["files"]["ieee_x"])), dev.put(load(spec["files"]["ieee_y"]))
+    ops, q = dev.alloc(24 * n), dev.alloc(4 * n)
+    dev.launch("ieee_ops", cdiv(n, 128), 128, p=(x, y, ops), i=(n,))
+    dev.launch("ieee_q", cdiv(n, 128), 128, p=(x, q), i=(n,))
+    dev.sync()
+    out = {}
+    for name, p, size in (("ieee_ops", ops, 24 * n), ("ieee_q", q, 4 * n)):
+        got, want = dev.read(p, size), load(spec["files"][name])
+        bad = [i for i in range(0, size, 4) if got[i:i + 4] != want[i:i + 4]]
+        out[name] = {"ok": not bad, "bytes": size, "words_differing": len(bad),
+                     "first": [{"offset": i, "got": got[i:i + 4].hex(), "want": want[i:i + 4].hex()} for i in bad[:6]]}
+    for p in (x, y, ops, q):
+        dev.free(p)
+    return out
+
+
 def check(dev: Dev, man: dict, base: str) -> dict:
     m, n, k = man["shape"]
     keys = {name: dev.put(bytes.fromhex(h)) for name, h in man["keys"].items()}
     load = lambda d, f: open(os.path.join(base, d, f["file"]), "rb").read()  # noqa: E731
+    ieee = check_ieee(dev, man, base)
     results = {}
     for forming, spec in man["formings"].items():
         files = spec["files"]
@@ -451,10 +475,12 @@ def check(dev: Dev, man: dict, base: str) -> dict:
         pipe.free()
         dev.free(xa)
         dev.free(xb)
+        res.update(ieee)
         failed = sorted(nm for nm, r in res.items() if not r["ok"])
+        ieee_ok = all(r["ok"] for r in ieee.values())
         results[forming] = {"buffers": len(res), "failed": failed,
                             "pearl_c_ok": not [x for x in failed if x.split("@")[0] not in PLAIN_BUFFERS],
-                            "plain_ok": not [x for x in failed if x.split("@")[0] in PLAIN_BUFFERS],
+                            "plain_ok": ieee_ok and not [x for x in failed if x.split("@")[0] in PLAIN_BUFFERS],
                             "detail": {nm: r for nm, r in res.items() if not r["ok"]}}
     for p in keys.values():
         dev.free(p)

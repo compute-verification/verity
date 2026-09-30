@@ -176,6 +176,10 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * i[0] * i[1]}
     if name == "diff_words":
         return {0: 4 * i[0], 1: 4 * i[0], 2: 8}
+    if name == "ieee_ops":
+        return {0: 4 * i[0], 1: 4 * i[0], 2: 24 * i[0]}
+    if name == "ieee_q":
+        return {0: 4 * i[0], 1: 4 * i[0]}
     if name.endswith("_smem"):
         return {0: 4}
     raise AssertionError(f"no footprint for {name}")
@@ -194,7 +198,8 @@ def threads(name: str, i: list[int]) -> int:
             "hash_tree_leaves": lambda: i[0], "hash_leaf": lambda: -(-i[0] // 64) * (i[1] // 64),
             "tickets": lambda: (i[0] // 16) * (i[1] // 16),
             "open_rows": lambda: i[0] * i[1] // 8, "gen_fp10": lambda: i[0] * (i[1] + i[1] // 4) // 4,
-            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
+            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "quant_s5": lambda: i[0] * i[1] // 16,
+            "ieee_ops": lambda: i[0], "ieee_q": lambda: i[0]}.get(name, lambda: 0)()
 
 
 @pytest.mark.slow

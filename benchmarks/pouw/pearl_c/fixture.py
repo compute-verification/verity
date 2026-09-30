@@ -335,8 +335,58 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
             agree = crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n)
             manifest["formings"][forming] = {"scheme": C.PearlC(forming=forming, hashing=HASHING).name, "files": o.files,
                                              "crosscheck": agree}
+    x, y = ieee_inputs()
+    ops, q = ieee_reference(x, y)
+    ieee = Out(out_dir)
+    for name, w in (("ieee_x", x), ("ieee_y", y), ("ieee_ops", ops), ("ieee_q", q)):
+        ieee.put(name, w.astype("<u4"), "u32")
+    manifest["ieee"] = {"count": int(x.size), "files": ieee.files, "coverage": ieee_coverage(x, y, ops)}
     (out_dir / "check.json").write_text(json.dumps(manifest, indent=1) + "\n")
     return manifest
+
+
+# ---- the IEEE test kernels' words (ieee_ops, ieee_q: the sequences ftz_gate.py admits) -------------------------------------
+
+F448, ONE = 0x43E00000, 0x3F800000
+
+
+def ieee_inputs(seed: int = 20260930) -> tuple[np.ndarray, np.ndarray]:
+    """x > 0 and y ≠ 0, finite FP32 words: subnormal x (and the smallest normals), quotients x / y and x / 448 that are
+    subnormal, x at or above 2^126 (a subnormal reciprocal), subnormal y, and random normals, with y of both signs.  bf16(x)
+    is finite and bf16(y) nonzero, so every reference is defined."""
+    rng = np.random.default_rng(seed)
+    sub = np.concatenate([[1, 2, 3, 0x7FFFFF, 0x400000, 0x7FFFFE], rng.integers(1, 0x800000, 250)])
+    tiny = rng.integers(0x00800000, 0x0D800000, 250)                 # 2^-126 .. 2^-100: subnormal x / y, x / 448
+    big = rng.integers(0x7E800000, 0x7F7F0000, 150)                  # 2^126 .. : a subnormal 1 / x
+    normal = rng.integers(0x00800000, 0x7F7F0000, 800)
+    edges = np.array([0x00800000, 0x00800001, ONE, F448, 0x7F7F0000, 0x3E800000, 0x01000000])
+    x = np.concatenate([sub, tiny, big, normal, edges]).astype(np.uint32)
+    ymag = np.concatenate([rng.integers(0x3F000000, 0x40800000, sub.size),        # 0.5 .. 4
+                           rng.integers(0x43800000, 0x54000000, tiny.size),       # 2^8 .. 2^41
+                           rng.integers(0x00800000, 0x7F7F0000, big.size),
+                           np.where(rng.random(normal.size) < 0.1, rng.integers(0x8001, 0x800000, normal.size),
+                                    rng.integers(0x00800000, 0x7F7F0000, normal.size)),
+                           [ONE, 0x7F7F0000, 0x8001, F448, 0x00800000, 0x3F800001, 0x4B000000]])
+    y = (ymag | (rng.integers(0, 2, ymag.size) << 31)).astype(np.uint32)
+    return x, y
+
+
+def ieee_reference(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """ieee_ops' six words per element (x / y, 448 / x, x / 448, 1 / x, sqrt x, bf16(x) / bf16(y)) and ieee_q's 448 / x, each
+    correctly rounded with subnormals kept (`verity.ml.tc.fp32`)."""
+    bx, by = rne_bf16(x).astype(np.uint32) << 16, rne_bf16(y).astype(np.uint32) << 16
+    ops = np.array([[fp32.div(int(a), int(b)), fp32.div(F448, int(a)), fp32.div(int(a), F448), fp32.div(ONE, int(a)),
+                     fp32.sqrt(int(a)), int(rne_bf16(np.array([fp32.div(int(p), int(q))], np.uint32))[0])]
+                    for a, b, p, q in zip(x, y, bx, by)], np.uint32)
+    return ops, ops[:, 1].copy()
+
+
+def ieee_coverage(x: np.ndarray, y: np.ndarray, ops: np.ndarray) -> dict[str, int]:
+    """How many subnormal inputs and outputs the words exercise, per operand and op."""
+    sub = lambda w: int((((w & 0x7F800000) == 0) & ((w & 0x7FFFFF) != 0)).sum())  # noqa: E731
+    names = ("x / y", "448 / x", "x / 448", "1 / x", "sqrt x")
+    return {"subnormal x": sub(x), "subnormal y": sub(y), **{f"subnormal {n}": sub(ops[:, j]) for j, n in enumerate(names)},
+            "subnormal bf16 quotient": int((((ops[:, 5] & 0x7F80) == 0) & ((ops[:, 5] & 0x7F) != 0)).sum())}
 
 
 def crosscheck(forming, ctx, ra, rb, at, bt, pa, pb, c, u, dg, lv, m, n) -> dict:
