@@ -47,7 +47,8 @@ def rules(X: np.ndarray, delta: float) -> tuple[np.ndarray, np.ndarray, np.ndarr
 
 def split_channels(X: np.ndarray, W: np.ndarray, delta: float, budget: int, batch: int = 4) -> tuple[list[int], list[dict]]:
     """Greedy: move the input channels that offend the most failing rows (entries at or above 8σ of a row failing liveness,
-    or above 444ρ of a row failing the floor) until every row passes or the budget is spent."""
+    or above 444ρ of a row failing the floor) until every row passes or the budget is spent. This is the one pinned rule
+    for S: ties in the offence count go to the lower channel index, and S never exceeds the budget (⌊k/100⌋ as deployed)."""
     k = X.shape[1]
     keep = np.ones(k, dtype=bool)
     S: list[int] = []
@@ -67,9 +68,9 @@ def split_channels(X: np.ndarray, W: np.ndarray, delta: float, budget: int, batc
         trace.append({"moved": len(S), "failing_rows": fails})
         if fails == 0 or len(S) >= budget:
             return S, trace
-        top = idx[np.argsort(-off)[:batch]]
+        top = idx[np.argsort(-off, kind="stable")[:batch]]
         top = [int(c) for c in top if off[np.searchsorted(idx, c)] > 0] or [int(idx[np.argmax(off)])]
-        for c in top:
+        for c in top[:budget - len(S)]:
             keep[c] = False
             S.append(c)
 
