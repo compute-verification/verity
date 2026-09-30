@@ -30,7 +30,11 @@ and B's roots equal to `audit.commit_rows` over the rows on the host and both se
 context; and PEARLC4_GATE_TILES whole 64 x 64 tiles (the first and seeded random ones) against the CPU twin (`twin.tile`,
 itself held to the scalar reference): y, P_A's and P_B's rows, and with hashing the tile's leaf (hence its 128 C̃‖U
 digests).  `known_bad` is the plain mode under the hash flags.  Pearl's lottery tickets are not computed (no PoUW check
-reads them; the coordinator's 06:35Z ruling for pearl-c-sm120, taken for Pearl-C4).
+reads them; the coordinator's 06:35Z ruling for pearl-c-sm120, taken for Pearl-C4).  Each gate reads its tiles' inputs
+(both seeds and the tiles' 64 A and B rows) from the device and reuses a twin tile made from the same ones, so a shape's
+roles, their flip controls and `known_bad` share its tiles; A's and B's host commitments are likewise recomputed only
+when the rows differ.  `prefetch` (arm interface v0.6, optional) starts the tiles in the harness's `refs.pool()` before
+a flag set's first gate.
 
 Shortcut: γ is unstated (the certificate's tt-out-fp4 conjecture is pending).
 """
@@ -66,6 +70,21 @@ def _ref():
     from verity_pouw import audit
     from verity_pouw.schemes import pearl_c4 as F
     return T, F, audit
+
+
+_JOBS: dict = {}
+
+
+def _twin_tile(fmt: str, seed_a: bytes, seed_b: bytes, k: int, ti: int, tj: int, ra: bytes, rb: bytes):
+    """The CPU twin's 64 x 64 tile (ti, tj) of A rows `ra` and B rows `rb` (BF16 bytes) under the call's seeds.  Host only,
+    so a forked worker of the harness's pool (`refs.pool()`) may run it.  twin.Job's F_A, F_B and G depend on seed_b and
+    k alone, so each process keeps them."""
+    T, F, _ = _ref()
+    if (fmt, seed_b, k) not in _JOBS:
+        _JOBS[fmt, seed_b, k] = T.job(F.FORMATS[fmt], seed_a, seed_b, k)
+    jb = dataclasses.replace(_JOBS[fmt, seed_b, k], seed_a=seed_a)
+    a, b = (np.frombuffer(r, "<u2").reshape(TILE, k) for r in (ra, rb))
+    return T.tile(jb, a, b, np.arange(TILE * ti, TILE * ti + TILE), np.arange(TILE * tj, TILE * tj + TILE))
 
 
 def mode_of(flags: frozenset[str]) -> str:
@@ -167,8 +186,9 @@ class _PearlC4:
 
     def __init__(self):
         self.d: D.Dev | None = None
-        self._jobs: dict = {}
         self._epochs: dict = {}
+        self._refs: dict = {}
+        self._commits: dict = {}
 
     def dump(self, dev, call: _Call, shape: Shape, out: Path) -> None:
         """The harness's hook (arm interface v0.5, `bench.poison_dump`): the call's transcript into `out`, read from the
@@ -256,13 +276,58 @@ class _PearlC4:
     def known_bad(self, dev, shape: Shape, operands) -> _Call:
         return _Call(self, shape, self.flag_sets["hash"], operands, "plain")
 
-    def _job(self, seed_a: bytes, seed_b: bytes, k: int):
-        """twin.Job; F_A, F_B and G depend on seed_b and k alone, so they are kept for later gates."""
-        T, F, _ = _ref()
-        key = (seed_b, k)
-        if key not in self._jobs:
-            self._jobs[key] = T.job(F.FORMATS[self.fmt], seed_a, seed_b, k)
-        return dataclasses.replace(self._jobs[key], seed_a=seed_a)
+    def _tile_inputs(self, call: _Call, shape: Shape) -> list[tuple[tuple, bytes, bytes]]:
+        """The gate's twin tiles (the first and PEARLC4_GATE_TILES − 1 seeded random ones), each as its key and its A and
+        B rows, read from the device as it stands.  The key holds every input of `_twin_tile`, the rows by their sha256."""
+        d, k = self.d, shape.k
+        seed_a, seed_b = (d.read(call.pl.buf[nm], 32) for nm in ("seed_a", "seed_b"))
+        rng = random.Random(f"{shape.label}/{seed_a.hex()}")
+        spots = [(0, 0)] + [(rng.randrange(call.m_pad // TILE), rng.randrange(shape.n // TILE))
+                            for _ in range(self.gate_tiles() - 1)]
+        out = []
+        for ti, tj in spots:
+            ra = d.read(call.pl.buf["xa"] + TILE * ti * k * 2, TILE * k * 2)
+            rb = d.read(call.pl.buf["xb"] + TILE * tj * k * 2, TILE * k * 2)
+            out.append(((self.fmt, seed_a, seed_b, k, ti, tj, hashlib.sha256(ra).digest(), hashlib.sha256(rb).digest()),
+                        ra, rb))
+        return out
+
+    def prefetch(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> None:
+        """Arm interface v0.6's hook: the gate's twin tiles for `call`, started in the harness's pool (`refs.pool()`) from
+        the device as it stands.  A tile already made or started from the same inputs is not started again."""
+        try:
+            import refs
+        except ImportError:
+            return
+        pool = refs.pool()
+        if pool is None:
+            return
+        for key, ra, rb in self._tile_inputs(call, shape):
+            if key not in self._refs:
+                self._refs[key] = pool.submit(_twin_tile, *key[:6], ra, rb)
+
+    def _twin(self, key: tuple, ra: bytes, rb: bytes):
+        """The twin tile of these inputs: made once per shape, so a role's gates, its flip control and `known_bad` share
+        it, or taken from `prefetch`."""
+        got = self._refs.get(key)
+        if got is None:
+            got = _twin_tile(*key[:6], ra, rb)
+        elif hasattr(got, "result"):
+            got = got.result()
+        self._refs[key] = got
+        return got
+
+    def _commit_rows(self, side: str, binding, index: int, ptr: int, count: int, k: int):
+        """`audit.commit_rows` over `count` rows at `ptr`, recomputed only when the bytes (or the binding) differ from the
+        last call's for this side."""
+        _, _, au = _ref()
+        raw = self.d.read(ptr, count * 2 * k)
+        last = self._commits.get(side)
+        if last is not None and last[0] == (binding, index, count, k) and last[1] == raw:
+            return last[2]
+        tree = au.commit_rows(binding, index, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)])
+        self._commits[side] = ((binding, index, count, k), raw, tree)
+        return tree
 
     def commitments(self, call: _Call, shape: Shape, mode: str) -> dict:
         """The device's roots and seeds against `audit.commit_rows` over the rows and the scheme's `noise` on the host.  The
@@ -272,12 +337,8 @@ class _PearlC4:
         from verity_pouw.protocol import Context, Matmul
         from verity_pouw.protocol import Shape as PShape
         d, pl, k = self.d, call.pl, shape.k
-        def rows(ptr: int, count: int) -> list[bytes]:
-            raw = d.read(ptr, count * 2 * k)
-            return [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)]
-
-        ta = au.commit_rows(au.activation_binding(call.salt, 0), 0, rows(pl.buf["xa"], call.m_pad))
-        tb = au.commit_rows(au.weight_binding(call.weight), -2, rows(pl.buf["xb"], shape.n))
+        ta = self._commit_rows("a", au.activation_binding(call.salt, 0), 0, pl.buf["xa"], call.m_pad, k)
+        tb = self._commit_rows("b", au.weight_binding(call.weight), -2, pl.buf["xb"], shape.n, k)
         ctx = Context(call.salt, Matmul(0, PShape(call.m_pad, k, shape.n), call.weight), ta.commitment.root,
                       tb.commitment.root)
         noise = F.PearlC4(self.fmt).noise(ctx)
@@ -288,8 +349,7 @@ class _PearlC4:
 
     def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> Gate:
         T, _, _ = _ref()
-        d, mode, m, n, k = self.d, mode_of(flags), call.m_pad, shape.n, shape.k
-        seed_a, seed_b = (d.read(call.pl.buf[nm], 32) for nm in ("seed_a", "seed_b"))
+        d, mode, m, n = self.d, mode_of(flags), call.m_pad, shape.n
         twin = call._pipeline(_Ops(call), store_cu=False)
         try:
             call.pad(twin, 0)
@@ -304,18 +364,9 @@ class _PearlC4:
             relaunch = {nm: d.read(twin.buf[nm], b.nbytes) == d.read(b.ptr, b.nbytes) for nm, b in call.outputs.items()}
         finally:
             twin.free()
-        xa = call.pl.buf["xa"]
         y = np.frombuffer(d.read(call.pl.buf["y"], call.pl.sizes["y"]), "<u2").reshape(m, n)
-        jb = self._job(seed_a, seed_b, k)
-        rng = random.Random(f"{shape.label}/{seed_a.hex()}")
-        spots = [(0, 0)] + [(rng.randrange(m // TILE), rng.randrange(n // TILE)) for _ in range(self.gate_tiles() - 1)]
-        tiles = []
-        for ti, tj in spots:
-            rows, cols = np.arange(TILE * ti, TILE * ti + TILE), np.arange(TILE * tj, TILE * tj + TILE)
-            a_rows = np.frombuffer(d.read(xa + TILE * ti * k * 2, TILE * k * 2), "<u2").reshape(TILE, k)
-            b_rows = np.frombuffer(d.read(call.pl.buf["xb"] + TILE * tj * k * 2, TILE * k * 2), "<u2").reshape(TILE, k)
-            t = T.tile(jb, a_rows, b_rows, rows, cols)
-            tiles.append(self._compare(call, t, ti, tj, y, mode, T))
+        tiles = [self._compare(call, self._twin(key, ra, rb), key[4], key[5], y, mode, T)
+                 for key, ra, rb in self._tile_inputs(call, shape)]
         commit = self.commitments(call, shape, mode)
         ok = all(relaunch.values()) and all(all(v for key, v in t.items() if key != "tile") for t in tiles)
         ok = ok and all(v for key, v in commit.items() if key != "root_a_hex")
