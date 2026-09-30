@@ -109,6 +109,6 @@ def test_release_json_records_the_collector_source_digest():
 
 def test_ext_keys_its_build_dir_by_the_digest_and_refuses_a_stale_load():
     src = open(os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_collect.py")).read()
-    assert "bd = native_jit.keyed_build_dir(parent, digest)" in src
+    assert "native_jit.jit_load(\"verity_native_collect\", native_jit.source_paths(HERE)" in src
     assert "missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, \"native_collect.cpp\"))" in src
     assert "raise RuntimeError" in src.split("missing = native_jit.missing_bindings")[1][:400]
