@@ -133,7 +133,8 @@ class Bench:
     def maps(self, a: int, b: int, m: int, n: int, k: int, tm: int = 128, bn: int = 128) -> int:
         key = (a, b, m, n, k, tm, bn)
         if key not in self._maps:
-            self._maps[key] = self.dev.put(self.tmap(a, k, m, tm) + self.tmap(b, k, n, bn) + bytes(256))
+            ab = self.tmap(a, k, m, tm) + self.tmap(b, k, n, bn)
+            self._maps[key] = self.dev.put(ab + ab)   # P_A, P_B: A and B again, so a kernel's tail is checkable (ml_tail_bad)
         return self._maps[key]
 
     def prep(self, name: str) -> int:
@@ -148,14 +149,18 @@ class Bench:
 
     def gemm(self, name: str, a: int, b: int, c: int, m: int, n: int, k: int, maps: int = 0, grid: int | None = None,
              y: int = 0, rs: int = 0, cs: int = 0) -> None:
-        name, _, skew = name.partition("@s")   # ml_ct@s512: warp rows of the second half start 512 cycles late
+        # ml_ct@s512: warp rows of the second half start 512 cycles late; ml_ct_x2r_tail@bad: the tail checked against depth
+        # [128, 256) (must fail every gate)
+        name, _, tag = name.partition("@")
+        skew, bad = (tag[1:] if tag.startswith("s") else 0), int(tag == "bad")
         smem = self.prep(name)
         if name.startswith("ml_"):
             tm, bn, ctas, wm = ml_tile(name)
             ncw = (tm // wm) * (bn // 32)
             g = min((m // tm) * (n // bn), grid or self.dev.sms * ctas)
             p = [a, b, c] + [0] * 7 + [self.maps(a, b, m, n, k, tm, bn)]
-            self.dev.launch(name, g, ncw * 32 + (128 if ncw % 4 == 0 else 32), smem, p=p, i=(m, n, k, self.raster, int(skew or 0)))
+            self.dev.launch(name, g, ncw * 32 + (128 if ncw % 4 == 0 else 32), smem, p=p,
+                            i=(m, n, k, self.raster, int(skew or 0), bad))
             return
         g = min((m // 128) * (n // 128), grid or self.dev.sms)
         self.dev.launch(name, g, R.NT, smem, p=(a, b, c, 0, y, 0, 0, rs, cs), i=(m, n, k, self.raster))
