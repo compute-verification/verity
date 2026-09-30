@@ -9,7 +9,8 @@ directory the arm writes its transcripts under (`build`'s out_dir); PEARLC_ROWS 
            of set 0 are then taken as gated, so freeing them writes their transcripts (of the stand-in's bytes).
   accept:  at the fixture's shape on its inputs and epoch (its beacon, matmul index and weight, B's root), the fixture's bytes
            written where the device would have put them (the call's buffers and the gate's second launch), the gate; then one
-           C~ word flipped, the gate again; then the word restored, the gate, and the call freed, which writes its transcript.
+           C~ word flipped (a message digest's where the call stores no C~, the fused call), the gate again; then the word
+           restored, the gate, and the call freed, which writes its transcript.
 """
 
 from __future__ import annotations
@@ -124,12 +125,13 @@ def accept(arm, check: Path) -> None:
     g = arm.gate(None, call, shape, flags)
     print(json.dumps({"flipped": None, "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
     r0, c0 = A.W.samples(A.W.Shape("fixture", m, n, k))[-1]
-    off = 4 * ((r0 + 5) * n + c0 + 7)
-    word = load("c")[off:off + 4]
-    write(rd, w["c"] + off, bytes([word[0] ^ 1]))
+    what = "c" if "c" in call.outputs else "digests"      # the fused call stores no C~: its row's message digest instead
+    off = 4 * ((r0 + 5) * n + c0 + 7) if what == "c" else 32 * ((r0 + 5) * (n // 32) + (c0 + 7) // 32)
+    word = load(what)[off:off + 4]
+    write(rd, w[what] + off, bytes([word[0] ^ 1]))
     g = arm.gate(None, call, shape, flags)
-    print(json.dumps({"flipped": ["c", r0 + 5, c0 + 7], "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
-    write(rd, w["c"] + off, word)
+    print(json.dumps({"flipped": [what, r0 + 5, c0 + 7], "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
+    write(rd, w[what] + off, word)
     g = arm.gate(None, call, shape, flags)
     call.free()
     print(json.dumps({"restored": True, "ok": g.ok, "transcribed": arm.transcribed}), flush=True)
