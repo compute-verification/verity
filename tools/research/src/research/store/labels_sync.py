@@ -174,6 +174,36 @@ def push_targets(store: LocalStore, targets: list[str], *, jobs: int = SYNC_JOBS
     return rep
 
 
+def pull_targets(store: LocalStore, targets: list[str]) -> dict:
+    """Fetch the assertions about `targets` that the remote has and this store lacks (one listing per target), the reverse of
+    `push_targets`.  A remote file whose content doesn't hash to its name or doesn't validate is left alone and reported in `bad`.
+        {"pulled": [content hash, ...], "bad": ["<key>: <why>", ...]}"""
+    r = store._require_remote()  # noqa: SLF001
+    rep: dict = {"pulled": [], "bad": []}
+    scratch = store.root / "scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    for t in dict.fromkeys(targets):
+        mine = local_labels_for(store, t)
+        for h, key in sorted(remote_labels_for(r, t).items()):
+            if h in mine:
+                continue
+            tmp = scratch / f".label-pull-{h}-{os.getpid()}"
+            try:
+                r.get(key, tmp)
+                lab = parse_label_bytes(tmp.read_bytes())
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                rep["bad"].append(f"{key}: {type(e).__name__}: {e}")
+                continue
+            finally:
+                tmp.unlink(missing_ok=True)
+            if label_hash(lab) != h or lab.target != t:
+                rep["bad"].append(f"{key}: content hashes to {label_hash(lab)} for {lab.target}, not its name")
+                continue
+            write_label_file(store, lab)
+            rep["pulled"].append(h)
+    return rep
+
+
 def verify_targets(store: LocalStore, targets: list[str]) -> dict:
     """The labels leg of the durability gate: for each target, every local assertion must be listed on the remote and HEAD back with
     its canonical size.  Nothing is uploaded.  Assertions that exist only on the remote count as `remote_only` (not a failure: another

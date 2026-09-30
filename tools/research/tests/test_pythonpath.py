@@ -6,27 +6,26 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
 
 from research import pythonpath as P
 from research import remote
-from research import runs as R
 from research.cli import main
+from waits import wait_runner
 
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
 REAL_ROOTS = ["tools/research/src", "packages/verity/src", "backends/sp1/python", "backends/numerical/python", "integrations/vllm",
-              "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/one_stage", "backends/flock/python", "tools/circuit_check/src"]
+              "protocols/sampled_proofs", "protocols/pous", "protocols/network_warden", "protocols/one_stage", "protocols/pouw", "backends/flock/python", "tools/circuit_check/src"]
 
 
 def test_this_repository_resolves_every_workspace_package_inside_the_tree(tmp_path):
     d = P.import_roots_dir(REPO)
     assert d["roots"] == REAL_ROOTS and d["missing"] == [] and d["source"] == "pyproject.toml [tool.uv.workspace]"
-    names = ["research", "verity", "verity_vllm", "verity_sp1", "verity_numerical", "verity_sampled_proofs", "verity_pous", "verity_network_warden", "verity_one_stage", "verity_flock", "circuit_check"]
+    names = ["research", "verity", "verity_vllm", "verity_sp1", "verity_numerical", "verity_sampled_proofs", "verity_pous", "verity_network_warden", "verity_one_stage", "verity_pouw", "verity_flock", "circuit_check"]
     probe = "import importlib.util as u, sys; [print(n, u.find_spec(n).origin) for n in sys.argv[1:]]"
     # -S: no site-packages, so an editable install elsewhere cannot answer; find_spec locates without importing (no torch)
     r = subprocess.run([PY, "-S", "-c", probe, *names], cwd=tmp_path, env={"PYTHONPATH": P.pythonpath(str(REPO), d)}, capture_output=True, text=True)
@@ -94,9 +93,7 @@ def test_launch_request_sets_the_trees_pythonpath_appends_the_users_and_records_
     (root / "requests" / "r" / "request.json").write_text(json.dumps(req))
     assert remote.launch_request(root / "requests" / "r" / "request.json")["started"]
     run_dir = root / "runs" / "r"
-    deadline = time.time() + 30
-    while R.summarize(run_dir)["state"] not in R.TERMINAL and time.time() < deadline:
-        time.sleep(0.1)
+    wait_runner(run_dir)
     out = (run_dir / "stdout.log").read_text().splitlines()
     assert out[0] == "tree 1", (run_dir / "stderr.log").read_text()
     assert out[1].split(":") == [SRC, str(src / "pkgs/one/src"), str(mine)], "tool, then the tree's roots, then the user's --env PYTHONPATH"

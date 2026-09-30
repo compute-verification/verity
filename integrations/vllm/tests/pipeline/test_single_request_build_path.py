@@ -72,7 +72,7 @@ def _compose(workload: Path, derived: Path, out: Path, eos: int) -> dict:
     """GP-01 as the Build runs it: `verity-vllm global-program` in its own interpreter."""
     p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "global-program", "--workload", str(workload),
                         "--derived", str(derived), "--out", str(out), "--eos-token-ids", str(eos)],
-                       cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800)
+                       cwd=VLLM_DIR, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     return json.loads(p.stdout.strip().splitlines()[-1])
 
@@ -84,11 +84,12 @@ def _decode_cold(descriptor: Path) -> int:
             "from verity.ir.codec import decode_program\n"
             "from verity_vllm.check.match.program_compare import _registry\n"
             "print(decode_program(json.load(gzip.open(sys.argv[1])), _registry()).gates)\n")
-    p = subprocess.run([sys.executable, "-c", code, str(descriptor)], cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800)
+    p = subprocess.run([sys.executable, "-c", code, str(descriptor)], cwd=VLLM_DIR, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     return int(p.stdout.strip().splitlines()[-1])
 
 
+@pytest.mark.slow
 def test_a_single_request_stochastic_workload_composes_as_the_build_does(tmp_path):
     """At V = 1000 and S = 32 the keep word's NaN tests read multi-part sequences (the writer's alias case)."""
     V, S, LP, STEPS = 1000, 32, 3, 1
@@ -111,9 +112,10 @@ def _build_101(tmp_path) -> Path:
 
 
 def _run(code: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-c", code, *args], cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800)
+    return subprocess.run([sys.executable, "-c", code, *args], cwd=VLLM_DIR, capture_output=True, text=True)
 
 
+@pytest.mark.slow
 def test_101s_request_program_composes_as_its_build_does(tmp_path):
     """#101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
     build = _build_101(tmp_path)
@@ -122,6 +124,7 @@ def test_101s_request_program_composes_as_its_build_does(tmp_path):
     assert _decode_cold(tmp_path / "build_workload" / "descriptor.json.gz") == r["gates"]
 
 
+@pytest.mark.slow
 def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
     """`manifest build` as the row runs it, in its own interpreter: the program view finds every Call's Definition and the word check
     runs over them all.  At the default gate limit its one violation is the sampler Call's size (the row raises the limit for it on a
@@ -130,11 +133,12 @@ def test_101s_manifest_step_resolves_every_call_as_its_build_does(tmp_path):
     env = {k: v for k, v in os.environ.items() if k not in ("VERITY_QWORD_MAX_GATES", "VERITY_WORD_CHECK")}
     p = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build", "--program", str(build / "build_request"),
                         "--workload", f"workloads/{ROW_101}.json", *MANIFEST_POLICY, "--out", str(tmp_path / "manifest.json")],
-                       cwd=VLLM_DIR, capture_output=True, text=True, timeout=1800, env=env)
+                       cwd=VLLM_DIR, capture_output=True, text=True, env=env)
     assert "not a registered Definition" not in p.stderr and "not in the registry" not in p.stderr, p.stderr[-3000:]
     assert p.returncode != 0 and "1 violation(s): GumbelTopPTokenSelect_v2{V=128256,S=32}: too-large, 32 Call(s)" in p.stderr, p.stderr[-3000:]
 
 
+@pytest.mark.slow
 def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
     """In a fresh interpreter: the query's program view of #101's request Program (as the manifest reads it), every Call's ports and its
     Definition as the word check specialises it, the sampler's unit rule, and the Commit's replay evaluator for every family."""

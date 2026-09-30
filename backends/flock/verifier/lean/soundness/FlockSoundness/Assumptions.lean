@@ -9,7 +9,8 @@ uses one takes it as a hypothesis: the development declares no `axiom`, so `#pri
 lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
 vacuous but can never make Lean prove something false.
 
-There is one, Assumption 2, a hypothesis about one explicit finder, for the audit's link term.
+There are two. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term. Assumption 3 is a
+hypothesis about the byte source the verifier draws its units from.
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved
 (`mcaError_le_bchks25`, from DKT26). Merkle binding is proved too (VCVio's binding theorem,
 `Merkle`), and SHA-256's collision resistance enters the compiled theorem as an explicit
@@ -45,5 +46,21 @@ def SHA512ExpectedTimeCR {D β : Type} (H : List UInt8 → D) (g : Game β) (s :
     (out : β → Option (List UInt8 × List UInt8)) (cost : β → ℝ) : Prop :=
   (prob (fun b => ∃ x y, out b = some (x, y) ∧ x ≠ y ∧ H x = H y) g s).toReal ≤
     expect cost g s / 2 ^ (256 : ℝ)
+
+/-- **Assumption 3 (`uniform/io-getrandombytes`): the verifier's operating-system randomness is independent uniform
+bytes**, for the unit draw.
+
+The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
+stream's bytes from it. To Lean's logic an `IO` action is a function of the world, and `IO.getRandomBytes` an opaque
+constant, so a `Prop` saying its bytes are random would be refutable, and every theorem taking it vacuous. A3 is stated
+instead of a byte source: a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the
+bytes `t ω i` that stream `i` returns, its first `L i`. The source is uniform when every event about those bytes has the
+probability it has for independent uniform bytes.
+
+What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a source,
+every call's bytes independent of every earlier call's, for every `L`. -/
+def UniformRandomBytes {Ω : Type} [Fintype Ω] {m : ℕ} (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) :
+    Prop :=
+  ∀ E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop, prCoin (fun ω => E (t ω)) = prCoin E
 
 end FlockSoundness.Assumptions

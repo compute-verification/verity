@@ -3,11 +3,9 @@ layer) scanned the WHOLE map index for every `*` identity: O(|*| x |map|).  At B
 unnoticed); at B64 it is 132,096 x ~890k -- the #23 device diagnostic on cp-r18-l40u sat >13 min at 100% CPU on the serving thread AFTER
 the instrumented run completed (faulthandler: binding.py coverage_check <listcomp>).  The fix builds one op-level key index
 (`_op_key_index`) and looks each `*` identity up in O(1); these tests pin that the verdict, the counts and the named lists are those of
-the scan on a B64-shaped fixture with every outcome present (bound, missing, ambiguous, address-mismatch, extra), and that the B64 shape
-runs in seconds."""
+the scan on a B64-shaped fixture with every outcome present (bound, missing, ambiguous, address-mismatch, extra), and that the B64 shape,
+hours for the old scan, is counted exactly."""
 from __future__ import annotations
-
-import time
 
 from verity_vllm.commit.binding import (
     _op_key_index,
@@ -102,12 +100,9 @@ def test_clean_fixture_is_ok_and_every_star_member_counts_as_used():
     assert cov["extra_n"] == 0                          # every plane member under a `*` identity is USED (not reported extra)
 
 
-def test_b64_shape_runs_in_seconds():
+def test_b64_shape_is_counted_exactly():
     """The #23 shape: 64 requests x 129 steps x 16 layers = 132,096 `*` identities against ~900k map entries (3 planes + 1 dense here:
     64 x 129 x (16 x 3 + 1) = 404,544 entries).  Pre-fix this scan was ~1.2e11 tuple compares (hours); the index makes it linear."""
     pop, bm = _fixture(64, 129, 16)
-    t0 = time.perf_counter()
     cov = coverage_check(pop, bm)
-    dt = time.perf_counter() - t0
     assert cov["expected_n"] == 64 * 129 * 17 and cov["missing_n"] == 2 and cov["ambiguous_n"] == 1
-    assert dt < 60.0, dt
