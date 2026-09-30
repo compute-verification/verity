@@ -217,7 +217,7 @@ def lift_expected(oracle: Path, keys: set[str] | None = None) -> dict[str, dict]
 def class_labels_for(keys) -> dict[str, dict]:
     """The rows' `class` labels by daniel (store_io.class_label), {} when the store is not reachable here (every class from the index)."""
     from . import store_io
-    if not store_io.reachable():
+    if not store_io.reachable(need_remote=False):              # labels are read from the local store when no remote is set
         print("[lift] the store is not reachable here: every class comes from INDEX.json (class_source says so)", file=sys.stderr)
         return {}
     out = {}

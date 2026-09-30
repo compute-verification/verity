@@ -19,10 +19,10 @@ def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    for k in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
+    for k in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "CHECK_STORE_CUSTODY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"):
         monkeypatch.delenv(k, raising=False)
     (tmp_path / "home").mkdir()
-    if not store_io.reachable():
+    if not store_io.reachable(need_remote=False):
         pytest.skip("the research store package is not importable here")
     return tmp_path
 
