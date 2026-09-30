@@ -754,3 +754,9 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
+from verity_vllm.program.kernels import ir_rows  # noqa: E402
+
+for _f in ir_rows.FAMILIES:
+    EVALUATORS[_f] = ir_rows.EVALUATOR
+    _k = ROWS[_f] = RowKernel(_f, partial(ir_rows.ir_row, _f), ("out",))
+    register(_f, _instance(_k), kernel=KERNEL, domain=DOMAIN, sample=_sample(), check_targets=lambda rng, f=_f: ir_rows.check_targets(f))
