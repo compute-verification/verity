@@ -102,35 +102,61 @@ extern "C" __global__ void nv_diff(const Args a) {
   if ((threadIdx.x & 31) == 0 && n) atomicAdd(reinterpret_cast<unsigned long long*>(a.p[2]), (unsigned long long)n);
 }
 
+DEV uint64_t globaltimer() {
+  uint64_t t;
+  asm volatile("mov.u64 %0, %globaltimer;" : "=l"(t));
+  return t;
+}
+
 // C = A B^T by the mainloop, persistent over the TM x 128 tiles: p0 SFA, p1 SFB, p2 C (FP32 words, or BF16 if BF16), p10 the
-// Maps; i0 M, i1 N, i2 K, i3 raster group
-template <int TM, int ST, int RP, int BO, bool BF16>
+// Maps; i0 M, i1 N, i2 K, i3 raster group.  STAMP: each consumer warp's lane 0 writes, for its CTA's tile j < 16, clock64 at
+// the tile's start, after its mainloop and after its epilogue, and globaltimer after the epilogue, to the u64s at
+// p3 + ((blockIdx.x NCW + warp) 16 + j) 4
+constexpr int NV_STAMP_TILES = 16;
+template <int TM, int ST, int RP, int BO, int LAG, bool BF16, bool STAMP>
 DEV void nv_gemm_body(const Args& a) {
-  using L = nvf4::Mainloop<TM, ST, RP, BO>;
+  using L = nvf4::Mainloop<TM, ST, RP, BO, LAG>;
   extern __shared__ __align__(1024) uint8_t nv_smem[];
   L ml(nv_smem);
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
   ml.roles(reinterpret_cast<const nvf4::Maps*>(a.p[10]), reinterpret_cast<const uint8_t*>(a.p[0]),
            reinterpret_cast<const uint8_t*>(a.p[1]), M, N, K, group);
   const int tiles_m = M / TM, tiles_n = N / L::BN;
-  for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
+  uint64_t* stamp = STAMP ? reinterpret_cast<uint64_t*>(a.p[3]) + (size_t)(blockIdx.x * L::NCW + threadIdx.x / 32) * NV_STAMP_TILES * 4
+                          : nullptr;
+  const bool stamping = STAMP && threadIdx.x % 32 == 0;
+  for (int t = blockIdx.x, j = 0; t < tiles_m * tiles_n; t += gridDim.x, j++) {
     int tm, tn;
     nvf4::raster(t, tiles_m, tiles_n, group, tm, tn);
     float acc[4][4][2][4];
+    const bool st = stamping && j < NV_STAMP_TILES;
+    if (st) stamp[4 * j] = clock64();
     ml.tile(K, acc, t + (int)gridDim.x < tiles_m * tiles_n);
+    if (st) stamp[4 * j + 1] = clock64();
     if constexpr (BF16) ml.store_bf16(reinterpret_cast<uint16_t*>(a.p[2]), N, tm, tn, acc);
     else ml.store_f32(reinterpret_cast<float*>(a.p[2]), N, tm, tn, acc);
+    if (st) {
+      stamp[4 * j + 2] = clock64();
+      stamp[4 * j + 3] = globaltimer();
+    }
   }
 }
 
-#define NV_GEMM(NAME, TM, ST, RP, BO, BF16)                                                                             \
-  extern "C" __global__ void __launch_bounds__((nvf4::Mainloop<TM, ST, RP, BO>::NT), 1) NAME(const Args a) {            \
-    nv_gemm_body<TM, ST, RP, BO, BF16>(a);                                                                              \
+#define NV_GEMM(NAME, TM, ST, RP, BO, LAG, BF16, STAMP)                                                                 \
+  extern "C" __global__ void __launch_bounds__((nvf4::Mainloop<TM, ST, RP, BO, LAG>::NT), 1) NAME(const Args a) {       \
+    nv_gemm_body<TM, ST, RP, BO, LAG, BF16, STAMP>(a);                                                                  \
   }                                                                                                                     \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = nvf4::Mainloop<TM, ST, RP, BO>::SMEM; }
-#define NV_PAIR(NAME, TM, ST, RP, BO) NV_GEMM(NAME##_w, TM, ST, RP, BO, false) NV_GEMM(NAME##_b, TM, ST, RP, BO, true)
+  extern "C" __global__ void NAME##_smem(int* out) { *out = nvf4::Mainloop<TM, ST, RP, BO, LAG>::SMEM; }
+// NAME_w (FP32 words), NAME_b (BF16) and NAME_t (NAME_b with STAMP)
+#define NV_PAIR(NAME, TM, ST, RP, BO, LAG)                                                                              \
+  NV_GEMM(NAME##_w, TM, ST, RP, BO, LAG, false, false)                                                                  \
+  NV_GEMM(NAME##_b, TM, ST, RP, BO, LAG, true, false) NV_GEMM(NAME##_t, TM, ST, RP, BO, LAG, true, true)
 
 // nv256: 256 x 128 tiles, 3 stages, the producer at 40 registers (232 to each consumer), A-major MMA order; _o: B-major
-// order (CUTLASS's)
-NV_PAIR(nv256, 256, 3, 40, 0)
-NV_PAIR(nv256_o, 256, 3, 40, 1)
+// order (CUTLASS's); _lN: LAG N cycles
+NV_PAIR(nv256, 256, 3, 40, 0, 0)
+NV_PAIR(nv256_o, 256, 3, 40, 1, 0)
+NV_PAIR(nv256_l512, 256, 3, 40, 0, 512)
+NV_PAIR(nv256_l1024, 256, 3, 40, 0, 1024)
+NV_PAIR(nv256_l2048, 256, 3, 40, 0, 2048)
+NV_PAIR(nv256_o_l1024, 256, 3, 40, 1, 1024)

@@ -368,14 +368,14 @@ class Bench:
             self.dev.ck("cuFuncSetAttribute", self.dev.fn(name), MAX_DYN, self.dev.smem[name])
         return self.dev.smem[name]
 
-    def gemm(self, name: str, ops: dict, c: int, m: int, n: int, k: int, grid: int | None = None) -> None:
-        """Header kernel `name` (nv256_w, nv256_o_b, ...): TM from the name, 8 consumer warps a 256-row tile, a producer
-        warpgroup."""
+    def gemm(self, name: str, ops: dict, c: int, m: int, n: int, k: int, grid: int | None = None, stamps: int = 0) -> None:
+        """Header kernel `name` (nv256_w, nv256_o_b, nv256_t, ...): TM from the name, 8 consumer warps a 256-row tile, a
+        producer warpgroup; a _t kernel's stamps to `stamps`."""
         smem = self.prep(name)
         tm = int(name[2:5])
         tiles = (m // tm) * (n // 128)
         g = min(tiles, grid or self.dev.sms)
-        self.dev.launch(name, g, 32 * 2 * (tm // 64) + 128, smem, p=[ops["sfa"], ops["sfb"], c] + [0] * 7 + [ops["maps"]],
+        self.dev.launch(name, g, 32 * 2 * (tm // 64) + 128, smem, p=[ops["sfa"], ops["sfb"], c, stamps] + [0] * 6 + [ops["maps"]],
                         i=(m, n, k, self.raster))
 
     def ref(self, ops: dict, c: int, m: int, n: int, k: int) -> None:
@@ -597,6 +597,49 @@ def steady(dev: Dev, nv: Nvml, m: int, n: int, k: int, bodies: dict, rounds: int
             "shape": [m, n, k], "rounds": rounds, "batch": batch, "summary": summary, "rows": rows}
 
 
+def stamps(bench: Bench, m: int, n: int, k: int, ops: dict, kernels: list[str], out_dir: str) -> dict:
+    """Each kernel's _t once at (m, n, k), its D checked against _b's: per consumer warp and tile, SM cycles in the mainloop
+    and in the epilogue, the lag of the second 128 rows' warp behind the first's on the same SMSP (warps w and w + 4) at
+    the mainloop's end, the cycles both of them spend in their epilogues at once, and the spread of the CTAs' last
+    epilogue ends (globaltimer, ns).  Raw stamps to out_dir/<kernel>.stamps.npy."""
+    import numpy as np
+    dev, T, ncw = bench.dev, 16, 8
+    tiles = (m // 256) * (n // 128)
+    grid = min(tiles, dev.sms)
+    size = grid * ncw * T * 4 * 8
+    buf, d1, d2 = dev.alloc(size), dev.alloc(m * n * 2), dev.alloc(m * n * 2)
+    per = np.array([len(range(c, tiles, grid)) for c in range(grid)])
+    valid = np.arange(T)[None, :] < per[:, None]
+    q = lambda x: [round(float(v), 1) for v in np.percentile(x, [10, 50, 90])] if len(x) else []
+    out = {}
+    for nm in kernels:
+        dev.fill(buf, 0, size)
+        bench.gemm(nm + "_b", ops, d1, m, n, k)
+        bench.gemm(nm + "_t", ops, d2, m, n, k, stamps=buf)
+        dev.sync()
+        raw = np.frombuffer(dev.read(buf, size), np.uint64).reshape(grid, ncw, T, 4).astype(np.int64)
+        if out_dir:
+            np.save(os.path.join(out_dir, f"{nm}.stamps.npy"), raw)
+        v = np.broadcast_to(valid[:, None, :], raw.shape[:3])
+        later = v & (np.arange(T)[None, None, :] > 0)
+        main, epi = raw[..., 1] - raw[..., 0], raw[..., 2] - raw[..., 1]
+        lo, hi = raw[:, :4], raw[:, 4:]
+        both = np.maximum(0, np.minimum(lo[..., 2], hi[..., 2]) - np.maximum(lo[..., 1], hi[..., 1]))
+        pv, pl = valid[:, None, :].repeat(4, 1), later[:, :4]
+        ends = raw[np.arange(grid), :, per - 1, 3].max(axis=1)
+        out[nm] = {"same_as_b": bench.diff(d1, d2, m * n, 2), "tiles": [int(per.min()), int(per.max())],
+                   "main_cycles_p10_50_90": q(main[later]), "first_main_cycles": q(main[:, :, 0].ravel()),
+                   "epilogue_cycles": q(epi[v]), "lag_cycles": q((hi[..., 1] - lo[..., 1])[pl]),
+                   "both_in_epilogue_cycles": q(both[pv]),
+                   "tile_period_cycles": q((raw[:, :, 1:, 0] - raw[:, :, :-1, 0])[later[:, :, 1:]]),
+                   "cta_end_spread_ns": int(ends.max() - ends.min()),
+                   "cta_end_ns_by_tiles": {int(t): q(ends[per == t] - ends.min()) for t in np.unique(per)}}
+    for p in (buf, d1, d2):
+        dev.free(p)
+    return {"kind": "stamps", "label": "Measured diagnostic (one launch each, SM clock64 per warp)", "shape": [m, n, k],
+            "kernels": out}
+
+
 def main(argv: list[str]) -> int:
     image = open(argv[1], "rb").read()
     dev = Dev(image)
@@ -658,6 +701,10 @@ def main(argv: list[str]) -> int:
         st = steady(dev, nv, s, s, s, bodies, int(os.environ.get("STEADY_ROUNDS", "4")), int(os.environ["STEADY"]))
         emit(st)
         print(f"steady (Measured diagnostic): {st['summary']}", file=sys.stderr)
+    if os.environ.get("STAMPS") and gated:
+        st = stamps(bench, s, s, s, keep, gated, os.environ["STAMPS"])
+        emit(st)
+        print(f"stamps (Measured diagnostic): {json.dumps(st['kernels'])}", file=sys.stderr)
     if os.environ.get("PROFILE"):   # one launch of each, between cuProfilerStart and Stop (ncu --profile-from-start off)
         dev.ck("cuProfilerStart")
         for nm, body in bodies.items():
