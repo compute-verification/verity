@@ -13,7 +13,10 @@ Variants (rung:recover), each on the whole WikiText-2 test split:
               o/down: y = (x Q(R^T W)^T) R^T), round to nearest, the RMSNorm scales folded in first
   rotx        rot with the massive-activation channels S left unmixed (split_rot; |S| <= hidden_size / 1024, found on
               one calibration window): the transform at this scale
-  none@nvfp4, rot@nvfp4, rotx@nvfp4   the same in NVFP4
+  rotbB(s)    S unmixed plus B keyed Haar blocks over the other channels, grouped by calibrated activation magnitude,
+              with gamma kept per block on the activation side (aw_fold.block_rotation; docs §8j); with s, S's columns
+              of q/k/v/gate/up leave the chain as an uncredited BF16 side product
+  none@nvfp4, rot@nvfp4, rotx@nvfp4, rotbB@nvfp4   the same in NVFP4
   recover 1   300 AdamW steps of 1,024 tokens on WikiText-2 train, training only a per-output-channel scale and bias
               after q/k/v/gate/up (their outputs are unrotated, so this is glue in the deployed model for every variant)
 
@@ -38,6 +41,7 @@ import torch  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import aw_fold as FD  # noqa: E402
 import aw_gpu as G  # noqa: E402
 
 PRE = G.PREEMPTED
@@ -60,6 +64,7 @@ class CompactLinear(torch.nn.Module):
         self.register_buffer("rscale", torch.ones(n, 1, dtype=torch.float32, device=dev), persistent=False)
         self.register_buffer("bscale", torch.ones(n, k // 16, dtype=torch.float8_e4m3fn, device=dev), persistent=False)
         self.fmt, self.rin, self.rout, self.scale, self.shift = "fp8", None, None, None, None
+        self.ps = self.side = None             # S's columns, as an uncredited BF16 side product (rotbBs)
 
     def core(self):
         """The codes times the block scales, exact in BF16 (E4M3 codes, and E2M1 x UE4M3 products, fit its 8 bits); the
@@ -77,6 +82,8 @@ class CompactLinear(torch.nn.Module):
             if self.rin is not None:
                 x = x @ self.rin.float()
             y = F.linear(x, self.core().float()) * self.rscale.view(1, -1)
+            if self.ps is not None:
+                y = y + x[..., self.ps] @ self.side.float().T
             if self.scale is not None:
                 y = y * self.scale + self.shift
             if self.rout is not None:
@@ -85,6 +92,8 @@ class CompactLinear(torch.nn.Module):
         if self.rin is not None:
             x = x @ self.rin
         y = F.linear(x, self.core()) * self.rscale.view(1, -1).to(x.dtype)
+        if self.ps is not None:
+            y = y + x[..., self.ps] @ self.side.T
         if self.scale is not None:
             y = y * self.scale.to(y.dtype) + self.shift.to(y.dtype)
         if self.rout is not None:
@@ -215,13 +224,36 @@ def project(model, shards, names, rung, seed, dev):
     and rounding then swamps the ordinary channels."""
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
-    rotated = base in ("rot", "rotx")
+    side = base.startswith("rotb") and base.endswith("s")
+    base = base[:-1] if side else base
+    rotated = base in ("rot", "rotx") or base.startswith("rotb")
     norms = {m for m in (norm_of(n) for n in names) if m}
+    keep = {}                                   # the part of gamma kept on the activation side, as the norm stores it
+    if base.startswith("rotb"):
+        bkey = ("blk", int(base[4:]), model.config.hidden_size, seed, tuple(SPLIT["channels"]))
+        if bkey not in _RB:
+            _RB[bkey] = FD.block_rotation(model.config.hidden_size, SPLIT["channels"], SPLIT["profile"], int(base[4:]), dev, seed)
+        q_blk, blk = _RB[bkey]
+        blk = blk.to(dev)
     for m in norms:
-        model.get_submodule(m).weight.data.copy_(torch.ones_like(model.get_submodule(m).weight) if rotated
-                                                 else shards.get(m + ".weight").to(torch.bfloat16))
+        gam = shards.get(m + ".weight").to(torch.float32)
+        if base.startswith("rotb"):
+            gk = gam.clone()
+            for b in range(int(base[4:])):
+                gk[blk == b] = gam[blk == b].pow(2).mean().sqrt()
+        elif rotated:
+            gk = torch.ones_like(gam)
+        else:
+            gk = gam
+        keep[m] = gk.to(torch.bfloat16)
+        model.get_submodule(m).weight.data.copy_(keep[m])
 
     def rmat(d):
+        if base.startswith("rotb"):
+            k2 = ("blk-bf16",) + bkey[1:]
+            if not PRECISION["fp32"] and k2 not in _RB:
+                _RB[k2] = q_blk.to(torch.bfloat16)
+            return q_blk, (q_blk if PRECISION["fp32"] else _RB[k2])
         if base == "rotx":
             r = split_rot(d, dev, seed)
             key = ("x-bf16", d, seed, tuple(SPLIT["channels"]))
@@ -237,9 +269,9 @@ def project(model, shards, names, rung, seed, dev):
             torch.cuda.empty_cache()
         mod = model.get_submodule(n)
         w = shards.get(n + ".weight").to(torch.float32)
-        mod.rin = mod.rout = None
+        mod.rin = mod.rout = mod.ps = mod.side = None
         if rotated and norm_of(n):
-            w = w * shards.get(norm_of(n) + ".weight").to(torch.float32)[None, :]
+            w = w * (shards.get(norm_of(n) + ".weight").to(torch.float32) / keep[norm_of(n)].float())[None, :]
         if rotated:
             if n.endswith(("o_proj", "down_proj")):
                 r, mod.rout = rmat(w.shape[0])
@@ -247,6 +279,11 @@ def project(model, shards, names, rung, seed, dev):
             else:
                 r, mod.rin = rmat(w.shape[1])
                 w = w @ r
+        if side and mod.rin is not None:
+            ps = torch.tensor([int(q_blk[c].argmax()) for c in SPLIT["channels"]], device=dev)
+            mod.ps, mod.side = ps, w[:, ps].to(torch.bfloat16)
+            w = w.clone()
+            w[:, ps] = 0.0
         set_codes(mod, w, fmt)
         del w
     torch.cuda.empty_cache()
@@ -359,17 +396,19 @@ def main():
     cfg, model, shards, names = build(snap, dev)
     print(json.dumps({"built": args.model, "linears": len(names), "seconds": round(time.time() - t0, 1),
                       "gpu_mem_gb": round(torch.cuda.memory_allocated() / 2 ** 30, 1)}), flush=True)
-    if any(v.split(":")[0].split("@")[0] == "rotx" for v in remaining):
+    if any(v.split(":")[0].split("@")[0] == "rotx" or v.startswith("rotb") for v in remaining):
         sf = out / "split_channels.json"
         if not sf.exists():
             cap = args.split_cap or cfg.hidden_size // 1024
             with torch.no_grad():
-                found = massive_channels(model, shards, names, train[:args.seqlen], dev, args.seed, cap, args.split_ratio)
-            if found is None:
-                return 143
+                if not project(model, shards, names, "none", args.seed, dev):
+                    return 143
+                found = FD.calibrate(model, train[:args.seqlen], dev, cap, args.split_ratio)
             atomic_write(sf, json.dumps({"channels": found[0], "cap": cap, "ratio": args.split_ratio, "top_scores": found[1],
+                                         "profile": found[2],
                                          "calibration": f"WikiText-2 train, tokens 0-{args.seqlen}, FP8 as registered"}, indent=1))
-        SPLIT["channels"] = json.loads(sf.read_text())["channels"]
+        cal = json.loads(sf.read_text())
+        SPLIT["channels"], SPLIT["profile"] = cal["channels"], cal.get("profile")
         print(json.dumps({"split_channels": SPLIT["channels"]}), flush=True)
     want = args.eval_windows if args.eval_windows > 0 else test.numel() // args.seqlen
     left = False
@@ -433,7 +472,7 @@ def main():
                "ppl": math.exp(sum(nll) / len(nll)), "window_nll": nll, "eval_windows": len(nll), "seqlen": args.seqlen,
                "recover_steps": steps, "recover_loss_trace": st["trace"], "project_seconds": st["tp"],
                "fold_norms_under_rotation": True,
-               "split_channels": SPLIT["channels"] if rung.split("@")[0] == "rotx" else None, "gpu": torch.cuda.get_device_name(0),
+               "split_channels": SPLIT["channels"] if rung.split("@")[0] == "rotx" or rung.startswith("rotb") else None, "gpu": torch.cuda.get_device_name(0),
                "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""), "peak_gpu_mem_gb": round(torch.cuda.max_memory_allocated() / 2 ** 30, 1)}
         atomic_write(out / f"{v.replace(':', '_')}.json", json.dumps(doc, indent=1))
         sp.unlink(missing_ok=True)
