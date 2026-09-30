@@ -130,6 +130,7 @@ theorem padOnto_M1 {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi 
   rw [← this, Finset.mul_sum]
   exact Finset.sum_congr rfl fun j _ => by rw [e]; ring
 
+omit [Fintype F] [Fintype K] [DecidableEq K] in
 /-- **Lemma B's row (viii) for the pads code** (§2.4 line 0, `Code(m) = Σ_i m_i·X^i` at the points of the pads tree): when
 rep `r`'s opened pads positions are distinct nonzero points `x r k`, at most `nPad` of them, and the padding's
 coefficient at position `k` is `x^(s + j)` (the padding follows the `s` pads), the padding reaches every vector of values

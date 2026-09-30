@@ -239,12 +239,13 @@ def simMask3 : (((Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) ×
   map_zero' := rfl
   map_add' _ _ := rfl
 
-/-- **`S_shvzk`'s output in the same order**: fresh values where the prover's are masked, the dummy run's where they are
-kept. -/
+omit [CharP F 2] in
 theorem simMask3_apply (b : ((Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F) × T.Seeds)
       × (Fin 2 → Fin T.nQ → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F)) :
     T.simMask3 b = (b.2.1, b.2.2.1, b.2.2.2, b.1.2.2.2) := rfl
 
+/-- **`S_shvzk`'s output in the same order**: fresh values where the prover's are masked, the dummy run's where they are
+kept. -/
 noncomputable def simCore (w0 : W) (σ : T.SimRand) : T.Core :=
   (0 + AddMonoidHom.snd _ _ σ.1,
     (fun q l => ∑ c, T.lanes w0 σ.1.1 l c * T.E q c, fun r => T.y1 w0 σ.1.1 r, 0) + T.mask1 σ.2.1,

@@ -14,7 +14,7 @@ the bound. Here XOR is the addition of the group `B`, so the proof holds for any
 
 `ideal_leaves_swap` is T1 applied once per leaf, the hybrid of Lemma B's proof: `n` leaves cost `n·δ₁`. `Table.view` has
 every leaf the final message doesn't open ideal (world `W₁`); with `N_hid` such leaves on each side, the hybrid is Lemma B's
-`2·δ₁·N_hid`. Instantiating it at `Table.view`'s leaves is on paper.
+`2·δ₁·N_hid` (`RealLeaves.table_shvzk_hm96`).
 -/
 
 namespace FlockSoundness.ZK
