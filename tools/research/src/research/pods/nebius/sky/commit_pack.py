@@ -57,7 +57,11 @@ DISK = os.environ.get("PACK_DISK_PATH", "/workspace")
 DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
 BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/commit/replay_bundle_p*,"
                               "/workspace/cp/sweep/*/commit/replay_bundle_p*,"
-                              "/workspace/jobs/dispatch/pack/golden/*/commit/replay_bundle_p*").split(",")
+                              "/workspace/jobs/dispatch/pack/golden/*/commit/replay_bundle_p*,"
+                              # the TP2 lane's sweeps: phi3-mini's B8 1k bundle (108 GB) waited here, uncounted, at 4:38 PM PDT
+                              "/workspace/jobs/probe-jit/*/*/sweep/*/commit/replay_bundle_p*,"
+                              "/workspace/research/runs/*/*/sweep/*/commit/replay_bundle_p*,"
+                              "/workspace/research/runs/*/*/*/commit/replay_bundle_p*").split(",")
 BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "150")) * 1e9
 BUNDLE_BATCH = 8
 BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "120")) * 1e9

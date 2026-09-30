@@ -259,6 +259,20 @@ def test_the_bundle_cap_counts_the_commits_running_and_the_candidate(pilot):
     assert pilot.bundle_ok(b1, int(pilot.BUNDLE_CAP) * 2, [long_b8, long_b8])
 
 
+def test_the_default_bundle_globs_count_every_sweep_on_node_1_but_not_published_attempts(monkeypatch):
+    monkeypatch.delenv("PACK_BUNDLE_GLOBS", raising=False)
+    mod = _load(NEBIUS / "sky" / "commit_pack.py", "commit_pack_defaults", monkeypatch)
+    phi3 = LLAMA_B8.replace("llama32-1b", "phi3-mini").replace("__i256__o32__", "__i1024__o128__")
+    waiting = [f"/workspace/jobs/cov/cov-g217/{LLAMA_B8}/commit/replay_bundle_p1",
+               f"/workspace/jobs/probe-jit/cfgtp2-deferred-phi3b8g/D/sweep/{phi3}/commit/replay_bundle_p0",
+               f"/workspace/research/runs/cfgtp2-cpu/C3/sweep/{LLAMA_B8}/commit/replay_bundle_p0",
+               f"/workspace/research/runs/cfgtp2-cpu/C5/{LLAMA_B8}/commit/replay_bundle_p0"]
+    for p in waiting:
+        assert any(Path(p).match(g) for g in mod.BUNDLE_GLOBS), p
+    published = "/workspace/jobs/runs/r20260930-224845-a7df/outputs/verdict/commit/replay_bundle_p0"
+    assert not any(Path(published).match(g) for g in mod.BUNDLE_GLOBS)
+
+
 def test_claim_has_one_winner(pilot, tmp_path):
     spool = tmp_path / "spool"
     _queue(spool, "only", "exit 0")
