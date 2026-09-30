@@ -112,6 +112,7 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
   obtain ⟨hr1, hsp⟩ := forIn_list_push (P := fun r => r.start + spanH r ≤ 2 ^ c.kLog ∧
       ∀ i, r.kind = .net i → (c.nets.getD i default).2.unitLog = r.slotLog)
     (g := fun r => (r.start, r.start + spanH r)) (fun r _ s t hs => by
+      obtain ⟨-, hs⟩ := ite_throw_ok' hs
       generalize hp : (if r.packed = true then (r.count * 2 ^ r.slotLog, 2 ^ r.slotLog)
         else (nextPow2 r.count * 2 ^ r.slotLog, nextPow2 r.count * 2 ^ r.slotLog)) = p at hs
       have hspan : p.1 = spanH r := by rw [← hp]; unfold spanH; split <;> rfl
@@ -279,6 +280,7 @@ theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : Typ
   obtain ⟨hr1, hsp⟩ := forIn_list_push (P := fun r => r.start + spanH r ≤ 2 ^ c.kLog ∧
       ∀ i, r.kind = .net i → (c.nets.getD i default).2.unitLog = r.slotLog)
     (g := fun r => (r.start, r.start + spanH r)) (fun r _ s t hs => by
+      obtain ⟨-, hs⟩ := ite_throw_ok' hs
       generalize hp : (if r.packed = true then (r.count * 2 ^ r.slotLog, 2 ^ r.slotLog)
         else (nextPow2 r.count * 2 ^ r.slotLog, nextPow2 r.count * 2 ^ r.slotLog)) = p at hs
       have hspan : p.1 = spanH r := by rw [← hp]; unfold spanH; split <;> rfl

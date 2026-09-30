@@ -99,6 +99,8 @@ import FlockSoundness.Audit.FlockCompiled
 import FlockSoundness.Audit.FlockBatched
 import FlockSoundness.Audit.Stratified
 import FlockSoundness.Audit.StratifiedMiss
+import FlockSoundness.ExecDraw
+import FlockSoundness.ExecStratified
 import FlockSoundness.Audit.Work
 import FlockSoundness.Audit.FlockWork
 import FlockSoundness.Audit.Closure
