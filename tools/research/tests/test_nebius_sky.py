@@ -34,27 +34,31 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
     for d in documents(path):
         if "kind: ClusterQueue" in d:
             name = re.search(r"metadata: \{name: (\S+)\}", d).group(1)
-            out[name] = {m[0]: ur.quantity(m[1]) for m in re.findall(r"\{name: (\S+), nominalQuota: ([^,}]+)", d)}
+            out[name] = {m[0]: ur.quantity(m[1].strip("\"")) for m in re.findall(r"\{name: (\S+), nominalQuota: ([^,}]+)", d)}
     return out
 
 
 def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
-    assert set(q) == {"circuits", "provers"}
+    assert set(q) == {"circuits", "provers", "backfill"} and set(q["backfill"].values()) == {0}          # backfill only borrows
     assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 3)       # tonight: coverage is the binding workstream
-    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (112, 64)           # checks and pinned benches run outside Kueue
+    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (124, 64)
+    assert sum(x["cpu"] for x in q.values()) + CONTROLLER["cpu"] <= NODE["cpu"]              # every admitted pod can be placed           # checks and pinned benches run outside Kueue
     for res, cap in NODE.items():
         assert sum(x[res] for x in q.values()) <= cap, res
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
     circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
-    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits and "borrowWithinCohort: {policy: Never}" in circuits
+    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits
+    assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in circuits          # it evicts only backfill to borrow
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
     assert provers.count("borrowingLimit: 0") == 3 == provers.count("nominalQuota")              # a borrowed bench is evicted by reclaim
-    assert text.count("    withinClusterQueue: Never") == 2 and "LowerPriority" not in text   # never evict a running Build
-    assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
+    assert text.count("    withinClusterQueue: Never") == 3 and text.count("policy: LowerPriority") == 1   # never evict a running Build
+    assert text.count("cohortName: nebius") == 3 and text.count("    reclaimWithinCohort: Any") == 2
+    backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
+    assert "reclaimWithinCohort: Never" in backfill and "borrowWithinCohort: {policy: Never}" in backfill and "borrowingLimit" not in backfill
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits-gpu", "circuits", "prover-bench", "dev", "backfill"]
     # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
     # file with regexes, so check it here
     assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
@@ -72,7 +76,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert queue in local and prio in priorities, f.name
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
-    assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits"),
+    assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits-gpu"),
                     "port-capture": ("circuits", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
@@ -84,6 +88,7 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
     assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
     assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
+    assert "kueue.x-k8s.io/priority-class: circuits-gpu" in gpu and "kueue.x-k8s.io/priority-class: circuits\n" in build  # Commits first
     assert build.count("kueue.x-k8s.io/queue-name: circuits") == gpu.count("kueue.x-k8s.io/queue-name: circuits") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
@@ -112,8 +117,12 @@ def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
 def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
     for f in sorted((SKY / "jobs").glob("*.yaml")):
         t = f.read_text()
-        cpus = re.search(r"^  cpus: (\d+)", t, re.M).group(1)
-        assert f'OMP_NUM_THREADS: "{cpus}"' in t, f.name                                  # SkyPilot's runner sets 1
+        for task in t.split("\n---\n"):
+            if "\nresources:" not in task:
+                continue
+            cpus = int(re.search(r"^  cpus: (\d+)", task, re.M).group(1))
+            threads = int(re.search(r'^  OMP_NUM_THREADS: "(\d+)"', task, re.M).group(1))    # SkyPilot's runner sets 1
+            assert threads == cpus or (f.stem == "config-run" and (cpus, threads) in {("\nname: build" in task) and (4, 16) or (4, 8)}), f.name
         assert "RESEARCH_RUNS: /workspace/jobs/runs" in t and "workdir" not in t, f.name
         assert "--python 3.12" in t, f.name                                               # the image's python is 3.10
 

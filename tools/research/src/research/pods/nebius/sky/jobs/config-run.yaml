@@ -31,7 +31,7 @@ name: build
 
 resources:
   infra: ssh/vy-nebius
-  cpus: 16
+  cpus: 4          # the request Kueue counts; a Build uses ~2-9 cores (15:52Z) and bursts onto idle ones: no CPU limit
   labels:
     budget-line: nebius-config-run
   memory: 160
@@ -123,7 +123,7 @@ name: gpu
 resources:
   infra: ssh/vy-nebius
   accelerators: RTXPRO6000:1
-  cpus: 8
+  cpus: 4          # a Commit uses ~2-4 cores and bursts onto idle ones (no CPU limit): a small request fits beside Builds
   labels:
     budget-line: nebius-config-run
   memory: 192
@@ -200,7 +200,7 @@ config:
       metadata:
         labels:
           kueue.x-k8s.io/queue-name: circuits
-          kueue.x-k8s.io/priority-class: circuits
+          kueue.x-k8s.io/priority-class: circuits-gpu      # ahead of queued 0-GPU Builds
           ov.noisy: "true"
       spec:
         terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt

@@ -9,12 +9,16 @@
 # GPU, m0-v3-a14's CPU), and two benches pinned to 160-191 would measure each other anyway, so a second prover job waits for the first.
 # Nothing is preempted within a queue (withinClusterQueue: Never; root 09:09Z, after captures threw away cov-k09-3's Build twice):
 # capture, sweep-night and the other priorities set admission order only.
+# backfill (root via RC, 15:36Z) is the dispatcher's standing tier: nominal quota 0, so everything it runs is borrowed idle quota.
+# circuits and provers take theirs back by reclaim, and circuits may also evict it to borrow (borrowWithinCohort LowerPriority, at
+# most priority 10, which only backfill has). Backfill jobs are short and requeue when evicted; it preempts nobody.
 # quiet_hour.sh holds circuits' admissions 12:30-13:30Z (stopPolicy: Hold) so benches can re-measure without new Builds.
 #
 # Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
 # ~1,690 GiB), or it admits pods that stay Pending.
-# CPU: circuits 112, provers 64 (the steward's 09:20Z set). The merge checks and pinned benches run outside Kueue on their own
-# cores, so a Kueue cut protects nothing for them.
+# CPU: circuits 124, provers 64 (15:55Z: the node's 192 less provers' 64 and ~3 of pods outside Kueue). Kueue quota is requests,
+# not use: a Build requests 4 and bursts onto idle cores (no CPU limit). The merge checks and pinned benches run outside Kueue on
+# their own cores, so a Kueue cut protects nothing for them.
 # The split is circuits 5 GPUs, provers 3. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
 # holds those with a placeholder pod and applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs
 # wait meanwhile, since provers doesn't borrow. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
@@ -33,7 +37,7 @@ spec:
   queueingStrategy: BestEffortFIFO
   preemption:
     reclaimWithinCohort: Any
-    borrowWithinCohort: {policy: Never}
+    borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}   # only backfill (10) gives way to its borrowing
     withinClusterQueue: Never
   resourceGroups:
   - coveredResources: [nvidia.com/gpu, cpu, memory]
@@ -41,7 +45,7 @@ spec:
     - name: vy-nebius-1
       resources:
       - {name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}
-      - {name: cpu, nominalQuota: 112, borrowingLimit: 32}
+      - {name: cpu, nominalQuota: 124, borrowingLimit: 32}
       - {name: memory, nominalQuota: 1280Gi, borrowingLimit: 384Gi}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
@@ -65,9 +69,34 @@ spec:
       - {name: memory, nominalQuota: 384Gi, borrowingLimit: 0}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: backfill}
+spec:
+  cohortName: nebius
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Never
+    borrowWithinCohort: {policy: Never}
+    withinClusterQueue: Never
+  resourceGroups:
+  - coveredResources: [nvidia.com/gpu, cpu, memory]
+    flavors:
+    - name: vy-nebius-1
+      resources:
+      - {name: nvidia.com/gpu, nominalQuota: "0"}
+      - {name: cpu, nominalQuota: "0"}
+      - {name: memory, nominalQuota: "0"}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
 metadata: {name: circuits, namespace: default}
 spec: {clusterQueue: circuits}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: backfill, namespace: default}
+spec: {clusterQueue: backfill}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: LocalQueue
@@ -89,9 +118,15 @@ description: the night's vLLM config sweep
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: WorkloadPriorityClass
+metadata: {name: circuits-gpu}
+value: 600
+description: circuits pods that hold a GPU (a two-task cell's Commit, a one-GPU row), admitted ahead of 0-GPU Builds (root 16:03Z)
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
 metadata: {name: circuits}
 value: 500
-description: daytime config runs
+description: daytime config runs' 0-GPU Builds
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: WorkloadPriorityClass
@@ -104,3 +139,9 @@ kind: WorkloadPriorityClass
 metadata: {name: dev}
 value: 100
 description: prover development and anything else that can wait
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: backfill}
+value: 10
+description: the dispatcher's standing backfill tier (queue backfill), on borrowed idle quota and evicted first
