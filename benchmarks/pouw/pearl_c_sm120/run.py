@@ -69,7 +69,7 @@ TREE_SMALL, ROWS_W_WARPS = 2048, 4
 #: compression's latency on an SM, and 64 CTAs of them cover A's 8,192 rows, 128 the prefill tile tree's 16,384 leaves
 TREE_CTA = 64
 #: the -h1 forms of A's rows and of the trees (h1_rows and h1_tree the defaults), each checked against the fixture
-ROW_FORMS, TREE_FORMS = ("v", "w", "cta"), ("one", "small", "nodes")
+ROW_FORMS, TREE_FORMS = ("v", "vp", "w", "cta"), ("one", "small", "nodes")
 #: h1_tree's counter slot (u32) per tree buffer: a tree's launches run in order on one stream, other trees' beside them
 CTR_SLOT = {"tree_a_h1": 0, "tree_t_h1": 1, "tree_t_h": 2}
 A_COMMITMENT = {"h0": "turboshake128 over 1 KB segments of A's FP32 rows (the bench's model; v1's verifier checks the SHA-256 "
@@ -446,15 +446,16 @@ class Pipeline:
 
     def rows(self, form: str | None = None) -> None:
         """A's row leaves (level 0 of A's tree) over the matmul's rows: `v` h1_rows (a warp a row, a CTA a row per SM at
-        decode, else ROWS_W_WARPS), `w` hash_rows_w, `cta` #449's hash_rows (a CTA a row)."""
+        decode, else ROWS_W_WARPS), `vp` h1_rows_p (h1_rows loading with L2::256B), `w` hash_rows_w, `cta` #449's hash_rows
+        (a CTA a row)."""
         d, b, mr, rb, form = self.dev, self.b, self.m_real, self.row_bytes, form or self.rows_form
         p = (b["xa"], b["tree_a_h1"], self.keys["dom_a"])
         if form == "cta":
             d.launch("b3:hash_rows", mr, 256, p=p, i=(mr, rb))
             return
-        warps = 1 if form == "v" and mr <= d.sms else ROWS_W_WARPS
-        d.launch("b3:h1_rows" if form == "v" else "b3:hash_rows_w", cdiv(mr, warps), 32 * warps, 4 * warps * rows_w_words(rb), p=p,
-                 i=(mr, rb))
+        warps = 1 if form in ("v", "vp") and mr <= d.sms else ROWS_W_WARPS
+        kernel = {"v": "b3:h1_rows", "vp": "b3:h1_rows_p", "w": "b3:hash_rows_w"}[form]
+        d.launch(kernel, cdiv(mr, warps), 32 * warps, 4 * warps * rows_w_words(rb), p=p, i=(mr, rb))
 
     def alternates(self) -> list[tuple[str, dict[str, tuple[int, int]], object]]:
         """-h1's other forms of the same bytes, each (name, {buffer: the byte range it rewrites}, launch): A's rows, then both

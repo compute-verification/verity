@@ -276,7 +276,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], **({3: 32} if p[3] else {})}
     if name in ("hash_leaf", "hash_leaf_p"):
         return {0: i[0] * i[1], 1: -(-i[0] // 64) * (i[1] // 64) * 32, **({2: 32} if p[2] else {})}
-    if name in ("hash_rows", "hash_rows_w", "h1_rows"):
+    if name in ("hash_rows", "hash_rows_w", "h1_rows", "h1_rows_p"):
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
     if name == "h1_tree":
         return {0: 32 * (2 * i[1] - 1), 1: 32, 2: 4, **({3: 32 * i[0]} if p[3] else {}),
@@ -315,7 +315,7 @@ def threads(name: str, i: list[int]) -> int:
             "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32, "hash_leaf": lambda: -(-i[0] // 64) * (i[1] // 64),
             "hash_rows": lambda: 256 * i[0], "hash_pad": lambda: i[1] - i[0], "hash_nodes": lambda: i[1],
             "hash_tree_leaves": lambda: i[0], "hash_msg_v": lambda: i[0] * i[1] // 32,
-            "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64), "hash_rows_w": lambda: 32 * i[0], "h1_rows": lambda: 32 * i[0],
+            "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64), "hash_rows_w": lambda: 32 * i[0], "h1_rows": lambda: 32 * i[0], "h1_rows_p": lambda: 32 * i[0],
             "h1_tree": lambda: i[1] // 2,
             "hash_tree_small": lambda: i[0] // 2, "seed_a": lambda: 1,
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
@@ -432,7 +432,7 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
             assert g[0] <= min(188, (i[0] // tm) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
         if name in ("words", "words_u"):
             assert g[0] == i[0] // 16 and ev["block"] == 128
-        if name in ("hash_rows_w", "h1_rows"):
+        if name in ("hash_rows_w", "h1_rows", "h1_rows_p"):
             assert ev["smem"] >= ev["block"] // 32 * 4 * 8 * -(-(64 + i[1]) // 1024) and ev["block"] % 32 == 0
         if name == "h1_tree":
             w, s = i[1], min(i[1], 2 * ev["block"])

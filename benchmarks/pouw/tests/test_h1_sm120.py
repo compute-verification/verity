@@ -1,5 +1,5 @@
-"""pouw_hash/h1_sm120.cuh's h1_rows and h1_tree commit the verifier's bytes, through pearl_c's thread-for-thread host build
-(simt_twin) with what h1_tree adds (the grid, 16-byte and L2 loads, the fence and the last-CTA counter; blocks run one after
+"""pouw_hash/h1_sm120.cuh's h1_rows (and h1_rows_p, whose L2::256B loads are plain ones on the host) and h1_tree commit the
+verifier's bytes, through pearl_c's thread-for-thread host build (simt_twin) with what h1_tree adds (the grid, 16-byte and L2 loads, the fence and the last-CTA counter; blocks run one after
 another): A's row leaves at every alignment against `verity.commitments`' frame-b3 leaves, and whole trees in one launch (pads,
 level keys, the tile tree's own leaves, the levels above the CTAs' roots in the last CTA) against #449's kernels level for
 level and `MerkleTree`'s root, with seed_A at A's root against the scheme's derivation."""
@@ -59,7 +59,7 @@ def build() -> C.CDLL:
         f"  for (int b = 0; b < grid; b++) {{\n"
         f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
         f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"
-        f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in ("h1_rows", "h1_tree"))
+        f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in ("h1_rows", "h1_rows_p", "h1_tree"))
     out = Path(tempfile.mkdtemp(prefix="h1-sm120-simt-"))
     (out / "twin.cpp").write_text(T._source().replace(T.PRELUDE, T.PRELUDE + EXTRA, 1) + body + runs)
     subprocess.run([cxx, "-O1", "-std=c++20", "-pthread", "-shared", "-fPIC", "-o", str(out / "twin.so"), str(out / "twin.cpp")],
@@ -89,7 +89,8 @@ def aligned(n: int, off: int = 0):
 
 @pytest.mark.parametrize("rb", [1, 3, 36, 64, 960, 961, 987, 988, 1024, 1040, 2011, 3072 - 64, 3072, 16384, 32768])
 @pytest.mark.parametrize("warps,off", [(1, 0), (4, 0), (4, 4)])
-def test_h1_rows_are_frame_b3_leaves_at_every_alignment(rb, warps, off):
+@pytest.mark.parametrize("kernel", ["h1_rows", "h1_rows_p"])
+def test_h1_rows_are_frame_b3_leaves_at_every_alignment(kernel, rb, warps, off):
     """Rows shorter than a block, of one chunk with the header (960) and a byte past it, 16-byte multiples and not (1,040;
     987, 988, 2,011), FP32 rows at k = 4,096 and 8,192 (17 and 33 chunks), from a 16-byte aligned base (the vector loads) and
     4 bytes past one (every block through row_msg_word)."""
@@ -99,7 +100,7 @@ def test_h1_rows_are_frame_b3_leaves_at_every_alignment(rb, warps, off):
     C.memmove(src, rows, len(rows))
     d = CommitmentDomain(BINDING, 3, RangeIndexedDomain(m), hash="blake3")
     out, dom = T.buffer(32 * m), T.buffer(d.domain_id)
-    launch("h1_rows", -(-m // warps), 32 * warps, [src, out, dom], [m, rb], smem=4 * warps * T.rows_w_words(rb))
+    launch(kernel, -(-m // warps), 32 * warps, [src, out, dom], [m, rb], smem=4 * warps * T.rows_w_words(rb))
     assert [out.raw[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)]
 
 

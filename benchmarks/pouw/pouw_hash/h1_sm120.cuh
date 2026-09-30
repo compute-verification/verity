@@ -5,14 +5,27 @@
 #include "../pearl_c/hash_sm120.cuh"
 
 DEV uint4 ld_nc(const uint4* p) { return __ldg(p); }
+// the same load, and an L2 miss fetches the 256 aligned bytes around it (the chunk's next blocks) from DRAM
+DEV uint4 ld_nc_256(const uint4* p) {
+#ifdef __CUDA_ARCH__
+  uint4 r;
+  asm("ld.global.nc.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(r.x), "=r"(r.y), "=r"(r.z), "=r"(r.w) : "l"(p));
+  return r;
+#else
+  return __ldg(p);
+#endif
+}
 DEV void ld_cv_cg(uint64_t p, uint32_t* h) {   // a node another CTA wrote, from L2
   const uint4 x = __ldcg(reinterpret_cast<const uint4*>(p)), y = __ldcg(reinterpret_cast<const uint4*>(p) + 1);
   h[0] = x.x; h[1] = x.y; h[2] = x.z; h[3] = x.w; h[4] = y.x; h[5] = y.y; h[6] = y.z; h[7] = y.w;
 }
 
 // A row's frame-b3 leaf by one warp, as row_leaf_w hashes it, with each block's 16 words as four 16-byte loads issued a
-// block ahead.  Needs rb a multiple of 16 and src 16-byte aligned for the vector path; other blocks go through row_msg_word.
+// block ahead (P256: with L2::256B).  Needs rb a multiple of 16 and src 16-byte aligned for the vector path; other blocks go
+// through row_msg_word.
+template <bool P256>
 DEV void row_leaf_v(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_t* key, uint32_t (*cvs)[8], int lane, uint32_t* h) {
+  auto ld = [](const uint4* p) { return P256 ? ld_nc_256(p) : ld_nc(p); };
   const uint64_t len = ROW_PREFIX + (uint64_t)rb;
   const int n = (int)((len + 1023) / 1024);
   const uint4* src4 = reinterpret_cast<const uint4*>(src);
@@ -30,7 +43,7 @@ DEV void row_leaf_v(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_
     bool nxt_fast = fast(0);
     if (nxt_fast) {
 #pragma unroll
-      for (int q = 0; q < 4; q++) nxt[q] = ld_nc(src4 + (64ull * c - 4) + q);
+      for (int q = 0; q < 4; q++) nxt[q] = ld(src4 + (64ull * c - 4) + q);
     }
     for (int b = 0; b < blocks; b++) {
       const uint64_t j0 = 256ull * c + 16ull * b;
@@ -42,7 +55,7 @@ DEV void row_leaf_v(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_
         nxt_fast = fast(b + 1);
         if (nxt_fast) {
 #pragma unroll
-          for (int q = 0; q < 4; q++) nxt[q] = ld_nc(src4 + j0 / 4 + q);
+          for (int q = 0; q < 4; q++) nxt[q] = ld(src4 + j0 / 4 + q);
         }
       }
       if (!cur_fast) {
@@ -81,9 +94,9 @@ DEV void row_leaf_v(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_
   }
 }
 
-// hash_rows, a warp per row and blockDim / 32 rows a CTA (row_leaf_v).  Dynamic shared memory: rows_w_words(rb) words a
-// warp.  Same arguments as hash_rows.
-extern "C" __global__ void __launch_bounds__(256) h1_rows(const Args a) {
+// hash_rows, a warp per row and blockDim / 32 rows a CTA (row_leaf_v; h1_rows_p loads with L2::256B).  Dynamic shared
+// memory: rows_w_words(rb) words a warp.  Same arguments as hash_rows.
+template <bool P256> DEV void h1_rows_body(const Args& a) {
   extern __shared__ uint32_t sh[];
   const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
   const uint64_t row = (uint64_t)blockIdx.x * (blockDim.x / 32) + warp;
@@ -91,10 +104,12 @@ extern "C" __global__ void __launch_bounds__(256) h1_rows(const Args a) {
   if (row >= (uint64_t)a.i[0]) return;
   uint32_t key[8], h[8];
   load_key(a.p[2], key);
-  row_leaf_v(reinterpret_cast<const uint8_t*>(a.p[0]) + row * rb, rb, row, key,
-             reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words((int)rb)), lane, h);
+  row_leaf_v<P256>(reinterpret_cast<const uint8_t*>(a.p[0]) + row * rb, rb, row, key,
+                   reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words((int)rb)), lane, h);
   if (lane == 0) store_cv(a.p[1] + row * 32, h);
 }
+extern "C" __global__ void __launch_bounds__(256) h1_rows(const Args a) { h1_rows_body<false>(a); }
+extern "C" __global__ void __launch_bounds__(256) h1_rows_p(const Args a) { h1_rows_body<true>(a); }
 
 // a label of n <= 64 bytes as one message block (zero-padded, little-endian words)
 DEV void h1_label(const char* s, int n, uint32_t w[16]) {
