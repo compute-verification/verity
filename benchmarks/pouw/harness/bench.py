@@ -415,7 +415,9 @@ def arm_entries(bench: Bench, dev, arm, shape, opsets: list[A.OperandSet], first
 
 def replay(dev, call, out: Path, write: bool) -> dict:
     """Fills every output of `call` with POISON, runs its weight side and launch once (not when `write` is False: the no-write
-    control), and has it write its transcript into `out`, reading only its declared outputs (arm interface v0.5)."""
+    control), and has it write its transcript into `out`, reading only its declared outputs (arm interface v0.5). The memset
+    runs on the legacy stream, which doesn't wait for the harness's non-blocking one, hence the sync on both sides."""
+    dev.sync()
     for b in call.outputs.values():
         dev.memset(b.ptr, A.POISON, b.nbytes)
     dev.sync()
