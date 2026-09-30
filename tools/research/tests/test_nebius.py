@@ -632,3 +632,25 @@ def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_r
     assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 2
     pp.alert(n2["monitors"], now + datetime.timedelta(minutes=31))
     assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 4
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_refuses_before_touching_a_node(tmp_path):
+    """n2_commit.sh's item checks run before any ssh: a bad key, a non-config-run item, a missing field or a TP2 row (a node-2
+    guest has one GPU) exits 2; a TP1 config-run item passes."""
+    script = NEBIUS / "n2_commit.sh"
+    env = {"ENV": {"ROW": "llama32-1b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "ROLE": "LLAMA32_1B",
+                   "REPO": "unsloth/Llama-3.2-1B", "REVISION": "9535bd9b"}}
+
+    def check(key: str, **item) -> int:
+        p = tmp_path / "item.json"
+        p.write_text(json.dumps({"template": "config-run", "tree": "/t", "env": dict(env["ENV"]), **item}))
+        return subprocess.run(["bash", str(script), "check", key, str(p)], env={**os.environ, "VY_N1": "unreachable.invalid",
+                              "VY_N2": "unreachable.invalid"}, capture_output=True).returncode
+
+    assert subprocess.run(["bash", "-n", str(script)]).returncode == 0
+    assert check("cov-g153") == 0
+    assert check("Cov_G153") == 2
+    assert check("cov-g153", template="config-run-row") == 2
+    assert check("cov-g153", env={**env["ENV"], "REVISION": ""}) == 2
+    assert check("cov-p002", env={**env["ENV"], "ROW": env["ENV"]["ROW"].replace("__tp1__", "__tp2__")}) == 2
