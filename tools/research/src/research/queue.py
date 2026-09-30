@@ -13,7 +13,7 @@ Admission.  A PR is admitted while it is open against `main`, has an owner, carr
 has every grant its change needs.  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that `research queue ready PR`
 writes, so a new push needs a new one; it replaces the merge-request note.  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
-on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
+on an `Owner: {coordinator}/{lane}` line, else on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/check/queue.toml` until the repository move, or `--rules`) says which grants a change needs: a role for changed files
 under listed paths (`merge_requires`' syntax, `!` patterns included), or for a change to listed sections of any `lean-audit.json`
 (`pins`, `reads`).  A grant is a store label `grant = {role}` on the target `pr:{number}@{head sha}`, so a new push needs new
@@ -63,7 +63,9 @@ RULES = "ci/queue.toml"
 RULES_BEFORE_MOVE = "tools/check/queue.toml"
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
-LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
+LANE_RE = re.compile(r"^[ \t>*_-]*Lane[*_]*[:\s][*_:\s]*`?([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
+#: `Owner: {coordinator}/{lane}` (docs/pr-ownership-plan.md §1), in plain or bold markdown
+OWNER_RE = re.compile(r"^[ \t>*_-]*Owner[*_]*:[*_]*[ \t]*`?([a-z0-9][a-z0-9-]*)/([A-Za-z0-9][A-Za-z0-9._-]*)`?", re.M)
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
@@ -105,9 +107,10 @@ class PR:
 
     @property
     def owner(self) -> str | None:
-        """The lane a `Lane {name}` line names, else the Cursor agent id the body carries (its PR footer), else None."""
-        if m := LANE_RE.search(self.body):
-            return m.group(1)
+        """The lane an `Owner: {coordinator}/{lane}` line names, else a `Lane {name}` line's, else the Cursor agent id the body
+        carries (its PR footer), else None."""
+        if m := OWNER_RE.search(self.body) or LANE_RE.search(self.body):
+            return m.group(m.lastindex)
         if m := AGENT_RE.search(self.body):
             return m.group(0)
         return None
@@ -325,7 +328,7 @@ class Queue:
             if rules.hold_label in p.labels:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
-                e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
+                e.state, e.why = "waiting", "no owner: add an `Owner: {coordinator}/{lane}` line to the PR body"
             elif ejected and ejected["head"] == p.head:
                 e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push re-admits it)"
             elif not self.ready(p.number, p.head):

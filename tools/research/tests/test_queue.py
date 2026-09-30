@@ -96,6 +96,15 @@ def world(tmp_path: Path) -> World:
     return World(tmp_path)
 
 
+def test_an_owner_line_names_the_lane_before_a_lane_line_or_an_agent_id():
+    assert PR(1, "h", body=f"Lane merge-queue\n\nOwner: root/merge-queue-2\n\n{AGENT}").owner == "merge-queue-2"
+    assert PR(1, "h", body="- **Owner:** `pous/pous-circuits`").owner == "pous-circuits"
+    assert PR(1, "h", body="Owner: lane-1\nLane lane-2").owner == "lane-2"         # an owner names its coordinator too
+    assert PR(1, "h", body="**Lane:** `lane-3`").owner == PR(1, "h", body="- Lane: lane-3").owner == "lane-3"
+    assert PR(1, "h", body="Lanes are listed below").owner is None
+    assert PR(1, "h", body=f"Owned by me\n{AGENT}").owner == AGENT
+
+
 def test_ready_prs_merge_onto_next_in_number_order_drafts_too_and_held_ownerless_or_unmarked_prs_wait(world):
     world.gh.put(3, world.change({"c.txt": "c3\n"}))
     world.gh.put(1, world.change({"a.txt": "a1\n"}))
