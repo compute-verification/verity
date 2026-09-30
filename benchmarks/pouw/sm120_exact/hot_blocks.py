@@ -15,8 +15,10 @@ Past the last listed length no block governs; there `count` at 64 rows is record
 (first start, --min-len) and (last start, --min-len + 3) every value is recounted from the row bitsets unpacked to bools
 (exit 4 on a mismatch).
 
-Out: `<out>/units/<unit>.json` (one record per start, length and block), then `summary.json`: per (start, L, block) the
-widest columns found with M rows over the units, where, and whether any search found the block.  Restartable: exit 99 once
+Out: `<out>/units/<unit>.json` (one record per start, length and block; with --per-start one file `<unit>.t<t>.json` per
+start, so a chunk keeps every start it finishes), then `summary.json`: per (start, L, block) the widest columns found with M
+rows over the units, where, and whether any search found the block, and per unit hot.py's liveness (`rows_live`,
+pearl_c.live_row) and admission counts; only admitted rows and columns are searched.  Restartable: exit 99 once
 --budget-min is spent while units remain, 0 after the summary.
     python3 benchmarks/pouw/sm120_exact/hot_blocks.py --units-dir <hot.py's out> --out DIR [--procs 32]
 """
@@ -86,7 +88,7 @@ def isect_greedy(bits: np.ndarray, cnt: np.ndarray, K: int) -> tuple[int, list[i
 
 
 def unit_blocks(task) -> dict:
-    ud, chain, starts, min_len, isect, out_dir = task
+    ud, chain, starts, min_len, isect, out_dir, tag = task
     ud, out_dir = Path(ud), Path(out_dir)
     meta = json.loads((ud / "unit.json").read_text())
     m, n, T = meta["m"], meta["n"], meta["planes"]
@@ -160,9 +162,10 @@ def unit_blocks(task) -> dict:
         gates.append({"t": t, "L": L, "mismatches": bad})
     name = ud.name
     res = {"unit": name, "family": meta["family"], "chain": chain, "m": m, "n": n, "T": T, "starts": starts,
-           "min_len": min_len, "gates": gates, "records": recs}
-    (out_dir / "units" / f"{name}.json").write_text(jdump(res) + "\n")
-    return {"unit": name, "gates": gates}
+           "min_len": min_len, "rows_admitted": meta.get("rows_admitted"), "rows_live": meta.get("rows_live"),
+           "gates": gates, "records": recs}
+    (out_dir / "units" / f"{tag}.json").write_text(jdump(res) + "\n")
+    return {"unit": tag, "gates": gates}
 
 
 def main() -> None:
@@ -174,6 +177,7 @@ def main() -> None:
     ap.add_argument("--starts", default="0,1,2,3,4,5")
     ap.add_argument("--min-len", type=int, default=6)
     ap.add_argument("--no-isect", action="store_true")
+    ap.add_argument("--per-start", action="store_true", help="one task and one file per unit and start")
     ap.add_argument("--procs", type=int, default=32)
     ap.add_argument("--budget-min", type=float, default=5.5)
     ap.add_argument("--out", default=None)
@@ -184,13 +188,15 @@ def main() -> None:
     (out / "units").mkdir(parents=True, exist_ok=True)
     starts = [int(x) for x in args.starts.split(",")]
     names = [f"{f}@{u}" for u in range(1, args.units + 1) for f in args.families.split(",") if f]
-    todo = [nm for nm in names if not (out / "units" / f"{nm}.json").exists()]
+    tasks = ([(nm, [t], f"{nm}.t{t}") for nm in names for t in starts] if args.per_start else
+             [(nm, starts, nm) for nm in names])
+    todo = [x for x in tasks if not (out / "units" / f"{x[2]}.json").exists()]
     fh = open(out / "log.jsonl", "a")
     bad = 0
     with Pool(args.procs) as pool:
-        pending = [pool.apply_async(unit_blocks, ((str(src / nm), args.chain, starts, args.min_len, not args.no_isect,
-                                                   str(out)),)) for nm in todo]
-        for nm, p in zip(todo, pending):
+        pending = [pool.apply_async(unit_blocks, ((str(src / nm), args.chain, ts, args.min_len, not args.no_isect,
+                                                   str(out), tag),)) for nm, ts, tag in todo]
+        for (_, _, nm), p in zip(todo, pending):
             left = 60 * args.budget_min - (time.time() - t0)
             try:
                 res = p.get(timeout=max(left, 1))
@@ -205,15 +211,17 @@ def main() -> None:
     if bad:
         fh.write(json.dumps({"gate_mismatches": bad}) + "\n")
         sys.exit(4)
-    write_summary(out, names, starts, fh)
+    write_summary(out, names, starts, fh, tasks)
 
 
-def write_summary(out: Path, names: list[str], starts: list[int], fh) -> None:
+def write_summary(out: Path, names: list[str], starts: list[int], fh, tasks: list[tuple]) -> None:
     best: dict[tuple, dict] = {}
     gates = 0
-    for nm in names:
-        d = json.loads((out / "units" / f"{nm}.json").read_text())
+    liveness = {}
+    for nm, _, tag in tasks:
+        d = json.loads((out / "units" / f"{tag}.json").read_text())
         gates += sum(g["mismatches"] for g in d["gates"])
+        liveness[nm] = {"rows_live": d.get("rows_live"), "rows_admitted": d.get("rows_admitted"), "m": d["m"], "n": d["n"]}
         for r in d["records"]:
             key = (r["t"], r["L"], r["M"], r["N"])
             w = max(r["count"], r.get("isect") or 0)
@@ -234,7 +242,7 @@ def write_summary(out: Path, names: list[str], starts: list[int], fh) -> None:
     tight = min((b for b in judged if b["passed"]), key=lambda b: b["margin"] / b["N"], default=None)
     doc = {"tool": "pouw_sm120_exact_hot_blocks", "units": names, "starts": starts, "blocks": {str(k): v for k, v in BLOCKS.items()},
            "gate_mismatches": gates, "blocks_judged": len(judged), "blocks_found": len(fails), "tightest_pass": tight,
-           "rows": rows}
+           "liveness": liveness, "rows": rows}
     (out / "summary.json").write_text(jdump(doc) + "\n")
     fh.write(jdump({"summary": {"gate_mismatches": gates, "judged": len(judged), "found": len(fails)}}) + "\n")
     run_result.write(out / "summary.json", gates == 0, "sm120-exact-hot-blocks",
