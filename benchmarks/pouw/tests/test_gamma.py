@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -49,8 +50,24 @@ def test_pearl_has_no_gamma_and_a_floor():
     assert r.gamma is None and float(r.gamma_floor.rstrip("%")) > 1.0
 
 
-def test_pearl_floor_charges_b_f_a():
-    assert G.row("pearl-fp8-v4", 8192, 8192, 8192).gamma_floor == "3.044%"   # (2r/n + 2r/m + 4r/k + 4/k)/Ω, r = 32
+def test_pearl_headline_is_as_shipped():
+    r = G.row("pearl-fp8-v4", 8192, 8192, 8192)
+    assert r.reading == "as shipped" and r.gamma_floor == "2.312%"
+    assert G.row("pearl-fp8-v4", 16, 8192, 8192).gamma_floor == "2.312%"    # B̃·F_A amortized: no r/m term
+
+
+def test_pearl_whitepaper_charges_b_f_a_per_unit():
+    r = G.row("pearl-fp8-v4", 8192, 8192, 8192, reading="whitepaper")
+    assert r.reading == "whitepaper" and r.gamma_floor == "3.044%"        # (2r/n + 2r/m + 4r/k + 4/k)/Ω, r = 32
+    assert G.row("pearl-fp8-v4", 16, 8192, 8192, reading="whitepaper").gamma_floor == "79.924%"
+    assert any("B̃·F_A" in t["name"] for t in r.terms)
+    assert not any("B̃·F_A" in t["name"] for t in G.row("pearl-fp8-v4", 8192, 8192, 8192).terms)
+
+
+def test_both_pearl_readings_are_reported():
+    out = subprocess.run([sys.executable, str(Path(G.__file__))], capture_output=True, text=True, check=True).stdout
+    assert "pearl-fp8-v4 (as shipped)" in out and "pearl-fp8-v4 (whitepaper)" in out
+    assert set(G.PEARL_READINGS) == {"as shipped", "whitepaper"}
 
 
 def test_uncovered_lm_head():

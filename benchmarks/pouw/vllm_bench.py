@@ -1,6 +1,6 @@
 """PoUW's overhead against plain vLLM, on one RTX 4090, with Qwen2.5-3B-Instruct.
 
-    python benchmarks/pouw/vllm_bench.py --model /path/to/qwen2.5-3b-instruct --out RESULT.json [--modes bf16,fp8,w7a7,ncp,pearl]
+    python benchmarks/pouw/vllm_bench.py --model /path/to/qwen2.5-3b-instruct --out RESULT.json [--modes bf16,fp8,w7a7,ncp,pearl,pearl-wp]
 
 This is the harness's stand-in for the vLLM adapter (``integrations/vllm/verity_vllm/protocol_options/pouw.py``, which
 waits for the vLLM coordinator's OK): it wraps every ``LinearBase`` layer's ``quant_method.apply``, found by type, on stock
@@ -13,7 +13,11 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
   word-granular production P, one (m, 3k, n) s8 GEMM that reads every accumulator once per 16-deep step (the kernel gated
   by ``gemm_bench.py``).  X·Yᵀ = A·Bᵀ exactly, so its tokens must equal ``w7a7``'s;
 - ``pearl``: Pearl's noisy quantization to e4m3 (rank-32 noise lines of norm 256, δ = 1), the windowed e4m3 GEMM of the
-  ``ada`` device, and the peel back to BF16.
+  ``ada`` device, and the peel back to BF16.  This is Pearl as shipped, the headline: F_A is keyed by seed_B, so B̃·F_A is
+  formed once per weight at install (`gamma.PEARL_READINGS`);
+- ``pearl-wp``: Pearl as its whitepaper describes it (§4.5, eq. 10): the same, with F_A drawn fresh on every call and B̃·F_A
+  formed per call, as an e4m3 cuBLASLt GEMM on the stored B̃ (exact, since B̃ and F_A are e4m3 values; cheaper than the
+  BF16 mma `gamma.py` prices, so this reading's cost is not overstated).
 
 Noise in the timed modes comes from torch's generator, not SHAKE256 or BLAKE3, and the transcript is not hashed in the
 timed path.  The binding (NCP: every checked word, 3k/16 per output; Pearl: A's planes and the ticket extracts) is added
@@ -47,7 +51,8 @@ PROMPTS = [
     "How does a refrigerator keep food cold?", "What is a prime number? Give five examples.",
 ]
 R = 32
-SCHEME = {"ncp": "ncp-v1", "pearl": "pearl-fp8-v4"}
+SCHEME = {"ncp": "ncp-v1", "pearl": "pearl-fp8-v4", "pearl-wp": "pearl-fp8-v4"}
+MODES = "bf16,fp8,w7a7,ncp,pearl,pearl-wp"
 
 
 def int7(x, dim):
@@ -63,7 +68,7 @@ def install(model, mode: str) -> dict:
 
     stats = {"calls": 0, "macs": 0, "transcript_bytes": 0, "layers": 0}
     ext = None
-    if mode in ("ncp", "pearl"):
+    if mode in SCHEME:
         from kernels import load
         ext = load()
     layers = [m for m in model.modules() if isinstance(m, LinearBase)]
@@ -97,7 +102,7 @@ def install(model, mode: str) -> dict:
                 st["pi"] = pi
                 del F1, F2
             layer.weight.data = torch.empty(0, dtype=W.dtype, device=W.device)
-        elif mode == "pearl":
+        elif mode in ("pearl", "pearl-wp"):
             Wf = W.float()
             l2 = Wf.pow(2).mean(dim=1, keepdim=True).sqrt().clamp_min(2 ** -32)
             linf = Wf.abs().amax(dim=1, keepdim=True).clamp_min(2 ** -32)
@@ -108,7 +113,7 @@ def install(model, mode: str) -> dict:
             Bq = torch.clamp(a_w * Wf + b_w * NB, -448, 448).to(torch.float8_e4m3fn).view(torch.uint8).contiguous()
             G = (FA.T.float() @ FB.float()) @ EB.T.float()                          # r x n
             Q = torch.cat([(EB.float() * b_w).T, a_w.T * (FA.T.float() @ Wf.T) + b_w.T * G], dim=0).to(torch.bfloat16)
-            st.update(Bq=Bq, a_w=a_w.view(1, n), Q=Q, FB=FB, FA=FA)
+            st.update(Bq=Bq, a_w=a_w.view(1, n), Q=Q, FB=FB, FA=FA, EBb=Q[:R].contiguous())
             layer.weight.data = torch.empty(0, dtype=W.dtype, device=W.device)
         layer._pouw = st
 
@@ -149,14 +154,21 @@ def install(model, mode: str) -> dict:
                 b = a * l2 * R ** 0.5 / 256.0 ** 2
                 mp = (m + 15) // 16 * 16 if m <= 32 else (m + 127) // 128 * 128
                 EA = lines(m, R)
-                Aq = torch.clamp(a * xf + b * (EA @ st["FA"].T).float(), -448, 448).to(torch.float8_e4m3fn).view(torch.uint8)
+                FA, Q = st["FA"], st["Q"]
+                if mode == "pearl-wp":
+                    FA = lines(k, R)
+                    one = torch.ones((), device=x.device)
+                    BFA = torch._scaled_mm(st["Bq"].view(torch.float8_e4m3fn), FA.to(torch.float8_e4m3fn).T.contiguous().T,
+                                           scale_a=one, scale_b=one, out_dtype=torch.bfloat16)          # n x r
+                    Q = torch.cat([st["EBb"], BFA.T], dim=0)
+                Aq = torch.clamp(a * xf + b * (EA @ FA.T).float(), -448, 448).to(torch.float8_e4m3fn).view(torch.uint8)
                 if mp != m:
                     Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.uint8, device=Aq.device)])
                 cfg = 0 if mp >= 128 and n % 128 == 0 else 1
                 Ct = ext.fp8_gemm(Aq.contiguous(), st["Bq"], cfg)[:m]
                 stats["transcript_bytes"] += pearl_hash_bytes(m, k, n)
                 P = torch.cat([(a * (x2 @ st["FB"]).float()), b * EA.float()], dim=1).to(torch.bfloat16)
-                y = ((Ct - (P @ st["Q"]).float()) / (a * st["a_w"])).to(x.dtype)
+                y = ((Ct - (P @ Q).float()) / (a * st["a_w"])).to(x.dtype)
             if bias is not None:
                 y = y + bias
             return y.reshape(*x.shape[:-1], n)
@@ -199,7 +211,7 @@ def run_mode(args, mode: str) -> dict:
     from vllm import SamplingParams
 
     llm = engine(args.model, mode, 32, 4096)
-    stats = install(find_model(llm), mode) if mode in ("w7a7", "ncp", "pearl") else {}
+    stats = install(find_model(llm), mode) if mode == "w7a7" or mode in SCHEME else {}
     tok = llm.get_tokenizer()
     msgs = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
     greedy = SamplingParams(temperature=0.0, max_tokens=48, logprobs=1)
@@ -247,7 +259,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "vllm.json")
-    ap.add_argument("--modes", default="bf16,fp8,w7a7,ncp,pearl")
+    ap.add_argument("--modes", default=MODES)
     ap.add_argument("--decode-batches", type=lambda s: [int(x) for x in s.split(",")], default=[1, 8, 32])
     ap.add_argument("--prefill-tokens", type=lambda s: [int(x) for x in s.split(",")], default=[512, 2048])
     ap.add_argument("--single", help="run one mode in this process and write its result to --out (vLLM keeps device memory "

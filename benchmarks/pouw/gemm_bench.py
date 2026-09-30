@@ -15,7 +15,9 @@ Timings, per workload shape (m, k, n), median of CUDA-event timed repetitions:
 - NCP: the (m, 3k, n) GEMM with every accumulator read once per 16-deep step (folded, a stand-in for feeding the hash)
   and forming the three noised operands;
 - Pearl: the windowed e4m3 GEMM, noisy quantization of A (the rank-32 noise product and the elementwise BF16 steps), and
-  the peel (A·F_B and the 2r correction columns, BF16).
+  the peel (A·F_B and the 2r correction columns, BF16).  Two readings (`gamma.PEARL_READINGS`): ``pearl_*``, the headline,
+  is Pearl as shipped (B̃·F_A once per weight, not timed per call); ``pearl_whitepaper_*`` adds B̃·F_A per call
+  (``pearl_peel_b_fa_ms``), F_A fresh per activation commitment as the whitepaper's §4.5 has it.
 
 Hashing: the binding (NCP: every checked word, 3k/16 per output; Pearl: A's planes and the ticket extracts) is added as
 serial time at each device rate in `gamma.HASHES`, estimated here, not run.  ``*_total_over_*``, the headline, is the
@@ -196,6 +198,7 @@ def bench_shape(ext, m: int, k: int, n: int, gates: dict) -> dict:
         out["pearl_gemm_ms"] = timed(lambda: ext.fp8_gemm(Aq, Bq, 0 if pad >= 128 and n % 128 == 0 else 1))
         out["pearl_quantize_ms"] = timed(quantize)
         out["pearl_peel_ms"] = timed(peel)
+        out["pearl_peel_b_fa_ms"] = timed(lambda: Bbf @ F)
         out["pearl_hash_bytes"] = pearl_hash_bytes(m, k, n)
         out["pearl_hash_est_ms"] = hash_ms(out["pearl_hash_bytes"])
         arith = out["pearl_gemm_ms"] + out["pearl_quantize_ms"] + out["pearl_peel_ms"]
@@ -204,6 +207,10 @@ def bench_shape(ext, m: int, k: int, n: int, gates: dict) -> dict:
         out["pearl_arith_over_fp8"] = arith / base
         out["pearl_total_over_fp8_by_hash"] = over(arith, out["pearl_hash_est_ms"], base)
         out["pearl_total_over_fp8"] = out["pearl_total_over_fp8_by_hash"][PINNED["pearl-fp8-v4"]]
+        wp = arith + out["pearl_peel_b_fa_ms"]
+        out["pearl_whitepaper_arith_over_fp8"] = wp / base
+        out["pearl_whitepaper_total_over_fp8_by_hash"] = over(wp, out["pearl_hash_est_ms"], base)
+        out["pearl_whitepaper_total_over_fp8"] = out["pearl_whitepaper_total_over_fp8_by_hash"][PINNED["pearl-fp8-v4"]]
     return out
 
 
@@ -229,7 +236,7 @@ def main() -> None:
                                     "gates": gates, "rows": rows}, indent=1))
     import run_result
     ms = [(f"{key}@{'x'.join(map(str, r['shape']))}", r[key], "ratio") for r in rows if tuple(r["shape"]) in ((1, 2048, 2048), (2048, 2048, 2048), (4096, 4096, 4096))
-          for key in ("ncp_total_over_fp8", "ncp_total_over_int8", "pearl_total_over_fp8",
+          for key in ("ncp_total_over_fp8", "ncp_total_over_int8", "pearl_total_over_fp8", "pearl_whitepaper_total_over_fp8",
                       "ncp_kernel_over_int8", "pearl_kernel_over_fp8") if key in r]
     run_result.write(args.out, gates["ncp"]["ok"] and gates["pearl"]["ok"], "gemm_bench gates",
                      f"ncp {gates['ncp']}; pearl {gates['pearl']}; totals include the binding at each scheme's pinned hash "

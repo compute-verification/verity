@@ -35,7 +35,7 @@ def parse_gemm(argv: list[str]) -> dict:
 def parse_vllm(argv: list[str]) -> dict:
     ap = _parser()
     ap.add_argument("--model", default=None)
-    ap.add_argument("--modes", default="bf16,fp8,w7a7,ncp,pearl")
+    ap.add_argument("--modes", default="bf16,fp8,w7a7,ncp,pearl,pearl-wp")
     ns, _ = ap.parse_known_args(argv)
     return {"model": (ns.model or "").rstrip("/").rsplit("/", 1)[-1], "modes": ns.modes}
 

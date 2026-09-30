@@ -97,13 +97,21 @@ def ncp_hash_words(m: int, k: int, n: int) -> int:
     return m * n * (3 * k // D)
 
 
-def pearl_terms(m: int, k: int, n: int) -> list[Term]:
+PEARL_READINGS = {
+    "as shipped": "F_A keyed by seed_B, as Pearl #311's consensus (zk-pow/src/api/fp8/noise.rs) and schemes/pearl_kw run it: "
+                  "B̃·F_A once per weight, amortized with the B side",
+    "whitepaper": "F_A from noise seed_A (whitepaper §4.5, eq. 10), fresh for every activation commitment: "
+                  "B̃·F_A charged per unit",
+}
+
+
+def pearl_terms(m: int, k: int, n: int, reading: str = "as shipped") -> list[Term]:
     """Pearl's honest miner per unit (``schemes/pearl_kw``), A side and outputs; the per-weight B side is amortized.
 
-    B̃·F_A is charged per unit: the whitepaper derives F_A from noise seed_A (§4.5, eq. 10), fresh for every activation
-    commitment. Pearl #311's consensus (``zk-pow/src/api/fp8/noise.rs``) and ``pearl_kw`` key it by seed_B instead, which
-    would amortize it with the B side."""
+    Pearl's two sources disagree on F_A (``PEARL_READINGS``).  The headline is ``as shipped``; ``whitepaper`` adds B̃·F_A
+    per unit."""
     mk, mn, nk = m * k, m * n, n * k
+    fresh = [Term("peel: B̃·F_A, BF16 mma (n·k·r)", nk * R * MAC_BF16_F32, False, "unchecked; F_A fresh per unit")]
     return [
         Term("GEMM m x k x n, FP8 mma with FP32 accumulate", m * k * n * MAC_FP8_F32, True, "Pearl credits m·k·n MACs"),
         Term("noise N = E·Fᵀ, one rank-32 FP8 atom per A entry", mk * R * MAC_FP8_F32, True),
@@ -112,7 +120,7 @@ def pearl_terms(m: int, k: int, n: int) -> list[Term]:
         Term("row norms l2, linf from the planes", mk * 2 * FP32, True, "Unverified count"),
         Term("extract: IMAD + SHF per output feeding the ticket", mn * 2 * INT32, True),
         Term("peel: A·F_B, BF16 mma (m·k·r)", mk * R * MAC_BF16_F32, False, "the useful output is unchecked"),
-        Term("peel: B̃·F_A, BF16 mma (n·k·r)", nk * R * MAC_BF16_F32, False, "unchecked; F_A fresh per unit"),
+        *({"as shipped": [], "whitepaper": fresh}[reading]),
         Term("peel: 2r correction columns per output, BF16 mma", mn * 2 * R * MAC_BF16_F32, False, "unchecked"),
         Term("unscale: one FFMA per output", mn * FP32, False, "unchecked"),
     ]
@@ -134,6 +142,7 @@ class Binding:
 @dataclass(frozen=True)
 class Row:
     scheme: str
+    reading: str | None                 # Pearl's F_A reading (PEARL_READINGS); None for NCP
     shape: tuple[int, int, int]
     wref: int
     credited: int
@@ -153,12 +162,17 @@ def pct(x: Fraction) -> str:
     return f"{float(x) * 100:.3f}%"
 
 
-def row(scheme: str, m: int, k: int, n: int) -> Row:
+def label(r: Row) -> str:
+    return r.scheme if r.reading is None else f"{r.scheme} ({r.reading})"
+
+
+def row(scheme: str, m: int, k: int, n: int, reading: str | None = None) -> Row:
     if scheme == "ncp-v1":
         terms, credited, plain = ncp_terms(m, k, n), 3 * m * k * n, m * k * n * MAC_INT8
         hashed = 4 * ncp_hash_words(m, k, n)
     else:
-        terms, credited, plain = pearl_terms(m, k, n), m * k * n * MAC_FP8_F32, m * k * n * MAC_FP8_F32
+        reading = reading or "as shipped"
+        terms, credited, plain = pearl_terms(m, k, n, reading), m * k * n * MAC_FP8_F32, m * k * n * MAC_FP8_F32
         hashed = pearl_hash_bytes(m, k, n)
     wref = sum(t.units for t in terms)
     skippable = sum(t.units for t in terms if not t.checked)
@@ -170,7 +184,7 @@ def row(scheme: str, m: int, k: int, n: int) -> Row:
 
     bindings = [Binding(None, "none", total(None), None)] + [Binding(h, v.status, total(h), gamma) for h, v in HASHES.items()]
     pinned = PINNED[scheme]
-    return Row(scheme, (m, k, n), wref, credited, f"{float(omega):.5f}", gamma, pct(Fraction(skippable, wref)), pinned,
+    return Row(scheme, reading, (m, k, n), wref, credited, f"{float(omega):.5f}", gamma, pct(Fraction(skippable, wref)), pinned,
                total(pinned), total(None), hashed / (m * k * n), hashed * HASHES[pinned].units_per_byte / (m * k * n),
                [asdict(b) for b in bindings], [asdict(t) for t in terms])
 
@@ -189,24 +203,27 @@ def main() -> None:
     args = ap.parse_args()
     work = json.loads(args.workload.read_text())
     shapes = [tuple(s) for s in work["gamma_shapes"]]
-    rows = [row(s, *shape) for s in ("ncp-v1", "pearl-fp8-v4") for shape in shapes]
+    rows = [row("ncp-v1", *shape) for shape in shapes]
+    rows += [row("pearl-fp8-v4", *shape, reading=p) for p in PEARL_READINGS for shape in shapes]
     model = work["model"]
     out = {"schema": "verity-pouw/gamma/v2", "cost_model": "W1 (RTX 4090), sub-word extraction priced",
-           "hashes": {h: asdict(v) for h, v in HASHES.items()}, "rows": [asdict(r) for r in rows],
-           "model": model["id"], "uncovered_lm_head_fraction": uncovered_fraction(model)}
+           "hashes": {h: asdict(v) for h, v in HASHES.items()}, "pearl_readings": PEARL_READINGS,
+           "rows": [asdict(r) for r in rows], "model": model["id"], "uncovered_lm_head_fraction": uncovered_fraction(model)}
     if args.json:
         args.json.write_text(json.dumps(out, indent=1))
     print("W1 vs plain is the total: the arithmetic plus the binding at the scheme's pinned hash. Arithmetic alone carries no γ.")
-    print(f"{'scheme':14} {'(m, k, n)':22} {'Ω':>8} {'γ':>9} {'γ floor':>9} {'W1 vs plain':>11} {'arith.':>8} "
+    print("Pearl has two readings of F_A; the headline is 'as shipped':")
+    print("\n".join(f"  {p}: {why}" for p, why in PEARL_READINGS.items()))
+    print(f"{'scheme':27} {'(m, k, n)':22} {'Ω':>8} {'γ':>9} {'γ floor':>9} {'W1 vs plain':>11} {'arith.':>8} "
           f"{'hash B/MAC':>10}  pinned")
     for r in rows:
-        print(f"{r.scheme:14} {str(r.shape):22} {r.omega:>8} {r.gamma or '—':>9} {r.gamma_floor:>9} {r.total_vs_plain_gemm:>11} "
+        print(f"{label(r):27} {str(r.shape):22} {r.omega:>8} {r.gamma or '—':>9} {r.gamma_floor:>9} {r.total_vs_plain_gemm:>11} "
               f"{r.arithmetic_vs_plain_gemm:>8} {r.hashed_bytes_per_useful_mac:10.4f}  {r.binding}")
     print(f"\nPer binding ({', '.join(f'{h} {v.units_per_byte:g} units/B {v.status}' for h, v in HASHES.items())}):")
-    print(f"{'scheme':14} {'(m, k, n)':22} {'binding':14} {'price':>9} {'W1 vs plain':>11} {'γ':>9}")
+    print(f"{'scheme':27} {'(m, k, n)':22} {'binding':14} {'price':>9} {'W1 vs plain':>11} {'γ':>9}")
     for r in rows:
         for b in r.bindings:
-            print(f"{r.scheme:14} {str(r.shape):22} {b['hash'] or 'none':14} {b['status']:>9} {b['total_vs_plain_gemm']:>11} "
+            print(f"{label(r):27} {str(r.shape):22} {b['hash'] or 'none':14} {b['status']:>9} {b['total_vs_plain_gemm']:>11} "
                   f"{b['gamma'] or '—':>9}")
     print(f"{model['id']}: lm_head is {out['uncovered_lm_head_fraction']:.1%} of a decode token's GEMM MACs (uncovered)")
 
