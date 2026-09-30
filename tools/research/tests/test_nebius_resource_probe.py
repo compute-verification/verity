@@ -109,6 +109,27 @@ def test_idle_gpus_sampler_needs_a_full_window_of_zero_util(tmp_path):
     assert all(x.startswith("{") for x in P.tail_lines(f, nbytes=500))
 
 
+def test_idle_from_series_needs_one_pod_for_the_whole_window():
+    util = {(0, "new-pod"): 0.0, (0, "old-pod"): 0.0, (1, "idle-pod"): 0.0, (2, "busy-pod"): 40.0, (3, ""): 0.0}
+    fb = {(0, "new-pod"): 50_000, (0, "old-pod"): 50_000, (1, "idle-pod"): 88_000, (2, "busy-pod"): 90_000, (3, ""): 90_000}
+    n = {(0, "new-pod"): 16, (0, "old-pod"): 44, (1, "idle-pod"): 60, (2, "busy-pod"): 60, (3, ""): 60}
+    assert P.idle_from_series(util, fb, n, 20.0) == [{"gpu": 1, "min_gib": 85.9, "pod": "idle-pod"}]
+
+
+def test_pool_flagged_reads_only_a_fresh_pool_file(tmp_path):
+    import time
+    f = tmp_path / "pool.json"
+    def write(age_s):
+        f.write_text(json.dumps({"generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(T0 - age_s)),
+                                 "nodes": {"n1": {"monitors": [{"kind": "gpu-idle-in-lease", "gpu": 1},
+                                                               {"kind": "gpu-unleased", "gpu": 2}, {"kind": "template-drift"}]}}}))
+    write(60)
+    assert P.pool_flagged(f, T0) == {1}
+    write(1800)
+    assert P.pool_flagged(f, T0) == set()
+    assert P.pool_flagged(tmp_path / "absent.json", T0) == set()
+
+
 def test_unpreserved_counts_finished_runs_without_a_marker(tmp_path):
     def run(name, state, age_s, marker=None):
         d = tmp_path / name

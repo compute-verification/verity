@@ -151,15 +151,27 @@ def idle_gpus_sampler(lines: list[str], now: float, window_s: float, gib: float)
             for i, s in sorted(per.items()) if s and max(u for u, _ in s) == 0 and min(m for _, m in s) > gib]
 
 
+def idle_from_series(util: dict, fb: dict, n: dict, gib: float, cover: float = 0.8) -> list[dict[str, Any]]:
+    """Node 1's DCGM series keyed by (gpu, pod): a GPU is idle when one pod held it for the whole window (its sample count at least
+    `cover` of the fullest series'), at 0% util, with over `gib` GiB in use throughout. A window that spans a pod handover isn't."""
+    full = max(n.values(), default=0)
+    out = {}
+    for k, u in util.items():
+        gpu, pod = k
+        if pod and u == 0 and fb.get(k, 0) / 1024 > gib and n.get(k, 0) >= cover * full:
+            out[gpu] = {"gpu": gpu, "min_gib": round(fb[k] / 1024, 1), "pod": pod}
+    return [out[g] for g in sorted(out)]
+
+
 def idle_gpus_prometheus(window_s: float, gib: float) -> list[dict[str, Any]]:
-    def by_gpu(q: str) -> dict[int, float]:
+    def by_series(q: str) -> dict[tuple[int, str], float]:
         url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
         with urllib.request.urlopen(url, timeout=10) as r:
-            return {int(x["metric"]["gpu"]): float(x["value"][1]) for x in json.load(r)["data"]["result"]}
+            return {(int(x["metric"]["gpu"]), x["metric"].get("pod", "")): float(x["value"][1]) for x in json.load(r)["data"]["result"]}
     w = f"{int(window_s)}s"
-    util = by_gpu(f"max by (gpu) (max_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[{w}]))")
-    fb = by_gpu(f"max by (gpu) (min_over_time(DCGM_FI_DEV_FB_USED{{{DCGM}}}[{w}]))")
-    return [{"gpu": i, "min_gib": round(fb[i] / 1024, 1)} for i in sorted(util) if util[i] == 0 and fb.get(i, 0) / 1024 > gib]
+    return idle_from_series(by_series(f"max by (gpu, pod) (max_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[{w}]))"),
+                            by_series(f"min by (gpu, pod) (min_over_time(DCGM_FI_DEV_FB_USED{{{DCGM}}}[{w}]))"),
+                            by_series(f"max by (gpu, pod) (count_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[{w}]))"), gib)
 
 
 def unpreserved(runs_dir: Path, now: float, age_s: float) -> dict[str, Any]:
@@ -249,7 +261,10 @@ def read(node: str, *, now: float, home: Path, ws: str = "/workspace") -> dict[s
         r["errors"].append(f"replay_queue: {type(e).__name__}: {str(e)[:200]}")
     try:
         if node == "n1":
-            r["idle_gpus"] = idle_gpus_prometheus(lim["idle_gpu_s"], lim["idle_gpu_gib"])
+            idle = idle_gpus_prometheus(lim["idle_gpu_s"], lim["idle_gpu_gib"])
+            flagged = pool_flagged(Path(ws) / "usage/infra-pool-n1.json", now)
+            r["idle_gpus_pool_flagged"] = [g for g in idle if g["gpu"] in flagged]
+            r["idle_gpus"] = [g for g in idle if g["gpu"] not in flagged]
         else:
             util = Path(ws) / "pouw/infra/util" / time.strftime("%Y-%m-%d.jsonl", time.gmtime(now))
             r["idle_gpus"] = idle_gpus_sampler(tail_lines(util), now, lim["idle_gpu_s"], lim["idle_gpu_gib"]) if util.exists() else []
