@@ -824,8 +824,9 @@ BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
         "(GPU-5f1149a4, seed 20260930) 1,671,168 gated elements, 0 mismatches, while two groups of 16 miss 88,660, the "
         "unscaled block-scaled adder (group 16 / 32) 193,027 / 192,566 and autoproof's model5 268,267; fresh-seed "
         "confirmation r20260930-073334-fdac (seed 20261003, gated on this model) 3,309,568 gated elements, 0 mismatches "
-        "(the alternatives miss 176,662 / 385,736 / 384,745); a 1024-step register chain (K = 32,768, r20260930-072400-dd3b) "
-        "1,408 end words, 0 mismatches. All three on one die, GPU-5f1149a4; the mixed and mxf8f6f4 rows ran on two more. "
+        "(the alternatives miss 176,662 / 385,736 / 384,745), both on GPU-5f1149a4; a 1024-step register chain (K = 32,768) "
+        "on a second die, r20260930-073445-e2b6 (GPU-2b59d5fe, seed 20261004, gated on this model), 1,408 end words, "
+        "0 mismatches. "
         "NaN/inf accumulators are outside the model (record-only). Capture sample: tests/ml/fixtures/tc-sm120-k32-e2m1-2026-09-30"
     ),
 )
