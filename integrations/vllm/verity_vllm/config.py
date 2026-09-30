@@ -317,6 +317,9 @@ class CommitConfig:
                                   "Commit (no control arm, no pairs) under bounded staging, a k-unit replay stratified by family, then "
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
+    replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
+                                  help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
+                                       "stays pending until `row stage replay` (CPU) replays the bundle")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")
