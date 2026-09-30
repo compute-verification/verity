@@ -116,6 +116,92 @@ def nvfp4_rows(w, g=None):
     return (torch.sign(x) * q * s).reshape(n, k) * gs
 
 
+def act_noise(x, delta, f_lines, g):
+    """The fork's activation noise: rank-32 E F^T with F fixed per linear and E fresh per call, scaled per row to
+    delta x the RMS over every 8th position (Pearl's rule); the peel removes it exactly in the useful output."""
+    rho = x[:, ::8].pow(2).mean(1, keepdim=True).sqrt()
+    e = torch.randn(x.shape[0], f_lines.shape[1], generator=g, device=x.device)
+    z = e @ f_lines.T
+    z = z / z.pow(2).mean(1, keepdim=True).sqrt().clamp_min(1e-30)
+    return delta * rho * z, rho
+
+
+def act_quant(x, fmt, f_lines, g):
+    """A_eff = Q(alpha (x + n)) / alpha - n: the operand of Pearl-C's useful output U with noise on A only (FP8: delta 1,
+    alpha = 448/(s + 4 delta rho); NVFP4: delta 1/4, alpha = 2688/(s + 4 delta rho), UE4M3 scales from the noisy block)."""
+    shape = x.shape
+    x2 = x.reshape(-1, shape[-1]).float()
+    delta = 1.0 if fmt == "fp8" else 0.25
+    n, rho = act_noise(x2, delta, f_lines, g)
+    s = x2.abs().amax(1, keepdim=True)
+    top = 448.0 if fmt == "fp8" else 6.0 * 448.0
+    alpha = top / (s + 4 * delta * rho).clamp_min(1e-30)
+    v = alpha * (x2 + n)
+    if fmt == "fp8":
+        q = e4m3_rn(v)
+    else:
+        m, k = v.shape
+        vb = v.reshape(m, k // 16, 16)
+        sb = e4m3_rn(vb.abs().amax(2, keepdim=True) / 6.0).clamp_min(2.0 ** -9)
+        grid, mids = E2M1_GRID.to(v.device), E2M1_MIDS.to(v.device)
+        xb = (vb / sb).clamp(-6.0, 6.0)
+        q = (torch.sign(xb) * grid[torch.bucketize(xb.abs(), mids)] * sb).reshape(m, k)
+    a = q / alpha - n
+    return (x2 + (a - x2).detach()).to(x.dtype).reshape(shape)
+
+
+def install_act(model, rung, seed, dev):
+    """Deploy every linear with the fork's activation path: y = Q_act(x R_in) W_q^T (then R_out^T), W_q the deployed weights
+    in the deployed basis. The bf16 rung keeps BF16 weights and activations (the reference)."""
+    fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
+    base = rung.split("@")[0]
+    for n, m in linears(model):
+        m._aw_rin = m._aw_rout = None
+        if rung == "bf16":
+            m.forward = torch.nn.Linear.forward.__get__(m)
+            continue
+        w = m._aw_orig.to(dev).float()
+        q = nvfp4_rows if fmt == "nvfp4" else fp8_rows
+        with torch.no_grad():
+            if base == "rot" and n.endswith(("o_proj", "down_proj")):
+                r = rot_matrix(w.shape[0], dev, seed)
+                m.weight.copy_(q(r.T @ w).to(m.weight.dtype))
+                m._aw_rout = r.to(m.weight.dtype)
+            elif base == "rot":
+                r = rot_matrix(w.shape[1], dev, seed)
+                m.weight.copy_(q(w @ r).to(m.weight.dtype))
+                m._aw_rin = r.to(m.weight.dtype)
+            else:
+                m.weight.copy_(q(w).to(m.weight.dtype))
+        k = m.in_features
+        m._aw_f = torch.randn(k, 32, generator=gen(dev, "act-F", n, seed), device=dev)
+        m._aw_g = gen(dev, "act-E", n, seed)
+
+        def fwd(x, m=m, fmt=fmt):
+            if m._aw_rin is not None:
+                x = x @ m._aw_rin
+            y = F.linear(act_quant(x, fmt, m._aw_f, m._aw_g), m.weight, m.bias)
+            if getattr(m, "_aw_scale", None) is not None:
+                y = y * m._aw_scale + m._aw_shift
+            if m._aw_rout is not None:
+                y = y @ m._aw_rout.T
+            return y
+        m.forward = fwd
+
+
+def glue_params(model, on):
+    """Per-output-channel scale and bias after q/k/v/gate/up (unrotated outputs): glue in every deployed variant."""
+    params = []
+    for n, m in linears(model):
+        if on and n.endswith(("q_proj", "k_proj", "v_proj", "gate_proj", "up_proj")):
+            m._aw_scale = torch.nn.Parameter(torch.ones(m.out_features, device=m.weight.device, dtype=m.weight.dtype))
+            m._aw_shift = torch.nn.Parameter(torch.zeros(m.out_features, device=m.weight.device, dtype=m.weight.dtype))
+            params += [m._aw_scale, m._aw_shift]
+        else:
+            m._aw_scale = m._aw_shift = None
+    return params
+
+
 def project(w, rung, name, seed):
     dev, dt = w.device, w.dtype
     w = w.float()
@@ -308,13 +394,14 @@ def eval_ppl(model, ids, seqlen, windows, dev):
     return nll
 
 
-def recover(model, train_ids, steps, seqlen, lr, dev, seed):
-    params = [p for n, p in model.named_parameters() if "norm" in n or n.endswith(".bias")]
+def recover(model, train_ids, steps, seqlen, lr, dev, seed, params=None):
+    if params is None:
+        params = [p for n, p in model.named_parameters() if "norm" in n or n.endswith(".bias")]
     for p in model.parameters():
         p.requires_grad_(False)
     for p in params:
         p.requires_grad_(True)
-    model.gradient_checkpointing_enable()
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     model.train()
     opt = torch.optim.AdamW(params, lr=lr)
     g = torch.Generator().manual_seed(seed)
@@ -380,6 +467,7 @@ def main():
     ap.add_argument("--census-layers", type=int, default=4, help="how many layers' linears to census (from the middle)")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--max-seconds", type=float, default=0, help="start no new variant after this long (0: no limit)")
+    ap.add_argument("--act", action="store_true", help="the fork's full activation path (noisy cast) and glue-affine recovery")
     args = ap.parse_args()
     t_start = time.time()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -387,6 +475,8 @@ def main():
     variants = args.variants.split(",")
     remaining = [v for v in variants if not (out / f"{v.replace(':', '_')}.json").exists()]
     if not remaining:
+        if os.environ.get("RESEARCH_RUN_DIR"):
+            write_result(Path(os.environ["RESEARCH_RUN_DIR"]), out, variants)
         print("all variants done"); return 0
     from datasets import load_dataset
     tok, model = load_model(dev)
@@ -394,6 +484,9 @@ def main():
     test = tok("\n\n".join(ds["test"]["text"]), return_tensors="pt").input_ids[0]
     train = tok("\n\n".join(ds["train"]["text"][:16000]), return_tensors="pt").input_ids[0]
     orig = {n: m.weight.detach().clone() for n, m in linears(model)}
+    if args.act:
+        for n, m in linears(model):
+            m._aw_orig = orig[n]
     small0 = {n: p.detach().clone() for n, p in model.named_parameters() if "norm" in n or n.endswith(".bias")}
     all_lin = [n for n, _ in linears(model)]
     layer_ids = sorted({int(n.split(".")[2]) for n in all_lin})
@@ -417,18 +510,23 @@ def main():
             src_w = {n: m.weight.detach().clone() for n, m in linears(model)}
             for n, m in linears(model):
                 m.weight.copy_(project(src_w[n], rung, n, args.seed))
-        census = ({} if rung.endswith("@nvfp4") else
+        if args.act:
+            install_act(model, rung, args.seed, dev)
+        census = ({} if rung.endswith("@nvfp4") or args.act else
                   {n: skippable_fraction(deployed_codes(src_w[n], rung, n, args.seed)) for n in census_names})
         if source == "adv" and (rung in ("none", "rot", "rot-sr") or rung.startswith(("specfloor-", "clamp-"))):
             rel = {n: relation_skippable(src_w[n], rung, n, args.seed) for n in census_names}
             census = {n: max(census[n], rel[n]) for n in census_names}
-        rloss = recover(model, train, args.recover_steps, args.recover_seqlen, args.lr, dev, args.seed) if rec else []
+        gp = glue_params(model, bool(rec)) if args.act else None
+        rloss = recover(model, train, args.recover_steps, args.recover_seqlen, args.lr, dev, args.seed, gp) if rec else []
         want = args.eval_windows if args.eval_windows > 0 else test.numel() // args.seqlen
         nll = eval_ppl(model, test, args.seqlen, want, dev)
         if PREEMPTED["flag"] or len(nll) != want:
             left = True
             break                                   # an interrupted variant is never written; it reruns from scratch
-        doc = {"variant": v, "source": source, "rung": rung, "recover": rec,
+        if args.act:
+            glue_params(model, False)
+        doc = {"variant": v, "source": source, "rung": rung, "recover": rec, "act": bool(args.act),
                "ppl": math.exp(sum(nll) / len(nll)) if nll else None, "window_nll": nll,
                "eval_windows": len(nll), "seqlen": args.seqlen, "recover_steps": args.recover_steps if rec else 0,
                "recover_loss_trace": rloss, "skippable_fraction_by_matrix": census,
