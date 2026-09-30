@@ -18,9 +18,13 @@ vector:
   `psi`'s: the extra-lane entries by (★), levels ≥ 1 from `y₁'^r` and fresh salts, `τ` and `C_μ` from the replayed
   constraint, the leaves.
 * **`table_shvzk`** (Lemma B in world `W₁`): the real view and `S_shvzk(x, e)` have the same distribution.
-* **Lemma A** (§4.2), `table_prefinal_translate` and `table_prefinal_indep`: in world `W₀`, the pre-final views on two
-  witnesses carrying the public region data agree along a translation of the blocks `u`, `R`, `h`, `μ` that reads only
-  earlier blocks, so by `card_fiber_eq_of_triShift` they have the same distribution.
+* **Lemma A at a non-degenerate coin vector** (§4.2), `table_prefinal_translate` and `table_prefinal_indep`: in world
+  `W₀`, the pre-final views on two witnesses carrying the public region data agree along a translation of the blocks `u`,
+  `R`, `h`, `μ` that reads only earlier blocks, so by `card_fiber_eq_of_triShift` they have the same distribution.
+
+Everything here is about one table. The paper's lemmas are per session of `J` tables; the product over tables (no claim
+or message reads two tables' witnesses or masks) stays on paper. So do Lemma A's cases where the coins make the prover
+refuse (a failing rank check, dependent `ρ^r`, `β = 0`), with the schedule, which T5 needs for Lemma C.
 -/
 
 namespace FlockSoundness.ZK
@@ -332,8 +336,10 @@ theorem psi_simCore (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1
 
 /-! ## Lemma A: the pre-final view doesn't depend on the witness -/
 
-/-- **Lemma A's translation** (§4.2): for witnesses `w`, `w'` that carry the public region data, a translation of the
-prover's randomness maps `w`'s pre-final view to `w'`'s. Block by block, each amount reads only earlier blocks:
+/-- **Lemma A's translation at a non-degenerate coin vector** (§4.2), for one table: for witnesses `w`, `w'` that carry
+the public region data, a translation of the prover's randomness maps `w`'s pre-final view to `w'`'s. The coins pass
+every check the prover makes (`Rank`, `W^r` bijective, `β ≠ 0`); the cases where they don't stay on paper. Block by
+block, each amount reads only earlier blocks:
 
 1. the mask slot, `u' := u + Δ` with `Φ(Δ) = ν(w) − ν(w')`, which the rank check makes solvable (step 2);
 2. the extra lanes, `R' := R + (W^r)⁻¹(y₁^r(w, u) − y₁^r(w', u'))`, so `y₁'^r` agrees (step 3); the paddings are unchanged
@@ -431,10 +437,10 @@ theorem card_simCore (hpad : T.PadOnto) (hW : ∀ r, Function.Bijective fun p : 
       (fun q l => ∑ c, T.lanes w0 u.1 l c * T.E q c, fun r => T.y1 w0 u.1 r, 0)) (fun _ _ => 0)
     (fun _ _ _ => 0) v
 
-/-- **Lemma B in world `W₁`** (`docs/zk-proof-public.md` §4.3; `table_shvzk`): at a fixed non-degenerate coin vector,
-for a witness `w` whose region claims send the public values (H_reg) and whose pads satisfy the inner proof's constraint
-(`InnerHolds`), the reference prover's view (`view`: the pre-final messages and the final message, hm96 leaves opened or
-ideal) and `S_shvzk(x, e)` (`sim`, on any dummy witness `w₀`) have the same distribution.
+/-- **Lemma B in world `W₁`** (`docs/zk-proof-public.md` §4.3; `table_shvzk`), for one table: at a fixed non-degenerate
+coin vector, for a witness `w` whose region claims send the public values (H_reg) and whose pads satisfy the inner
+proof's constraint (`InnerHolds`), the reference prover's view (`view`: the pre-final messages and the final message,
+hm96 leaves opened or ideal) and `S_shvzk(x, e)` (`sim`, on any dummy witness `w₀`) have the same distribution.
 
 Non-degenerate means the prover refuses nothing: the rank check passes (`Rank`), each `ρ^r` is independent over `F`
 (`W^r` bijective), and `β^r ≠ 0`. `PadOnto` and `PadsOnto` are T4 for the two codes at their opened positions. -/
@@ -446,9 +452,10 @@ theorem table_shvzk (hrank : T.Rank) (hpad : T.PadOnto)
     (T.psi_realCore hW hβ w hreg hinner) (T.psi_simCore hW w0)
 
 omit [Fintype K] [DecidableEq K] in
-/-- **Lemma A** (§4.2, `card_fiber_eq_of_triShift` applied to its translation): at a fixed non-degenerate coin vector, in
-world `W₀`, the pre-final views on any two witnesses carrying the public region data take every value equally often.
-Lemma A needs no other property of the witnesses, so it holds for the dummy one. -/
+/-- **Lemma A at a non-degenerate coin vector** (§4.2, `card_fiber_eq_of_triShift` applied to its translation), for one
+table: in world `W₀`, the pre-final views on any two witnesses carrying the public region data take every value equally
+often. Lemma A needs no other property of the witnesses, so it holds for the dummy one. The coins where the prover refuses
+stay on paper. -/
 theorem table_prefinal_indep (hrank : T.Rank)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0)
     (w w' : W) (hreg : T.sReg w = T.pubReg) (hreg' : T.sReg w' = T.pubReg) :

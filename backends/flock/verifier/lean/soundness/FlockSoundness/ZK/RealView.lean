@@ -23,7 +23,8 @@ namespace Table
 variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B]
   (T : Table F K W Salt (B × Salt) D Hi VL)
 
-/-- The leaves nobody opens: level 0's other positions, and each rep's other pads positions. -/
+/-- The leaves nobody opens: level 0's other positions, and each rep's other pads positions. Its size is at most the
+paper's `N_hid`, which counts every level-0 and pads-tree leaf. -/
 abbrev Hid := Fin T.nU ⊕ (Fin 2 × Fin T.nPU)
 
 /-- The view with its hidden leaves `L`. -/

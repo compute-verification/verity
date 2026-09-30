@@ -9,13 +9,17 @@ import FlockSoundness.ZK.RealView
 are hm96 leaves of what they commit: the level-0 codeword's columns at the other positions, and each pads tree's columns
 at the positions its rep doesn't open. `S_shvzk`'s are hm96 leaves too: its dummy run's level-0 columns, and zero pads
 columns (§3.2 step 6). This file moves both sides to `W₁` with `ideal_leaves_swap`, at `δ₁` per hidden leaf, which is
-Lemma B's bound `2·δ₁·N_hid` (§4.3).
+Lemma B's bound (§4.3), for one table.
+
+The bound is `2·|Hid|·δ₁`, with `Table.Hid` the leaves the final message doesn't open. The paper's `N_hid` counts
+every level-0 and pads-tree leaf, so `|Hid| ≤ N_hid`, and the Lean bound is at least as strong as the paper's
+`2·δ₁·N_hid`.
 
 * `Table.Hm96`, `Table.viewWith`, `Table.simWith`, `Hm96.viewR`, `Hm96.simR` (in `RealView`): hm96's structure, the views
   with their hidden leaves given, and the two views with real leaves; `view` and `sim` are `viewWith`, `simWith` at ideal
   leaves.
 * `table_shvzk_hm96`: for every event on the view, the real prover's probability and `S_shvzk`'s differ by at most
-  `2·N_hid·δ₁` in each direction.
+  `2·|Hid|·δ₁` in each direction.
 -/
 
 namespace FlockSoundness.ZK
@@ -191,11 +195,12 @@ theorem prCoin_simWith_ideal (w0 : W) (E : T.View → Prop) :
   rw [← h, ← prCoin_fst (E := T.Hid → B × Salt) (fun σ => E (T.sim w0 σ))]
   rfl
 
-/-- **Lemma B with real leaves** (`docs/zk-proof-public.md` §4.3, `SD ≤ 2·δ₁·N_hid`): at a fixed non-degenerate coin
-vector, under `table_shvzk`'s hypotheses and hm96 hiding (`Hm96Hiding`, `δ₁` per leaf), every event on the view has
-probabilities within `2·N_hid·δ₁` of each other under the real prover (`viewR`: every leaf the final message doesn't open
-is a real hm96 leaf of what it commits) and under `S_shvzk` with real leaves (`simR`). `N_hid` is the number of hidden
-leaves, level 0's and both pads trees'. The proof moves each side to world `W₁` with `ideal_leaves_swap`, at `δ₁` per
+/-- **Lemma B with real leaves** (`docs/zk-proof-public.md` §4.3, `SD ≤ 2·δ₁·N_hid`), for one table: at a fixed
+non-degenerate coin vector, under `table_shvzk`'s hypotheses and hm96 hiding (`Hm96Hiding`, `δ₁` per leaf), every event on
+the view has probabilities within `2·|Hid|·δ₁` of each other under the real prover (`viewR`: every leaf the final message
+doesn't open is a real hm96 leaf of what it commits) and under `S_shvzk` with real leaves (`simR`). `Hid` is the hidden
+leaves, level 0's and both pads trees' unopened ones, so `|Hid|` is at most the paper's `N_hid`, which counts every leaf of
+those trees: the bound is at least as strong. The proof moves each side to world `W₁` with `ideal_leaves_swap`, at `δ₁` per
 leaf, and there applies `table_shvzk`. -/
 theorem table_shvzk_hm96 {C : Type} (M : T.Hm96 C) {δ₁ : ℝ≥0∞} (hT1 : Assumptions.Hm96Hiding M.My M.cs δ₁)
     (hrank : T.Rank) (hpad : T.PadOnto)
