@@ -476,7 +476,8 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile)."""
     from .export_compat import export_compat, read_back_applied
     from .triton_capture import intercept_triton_launches
-    with torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod):
+    from .derive import no_fx_stack_traces
+    with torch.no_grad(), fake_forward_context(vllm_config, num_tokens), torch.device("meta"), export_compat(profile, mod), no_fx_stack_traces():
         if intercept_triton:
             with intercept_triton_launches(launch_log):
                 ep = torch.export.export(mod, inputs, strict=strict)
