@@ -15,6 +15,18 @@
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
+// an 8x8 bit matrix, row r in byte r (bit c its column c), transposed
+__device__ __forceinline__ u64 zlin_t8(u64 x) {
+    u64 t = (x ^ (x >> 7)) & 0x00AA00AA00AA00AAULL;
+    x ^= t ^ (t << 7);
+    t = (x ^ (x >> 14)) & 0x0000CCCC0000CCCCULL;
+    x ^= t ^ (t << 14);
+    t = (x ^ (x >> 28)) & 0x00000000F0F0F0F0ULL;
+    return x ^ t ^ (t << 28);
+}
+
+// out[(s << k_log) + c] holds bit c of z's rows 8s..8s+7 (bit r: row 8s + r). A thread's 128 bytes are sixteen 8x8 bit
+// transposes, stored 16 bytes at a time (out is 16-byte aligned)
 __global__ void chunk_zlin_transpose(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
     const long long wpr = (1LL << k_log) / 128;   // F128 words per block row
     for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_stripes * wpr;
@@ -23,15 +35,19 @@ __global__ void chunk_zlin_transpose(const F128* __restrict__ z, int k_log, long
         F128 v[8];
 #pragma unroll
         for (int r = 0; r < 8; r++) v[r] = z[(8 * s + r) * wpr + w];
-        uint8_t* o = out + (s << k_log) + w * 128;
-        for (int b = 0; b < 128; b++) {
-            uint8_t byte = 0;
+        uint4* o = reinterpret_cast<uint4*>(out + (s << k_log) + w * 128);
 #pragma unroll
-            for (int r = 0; r < 8; r++) {
-                u64 word = b < 64 ? v[r].lo : v[r].hi;
-                byte |= (uint8_t)(((word >> (b & 63)) & 1) << r);
+        for (int q = 0; q < 8; q++) {
+            u64 p[2];
+#pragma unroll
+            for (int h = 0; h < 2; h++) {
+                const int j = 2 * q + h;   // byte j of each row: output bytes 8j..8j+7
+                u64 x = 0;
+#pragma unroll
+                for (int r = 0; r < 8; r++) x |= (((j < 8 ? v[r].lo : v[r].hi) >> (8 * (j & 7))) & 0xFF) << (8 * r);
+                p[h] = zlin_t8(x);
             }
-            o[b] = byte;
+            o[q] = make_uint4((uint32_t)p[0], (uint32_t)(p[0] >> 32), (uint32_t)p[1], (uint32_t)(p[1] >> 32));
         }
     }
 }
