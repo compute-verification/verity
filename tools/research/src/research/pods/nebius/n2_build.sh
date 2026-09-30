@@ -2,7 +2,9 @@
 # Verity's vLLM CPU Builds on vy-nebius-2's idle CPUs (Daniel 19:12Z: the two nodes are one pool), as `project=verity` fill guests
 # that node 2's fill runner pins to its Verity CPUs and freezes (SIGSTOP) through PoUW's timed windows. The Commit stays on node 1.
 #
-#   on node 1:  n2_build.sh submit KEY ITEM.json   (ITEM: the config-run item a lane gives dispatch.py, as in its ready files)
+#   on node 1:  n2_build.sh submit KEY ITEM.json|-   (ITEM: the config-run item a lane gives dispatch.py, as in its ready files;
+#                                                    `-` reads it from stdin)
+# Installed at /workspace/verity-guest/bin/n2_build.sh on both nodes.
 #   on node 2:  n2_build.sh run KEY                (the fill job's body; submit writes it)
 #
 # ITEM is {"template": "config-run", "tree": ..., "env": {ROW, ROLE, REPO, REVISION, SWEEP_DIR, CAMPAIGN, ...},
@@ -54,6 +56,9 @@ EOF
 submit() {
   local key=$1 item=$2
   [[ $key =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || { echo "KEY: lowercase letters, digits and dashes" >&2; exit 2; }
+  if [ "$item" = - ]; then
+    mkdir -p "$GUEST/submitted" && item=$GUEST/submitted/$key.json && cat > "$item"
+  fi
   local tree row repo rev mem max_min
   { read -r tree; read -r row; read -r repo; read -r rev; read -r mem; read -r max_min; } < <(item_get "$item" tree ROW REPO REVISION mem max_min)
   [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("template"))' "$item")" = config-run ] \
