@@ -4,7 +4,8 @@
 #   - sshd: keys only, no root, only $VY_USER;
 #   - the data disk (/dev/disk/by-id/virtio-data) is formatted ONLY when it holds no filesystem, and mounted at /workspace, where
 #     the tooling already looks: /workspace/hf (HF_HOME, the weight cache), /workspace/research (the research root),
-#     /workspace/ramlock (--mem-gb reservations);
+#     /workspace/ramlock (--mem-gb reservations), /workspace/cp (the vLLM integration's build root, as on a RunPod pod: its
+#     pipeline and tests create directories there, and /workspace itself is root's);
 #   - /run/gpu-lease for gpu-lease, and the lease: vy-lease.service runs research's lease.sh as $VY_USER, which stops this VM
 #     through the Nebius API (vy-nebius-stop, the attached service account's token from the metadata service) once the lease
 #     and its grace have passed.  Every boot grants VY_BOOT_LEASE_S so a started VM is not stopped before anyone can extend it.
