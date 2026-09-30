@@ -189,6 +189,7 @@ class _PearlC4:
         self._epochs: dict = {}
         self._refs: dict = {}
         self._commits: dict = {}
+        self._commits_shape: str | None = None
 
     def dump(self, dev, call: _Call, shape: Shape, out: Path) -> None:
         """The harness's hook (arm interface v0.5, `bench.poison_dump`): the call's transcript into `out`, read from the
@@ -317,16 +318,18 @@ class _PearlC4:
         self._refs[key] = got
         return got
 
-    def _commit_rows(self, side: str, binding, index: int, ptr: int, count: int, k: int):
-        """`audit.commit_rows` over `count` rows at `ptr`, recomputed only when the bytes (or the binding) differ from the
-        last call's for this side."""
+    def _commit_rows(self, shape: Shape, binding: bytes, index: int, ptr: int, count: int, k: int):
+        """`audit.commit_rows` over `count` rows at `ptr`, made once per shape for each binding and its rows' bytes: the
+        harness gates each role's first and last operand sets in turn, whose A and B have bindings of their own."""
         _, _, au = _ref()
         raw = self.d.read(ptr, count * 2 * k)
-        last = self._commits.get(side)
-        if last is not None and last[0] == (binding, index, count, k) and last[1] == raw:
-            return last[2]
+        if self._commits_shape != shape.label:
+            self._commits, self._commits_shape = {}, shape.label
+        got = self._commits.get((binding, index, count, k))
+        if got is not None and got[0] == raw:
+            return got[1]
         tree = au.commit_rows(binding, index, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)])
-        self._commits[side] = ((binding, index, count, k), raw, tree)
+        self._commits[binding, index, count, k] = (raw, tree)
         return tree
 
     def commitments(self, call: _Call, shape: Shape, mode: str) -> dict:
@@ -337,8 +340,8 @@ class _PearlC4:
         from verity_pouw.protocol import Context, Matmul
         from verity_pouw.protocol import Shape as PShape
         d, pl, k = self.d, call.pl, shape.k
-        ta = self._commit_rows("a", au.activation_binding(call.salt, 0), 0, pl.buf["xa"], call.m_pad, k)
-        tb = self._commit_rows("b", au.weight_binding(call.weight), -2, pl.buf["xb"], shape.n, k)
+        ta = self._commit_rows(shape, au.activation_binding(call.salt, 0), 0, pl.buf["xa"], call.m_pad, k)
+        tb = self._commit_rows(shape, au.weight_binding(call.weight), -2, pl.buf["xb"], shape.n, k)
         ctx = Context(call.salt, Matmul(0, PShape(call.m_pad, k, shape.n), call.weight), ta.commitment.root,
                       tb.commitment.root)
         noise = F.PearlC4(self.fmt).noise(ctx)
