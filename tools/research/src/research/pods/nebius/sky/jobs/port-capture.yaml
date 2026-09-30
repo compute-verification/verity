@@ -41,7 +41,7 @@ setup: |
   [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
   cd "$SRC"
   cd integrations/vllm
-  flock /workspace/jobs/.vllm-bootstrap.lock env WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh
+  flock /workspace/jobs/.vllm-bootstrap.lock env WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh --out /workspace/jobs/bootstrap/capture
 
 run: |
   set -euo pipefail
