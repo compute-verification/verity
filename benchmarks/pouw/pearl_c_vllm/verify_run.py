@@ -26,7 +26,7 @@ import json
 import mmap
 import os
 import sys
-from multiprocessing import Pool
+import multiprocessing
 from pathlib import Path
 
 import numpy as np
@@ -156,7 +156,8 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         _JOB.update(scheme=scheme, epoch=epoch, transcript=transcript, records=records, verifier=verifier,
                     prover=Opened(man, Files(path.parent), verifier.refs))
         if jobs > 1 and len(todo) > 1:
-            with Pool(min(jobs, len(todo))) as pool:
+            # fork: the workers unpickle their function from this module, which callers load from its path, not by an importable name
+            with multiprocessing.get_context("fork").Pool(min(jobs, len(todo))) as pool:
                 verdicts = pool.map(check, todo, chunksize=1)
         else:
             verdicts = [check(p) for p in todo]
