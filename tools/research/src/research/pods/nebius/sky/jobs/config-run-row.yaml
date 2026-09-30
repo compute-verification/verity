@@ -1,4 +1,6 @@
-# A full vLLM sweep row (Build, Match, Commit; 5-11 h, one GPU throughout) on the Nebius cluster: queue circuits, priority circuits.
+# A full vLLM sweep row (Build, Match, Commit; 5-11 h, one GPU throughout) on the Nebius cluster: queue deployments-gpu. Transitional:
+# it holds its GPU through its CPU Build, which the vLLM coordinator's pipeline split (GPU-only Commits, CPU-only Builds and checks)
+# replaces; until then it requests the GPU queue's 4 vCPU and bursts onto idle cores.
 # Coverage cells (--config-run 1) use config-run.yaml instead: a CPU Build task and a short GPU Commit task. The night sweep submits the same
 # file with the priority label set to sweep-night (the runbook's one-line sed).
 #
@@ -20,7 +22,7 @@ name: config-run-row
 resources:
   infra: ssh/vy-nebius
   accelerators: RTXPRO6000:1
-  cpus: 16
+  cpus: 4
   labels:
     budget-line: nebius-config-run
   memory: 512
@@ -78,7 +80,7 @@ config:
     pod_config:
       metadata:
         labels:
-          kueue.x-k8s.io/queue-name: circuits
+          kueue.x-k8s.io/queue-name: deployments-gpu
           kueue.x-k8s.io/priority-class: circuits-gpu      # holds a GPU: ahead of queued 0-GPU Builds
           verity.dev/build: "true"
       spec:
