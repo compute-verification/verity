@@ -361,30 +361,6 @@ extern "C" void* flock_cuda_host_alloc(size_t bytes) {
     return p;
 }
 
-// device memory for a witness's host words copied ahead of its session (gpu_circuit.rs DevBuf), and a copy either way on a
-// stream of its own, beside the kernels of the session proving meanwhile
-extern "C" void* flock_cuda_dev_alloc(size_t bytes) {
-    void* p = nullptr;
-    if (cudaMalloc(&p, bytes) != cudaSuccess) { cudaGetLastError(); return nullptr; }
-    return p;
-}
-
-extern "C" int flock_cuda_copy(void* dst, const void* src, size_t bytes) {
-    cudaStream_t s;
-    if (cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking) != cudaSuccess) { cudaGetLastError(); return 1; }
-    const cudaError_t e = cudaMemcpyAsync(dst, src, bytes, cudaMemcpyDefault, s);
-    const cudaError_t f = cudaStreamSynchronize(s);
-    cudaStreamDestroy(s);
-    if (e != cudaSuccess || f != cudaSuccess) { cudaGetLastError(); return 1; }
-    return 0;
-}
-
-static bool fc_on_device(const void* p) {
-    cudaPointerAttributes a;
-    if (!p || cudaPointerGetAttributes(&a, p) != cudaSuccess) { cudaGetLastError(); return false; }
-    return a.type == cudaMemoryTypeDevice;
-}
-
 // the host slots from mapped host memory: slot i's F128 words at at[i], from zab + off[i] u64 (ab: its a then b words, z = a & b;
 // else z, a, b); blocks stride over the slots, a block's threads over one slot's words
 __global__ void fc_host_slots(const uint64_t* __restrict__ zab, const long long* __restrict__ at, const long long* __restrict__ off,
@@ -414,6 +390,34 @@ static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams*
         if (t < 0 || t >= N->n_types || ((long long)(N->r_pos0[j] + N->r_count[j]) << N->type_log[t]) > (1LL << k_log)) return 1;
     }
     return 0;
+}
+
+// chunk_zlin_transpose's former kernel, one byte a thread per store (the same bytes): FC_ZLIN_BYTEWISE=1 times it in the same job
+__global__ void fc_zlin_transpose_bytewise(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
+    const long long wpr = (1LL << k_log) / 128;
+    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_stripes * wpr;
+         t += (long long)gridDim.x * blockDim.x) {
+        long long s = t / wpr, w = t % wpr;
+        F128 v[8];
+#pragma unroll
+        for (int r = 0; r < 8; r++) v[r] = z[(8 * s + r) * wpr + w];
+        uint8_t* o = out + (s << k_log) + w * 128;
+        for (int b = 0; b < 128; b++) {
+            uint8_t byte = 0;
+#pragma unroll
+            for (int r = 0; r < 8; r++) {
+                u64 word = b < 64 ? v[r].lo : v[r].hi;
+                byte |= (uint8_t)(((word >> (b & 63)) & 1) << r);
+            }
+            o[b] = byte;
+        }
+    }
+}
+
+static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, uint8_t* d_zlin) {
+    static const bool bytewise = [] { const char* e = std::getenv("FC_ZLIN_BYTEWISE"); return e && e[0] == '1'; }();
+    if (bytewise) fc_zlin_transpose_bytewise<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
+    else chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
 }
 
 static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N, int m, int k_log, long long len, F128* df, F128* d_a,
@@ -446,22 +450,16 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             const long long hper = N->r_count[hr];
             const long long n_h = (1LL << (m - k_log)) * hper;
             const long long hg = (n_h + 31) / 32;
-            // the input rows, and the host slots below, may be the device's copies already (copied while the witness was built)
-            const bool hin_dev = fc_on_device(N->h_inputs);
-            uint64_t* d_hin = (uint64_t*)N->h_inputs; uint32_t* d_hs = nullptr;
-            if (!hin_dev) {
-                CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
-                CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
-            }
+            uint64_t* d_hin; uint32_t* d_hs = nullptr;
+            CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
+            CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
             // the host slots from mapped host memory, on a stream of their own beside the compressions (other words of z, a, b),
             // once the memsets are done; pageable host slots take three copies each after the compressions
             static cudaStream_t hs_stream = nullptr;
             static cudaEvent_t hs_zeroed = nullptr, hs_done = nullptr;
             static int n_sm = 0;
             const uint64_t* zab_dev = nullptr;
-            if (N->n_host0 && fc_on_device(N->host0_zab)) {
-                zab_dev = N->host0_zab;
-            } else if (N->n_host0 && cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
+            if (N->n_host0 && cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
                 cudaGetLastError();
                 zab_dev = nullptr;
             }
@@ -539,7 +537,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             }
             CK(cudaStreamSynchronize(0));
             if (d_hs) cudaFree(d_hs);
-            if (!hin_dev) cudaFree(d_hin);
+            cudaFree(d_hin);
             if (zab_dev) {
                 CK(cudaEventSynchronize(hs_done));
                 cudaFree(d_hat); cudaFree(d_hoff); cudaFree(d_hw);
@@ -637,7 +635,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         }
     }
     const long long n_stripes = (1LL << (m - k_log)) / 8;
-    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
+    fc_zlin_transpose(df, k_log, n_stripes, d_zlin);
     CK(cudaGetLastError());
     CK(cudaStreamSynchronize(0));
     return 0;
