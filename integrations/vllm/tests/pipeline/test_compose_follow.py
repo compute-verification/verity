@@ -65,7 +65,7 @@ def test_the_followed_compose_is_the_compose(build_dirs, tmp_path):
     root, dirs = build_dirs
     plain = G.build(str(root / "workload.json"), dirs, str(tmp_path / "plain"))
     canon: dict = {}
-    early = C.follow_components(list(reversed(dirs)), set(SHAPES), canon, timeout=60)
+    early = C.follow_components(list(reversed(dirs)), set(SHAPES), canon)
     assert set(early) == set(dirs) and all("comp" in e for e in early.values())
     followed = G.build(str(root / "workload.json"), dirs, str(tmp_path / "followed"), early=early, canon=canon)
     assert plain["ok"] and followed["ok"] and plain["workload_digest"] == followed["workload_digest"]
@@ -77,15 +77,15 @@ def test_a_failed_derive_or_the_stop_marker_composes_nothing(build_dirs, tmp_pat
     bad = tmp_path / "build_request_LP7_T1"
     bad.mkdir()
     (bad / "result.json").write_text(json.dumps({"ok": False}))
-    assert C.follow_components([*dirs, str(bad)], set(SHAPES), {}, timeout=60) is None
+    assert C.follow_components([*dirs, str(bad)], set(SHAPES), {}) is None
     stop = tmp_path / "derives_failed"
     stop.write_text("")
-    assert C.follow_components([*dirs, str(tmp_path / "never")], set(SHAPES), {}, timeout=60, stop=str(stop)) is None
+    assert C.follow_components([*dirs, str(tmp_path / "never")], set(SHAPES), {}, stop=str(stop)) is None
 
 
 def test_once_the_derives_are_over_an_unreadable_dir_is_left_to_the_compose(build_dirs, tmp_path):
     _root, dirs = build_dirs
     done = tmp_path / "derives_done"
     done.write_text("")
-    early = C.follow_components([*dirs, str(tmp_path / "never")], set(SHAPES), {}, timeout=60, done=str(done))
+    early = C.follow_components([*dirs, str(tmp_path / "never")], set(SHAPES), {}, done=str(done))
     assert set(early) == set(dirs)

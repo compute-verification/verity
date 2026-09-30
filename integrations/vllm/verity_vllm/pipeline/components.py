@@ -116,13 +116,14 @@ def _ready(d: str) -> bool | None:
         return None
 
 
-def follow_components(derived_dirs: list[str], need: set[tuple[int, int]], canon: dict, *, timeout: float, done: str | None = None,
-                      stop: str | None = None) -> dict[str, dict] | None:
+def follow_components(derived_dirs: list[str], need: set[tuple[int, int]], canon: dict, *, timeout: float | None = None,
+                      done: str | None = None, stop: str | None = None) -> dict[str, dict] | None:
     """Load, check and decode each needed component as its derive finishes, while the others still run: {dir: {"prov", "comp" | "error",
     "secs"}}, or None when a derive failed or `stop` appeared (the Build fails; nothing is composed).  Once `done` exists the derives
     are over and a dir still unreadable is left to `build`'s own pass, which reports it as it always did.  Components are decoded in the
-    order they finish into one shared-definition set (`canon`): a definition is shared by content, so the order changes no output."""
-    deadline, pending, out = time.time() + timeout, list(derived_dirs), {}
+    order they finish into one shared-definition set (`canon`): a definition is shared by content, so the order changes no output.
+    `timeout` (seconds) bounds the wait for dirs no marker ends; None waits on the markers alone."""
+    deadline, pending, out = None if timeout is None else time.time() + timeout, list(derived_dirs), {}
     while pending:
         progressed = False
         for d in list(pending):
@@ -141,7 +142,7 @@ def follow_components(derived_dirs: list[str], need: set[tuple[int, int]], canon
             break
         if stop and os.path.exists(stop):
             return None
-        if time.time() > deadline:
+        if deadline is not None and time.time() > deadline:
             raise TimeoutError(f"follow: {len(pending)} derived dir(s) not written in {timeout:.0f} s: {pending[:3]}")
         if not progressed:
             time.sleep(1)
