@@ -657,7 +657,9 @@ def attack(args):
 
 # ---- real models ----------------------------------------------------------------------------------------------------
 
-VARIANTS = ("base", "f1", "f1_in")     # v1 now (term 1 on the witness); F1′ as stated; F1′ with κ inside
+VARIANTS = ("base", "f1", "f1_in", "f1_in_t3e")
+# v1 now (term 1 on the witness); F1′ as stated; F1′ with κ inside; and that with term 3 per element (both codes
+# witness-dead; theory-pearl-c4-domain.md §6.11's reserve form) in place of per screened block pair
 
 
 def split_keep(X):
@@ -705,7 +707,8 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
     # R1 (theory-pearl-c4-domain.md §6.8, ratings.md 15:18Z): a row of A′ or B̃ whose own F1′ (κ inside) per word
     # exceeds ρ·(its cell credit) is uncredited; a tile whose credited rows' debit exceeds the cap is rejected
     exa = uia > CAP * cw
-    rows, r1 = [], []
+    dead_a = a["dead"].astype(np.float32)
+    rows, r1, r1e = [], [], []
     wstat = dict(fb=[], sb=[], off=0.0, blocks=0, unc=0, exb=0, nb=0)
     per = max(1, int(chunk_elems // (T * k)))
     for c0 in range(0, len(cols), per):
@@ -719,6 +722,7 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
         db, dib, sb = f1_windows(lb["p"], lb["off"], B=B)
         ub, uib = 128 * db.sum(1), 128 * dib.sum(1)
         exb = uib > CAP * cw
+        dead_b = b["dead"].astype(np.float32)
         wstat["fb"].append(db.mean(1))
         wstat["sb"].append(float(sb.mean()))
         wstat["off"] += float(lb["off"].sum())
@@ -739,23 +743,28 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
                 f1 = (T * ua[I][ok].sum() + nI * ub[J].sum()) / cred
                 f1i = (T * uia[I][ok].sum() + nI * uib[J].sum()) / cred
                 t3 = B * (a["scr"][I][ok] @ b["scr"][J].T).sum() / cred
+                t3e = float((dead_a[I][ok] @ dead_b[J].T).sum()) / cred
                 t4 = T * FS / n * a["sdw"][I][ok].sum() / cred
                 sv, fA, fB = f2_save(la["rea"][I][ok], lb["rea"][J], cL)
                 sv0 = f2_save(la["rea"][I][ok], lb["rea"][J], 0.0)[0]
                 f2 = sv * nI * T * k / cred
                 f1_chain = fa_row[I].mean() + db[J].mean(1).mean()      # dnc2.py's tile figure (share of chain, all rows)
                 rows.append(dict(cred=cred, base=t1 + t3 + t4, f1=f1 + t3 + t4 + f2, f1_in=f1i + t3 + t4 + f2,
-                                 t_f1=f1, t_f1_in=f1i, t3=t3, t4=t4, f2=f2, f2_cl0=sv0, fAB=fA + fB, f1_chain=f1_chain))
+                                 f1_in_t3e=f1i + t3e + t4 + f2, t_f1=f1, t_f1_in=f1i, t3=t3, t3e=t3e, t4=t4, f2=f2,
+                                 f2_cl0=sv0, fAB=fA + fB, f1_chain=f1_chain))
                 okr, okc = ok & ~exa[I], ~exb[J]
                 nr, nc = int(okr.sum()), int(okc.sum())
                 if nr == 0 or nc == 0:
                     r1.append((cred, 0.0, 0.0))
+                    r1e.append((cred, 0.0, 0.0))
                     continue
                 cr = nr * nc * cw
-                deb = ((nc * uia[I][okr].sum() + nr * uib[J][okc].sum()) / cr
-                       + B * (a["scr"][I][okr] @ b["scr"][J][okc].T).sum() / cr
-                       + nc * FS / n * a["sdw"][I][okr].sum() / cr + sv * nr * nc * k / cr)
+                rest = ((nc * uia[I][okr].sum() + nr * uib[J][okc].sum()) / cr
+                        + nc * FS / n * a["sdw"][I][okr].sum() / cr + sv * nr * nc * k / cr)
+                deb = rest + B * (a["scr"][I][okr] @ b["scr"][J][okc].T).sum() / cr
+                debe = rest + float((dead_a[I][okr] @ dead_b[J][okc].T).sum()) / cr
                 r1.append((cred, cr if deb <= CAP else 0.0, deb))
+                r1e.append((cred, cr if debe <= CAP else 0.0, debe))
     o = {key: np.array([t[key] for t in rows]) for key in rows[0]}
     cred = o["cred"]
     tot = cred.sum()
@@ -777,12 +786,16 @@ def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems
         out[v] = dict(over=float(cred[d > CAP].sum() / tot), over_half=float(cred[d > CAP / 2].sum() / tot),
                       max=float(d.max()), mean=float((cred * d).sum() / tot), tiles_over=int((d > CAP).sum()),
                       tiles_at=dict((str(f), int((d > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)),
-                      worst_terms={t: float(o[t][iw]) for t in ("t_f1", "t_f1_in", "t3", "t4", "f2")})
+                      worst_terms={t: float(o[t][iw]) for t in ("t_f1", "t_f1_in", "t3", "t3e", "t4", "f2")})
     q = np.array(r1)
     out["r1"] = dict(uncredited=float(1 - q[:, 1].sum() / q[:, 0].sum()), tiles_rejected=int(((q[:, 1] == 0) & (q[:, 2] > CAP)).sum()),
                      rows_excluded_a=float(exa[:m].mean()), rows_excluded_b=float(wstat["exb"] / max(wstat["nb"], 1)),
                      max_debit=float(q[:, 2].max()),
                      tiles_at=dict((str(f), int((q[:, 2] > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)))
+    qe = np.array(r1e)
+    out["r1_t3e"] = dict(uncredited=float(1 - qe[:, 1].sum() / qe[:, 0].sum()),
+                         tiles_rejected=int(((qe[:, 1] == 0) & (qe[:, 2] > CAP)).sum()), max_debit=float(qe[:, 2].max()),
+                         tiles_at=dict((str(f), int((qe[:, 2] > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)))
     return out
 
 
@@ -871,6 +884,8 @@ def summarize(args, res, tokens, t0, fmt):
             "layer_step": args.layer_step, "linears": len(res), "tiles": sum(r["tiles"] for r in res.values()),
             "seconds": round(time.time() - t0)}
     for v in VARIANTS:
+        if not all(v in r for r in res.values()):
+            continue
         worst = max(res, key=lambda nm: res[nm][v]["max"])
         summ[v] = {"credit_over_cap": wavg(lambda r: r[v]["over"]), "credit_over_half_cap": wavg(lambda r: r[v]["over_half"]),
                    "macs_in_linears_without_2x_margin": sum(r["macs"] for r in res.values() if r[v]["max"] > CAP / 2) / macs,
@@ -892,7 +907,10 @@ def summarize(args, res, tokens, t0, fmt):
                                   "law": sorted({r.get("law", "exact") for r in res.values()})}
     summ["weight_tiles"] = {"drawn": sum(r.get("weight_tiles", 0) for r in res.values()),
                             "of": sum(r.get("weight_tiles_total", 0) for r in res.values())}
-    for v in ("f1_in", "r1"):
+    summ["r1_t3e"] = {"uncredited": wavg(lambda r: r.get("r1_t3e", r["r1"])["uncredited"]),
+                      "tiles_rejected": sum(r.get("r1_t3e", r["r1"])["tiles_rejected"] for r in res.values()),
+                      "max_tile_debit": max(r.get("r1_t3e", r["r1"])["max_debit"] for r in res.values())}
+    for v in ("f1_in", "r1", "r1_t3e"):
         summ[v]["tiles_at_fraction_of_cap"] = {f: sum(r[v].get("tiles_at", {}).get(f, 0) for r in res.values())
                                               for f in ("0.5", "0.8", "0.9", "1.0")}
     summ["f1_chain_tiles_over_cap"] = sum(r["tiles_f1_chain_over"] for r in res.values())
