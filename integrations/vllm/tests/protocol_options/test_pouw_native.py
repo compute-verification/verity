@@ -83,15 +83,16 @@ def test_each_template_evaluates_from_its_regenerated_inputs_to_its_outputs(thre
 
 
 def test_the_weight_is_read_once_in_blocks_and_the_block_does_not_change_the_commit():
-    """The weight side reads the rows once, and each call on it once more (for t and its tiles), in blocks."""
+    """The weight side reads the rows once, and each call on it once more (for t and its tiles), in blocks: each block once,
+    in whatever order the pool's workers take them."""
     call = _call(np.random.default_rng(3), 16, 64, 80)
     nw = PN.NativeWeight(call.b, "ncp-v2", call.salt, call.weight, call.colids)
     side = nw.commit(block=32)
-    assert call.b.reads == [(0, 32), (32, 64), (64, 80)]
+    assert sorted(call.b.reads) == [(0, 32), (32, 64), (64, 80)]
     assert (side.leaves, side.inputs, side.root) == (lambda o: (o.leaves, o.inputs, o.root))(nw.commit(block=256))
     call.b.reads.clear()
     a = PN.Native(call, "ncp-v2").commit(0, side, block=32)
-    assert call.b.reads == [(0, 32), (32, 64), (64, 80)]
+    assert sorted(call.b.reads) == [(0, 32), (32, 64), (64, 80)]
     b = PN.Native(call, "ncp-v2").commit(0, side, block=256)
     assert (a.leaves, a.inputs, a.root) == (b.leaves, b.inputs, b.root) and np.array_equal(a.y, b.y)
 

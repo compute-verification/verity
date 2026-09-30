@@ -59,14 +59,26 @@ _NODE = b"node"
 _EMPTY = b"empty"
 
 
-def _uint(value: int) -> bytes:
+def frame_uint(value: int) -> bytes:
+    """A nonnegative integer as the frame hashes it: big-endian, in as few bytes as hold it (at least one)."""
+
     if type(value) is not int or value < 0:
         raise ProtocolError("hash integers must be nonnegative")
     return value.to_bytes(max(1, (value.bit_length() + 7) // 8), "big")
 
 
+_uint = frame_uint
+
+
+def frame_message(tag: bytes, *parts: bytes) -> bytes:
+    """What the frame hash of ``tag`` over ``parts`` hashes: the frame prefix, the tag and each part, length-prefixed.  A
+    caller with a faster hash of the same function (a native BLAKE3) hashes this message to get the frame's digest."""
+
+    return _FRAME + len(tag).to_bytes(4, "big") + tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+
+
 def _hash(tag: bytes, *parts: bytes, hash: str = "sha256") -> bytes:
-    message = _FRAME + len(tag).to_bytes(4, "big") + tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+    message = frame_message(tag, *parts)
     return _blake3.blake3(message) if hash in _BLAKE3_FRAMES else sha(hash)(message).digest()
 
 

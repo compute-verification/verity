@@ -4,7 +4,7 @@ by GPU 1's kernel pipeline, one epoch per install over every linear weight, one 
 The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, whose ``run.py`` has the
 `Pipeline` (its kernels in order, each a named step of a phase, over buffers the caller may own) and whose ``fixture.py`` has
 the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``, default the directory's
-``pearl_c_sm120.cubin``).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
+cubin).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
 device's primary context:
 
 * **The trees** are the scheme's hashing format's (`SCHEMES`, the pipeline's ``hashing``): frame-b3 under -h1, frame-b3s
@@ -58,21 +58,46 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-import json
 import sys
 import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.commitments import RangeIndexedDomain
-from verity.commitments.merkle import _FRAME, _uint
-from verity_pouw.audit import Epoch, Workload, activation_binding, rows_domain, transcript_domain
+from verity_pouw.audit import Epoch, Workload, rows_domain, transcript_domain
 from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
-from verity_pouw.schemes import pearl_kw as P
-from verity_pouw.serving import SCHEDULES, SERIAL, Schedule, SchemeId, StepIO, hash_format, schedule_refusals
+from verity_pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity_pouw.serving import (
+    SCHEDULES,
+    SERIAL,
+    Schedule,
+    SchemeId,
+    StepIO,
+    hash_format,
+    schedule_refusals,
+)
+
+from .pouw_pearl_c_graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
+from .pouw_pearl_c_host import (
+    _bytes,
+    _Keys,
+    _Lane,
+    _put,
+    _stream,
+    _TorchStream,
+    _Uploads,
+    _write,
+    _zeros,
+    call_keys,  # noqa: F401 - kept importable here, as the tests read it
+    write_manifest,
+)
+from .pouw_pearl_c_screen import (
+    excluded,
+    screen,
+    screen_into,
+)
 
 #: the Pearl-C schemes this device path runs, by name (`verity_pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
@@ -80,24 +105,14 @@ from verity_pouw.serving import SCHEDULES, SERIAL, Schedule, SchemeId, StepIO, h
 #: switch: -h1 commits with frame-b3 trees, -h2 with frame-b3s (GPU 1's pipeline, `run.Pipeline`'s ``hashing``); which one
 #: serves is Daniel's call.  Its keys and tree hash come from `verity_pouw.serving.HASH_FORMATS`, the one table, through the
 #: scheme.
-SCHEMES = ("pearl-c-sm120-v1-h1", "pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120-v1-h2")
+SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing=h).name for d, h in ((SM120, "h1"), (SM120_UNPROMOTED, "h1"), (SM120, "h2")))
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
 LEAF_CAPACITY = 1 << 23
-#: the liveness screen's relative band, far wider than its FP32 error (2⁻²³)
-BAND = 2.0 ** -10
 #: calls one pass's A-root buffer holds, and rows its screen-flag buffer holds
 CALL_CAPACITY = 1 << 16
 FLAG_ROWS = 1 << 22
-#: the pinned ring's key slots (each call's dom_a ‖ unit, 136 bytes)
-UPLOAD_SLOTS = 1024
-#: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
-#: a small share of the call, and a graph's own y would cost m x n of memory per weight
-GRAPH_ROWS = 256
-#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (136 bytes, padded), and the byte
-#: offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
-SLOT_BYTES = 144
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b")
@@ -118,8 +133,6 @@ STEP_GROUPS = {"pad_a": "a_tree", "node_keys_a": "a_tree", "hash_rows_a": "a_tre
 SIDE_IO = {"hash_msg": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"digests"})),
            "hash_leaf": StepIO("tile_hash", frozenset({"digests"}), frozenset())}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
-#: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
-PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 
 
 def rotated(schedule: Schedule) -> tuple[str, ...]:
@@ -177,6 +190,14 @@ def _load(name: str, path: Path) -> tuple[Any, str]:
     return sys.modules[key], digest
 
 
+def _the_cubin(directory: Path) -> Path:
+    """A kernel directory's one cubin, when the caller names none."""
+    found = sorted(directory.glob("*.cubin"))
+    if len(found) != 1:
+        raise ValueError(f"{directory}: {len(found)} cubins, not one: name the cubin")
+    return found[0]
+
+
 def source_digest(run_sha256: str, fixture_sha256: str) -> str:
     """The kernel sources' digest: `run.py`'s and `fixture.py`'s, in that order."""
     return hashlib.sha256(bytes.fromhex(run_sha256) + bytes.fromhex(fixture_sha256)).hexdigest()
@@ -196,9 +217,9 @@ class Kernel:
     @classmethod
     def load(cls, directory: str, cubin: str | None = None) -> Kernel:
         d = Path(directory)
-        run, run_sha = _load("pearl_c_sm120_run", d / "run.py")
-        fixture, fixture_sha = _load("pearl_c_sm120_fixture", d / "fixture.py")
-        raw = Path(cubin or d / "pearl_c_sm120.cubin").read_bytes()
+        run, run_sha = _load("pearl_c_run", d / "run.py")
+        fixture, fixture_sha = _load("pearl_c_fixture", d / "fixture.py")
+        raw = Path(cubin or _the_cubin(d)).read_bytes()
         key = (source_digest(run_sha, fixture_sha), hashlib.sha256(raw).hexdigest())
         if key not in _KERNELS:
             dev = run.Dev(raw)
@@ -209,172 +230,6 @@ class Kernel:
 
 #: (source_sha256, cubin_sha256) -> the loaded kernel
 _KERNELS: dict[tuple[str, str], Kernel] = {}
-
-
-def torch_uint8() -> Any:
-    import torch
-    return torch.uint8
-
-
-def _zeros(n: int, device: Any) -> Any:
-    import torch
-    return torch.zeros(max(n, 16), dtype=torch.uint8, device=device)
-
-
-def _put(t: Any, data: bytes) -> None:
-    """`data` into device bytes `t`, on the current stream (the pinned staging copy is torch's to keep alive)."""
-    import torch
-    host = torch.frombuffer(bytearray(data), dtype=torch.uint8)
-    t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
-
-
-class _TorchStream:
-    """torch's Stream object for the current stream, looked up again only when the raw handle changes: `Event.record()`
-    without a stream calls `torch.cuda.current_stream`, about 15 µs."""
-
-    def __init__(self):
-        self.raw, self.stream = None, None
-
-    def __call__(self, raw: int) -> Any:
-        if raw != self.raw:
-            import torch
-            self.raw, self.stream = raw, torch.cuda.current_stream()
-        return self.stream
-
-
-def _stream(device: Any) -> int:
-    """The current stream's handle: torch's raw accessor, not `torch.cuda.current_stream`, which costs about 15 µs a call."""
-    import torch
-    if device.type != "cuda":
-        return 0
-    return torch._C._cuda_getCurrentRawStream(device.index if device.index is not None else torch.cuda.current_device())
-
-
-def _bytes(t: Any) -> bytes:
-    return t.cpu().numpy().tobytes()
-
-
-def screen(x: Any, alpha: Any, aux: Any, chunk: int = 1 << 26) -> tuple[Any, Any]:
-    """The per-row rules on FP32 rows x (rows x k, on the device) with their `stats_s5` α and (s, ρ): (fails, unsure), two
-    bool vectors.  A row fails on the noise floor (ρ·α < σ_min, exact as a double product) or when its dead count, screened
-    in FP32 against 64·Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ with a relative band of 2⁻¹⁰, is surely over k/64; `unsure` rows are those
-    the band leaves open, for `pearl_c.live_row` to decide exactly."""
-    import torch
-    rows, k = x.shape
-    rho = aux.view(torch.float32)[:2 * rows].view(rows, 2)[:, 1].double()
-    floor = rho * alpha.view(torch.float32)[:rows].double() < P.SIGMA_MIN
-    k8 = len(range(0, k, C.S5_STRIDE))
-    fails, unsure = torch.empty_like(floor), torch.empty_like(floor)
-    step = max(1, chunk // k)
-    for r0 in range(0, rows, step):
-        sq = x[r0:r0 + step].float().square()
-        thr = (64.0 * sq[:, ::C.S5_STRIDE].double().sum(1) / k8)[:, None]
-        hi, lo = (thr * (1 + BAND)).float(), (thr * (1 - BAND)).float()
-        dead = (sq > hi).sum(1)
-        band = ((sq >= lo) & (sq <= hi)).sum(1)
-        f = floor[r0:r0 + step]
-        sure_fail, sure_pass = 64 * dead > k, 64 * (dead + band) <= k
-        fails[r0:r0 + step] = f | sure_fail
-        unsure[r0:r0 + step] = ~f & ~sure_fail & ~sure_pass
-    return fails, unsure
-
-
-_SCREEN_KERNEL: list = []
-
-
-def _screen_kernel():
-    """`screen` as one Triton program a row: FP64 sum of the squares at positions ≡ 0 (mod 8), the band's bounds rounded to
-    FP32 as `screen` rounds them, the dead and in-band counts, and the noise floor from the row's α and ρ.  Its sum's order is
-    not torch's, so a row can come out unsure in one and decided in the other; both leave only rows within the band undecided,
-    and `excluded` decides those exactly, so the records are the same."""
-    if not _SCREEN_KERNEL:
-        import triton
-        import triton.language as tl
-
-        @triton.jit
-        def kernel(x, alpha, aux, out, k, k8, sigma, band, BLOCK: tl.constexpr):
-            row = tl.program_id(0)
-            base = x + row.to(tl.int64) * k
-            acc = tl.zeros([BLOCK], dtype=tl.float64)
-            for s in range(0, k, BLOCK):
-                offs = s + tl.arange(0, BLOCK)
-                v = tl.load(base + offs, mask=offs < k, other=0.0).to(tl.float32)
-                acc += tl.where(offs % 8 == 0, (v * v).to(tl.float64), 0.0)
-            thr = 64.0 * tl.sum(acc, axis=0) / k8
-            hi = (thr * (1.0 + band)).to(tl.float32)
-            lo = (thr * (1.0 - band)).to(tl.float32)
-            dead = tl.zeros([BLOCK], dtype=tl.int32)
-            near = tl.zeros([BLOCK], dtype=tl.int32)
-            for s in range(0, k, BLOCK):
-                offs = s + tl.arange(0, BLOCK)
-                live = offs < k
-                v = tl.load(base + offs, mask=live, other=0.0).to(tl.float32)
-                sq = v * v
-                dead += tl.where(live & (sq > hi), 1, 0)
-                near += tl.where(live & (sq >= lo) & (sq <= hi), 1, 0)
-            d = tl.sum(dead, axis=0)
-            b = tl.sum(near, axis=0)
-            floor = tl.where(tl.load(aux + 2 * row + 1).to(tl.float64) * tl.load(alpha + row).to(tl.float64) < sigma, 1, 0)
-            sure_fail = tl.where(64 * d > k, 1, 0)
-            sure_pass = tl.where(64 * (d + b) <= k, 1, 0)
-            tl.store(out + 2 * row, tl.maximum(floor, sure_fail).to(tl.uint8))
-            tl.store(out + 2 * row + 1, ((1 - floor) * (1 - sure_fail) * (1 - sure_pass)).to(tl.uint8))
-        _SCREEN_KERNEL.append(kernel)
-    return _SCREEN_KERNEL[0]
-
-
-_COPY_KERNEL: list = []
-
-
-def _copy_kernel():
-    """n bytes from src to dst at the byte offset `offs[which]`, read on the device (a graph's scatter into the pass)."""
-    if not _COPY_KERNEL:
-        import triton
-        import triton.language as tl
-
-        @triton.jit
-        def copy_at(src, dst, offs, which, n, BLOCK: tl.constexpr):
-            o = tl.load(offs + which)
-            i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-            live = i < n
-            tl.store(dst + o + i, tl.load(src + i, mask=live), mask=live)
-        _COPY_KERNEL.append(copy_at)
-    return _COPY_KERNEL[0]
-
-
-def fused_screen_available() -> bool:
-    try:
-        import triton  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
-def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
-    """`screen`'s two flags per row of x (fails, unsure) into `out` (uint8, rows x 2): one fused kernel with `fused`, else
-    `screen`'s torch operations."""
-    import torch
-    rows, k = x.shape
-    if fused:
-        _screen_kernel()[(rows,)](x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)),
-                                  P.SIGMA_MIN, BAND, BLOCK=1024)
-    else:
-        fails, unsure = screen(x, alpha, aux)
-        out[:, 0].copy_(fails)
-        out[:, 1].copy_(unsure)
-
-
-def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:
-    """The rows of x (FP32, on the device) that fail the rules: `screen`'s fails, and its unsure rows that
-    `pearl_c.live_row` rejects on their words."""
-    import torch
-    rows = unsure.nonzero().flatten()
-    out = {int(i) for i in fails.nonzero().flatten().tolist()}
-    if len(rows):
-        for r, row in zip(rows.tolist(), x[rows].view(torch.int32).cpu().numpy().astype("<u4")):
-            if not C.live_row([int(v) for v in row]):
-                out.add(int(r))
-    return tuple(sorted(out))
 
 
 @dataclass
@@ -415,17 +270,6 @@ class _Pass:
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
 
 
-@dataclass
-class _Graph:
-    """One pipeline's call steps captured as a CUDA graph, over buffers of its own where a call's differ: y, and the call's
-    tile leaves, which are copied to the pass's leaf buffer at the call's offset after each replay; with hashing and no filler
-    rows, the screen's flags too (``flags``), copied likewise."""
-    y: Any
-    leaves: Any
-    flags: Any = None
-    graph: Any = None
-
-
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0]) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
     `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash and the trees'
@@ -447,81 +291,6 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
         out[w] = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
     return out
-
-
-def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = "blake3") -> bytes:
-    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash`."""
-    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
-
-
-class _Keys:
-    """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `CommitmentDomain.domain_id`'s framed message hashed
-    natively (tagged ``domain``, or ``domain/b3s`` under frame-b3s), and unit's label hash is a constant.  The native path
-    is held to `call_keys` once at construction, so a tree hash it doesn't frame (or a framing that moved) fails there.
-    Without the package, `call_keys` itself."""
-
-    def __init__(self, fixture: Any, salt: bytes, hash: str):
-        try:
-            import blake3 as native
-        except ImportError:
-            native = None
-        self.native, self.fixture, self.salt, self.hash = native, fixture, salt, hash
-        self.tag = b"domain/b3s" if hash == "blake3-s256" else b"domain"
-        self.label = fixture.unit_block(salt, bytes(32), 0)[-32:]
-        self.positions: dict[int, bytes] = {}
-        if native is not None and self(bytes(32), 0, ROW_ALIGN) != call_keys(fixture, salt, bytes(32), 0, ROW_ALIGN, hash):
-            raise ValueError(f"native BLAKE3 keys don't frame tree hash {hash!r} as CommitmentDomain does")
-
-    def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
-        if self.native is None:
-            return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
-        pos = self.positions.get(m16)
-        if pos is None:
-            pos = self.positions[m16] = bytes.fromhex(RangeIndexedDomain(m16).identity_digest)
-        parts = (activation_binding(self.salt, index), _uint(index + 2), pos, _uint(m16))
-        msg = _FRAME + len(self.tag).to_bytes(4, "big") + self.tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
-        return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
-
-
-class _Lane:
-    """A stream the run owns, at a schedule's priority, and its handle; off the GPU a stand-in handle (``standin``) for the
-    recording device's log.  ``priority`` is the one the device gave it."""
-
-    def __init__(self, device: Any, priority: str, standin: int):
-        import torch
-        if device.type == "cuda":
-            self.stream = torch.cuda.Stream(device=device, priority=PRIORITY[priority])
-            self.raw, self.priority = self.stream.cuda_stream, self.stream.priority
-        else:
-            self.stream, self.raw, self.priority = None, standin, PRIORITY[priority]
-        self.event = torch.cuda.Event() if device.type == "cuda" else None
-
-
-class _Uploads:
-    """Small host-to-device copies through a pinned ring allocated once: each is one copy on the current stream, and a slot is
-    written again only once its last copy is done (its event)."""
-
-    def __init__(self, device: Any, slots: int = UPLOAD_SLOTS, width: int = 144):
-        import torch
-        self.cuda, self.slots, self.i = device.type == "cuda", slots, 0
-        self.host = torch.zeros((slots, width), dtype=torch.uint8, pin_memory=self.cuda)
-        self.view = self.host.numpy()
-        self.events: list[Any] = [None] * slots
-
-    def put(self, dst: Any, data: bytes, stream: Any = None) -> None:
-        """`data` into `dst` on `stream` (torch's current stream when None)."""
-        import numpy as np
-        import torch
-        i, n = self.i, len(data)
-        self.i = (i + 1) % self.slots
-        if self.events[i] is not None:
-            self.events[i].synchronize()
-        self.view[i, :n] = np.frombuffer(data, np.uint8)
-        dst[:n].copy_(self.host[i, :n], non_blocking=self.cuda)
-        if self.cuda:
-            if self.events[i] is None:
-                self.events[i] = torch.cuda.Event()
-            self.events[i].record(stream)
 
 
 def _weight_binding(w: int) -> bytes:
@@ -546,7 +315,7 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, variant: str = "sm120", hashing: str = "h1") -> Any:
+              m_real: int | None = None, *, variant: str, hashing: str) -> Any:
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "t_row": 0, "t_tile": 0, "unit": 0, **keys}
     return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, hashing=hashing)
 
@@ -572,7 +341,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
         kernel.dev.stream = None
 
 
-class PearlCDeviceRun:
+class PearlCDeviceRun(GraphCalls):
     """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
     the passes the bench and the verifier need (`begin`, `end`)."""
 
@@ -599,7 +368,7 @@ class PearlCDeviceRun:
         self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
         self.tree_hash = hash_format(scheme).tree_hash
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
-        self.fused_screen = self.device.type == "cuda" and fused_screen_available()
+        self.fused_screen = self.device.type == "cuda"
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         if self.graphs:
             import torch
@@ -619,7 +388,7 @@ class PearlCDeviceRun:
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
                                                 f"sources {(kernel.source_sha256 or 'unrecorded')[:16]})",
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
-            "host": {"keys": "native blake3" if self.keys.native else "verity.commitments.blake3 (pure Python)",
+            "host": {"keys": "native blake3",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None, "graphs": f"calls of at most {GRAPH_ROWS} rows, serial schedule" if self.graphs else None,
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
@@ -708,10 +477,10 @@ class PearlCDeviceRun:
         """Every buffer a call of `sh` writes: its own, and the ring's other sets."""
         return [*sh.b.values(), *(t for st in sh.sets[1:] for t in st.values())]
 
-    def _graphed(self, m16: int) -> bool:
-        """Whether calls of m₁₆ rows replay as graphs (`graphs`, the serial schedule), reading their keys and offsets from
-        their weight's slot."""
-        return self.graphs and m16 <= GRAPH_ROWS and not self.schedule.side and self.schedule.main_priority != "greatest"
+
+    def _call_steps(self, pipe: Any) -> list[Any]:
+        """The call's steps in order: every call step but the hashing ones when hashing is off, and but the omitted ones."""
+        return _steps(pipe, tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit))
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups."""
@@ -829,100 +598,6 @@ class PearlCDeviceRun:
         return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias,
                            rows=x2 if x2.is_contiguous() and x2.dtype == torch.bfloat16 else None)
 
-    def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
-        """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""
-        return 32 * tiles_at, 2 * flags_at, 32 * index
-
-    def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
-        """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every
-        weight's slot for the rest of the forward is predicted (the next indices, the same m, the pass's running offsets) and
-        uploaded in one copy; a call whose slot doesn't hold its own values (another order or m) gets them uploaded alone, so
-        the bytes don't depend on the prediction."""
-        import numpy as np
-        cur, R = self.cur, self.kernel.run
-        want = (index, m16, cur.tiles, cur.flag_rows)
-        pos = self.order[w]
-        if pos == 0:
-            if self._slots_copied is not None:
-                self._slots_copied.synchronize()
-            keys, offs = self._host_keys.numpy(), self._host_offs.numpy()
-            tiles_at, flags_at = cur.tiles, cur.flag_rows
-            for v, i in sorted(self.order.items(), key=lambda kv: kv[1]):
-                keys[i, :136] = np.frombuffer(self.keys(self.roots[v], index + i, m16), np.uint8)
-                offs[i] = self._offsets(index + i, tiles_at, flags_at)
-                self._predicted[v] = (index + i, m16, tiles_at, flags_at)
-                tiles_at += R.cdiv(m16, R.TILE) * (self.weights[v].n // R.TILE)
-                flags_at += m
-            self.key_slots.copy_(self._host_keys, non_blocking=True)
-            self.offs.copy_(self._host_offs, non_blocking=True)
-            import torch
-            self._slots_copied = self._slots_copied or torch.cuda.Event()
-            self._slots_copied.record(stream)
-        if self._predicted.get(w) != want:
-            self.uploads.put(self.key_slots[pos], self.keys(self.roots[w], index, m16), stream)
-            self.uploads.put(self.offs[pos].view(torch_uint8()), np.array(self._offsets(index, cur.tiles, cur.flag_rows),
-                                                                             "<i8").tobytes(), stream)
-            self._predicted[w] = want
-
-    def _replay(self, w: int, sh: _Shape, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
-        """The call's steps as one CUDA graph on the caller's stream (`graphs`): captured at the pipeline's first call, after
-        one eager run of the same steps (their first use syncs: the GEMMs' shared-memory probes), on buffers of the graph's
-        own for y and the leaves.  Returns y, and whether the graph screened the call (with hashing, when it has no filler
-        rows); the leaves, and the flags when it did, go to the pass's buffers at the call's offsets."""
-        import torch
-        screen = self.hashing and m == sh.m16
-        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, screen)
-        names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
-        g = self._graphs.get(key)
-        if g is None:
-            g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(32 * tiles, self.device))
-            if screen:
-                g.flags = _zeros(2 * m, self.device)[:2 * m].view(m, 2)
-            if self.cur.poison is not None:
-                for t in (g.y.view(torch.uint8), g.leaves, g.flags):
-                    if t is not None:
-                        t.fill_(self.cur.poison)
-            pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
-            steps = _steps(pipe, names)
-            if screen:
-                steps = [*steps, lambda: screen_into(g.flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)]
-            if self.hashing:
-                steps = [*steps, self._scatter(w, sh, pipe, g, tiles, m if screen else 0)]
-            self.kernel.dev.stream = raw
-            try:
-                for f in steps:
-                    f()
-                capture = torch.cuda.Stream(device=self.device)
-                capture.wait_stream(self.torch_stream(raw))
-                g.graph = torch.cuda.CUDAGraph()
-                with torch.cuda.stream(capture):
-                    g.graph.capture_begin(capture_error_mode="thread_local")
-                    self.kernel.dev.stream = capture.cuda_stream
-                    try:
-                        for f in steps:
-                            f()
-                    finally:
-                        g.graph.capture_end()
-                self.torch_stream(raw).wait_stream(capture)
-            finally:
-                self.kernel.dev.stream = None
-            self._graphs[key] = g
-        else:
-            g.graph.replay()
-        return g.y.clone(), screen
-
-    def _scatter(self, w: int, sh: _Shape, pipe: Any, g: _Graph, tiles: int, flag_rows: int):
-        """The graph's last step: the call's leaves, flags (when it screened) and A root into the pass's buffers, at the
-        offsets in its weight's slot."""
-        size, offs = pipe.size["tree_a"], self.offs[self.order[w]]
-        root, flags, copy = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), _copy_kernel()
-
-        def scatter():
-            copy[(-(-32 * tiles // 1024),)](g.leaves, self.leaves, offs, 0, 32 * tiles, BLOCK=1024)
-            if flag_rows:
-                copy[(-(-2 * flag_rows // 1024),)](g.flags, flags, offs, 1, 2 * flag_rows, BLOCK=1024)
-            copy[(1,)](root, self.roots_buf, offs, 2, 32, BLOCK=1024)
-        return scatter
 
     def _after(self, cur: _Pass, w: int, wt: _Weight, sh: _Shape, pipe: Any, index: int, m: int, k: int, m16: int, tiles: int,
                y: Any, lead: Any, bias: Any, screened: bool = False, rows: Any = None, scattered: bool = False) -> Any:
@@ -1104,24 +779,3 @@ class _ExecutorPass:
             return self.run.end()
         finally:
             self.run.omit = frozenset()
-
-
-def _write(path: Path, data: bytes, digest: bool = True) -> dict:
-    """A transcript file.  Row files carry no digest: the committed roots bind them, and the verifier checks every opened row
-    against them."""
-    path.write_bytes(data)
-    nested = path.parent.name in ("calls", "weights")
-    out = {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": len(data)}
-    if digest:
-        out["sha256"] = hashlib.sha256(data).hexdigest()
-    return out
-
-
-def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
-    """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the beacon, the salt, the
-    records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and tree
-    levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
-    levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 32 bytes a node."""
-    path = d / "manifest.json"
-    path.write_text(json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n")
-    return path
