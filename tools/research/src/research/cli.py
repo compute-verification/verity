@@ -39,6 +39,8 @@
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
+  research slack ask|announce|reply|pickup|done|decline|roster|match|verify-author|read|handles|subscriptions|groups sync|ask-daniel [--dry-run]
+                                                 # the coordination API on Slack (research/slack.py; skill using-slack)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -66,6 +68,7 @@ from pathlib import Path
 from . import compare as C
 from . import record, remote, result
 from . import runs as R
+from .timefmt import both
 
 EX_DATAERR = 65
 
@@ -743,7 +746,7 @@ def cmd_status(argv: list[str]) -> int:
         if ledger.get("error"):
             print(f"ledger    unavailable: {ledger['error']}")
         else:
-            print(f"ledger    runpod balance ${ledger['clientBalance']:.2f}  spend limit ${ledger['spendLimit']}  now ${ledger['currentSpendPerHr']}/h  (observed {ledger['observed_utc']}; the provider's numbers, not a research counter)")
+            print(f"ledger    runpod balance ${ledger['clientBalance']:.2f}  spend limit ${ledger['spendLimit']}  now ${ledger['currentSpendPerHr']}/h  (observed {both(ledger['observed_utc'])}; the provider's numbers, not a research counter)")
         print()
     if not rows:
         print(f"no runs under {root}")
@@ -890,6 +893,10 @@ def main(argv: list[str] | None = None) -> int:
         from .commitmap import main as git_main
 
         return git_main(rest)
+    if cmd == "slack":
+        from .slack import main as slack_main
+
+        return slack_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 
