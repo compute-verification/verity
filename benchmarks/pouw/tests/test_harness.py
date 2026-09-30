@@ -426,6 +426,17 @@ def test_identity_reads_the_server_table_and_refuses_any_other_gpu():
     assert not I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, UUID5, None, pod=True)["uuid_checked"]
 
 
+def test_a_queue_job_accepts_any_listed_gpu_and_records_it():
+    table = I.parse_server_md(SERVER_MD)
+    node = ",".join(table.values())
+    got = I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, table[6], node)
+    assert got["uuid"] == table[6] and got["expected_uuids"] == list(table.values())
+    with pytest.raises(I.IdentityError, match="one of"):
+        I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, "GPU-00000000-0000-0000-0000-000000000000", node)
+    with pytest.raises(I.IdentityError, match="malformed"):
+        I.check({**ENV, "CUDA_VISIBLE_DEVICES": "0"}, 0, 1, table[6], node + ",GPU-nope")
+
+
 def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms():
     I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86")):

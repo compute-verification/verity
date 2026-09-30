@@ -34,8 +34,10 @@ def parse_server_md(text: str) -> dict[int, str]:
 
 def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_uuid: str | None,
           pod: bool = False) -> dict:
-    """Refuses the run unless it is on GPU `gpu` alone and that GPU is `expected_uuid`. On a single-GPU pod (`pod`), which
-    has no server table, the UUID is recorded and matched only when one is given."""
+    """Refuses the run unless it is on GPU `gpu` alone and that GPU is `expected_uuid`. `expected_uuid` may list several,
+    comma-separated: a queue job that can't pin an index (node 2's Kueue queue gives a one-GPU job whichever GPU is free, as
+    index 0) passes the node's UUIDs and records which one it got. On a single-GPU pod (`pod`), which has no server table,
+    the UUID is recorded and matched only when one is given."""
     cvd = env.get("CUDA_VISIBLE_DEVICES")
     if cvd is None or cvd.strip() != str(gpu):
         raise IdentityError(f"CUDA_VISIBLE_DEVICES must be exactly {gpu!r}, is {cvd!r}")
@@ -45,12 +47,15 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
         raise IdentityError(f"CUDA sees {device_count} devices, not 1")
     if not expected_uuid and not pod:
         raise IdentityError("no expected UUID (--expect-uuid, from server.md's table)")
-    if expected_uuid and not UUID_RE.fullmatch(expected_uuid):
-        raise IdentityError(f"malformed expected UUID {expected_uuid!r}")
-    if expected_uuid and uuid != expected_uuid:
-        raise IdentityError(f"the visible device is {uuid}, not GPU {gpu}'s {expected_uuid}")
-    return {"gpu": gpu, "uuid": uuid, "uuid_checked": bool(expected_uuid), "pod": pod, "cuda_visible_devices": cvd,
-            "cuda_device_order": env["CUDA_DEVICE_ORDER"]}
+    expected = [u.strip() for u in (expected_uuid or "").split(",") if u.strip()]
+    for u in expected:
+        if not UUID_RE.fullmatch(u):
+            raise IdentityError(f"malformed expected UUID {u!r}")
+    if expected and uuid not in expected:
+        want = f"one of {', '.join(expected)}" if len(expected) > 1 else f"GPU {gpu}'s {expected[0]}"
+        raise IdentityError(f"the visible device is {uuid}, not {want}")
+    return {"gpu": gpu, "uuid": uuid, "uuid_checked": bool(expected), "expected_uuids": expected, "pod": pod,
+            "cuda_visible_devices": cvd, "cuda_device_order": env["CUDA_DEVICE_ORDER"]}
 
 
 #: what the card must be (the pods' bootstrap check): an RTX PRO 6000 Blackwell, sm_120 with 188 SMs, driver 575 or later

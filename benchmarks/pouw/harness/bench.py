@@ -489,7 +489,8 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
 def parse(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--gpu", type=int, help="the GPU index CUDA_VISIBLE_DEVICES must name (yours, from the brief)")
-    p.add_argument("--expect-uuid", help="that GPU's UUID, from server.md's table")
+    p.add_argument("--expect-uuid", help="that GPU's UUID, from server.md's table (a queue job that can't pin an index: "
+                                         "the node's UUIDs, comma-separated)")
     p.add_argument("--server-md", type=Path, help="read --expect-uuid from this copy of server.md's table")
     p.add_argument("--pod", action="store_true", help="a single-GPU pod: the UUID is recorded, matched only if given")
     p.add_argument("--arm", action="append", default=[], help="an arm, module:Class (repeatable)")
