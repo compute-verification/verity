@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aw_gpu as G  # noqa: E402
 
 PRE = G.PREEMPTED
+PRECISION = {"fp32": False}
 E2M1_VALUES = torch.tensor([0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, -0.0, -0.5, -1.0, -1.5, -2.0, -3.0, -4.0, -6.0])
 
 
@@ -46,7 +47,8 @@ def on_term(signum, frame):
 
 
 class CompactLinear(torch.nn.Module):
-    """A linear layer held as deployed codes; dequantized to BF16 per forward."""
+    """A linear layer held as deployed codes; dequantized to BF16 per forward. With PRECISION["fp32"], the GEMM and the
+    rotations run in FP32 storage (TF32 tensor cores) and only the output is rounded to BF16."""
 
     def __init__(self, n, k, dev):
         super().__init__()
@@ -66,6 +68,17 @@ class CompactLinear(torch.nn.Module):
         return (v.reshape(n, k // 16, 16) * self.bscale.to(torch.bfloat16).unsqueeze(2)).reshape(n, k)
 
     def forward(self, x):
+        if PRECISION["fp32"]:
+            dt = x.dtype
+            x = x.float()
+            if self.rin is not None:
+                x = x @ self.rin.float()
+            y = F.linear(x, self.core().float()) * self.rscale.view(1, -1)
+            if self.scale is not None:
+                y = y * self.scale + self.shift
+            if self.rout is not None:
+                y = y @ self.rout.float().T
+            return y.to(dt)
         if self.rin is not None:
             x = x @ self.rin
         y = F.linear(x, self.core()) * self.rscale.view(1, -1).to(x.dtype)
@@ -155,10 +168,13 @@ _RB = {}
 
 
 def rot_bf16(d, dev, seed):
-    """One shared BF16 copy of the rotation per size: a copy per linear would take 560 x 134 MB on the 70B model."""
-    if (d, seed) not in _RB:
-        _RB[(d, seed)] = G.rot_matrix(d, dev, seed).to(torch.bfloat16)
-    return _RB[(d, seed)]
+    """One shared copy of the rotation per size (a copy per linear would take 560 x 134 MB on the 70B model): FP32 when
+    PRECISION["fp32"], else BF16."""
+    key = (d, seed, PRECISION["fp32"])
+    if key not in _RB:
+        r = G.rot_matrix(d, dev, seed)
+        _RB[key] = r if PRECISION["fp32"] else r.to(torch.bfloat16)
+    return _RB[key]
 
 
 def project(model, shards, names, rung, seed, dev):
@@ -257,9 +273,12 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--max-seconds", type=float, default=540)
+    ap.add_argument("--precision", choices=("bf16", "fp32"), default="fp32",
+                    help="fp32: GEMMs and rotations in FP32 storage on TF32 tensor cores (the rotated 70B needs it); bf16: BF16")
     args = ap.parse_args()
     t0 = time.time()
-    torch.backends.cuda.matmul.allow_tf32 = False
+    PRECISION["fp32"] = args.precision == "fp32"
+    torch.backends.cuda.matmul.allow_tf32 = PRECISION["fp32"]
     dev = torch.device("cuda")
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     variants = args.variants.split(",")
@@ -293,7 +312,8 @@ def main():
         nll = G.eval_ppl(model, test, args.seqlen, want, dev) if not PRE["flag"] else []
         if PRE["flag"] or len(nll) != want:
             break
-        doc = {"variant": v, "model": args.model, "rung": rung, "recover": int(rec), "ppl": math.exp(sum(nll) / len(nll)),
+        doc = {"variant": v, "model": args.model, "rung": rung, "recover": int(rec), "precision": args.precision,
+               "ppl": math.exp(sum(nll) / len(nll)),
                "window_nll": nll, "eval_windows": len(nll), "seqlen": args.seqlen,
                "recover_steps": args.recover_steps if rec == "1" else 0, "recover_loss_trace": trace,
                "project_seconds": round(tp, 1), "seconds": round(time.time() - t1, 1),

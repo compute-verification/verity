@@ -19,7 +19,11 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--model", default="unsloth/Llama-3.2-1B")
 ap.add_argument("--windows", type=int, default=2)
 ap.add_argument("--reference", action="store_true")
+ap.add_argument("--precision", choices=("bf16", "fp32"), default="bf16")
+ap.add_argument("--rungs", default="none,rot,none@nvfp4,rot@nvfp4")
 args = ap.parse_args()
+S.PRECISION["fp32"] = args.precision == "fp32"
+torch.backends.cuda.matmul.allow_tf32 = S.PRECISION["fp32"]
 dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 hf = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
 snap = glob.glob(f"{hf}/hub/models--{args.model.replace('/', '--')}/snapshots/*")[0]
@@ -38,14 +42,14 @@ def ppl(model):
     return round(float(torch.tensor(nll).mean().exp()), 4)
 
 
-out = {"model": args.model, "device": str(dev)}
+out = {"model": args.model, "device": str(dev), "precision": args.precision}
 if args.reference:
     ref = AutoModelForCausalLM.from_pretrained(snap, dtype=torch.bfloat16).to(dev).eval()
     out["reference"] = ppl(ref)
     del ref
     torch.cuda.empty_cache()
 cfg, model, shards, names = S.build(snap, dev)
-for rung in ("none", "rot", "none@nvfp4", "rot@nvfp4"):
+for rung in args.rungs.split(","):
     with torch.no_grad():
         S.project(model, shards, names, rung, 20260930, dev)
     out[rung] = ppl(model)
