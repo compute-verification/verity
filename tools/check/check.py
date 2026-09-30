@@ -46,6 +46,13 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
 `--verdicts-in` (the merge queue's pods share their passes this way; the pack imported is named in the result's `verdicts`).
+
+The evidence store.  A recorded check runs the store-backed tests (integrations/vllm's `store_io`) on the store's remote, never
+skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
+dir (`research run --custody-r2`, the default with --on: a delete-free key with GetObject), which `store_io` hands to its store
+CLI only.  So `--record --on` must be launched where the parent R2 key is (the Cursor secrets, or `~/.config/verity/r2.env` when it
+holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key, and `research run` refuses.  VERITY_SKIP_STORE=1
+is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.
 """
 from __future__ import annotations
 
@@ -70,10 +77,23 @@ ROOT = Path(__file__).resolve().parents[2]
 FLOCK_VERIFIER = ROOT / "backends" / "flock" / "verifier"
 #: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
 VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
-                      "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY"})
+                      "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY",
+                      "CHECK_STORE_CUSTODY"})
 #: variables naming the machine rather than what a step computes: a pod's id, address and pod-scoped key (so a verdict one pod
 #: stored stays valid on another; `verdicts.py`)
 MACHINE_PREFIXES = ("RUNPOD_",)
+#: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
+CUSTODY_ENV = "CHECK_STORE_CUSTODY"
+STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
+
+
+def custody_dir() -> Path | None:
+    """The recording run's custody dir (`<root>/requests/<run id>/custody/`, beside `<root>/runs/<run id>/`) when it holds a key."""
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if not run_dir or not run_id:
+        return None
+    d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
+    return d if (d / "store.toml").is_file() and (d / "cred.json").is_file() else None
 
 
 def cache_dir() -> Path:
@@ -434,8 +454,13 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 def env() -> dict[str, str]:
     """The steps' environment, as a plain shell's: none of what the recording run gives its workload (`RESEARCH_*`, the
     machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them), PYTHONPATH entries inside this
-    tree only (a machine's runner puts its shipped `research` first), and a git identity when none is set."""
-    out = {k: v for k, v in os.environ.items() if not k.startswith("RESEARCH_") and k != "PYTHONPYCACHEPREFIX"}
+    tree only (a machine's runner puts its shipped `research` first), and a git identity when none is set.  Inside a recorded run,
+    the store is required and the run's custody dir is passed on (the module docstring's "The evidence store")."""
+    out = {k: v for k, v in os.environ.items() if not k.startswith("RESEARCH_") and k not in ("PYTHONPYCACHEPREFIX", CUSTODY_ENV, STORE_REQUIRED_ENV)}
+    if os.environ.get("RESEARCH_RUN_ID"):
+        out[STORE_REQUIRED_ENV] = "1"
+        if custody := custody_dir():
+            out[CUSTODY_ENV] = str(custody)
     keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
     if keep:
         out["PYTHONPATH"] = os.pathsep.join(keep)
@@ -602,6 +627,10 @@ def main(argv: list[str]) -> int:
             print("check: --record inside a recorded run", file=sys.stderr)
             return 2
         return record([a for a in argv if a != "--record"])
+    if os.environ.get("RESEARCH_RUN_ID") and os.environ.get("VERITY_SKIP_STORE") == "1":
+        print("check: VERITY_SKIP_STORE=1 inside a recorded run: a recorded check runs the store-backed tests (the module docstring's "
+              "\"The evidence store\")", file=sys.stderr)
+        return 2
     cache = "--no-cache" not in argv
     rest = [a for a in argv if a != "--no-cache"]
     pack = None

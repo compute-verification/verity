@@ -244,8 +244,13 @@ def _gemm(dot: Callable, statics: dict[str, Any], ops: Sequence[np.ndarray]) -> 
 
 
 def gemm(statics: dict[str, Any], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
-    """`Gemm_v1{K,N}`: the ascending k16 AmpereBF16TcDot16 chain from 0 per coordinate, then f2fp_bf16."""
+    """`Gemm_v1{K,N}`: the ascending k16 AmpereBF16TcDot16 chain from 0 per coordinate, then f2fp_bf16 (the float64 chain of
+    `dense_rows` for a row past `FAST_GEMM_WORDS` weight words, word for word the same)."""
     from verity_vllm.program.kernels import derived_rows as D
+    K, N = int(statics["K"]), int(statics["N"])
+    if K * N >= dense_rows.FAST_GEMM_WORDS:
+        out, _nonfin = dense_rows.gemm_ampere_row(np.asarray(ops[0], dtype=np.uint16).reshape(K), np.asarray(ops[1], dtype=np.uint16).reshape(N, K))
+        return {"0": out, "out": out}
     out, _nonfin = _gemm(D.dot_bf16, statics, ops)
     return {"0": out, "out": out}
 
@@ -785,3 +790,5 @@ _row("MoeExpertGemmW_v1", partial(moe_expert_gemm, routed=True), ("down",), _sam
 _row("MoeFfnFixedL_v1", partial(moe_ffn_fixed, router_gemm=False), ("out",))
 _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
+
+from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
