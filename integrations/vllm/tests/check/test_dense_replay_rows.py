@@ -14,6 +14,7 @@ from verity_vllm.program.kernels import ir_rows
 from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
 from verity_vllm.program.registry import dense
 from verity_vllm.query.call_scope import specialization
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import spec_statics
 
@@ -50,8 +51,9 @@ def test_each_dense_row_is_the_ir_reference():
         fam, st = spec_family(r["spec"]), spec_statics(r["spec"])
         vals[r["i"]] = list(evaluate(specialization(fam, st), *args))
         if fam in ir_rows.FAMILIES:
-            got = ROWS[fam].fn(st, [np.asarray(a, dtype=np.uint64) for a in args])
-            assert [int(w) for m in got.values() for w in m] == vals[r["i"]], r["name"]
+            # the replay reads statics as the manifest spells them (an f64 literal stays `{"f64":"<hex>"}` text)
+            got = ROWS[fam].fn(RM.spec_statics(r["spec"]), [np.asarray(a, dtype=np.uint64) for a in args])
+            assert got["0"] is got["out"] and got["out"].tolist() == vals[r["i"]], r["name"]
             seen.add(fam)
     assert seen == set(ir_rows.FAMILIES) - {"GeluTanhMul_v1"}
 
@@ -62,10 +64,11 @@ def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
     gu = (np.asarray(rng.standard_normal(2 * I) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
     gu[:6] = [0x7FC0, 0xFF80, 0x7F80, 0x8000, 0x0001, 0x7F7F]
     got = ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu])
-    assert list(got) == ["out"] and got["out"].dtype == np.uint16
+    assert list(got) == ["0", "out"] and got["out"].dtype == np.uint16
     assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=I), gu.tolist()))
     import pytest
     with pytest.raises(ir_rows.Declined, match="arg words"):
         ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu[:-1]])
     with pytest.raises(ir_rows.Declined, match="past"):
         ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
+
