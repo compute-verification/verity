@@ -139,9 +139,9 @@ def tile(job: Job, name: str, t: int) -> dict:
     noise = s.noise(Context(lab("salt"), unit, lab("root_a"), lab("root_b")))
     got = {"tile": [ti, tj], "m": m, "n": n, "k_kept": len(keep), "k_unit": k_unit}
     try:
-        a, _ = s._side(unit_rows(x[rows], keep, k_unit), rows, F.ROLE_EA, F.ROLE_FA, noise.seed_a, noise.seed_b, k_unit)
-        b, _ = s._side(unit_rows(np.asarray(w[cols]), keep, k_unit), cols, F.ROLE_EB, F.ROLE_FB, noise.seed_b,
-                       noise.seed_b, k_unit)
+        a, e_a = s._side(unit_rows(x[rows], keep, k_unit), rows, F.ROLE_EA, F.ROLE_FA, noise.seed_a, noise.seed_b, k_unit)
+        b, e_b = s._side(unit_rows(np.asarray(w[cols]), keep, k_unit), cols, F.ROLE_EB, F.ROLE_FB, noise.seed_b,
+                         noise.seed_b, k_unit)
     except P.Reject as e:
         return got | {"rejected": str(e)}
     cred_a = [p for p in range(TILE) if F.row_passes(F.NVFP4, a.x[p])]
@@ -149,7 +149,7 @@ def tile(job: Job, name: str, t: int) -> dict:
     got |= {"credited": [len(cred_a), len(cred_b)], "rejected": ""}
     if not (cred_a and cred_b):
         return got
-    debit, cap = s.tile_cap(W.UnitRecord(unit, m, len(keep)), SimpleNamespace(a=a, b=b), cred_a, cred_b)
+    debit, cap = s.tile_cap(W.UnitRecord(unit, m, len(keep)), SimpleNamespace(a=a, b=b, e_a=e_a, e_b=e_b), cred_a, cred_b)
     return got | {"debit": s.last_debit.to_json(), "cap": str(cap), "ratio": float(debit / cap)}
 
 

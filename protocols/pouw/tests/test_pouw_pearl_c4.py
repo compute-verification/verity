@@ -8,6 +8,7 @@ import base64
 import copy
 import json
 import pickle
+import random
 import types
 from fractions import Fraction
 
@@ -198,21 +199,24 @@ def test_row_rules_and_debit(fmt):
     e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
     a = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FA, 1024))
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
-    clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096)
-    assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0
+    clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
+    assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
+    # F1′: NVFP4's scales move with the salt, which cancels a Gaussian window's small saving; MXFP4's UE8M0 scales don't,
+    # so its windows keep it (about 1% of this tile's cap)
+    assert (clean.split == 0) if fmt == "nvfp4" else 0 < clean.split < 1
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
     # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
-    assert clean.total == clean.forming + clean.identity and (clean.identity == 0) == (fmt == "nvfp4")
+    assert clean.total == clean.forming + clean.identity + clean.split and (clean.identity == 0) == (fmt == "nvfp4")
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
     # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
-    d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096)
-    assert d.dead_pairs == f.block and d.two_four == 4 * F.two_four_units(dead) and d.identity == d.subgrid == d.windows == 0
+    d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096, e, e)
+    assert d.dead_pairs == f.block and d.identity == d.subgrid == d.windows == 0
     assert d.counts["screened_blocks_a"] == d.counts["screened_blocks_b"] == 1 and d.counts["forming_elements"] >= f.block
     assert d.forming == Fraction(F.FORMING_CREDITED * d.counts["forming_elements"] * 2, 4096)
-    assert d.total == d.dead_pairs + d.two_four + d.forming
+    assert d.total == d.dead_pairs + d.split + d.int8 + d.forming
 
 
 def screened_tile(blocks: int):
@@ -254,7 +258,9 @@ def test_a_row_whose_screened_blocks_push_the_tile_past_rho_is_rejected():
     unneeded = [all(ops.b.codes[j][t] & 7 == 0 for j in range(4)) for t in range(1024)]
     salt_dead_only = sum(p or u for row in dead for p, u in zip(row, unneeded))
     assert salt_dead_only < d.counts["forming_elements"] and d.dead_pairs == 0
-    assert Fraction(F.FORMING_CREDITED * salt_dead_only * 4, 1024) + d.two_four + d.identity + d.subgrid + d.windows < cap
+    # F1′ charges these blocks too: next to a 9.75ρ max their other codes change rarely (σ' ≈ 0.15 E2M1 units)
+    assert d.split > 0
+    assert Fraction(F.FORMING_CREDITED * salt_dead_only * 4, 1024) + d.int8 + d.identity + d.subgrid + d.windows < cap
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
@@ -268,6 +274,114 @@ def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
     word, identity, subgrid = F.word_replay(f, top + low, top + low, [0x7E] * 4 + [0x01] * 4, [0x7E] * 4 + [0x01] * 4)
     assert (identity, subgrid) == (1, 4) and word == F.chain(f, top, top, [0x7E] * 4, [0x7E] * 4)
     assert F.two_four_windows([0x1, 0x9, 0, 0] * 32 + [0x1] * 128) == [True, False]
+
+
+def _row(values) -> list[int]:
+    return F.parse_row(F.bf16_row([P.f32_to_bf16(v) for v in values]), len(values))
+
+
+_COLS = random.Random(7)
+_BLOCK_SIGN = [_COLS.choice((-1, 1)) for _ in range(4096 // 16)]
+_CELL = [_COLS.choice((0.0, 0.5, 1.0, 1.5)) for _ in range(4096)]
+_SIGN = [_COLS.choice((-1, 1)) for _ in range(4096)]
+_SAMPLE = [1.0 if _COLS.random() < 0.275 else 0.5 for _ in range(4096)]
+
+
+def spike_row(i: int, k: int = 1024, s: float = 8.9, top: float | None = None) -> list[int]:
+    """The assessor's base-split rows (fp4-base-split-break.md): every 8th position at ±1 (ρ = 1), 14 spikes per block at
+    s·ρ off ρ's positions, signed by a row sign times a block sign.  `top` puts one entry in the last block (screened)
+    that sets α so the spikes' block max centres UE4M3's byte 384: every scale then sits at one byte."""
+    rng = random.Random(i)
+    rs = 1 if i % 2 else -1
+    v = [rng.choice((-1.0, 1.0)) if t % 8 == 0 else s * rs * _BLOCK_SIGN[t // 16] for t in range(k)]
+    if top is not None:
+        v[k - 15] = top
+    return _row(v)
+
+
+def narrow_cell_row(i: int, k: int = 1024, s: float = 8.9) -> list[int]:
+    """One max per block at s·ρ, and every other code, ρ's samples included, at the centre of a narrow E2M1 cell (0,
+    ±0.5, ±1 or ±1.5 of s/6), in a rank-one pattern: no code is near-deterministic at ε = 5%, yet the split pays
+    (theory-pearl-c4-domain.md §6.1)."""
+    u, rs = s / 6, 1 if i % 2 else -1
+    v = [rs * _SIGN[t] * (_SAMPLE[t] if t % 8 == 0 else _CELL[t]) * u for t in range(k)]
+    for b in range(k // 16):
+        v[16 * b + 1] = s * rs
+    return _row(v)
+
+
+def formed(f: F.Fmt, rows, role_e: int, role_f: int, k: int):
+    e = [F.line(b"\x03" * 32, role_e, i) for i in range(len(rows))]
+    return F.form(f, rows, e, F.basis(b"\x04" * 32, role_f, k)), e
+
+
+@pytest.mark.parametrize("family", [spike_row, narrow_cell_row], ids=["spike", "narrow-cell"])
+def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
+    """F1′ (theory §6.2): the assessor's spike rows, which the support witness reads as salt-live (every other item 0),
+    and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the cap, while
+    the Gaussian side carries nothing."""
+    f, k, n = F.NVFP4, 1024, 4096
+    rows = [family(i) for i in range(4)]
+    assert all(F.row_passes(f, x) and not any(F.dead_blocks(f, x)) for x in rows)
+    a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
+    b, e_b = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "B", 4, k)], F.ROLE_EB, F.ROLE_FB, k)
+    d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b)
+    cap = F.CAP * Fraction(F.PearlC4().credit_of(Shape(1, k, n)), n) * 16
+    assert d.split > 50 * cap
+    gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k) for j in range(4)]
+    assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) == 0
+    if family is spike_row:
+        assert d.counts["salt_dead_a"] == 0
+
+
+def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
+    """A block keeps its scale under any reordering, so reliable codes one per aligned pair (0 and ½ alternating) are
+    paired together: every chunk keeps two unchanged pairs and the 2:4 pass always fits (S_w = ½).  All reliable: the
+    capped sum, 1; all changing half the time: nothing."""
+    f = F.NVFP4
+    assert F.split_saving(f, [0.0, 0.5] * 64) == pytest.approx(0.5)
+    assert F.split_saving(f, [0.0] * 128) == 1.0
+    assert F.split_saving(f, [0.5] * 128) < 1e-4
+
+
+def test_f2_depth_cost_is_the_pinned_formula():
+    """c_L (bc-d9842080, 13:35Z) at the GEMM shapes of theory §6.3, with depth capped only by log2(k/block)."""
+    f = F.NVFP4
+    assert [round(F.int8_depth_cost(f, s, s, s), 3) for s in (8192, 16384, 32768, 65536)] == [0.808, 0.707, 0.619, 0.542]
+    assert round(F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24), 3) == 0.403
+    assert F.int8_depth_cost(f, 1 << 24, 16, 1 << 24) == 2.0
+    assert F.int8_depth_cost(F.MXFP4, 1 << 24, 1 << 16, 1 << 24) > F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24)
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_f2_reads_flatness_per_row_and_per_block_column_class(fmt):
+    """F2 on the tile's realised scale bytes: flat at one byte, the route's whole 1 − c_L; flat per row (row factors of
+    two) or per block-column class (two classes a byte apart, each a sub-GEMM over half of k), the same, where the tile's
+    modal share (0.5) alone would read nothing; bytes spread as honest ones are, nothing."""
+    f, m, n, k = F.FORMATS[fmt], 1 << 24, 1 << 24, 8192
+    nb, base = k // f.block, 0x50 if fmt == "nvfp4" else 120
+    full, half = 1 - F.int8_depth_cost(f, m, k, n), 1 - F.int8_depth_cost(f, m, k // 2, n)
+    flat = [[base] * nb for _ in range(8)]
+    assert F.int8_saving(f, flat, flat, m, n) == pytest.approx(full) and full > 0
+    shifted = [[base + (8 if fmt == "nvfp4" else 1) * (r % 2)] * nb for r in range(8)]
+    assert F.int8_saving(f, shifted, flat, m, n) == pytest.approx(full)
+    two = [[base + c % 2 for c in range(nb)] for _ in range(8)]
+    assert F.int8_saving(f, two, two, m, n) == pytest.approx(half) and half > 0
+    rng = random.Random(1)
+    honest = [[base + rng.randrange(6) for _ in range(nb)] for _ in range(8)]
+    assert F.int8_saving(f, honest, honest, m, n) == 0
+
+
+def test_f2_charges_a_formed_tile_whose_scales_sit_at_one_byte():
+    """The flattest rows (fp4-int8-route.md 12:00Z): spike rows with α tuned so every block max centres byte 384, on both
+    sides.  Their realised scales sit at one byte, so F2 charges the masked int8 route's saving on every chain MAC."""
+    f, k, m = F.NVFP4, 4096, 1 << 24
+    rows = [spike_row(i, k, top=9.88) for i in range(4)]
+    a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
+    b, e_b = formed(f, rows, F.ROLE_EB, F.ROLE_FB, k)
+    d = F.tile_debit(f, a, b, range(4), range(4), m, e_a, e_b, m)
+    save = F.int8_saving(f, a.scales, b.scales, m, m)
+    assert save > 0 and d.int8 == Fraction(save) * 16 * k
 
 
 def test_scale_bytes_have_one_encoding_and_no_zero():
