@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """W1 price microbenchmarks on sm_120 (the RTX PRO 6000): issue rates per SM per clock of the dense FP8 atom (f32 and f16
-accumulation), the block-scaled mxf8f6f4 and nvf4 atoms, BF16 and FP16 mma.sync, FP32 FADD and FFMA, and the E4M3 cast, and the
-prices W1 reads off them.
+accumulation), the block-scaled mxf8f6f4 and nvf4 atoms, BF16 and FP16 mma.sync, FP32 FADD and FFMA, the packed add.rn.f32x2 and
+the same adds as plain C pairs, and the E4M3 cast, and the prices W1 reads off them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
 
 The unit is W1's: one dense E4M3 MAC with FP32 accumulation, i.e. 1 / (the qmma_e4m3_f32 rate per SM per clock).  A price is that
-rate over an op's rate in its own unit: per MAC for the atoms, per register written for FADD / FFMA, per code (and per instruction,
-two codes) for the cast.  Per-clock rates come from clock64() around each block's loop, so they don't move with the SM clock; the
+rate over an op's rate in its own unit: per MAC for the atoms, per register written for FADD / FFMA, per result word (and per
+instruction, two words) for the packed add, per code (and per instruction, two codes) for the cast.  Per-clock rates come from clock64() around each block's loop, so they don't move with the SM clock; the
 clock itself is recorded per rep (cycles over event time, and an ``nvidia-smi --id`` sample), and results carry ``--clocks`` as
 their clock label (unlocked unless the operator says otherwise, e.g. locked-2100 on node 2).
 
 Gates, in order, before anything is timed: the device (``fp8.identity_gate``: one visible device, its UUID, sm_120); the SASS gate
 (each op's loop body holds exactly its instruction, NACC x UNROLL MMAs or 64 scalar instructions, and its full loop composition is
-recorded); the numeric gate (all-ones operands give exact integers for every atom and FADD / FFMA; the cast is checked against
+recorded); the numeric gate (all-ones operands give exact integers for every atom and FADD / FFMA, and for the packed and paired
+adds 1 in the low word and 2 in the high, so a swapped half shows; the cast is checked against
 ``fp8.cvt_ref`` on the timing data, and an op whose expected words are all zero fails as vacuous); one block per SM (distinct
 %smid).  A failed gate writes no measurements.  ``--fake-silicon``
 replaces the device with a model that returns the gate's words and cycles from the Public datasheet rates (a CPU dry run of the
@@ -57,14 +58,18 @@ OPS = [
     ("ffma", "FFMA", NCHAIN * SUNROLL, 32, "register"),
     ("f2fp_e4m3x2", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
     ("f2fp_e4m3x2_u16", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
+    # sm_120a has no FADD2: each add.rn.f32x2 is two FADDs (sm_100a's ptxas gives one FADD2), and plain C pairs stay FADDs
+    ("fadd_f32x2", "FADD", 2 * NCHAIN * SUNROLL, 32, "word"),
+    ("fadd_pairs", "FADD", 2 * NCHAIN * SUNROLL, 32, "word"),
 ]
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
-           "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate"]  # w1_prices.cu's KERNELS, in op order
-_WATCHED = re.compile(r"^(?:[A-Z]*MMA|F2FP|F2F|FADD|FFMA|FMUL|UF2FP|UFADD|UFFMA)(?:\.|$)")
+           "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate", "fadd_f32x2_rate", "fadd_pairs_rate"]  # w1_prices.cu's KERNELS, in op order
+_WATCHED = re.compile(r"^(?:[A-Z]*MMA|F2FP|F2F|FADD2?|FFMA2?|FMUL2?|UF2FP|UFADD|UFFMA)(?:\.|$)")
 # Public (datasheet) dense rates per SM per clock, the fake device's cycles: RTX PRO 6000 Blackwell, 188 SMs.  Estimated, never output.
 _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 1024, "omma_nvf4": 2048, "hmma_bf16_f32": 512,
-              "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64, "f2fp_e4m3x2_u16": 64}
+              "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64, "f2fp_e4m3x2_u16": 64, "fadd_f32x2": 128,
+              "fadd_pairs": 128}
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
@@ -174,6 +179,7 @@ GATE_ROW = {  # per op: the all-ones row (a0..a3, b0, b1, scale A, scale B), or 
     0: [_rep(0x38, 8)] * 6 + [0, 0], 1: [_rep(0x38, 8)] * 6 + [0, 0], 2: [_rep(0x38, 8)] * 6 + [127, 127],
     3: [_rep(0x2, 4)] * 6 + [_rep(0x38, 8)] * 2, 4: [_rep(0x3F80, 16)] * 6 + [0, 0], 5: [_rep(0x3C00, 16)] * 6 + [0, 0],
     6: [0, 0x3F800000, 0x3F800000] + [0] * 5, 7: [0, 0x3F800000, 0x3F800000] + [0] * 5,
+    10: [0, 0, 0x3F800000, 0x40000000] + [0] * 4, 11: [0, 0, 0x3F800000, 0x40000000] + [0] * 4,  # low half adds 1, high half 2
 }
 
 
@@ -214,6 +220,9 @@ def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
         w.reshape(THREADS, NACC, 4)[:, :, :2] = v | (v << 16)
     elif op in (6, 7):
         w[:, :NCHAIN] = np.float32(SUNROLL * iters).view(np.uint32)
+    elif op in (10, 11):
+        w[:, 0:2 * NCHAIN:2] = np.float32(SUNROLL * iters).view(np.uint32)
+        w[:, 1:2 * NCHAIN:2] = np.float32(2 * SUNROLL * iters).view(np.uint32)
     else:
         w[:, :NCHAIN] = np.tile(f2fp_model(iters, rows, packed=op == 8), (THREADS // 32, 1))
     return w
@@ -241,6 +250,9 @@ def timing_rows(op: int, rng) -> np.ndarray:
         r[:, 0] = np.float32(rng.uniform(1, 2, 32)).view(np.uint32)
         r[:, 1] = np.float32(rng.uniform(2**-10, 2**-9, 32) * rng.choice([-1, 1], 32)).view(np.uint32)
         r[:, 2] = np.float32(1 - rng.uniform(2**-12, 2**-11, 32)).view(np.uint32)
+    elif op in (10, 11):
+        r[:, :2] = np.float32(rng.uniform(1, 2, (32, 2))).view(np.uint32)
+        r[:, 2:4] = np.float32(rng.uniform(2**-10, 2**-9, (32, 2)) * rng.choice([-1, 1], (32, 2))).view(np.uint32)
     else:
         r[:, 0] = np.float32(rng.uniform(1, 2, 32)).view(np.uint32)
         r[:, 1] = np.float32(rng.uniform(0.25, 0.5, 32)).view(np.uint32)
@@ -304,6 +316,7 @@ def prices(tim: dict) -> dict:
     for name, _, _, _, per in OPS:
         out["price_units"][f"{name} per {per}"] = unit / rate[name]
     out["price_units"]["f2fp_e4m3x2 per instruction (2 codes)"] = 2 * unit / rate["f2fp_e4m3x2"]
+    out["price_units"]["fadd_f32x2 per instruction (2 words)"] = 2 * unit / rate["fadd_f32x2"]
     out["f16_over_f32_accumulate"] = rate["qmma_e4m3_f16"] / unit
     return out
 
@@ -386,7 +399,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--target-cycles", type=int, default=1 << 27, help="cycles per timed launch (about 50 ms at 2.6 GHz)")
     ap.add_argument("--compile-only", action="store_true", help="build + SASS gate only (no GPU)")
     ap.add_argument("--clocks", default="unlocked", help="the clock state the operator set, as results label it (e.g. locked-2100)")
-    ap.add_argument("--expect-gpu-uuid", default=None, help="the device's UUID from internal/pouw/rtx-pro/server.md; a mismatch stops the run")
+    ap.add_argument("--expect-gpu-uuid", default=os.environ.get("GPU_LEASE_UUID"),
+                    help="the device's UUID (default: gpu-lease's GPU_LEASE_UUID); a mismatch stops the run")
     ap.add_argument("--fake-silicon", action="store_true", help="host models stand in for the device (CPU dry run; never evidence)")
     ap.add_argument("--corrupt-word", type=int, default=None, help="with --fake-silicon: flip one bit of one gate word; the run must fail")
     return ap

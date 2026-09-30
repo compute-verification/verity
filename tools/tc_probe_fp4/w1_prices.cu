@@ -14,6 +14,8 @@
 //    7  ffma_rate              fma.rn.f32                                                                         32 lanes
 //    8  f2fp_rate              cvt.rn.satfinite.e4m3x2.f32 (+ one 3-input add per four converts)                64 elements
 //    9  f2fp_u16_rate          the same, each result zero-extended (+ one 3-input add per two converts)            64 elements
+//   10  fadd_f32x2_rate        add.rn.f32x2 (PTX 8.6; sm_120a lowers each to two FADD, sm_100a to one FADD2)       64 words
+//   11  fadd_pairs_rate        two independent C-level f32 adds per chain pair (does ptxas pair them on its own?)   32 words
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -221,9 +223,56 @@ __global__ void __launch_bounds__(THREADS) f2fp_u16_rate(const uint32_t* __restr
     for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
 }
 
+// Packed FP32 pairs: NCHAIN chains of two words each, a lane's row words 0 and 1 the chains' low and high starts, words 2 and 3 the
+// low and high addends, so both halves are checked and a swap shows.
+__global__ void __launch_bounds__(THREADS) fadd_f32x2_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                           long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    unsigned long long x[NCHAIN];
+    const unsigned long long x0 = (unsigned long long)row[1] << 32 | row[0], y = (unsigned long long)row[3] << 32 | row[2];
+    for (int j = 0; j < NCHAIN; j++) x[j] = x0;
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+        for (int u = 0; u < SUNROLL; u++) {
+#pragma unroll
+            for (int j = 0; j < NCHAIN; j++) asm volatile("add.rn.f32x2 %0, %0, %1;" : "+l"(x[j]) : "l"(y));
+        }
+    }
+    RATE_EPILOGUE
+    for (int j = 0; j < NCHAIN; j++) {
+        chk[(size_t)tid * CHK + 2 * j] = (uint32_t)x[j];
+        chk[(size_t)tid * CHK + 2 * j + 1] = (uint32_t)(x[j] >> 32);
+    }
+}
+
+// The same pairs as plain C adds, the code anyone writes: whatever ptxas makes of them is what they cost.  Chain j starts j ulps
+// above the row's start, so no two chains are the same computation and none can be merged (the gate's start is 0, and its first add
+// of 1 or 2 rounds the offset away).
+__global__ void __launch_bounds__(THREADS) fadd_pairs_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                           long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    float x[2 * NCHAIN];
+    const float y0 = __uint_as_float(row[2]), y1 = __uint_as_float(row[3]);
+    for (int j = 0; j < NCHAIN; j++) x[2 * j] = __uint_as_float(row[0] + j), x[2 * j + 1] = __uint_as_float(row[1] + j);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+        for (int u = 0; u < SUNROLL; u++) {
+#pragma unroll
+            for (int j = 0; j < NCHAIN; j++) {
+                x[2 * j] = x[2 * j] + y0;
+                x[2 * j + 1] = x[2 * j + 1] + y1;
+            }
+        }
+    }
+    RATE_EPILOGUE
+    for (int j = 0; j < 2 * NCHAIN; j++) chk[(size_t)tid * CHK + j] = __float_as_uint(x[j]);
+}
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
-                          fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate};
+                          fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace

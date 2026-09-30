@@ -1,8 +1,9 @@
 """``tools/tc_probe_fp4/w1.py``, the W1 price microbenchmarks, on fake silicon and on synthetic SASS.
 
 The fake run passes every gate and turns its rates into prices in the unit; a flipped gate word fails the run before anything is
-timed; the SASS loop gate rejects a loop with a missing or an extra watched instruction; the cast gate's packing (hi operand in
-the upper byte) is pinned; the tool declarations resolve their key params.  With nvcc on the PATH, the real build's loops are
+timed; the SASS loop gate rejects a loop with a missing or an extra watched instruction, and pins add.rn.f32x2's sm_120a lowering
+(two FADDs, no FADD2); the packed add's gate words tell its halves apart; the cast gate's packing (hi operand in the upper byte) is
+pinned; the tool declarations resolve their key params.  With nvcc on the PATH, the real build's loops are
 checked.
 """
 from __future__ import annotations
@@ -26,6 +27,7 @@ import w1  # noqa: E402
 def no_nvcc(monkeypatch):
     monkeypatch.setattr(w1.P4, "nvcc_bin", lambda: "/nonexistent/nvcc")
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
 
 
 def _run(tmp_path, *extra):
@@ -40,6 +42,15 @@ def test_fake_run_prices(tmp_path, no_nvcc):
     assert p["qmma_e4m3_f32 per MAC"] == 1.0
     assert p["fadd per register"] == pytest.approx(1024 / 128, rel=1e-6)
     assert p["f2fp_e4m3x2 per instruction (2 codes)"] == pytest.approx(2 * p["f2fp_e4m3x2 per code"])
+    assert p["fadd_f32x2 per word"] == pytest.approx(1024 / 128, rel=1e-6) == p["fadd_pairs per word"]
+    assert p["fadd_f32x2 per instruction (2 words)"] == pytest.approx(2 * p["fadd_f32x2 per word"])
+
+
+@pytest.mark.parametrize("op", [10, 11])
+def test_packed_add_gate_tells_the_halves_apart(op):
+    want = w1.expected_words(op, w1.GATE_ITERS, np.array(w1.GATE_ROW[op], np.uint32)[None].repeat(32, 0))
+    lo, hi = want[:, 0:16:2].view(np.float32), want[:, 1:16:2].view(np.float32)
+    assert (lo == w1.SUNROLL * w1.GATE_ITERS).all() and (hi == 2 * lo).all()
 
 
 def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
@@ -60,10 +71,10 @@ def test_vacuous_gate_fails(tmp_path, no_nvcc, monkeypatch):
     assert code == 1 and res["numeric_gate"]["ops"]["fadd"]["vacuous"] and "prices" not in res
 
 
-def _sass(body: list[str]) -> str:
+def _sass(body: list[str], kernel: str = "fadd_rate") -> str:
     lines = [f"        /*{16 * i:04x}*/                   {op} R0, R1 ;" for i, op in enumerate(body)]
     lines.append(f"        /*{16 * len(body):04x}*/                   BRA.U UP0, 0x0 ;")
-    return "\n\tFunction : _ZN12_GLOBAL__N_19fadd_rateEPKjPjPxPii\n" + "\n".join(lines) + "\n"
+    return f"\n\tFunction : _ZN12_GLOBAL__N_1{len(kernel)}{kernel}EPKjPjPxPii\n" + "\n".join(lines) + "\n"
 
 
 def test_loop_bodies_counts_one_loop():
@@ -76,6 +87,13 @@ def test_sass_gate_rejects_a_wrong_loop(monkeypatch, body):
     monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body)})())
     gate = w1.sass_gate(Path("/nonexistent.so"), None)
     assert not gate["kernels"]["fadd"]["ok"]
+
+
+@pytest.mark.parametrize("body, ok", [(["FADD"] * 128, True), (["FADD2"] * 64, False), (["FADD"] * 126 + ["FADD2"], False)])
+def test_sass_gate_pins_the_packed_add_lowering(monkeypatch, body, ok):
+    """sm_120a lowers add.rn.f32x2 to two FADDs; a toolchain that emits FADD2 changes the price and must fail the gate."""
+    monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body, "fadd_f32x2_rate")})())
+    assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"]["fadd_f32x2"]["ok"] is ok
 
 
 def test_f2fp_packing_pinned():
