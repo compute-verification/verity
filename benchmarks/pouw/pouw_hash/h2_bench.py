@@ -24,8 +24,9 @@ CUDA graphs at the node's clocks, not a panel row).
    commitment, hash_msg, the tile leaves and tile tree), the chain GEMMs that price the fused digests (gemm_pearlc_b less
    gemm_pearlc_s), gemm_ct and the plain GEMMs for scale; REPS CUDA-event reps each after a warm-up (run.py's `timed`, one
    launch between events), and for steps under GRAPH_BELOW_MS a CUDA graph of back-to-back copies (at least ~2 ms a replay,
-   L2-warm), REPS replays.  `call_hash_chain` is the call's hashing in order (A's commitment, hash_msg where unfused, the tile
-   leaves and tile tree), timed both ways.  NVML clocks before and after each round.
+   L2-warm, captured once), REPS replays.  `call_hash_chain` is the call's hashing in order (A's commitment, hash_msg where
+   unfused, the tile leaves and tile tree), timed both ways.  A round sweeps the steps for at least ROUND_S seconds; its row
+   holds the medians and minima over its samples, and NVML's clocks before and after it.
 
 One JSON object per line on stdout; a summary on stderr.
 """
@@ -54,7 +55,7 @@ TREE_HASH = {"h1": "blake3", "h2": "blake3-s256"}
 #: Pearl-C's digest keys under -h1 and -h2 (pearl_c.H1_KEYS)
 DIGEST_KEYS = {"k_msg": blake3(b"pearl-c/h1/message"), "k_leaf": blake3(b"pearl-c/h1/leaf")}
 N_ROWS, N_PADS, N_NODES, N_TREE_LEAVES, N_DIGESTS, N_TILES, FULL = 6, 16, 256, 256, 512, 96, 2048
-GRAPH_BELOW_MS, GRAPH_REPLAY_MS, GRAPH_MAX_COPIES = 2.0, 2.0, 64
+GRAPH_BELOW_MS, GRAPH_REPLAY_MS, GRAPH_MAX_COPIES, ROUND_S = 2.0, 2.0, 64, 5.0
 TIMED = ("pad_a", "node_keys_a", "pad_t", "node_keys_t", "pad_b", "node_keys_b", "hash_rows_b", "tree_b", "hash_rows_a", "tree_a",
          "seed_a", "hash_msg", "hash_leaf", "tree_leaves_t", "tree_t", "gemm_pearlc_s", "gemm_pearlc_b", "gemm_ct", "gemm_plain",
          "gemm_fast")
@@ -169,7 +170,7 @@ class Graphs:
         self.dev, self.s = dev, vp()
         dev.ck("cuStreamCreate", C.byref(self.s), STREAM_NON_BLOCKING)
 
-    def time(self, fns, copies: int, reps: int) -> list[float]:
+    def make(self, fns, copies: int) -> tuple[vp, vp]:
         d, g, ge = self.dev, vp(), vp()
         d.ck("cuStreamBeginCapture_v2", self.s, CAPTURE_RELAXED)
         d.stream = self.s
@@ -183,6 +184,14 @@ class Graphs:
         d.ck("cuGraphInstantiateWithFlags", C.byref(ge), g, 0)
         d.ck("cuGraphLaunch", ge, self.s)
         d.ck("cuStreamSynchronize", self.s)
+        return g, ge
+
+    def drop(self, graph: tuple[vp, vp]) -> None:
+        self.dev.cu.cuGraphExecDestroy(graph[1])
+        self.dev.cu.cuGraphDestroy(graph[0])
+
+    def time(self, graph: tuple[vp, vp], copies: int, reps: int) -> list[float]:
+        d, ge = self.dev, graph[1]
         out = []
         for _ in range(reps):
             a, e, ms = vp(), vp(), C.c_float()
@@ -196,8 +205,6 @@ class Graphs:
             d.cu.cuEventDestroy_v2(a)
             d.cu.cuEventDestroy_v2(e)
             out.append(ms.value / copies)
-        d.cu.cuGraphExecDestroy(ge)
-        d.cu.cuGraphDestroy(g)
         return out
 
 
@@ -249,19 +256,24 @@ def bench(dev: R.Dev, nv: R.Nvml, graphs: Graphs, shape, variant: str, hashing: 
         timed = [x for x in TIMED if x in fns]
         chain = [fns[x] for x in COMMIT + (() if pipe.fused else ("hash_msg",)) + TILE_HASH]
         fns["call_hash_chain"] = lambda: [f() for f in chain]
-        rnd = 0
+        rnd, made, copies, errs = 0, {}, {}, {}
         while rnd == 0 or time.time() - t0 < budget:
-            before, ev, gr, copies, errs = nv.read(), {}, {}, {}, {}
-            for x in timed + ["call_hash_chain"]:
-                ev[x] = statistics.median(dev.timed(fns[x], reps))
-            for x in timed + ["call_hash_chain"]:
-                if ev[x] < GRAPH_BELOW_MS:
-                    copies[x] = max(1, min(GRAPH_MAX_COPIES, int(GRAPH_REPLAY_MS / max(ev[x], 1e-3))))
-                    try:
-                        gr[x] = statistics.median(graphs.time([fns[x]], copies[x], reps))
-                    except RuntimeError as e:
-                        errs[x] = str(e)
+            before, r0, sweeps, evs, grs = nv.read(), time.time(), 0, {}, {}
+            while sweeps == 0 or time.time() - r0 < ROUND_S:
+                for x in timed + ["call_hash_chain"]:
+                    evs.setdefault(x, []).extend(dev.timed(fns[x], reps))
+                for x in timed + ["call_hash_chain"]:
+                    if x not in made and x not in errs and statistics.median(evs[x]) < GRAPH_BELOW_MS:
+                        copies[x] = max(1, min(GRAPH_MAX_COPIES, int(GRAPH_REPLAY_MS / max(statistics.median(evs[x]), 1e-3))))
+                        try:
+                            made[x] = graphs.make([fns[x]], copies[x])
+                        except RuntimeError as e:
+                            errs[x] = str(e)
+                    if x in made:
+                        grs.setdefault(x, []).extend(graphs.time(made[x], copies[x], reps))
+                sweeps += 1
             after = nv.read()
+            ev, gr = {x: statistics.median(v) for x, v in evs.items()}, {x: statistics.median(v) for x, v in grs.items()}
             both = {**ev, **gr}
             if not {"gemm_pearlc_b", "gemm_pearlc_s"} <= gr.keys():
                 both.update({x: ev[x] for x in ("gemm_pearlc_b", "gemm_pearlc_s") if x in ev})
@@ -269,8 +281,10 @@ def bench(dev: R.Dev, nv: R.Nvml, graphs: Graphs, shape, variant: str, hashing: 
             evd["call_hash_chain"] = round(ev["call_hash_chain"] + (evd.get("digests_fused", 0.0) if pipe.fused else 0.0), 5)
             if "call_hash_chain" in gr:
                 grd["call_hash_chain"] = round(gr["call_hash_chain"] + (grd.get("digests_fused", 0.0) if pipe.fused else 0.0), 5)
-            R.emit({"kind": "h2bench", "label": LABEL, **head, "round": rnd, "reps": reps,
+            R.emit({"kind": "h2bench", "label": LABEL, **head, "round": rnd, "reps": reps, "sweeps": sweeps,
                     "ms_event": {x: round(v, 5) for x, v in ev.items()}, "ms_graph": {x: round(v, 5) for x, v in gr.items()},
+                    "ms_event_min": {x: round(min(v), 5) for x, v in evs.items()},
+                    "ms_graph_min": {x: round(min(v), 5) for x, v in grs.items()},
                     "graph_copies": copies, "graph_errors": errs, "derived_event_ms": evd, "derived_graph_ms": grd,
                     "gate": {"ok": True, "checked": sum(c["checked"] for c in t.values())}, "clk_before": before, "clk_after": after,
                     "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
@@ -278,6 +292,8 @@ def bench(dev: R.Dev, nv: R.Nvml, graphs: Graphs, shape, variant: str, hashing: 
                   f"{evd['call_hashing']:.4f} ms (event); A commit {grd['a_commit']:.4f}, tile {grd['tile_leaves'] + grd['tile_tree']:.4f}",
                   file=sys.stderr)
             rnd += 1
+        for graph in made.values():
+            graphs.drop(graph)
         return 0
     finally:
         pipe.free()
