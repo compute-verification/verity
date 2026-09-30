@@ -11,22 +11,32 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | File | What |
 |---|---|
 | `arm.py` | the arm interface (v0.x): what an arm provides and what the harness checks; the contract is published in the project store, `internal/pouw/rtx-pro/workers/6-harness.md` |
-| `bench.py` | the run: identity, fill preflight, per shape gates (negative controls at the first shape), the baselines' autotune, interleaved timing, the consistency gate, the report |
+| `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, interleaved timing, the consistency gate, the report |
+| `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
 | `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms and CUTLASS's sm_120 kernels, and the bit-exact gate on ternary operands |
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt, the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) |
 
-Build (no GPU needed; nvcc 12.8 or later, about 7 GB of memory per CUTLASS 3.x unit):
+Build (no GPU needed; nvcc 12.9, about 7 GB of memory per CUTLASS 3.x unit):
 
 ```bash
 export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh)"   # prints the library's path, nothing else
 ```
 
-The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources and nvcc's version, with
-`build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is reused. A run refuses a
-library its `build.json` doesn't describe.
+The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources, nvcc's version and the
+cuBLAS headers', with `build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is
+reused, and so is each object whose unit, headers and flags are unchanged. A run refuses a library its `build.json` doesn't
+describe. Where there is no CUDA 12.9 (node 2 has 13.0), `. jobs/toolkit.sh` first assembles it from NVIDIA's pinned
+redistributable archives and the cuBLASLt wheel `env.sh` pins. On node 2 the build is a CPU job, at `nice 19` on the fill
+queue's cores:
+
+```bash
+research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source -- bash -c \
+  '. benchmarks/pouw/harness/jobs/toolkit.sh && export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 &&
+   L="$(nice -n 19 taskset -c 96-191 benchmarks/pouw/harness/native/build.sh)" && cp "${L%/*}"/{libpouw_harness.so,build.json} "$RESEARCH_RUN_DIR/"'
+```
 
 Run on your GPU only (`CUDA_VISIBLE_DEVICES` one index; the UUID from `server.md`'s table):
 
@@ -57,6 +67,10 @@ $R -- gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${
 An arm on another branch runs from a tree that holds both: its branch with this directory and `../tests/test_harness.py`
 checked out from the harness's commit, `--arm-path` its own directory. `jobs/harness.yaml` and `jobs/harness-timed.yaml` are
 node 2's queue jobs, for when its Kueue is up.
+
+Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
+`--decode-method independent` times the old independent graph with any library. An arm's calls expose `phases` (before, gemm,
+after) to get the split; `arm.py` has the contract.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
 consistency gate rejected an arm. The JSON is written in every case, with every rep.
