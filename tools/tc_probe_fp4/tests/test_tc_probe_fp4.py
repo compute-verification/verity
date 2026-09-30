@@ -32,6 +32,7 @@ import lean_vectors as LV  # noqa: E402
 import meta_rule as MR  # noqa: E402
 import probe as P  # noqa: E402
 import recheck as RC  # noqa: E402
+import sp_e4m3 as SP  # noqa: E402
 import sparse as S  # noqa: E402
 import t1_merged as T  # noqa: E402
 import tool  # noqa: E402
@@ -437,6 +438,53 @@ def test_recheck_gates_e2m1_on_the_registry_model_and_scales_the_fixed_families(
         assert RC.main(ver + ["--fixed-mult", "2", "--out", str(out / "v")]) == rc
         assert json.loads((out / "v" / "recheck.json").read_text())["primary_model"] == "gs32_w26_native"
         assert RC.main(ver + ["--out", str(out / "v1")]) == 1
+
+
+def test_sparse_e4m3_packs_registers_and_verify_derives_every_word(no_nvcc, tmp_path):
+    """The host's register packing puts each operand byte where the fragment layout says; a fake capture of one group over the 32
+    kept products resumes at its budget, verify refuses it until it is marked as gated, then finds that candidate (and the dense
+    twin on the compressed operands) reproducing every sparse word while the two chained atoms do not, and a changed words file
+    fails."""
+    rng = np.random.default_rng(0)
+    As = rng.integers(0, 256, (2, 16, 32)).astype(np.uint8)
+    R = SP.pack_a(As)
+    B = rng.integers(0, 256, (2, 8, 64)).astype(np.uint8)
+    RB = SP._pack_b(B, SP.B_READINGS["k_4q_16r"])
+    M = SP.META_VALID[rng.integers(0, 6, (2, 16, 16))]
+    E = SP.pack_meta(M, "row_q1_groups_q2")
+    for lane in (0, 6, 31):
+        g, q = lane >> 2, lane & 3
+        for r in range(4):
+            for j in range(4):
+                assert (int(R[1, lane, r]) >> (8 * j)) & 0xFF == As[1, g + 8 * (r & 1), 4 * q + j + 16 * (r >> 1)]
+                assert (int(RB[1, lane, r]) >> (8 * j)) & 0xFF == B[1, g, 4 * q + j + 16 * r]
+        assert all((int(E[1, lane]) >> (4 * c)) & 0xF == M[1, g + 8 * (q & 1), 8 * (q >> 1) + c] for c in range(8))
+    C = rng.integers(0, 1 << 32, (2, 16, 8), dtype=np.uint64).astype(np.uint32)
+    assert np.array_equal(SP.unpack_d(SP.pack_c(C)), C)
+    assert np.array_equal(SP.expand(As, M)[..., SP.logical_columns(M)[0, 0]][0, 0], As[0, 0])
+
+    cap = ["capture", "--seeds", "5", "--n-random", "16", "--fake-silicon", "gather_g32", "--budget-s", "0", "--out", str(tmp_path / "c")]
+    rcs = [SP.main(cap) for _ in range(14)]
+    assert rcs[0] == 99 and rcs[-1] == 0
+    ver = ["verify", "--seed", "5", "--n-random", "16", "--capture", str(tmp_path / "c"), "--procs", "1"]
+    assert SP.main(ver + ["--out", str(tmp_path / "fake")]) == 1
+    d = tmp_path / "c" / "5"
+    done = json.loads((d / "done.json").read_text())
+    done.update(fake_silicon=None, expect_uuid="GPU-x")
+    done["identity"].update(backend="mma.sync", gpu_uuid="GPU-x")
+    (d / "done.json").write_text(json.dumps(done))
+    assert SP.main(ver + ["--out", str(tmp_path / "ok")]) == 0
+    f = json.loads((tmp_path / "ok" / "sparse.json").read_text())["finding"]
+    assert f["candidates_reproducing_every_sparse_word"] == ["gather_g32"]
+    assert f["sparse_vs_dense"]["dense_on_compressed"]["differing_words"] == 0 < f["sparse_vs_dense"]["dense_two_atoms"]["differing_words"]
+    D = np.load(d / "random_acc.sparse.npy")
+    D[0, 0, 0] ^= 1
+    np.save(d / "random_acc.sparse.npy", D)
+    assert SP.main(ver + ["--out", str(tmp_path / "changed")]) == 1
+    assert "changed since the capture" in json.loads((tmp_path / "changed" / "sparse.json").read_text())["failures"][0]
+    p = tool.TC_SPARSE_E4M3.parse(["python", "tools/tc_probe_fp4/sp_e4m3.py", "verify", "--seed", "5", "--n-random", "16",
+                                   "--capture", "/c", "--prebuilt", "/x.so", "--procs", "8", "--out", "x"])
+    assert p == {"cmd": "verify", "seeds": None, "fake_silicon": None, "arch": "sm_120a", "seed": 5, "n_random": 16, "fixed_mult": 1}
 
 
 def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):
