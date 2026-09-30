@@ -2,9 +2,11 @@
 installed (the fixture package passes clean and fails each check once a violation is added)."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -17,13 +19,19 @@ spec.loader.exec_module(A)
 STD = ["Classical.choice", "Quot.sound", "propext"]
 
 
+def sha(s: str) -> str:
+    """A stand-in SHA-256 content hash, tied to the stand-in 32-bit one."""
+    return hashlib.sha256(s.encode()).hexdigest()
+
+
 def pin(signature="P.t (h : P.Hyp) (n : Nat) : P.f n = n", hyps=None, reads=None, axioms=STD, kind="theorem", h="00000000000000aa"):
-    return {"kind": kind, "module": "P.Thms", "signature": signature, "axioms": axioms, "type_hash": h,
+    reads = reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+                                             {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
+                                             {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}]
+    return {"kind": kind, "module": "P.Thms", "signature": signature, "axioms": axioms, "type_hash": h, "type_sha256": sha(h),
             "hypotheses": hyps if hyps is not None else [{"binder": "h", "type": "P.Hyp", "closed": True, "named": "P.Hyp",
                                                           "module": "P.Assumptions"}],
-            "reads": reads if reads is not None else [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
-                                                      {"name": "P.f.match_1", "module": "P.Defs", "kind": "def", "hash": "2" * 32},
-                                                      {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}]}
+            "reads": [r | {"sha256": sha(r["hash"])} for r in reads]}
 
 
 def facts(**over):
@@ -47,7 +55,8 @@ def recorded(f=None):
 def test_a_recorded_package_passes_and_its_record_is_the_statement():
     pol = recorded()
     assert pol["pins"]["P.t"] == {"signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"], "assumptions": ["P.Hyp"],
-                                  "type_hash": "00000000000000aa"}
+                                  "type_hash": sha("00000000000000aa")}
+    assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
     assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["pins"] == ["P.t"]
     assert A.judge(pol, facts(), FILES) == ([], pol)
     assert A.judge(POLICY, facts(), FILES)[0] == ["pins: P.t has no record; run `audit.py --update` and commit the record"]
@@ -99,6 +108,38 @@ def test_a_changed_statement_or_meaning_fails_until_updated():
     assert A.judge(pol, facts(pins={"P.t": moved}), FILES)[0] == ["pins: definitions in P.Defs that P.t read changed (changed: P.f)"]
     grown = pin(reads=pin()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def", "hash": "4" * 32}])
     assert A.judge(pol, facts(pins={"P.t": grown}), FILES)[0] == ["pins: the pinned statements now read definitions in P.More (P.t)"]
+
+
+def test_a_32_bit_record_is_checked_as_it_is_and_rehashed_by_update():
+    new = recorded()
+    old = new | {"pins": {"P.t": new["pins"]["P.t"] | {"type_hash": "00000000000000aa"}},
+                 "reads": A.read_groups(A.pinned_reads(facts()), old=True)}
+    assert len(old["reads"]["P.Defs"]["digest"]) == 32 and len(old["reads"]["P.Defs"]["definitions"]["P.f"]) == 16
+    assert A.judge(old, facts(), FILES)[0] == []
+    fails = A.judge(old, facts(pins={"P.t": pin(h="00000000000000bb")}), FILES)[0]
+    assert fails == ["pins: P.t's type hash changed:\n00000000000000aa -> 00000000000000bb"]
+    fails, rehashed = A.judge(old, facts(), FILES, update=True)
+    assert fails == [] and rehashed == new
+    text = A.review(old, rehashed, facts(), {})
+    assert text == [f"pin P.t: {A.REHASHED}", f"reads: 2 {A.REGROUPED}"] and A.statement_changes(text) == []
+    moved = facts(pins={"P.t": pin(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "9" * 32},
+                                          {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "3" * 32}])})
+    text = A.review(old, A.judge(old, moved, FILES, update=True)[1], moved, {})
+    assert text == [f"pin P.t: {A.REHASHED}", "definition P.f (P.Defs), read by P.t: changed", f"reads: 1 {A.REGROUPED}"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Alpha.lean").write_text(
+        "namespace Control\ntheorem a (x : Nat) : x + 0 = x := rfl\ntheorem b (y : Nat) : y + 0 = y := rfl\n"
+        "theorem c {x : Nat} : x + 0 = x := rfl\ntheorem d (x : Nat) : 0 + x = x := Nat.zero_add x\nend Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Alpha\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    f = A.facts_of(pkg, {"roots": ["Control"], "pins": {f"Control.{n}": {} for n in "abcd"}}, tmp_path)
+    got = {n: f["pins"][f"Control.{n}"]["type_sha256"] for n in "abcd"}
+    assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
 def test_generated_constants_belong_to_their_declaration():
