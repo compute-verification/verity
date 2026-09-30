@@ -17,7 +17,7 @@ from fractions import Fraction
 from pathlib import Path
 
 RHO = Fraction(1, 400)
-TERMS = ("two_four", "identity", "dead_pairs", "forming", "subgrid", "windows")
+TERMS = ("split", "int8", "identity", "dead_pairs", "forming", "subgrid", "windows")
 
 
 def x_files(summary: dict, manifest: Path | None = None) -> dict[str, str]:
