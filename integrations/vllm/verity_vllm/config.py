@@ -4,8 +4,9 @@
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
   tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS`` and ``CHECKPOINTS``.
 * **What runs.**  The row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
-  (``TARGETS``), and :class:`EnginePin`, the pinned engine record every engine is built from: model, full revision and
-  checkpoint role, checked against ``manifests/checkpoints.json``.
+  (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
+  engine record every engine is built from: model, full revision and checkpoint role, checked against
+  ``manifests/checkpoints.json``.
 * **How a stage runs.**  :class:`BuildConfig`, :class:`MatchConfig` and :class:`CommitConfig`: defaults in code,
   overrides from flags or the environment of ``verity-vllm row``.
 * **Where it runs.**  :class:`RunEnv`: interpreters, caches and roots.  ``pipeline/cli.py`` fills it from flags and the
@@ -50,7 +51,8 @@ class UsageError(ValueError):
 def option(*flags: str, env: str | None = None, env_empty: bool = False, **kw: Any) -> Any:
     """One command-line option of a subcommand's options dataclass.
 
-    ``flags`` and ``kw`` are ``argparse`` ``add_argument`` arguments, applied by ``pipeline/cli.py``.  ``kw["default"]``
+    ``flags`` and ``kw`` are ``argparse`` ``add_argument`` arguments, applied by ``pipeline/cli.py``, which also takes
+    ``action="boolean_optional"`` (``argparse.BooleanOptionalAction``: ``--flag`` / ``--no-flag``).  ``kw["default"]``
     is also the field's default; a field without one is required (a required flag, or a positional).  ``env`` names the
     environment variable whose value the CLI takes as the default, converted by ``type`` like a flag value; an empty
     variable counts as unset unless ``env_empty``.
@@ -159,6 +161,42 @@ def row_target(row: str) -> str | None:
     """The device token of a row id (its third field when the fourth is ``tp<N>``), None when the id lacks the grammar."""
     parts = str(row).split("__")
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
+
+
+#: The protocols a run can enable (`verity_vllm.protocol_options`), in install order, innermost first: PoUW replaces the
+#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
+PROTOCOLS = ("pouw", "pous", "sampled-proofs")
+#: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
+DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:vllm-v1",)
+_SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
+
+
+def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, ...]:
+    """A protocol set in its one spelling: ``name:scheme`` entries, one per protocol, in `PROTOCOLS` order.
+
+    ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
+    ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
+    entries of one protocol.  Whether a scheme is registered is the protocol package's to say
+    (`verity_vllm.protocol_options.refusals`)."""
+    if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
+        return ()
+    if isinstance(value, Mapping):
+        items = [f"{k}:{v}" for k, v in value.items()]
+    elif isinstance(value, str):
+        items = [x.strip() for x in value.split(",")]
+    else:
+        items = [str(x).strip() for x in value]
+    got: dict[str, str] = {}
+    for item in items:
+        name, sep, scheme = item.partition(":")
+        if name not in PROTOCOLS:
+            raise ValueError(f"protocol entry {item!r}: unknown protocol {name!r} (known: {', '.join(PROTOCOLS)})")
+        if not sep or not _SCHEME.fullmatch(scheme):
+            raise ValueError(f"protocol entry {item!r}: expected {name}:<scheme>, the scheme a name its protocol registers")
+        if name in got:
+            raise ValueError(f"protocol {name!r} is enabled twice ({got[name]!r} and {scheme!r}); a run enables one scheme per protocol")
+        got[name] = scheme
+    return tuple(f"{n}:{got[n]}" for n in PROTOCOLS if n in got)
 
 
 def checkpoint_entries(checkpoints: str | Path = CHECKPOINTS) -> list[dict[str, Any]]:
@@ -289,21 +327,21 @@ class CommitConfig:
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
                                       help="opt in, never the record: the Commit also commits every RoPE head in M0's serving row format "
                                            "(verity_vllm.commit.serving_rows) over this partition file, fixed before serving")
-    norm_tap: str = option("--norm-tap", env="NORM_TAP", default="0",
-                           help="1 opts in, never the record: commit one scale per norm Call row (verity_vllm.query.norm_scales) through "
-                                "the norm-scale tap (acquire.sources.norm_scale_source); the manifest and run root then differ from the record")
-    guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="0",
-                                  help="1 opts in, never the record: the attention stream's ROW word 3 carries GuardNegInfZero(m) after a row's "
-                                       "first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written by the "
-                                       "guarded-max FA2/FA3 tap build; the manifest and the run root then differ from the record")
-    router_tap: str = option("--router-tap", env="ROUTER_TAP", default="0",
-                             help="1 opts in, never the record: commit the selection-order router's softmax per token row (verity_vllm.query."
-                                  "router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source); the manifest and run "
-                                  "root then differ from the record")
-    vocab_tap: str = option("--vocab-tap", env="VOCAB_TAP", default="0",
-                            help="1 opts in, never the record: commit each TP rank's vocabulary-range values per token row (verity_vllm.query."
-                                 "vocab_range) through the vocabulary-range source (acquire.sources.vocab_range_source); the manifest and run "
-                                 "root then differ from the record")
+    norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
+                           help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
+                                "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")
+    guarded_max_tap: str = option("--guarded-max-tap", env="GUARDED_MAX_TAP", default="1",
+                                  help="0 opts out, for A/B only: by default the attention stream's ROW word 3 carries GuardNegInfZero(m) after a "
+                                       "row's first key block and its MS class every block's max * scale (verity_vllm.query.guarded_max), written "
+                                       "by the guarded-max FA2/FA3 tap build")
+    router_tap: str = option("--router-tap", env="ROUTER_TAP", default="1",
+                             help="0 opts out, for A/B only: by default the row commits the selection-order router's softmax per token row "
+                                  "(verity_vllm.query.router_softmax) through the router-softmax tap (acquire.sources.router_softmax_source) "
+                                  "when its manifest names MoE routers")
+    vocab_tap: str = option("--vocab-tap", env="VOCAB_TAP", default="1",
+                            help="0 opts out, for A/B only: by default each TP rank commits its vocabulary-range values per token row "
+                                 "(verity_vllm.query.vocab_range) through the vocabulary-range source (acquire.sources.vocab_range_source) "
+                                 "when its manifest names vocabulary ranges")
 
 
 # ---------------------------------------------------------------------------------------------------------------- where it runs
@@ -329,10 +367,10 @@ class RunEnv:
                                    help="M1 tap .so (default: the one of the row's attention implementation)")
     hidden_so_fa2: str = option("--hidden-so-fa2")
     hidden_so_fa3: str = option("--hidden-so-fa3")
-    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build, used when --guarded-max-tap 1")
-    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build, used when --guarded-max-tap 1")
-    norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used when --norm-tap 1")
-    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used when --router-tap 1")
+    hidden_so_fa2_guarded: str = option("--hidden-so-fa2-guarded", help="the guarded-max FA2 tap build (ops/pod_fa2_tap.sh, FA2_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
+    norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
+    router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
     hot_root: str = option("--hot-root", env="HOT_ROOT")
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,

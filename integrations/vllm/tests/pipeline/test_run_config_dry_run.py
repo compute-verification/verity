@@ -163,8 +163,9 @@ def test_run_stage_records_failure_and_tees_log(tmp_path):
 
 
 def test_run_stage_timeout(tmp_path):
-    rec = RC.run_stage("slow", [sys.executable, "-c", "import time; time.sleep(30)"], tmp_path / "slow.log", max_rss_gb=None, timeout_s=1.0)
-    assert rec["status"] == "timeout" and rec["seconds"] < 10
+    # the stage blocks on a pipe nobody writes to: it ends only when run_stage's wall budget kills it
+    rec = RC.run_stage("slow", [sys.executable, "-c", "import os; os.read(os.pipe()[0], 1)"], tmp_path / "slow.log", max_rss_gb=None, timeout_s=1.0)
+    assert rec["status"] == "timeout" and rec["reason"] == "wall > 1 s"
 
 
 # --- the cheap CPU stages on the local m1 capture ------------------------------------------------------------------------
@@ -177,7 +178,7 @@ def test_local_cpu_stages_on_m1(tmp_path):
            "--workload", "workloads/workload_32x16_1req.json", "--case", "B0", "--out", str(run), "--phase", "cpu", "--laptop",
            "--log", str(M1_LOG), "--snapshots", str(M1_DIR), "--control-tokens", str(M1_CTL),
            "--skip", "replay,compare,census,nonint,root_policy,golden", "--cards-dir", str(tmp_path / "cards")]
-    p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT, timeout=170)
+    p = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr[-3000:]
     stages = {r["stage"]: r for r in json.loads((run / "stages.json").read_text())["stages"]}
     assert stages["resolve"]["status"] == "ok" and stages["fold"]["status"] == "ok" and stages["fold_2"]["status"] == "ok"

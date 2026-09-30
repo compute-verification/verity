@@ -17,7 +17,7 @@ The family is L1's pinned Ampere step plus the two casts, with 16-bit sources:
   step is a protocol decision, not a backend one.
 * ``f32_to_bf16`` (32 -> 16): round to nearest, ties to even; every NaN becomes one canonical word -- ``0x7FC0``
   in ``@1`` (the software canonicalisation), ``0x7FFF`` in ``@2`` (the measured ``cvt.rn.bf16.f32`` word; the
-  production epilogue).  The versions agree on every non-NaN word.
+  serving epilogue).  The versions agree on every non-NaN word.
 * ``bf16_to_f32`` (16 -> 32): the exact widening.
 * ``in`` and ``weight``: 16-bit source words.
 

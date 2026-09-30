@@ -78,7 +78,7 @@ def test_units_and_exported_vus_reconcile_with_the_run(tmp_path):
 
 
 def test_template_of_is_the_exporters_cut():
-    assert VX.template_of("Gemm_v1{K=2048,N=3072}") == ("GemmCoordinate", {"K": 2048, "dot": "AmpereBF16TcDot16_v1"}, 3072)
+    assert VX.template_of("Gemm_v1{K=2048,N=3072}") == ("GemmCoordinate", {"K": 2048, "dot": "AmpereBF16TcDot16_v2"}, 3072)
     assert VX.template_of("RoPE_v1{NHEADS=8,D=64}") == ("RoPEHead", {"D": 64}, 8)
     t, p, m = VX.template_of("Attention_v3{T=5,NH=32,KVH=8,D=64,BN=128}")
     assert (t, p["D"], m) == ("AttentionHead", 64, 32)

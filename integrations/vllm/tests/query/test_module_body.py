@@ -15,7 +15,9 @@ from verity_vllm.correspondence.reader_for_query import Correspondence, implemen
 from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.query.required import NAMED_RESIDUALS, member_name, merge_ranks, request_manifest, shared_instances, under
+from verity_vllm.query.compose import merge_ranks
+from verity_vllm.query.required import (NAMED_RESIDUALS, Q_MODULE_BODY_ID, Q_WORD_ID, member_name, partition_of, request_manifest,
+                                        shared_instances, under)
 
 W = "model.model"                                  # the export wrapper holds the served model under `model`
 EMBED_W, QKV_W = f"{W}.embed.weight", f"{W}.layers.0.self_attn.qkv_proj.weight"
@@ -125,10 +127,10 @@ def test_request_manifest_rows():
     P = program()
     corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {}, "target": {"declared": {"compute_capability": [8, 9]}}}
-    r = request_manifest(P, corr, res, request_id="r0")
+    r = request_manifest(P, corr, res, request_id="r0", query=Q_MODULE_BODY_ID)
     man = r.manifest
     rows = {(x["family"], x["op_path"], x["output_member"], tuple(x["element_range"])) for x in man["identities"]}
-    assert rows == {
+    assert rows == MODULE_BODY_ROWS == {
         ("weights", "model.embed.weight", "weight", (0, None)), ("weights", "model.layers.0.self_attn.qkv_proj.weight", "weight", (0, None)),
         ("instance_outputs", "model.embed", "out", (0, 4)),
         ("instance_outputs", "model", "out", (0, 8)),                                  # h2 + h4: two crossing rows of `model`'s own body
@@ -147,6 +149,36 @@ def test_request_manifest_rows():
     assert [x["output_member"] for x in man["identities"] if x["op_path"] == "model"] == ["out"]
     body = next(x for x in man["identities"] if x["op_path"] == "model")
     assert body["boundary"] == {"crossing_rows": 2, "returned_rows": 2, "structural_member": "out"}   # a crossing Value is a returned tensor too
+    assert man["query"]["query_id"] == Q_MODULE_BODY_ID and "partition" not in man["query"]
+
+
+MODULE_BODY_ROWS = {
+    ("weights", "model.embed.weight", "weight", (0, None)), ("weights", "model.layers.0.self_attn.qkv_proj.weight", "weight", (0, None)),
+    ("instance_outputs", "model.embed", "out", (0, 4)), ("instance_outputs", "model", "out", (0, 8)),
+    ("instance_outputs", "model.layers.0.input_layernorm", "out", (0, 4)), ("instance_outputs", "model.layers.0.self_attn.qkv_proj", "0", (0, 4)),
+    ("instance_outputs", "model.layers.0.self_attn.rotary_emb", "0", (0, 4)), ("instance_outputs", "model.lm_head", "out", (0, 4)),
+    ("sampled_token_ids", "runner.sampler", "sampled_token_ids", (0, 1)), ("input_token_ids", "model.embed", "in", (0, 1)),
+}
+
+
+def test_the_query_of_record_commits_every_call_boundary_and_names_the_partition():
+    """Under Q_word, h1 (Mul -> Add inside `model`'s own body) crosses Calls: required, spelt under its fx node (`call_boundaries`); every
+    module-body row stays as it was.  The header names the query and, given the Program's SHA-512, its verity/partition/v1 object."""
+    P = program()
+    corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
+    res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {}, "target": {"declared": {"compute_capability": [8, 9]}}}
+    sha = "ab" * 64
+    man = request_manifest(P, corr, res, request_id="r0", program_sha512=sha).manifest
+    rows = {(x["family"], x["op_path"], x["output_member"], tuple(x["element_range"])) for x in man["identities"]}
+    assert rows == MODULE_BODY_ROWS | {("call_boundaries", "model/mul", "out", (0, 4))}
+    assert man["complete"] and man["unmodelled"] == {}
+    q = man["query"]
+    assert q["query_id"] == Q_WORD_ID and q["boundary"] == "call" and q["engine"] == "q-word"
+    assert "call_boundaries" in q["required_families"]
+    assert q["partition"] == partition_of(sha)
+    assert q["partition"]["object"] == {"format": "verity/partition/v1", "program": sha, "query": {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}}}
+    assert man["populations"]["units"] == 9 and man["populations"]["boundary_values"] == 12
+    assert "partition" not in request_manifest(P, corr, res, request_id="r0").manifest["query"], "no SHA-512, no partition object"
 
 
 DOWN_W, LM_W = f"{W}.layers.0.mlp.down_proj.weight", f"{W}.lm_head.weight"

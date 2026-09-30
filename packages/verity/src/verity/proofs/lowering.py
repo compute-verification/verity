@@ -43,7 +43,7 @@ backend representation of the selected subcircuit relation; L7 is the theorem
 * :func:`check_relations` is ``Eval_Verity``: the relation check on the words
   at the boundary, including the ``Input`` equations.  It agrees with the
   backend's ``check_relations`` (``TransparentBackend._check_relations``,
-  ``zk/sp1/common/src/check.rs``) plus the backend's pin check.
+  ``backends/sp1/common/src/kernel/relations.rs``) plus the backend's pin check.
 """
 
 from __future__ import annotations

@@ -1,5 +1,6 @@
 """The MoE router in its selection order (`registry.moe.MoeRouterTopKOrdered_v1` / `...OrderedNorm_v1`): its outputs (weights and ids)
-equal the kernel-order Definitions' bit for bit (ties, NaN, +-inf, +-0), and it is opt-in only (no digest of record moves).  The interior
+equal the kernel-order Definitions' bit for bit (ties, NaN, +-inf, +-0); it is the default construction and the kernel-order routers stay
+declarable (`moe_construction = "indexed-read"`), their digests unchanged.  The interior
 words it commits are `topkGating`'s own through `MoeRouterProbs` (the `fmaxf` row max, NaN exponentials and reciprocal as 0x7FFFFFFF),
 which the kernel-order statement's interior is not: `tests/properties/test_router_tap_exactness.py` and the router-tap exactness record.
 Its partition (the softmax committed once, nothing computed twice) is checked with the no-recompute rule, `tests/query/test_word.py`."""
@@ -63,12 +64,13 @@ def test_the_kernel_order_routers_of_record_are_unchanged():
     assert _digest(moe.MoeRouterTopKNorm, E=128, TOPK=8, VPT=8) == "ef2f47ef03606d54"
 
 
-def test_the_statement_is_opt_in():
+def test_the_statement_is_the_default_and_the_kernel_order_router_stays_declarable():
     base = TargetProfile.default()
-    assert "moe_construction" not in base.to_json() and base.effective_moe_construction() == "indexed-read"
-    ordered = base.with_overrides(moe_construction="indexed-read-ordered")
-    assert ordered.digest() != base.digest()
-    assert ordered.moe_construction_declaration()["definitions"][0] == "MoeRouterTopKOrdered_v1{E,TOPK,VPT}"
+    assert "moe_construction" not in base.to_json() and base.effective_moe_construction() == "indexed-read-ordered"
+    assert base.moe_construction_declaration()["definitions"][0] == "MoeRouterTopKOrdered_v1{E,TOPK,VPT}"
+    kernel_order = base.with_overrides(moe_construction="indexed-read")
+    assert kernel_order.digest() != base.digest()
+    assert kernel_order.moe_construction_declaration()["definitions"][0] == "MoeRouterTopK_v1{E,TOPK,VPT}"
 
 
 def test_the_fold_states_the_declared_router():

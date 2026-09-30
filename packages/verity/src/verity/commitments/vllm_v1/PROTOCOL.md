@@ -1,9 +1,9 @@
-# `vllm-v1`: vLLM's production commitment framing
+# `vllm-v1`: vLLM's serving commitment framing
 
-This is the commitment framing vLLM's production Commit path emits, as a named scheme. It is permanent and sits
+This is the commitment framing vLLM's serving Commit path emits, as a named scheme. It is permanent and sits
 beside frame-v3 (`verity.commitments.frame_v3`). Backends select one or the other, and both are
-benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes no
-production root.
+benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes none
+of the roots serving emits.
 
 - Reference: `verity.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
   `verity.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
@@ -55,7 +55,7 @@ Each `fa2h` header is sixteen `u32le` words:
 
 - **`src_mask` is below 2⁸ in both headers.** Word 1's byte 1 is therefore a kind byte (1 for chunk, 0 for
   thread), so no thread header equals a chunk header. The reference rejects any field that doesn't fit its word.
-  The integration masks the chunk `src_mask` silently and doesn't bound the thread one. Every production mask is at
+  The integration masks the chunk `src_mask` silently and doesn't bound the thread one. Every mask serving uses is at
   most 63, so the two agree on every root recorded so far.
 - **First bytes separate every preimage.** A node or lift preimage starts `00 00 00 13`, an id leaf the same
   followed by `verity-vllm/leaf`, a position leaf `verity/`, and an `fa2h` leaf `fa2h`. So no leaf preimage is a
@@ -198,7 +198,7 @@ The FA3 tap (`fa3_tap_src/verity_tap_fa3.h`) only materialises the stream and do
 
 ## 7. Findings
 
-I found no soundness gap, so no production root changes. Four ambiguities are pinned by this spec instead of
+I found no soundness gap, so none of the roots serving emits change. Four ambiguities are pinned by this spec instead of
 fixed in the bytes. Fixing any of them in the bytes would change roots:
 
 1. **No root binds the leaf rule.** A step tree of position leaves and one of chunk leaves bind the same fields.

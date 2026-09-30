@@ -18,3 +18,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # real account or bucket through them
     for k in ("RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCOUNT_ID"):
         monkeypatch.delenv(k, raising=False)
+    # ... nor the public export (an empty URL is no public source; unset would mean fetchset.PUBLIC_URL) or an export bucket
+    monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
+    for k in ("RESEARCH_EXPORT_DIR", "RESEARCH_EXPORT_BUCKET"):
+        monkeypatch.delenv(k, raising=False)

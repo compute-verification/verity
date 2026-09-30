@@ -4,10 +4,10 @@ the golden-record format, compared bit for bit against the pinned ``verity.ml.tc
 Provenance: ported for lane WP1 from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
 ``validate_tiles.py``: the BF16 kernel, encodings, finite-sweep families, per-element records, multiprocess model comparison,
 golden sampling) and extended for lane tc-probe-fp8 with the E4M3 kernel half and encodings of the same files, the FP8-specific
-families (the Ada zero-product accumulator truncation of ``docs/hardware-semantics.md``, Hawkeye's adder-width probe of
-``characterize.py``, the special-value classes of ``gpu/tc-fp8/campaign.py``) and the Hopper ``wgmma`` path with the SASS
-confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile kernel).  Only the GPU host runs
-this; it needs numpy and nvcc (``cuobjdump`` for ``--sass-check``).
+families (the Ada zero-product accumulator truncation: discrepancy-log entry D10 and ``verity.ml.tc.models.ADA_E4M3_M16N8K32``;
+Hawkeye's adder-width probe of ``characterize.py``; the special-value classes of ``gpu/tc-fp8/campaign.py``) and the Hopper
+``wgmma`` path with the SASS confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile
+kernel).  Only the GPU host runs this; it needs numpy and nvcc (``cuobjdump`` for ``--sass-check``).
 
 Instructions (``--instruction``; ``--arch`` is derived from the entry and may be overridden)::
 
@@ -76,7 +76,7 @@ the same families, the same random draws, the same words.
 ``--canary`` (``canary.py``) runs the instruction's fixed canary tile set -- the first tiles of every family under the canary seed
 plus every regression tile of every resolved discrepancy-log entry naming the instruction -- in under a minute, exits 1 on any
 mismatch against a declared model, and marks ``result.json`` (``tc-evidence/v1``) with ``workload_fingerprint.family = canary``
-and ``tc_evidence.canary``; the trust framework (``verity.proofs.trust``) treats a failing canary on the anchor as an
+and ``tc_evidence.canary``; the trust framework (``trust.py``) treats a failing canary on the anchor as an
 invalidation trigger.  Run it after any driver / ptxas / toolkit change on an anchor and on a second device of the SKU.
 """
 

@@ -22,7 +22,8 @@ export PYTHONPATH=$REPO:$REPO/vllm-poc HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_
 export VERITOR_REPO=$REPO NATIVE_COLLECT_BUILD=${NATIVE_COLLECT_BUILD:-/workspace/cp/nc_build}
 GPU_UTIL=${GPU_UTIL:-0.5}
 FA_VER=$($PY -c "from verity_vllm.program.frontend.target_profile import TargetProfile; print(TargetProfile.from_device().effective_flash_attn_version())" 2>/dev/null || echo 2)
-HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so || echo /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so)}
+G=$([ "${GUARDED_MAX_TAP:-1}" = 1 ] && echo G)   # the guarded-max build unless GUARDED_MAX_TAP=0 (config.CommitConfig), as the row selects it
+HIDDEN_SO=${HIDDEN_SO:-$([ "$FA_VER" = 3 ] && echo /workspace/cp/fa2/build/fa3_matReq$G/verity_fa3_matReq$G.so || echo /workspace/cp/fa2/build/matReq$G/verity_fa2_matReq$G.so)}
 CLASS=$([ "$FA_VER" = 3 ] && echo fa3_hidden_m1_stream || echo fa2_hidden_m1_stream)
 B=$(python3 -c "import json;print(json.load(open('$WL'))['sweep']['batch'])")
 MML=$(python3 -c "import json;w=json.load(open('$WL'));s=w['sweep'];print(s['max_input']+s['max_output'])")

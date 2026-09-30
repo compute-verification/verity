@@ -10,9 +10,9 @@ running max of -inf to 0.  `AttnBlock_v2` guards on every block; on a row whose 
 
 `AttentionHead_v4` takes the tile's `n_block_min_causal_local_mask` as the static `MASKED_FROM` (the lowest key block the kernel guards;
 `fa3_masked_from`): block b runs `AttnBlock_v4{..., CHECK = b >= MASKED_FROM}`.  The row's first block (`ceil(T/BN) - 1`) is always at or
-above it.  `targets.attention_spec` binds `Attention_v4` only under `TargetProfile.fa3_construction = "check-inf-per-iteration"`; the default
-construction binds `Attention_v2`, so no Program of record moves.  New versions because the identity changed; v2 stays registered and
-untouched (registry version discipline).
+above it.  `targets.attention_spec` binds `Attention_v4` under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default);
+`"guard-every-block"` binds `Attention_v2`.  New versions because the identity changed; v2 stays registered and untouched (registry version
+discipline).
 """
 from __future__ import annotations
 

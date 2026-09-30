@@ -13,8 +13,9 @@ _SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, te
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
     """The launch's top-p split count S carried by a fold TokenSelect instance.  [R16 stoch M-0254 / global M-0169 (4)] The value of
     the select's `Const32[S]` splits operand (compare.Prog._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
-    is bound to the Program's request-owned `splits` input entry), else the `S=<n>` static of the R15 form `GumbelTopPTokenSelect_v1{V,S}`
-    (the fold's spec strings may carry a `prefix:`).  None when the instance carries no readable S."""
+    is bound to the Program's request-owned `splits` input entry, or held equal to a single-request Program's own `Const32[S]` by
+    `constant_splits_agree`), else the `S=<n>` static of the R15 form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
+    a `prefix:`).  None when the instance carries no readable S."""
     if B is not None and inst is not None:
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
         if v is not None:
@@ -33,6 +34,30 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
                         return int(cv[1])
     m = _S_STATIC_RE.search(spec.split(":", 1)[-1])
     return int(m.group(1)) if m else None
+
+
+def constant_splits_agree(A, B) -> dict | None:
+    """[single-request workloads] A single-request Program carries S = SplitsFor_v1(1, num_SMs) as its own `Const32[S]` per select,
+    bound like the fold's and removed from both sequences by `compare.Prog._bind_splits`, so neither the canonical hash nor a DAG hash
+    carries its value: the two sides agree only if the constants are equal at every event both have (an event on one side only is a
+    step the structural comparison already reports, e.g. a component's steps past an EOS).  None when either side binds no constant
+    (a derived-S Program reads its `splits` input instead).  Mismatches are [event, S of A, S of B]."""
+    ea, eb = _splits_by_event(A), _splits_by_event(B)
+    if not (ea and eb):
+        return None
+    events = sorted(set(ea) & set(eb))
+    bad = [[e, ea[e], eb[e]] for e in events if ea[e] != eb[e]]
+    return {"equal": not bad, "events": len(events), "mismatches": bad[:16]}
+
+
+def _splits_by_event(P) -> dict[int, int]:
+    """{event ordinal: S} of a compare.Prog's bound `Const32[S]` splits operands."""
+    out = {}
+    for k, S in getattr(P, "splits_values", {}).items():
+        i = P.k2i.get(k)
+        if i is not None and i in P.i2step:
+            out[P.i2step[i][0]] = S
+    return out
 
 
 def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -> dict:
@@ -119,13 +144,15 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     allowed to follow the inflated batch), a top-p select on a step the state schedules nobody at is named, a scheduled sampling step
     without a top-p select is named, and a step whose state is unestablished fails closed.  The live->S transitions are reported with
     their causes (`transitions`).  Without `scheduled` the check reads the observed logits rows as before (R16 form)."""
+    from verity_vllm.program.registry.sampling import SHARED_GREEDY
     from verity_vllm.program.registry.topp_split import splits_for
     from verity_vllm.program.sampling_event import family_of
+    topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)
     n_topp = 0
     for i, r in enumerate(B.inst):
         sp = r["spec"]
-        if family_of(sp) != _TOPP_FAMILY:
+        if family_of(sp) not in topp:
             continue
         n_topp += 1
         per_step[engine_step_of.get(i)].add(top_p_split_count(sp, B, r))
