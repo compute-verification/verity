@@ -37,6 +37,7 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "pearl-c-h100-v0": _pearl_c("v0"),
     "pearl-c-h100-v1": _pearl_c("v1"),
     "pearl-c-h100-v1-h1": _pearl_c("v1", hashing="h1"),
+    "pearl-c-h100-v1-h2": _pearl_c("v1", hashing="h2"),
     "pearl-c-sm120-v1": _pearl_c("v1", "sm120"),
 }
 

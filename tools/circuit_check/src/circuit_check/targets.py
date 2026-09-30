@@ -180,15 +180,19 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 def _pouw_roots() -> list[Any]:
     """PoUW's `ncp-v2` unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on
     it (`verity_pouw.circuit.ncp2`), for both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check
-    their template partitions and the Z separator."""
+    their template partitions and the Z separator. Beside them, the model Program's rows at a PoUW site, without and with the
+    bias (`verity_vllm.program.registry.pouw_rows`)."""
+    from verity.ir.defs import bind
     from verity_pouw.circuit import ncp2
+    from verity_vllm.program.registry import pouw_rows
 
     shape = ncp2.Shape(16, 64, 16)
     out = []
     for kind in ("shift24", "word"):
         out += [t for t in ncp2.templates(64, kind).values() if t not in out]
         out += [ncp2.linear(shape, kind), ncp2.weight(shape, kind), ncp2.window(shape, 2, kind)]
-    return out
+    return out + [bind(pouw_rows.NcpLinearRow, K=64, N=16), bind(pouw_rows.NcpLinearRowBias, K=64, N=16),
+                  bind(pouw_rows.NcpLinearCoordinate, K=64)]
 
 
 def _core_roots() -> list[Any]:
@@ -267,7 +271,7 @@ def _vocabulary_bindings() -> list[tuple[str, Any]]:
 
     small = {"K": 32, "N": 16, "V": 16, "H": 16, "T": 5, "NH": 2, "KVH": 1, "D": 16, "NHEADS": 2, "I": 16, "EPS": 1e-5, "C": 0.5,
              "CAP": 30.0, "BIAS": True, "APPROX": "tanh", "SCALE_OP": "mul", "E": 4, "TOPK": 2, "VPT": 2, "DOT": P.AmpereBF16TcDot16,
-             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0,
+             "INV": P.Fa2InvSum, "WORLD": 2, "G": 128, "W": 32, "BITS": 0, "BN": 16, "VS": 16, "START": 16, "MASKED_FROM": 0, "FA2_MASKED_FROM": 0,
              "SCALE": "shared-per-block", "S": 4,
              "CONSTRUCTION": "shared-greedy"}
     wide = {**small, "K": 256, "N": 256, "H": 256}           # FP8's 128-element blocks and 256-thread quantization

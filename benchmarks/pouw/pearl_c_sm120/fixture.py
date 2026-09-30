@@ -71,21 +71,23 @@ def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
     return salt + root_b + index.to_bytes(8, "little") + blake3(C.LABELS["seed-A"])
 
 
-def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes) -> tuple[Epoch, bytes, bytes]:
-    """A one-unit epoch on B's rows as `verity_pouw.audit` starts it: (epoch, B's frame-b3 tree bytes, its root)."""
-    dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), "blake3")
+def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes, hash: str) -> tuple[Epoch, bytes, bytes]:
+    """A one-unit epoch on B's rows as `verity_pouw.audit` starts it: (epoch, B's tree bytes under tree hash `hash`, its
+    root)."""
+    dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), hash)
     tree_b = H.tree_bytes(dom_b, b_rows, ROW_SCHEMA)
     return Epoch.start(Workload((matmul,)), {matmul.weight: tree_b[-32:]}, beacon), tree_b, tree_b[-32:]
 
 
 def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
-    """The pipeline's key inputs for a unit of `epoch` (run.Pipeline's `keys`)."""
-    s, salt = matmul.shape, epoch.salt
+    """The pipeline's key inputs for a unit of `epoch` (run.Pipeline's `keys`; -h2's templates are run.b3s_template's): the
+    domains in the scheme's tree hash and the digests' keys the scheme's."""
+    s, salt, h, dk = matmul.shape, epoch.salt, scheme.commitment_hash, scheme.digest_keys
     return {"line_b": P._line_key(seed_b),
-            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, "blake3").domain_id,
-            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, "blake3").domain_id,
-            "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), "blake3").domain_id,
-            "k_msg": C.H1_KEYS["message"], "k_leaf": C.H1_KEYS["leaf"],
+            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
+            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
+            "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
+            "k_msg": dk["message"], "k_leaf": dk["leaf"],
             "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
 
 
@@ -231,18 +233,19 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     ra, rb = H.CV.rows_f32(CASE, "A", m, k), H.CV.rows_f32(CASE, "B", n, k)
     scheme = C.PearlC(forming="v1", device=SM120, hashing="h1")
+    h = scheme.commitment_hash
     mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
-    epoch, tree_b, root_b = epoch_of(mm, rb, BEACON)
-    assert root_b == commit_rows(weight_binding(WEIGHT), -2, rb, "blake3").commitment.root
-    dom_a = rows_domain(activation_binding(epoch.salt, INDEX), INDEX, m, "blake3")
+    epoch, tree_b, root_b = epoch_of(mm, rb, BEACON, h)
+    assert root_b == commit_rows(weight_binding(WEIGHT), -2, rb, h).commitment.root
+    dom_a = rows_domain(activation_binding(epoch.salt, INDEX), INDEX, m, h)
     tree_a = H.tree_bytes(dom_a, ra, ROW_SCHEMA)
-    assert tree_a[-32:] == commit_rows(activation_binding(epoch.salt, INDEX), INDEX, ra, "blake3").commitment.root
+    assert tree_a[-32:] == commit_rows(activation_binding(epoch.salt, INDEX), INDEX, ra, h).commitment.root
     ctx = Context(epoch.salt, mm, tree_a[-32:], root_b)
     noise = scheme.noise(ctx)
     keys = keys_of(scheme, epoch, mm, noise.seed_b)
-    dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), "blake3")
+    dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), h)
     manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v3", "shape": [m, n, k], "case": CASE, "layout": "rowmajor, k32",
-                "hashing": "h1", "beacon": BEACON.hex(), "keys": {name: x.hex() for name, x in keys.items()},
+                "hashing": scheme.hashing, "beacon": BEACON.hex(), "keys": {name: x.hex() for name, x in keys.items()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
                           "root_a": tree_a[-32:].hex(), "root_b": root_b.hex()}, "variants": {}}
     o = H.Out(out_dir)

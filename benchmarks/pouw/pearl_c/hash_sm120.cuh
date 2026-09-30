@@ -199,3 +199,121 @@ extern "C" __global__ void __launch_bounds__(128) hash_leaf_p(const Args a) {
   }
   store_cv(a.p[1] + (size_t)t * 32, h);
 }
+
+// ---------------------------------------------------------------- A's commitment at decode: latency
+// b3c4: one BLAKE3 compression by the four lanes q = lane % 4 of a group, lane q holding column q of the state (v[q], v[4+q],
+// v[8+q], v[12+q]); the diagonal step's operands come by three shuffles and go back by three.  Every lane of the group
+// passes the same cv, msg, counter, len and flags and gets the whole output.  The group's lanes must be converged.
+DEV uint32_t sel4(int q, uint32_t x0, uint32_t x1, uint32_t x2, uint32_t x3) { return q == 0 ? x0 : q == 1 ? x1 : q == 2 ? x2 : x3; }
+DEV void g1(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d, uint32_t x, uint32_t y) {
+  a = a + b + x; d = rotr(d ^ a, 16); c = c + d; b = rotr(b ^ c, 12);
+  a = a + b + y; d = rotr(d ^ a, 8); c = c + d; b = rotr(b ^ c, 7);
+}
+DEV void b3c4(const uint32_t* cv, const uint32_t* msg, uint64_t counter, uint32_t len, uint32_t flags, uint32_t* out) {
+  constexpr int PERM[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
+  const int lane = threadIdx.x % 32, q = lane % 4, base = lane - q;
+  const unsigned mask = 0xFu << base;
+  uint32_t m[16], t[16];
+#pragma unroll
+  for (int i = 0; i < 16; i++) m[i] = msg[i];
+  uint32_t a = sel4(q, cv[0], cv[1], cv[2], cv[3]), b = sel4(q, cv[4], cv[5], cv[6], cv[7]);
+  uint32_t c = sel4(q, B3_IV[0], B3_IV[1], B3_IV[2], B3_IV[3]);
+  uint32_t d = sel4(q, (uint32_t)counter, (uint32_t)(counter >> 32), len, flags);
+#pragma unroll
+  for (int r = 0; r < 7; r++) {
+    g1(a, b, c, d, sel4(q, m[0], m[2], m[4], m[6]), sel4(q, m[1], m[3], m[5], m[7]));
+    b = __shfl_sync(mask, b, base + ((q + 1) & 3));
+    c = __shfl_sync(mask, c, base + ((q + 2) & 3));
+    d = __shfl_sync(mask, d, base + ((q + 3) & 3));
+    g1(a, b, c, d, sel4(q, m[8], m[10], m[12], m[14]), sel4(q, m[9], m[11], m[13], m[15]));
+    b = __shfl_sync(mask, b, base + ((q + 3) & 3));
+    c = __shfl_sync(mask, c, base + ((q + 2) & 3));
+    d = __shfl_sync(mask, d, base + ((q + 1) & 3));
+#pragma unroll
+    for (int i = 0; i < 16; i++) t[i] = m[PERM[i]];
+#pragma unroll
+    for (int i = 0; i < 16; i++) m[i] = t[i];
+  }
+  const uint32_t lo = a ^ c, hi = b ^ d;                    // output words q and 4 + q
+#pragma unroll
+  for (int i = 0; i < 4; i++) {
+    out[i] = __shfl_sync(mask, lo, base + i);
+    out[4 + i] = __shfl_sync(mask, hi, base + i);
+  }
+}
+
+// latency: n dependent compressions on one thread (i1 = 0, b3c) or on one group of four lanes (i1 = 1, b3c4), the SM clock
+// cycles they took into p0 (u64), and the last chaining value into p0 + 16 (store_cv's uint4 stores need 16-byte
+// alignment).  i0 n
+extern "C" __global__ void __launch_bounds__(32) lat_chain(const Args a) {
+  uint32_t cv[8], m[16];
+#pragma unroll
+  for (int i = 0; i < 8; i++) cv[i] = B3_IV[i];
+#pragma unroll
+  for (int i = 0; i < 16; i++) m[i] = 0x9E3779B9u * (i + 1);
+  const int n = a.i[0];
+  const long long t0 = clock64();
+  for (int k = 0; k < n; k++) {
+    if (a.i[1]) b3c4(cv, m, (uint64_t)k, 64, B3_KEYED, cv);
+    else b3c(cv, m, (uint64_t)k, 64, B3_KEYED, cv);
+    m[0] ^= cv[0];
+  }
+  const long long t1 = clock64();
+  if (threadIdx.x == 0) {
+    *reinterpret_cast<unsigned long long*>(a.p[0]) = (unsigned long long)(t1 - t0);
+    store_cv(a.p[0] + 16, cv);
+  }
+}
+
+// A's row leaves and its tree in one launch: hash_rows_w's warps, then the last CTA to finish (a counter in p4, which it
+// resets) writes the pads and every level as hash_pad and hash_tree_small do; launched with 128 threads (4 rows) a CTA.  p0 rows, p1 the tree, p2 domain id, p3 the level
+// keys, p4 a zeroed u32 counter; i0 rows, i1 row bytes, i2 width (level 0, a power of two).  Dynamic shared memory:
+// rows_w_words(rb) words per warp.
+extern "C" __global__ void __launch_bounds__(128, 1) hash_rows_wt(const Args a) {
+  extern __shared__ uint32_t sh[];
+  __shared__ int last;
+  const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
+  const uint64_t row = (uint64_t)blockIdx.x * (blockDim.x / 32) + warp;
+  const uint32_t rb = (uint32_t)a.i[1];
+  const int m = a.i[0], width = a.i[2];
+  uint32_t key[8], h[8];
+  load_key(a.p[2], key);
+  if (row < (uint64_t)m) {
+    row_leaf_w(reinterpret_cast<const uint8_t*>(a.p[0]) + row * rb, rb, row, key,
+               reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words((int)rb)), lane, h);
+    if (lane == 0) store_cv(a.p[1] + row * 32, h);
+  }
+  __threadfence();
+  __syncthreads();
+  if (threadIdx.x == 0) last = atomicAdd(reinterpret_cast<unsigned*>(a.p[4]), 1u) == gridDim.x - 1;
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  for (int r = m + (int)threadIdx.x; r < width; r += blockDim.x) {
+    uint32_t pm[16];                                        // the pad's message, 0x03 ‖ u64 rank: one block of 9 bytes
+#pragma unroll
+    for (int w = 0; w < 16; w++) pm[w] = 0u;
+    pm[0] = 3u | ((uint32_t)r << 8);
+    pm[1] = (uint32_t)r >> 24;
+    b3c(key, pm, 0, 9, B3_KEYED | B3_START | B3_END | B3_ROOT, h);
+    store_cv(a.p[1] + (uint64_t)r * 32, h);
+  }
+  __syncthreads();
+  uint64_t below = a.p[1];
+  int level = 0;
+  for (uint64_t w = (uint64_t)width; w > 1; w >>= 1, level++) {
+    const uint64_t above = below + 32 * w;
+    uint32_t lk[8];
+    load_key(a.p[3] + 32ull * level, lk);
+    for (uint64_t i = threadIdx.x; i < w / 2; i += blockDim.x) {
+      uint32_t mm[16], hh[8];
+      load_key(below + 64 * i, mm);
+      load_key(below + 64 * i + 32, mm + 8);
+      blake3_block(lk, mm, hh);
+      store_cv(above + 32 * i, hh);
+    }
+    __syncthreads();
+    below = above;
+  }
+  if (threadIdx.x == 0) *reinterpret_cast<unsigned*>(a.p[4]) = 0u;
+}

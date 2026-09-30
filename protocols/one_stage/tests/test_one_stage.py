@@ -543,3 +543,126 @@ def test_a_pre_canonical_object_keeps_its_digest():
     prog = P.population_program(PAIR, 6)
     old = {"program": P.program_sha512(prog), "query": {"name": "Q_template_instance", "version": 0, "template": PAIR.id, "width_rule": None}}
     assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
+
+
+# --- the work law (the draw law's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
+
+def test_the_work_rule_sizes_by_work_above_the_floor():
+    """`work_k` is Lean's `workK`: ceil(K w n_s / W), at least the floor and at most n_s; so every non-empty stratum draws at
+    least min(n_s, f_s) (`floor_le_workK`), at least K w n_s / W or all (`workK_ge`), and at most K + sum_s f_s in all
+    (`sum_workK_le`)."""
+    assert D.work_k(4, 10, 3, 30, 1) == 3 and D.work_k(4, 0, 3, 30, 1) == 1 and D.work_k(4, 0, 3, 30, 2) == 2
+    assert D.work_k(10, 1, 7, 70, 1) == 1 and D.work_k(10, 3, 7, 70, 1) == 3 and D.work_k(1, 1, 5, 1000, 9) == 5
+    for works in ((0, 5), (1, 1), (2, 7, 0), (3, 0, 0, 1)):
+        for sizes in ((1, 4), (3, 2), (2, 2, 5), (1, 1, 1, 9)):
+            if len(sizes) != len(works):
+                continue
+            total = sum(w * n for w, n in zip(works, sizes))
+            for k in range(1, sum(sizes) + 1):
+                for floor in (1, 2):
+                    ks = [D.work_k(k, w, n, total, floor) for w, n in zip(works, sizes)]
+                    assert all(min(n, floor) <= x <= n for x, n in zip(ks, sizes))
+                    assert all(x == n or x * total >= k * w * n for x, w, n in zip(ks, works, sizes))
+                    assert sum(ks) <= k + floor * len(sizes)
+
+
+def _work_program():
+    prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
+    return prog, P.template_instances_query([PAIR.id, XOR3.id])
+
+
+def test_derive_expands_the_work_rule_over_the_verifiers_table():
+    """PAIR does the PoUW work; XOR3 stands for units credited nothing (dequantization, or filler: units of padded rows only,
+    or declared uncredited), which draw their floor for integrity and add nothing to W."""
+    prog, q = _work_program()
+    table = {PAIR.id: 10, XOR3.id: 0}
+    law = D.derive(prog, q, D.parse_law("work:4"), table)
+    assert law == {"law": "work", "k": 4, "strata": [
+        {"template": XOR3.id, "units": [[0, 2], [5, 6]], "work": 0, "floor": 1, "k": 1},
+        {"template": PAIR.id, "units": [[2, 5]], "work": 10, "floor": 1, "k": 3}]}
+    assert D.total_work(law["strata"]) == 30 and D.strata_problem(law, 6) is None
+    assert D.derive(prog, q, law, table) == law
+    floors = D.derive(prog, q, {"law": "work", "k": 2}, {PAIR.id: {"work": 10, "floor": 2}, XOR3.id: {"work": 0, "floor": 3}})
+    assert [s["k"] for s in floors["strata"]] == [3, 2]            # the floors bind: 3 of XOR3's 3, 2 of PAIR's 3
+    assert D.parse_law("work:5") == {"law": "work", "k": 5}
+    with pytest.raises(ValueError, match="work table"):
+        D.derive(prog, q, law)
+    with pytest.raises(ValueError, match="names no work"):
+        D.derive(prog, q, law, {PAIR.id: 10})
+    with pytest.raises(ValueError, match="does some work"):
+        D.derive(prog, q, law, {PAIR.id: 0, XOR3.id: 0})
+    for bad in ({PAIR.id: -1, XOR3.id: 0}, {PAIR.id: True, XOR3.id: 0}, {PAIR.id: {"work": 1, "floor": 0}, XOR3.id: 0},
+                {PAIR.id: {"work": 1, "extra": 1}, XOR3.id: 0}, {PAIR.id: 1.5, XOR3.id: 0}, [PAIR.id]):
+        with pytest.raises(ValueError):
+            D.work_table(bad)
+    for bad in ("work:0", "work:x"):
+        with pytest.raises(ValueError):
+            D.parse_law(bad)
+
+
+def _work_registration():
+    prog, q = _work_program()
+    ports = _ports(prog, q, 6)
+    roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
+    rule, table = D.parse_law("work:4"), {PAIR.id: 10, XOR3.id: 0}
+    return prog, q, rule, table, R.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64, work_table=table)
+
+
+def test_r1_holds_a_work_law_to_the_verifiers_own_table():
+    prog, q, rule, table, rec = _work_registration()
+    assert rec["law"]["law"] == "work" and [s["k"] for s in rec["law"]["strata"]] == [1, 3]
+    assert _check(rec, prog, q, law=rule, work_table=table).ok
+    assert _check(rec, prog, q, law=rule, work_table={PAIR.id: 10, XOR3.id: 5}).codes == ("R1-law",)
+    assert _check(rec, prog, q, law=rule).codes == ("R1-law",)                           # no table: the law doesn't apply
+    assert _check(rec, prog, q, law=D.parse_law("stratified:4")).codes == ("R1-law",)
+
+
+def test_work_draw_checks_and_closures():
+    prog, q, rule, table, rec = _work_registration()
+    law = D.derive(prog, q, rule, table)
+    good = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [2, 3, 4, 5]}
+    assert D.check_draw(good, rec, law).ok and D.law_of(good) == law and D.proved(good) == [2, 3, 4, 5]
+    assert D.check_draw({**good, "units": [0, 2, 3, 4]}, rec, law).ok
+    assert D.check_draw({**good, "units": [0, 2, 3, 5]}, rec, law).codes == ("strata-count",)
+    closed = {**good, "units": [0, 2, 3, 4], "closure": [1, 5]}
+    assert D.check_draw(closed, rec, law).ok and D.proved(closed) == [0, 1, 2, 3, 4, 5]
+    assert D.check_proved(closed, [0, 1, 2, 3, 4, 5], 6).ok and D.check_proved(closed, [0, 2, 3, 4], 4).codes == ("instances", "units")
+    assert D.check_draw({**closed, "closure": [1, 2]}, rec, law).codes == ("closure-drawn",)
+    assert D.check_draw({**closed, "closure": []}, rec, law).codes == ("closure",)
+    assert D.check_draw({**closed, "closure": [5, 1]}, rec, law).codes == ("closure",)
+    stratified = D.derive(prog, q, D.parse_law("stratified:4"))
+    assert D.check_draw({"law": "stratified", "population": 6, "k": 4, "strata": stratified["strata"], "units": [0, 2, 3, 5],
+                         "closure": [1]}, rec, stratified).codes == ("keys",)           # a closure only on a work draw
+    wrong_k = [law["strata"][0], {**law["strata"][1], "k": 2}]
+    assert D.strata_problem({"law": "work", "k": 4, "strata": wrong_k}, 6) == f"stratum {PAIR.id!r}: k is not the work rule's"
+    no_work = [{**s, "work": 0} for s in law["strata"]]
+    assert D.strata_problem({"law": "work", "k": 4, "strata": no_work}, 6) == "a work law's population does no work"
+    floor0 = [{**law["strata"][0], "floor": 0}, law["strata"][1]]
+    assert D.strata_problem({"law": "work", "k": 4, "strata": floor0}, 6) == f"stratum {XOR3.id!r}: a floor is at least one"
+    assert D.strata_problem({"law": "work", "k": 4, "strata": [dict(s, k=s["k"]) for s in stratified["strata"]]}, 6) is not None
+
+
+def test_audit_record_under_the_work_law():
+    """The work law is the stratified law at its sizes, so the profile is core's `Stratified` over the same strata at the
+    work sizes; the zero-work stratum is bounded by its floor draw."""
+    from verity.proofs.profile import Stratified, Stratum
+    prog, q, rule, table, rec = _work_registration()
+    law = D.derive(prog, q, rule, table)
+    d = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [0, 2, 3, 4]}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, law, [0, 2, 3, 4], 4, {}, {"lean": lean}, 0.25)
+    core = Stratified((Stratum(XOR3.id, 3, 1), Stratum(PAIR.id, 3, 3)))
+    assert r["accepted"] and r["law"] == law and r["integrity_profile"]["law"] == law
+    assert r["profile"] == {**core.to_json(), "delta": 0.25, "drawn": {XOR3.id: 1, PAIR.id: 3}}
+    assert r["wrong_units"]["per_template"] == {XOR3.id: core.stratum_bound(XOR3.id, 0.25), PAIR.id: 0}
+
+
+def test_work_sizes_are_the_lean_verifiers():
+    """The sizes `backends/flock/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
+    `flock-verify draw --work K`: strata of 3, 3 and 4 units doing 3, 1 and 0 (W = 12), and its floor cases."""
+    sizes, works = (3, 3, 4), (3, 1, 0)
+    total = sum(w * n for w, n in zip(works, sizes))
+    for k, want in {1: [1, 1, 1], 2: [2, 1, 1], 4: [3, 1, 1], 10: [3, 3, 1]}.items():
+        assert [D.work_k(k, w, n, total, 1) for w, n in zip(works, sizes)] == want, k
+    for floors, want in (((1, 1, 2), [2, 1, 2]), ((1, 1, 9), [2, 1, 4]), ((1, 3, 1), [2, 3, 1])):
+        assert [D.work_k(2, w, n, total, f) for w, n, f in zip(works, sizes, floors)] == want, floors

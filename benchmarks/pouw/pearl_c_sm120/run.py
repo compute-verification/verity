@@ -20,7 +20,8 @@
    reference), the plain baselines only if theirs do.  Exit 4 if any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
-   (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing, hashing format -h1; fused at 128 x 128
+   (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing, in the hashing format HASHING, -h1
+   by default (the check's is -h1, the fixture's); fused at 128 x 128
    tiles, gemm_pearlc_b's time less gemm_pearlc_s's is hashing), the call end to end with and without its hashes (commit and
    hashing; without, the chain is gemm_pearlc_s where it runs), and consistency checks (C~ of gemm_ct equals gemm_pearlc's;
    a second gemm_pearlc gives the same U; gemm_pearlc_s's, gemm_pearlc_b's and gemm_pearlc_w's y, gemm_pearlc_b's digests
@@ -42,7 +43,7 @@
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted sm120-hot",
-                                 PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_A_FORMS="w,nodes", PEARLC_FORMING="split",
+                                 HASHING=h1, PEARLC_LIBCUDA, PEARLC_LIBNVML, PEARLC_A_FORMS="w,nodes", PEARLC_FORMING="split",
                                  PEARLC_EPILOGUE="b")
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
@@ -357,6 +358,11 @@ W_SLOT, W_CTAS = 2 * 128 * 128 * 4 + 512 * 32, 256
 TILES_CTA = 128                                # h1_tiles' threads a CTA: a tile's 2 x 64 digests
 #: h1_tree's threads a CTA before the last CTA's roots need more: 64 CTAs of 64 cover A's 8,192 rows, 128 the tile tree's 16,384
 TREE_CTA = 64
+#: hashing formats: -h1 (frame-b3 trees) and -h2 (frame-b3s: each leaf a tree over its value's 256-byte segments)
+HASHINGS = ("h1", "h2")
+#: `verity_pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
+ROW_SCHEMA, TILE_SCHEMA = "verity/pouw/row/v1", "verity/pouw/tile/v1"
+B3S_SEG, B3S_MAX_SEGS = 256, 512
 
 
 def pow2(n: int) -> int:
@@ -366,6 +372,23 @@ def pow2(n: int) -> int:
 
 def depth(n: int) -> int:
     return pow2(n).bit_length() - 1
+
+
+def b3s_template(schema: str) -> bytes:
+    """-h2's segment-key message (hash_h2.cuh) with the rank, position, L and j left zero: 64 bytes, of which the kernels hash
+    `b3s_template_len`."""
+    name = schema.encode()
+    head = b"\x05" + bytes(28) + len(name).to_bytes(2, "little") + name
+    return head + bytes(64 - len(head))
+
+
+def b3s_template_len(schema: str) -> int:
+    return 31 + len(schema.encode())
+
+
+def b3s_levels(rb: int) -> int:
+    """The segment tree's levels over a value of rb bytes (an odd last node promoted, so ⌈log2 segments⌉)."""
+    return depth(cdiv(rb, B3S_SEG))
 
 
 def rows_w_words(rb: int) -> int:
@@ -424,12 +447,12 @@ class Buffers(dict):
 
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
-    `epoch` (B's frame-b3 row tree, whose root the epoch's salt and seed_B follow), `unit` (the level keys and pads of A's
-    tree and the tile tree, which depend on their domains alone), `job` (the weight side, once per weight and epoch), then
-    the call: `commit` (A's row tree, and E_A's line key from its root on the device: `seed_line_a`), `forming` (with v2-hot's
-    `hot_a`, the rows' start words from E_A's line key and forming's alpha and rho, after `stats_a`), `gemm`
-    (gemm_ct, the chain alone, for the split), `cleanup` and `hashing` (-h1: the message digests, the tile leaves and the tile
-    tree); and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  The chain runs
+    `epoch` (B's row tree, whose root the epoch's salt and seed_B follow), `unit` (the level keys and pads of A's tree and the
+    tile tree, which depend on their domains alone), `job` (the weight side, once per weight and epoch), then the call:
+    `commit` (A's row tree, and E_A's line key from its root on the device: `seed_line_a`), `forming` (with v2-hot's `hot_a`,
+    the rows' start words from E_A's line key and forming's alpha and rho, after `stats_a`), `gemm` (gemm_ct, the chain alone,
+    for the split), `cleanup` and `hashing` (the message digests, the tile leaves and the tile tree); and the baselines'
+    `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  The chain runs
     on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the 32-column words on 128 x 32 CTA
     tiles, but A'F_B at 64 x 64 on the `words` kernel's warp tiles.  The 128 x 128 GEMMs run on the mainloop, their operands
     by the tensor maps in `tma` (ML_MAPS).  `fused` (the default where it applies: 128 x 128 tiles over m_real = m rows) makes
@@ -438,18 +461,25 @@ class Pipeline:
     (EPILOGUE) makes the fused chain gemm_pearlc_w where it has one (`hash_warps`), which writes the tile leaves too and drops
     hash_leaf as well.
 
+    `hashing` is the trees' format, the message digests and tile leaves being the same in both: -h1 (frame-b3, a row leaf
+    through BLAKE3's chunk tree, hash_rows_w) or -h2 (frame-b3s: a row leaf is a tree over its 256-byte segments,
+    hash_rows_b3s, under segment level keys it derives itself and its first CTA stores in `skeys_<tree>`; the tile tree's
+    leaves hash_leaves_b3s).  Pads, node keys and every level above the leaves are frame-b3's in both.
+
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
-    labels `k_msg`, `k_leaf`, and `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
-    BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (h1_commit under
-    `fold`).  `rows_form` and `tree_form` pick the kernels of the trees' row leaves and levels (ROWS_FORM and TREE_FORM, or
-    one of FORMS) for the steps made after they're set.  `steps` binds each step's launches at its first call (`bind`): a
-    buffer the caller repoints between calls (`b[name] = ptr`) is followed, anything else a step reads is fixed then."""
+    labels `k_msg`, `k_leaf`, `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
+    BLAKE3("pearl-c/v0/seed-A")), and under -h2 `t_row`, `t_tile`, the segment keys' templates (`b3s_template` of ROW_SCHEMA
+    and TILE_SCHEMA).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (h1_commit under `fold`).
+    `rows_form` and `tree_form` pick the -h1 kernels of the trees' row leaves and levels (ROWS_FORM and TREE_FORM, or one of
+    FORMS) for the steps made after they're set; -h2 has ALT_FORMS alone.  `steps` binds each step's launches at its first
+    call (`bind`): a buffer the caller repoints between calls (`b[name] = ptr`) is followed, anything else a step reads is
+    fixed then."""
 
     GEMM_SMEM: dict[str, int] = {}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None,
-                 fused: bool | None = None):
+                 fused: bool | None = None, hashing: str = "h1"):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
@@ -461,6 +491,14 @@ class Pipeline:
         self.bm = bm or (BM if m % BM == 0 else BM_D)
         if m % self.bm or n % BM or k % 1024:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024, not {(m, n, k)}")
+        if hashing not in HASHINGS:
+            raise ValueError(f"hashing {hashing!r}: one of {HASHINGS}")
+        if hashing == "h2" and cdiv(4 * k, B3S_SEG) > B3S_MAX_SEGS:
+            raise ValueError(f"hash_rows_b3s takes rows of at most {B3S_MAX_SEGS} segments (k <= {B3S_MAX_SEGS * B3S_SEG // 4}), "
+                             f"not k = {k}")
+        self.hashing = hashing
+        if hashing == "h2":
+            self.rows_form, self.tree_form = ALT_FORMS
         self.fusable = self.bm == BM and self.m_real == m
         if fused and not self.fusable:
             raise ValueError(f"gemm_pearlc_b digests every row of 128 x 128 tiles: m = {m} rows at bm = {self.bm}, m_real = "
@@ -507,6 +545,7 @@ class Pipeline:
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
             "line_a": 32, "seed_a": 32, "hot_a": 4 * m, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
+            **{f"skeys_{t}": 32 * max(b3s_levels(4 * k), 1) for t in ("a", "b")},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8, "leaves2": tiles * 32,
             **({"wscratch": min((m // BM) * (n // BM), W_CTAS) * 2 * W_SLOT} if m % BM == 0 else {}),
@@ -558,9 +597,16 @@ class Pipeline:
         return out
 
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
-        """A frame-b3 tree over `count` FP32 rows of x, a warp a row (h1_rows_p, a CTA a row per SM when the rows fit; `w`
-        hash_sm120.cuh's hash_rows_w; `s` A's with stats_a, rows_stats, and B's h1_rows_p), then its levels."""
+        """A tree over `count` FP32 rows of x, then its levels.  -h1: a warp a row (h1_rows_p, a CTA a row per SM when the rows
+        fit; `w` hash_sm120.cuh's hash_rows_w; `s` A's with stats_a, rows_stats, and B's h1_rows_p).  -h2: hash_h2.cuh's
+        hash_rows_b3s (a CTA a row, a thread a segment, the segment tree's level keys its own)."""
         d, b, rb = self.dev, self.b, self.row_bytes
+        if self.hashing == "h2":
+            threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
+            return [(f"hash_rows_{tag}", lambda: d.launch("hash_rows_b3s", count, threads,
+                                                          p=(b[x], b[f"tree_{tag}"], self.keys[dom], b[f"skeys_{tag}"], self.keys["t_row"]),
+                                                          i=(count, rb, 0, b3s_template_len(ROW_SCHEMA)))),
+                    (f"tree_{tag}", lambda: self.levels(tag, count))]
         p = self.rows_form in ("p", "s")
         kernel = "h1_rows_p" if p else "hash_rows_w"
         warps = 1 if p and count <= d.sms else ROWS_WARPS
@@ -599,6 +645,16 @@ class Pipeline:
                                                      b["seed_a"], b["keys_a"]), i=(mr, rb, width)))]
         return self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
+
+    def tree_leaves(self, tag: str, values: int, count: int, dom: str) -> None:
+        """A tree's level 0 over `count` 32-byte values at device address `values` (the tile leaves): -h1 hash_tree_leaves,
+        -h2 hash_leaves_b3s under TILE_SCHEMA's template."""
+        d, tree = self.dev, self.b[f"tree_{tag}"]
+        if self.hashing == "h2":
+            d.launch("hash_leaves_b3s", cdiv(count, 128), 128, p=(values, tree, self.keys[dom], self.keys["t_tile"]),
+                     i=(count, 32, 0, b3s_template_len(TILE_SCHEMA)))
+        else:
+            d.launch("hash_tree_leaves", cdiv(count, 128), 128, p=(values, tree, self.keys[dom]), i=(count,))
 
     def form_alt_launch(self, tag: str, kernel: str) -> None:
         """`kernel` (one of FORM_ALTS) over one side's rows into at2."""
@@ -679,6 +735,8 @@ class Pipeline:
 
     def steps(self, bound: bool = True) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
+        if self.hashing == "h2" and (self.rows_form, self.tree_form) != ALT_FORMS:
+            raise ValueError(f"-h2's trees have one form, {','.join(ALT_FORMS)}: not {self.rows_form},{self.tree_form}")
         tile = "_d" if self.bm == BM_D else ""
         ct, chain = f"gemm_ct{tile}{sx}", self.extra()
 
@@ -733,9 +791,7 @@ class Pipeline:
         one, tw = self.tree_form in ("one", "fold"), pow2(tiles)
         hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + ([] if self.hash_warps else [
                    ("hash_leaf", chain["hash_leaf"])]) + [
-                   *([] if one else [
-                       ("tree_leaves_t", lambda: d.launch("hash_tree_leaves", cdiv(tiles, 128), 128,
-                                                          p=(b["leaves"], b["tree_t"], kk["dom_t"]), i=(tiles,)))]),
+                   *([] if one else [("tree_leaves_t", lambda: self.tree_leaves("t", b["leaves"], tiles, "dom_t"))]),
                    ("tree_t", (lambda: self.tree_one("t", tiles, "dom_t", leaves="leaves")) if one
                     else (lambda: self.levels("t", tiles)))]
         if self.tree_form == "fold" and not self.fused and tw <= 2 * TILES_CTA:
@@ -945,16 +1001,18 @@ def parse_shape(s: str) -> tuple[int, int, int]:
     return (parts[0],) * 3 if len(parts) == 1 else tuple(parts)
 
 
-def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: int, gates: dict) -> dict:
+def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: int, gates: dict, hashing: str = "h1") -> dict:
     m_real, n, k = shape
     m = cdiv(m_real, BM_D) * BM_D
     keys = {name: dev.put(hashlib.shake_256(f"pearl-c-timing/{name}".encode()).digest(size)) for name, size in TIMING_KEYS.items()}
+    keys.update(t_row=dev.put(b3s_template(ROW_SCHEMA)), t_tile=dev.put(b3s_template(TILE_SCHEMA)))
     xa, xb = dev.alloc(m * 4 * k), dev.alloc(n * 4 * k)
     for x, rows, seed in ((xa, m_real, 11), (xb, n, 12)):
         dev.launch("gen_f32", cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))
-    pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, m_real=m_real)
+    pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, m_real=m_real, hashing=hashing)
     pipe.run_all()
     out = measure(dev, nv, pipe, reps, gates)
+    out["hashing"] = hashing
     pipe.free()
     for p_ in (xa, xb, *keys.values()):
         dev.free(p_)
@@ -1198,20 +1256,24 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
                                               "chain_only": round(med["gemm_ct"] / fastest, 4)}
     if gates["pearl_c"]:
         out["alt_ms"] = {}
-        for forms in OTHER_FORMS:
-            alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
+        h1 = pipe.hashing == "h1"
+        for forms in OTHER_FORMS if h1 else ():
+            alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real,
+                           hashing=pipe.hashing)
             alt.rows_form, alt.tree_form = forms
             out["alt_ms"].update({f"{nm}@{','.join(forms)}": round(statistics.median(dev.timed(f, reps)), 4)
                                   for nm, p, f in alt.steps() if p in ("commit", "hashing")})
         for forming in OTHER_FORMINGS:
-            alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
+            alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real,
+                           hashing=pipe.hashing)
             alt.forming_form = forming
             out["alt_ms"].update({f"{nm}@forming={forming}": round(statistics.median(dev.timed(f, reps)), 4)
                                   for nm, p, f in alt.steps() if p == "forming"})
         out["call_e2e_ms_by_form"] = {}
-        for forms in FORMS:
+        for forms in FORMS if h1 else (ALT_FORMS,):
             for forming in FORMINGS:
-                alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
+                alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real,
+                               hashing=pipe.hashing)
                 alt.rows_form, alt.tree_form = forms
                 alt.forming_form = forming
                 call = [f for _, p, f in alt.steps() if p in ("commit", "forming", "cleanup", "hashing")]
@@ -1220,7 +1282,8 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         if "gemm_pearlc_w" in extra:
             out["call_e2e_ms_by_epilogue"] = {}
             for epilogue in EPILOGUES:
-                alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
+                alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real,
+                               hashing=pipe.hashing)
                 alt.epilogue = epilogue
                 call = [f for _, p, f in alt.steps() if p in ("commit", "forming", "cleanup", "hashing")]
                 t = dev.timed(lambda call=call: [f() for f in call], reps)
@@ -1270,7 +1333,7 @@ def main(argv: list[str]) -> int:
             if not (gates["pearl_c"] or gates["plain"]):
                 continue
             t0 = time.time()
-            row = timing(dev, nv, shape, variant, reps, gates)
+            row = timing(dev, nv, shape, variant, reps, gates, os.environ.get("HASHING", "h1"))
             row["seconds"] = round(time.time() - t0, 2)
             row["m_real"] = shape[0]
             ok = ok and not any(row.get("consistency", {}).values())
