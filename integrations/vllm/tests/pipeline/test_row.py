@@ -3,6 +3,8 @@
 * a cancelled row takes its running stage (and the stage's forked workers) with it: GNU ``timeout`` moves the stage into
   its own process group, which never sees the runner's killpg, so the driver forwards TERM/INT/HUP to timeout's pid,
   waits for the stage to be gone, records the cancel and exits 128+signal;
+* a row's derives run in parallel by default, as many as the memory headroom holds at the largest shape's planned peak (a fit
+  that bounds the epoch's measured derives) and at most one per CPU, the longest shapes first;
 * after a PASS Build the row stops (exit 21, no Match) when a call-boundary identity of its manifest has no source the
   Commit attaches, the first one named in stages.txt, and goes on to Match when each has one;
 * a Commit over a Match record whose account files are gone refuses to start (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE,
@@ -271,6 +273,71 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
     end, row_end = _timeline(r)
     assert {"stage": "stage.commit", "ev": "end", "rc": 3, "fail_class": "PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE", "missing": lacks}.items() <= end.items()
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "commit"}.items() <= row_end.items()
+
+
+# ---------------------------------------------------------------------------------------------------------------- Build: derives
+
+#: request derives of the 2026-09-29 epoch's stored Builds: (row, LP, T, decoder layers, measured peak RSS in MiB)
+EPOCH_DERIVES = (("#11", 4096, 511, 16, 124529), ("#75", 1024, 127, 48, 43974), ("#74", 1024, 127, 36, 34107), ("#74", 817, 120, 36, 26893),
+                 ("#57", 1024, 127, 26, 21118), ("#67", 1024, 127, 16, 14071), ("#67", 1024, 28, 16, 11067))
+
+
+def test_the_planned_derive_peak_bounds_the_epochs_measured_ones_without_doubling_them():
+    for row, lp, t, layers, mib in EPOCH_DERIVES:
+        planned = R.derive_bytes(lp, t, layers) / (1 << 20)
+        assert mib <= planned <= 2 * mib, (row, lp, t, round(planned), mib)
+
+
+def test_auto_derives_as_many_as_the_memory_and_cpus_hold_at_the_largest_shape():
+    shapes = [(1024, 127), *[(lp, 64) for lp in range(100, 1000, 100)]]
+    per = R.derive_bytes(1024, 127, 16)
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=32) == 8
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=4) == 4
+    assert R.build_jobs_auto(shapes[:3], 16, headroom=10 * per, cpus=32) == 3
+    assert R.build_jobs_auto(shapes, 16, headroom=per, cpus=32) == 1
+    assert R.build_jobs_auto(shapes, None, headroom=100 << 30, cpus=32) == 5       # the model's layers unknown: 20 GiB per derive
+
+
+def test_the_model_layers_come_from_the_checkpoints_config(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
+    (tmp_path / "b").mkdir()
+    (tmp_path / "b" / "config.json").write_text(json.dumps({"text_config": {"num_hidden_layers": 26}}))
+    assert (R.model_layers(str(tmp_path / "a")), R.model_layers(str(tmp_path / "b")), R.model_layers(str(tmp_path / "c"))) == (16, 26, None)
+
+
+def _derive_row(tmp_path, monkeypatch, *argv: str, cpus: int):
+    row = "llama32-1b__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager"
+    r = _row(tmp_path, *argv, row=row)
+    s = R.row_shape(r.path(r.wl), r.path("manifests/checkpoints.json"), str(tmp_path))
+    ck = tmp_path / "ck"
+    ck.mkdir()
+    (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
+    r.B, r.LP, r.T, r.MML, r.ck, r.tgt_args = s["B"], s["LP"], s["T"], s["I"] + s["O"], str(ck), []
+    ran: list[str] = []
+    monkeypatch.setattr(r, "launch_args", lambda lp, t: [])
+    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, *extra: ran.append(st) or 0)
+    monkeypatch.setattr(R, "_memory_headroom", lambda: 1 << 40)
+    monkeypatch.setattr(R, "_cpus", lambda: cpus)
+    return r, ran
+
+
+def test_a_rows_derives_run_in_parallel_by_default(tmp_path, monkeypatch):
+    r, ran = _derive_row(tmp_path, monkeypatch, cpus=4)
+    assert r.derive_all(60) == (0, 0)
+    mark = next(e for e in _timeline(r) if e["stage"] == "build.jobs")
+    assert (mark["jobs"], mark["requested"]) == (4, "auto") and len(ran) == 2 + len(R.extra_shapes(r.path(r.wl), r.LP, r.T))
+    r, _ran = _derive_row(tmp_path / "one", monkeypatch, "--build-jobs", "1", cpus=4)
+    r.derive_all(60)
+    assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 1
+
+
+def test_the_extra_shapes_derive_longest_first(tmp_path, monkeypatch):
+    r, ran = _derive_row(tmp_path, monkeypatch, cpus=1)
+    r.derive_all(60)
+    extra = [tuple(int(x) for x in st[len("build.derive_request_LP"):].split("_T")) for st in ran[2:]]
+    assert ran[:2] == ["build.derive_step", "build.derive_request"] and len(extra) > 1
+    assert [lp + t for lp, t in extra] == sorted((lp + t for lp, t in extra), reverse=True)
 
 
 # ---------------------------------------------------------------------------------------------------------------- Build: call boundaries

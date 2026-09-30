@@ -249,13 +249,14 @@ class SingleRow(Row):
         return ["--launch-max-seqlen-q", *lc.split("\n")] if lc else []
 
     def derive_all(self, to: int) -> tuple[int, int]:
-        """The step, request and extra-shape derives, serially or ``--build-jobs`` wide -> (step rc, request rc)."""
+        """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
         cmd_s = self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "step", "--M", str(self.B), "--pos0", "8",
                          "--max-model-len", str(self.MML), "--workload", self.wl, "--out", f"{self.d}/build_step", *self.tgt_args)
         lctx = self.launch_args(self.LP, self.T)
         cmd_r = self.request_cmd(self.LP, self.T, f"{self.d}/build_request", lctx)
-        req = self.cb.build_jobs or "1"
-        jobs = str(R.build_jobs_auto()) if req == "auto" else req
+        req = self.cb.build_jobs or "auto"
+        shapes = [(self.LP, self.T), *R.extra_shapes(self.path(self.wl), self.LP, self.T)]
+        jobs = str(R.build_jobs_auto(shapes, R.model_layers(self.ck))) if req == "auto" else req
         jobs_n = int(jobs) if re.fullmatch(r"[0-9]+", jobs) else 1
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []
