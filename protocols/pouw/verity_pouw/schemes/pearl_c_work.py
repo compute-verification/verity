@@ -28,6 +28,8 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **The draws (F8)** are keyed by a beacon round published after the verifier recorded the prover's commitment (the
   transcript root and the records root), through `verity.randomness.derive`.
+* **Other row formats.** A scheme with its own row encoding, per-row rules and debit (`pearl_c4`) brings
+  `parse_row(row, k)`, `row_passes(words)` and `tile_cap(record, ops, rows, cols)`; Pearl-C v1's are this module's.
 """
 
 from __future__ import annotations
@@ -184,17 +186,23 @@ def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[in
     return debit, D.CAP * scheme.credit_of(Shape(len(a_codes), record.k_kept, len(b_codes)))
 
 
+def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[Sequence[int]], bool]]:
+    """(parse_row, row_passes): the scheme's own when it brings them, else Pearl-C v1's."""
+    return getattr(scheme, "parse_row", C.parse_f32_row), getattr(scheme, "row_passes", row_passes)
+
+
 def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
                  ops) -> str | None:
     """The tile rule on an opened tile whose openings and digest have passed: None, or the reason it fails."""
     k = record.matmul.shape.k
+    parse, passes = _rules(scheme)
     ea, eb = set(record.excluded_a), set(record.excluded_b)
     kinds = [("A", i, row, "filler" if i >= record.real_rows else "excluded" if i in ea else "credited")
              for i, row in zip(tile.rows, a_rows, strict=True)]
     kinds += [("B", j, row, "excluded" if j in eb else "credited") for j, row in zip(tile.cols, b_rows, strict=True)]
     for side, index, row, kind in kinds:
         try:
-            words = C.parse_f32_row(row, k)
+            words = parse(row, k)
         except P.Reject as e:
             return f"{side} row {index} is malformed: {e}"
         if kind == "filler":
@@ -203,12 +211,16 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
             continue
         if any(words[record.k_kept:]):
             return f"{side} row {index} is not zero past the kept width"
-        if row_passes(words) != (kind == "credited"):
+        if passes(words) != (kind == "credited"):
             return f"{side} row {index} is {kind} but {'fails' if kind == 'credited' else 'passes'} the per-row rules"
     rows, cols = record.credited(tile)
     if rows and cols:
         pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
-        debit, cap = tile_cap(scheme, record, [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols])
+        if hasattr(scheme, "tile_cap"):
+            debit, cap = scheme.tile_cap(record, ops, [pos_a[i] for i in rows], [pos_b[j] for j in cols])
+        else:
+            debit, cap = tile_cap(scheme, record, [ops.a.codes[pos_a[i]] for i in rows],
+                                  [ops.b.codes[pos_b[j]] for j in cols])
         if debit > cap:
             return f"the replayed debit {float(debit):.0f} exceeds the cap {float(cap):.0f} (ρ·creditOf of the tile)"
     return None
@@ -287,7 +299,7 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
     open one tile per excluded row, and accept iff every opened tile passes `Verifier.check_tile` and `check_opened`.
     `committed_round` is the latest beacon round when the verifier recorded the commitment; `split_check(weight, split)`
     recomputes S from the calibration data by the pinned rule, and is required when any S is nonempty."""
-    if scheme.forming != "v1":
+    if getattr(scheme, "forming", "v1") != "v1":
         raise ValueError("the work law is stated for forming v1")
     w_ref, credit = work(scheme, records)
     job = job_costs(scheme, records)
@@ -331,12 +343,14 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
 def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]],
             splits: Mapping[int, Split], real_rows: Mapping[int, int] | None = None) -> list[UnitRecord]:
     """An honest prover's records: each real row and each weight row checked by the per-row rules on the unit's words."""
-    excluded_b = {w: tuple(j for j, r in enumerate(rows) if not row_passes(C.parse_f32_row(r, len(r) // 4)))
+    parse, passes = _rules(scheme)
+    k_of = {u.weight: u.shape.k for u in epoch.workload.matmuls}
+    excluded_b = {w: tuple(j for j, r in enumerate(rows) if not passes(parse(r, k_of[w])))
                   for w, rows in weights.items()}
     out = []
     for u in epoch.workload.matmuls:
         real = (real_rows or {}).get(u.index, u.shape.m)
         rows = activations[u.index]
-        excluded_a = tuple(i for i in range(real) if not row_passes(C.parse_f32_row(rows[i], u.shape.k)))
+        excluded_a = tuple(i for i in range(real) if not passes(parse(rows[i], u.shape.k)))
         out.append(UnitRecord(u, real, splits[u.weight].k_kept, excluded_a, excluded_b[u.weight]))
     return out
