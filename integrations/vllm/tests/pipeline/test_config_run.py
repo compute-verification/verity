@@ -55,6 +55,10 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
     assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd
     assert cmd[cmd.index("--replay-k") + 1] == "128" and "--vu-export-dir" not in cmd
+    assert cmd[cmd.index("--replay-draw") + 1] == "uniform", "the gate's k units are a uniform draw unless the row asks for family"
+    fam = _row(tmp_path / "fam", "--config-run", "1", "--replay-draw", "family")
+    fam.hidden_so, fam.B = "/x/verity_fa2_matReqG.so", 1
+    assert fam.commit_cmd([])[fam.commit_cmd([]).index("--replay-draw") + 1] == "family"
     row = _row(tmp_path / "row")
     row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
     plain = row.commit_cmd([])
@@ -68,7 +72,8 @@ def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
     cmd = r.commit_cmd([])
     args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
-    assert (args.only_arm, args.bounded_staging, args.replay_k, args.pairs, args.warmup) == ("instrumented", True, 128, 1, 1)
+    assert (args.only_arm, args.bounded_staging, args.replay_k, args.replay_draw, args.pairs, args.warmup) == ("instrumented", True, 128,
+                                                                                                                "uniform", 1, 1)
 
 
 @pytest.mark.parametrize("commit_pass,rc,expect", [(True, 0, None), (False, 0, 12), (True, 3, 12)])
@@ -201,6 +206,18 @@ def test_family_strata_draw_k_units_with_every_family_at_least_once():
     assert len(kept) == 256 and fams.count("Embedding_v1") == 3, "the small family is used up, the others fill k"
     assert abs(fams.count("Gemm_v1") - fams.count("RoPE_v1")) <= 1
     assert family_strata(vus, None, 2) == (vus, 2), "without k: the row's per-stratum sample, untouched"
+
+
+def test_the_uniform_draw_is_k_units_from_one_stratum_of_every_unit():
+    vus = [{"i": i, "family": fam, "stratum": f"{fam}|r0|rank0|mid|op{i}|fresh-window"}
+           for fam, n in (("Gemm_v1", 900), ("RoPE_v1", 400), ("Embedding_v1", 3)) for i in range(n)]
+    keyed, per = family_strata(vus, 460, draw="uniform")
+    assert per == 460 and {v["stratum"] for v in keyed} == {"all|all|all|all|all|all"}
+    assert {v["family"] for v in keyed} == {"Gemm_v1", "RoPE_v1", "Embedding_v1"}, "each unit keeps its family for the record"
+    picked, strata, tgt = sample(keyed, per, seed=11)
+    assert len(picked) == tgt["stratified"] == 460 and len({(v["family"], v["i"]) for v in picked}) == 460, "without replacement"
+    assert strata == {"all|all|all|all|all|all": {"population": 1303, "sampled": 460}}
+    assert picked != sample(keyed, per, seed=12)[0]
 
 
 # ---------------------------------------------------------------------------------------------------------------- the sweep driver
