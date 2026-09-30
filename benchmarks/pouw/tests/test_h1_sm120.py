@@ -45,10 +45,8 @@ def seed_a_keys(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
     return seed + pearl_kw._line_key(seed) + pearl_kw.subkey("jackpot", seed)
 
 EXTRA = r"""
-static Dim gridDim;
 static inline uint4 __ldg(const uint4* p) { return *p; }
 static inline uint4 __ldcg(const uint4* p) { return *p; }
-static inline void __threadfence() {}
 static inline unsigned atomicInc(unsigned* p, unsigned v) { const unsigned old = *p; *p = old >= v ? 0 : old + 1; return old; }
 static inline int __clzll(long long x) { return x ? __builtin_clzll((unsigned long long)x) : 64; }
 """
