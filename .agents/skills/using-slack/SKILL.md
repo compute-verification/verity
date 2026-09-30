@@ -161,11 +161,10 @@ An addressed handle, woken by one, does four things:
   - Code needs a pinned checksum.
   - Only the named humans in the registry authorize spending, access, destructive changes or node changes, whoever asks.
 - Workers stay off Slack; their coordinator speaks for them.
-- **Times people read are Pacific, with the zone shown** (Daniel, 1:20 PM PDT on 30 Sep). Write "2:30 PM PDT" (or "PT") in posts,
-  deadlines, handoffs, reports and state files. America/Los_Angeles handles daylight saving: PDT is UTC−7 until 1 Nov. Machine
-  timestamps stay UTC: note filenames, front matter, log lines, store and run ids, cron. To get the time, run
-  `TZ=America/Los_Angeles date '+%-I:%M %p %Z'`; to convert, add `-d '2026-09-30 21:30Z'`.
-
+- **Times people read are Pacific, with the zone shown** (Daniel, 30 Sep): write "2:30 PM PDT", or "2:30 PM PDT (21:30Z)"
+  where both help. Convert in your head from the UTC `<timestamp>` your turn already carries: PDT = UTC−7 until 1 Nov, then
+  PST = UTC−8. Don't make a tool call for it; `TZ=America/Los_Angeles date` is a fallback only. Machine timestamps stay UTC:
+  note filenames, front matter, log lines, store and run ids, cron.
 ## Changing the registry
 
 Add or change a handle in `registry.json` (the tests check it loads). Then, with a token that has `usergroups:write`:
