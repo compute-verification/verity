@@ -27,3 +27,6 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_PUBLIC_URL", "")
     # ... nor the machine's hard deadline: lease.sh defaults to /etc/research/deadline, which a Nebius host has
     monkeypatch.setenv("LEASE_DEADLINE_FILE", str(tmp_path_factory.mktemp("lease") / "absent-deadline"))
+    # ... nor its GPU split: gpu-lease and the runner read /etc/vy/direct-gpus, which says `none` on a cut-over Nebius host
+    monkeypatch.setenv("GPU_LEASE_ALLOWED_FILE", str(tmp_path_factory.mktemp("gpu-lease") / "absent-direct-gpus"))
+    monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
