@@ -5,8 +5,9 @@
 #                        intended tensor-core instructions and nothing lowered: every FP8 atom a QMMA.16832.F32.E4M3.E4M3
 #                        (32 per 64-deep stage in the 128 x 128 GEMMs, 8 in the 64 x 64 and 128 x 32 ones, at least one in form_s5 and words), every
 #                        peel step an HMMA.16816.F32.BF16 (64 in each gemm_pearlc, none elsewhere), no other MMA form
-#   hash_sm120a.cubin    #449's ../pearl_c/hash.cu (hash.cuh's -h1 kernels: frame-b3 row and tile trees, keyed BLAKE3 digests
-#                        and leaves), the same flags, refused on a ptxas warning, spill, stack frame or any MMA (sass_hash.json)
+#   hash_sm120a.cubin    ../pouw_hash/h1_sm120.cu: #449's hash.cuh (-h1's kernels: frame-b3 row and tile trees, keyed BLAKE3
+#                        digests and leaves), hash_sm120.cuh's and h1_sm120.cuh's (h1_rows, h1_tree), the same flags, refused
+#                        on a ptxas warning, spill, stack frame or any MMA (sass_hash.json)
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
 #   run.py, toolchain.txt, source.txt (the verity commit), MANIFEST.sha256
@@ -24,7 +25,7 @@ PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm120.cubin" > 
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm120.sass" "$OUT/sass.json"
 rm "$OUT/pearl_c_sm120.sass"
 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxas -v -cubin \
-  -o "$OUT/hash_sm120a.cubin" "$HERE/../pearl_c/hash.cu" 2> "$OUT/ptxas_hash.txt"
+  -o "$OUT/hash_sm120a.cubin" "$HERE/../pouw_hash/h1_sm120.cu" 2> "$OUT/ptxas_hash.txt"
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/hash_sm120a.cubin" > "$OUT/hash_sm120a.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas_hash.txt" "$OUT/hash_sm120a.sass" "$OUT/sass_hash.json" --no-mma
 rm "$OUT/hash_sm120a.sass"

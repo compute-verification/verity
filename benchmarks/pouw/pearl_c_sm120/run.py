@@ -20,10 +20,14 @@
    throttle reasons before and after.
 
 A variant ending in -h1 hashes under -h1 (pearl-c-<device>-v1-h1) with hash_sm120a.cubin's kernels, launched as `b3:<name>`
-(#449's hash.cuh: A's rows as a frame-b3 tree, the digests and leaves as keyed BLAKE3, the tile tree; through
-hash_sm120.cuh's entry points for sm_120, which commit the same bytes: hash_rows_w, hash_msg_v, hash_leaf_p, and
-hash_tree_small for a tree of at most TREE_SMALL leaves), then seed_a derives seed_A from A's root with E_A's line and jackpot
-keys (checked against the fixture's, which it derives from the tree's root; forming still reads the key it is given), and its
+(#449's hash.cuh: A's rows as a frame-b3 tree, the digests and leaves as keyed BLAKE3, the tile tree; hash_sm120.cuh's
+hash_msg_v and hash_leaf_p; and pouw_hash/h1_sm120.cuh's h1_rows, A's row leaves with 16-byte loads, and h1_tree, a whole
+tree in one launch: its pads, level keys, levels and, for the tile tree, its frame-b3 leaves, and for A's tree seed_A from the
+root with E_A's line and jackpot keys, as seed_a derives them).  The check holds these against the fixture and re-runs the
+other forms of the same bytes against it too: A's rows by hash_rows_w and #449's hash_rows, both trees by hash_tree_small (up
+to TREE_SMALL leaves) and by hash_nodes a level with seed_a, and by h1_tree from one thread a CTA (its last CTA's levels), and
+the timing times each of them as `alt_ms`.
+seed_A is checked against the fixture's, which derives it from the tree's root; forming still reads the key it is given.  The
 fused chain is gemm_pearlc_b; the fused call commits A before forming, since seed_A keys E_A.  At decode the tile leaves are
 over the real rows (a partial last row tile), not the padding.  Otherwise h0:
 TurboSHAKE128 digests and leaves, and A's rows as TurboSHAKE128 over 1 KB segments, the bench's model and not the SHA-256
@@ -59,13 +63,20 @@ H1_KEYS = {"k_msg": "071cf46377a5d6f62e118a6c4d1bcd93d8d781af04ef0bdd84f9011381e
            "k_leaf": "0e661b01c2077b147887d1ee19aed2ddb35c2cc459cc62f6af0b05ea9f926169"}
 #: blake3("pearl-c/v0/seed-A"), seed_A's public key (`pearl_c.LABELS`)
 SEED_A_KEY = "6c8abb01868eaa7a07ed62333c4c6ae75daeb48c0f4e709fe7a6d8401f2a202a"
-#: hash_tree_small's widest level 0 (two nodes a thread, 1,024 threads), and hash_rows_w's warps per CTA (hash_sm120.cuh)
+#: hash_tree_small's widest level 0 (two nodes a thread, 1,024 threads), and hash_rows_w's and h1_rows' warps per CTA
 TREE_SMALL, ROWS_W_WARPS = 2048, 4
+#: h1_tree's threads per CTA before the last CTA's roots need more (h1_sm120.cuh): 64 threads keep a level at one
+#: compression's latency on an SM, and 64 CTAs of them cover A's 8,192 rows, 128 the prefill tile tree's 16,384 leaves
+TREE_CTA = 64
+#: the -h1 forms of A's rows and of the trees (h1_rows and h1_tree the defaults), each checked against the fixture
+ROW_FORMS, TREE_FORMS = ("v", "w", "cta"), ("one", "small", "nodes")
+#: h1_tree's counter slot (u32) per tree buffer: a tree's launches run in order on one stream, other trees' beside them
+CTR_SLOT = {"tree_a_h1": 0, "tree_t_h1": 1, "tree_t_h": 2}
 A_COMMITMENT = {"h0": "turboshake128 over 1 KB segments of A's FP32 rows (the bench's model; v1's verifier checks the SHA-256 "
                       "frame tree of whole rows, not timed here)",
                 "h1": "frame-b3 BLAKE3 tree of A's FP32 rows (-h1's verifier's)"}
-#: per hashing format, the hashing steps ahead of forming: A's commitment, and under -h1 seed_A from its root
-A_FIRST = {"h0": ("hash_rows",), "h1": ("hash_rows", "tree_a", "seed_a")}
+#: per hashing format, the hashing steps ahead of forming: A's commitment, and under -h1 its tree with seed_A from the root
+A_FIRST = {"h0": ("hash_rows",), "h1": ("hash_rows", "tree_a")}
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
 CUDA = {
@@ -320,7 +331,7 @@ class Pipeline:
         self.g = VARIANT_G[base]
         self.suffix = "" if self.g else "_u"
         self.fused_gemm = "gemm_pearlc_b" if self.hashing == "h1" else "gemm_pearlc_h"
-        self.tree_small = TREE_SMALL
+        self.rows_form, self.tree_form, self.tree_cta = ROW_FORMS[0], TREE_FORMS[0], TREE_CTA
         self.tiles = cdiv(self.m_real, 64) * (n // 64)
         self.bm = bm or (BM if m % BM == 0 else BM_D)
         if m % self.bm or n % BM or k % 1024:
@@ -350,7 +361,7 @@ class Pipeline:
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
             "digests_h1": m * n, "leaves_h1": tiles * 32, "tree_a_h1": (2 * pow2(m) - 1) * 32,
             "tree_t_h1": (2 * pow2(tiles) - 1) * 32, "tree_t_h": (2 * pow2(tiles) - 1) * 32,
-            "keys_a": 32 * depth(m), "keys_t": 32 * depth(tiles), "seed_h1": 96,
+            "keys_a": 32 * depth(m), "keys_t": 32 * depth(tiles), "seed_h1": 96, "ctr": 4 * len(CTR_SLOT),
         }
 
     def free(self) -> None:
@@ -375,16 +386,16 @@ class Pipeline:
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms), NT, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
 
-    def levels(self, name: str, count: int, dom: str, keys: str) -> None:
+    def levels(self, name: str, count: int, dom: str, keys: str, form: str) -> None:
         """A frame-b3 tree over `count` leaves already at level 0 of buffer `name`: its pads, its level keys (into buffer
-        `keys`), then the levels above, in one hash_tree_small launch up to `tree_small` leaves (TREE_SMALL), else a
-        hash_nodes launch a level (#449's run.py)."""
+        `keys`), then the levels above, under `small` in one hash_tree_small launch up to TREE_SMALL leaves, else (and under
+        `nodes`) a hash_nodes launch a level (#449's run.py)."""
         d, base, width, lk = self.dev, self.b[name], pow2(count), self.b[keys]
         if width > count:
             d.launch("b3:hash_pad", cdiv(width - count, 128), 128, p=(base, self.keys[dom]), i=(count, width))
         if width > 1:
             d.launch("b3:hash_node_keys", 1, 32, p=(lk, self.keys[dom]), i=(depth(count),))
-        if 1 < width <= self.tree_small:
+        if 1 < width <= TREE_SMALL and form == "small":
             d.launch("b3:hash_tree_small", 1, width // 2, p=(base, lk), i=(width,))
             return
         off, level = 0, 0
@@ -393,10 +404,79 @@ class Pipeline:
                      i=(level, width // 2))
             off, width, level = off + width, width // 2, level + 1
 
-    def tile_tree(self, leaves: str, tree: str) -> None:
-        self.dev.launch("b3:hash_tree_leaves", cdiv(self.tiles, 128), 128, p=(self.b[leaves], self.b[tree], self.keys["dom_t"]),
-                        i=(self.tiles,))
-        self.levels(tree, self.tiles, "dom_t", "keys_t")
+    def tree_grid(self, width: int, leaves: bool) -> tuple[int, int]:
+        """h1_tree's (CTAs, threads a CTA) for a level 0 of `width` nodes: two leaves a thread on tree_cta threads, more while
+        the CTAs' roots would be over two a thread of the last CTA; one CTA a leaf's thread when the tree's leaves are hashed
+        in it and one CTA holds them."""
+        t = max(1, min(width // 2, self.tree_cta))
+        while width // (2 * t) > 2 * t:
+            t *= 2
+        grid = max(1, width // (2 * t))
+        if grid == 1 and leaves:
+            t = min(width, 1024)
+        if t > 1024:
+            raise ValueError(f"h1_tree takes a level 0 of at most 2^22 nodes, not {width}")
+        return grid, t
+
+    def tree(self, name: str, count: int, dom: str, keys: str, leaves: str | None = None, seed: bool = False,
+             form: str | None = None) -> None:
+        """A frame-b3 tree in buffer `name` over `count` leaves: under `leaves` the tile tree's frame-b3 leaves over those
+        32-byte values, else the leaves already at level 0; under `seed` then seed_A from its root (A's tree).  The `one` form
+        is h1_tree, all of it in one launch; `small` and `nodes` are hash_tree_leaves, `levels` and seed_a."""
+        d, b, kx, form = self.dev, self.b, self.keys, form or self.tree_form
+        if form == "one":
+            width = pow2(count)
+            grid, t = self.tree_grid(width, leaves is not None)
+            smem = 32 * (min(width, 2 * t) + 32)
+            if smem > 48 * 1024:
+                d.ck("cuFuncSetAttribute", d.fn("b3:h1_tree"), MAX_DYN, smem)
+            sp = (b["seed_h1"], kx["k_seed"], kx["salt"], kx["root_b"]) if seed else (0, 0, 0, 0)
+            d.launch("b3:h1_tree", grid, t, smem, p=(b[name], kx[dom], b["ctr"] + 4 * CTR_SLOT[name], b[leaves] if leaves else 0, *sp,
+                                                     b[keys]), i=(count, width, self.index))
+            return
+        if leaves:
+            d.launch("b3:hash_tree_leaves", cdiv(count, 128), 128, p=(b[leaves], b[name], kx[dom]), i=(count,))
+        self.levels(name, count, dom, keys, form)
+        if seed:
+            root = b[name] + 32 * (2 * pow2(count) - 2)
+            d.launch("seed_a", 1, 32, p=(b["seed_h1"], kx["k_seed"], kx["salt"], root, kx["root_b"]), i=(self.index,))
+
+    def tile_tree(self, leaves: str, tree: str, form: str | None = None) -> None:
+        self.tree(tree, self.tiles, "dom_t", "keys_t", leaves=leaves, form=form)
+
+    def rows(self, form: str | None = None) -> None:
+        """A's row leaves (level 0 of A's tree) over the matmul's rows: `v` h1_rows (a warp a row, a CTA a row per SM at
+        decode, else ROWS_W_WARPS), `w` hash_rows_w, `cta` #449's hash_rows (a CTA a row)."""
+        d, b, mr, rb, form = self.dev, self.b, self.m_real, self.row_bytes, form or self.rows_form
+        p = (b["xa"], b["tree_a_h1"], self.keys["dom_a"])
+        if form == "cta":
+            d.launch("b3:hash_rows", mr, 256, p=p, i=(mr, rb))
+            return
+        warps = 1 if form == "v" and mr <= d.sms else ROWS_W_WARPS
+        d.launch("b3:h1_rows" if form == "v" else "b3:hash_rows_w", cdiv(mr, warps), 32 * warps, 4 * warps * rows_w_words(rb), p=p,
+                 i=(mr, rb))
+
+    def alternates(self) -> list[tuple[str, dict[str, tuple[int, int]], object]]:
+        """-h1's other forms of the same bytes, each (name, {buffer: the byte range it rewrites}, launch): A's rows, then both
+        trees (A's with seed_A), under each form but the defaults, and under h1_tree from one thread a CTA (`one@1`, which
+        takes it through its last CTA's levels at the fixture's widths)."""
+        mr, sz = self.m_real, self.size
+        a_tree = {"tree_a_h1": (32 * mr, sz["tree_a_h1"]), "seed_h1": (0, 96), "keys_a": (0, sz["keys_a"])}
+        t_tree = {"tree_t_h1": (0, sz["tree_t_h1"]), "keys_t": (0, sz["keys_t"])}
+
+        def form(fn, f: str):
+            def run():
+                cta, self.tree_cta = self.tree_cta, 1 if f == "one@1" else self.tree_cta
+                try:
+                    fn(f.split("@")[0])
+                finally:
+                    self.tree_cta = cta
+            return run
+        out = [(f"hash_rows@{f}", {"tree_a_h1": (0, 32 * mr)}, form(self.rows, f)) for f in ROW_FORMS[1:]]
+        for f in TREE_FORMS[1:] + ("one@1",):
+            out += [(f"tree_a@{f}", a_tree, form(lambda g: self.tree("tree_a_h1", mr, "dom_a", "keys_a", seed=True, form=g), f)),
+                    (f"tree_t@{f}", t_tree, form(lambda g: self.tile_tree("leaves_h1", "tree_t_h1", form=g), f))]
+        return out
 
     def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
@@ -454,13 +534,8 @@ class Pipeline:
             mr, kx = self.m_real, self.keys
             leaf = lambda dg, lv: d.launch("b3:hash_leaf_p", cdiv(self.tiles, 32), 128, p=(b[dg], b[lv], kx["k_leaf"]),  # noqa: E731
                                            i=(mr, n))
-            root_a = b["tree_a_h1"] + 32 * (2 * pow2(mr) - 2)
-            hashing = [("hash_rows", lambda: d.launch("b3:hash_rows_w", cdiv(mr, ROWS_W_WARPS), 32 * ROWS_W_WARPS,
-                                                      4 * ROWS_W_WARPS * rows_w_words(self.row_bytes),
-                                                      p=(b["xa"], b["tree_a_h1"], kx["dom_a"]), i=(mr, self.row_bytes))),
-                       ("tree_a", lambda: self.levels("tree_a_h1", mr, "dom_a", "keys_a")),
-                       ("seed_a", lambda: d.launch("seed_a", 1, 32, p=(b["seed_h1"], kx["k_seed"], kx["salt"], root_a, kx["root_b"]),
-                                                   i=(self.index,))),
+            hashing = [("hash_rows", lambda: self.rows()),
+                       ("tree_a", lambda: self.tree("tree_a_h1", mr, "dom_a", "keys_a", seed=True)),
                        ("hash_msg", lambda: d.launch("b3:hash_msg_v", cdiv(mr * n // 32, 128), 128,
                                                      p=(b["c"], b["u"], b["digests_h1"], kx["k_msg"]), i=(mr, n))),
                        ("hash_leaf", lambda: leaf("digests_h1", "leaves_h1")),
@@ -554,13 +629,14 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         for out, name in FUSED[hashing].items():
             res[f"{name}@{pipe.fused_gemm}"] = compare(dev, pipe, name, want(name), alias=out)
         if hashing == "h1":
-            pipe.tree_small = 1
-            for step, tree, leaves in (("tree_a", "tree_a_h1", pipe.m_real), ("tree_t", "tree_t_h1", pipe.tiles)):
-                dev.ck("cuMemsetD8_v2", u64(pipe.b[tree] + 32 * leaves), 0xAB, pipe.size[tree] - 32 * leaves)
-                [fn for nm, _, fn in pipe.steps() if nm == step][0]()
+            for alt, spans, fn in pipe.alternates():
+                for buf, (lo, hi) in spans.items():
+                    dev.ck("cuMemsetD8_v2", u64(pipe.b[buf] + lo), 0xAB, hi - lo)
+                fn()
                 dev.sync()
-                res[f"{tree}@hash_nodes"] = compare(dev, pipe, tree, want(tree))
-            pipe.tree_small = TREE_SMALL
+                for buf in spans:
+                    if buf in files or buf in common:
+                        res[f"{buf}@{alt}"] = compare(dev, pipe, buf, want(buf))
         aliases = {"c2": "c", **FUSED[hashing]}
         small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D, index=pipe.index)
         for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
@@ -653,6 +729,10 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             e2e_f = statistics.median(dev.timed(lambda: [f() for f in fused], reps))
             out.update({"call_e2e_fused_ms": round(e2e_f, 4), "fused_hash_ms": round(med[pipe.fused_gemm] - med["gemm_pearlc_s"], 4),
                         "cu_stores_ms": round(med["gemm_pearlc"] - med["gemm_pearlc_s"], 4)})
+        if pipe.hashing == "h1":
+            alt = {nm: dev.timed(fn, reps) for nm, _, fn in pipe.alternates()}
+            out["alt_ms"] = {nm: round(statistics.median(t), 4) for nm, t in alt.items()}
+            out["alt_runs"] = {nm: [round(x, 4) for x in t] for nm, t in alt.items()}
         out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff("c2", "c")}
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
         [f for nm, _, f in steps if nm == "gemm_pearlc"][0]()

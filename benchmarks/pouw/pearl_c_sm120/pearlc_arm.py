@@ -19,14 +19,15 @@ and weight side (its flag sets share them: the harness runs one call of a set at
 call reuse its set before that set's previous hashes are done); the gate's second launch has per-shape buffers.
 
 The gate, at the exact shape and flag set: a second launch into the gate's own buffers (C̃ by gemm_ct, another kernel; C̃, U
-and y by gemm_pearlc on 3 CTAs, another tile schedule, unfused; the hashes over those) must equal every output word for word
+and y by gemm_pearlc on 3 CTAs, another tile schedule, unfused; the hashes over those, under -h1 A's rows by #449's hash_rows
+and both trees a level a launch with seed_a, where the call runs h1_rows and h1_tree) must equal every output word for word
 (`all`: the fused call's message digests too), and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B
 codes and α, C̃, U (fused: their message digests), y and, with hashing, the leaf and row r0's commitments must equal #449's
 CPU twin (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the harness's operand rows.  `known_bad` flips C̃'s
 first word (fused: the first digest's) between the product and the hashes.
 
-Under -h1 the hashes are #449's hash.cuh through hash_sm120.cuh's sm_120 entry points (hash_sm120a.cubin, `b3:<name>`), seed_a
-(pearl_c_sm120.cu), and, fused, gemm_pearlc_b's keyed BLAKE3 digests:
+Under -h1 the hashes are #449's hash.cuh through hash_sm120.cuh's and pouw_hash/h1_sm120.cuh's sm_120 entry points
+(hash_sm120a.cubin, `b3:<name>`: h1_rows, h1_tree with seed_A at A's root), and, fused, gemm_pearlc_b's keyed BLAKE3 digests:
 A's rows as the frame-b3 tree -h1's verifier checks, the keyed digests and tile leaves, and the tile tree, all over the
 matmul's m rows (the scheme's partial last row tile at decode), so A's domain and the tile tree's count m, not the twin's
 128-row padding (`domains`); the twin's tiles are checked on their real rows, and on row r0's leaf in A's tree, and seed_a's
@@ -36,7 +37,7 @@ Shortcuts, flagged: at 64 x 64 tiles the hashing is #449's device code, unfused 
 under h0, A's rows are committed as #449's TurboSHAKE128 1 KiB segments, not the protocol's SHA-256 whole-row leaves; m is
 padded to 64 rows (decode's m = 32 issues 2x its tensor work on 64 x 64 tiles, and `work` counts issued MACs); the prices and
 G are the H100's stand-ins, so W_ref, the credit and γ are Derived at stand-in prices; under -h1, E_A's lines are keyed from
-the arm's stand-in seed_A (the twin's), not seed_a's, which is derived and gated in its place in the call but not read.
+the arm's stand-in seed_A (the twin's), not h1_tree's, which is derived and gated in its place in the call but not read.
 
   python bench.py --arm-path <this directory> --arm pearlc_arm:PearlCSm120 [--arm pearlc_arm:PearlCSm120H1] ...
 
@@ -83,7 +84,7 @@ T, SEGMENT = W.T, F.F32_SEGMENT
 WEIGHT = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b", "epb_codes",
           "bt", "bf", "pb_t")
 OWN = WEIGHT + ("ea_codes",)       # E_A's lines are the set's too (its line_a key), and nohash reads them from prepare
-CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y")
+CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y", "ctr")
 #: per hashing format, each hashed output and the pipeline's buffers it is: unfused (the second launch's too), then fused
 HASHED = {"h0": {"digests": ("digests", "digests_h"), "leaves": ("leaves", "leaves_h"), "rows": ("rows",)},
           "h1": {"digests": ("digests_h1", "digests_h"), "leaves": ("leaves_h1", "leaves_h"), "tree_t": ("tree_t_h1", "tree_t_h"),
@@ -283,6 +284,7 @@ class _Call:
                          index=self.arm.index)
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
+        ref.rows_form, ref.tree_form = "cta", "nodes"
         steps = ref.steps()
         by = {name: f for name, _, f in steps}
         for name in ("gemm_ct", "gemm_pearlc") + (tuple(nm for nm, p, _ in steps if p == "hashing") if self.hashing else ()):
@@ -416,8 +418,8 @@ class PearlCSm120:
                              "m padded to 64 rows (64 x 64 tiles below 128 rows); work counts issued MACs",
                              "prices and G are the H100's stand-ins; W_ref, credit and gamma Derived at those"]}
         if self.hashing == "h1":
-            rec["shortcuts"].append("E_A's lines keyed from the arm's stand-in seed_A (the twin's); seed_a derives the protocol's "
-                                    "seed_A from A's root before forming (timed, gated) but forming doesn't read it")
+            rec["shortcuts"].append("E_A's lines keyed from the arm's stand-in seed_A (the twin's); h1_tree derives the protocol's "
+                                    "seed_A at A's root before forming (timed, gated) but forming doesn't read it")
         if self.hashing == "h1":
             rec["hash_cubin_sha256"] = hashlib.sha256(hash_cubin.read_bytes()).hexdigest()
             rec["commitments"] = ("A's rows and the tile tree over the matmul's m rows (the scheme's partial last row tile), "
