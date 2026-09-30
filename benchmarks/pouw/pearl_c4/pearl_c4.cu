@@ -478,50 +478,64 @@ template <int FMT, int BM, int BN, int MODE> DEV void gemm_body(const Args& a) {
 #pragma unroll
       for (int i = 0; i < 4; i++) acc[mi][j][i] = 0.0f;
 
+  // One k64 group's fragments: A's two m16 blocks, B's eight n8 blocks and their scales, from stage st
+  struct Frag { uint32_t af[2][4], bf[8][2], sfa[2], sfb[8]; };
+  auto frags = [&](int st, int at, Frag& f) {
+    const uint8_t* s = smem + st * G::STAGE;
+    const uint32_t sA = sa(s), sB = sa(s + G::A_BYTES);
+    const uint8_t* sSA = s + G::A_BYTES + G::B_BYTES;
+    const uint8_t* sSB = sSA + G::SA_BYTES;
+#pragma unroll
+    for (int mi = 0; mi < 2; mi++) {
+      const int r = wm * 32 + mi * 16 + (lane & 7) + 8 * ((lane >> 3) & 1);
+      ldsm4(f.af[mi], sA + swz64(r, 2 * at + (lane >> 4)));
+      const uint8_t* sp = sSA + (wm * 32 + mi * 16 + 8 * (lane & 1) + (lane >> 2)) * SFB + at * (SFB / 2);
+      f.sfa[mi] = SFB == 8 ? *reinterpret_cast<const uint32_t*>(sp) : (uint32_t)*reinterpret_cast<const uint16_t*>(sp);
+    }
+#pragma unroll
+    for (int nj = 0; nj < 4; nj++) {
+      uint32_t r4[4];
+      const int r = wn * 64 + nj * 16 + (lane & 7) + 8 * (lane >> 4);
+      ldsm4(r4, sB + swz64(r, 2 * at + ((lane >> 3) & 1)));
+      f.bf[2 * nj][0] = r4[0];
+      f.bf[2 * nj][1] = r4[1];
+      f.bf[2 * nj + 1][0] = r4[2];
+      f.bf[2 * nj + 1][1] = r4[3];
+    }
+#pragma unroll
+    for (int j = 0; j < 8; j++) {
+      const uint8_t* sp = sSB + (wn * 64 + 8 * j + (lane >> 2)) * SFB + at * (SFB / 2);
+      f.sfb[j] = SFB == 8 ? *reinterpret_cast<const uint32_t*>(sp) : (uint32_t)*reinterpret_cast<const uint16_t*>(sp);
+    }
+  };
+  auto mmas = [&](const Frag& f) {
+#pragma unroll
+    for (int mi = 0; mi < 2; mi++)
+#pragma unroll
+      for (int j = 0; j < 8; j++) mma_fp4<FMT>(acc[mi][j], f.af[mi], f.bf[j][0], f.bf[j][1], acc[mi][j], f.sfa[mi], f.sfb[j]);
+  };
+
 #pragma unroll
   for (int st = 0; st < STAGES - 1; st++) {
     if (st < KB) load(st, st);
     cp_commit();
   }
+  // Fragments run one k64 group ahead of the MMAs.  The barrier sits between a tile's two groups: past it, tile kb + 1
+  // has landed and every warp is done with stage kb - 1, which the next load refills.  Each accumulator still chains
+  // its k64 groups in order.
+  Frag f0, f1;
+  cp_wait<STAGES - 2>();
+  __syncthreads();
+  frags(0, 0, f0);
   for (int kb = 0; kb < KB; kb++) {
-    cp_wait<STAGES - 2>();
+    frags(kb % STAGES, 1, f1);
+    mmas(f0);
+    cp_wait<STAGES - 3>();
     __syncthreads();
     if (kb + STAGES - 1 < KB) load(kb + STAGES - 1, (kb + STAGES - 1) % STAGES);
     cp_commit();
-    const uint8_t* s = smem + (kb % STAGES) * G::STAGE;
-    const uint32_t sA = sa(s), sB = sa(s + G::A_BYTES);
-    const uint8_t* sSA = s + G::A_BYTES + G::B_BYTES;
-    const uint8_t* sSB = sSA + G::SA_BYTES;
-#pragma unroll
-    for (int at = 0; at < 2; at++) {
-      uint32_t af[2][4], bfr[8][2], sfa[2], sfb[8];
-#pragma unroll
-      for (int mi = 0; mi < 2; mi++) {
-        const int r = wm * 32 + mi * 16 + (lane & 7) + 8 * ((lane >> 3) & 1);
-        ldsm4(af[mi], sA + swz64(r, 2 * at + (lane >> 4)));
-        const uint8_t* sp = sSA + (wm * 32 + mi * 16 + 8 * (lane & 1) + (lane >> 2)) * SFB + at * (SFB / 2);
-        sfa[mi] = SFB == 8 ? *reinterpret_cast<const uint32_t*>(sp) : (uint32_t)*reinterpret_cast<const uint16_t*>(sp);
-      }
-#pragma unroll
-      for (int nj = 0; nj < 4; nj++) {
-        uint32_t r4[4];
-        const int r = wn * 64 + nj * 16 + (lane & 7) + 8 * (lane >> 4);
-        ldsm4(r4, sB + swz64(r, 2 * at + ((lane >> 3) & 1)));
-        bfr[2 * nj][0] = r4[0];
-        bfr[2 * nj][1] = r4[1];
-        bfr[2 * nj + 1][0] = r4[2];
-        bfr[2 * nj + 1][1] = r4[3];
-      }
-#pragma unroll
-      for (int j = 0; j < 8; j++) {
-        const uint8_t* sp = sSB + (wn * 64 + 8 * j + (lane >> 2)) * SFB + at * (SFB / 2);
-        sfb[j] = SFB == 8 ? *reinterpret_cast<const uint32_t*>(sp) : (uint32_t)*reinterpret_cast<const uint16_t*>(sp);
-      }
-#pragma unroll
-      for (int mi = 0; mi < 2; mi++)
-#pragma unroll
-        for (int j = 0; j < 8; j++) mma_fp4<FMT>(acc[mi][j], af[mi], bfr[j][0], bfr[j][1], acc[mi][j], sfa[mi], sfb[j]);
-    }
+    if (kb + 1 < KB) frags((kb + 1) % STAGES, 0, f0);
+    mmas(f1);
   }
   cp_wait<0>();
   __syncthreads();
