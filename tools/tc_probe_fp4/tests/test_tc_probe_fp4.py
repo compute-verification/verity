@@ -23,6 +23,7 @@ sys.path.insert(0, str(HERE))
 
 import cast  # noqa: E402
 import f1_rates as F1  # noqa: E402
+import f3_lut as F3  # noqa: E402
 import fp4_emulation_1ad1aaa2 as E  # noqa: E402
 import k32  # noqa: E402
 import lean_vectors as LV  # noqa: E402
@@ -576,6 +577,10 @@ def test_store_declarations_keep_guards_out_of_the_derivation():
                                  "--expect-uuid", "GPU-1", "--locked-mhz", "2100"])
     assert r["cmd"] == "run" and r["family"] == "fp4" and r["locked_mhz"] == 2100
     assert not {"out", "build", "expect_uuid"} & set(r) and set(r) <= set(tool.TC_RATES_FP4.key_params)
+    f3 = tool.TC_LUT_FP4.parse(["python", "tools/tc_probe_fp4/f3_lut.py", "run", "--build", "b", "--width", "g2c4", "--out", "x",
+                                "--expect-uuid", "GPU-1", "--locked-mhz", "2100"])
+    assert f3["cmd"] == "run" and f3["width"] == "g2c4" and f3["locked_mhz"] == 2100 and "_unknown" not in f3
+    assert not {"out", "build", "runs", "expect_uuid"} & set(f3) and set(f3) <= set(tool.TC_LUT_FP4.key_params)
 
 
 def test_f1_kernels_are_body_chains_of_their_form():
@@ -731,6 +736,101 @@ def test_f1_dry_run_prices_against_nvfp4_and_its_gates_fail_closed(no_nvcc, tmp_
                                                                              "tf32.fake.json"]
 
 
+def test_f3_variants_cover_every_width_and_arm():
+    table = F3.variants()
+    assert sorted(table) == sorted((arm, g, c) for g, c in F3.WIDTHS.values() for arm in F3.ARMS)
+    assert F3.nt_of() == 8 and F1._flags_ok(F3.NVCC_FLAGS)
+
+
+@pytest.mark.parametrize("width", sorted(F3.WIDTHS))
+def test_f3_tables_sum_to_the_group_dots_and_pack_the_scales(width):
+    """Summing a row's 16/G lookups of one block in u32 and unpacking lo + 65536 hi gives each column's exact group dot."""
+    g, c = F3.WIDTHS[width]
+    ng, nkg = min(F3.ng_of(g), 2), 64 // g
+    ops = F3.make_operands("mixed", F3.LUT_TPB * ng, ng, c, 5)
+    pk = F3.pack(ops, g)
+    assert pk.tables.shape == (ng, nkg, 16 ** g, c // 2) and pk.arows.shape == (ops.acodes.shape[0], F3.AROW)
+    codes, scales = F3.unpack_rows(pk.arows)
+    assert np.array_equal(codes, ops.acodes) and np.array_equal(scales, ops.ascale)
+    grp = ops.groups
+    idx = (ops.acodes.reshape(-1, nkg, g).astype(np.int64) << (4 * np.arange(g))).sum(-1)
+    ent = pk.tables[grp[:, None], np.arange(nkg)[None, :], idx]
+    s = ent.reshape(-1, 4, nkg // 4, c // 2).sum(2, dtype=np.uint32)
+    lo = (s & 0xFFFF).astype(np.uint16).view(np.int16).astype(np.int64)
+    hi = (s.view(np.int32).astype(np.int64) - lo) >> 16
+    gd, _, _, part = F3.terms(ops.acodes, ops.ascale, ops.wcodes, ops.wscale, grp)
+    assert np.array_equal(lo.transpose(0, 2, 1), gd[:, 0::2]) and np.array_equal(hi.transpose(0, 2, 1), gd[:, 1::2])
+    w = pk.wsc.astype(np.int64)
+    mb, eb = E.ue4m3_dyadic(ops.wscale.astype(np.int64))
+    assert np.array_equal(w & 15, mb) and np.array_equal(((w >> 4) & 15) - 10, eb)
+    assert np.array_equal((w >> 8) & 0xFFFF, (((ops.wcodes.reshape(ng, c, 4, 16) & 7) != 0) << np.arange(16)).sum(-1))
+    # the mixed family reaches every participation case and keeps its scales and accumulators in the model's domain
+    assert part.any() and not part.all() and (ops.ascale < 0x7F).all() and (ops.wscale < 0x7F).all()
+    subnormal = ((ops.c0 & 0x7F800000) == 0) & ((ops.c0 & 0x7FFFFF) != 0)
+    assert np.isfinite(ops.c0.view(np.float32)).all() and (ops.c0 == 0x80000000).any() and subnormal.any()
+
+
+def test_f3_sass_gate_counts_lookups_and_fails_closed():
+    table = [("dots", 1, 2), ("exact", 4, 2)]
+    fn = {"dots": "_ZN12_GLOBAL__N_110lut_kernelILi0ELi1ELi2EEEvPKj", "exact": "_ZN12_GLOBAL__N_110lut_kernelILi1ELi4ELi2EEEvPKj",
+          "native": "_ZN12_GLOBAL__N_113native_kernelEPKj"}
+    clean = {"registers": 40, "spill_stores": 0, "spill_loads": 0}
+    loops = {fn["dots"]: {"LDS": 64, "IADD3": 70}, fn["exact"]: {"LDG.E.CONSTANT": 16, "IMAD": 50},
+             fn["native"]: {F3.NATIVE_OPCODE: 8, "BRA": 1}}
+    ptxas = {v: dict(clean) for v in fn.values()}
+    g = F3.sass_gate(loops, ptxas, table, 8)
+    assert all(v["ok"] for v in g.values()) and set(g) == {"dots_g1c2", "exact_g4c2", "native"}
+    for bad_loops, bad_ptxas in (({**loops, fn["dots"]: {"LDS": 63}}, ptxas),
+                                 ({**loops, fn["dots"]: {"LDS": 64, "LDG.E.CONSTANT": 1}}, ptxas),
+                                 ({**loops, fn["exact"]: {"LDG.E.CONSTANT": 16, "HMMA.16816.F32": 1}}, ptxas),
+                                 ({**loops, fn["native"]: {F3.NATIVE_OPCODE: 7}}, ptxas),
+                                 (loops, {**ptxas, fn["exact"]: {**clean, "spill_loads": 4}}),
+                                 ({k: v for k, v in loops.items() if k != fn["dots"]}, ptxas)):
+        assert not all(v["ok"] for v in F3.sass_gate(bad_loops, bad_ptxas, table, 8).values())
+    rep = F3.ptxas_report("ptxas info    : Compiling entry function '%s' for 'sm_120a'\nptxas info    : Function properties for %s\n"
+                          "    0 bytes stack frame, 8 bytes spill stores, 8 bytes spill loads\nptxas info    : Used 247 registers, used 1 "
+                          "barriers" % (fn["dots"], fn["dots"]))
+    assert rep == {fn["dots"]: {"spill_stores": 8, "spill_loads": 8, "registers": 247}}
+
+
+def _f3_fake_build(d: Path, ok: bool = True) -> Path:
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "build.json").write_text(json.dumps({"schema": F3.SCHEMA + "/build", "variants": F3.variants(), "nt": F3.nt_of(), "ok": ok,
+                                              "gate": {"native": {"ok": ok}}, "so": "none.so", "so_sha256": "0" * 64,
+                                              "source_sha256": "1" * 64, "nvcc": "none", "nvcc_flags": F3.NVCC_FLAGS, "ftz_fp32": []}))
+    return d
+
+
+def test_f3_dry_run_is_bit_exact_against_the_atom_and_fails_closed(no_nvcc, tmp_path):
+    """The fake runs the LUT arms through the packed tables and scale words and the native arm through the pinned model's
+    vectorised step on the codes, so a passing gate means the host's tables reproduce the atom's words."""
+    b = _f3_fake_build(tmp_path / "b")
+    common = ["--build", str(b), "--fake-silicon", "--reps", "2", "--sustain-s", "0", "--target-ms", "1", "--sample", "128"]
+    assert F3.main(["run", "--width", "g2c2", "--out", str(tmp_path / "r")] + common) == 0
+    r = json.loads((tmp_path / "r" / "g2c2.fake.json").read_text())
+    assert not r["failures"] and set(r["gate"]) == {f"{f}/L{n}" for f in F3.FAMILIES for n in F3.GATE_LENGTHS}
+    assert all(v["model_sample"] == 128 and v["native_model_mismatches"] == 0 and v["exact_words"] > 0 for v in r["gate"].values())
+    assert all(v["ok"] and v["exact_length"] >= 1000 for v in r["timed_length_gate"].values())
+    # the fake: lookups at 32 per SM per clock (4 products each at g2c2), NVFP4 at 2,048 products
+    assert r["per_arm"]["uniform/dots"]["fp4_slots_per_product"] == pytest.approx(2048 / 128)
+    assert r["per_arm"]["uniform/dots"]["fp4_slots_per_lookup"] == pytest.approx(64)
+    assert r["per_arm"]["gaussian/native"]["fp4_slots_per_product"] == pytest.approx(1.0) and r["clocks"] == "unlocked"
+
+    assert F3.main(["run", "--width", "g2c2", "--out", str(tmp_path / "bad"), "--corrupt-word"] + common) == 1
+    bad = json.loads((tmp_path / "bad" / "g2c2.fake.json").read_text())
+    assert bad["failures"] and bad["gate"]["mixed/L1"]["exact_native_mismatches"] == 4 and "per_arm" not in bad
+    nb = _f3_fake_build(tmp_path / "nb", ok=False)
+    assert F3.main(["run", "--width", "g2c2", "--out", str(tmp_path / "nb_r"), "--build", str(nb)] + common[2:]) == 1
+    assert "per_arm" not in json.loads((tmp_path / "nb_r" / "g2c2.fake.json").read_text())
+
+    assert F3.main(["collect", "--build", str(b), "--runs", str(tmp_path / "r"), "--out", str(tmp_path / "t")]) == 1
+    t = json.loads((tmp_path / "t" / "f3_lut.json").read_text())
+    assert t["rows"]["g2c2/uniform/exact"]["fp4_slots_per_product"] == pytest.approx(3 * 2048 / 128)
+    assert not t["claim"]["cheaper_exact"] and not t["claim"]["holds_over_measured"] and "g1c2" in t["missing_widths"]
+    res = json.loads((tmp_path / "t" / "result.json").read_text())
+    assert res["validation"]["status"] == "failed" and "fake silicon" in res["validation"]["detail"]
+
+
 @pytest.mark.skipif(os.environ.get("VERITY_TC_PROBE_FP4_NVCC") != "1",
                     reason="set VERITY_TC_PROBE_FP4_NVCC=1 to build the kernels and run the offline SASS gates (nvcc 12.9, ~30 s)")
 def test_offline_sass_gates(tmp_path):
@@ -743,6 +843,7 @@ def test_offline_sass_gates(tmp_path):
                 ["probe.py", "--instruction", "sp_nvf4_t1", "--out", str(tmp_path / "t1"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
                 ["f1_rates.py", "build", "--out", str(tmp_path / "f1")],
+                ["f3_lut.py", "build", "--out", str(tmp_path / "f3")],
                 ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])
