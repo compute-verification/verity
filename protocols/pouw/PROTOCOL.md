@@ -244,14 +244,17 @@ useful    U/(α_A·α_B), glue
   binds no word to its order. The design's defense against a salt-free precomputation is that every code and every
   block scale depends on the salt.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
-  strictly row-relative); and D-SS's dead share, at most one scale block in 64 is dead. A block is dead when its clean
-  |max| exceeds 10ρ (theory §5: past about 10ρ a dominant element keeps its code on every draw of the noise).
+  strictly row-relative).
+- **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
+  (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Items 3 and 4 below charge every
+  element of a screened block as salt-dead, so a row with many screened blocks is rejected only when its tile's debit
+  passes the cap. This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units:
   1. per row and 4-group with at least 2 salt-dead codes, 0.5 per MAC (1 when all 4 are), on every word the row feeds,
      for A′ and for B̃;
   2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
-  3. per block dead on both the A row and the B row, one block of MACs per pair-word;
-  4. per salt-dead or unneeded A element (every credited B code at its position is zero), f_s·|cols|/n;
+  3. per block screened on both the A row and the B row, one block of MACs per pair-word;
+  4. per salt-dead, screened-block or unneeded A element (every credited B code at its position is zero), f_s·|cols|/n;
   5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it
      adds exactly 0), one block of MACs;
   - and D-24: per row and aligned 128 of k whose every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0), 0.5 per MAC
@@ -261,10 +264,12 @@ useful    U/(α_A·α_B), glue
     F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
     high.
   - D-SS's spread bound (2^15.8, implied by D-NF) is counted, not enforced: items 2 and 5 charge what it would exclude.
-  - D-SS's scale-byte range is enforced on every formed side (`scale_bytes_ok`): no UE4M3 byte with bit 7 set, which
-    sm_120 reads from its low 7 bits (a second encoding of the same C̃), no zero scale, and no NaN. The verifier forms
-    every scale itself from the committed rows, and every replayed step reads a UE4M3 byte as the hardware does
-    (`hw_scales`).
+  - D-SB is enforced on every formed side before hashing (`check_scale_bytes`): every block scale in 0x01–0x7E (UE8M0:
+    short of 0xFF) and every a_E at most 0x7E, so no UE4M3 byte has bit 7 set, which sm_120 reads from its low 7 bits (a
+    second encoding of the same C̃), none is 0x7F (NaN), and no block scale is zero. Every committed word is finite
+    (`parse_row`). An a_E of 0x00 is D-NF's exclusion, not a rejection, since a zero row (decode's filler) forms it. The
+    verifier forms every scale itself from the committed rows, and every replayed step reads a UE4M3 byte as the hardware
+    does (`hw_scales`).
   - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
   - W_ref = mnk + 32·mk + 256·mn + 117·mk;
@@ -277,7 +282,7 @@ useful    U/(α_A·α_B), glue
   row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
   - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
-    per-row rules, the draws and their openings, and a count of device scale bytes outside D-SS's range;
+    per-row rules, the draws and their openings, and a count of device scale bytes outside D-SB's range;
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 

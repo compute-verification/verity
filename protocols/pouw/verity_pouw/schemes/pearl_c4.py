@@ -43,14 +43,16 @@ as Pearl-C's H100 argument had it.  The design rests instead on every code and e
 
 **The domain and the debit** are the theory lane's (research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
 §1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (a_E a normal
-UE4M3, one a_E per row) and D-SS's dead share (a block is dead when its clean |max| exceeds 10ρ; at most one in 64).  A
-drawn tile's debit is replayed over its credited words (`tile_debit`):
+UE4M3, one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
+and every element of it is charged as salt-dead (items 3 and 4), so a row with many screened blocks is rejected only when
+its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  A drawn tile's debit is replayed
+over its credited words (`tile_debit`):
 
 ~~~text
 1  2:4 groups    per row and 4-group with ≥ 2 salt-dead codes: 0.5 per MAC (1 when all 4 are), on every word the row feeds
 2  identity      per atom whose lone skip leaves the word unchanged: 64 per atom-word
-3  dead pairs    per block dead on both the A row and the B row: `block` per pair-word
-4  forming       per salt-dead or unneeded A element: f_s · |cols|/n
+3  dead pairs    per block screened on both the A row and the B row: `block` per pair-word
+4  forming       per salt-dead, screened-block or unneeded A element: f_s · |cols|/n
 5  sub-grid      per (word, block) with 2304·m_a·m_b·2^(e_a+e_b−2) below its step's grid (it adds exactly 0): `block`
 D-24 windows     per row and aligned 128 of k whose every 4-group has ≤ 2 nonzero codes: 0.5 per MAC, on every word it feeds
 cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
@@ -59,11 +61,13 @@ cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/4
 A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
 codes, not on the atom's word.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
 gather any 16 such rows), and the literal spans are counted.  D-SS's spread bound (2^15.8, implied by D-NF) is counted, not
-enforced: items 2 and 5 charge what it would exclude.  D-SS's scale-byte range is enforced (`scale_bytes_ok`, server.md
-09:38Z): no UE4M3 byte with bit 7 set, which sm_120 reads from its low 7 bits (a second encoding of the same C̃), and no
-zero scale, which would zero a noise block's products.  The verifier forms every scale from the committed rows, so no
-prover's byte reaches the checked values; the rule guards that forming, and every replayed step reads bytes as the
-hardware does (`hw_scales`).
+enforced: items 2 and 5 charge what it would exclude.  D-SB is enforced on every formed side before hashing
+(`check_scale_bytes`, server.md 10:32Z): every block scale in 0x01–0x7E (UE8M0: short of 0xFF) and every a_E at most 0x7E,
+so no UE4M3 byte has bit 7 set, which sm_120 reads from its low 7 bits (a second encoding of the same C̃), none is 0x7F
+(NaN), and no block scale is zero, which would zero a noise block's products; every committed word is finite
+(`parse_row`).  An a_E of 0x00 is D-NF's exclusion, not a rejection: a zero row forms it.  The verifier forms every
+scale from the committed rows, so no prover's byte reaches the checked values; the rule guards that forming, and every
+replayed step reads bytes as the hardware does (`hw_scales`).
 
 **Stand-ins.**  The atoms are the RTX 5090 pins (`BLACKWELL_SM120_NVF4`, `_MXF4`, `HOPPER_BF16_M16N8K16`), pending GPU 4's
 RTX PRO recheck.  The E2M1, UE4M3 and UE8M0 casts are modelled from the PTX ISA, not captured.  A negative value that
@@ -108,8 +112,8 @@ NOISE_F_SCALE = 0x18               # UE4M3 2^-4: F's scale inside the noise atom
 UE4M3_ONE, UE8M0_ONE = 0x38, 127
 UE4M3_MIN = 0x01                   # 2^-9
 UE4M3_NORMAL = 0x08                # 2^-6
-DEAD_RHO = 10                      # dead block: amax_b > 10ρ (theory-pearl-c4-domain.md §5, the code-level salt-dead fix)
-DEAD_SHARE = 64                    # a row passes with at most one dead block in 64
+UE4M3_TOP = 0x7E                   # 448; 0x7F is NaN
+DEAD_RHO_SQ = 90                   # screened block: (clean amax_b)² > 90·ρ², 9.5ρ (theory-pearl-c4-domain.md D-SS, §5)
 
 #: W1 in FP4 units (1 = one dense FP4 MAC on sm_120): a BF16 MAC 4, an FP32 instruction 16 (placeholders from public peak
 #: rates; the measured FADD is 16.9).
@@ -317,16 +321,21 @@ def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
 
 
 def scale_bytes_ok(fmt: Fmt, scales: Sequence[int]) -> bool:
-    """D-SS's range, enforced (`check_scale_bytes`): one encoding per scale, no zero scale on a block that carries noise
-    (every block does), and no NaN.  UE4M3 in [0x01, 0x7E] (bit 7 clear, not 0x00, not 0x7F); UE8M0, whose 8 bits are all
-    its exponent and which has no zero, short of its NaN 0xFF.  Honest forming meets it by construction (`block_scale`)."""
-    return all(UE4M3_MIN <= s <= 0x7E for s in scales) if fmt is NVFP4 else all(0 <= s < 0xFF for s in scales)
+    """D-SB's range for block scales: one encoding per scale, no zero scale on a block that carries noise (every block
+    does), and no NaN.  UE4M3 in [0x01, 0x7E] (bit 7 clear, not 0x00, not 0x7F); UE8M0, whose 8 bits are all its exponent
+    and which has no zero, short of its NaN 0xFF.  Honest forming meets it by construction (`block_scale`)."""
+    return all(UE4M3_MIN <= s <= UE4M3_TOP for s in scales) if fmt is NVFP4 else all(0 <= s < 0xFF for s in scales)
 
 
 def check_scale_bytes(fmt: Fmt, side: Formed) -> None:
+    """D-SB on one formed side, before hashing: every block scale in `scale_bytes_ok`'s range and every a_E at most 0x7E
+    (bit 7 clear, not NaN).  An a_E below 0x01 is left to D-NF, which excludes its row: a zero row (decode's filler, which
+    the work law requires to be zero) forms a_E = 0x00.  The committed words' finiteness is `parse_row`'s."""
     for row in side.scales:
         if not scale_bytes_ok(fmt, row):
-            raise P.Reject("a formed scale byte is outside D-SS's range (bit 7 set, a zero scale or NaN)")
+            raise P.Reject("a formed scale byte is outside D-SB's range (bit 7 set, a zero scale or NaN)")
+    if not all(0 <= ae <= UE4M3_TOP for ae in side.ae):
+        raise P.Reject("a row's a_E is outside D-SB's range (bit 7 set or NaN)")
 
 
 def chain(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scales: Sequence[int], b_scales: Sequence[int]) -> int:
@@ -396,21 +405,22 @@ def _exact_rho_sq(x: Sequence[int]) -> Fraction:
 
 
 def dead_blocks(fmt: Fmt, x: Sequence[int]) -> list[bool]:
-    """Per scale block: dead when its clean |max| exceeds 10ρ (exact ρ² over every 8th position): a salt-free admission
-    screen, below which a dominant element's code still moves on some draw of the noise."""
+    """Per scale block: screened when (clean amax_b)² > 90·ρ² (9.5ρ; exact, ρ² over every 8th position).  Salt-free, and
+    it covers every salt-dead element (Lean `saltDead4_screened`), so the debit charges every element of a screened block
+    as salt-dead (items 3 and 4) instead of rejecting its row."""
     rho_sq = _exact_rho_sq(x)
-    return [Fraction(P.f32_of_bits(max(w & 0x7FFFFFFF for w in x[b:b + fmt.block]))) ** 2 > DEAD_RHO ** 2 * rho_sq
+    return [Fraction(P.f32_of_bits(max(w & 0x7FFFFFFF for w in x[b:b + fmt.block]))) ** 2 > DEAD_RHO_SQ * rho_sq
             for b in range(0, len(x), fmt.block)]
 
 
 def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
-    """Admission, per row and salt-free: D-NF (a_E is a normal UE4M3, at least 2^-6) and D-SS's dead share (at most one
-    scale block in 64 is dead)."""
+    """Admission, per row and salt-free: D-NF (a_E is a normal UE4M3, at least 2^-6).  A row's screened blocks are
+    charged in its tiles' debit (`tile_debit`), and the tile's cap rejects them."""
     try:
         ae = stats(fmt, x)[4]
     except P.Reject:
         return False
-    return ae >= UE4M3_NORMAL and DEAD_SHARE * sum(dead_blocks(fmt, x)) <= len(x) // fmt.block
+    return ae >= UE4M3_NORMAL
 
 
 def scale_dyadic(fmt: Fmt, byte: int) -> tuple[int, int]:
@@ -560,12 +570,13 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
     blocks_a, blocks_b = {i: dead_blocks(fmt, a.x[i]) for i in rows}, {j: dead_blocks(fmt, b.x[j]) for j in cols}
     pairs = sum(p and q for i in rows for j in cols for p, q in zip(blocks_a[i], blocks_b[j]))
     unneeded = [all(b.codes[j][t] & 7 == 0 for j in cols) for t in range(len(a.codes[0]))]
-    elements = sum(d or u for i in rows for d, u in zip(dead_a[i], unneeded))
+    elements = sum(d or u or blocks_a[i][t // fmt.block] for i in rows for t, (d, u) in enumerate(zip(dead_a[i], unneeded)))
     spans = sum(all(win_a[i][w] for i in range(r, r + 16)) for r in range(0, len(a.codes) - 15, 16)
                 for w in range(len(win_a[0])))
     counts = {"salt_dead_a": sum(sum(dead_a[i]) for i in rows), "salt_dead_b": sum(sum(dead_b[j]) for j in cols),
               "two_four_windows_a": sum(sum(win_a[i]) for i in rows), "two_four_windows_b": sum(sum(win_b[j]) for j in cols),
               "d24_spans_a": spans, "identity_atom_words": identity, "subgrid_block_words": subgrid, "dead_pairs": pairs,
+              "screened_blocks_a": sum(sum(blocks_a[i]) for i in rows), "screened_blocks_b": sum(sum(blocks_b[j]) for j in cols),
               "forming_elements": elements, "unneeded_positions": sum(unneeded),
               "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
               + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
@@ -596,7 +607,7 @@ class PearlC4:
             claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
                     "beacon-unpredictability"),
             hypotheses=(
-                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS), as the theory lane states it, proposed and "
+                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB), as the theory lane states it, proposed and "
                 "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
                 "the cap for less than their credit less the debit (research store "
                 "internal/pouw/rtx-pro/theory-pearl-c4-domain.md §2)",
@@ -611,7 +622,7 @@ class PearlC4:
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
-                        ("delta_inv", 4), ("dead_rho", DEAD_RHO), ("dead_share", DEAD_SHARE)),
+                        ("delta_inv", 4), ("dead_rho_sq", DEAD_RHO_SQ)),
         )
 
     def check(self, matmul: Matmul) -> None:

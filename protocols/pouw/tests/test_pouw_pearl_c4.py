@@ -157,25 +157,27 @@ def test_domain_and_registry():
             s.check(Matmul(0, bad, 0))
 
 
-def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,)) -> bytes:
-    """Entries at 256 (well past 10ρ) at unsampled positions: each makes its scale block dead."""
+def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 256.0) -> bytes:
+    """Entries at `value` at unsampled positions: at 256 (well past 9.5ρ) each screens its scale block; at 2^16 the row's
+    a_E is subnormal (D-NF)."""
     w = [x >> 16 for x in F.parse_row(row, k)]
     for p in at:
-        w[p] = P.f32_to_bf16(256.0)
+        w[p] = P.f32_to_bf16(value)
     return F.bf16_row(w)
 
 
 @pytest.mark.parametrize("fmt", FMTS)
-def test_dead_screen_is_10_rho(fmt):
-    """ρ = 1 (every 8th position at 1.0): a block whose |max| is 10 is live, just past 10 (and 11, live under 12ρ) dead."""
+def test_dead_screen_is_90_rho_squared(fmt):
+    """ρ = 1 (every 8th position at 1.0): a block whose |max| is 9.4375 is live, 9.5 (just past √90) and 10 (live under the
+    earlier 10ρ) screened."""
     f = F.FORMATS[fmt]
 
     def row(v):
         x = [P.f32_bits(1.0) if p % 8 == 0 else 0 for p in range(1024)]
         x[1] = P.f32_bits(v)
         return x
-    assert F.DEAD_RHO == 10
-    assert [F.dead_blocks(f, row(v))[0] for v in (10.0, 10.0625, 11.0)] == [False, True, True]
+    assert F.DEAD_RHO_SQ == 90 and ("dead_rho_sq", 90) in F.PearlC4(fmt).certificate.parameters
+    assert [F.dead_blocks(f, row(v))[0] for v in (9.4375, 9.5, 10.0)] == [False, True, True]
     assert not any(F.dead_blocks(f, row(10.0))[1:])
 
 
@@ -187,8 +189,9 @@ def test_row_rules_and_debit(fmt):
     assert not F.row_passes(f, [0] * 1024)                      # a_E rounds to zero
     one = F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024), 1024)
     two = F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024, (1, 2 * f.block + 1)), 1024)
-    assert F.row_passes(f, one) == (fmt == "nvfp4")             # one dead block in 64 (nvfp4), in 32 (mxfp4)
-    assert sum(F.dead_blocks(f, one)) == 1 and not F.row_passes(f, two)
+    # screened blocks no longer fail the row (the one-in-64 cap is gone): the debit charges them
+    assert sum(F.dead_blocks(f, one)) == 1 and sum(F.dead_blocks(f, two)) == 2 and F.row_passes(f, one) and F.row_passes(f, two)
+    assert not F.row_passes(f, F.parse_row(spiked(V.rows("rules", "A", 1, 1024)[0], 1024, value=2.0 ** 16), 1024))
     e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
     a = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FA, 1024))
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
@@ -204,9 +207,51 @@ def test_row_rules_and_debit(fmt):
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
     d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096)
     assert d.dead_pairs == f.block and d.two_four == 4 * F.two_four_units(dead) and d.identity == d.subgrid == d.windows == 0
-    assert d.counts["forming_elements"] >= f.block
+    assert d.counts["screened_blocks_a"] == d.counts["screened_blocks_b"] == 1 and d.counts["forming_elements"] >= f.block
     assert d.forming == Fraction(F.FORMING_CREDITED * d.counts["forming_elements"] * 2, 4096)
     assert d.total == d.dead_pairs + d.two_four + d.forming
+
+
+def screened_tile(blocks: int):
+    """A 4 x 4 credited tile of a 4 x 1024 x 1024 NVFP4 unit whose A row 0 has `blocks` screened blocks, each by one
+    element at 9.75ρ, which leaves the block's other codes salt-live: (scheme, record, tile, A rows, B rows, ops, x_0)."""
+    s, k = V.scheme("nvfp4", False), 1024
+    ctx = V.ctx_of("screen", (4, k, 1024), 0, 0)
+    a_rows, b_rows = V.rows("screen", "A", 4, k), V.rows("screen", "B", 4, k)
+    x = F.parse_row(a_rows[0], k)
+    rho = float(F._exact_rho_sq(x)) ** 0.5
+    a_rows[0] = spiked(a_rows[0], k, tuple(16 * b + 1 for b in range(blocks)), 9.75 * rho)
+    tile = type(s.tiles(Shape(64, k, 64))[0])(range(4), range(4))
+    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+    return s, W.UnitRecord(ctx.matmul, 4, k), tile, a_rows, b_rows, ops, F.parse_row(a_rows[0], k)
+
+
+def test_a_row_the_old_cap_rejected_is_admitted_and_debited():
+    """Two screened blocks in 64, past D-SS's retired one-in-64 cap: the row is credited, every element of its screened
+    blocks is charged in the forming item (not only their salt-dead dominant elements), and the tile stays under ρ."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(2)
+    assert sum(F.dead_blocks(s.fmt, x)) == 2 > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
+    assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:2 * s.fmt.block]) <= 2
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+    d = s.last_debit
+    assert d.counts["screened_blocks_a"] == 2 and d.counts["forming_elements"] >= 2 * s.fmt.block
+    assert d.forming >= Fraction(F.FORMING_CREDITED * 2 * s.fmt.block * 4, 1024)
+    assert 0 < d.total <= s.tile_cap(record, ops, range(4), range(4))[1]
+
+
+def test_a_row_whose_screened_blocks_push_the_tile_past_rho_is_rejected():
+    """Sixteen screened, otherwise salt-live blocks: without their charge the tile is well under ρ; with it, over."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(16)
+    assert F.row_passes(s.fmt, x) and sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:16 * s.fmt.block]) <= 16
+    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
+    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
+    assert d.counts["screened_blocks_a"] == 16 and d.total > cap
+    dead = [F.salt_dead(s.fmt, ops.a.x[i], ops.a.alpha[i], ops.a.ae[i]) for i in range(4)]
+    unneeded = [all(ops.b.codes[j][t] & 7 == 0 for j in range(4)) for t in range(1024)]
+    salt_dead_only = sum(p or u for row in dead for p, u in zip(row, unneeded))
+    assert salt_dead_only < d.counts["forming_elements"] and d.dead_pairs == 0
+    assert Fraction(F.FORMING_CREDITED * salt_dead_only * 4, 1024) + d.two_four + d.identity + d.subgrid + d.windows < cap
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
@@ -224,8 +269,8 @@ def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
 
 def test_scale_bytes_have_one_encoding_and_no_zero():
     """sm_120 reads a UE4M3 scale from its low 7 bits (the assessor's run of all 256 bytes), so every replayed step does too;
-    the domain rejects bit 7 (a second encoding of the same C̃) and a zero scale (a noise block's products zeroed), and
-    honest forming writes neither: its bytes over an amax sweep from 0 to FP32's largest stay in [0x01, 0x7E]."""
+    D-SB rejects bit 7 (a second encoding of the same C̃), a zero scale (a noise block's products zeroed) and 0x7F (NaN), and
+    honest forming writes none: its bytes over an amax sweep from 0 to FP32's largest stay in [0x01, 0x7E]."""
     f = F.NVFP4
     assert all(F.scale_dyadic(f, 0x80 | b) == F.scale_dyadic(f, b) for b in range(0x7F))
     codes, other = list(range(16)) * 8, [(3 * c + 5) % 16 for c in range(128)]
@@ -239,23 +284,57 @@ def test_scale_bytes_have_one_encoding_and_no_zero():
     sweep = [0, 1, 0x00400000, *range(0x00800000, 0x7F800000, 0x00100001), 0x7F7FFFFF]
     assert {F.block_scale(f, w)[0] for w in sweep} <= set(range(0x01, 0x7F))
     assert F.scale_bytes_ok(F.MXFP4, [F.block_scale(F.MXFP4, w)[0] for w in sweep])
-    side = F.form(f, [F.parse_row(r, K) for r in V.rows("scales", "A", 4, K)], [F.line(b"e" * 32, 0, i) for i in range(4)],
-                  F.basis(b"f" * 32, F.ROLE_FA, K))
-    F.check_scale_bytes(f, side)
-    side.scales[2][1] = 0x80 | side.scales[2][1]
-    with pytest.raises(P.Reject):
-        F.check_scale_bytes(f, side)
-    side.scales[2][1] = 0
-    with pytest.raises(P.Reject):
-        F.check_scale_bytes(f, side)
     counts = R.device_scales(f, bytes([0x38, 0x00, 0x80, 0xB8, 0x7F, 0x01]))
     assert counts == {"bytes": 6, "outside_range": 4, "min": 0, "max": 0xB8, "bit7": 2, "zero": 1, "nan": 1}
 
 
+def scales_side() -> F.Formed:
+    return F.form(F.NVFP4, [F.parse_row(r, K) for r in V.rows("scales", "A", 4, K)],
+                  [F.line(b"e" * 32, 0, i) for i in range(4)], F.basis(b"f" * 32, F.ROLE_FA, K))
+
+
+@pytest.mark.parametrize("edit", [lambda s: s.scales[2].__setitem__(1, 0x80 | s.scales[2][1]),
+                                  lambda s: s.ae.__setitem__(1, 0x80 | s.ae[1]),
+                                  lambda s: s.scales[2].__setitem__(1, 0x00),
+                                  lambda s: s.scales[2].__setitem__(1, 0x7F),
+                                  lambda s: s.ae.__setitem__(1, 0x7F)],
+                         ids=["scale-bit-7", "a_E-bit-7", "scale-0x00", "scale-0x7F", "a_E-0x7F"])
+def test_d_sb_rejects_a_scale_byte_outside_0x01_to_0x7E(edit):
+    side = scales_side()
+    F.check_scale_bytes(F.NVFP4, side)
+    edit(side)
+    with pytest.raises(P.Reject):
+        F.check_scale_bytes(F.NVFP4, side)
+
+
+def test_d_sb_leaves_a_zero_rows_a_e_to_d_nf():
+    """A zero row (decode's filler) forms a_E = 0x00 and block scales 0x01: D-SB admits the side, D-NF excludes the row."""
+    side = F.form(F.NVFP4, [[0] * K], [F.line(b"e" * 32, 0, 0)], F.basis(b"f" * 32, F.ROLE_FA, K))
+    assert side.ae == [0] and set(side.scales[0]) == {F.UE4M3_MIN}
+    F.check_scale_bytes(F.NVFP4, side)
+    assert not F.row_passes(F.NVFP4, [0] * K)
+
+
+@pytest.mark.parametrize("word", [0x7FC0, 0x7F80, 0xFF80], ids=["nan", "inf", "-inf"])
+def test_d_sb_rejects_a_non_finite_input_word(word):
+    """A NaN or ±inf activation word: the row is malformed on the tile rule, and the verifier forms no operands from it."""
+    s, ctx = V.scheme("nvfp4", True), V.ctx_of("finite", (16, K, 16), 1, 2)
+    tile = s.tiles(ctx.matmul.shape)[0]
+    a, b = V.rows("finite", "A", 16, K), V.rows("finite", "B", 16, K)
+    w = [x >> 16 for x in F.parse_row(a[5], K)]
+    w[7] = word
+    a[5] = F.bf16_row(w)
+    with pytest.raises(P.Reject):
+        F.parse_row(a[5], K)
+    assert s.encode(ctx, s.noise(ctx), a, b, tile) is None
+    record = W.UnitRecord(ctx.matmul, 16, K)
+    assert W.check_opened(s, record, tile, a, b, None) == "A row 5 is malformed: non-finite FP32 word"
+
+
 def lifecycle(s: F.PearlC4, real=20):
-    """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 has a dead block; B passes."""
+    """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails D-NF; B passes."""
     rows_a = V.rows("work-life", "A", real, K) + [F.bf16_row([0] * K)] * (32 - real)
-    rows_a[3] = spiked(rows_a[3])
+    rows_a[3] = spiked(rows_a[3], value=2.0 ** 16)
     rows_b = V.rows("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
     prover = Prover(s, {9: rows_b})
