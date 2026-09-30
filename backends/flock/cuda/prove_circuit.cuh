@@ -361,6 +361,41 @@ extern "C" void* flock_cuda_host_alloc(size_t bytes) {
     return p;
 }
 
+// device memory for a witness's host words copied ahead of its session (gpu_circuit.rs DevBuf), and a copy either way on a
+// stream of its own, beside the kernels of the session proving meanwhile
+extern "C" void* flock_cuda_dev_alloc(size_t bytes) {
+    void* p = nullptr;
+    if (cudaMalloc(&p, bytes) != cudaSuccess) { cudaGetLastError(); return nullptr; }
+    return p;
+}
+
+// The copy goes in pieces of FC_COPY_PIECE_MB (default 8; 0: one piece), each synced before the next: the session proving
+// meanwhile waits on the whole device often (Ligerito's transcript syncs, cudaFree), and each such wait then covers one piece
+extern "C" int flock_cuda_copy(void* dst, const void* src, size_t bytes) {
+    static const size_t piece = [] {
+        const char* e = std::getenv("FC_COPY_PIECE_MB");
+        const long v = e ? atol(e) : 8;
+        return v > 0 ? (size_t)v << 20 : (size_t)0;
+    }();
+    cudaStream_t s;
+    if (cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking) != cudaSuccess) { cudaGetLastError(); return 1; }
+    const size_t step = piece ? piece : bytes;
+    cudaError_t e = cudaSuccess;
+    for (size_t o = 0; o < bytes && e == cudaSuccess; o += step) {
+        e = cudaMemcpyAsync((char*)dst + o, (const char*)src + o, std::min(step, bytes - o), cudaMemcpyDefault, s);
+        if (e == cudaSuccess) e = cudaStreamSynchronize(s);
+    }
+    cudaStreamDestroy(s);
+    if (e != cudaSuccess) { cudaGetLastError(); return 1; }
+    return 0;
+}
+
+static bool fc_on_device(const void* p) {
+    cudaPointerAttributes a;
+    if (!p || cudaPointerGetAttributes(&a, p) != cudaSuccess) { cudaGetLastError(); return false; }
+    return a.type == cudaMemoryTypeDevice;
+}
+
 // the host slots from mapped host memory: slot i's F128 words at at[i], from zab + off[i] u64 (ab: its a then b words, z = a & b;
 // else z, a, b); blocks stride over the slots, a block's threads over one slot's words
 __global__ void fc_host_slots(const uint64_t* __restrict__ zab, const long long* __restrict__ at, const long long* __restrict__ off,
@@ -450,16 +485,22 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             const long long hper = N->r_count[hr];
             const long long n_h = (1LL << (m - k_log)) * hper;
             const long long hg = (n_h + 31) / 32;
-            uint64_t* d_hin; uint32_t* d_hs = nullptr;
-            CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
-            CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
+            // the input rows, and the host slots below, may be the device's copies already (copied while the witness was built)
+            const bool hin_dev = fc_on_device(N->h_inputs);
+            uint64_t* d_hin = (uint64_t*)N->h_inputs; uint32_t* d_hs = nullptr;
+            if (!hin_dev) {
+                CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
+                CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
+            }
             // the host slots from mapped host memory, on a stream of their own beside the compressions (other words of z, a, b),
             // once the memsets are done; pageable host slots take three copies each after the compressions
             static cudaStream_t hs_stream = nullptr;
             static cudaEvent_t hs_zeroed = nullptr, hs_done = nullptr;
             static int n_sm = 0;
             const uint64_t* zab_dev = nullptr;
-            if (N->n_host0 && cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
+            if (N->n_host0 && fc_on_device(N->host0_zab)) {
+                zab_dev = N->host0_zab;
+            } else if (N->n_host0 && cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
                 cudaGetLastError();
                 zab_dev = nullptr;
             }
@@ -537,7 +578,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             }
             CK(cudaStreamSynchronize(0));
             if (d_hs) cudaFree(d_hs);
-            cudaFree(d_hin);
+            if (!hin_dev) cudaFree(d_hin);
             if (zab_dev) {
                 CK(cudaEventSynchronize(hs_done));
                 cudaFree(d_hat); cudaFree(d_hoff); cudaFree(d_hw);
