@@ -64,10 +64,11 @@ run: |
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   cd "$SRC"
   export PATH=$CUDA_HOME/bin:$PATH
-  # compiled kernels persist per tree on the host (config-run.yaml's gpu task says why this keeps records' evidence of compilation)
-  tree=$(basename "$SRC")
-  export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$tree VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$tree
-  mkdir -p "$TRITON_CACHE_DIR" "$VLLM_CACHE_ROOT"
+  # compiled kernels and JIT builds persist on the host, under config-run.yaml's gpu-task rules (eager rows; trees with #561)
+  case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
+  if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+    export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
+  fi
   PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- \
     bash -c 'cd "$SRC/integrations/vllm" && /workspace/jobs/venv312/bin/python -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REVISION"'
 
