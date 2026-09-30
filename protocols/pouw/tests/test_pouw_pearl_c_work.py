@@ -185,6 +185,22 @@ def test_r1_is_a_no_op_on_pearl_c():
     assert reason == "A row 0 is excluded but passes the per-row rules"
 
 
+def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
+    """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_debit`) is its own: Pearl-C (FP8) brings no
+    `tile_cap`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
+    from verity_pouw.schemes import pearl_c4
+
+    def unreachable(*args, **kwargs):
+        raise AssertionError("Pearl-C reached Pearl-C4's debit")
+
+    monkeypatch.setattr(pearl_c4, "tile_debit", unreachable)
+    monkeypatch.setattr(pearl_c4, "salt_dead", unreachable)
+    epoch, prover, tr, rows_a, rows_b = lifecycle()
+    assert not hasattr(S, "tile_cap")
+    records = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+
+
 def test_audit_under_hashing_h1():
     """The work law's audit is the same under hashing format -h1: its openings verify against frame-b3 roots."""
     h1 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1")

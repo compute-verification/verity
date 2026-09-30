@@ -467,11 +467,11 @@ useful    U/(α_A·α_B), glue
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
   strictly row-relative).
 - **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
-  (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Item 3 below charges a block
-  screened on both operands per pair-word, so a row with many screened blocks is rejected only when its tile's debit
-  passes the cap. Item 4 charges the reference's witness (`salt_dead`) alone, not every element of a screened block
-  (`server.md` 11:32Z); F1′ charges a screened block's near-certain codes at their own p_t. This replaces D-SS's
-  one-in-64 row cap, which rejected about half of real activation rows.
+  (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Items 3 and 4 below charge the
+  reference's witness (`salt_dead`) per element, not every element of a screened block (`server.md` 11:32Z; item 3's
+  per-element form, the assessor's B at 17:25Z), so a row with many screened blocks is rejected only when its tile's
+  debit passes the cap, and neither item charges more than its block form. F1′ charges a screened block's near-certain
+  codes at their own p_t. This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units. Items 1 and 1b and R1
   are the base-split and flatness fix: research store `internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §6.2, §6.3 and
   §6.8, under the assessor's FP4 conditions (`internal/pouw/red-team/ratings.md` 15:18Z).
@@ -495,7 +495,8 @@ useful    U/(α_A·α_B), glue
         excluded row under it that passes the per-row rules, fails the tile.
       - The row is still formed, checked and hashed.
   2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
-  3. per block screened on both the A row and the B row, one block of MACs per pair-word;
+  3. per word and position whose A code and B code are both salt-dead (`salt_dead`, replayed per element on both
+     sides from the drawn tile's own forming), one MAC; a fully dead atom is charged its 64;
   4. per salt-dead A element (the reference's witness, `salt_dead`) or unneeded one (every credited B code at its
      position is zero), f_s·|cols|/n;
   5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it

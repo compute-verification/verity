@@ -224,7 +224,9 @@ def test_row_rules_and_debit(fmt):
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
     d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096, e, e)
-    assert d.dead_pairs == f.block and d.identity == d.subgrid == d.windows == 0
+    dead_b = F.salt_dead(f, b.x[0], b.alpha[0], b.ae[0])
+    assert d.counts["screened_block_pairs"] == 1 and d.identity == d.subgrid == d.windows == 0
+    assert 0 < d.dead_pairs == d.counts["dead_pairs"] == sum(p and q for p, q in zip(dead, dead_b)) <= f.block
     unneeded = [all(b.codes[j][t] & 7 == 0 for j in (0, 1)) for t in range(1024)]
     witness = sum(p or u for i in (0, 1) for p, u in zip(F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i]), unneeded))
     assert d.counts["screened_blocks_a"] == d.counts["screened_blocks_b"] == 1 and d.counts["forming_elements"] == witness
@@ -287,17 +289,71 @@ def test_a_row_whose_screened_blocks_pass_r1_is_rejected_by_f1_prime():
     assert d.split > cap
 
 
-def test_blocks_both_operands_screen_push_the_tile_past_rho_by_item_3():
-    """Four blocks screened on A row 0 and B row 0 alike: 4 pairs on word (0, 0), 16 units each, pass the tile's cap
-    (16 cells' share of creditOf at ρ = 1/400, about 56 units), so the tile is rejected; the same four on A alone pass."""
+def dead_rows(rows: int, k: int = 1024) -> list[bytes]:
+    """Rows salt-dead at every position: ρ from 1.0 at every 8th position, and one element per block at 256ρ, so each
+    block's scale sits on its spike and every other code rounds to 0 at every draw."""
+    x = [P.f32_bits(1.0) if p % 8 == 0 else 0 for p in range(k)]
+    for b in range(0, k, 16):
+        x[b + 1] = P.f32_bits(256.0)
+    return [F.bf16_row([w >> 16 for w in x])] * rows
+
+
+def dead_tile(a_dead: bool, b_dead: bool):
+    """A 2 x 2 NVFP4 tile of a 2 x 1024 x 1024 unit, each side all salt-dead rows or Gaussian ones: (scheme, record, ops)."""
+    s, k = V.scheme("nvfp4", False), 1024
+    ctx = V.ctx_of("dead", (2, k, 1024), 0, 0)
+    a_rows = dead_rows(2) if a_dead else V.rows("dead", "A", 2, k)
+    b_rows = dead_rows(2) if b_dead else V.rows("dead", "B", 2, k)
+    tile = type(s.tiles(Shape(64, k, 64))[0])(range(2), range(2))
+    return s, W.UnitRecord(ctx.matmul, 2, k), s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+
+
+def test_item_3_charges_per_element_where_both_codes_are_salt_dead():
+    """Item 3 per element (the assessor's B, 17:25Z): one MAC per word and position whose A and B codes are both
+    salt-dead.  Where both sides are dead everywhere every word is charged k, each atom its full 64; a dead side against
+    a live one (dead zeros included) charges nothing; and it never exceeds the block form."""
+    s, record, ops = dead_tile(True, True)
+    assert all(all(F.salt_dead(s.fmt, x, al, ae)) for side in (ops.a, ops.b) for x, al, ae in zip(side.x, side.alpha, side.ae))
+    s.tile_cap(record, ops, range(2), range(2))
+    d = s.last_debit
+    assert d.dead_pairs == 4 * 1024 == 4 * (1024 // F.ATOM) * F.ATOM
+    assert d.dead_pairs <= s.fmt.block * d.counts["screened_block_pairs"]
+    for a_dead, b_dead in ((True, False), (False, True)):
+        s, record, ops = dead_tile(a_dead, b_dead)
+        s.tile_cap(record, ops, range(2), range(2))
+        dead = ops.a if a_dead else ops.b
+        assert any(c & 7 == 0 for c in dead.codes[0]) and s.last_debit.dead_pairs == 0
+
+
+@pytest.mark.parametrize("a_blocks, b_blocks", ((4, 4), (16, 16), (2, 0)))
+def test_item_3_never_charges_more_than_its_block_form(a_blocks, b_blocks):
+    """On spiked tiles (each spike at 9.75ρ salt-dead, the rest of its block live) and a Gaussian control: the per-element
+    count is at most `block` per co-screened block pair (`saltDead4_screened`), and on four co-screened blocks it is their
+    four spikes, 4 units, where the block form charged 64 and failed the tile's cap (about 56 units)."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(a_blocks, b_blocks)
+    s.tile_cap(record, ops, range(4), range(4))
+    d = s.last_debit
+    assert d.counts["screened_block_pairs"] == min(a_blocks, b_blocks)
+    assert d.dead_pairs <= s.fmt.block * d.counts["screened_block_pairs"]
+    if (a_blocks, b_blocks) == (4, 4):
+        assert d.dead_pairs == 4 and W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+        assert s.fmt.block * d.counts["screened_block_pairs"] > s.tile_cap(record, ops, range(4), range(4))[1]
+
+
+def test_the_provers_debit_is_the_verifiers():
+    """Items 3 and 4 read the witness from the tile's own forming on both sides, so a prover forming the committed rows
+    from the unit's seeds gets the verifier's debit exactly; over the credited rows only, the spiked row's dead pairs
+    drop out."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
-    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
-    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
-    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
-    assert d.counts["dead_pairs"] == 4 and d.dead_pairs == 4 * s.fmt.block and d.total > cap
-    assert d.counts["forming_elements"] == witness_elements(s, ops)
-    s, record, tile, a_rows, b_rows, ops, x = screened_tile(4)
-    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None and s.last_debit.dead_pairs == 0
+    ctx, k = V.ctx_of("screen", (4, 1024, 1024), 0, 0), 1024
+    noise = s.noise(ctx)
+    a, e_a = s._side(a_rows, tile.rows, F.ROLE_EA, F.ROLE_FA, noise.seed_a, noise.seed_b, k)
+    b, e_b = s._side(b_rows, tile.cols, F.ROLE_EB, F.ROLE_FB, noise.seed_b, noise.seed_b, k)
+    mine = F.tile_debit(s.fmt, a, b, range(4), range(4), 1024, e_a, e_b, 4)
+    s.tile_cap(record, ops, range(4), range(4))
+    assert mine == s.last_debit and mine.dead_pairs == 4
+    s.tile_cap(record, ops, [1, 2, 3], range(4))
+    assert s.last_debit.dead_pairs == 0 and s.last_debit.counts["words"] == 12
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
