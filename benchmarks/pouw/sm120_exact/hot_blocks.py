@@ -18,8 +18,9 @@ Past the last listed length no block governs; there `count` at 64 rows is record
 Out: `<out>/units/<unit>.json` (one record per start, length and block; with --per-start one file `<unit>.t<t>.json` per
 start, so a chunk keeps every start it finishes), then `summary.json`: per (start, L, block) the widest columns found with M
 rows over the units, where, and whether any search found the block, and per unit hot.py's liveness (`rows_live`,
-pearl_c.live_row) and admission counts; only admitted rows and columns are searched.  Restartable: exit 99 once
---budget-min is spent while units remain, 0 after the summary.
+pearl_c.live_row) and admission counts; only admitted rows and columns are searched.  Restartable: a task saves its
+progress to `<unit>[.t<t>].part.json` every minute and once --budget-min is spent, and resumes from it; exit 99 while tasks
+remain, 0 after the summary.
     python3 benchmarks/pouw/sm120_exact/hot_blocks.py --units-dir <hot.py's out> --out DIR [--procs 32]
 """
 from __future__ import annotations
@@ -88,7 +89,10 @@ def isect_greedy(bits: np.ndarray, cnt: np.ndarray, K: int) -> tuple[int, list[i
 
 
 def unit_blocks(task) -> dict:
-    ud, chain, starts, min_len, isect, out_dir, tag = task
+    """One task: a unit's records at the given starts, written to `<tag>.json`.  Its progress is saved to `<tag>.part.json`
+    every minute and once `deadline` (epoch seconds) passes, when it returns early; a later call resumes after the saved
+    plane (the ANDs up to it are replayed, not the searches)."""
+    ud, chain, starts, min_len, isect, out_dir, tag, deadline = task
     ud, out_dir = Path(ud), Path(out_dir)
     meta = json.loads((ud / "unit.json").read_text())
     m, n, T = meta["m"], meta["n"], meta["planes"]
@@ -101,7 +105,28 @@ def unit_blocks(task) -> dict:
     recs, kept = [], {}
     cur: dict[int, tuple[np.ndarray, np.ndarray]] = {}
     dead: dict[int, int] = {}
+    part = out_dir / "units" / f"{tag}.part.json"
+    s_done = min(starts) - 1
+    if part.exists():
+        p = json.loads(part.read_text())
+        recs, s_done = p["records"], p["s_done"]
+        kept = {tuple(k): v for k, v in p["kept"]}
+        dead = {int(t): L for t, L in p["dead"].items()}
+    resumed_at, saved = s_done, time.time()
+
+    def save(s: int) -> None:
+        tmp = part.with_suffix(".tmp")
+        tmp.write_text(jdump({"records": recs, "kept": [[list(k), v] for k, v in kept.items()], "dead": dead, "s_done": s}))
+        tmp.replace(part)
+
     for s in range(min(starts), T):
+        if s > s_done and time.time() > deadline:
+            if s - 1 > resumed_at:
+                save(s - 1)
+            return {"unit": tag, "partial": s - 1}
+        if s > s_done and time.time() - saved > 60:
+            save(s - 1)
+            saved = time.time()
         pr, pc = np.asarray(RB[s]), np.asarray(CB[s])
         for t in starts:
             if s < t or t in dead:
@@ -116,7 +141,7 @@ def unit_blocks(task) -> dict:
                 cur[t][0][...] &= pr
                 cur[t][1][...] &= pc
             L = s - t + 1
-            if L < min_len:
+            if L < min_len or s <= s_done:
                 continue
             r, c = cur[t]
             rc, cc = popc(r).sum(1, dtype=np.int64), popc(c).sum(1, dtype=np.int64)
@@ -165,6 +190,7 @@ def unit_blocks(task) -> dict:
            "min_len": min_len, "rows_admitted": meta.get("rows_admitted"), "rows_live": meta.get("rows_live"),
            "gates": gates, "records": recs}
     (out_dir / "units" / f"{tag}.json").write_text(jdump(res) + "\n")
+    part.unlink(missing_ok=True)
     return {"unit": tag, "gates": gates}
 
 
@@ -192,25 +218,33 @@ def main() -> None:
              [(nm, starts, nm) for nm in names])
     todo = [x for x in tasks if not (out / "units" / f"{x[2]}.json").exists()]
     fh = open(out / "log.jsonl", "a")
-    bad = 0
+    bad, more = 0, 0
+    deadline = t0 + 60 * args.budget_min
     with Pool(args.procs) as pool:
         pending = [pool.apply_async(unit_blocks, ((str(src / nm), args.chain, ts, args.min_len, not args.no_isect,
-                                                   str(out), tag),)) for nm, ts, tag in todo]
+                                                   str(out), tag, deadline),)) for nm, ts, tag in todo]
         for (_, _, nm), p in zip(todo, pending):
-            left = 60 * args.budget_min - (time.time() - t0)
-            try:
-                res = p.get(timeout=max(left, 1))
-            except Exception as e:  # the budget ran out (or a unit failed); units written so far are kept
+            left = deadline - time.time()
+            try:  # a task returns at the first plane past the deadline; the extra 4 minutes cover that plane's searches
+                res = p.get(timeout=max(left, 1) + 240)
+            except Exception as e:  # a task overran (or failed); what the tasks saved is kept
                 fh.write(json.dumps({"stopped": nm, "why": type(e).__name__, "detail": str(e)[:300]}) + "\n")
                 fh.flush()
                 pool.terminate()
                 sys.exit(99 if isinstance(e, PoolTimeout) else 1)
-            bad += sum(g["mismatches"] for g in res["gates"])
-            fh.write(jdump({"done": nm, "gates": res["gates"], "seconds": round(time.time() - t0, 1)}) + "\n")
+            if "partial" in res:
+                more += 1
+                fh.write(jdump({"saved": nm, "through_plane": res["partial"], "seconds": round(time.time() - t0, 1)}) + "\n")
+            else:
+                bad += sum(g["mismatches"] for g in res["gates"])
+                fh.write(jdump({"done": nm, "gates": res["gates"], "seconds": round(time.time() - t0, 1)}) + "\n")
             fh.flush()
     if bad:
         fh.write(json.dumps({"gate_mismatches": bad}) + "\n")
         sys.exit(4)
+    if more:
+        fh.write(json.dumps({"chunk_end": {"tasks_left": more, "seconds": round(time.time() - t0, 1)}}) + "\n")
+        sys.exit(99)
     write_summary(out, names, starts, fh, tasks)
 
 
