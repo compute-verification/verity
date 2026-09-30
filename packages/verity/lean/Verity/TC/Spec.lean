@@ -172,6 +172,11 @@ def runGroups (width : Nat) (zeroExponent : Int) : List Nat → Value → List N
 def tcDotTotal (p : Pipeline) (accBits : Nat) (a b : List Nat) : Nat :=
   packValue (runGroups p.width p.zeroExponent p.groups (fp32Value accBits) a b)
 
+/-- `total.cvt_rn_bf16_f32`: `cvt.rn.bf16.f32`, round to nearest even on finite words (overflow to `±inf`), `±inf` kept,
+every NaN to the canonical `0x7FFF`. -/
+def cvtRnBf16F32 (bits : Nat) : Nat :=
+  if fp32Class bits = .nan then 0x7FFF else ((bits + 0x7FFF + ((bits >>> 16) &&& 1)) >>> 16) &&& 0xFFFF
+
 /-- `tc_dot_total` folded over a unit's k16 steps in k order: one GEMM output coordinate's accumulator, as
 `models.tc_dot_chain` folds a model's step. -/
 def tcDotChainTotal (p : Pipeline) (accBits : Nat) (steps : List (List Nat × List Nat)) : Nat :=

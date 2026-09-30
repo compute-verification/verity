@@ -87,6 +87,34 @@
    "assumptions": [],
    "type_hash": "c5e53aa7a02e01bcec6b56bb806b0575eb01c0401d98fac8c1598448f7362eac"
   },
+  "Verity.TC.ampere_unit_bf16": {
+   "signature": [
+    "Verity.TC.ampere_unit_bf16 (align : Verity.TC.Relation.Align)",
+    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
+    "  (hin :",
+    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
+    "      List.instMembership.mem steps s →",
+    "        And (Eq s.fst.length 16)",
+    "          (And (Eq s.snd.fst.length 16)",
+    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
+    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
+    "  (out : Verity.TC.Relation.State)",
+    "  (h :",
+    "    Verity.TC.Relation.ChainHolds Verity.TC.AMPERE_BF16_M16N8K16 align",
+    "      (Verity.TC.Relation.zeroState Verity.TC.AMPERE_BF16_M16N8K16) steps out)",
+    "  (c : Verity.TC.Relation.PackCols) (hc : Verity.TC.Relation.packHolds out c) :",
+    "  And",
+    "    (Eq c.word",
+    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.AMPERE_BF16_M16N8K16 0",
+    "          (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps)).cast)",
+    "    (Eq c.bf16",
+    "      (Verity.TC.Spec.cvtRnBf16F32",
+    "          (Verity.TC.Spec.tcDotChainTotal Verity.TC.AMPERE_BF16_M16N8K16 0",
+    "            (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "2a59af350750a522ab6a727b2069c40b7717af8d6e3787ee2beb1bfb09ba4070"
+  },
   "Verity.TC.ampere_unit_sound": {
    "signature": [
     "Verity.TC.ampere_unit_sound (align : Verity.TC.Relation.Align) (acc : Nat)",
@@ -193,6 +221,34 @@
    "assumptions": [],
    "type_hash": "e5edef2e6a0ce986000364a29e5ae3f31816d8b5613092af4fe69ca172a9a92c"
   },
+  "Verity.TC.hopper_unit_bf16": {
+   "signature": [
+    "Verity.TC.hopper_unit_bf16 (align : Verity.TC.Relation.Align)",
+    "  (steps : List (Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)))",
+    "  (hin :",
+    "    ∀ (s : Prod (List Nat) (Prod (List Nat) Verity.TC.Relation.Witness)),",
+    "      List.instMembership.mem steps s →",
+    "        And (Eq s.fst.length 16)",
+    "          (And (Eq s.snd.fst.length 16)",
+    "            (And (∀ (x : Nat), List.instMembership.mem s.fst x → instLTNat.lt x (instHPow.hPow 2 16))",
+    "              (∀ (x : Nat), List.instMembership.mem s.snd.fst x → instLTNat.lt x (instHPow.hPow 2 16)))))",
+    "  (out : Verity.TC.Relation.State)",
+    "  (h :",
+    "    Verity.TC.Relation.ChainHolds Verity.TC.HOPPER_BF16_WGMMA_K16 align",
+    "      (Verity.TC.Relation.zeroState Verity.TC.HOPPER_BF16_WGMMA_K16) steps out)",
+    "  (c : Verity.TC.Relation.PackCols) (hc : Verity.TC.Relation.packHolds out c) :",
+    "  And",
+    "    (Eq c.word",
+    "      (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 0",
+    "          (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps)).cast)",
+    "    (Eq c.bf16",
+    "      (Verity.TC.Spec.cvtRnBf16F32",
+    "          (Verity.TC.Spec.tcDotChainTotal Verity.TC.HOPPER_BF16_WGMMA_K16 0",
+    "            (List.map (fun s => { fst := s.fst, snd := s.snd.fst }) steps))).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "c1bb530b5e9f83e150d4a04927fbbeae6426ed923d46d032eb1709ed2db669ea"
+  },
   "Verity.TC.hopper_unit_sound": {
    "signature": [
     "Verity.TC.hopper_unit_sound (align : Verity.TC.Relation.Align) (acc : Nat)",
@@ -241,6 +297,19 @@
    ],
    "assumptions": [],
    "type_hash": "5746d0d0cf29d23a9b0b133b65576529292aa5917c96c8eb8a5582a6bfe52894"
+  },
+  "Verity.TC.pack_sound_complete": {
+   "signature": [
+    "Verity.TC.pack_sound_complete (Z : Int) (V : Verity.TC.Spec.Value) (hV : Verity.TC.Proofs.Admissible V) :",
+    "  And",
+    "    (∀ (c : Verity.TC.Relation.PackCols),",
+    "      Verity.TC.Relation.packHolds (Verity.TC.Proofs.stateOf Z V) c →",
+    "        And (Eq c.word (Verity.TC.Spec.packValue V).cast)",
+    "          (Eq c.bf16 (Verity.TC.Spec.cvtRnBf16F32 (Verity.TC.Spec.packValue V)).cast))",
+    "    (Exists fun c => Verity.TC.Relation.packHolds (Verity.TC.Proofs.stateOf Z V) c)"
+   ],
+   "assumptions": [],
+   "type_hash": "9b357ce37eb093da3677870f727c259fd78f42903c5202ea171ece2e46d09a7c"
   }
  },
  "reads": {
@@ -281,18 +350,20 @@
     "Verity.TC.ampere_step_hw",
     "Verity.TC.ampere_step_iff",
     "Verity.TC.ampere_step_sound",
+    "Verity.TC.ampere_unit_bf16",
     "Verity.TC.ampere_unit_sound",
     "Verity.TC.ampere_unit_sound_zero",
     "Verity.TC.hopper_step_complete",
     "Verity.TC.hopper_step_hw",
     "Verity.TC.hopper_step_iff",
     "Verity.TC.hopper_step_sound",
+    "Verity.TC.hopper_unit_bf16",
     "Verity.TC.hopper_unit_sound",
     "Verity.TC.hopper_unit_sound_zero"
    ]
   },
   "Verity.TC.Relation": {
-   "digest": "b3bec9d90aa07931fcc77cad5866c25ec732033afd072daefbc3a9492519dbdf",
+   "digest": "74a0a61b3ac32d1a61324e0e8b2d4493c9de70d016a29c00164a993bfd828cf6",
    "definitions": {
     "Verity.TC.Relation.Align": "bd927acbef0f1cebcf242d571b3d07a0ee22ea66a5cfe1edfddfd480b1370818",
     "Verity.TC.Relation.Align.div": "bc18a3a235779005208b11d8ed68f14bf79334374a7493c0a8c892d715d376a1",
@@ -348,6 +419,23 @@
     "Verity.TC.Relation.LIN": "ac49bee6c077a8700fecde66f5148a19543e6d2956142982ba0fec6d6a3b3de9",
     "Verity.TC.Relation.LOOKUP": "65ebaa1ba6fc4c9453e2d07904cbd58d228a3740e6c7ee1bb8c9c12260b036a2",
     "Verity.TC.Relation.MUL": "2dcc3336588b7a3beb41c137a32fee04e1ccfe4138f82838cef6bd52efd1eeb0",
+    "Verity.TC.Relation.PackCols": "b52066ba8d3ffad1a67185ddbc789bdcda9c59dd6beca65e5a787d9be00aa9d5",
+    "Verity.TC.Relation.PackCols.Ebias": "631d1fb6f8d330d0e8cf0efaf2e8a97aa3a572749390886962dc371733e813da",
+    "Verity.TC.Relation.PackCols.b16": "7200759f7a1d38aaa572534936cb0eb107f4205f8975c3b4494fce685cb0dc97",
+    "Verity.TC.Relation.PackCols.bf16": "3e46bbff790f16acb6e937257708aa777c878b9ded4fefd29904f5aa742f3c01",
+    "Verity.TC.Relation.PackCols.carry": "b7556de1e6e24e273b3cd79ac43bced92b884f8b33ab2f922103e951d2b103a3",
+    "Verity.TC.Relation.PackCols.fin_nz": "d5ed175e94401a11748e148b93a7af6067a3c4400ce3dee07bda5c4b579a2631",
+    "Verity.TC.Relation.PackCols.hi": "ab25dfe4040124b3075262cedcb877056cc5e521c0a095ee576b20e236871c60",
+    "Verity.TC.Relation.PackCols.hi2": "d59ae4df3758ab1f7803f663be7acccf64ffb22d25b17bb31507defcb9997f7a",
+    "Verity.TC.Relation.PackCols.hidden": "3edd958b16dae6006ed648f2f74ab789729515c2b4e27969430d206dfaf7d6f9",
+    "Verity.TC.Relation.PackCols.lo": "040754fef676421133e0aba0b766062c2ce71bb06ab86b509dbb63b41220c467",
+    "Verity.TC.Relation.PackCols.mant": "da64cfd73442a8d6fb0b380189efbce2341776dab141a08833a6393ee3a1b906",
+    "Verity.TC.Relation.PackCols.nh_nz": "27dbb385c836836adae86a6dcaee3a582d520ace77a36ce5f869ea6f2a47dcff",
+    "Verity.TC.Relation.PackCols.rem": "c5cffab8aaeb8ff45c75a9c58a885742a3a5273a14dca956e2cd2c911214ae58",
+    "Verity.TC.Relation.PackCols.rounded": "91c97792cbdac12d9ec32aec4e182c988d4cef7afcdc28106818697605adf1d5",
+    "Verity.TC.Relation.PackCols.word": "fb3c50c31c199e1020a74b6072ae7f82071510a3f229e1e79074093b9a560a46",
+    "Verity.TC.Relation.PackCols.wrap": "1ec31613dffd1cc61d0faf251b1e764c4e0ed3efb6d3ef725a3930f337b3326c",
+    "Verity.TC.Relation.PackCols.z": "5c1d015ac0550c1992cf8a0e42cb669ae1b0c4fd976a928fa2f77f2d0ddeaee7",
     "Verity.TC.Relation.Params": "a3880e90527a525ee2305c1cded7a478b98da4bf23802fce23d4339d48e2d3e8",
     "Verity.TC.Relation.Params.A": "6b4770ee357f08d38155cf13b367ce5d4add61183436255f2e5878e6568377b5",
     "Verity.TC.Relation.Params.B": "3c102baec407e967fb1cb21c3dc3755ea774fef559bf747914b495db836a3d01",
@@ -396,12 +484,15 @@
     "Verity.TC.Relation.Witness.Shaped": "467f020df362749ab5d1655e309e7f34f2325b6248425fff0c4331476b2b2ecf",
     "Verity.TC.Relation.Witness.groups": "a1994a1c0ce516735ae0fcc464d529cc18a01e9fcad01da0feff8744120a8220",
     "Verity.TC.Relation.Witness.prod": "decc41629955ef620f7e241dd6effd5e0644d0ee4a17c4c0baa20253f2638ba0",
+    "Verity.TC.Relation.cvtHolds": "81085f8157e03e80189696a5524149626a6bf213253d401cfbd5095d6d3129ee",
     "Verity.TC.Relation.decodeState": "8e5d5eddfdd8268ac5e6138ca66212b23878d2918fa1bfd2950cdf44dba5b62b",
     "Verity.TC.Relation.groupHolds": "77264ac69128e8f24749636e5dbb7cbacb52efe6f5e4bea528dc67d9943eeb70",
     "Verity.TC.Relation.groupsHold": "6d883089e8facd039af3ccaabd6bcad3a37844598adde1cff5d504a7707a8194",
     "Verity.TC.Relation.instDecidableEqAlign": "44d539cdbb980173dee30181d2ba75169762f8865f071d2418e73e45d9508e5c",
     "Verity.TC.Relation.instInhabitedProdCols": "e12f41b25ddc131cf213d12087be58ae98abbcabaec8a53f34f2e89d6b60c945",
     "Verity.TC.Relation.instInhabitedProdCols.default": "bd256c636b89e9377c812ce9302bded27237a67f77603acf9e5b8fe104e2cf62",
+    "Verity.TC.Relation.packHolds": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e",
+    "Verity.TC.Relation.packWordHolds": "40068be3cd494914acf0f2f6e18d640adeabfe66d60635d3b6f15b5cfed04db5",
     "Verity.TC.Relation.params": "7c994899db094567b4c4a3cf9b49995747748a0e0e6c4d5fc241f1b15af1a112",
     "Verity.TC.Relation.prodHolds": "4efcfc14c04432afcfc9cf98b0d670788107cbfc637c7dffe546fe40a6f8cafd",
     "Verity.TC.Relation.stepOut": "16b686eb085fb3bd120699f545b1691deac28fe4437dc4b86059049c9462af6b",
@@ -421,18 +512,21 @@
     "Verity.TC.ampere_step_hw",
     "Verity.TC.ampere_step_iff",
     "Verity.TC.ampere_step_sound",
+    "Verity.TC.ampere_unit_bf16",
     "Verity.TC.ampere_unit_sound",
     "Verity.TC.ampere_unit_sound_zero",
     "Verity.TC.hopper_step_complete",
     "Verity.TC.hopper_step_hw",
     "Verity.TC.hopper_step_iff",
     "Verity.TC.hopper_step_sound",
+    "Verity.TC.hopper_unit_bf16",
     "Verity.TC.hopper_unit_sound",
-    "Verity.TC.hopper_unit_sound_zero"
+    "Verity.TC.hopper_unit_sound_zero",
+    "Verity.TC.pack_sound_complete"
    ]
   },
   "Verity.TC.Spec": {
-   "digest": "bb30fd23d7ba8ef471a47a695c04783c64e10f1106fe19be5d1491a4cd574108",
+   "digest": "5f73a9648008c61d3a436b0a04917e73eb51ff06f7079a4ac9c90c9d0b10711e",
    "definitions": {
     "Verity.TC.Spec.Cls": "32a69efb9d8f020818f79ecf7874331b6da9974ae1cfd4bd9cef974e02a3e602",
     "Verity.TC.Spec.Cls.finite": "ec657bd6c072f498b499d61a5f8dd9b98fce7391d9794fb5f41ec8db740554c9",
@@ -457,6 +551,7 @@
     "Verity.TC.Spec.bf16Class": "4aaa1b25bbccea480adfa5ae798a5a0a3bb08897ac311d245cfc978163ac3e4e",
     "Verity.TC.Spec.bf16Product": "c73291cd387f1bbbc1e24dec617fde88226ee97a0cc797b550e003399dc96eda",
     "Verity.TC.Spec.bf16ProductTotal": "8ae397205551e338c277300d10f53bfc37089fa7e76a505ce5876c795ea18d32",
+    "Verity.TC.Spec.cvtRnBf16F32": "a8f2192006997dada720192020d1d74f8c7bd327d4763be405f5d65c8b531f00",
     "Verity.TC.Spec.fp32Class": "1b34697b7501cb0a4a85fcd76ec879dd1477b8697ea69efac14faf350b718ca4",
     "Verity.TC.Spec.fp32Term": "8ada0758d4f2c682486c2ecf70eb2c3df3ebce03a053f4ab70c6c417858092a6",
     "Verity.TC.Spec.fp32Value": "114ecab0afefeb391dff65e876d5f0c4c55d39febbebbefa2ca78e7877828972",
@@ -473,13 +568,16 @@
     "Verity.TC.ampere_step_hw",
     "Verity.TC.ampere_step_iff",
     "Verity.TC.ampere_step_sound",
+    "Verity.TC.ampere_unit_bf16",
     "Verity.TC.ampere_unit_sound",
     "Verity.TC.ampere_unit_sound_zero",
     "Verity.TC.hopper_step_hw",
     "Verity.TC.hopper_step_iff",
     "Verity.TC.hopper_step_sound",
+    "Verity.TC.hopper_unit_bf16",
     "Verity.TC.hopper_unit_sound",
-    "Verity.TC.hopper_unit_sound_zero"
+    "Verity.TC.hopper_unit_sound_zero",
+    "Verity.TC.pack_sound_complete"
    ]
   }
  },

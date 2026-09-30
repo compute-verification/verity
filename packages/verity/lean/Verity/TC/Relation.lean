@@ -358,4 +358,59 @@ def ChainHolds (pipe : Pipeline) (align : Align) : State → List (List Nat × L
   | st, [], out => out = st
   | st, (a, b, w) :: rest, out => StepHolds pipe align st a b w ∧ ChainHolds pipe align (stepOut st w.groups) rest out
 
+/-- The columns of the unit boundary, `pack_relation`: the FP32 word of the final state and its `cvt.rn.bf16.f32`
+rounding. `low = M - hidden * 2^23`, `fin = 1 - nan - inf`, `nz = 1 - z` and `t = lo + 0x7FFF + b16` are the linear
+expressions the Python computes from them. -/
+structure PackCols where
+  hidden : Int
+  z : Int
+  nh_nz : Int
+  fin_nz : Int
+  Ebias : Int
+  mant : Int
+  word : Int
+  hi : Int
+  lo : Int
+  b16 : Int
+  hi2 : Int
+  carry : Int
+  rem : Int
+  rounded : Int
+  wrap : Int
+  bf16 : Int
+
+/-- The first half of `relation.pack_relation` on the final state `st`: its FP32 word. -/
+def packWordHolds (st : State) (c : PackCols) : Prop :=
+  let low := st.M - c.hidden * 2 ^ 23
+  let fin := 1 - st.nan - st.inf
+  BOOL c.hidden ∧
+  RANGE low 23 ∧
+  ISZERO st.M 24 c.z ∧
+  MUL (1 - c.hidden) (1 - c.z) c.nh_nz ∧
+  MUL c.nh_nz (st.e - FP32_MIN_E) 0 ∧
+  MUL fin (1 - c.z) c.fin_nz ∧
+  MUL c.fin_nz (st.e + 126 + c.hidden) (c.Ebias - (st.nan + st.inf) * 255) ∧
+  MUL fin low (c.mant - st.nan * 0x7FFFFF) ∧
+  LIN (c.word - (st.neg * 2 ^ 31 + c.Ebias * 2 ^ 23 + c.mant))
+
+/-- The second half of `relation.pack_relation`, `cvt.rn.bf16.f32` of the word: every NaN to `0x7FFF`; otherwise RNE,
+carrying into the exponent. -/
+def cvtHolds (nan : Int) (c : PackCols) : Prop :=
+  RANGE c.lo 16 ∧
+  RANGE c.hi 16 ∧
+  LIN (c.hi * 65536 + c.lo - c.word) ∧
+  BOOL c.b16 ∧
+  RANGE c.hi2 15 ∧
+  LIN (c.hi2 * 2 + c.b16 - c.hi) ∧
+  BOOL c.carry ∧
+  RANGE c.rem 16 ∧
+  LIN (c.carry * 65536 + c.rem - (c.lo + 0x7FFF + c.b16)) ∧
+  BOOL c.wrap ∧
+  RANGE c.rounded 16 ∧
+  LIN (c.rounded + c.wrap * 65536 - c.hi - c.carry) ∧
+  MUL nan (0x7FFF - c.rounded) (c.bf16 - c.rounded)
+
+/-- `relation.pack_relation` on the final state `st`: the FP32 word, then its `cvt.rn.bf16.f32` rounding. -/
+def packHolds (st : State) (c : PackCols) : Prop := packWordHolds st c ∧ cvtHolds st.nan c
+
 end Verity.TC.Relation

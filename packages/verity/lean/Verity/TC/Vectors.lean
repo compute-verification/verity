@@ -574,4 +574,62 @@ theorem a31 : tcDotTotal AMPERE_BF16_M16N8K16 0x80000000
     0x00000000 := by
   decide +kernel
 
+/-! ## `cvt_rn_bf16_f32`: NaNs, infinities, ties to even, overflow to infinity, subnormals -/
+
+theorem c00 : cvtRnBf16F32 0x7fffffff = 0x7fff := by decide +kernel
+
+theorem c01 : cvtRnBf16F32 0xffc00001 = 0x7fff := by decide +kernel
+
+theorem c02 : cvtRnBf16F32 0x7f800001 = 0x7fff := by decide +kernel
+
+theorem c03 : cvtRnBf16F32 0x7f800000 = 0x7f80 := by decide +kernel
+
+theorem c04 : cvtRnBf16F32 0xff800000 = 0xff80 := by decide +kernel
+
+theorem c05 : cvtRnBf16F32 0x00000000 = 0x0000 := by decide +kernel
+
+theorem c06 : cvtRnBf16F32 0x80000000 = 0x8000 := by decide +kernel
+
+theorem c07 : cvtRnBf16F32 0x3f800000 = 0x3f80 := by decide +kernel
+
+theorem c08 : cvtRnBf16F32 0x3f808000 = 0x3f80 := by decide +kernel
+
+theorem c09 : cvtRnBf16F32 0x3f818000 = 0x3f82 := by decide +kernel
+
+theorem c10 : cvtRnBf16F32 0x3f807fff = 0x3f80 := by decide +kernel
+
+theorem c11 : cvtRnBf16F32 0x3f808001 = 0x3f81 := by decide +kernel
+
+theorem c12 : cvtRnBf16F32 0x7f7fffff = 0x7f80 := by decide +kernel
+
+theorem c13 : cvtRnBf16F32 0xff7fffff = 0xff80 := by decide +kernel
+
+theorem c14 : cvtRnBf16F32 0x7f7f8000 = 0x7f80 := by decide +kernel
+
+theorem c15 : cvtRnBf16F32 0x00000001 = 0x0000 := by decide +kernel
+
+theorem c16 : cvtRnBf16F32 0x007fffff = 0x0080 := by decide +kernel
+
+theorem c17 : cvtRnBf16F32 0x00800000 = 0x0080 := by decide +kernel
+
+theorem c18 : cvtRnBf16F32 0x80008000 = 0x8000 := by decide +kernel
+
+theorem c19 : cvtRnBf16F32 0x52e6b438 = 0x52e7 := by decide +kernel
+
+theorem c20 : cvtRnBf16F32 0xf2a74de4 = 0xf2a7 := by decide +kernel
+
+theorem c21 : cvtRnBf16F32 0x269e0d37 = 0x269e := by decide +kernel
+
+theorem c22 : cvtRnBf16F32 0x6513270e = 0x6513 := by decide +kernel
+
+theorem c23 : cvtRnBf16F32 0xa6a3a450 = 0xa6a4 := by decide +kernel
+
+theorem c24 : cvtRnBf16F32 0x0c5c7fd0 = 0x0c5c := by decide +kernel
+
+theorem c25 : cvtRnBf16F32 0x128b2f33 = 0x128b := by decide +kernel
+
+theorem c26 : cvtRnBf16F32 0xd23f0824 = 0xd23f := by decide +kernel
+
+theorem c27 : cvtRnBf16F32 0x892f902b = 0x8930 := by decide +kernel
+
 end Verity.TC.Vectors

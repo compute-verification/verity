@@ -5,4 +5,5 @@ import Verity.TC.Proofs
 import Verity.TC.Ampere
 import Verity.TC.Sound
 import Verity.TC.AmpereSound
+import Verity.TC.Boundary
 import Verity.TC.Vectors

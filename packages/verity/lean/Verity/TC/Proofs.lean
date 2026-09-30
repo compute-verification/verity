@@ -6,3 +6,4 @@ import Verity.TC.Proofs.Group
 import Verity.TC.Proofs.SemGroup
 import Verity.TC.Proofs.Prod
 import Verity.TC.Proofs.Complete
+import Verity.TC.Proofs.Pack
