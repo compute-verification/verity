@@ -1,5 +1,6 @@
 # A port-lane capture on the Nebius cluster (the sm_120 GEMM correspondence, the FA2 capture, the e4m3 step probe, the 188-SM
-# kernels): queue circuits, priority circuits. It runs no Build, so it doesn't block a prover bench.
+# kernels): queue circuits, priority circuits. Its bootstrap is CPU-only (the venv, vLLM, the checkpoints; no native taps: a capture
+# doesn't use them; Commits that do run through config-run), writing its record under /workspace/jobs, never into the tree.
 #
 #   sky jobs launch -n capture-<what> tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml \
 #     --env CMD='python -m tc_probe ...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
@@ -50,7 +51,7 @@ setup: |
   [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
   cd "$SRC"
   cd integrations/vllm
-  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh --out /workspace/jobs/bootstrap/capture
+  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh --cpu --out /workspace/jobs/bootstrap/capture-cpu
 
 run: |
   set -euo pipefail

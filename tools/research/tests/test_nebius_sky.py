@@ -167,3 +167,29 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
         assert out.split("metadata: {name: provers}")[0] == (SKY / "kueue.yaml").read_text().split("metadata: {name: provers}")[0]
     pouw = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue-pouw.yaml"), "0"], capture_output=True, text=True, check=True).stdout
     assert pouw == (SKY / "kueue-pouw.yaml").read_text()
+
+
+def test_every_template_runs_from_a_job_private_tree_and_bootstraps_outside_it():
+    for f in sorted((SKY / "jobs").glob("*.yaml")):
+        t = f.read_text()
+        tasks = t.count("\nsetup: |")
+        assert t.count('JOB_SRC=/workspace/jobs/src/$(hostname)') == tasks >= 1, f.name        # uid 1000 can't write the synced tree
+        assert t.count("export SRC=/workspace/jobs/src/$(hostname)") == tasks, f.name
+        for line in (ln for ln in t.replace("\\\n", " ").splitlines() if "pod_bootstrap.sh" in ln):
+            assert "env -u REPO" in line and re.search(r'--out "?/workspace/jobs/', line), (f.name, line)
+    capture = (SKY / "jobs" / "port-capture.yaml").read_text()
+    assert "pod_bootstrap.sh --cpu --out" in capture                                           # a capture needs no native taps
+
+
+def test_submit_names_the_tools_it_is_missing(tmp_path):
+    import os
+    import shutil
+    import subprocess
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("bash", "git", "python3", "ssh", "curl", "dirname", "sed", "cat", "tr", "head", "awk", "grep"):
+        if path := shutil.which(tool):
+            os.symlink(path, bin_dir / tool)
+    r = subprocess.run(["bash", str(SKY / "submit.sh"), "prover-dev", "x"], capture_output=True, text=True,
+                       env={"PATH": str(bin_dir), "HOME": str(tmp_path)})
+    assert r.returncode == 2 and "missing on this machine: uv rsync" in r.stderr
