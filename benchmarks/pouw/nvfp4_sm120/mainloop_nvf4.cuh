@@ -18,7 +18,9 @@
 // scale words for four MMAs: rows 128 h + 16 q + 32 mi + [0, 16) (m16 block mi = 0..3; wm = w / 2 = 2 h + q) and columns
 // 32 i + 8 (2 wn + jl) + [0, 8) (n8 block (i, jl), i = 0..3, jl = 0..1; wn = w % 2).  acc[mi][i][jl][e] is the mma.sync
 // m16n8 accumulator of that block: element e at row + lane / 4 + 8 (e / 2), column + 2 (lane % 4) + e % 2 (Mainloop::row_of,
-// col_of).
+// col_of).  WIDE: columns 64 wn + 16 i + 8 jl + [0, 8) instead, a warp's 64 contiguous, so that store_bf16 writes rows of
+// 128 bytes (a warp's 16-byte store 4 lines, not 16: the epilogue's stores made 2,048 L1 tag requests a tile and SM, on the
+// pipe the other warps' ldmatrix take); its scale words then take four 8-byte loads a step, not two 16-byte ones.
 //
 // Host side: two CUtensorMaps (A, B), each UINT8, rank 2, globalDim {K / 2, rows}, globalStrides {K / 2}, box {64, TM} for A
 // and {64, 128} for B, SWIZZLE_64B, contiguous (64-byte aligned), passed by pointer; the scale buffers by address (16-byte
@@ -90,6 +92,9 @@ NV_DEV void ldsm4(uint32_t* r, uint32_t addr) {
 NV_DEV void lds128(uint32_t* r, uint32_t addr) {
   asm volatile("ld.shared.v4.b32 {%0, %1, %2, %3}, [%4];" : "=r"(r[0]), "=r"(r[1]), "=r"(r[2]), "=r"(r[3]) : "r"(addr));
 }
+NV_DEV void lds64(uint32_t* r, uint32_t addr) {
+  asm volatile("ld.shared.v2.b32 {%0, %1}, [%2];" : "=r"(r[0]), "=r"(r[1]) : "r"(addr));
+}
 NV_DEV void stsm4(uint32_t addr, uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3) {
   asm volatile("stmatrix.sync.aligned.m8n8.x4.shared.b16 [%0], {%1, %2, %3, %4};" ::"r"(addr), "r"(r0), "r"(r1), "r"(r2), "r"(r3)
                : "memory");
@@ -131,8 +136,8 @@ struct Maps { uint8_t a[128], b[128]; };
 // late, so that the two warps of an SMSP would reach their epilogues apart, gained nothing: the full barriers they share pull
 // them back within a few hundred cycles, r20260930-114329-edb6.  Folding each tile's BF16 store into the next tile's first
 // step, each group's 4 blocks stored just before the group overwrites them, measured 2.2% slower: fill job
-// nvf4-fold-3f7b3edf.)
-template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> struct Mainloop {
+// nvf4-fold-3f7b3edf.)  WIDE: each warp's 64 columns contiguous (above).
+template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int WIDE = 0> struct Mainloop {
   static constexpr int BN = 128, BK = 128, ROW = BK / 2, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
   static constexpr int REGS_P = RP, REGS_LAUNCH = 65536 / NT / 8 * 8, REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
                        REGS_C = REGS_FIT < 256 ? REGS_FIT : 256;
@@ -143,6 +148,7 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> str
   static constexpr uint32_t SCRATCH = STAGES * STAGE, SCR_WARP = 512 * SLOTS;
   static constexpr int SMEM = SCRATCH + SCR_WARP * NCW + 16 * STAGES;
   static_assert(SLOTS >= 1, "a 512-byte scratch slot a consumer warp");
+  static_assert(!WIDE || SLOTS == 4, "WIDE's store_bf16 stages an m16 block's 16 x 64 in 2 KB a warp");
   static_assert(TM == 128 || TM == 256, "TM x 128 tiles of 64 x 64 warp tiles");
   static_assert(STAGE % 512 == 0 && A_BYTES % 512 == 0 && SF_OFF % 512 == 0, "boxes on SWIZZLE_64B's 512-byte period");
   static_assert(SMEM <= 99 * 1024, "sm_120's 99 KB a block");
@@ -218,15 +224,18 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> str
 #pragma unroll
     for (int j = 0; j < 2; j++) {
       a_off[j] = (128 * h + 16 * q + (lane & 15)) * ROW + (((2 * j + (lane >> 4)) ^ ((lane >> 1) & 3)) << 4);
-      b_off[j] = A_BYTES + (16 * wn + (lane & 7) + 8 * (lane >> 4)) * ROW + (((2 * j + ((lane >> 3) & 1)) ^ ((lane >> 1) & 3)) << 4);
+      b_off[j] = A_BYTES + ((WIDE ? 64 : 16) * wn + (lane & 7) + 8 * (lane >> 4)) * ROW +
+                 (((2 * j + ((lane >> 3) & 1)) ^ ((lane >> 1) & 3)) << 4);
     }
     sfa_off = SF_OFF + h * 1024 + (16 * q + 8 * (lane & 1) + (lane >> 2)) * 16;
-    sfb_off = SF_OFF + SFA_BYTES + ((lane >> 2) + 16 * wn) * 16;
+    sfb_off = WIDE ? SF_OFF + SFA_BYTES + (lane >> 2) * 16 + 8 * wn : SF_OFF + SFA_BYTES + ((lane >> 2) + 16 * wn) * 16;
     scr = base + SCRATCH + SCR_WARP * warp;
   }
   // the accumulator element e of block (mi, i, jl) sits at (row_of(mi, e), col_of(i, jl, e)) of the tile
   NV_DEV int row_of(int mi, int e) const { return 128 * (wm >> 1) + 16 * (wm & 1) + 32 * mi + (lane_ >> 2) + 8 * (e >> 1); }
-  NV_DEV int col_of(int i, int jl, int e) const { return 32 * i + 8 * (2 * wn + jl) + 2 * (lane_ & 3) + (e & 1); }
+  NV_DEV int col_of(int i, int jl, int e) const {
+    return (WIDE ? 64 * wn + 16 * i + 8 * jl : 32 * i + 8 * (2 * wn + jl)) + 2 * (lane_ & 3) + (e & 1);
+  }
 
   // one 64-deep step's fragments: A's 4 m16 blocks, B's 8 n8 blocks, their scale words (sa[mi], sb[jl][i])
   struct Frag { uint32_t a[4][4], b[4][2][2], sa[4], sb[2][4]; };
@@ -234,13 +243,26 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> str
   NV_DEV void load_part(Frag& f, uint32_t st, int j, int g) const {
     ldsm4(f.a[g], st + a_off[j] + g * 32 * ROW);
     uint32_t r[4];
-    ldsm4(r, st + b_off[j] + g * 32 * ROW);
+    ldsm4(r, st + b_off[j] + g * (WIDE ? 16 : 32) * ROW);
     f.b[g][0][0] = r[0]; f.b[g][0][1] = r[1]; f.b[g][1][0] = r[2]; f.b[g][1][1] = r[3];
   }
+  // WIDE: B row 64 wn + 16 i + 8 jl + lane / 4's word sits at (16 (i % 2) + 8 jl + lane / 4) 16 + 4 (2 wn + i / 2) of an atom
   NV_DEV void load_scales(Frag& f, uint32_t st, int j) const {
     lds128(f.sa, st + sfa_off + j * 512);
-    lds128(f.sb[0], st + sfb_off + j * 512);
-    lds128(f.sb[1], st + sfb_off + 8 * 16 + j * 512);
+    if (WIDE) {
+#pragma unroll
+      for (int jl = 0; jl < 2; jl++)
+#pragma unroll
+        for (int p = 0; p < 2; p++) {
+          uint32_t r[2];
+          lds64(r, st + sfb_off + (16 * p + 8 * jl) * 16 + j * 512);
+          f.sb[jl][p] = r[0];
+          f.sb[jl][p + 2] = r[1];
+        }
+    } else {
+      lds128(f.sb[0], st + sfb_off + j * 512);
+      lds128(f.sb[1], st + sfb_off + 8 * 16 + j * 512);
+    }
   }
   NV_DEV void load(Frag& f, uint32_t st, int j) const {
     load_scales(f, st, j);
@@ -336,33 +358,58 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> str
         for (int i = 0; i < 4; i++)
 #pragma unroll
           for (int jl = 0; jl < 2; jl++)
-            *reinterpret_cast<float2*>(r + 32 * i + 8 * jl) = make_float2(acc[mi][i][jl][2 * hf], acc[mi][i][jl][2 * hf + 1]);
+            *reinterpret_cast<float2*>(r + (WIDE ? 16 : 32) * i + 8 * jl) =
+                make_float2(acc[mi][i][jl][2 * hf], acc[mi][i][jl][2 * hf + 1]);
       }
   }
   // BF16 (bf16x2), each 16 x 16 block (mi, i) of the warp's through a scratch slot: stmatrix writes the block's four 8 x 8
   // matrices as 16 rows of 32 bytes (chunk c of row r at c ^ (r / 4) % 2, bank-conflict free), then each lane reads 16 bytes
   // of row lane / 2 and stores them, so a warp's store is 16 rows' 32 contiguous bytes; SLOTS blocks a round, so that their
-  // reads are in flight together
+  // reads are in flight together.  WIDE: each m16 block mi's 16 x 64 through the warp's 2 KB: stmatrix writes block (mi, i)
+  // into 16 rows of 128 bytes (chunk c of row r at c ^ r % 8), then each lane reads 16 bytes of row 4 u + lane / 8 and stores
+  // them, so a warp's store is 4 rows' 128 contiguous bytes
   NV_DEV void store_bf16(uint16_t* C, int ldc, int tm, int tn, const float (&acc)[4][4][2][4]) const {
-    const int l = lane_, mm = l >> 3, r = (l & 7) + 8 * (mm >> 1);
-    const uint32_t st_addr = scr + r * 32 + (((mm & 1) ^ ((r >> 2) & 1)) << 4);
-    const uint32_t ld_addr = scr + (l >> 1) * 32 + (((l & 1) ^ ((l >> 3) & 1)) << 4);
-    uint16_t* p = C + ((size_t)tm * TM + 128 * (wm >> 1) + 16 * (wm & 1) + (l >> 1)) * ldc + (size_t)tn * BN + 16 * wn + 8 * (l & 1);
+    if constexpr (WIDE) {
+      const int l = lane_, mm = l >> 3, r = (l & 7) + 8 * (mm >> 1);
+      const uint32_t st_row = scr + r * 128, c0 = (mm & 1) ^ (l & 7), ld_row = scr + (l >> 3) * 128, c1 = (l & 7) ^ (l >> 3);
+      uint16_t* p = C + ((size_t)tm * TM + 128 * (wm >> 1) + 16 * (wm & 1) + (l >> 3)) * ldc + (size_t)tn * BN + 64 * wn + 8 * (l & 7);
 #pragma unroll
-    for (int g0 = 0; g0 < 16; g0 += SLOTS) {
+      for (int mi = 0; mi < 4; mi++) {
 #pragma unroll
-      for (int u = 0; u < SLOTS && g0 + u < 16; u++) {
-        const float(&x)[2][4] = acc[(g0 + u) / 4][(g0 + u) % 4];
-        stsm4(st_addr + 512 * u, bf16x2(x[0][0], x[0][1]), bf16x2(x[1][0], x[1][1]), bf16x2(x[0][2], x[0][3]),
-              bf16x2(x[1][2], x[1][3]));
+        for (int i = 0; i < 4; i++) {
+          const float(&x)[2][4] = acc[mi][i];
+          stsm4(st_row + ((c0 ^ (2 * i)) << 4), bf16x2(x[0][0], x[0][1]), bf16x2(x[1][0], x[1][1]), bf16x2(x[0][2], x[0][3]),
+                bf16x2(x[1][2], x[1][3]));
+        }
+        __syncwarp();
+        uint32_t v[4][4];
+#pragma unroll
+        for (int u = 0; u < 4; u++) lds128(v[u], ld_row + 512 * u + ((c1 ^ (4 * (u & 1))) << 4));
+#pragma unroll
+        for (int u = 0; u < 4; u++) stg128(p + (size_t)(32 * mi + 4 * u) * ldc, v[u]);
+        __syncwarp();
       }
-      __syncwarp();
-      uint32_t v[SLOTS][4];
+    } else {
+      const int l = lane_, mm = l >> 3, r = (l & 7) + 8 * (mm >> 1);
+      const uint32_t st_addr = scr + r * 32 + (((mm & 1) ^ ((r >> 2) & 1)) << 4);
+      const uint32_t ld_addr = scr + (l >> 1) * 32 + (((l & 1) ^ ((l >> 3) & 1)) << 4);
+      uint16_t* p = C + ((size_t)tm * TM + 128 * (wm >> 1) + 16 * (wm & 1) + (l >> 1)) * ldc + (size_t)tn * BN + 16 * wn + 8 * (l & 1);
 #pragma unroll
-      for (int u = 0; u < SLOTS && g0 + u < 16; u++) lds128(v[u], ld_addr + 512 * u);
+      for (int g0 = 0; g0 < 16; g0 += SLOTS) {
 #pragma unroll
-      for (int u = 0; u < SLOTS && g0 + u < 16; u++) stg128(p + (size_t)32 * ((g0 + u) / 4) * ldc + 32 * ((g0 + u) % 4), v[u]);
-      __syncwarp();
+        for (int u = 0; u < SLOTS && g0 + u < 16; u++) {
+          const float(&x)[2][4] = acc[(g0 + u) / 4][(g0 + u) % 4];
+          stsm4(st_addr + 512 * u, bf16x2(x[0][0], x[0][1]), bf16x2(x[1][0], x[1][1]), bf16x2(x[0][2], x[0][3]),
+                bf16x2(x[1][2], x[1][3]));
+        }
+        __syncwarp();
+        uint32_t v[SLOTS][4];
+#pragma unroll
+        for (int u = 0; u < SLOTS && g0 + u < 16; u++) lds128(v[u], ld_addr + 512 * u);
+#pragma unroll
+        for (int u = 0; u < SLOTS && g0 + u < 16; u++) stg128(p + (size_t)32 * ((g0 + u) / 4) * ldc + 32 * ((g0 + u) % 4), v[u]);
+        __syncwarp();
+      }
     }
   }
 };
