@@ -496,16 +496,24 @@ def weight_id(shape_index: int, i: int) -> int:
     return ((shape_index + 1) << 32) | i
 
 
-def sensors():
-    """A reader of the device's SM and memory clocks, temperature, power and throttle reasons: NVML's through pynvml where it
-    is installed, else nvidia-smi's, else None."""
-    dev = (os.environ.get("CUDA_VISIBLE_DEVICES") or "0").split(",")[0]
-    dev = int(dev) if dev.isdigit() else 0
+def device_uuid(torch) -> str:
+    """The current device's UUID as NVML and nvidia-smi name it (``GPU-…``). On a multi-GPU box CUDA's device order and
+    NVML's can differ, so the sensors and the versions find the device by it, not by an index."""
+    s = str(torch.cuda.get_device_properties(torch.cuda.current_device()).uuid)
+    return s if s.startswith("GPU-") else f"GPU-{s}"
+
+
+def sensors(uuid: str):
+    """A reader of the device ``uuid``'s SM and memory clocks, temperature, power and throttle reasons: NVML's through pynvml
+    where it is installed, else nvidia-smi's, else None."""
     try:
         import pynvml
 
         pynvml.nvmlInit()
-        h = pynvml.nvmlDeviceGetHandleByIndex(dev)
+        try:
+            h = pynvml.nvmlDeviceGetHandleByUUID(uuid)
+        except TypeError:
+            h = pynvml.nvmlDeviceGetHandleByUUID(uuid.encode())
         reasons = getattr(pynvml, "nvmlDeviceGetCurrentClocksEventReasons", None) or pynvml.nvmlDeviceGetCurrentClocksThrottleReasons
         return lambda: {"sm_mhz": pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM),
                         "mem_mhz": pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_MEM),
@@ -517,7 +525,7 @@ def sensors():
         return lambda: None
     keys = ("sm_mhz", "mem_mhz", "temp_c", "power_w", "throttle")
     for reasons in ("clocks_event_reasons.active", "clocks_throttle_reasons.active"):
-        query = ["nvidia-smi", "-i", str(dev), f"--query-gpu=clocks.sm,clocks.mem,temperature.gpu,power.draw,{reasons}",
+        query = ["nvidia-smi", "-i", uuid, f"--query-gpu=clocks.sm,clocks.mem,temperature.gpu,power.draw,{reasons}",
                  "--format=csv,noheader,nounits"]
         if subprocess.run(query, capture_output=True).returncode == 0:
             def smi(query=query) -> dict:
@@ -530,8 +538,9 @@ def sensors():
 def versions(torch) -> dict:
     """What a number here depends on beyond the source: the device, torch, CUDA, cuBLASLt, Triton, the driver, nvcc, and the
     power limit and clocks nvidia-smi reports."""
-    props = torch.cuda.get_device_properties(torch.cuda.current_device())
-    out: dict = {"device": props.name, "capability": f"{props.major}.{props.minor}", "sms": props.multi_processor_count,
+    props, uuid = torch.cuda.get_device_properties(torch.cuda.current_device()), device_uuid(torch)
+    out: dict = {"device": props.name, "uuid": uuid, "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+                 "capability": f"{props.major}.{props.minor}", "sms": props.multi_processor_count,
                  "l2_bytes": props.L2_cache_size, "memory_bytes": props.total_memory, "torch": torch.__version__,
                  "cuda": torch.version.cuda, "python": sys.version.split()[0], "numpy": np.__version__}
     try:
@@ -550,7 +559,7 @@ def versions(torch) -> dict:
     if shutil.which("nvidia-smi"):
         keys = ("driver_version", "power.limit", "clocks.applications.graphics", "clocks.applications.memory", "clocks.max.sm",
                 "clocks.max.mem", "persistence_mode", "pstate")
-        r = subprocess.run(["nvidia-smi", "-i", "0", f"--query-gpu={','.join(keys)}", "--format=csv,noheader"], capture_output=True,
+        r = subprocess.run(["nvidia-smi", "-i", uuid, f"--query-gpu={','.join(keys)}", "--format=csv,noheader"], capture_output=True,
                            text=True)
         out["nvidia_smi"] = dict(zip(keys, (v.strip() for v in r.stdout.split(",")))) if r.returncode == 0 else r.stderr[-300:]
     return out
@@ -566,7 +575,7 @@ class Clock:
         self.l2 = torch.cuda.get_device_properties(torch.cuda.current_device()).L2_cache_size
         self.buf = torch.zeros(self.l2, dtype=torch.float32, device="cuda")
         self.sink = torch.zeros((), dtype=torch.float32, device="cuda")
-        self.sample = sensors()
+        self.sample = sensors(device_uuid(torch))
 
     def burst(self, call, count: int, end=None, write: bool = False) -> dict:
         torch = self.torch

@@ -8,6 +8,7 @@ import json
 import math
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -168,6 +169,14 @@ def test_each_arm_runs_once_in_each_place_over_a_rotation():
     orders = [B.rotation(names, r) for r in range(len(names))]
     assert all(sorted(o) == sorted(names) for o in orders)
     assert all(sorted(o[i] for o in orders) == sorted(names) for i in range(len(names)))
+
+
+def test_the_sensors_find_the_device_by_its_uuid_not_an_index():
+    """CUDA's device order and NVML's can differ on a multi-GPU box: the UUID names the one the bench runs on."""
+    for raw in ("GPU-5b3d8f2a-0000-1111-2222-333344445555", "5b3d8f2a-0000-1111-2222-333344445555"):
+        props = SimpleNamespace(uuid=raw)
+        torch = SimpleNamespace(cuda=SimpleNamespace(current_device=lambda: 3, get_device_properties=lambda i: props))
+        assert B.device_uuid(torch) == "GPU-5b3d8f2a-0000-1111-2222-333344445555"
 
 
 def test_every_prover_arm_is_timed_at_the_flags_its_gate_checks():
