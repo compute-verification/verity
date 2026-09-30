@@ -49,7 +49,8 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     text = (SKY / "kueue.yaml").read_text()
     circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
     assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits and "borrowWithinCohort: {policy: Never}" in circuits
-    assert "borrowingLimit" not in text.split("metadata: {name: provers}")[1]                   # borrowing never preempts; provers reclaims
+    provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
+    assert provers.count("borrowingLimit: 0") == 3 == provers.count("nominalQuota")              # a borrowed bench is evicted by reclaim
     assert text.count("    withinClusterQueue: Never") == 2 and "LowerPriority" not in text   # never evict a running Build
     assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
