@@ -140,8 +140,8 @@ def parse_pearlc_split7b(argv: list[str]) -> dict:
 POUW_PEARLC_CENSUS = Tool(name="pouw_pearlc_census", version="1", command=["python", "benchmarks/pouw/pearlc_census.py"],
                           closure=["benchmarks/pouw/pearlc_census.py", "benchmarks/pouw/run_result.py",
                                    "packages/verity/src/verity/ml/tc/**"],
-                          key_params=["ks", "deltas", "tile", "families", "run", "forming", "line_norm"], produces=["bench-result/v1", "run-files/v1"],
-                          parse=parse_pearlc_census)
+                          key_params=["ks", "deltas", "tile", "families", "run", "forming", "line_norm", "atom"],
+                          produces=["bench-result/v1", "run-files/v1"], parse=parse_pearlc_census)
 POUW_PEARLC_ACTIVATIONS = Tool(name="pouw_pearlc_activations", version="1", command=["python", "benchmarks/pouw/pearlc_activations.py"],
                                closure=["benchmarks/pouw/pearlc_activations.py", "benchmarks/pouw/pearlc_census.py",
                                         "benchmarks/pouw/run_result.py", "packages/verity/src/verity/ml/tc/**"],

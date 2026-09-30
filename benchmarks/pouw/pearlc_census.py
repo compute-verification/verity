@@ -51,6 +51,27 @@ SIG = np.array([(c & 7) | (8 if c >> 3 else 0) for c in range(128)], dtype=np.in
 EXP1 = np.array([max(c >> 3, 1) for c in range(128)], dtype=np.int64)
 OFF, PSHIFT = -14, 17        # verity.ml.tc.term.E4M3: product_exponent_offset, product_shift
 
+# The accumulator step's adder width and exponent floor (`verity.ml.tc.models.GroupSum`, one group of 32): HOPPER_E4M3_K32, or
+# the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32 (mma.sync kind::f8f6f4 m16n8k32).
+ATOMS = {"hopper": (14, -139), "sm120": (26, -133)}
+ATOM = "hopper"
+WIDTH, ZERO_EXP = ATOMS[ATOM]
+
+
+def set_atom(name: str) -> None:
+    global ATOM, WIDTH, ZERO_EXP
+    ATOM = name
+    WIDTH, ZERO_EXP = ATOMS[name]
+
+
+def reference_atom(name: str):
+    from verity.ml.tc.models import HOPPER_E4M3_K32, GroupSum
+    if name == "hopper":
+        return HOPPER_E4M3_K32
+    width, zero = ATOMS[name]
+    return GroupSum(name="blackwell_sm120_e4m3_m16n8k32", arch="sm_120", dtype="e4m3", operand_bits=8, groups=(32,),
+                    width=width, zero_exponent=zero, validated="BLACKWELL_SM120_E4M3_M16N8K32 at verity 8eed14b0")
+
 
 def enc(x: np.ndarray) -> np.ndarray:
     a = np.minimum(np.abs(x), Q_MAX)
@@ -90,33 +111,41 @@ def step(C: np.ndarray, a: np.ndarray, b: np.ndarray):
     pexp = EXP1[ma] + EXP1[mb] + OFF
     pneg = ((a ^ b) & 0x80) != 0
     cneg, cexp, cmag = _fp32_parts(C)
-    mx = np.maximum(np.maximum(np.where(ss > 0, pexp, -10 ** 6).max(-1), np.where(cmag > 0, cexp, -10 ** 6)), -139)
+    W, rs = WIDTH, WIDTH - 24
+    mx = np.maximum(np.maximum(np.where(ss > 0, pexp, -10 ** 6).max(-1), np.where(cmag > 0, cexp, -10 ** 6)), ZERO_EXP)
     psh = np.clip(mx[:, None] - pexp, 0, 62)
     csh = np.clip(mx - cexp, 0, 62)
-    p10 = (ss << PSHIFT) >> 10
+    p10 = (ss << PSHIFT) << rs if rs >= 0 else (ss << PSHIFT) >> -rs
     ps = np.where(ss > 0, p10 >> psh, 0)
-    c10 = cmag >> 10
+    c10 = cmag << rs if rs >= 0 else cmag >> -rs
     cs = np.where(cmag > 0, c10 >> csh, 0)
-    lost = ((cmag & 0x3FF) != 0) | ((c10 & ((np.int64(1) << csh) - 1)) != 0)
+    lost = (c10 & ((np.int64(1) << csh) - 1)) != 0
+    if rs < 0:
+        lost |= (cmag & ((1 << -rs) - 1)) != 0
     lost |= ((ss > 0) & ((p10 & ((np.int64(1) << psh) - 1)) != 0)).any(-1)
     tot = np.where(pneg, -ps, ps).sum(-1) + np.where(cneg, -cs, cs)
     neg, m = tot < 0, np.abs(tot)
     bl = np.frexp(m.astype(np.float64))[1].astype(np.int64)
-    ex = mx + bl - 14
-    over = np.clip(bl - 14, 0, 62)
-    lost |= (bl > 14) & ((m & ((np.int64(1) << over) - 1)) != 0)
-    m = np.where(bl > 14, m >> over, m << np.clip(14 - bl, 0, 62))
+    ex = mx + bl - W
+    over = np.clip(bl - W, 0, 62)
+    lost |= (bl > W) & ((m & ((np.int64(1) << over) - 1)) != 0)
+    m = np.where(bl > W, m >> over, m << np.clip(W - bl, 0, 62))
     sub = ex < -126
     subsh = np.clip(-126 - ex, 0, 62)
     lost |= sub & ((m & ((np.int64(1) << subsh) - 1)) != 0)
     m = np.where(sub, m >> subsh, m)
     ex = np.where(sub, -126, ex)
-    v = np.ldexp((m << 10).astype(np.float64), (ex - 23).astype(np.int64))
-    return np.where(m == 0, 0.0, np.where(neg, -v, v)), ~lost
+    if rs >= 0:
+        lost |= (m & ((1 << rs) - 1)) != 0
+        m24 = m >> rs
+    else:
+        m24 = m << -rs
+    v = np.ldexp(m24.astype(np.float64), (ex - 23).astype(np.int64))
+    return np.where(m24 == 0, 0.0, np.where(neg, -v, v)), ~lost
 
 
-def selftest(cases: int = 3000) -> int:
-    from verity.ml.tc.models import HOPPER_E4M3_K32 as H
+def selftest(cases: int = 3000, atom: str = "hopper") -> int:
+    H = reference_atom(atom)
     rng = np.random.default_rng(7)
     a = (rng.integers(0, 0x7F, (cases, 32)) | rng.integers(0, 2, (cases, 32)) * 0x80).astype(np.uint8)
     b = (rng.integers(0, 0x7F, (cases, 32)) | rng.integers(0, 2, (cases, 32)) * 0x80).astype(np.uint8)
@@ -335,6 +364,43 @@ def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndar
     return flags, eF
 
 
+def debit_pure(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The replayed debit per word with no promotion (one chain over all of k): flag atom t when skipping it alone leaves the
+    word's final value unchanged. It contains the identities. Joint skips of several atoms are the chain's cross-atom hole,
+    which only TT_OUT carries once there are no promotion groups to bound them."""
+    P, k = a.shape
+    T = k // 32
+    Cs, C = [np.zeros(P)], np.zeros(P)
+    for t in range(T):
+        C, _ = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
+        Cs.append(C)
+    final = Cs[-1]
+    flags = np.zeros((P, T), dtype=bool)
+    for t in range(T):
+        C = Cs[t]
+        for h in range(t + 1, T):
+            C, _ = step(C, a[:, 32 * h:32 * h + 32], b[:, 32 * h:32 * h + 32])
+        flags[:, t] = C == final
+    return flags
+
+
+def ticket(a: np.ndarray, b: np.ndarray, G: int) -> np.ndarray:
+    """Each word's ticket: the promoted FP32 total (G > 0), or the one unpromoted chain's value (G = 0)."""
+    T = a.shape[1] // 32
+    if G:
+        return group_sums(a, b, G)[1].astype(np.float64)
+    C = np.zeros(a.shape[0])
+    for t in range(T):
+        C, _ = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
+    return C
+
+
+def exact_dot(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """The exact dot products of the codes' values: exact in float64, since every product is a multiple of 2^-18 below 2^18
+    and k <= 2^16 keeps every partial sum within 53 bits."""
+    return (val(a) * val(b)).sum(1)
+
+
 def group_sums(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
     """Each word's group accumulators (words, groups) and its final promoted total (the ticket word)."""
     T = a.shape[1] // 32
@@ -513,6 +579,8 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
     ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
     A, B = a[ii.ravel()], b[jj.ravel()]
     out = []
+    exact = exact_dot(A, B)
+    words = {G: ticket(A, B, G) for G in (0, 4)}
     for G in (0, 4):
         tid, tex, word_id, promo = chain(A, B, G)
         T = k // 32
@@ -522,7 +590,15 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                "atoms": T, "tile_identity_atoms": int(tid.sum()), "exact_run_atoms": exact_run_atoms(tex),
                "tile_exact_atoms": int(tex.sum()), "promotion_identities": promo, "word_identity": round(word_id, 6),
                "noise_free_entries": float(nfA.mean()), "double_rounding_differs": round((drA + drB) / 2, 6),
-               "skippable_share": skip / T}
+               "skippable_share": skip / T, "atom": ATOM,
+               "word_exact_share": round(float((words[G] == exact).mean()), 6),
+               "promoted_equals_unpromoted_share": round(float((words[0] == words[4]).mean()), 6)}
+        if not G and with_debit and ATOM != "hopper":
+            flags = debit_pure(A, B)
+            per_word = flags.sum(1)
+            row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
+                        "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
+                        "tile_all_flagged_share": round(float(flags.all(0).mean()), 6)})
         if G and with_debit:
             flags, eF = debit(A, B, G)
             per_word = flags.sum(1)
@@ -569,10 +645,13 @@ def main() -> None:
                     help="with --debit: run P1's greedy cross-group search on this many words per cell")
     ap.add_argument("--transfer-words", type=int, default=0,
                     help="with --debit and --forming s5: the reviewer's transfer test (simulated-draw greedy sets skipped on the real draw)")
+    ap.add_argument("--atom", choices=tuple(ATOMS), default="hopper",
+                    help="the accumulator step: HOPPER_E4M3_K32, or the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32")
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()
-    bad = selftest()
-    print(json.dumps({"selftest_cases": 3000, "mismatches": bad}), flush=True)
+    set_atom(args.atom)
+    bad = selftest(atom=args.atom)
+    print(json.dumps({"selftest_cases": 3000, "atom": args.atom, "mismatches": bad}), flush=True)
     if args.selftest or bad:
         sys.exit(1 if bad else 0)
     rows, cols = map(int, args.tile.split("x"))
@@ -588,7 +667,7 @@ def main() -> None:
     scored = [r for r in rows_out if r["in_domain"] and key in r]
     worst = max((r[key] for r in scored), default=0.0)
     worst_row = max(scored, key=lambda r: r[key], default=None)
-    doc = {"tool": "pouw_pearlc_census", "tile": args.tile, "forming": args.forming, "line_norm": args.line_norm, "selftest_mismatches": bad, "cells": rows_out,
+    doc = {"tool": "pouw_pearlc_census", "atom": args.atom, "tile": args.tile, "forming": args.forming, "line_norm": args.line_norm, "selftest_mismatches": bad, "cells": rows_out,
            "criterion": key, "worst_in_domain_skippable_share": worst, "worst_in_domain_cell": worst_row, "threshold": 1 / 400,
            "seconds": round(time.time() - t0, 1)}
     out = Path(args.out)
