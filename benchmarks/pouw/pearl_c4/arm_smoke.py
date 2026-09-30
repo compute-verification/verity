@@ -3,12 +3,13 @@
 shape and arm, each flag set prepared on BF16 operands of the fixture's kind, launched, gated (`check_gate`), its first
 ``all`` output's middle byte flipped and the gate rerun (it must refuse), and `known_bad` gated (it must refuse).  With
 --run-dir, the build gets ``transcripts_dir`` (RUN_DIR/transcripts), so the hash call dumps its transcript when freed, and
-the build record's ``verifier`` (arm interface v0.4, `check_verifier` when the harness has it) runs per shape as the
-harness's verify.py runs it: its commands in order, accepted only by a line starting ACCEPT that names the transcript's
-sha256, with no REJECT naming it and every command exiting 0.  One JSON object per line; exit 4 when any gate, control,
-check or verification fails.
+each arm's ``verifier`` (arm interface v0.4, `check_verifier` when the harness has it) goes to RUN_DIR/verifiers.json with
+the shapes dumped.  --verify-run RUN_DIR, on the CPU alone, runs them per shape as the harness's verify.py does: the
+commands in order, accepted only by a line starting ACCEPT that names the transcript's sha256, with no REJECT naming it and
+every command exiting 0.  One JSON object per line; exit 4 when any gate, control, check or verification fails.
 
-  python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx] [--run-dir D --commit SHA]
+  python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx] [--run-dir D]
+  python3 arm_smoke.py --verify-run D --run-id ID --commit SHA
 
 DIR holds the harness's arm.py (benchmarks/pouw/harness).  Shapes are MxKxN, as the harness's `Shape` orders them.
 """
@@ -71,17 +72,15 @@ def operands(d, shape, seed: int):
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--harness", type=Path, required=True)
+    ap.add_argument("--harness", type=Path)
     ap.add_argument("--shapes", nargs="*", default=["128x1024x256", "32x2048x384"])
     ap.add_argument("--arms", nargs="*", default=["PearlC4Nv", "PearlC4Mx"])
-    ap.add_argument("--run-dir", type=Path, help="dump each shape's transcript under RUN_DIR/transcripts and verify it")
+    ap.add_argument("--run-dir", type=Path, help="dump each shape's transcript under RUN_DIR/transcripts and record each "
+                    "arm's verifier in RUN_DIR/verifiers.json")
+    ap.add_argument("--verify-run", type=Path, metavar="RUN_DIR", help="no GPU: run the verifiers a --run-dir pass recorded")
     ap.add_argument("--run-id", default="arm-smoke")
     ap.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
     a = ap.parse_args(argv)
-    sys.path[:0] = [str(a.harness.resolve()), str(HERE)]
-    import arm as A
-    import pearl_c4_arm as PA
-
     ok = True
 
     def emit(row: dict) -> None:
@@ -89,6 +88,21 @@ def main(argv: list[str]) -> int:
         ok &= row.get("ok", True) is not False
         print(json.dumps(row, default=str), flush=True)
 
+    if a.verify_run:
+        recorded = json.loads((a.verify_run / "verifiers.json").read_text())
+        for name, rec in recorded.items():
+            for label in rec["shapes"]:
+                r = verify(rec["verifier"], a.verify_run.resolve(), a.run_id, a.commit, name, label)
+                emit({"arm": name, "shape": label, "ok": r["ok"], "verification": r})
+        emit({"verify": "pass" if ok and recorded else "FAIL"})
+        return 0 if ok and recorded else 4
+    if a.harness is None:
+        ap.error("--harness is required without --verify-run")
+    sys.path[:0] = [str(a.harness.resolve()), str(HERE)]
+    import arm as A
+    import pearl_c4_arm as PA
+
+    recorded: dict = {}
     for name in a.arms:
         arm = getattr(PA, name)()
         A.check_arm(arm, {"nvfp4", "mxfp4"})
@@ -96,6 +110,7 @@ def main(argv: list[str]) -> int:
         build = arm.build(ctx)
         v = A.check_verifier(arm.name, build) if hasattr(A, "check_verifier") else build["verifier"]
         emit({"arm": arm.name, "build": build, "verifier_checked": hasattr(A, "check_verifier")})
+        recorded[arm.name] = {"verifier": v, "shapes": []}
         d = arm.d
         for spec in a.shapes:
             m, k, n = (int(v) for v in spec.split("x"))
@@ -132,9 +147,9 @@ def main(argv: list[str]) -> int:
             bad.free()
             d.free(ops.a.ptr)
             d.free(ops.b.ptr)
-            if a.run_dir:
-                r = verify(v, a.run_dir, a.run_id, a.commit, arm.name, shape.label)
-                emit({"arm": arm.name, "shape": shape.label, "ok": r["ok"], "verification": r})
+            recorded[arm.name]["shapes"].append(shape.label)
+    if a.run_dir:
+        (a.run_dir / "verifiers.json").write_text(json.dumps(recorded, indent=1) + "\n")
     emit({"smoke": "pass" if ok else "FAIL"})
     return 0 if ok else 4
 
