@@ -12,9 +12,9 @@ from __future__ import annotations
 import re
 
 #: dtype -> (coordinate composite, binding record) in verity.ml.gemm, and the census line of its dense peak
-DTYPES = {"e4m3": ("GemmCoordinateE4m3", "GEMM_SM120_E4M3", "rtx-pro-6000-server/e4m3"),
-          "nvf4": ("GemmCoordinateNvf4", "GEMM_SM120_NVF4", "rtx-pro-6000-server/e2m1"),
-          "mxf4": ("GemmCoordinateMxf4", "GEMM_SM120_MXF4", "rtx-pro-6000-server/e2m1")}
+DTYPES = {"e4m3": ("GemmCoordinateE4m3", "GEMM_SM120_E4M3", "rtx-pro-6000-bse/e4m3"),
+          "nvf4": ("GemmCoordinateNvf4", "GEMM_SM120_NVF4", "rtx-pro-6000-bse/e2m1"),
+          "mxf4": ("GemmCoordinateMxf4", "GEMM_SM120_MXF4", "rtx-pro-6000-bse/e2m1")}
 
 
 def coordinate(dtype: str, K: int):
