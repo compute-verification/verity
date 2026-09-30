@@ -17,7 +17,8 @@ products.  The lemma's region is 1,024 rows x 512 columns of a unit's output, al
    `internal/pouw/cheap-binding/pearlc_exact_runs.py`'s metrics (steps, run32, tile, frag, win, rect), which are reported.
 4. `unit:<family>`, per census family: A and B, 8,192 x 8,192 codes each, formed on the card by §5 (the host draws X, s,
    rho, alpha, C and E' exactly as `form_s5` does; `formed` in sm120_chain/run.py at 8,192 rows), gated on 4,096 sampled
-   elements; the unpromoted chain with flags (2 GB), gated on 512 sampled words over all 256 atoms; then for every one of
+   elements; the unpromoted chain with flags (2 GB), gated on 512 sampled words over all 256 atoms (and `window_bits` on the
+   same words over every window, both orientations); then for every one of
    the 225 sliding 32-atom windows: the share of words exact over it, the natural 16 x 8 fragments exact over it, and a
    greedy biclique (rows by exact count, columns intersected; then every row holding the chosen columns added), on row
    bitsets and on column bitsets; on the 8 aligned windows and the 2 densest others, `intersect_greedy` too (from the 4
@@ -28,8 +29,13 @@ products.  The lemma's region is 1,024 rows x 512 columns of a unit's output, al
    on F2), and with the census's own flat line (E' = e4m3(σα/16), F ±11/4); per side, all rows and Π's admitted rows,
    the worst admitted row beside P3's 1/64 bound; `dead_mask` on the card, gated on 2,048 elements per screen against
    census.step.  The same A and B give the merge rates: Strassen's diagonal pair (sum and difference both E4M3, as pearlc_merge_rate.py)
-   and each of Strassen's 10 pre-adds, per element and per whole fragment (16 x 32 on A, 32 x 8 on B), and random pairs.
-5. Restartable: one JSON per item in --out, a state file, and exit 99 once --budget-min is spent while items remain; exit 0
+   and each of Strassen's 10 pre-adds, per element and per whole fragment (16 x 32 on A, 32 x 8 on B), and random pairs;
+   and the largest block where the diagonal pair's sum and difference are both E4M3 (`greedy` and `intersect_greedy` on
+   A11, A22 and B11, B22 in place: rows and columns are not permuted across quadrants).
+5. `acts:<linear>` with --acts DIR (a pearlc_capture directory; --acts-layers filters by regex): the same measurements with
+   A = the linear's captured token rows (the first multiple of 64) and B = its weight rows, formed as in 4; the region
+   search counts only words whose A row and B row Π admits (the noise-floor and liveness rules, unsplit).
+6. Restartable: one JSON per item in --out, a state file, and exit 99 once --budget-min is spent while items remain; exit 0
    after summary.json.  An item started 3 times without finishing fails the job (exit 1).
 
   gpu-lease 1 --wait -- env CUDA_DEVICE_ORDER=PCI_BUS_ID python3 benchmarks/pouw/sm120_exact/run.py --gpu lease \
@@ -120,8 +126,9 @@ class Dev(ChainDev):
         return flags, out
 
     def windows(self, flags: int, M: int, m: int, n: int, T: int, t0: int, nt: int, tr: int) -> np.ndarray:
+        assert (t0 + nt + 30) // 32 < (t0 >> 5) + 16
         self.launch("window_bits", ((m * n + 255) // 256, 1, 1), 256, 0,
-                    [u64(flags), u64(M), i32(m), i32(n), i32(T), i32(t0), i32(nt), i32(tr)])
+                    [u64(flags), u64(M), i32(m), i32(n), i32(T), i32(t0), i32(nt), i32(tr), i32(t0 >> 5)])
         self.sync()
         rows, cols = (n, m) if tr else (m, n)
         return self.fetch(M, nt * rows * (cols // 32), np.uint32).reshape(nt, rows, cols // 32)
@@ -190,15 +197,33 @@ def prep(X: np.ndarray, Fc: np.ndarray, rng: np.random.Generator):
 def operands(dev: Dev, fam: str, k: int, rows: int, run: int = 1):
     """A and B's codes formed on the card (device pointers, with C's), with the host inputs kept for the gates."""
     XA, XB, _, _ = census.family_rows(fam, k, 1.0, rows, rows, run)
+    return form_sides(dev, XA, XB, fam, k, run)
+
+
+def form_sides(dev: Dev, XA: np.ndarray, XB: np.ndarray, key: str, k: int, run: int = 1):
+    """§5's forming of activation rows XA and weight rows XB, with the census's seeds under `key`."""
     FcA, FcB = census.s5_lines(k, run, LINE_NORM)
     sides = {}
     for side, X, Fc in (("A", XA, FcA), ("B", XB, FcB)):
-        Cf, Ec, floor_ok, live_ok, flat = prep(X, Fc, census._rng(run, fam, k, 1.0, f"unit-{side}"))
+        Cf, Ec, floor_ok, live_ok, flat = prep(X, Fc, census._rng(run, key, k, 1.0, f"unit-{side}"))
         ptr, cptr = dev.form(Cf, Ec, Fc)
         sides[side] = {"ptr": ptr, "cptr": cptr, "C": Cf, "E": Ec, "F": Fc, "row_ok": floor_ok & live_ok, "flat": flat,
-                       "floor_ok": bool(floor_ok.all()), "live_ok": bool(live_ok.all())}
-    del XA, XB
+                       "rows": X.shape[0], "floor_ok": bool(floor_ok.all()), "live_ok": bool(live_ok.all())}
     return sides
+
+
+def capture_linear(rd: Path, name: str) -> tuple[np.ndarray, np.ndarray]:
+    """One linear of a pearlc_capture directory: X (its tokens, sha256-checked) and W from the manifest's snapshot."""
+    import pearlc_activations as PA
+    man = json.loads((rd / "manifest.json").read_text())
+    ent = man["inputs"][name]
+    f = rd / ent["file"]
+    if PA.sha256(f) != ent["sha256"]:
+        raise SystemExit(f"{f}: sha256 differs from {rd / 'manifest.json'}")
+    snap = Path(man["snapshot"])
+    wmap = json.loads((snap / "model.safetensors.index.json").read_text())["weight_map"]
+    wname = name + ".weight"
+    return np.load(f).astype(np.float64), PA.safetensor(snap / wmap[wname], wname).astype(np.float64)
 
 
 def dead_twin(Cf: np.ndarray, e: np.ndarray, f: int, r: np.ndarray, l: np.ndarray) -> np.ndarray:
@@ -482,6 +507,12 @@ def merge_stats(A: np.ndarray, Bs: np.ndarray, seed: int) -> dict:
         out[name] = {"element": round(float(ok.mean()), 6), "frag_hits": hits, "frags": total}
     both_a = LUT_BOTH[A11, A22]
     both_b = LUT_BOTH[B11, B22]
+    blocks = {}
+    for name, ok in (("A11,A22", both_a), ("B11,B22", both_b)):
+        bits = pack_rows(ok)
+        g = greedy(bits)
+        blocks[name] = {"plain": list(g["plain"]), "grown": list(g["grown"]), "intersect": list(intersect_greedy(bits)),
+                        "need_fragment": [16 if name[0] == "A" else 8, 32]}
     rng = np.random.default_rng(seed)
     q = 1 << 20
     ra = LUT_BOTH[A.ravel()[rng.integers(0, A.size, q)], A.ravel()[rng.integers(0, A.size, q)]]
@@ -491,7 +522,7 @@ def merge_stats(A: np.ndarray, Bs: np.ndarray, seed: int) -> dict:
     frags = sum(v["frags"] for v in out.values())
     return {"pair_A": round(float(both_a.mean()), 6), "pair_B": round(float(both_b.mean()), 6),
             "rand_A": round(float(ra.mean()), 6), "frag_both_A": [fa, fna], "frag_both_B": [fb, fnb],
-            "preadds": out, "preadd_frag_hits": hits, "preadd_frags": frags,
+            "preadds": out, "preadd_frag_hits": hits, "preadd_frags": frags, "pair_blocks": blocks,
             "zero_share_A": round(float(((A & 0x7F) == 0).mean()), 6), "zero_share_B": round(float(((Bs & 0x7F) == 0).mean()), 6)}
 
 
@@ -559,18 +590,38 @@ def refcheck(dev: Dev, fh) -> dict:
 
 def unit(dev: Dev, fh, fam: str, k: int, rows: int, seed: int) -> dict:
     t_start = time.time()
-    m = n = rows
-    T = k // 32
     sides = operands(dev, fam, k, rows)
+    return measure(dev, fh, f"unit:{fam}", fam, sides, k, seed, t_start, mask=False)
+
+
+def acts_unit(dev: Dev, fh, rd: Path, name: str, seed: int) -> dict:
+    """A captured linear as a unit: A = its token rows (the first multiple of 64), B = its weight rows; the region search
+    counts only words whose A row and B row Π admits (the unsplit rules)."""
+    t_start = time.time()
+    X, W = capture_linear(rd, name)
+    X = X[: X.shape[0] - X.shape[0] % 64]
+    sides = form_sides(dev, X, W, name, X.shape[1])
+    del X, W
+    res = measure(dev, fh, f"acts:{name}", name, sides, sides["A"]["C"].shape[1], seed, t_start, mask=True)
+    res["capture"] = str(rd)
+    return res
+
+
+def measure(dev: Dev, fh, item: str, label: str, sides: dict, k: int, seed: int, t_start: float, mask: bool) -> dict:
+    m, n = sides["A"]["rows"], sides["B"]["rows"]
+    T = k // 32
     rng = np.random.default_rng(seed)
-    res = {"item": f"unit:{fam}", "family": fam, "m": m, "n": n, "k": k, "atom": ATOM, "forming": "s5, delta 1, line norm 16",
+    okA, okB = sides["A"]["row_ok"], sides["B"]["row_ok"]
+    res = {"item": item, "family": label, "m": m, "n": n, "k": k, "atom": ATOM, "forming": "s5, delta 1, line norm 16",
            "rules_ok": all(sides[s]["floor_ok"] and sides[s]["live_ok"] for s in "AB"),
            "rejected_by": [f"{r}-{s}" for s in "AB" for r, v in (("noise-floor", sides[s]["floor_ok"]),
-                                                                    ("liveness", sides[s]["live_ok"])) if not v]}
+                                                                    ("liveness", sides[s]["live_ok"])) if not v],
+           "rows_admitted": {"A": int(okA.sum()), "B": int(okB.sum())}, "region_search_admitted_only": mask}
     codes = {}
     bad = 0
     res["salt_dead"] = {}
     for s in "AB":
+        rows = sides[s]["rows"]
         codes[s] = dev.fetch(sides[s]["ptr"], rows * k, np.uint8).reshape(rows, k)
         r, l = rng.integers(0, rows, 2048), rng.integers(0, k, 2048)
         bad += int((codes[s][r, l] != form_twin(sides[s]["C"], sides[s]["E"], sides[s]["F"], r, l)).sum())
@@ -601,13 +652,25 @@ def unit(dev: Dev, fh, fam: str, k: int, rows: int, seed: int) -> dict:
     nt = 15
     M = dev.alloc(4 * nt * m * (n // 32))
     wins, densest, strong = [], [], []
+    colA, colB = pack_rows(okA[None, :])[0], pack_rows(okB[None, :])[0]
+    wgot = np.lib.stride_tricks.sliding_window_view(got, WIN, axis=1).all(2)
+    win_bad = 0
     for t0 in range(0, T - WIN + 1, nt):
         cnt = min(nt, T - WIN + 1 - t0)
         rb = dev.windows(flags, M, m, n, T, t0, cnt, 0)
         cb = dev.windows(flags, M, m, n, T, t0, cnt, 1)
+        want_w = wgot[:, t0:t0 + cnt].T
+        win_bad += int((((rb[:, ii, jj >> 5] >> (jj & 31)) & 1).astype(bool) != want_w).sum())
+        win_bad += int((((cb[:, jj, ii >> 5] >> (ii & 31)) & 1).astype(bool) != want_w).sum())
+        dens = popc(rb).sum((1, 2)) / (m * n)
+        if mask:
+            rb[:, ~okA] = 0
+            rb &= colB
+            cb[:, ~okB] = 0
+            cb &= colA
         for q in range(cnt):
             g_r, g_c = greedy(rb[q]), greedy(cb[q])
-            d = float(popc(rb[q]).sum()) / (m * n)
+            d = float(dens[q])
             wins.append({"t": t0 + q, "density": round(d, 6), "frags16x8": fragments_exact(rb[q]), "by_rows": g_r, "by_cols": g_c})
             if (t0 + q) % WIN == 0:
                 strong.append({"t": t0 + q, "density": round(d, 6), "rows_x_cols": list(intersect_greedy(rb[q])),
@@ -622,6 +685,11 @@ def unit(dev: Dev, fh, fam: str, k: int, rows: int, seed: int) -> dict:
     dev.free(M)
     for p in (flags, sides["A"]["ptr"], sides["B"]["ptr"]):
         dev.free(p)
+    res["window_gate"] = {"words": 512, "windows": T - WIN + 1, "orientations": 2, "mismatches": win_bad}
+    res["ok"] = win_bad == 0
+    if not res["ok"]:
+        emit(fh, {"gate_failed": {"item": item, "window_gate": res["window_gate"]}})
+        return res
     t_win = time.time()
 
     def area(x):
@@ -666,6 +734,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--nvcc", default=shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--acts", default=None, help="a pearlc_capture directory: each captured linear is a unit")
+    ap.add_argument("--acts-layers", default=".", help="regex over the capture's linear names")
     args = ap.parse_args()
     t0 = time.time()
     out_dir = Path(args.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out")
@@ -673,6 +743,9 @@ def main() -> None:
     fh = open(out_dir / "log.jsonl", "a")
     census.set_atom(ATOM)
     items = ["refcheck", *(f"unit:{f}" for f in args.families.split(",") if f)]
+    if args.acts:
+        names = json.loads((Path(args.acts) / "manifest.json").read_text())["inputs"]
+        items += [f"acts:{x}" for x in names if re.search(args.acts_layers, x)]
     state_path = out_dir / "state.json"
     state = json.loads(state_path.read_text()) if state_path.exists() else {"done": [], "starts": {}}
     todo = [x for x in items if x not in state["done"]]
@@ -719,6 +792,8 @@ def main() -> None:
         ts = time.time()
         if item == "refcheck":
             res = refcheck(dev, fh)
+        elif item.startswith("acts:"):
+            res = acts_unit(dev, fh, Path(args.acts), item.split(":", 1)[1], args.seed)
         else:
             res = unit(dev, fh, item.split(":", 1)[1], args.k, args.rows, args.seed)
         res.update({"identity": ident, "build_cubin_sha256": rec["cubin_sha256"], "clocks": nvml.read(),

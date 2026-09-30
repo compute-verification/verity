@@ -208,22 +208,23 @@ extern "C" __global__ void __launch_bounds__(128) chain_flags(const uint8_t* __r
 
 // For the 32-atom windows starting at t0 .. t0 + nt - 1, word (i, j) exact on every atom of [t, t + 32): with tr = 0, row
 // bitsets, M[t - t0][i][j / 32] bit j % 32; with tr = 1, column bitsets, M[t - t0][j][i / 32] bit i % 32.  One warp per 32
-// consecutive words of a row (tr = 0) or a column (tr = 1); T / 32 <= 16 flag planes.  m, n % 32 == 0, m * n % blockDim == 0.
+// consecutive words of a row (tr = 0) or a column (tr = 1); the flag planes read are pbase .. pbase + 15, so every window
+// t of the launch needs (t + 31) / 32 < pbase + 16.  m, n % 32 == 0, m * n % blockDim == 0.
 extern "C" __global__ void window_bits(const uint32_t* __restrict__ flags, uint32_t* __restrict__ M, int m, int n, int T,
-                                       int t0, int nt, int tr) {
+                                       int t0, int nt, int tr, int pbase) {
   const size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
   if (idx >= static_cast<size_t>(m) * n) return;
   const size_t i = tr ? idx % m : idx / n, j = tr ? idx / m : idx % n, word = i * n + j;
   const int planes = T >> 5;
   uint32_t f[17];
 #pragma unroll
-  for (int p = 0; p < 16; ++p) f[p] = p < planes ? flags[static_cast<size_t>(p) * m * n + word] : 0u;
+  for (int p = 0; p < 16; ++p) f[p] = pbase + p < planes ? flags[static_cast<size_t>(pbase + p) * m * n + word] : 0u;
   f[16] = 0u;
   const size_t dst = tr ? j * (m >> 5) + (i >> 5) : i * (n >> 5) + (j >> 5), plane = static_cast<size_t>(m) * (n >> 5);
   for (int t = t0; t < t0 + nt; ++t) {
     bool ok = false;
     if (t + 32 <= T) {
-      const int p = t >> 5, s = t & 31;
+      const int p = (t >> 5) - pbase, s = t & 31;
       uint32_t lo = f[0], hi = f[1];
 #pragma unroll
       for (int q = 0; q < 16; ++q)
