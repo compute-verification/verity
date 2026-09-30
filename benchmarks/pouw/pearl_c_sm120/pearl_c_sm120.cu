@@ -2,7 +2,7 @@
 // pearl_c.py on pearl_c_device.SM120) and the plain FP8 GEMMs, for run.py and arm.py.  Every kernel takes one Args by value:
 // 16 pointers p[] and 16 ints i[].  sm_120 has no wgmma, TMA multicast or tcgen05: the products are warp-level mma.sync
 // (kind::f8f6f4 m16n8k32 E4M3 for every FP8 atom, m16n8k16 BF16 for the peel) fed by ldmatrix from shared memory that
-// cp.async fills, within 99 KB of shared memory per block.
+// cp.async fills (TMA on the 128 x 128 GEMMs: mainloop_sm120.cuh), within 99 KB of shared memory per block.
 //
 // Layout (fixture.py's `rowmajor`): every operand is a row-major byte matrix with its depth contiguous, byte k of row r at
 // r * depth + k.  So are A' (m x k) and B~ (n x k), the model's own FP8 layout; E and E' (rows x 32); the F lines (k x 32, line t
@@ -15,6 +15,8 @@
 #include <cuda_fp8.h>
 
 #include "../pearl_c/hash_sm120.cuh"
+#include "../pouw_hash/pouw_hash.cuh"
+#include "mainloop_sm120.cuh"
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)
 DEV float bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }
@@ -55,8 +57,9 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 }
 
 // ---------------------------------------------------------------- the GEMM
-// A (M x K) and B (N x K) row-major E4M3.  One CTA of 8 warps per TM x BN tile: 128 x 128 (warp tile 64 x 32), 64 x 64
-// (16 x 32) for decode's few rows, where 128 x 128 tiles leave most SMs idle, or 128 x 32 (16 x 32) for the 32-column words
+// A (M x K) and B (N x K) row-major E4M3.  One CTA of 8 warps per TM x BN tile (gemm_body's: the 128 x 128 GEMMs are
+// ml_body's, below): 64 x 64 (warp tile 16 x 32) for decode's few rows, where 128 x 128 tiles leave most SMs idle, or 128 x 32
+// (16 x 32) for the 32-column words
 // (A'F_B, B~F_A, G) at M a multiple of 128; persistent over tiles in groups of `i[3]` tile
 // rows; a 4-deep cp.async pipeline of 64-byte stages (two atoms each).  G is the promotion period: every 32 G products (G / 2
 // stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every
@@ -65,7 +68,8 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control for a fused epilogue's digests
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
+//   PEARLC_B  PEARLC_S with the -h1 message digests of C~ and U from registers (ml_body only)
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_B };
 constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
   return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
@@ -277,17 +281,156 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   }
 }
 
+// The 128 x 128 GEMMs on bc-fb55a759's mainloop (mainloop_sm120.cuh: TMA into 3 stages of 128 bytes of depth, a producer
+// warpgroup, 8 consumer warps of 64 x 32, the chain word for word gemm_body's), with gemm_body's epilogues; PEARLC_B's is GPU 2's
+// fused one (bc-7442ca43's gemm_pearlc_b: each (row, 32-column chunk)'s message of C~ and U hashed from registers by
+// pouw_hash's quad_msg_digest_b3, BLAKE3 keyed by blake3("pearl-c/h1/message"), into p9 in hash_msg_v's layout), its 1 KB of
+// scratch per warp in the tail stage's P_A rows once every consumer has read its peel fragments.  p10 the four tensor maps
+// (ml::Maps; P_A, P_B the peel's, else A, B again), p11 the message key.
+constexpr int ML_NT = 384;
+template <int G> constexpr int ML_RP = G ? 24 : 40;   // the producer's registers: the mainloop's recommended v1 and v2
+template <int G> constexpr int ML_U = G ? 1 : 2;      // stages per K-loop iteration (v1 at 2 spills under nvcc 13.0)
+template <int MODE, int G> DEV void ml_body(const Args& a) {
+  constexpr bool PEEL = MODE >= M_PEARLC, HASH = MODE == M_PEARLC_B;
+  constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
+  using L = ml::Mainloop<128, 128, G, 3, PEEL, 1, ML_RP<G>>;
+  constexpr int MI = L::MI, NI = L::NI;
+  static_assert(L::NT == ML_NT && MI == 4 && NI == 4, "gemm_body's 128 x 128 fragments: 8 warps of 64 x 32");
+  extern __shared__ __align__(1024) uint8_t ml_smem[];
+  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
+  const int tiles_m = M / 128, tiles_n = N / 128;
+  L ml(ml_smem);
+  ml.roles(reinterpret_cast<const ml::Maps*>(a.p[10]), M, N, K, group);
+  for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
+    int tm, tn;
+    ml::raster(t, tiles_m, tiles_n, group, tm, tn);
+    float acc[MI][NI][4], total[MI][NI][4];
+    ml.template tile<ML_U<G>, true>(K, acc, total);
+    // a block boundary (never taken): scheduled among the chain's last MMAs, the plain epilogue spills v1
+    if (MODE == M_PLAIN && K < 0) __trap();
+    uint32_t tid;
+    asm volatile("mov.u32 %0, %%tid.x;" : "=r"(tid));   // the epilogue's indices afresh each tile (hoisted, they spill)
+    const int warp = tid / 32, lane = tid % 32, wm = warp / L::WARPS_N, wn = warp % L::WARPS_N;
+    const int a_row = wm * L::WM + (lane & 15), a_half = lane >> 4;
+    const int b_row = wn * L::WN + (lane & 7) + ((lane >> 4) << 3), b_half = (lane >> 3) & 1;
+    const int g = lane >> 2, q = lane & 3;
+    const int row0 = tm * 128 + wm * L::WM + g, col0 = tn * 128 + wn * L::WN + 2 * q;
+    float* C = reinterpret_cast<float*>(a.p[2]);   // read here, from the parameter bank, not held through the mainloop
+    float* U = reinterpret_cast<float*>(a.p[3]);
+    uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
+    const float* rs = reinterpret_cast<const float*>(a.p[7]);
+    const float* cs = reinterpret_cast<const float*>(a.p[8]);
+    if constexpr (MODE == M_PLAIN) {
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) {
+        const int row = row0 + 16 * mi;
+        const float r0 = rs[row], r1 = rs[row + 8];
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          const int col = col0 + 8 * ni;
+          const float c0 = cs[col], c1 = cs[col + 1];
+          store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
+          store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+        }
+      }
+    } else if constexpr (STORE_C) {
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          const int row = row0 + 16 * mi, col = col0 + 8 * ni;
+          store2(C + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
+          store2(C + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+        }
+    }
+    if constexpr (PEEL) {
+      if constexpr (HASH) {
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+            for (int e = 0; e < 4; e++) acc[mi][ni][e] = total[mi][ni][e];   // C~, beside U
+      }
+      const uint32_t pa0 = ml.tail_wait(), pb0 = pa0 + L::A_BYTES;
+      // with C~ held beside U, one step's fragments at a time (hoisting all four spills v1)
+#pragma unroll(HASH ? 1 : 4)
+      for (int s = 0; s < 4; s++) {
+        uint32_t fa[MI][4], fb[NI][2];
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], pa0 + swz128(a_row + 16 * mi, 2 * s + a_half));
+#pragma unroll
+        for (int nj = 0; nj < NI / 2; nj++) {
+          uint32_t r[4];
+          ldsm4(r, pb0 + swz128(b_row + 16 * nj, 2 * s + b_half));
+          fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+        }
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++) hmma(total[mi][ni], fa[mi], fb[ni]);
+      }
+      if constexpr (!HASH) ml.tail_release();
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) {
+        const int row = row0 + 16 * mi;
+        const float r0 = rs[row], r1 = rs[row + 8];
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          const int col = col0 + 8 * ni;
+          const float c0 = cs[col], c1 = cs[col + 1];
+          if constexpr (STORE_U) {
+            store2(U + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1]);
+            store2(U + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3]);
+          }
+          store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
+          store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+        }
+      }
+      if constexpr (HASH) {
+        asm volatile("bar.sync 1, %0;" ::"n"(L::NCT) : "memory");   // every consumer's peel reads of the tail are done
+        uint64_t* scratch = reinterpret_cast<uint64_t*>(ml_smem + (pa0 - ml.base)) + 128 * warp;
+        const uint32_t* kp = reinterpret_cast<const uint32_t*>(a.p[11]);
+        uint32_t key[8];
+        asm volatile("ld.global.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(key[0]), "=r"(key[1]), "=r"(key[2]), "=r"(key[3]) : "l"(kp));
+        asm volatile("ld.global.v4.u32 {%0, %1, %2, %3}, [%4];" : "=r"(key[4]), "=r"(key[5]), "=r"(key[6]), "=r"(key[7]) : "l"(kp + 4));
+        uint8_t* const dg = reinterpret_cast<uint8_t*>(a.p[9]) + (size_t)(tn * 128 + wn * L::WN) / 32 * 32;
+        const int per = N / 32, row = tm * 128 + wm * L::WM;
+        auto region = [&](auto pc) {
+          constexpr int p = decltype(pc)::value;
+          auto frag = [&](int arr, int j, int i) { return arr ? total[2 * p + (j >> 2)][j & 3][i] : acc[2 * p + (j >> 2)][j & 3][i]; };
+          uint32_t h[8];
+          ph::quad_msg_digest_b3<2>(frag, key, scratch, h);
+          uint4* o = reinterpret_cast<uint4*>(dg + (size_t)(row + ph::pearlc::narrow_row(p, lane)) * per * 32);
+          o[0] = make_uint4(h[0], h[1], h[2], h[3]);
+          o[1] = make_uint4(h[4], h[5], h[6], h[7]);
+        };
+        region(Int<0>{});
+        region(Int<1>{});
+        ml.tail_release();
+      }
+    }
+  }
+}
+
 // G4: pearl-c-sm120-v1 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted;
-// _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile
+// _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile; ML_GEMM: the 128 x 128 tile on the mainloop, _s y alone, _b fused
+#define ML_GEMM(NAME, MODE, G)                                                                                \
+  extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, G>(a); } \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM; }
 #define GEMM(NAME, MODE, TM, BN, G)                                                                                 \
   extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN>(); }
-GEMM(gemm_plain, M_PLAIN, 128, 128, 4)
-GEMM(gemm_fast, M_PLAIN, 128, 128, 0)
-GEMM(gemm_ct, M_CT, 128, 128, 4)
-GEMM(gemm_pearlc, M_PEARLC, 128, 128, 4)
-GEMM(gemm_ct_u, M_CT, 128, 128, 0)
-GEMM(gemm_pearlc_u, M_PEARLC, 128, 128, 0)
+ML_GEMM(gemm_plain, M_PLAIN, 4)
+ML_GEMM(gemm_fast, M_PLAIN, 0)
+ML_GEMM(gemm_ct, M_CT, 4)
+ML_GEMM(gemm_pearlc, M_PEARLC, 4)
+ML_GEMM(gemm_ct_u, M_CT, 0)
+ML_GEMM(gemm_pearlc_u, M_PEARLC, 0)
+ML_GEMM(gemm_pearlc_s, M_PEARLC_S, 4)
+ML_GEMM(gemm_pearlc_s_u, M_PEARLC_S, 0)
+ML_GEMM(gemm_pearlc_b, M_PEARLC_B, 4)
+ML_GEMM(gemm_pearlc_b_u, M_PEARLC_B, 0)
 GEMM(gemm_ct_d, M_CT, 64, 64, 4)
 GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
