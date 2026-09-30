@@ -685,6 +685,24 @@ def layout_gate(dev, row: str, instr: str | None, rng) -> dict:
 
 
 BOOTSTRAP = {"name": "RTX PRO 6000", "sms": 188, "min_driver": 575}  # server.md's bootstrap checks for the card
+SMI_FIELDS = ("name,driver_version,vbios_version,pci.bus_id,clocks.sm,clocks.mem,clocks.max.sm,temperature.gpu,power.draw,"
+              "clocks_event_reasons.active")
+
+
+def smi_query(uuid: str, fields: str, nounits: bool = False) -> dict | None:
+    """``nvidia-smi --query-gpu`` for one device; when the whole query fails (a field this driver doesn't know), field by field."""
+    fmt = "--format=csv,noheader" + (",nounits" if nounits else "")
+
+    def q(f: str) -> list[str] | None:
+        p = subprocess.run(["nvidia-smi", f"--id={uuid}", f"--query-gpu={f}", fmt], capture_output=True, text=True)
+        return [s.strip() for s in p.stdout.split(",")] if p.returncode == 0 else None
+
+    names = fields.split(",")
+    vals = q(fields)
+    if vals is not None and len(vals) == len(names):
+        return dict(zip(names, vals))
+    out = {n: (v or [None])[0] for n in names for v in [q(n)]}
+    return out if any(v is not None for v in out.values()) else None
 
 
 def identity_gate(dev, expect_uuid: str | None, bootstrap: dict | None = None) -> tuple[dict, list[str]]:
@@ -697,9 +715,7 @@ def identity_gate(dev, expect_uuid: str | None, bootstrap: dict | None = None) -
     if expect_uuid and info["gpu_uuid"].lower() != expect_uuid.lower():
         failures.append(f"device UUID {info['gpu_uuid']} != --expect-gpu-uuid {expect_uuid}")
     if info["gpu_uuid"] != "GPU-fake":
-        q = "name,driver_version,vbios_version,pci.bus_id,clocks.sm,clocks.mem,clocks.max.sm,temperature.gpu,power.draw,clocks_throttle_reasons.active"
-        smi = subprocess.run(["nvidia-smi", f"--id={info['gpu_uuid']}", f"--query-gpu={q}", "--format=csv,noheader"], capture_output=True, text=True)
-        info["nvidia_smi"] = dict(zip(q.split(","), (s.strip() for s in smi.stdout.split(",")))) if smi.returncode == 0 else None
+        info["nvidia_smi"] = smi_query(info["gpu_uuid"], SMI_FIELDS)
         info["driver"] = (info["nvidia_smi"] or {}).get("driver_version")
         if info["compute_capability"] != "12.0":
             failures.append(f"compute capability {info['compute_capability']} is not sm_120")

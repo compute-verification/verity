@@ -53,7 +53,7 @@ def parse_w1(argv: list[str]) -> dict:
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--target-cycles", type=int, default=1 << 27)
     ap.add_argument("--compile-only", action="store_true")
-    ap.add_argument("--locked-clocks", action="store_true")
+    ap.add_argument("--clocks", default="unlocked")
     ap.add_argument("--expect-gpu-uuid", default=None)
     ns, unknown = ap.parse_known_args(_argv_after(argv, "w1.py"))
     out = vars(ns)
@@ -77,7 +77,7 @@ W1_PRICES = Tool(
     name="w1_prices", version="1",
     command=["python", "tools/tc_probe_fp4/w1.py"],
     closure=_CLOSURE,
-    key_params=["seed", "reps", "target_cycles", "compile_only", "locked_clocks"],
+    key_params=["seed", "reps", "target_cycles", "compile_only", "clocks"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
     produces=["bench-result/v1", "run-files/v1"],

@@ -88,7 +88,7 @@ def test_tool_declarations_resolve():
     _, k = TC_PROBE_FP8.resolve_params(["python", "tools/tc_probe_fp4/fp8.py", "--row", "chain", "--out", "/x", "--expect-gpu-uuid", "GPU-1"])
     assert k["row"] == "chain" and k["instruction"] is None and k["steps"] == 2048
     _, k = W1_PRICES.resolve_params(["python", "tools/tc_probe_fp4/w1.py", "--out", "/x", "--reps", "12"])
-    assert k["reps"] == 12 and k["locked_clocks"] is False
+    assert k["reps"] == 12 and k["clocks"] == "unlocked"
 
 
 @pytest.mark.slow

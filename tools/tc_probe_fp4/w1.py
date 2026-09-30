@@ -260,9 +260,7 @@ def numeric_gate(dev, rng) -> tuple[dict, dict[int, np.ndarray]]:
 def smi_sample(uuid: str | None) -> dict | None:
     if not uuid or uuid == "GPU-fake":
         return None
-    q = "clocks.sm,clocks.mem,temperature.gpu,power.draw,clocks_throttle_reasons.active"
-    p = subprocess.run(["nvidia-smi", f"--id={uuid}", f"--query-gpu={q}", "--format=csv,noheader,nounits"], capture_output=True, text=True)
-    return dict(zip(q.split(","), (s.strip() for s in p.stdout.split(",")))) if p.returncode == 0 else None
+    return F8.smi_query(uuid, "clocks.sm,clocks.mem,temperature.gpu,power.draw,clocks_event_reasons.active", nounits=True)
 
 
 def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uuid: str | None) -> dict:
@@ -307,7 +305,7 @@ def run(args) -> tuple[int, dict]:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     res: dict = {"schema": "tc-probe-fp4/w1/v1", "fake_silicon": bool(args.fake_silicon), "seed": args.seed, "reps": args.reps,
-                 "target_cycles": args.target_cycles, "clocks": "locked" if args.locked_clocks else "unlocked"}
+                 "target_cycles": args.target_cycles, "clocks": args.clocks}
     failures: list[str] = []
     so = None
     if not args.fake_silicon or Path(P4.nvcc_bin()).exists():
@@ -376,7 +374,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--target-cycles", type=int, default=1 << 27, help="cycles per timed launch (about 50 ms at 2.6 GHz)")
     ap.add_argument("--compile-only", action="store_true", help="build + SASS gate only (no GPU)")
-    ap.add_argument("--locked-clocks", action="store_true", help="the SM clock was locked on this GPU (nvidia-smi -i IDX -lgc) at GPU 6's value")
+    ap.add_argument("--clocks", default="unlocked", help="the clock state the operator set, as results label it (e.g. locked-2100)")
     ap.add_argument("--expect-gpu-uuid", default=None, help="the device's UUID from internal/pouw/rtx-pro/server.md; a mismatch stops the run")
     ap.add_argument("--fake-silicon", action="store_true", help="host models stand in for the device (CPU dry run; never evidence)")
     ap.add_argument("--corrupt-word", type=int, default=None, help="with --fake-silicon: flip one bit of one gate word; the run must fail")

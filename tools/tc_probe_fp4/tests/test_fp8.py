@@ -126,6 +126,17 @@ def test_identity_gate_bootstrap_checks(monkeypatch):
     assert info["driver"] == "570.153.02" and info["uuid_checked"] is False
 
 
+def test_smi_query_survives_an_unknown_field(monkeypatch):
+    def run(argv, **k):
+        f = argv[2].split("=", 1)[1]
+        ok = "clocks_event_reasons" not in f
+        return type("P", (), {"returncode": 0 if ok else 2, "stdout": ", ".join(x.upper() for x in f.split(",")) if ok else ""})()
+
+    monkeypatch.setattr(fp8.subprocess, "run", run)
+    got = fp8.smi_query("GPU-x", "driver_version,clocks.sm,clocks_event_reasons.active")
+    assert got == {"driver_version": "DRIVER_VERSION", "clocks.sm": "CLOCKS.SM", "clocks_event_reasons.active": None}
+
+
 def test_fake_silicon_refused_under_research_run(monkeypatch, tmp_path):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     assert fp8.main(["--row", "fadd", "--out", str(tmp_path), "--fake-silicon"]) == 2
