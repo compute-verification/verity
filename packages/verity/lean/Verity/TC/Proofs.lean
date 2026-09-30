@@ -1,0 +1,9 @@
+import Verity.TC.Proofs.Step
+import Verity.TC.Proofs.Words
+import Verity.TC.Proofs.Norm
+import Verity.TC.Proofs.Fold
+import Verity.TC.Proofs.Group
+import Verity.TC.Proofs.SemGroup
+import Verity.TC.Proofs.Prod
+import Verity.TC.Proofs.Complete
+import Verity.TC.Proofs.Pack

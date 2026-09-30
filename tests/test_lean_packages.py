@@ -65,3 +65,14 @@ def test_every_record_merges_with_the_driver():
              if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
     assert not stale, (f"reads digests that are not the SHA-256 of their definitions (`python tools/lean/merge.py --normalize "
                        f"FILE` recomputes them): {stale}")
+
+
+CORE = ROOT / "packages" / "verity" / "lean"
+
+
+def test_core_package_has_no_dependencies():
+    """Core's own proofs (`packages/verity/lean`) live in a package of their own that requires nothing: core depends on no
+    backend, and a Lean dependency would put one in its build."""
+    assert CORE in lake_packages()
+    assert "require" not in (CORE / "lakefile.toml").read_text()
+    assert json.loads((CORE / "lake-manifest.json").read_text())["packages"] == []
