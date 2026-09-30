@@ -1206,9 +1206,9 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
     return env
 
 
-def _kueue_owns_every_gpu(path: str | None = None) -> bool:
-    try:
-        return Path(path or DIRECT_GPUS_FILE).read_text().strip() == "none"
+def _kueue_owns_every_gpu() -> bool:
+    try:   # GPU_LEASE_ALLOWED_FILE: the same override gpu-lease reads (tests point it away from the host's file)
+        return Path(os.environ.get("GPU_LEASE_ALLOWED_FILE") or DIRECT_GPUS_FILE).read_text().strip() == "none"
     except OSError:
         return False
 

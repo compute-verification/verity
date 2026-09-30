@@ -348,7 +348,7 @@ def test_a_direct_run_sees_no_gpu_once_kueue_owns_every_gpu(tmp_path, monkeypatc
     """After the cutover (`/etc/vy/direct-gpus` = none) the runner blanks CUDA_VISIBLE_DEVICES for every direct run, even one whose
     --env names a GPU; before it (a direct set) or on a machine without the file, the run's environment is left alone."""
     split = tmp_path / "direct-gpus"
-    monkeypatch.setattr(remote, "DIRECT_GPUS_FILE", str(split))
+    monkeypatch.setenv("GPU_LEASE_ALLOWED_FILE", str(split))
     req = {"env": {"CUDA_VISIBLE_DEVICES": "0"}}
     for text, want in (("none\n", ""), ("4,5,6,7\n", "0")):
         split.write_text(text)
