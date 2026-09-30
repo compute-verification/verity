@@ -181,7 +181,9 @@ UE4M3_VALID = np.array([c for c in range(0x80) if c != 0x7F], dtype=np.uint8)  #
 
 
 def uuid_allowed(uuid: str | None, expect: str) -> bool:
-    """``--expect-uuid`` is one UUID or a comma list (a lease picks the GPU: every UUID the host's table allows)."""
+    """``--expect-uuid`` is one UUID or a comma list (a lease picks the GPU: every UUID the host's table allows), environment
+    variables expanded: ``'$GPU_LEASE_UUID'`` is the GPU node 2's ``gpu-lease`` gave the job (unset, it stays literal and fails)."""
+    expect = os.path.expandvars(expect)
     return uuid is not None and uuid in {u.strip() for u in expect.split(",") if u.strip()}
 
 

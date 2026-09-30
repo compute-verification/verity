@@ -189,9 +189,13 @@ def test_sparse_dense_twins_are_the_identities_each_truth_implies(no_nvcc, tmp_p
     assert halves["dense_two_atoms"] == 0 and halves["dense_atom"] == 0 and halves["dense_on_compressed"] > 0
 
 
-def test_expect_uuid_takes_one_uuid_or_a_list():
+def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):
     assert P.uuid_allowed("GPU-a", "GPU-a") and P.uuid_allowed("GPU-a", "GPU-b, GPU-a")
     assert not P.uuid_allowed("GPU-a", "GPU-b") and not P.uuid_allowed(None, "GPU-a") and not P.uuid_allowed("", ",")
+    monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
+    assert not P.uuid_allowed("GPU-a", "$GPU_LEASE_UUID")
+    monkeypatch.setenv("GPU_LEASE_UUID", "GPU-a")
+    assert P.uuid_allowed("GPU-a", "$GPU_LEASE_UUID") and not P.uuid_allowed("GPU-b", "$GPU_LEASE_UUID")
 
 
 def test_sparse_gates_fail_closed(no_nvcc, tmp_path, monkeypatch):
