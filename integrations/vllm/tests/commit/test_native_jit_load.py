@@ -19,15 +19,17 @@ import pytest
 
 from verity_vllm.commit.committer import native_jit as nj
 
-_RUN = ("import importlib.util, pathlib, sys\n"
-        "spec = importlib.util.spec_from_file_location('native_jit_cases', sys.argv[1])\n"
-        "cases = importlib.util.module_from_spec(spec)\n"
-        "spec.loader.exec_module(cases)\n"
-        "getattr(cases, sys.argv[2]).__wrapped__(pathlib.Path(sys.argv[3]))\n")
+_RUN = ("import pathlib, sys, types\n"
+        "path, name, tmp = sys.argv[1:4]\n"
+        "cases = sys.modules['native_jit_cases'] = types.ModuleType('native_jit_cases')\n"
+        "cases.__file__ = path\n"
+        "exec(compile(open(path).read(), path, 'exec'), cases.__dict__)\n"
+        "getattr(cases, name).__wrapped__(pathlib.Path(tmp))\n")
 
 
 def _isolated(case):
-    """The test, run as `case(tmp_path)` in a fresh interpreter of this module; its failure is reported with the child's output."""
+    """The test, run as `case(tmp_path)` in a fresh interpreter of this module; its failure is reported with the child's output.  The
+    child compiles this file from source, never from a cached `.pyc`, whose mtime check a same-size edit within a second passes."""
     @functools.wraps(case)
     def test(tmp_path):
         r = subprocess.run([sys.executable, "-c", _RUN, __file__, case.__name__, str(tmp_path)], capture_output=True, text=True)
