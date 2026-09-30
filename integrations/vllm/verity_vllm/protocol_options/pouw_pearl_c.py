@@ -52,14 +52,15 @@ SPLIT_DOMAIN = b"verity/pouw/pearl-c/split/v1\0"
 
 # ---- the channel split --------------------------------------------------------------------------------------------
 
-def row_ok(words: Sequence[int]) -> bool:
+def row_ok(words: Sequence[int] | np.ndarray) -> bool:
     """The pinned domain rules on one row of FP32 words: the noise floor σ·α ≥ 1 and liveness (at most len/64 entries at
     |x| ≥ 8σ), with s, ρ and α as `pearl_c.s5_stats` computes them."""
-    _, rho, alpha, _ = C.s5_stats(words)
+    words = np.asarray(words, np.uint32)
+    _, rho, alpha, _ = C.s5_stats([int(v) for v in words])
     r, a = P.f32_of_bits(rho), P.f32_of_bits(alpha)
     if r * a < P.SIGMA_MIN:
         return False
-    dead = sum(1 for w in words if abs(P.f32_of_bits(w)) >= P.TAU_IDLE * r)
+    dead = int((np.abs(words.view(np.float32).astype(np.float64)) >= P.TAU_IDLE * r).sum())
     return dead <= P.EPS_IDLE * len(words)
 
 
@@ -93,30 +94,47 @@ class Split:
         return hashlib.sha256(SPLIT_DOMAIN + struct.pack(f"<II{len(self.side)}I", self.k, len(self.side), *self.side)).digest()
 
 
+def _rules(vals: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The cheap-binding lane's float64 statement of the rules (`pearlc_headline.rules`): floor ok, live ok and σ per row."""
+    s = np.abs(vals).max(1)
+    sig = np.sqrt((vals[:, ::8].astype(np.float64) ** 2).mean(1))
+    alpha = np.where(s + 4 * sig > 0, 448.0 / np.maximum(s + 4 * sig, 1e-300), 0.0)
+    return sig * alpha >= 1.0, (np.abs(vals) >= 8 * sig[:, None]).sum(1) * 64 <= vals.shape[1], sig
+
+
 def calibrate_split(x: np.ndarray, w: np.ndarray, budget: int = 512, batch: int = 4) -> Split:
-    """S for one layer from calibration rows x (tokens x k) and its weight w (n x k), both FP32 values.  The cheap-binding
-    lane's `split_channels` ranking: move the `batch` channels that offend the most failing rows, an entry at or above 8σ of a
-    row failing liveness or above 444ρ of a row failing the floor.  It stops when every row of both passes `row_ok` on
-    the unit's padded channels, or at `budget`."""
+    """S for one layer from calibration rows x (tokens x k) and its weight w (n x k), both FP32 values.
+    - The ranking is the cheap-binding lane's `split_channels`, in its float64 statement: move the `batch` channels that offend
+      the most failing rows, an entry at or above 8σ of a row failing liveness or above 444ρ of a row failing the floor.
+    - When no row fails that statement, every row is checked exactly by `row_ok` on the unit's padded channels; a row that
+      fails there joins the ranking as failing, and the loop goes on.
+    - It stops when every row passes `row_ok`, or at `budget`."""
     k = x.shape[1]
     side: list[int] = []
+    forced: list[set[int]] = [set(), set()]
     while True:
         split = Split(k, tuple(sorted(side)))
         kept = split.kept
         off = np.zeros(len(kept))
         failing = 0
-        for vals in (x, w):
-            words = split.unit_words(np.ascontiguousarray(vals, np.float32).view(np.uint32))
-            for i, row in enumerate(words):
-                if row_ok([int(v) for v in row]):
-                    continue
-                failing += 1
-                _, rho, alpha, _ = C.s5_stats([int(v) for v in row])
-                r = P.f32_of_bits(rho)
-                mags = np.abs(vals[i, kept].astype(np.float64))
-                floor_bad = r * P.f32_of_bits(alpha) < P.SIGMA_MIN
-                off += (mags > 444 * r) if floor_bad else (mags >= P.TAU_IDLE * r)
-        if failing == 0 or len(side) >= budget:
+        for vals, extra in zip((x, w), forced):
+            vk = vals[:, kept]
+            fl, lv, sig = _rules(vk)
+            bad = ~(fl & lv)
+            bad[list(extra)] = True
+            failing += int(bad.sum())
+            if bad.any():
+                mags, sb = np.abs(vk[bad]).astype(np.float64), sig[bad][:, None]
+                floor_bad = ~fl[bad][:, None] | (fl[bad] & lv[bad])[:, None]
+                off += ((floor_bad & (mags > 444 * sb)) | (~lv[bad][:, None] & (mags >= 8 * sb))).sum(0)
+        if failing == 0:
+            exact = [{i for i, row in enumerate(split.unit_words(np.ascontiguousarray(v, np.float32).view(np.uint32)))
+                      if not row_ok(row)} for v in (x, w)]
+            if not any(exact):
+                return split
+            forced = exact
+            continue
+        if len(side) >= budget:
             return split
         order = np.argsort(-off, kind="stable")
         top = [int(kept[j]) for j in order[:batch] if off[j] > 0] or [int(kept[order[0]])]
