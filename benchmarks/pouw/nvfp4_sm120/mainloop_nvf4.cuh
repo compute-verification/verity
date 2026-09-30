@@ -302,25 +302,72 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> str
       const uint32_t done = empty(s);
       step(acc, f0, f1, stage(s), 1, true, [] {});
       advance();
-      const bool more = kt + 1 < KT || next;
-      if (LATE) {
-        group(acc, f1, 0);
-        mbar_release(done);
-        const bool ready = more && mbar_ready_warp(full(s), ph);
-        rest(acc, f1, f0, stage(s), 0, ready);
-        if (more && !ready) {
-          mbar_wait_warp(full(s), ph);
-          load(f0, stage(s), 0);
-        }
-      } else {
-        step(acc, f1, f0, stage(s), 0, more, [&] {
-          mbar_release(done);
-          if (more) mbar_wait_warp(full(s), ph);
-        });
-      }
+      second(acc, f1, done, kt + 1 < KT || next);
     }
     primed = next;
   }
+  // a stage's second step (f1's MMAs), after its first: releases the stage (`done`) and, if `more`, loads the next stage's
+  // first fragments into f0
+  NV_DEV void second(float (&acc)[4][4][2][4], const Frag& f1, uint32_t done, bool more) {
+    if (LATE) {
+      group(acc, f1, 0);
+      mbar_release(done);
+      const bool ready = more && mbar_ready_warp(full(s), ph);
+      rest(acc, f1, f0, stage(s), 0, ready);
+      if (more && !ready) {
+        mbar_wait_warp(full(s), ph);
+        load(f0, stage(s), 0);
+      }
+    } else {
+      step(acc, f1, f0, stage(s), 0, more, [&] {
+        mbar_release(done);
+        if (more) mbar_wait_warp(full(s), ph);
+      });
+    }
+  }
+  // tile() with the previous tile's store_bf16 (tile (ptm, ptn) of C, if `prev`: acc holds its chain on entry) folded into
+  // this tile's first step: before group g of it overwrites its 4 accumulator blocks, put() and emit() store them, so a
+  // warp's stores sit between its MMA groups instead of after its last.  The last tile's store is store_bf16's.
+  NV_DEV void tile_bf16(int K, float (&acc)[4][4][2][4], bool next, bool prev, uint16_t* C, int ldc, int ptm, int ptn) {
+    static_assert(SLOTS == 4, "a group's 4 blocks a round");
+    const int KT = K / BK;
+    Frag f1;
+    if (!primed) {
+      mbar_wait_warp(full(s), ph);
+      load(f0, stage(s), 0);
+    }
+    const uint32_t done = empty(s), st = stage(s);
+#pragma unroll
+    for (int g = 0; g < 4; g++) {
+      if (prev) {
+        uint32_t v[4][4];
+        put(v, g, acc);
+        emit(C, ldc, ptm, ptn, g, v);
+      }
+#pragma unroll
+      for (int u = 0; u < 4; u++)
+#pragma unroll
+        for (int jl = 0; jl < 2; jl++)
+#pragma unroll
+          for (int e = 0; e < 4; e++) acc[blk_mi(g, u)][blk_i(g, u)][jl][e] = 0.0f;
+      group(acc, f0, g);
+      if (g == 0) load_scales(f1, st, 1);
+      load_part(f1, st, 1, g);
+    }
+    advance();
+    second(acc, f1, done, KT > 1 || next);
+#pragma unroll 1
+    for (int kt = 1; kt < KT; kt++) {
+      const uint32_t d = empty(s);
+      step(acc, f0, f1, stage(s), 1, true, [] {});
+      advance();
+      second(acc, f1, d, kt + 1 < KT || next);
+    }
+    primed = next;
+  }
+  // the 4 accumulator blocks (mi, i) group g writes, u = 0..3: BORDER 0 (g, u), 1 (u, g)
+  NV_DEV static constexpr int blk_mi(int g, int u) { return BORDER == 0 ? g : u; }
+  NV_DEV static constexpr int blk_i(int g, int u) { return BORDER == 0 ? u : g; }
 
   // ---- epilogues: tile (tm, tn) of C, row-major with ldc elements a row
   NV_DEV void store_f32(float* C, int ldc, int tm, int tn, const float (&acc)[4][4][2][4]) const {
@@ -362,6 +409,29 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0> str
       for (int u = 0; u < SLOTS && g0 + u < 16; u++) stg128(p + (size_t)32 * ((g0 + u) / 4) * ldc + 32 * ((g0 + u) % 4), v[u]);
       __syncwarp();
     }
+  }
+  // store_bf16's round for group g's 4 blocks, in two halves: put() writes them to the slots and reads them back into v,
+  // emit() stores v to tile (tm, tn) of C
+  NV_DEV void put(uint32_t (&v)[4][4], int g, const float (&acc)[4][4][2][4]) const {
+    const int l = lane_, mm = l >> 3, r = (l & 7) + 8 * (mm >> 1);
+    const uint32_t st_addr = scr + r * 32 + (((mm & 1) ^ ((r >> 2) & 1)) << 4);
+    const uint32_t ld_addr = scr + (l >> 1) * 32 + (((l & 1) ^ ((l >> 3) & 1)) << 4);
+#pragma unroll
+    for (int u = 0; u < 4; u++) {
+      const float(&x)[2][4] = acc[blk_mi(g, u)][blk_i(g, u)];
+      stsm4(st_addr + 512 * u, bf16x2(x[0][0], x[0][1]), bf16x2(x[1][0], x[1][1]), bf16x2(x[0][2], x[0][3]),
+            bf16x2(x[1][2], x[1][3]));
+    }
+    __syncwarp();
+#pragma unroll
+    for (int u = 0; u < 4; u++) lds128(v[u], ld_addr + 512 * u);
+  }
+  NV_DEV void emit(uint16_t* C, int ldc, int tm, int tn, int g, const uint32_t (&v)[4][4]) const {
+    const int l = lane_;
+    uint16_t* p = C + ((size_t)tm * TM + 128 * (wm >> 1) + 16 * (wm & 1) + (l >> 1)) * ldc + (size_t)tn * BN + 16 * wn + 8 * (l & 1);
+#pragma unroll
+    for (int u = 0; u < 4; u++) stg128(p + (size_t)32 * blk_mi(g, u) * ldc + 32 * blk_i(g, u), v[u]);
+    __syncwarp();
   }
 };
 
