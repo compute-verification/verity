@@ -545,9 +545,13 @@ int main(int argc, char** argv) {
         auto launch = [&](auto kern) {
           return [&, kern](int b, int t, size_t s, long long it, Rec* r) { kern<<<b, t, s>>>((int)it, ks, r, dg, y, nullptr); };
         };
-        snprintf(nm, sizeof nm, "epi w4 k%d %s", 32 * ks, hash ? "hash" : "nohash");
-        if (hash) row(filter, "epi", nm, k_epi<1, 4>, bytes, 128, 0, base + 4 * 1024, launch(k_epi<1, 4>), ex, macs);
-        else row(filter, "epi", nm, k_epi<0, 4>, bytes, 128, 0, base, launch(k_epi<0, 4>), ex, macs);
+        // w4 at every resident block, then at one block per SM: the difference is how much a second block's tile loop hides
+        // the first one's hashing
+        for (int one : {0, 1}) {
+          snprintf(nm, sizeof nm, "epi w4 k%d %s%s", 32 * ks, hash ? "hash" : "nohash", one ? " 1cta" : "");
+          if (hash) row(filter, "epi", nm, k_epi<1, 4>, bytes, 128, one, base + 4 * 1024, launch(k_epi<1, 4>), ex, macs);
+          else row(filter, "epi", nm, k_epi<0, 4>, bytes, 128, one, base, launch(k_epi<0, 4>), ex, macs);
+        }
         snprintf(nm, sizeof nm, "epi w8 k%d %s", 32 * ks, hash ? "hash" : "nohash");
         if (hash) row(filter, "epi", nm, k_epi<1, 8>, bytes, 256, 0, base + 8 * 1024, launch(k_epi<1, 8>), ex, macs);
         else row(filter, "epi", nm, k_epi<0, 8>, bytes, 256, 0, base, launch(k_epi<0, 8>), ex, macs);
