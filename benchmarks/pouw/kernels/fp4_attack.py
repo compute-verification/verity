@@ -161,16 +161,21 @@ def _lib(so: Path):
 
 
 def _check_identity(expect_uuid: str | None) -> dict:
-    """One visible device; its UUID equals --expect-uuid (from server.md).  A guard never fails open (AGENTS.md)."""
+    """One visible device; its UUID equals --expect-uuid (from server.md) and gpu-lease's GPU_LEASE_UUID when set.  A guard
+    never fails open (AGENTS.md).  nvidia-smi ignores CUDA_VISIBLE_DEVICES and lists every GPU on the node, so it is asked
+    for the visible device only (``-i``; gpu-lease sets CUDA_DEVICE_ORDER=PCI_BUS_ID, nvidia-smi's own order)."""
     vis = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+    lease = os.environ.get("GPU_LEASE_UUID") or None
     smi = shutil.which("nvidia-smi")
     uuid = None
     if smi:
-        r = subprocess.run([smi, "--query-gpu=uuid", "--format=csv,noheader"], capture_output=True, text=True, check=False)
+        sel = ["-i", vis] if vis and "," not in vis else []
+        r = subprocess.run([smi, *sel, "--query-gpu=uuid", "--format=csv,noheader"], capture_output=True, text=True, check=False)
         lines = [x.strip() for x in r.stdout.splitlines() if x.strip()]
         uuid = lines[0] if len(lines) == 1 else f"{len(lines)} devices visible"
-    ok = (expect_uuid is None) or (uuid == expect_uuid)
-    return {"ok": ok, "cuda_visible_devices": vis, "device_uuid": uuid, "expect_uuid": expect_uuid}
+    want = expect_uuid or lease
+    ok = uuid is not None and uuid.startswith("GPU-") and (want is None or uuid == want) and (lease is None or uuid == lease)
+    return {"ok": ok, "cuda_visible_devices": vis, "device_uuid": uuid, "expect_uuid": expect_uuid, "gpu_lease_uuid": lease}
 
 
 def measure(kind: str, so: Path, warmup: int, reps: int, sustain_s: float, warps_per_sm: int = 16,

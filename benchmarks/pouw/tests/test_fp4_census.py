@@ -77,6 +77,37 @@ def test_attack_kernel_tables_and_fragments_are_consistent():
     assert (sp[:, :, 8] == 0x44444444).all()                                   # valid 2:4 ordered metadata everywhere
 
 
+def test_identity_gate_reads_only_the_leased_device(monkeypatch):
+    """nvidia-smi lists every GPU on a node whatever CUDA_VISIBLE_DEVICES says (node 2, server.md 06:35Z), so the gate asks
+    for the visible device with -i and checks it against gpu-lease's GPU_LEASE_UUID; anything else fails closed."""
+    from types import SimpleNamespace
+
+    from kernels import fp4_attack as A
+
+    node = [f"GPU-{i}" for i in range(8)]
+    calls = []
+
+    def smi(argv, **_):
+        calls.append(argv)
+        out = [node[int(argv[argv.index("-i") + 1])]] if "-i" in argv else node
+        return SimpleNamespace(stdout="\n".join(out) + "\n")
+
+    monkeypatch.setattr(A.shutil, "which", lambda _: "/usr/bin/nvidia-smi")
+    monkeypatch.setattr(A.subprocess, "run", smi)
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "4")
+    monkeypatch.setenv("GPU_LEASE_UUID", "GPU-4")
+    ok = A._check_identity(None)
+    assert ok["ok"] and ok["device_uuid"] == "GPU-4" and calls[-1][1:3] == ["-i", "4"]
+    assert A._check_identity("GPU-4")["ok"] and not A._check_identity("GPU-5")["ok"]
+    monkeypatch.setenv("GPU_LEASE_UUID", "GPU-5")                              # the lease names another GPU
+    assert not A._check_identity(None)["ok"]
+    monkeypatch.delenv("GPU_LEASE_UUID")
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES")                                  # unrestricted: all 8 visible
+    assert A._check_identity(None)["device_uuid"] == "8 devices visible" and not A._check_identity(None)["ok"]
+    monkeypatch.setattr(A.shutil, "which", lambda _: None)                      # no nvidia-smi at all
+    assert not A._check_identity(None)["ok"]
+
+
 def test_base_split_dense_noise_gives_no_saving():
     """Dense row-relative noise (delta=1/4) changes enough codes that the salt-free base split ties the honest MMA."""
     rng = np.random.default_rng(9)
