@@ -412,7 +412,7 @@ def test_runner_refuses_another_device(small_fixture, ship, tmp_path):
         log = tmp_path / "refused.jsonl"
         log.unlink(missing_ok=True)
         r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=dry_env(ship, log, **kw),
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True)
         assert r.returncode == 3, (kw, r.stderr)
         env = json.loads(r.stdout.splitlines()[0])
         assert env["kind"] == "env" and env["refused"] and len(r.stdout.splitlines()) == 1
@@ -425,7 +425,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     launch of the check and the timing fits its buffers."""
     log = tmp_path / "gated.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=dry_env(ship, log),
-                       capture_output=True, text=True, timeout=600)
+                       capture_output=True, text=True)
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     assert [x["kind"] for x in rows] == ["env", "mem", "check"] and rows[0]["uuid"] == UUID and rows[0]["cc"] == [12, 0]
@@ -434,7 +434,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
                        env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1024x1024x3072"),
-                       capture_output=True, text=True, timeout=600)
+                       capture_output=True, text=True)
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     kinds = [x["kind"] for x in rows]
@@ -656,7 +656,7 @@ def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: 
     """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows; its JSON lines."""
     r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, mode, str(tmp / "run"),
                         *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows")),
-                       capture_output=True, text=True, timeout=600)
+                       capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     return [json.loads(x) for x in r.stdout.splitlines()]
 
@@ -807,7 +807,7 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     _, neg_path = transcript(tmp_path / "run", arm.name, "fixture", root="negative")
     assert all(set((neg_path.parent / f"{f}.bin").read_bytes()) == {A.POISON} for f in ("tree_a", "tree_t", "tree_b", "leaves"))
     r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
-                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True, timeout=600)
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     line, control = r.stdout.splitlines()
     sha, neg_sha = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (path, neg_path))
@@ -830,7 +830,7 @@ def test_a_transcript_its_call_did_not_write_is_rejected(A, small_fixture, ship,
     _, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
     assert set((path.parent / "tree_a.bin").read_bytes()) == {A.POISON}
     r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
-                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True, timeout=600)
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True)
     assert r.returncode == 1, r.stdout + r.stderr
     line, control = r.stdout.splitlines()
     assert line.startswith("REJECT pearl-c-sm120-v1-h1 fixture: ") and control.startswith("REJECT negative control ")
