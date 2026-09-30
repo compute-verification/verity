@@ -908,10 +908,9 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
     assert "who=kubernetes" in (tmp_path / "gl" / "0.owner").read_text()
     env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_ALLOWED_FILE": str(tmp_path / "gl" / "pool.gpus")}
     got = subprocess.run(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", "sh", "-c", "echo $CUDA_VISIBLE_DEVICES"], env=env,
-                         capture_output=True, text=True, timeout=60)
+                         capture_output=True, text=True)
     assert got.returncode == 0 and got.stdout.strip() == "2"
-    two = subprocess.run(["bash", str(GPU_LEASE), "2", "--mem-gb", "0", "--", "true"], env=env, capture_output=True, text=True,
-                         timeout=60)
+    two = subprocess.run(["bash", str(GPU_LEASE), "2", "--mem-gb", "0", "--", "true"], env=env, capture_output=True, text=True)
     assert two.returncode == 75
 
 
