@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Share one machine's GPUs between concurrent runs: one lock file per GPU, held with flock(1).
 #
-#   gpu-lease N [--wait] [--on LIST] [--max-min M] -- CMD...
+#   gpu-lease N [--wait] [--on LIST] [--max-min M] [--mem-gb G] -- CMD...
 #                                                take N free GPUs and run CMD with CUDA_VISIBLE_DEVICES naming them
 #   gpu-lease status                             one line per GPU: index, free or held, and the holder: minutes held, pid, run
 #                                                id, who, UUID, start and command
@@ -31,6 +31,11 @@
 # the n-th earliest of the allowed GPUs' "free by": now for a free GPU, a lease's until=, else its start plus $GPU_LEASE_MAX_MIN
 # (default 30, the servers' lease rule), else now for a lease past that.  So a timed window waiting for the last long lease to
 # drain keeps the other GPUs busy with jobs that will be gone when it can start.
+#
+# Memory: CMD runs in a systemd user scope with MemoryMax=G GiB and no swap, so a job that runs away is OOM-killed inside its own
+# cgroup (the scope `gpu-lease-<pid>`, named in the user journal) instead of the kernel choosing a victim for the whole machine.
+# G is --mem-gb, else $GPU_LEASE_MEM_GB_PER_GPU (default 90% of MemTotal over the GPU count) per GPU leased; --mem-gb 0 runs
+# uncapped.  Where this user's systemd can't make a scope (a container, no lingering), CMD runs uncapped and gpu-lease says so.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -63,7 +68,7 @@ uuid_table() {
   fi
 }
 
-usage() { echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--max-min M] -- CMD... | gpu-lease status" >&2; exit 2; }
+usage() { echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--max-min M] [--mem-gb G] -- CMD... | gpu-lease status" >&2; exit 2; }
 
 live_waiters() {
   # the queued --wait requests, oldest first; a file whose waiter is gone (its lock free) is removed
@@ -159,12 +164,13 @@ take() {
 if [ "$1" = status ]; then status; exit 0; fi
 n=$1; shift
 case $n in ''|*[!0-9]*|0) usage ;; esac
-wait=0 on="" maxmin=""
+wait=0 on="" maxmin="" memgb=""
 while [ $# -gt 0 ] && [ "$1" != -- ]; do
   case $1 in
     --wait) wait=1 ;;
     --on) [ $# -ge 2 ] || usage; on=$2; shift ;;
     --max-min) [ $# -ge 2 ] || usage; maxmin=$2; shift; case $maxmin in ''|*[!0-9]*|0) usage ;; esac ;;
+    --mem-gb) [ $# -ge 2 ] || usage; memgb=$2; shift; case $memgb in ''|*[!0-9]*) usage ;; esac ;;
     *) usage ;;
   esac
   shift
@@ -221,6 +227,20 @@ until { [ -z "$(ahead)" ] || may_backfill; } && take "$n"; do
   sleep "${GPU_LEASE_POLL_S:-15}"
 done
 if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; fi
+scope=()
+if [ "$memgb" != 0 ]; then
+  if [ -z "$memgb" ]; then
+    per=${GPU_LEASE_MEM_GB_PER_GPU:-$(awk -v n="$(gpu_count)" '/^MemTotal:/ {printf "%d", $2 * 0.9 / 1048576 / (n > 0 ? n : 1)}' /proc/meminfo)}
+    memgb=$((per * n))
+  fi
+  export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+  if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
+    scope=(systemd-run --user --scope --quiet --collect --unit "gpu-lease-$$" -p "MemoryMax=${memgb}G" -p MemorySwapMax=0 --)
+  else
+    echo "gpu-lease: this user's systemd can't make a scope here, so CMD runs without a memory cap" >&2
+    memgb=""
+  fi
+fi
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 ends=""
 [ -n "$maxmin" ] && ends=" until=$(date -u -d "@$(($(date -u -d "$started" +%s) + 60 * maxmin))" +%Y-%m-%dT%H:%M:%SZ)"
@@ -229,12 +249,12 @@ uuids=()
 for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
   uuids+=("${u:--}")
-  echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends cmd=$(echo "$*" | cut -c1-80)" \
-    > "$dir/$i.owner"
+  echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
+    "cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
 done
 CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
 GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
 export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID
 echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES ($GPU_LEASE_UUID) for $who, pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}${ends:+,$ends}" >&2
-[ -n "$maxmin" ] && exec timeout -k 20 "$((maxmin * 60))" "$@"
-exec "$@"
+[ -n "$maxmin" ] && exec "${scope[@]}" timeout -k 20 "$((maxmin * 60))" "$@"
+exec "${scope[@]}" "$@"
