@@ -4,6 +4,7 @@ device by SHAKE256 with the spec's v1 framing (`band_gpu`'s `pous_native.shake25
 from __future__ import annotations
 
 import ctypes
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -28,10 +29,9 @@ class Kernels:
     def __init__(self, lib_dir: str, build_dir: str, params: reference.Params, salt: bytes, model: bytes) -> None:
         import torch
 
-        sys_path = str(Path(__file__).resolve().parents[1])
-        import sys
-        if sys_path not in sys.path:
-            sys.path.insert(0, sys_path)
+        root = str(Path(__file__).resolve().parents[1])
+        if root not in sys.path:
+            sys.path.insert(0, root)
         from band_gpu import native
 
         self.torch = torch

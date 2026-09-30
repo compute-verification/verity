@@ -195,3 +195,30 @@ def audit_key(source: bytes, epoch: bytes, verification_root: bytes, salt: bytes
     audit_id = derive(source, "verity/pous/audit-id/v1", {"counter": counter, "epoch": epoch}).stream("id", 32)
     return audit_id, derive(source, "verity/pous/audit-challenge/v2",
                             {"audit": audit_id, "epoch": epoch, "root": verification_root, "salt": salt})
+
+
+def conformance(full_encode: bool = False) -> dict[str, object]:
+    """`vectors.json` against this reference: the file's hash is the spec's, and every vector's salt, keys and decode (and its
+    encode, at full width only with `full_encode`: two roots in Python take seconds) come out as pinned."""
+    import json
+
+    raw = VECTORS.read_bytes()
+    doc = json.loads(raw)
+    checks = {"file_sha256": hashlib.sha256(raw).hexdigest() == VECTORS_SHA256}
+    for v in doc["vectors"]:
+        w, c0 = int(v["w"]), int(v["c0"])
+        params = Params(w, c0, 2054 if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0) else w // 8 - 1)
+        model, n = bytes.fromhex(v["model_commitment"]), params.width_bytes
+        salt = setup_salt(bytes.fromhex(v["source"]), params, model)
+        k, t, attempt = keys(salt, params, model, int(v["segment"]), int(v["block"]))
+        m, c = int(v["m"], 16), int(v["c"], 16)
+        ok = (salt.hex() == v["setup_salt"] and k.to_bytes(n, "big").hex() == v["K"] and t.to_bytes(n, "big").hex() == v["t"]
+              and attempt == int(v["t_rejection_index"]) and decode(params, c, k, t) == m)
+        if full_encode or w < DEPLOYMENT.w:
+            ok = ok and encode(params, m, k, t) == c
+        checks[v["id"]] = ok
+    for s in doc["sigma_rejection_vectors"]:
+        w, c0 = int(s["w"]), int(s["c0"])
+        params = Params(w, c0, 2054 if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0) else w // 8 - 1)
+        checks[s["id"]] = sigma(params, int(s["r"], 16), int(s["K"], 16)) == int(s["sigma"], 16)
+    return {"passed": all(checks.values()), "vector": str(VECTORS.name), "checks": checks}

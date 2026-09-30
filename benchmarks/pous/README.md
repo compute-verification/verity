@@ -43,6 +43,21 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
+- `p2-v1-gpu`: P2 v1, the frozen specification (the POUS store's `docs/efficient-crypto/p2-spec-draft.md`), in `p2_v1/`, with
+  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
+  - `reference.py`: the scheme on the CPU on `verity.randomness` (the v1 SHAKE256 key framing, the maps, the RFC 6962 tree over
+    v1 leaves, the mode-0 audit derivation), pinned by the P2 kit's `vectors.json` (the file hash in the spec's §7);
+  - `p2v1.cu`: decode with per-block v1 keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device by
+    `pous_native.shake256_rows` just before use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic
+    squaring, reduced by `2^W ≡ c0`);
+  - the kernel gates: the pinned vector through the device (keys, encode, decode), the round trip, sampled blocks against the
+    reference's decode and keys, no kernel flag; a failed gate stops the run;
+  - audits at k = 105 (`p2_v1/live.py`: v1 leaves, `verity/pous/audit-challenge/v2`), against a limit fixed before load (the spec
+    caps the allowance at 1 ms), with the value, late and recompute controls (a dropped block re-encoded from `W` on demand);
+  - encode GB/s over the first `--p2-encode-blocks` blocks (the rest of `C` is random canonical blocks), and one block's two
+    roots against twice the limit (SeqRoot; the root is untuned, so an upper bound on the fastest GPU root).
+  The transport is the harness's responder wire, not `p2-audit-wire/v1`'s frames.
+
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`.
   - The measured build expands fresh per-block keys in the timed kernel, by ChaCha8 from one 32-byte seed per
@@ -65,4 +80,6 @@ research run --on <L40S pod> --project verity --source . --cwd source --campaign
   -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=qwen2.5-7b/layer0+head]                     # experimental P2
 research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]
+research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
+  -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]      # band and P2 v1, then the table
 ~~~

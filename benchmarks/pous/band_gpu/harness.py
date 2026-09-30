@@ -422,14 +422,15 @@ def _verifier_env() -> dict[str, str]:
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
 
 
-def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any) -> dict[str, Any]:
+def calibrate_limit(start: Callable[[], Any], fields: dict[str, Any], script: Path, out: Path, a: Any, leaves: Path | None = None,
+                    tag: str = "calibrate") -> dict[str, Any]:
     """The verifier's no-load loopback calibration (`--calibrate-only`): the limit every audit below is judged against."""
     responder = start()
-    ready = out / "ready-calibrate.json"
+    ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
-    result = out / "calibrate.json"
-    cmd = _verifier_cmd(script, ready, out / "leaves.bin", result, a, None, ["--calibrate-only"])
-    with (out / "calibrate.log").open("w") as log:
+    result = out / f"{tag}.json"
+    cmd = _verifier_cmd(script, ready, leaves or out / "leaves.bin", result, a, None, ["--calibrate-only"])
+    with (out / f"{tag}.log").open("w") as log:
         subprocess.Popen(cmd, env=_verifier_env(), stdout=log, stderr=subprocess.STDOUT).wait()
     responder.stop()
     return json.loads(result.read_text()) if result.exists() else {}

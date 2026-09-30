@@ -8,6 +8,8 @@
 #     -- bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=...]      # built for the device's arch (ARCH=sm_NN overrides)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
+#   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=...]    # band-gpu then p2-v1-gpu, and the table
 #
 # HW, the census id recorded with the result, is the pod's GPU: the H100 SXM and the L40S are known, and any other GPU, or
 # none, needs HW=<census/hardware.json id>.
@@ -95,6 +97,37 @@ elif [ "$IMPL" = band-gpu ]; then
     --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$(nproc)" --verifier-cpu "$VCPU" \
     --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
   RC=$?
+  nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-after.txt" 2>&1 || true
+  exit $RC
+elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
+  gpu_env || exit 3
+  record_host
+  # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, libgmp for CGBN's host pass, the device's arch
+  ARCH=${ARCH:-sm_$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
+  echo '#include <gmp.h>' | cpp >/dev/null 2>&1 || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
+  CG=$W/CGBN
+  [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
+  git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
+  P2LIB=$W/p2v1bin-$ARCH
+  make -C benchmarks/pous/p2_v1 CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
+  cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
+  arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
+    ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
+      --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
+      --workers "$(nproc)" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
+      ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
+  }
+  if [ "$IMPL" = side-by-side ]; then
+    mkdir -p "$O/bench/band" "$O/bench/p2"
+    arm band-gpu "$O/bench/band" sub; RB=$?
+    nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-between.txt" 2>&1 || true
+    arm p2-v1-gpu "$O/bench/p2" sub; RP=$?
+    "$PY" benchmarks/pous/side_by_side.py "$O/bench/band/bench-result.json" "$O/bench/p2/bench-result.json" \
+      --out "$O/bench/side-by-side.json" --markdown "$O/bench/side-by-side.md"
+    RC=$?; [ $RB -ne 0 ] || [ $RP -ne 0 ] && RC=1
+  else
+    arm p2-v1-gpu "$O/bench"; RC=$?
+  fi
   nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-after.txt" 2>&1 || true
   exit $RC
 elif [ "$IMPL" = p2-gpu ]; then
