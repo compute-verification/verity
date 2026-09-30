@@ -238,6 +238,21 @@ done
 run sudo systemctl daemon-reload
 grep -q "metadata: {name: circuits}" "$QUEUES" && run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
 
+step "5. the host's CUDA driver library for GPU-less pods (/workspace/jobs/cuda-driver)"
+# A coverage cell's Build task has no GPU, and so no driver libraries in its pod, but importing vLLM's CUDA platform (#536) loads
+# libcuda.so.1. The task finds this copy on LD_LIBRARY_PATH (jobs/config-run.yaml); without the /dev/nvidia* devices it can't reach a
+# GPU. Re-copied when the host's driver changes.
+drv=$(readlink -f /usr/lib/x86_64-linux-gnu/libcuda.so.1 2> /dev/null || true)
+if [ -z "$drv" ] || [ ! -r "$drv" ]; then
+  echo "   no libcuda.so.1 on this host: GPU-less Build tasks will fail to import vLLM's CUDA platform"
+elif cmp -s "$drv" "/workspace/jobs/cuda-driver/$(basename "$drv")"; then
+  echo "   /workspace/jobs/cuda-driver has $(basename "$drv")"
+else
+  run install -d -m 755 /workspace/jobs/cuda-driver
+  run cp -p "$drv" /workspace/jobs/cuda-driver/
+  run ln -sfn "$(basename "$drv")" /workspace/jobs/cuda-driver/libcuda.so.1
+fi
+
 step "done"
 echo "   check:  sky check ssh && sky gpus list --infra ssh/$POOL && ${KUBECTL[*]} get clusterqueues"
 echo "   client: ssh -N -L 46580:127.0.0.1:46580 $USER@<public ip>  then  sky api login -e http://127.0.0.1:46580"
