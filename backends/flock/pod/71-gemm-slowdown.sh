@@ -63,7 +63,7 @@ if [ "${GATE:-1}" = 1 ]; then
   OUT=$R/out/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 SELFTEST_GPU=1 \
     SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu || exit 1
 fi
-OUT=$R/out/m34 bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=auto BATCH_ANDS=${BATCH_ANDS:-4294967296} \
+OUT=$R/out/m34 bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=${BATCH:-auto} ${N:+N=$N} BATCH_ANDS=${BATCH_ANDS:-4294967296} \
   MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-17179869184} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 || exit 1
 W=${FLOCK_WORK:-/workspace}/flock-circuit; UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/torch/bin/python ] || { $UV venv -q --python 3.12 $W/torch && $UV pip install -q --python $W/torch/bin/python 'torch>=2.7' \
