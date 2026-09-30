@@ -380,31 +380,45 @@ def check (record statement : Option Json) (instances : Nat) : V Unit := do
     let d ← UnitDraw.ofJson s
     if d.proved.size != instances then throw "U3: the statement's instances are not the drawn units and their closure"
 
-/-- A sampler run on the verifier's operating-system randomness: a stream of `need` bytes, extended by `need` more and the
-same sampler rerun on it whenever it runs out, so the draw stays exact. -/
-def onOS (need : Nat) (run : ByteArray → Option (Array Nat)) : IO (Array Nat) := do
-  let mut src ← IO.getRandomBytes need.toUSize
+/-- A sampler run on a byte source, `get need` returning `need` fresh bytes: a stream of `need` bytes, extended by `need`
+more and the same sampler rerun on it whenever it runs out, so the draw stays exact. `none` only if the loop ends, which
+it doesn't. -/
+def onWith {m : Type → Type} [Monad m] (get : Nat → m ByteArray) (need : Nat) (run : ByteArray → Option (Array Nat)) :
+    m (Option (Array Nat)) := do
+  let mut src ← get need
   repeat
-    if let some units := run src then return units
-    src := src ++ (← IO.getRandomBytes need.toUSize)
-  throw (IO.userError "unreachable")
+    if let some units := run src then return some units
+    src := src ++ (← get need)
+  return none
 
-/-- The draw from the verifier's operating-system randomness; a stratified or work draw takes one stream per stratum. -/
-def drawOS (law : Law) (population : Nat) : IO UnitDraw := do
+/-- The stratified draw on a byte source, stratum `i`'s stream from `get i`: `stratified`, each stratum's `subset` run by
+`onWith`. -/
+def stratifiedWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (strata : Array Stratum) :
+    m (Option (Array Nat)) := do
+  let mut out := #[]
+  for i in [0:strata.size] do
+    let s := strata[i]!
+    let some local_ ← onWith (get i) s.need (subset s.k s.size) | return none
+    out := out ++ local_.map s.unit
+  return some (out.qsort (· < ·))
+
+/-- The draw on a byte source, stream `i`'s bytes from `get i`: one stream per stratum for a stratified or work draw, stream
+`0` for a subset or Bernoulli draw. -/
+def drawWith {m : Type → Type} [Monad m] (get : Nat → Nat → m ByteArray) (law : Law) (population : Nat) :
+    m (Option UnitDraw) := do
   let units ← match law with
-    | .subset k => onOS (2 * k * width population + 64) (subset k population)
-    | .bernoulli a b => onOS (2 * population * width b + 64) (bernoulli a b population)
-    | .stratified _ strata => do
-      let mut out := #[]
-      for s in strata do
-        out := out ++ (← onOS s.need (subset s.k s.size)).map s.unit
-      pure (out.qsort (· < ·))
-    | .work _ strata => do
-      let mut out := #[]
-      for s in strata do
-        out := out ++ (← onOS s.need (subset s.k s.size)).map s.unit
-      pure (out.qsort (· < ·))
-  return { law, population, units }
+    | .subset k => onWith (get 0) (2 * k * width population + 64) (subset k population)
+    | .bernoulli a b => onWith (get 0) (2 * population * width b + 64) (bernoulli a b population)
+    | .stratified _ strata => stratifiedWith get strata
+    | .work _ strata => stratifiedWith get (strata.map (·.toStratum))
+  return units.map fun units => { law, population, units }
+
+/-- The draw from the verifier's operating-system randomness: `drawWith` with every stream's bytes from
+`IO.getRandomBytes`. -/
+def drawOS (law : Law) (population : Nat) : IO UnitDraw := do
+  let some d ← drawWith (fun _ need => IO.getRandomBytes need.toUSize) law population
+    | throw (IO.userError "unreachable")
+  return d
 
 /-- The draw from given bytes (a test): `subset` and `bernoulli` on the one stream; `stratified` and `work` on
 consecutive segments, stratum `s`'s the next `2 k_s · width(n_s) + 64` bytes. `none` when a stream runs out. -/

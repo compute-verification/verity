@@ -969,7 +969,7 @@ def _blob_list(path: str | None) -> list[tuple[str, int]]:
 def cmd_fetch_fixtures(argv: list[str]) -> int:
     """Make the fetched entries of `fixtures/artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
     manifests and blobs come from the local store, else the private remote when this machine can reach it, else the public export
-    (`--public-url`, `$RESEARCH_FIXTURES_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
+    (`--public-url`, `$RESEARCH_PUBLIC_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
     left alone.  `--check` only reports (exit 1 if any is missing or differs).  `--stubs` also restores the history stubs in
     tracked files (an old commit's checkout)."""
     from . import fetchset, fixtures as F  # noqa: PLC0415
