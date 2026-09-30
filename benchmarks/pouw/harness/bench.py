@@ -48,6 +48,8 @@ INPUT_FORMATS = {"f32": (F.F32, None), "bf16": (F.BF16, None), "e4m3": (F.E4M3, 
                  "e2m1-mx": (F.E2M1, "mxfp4"), "int8": (F.INT8, None)}
 L2_SM120 = 128 << 20
 TUNE_REPS, FINALISTS = 3, 2
+LT_SEARCHES = ("heuristic", "enumerate")
+SCREEN_KEEP, SCREEN_CHUNK = 8, 16
 #: operands may take at most this share of the free device memory
 MEMORY_SHARE = 0.85
 
@@ -172,7 +174,7 @@ class Bench:
                 self.dropped.append({"key": list(e.key), "why": f"graph capture: {type(ex).__name__}: {ex}"})
         return kept
 
-    def tune(self, entries: list[Entry], burst: int, reps: int) -> dict[tuple, float]:
+    def tune(self, entries: list[Entry], burst: int, reps: int, stage: str = "tune") -> dict[tuple, float]:
         """A short sweep (graph method) over gated candidates: each one's median per-call ms."""
         out = {}
         for e in entries:
@@ -180,7 +182,7 @@ class Bench:
             xs = []
             for r in range(reps):
                 t = self.timer.time(e, "graph", burst)
-                self.tuning.append({"key": list(e.key), "rep": r, **t})
+                self.tuning.append({"key": list(e.key), "stage": stage, "rep": r, **t})
                 xs.append(t["ms_per_call"])
             out[e.key] = statistics.median(xs)
         return out
@@ -315,14 +317,23 @@ def arm_entries(bench: Bench, dev, arm, shape, opsets: list[A.OperandSet], first
 # ---- baselines -------------------------------------------------------------------------------------------------------------
 
 
-def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int) -> dict:
+def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
+                   search: str = "heuristic") -> dict:
     """Every family's candidates, each gated on the gate set; at the first shape, the known-bad variants. Returns per family
     the gated candidates and what was tried."""
     out = {}
     for fam in fams:
         gops = so.ops(fam, -1)
         refused: list[str] = []
-        lts = B.lt_candidates(dev, fam, shape, gops, want, refused=refused)
+        lts: list = []
+        enumeration: dict = {}
+        for lt in dev.lts:
+            heur = B.lt_candidates(dev, fam, shape, gops, want, refused=refused, lt=lt)
+            lts += heur
+            if search == "enumerate":
+                more, enumeration[lt.prefix] = B.lt_enumerated(dev, fam, shape, gops, lt, B.lt_splitks(shape, dev.info["sms"]),
+                                                               {B.lt_key(c) for c in heur}, refused=refused)
+                lts += more
         cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels)
         gated = []
         for c in lts + cuts:
@@ -339,7 +350,9 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
                 gated.append(c)
         out[fam.name] = {"gated": gated, "all": lts + cuts,
                          "tried": [{"name": c.name, "source": c.source, "config": c.config} for c in lts + cuts],
-                         "cublaslt_refused": refused, "cutlass_unimplementable": unimpl}
+                         "cublaslt_refused": refused, "cutlass_unimplementable": unimpl,
+                         "cublaslt_libraries": [{"prefix": t.prefix, "version": t.version} for t in dev.lts],
+                         "cublaslt_enumeration": enumeration or None}
         if not lts + cuts:
             bench.log(f"no plain kernel for {fam.name} at {shape.label} (cuBLASLt: {refused or 'no algorithm'}; "
                       f"CUTLASS: {'none built' if not unimpl else unimpl})")
@@ -367,12 +380,48 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
     return out
 
 
-def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst: int, reps: int, finalists: int) -> list[Entry]:
-    """Each family's gated candidates on every timing set, a short graph sweep, and the fastest `finalists` per family."""
+def screened(ms: dict[str, float], names: list[str], keep: int) -> list[str]:
+    """The `keep` fastest of `names` by their screen times (one never screened, or whose screen failed, is slowest)."""
+    return sorted(names, key=lambda n: (ms.get(n, float("inf")), n))[:keep]
+
+
+def screen(bench: Bench, dev, shape, fam, so, cands: list, lt_ws, burst: int) -> dict[str, float]:
+    """One graph rep of each candidate over every timing set (the tune's sweep, once), in chunks: the enumeration's
+    configurations are many, and only the fastest few go on to the tune."""
+    out: dict[str, float] = {}
+    for i in range(0, len(cands), SCREEN_CHUNK):
+        entries = []
+        for c in cands[i:i + SCREEN_CHUNK]:
+            key = ("baseline", shape.label, fam.name, c.name)
+            try:
+                calls = [B.BaselineCall(dev, c, shape, so.ops(fam, s), lt_ws) for s in range(so.sets)]
+            except Exception as ex:  # noqa: BLE001 - recorded; not screened
+                bench.dropped.append({"key": list(key), "why": f"screen prepare: {type(ex).__name__}: {ex}"})
+                continue
+            entries.append(Entry(key, "baseline", calls))
+        try:
+            tuned = bench.tune(bench.capture(entries, burst), burst, 1, stage="screen")
+        finally:
+            free_entries(bench, entries)
+        out |= {k[-1]: v for k, v in tuned.items()}
+    return out
+
+
+def tune_baselines(bench: Bench, dev, shape, fams, so, gated: dict, lt_ws, burst: int, reps: int, finalists: int,
+                   screen_keep: int = SCREEN_KEEP) -> list[Entry]:
+    """Each family's gated candidates on every timing set, a short graph sweep, and the fastest `finalists` per family. The
+    enumerated cuBLASLt configurations are screened first (`screen`), and only the `screen_keep` fastest are tuned."""
     keep = []
     for fam in fams:
         entries = []
-        for c in gated[fam.name]["gated"]:
+        cands = gated[fam.name]["gated"]
+        wide = [c for c in cands if "enumerated" in c.config]
+        if len(wide) > screen_keep:
+            ms = screen(bench, dev, shape, fam, so, wide, lt_ws, burst)
+            kept = set(screened(ms, [c.name for c in wide], screen_keep))
+            gated[fam.name]["screen_ms"] = dict(sorted(ms.items(), key=lambda kv: kv[1]))
+            cands = [c for c in cands if "enumerated" not in c.config or c.name in kept]
+        for c in cands:
             key = ("baseline", shape.label, fam.name, c.name)
             try:
                 calls = [B.BaselineCall(dev, c, shape, so.ops(fam, s), lt_ws) for s in range(so.sets)]
@@ -553,12 +602,14 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     gated: dict = {}
     unchained: dict = {}
     try:
-        gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed)
+        gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed,
+                               getattr(args, "lt_search", "heuristic"))
         arm_ents, arm_sets = [], {}
         for a in arms:
             arm_sets[a.name] = arm_operand_sets(dev, a, so)
             arm_ents += arm_entries(bench, dev, a, shape, arm_sets[a.name], first)
-        entries = tune_baselines(bench, dev, shape, fams, so, gated, lt_ws, plan["burst"], args.tune_reps, args.finalists)
+        entries = tune_baselines(bench, dev, shape, fams, so, gated, lt_ws, plan["burst"], args.tune_reps, args.finalists,
+                                 getattr(args, "screen_keep", SCREEN_KEEP))
         entries += bench.capture(arm_ents, plan["burst"])
         free_entries(bench, [e for e in arm_ents if e not in entries])
         if chained(args, shape):
@@ -668,6 +719,10 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                    help="at decode shapes (m = 32), also time every kernel and arm as a dependent chain (chain.py), the "
                         "panel's decode method; 'independent' times bursts of independent calls only")
     p.add_argument("--lt-candidates", type=int, default=B.LT_CANDIDATES)
+    p.add_argument("--lt-search", choices=LT_SEARCHES, default="heuristic",
+                   help="'enumerate': beside the heuristic's candidates, every configuration each cuBLASLt's capabilities "
+                        "admit at the shape (gated; the --screen-keep fastest of one graph rep go on to the tune)")
+    p.add_argument("--screen-keep", type=int, default=SCREEN_KEEP)
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")
     p.add_argument("--lock-mhz", type=int, help="lock this GPU's graphics clock (nvidia-smi -i UUID -lgc F,F); reset at exit")

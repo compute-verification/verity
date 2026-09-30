@@ -1,12 +1,15 @@
-"""The plain GEMM baselines: per family (precision), every cuBLASLt heuristic candidate (up to 32) and every CUTLASS sm_120
-kernel that implements the shape, each gated bit-exactly, then autotuned; the fastest per family is what the arms divide by.
+"""The plain GEMM baselines: per family (precision), every cuBLASLt heuristic candidate (up to 32) from each cuBLASLt loaded
+(`native.LtLib`), with `enumerate` every configuration cuBLASLt's capabilities admit (`lt_enumerated`), and every CUTLASS
+sm_120 kernel that implements the shape, each gated bit-exactly, then autotuned; the fastest per family is what the arms
+divide by.
 
 GEMM alone on pre-quantized operands, TN (A m x k and B n x k, both K-major), D m x n row-major in BF16 (int8: int32),
 alpha 1, beta 0. Scale factors are all 1 (their values don't change a kernel's time; their bytes are read as usual).
 
-**The gate** runs each candidate at the timed shape on a gate operand set of ternary values ({-1, 0, 1}, scales 1), whose
-sums are exact under any accumulator the card could have: D is filled with a sentinel first, then no sentinel word may
-remain, and 32 x 32 sampled entries (the corners among them) must equal numpy's exact product, bit for bit.
+**The gate** runs each candidate twice at the timed shape on a gate operand set of ternary values ({-1, 0, 1}, scales 1),
+whose sums are exact under any accumulator the card could have, and checks the second call (so that whatever the first
+leaves behind, a stream-K workspace say, can't break the calls after it): D is filled with a sentinel before each, then no
+sentinel word may remain, and 32 x 32 sampled entries (the corners among them) must equal numpy's exact product, bit for bit.
 **The known-bad variants** (the harness's negative control): the same candidate with one output byte flipped at a sampled
 entry, and cuBLASLt over half of k; the gate must reject both, or the run stops.
 """
@@ -23,6 +26,9 @@ from arm import Buffer, Shape
 
 LT_WORKSPACE = 32 << 20
 LT_CANDIDATES = 32
+LT_ENUMERATED_MAX = 8192
+#: a cuBLASLt configuration's identity (with the library and the fp8-blk128 swap)
+LT_CONFIG = ("algo_id", "tile", "stages", "splitk", "reduction", "swizzle", "custom", "inner_shape", "cluster_shape")
 SAMPLE_ROWS = SAMPLE_COLS = 32
 SENTINEL = {"bf16": (2, 0xFFFF, 0xFF), "int32": (4, 0x7F7F7F7F, 0x7F)}  # (word bytes, word, memset byte): a BF16 NaN; an
 #                                                                        int32 no ternary sum reaches
@@ -101,6 +107,7 @@ class Candidate:
     cutlass: int | None = None
     sf_bytes: tuple[int, int] = (0, 0)
     ws: int = 0
+    ltlib: object = None    # the native.LtLib that owns the plan
 
 
 @dataclass
@@ -135,8 +142,9 @@ class BaselineCall:
             d.ck(d.lib.ph_cutlass_launch(C.c_void_p(self._h), C.c_void_p(stream)), self.cand.name)
         else:
             plan, c = self.cand.lt
-            d.ck(d.lib.ph_lt_run(plan, C.byref(c), o.a.ptr, o.b.ptr, o.d.ptr, o.sa.ptr if o.sa else None,
-                                 o.sb.ptr if o.sb else None, self._ws.ptr, stream), self.cand.name)
+            lt = self.cand.ltlib
+            lt.ck(lt.lib.ph_lt_run(plan, C.byref(c), o.a.ptr, o.b.ptr, o.d.ptr, o.sa.ptr if o.sa else None,
+                                   o.sb.ptr if o.sb else None, self._ws.ptr, stream), self.cand.name)
 
     def weight_side(self, stream: int) -> None:
         pass
@@ -147,44 +155,114 @@ class BaselineCall:
             self._h = None
 
 
+def _lt_plans(dev, fam: Family, shape: Shape, lt, ld: int | None):
+    """(swap, plan) per plan the family has: fp8-blk128 has two (the 128 x 128 blocks on either operand)."""
+    for swap in ((0, 1) if fam.name == "fp8-blk128" else (0,)):
+        plan = C.c_void_p()
+        lt.ck(lt.lib.ph_lt_plan_create_ld(fam.lt_kind, shape.m, shape.n, shape.k, ld or shape.k, LT_WORKSPACE, swap,
+                                          C.byref(plan)))
+        yield swap, plan
+
+
 def lt_candidates(dev, fam: Family, shape: Shape, ops: Operands, want: int = LT_CANDIDATES,
-                  ld: int | None = None, refused: list[str] | None = None) -> list[Candidate]:
-    """cuBLASLt's top `want` heuristic algorithms for the shape (A and B with leading dimension `ld`, default k). Each
-    candidate holds its plan; `release_plans` frees them. Where cuBLASLt refuses the family outright (on sm_120, cuBLASLt
-    12.9's heuristic query returns INVALID_VALUE for MXFP4), that is no candidate, and the reason goes to `refused`."""
+                  ld: int | None = None, refused: list[str] | None = None, lt=None) -> list[Candidate]:
+    """cuBLASLt's top `want` heuristic algorithms for the shape (A and B with leading dimension `ld`, default k), from `lt`
+    (a `native.LtLib`; the harness library's own by default). Each candidate holds its plan; `release_plans` frees them.
+    Where cuBLASLt refuses the family outright (on sm_120, cuBLASLt 12.9's heuristic query returns INVALID_VALUE for MXFP4),
+    that is no candidate, and the reason goes to `refused`."""
     from native import LtCandidate, NativeError
 
     if fam.lt_kind is None:
         return []
+    lt = lt or dev.lts[0]
     out: list[Candidate] = []
-    for swap in ((0, 1) if fam.name == "fp8-blk128" else (0,)):
-        plan = C.c_void_p()
-        dev.ck(dev.lib.ph_lt_plan_create_ld(fam.lt_kind, shape.m, shape.n, shape.k, ld or shape.k, LT_WORKSPACE, swap,
-                                            C.byref(plan)))
+    for swap, plan in _lt_plans(dev, fam, shape, lt, ld):
         arr, got = (LtCandidate * want)(), C.c_int()
         try:
-            dev.ck(dev.lib.ph_lt_candidates(plan, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None, want,
-                                            arr, C.byref(got)), f"heuristics {fam.name}")
+            lt.ck(lt.lib.ph_lt_candidates(plan, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None, want,
+                                          arr, C.byref(got)), f"{lt.prefix} heuristics {fam.name}")
         except NativeError as ex:
-            dev.lib.ph_lt_plan_destroy(plan)
+            lt.lib.ph_lt_plan_destroy(plan)
             if refused is None:
                 raise
             refused.append(str(ex))
             continue
         if got.value == 0:
-            dev.lib.ph_lt_plan_destroy(plan)
+            lt.lib.ph_lt_plan_destroy(plan)
         for i in range(got.value):
             c = LtCandidate()
             C.memmove(C.byref(c), C.byref(arr[i]), C.sizeof(c))
-            cfg = c.config() | {"heuristic_rank": i, "blk128_swap": swap}
-            out.append(Candidate(fam.name, "cublaslt", f"lt_{fam.name}_{swap}_{i}_algo{c.algo_id}_tile{c.tile}", cfg,
-                                 lt=(plan, c), ws=c.workspace))
+            cfg = c.config() | {"heuristic_rank": i, "blk128_swap": swap, "library": lt.prefix, "cublaslt": lt.version}
+            out.append(Candidate(fam.name, "cublaslt", f"{lt.prefix}_{fam.name}_{swap}_{i}_algo{c.algo_id}_tile{c.tile}",
+                                 cfg, lt=(plan, c), ws=c.workspace, ltlib=lt))
     return out
 
 
+def lt_key(c: Candidate) -> tuple:
+    return (c.config["library"], c.config["blk128_swap"], *(c.config[k] for k in LT_CONFIG))
+
+
+def lt_splitks(shape: Shape, sms: int) -> list[int]:
+    """The split-k counts the enumeration tries: 1, and up to 16 where 128 x 128 output tiles would fill fewer than two
+    waves of the SMs (decode's skinny m)."""
+    tiles = -(-shape.m // 128) * -(-shape.n // 128)
+    return [1] if tiles >= 2 * sms else [1, 2, 3, 4, 6, 8, 12, 16]
+
+
+def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: list[int], seen: set,
+                  refused: list[str] | None = None, want: int = LT_ENUMERATED_MAX) -> tuple[list[Candidate], dict]:
+    """Every configuration of every algorithm `lt` has for the family's types that cublasLtMatmulAlgoCheck accepts at the
+    shape (lt.cu's ph_lt_enumerate), less those in `seen` (the heuristic's, by `lt_key`). Returns them and what was tried:
+    configurations checked, accepted, and whether `want` cut the list short."""
+    from native import LtCandidate, NativeError
+
+    info = {"checked": 0, "accepted": 0, "new": 0, "truncated": False, "splitks": splitks}
+    if fam.lt_kind is None or not lt.can_enumerate:
+        return [], info | {"skipped": "no cuBLASLt path" if fam.lt_kind is None else "library predates ph_lt_enumerate"}
+    out: list[Candidate] = []
+    ks = (C.c_int * len(splitks))(*splitks)
+    for swap, plan in _lt_plans(dev, fam, shape, lt, None):
+        arr, got, checked = (LtCandidate * want)(), C.c_int(), C.c_int()
+        try:
+            lt.ck(lt.lib.ph_lt_enumerate(plan, ops.sa.ptr if ops.sa else None, ops.sb.ptr if ops.sb else None, ks,
+                                         len(splitks), want, arr, C.byref(got), C.byref(checked)),
+                  f"{lt.prefix} enumerate {fam.name}")
+        except NativeError as ex:
+            lt.lib.ph_lt_plan_destroy(plan)
+            if refused is None:
+                raise
+            refused.append(str(ex))
+            continue
+        info["checked"] += checked.value
+        info["accepted"] += got.value
+        info["truncated"] |= got.value > want
+        mine = []
+        for i in range(min(got.value, want)):
+            c = LtCandidate()
+            C.memmove(C.byref(c), C.byref(arr[i]), C.sizeof(c))
+            cfg = c.config() | {"enumerated": i, "blk128_swap": swap, "library": lt.prefix, "cublaslt": lt.version}
+            cand = Candidate(fam.name, "cublaslt", _enum_name(lt.prefix, fam.name, swap, cfg), cfg, lt=(plan, c),
+                             ws=c.workspace, ltlib=lt)
+            if lt_key(cand) not in seen:
+                seen.add(lt_key(cand))
+                mine.append(cand)
+        if not mine:
+            lt.lib.ph_lt_plan_destroy(plan)
+        out += mine
+    info["new"] = len(out)
+    return out, info
+
+
+def _enum_name(prefix: str, fam: str, swap: int, c: dict) -> str:
+    extra = "".join(f"_{tag}{c[k]}" for k, tag in (("splitk", "sk"), ("reduction", "r"), ("swizzle", "sw"), ("custom", "c"),
+                                                    ("inner_shape", "i"), ("cluster_shape", "cl")) if c[k] and
+                    not (k == "splitk" and c[k] == 1))
+    return f"{prefix}_{fam}_{swap}_algo{c['algo_id']}_tile{c['tile']}_st{c['stages']}{extra}"
+
+
 def release_plans(dev, cands: list[Candidate]) -> None:
-    for plan in {c.lt[0].value for c in cands if c.lt is not None}:
-        dev.lib.ph_lt_plan_destroy(C.c_void_p(plan))
+    for plan, lt in {c.lt[0].value: c.ltlib for c in cands if c.lt is not None}.items():
+        lt.lib.ph_lt_plan_destroy(C.c_void_p(plan))
     for c in cands:
         c.lt = None
 
@@ -322,13 +400,15 @@ def expected(fam: Family, a_rows: np.ndarray, b_rows: np.ndarray) -> np.ndarray:
 
 
 def gate(dev, fam: Family, shape: Shape, call: BaselineCall, rng_seed: int, corrupt: bool = False) -> dict:
-    """Runs `call` on the gate set and checks D (see the module docstring). `corrupt` flips a byte of D at a sampled entry
-    after the launch: the negative control."""
+    """Runs `call` twice on the gate set and checks the second call's D (see the module docstring). `corrupt` flips a byte
+    of D at a sampled entry after the launches: the negative control."""
     ops = call.ops
     wb, sentinel, byte = SENTINEL[fam.out]
-    dev.memset(ops.d.ptr, byte, ops.d.nbytes)
-    dev.sync()
-    call.launch(dev.stream)
+    for _ in range(2):
+        dev.memset(ops.d.ptr, byte, ops.d.nbytes)
+        dev.sync()
+        call.launch(dev.stream)
+        dev.sync()
     rng = random.Random(rng_seed)
     rows, cols = sample_indices(shape.m, SAMPLE_ROWS, rng), sample_indices(shape.n, SAMPLE_COLS, rng)
     if corrupt:

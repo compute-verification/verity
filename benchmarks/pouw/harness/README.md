@@ -14,10 +14,10 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `bench.py` | the run: identity, fill and derive preflights, per shape gates (negative controls at the first shape), the baselines' autotune, interleaved timing, the consistency gate, the report |
 | `chain.py`, `derive.py` | decode as a dependent chain (`--decode-method dependent-chain`, the default): call i+1's A is derived on the device from call i's y, for the plain GEMM and for arms alike; an arm's decode split into before, during and after the GEMM, with and without a side stream; `derive.py` is the derive's bit-exact numpy twin, which gates every chain |
 | `characterize.py` | the card: identity, tensor-core peak rates per MMA kind, DRAM and L2 bandwidth, operand-entropy control, sustained clocks under a held GEMM; the lock-clock sweep only when asked (`--sections lock`), never where someone else fixes the clocks (node 2) |
-| `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms and CUTLASS's sm_120 kernels, and the bit-exact gate on ternary operands |
+| `baselines.py` | the baseline families (BF16, FP8 per-tensor and rowwise, MXFP8, FP8 1×128/128×128, NVFP4, MXFP4, int8): cuBLASLt's top heuristic algorithms (with `--lt-search enumerate`, every configuration its capabilities admit at the shape, screened by one graph rep before the tune), from each cuBLASLt loaded, and CUTLASS's sm_120 kernels, and the bit-exact gate on ternary operands |
 | `example_arm.py` | an example arm, **not a PoUW scheme** (plain cuBLASLt FP8 and a stand-in read of D): the smoke test of the arm path and a template |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
-| `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt, the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) |
+| `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
 Build (no GPU needed; nvcc 12.9, about 7 GB of memory per CUTLASS 3.x unit):
 
@@ -29,14 +29,20 @@ The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache),
 cuBLAS headers', with `build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is
 reused, and so is each object whose unit, headers and flags are unchanged. A run refuses a library its `build.json` doesn't
 describe. Where there is no CUDA 12.9 (node 2 has 13.0), `. jobs/toolkit.sh` first assembles it from NVIDIA's pinned
-redistributable archives and the cuBLASLt wheel `env.sh` pins. On node 2 the build is a CPU job, at `nice 19` on the fill
+redistributable archives and the cuBLASLt wheel `env.sh` pins. `LT2_HOME` names a second cuBLAS install (node 2's
+`/usr/local/cuda`, whose `libcublasLt.so.13` is 13.1.1.3): `lt.cu` is built alone against it with the host compiler into
+`libpouw_lt2.so`, which a run loads beside the library (`RTLD_LOCAL`; `POUW_HARNESS_LT2` names another, or `none`), so every
+family also gets that cuBLASLt's candidates, named `lt<major>_…`. On node 2 the build is a CPU job, at `nice 19` on the fill
 queue's cores:
 
 ```bash
 research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source -- bash -c \
-  '. benchmarks/pouw/harness/jobs/toolkit.sh && export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 &&
-   L="$(nice -n 19 taskset -c 96-191 benchmarks/pouw/harness/native/build.sh)" && cp "${L%/*}"/{libpouw_harness.so,build.json} "$RESEARCH_RUN_DIR/"'
+  '. benchmarks/pouw/harness/jobs/toolkit.sh && export POUW_HARNESS_BUILD=/workspace/pouw/harness/build JOBS=8 LT2_HOME=/usr/local/cuda &&
+   L="$(nice -n 19 taskset -c 96-191 benchmarks/pouw/harness/native/build.sh)" &&
+   cp "${L%/*}"/{libpouw_harness.so,libpouw_lt2.so,build.json} "$RESEARCH_RUN_DIR/"'
 ```
+
+`build.json` also records each kernel's registers, stack and local memory (`resources`; a spill shows as local bytes).
 
 Run on your GPU only (`CUDA_VISIBLE_DEVICES` one index; the UUID from `server.md`'s table):
 
@@ -56,7 +62,7 @@ against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 -
 
 ```bash
 R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
-   --send BUILD/libpouw_harness.so --send BUILD/build.json --send GPUS.md'          # GPUS.md: server.md (its GPU table)
+   --send BUILD/libpouw_harness.so --send BUILD/libpouw_lt2.so --send BUILD/build.json --send GPUS.md'  # GPUS.md: server.md's table
 H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/bench.py --gpu lease
    --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline
    --arm-path benchmarks/pouw/harness --arm example_arm:ExampleFp8 --out "$RESEARCH_RUN_DIR/bench.json"'

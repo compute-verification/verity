@@ -554,6 +554,29 @@ def test_scale_tensors_cover_every_block():
     assert B.scale_bytes(None, 8192, 8192) == 0
 
 
+def test_the_enumeration_splits_k_only_where_the_output_tiles_underfill_the_card():
+    assert B.lt_splitks(SHAPE, 188) == [1]
+    ks = B.lt_splitks(A.Shape("m32-n8192-k8192", 32, 8192, 8192), 188)
+    assert ks[0] == 1 and max(ks) == 16
+
+
+def test_the_screen_keeps_the_fastest_and_ranks_the_unscreened_last():
+    assert H.screened({"a": 2.0, "b": 1.0, "d": 0.5}, ["a", "b", "c", "d"], 3) == ["d", "b", "a"]
+    assert H.screened({}, ["b", "a"], 1) == ["a"]
+
+
+def test_an_enumerated_configuration_is_named_by_its_config_and_deduplicated_by_it():
+    cfg = {"algo_id": 70, "tile": 23, "stages": 37, "splitk": 1, "reduction": 0, "swizzle": 1, "custom": 0,
+           "inner_shape": 0, "cluster_shape": 2, "blk128_swap": 0, "library": "lt13"}
+    name = B._enum_name("lt13", "nvfp4", 0, cfg)
+    assert name == "lt13_nvfp4_0_algo70_tile23_st37_sw1_cl2"
+    heur = B.Candidate("nvfp4", "cublaslt", "lt_x", cfg | {"heuristic_rank": 0})
+    enum = B.Candidate("nvfp4", "cublaslt", name, cfg | {"enumerated": 5})
+    assert B.lt_key(heur) == B.lt_key(enum)
+    assert B.lt_key(enum) != B.lt_key(B.Candidate("nvfp4", "cublaslt", name, cfg | {"library": "lt"}))
+    assert "_sk4_r1" in B._enum_name("lt", "nvfp4", 0, cfg | {"splitk": 4, "reduction": 1})
+
+
 def test_set_count_bounds():
     assert S.set_count(1, 128 << 20) == S.MAX_SETS
     assert S.set_count(1 << 40, 128 << 20) == S.MIN_SETS
