@@ -323,6 +323,9 @@ class CommitConfig:
     replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
                               help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
                                    "stratified by family (each family at least once, the rest split evenly)")
+    replay_deferred: str = option("--replay-deferred", env="REPLAY_DEFERRED", default="0",
+                                  help="config run: 1 = the Commit writes a replay bundle and exits without the replay; the verdict "
+                                       "stays pending until `row stage replay` (CPU) replays the bundle")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")

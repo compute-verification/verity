@@ -209,6 +209,8 @@ def test_collect_folds_timelines_and_derives_envelopes_from_stages_txt(tmp_path)
     (["--out", "o"], False),
     (["--out", "o", "--arms", "a,b"], True),
     (["--out", "o", "--only-arm", "control"], True),
+    (["--out", "o", "--only-arm", "instrumented", "--compiled-taps", "kernels"], True),
+    (["--out", "o", "--only-arm", "instrumented", "--bounded-staging", "--replay-k", "460", "--replay-deferred"], False),   # a deferred config-run Commit
     (["--out", "o", "--compiled-taps", "on"], True),
     (["--out", "o", "--late-read", "qkv_proj"], True),
     (["--out", "o", "--value-check"], True),
