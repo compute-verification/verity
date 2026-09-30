@@ -40,6 +40,24 @@ def test_tiled_layout_is_the_kernels(rows, depth, h):
     assert got == bytes(want)
 
 
+def test_form_s5_stores_code_pairs_at_the_tiled_offsets():
+    """form_s5 casts codes i and i + 1 of a thread's 64 into one 16-bit word at a per-thread base plus a constant: for every
+    thread and pair, that offset is the tiled layout's for element i (row r, column t) and i + 1 sits at t + 1."""
+    body = re.search(r'form_s5\(const Args a\) \{(.*?)\n\}', SOURCE, re.S).group(1)
+    assert "e4m3x2(d[i], d[i + 1])" in body and "e4m3(d[i])" not in body
+    base_src = re.search(r"const int base = ([^;]+);", body).group(1)
+    off_src = re.search(r"uint16_t\*>\(sO \+ base \+ (.*)\) =$", body, re.M).group(1)
+    for tid in range(128):
+        rA, cA = 16 * (tid // 32) + (tid % 32) // 4, 2 * (tid % 4)
+        base = eval(base_src, {"rA": rA, "cA": cA})
+        for i in range(0, 64, 2):
+            q, m = (i // 2) % 2, i // 4
+            off = base + eval(off_src.replace("/", "//"), {"q": q, "m": m})
+            r, t = rA + 8 * ((i // 2) % 2), 8 * (i // 4) + cA + i % 2
+            want = (t // 32) * 2048 + (r >> 3) * 256 + ((t & 31) >> 4) * 128 + (r & 7) * 16 + (t & 15)
+            assert off == want and off % 2 == 0 and (t + 1) & 15 == (t & 15) + 1
+
+
 def test_kernel_constants_match_the_reference():
     from verity_pouw.schemes import pearl_c as C
     from verity_pouw.schemes import pearl_kw as P

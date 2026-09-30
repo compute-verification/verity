@@ -27,6 +27,8 @@ DEV uint16_t bmul(uint16_t a, uint16_t b) { return f2bf(__fmul_rn(bf2f(a), bf2f(
 DEV uint16_t bdiv(uint16_t a, uint16_t b) { return f2bf(__fdiv_rn(bf2f(a), bf2f(b))); }
 DEV uint16_t bmax(uint16_t a, uint16_t b) { return bf2f(a) >= bf2f(b) ? a : b; }
 DEV uint8_t e4m3(float f) { return (uint8_t)__nv_cvt_float_to_fp8(f, __NV_SATFINITE, __NV_E4M3); }
+// two codes from one F2FP (both operands live): lo in the low byte
+DEV uint16_t e4m3x2(float lo, float hi) { return __nv_cvt_float2_to_fp8x2(make_float2(lo, hi), __NV_SATFINITE, __NV_E4M3); }
 DEV float e4m3f(uint8_t c) { return __half2float(__half(__nv_cvt_fp8_to_halfraw(c, __NV_E4M3))); }
 DEV uint16_t e4m3bf(uint8_t c) { return f2bf(e4m3f(c)); }
 
@@ -513,10 +515,14 @@ extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) {
   qmma<128, 1>(d, desc(sa(sE)), desc(sa(sF)));
   WG_COMMIT;
   WG_WAIT(0);
+  // codes i and i + 1 are columns t, t + 1 of row r (r = rA + 8q, t = 8m + cA): one F2FP and one 16-bit store at the
+  // tiled offset, a per-thread base plus a constant, so the cast is the statement's (two codes per F2FP)
+  const int base = (rA >> 3) * 256 + (rA & 7) * 16 + cA;
 #pragma unroll
-  for (int i = 0; i < 64; i++) {
-    const int r = rA + 8 * ((i / 2) % 2), t = 8 * (i / 4) + cA + i % 2;
-    sO[(t / 32) * 2048 + (r >> 3) * 256 + ((t & 31) >> 4) * 128 + (r & 7) * 16 + (t & 15)] = e4m3(d[i]);
+  for (int i = 0; i < 64; i += 2) {
+    const int q = (i / 2) % 2, m = i / 4;
+    *reinterpret_cast<uint16_t*>(sO + base + (m / 4) * 2048 + q * 256 + ((m % 4) / 2) * 128 + (m % 2) * 8) =
+        e4m3x2(d[i], d[i + 1]);
   }
   __syncthreads();
   uint8_t* out = reinterpret_cast<uint8_t*>(a.p[5]);
@@ -539,7 +545,7 @@ extern "C" __global__ void quant_s5(const Args a) {
 #pragma unroll
   for (int i = 0; i < 4; i++) {
     const float4 v = x[i];
-    o[i] = e4m3(__fmul_rn(al, v.x)) | e4m3(__fmul_rn(al, v.y)) << 8 | e4m3(__fmul_rn(al, v.z)) << 16 | (uint32_t)e4m3(__fmul_rn(al, v.w)) << 24;
+    o[i] = e4m3x2(__fmul_rn(al, v.x), __fmul_rn(al, v.y)) | (uint32_t)e4m3x2(__fmul_rn(al, v.z), __fmul_rn(al, v.w)) << 16;
   }
   *reinterpret_cast<uint4*>(reinterpret_cast<uint8_t*>(a.p[2]) + tiled(row, t, 128, k)) = make_uint4(o[0], o[1], o[2], o[3]);
 }
