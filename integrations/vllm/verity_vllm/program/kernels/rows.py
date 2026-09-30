@@ -26,6 +26,7 @@ import numpy as np
 
 from verity.evaluation.batch import type_dtype, type_shape
 from verity_vllm.program.kernels.bias_epilogue_rows import gemm_bias_f32_epilogue
+from verity_vllm.program.kernels.gemv_rows import gemv_bias_f32
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
@@ -77,6 +78,7 @@ EVALUATORS = {
     "BiasAdd_v1": "Bf16Add on the composed interior Gemm output + the registered bias slice (one f32 add, RNE; biased linears, MAN-07)",
     "GemmBias_v1": "Gemm_v1's row (dot_bf16 + f2fp_bf16), then BiasAdd_v1's Bf16Add with the bias slice, per coordinate (GemmBiasCoordinate_v1)",
     "GemmBiasF32Epilogue_v1": "Gemm_v2's f32 chain (the DOT static's k16 twin), the bias slice widened and added in f32, then f2fp_bf16, per coordinate",
+    "GemvBiasF32_v1": "verity_vllm.program.kernels.gemv_rows.gemv_bias_f32 (cuBLAS gemvx at M = 1: T strided FFMA chains, a halving tree, f32 bias)",
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     # [R16 stoch, rev F-r16-20(a)] the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
     # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
@@ -717,7 +719,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
+    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, gemm_bias, gemv_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -733,14 +735,12 @@ def _check_targets() -> dict[str, list]:
         "Attention_v4": [bind(fa3_check_inf.AttentionV4, **dict(attn, T=40), **fa3, MASKED_FROM=m) for m in (2, 0)],
         "RMSNormTriton_v1": [bind(b1.RMSNormTriton, N=16, EPS=1e-6)],
         "RMSNormFusedCuda_v2": [bind(b1.RMSNormFusedCuda, N=16, EPS=1e-6)],
-        "SiluMul_v1": [bind(b1.SiluMul, I=8)],
-        "Embedding_v1": [bind(b1.Embedding, V=5, H=4)],
-        "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
+        "SiluMul_v1": [bind(b1.SiluMul, I=8)], "Embedding_v1": [bind(b1.Embedding, V=5, H=4)], "BiasAdd_v1": [bind(b1.BiasAdd, N=8)],
         "GemmBias_v1": [bind(gemm_bias.GemmBias, K=32, N=3)],
         "GemmBiasF32Epilogue_v1": [bind(gemm_bias.GemmBiasF32Epilogue, K=32, N=3, DOT=hopper.HopperBF16WgmmaDot16),
                                    bind(gemm_bias.GemmBiasF32Epilogue, K=32, N=3, DOT=P.AmpereBF16TcDot16)],
-        "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)],
-        "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
+        "GemvBiasF32_v1": [bind(gemv_bias.GemvBiasF32, K=64, N=3, V=8, T=8), bind(gemv_bias.GemvBiasF32, K=96, N=2, V=1, T=32)],
+        "Bf16MulScalarTensor_v1": [bind(b1.Bf16MulScalarTensor, N=8)], "TokenSelect_v1": [bind(b1.TokenSelect, V=16)],
         "GumbelTopPTokenSelect_v1": [bind(sampling.GumbelTopPTokenSelect, V=16)],
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
         "GumbelTopPTokenSelect_v2": [bind(topp_words.GumbelTopPTokenSelectV2, V=16, S=4)],
@@ -778,6 +778,7 @@ _row("Embedding_v1", embedding, ("out",), _sample({0: "V"}))
 _row("BiasAdd_v1", bias_add, ("0",))
 _row("GemmBias_v1", gemm_bias, ("0",))
 _row("GemmBiasF32Epilogue_v1", lambda st, ops: gemm_bias_f32_epilogue(st, ops, prim_static(st, "DOT", "GemmBiasF32Epilogue_v1"), GEMM_CHUNK), ("0",))
+_row("GemvBiasF32_v1", lambda st, ops: {"0": gemv_bias_f32(ops[0], ops[1], ops[2], **st)}, ("0",))
 _row("Bf16MulScalarTensor_v1", mul_scalar_tensor, ("out",))
 _row("TokenSelect_v1", token_select, (SAMPLED_MEMBER,))
 _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
@@ -797,4 +798,3 @@ _row("MoeFfnFixed_v1", partial(moe_ffn_fixed, router_gemm=True), ("out",))
 _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
-from verity_vllm.program.kernels import gemv_rows  # noqa: E402,F401  -- registers the M = 1 gemv row (GemvBiasF32_v1)
