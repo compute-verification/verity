@@ -321,6 +321,7 @@ def main() -> None:
         emit(fh, {"refused": "identity", **ident, "expect_uuid": args.expect_uuid})
         sys.exit(3)
     nvml = Nvml(dev.uuid)
+    ident["uuid_checked"] = args.expect_uuid != "record"
     emit(fh, {"identity": {**ident, "nvml_driver": nvml.driver, "numpy": np.__version__, "atom": ATOM}})
 
     cubin, rec = build(out_dir, args.nvcc)
