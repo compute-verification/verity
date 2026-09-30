@@ -123,6 +123,147 @@ def scale_value(byte, fmt):
     return np.maximum(uval(byte), 2.0 ** -9) if fmt == "nv" else np.exp2(byte.astype(np.float64) - 127)
 
 
+_PHI_CACHE: dict[int, np.ndarray] = {}
+
+
+
+# ---- the exact law, the certified evaluation (docs/pouw/pearl-c4-fix.md §7): per-row FFTs, a certified modal byte,
+# ---- a 4-lookup lower bound on p_t
+
+def _phi(size):
+    if size not in _PHI_CACHE:
+        w = 2 * np.pi * np.arange(size // 2 + 1) / size
+        _PHI_CACHE[size] = np.stack([(2 + 2 * sum(np.cos(w * v * h) for h in _MAGS)) / 16 for v in _MAGS])
+    return _PHI_CACHE[size]
+
+
+def row_law(eh):
+    """(cdf, L): P(n ≤ m) for m in [−L, L] per row, L the rows' largest support 12·Σ|e_j|, each row's FFT sized to its own
+    support (no aliasing inside it, zero outside)."""
+    Lr = 12 * np.abs(eh).sum(1)
+    L = int(Lr.max())
+    counts = np.stack([(np.abs(eh) == v).sum(1) for v in _MAGS], 1)
+    sizes = np.maximum(64, 1 << np.ceil(np.log2(2 * Lr + 1)).astype(int))
+    n = np.arange(-L, L + 1)
+    cdf = np.empty((len(eh), 2 * L + 1))
+    for size in np.unique(sizes):
+        idx = np.nonzero(sizes == size)[0]
+        phi = np.ones((len(idx), size // 2 + 1))
+        ph = _phi(int(size))
+        for i in range(len(_MAGS)):
+            phi *= np.power(ph[i][None, :], counts[idx, i:i + 1])
+        pmf = np.fft.irfft(phi, int(size), axis=1)[:, n % size]
+        pmf = np.where(np.abs(n)[None, :] <= Lr[idx, None], np.maximum(pmf, 0), 0)
+        c = np.cumsum(pmf, 1)
+        cdf[idx] = c / c[:, -1:]
+    return cdf, L
+
+
+def p_leL(cdf, L, m):
+    idx = m + L
+    base = (np.arange(len(cdf)) * (2 * L + 1)).reshape((-1,) + (1,) * (m.ndim - 1))
+    out = cdf.ravel()[base + np.clip(idx, 0, 2 * L)]
+    return np.where(idx < 0, 0.0, out)
+
+
+def belowL(u, delta, tie_down, L):
+    z = u / delta
+    r = np.rint(z)
+    tie = np.abs(z - r) < 1e-9 * np.maximum(1.0, np.abs(z))
+    m = np.where(tie, r - np.where(tie_down, 0, 1), np.ceil(z) - 1)
+    return np.clip(m, -L - 1, L + 1).astype(np.int64)
+
+
+def p_lower(v, s, delta, cdf, L, j=None):
+    """A lower bound on p_t from 2j CDF lookups: the j edges on either side of the element's own cell resolve the cells
+    between them exactly, and the mass beyond them on each side is taken as one cell, so
+    1 − max(those cells, the two tails) ≤ 1 − max_c P(code = c) = p_t. j = 7 is exact."""
+    j = P_LOOKUPS // 2 if j is None else j
+    c0 = np.searchsorted(EDGES, v / s, side="right")
+    d = delta[:, None]
+    Fs = []
+    for i in range(-j, j):
+        e = c0 + i
+        ec = np.clip(e, 0, 13)
+        f = p_leL(cdf, L, belowL(EDGES[ec] * s - v, d, TIE_DOWN[ec], L))
+        Fs.append(np.where(e < 0, 0.0, np.where(e > 13, 1.0, f)))
+    best = np.maximum(Fs[0], 1 - Fs[-1])
+    for lo, hi in zip(Fs[:-1], Fs[1:]):
+        best = np.maximum(best, hi - lo)
+    return np.clip(1 - best, 0, 1)
+
+
+P_LOOKUPS = 4
+
+
+# ---- the byte law: P(byte ≤ b) by the product formula ----------------------------------------------------------------
+
+_U4 = uval(np.arange(127))
+_MID = np.concatenate([(_U4[:-1] + _U4[1:]) / 2, [np.inf]])      # byte ≤ b ⇔ amax/6 < _MID[b] (b = 126: always)
+
+
+def byte_cdf(vb, rows, delta, cdf, L, b):
+    """P(byte ≤ b) for NVFP4 blocks: vb (N, 16) the blocks' values α·x, rows (N,) each block's row (its law and δ),
+    b (N, C) candidate bytes; the floor at byte 1 makes P(byte ≤ 0) = 0."""
+    U = 6 * _MID[np.clip(b, 0, 126)]
+    d = delta[rows][:, None, None]
+    Ub = np.where(np.isfinite(U), U, 0.0)[..., None]
+    hi = np.clip(np.ceil((Ub - vb[:, None, :]) / d) - 1, -L - 1, L + 1).astype(np.int64)
+    lo = np.clip(np.floor((-Ub - vb[:, None, :]) / d), -L - 1, L + 1).astype(np.int64)
+    base = (rows * (2 * L + 1))[:, None, None]
+    flat = cdf.ravel()
+    ph = np.where(hi + L < 0, 0.0, flat[base + np.clip(hi + L, 0, 2 * L)])
+    pl = np.where(lo + L < 0, 0.0, flat[base + np.clip(lo + L, 0, 2 * L)])
+    g = np.prod(np.clip(ph - pl, 0, 1), axis=2)
+    g = np.where(np.isfinite(U), g, 1.0)
+    return np.where(b <= 0, 0.0, g)
+
+
+def _blocks(v):
+    R, k = v.shape
+    return v.reshape(R * (k // 16), 16), np.repeat(np.arange(R), k // 16)
+
+
+def modal_product(v, delta, cdf, L):
+    """The exact modal byte: P(byte = b) over every byte the rows' noise support reaches."""
+    R, k = v.shape
+    vb, rows = _blocks(v)
+    amax = np.abs(vb).max(1)
+    reach = delta[rows] * L
+    lo = scale_byte(np.maximum(amax - reach, 0), "nv")
+    hi = scale_byte(amax + reach, "nv")
+    C = int((hi - lo).max()) + 2
+    cand = lo[:, None] - 1 + np.arange(C)[None, :]
+    out = np.empty(len(vb), np.int64)
+    for a in range(0, len(vb), 4096):
+        sl = slice(a, a + 4096)
+        pb = np.diff(byte_cdf(vb[sl], rows[sl], delta, cdf, L, cand[sl]), axis=1)
+        out[sl] = cand[sl, 1:][np.arange(len(pb)), pb.argmax(1)]
+    return out.reshape(R, k // 16), C
+
+
+def modal_local(v, delta, cdf, L, rea, widths=(1, 4, 16)):
+    """The modal byte by a certified local search around the realised byte r: with P(b) for b in r − w … r + w and the
+    mass outside that window, the argmax inside is the modal byte whenever it is at least the outside mass (no byte
+    outside can beat it). Blocks not certified at one width try the next, on those blocks only; any still uncertified
+    are returned as -1, for the caller to charge on the safe side. Costs 2·(2w + 2)·16 CDF lookups per block."""
+    R, k = v.shape
+    vb, rows = _blocks(v)
+    r = rea.ravel()
+    modal = np.full(len(r), -1, np.int64)
+    todo = np.arange(len(r))
+    for w in widths:
+        if len(todo) == 0:
+            break
+        cand = r[todo][:, None] + np.arange(-w - 1, w + 1)[None, :]
+        g = byte_cdf(vb[todo], rows[todo], delta, cdf, L, cand)
+        pb = np.diff(g, axis=1)
+        ok = pb.max(1) >= 1 - (g[:, -1] - g[:, 0])
+        modal[todo[ok]] = r[todo[ok]] + pb[ok].argmax(1) - w
+        todo = todo[~ok]
+    return modal.reshape(R, k // 16)
+
+
 DELTA = {"nv": 0.25, "mx": 0.25}
 
 
@@ -230,7 +371,30 @@ def law_side(X, rng, law="exact", draws=24, fmt="nv", sd=None):
     B = BLOCK[fmt]
     sd = sd or side_fmt(X, fmt)
     alpha, ae, dnf, rho2, scr, dead = sd["alpha"], sd["ae"], sd["dnf"], sd["rho2"], sd["screened"], sd["dead"]
-    if law == "exact":
+    uncertified = 0
+    if law == "certified":
+        # §7's option C: the modal byte by the certified local search, p_t from the 4-lookup lower bound; a block that
+        # can't be certified is charged on the safe side (p = 0 on its codes, no κ relief) and counted
+        assert fmt == "nv", "the certified evaluation is NVFP4's"
+        eh = H[rng.integers(0, 16, (R, 32))]
+        delta = ae / 64
+        v = alpha[:, None] * X
+        rea = draw_bytes(v, eh, delta, rng, fmt)
+        mod = np.empty_like(rea)
+        p = np.empty((R, k))
+        step = max(16, int(4_000_000 // max(k, 1)))
+        for a in range(0, R, step):
+            sl = slice(a, a + step)
+            cdf, L = row_law(eh[sl])
+            mod[sl] = modal_local(v[sl], delta[sl], cdf, L, rea[sl])
+            bad = mod[sl] < 0
+            s_ = np.repeat(scale_value(np.where(bad, rea[sl], mod[sl]), fmt), B, axis=1)
+            p[sl] = np.where(np.repeat(bad, B, axis=1), 0.0, p_lower(v[sl], s_, delta[sl], cdf, L))
+        bad = mod < 0
+        uncertified = int(bad.sum())
+        mod = np.where(bad, rea, mod)
+        a0 = None
+    elif law == "exact":
         eh = H[rng.integers(0, 16, (R, 32))]
         delta = ae / 64
         v = alpha[:, None] * X
@@ -247,7 +411,7 @@ def law_side(X, rng, law="exact", draws=24, fmt="nv", sd=None):
         p, a0 = p_gauss(X, alpha, rho2)
     p = np.where(dead | np.repeat(scr, B, axis=1), 0.0, p)
     return dict(p=p, a0=a0, mod=mod, rea=rea, off=(mod != rea), scr=scr, dead=dead, dnf=dnf,
-                eh=eh if law == "exact" else None)
+                eh=eh if law != "gauss" else None, uncertified=uncertified, blocks=int(rea.size))
 
 
 # ---- F1′'s window DPs (dnc2.py) -------------------------------------------------------------------------------------
@@ -510,91 +674,115 @@ def unit(Z, keep, k_unit):
     return out
 
 
-def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False):
-    """X: (m, k) activations as a float array; W: (n, k) weights as a torch tensor (only the sampled tiles are read).
-    With `split`, the census is of the split unit: the kept channels zero-padded to a multiple of 128 on both sides."""
+def linear(X, W, rng, law, max_cols, m_shape, fmt="nv", split=False, chunk_elems=4_000_000):
+    """X: (m, k) activations as a float array; W: (n, k) weights as a torch tensor. `max_cols` 64-row weight tiles are
+    drawn by `rng` (every tile when it is 0 or at least n/64); they are formed and replayed in chunks of about
+    `chunk_elems` elements. With `split`, the census is of the split unit: the kept channels zero-padded to a multiple
+    of 128 on both sides."""
     B = BLOCK[fmt]
     X = bf16(X)
     m, k_full = X.shape
     n = W.shape[0]
     m -= m % T
-    cols = sorted(rng.choice(n // T, min(n // T, max_cols), replace=False))
-    Wj = bf16(np.concatenate([W[c * T:(c + 1) * T].float().numpy() for c in cols]))
-    side_share = 0.0
+    ntiles = n // T
+    cols = list(range(ntiles)) if max_cols <= 0 or max_cols >= ntiles else sorted(rng.choice(ntiles, max_cols, replace=False))
+    side_share, keep = 0.0, None
     if split:
         keep = split_keep(X)
         k_unit = -(-len(keep) // 128) * 128
-        X, Wj = unit(X, keep, k_unit), unit(Wj, keep, k_unit)
+        X = unit(X, keep, k_unit)
         side_share = 1 - len(keep) / k_full
     k = X.shape[1] - X.shape[1] % B
     cL = c_L(m_shape or m, k, n, B)
-    Wj = Wj[:, :k]
     Xa = X[:m, :k]
-    a, b = side_fmt(Xa, fmt), side_fmt(Wj, fmt)
-    la, lb = law_side(Xa, rng, law, fmt=fmt, sd=a), law_side(Wj, rng, law, fmt=fmt, sd=b)
+    a = side_fmt(Xa, fmt)
+    la = law_side(Xa, rng, law, fmt=fmt, sd=a)
     da, dia, sa = f1_windows(la["p"], la["off"], B=B)
-    db, dib, sb = f1_windows(lb["p"], lb["off"], B=B)
-    ua, ub = 128 * da.sum(1), 128 * db.sum(1)              # FP4 units per word the row feeds
-    uia, uib = 128 * dia.sum(1), 128 * dib.sum(1)
-    fa_row, fb_row = da.mean(1), db.mean(1)                # share of the row's chain
+    ua, uia = 128 * da.sum(1), 128 * dia.sum(1)          # FP4 units per word the row feeds
+    fa_row = da.mean(1)                                  # share of the row's chain
     cw = k + (32 + FS) * k / n + 256
     ok_all = a["dnf"]
     # R1 (theory-pearl-c4-domain.md §6.8, ratings.md 15:18Z): a row of A′ or B̃ whose own F1′ (κ inside) per word
     # exceeds ρ·(its cell credit) is uncredited; a tile whose credited rows' debit exceeds the cap is rejected
-    exa, exb = uia > CAP * cw, uib > CAP * cw
+    exa = uia > CAP * cw
     rows, r1 = [], []
-    for r in range(m // T):
-        I = slice(r * T, (r + 1) * T)
-        ok = ok_all[I]
-        if ok.sum() == 0:
-            continue
-        nI = ok.sum()
-        for c in range(len(cols)):
-            J = slice(c * T, (c + 1) * T)
-            cred = nI * T * cw
-            t1 = (T * a["units"][I][ok].sum() + nI * b["units"][J].sum()) / cred
-            f1 = (T * ua[I][ok].sum() + nI * ub[J].sum()) / cred
-            f1i = (T * uia[I][ok].sum() + nI * uib[J].sum()) / cred
-            t3 = B * (a["scr"][I][ok] @ b["scr"][J].T).sum() / cred
-            t4 = T * FS / n * a["sdw"][I][ok].sum() / cred
-            sv, fA, fB = f2_save(la["rea"][I][ok], lb["rea"][J], cL)
-            sv0 = f2_save(la["rea"][I][ok], lb["rea"][J], 0.0)[0]
-            f2 = sv * nI * T * k / cred
-            f1_chain = fa_row[I].mean() + fb_row[J].mean()          # dnc2.py's tile figure (share of chain, all rows)
-            rows.append(dict(cred=cred, base=t1 + t3 + t4, f1=f1 + t3 + t4 + f2, f1_in=f1i + t3 + t4 + f2,
-                             t_f1=f1, t_f1_in=f1i, t3=t3, t4=t4, f2=f2, f2_cl0=sv0, fAB=fA + fB, f1_chain=f1_chain))
-            okr, okc = ok & ~exa[I], ~exb[J]
-            nr, nc = int(okr.sum()), int(okc.sum())
-            if nr == 0 or nc == 0:
-                r1.append((cred, 0.0, 0.0))
+    wstat = dict(fb=[], sb=[], off=0.0, blocks=0, unc=0, exb=0, nb=0)
+    per = max(1, int(chunk_elems // (T * k)))
+    for c0 in range(0, len(cols), per):
+        cc = cols[c0:c0 + per]
+        Wj = bf16(np.concatenate([W[c * T:(c + 1) * T].float().numpy() for c in cc]))
+        if split:
+            Wj = unit(Wj, keep, X.shape[1])
+        Wj = Wj[:, :k]
+        b = side_fmt(Wj, fmt)
+        lb = law_side(Wj, rng, law, fmt=fmt, sd=b)
+        db, dib, sb = f1_windows(lb["p"], lb["off"], B=B)
+        ub, uib = 128 * db.sum(1), 128 * dib.sum(1)
+        exb = uib > CAP * cw
+        wstat["fb"].append(db.mean(1))
+        wstat["sb"].append(float(sb.mean()))
+        wstat["off"] += float(lb["off"].sum())
+        wstat["blocks"] += lb["blocks"]
+        wstat["unc"] += lb["uncertified"]
+        wstat["exb"] += int(exb.sum())
+        wstat["nb"] += len(exb)
+        for r in range(m // T):
+            I = slice(r * T, (r + 1) * T)
+            ok = ok_all[I]
+            if ok.sum() == 0:
                 continue
-            cr = nr * nc * cw
-            deb = ((nc * uia[I][okr].sum() + nr * uib[J][okc].sum()) / cr
-                   + B * (a["scr"][I][okr] @ b["scr"][J][okc].T).sum() / cr
-                   + nc * FS / n * a["sdw"][I][okr].sum() / cr + sv * nr * nc * k / cr)
-            r1.append((cred, cr if deb <= CAP else 0.0, deb))
+            nI = ok.sum()
+            for ci in range(len(cc)):
+                J = slice(ci * T, (ci + 1) * T)
+                cred = nI * T * cw
+                t1 = (T * a["units"][I][ok].sum() + nI * b["units"][J].sum()) / cred
+                f1 = (T * ua[I][ok].sum() + nI * ub[J].sum()) / cred
+                f1i = (T * uia[I][ok].sum() + nI * uib[J].sum()) / cred
+                t3 = B * (a["scr"][I][ok] @ b["scr"][J].T).sum() / cred
+                t4 = T * FS / n * a["sdw"][I][ok].sum() / cred
+                sv, fA, fB = f2_save(la["rea"][I][ok], lb["rea"][J], cL)
+                sv0 = f2_save(la["rea"][I][ok], lb["rea"][J], 0.0)[0]
+                f2 = sv * nI * T * k / cred
+                f1_chain = fa_row[I].mean() + db[J].mean(1).mean()      # dnc2.py's tile figure (share of chain, all rows)
+                rows.append(dict(cred=cred, base=t1 + t3 + t4, f1=f1 + t3 + t4 + f2, f1_in=f1i + t3 + t4 + f2,
+                                 t_f1=f1, t_f1_in=f1i, t3=t3, t4=t4, f2=f2, f2_cl0=sv0, fAB=fA + fB, f1_chain=f1_chain))
+                okr, okc = ok & ~exa[I], ~exb[J]
+                nr, nc = int(okr.sum()), int(okc.sum())
+                if nr == 0 or nc == 0:
+                    r1.append((cred, 0.0, 0.0))
+                    continue
+                cr = nr * nc * cw
+                deb = ((nc * uia[I][okr].sum() + nr * uib[J][okc].sum()) / cr
+                       + B * (a["scr"][I][okr] @ b["scr"][J][okc].T).sum() / cr
+                       + nc * FS / n * a["sdw"][I][okr].sum() / cr + sv * nr * nc * k / cr)
+                r1.append((cred, cr if deb <= CAP else 0.0, deb))
     o = {key: np.array([t[key] for t in rows]) for key in rows[0]}
     cred = o["cred"]
     tot = cred.sum()
-    out = dict(k=k, n=n, tiles=len(cred), macs=float(m * n * k_full), dnf_fail=float(1 - ok_all.mean()), c_L=cL,
-               side_share=side_share,
+    fb_row = np.concatenate(wstat["fb"])
+    out = dict(k=k, n=n, tiles=len(cred), weight_tiles=len(cols), weight_tiles_total=ntiles, macs=float(m * n * k_full),
+               dnf_fail=float(1 - ok_all.mean()), c_L=cL, side_share=side_share, law=law,
                f2_max=float(o["f2"].max()), f2_cl0_max=float(o["f2_cl0"].max()), fAB_max=float(o["fAB"].max()),
                fAB_median=float(np.median(o["fAB"])), tiles_f1_chain_over=int((o["f1_chain"] > CAP).sum()),
                f1_row_a=dict(mean=float(fa_row.mean()), p99=float(np.quantile(fa_row, 0.99)), max=float(fa_row.max())),
                f1_row_w=dict(mean=float(fb_row.mean()), max=float(fb_row.max())),
                f1_in_row_a_max=float(dia.mean(1).max()),
-               S_w_mean=dict(a=float(sa.mean()), w=float(sb.mean())),
-               modal_byte_share=dict(a=float(1 - la["off"].mean()), w=float(1 - lb["off"].mean())),
+               S_w_mean=dict(a=float(sa.mean()), w=float(np.mean(wstat["sb"]))),
+               modal_byte_share=dict(a=float(1 - la["off"].mean()), w=float(1 - wstat["off"] / wstat["blocks"])),
+               uncertified=dict(a=la["uncertified"], a_blocks=la["blocks"], w=wstat["unc"], w_blocks=wstat["blocks"]),
                worst_row=int(np.argmax(fa_row)))
     for v in VARIANTS:
         d = o[v]
         iw = int(np.argmax(d))
         out[v] = dict(over=float(cred[d > CAP].sum() / tot), over_half=float(cred[d > CAP / 2].sum() / tot),
                       max=float(d.max()), mean=float((cred * d).sum() / tot), tiles_over=int((d > CAP).sum()),
+                      tiles_at=dict((str(f), int((d > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)),
                       worst_terms={t: float(o[t][iw]) for t in ("t_f1", "t_f1_in", "t3", "t4", "f2")})
     q = np.array(r1)
     out["r1"] = dict(uncredited=float(1 - q[:, 1].sum() / q[:, 0].sum()), tiles_rejected=int(((q[:, 1] == 0) & (q[:, 2] > CAP)).sum()),
-                     rows_excluded_a=float(exa[:m].mean()), rows_excluded_b=float(exb.mean()), max_debit=float(q[:, 2].max()))
+                     rows_excluded_a=float(exa[:m].mean()), rows_excluded_b=float(wstat["exb"] / max(wstat["nb"], 1)),
+                     max_debit=float(q[:, 2].max()),
+                     tiles_at=dict((str(f), int((q[:, 2] > f * CAP).sum())) for f in (0.5, 0.8, 0.9, 1.0)))
     return out
 
 
@@ -653,9 +841,11 @@ def layer_of(nm):
 
 def real(args):
     DELTA.update({"nv": args.delta_nv, "mx": args.delta_mx})
-    keep = lambda nm, L: layer_of(nm) % args.layer_step == 0 or layer_of(nm) == L - 1  # noqa: E731
+    lo_hi = [int(x) for x in args.layers.split("-")] if args.layers else None
+    keep = (lambda nm, L: lo_hi[0] <= layer_of(nm) <= lo_hi[-1]) if lo_hi else \
+        (lambda nm, L: layer_of(nm) % args.layer_step == 0 or layer_of(nm) == L - 1)
     lins, got, weight, tokens = capture(args, keep)
-    rng = np.random.default_rng(20260930)
+    rng = np.random.default_rng(args.seed)
     allres = {f: {} for f in args.fmts}
     t0 = time.time()
     for i, nm in enumerate(lins):
@@ -693,6 +883,18 @@ def summarize(args, res, tokens, t0, fmt):
                   "tiles_rejected": sum(r["r1"]["tiles_rejected"] for r in res.values()),
                   "max_tile_debit": max(r["r1"]["max_debit"] for r in res.values())}
     summ["side_share"] = wavg(lambda r: r.get("side_share", 0.0))
+    ua = sum(r.get("uncertified", {}).get("a", 0) for r in res.values())
+    uab = sum(r.get("uncertified", {}).get("a_blocks", 0) for r in res.values())
+    uw = sum(r.get("uncertified", {}).get("w", 0) for r in res.values())
+    uwb = sum(r.get("uncertified", {}).get("w_blocks", 0) for r in res.values())
+    summ["uncertified_blocks"] = {"a": ua, "a_blocks": uab, "a_rate": ua / max(uab, 1),
+                                  "w": uw, "w_blocks": uwb, "w_rate": uw / max(uwb, 1),
+                                  "law": sorted({r.get("law", "exact") for r in res.values()})}
+    summ["weight_tiles"] = {"drawn": sum(r.get("weight_tiles", 0) for r in res.values()),
+                            "of": sum(r.get("weight_tiles_total", 0) for r in res.values())}
+    for v in ("f1_in", "r1"):
+        summ[v]["tiles_at_fraction_of_cap"] = {f: sum(r[v].get("tiles_at", {}).get(f, 0) for r in res.values())
+                                              for f in ("0.5", "0.8", "0.9", "1.0")}
     summ["f1_chain_tiles_over_cap"] = sum(r["tiles_f1_chain_over"] for r in res.values())
     summ["f1_row_a"] = {"mean": wavg(lambda r: r["f1_row_a"]["mean"]), "max": max(r["f1_row_a"]["max"] for r in res.values())}
     summ["f1_row_w"] = {"mean": wavg(lambda r: r["f1_row_w"]["mean"]), "max": max(r["f1_row_w"]["max"] for r in res.values())}
@@ -778,8 +980,11 @@ def main(argv=None) -> int:
     r = sub.add_parser("real")
     r.add_argument("model")
     r.add_argument("--tokens", type=int, default=256)
-    r.add_argument("--law", choices=("exact", "gauss"), default="exact")
-    r.add_argument("--max-cols", type=int, default=8, help="64-row weight tiles sampled per linear")
+    r.add_argument("--law", choices=("certified", "exact", "gauss"), default="certified",
+                   help="certified: §7's evaluation, which reports its uncertified blocks; exact: the modal byte from 24 draws")
+    r.add_argument("--max-cols", type=int, default=8, help="64-row weight tiles sampled per linear (0: every tile)")
+    r.add_argument("--layers", default=None, help="only these decoder layers, e.g. 0-7")
+    r.add_argument("--seed", type=int, default=20260930, help="the census's salts and weight-tile draws")
     r.add_argument("--layer-step", type=int, default=1, help="decoder layers whose index is a multiple of this, and the last")
     r.add_argument("--m-shape", type=int, default=0, help="the GEMM's m for F2's c_L (default: the tokens captured)")
     r.add_argument("--fmts", nargs="+", choices=("nv", "mx"), default=["nv", "mx"], help="NVFP4 and/or MXFP4 forming")
