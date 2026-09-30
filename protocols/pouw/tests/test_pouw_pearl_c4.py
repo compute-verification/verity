@@ -15,6 +15,7 @@ import pytest
 
 import pearl_c4_vectors as V
 from verity.commitments.turboshake import turboshake128
+from verity.errors import InvalidArtifact
 from verity.ml.tc import fp32
 from verity_pouw.audit import Epoch, Prover, Workload
 from verity_pouw.protocol import DomainError, Matmul, Shape
@@ -289,6 +290,40 @@ def test_scale_bytes_have_one_encoding_and_no_zero():
     assert F.scale_bytes_ok(F.MXFP4, [F.block_scale(F.MXFP4, w)[0] for w in sweep])
     counts = R.device_scales(f, bytes([0x38, 0x00, 0x80, 0xB8, 0x7F, 0x01]))
     assert counts == {"bytes": 6, "outside_range": 4, "min": 0, "max": 0xB8, "bit7": 2, "zero": 1, "nan": 1}
+
+
+#: The four rows the decode's 28-row `nvf4Specials` table adds (bc-5a715b19's review, research store
+#: internal/pouw-fp8/pearl-c4-scale-decode/): (accumulator, a, b, sa, sb), codes and bytes packed little-endian, as the
+#: Lean `Vec`.  Each is a NaN accumulator with one scale byte that sets bit 7.
+NAN_BIT7_SPECIALS = (
+    (0xFFACB8FF, 0xD012B2233DC6403271C58AC78DFF95B32950DA366B5B32A97D33B2DECE69A903,
+     0x932E07AB6589BD2774DC10686F6F47C3F71883659810A8DEEA135E394A8BA32E, 0x28DB5712, 0x4F2C4D74),
+    (0x7F8163AC, 0x8C723EEE523093DAF5F775033AA7D281B9FB908BBBE1EF1F462490252D508333,
+     0x357A39B4614523259FAFD800A9D93ABA65E1E668F3DD38A4AD9D9E120FCA114E, 0x384E2E0F, 0x578E342B),
+    (0xFF9F8CAE, 0x4BC3E89FB7E108A21C2DDF27D95A2F8F9792EC8E966FFC2CD96ADEDA5AAF81D9,
+     0xFC1D14F7D95984BAD926475BE192F56E9577D5A73A914EE07411125B44C4EC14, 0x3551142B, 0x74E13924),
+    (0x7FFEAA77, 0xC1E2F0693F03C513B5FCA39B949062349E45A9E1FC2EA0E0E25E1D9F6D905825,
+     0x2311785E72C70F5C98D86F50B5CB5856F42807A0191C155683D3ABAFE7F2C6F4, 0x5CF25B71, 0x3B501375),
+)
+
+
+@pytest.mark.parametrize("row", NAN_BIT7_SPECIALS, ids=lambda r: f"{r[0]:08X}")
+def test_nan_accumulator_specials_read_their_scales_as_the_hardware(row):
+    """The decode's 28-row specials table: a NaN accumulator whose scale bytes set bit 7.  Read as sm_120 reads them
+    (`hw_scales`, low 7 bits), the bytes are valid scales, so the vector is outside the model only through its
+    accumulator (the step raises, Lean's `none`); `verity.ml.tc`'s own decode rejects the raw bytes, which is the row the
+    current Lean decode fails.  D-SB keeps such bytes off every formed side."""
+    from verity.ml.tc.models import BLACKWELL_SM120_NVF4 as atom
+    acc, a, b, sa, sb = row
+    codes_a, codes_b = [(a >> 4 * i) & 15 for i in range(64)], [(b >> 4 * i) & 15 for i in range(64)]
+    sa, sb = [(sa >> 8 * i) & 255 for i in range(4)], [(sb >> 8 * i) & 255 for i in range(4)]
+    assert (acc >> 23) & 0xFF == 0xFF and acc & 0x7FFFFF and any(s & 0x80 for s in sa + sb)
+    assert atom.group_terms(codes_a, codes_b, F.hw_scales(F.NVFP4, sa), F.hw_scales(F.NVFP4, sb))
+    with pytest.raises(InvalidArtifact):
+        atom.group_terms(codes_a, codes_b, sa, sb)
+    with pytest.raises(InvalidArtifact):
+        atom.step_scaled(acc, codes_a, codes_b, F.hw_scales(F.NVFP4, sa), F.hw_scales(F.NVFP4, sb))
+    assert not F.scale_bytes_ok(F.NVFP4, sa + sb)
 
 
 def scales_side() -> F.Formed:

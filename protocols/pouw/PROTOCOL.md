@@ -486,6 +486,11 @@ useful    U/(α_A·α_B), glue
     (`parse_row`). An a_E of 0x00 is D-NF's exclusion, not a rejection, since a zero row (decode's filler) forms it. The
     verifier forms every scale itself from the committed rows, and every replayed step reads a UE4M3 byte as the hardware
     does (`hw_scales`).
+    The decode is the Lean `scaleDyadic` proposal's.
+    - Its `nvf4Specials` table has 28 rows: research store `internal/pouw-fp8/pearl-c4-scale-decode/`, bc-5a715b19's
+      review.
+    - Four of those rows are NaN accumulators whose scale bytes set bit 7. They are valid scales under the hardware
+      decode, invalid under `verity.ml.tc`'s, and outside the model through the accumulator (a test).
   - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
   - W_ref = mnk + 32·mk + 256·mn + 117·mk;
