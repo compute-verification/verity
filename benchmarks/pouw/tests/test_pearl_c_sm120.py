@@ -244,8 +244,6 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1]}
     if name == "hash_leaf":
         return {0: i[0] * i[1], 1: (i[0] // 64) * (i[1] // 64) * 32}
-    if name == "tickets":
-        return {0: 4 * i[0] * i[1], 1: (i[0] // 16) * (i[1] // 16) * 32, 2: 32}
     if name == "hash_rows_f32":
         assert i[1] % 1024 == 0
         return {0: i[0] * i[1], 1: i[0] * (i[1] // 1024) * 32}
@@ -266,7 +264,7 @@ def threads(name: str, i: list[int]) -> int:
     """Threads the launch must cover."""
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32, "hash_leaf": lambda: (i[0] // 64) * (i[1] // 64),
-            "tickets": lambda: (i[0] // 16) * (i[1] // 16), "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0],
+            "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0],
             "quant_s5": lambda: i[0] * i[1] // 16, "hash_rows_f32": lambda: i[0] * (i[1] // 1024)}.get(name, lambda: 0)()
 
 
@@ -471,8 +469,7 @@ def test_arm_accounting_is_the_schemes(A):
             assert w.tensor_macs == {"fp8-e4m3": m * shape.n * shape.k + m * (C.R + arm.device.atom.k) * shape.k,
                                      "bf16": m * shape.n * C.PEEL_K}
             assert w.hashed_bytes == {"turboshake128/messages": 8 * m * shape.n, "turboshake128/leaves": m * shape.n,
-                                      "turboshake128/rows": 4 * shape.m * shape.k,
-                                      "blake3/tickets": 64 * (m // 16) * (shape.n // 16)}
+                                      "turboshake128/rows": 4 * shape.m * shape.k}
             g = {k: Fraction(v) for k, v in w.gamma.items() if k != "basis"}
             if cls == "PearlCSm120":
                 assert g == B.gamma(shape.n, shape.k)
@@ -516,12 +513,12 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     sx = "" if arm.device.g else "_u"
     for g in rows[:-1]:
         assert not g["ok"] and set(g["checked"].values()) == {"all"}
-        assert set(g["checked"]) == {"y", "c", "u"} | ({"leaves", "tickets", "rows"} if g["role"] == "hash" else set())
+        assert set(g["checked"]) == {"y", "c", "u"} | ({"leaves", "rows"} if g["role"] == "hash" else set())
         assert all(t["failed"] for t in g["detail"]["twin_tiles"])
     assert rows[-1]["live"] == []
 
     forming = ["stats_s5", "eprime", "form_s5", "gemm_words" + sx, "pa", "gemm_pearlc" + sx]
-    hashes = ["hash_msg", "hash_leaf", "tickets", "hash_rows_f32"]
+    hashes = ["hash_msg", "hash_leaf", "hash_rows_f32"]
     got, allocs = windows(log)
     assert not allocs
     ea: dict[tuple, int] = {}

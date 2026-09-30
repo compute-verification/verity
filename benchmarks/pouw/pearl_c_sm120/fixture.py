@@ -4,7 +4,8 @@ pearl_c_sm120.cu's kernels write, in its row-major layout, for forming v1 on `pe
 over every cell are batched in numpy (the chains by the twin, `benchmarks/pouw/pearl_c/twin.py`, the peel with
 `verity.ml.kernels.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
 `benchmarks/pouw/pearl_c/fixture.py`, do the rest), and one whole 64 x 64 tile per variant is
-recomputed by the scheme (`encode`, `checked`, `digest`, `tickets`) and must agree.  run.py compares the device's buffers
+recomputed by the scheme (`encode`, `checked`, `digest`) and must agree.  Pearl's tickets are not part of
+`pearl-c-sm120` (no PoUW check reads them), so nothing here computes them.  run.py compares the device's buffers
 with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
@@ -163,7 +164,6 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         dg = H.digests(c, u)
         v.put("digests", dg, "u8")
         v.put("leaves", H.leaves(dg, m, n), "u8")
-        v.put("tickets", H.tickets(c, noise.seed_a), "u8")
         agree = crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n)
         manifest["variants"][device.name] = {"scheme": C.PearlC(forming="v1", device=device).name, "g": device.g,
                                              "files": v.files, "crosscheck": agree}
@@ -172,7 +172,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
 
 
 def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n) -> dict:
-    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme on `device`: encode, checked, digest, tickets."""
+    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme on `device`: encode, checked, digest."""
     s = C.PearlC(forming="v1", device=device)
     rows, cols = range(64, 128), range(n - 64, n)
     noise = s.noise(ctx)
@@ -187,7 +187,6 @@ def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n) -> dict:
     assert s.admissible(ctx, ops)
     mine = turboshake128(b"".join(dg[r * per + per - 2 + h] for r in rows for h in range(2)), C.D_LEAF, 32)
     assert s.digest(ctx, noise, checked) == mine
-    assert s.tickets(noise, checked) == H.tickets(np.array(checked.c, np.uint32), noise.seed_a)
     return {"tile": [64, n - 64], "cells": 64 * 64, "agree": True}
 
 

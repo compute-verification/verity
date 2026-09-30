@@ -631,34 +631,6 @@ extern "C" __global__ void __launch_bounds__(128) hash_rows_f32(const Args a) {
   store32(reinterpret_cast<uint8_t*>(a.p[1]) + t * 32, h);
 }
 
-// Pearl's tickets: per 16 x 16 subtile of C~, the 16-lane fold (lane (rb, cb) folds its 4 x 4 block row-major,
-// lane <- rotl32(lane 0x9E3779B1 + bits, 13)) hashed as one keyed BLAKE3 block.  p0 C~, p1 out (subtiles row-major x 32 B),
-// p2 key (8 words); i0 rows, i1 cols
-extern "C" __global__ void __launch_bounds__(128) tickets(const Args a) {
-  const int cols = a.i[1], sn = cols / 16;
-  const int t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= a.i[0] / 16 * sn) return;
-  const int si = t / sn, sj = t % sn;
-  const uint32_t* C = reinterpret_cast<const uint32_t*>(a.p[0]);
-  uint32_t z[16], kw[8], h[8];
-#pragma unroll
-  for (int l = 0; l < 16; l++) {
-    uint32_t lane = 0;
-#pragma unroll
-    for (int f = 0; f < 16; f++) {
-      lane = lane * 0x9E3779B1u + C[(size_t)(16 * si + 4 * (l / 4) + f / 4) * cols + 16 * sj + 4 * (l % 4) + f % 4];
-      lane = __funnelshift_l(lane, lane, 13);
-    }
-    z[l] = lane;
-  }
-#pragma unroll
-  for (int i = 0; i < 8; i++) kw[i] = reinterpret_cast<const uint32_t*>(a.p[2])[i];
-  blake3_block(kw, z, h);
-  uint4* out = reinterpret_cast<uint4*>(a.p[1] + (size_t)t * 32);
-  out[0] = make_uint4(h[0], h[1], h[2], h[3]);
-  out[1] = make_uint4(h[4], h[5], h[6], h[7]);
-}
-
 // words differing between two buffers: p0, p1 (u32), p2 counter (u64); i0 count (in words, < 2^31 per launch)
 extern "C" __global__ void diff_words(const Args a) {
   const size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;

@@ -99,7 +99,7 @@ def accept(arm, check: Path) -> None:
     call = arm.prepare(HarnessDev(), shape, arm.flag_sets["hash"], op)
     call.launch(STREAM)
     s, w = call.scratch.b, call.own.b
-    for name in ("at", "alpha_a", "c", "u", "y", "leaves", "tickets", "rows"):
+    for name in ("at", "alpha_a", "c", "u", "y", "leaves", "rows"):
         write(rd, s[name], load(name))
     for name in ("bt", "alpha_b"):
         write(rd, w[name], load(name))

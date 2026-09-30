@@ -5,15 +5,16 @@ kernels as the honest prover on the harness's FP32 operands, on the device recor
 Per operand set, `weight_side` is the per-(weight, epoch) work: E_B's, F_A's and F_B's lines, B's statistics, E′ and forming,
 B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 128, A's rows into a zero-padded buffer; E_A's lines; A's
 statistics, E′ and forming; A′·F_B and P_A; the chain with its peel and y; then every hash (the C̃ and U messages, the tile
-leaves, Pearl's tickets, A's row commitments).  `nohash` is the same call without the hashes and without E_A's XOF (its lines
-come from `prepare`), so it writes the same C̃, U and y.  A shape's operand sets and flag sets share the per-call buffers (the
-harness runs one call at a time on one stream); each operand set has its own keys, E_A's lines and weight side.
+leaves, A's row commitments; Pearl's tickets are not part of `pearl-c-sm120`, since no PoUW check reads them).  `nohash` is
+the same call without the hashes and without E_A's XOF (its lines come from `prepare`), so it writes the same C̃, U and y.
+A shape's operand sets and flag sets share the per-call buffers (the harness runs one call at a time on one stream); each
+operand set has its own keys, E_A's lines and weight side.
 
 The gate, at the exact shape and flag set: a second launch into the gate's own buffers (C̃ by gemm_ct, another kernel; C̃, U
 and y by gemm_pearlc on 3 CTAs, another tile schedule; the hashes over those) must equal every output word for word (`all`),
-and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes and α, C̃, U, y and, with hashing, the leaf,
-the tickets and row r0's commitments must equal #449's CPU twin (`benchmarks/pouw/pearl_c/twin.py`) on the device record,
-from the harness's operand rows.  `known_bad` flips C̃'s first word between the product and the hashes.
+and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes and α, C̃, U, y and, with hashing, the leaf
+and row r0's commitments must equal #449's CPU twin (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the
+harness's operand rows.  `known_bad` flips C̃'s first word between the product and the hashes.
 
 Shortcuts, flagged: the hashing is #449's device code, unfused (the digests read C̃ and U back from memory); m is padded to
 128 rows (decode's m = 32 issues 4x its tensor work, and `work` counts issued MACs); the prices and G are the H100's
@@ -57,13 +58,12 @@ from verity_pouw.protocol import Shape as MShape  # noqa: E402
 from verity_pouw.schemes import pearl_c as C  # noqa: E402
 from verity_pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
 
-T, SUBTILE, SEGMENT = W.T, 16, W.SEGMENT
+T, SEGMENT = W.T, W.SEGMENT
 WEIGHT = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b", "epb_codes",
           "bt", "bf", "pb_t")
 OWN = WEIGHT + ("ea_codes",)       # E_A's lines are the set's too (its line_a key), and nohash reads them from prepare
-CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y", "digests", "leaves", "tickets",
-        "rows")
-REF = ("c2", "c", "u", "y", "digests", "leaves", "tickets", "rows")
+CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y", "digests", "leaves", "rows")
+REF = ("c2", "c", "u", "y", "digests", "leaves", "rows")
 KEYS = ("line_a", "line_b", "jackpot")
 REF_GRID = 3
 GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and the debit cap ρ (statement parameters, cheap-binding.md §1)
@@ -102,7 +102,7 @@ def expected(t, hashing: bool) -> dict[str, bytes]:
            "c": t.c.astype("<u4").tobytes(), "u": t.u.astype("<u4").tobytes(),
            "y": H.glue_y(t.u.astype(np.uint32), ia, ib).astype("<u2").tobytes()}
     if hashing:
-        out.update(leaf=t.leaf, tickets=b"".join(t.tickets), rows=b"".join(t.row_commits))
+        out.update(leaf=t.leaf, rows=b"".join(t.row_commits))
     return out
 
 
@@ -162,7 +162,7 @@ class _Call:
         flip = [lambda: hdev.xor_byte(s["c"], 0, 0x01, rd.stream)] if corrupt else []
         hashes = [f for _, phase, f in steps if phase == "hashing"]
         self.steps = (lines_ea if self.xof else []) + forming + cleanup + flip + (hashes if self.hashing else [])
-        names = (("leaves", "tickets", "rows") if self.hashing else ()) + ("y", "c", "u")
+        names = (("leaves", "rows") if self.hashing else ()) + ("y", "c", "u")
         self.outputs = {name: Buffer(s[name], self.size[name]) for name in names}
         if fresh:
             for f in self.job:
@@ -208,7 +208,7 @@ class _Call:
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
         steps = {name: f for name, _, f in ref.steps()}
-        for name in ("gemm_ct", "gemm_pearlc") + (("hash_msg", "hash_leaf", "tickets", "hash_rows") if self.hashing else ()):
+        for name in ("gemm_ct", "gemm_pearlc") + (("hash_msg", "hash_leaf", "hash_rows") if self.hashing else ()):
             steps[name]()
         rd.sync()
         out = {name: self.diff(buf.ptr, s["ref_" + name], buf.nbytes) for name, buf in self.outputs.items()}
@@ -238,8 +238,6 @@ class _Call:
         if self.hashing:
             segs = 4 * k // SEGMENT
             out["leaf"] = get(s["leaves"] + 32 * ((r0 // T) * (n // T) + c0 // T), 32)
-            out["tickets"] = b"".join(get(s["tickets"] + 32 * ((r0 // SUBTILE + j) * (n // SUBTILE) + c0 // SUBTILE), 32 * T // SUBTILE)
-                                      for j in range(T // SUBTILE))
             out["rows"] = get(s["rows"] + 32 * segs * r0, 32 * segs)
         return out
 
@@ -331,7 +329,7 @@ class PearlCSm120:
                     w_ref=str(self.scheme.wref(s)), credited=str(self.scheme.credit_of(s)),
                     unit=f"W1 units ({self.device.name}, stand-in prices: the H100's)",
                     hashed_bytes={"turboshake128/messages": 8 * m * n, "turboshake128/leaves": m * n,
-                                  "turboshake128/rows": 4 * shape.m * k, "blake3/tickets": 64 * (m // SUBTILE) * (n // SUBTILE)},
+                                  "turboshake128/rows": 4 * shape.m * k},
                     weight_hashed_bytes={}, gamma=gamma(self.scheme, shape))
 
     def prepare(self, dev, shape, flags: frozenset[str], operands, corrupt: bool = False) -> _Call:

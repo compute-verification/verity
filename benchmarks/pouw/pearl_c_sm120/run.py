@@ -274,8 +274,7 @@ class Pipeline:
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
             "at": m * k, "bt": n * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
-            "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "tickets": (m // 16) * (n // 16) * 32,
-            "rows": m * (4 * k // 1024) * 32,
+            "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "rows": m * (4 * k // 1024) * 32,
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
         }
@@ -337,8 +336,6 @@ class Pipeline:
         hashing = [("hash_msg", lambda: d.launch("hash_msg", cdiv(m * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"]), i=(m, n))),
                    ("hash_leaf", lambda: d.launch("hash_leaf", cdiv((m // 64) * (n // 64), 64), 64, p=(b["digests"], b["leaves"]),
                                                   i=(m, n))),
-                   ("tickets", lambda: d.launch("tickets", cdiv((m // 16) * (n // 16), 128), 128,
-                                                p=(b["c"], b["tickets"], self.keys["jackpot"]), i=(m, n))),
                    ("hash_rows", lambda: d.launch("hash_rows_f32", cdiv(self.m_real * segs, 128), 128, p=(b["xa"], b["rows"]),
                                                   i=(self.m_real, self.row_bytes)))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
