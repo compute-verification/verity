@@ -10,20 +10,22 @@ promotion from +0 every 4 atoms (G4). A cell is in Pi's domain when G4 is used, 
 The census passes when every in-domain cell's skippable share is at most 1/400.
 
 The atom is `verity.ml.tc`'s FP8 `mma`/`wgmma` step with a nonzero accumulator, parametric in the model (`--atom`,
-`set_atom`): H100's one group of 32 (`HOPPER_E4M3_K32`, the default) or Ada's two groups of 16 (`ADA_E4M3_M16N8K32`),
-sm_120's first hypothesis until GPU 0's capture lands.  Only the atom changes across cards; the families, the debit and
-the domain rule are the same, so the census re-runs unchanged on the captured step.  It is vectorized here and checked
-against `verity.ml.tc` for every atom by --selftest. The noise is Pearl's shape, simplified: per row,
+`set_atom`): H100's one group of 32 on a 14-bit adder (`HOPPER_E4M3_K32`, the default), Ada's two groups of 16
+(`ADA_E4M3_M16N8K32`), the RTX PRO 6000's one group of 32 on a 26-bit adder (`BLACKWELL_SM120_E4M3_M16N8K32`), or any
+`groups:width:zero`.  Only the atom changes across cards (the forming atom and the chain both run on it); the families, the
+debit and the domain rule are the same.  It is vectorized here and checked against `verity.ml.tc`'s `GroupSum.step` for
+every atom by --selftest.  --exact-run-min is the card's exact-rewrite break-even in atoms. The noise is Pearl's shape, simplified: per row,
 y = x + delta*rms(x)*Z with Z a rank-32 row of unit RMS (lines of entries +-(1..128)); alpha = 448/max|y|;
 codes = RNE_E4M3(alpha*y). Seeds are the tuple (run, unit index, side), so duplicated units get independent noise.
 
     python benchmarks/pouw/pearlc_census.py --selftest
-    python benchmarks/pouw/pearlc_census.py --atom ada-e4m3-k32 --ks 8192,16384,65536 --deltas 1 --tile 64x16 --out census.json
-    python benchmarks/pouw/pearlc_census.py --atom ada-e4m3-k32 --forming s5 --line-norm 16 --ks 8192,65536 --out census_s5.json
+    python benchmarks/pouw/pearlc_census.py --ks 8192,16384,65536 --deltas 1 --tile 64x16 --out census.json
+    python benchmarks/pouw/pearlc_census.py --atom sm120-e4m3-k32 --forming s5 --line-norm 16 --ks 8192,65536 --debit \
+        --out census_sm120.json
 
 --forming s5 is docs/pouw/cheap-binding.md §5's forming, bit-exact: s = max|x|, rho = RMS over every 8th position,
 sigma = delta*rho, alpha = 448/(s + 4*sigma); F's lines are E4M3 codes of (N_F/sqrt(32))*w and E'_row = e4m3((sigma*alpha/N_F)*v)
-(w, v unit-RMS lines of entries +-(1..128)); D = HOPPER_E4M3_K32.step(C = f32(alpha*x), E'_row, F_l) per element; A' =
+(w, v unit-RMS lines of entries +-(1..128)); D = atom.step(C = f32(alpha*x), E'_row, F_l) per element; A' =
 RNE_E4M3(D) with saturation. Pi's activation rules are checked per row: the noise floor sigma*alpha >= 1 and liveness (at
 most k/64 entries with |x| >= 8*sigma); a cell whose rows break them is out of the domain ("rejected"). The collision rate
 is how often two independent noise draws give an element the same code: the element-level noise entropy.
@@ -59,9 +61,9 @@ FP32_SIG = 24                # the FP32 significand width the adder rescales fro
 # floor `zero`, the incoming accumulator cut to `width` and joined to the first group, each group's result to the next.
 ATOMS = {
     "hopper-e4m3-k32": ((32,), 14, -139),      # HOPPER_E4M3_K32 (Hawkeye H100)
-    "ada-e4m3-k32": ((16, 16), 14, -139),      # ADA_E4M3_M16N8K32 (RTX 4090); sm_120's first hypothesis (Ada's adder)
+    "ada-e4m3-k32": ((16, 16), 14, -139),      # ADA_E4M3_M16N8K32 (RTX 4090)
+    "sm120-e4m3-k32": ((32,), 26, -133),       # BLACKWELL_SM120_E4M3_M16N8K32 (RTX PRO 6000, r20260930-031244-ecbc)
 }
-_ATOM_MODEL = {"hopper-e4m3-k32": "HOPPER_E4M3_K32", "ada-e4m3-k32": "ADA_E4M3_M16N8K32"}
 ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO = ATOMS["hopper-e4m3-k32"]
 ATOM_NAME = "hopper-e4m3-k32"
 
@@ -156,9 +158,9 @@ def step(C: np.ndarray, a: np.ndarray, b: np.ndarray):
 
 
 def selftest(cases: int = 3000) -> int:
-    """Check the vectorized parametric step against `verity.ml.tc` on nonzero-accumulator cases, for every atom in ATOMS
-    (the current selection restored at the end).  Returns the total mismatch count."""
-    from verity.ml.tc import models as M
+    """Check the vectorized parametric step against `verity.ml.tc`'s `GroupSum.step` on nonzero-accumulator cases, for
+    every atom in ATOMS and the current selection (restored at the end).  Returns the total mismatch count."""
+    from verity.ml.tc.models import GroupSum
     saved = ATOM_NAME
     rng = np.random.default_rng(7)
     a = (rng.integers(0, 0x7F, (cases, 32)) | rng.integers(0, 2, (cases, 32)) * 0x80).astype(np.uint8)
@@ -167,9 +169,10 @@ def selftest(cases: int = 3000) -> int:
     C = np.where(rng.random(cases) < 0.2, 0.0, rng.standard_normal(cases) * np.exp2(rng.integers(-20, 30, cases)))
     C = C.astype(np.float32).astype(np.float64)
     bad = 0
-    for name in ATOMS:
+    for name in dict.fromkeys([*ATOMS, saved]):
         set_atom(name)
-        H = getattr(M, _ATOM_MODEL[name])
+        H = GroupSum(name=name, arch="census", dtype="e4m3", operand_bits=8, groups=ATOM_GROUPS, width=ATOM_WIDTH,
+                     zero_exponent=ATOM_ZERO, validated="census selftest")
         D, _ = step(C, a, b)
         for i in range(cases):
             want = H.step(int(np.float32(C[i]).view(np.uint32)), [int(x) for x in a[i]], [int(x) for x in b[i]])
@@ -313,25 +316,26 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
 
 def chain(a: np.ndarray, b: np.ndarray, G: int):
     """a, b: (P, k) codes of the P outputs of one tile. Returns per-atom tile identity, per-atom tile exactness, word identity
-    share, and promotion identities (G > 0)."""
+    share, promotion identities (G > 0), each word's final value (the ticket word under G, the chained word when pure) and
+    the share of (word, atom) steps that are exact."""
     P, k = a.shape
     T = k // 32
     C = np.zeros(P)
     total = np.zeros(P, dtype=np.float32)
     tid, tex = np.zeros(T, bool), np.zeros(T, bool)
-    words, promo = 0, 0
+    words, promo, wex = 0, 0, 0
     for t in range(T):
         if G and t % G == 0:
             C = np.zeros(P)
         D, ex = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
         same = D == C
-        tid[t], tex[t], words = same.all(), ex.all(), words + int(same.sum())
+        tid[t], tex[t], words, wex = same.all(), ex.all(), words + int(same.sum()), wex + int(ex.sum())
         C = D
         if G and (t % G == G - 1 or t == T - 1):
             new = (total + C.astype(np.float32)).astype(np.float32)
             promo += int(((new == total) & (C != 0)).all())
             total = new
-    return tid, tex, words / (P * T), promo
+    return tid, tex, words / (P * T), promo, (total if G else C.astype(np.float32)), wex / (P * T)
 
 
 def group_run(a: np.ndarray, b: np.ndarray, ts: list[int], skip: frozenset = frozenset()) -> tuple[np.ndarray, list[np.ndarray]]:
@@ -510,7 +514,11 @@ def not_needed_share(flags: np.ndarray, rows: int, cols: int) -> float:
     return float(flags.reshape(rows, cols, -1).all(1).mean())
 
 
-def exact_run_mask(tex: np.ndarray, min_run: int = 14) -> np.ndarray:
+EXACT_RUN_MIN = 14      # atoms: one Winograd level's break-even on the H100 (450-700 of inner dimension); --exact-run-min
+
+
+def exact_run_mask(tex: np.ndarray, min_run: int | None = None) -> np.ndarray:
+    min_run = EXACT_RUN_MIN if min_run is None else min_run
     mask, start = np.zeros(len(tex), bool), None
     for i, e in enumerate(list(tex) + [False]):
         if e and start is None:
@@ -522,7 +530,7 @@ def exact_run_mask(tex: np.ndarray, min_run: int = 14) -> np.ndarray:
     return mask
 
 
-def exact_run_atoms(tex: np.ndarray, min_run: int = 14) -> int:
+def exact_run_atoms(tex: np.ndarray, min_run: int | None = None) -> int:
     return int(exact_run_mask(tex, min_run).sum())
 
 
@@ -536,15 +544,23 @@ def val(codes: np.ndarray) -> np.ndarray:
     return np.where(codes & 0x80, -v, v)
 
 
+def family_rows(fam: str, k: int, delta: float, rows: int, cols: int, run: int):
+    """A family's activation rows XA and weight rows XB, and the s5 F codes of each side, from the census's seeds."""
+    FA = lines(k, _rng(run, "FA", k))
+    XA, XB = family(fam, rows, cols, k, FA, _rng(run, fam, k, delta))
+    return XA, XB, FA, lines(k, _rng(run, "FB", k))
+
+
+def s5_lines(k: int, run: int, line_norm: float):
+    return tuple(enc(unit_lines(k, _rng(run, f"{s}-lines", k)) * (line_norm / np.sqrt(32))) for s in ("FA", "FB"))
+
+
 def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming: str = "census",
          line_norm: float = 256.0, with_debit: bool = False, cross_words: int = 0, transfer_words: int = 0) -> list[dict]:
-    rng = _rng(run, fam, k, delta)
-    FA, FB = lines(k, _rng(run, "FA", k)), lines(k, _rng(run, "FB", k))
-    XA, XB = family(fam, rows, cols, k, FA, rng)
+    XA, XB, FA, FB = family_rows(fam, k, delta, rows, cols, run)
     extra = {"forming": forming}
     if forming == "s5":
-        FcA = enc(unit_lines(k, _rng(run, "FA-lines", k)) * (line_norm / np.sqrt(32)))
-        FcB = enc(unit_lines(k, _rng(run, "FB-lines", k)) * (line_norm / np.sqrt(32)))
+        FcA, FcB = s5_lines(k, run, line_norm)
         a, collA, subA, floorA, liveA = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A"))
         b, collB, subB, floorB, liveB = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B"))
         nfA, drA, drB = np.zeros(1), 0.0, 0.0
@@ -560,16 +576,24 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
     ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
     A, B = a[ii.ravel()], b[jj.ravel()]
     out = []
+    finals = {}
     for G in (0, 4):
-        tid, tex, word_id, promo = chain(A, B, G)
+        tid, tex, word_id, promo, finals[G], word_exact = chain(A, B, G)
         T = k // 32
         skip = int((tid | exact_run_mask(tex)).sum()) + promo
         row = {**extra, "family": fam, "k": k, "delta": delta, "layout": "G4" if G else "pure",
                "in_domain": in_domain(G, k, delta) and ok,
                "atoms": T, "tile_identity_atoms": int(tid.sum()), "exact_run_atoms": exact_run_atoms(tex),
-               "tile_exact_atoms": int(tex.sum()), "promotion_identities": promo, "word_identity": round(word_id, 6),
+               "tile_exact_atoms": int(tex.sum()), "word_exact_steps": round(word_exact, 6),
+               "promotion_identities": promo, "word_identity": round(word_id, 6),
                "noise_free_entries": float(nfA.mean()), "double_rounding_differs": round((drA + drB) / 2, 6),
                "skippable_share": skip / T}
+        if G:
+            # The unpromoted attack: the pure chain's word in place of the ticket word, per word and whole tiles.
+            same = finals[0] == finals[G]
+            full = T // G * G
+            row.update({"unpromoted_equal_words": round(float(same.mean()), 6), "unpromoted_equal_tile": bool(same.all()),
+                        "tile_exact_groups": round(float(tex[:full].reshape(-1, G).all(1).mean()), 6) if full else 0.0})
         if G and with_debit:
             flags, eF = debit(A, B, G)
             per_word = flags.sum(1)
@@ -601,6 +625,7 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
 
 
 def main() -> None:
+    global EXACT_RUN_MIN
     ap = argparse.ArgumentParser()
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--ks", default="8192,16384,65536")
@@ -611,7 +636,9 @@ def main() -> None:
     ap.add_argument("--forming", choices=("census", "s5"), default="census")
     ap.add_argument("--line-norm", type=float, default=256.0)
     ap.add_argument("--atom", default="hopper-e4m3-k32",
-                    help="the FP8 atom model: hopper-e4m3-k32, ada-e4m3-k32 (sm_120's first hypothesis), or groups:width:zero")
+                    help=f"the FP8 atom model: one of {', '.join(ATOMS)}, or groups:width:zero")
+    ap.add_argument("--exact-run-min", type=int, default=EXACT_RUN_MIN,
+                    help="atoms in a tile-exact run before an exact rewrite pays (the card's break-even; 14 on the H100)")
     ap.add_argument("--debit", action="store_true",
                     help="replay each word's debit (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
     ap.add_argument("--cross-words", type=int, default=0,
@@ -621,6 +648,7 @@ def main() -> None:
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()
     set_atom(args.atom)
+    EXACT_RUN_MIN = args.exact_run_min
     bad = selftest()
     print(json.dumps({"selftest_cases": 3000, "atom": ATOM_NAME, "mismatches": bad}), flush=True)
     if args.selftest or bad:
@@ -639,7 +667,8 @@ def main() -> None:
     worst = max((r[key] for r in scored), default=0.0)
     worst_row = max(scored, key=lambda r: r[key], default=None)
     doc = {"tool": "pouw_pearlc_census", "atom": ATOM_NAME, "atom_groups": list(ATOM_GROUPS), "atom_width": ATOM_WIDTH,
-           "atom_zero": ATOM_ZERO, "tile": args.tile, "forming": args.forming, "line_norm": args.line_norm,
+           "atom_zero": ATOM_ZERO, "exact_run_min": EXACT_RUN_MIN, "tile": args.tile, "forming": args.forming,
+           "line_norm": args.line_norm,
            "selftest_mismatches": bad, "cells": rows_out,
            "criterion": key, "worst_in_domain_skippable_share": worst, "worst_in_domain_cell": worst_row, "threshold": 1 / 400,
            "seconds": round(time.time() - t0, 1)}
