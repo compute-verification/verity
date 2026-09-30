@@ -1,7 +1,7 @@
 {
  "roots": ["Verity"],
  "assumptions": ["Verity.Assumptions"],
- "meaning": ["Verity.TC.Pipeline", "Verity.TC.Spec", "Verity.TC.Relation", "Verity.Assumptions"],
+ "meaning": ["Verity.TC.Pipeline", "Verity.TC.Spec", "Verity.TC.Relation", "Verity.Assumptions", "Verity.TC.Gadgets"],
  "layers": {
   "Verity.TC.Pipeline": {
    "imports": [],
@@ -25,6 +25,22 @@
   }
  },
  "pins": {
+  "Verity.TC.Gadgets.iszero_gadget": {
+   "signature": [
+    "Verity.TC.Gadgets.iszero_gadget (x z : Int) (bits : Nat) :",
+    "  Iff (Verity.TC.Gadgets.ZeroChunks (Verity.TC.Gadgets.isZeroWidths bits) x z) (Verity.TC.Relation.ISZERO x bits z)"
+   ],
+   "assumptions": [],
+   "type_hash": "f562a21be2ba94c1d9e6d3380ba1b7539da29a708ff975ce67d3506ac1ebc0e6"
+  },
+  "Verity.TC.Gadgets.range_gadget": {
+   "signature": [
+    "Verity.TC.Gadgets.range_gadget (x : Int) (bits : Nat) :",
+    "  Iff (Verity.TC.Gadgets.Chunks (Verity.TC.Gadgets.rangeWidths bits) x) (Verity.TC.Relation.RANGE x bits)"
+   ],
+   "assumptions": [],
+   "type_hash": "4aac4ba910330b4d20855c17d4780b52293c858c74fc14f41f3a7429575e1f4b"
+  },
   "Verity.TC.ada_eq_ampere": {
    "signature": ["Verity.TC.ada_eq_ampere : Eq Verity.TC.ADA_BF16_M16N8K16 Verity.TC.AMPERE_BF16_M16N8K16"],
    "assumptions": [],
@@ -331,6 +347,16 @@
     "Verity.TC.hopper_step_sound"
    ]
   },
+  "Verity.TC.Gadgets": {
+   "digest": "a5add407e1fdb53f98c0d95f7a378b04abc7dc97d7be51f6bd81ea446fa8a728",
+   "definitions": {
+    "Verity.TC.Gadgets.Chunks": "1225e390d1c8aacfa814a2badc8fe1439607e75d534dbb55868fb41b0912d43f",
+    "Verity.TC.Gadgets.ZeroChunks": "198e3ab557cd5d50f6896f9c691ee6491b4de1caa3d87fa9a816b66ac1d68505",
+    "Verity.TC.Gadgets.isZeroWidths": "51b86a56686596236cdebb9470177a8b3e1ed79f42ecb6ce7cd7ec20409a575d",
+    "Verity.TC.Gadgets.rangeWidths": "915f7c5c531a47ce9790cc92ec02be1f06103cf94596144c6fef95e8352c01f9"
+   },
+   "pins": ["Verity.TC.Gadgets.iszero_gadget", "Verity.TC.Gadgets.range_gadget"]
+  },
   "Verity.TC.Pipeline": {
    "digest": "f10ff7d3adcfbec48c772e52d46c7a94bd43f9e5d1c2a3d4cc10c41b8c56cd4c",
    "definitions": {
@@ -508,6 +534,8 @@
     "Verity.TC.Relation.zeroState": "76f5f56483cad8dcffb6d6f0e63076b8477410fb251112e4da877e10771f2af4"
    },
    "pins": [
+    "Verity.TC.Gadgets.iszero_gadget",
+    "Verity.TC.Gadgets.range_gadget",
     "Verity.TC.ampere_step_complete",
     "Verity.TC.ampere_step_hw",
     "Verity.TC.ampere_step_iff",
