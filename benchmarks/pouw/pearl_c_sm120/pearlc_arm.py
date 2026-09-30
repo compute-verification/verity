@@ -82,8 +82,8 @@ R = _load("pearl_c_sm120_run", HERE / "run.py")
 F = _load("pearl_c_sm120_fixture", HERE / "fixture.py")
 W = F.W
 
-from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, rows_domain,  # noqa: E402
-                               transcript_domain, weight_binding)
+from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commitment_hash,  # noqa: E402
+                               rows_domain, transcript_domain, weight_binding)
 from verity_pouw.protocol import Context, DomainError, Matmul  # noqa: E402
 from verity_pouw.protocol import Shape as MShape  # noqa: E402
 from verity_pouw.schemes import pearl_c as C  # noqa: E402
@@ -185,7 +185,7 @@ class _Call:
         self.keys = {x: w["key_" + x] for x in KEYS}
         self.xa = w.get("xa", ops.a.ptr)
         self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr, bufs={b: w[b] for b in OWN + CALL},
-                               m_real=shape.m)
+                               m_real=shape.m, hashing=arm.scheme.hashing)
         steps = self.pipe.steps()
         by = {name: f for name, _, f in steps}
         y_only = None if self.hashing else self.pipe.extra().get("gemm_pearlc_s")
@@ -220,8 +220,9 @@ class _Call:
         """B's row tree under its domain (the weight's alone), then the epoch on its root and the arm's beacon, and the keys
         that follow: the unit's pads and level keys and the weight side run under them."""
         arm, rd, sh = self.arm, self.arm.rd, self.shape
+        h = commitment_hash(arm.scheme)
         mm = Matmul(arm.index, MShape(sh.m, sh.k, sh.n), self.ops.weight_id)
-        self.put("dom_b", rows_domain(weight_binding(mm.weight), -2, sh.n, "blake3").domain_id)
+        self.put("dom_b", rows_domain(weight_binding(mm.weight), -2, sh.n, h).domain_id)
         self.enqueue([f for _, p, f in steps if p == "epoch"], None)
         rd.sync()
         root_b, beacon = self.root_b(), arm.beacon(sh, self.ops)
@@ -232,8 +233,8 @@ class _Call:
         self.enqueue([f for _, p, f in steps if p in ("unit", "job")], None)
         rd.sync()
         return {"matmul": mm, "epoch": epoch, "beacon": beacon, "root_b": root_b, "seed_b": seed_b,
-                "dom_a": rows_domain(activation_binding(epoch.salt, mm.index), mm.index, sh.m, "blake3"),
-                "dom_t": transcript_domain(epoch, self.pipe.tiles, "blake3")}
+                "dom_a": rows_domain(activation_binding(epoch.salt, mm.index), mm.index, sh.m, h),
+                "dom_t": transcript_domain(epoch, self.pipe.tiles, h)}
 
     def enqueue(self, steps: list, stream) -> None:
         rd = self.arm.rd
@@ -288,7 +289,8 @@ class _Call:
         none; with hashing, seed_A and E_A's line key too."""
         rd, s, w = self.arm.rd, self.scratch.b, self.own.b
         ref = R.Pipeline(rd, self.m, self.n, self.k, self.arm.variant, self.keys, self.xa, self.ops.b.ptr,
-                         bufs={**self.pipe.b, **{b: s["ref_" + b] for b in REF_BUFS}}, m_real=self.shape.m, fused=False)
+                         bufs={**self.pipe.b, **{b: s["ref_" + b] for b in REF_BUFS}}, m_real=self.shape.m, fused=False,
+                         hashing=self.arm.scheme.hashing)
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
         steps = {name: f for name, _, f in ref.steps()}

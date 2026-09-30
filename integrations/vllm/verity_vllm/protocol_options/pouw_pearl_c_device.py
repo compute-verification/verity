@@ -7,14 +7,17 @@ the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``,
 ``pearl_c_sm120.cubin``).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
 device's primary context:
 
+* **The trees** are the scheme's hashing format's (`SCHEMES`, the pipeline's ``hashing``): frame-b3 under -h1, frame-b3s
+  under -h2, whose row leaves are trees over 256-byte segments under per-domain segment level keys (``seg_keys_*``).
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
-  into B's frame-b3 row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
+  into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
   and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
   weight side keeps about a byte per weight (B̃) beside the model's own weight.
 * **Each call** (`gemm`):
   - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
     zero rows) and zero padding up to the kernels' tile;
-  - ``commit``: A's pads and level keys under its domain, A's row tree, seed_A and E_A's line key;
+  - ``commit``: A's pads and level keys (and -h2's segment level keys) under its domain, A's row tree, seed_A and E_A's
+    line key;
   - ``forming``: E_A's lines, A's statistics and forming;
   - ``cleanup``: A′·F_B, P_A, and the chain with its peel and y (``gemm_pearlc`` writes y into the tensor this returns);
   - ``hashing``: the message digests and the tile leaves, into the pass's leaf buffer at the call's offset.  No per-call
@@ -53,14 +56,16 @@ from typing import Any
 
 from verity.commitments import RangeIndexedDomain
 from verity.commitments.merkle import _FRAME, _uint
-from verity_pouw.audit import Epoch, Workload, activation_binding, rows_domain, transcript_domain
+from verity_pouw.audit import Epoch, Workload, activation_binding, commitment_hash, rows_domain, transcript_domain
 from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
 from verity_pouw.schemes import pearl_kw as P
 
-#: scheme name -> (forming, device record, hashing format).  ``-h2`` joins once GPU 1's pipeline commits A with frame-b3s.
-SCHEMES = {"pearl-c-sm120-v1-h1": ("v1", "sm120", "h1")}
+#: scheme name -> (forming, device record, hashing format): -h1 commits with frame-b3 trees, -h2 with frame-b3s.  The format is
+#: the scheme's (`PearlC.hashing`, `run.Pipeline`'s ``hashing``), and so are its tree hash (`audit.commitment_hash`) and the
+#: digests' keys (`PearlC.digest_keys`); nothing here restates them.  Which format serves is Daniel's call.
+SCHEMES = {"pearl-c-sm120-v1-h1": ("v1", "sm120", "h1"), "pearl-c-sm120-v1-h2": ("v1", "sm120", "h2")}
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -74,14 +79,15 @@ FLAG_ROWS = 1 << 22
 UPLOAD_SLOTS = 1024
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
-                  "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b")
+                  "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "digests",
-                "tree_a", "keys_a", "line_a", "seed_a")
-EPOCH_STEPS = ("pad_b", "node_keys_b", "hash_rows_b", "tree_b")
+                "tree_a", "keys_a", "skeys_a", "line_a", "seed_a")
+EPOCH_STEPS = ("pad_b", "node_keys_b", "seg_keys_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
-CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
-              "gemm_pearlc", "hash_msg", "hash_leaf")
-HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg", "hash_leaf"})
+CALL_STEPS = ("pad_a", "node_keys_a", "seg_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a",
+              "af", "pa", "gemm_pearlc", "hash_msg", "hash_leaf")
+HASH_STEPS = frozenset({"pad_a", "node_keys_a", "seg_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg",
+                        "hash_leaf"})
 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
@@ -318,50 +324,57 @@ class _Pass:
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
 
 
-def weight_roots(kernel: Kernel, weights: dict[int, Any]) -> dict[int, bytes]:
-    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase."""
+def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str) -> dict[int, bytes]:
+    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, in the trees
+    of `scheme` (a name of `SCHEMES`)."""
     import torch
-    R, out = kernel.run, {}
+    R, s, out = kernel.run, scheme_of(scheme), {}
     for w, weight in weights.items():
         n, k = weight.shape
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
-        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "keys_b", "faT32", "fbT32", "fbT128")}
-        keys = _zeros(64, weight.device)
-        _put(keys[32:], rows_domain(_weight_binding(w), -2, n, "blake3").domain_id)
+        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "keys_b", "skeys_b", "faT32", "fbT32", "fbT128")}
+        keys, const = _zeros(64, weight.device), _constants(kernel, s, weight.device)
+        _put(keys[32:], rows_domain(_weight_binding(w), -2, n, commitment_hash(s)).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32})
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32, **_constant_keys(const)}, hashing=s.hashing)
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
         out[w] = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
     return out
 
 
-def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int) -> bytes:
-    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows."""
-    return rows_domain(activation_binding(salt, index), index, m16, "blake3").domain_id + fixture.unit_block(salt, root_b, index)
+def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str) -> bytes:
+    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under the scheme's tree hash
+    `hash` (`audit.commitment_hash`)."""
+    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
 
 
 class _Keys:
     """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `CommitmentDomain.domain_id`'s framed message hashed
-    natively, and unit's label hash is a constant.  Without the package, `call_keys` itself."""
+    natively (tagged ``domain``, or ``domain/b3s`` under frame-b3s), and unit's label hash is a constant.  The native path
+    is held to `call_keys` once at construction, so a tree hash it doesn't frame (or a framing that moved) fails there.
+    Without the package, `call_keys` itself."""
 
-    def __init__(self, fixture: Any, salt: bytes):
+    def __init__(self, fixture: Any, salt: bytes, hash: str):
         try:
             import blake3 as native
         except ImportError:
             native = None
-        self.native, self.fixture, self.salt = native, fixture, salt
+        self.native, self.fixture, self.salt, self.hash = native, fixture, salt, hash
+        self.tag = b"domain/b3s" if hash == "blake3-s256" else b"domain"
         self.label = fixture.unit_block(salt, bytes(32), 0)[-32:]
         self.positions: dict[int, bytes] = {}
+        if native is not None and self(bytes(32), 0, ROW_ALIGN) != call_keys(fixture, salt, bytes(32), 0, ROW_ALIGN, hash):
+            raise ValueError(f"native BLAKE3 keys don't frame tree hash {hash!r} as CommitmentDomain does")
 
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
-            return call_keys(self.fixture, self.salt, root_b, index, m16)
+            return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = bytes.fromhex(RangeIndexedDomain(m16).identity_digest)
         parts = (activation_binding(self.salt, index), _uint(index + 2), pos, _uint(m16))
-        msg = _FRAME + (6).to_bytes(4, "big") + b"domain" + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+        msg = _FRAME + len(self.tag).to_bytes(4, "big") + self.tag + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
         return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
 
 
@@ -397,19 +410,36 @@ def _weight_binding(w: int) -> bytes:
     return weight_binding(w)
 
 
+def _constants(kernel: Kernel, scheme: C.PearlC, device: Any) -> Any:
+    """The pipeline's constant keys on the device: the scheme's digest keys (message, leaf) and frame-b3s's segment-key
+    templates (row, tile)."""
+    keys = scheme.digest_keys
+    if keys is None:
+        raise ValueError(f"{scheme.name}: the device path's digests are keyed BLAKE3, and hashing {scheme.hashing} has no keys")
+    R, t = kernel.run, _zeros(192, device)
+    _put(t, keys["message"] + keys["leaf"] + R.b3s_template(R.ROW_SCHEMA) + R.b3s_template(R.TILE_SCHEMA))
+    return t
+
+
+def _constant_keys(t: Any) -> dict[str, int]:
+    p = t.data_ptr()
+    return {"k_msg": p, "k_leaf": p + 32, "t_row": p + 64, "t_tile": p + 128}
+
+
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None) -> Any:
-    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "unit": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, "sm120", full, xa, xb, bufs=bufs, m_real=m_real)
+              m_real: int | None = None, hashing: str = "h1") -> Any:
+    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "t_row": 0, "t_tile": 0, "unit": 0, **keys}
+    return kernel.run.Pipeline(kernel.dev, m, n, k, "sm120", full, xa, xb, bufs=bufs, m_real=m_real, hashing=hashing)
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
-    """The named steps in order.  A tree's pads and level keys exist only where the tree needs them, and on the fused path
+    """The named steps in order.  A tree's pads and level keys exist only where the tree needs them (segment level keys under
+    -h2 alone), and on the fused path
     (``pipe.fused``: 128 x 128 tiles over every row) ``gemm_pearlc`` writes the message digests itself, so ``hash_msg`` isn't
     a step."""
     by = {name: f for name, _, f in pipe.steps()}
     optional = {"hash_msg"} if getattr(pipe, "fused", False) else set()
-    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_")) and x not in optional]
+    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_", "seg_keys_")) and x not in optional]
     if missing:
         raise RuntimeError(f"the kernel's pipeline has no steps {missing}")
     return [by[x] for x in names if x in by]
@@ -437,12 +467,12 @@ class PearlCDeviceRun:
         self.device = next(iter(weights.values())).device
         self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
                            self.roots, salt)
-        self.const = _zeros(64, self.device)
-        _put(self.const, C.H1_KEYS["message"] + C.H1_KEYS["leaf"])
+        self.const = _constants(kernel, scheme, self.device)
         self.leaves = _zeros(32 * capacity, self.device)
         self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
-        self.keys, self.uploads = _Keys(kernel.fixture, salt), _Uploads(self.device)
+        self.tree_hash = commitment_hash(scheme)
+        self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.fused_screen = self.device.type == "cuda" and fused_screen_available()
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
@@ -474,7 +504,8 @@ class PearlCDeviceRun:
         _put(keys, kk["line_b"] + kk["dom_b"])
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32})
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32, **_constant_keys(self.const)},
+                         hashing=self.scheme.hashing)
         stream = _stream(weight.device)
         _run(K, pipe, EPOCH_STEPS, stream)
         root = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
@@ -507,8 +538,8 @@ class PearlCDeviceRun:
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
                     "leaves": 0}
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": sh.keys.data_ptr(),
-                    "unit": sh.keys.data_ptr() + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
-            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16)
+                    "unit": sh.keys.data_ptr() + 32, **_constant_keys(self.const)}
+            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, self.scheme.hashing)
             names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
             steps = _steps(pipe, names)
             if self.time_gemm and self.device.type == "cuda":
@@ -628,15 +659,14 @@ class PearlCDeviceRun:
             R, count = K.run, cur.tiles
             tree = _zeros(32 * (2 * R.pow2(count) - 1), self.device)
             lk, dom = _zeros(32 * max(R.depth(count), 1), self.device), _zeros(32, self.device)
-            _put(dom, transcript_domain(epoch, count, "blake3").domain_id)
+            _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
             ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr(), "keys_t": lk.data_ptr()},
-                                       keys={"dom_t": dom.data_ptr()})
+                                       keys={"dom_t": dom.data_ptr(), **_constant_keys(self.const)}, hashing=self.scheme.hashing)
             K.dev.stream = self.stream()
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
                     f()
-                K.dev.launch("hash_tree_leaves", R.cdiv(count, 128), 128, p=(self.leaves.data_ptr(), tree.data_ptr(), dom.data_ptr()),
-                             i=(count,))
+                R.Pipeline.tree_leaves(ns, "t", self.leaves.data_ptr(), count, "dom_t")
                 R.Pipeline.levels(ns, "t", count)
             finally:
                 K.dev.stream = None

@@ -64,7 +64,7 @@ PREFILL, BATCH, PROMPT, STEPS = 8192, 32, 64, 64
 #: the served y's bound against the float product (the scheme's tested bound, protocols/pouw's sm120 useful-output test)
 ERR = 0.08
 #: the negative control's omitted steps: every write of the commitment (A's row tree, the digests, the tile leaves)
-CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
+CONTROL_OMITS = frozenset({"pad_a", "node_keys_a", "seg_keys_a", "hash_rows_a", "tree_a", "hash_msg", "hash_leaf"})
 #: the panel's shape names for the two phases
 SHAPES = {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
 
@@ -98,7 +98,7 @@ def install(model, args, beacon: bytes, state: dict):
     if bad:
         raise SystemExit(f"{SCHEME} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    roots = PPD.weight_roots(kernel, weights)
+    roots = PPD.weight_roots(kernel, weights, SCHEME)
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, beacon).salt
     run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, beacon, time_gemm=True)

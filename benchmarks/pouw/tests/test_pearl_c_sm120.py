@@ -199,7 +199,8 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
     assert not problems, problems
     for name in ("gemm_pearlc", "gemm_pearlc_u"):
         assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
-    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a"} <= set(funcs)
+    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "b3s_level_keys", "hash_rows_b3s",
+            "hash_leaves_b3s"} <= set(funcs)
 
 
 @pytest.mark.slow
@@ -258,10 +259,11 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
 KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
-HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm120.cuh"))
+HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm120.cuh", "hash_h2.cuh"))
 #: the -h1 kernels (#449's hash.cuh and hash_sm120.cuh) the pipeline launches at the dry run's shapes: no pads (every count a
-#: power of two) and no level wider than hash_tree_small's
+#: power of two) and no level wider than hash_tree_small's; and -h2's (hash_h2.cuh) in place of the leaves'
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
+H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s"}
 
 
 def form_kernels() -> list[str]:
@@ -333,6 +335,12 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32 * (2 * i[0] - 1), 1: 32 * (i[0].bit_length() - 1)}
     if name == "hash_tree_leaves":
         return {0: 32 * i[0], 1: 32 * i[0], 2: 32}
+    if name == "b3s_level_keys":
+        return {0: 32 * i[0], 1: 32}
+    if name == "hash_rows_b3s":
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64}
+    if name == "hash_leaves_b3s":
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 64}
     if name == "hash_node_keys":
         return {0: 32 * i[0], 1: 32}
     if name == "hash_pad":
@@ -361,6 +369,7 @@ def threads(name: str, i: list[int]) -> int:
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "hash_tree_leaves": lambda: i[0],
             "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1,
+            "b3s_level_keys": lambda: i[0], "hash_leaves_b3s": lambda: i[0],
             "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
 
 
@@ -436,8 +445,26 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
             seen.add(ev["name"])
     assert seen == set(own_kernels()) | H1_LAUNCHED
     for t in rows[3:]:
-        assert t["fused"] and set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
+        assert t["fused"] and t["hashing"] == "h1"
+        assert set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
                                          "digests_fused_vs_unfused_words_differing"}
+
+    log = tmp_path / "launches_h2.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1000x1024x3072", VARIANTS="sm120",
+                                   HASHING="h2"),
+                       capture_output=True, text=True, timeout=600)
+    assert r.returncode == 4, r.stderr
+    (t,) = [x for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"]
+    assert t["hashing"] == "h2" and not t["fused"] and set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
+    allocs, seen, timed = {}, set(), False
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs)
+        if ev["op"] == "launch":
+            timed = timed or ev["name"] == "gen_f32"
+            if timed:
+                seen.add(ev["name"])
+    assert H2_LAUNCHED | {"hash_pad"} <= seen and not seen & {"hash_rows_w", "hash_tree_leaves"}
 
 
 def room(allocs: dict[int, int], ptr: int) -> int:
@@ -489,6 +516,10 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert not p[5] or {(p[5], 128, M), (p[6], 128, N)} <= maps, name
         if name in ("words", "words_u"):
             assert g[0] == i[0] // 16 and ev["block"] == 128
+        if name == "hash_rows_b3s":
+            assert g[0] == i[0] and -(-i[1] // 256) <= ev["block"] <= 512 and ev["block"] % 32 == 0 and i[3] <= 64
+        if name == "hash_leaves_b3s":
+            assert i[1] <= 256 and i[3] <= 64
 
 
 # ---- the bench arm (pearlc_arm.py) against the harness's arm interface v0 ---------------------------------------------------
