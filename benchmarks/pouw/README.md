@@ -10,6 +10,7 @@ same gates for every scheme. The cost model is W1 on an RTX 4090 (the PoUW probl
 | `route_u_bench.py` | RTX 4090 | Native NCP route-U gate against `checked()` on every 16x16 tile, then throughput against the signed-s8 checkpoint-dump kernel |
 | `vllm_bench.py` | RTX 4090 | Overhead against plain vLLM (Qwen2.5-3B-Instruct): BF16, stock FP8, W7A7 (int7 without PoUW), NCP and Pearl, all by wrapping every `LinearBase` layer's `quant_method.apply`, the vLLM adapter's hook site. NCP's greedy tokens must equal W7A7's |
 | `e2e_audit.py` | RTX 4090 | The protocol end to end: the GPU kernels prove, the pure-Python reference verifies the work-weighted draws; an honest prover is accepted, and a prover that corrupts half the tiles is rejected |
+| `pouw_bench.py` | CPU (`--dry-run`), RTX 4090 | PoUW alone on fixed matmul shapes (`pouw_bench_shapes.json`: #389's and #435's Qwen2.5-0.5B linears, census workloads' GEMMs by id, and 4,096³ and 8,192³), with no served model. `ncp-v2`'s fused prover per call against cuBLASLt int8 and FP8 on the same shape, with hashing included and reported separately (committed less the no-hash control), and change 1's async path; W1's Ω and γ per shape and the certificate's γ_0 and Ω*; samples per bit. Each variant of the tile kernel (`--tile-variants`, as `ncp2_gpu_bench` takes them) is gated against `pouw_native`, on the CPU twin and on the device, before it is timed |
 | `kernels/pouw_gemm.cu` | RTX 4090 | NCP's native u8xs8 route-U GEMM from `c0`, the signed-s8 control, both with every 16-deep checkpoint written out, and Pearl's e4m3 GEMM on the `ada` device |
 | `workloads.json` | | The model and its linear shapes, the decode batches and prefill lengths, and the reference shapes |
 
@@ -20,6 +21,7 @@ python benchmarks/pouw/gemm_bench.py --out gemm.json
 python benchmarks/pouw/route_u_bench.py --out route_u.json
 VLLM_USE_FLASHINFER_SAMPLER=0 python benchmarks/pouw/vllm_bench.py --model /path/to/Qwen2.5-3B-Instruct --out vllm.json
 python benchmarks/pouw/e2e_audit.py --out e2e.json
+python benchmarks/pouw/pouw_bench.py --out pouw_bench.json     # CPU-only parts first: --dry-run
 ~~~
 
 What the timings cover:

@@ -310,6 +310,8 @@ def cpu_commit(spec: dict, rows: int = D) -> dict:
         t3 = time.perf_counter()
         out["calls"].append({"k": k, "n": n, "native_weight_s": t1 - t0, "native_call_s": t2 - t1, "twin_call_s": t3 - t2})
     out["forward_native_s"] = layers * sum(c["native_call_s"] for c in out["calls"])
+    # #389 measured before the port, when each call formed and hashed its weight's Y: that is the call and its side together
+    out["forward_native_with_weight_s"] = layers * sum(c["native_call_s"] + c["native_weight_s"] for c in out["calls"])
     out["forward_twin_s"] = layers * sum(c["twin_call_s"] for c in out["calls"])
     return out
 
@@ -557,7 +559,8 @@ def _report(res: dict) -> None:
     if "cpu_389" in res:
         cpu = res["cpu_389"]
         print(f"#389 path on {cpu['cpu']} ({cpu['threads']} threads): a forward at {cpu['rows']} rows {cpu['forward_native_s']:.1f} s "
-              f"(pouw_native), {cpu['forward_twin_s']:.2f} s (twin); #389 measured {res['figures']['#389']['cpu_forward_16_rows_s']}")
+              f"(pouw_native), {cpu['forward_native_with_weight_s']:.1f} s with each weight side as #389 committed it per call, "
+              f"{cpu['forward_twin_s']:.2f} s (twin); #389 measured {res['figures']['#389']['cpu_forward_16_rows_s']}")
 
 
 if __name__ == "__main__":

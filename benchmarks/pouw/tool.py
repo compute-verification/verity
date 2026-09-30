@@ -4,6 +4,7 @@
     research run ... --tool pouw_route_u -- python benchmarks/pouw/route_u_bench.py --out $D/route_u.json
     research run ... --tool pouw_vllm -- python benchmarks/pouw/vllm_bench.py --model /root/models/qwen2.5-3b-instruct --out $D/vllm.json
     research run ... --tool pouw_e2e -- python benchmarks/pouw/e2e_audit.py --out $D/e2e.json
+    research run ... --tool pouw_bench -- python benchmarks/pouw/pouw_bench.py --out $D/pouw_bench.json
 
 Key params: the workload file (gemm), the model and the modes (vllm), the draw count (e2e).  ``--out`` says where and does not
 enter the derivation.  Imports nothing but ``research.store.tool``.
@@ -47,6 +48,15 @@ def parse_e2e(argv: list[str]) -> dict:
     return {"t": ns.t}
 
 
+def parse_bench(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("--tile-variants", default="")
+    ap.add_argument("--sets", default="baseline,census,square")
+    ap.add_argument("--dry-run", action="store_true")
+    ns, _ = ap.parse_known_args(argv)
+    return {"tile_variants": ns.tile_variants, "sets": ns.sets, "dry_run": ns.dry_run}
+
+
 def parse_route_u(argv: list[str]) -> dict:
     ap = _parser()
     ap.add_argument("--reps", type=int, default=30)
@@ -62,6 +72,10 @@ POUW_VLLM = Tool(name="pouw_vllm", version="1", command=["python", "benchmarks/p
                  key_params=["model", "modes"], produces=["bench-result/v1", "run-files/v1"], parse=parse_vllm)
 POUW_E2E = Tool(name="pouw_e2e", version="1", command=["python", "benchmarks/pouw/e2e_audit.py"], closure=CLOSURE,
                 key_params=["t"], produces=["bench-result/v1", "run-files/v1"], parse=parse_e2e)
+#: pouw_bench also reads the fused kernel and its committers (the vLLM integration's protocol options) and the census
+BENCH_CLOSURE = [*CLOSURE, "integrations/vllm/verity_vllm/protocol_options/**", "census/workloads.json"]
+POUW_BENCH = Tool(name="pouw_bench", version="1", command=["python", "benchmarks/pouw/pouw_bench.py"], closure=BENCH_CLOSURE,
+                  key_params=["tile_variants", "sets", "dry_run"], produces=["bench-result/v1", "run-files/v1"], parse=parse_bench)
 POUW_PEARL_CAL = Tool(name="pouw_pearl_cal", version="1", command=["python", "benchmarks/pouw/pearl_calibration.py"],
                       closure=["benchmarks/pouw/pearl_calibration.py", "benchmarks/pouw/pearl_b200_setup.sh",
                                "benchmarks/pouw/run_result.py"],

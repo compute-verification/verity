@@ -55,8 +55,12 @@ def test_w1_is_the_certificates_at_the_domains_edge_and_absent_outside_it():
     assert outside["gamma"] is None and "outside" in outside["outside"]
 
 
-def test_a_calls_hashed_bytes_are_about_three_quarters_of_a_byte_per_mac():
-    assert 0.75 < B.hashed_bytes_per_mac(2048, 4096, 4096) < 0.76
+def test_a_calls_hashed_bytes_are_its_tile_words_three_quarters_of_a_byte_per_mac_and_the_rest():
+    """The tile words are 3/4 of a byte per MAC; the dequantization leaves (a block per output, 64/k per MAC) and the units
+    tree (a node per unit, about 128/k) add the rest."""
+    m, k, n = 2048, 4096, 4096
+    got = B.hashed_bytes_per_mac(m, k, n)
+    assert 0.75 + 64 / k + 128 / k < got < 0.75 + 64 / k + 128 / k + 0.01
 
 
 def test_samples_per_bit():
