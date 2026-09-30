@@ -130,6 +130,11 @@ and when accepted `verifier_commit`, `verifier_accept` (the line verbatim), `tra
 gets `verification` with every command's exit code. It exits 0 only if every panel row was accepted and every command
 exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without a verifier gets no measured row.
 
+Every gate's record and every negative control carry `wall_s`, the host's seconds in them (a gate's summed over its runs),
+and each shape its `wall_s` by stage (`operands`, `baseline_gates`, `arm_gates`, `tune`, `chain_gates`, `sass_gate`,
+`warmup`, `timed`, `report`), so a lease's idle minutes show where they went: operands are filled on the device in
+milliseconds, while an arm's CPU reference inside its gates can take minutes.
+
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
 consistency gate rejected an arm; 7 the SASS gate refused a binary. The JSON is written in every case, with every rep, and
 `sass_gate` holds every binary's verdict.
