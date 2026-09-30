@@ -9,6 +9,7 @@ the gate."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -72,7 +73,7 @@ def test_swizzles_are_the_kernels_and_conflict_free():
 
 def gemm_smem(mode: str, tm: int, bn: int) -> int:
     bk, stages, peel = const("BK"), const("STAGES"), const("PEEL_ROW")
-    return stages * (tm + bn) * bk + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S", "M_PEARLC_H") else 0)
+    return stages * (tm + bn) * bk + ((tm + bn) * peel if mode in ("M_PEARLC", "M_PEARLC_S") else 0)
 
 
 def gemms() -> list[tuple[str, str, int, int, int]]:
@@ -87,12 +88,10 @@ def gemm_tile(name: str) -> tuple[int, int]:
 
 
 def test_gemms_fit_sm120_shared_memory():
-    assert ("STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S || MODE == M_PEARLC_H ? (TM + BN) * PEEL_ROW : 0)"
-            in SOURCE)
+    assert "STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
     names = {n for n, *_ in gemms()}
     assert names == {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u",
-                     "gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u",
-                     "gemm_pearlc_s", "gemm_pearlc_s_u", "gemm_pearlc_h", "gemm_pearlc_h_u"}
+                     "gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u"}
     for name, mode, tm, bn, g in gemms():
         assert gemm_smem(mode, tm, bn) <= SM120_MAX_DYN, name
         assert (tm, bn) == gemm_tile(name)
@@ -175,7 +174,7 @@ def test_twin_tile_is_the_scheme_on_the_record(device):
 
     dev, small = DEVICES[device], W.Shape("small", 96, 128, 256)
     jb = W.job(small, dev)
-    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", device=dev)
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", device=dev, hashing="h1")
     noise = C.Noise(jb.seeds["seed_a"], jb.seeds["seed_b"])
     ctx = Context(bytes(32), Matmul(0, MShape(small.m, small.k, small.n), 0), bytes(32), bytes(32))
     own = W.tile(jb, 64, 64)
@@ -501,7 +500,8 @@ def A(arm_dir):
 
 def test_arm_accounting_is_the_schemes(A):
     """Work, W_ref and the credit are the scheme's on the arm's record, and G = 4's γ is #449's `bench.gamma` (the H100's, at
-    the same stand-in prices); the unpromoted record credits no promotion adds, so its γ is its own."""
+    the same stand-in prices); the unpromoted record credits no promotion adds, so its γ is its own.  The hashed bytes are
+    -h1's: A's rows and B's under their domains, the message digests, the tile leaves and both trees' nodes."""
     from verity_pouw.protocol import Shape as MShape
     from verity_pouw.schemes import pearl_c as C
 
@@ -514,15 +514,21 @@ def test_arm_accounting_is_the_schemes(A):
     for cls in ARMS:
         arm = getattr(A, cls)()
         assert (arm.stream, arm.precision, arm.inputs) == ("fp8", "fp8-e4m3", "f32")
-        assert arm.flag_sets == {"hash": {"hash", "xof"}, "nohash": frozenset()} and arm.panel["line"] == "pearl-c-sm120"
+        assert arm.flag_sets == {"hash": {"hash"}, "nohash": frozenset()} and arm.panel["line"] == "pearl-c-sm120"
+        assert arm.scheme.name == arm.name and arm.name.endswith("-v1-h1")
+        assert arm.panel["version"] == {"PearlCSm120": "v1-h1", "PearlCSm120Unpromoted": "v2-h1"}[cls]
         for shape in (Shape("m8192-n8192-k8192", 8192, 8192, 8192), Shape("m32-n8192-k8192", 32, 8192, 8192)):
             assert arm.domain(shape) is None
-            w, s, m = arm.work(shape), MShape(shape.m, shape.k, shape.n), A.padded(shape.m)
+            w, s, m, mr = arm.work(shape), MShape(shape.m, shape.k, shape.n), A.padded(shape.m), shape.m
+            tiles = -(-mr // 64) * (shape.n // 64)
             assert (w.w_ref, w.credited) == (str(arm.scheme.wref(s)), str(arm.scheme.credit_of(s)))
             assert w.tensor_macs == {"fp8-e4m3": m * shape.n * shape.k + m * (C.R + arm.device.atom.k) * shape.k,
                                      "bf16": m * shape.n * C.PEEL_K}
-            assert w.hashed_bytes == {"turboshake128/messages": 8 * m * shape.n, "turboshake128/leaves": m * shape.n,
-                                      "turboshake128/rows": 4 * shape.m * shape.k}
+            assert w.hashed_bytes == {"blake3/rows": mr * (64 + 4 * shape.k), "blake3/messages": 8 * mr * shape.n,
+                                      "blake3/leaves": mr * shape.n, "blake3/tile_leaves": 96 * tiles,
+                                      "blake3/tree_nodes": 64 * (A.R.pow2(mr) - 1 + A.R.pow2(tiles) - 1)}
+            assert w.weight_hashed_bytes == {"blake3/rows": shape.n * (64 + 4 * shape.k),
+                                             "blake3/tree_nodes": 64 * (A.R.pow2(shape.n) - 1)}
             g = {k: Fraction(v) for k, v in w.gamma.items() if k != "basis"}
             if cls == "PearlCSm120":
                 assert g == B.gamma(shape.n, shape.k)
@@ -530,21 +536,25 @@ def test_arm_accounting_is_the_schemes(A):
     arm = A.PearlCSm120()
     assert "multiple of 1,024" in arm.domain(Shape("x", 128, 1000, 128))
     assert "multiple of 128" in arm.domain(Shape("x", 128, 1024, 100))
+    assert arm.domain(Shape("x", 24, 1024, 128))       # the scheme's own rule: 16 | m
 
 
-def driver(A, ship: Path, arm_dir: Path, log: Path, cls: str, *args: str) -> list[dict]:
-    r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, *args],
-                       env=dry_env(ship, log, PEARLC_SHIP=str(ship)), capture_output=True, text=True, timeout=600)
+def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str) -> list[dict]:
+    """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows; its JSON lines."""
+    r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, mode, str(tmp / "run"),
+                        *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows")),
+                       capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stderr
     return [json.loads(x) for x in r.stdout.splitlines()]
 
 
 def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
-    """The stand-in's log cut at the driver's marks: each launch or weight side with the launches, copies and flips inside."""
+    """The stand-in's log cut at the driver's marks: each launch, weight side or transcript window with the launches, copies
+    and flips inside."""
     out, allocs, cur = [], {}, None
     for ev in map(json.loads, log.read_text().splitlines()):
         track(ev, allocs)
-        if ev["op"] == "mark" and ev["what"] in ("launch", "weight", "phases"):
+        if ev["op"] == "mark" and ev["what"] in ("launch", "weight", "phases", "transcripts"):
             cur = (ev, [])
         elif ev["op"] == "mark" and ev["what"] == "end":
             out.append(cur)
@@ -554,41 +564,60 @@ def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
     return out, allocs
 
 
+def transcript(run: Path, arm: str, label: str) -> tuple[dict, Path]:
+    path = run / "transcripts" / arm / label / "manifest.json"
+    return json.loads(path.read_text()), path
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("cls", ARMS)
 def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
-    """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy,
-    the kernels each role's step needs and no others (nohash: no XOF, no hash), each operand set's E_A lines and call
-    buffers its own, the phases the call's launches split before, at and after the chain, every footprint allocated; the
-    gate fails (the stand-in computes nothing) naming every output in full, and nothing leaks."""
-    log = tmp_path / "arm.jsonl"
-    rows = driver(A, ship, arm_dir, log, cls, "dry")
+    """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy, the
+    kernels each role's step needs and no others (nohash: no tree of A, no seed_A, no E_A lines, no hashes), E_A's line key
+    seed_line_a's from A's root, each operand set's E_A lines and call buffers its own, the phases the call's launches split
+    before, at and after the chain, every footprint allocated; the gate fails (the stand-in computes nothing, so seed_A isn't
+    the scheme's and no twin tile matches) naming every output in full; freeing set 0's gated hash calls launches each once
+    more, synchronously, and writes its transcript with the trees' frame-b3 sizes; nothing leaks."""
+    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry")
     arm = getattr(A, cls)()
     sx = "" if arm.device.g else "_u"
+    end = rows[-1]
     for g in rows[:-1]:
         assert not g["ok"] and set(g["checked"].values()) == {"all"}
-        hashed = {"leaves", "rows"} if g["role"] == "hash" else set()
-        assert set(g["checked"]) == ({"y"} | hashed | ({"digests"} if hashed else set()) if g["shape"] == "pre" else
-                                     {"y", "c", "u"} | hashed)
-        assert all(t["failed"] for t in g["detail"]["twin_tiles"])
-    assert rows[-1]["live"] == []
+        assert set(g["checked"]) == {"y", "c", "u"} | (set(A.HASHED) if g["role"] == "hash" else set())
+        assert g["detail"]["scheme"] == arm.name and all(t["failed"] for t in g["detail"]["twin_tiles"])
+        if g["role"] == "hash":
+            assert g["detail"]["seeds"] == {"seed_a": False, "line_a": False, "seed_b": True}
+    assert end["live"] == [] and set(end["transcribed"]) == {"pre", "dec"}
 
-    # prefill's m = 256 takes 128 x 128 tiles, so its chain is fused (gemm_pearlc_h, or gemm_pearlc_s without hashing)
-    chain = lambda shape, role: {"pre": "gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_h",  # noqa: E731
-                                 "dec": "gemm_pearlc_d"}[shape] + sx
-    forming = lambda shape, role: ["stats_s5", "eprime", "form_s5", {"pre": "gemm_words", "dec": "words"}[shape] + sx,  # noqa: E731
-                                   "pa", chain(shape, role)]
-    hashes = lambda shape: (["hash_leaf"] if shape == "pre" else ["hash_msg", "hash_leaf"]) + ["hash_rows_f32"]  # noqa: E731
-    got, allocs = windows(log)
+    words = {"pre": "gemm_words", "dec": "words"}
+    chain = lambda shape: {"pre": "gemm_pearlc", "dec": "gemm_pearlc_d"}[shape] + sx  # noqa: E731
+    commit = ["hash_rows_w", "hash_tree_small", "seed_line_a", "lines"]
+    forming = lambda shape: ["stats_s5", "eprime", "form_s5", words[shape] + sx, "pa"]  # noqa: E731
+    hashes = ["hash_msg_v", "hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]
+    weight = (["hash_node_keys", "hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
+              + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"])
+    got, allocs = windows(tmp_path / "dry.jsonl")
     assert not allocs
     ea: dict[tuple, int] = {}
     launched: dict[tuple, list[dict]] = {}
     for mark, evs in got:
-        assert all(ev["stream"] == 0x1234 for ev in evs), mark
         names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
         copy = ["copy"] if mark["shape"] == "dec" else []
+        if mark["what"] == "transcripts":
+            assert all(ev["stream"] == 0 for ev in evs) and names == copy + commit + forming(mark["shape"]) + [chain(mark["shape"])] + hashes
+            man, _ = transcript(tmp_path / "run", arm.name, mark["shape"])
+            m, n = man["shape"]["m"], man["shape"]["n"]
+            tiles = -(-m // 64) * (n // 64)
+            assert man["scheme"] == arm.name and man["commitment"]["count"] == tiles and man["matmul"] == {"index": 0, "weight": 0}
+            assert {f: s["bytes"] for f, s in man["files"].items()} == {
+                "tree_a": 32 * (2 * A.R.pow2(m) - 1), "tree_b": 32 * (2 * A.R.pow2(n) - 1), "tree_t": 32 * (2 * A.R.pow2(tiles) - 1),
+                "leaves": 32 * tiles, "rows_a": 4 * m * man["shape"]["k"], "rows_b": 4 * n * man["shape"]["k"]}
+            assert Path(man["files"]["rows_a"]["path"]).parent == tmp_path / "rows" / arm.name / mark["shape"]
+            continue
+        assert all(ev["stream"] == end["stream"] for ev in evs), mark
         if mark["what"] == "weight":
-            assert names == ["lines"] * 3 + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"]
+            assert names == weight
             continue
         if mark["what"] == "phases":
             parts: dict[str, list[dict]] = {}
@@ -599,39 +628,105 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
                     cur.append(ev)
             whole = launched[(mark["shape"], mark["role"], mark["set"])]
             assert [ev for p in ("before", "gemm", "after") for ev in parts[p]] == whole, mark
-            assert [ev["name"] for ev in parts["gemm"]] == [chain(mark["shape"], mark["role"])]
-            assert [ev["name"] for ev in parts["after"]] == (hashes(mark["shape"]) if mark["role"] == "hash" else [])
+            assert [ev["name"] for ev in parts["gemm"]] == [chain(mark["shape"])]
+            assert [ev["name"] for ev in parts["after"]] == (hashes if mark["role"] == "hash" else [])
             continue
         launched[(mark["shape"], mark["role"], mark["set"])] = evs
-        f, h = forming(mark["shape"], mark["role"]), hashes(mark["shape"])
-        want = {"hash": copy + ["lines"] + f + h, "nohash": copy + f,
-                "known_bad": copy + ["lines"] + f + ["xor_byte"] + h}[mark["role"]]
+        f = forming(mark["shape"])
+        want = {"hash": copy + commit + f + [chain(mark["shape"])] + hashes, "nohash": copy + f + [chain(mark["shape"])],
+                "known_bad": copy + commit + f + [chain(mark["shape"]), "xor_byte"] + hashes}[mark["role"]]
         assert names == want, mark
+        by = {ev.get("name"): ev for ev in evs}
         if mark["role"] != "nohash":
-            lines = evs[len(copy)]
-            assert lines["p"][0] == mark["keys"]["line_a"] and lines["i"][2] == A.padded({"pre": 256, "dec": 32}[mark["shape"]])
-            assert next(ev for ev in evs if ev.get("name") == "eprime")["p"][0] == lines["p"][1]
-        e = next(ev for ev in evs if ev.get("name") == "eprime")["p"][0]
+            seed, lines = by["seed_line_a"], by["lines"]
+            assert lines["p"][0] == seed["p"][2] and seed["p"][1] == mark["keys"]["unit"]
+            assert lines["i"][2] == A.padded({"pre": 256, "dec": 32}[mark["shape"]])
+            assert by["eprime"]["p"][0] == lines["p"][1] and by["hash_msg_v"]["p"][:2] == by[chain(mark["shape"])]["p"][2:4]
+        e = by["eprime"]["p"][0]
         assert ea.setdefault((mark["shape"], mark["set"]), e) == e
     for shape in ("pre", "dec"):
         assert ea[(shape, 0)] != ea[(shape, 1)]
-        calls = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name", "").startswith("gemm_pearlc")) for s in (0, 1)]
-        assert calls[0]["p"][4] != calls[1]["p"][4] and calls[0]["p"][0] != calls[1]["p"][0]
-        if shape == "pre":
-            assert calls[0]["p"][9] != calls[1]["p"][9] and calls[0]["p"][2] == 0
+        calls = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name") == chain(shape)) for s in (0, 1)]
+        assert all(calls[0]["p"][j] != calls[1]["p"][j] for j in (0, 2, 3, 4))
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("cls", ARMS)
 def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls):
-    """The fixture's bytes (the scheme's, at its seeds) where the kernels would have written them pass the gate; at its
-    128 x 128 tiles the call is fused, and one message digest's byte flipped in the last sampled tile fails it twice over,
-    against the second launch (unfused, hash_msg over gemm_pearlc's C̃ and U) and against the twin."""
-    first, flipped = driver(A, ship, arm_dir, tmp_path / "accept.jsonl", cls, "accept", str(small_fixture / "check.json"))
-    assert first["ok"] and first["checked"] == {name: "all" for name in ("leaves", "rows", "digests", "y")}
+    """The fixture's bytes (the scheme's, at its epoch and seeds) where the kernels would have written them pass the gate, the
+    device's seed_A and E_A's line key the scheme's from its root_A; one C̃ word flipped in the last sampled tile fails it twice
+    over, against the second launch (gemm_pearlc and gemm_ct both) and against the twin; restored, it passes again and freeing
+    the call writes the transcript, which the reference verifier (verify.py, `verity_pouw.audit.Verifier`) accepts."""
+    first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"))
+    arm = getattr(A, cls)()
+    assert first["ok"] and first["checked"] == {name: "all" for name in ("y", "c", "u") + A.HASHED}
     assert not any(first["detail"]["words_differing_from_relaunch"].values())
+    assert first["detail"]["seeds"] == {"seed_a": True, "line_a": True, "seed_b": True}
     assert len(first["detail"]["twin_tiles"]) == 3 and not any(t["failed"] for t in first["detail"]["twin_tiles"])
-    assert not flipped["ok"] and flipped["flipped"][0] == "digests"
+    assert not flipped["ok"] and flipped["flipped"][0] == "c"
     diff = flipped["detail"]["words_differing_from_relaunch"]
-    assert diff["digests"] == sum(diff.values()) == 1
-    assert [t["failed"] for t in flipped["detail"]["twin_tiles"]] == [[], [], ["digests"]]
+    assert diff["c"] == diff["c@gemm_ct"] == 1 and sum(diff.values()) == 2
+    assert [t["failed"] for t in flipped["detail"]["twin_tiles"]] == [[], [], ["c"]]
+    assert restored["ok"] and set(restored["transcribed"]) == {"fixture"}
+
+    man, path = transcript(tmp_path / "run", arm.name, "fixture")
+    check = json.loads((small_fixture / "check.json").read_text())
+    assert man["beacon"] == check["beacon"] and man["weight_root"] == check["seeds"]["root_b"]
+    r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
+                        "--commit", "test"], capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stdout + r.stderr
+    line, = r.stdout.splitlines()
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    assert line.startswith(f"ACCEPT {arm.name} fixture: verity_pouw.audit.Verifier, Sampled(1) drew tiles ")
+    assert line.endswith(f"; transcript sha256:{sha}; verifier test")
+    verdict = json.loads((tmp_path / "run" / "verify.json").read_text())
+    assert verdict["ok"] and verdict["transcripts"][0]["accepted"] and verdict["transcripts"][0]["line"] == line
+
+
+@pytest.mark.slow
+def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_dir, tmp_path):
+    """verify.py rejects, before any tile is recomputed: another root_A (every drawn tile's activation openings fail), another
+    tile root (the leaf openings), a beacon the salt isn't from, a file that isn't the manifest's (its SHA-256), a scheme the
+    arguments don't name; and a run directory with no transcript, or an arm's error in place of one."""
+    driver(A, ship, arm_dir, tmp_path, "PearlCSm120", "accept", str(small_fixture / "check.json"))
+    V = load("pearl_c_sm120_verify", HERE / "verify.py")
+    _, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
+    flip = lambda h: ("11" if h[:2] == "00" else "00") + h[2:]  # noqa: E731
+
+    def tampered(edit) -> dict:
+        d = tmp_path / "t" / edit.__name__
+        shutil.copytree(path.parent, d)
+        man = json.loads(path.read_text())
+        edit(man, d)
+        (d / "manifest.json").write_text(json.dumps(man))
+        return V.verify(d / "manifest.json", 4, "test")
+
+    def root_a(man, d):
+        man["activation_root"] = flip(man["activation_root"])
+
+    def tile_root(man, d):
+        man["commitment"]["root"] = flip(man["commitment"]["root"])
+
+    def beacon(man, d):
+        man["beacon"] = flip(man["beacon"])
+
+    def leaves(man, d):
+        (d / "leaves.bin").write_bytes(bytes(32) + (d / "leaves.bin").read_bytes()[32:])
+
+    def scheme(man, d):
+        man["scheme_args"]["device"] = "sm120-unpromoted"
+
+    for edit, why in ((root_a, "activation opening"), (tile_root, "transcript opening"), (beacon, "salt"),
+                      (leaves, "the manifest says"),
+                      (scheme, "is not")):
+        r = tampered(edit)
+        assert not r["accepted"] and r["line"].startswith("REJECT") and why in r["line"], (edit.__name__, r["line"])
+
+    empty, failed = tmp_path / "empty", tmp_path / "failed" / "transcripts" / "pearl-c-sm120-v1-h1" / "pre"
+    empty.mkdir()
+    failed.mkdir(parents=True)
+    (failed / "error.txt").write_text("RuntimeError: no\n")
+    for run, missing in ((empty, []), (failed.parents[2], ["transcripts/pearl-c-sm120-v1-h1/pre"])):
+        assert V.main([str(run)]) == 1
+        assert json.loads((run / "verify.json").read_text()) == {"verifier_commit": os.environ.get("RESEARCH_SOURCE_SHA", "unknown"),
+                                                                 "draws": 3, "ok": False, "transcripts": [], "missing": missing}
