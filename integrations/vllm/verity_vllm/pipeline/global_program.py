@@ -216,8 +216,8 @@ def workload_lag(manifest: dict, shapes: dict) -> dict:
 
 
 #: [R17-42] the Definition ids (name prefixes of `spec_histogram` keys) that identify each construction's binding of the fused-MoE block
-_MOE_CONSTRUCTION_SPECS = {"indexed-read": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopK_v1", "MoeRouterTopKNorm_v1", "MoeSum_v1"),
-                           "indexed-read-ordered": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeRouterTopKOrdered_v1", "MoeRouterTopKOrderedNorm_v1", "MoeSum_v1"),
+_MOE_CONSTRUCTION_SPECS = {"indexed-read": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeExpertGemm_v2", "MoeExpertGemmW_v2", "MoeRouterTopK_v1", "MoeRouterTopKNorm_v1", "MoeSum_v1"),
+                           "indexed-read-ordered": ("MoeExpertGemm_v1", "MoeExpertGemmW_v1", "MoeExpertGemm_v2", "MoeExpertGemmW_v2", "MoeRouterTopKOrdered_v1", "MoeRouterTopKOrderedNorm_v1", "MoeSum_v1"),
                            "padded": ("MoeFfnFixedL_v1",)}
 
 
