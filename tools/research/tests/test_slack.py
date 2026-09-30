@@ -347,10 +347,21 @@ def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
     assert rc == 2 and "more than the broker takes" in err and not broker.requests
 
 
-def test_broker_methods_are_exactly_the_methods_this_module_calls():
+def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
     src = Path(slack.__file__).read_text()
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
-    assert called == set(slack.BROKER_METHODS) and len(slack.BROKER_METHODS) == len(called)
+    assert set(slack.DIRECT_ONLY) == {"usergroups.create", "usergroups.enable", "usergroups.update"}
+    assert called == set(slack.BROKER_METHODS) | set(slack.DIRECT_ONLY) and not set(slack.BROKER_METHODS) & set(slack.DIRECT_ONLY)
+    assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
+
+
+def test_groups_sync_plans_through_the_broker_but_applies_only_with_the_token(broker, registry, capsys):
+    rc, out, _ = run(capsys, "groups", "sync")
+    assert rc == 0 and "plan only" in out and [r[1]["method"] for r in broker.requests] == ["auth.test", "usergroups.list"]
+    broker.requests.clear()
+    rc, _, err = run(capsys, "groups", "sync", "--apply")
+    assert rc == 2 and "groups sync --apply needs SLACK_BOT_TOKEN" in err and "a VM that has the token" in err
+    assert not broker.requests and not broker.state.groups
 
 
 @pytest.fixture

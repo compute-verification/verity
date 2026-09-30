@@ -52,9 +52,10 @@ REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 FRONT_DOOR = "agent-coordination"
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
-#: every Web API method this module calls, and so exactly what the broker's route allows (the tests check the two agree)
+#: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
 BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
-                  "reactions.add", "usergroups.create", "usergroups.enable", "usergroups.list", "usergroups.update")
+                  "reactions.add", "usergroups.list")
+DIRECT_ONLY = ("usergroups.create", "usergroups.enable", "usergroups.update")        # `groups sync --apply`: the token itself
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 EVERY = "every handle"
@@ -613,6 +614,9 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     the registry, which the caller commits. Existing groups keep their members."""
     api = client(ns)
     write = ns.apply and not ns.dry_run
+    if write and api.via == "broker":
+        raise SlackError("groups sync --apply needs SLACK_BOT_TOKEN itself (the broker doesn't relay user-group writes): "
+                         "run it on a VM that has the token")
     changed = False
     bot = api.call("auth.test").get("bot_id")
     if bot and reg.get("bot_id") != bot:

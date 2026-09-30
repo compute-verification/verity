@@ -49,7 +49,7 @@ subcommand takes `--dry-run`, which sends nothing and prints each request it wou
 
 - `SLACK_BOT_TOKEN` is Verity's bot (a Cursor secret). Never print it.
 - An agent without it (one started before the secret existed) goes through Verity's Slack broker automatically, on its Cursor
-  identity; `RESEARCH_SLACK_VIA=broker` forces that. The broker allows only `BROKER_METHODS` in `slack.py`; errors exit 2.
+  identity; `RESEARCH_SLACK_VIA=broker` forces that. The broker allows only `BROKER_METHODS` in `slack.py`, so `groups sync --apply` needs the token.
 - `RESEARCH_AGENT_URL=https://cursor.com/agents/<your bc id>`: every post ends with a link to the agent that wrote it.
 - Channel ids come from the registry, or `SLACK_CHANNEL_AGENT_COORDINATION` and `SLACK_CHANNEL_AGENT_ALERTS`.
 - Every channel holds two Slack apps. Cursor's app delivers the wakes (`subscribe_slack_*`), and Verity's bot posts and reads
