@@ -19,6 +19,7 @@ Designs (δ = 1/4 row-relative noise unless named; the noise std is δ·ρ·α�
 
   v1            rank-32 real-unit noise (uniform E2M1 lines, as `fp4-design.md` §2) and block scales from the noisy amax
   v1-rR         the same at rank R (R FFMAs per element instead of the k64 atom), same variance
+  v1-sN         v1 with a noise floor relative to the row max as well: σ = max(ρ/4, s/N) (one a_E per row)
   v3-gauss      rank-1 e_i·f_t with Gaussian e, f; clean-path block scales (v-c as written)
   v3-sign       rank-1 with fixed magnitude: e_i = ±1, f_t = ±1 (noise exactly ±δρα₀); clean scales
   v3-sign-d2    the same at δ = 1/2
@@ -66,11 +67,11 @@ def scale_val(code: np.ndarray) -> np.ndarray:
     return m * np.exp2(e)
 
 
-def row_stats(x: np.ndarray, delta: float):
+def row_stats(x: np.ndarray, delta: float, rowmax: float = 0.0):
     s = np.abs(x).max(axis=1, keepdims=True)
     rho = np.sqrt((x[:, ::8] ** 2).mean(axis=1, keepdims=True))
     alpha = 2688.0 / np.maximum(s + 4 * delta * rho, 2.0 ** -32)
-    return alpha, delta * rho * alpha                      # alpha0, and the noise std in scaled units
+    return alpha, np.maximum(delta * rho, rowmax * s) * alpha   # alpha0, and the noise std in scaled units
 
 
 def form(x: np.ndarray, design: str, rng: np.random.Generator, scales: bool = False):
@@ -78,7 +79,8 @@ def form(x: np.ndarray, design: str, rng: np.random.Generator, scales: bool = Fa
     with `scales` the block scales the MMA reads, [R, k/16]."""
 
     delta = 0.5 if design.endswith("-d2") else 0.25
-    alpha, sig = row_stats(x, delta)
+    floor = re.search(r"-s(\d+)$", design)
+    alpha, sig = row_stats(x, delta, 1 / int(floor.group(1)) if floor else 0.0)
     ax = alpha * x
     r, k = x.shape
     if design.startswith("v1"):

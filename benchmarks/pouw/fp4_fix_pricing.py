@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fp4_emulation import E2M1_HALVES, e2m1_rn, ue4m3_dyadic, ue4m3_rn  # noqa: E402
 from fp4_v4_coverage import KB1, T, bf16, side, stats, uval, witness  # noqa: E402
 
-EPS = (0.005, 0.01, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30)
+EPS = (0.005, 0.01, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40)
 VALUES = np.array([0, 0.5, 1, 1.5, 2, 3, 4, 6, 0, -0.5, -1, -1.5, -2, -3, -4, -6])
 
 
@@ -72,23 +72,35 @@ def units_of(dead):
 
 # ---- the attack family ---------------------------------------------------------------------------------------------
 
-def attack_rows(rows, k, S, rng):
+def attack_rows(rows, k, S, rng, park=None):
+    """The assessor's rows; with `park`, one element per block sits at S·ρ (the block max) and the other 13 spikes at
+    park/6 of it, the centre of an E2M1 cell (4.25: code 4's, the widest below saturation)."""
     x = rng.standard_normal((rows, k))
     r = rng.choice((-1.0, 1.0), rows)
     c = rng.choice((-1.0, 1.0), k // 16)
     offs = [o for o in range(16) if o not in (0, 8)]
     for b in range(k // 16):
-        for o in offs:
-            x[:, 16 * b + o] = S * r * c[b]
+        for i, o in enumerate(offs):
+            x[:, 16 * b + o] = S * r * c[b] * (1.0 if park is None or i == 0 else park / 6)
     return x, np.array([o in offs for o in range(16)] * (k // 16))
+
+
+def stats_floor(X, rowmax):
+    """v1's row statistics with the noise σ = max(ρ/4, rowmax·s), s the row's max (one factor per row: the atom's a_E)."""
+    alpha, ae, dnf, rho2 = stats(X, KB1)
+    if rowmax:
+        s = np.abs(X).max(1)
+        sig = np.maximum(np.sqrt(rho2) / 4, rowmax * s)
+        ae = uval(ue4m3_rn(sig * alpha * KB1))
+    return alpha, ae, dnf, rho2
 
 
 def attack(args):
     rng = np.random.default_rng(20260930)
     out = []
     for S in args.S:
-        x, spike = attack_rows(args.rows, args.k, S, rng)
-        alpha, ae, dnf, rho2 = stats(x, KB1)
+        x, spike = attack_rows(args.rows, args.k, S, rng, args.park)
+        alpha, ae, dnf, rho2 = stats_floor(x, args.rowmax)
         pc = p_change(x, alpha, ae, args.salts, rng)
         sp = pc[:, spike]
         # ΔA against the salt-free guess A0 (the modal code), over fresh draws
@@ -119,12 +131,68 @@ def attack(args):
         Path(args.out).write_text(json.dumps(out, indent=1))
 
 
+# ---- the count-limit candidate: the attacker's best response -----------------------------------------------------
+
+def flip_of(eps):
+    """The per-draw flip rate f of a two-valued code whose P_change is eps: P_change = 2f(1 − f)."""
+    return (1 - np.sqrt(max(1 - 2 * eps, 0.0))) / 2
+
+
+def countlimit(args):
+    """Best response to "at most L near-deterministic codes (P_change < ε) per block": per block, the two ρ positions
+    (offsets 0 and 8) are background, nonzero in ΔA with probability `bg` (the assessor's rows: 0.71); L positions are
+    deterministic and fill the background's 4-groups first; the other 14 − L sit just past the threshold, flipping with
+    f(ε) per draw.  All structured (rank-1 A0).  ΔA's cost is 0.5 + 0.5·(share of 16 x 64 fragments needing a second pass),
+    the attack's 0.05 + 0.95·(ΔA + A0 corrections 0.08 … 0.25) as the assessor prices it."""
+    from math import comb
+    out = []
+    for eps in args.eps:
+        f = flip_of(eps)
+        for L in args.L:
+            # positions per 4-group: g0 = {0 (bg), 1, 2, 3}, g1 = {4..7}, g2 = {8 (bg), 9, 10, 11}, g3 = {12..15}
+            det = [0, 0, 0, 0]
+            left = L
+            for g in (0, 2, 1, 3):
+                take = min(left, 3 if g in (0, 2) else 4)
+                det[g] = take
+                left -= take
+            viol = []
+            for g in range(4):
+                live = (3 if g in (0, 2) else 4) - det[g]
+                bgp = args.bg if g in (0, 2) else 0.0
+                p_more = 0.0
+                for bgnz in (0, 1):
+                    pb = bgp if bgnz else 1 - bgp
+                    if pb == 0:
+                        continue
+                    for x in range(live + 1):
+                        if bgnz + x > 2:
+                            p_more += pb * comb(live, x) * f ** x * (1 - f) ** (live - x)
+                viol.append(p_more)
+            clean = np.prod([(1 - v) ** 64 for v in viol])          # 16 rows x 4 blocks of each group type per fragment
+            delta = 0.5 + 0.5 * (1 - clean)
+            saving = [1 - (0.05 + 0.95 * (delta + a0)) for a0 in (0.08, 0.25)]
+            rec = {"eps": eps, "L": L, "flip": f, "violation_per_group": viol, "fragments_one_pass": float(clean),
+                   "saving": saving, "closed": bool(saving[0] <= 0.0025)}
+            out.append(rec)
+            print(f"eps {eps:.2f} L {L:2d}: flip {f:.3f}  fragments one-pass {100*clean:5.1f}%  saving {100*saving[0]:6.1f} .. {100*saving[1]:6.1f}%  {'closed' if rec['closed'] else 'OPEN'}", flush=True)
+    if args.out:
+        Path(args.out).write_text(json.dumps(out, indent=1))
+
+
 # ---- real models ---------------------------------------------------------------------------------------------------
 
 FS, CAPS = 107.34, (0.0025, 0.001)
 
 
-def linear(X, W, rng, salts, max_cols=24, a_only=False, exclude_max=False):
+def modal_share(X, alpha):
+    """Per row: the share of blocks whose clean UE4M3 scale byte is the row's most common one."""
+    R, k = X.shape
+    b = ue4m3_rn(np.abs(alpha[:, None] * X).reshape(R, k // 16, 16).max(2) / 6)
+    return np.array([np.bincount(r).max() / len(r) for r in b])
+
+
+def linear(X, W, rng, salts, max_cols=24, a_only=False, exclude_max=False, count_limits=()):
     from fp4_v4_coverage import DESIGNS
     p = DESIGNS["v1"]
     X, W = bf16(X), bf16(W)
@@ -165,6 +233,33 @@ def linear(X, W, rng, salts, max_cols=24, a_only=False, exclude_max=False):
         res["eps"][str(eps)] = {"max": float(deb.max()), "over": {str(c): float(cred[deb > c].sum() / cred.sum()) for c in CAPS},
                                 "no_margin": {str(c): bool(deb.max() > c / 2) for c in CAPS},
                                 "dead_share_a": float((pa < eps).mean())}
+        # the count limit: a block of A with more than L ε-dead codes is charged in term 1 at 1 per MAC (16 per word)
+        cnt = (pa < eps).reshape(m, k // 16, 16).sum(2)
+        res["eps"][str(eps)]["count_hist"] = np.bincount(cnt.ravel(), minlength=17).tolist()
+        for L in count_limits:
+            over_units = 16.0 * (cnt > L).sum(1)
+            deb, cred = [], []
+            for r in range(m // T):
+                I = slice(r * T, (r + 1) * T)
+                ok = rows_ok[I]
+                if ok.sum() == 0:
+                    continue
+                nI = ok.sum()
+                for c in range(len(cols)):
+                    J = slice(c * T, (c + 1) * T)
+                    cr = nI * T * cw
+                    t1 = (T * (a["units"][I][ok] + over_units[I][ok]).sum() + nI * b["units"][J].sum()) / cr
+                    t3 = 16 * (a["scr"][I][ok] @ b["scr"][J].T).sum() / cr
+                    t4 = T * FS / n * a["sdw"][I][ok].sum() / cr
+                    deb.append(t1 + t3 + t4)
+                    cred.append(cr)
+            deb, cred = np.array(deb), np.array(cred)
+            res["eps"][str(eps)][f"L{L}"] = {"max": float(deb.max()), "over": float(cred[deb > CAPS[0]].sum() / cred.sum()),
+                                            "no_margin": bool(deb.max() > CAPS[0] / 2), "blocks_over": float((cnt > L).mean())}
+    alpha_a = stats(X[:m], KB1)[0]
+    ms = modal_share(X[:m], alpha_a)
+    res["modal_share"] = {"median": float(np.median(ms)), "p90": float(np.quantile(ms, 0.9)),
+                          "rows_over_0.97": float((ms > 0.97).mean())}
     return res
 
 
@@ -190,7 +285,7 @@ def real(args):
         if int(nm.split(".")[2]) % args.layer_step:
             continue
         res[nm] = linear(x.float().numpy(), mod.weight.detach().float().numpy(), rng, args.salts, a_only=args.a_only,
-                         exclude_max=args.exclude_max)
+                         exclude_max=args.exclude_max, count_limits=args.count_limits)
     macs = sum(r["macs"] for r in res.values())
     summ = {"model": args.model, "tokens": int(ids.shape[1]), "salts": args.salts, "a_only": args.a_only,
             "layer_step": args.layer_step, "exclude_max": args.exclude_max, "linears": len(res), "eps": {}}
@@ -201,6 +296,17 @@ def real(args):
         for c in CAPS:
             summ["eps"][e][f"credit_over_{c}"] = sum(r["eps"][e]["over"][str(c)] * r["macs"] for r in res.values()) / macs
             summ["eps"][e][f"macs_no_2x_margin_{c}"] = sum(r["macs"] for r in res.values() if r["eps"][e]["no_margin"][str(c)]) / macs
+    for eps in EPS:
+        e = str(eps)
+        for L in args.count_limits:
+            k_ = f"L{L}"
+            summ["eps"][e][k_] = {
+                "credit_over_0.0025": sum(r["eps"][e][k_]["over"] * r["macs"] for r in res.values()) / macs,
+                "macs_no_2x_margin": sum(r["macs"] for r in res.values() if r["eps"][e][k_]["no_margin"]) / macs,
+                "worst_tile": max(r["eps"][e][k_]["max"] for r in res.values()),
+                "blocks_over": sum(r["eps"][e][k_]["blocks_over"] * r["macs"] for r in res.values()) / macs}
+    summ["modal_share"] = {"rows_over_0.97": sum(r["modal_share"]["rows_over_0.97"] * r["macs"] for r in res.values()) / macs,
+                           "median_of_medians": float(np.median([r["modal_share"]["median"] for r in res.values()]))}
     print(json.dumps(summ, indent=1), flush=True)
     if args.out:
         Path(args.out).write_text(json.dumps({"summary": summ, "linears": res}))
@@ -215,6 +321,8 @@ def main(argv=None) -> int:
     a.add_argument("--k", type=int, default=2048)
     a.add_argument("--salts", type=int, default=128)
     a.add_argument("--draws", type=int, default=8)
+    a.add_argument("--rowmax", type=float, default=0.0, help="noise floor relative to the row max: σ = max(ρ/4, rowmax·s)")
+    a.add_argument("--park", type=float, default=None, help="park 13 of the 14 spikes at this E2M1 cell centre (e.g. 4.25)")
     a.add_argument("--out", default=None)
     r = sub.add_parser("real")
     r.add_argument("model")
@@ -224,9 +332,16 @@ def main(argv=None) -> int:
     r.add_argument("--a-only", action="store_true", help="probabilistic salt-deadness on A only; B's term 1 on the witness")
     r.add_argument("--layer-step", type=int, default=1, help="only decoder layers whose index is a multiple of this")
     r.add_argument("--exclude-max", action="store_true", help="never count a block's clean maximum as ε-dead")
+    r.add_argument("--count-limits", type=lambda s: [int(v) for v in s.split(",")], default=[],
+                   help="per-block limits L on ε-dead A codes; a block over L is charged in term 1 at 1 per MAC")
     r.add_argument("--out", default=None)
+    c = sub.add_parser("countlimit")
+    c.add_argument("--eps", type=float, nargs="+", default=[0.05, 0.10, 0.15, 0.20, 0.30, 0.40])
+    c.add_argument("--L", type=int, nargs="+", default=[1, 2, 3, 4, 6, 8, 10, 12])
+    c.add_argument("--bg", type=float, default=0.71)
+    c.add_argument("--out", default=None)
     args = ap.parse_args(argv)
-    attack(args) if args.cmd == "attack" else real(args)
+    {"attack": attack, "real": real, "countlimit": countlimit}[args.cmd](args)
     return 0
 
 
