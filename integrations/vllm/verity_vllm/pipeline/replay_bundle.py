@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit import store_dump as SD
+from verity_vllm.pipeline import c2_replay as C2
 
 SCHEMA = "verity-vllm/replay-bundle/v1"
 MANIFEST = "MANIFEST.json"
@@ -60,7 +61,8 @@ def refuse(args: Any) -> None:
            "one instrumented committer only (no --arms, no control-only process)" if args.arms or args.only_arm == "control" else
            "--padded-finalize: padding steps are not in the replay bundle's store" if args.padded_finalize else
            f"--compiled-taps {args.compiled_taps}: the compiled check is its own C2" if args.compiled_taps != "off" else
-           "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else None)
+           "--vu-export-dir exports from the replay, which does not run here" if args.vu_export_dir else
+           "--serving-rows commits through the live committer" if args.serving_rows else None)
     if why:
         raise SystemExit(f"--replay-deferred: {why}")
 
@@ -72,14 +74,12 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     tl.start("validate.replay_bundle", pair=pair)
     write_store(out, pair, com, rc)
     caps = {str(q.get("request_id")): int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs}
-    blocks = getattr(com, "_gpu_blocks", None) or {}
     ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
            "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
            "stop_of_record": stop_of_record,
            # the reconciliation of the not-executed class reads the placed identities only when a request stopped early
            "ids_full": ids_full if any(len(v) < caps.get(str(k), 0) for k, v in tokens.items()) else None,
-           "retention": ("device" if any(b is not None and bool(getattr(b, "is_cuda", False)) for b, _u in blocks.values())
-                         else (str(args.retain) if args.retain else ("host" if blocks else None))),
+           "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings)}
     sr, lk = deferred_records(path(out, pair))
