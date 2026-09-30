@@ -329,8 +329,10 @@ rather than `verity.commitments`' frame v3.
 A program's rounds are counted by `oracle.run`, never claimed. `audit.simulate` sets the round budget per answer at
 `(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the adversary's fastest oracle call, and its 242 µs default is
 `P_T`'s Feistel-SHAKE256 floor at 64 KB (a `Π₂` call is at least 480 µs), so the budget is 2 rounds at Δ = 0.5 ms.
-`CERTIFIED_ROUNDS = 28` is the most the band certificate `band_twoWay_220_12` covers when a level costs 3 calls
-(`Π₂` of the oldest parent, `Π₂` of the pad, `P`), `⌊(D − 1)/3⌋ + 1 ≤ 10`.
+`CERTIFIED_ROUNDS = 10` is what P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
+`Pous.Pinned.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on `B(220, 16)`. The
+column-game certificate `band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level
+(`Π₂` of the oldest parent, `Π₂` of the pad, `P`) reads as 28 rounds; no `Meets` statement covers that reading.
 
 `adversary.schedule` computes, for any holding, the fewest rounds after which each value is known. It covers keys
 (each query waits for the parent it absorbs), forward labels, promotion from held or revealed columns, and the
