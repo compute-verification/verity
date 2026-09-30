@@ -9,7 +9,7 @@ The dispatcher (dispatch.py, PACK_COMMITS=1) spools each eligible Commit, config
 finishes, and stops claiming at PACK_CLAIM_UNTIL_S, in the quiet hour (12:30-13:30Z), or after an MPS fault; it exits once
 nothing runs and the queue has been empty for PACK_IDLE_S, or at PACK_MAX_WALL_S, when whatever still runs is stopped.
 Storage (infra and circuits, 3:25-3:36 PM PDT Sep 30): it claims nothing while /workspace is PACK_DISK_PAUSE (80%) full or more,
-and no Commit of batch 8 or more while the sealed replay bundles waiting on the node pass PACK_BUNDLE_CAP_GB (300).
+and no Commit of batch 8 or more while the sealed replay bundles waiting on the node pass PACK_BUNDLE_CAP_GB (150).
 
 **MPS.** `nvidia-cuda-mps-control -d` with its pipe and log directories under the pod's scratch ($TMPDIR/commit-pack-<pod>, removed at
 exit). Each client gets CUDA_MPS_PINNED_DEVICE_MEM_LIMIT (0=28G) and CUDA_MPS_ACTIVE_THREAD_PERCENTAGE (100), and the Commit
@@ -56,7 +56,7 @@ DISK_PAUSE = float(os.environ.get("PACK_DISK_PAUSE", "0.80"))
 BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/commit/replay_bundle_p*,"
                               "/workspace/cp/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/jobs/dispatch/pack/golden/*/commit/replay_bundle_p*").split(",")
-BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "300")) * 1e9
+BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "150")) * 1e9
 BUNDLE_BATCH = 8
 FAULT_EXIT = 87
 QUIET = ((12, 30), (13, 30))
