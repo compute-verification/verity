@@ -41,6 +41,11 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   BINARY=$BIN/flock-circuit; SELFTEST_BINARY=$BIN/flock-circuit-selftest
 fi
 B=$BINARY; SB=${SELFTEST_BINARY:-$BINARY}; sha256sum $B $SB | tee $O/binary.sha256
+# WRAP: a command the prover's prove sessions run under (71-gemm-slowdown.sh NSYS=1); binary.sha256 is the prover's own
+if [ -n "${WRAP:-}" ]; then
+  printf '#!/bin/sh\ncase "$1" in prove) exec %s %s "$@" ;; *) exec %s "$@" ;; esac\n' "$WRAP" "$B" "$B" > $O/prover-wrapped
+  chmod +x $O/prover-wrapped; B=$O/prover-wrapped
+fi
 if [ -z "${PYBIN:-}" ]; then
   [ -x $HOME/.local/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
   [ -x $W/py/bin/python ] || { $HOME/.local/bin/uv venv -q --python 3.12 $W/py && $HOME/.local/bin/uv pip install -q --python $W/py/bin/python numpy blake3; }

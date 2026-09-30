@@ -64,8 +64,24 @@ if [ "${GATE:-1}" = 1 ]; then
   OUT=$R/out/gate bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=16 WARM=0 RUNS=1 SELFTEST=1 SELFTEST_GPU=1 \
     SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu || exit 1
 fi
+# NSYS=1: a profile, not an attempt: the m = 34 prove sessions under Nsight Systems' CUDA trace (unpacked like CUDA 13.3), each
+# process's kernel, memcpy and API summaries in out/nsys; no native GEMMs, no result.json
+if [ "${NSYS:-0}" = 1 ]; then
+  NR=${FLOCK_WORK:-/workspace}/nsys-root; NS=$NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
+  if [ ! -x $NS ]; then
+    mkdir -p $NR/debs && (cd $NR/debs && apt-get download nsight-systems-2026.1.3) || exit 1
+    for d in $NR/debs/*.deb; do dpkg-deb -x $d $NR; done
+  fi
+  mkdir -p $R/out/nsys; export WRAP="$NS profile -t cuda --sample=none --cpuctxsw=none -o $R/out/nsys/prove-%p"
+fi
 OUT=$R/out/m34 bash backends/flock/pod/70-class-sweep.sh DEFS=$DEFS BATCH=${BATCH:-auto} ${N:+N=$N} BATCH_ANDS=${BATCH_ANDS:-4294967296} \
   MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-17179869184} WARM=${WARM:-1} RUNS=${RUNS:-3} SELFTEST=0 || exit 1
+if [ "${NSYS:-0}" = 1 ]; then
+  for f in $R/out/nsys/*.nsys-rep; do
+    $NS stats -q -r cuda_gpu_kern_sum,cuda_gpu_mem_time_sum,cuda_api_sum -f csv -o ${f%.nsys-rep} $f > /dev/null
+  done
+  exit 0
+fi
 W=${FLOCK_WORK:-/workspace}/flock-circuit; UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $W/torch/bin/python ] || { $UV venv -q --python 3.12 $W/torch && $UV pip install -q --python $W/torch/bin/python 'torch>=2.7' \
   --index-url https://download.pytorch.org/whl/cu128; } || exit 1
