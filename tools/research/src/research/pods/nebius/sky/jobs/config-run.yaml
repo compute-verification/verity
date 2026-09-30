@@ -50,6 +50,7 @@ envs:
   PY312: /workspace/jobs/venv312/bin/python
   RESEARCH_PY: /workspace/jobs/bin/py312
   RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
   HOT_ROOT: /workspace/jobs/hot
   HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
   HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
@@ -100,6 +101,7 @@ config:
           kueue.x-k8s.io/priority-class: circuits
           verity.dev/build: "true"
       spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
         containers:
         - volumeMounts:
           - {name: workspace, mountPath: /workspace}
@@ -135,6 +137,7 @@ envs:
   PY312: /workspace/jobs/venv312/bin/python
   RESEARCH_PY: /workspace/jobs/bin/py312
   RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
   HOT_ROOT: /workspace/jobs/hot
   HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
   HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
@@ -180,6 +183,7 @@ config:
           kueue.x-k8s.io/priority-class: circuits
           ov.noisy: "true"
       spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
         containers:
         - volumeMounts:
           - {name: workspace, mountPath: /workspace}

@@ -26,6 +26,7 @@ envs:
   CMD: null
   CAMPAIGN: nebius-bench
   RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
   UV_CACHE_DIR: /workspace/jobs/cache/uv
   UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
   CARGO_TARGET_DIR: /workspace/jobs/cache/cargo-target
@@ -63,6 +64,7 @@ config:
           kueue.x-k8s.io/priority-class: prover-bench
           ov.noisy: "true"
       spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
         containers:
         - volumeMounts:
           - {name: workspace, mountPath: /workspace}

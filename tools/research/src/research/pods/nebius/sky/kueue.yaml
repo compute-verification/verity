@@ -1,18 +1,18 @@
 # Kueue on the Nebius cluster (Kueue v0.19.6, applied by cluster_up.sh). The weekly retune edits only this file: the nominalQuota
 # lines below, from usage_report.py's summary.
 #
-# One cohort (nebius), two ClusterQueues. provers may borrow circuits' idle capacity, and circuits reclaiming it preempts the
-# borrower whatever its priority (reclaimWithinCohort: Any). circuits never borrows (borrowingLimit 0): a config run can't be
-# checkpointed, so it must never sit on quota a reclaim could take back. Within provers only lower priorities are preempted;
-# within circuits nothing is (withinClusterQueue: Never): its rows run 5-11 h uncheckpointed, so a priority there only orders the
-# queue. A short capture (priority capture) takes the next free GPU ahead of queued rows and is never evicted by a later row.
+# One cohort (nebius), two ClusterQueues. Tonight (root, 08:33Z) coverage is the binding workstream: circuits has 5 GPUs, provers 3,
+# and circuits may borrow up to 2 of provers' idle GPUs (with the CPU and memory two cells need). Borrowing never preempts
+# (borrowWithinCohort: Never), so a running capture or M0 bench is never evicted for it; when provers' own jobs queue, provers
+# reclaims its quota by preempting circuits' borrowers (reclaimWithinCohort: Any), which SkyPilot requeues. provers borrows the same
+# way from circuits' idle quota. Within a queue, only lower priorities are preempted.
 # quiet_hour.sh holds circuits' admissions 12:30-13:30Z (stopPolicy: Hold) so benches can re-measure without new Builds.
 #
 # Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
 # ~1,690 GiB), or it admits pods that stay Pending.
-# CPU: the node's 192 vCPU less the merge-check slots' 88 cores (8-95, pinned direct work since 08:09Z): 104, as circuits 64
-# (4 GPU cells x 16 vCPU) and provers 40. Kueue's quota is accounting; the slots' own pinning keeps checks on their cores.
-# The split is circuits 4 GPUs, provers 4. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
+# CPU: the node's 192 vCPU less the merge-check slots' 88 cores (8-95, pinned direct work since 08:09Z): 104, as circuits 80
+# (5 GPU cells x 16 vCPU) and provers 24. Kueue's quota is accounting; the slots' own pinning keeps checks on their cores.
+# The split is circuits 5 GPUs, provers 3. While lanes still run GPU work directly on GPUs 4-7 (outside Kubernetes), cluster_up.sh
 # holds those with a placeholder pod and applies this file with provers' GPU quota lowered by the GPUs held (4 -> 0); its GPU jobs
 # borrow circuits' idle GPUs meanwhile. Cutover: VY_DIRECT_GPUS=none cluster_up.sh --apply.
 apiVersion: kueue.x-k8s.io/v1beta2
@@ -30,16 +30,16 @@ spec:
   queueingStrategy: BestEffortFIFO
   preemption:
     reclaimWithinCohort: Any
-    borrowWithinCohort: {policy: LowerPriority}
-    withinClusterQueue: Never
+    borrowWithinCohort: {policy: Never}
+    withinClusterQueue: LowerPriority
   resourceGroups:
   - coveredResources: [nvidia.com/gpu, cpu, memory]
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 4, borrowingLimit: 0}
-      - {name: cpu, nominalQuota: 64, borrowingLimit: 0}
-      - {name: memory, nominalQuota: 1280Gi, borrowingLimit: 0}
+      - {name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}
+      - {name: cpu, nominalQuota: 80, borrowingLimit: 32}
+      - {name: memory, nominalQuota: 1280Gi, borrowingLimit: 384Gi}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
@@ -57,8 +57,8 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 4}
-      - {name: cpu, nominalQuota: 40}
+      - {name: nvidia.com/gpu, nominalQuota: 3}
+      - {name: cpu, nominalQuota: 24}
       - {name: memory, nominalQuota: 384Gi}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2

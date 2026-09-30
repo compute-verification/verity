@@ -38,6 +38,7 @@ envs:
   TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
   HF_HUB_OFFLINE: "1"
   RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
   UV_CACHE_DIR: /workspace/jobs/cache/uv
   UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
 
@@ -78,6 +79,7 @@ config:
           kueue.x-k8s.io/priority-class: circuits
           verity.dev/build: "true"
       spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
         containers:
         - volumeMounts:
           - {name: workspace, mountPath: /workspace}

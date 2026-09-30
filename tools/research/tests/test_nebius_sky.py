@@ -41,14 +41,15 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
 def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"circuits", "provers"}
-    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (4, 4)       # cluster_up lowers provers' while GPUs 4-7 are direct
-    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (64, 40)            # 192 less the check slots' 88 cores (8-95)
+    assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 3)       # tonight: coverage is the binding workstream
+    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (80, 24)            # 192 less the check slots' 88 cores (8-95)
     for res, cap in NODE.items():
         assert sum(x[res] for x in q.values()) <= cap, res
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
     circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
-    assert circuits.count("borrowingLimit: 0") == 3 and "borrowingLimit" not in text.split("metadata: {name: provers}")[1]
+    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits and "borrowWithinCohort: {policy: Never}" in circuits
+    assert "borrowingLimit" not in text.split("metadata: {name: provers}")[1]                   # borrowing never preempts; provers reclaims
     assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
     assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
@@ -163,7 +164,7 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
     up = (SKY / "cluster_up.sh").read_text()
     render = up[up.index("<<'PY'\n") + len("<<'PY'\n"):up.index("\nPY\n")]
     (tmp_path / "render.py").write_text(render)
-    for direct, want in ((4, 0), (0, 4), (6, 0)):
+    for direct, want in ((4, 0), (0, 3), (2, 1)):
         out = subprocess.run(["python3", str(tmp_path / "render.py"), str(SKY / "kueue.yaml"), str(direct)], capture_output=True, text=True, check=True).stdout
         provers = out.split("metadata: {name: provers}")[1]
         assert re.search(r"\{name: nvidia.com/gpu, nominalQuota: (\d+)", provers).group(1) == str(want)
@@ -255,3 +256,20 @@ def test_every_task_has_the_venvs_tools_on_path_and_captures_skip_the_flashinfer
         assert runs and all("export PATH=/workspace/jobs/venv312/bin:$PATH" in r.split("\nconfig:")[0] for r in runs), f.name
     capture = (SKY / "jobs" / "port-capture.yaml").read_text()
     assert 'VLLM_USE_FLASHINFER_SAMPLER: "0"' in capture.split("\nsecrets:")[0]           # an env default, so --env overrides it
+
+
+def test_a_preempted_job_can_still_publish_its_attempt():
+    for f in sorted((SKY / "jobs").glob("*.yaml")):
+        t = f.read_text()
+        tasks = t.count("\nrun: |")
+        assert t.count("terminationGracePeriodSeconds: 300") == tasks, f.name        # the default 30 s killed a publish mid-way
+        assert t.count("RESEARCH_STORE: /workspace/jobs/store") == tasks, f.name    # the pod's own home dies with the pod
+
+
+def test_backfill_takes_its_credentials_on_stdin_only():
+    import subprocess
+    script = SKY / "backfill_attempts.sh"
+    text = script.read_text()
+    assert "head -n 4 > \"$creds\"" in text and "R2_ENDPOINT=" not in text.replace("export R2_ENDPOINT", "")
+    r = subprocess.run(["bash", str(script)], input="only-one-line\n", capture_output=True, text=True)
+    assert r.returncode == 2 and "want the 4 credential lines on stdin" in r.stderr
