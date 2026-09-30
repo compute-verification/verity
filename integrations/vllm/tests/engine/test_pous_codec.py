@@ -196,3 +196,62 @@ def test_dense_twin_matches_the_reference_dense_codec(ext):
     junk = torch.randint(0, 256, (1, 6, 65_536), dtype=torch.uint8, generator=g)
     assert (dense.decode(junk.cuda(), tags).cpu().numpy().tobytes()
             == ref.DENSE.decode_segment(params, prims, salt, 3, [bytes(r) for r in junk[0].tolist()]))
+
+
+# --- the twins, keyed by scheme id and gated by the scheme's pinned vector ---------------------------------------------------
+
+def test_twins_are_keyed_by_the_protocols_scheme_ids_and_the_band_has_a_reference():
+    """Every twin is registered under a `verity_pous.schemes` id whose reference codec it computes, at the scheme's registered
+    geometry; the band's reference and primitives are here, its GPU twin fails closed until the band kernels, and so does
+    every scheme without a twin (P2)."""
+    from verity_pous import schemes
+
+    from verity_vllm.engine.pous import twins
+
+    assert set(twins.TWINS) == {"p3/v1", "dense-chain/v1"} and set(twins.TWINS) < set(schemes.REGISTRY)
+    for sid in [*twins.TWINS, "band-chain/d12/v1"]:
+        ref, geo = twins.reference(sid)
+        assert ref.name == sid and schemes.get(sid).params == geo
+        assert twins.primitives(ref, geo) is not None
+    for sid in ("band-chain/d12/v1", "p2-16448/v2"):
+        with pytest.raises(NotImplementedError, match="no GPU twin"):
+            twins.of(sid)
+
+
+def test_the_gate_inputs_are_the_pinned_vectors_generators():
+    """`vector_input` draws the pinned vectors' `W` and salt exactly as `protocols/pous/tests/pous_vectors.py` does."""
+    from verity_vllm.engine.pous import twins
+
+    def pinned(label, n):
+        return hashlib.shake_256(b"verity-pous/vectors/" + label.encode()).digest(n)
+
+    w, salt, n = twins.vector_input("p3/v1")
+    assert (w, salt, n) == (pinned("w/220/2384/12/1", OPERATING_POINT.w_bytes), pinned("salt", 24), OPERATING_POINT.blocks_per_segment)
+    w, salt, n = twins.vector_input("dense-chain/v1")
+    assert n == 16 and w[:16 * 65_536] == pinned("dense-w", 16 * 65_536) and w[16 * 65_536:] == bytes(496 * 65_536)
+    vectors = json.loads(twins.VECTORS.read_text())
+    assert {t.vector for t in twins.TWINS.values()} <= set(vectors)
+
+
+def test_the_gate_refuses_a_twin_that_misses_its_pinned_vector():
+    """The gate on a small dense instance, with the reference as a stand-in twin: its digest passes, one flipped bit refuses."""
+    from verity_pous import dense as ref
+
+    from verity_vllm.engine.pous import twins
+
+    params = ref.DenseParams(18, 64 * 8)
+    w, salt, n = twins.vector_input("dense-chain/v1", params)
+    want = hashlib.sha256(b"".join(ref.DENSE.encode_segment(params, ref.reference(params), salt, 0, w)[:n])).hexdigest()
+
+    def encode(seg, tags, flip=False):
+        blocks = ref.DENSE.encode_segment(params, ref.reference(params), tags, 0, seg[0].numpy().tobytes())
+        out = torch.frombuffer(bytearray(b"".join(blocks)), dtype=torch.uint8).view(1, params.blocks_per_segment, -1).clone()
+        if flip:
+            out[0, 3, 0] ^= 1
+        return out
+
+    kw = {"tags": lambda s, segs, device: s, "params": params, "vectors": {"dense/64kb/prefix16": want}}
+    rep = twins.gate("dense-chain/v1", "cpu", encode=encode, **kw)
+    assert rep["digest"] == want and rep["blocks"] == 16
+    with pytest.raises(twins.GateError, match="does not reproduce"):
+        twins.gate("dense-chain/v1", "cpu", encode=lambda seg, tags: encode(seg, tags, flip=True), **kw)
