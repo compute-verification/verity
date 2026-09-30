@@ -1,12 +1,14 @@
-"""form_nv's block-step variants on one card (handoffs/ue4m3-scale-lut.md, server.md 11:28Z): the gate, then the timing.
+"""form_nv's block-step variants on one card (handoffs/ue4m3-scale-lut.md, server.md 11:28Z and 13:25Z): the gate, then
+the timing.
 
   python form_bench.py CUBIN OUT_JSON [--expect-uuid GPU-...] [--shapes 8192x8192,64x8192] [--reps 7] [--item-ms 40]
 
-Variants (pearl_c4.cu, `form_body`'s V): form_nv (0, the shipped one), form_nv_v1 (the amax by FMNMX, the floor in FP32
-and one packed e4m3x2 encode), form_nv_v2 (v1 with lut256's 32 KB reciprocal table).  Per shape (rows x k, A's forming
-as the call launches it, `Pipeline.steps`' geometry and E lines from seed_a):
+Variants (pearl_c4.cu, `form_body`'s V): form_nv_v0 (0, the integer-max amax and a 128-entry table: the forming shipped
+until lut256), form_nv_v1 (the amax by FMNMX, the floor in FP32 and one packed e4m3x2 encode), form_nv (2, the shipped
+one: v1 with lut256's reciprocal table, the path the block scale is priced on).  Per shape (rows x k, A's forming as the
+call launches it, `Pipeline.steps`' geometry and E lines from seed_a):
   1. the gate: on four inputs (Gaussian rows, rows over 10^±3 with outliers, a zero row and near-zero rows, spikes of
-     10^18) every variant's codes, scales, α, 1/α, a_E, P and E lines byte-equal to form_nv's; nothing is timed unless
+     10^18) every variant's codes, scales, α, 1/α, a_E, P and E lines byte-equal to form_nv_v0's; nothing is timed unless
      every variant passes.  The variants agree where D is finite (FMNMX drops a NaN the integer max keeps): ρ² must
      not overflow, and a row whose a_E is NaN is outside D-SB anyway;
   2. the timing: `--reps` rounds, each variant once per round in turn, an item of launches sized to at least `--item-ms`,
@@ -29,7 +31,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dev as D  # noqa: E402
 
-VARIANTS = ("form_nv", "form_nv_v1", "form_nv_v2")
+REF = "form_nv_v0"
+VARIANTS = (REF, "form_nv_v1", "form_nv")
 OUTS = ("a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "lines_ea")
 FP4_PER_SM_CLK = 2048
 
@@ -73,9 +76,9 @@ def shape_run(d: D.Dev, rows: int, k: int, args) -> dict:
     d.write(b["seed_a"], bytes(range(32)))
     d.write(b["seed_b"], bytes(range(32, 64)))
     d.launch("lines", D.cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fa"]], i=[D.ROLE_FA, k])
-    name0, geo, kw = next(s for s in pl.steps("hash") if s[0] == "form_nv")
-    smem = {"form_nv": 0, "form_nv_v1": 0, "form_nv_v2": d.dyn_smem("form_nv_v2")}
-    bufs = {v: {o: b[o] if v == name0 else d.alloc(pl.sizes[o]) for o in OUTS} for v in VARIANTS}
+    _, geo, kw = next(s for s in pl.steps("hash") if s[0] == pl.form)
+    smem = {v: pl.form_smem if v == pl.form else 0 for v in VARIANTS}
+    bufs = {v: {o: b[o] if v == pl.form else d.alloc(pl.sizes[o]) for o in OUTS} for v in VARIANTS}
 
     def launch(v: str) -> None:
         o = bufs[v]
@@ -89,7 +92,7 @@ def shape_run(d: D.Dev, rows: int, k: int, args) -> dict:
         for v in VARIANTS:
             launch(v)
         d.sync()
-        ref = {o: d.read(bufs[name0][o], pl.sizes[o]) for o in OUTS}
+        ref = {o: d.read(bufs[REF][o], pl.sizes[o]) for o in OUTS}
         gate[label] = {v: {o: d.read(bufs[v][o], pl.sizes[o]) == ref[o] for o in OUTS} for v in VARIANTS[1:]}
     ok = all(all(r.values()) for g in gate.values() for r in g.values())
     res = {"rows": rows, "k": k, "grid": list(geo[0]), "gate": gate, "gate_ok": ok,
@@ -109,12 +112,13 @@ def shape_run(d: D.Dev, rows: int, k: int, args) -> dict:
             units = ms * 1e-3 * mhz * 1e6 * d.sms * FP4_PER_SM_CLK / (rows * k)
             res["timing"][v] = {"launches_per_item": per[v], "reps": reps[v], "ms_median": ms, "sm_mhz_median": mhz,
                                 "fp4_units_per_element": units}
-        base = res["timing"][name0]["fp4_units_per_element"]
+        base = res["timing"][REF]["fp4_units_per_element"]
         for v in VARIANTS[1:]:
-            res["timing"][v]["fp4_units_per_element_vs_form_nv"] = res["timing"][v]["fp4_units_per_element"] - base
-    for v in VARIANTS[1:]:
-        for o in OUTS:
-            d.free(bufs[v][o])
+            res["timing"][v][f"fp4_units_per_element_vs_{REF}"] = res["timing"][v]["fp4_units_per_element"] - base
+    for v in VARIANTS:
+        if v != pl.form:
+            for o in OUTS:
+                d.free(bufs[v][o])
     pl.free()
     return res
 
