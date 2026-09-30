@@ -249,4 +249,162 @@ theorem check_facts {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed =
     cuts := cuts
     leaves := ⟨hlv.1, fun u hu => leaves u (Nat.zero_le _) hu⟩ }
 
+
+/-- **What `HmRow.check` accepted, for a typed template** (`c.typed = some tb`, #277): the ranges' common facts, one range
+of `G · per_vu` slots per circuit, the root one slot per VU, each placed layout's circuit one slot per part, its slot size
+its range's, and a forced-zero row in the root's slot. -/
+structure CheckFactsT (c : Circuit) (tb : TypedBlock) : Prop where
+  bound_slotLog : ∀ r ∈ c.ranges.toList, r.start + spanH r ≤ 2 ^ c.kLog ∧
+    ∀ i, r.kind = .net i → (c.nets.getD i default).2.unitLog = r.slotLog
+  disj : c.ranges.toList.Pairwise Apart
+  unit_lookup : c.unit.lookup.isSome = false
+  count : ∀ r ∈ c.ranges.toList, ∀ n, r.kind = .net n → r.count = c.g * c.perVu.getD n 0
+  one_range : ∀ n < c.nets.size, (c.ranges.filter (·.kind == Kind.net n)).size = 1
+  root_perVu : c.perVu.getD c.unitNet 0 = 1
+  rangeLogs : ∀ e ∈ tb.rangeLogs.toList, c.perVu.getD e.1 0 = (tb.parts.filter (·.1 == e.1)).size ∧
+    (c.nets.getD e.1 default).2.unitLog = e.2
+  root_zero : c.unit.useful < 2 ^ c.unit.unitLog
+  sha_in : (portCols (c.nets.getD c.shaNet default).2.inGroups).size = 6 ∧
+    ∀ i < 6, ((portCols (c.nets.getD c.shaNet default).2.inGroups)[i]!).2 = if i % 2 == 0 then 512 else 1024
+  hm_in : (portCols (c.nets.getD c.hmNet default).2.inGroups).map (·.2) = #[512, 1024, 8 * HmRow.SALT_BYTES]
+  perVu_sha : c.perVu.getD c.shaNet 0 = (HmRow.rowSlots c.ports).1
+  perVu_hm : c.perVu.getD c.hmNet 0 = nextPow2 c.ports.size
+  rows_after : tb.rangeLogs.size < c.shaNet ∧ tb.rangeLogs.size < c.hmNet
+
+theorem check_facts_typed {c : Circuit} {tags : Tags} {ls : Lean.Json} {tb : TypedBlock} (ht : c.typed = some tb)
+    (h : HmRow.check c tags ls = .ok ()) : CheckFactsT c tb := by
+  unfold HmRow.check at h
+  obtain ⟨spans, hspans, h⟩ := except_bind_ok h
+  rw [← Array.forIn_toList] at hspans
+  obtain ⟨hr1, hsp⟩ := forIn_list_push (P := fun r => r.start + spanH r ≤ 2 ^ c.kLog ∧
+      ∀ i, r.kind = .net i → (c.nets.getD i default).2.unitLog = r.slotLog)
+    (g := fun r => (r.start, r.start + spanH r)) (fun r _ s t hs => by
+      generalize hp : (if r.packed = true then (r.count * 2 ^ r.slotLog, 2 ^ r.slotLog)
+        else (nextPow2 r.count * 2 ^ r.slotLog, nextPow2 r.count * 2 ^ r.slotLog)) = p at hs
+      have hspan : p.1 = spanH r := by rw [← hp]; unfold spanH; split <;> rfl
+      obtain ⟨span, align⟩ := p
+      simp only at hspan
+      subst hspan
+      obtain ⟨-, hs⟩ := ite_throw_ok' hs
+      obtain ⟨h2, hs⟩ := ite_throw_ok' hs
+      simp only [Bool.or_eq_true, not_or, decide_eq_true_eq, not_lt] at h2
+      split at hs
+      · rename_i i hk
+        obtain ⟨h3, hs⟩ := ite_throw_ok' hs
+        simp only [bne_iff_ne, ne_eq, not_not] at h3
+        cases hs
+        refine ⟨rfl, h2.2, fun i' hi' => ?_⟩
+        rw [hk] at hi'
+        cases hi'
+        exact h3
+      · rename_i hk
+        obtain ⟨-, hs⟩ := ite_throw_ok' hs
+        cases hs
+        refine ⟨rfl, h2.2, fun i' hi' => ?_⟩
+        rw [hk] at hi'
+        cases hi'
+      · exact absurd hs throw_bind_ne) hspans
+  obtain ⟨u, hpair, h⟩ := except_bind_ok h
+  have hp := forIn_range_forall (P := fun i => ∀ j, i + 1 ≤ j → j < spans.size →
+      ¬ (spans[i]!.1 < spans[j]!.2 ∧ spans[j]!.1 < spans[i]!.2)) (fun i _ _ s t hs => by
+    obtain ⟨u', hu, hs⟩ := except_bind_ok hs
+    cases hs
+    refine ⟨⟨_, rfl⟩, ?_⟩
+    exact forIn_range_forall (P := fun j => ¬ (spans[i]!.1 < spans[j]!.2 ∧ spans[j]!.1 < spans[i]!.2))
+      (fun j _ _ s t hs => by
+        obtain ⟨hc, hs⟩ := ite_throw_ok' hs
+        cases hs
+        refine ⟨⟨_, rfl⟩, ?_⟩
+        simpa using hc) hu) hpair
+  have hspans_eq : spans = c.ranges.map (fun r => (r.start, r.start + spanH r)) := by
+    apply Array.ext'
+    rw [hsp, Array.toList_map]
+    simp
+  have hg : ∀ i (hi : i < c.ranges.size),
+      spans[i]! = (c.ranges[i].start, c.ranges[i].start + spanH c.ranges[i]) := by
+    intro i hi
+    rw [hspans_eq, getElem!_pos _ _ (by simpa using hi)]
+    simp
+  have hsz : spans.size = c.ranges.size := by rw [hspans_eq, Array.size_map]
+  have disj : c.ranges.toList.Pairwise Apart := by
+    rw [List.pairwise_iff_getElem]
+    intro i j hi hj hij
+    have hi' : i < c.ranges.size := by simpa using hi
+    have hj' : j < c.ranges.size := by simpa using hj
+    have := hp i (Nat.zero_le _) (by omega) j hij (by omega)
+    rw [hg i hi', hg j hj'] at this
+    simpa [Apart] using this
+  obtain ⟨hlk, h⟩ := ite_throw_ok' h
+  obtain ⟨hpv, h⟩ := ite_throw_ok' h
+  obtain ⟨hports, h⟩ := ite_throw_ok' h
+  simp only [ht] at h
+  obtain ⟨u1, hcount, h⟩ := except_bind_ok h
+  obtain ⟨u2, hone, h⟩ := except_bind_ok h
+  have count := forIn_array_forall (P := fun r => ∀ n, r.kind = .net n → r.count = c.g * c.perVu.getD n 0)
+    (fun r _ s t hs => by
+      split at hs
+      · rename_i n hk
+        obtain ⟨hc, hs⟩ := ite_throw_ok' hs
+        cases hs
+        refine ⟨⟨_, rfl⟩, fun n' hn' => ?_⟩
+        rw [hk] at hn'
+        cases hn'
+        simp only [bne_iff_ne, ne_eq, not_not] at hc
+        exact hc
+      · rename_i hk
+        cases hs
+        exact ⟨⟨_, rfl⟩, fun n' hn' => absurd hn' (hk n')⟩) hcount
+  have one_range := forIn_range_forall (P := fun n => (c.ranges.filter (·.kind == Kind.net n)).size = 1)
+    (fun n _ _ s t hs => by
+      obtain ⟨hc, hs⟩ := ite_throw_ok' hs
+      cases hs
+      simp only [bne_iff_ne, ne_eq, not_not] at hc
+      exact ⟨⟨_, rfl⟩, hc⟩) hone
+  unfold HmRow.checkTyped at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h)
+  obtain ⟨hrows, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jp0] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) root nOut jp1 at h)
+  obtain ⟨hpv1, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jp1] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp2 at h)
+  obtain ⟨-, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jp2] at h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp3 at h)
+  obtain ⟨-, h⟩ := ite_throw_ok' h
+  simp (config := { zeta := false }) only [jp3] at h
+  obtain ⟨u3, hrl, h⟩ := except_bind_ok h
+  ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h)
+  obtain ⟨hz, -⟩ := ite_throw_ok' h
+  have rangeLogs := forIn_array_forall (P := fun e : ℕ × ℕ => c.perVu.getD e.1 0 = (tb.parts.filter (·.1 == e.1)).size ∧
+      (c.nets.getD e.1 default).2.unitLog = e.2)
+    (fun e _ s t hs => by
+      obtain ⟨n, sl⟩ := e
+      obtain ⟨hc, hs⟩ := ite_throw_ok' hs
+      cases hs
+      simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not] at hc
+      exact ⟨⟨_, rfl⟩, hc⟩) hrl
+  simp only [bne_iff_ne, ne_eq, not_not] at hpv1
+  have hpv' : ¬(c.perVu.getD c.shaNet 0 != (HmRow.rowSlots c.ports).1 ||
+      c.perVu.getD c.hmNet 0 != nextPow2 c.ports.size) = true := hpv
+  simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not] at hpv'
+  simp only [Bool.or_eq_true, not_or, bne_iff_ne, ne_eq, not_not, List.any_eq_true, List.mem_range, not_exists,
+    not_and] at hports
+  exact {
+    bound_slotLog := hr1
+    disj := disj
+    unit_lookup := by simpa using hlk
+    count := count
+    one_range := fun n hn => one_range n (Nat.zero_le _) hn
+    root_perVu := hpv1
+    rangeLogs := rangeLogs
+    root_zero := Nat.lt_of_not_le hz
+    sha_in := ⟨by rw [hports.1.1.1.1]; rfl, fun i hi => hports.1.1.1.2 i (by rw [hports.1.1.1.1]; exact hi)⟩
+    hm_in := hports.1.2
+    perVu_sha := hpv'.1
+    perVu_hm := hpv'.2
+    rows_after := by
+      simp only [Bool.or_eq_true, decide_eq_true_eq, not_or, not_le] at hrows
+      exact hrows }
+
 end FlockSoundness

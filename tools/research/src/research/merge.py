@@ -9,6 +9,9 @@ target checkout that is not on BRANCH or has tracked changes, and a REF the targ
 ancestor of REF), since then the merged tree is not the one that was checked; merge the target into the branch and check the new
 tip.  The merge commit carries a `Check: <attempt id>` trailer.  Exit 0 merged (or would, with --dry-run), 1 refused, 2 usage.
 
+After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
+the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
+
 After a merge lands, and on its own with --sweep, every open pull request whose head is on the remote's copy of BRANCH is closed
 with a comment naming the commit it landed in, and every open pull request whose base branch is on it is retargeted onto BRANCH.
 The remote's branch, fetched first, is the truth, never the checkout: `research merge` does not push, so what a merge lands is
@@ -37,11 +40,21 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
     return r
 
 
-def passing(store, commit: str, tool: str = "check") -> list[str]:
-    """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first."""
+def passing(store, commit: str, tool: str = "check", *, tree: str | None = None, maps=None) -> list[str]:
+    """Ids of the attempts of ``tool`` that passed on the clean tree of ``commit``, newest first.  After a history rewrite
+    (`commitmap`), an attempt of an old commit counts for its image when the map says the rewrite kept the tree and, where the
+    attempt recorded its tree, that tree is ``tree``."""
     rows = store.index.sql("SELECT id FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 AND state = 'done' "
                            "AND rc = 0 ORDER BY start_utc DESC", (tool, commit))
-    return [r[0] for r in rows]
+    ids = [r[0] for r in rows]
+    for old in (maps.equivalent(commit)[1:] if maps else []):
+        rows = store.index.sql("SELECT id, manifest_json FROM attempts WHERE tool = ? AND source_commit = ? AND source_dirty = 0 "
+                               "AND state = 'done' AND rc = 0 ORDER BY start_utc DESC", (tool, old))
+        for rid, doc in rows:
+            recorded = (json.loads(doc).get("source") or {}).get("tree") if doc else None
+            if tree is None or recorded in (None, tree):
+                ids.append(rid)
+    return ids
 
 
 def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print) -> tuple[str, str]:
@@ -59,7 +72,14 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print)
             store.refresh(attempts_only=True)
         except Exception as e:  # noqa: BLE001  (the local catalog still answers; say it may be behind)
             log(f"research merge: refresh from the remote failed ({type(e).__name__}: {e}); using the local catalog")
-    ids = passing(store, commit, tool)
+    from .commitmap import Maps  # noqa: PLC0415
+
+    maps = Maps.load(store)
+    if old := maps.old_history(repo, commit, "HEAD"):
+        raise Refused(f"{commit[:12]} holds {len(old)} commit(s) a history rewrite replaced (e.g. {old[0][:12]}): merging it would bring the "
+                      f"old history back; move the branch onto the rewritten one with `research git remap` and push that")
+    tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
+    ids = passing(store, commit, tool, tree=tree, maps=maps)
     if not ids:
         rows = store.index.sql("SELECT id, state, rc, source_dirty FROM attempts WHERE tool = ? AND source_commit = ?", (tool, commit))
         seen = "; ".join(f"{r[0]} {r[1]} rc={r[2]}{' dirty' if r[3] else ''}" for r in rows) or "none"

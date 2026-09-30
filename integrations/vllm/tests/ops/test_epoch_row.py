@@ -22,6 +22,8 @@ SCRIPT = VLLM / "verity_vllm" / "ops" / "epoch_row.sh"
 BASH = shutil.which("bash") or "/bin/bash"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
 ART = "art:" + "ab" * 32
+#: the job's start, and the "now" the script measures its deadlines from (EPOCH_NOW): no test reads the wall clock
+START = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 STAGE = """#!/bin/bash
 # stand-in for the `verity-vllm` launcher: `row run ROW ROLE REPO REV --stages S` is a stage whose behaviour FAKE_<S> names (ok | sleep:
@@ -52,7 +54,7 @@ def _utc(dt: datetime) -> str:
 
 
 def _job(tmp_path: Path, *, timeout_s: float = 7200, key_after_run_s: float = 7200) -> dict[str, str]:
-    now = datetime.now(timezone.utc)
+    now = START
     root = tmp_path / "research"
     run = root / "runs" / "r1"
     custody = root / "requests" / "r1" / "custody"
@@ -72,7 +74,7 @@ def _job(tmp_path: Path, *, timeout_s: float = 7200, key_after_run_s: float = 72
     env.update({"RESEARCH_RUN_DIR": str(run), "RESEARCH_RUN_ID": "r1", "RESEARCH_SOURCE_SHA": "e0", "EPOCH_SHA": "e0", "ROW": ROW,
                 "ROWNUM": "101", "CLASS": "GREEN", "PY": str(b / "py"), "REAL_PY": sys.executable, "RESEARCH_CLI": str(b / "research"),
                 "EPOCH_BOOTSTRAP": str(b / "bootstrap"), "SWEEP_DIR": str(tmp_path / "sweep"), "RESEARCH_STORE": str(tmp_path / "store"),
-                "CALLS": str(tmp_path / "calls.txt"), "FAKE_SLEEP": "60"})
+                "CALLS": str(tmp_path / "calls.txt"), "FAKE_SLEEP": "60", "EPOCH_NOW": str(int(START.timestamp()))})
     return env
 
 
@@ -108,7 +110,7 @@ def test_script_parses() -> None:
 
 def test_a_stage_deadline_stops_the_stage_stores_preserves_and_exits(tmp_path: Path) -> None:
     env = _job(tmp_path)
-    env.update({"FAKE_BUILD": "sleep", "DEADLINE_BUILD": _utc(datetime.now(timezone.utc) + timedelta(seconds=4))})
+    env.update({"FAKE_BUILD": "sleep", "DEADLINE_BUILD": _utc(START + timedelta(seconds=4))})
     r = _run(env)
     assert r.returncode == 124, (r.stdout, r.stderr)
     prog = _progress(env)

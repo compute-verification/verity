@@ -323,7 +323,7 @@ The draw is the object
 {"law": "subset",     "population": N, "k": K,                       "units": [u_0 < u_1 < …]}
 {"law": "bernoulli",  "population": N, "p": "num/den",               "units": [u_0 < u_1 < …]}
 {"law": "stratified", "population": N, "k": K, "strata": [stratum…], "units": [u_0 < u_1 < …]}
-{"law": "work",       "population": N, "k": K, "strata": [work stratum…], "units": [u_0 < u_1 < …]}
+{"law": "work",       "population": N, "k": K, "strata": [work stratum…], "units": [u_0 < u_1 < …], ["closure": [c_0 < c_1 < …]]}
 ~~~
 
 **The stratified law** is the default (Daniel, Sep 27; the encoding is `note:20260927T1550Z-handoff-from-stratified-law`,
@@ -340,6 +340,9 @@ the same as `protocols/one_stage/PROTOCOL.md`'s):
   and the draw is the union, ascending. Given bytes (a test's `--stream`) are cut into consecutive per-stratum segments of
   those sizes, and aren't extended.
 - A session that proves one template's units is served that template's share as a `subset` draw over its `n_s` units.
+- **The verifier's own `K` and strata.** A draw's `K` and strata set every `k_s`, so `verify` never takes them as stated.
+  It refuses a stratified draw unless it holds its own `K` (`--stratified K`), program and partition, refuses one drawn
+  at any other `K`, and then holds the law to its own derivation.
 
 **The work law** is the draw law's second version (Daniel approved work-proportional sizing on Sep 28,
 `note:20260929T0340Z-handoff-from-pous-rulings-2`). It keeps the stratified law's strata and sampler; only the sizes
@@ -347,22 +350,49 @@ differ. The stratified law is unchanged.
 - **Work.** Each template's PoUW work per unit comes from the verifier's own work table (`--work-table F`: a JSON
   object from template descriptor id to a natural number, in any fixed unit). Units that do no PoUW work, such as
   dequantization, the quantizer and attention, have work 0. A template the table does not name refuses the law
-  (`HmRow.workLaw`, `flock-verify draw --program P --partition Q --work K --work-table F`). A draw's `K` and stated
-  work set every `k_s`, so `verify` never takes them as stated. It refuses a work draw unless it holds its own `K`
+- **Work and floors.** Each template's PoUW work per unit, and its floor, come from the verifier's own work table
+  (`--work-table F`: a JSON object from template descriptor id to the work, a natural number in any fixed unit, or to
+  `{"work": w, "floor": f}` with `f ≥ 1`; the floor is one when the table gives only the work). Units that do no PoUW
+  work, such as dequantization, the quantizer and attention, have work 0. A template the table does not name refuses the
+  law (`HmRow.workLaw`, `flock-verify draw --program P --partition Q --work K --work-table F`). A draw's `K`, works and
+  floors set every `k_s`, so `verify` never takes them as stated. It refuses a work draw unless it holds its own `K`
   (`--work K`), work table, program and partition, refuses one drawn at any other `K`, and then holds the law to its own
   derivation.
-- **Sizes.** With `W = Σ_s w_s n_s ≥ 1` and `1 ≤ K ≤ N`, stratum `s` draws `k_s = min(n_s, max(1, ⌈K w_s n_s / W⌉))`
-  (`Draw.workK`). This is its work share of `K`, rounded up. It is never above `n_s`, and never below one: this
-  integrity floor binds exactly for the strata that do no work. At most `K` plus one unit per stratum are drawn. A
-  work stratum is `{"template": id, "units": [[lo, hi], …], "work": w_s, "k": k_s}`.
+- **Sizes.** With `W = Σ_s w_s n_s ≥ 1` and `1 ≤ K ≤ N`, stratum `s` draws `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`
+  (`Draw.workK`). This is its work share of `K`, rounded up. It is never above `n_s`, and never below its floor `f_s`. A
+  work stratum is `{"template": id, "units": [[lo, hi], …], "work": w_s, "floor": f_s, "k": k_s}`.
+- **Floors.** Every floor is at least one, and U2 refuses a floor of 0. With every floor one, the integrity floor binds
+  exactly for the strata that do no work, and at most `K` plus one unit per stratum are drawn. In general at most
+  `K + Σ_s f_s` are drawn. The table sets each stratum's floor by what the stratum needs: a stratum with `b_s` of its
+  `n_s` units wrong escapes with at most `((n_s − b_s)/n_s)^(f_s)`, so `f_s ≈ ln(1/δ)/ε_s` catches a fraction `ε_s`
+  of it wrong up to `δ`. Floors of at least the stratified law's sizes at `C` for the strata that do no work keep that law's
+  guarantee for them.
 - **What it guarantees** (`soundness/FlockSoundness/Audit/Work.lean`). Wrong units that do a fraction `ε` of the work
-  escape with probability at most `(1 − ε)^K` (`work_escape_le`). At the sizing of record, `δ = 2^-40` and `ε = 0.1%`,
-  `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not (`record_sizing_one_fewer`). Rounding up keeps
-  every unit's inclusion probability at least `K w_s / W`, which the bound needs. Every non-empty stratum draws at
-  least one unit, so a wholly wrong stratum is caught (`audit_work_whole_stratum`).
-- **Closure draws** are not part of this law: proving a drawn tile together with the two strips it reads waits for
-  the red team's verdict on the PoUW design's closure theorem. `Law.widen` and `escape_widen_le` carry the work law's
-  bounds to any rule that adds units after the draw.
+  escape with probability at most `(1 − ε)^K` (`work_escape_le`), whatever the floors. At the sizing of record,
+  `δ = 2^-40` and `ε = 0.1%`, `K = 27,713` meets it (`record_sizing`) and `K = 27,712` does not
+  (`record_sizing_one_fewer`). Rounding up keeps every unit's inclusion probability at least `K w_s / W`, which the bound
+  needs. Every non-empty stratum draws at least one unit, so a wholly wrong stratum is caught
+  (`audit_work_whole_stratum`). Each stratum's floor gives its own escape bound (`work_escape_floor_le`,
+  `audit_work_floor`). When the strata that do no work have floors of at least the stratified law's sizes at `C`, a set
+  escapes at most as often as its units in those strata escape `stratified:C` (`work_escape_le_count`,
+  `audit_work_rest`).
+- **Closure draws.** A closure draw proves each drawn unit together with its closure: for a tile, the two strips it
+  reads and the node units on its X strip's path. The closure comes from the verifier's own closure map (`--closure F`: a
+  JSON object from a unit's index to the units its credit depends on).
+  - The draw keeps its sampled `units`, so U2's per-stratum counts are unchanged, and adds `"closure"`: the units in the
+    drawn units' closures that are not themselves drawn, ascending (`Draw.closureOf`).
+  - The statement proves both (`UnitDraw.proved`), and U3 counts both.
+  - `verify` refuses a closure draw unless it holds its own closure map, and then the closure must be its own derivation
+    from the drawn units. With the map, a plain work draw is refused too, since it lacks its closure.
+  - What it guarantees (`soundness/FlockSoundness/Audit/Closure.lean`): a set's escape under the closure draw is the work
+    law's escape of the set with the units it makes unsound, those whose closure meets it (`closure_escape`). The unsound
+    work is the work of both: the closure map need not list a tile in its own closure, so the wrong units' own work is
+    counted explicitly. A wrong unit's harm is its own work and that of every unit above it, so one that is never drawn on
+    its own, such as a node, is charged all of it (`harm_le_unsoundWork`). At any floors, the audit accepts while the
+    unsound work is at least a fraction `ε` of the work with probability at most `(1 − ε)^K + ε_ks + δ_link`
+    (`audit_work_closure`). At K = 27,713 and ε = 0.1% that is `2^-40` (`audit_work_closure_of_record`).
+  - `Law.widen`'s `escape_widen_le` is weaker. It carries only the base law's escape bounds, and only to a widening on the
+    same coins, and those bound the wrong units' own work, not the unsound work.
 
 The statement carries it as the public header's `unit_draw` (so under `pub.sha` and Σ), instance `i` being unit `u_i`,
 and the record keeps it as `unit_draw`. The offline checks:
@@ -370,8 +400,8 @@ and the record keeps it as `unit_draw`. The offline checks:
 | check | rule |
 |---|---|
 | U1 | the record keeps a draw iff the statement carries one, and they are canonically equal |
-| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, k}`, `W ≥ 1` and each `k` the work rule's. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, at the draw's `K`. A work draw's law must always be its own derivation from them, its work table and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
-| U3 | the statement's `instances` is the number of drawn units |
+| U2 | the draw is well formed: exactly the law's keys; units ascending, distinct and in `[0, N)`; `subset` has `K ≤ N` units; `bernoulli` has `0 ≤ num ≤ den`, `den > 0`, no unit at `p = 0` and every unit at `p = 1`; `stratified` has `1 ≤ K ≤ N`, each stratum exactly `{template, units, k}` with a distinct template, its ranges ascending, disjoint, not adjacent and non-empty, its `k` the rule's, the strata's ranges tiling `[0, N)` exactly, and exactly `k_s` units in each; `work` has the same checks, with each stratum exactly `{template, units, work, floor, k}`, a floor of at least one, `W ≥ 1`, each `k` the work rule's above its floor, and a closure (when there is one) of non-empty, ascending, distinct units of the population, none of them drawn. When the verifier holds the program and a template-query partition object, a stratified draw's law must be its own derivation from them, and `verify` refuses a stratified draw without them and its own `K` (`--stratified K`), or at another `K`. A work draw's law must always be its own derivation from them, its work table (works and floors) and its own `K`, and `verify` refuses a work draw without all four or at another `K` |
+| U3 | the statement's `instances` is the number of drawn units and their closure. A work draw's closure must be the verifier's own derivation from its closure map, and `verify` refuses a closure draw without the map |
 
 `stratified_agree.py` checks the Lean verifier against core's (#164's `verity_one_stage.draw`, #161's `Stratified`):
 - the derived law and population, against `draw.derive` and `partition.units`;
@@ -1099,8 +1129,30 @@ gate)`. The failure codes, in order, are those of `verity.ir.partition.validate_
 
 With no failure, each gate is certified by exactly one unit and the committed set is the boundary set. A read outside the
 circuit is malformed. `unit_cut_agree.py` checks the codes against the reference on random cuts (5000 agree, every code
-exercised). Still ahead, once the verifier holds the IR program (§16.8): the width rule, the claimed units' membership in
-the partition, and the leaf positions derived from it.
+exercised).
+
+**One Call's cut against its graph** (`Partition.checkCut`, `flock-verify cut-check`; reference `verity.ir.cut.check_cut`,
+PR #111). The invariant runs on the Call's computing gates, with its parameters as the input unit and, unless served values
+are given, the committed set the cut implies: a value is committed exactly when another unit reads it or the Call returns
+it. Then the width rule `Q_word_v1{X, W, EXTRAS}`, today `(16, 32, 0)`: each unit's boundary (its gates another unit reads
+or the Call returns) is at most `X + EXTRAS` bits, or one value of at most `W + EXTRAS` bits; else `unit-too-wide`, with
+`(unit, bits, values)`.
+
+**`Q_word` v1 over the verifier's own copy of the program** (`Flock.Qword`, `Flock.Program`, `Flock.Extract`;
+`flock-verify evaluate`, `qword-program`; reference `verity.ir.cut` and `verity.ir.partition_object`, #111, #120):
+- the program is decoded from its `verity-ir/descriptor/v1` bytes by #120's rules, and each Call's graph is built as core's
+  `CallGraph` builds it;
+- a program that is not topological, or whose root batches or scans, is inapplicable to every query;
+- the cut is core's: a flat cut packs the returned gates into runs of at most `X` bits and promotes committed units until no
+  edge crosses units that head nothing, and a separable body is its members' cuts;
+- `Extract.checkCalls` checks each Definition's cut once, on its Call's whole graph with the derived committed set, for the
+  partition invariant and the width rule `(X, W, 0)`, as `partition_object.verify` does.
+
+The algorithm step by step and the agreement evidence (`cut_check_agree.py`, `qword_agree.py`, `qword_program_agree.py`:
+every pinned vector, all of #101's Definitions, the LM-head `Gemm` in 100 s at 9 GB) are in
+`note:20260929T1052Z-report-flock-verifier-qword-cut-check`.
+
+Still ahead: the leaf positions.
 
 ### 16.8 Objects by content
 
@@ -1247,9 +1299,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   against #131's `template_instance_vectors.json` (16 of 16: the population, the ranges, every unit's node, member and gates,
   the refusals word for word, the malformed parameters).
 - **The partition finding.** Every verdict of such a statement carries `partition = {rule, query, digest, units, note}`.
-  `units` is `derived` when the verifier derived the statement's units itself: the template queries, given `--program`.
-  For `Q_word` v1 (`Flock.Qword`) the program's Call graphs are not extracted yet, and any other query is not evaluated;
-  then `units` is `as stated`, with the reason in `note`, and an audit reports it as a gap, not a complete check.
+  `units` is `derived` when the verifier derived the statement's units itself, given `--program`: for the template
+  queries (above), and for `Q_word` v1 (§16.7) when the program is the object's, the query applies, every claimed unit is
+  one whole activation of the circuit's template (the innermost Definition on its `locate` path, whose cut is one unit),
+  and every Call's cut holds the invariant and the width rule. A failing cut refuses the partition, naming the Call and
+  its codes. Set 10's object, over RoPE's own program (a root batch), is refused with `--program`, as core's `evaluate`
+  refuses it. For any other query, or without `--program`, `units` is `as stated`, with the reason in `note`, which an
+  audit reports as a gap.
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.
@@ -1278,11 +1334,15 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
     (`flock-verify typed-expand`, `test_lean_typed_statement.py`).
 - **A template** (GEMM) is parsed with its block (`HmRow.parse`'s `tmpl`, #273's split).
   - **Circuits:** `root`, the unit's own region with its entries at part columns left out, one slot per VU. Then each
-    placed layout's rows, named by its digest, one slot of its range per part.
+    placed layout's rows, named by its digest, one slot of its range per part. A part's circuit is its own layout's, by
+    position among the placed layouts (`HmRow.blockOf`), never by digest: two layouts with one digest stay apart. A part
+    naming a layout the file lacks is refused.
   - **Derived, never stated:** `units_per_vu` (1), the leaf maps (none), the output circuit (the root) and the wires (the
     rows' chains). META stating any of them, or `lookups`, `leaf_cuts` or `unit_log`, is refused.
   - **Checks** (#273's `check_typed`): the root's ports are the rows' words and the output words, 16 bits each, in one
     output group. Each placed layout has one slot per part, of its range's size. The root's slot has a forced-zero row.
+    The rows' circuits (`sha512x3`, `hm96`, found by name) come after the root and the placed layouts, so no part is
+    one of them.
   - **Δ:** first the flat statement's entries. Then, per VU:
     1. each input bit `w` a copy of its message bit (bit `w % 16` of row word `w / 16`);
     2. each part's bound input rows, `(i, i)` and each source, in item order;
@@ -1435,8 +1495,8 @@ The lowering theorems are proved about a certified checker, over all inputs. The
 files at setup and refuses a circuit it cannot certify. So no proof evaluates a pinned file in the kernel, and no proof
 uses `native_decide`.
 
-Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a test allow only `propext`,
-`Classical.choice` and `Quot.sound`):
+Level-3 status (`lean/FlockProofs`, kernel-checked; the Lean audit, `tools/lean/audit.py` with `lean/lean-audit.json`,
+allows only `propext`, `Classical.choice` and `Quot.sound`):
 - **1b, Merkle: an explicit collision extractor.** A fixed hash with 32- or 64-byte digests has collisions by counting, so
   a proposition "a collision exists" holds outright and says nothing about the verifier. The statements therefore carry the
   reduction as computable functions from the verifier's accepted checks to an explicit pair of inputs, with theorems that
@@ -1464,7 +1524,7 @@ Level-3 status (`lean/FlockProofs`, kernel-checked; `CheckAxioms.lean` and a tes
 - **1c, session binding:** `squeeze_answers` and `squeeze_retained` are proved. A squeeze that succeeds returns exactly
   round k's recorded coins, and only if the framed bytes are that round's retained bytes, or hash to its digest.
 - **2, the fields** (`lean/level3`, a second package: Mathlib at the soundness package's pin, the executable by path; its
-  own `CheckAxioms.lean` under the same test):
+  own `lean-audit.json` under the same audit):
   - `F128.poly_mul`, `F128.poly_add`: the executable's product (carry-less multiply, Karatsuba, the GHASH reduction) and sum
     are polynomial multiplication and addition over GF(2) modulo `G = X^128 + X^7 + X^2 + X + 1`. `toAdj` is a bijection
     `F128 ≅ GF(2)[X]/(G)` that preserves both.

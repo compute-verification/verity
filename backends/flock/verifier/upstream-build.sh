@@ -10,15 +10,26 @@
 #
 # Build on the oldest glibc a check runs on: the binaries need the build host's symbol versions (a 24.04 build needs
 # GLIBC_2.39 and cannot start on 22.04's 2.35). On RunPod: `--image runpod/base:1.3.3-ubuntu2204`.
+#
+# Build for a CPU every check pod has: the bundle's `.cargo/config.toml` asks for `target-cpu=native`, and a build on an
+# AVX-512 host then dies of SIGILL on one without (AMD Zen 3). RUSTFLAGS overrides it (default x86-64-v3: AVX2, no AVX-512)
+# and BUILD.json records the flags. AVX-512 code behind runtime CPU detection (hash crates' kernels) stays and is portable,
+# so counting instructions proves nothing: check's agreement preflight replays a stored session on the check machine instead.
+# RUST_TOOLCHAIN (default the one the pinned build used) keeps a rebuild to the flags alone.
 set -euo pipefail
 RUN=${RESEARCH_RUN_DIR:?run under research run}
 W=${WORK:-$HOME/flock-upstream-build}
+export RUSTFLAGS=${RUSTFLAGS:--C target-cpu=x86-64-v3}
+RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}
 rm -rf "$W" && mkdir -p "$W/out"
 BUNDLE=$(ls "$RUN"/inputs/ci-bundle*.tar.gz | head -1)
 tar -xzf "$BUNDLE" -C "$W"
 
-command -v cargo >/dev/null || { curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null; }
+command -v rustup >/dev/null || [ -x "$HOME/.cargo/bin/rustup" ] || \
+  { curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none >/dev/null; }
 source "$HOME/.cargo/env"
+rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal >/dev/null
+export RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN
 QUOTA=$(awk '$1 != "max" {print int($1 / $2)}' /sys/fs/cgroup/cpu.max 2>/dev/null || true)
 J=${QUOTA:-$(nproc)}
 
@@ -37,15 +48,15 @@ for c in $(ls "$W/live"); do
 done
 
 GLIBC_NEEDS=$(for b in "$W"/out/upstream-*; do objdump -T "$b"; done | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -1)
-python3 - "$W/out" "$BUNDLE" "$(git -C "$W/flock" rev-parse HEAD 2>/dev/null || echo unknown)" "$(rustc -V)" "$(cargo -V)" \
-  "$(rustc -vV | awk '/^host:/ {print $2}')" "$(ldd --version | head -1)" "$GLIBC_NEEDS" <<'EOF'
+python3 - "$W/out" "$BUNDLE" "$(git -c safe.directory="*" -C "$W/flock" rev-parse HEAD 2>/dev/null || echo unknown)" "$(rustc -V)" "$(cargo -V)" \
+  "$(rustc -vV | awk '/^host:/ {print $2}')" "$(ldd --version | head -1)" "$GLIBC_NEEDS" "$RUSTFLAGS" <<'EOF'
 import hashlib, json, sys
 from pathlib import Path
-out, bundle, flock, rustc, cargo, host, build_glibc, glibc = Path(sys.argv[1]), Path(sys.argv[2]), *sys.argv[3:]
+out, bundle, flock, rustc, cargo, host, build_glibc, glibc, rustflags = Path(sys.argv[1]), Path(sys.argv[2]), *sys.argv[3:]
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 bins = {p.name.removeprefix("upstream-"): sha(p) for p in sorted(out.glob("upstream-*"))}
 doc = {"flock": flock, "rustc": rustc, "cargo": cargo, "host": host, "build_glibc": build_glibc, "glibc": glibc,
-       "bundle_sha256": sha(bundle), "binaries": bins}
+       "rustflags": rustflags, "bundle_sha256": sha(bundle), "binaries": bins}
 (out / "BUILD.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 print(json.dumps(doc))
 EOF
