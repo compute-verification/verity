@@ -123,7 +123,26 @@ def linear(X, W, rng, p, max_cols=24):
     iw = int(np.argmax(deb))
     return dict(k=k, n=n, tiles=len(out), macs=float(m * n * k), dnf_fail=float(1 - a["dnf"].mean()),
                 dead_share_a=a["dead_share"], cred=o[:, 0].tolist(), debit=deb.tolist(),
-                max_debit=float(deb.max()), worst_terms=[float(v) for v in o[iw, 1:]])
+                max_debit=float(deb.max()), mean_debit=float((o[:, 0] * deb).sum() / o[:, 0].sum()),
+                worst_terms=[float(v) for v in o[iw, 1:]])
+
+
+def two_level(res: dict, rho_u: float, rho_t: float) -> dict:
+    """A unit (one linear) is admitted at ρ_u when its credit-weighted mean tile debit is at most ρ_u; inside an admitted
+    unit a tile whose debit exceeds the per-tile allowance ρ_t is left uncredited.  The honest completeness is the
+    admitted credit's share, MAC-weighted over the model."""
+    macs = sum(r["macs"] for r in res.values())
+    kept = 0.0
+    out_units = []
+    for nm, r in res.items():
+        if r["mean_debit"] > rho_u:
+            out_units.append(nm)
+            continue
+        kept += r["macs"] * sum(c for c, d in zip(r["cred"], r["debit"]) if d <= rho_t) / sum(r["cred"])
+    return {"rho_u": rho_u, "rho_t": rho_t, "credit_admitted": kept / macs, "units_over_rho_u": len(out_units),
+            "their_mac_share": sum(res[nm]["macs"] for nm in out_units) / macs,
+            "units_without_2x_margin": sum(r["mean_debit"] > rho_u / 2 for r in res.values()),
+            "worst_unit_mean": max(r["mean_debit"] for r in res.values())}
 
 
 def main(argv=None) -> int:
@@ -133,6 +152,8 @@ def main(argv=None) -> int:
     ap.add_argument("--tokens", type=int, default=512)
     ap.add_argument("--text", default=str(Path(__file__).resolve().parents[2] / "README.md"))
     ap.add_argument("--caps", default="0.0025,0.001")
+    ap.add_argument("--fuse", action="store_true",
+                    help="replay q/k/v and gate/up as the fused GEMMs a server runs (one A′ formed per shared input)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
     import torch
@@ -148,7 +169,7 @@ def main(argv=None) -> int:
 
     def hook(nm):
         def f(mod, a):
-            got[nm] = a[0][0].float().numpy()
+            got[nm] = a[0][0].detach().to(torch.bfloat16).clone()      # the model's BF16 input, exact at half the memory
         return f
 
     hs = [mod.register_forward_pre_hook(hook(nm)) for nm, mod in lins.items()]
@@ -157,7 +178,23 @@ def main(argv=None) -> int:
     for h in hs:
         h.remove()
     rng = np.random.default_rng(20260930)
-    res = {nm: linear(got[nm], mod.weight.detach().float().numpy(), rng, p) for nm, mod in lins.items()}
+    groups: dict[str, list[str]] = {}
+    for nm in lins:
+        key = nm
+        if args.fuse:
+            head, _, leaf = nm.rpartition(".")
+            if leaf in ("q_proj", "k_proj", "v_proj"):
+                key = head + ".qkv_proj"
+            elif leaf in ("gate_proj", "up_proj"):
+                key = head + ".gate_up_proj"
+        groups.setdefault(key, []).append(nm)
+    res = {}
+    for key, names in groups.items():
+        xs = [got.pop(nm) for nm in names]
+        if any(not torch.equal(xs[0], x) for x in xs[1:]):
+            raise ValueError(f"{key}: fused linears read different inputs")
+        w = np.concatenate([lins[nm].weight.detach().float().numpy() for nm in names])
+        res[key] = linear(xs[0].float().numpy(), w, rng, p)
     macs = sum(r["macs"] for r in res.values())
     summ = {"model": args.model, "design": args.design, "tokens": int(ids.shape[1]), "linears": len(res),
             "dnf_fail_share": sum(r["dnf_fail"] * r["macs"] for r in res.values()) / macs,
@@ -169,14 +206,16 @@ def main(argv=None) -> int:
             "linears_with_rejections": sum(v > 0 for v in rej.values()),
             "linears_without_2x_margin": sum(r["max_debit"] > cap / 2 for r in res.values()),
             "their_mac_share": sum(r["macs"] for nm, r in res.items() if r["max_debit"] > cap / 2) / macs}
+    summ["two_level"] = [two_level(res, 0.001, rt) for rt in (0.001, 0.0025, 0.005, 0.01)]
     downs = sorted((nm for nm in res if nm.endswith("down_proj")), key=lambda s: int(s.split(".")[2]))
     summ["first_last_down_proj"] = [res[downs[0]]["max_debit"], res[downs[-1]]["max_debit"]]
     summ["every_down_proj"] = [min(res[d]["max_debit"] for d in downs), max(res[d]["max_debit"] for d in downs)]
     print(json.dumps(summ, indent=1), flush=True)
     if args.out:
         for r in res.values():
-            del r["cred"], r["debit"]
-        Path(args.out).write_text(json.dumps({"summary": summ, "linears": res}, indent=1))
+            r["cred"] = [round(c) for c in r["cred"]]
+            r["debit"] = [round(d, 7) for d in r["debit"]]
+        Path(args.out).write_text(json.dumps({"summary": summ, "linears": res}))
     return 0
 
 
