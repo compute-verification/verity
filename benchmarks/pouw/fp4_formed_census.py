@@ -81,15 +81,17 @@ def side_stats(twin, F, fmt, fmt_name: str, words: np.ndarray, seeds: list[bytes
                witness_rows: int, rng, fp32_op: float, partner_blocks: int) -> dict:
     rows, k = words.shape
     X = twin.f32(words).astype(np.float64)
-    dead_rho = float(F.DEAD_RHO) if hasattr(F, "DEAD_RHO") else float(np.sqrt(F.TAU_SQ_INV))
+    dead_rho = float(np.sqrt(getattr(F, "DEAD_RHO_SQ", None) or getattr(F, "TAU_SQ_INV", None) or F.DEAD_RHO ** 2))
     ref_dnf = np.array([ref_ae(F, fmt, row) >= F.UE4M3_NORMAL for row in words])
-    ref_dss = np.array([F.DEAD_SHARE * sum(F.dead_blocks(fmt, [int(v) for v in row])) <= k // fmt.block for row in words])
-    mine = C.rows_admitted(X, fmt_name, dead_rho=dead_rho)
+    capped = hasattr(F, "DEAD_SHARE")                   # the one-in-64 row cap, gone since the 10:35Z screen rule
+    ref_dss = np.array([not capped or F.DEAD_SHARE * sum(F.dead_blocks(fmt, [int(v) for v in row])) <= k // fmt.block
+                        for row in words])
+    mine = C.rows_admitted(X, fmt_name, dead_rho=dead_rho)["both" if capped else "dnf"]
     out = {"rows": rows, "k": k, "admission": {
         "dead_rho": dead_rho, "reference_dnf": float(ref_dnf.mean()), "reference_dss": float(ref_dss.mean()),
         "reference_rows_admitted": float((ref_dnf & ref_dss).mean()),
-        "census_rows_admitted": float(mine["both"].mean()),
-        "census_agrees": float((mine["both"] == (ref_dnf & ref_dss)).mean())}}
+        "census_rows_admitted": float(mine.mean()),
+        "census_agrees": float((mine == (ref_dnf & ref_dss)).mean())}}
     formed = []
     for sd in seeds:
         e = np.array([F.line(sd, role_e, i) for i in range(rows)], np.uint8)
