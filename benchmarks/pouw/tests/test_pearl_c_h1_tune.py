@@ -135,9 +135,9 @@ def test_the_four_lane_compression_is_b3cs():
         m[0] ^= cv[0]
     want = b"".join(w.to_bytes(4, "little") for w in cv)
     for mode, threads in ((0, 1), (1, 4)):
-        out = T.buffer(40)
+        out = T.buffer(48)
         T.launch("lat_chain", 1, threads, [out], [n, mode])
-        assert out.raw[8:40] == want, mode
+        assert out.raw[16:48] == want, mode
 
 
 @pytest.mark.parametrize("m,rb", [(32, 32768), (32, 16384), (5, 900)])

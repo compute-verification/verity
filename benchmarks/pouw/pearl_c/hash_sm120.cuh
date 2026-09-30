@@ -243,7 +243,8 @@ DEV void b3c4(const uint32_t* cv, const uint32_t* msg, uint64_t counter, uint32_
 }
 
 // latency: n dependent compressions on one thread (i1 = 0, b3c) or on one group of four lanes (i1 = 1, b3c4), the SM clock
-// cycles they took into p0 (u64), and the last chaining value into p0 + 8.  i0 n
+// cycles they took into p0 (u64), and the last chaining value into p0 + 16 (store_cv's uint4 stores need 16-byte
+// alignment).  i0 n
 extern "C" __global__ void __launch_bounds__(32) lat_chain(const Args a) {
   uint32_t cv[8], m[16];
 #pragma unroll
@@ -260,7 +261,7 @@ extern "C" __global__ void __launch_bounds__(32) lat_chain(const Args a) {
   const long long t1 = clock64();
   if (threadIdx.x == 0) {
     *reinterpret_cast<unsigned long long*>(a.p[0]) = (unsigned long long)(t1 - t0);
-    store_cv(a.p[0] + 8, cv);
+    store_cv(a.p[0] + 16, cv);
   }
 }
 

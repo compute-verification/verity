@@ -291,6 +291,15 @@ def gates(d: Bench, V: dict) -> dict:
         bad += [f"tiles {form} {k}" for k, v in checks.items() if not v]
         for p in (cp, up, dg, lv, tp, dt, tk):
             d.free(p)
+    lc, p = V["lat_chain"], d.alloc(64)
+    for mode, threads, name in ((0, 1, "b3c"), (1, 4, "b3c4")):
+        d.go(None, "lat_chain", 1, threads, (p,), (lc["n"], mode))
+        d.sync()
+        ok = d.read(p + 16, 32).hex() == lc["cv"]
+        out["trees"][f"lat_chain {name}"] = ok
+        if not ok:
+            bad.append(f"lat_chain {name}")
+    d.free(p)
     out["failures"] = bad
     return out
 
