@@ -782,6 +782,15 @@ def test_nvfp4_rounds_without_dividing_on_the_preflight_edge_row():
     assert np.isin(a, th * s).sum() > len(blocks)
 
 
+@pytest.mark.parametrize("seed", [11, 0, 1, 2, 3])
+def test_the_derive_preflight_y_is_finite(seed):
+    """The device's FMUL canonicalizes a NaN and the twin keeps its bits, so a NaN in y fails the preflight on bytes it
+    doesn't mean to test; its y holds none, nor an infinity, at every preflight shape."""
+    for m, n, _, _ in H.PREFLIGHT_DERIVE:
+        for src in DV.SRC:
+            assert np.isfinite(DV.load(src, DV.preflight_y(src, m, n, seed), m, n)).all(), (m, n, src)
+
+
 @pytest.mark.parametrize("kind", sorted(DV.KINDS))
 def test_every_derive_stays_bounded_reads_columns_mod_n_and_decodes_close_to_its_input(kind):
     m, n, k = 8, 96, 128

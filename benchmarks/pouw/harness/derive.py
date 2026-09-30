@@ -156,8 +156,8 @@ def check(kind_name: str, src: str, y: bytes, a: bytes, sf: bytes | None, m: int
 
 
 def _ulps(x: np.ndarray, d: np.ndarray) -> np.ndarray:
-    """Positive float32 x moved d ulps."""
-    return (np.asarray(x, np.float32).view(np.int32) + np.asarray(d, np.int32)).view(np.float32)
+    """Non-negative float32 x moved d ulps, stopping at +0 (whose bits less one ulp would be a NaN)."""
+    return np.maximum(np.asarray(x, np.float32).view(np.int32) + np.asarray(d, np.int32), np.int32(0)).view(np.float32)
 
 
 def _nvfp4_edges(rng: np.random.Generator, n: int) -> np.ndarray:
