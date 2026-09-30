@@ -355,24 +355,31 @@ def rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
 #: hash_node_keys, hash_nodes a level a launch); "tuned" (hash_rows_w, hash_node_keys, hash_tree_small); "keys" (tuned, the
 #: level keys on the side stream from the call's start: they depend on the domain id only); "one" (the keys so, and
 #: hash_rows_wt: rows and tree in one launch); "producer" (the keys so, and derive_rows_hash: A hashed by the kernel that
-#: writes it). Candidates that change the protocol, measured only: "overlap" (the one-launch commitment on the side stream
-#: beside the GEMM, as if the noise didn't wait for A's root) and "blk" (the per-block Merkle row layout, hash_rows_blk, then
-#: hash_tree_small). The post-GEMM hashing: "none", "pushed", "serial" (tuned, on the GEMM's stream), "side" (tuned, on the
-#: side stream).
+#: writes it). "pre", "onepre": "tuned" and "one" with the level keys computed once, before the chain (they depend on the
+#: domain id alone, known from the salt and the matmul's index: a table at the epoch's start), so no call launches them.
+#: Candidates that change the protocol, measured only: "overlap" (the one-launch commitment on the side stream beside the
+#: GEMM, as if the noise didn't wait for A's root) and "blkpre" (the per-block Merkle row layout, hash_rows_blk, then
+#: hash_tree_small, keys so). The post-GEMM hashing: "none", "pushed", "serial" (tuned, on the GEMM's stream), "side"
+#: (tuned, on the side stream).
 ARMS = [
     ("plain fp32 rows", ROW_F32, "none", "none"), ("plain bf16 rows", ROW_BF16, "none", "none"),
     ("h1 as pushed", ROW_F32, "pushed", "pushed"), ("h1 tuned", ROW_F32, "tuned", "serial"),
     ("h1 tuned, side stream", ROW_F32, "tuned", "side"),
     ("A as pushed", ROW_F32, "pushed", "none"), ("A tuned", ROW_F32, "tuned", "none"),
-    ("A tuned, keys early", ROW_F32, "keys", "none"), ("A in one launch", ROW_F32, "one", "none"),
-    ("A in its producer", ROW_F32, "producer", "none"),
-    ("h1 A in one launch, side stream", ROW_F32, "one", "side"), ("h1 A in its producer, side stream", ROW_F32, "producer", "side"),
+    ("A tuned, keys early", ROW_F32, "keys", "none"), ("A tuned, keys precomputed", ROW_F32, "pre", "none"),
+    ("A in one launch, keys precomputed", ROW_F32, "onepre", "none"), ("A in its producer", ROW_F32, "producer", "none"),
+    ("h1 tuned, keys precomputed, side stream", ROW_F32, "pre", "side"),
+    ("h1 A in one launch, keys precomputed, side stream", ROW_F32, "onepre", "side"),
     ("candidate: A overlapped with the GEMM", ROW_F32, "overlap", "none"),
-    ("candidate: h1 A overlapped, side stream", ROW_F32, "overlap", "side"),
-    ("candidate: A block layout", ROW_F32, "blk", "none"), ("candidate: h1 A block layout, side stream", ROW_F32, "blk", "side"),
-    ("candidate: A bf16 rows in its producer", ROW_BF16, "producer", "none"),
-    ("candidate: h1 bf16 rows in its producer, side stream", ROW_BF16, "producer", "side"),
+    ("candidate: A block layout", ROW_F32, "blkpre", "none"),
+    ("candidate: h1 A block layout, side stream", ROW_F32, "blkpre", "side"),
+    ("candidate: A bf16 rows, keys precomputed", ROW_BF16, "pre", "none"),
+    ("candidate: h1 bf16 rows, keys precomputed, side stream", ROW_BF16, "pre", "side"),
 ]
+
+
+#: the A modes whose level keys go on the side stream at each call's start
+EARLY = ("keys", "one", "producer", "overlap")
 
 
 def latency(d: Bench) -> dict:
@@ -392,14 +399,14 @@ def latency(d: Bench) -> dict:
 
 
 #: the decode arms whose last call's output verify_h1.py checks (every arm on -h1's format; the block layout is not)
-VERIFY = [name for name, _rb, amode, _post in ARMS if amode != "blk" and not name.startswith("plain")]
+VERIFY = [name for name, _rb, amode, _post in ARMS if not amode.startswith("blk") and not name.startswith("plain")]
 
 
 def slug(name: str) -> str:
     return "".join(ch if ch.isalnum() else "-" for ch in name).strip("-").replace("--", "-")
 
 
-def decode(d: Bench, reps: int, V: dict, tdir: str | None) -> dict:
+def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
     """Per call of the dependent chain at m = 32, n = k = 8,192, each arm replayed as one graph of CALLS calls."""
     n, k, m = N, K, M
     depth = max(0, (m - 1).bit_length())
@@ -417,19 +424,19 @@ def decode(d: Bench, reps: int, V: dict, tdir: str | None) -> dict:
     def commit_a(s, amode: str, rb: int) -> None:
         if amode in ("pushed", "tuned"):
             launch_a(d, s, amode, rows[rb], a_tree, a_keys, dom_a, m, rb)
-        elif amode == "keys":
+        elif amode in ("keys", "pre"):
             launch_rows(d, s, "tuned", rows[rb], a_tree, dom_a, m, rb)
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
-        elif amode in ("one", "overlap"):
+        elif amode in ("one", "onepre", "overlap"):
             d.go(s, "hash_rows_wt", -(-m // 4), 128, (rows[rb], a_tree, dom_a, a_keys, counter), (m, rb, m), smem=4 * 4 * rows_w_words(rb))
-        elif amode == "blk":
+        elif amode == "blkpre":
             d.go(s, "hash_rows_blk", m, 256, (rows[rb], a_tree, blk_key, blk_levels), (m, rb))
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
 
     def call(i: int, rb: int, amode: str, post: str, st: dict) -> None:
         s1, s2 = d.s1, d.s2
         sl = slots[i % 2]
-        early = amode in ("keys", "one", "producer", "overlap", "blk")
+        early = amode in EARLY
         if early:                                            # the level keys, from the domain id alone, beside the producer
             d.wait(s2, d.event(s1))
             d.go(s2, "hash_node_keys", 1, 32, (a_keys, dom_a), (depth,))
@@ -475,20 +482,25 @@ def decode(d: Bench, reps: int, V: dict, tdir: str | None) -> dict:
             for e in [st.get("a_done")] + st["joins"][-1:]:
                 if e is not None:
                     d.wait(d.s1, e)
-            if amode in ("keys", "one", "producer", "overlap", "blk"):
+            if amode in EARLY:
                 d.wait(d.s1, d.event(d.s2))
         graphs[name] = d.graph(body)
+    d.go(None, "hash_node_keys", 1, 32, (a_keys, dom_a), (depth,))     # the "pre" arms' table (every arm writes the same keys)
+    d.sync()
     for ge in graphs.values():                               # warm every graph once
         d.replay_ms(ge, 1)
     raw = {name: [] for name in graphs}
+    clk = {name: [] for name in graphs}
     for rep in range(reps):                                  # the arms interleaved, rotated each rep
         order = list(graphs)
         order = order[rep % len(order):] + order[:rep % len(order)]
         for name in order:
             raw[name] += d.replay_ms(graphs[name], 1)
+            clk[name].append(nv.read()["sm_mhz"])
     for name, rb, amode, post in ARMS:
         ms = raw[name]
-        out[name] = {"rows_bytes": rb, "a": amode, "post": post, "per_call_us": statistics.median(ms) * 1e3 / CALLS, "raw_ms": ms}
+        out[name] = {"rows_bytes": rb, "a": amode, "post": post, "per_call_us": statistics.median(ms) * 1e3 / CALLS, "raw_ms": ms,
+                     "sm_mhz": clk[name]}
     if tdir:                                                 # each verified arm once more; its last call's output, for the verifier
         os.makedirs(tdir, exist_ok=True)
         run = os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local"
@@ -548,7 +560,7 @@ def main() -> None:
     save()
     res["latency"] = latency(d)
     save()
-    res["decode"] = decode(d, args.reps, V, args.transcripts)
+    res["decode"] = decode(d, nv, args.reps, V, args.transcripts)
     res["clocks_after"] = nv.read()
     save()
     for name, r in res["decode"].items():
