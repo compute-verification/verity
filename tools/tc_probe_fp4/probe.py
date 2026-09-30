@@ -871,6 +871,78 @@ def families_fp4_re(rng, n_random: int, scale_kind: str):
         sfb[sel] = rng.integers(200, 255, (int(sel.sum()), 8, nblk))
     yield "specials", A, Bt, sfa, sfb, acc
 
+    yield ("scale_split_twins", *scale_split_twins(rng, n_random // 8, scale_kind))
+
+
+#: E2M1 magnitude index -> the index of twice its magnitude (0, .5, 1, 1.5, 2, 3 -> 0, 1, 2, 3, 4, 6); 4 and 6 have none.
+_E2M1_DOUBLE = np.array([0, 2, 4, 5, 6, 7, 0, 0], np.uint8)
+TWIN_OFFSETS = (27, 28, 29)
+
+
+def scale_split_twins(rng, n: int, scale_kind: str):
+    """The Pipeline-fit discriminator: tile ``2t + 1`` is tile ``2t`` with every A nibble doubled and every A scale halved.
+
+    Every scaled product is the same in both, so any model that reads only the exact products and the accumulator (every
+    ``GroupSum``, at any groups, width and floor) gives both twins one word; the scale-exponent anchor of
+    ``BlockScaledAlignAdd`` moves one binade down.  The accumulator is ``+-2^(X_max - off)`` with ``off`` = 27, 28, 29 by
+    tile pair (``TWIN_OFFSETS``): at 28 it lies on the second twin's grid only, so the words differ wherever the sum is exact
+    in binary32 and the accumulator opposes it; at 27 and 29 the twins agree.  Half the pairs keep A's nonzero nibbles in
+    group 0, so the sum is often exact.  Returns ``(A, Bt, SFA, SFB, C)``.
+    """
+    k, nblk = 64, (4 if scale_kind == "ue4m3" else 2)
+    h = max(n // 2, 1)
+    mag = rng.integers(0, 6, (h, 16, k)).astype(np.uint8)
+    mag[: h // 2, :, 16:] = 0
+    mag = np.where(rng.random((h, 16, k)) < 0.25, 0, mag).astype(np.uint8)
+    sign = (rng.integers(0, 2, (h, 16, k)) << 3).astype(np.uint8)
+    a1, a2 = sign | mag, sign | _E2M1_DOUBLE[mag]
+    bt = rng.integers(0, 16, (h, 8, k)).astype(np.uint8)
+    if scale_kind == "ue4m3":
+        sfa1 = (rng.integers(6, 11, (h, 16, nblk)) << 3 | rng.integers(0, 8, (h, 16, nblk))).astype(np.uint8)
+        sfb = (rng.integers(6, 11, (h, 8, nblk)) << 3 | rng.integers(0, 8, (h, 8, nblk))).astype(np.uint8)
+        sfa2 = sfa1 - np.uint8(8)
+        ea, eb = (sfa1 >> 3).astype(np.int64) - 10, (sfb >> 3).astype(np.int64) - 10
+    else:
+        sfa1 = rng.integers(120, 136, (h, 16, nblk)).astype(np.uint8)
+        sfb = rng.integers(120, 136, (h, 8, nblk)).astype(np.uint8)
+        sfa2 = sfa1 - np.uint8(1)
+        ea, eb = sfa1.astype(np.int64) - 130, sfb.astype(np.int64) - 130
+    gpb = 4 // nblk
+    a_nz = (model5.E2M1_NUM[a1.astype(np.int64)] != 0).reshape(h, 16, 4, 16).astype(np.int64)
+    b_nz = (model5.E2M1_NUM[bt.astype(np.int64)] != 0).reshape(h, 8, 4, 16).astype(np.int64)
+    live = np.einsum("nigk,njgk->nijg", a_nz, b_nz) > 0
+    blk = np.arange(4) // gpb
+    x = -2 + ea[:, :, None, blk] + eb[:, None, :, blk]
+    x_max = np.where(live, x, -(1 << 20)).max(-1)
+    x_max = np.where(live.any(-1), x_max, -20)
+    off = np.array(TWIN_OFFSETS)[np.arange(h) % len(TWIN_OFFSETS)][:, None, None]
+    acc = ((rng.integers(0, 2, (h, 16, 8)).astype(np.uint32) << 31) | ((x_max - off + 127).astype(np.uint32) << 23)).astype(np.uint32)
+
+    def twin(u, v):
+        out = np.empty((2 * h, *u.shape[1:]), u.dtype)
+        out[0::2], out[1::2] = u, v
+        return out
+
+    return twin(a1, a2), twin(bt, bt), twin(sfa1, sfa2), twin(sfb, sfb), twin(acc, acc)
+
+
+def twin_summary(D, models: dict) -> dict:
+    """Words where the twins of ``scale_split_twins`` differ, by accumulator offset, on the device and under each model.
+
+    A difference on the device is a pair of inputs with the same exact products and accumulator but different words, so no
+    model reading only those (no ``GroupSum``) computes the instruction."""
+
+    off = np.array(TWIN_OFFSETS)[np.arange(D.shape[0] // 2) % len(TWIN_OFFSETS)]
+
+    def differ(words):
+        d = words[0::2] != words[1::2]
+        return {f"off{o}": int(d[off == o].sum()) for o in TWIN_OFFSETS}
+
+    hw = differ(D)
+    return {"pairs": int(D.shape[0] // 2), "elements_per_twin": int(D.shape[0] // 2) * 128, "device_words_differ": hw,
+            "model_words_differ": {m: differ(v) for m, v in models.items()},
+            "no_product_value_model_fits": any(hw.values())}
+
 
 def families_bf16(rng, n_random: int):
     k = 16
@@ -1359,6 +1431,8 @@ def main(argv: list[str] | None = None) -> int:
                         rec["model"] = "error" if err[t, i, j] else f"{int(model[t, i, j]):08x}"
                         first.append(rec)
                     fam["first_mismatches"][mname] = first
+                if name == "scale_split_twins" and steps == 1:
+                    fam["twins"] = twin_summary(D, models)
                 if primary in errs and errs[primary].any():
                     fam["observed_outside_model_domain"] = observed_summary(D, C, errs[primary])
                 if tcgen05:

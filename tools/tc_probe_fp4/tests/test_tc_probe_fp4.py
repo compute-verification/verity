@@ -189,6 +189,35 @@ def test_sparse_dense_twins_are_the_identities_each_truth_implies(no_nvcc, tmp_p
     assert halves["dense_two_atoms"] == 0 and halves["dense_atom"] == 0 and halves["dense_on_compressed"] > 0
 
 
+@pytest.mark.parametrize("instr,model", [("nvf4", M.BLACKWELL_SM120_NVF4), ("mxf4", M.BLACKWELL_SM120_MXF4)])
+def test_scale_split_twins_share_every_scaled_product_but_not_the_word(instr, model):
+    """The twins' scaled group terms and accumulators are equal value for value, so no model reading only those tells them
+    apart; the pinned model does, at the offset that lies between the two anchors only."""
+    A, Bt, SFA, SFB, C = P.scale_split_twins(np.random.default_rng(3), 12, P.SCALE_KIND[instr])
+    differ = {o: 0 for o in P.TWIN_OFFSETS}
+    for t in range(A.shape[0] // 2):
+        off = P.TWIN_OFFSETS[t % len(P.TWIN_OFFSETS)]
+        for i in range(16):
+            for j in range(8):
+                words, values = [], []
+                for u in (2 * t, 2 * t + 1):
+                    args = (A[u, i].tolist(), Bt[u, j].tolist(), SFA[u, i].tolist(), SFB[u, j].tolist())
+                    values.append([Fraction(m) * Fraction(2) ** x for m, x, _ in model.group_terms(*args)])
+                    words.append(model.step_scaled(int(C[u, i, j]), *args))
+                assert values[0] == values[1] and C[2 * t, i, j] == C[2 * t + 1, i, j]
+                differ[off] += words[0] != words[1]
+    assert differ[28] > 0 and differ[27] == 0 and differ[29] == 0, differ
+
+
+def test_scale_split_twins_dry_run_reports_the_refutation(no_nvcc, tmp_path):
+    rc = P.main(["--instruction", "nvf4", "--out", str(tmp_path), "--fake-silicon", "verity", "--sweep",
+                 "--n-random", "96", "--procs", "1", "--families", "scale_split_twins"])
+    assert rc == 0
+    twins = json.loads((tmp_path / "probe_results.json").read_text())["sweep"]["families"]["scale_split_twins"]["twins"]
+    assert twins["no_product_value_model_fits"] and twins["device_words_differ"]["off28"] > 0
+    assert twins["device_words_differ"]["off27"] == twins["device_words_differ"]["off29"] == 0
+
+
 def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):
     assert P.uuid_allowed("GPU-a", "GPU-a") and P.uuid_allowed("GPU-a", "GPU-b, GPU-a")
     assert not P.uuid_allowed("GPU-a", "GPU-b") and not P.uuid_allowed(None, "GPU-a") and not P.uuid_allowed("", ",")
