@@ -72,8 +72,9 @@ def row_stats(x: np.ndarray, delta: float):
     return alpha, delta * rho * alpha                      # alpha0, and the noise std in scaled units
 
 
-def form(x: np.ndarray, design: str, rng: np.random.Generator):
-    """One salt's formed operand: (what the chain reads, the useful value, noise added, saturated mask), all [R, k]."""
+def form(x: np.ndarray, design: str, rng: np.random.Generator, scales: bool = False):
+    """One salt's formed operand: (what the chain reads, the useful value, noise added, saturated mask), all [R, k], and
+    with `scales` the block scales the MMA reads, [R, k/16]."""
 
     delta = 0.5 if design.endswith("-d2") else 0.25
     alpha, sig = row_stats(x, delta)
@@ -107,7 +108,78 @@ def form(x: np.ndarray, design: str, rng: np.random.Generator):
     q = d / scb * gain
     codes = e2m1_rn(q)
     chain = value_of(codes) * scb
-    return chain, chain / gain, noise, np.abs(q) > 6.0
+    out = (chain, chain / gain, noise, np.abs(q) > 6.0)
+    return out + (sc,) if scales else out
+
+
+def flat(rows: int, k: int, rng: np.random.Generator) -> np.ndarray:
+    """The adversary's flat rows: every block is a signed permutation of one 16-value pattern, so every block has the
+    same amax and the clean quantizer gives one block scale per row."""
+
+    pat = np.abs(rng.standard_normal(16))
+    idx = np.argsort(rng.random((rows, k // 16, 16)), axis=2)
+    return (pat[idx] * rng.choice([-1.0, 1.0], (rows, k // 16, 16))).reshape(rows, k)
+
+
+def operand(fam: str, side: str, rows: int, k: int, rng: np.random.Generator) -> np.ndarray:
+    return flat(rows, k, rng) if fam == "flat" else family(fam, side, rows, k, rng)
+
+
+def scale_classes(sa: np.ndarray, sb: np.ndarray, live: np.ndarray) -> tuple[int, int]:
+    """Joint scale classes of one word, from its blocks' scales (sa, sb: [nb]) over its live blocks (both codes nonzero).
+    An integer accumulation spans blocks whose scale products agree up to 2^d, 0 <= d <= 6 (each int8 input absorbs
+    2^3: 12·8 <= 127). `pair` groups by (A mantissa, B mantissa), as `fp4-tile-model.md` §7.3(b); `product` groups by the
+    product's normalized mantissa, which is all one accumulation needs (33 values). Each group's exponents are covered
+    greedily by windows of 7."""
+
+    ea = np.floor(np.log2(sa[live])).astype(int) - 3
+    eb = np.floor(np.log2(sb[live])).astype(int) - 3
+    ma = np.rint(sa[live] / np.exp2(ea)).astype(int)
+    mb = np.rint(sb[live] / np.exp2(eb)).astype(int)
+    p = ma * mb
+    sh = (p >= 128).astype(int)
+    e = ea + eb + sh
+    mu = p / (1 << sh)
+
+    def cover(keys):
+        n = 0
+        for key in set(keys):
+            es = np.sort(e[[kk == key for kk in keys]])
+            i = 0
+            while i < len(es):
+                n += 1
+                i = np.searchsorted(es, es[i] + 7)
+        return n
+
+    return cover(list(zip(ma.tolist(), mb.tolist()))), cover(mu.tolist())
+
+
+def classes(fam: str, design: str, rows: int, k: int, words: int, seed: int) -> dict:
+    """Per-word joint scale classes for one salt. The weights (B) are formed by the same design, except that the gain
+    form's weights keep v3′'s salted scale (`pearl-c4-v3.md` §8)."""
+
+    rng = np.random.default_rng(seed)
+    xa = operand(fam, "A", rows, k, np.random.default_rng(seed + 1))
+    xb = operand(fam, "B", rows, k, np.random.default_rng(seed + 2))
+    return classes_of(xa, xb, design, words, rng)
+
+
+def classes_of(xa: np.ndarray, xb: np.ndarray, design: str, words: int, rng: np.random.Generator) -> dict:
+    rows, k = xa.shape
+    ca, _, _, _, sa = form(xa, design, rng, scales=True)
+    cb, _, _, _, sb = form(xb, design.replace("-hg", "-hj"), rng, scales=True)
+    la = (ca != 0).reshape(rows, k // 16, 16).any(axis=2)
+    lb = (cb != 0).reshape(len(xb), k // 16, 16).any(axis=2)
+    cp, cq = [], []
+    for _ in range(words):
+        i, j = rng.integers(0, rows), rng.integers(0, len(xb))
+        a, b = scale_classes(sa[i], sb[j], la[i] & lb[j])
+        cp.append(a)
+        cq.append(b)
+    cp, cq = np.array(cp), np.array(cq)
+    return {"pair_median": float(np.median(cp)), "pair_min": int(cp.min()), "pair_lt37": float((cp < 37).mean()),
+            "prod_median": float(np.median(cq)), "prod_min": int(cq.min()), "prod_max": int(cq.max()),
+            "prod_lt37": float((cq < 37).mean()), "prod_ge64": float((cq >= 64).mean())}
 
 
 def plain(x: np.ndarray):
@@ -121,8 +193,15 @@ def plain(x: np.ndarray):
 
 def census(fam: str, design: str, rows: int, k: int, salts: int, seed: int) -> dict:
     rng = np.random.default_rng(seed)
-    xa = family(fam, "A", rows, k, np.random.default_rng(seed + 1))
+    xa = operand(fam, "A", rows, k, np.random.default_rng(seed + 1))
     xb = family("gaussian", "B", rows, k, np.random.default_rng(seed + 2))
+    return measure(xa, xb, design, salts, rng)
+
+
+def measure(xa: np.ndarray, xb: np.ndarray, design: str, salts: int, rng: np.random.Generator) -> dict:
+    """The census's statistics for activations xa [R, k] against weights xb [N, k]."""
+
+    rows, k = xa.shape
     vals = np.empty((salts, rows, k), np.float32)
     sat = 0.0
     for s in range(salts):
@@ -157,7 +236,7 @@ def census(fam: str, design: str, rows: int, k: int, salts: int, seed: int) -> d
     errs = []
     for _ in range(2):
         _, va, na, _ = form(xa, design, rng)
-        _, vb, nb, _ = form(xb, design, rng)
+        _, vb, nb, _ = form(xb, design.replace("-hg", "-hj"), rng)
         aa, _ = row_stats(xa, 0.5 if design.endswith("-d2") else 0.25)
         ab, _ = row_stats(xb, 0.5 if design.endswith("-d2") else 0.25)
         u = ((va - na) / aa) @ ((vb - nb) / ab).T
@@ -203,14 +282,25 @@ def main(argv=None) -> int:
     ap.add_argument("--k", type=int, default=2048)
     ap.add_argument("--salts", type=int, default=64)
     ap.add_argument("--seed", type=int, default=20260930)
+    ap.add_argument("--seeds", type=int, default=1, help="repeat the census over seeds seed, seed+1000, ... (no crafted)")
+    ap.add_argument("--classes", type=int, default=0, help="instead, count joint scale classes on this many words")
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
     res = {"rows": args.rows, "k": args.k, "salts": args.salts, "seed": args.seed, "families": {}, "crafted": {}}
     for d in args.designs.split(","):
         for f in args.families.split(","):
-            r = census(f, d, args.rows, args.k, args.salts, args.seed)
+            if args.classes:
+                r = classes(f, d, args.rows, args.k, args.classes, args.seed)
+            elif args.seeds > 1:
+                runs = [census(f, d, args.rows, args.k, args.salts, args.seed + 1000 * s) for s in range(args.seeds)]
+                r = {f"{a}_{m.__name__}": float(m([x[a] for x in runs])) for a in ("debit_2of4", "salt_dead", "err_ratio")
+                     for m in (np.min, np.max)}
+            else:
+                r = census(f, d, args.rows, args.k, args.salts, args.seed)
             res["families"].setdefault(f, {})[d] = r
             print(f"{f:12s} {d:11s} " + " ".join(f"{a}={b:.4f}" for a, b in r.items()), flush=True)
+        if args.classes or args.seeds > 1:
+            continue
         res["crafted"][d] = crafted(d, args.k, min(args.salts, 32), args.seed)
         print(f"{'crafted':12s} {d:11s} {res['crafted'][d]}", flush=True)
     text = json.dumps(res, indent=1)
