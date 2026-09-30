@@ -8,12 +8,16 @@ dependent chain's split and side stream, the report) and as a template for the s
 
 Its gate: D equals, byte for byte, a second launch of the same algorithm into its own buffer (`all`), and 32 x 32 sampled
 entries are within 2^-7 relative (plus an FP32 accumulation allowance) of numpy's float64 product (`sampled`).
-`known_bad` is the same GEMM over half of k.
+`known_bad` is the same GEMM over half of k. Its `dump` writes D's sha256 (``manifest.json``), so the harness's poisoned
+dump and no-write control run on the card too.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import random
+from pathlib import Path
 
 import baselines as B
 import fill as F
@@ -116,6 +120,11 @@ class ExampleFp8:
 
     def known_bad(self, dev, shape: Shape, operands) -> _Call:
         return self.prepare(dev, shape, self.flag_sets["hash"], operands, half_k=True)
+
+    def dump(self, dev, call: _Call, shape: Shape, out: Path) -> None:
+        d = call.outputs["d"]
+        (out / "manifest.json").write_text(json.dumps({"arm": self.name, "shape": shape.label,
+                                                       "d_sha256": hashlib.sha256(dev.read(d.ptr, d.nbytes)).hexdigest()}))
 
     def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> Gate:
         call.twin.launch(dev.stream)

@@ -19,6 +19,8 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 | `sass_gate.py` | the SASS gate, before anything is timed: no instruction with `.FTZ` and no FP32 `MUFU` (so no `-ftz=true`, `--use_fast_math` or approximate div/sqrt build) in any binary an arm declares (`binaries` in its build record) or any library with device code mapped into the run, except inside ptxas's IEEE div/sqrt/rcp and integer-division sequences as a ptxas pinned in `sass_pins.json` (version, build, arguments, numeric run) builds them; nvdisasm and `cuobjdump -sass` must agree; also a CLI (`python sass_gate.py BINARY...`, `--pin`) |
 | `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
 | `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments |
+| `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
+| `price_twins.py`, `price_twins.json` | γ's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, and never takes one typed in |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
@@ -61,7 +63,8 @@ Where there is no CUDA 12.8+ toolkit, or it isn't the build's (node 2 has 13.0),
 cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `art:<id>` of one preserved with
 `research data put --kind pouw-harness-build/v1 --tree DIR --preserve`), and this tree's `verity` and `verity_pouw` on
 `PYTHONPATH`. On node 2, `gpu-lease 1` picks the GPU, so the run names it `--gpu lease` (the one index the lease set, checked
-against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait` and times on its first GPU:
+against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait --timed` and times on its first GPU
+(`--timed` pauses the fill queue: without it, fill jobs keep running beside the timed run):
 
 ```bash
 R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
@@ -70,14 +73,14 @@ H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" ben
    --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline
    --arm-path benchmarks/pouw/harness --arm example_arm:ExampleFp8 --out "$RESEARCH_RUN_DIR/bench.json"'
 $R -- gpu-lease 1 --wait -- bash -c "$H"                                                           # untimed: gates, autotune
-$R -- gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
+$R -- gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
 ```
 
 A measured panel row also needs the verify step in the same run, after the lease, so no GPU waits on the CPU verifier:
 
 ```bash
 V='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/verify.py "$RESEARCH_RUN_DIR/bench.json"'
-$R -- bash -c "gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
+$R -- bash -c "gpu-lease 8 --wait --timed -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=\${CUDA_VISIBLE_DEVICES%%,*} && $H'; b=\$?; $V; v=\$?; exit \$(( b ? b : v ))"
 ```
 
 `H` and `V` go to `bash -c`, so each must be one line (`H` is wrapped above for reading).
@@ -132,12 +135,29 @@ exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without
 
 Every gate's record and every negative control carry `wall_s`, the host's seconds in them (a gate's summed over its runs),
 and each shape its `wall_s` by stage (`operands`, `baseline_gates`, then `screen` alone under `--screen-only`, else
-`arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `report`), so a lease's idle minutes show where
-they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
+`arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `transcripts`, `report`), so a lease's idle minutes
+show where they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
 take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job's CPUs (`OMP_NUM_THREADS`, a fill job's
 `cpus=`), for such references, and an arm with `prefetch(dev, call, shape, flags)` is told every call a flag set's gate is
 about to check before the first of them, so their references compute side by side; the gate still compares against the
 inputs as the device holds them at the gate.
+
+**Poisoned transcripts and the no-write control** (panel rule, server.md 11:50Z). An arm with `dump` (arm interface v0.5)
+lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,
+default `call.outputs`; never an operand, since poisoning one changes what the call computes, so an overlap is refused and the
+row gets no control) is filled with 0xA5, the weight side and the call run, and the arm's `dump` writes
+`transcripts/<arm>/<shape>/`; then the buffers are poisoned again, nothing is launched, and `dump` writes
+`negative/<arm>/<shape>/`, which the verifier must reject. The run's JSON says what was poisoned and how many bytes the call
+wrote (`poisoning`). `verify.py` judges the control at the transcript's path under `negative/` unless the declaration names
+another `control`; an accepted control rejects the row, and a rejected one's line is the row's `--negative-control`. An arm
+without `dump` still writes its own transcripts, and its record says the harness didn't poison them.
+
+**Every attempt is recorded.** `verify.py` writes `ledger/<arm>/<shape>.json` for every arm row, verified or not; pass
+`--tier 2b` for a timed whole-node run (the default, 2a, is a screen that never plots), `--hypothesis`, `--parent`, and
+`--publish` to put the records into the evidence store. The arm's build record names its `variant`
+(`ledger.variant_record`: the sources' digest, the binary's, the priced path) and its `lineage` (parent, approach,
+mechanism tags, hypothesis, panel line and version). γ is looked up from `price_twins.json` on the variant's priced path, at
+both FP32 prices, the larger published; a lineage that types γ in gets no record.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
 consistency gate rejected an arm; 7 the SASS gate refused a binary. The JSON is written in every case, with every rep, and

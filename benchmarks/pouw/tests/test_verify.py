@@ -261,5 +261,5 @@ def test_check_verifier_normalizes_a_good_one_and_allows_none():
     assert A.check_verifier("x", {}) is None
     v = A.check_verifier("x", {"verifier": GOOD | {"name": "the audit"}})
     assert v == {"per": "shape", "transcript": GOOD["transcript"], "commands": GOOD["commands"], "commit": None,
-                 "name": "the audit"}
+                 "name": "the audit", "control": None}
     assert A.check_verifier("x", {"verifier": v}) == v
