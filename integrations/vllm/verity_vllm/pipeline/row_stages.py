@@ -537,8 +537,9 @@ class SingleRow(Row):
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
-        if self.config_run:                           # one instrumented run, bounded staging, k units
-            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k), "--replay-draw", ck.replay_draw]
+        if self.config_run:                           # one instrumented run (and its control with a baseline), bounded staging, k units
+            cmd += [] if ck.config_baseline == "1" else ["--only-arm", "instrumented"]
+            cmd += ["--bounded-staging", "--replay-k", str(ck.replay_k), "--replay-draw", ck.replay_draw]
             if ck.replay_deferred in ("1", "slim"):
                 cmd += ["--replay-deferred", *(["slim"] if ck.replay_deferred == "slim" else [])]
         if self.protocols:
