@@ -217,7 +217,7 @@ def wholerow(b: dict, d: dict, w: set) -> tuple[list[tuple[str, dict]], dict]:
     return todo, st
 
 
-def sampled(deps: list[tuple[str, str]], d: dict, w: set, ahead: int = 2) -> tuple[list[tuple[str, dict]], dict]:
+def sampled(deps: list[tuple[str, str]], d: dict, w: set, ahead: int = 2, gen: int = 1) -> tuple[list[tuple[str, dict]], dict]:
     """(a): each passing deployment's sampled units (73-sweep-shape.sh MODE=sampled-stage, then MODE=sampled), every unit proved. The
     first deployment's prove job selftests every SAMPLED_SELFTEST-th shape on the GPU; the rest wait until those selftests and their
     GPU cases (the device's proofs and transcripts against the CPU's) all pass."""
@@ -226,12 +226,12 @@ def sampled(deps: list[tuple[str, str]], d: dict, w: set, ahead: int = 2) -> tup
     first_ended = False
     staging = 0   # deployments on disk: staged or staging, their prove job not ended (50-60 GB each; PRUNE frees them)
     for j, (slug, ev) in enumerate(deps):
-        t = f"a-{tag(slug)}"
+        t = f"a-{tag(slug)}" + (f"-g{gen}" if gen > 1 else "")
         sid, pid = f"{t}-s", f"{t}-p"
         if sid in w and d.get(sid, {}).get("state", "succeeded") == "succeeded" and pid not in d:
             staging += 1
     for j, (slug, ev) in enumerate(deps):
-        t = f"a-{tag(slug)}"
+        t = f"a-{tag(slug)}" + (f"-g{gen}" if gen > 1 else "")
         sid, pid = f"{t}-s", f"{t}-p"
         failed = any(x in d and d[x].get("state") != "succeeded" for x in (sid, pid))
         st["failed"] += failed
@@ -272,6 +272,8 @@ def main() -> int:
     ap.add_argument("--chunk-from", action="append", default=[], metavar="ROW=N", help="that row's shapes below N are one-shape jobs")
     ap.add_argument("--wholerow", default=None, help="(b): a JSON file {row, shape, statements, chunk, parallel, extrap_s, tol, min_chunks}")
     ap.add_argument("--deployments", default=None, help="(a): a file of `<slug>=<evidence dir>` lines, the first selftested")
+    ap.add_argument("--a-ahead", type=int, default=2, help="(a): deployments on disk at once (staging, or staged and not proved)")
+    ap.add_argument("--a-gen", type=int, default=1, help="(a): a new generation of ids (`-g<N>`), every deployment staged afresh")
     a = ap.parse_args()
     chunk_from = {r: int(n) for r, _, n in (x.rpartition("=") for x in a.chunk_from)}
     while True:
@@ -282,7 +284,7 @@ def main() -> int:
             todo += t
         if a.deployments:
             deps = [tuple(ln.split("=", 1)) for ln in Path(a.deployments).read_text().splitlines() if "=" in ln]
-            t, out["a"] = sampled(deps, d, w, ahead=2)
+            t, out["a"] = sampled(deps, d, w, ahead=a.a_ahead, gen=a.a_gen)
             todo += t
         # (a) and (b) first; the shape sweep only fills in, one file a tick, while they have nothing to write
         if todo and a.cmd != "status" and clear_to_write():
