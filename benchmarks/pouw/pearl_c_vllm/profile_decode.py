@@ -5,7 +5,8 @@ tokens), split into first use against steady state, prefill against decode, and 
   python benchmarks/pouw/pearl_c_vllm/profile_decode.py --nsys-kernels KERN_SUM.csv --out RUN_DIR/profile.json   # after nsys
 
 ``window.sh`` with ``MODE=profile`` runs the first under ``nsys profile --capture-range=cudaProfilerApi`` in a normal lease,
-then ``nsys stats`` and the second.  One engine, the arm (BF16 with the Pearl-C wrapper, `e2e.install`), in this process.
+then ``nsys stats`` and the second.  One engine, the arm (BF16 with the Pearl-C wrapper, `e2e.install`), in this process, gated first (`e2e.gate`, the
+screen's check included, untimed).
 The passes, in order:
 1. ``bf16-warm``: stock BF16, so vLLM's own first use is paid before Pearl-C's;
 2. ``pearlc-first``: the device run's first use (its shapes, pipelines, the GEMMs' shared-memory probes and tensor maps);
@@ -152,8 +153,9 @@ def instrument(prof: Profile):
     the function that puts them back."""
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     run_cls = PPD.PearlCDeviceRun
-    saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "call_keys", "_put", "screen", "excluded")]
+    saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
     saved += [(run_cls, n, vars(run_cls)[n]) for n in ("_shape", "_pipe", "end", "gemm")]
+    saved += [(PPD._Keys, "__call__", vars(PPD._Keys)["__call__"]), (PPD._Uploads, "put", vars(PPD._Uploads)["put"])]
     steps = PPD._steps
 
     def named_steps(pipe, names):
@@ -161,8 +163,10 @@ def instrument(prof: Profile):
         return [prof.step(name, f) for name, f in zip([x for x in names if x in present], steps(pipe, names), strict=True)]
 
     PPD._steps = named_steps
-    for name in ("call_keys", "_put", "screen", "excluded"):
-        setattr(PPD, name, prof.section(name, getattr(PPD, name)))
+    PPD.screen_into = prof.section("screen", PPD.screen_into)
+    PPD.excluded = prof.section("excluded", PPD.excluded)
+    PPD._Keys.__call__ = prof.section("call_keys", PPD._Keys.__call__)
+    PPD._Uploads.put = prof.section("_put", PPD._Uploads.put)
     run_cls._shape = prof.section("shapes (first use: buffers)", run_cls._shape)
     run_cls._pipe = prof.section("pipelines (first use: build, tensor maps)", run_cls._pipe)
     end = run_cls.end
@@ -195,8 +199,9 @@ def run(args) -> dict:
     state = {"active": False}
     model = find_model(llm)
     t0 = time.perf_counter()
-    run_, _ = e2e.install(model, args, os.urandom(32), state)
+    run_, weights = e2e.install(model, args, os.urandom(32), state)
     install_s = time.perf_counter() - t0
+    gate = e2e.gate(run_, weights)
 
     def hook(_module, a, kw):
         ids = kw.get("input_ids") if kw.get("input_ids") is not None else (a[0] if a else None)
@@ -238,6 +243,7 @@ def run(args) -> dict:
     buf = io.StringIO()
     pstats.Stats(cprof, stream=buf).sort_stats("tottime").print_stats(30)
     return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": os.environ.get("RESEARCH_RUN_ID"), "install_s": install_s,
+            "host": run_.details["host"], "gate_ok": all(g["ok"] for g in gate), "gate": gate,
             "prompts": len(chat), "max_tokens": 48, "pass_wall_s": walls, "passes": prof.report(),
             "cprofile_top_tottime": buf.getvalue().splitlines()[:60]}
 
