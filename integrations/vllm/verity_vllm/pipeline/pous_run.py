@@ -1,8 +1,9 @@
 """`verity-vllm pous`: POUS end to end on one GPU, each role in its own process.
 
-    verity-vllm pous e2e --out DIR --case QWEN05 --build-dir DIR [--audits N] [--drop-fraction F] [--result FILE]
+    verity-vllm pous e2e --out DIR --case QWEN05 --build-dir DIR [--codec NAME] [--audits N] [--drop-fraction F] [--result FILE]
 
-runs the reference lifecycle (`protocols/pous/PROTOCOL.md`):
+runs the reference lifecycle (`protocols/pous/PROTOCOL.md`) of the reference codec ``--codec`` (`engine/pous/twins.reference`:
+``p3/v1``, the default, ``dense-chain/v1`` or ``band-chain/d12/v1``), at the geometry it is served at, in every role:
 
 1. `commit` (server): `verity_pous.setup.commit` of `W`, the checkpoint's data section (`engine/pous/layout.py`);
 2. `vk` (verifier): `setup.draw_salt` from its own secret after the commitment, then its own reference encoding of `W`
@@ -36,6 +37,9 @@ from verity_vllm.config import option
 PROMPTS = ["The capital of France is", "def fibonacci(n):", "Proof of useful space means", "1, 1, 2, 3, 5, 8,"]
 GPU_MEMORY_UTILIZATION = 0.6
 LAYER0 = "model.layers.0."
+MAX_BATCHED_TOKENS = 16384      # pous-bench's scheduler budget: a 4 x 2048-token prefill is one forward
+DECODE_PROMPT = 128             # pous-bench's decode prompt
+PLAIN_DECODE_TOKENS = 64        # the plaintext decode steps averaged, as pous-bench
 
 
 def _write(path: Path, doc: Any) -> None:
@@ -44,6 +48,13 @@ def _write(path: Path, doc: Any) -> None:
 
 def _read(path: Path) -> Any:
     return json.loads(path.read_text())
+
+
+def reference_codec(name: str):
+    """The reference codec ``name`` and the geometry it is served at (`engine/pous/twins.reference`, no torch)."""
+    from verity_vllm.engine.pous import twins
+
+    return twins.reference(name)
 
 
 def checkpoint_files(case: str) -> list[str]:
@@ -87,57 +98,105 @@ def cmd_commit(a) -> None:
 
     from verity_vllm.engine.pous import layout
 
-    ck = layout.read(checkpoint_files(a.case))
+    ref, base = reference_codec(a.codec)
+    ck = layout.read(checkpoint_files(a.case), base)
     commitment = setup.commit(ck.params, ck.read_w())
-    _write(Path(a.out) / "commit.json", {"commitment": commitment.hex(), "params": ck.params.manifest(), "checkpoint": [x.path for x in ck.sections]})
+    _write(Path(a.out) / "commit.json", {"commitment": commitment.hex(), "codec": ref.name, "params": ck.params.manifest(),
+                                         "checkpoint": [x.path for x in ck.sections]})
 
 
 def cmd_vk(a) -> None:
     from verity_pous import setup
-    from verity_pous.primitives import reference
 
-    from verity_vllm.engine.pous import codec, layout
+    from verity_vllm.engine.pous import layout, twins
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
-    commitment = bytes.fromhex(_read(out / "commit.json")["commitment"])
+    committed = _read(out / "commit.json")
+    commitment = bytes.fromhex(committed["commitment"])
+    ref_codec, base = reference_codec(a.codec)
+    if committed.get("codec", ref_codec.name) != ref_codec.name:
+        raise SystemExit(f"the server committed under {committed['codec']}, not {ref_codec.name}")
     salt = setup.draw_salt(os.urandom(32), commitment)
-    ck = layout.read(checkpoint_files(a.case))
+    ck = layout.read(checkpoint_files(a.case), base)
     w = ck.read_w()
     if setup.commit(ck.params, w) != commitment:
         raise SystemExit("W does not match the server's commitment")
     _write(out / "salt.json", {"salt": salt.hex()})
     t0 = time.perf_counter()
-    segments = pv.encode(ck.params, w, salt, a.workers, codec.REFERENCE)
-    vk = setup.verifier_key(ck.params, reference(ck.params), w, commitment, salt, encoded=segments, codec=codec.REFERENCE)
+    segments = pv.encode(ck.params, w, salt, a.workers, ref_codec)
+    vk = setup.verifier_key(ck.params, twins.primitives(ref_codec, ck.params), w, commitment, salt, encoded=segments, codec=ref_codec)
     enc_s = time.perf_counter() - t0
     (out / "vk-leaves.bin").write_bytes(b"".join(vk.leaves))
     t1 = time.perf_counter()
     names = sorted(n for n in ck.dtypes if n.startswith(LAYER0))
     ref = {n: hashlib.sha256(b).hexdigest()
-           for n, b in pv.reference_decode(ck.layout, segments, salt, names, a.workers, codec.REFERENCE).items()}
+           for n, b in pv.reference_decode(ck.layout, segments, salt, names, a.workers, ref_codec).items()}
     plain = {n: hashlib.sha256(ck.layout.unpack(w, n)).hexdigest() for n in names}
-    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "codec": codec.REFERENCE.name,
+    _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "codec": ref_codec.name,
                              "encode_s": enc_s,
                              "workers": a.workers, "reference_decode_s": time.perf_counter() - t1,
                              "reference_decode_layer0": ref, "reference_decode_matches_w": ref == plain})
 
 
 def load_vk(out: Path):
-    from verity_pous.params import Params
     from verity_pous.verifier import VerifierKey
 
     doc = _read(out / "vk.json")
+    _, base = reference_codec(doc["codec"])
+    params = base.with_segments(doc["params"]["segments"])
+    if params.manifest() != doc["params"]:
+        raise ValueError(f"vk.json's params {doc['params']} are not {doc['codec']}'s served geometry {params.manifest()}")
     raw = (out / "vk-leaves.bin").read_bytes()
-    vk = VerifierKey.from_leaves(Params(**doc["params"]), bytes.fromhex(doc["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
+    vk = VerifierKey.from_leaves(params, bytes.fromhex(doc["salt"]), [raw[i:i + 32] for i in range(0, len(raw), 32)])
     if vk.root.hex() != doc["root"]:
         raise ValueError("vk-leaves.bin does not have the root vk.json records")
     return doc, vk
 
 
+def engine_args(a) -> dict[str, Any] | None:
+    """The scheduler budget of the timed configurations, the same for the plain and the served engine."""
+    return {"max_num_batched_tokens": MAX_BATCHED_TOKENS} if a.prefill else None
+
+
+def throughput(engine, a, info) -> list[dict[str, Any]]:
+    """pous-bench's prefill configurations (``--prefill``) and decode at batch 1 on this role's engine (`pipeline/pous_timing.py`):
+    prefill tokens/s over the time to every first token, decode tokens/s over the steps after it.  A POUS forward pays the
+    whole model's decode, so the served engine times ``--decode-tokens`` steps and the plain one `PLAIN_DECODE_TOKENS`."""
+    from verity_vllm.pipeline import pous_timing as pb
+
+    rows = []
+    for item in filter(None, a.prefill.split(",")):
+        length, batch = (int(x) for x in item.split("x"))
+        rows.append(pb.prefill(engine, length, batch, info))
+    if a.decode_tokens:
+        rows.append(pb.decode(engine, 1, DECODE_PROMPT, a.decode_tokens if info() is not None else PLAIN_DECODE_TOKENS, info))
+    return rows
+
+
+def slowdowns(plain: list[dict[str, Any]], pous: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Plain tokens/s over POUS tokens/s, per configuration both roles timed."""
+    key = lambda r: f"prefill {r['length']}x{r['batch']}" if r["kind"] == "prefill" else f"decode batch {r['batch']}"  # noqa: E731
+    served = {key(r): r for r in pous}
+    return {key(p): {"plain_tokens_per_s": p["tokens_per_s"], "pous_tokens_per_s": served[key(p)]["tokens_per_s"],
+                     "slowdown": p["tokens_per_s"] / served[key(p)]["tokens_per_s"],
+                     "pous_decode_s": served[key(p)].get("decode_s"), "pous_decodes": served[key(p)].get("decodes")}
+            for p in plain if key(p) in served}
+
+
 def cmd_plain(a) -> None:
-    engine = build(a.case, None)
-    _write(Path(a.out) / "plain.json", {"outputs": generate(engine, a.max_tokens)})
+    engine = build(a.case, None, engine_args=engine_args(a))
+    doc = {"outputs": generate(engine, a.max_tokens)}
+    if a.prefill or a.decode_tokens:
+        doc["throughput"] = throughput(engine, a, lambda: None)
+    _write(Path(a.out) / "plain.json", doc)
+
+
+def serve_spec(a, out: Path) -> dict[str, Any]:
+    """The `engine/pous/quant.py` spec of the served store: the codec, the checkpoint, the verifier's salt, the drop."""
+    return {"codec": reference_codec(a.codec)[0].name, "safetensors": checkpoint_files(a.case), "build_dir": a.build_dir,
+            "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction, "drop_source": os.urandom(32).hex(),
+            "layers_per_decode": a.layers_per_decode, **(json.loads(a.kernels) if a.kernels else {})}
 
 
 def cmd_serve(a) -> None:
@@ -147,16 +206,17 @@ def cmd_serve(a) -> None:
     if reserved:
         os.sched_setaffinity(0, set(os.sched_getaffinity(0)) - reserved)
     out = Path(a.out)
-    spec = {"safetensors": checkpoint_files(a.case), "build_dir": a.build_dir, "salt": _read(out / "salt.json")["salt"], "drop_fraction": a.drop_fraction,
-            "drop_source": os.urandom(32).hex(), "layers_per_decode": a.layers_per_decode}
+    spec = serve_spec(a, out)
     spec_path = out / f"pous-{a.tag}.json"
     _write(spec_path, spec)
     t0 = time.perf_counter()
-    engine = build(a.case, spec_path)
+    engine = build(a.case, spec_path, engine_args=engine_args(a))
     llm = engine.llm
     doc: dict[str, Any] = {"build_s": time.perf_counter() - t0, "spec": spec, "info_after_load": llm.collective_rpc("pous_info")[0]}
     if not a.drop_fraction:
         doc["outputs"] = generate(engine, a.max_tokens)
+        if a.prefill or a.decode_tokens:
+            doc["throughput"] = throughput(engine, a, lambda: llm.collective_rpc("pous_info")[0])
     raw = llm.collective_rpc("pous_leaves")[0]
     (out / f"leaves-{a.tag}.bin").write_bytes(raw)
     doc["root"] = MerkleTree([raw[i:i + 32] for i in range(0, len(raw), 32)]).root.hex()
@@ -206,7 +266,8 @@ def _step(out: Path, name: str, args: list[str]) -> None:
 
 
 def _base(a) -> list[str]:
-    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir]
+    return ["--out", a.out, "--case", a.case, "--build-dir", a.build_dir, "--codec", a.codec, "--prefill", a.prefill,
+            "--decode-tokens", str(a.decode_tokens), "--kernels", a.kernels]
 
 
 def _audit_round(out: Path, tag: str, extra: list[str], a) -> dict[str, Any]:
@@ -268,6 +329,7 @@ def summarize(out: Path, honest: dict, negative: dict, a) -> dict[str, Any]:
         "timing": {"plain_generate_s": plain[0]["wall_s"], "pous_generate_s": (hs.get("outputs") or [{}])[0].get("wall_s"),
                    "max_tokens": a.max_tokens, "decode": {k: (hs.get("info_end") or {}).get(k) for k in ("decodes", "decode_s", "decoded_bytes")},
                    "serving_loops_during_audit_s": hs.get("serving_loops_during_audit_s")},
+        "throughput": slowdowns(_read(out / "plain.json").get("throughput") or [], hs.get("throughput") or []),
         "rc": {"honest": [honest["serve_rc"], honest["verify_rc"]], "dropped": [negative["serve_rc"], negative["verify_rc"]]},
     }
     rec = hv.get("audit_of_record") or {}
@@ -294,6 +356,10 @@ def research_result(result: dict[str, Any], a, passed: bool) -> dict[str, Any]:
             ("plain_generate", result["timing"]["plain_generate_s"], "s"), ("pous_generate", result["timing"]["pous_generate_s"], "s"),
             ("honest_audits_accepted", result["honest"]["audits_accepted"], "count"),
             ("negative_audits_accepted", result["negative"]["audits_accepted"], "count")]
+    for config, s in (result.get("throughput") or {}).items():
+        tag = config.replace(" ", "_")
+        rows += [(f"slowdown_{tag}", s["slowdown"], "x"), (f"plain_{tag}", s["plain_tokens_per_s"], "token/s"),
+                 (f"pous_{tag}", s["pous_tokens_per_s"], "token/s")]
     failed = sorted(k for k, v in result["verdicts"].items() if not v)
     return {"schema": "research/result/v0.1", "run_id": a.run_id,
             "workload_fingerprint": {"case": a.case, "codec": result["codec"], "salt": result["setup"]["salt"],
@@ -329,6 +395,14 @@ class _Common:
     out: str = option("--out", required=True, help="the run directory every role reads and writes")
     case: str = option("--case", required=True, help="the checkpoint role in manifests/checkpoints.json")
     build_dir: str = option("--build-dir", required=True, help="parent directory of the pous_native JIT build")
+    prefill: str = option("--prefill", default="",
+                          help="prefill configurations the plain and honest serve roles time, length x batch, comma separated (e.g. 2048x4)")
+    decode_tokens: int = option("--decode-tokens", type=int, default=0,
+                                help="decode steps the honest serve role times at batch 1 (plain: 64); 0 times no decode")
+    kernels: str = option("--kernels", default="",
+                          help="GPU kernel flags merged into the serve spec (engine/pous/quant.py's keys), as JSON; default the kernels' defaults")
+    codec: str = option("--codec", default="p3/v1",
+                        help="the reference codec served and audited (engine/pous/twins.reference): p3/v1, dense-chain/v1, band-chain/d12/v1")
     tag: str = option("--tag", default="honest", help="the server round: honest or dropped")
     max_tokens: int = option("--max-tokens", type=int, default=6, help="tokens per prompt of the compared generation")
     load_tokens: int = option("--load-tokens", type=int, default=2, help="tokens per prompt of the serving loop during the audit")
