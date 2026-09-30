@@ -9,11 +9,16 @@ from verity_pouw.serving import (
     HASH_FORMATS,
     SCHEDULES,
     SERIAL,
+    GateRecord,
+    KernelVariant,
     PassCommitment,
     Schedule,
     SchemeId,
+    ShapeRule,
+    StepIO,
     hash_format,
     schedule_refusals,
+    variant_refusals,
 )
 
 #: every Pearl-C name registered or recorded on the open PRs (#449, #540, #548, #549, #555) and the ones their panel lines name
@@ -94,6 +99,55 @@ def test_a_schedule_is_refused_for_each_thing_wrong_with_it():
     assert any("gemm can't leave the main lane" in r for r in got)
     assert any("needs ring >= 2" in r for r in got)
     assert any("main_priority 'high'" in r for r in got)
+
+
+LLAMA_8B = ((6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336))
+
+
+def variant(**kw):
+    base = dict(family="pearl-c", device="sm120", schemes=frozenset({"pearl-c-sm120-v1-h1"}),
+                schedules=frozenset({"serial", "deferred"}), shapes=ShapeRule(k_multiple=1024, n_multiple=128, m_align=16),
+                source_sha256="3f0a91c2d4e5" + "0" * 52, binary_sha256="ab" * 32, loader="cubin-ctypes", prices="cast-8.72",
+                steps={"hash_leaf": StepIO("tile_hash", frozenset({"digests", "k_leaf"}), frozenset({"leaves"}))})
+    return KernelVariant(**{**base, **kw})
+
+
+def gate(v, **kw):
+    base = dict(variant=v.id, run="r20260930-124211-a304", gates="harness@f5e584af", shapes=LLAMA_8B, exact=True,
+                poisoned_accepted=True, controls_rejected=True, schedules_equal=True, sass_ok=True, toolkit="nvcc 12.9 -O3",
+                prices="cast-8.72")
+    return GateRecord(**{**base, **kw})
+
+
+def test_a_variant_is_named_by_its_sources_digest():
+    v = variant()
+    assert v.id == "pearl-c-sm120/3f0a91c2d4e5" and v == variant(steps={}) and hash(v) == hash(variant(steps={}))
+    assert variant(source_sha256="9b1e07aa41c0" + "0" * 52).id != v.id
+
+
+def test_a_gated_variant_serves_its_scheme_and_schedule_at_every_gated_shape():
+    v = variant()
+    assert variant_refusals(v, "pearl-c-sm120-v1-h1", "deferred", LLAMA_8B, gate(v)) == []
+
+
+def test_a_variant_is_refused_for_each_thing_it_lacks():
+    v = variant()
+    got = variant_refusals(v, "pearl-c-sm120-v1-h2", "h3o", [(18944, 3584)], None)
+    assert got == ["pearl-c-sm120/3f0a91c2d4e5 computes pearl-c-sm120-v1-h1, not pearl-c-sm120-v1-h2",
+                   "pearl-c-sm120/3f0a91c2d4e5 runs deferred, serial, not h3o",
+                   "pearl-c-sm120/3f0a91c2d4e5: (n, k) = (18944, 3584): the kernel takes k a multiple of 1024 in [1, 16777216] "
+                   "and n a multiple of 128",
+                   "pearl-c-sm120/3f0a91c2d4e5 has no device gate"]
+
+
+def test_a_gate_admits_only_its_own_variant_at_its_own_shapes_and_prices():
+    v, other = variant(), variant(source_sha256="9b1e07aa41c0" + "0" * 52)
+    got = variant_refusals(v, "pearl-c-sm120-v1-h1", "serial", [*LLAMA_8B, (8192, 8192)],
+                           gate(other, controls_rejected=False, prices="cast-32.06"))
+    assert got == [f"{v.id}: the gate is {other.id}'s",
+                   f"{v.id}: its gate (r20260930-124211-a304) failed controls_rejected",
+                   f"{v.id}: its gate didn't cover [(8192, 8192)]",
+                   f"{v.id}: gated on priced path cast-32.06, declares cast-8.72"]
 
 
 def test_a_pass_commitment_is_json_with_hex_bytes():
