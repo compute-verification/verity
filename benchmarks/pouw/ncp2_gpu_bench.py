@@ -200,10 +200,53 @@ def gate_async(torch) -> list[dict]:
 
 #: the fused kernel's timed shapes: decode at 16 and 32 rows, and prefill
 FUSED_ROWS = (16, 32, 256, 2048)
-#: its modes: no hashing at all (the control), the committed word leaves, the low-byte variant (its γ is unproved: timed only,
-#: never a result)
-FUSED_MODES = {"nohash": PD.TIME_TILES, "word": PD.HASH | PD.TIME_TILES | PD.CACHE_Y,
-               "lowbyte": PD.HASH | PD.TIME_TILES | PD.CACHE_Y | PD.LOWBYTE}
+#: its modes: no hashing at all (the control) and the committed word leaves. The low-byte variant (`PD.LOWBYTE`) is left
+#: out: its γ is unproved, and it can't be gated at the timed shapes (`gate_timed`).
+FUSED_MODES = {"nohash": PD.TIME_TILES, "word": PD.HASH | PD.TIME_TILES | PD.CACHE_Y}
+SALT = bytes(range(32))
+M32 = 0xFFFFFFFF
+
+
+def host_call(a, s, b, t, bias, forward: int, position: int, weight: int, rowids, colids, salt: bytes = SALT):
+    """A committer's device inputs (torch tensors, as `FusedCommitter` takes them) as the host call `pouw_native` commits."""
+    h = lambda x, dt: np.ascontiguousarray(x.cpu().numpy()).view(dt)  # noqa: E731
+    return PD.PC.Call(h(a, np.int8), h(s, np.uint32), PD.PC.Quantized(h(b, np.int8), h(t, np.uint32)), h(bias, np.uint16), salt,
+                      forward=forward, layer=position >> 32, site=position & M32, weight=weight, rowids=h(rowids, np.uint32),
+                      colids=h(colids, np.uint32))
+
+
+#: the independent build's commitments by (m, k, n, weight), made once and reused across `tile_variants`' builds
+_REFERENCES: dict = {}
+
+
+def reference(call) -> dict:
+    """What the correctness-first device build (`ncp2_kernels.cu`, which shares no code with `ncp2_tiles.cuh` or
+    `ncp2_fast.cuh`) commits for ``call``: its root, a digest of its leaves, its weight side's Y leaves and y."""
+    key = (call.shape.m, call.shape.k, call.shape.n, call.weight)
+    if key not in _REFERENCES:
+        rec = PD.commit_call(0, "ncp-v2", call, on="device")
+        _REFERENCES[key] = {"root": rec.root, "leaves": hashlib.sha256(rec.leaves).digest(), "yleaves": rec.side.leaves, "y": rec.y}
+    return _REFERENCES[key]
+
+
+def gate_timed(call, flags: int, spot: int = 3) -> dict:
+    """The gate at a timed shape and flag set (the red team's W2): the serving kernel committing ``call`` with the timed
+    ``flags`` against the independent device build (`reference`), root, every leaf, the weight side's Y leaves and y; and
+    ``spot`` tiles and dequantization units, drawn from the call's own root, against `pouw_native`. Stops the run at the first
+    difference."""
+    got = PD.commit_call(0, "ncp-v2", call, on="fused", flags=flags)
+    ref, sh = reference(call), call.shape
+    checks = {"root": got.root == ref["root"], "leaves": hashlib.sha256(got.leaves).digest() == ref["leaves"],
+              "yleaves": got.side.leaves == ref["yleaves"], "y": bool(np.array_equal(got.y, ref["y"]))}
+    nat = PN.Native(call, "ncp-v2")
+    draw = np.random.default_rng(int.from_bytes(got.root[:8], "little"))
+    tiles, deq = nat.base["tile"], nat.base["dequant"]
+    units = [int(u) for u in draw.integers(tiles, deq, spot)] + [int(u) for u in draw.integers(deq, nat.population, spot)]
+    checks["native"] = all(PD.PC.unit_leaf(nat.outputs(u)) == got.leaf(u) for u in units)
+    row = {"m": sh.m, "k": sh.k, "n": sh.n, "flags": flags, "units_checked": units} | checks
+    if not all(checks.values()):
+        raise SystemExit(f"timed gate {sh} flags {flags}: {checks}")
+    return row
 
 
 def fused_timings(torch, reps: int, save=lambda part: None, modes: dict | None = None, rows: tuple = FUSED_ROWS) -> dict:
@@ -222,16 +265,19 @@ def fused_timings(torch, reps: int, save=lambda part: None, modes: dict | None =
             bias = torch.zeros(n, dtype=torch.int16, device="cuda")
             rowids = torch.arange(m, dtype=torch.int32, device="cuda")
             colids = torch.arange(n, dtype=torch.int32, device="cuda")
-            ys = {}
+            weight = (m << 40) | (k << 20) | n                   # a weight id of its own: no Y-leaf cache entry is shared
+            ys, row["gates"] = {}, []
             for mode, flags in modes.items():
-                c = PD.FusedCommitter("ncp-v2", bytes(range(32)), flags)
-                ys[mode] = c(a, s, b, t, bias, 1, 2, n, rowids, colids)
+                if flags & PD.HASH:
+                    row["gates"].append(gate_timed(host_call(a, s, b, t, bias, 1, 2, weight, rowids, colids), flags))
+                c = PD.FusedCommitter("ncp-v2", SALT, flags)
+                ys[mode] = c(a, s, b, t, bias, 1, 2, weight, rowids, colids)
                 torch.cuda.synchronize()
                 c.tile_ms()
                 e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
                 e0.record()
                 for i in range(reps):
-                    c(a, s, b, t, bias, 2 + i, 2, n, rowids, colids)
+                    c(a, s, b, t, bias, 2 + i, 2, weight, rowids, colids)
                 e1.record()
                 torch.cuda.synchronize()
                 tile_ms, calls = c.tile_ms()
@@ -241,7 +287,6 @@ def fused_timings(torch, reps: int, save=lambda part: None, modes: dict | None =
             acc = call_accounting(m, k, n)
             count, length = acc["messages"]["tile words"]
             row["tile_word_rate_bytes_per_s"] = count * absorbed("sha256", length) / (row["word_tile_ms"] * 1e-3)
-            row["tile_lowbyte_bytes"] = count * (length - UNIT_TAG) // 4
             out["calls"].append(row)
             save(out)
             del a, b
@@ -262,8 +307,9 @@ VARIANT_ROWS = (32, 2048)
 def tile_variants(torch, spec: str, reps: int, save=lambda part: None) -> list[dict]:
     """Change 3's builds of the serving kernel, one per ';'-separated part of ``spec`` (``rows=8,unroll=2,sha=1``; a macro left
     out keeps the header's default): each built with its macros (`TILE_MACROS`, part of the build's key) and nvcc's resource
-    usage, gated against `pouw_native` on every gate call (`gate_fused`), and only if it passes timed: the committed word
-    leaves' device time per call and the tile words' achieved rate at `VARIANT_ROWS` rows."""
+    usage, gated against `pouw_native` on every gate call (`gate_fused`) and, before each timed shape, on its root and leaves
+    at the timed flags (`gate_timed`), and only if it passes timed: the committed word leaves' device time per call and the
+    tile words' achieved rate at `VARIANT_ROWS` rows. A variant that fails a timed gate stops the run."""
     base, out = PD.NVCC_FLAGS, []
     try:
         for part in spec.split(";"):
@@ -292,28 +338,37 @@ ASYNC_ROWS, ASYNC_LAYERS = 32, 24
 
 def async_timings(torch, reps: int) -> dict:
     """The hashing cut's change 1 on fixed shapes, with no model: one decode step's calls (`ASYNC_LAYERS` layers of QWEN05's
-    linears at `ASYNC_ROWS` rows, each layer's weights their own), committed one after another on one stream by
-    `FusedCommitter` (whose served y is its committed y), against served from the exact product and committed on side streams
-    by `AsyncCommitter`, drained before the clock stops; and the exact serve alone. Wall time per step over ``reps`` steps."""
-    m, salt = ASYNC_ROWS, bytes(range(32))
-    shapes = []
-    for k, n in QWEN05:
-        g = torch.Generator(device="cuda").manual_seed(3 * k + n)
-        shapes.append((torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g),
-                       torch.full((m,), 1e-3, dtype=torch.float32, device="cuda").view(torch.int32),
-                       torch.randint(-64, 64, (n, k), dtype=torch.int8, device="cuda", generator=g),
-                       torch.full((n,), 1e-2, dtype=torch.float32, device="cuda").view(torch.int32),
-                       torch.zeros(n, dtype=torch.int16, device="cuda"), torch.arange(n, dtype=torch.int32, device="cuda")))
+    linears at `ASYNC_ROWS` rows, every layer's weights distinct, 307 MB in all, so none stays in the 72 MB L2 between its
+    calls), committed one after another on one stream by `FusedCommitter` (whose served y is its committed y), against served
+    from the exact product and committed on side streams by `AsyncCommitter`, drained before the clock stops; and the exact
+    serve alone. The three arms are timed the same way: wall time over a whole step, the same calls in the same order.
+    Before any timing, the first step is gated: every call's root, from both committers, against the independent device
+    build (`reference`). Wall time per step over ``reps`` steps."""
+    m, salt = ASYNC_ROWS, SALT
+    calls = []                                              # per layer and linear: (a, s, b, t, bias, colids)
+    for layer in range(ASYNC_LAYERS):
+        for k, n in QWEN05:
+            g = torch.Generator(device="cuda").manual_seed(4096 * layer + 3 * k + n)
+            calls.append((torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g),
+                          torch.full((m,), 1e-3, dtype=torch.float32, device="cuda").view(torch.int32),
+                          torch.randint(-64, 64, (n, k), dtype=torch.int8, device="cuda", generator=g),
+                          torch.full((n,), 1e-2, dtype=torch.float32, device="cuda").view(torch.int32),
+                          torch.zeros(n, dtype=torch.int16, device="cuda"), torch.arange(n, dtype=torch.int32, device="cuda")))
     rowids = torch.arange(m, dtype=torch.int32, device="cuda")
     sync = PD.FusedCommitter("ncp-v2", salt, PD.HASH | PD.CACHE_Y)
     exact = PD.AsyncCommitter("ncp-v2", salt, PD.HASH | PD.CACHE_Y)
     out: dict = {"rows": m, "calls_per_step": ASYNC_LAYERS * len(QWEN05), "sync_step_s": [], "async_step_s": [], "serve_step_s": [],
                  "mismatched_words": 0}
 
-    def step(commit, forward: int) -> None:
-        for layer in range(ASYNC_LAYERS):
-            for j, (a, s, b, t, bias, colids) in enumerate(shapes):
-                commit(a, s, b, t, bias, forward, (layer << 32) | j, len(QWEN05) * layer + j, rowids, colids)
+    def place(i: int) -> tuple[int, int]:                  # call i's position and weight id
+        return ((i // len(QWEN05)) << 32) | (i % len(QWEN05)), i
+
+    def step(commit, forward: int, roots: list | None = None) -> None:
+        for i, (a, s, b, t, bias, colids) in enumerate(calls):
+            root = None if roots is None else np.zeros(32, np.uint8)
+            commit(a, s, b, t, bias, forward, *place(i), rowids, colids, **({} if root is None else {"root": root}))
+            if roots is not None:
+                roots.append(root.tobytes())
 
     def drained(forward: int) -> None:
         step(exact, forward)
@@ -326,13 +381,19 @@ def async_timings(torch, reps: int) -> dict:
         torch.cuda.synchronize()
         return time.perf_counter() - t0
 
-    step(sync, 0)                                           # warm: every weight's Y leaves cached, every workspace grown
-    drained(0)
+    sync_roots: list = []
+    step(sync, 0, sync_roots)                               # the gate step, which also warms: Y leaves cached, workspaces grown
+    step(exact, 0)
+    first = exact.drain()
+    out["mismatched_words"] += first["mismatched_words"]
+    want = [reference(host_call(a, s, b, t, bias, 0, *place(i), rowids, colids))["root"] for i, (a, s, b, t, bias, colids) in enumerate(calls)]
+    out["gate"] = {"calls": len(calls), "sync_roots_equal": sync_roots == want, "async_roots_equal": first["roots"] == want}
+    if not (out["gate"]["sync_roots_equal"] and out["gate"]["async_roots_equal"]):
+        raise SystemExit(f"decode step gate: {out['gate']}")
     for i in range(1, reps + 1):
         out["sync_step_s"].append(wall(lambda: step(sync, i)))
         out["async_step_s"].append(wall(lambda: drained(i)))
-        out["serve_step_s"].append(wall(lambda: [exact.serve(a, s, b, t, bias) for _ in range(ASYNC_LAYERS)
-                                                 for a, s, b, t, bias, _c in shapes]))
+        out["serve_step_s"].append(wall(lambda: [exact.serve(a, s, b, t, bias) for a, s, b, t, bias, _c in calls]))
     exact.close()
     for key in ("sync_step_s", "async_step_s", "serve_step_s"):
         out[key[:-2] + "_mean_s"] = sum(out[key]) / max(1, len(out[key]))
