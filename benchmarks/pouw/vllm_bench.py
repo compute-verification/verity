@@ -11,7 +11,9 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
   NCP's useful workload without the protocol;
 - ``ncp``: the same int7 operands through NCP: X = [A + E₁ | A + E₂ | −(A + E₃)], Y = [B + F₁ ; B + F₂ ; B + F₃] with the
   word-granular production P, one (m, 3k, n) s8 GEMM that reads every accumulator once per 16-deep step (the kernel gated
-  by ``gemm_bench.py``).  X·Yᵀ = A·Bᵀ exactly, so its tokens must equal ``w7a7``'s;
+  by ``gemm_bench.py``).  X·Yᵀ = A·Bᵀ exactly, so its tokens must equal ``w7a7``'s.  Each call forms Y from the int7
+  weight and the epoch's F₁, re-drawn from its layer's seed, so no weight-derived copy outlives the call (no weight
+  copies, Daniel 28 Sep 20:31Z) and the timed mode pays the forming;
 - ``pearl``: Pearl's noisy quantization to e4m3 (rank-32 noise lines of norm 256, δ = 1), the windowed e4m3 GEMM of the
   ``ada`` device, and the peel back to BF16.
 
@@ -86,13 +88,9 @@ def install(model, mode: str) -> dict:
                 if k not in perms:
                     from verity_pouw.schemes.ncp import word_perm
                     perms[k] = torch.tensor(word_perm(k)[0], device="cuda", dtype=torch.long)
-                pi = perms[k]
-                F1 = torch.randint(-31, 33, (n, k), dtype=torch.int8, device="cuda", generator=gen)
-                F2 = torch.empty_like(F1)
-                F2[:, pi] = -F1
-                st["Y"] = torch.cat([Wq + F1, Wq + F2, Wq + F1 + F2], dim=1).view(torch.uint8).contiguous()
-                st["pi"] = pi
-                del F1, F2
+                st["Wq"] = Wq.contiguous()
+                st["pi"] = perms[k]
+                st["seed"] = int(torch.randint(0, 1 << 62, (1,), device="cuda", generator=gen).item())
             layer.weight.data = torch.empty(0, dtype=W.dtype, device=W.device)
         elif mode == "pearl":
             Wf = W.float()
@@ -135,7 +133,15 @@ def install(model, mode: str) -> dict:
                 E1 = torch.randint(-31, 33, (mp, k), dtype=torch.int8, device=Aq.device, generator=gen)
                 E2 = E1[:, st["pi"]]
                 X = torch.cat([Aq + E1, Aq + E2, -(Aq + E1 + E2)], dim=1).view(torch.uint8).contiguous()
-                C, _, _ = ext.ncp_gemm(X, st["Y"], 1, cfg)
+                F1 = torch.randint(-31, 33, (n, k), dtype=torch.int8, device=Aq.device,
+                                   generator=torch.Generator(device=Aq.device).manual_seed(st["seed"]))
+                F2 = torch.empty_like(F1)
+                F2[:, st["pi"]] = -F1
+                Wq = st["Wq"]
+                Y = torch.cat([Wq + F1, Wq + F2, Wq + F1 + F2], dim=1).view(torch.uint8).contiguous()
+                del F1, F2
+                C, _, _ = ext.ncp_gemm(X, Y, 1, cfg)
+                del Y
                 stats["transcript_bytes"] += 4 * m * n * (3 * k // 16)
                 y = (C[:m].float() * sx * st["sw"]).to(x.dtype)
             else:
