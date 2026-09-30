@@ -25,9 +25,9 @@ KNOWN_FAILURES = {
         "CPU torch: `Tried to instantiate dummy base class _cuda_isCurrentStreamCapturing` (owner vllm-epoch-prep)",
     "tests/pipeline/test_source_identity.py::test_negative_requested_sha_mismatch_fails_by_name":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[integration]":
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_verity_tree_and_sha[integration]":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
-    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_veritor_repo_and_sha[repo]":
+    "tests/pipeline/test_source_identity.py::test_precheck_passes_with_matching_verity_tree_and_sha[repo]":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",
     "tests/pipeline/test_source_identity.py::test_repo_root_resolution_prefers_export_json_then_git_then_markers":
         "needs a .git; a shipped check tree has none (owner vllm-epoch-run)",

@@ -19,7 +19,8 @@ The rules are in `AGENTS.md` ("Lean"); the audit's reference is `tools/lean/READ
 - **Pick the package by its dependencies.** Code the verifier runs, and anything the V[B] generator or a reference
   prover runs: `backends/flock/verifier/lean/` (no dependencies). Facts about the executable's definitions:
   `level3/` (Mathlib). Protocol theorems (soundness, knowledge soundness, zero knowledge, audits): `soundness/` (ArkLib).
-  A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
+  Proofs about core's own definitions (`verity.ml.tc` and the like): `packages/verity/lean/` (no dependencies), since
+  core depends on no backend. A new package only when the dependencies differ; give it a `lean-audit.json` and the shared `lean-toolchain`.
 - **Own a subdirectory and namespace** (`FlockSoundness/Knowledge/`, `FlockSoundness.Knowledge`), with one aggregator
   module that imports its files. The package root imports the aggregator once, when the area is created, so parallel
   lanes don't edit the same root file.
@@ -39,6 +40,11 @@ python tools/lean/audit.py PKG                     what check runs, for one pack
 
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
+
+The replay refuses `X.congr_simp is declared by a replayed module and by one it imports`. `simp` realizes a structure
+constructor's congruence lemma (`ZeroHom.mk.congr_simp`) in your module when it rewrites under an unfolded bundled map,
+and Mathlib has realized it already. Don't unfold a `→+` or `→*` inside `simp`: prove its `_apply` lemma by `rfl` and
+simp with that.
 
 ## Assumptions and pins
 
@@ -74,4 +80,5 @@ never change a `require`, a revision or `lean-toolchain` in a feature PR.
   tools/lean/tests tests/test_lean_packages.py` passes.
 - The PR says which pins changed, if any, and why; the ledger's status rows match the pins.
 - Merge `main` into your branch rather than rebasing someone else's work; conflicts in a ledger are resolved by keeping
-  both sides' rows.
+  both sides' rows. Run `python tools/lean/merge.py --install` once per clone: `lean-audit.json` then merges without a
+  rebuild, and only a conflict it refuses needs `audit.py --update` on the merged tree.
