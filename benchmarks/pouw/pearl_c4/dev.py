@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+"""Pearl-C4 (``pearl-c-nvfp4-v0``, ``pearl-c-mxfp4-v0``) on one sm_120 GPU from the prebuilt pearl_c4.cubin, through the CUDA
+driver API (ctypes on libcuda.so.1; stdlib and numpy, nothing built on the machine).
+
+  python3 dev.py check CHECK_DIR [--expect-uuid GPU-...]      every kernel on fixture.py's inputs, every buffer byte for byte
+  python3 dev.py time MxNxK [...] [--fmt nvfp4|mxfp4] [--reps R] [--expect-uuid GPU-...]
+                                                              self-timing for hillclimbing (the harness's numbers are the record)
+
+The check runs the weight side and one call in each mode (hash with C~ and U stored, nohash, plain) at both CTA heights
+(BM = 128 and 64), and compares every buffer the kernels write with the fixture.  One JSON object per line on stdout.
+Exit 3: identity refused; 4: a buffer differs.
+
+The pipeline (`Pipeline`) is also the FP4 bench arm's (arm.py): `weight_side` is the per-(weight, epoch) work, `launch` the
+per-call prover step, each on a given stream and capturable into a CUDA graph.
+"""
+
+from __future__ import annotations
+
+import ctypes as C
+import hashlib
+import json
+import os
+import statistics
+import sys
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+SM_COUNT, MAX_DYN_SMEM = 16, 8
+ROLE_EA, ROLE_FA, ROLE_EB, ROLE_FB = 0, 1, 2, 3
+SEGMENT = 1024
+FMTS = {"nvfp4": ("nv", 16), "mxfp4": ("mx", 32)}
+MODES = ("hash", "nohash", "plain")
+
+u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
+CUDA = {
+    "cuInit": [u], "cuDriverGetVersion": [P(i32)], "cuDeviceGet": [P(i32), i32], "cuDeviceGetCount": [P(i32)],
+    "cuDeviceGetName": [C.c_char_p, i32, i32], "cuDeviceGetUuid_v2": [C.c_char_p, i32],
+    "cuDeviceGetAttribute": [P(i32), i32, i32], "cuDevicePrimaryCtxRetain": [P(vp), i32], "cuCtxSetCurrent": [vp],
+    "cuModuleLoadData": [P(vp), C.c_char_p], "cuModuleGetFunction": [P(vp), vp, C.c_char_p],
+    "cuFuncSetAttribute": [vp, i32, i32], "cuMemAlloc_v2": [P(u64), sz], "cuMemFree_v2": [u64],
+    "cuMemsetD8_v2": [u64, C.c_ubyte, sz], "cuMemcpyHtoD_v2": [u64, vp, sz], "cuMemcpyDtoH_v2": [vp, u64, sz],
+    "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
+    "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
+    "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
+}
+
+
+class Args(C.Structure):
+    _fields_ = [("p", C.c_uint64 * 16), ("i", C.c_int32 * 16)]
+
+
+def emit(obj: dict) -> None:
+    print(json.dumps(obj), flush=True)
+
+
+def cdiv(a: int, b: int) -> int:
+    return -(-a // b)
+
+
+class Dev:
+    """The device's primary context (shared with the harness), the module, allocations and launches."""
+
+    def __init__(self, cubin: bytes, expect_uuid: str | None = None):
+        self.cu = C.CDLL(os.environ.get("PEARLC4_LIBCUDA", "libcuda.so.1"))
+        for f, a in CUDA.items():
+            getattr(self.cu, f).argtypes, getattr(self.cu, f).restype = a, i32
+        self.ck("cuInit", 0)
+        count = self.get("cuDeviceGetCount")
+        self.dev = self.get("cuDeviceGet", 0)
+        name = C.create_string_buffer(256)
+        self.ck("cuDeviceGetName", name, 256, self.dev)
+        self.name = name.value.decode()
+        raw = C.create_string_buffer(16)
+        self.ck("cuDeviceGetUuid_v2", raw, self.dev)
+        h = raw.raw.hex()
+        self.uuid = f"GPU-{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+        self.cc = (self.get("cuDeviceGetAttribute", 75, self.dev), self.get("cuDeviceGetAttribute", 76, self.dev))
+        self.sms = self.get("cuDeviceGetAttribute", SM_COUNT, self.dev)
+        self.driver = self.get("cuDriverGetVersion")
+        self.identity = {"name": self.name, "uuid": self.uuid, "cc": list(self.cc), "sms": self.sms, "driver_api": self.driver,
+                         "visible": count, "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+        if expect_uuid is not None and (count != 1 or self.uuid != expect_uuid):
+            raise PermissionError(f"identity refused: {count} visible device(s), UUID {self.uuid}, expected {expect_uuid}")
+        if self.cc != (12, 0):
+            raise PermissionError(f"identity refused: compute capability {self.cc}, pearl_c4.cubin is sm_120a")
+        ctx = vp()
+        self.ck("cuDevicePrimaryCtxRetain", C.byref(ctx), self.dev)
+        self.ck("cuCtxSetCurrent", ctx)
+        self.mod = vp()
+        self.ck("cuModuleLoadData", C.byref(self.mod), cubin)
+        self.fns: dict[str, vp] = {}
+        self.smem: dict[str, int] = {}
+
+    def ck(self, f: str, *a) -> None:
+        r = getattr(self.cu, f)(*a)
+        if r:
+            s = C.c_char_p()
+            self.cu.cuGetErrorString(r, C.byref(s))
+            raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
+
+    def get(self, f: str, *a) -> int:
+        v = i32()
+        self.ck(f, C.byref(v), *a)
+        return v.value
+
+    def fn(self, name: str) -> vp:
+        if name not in self.fns:
+            f = vp()
+            self.ck("cuModuleGetFunction", C.byref(f), self.mod, name.encode())
+            self.fns[name] = f
+        return self.fns[name]
+
+    def dyn_smem(self, name: str) -> int:
+        """A GEMM's dynamic shared memory, from its _smem kernel, and the attribute set to allow it."""
+        if name not in self.smem:
+            p = self.alloc(4)
+            self.launch(name + "_smem", 1, 1, p=[p])
+            self.sync()
+            self.smem[name] = int.from_bytes(self.read(p, 4), "little")
+            self.free(p)
+            self.ck("cuFuncSetAttribute", self.fn(name), MAX_DYN_SMEM, self.smem[name])
+        return self.smem[name]
+
+    def alloc(self, n: int) -> int:
+        p = u64()
+        self.ck("cuMemAlloc_v2", C.byref(p), max(n, 16))
+        self.ck("cuMemsetD8_v2", p, 0, max(n, 16))
+        return p.value
+
+    def free(self, p: int) -> None:
+        self.ck("cuMemFree_v2", u64(p))
+
+    def write(self, p: int, data: bytes) -> None:
+        self.ck("cuMemcpyHtoD_v2", u64(p), C.c_char_p(data), len(data))
+
+    def read(self, p: int, n: int) -> bytes:
+        buf = C.create_string_buffer(n)
+        self.ck("cuMemcpyDtoH_v2", buf, u64(p), n)
+        return buf.raw
+
+    def launch(self, name: str, grid: int, block: int, smem: int = 0, p=(), i=(), stream: int = 0) -> None:
+        a = Args()
+        for j, v in enumerate(p):
+            a.p[j] = v
+        for j, v in enumerate(i):
+            a.i[j] = v
+        params = (vp * 1)(C.addressof(a))
+        self.ck("cuLaunchKernel", self.fn(name), grid, 1, 1, block, 1, 1, smem, vp(stream or None), params, None)
+
+    def sync(self) -> None:
+        self.ck("cuCtxSynchronize")
+
+    def timed(self, body, reps: int) -> list[float]:
+        out = []
+        for _ in range(reps):
+            a, b, ms = vp(), vp(), C.c_float()
+            self.ck("cuEventCreate", C.byref(a), 0)
+            self.ck("cuEventCreate", C.byref(b), 0)
+            self.ck("cuEventRecord", a, None)
+            body()
+            self.ck("cuEventRecord", b, None)
+            self.ck("cuEventSynchronize", b)
+            self.ck("cuEventElapsedTime", C.byref(ms), a, b)
+            self.cu.cuEventDestroy_v2(a)
+            self.cu.cuEventDestroy_v2(b)
+            out.append(ms.value)
+        return out
+
+
+def buffer_sizes(fmt: str, m: int, n: int, k: int) -> dict[str, int]:
+    blk = FMTS[fmt][1]
+    return {
+        "xa": 2 * m * k, "xb": 2 * n * k, "seed_a": 32, "seed_b": 32, "key": 32,
+        "lines_ea": 16 * m, "lines_eb": 16 * n, "lines_fa": 16 * k, "lines_fb": 16 * k, "fat": 16 * k, "fbt": 16 * k,
+        "rows_a": m * (2 * k // SEGMENT) * 32, "rows_b": n * (2 * k // SEGMENT) * 32,
+        "a_codes": m * k // 2, "a_scales": m * k // blk, "a_alpha": 4 * m, "a_inv": 4 * m, "a_ae": m,
+        "b_codes": n * k // 2, "b_scales": n * k // blk, "b_alpha": 4 * n, "b_inv": 4 * n, "b_ae": n,
+        "pa": 128 * m, "pb": 128 * n, "g": 4096, "bf": 128 * n,
+        "y": 2 * m * n, "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "tickets": (m // 16) * (n // 16) * 32,
+    }
+
+
+def domain(m: int, n: int, k: int) -> str | None:
+    if not (1024 <= k <= 1 << 16 and k % 512 == 0):
+        return "k: 1,024 <= k <= 2^16 with 512 | k (the scheme's k_min and 128 | k; whole 1 KB row-hash segments)"
+    if m % 64 or n % 128:
+        return "m a multiple of 64 (the tile; pad with zero filler rows) and n of 128 (the CTA width)"
+    return None
+
+
+class Pipeline:
+    """One (format, shape) instance: its buffers and its kernels in order.  `external` maps buffer names (xa, xb) to
+    device pointers the caller owns (the harness's operand sets); the rest are allocated here."""
+
+    def __init__(self, dev: Dev, fmt: str, m: int, n: int, k: int, bm: int | None = None, store_cu: bool = False,
+                 external: dict[str, int] | None = None):
+        why = domain(m, n, k)
+        if why:
+            raise ValueError(f"{m}x{n}x{k} outside pearl_c4.cu's domain: {why}")
+        self.dev, self.fmt, self.m, self.n, self.k = dev, fmt, m, n, k
+        self.tag, self.blk = FMTS[fmt]
+        self.bm = bm or (128 if m % 128 == 0 else 64)
+        self.sizes = buffer_sizes(fmt, m, n, k)
+        self.external = dict(external or {})
+        if store_cu:
+            self.sizes.update(c=4 * m * n, u=4 * m * n)
+        self.buf = {name: self.external.get(name) or dev.alloc(size) for name, size in self.sizes.items()}
+        self.threads = 32 * (self.bm // 32) * 2
+
+    def gemm(self, mode: str) -> str:
+        return f"gemm_{self.tag}_{mode}" + ("" if self.bm == 128 else "_m64")
+
+    def weight_side(self, stream: int = 0, hashing: bool = True) -> None:
+        """Per (weight, epoch): F_A, F_B and E_B's lines, F's transposes, B's commitment (modeled), B's forming, G, B~F_A, P_B."""
+        d, b, n, k = self.dev, self.buf, self.n, self.k
+        L = lambda *a, **kw: d.launch(*a, stream=stream, **kw)  # noqa: E731
+        L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fa"]], i=[ROLE_FA, k])
+        L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fb"]], i=[ROLE_FB, k])
+        L("lines", cdiv(n, 128), 128, p=[b["seed_b"], b["lines_eb"]], i=[ROLE_EB, n])
+        L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fa"], b["fat"]], i=[k])
+        L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fb"], b["fbt"]], i=[k])
+        if hashing:
+            L("hash_rows", cdiv(n * (2 * k // SEGMENT), 128), 128, p=[b["xb"], b["rows_b"]], i=[n, 2 * k])
+        L(f"form_{self.tag}", n // 16, 256, p=[b["xb"], b["lines_eb"], b["lines_fb"], b["b_codes"], b["b_scales"], b["b_alpha"],
+                                               b["b_inv"], b["b_ae"], b["pb"]], i=[n, k, 32, 1])
+        L(f"chain32_{self.tag}", 2, 128, p=[b["fbt"], 0, b["fat"], b["g"]], i=[32, k, 0])
+        L(f"chain32_{self.tag}", n // 16, 128, p=[b["b_codes"], b["b_scales"], b["fat"], b["bf"]], i=[n, k, 0])
+        L("pb", cdiv(32 * n, 256), 256, p=[b["pb"], b["g"], b["bf"]], i=[n])
+
+    def prime(self, stream: int = 0) -> None:
+        """E_A's lines once, so that the nohash call (which leaves the XOF out) forms from real lines."""
+        self.dev.launch("lines", cdiv(self.m, 128), 128, p=[self.buf["seed_a"], self.buf["lines_ea"]], i=[ROLE_EA, self.m],
+                        stream=stream)
+
+    def launch(self, stream: int = 0, mode: str = "hash") -> None:
+        """One call: A's commitment (modeled) and E_A's lines (hash only), A's forming, A'F_B into P_A, the chain with the
+        peel and (hash) the epilogue's digests and tickets, then (hash) the tile leaves."""
+        d, b, m, n, k = self.dev, self.buf, self.m, self.n, self.k
+        L = lambda *a, **kw: d.launch(*a, stream=stream, **kw)  # noqa: E731
+        if mode == "hash":
+            L("hash_rows", cdiv(m * (2 * k // SEGMENT), 128), 128, p=[b["xa"], b["rows_a"]], i=[m, 2 * k])
+            L("lines", cdiv(m, 128), 128, p=[b["seed_a"], b["lines_ea"]], i=[ROLE_EA, m])
+        L(f"form_{self.tag}", m // 16, 256, p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"],
+                                               b["a_inv"], b["a_ae"], b["pa"]], i=[m, k, 0, 0])
+        L(f"chain32_{self.tag}", m // 16, 128, p=[b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], i=[m, k, 1])
+        g = self.gemm(mode)
+        L(g, (m // self.bm) * (n // 128), self.threads, d.dyn_smem(g),
+          p=[b["a_codes"], b["a_scales"], b["b_codes"], b["b_scales"], b["pa"], b["pb"], b["a_inv"], b["b_inv"], b["y"],
+             b["digests"], b["tickets"], b["key"], b.get("c", 0), b.get("u", 0)], i=[m, n, k])
+        if mode == "hash":
+            L("leaves", cdiv((m // 64) * (n // 64), 64), 64, p=[b["digests"], b["leaves"]], i=[m, n])
+
+    def free(self) -> None:
+        for name, p in self.buf.items():
+            if name not in self.external:
+                self.dev.free(p)
+
+
+# ---------------------------------------------------------------- the check
+
+WRITTEN = {
+    "weight": ("lines_fa", "lines_fb", "lines_eb", "fat", "fbt", "b_codes", "b_scales", "b_alpha", "b_inv", "b_ae", "pb", "g",
+               "bf"),
+    "hash": ("rows_a", "lines_ea", "a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "c", "u", "y", "digests", "leaves",
+             "tickets"),
+    "nohash": ("a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "y"),
+    "plain": ("a_codes", "a_scales", "y_plain"),
+}
+WORD = {"a_alpha": 4, "a_inv": 4, "b_alpha": 4, "b_inv": 4, "g": 4, "bf": 4, "c": 4, "u": 4, "pa": 2, "pb": 2, "y": 2,
+        "y_plain": 2, "digests": 32, "leaves": 32, "tickets": 32, "rows_a": 32}
+
+
+def diff(name: str, got: bytes, want: bytes) -> dict:
+    w = WORD.get(name, 1)
+    g, e = np.frombuffer(got, np.uint8).reshape(-1, w), np.frombuffer(want, np.uint8).reshape(-1, w)
+    bad = np.nonzero((g != e).any(axis=1))[0]
+    out = {"buffer": name, "words": len(e), "mismatches": int(len(bad)), "sha256": hashlib.sha256(got).hexdigest()}
+    if len(bad):
+        out["first"] = [{"index": int(j), "got": g[j].tobytes().hex(), "want": e[j].tobytes().hex()} for j in bad[:4]]
+    return out
+
+
+def check_fmt(dev: Dev, d: Path) -> bool:
+    mf = json.loads((d / "manifest.json").read_text())
+    m, n, k = mf["shape"]["m"], mf["shape"]["n"], mf["shape"]["k"]
+    want = {name: (d / f"{name}.bin").read_bytes() for name in mf["files"]}
+    for name, meta in mf["files"].items():
+        if hashlib.sha256(want[name]).hexdigest() != meta["sha256"]:
+            raise RuntimeError(f"{d}/{name}.bin does not match its manifest")
+    ok = True
+    for bm in (128, 64):
+        if m % bm:
+            continue
+        pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, store_cu=True)
+        for name in ("xa", "xb", "seed_a", "seed_b", "key"):
+            dev.write(pl.buf[name], want[name])
+        pl.weight_side()
+        dev.sync()
+        rows = [diff(name, dev.read(pl.buf[name], len(want[name])), want[name]) for name in WRITTEN["weight"]]
+        for mode in MODES:
+            pl.launch(mode=mode)
+            dev.sync()
+            for name in WRITTEN[mode]:
+                src = "y" if name == "y_plain" else name
+                rows.append(diff(name, dev.read(pl.buf[src], len(want[name])), want[name]) | {"mode": mode})
+        pl.free()
+        for r in rows:
+            r.update(fmt=mf["fmt"], bm=bm, shape=[m, n, k])
+            emit(r)
+            ok &= r["mismatches"] == 0
+    return ok
+
+
+def main(argv: list[str]) -> int:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("what", choices=("check", "time"))
+    ap.add_argument("args", nargs="*")
+    ap.add_argument("--expect-uuid")
+    ap.add_argument("--fmt", default="nvfp4", choices=tuple(FMTS))
+    ap.add_argument("--reps", type=int, default=10)
+    ap.add_argument("--cubin", default=str(HERE / "pearl_c4.cubin"))
+    a = ap.parse_args(argv)
+    try:
+        dev = Dev(Path(a.cubin).read_bytes(), a.expect_uuid)
+    except PermissionError as e:
+        emit({"refused": str(e)})
+        return 3
+    emit({"identity": dev.identity, "cubin_sha256": hashlib.sha256(Path(a.cubin).read_bytes()).hexdigest()})
+    if a.what == "check":
+        root = Path(a.args[0] if a.args else HERE / "check")
+        ok = all([check_fmt(dev, root / fmt) for fmt in FMTS if (root / fmt).is_dir()])
+        emit({"check": "pass" if ok else "FAIL"})
+        return 0 if ok else 4
+    rng = np.random.default_rng(20260930)
+    for spec in a.args or ["8192x8192x8192"]:
+        m, n, k = (int(v) for v in spec.split("x"))
+        pl = Pipeline(dev, a.fmt, m, n, k)
+        for name, rows in (("xa", m), ("xb", n)):
+            x = rng.integers(-8, 9, (rows, k)).astype(np.float32).view(np.uint32) >> 16
+            dev.write(pl.buf[name], x.astype("<u2").tobytes())
+        dev.write(pl.buf["seed_a"], hashlib.sha256(b"seed-a").digest())
+        dev.write(pl.buf["seed_b"], hashlib.sha256(b"seed-b").digest())
+        pl.weight_side()
+        pl.prime()
+        dev.sync()
+        row = {"shape": [m, n, k], "fmt": a.fmt, "bm": pl.bm, "unlabelled": "self-timing, clocks not locked: not a panel number"}
+        row["weight_side_ms"] = statistics.median(dev.timed(pl.weight_side, a.reps))
+        for mode in MODES:
+            pl.launch(mode=mode)
+            ms = statistics.median(dev.timed(lambda mode=mode: pl.launch(mode=mode), a.reps))
+            row[f"{mode}_ms"] = ms
+            row[f"{mode}_chain_pflops"] = round(2 * m * n * k / ms / 1e12, 3)
+        emit(row)
+        pl.free()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
