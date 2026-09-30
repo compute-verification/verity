@@ -337,7 +337,7 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
             par = parent or lineage.get("parent")
             panel = lineage.get("panel") or build.get("panel")
             meta = {
-                "schema": KIND, "time": time or now(), "run": run_id, "harness": commit, "tier": tier, "by": by,
+                "schema": KIND, "time": time or now(), "run": run_id, "run_id": run_id, "harness": commit, "tier": tier, "by": by,
                 "arm": name, "stream": arm.get("stream"), "precision": arm.get("precision") or r.get("precision"),
                 "shape": shape["label"], "m": shape.get("m"), "k": shape.get("k"), "n": shape.get("n"),
                 "phase": shape.get("phase"), "panel_shape": p.get("shape"),
@@ -389,6 +389,28 @@ def write(run_dir: Path, recs: list[dict]) -> list[Path]:
 
 def read(run_dir: Path) -> list[dict]:
     return [json.loads(p.read_text()) for p in sorted((run_dir / "ledger").glob("*/*.json"))]
+
+
+OUTPUTS = "outputs.json"
+OUTPUTS_SCHEMA = "research/outputs/v0.1"
+
+
+def write_outputs(run_dir: Path, recs: list[dict]) -> Path:
+    """Declares the records in the run's ``outputs.json`` (`research.store.attempt.typed_outputs`), so the runner of a
+    ``research run --on`` publishes them with the attempt, with the store key it holds and the workload doesn't. Each is
+    a payload-less typed output named ``kernel-attempt/<arm>/<shape>``, whose manifest is the one `publish` puts, so either
+    path gives the same art: id. Entries the workload declared before are kept."""
+    path = run_dir / OUTPUTS
+    doc = json.loads(path.read_text()) if path.is_file() else {"schema": OUTPUTS_SCHEMA, "outputs": []}
+    if doc.get("schema") != OUTPUTS_SCHEMA:
+        raise LedgerError(f"{path} is {doc.get('schema')!r}, not {OUTPUTS_SCHEMA}")
+    mine = {f"{KIND.split('/')[0]}/{r['meta']['arm']}/{r['meta']['shape']}": r for r in recs}
+    doc["outputs"] = [e for e in doc.get("outputs") or [] if e.get("name") not in mine]
+    doc["outputs"] += [{"name": n, "kind": r["kind"], "meta": r["meta"], "refs": r.get("refs") or {}} for n, r in mine.items()]
+    tmp = path.with_name(path.name + ".ledger-tmp")
+    tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
+    os.replace(tmp, path)
+    return path
 
 
 # ---- the store -----------------------------------------------------------------------------------------------------------------
