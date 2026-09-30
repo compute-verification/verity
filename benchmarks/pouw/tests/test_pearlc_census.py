@@ -16,6 +16,14 @@ def test_chained_atom_matches_verity():
     assert C.selftest(400) == 0
 
 
+def test_sm120_atom_matches_verity():
+    C.set_atom("sm120")
+    try:
+        assert C.selftest(400, "sm120") == 0
+    finally:
+        C.set_atom("hopper")
+
+
 def test_generic_tile_has_nothing_to_skip():
     for row in C.cell("gaussian", 1024, 1.0, 8, 4, run=1):
         assert row["in_domain"] and row["skippable_share"] == 0.0
