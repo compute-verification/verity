@@ -63,6 +63,13 @@ def test_q_word_cuts_gemm_bias_into_one_unit_per_output_word_with_no_committed_i
     assert rule["units_per_call"] == N and rule["committed_interior_words"] == 0 and rule["max_out_bits"] == 16, rule
 
 
+@pytest.mark.parametrize("family", ["GemmBias_v1", "GemmBias_v2"])
+def test_a_one_call_biased_linear_is_its_modules_slot_0(family):
+    r = RQ._residual_for(family, "out", own_parameter=True)
+    assert r is not None and r.v1_member == "0", r
+    assert RQ._residual_for(family, "out", own_parameter=False) is None
+
+
 # ---------------------------------------------------------------------------------------------------------
 # the frontend: the export's Triton launch followed by the linear's bias add
 # ---------------------------------------------------------------------------------------------------------
