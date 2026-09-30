@@ -91,6 +91,11 @@ TARGETS: dict[str, tuple[int, int]] = {
     "rtxpro6000": (12, 0),
 }
 
+#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
+#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
+#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
+
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
 _TOKEN = re.compile(r"__(tp|b|i|o)(\d+)(?=__)")

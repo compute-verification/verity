@@ -149,8 +149,10 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
 
 - The Lean packages are `backends/flock/verifier/lean/` (the executable verifier, no dependencies), its `level3/` (proofs
   about the executable's definitions, Mathlib) and `soundness/` (the protocol's proofs, ArkLib), and
-  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib). New Lean goes into the
-  package whose dependencies it needs, in a subdirectory and namespace of its own. All packages share one toolchain and
+  `protocols/pous/lean/` (POUS's pinned statements, proofs and grader, Mathlib), and `packages/verity/lean/` (core's own
+  proofs about `verity`'s definitions, such as `verity.ml.tc`'s step relation, no dependencies). New Lean goes into the
+  package whose dependencies it needs, in a subdirectory and namespace of its own; a core-only proof goes into core's
+  package, never a backend's. All packages share one toolchain and
   one Mathlib revision (`tests/test_lean_packages.py`); bump them together, in a PR of their own.
 - Every Lake package has a `lean-audit.json`, and `check` audits every declaration (`tools/lean/audit.py`): only `propext`,
   `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an assumption is a named
