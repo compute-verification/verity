@@ -18,8 +18,9 @@ Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
   layer holding it), and the responder started last.  Uninstall runs newest first: responder, wrappers, then ``W`` restored.
 * **The codec** (settings ``codec``): ``reference`` encodes and decodes with the scheme's reference on the CPU, and answers
   in process; ``gpu`` keeps ``C`` in device memory and uses the scheme's GPU twin (`engine/pous/twins.py`, keyed by the
-  scheme id), which must first reproduce the scheme's pinned vector (`twins.gate`); a layer's weight is decoded on the
-  device from the segments it overlaps, and with ``port`` set the native responder (`engine/pous/pous_native.cu`) answers
+  scheme id), which must first reproduce the scheme's pinned vector (`twins.gate`); a forward's first wrapped use decodes all
+  of ``C`` on the device in one batch, each layer computes with a view of it, and after the forward's last use the decoded
+  copy is zeroed (``decode_group: all``); with ``port`` set the native responder (`engine/pous/pous_native.cu`) answers
   challenges from ``C`` in device memory on its own socket and core (``host``, ``port``, ``responder_cpu``).
   ``drop_fraction`` (the negative control) zeroes that fraction of ``C``'s blocks after encoding, drawn through
   `verity.randomness` from ``drop_source``.
@@ -29,7 +30,7 @@ Placeholder, 28 Sep 2026: this wires the protocol in; it certifies nothing yet.
 * **Weights of record:** `Installed.weights` (``decoded``) returns the released plaintext by ``named_parameters`` name,
   tied names mapped to one tensor, which the Commit's replay reads (`protocol_options.weights_view`).
 
-What is not here yet: the batched decode once per forward (the band kernels), and TP.
+What is not here yet: the band's GPU twin (it comes with the band kernels), and TP.
 """
 from __future__ import annotations
 
@@ -71,7 +72,7 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if reason and not own.get("experimental"):
         out.append(f"{scheme} is experimental ({reason}); settings pous.experimental = true runs it anyway")
     if own.get("decode_group", "all") != "all":
-        out.append(f"decode_group {own['decode_group']!r}: only 'all' is built (each layer decodes on its own use)")
+        out.append(f"decode_group {own['decode_group']!r}: only 'all' is built (one batched decode of C per forward)")
     codec = own.get("codec", "reference")
     if codec not in CODECS:
         out.append(f"codec {codec!r}: one of {', '.join(CODECS)}")
@@ -274,6 +275,9 @@ class _DeviceStore:
     dropped: list[int] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
     stats: dict[str, Any] = field(default_factory=dict)
+    uses: int = 0
+    taken: int = 0
+    scratch: Any = None
 
     @property
     def n_blocks(self) -> int:
@@ -303,6 +307,30 @@ class _DeviceStore:
 
     def block(self, i: int) -> bytes:
         return self.c.view(self.n_blocks, -1)[i].cpu().numpy().tobytes()
+
+    def forward_view(self, name: str, meta: Any) -> Any:
+        """The tensor `name` as a view of this forward's one batched decode of every segment, made at its first use."""
+        import torch
+
+        if self.scratch is None:
+            t0 = time.perf_counter()
+            self.scratch = self.decode_fn(self.c, self.tags).reshape(-1)
+            if self.c.device.type == "cuda":
+                torch.cuda.synchronize(self.c.device)
+            self.stats["decodes"] += 1
+            self.stats["decode_s"] += time.perf_counter() - t0
+            self.stats["decoded_bytes"] += self.scheme.params.w_bytes
+        pl = self.layout.placement(name)
+        shape, dtype, _ = meta
+        return self.scratch[pl.offset:pl.offset + pl.size].view(dtype).reshape(shape)
+
+    def used(self) -> None:
+        """One wrapped use of the forward is done; after the last, the decoded copy is zeroed before it is freed, so no
+        plaintext outlives the forward, not even in the allocator's pool."""
+        self.taken += 1
+        if self.taken >= self.uses and self.scratch is not None:
+            self.scratch.zero_()
+            self.scratch, self.taken = None, 0
 
 
 def _device_store(layout: Any, scheme: Any, w: bytes, commitment: bytes, own: Mapping[str, Any], *, device: Any = None,
@@ -386,10 +414,13 @@ def _qualnames(entry: str, model: Any, layers: list[tuple[str, Any]], names: dic
     return out
 
 
-def _wrapper(decoded: Callable[[Any], Any]) -> Callable[[Any], Any]:
+def _wrapper(decoded: Callable[[Any], Any], used: Callable[[], None] | None = None) -> Callable[[Any], Any]:
     def make(inner: Any) -> Any:
         def apply(layer: Any, x: Any, bias: Any = None) -> Any:
-            return inner(_Proxy(layer, decoded(layer)), x, bias)
+            out = inner(_Proxy(layer, decoded(layer)), x, bias)
+            if used is not None:
+                used()
+            return out
         return apply
     return make
 
@@ -447,9 +478,14 @@ def install(scheme: str, target: Target) -> PousOption:
             TENSORS.restore(p, store.tensor(names[id(m)], meta[names[id(m)]]))
 
     hooks.service("plaintext released", release, restore)
-    decoded = lambda layer: store.tensor(names[id(layer)], meta[names[id(layer)]])  # noqa: E731
+    if isinstance(store, _DeviceStore):
+        store.uses = len(layers)
+        view, used = store.forward_view, store.used
+    else:
+        view, used = store.tensor, None
+    decoded = lambda layer: view(names[id(layer)], meta[names[id(layer)]])  # noqa: E731
     for qm in {id(m.quant_method): m.quant_method for _, m in layers}.values():
-        hooks.wrap(qm, "apply", _wrapper(decoded))
+        hooks.wrap(qm, "apply", _wrapper(decoded, used))
     if own.get("port") is not None:
         opt.responder = hooks.service("responder", *_native_responder(store, own))
         responder: Any = {"kind": "native", "host": own.get("host", "127.0.0.1"), "port": int(opt.responder.handle.port()),

@@ -87,6 +87,7 @@ class Linear:
 
         class Apply:
             def apply(self, layer, x, bias=None):
+                self.seen = layer.weight
                 return layer.weight.clone()
         self.quant_method = Apply()
 
@@ -132,11 +133,15 @@ def test_codec_gpu_serves_through_the_hooks_and_answers_from_the_device_store(mo
     comp = PO.install(model, _ctx(f"pous:{DENSE}", settings={"pous": {"codec": "gpu", "build_dir": "/unused", "salt": SALT}}))
     opt = comp.get("pous")
     assert all(layer.weight.numel() == 0 for layer in model.layers.values())                  # only C is held
-    for name, layer in model.layers.items():
-        want = model.plain["q" if name == "head" else name]
-        assert torch.equal(layer.quant_method.apply(layer, None), want)                        # decoded on every use
+    for forward in (1, 2):
+        for name, layer in model.layers.items():
+            want = model.plain["q" if name == "head" else name]
+            assert torch.equal(layer.quant_method.apply(layer, None), want)                    # decoded on every use
+        assert opt.store.scratch is None and opt.store.stats["decodes"] == forward             # one batched decode a forward
+    seen = model.layers["q"].quant_method.seen
+    assert seen.shape == model.plain["q"].shape and not seen.any()                             # zeroed after the forward's last use
     info = opt.info()
-    assert info["codec"] == f"GPU twin of {DENSE}" and info["stats"]["decodes"] == 3 and info["responder"].startswith("in-process")
+    assert info["codec"] == f"GPU twin of {DENSE}" and info["stats"]["decodes"] == 2 and info["responder"].startswith("in-process")
     c = opt.commitment()
     assert c["salt"] == SALT and len(opt.leaves()) == 32 * info["blocks"]
     s = opt.store
