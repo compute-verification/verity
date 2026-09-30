@@ -1,5 +1,5 @@
-"""Proposition 2 and the warden's semantics, mirroring the Lean package's pinned statements (`NetTiming.Occupancy`,
-`NetTiming.Assumptions`)."""
+"""Proposition 2 and the warden's semantics, mirroring the Lean package's statements (`NetTiming.Occupancy`,
+`NetTiming.Assumptions`): pinned, except `occ_fill` and `leftPacked_occ_fill`, which are proved but not pinned."""
 
 import itertools
 import math

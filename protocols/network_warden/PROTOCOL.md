@@ -126,7 +126,8 @@ every frame), the capacity per day, and the K charge by span.
 
 ## Tests
 
-`uv run pytest protocols/network_warden`. The tests mirror the Lean package's pinned statements:
+`uv run pytest protocols/network_warden`. The tests mirror the Lean package's statements, which are its 31 pins plus
+`occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (proved and audited, not pinned):
 - **`test_network_warden_grid.py`:** the counts, `fill`, tightness and the fixed-M bounds, by enumeration, plus the warden's
   semantics;
 - **`test_network_warden_capacity.py`:**
