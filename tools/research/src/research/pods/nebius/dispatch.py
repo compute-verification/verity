@@ -31,6 +31,15 @@ regardless of depth.
 
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
 Inside the Job, the template's own `research run` writes the Attempt.
+
+**Packing (PACK_COMMITS=1; default 0).** config-run's gpu task of an eligible item (`packable`: TP1, a model of <= 4B on
+PACK_MODELS, batch <= 8, a tree with the deferred replay; never TP2, Gemma-2, Pythia or 7B+) is spooled, rendered as its Job would
+be, to `$PACK_SPOOL/queue/` (default <root>/pack) instead of submitted, and still-suspended gpu Jobs of eligible items are taken
+off Kueue into the spool (PACK_ADOPT, default 1). At most PACK_PODS (2) `commit-pack` Jobs run at once (sky/jobs/commit-pack.yaml,
+its pilot sky/commit_pack.py), each running up to 3 spooled Commits on its one GPU under MPS. Their `results/` come back into the
+chain whatever the flag: rc 0 submits the next task (the CPU replay), 99 spools it again, and anything else (an MPS fault included)
+resubmits the task once as a normal 1-GPU Job with `unpacked` set on the item; a Commit that then fails ends as any failure does.
+Entries claimed by a pod that is gone count as a fault. Rollback: PACK_COMMITS=0, then let the pods finish or delete them.
 """
 from __future__ import annotations
 
@@ -61,6 +70,15 @@ DEFAULT_DEPTH = "circuits=4,provers=2,backfill=4"
 DEFAULT_PRIORITY = {"backfill": "backfill"}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 LABEL = "verity.dev/dispatch"
+PACK_COMMITS = os.environ.get("PACK_COMMITS", "0") == "1"
+PACK_ADOPT = os.environ.get("PACK_ADOPT", "1") == "1"
+PACK = Path(os.environ.get("PACK_SPOOL", str(ROOT / "pack")))
+PACK_PODS = int(os.environ.get("PACK_PODS", "2"))
+PACK_SLOTS = 3
+PACK_TEMPLATE = "commit-pack"
+PACK_MODELS = ("smollm2-135m", "smollm2-360m", "tinyllama-11b", "qwen25-05b", "qwen25-15b", "llama32-1b", "phi3-mini", "qwen3-4b")
+PACK_MAX_BATCH = 8
+QUIET = ((12, 30), (13, 30))
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -207,6 +225,174 @@ def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False
     return name
 
 
+def quiet(t: float | None = None) -> bool:
+    g = time.gmtime(time.time() if t is None else t)
+    return QUIET[0] <= (g.tm_hour, g.tm_min) < QUIET[1]
+
+
+def packable(item: dict, idx: int) -> str | None:
+    """Why task `idx` of the item isn't packed, or None when it is (the cutover plan's eligibility)."""
+    if item.get("template") != "config-run":
+        return "not a config-run"
+    tasks, _ = load_template(item["template"])
+    if (tasks[idx].get("name") or "") != "gpu":
+        return "not the gpu task"
+    if item.get("unpacked"):
+        return f"unpacked ({item['unpacked']})"
+    env = item.get("env") or {}
+    if str(env.get("REPLAY_DEFERRED", "auto")) == "0":
+        return "REPLAY_DEFERRED=0 (replays on its GPU)"
+    parts = str(env.get("ROW", "")).split("__")
+    if parts[0] not in PACK_MODELS:
+        return f"model {parts[0]!r} is not on the packing list"
+    if "tp1" not in parts:
+        return "not TP1"
+    batch = next((int(p[1:]) for p in parts if re.fullmatch(r"b\d+", p)), None)
+    if batch is None or batch > PACK_MAX_BATCH:
+        return f"batch {batch} (packing takes <= {PACK_MAX_BATCH})"
+    if task_resources(item, tasks[idx], idx, len(tasks))[2] != 1:
+        return "not a 1-GPU task"
+    tools = Path(item["tree"]) / "integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    try:
+        if "VLLM_REPLAY" not in tools.read_text():
+            return "the tree has no deferred replay"
+    except OSError:
+        return f"no {tools}"
+    return None
+
+
+def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
+    """Queue task `idx` for a commit-pack pod: the Job it would be, as its env and script."""
+    job = render(item, key, idx, tries)
+    name = job["metadata"]["name"]
+    c = job["spec"]["template"]["spec"]["containers"][0]
+    entry = {"key": key, "item": item, "idx": idx, "tries": tries, "job": name, "spooled": now_utc(),
+             "template": job["metadata"]["annotations"]["verity.dev/template"],
+             "env": {e["name"]: e["value"] for e in c["env"]}, "script": c["command"][-1]}
+    if dry:
+        print(json.dumps(entry, indent=1))
+        return name
+    q = PACK / "queue"
+    q.mkdir(parents=True, exist_ok=True)
+    tmp = q / f".{name}.tmp"
+    tmp.write_text(json.dumps(entry, sort_keys=True))
+    tmp.rename(q / f"{name}.json")
+    append("log.jsonl", {"ev": "spool", "job": name, "key": key, "task": idx, "try": tries, "template": entry["template"],
+                         "tree": item["tree"]})
+    print(f"spooled {name} ({key} task {idx} try {tries}) for commit-pack")
+    return name
+
+
+def route(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
+    if PACK_COMMITS and packable(item, idx) is None:
+        return spool(item, key, idx, tries, dry)
+    return submit(item, key, idx, tries, dry)
+
+
+def pack_keys() -> set[str]:
+    """Keys whose task is in the spool: queued, claimed or with a result not yet read back."""
+    keys = set()
+    for f in [*PACK.glob("queue/*.json"), *PACK.glob("claimed/*/*.json"), *PACK.glob("results/*.json")]:
+        try:
+            keys.add(json.loads(f.read_text())["key"])
+        except (OSError, ValueError, KeyError):
+            continue
+    return keys
+
+
+def pack_results(pods: list[dict], dry: bool = False) -> None:
+    """Read commit-pack results back into their chains; entries claimed by a pod that is gone are a fault."""
+    live = {p["metadata"]["name"] for p in pods if (p.get("status") or {}).get("phase") in ("Pending", "Running")}
+    for d in sorted(p for p in PACK.glob("claimed/*") if p.is_dir()):
+        if d.name in live:
+            continue
+        for f in d.glob("*.json"):
+            if dry:
+                print(f"would requeue {f.name}: pod {d.name} is gone")
+                continue
+            res = PACK / "results" / f.name
+            if not res.exists():
+                entry = json.loads(f.read_text())
+                res.parent.mkdir(parents=True, exist_ok=True)
+                res.write_text(json.dumps({"name": f.stem, "key": entry["key"], "idx": entry["idx"], "tries": entry["tries"],
+                                           "entry": entry, "rc": None, "fault": True, "pod": d.name,
+                                           "reason": f"pod {d.name} ended without a result"}, sort_keys=True))
+            f.unlink(missing_ok=True)
+        if not dry and not any(d.iterdir()):
+            d.rmdir()
+    for r in sorted(PACK.glob("results/*.json")):
+        res = json.loads(r.read_text())
+        entry = res["entry"]
+        item, key, idx, tries, rc = entry["item"], entry["key"], entry["idx"], entry["tries"], res.get("rc")
+        if dry:
+            print(f"would read back {r.name}: rc {rc} fault {res.get('fault')}")
+            continue
+        append("log.jsonl", {"ev": "end", "job": entry["job"], "key": key, "task": idx, "try": tries,
+                             "state": "succeeded" if rc == 0 else "failed", "rc": rc, "wall_s": res.get("wall_s"),
+                             "packed": res.get("pod"), "fault": bool(res.get("fault")), "reason": res.get("reason")})
+        ntasks = len(load_template(item["template"])[0])
+        if rc == 0 and idx + 1 < ntasks:
+            route(item, key, idx + 1, 0)
+        elif rc == REQUEUE_RC and not res.get("fault") and tries + 1 < MAX_TRIES:
+            route(item, key, idx, tries + 1)
+        elif rc != 0 and not item.get("unpacked"):
+            why = res.get("reason") or f"rc {rc}"
+            append("log.jsonl", {"ev": "unpack", "key": key, "task": idx, "why": why, "pod": res.get("pod")})
+            submit({**item, "unpacked": f"{res.get('pod')}: {why}"[:200]}, key, idx, tries + 1)
+        else:
+            append("done.jsonl", {"key": key, "state": "succeeded" if rc == 0 else "failed", "rc": rc, "task": idx,
+                                  "job": entry["job"], "packed": res.get("pod")})
+        done_dir = PACK / "results" / "done"
+        done_dir.mkdir(parents=True, exist_ok=True)
+        r.rename(done_dir / r.name)
+
+
+def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
+    """Move still-suspended gpu Jobs of eligible items into the spool, keeping it at most two pods' slots deep."""
+    room = 2 * PACK_PODS * PACK_SLOTS - len(list(PACK.glob("queue/*.json")))
+    for j in sorted(jobs, key=lambda j: j["metadata"].get("creationTimestamp", "")):
+        if room <= 0:
+            return
+        if not j["spec"].get("suspend") or (j.get("status") or {}).get("startTime"):
+            continue
+        item = json.loads(j["metadata"]["annotations"]["verity.dev/item-json"])
+        idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
+        if packable(item, idx) is not None:
+            continue
+        name, key = j["metadata"]["name"], j["metadata"]["annotations"]["verity.dev/item"]
+        if dry:
+            print(f"would adopt {name} ({key})")
+            room -= 1
+            continue
+        fresh = json.loads(kubectl("get", "job", name, "-o", "json"))
+        if not fresh["spec"].get("suspend") or (fresh.get("status") or {}).get("startTime"):
+            continue
+        kubectl("delete", "job", name, "--wait=false")
+        append("log.jsonl", {"ev": "adopt", "job": name, "key": key, "task": idx, "try": tries})
+        spool(item, key, idx, tries)
+        room -= 1
+
+
+def pack_pods(jobs: list[dict], dry: bool = False) -> None:
+    """Keep up to PACK_PODS commit-pack Jobs while the spool holds more than the running pods' free slots."""
+    if quiet():
+        return
+    active = [j for j in jobs if j["metadata"]["annotations"].get("verity.dev/template", "").startswith(PACK_TEMPLATE + "@")
+              and not (j.get("status") or {}).get("succeeded") and not (j.get("status") or {}).get("failed")]
+    claimed = len(list(PACK.glob("claimed/*/*.json")))
+    queued = len(list(PACK.glob("queue/*.json")))
+    if queued and len(active) < PACK_PODS and queued > PACK_SLOTS * len(active) - claimed:
+        submit_pack_pod(dry=dry)
+
+
+def submit_pack_pod(priority: str | None = None, dry: bool = False) -> str:
+    item = {"id": "p", "template": PACK_TEMPLATE, "tree": str(HERE), "env": {"PACK_SPOOL": str(PACK)}}
+    if priority:
+        item["priority"] = priority
+    key = f"{PACK_TEMPLATE}/p{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}{os.getpid() % 100:02d}"
+    return submit(item, key, dry=dry)
+
+
 def done_keys() -> set[str]:
     p = ROOT / "done.jsonl"
     return {json.loads(line)["key"] for line in p.read_text().splitlines() if line.strip()} if p.exists() else set()
@@ -266,10 +452,12 @@ def job_state(job: dict, pods: dict) -> tuple[str, int | None]:
 def tick(dry: bool = False) -> None:
     jobs = json.loads(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-o", "json"))["items"]
     pods: dict[str, list] = {}
-    for p in json.loads(kubectl("get", "pods", "-l", f"{LABEL}=node1", "-o", "json"))["items"]:
+    pod_list = json.loads(kubectl("get", "pods", "-l", f"{LABEL}=node1", "-o", "json"))["items"]
+    for p in pod_list:
         pods.setdefault((p["metadata"].get("labels") or {}).get("job-name", ""), []).append(p)
+    pack_results(pod_list, dry)
     done = done_keys()
-    inflight: set[str] = set()
+    inflight: set[str] = pack_keys()
     for j in jobs:
         key = j["metadata"]["annotations"]["verity.dev/item"]
         state, rc = job_state(j, pods)
@@ -294,11 +482,13 @@ def tick(dry: bool = False) -> None:
             nxt = (idx, tries + 1)
         if not dry:
             if nxt:
-                submit(item, key, *nxt)
+                route(item, key, *nxt)
             else:
                 append("done.jsonl", {"key": key, "state": state, "rc": rc, "task": idx, "job": j["metadata"]["name"]})
                 inflight.discard(key)
             kubectl("label", "job", j["metadata"]["name"], "verity.dev/seen=1", "--overwrite")
+    if PACK_COMMITS and PACK_ADOPT:
+        pack_adopt(jobs, dry)
     wls = json.loads(kubectl("get", "workloads", "-o", "json"))["items"]
     pending: dict[str, int] = {}
     for w in wls:
@@ -339,6 +529,8 @@ def tick(dry: bool = False) -> None:
             set_aside(f, key, "taken")
         pending[q] = pending.get(q, 0) + 1
         inflight.add(key)
+    if PACK_COMMITS:
+        pack_pods(json.loads(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-o", "json"))["items"], dry)
 
 
 def prom(q: str) -> float | None:
@@ -380,6 +572,17 @@ def main(argv: list[str]) -> int:
     s.add_argument("--task", type=int, default=0, help="start the chain at this task (resume after an earlier task succeeded)")
     s.add_argument("--try", dest="tries", type=int, default=0, help="the try number in the Job name (a resubmission)")
     s.add_argument("--dry-run", action="store_true")
+    sp = sub.add_parser("spool", help="queue one item's task for a commit-pack pod now, whatever PACK_COMMITS says")
+    sp.add_argument("template")
+    sp.add_argument("key", help="workstream/id")
+    sp.add_argument("--tree", required=True)
+    sp.add_argument("--priority")
+    sp.add_argument("--env", action="append", default=[])
+    sp.add_argument("--task", type=int, default=1)
+    sp.add_argument("--dry-run", action="store_true")
+    pp = sub.add_parser("pack-pod", help="submit one commit-pack Job now")
+    pp.add_argument("--priority")
+    pp.add_argument("--dry-run", action="store_true")
     t = sub.add_parser("tick")
     t.add_argument("--dry-run", action="store_true")
     lp = sub.add_parser("loop")
@@ -393,6 +596,15 @@ def main(argv: list[str]) -> int:
             if v:
                 item[k] = v
         submit(item, ns.key, ns.task, ns.tries, dry=ns.dry_run)
+    elif ns.cmd == "spool":
+        item = {"id": ns.key.split("/", 1)[-1], "template": ns.template, "tree": ns.tree,
+                "env": dict(e.split("=", 1) for e in ns.env), **({"priority": ns.priority} if ns.priority else {})}
+        why = packable(item, ns.task)
+        if why:
+            raise SystemExit(f"not packable: {why}")
+        spool(item, ns.key, ns.task, dry=ns.dry_run)
+    elif ns.cmd == "pack-pod":
+        submit_pack_pod(ns.priority, dry=ns.dry_run)
     elif ns.cmd == "tick":
         tick(ns.dry_run)
     elif ns.cmd == "loop":

@@ -81,6 +81,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
     assert seen == {"config-run": ("deployments-cpu", "circuits"), "config-run-row": ("deployments-gpu", "circuits-gpu"),
+                    "commit-pack": ("deployments-gpu", "circuits-gpu"),
                     "port-capture": ("deployments-gpu", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
@@ -284,6 +285,9 @@ def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
         if f.stem.startswith("prover-"):
             assert t.count('JOB_SRC=/workspace/jobs/src/$(hostname)') == tasks >= 1, f.name
             assert t.count("export SRC=/workspace/jobs/src/$(hostname)") == tasks, f.name
+            continue
+        if f.stem == "commit-pack":           # a pilot: each Commit it runs is config-run's gpu task script, job tree included
+            assert tasks == 0 and "job_tree.sh" not in t and 'pilot=$SRC/sky/commit_pack.py' in t, f.name
             continue
         assert t.count('job_tree.sh" "$SRC")') == t.count('job_tree.sh" --mine)') == tasks >= 1, f.name
         assert "pod_bootstrap.sh" not in t and t.count('vllm_bootstrap.sh" ') == tasks, f.name
