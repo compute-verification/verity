@@ -10,9 +10,12 @@
   research notes push LANE [--repo DIR]                     # after every commit: the lane's branch -> origin (never main, never --force)
   research notes branches [--fetch] [--all] [--lane GLOB] [--json]   # lane branches vs origin; exit 1 if an open lane's work is not there
   research notes sync [--path P]... [-m MSG] | scan          # notes_sync.py: commit, rebase, push with retries | history audit
+  research notes archive LANE [--older-days 3] [--by month|day] [--apply]   # notes_archive.py: older notes into month folders
   research notes status|watch --liveness git [--fetch] ...   # steward.py: notes commit times and origin's lane/* tips, not mtimes
   research notes watch --lease [store|PATH] [--standby] ...   # steward.py: only the steward lease's holder acts
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
+  research notes index [--root DIR] [--catalog PATH] [--search TEXT | --evidence ID]   # notes_index.py: notes, full text, citations
+  research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -62,13 +65,15 @@ run launched on the pod has preserved.json (`research fetch --all`) or is in the
 <first reason>` at most every 30 min, both in reaper.log.  `OVERDUE <lane>`, once: not done 30 min after its binding's `final` (the
 first such HH:MMZ after the binding was written).  With `--pods`, `OVER-BUDGET <lane>`, once: its pods' $/h x time, accumulated per
 pass, passed the binding's budget (its first `$<number>`).  `RENDERED <path>` / `RENDER-FAILED <entry>: <why>`: the `[[render]]`
-entries of `<root>/steward.toml` (daily at `at`, `render_lines`).  `ROUTED <lane> <n>`: new KILLED lines of the laptop guardian's log
+entries of `<root>/steward.toml` (daily at `at`, `render_lines`).  `LAUNCHED <name> <run id> on <machine>` / `RUN-FAILED <name>: <why>`:
+its `[[run]]` entries, each a recorded `research run --on MACHINE` launched daily at `at`, or weekly with `weekday` (`run_lines`).
+`ROUTED <lane> <n>`: new KILLED lines of the laptop guardian's log
 (`--guardian-log`) went to the lane that owns them (`--on <machine>`, or the killed process's cwd under a bound worktree) as one
 handoff per lane per pass (a final lane's to `lanes/coordinator/`); `KILLED-UNOWNED <line>` when no lane does.  A rule that fails
 prints `STEWARD-ERROR <rule>: <error>` and the watch goes on.
 
-`relaunch` is contract §C in one command: save the lane's uncommitted work to `lanes/<lane>/evidence/uncommitted-<HHMMZ>*`,
-checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
+`relaunch` is contract §C in one command: save the lane's uncommitted work to `~/.research/relaunch/<lane>/uncommitted-<HHMMZ>*`
+(`$RESEARCH_RELAUNCH`; on the worktree's machine, never in the notes), checkpoint it superseded, bind the successor (`<topic>-<N+1>` unless `--as`) to its branch, worktree and pods, print the
 successor's launch message.  `gc-worktrees` lists (`--apply`: removes) clean worktrees under the coordinator's worktree root
 whose lanes are all done and whose branch tip is on origin; branches are never deleted, dirty worktrees never removed.
 
@@ -96,8 +101,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
+from . import remote
 from .pythonpath import tree_pythonpath
 from .pods import POD_SUFFIXES, strip_pod_suffix
+from .runs import new_run_id
 from .pods.workproc import FIND_PRUNE, NOT_WORK_RE, WORK_RE
 
 STATES = ("open", "blocked", "final", "superseded")
@@ -794,13 +801,16 @@ def is_git_data(p: Path) -> bool:
 
 def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime | None = None) -> dict | None:
     """Commit every change in the notes repo except files over `max_bytes` (dumps belong in the store; .gitignore drops the known
-    kinds).  Only the coordinator's watcher calls this, so lanes never contend for the index lock.  None: not a repo, or clean."""
+    kinds), git data (`refused`) and evidence or renders (`evidence`: `notes_sync.is_evidence`, the store holds them).  Only the
+    coordinator's watcher calls this, so lanes never contend for the index lock.  None: not a repo, or clean."""
+    from .notes_sync import is_evidence  # noqa: PLC0415
+
     if not (root / ".git").exists():
         return None
     st = _git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
     if st is None:
         return None
-    entries, paths, big, refused = st.split("\0"), [], [], []
+    entries, paths, big, refused, evidence = st.split("\0"), [], [], [], []
     i = 0
     while i < len(entries):
         e = entries[i]
@@ -817,18 +827,23 @@ def snapshot(root: Path, max_bytes: int = SNAPSHOT_MAX_BYTES, now: dt.datetime |
         if p.is_file() and is_git_data(p):
             refused.append(path)
             continue
+        if p.is_file() and is_evidence(path):
+            evidence.append(path)
+            continue
         (big if p.is_file() and p.stat().st_size > max_bytes else paths).append(path)
+    left = {"skipped": big, "refused": refused, "evidence": evidence}
     if not paths:
-        return {"commit": None, "paths": 0, "skipped": big, "refused": refused} if big or refused else None
+        return {"commit": None, "paths": 0, **left} if big or refused or evidence else None
     subprocess.run(["git", "--literal-pathspecs", "-C", str(root), "add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"],
                    input="\0".join(paths), text=True, check=True, capture_output=True, timeout=120)
+    if evidence:                                          # a staged copy would be committed anyway
+        _git(root, "--literal-pathspecs", "reset", "-q", "--", *evidence)
     now = now or _utcnow()
     msg = (f"snapshot {now:%Y-%m-%dT%H:%MZ}: {len(paths)} paths" + (f"; {len(big)} too big, not committed" if big else "")
-           + (f"; {len(refused)} git data refused" if refused else ""))
+           + (f"; {len(refused)} git data refused" if refused else "") + (f"; {len(evidence)} evidence left out" if evidence else ""))
     if subprocess.run(["git", "-C", str(root), "commit", "-q", "--no-verify", "-m", msg], capture_output=True, timeout=60).returncode:
-        return {"commit": None, "paths": 0, "skipped": big, "refused": refused}
-    return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), "skipped": big,
-            "refused": refused}
+        return {"commit": None, "paths": 0, **left}
+    return {"commit": (_git(root, "rev-parse", "--short", "HEAD") or "").strip(), "paths": len(paths), **left}
 
 
 # ---- rendering and the watch loop ----------------------------------------------------------------------------------------------------------
@@ -908,6 +923,9 @@ def _snapshot_line(snap: dict) -> str:
     refused = snap.get("refused") or []
     if refused:
         tail += f"; REFUSED {len(refused)} git data (code moves only through verity branches): {', '.join(refused[:3])}"
+    evidence = snap.get("evidence") or []
+    if evidence:
+        tail += f"; left out {len(evidence)} evidence/render files (the evidence store holds them): {', '.join(evidence[:3])}"
     return f"notes snapshot {snap['commit'] or '(none)'}: {snap['paths']} paths{tail}"
 
 
@@ -1048,9 +1066,12 @@ REAP_RETRY_S = 30 * 60
 OVERDUE_GRACE_MIN = 30
 RENDER_TIMEOUT_S = 600
 RENDER_REFRESH_TIMEOUT_S = 600
+RUN_LAUNCH_TIMEOUT_S = 600
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 #: The artifact kinds whose payloads the render's readers parse (instance-equiv/v1 documents; payload-only bench-result/v1
 #: envelopes): a render entry's store refresh makes them local unless the entry names its own `payloads`.
 RENDER_PAYLOAD_KINDS = ("instance-equiv/v1", "bench-result/v1")
+RENDERS_ENV = "RESEARCH_RENDERS"
 NEVER_RAN = ("refused", "resolving", "shipping")        # remote.json phases of a launch that never reached the machine's runner
 BUDGET_RE = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
 HHMMZ_RE = re.compile(r"(\d{1,2}):(\d{2})Z")
@@ -1303,11 +1324,44 @@ def _render_run(cmd: list[str], env: dict, cwd: Path, timeout: float) -> tuple[i
     return r.returncode, r.stdout, r.stderr
 
 
+def steward_entries(path: Path, table: str, now: dt.datetime, state: dict, fail: str) -> tuple[list, list[str]]:
+    """The `[[table]]` entries of steward.toml, re-read every pass.  A file that does not parse is one `<fail> steward.toml: <error>`
+    line, said again only when the error changes."""
+    if not path.exists():
+        return [], []
+    try:
+        entries = tomllib.loads(path.read_text()).get(table) or []
+        state.pop(f"{table}_config_error", None)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        if state.get(f"{table}_config_error") == str(e):
+            return [], []
+        state[f"{table}_config_error"] = str(e)
+        return [], [f"{now:%H:%MZ} {fail} {path.name}: {e}"]
+    return (entries if isinstance(entries, list) else []), []
+
+
+def due_period(at: re.Match, now: dt.datetime, weekday: str | None = None) -> str | None:
+    """The period a scheduled entry is due in: the UTC day (`2026-09-28`) once `now` is at or after `at` (an HH:MMZ match), or with
+    `weekday` the ISO week (`2026-W40`) once `now` is at or after `at` on that weekday; None before."""
+    start = now.replace(hour=int(at[1]) % 24, minute=int(at[2]), second=0, microsecond=0)
+    if weekday is None:
+        return f"{now:%Y-%m-%d}" if now >= start else None
+    start -= dt.timedelta(days=now.weekday() - WEEKDAYS.index(weekday))
+    year, week, _ = now.isocalendar()
+    return f"{year}-W{week:02d}" if now >= start else None
+
+
+def renders_root() -> Path:
+    """Where a render entry's relative `out` lands: `$RESEARCH_RENDERS`, else ~/.research/renders.  Never the notes: they are Git."""
+    return Path(os.environ.get(RENDERS_ENV) or Path.home() / ".research" / "renders").expanduser()
+
+
 def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None,
                  run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _render_run,
                  timeout_s: float = RENDER_TIMEOUT_S) -> list[str]:
     """Scheduled renders, from `[[render]]` entries of <root>/steward.toml (re-read every pass): `at` (HH:MMZ, daily), `source` (a tree
-    with backends/numerical and tools/research), `out` (under the notes root), `store` (default ~/.research/store).  Once per UTC day
+    with backends/numerical and tools/research), `out` (a directory outside the notes: absolute, or relative to :func:`renders_root`;
+    one inside the notes is an invalid entry, since renders never go to Git), `store` (default ~/.research/store).  Once per UTC day
     at or after `at`, `python -m verity_numerical.bench.tables` and `.drilldown --root STORE --format md` run with the source tree's
     workspace import roots and root on PYTHONPATH (`research env --source`, `pythonpath.tree_pythonpath`) into <out>/<stamp>-tables.md / -drilldowns.md: `RENDERED <path>`, or `RENDER-FAILED <entry>: <stderr tail>` (both
     within 10 min).  An entry with `preview = true` also renders `.views` (the approved spec's tables, a labelled preview that is
@@ -1319,34 +1373,28 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     difference is a RENDER-FAILED line) as <stamp>-parity.md.  `published = "tables"` is the default.  Before rendering, the entry's store is caught up from the remote
     with `research data refresh --payloads <kinds>` (`payloads`, default :data:`RENDER_PAYLOAD_KINDS`), so a render on a machine
     that did not write the records (the control pod) reads what the pods published, payloads included; `refresh = false` skips it,
-    and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  The snapshot
-    commits them."""
-    path = config or root / STEWARD_TOML
-    if not path.exists():
-        return []
+    and a failed refresh is `RENDER-REFRESH-FAILED <entry>: ...` while the render still runs on the store as it is.  A render is
+    regenerated from the store on demand, so it is output, not evidence: nothing commits or stores it."""
+    entries, lines = steward_entries(config or root / STEWARD_TOML, "render", now, state, "RENDER-FAILED")
+    if not entries:
+        return lines
     done = state.setdefault("render", {})
-    try:
-        entries = tomllib.loads(path.read_text()).get("render") or []
-        state.pop("render_config_error", None)
-    except (OSError, tomllib.TOMLDecodeError) as e:
-        if state.get("render_config_error") == str(e):
-            return []
-        state["render_config_error"] = str(e)
-        return [f"{now:%H:%MZ} RENDER-FAILED {path.name}: {e}"]
-    lines, today = [], f"{now:%Y-%m-%d}"
-    for e in entries if isinstance(entries, list) else []:
+    for e in entries:
         at, out = str(e.get("at", "")), str(e.get("out", ""))
         key, m = f"{out}@{at}", HHMMZ_RE.fullmatch(at)
+        dest = renders_root() / Path(out).expanduser()                      # an absolute `out` stays itself
         bad = ("an entry needs at = \"HH:MMZ\", source and out" if not (m and out and e.get("source")) else
-               f"published = {e['published']!r}: \"tables\", \"views\" or \"entities\"" if e.get("published", "tables") not in ("tables", "views", "entities") else None)
+               f"published = {e['published']!r}: \"tables\", \"views\" or \"entities\"" if e.get("published", "tables") not in ("tables", "views", "entities") else
+               f"out {out!r} is inside the notes ({root}): renders never go to Git; use an absolute path outside them, or one relative "
+               f"to ${RENDERS_ENV} (default ~/.research/renders)" if dest.resolve().is_relative_to(Path(root).resolve()) else None)
         if bad:
             if done.get(key) != "invalid":
                 done[key] = "invalid"
                 lines.append(f"{now:%H:%MZ} RENDER-FAILED {key}: {bad}")
             continue
-        if now < now.replace(hour=int(m[1]) % 24, minute=int(m[2]), second=0, microsecond=0) or done.get(key) == today:
+        if (period := due_period(m, now)) is None or done.get(key) == period:
             continue
-        done[key] = today
+        done[key] = period
         src = Path(str(e["source"])).expanduser()
         store = Path(str(e.get("store") or "~/.research/store")).expanduser()
         env = {**os.environ, "PYTHONPATH": tree_pythonpath(src)}
@@ -1370,7 +1418,7 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
             cmd = [sys.executable, "-m", f"verity_numerical.bench.{mod}", "--root", str(store), "--format", fmt, *extra]
             rc, stdout, stderr = run(cmd, env, src, left) if left > 0 else (None, "", f"timeout after {timeout_s:.0f}s")
             if rc == 0:
-                f = root / out / f"{now:%Y%m%dT%H%MZ}-{suffix}.{'md' if fmt == 'md' else 'json'}"
+                f = dest / f"{now:%Y%m%dT%H%MZ}-{suffix}.{'md' if fmt == 'md' else 'json'}"
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_text(stdout)
                 lines.append(f"{now:%H:%MZ} RENDERED {_tilde(f)}")
@@ -1379,16 +1427,65 @@ def render_lines(root: Path, now: dt.datetime, state: dict, config: Path | None 
     return lines
 
 
+def run_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None,
+              run: Callable[[list[str], dict, Path, float], tuple[int | None, str, str]] = _render_run,
+              timeout_s: float = RUN_LAUNCH_TIMEOUT_S, new_id: Callable[[], str] = new_run_id) -> list[str]:
+    """Scheduled recorded runs, from `[[run]]` entries of <root>/steward.toml (re-read every pass): `name`, `at` (HH:MMZ), `weekday`
+    (`mon` ... `sun`: weekly; daily without), `source` (the tree it is launched from) and `args`, the arguments of `research run`, which
+    put it on a machine (`["--on", MACHINE, ..., "--", CMD...]`).  Once per UTC day (per ISO week with `weekday`) at or after `at`,
+    `python -m research run --id <run id> <args>` runs in `source` with the tree's workspace on PYTHONPATH, as a render's commands
+    do.  It returns once the machine has started the workload detached, so the pass waits for the launch only (at most 10 min),
+    never for the run: `LAUNCHED <name> <run id> on <machine>`, else `RUN-FAILED <name> <run id>: <stderr tail>`, and the next
+    launch is the next period's.  The run's Attempt records the rest (`research inspect <run id>`).  An invalid entry is one
+    `RUN-FAILED <name>: <why>` line."""
+    entries, lines = steward_entries(config or root / STEWARD_TOML, "run", now, state, "RUN-FAILED")
+    if not entries:
+        return lines
+    done, invalid, seen = state.setdefault("run", {}), state.setdefault("run_invalid", {}), set()
+    for e in entries:
+        name, args, weekday = str(e.get("name", "")), e.get("args"), e.get("weekday")
+        m = HHMMZ_RE.fullmatch(str(e.get("at", "")))
+        ok = name and m and e.get("source") and isinstance(args, list) and all(isinstance(a, str) for a in args)
+        opts = args[:args.index("--")] if ok and "--" in args else []
+        machine = remote.flag_value(opts, "--on")
+        bad = ('an entry needs name, at = "HH:MMZ", source and args (a list of strings)' if not ok else
+               f"weekday = {weekday!r}: one of {', '.join(WEEKDAYS)}" if weekday is not None and weekday not in WEEKDAYS else
+               'args put the run on a machine: ["--on", MACHINE, ..., "--", CMD...]' if not machine else
+               "args set --id: the steward names the run" if remote.flag_value(opts, "--id") is not None else
+               f"name {name!r} is used by another entry" if name in seen else None)
+        seen.add(name)
+        if bad:
+            if invalid.get(name) != bad:
+                invalid[name] = bad
+                lines.append(f"{now:%H:%MZ} RUN-FAILED {name or '?'}: {bad}")
+            continue
+        if (period := due_period(m, now, weekday)) is None or done.get(name, {}).get("period") == period:
+            continue
+        run_id = new_id()
+        done[name] = {"period": period, "run": run_id}
+        invalid.pop(name, None)
+        src = Path(str(e["source"])).expanduser()
+        cmd = [sys.executable, "-m", "research", "run", "--id", run_id, *args]
+        rc, stdout, stderr = run(cmd, {**os.environ, "PYTHONPATH": tree_pythonpath(src)}, src, timeout_s)
+        done[name]["rc"] = rc
+        lines.append(f"{now:%H:%MZ} LAUNCHED {name} {run_id} on {machine}" if rc == 0 else
+                     f"{now:%H:%MZ} RUN-FAILED {name} {run_id}: {' '.join((stderr or stdout).split())[-200:] or f'rc {rc}'}")
+    return lines
+
+
 def sync_lines(root: Path, srep: dict, now: dt.datetime) -> list[str]:
     """The watcher's line for its own `notes sync`: the report when it committed, and a failure as `SYNC-FAILED ahead A behind B:
-    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent."""
+    <report>` every pass it lasts, so a clone that stops syncing (83 commits behind on 2026-09-26) is never silent.  A lane note left
+    out for a stamp ahead of the clock or broken front matter is one `SYNC-REFUSED <path>: ...` line every pass it lasts; the other
+    notes synced.  A `SYNC-WARN <path>: ...` line comes once, with the commit that took the note."""
     from . import notes_sync  # noqa: PLC0415
 
-    if srep["rc"]:
+    refused = [f"{now:%H:%MZ} {x}" for x in notes_sync.refused_lines(srep)]
+    if srep["rc"] not in (0, notes_sync.FUTURE_RC):
         ab = notes_sync.lag(root)
         where = f"ahead {ab[0]} behind {ab[1]}" if ab else "lag unknown"
-        return [f"{now:%H:%MZ} SYNC-FAILED {where}: {notes_sync.render_sync(srep)}"]
-    return [f"{now:%H:%MZ} {notes_sync.render_sync(srep)}"] if srep.get("commit") else []
+        return [f"{now:%H:%MZ} SYNC-FAILED {where}: {notes_sync.render_sync(srep)}", *refused]
+    return ([f"{now:%H:%MZ} {notes_sync.render_sync(srep)}"] if srep.get("commit") else []) + refused
 
 
 def steward_rule(name: str, fn: Callable[..., list[str]], *args, **kw) -> list[str]:
@@ -1526,6 +1623,12 @@ def save_uncommitted(wt: Path, dest: Path, stamp: str, max_file_mb: float = 100)
     return {"files": files, "dirty": len(lines), "conflicts": [x[3:] for x in lines if x[:2] in UNMERGED], "big": big}
 
 
+def relaunch_dir(lane: str) -> Path:
+    """Where `relaunch` saves a lane's uncommitted work: `$RESEARCH_RELAUNCH/<lane>`, else ~/.research/relaunch/<lane>.  On the
+    worktree's machine, never in the notes: a copy of code is not evidence, and the notes are Git."""
+    return Path(os.environ.get("RESEARCH_RELAUNCH") or Path.home() / ".research" / "relaunch").expanduser() / lane
+
+
 def successor_name(root: Path, lane: str, succ: dict[str, str] | None = None) -> str:
     """`<topic>-<N+1>`: wave-4090 -> wave-4090-2 -> wave-4090-3 (a name some lane dir already has is skipped)."""
     topic, n = attempt(root, lane, succ)
@@ -1553,7 +1656,7 @@ def relaunch(root: Path, lane: str, successor: str | None = None, why: str = "",
     branch = b.get("branch") or f"lane/{lane}"
     wt = b.get("worktree") or (worktrees(repo).get(branch) if repo else None)
     stamp, done = f"{now:%H%MZ}", []
-    saved = save_uncommitted(Path(wt), root / "lanes" / lane / "evidence", stamp) if wt and Path(wt).is_dir() else None
+    saved = save_uncommitted(Path(wt), relaunch_dir(lane), stamp) if wt and Path(wt).is_dir() else None
     if saved:
         done.append(f"saved {saved['dirty']} uncommitted path(s): " + " ".join(_tilde(p) for p in saved["files"]))
     else:
@@ -1788,19 +1891,28 @@ def main(argv: list[str]) -> int:
 
     if argv and argv[0] in ("sync", "scan"):
         return notes_sync.main(argv, default_root())
+    if argv and argv[0] == "archive":
+        from .notes_archive import main as archive_main  # noqa: PLC0415
+
+        return archive_main(argv[1:], default_root())
     if argv and argv[0] == "service":
         from .steward import service_main  # noqa: PLC0415
 
         return service_main(argv[1:])
+    if argv and argv[0] in ("index", "mcp"):
+        from . import notes_index, notes_mcp  # noqa: PLC0415
+
+        return (notes_index if argv[0] == "index" else notes_mcp).main(argv[1:], default_root())
     rc = _main(argv)
     if rc in (0, 3) and argv and argv[0] in ("checkpoint", "bind", "relaunch"):
         root = Path(argv[argv.index("--root") + 1]).expanduser() if "--root" in argv[:-1] else default_root()
         lanes = [argv[1]] if len(argv) > 1 and not argv[1].startswith("-") else []
         if argv[0] == "relaunch" and "--as" in argv[:-1]:
             lanes.append(argv[argv.index("--as") + 1])
-        line = notes_sync.auto_sync(root, lanes if argv[0] != "relaunch" or "--as" in argv else [])
+        line, sync_rc = notes_sync.auto_sync(root, lanes if argv[0] != "relaunch" or "--as" in argv else [])
         if line:
             print(line, file=sys.stderr)
+        rc = rc or sync_rc
     return rc
 
 
@@ -2040,6 +2152,7 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             more += steward_rule("overdue", overdue_lines, root, rows, now, state)
             more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
             more += steward_rule("render", render_lines, root, now, state)
+            more += steward_rule("run", run_lines, root, now, state)
             more += steward_rule("state", lambda: save_state(root, state) or [])
         if lease_line:
             more.append(lease_line)

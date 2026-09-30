@@ -6,6 +6,7 @@ numerical correspondence with the FA2 kernel (that is lane B-sem's / `fa2_model.
 from __future__ import annotations
 
 import gc
+import sys
 import tracemalloc
 import weakref
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity_vllm.commit import scheme
 from tests.commit.fa2_prototype.derived import open_derived, verify_derived
 from tests.commit.fa2_prototype.encoding import Geometry, ValueId
 from tests.commit.fa2_prototype.fixture import GEOMETRY_JSON, archived_geometry_fixture, synthetic_fixture
@@ -129,14 +131,34 @@ def test_archived_geometry_fixture_roundtrip() -> None:
     assert GEOMETRY_JSON.exists()
 
 
+#: The code a commit runs.  A block counts only when one of these files is on the stack that allocated it, so nothing another
+#: thread or an earlier test allocates is counted.
+COMMIT_CODE = (str(Path(__file__).parent / "fa2_prototype" / "*"), str(Path(__file__).parent / "stream_merkle.py"), scheme.__file__)
+#: Frames tracemalloc keeps per block: enough for every block the commit makes to reach a frame of `COMMIT_CODE`.
+COMMIT_FRAMES = 16
+
+
+def _commit_resident(snapshot: tracemalloc.Snapshot) -> int:
+    """Bytes of `snapshot`'s blocks that commit code allocated.  numpy's own code keeps a varying number of small blocks after
+    `np.cumsum` (raw memory, not objects anything references; the count differs run to run), so a Python-heap block counts
+    only when numpy's code did not make it.  Array buffers (numpy's tracemalloc domain) always count."""
+    np_dir = str(Path(np.__file__).parent)
+    traces = snapshot.filter_traces([tracemalloc.Filter(True, p, all_frames=True) for p in COMMIT_CODE]).traces
+    return sum(t.size for t in traces if t.domain != 0 or not t.traceback[-1].filename.startswith(np_dir))
+
+
 def test_transient_storage_is_released() -> None:
     """After commit only roots + declared per-tile state remain: the fixture's arrays and every leaf/level are gone."""
+    # A first commit pays every first use (numpy's dispatch caches, lazy imports), so the measured one counts the same bytes
+    # whatever ran before it in the process.  The layout is static context, built before the measurement.
+    warm = synthetic_fixture(seed=12, geo=GEO, layer=1, step=0, prompt_len=96)
+    HierCommitment(HierLayout(warm.ctx, GEO, 4)).commit(warm)
     fx = synthetic_fixture(seed=11, geo=GEO, layer=1, step=0, prompt_len=96)
-    gc.collect()
-    tracemalloc.start()
-    base = tracemalloc.take_snapshot()
     L = HierLayout(fx.ctx, GEO, 4)
     c = HierCommitment(L)
+    gc.collect()
+    tracemalloc.start(COMMIT_FRAMES)
+    base = tracemalloc.take_snapshot()
     R = c.commit(fx)
     ref_q = weakref.ref(fx.q16)
     fx_words = int(fx.q16.nbytes + fx.k16.nbytes + fx.v16.nbytes)
@@ -145,14 +167,16 @@ def test_transient_storage_is_released() -> None:
     after = tracemalloc.take_snapshot()
     tracemalloc.stop()
     assert ref_q() is None, "the fixture arrays are still referenced"
-    grown = sum(s.size_diff for s in after.compare_to(base, "filename") if s.size_diff > 0)
+    grown = _commit_resident(after) - _commit_resident(base)
     retained = c.retained_bytes()
     n_sub = sum(len(v) for v in c.subtree_roots.values())
     assert retained == 32 * n_sub + 40
-    # What may remain: the subtree roots (32 B + Python object overhead each), the tile table (static context, a few
-    # hundred bytes per tile) and tracemalloc's own bookkeeping.  The committed stream (4 * N bytes), the leaves, the
-    # tree levels and the fixture must not be resident.
-    assert grown < 400 * n_sub + 400 * len(L.tiles) + 16 * 1024, (grown, n_sub, L.n_words * 4, fx_words)
+    # What may remain is what the commitment declares: R and the subtree roots, one list per tile keyed by (head, q-block),
+    # plus numpy's shape cache (at most 7 blocks of each size: 16, 32 and 48 B for the commit's 1-, 2- and 3-D arrays, so under
+    # 1 KiB).  The committed stream (4 * N bytes), the leaves, the tree levels and the fixture must not be resident.
+    declared = sys.getsizeof(R) + sys.getsizeof(c.subtree_roots) + sum(
+        sys.getsizeof(k) + sys.getsizeof(v) + sum(map(sys.getsizeof, v)) for k, v in c.subtree_roots.items())
+    assert grown <= declared + 1024, (grown, declared, n_sub, L.n_words * 4, fx_words)
     assert grown < L.n_words * 4 // 8
     assert len(R) == 32
 
