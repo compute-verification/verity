@@ -39,8 +39,11 @@ def _load(name: str, path: Path):
 H = _load("pearl_c_h100_fixture", HERE.parent / "pearl_c" / "fixture.py")
 W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 
+from verity.commitments.blake3 import keyed  # noqa: E402
+from verity.commitments.merkle import MerkleTree  # noqa: E402
 from verity.commitments.turboshake import turboshake128  # noqa: E402
 from verity.ml.kernels import group_sum_total_batch  # noqa: E402
+from verity_pouw.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, commit_rows  # noqa: E402
 from verity_pouw.protocol import Tile  # noqa: E402
 from verity_pouw.schemes import pearl_c as C  # noqa: E402
 from verity_pouw.schemes import pearl_kw as P  # noqa: E402
@@ -48,6 +51,25 @@ from verity_pouw.schemes.pearl_c_device import DEVICES, SM120, SM120_UNPROMOTED,
 
 VARIANTS = (SM120, SM120_UNPROMOTED)
 CASE = H.CASE
+F32_SEGMENT, D_ROWS = 1024, 0x23
+
+
+def digests_h0(c: np.ndarray, u: np.ndarray) -> list[bytes]:
+    """Hashing format h0's message digests (TurboSHAKE128, D = 0x21), per (row, 32-column chunk), row-major."""
+    return [C.message_digest(c[i, h:h + C.CHUNK].astype("<u4").tobytes() + u[i, h:h + C.CHUNK].astype("<u4").tobytes(), "h0")
+            for i in range(c.shape[0]) for h in range(0, c.shape[1], C.CHUNK)]
+
+
+def leaves_h0(dg: list[bytes], m: int, n: int) -> list[bytes]:
+    per = n // C.CHUNK
+    return [turboshake128(b"".join(dg[r * per + 2 * tj + h] for r in range(64 * ti, 64 * ti + 64) for h in range(2)), C.D_LEAF, 32)
+            for ti in range(m // 64) for tj in range(n // 64)]
+
+
+def row_commits(rows: list[bytes], segment: int) -> list[bytes]:
+    """The bench's model of A's commitment (TurboSHAKE128 over 1 KB FP32 row segments, D = 0x23), which no verifier checks:
+    h0's A tree is `audit.commit_rows`' SHA-256 frame, h1's frame-b3 (`tree_a_h1`)."""
+    return [turboshake128(r[s:s + segment], D_ROWS, 32) for r in rows for s in range(0, len(r), segment)]
 
 
 def rowmajor(x: np.ndarray) -> bytes:
@@ -92,9 +114,12 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     ctx = H.context(m, n, k)
     noise = C.PearlC(forming="v1", device=SM120).noise(ctx)
+    tiles = (m // 64) * (n // 64)
     manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v1", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
                 "keys": {"line_a": P._line_key(noise.seed_a).hex(), "line_b": P._line_key(noise.seed_b).hex(),
-                         "jackpot": P.subkey("jackpot", noise.seed_a).hex()},
+                         "jackpot": P.subkey("jackpot", noise.seed_a).hex(), "dom_a": H.a_domain(ctx).domain_id.hex(),
+                         "dom_t": H.t_domain(ctx, tiles).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(),
+                         "k_leaf": C.H1_KEYS["leaf"].hex()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex()}, "variants": {}}
     o = H.Out(out_dir)
     lines = {name: np.array([P.sample_line(seed, side, 0, t) for t in range(count)], np.uint8)
@@ -125,7 +150,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     at, bt = np.array(a.codes, np.uint8), np.array(b.codes, np.uint8)
     o.put("at", rowmajor(at), "u8")
     o.put("bt", rowmajor(bt), "u8")
-    o.put("rows", H.row_commits(ra, H.F32_SEGMENT), "u8")
+    o.put("rows", row_commits(ra, F32_SEGMENT), "u8")
+    o.put("tree_a_h1", H.tree_bytes(H.a_domain(ctx), ra, ROW_SCHEMA), "u8")
     fa_vals = np.frombuffer(b"".join(ra), "<f4").reshape(m, k)
     fb_vals = np.frombuffer(b"".join(rb), "<f4").reshape(n, k)
     qa, sa = H.plain(fa_vals)
@@ -161,10 +187,16 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         v.put("c", c, "u32")
         v.put("u", u, "u32")
         v.put("y", H.glue_y(u, inv["a"], inv["b"]), "u16")
-        dg = H.digests(c, u)
+        dg = digests_h0(c, u)
         v.put("digests", dg, "u8")
-        v.put("leaves", H.leaves(dg, m, n), "u8")
+        v.put("leaves", leaves_h0(dg, m, n), "u8")
+        dg1 = H.digests(c, u)
+        lv1 = H.leaves(dg1, m, n)
+        v.put("digests_h1", dg1, "u8")
+        v.put("leaves_h1", lv1, "u8")
+        v.put("tree_t_h1", H.tree_bytes(H.t_domain(ctx, tiles), lv1, TILE_SCHEMA), "u8")
         agree = crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n)
+        agree["h1"] = crosscheck_h1(device, ctx, ra, rb, dg1, lv1, n)
         manifest["variants"][device.name] = {"scheme": C.PearlC(forming="v1", device=device).name, "g": device.g,
                                              "files": v.files, "crosscheck": agree}
     (out_dir / "check.json").write_text(json.dumps(manifest, indent=1) + "\n")
@@ -188,6 +220,24 @@ def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n) -> dict:
     mine = turboshake128(b"".join(dg[r * per + per - 2 + h] for r in rows for h in range(2)), C.D_LEAF, 32)
     assert s.digest(ctx, noise, checked) == mine
     return {"tile": [64, n - 64], "cells": 64 * 64, "agree": True}
+
+
+def crosscheck_h1(device, ctx, ra, rb, dg, lv, n) -> dict:
+    """Hashing format -h1 on `device` (``pearl-c-<device>-v1-h1``): the same tile's leaf through the scheme, and the frame-b3
+    trees' roots as `verity_pouw.audit` commits A's rows and the tile leaves."""
+    s = C.PearlC(forming="v1", device=device, hashing="h1")
+    rows, cols = range(64, 128), range(n - 64, n)
+    noise = s.noise(ctx)
+    ops = s.encode(ctx, noise, [ra[i] for i in rows], [rb[j] for j in cols], Tile(tuple(rows), tuple(cols)))
+    checked = s.checked(ctx, ops)
+    per, tn = n // C.CHUNK, n // 64
+    mine = keyed(C.H1_KEYS["leaf"], b"".join(dg[r * per + per - 2 + h] for r in rows for h in range(2)))
+    assert s.digest(ctx, noise, checked) == mine and lv[tn + tn - 1] == mine
+    root_a = commit_rows(activation_binding(ctx.salt, ctx.matmul.index), ctx.matmul.index, ra, s.commitment_hash).commitment.root
+    assert H.tree_bytes(H.a_domain(ctx), ra, ROW_SCHEMA)[-32:] == root_a
+    tree_t = MerkleTree(H.t_domain(ctx, len(lv)), dict(enumerate(lv)), lambda _: TILE_SCHEMA)
+    assert H.tree_bytes(H.t_domain(ctx, len(lv)), lv, TILE_SCHEMA)[-32:] == tree_t.commitment.root
+    return {"scheme": s.name, "tile": [64, n - 64], "root_a": root_a.hex(), "root_t": tree_t.commitment.root.hex(), "agree": True}
 
 
 if __name__ == "__main__":
