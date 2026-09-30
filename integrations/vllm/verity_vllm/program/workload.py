@@ -40,8 +40,20 @@ def _is_input_node(n: Node) -> bool:
     return n.form == "batch" and (getattr(n.fn, "family", None) == "Input" or n.fn.id.startswith("Input"))
 
 
-def _remap(r: Refs, K: int) -> Refs:
-    """Root-body refs -> request-body refs: node k < K (an Input batch) becomes parameter k; node k >= K becomes node k-K."""
+def _remap(r: Refs, K: int, logs: dict[int, tuple[PartLog, PartLog]] | None = None) -> Refs:
+    """Root-body refs -> request-body refs: node k < K (an Input batch) becomes parameter k; node k >= K becomes node k-K.
+
+    `logs` (one per `K`) maps a `PartLog` a `Concat` was cut from to the log of its remapped parts, so a key/value sequence
+    one row longer than the call before remaps one part."""
+    if logs is not None and isinstance(r, Concat) and r.prefix is not None:
+        log, j = r.prefix
+        hit = logs.get(id(log))
+        if hit is None or hit[0] is not log:
+            hit = logs[id(log)] = (log, PartLog())
+        sub = hit[1]
+        for p in log.parts[len(sub):j]:
+            sub.append(_remap(p, K))
+        return sub.raw_cut(j, [_remap(p, K) for p in r.parts[j:]])
     if isinstance(r, Affine):
         if r.space != "n":
             raise ValueError(f"unexpected ref space {r.space!r} in a root body")

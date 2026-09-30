@@ -2,10 +2,11 @@
 liveness) give what they give on the same sequence built part by part."""
 from __future__ import annotations
 
+import json
 import random
 
-from verity.ir.codec import encode_program
-from verity.ir.defs import CompositeDefinition, PrimitiveDefinition
+from verity.ir.codec import decode_program, encode_program
+from verity.ir.defs import CompositeDefinition, PrimitiveDefinition, Registry
 from verity.ir.liveness import dead_gates
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat, prefix_runs, runs
@@ -130,3 +131,26 @@ def test_encoding_and_liveness_of_log_cuts_are_those_of_concat():
             a, b = _attention_like(N, True, dead), _attention_like(N, False, dead)
             assert encode_program(a) == encode_program(b)
             assert dead_gates(a).to_json() == dead_gates(b).to_json()
+
+
+def test_a_decoded_alias_chain_is_one_log_and_decodes_to_the_flat_parts():
+    """Call P's key sequence is written as an alias to call P-1's plus one part; the decoder extends one log along the chain,
+    and every decoded sequence is `Concat` of the flat parts the writer had."""
+    reg = Registry()
+    reg.add(Neg16)
+    reg.add(Add16)
+    N = 30
+    p = _attention_like(N, True)
+    desc = json.loads(json.dumps(encode_program(p)))
+    d = decode_program(desc, reg)
+    assert encode_program(d) == desc
+    logs = set()
+    for want, got in zip(p.root.body.nodes, d.root.body.nodes):
+        for a, b in zip(want.args, got.args):
+            if isinstance(a.refs, Concat):
+                flat = _flat(a.refs)
+                assert isinstance(b.refs, Concat) and b.refs.starts == Concat(flat).starts and b.refs.count == a.refs.count
+                assert [x.to_json() for x in b.refs.parts] == [x.to_json() for x in flat]
+                if b.refs.prefix is not None:
+                    logs.add(id(b.refs.prefix[0]))
+    assert len(logs) == 1

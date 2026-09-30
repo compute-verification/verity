@@ -32,7 +32,7 @@ from typing import Callable, Any
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
                    SpecializedDefinition, bind)
 from .program import INPUT_ID, input_prim
-from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, refs_from_json
+from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
 from .types import type_from_json
 
 SCHEMA_V0 = "verity-ir/descriptor/v0"
@@ -528,11 +528,26 @@ def _decode_refs(j, nodes: list[Node], schema: str, leaves: Callable[[str, int],
             raise ValueError(f"alias to argument {a} of node {k}: aliases name an argument of an earlier node")
         return nodes[k].args[a].refs
     if "concat" in j:
+        items = j["concat"]
+        log = None
+        if items and "alias" in items[0]:
+            p = _decode_refs(items[0], nodes, schema, leaves)
+            if isinstance(p, Concat) and p.prefix is not None and p.prefix[1] == len(p.prefix[0]) == len(p.parts):
+                log = p.prefix[0]  # the alias is the whole log so far (a key sequence one row longer than the call before)
+            elif isinstance(p, Concat):
+                log = PartLog(p.parts)
+            else:
+                log = PartLog([p])
+            items = items[1:]
         parts: list[Refs] = []
-        for x in j["concat"]:
+        for x in items:
             p = _decode_refs(x, nodes, schema, leaves)
             parts.extend(p.parts if isinstance(p, Concat) else [p])
-        return Concat(parts)
+        if log is None:
+            return Concat(parts)
+        for p in parts:
+            log.append(p)
+        return log.raw_cut(len(log))
     return _checked_refs(refs_from_json(j), leaves)
 
 

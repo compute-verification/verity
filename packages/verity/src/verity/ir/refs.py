@@ -310,6 +310,17 @@ class PartLog:
         c.count, c.prefix = pos, (self, j)
         return c
 
+    def raw_cut(self, j: int, extra: list[Refs] = ()) -> Concat:
+        """`Concat(parts[:j] + extra)`: the parts as they are, not in `concat`'s normal form (what the descriptor decoder builds)."""
+        c = Concat.__new__(Concat)
+        c.parts, c.starts, pos = self.parts[:j], self.starts[:j], self.starts[j]
+        for p in extra:
+            c.parts.append(p)
+            c.starts.append(pos)
+            pos += p.count
+        c.count, c.prefix = pos, (self, j)
+        return c
+
     def leaf_parts(self, j: int) -> bool:
         """No part of `parts[:j]` is a `Concat`."""
         return j <= self._leaf
