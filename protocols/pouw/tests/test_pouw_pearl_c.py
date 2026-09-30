@@ -261,7 +261,7 @@ def test_v1_atom_is_alpha_x_plus_the_noise():
         noise_t = [sum(P.fp8_to_f32(e) * P.fp8_to_f32(f) for e, f in zip(ep, fa[t])) for t in range(k)]
         for t in range(k):
             ax = P.f32_of_bits(P.f32_bits(P.f32(alpha * P.f32_of_bits(x[t]))))
-            d = P.f32_of_bits(C.HOPPER_E4M3_K32.step(P.f32_bits(ax), ep, fa[t]))
+            d = P.f32_of_bits(s.device.atom.step(P.f32_bits(ax), ep, fa[t]))
             assert ops.a.codes[i][t] == P.f32_to_fp8(d)
             assert abs(d - (ax + noise_t[t])) <= 2.0 ** -12 * max(abs(ax), max(abs(n) for n in noise_t)) + 2.0 ** -20
         ratios.append((sum(n * n for n in noise_t) / k) ** 0.5 / (rho * alpha))

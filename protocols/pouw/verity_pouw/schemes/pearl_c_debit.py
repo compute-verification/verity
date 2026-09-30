@@ -16,6 +16,9 @@
 * `debit_units(atoms, elements)` is `debitOf` at `Params.pi`, `Costs.adopted`: 40 units per flagged atom-word (its 32
   MACs and a quarter of a promotion add) and 64 per debited element.
 * `CAP` = ρ = 1/400: a tile whose debit exceeds ρ·`creditOf(tile)` is rejected (`capOK`, per tile).
+
+Each takes the scheme's device (`pearl_c_device`, the H100 by default): its atom, G and prices.  The module constants are
+the H100's.
 """
 
 from __future__ import annotations
@@ -24,15 +27,20 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 from verity.ml.tc import fp32
-from verity.ml.tc.models import HOPPER_E4M3_K32
 
 from . import pearl_kw as P
+from .pearl_c_device import H100, Device
 
-G = 4                                  # atoms per promotion group (`Params.pi.G`)
-ATOM = 32
+G = H100.g                             # atoms per promotion group (`Params.pi.G`)
+ATOM = H100.atom.k
 CAP = Fraction(1, 400)
-ATOM_UNITS = ATOM + Fraction(ATOM, G)  # `debitOf`: 32 MACs and 32/G of a promotion add per flagged atom-word
-ELEMENT_UNITS = 64                     # `Costs.adopted`'s fs per debited forming element
+ATOM_UNITS = ATOM + Fraction(H100.prices.fadd, G)  # `debitOf`: 32 MACs and 1/G of a promotion add per flagged atom-word
+ELEMENT_UNITS = H100.prices.forming_credited       # `Costs.adopted`'s fs per debited forming element
+
+
+def atom_units(device: Device = H100) -> Fraction:
+    """`debitOf`'s price of one flagged atom-word on `device`: its MACs and 1/G of a promotion add."""
+    return device.atom.k + Fraction(device.prices.fadd, device.g)
 _TOP = 0x7F7FFFFF                      # the largest finite FP32 magnitude
 
 
@@ -52,8 +60,8 @@ def _promote(total: int, word: int) -> int:
     return 0 if out == 0x80000000 else out
 
 
-def _step(word: int, a: Sequence[int], b: Sequence[int]) -> int:
-    out = HOPPER_E4M3_K32.step(word, a, b)
+def _step(word: int, a: Sequence[int], b: Sequence[int], device: Device) -> int:
+    out = device.atom.step(word, a, b)
     if (out >> 23) & 0xFF == 0xFF:
         raise P.Reject("an atom left the finite range")
     return out
@@ -79,24 +87,25 @@ def _least(pred) -> int:
     return lo
 
 
-def _masked(atoms: Sequence[tuple[Sequence[int], Sequence[int]]]) -> dict[int, int]:
+def _masked(atoms: Sequence[tuple[Sequence[int], Sequence[int]]], device: Device) -> dict[int, int]:
     """A group's word from +0 under each mask of skipped atoms (bit j: atom j passes its incoming word through)."""
     words = {0: 0}
     for j, (a, b) in enumerate(atoms):
         nxt = {}
         for mask, w in words.items():
-            nxt[mask] = _step(w, a, b)
+            nxt[mask] = _step(w, a, b, device)
             nxt[mask | 1 << j] = w
         words = nxt
     return words
 
 
-def word_flags(a: Sequence[int], b: Sequence[int]) -> list[bool]:
+def word_flags(a: Sequence[int], b: Sequence[int], device: Device = H100) -> list[bool]:
     """`Skip.wordFlags k a b t` for t < k/32."""
-    if len(a) != len(b) or len(a) % (G * ATOM):
+    g_, atom = device.g, device.atom.k
+    if len(a) != len(b) or len(a) % (g_ * atom):
         raise P.Reject("a word's rows are whole promotion groups")
-    atoms = [(a[s:s + ATOM], b[s:s + ATOM]) for s in range(0, len(a), ATOM)]
-    groups = [_masked(atoms[g:g + G]) for g in range(0, len(atoms), G)]
+    atoms = [(a[s:s + atom], b[s:s + atom]) for s in range(0, len(a), atom)]
+    groups = [_masked(atoms[g:g + g_], device) for g in range(0, len(atoms), g_)]
     totals = [0]
     for masked in groups:
         totals.append(_promote(totals[-1], masked[0]))
@@ -111,13 +120,13 @@ def word_flags(a: Sequence[int], b: Sequence[int]) -> list[bool]:
     for g, masked in enumerate(groups):
         lo, hi = bounds[g]
         keeps = [mask for mask, w in masked.items() if mask and lo <= _key(_promote(totals[g], w)) <= hi]
-        flags.extend(any(mask >> j & 1 for mask in keeps) for j in range(G))
+        flags.extend(any(mask >> j & 1 for mask in keeps) for j in range(g_))
     return flags
 
 
-def chain_atoms(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]) -> int:
+def chain_atoms(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device: Device = H100) -> int:
     """The flagged atoms over every word (a_row, b_row) of a tile: `Skip.chainDebit`'s count, additive over words."""
-    return sum(sum(word_flags(a, b)) for a in a_rows for b in b_rows)
+    return sum(sum(word_flags(a, b, device)) for a in a_rows for b in b_rows)
 
 
 def forming_elements(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]) -> int:
@@ -125,6 +134,6 @@ def forming_elements(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[
     return 0
 
 
-def debit_units(atoms: int, elements: int) -> Fraction:
-    """`debitOf Params.pi Costs.adopted ⟨atoms, elements⟩`."""
-    return ATOM_UNITS * atoms + ELEMENT_UNITS * elements
+def debit_units(atoms: int, elements: int, device: Device = H100) -> Fraction:
+    """`debitOf Params.pi Costs.adopted ⟨atoms, elements⟩` at the device's prices."""
+    return atom_units(device) * atoms + device.prices.forming_credited * elements

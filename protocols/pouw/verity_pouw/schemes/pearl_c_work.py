@@ -180,7 +180,8 @@ def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[in
              ) -> tuple[Fraction, Fraction]:
     """(debit, cap) over credited words given as their A′ and B̃ code rows: `debitOf` of the replayed debit, and
     ρ·`creditOf` of the tile at |K|."""
-    debit = D.debit_units(D.chain_atoms(a_codes, b_codes), D.forming_elements(a_codes, b_codes))
+    d = scheme.device
+    debit = D.debit_units(D.chain_atoms(a_codes, b_codes, d), D.forming_elements(a_codes, b_codes), d)
     return debit, D.CAP * scheme.credit_of(Shape(len(a_codes), record.k_kept, len(b_codes)))
 
 
@@ -289,6 +290,8 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
     recomputes S from the calibration data by the pinned rule, and is required when any S is nonempty."""
     if scheme.forming != "v1":
         raise ValueError("the work law is stated for forming v1")
+    if ALIGN % scheme.device.window:
+        raise ValueError(f"k_unit's alignment {ALIGN} is not whole promotion windows of {scheme.name}")
     w_ref, credit = work(scheme, records)
     job = job_costs(scheme, records)
 

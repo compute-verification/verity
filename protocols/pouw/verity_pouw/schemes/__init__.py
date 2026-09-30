@@ -21,10 +21,11 @@ def _pearl(**config: Any) -> PoUWScheme:
     return PearlKW(**config)
 
 
-def _pearl_c(forming: str) -> Callable[..., PoUWScheme]:
+def _pearl_c(forming: str, device: str = "h100") -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
         from .pearl_c import PearlC
-        return PearlC(forming=forming, **config)
+        from .pearl_c_device import DEVICES
+        return PearlC(forming=forming, device=DEVICES[device], **config)
     return make
 
 
@@ -35,6 +36,7 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "pearl-fp8-v4": _pearl,
     "pearl-c-h100-v0": _pearl_c("v0"),
     "pearl-c-h100-v1": _pearl_c("v1"),
+    "pearl-c-sm120-v1": _pearl_c("v1", "sm120"),
 }
 
 
