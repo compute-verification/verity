@@ -1144,6 +1144,9 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    for k in ("out", "unit", "scratch", "prebuilt", "units", "capture_root"):
+        if getattr(args, k):
+            setattr(args, k, os.path.expandvars(getattr(args, k)))
     if args.phase == "compile":
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
