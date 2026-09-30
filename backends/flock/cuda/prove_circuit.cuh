@@ -485,6 +485,35 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             const long long hper = N->r_count[hr];
             const long long n_h = (1LL << (m - k_log)) * hper;
             const long long hg = (n_h + 31) / 32;
+            static cudaStream_t hs_stream = nullptr;
+            static cudaEvent_t hs_zeroed = nullptr, hs_done = nullptr;
+            static int n_sm = 0;
+            if (N->n_host0 && !hs_stream) {
+                CK(cudaStreamCreateWithFlags(&hs_stream, cudaStreamNonBlocking));
+                CK(cudaEventCreateWithFlags(&hs_zeroed, cudaEventDisableTiming));
+                CK(cudaEventCreateWithFlags(&hs_done, cudaEventDisableTiming));
+                CK(cudaDeviceGetAttribute(&n_sm, cudaDevAttrMultiProcessorCount, 0));
+            }
+            // FC_HS_DMA=1: mapped a, b host slots go to a device staging buffer by the copy engine on hs_stream, issued before the
+            // compression rows' copy, and fc_host_slots reads the staged words: the same words, with no SM waiting on PCIe reads
+            // beside the compressions. The buffer is kept for the process, since a cudaFree would sync the device.
+            static const bool hs_dma = [] { const char* e = std::getenv("FC_HS_DMA"); return e && e[0] == '1'; }();
+            static uint64_t* hs_stage = nullptr;
+            static size_t hs_stage_cap = 0;
+            const uint64_t* zab_staged = nullptr;
+            if (hs_dma && N->n_host0 && N->host0_ab && !fc_on_device(N->host0_zab)) {
+                size_t u64s = 0;
+                for (long long i = 0; i < N->n_host0; i++) u64s += 4 * (size_t)N->host0_words[i];
+                if (hs_stage_cap < u64s) {
+                    if (hs_stage) cudaFree(hs_stage);
+                    hs_stage = nullptr; hs_stage_cap = 0;
+                    if (cudaMalloc(&hs_stage, u64s * 8) == cudaSuccess) hs_stage_cap = u64s;
+                    else { cudaGetLastError(); hs_stage = nullptr; }
+                }
+                if (hs_stage && cudaMemcpyAsync(hs_stage, N->host0_zab, u64s * 8, cudaMemcpyHostToDevice, hs_stream) == cudaSuccess)
+                    zab_staged = hs_stage;
+                else cudaGetLastError();
+            }
             // the input rows, and the host slots below, may be the device's copies already (copied while the witness was built)
             const bool hin_dev = fc_on_device(N->h_inputs);
             uint64_t* d_hin = (uint64_t*)N->h_inputs; uint32_t* d_hs = nullptr;
@@ -494,15 +523,14 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             }
             // the host slots from mapped host memory, on a stream of their own beside the compressions (other words of z, a, b),
             // once the memsets are done; pageable host slots take three copies each after the compressions
-            static cudaStream_t hs_stream = nullptr;
-            static cudaEvent_t hs_zeroed = nullptr, hs_done = nullptr;
-            static int n_sm = 0;
-            const uint64_t* zab_dev = nullptr;
-            if (N->n_host0 && fc_on_device(N->host0_zab)) {
-                zab_dev = N->host0_zab;
-            } else if (N->n_host0 && cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
-                cudaGetLastError();
-                zab_dev = nullptr;
+            const uint64_t* zab_dev = zab_staged;
+            if (!zab_dev && N->n_host0) {
+                if (fc_on_device(N->host0_zab)) {
+                    zab_dev = N->host0_zab;
+                } else if (cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
+                    cudaGetLastError();
+                    zab_dev = nullptr;
+                }
             }
             if (N->n_host0 && N->host0_ab && !zab_dev) {
                 printf("FFI circuit: host slots in the a, b layout need mapped host memory\n"); return 209;
@@ -510,12 +538,6 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             long long *d_hat = nullptr, *d_hoff = nullptr; int* d_hw = nullptr;
             auto host_slots = [&]() -> int {
                 if (!zab_dev) return 0;
-                if (!hs_stream) {
-                    CK(cudaStreamCreateWithFlags(&hs_stream, cudaStreamNonBlocking));
-                    CK(cudaEventCreateWithFlags(&hs_zeroed, cudaEventDisableTiming));
-                    CK(cudaEventCreateWithFlags(&hs_done, cudaEventDisableTiming));
-                    CK(cudaDeviceGetAttribute(&n_sm, cudaDevAttrMultiProcessorCount, 0));
-                }
                 const long long n = N->n_host0;
                 std::vector<long long> off((size_t)n);
                 for (long long i = 0, o = 0; i < n; i++) { off[i] = o; o += (N->host0_ab ? 4LL : 6LL) * N->host0_words[i]; }
