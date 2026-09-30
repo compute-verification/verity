@@ -25,6 +25,7 @@ import json
 import os
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,8 @@ from verity_vllm.pipeline import c2_replay as C2
 
 SCHEMA = "verity-vllm/replay-bundle/v1"
 MANIFEST = "MANIFEST.json"
+#: the context's (unwritten) key for the sha256 of the files `write_store` hashed as it wrote them
+HASHED = "_hashed"
 ARGS = ("program_dir", "programs_root", "program_digest", "required_manifest", "replay_per_stratum", "replay_max", "replay_target", "replay_k",
         "replay_workers", "replay_seed", "replay_challenge", "window_mb", "window_slots", "retain", "label", "serving_rows", "openings",
         "checkpoints", "workload", "weights_of_record", "checkpoint_dir")
@@ -75,7 +78,8 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     from verity_vllm.check.replay.driver import engine_facts_of_record
 
     tl.start("validate.replay_bundle", pair=pair)
-    write_store(out, pair, com, rc)
+    hashed: dict[str, str] = {}
+    write_store(out, pair, com, rc, digests=hashed)
     caps = {str(q.get("request_id")): int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs}
     ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
            "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
@@ -85,7 +89,7 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
-           "vc_result": vc_result, "engine_of_record": engine_facts_of_record()}
+           "vc_result": vc_result, "engine_of_record": engine_facts_of_record(), HASHED: hashed}
     sr, lk = deferred_records(path(out, pair))
     tl.end("validate.replay_bundle", pair=pair)
     print(f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair {pair}): DEFERRED -- store and weights tree written to {partial(out, pair)}", flush=True)
@@ -134,8 +138,9 @@ def seal_all(out: Path, deferred: dict[int, dict], rows: list[dict], verdict: di
         if row is None or not awaits_replay(row.get("commit") or {}):
             discard(out, p)
             continue
+        hashed = ctx.pop(HASHED, None)
         with tl.span("closure.replay_bundle", pair=p):
-            m = seal(out, p, ctx | {"row": row, "verdict": verdict}, Path(out) / f"binding_map_p{p}.json")
+            m = seal(out, p, ctx | {"row": row, "verdict": verdict}, Path(out) / f"binding_map_p{p}.json", hashed=hashed)
         bundles.append({"pair": p, "path": m["path"], "manifest_sha256": m["sha256"], "bytes": m["bytes"], "files": len(m["files"])})
         print(f"[delta] REPLAY BUNDLE (pair {p}): {m['path']} sealed, {len(m['files'])} files, {m['bytes'] >> 20} MiB, manifest sha256 {m['sha256'][:16]}", flush=True)
     verdict["replay_deferred"] = {"pending_pairs": pending, "bundles": bundles}
@@ -148,9 +153,11 @@ def _registered(model: Any) -> dict[str, Any]:
     return out
 
 
-def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None) -> Path:
+def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
+                digests: dict[str, str] | None = None) -> Path:
     """The bundle's store and weights, written into its partial dir (the rest follows at `seal`).  `extra_names`: the registered
-    tensors whose bytes go into the bundle (default: the registered buffers and engine constants, which no checkpoint holds)."""
+    tensors whose bytes go into the bundle (default: the registered buffers and engine constants, which no checkpoint holds).
+    ``digests`` receives the sha256 of the store's step files as they were written (by their path in the bundle)."""
     import torch
 
     from verity_vllm.check.weights_of_record import ENGINE_CONSTANT_RE
@@ -158,7 +165,10 @@ def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_n
     p = partial(out, pair)
     if p.exists():
         shutil.rmtree(p)
-    SD.dump(com, rc, p / "store")
+    dumped: dict[str, str] = {}
+    SD.dump(com, rc, p / "store", digests=dumped)
+    if digests is not None:
+        digests.update({f"store/{k}": v for k, v in dumped.items()})
     tree = getattr(com, "weights_tree", None)
     if not tree or (rc.weight_registration or {}).get("root") != tree.get("root"):
         raise ValueError("replay bundle: the committer kept no weights tree for the run's committed weights root (register_weights)")
@@ -189,13 +199,17 @@ def _sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map: str | os.PathLike) -> dict[str, Any]:
-    """Writes the context and the binding map into the partial bundle, then its manifest, and renames it into place."""
+def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map: str | os.PathLike, *,
+         hashed: dict[str, str] | None = None) -> dict[str, Any]:
+    """Writes the context and the binding map into the partial bundle, then its manifest, and renames it into place.  ``hashed``: the
+    sha256 of files taken as they were written (`write_store`); every other file is read and hashed here."""
     p, final = partial(out, pair), path(out, pair)
     shutil.copyfile(binding_map, p / "binding_map.json")
     (p / "context.json").write_text(json.dumps({"schema": SCHEMA, **context}, default=str, separators=(",", ":")) + "\n")
-    files = {f.relative_to(p).as_posix(): {"sha256": _sha256(f), "bytes": f.stat().st_size}
-             for f in sorted(x for x in p.rglob("*") if x.is_file())}
+    rels = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
+    with ThreadPoolExecutor(8) as pool:
+        sums = dict(zip(rels, pool.map(lambda r: (hashed or {}).get(r) or _sha256(p / r), rels)))
+    files = {r: {"sha256": sums[r], "bytes": (p / r).stat().st_size} for r in rels}
     man = {"schema": SCHEMA, "files": files, "bytes": sum(v["bytes"] for v in files.values()),
            "sealed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     (p / MANIFEST).write_text(json.dumps(man, indent=1) + "\n")
@@ -219,7 +233,9 @@ def open_bundle(bundle: str | os.PathLike) -> dict[str, Any]:
     want = set(man["files"])
     if have != want:
         raise ValueError(f"{b}: files differ from the manifest: missing {sorted(want - have)[:4]}, extra {sorted(have - want)[:4]}")
-    bad = [rel for rel, v in sorted(man["files"].items()) if _sha256(b / rel) != v["sha256"]]
+    rels = sorted(man["files"])
+    with ThreadPoolExecutor(8) as pool:
+        bad = [rel for rel, got in zip(rels, pool.map(lambda r: _sha256(b / r), rels)) if got != man["files"][rel]["sha256"]]
     if bad:
         raise ValueError(f"{b}: files whose sha256 is not the manifest's: {bad[:4]}")
     ctx = json.loads((b / "context.json").read_text())
