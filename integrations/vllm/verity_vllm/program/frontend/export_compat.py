@@ -89,6 +89,22 @@ def apply_target_profile(profile):
         yield
 
 
+def select_cuda_platform() -> str:
+    """A declared target is a CUDA device: install vLLM's CUDA platform as `current_platform` before anything resolves it, instead of
+    `vllm.platforms` probing NVML for it.  On a GPU-free Build host NVML is absent and that probe resolves a non-CUDA platform; the class
+    installed is the one the probe picks on a GPU host (`vllm.platforms.cuda.CudaPlatform`: the NVML-backed class when NVML answers,
+    the torch-backed one when it does not), and `apply_target_profile` answers the target's capability on either.  Build path only:
+    serving resolves its platform as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
+    import vllm.platforms as P
+    from vllm.platforms.cuda import CudaPlatform
+    resolved = P.__dict__.get("current_platform") or P._current_platform   # the lazy `current_platform` getter returns `_current_platform`
+    if resolved is None:
+        P._current_platform = resolved = CudaPlatform()
+    elif not resolved.is_cuda():
+        raise RuntimeError(f"vLLM resolved {type(resolved).__qualname__} before the declared CUDA target could select its platform")
+    return type(resolved).__qualname__
+
+
 def read_back_applied() -> dict:
     """What the pinned vLLM answers RIGHT NOW for the target facts the construction consults — the manifest's `target.applied` block
     is this record, taken inside `apply_target_profile`, never a literal. Absent answers are recorded as None (a mismatch)."""
@@ -259,4 +275,4 @@ def export_compat(profile=None, model=None):
         yield
 
 
-__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "moe_ops_traced", "read_back_applied", "host_facts"]
+__all__ = ["export_compat", "tensor_data_as_detach", "apply_target_profile", "select_cuda_platform", "moe_ops_traced", "read_back_applied", "host_facts"]

@@ -353,6 +353,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         res["code_rev"] = None
     # the profile's environment is applied BEFORE vLLM is imported (vllm_meta's setdefaults are the fallback for callers without a profile)
     engine_env.apply_target(target.env())
+    if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
+        from verity_vllm.program.frontend.export_compat import select_cuda_platform
+        print(f"[derive_step] declared target {target.sm_arch}: vLLM platform {select_cuda_platform()}", file=sys.stderr)
     res["ok"] = False
     try:
         # [X-05] applicability declares the sampler: a policy outside the builder's token-select vocabulary is refused HERE, before any
