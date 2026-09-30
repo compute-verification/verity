@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 from cluster import cpuset
-from cluster.model import Allocation, Cluster, Gpu, Job, Node, Share
+from cluster.model import Allocation, Cluster, Gpu, Job, Node, Share, Workstream
 
 T0 = 1_790_000_000
-PRIO = {"service": 1000, "timed": 900, "session": 700, "work": 500, "dev": 100, "fill": 10}
+PRIO = {"service": 1000, "timed": 900, "session": 700, "bench": 600, "work": 500, "capture": 400, "dev": 100, "fill": 10}
 
 
 def node(name: str, owner: str, *, gpus: int = 8, memory: int = 256, stops_at: int | None = None, drain_s: int = 0,
@@ -16,8 +16,8 @@ def node(name: str, owner: str, *, gpus: int = 8, memory: int = 256, stops_at: i
                 pools={k: cpuset.parse(v) for k, v in (pools or {}).items()})
 
 
-def cluster(*nodes: Node, shares: tuple[Share, ...] = ()) -> Cluster:
-    return Cluster(name="test", nodes={n.name: n for n in nodes}, priorities=dict(PRIO), shares=shares)
+def cluster(*nodes: Node, shares: tuple[Share, ...] = (), workstreams: tuple[Workstream, ...] = ()) -> Cluster:
+    return Cluster(name="test", nodes={n.name: n for n in nodes}, priorities=dict(PRIO), shares=shares, workstreams=workstreams)
 
 
 def one(owner: str = "p", **kw) -> Cluster:

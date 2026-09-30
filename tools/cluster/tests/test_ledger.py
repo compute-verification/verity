@@ -106,3 +106,46 @@ def test_usage_ranks_holders_by_busy_share(tmp_path):
         lg.append(t + 600, "end", alloc=a.id, rc=0, gpus=[{"index": 0, "uuid": "", **ledger.gpu_usage(t, t + 600, samples, 10)}])
     rows = ledger.usage(ledger.read(tmp_path / "l.jsonl"))
     assert [(r["submitter"], r["leases"], r["busy_share"]) for r in rows] == [("a", 2, 0.05), ("b", 1, 0.9)]
+
+
+# a gpu-lease/usage/v1 record as node 2's gpu-lease writes it (infra/nebius 1ebbd156): busy and sampled count whole 10 s
+# readings, so they can pass held_s by up to one cadence
+USAGE = {"schema": "gpu-lease/usage/v1", "host": "vy-nebius-2", "pid": 2235138, "scope": "gpu-lease-2235138", "who": "bc-ccd30e80",
+         "run": "r20260930-190711-c584", "timed": False, "preemptible": True, "since": "2026-09-30T19:07:33Z",
+         "end": "2026-09-30T19:22:33Z", "rc": 0, "cmd": "timeout 900 bash window.sh",
+         "gpus": [{"index": 3, "uuid": "GPU-9f1f172d", "held_s": 900, "busy_s": 905, "sampled_s": 910}]}
+
+
+def test_usage_v1_records_become_end_records_and_feed_the_usage_report(tmp_path):
+    assert ledger.end_fields(USAGE) == {"rc": 0, "run": "r20260930-190711-c584",
+                                        "gpus": [{"index": 3, "uuid": "GPU-9f1f172d", "held_s": 900, "busy_s": 900, "sampled_s": 900}]}
+    assert ledger.usage_key(USAGE) == (2235138, ledger.epoch("2026-09-30T19:07:33Z"))
+    with pytest.raises(ValueError, match="not a gpu-lease/usage/v1 record"):
+        ledger.end_fields({"schema": "other"})
+    lg = ledger.Ledger(tmp_path / "l.jsonl")
+    j = job("l-1", gpus=1, cpus=0, submitter="bc-ccd30e80")
+    acts = plan(one(), "n1", [], [j], T0)
+    lg.actions(T0, acts, source="gpu-lease")
+    lg.end(T0 + 900, acts[0].alloc.id, usage=USAGE)
+    records = ledger.read(tmp_path / "l.jsonl")
+    assert records[0]["source"] == "gpu-lease" and records[1]["rc"] == 0 and records[1]["run"] == USAGE["run"]
+    (row,) = ledger.usage(records)
+    assert row["submitter"] == "bc-ccd30e80" and row["busy_share"] == 1.0
+
+
+def test_state_comes_from_the_ledger_alone_and_state_json_round_trips(tmp_path):
+    records, cpu, win = _window_day(tmp_path / "l.jsonl")
+    st = ledger.state(records)
+    assert list(st.allocations) == [cpu] and st.allocations[cpu].state == "running" and st.allocations[cpu].frozen_s == 300
+    assert st.seq == len(records) and st.head == records[-1]["hash"] and st.queue == {}
+    half = ledger.state(records[:3])
+    assert ledger.state(records[3:], half) == st
+    lg = ledger.Ledger(tmp_path / "l.jsonl")
+    lg.submit(T0 + 500, job("q-1", gpus=1), "n1", handle="/run/gpu-lease/wait.1.42")
+    lg.submit(T0 + 501, job("q-2", gpus=1), "n1")
+    lg.withdraw(T0 + 502, "q-2", "gave up")
+    st = ledger.state(ledger.read(tmp_path / "l.jsonl"))
+    assert [(q.job.id, q.handle, q.since) for q in st.queue.values()] == [("q-1", "/run/gpu-lease/wait.1.42", T0 + 500)]
+    ledger.write_state(tmp_path / "state.json", st)
+    assert ledger.state_from_dict(json.loads((tmp_path / "state.json").read_text())) == st
+    assert [p.name for p in tmp_path.iterdir()] and not list(tmp_path.glob(".state.json.*"))

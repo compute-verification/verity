@@ -8,9 +8,11 @@ The rules, each enforced here and checked by `tests/test_simulation.py` on rando
 
 1. **Exclusive resources.** A GPU, a CPU or a named lock is in at most one allocation; memory is never overcommitted; a
    guest's CPUs come from its share; a node's reserved CPU pools go only to jobs naming them, even while idle.
-2. **Standing, then priority.** A job displaces an allocation only when its rank (`Cluster.rank`: owner before guest, then
-   priority class) is strictly higher, and only a `requeue` allocation is evicted. A guest must be preemptible and may not be
-   quiet, so an owner's work always gets its node back.
+2. **Standing, then share, then priority.** A job displaces an allocation only when its rank (`Cluster.rank`: owner before
+   guest, then running within its workstream's own GPUs before borrowing, then priority class) is strictly higher, and only
+   a `requeue` allocation is evicted. A guest must be preemptible and may not be quiet, so an owner's work always gets its
+   node back; a workstream's work within its own GPUs gets them back from any borrower, whatever its priority. A
+   workstream never runs beyond its GPUs plus its `borrow_gpus`.
 3. **Quiet jobs** (timed windows) run with nothing else active on their node: GPU-holding allocations are evicted (a frozen
    CUDA context still holds its GPU), CPU-only ones frozen and thawed afterwards; only a `quiet_safe` service keeps running.
    A quiet job blocked by an allocation it may not displace waits, and holds the node's reservation.
@@ -26,6 +28,8 @@ The rules, each enforced here and checked by `tests/test_simulation.py` on rando
 
 A lease taken by hand over SSH (a kernel inner loop, a debugger) is a `session` allocation like any other, so the same
 rules see it: it holds its GPUs until it ends, a quiet job waits for it unless it is preemptible, and it shows when idle.
+A session without a `max_s` plans with its `expected_s`: a reservation behind it expects it gone then (or now, once it
+has overrun), and only jobs with a hard `max_s` backfill ahead of a reservation.
 """
 from __future__ import annotations
 
@@ -97,6 +101,7 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
     standing = cluster.standing(job.project, node)
     if standing is None:
         return f"{job.project} has no share on {node}"
+    length = job.length_s
     if standing == GUEST:
         share = cluster.share(job.project, node)
         if job.quiet:
@@ -105,10 +110,16 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
             return f"a guest on {node} must be preemptible"
         if share.max_job_memory_gib is not None and job.memory_gib > share.max_job_memory_gib:
             return f"{job.project}'s jobs on {node} get at most {share.max_job_memory_gib} GiB each"
-        if share.until is not None and (now >= share.until or (job.max_s is not None and now + job.max_s > share.until)):
+        if share.until is not None and (now >= share.until or (length is not None and now + length > share.until)):
             return f"{job.project}'s share on {node} ends at {share.until}"
+    if job.workstream is not None:
+        w = cluster.workstream(job.workstream, node)
+        if w is None or standing != OWNER:
+            return f"workstream {job.workstream} is not {job.project}'s on {node}"
+        if w.borrow_gpus is not None and job.gpus > w.gpus + w.borrow_gpus:
+            return f"larger than workstream {w.name} may hold on {node} ({w.gpus} GPUs + {w.borrow_gpus} borrowed)"
     ends = n.admission_ends
-    if ends is not None and (now >= ends or (job.max_s is not None and now + job.max_s > ends)):
+    if ends is not None and (now >= ends or (length is not None and now + length > ends)):
         return f"would run past {node}'s admission end {ends}"
     if job.pool is not None and job.pool not in n.pools:
         return f"{node} has no CPU pool {job.pool!r}"
@@ -142,6 +153,11 @@ def fit(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allocation],
         for cap, want, what in caps:
             if cap is not None and want > cap:
                 return f"at {job.project}'s share of {what} on {node}"
+    w = cluster.workstream(job.workstream, node)
+    if w is not None and w.borrow_gpus is not None and job.gpus:
+        mine = sum(len(a.gpus) for a in occ if a.job.workstream == w.name)
+        if mine + job.gpus > w.gpus + w.borrow_gpus:
+            return f"at workstream {w.name}'s GPUs on {node}"
     free_gpus = sorted({g.index for g in n.gpus} - used_gpus)
     if job.gpu_ids:
         if set(job.gpu_ids) & used_gpus:
@@ -163,7 +179,6 @@ def plan(cluster: Cluster, node: str, allocations: Iterable[Allocation], queue: 
     """The actions for `node` at `now` (module docstring). `done` holds the ids of jobs that ended well, `has` the content
     ids staged on the node, and `held_locks` the locks allocations elsewhere in the cluster hold."""
     live = {a.id: a for a in sorted(allocations, key=lambda a: a.id) if a.node == node}
-    rank = lambda j: cluster.rank(j, node)  # noqa: E731
     ends = cluster.nodes[node].admission_ends
     expires = [Expire(a.id) for a in live.values()
                if (a.job.max_s is not None and a.running_s(now) >= a.job.max_s)
@@ -182,6 +197,12 @@ def plan(cluster: Cluster, node: str, allocations: Iterable[Allocation], queue: 
     def quiet_now() -> bool:
         return any(a.job.quiet and a.state == "running" for a in occupants())
 
+    def arank(a: Allocation) -> tuple:
+        return cluster.rank(a.job, node, a.id in in_share(cluster, node, occupants()))
+
+    def jrank(job: Job) -> tuple:
+        return cluster.rank(job, node, job_in_share(cluster, node, job, occupants()))
+
     pending = []
     for job in sorted(queue, key=lambda j: j.id):
         why = static_refusal(cluster, node, job, now)
@@ -194,20 +215,19 @@ def plan(cluster: Cluster, node: str, allocations: Iterable[Allocation], queue: 
         else:
             pending.append(job)
 
-    reservation: tuple[Job, int | None] | None = None
+    reservation: tuple[Job, int | None, tuple] | None = None
 
     def backfill_ok(job: Job) -> bool:
         if reservation is None:
             return True
-        holder, start_by = reservation
+        holder, start_by, holder_rank = reservation
         if start_by is not None and job.max_s is not None and now + job.max_s <= start_by:
             return True
-        return rank(job) < rank(holder) and job.preempt == "requeue"
+        return jrank(job) < holder_rank and job.preempt == "requeue"
 
     def turns(job: Job) -> tuple:
-        standing, prio = rank(job)
         mine = sum(1 for a in occupants() if a.job.submitter == job.submitter)
-        return (-standing, -prio, mine, job.submitted, job.id)
+        return (*(-x for x in jrank(job)), mine, job.submitted, job.id)
 
     while pending:
         job = min(pending, key=turns)
@@ -220,12 +240,12 @@ def plan(cluster: Cluster, node: str, allocations: Iterable[Allocation], queue: 
             continue
         occ = occupants()
         if job.quiet:
-            outcome = _quiet(cluster, node, job, occ, held_locks, rank)
+            outcome = _quiet(cluster, node, job, occ, held_locks, arank, jrank(job), now)
         else:
-            outcome = _ordinary(cluster, node, job, occ, held_locks, rank)
+            outcome = _ordinary(cluster, node, job, occ, held_locks, arank, jrank(job), now)
         if isinstance(outcome, Wait):
             if reservation is None and outcome.start_by is not None:
-                reservation = (job, outcome.start_by)
+                reservation = (job, outcome.start_by, jrank(job))
             later.append(outcome)
             continue
         victims, frozen, (gpus, cpus) = outcome
@@ -274,19 +294,42 @@ def apply(allocations: Iterable[Allocation], actions: Iterable[Action], now: int
     return sorted(live.values(), key=lambda a: a.id)
 
 
-def _ordinary(cluster, node, job, occ, held_locks, rank):
+def in_share(cluster: Cluster, node: str, allocations: Iterable[Allocation]) -> frozenset[str]:
+    """The allocations running within their workstream's own GPUs: each workstream's oldest first, while their GPUs fit.
+    The rest of a workstream's allocations borrow."""
+    used: dict[str, int] = {}
+    out = set()
+    for a in sorted(allocations, key=lambda a: (a.started, a.id)):
+        w = cluster.workstream(a.job.workstream, node)
+        if w is not None and used.get(w.name, 0) + len(a.gpus) <= w.gpus:
+            used[w.name] = used.get(w.name, 0) + len(a.gpus)
+            out.add(a.id)
+    return frozenset(out)
+
+
+def job_in_share(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allocation]) -> bool:
+    """Whether `job` would start within its workstream's own GPUs beside `occupants`."""
+    w = cluster.workstream(job.workstream, node)
+    if w is None:
+        return False
+    occ = list(occupants)
+    shared = in_share(cluster, node, occ)
+    return sum(len(a.gpus) for a in occ if a.id in shared and a.job.workstream == w.name) + job.gpus <= w.gpus
+
+
+def _ordinary(cluster, node, job, occ, held_locks, arank, mine, now):
     got = fit(cluster, node, job, occ, held_locks)
     if not isinstance(got, str):
         return [], [], got
-    movable = sorted((a for a in occ if a.job.preempt == "requeue" and rank(a.job) < rank(job)),
-                     key=lambda a: (rank(a.job), -a.started, a.id))
+    movable = sorted((a for a in occ if a.job.preempt == "requeue" and arank(a) < mine),
+                     key=lambda a: (arank(a), -a.started, a.id))
     chosen: list[Allocation] = []
     for a in movable:
         chosen.append(a)
         if not isinstance(fit(cluster, node, job, _without(occ, chosen), held_locks), str):
             break
     else:
-        return Wait(job.id, got, _start_by(cluster, node, job, occ, movable, held_locks))
+        return Wait(job.id, got, _start_by(cluster, node, job, occ, movable, held_locks, now))
     for a in list(reversed(chosen)):
         trial = [c for c in chosen if c is not a]
         if not isinstance(fit(cluster, node, job, _without(occ, trial), held_locks), str):
@@ -294,10 +337,10 @@ def _ordinary(cluster, node, job, occ, held_locks, rank):
     return [a.id for a in chosen], [], fit(cluster, node, job, _without(occ, chosen), held_locks)
 
 
-def _quiet(cluster, node, job, occ, held_locks, rank):
+def _quiet(cluster, node, job, occ, held_locks, arank, mine, now):
     evict, freeze, blockers = [], [], []
     for a in occ:
-        lower = rank(a.job) < rank(job)
+        lower = arank(a) < mine
         if a.job.quiet_safe or a.state == "frozen":
             continue
         if a.gpus:
@@ -306,11 +349,11 @@ def _quiet(cluster, node, job, occ, held_locks, rank):
             (freeze if lower and a.job.preempt in ("freeze", "requeue") else blockers).append(a)
     if blockers:
         ends = [a.ends_by for a in blockers]
-        start_by = None if None in ends else max(ends)
+        start_by = None if None in ends else max(now, *ends)
         return Wait(job.id, f"quiet job waits for {', '.join(a.id for a in blockers)}", start_by)
     extra: list[Allocation] = []
     got = fit(cluster, node, job, _without(occ, evict), held_locks)
-    for a in sorted((a for a in freeze if a.job.preempt == "requeue"), key=lambda a: (rank(a.job), -a.started, a.id)):
+    for a in sorted((a for a in freeze if a.job.preempt == "requeue"), key=lambda a: (arank(a), -a.started, a.id)):
         if not isinstance(got, str):
             break
         extra.append(a)
@@ -320,14 +363,15 @@ def _quiet(cluster, node, job, occ, held_locks, rank):
     return [a.id for a in evict + extra], [a.id for a in freeze if a not in extra], got
 
 
-def _start_by(cluster, node, job, occ, movable, held_locks) -> int | None:
-    """The earliest instant `job` fits once the allocations it may not evict have ended in order of their ends."""
+def _start_by(cluster, node, job, occ, movable, held_locks, now) -> int | None:
+    """The earliest instant `job` fits once the allocations it may not evict have ended in order of their ends (a session
+    past its expected length is expected gone now, as `gpu-lease` counts a lease past its rule)."""
     staying = sorted((a for a in occ if a not in movable), key=lambda a: (a.ends_by is None, a.ends_by or 0))
     for i, a in enumerate(staying):
         if a.ends_by is None:
             return None
         if not isinstance(fit(cluster, node, job, staying[i + 1:], held_locks), str):
-            return a.ends_by
+            return max(now, a.ends_by)
     return None
 
 
@@ -374,4 +418,4 @@ def _pick_cpus(n: Node, free: frozenset[int], count: int, gpus: tuple[int, ...])
 
 
 __all__ = ["Action", "Evict", "Expire", "Freeze", "Idle", "OWNER", "Refuse", "Start", "Thaw", "Wait", "apply", "fit", "idle",
-           "plan", "static_refusal"]
+           "in_share", "job_in_share", "plan", "static_refusal"]

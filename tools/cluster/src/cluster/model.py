@@ -6,8 +6,10 @@ a long-lived service, a time-boxed interactive session, or a data-staging job. A
 exact GPUs, CPUs and memory on one node from a start time, running or frozen.
 
 Standing decides displacement before priority does: on its own node a project's job outranks every guest's, and a guest
-runs only on idle capacity, only preemptibly, and never beside a quiet job. Times are integer seconds since the epoch,
-always passed in; nothing here reads a clock.
+runs only on idle capacity, only preemptibly, and never beside a quiet job. Inside an owner, a **workstream** owns some of
+its node's GPUs: its jobs within those GPUs outrank every job running on GPUs it borrowed, whatever their priority, so
+lent capacity comes back when the lender's work arrives. Times are integer seconds since the epoch, always passed in;
+nothing here reads a clock.
 """
 from __future__ import annotations
 
@@ -95,23 +97,39 @@ class Share:
 
 
 @dataclass(frozen=True)
+class Workstream:
+    """A part of a node's owner that owns `gpus` of the node's GPUs (Kueue's nominal quota). Its jobs within them run in
+    share; beyond them they borrow idle GPUs, at most `borrow_gpus` more (`None`: any; 0: it never borrows), and a job
+    running in anyone's share outranks every borrower."""
+    name: str
+    node: str
+    gpus: int
+    borrow_gpus: int | None = None
+
+
+@dataclass(frozen=True)
 class Cluster:
     name: str
     nodes: dict[str, Node]
     priorities: dict[str, int]
     shares: tuple[Share, ...] = ()
+    workstreams: tuple[Workstream, ...] = ()
 
     def share(self, project: str, node: str) -> Share | None:
         return next((s for s in self.shares if s.project == project and s.node == node), None)
+
+    def workstream(self, name: str | None, node: str) -> Workstream | None:
+        return next((w for w in self.workstreams if w.name == name and w.node == node), None)
 
     def standing(self, project: str, node: str) -> str | None:
         if self.nodes[node].owner == project:
             return OWNER
         return GUEST if self.share(project, node) else None
 
-    def rank(self, job: "Job", node: str) -> tuple[int, int]:
-        """Who displaces whom on `node`: standing first, then priority. Only a strictly higher rank displaces."""
-        return (1 if self.standing(job.project, node) == OWNER else 0, self.priorities[job.priority])
+    def rank(self, job: "Job", node: str, in_share: bool = False) -> tuple[int, int, int]:
+        """Who displaces whom on `node`: standing first, then whether the job runs within its workstream's own GPUs
+        (`in_share`, which only the planner knows, from what else runs), then priority. Only a strictly higher rank displaces."""
+        return (1 if self.standing(job.project, node) == OWNER else 0, 1 if in_share else 0, self.priorities[job.priority])
 
 
 @dataclass(frozen=True)
@@ -125,6 +143,7 @@ class Job:
     cpus: int = 1
     memory_gib: int = 1
     max_s: int | None = None
+    expected_s: int | None = None
     preempt: str = "requeue"
     quiet: bool = False
     quiet_safe: bool = False
@@ -134,10 +153,20 @@ class Job:
     inputs: frozenset[str] = frozenset()
     after: tuple[str, ...] = ()
     pool: str | None = None
+    workstream: str | None = None
     submitted: int = 0
 
+    @property
+    def length_s(self) -> int | None:
+        """How long it is planned to run: `max_s`, else a session's `expected_s` (an estimate for backfill, never enforced)."""
+        return self.max_s if self.max_s is not None else self.expected_s
+
     def problems(self, cluster: Cluster) -> list[str]:
-        """Why this job can never run anywhere in `cluster`, by rule; empty when it is well formed."""
+        """Why this job can never run anywhere in `cluster`, by rule; empty when it is well formed.
+
+        `cpus = 0` is a CPU-unmanaged job: the planner gives it no CPUs and its processes run wherever they are placed
+        outside it (node 2's `gpu-lease` leases, which aren't pinned). A session may have no `max_s` if it has an
+        `expected_s`: nothing ends it but itself and the node's admission end."""
         out = []
         if self.priority not in cluster.priorities:
             out.append(f"unknown priority class {self.priority!r}")
@@ -148,10 +177,17 @@ class Job:
         if self.kind == "service":
             if self.max_s is not None:
                 out.append("a service has no max_s: it runs until its node drains")
+        elif self.kind == "session" and self.max_s is None:
+            if self.expected_s is None or self.expected_s <= 0:
+                out.append("a session without max_s declares expected_s, the length backfill plans around")
         elif self.max_s is None or self.max_s <= 0:
             out.append("every job but a service declares max_s, the time it is killed at")
-        if self.cpus < 1:
-            out.append("a job needs at least one CPU")
+        if self.expected_s is not None and self.kind != "session":
+            out.append("only a session has an expected_s instead of a hard max_s")
+        if self.cpus < 0 or (self.cpus == 0 and self.gpus == 0):
+            out.append("a job needs at least one CPU, or GPUs with cpus = 0 (CPU-unmanaged)")
+        if self.cpus == 0 and self.pool is not None:
+            out.append("a CPU-unmanaged job names no CPU pool")
         if self.gpus < 0 or self.memory_gib < 1:
             out.append("gpus must be >= 0 and memory_gib >= 1")
         if self.quiet_safe and self.kind != "service":
@@ -162,6 +198,8 @@ class Job:
             out.append(f"gpu_ids names {len(self.gpu_ids)} GPUs for a job of {self.gpus}")
         if self.node is not None and self.node not in cluster.nodes:
             out.append(f"unknown node {self.node!r}")
+        if self.workstream is not None and not any(w.name == self.workstream for w in cluster.workstreams):
+            out.append(f"unknown workstream {self.workstream!r}")
         return out
 
 
@@ -185,8 +223,10 @@ class Allocation:
 
     @property
     def ends_by(self) -> int | None:
-        """When it is sure to be gone if it isn't frozen again: its start plus max_s plus the time it has been frozen."""
-        return None if self.job.max_s is None else self.started + self.frozen_s + self.job.max_s
+        """When it is sure to be gone if it isn't frozen again: its start plus max_s plus the time it has been frozen. For a
+        session with only an `expected_s`, when it is expected to be gone (a plan for backfill, not a promise)."""
+        n = self.job.length_s
+        return None if n is None else self.started + self.frozen_s + n
 
 
 def load(path: str | Path) -> Cluster:
@@ -211,7 +251,10 @@ def from_dict(d: dict[str, Any]) -> Cluster:
               max_gpus=s.get("max_gpus"), max_cpus=s.get("max_cpus"), max_memory_gib=s.get("max_memory_gib"),
               max_jobs=s.get("max_jobs"), max_job_memory_gib=s.get("max_job_memory_gib"), until=instant(s.get("until")))
         for s in d.get("shares", []))
-    cluster = Cluster(name=meta.get("name", "cluster"), nodes=nodes, priorities=priorities, shares=shares)
+    workstreams = tuple(Workstream(name=w["name"], node=w["node"], gpus=int(w["gpus"]), borrow_gpus=w.get("borrow_gpus"))
+                        for w in d.get("workstreams", []))
+    cluster = Cluster(name=meta.get("name", "cluster"), nodes=nodes, priorities=priorities, shares=shares,
+                      workstreams=workstreams)
     problems = validate(cluster)
     if problems:
         raise ModelError("; ".join(problems))
@@ -257,6 +300,18 @@ def validate(cluster: Cluster) -> list[str]:
     pairs = [(s.project, s.node) for s in cluster.shares]
     if len(set(pairs)) != len(pairs):
         out.append("two shares for one project on one node")
+    for w in cluster.workstreams:
+        if w.node not in cluster.nodes:
+            out.append(f"workstream {w.name} names unknown node {w.node!r}")
+        elif w.gpus < 0 or (w.borrow_gpus is not None and w.borrow_gpus < 0):
+            out.append(f"workstream {w.name}: gpus and borrow_gpus must be >= 0")
+    for name in {w.node for w in cluster.workstreams if w.node in cluster.nodes}:
+        own = sum(w.gpus for w in cluster.workstreams if w.node == name)
+        if own > len(cluster.nodes[name].gpus):
+            out.append(f"{name}: its workstreams own {own} GPUs of {len(cluster.nodes[name].gpus)}")
+    names = [(w.name, w.node) for w in cluster.workstreams]
+    if len(set(names)) != len(names):
+        out.append("two workstreams of one name on one node")
     return out
 
 

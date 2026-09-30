@@ -59,7 +59,8 @@ def main(argv: list[str] | None = None) -> int:
         except model.ModelError as e:
             print(f"cluster: {a.description}: {e}", file=sys.stderr)
             return 1
-        print(f"{c.name}: {len(c.nodes)} nodes, {sum(len(n.gpus) for n in c.nodes.values())} GPUs, {len(c.shares)} shares")
+        print(f"{c.name}: {len(c.nodes)} nodes, {sum(len(n.gpus) for n in c.nodes.values())} GPUs, {len(c.shares)} shares, "
+              f"{len(c.workstreams)} workstreams")
         return 0
     if a.cmd == "plan":
         c = model.load(a.description)

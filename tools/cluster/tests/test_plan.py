@@ -174,3 +174,43 @@ def test_idle_leases_are_named_and_never_acted_on():
     assert acts == [Idle(fill.id, "f", 690), Idle(session.id, "s", 700)]
     assert idle(one(), "n1", [fill], {fill.id: T0 + 200}, T0 + 700, idle_s={"batch": 600}) == []
     assert idle(one(), "n1", [fill], {}, T0 + 700, idle_s={"session": 600}) == []
+
+
+def test_a_workstream_reclaims_its_own_gpus_from_a_borrower_whatever_the_borrowers_priority():
+    from cluster.model import Workstream
+    c = cluster(node("n1", "p", gpus=4), workstreams=(Workstream("benches", "n1", 1, borrow_gpus=0),
+                                                       Workstream("deploy", "n1", 3, borrow_gpus=1)))
+    borrowed = alloc(job("d-1", gpus=4, priority="work", workstream="deploy", max_s=3000), (0, 1, 2, 3), "0-1")
+    bench = job("b-1", gpus=1, priority="fill", workstream="benches")
+    acts = plan(c, "n1", [borrowed], [bench], T0)
+    assert acts[0] == Evict(borrowed.id, "b-1") and by_job(acts, Start)["b-1"].alloc.gpus == (0,)
+    # within its own GPUs a deployment keeps them against a higher-priority job that has no workstream
+    own = alloc(job("d-2", gpus=3, priority="fill", workstream="deploy", max_s=3000), (1, 2, 3), "2-3")
+    assert kinds(plan(c, "n1", [own], [job("x-1", gpus=4, priority="work")], T0)) == ["Wait"]
+    # benches never borrow: a second bench waits even with GPUs free, and a 2-GPU bench is refused outright
+    one_bench = alloc(job("b-0", gpus=1, priority="bench", workstream="benches"), (0,), "4-5")
+    w = plan(c, "n1", [one_bench], [job("b-2", gpus=1, priority="bench", workstream="benches"),
+                                    job("b-3", gpus=2, priority="bench", workstream="benches")], T0)
+    assert by_job(w, Wait)["b-2"].reason == "at workstream benches's GPUs on n1"
+    assert "benches may hold" in by_job(w, Refuse)["b-3"].reason
+
+
+def test_a_session_with_only_an_expected_length_plans_backfill_but_is_never_expired():
+    session = alloc(job("s-1", gpus=1, cpus=0, kind="session", priority="session", preempt="never", max_s=None,
+                        expected_s=900), (0,), "")
+    assert session.ends_by == T0 + 900 and plan(one(), "n1", [session], [], T0 + 5000) == []
+    window = job("w-1", gpus=8, priority="timed", quiet=True)
+    w = by_job(plan(one(), "n1", [session], [window], T0 + 60), Wait)["w-1"]
+    assert w.start_by == T0 + 900
+    # overrun: the window expects it gone now, as gpu-lease counts a lease past its rule
+    assert by_job(plan(one(), "n1", [session], [window], T0 + 1000), Wait)["w-1"].start_by == T0 + 1000
+    # it still ends at the admission end, and it isn't admitted when its expected length crosses it
+    c = one(stops_at=T0 + 3600, drain_s=600)
+    assert plan(c, "n1", [session], [], T0 + 3000) == [Expire(session.id)]
+    late = job("s-2", kind="session", priority="session", preempt="never", max_s=None, expected_s=1200, gpus=1, cpus=0)
+    assert "admission end" in plan(c, "n1", [], [late], T0 + 2000)[0].reason
+
+
+def test_a_cpu_unmanaged_lease_gets_gpus_and_memory_but_no_cpus():
+    (s,) = plan(one(), "n1", [], [job("g-1", gpus=2, cpus=0, memory_gib=190)], T0)
+    assert s.alloc.gpus == (0, 1) and s.alloc.cpus == frozenset() and s.alloc.memory_gib == 190

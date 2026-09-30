@@ -16,9 +16,11 @@ src/cluster/
 ├── cpuset.py   CPU lists in the kernel's format (0-7,16)
 ├── model.py    Cluster, Node, Gpu, Share, Job, Allocation; the description's TOML; job and allocation dicts
 ├── plan.py     plan(): one node's actions (expire, evict, freeze, start, thaw, wait, refuse); idle(): idle GPU leases
+├── invariants.py  the rules as checks on a node's state, run by the simulation and by the agent every tick
 ├── route.py    place(): which node's queue a job enters
-├── ledger.py   the append-only, hash-chained ledger; history, quiet_report, failures
-└── cli.py      cluster validate | plan | ledger verify | ledger quiet | ledger failures
+├── ledger.py   the append-only, hash-chained ledger; state (the one source of lease and queue state), state.json,
+│               gpu-lease/usage/v1 ingest, history, quiet_report, failures, usage
+└── cli.py      cluster validate | plan | ledger verify | ledger quiet | ledger failures | ledger usage
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 tests/          one scenario per rule (test_plan.py), and random workloads checked against every rule (test_simulation.py)
 ~~~
@@ -28,13 +30,21 @@ tests/          one scenario per rule (test_plan.py), and random workloads check
 `plan.py`'s docstring states them, and `tests/test_simulation.py` checks them on every tick of seeded random workloads over
 the Nebius description and a small two-node cluster: no GPU, CPU or lock in two allocations and no memory overcommitted;
 a node's reserved CPU pools (node 1's check slots) only for jobs naming them;
-owner before guest, then priority, and only a strictly higher rank evicts, and only a `requeue` allocation; a quiet job
+owner before guest, then work within its workstream's own GPUs before borrowers (node 1's `provers` and
+`deployments-gpu`, as Kueue's quotas), then priority, and only a strictly higher rank evicts, and only a `requeue`
+allocation; a quiet job
 runs with everything else on its node evicted (GPU work) or frozen (CPU work); the highest-ranked blocked job reserves its
 node and lower jobs backfill only around it; no job admitted past its node's admission end or its share's end, and frozen
 time not counted against `max_s`; equal jobs take turns by submitter; idle GPU leases named and reclaimed from `requeue`
 holders.
 
-A lease taken by hand over SSH (a kernel inner loop, a debugger) is a `session` allocation, so the same rules see it.
+A lease taken by hand over SSH (a kernel inner loop, a debugger) is a `session` allocation, so the same rules see it. A
+session may have no hard limit but an expected length (`gpu-lease` without `--max-min`), which plans backfill and is never
+enforced, and a lease may be CPU-unmanaged (`cpus = 0`), as `gpu-lease`'s are.
+
+Lease and queue state come from the ledger alone (`ledger.state`): a start takes a job out of the queue, a queued job is
+bound to the live handle its request holds and is withdrawn when that drops, and the simulation checks on every tick that
+the ledger replays into exactly the simulator's allocations and queue.
 
 ## Commands
 

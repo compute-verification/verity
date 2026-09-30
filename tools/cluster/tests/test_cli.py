@@ -10,7 +10,7 @@ NEBIUS = str(Path(__file__).parents[1] / "descriptions" / "nebius.toml")
 
 def test_validate(capsys, tmp_path):
     assert cli.main(["validate", NEBIUS]) == 0
-    assert capsys.readouterr().out.strip() == "nebius: 2 nodes, 16 GPUs, 1 shares"
+    assert capsys.readouterr().out.strip() == "nebius: 2 nodes, 16 GPUs, 2 shares, 2 workstreams"
     bad = tmp_path / "bad.toml"
     bad.write_text('[priorities]\nwork = 1\n[nodes.a]\nowner = "p"\nmemory_gib = 0\nnuma = { 0 = "0-3" }\n')
     assert cli.main(["validate", str(bad)]) == 1

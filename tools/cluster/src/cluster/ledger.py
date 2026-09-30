@@ -1,26 +1,35 @@
 """The allocation ledger: an append-only, hash-chained JSON-lines log of what each node's scheduler did.
 
 Every record carries `seq`, `t` (epoch seconds), `kind`, its fields, `prev` (the previous record's hash) and `hash`
-(sha256 of the record's canonical JSON without `hash`). Kinds: `start` (an allocation), `freeze` and `evict` (with `by`),
-`thaw`, `expire`, `end` (with `rc`, the run id when it was a recorded run, and `gpus`: each GPU's held, busy and sampled
-seconds from `gpu_usage`), `refuse` (a job and its reason), `idle` (GPUs held without computing, a notice only), and
-`admin-begin` / `admin-end` for a repair session on a node (who and why), which no scheduler decided and every quiet
-report must see.
+(sha256 of the record's canonical JSON without `hash`). Kinds: `submit` (a job enters a node's queue, with the `handle`
+its request holds live), `withdraw` (a queued job left without starting: its handle dropped, or it gave up), `start` (an
+allocation; `source` names who decided it when that wasn't this ledger's planner, as for a lease `gpu-lease` granted),
+`freeze` and `evict` (with `by`), `thaw`, `expire`, `end` (with `rc`, the run id when it was a recorded run, and `gpus`:
+each GPU's held, busy and sampled seconds, from `gpu_usage` or a `gpu-lease/usage/v1` record), `refuse` (a job and its
+reason), `idle` (GPUs held without computing, a notice only), and `admin-begin` / `admin-end` for a repair session on a
+node (who and why), which no scheduler decided and every quiet report must see.
 
-The ledger is the evidence behind a run's placement: `history` replays it into each allocation's running and frozen
-intervals, and `quiet_report` says, for one allocation, what else was active on its node while it ran, which is what a
-timed row's claim that "the node was quiet" rests on.
+The ledger is the one source of lease and queue state: `state` replays it into the live allocations and the queue, and
+the node agent writes that to `state.json` after every tick, so every reader (the fill runner, the quiet step, status
+pages, usage reports) sees the same state, never one inferred from processes or file names. It is also the evidence
+behind a run's placement: `history` replays it into each allocation's running and frozen intervals, and `quiet_report`
+says, for one allocation, what else was active on its node while it ran, which is what a timed row's claim that "the node
+was quiet" rests on.
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+import os
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 from . import model
 from .plan import Action, Evict, Expire, Freeze, Idle, Refuse, Start, Thaw
+
+USAGE_V1 = "gpu-lease/usage/v1"
 
 GENESIS = "0" * 64
 
@@ -56,12 +65,22 @@ class Ledger:
         self.seq, self.last, self.last_t = record["seq"], record["hash"], t
         return record
 
-    def actions(self, t: int, actions: Iterable[Action]) -> list[dict[str, Any]]:
+    def submit(self, t: int, job: model.Job, node: str, handle: str | None = None) -> dict[str, Any]:
+        return self.append(t, "submit", job=model.job_to_dict(job), node=node, **({"handle": handle} if handle else {}))
+
+    def withdraw(self, t: int, job: str, why: str) -> dict[str, Any]:
+        return self.append(t, "withdraw", job=job, why=why)
+
+    def end(self, t: int, alloc: str, rc: int | None = None, *, usage: dict[str, Any] | None = None) -> dict[str, Any]:
+        """An allocation's end, with its exit status and per-GPU use from its `gpu-lease/usage/v1` record when there is one."""
+        return self.append(t, "end", alloc=alloc, **(end_fields(usage) if usage else {"rc": rc}))
+
+    def actions(self, t: int, actions: Iterable[Action], source: str | None = None) -> list[dict[str, Any]]:
         """Record the actions an executor carried out at `t` (a Wait is not recorded: nothing happened)."""
         out = []
         for a in actions:
             if isinstance(a, Start):
-                out.append(self.append(t, "start", alloc=model.allocation_to_dict(a.alloc)))
+                out.append(self.append(t, "start", alloc=model.allocation_to_dict(a.alloc), **({"source": source} if source else {})))
             elif isinstance(a, (Freeze, Evict)):
                 out.append(self.append(t, "freeze" if isinstance(a, Freeze) else "evict", alloc=a.alloc, by=a.by))
             elif isinstance(a, (Thaw, Expire)):
@@ -75,6 +94,106 @@ class Ledger:
 
 def read(path: str | Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+
+
+@dataclass(frozen=True)
+class Queued:
+    job: model.Job
+    node: str
+    handle: str | None
+    since: int
+
+
+@dataclass(frozen=True)
+class State:
+    """Lease and queue state as the ledger has it at record `seq` (hash `head`): the live allocations and the queued jobs."""
+    allocations: dict[str, model.Allocation]
+    queue: dict[str, Queued]
+    seq: int = 0
+    head: str = GENESIS
+    t: int | None = None
+
+    def on(self, node: str) -> tuple[list[model.Allocation], list[model.Job]]:
+        return ([a for a in self.allocations.values() if a.node == node],
+                [q.job for q in self.queue.values() if q.node == node])
+
+
+def state(records: Iterable[dict[str, Any]], start: State | None = None) -> State:
+    """Replay the ledger (or the records after `start`, on top of it) into its live allocations and queue. A start takes its
+    job out of the queue; an evict, expire or end removes the allocation, and a job that runs again is submitted again; a
+    withdraw or a refusal removes a queued job."""
+    allocs: dict[str, model.Allocation] = dict(start.allocations) if start else {}
+    queue: dict[str, Queued] = dict(start.queue) if start else {}
+    seq, head, t = (start.seq, start.head, start.t) if start else (0, GENESIS, None)
+    for r in records:
+        k, t = r["kind"], r["t"]
+        seq, head = r["seq"], r["hash"]
+        if k == "submit":
+            job = model.job_from_dict(r["job"])
+            queue[job.id] = Queued(job, r["node"], r.get("handle"), t)
+        elif k in ("withdraw", "refuse"):
+            queue.pop(r["job"], None)
+        elif k == "start":
+            a = model.allocation_from_dict(r["alloc"])
+            allocs[a.id] = a
+            queue.pop(a.job.id, None)
+        elif k == "freeze":
+            a = allocs[r["alloc"]]
+            allocs[a.id] = replace(a, state="frozen", frozen_by=r["by"], frozen_at=a.frozen_at if a.frozen_at is not None else t)
+        elif k == "thaw":
+            a = allocs[r["alloc"]]
+            allocs[a.id] = replace(a, state="running", frozen_by=None, frozen_at=None,
+                                   frozen_s=a.frozen_s + t - (a.frozen_at if a.frozen_at is not None else t))
+        elif k in ("evict", "expire", "end"):
+            allocs.pop(r["alloc"], None)
+    return State(allocs, queue, seq, head, t)
+
+
+def state_to_dict(s: State) -> dict[str, Any]:
+    return {"schema": "cluster/state/v1", "seq": s.seq, "head": s.head, "t": s.t,
+            "allocations": [model.allocation_to_dict(a) for a in sorted(s.allocations.values(), key=lambda a: a.id)],
+            "queue": [{"job": model.job_to_dict(q.job), "node": q.node, "handle": q.handle, "since": q.since}
+                      for q in sorted(s.queue.values(), key=lambda q: (q.since, q.job.id))]}
+
+
+def state_from_dict(d: dict[str, Any]) -> State:
+    return State({a["id"]: model.allocation_from_dict(a) for a in d["allocations"]},
+                 {q["job"]["id"]: Queued(model.job_from_dict(q["job"]), q["node"], q.get("handle"), q["since"]) for q in d["queue"]},
+                 d["seq"], d["head"], d["t"])
+
+
+def write_state(path: str | Path, s: State) -> None:
+    """`state.json`, replaced whole (write, then rename), so a reader never sees half of it."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(state_to_dict(s), sort_keys=True) + "\n")
+    os.replace(tmp, path)
+
+
+def epoch(stamp: str) -> int:
+    """`2026-09-30T18:00:00Z` as epoch seconds, the form `gpu-lease` writes its times in."""
+    return int(datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp())
+
+
+def end_fields(rec: dict[str, Any]) -> dict[str, Any]:
+    """An `end` record's fields from a `gpu-lease/usage/v1` record: its `rc`, `run` and per-GPU `gpus`, in `gpu_usage`'s
+    shape. Busy and sampled time are capped at the held time, since `gpu-lease` counts each reading a full cadence."""
+    if rec.get("schema") != USAGE_V1:
+        raise ValueError(f"not a {USAGE_V1} record: {rec.get('schema')!r}")
+    gpus = []
+    for g in rec["gpus"]:
+        held = int(g["held_s"])
+        gpus.append({"index": int(g["index"]), "uuid": g.get("uuid", "-"), "held_s": held,
+                     "busy_s": min(int(g["busy_s"]), held), "sampled_s": min(int(g["sampled_s"]), held)})
+    out: dict[str, Any] = {"rc": rec["rc"], "gpus": gpus}
+    if rec.get("run"):
+        out["run"] = rec["run"]
+    return out
+
+
+def usage_key(rec: dict[str, Any]) -> tuple[int, int]:
+    """What ties a usage record to its lease: `gpu-lease`'s pid and start (both in the lease's owner file)."""
+    return int(rec["pid"]), epoch(rec["since"])
 
 
 def verify(records: list[dict[str, Any]]) -> list[str]:
