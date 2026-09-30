@@ -159,6 +159,8 @@ HOPPER_PRIMITIVES = [HopperBF16WgmmaDot16, Fa3InvSum]
 # FA3's per-iteration Check_inf chain (`Attention_v4`, `TargetProfile.fa3_construction`) registers with the Hopper bindings, so every process
 # that decodes a Hopper Program can decode one built under that construction
 from verity_vllm.program.registry import fa3_check_inf  # noqa: E402, F401
+# FA2's (`Attention_v5`, the Hopper k16 step's FA2 on cc 12.0) likewise
+from verity_vllm.program.registry import fa2_check_inf  # noqa: E402, F401
 
 # --- CF1 (composition.md §2): the Hopper eager profile as a binding record of b1's factored `Serve_v2` -----------
 # The environment substitution above (`_BoundPrims._over`, `ENV["BN"]`) written as the statics it always was: the same
