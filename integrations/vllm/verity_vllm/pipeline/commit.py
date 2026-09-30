@@ -2435,7 +2435,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                                               served_tokens={_rl[str(k)]: [int(t) for t in v] for k, v in r["tokens"].items() if str(k) in _rl})
                         if hasattr(SR, "executed_prefix_of_record") and "executed_prefix" in inspect.signature(SR.sampled_replay).parameters:
                             _ep_facts = EPX.facts_accepted_by(SR.executed_prefix_of_record, _ep_facts)
-                            _sr_kw["executed_prefix"] = {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
+                            _sr_kw["executed_prefix"] = {} if args.replay_k and not _epr_r["any_eos_stop"] else {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
                             _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
                             if _epr_r["any_eos_stop"] or _flt:
                                 print(f"[delta] not-executed(R17-1) class -> sampled_replay(executed_prefix=): " + ", ".join(
