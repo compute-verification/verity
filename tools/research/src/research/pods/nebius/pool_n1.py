@@ -9,7 +9,8 @@ Kueue's Workloads it writes the n2 fields it can compute here: GPU busy (share o
 `useful_share_1h` (the busy samples a pod holds), `cpu_busy_5m`, per GPU {index, busy_5m, holder, class}, and `waiting` split into
 GPU and CPU Workloads. `ready_gpu_h`, `lease_waiters` and `kinds` are left out: node 1's queue has no durations yet. `monitors`:
   - `gpu-idle-in-lease`: a pod has held a GPU for 5 min at a mean util under 10%;
-  - `gpu-unleased`: a GPU with memory in use (over 1 GiB) or busy that no admitted Workload's pod holds;
+  - `gpu-unleased`: a GPU with memory in use (over 1 GiB for all of the last 5 min) or busy that no admitted Workload's
+    running pod holds (a GPU whose DCGM pod has just finished is a handover, not flagged);
   - `template-drift`: the dispatcher's templates (`$DISPATCH_SKY`) differ from `infra/nebius` as last pushed into node 1's bare repo
     (`refs/kueue-fold/infra-nebius`; neither node can read GitHub, so an agent pushes it and writes `ref.json` with the time).
 """
@@ -62,7 +63,8 @@ def kubectl(*args: str) -> dict:
 
 
 def observe() -> dict:
-    busy = f"(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}} >= bool 1)"
+    util = f"max by (gpu) (DCGM_FI_DEV_GPU_UTIL{{{DCGM}}})"      # a GPU has one series per pod it has held
+    busy = f"({util} >= bool 1)"
     obs = {
         "t": time.time(),
         "sampled_at": scalar(f"max(timestamp(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}))"),
@@ -70,11 +72,11 @@ def observe() -> dict:
         "samples_1h": scalar(f"min(count_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[1h]))"),
         "busy_5m": by_gpu(f"avg_over_time({busy}[5m:15s])"),
         "busy_1h": by_gpu(f"avg_over_time({busy}[1h:15s])"),
-        "util_5m": by_gpu(f"avg_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[5m])"),
-        "held_busy_1h": scalar(f'sum(sum_over_time((DCGM_FI_DEV_GPU_UTIL{{{DCGM},pod!=""}} >= bool 1)[1h:15s]))'),
+        "util_5m": by_gpu(f"max by (gpu) (avg_over_time(DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}[5m]))"),
+        "held_busy_1h": scalar(f'sum(sum_over_time((max by (gpu) (DCGM_FI_DEV_GPU_UTIL{{{DCGM},pod!=""}}) >= bool 1)[1h:15s]))'),
         "all_busy_1h": scalar(f"sum(sum_over_time({busy}[1h:15s]))"),
         "cpu_busy_5m": scalar('1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))'),
-        "fb_mib": by_gpu(f"DCGM_FI_DEV_FB_USED{{{DCGM}}}"),
+        "fb_mib": by_gpu(f"min by (gpu) (min_over_time(DCGM_FI_DEV_FB_USED{{{DCGM}}}[5m]))"),
         "pod_of_gpu": {int(r["metric"]["gpu"]): r["metric"].get("pod") or None for r in prom(f"DCGM_FI_DEV_GPU_UTIL{{{DCGM}}}")},
         "pods": kubectl("get", "pods")["items"],
         "jobs": kubectl("get", "jobs")["items"],
@@ -133,6 +135,8 @@ def build(obs: dict, drift: dict | None = None) -> dict:
                 monitors.append({"kind": "gpu-idle-in-lease", "gpu": i, "owner": owner, "job_kind": kind,
                                  "mean_util_5m": round(util5, 1), "lease_since": since, "key": f"n1:{name}:gpu{i}",
                                  "msg": f"{name} ({kind}, queue {wl['spec'].get('queueName')}) holds GPU {i} at {util5:.1f}% over 5 min"})
+        elif (pod or {}).get("status", {}).get("phase") in ("Succeeded", "Failed"):
+            pass                                         # DCGM still names the pod that just finished: a handover
         elif fb > UNLEASED_FB_MIB or util5 >= 1:
             holder, cls = pod_name, "direct"
             monitors.append({"kind": "gpu-unleased", "gpu": i, "pid": None, "cmd": pod_name, "lease": None,

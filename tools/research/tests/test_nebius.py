@@ -567,18 +567,19 @@ def test_pool_n1_flags_an_idle_admitted_gpu_and_an_unleased_one_and_counts_waiti
 
     pod = lambda name, job, start: {"metadata": {"name": name, "labels": {"job-name": job}}, "status": {"startTime": start}}
     obs = {"t": t, "sampled_at": t - 10, "samples_5m": 20, "samples_1h": 240,
-           "busy_5m": {0: 0.1, 1: 1.0, 2: 0.0, 3: 0.5}, "busy_1h": {0: 0.2, 1: 1.0, 2: 0.0, 3: 0.5},
-           "util_5m": {0: 2.0, 1: 80.0, 2: 0.0, 3: 30.0}, "fb_mib": {0: 9000, 1: 20000, 2: 0, 3: 5000},
+           "busy_5m": {0: 0.1, 1: 1.0, 2: 0.0, 3: 0.5, 4: 0.4}, "busy_1h": {0: 0.2, 1: 1.0, 2: 0.0, 3: 0.5, 4: 0.3},
+           "util_5m": {0: 2.0, 1: 80.0, 2: 0.0, 3: 30.0, 4: 0.0}, "fb_mib": {0: 9000, 1: 20000, 2: 0, 3: 5000, 4: 50000},
            "held_busy_1h": 540, "all_busy_1h": 600, "cpu_busy_5m": 0.31,
-           "pod_of_gpu": {0: "c-idle-x", 1: "c-busy-x", 2: None, 3: "rogue"},
+           "pod_of_gpu": {0: "c-idle-x", 1: "c-busy-x", 2: None, 3: "rogue", 4: "done-x"},
            "pods": [pod("c-idle-x", "nd-vllm-commit-1", "2026-09-30T21:40:00Z"), pod("c-busy-x", "nd-po-1", "2026-09-30T21:40:00Z"),
-                    pod("rogue", "rogue-job", "2026-09-30T21:00:00Z")],
+                    pod("rogue", "rogue-job", "2026-09-30T21:00:00Z"),
+                    {**pod("done-x", "done-job", "2026-09-30T21:00:00Z"), "status": {"phase": "Succeeded"}}],
            "jobs": [{"metadata": {"name": "nd-vllm-commit-1", "annotations": {"verity.dev/template": "config-run@9c6a"}}}],
            "workloads": [wl("nd-vllm-commit-1", "deployments-gpu", True), wl("nd-po-1", "pous-overflow", True),
                          wl("wait-g", "deployments-gpu", False), wl("wait-c", "deployments-cpu", False, gpus=0)]}
     n1 = m.build(obs)
     assert [(g["index"], g["holder"], g["class"]) for g in n1["gpus"]] == [
-        (0, "kueue:nd-vllm-commit-1", "verity"), (1, "kueue:nd-po-1", "pous"), (2, None, "free"), (3, "rogue", "direct")]
+        (0, "kueue:nd-vllm-commit-1", "verity"), (1, "kueue:nd-po-1", "pous"), (2, None, "free"), (3, "rogue", "direct"), (4, None, "free")]
     assert (n1["gpu_busy_5m"], n1["useful_share_1h"], n1["waiting"], n1["waiting_gpu"], n1["waiting_cpu"]) == (0.4, 0.9, 2, 1, 1)
     assert [(x["kind"], x["gpu"]) for x in n1["monitors"]] == [("gpu-idle-in-lease", 0), ("gpu-unleased", 3)]
     assert n1["monitors"][0]["job_kind"] == "config-run@9c6a" and n1["monitors"][0]["owner"] == "deployments-gpu"
