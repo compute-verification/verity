@@ -18,7 +18,7 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
-k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
+k-unit replay (uniform by default, ``--replay-draw``), and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
 record incomplete at Commit; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the Commit
@@ -533,8 +533,8 @@ class SingleRow(Row):
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
-        if self.config_run:                           # one instrumented run, bounded staging, k units stratified by family
-            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
+        if self.config_run:                           # one instrumented run, bounded staging, k units
+            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k), "--replay-draw", ck.replay_draw]
         if self.protocols:
             cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)

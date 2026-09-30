@@ -1,7 +1,7 @@
 """The config run's and the Program cache's parts of a single-GPU row (`row_stages.SingleRow`), docs/vllm-config-sweep-plan.md §2-§4.
 
 A config run (`--config-run 1`) is the Build, the strict word check of its manifest (`word_check`), ONE instrumented Commit (`--pairs 1
---only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay stratified by family, and
+--only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay (`--replay-draw`), and
 `config_record.json` (`config_record`), written however the run ends.  No Match, no manifest-verify rebuild, no VU export: the Commit's
 decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match there is no account
 for the executed-prefix class (`check.executed_prefix`) to link to: when every request ran to its cap the class has nothing to classify and the
