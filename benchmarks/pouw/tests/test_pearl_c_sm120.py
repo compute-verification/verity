@@ -111,8 +111,10 @@ def test_kernel_constants_match_the_reference():
     run = (HERE / "run.py").read_text()
     n256, n16 = re.search(r"NORM_256, NORM_16 = (0x[0-9A-F]+), (0x[0-9A-F]+)", run).groups()
     assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
-    for d in (C.D_MESSAGE, C.D_LEAF, 0x23):
-        assert f"0x{d:02x}" in SOURCE.lower()
+    label = re.search(r"LINE_LABEL\[(\d+)\] = \{([^}]*)\}", SOURCE)
+    assert bytes(ord(c) for c in re.findall(r"'(.)'", label.group(2))) == P.LABELS["noise-line"] and int(label.group(1)) == 23
+    from verity.commitments.blake3 import blake3
+    assert F.unit_block(b"s" * 32, b"b" * 32, 7)[72:] == blake3(C.LABELS["seed-A"]) == blake3(b"pearl-c/v0/seed-A")
     variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
     assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
     promoted = {g for *_, g in gemms() if g}
@@ -156,8 +158,9 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
                                    env=env).stdout)
     funcs, problems = S.gate(ptxas.read_text(), sass.read_text())
     assert not problems, problems
-    for name in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_h"):
+    for name in ("gemm_pearlc", "gemm_pearlc_u"):
         assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
+    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a"} <= set(funcs)
 
 
 @pytest.mark.slow
@@ -202,7 +205,7 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
     assert set(man["variants"]) == {"sm120", "sm120-unpromoted"}
     cs = {}
     for variant, spec in man["variants"].items():
-        assert spec["crosscheck"]["agree"] and spec["scheme"] == f"pearl-c-{variant}-v1"
+        assert spec["crosscheck"]["agree"] and spec["scheme"] == f"pearl-c-{variant}-v1-h1"
         c = np.frombuffer((small_fixture / variant / "c.bin").read_bytes(), "<u4")
         u = np.frombuffer((small_fixture / variant / "u.bin").read_bytes(), "<u4")
         assert c.size == u.size == 128 * 128 and (c != u).mean() > 0.99
@@ -215,10 +218,22 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
-def kernel_names() -> list[str]:
-    plain = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(', SOURCE)) - {"NAME"}
+KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
+HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm120.cuh"))
+#: the -h1 kernels (#449's hash.cuh and hash_sm120.cuh) the pipeline launches at the dry run's shapes: no pads (every count a
+#: power of two) and no level wider than hash_tree_small's
+H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
+
+
+def own_kernels() -> list[str]:
+    plain = set(re.findall(KERNEL, SOURCE)) - {"NAME"}
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
+
+
+def kernel_names() -> list[str]:
+    """Every kernel in the cubin: pearl_c_sm120.cu's and the hash headers' it includes."""
+    return own_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE)))
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
@@ -244,12 +259,10 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
             assert base == "gemm_ct" or N == 32, name
             need[2] = 4 * M * N
         else:
-            assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_h"), name
+            assert base in ("gemm_pearlc", "gemm_pearlc_s"), name
             need.update({4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
             if base == "gemm_pearlc":
                 need.update({2: 4 * M * N, 3: 4 * M * N})
-            if base == "gemm_pearlc_h":
-                need[9] = M * N
         return need
     if name in ("words", "words_u"):
         M, N, K = i[:3]
@@ -259,13 +272,24 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32 * i[0], 2: 128 * i[0], 3: 128 * i[0]}
     if name == "pb":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 32 * 32 * 4, 4: 128 * i[0]}
-    if name == "hash_msg":
-        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1]}
-    if name == "hash_leaf":
-        return {0: i[0] * i[1], 1: (i[0] // 64) * (i[1] // 64) * 32}
-    if name == "hash_rows_f32":
-        assert i[1] % 1024 == 0
-        return {0: i[0] * i[1], 1: i[0] * (i[1] // 1024) * 32}
+    if name == "hash_msg_v":
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], 3: 32}
+    if name == "hash_leaf_p":
+        return {0: i[0] * i[1], 1: -(-i[0] // 64) * (i[1] // 64) * 32, 2: 32}
+    if name == "hash_rows_w":
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
+    if name == "hash_tree_small":
+        return {0: 32 * (2 * i[0] - 1), 1: 32 * (i[0].bit_length() - 1)}
+    if name == "hash_tree_leaves":
+        return {0: 32 * i[0], 1: 32 * i[0], 2: 32}
+    if name == "hash_node_keys":
+        return {0: 32 * i[0], 1: 32}
+    if name == "hash_pad":
+        return {0: 32 * i[1], 1: 32}
+    if name == "hash_nodes":
+        return {0: 64 * i[1], 1: 32 * i[1], 2: 32}
+    if name == "seed_line_a":
+        return {0: 32, 1: 104, 2: 32, 3: 32}
     if name == "quant_s5":
         return {0: 4 * i[0] * i[1], 1: 4 * i[0], 2: i[0] * i[1]}
     if name == "plainq":
@@ -282,10 +306,11 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
 def threads(name: str, i: list[int]) -> int:
     """Threads the launch must cover."""
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
-            "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32, "hash_leaf": lambda: (i[0] // 64) * (i[1] // 64),
+            "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
-            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
-            "quant_s5": lambda: i[0] * i[1] // 16, "hash_rows_f32": lambda: i[0] * (i[1] // 1024)}.get(name, lambda: 0)()
+            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "hash_tree_leaves": lambda: i[0],
+            "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1,
+            "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
 
 
 @pytest.fixture(scope="module")
@@ -347,7 +372,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert set(rows[2]["variants"]) == {"sm120", "sm120-unpromoted"}
     for t in rows[3:]:
         assert t["gates"]["ungated"] and {"split_ms", "call_e2e_ms", "ratio_vs_own_plain_gemm", "consistency", "job_ms"} <= set(t)
-        assert set(t["split_ms"]) == {"forming", "gemm", "cleanup", "hashing"}
+        assert set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
 
     allocs: dict[int, int] = {}
     seen = set()
@@ -355,7 +380,12 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         track(ev, allocs)
         if ev["op"] == "launch":
             seen.add(ev["name"])
-    assert seen == set(kernel_names())
+    assert seen == set(own_kernels()) | H1_LAUNCHED
+
+
+def room(allocs: dict[int, int], ptr: int) -> int:
+    """Bytes from ptr to the end of the live allocation holding it (0 if none): a tree's root is its buffer's last node."""
+    return next((base + n - ptr for base, n in allocs.items() if base <= ptr < base + n), 0)
 
 
 def track(ev: dict, allocs: dict[int, int]) -> None:
@@ -373,8 +403,9 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            assert p[slot] in allocs, (name, slot)
-            assert allocs[p[slot]] >= n, (name, slot, allocs[p[slot]], n)
+            if not p[slot] and (name, slot) == ("seed_line_a", 3):
+                continue
+            assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
         assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
         if name == "form_s5":

@@ -12,12 +12,10 @@
    any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
-   (the weight side; the call's forming, GEMM, clean-up and hashing), the call end to end with and without hashing, and
-   consistency checks (C~ of gemm_ct equals gemm_pearlc's; a second gemm_pearlc gives the same U), and at m a multiple of
-   128 the fused call: gemm_pearlc_h computes the message digests from registers in its epilogue and stores neither C~ nor
-   U, only y (its digests and their leaves checked byte for byte like hash_msg's and hash_leaf's), replacing gemm_pearlc +
-   hash_msg; gemm_pearlc_s is the same kernel without the hashing, the control that prices it.  NVML's clocks, power and
-   throttle reasons before and after.
+   (the weight side; the call's commitment of A, forming, GEMM, clean-up and hashing, hashing format -h1), the call end to
+   end with and without its hashes (commit and hashing), and consistency checks (C~ of gemm_ct equals gemm_pearlc's; a
+   second gemm_pearlc gives the same U).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
+   only; the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
@@ -245,6 +243,23 @@ def cdiv(a: int, b: int) -> int:
     return -(-a // b)
 
 
+TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
+
+
+def pow2(n: int) -> int:
+    """A frame-b3 tree's level-0 width over n leaves."""
+    return 1 << max(n - 1, 0).bit_length()
+
+
+def depth(n: int) -> int:
+    return pow2(n).bit_length() - 1
+
+
+def rows_w_words(rb: int) -> int:
+    """hash_sm120.cuh's shared words per warp of hash_rows_w for rows of rb bytes."""
+    return 8 * ((64 + rb + 1023) // 1024)
+
+
 def gemm_tile(name: str) -> tuple[int, int]:
     """A GEMM kernel's CTA tile (rows, columns): 64 x 64 for the _d kernels, 128 x 32 for gemm_words, else 128 x 128."""
     if name.startswith("gemm_words"):
@@ -254,28 +269,34 @@ def gemm_tile(name: str) -> tuple[int, int]:
 
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
-    `job` (the weight side, once per weight and epoch), `forming`, `gemm` (gemm_ct, the chain alone, for the split),
-    `cleanup` and `hashing` (the call), `fused` (on 128 x 128 tiles: the chain with the digests in its epilogue, its hash-free
-    control and the digests' leaves), and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of
-    128 only).  The chain runs on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the
-    32-column words on 128 x 32 CTA tiles, but A'F_B at 64 x 64 on the `words` kernel's warp tiles."""
+    `epoch` (B's frame-b3 row tree, whose root the epoch's salt and seed_B follow), `unit` (the level keys and pads of A's
+    tree and the tile tree, which depend on their domains alone), `job` (the weight side, once per weight and epoch), then
+    the call: `commit` (A's row tree, and E_A's line key from its root on the device: `seed_line_a`), `forming`, `gemm`
+    (gemm_ct, the chain alone, for the split), `cleanup` and `hashing` (-h1: the message digests, the tile leaves and the tile
+    tree); and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  The chain runs
+    on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the 32-column words on 128 x 32 CTA
+    tiles, but A'F_B at 64 x 64 on the `words` kernel's warp tiles.
+
+    `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
+    labels `k_msg`, `k_leaf`, and `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
+    BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a`."""
 
     GEMM_SMEM: dict[str, int] = {}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's and have their rows committed, the rest filler."""
+        matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
         self.m_real = m if m_real is None else m_real
         self.g = VARIANT_G[variant]
         self.suffix = "" if self.g else "_u"
         self.bm = bm or (BM if m % BM == 0 else BM_D)
         if m % self.bm or n % BM or k % 1024:
-            raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024 (row-hash segments), "
-                             f"not {(m, n, k)}")
-        self.row_bytes, self.segment = 4 * k, 1024
-        sizes = self.sizes(m, n, k)
+            raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024, not {(m, n, k)}")
+        self.row_bytes = 4 * k
+        self.tiles = cdiv(self.m_real, TILE) * (n // TILE)
+        sizes = self.sizes(m, n, k, self.m_real)
         self.size = sizes
         self.owned = bufs is None
         self.b = {name: dev.alloc(s) for name, s in sizes.items()} if self.owned else dict(bufs)
@@ -283,7 +304,10 @@ class Pipeline:
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
 
     @staticmethod
-    def sizes(m: int, n: int, k: int) -> dict[str, int]:
+    def sizes(m: int, n: int, k: int, m_real: int | None = None) -> dict[str, int]:
+        m_real = m if m_real is None else m_real
+        tiles = cdiv(m_real, TILE) * (n // TILE)
+        tree = lambda count: {"tree": 32 * (2 * pow2(count) - 1), "keys": 32 * max(depth(count), 1)}  # noqa: E731
         return {
             "ea_codes": m * 32, "eb_codes": n * 32, "fa_codes": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fbT32": 32 * k,
             "fbT128": 128 * k, "g": 128 * 32 * 4,
@@ -291,11 +315,49 @@ class Pipeline:
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
             "at": m * k, "bt": n * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
-            "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "rows": m * (4 * k // 1024) * 32,
-            "digests_h": m * n, "leaves_h": (m // 64) * (n // 64) * 32,
+            "line_a": 32, "seed_a": 32, "digests": m_real * n, "leaves": tiles * 32,
+            **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
         }
+
+    def root(self, tag: str) -> int:
+        """The device address of a tree's root, its last node."""
+        return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - 32
+
+    def levels(self, tag: str, count: int) -> None:
+        """A frame-b3 tree's levels above level 0 (leaves and pads written): hash_nodes a level at a time down to
+        TREE_SMALL nodes, then hash_tree_small for the rest in one launch."""
+        d, base, lk = self.dev, self.b[f"tree_{tag}"], self.b[f"keys_{tag}"]
+        width, off, level = pow2(count), 0, 0
+        while width > TREE_SMALL:
+            d.launch("hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), lk + 32 * level),
+                     i=(level, width // 2))
+            off, width, level = off + width, width // 2, level + 1
+        if width > 1:
+            d.launch("hash_tree_small", 1, min(1024, width // 2), p=(base + 32 * off, lk + 32 * level), i=(width,))
+
+    def tree_setup(self, tag: str, count: int, dom: str) -> list[tuple[str, object]]:
+        """A tree's pads and level keys (hash_pad, hash_node_keys): its domain's alone, so once per unit."""
+        d, b, width = self.dev, self.b, pow2(count)
+        out = []
+        if width > count:
+            out.append((f"pad_{tag}", lambda: d.launch("hash_pad", cdiv(width - count, 128), 128, p=(b[f"tree_{tag}"], self.keys[dom]),
+                                                       i=(count, width))))
+        if width > 1:
+            out.append((f"node_keys_{tag}", lambda: d.launch("hash_node_keys", cdiv(depth(count), 32), 32,
+                                                             p=(b[f"keys_{tag}"], self.keys[dom]), i=(depth(count),))))
+        return out
+
+    def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
+        """A frame-b3 tree over `count` FP32 rows of x (hash_sm120.cuh's hash_rows_w, a warp a row), then its levels."""
+        d, b, rb = self.dev, self.b, self.row_bytes
+        smem = 4 * ROWS_WARPS * rows_w_words(rb)
+        if smem > 48 * 1024:
+            d.ck("cuFuncSetAttribute", d.fn("hash_rows_w"), MAX_DYN, smem)
+        return [(f"hash_rows_{tag}", lambda: d.launch("hash_rows_w", cdiv(count, ROWS_WARPS), 32 * ROWS_WARPS, smem,
+                                                      p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
+                (f"tree_{tag}", lambda: self.levels(tag, count))]
 
     def free(self) -> None:
         for name, p in self.b.items():
@@ -353,24 +415,25 @@ class Pipeline:
                ("bf", lambda: self.words("bt", "faT32", n, "bf")),
                ("g", lambda: self.words("fbT128", "faT32", 128, "g")),
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b["epb_codes"], 0, b["bf"], b["g"], b["pb_t"]), i=(n,)))]
-        forming = [lines("ea", self.keys["line_a"], 0, 0, m, "ea_codes"),
+        forming = [lines("ea", b["line_a"], 0, 0, m, "ea_codes"),
                    *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", warps=self.bm == BM_D)),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", lambda: self.gemm(pearlc, "at", "bt", m, n, out=("c", "u", "y"), pa=b["pa_t"], pb=b["pb_t"],
                                                      rs=b["ia_a"], cs=b["ia_b"]))]
-        segs = self.row_bytes // self.segment
-        hashing = [("hash_msg", lambda: d.launch("hash_msg", cdiv(m * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"]), i=(m, n))),
-                   ("hash_leaf", lambda: d.launch("hash_leaf", cdiv((m // 64) * (n // 64), 64), 64, p=(b["digests"], b["leaves"]),
-                                                  i=(m, n))),
-                   ("hash_rows", lambda: d.launch("hash_rows_f32", cdiv(self.m_real * segs, 128), 128, p=(b["xa"], b["rows"]),
-                                                  i=(self.m_real, self.row_bytes)))]
-        fused = [(nm, lambda nm=nm, dg=dg: self.gemm(nm + sx, "at", "bt", m, n, out=(None, None, "y"), pa=b["pa_t"], pb=b["pb_t"],
-                                                    rs=b["ia_a"], cs=b["ia_b"], dg=b[dg] if dg else 0))
-                 for nm, dg in (("gemm_pearlc_s", None), ("gemm_pearlc_h", "digests_h"))]
-        fused.append(("hash_leaf_h", lambda: d.launch("hash_leaf", cdiv((m // 64) * (n // 64), 64), 64,
-                                                      p=(b["digests_h"], b["leaves_h"]), i=(m, n))))
+        mr, kk, tiles = self.m_real, self.keys, self.tiles
+        epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
+        unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
+        commit = self.row_tree("a", "xa", mr, "dom_a") + [
+            ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
+        hashing = [("hash_msg", lambda: d.launch("hash_msg_v", cdiv(mr * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"], kk["k_msg"]),
+                                                 i=(mr, n))),
+                   ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, 32), 128, p=(b["digests"], b["leaves"], kk["k_leaf"]),
+                                                  i=(mr, n))),
+                   ("tree_leaves_t", lambda: d.launch("hash_tree_leaves", cdiv(tiles, 128), 128, p=(b["leaves"], b["tree_t"], kk["dom_t"]),
+                                                      i=(tiles,))),
+                   ("tree_t", lambda: self.levels("t", tiles))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
         plain = [("plainq_a", lambda: d.launch("plainq", m, 256, p=(b["xa"], b["qa"], b["sa"]), i=(m, k))),
                  ("gemm_plain", lambda: self.gemm("gemm_plain", "qa", "qb", m, n, out=(None, None, "y_plain"), rs=b["sa"], cs=b["sb"])),
@@ -382,9 +445,8 @@ class Pipeline:
                    ("gemm_adopt", lambda: self.gemm("gemm_plain", "qa_s5", "qb_s5", m, n, out=(None, None, "y_adopt"), rs=b["ia_a"],
                                                     cs=b["ia_b"]))]
         tag = lambda phase, xs: [(nm, phase, f) for nm, f in xs]  # noqa: E731
-        out = tag("job", job) + tag("forming", forming) + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing)
-        if self.bm == BM:
-            out += tag("fused", fused)
+        out = (tag("epoch", epoch) + tag("unit", unit) + tag("job", job) + tag("commit", commit) + tag("forming", forming)
+               + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing))
         if m % BM == 0:
             out += tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job) + tag("adopted", adopted)
         return out
@@ -406,9 +468,8 @@ class Pipeline:
 
 PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "qa_s5", "qb_s5", "y_adopt"}
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
-               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)),
-               ("gemm_pearlc_h", ("y", "digests_h")))
-FUSED_ALIASES = {"c2": "c", "digests_h": "digests"}
+               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)))
+ALIASES = {"c2": "c"}
 #: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
 
@@ -441,8 +502,6 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             res[name] = compare(dev, pipe, name, want(name))
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
-            if name in ("digests", "leaves"):
-                res[f"{name}@gemm_pearlc_h"] = compare(dev, pipe, name, want(name), alias=name + "_h")
         small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
         for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
             steps = {nm: fn for nm, _, fn in p_.steps()}
@@ -460,7 +519,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                     p_.gemm = real
                     dev.sync()
                     for o in outs:
-                        res[f"{o}@{tag}" + (f"grid{grid}" if grid else "")] = compare(dev, pipe, o, want(FUSED_ALIASES.get(o, o)))
+                        res[f"{o}@{tag}" + (f"grid{grid}" if grid else "")] = compare(dev, pipe, o, want(ALIASES.get(o, o)))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
@@ -476,7 +535,8 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
 
 # ---- the diagnostic timing ----------------------------------------------------------------------------------------
 
-CALL_PHASES = ("forming", "gemm", "cleanup", "hashing")
+CALL_PHASES = ("commit", "forming", "gemm", "cleanup", "hashing")
+TIMING_KEYS = {"line_b": 32, "dom_a": 32, "dom_b": 32, "dom_t": 32, "k_msg": 32, "k_leaf": 32, "unit": 104}
 
 
 def parse_shape(s: str) -> tuple[int, int, int]:
@@ -488,7 +548,7 @@ def parse_shape(s: str) -> tuple[int, int, int]:
 def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: int, gates: dict) -> dict:
     m_real, n, k = shape
     m = cdiv(m_real, BM_D) * BM_D
-    keys = {name: dev.put(hashlib.sha256(f"pearl-c-timing/{name}".encode()).digest()) for name in ("line_a", "line_b", "jackpot")}
+    keys = {name: dev.put(hashlib.shake_256(f"pearl-c-timing/{name}".encode()).digest(size)) for name, size in TIMING_KEYS.items()}
     xa, xb = dev.alloc(m * 4 * k), dev.alloc(n * 4 * k)
     for x, rows, seed in ((xa, m_real, 11), (xb, n, 12)):
         dev.launch("gen_f32", cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))
@@ -507,7 +567,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
     before = nv.read()
     med, runs = {}, {}
     for name, phase, f in steps:
-        if phase in CALL_PHASES + ("job", "fused") and not gates["pearl_c"] or \
+        if phase in CALL_PHASES + ("epoch", "unit", "job") and not gates["pearl_c"] or \
                 phase in ("plain", "plain_job", "adopted", "adopted_job") and not gates["plain"]:
             continue
         t = dev.timed(f, reps)
@@ -518,21 +578,15 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
            "variant": pipe.variant, "reps": reps, "gates": gates, "ms": {nm: round(v, 4) for nm, v in med.items()}, "runs": runs,
            "clk_before": before, "clk_after": after}
     if gates["pearl_c"]:
-        call = [f for nm, p, f in steps if p in ("forming", "cleanup", "hashing")]
+        call = [f for nm, p, f in steps if p in ("commit", "forming", "cleanup", "hashing")]
         no_hash = [f for nm, p, f in steps if p in ("forming", "cleanup")]
         e2e = statistics.median(dev.timed(lambda: [f() for f in call], reps))
         e2e_nh = statistics.median(dev.timed(lambda: [f() for f in no_hash], reps))
-        split = {"forming": phases["forming"], "gemm": med["gemm_ct"],
+        split = {"commit": phases["commit"], "forming": phases["forming"], "gemm": med["gemm_ct"],
                  "cleanup": med["af"] + med["pa"] + med["gemm_pearlc"] - med["gemm_ct"], "hashing": phases["hashing"]}
         out.update({"split_ms": {kk: round(v, 4) for kk, v in split.items()}, "call_sum_ms": round(sum(split.values()), 4),
                     "call_e2e_ms": round(e2e, 4), "call_e2e_no_hash_ms": round(e2e_nh, 4), "job_ms": round(phases["job"], 4),
                     "pearlc_tflops": round(2 * m * n * k / med["gemm_pearlc"] / 1e9, 1)})
-        if "gemm_pearlc_h" in med:
-            by = {nm: f for nm, _, f in steps}
-            fused = [f for nm, p, f in steps if p == "forming"] + [by[x] for x in ("af", "pa", "gemm_pearlc_h", "hash_leaf_h", "hash_rows")]
-            e2e_f = statistics.median(dev.timed(lambda: [f() for f in fused], reps))
-            out.update({"call_e2e_fused_ms": round(e2e_f, 4), "fused_hash_ms": round(med["gemm_pearlc_h"] - med["gemm_pearlc_s"], 4),
-                        "cu_stores_ms": round(med["gemm_pearlc"] - med["gemm_pearlc_s"], 4)})
         out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff("c2", "c")}
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
         [f for nm, _, f in steps if nm == "gemm_pearlc"][0]()
@@ -546,8 +600,6 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             fastest = min(med["gemm_plain"], med["gemm_fast"])
             out["ratio_vs_own_plain_gemm"] = {"call_e2e": round(e2e / fastest, 4), "no_hash_e2e": round(e2e_nh / fastest, 4),
                                               "chain_only": round(med["gemm_ct"] / fastest, 4)}
-            if "call_e2e_fused_ms" in out:
-                out["ratio_vs_own_plain_gemm"]["call_e2e_fused"] = round(out["call_e2e_fused_ms"] / fastest, 4)
     return out
 
 
@@ -598,14 +650,12 @@ def main(argv: list[str]) -> int:
             if "split_ms" in row:
                 print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms, no hashing {row['call_e2e_no_hash_ms']:.3f} ms; split "
                       f"{row['split_ms']}", file=sys.stderr)
-            if "call_e2e_fused_ms" in row:
-                print(f"{label} {variant}: fused call {row['call_e2e_fused_ms']:.3f} ms (digests in the epilogue "
-                      f"{row['fused_hash_ms']:.3f} ms, C~ and U stores {row['cu_stores_ms']:.3f} ms)", file=sys.stderr)
             if "ratio_vs_own_plain_gemm" in row:
                 s, r = row["split_ms"], row["ratio_vs_own_plain_gemm"]
                 print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms = {r['call_e2e']:.3f}x this build's plain FP8 GEMM "
-                      f"({row['plain_tflops']} / {row['fast_tflops']} TFLOPS promoted / not); split GEMM {s['gemm']:.3f}, clean-up "
-                      f"{s['cleanup']:.3f}, forming {s['forming']:.3f}, hashing {s['hashing']:.3f}; no hashing {r['no_hash_e2e']:.3f}x; "
+                      f"({row['plain_tflops']} / {row['fast_tflops']} TFLOPS promoted / not); split commit {s['commit']:.3f}, GEMM "
+                      f"{s['gemm']:.3f}, clean-up {s['cleanup']:.3f}, forming {s['forming']:.3f}, hashing {s['hashing']:.3f}; no "
+                      f"hashing {r['no_hash_e2e']:.3f}x; "
                       f"consistency {row['consistency']}", file=sys.stderr)
     return 0 if ok else 4
 

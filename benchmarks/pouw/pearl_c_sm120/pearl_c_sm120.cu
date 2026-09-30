@@ -14,11 +14,7 @@
 #include <cuda_fp16.h>
 #include <cuda_fp8.h>
 
-#include "../pouw_hash/pouw_hash.cuh"
-
-struct Args { uint64_t p[16]; int32_t i[16]; };
-
-#define DEV __device__ __forceinline__
+#include "../pearl_c/hash_sm120.cuh"
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)
 DEV float bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }
@@ -68,15 +64,11 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PLAIN   y = bf16(total sa sb)
 //   CT      stores C~ (FP32)
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
-//   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control of PEARLC_H
-//   PEARLC_H  PEARLC_S, hashing C~ and U from registers instead of storing them: each (row, 32-column chunk)'s message
-//             digest of C~ and U (TurboSHAKE128, D = 0x21, into p9 in hash_msg's layout). C~ is kept in the promotion
-//             accumulators through the peel; each warp's scratch is its share of the pipeline's stages, free after the main
-//             loop.  128 x 128 tiles only (a 64 x 32 warp tile)
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_H };
+//   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control for a fused epilogue's digests
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
 constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
-  return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S || MODE == M_PEARLC_H ? (TM + BN) * PEEL_ROW : 0);
+  return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
 }
 
 DEV uint32_t swz64(int r, int c) { return r * 64 + ((c ^ ((r >> 1) & 3)) << 4); }
@@ -114,14 +106,12 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
 
 template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
-  constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S || MODE == M_PEARLC_H, HASH = MODE == M_PEARLC_H;
+  constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S;
   constexpr bool STORE_CU = MODE == M_PEARLC || MODE == M_CT, PROMOTE = G > 0;
   constexpr int PERIOD = PROMOTE ? G / 2 : 1;
   static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
   constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
   static_assert(WARPS_M * WARPS_N == 8 && MI >= 1 && NI % 2 == 0, "8 warps of 16k x 32 columns");
-  constexpr int SCRATCH = WM * WN * 4;  // a warp's share of the stages: the quad transpose's scratch
-  static_assert(!HASH || (MI == 4 && NI == 4 && 8 * SCRATCH <= STAGES * (A_ST + B_ST)), "a hashed warp tile is 64 x 32");
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t* sA = smem;
   uint8_t* sB = smem + STAGES * A_ST;
@@ -225,7 +215,6 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
     __syncthreads();
 
     const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
-    uint8_t* const scratch = smem + SCRATCH * warp;
     if constexpr (MODE == M_PLAIN) {
 #pragma unroll
       for (int mi = 0; mi < MI; mi++) {
@@ -250,14 +239,6 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
         }
     }
     if constexpr (PEEL) {
-      if constexpr (HASH) {
-#pragma unroll
-        for (int mi = 0; mi < MI; mi++)
-#pragma unroll
-          for (int ni = 0; ni < NI; ni++)
-#pragma unroll
-            for (int e = 0; e < 4; e++) acc[mi][ni][e] = total[mi][ni][e];
-      }
       const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
 #pragma unroll
       for (int s = 0; s < 4; s++) {
@@ -292,21 +273,6 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
         }
       }
     }
-    if constexpr (HASH) {
-      uint8_t* dg = reinterpret_cast<uint8_t*>(a.p[9]) + (size_t)(tn * BN + wn * WN) / 32 * 32;
-      const int per = N / 32, row = tm * TM + wm * WM;
-      auto region = [&](auto pc) {
-        constexpr int p = decltype(pc)::value;
-        uint64_t h[4];
-        ph::quad_msg_digest<2>([&](int arr, int j, int i) { return arr ? total[2 * p + (j >> 2)][j & 3][i] : acc[2 * p + (j >> 2)][j & 3][i]; },
-                               ph::pearlc::D_MESSAGE, reinterpret_cast<uint64_t*>(scratch), h);
-        ulonglong2* o = reinterpret_cast<ulonglong2*>(dg + (size_t)(row + ph::pearlc::narrow_row(p, lane)) * per * 32);
-        o[0] = make_ulonglong2(h[0], h[1]);
-        o[1] = make_ulonglong2(h[2], h[3]);
-      };
-      region(Int<0>{});
-      region(Int<1>{});
-    }
     __syncthreads();
   }
 }
@@ -328,11 +294,6 @@ GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
 GEMM(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_u, M_CT, 128, 32, 0)
-GEMM(gemm_pearlc_s, M_PEARLC_S, 128, 128, 4)
-GEMM(gemm_pearlc_s_u, M_PEARLC_S, 128, 128, 0)
-GEMM(gemm_pearlc_h, M_PEARLC_H, 128, 128, 4)
-GEMM(gemm_pearlc_h_u, M_PEARLC_H, 128, 128, 0)
-
 // The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8
 // output tile over all of K, the chain in the GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0),
 // fragments loaded straight from global memory through a ring of D atoms in registers, so D atoms' loads are in flight
@@ -380,35 +341,7 @@ template <int G> DEV void words_body(const Args& a) {
 extern "C" __global__ void __launch_bounds__(128) words(const Args a) { words_body<4>(a); }
 extern "C" __global__ void __launch_bounds__(128) words_u(const Args a) { words_body<0>(a); }
 
-// ---------------------------------------------------------------- noise lines (Pearl's line rule)
-__device__ const uint32_t B3_IV[8] = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};
-DEV uint32_t rotr(uint32_t x, int n) { return __funnelshift_r(x, x, n); }
-DEV void b3g(uint32_t* v, int a, int b, int c, int d, uint32_t x, uint32_t y) {
-  v[a] = v[a] + v[b] + x; v[d] = rotr(v[d] ^ v[a], 16); v[c] = v[c] + v[d]; v[b] = rotr(v[b] ^ v[c], 12);
-  v[a] = v[a] + v[b] + y; v[d] = rotr(v[d] ^ v[a], 8); v[c] = v[c] + v[d]; v[b] = rotr(v[b] ^ v[c], 7);
-}
-// one keyed BLAKE3 hash of a single 64-byte block (CHUNK_START | CHUNK_END | ROOT | KEYED_HASH), the first 32 bytes
-DEV void blake3_block(const uint32_t* key, const uint32_t* msg, uint32_t* out) {
-  constexpr int PERM[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
-  uint32_t v[16], m[16], t[16];
-#pragma unroll
-  for (int i = 0; i < 8; i++) { v[i] = key[i]; v[i + 8] = i < 4 ? B3_IV[i] : 0; }
-  v[14] = 64; v[15] = 1 | 2 | 8 | 16;
-#pragma unroll
-  for (int i = 0; i < 16; i++) m[i] = msg[i];
-#pragma unroll
-  for (int r = 0; r < 7; r++) {
-    b3g(v, 0, 4, 8, 12, m[0], m[1]); b3g(v, 1, 5, 9, 13, m[2], m[3]); b3g(v, 2, 6, 10, 14, m[4], m[5]); b3g(v, 3, 7, 11, 15, m[6], m[7]);
-    b3g(v, 0, 5, 10, 15, m[8], m[9]); b3g(v, 1, 6, 11, 12, m[10], m[11]); b3g(v, 2, 7, 8, 13, m[12], m[13]); b3g(v, 3, 4, 9, 14, m[14], m[15]);
-#pragma unroll
-    for (int i = 0; i < 16; i++) t[i] = m[PERM[i]];
-#pragma unroll
-    for (int i = 0; i < 16; i++) m[i] = t[i];
-  }
-#pragma unroll
-  for (int i = 0; i < 8; i++) out[i] = v[i] ^ v[i + 8];
-}
-
+// ---------------------------------------------------------------- noise lines (Pearl's line rule; hash.cuh's BLAKE3)
 DEV uint32_t isqrt(uint32_t v) {
   uint32_t r = (uint32_t)sqrt((double)v);
   while ((uint64_t)r * r > v) r--;
@@ -637,165 +570,23 @@ extern "C" __global__ void pb(const Args a) {
   out[32 + q] = e4m3bf(E[q]) ^ 0x8000;
 }
 
-// ---------------------------------------------------------------- hashing: TurboSHAKE128 (Keccak-p[1600, 12], rate 168)
-// #449's device code, unfused: the digests read C~ and U back from global memory after the GEMM.
-DEV uint64_t rol64(uint64_t x, int n) { return n ? (x << n) | (x >> (64 - n)) : x; }
-template <int LUT> DEV uint32_t lop3_32(uint32_t a, uint32_t b, uint32_t c) {
-  uint32_t r;
-  asm("lop3.b32 %0, %1, %2, %3, %4;" : "=r"(r) : "r"(a), "r"(b), "r"(c), "n"(LUT));
-  return r;
-}
-template <int LUT> DEV uint64_t lop3_64(uint64_t a, uint64_t b, uint64_t c) {
-  return (uint64_t)lop3_32<LUT>((uint32_t)(a >> 32), (uint32_t)(b >> 32), (uint32_t)(c >> 32)) << 32 |
-         lop3_32<LUT>((uint32_t)a, (uint32_t)b, (uint32_t)c);
-}
-DEV uint64_t x3(uint64_t a, uint64_t b, uint64_t c) { return lop3_64<0x96>(a, b, c); }
-DEV uint64_t chi(uint64_t a, uint64_t b, uint64_t c) { return lop3_64<0xD2>(a, b, c); }
-DEV void keccak12(uint64_t* s) {
-  constexpr uint64_t RC[12] = {0x000000008000808bULL, 0x800000000000008bULL, 0x8000000000008089ULL, 0x8000000000008003ULL,
-                               0x8000000000008002ULL, 0x8000000000000080ULL, 0x000000000000800aULL, 0x800000008000000aULL,
-                               0x8000000080008081ULL, 0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL};
-  constexpr int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
-  constexpr int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
-#pragma unroll
-  for (int r = 0; r < 12; r++) {
-    uint64_t bc[5];
-#pragma unroll
-    for (int i = 0; i < 5; i++) bc[i] = x3(x3(s[i], s[i + 5], s[i + 10]), s[i + 15], s[i + 20]);
-#pragma unroll
-    for (int i = 0; i < 5; i++) {
-      const uint64_t p = bc[(i + 4) % 5], q = rol64(bc[(i + 1) % 5], 1);
-#pragma unroll
-      for (int j = 0; j < 25; j += 5) s[j + i] = x3(s[j + i], p, q);
-    }
-    uint64_t t = s[1];
-#pragma unroll
-    for (int i = 0; i < 24; i++) { const int j = piln[i]; const uint64_t x = s[j]; s[j] = rol64(t, rotc[i]); t = x; }
-#pragma unroll
-    for (int j = 0; j < 25; j += 5) {
-      const uint64_t b0 = s[j], b1 = s[j + 1], b2 = s[j + 2], b3 = s[j + 3], b4 = s[j + 4];
-      s[j] = chi(b0, b1, b2); s[j + 1] = chi(b1, b2, b3); s[j + 2] = chi(b2, b3, b4); s[j + 3] = chi(b3, b4, b0); s[j + 4] = chi(b4, b0, b1);
-    }
-    s[0] ^= RC[r];
-  }
-}
-// TurboSHAKE128 of NL little-endian 64-bit lanes (lane(i) = message bytes 8i..8i+7), 32 bytes out
-template <int NL, uint64_t DS, class Lane> DEV void turboshake(const Lane& lane, uint64_t* out) {
-  uint64_t s[25];
-#pragma unroll
-  for (int i = 0; i < 25; i++) s[i] = 0;
-#pragma unroll 1
-  for (int b = 0; b < NL / 21; b++) {
-#pragma unroll
-    for (int w = 0; w < 21; w++) s[w] ^= lane(b * 21 + w);
-    keccak12(s);
-  }
-  constexpr int rem = NL % 21;
-#pragma unroll
-  for (int w = 0; w < rem; w++) s[w] ^= lane(NL / 21 * 21 + w);
-  s[rem] ^= DS;
-  s[20] ^= 0x8000000000000000ULL;
-  keccak12(s);
-#pragma unroll
-  for (int i = 0; i < 4; i++) out[i] = s[i];
-}
-DEV void store32(uint8_t* p, const uint64_t* h) {
-  reinterpret_cast<ulonglong2*>(p)[0] = make_ulonglong2(h[0], h[1]);
-  reinterpret_cast<ulonglong2*>(p)[1] = make_ulonglong2(h[2], h[3]);
-}
-
-// TurboSHAKE128 of a warp's 32 messages, one a lane, each NL little-endian 64-bit lanes, staged 16 lanes (128 bytes) at a time
-// through `ring` (the warp's 4 KB): chunk c of message s is the 8 16-byte pieces at chunk(c) + s * stride.  A load covers 4
-// messages' 128 bytes, and the next chunk's loads are in flight while this one is absorbed.  Piece p of message s sits at slot
-// p ^ (s & 7) of its 128-byte row, so the stores and the lanes' reads spread over the banks.  Messages past `live` read zeros.
-template <int NL, uint64_t DS, class Chunk>
-DEV void turboshake_warp(const Chunk& chunk, size_t stride, int live, uint4* ring, uint64_t* out) {
-  static_assert(NL % 16 == 0, "whole chunks");
-  const int lane = threadIdx.x % 32;
-  uint4 pre[8];
-  auto fetch = [&](int c) {
-    const uint4* base = chunk(c);
-#pragma unroll
-    for (int r = 0; r < 8; r++) {
-      const int s = lane / 8 + 4 * r;
-      pre[r] = s < live ? base[s * stride + lane % 8] : make_uint4(0, 0, 0, 0);
-    }
-  };
-  auto stage = [&]() {
-    __syncwarp();
-#pragma unroll
-    for (int r = 0; r < 8; r++) {
-      const int s = lane / 8 + 4 * r;
-      ring[s * 8 + ((lane % 8) ^ (s & 7))] = pre[r];
-    }
-    __syncwarp();
-  };
-  const uint64_t* mine = reinterpret_cast<const uint64_t*>(ring + lane * 8);
-  auto word = [&](int i) {
-    if ((i & 15) == 0) {
-      stage();
-      if (i + 16 < NL) fetch((i >> 4) + 1);
-    }
-    return mine[2 * (((i & 15) >> 1) ^ (lane & 7)) + (i & 1)];
-  };
-  uint64_t s[25];
-#pragma unroll
-  for (int i = 0; i < 25; i++) s[i] = 0;
-  fetch(0);
-#pragma unroll 1
-  for (int b = 0; b < NL / 21; b++) {
-#pragma unroll
-    for (int w = 0; w < 21; w++) s[w] ^= word(b * 21 + w);
-    keccak12(s);
-  }
-  constexpr int rem = NL % 21;
-#pragma unroll
-  for (int w = 0; w < rem; w++) s[w] ^= word(NL / 21 * 21 + w);
-  s[rem] ^= DS;
-  s[20] ^= 0x8000000000000000ULL;
-  keccak12(s);
-#pragma unroll
-  for (int i = 0; i < 4; i++) out[i] = s[i];
-}
-
-// message digests: TurboSHAKE128(le32 C~ of the 32-column chunk || le32 U of the chunk, D = 0x21) per (row, chunk); message t
-// is C~'s and U's 128 bytes at 128 t.  A warp hashes 32 consecutive messages.
-// p0 C~ (rows x cols), p1 U, p2 out (rows x cols/32 x 32 B); i0 rows, i1 cols
-extern "C" __global__ void __launch_bounds__(128) hash_msg(const Args a) {
-  __shared__ uint4 ring[4][256];
-  const size_t total = (size_t)a.i[0] * (a.i[1] / 32), t0 = (size_t)(blockIdx.x * 4 + threadIdx.x / 32) * 32, t = t0 + threadIdx.x % 32;
-  if (t0 >= total) return;
-  const uint4* c = reinterpret_cast<const uint4*>(a.p[0]) + t0 * 8;
-  const uint4* u = reinterpret_cast<const uint4*>(a.p[1]) + t0 * 8;
-  uint64_t h[4];
-  turboshake_warp<32, 0x21>([&](int ch) { return ch ? u : c; }, 8, (int)min((size_t)32, total - t0), ring[threadIdx.x / 32], h);
-  if (t < total) store32(reinterpret_cast<uint8_t*>(a.p[2]) + t * 32, h);
-}
-
-// tile leaves: TurboSHAKE128 of a 64 x 64 tile's 128 message digests (rows in order, 2 chunks each), D = 0x22.
-// p0 digests, p1 out (tiles row-major x 32 B); i0 rows, i1 cols
-extern "C" __global__ void __launch_bounds__(64) hash_leaf(const Args a) {
-  const int cols = a.i[1], tn = cols / 64, per = cols / 32;
-  const int t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= a.i[0] / 64 * tn) return;
-  const int ti = t / tn, tj = t % tn;
-  const uint64_t* dg = reinterpret_cast<const uint64_t*>(a.p[0]);
-  uint64_t h[4];
-  turboshake<512, 0x22>([&](int i) { return dg[((size_t)(64 * ti + i / 8) * per + 2 * tj + (i / 4) % 2) * 4 + i % 4]; }, h);
-  store32(reinterpret_cast<uint8_t*>(a.p[1]) + (size_t)t * 32, h);
-}
-
-// A's commitment, modeled: TurboSHAKE128 of each 1,024-byte segment of an FP32 row, D = 0x23.  The rows are contiguous and
-// whole segments, so segment t is the 1,024 bytes at 1,024 t; a warp hashes 32 consecutive segments.  p0 rows, p1 out
-// (rows x segs x 32 B); i0 rows, i1 row bytes (a multiple of 1,024)
-extern "C" __global__ void __launch_bounds__(128) hash_rows_f32(const Args a) {
-  __shared__ uint4 ring[4][256];
-  const size_t total = (size_t)a.i[0] * (a.i[1] / 1024), t0 = (size_t)(blockIdx.x * 4 + threadIdx.x / 32) * 32, t = t0 + threadIdx.x % 32;
-  if (t0 >= total) return;
-  const uint4* src = reinterpret_cast<const uint4*>(a.p[0]) + t0 * 64;
-  uint64_t h[4];
-  turboshake_warp<128, 0x23>([&](int ch) { return src + 8 * ch; }, 64, (int)min((size_t)32, total - t0), ring[threadIdx.x / 32], h);
-  if (t < total) store32(reinterpret_cast<uint8_t*>(a.p[1]) + t * 32, h);
+// ---------------------------------------------------------------- -h1: E_A's line key from A's committed root
+// The noise is keyed on the device's own commitment of A (pearl_c.PearlC.noise): seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖
+// root_B ‖ u64 index), H_l(x) = BLAKE3(x; key = BLAKE3(l)), and E_A's line key is keyed(seed_A, "pearl/v4/FP8/noise-line")
+// (pearl_kw._line_key).  p0 root_A (the last node of A's tree), p1 the unit's block: salt (32) ‖ root_B (32) ‖ u64 index ‖
+// BLAKE3("pearl-c/v0/seed-A") (32), p2 out: E_A's line key (32 B), p3 out: seed_A (32 B) or 0.  One thread.
+__constant__ uint8_t LINE_LABEL[23] = {'p', 'e', 'a', 'r', 'l', '/', 'v', '4', '/', 'F', 'P', '8', '/',
+                                       'n', 'o', 'i', 's', 'e', '-', 'l', 'i', 'n', 'e'};
+extern "C" __global__ void __launch_bounds__(32) seed_line_a(const Args a) {
+  if (threadIdx.x) return;
+  const uint8_t* ra = reinterpret_cast<const uint8_t*>(a.p[0]);
+  const uint8_t* unit = reinterpret_cast<const uint8_t*>(a.p[1]);
+  uint32_t key[8], seed[8], h[8];
+  load_key(a.p[1] + 72, key);
+  b3_short<104>(key, [&](int j) { return (uint32_t)(j < 32 ? unit[j] : j < 64 ? ra[j - 32] : unit[j - 32]); }, seed);
+  b3_short<23>(seed, [&](int j) { return (uint32_t)LINE_LABEL[j]; }, h);
+  store_cv(a.p[2], h);
+  if (a.p[3]) store_cv(a.p[3], seed);
 }
 
 // words differing between two buffers: p0, p1 (u32), p2 counter (u64); i0 count (in words, < 2^31 per launch)

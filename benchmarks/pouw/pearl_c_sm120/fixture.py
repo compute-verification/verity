@@ -10,14 +10,16 @@ with these bytes before it times anything.
 
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
-Writes OUT_DIR/check.json (the shape, keys, and per buffer its file, dtype and SHA-256) and the buffers as raw little-endian
-files: `common` (lines, inputs, forming, the plain and adopted baselines, row commitments) and per variant (`sm120`,
-`sm120-unpromoted`) the chains and everything after them.
+The instance is a one-unit epoch as `verity_pouw.audit` starts it, hashing format -h1: B's frame-b3 row tree, the salt from
+the beacon and B's root, A's frame-b3 row tree, and the noise from A's committed root (so E_A's line key is an output the
+device derives, `line_a`).  Writes OUT_DIR/check.json (the shape, keys, seeds, and per buffer its file, dtype and SHA-256)
+and the buffers as raw little-endian files: `common` (both row trees, seed_A and E_A's line key, lines, inputs, forming, the
+plain and adopted baselines) and per variant (`sm120`, `sm120-unpromoted`) the chains and everything after them, through
+the message digests, the tile leaves and the tile tree.
 """
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import sys
@@ -39,15 +41,46 @@ def _load(name: str, path: Path):
 H = _load("pearl_c_h100_fixture", HERE.parent / "pearl_c" / "fixture.py")
 W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 
-from verity.commitments.turboshake import turboshake128  # noqa: E402
+from verity.commitments.blake3 import blake3  # noqa: E402
 from verity.ml.kernels import group_sum_total_batch  # noqa: E402
-from verity_pouw.protocol import Tile  # noqa: E402
+from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
+                               rows_domain, transcript_domain, weight_binding)
+from verity_pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
 from verity_pouw.schemes import pearl_c as C  # noqa: E402
 from verity_pouw.schemes import pearl_kw as P  # noqa: E402
-from verity_pouw.schemes.pearl_c_device import DEVICES, SM120, SM120_UNPROMOTED, Device  # noqa: E402
+from verity_pouw.schemes.pearl_c_device import (  # noqa: E402
+    DEVICES,
+    SM120,
+    SM120_UNPROMOTED,
+    Device,
+)
 
 VARIANTS = (SM120, SM120_UNPROMOTED)
-CASE = H.CASE
+CASE, INDEX, WEIGHT = H.CASE, H.INDEX, H.WEIGHT
+BEACON = b"verity-pouw/pearl-c-sm120-gpu-check/beacon"
+
+
+def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
+    """seed_line_a's p1: salt ‖ root_B ‖ u64 index ‖ BLAKE3("pearl-c/v0/seed-A") (seed_A's key)."""
+    return salt + root_b + index.to_bytes(8, "little") + blake3(C.LABELS["seed-A"])
+
+
+def epoch_of(matmul: Matmul, b_rows: list[bytes], beacon: bytes) -> tuple[Epoch, bytes, bytes]:
+    """A one-unit epoch on B's rows as `verity_pouw.audit` starts it: (epoch, B's frame-b3 tree bytes, its root)."""
+    dom_b = rows_domain(weight_binding(matmul.weight), -2, len(b_rows), "blake3")
+    tree_b = H.tree_bytes(dom_b, b_rows, ROW_SCHEMA)
+    return Epoch.start(Workload((matmul,)), {matmul.weight: tree_b[-32:]}, beacon), tree_b, tree_b[-32:]
+
+
+def keys_of(scheme: C.PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
+    """The pipeline's key inputs for a unit of `epoch` (run.Pipeline's `keys`)."""
+    s, salt = matmul.shape, epoch.salt
+    return {"line_b": P._line_key(seed_b),
+            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, "blake3").domain_id,
+            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, "blake3").domain_id,
+            "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), "blake3").domain_id,
+            "k_msg": C.H1_KEYS["message"], "k_leaf": C.H1_KEYS["leaf"],
+            "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
 
 
 def rowmajor(x: np.ndarray) -> bytes:
@@ -90,13 +123,27 @@ def form(pool: Pool, device: Device, rows: list[bytes], side: int, seed_e: bytes
 def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     assert m % 128 == 0 and n % 128 == 0 and k % 1024 == 0, (m, n, k)
     out_dir.mkdir(parents=True, exist_ok=True)
-    ctx = H.context(m, n, k)
-    noise = C.PearlC(forming="v1", device=SM120).noise(ctx)
-    manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v1", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
-                "keys": {"line_a": P._line_key(noise.seed_a).hex(), "line_b": P._line_key(noise.seed_b).hex(),
-                         "jackpot": P.subkey("jackpot", noise.seed_a).hex()},
-                "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex()}, "variants": {}}
+    ra, rb = H.CV.rows_f32(CASE, "A", m, k), H.CV.rows_f32(CASE, "B", n, k)
+    scheme = C.PearlC(forming="v1", device=SM120, hashing="h1")
+    mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
+    epoch, tree_b, root_b = epoch_of(mm, rb, BEACON)
+    assert root_b == commit_rows(weight_binding(WEIGHT), -2, rb, "blake3").commitment.root
+    dom_a = rows_domain(activation_binding(epoch.salt, INDEX), INDEX, m, "blake3")
+    tree_a = H.tree_bytes(dom_a, ra, ROW_SCHEMA)
+    assert tree_a[-32:] == commit_rows(activation_binding(epoch.salt, INDEX), INDEX, ra, "blake3").commitment.root
+    ctx = Context(epoch.salt, mm, tree_a[-32:], root_b)
+    noise = scheme.noise(ctx)
+    keys = keys_of(scheme, epoch, mm, noise.seed_b)
+    dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), "blake3")
+    manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v2", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
+                "hashing": "h1", "beacon": BEACON.hex(), "keys": {name: x.hex() for name, x in keys.items()},
+                "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
+                          "root_a": tree_a[-32:].hex(), "root_b": root_b.hex()}, "variants": {}}
     o = H.Out(out_dir)
+    o.put("tree_a", tree_a, "u8")
+    o.put("tree_b", tree_b, "u8")
+    o.put("seed_a", noise.seed_a, "u8")
+    o.put("line_a", P._line_key(noise.seed_a), "u8")
     lines = {name: np.array([P.sample_line(seed, side, 0, t) for t in range(count)], np.uint8)
              for name, seed, side, count in (("ea", noise.seed_a, 0, m), ("eb", noise.seed_b, 1, n))}
     for name, side in (("fa", 0), ("fb", 1)):
@@ -108,7 +155,6 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     o.put("faT32", faT, "u8")
     o.put("fbT32", fbT, "u8")
     o.put("fbT128", fbT128, "u8")
-    ra, rb = H.CV.rows_f32(CASE, "A", m, k), H.CV.rows_f32(CASE, "B", n, k)
     o.put("xa", b"".join(ra), "u8")
     o.put("xb", b"".join(rb), "u8")
     with Pool() as pool:
@@ -125,7 +171,6 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     at, bt = np.array(a.codes, np.uint8), np.array(b.codes, np.uint8)
     o.put("at", rowmajor(at), "u8")
     o.put("bt", rowmajor(bt), "u8")
-    o.put("rows", H.row_commits(ra, H.F32_SEGMENT), "u8")
     fa_vals = np.frombuffer(b"".join(ra), "<f4").reshape(m, k)
     fb_vals = np.frombuffer(b"".join(rb), "<f4").reshape(n, k)
     qa, sa = H.plain(fa_vals)
@@ -162,18 +207,20 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         v.put("u", u, "u32")
         v.put("y", H.glue_y(u, inv["a"], inv["b"]), "u16")
         dg = H.digests(c, u)
+        lv = H.leaves(dg, m, n)
         v.put("digests", dg, "u8")
-        v.put("leaves", H.leaves(dg, m, n), "u8")
-        agree = crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n)
-        manifest["variants"][device.name] = {"scheme": C.PearlC(forming="v1", device=device).name, "g": device.g,
+        v.put("leaves", lv, "u8")
+        v.put("tree_t", H.tree_bytes(dom_t, lv, TILE_SCHEMA), "u8")
+        agree = crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n)
+        manifest["variants"][device.name] = {"scheme": C.PearlC(forming="v1", device=device, hashing="h1").name, "g": device.g,
                                              "files": v.files, "crosscheck": agree}
     (out_dir / "check.json").write_text(json.dumps(manifest, indent=1) + "\n")
     return manifest
 
 
-def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n) -> dict:
-    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme on `device`: encode, checked, digest."""
-    s = C.PearlC(forming="v1", device=device)
+def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n) -> dict:
+    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme on `device` at -h1: encode, checked, digest."""
+    s = C.PearlC(forming="v1", device=device, hashing="h1")
     rows, cols = range(64, 128), range(n - 64, n)
     noise = s.noise(ctx)
     ops = s.encode(ctx, noise, [ra[i] for i in rows], [rb[j] for j in cols], Tile(tuple(rows), tuple(cols)))
@@ -183,10 +230,8 @@ def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, dg, n) -> dict:
     assert [list(r) for r in ops.a.codes] == at[64:128].tolist() and [list(r) for r in ops.b.codes] == bt[n - 64:].tolist()
     assert ops.pa == pa[64:128].tolist() and ops.pb == pb[n - 64:].tolist()
     assert checked.c == sub(c) and checked.u == sub(u)
-    per = n // C.CHUNK
     assert s.admissible(ctx, ops)
-    mine = turboshake128(b"".join(dg[r * per + per - 2 + h] for r in rows for h in range(2)), C.D_LEAF, 32)
-    assert s.digest(ctx, noise, checked) == mine
+    assert s.digest(ctx, noise, checked) == lv[(n // 64) + n // 64 - 1]
     return {"tile": [64, n - 64], "cells": 64 * 64, "agree": True}
 
 
