@@ -1230,7 +1230,7 @@ def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_ro
 
 
 def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_takes_the_movable_groups():
-    assert A.Arm is A.BenchArm and isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.5"
+    assert A.Arm is A.BenchArm and isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
     assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS
     try:
         from verity_pouw import serving

@@ -98,7 +98,7 @@ and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` 
 `clock_gap` (medians more than 0.5% apart; server.md 08:50Z).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
-`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.5;
+`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.6;
 `Arm` is its deprecated alias, since the vLLM API's `Arm` is a serving bench mode) gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
 `tile_hash`, `screen`, as `verity_pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and

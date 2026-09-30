@@ -2,12 +2,12 @@
 harness does with each member, is published in the project store (`internal/pouw/rtx-pro/workers/6-harness.md`, "Arm
 interface"); this module is that contract in code, and `check_arm` is what the harness enforces before it runs an arm.
 
-An arm is any object with the members of `BenchArm` (v0.5; `Arm`, its old name, is a deprecated alias: the vLLM API's
+An arm is any object with the members of `BenchArm` (v0.6; `Arm`, its old name, is a deprecated alias: the vLLM API's
 `Arm` is a bench mode at the serving level, not a prover under test); the harness loads it by ``module:Class`` (``--arm``),
 constructs it with no arguments, and calls `build` once. Device pointers and CUDA streams are Python ints; everything runs in
 the device's primary context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
 
-A call's ``phases`` (v0.5) are named by the step groups the executor schedules, `GROUPS`; the chain times them in three
+A call's ``phases`` (v0.6) are named by the step groups the executor schedules, `GROUPS`; the chain times them in three
 parts, `PARTS`, the last of which is `MOVABLE`, what its side stream (the ``deferred`` schedule) takes. v0.4's phase names
 ``before``, ``gemm`` and ``after`` are still accepted, each as its part, and deprecated.
 
@@ -68,7 +68,7 @@ import string
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-VERSION = "v0.5"
+VERSION = "v0.6"
 #: a call's step groups, in the order its main lane runs them; must equal verity_pouw.serving.GROUPS
 GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 #: the groups nothing later in the call reads, so they may leave the main lane; must equal verity_pouw.serving.MOVABLE
