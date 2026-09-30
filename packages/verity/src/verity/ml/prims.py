@@ -14,7 +14,8 @@ an opposite-sign infinity (rule R6).  `_v2` is `tc_dot_total(AMPERE_BF16_M16N8K1
 equal to `_v1` on every finite input.  A registered id denotes one function, so the id changed.
 `F32ToE4m3Sat_v1` and `HopperE4m3QgmmaDot32_v1` are the definitions the vLLM integration registered for its FP8 linear
 (same ids, same functions).  `BlackwellE4m3QmmaDot32_v1` is the consumer-Blackwell (sm_120) FP8 `mma.sync` step,
-`tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`.
+`tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`; `BlackwellNvf4OmmaDot64_v1` its NVFP4 step
+(`models.BLACKWELL_SM120_NVF4`), with the two casts NVFP4 quantization uses, `F32ToE2m1Sat_v1` and `E4m3ToF32_v1`.
 """
 from __future__ import annotations
 
@@ -22,17 +23,22 @@ from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
 
 from .tc import cast
-from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32
+from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4
 from .tc.silicon import AMPERE_BF16_M16N8K16
 from .tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 from .tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
 
-BF16, F32, E4M3 = Value(16), Value(32), Value(8)
+BF16, F32, E4M3, E2M1 = Value(16), Value(32), Value(8), Value(4)
 A16 = Array(16, BF16)
 A32_8 = Array(32, E4M3)
+A64_4 = Array(64, E2M1)
+A4_8 = Array(4, E4M3)            # four UE4M3 block-scale bytes (the E4M3 encoding with the sign bit clear)
+#: `cvt.rn.satfinite.e2m1x2.f32`'s code for a NaN input (E2M1 has none), with the input's sign bit
+E2M1_NAN_CODE = 0x7
 
-__all__ = ["A16", "A32_8", "BF16", "E4M3", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "BlackwellE4m3QmmaDot32", "F2fpBf16", "F32ToBf16Rn",
-           "F32ToE4m3Sat", "HopperBF16WgmmaDot16", "HopperE4m3QgmmaDot32", "const"]
+__all__ = ["A16", "A32_8", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "BlackwellE4m3QmmaDot32",
+           "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
+           "HopperE4m3QgmmaDot32", "const"]
 
 
 @primitive("Bf16ToF32", 1, [("a", BF16)], F32, conformance="exact-model-tested")
@@ -109,6 +115,33 @@ def BlackwellE4m3QmmaDot32(acc: int, *ab: int) -> int:
     return tc_dot_total_e4m3(BLACKWELL_SM120_E4M3_M16N8K32, acc, list(ab[:32]), list(ab[32:64]))
 
 
+@primitive("BlackwellNvf4OmmaDot64", 1, [("acc", F32), ("a", A64_4), ("b", A64_4), ("sa", A4_8), ("sb", A4_8)], F32,
+           conformance="exact-model-tested; pinned (dossier art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e: two "
+                       "RTX 5090 dies, 17.3M words); on the RTX PRO 6000 Blackwell Server Edition (driver 580.173.02, CUDA 13.0, "
+                       "SASS-checked) lane pouw's sweeps r20260930-064142-07f5 and r20260930-064149-a24f, 16,932,864 gated words each "
+                       "on two GPUs, 0 mismatches")
+def BlackwellNvf4OmmaDot64(acc: int, *ab: int) -> int:
+    """One accumulator coordinate of `mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64 ... e2m1.e2m1.f32.ue4m3`
+    on sm_120a (SASS `OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X`): 64 E2M1 codes per operand in four blocks of 16, one UE4M3 scale
+    byte per block, `models.BLACKWELL_SM120_NVF4.step_scaled` (`BlockScaledAlignAdd`: exact group dots, lossless block scales,
+    the five-way align-add, truncation, every zero +0).  Defined on finite accumulators, valid scale bytes (bit 7 clear, not
+    0x7F) and sums inside binary32; outside that domain it raises (D20)."""
+    return BLACKWELL_SM120_NVF4.step_scaled(acc, list(ab[:64]), list(ab[64:128]), list(ab[128:132]), list(ab[132:136]))
+
+
+@primitive("F32ToE2m1Sat", 1, [("x", F32)], E2M1,
+           conformance="exact-model-tested; NVFP4 activation quantization on the RTX PRO 6000 (vllm::cvt_fp16_to_fp4)")
+def F32ToE2m1Sat(x: int) -> int:
+    """`cvt.rn.satfinite.e2m1x2.f32` (SASS `F2FP.SATFINITE.E2M1.F32.PACK_AB`), one lane: `cast.f32_to_e2m1_sat_word`."""
+    return cast.f32_to_e2m1_sat_word(x, E2M1_NAN_CODE)
+
+
+@primitive("E4m3ToF32", 1, [("x", E4M3)], F32, conformance="exact-model-tested")
+def E4m3ToF32(x: int) -> int:
+    """`float(__nv_fp8_e4m3)`: the exact widening `cast.e4m3_to_f32_word` (NaN -> 0x7FFFE000, documented, not measured)."""
+    return cast.e4m3_to_f32_word(x)
+
+
 # ---- constants: one primitive per (width, bits), materialised on demand and decodable by id -------------------------------------------
 
 _CONSTS: dict[tuple[int, int], PrimitiveDefinition] = {}
@@ -155,6 +188,11 @@ def _register_kernels() -> None:
                     domain=every, sample=K.sample_tc)
     register_kernel(BlackwellE4m3QmmaDot32, lambda acc, a, b: K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b),
                     domain=every, sample=K.sample_tc)
+    register_kernel(BlackwellNvf4OmmaDot64, lambda acc, a, b, sa, sb: K.block_scaled_batch(BLACKWELL_SM120_NVF4, acc, a, b, sa, sb),
+                    domain="finite accumulators, valid scale codes, sums inside binary32",
+                    sample=K._sample_block_scaled(BLACKWELL_SM120_NVF4))
+    register_kernel(F32ToE2m1Sat, lambda x: K.f32_to_e2m1_sat_batch(x, E2M1_NAN_CODE), domain=every)
+    register_kernel(E4m3ToF32, K.e4m3_to_f32_batch, domain=every)
 
 
 _register_kernels()

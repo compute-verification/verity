@@ -80,6 +80,32 @@ def f2fp_bf16_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
     return _f32_to_bf16(a, 0x7FFF), None
 
 
+def f32_to_e2m1_sat_batch(a: np.ndarray, nan: int) -> tuple[np.ndarray, None]:
+    """`cast.f32_to_e2m1_sat_word` on every word."""
+    from .tc.cast import E2M1_UP
+
+    u = np.asarray(a, dtype=np.uint32)
+    sign = ((u >> 31) << 3).astype(np.uint8)
+    mag = u & np.uint32(0x7FFFFFFF)
+    code = np.zeros(u.shape, dtype=np.uint8)
+    for bound, up in E2M1_UP:
+        code += ((mag > bound) | ((mag == bound) if up else False)).astype(np.uint8)
+    return np.where(mag > 0x7F800000, np.uint8(nan), code) | sign, None
+
+
+_E4M3_TO_F32 = None
+
+
+def e4m3_to_f32_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
+    """`cast.e4m3_to_f32_word` on every byte (a 256-entry table of it)."""
+    global _E4M3_TO_F32
+    if _E4M3_TO_F32 is None:
+        from .tc.cast import e4m3_to_f32_word
+
+        _E4M3_TO_F32 = np.array([e4m3_to_f32_word(b) for b in range(256)], dtype=np.uint32)
+    return _E4M3_TO_F32[np.asarray(a, dtype=np.int64) & 0xFF], None
+
+
 def f32_to_bf16_rn_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
     """`cast.f32_to_bf16_word`: RNE, every NaN -> 0x7FC0."""
     return _f32_to_bf16(a, 0x7FC0), None
