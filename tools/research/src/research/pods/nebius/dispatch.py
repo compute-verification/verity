@@ -316,8 +316,8 @@ def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> 
     if dry:
         print(json.dumps(entry, indent=1))
         return name
+    pack_tree()
     q = PACK / "queue"
-    q.mkdir(parents=True, exist_ok=True)
     tmp = q / f".{name}.tmp"
     tmp.write_text(json.dumps(entry, sort_keys=True))
     tmp.rename(q / f"{name}.json")
@@ -325,6 +325,15 @@ def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> 
                          "tree": item["tree"]})
     print(f"spooled {name} ({key} task {idx} try {tries}) for commit-pack")
     return name
+
+
+def pack_tree() -> None:
+    """The spool's directories, writable by the pack pods (uid 1000) as well as this dispatcher."""
+    for d in ("queue", "claimed", "results/done", "logs", "stats"):
+        (PACK / d).mkdir(parents=True, exist_ok=True)
+    for d in (PACK, *(PACK / d for d in ("queue", "claimed", "results", "results/done", "logs", "stats"))):
+        if d.stat().st_uid == os.getuid():
+            d.chmod(0o777)
 
 
 def disk_full() -> bool:
@@ -441,6 +450,8 @@ def submit_pack_pod(priority: str | None = None, dry: bool = False) -> str:
     if priority:
         item["priority"] = priority
     key = f"{PACK_TEMPLATE}/p{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}{os.getpid() % 100:02d}"
+    if not dry:
+        pack_tree()
     return submit(item, key, dry=dry)
 
 

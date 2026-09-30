@@ -118,6 +118,7 @@ def test_route_spools_only_under_the_flag_and_below_the_disk_pause(dispatch, tmp
     entry = json.loads((dispatch.PACK / "queue" / f"{name}.json").read_text())
     assert not dispatch.calls and entry["key"] == "lane/c1" and entry["idx"] == 1
     assert entry["env"]["ROW"] == LLAMA_B8 and "row stage commit" in entry["script"]
+    assert all((dispatch.PACK / d).stat().st_mode & 0o777 == 0o777 for d in ("", "queue", "claimed", "results/done", "logs", "stats"))
     assert dispatch.pack_keys() == {"lane/c1"}
 
 
@@ -193,7 +194,9 @@ def pilot(tmp_path, monkeypatch):
         monkeypatch.setenv(k, str(v))
     mod = _load(NEBIUS / "sky" / "commit_pack.py", "commit_pack", monkeypatch)
     monkeypatch.setattr(mod, "quiet", lambda t: False)
-    return mod
+    umask = os.umask(0o022)
+    yield mod
+    os.umask(umask)
 
 
 def _queue(spool: Path, name: str, script: str, row: str = "") -> None:
@@ -205,10 +208,13 @@ def _queue(spool: Path, name: str, script: str, row: str = "") -> None:
 def test_the_pilot_runs_commits_as_mps_clients_and_cleans_up(pilot, tmp_path):
     spool = tmp_path / "spool"
     _queue(spool, "ok", 'test "$CUDA_MPS_PINNED_DEVICE_MEM_LIMIT" = 0=28G && test "$GPU_UTIL" = 0.28 && '
-                        'test "$REPLAY_DEFERRED" = 1 && test -S "$CUDA_MPS_PIPE_DIRECTORY/control" -o -p "$CUDA_MPS_PIPE_DIRECTORY/control"')
+                        'test "$REPLAY_DEFERRED" = 1 && test "$(umask)" = 0022 && '
+                        'test -S "$CUDA_MPS_PIPE_DIRECTORY/control" -o -p "$CUDA_MPS_PIPE_DIRECTORY/control"')
     assert pilot.main() == 0
     res = json.loads((spool / "results" / "ok.json").read_text())
     assert res["rc"] == 0 and res["fault"] is False and res["pod"] == "pod-a"
+    for p in (spool / "claimed" / "pod-a", spool / "results", spool / "results" / "ok.json", spool / "logs" / "pod-a"):
+        assert p.stat().st_mode & 0o002, p        # the dispatcher runs as another uid
     assert not list((spool / "claimed" / "pod-a").iterdir()) and not (tmp_path / "tmp" / "commit-pack-pod-a").exists()
 
 

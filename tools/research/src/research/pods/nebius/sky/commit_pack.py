@@ -239,6 +239,7 @@ def _terminate(signum, frame):
 
 def main() -> int:
     signal.signal(signal.SIGTERM, _terminate)   # the pilot is the container's PID 1: without a handler it ignores SIGTERM
+    os.umask(0)   # the dispatcher (another uid) moves and deletes what the pilot writes in the spool; the Commits keep 022
     t0 = time.time()
     scratch = Path(os.environ.get("TMPDIR") or "/tmp") / f"commit-pack-{POD}"
     logs = SPOOL / "logs" / POD
@@ -319,7 +320,7 @@ def main() -> int:
                        "OV_PACKED": POD}
                 with open(log, "ab") as out:
                     proc = subprocess.Popen(["bash", "-c", entry["script"]], env=env, stdout=out, stderr=subprocess.STDOUT,
-                                            start_new_session=True)
+                                            start_new_session=True, umask=0o022)
                 running[name] = Client(name, entry, proc, log, slot)
                 print(f"{now_utc()} started {name} ({entry['key']}) in slot {slot}, pid {proc.pid}", flush=True)
             if running or (disk_ok and any(_accepts(f, accept) for f in (SPOOL / "queue").glob("*.json"))):
