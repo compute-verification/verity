@@ -30,3 +30,8 @@ def test_s5_forming_rules():
     rows = {r["family"]: r for fam in ("gaussian", "zero-row") for r in C.cell(fam, 1024, 1.0, 4, 2, run=1, forming="s5")}
     assert rows["gaussian"]["rules_ok"] and rows["gaussian"]["collision_A"] < 0.5
     assert not rows["zero-row"]["rules_ok"] and "noise-floor-A" in rows["zero-row"]["rejected_by"]
+
+
+def test_aligned_spikes_pass_the_rules_and_freeze_words():
+    g4 = [r for r in C.cell("aligned-spikes-r300", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0) if r["layout"] == "G4"]
+    assert g4[0]["rules_ok"] and g4[0]["word_identity"] > 0.5

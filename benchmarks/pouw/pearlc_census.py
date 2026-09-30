@@ -191,6 +191,7 @@ def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: 
 FAMILIES = ("gaussian", "spike1-first", "spikes-first", "spikes-permuted", "spikes-groupstart", "constant",
             "coherent-gaussian", "orthogonal-FA", "duplicated")
 ACTIVATION_FAMILIES = ("zero-row", "zero-slices", "sparse10", "rank1", "saturated", "grid-aligned", "in-span-FA")
+FREEZE_FAMILIES = ("aligned-spikes-r64", "aligned-spikes-r160", "aligned-spikes-r220", "aligned-spikes-r300")
 
 
 def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.random.Generator):
@@ -226,6 +227,15 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
     if name in ("constant", "coherent-gaussian"):
         v = rng.choice([-1.0, 1.0], k) if name == "constant" else rng.standard_normal(k)
         return np.tile(v, (rows, 1)), np.tile(v, (cols, 1))
+    if name.startswith("aligned-spikes-r"):
+        # Two spikes per 128-deep group, at the same positions in every row of A and B, off the every-8th grid so that rho is
+        # the Gaussian background's: s/rho = R, which the noise floor allows up to 444 and liveness allows at k/64 entries.
+        R = float(name.removeprefix("aligned-spikes-r"))
+        pos = np.concatenate([np.arange(0, k, 128) + 1, np.arange(0, k, 128) + 9])
+        A, B = rng.standard_normal((rows, k)), rng.standard_normal((cols, k))
+        A[:, pos] = R
+        B[:, pos] = R
+        return A, B
     pos = {"spike1-first": np.arange(1), "spikes-first": np.arange(L),
            "spikes-permuted": rng.permutation(k)[:L],
            "spikes-groupstart": np.arange(0, k, 128)[:L]}[name]
