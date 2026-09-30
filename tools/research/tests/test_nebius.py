@@ -162,6 +162,29 @@ def test_gpu_lease_pins_by_index_or_uuid_and_status_names_the_holder(tmp_path):
     assert r.returncode == 2 and "not one gpu-lease hands out" in r.stderr
 
 
+@needs_flock
+def test_gpu_lease_leaves_the_gpus_to_an_older_waiter_and_forgets_a_dead_one(tmp_path):
+    env = gpu_env(tmp_path, count=2)
+    gl = tmp_path / "gl"
+    gl.mkdir()
+    assert subprocess.run(["bash", str(GPU_LEASE), "1", "--wait", "--", "true"], env=env).returncode == 0
+    assert not list(gl.glob("wait.*"))                                  # met at once: never queued
+    queued = gl / "wait.0000000000000000001.1"
+    waiter = subprocess.Popen(["bash", "-c", f'exec 9>"{queued}"; flock -x 9; echo "pid=1 n=2 who=timed-window" >&9; echo ready; read x'],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        assert waiter.stdout.readline().strip() == "ready"
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "waiting first" in r.stderr and "who=timed-window" in r.stderr
+        status = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout.splitlines()
+        assert status[-1].startswith("waiting ") and "who=timed-window" in status[-1]
+    finally:
+        waiter.stdin.close()
+        waiter.wait()
+    assert subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env).returncode == 0
+    assert not queued.exists()
+
+
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------
 
 def launch(*args: str, **env: str) -> subprocess.CompletedProcess:

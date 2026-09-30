@@ -19,6 +19,11 @@
 # set is refused.  CMD gets GPU_LEASE_UUID, the UUIDs it holds (comma-separated), to record with its results.  The holder is named
 # by $GPU_LEASE_WHO (else $RESEARCH_LANE, else the user), so `status` says who holds what and for how long.
 # GPU_LEASE_UUID_TABLE overrides the UUIDs nvidia-smi reports, comma-separated in index order (tests).
+#
+# Waiting is first come, first served, so a whole-node request (`gpu-lease 8 --wait`) is not starved by shorter leases starting
+# around it: a --wait request that can't be met at once queues as $GPU_LEASE_DIR/wait.<ns>.<pid>, locked while it waits, and
+# every later request (waiting or not) leaves the GPUs to the older waiters: a request without --wait exits 75 naming them.
+# `status` lists the waiters.  A waiter that dies drops its lock, and the next reader removes its file.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -53,8 +58,31 @@ uuid_table() {
 
 usage() { echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] -- CMD... | gpu-lease status" >&2; exit 2; }
 
+live_waiters() {
+  # the queued --wait requests, oldest first; a file whose waiter is gone (its lock free) is removed
+  local f fd
+  for f in "$dir"/wait.*; do
+    [ -e "$f" ] || continue
+    exec {fd}<"$f" 2>/dev/null || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; rm -f "$f"; continue; fi
+    exec {fd}>&-
+    echo "$f"
+  done
+}
+
+ahead() {
+  # the waiters this request must leave the GPUs to: all of them, or for a queued waiter the older ones
+  live_waiters | awk -v me="${MYWAIT:-}" 'me == "" || $0 < me'
+}
+
+minutes_since() {
+  local since
+  since=$(echo "$1" | sed -n 's/.*since=\([^ ]*\).*/\1/p')
+  since=$(date -u -d "$since" +%s 2>/dev/null) && echo "$((($(date -u +%s) - since) / 60))m "
+}
+
 status() {
-  local i fd state owner since age now
+  local i fd state owner since age now f
   now=$(date -u +%s)
   [ -r "$allowed_file" ] && echo "# direct-run GPUs from $allowed_file: $(tr -d '\n' < "$allowed_file") (the rest are Kubernetes')"
   for i in $(gpu_indices); do
@@ -63,11 +91,12 @@ status() {
     if flock -n -s "$fd"; then state=free; owner=""; else state=held; fi
     exec {fd}>&-
     age=""
-    if [ -n "$owner" ]; then
-      since=$(echo "$owner" | sed -n 's/.*since=\([^ ]*\).*/\1/p')
-      since=$(date -u -d "$since" +%s 2>/dev/null) && age="$(((now - since) / 60))m "
-    fi
+    [ -n "$owner" ] && age=$(minutes_since "$owner")
     echo "$i $state${owner:+ $age$owner}"
+  done
+  for f in $(live_waiters); do
+    owner=$(cat "$f" 2>/dev/null)
+    echo "waiting $(minutes_since "$owner")$owner"
   done
 }
 
@@ -129,16 +158,30 @@ if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-le
 mkdir -p "$dir" 2>/dev/null
 [ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
 
-until take "$n"; do
+who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
+MYWAIT=""
+until [ -z "$(ahead)" ] && take "$n"; do
   if [ "$wait" != 1 ]; then
-    echo "gpu-lease: fewer than $n of $total GPUs free ($(status | grep -v '^#' | tr '\n' ';'))" >&2
+    first=$(ahead | head -1)
+    if [ -n "$first" ]; then
+      echo "gpu-lease: a request is waiting first ($(cat "$first" 2>/dev/null)): add --wait to queue behind it" >&2
+    else
+      echo "gpu-lease: fewer than $n of $total GPUs free ($(status | grep -v '^#' | tr '\n' ';'))" >&2
+    fi
     exit 75
+  fi
+  if [ -z "$MYWAIT" ]; then
+    exec {wfd}>"$dir/.wait.$$"
+    flock -x "$wfd"
+    echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&"$wfd"
+    MYWAIT="$dir/wait.$(date -u +%s%N).$$"
+    mv "$dir/.wait.$$" "$MYWAIT"
   fi
   sleep "${GPU_LEASE_POLL_S:-15}"
 done
+if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; fi
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 [ -n "${table:-}" ] || table=$(uuid_table)
-who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
 uuids=()
 for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
