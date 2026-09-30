@@ -260,6 +260,13 @@ def small_fixture(tmp_path_factory):
     return out
 
 
+@pytest.fixture(scope="module")
+def small_fixture_h2(tmp_path_factory):
+    out = tmp_path_factory.mktemp("pearl-c-sm120-fixture-h2")
+    F.build(out, 128, 128, 1024, hashing="h2")
+    return out
+
+
 @pytest.mark.slow
 def test_fixture_agrees_with_the_scheme(small_fixture):
     man = json.loads((small_fixture / "check.json").read_text())
@@ -745,6 +752,7 @@ class Gate:
     detail: dict[str, Any] = field(default_factory=dict)
 '''
 ARMS = ["PearlCSm120", "PearlCSm120Unpromoted"]
+ARMS_H2 = ["PearlCSm120H2", "PearlCSm120UnpromotedH2"]
 #: the arm's call under run.py's default forms (GPU 1's kernels) and under h1_sm120.cuh's one-launch kernels
 FOLD = "p,fold"
 ARM_FORMS = [None, FOLD]
@@ -811,6 +819,15 @@ def test_arm_accounting_is_the_schemes(A):
                 assert arm.rho == Fraction(1, 1000) and round(float(g["cap"]) * 100, 4) == 0.3616
             assert f"ρ = {arm.rho}" in w.gamma["basis"]
             assert g["floor"] < g["cap"] < Fraction(1, 100) and g["cap"] < g["cap_chain_only"]
+    for cls, h1 in zip(ARMS_H2, ARMS):
+        arm, base = getattr(A, cls)(), getattr(A, h1)()
+        assert arm.hashing == arm.scheme.hashing == "h2" and arm.scheme.name == arm.name == base.name.removesuffix("-h1") + "-h2"
+        assert arm.panel == {"line": "pearl-c-sm120", "version": base.panel["version"].replace("-h1", "-h2")}
+        assert (arm.variant, arm.rho, arm.flag_sets) == (base.variant, base.rho, base.flag_sets)
+        assert arm.forms() == A.R.ALT_FORMS and arm.lineage()["mechanism"][:3] == list(A.MECHANISM_H2)
+        for shape in (Shape("m8192-n8192-k8192", 8192, 8192, 8192), Shape("m32-n8192-k8192", 32, 8192, 8192)):
+            assert arm.domain(shape) is None and arm.work(shape).gamma == base.work(shape).gamma
+        assert "segments" in arm.domain(Shape("x", 128, 33792, 1024)) and base.domain(Shape("x", 128, 33792, 1024)) is None
     arm = A.PearlCSm120()
     assert "multiple of 1,024" in arm.domain(Shape("x", 128, 1000, 128))
     assert "multiple of 128" in arm.domain(Shape("x", 128, 1024, 100))
@@ -970,16 +987,50 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls, forms):
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS_H2)
+def test_h2_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
+    """The -h2 arms as the harness drives them, on the stand-in: A's and B's row leaves by hash_rows_b3s, a CTA a row, under
+    the row template (`t_row`, put once an epoch) and storing their segment keys in the set's skeys_a and skeys_b; the tile
+    tree's leaves by hash_leaves_b3s under `t_tile`; no -h1 leaf kernel nor another tree form; the transcripts in -h2's
+    scheme; nothing leaks."""
+    rows = driver(A, ship, arm_dir, tmp_path, cls, "dry", forms=FOLD)
+    arm = getattr(A, cls)()
+    assert rows[-1]["live"] == [] and set(rows[-1]["transcribed"]) == {"pre", "dec"}
+    got, allocs = windows(tmp_path / "dry.jsonl")
+    assert not allocs
+    names = {ev.get("name") for _, evs in got for ev in evs}
+    assert {"hash_rows_b3s", "hash_leaves_b3s", "hash_tree_small", "seed_line_a"} <= names
+    assert not names & {"hash_rows_w", "hash_tree_leaves", "h1_rows_p", "h1_rows_stats", "h1_tree", "h1_commit", "h1_tiles",
+                        "b3s_level_keys"}
+    for mark, evs in got:
+        if "keys" not in mark:
+            continue
+        rows_b3s = [ev for ev in evs if ev.get("name") == "hash_rows_b3s"]
+        if mark["role"] != "nohash":
+            assert len(rows_b3s) == 1 and rows_b3s[0]["grid"][0] == {"pre": 256, "dec": 32}[mark["shape"]]
+            assert rows_b3s[0]["p"][4] == mark["keys"]["t_row"] and rows_b3s[0]["p"][3]
+        for ev in evs:
+            if ev.get("name") == "hash_leaves_b3s":
+                assert ev["p"][3] == mark["keys"]["t_tile"]
+    for shape in ("pre", "dec"):
+        man, _ = transcript(tmp_path / "run", arm.name, shape)
+        assert man["scheme"] == arm.name and man["scheme_args"]["hashing"] == "h2"
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize("forms", ARM_FORMS)
-@pytest.mark.parametrize("cls", ARMS)
-def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls, forms):
+@pytest.mark.parametrize("cls", ARMS + ARMS_H2)
+def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, request, ship, arm_dir, tmp_path, cls, forms):
     """The fixture's bytes (the scheme's, at its epoch and seeds) where the kernels would have written them pass the gate, the
     device's seed_A and E_A's line key the scheme's from its root_A.  At the fixture's 128 rows the call is fused, so it stores
     y and the digests, no C̃ or U: the twin reads the second (unfused) launch's C̃ and U, and one message digest flipped in the
     last sampled tile's row fails the gate against the second launch's hash_msg_v (on the stand-in, which computes no tile
     leaf, there alone).  Restored, it passes again and freeing the call writes the transcript, which the reference verifier
     (verify.py, `verity_pouw.audit.Verifier`) accepts, and its negative control, whose trees and leaves are all poison (the
-    stand-in writes nothing) and which the verifier rejects."""
+    stand-in writes nothing) and which the verifier rejects.  The -h2 arms, on the -h2 fixture, under their one form."""
+    if cls in ARMS_H2 and forms:
+        pytest.skip("-h2 has one form")
+    small_fixture = request.getfixturevalue("small_fixture_h2" if cls in ARMS_H2 else "small_fixture")
     first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"), forms=forms)
     arm = getattr(A, cls)()
     assert first["ok"] and first["checked"] == {name: "all" for name in ("y",) + A.HASHED}

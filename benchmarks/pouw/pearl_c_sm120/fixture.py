@@ -228,11 +228,13 @@ def form(pool: Pool, device: Device, rows: list[bytes], side: int, seed_e: bytes
     return built, [x for _, ep in parts for x in ep]
 
 
-def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
+def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024, hashing: str = "h1") -> dict:
+    """The fixture in hashing format `hashing`: -h1, or -h2 (its trees frame-b3s, so root_A, the seeds and every value
+    after them are -h2's)."""
     assert m % 128 == 0 and n % 128 == 0 and k % 1024 == 0, (m, n, k)
     out_dir.mkdir(parents=True, exist_ok=True)
     ra, rb = H.CV.rows_f32(CASE, "A", m, k), H.CV.rows_f32(CASE, "B", n, k)
-    scheme = C.PearlC(forming="v1", device=SM120, hashing="h1")
+    scheme = C.PearlC(forming="v1", device=SM120, hashing=hashing)
     h = scheme.commitment_hash
     mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
     epoch, tree_b, root_b = epoch_of(mm, rb, BEACON, h)
@@ -331,8 +333,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         v.put("leaves", lv, "u8")
         v.put("tree_t", H.tree_bytes(dom_t, lv, TILE_SCHEMA), "u8")
         if start is None:
-            scheme, agree = (C.PearlC(forming="v1", device=device, hashing="h1").name,
-                             crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n))
+            scheme, agree = (C.PearlC(forming="v1", device=device, hashing=hashing).name,
+                             crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n, hashing))
         else:
             scheme, agree = None, crosscheck_hot(device, at, bt, pa, pb, start, c, u)
         manifest["variants"][name] = {"scheme": scheme, "g": device.g, "files": v.files, "crosscheck": agree}
@@ -340,9 +342,10 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     return manifest
 
 
-def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n) -> dict:
-    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme on `device` at -h1: encode, checked, digest."""
-    s = C.PearlC(forming="v1", device=device, hashing="h1")
+def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n, hashing: str = "h1") -> dict:
+    """One 64 x 64 tile (rows 64-127, the last 64 columns) through the scheme on `device` in `hashing`: encode, checked,
+    digest."""
+    s = C.PearlC(forming="v1", device=device, hashing=hashing)
     rows, cols = range(64, 128), range(n - 64, n)
     noise = s.noise(ctx)
     ops = s.encode(ctx, noise, [ra[i] for i in rows], [rb[j] for j in cols], Tile(tuple(rows), tuple(cols)))

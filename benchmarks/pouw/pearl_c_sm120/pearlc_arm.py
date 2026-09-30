@@ -1,6 +1,8 @@
 """Pearl-C's FP8 arm for GPU 6's bench harness (arm interface v0.5, `benchmarks/pouw/harness/arm.py`): pearl_c_sm120.cu's
 kernels as the honest prover of `pearl-c-sm120-v1-h1` on the harness's FP32 operands, on the device record
-`pearl_c_device.SM120` (G = 4, the panel's `pearl-c-sm120` v1-h1) or `SM120_UNPROMOTED` (v2-h1).
+`pearl_c_device.SM120` (G = 4, the panel's `pearl-c-sm120` v1-h1) or `SM120_UNPROMOTED` (v2-h1); the `H2` arms are the same
+under hashing -h2 (`pearl-c-sm120-v1-h2`, the panel's v1-h2 and v2-h2): A's and B's row leaves by hash_rows_b3s under the
+segment templates `t_row` and `t_tile`, the tile tree's leaves by hash_leaves_b3s, the trees' one form (run.ALT_FORMS).
 
 Each operand set is a one-unit epoch as `verity_pouw.audit` starts it, in hashing format -h1: B's frame-b3 row tree on the
 device, its root read back, the salt from that root and a beacon of `os.urandom(32)` drawn at `prepare`, seed_B, and the
@@ -55,6 +57,7 @@ issued MACs); the prices (SM120_PRICES) and G are the device record's (its stand
 the credit and γ are Derived at those.
 
   python bench.py --arm-path <this directory> --arm pearlc_arm:PearlCSm120 [--arm pearlc_arm:PearlCSm120Unpromoted] ...
+  python bench.py --arm-path <this directory> --arm pearlc_arm:PearlCSm120H2 [--arm pearlc_arm:PearlCSm120UnpromotedH2] ...
 
 PEARLC_SHIP names build.sh's output (pearl_c_sm120.cubin, sass.json, toolchain.txt, source.txt; default this directory).
 Needs Python >= 3.12 with numpy, and `verity` and `verity_pouw` importable (the twin, the epoch).
@@ -121,6 +124,10 @@ CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "
 HASHED = ("digests", "leaves", "tree_a", "tree_t")
 REF = ("c2", "c", "u", "y", "line_a", "seed_a") + HASHED
 REF_BUFS = REF + ("tma",)                 # the second launch's own tensor maps
+#: -h2's key inputs (the segment templates, put once an epoch) and the buffers where hash_rows_b3s's first CTA stores its
+#: segment keys, B's with the weight side's and A's with the call's
+H2_KEYS = {"t_row": len(R.b3s_template(R.ROW_SCHEMA)), "t_tile": len(R.b3s_template(R.TILE_SCHEMA))}
+H2_WEIGHT, H2_CALL = ("skeys_b",), ("skeys_a",)
 REF_HASH_STEPS = ("pad_a", "pad_t", "hash_rows_a", "tree_a", "seed_a")
 REF_GRID = 3
 TRANSCRIPT_SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v1"
@@ -143,6 +150,7 @@ MECHANISM = {("w", "nodes"): ("hash:h1-rows-warp", "hash:h1-tree-level-launches"
              ("p", "one"): ("hash:h1-rows-l2-256b", "hash:h1-tree-one-launch", "hash:h1-level-key-table"),
              ("p", "fold"): ("hash:h1-commit-one-launch", "hash:h1-tiles-one-launch", "hash:h1-level-key-table"),
              ("s", "one"): ("hash:h1-rows-stats-one-pass", "hash:h1-tree-one-launch", "hash:h1-level-key-table")}
+MECHANISM_H2 = ("hash:h2-rows-b3s-own-keys", "hash:h2-tile-leaves-b3s", "hash:h1-tree-level-launches")
 PHASE_GROUPS = {"before": ["a_tree", "screen", "forming", "cleanup"], "gemm": ["gemm"], "after": ["tile_hash"]}
 GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and v1's debit cap ρ (statement parameters, cheap-binding.md §1)
 RHO_CAP_V2 = Fraction(1, 1000)            # v2's debit cap ρ, the panel's pearl-c-sm120 v2 line (the RTX PRO coordinator's 13:52Z)
@@ -183,16 +191,16 @@ def gamma(scheme: C.PearlC, shape, rho: Fraction = RHO_CAP) -> dict[str, str]:
             "basis": f"Derived: TT_OUT γ0 = {GAMMA0}, ρ = {rho} on {scheme.device.name} at its record's prices, G = {scheme.device.g}"}
 
 
-def expected(t, real: int, hashing: bool, ep: dict, tid: int, a_row: bytes) -> dict[str, bytes]:
+def expected(t, real: int, hashing: bool, ep: dict, tid: int, a_row: bytes, fmt: str = "h1") -> dict[str, bytes]:
     """A twin tile's bytes in the kernels' layout, by the names `_Call.tile_bytes` reads; with hashing the leaf over the
-    tile's `real` rows (the scheme's `digest`), its leaf in the tile tree and row r0's in A's tree."""
+    tile's `real` rows (the scheme's `digest` in hashing format `fmt`), its leaf in the tile tree and row r0's in A's tree."""
     ia, ib = F.H.recip(t.a.alpha.astype(np.uint32)), F.H.recip(t.b.alpha.astype(np.uint32))
     out = {"at": F.k32(t.a.codes.astype(np.uint8)).tobytes(), "alpha_a": t.a.alpha.astype("<u4").tobytes(),
            "bt": F.k32(t.b.codes.astype(np.uint8)).tobytes(), "alpha_b": t.b.alpha.astype("<u4").tobytes(),
            "y": F.H.glue_y(t.u.astype(np.uint32), ia, ib).astype("<u2").tobytes(),
            "c": t.c.astype("<u4").tobytes(), "u": t.u.astype("<u4").tobytes()}
     if hashing:
-        leaf = C.leaf(C.Checked(t.c[:real].tolist(), t.u[:real].tolist()), "h1")
+        leaf = C.leaf(C.Checked(t.c[:real].tolist(), t.u[:real].tolist()), fmt)
         out.update(leaf=leaf, tile_leaf=ep["dom_t"].leaf(tid, tid, TILE_SCHEMA, leaf),
                    row_leaf=ep["dom_a"].leaf(t.r0, t.r0, ROW_SCHEMA, a_row))
     return out
@@ -233,14 +241,16 @@ class _Call:
         size = self.size = R.Pipeline.sizes(m, n, k, shape.m)
         self.scratch, _ = arm.acquire(arm.scratch, shape, lambda: {"ref_" + b: size[b] for b in REF_BUFS})
         self.set_key = (shape, ops.a.ptr, ops.b.ptr, ops.seed)
-        self.own, fresh = arm.acquire(arm.sets, self.set_key, lambda: {**{b: size[b] for b in OWN + CALL},
+        h2 = arm.hashing == "h2"
+        bufs, keys = OWN + CALL + (H2_WEIGHT + H2_CALL if h2 else ()), {**KEYS, **(H2_KEYS if h2 else {})}
+        self.own, fresh = arm.acquire(arm.sets, self.set_key, lambda: {**{b: size[b] for b in bufs},
                                                                       **({"xa": 4 * m * k} if m != shape.m else {}),
-                                                                      **{"key_" + x: nb for x, nb in KEYS.items()}})
+                                                                      **{"key_" + x: nb for x, nb in keys.items()}})
         w = self.own.b
-        self.keys = {x: w["key_" + x] for x in KEYS}
+        self.keys = {x: w["key_" + x] for x in keys}
         self.xa = w.get("xa", ops.a.ptr)
-        self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr, bufs={b: w[b] for b in OWN + CALL},
-                               m_real=shape.m, hashing=arm.scheme.hashing)
+        self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr, bufs={b: w[b] for b in bufs},
+                               m_real=shape.m, hashing=arm.hashing)
         steps = self.pipe.steps()
         by = {name: f for name, _, f in steps}
         y_only = None if self.hashing else self.pipe.extra().get("gemm_pearlc_s")
@@ -259,7 +269,7 @@ class _Call:
         self.phases = {name: (lambda stream, fs=fs: self.enqueue(fs, stream)) for name, fs in self.parts.items()}
         names = ("y",) + self.stored + (HASHED if self.hashing else ())
         self.outputs = {name: Buffer(w[name], size[name]) for name in names}
-        self.transcript_buffers = {name: Buffer(w[name], size[name]) for name in OWN + CALL if name not in UNPOISONED}
+        self.transcript_buffers = {name: Buffer(w[name], size[name]) for name in bufs if name not in UNPOISONED}
         if self.xa != ops.a.ptr:
             self.transcript_buffers["xa"] = Buffer(self.xa, 4 * shape.m * k)
         if fresh:
@@ -280,6 +290,9 @@ class _Call:
         arm, rd, sh = self.arm, self.arm.rd, self.shape
         h = commitment_hash(arm.scheme)
         mm = Matmul(arm.index, MShape(sh.m, sh.k, sh.n), self.ops.weight_id)
+        if arm.hashing == "h2":
+            self.put("t_row", R.b3s_template(R.ROW_SCHEMA))
+            self.put("t_tile", R.b3s_template(R.TILE_SCHEMA))
         self.put("dom_b", rows_domain(weight_binding(mm.weight), -2, sh.n, h).domain_id)
         self.enqueue([f for _, p, f in steps if p == "epoch"], None)
         rd.sync()
@@ -345,7 +358,7 @@ class _Call:
         rd, s, w = self.arm.rd, self.scratch.b, self.own.b
         ref = R.Pipeline(rd, self.m, self.n, self.k, self.arm.variant, self.keys, self.xa, self.ops.b.ptr,
                          bufs={**self.pipe.b, **{b: s["ref_" + b] for b in REF_BUFS}}, m_real=self.shape.m, fused=False,
-                         hashing=self.arm.scheme.hashing)
+                         hashing=self.arm.hashing)
         ref.rows_form, ref.tree_form = R.ALT_FORMS
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
@@ -432,7 +445,8 @@ class _Call:
                 except BrokenProcessPool:
                     wt.twin[key] = W.tile(*args)
             tid = (r0 // T) * (self.n // T) + c0 // T
-            want = expected(wt.twin[key], min(T, sh.m - r0), self.hashing, ep, tid, a_rows[0].astype("<u4").tobytes())
+            want = expected(wt.twin[key], min(T, sh.m - r0), self.hashing, ep, tid, a_rows[0].astype("<u4").tobytes(),
+                            self.arm.hashing)
             got = self.tile_bytes(r0, c0, tid)
             out.append({"tile": [r0, c0], "failed": sorted(name for name in want if got[name] != want[name])})
         return out
@@ -448,10 +462,11 @@ class PearlCSm120:
     panel = {"line": "pearl-c-sm120", "version": "v1-h1"}
     rho = RHO_CAP
     index = 0
+    hashing = "h1"
 
     def __init__(self):
         self.device = DEVICES[self.variant]
-        self.scheme = C.PearlC(forming="v1", device=self.device, hashing="h1")
+        self.scheme = C.PearlC(forming="v1", device=self.device, hashing=self.hashing)
         assert self.scheme.name == self.name, (self.scheme.name, self.name)
         self.rd = None
         self.out_dir: Path | None = None
@@ -491,7 +506,7 @@ class PearlCSm120:
                "verifier": {"per": "run", "transcript": "transcripts/{arm}/{shape}/manifest.json",
                             "control": "negative/{arm}/{shape}/manifest.json",
                             "commands": [["{python}", str(HERE / "verify.py"), "{run_dir}", "--commit", "{commit}"]]},
-               "forms": {"a": f"{R.ROWS_FORM},{R.TREE_FORM}", "forming": R.FORMING, "epilogue": R.EPILOGUE},
+               "forms": {"a": ",".join(self.forms()), "forming": R.FORMING, "epilogue": R.EPILOGUE},
                "lineage": self.lineage(),
                "call": "at 128 x 128 tiles over m = m_real rows the fused chain: gemm_pearlc_b stores y and the -h1 message "
                        "digests hashed from registers (C~, U never stored), gemm_pearlc_s y alone without hashing; else "
@@ -516,7 +531,7 @@ class PearlCSm120:
         if ledger is not None:
             rec["variant"] = ledger.variant_record(
                 family="pearl-c", device="sm120", root=REPO, binaries=[cubin], prices=PRICES.get(R.FORMING),
-                schemes={C.PearlC(forming="v1", device=DEVICES[v], hashing="h1").name for v in VARIANTS},
+                schemes={C.PearlC(forming="v1", device=DEVICES[v], hashing=self.hashing).name for v in VARIANTS},
                 sources=sources(HERE / "pearl_c_sm120.cu"))
         for name in ("sass.json", "toolchain.txt", "source.txt"):
             p = ship / name
@@ -524,11 +539,16 @@ class PearlCSm120:
                 rec[name] = json.loads(p.read_text()) if name.endswith(".json") else p.read_text().strip()
         return rec
 
+    def forms(self) -> tuple[str, str]:
+        """The trees' forms the call runs: run.py's ROWS_FORM and TREE_FORM under -h1, -h2's one (run.ALT_FORMS)."""
+        return (R.ROWS_FORM, R.TREE_FORM) if self.hashing == "h1" else R.ALT_FORMS
+
     def lineage(self) -> dict:
         """The attempt as the ledger records it: the forms' mechanism tags, the panel line and version, the chain's phases by
         step group; PEARLC_LINEAGE (JSON, by arm name) adds what the run knows, such as its parent and panel attempt."""
         out = {"approach": "pouw/pearl-c-sm120", "panel": dict(self.panel), "phase_groups": PHASE_GROUPS,
-               "mechanism": [*MECHANISM[(R.ROWS_FORM, R.TREE_FORM)], f"forming:{R.FORMING}", f"epilogue:{R.EPILOGUE}"]}
+               "mechanism": [*(MECHANISM[self.forms()] if self.hashing == "h1" else MECHANISM_H2), f"forming:{R.FORMING}",
+                             f"epilogue:{R.EPILOGUE}"]}
         extra = json.loads(os.environ.get("PEARLC_LINEAGE") or "{}").get(self.name, {})
         return {**out, **extra, "panel": {**out["panel"], **extra.get("panel", {})}}
 
@@ -537,6 +557,8 @@ class PearlCSm120:
             return f"k = {shape.k} is not a multiple of 1,024 (the kernels' k blocks)"
         if shape.n % R.BM:
             return f"n = {shape.n} is not a multiple of {R.BM} (the kernels' tiles)"
+        if self.hashing == "h2" and 4 * shape.k > R.B3S_MAX_SEGS * R.B3S_SEG:
+            return f"k = {shape.k}: hash_rows_b3s takes rows of at most {R.B3S_MAX_SEGS} segments of {R.B3S_SEG} bytes"
         try:
             self.scheme.check(Matmul(self.index, MShape(shape.m, shape.k, shape.n), 0))
         except DomainError as ex:
@@ -634,7 +656,7 @@ class PearlCSm120:
             files[name] = {"path": f"{name}.bin", "bytes": len(data[name]), "sha256": hashlib.sha256(data[name]).hexdigest()}
         mm, epoch = ep["matmul"], ep["epoch"]
         man = {"schema": TRANSCRIPT_SCHEMA, "arm": self.name, "scheme": self.scheme.name,
-               "scheme_args": {"forming": "v1", "device": self.device.name, "hashing": "h1"},
+               "scheme_args": {"forming": "v1", "device": self.device.name, "hashing": self.hashing},
                "shape": {"label": sh.label, "m": sh.m, "k": sh.k, "n": sh.n}, "matmul": {"index": mm.index, "weight": mm.weight},
                "beacon": ep["beacon"].hex(), "salt": epoch.salt.hex(), "weight_root": ep["root_b"].hex(),
                "activation_root": data["tree_a"][-32:].hex(),
@@ -648,3 +670,15 @@ class PearlCSm120Unpromoted(PearlCSm120):
     variant = "sm120-unpromoted"
     panel = {"line": "pearl-c-sm120", "version": "v2-h1"}
     rho = RHO_CAP_V2
+
+
+class PearlCSm120H2(PearlCSm120):
+    name = "pearl-c-sm120-v1-h2"
+    panel = {"line": "pearl-c-sm120", "version": "v1-h2"}
+    hashing = "h2"
+
+
+class PearlCSm120UnpromotedH2(PearlCSm120Unpromoted):
+    name = "pearl-c-sm120-unpromoted-v1-h2"
+    panel = {"line": "pearl-c-sm120", "version": "v2-h2"}
+    hashing = "h2"
