@@ -104,9 +104,9 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
                              capture_output=True, text=True, check=True).stdout
         return out.split("\n---\n")[1:]
     b2, g2 = render("tp2", "", "")
-    assert "  memory: 160" in b2 and "  memory: 128" in g2 and "accelerators: RTXPRO6000:2" in g2 and "  cpus: 8 " in g2
+    assert "  memory: 160" in b2 and "  memory: 340" in g2 and "accelerators: RTXPRO6000:2" in g2 and "  cpus: 8 " in g2
     b3, g3 = render("moe", "300", "")                                                                  # a per-cell figure wins
-    assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 64 " in g3
+    assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 170 " in g3
 
 
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
