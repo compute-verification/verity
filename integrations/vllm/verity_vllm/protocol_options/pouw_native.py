@@ -193,27 +193,38 @@ class NativeWeight:
         return [_i7(b), _ints(np.frombuffer(self.salt, "<u4")), _ints(_lane(self.weight)), _ints(self.colids[D * u:D * u + D])]
 
     def commit(self, block: int | None = None) -> PC.WeightRecord:
-        """Every Y unit's leaf, hashed as it is computed, and the inputs' digest; the rows are read ``block`` at a time."""
+        """Every Y unit's leaf, hashed as it is computed, the inputs' digest and what a call reads (`WeightRecord.reads`);
+        the rows are read ``block`` at a time."""
         n = self.n
         block = max(D, (block or block_for(n)) // D * D)
         leaves: list[bytes] = [b""] * self.population
 
-        def columns(lo: int) -> np.ndarray:
+        def columns(lo: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             hi = min(n, lo + block)
-            b, _t = self.read(lo, hi)
+            b, t = self.read(lo, hi)
             y, c0 = self.block(b, lo)
             for j in range(0, hi - lo, D):
                 u = (lo + j) // D
                 leaves[u] = PC.unit_leaf(_tampered(self.tamper, u, np.concatenate([y[j:j + D].reshape(-1), c0[j:j + D]])))
-            return b
+            return b, y, c0, t
 
-        rd = PC.RowsDigest(n, self.k)
-        for b in _pool().map(columns, range(0, n, block)):               # in block order: B is digested row by row
+        rd, read = PC.RowsDigest(n, self.k), PC.Read(n, self.k)
+        for b, y, c0, t in _pool().map(columns, range(0, n, block)):     # in block order: B, Y, c₀ and t digested in order
             rd.update(b)
+            read.update(y, c0, t)
         blob = b"".join(leaves)
         return PC.WeightRecord(self.scheme, self.rows, self.salt, self.weight, self.colids,
                                PC.weight_inputs_digest(rd.digest(), self.salt, self.weight, self.colids), blob,
-                               PC.units_root(blob), self.outputs)
+                               PC.units_root(blob), self.outputs, read.parts())
+
+    def reads(self, block: int | None = None) -> tuple[bytes, bytes, bytes]:
+        """What a call on this weight reads, digested (`pouw_circuit.Read`): its Y, its c₀ and the scales t, regenerated."""
+        n, rd = self.n, PC.Read(self.n, self.k)
+        block = max(D, (block or BLOCK) // D * D)
+        for lo in range(0, n, block):
+            b, t = self.read(lo, min(n, lo + block))
+            rd.update(*self.block(b, lo), t)
+        return rd.parts()
 
 
 def commit_weight(scheme: str, call: PC.Call, tamper: Mapping[tuple[int, int], int] | None = None) -> PC.WeightRecord:
@@ -446,15 +457,6 @@ class Native:
         blob = b"".join(leaves)
         return PC.CallRecord(index, self.scheme, c, PC.inputs_digest(c, rd.parts()), blob, PC.units_root(blob), served, side,
                              self.outputs, self.read)
-
-    def read_digests(self, block: int | None = None) -> tuple[bytes, bytes, bytes]:
-        """The digests of the groups this call reads from its weight side (Y, c₀, t; `pouw_circuit.Read`), regenerated."""
-        n, rd = self.shape.n, PC.Read(self.shape.n, self.shape.k)
-        block = max(D, (block or BLOCK) // D * D)
-        for lo in range(0, n, block):
-            b, t = self.side.read(lo, min(n, lo + block))
-            rd.update(*self.side.block(b, lo), t)
-        return rd.parts()
 
 
 def served(call: PC.Call, block: int | None = None) -> np.ndarray:

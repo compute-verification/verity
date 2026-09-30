@@ -69,7 +69,8 @@ def test_the_commit_is_the_ir_commit_and_the_reference(three_strips):
     nat, ir = PN.commit_call(0, "ncp-v2", call), PC.commit_call_ir(0, "ncp-v2", call)
     assert (nat.leaves, nat.inputs, nat.root) == (ir.leaves, ir.inputs, ir.root) and np.array_equal(nat.y, ir.y)
     assert (nat.side.leaves, nat.side.inputs, nat.side.root) == (ir.side.leaves, ir.side.inputs, ir.side.root)
-    assert PC.call_leaf(nat) == PC.call_leaf(ir)
+    assert PC.call_leaf(nat) == PC.call_leaf(ir) and nat.side.reads == ir.side.reads
+    assert nat.side.reads == PN.NativeWeight.of(nat.side).reads(block=16) and PC.inputs_digest(call, nat.side.reads) == nat.inputs
     assert all(np.array_equal(a, b) for cs in range(2) for a, b in zip(nat.read(cs), ir.read(cs)))
     assert [[int(v) for v in r] for r in nat.y] == CR.evaluate(call.reference(), PC.kind_of("ncp-v2")).y
 
