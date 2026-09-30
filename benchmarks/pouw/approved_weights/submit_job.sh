@@ -3,7 +3,8 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> -- \
 #     bash <shipped tree>/benchmarks/pouw/approved_weights/submit_job.sh NAME GPUS -- SCRIPT [ARGS...]
 # SCRIPT (in this directory) must checkpoint in --out and exit 0 when done, 99 while chunks remain, 143 when preempted. The
-# research run holds no GPU. Once the fill job is done, the outputs are copied into $RESEARCH_RUN_DIR/out and SCRIPT runs
+# research run holds no GPU. With AW_HOLD=1 the job waits in /workspace/pouw/approved-weights/held/ for release_held.sh
+# instead of going straight to the queue. Once the fill job is done, the outputs are copied into $RESEARCH_RUN_DIR/out and SCRIPT runs
 # once more there with nothing left to compute, which writes $RESEARCH_RUN_DIR/result.json (research/result/v0.1).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -19,7 +20,8 @@ ARGS=$(printf ' %q' "$@")
 MEM=$([ "$GPUS" = 0 ] && echo 64 || echo 128)
 mkdir -p "$D/out"
 echo "sha=$SHA job=$JOB out=$D/out start=$(date -u +%FT%TZ)"
-if [ ! -e "$FILL/queue/$JOB.sh" ] && [ ! -e "$FILL/running/$JOB.sh" ] && [ ! -e "$FILL/done/$JOB.sh" ]; then
+HELD=/workspace/pouw/approved-weights/held
+if [ ! -e "$FILL/queue/$JOB.sh" ] && [ ! -e "$FILL/running/$JOB.sh" ] && [ ! -e "$FILL/done/$JOB.sh" ] && [ ! -e "$HELD/$JOB.sh" ]; then
   cat > "$D/$JOB.sh" << EOF
 #!/usr/bin/env bash
 # fill: owner=bc-8412d697-8e5a-51be-834a-b61a695bcc03 gpus=$GPUS max_min=25 cpus=8 project=pous mem_gb=$MEM
@@ -32,8 +34,13 @@ echo "uuid=\${GPU_LEASE_UUID:-cpu} job=\${FILL_JOB:-?} sha=$SHA start=\$(date -u
 exec $PY $HERE/$SCRIPT --out $D/out$ARGS
 EOF
   chmod +x "$D/$JOB.sh"
-  mv "$D/$JOB.sh" "$FILL/queue/$JOB.sh"
-  echo "queued $FILL/queue/$JOB.sh"
+  if [ "${AW_HOLD:-0}" = 1 ]; then          # release_held.sh queues it with the other held jobs
+    mv "$D/$JOB.sh" "$HELD/$JOB.sh"
+    echo "held $HELD/$JOB.sh"
+  else
+    mv "$D/$JOB.sh" "$FILL/queue/$JOB.sh"
+    echo "queued $FILL/queue/$JOB.sh"
+  fi
 fi
 until [ -e "$FILL/done/$JOB.sh" ] || [ -e "$FILL/failed/$JOB.sh" ]; do sleep 60; done
 [ -e "$FILL/failed/$JOB.sh" ] && echo "the fill job failed: $FILL/failed/$JOB.sh"
