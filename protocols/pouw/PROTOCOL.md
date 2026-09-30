@@ -183,6 +183,13 @@ useful    U/(α_A·α_B), glue
       |x| ≥ 8σ.
 - **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
+- **U's exact order, CPU-pinned** (`schemes/pearl_c_u.py`), for the Lean model of the clean-up.
+  - It states the chain with its promotion, the fused columns, the factors' single BF16 roundings, P_B's FMA chain and the
+    four K16 steps, and both tensor-core steps as integer grouped sums.
+  - It equals `pearl_c` bit for bit.
+  - Its vectors (`tests/vectors/pearl_c_u.json`) are cells of the H100 kernel's gate problem, and they agree with the
+    gate's expected buffers, whose hashes they record.
+  - The H100 capture confirms it on silicon.
 
 ## Not here yet
 
