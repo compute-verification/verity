@@ -70,7 +70,9 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
   * casts (``--instruction cvt_*``, ``cast.py``); the 2:4 sparse ``mma.sp`` m16n8k128 rows (``--instruction sp_nvf4 | sp_mxf4``,
     ``sparse.py``: a capture over named candidates, the first of which is the dense pinned model on the compressed operands);
     T1's merged k128 route (``--instruction sp_nvf4_t1``, ``t1_merged.py``: the sparse k128 from C = H against two chained dense
-    atoms from C = H, on the operands of ``fp4_emulation.py routes`` at 1ad1aaa2, for each ``--hot-bits`` h and C = +0).
+    atoms from C = H, on the operands of ``fp4_emulation.py routes`` at 1ad1aaa2, for each ``--hot-bits`` h and C = +0);
+    the sparse rows' metadata rule (``--instruction sp_nvf4_meta | sp_mxf4_meta``, ``meta_rule.py``: where each of the 16
+    nibbles puts a chunk's stored codes, the pinned step on that gather, and the zero patterns the hardware can write).
   * ``scale_split_twins`` (nvf4, mxf4): tile pairs with equal scaled products and accumulators but A's scale halved into its
     nibbles; ``twins`` counts the words the pair's members differ in, and any difference on the device means no model that
     reads only the exact products and the accumulator (no ``GroupSum``) computes the instruction.
@@ -143,6 +145,8 @@ CAST_INSTRUCTIONS = ("cvt_e2m1x2_f32", "cvt_f16x2_e2m1x2", "cvt_ue8m0x2_f32_rz",
 SPARSE_INSTRUCTIONS = ("sp_nvf4", "sp_mxf4")
 #: T1's merged k128 route (t1_merged.py): the sparse NVF4 row against the dense one's two-atom chain, from the hot accumulator
 T1_INSTRUCTIONS = ("sp_nvf4_t1",)
+#: the sparse rows' metadata rule (meta_rule.py): what each of the 16 nibbles gathers, and the pinned step on that gather
+META_RULE_INSTRUCTIONS = ("sp_nvf4_meta", "sp_mxf4_meta")
 #: mma.sync instruction -> RowKind of mma_fp4.cu's generic kernel (single tiles of the new rows, and every in-register chain)
 ROW_KIND = {"nvf4": 0, "mxf4": 1, "f8f6f4": 2, "f8f6f4_e2m1_e4m3": 3, "f8f6f4_e4m3_e2m1": 4, "mxf8f6f4_e2m1": 5, "mxf8f6f4_e2m1_e4m3": 6,
             "mxf8f6f4_e4m3_e2m1": 7}
@@ -1239,7 +1243,8 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="nvf4",
-                    choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS) + list(T1_INSTRUCTIONS))
+                    choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS) + list(T1_INSTRUCTIONS)
+                    + list(META_RULE_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--chain2", action="store_true", help="tcgen05: pair each family's tiles into K=128 chains (two MMAs on one TMEM accumulator)")
@@ -1272,6 +1277,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.instruction in T1_INSTRUCTIONS:
         import t1_merged
         return t1_merged.main(args)
+    if args.instruction in META_RULE_INSTRUCTIONS:
+        import meta_rule
+        return meta_rule.main(args)
     if args.instruction in SPARSE_INSTRUCTIONS:
         import sparse
         return sparse.main(args)

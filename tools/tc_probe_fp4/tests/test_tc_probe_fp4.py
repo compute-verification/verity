@@ -24,6 +24,7 @@ sys.path.insert(0, str(HERE))
 import cast  # noqa: E402
 import fp4_emulation_1ad1aaa2 as E  # noqa: E402
 import k32  # noqa: E402
+import meta_rule as MR  # noqa: E402
 import probe as P  # noqa: E402
 import sparse as S  # noqa: E402
 import t1_merged as T  # noqa: E402
@@ -419,6 +420,60 @@ def test_t1_dry_run_records_the_finding_and_fails_closed(no_nvcc, tmp_path):
     assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) == 1
 
 
+def test_meta_rule_predicates_on_ptx_ordered_pairs():
+    """Part C on PTX's six nibbles: the hardware's patterns are the ones touching at most two pairs, and D-24 and the hardware
+    each admit patterns the other refuses."""
+    t = MR.predicate_tables({m: S.OFFSETS[m].tolist() for m in S.META_VALID.tolist()})
+    assert t["counts"] == {"hw_ordered": 67, "hw_all16": 67, "d24": 121, "hw_ordered_and_d24": 57}
+    assert t["hw_ordered_is_at_most_two_pairs"] and t["hw_all16_equals_hw_ordered"]
+    assert t["hw_not_d24"]["count"] == 10 and [0, 1, 2, 3] in t["hw_not_d24"]["examples"]
+    assert t["d24_not_hw"]["count"] == 64
+    assert MR.predicate_tables({m: MR.pairs_from_bits(m) for m in range(16)})["hw_all16_equals_hw_ordered"]
+
+
+def test_meta_rule_part_a_decodes_weights_and_blocks():
+    for instr in ("sp_nvf4", "sp_mxf4"):
+        kind = S.SCALE_KIND[instr]
+        for variant, (a, b) in MR.CODES.items():
+            for blk, e in enumerate(MR.BLOCK_EXPS[kind]):
+                for w in (1, 2, 3, 15):
+                    word = P.f32_bits(np.float32(w * MR.E2M1_VALUE[a] * MR.E2M1_VALUE[b] * 2.0 ** e))
+                    assert [int(x[0]) for x in MR.decode(np.array([word]), instr, variant)] == [w, blk], (instr, variant, e, w)
+        assert [int(x) for x in MR.decode(np.array([0, 0x80000000, 0x3F800001], np.uint32), instr, "a")[0]] == [0, 0, -1]
+
+
+@pytest.mark.slow
+def test_meta_rule_dry_run_measures_the_fake_rule_and_fails_closed(no_nvcc, tmp_path, monkeypatch):
+    """The whole driver on the CPU: the fake's rule comes back nibble for nibble, a changed unordered nibble is a finding (not a
+    failure), and a changed ordered nibble fails the run."""
+    base = ["--instruction", "sp_nvf4_meta", "--fake-silicon", "pairs_from_bits", "--seed", "1", "--n-random", "64", "--procs", "1"]
+    assert P.main(base + ["--out", str(tmp_path / "ok")]) == 0
+    doc = json.loads((tmp_path / "ok" / "probe_results.json").read_text())
+    assert doc["part_a"]["pairs_from_bits"]["differs"] == [] and doc["part_a"]["variants_agree"]
+    assert all(doc["part_a"]["blocks"].values()) and doc["part_b"]["mismatches"] == 0 == doc["part_b2"]["differing_words"]
+    assert doc["part_c"]["counts"]["hw_all16"] == 67
+
+    def patched(changes):
+        off = MR.gather_offsets({m: MR.pairs_from_bits(m) for m in range(16)})
+        for m, o in changes.items():
+            off[m] = o
+
+        def init(self, instr, name):
+            self.model_name, self.off = name, off
+        monkeypatch.setattr(MR.FakeMeta, "__init__", init)
+
+    patched({0: [-1, -1, -1, -1], 5: [3, 2, -1, -1]})
+    assert P.main(base + ["--out", str(tmp_path / "unordered")]) == 0
+    doc = json.loads((tmp_path / "unordered" / "probe_results.json").read_text())
+    assert doc["rule"]["0"] == [None] * 4 and doc["rule"]["5"] == [3, 2, None, None]
+    assert doc["part_a"]["pairs_from_bits"]["differs"] == [0, 5]
+    patched({4: [1, 0, 2, 3]})
+    assert P.main(base + ["--out", str(tmp_path / "ordered")]) == 1
+    doc = json.loads((tmp_path / "ordered" / "probe_results.json").read_text())
+    assert doc["failures"][0].startswith("layout check failed") and "part_a" not in doc
+    assert not list((tmp_path / "ordered").glob("meta_part_*.npz"))
+
+
 def test_store_declarations_keep_guards_out_of_the_derivation():
     p = tool.TC_PROBE_FP4.parse(["python", "tools/tc_probe_fp4/probe.py", "--instruction", "f8f6f4", "--out", "x",
                                  "--expect-uuid", "GPU-1", "--chain", "4"])
@@ -440,6 +495,7 @@ def test_offline_sass_gates(tmp_path):
                 ["probe.py", "--instruction", "cvt_e2m1x2_f32", "--out", str(tmp_path / "c"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4", "--out", str(tmp_path / "sp"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4_t1", "--out", str(tmp_path / "t1"), "--sass-only"],
+                ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
                 ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])
