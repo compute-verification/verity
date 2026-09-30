@@ -11,7 +11,8 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
     binding_map.json  the run's binding map (`binding_map_p<pair>.json`)
     context.json      everything else the replay reads: the requests, sampling, served tokens, stop rule of record, the replay's
                       arguments and Program refs, the required manifest's path and sha256, the retention, the Commit's row as recorded
-                      (weights pin, coverage, openings) and verdict inputs (declaration, required classes)
+                      (weights pin, coverage, openings), verdict inputs (declaration, required classes) and the engine's
+                      configuration of record (`engine_facts_of_record`, read in the Commit's process)
     MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
@@ -71,6 +72,8 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
           tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None) -> tuple[dict, dict, dict]:
     """At the C2 site of a deferred run: writes the bundle's store and weights tree, and returns the run's deferred sampled-replay and
     linkage records and the bundle's context (sealed once the run's record is final, after the weights pin and the openings)."""
+    from verity_vllm.check.replay.driver import engine_facts_of_record
+
     tl.start("validate.replay_bundle", pair=pair)
     write_store(out, pair, com, rc)
     caps = {str(q.get("request_id")): int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs}
@@ -82,7 +85,7 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
-           "vc_result": vc_result}
+           "vc_result": vc_result, "engine_of_record": engine_facts_of_record()}
     sr, lk = deferred_records(path(out, pair))
     tl.end("validate.replay_bundle", pair=pair)
     print(f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair {pair}): DEFERRED -- store and weights tree written to {partial(out, pair)}", flush=True)

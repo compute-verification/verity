@@ -142,6 +142,17 @@ def test_a_bundle_that_is_not_the_records_is_refused(tmp_path, tamper, why):
         CPU.of_record(RB.open_bundle(RB.path(out, 1)), out)
 
 
+def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):
+    art = tmp_path / "sampled_replay_p1.json"
+    cpu = {"VLLM_BATCH_INVARIANT": None, "compute_capability": "unavailable: no CUDA device"}
+    art.write_text(json.dumps({"sampled_replay": {"engine_of_record": cpu}, "boundary_linkage": {}}))
+    row = {"commit": {"sampled_replay": {"engine_of_record": cpu}}}
+    gpu = {"VLLM_BATCH_INVARIANT": "1", "compute_capability": [12, 0]}
+    CPU.engine_of_record(row, {"engine_of_record": gpu}, art)
+    for sr in (row["commit"]["sampled_replay"], json.loads(art.read_text())["sampled_replay"]):
+        assert sr["engine_of_record"] == gpu and sr["engine_of_replay"] == cpu
+
+
 def test_the_record_is_rewritten_whole_with_the_decided_run(tmp_path):
     out = _deferred(tmp_path)
     b = RB.open_bundle(RB.path(out, 1))

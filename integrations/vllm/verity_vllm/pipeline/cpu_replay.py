@@ -185,6 +185,17 @@ def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
     return SimpleNamespace(**a, replay_cache=False, vu_export_dir=None)
 
 
+def engine_of_record(row: dict[str, Any], ctx: dict[str, Any], art: Path) -> None:
+    """The replay's `engine_of_record` is the Commit engine's (read in its process, in the bundle); this process's beside it."""
+    eng = ctx.get("engine_of_record")
+    if eng is None:
+        return
+    doc = json.loads(art.read_text())
+    for sr in (row["commit"]["sampled_replay"], doc["sampled_replay"]):
+        sr["engine_of_replay"], sr["engine_of_record"] = sr.get("engine_of_record"), eng
+    _write(art, json.dumps(doc, indent=1, default=str) + "\n")
+
+
 def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict[str, Any]) -> None:
     """The run's value correspondence and verdict with the replay on the record (in the in-process Commit's component order)."""
     from verity_vllm.check.verdict import commit_verdict
@@ -253,6 +264,7 @@ def replay(o: Options) -> bool | None:
                    manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
                    components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p),
                    weights_check=lambda: dict(wc), tl=tl), {})
+    engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
     decide(row, ctx, wc, b)
     record(out, rows, verdict, b, time.perf_counter() - t0)
     c = row["commit"]
