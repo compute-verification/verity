@@ -351,7 +351,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
                                   "once; W e4m3 [N,K] + Ws f32 [N/G,K/G] Inputs",
            "scaled_mm_fp8_block_dot": "ScaledMmFp8BlockSharedScale_v2{K,N,G,DOT} or ScaledMmFp8Block_v2{K,N,G,DOT}: scaled_mm_fp8_block's schedule "
-                                      "over the target's e4m3 k32 step (registry.targets.fp8_block_dot; sm_120's CUTLASS blockwise kernel)"})
+                                      "over the target's e4m3 k32 step (registry.targets.fp8_block_dot; cc 12.0's CUTLASS blockwise kernel)"})
 
 
 def profile_records(vocab: Vocabulary) -> dict | None:

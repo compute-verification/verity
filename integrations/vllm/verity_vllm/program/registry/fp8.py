@@ -404,7 +404,7 @@ SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
 # ---------------------------------------------------------------------------------------------------------
 
 _BLOCK_CONF_V2 = ("exact-model-tested; RTX PRO 6000 (cc 12.0) 2026-09-30, vLLM d9105ea80 under VLLM_USE_DEEP_GEMM=0 (CutlassFp8BlockScaledMMKernel, "
-                  "cutlass_3x_gemm_fp8_blockwise sm120: swap_ab 128x32x128 at M <= 64, pingpong 64x128x128 at M <= 256, 128x128x128 above), "
+                  "cutlass_3x_gemm_fp8_blockwise on cc 12.0: swap_ab 128x32x128 at M <= 64, pingpong 64x128x128 at M <= 256, 128x128x128 above), "
                   "#469's pinned block-FP8 checkpoint, layer 0's qkv/o/gate_up/down at 11-21 values of M: 119,016 of 119,016 sampled coordinates with "
                   "DOT = BlackwellE4m3QmmaDot32_v1 and the FFMA promotion (mul+add 119,003; Hopper's step 111,401), run r20260930-164401-c04d, "
                   "check r20260930-164854-5f2c")

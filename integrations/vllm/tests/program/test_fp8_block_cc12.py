@@ -1,7 +1,7 @@
 """`ScaledMmFp8Block_v2{K,N,G,DOT}`: the blockwise FP8 linear with the e4m3 k32 step as a static.  On the RTX PRO 6000 (cc 12.0,
 `VLLM_USE_DEEP_GEMM=0`) vLLM's `CutlassFp8BlockScaledMMKernel` is `ScaledMmFp8Block_v1`'s schedule over `BlackwellE4m3QmmaDot32_v1`.
 
-The fixture `data/fp8_block_sm120_operands.npz` holds served words of that kernel (run r20260930-164401-c04d, checked in full by
+The fixture `data/fp8_block_cc12_operands.npz` holds served words of that kernel (run r20260930-164401-c04d, checked in full by
 r20260930-164854-5f2c): 64 output columns of one qkv weight block (K = 2560) at M = 1, 65 and 257, one row of each of the three sm120
 blockwise dispatch configs (swap_ab 128x32x128, pingpong 64x128x128, 128x128x128), with the served quantizer's words.
 """
@@ -22,7 +22,7 @@ from verity_vllm.program.kernels import rows as RK
 from verity_vllm.program.registry import fp8
 from verity_vllm.program.registry import targets as TG
 
-FIX = Path(__file__).parent / "data" / "fp8_block_sm120_operands.npz"
+FIX = Path(__file__).parent / "data" / "fp8_block_cc12_operands.npz"
 G = 128
 MS = (1, 65, 257)
 SM120 = DEFAULT_TARGET.with_overrides(compute_capability=(12, 0), num_sms=188)

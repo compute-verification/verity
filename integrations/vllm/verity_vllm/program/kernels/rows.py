@@ -162,12 +162,12 @@ _FP8_TWIN_PROVENANCE = {
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
 _FP8_SM120_TWIN_PROVENANCE = {
-    "fixture": "tests/program/data/fp8_block_sm120_operands.npz",
+    "fixture": "tests/program/data/fp8_block_cc12_operands.npz",
     "fixture_sha256": "67306cfecd9de152f91abaf5a3f69410f72d503ce21d9bb05e6415d4561eb1d6",
-    "captured_from": ["_C.per_token_group_fp8_quant", "_C.cutlass_scaled_mm blockwise sm120 (CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0)"],
+    "captured_from": ["_C.per_token_group_fp8_quant", "_C.cutlass_scaled_mm blockwise, cc 12.0 (CutlassFp8BlockScaledMMKernel, VLLM_USE_DEEP_GEMM=0)"],
     "device": "vy-nebius-1, NVIDIA RTX PRO 6000 Blackwell Server Edition (cc 12.0), vLLM 0.28.1rc1.dev472+gd9105ea80",
     "captured_utc": "2026-09-30", "runs": ["r20260930-164401-c04d", "r20260930-164854-5f2c"],
-    "tests": ["tests/program/test_fp8_block_sm120.py"],
+    "tests": ["tests/program/test_fp8_block_cc12.py"],
     "definitions": "verity_vllm/program/registry/fp8.py: ScaledMmFp8Block_v2{K,N,G,DOT}, ScaledMmFp8BlockSharedScale_v2{K,N,G,DOT}",
 }
 EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,

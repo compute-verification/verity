@@ -11,6 +11,9 @@ KNOWN: dict[str, str] = {
     "partition/gate-recomputed ScaledMmFp8Block_v1": "every coordinate of a 128-column weight block recomputes the block's scale "
         "product F32Mul(sx[kb], sw[kb]) (fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; "
         "word.unit_rule partitions the batch's members one by one and does not see it",
+    "partition/gate-recomputed ScaledMmFp8Block_v2": "ScaledMmFp8Block_v1's recomputation with the step as a static: every coordinate "
+        "of a weight block recomputes the block's scale product (fp8.ScaledMmFp8BlockCoordinateV2); the shared-per-block construction, "
+        "the default, computes it once",
 }
 
 

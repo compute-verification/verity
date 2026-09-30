@@ -209,7 +209,7 @@ REGISTERED: dict[str, GemmTarget] = {
                   "the swapped order misses 89 of its 125 discriminating coordinates (red team fp8-per-tensor-scale-order, reproducer "
                   "r20260930-081238-476e); the step is pinned (trust dossier "
                   "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)",
-                  "the blockwise FP8 linear under VLLM_USE_DEEP_GEMM=0 (CutlassFp8BlockScaledMMKernel, all three sm120 blockwise dispatch "
+                  "the blockwise FP8 linear under VLLM_USE_DEEP_GEMM=0 (CutlassFp8BlockScaledMMKernel, all three cc 12.0 blockwise dispatch "
                   "configs): ScaledMmFp8Block_v1's schedule over BlackwellE4m3QmmaDot32_v1, 119,016 of 119,016 sampled coordinates of "
                   "a pinned block-FP8 checkpoint's layer-0 linears (#469) (Hopper's step: 111,401), Fp8GroupQuant_v1 8,669 of 8,669 rows, run "
                   "r20260930-164401-c04d, check r20260930-164854-5f2c")),

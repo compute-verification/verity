@@ -108,10 +108,11 @@ def test_the_partition_commits_each_product_once(K, N):
 
 
 def test_new_ids_carry_no_version_in_their_names():
-    for d in (fp8.ScaledMmFp8BlockSharedScale, fp8.ScaledMmFp8BlockSharedScaleTile, fp8.ScaledMmFp8BlockCoordinateGivenScale):
+    for d, v in ((fp8.ScaledMmFp8BlockSharedScale, 1), (fp8.ScaledMmFp8BlockSharedScaleTile, 1), (fp8.ScaledMmFp8BlockCoordinateGivenScale, 1),
+                 (fp8.ScaledMmFp8BlockSharedScaleV2, 2), (fp8.ScaledMmFp8BlockSharedScaleTileV2, 2), (fp8.ScaledMmFp8BlockCoordinateGivenScaleV2, 2)):
         name = d.id.rsplit("_v", 1)[0]
-        assert d.id == f"{name}_v1" and not re.search(r"[Vv]\d", name) and name.startswith("ScaledMmFp8Block")
-    assert fp8.SHARED_SCALE == {"ScaledMmFp8Block_v1": fp8.ScaledMmFp8BlockSharedScale}
+        assert d.id == f"{name}_v{v}" and not re.search(r"[Vv]\d", name) and name.startswith("ScaledMmFp8Block")
+    assert fp8.SHARED_SCALE == {"ScaledMmFp8Block_v1": fp8.ScaledMmFp8BlockSharedScale, "ScaledMmFp8Block_v2": fp8.ScaledMmFp8BlockSharedScaleV2}
 
 
 def test_the_knob_defaults_to_shared_per_block_and_is_omitted_when_unset():
