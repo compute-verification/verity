@@ -27,11 +27,14 @@ export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
 export HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=$PWD/packages/verity/src:$PWD/protocols/pouw:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
+# NVML ignores CUDA_VISIBLE_DEVICES, so every nvidia-smi query names the leased GPU by its UUID (gpu-lease's first)
+UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
+[ -n "$UUID" ] || fail IDENTITY "no GPU_LEASE_UUID: run under gpu-lease"
+export E2E_GPU_UUID=$UUID
 touch "$OUT/.started"
 trap 'find "$HOME/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
 
-nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i 0 > "$OUT/identity.csv"
-UUID=$(cut -d, -f1 "$OUT/identity.csv")
+nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
 grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/identity.csv" || fail IDENTITY "$(cat "$OUT/identity.csv")"
 
 mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-$OUT/inputs/pearl-c-sm120-ship.tar}" -C "$OUT/ship"

@@ -148,11 +148,16 @@ def gate(run, weights: dict) -> list[dict]:
     return out
 
 
+def gpu() -> str:
+    """The GPU nvidia-smi should read: window.sh's E2E_GPU_UUID (the lease's), since NVML ignores CUDA_VISIBLE_DEVICES."""
+    return os.environ.get("E2E_GPU_UUID", "0")
+
+
 def clocks() -> dict:
     """The SM and memory clocks now, from nvidia-smi (the panel's per-rep clock record)."""
     try:
         q = subprocess.run(["nvidia-smi", "--query-gpu=uuid,clocks.sm,clocks.mem,power.draw", "--format=csv,noheader,nounits",
-                            "-i", "0"], capture_output=True, text=True, timeout=10, check=False).stdout.strip().split(", ")
+                            "-i", gpu()], capture_output=True, text=True, timeout=10, check=False).stdout.strip().split(", ")
         return {"uuid": q[0], "sm_mhz": int(q[1]), "mem_mhz": int(q[2]), "watts": float(q[3])}
     except Exception as ex:  # noqa: BLE001 - a missing reading is recorded, not fatal
         return {"error": f"{type(ex).__name__}: {ex}"}
@@ -354,8 +359,8 @@ def split(results: dict) -> dict:
 
 def memory_mib() -> int | None:
     try:
-        q = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", "0"], capture_output=True,
-                           text=True, timeout=10, check=False)
+        q = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits", "-i", gpu()],
+                           capture_output=True, text=True, timeout=10, check=False)
         return int(q.stdout.strip())
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return None
