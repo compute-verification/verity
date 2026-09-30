@@ -144,3 +144,21 @@ if '#include "prove_circuit.cuh"' not in s:
     s = s.replace('#include "prove_chunk.cuh"', '#include "prove_chunk.cuh"\n#include "prove_circuit.cuh"', 1)
     ffi.write_text(s)
 print("prove_circuit.cuh installed:", len(text.splitlines()), "lines")
+
+# the zerocheck's second-round and tail kernels also at two blocks an SM (__launch_bounds__(ZT_TPB, 2): 128 registers and a few
+# hundred bytes of spills, where the default build's 182-194 registers fit one block): a copy of each, FC_ZT_LB2=1 launches it
+zt = g / "zerocheck_tail.cuh"
+tt = zt.read_text()
+if "zt_lb2()" not in tt:
+    zt.write_text(put(tt, '#include "sumcheck_ab.cuh"', '#include "sumcheck_ab.cuh"\n#include <cstdlib>\nstatic inline bool zt_lb2() {\n'
+                      '    static const bool v = [] { const char* e = std::getenv("FC_ZT_LB2"); return e && e[0] == \'1\'; }();\n'
+                      '    return v;\n}'))
+for path, name in ((g / "zerocheck_round2.cuh", "zerocheck_second_round_fold_with_lookahead_high_bits"),
+                   (zt, "zerocheck_tail_lookahead_fold_and_message")):
+    t = path.read_text()
+    i = t.index(f"__global__ void {name}(")
+    assert t.count(f"__global__ void {name}(") == 1, name
+    j = t.index("\n}\n", i) + 3
+    t = t[:j] + "\n" + t[i:j].replace(f"__global__ void {name}(", f"__global__ void __launch_bounds__(ZT_TPB, 2) {name}_lb2(", 1) + t[j:]
+    t = put(t, f"{name}<<<", f"(zt_lb2() ? {name}_lb2 : {name})<<<")
+    path.write_text(t)
