@@ -72,6 +72,19 @@ def test_no_visible_gpu_for_a_gpu_stage_fails_closed(monkeypatch):
     assert rec["verdict"] == "FAIL" and rec["mismatches"][0]["fact"] == "device"
 
 
+def test_rtxpro6000_rows_are_the_cc_12_0_family(monkeypatch):
+    row = "llama32-1b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    assert tf.row_family(row) == ("rtxpro6000", (12, 0))
+    monkeypatch.setattr(tf, "device_cc", lambda: ((12, 0), "test"))
+    bs = {"step": {"target": {"compute_capability": [12, 0], "num_sms": 188}}}
+    assert tf.check(row, {"target": {"compute_capability": [12, 0]}}, ["build", "match", "commit"], build_summary=bs)["verdict"] == "PASS"
+    assert tf.check(ROW_L40S, {"sweep": {}}, ["match"])["mismatches"][0]["why"].startswith("pod device 12.0 != row family 8.9")
+    monkeypatch.setattr(tf, "device_cc", lambda: ((8, 9), "test"))
+    assert tf.check(row, {"sweep": {}}, ["match"])["verdict"] == "FAIL"
+    hopper_build = tf.check(row, None, ["build"], want_device=False, build_summary={"step": {"target": {"compute_capability": [9, 0]}}})
+    assert hopper_build["verdict"] == "FAIL" and [m["fact"] for m in hopper_build["mismatches"]] == ["built"]
+
+
 def test_unknown_device_class_is_a_refusal_not_a_guess():
     rec = tf.check("m__bf16__tpu5__tp1__b1__i1__o1__mixed__greedy__bi-eager", {"sweep": {}}, ["build"], want_device=False)
     assert rec["verdict"] == "FAIL" and rec["mismatches"][0]["fact"] == "row"

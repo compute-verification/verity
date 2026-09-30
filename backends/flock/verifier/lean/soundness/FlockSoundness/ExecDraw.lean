@@ -682,7 +682,9 @@ namespace FlockSoundness.Audit.Law
 open Game Finset
 open scoped ENNReal
 
-/-- **The executable draw escapes no more often than the model's.** -/
+/-- **The executable draw escapes no more often than the model's.** Its probability space is a uniform stream: that
+the verifier's bytes are uniform is A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`), which
+`drawOS_subset_escape_le` (`ExecDrawOS.lean`) takes for the live draw, reruns included. -/
 theorem subset_exec_escape_le (n k L : ℕ) (hk : k ≤ n) (B : Finset (Fin n)) :
     prCoin (fun f : Fin L → Fin 256 =>
         ∃ D, Flock.Draw.subset k n (Law.streamOf f) = some D ∧ ∀ u ∈ B, u.val ∉ D) ≤
