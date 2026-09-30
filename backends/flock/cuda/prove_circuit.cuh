@@ -392,6 +392,34 @@ static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams*
     return 0;
 }
 
+// chunk_zlin_transpose's former kernel, one byte a thread per store (the same bytes): FC_ZLIN_BYTEWISE=1 times it in the same job
+__global__ void fc_zlin_transpose_bytewise(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
+    const long long wpr = (1LL << k_log) / 128;
+    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_stripes * wpr;
+         t += (long long)gridDim.x * blockDim.x) {
+        long long s = t / wpr, w = t % wpr;
+        F128 v[8];
+#pragma unroll
+        for (int r = 0; r < 8; r++) v[r] = z[(8 * s + r) * wpr + w];
+        uint8_t* o = out + (s << k_log) + w * 128;
+        for (int b = 0; b < 128; b++) {
+            uint8_t byte = 0;
+#pragma unroll
+            for (int r = 0; r < 8; r++) {
+                u64 word = b < 64 ? v[r].lo : v[r].hi;
+                byte |= (uint8_t)(((word >> (b & 63)) & 1) << r);
+            }
+            o[b] = byte;
+        }
+    }
+}
+
+static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, uint8_t* d_zlin) {
+    static const bool bytewise = [] { const char* e = std::getenv("FC_ZLIN_BYTEWISE"); return e && e[0] == '1'; }();
+    if (bytewise) fc_zlin_transpose_bytewise<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
+    else chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
+}
+
 static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N, int m, int k_log, long long len, F128* df, F128* d_a,
                       F128* d_b, uint8_t* d_zlin) {
     const FlockChunkParams* C = &N->c;
@@ -607,7 +635,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
         }
     }
     const long long n_stripes = (1LL << (m - k_log)) / 8;
-    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
+    fc_zlin_transpose(df, k_log, n_stripes, d_zlin);
     CK(cudaGetLastError());
     CK(cudaStreamSynchronize(0));
     return 0;

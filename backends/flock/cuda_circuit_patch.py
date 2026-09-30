@@ -86,7 +86,7 @@ body = put(body, alloc + wit,
            "    std::vector<F128> fc_zk_comb(64);\n"
            "    if (take) {\n        df = g_fc_kept.df; d_a = g_fc_kept.d_a; d_b = g_fc_kept.d_b;\n"
            "        CK(ffi_malloc(&d_zlin, (size_t)len * 16));\n"
-           "        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n        CK(cudaGetLastError());\n"
+           "        fc_zlin_transpose(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);\n        CK(cudaGetLastError());\n"
            "    } else {\n" + "".join("    " + x for x in (alloc + wit.split("\n", 1)[1]).splitlines(True)) + "    }\n")
 body = put(body, "    if (N->zk_on) {\n        CKI(fc_commit_l0_zk(",
            "    if (take) {\n"
