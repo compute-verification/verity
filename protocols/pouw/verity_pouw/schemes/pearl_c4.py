@@ -1,4 +1,6 @@
-"""``pearl-c-nvfp4-v0`` and ``pearl-c-mxfp4-v0``: Pearl-C on sm_120's block-scaled FP4 (``mma.sync kind::mxf4nvf4``).
+"""``pearl-c-nvfp4-v0``: Pearl-C on sm_120's block-scaled FP4 (``mma.sync kind::mxf4nvf4``), NVFP4 only.  MXFP4
+(``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain (Daniel, 15:34Z): same forming and
+chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
 The design is research store ``internal/pouw/rtx-pro/fp4-design.md`` (GPU 5's lane).  It is Pearl-C (`pearl_c`) with the
 FP8 product replaced by the E2M1 one: the noise enters inside one atom per element, one noisy cast forms the operand,
@@ -879,6 +881,10 @@ class PearlC4:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         self.fmt = FORMATS[fmt]
         self.name = NAMES[fmt]
+        #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
+        #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
+        #: D on honest coverage and Pearl-C4 claims NVFP4 alone (ratings.md 15:12Z; Daniel, 15:34Z).
+        self.contrast = self.fmt is MXFP4
         self.k_min, self.tile = k_min, tile
         self.last_debit: Debit | None = None
         self._encoded: tuple | None = None
@@ -909,6 +915,17 @@ class PearlC4:
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
                         ("delta_inv", 4), ("dead_rho_sq", DEAD_RHO_SQ)),
         )
+        if self.contrast:
+            self.certificate = Certificate(
+                conjecture="none: a contrast line outside Pearl-C4's claimed domain (NVFP4 only)",
+                gamma0=None,
+                omega=Fraction(1),
+                claims=(),
+                hypotheses=(),
+                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′ (ratings.md 15:12Z), and "
+                            "Pearl-C4 claims NVFP4 alone (Daniel, 15:34Z)",),
+                parameters=self.certificate.parameters,
+            )
 
     def check(self, matmul: Matmul) -> None:
         s = matmul.shape

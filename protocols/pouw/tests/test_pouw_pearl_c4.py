@@ -1,4 +1,4 @@
-"""``pearl-c-nvfp4-v0`` and ``pearl-c-mxfp4-v0`` (`pearl_c4`): the casts, the noise lines, the noise atom, the clean-up's
+"""``pearl-c-nvfp4-v0`` (`pearl_c4`), with MXFP4 as its contrast line: the casts, the noise lines, the noise atom, the clean-up's
 algebra, the chain's exactness on the domain (which the design's argument turns on), the accounting, the per-row rules and
 debit, the work law through `pearl_c_work`, and the pinned vectors."""
 
@@ -153,8 +153,14 @@ def test_accounting_at_8192():
 
 
 def test_domain_and_registry():
-    s = get("pearl-c-mxfp4-v0")
-    assert isinstance(s, F.PearlC4) and s.fmt is F.MXFP4 and s.name == "pearl-c-mxfp4-v0"
+    """Pearl-C4 claims NVFP4 only (Daniel, 15:34Z): MXFP4 stays constructible as the contrast line, unregistered and with a
+    certificate that claims nothing."""
+    s = get("pearl-c-nvfp4-v0")
+    assert isinstance(s, F.PearlC4) and s.fmt is F.NVFP4 and not s.contrast and "tt-out/fp4-sm120" in s.certificate.claims
+    with pytest.raises(KeyError):
+        get("pearl-c-mxfp4-v0")
+    mx = F.PearlC4("mxfp4")
+    assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
     s.check(Matmul(0, Shape(64, 1024, 64), 0))
     for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64)):
         with pytest.raises(DomainError):

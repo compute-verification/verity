@@ -44,7 +44,6 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "pearl-c-h100-v1": _pearl_c("v1"),
     "pearl-c-h100-v1-h1": _pearl_c("v1", "h1"),
     "pearl-c-nvfp4-v0": _pearl_c4("nvfp4"),
-    "pearl-c-mxfp4-v0": _pearl_c4("mxfp4"),
 }
 
 

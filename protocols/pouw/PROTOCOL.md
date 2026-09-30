@@ -428,10 +428,15 @@ useful    U/(α_A·α_B), glue
     gate's expected buffers, whose hashes they record.
   - The H100 capture confirms it on silicon.
 
-## `pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`: Pearl-C on sm_120's block-scaled FP4 (`schemes/pearl_c4.py`)
+## `pearl-c-nvfp4-v0`: Pearl-C on sm_120's block-scaled FP4, NVFP4 only (`schemes/pearl_c4.py`)
 
 GPU 5's RTX PRO 6000 design (research store `internal/pouw/rtx-pro/fp4-design.md`). It is Pearl-C with the FP8 product
-replaced by `mma.sync kind::mxf4nvf4`: NVFP4 (UE4M3 scales per 16) is the headline, MXFP4 (UE8M0 per 32) is beside it.
+replaced by `mma.sync kind::mxf4nvf4`, on NVFP4 (UE4M3 scales per 16).
+- **MXFP4 is a contrast line, not in the claimed domain** (Daniel, 15:34Z). The module keeps it (UE8M0 scales per 32,
+  `pearl-c-mxfp4-v0`), unregistered in `schemes.get`, with a certificate that claims nothing.
+- **Why it is excluded:** its int8 closure holds under F2, but F1′ below puts 9.5–57% of honest MXFP4 credit over the
+  cap on every model, so its line is D on honest coverage. Its UE8M0 scales don't move with the salt, and its round-up
+  scales make honest zero codes reliable.
 The conjecture it rests on, TT_OUT-FP4 (`tt-out/fp4-sm120`), is stated by the theory lane
 (`internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §2) and proposed, not proved, so the certificate names no γ_0. The
 module's docstring states every step and rounding.
@@ -465,9 +470,28 @@ useful    U/(α_A·α_B), glue
   (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Items 3 and 4 below charge every
   element of a screened block as salt-dead, so a row with many screened blocks is rejected only when its tile's debit
   passes the cap. This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
-- **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units:
-  1. per row and 4-group with at least 2 salt-dead codes, 0.5 per MAC (1 when all 4 are), on every word the row feeds,
-     for A′ and for B̃;
+- **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units. Items 1 and 1b and R1
+  are the base-split and flatness fix: research store `internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §6.2, §6.3 and
+  §6.8, under the assessor's FP4 conditions (`internal/pouw/red-team/ratings.md` 15:18Z).
+  1. **F1′, the base split's expected saving,** per row and aligned 128-window of A′ and of B̃, on every word the row
+     feeds:
+     - p_t = P(code ≠ its modal code) at the block's modal scale byte, under the exact law of the row's noise given
+       this salt's E line (`noise_law`);
+     - the charge is 128·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]), where R_24 is one 2:4 pass plus a
+       CUDA-core patch of the excess, and R_skip is a skip or patch per k64 atom;
+     - it is taken at the cheater's sorted layout inside each block, with κ = min(c·M_w, 0.125) inside the expectation,
+       where c = 16.92/128 and M_w counts the window's blocks whose realised byte isn't their modal byte.
+
+  1b. **F2, the masked int8 route's saving,** per tile on both operands: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain
+      MAC.
+      - f is read at the tile's modal byte, per row and per block-column class, taking the largest reading.
+      - c_L = min over 1 ≤ L ≤ log₂(k/16) of 2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75, at W1's int8 leaf.
+
+  R1. **A row whose own F1′ per word passes ρ·(its cell credit) is uncredited.**
+      - The prover declares it (`pearl_c_work.declare` with the transcript).
+      - The verifier checks the declaration on every drawn tile (`check_opened`): a credited row over the bound, or an
+        excluded row under it that passes the per-row rules, fails the tile.
+      - The row is still formed, checked and hashed.
   2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
   3. per block screened on both the A row and the B row, one block of MACs per pair-word;
   4. per salt-dead, screened-block or unneeded A element (every credited B code at its position is zero), f_s·|cols|/n;
