@@ -30,6 +30,13 @@ public-constant rule (`const`, c0 = 64); the +0 chain starts every word at +0.
 4. Restartable: one directory per unit, a state file, and exit 99 once --budget-min is spent while units remain; exit 0
    after summary.json.  A unit started 3 times without finishing fails the job (exit 1).
 
+--mode v1hot is v1-hot's full-unit run (ttout-restatements.md §9; the fill candidate's "Update, 14:40Z"): the same units,
+and per v1 group g (atoms 4g .. 4g + 3, 128 deep) the chain restarted from H_{i,g} (chain `v1hot`, pearlc_v1_hot's
+hot_group_words, publicConst 64) or from +0 (chain `v1`, v1's groups).  A plane is then a group, exact when all 4 of its
+steps are: `{v1hot,v1}.{rows,cols}.u32` are k / 128 x 8,192 x 256 uint32 (512 MiB), and `Hg.npy` holds H_{i,g}.  Gated as
+above per group (pearlc_hot_start.chain over each group from its start), plus H_{i,0} = H_i and every group's exponent
+against the closed form; the self-test also checks H_{i,g} against hot_group_words on the reference rows.
+
   gpu-lease 1 --wait -- env CUDA_DEVICE_ORDER=PCI_BUS_ID PYTHONPATH=<04734fb5>/packages/verity/src:<04734fb5>/protocols/pouw \
       python3 benchmarks/pouw/sm120_exact/hot.py --gpu lease --expect-uuid lease --ref <pearlc_hot_start.py's dir> --out DIR
 """
@@ -59,15 +66,17 @@ import run_result  # noqa: E402
 from run import Dev, build, popc  # noqa: E402
 from sm120_chain.run import Nvml, emit  # noqa: E402
 
-HS = C = D = P = None      # pearlc_hot_start and the scheme's modules, imported in main() from --ref and PYTHONPATH
+HS = HV = C = D = P = None  # pearlc_hot_start, pearlc_v1_hot and the scheme's modules, imported from --ref and PYTHONPATH
 FAMILIES = (*census.ACTIVATION_FAMILIES, *census.FREEZE_FAMILIES, "near-cap")
 CHAINS = ("hot", "zero")
+MODE_CHAINS = {"v2hot": CHAINS, "v1hot": ("v1hot", "v1")}
+GROUP = 128                # v1's group depth: G = 4 atoms of 32
 SELFTEST = (("near-cap", 128), ("rank1", 64), ("aligned-spikes-r64", 64))
 REF_FILES = ("pearlc_hot_start.py", "pearlc_exact_runs.py", "pearlc_promotion_fusion.py", "pearlc_row_compat.py")
 
 
-def load_ref(ref: str) -> dict:
-    global HS, C, D, P
+def load_ref(ref: str, mode: str = "v2hot") -> dict:
+    global HS, HV, C, D, P
     sys.path.insert(0, ref)
     import pearlc_hot_start as hs
     from verity_pouw.schemes import pearl_c, pearl_c_device, pearl_kw
@@ -76,6 +85,10 @@ def load_ref(ref: str) -> dict:
         raise SystemExit(f"{C.__file__}: no form_v1 or SM120_UNPROMOTED; PYTHONPATH must name the scheme's tree (04734fb5)")
     files = {m.__name__: m.__file__ for m in (pearl_c, pearl_c_device, pearl_kw)}
     files.update({f: str(Path(ref) / f) for f in REF_FILES})
+    if mode == "v1hot":
+        import pearlc_v1_hot as hv
+        HV = hv
+        files["pearlc_v1_hot.py"] = str(Path(ref) / "pearlc_v1_hot.py")
     return {name: {"path": p, "sha256": hashlib.sha256(Path(p).read_bytes()).hexdigest()} for name, p in files.items()}
 
 
@@ -122,8 +135,9 @@ def _basis_task(args):
     return np.array(C._basis(seed_b, side, k, C.LINE_NORM_V1), np.uint8)
 
 
-def prep(pool: Pool, fam: str, k: int, rows: int, u: int) -> dict:
-    """The unit's host side: both sides' FP32 rows, s5 words, E', C = α·x, F, admission, and H_i."""
+def prep(pool: Pool, fam: str, k: int, rows: int, u: int, mode: str = "v2hot") -> dict:
+    """The unit's host side: both sides' FP32 rows, s5 words, E', C = α·x, F, admission, H_i, and in v1hot mode H_{i,g}
+    (rows x k / 128)."""
     xa, xb, salt = pool.apply(_draw_task, ((fam, k, rows, u),))
     seed_b = C._labelled(salt.encode() + b"B", "seed-B")
     seed_a = C._labelled(salt.encode() + b"A", "seed-A")
@@ -146,10 +160,14 @@ def prep(pool: Pool, fam: str, k: int, rows: int, u: int) -> dict:
     # the search, so they start at H_i sized as if α·ρ = 1.
     floor = (a["alpha"].view(np.float32).astype(np.float64) * a["rho"].view(np.float32) >= P.SIGMA_MIN)
     one = np.uint32(P.f32_bits(1.0))
-    H, c = HS.hot_words(seed_a, SimpleNamespace(codes=[None] * rows, alpha=np.where(floor, a["alpha"], one).tolist(),
-                                                rho=np.where(floor, a["rho"], one).tolist()), None, "const")
-    return {"fam": fam, "u": u, "k": k, "rows": rows, "salt": salt, "seed_a": seed_a, "seed_b": seed_b, "sides": sides,
-            "H": np.array(H, np.uint32), "c0": c, "below_floor": ~floor}
+    sized = SimpleNamespace(codes=[None] * rows, alpha=np.where(floor, a["alpha"], one).tolist(),
+                            rho=np.where(floor, a["rho"], one).tolist())
+    H, c = HS.hot_words(seed_a, sized, None, "const")
+    out = {"fam": fam, "u": u, "k": k, "rows": rows, "salt": salt, "seed_a": seed_a, "seed_b": seed_b, "sides": sides,
+           "H": np.array(H, np.uint32), "c0": c, "below_floor": ~floor}
+    if mode == "v1hot":
+        out["Hg"] = np.array(HV.hot_group_words(seed_a, sized, k // GROUP), np.uint32)
+    return out
 
 
 def closed_form_h(alpha: np.ndarray, rho: np.ndarray, H: np.ndarray, below_floor: np.ndarray) -> int:
@@ -160,6 +178,15 @@ def closed_form_h(alpha: np.ndarray, rho: np.ndarray, H: np.ndarray, below_floor
     return int(((((H >> 23) & 0xFF).astype(np.int64) - 127 != e) & ~below_floor).sum())
 
 
+def hg_gates(u: dict) -> dict:
+    """H_{i,g} against v2-hot: group 0's word is H_i (block 0 of the same keyed line hash, the same exponent), and every
+    group's exponent is the closed form's."""
+    A, Hg = u["sides"]["A"], u["Hg"]
+    return {"Hg0_vs_H_mismatches": int((Hg[:, 0] != u["H"]).sum()),
+            "Hg_closed_form_mismatches": sum(closed_form_h(A["alpha"], A["rho"], Hg[:, g], u["below_floor"])
+                                             for g in range(Hg.shape[1]))}
+
+
 # ---- the card ------------------------------------------------------------------------------------------------------------
 
 def form_side(dev: Dev, side: dict) -> int:
@@ -168,22 +195,26 @@ def form_side(dev: Dev, side: dict) -> int:
     return ptr
 
 
-def chain_bits(dev: Dev, da: int, db: int, m: int, n: int, k: int, h: int, sink=None) -> tuple[np.ndarray, np.ndarray]:
-    """One chain; its atoms' row and column bitsets go to sink(layout, t0, (32, rows, cols / 32) uint32) per flag plane.
-    Returns the final words and each atom's exact count."""
-    flags, out = dev.chain(da, db, m, n, k, h)
-    T = k // 32
+def chain_bits(dev: Dev, da: int, db: int, m: int, n: int, k: int, h: int, sink=None,
+               grouped: bool = False) -> tuple[np.ndarray, np.ndarray]:
+    """One chain; its planes' row and column bitsets go to sink(layout, p0, (nt, rows, cols / 32) uint32), 32 planes at a
+    time.  A plane is an atom, or with grouped a v1 group (restarting from h's H_{i,g}, or +0), exact on all 4 of its
+    atoms.  Returns the final words and each plane's exact count."""
+    w = GROUP // 32 if grouped else 1
+    flags, out = dev.chain(da, db, m, n, k, h, k // GROUP if grouped else 0)
+    T = k // 32 // w
     M = dev.alloc(4 * 32 * m * (n // 32))
     counts = np.zeros(T, np.int64)
-    for t0 in range(0, T, 32):
+    for p0 in range(0, T, 32):
+        nt = min(32, T - p0)
         for tr, layout in ((0, "rows"), (1, "cols")):
-            dev.atom_bits(flags, M, m, n, t0, 32, tr)
+            dev.atom_bits(flags, M, m, n, p0 * w, nt, tr, w)
             rows_, cols_ = (n, m) if tr else (m, n)
-            planes = dev.fetch(M, 32 * rows_ * (cols_ // 32), np.uint32).reshape(32, rows_, cols_ // 32)
+            planes = dev.fetch(M, nt * rows_ * (cols_ // 32), np.uint32).reshape(nt, rows_, cols_ // 32)
             if not tr:
-                counts[t0:t0 + 32] = popc(planes).sum((1, 2))
+                counts[p0:p0 + nt] = popc(planes).sum((1, 2))
             if sink:
-                sink(layout, t0, planes)
+                sink(layout, p0, planes)
             del planes
     fin = dev.fetch(out, m * n, np.uint32).reshape(m, n)
     dev.free(M)
@@ -200,14 +231,37 @@ def ref_chain(a: list, b: list, h: int, T: int) -> tuple[list, int]:
     return HS.chain(a, b, D.SM120_UNPROMOTED, h, T)
 
 
+def ref_planes(mode: str, chain: str, a: list, b: list, u: dict, i: int, T: int) -> tuple[list, int]:
+    """pearlc_hot_start.chain's per-plane exactness for word (i, ·) and its final word: per atom from H_i or +0 (v2hot);
+    per v1 group, all 4 steps exact from H_{i,g} or +0, and the last group's word (v1hot)."""
+    if mode == "v2hot":
+        return ref_chain(a, b, int(u["H"][i]) if chain == "hot" else 0, T)
+    got, fin = [], 0
+    for g in range(len(a) // GROUP):
+        lo = GROUP * g
+        fl, fin = ref_chain(a[lo:lo + GROUP], b[lo:lo + GROUP], int(u["Hg"][i, g]) if chain == "v1hot" else 0, GROUP // 32)
+        got.append(all(fl))
+    return got, fin
+
+
+def h_ptr(dev: Dev, chain: str, u: dict) -> int:
+    if chain == "hot":
+        return dev.put(u["H"])
+    if chain == "v1hot":
+        return dev.put(np.ascontiguousarray(u["Hg"]))
+    return 0
+
+
 # ---- items ---------------------------------------------------------------------------------------------------------------
 
-def selftest(dev: Dev, pool: Pool, fh) -> dict:
-    k, rows, T = 1024, 128, 32
-    res = {"item": "selftest", "gates": []}
+def selftest(dev: Dev, pool: Pool, fh, mode: str) -> dict:
+    k, rows = 1024, 128
+    grouped = mode == "v1hot"
+    T = k // GROUP if grouped else k // 32
+    res = {"item": "selftest", "mode": mode, "gates": []}
     ok = True
     for fam, words_side in SELFTEST:
-        u = prep(pool, fam, k, rows, 1)
+        u = prep(pool, fam, k, rows, 1, mode)
         g = {"gate": f"selftest/{fam}/k{k}", "rows": rows}
         A, B = u["sides"]["A"], u["sides"]["B"]
         fa, fb = form_host(A, rows, k), form_host(B, rows, k)
@@ -219,32 +273,38 @@ def selftest(dev: Dev, pool: Pool, fh) -> dict:
                 (np.array(FB.alpha, np.uint32) != B["alpha"]).sum() + (seed_a != u["seed_a"]))
             Hr, _ = HS.hot_words(seed_a, FA, FB, "const")
             g["H_vs_hot_words"] = int((np.array(Hr, np.uint32) != u["H"]).sum())
+            if grouped:
+                Hgr = HV.hot_group_words(seed_a, FA, k // GROUP)
+                g["Hg_vs_hot_group_words"] = int((np.array(Hgr, np.uint32) != u["Hg"]).sum())
         da, db = form_side(dev, A), form_side(dev, B)
         ca = dev.fetch(da, rows * k, np.uint8).reshape(rows, k)
         cb = dev.fetch(db, rows * k, np.uint8).reshape(rows, k)
         g["form_vs_form_v1"] = int((ca != fa).sum() + (cb != fb).sum())
         g["H_closed_form_mismatches"] = closed_form_h(A["alpha"], A["rho"], u["H"], u["below_floor"])
-        hp = dev.put(u["H"])
-        for chain, h in (("hot", hp), ("zero", 0)):
+        if grouped:
+            g.update(hg_gates(u))
+        for chain in MODE_CHAINS[mode]:
             got = {}
-            fin, counts = chain_bits(dev, da, db, rows, rows, k, h,
-                                     lambda layout, t0, planes: got.__setitem__(layout, planes.copy()))
+            hp = h_ptr(dev, chain, u)
+            fin, counts = chain_bits(dev, da, db, rows, rows, k, hp,
+                                     lambda layout, t0, planes: got.__setitem__(layout, planes.copy()), grouped)
+            if hp:
+                dev.free(hp)
             bad_f = bad_w = bad_t = 0
             for i in range(words_side):
                 for j in range(words_side):
-                    want, wfin = ref_chain(ca[i].tolist(), cb[j].tolist(), int(u["H"][i]) if chain == "hot" else 0, T)
+                    want, wfin = ref_planes(mode, chain, ca[i].tolist(), cb[j].tolist(), u, i, T)
                     for t in range(T):
                         bad_f += bit(got["rows"], t, i, j) != want[t]
                         bad_t += bit(got["cols"], t, j, i) != want[t]
                     bad_w += not same_word(int(fin[i, j]), wfin)
             g[f"{chain}_flag_mismatches"], g[f"{chain}_cols_mismatches"], g[f"{chain}_word_mismatches"] = bad_f, bad_t, bad_w
             g[f"{chain}_words_checked"] = words_side * words_side
-            g[f"{chain}_steps_exact"] = round(float(counts.sum() / (rows * rows * T)), 6)
-        dev.free(hp)
+            g[f"{chain}_planes_exact"] = round(float(counts.sum() / (rows * rows * T)), 6)
         dev.free(da)
         dev.free(db)
         g["ok"] = all(v == 0 for x, v in g.items() if x.endswith(("mismatches", "_vs_hot_start_units", "_vs_hot_words",
-                                                                   "form_vs_form_v1")))
+                                                                   "_vs_hot_group_words", "form_vs_form_v1")))
         ok &= g["ok"]
         emit(fh, g)
         res["gates"].append(g)
@@ -263,9 +323,10 @@ def same_word(x: int, y: int) -> bool:
     return x == y or (x & 0x7FFFFFFF) == 0 == (y & 0x7FFFFFFF)
 
 
-def unit(dev: Dev, pool: Pool, fh, out_dir: Path, u: dict, seed: int) -> dict:
+def unit(dev: Dev, pool: Pool, fh, out_dir: Path, u: dict, seed: int, mode: str) -> dict:
     fam, k, m = u["fam"], u["k"], u["rows"]
-    n, T = m, k // 32
+    grouped = mode == "v1hot"
+    n, T = m, (k // GROUP if grouped else k // 32)
     name = f"{fam}@{u['u']}"
     t_start = time.time()
     rng = np.random.default_rng([seed, u["u"], *hashlib.sha256(fam.encode()).digest()[:4]])
@@ -277,7 +338,10 @@ def unit(dev: Dev, pool: Pool, fh, out_dir: Path, u: dict, seed: int) -> dict:
     np.save(ud / "okA.npy", A["ok"])
     np.save(ud / "okB.npy", B["ok"])
     np.save(ud / "H.npy", u["H"])
-    res = {"item": f"unit:{name}", "family": fam, "unit": u["u"], "salt": u["salt"], "m": m, "n": n, "k": k,
+    if grouped:
+        np.save(ud / "Hg.npy", u["Hg"])
+    res = {"item": f"unit:{name}", "mode": mode, "family": fam, "unit": u["u"], "salt": u["salt"], "m": m, "n": n, "k": k,
+           "planes": T, "atoms_per_plane": GROUP // 32 if grouped else 1,
            "forming": "pearl_c.form_v1 on SM120_UNPROMOTED (host: s5_stats, eprime, alpha*x; card: the atom, Pearl's cast)",
            "hot_rule": "const", "c0": u["c0"], "rows_admitted": {"A": int(A["ok"].sum()), "B": int(B["ok"].sum())},
            "A_rows_below_floor_sized_at_1": int(u["below_floor"].sum()),
@@ -298,40 +362,48 @@ def unit(dev: Dev, pool: Pool, fh, out_dir: Path, u: dict, seed: int) -> dict:
             bad += P.f32_to_fp8(P.f32_of_bits(w)) != codes[r[q], l[q]]
     res["form_gate"] = {"rows": 4, "elements": 8192, "mismatches": bad}
     res["H_closed_form_mismatches"] = closed_form_h(A["alpha"], A["rho"], u["H"], u["below_floor"])
+    if grouped:
+        res.update(hg_gates(u))
     t_form = time.time()
     ii, jj = rng.integers(0, m, 64), rng.integers(0, n, 64)
-    hp = dev.put(u["H"])
     res["chains"] = {}
-    for chain, h in (("hot", hp), ("zero", 0)):
+    for chain in MODE_CHAINS[mode]:
         files = {lay: open(ud / f"{chain}.{lay}.u32", "wb") for lay in ("rows", "cols")}
         sample = {"rows": np.zeros((64, T), bool), "cols": np.zeros((64, T), bool)}
 
-        def sink(layout, t0, planes):
+        def sink(layout, p0, planes):
             planes.tofile(files[layout])
+            nt = planes.shape[0]
             if layout == "rows":
-                sample["rows"][:, t0:t0 + 32] = ((planes[:, ii, jj >> 5] >> (jj & 31)) & 1).T.astype(bool)
+                sample["rows"][:, p0:p0 + nt] = ((planes[:, ii, jj >> 5] >> (jj & 31)) & 1).T.astype(bool)
             else:
-                sample["cols"][:, t0:t0 + 32] = ((planes[:, jj, ii >> 5] >> (ii & 31)) & 1).T.astype(bool)
+                sample["cols"][:, p0:p0 + nt] = ((planes[:, jj, ii >> 5] >> (ii & 31)) & 1).T.astype(bool)
 
-        fin, counts = chain_bits(dev, da, db, m, n, k, h, sink)
+        hp = h_ptr(dev, chain, u)
+        fin, counts = chain_bits(dev, da, db, m, n, k, hp, sink, grouped)
+        if hp:
+            dev.free(hp)
         for fobj in files.values():
             fobj.close()
         bf = bc = bw = 0
         for q in range(64):
-            want, wfin = ref_chain(ca[ii[q]].tolist(), cb[jj[q]].tolist(), int(u["H"][ii[q]]) if chain == "hot" else 0, T)
+            want, wfin = ref_planes(mode, chain, ca[ii[q]].tolist(), cb[jj[q]].tolist(), u, int(ii[q]), T)
             want = np.array(want, bool)
             bf += int((sample["rows"][q] != want).sum())
             bc += int((sample["cols"][q] != want).sum())
             bw += not same_word(int(fin[ii[q], jj[q]]), wfin)
-        res["chains"][chain] = {"gate": {"words": 64, "atoms": T, "flag_mismatches": bf, "cols_mismatches": bc,
+        res["chains"][chain] = {"gate": {"words": 64, "planes": T, "flag_mismatches": bf, "cols_mismatches": bc,
                                          "word_mismatches": bw},
-                                "exact_per_atom": counts.tolist(), "steps_exact": round(float(counts.sum() / (m * n * T)), 6),
+                                "exact_per_plane": counts.tolist(),
+                                "planes_exact": round(float(counts.sum() / (m * n * T)), 6),
                                 "bytes_per_layout": T * m * n // 8}
+        if not grouped:
+            res["chains"][chain]["exact_per_atom"] = res["chains"][chain]["exact_per_plane"]
+            res["chains"][chain]["steps_exact"] = res["chains"][chain]["planes_exact"]
         del fin
-    dev.free(hp)
     dev.free(da)
     dev.free(db)
-    res["ok"] = (bad == 0 and res["H_closed_form_mismatches"] == 0 and
+    res["ok"] = (bad == 0 and all(v == 0 for x, v in res.items() if x.endswith("mismatches")) and
                  all(v == 0 for c in res["chains"].values() for x, v in c["gate"].items() if x.endswith("mismatches")))
     res["seconds"] = {"form_and_gate": round(t_form - t_start, 1), "total": round(time.time() - t_start, 1)}
     return res
@@ -349,6 +421,8 @@ def main() -> None:
     ap.add_argument("--rows", type=int, default=8192)
     ap.add_argument("--procs", type=int, default=8)
     ap.add_argument("--budget-min", type=float, default=5.5)
+    ap.add_argument("--mode", choices=tuple(MODE_CHAINS), default="v2hot",
+                    help="v2hot: per atom, from H_i and +0; v1hot: per v1 group, from H_{i,g} and +0")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--nvcc", default=shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc")
     ap.add_argument("--out", default=None)
@@ -357,13 +431,13 @@ def main() -> None:
     out_dir = Path(args.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out")
     out_dir.mkdir(parents=True, exist_ok=True)
     fh = open(out_dir / "log.jsonl", "a")
-    code = load_ref(args.ref)
+    code = load_ref(args.ref, args.mode)
     items = ["selftest", *(f"unit:{f}@{u}" for u in range(1, args.units + 1) for f in args.families.split(",") if f)]
     state_path = out_dir / "state.json"
     state = json.loads(state_path.read_text()) if state_path.exists() else {"done": [], "starts": {}}
     todo = [x for x in items if x not in state["done"]]
     if not todo:
-        write_summary(out_dir, items, fh)
+        write_summary(out_dir, items, fh, args.mode)
         return
 
     visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
@@ -390,13 +464,13 @@ def main() -> None:
         sys.exit(5)
     dev.load(cubin)
 
-    pool = Pool(args.procs, initializer=load_ref, initargs=(args.ref,))
+    pool = Pool(args.procs, initializer=load_ref, initargs=(args.ref, args.mode))
     ahead = ThreadPoolExecutor(1)
     unit_secs: list[float] = []
 
     def prep_of(item):
         fam, _, u = item.split(":", 1)[1].partition("@")
-        return ahead.submit(prep, pool, fam, args.k, args.rows, int(u))
+        return ahead.submit(prep, pool, fam, args.k, args.rows, int(u), args.mode)
 
     def fits(units: int) -> bool:
         return time.time() - t0 + units * (max(unit_secs) if unit_secs else 150.0) <= 60 * args.budget_min
@@ -417,11 +491,11 @@ def main() -> None:
             sys.exit(1)
         ts = time.time()
         if item == "selftest":
-            res = selftest(dev, pool, fh)
+            res = selftest(dev, pool, fh, args.mode)
         else:
             u = (nxt or prep_of(item)).result()
             nxt = prep_of(todo[q + 1]) if q + 1 < len(todo) and fits(2) else None
-            res = unit(dev, pool, fh, out_dir, u, args.seed)
+            res = unit(dev, pool, fh, out_dir, u, args.seed, args.mode)
             del u
         res.update({"identity": ident, "build_cubin_sha256": rec["cubin_sha256"], "code": code, "clocks": nvml.read(),
                     "clock_label": args.clock_label})
@@ -434,22 +508,23 @@ def main() -> None:
             (out_dir / "units" / item.split(":", 1)[1] / "unit.json").write_text(json.dumps(res, indent=1) + "\n")
         (out_dir / f"{stem}.json").write_text(json.dumps(res, indent=1) + "\n")
         emit(fh, {"done": {x: res.get(x) for x in ("item", "rows_admitted", "H_exponents", "seconds")} |
-                  {c: res["chains"][c]["steps_exact"] for c in res.get("chains", {})}})
+                  {c: res["chains"][c]["planes_exact"] for c in res.get("chains", {})}})
         state["done"].append(item)
         state_path.write_text(json.dumps(state))
         if item != "selftest":
             unit_secs.append(time.time() - ts)
     pool.close()
-    write_summary(out_dir, items, fh)
+    write_summary(out_dir, items, fh, args.mode)
 
 
-def write_summary(out_dir: Path, items: list[str], fh) -> None:
+def write_summary(out_dir: Path, items: list[str], fh, mode: str) -> None:
     rows = []
     for item in items[1:]:
         r = json.loads((out_dir / f"{item.replace(':', '-')}.json").read_text())
         rows.append({"item": item, "family": r["family"], "unit": r["unit"], "rows_admitted": r["rows_admitted"],
-                     "H_exponents": r["H_exponents"], **{f"steps_exact_{c}": r["chains"][c]["steps_exact"] for c in CHAINS}})
-    doc = {"tool": "pouw_sm120_exact_hot", "rows": rows,
+                     "H_exponents": r["H_exponents"],
+                     **{f"planes_exact_{c}": r["chains"][c]["planes_exact"] for c in MODE_CHAINS[mode]}})
+    doc = {"tool": "pouw_sm120_exact_hot", "mode": mode, "rows": rows,
            "selftest": json.loads((out_dir / "selftest.json").read_text())["gates"]}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")

@@ -119,11 +119,13 @@ constexpr int FM = 64, FN = 64, FK = 128;
 
 // The unpromoted chain (one FP32 accumulator over all of k, as sm120_chain's chain_unpromoted) on a 64 x 64 tile per CTA,
 // 4 warps of 32 x 32, and each step's exactness: flags[w][i][j] bit b is atom 32w + b of word (i, j); out[i][j] is the
-// final word.  Every word of row i starts at the FP32 word H[i] (v2-hot's salted start), or at +0 when H is null.
+// final word.  With hs = 0, every word of row i starts at the FP32 word H[i] (v2-hot's salted start), or at +0 when H is
+// null.  With hs = k / 128, the accumulator restarts at every 128-deep group g (atoms 4g .. 4g + 3, one v1 group) from
+// H[i * hs + g] (v1-hot's H_{i,g}), or from +0 when H is null (v1's groups); out is then the last group's word.
 // m, n % 64 == 0, k % 1024 == 0.
 extern "C" __global__ void __launch_bounds__(128) chain_flags(const uint8_t* __restrict__ A, const uint8_t* __restrict__ B,
                                                               uint32_t* __restrict__ flags, uint32_t* __restrict__ out, int m,
-                                                              int n, int k, const uint32_t* __restrict__ H) {
+                                                              int n, int k, const uint32_t* __restrict__ H, int hs) {
   __shared__ __align__(16) uint8_t sA[FM * FK];
   __shared__ __align__(16) uint8_t sB[FN * FK];
   const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5, wm = warp >> 1, wn = warp & 1, gid = lane >> 2, tig = lane & 3;
@@ -141,6 +143,18 @@ extern "C" __global__ void __launch_bounds__(128) chain_flags(const uint8_t* __r
   }
 
   for (int kt = 0; kt < k / FK; ++kt) {
+    if (hs) {
+#pragma unroll
+      for (int i = 0; i < 2; ++i) {
+        const int r = m0 + wm * 32 + i * 16 + gid;
+        const float h0 = H ? __uint_as_float(H[static_cast<size_t>(r) * hs + kt]) : 0.f;
+        const float h1 = H ? __uint_as_float(H[static_cast<size_t>(r + 8) * hs + kt]) : 0.f;
+#pragma unroll
+        for (int j = 0; j < 4; ++j)
+#pragma unroll
+          for (int e = 0; e < 4; ++e) acc[i][j][e] = e < 2 ? h0 : h1;
+      }
+    }
     __syncthreads();
     for (int c = tid; c < FM * FK / 16; c += 128) {
       const int row = c >> 3, ch = c & 7;
@@ -259,18 +273,26 @@ extern "C" __global__ void window_bits(const uint32_t* __restrict__ flags, uint3
   }
 }
 
-// Each atom's exactness as bitsets, for atoms t0 .. t0 + nt - 1 (all within flag plane t0 / 32): with tr = 0, row bitsets,
-// M[t - t0][i][j / 32] bit j % 32; with tr = 1, column bitsets, M[t - t0][j][i / 32] bit i % 32.  One warp per 32
-// consecutive words of a row (tr = 0) or a column (tr = 1).  m, n % 32 == 0, m * n % blockDim == 0, t0 % 32 + nt <= 32.
+// Exactness over runs of w atoms as bitsets: plane q is atoms t0 + q w .. t0 + q w + w - 1 all exact (w = 1: each atom's
+// flag; w = 4: a v1 group's).  With tr = 0, row bitsets, M[q][i][j / 32] bit j % 32; with tr = 1, column bitsets,
+// M[q][j][i / 32] bit i % 32.  One warp per 32 consecutive words of a row (tr = 0) or a column (tr = 1).
+// m, n % 32 == 0, m * n % blockDim == 0, w in {1, 2, 4, 8, 16}, t0 % w == 0.
 extern "C" __global__ void atom_bits(const uint32_t* __restrict__ flags, uint32_t* __restrict__ M, int m, int n, int t0, int nt,
-                                     int tr) {
+                                     int tr, int w) {
   const size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
   if (idx >= static_cast<size_t>(m) * n) return;
   const size_t i = tr ? idx % m : idx / n, j = tr ? idx / m : idx % n;
-  const uint32_t f = flags[static_cast<size_t>(t0 >> 5) * m * n + i * n + j];
   const size_t dst = tr ? j * (m >> 5) + (i >> 5) : i * (n >> 5) + (j >> 5), plane = static_cast<size_t>(m) * (n >> 5);
+  const uint32_t run = (1u << w) - 1u;
+  int pl = -1;
+  uint32_t f = 0;
   for (int q = 0; q < nt; ++q) {
-    const uint32_t mask = __ballot_sync(0xFFFFFFFFu, (f >> ((t0 + q) & 31)) & 1u);
+    const int t = t0 + q * w;
+    if ((t >> 5) != pl) {
+      pl = t >> 5;
+      f = flags[static_cast<size_t>(pl) * m * n + i * n + j];
+    }
+    const uint32_t mask = __ballot_sync(0xFFFFFFFFu, ((f >> (t & 31)) & run) == run);
     if ((threadIdx.x & 31) == 0) M[static_cast<size_t>(q) * plane + dst] = mask;
   }
 }

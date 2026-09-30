@@ -18,6 +18,10 @@ only words whose A row and B row Π admits counting (`okA.npy`, `okB.npy`):
 Per unit and chain: t0 (the first start from which no shape of the family is found at any width), the coverage before
 t0 per width, and the closest approach.  The pass condition for the hot chain is no free-family shape at any start.
 
+--mode v1hot searches hot.py --mode v1hot's units (chains `v1hot` and `v1`): a plane is one v1 group, and each group alone
+(width 1) against the free 4-atom shapes of pearlc_v1_hot.FREE4 (FREE4_V1: the table's four, plus 1,536 x 1,200 and
+2,304 x 800); t0 counts groups.  The pass condition is no free 4-atom shape in any group on the v1hot chain.
+
 Restartable: one .npz and one .json per (unit, chain) in <out>/search, a state file, exit 99 once --budget-min is spent
 while items remain or hot.py has units left to write; exit 0 after summary.json.
     python3 benchmarks/pouw/sm120_exact/hot_search.py --units-dir <hot.py's out> --out DIR [--procs 8]
@@ -39,7 +43,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(1, str(HERE.parent))
 import run_result  # noqa: E402
-from hot import CHAINS, FAMILIES  # noqa: E402
+from hot import FAMILIES, MODE_CHAINS  # noqa: E402
 
 PRICED = {8: [(2000, 2048), (1024, 4000), (1440, 2304), (1152, 2880), (960, 5184)],
           9: [(720, 1728), (864, 1440), (432, 2880), (360, 3456), (1152, 1152), (576, 2304), (288, 4608)],
@@ -63,6 +67,10 @@ FREE_ONLY = {4: [(1920, 960), (2400, 768), (1600, 1152), (3840, 640)],
 WIDTHS = sorted(set(PRICED) | set(FREE_ONLY))
 SHAPES = {w: {"priced": PRICED.get(w, []), "free": PRICED.get(w, []) + FREE_ONLY.get(w, [])} for w in WIDTHS}
 SIDES = {w: sorted({x for s in SHAPES[w]["free"] for x in s}) for w in WIDTHS}
+# v1hot: a plane is one v1 group (4 atoms), searched alone against the free 4-atom shapes of pearlc_v1_hot.FREE4
+FREE4_V1 = [(1920, 960), (2400, 768), (1600, 1152), (1536, 1200), (2304, 800), (3840, 640)]
+TABLES = {"v2hot": (WIDTHS, SHAPES, SIDES),
+          "v1hot": ([1], {1: {"priced": [], "free": FREE4_V1}}, {1: sorted({x for s in FREE4_V1 for x in s})})}
 
 
 def popc(x: np.ndarray) -> np.ndarray:
@@ -106,7 +114,8 @@ def found_ratio(Rc: dict, Rr: dict, shapes: list) -> float:
 
 def search_starts(task) -> dict:
     """The (t, w) results for the given starts of one (unit, chain)."""
-    rows_path, cols_path, m, n, T, okA, okB, starts = task
+    rows_path, cols_path, m, n, T, okA, okB, starts, mode = task
+    widths, shapes_of, sides_of = TABLES[mode]
     RB = np.memmap(rows_path, np.uint64, "r", shape=(T, m, n // 64))
     CB = np.memmap(cols_path, np.uint64, "r", shape=(T, n, m // 64))
     maskB = np.packbits(okB, bitorder="little").view(np.uint64)
@@ -118,7 +127,7 @@ def search_starts(task) -> dict:
         curC = CB[t] & maskA
         curC[~okB] = 0
         done = t + 1
-        for w in WIDTHS:
+        for w in widths:
             if t + w > T:
                 break
             for s in range(done, t + w):
@@ -130,12 +139,12 @@ def search_starts(task) -> dict:
             total = int(rc.sum())
             if total == 0:
                 break
-            sides = SIDES[w]
+            sides = sides_of[w]
             Rc = dict(zip(sides, prefix_rows(curC, cc, sides).tolist()))
             Rr = dict(zip(sides, prefix_rows(curR, rc, sides).tolist()))
             rec = {"exact": total, "Rc": [Rc[x] for x in sides], "Rr": [Rr[x] for x in sides]}
             for fam in ("priced", "free"):
-                shapes = SHAPES[w][fam]
+                shapes = shapes_of[w][fam]
                 ratio = found_ratio(Rc, Rr, shapes) if shapes else 0.0
                 rec[f"ratio_{fam}"] = ratio
                 cov = 0
@@ -148,17 +157,19 @@ def search_starts(task) -> dict:
     return out
 
 
-def search_item(pool: Pool, ud: Path, chain: str, procs: int) -> tuple[dict, dict]:
+def search_item(pool: Pool, ud: Path, chain: str, procs: int, mode: str = "v2hot") -> tuple[dict, dict]:
     meta = json.loads((ud / "unit.json").read_text())
-    m, n, T = meta["m"], meta["n"], meta["k"] // 32
+    m, n, T = meta["m"], meta["n"], meta.get("planes", meta["k"] // 32)
+    widths, shapes_of, sides_of = TABLES[mode]
     okA, okB = np.load(ud / "okA.npy"), np.load(ud / "okB.npy")
     starts = [list(range(q, T, procs)) for q in range(procs)]
-    parts = pool.map(search_starts, [(str(ud / f"{chain}.rows.u32"), str(ud / f"{chain}.cols.u32"), m, n, T, okA, okB, s)
+    parts = pool.map(search_starts, [(str(ud / f"{chain}.rows.u32"), str(ud / f"{chain}.cols.u32"), m, n, T, okA, okB, s, mode)
                                      for s in starts])
     res = {k_: v for p in parts for k_, v in p.items()}
     words = int(okA.sum()) * int(okB.sum())
     arrays, summary = {}, {"unit": ud.name, "chain": chain, "m": m, "n": n, "T": T, "admitted_words": words,
-                           "exact_per_atom": meta["chains"][chain]["exact_per_atom"]}
+                           "mode": mode, "atoms_per_plane": meta.get("atoms_per_plane", 1),
+                           "exact_per_plane": meta["chains"][chain].get("exact_per_plane", meta["chains"][chain].get("exact_per_atom"))}
     for fam in ("priced", "free"):
         hits = [(t, w) for (t, w), r in res.items() if r[f"ratio_{fam}"] >= 1]
         t0 = 1 + max(t for t, _ in hits) if hits else 0
@@ -169,10 +180,10 @@ def search_item(pool: Pool, ud: Path, chain: str, procs: int) -> tuple[dict, dic
             "closest": {"t": best[0][0], "w": best[0][1], "ratio": round(best[1][f"ratio_{fam}"], 6)} if best else None,
             "coverage_before_t0": {str(w): round(max((r[f"cover_{fam}"] for (t, w_), r in res.items() if w_ == w and t < t0),
                                                      default=0) / (m * n), 6)
-                                   for w in WIDTHS if SHAPES[w][fam]}}
-    for w in WIDTHS:
+                                   for w in widths if shapes_of[w][fam]}}
+    for w in widths:
         L = T - w + 1
-        Rc = np.zeros((L, len(SIDES[w])), np.int32)
+        Rc = np.zeros((L, len(sides_of[w])), np.int32)
         Rr = np.zeros_like(Rc)
         ex = np.zeros(L, np.int64)
         cov = np.zeros((L, 2), np.int64)
@@ -183,10 +194,10 @@ def search_item(pool: Pool, ud: Path, chain: str, procs: int) -> tuple[dict, dic
                 Rc[t], Rr[t], ex[t] = r["Rc"], r["Rr"], r["exact"]
                 cov[t] = r["cover_priced"], r["cover_free"]
                 rat[t] = r["ratio_priced"], r["ratio_free"]
-        arrays.update({f"w{w}_sides": np.array(SIDES[w]), f"w{w}_Rc": Rc, f"w{w}_Rr": Rr, f"w{w}_exact": ex,
+        arrays.update({f"w{w}_sides": np.array(sides_of[w]), f"w{w}_Rc": Rc, f"w{w}_Rr": Rr, f"w{w}_exact": ex,
                        f"w{w}_cover": cov, f"w{w}_ratio": rat})
     summary["density"] = {str(w): [round(float(arrays[f"w{w}_exact"].max()) / max(words, 1), 6),
-                                   round(float(arrays[f"w{w}_exact"].min()) / max(words, 1), 6)] for w in WIDTHS}
+                                   round(float(arrays[f"w{w}_exact"].min()) / max(words, 1), 6)] for w in widths}
     return summary, arrays
 
 
@@ -206,7 +217,8 @@ def selftest() -> None:
         rp, cp = Path(d) / "r.u32", Path(d) / "c.u32"
         np.packbits(E, axis=2, bitorder="little").tofile(rp)
         np.packbits(E.transpose(0, 2, 1), axis=2, bitorder="little").tofile(cp)
-        res = search_starts((str(rp), str(cp), m, n, T, okA, okB, list(range(T))))
+        res = search_starts((str(rp), str(cp), m, n, T, okA, okB, list(range(T)), "v2hot"))
+        res1 = search_starts((str(rp), str(cp), m, n, T, okA, okB, list(range(T)), "v1hot"))
     bad = 0
     for (t, w), r in res.items():
         ok = np.logical_and.reduce(E[t:t + w], axis=0)
@@ -222,6 +234,8 @@ def selftest() -> None:
     want = {(3, 8, "priced"): True, (3, 9, "priced"): True, (4, 9, "free"): True, (3, 12, "free"): False,
             (2, 4, "free"): False, (9, 4, "free"): True, (10, 4, "free"): False}
     wrong = [x for x, v in want.items() if hit(*x) != v]
+    want1 = {2: False, 3: True, 12: True, 13: False}
+    wrong += [("v1hot", t) for t, v in want1.items() if (res1.get((t, 1), {}).get("ratio_free", 0) >= 1) != v]
     print(f"selftest: {len(res)} (t, w) cells, {bad} recount mismatches; planted (3, 8): priced ratio "
           f"{planted['ratio_priced']:.3f}, cover {planted['cover_priced']} (want 4096000); found-test mismatches {wrong}")
     if bad or wrong or planted["cover_priced"] != 2000 * 2048:
@@ -237,6 +251,8 @@ def main() -> None:
     ap.add_argument("--budget-min", type=float, default=5.5)
     ap.add_argument("--out", default=None)
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--mode", choices=tuple(TABLES), default="v2hot",
+                    help="v2hot: every width at every atom; v1hot: each v1 group against the free 4-atom shapes")
     args = ap.parse_args()
     if args.selftest:
         selftest()
@@ -247,7 +263,7 @@ def main() -> None:
     (out_dir / "search").mkdir(parents=True, exist_ok=True)
     fh = open(out_dir / "log.jsonl", "a")
     names = [f"{f}@{u}" for u in range(1, args.units + 1) for f in args.families.split(",") if f]
-    items = [(nm, c) for nm in names for c in CHAINS]
+    items = [(nm, c) for nm in names for c in MODE_CHAINS[args.mode]]
     state_path = out_dir / "state.json"
     state = json.loads(state_path.read_text()) if state_path.exists() else {"done": [], "starts": {}}
     pool = Pool(args.procs)
@@ -266,7 +282,7 @@ def main() -> None:
             fh.write(json.dumps({"failed": key, "reason": "started 3 times without finishing"}) + "\n")
             sys.exit(1)
         ts = time.time()
-        summary, arrays = search_item(pool, src / "units" / nm, chain, args.procs)
+        summary, arrays = search_item(pool, src / "units" / nm, chain, args.procs, args.mode)
         summary["seconds"] = round(time.time() - ts, 1)
         np.savez_compressed(out_dir / "search" / f"{key}.npz", **arrays)
         (out_dir / "search" / f"{key}.json").write_text(json.dumps(summary, indent=1) + "\n")
@@ -282,18 +298,20 @@ def main() -> None:
     if left:
         fh.write(json.dumps({"chunk_end": len(left), "seconds": round(time.time() - t0, 1)}) + "\n")
         sys.exit(99)
-    write_summary(out_dir, names, fh)
+    write_summary(out_dir, names, fh, args.mode)
 
 
-def write_summary(out_dir: Path, names: list[str], fh) -> None:
+def write_summary(out_dir: Path, names: list[str], fh, mode: str = "v2hot") -> None:
+    hot, zero = MODE_CHAINS[mode]
+    widths, shapes_of, _ = TABLES[mode]
     per = {}
     for nm in names:
-        for c in CHAINS:
+        for c in (hot, zero):
             per[f"{nm}.{c}"] = json.loads((out_dir / "search" / f"{nm}.{c}.json").read_text())
     fams = sorted({nm.split("@")[0] for nm in names})
     table = {}
     for f in fams:
-        for c in CHAINS:
+        for c in (hot, zero):
             rs = [per[f"{nm}.{c}"] for nm in names if nm.split("@")[0] == f]
             table[f"{f}.{c}"] = {
                 fam: {"t0": max(r[fam]["t0"] for r in rs), "units_with_shape": sum(r[fam]["found"] > 0 for r in rs),
@@ -301,20 +319,24 @@ def write_summary(out_dir: Path, names: list[str], fh) -> None:
                       "coverage_before_t0": {w: max(r[fam]["coverage_before_t0"].get(w, 0) for r in rs)
                                              for w in rs[0][fam]["coverage_before_t0"]}}
                 for fam in ("priced", "free")}
-    hot_free = sum(table[f"{f}.hot"]["free"]["units_with_shape"] for f in fams)
-    hot_priced = sum(table[f"{f}.hot"]["priced"]["units_with_shape"] for f in fams)
-    doc = {"tool": "pouw_sm120_exact_hot_search", "pass_condition": "no free-family shape at any start on the hot chain",
+    hot_free = sum(table[f"{f}.{hot}"]["free"]["units_with_shape"] for f in fams)
+    hot_priced = sum(table[f"{f}.{hot}"]["priced"]["units_with_shape"] for f in fams)
+    cond = {"v2hot": "no free-family shape at any start on the hot chain",
+            "v1hot": "no free 4-atom shape in any group on the v1hot chain"}[mode]
+    doc = {"tool": "pouw_sm120_exact_hot_search", "mode": mode, "chains": [hot, zero], "pass_condition": cond,
            "passed": hot_free == 0, "hot_units_with_free_shape": hot_free, "hot_units_with_priced_shape": hot_priced,
-           "families": table, "shapes": {str(w): SHAPES[w] for w in WIDTHS}}
+           "families": table, "shapes": {str(w): shapes_of[w] for w in widths}}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")
     fh.write(json.dumps({"summary": {x: doc[x] for x in ("passed", "hot_units_with_free_shape", "hot_units_with_priced_shape")}}) + "\n")
-    zero_t0 = max(table[f"{f}.zero"]["priced"]["t0"] for f in fams)
+    fam0 = "priced" if mode == "v2hot" else "free"
+    zero_t0 = max(table[f"{f}.{zero}"][fam0]["t0"] for f in fams)
     run_result.write(path, True, "sm120-exact-hot-search",
-                     f"{len(names)} units: hot chain, units with a free-family shape {hot_free}, priced {hot_priced}; "
-                     f"+0 chain priced t0 up to {zero_t0}",
+                     f"{mode}, {len(names)} units: {hot} chain, units with a free-family shape {hot_free}, priced {hot_priced}; "
+                     f"{zero} chain {fam0} t0 up to {zero_t0}",
                      [("units", len(names), "count"), ("hot_units_with_free_shape", hot_free, "count"),
-                      ("hot_units_with_priced_shape", hot_priced, "count"), ("zero_priced_t0_max", zero_t0, "atoms")])
+                      ("hot_units_with_priced_shape", hot_priced, "count"),
+                      (f"zero_{fam0}_t0_max", zero_t0, "atoms" if mode == "v2hot" else "groups")])
 
 
 if __name__ == "__main__":

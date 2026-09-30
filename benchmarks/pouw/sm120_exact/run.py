@@ -121,19 +121,22 @@ class Dev(ChainDev):
         self.free(out)
         return mask
 
-    def chain(self, da: int, db: int, m: int, n: int, k: int, h: int = 0) -> tuple[int, int]:
-        """The chain's flags and final words; h: a device pointer to m FP32 start words (v2-hot's H_i), 0 for +0."""
+    def chain(self, da: int, db: int, m: int, n: int, k: int, h: int = 0, hs: int = 0) -> tuple[int, int]:
+        """The chain's flags and final words; h: a device pointer to m FP32 start words (v2-hot's H_i), 0 for +0; with
+        hs = k / 128, each 128-deep group restarts from h's m x hs words (v1-hot's H_{i,g}) or +0."""
+        assert hs in (0, k // 128)
         flags, out = self.alloc(4 * (k // 1024) * m * n), self.alloc(4 * m * n)
         self.launch("chain_flags", (n // 64, m // 64, 1), 128, 0,
-                    [u64(da), u64(db), u64(flags), u64(out), i32(m), i32(n), i32(k), u64(h)])
+                    [u64(da), u64(db), u64(flags), u64(out), i32(m), i32(n), i32(k), u64(h), i32(hs)])
         self.sync()
         return flags, out
 
-    def atom_bits(self, flags: int, M: int, m: int, n: int, t0: int, nt: int, tr: int) -> None:
-        """Atoms t0 .. t0 + nt - 1 of the flags as bitsets in M (row bitsets, or column bitsets with tr), on the card."""
-        assert t0 % 32 + nt <= 32
+    def atom_bits(self, flags: int, M: int, m: int, n: int, t0: int, nt: int, tr: int, w: int = 1) -> None:
+        """Planes q < nt of the flags as bitsets in M (row bitsets, or column bitsets with tr), on the card: atoms
+        t0 + q w .. t0 + q w + w - 1 all exact."""
+        assert w in (1, 2, 4, 8, 16) and t0 % w == 0 and nt <= 32
         self.launch("atom_bits", ((m * n + 255) // 256, 1, 1), 256, 0,
-                    [u64(flags), u64(M), i32(m), i32(n), i32(t0), i32(nt), i32(tr)])
+                    [u64(flags), u64(M), i32(m), i32(n), i32(t0), i32(nt), i32(tr), i32(w)])
         self.sync()
 
     def windows(self, flags: int, M: int, m: int, n: int, T: int, t0: int, nt: int, tr: int) -> np.ndarray:
