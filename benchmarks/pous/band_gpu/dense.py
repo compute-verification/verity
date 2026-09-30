@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import torch
 
-from verity_vllm.engine.pous import codec
+from . import codec
 
 
 def _initial(tags: torch.Tensor, blocks: int, width: int) -> torch.Tensor:
@@ -172,7 +172,7 @@ class _Chunked:
 
     def permute(self, row0: int, xsrc: torch.Tensor | None = None, xidx: torch.Tensor | None = None) -> None:
         """Π₂ on rows `row0 ..`; with `xsrc`, round 1 reads each row's X from row `xidx[r]` of `xsrc` (the pad where < 0)."""
-        from verity_vllm.engine.pous import native
+        from . import native
 
         for start, n, split in self.launches(row0, allow_split=xsrc is None):
             native.ext().feistel_chunked(self.words, start, n, self.half // 8, codec.PI_DOMAIN, CHUNKED_THREADS[0],
@@ -199,7 +199,7 @@ def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> tor
         else:
             st.pad(slice(first, pad_end))
             if pad_end < r:
-                from verity_vllm.engine.pous import native
+                from . import native
 
                 native.ext().chunked_gather(st.words, pad_end, c_flat, (base[pad_end:] + blk[pad_end:] - j).contiguous(),
                                             width // 8)
@@ -209,7 +209,7 @@ def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> tor
 
 
 def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.Tensor:
-    from verity_vllm.engine.pous import native
+    from . import native
 
     r = len(blk)
     st = _Chunked(r, width, c_flat.device)

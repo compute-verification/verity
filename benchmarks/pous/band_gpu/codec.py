@@ -2,10 +2,10 @@
 
 The operating point is `verity_pous.params.OPERATING_POINT`: a segment is `N` = 220 labels of `M` = 65,560 bytes (220 components
 of 298 bytes), band graph B(220, 12), two layers joined by the transpose.  `verity_pous` is the oracle: the verifier's own
-encoding with it must have the server's root, and `tests/engine/test_pous_codec.py` checks each piece against it.
+encoding with it must have the server's root, and the vLLM tree's `tests/engine/test_pous_codec.py` checks each piece against it.
 
-This module is the GPU twin of `scheme.P3`; `engine/pous/dense.py` is that of `dense.DENSE`, and `engine/pous/twins.py` maps a
-reference codec to its twin.
+This module is the GPU twin of `scheme.P3`; `dense.py` beside it is that of `dense.DENSE` and of the band (`band.BAND12`), and
+holds the Feistel dispatch switches and `segment_tags` the band's kernels use.
 
     tag_s   = salt (24 B) || u64(s)
     Pi, Pi2 = Feistel-10 on M + 64 or 2M + 64 bytes, F_i(x) = SHAKE256(0x48 || u8(i) || x)[0 : width / 2]
@@ -29,7 +29,7 @@ from verity_pous.codec import Codec
 from verity_pous.params import OPERATING_POINT, SALT_BITS, TAG_BITS
 from verity_pous.scheme import P3
 
-from verity_vllm.engine.pous import native
+from . import native
 
 N = OPERATING_POINT.n
 WC = OPERATING_POINT.wc // 8
