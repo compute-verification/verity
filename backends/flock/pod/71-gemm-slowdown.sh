@@ -25,7 +25,7 @@ fi
 # /workspace/jobs in a Kueue job (another uid); staged statements are kept there for the next attempt (FLOCK_STAGE_CACHE)
 if [ ! -w /workspace ] && [ -z "${FLOCK_WORK:-}" ]; then
   if mkdir -p /workspace/cache/flock 2>/dev/null && [ -w /workspace/cache/flock ]; then export FLOCK_WORK=/workspace/cache/flock
-  else export FLOCK_WORK=/workspace/jobs/flock-m0; mkdir -p $FLOCK_WORK; fi
+  else export FLOCK_WORK=/workspace/jobs/flock-m0; mkdir -p $FLOCK_WORK/home; export HOME=$FLOCK_WORK/home; fi
 fi
 export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-${FLOCK_WORK:-/workspace}/stage-cache}
 # a Kueue job's template sets its own cargo target dir; the builds here keep theirs. Its pod has no CPU limit: the prover's
