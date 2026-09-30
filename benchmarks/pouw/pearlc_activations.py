@@ -11,6 +11,7 @@ that leaves the ticket word unchanged), P3's not-needed share, the tile's undebi
 P1's greedy cross-group joint set on --cross-words words per tile (`pearlc_census.cross_group`), which no debit covers.
 
     python benchmarks/pouw/pearlc_activations.py --tiles 2 --out pearlc_activations.json
+    python benchmarks/pouw/pearlc_activations.py --atom sm120-e4m3-k32 --tiles 2 --out pearlc_activations_sm120.json
 
 Under `research run` it writes result.json: passed when every sampled tile's residual is at most 1/400.
 """
@@ -60,8 +61,10 @@ def main() -> None:
     ap.add_argument("--transfer", action="store_true", help="the reviewer's transfer test on the cross-group sample words")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--threads", type=int, default=3)
+    ap.add_argument("--atom", default="hopper-e4m3-k32", help="the FP8 atom (pearlc_census.ATOMS or groups:width:zero)")
     ap.add_argument("--out", default="pearlc_activations.json")
     args = ap.parse_args()
+    C.set_atom(args.atom)
     torch.set_num_threads(args.threads)
     tok = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16)
@@ -135,7 +138,7 @@ def main() -> None:
         model(chunk)
     measured = [r for r in layers if r.get("tiles")]
     worst_resid = max((r["residual_share_max"] for r in measured), default=0.0)
-    doc = {"tool": "pouw_pearlc_activations", "model": args.model, "dataset": "wikitext-2-raw-v1:test", "window": args.window,
+    doc = {"tool": "pouw_pearlc_activations", "atom": args.atom, "model": args.model, "dataset": "wikitext-2-raw-v1:test", "window": args.window,
            "seqlen": args.seqlen, "delta": args.delta, "line_norm": args.line_norm, "layers": layers,
            "summary": {"layers": len(layers), "layers_measured": len(measured),
                        "A_rows_inadmissible_max": max(max(r["A_floor_fail"], r["A_live_fail"]) for r in layers),
