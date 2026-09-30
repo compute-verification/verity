@@ -54,11 +54,15 @@ EOF
 stage|shape)
   $(command -v python3) - $D/counts.json $SHAPE $R/out/defs.json <<'EOF' || exit 1
 import json, sys
-c = json.load(open(sys.argv[1]))
-defs = {fid: c["calls"][fid] for fid, per in c["per_definition"].items() if sys.argv[2] in per}
-if not defs:
-    sys.exit(f"shape {sys.argv[2]} is in no Definition of {sys.argv[1]}")
-json.dump(defs, open(sys.argv[3], "w"))
+c, s = json.load(open(sys.argv[1])), sys.argv[2]
+holders = {fid: per for fid, per in c["per_definition"].items() if s in per}
+if not holders:
+    sys.exit(f"shape {s} is in no Definition of {sys.argv[1]}")
+# the smallest Definition holding it (attention's shared shapes are in up to 1,151 of them), its Calls scaled to the shape's row
+# units: those cap the batch; the row's own count stays counts.json's, which the rollup reads
+fid = min(holders, key=lambda f: (sum(holders[f].values()), f))
+row = c["shapes"][s]["row_units"] or holders[fid][s] * c["calls"][fid]
+json.dump({fid: max(1, round(row / holders[fid][s]))}, open(sys.argv[3], "w"))
 EOF
   echo $SHAPE > $R/out/shapes.txt
   OUT=$R/out bash backends/flock/pod/70-class-sweep.sh DEFS=$R/out/defs.json SHAPES=$R/out/shapes.txt SELECT=${SELECT:-units} \
