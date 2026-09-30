@@ -21,9 +21,15 @@
 //   14  f2fp_e2m1_x2_rate      op 12 with 32 constants: twice the converts over the same per-iteration overhead     64 elements
 //   15  qmma_sp_e4m3_rate      mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32  8192 logical MAC
 //                              (4096 nonzero products: 2:4 along k)
+//   16  cs_port_fadd_rate      the port's E4M3 cast-and-store: scalar convert with a zero partner, LOP3 + IMAD, STS.U16   32 codes
+//                              (+ one FADD per code feeding it)
+//   17  cs_port_nogen_rate     the same instruction mix with a live partner in place of zero, no per-code input          32 codes
+//   18  cs_packed_fadd_rate    cvt.rn.satfinite.e4m3x2.f32 on two live floats, four codes to a word, STS.32 (+ FADD)      64 codes
+//   19  cs_packed_nogen_rate   the same with no per-code input                                                           64 codes
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
+#include <cuda_fp8.h>
 #include <cuda_runtime.h>
 #include <stdint.h>
 
@@ -362,10 +368,153 @@ __global__ void __launch_bounds__(THREADS) f2fp_e2m1_x2_rate(const uint32_t* __r
     for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
 }
 
+// Cast-and-store loops (ops 16-19).  One iteration is one warp of form_s5 (pearl_c_sm120.cu at 952e3ecc) casting its 16 x 128
+// tile, 64 codes per thread, and staging it in shared memory at the port's addresses: rows g and g + 8 of the warp's 16, FORM_ROW
+// bytes a row, so a quad's stores hit distinct banks.  The stores are volatile, so every iteration's stores stay in the loop, and
+// after timing each thread reads its own words back into chk.  Ops 16 and 18 feed the converts from 64 FADD chains (x_j += y, one
+// FADD per code, as the port has one FMUL per code); ops 17 and 19 need no per-code input: each convert pairs one of the
+// iteration's two values f, g (two integer adds per iteration) with a per-lane constant.  Row word 0 = the chains' base (16, 18)
+// or f's start word (17, 19; g = f + 2^21); word 1 = y (16, 18) or the constants' base (17, 19).  Value j = base + j * 2^20 with
+// the sign flipped on odd j: 64 values over eight binades per lane.
+constexpr int FORM_ROW = 144;
+constexpr int NCS = 64;
+
+template <int N>
+__device__ __forceinline__ void cs_values(uint32_t base, float* v) {
+#pragma unroll
+    for (int j = 0; j < N; j++) v[j] = __uint_as_float((base + ((uint32_t)j << 20)) ^ ((uint32_t)(j & 1) << 31));
+}
+
+// The port's e4m3(): one code per convert, the other half converting a zero.
+__device__ __forceinline__ uint8_t e4m3_port(float f) { return (uint8_t)__nv_cvt_float_to_fp8(f, __NV_SATFINITE, __NV_E4M3); }
+
+// The same convert with a live high half, written as cuda_fp8.h writes it (a plain asm): the low byte is code(lo).
+__device__ __forceinline__ uint16_t cvt_e4m3x2_h(float hi, float lo) {
+    uint16_t r;
+    asm("cvt.rn.satfinite.e4m3x2.f32 %0, %1, %2;" : "=h"(r) : "f"(hi), "f"(lo));
+    return r;
+}
+
+// Byte offset of a thread's first staged 16-bit word (port) or 32-bit word (packed) in the block's shared memory.
+__device__ __forceinline__ int cs_offset(int bytes_per_quad_lane) {
+    const int lane = threadIdx.x & 31;
+    return (threadIdx.x >> 5) * 16 * FORM_ROW + (lane >> 2) * FORM_ROW + bytes_per_quad_lane * (lane & 3);
+}
+
+// chk word nb = row g's word | row g + 8's << 16 (port), or words 2m, 2m + 1 = row g's and row g + 8's word m (packed).
+__device__ __forceinline__ void cs_port_readback(const uint8_t* s0, uint32_t* out) {
+#pragma unroll
+    for (int nb = 0; nb < 16; nb++)
+        out[nb] = *reinterpret_cast<const volatile uint16_t*>(s0 + 8 * nb) |
+                  (uint32_t)*reinterpret_cast<const volatile uint16_t*>(s0 + 8 * FORM_ROW + 8 * nb) << 16;
+}
+
+__device__ __forceinline__ void cs_packed_readback(const uint8_t* p0, uint32_t* out) {
+#pragma unroll
+    for (int m = 0; m < 8; m++) {
+        out[2 * m] = *reinterpret_cast<const volatile uint32_t*>(p0 + 16 * m);
+        out[2 * m + 1] = *reinterpret_cast<const volatile uint32_t*>(p0 + 8 * FORM_ROW + 16 * m);
+    }
+}
+
+// The port's cast-and-store: per atom four scalar converts, two codes to a 16-bit word (the port's expression), one STS.U16 each.
+__global__ void __launch_bounds__(THREADS) cs_port_fadd_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                             long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint8_t* s0 = smem_pad + cs_offset(2);
+    uint8_t* s1 = s0 + 8 * FORM_ROW;
+    float x[NCS];
+    cs_values<NCS>(row[0], x);
+    const float y = __uint_as_float(row[1]);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+        for (int j = 0; j < NCS; j++) x[j] = __fadd_rn(x[j], y);
+#pragma unroll
+        for (int nb = 0; nb < 16; nb++) {
+            *reinterpret_cast<volatile uint16_t*>(s0 + 8 * nb) = e4m3_port(x[4 * nb]) | (uint16_t)e4m3_port(x[4 * nb + 1]) << 8;
+            *reinterpret_cast<volatile uint16_t*>(s1 + 8 * nb) = e4m3_port(x[4 * nb + 2]) | (uint16_t)e4m3_port(x[4 * nb + 3]) << 8;
+        }
+    }
+    RATE_EPILOGUE
+    cs_port_readback(s0, chk + (size_t)tid * CHK);
+}
+
+// The port's instruction mix with no per-code input: the converts' discarded high half is f or g instead of zero.
+__global__ void __launch_bounds__(THREADS) cs_port_nogen_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                              long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint8_t* s0 = smem_pad + cs_offset(2);
+    uint8_t* s1 = s0 + 8 * FORM_ROW;
+    float xs[NCS];
+    cs_values<NCS>(row[1], xs);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+        const float f = __uint_as_float(row[0] + (uint32_t)it);
+        const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
+#pragma unroll
+        for (int nb = 0; nb < 16; nb++) {
+            *reinterpret_cast<volatile uint16_t*>(s0 + 8 * nb) =
+                (uint8_t)cvt_e4m3x2_h(f, xs[4 * nb]) | (uint16_t)(uint8_t)cvt_e4m3x2_h(g, xs[4 * nb + 1]) << 8;
+            *reinterpret_cast<volatile uint16_t*>(s1 + 8 * nb) =
+                (uint8_t)cvt_e4m3x2_h(f, xs[4 * nb + 2]) | (uint16_t)(uint8_t)cvt_e4m3x2_h(g, xs[4 * nb + 3]) << 8;
+        }
+    }
+    RATE_EPILOGUE
+    cs_port_readback(s0, chk + (size_t)tid * CHK);
+}
+
+// Packed: two live values per convert, four codes to a 32-bit word (bytes x_0..x_3 in order), one STS.32 per word.  A word holds
+// four adjacent columns, where the port's lane holds two, so its columns are a permutation of the port's within 16.
+__global__ void __launch_bounds__(THREADS) cs_packed_fadd_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                               long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint8_t* p0 = smem_pad + cs_offset(4);
+    uint8_t* p1 = p0 + 8 * FORM_ROW;
+    float x[NCS];
+    cs_values<NCS>(row[0], x);
+    const float y = __uint_as_float(row[1]);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+        for (int j = 0; j < NCS; j++) x[j] = __fadd_rn(x[j], y);
+#pragma unroll
+        for (int m = 0; m < 8; m++) {
+            *reinterpret_cast<volatile uint32_t*>(p0 + 16 * m) = cvt_e4m3x4(x[8 * m + 1], x[8 * m], x[8 * m + 3], x[8 * m + 2]);
+            *reinterpret_cast<volatile uint32_t*>(p1 + 16 * m) = cvt_e4m3x4(x[8 * m + 5], x[8 * m + 4], x[8 * m + 7], x[8 * m + 6]);
+        }
+    }
+    RATE_EPILOGUE
+    cs_packed_readback(p0, chk + (size_t)tid * CHK);
+}
+
+// Packed with no per-code input: word = P(f, x_2i) | P(x_2i+1, g) << 16, P(hi, lo) = code(hi) << 8 | code(lo), i = 2m + h.
+__global__ void __launch_bounds__(THREADS) cs_packed_nogen_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                                long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint8_t* p0 = smem_pad + cs_offset(4);
+    uint8_t* p1 = p0 + 8 * FORM_ROW;
+    float xs[NCS / 2];
+    cs_values<NCS / 2>(row[1], xs);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+        const float f = __uint_as_float(row[0] + (uint32_t)it);
+        const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
+#pragma unroll
+        for (int m = 0; m < 8; m++) {
+            *reinterpret_cast<volatile uint32_t*>(p0 + 16 * m) = cvt_e4m3x4(f, xs[4 * m], xs[4 * m + 1], g);
+            *reinterpret_cast<volatile uint32_t*>(p1 + 16 * m) = cvt_e4m3x4(f, xs[4 * m + 2], xs[4 * m + 3], g);
+        }
+    }
+    RATE_EPILOGUE
+    cs_packed_readback(p0, chk + (size_t)tid * CHK);
+}
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
                           fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate,
-                          f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate, qmma_sp_e4m3_rate};
+                          f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate, qmma_sp_e4m3_rate,
+                          cs_port_fadd_rate, cs_port_nogen_rate, cs_packed_fadd_rate, cs_packed_nogen_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace
