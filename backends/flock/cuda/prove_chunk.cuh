@@ -52,6 +52,77 @@ __global__ void chunk_zlin_transpose(const F128* __restrict__ z, int k_log, long
     }
 }
 
+// ring_switch_fold_rows_grouped's partials, the same XOR sums at [bit][chunk]: a warp takes a row at a time and lane l its bits
+// 4l..4l+3, so each witness row and suffix word is read once (the grouped kernel reads them once per 8 bits, 16 times)
+__global__ void chunk_ring_fold_rows(const F128* __restrict__ witness, const F128* __restrict__ suffix, long long len, int chunks,
+                                     F128* __restrict__ partials) {
+    __shared__ F128 red[8][128];   // launched at 256 threads
+    const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5, nw = blockDim.x >> 5, sh = 4 * (lane & 15);
+    const long long per = (len + chunks - 1) / chunks, r0 = (long long)blockIdx.x * per, r1 = min(len, r0 + per);
+    F128 acc[4] = {};
+    auto fold = [&](const F128& w, const F128& s) {
+        const unsigned nib = (unsigned)(((lane < 16 ? w.lo : w.hi) >> sh) & 15);
+#pragma unroll
+        for (int b = 0; b < 4; b++) {
+            const u64 m = 0ull - (u64)((nib >> b) & 1);
+            acc[b].lo ^= s.lo & m;
+            acc[b].hi ^= s.hi & m;
+        }
+    };
+    long long i = r0 + wid;
+    for (; i + 3 * nw < r1; i += 4 * nw) {
+        const F128 w0 = witness[i], w1 = witness[i + nw], w2 = witness[i + 2 * nw], w3 = witness[i + 3 * nw];
+        const F128 s0 = suffix[i], s1 = suffix[i + nw], s2 = suffix[i + 2 * nw], s3 = suffix[i + 3 * nw];
+        fold(w0, s0); fold(w1, s1); fold(w2, s2); fold(w3, s3);
+    }
+    for (; i < r1; i += nw) fold(witness[i], suffix[i]);
+#pragma unroll
+    for (int b = 0; b < 4; b++) red[wid][4 * lane + b] = acc[b];
+    __syncthreads();
+    for (int t = threadIdx.x; t < 128; t += blockDim.x) {
+        F128 x{0, 0};
+        for (int k = 0; k < nw; k++) { x.lo ^= red[k][t].lo; x.hi ^= red[k][t].hi; }
+        partials[(long long)t * chunks + blockIdx.x] = x;
+    }
+}
+
+// ring_switch_combine_basis's sums, the same XORs: each claim's 128 weights as 32 tables of their nibbles' sums in shared memory,
+// so a row is 64 lookups rather than a walk over its set bits
+__global__ void chunk_ring_combine_basis(const F128* __restrict__ suffix_ab, const F128* __restrict__ suffix_c,
+                                         const F128* __restrict__ weights_ab, const F128* __restrict__ weights_c, long long len,
+                                         F128* __restrict__ combined) {
+    __shared__ F128 tab[2][32][16];
+    for (int e = threadIdx.x; e < 2 * 32 * 16; e += blockDim.x) {
+        const int c = e >> 9, p = (e >> 4) & 31, v = e & 15;
+        const F128* w = c ? weights_c : weights_ab;
+        F128 x{0, 0};
+        for (int b = 0; b < 4; b++)
+            if ((v >> b) & 1) { x.lo ^= w[4 * p + b].lo; x.hi ^= w[4 * p + b].hi; }
+        tab[c][p][v] = x;
+    }
+    __syncthreads();
+    for (long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x; i < len; i += (long long)gridDim.x * blockDim.x) {
+        const F128 s[2] = {suffix_ab[i], suffix_c[i]};
+        F128 acc{0, 0};
+#pragma unroll
+        for (int c = 0; c < 2; c++) {
+#pragma unroll
+            for (int p = 0; p < 32; p++) {
+                const F128 x = tab[c][p][((p < 16 ? s[c].lo : s[c].hi) >> (4 * (p & 15))) & 15];
+                acc.lo ^= x.lo;
+                acc.hi ^= x.hi;
+            }
+        }
+        combined[i] = acc;
+    }
+}
+
+// FC_RING_GROUPED=1: the ring switch's former kernels (the same sums), for a same-job control
+static bool chunk_ring_grouped() {
+    static const bool v = [] { const char* e = std::getenv("FC_RING_GROUPED"); return e && e[0] == '1'; }();
+    return v;
+}
+
 __global__ void chunk_comb_expand(const F128* __restrict__ comb_sub, const F128* __restrict__ ratio, int sub_log,
                                   long long k, F128* __restrict__ comb) {
     long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
@@ -1106,7 +1177,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     const int n_cl = 2 + n_extra;
     vector<vector<F128>> shats(n_cl, vector<F128>(128));
     F128 *d_suffix_ab, *d_suffix_c, *d_shat, *d_shat_partials;
-    const int ring_switch_chunks = 64;
+    const int ring_switch_chunks = chunk_ring_grouped() ? 64 : 1024;
     {
         F128 *d_eq_shat_ab;
         const int shat_ab_tail_len = 1 << (irl - 1);
@@ -1123,7 +1194,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     CK(ffi_malloc(&d_shat_partials, 128 * ring_switch_chunks * sizeof(F128)));
     build_eq_device(d_suffix_ab, xfull_ab.data() + 1, (int)xfull_ab.size() - 1);
     auto fold_rows = [&](const F128* suffix, vector<F128>& shat) -> int {
-        ring_switch_fold_rows_grouped<<<dim3(ring_switch_chunks, 16), 256>>>(df, suffix, len, ring_switch_chunks, d_shat_partials);
+        if (chunk_ring_grouped()) ring_switch_fold_rows_grouped<<<dim3(ring_switch_chunks, 16), 256>>>(df, suffix, len, ring_switch_chunks, d_shat_partials);
+        else chunk_ring_fold_rows<<<ring_switch_chunks, 256>>>(df, suffix, len, ring_switch_chunks, d_shat_partials);
         ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, ring_switch_chunks, d_shat);
         CK(cudaGetLastError());
         CK(cudaMemcpy(shat.data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
@@ -1158,7 +1230,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         else { F128 one{1, 0}; CK(cudaMemcpy(d_e, &one, sizeof(F128), cudaMemcpyHostToDevice)); }
         chunk_sparse_gather<<<(unsigned)std::min<long long>((n + 255) / 256, 65535), 256>>>(df, sp[ei], n, d_wx);
         CK(cudaGetLastError());
-        ring_switch_fold_rows_grouped<<<dim3(ring_switch_chunks, 16), 256>>>(d_wx, d_e, n, ring_switch_chunks, d_shat_partials);
+        if (chunk_ring_grouped()) ring_switch_fold_rows_grouped<<<dim3(ring_switch_chunks, 16), 256>>>(d_wx, d_e, n, ring_switch_chunks, d_shat_partials);
+        else chunk_ring_fold_rows<<<ring_switch_chunks, 256>>>(d_wx, d_e, n, ring_switch_chunks, d_shat_partials);
         ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, ring_switch_chunks, d_shat);
         CK(cudaGetLastError());
         CK(cudaMemcpy(shats[2 + ei].data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
@@ -1202,7 +1275,8 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         vector<F128> w(2 * 128);
         for (int j = 0; j < 128; j++) { w[j] = MUL(gam[0], eq_rd[0][j]); w[128 + j] = MUL(gam[1], eq_rd[1][j]); }
         CK(cudaMemcpy(d_w, w.data(), 256 * sizeof(F128), cudaMemcpyHostToDevice));
-        ring_switch_combine_basis<<<(unsigned)((len + 255) / 256), 256>>>(d_suffix_ab, d_suffix_c, d_w, d_w + 128, len, dcb);
+        if (chunk_ring_grouped()) ring_switch_combine_basis<<<(unsigned)((len + 255) / 256), 256>>>(d_suffix_ab, d_suffix_c, d_w, d_w + 128, len, dcb);
+        else chunk_ring_combine_basis<<<(unsigned)std::min<long long>((len + 255) / 256, 4096), 256>>>(d_suffix_ab, d_suffix_c, d_w, d_w + 128, len, dcb);
         CK(cudaGetLastError());
     }
     CK(ffi_free(d_suffix_ab)); CK(ffi_free(d_suffix_c));
