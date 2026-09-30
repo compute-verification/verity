@@ -122,6 +122,8 @@ CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
+DIRECT_CPUS_FILE = "/etc/vy/direct-cpus"      # the CPUs a direct run starts on (a cpu list, e.g. 0-95): the rest are pinned benchmarks'.
+                                              # A command may still pin itself elsewhere (taskset -c 128-159 ...); absent: no default
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -1158,6 +1160,9 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
+    cpus = direct_cpus()
+    if cpus:
+        remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
     argv = [req.get("python") or sys.executable, "-m", "research", "run", "--runs-dir", str(runs_root), "--id", run_id, "--claimed",
             "--cost-json", json.dumps(cost), "--remote-json", json.dumps(remote)]
     if req.get("exclusive"):
@@ -1167,7 +1172,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     argv += [*(req.get("harness_args") or []), "--", *req["command"]]
     log = open(run_dir / "launcher.log", "ab")
     try:
-        proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+        proc = subprocess.Popen(argv, cwd=req.get("cwd") or None, env=env, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True,
+                                preexec_fn=(lambda: os.sched_setaffinity(0, cpus)) if cpus else None)
     except OSError:
         if mem_rec:
             M.release(mem_rec["reservation"], run_id)
@@ -1206,9 +1212,37 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
     return env
 
 
-def _kueue_owns_every_gpu(path: str | None = None) -> bool:
+def direct_cpus() -> set[int]:
+    """The CPUs a direct run starts on, from DIRECT_CPUS_FILE (tests: $DIRECT_CPUS_FILE), intersected with this process's own; empty
+    when the file is absent or names none of them."""
     try:
-        return Path(path or DIRECT_GPUS_FILE).read_text().strip() == "none"
+        text = Path(os.environ.get("DIRECT_CPUS_FILE") or DIRECT_CPUS_FILE).read_text()
+    except OSError:
+        return set()
+    want: set[int] = set()
+    for part in text.replace("\n", ",").split(","):
+        lo, _, hi = part.strip().partition("-")
+        if lo.isdigit() and (not hi or hi.isdigit()):
+            want |= set(range(int(lo), int(hi or lo) + 1))
+    return want & os.sched_getaffinity(0)
+
+
+def format_cpus(cpus: set[int]) -> str:
+    """`0-31,64-95` for a CPU set."""
+    out, run = [], []
+    for c in sorted(cpus):
+        if run and c != run[-1] + 1:
+            out.append(f"{run[0]}-{run[-1]}" if len(run) > 1 else str(run[0]))
+            run = []
+        run.append(c)
+    if run:
+        out.append(f"{run[0]}-{run[-1]}" if len(run) > 1 else str(run[0]))
+    return ",".join(out)
+
+
+def _kueue_owns_every_gpu() -> bool:
+    try:   # GPU_LEASE_ALLOWED_FILE: the same override gpu-lease reads (tests point it away from the host's file)
+        return Path(os.environ.get("GPU_LEASE_ALLOWED_FILE") or DIRECT_GPUS_FILE).read_text().strip() == "none"
     except OSError:
         return False
 

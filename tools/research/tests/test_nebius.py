@@ -83,6 +83,7 @@ def test_the_lease_loop_stops_a_non_runpod_machine_by_its_own_command(tmp_path):
     (tmp_path / "environ").write_bytes(b"")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("LEASE_", "RESEARCH_LEASE", "RUNPOD_"))}
     env |= {"LEASE_DIR": str(tmp_path / "lease"), "LEASE_ENVIRON": str(tmp_path / "environ"), "LEASE_TERMINATE_CMD": f"sh {rec}",
+            "LEASE_DEADLINE_FILE": str(tmp_path / "no-deadline"),     # not the host's /etc/research/deadline (a Nebius server has one)
             "LEASE_MACHINE_ID": "computeinstance-e00test", "LEASE_ONCE": "1"}
     now = 1_800_000_000
     assert subprocess.run(["sh", str(L.LEASE_SH), "extend", "60", "test"], env={**env, "LEASE_NOW": str(now)}).returncode == 0
@@ -152,7 +153,11 @@ def test_gpu_lease_pins_by_index_or_uuid_and_status_names_the_holder(tmp_path):
     assert lines[:3] == ["2 GPU-c2", "pinned-busy=75", "3 GPU-d3"]
     held = [ln for ln in lines[3:] if ln.split()[1] == "held"]
     assert len(held) == 1 and held[0].startswith("2 held ") and "who=bc-test" in held[0] and "uuid=GPU-c2" in held[0]
-    assert re.match(r"2 held \d+m pid=", held[0])
+    assert re.match(r"2 held \d+m pid=", held[0]) and "timed=1" not in held[0]
+    for tag, extra in (("flag", ["--timed"]), ("env", [])):
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", *extra, "--mem-gb", "0", "--", "bash", str(GPU_LEASE), "status"],
+                           env={**env, **({"GPU_LEASE_TIMED": "1"} if tag == "env" else {})}, capture_output=True, text=True)
+        assert r.returncode == 0 and any("held" in ln and "timed=1" in ln for ln in r.stdout.splitlines()), (tag, r.stdout)
     for bad in (["--on", "7"], ["--on", "GPU-zz"], ["--on", "x1"]):
         assert subprocess.run(["bash", str(GPU_LEASE), "1", *bad, "--", "true"], env=env, capture_output=True).returncode == 2
     assert subprocess.run(["bash", str(GPU_LEASE), "2", "--on", "1", "--", "true"], env=env, capture_output=True).returncode == 2
@@ -273,6 +278,11 @@ def test_check_slot_pins_a_check_to_a_free_slot_with_the_pods_python(tmp_path):
     r = subprocess.run(["bash", str(slot), "bash", "-c", show], env={**env, "VY_CHECK_SLOTS": "", "VY_CHECK_SLOTS_FILE": str(slots_file),
                        "UV_PYTHON": "3.12"}, capture_output=True, text=True)
     assert r.stdout.split() == ["3.12", "0"]
+    path_file = tmp_path / "check-path"
+    path_file.write_text("/opt/check-toolchain/bin\n")
+    r = subprocess.run(["bash", str(slot), "bash", "-c", "echo $PATH"], env={**env, "VY_CHECK_PATH_FILE": str(path_file)},
+                       capture_output=True, text=True)
+    assert r.stdout.startswith("/opt/check-toolchain/bin:")
 
 
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------
@@ -348,7 +358,7 @@ def test_a_direct_run_sees_no_gpu_once_kueue_owns_every_gpu(tmp_path, monkeypatc
     """After the cutover (`/etc/vy/direct-gpus` = none) the runner blanks CUDA_VISIBLE_DEVICES for every direct run, even one whose
     --env names a GPU; before it (a direct set) or on a machine without the file, the run's environment is left alone."""
     split = tmp_path / "direct-gpus"
-    monkeypatch.setattr(remote, "DIRECT_GPUS_FILE", str(split))
+    monkeypatch.setenv("GPU_LEASE_ALLOWED_FILE", str(split))
     req = {"env": {"CUDA_VISIBLE_DEVICES": "0"}}
     for text, want in (("none\n", ""), ("4,5,6,7\n", "0")):
         split.write_text(text)
@@ -357,3 +367,16 @@ def test_a_direct_run_sees_no_gpu_once_kueue_owns_every_gpu(tmp_path, monkeypatc
         assert ("gpus" in rec) == (want == "")
     split.unlink()
     assert remote._runner_env(req, tmp_path / "runs", None, {})["CUDA_VISIBLE_DEVICES"] == "0"
+
+
+def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhere(tmp_path, monkeypatch):
+    """With /etc/vy/direct-cpus (the Nebius CPU map's non-benchmark CPUs) a direct run's runner, and so its workload, starts on those
+    CPUs, keeping the pinned benchmarks' cores clean; a command's own taskset still moves it. No file: the machine's own affinity."""
+    mine = sorted(os.sched_getaffinity(0))
+    cpus_file = tmp_path / "direct-cpus"
+    monkeypatch.setenv("DIRECT_CPUS_FILE", str(cpus_file))
+    assert remote.direct_cpus() == set()
+    cpus_file.write_text(f"{mine[0]}\n")
+    assert remote.direct_cpus() == {mine[0]} and remote.format_cpus({0, 1, 2, 5, 7, 8}) == "0-2,5,7-8"
+    cpus_file.write_text("100000-100001\n")                   # none of this machine's: no default rather than an empty mask
+    assert remote.direct_cpus() == set()
