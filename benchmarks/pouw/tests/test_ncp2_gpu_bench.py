@@ -328,3 +328,58 @@ def test_the_vllm_split_adds_up_to_the_slowdown():
     got = V.split(bf16, full, nohash, low, exact)
     assert got["prefill_2048"]["async_slowdown"] == 60.0 and got["decode_b32"]["async_s"] == 4.0
     assert abs(got["decode_b32"]["async_serve_x_bf16"] - 0.6) < 1e-12 and "async_s" not in out["decode_b32"]
+
+
+def test_the_async_timings_run_one_decode_steps_calls_both_ways(monkeypatch):
+    calls = {"sync": 0, "async": 0, "serve": 0, "drains": 0}
+
+    class Sync:
+        def __init__(self, scheme, salt, flags):
+            pass
+
+        def __call__(self, *args):
+            calls["sync"] += 1
+
+    class Exact(Sync):
+        def __call__(self, *args):
+            calls["async"] += 1
+
+        def serve(self, *args):
+            calls["serve"] += 1
+
+        def drain(self):
+            calls["drains"] += 1
+            return {"calls": 0, "mismatched_words": 0, "roots": []}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(B.PD, "FusedCommitter", Sync)
+    monkeypatch.setattr(B.PD, "AsyncCommitter", Exact)
+    out = B.async_timings(_FT, 2)
+    per = B.ASYNC_LAYERS * len(B.QWEN05)
+    assert out["calls_per_step"] == per and calls == {"sync": 3 * per, "async": 3 * per, "serve": 2 * per, "drains": 3}
+    assert len(out["sync_step_s"]) == len(out["async_step_s"]) == 2 and out["mismatched_words"] == 0
+    assert {"sync_step_mean_s", "async_step_mean_s", "serve_step_mean_s"} <= set(out)
+
+
+def test_each_tile_variant_is_built_with_its_macros_gated_and_only_then_timed(monkeypatch):
+    seen = []
+
+    def gate():
+        flags = B.PD.NVCC_FLAGS
+        seen.append(flags)
+        if "-DNCP2_TILE_SHA=0" in flags:
+            raise SystemExit("fused kernel: five-strips: unit 3 (tile (0, 0)) has the wrong leaf")
+        return [{"call": "five-strips", "difference": None}]
+
+    timed = []
+    monkeypatch.setattr(B, "gate_fused", gate)
+    monkeypatch.setattr(B, "fused_timings", lambda torch, reps, modes=None, rows=(): timed.append((tuple(modes), rows)) or {"calls": []})
+    monkeypatch.setattr(B.PD, "configure", lambda **k: None)
+    base = B.PD.NVCC_FLAGS
+    out = B.tile_variants(_FT, "rows=8,unroll=2,sha=1;sha=0;rows=0", 3)
+    assert [r["variant"] for r in out] == [{"rows": 8, "unroll": 2, "sha": 1}, {"sha": 0}, {"rows": 0}]
+    assert seen[0] == base + ("-DNCP2_TILE_REG_ROWS=8", "-DNCP2_TILE_SHA=1", "-DNCP2_TILE_REG_UNROLL=2", "--resource-usage")
+    assert "gate_failed" in out[1] and "timings" not in out[1] and all("timings" in out[i] for i in (0, 2))
+    assert timed == [(("word",), B.VARIANT_ROWS)] * 2 and B.PD.NVCC_FLAGS == base

@@ -206,11 +206,12 @@ FUSED_MODES = {"nohash": PD.TIME_TILES, "word": PD.HASH | PD.TIME_TILES | PD.CAC
                "lowbyte": PD.HASH | PD.TIME_TILES | PD.CACHE_Y | PD.LOWBYTE}
 
 
-def fused_timings(torch, reps: int, save=lambda part: None) -> dict:
-    """Per Qwen2.5-0.5B linear and m, each mode's device time per call and its tile kernel's (the Y leaves cached, as a run's
-    later calls see them), with the tile words' achieved rate."""
+def fused_timings(torch, reps: int, save=lambda part: None, modes: dict | None = None, rows: tuple = FUSED_ROWS) -> dict:
+    """Per Qwen2.5-0.5B linear and m (``rows``), each mode's (``modes``, default `FUSED_MODES`) device time per call and its
+    tile kernel's (the Y leaves cached, as a run's later calls see them), with the tile words' achieved rate."""
+    modes = FUSED_MODES if modes is None else modes
     out: dict = {"calls": []}
-    for m in FUSED_ROWS:
+    for m in rows:
         for k, n in QWEN05:
             row: dict = {"m": m, "k": k, "n": n}
             g = torch.Generator(device="cuda").manual_seed(m * 7 + n)
@@ -222,7 +223,7 @@ def fused_timings(torch, reps: int, save=lambda part: None) -> dict:
             rowids = torch.arange(m, dtype=torch.int32, device="cuda")
             colids = torch.arange(n, dtype=torch.int32, device="cuda")
             ys = {}
-            for mode, flags in FUSED_MODES.items():
+            for mode, flags in modes.items():
                 c = PD.FusedCommitter("ncp-v2", bytes(range(32)), flags)
                 ys[mode] = c(a, s, b, t, bias, 1, 2, n, rowids, colids)
                 torch.cuda.synchronize()
@@ -245,10 +246,98 @@ def fused_timings(torch, reps: int, save=lambda part: None) -> dict:
             save(out)
             del a, b
             torch.cuda.empty_cache()
-    for m in FUSED_ROWS:
-        rows = [r for r in out["calls"] if r["m"] == m]
-        out[f"forward_m{m}"] = {mode: LAYERS * sum(r[f"{mode}_ms"] for r in rows) for mode in FUSED_MODES} | {
-            f"{mode}_tile": LAYERS * sum(r[f"{mode}_tile_ms"] for r in rows) for mode in FUSED_MODES}
+    for m in rows:
+        at = [r for r in out["calls"] if r["m"] == m]
+        out[f"forward_m{m}"] = {mode: LAYERS * sum(r[f"{mode}_ms"] for r in at) for mode in modes} | {
+            f"{mode}_tile": LAYERS * sum(r[f"{mode}_tile_ms"] for r in at) for mode in modes}
+    return out
+
+
+#: change 3's build macros in `ncp2_tiles.cuh`, by the names `--tile-variants` uses
+TILE_MACROS = {"rows": "NCP2_TILE_REG_ROWS", "unroll": "NCP2_TILE_REG_UNROLL", "sha": "NCP2_TILE_SHA"}
+#: the rows each variant's tile hashing is timed at: decode and prefill
+VARIANT_ROWS = (32, 2048)
+
+
+def tile_variants(torch, spec: str, reps: int, save=lambda part: None) -> list[dict]:
+    """Change 3's builds of the serving kernel, one per ';'-separated part of ``spec`` (``rows=8,unroll=2,sha=1``; a macro left
+    out keeps the header's default): each built with its macros (`TILE_MACROS`, part of the build's key) and nvcc's resource
+    usage, gated against `pouw_native` on every gate call (`gate_fused`), and only if it passes timed: the committed word
+    leaves' device time per call and the tile words' achieved rate at `VARIANT_ROWS` rows."""
+    base, out = PD.NVCC_FLAGS, []
+    try:
+        for part in spec.split(";"):
+            fields = {k: int(v) for k, v in (kv.split("=") for kv in part.split(",") if kv)}
+            flags = tuple(f"-D{TILE_MACROS[k]}={v}" for k, v in sorted(fields.items()))
+            PD.NVCC_FLAGS = base + flags + ("--resource-usage",)
+            PD.configure()
+            row: dict = {"variant": fields, "flags": list(flags)}
+            try:
+                row["gate"] = gate_fused()
+            except SystemExit as e:
+                row["gate_failed"] = str(e)
+            if "gate" in row:
+                row["timings"] = fused_timings(torch, reps, modes={"word": FUSED_MODES["word"]}, rows=VARIANT_ROWS)
+            out.append(row)
+            save(out)
+    finally:
+        PD.NVCC_FLAGS = base
+        PD.configure()
+    return out
+
+
+#: change 1 measured on fixed shapes: one decode step's calls, every linear of `ASYNC_LAYERS` layers of QWEN05 at `ASYNC_ROWS` rows
+ASYNC_ROWS, ASYNC_LAYERS = 32, 24
+
+
+def async_timings(torch, reps: int) -> dict:
+    """The hashing cut's change 1 on fixed shapes, with no model: one decode step's calls (`ASYNC_LAYERS` layers of QWEN05's
+    linears at `ASYNC_ROWS` rows, each layer's weights their own), committed one after another on one stream by
+    `FusedCommitter` (whose served y is its committed y), against served from the exact product and committed on side streams
+    by `AsyncCommitter`, drained before the clock stops; and the exact serve alone. Wall time per step over ``reps`` steps."""
+    m, salt = ASYNC_ROWS, bytes(range(32))
+    shapes = []
+    for k, n in QWEN05:
+        g = torch.Generator(device="cuda").manual_seed(3 * k + n)
+        shapes.append((torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g),
+                       torch.full((m,), 1e-3, dtype=torch.float32, device="cuda").view(torch.int32),
+                       torch.randint(-64, 64, (n, k), dtype=torch.int8, device="cuda", generator=g),
+                       torch.full((n,), 1e-2, dtype=torch.float32, device="cuda").view(torch.int32),
+                       torch.zeros(n, dtype=torch.int16, device="cuda"), torch.arange(n, dtype=torch.int32, device="cuda")))
+    rowids = torch.arange(m, dtype=torch.int32, device="cuda")
+    sync = PD.FusedCommitter("ncp-v2", salt, PD.HASH | PD.CACHE_Y)
+    exact = PD.AsyncCommitter("ncp-v2", salt, PD.HASH | PD.CACHE_Y)
+    out: dict = {"rows": m, "calls_per_step": ASYNC_LAYERS * len(QWEN05), "sync_step_s": [], "async_step_s": [], "serve_step_s": [],
+                 "mismatched_words": 0}
+
+    def step(commit, forward: int) -> None:
+        for layer in range(ASYNC_LAYERS):
+            for j, (a, s, b, t, bias, colids) in enumerate(shapes):
+                commit(a, s, b, t, bias, forward, (layer << 32) | j, len(QWEN05) * layer + j, rowids, colids)
+
+    def drained(forward: int) -> None:
+        step(exact, forward)
+        out["mismatched_words"] += exact.drain()["mismatched_words"]
+
+    def wall(run) -> float:
+        torch.cuda.synchronize()
+        t0 = time.perf_counter()
+        run()
+        torch.cuda.synchronize()
+        return time.perf_counter() - t0
+
+    step(sync, 0)                                           # warm: every weight's Y leaves cached, every workspace grown
+    drained(0)
+    for i in range(1, reps + 1):
+        out["sync_step_s"].append(wall(lambda: step(sync, i)))
+        out["async_step_s"].append(wall(lambda: drained(i)))
+        out["serve_step_s"].append(wall(lambda: [exact.serve(a, s, b, t, bias) for _ in range(ASYNC_LAYERS)
+                                                 for a, s, b, t, bias, _c in shapes]))
+    exact.close()
+    for key in ("sync_step_s", "async_step_s", "serve_step_s"):
+        out[key[:-2] + "_mean_s"] = sum(out[key]) / max(1, len(out[key]))
+    if out["mismatched_words"]:
+        raise SystemExit(f"async path: {out['mismatched_words']} served words differ from the committed y")
     return out
 
 
@@ -402,6 +491,8 @@ def main() -> None:
     ap.add_argument("--reps", type=int, default=20)
     ap.add_argument("--out", type=Path)
     ap.add_argument("--fused-only", action="store_true", help="the fused kernel's gates and timings only")
+    ap.add_argument("--tile-variants", help="change 3's builds, ';'-separated, each like rows=8,unroll=2,sha=1 (tile_variants): "
+                                            "the hash gates, then each build gated and its tile hashing timed, and nothing else")
     args = ap.parse_args()
     PD.configure(build_dir=os.environ.get("VERITY_POUW_CUDA_BUILD"), arch=os.environ.get("VERITY_POUW_CUDA_ARCH"))
     res: dict = {"accounting": [forward_accounting(m) for m in ROWS]}
@@ -420,12 +511,18 @@ def main() -> None:
         from kernels import load
 
         save("device", torch.cuda.get_device_name())
+        if args.tile_variants:
+            save("gates", {"hashes": gate_hashes()})
+            save("variants", tile_variants(torch, args.tile_variants, args.reps, save=lambda part: save("variants", part)))
+            _report(res)
+            return
         if args.fused_only:
             save("gates", {"hashes": gate_hashes()})
             res["gates"]["fused"] = gate_fused()
             res["gates"]["async"] = gate_async(torch)
             save("gates", res["gates"])
             save("fused", fused_timings(torch, args.reps, save=lambda part: save("fused", part)))
+            save("async", async_timings(torch, args.reps))
             _report(res)
             return
         ext = load()
