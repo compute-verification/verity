@@ -138,3 +138,15 @@ def test_salt_dead_share_tracks_iid_and_falls_with_noise():
         assert r["debit_2of4_per_mac"] == 0.5 * r["share_4groups_ge2_salt_dead"]
         shares.append(r["share_4groups_ge2_salt_dead"])
     assert shares[0] > shares[1] > shares[2]
+
+
+def test_base_split_reads_dumped_activations(tmp_path):
+    """basesplit --acts runs the split on fp4_quality.py's dumped activation rows, one result per (file, linear, format)."""
+    rng = np.random.default_rng(5)
+    np.savez(tmp_path / "layer00.npz", **{"mlp.up_proj/x": rng.standard_normal((32, 256)).astype(np.float32),
+                                          "mlp.up_proj/w": rng.standard_normal((32, 256)).astype(np.float32)})
+    args = C.parse_args(["basesplit", "--acts", str(tmp_path), "--noise", "none,row", "--delta", "0.25"])
+    res = C.cmd_basesplit(args)
+    assert {(r["source"], r["linear"], r["k"], r["noise"]) for r in res["results"]} == {("layer00", "mlp.up_proj", 256, "row")}
+    assert len(res["results"]) == len(C.atoms_from(args))
+    assert all(r["cheater_A_cost_per_dense_mac"] == 1.0 for r in res["results"])

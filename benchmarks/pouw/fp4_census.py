@@ -18,6 +18,7 @@ sigma_c code units per block, after the block scale).
     python benchmarks/pouw/fp4_census.py selftest
     python benchmarks/pouw/fp4_census.py synth --k 8192 --pairs 128 --out synth.json
     python benchmarks/pouw/fp4_census.py real --acts acts_dir --out real.json      # npz files from fp4_quality.py --dump-acts
+    python benchmarks/pouw/fp4_census.py basesplit --noise row --delta 0.25 [--acts acts_dir] --out split.json
     python benchmarks/pouw/fp4_census.py breakeven
 """
 from __future__ import annotations
@@ -568,18 +569,32 @@ def cmd_real(args) -> dict:
 def cmd_basesplit(args) -> dict:
     """The base-split falsifier (design X-FP4-1): per family/format/noise, how cheap the salt-free split is (A side)."""
     rng = np.random.default_rng(args.seed)
-    res = {"k": args.k, "pairs": args.pairs, "seed": args.seed, "noise": args.noise, "delta": args.delta, "results": []}
+    res = {"k": args.k, "pairs": args.pairs, "seed": args.seed, "noise": args.noise, "delta": args.delta,
+           "acts": str(args.acts) if args.acts else None, "results": []}
     fams = FAMILIES if args.families == "all" else tuple(args.families.split(","))
+
+    def operands():
+        """Synthetic families, or with --acts the real activation rows that fp4_quality.py --dump-acts wrote."""
+        if not args.acts:
+            for fam in fams:
+                yield {"family": fam}, family(fam, max(args.pairs, 64), args.k, rng)[0]
+            return
+        for f in sorted(Path(args.acts).glob("*.npz")):
+            d = np.load(f)
+            for lin in sorted({key.rsplit("/", 1)[0] for key in d.files}):
+                X = d[f"{lin}/x"].astype(np.float64)
+                X = X[:, : args.max_k] if args.max_k else X
+                yield {"source": f.stem, "linear": lin, "k": int(X.shape[1])}, X
+
     for name, (atom, fmt) in atoms_from(args).items():
-        for fam in fams:
-            A, _ = family(fam, max(args.pairs, 64), args.k, rng)
+        for label, A in operands():
             for noise in args.noise.split(","):
                 if noise == "none":
                     continue                                            # the split needs a salt: noise is what the base can't guess
                 r = base_split(fmt, A, noise, args.delta, rng)
-                row = {"atom": atom.name, "format": fmt, "family": fam, "noise": noise, **r}
+                row = {"atom": atom.name, "format": fmt, **label, "noise": noise, **r}
                 res["results"].append(row)
-                print(json.dumps({"format": fmt, "family": fam, "noise": noise, "density": round(r["code_change_density"], 3),
+                print(json.dumps({"format": fmt, **label, "noise": noise, "density": round(r["code_change_density"], 3),
                                   "cheater_A_cost": round(r.get("cheater_A_cost_per_dense_mac", 1.0), 3),
                                   "one_pass_2of4": round(r.get("frag_one_pass_2of4", 0.0), 3),
                                   "ge2_salt_dead": round(r["share_4groups_ge2_salt_dead"], 3),
@@ -626,7 +641,7 @@ def breakeven(prices: dict) -> dict:
                                  "note": "IMMA k16 group dots (2 units/MAC) plus one scale multiply-add per 16 MACs per output (p/16)"}}
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["selftest", "synth", "real", "basesplit", "breakeven"])
     ap.add_argument("--atom", action="append", default=None)
@@ -641,8 +656,13 @@ def main() -> None:
     ap.add_argument("--max-k", type=int, default=0)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     args.atom = args.atom or ["blackwell_sm120_nvf4_m16n8k64", "blackwell_sm120_mxf4_m16n8k64"]
+    return args
+
+
+def main() -> None:
+    args = parse_args()
     t0 = time.time()
     if args.cmd == "selftest":
         rep = selftest()
