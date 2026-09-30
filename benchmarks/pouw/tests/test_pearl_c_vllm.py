@@ -214,6 +214,29 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     assert (tmp_path / man["weights"]["0"]["rows"]["path"]).stat().st_size == 2 * 256 * 1024
 
 
+def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
+    make, kernel, weights, *_ = device_run
+    run = make()
+    run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
+    run.end()
+    run.begin(retain=str(tmp_path))
+    assert bool((run.leaves == 0xA5).all()) and all(bool((t == 0xA5).all()) for sh in run.shapes.values() for t in sh.b.values())
+    run.omit = frozenset({"hash_leaf"})
+    kernel.dev.log.clear()
+    run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
+    assert "hash_leaf_p" not in [n for n, *_ in kernel.dev.log] and "hash_msg_v" in [n for n, *_ in kernel.dev.log]
+
+
+def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
+    """On the recording stand-in nothing is written, so every pass commits the poison: the repeat holds, and only the negative
+    control (the call with its tile leaves omitted) can tell. It must, for every shape."""
+    make, _, weights, *_ = device_run
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    rows = E2E.gate(make(), weights)
+    assert [(r["n"], r["m"]) for r in rows] == [(256, 8192), (256, 32), (128, 8192), (128, 32)]
+    assert all(r["commitment_repeats"] and not r["omitted_leaves_rejected"] and not r["ok"] for r in rows)
+
+
 # ---- the verifier on an honest pass -------------------------------------------------------------------------------
 
 def laid_out(domain, leaves: list[bytes]) -> bytes:

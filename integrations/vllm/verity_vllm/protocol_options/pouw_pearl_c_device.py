@@ -27,7 +27,9 @@ device's primary context:
   under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the pass also writes what the
   prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels per weight, the leaves, the
   tile tree and the manifest (`write_manifest`) that the reference verifier reads
-  (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).
+  (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
+  earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
+  must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
 
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
 records.  What is left is the same forming and GEMM without hashing, for the time split.
@@ -217,6 +219,7 @@ class _Pass:
     records: list[PW.UnitRecord] = field(default_factory=list)
     files: list[dict] = field(default_factory=list)
     tiles: int = 0
+    poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
 
 
 def weight_roots(kernel: Kernel, weights: dict[int, Any]) -> dict[int, bytes]:
@@ -277,7 +280,7 @@ class PearlCDeviceRun:
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
-        self.time_gemm, self.events = time_gemm, []
+        self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
         self.device = next(iter(weights.values())).device
         self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
@@ -287,7 +290,7 @@ class PearlCDeviceRun:
         self.leaves = _zeros(32 * capacity, self.device)
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
-        self.pipes: dict[tuple[int, int], tuple[Any, list[Any]]] = {}
+        self.pipes: dict[tuple[int, int, frozenset], tuple[Any, list[Any]]] = {}
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                                         "transcript_root": None, "units": 0, "tiles": 0}
@@ -334,10 +337,13 @@ class PearlCDeviceRun:
             size = R.Pipeline.sizes(mp, n, k, m16)
             self.shapes[key] = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
                                       torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(32 + 104, self.device))
+            if self.cur is not None and self.cur.poison is not None:
+                for t in self.shapes[key].b.values():
+                    t.fill_(self.cur.poison)
         return self.shapes[key]
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any]]:
-        key = (w, sh.m16)
+        key = (w, sh.m16, self.omit)
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
@@ -345,7 +351,7 @@ class PearlCDeviceRun:
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": sh.keys.data_ptr(),
                     "unit": sh.keys.data_ptr() + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16)
-            names = CALL_STEPS if self.hashing else tuple(x for x in CALL_STEPS if x not in HASH_STEPS)
+            names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
             steps = _steps(pipe, names)
             if self.time_gemm and self.device.type == "cuda":
                 at = [x for x in names if x in {n for n, _, _ in pipe.steps()}].index("gemm_pearlc")
@@ -367,7 +373,8 @@ class PearlCDeviceRun:
     def gemm_ms(self) -> tuple[float, int]:
         """The GEMM kernel's summed time (``gemm_pearlc``, CUDA events on its stream) and its call count since the last read."""
         import torch
-        torch.cuda.synchronize(self.device)
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
         out = (sum(a.elapsed_time(b) for a, b in self.events), len(self.events))
         self.events.clear()
         return out
@@ -424,8 +431,19 @@ class PearlCDeviceRun:
 
     def begin(self, retain: str | None = None) -> None:
         """A new pass: its own transcript under the install's epoch, the call indices from 0.  With `retain`, the pass writes
-        what the prover opens from into that directory."""
+        what the prover opens from into that directory, from poisoned outputs."""
         self.cur = _Pass(Path(retain) if retain else None)
+        if retain and self.hashing:
+            self.poison()
+
+    def poison(self, value: int = 0xA5) -> None:
+        """Every buffer a call of this pass writes (each shape's, those created later in the pass too, and the leaves) filled
+        with `value`."""
+        self.cur.poison = value
+        self.leaves.fill_(value)
+        for sh in self.shapes.values():
+            for t in sh.b.values():
+                t.fill_(value)
 
     def end(self) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's

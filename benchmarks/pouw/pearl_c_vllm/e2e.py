@@ -21,7 +21,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   ``pearlc-nohash``), and everything else.
 - **Gates, before any timing, in the mode's own process:** at every distinct linear shape and both m, served y is held to
   the float product x·Wᵀ (relative RMS error under 8%, the scheme's tested bound).  With hashing, the same call made twice,
-  each from a fresh pass, must give the same A root and tile root.
+  each from a fresh pass on poisoned outputs, must give the same A root and tile root, and the negative control, the call
+  once more with its tile leaves omitted, must not.
 - **The verify pass** (``pearlc`` with ``--retain``): after the timing, the first timed prefill prompt and the decode prompts
   are replayed, each as a retained pass (`PearlCDeviceRun.begin(retain=…)`).  Each pass's commitment must equal its timed
   pass's.  Their manifests go to `verify_run.py`, the reference verifier, after the window.
@@ -102,23 +103,28 @@ def gate(run, weights: dict) -> list[dict]:
     """Served y against x·Wᵀ, and with hashing the same call's commitment twice, at every distinct (n, k) and both m."""
     import torch
     out, seen = [], set()
-    gen = torch.Generator(device="cuda").manual_seed(20260930)
+    gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
     for w, W in weights.items():
         if tuple(W.shape) in seen:
             continue
         seen.add(tuple(W.shape))
         for m in (PREFILL, BATCH):
             x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-            commits = []
-            for _ in range(2 if run.hashing else 1):
+            commits, served = [], None
+            for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
                 run.begin()
+                run.poison()
+                run.omit = frozenset(omit)
                 y = run.gemm(w, x, W, None)
+                served = y if served is None else served
                 commits.append({k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots")})
+            run.omit = frozenset()
             ref = x.float() @ W.float().T
-            err = float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
+            err = float(((served.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())
             same = len(commits) == 1 or commits[0] == commits[1]
+            control = len(commits) == 1 or commits[2]["transcript_root"] != commits[0]["transcript_root"]
             out.append({"weight": w, "n": W.shape[0], "k": W.shape[1], "m": m, "rel_rms": err, "commitment_repeats": same,
-                        "ok": err < ERR and same})
+                        "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
     run.details["passes"].clear()
     run.gemm_ms()
     return out
