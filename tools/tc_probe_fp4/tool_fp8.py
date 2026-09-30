@@ -37,6 +37,7 @@ def parse_fp8(argv: list[str]) -> dict:
     ap.add_argument("--expect-model", default=None)
     ap.add_argument("--lease-max-min", type=int, default=None)
     ap.add_argument("--phase", default="all")
+    ap.add_argument("--prebuilt", default=None)
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--target-cycles", type=int, default=1 << 27)

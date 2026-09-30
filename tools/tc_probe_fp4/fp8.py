@@ -20,6 +20,11 @@ Rows (kernels in ``mma_fp8.cu``, built ``-gencode arch=compute_120a,code=sm_120a
               compressed operands and GroupSum candidates, plus its W1 rate (``fp8_sparse.py``; ``--lease-max-min M`` runs the GPU
               phase under gpu-lease and verifies after the lease is released)
 
+The step row splits for fill jobs, so a GPU is held only while it captures: ``--phase gpu`` runs the gates and the capture and
+writes ``step_gpu.json`` beside ``tiles_<instruction>.npz``; ``--phase verify``, with the same workload flags and no device, checks
+that capture on the CPU and writes ``probe_results.json``.  One seed gives the same operands, words and samples split or not.
+``--prebuilt`` loads a library built earlier (``--row compile``) instead of building; the SASS gate still reads it.
+
 Gates, in order, before anything is measured: the device (exactly one visible, its UUID equal to ``--expect-gpu-uuid``, which
 defaults to ``gpu-lease``'s ``GPU_LEASE_UUID``), the SASS
 gate, the exact small-integer layout check of every kernel the row uses.  A failed gate writes the gate report and no
@@ -750,21 +755,41 @@ def _finite_domain(A, Bt, C, fa, fb, primary_out) -> np.ndarray:
     return ok & ((primary_out.reshape(-1) & 0x7F800000) != 0x7F800000)
 
 
-def row_step(dev, args, out: Path) -> dict:
+def capture_step(dev, args, out: Path) -> dict:
+    """The step row's device part: each family's operands and device words, and the elements its check samples (drawn here, so a
+    seed gives the same operands and samples whether the row runs in one process or split), into ``tiles_<instruction>.npz``."""
     instr = args.instruction
-    _, fa, fb, _, _ = TILES[instr]
     rng = np.random.default_rng(args.seed)
-    cands = candidates(instr)
-    primary = PRIMARY[instr][0]
-    fams, samples, first = {}, {}, []
-    arrays = {}
+    arrays, fams = {}, {}
     for name, A, Bt, C, SFA, SFB in step_families(rng, instr, args.n_random):
         if args.families and name not in args.families:
             continue
         n = A.shape[0]
         SFA = np.full((n, 16), 127, np.uint8) if SFA is None else SFA
         SFB = np.full((n, 8), 127, np.uint8) if SFB is None else SFB
+        t = time.time()
         D = dev.tiles(instr, A, Bt, C, SFA, SFB)
+        fams[name] = {"tiles": int(n), "device_seconds": round(time.time() - t, 3)}
+        pick = rng.choice(D.size, size=min(64, D.size), replace=False)
+        arrays[name] = dict(A=A, Bt=Bt, C=C, D=D, SFA=SFA, SFB=SFB, pick=pick)
+    np.savez_compressed(out / f"tiles_{instr}.npz", **{f"{f}.{k}": v for f, d in arrays.items() for k, v in d.items()})
+    return fams
+
+
+def verify_step(args, out: Path) -> dict:
+    """The step row's check of the capture in ``tiles_<instruction>.npz``, on the CPU: every candidate's words against the device's."""
+    instr = args.instruction
+    _, fa, fb, _, _ = TILES[instr]
+    cands = candidates(instr)
+    primary = PRIMARY[instr][0]
+    fams, samples, first = {}, {}, []
+    captured: dict[str, dict] = {}
+    with np.load(out / f"tiles_{instr}.npz") as data:
+        for key in data.files:
+            name, k = key.rsplit(".", 1)
+            captured.setdefault(name, {})[k] = data[key]
+    for name, v in captured.items():
+        A, Bt, C, D, SFA, SFB, pick = (v[k] for k in ("A", "Bt", "C", "D", "SFA", "SFB", "pick"))
         preds = {c: evaluate(instr, sp, A, Bt, C, SFA, SFB) for c, sp in cands.items()}
         if instr in ("f8_e4m3", "legacy_e4m3", "f8_e5m2"):  # the core kernel on the registered model must equal this row's arithmetic
             core = TCM.BLACKWELL_SM120_E4M3_M16N8K32 if fa == "e4m3" else TCM.BLACKWELL_SM120_E5M2_M16N8K32
@@ -783,17 +808,19 @@ def row_step(dev, args, out: Path) -> dict:
                     first.append({"family": name, "tile": int(t), "i": int(i), "j": int(j), "c": f"{int(C[t, i, j]):08x}",
                                   "a": _hexrow(A[t, i], 2), "b": _hexrow(Bt[t, j], 2), "sfa": int(SFA[t, i]), "sfb": int(SFB[t, j]),
                                   "hardware": f"{int(d[r]):08x}", "expected": f"{int(p.reshape(-1)[r]):08x}"})
-        pick = rng.choice(d.size, size=min(64, d.size), replace=False)
         samples[name] = [{"c": f"{int(C.reshape(-1)[r]):08x}", "a": _hexrow(A[r // 128, (r // 8) % 16], 2), "b": _hexrow(Bt[r // 128, r % 8], 2),
                           "sfa": int(SFA[r // 128, (r // 8) % 16]), "sfb": int(SFB[r // 128, r % 8]), "d": f"{int(d[r]):08x}"} for r in pick]
         fams[name] = rec
-        arrays[name] = dict(A=A, Bt=Bt, C=C, D=D, SFA=SFA, SFB=SFB)
-    np.savez_compressed(out / f"tiles_{instr}.npz", **{f"{f}.{k}": v for f, d in arrays.items() for k, v in d.items()})
     totals = {c: sum(f["mismatches"][c] for f in fams.values()) for c in cands}
     return {"families": fams, "candidates": {c: {**sp, "groups": list(sp["groups"])} for c, sp in cands.items()}, "primary": primary,
             "total_mismatches": totals, "first_mismatches": first, "samples": samples,
             "elements": sum(f["elements"] for f in fams.values()), "gated_elements": sum(f["gated_elements"] for f in fams.values()),
             "agrees": {c: v == 0 for c, v in totals.items()}}
+
+
+def row_step(dev, args, out: Path) -> dict:
+    device = capture_step(dev, args, out)
+    return {**verify_step(args, out), "device": device}
 
 
 def _chain_facts(A, Bt, C0, D) -> dict:
@@ -982,6 +1009,9 @@ ROWS = {"step": row_step, "chain": row_chain, "mixed": row_mixed, "cvt": row_cvt
 # --- main ---------------------------------------------------------------------------------------------------------------------------
 
 
+STEP_GPU_JSON = "step_gpu.json"
+
+
 def run(args) -> tuple[int, dict]:
     if args.row == "sparse":
         import fp8_sparse
@@ -989,14 +1019,19 @@ def run(args) -> tuple[int, dict]:
         return fp8_sparse.run(args)
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
+    if args.phase == "verify":
+        return run_verify(args, out)
+    end = finish_gpu if args.phase == "gpu" else finish
     t0 = time.time()
     results: dict = {"schema": "tc-probe-fp4/fp8/v1", "row": args.row, "instruction": args.instruction if args.row == "step" else None,
                      "seed": args.seed, "fake_silicon": bool(args.fake_silicon)}
     failures: list[str] = []
-    so, nvcc = None, None
-    if not args.fake_silicon or P4.nvcc_bin() and Path(P4.nvcc_bin()).exists():
-        so, nvcc = P4.build(ARCH, out, SOURCE)
-        results["nvcc"] = nvcc
+    so = None
+    if args.prebuilt:
+        so, results["nvcc"] = Path(args.prebuilt), f"prebuilt {args.prebuilt}"
+    elif not args.fake_silicon or P4.nvcc_bin() and Path(P4.nvcc_bin()).exists():
+        so, results["nvcc"] = P4.build(ARCH, out, SOURCE)
+    if so is not None:
         results["sass"] = sass_gate(so, out)
         if not results["sass"]["ok"]:
             failures.append("SASS gate: " + ", ".join(k for k, r in results["sass"]["kernels"].items() if not r["ok"]))
@@ -1004,7 +1039,7 @@ def run(args) -> tuple[int, dict]:
         results["sass"] = {"ok": None, "detail": "skipped: fake silicon without nvcc"}
     if args.row == "compile" or failures:
         results["seconds"] = round(time.time() - t0, 3)
-        return finish(out, args, results, failures, identity=None)
+        return end(out, args, results, failures, None)
     dev = FakeDevice(args.corrupt_word) if args.fake_silicon else Device(so)
     identity, id_fail = identity_gate(dev, args.expect_gpu_uuid)
     results["identity"] = identity
@@ -1018,10 +1053,50 @@ def run(args) -> tuple[int, dict]:
             failures.append(f"layout check: {results['layout']['mismatches']}")
     if failures:
         results["seconds"] = round(time.time() - t0, 3)
-        return finish(out, args, results, failures, identity)
+        return end(out, args, results, failures, identity)
     if isinstance(dev, FakeDevice):
         dev.armed = True
-    res = ROWS[args.row](dev, args, out)
+    if args.phase == "gpu":
+        results["device"] = capture_step(dev, args, out)
+        results["seconds"] = round(time.time() - t0, 3)
+        return end(out, args, results, failures, identity)
+    return judge(out, args, results, ROWS[args.row](dev, args, out), failures, identity, t0)
+
+
+def _workload(args) -> dict:
+    return {"instruction": args.instruction, "seed": args.seed, "n_random": args.n_random,
+            "families": sorted(args.families) if args.families else None}
+
+
+def finish_gpu(out: Path, args, results: dict, failures: list[str], identity: dict | None) -> tuple[int, dict]:
+    """The step row's GPU phase report, ``step_gpu.json``: the gates and the capture's workload, which ``--phase verify`` reads.
+    No probe_results.json or result.json: nothing is verified yet."""
+    results.update(_workload(args), phase="gpu", failures=failures, validation="gpu phase " + ("passed" if not failures else "failed"))
+    tmp = out / (STEP_GPU_JSON + ".tmp")
+    tmp.write_text(json.dumps(results, indent=1, default=str))
+    os.replace(tmp, out / STEP_GPU_JSON)
+    return (0 if not failures else 1), results
+
+
+def run_verify(args, out: Path) -> tuple[int, dict]:
+    """``--phase verify``: the step row's check of the capture ``--phase gpu`` left in ``--out``, on the CPU (no device, no lease)."""
+    t0 = time.time()
+    path = out / STEP_GPU_JSON
+    g = json.loads(path.read_text()) if path.exists() else {"failures": [f"the GPU phase wrote no {STEP_GPU_JSON}"]}
+    results: dict = {"schema": "tc-probe-fp4/fp8/v1", "row": "step", "instruction": args.instruction, "seed": args.seed,
+                     "fake_silicon": bool(g.get("fake_silicon")), **{k: g.get(k) for k in ("nvcc", "sass", "identity", "layout")},
+                     "gpu_phase": {k: g.get(k) for k in ("device", "seconds")}}
+    failures = list(g.get("failures", []))
+    captured = {k: g.get(k) for k in _workload(args)}
+    if path.exists() and captured != _workload(args):
+        failures.append(f"the capture in --out is {captured}, not {_workload(args)}")
+    if failures:
+        results["seconds"] = round(time.time() - t0, 3)
+        return finish(out, args, results, failures, results["identity"])
+    return judge(out, args, results, verify_step(args, out), failures, results["identity"], t0)
+
+
+def judge(out: Path, args, results: dict, res: dict, failures: list[str], identity: dict | None, t0: float) -> tuple[int, dict]:
     results["capture"] = {k: v for k, v in res.items() if k != "samples"}
     (out / "capture_sample.json").write_text(json.dumps(res.get("samples", {}), indent=1))
     primary_ok = res["agrees"].get(res["primary"], all(res["agrees"].values())) if args.row != "fadd" else all(res["agrees"].values())
@@ -1080,11 +1155,14 @@ def parser() -> argparse.ArgumentParser:
                     help="the device's UUID (default: gpu-lease's GPU_LEASE_UUID); a mismatch stops the run")
     ap.add_argument("--fake-silicon", action="store_true", help="the primary model stands in for the device (CPU dry run; never evidence)")
     ap.add_argument("--corrupt-word", type=int, default=None, help="with --fake-silicon: flip one bit of this output word once; the run must fail")
+    ap.add_argument("--phase", default="all", choices=["all", "gpu", "verify"],
+                    help="step and sparse rows. gpu: the gates and the capture only, into --out (step: step_gpu.json and the tiles); "
+                         "verify (step): check that capture on the CPU, with the same workload flags, and write probe_results.json")
+    ap.add_argument("--prebuilt", default=None, help="an already built libmma_fp8 .so, instead of building (the SASS gate still reads it)")
     sp = ap.add_argument_group("sparse row")
     sp.add_argument("--expect-model", default=None, help="a fp8_sparse candidate that must reproduce every gated word (default: a capture)")
     sp.add_argument("--lease-max-min", type=int, default=None,
                     help="run the GPU phase under `gpu-lease 1 --wait --max-min M` and verify on the CPU after the lease is released")
-    sp.add_argument("--phase", default="all", choices=["all", "gpu"], help="gpu: the device part only, into --out (the lease's child)")
     sp.add_argument("--workers", type=int, default=0, help="CPU processes for the verification (default min(32, cpu count))")
     sp.add_argument("--reps", type=int, default=10, help="W1 timing reps")
     sp.add_argument("--target-cycles", type=int, default=1 << 27, help="W1 cycles per timed launch")
@@ -1102,6 +1180,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.lease_max_min and args.fake_silicon:
         print("fp8.py: --lease-max-min takes a GPU; --fake-silicon runs in process", file=sys.stderr)
+        return 2
+    if args.phase != "all" and args.row not in (("step",) if args.phase == "verify" else ("step", "sparse")):
+        print(f"fp8.py: --phase {args.phase} is for the step row" + (" and the sparse row" if args.phase == "gpu" else ""), file=sys.stderr)
+        return 2
+    if args.prebuilt and args.row == "sparse":
+        print("fp8.py: the sparse row builds its own libraries; no --prebuilt", file=sys.stderr)
         return 2
     if args.expect_model is not None:
         import fp8_sparse

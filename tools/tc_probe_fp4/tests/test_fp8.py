@@ -150,6 +150,57 @@ def test_fake_silicon_refused_under_research_run(monkeypatch, tmp_path):
     assert fp8.main(["--row", "fadd", "--out", str(tmp_path), "--fake-silicon"]) == 2
 
 
+SPLIT = ["--row", "step", "--instruction", "f8_e4m3e5m2", "--n-random", "32", "--seed", "11", "--families", "subnormal,randn_zero_acc"]
+
+
+def _verify(out, argv=SPLIT):
+    return fp8.run(fp8.parser().parse_args([*argv, "--out", str(out), "--phase", "verify"]))
+
+
+def _tiles(out):
+    with np.load(out / "tiles_f8_e4m3e5m2.npz") as d:
+        return {k: d[k] for k in d.files}
+
+
+def test_split_step_equals_one_process(tmp_path, no_nvcc):
+    code, one = _run(tmp_path / "one", SPLIT)
+    assert code == 0
+    code, gpu = _run(tmp_path / "split", [*SPLIT, "--phase", "gpu"])
+    assert code == 0 and gpu["validation"] == "gpu phase passed" and "capture" not in gpu
+    assert not (tmp_path / "split" / "probe_results.json").exists()
+    assert json.loads((tmp_path / "split" / "step_gpu.json").read_text())["families"] == ["randn_zero_acc", "subnormal"]
+    code, ver = _verify(tmp_path / "split")
+    assert code == 0 and ver["validation"] == "passed", ver["failures"]
+    assert ver["capture"] == {k: v for k, v in one["capture"].items() if k != "device"}
+    tiles = lambda device: {k: v["tiles"] for k, v in device.items()}
+    assert tiles(ver["gpu_phase"]["device"]) == tiles(one["capture"]["device"]) == {"randn_zero_acc": 32, "subnormal": 32}
+    a, b = _tiles(tmp_path / "one"), _tiles(tmp_path / "split")
+    assert a.keys() == b.keys() and all(np.array_equal(a[k], b[k]) for k in a)
+    assert (tmp_path / "one" / "capture_sample.json").read_text() == (tmp_path / "split" / "capture_sample.json").read_text()
+
+
+def test_split_step_corruption_fails_in_verify(tmp_path, no_nvcc):
+    code, gpu = _run(tmp_path, [*SPLIT, "--phase", "gpu", "--corrupt-word", "5"])
+    assert code == 0 and gpu["validation"] == "gpu phase passed"
+    code, ver = _verify(tmp_path)
+    assert code == 1 and any(f.startswith("primary") for f in ver["failures"]), ver["failures"]
+
+
+def test_verify_refuses_another_workload_or_no_capture(tmp_path, no_nvcc):
+    assert _run(tmp_path / "cap", [*SPLIT, "--phase", "gpu"])[0] == 0
+    code, ver = _verify(tmp_path / "cap", [*SPLIT[:-3], "12", *SPLIT[-2:]])
+    assert code == 1 and ver["failures"][0].startswith("the capture in --out is") and "capture" not in ver
+    code, ver = _verify(tmp_path / "empty")
+    assert code == 1 and ver["failures"] == ["the GPU phase wrote no step_gpu.json"]
+    assert json.loads((tmp_path / "empty" / "probe_results.json").read_text())["validation"] == "failed"
+
+
+def test_phase_and_prebuilt_refused_where_they_do_nothing(tmp_path):
+    assert fp8.main(["--row", "chain", "--phase", "gpu", "--out", str(tmp_path), "--fake-silicon"]) == 2
+    assert fp8.main(["--row", "sparse", "--phase", "verify", "--out", str(tmp_path)]) == 2
+    assert fp8.main(["--row", "sparse", "--prebuilt", "x.so", "--out", str(tmp_path)]) == 2
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("nvcc") is None or shutil.which("cuobjdump") is None, reason="needs nvcc and cuobjdump (CUDA 12.9)")
 def test_sass_gate_on_a_real_build(tmp_path):
