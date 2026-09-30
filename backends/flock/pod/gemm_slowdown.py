@@ -12,6 +12,11 @@ at M = 1 (vLLM computes only the last token's logits); decode is every GEMM at M
     python gemm_slowdown.py native --out native.json [--iters 100] [--trials 5]
     python gemm_slowdown.py compute --sweep m34/results.jsonl [--gate gate/results.jsonl] --native native.json --result result.json
     python gemm_slowdown.py sample --pgid PGID --out others.txt [--every 30]   # cores busy outside process group PGID (overlapping Builds)
+    python gemm_slowdown.py point --slowdown slowdown.json --config C --result result.json   # one (phase, config) row of an attempt
+
+The rows (ov.config, one stored run each, from the attempt's slowdown.json): per phase, the model's GEMMs together
+(`llama32-1b.prefill.M256`, `llama32-1b.decode.M1-8`) and the two shapes that set the two per-coordinate costs, gate_up for
+K = 2048 and down for K = 8192 (`256x16384x2048`, `256x2048x8192`, `1x16384x2048`, `1x2048x8192`).
 """
 from __future__ import annotations
 
@@ -30,6 +35,11 @@ LM_HEAD = ("lm_head", 128256, 2048)
 PREFILL_M = 256
 DECODE_M = (1, 2, 4, 8)
 GATE_CASES = ("gpu_paths_agree", "gpu_proofs_match_cpu")
+
+
+CONFIGS = {"llama32-1b.prefill.M256": ("prefill", None), "256x16384x2048": ("prefill", (256, 16384, 2048)),
+           "256x2048x8192": ("prefill", (256, 2048, 8192)), "llama32-1b.decode.M1-8": ("decode", None),
+           "1x16384x2048": ("decode", (1, 16384, 2048)), "1x2048x8192": ("decode", (1, 2048, 8192))}
 
 
 def phases() -> dict[str, list[tuple[str, int, int, int, int]]]:
@@ -127,6 +137,16 @@ def compute(a) -> None:
             prove_only += count * m * n * pc[k]["prove_s_per_coord"]
             nat_s += count * nat["times_s"][f"{m}x{n}x{k}"]
         res[ph] = {"slowdown": prover / nat_s, "slowdown_prove_only": prove_only / nat_s, "prover_s": prover, "native_s": nat_s}
+    configs = {}
+    for c, (ph, shape) in CONFIGS.items():
+        if shape is None:
+            if "slowdown" in res.get(ph, {}):
+                configs[c] = {"phase": ph, **res[ph]}
+        elif shape[2] in pc:
+            m, n, k = shape
+            t = nat["times_s"][f"{m}x{n}x{k}"]
+            configs[c] = {"phase": ph, "slowdown": m * n * pc[k]["s_per_coord"] / t, "slowdown_prove_only": m * n * pc[k]["prove_s_per_coord"] / t,
+                          "prover_s": m * n * pc[k]["s_per_coord"], "native_s": t}
     out = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"gpu": nat.get("gpu"), "sm": nat.get("sm"), "torch": nat.get("torch"),
                                     "digests": {k: v["statement_digest"] for k, v in pc.items()}},
@@ -137,11 +157,28 @@ def compute(a) -> None:
                            + [{"name": f"s_per_coord_K{k}", "value": v["s_per_coord"], "unit": "s"} for k, v in pc.items()],
            "measurement_files": ["out/slowdown.json", "out/native.json", "out/m34/classes/results.jsonl"]}
     Path(a.result).parent.mkdir(parents=True, exist_ok=True)
-    (Path(a.result).parent / "out" / "slowdown.json").write_text(json.dumps({"phases": res, "per_coordinate": pc, "native": nat, "gate": g}, indent=1))
+    (Path(a.result).parent / "out" / "slowdown.json").write_text(json.dumps({"phases": res, "configs": configs, "per_coordinate": pc, "native": nat,
+                                                                          "gate": g}, indent=1))
     tmp = Path(a.result).with_suffix(".tmp")
     tmp.write_text(json.dumps(out, indent=1))
     os.replace(tmp, a.result)
     print(json.dumps({ph: {k: v for k, v in r.items() if k != "missing_K"} for ph, r in res.items()}), g["status"])
+
+
+def point(a) -> None:
+    """One (phase, config) row of an attempt, as its own result: the overhead, the gate, and where it came from."""
+    d = json.loads(Path(a.slowdown).read_text())
+    c = d["configs"][a.config]
+    out = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
+           "workload_fingerprint": {"config": a.config, "phase": c["phase"], "from_run": a.from_run, "gpu": d["native"].get("gpu")},
+           "validation": {"status": d["gate"]["status"], "checker": "the measuring run's byte identity", "detail": a.from_run or ""},
+           "measurements": [{"name": "overhead", "value": c["slowdown"], "unit": "x-native"},
+                            {"name": "overhead_prove_only", "value": c["slowdown_prove_only"], "unit": "x-native"},
+                            {"name": "prover_s", "value": c["prover_s"], "unit": "s"}, {"name": "native_s", "value": c["native_s"], "unit": "s"}]}
+    tmp = Path(a.result).with_suffix(".tmp")
+    tmp.write_text(json.dumps(out, indent=1))
+    os.replace(tmp, a.result)
+    print(a.config, c["phase"], f"{c['slowdown']:.4g}", d["gate"]["status"])
 
 
 def sample(a) -> None:
@@ -188,13 +225,18 @@ def main() -> None:
     c.add_argument("--gate")
     c.add_argument("--native", required=True)
     c.add_argument("--result", required=True)
+    pt = sub.add_parser("point")
+    pt.add_argument("--slowdown", required=True)
+    pt.add_argument("--config", required=True, choices=sorted(CONFIGS))
+    pt.add_argument("--from-run", default="")
+    pt.add_argument("--result", default=os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "result.json"))
     sm = sub.add_parser("sample")
     sm.add_argument("--pgid", type=int, required=True)
     sm.add_argument("--out", required=True)
     sm.add_argument("--every", type=float, default=30)
     a = ap.parse_args()
     t = time.time()
-    {"native": native, "compute": compute, "sample": sample}[a.cmd](a)
+    {"native": native, "compute": compute, "sample": sample, "point": point}[a.cmd](a)
     print(f"{a.cmd}: {time.time() - t:.1f} s")
 
 
