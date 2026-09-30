@@ -205,9 +205,10 @@ REGISTERED: dict[str, GemmTarget] = {
                   "bit-exact at M >= 2 with the bias added in FP32 before the rounding (cuBLASLt's epilogue, not GemmBias_v1's bf16 add after it); "
                   "at M = 1 cuBLAS runs a gemv kernel that is not this chain (20 of 24 cases off in 1 to 3 of 1,024 coordinates)",
                   "the per-tensor FP8 linear: vLLM's cc 12.0 CUTLASS FP8 dispatch (d9105ea80) has no swap_ab, so ScaleA = the activation "
-                  "scale: bf16(s_x * (s_w * acc)) over the ascending BlackwellE4m3QmmaDot32_v1 chain, 15.7M coordinates exact on an RTX PRO "
-                  "6000 (run r20260930-041842-76a2); the swapped order misses 89 of its 125 discriminating coordinates (red team "
-                  "fp8-per-tensor-scale-order, reproducer r20260930-081238-476e); the step is pinned (trust dossier "
+                  "scale: bf16(s_x * (s_w * acc)) over the ascending BlackwellE4m3QmmaDot32_v1 chain, 15,728,640 coordinates exact on an "
+                  "RTX PRO 6000 without a bias (run r20260930-041842-76a2), the bias form (one FMA, ScaledEpilogueBias) from the source; "
+                  "the swapped order misses 89 of its 125 discriminating coordinates (red team fp8-per-tensor-scale-order, reproducer "
+                  "r20260930-081238-476e); the step is pinned (trust dossier "
                   "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)")),
 }
 
