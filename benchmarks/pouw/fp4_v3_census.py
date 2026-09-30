@@ -30,6 +30,10 @@ Designs (δ = 1/4 row-relative noise unless named; the noise std is δ·ρ·α�
                 per-row constant), and the headroom at the largest magnitude; it gives identical rows distinct codes
   v3-sign-nm    signs-only rank-1 with the per-row magnitude, and block scales from the noisy amax as v1 (one FMNMX per
                 element, uncredited)
+  v3-sign-hgNm  v3-sign-hjNm's rule without a salted scale: the salt-free headroom goes in the clean quantizer's scale,
+                UE4M3((amax_b + 1.25δρα₀)/6), and 2^-u_i is a per-row gain on its reciprocal (one FMUL per block, no
+                UE4M3 encode, decode or reciprocal); the chain reads code x the clean scale, the epilogue's per-row α
+                undoes the gain
 
     python benchmarks/pouw/fp4_v3_census.py --out v3-census.json
 """
@@ -38,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -46,7 +51,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fp4_emulation import E2M1_HALVES, e2m1_rn, family, ue4m3_dyadic, ue4m3_rn  # noqa: E402
 
-DESIGNS = ("v1", "v3-gauss", "v3-sign", "v3-sign-d2", "v3-sign-j4", "v3-sign-j2", "v3-sign-h", "v3-sign-hj4", "v3-sign-hj4m", "v3-sign-nm")
+DESIGNS = ("v1", "v3-gauss", "v3-sign", "v3-sign-d2", "v3-sign-j4", "v3-sign-j2", "v3-sign-h", "v3-sign-hj4", "v3-sign-hj4m",
+           "v3-sign-hj8m", "v3-sign-hg4m", "v3-sign-hg8m", "v3-sign-nm")
 
 
 def value_of(codes: np.ndarray) -> np.ndarray:
@@ -67,7 +73,7 @@ def row_stats(x: np.ndarray, delta: float):
 
 
 def form(x: np.ndarray, design: str, rng: np.random.Generator):
-    """One salt's formed operand: (values, noise added, saturated mask), all [R, k]."""
+    """One salt's formed operand: (what the chain reads, the useful value, noise added, saturated mask), all [R, k]."""
 
     delta = 0.5 if design.endswith("-d2") else 0.25
     alpha, sig = row_stats(x, delta)
@@ -88,14 +94,20 @@ def form(x: np.ndarray, design: str, rng: np.random.Generator):
     if "-h" in design:
         amax = amax + sig * (1.25 if design.endswith("m") else 1.0)   # the noise's headroom: its largest magnitude
     amax = amax / 6.0
-    if "j" in design.split("-")[-1]:
-        j = int(design.split("-")[-1].strip("hjm"))
-        amax = amax * np.exp2(rng.uniform(0, 1.0 / j, (r, 1)))
+    jit = re.fullmatch(r"h?([jg])(\d+)m?", design.split("-")[-1])
+    gain = np.ones((r, 1))
+    if jit:
+        u = rng.uniform(0, 1.0 / int(jit.group(2)), (r, 1))
+        if jit.group(1) == "g":
+            gain = np.exp2(-u)
+        else:
+            amax = amax * np.exp2(u)
     sc = scale_val(np.maximum(ue4m3_rn(amax), 1))
     scb = np.repeat(sc, 16, axis=1)
-    q = d / scb
+    q = d / scb * gain
     codes = e2m1_rn(q)
-    return value_of(codes) * scb, noise, np.abs(q) > 6.0
+    chain = value_of(codes) * scb
+    return chain, chain / gain, noise, np.abs(q) > 6.0
 
 
 def plain(x: np.ndarray):
@@ -114,7 +126,7 @@ def census(fam: str, design: str, rows: int, k: int, salts: int, seed: int) -> d
     vals = np.empty((salts, rows, k), np.float32)
     sat = 0.0
     for s in range(salts):
-        v, _, m = form(xa, design, rng)
+        v, _, _, m = form(xa, design, rng)
         vals[s] = v
         sat += m.mean()
     dead = (vals == vals[0]).all(axis=0)
@@ -144,8 +156,8 @@ def census(fam: str, design: str, rows: int, k: int, salts: int, seed: int) -> d
     ref = np.linalg.norm(plain(xa) @ plain(xb).T - exact)
     errs = []
     for _ in range(2):
-        va, na, _ = form(xa, design, rng)
-        vb, nb, _ = form(xb, design, rng)
+        _, va, na, _ = form(xa, design, rng)
+        _, vb, nb, _ = form(xb, design, rng)
         aa, _ = row_stats(xa, 0.5 if design.endswith("-d2") else 0.25)
         ab, _ = row_stats(xb, 0.5 if design.endswith("-d2") else 0.25)
         u = ((va - na) / aa) @ ((vb - nb) / ab).T
