@@ -195,23 +195,27 @@ def test_row_rules_and_debit(fmt):
     e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
     a = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FA, 1024))
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
-    clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096)
+    shape = Shape(64, 1024, 4096)
+    clean = F.tile_debit(f, a, b, e, e, [1, 2, 3], [1, 2, 3], shape)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
     # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
-    assert clean.total == clean.forming + clean.identity and (clean.identity == 0) == (fmt == "nvfp4")
+    assert clean.f2 == 0 and clean.total == clean.f1 + clean.forming + clean.identity
+    assert (clean.identity == 0) == (fmt == "nvfp4")
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
     # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
-    d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096)
-    assert d.dead_pairs == f.block and d.two_four == 4 * F.two_four_units(dead) and d.identity == d.subgrid == d.windows == 0
+    d = F.tile_debit(f, a, b, e, e, [0, 1], [0, 1], shape)
+    f1 = [F.f1_row(f, side, i, e[i], F.salt_dead(f, side.x[i], side.alpha[i], side.ae[i]), F.dead_blocks(f, side.x[i]))[0]
+          for side in (a, b) for i in (0, 1)]
+    assert d.dead_pairs == f.block and d.f1 == 2 * sum(f1) and d.f2 == d.identity == d.subgrid == d.windows == 0
     unneeded = [all(b.codes[j][t] & 7 == 0 for j in (0, 1)) for t in range(1024)]
     witness = sum(p or u for i in (0, 1) for p, u in zip(F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i]), unneeded))
     assert d.counts["screened_blocks_a"] == d.counts["screened_blocks_b"] == 1 and d.counts["forming_elements"] == witness
     assert d.forming == Fraction(F.FORMING_CREDITED * witness * 2, 4096)
-    assert d.total == d.dead_pairs + d.two_four + d.forming
+    assert d.total == d.dead_pairs + d.f1 + d.forming
 
 
 def screened_tile(blocks: int, b_blocks: int = 0):
@@ -237,32 +241,269 @@ def witness_elements(s, ops) -> int:
 
 
 @pytest.mark.parametrize("blocks", (2, 16))
-def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(blocks):
+def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness_and_by_f1(blocks):
     """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
-    witness's salt-dead elements (not every element of a screened block), no block pair is screened, and the tile stays
-    under ρ (server.md 11:32Z)."""
+    witness's salt-dead elements (not every element of a screened block), and no block pair is screened (server.md
+    11:32Z).  F1′ counts a screened block's codes as never changing (theory §6.2), so 16 of them, two whole row windows,
+    cost row 0 about 2·128·(1 − 1/8) per word: over the cap of a 4 x 4 tile (its 16 cells' share, about 56), under a
+    64 x 64 tile's (about 11,500)."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
     assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
     assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:blocks * s.fmt.block]) <= blocks
-    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
-    d = s.last_debit
+    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
+    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
     assert d.counts["screened_blocks_a"] == blocks and d.dead_pairs == 0
     assert d.counts["forming_elements"] == witness_elements(s, ops) < blocks * s.fmt.block
     assert d.forming == Fraction(F.FORMING_CREDITED * witness_elements(s, ops) * 4, 1024)
-    assert 0 < d.total <= s.tile_cap(record, ops, range(4), range(4))[1]
+    if blocks == 2:
+        assert reason is None and 0 < d.total <= cap
+    else:
+        assert d.counts["f1_windows_a"] >= 2 and 4 * 2 * 128 * Fraction(7, 8) <= d.f1 and d.total > cap
+        assert reason.startswith("the replayed debit")
+        assert d.f1 * 64 / 4 < cap * 64 * 64 / 16           # row 0 feeding 64 columns, against a 64 x 64 tile's cap
 
 
 def test_blocks_both_operands_screen_push_the_tile_past_rho_by_item_3():
     """Four blocks screened on A row 0 and B row 0 alike: 4 pairs on word (0, 0), 16 units each, pass the tile's cap
-    (16 cells' share of creditOf at ρ = 1/400, about 56 units), so the tile is rejected; the same four on A alone pass."""
+    (16 cells' share of creditOf at ρ = 1/400, about 56 units) by item 3 alone; F1′ charges the same four on A alone, half
+    of one row window, past a 4 x 4 tile's cap too."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
     reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
     d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
-    assert d.counts["dead_pairs"] == 4 and d.dead_pairs == 4 * s.fmt.block and d.total > cap
+    assert d.counts["dead_pairs"] == 4 and d.dead_pairs == 4 * s.fmt.block > cap
     assert d.counts["forming_elements"] == witness_elements(s, ops)
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4)
-    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None and s.last_debit.dead_pairs == 0
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is not None
+    assert s.last_debit.dead_pairs == 0 and s.last_debit.f1 > cap
+
+
+def two_draw_row(k: int = 128) -> tuple[list[int], list[int], list[int]]:
+    """A row, its E line with codes at two positions (the rest 0, so 16^30 of every 16^32 lines share each (f_3, f_17)
+    pair) and the row's positions whose E code is nonzero."""
+    x = F.parse_row(V.rows("law", "A", 1, k)[0], k)
+    e = [0] * F.R
+    e[3], e[17] = 0x6, 0xB
+    return x, e, [3, 17]
+
+
+def brute(fmt: F.Fmt, c: int, ae: int, e: list[int], at: list[int]) -> list[int]:
+    """The noise atom's D on each of the 256 (f_3, f_17) pairs, every other F code 0."""
+    out = []
+    for f1 in range(16):
+        for f2 in range(16):
+            f = [0] * F.R
+            f[at[0]], f[at[1]] = f1, f2
+            out.append(F.noise_atom(c, e, ae, f))
+    return out
+
+
+def test_the_line_sum_law_is_exact():
+    """`_law` against direct enumeration on an E line with four nonzero codes, and its total and second moment in
+    general: 16^32 lines, E[S²] = 34.25·Σ_r h(e_r)² (a uniform nibble's E[h²] is 548/16)."""
+    from collections import Counter
+    from itertools import product
+    e = [3, 0, 12, 9] + [0] * 28
+    mags = [0] * 8
+    for c in e:
+        mags[c & 7] += 1
+    lo, cdf = F._law(tuple(mags))
+    direct = Counter(sum(F._H[a] * F._H[b] for a, b in zip(e, fs)) for fs in product(range(16), repeat=4))
+    pmf = [cdf[0]] + [cdf[j] - cdf[j - 1] for j in range(1, len(cdf))]
+    assert pmf == [direct.get(s, 0) * 16 ** 28 for s in range(lo, lo + len(cdf))]
+    e = F.line(b"law" * 11, F.ROLE_EA, 0)
+    mags = [0] * 8
+    for c in e:
+        mags[c & 7] += 1
+    lo, cdf = F._law(tuple(mags))
+    pmf = [cdf[0]] + [cdf[j] - cdf[j - 1] for j in range(1, len(cdf))]
+    assert cdf[-1] == F.LINES and sum(n * (lo + j) for j, n in enumerate(pmf)) == 0
+    assert sum(n * (lo + j) ** 2 for j, n in enumerate(pmf)) * 16 == F.LINES * 548 * sum(F._H[c] ** 2 for c in e)
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_p_and_the_scale_masses_match_the_noise_atom_line_by_line(fmt):
+    """On `two_draw_row`'s E line every line is one of 256 classes of 16^30, so each element's exact law is enumerable:
+    p_t (`_p_change`) and P(|D_t| < `_above`(b)) (`_below`) equal the counts over the noise atom's own words, lines whose
+    every product is zero (D = C) included, at every scale byte the row's blocks can take."""
+    f = F.FORMATS[fmt]
+    x, e, at = two_draw_row()
+    _, _, alpha, _, ae = F.stats(f, x)
+    mags = [0] * 8
+    for c in e:
+        mags[c & 7] += 1
+    law, idle, weight = F._law(tuple(mags)), 16 ** 30 * 4, 16 ** 30
+    for t in range(0, len(x), 5):
+        c = fp32.mul(alpha, x[t])
+        y, ds = F._atom_sum(c, ae), brute(f, c, ae, e, at)
+        for byte in sorted({F.block_scale(f, d & 0x7FFFFFFF)[0] for d in ds} | {F.block_scale(f, c & 0x7FFFFFFF)[0]}):
+            from collections import Counter
+            values = Counter(F.e2m1_value(F.e2m1(fp32.mul(d, F.recip(f, byte)))) for d in ds)
+            assert F._p_change(f, law, idle, y, c, byte) == (F.LINES - max(values.values()) * weight) / F.LINES
+            u = F._above(f, byte)
+            assert F._below(law, idle, y, c, u) == weight * sum(u is None or d & 0x7FFFFFFF < u for d in ds)
+            assert all((F.block_scale(f, d & 0x7FFFFFFF)[0] <= byte) == (u is None or d & 0x7FFFFFFF < u) for d in ds)
+
+
+def test_the_modal_byte_is_the_realised_bytes_mode():
+    """A block's modal byte from the product formula against 600 formings of it (each element's F line drawn afresh):
+    the most frequent realised byte, and every byte's predicted probability within 4.5 standard errors."""
+    import math
+    import random
+    from collections import Counter
+    f, rng = F.NVFP4, random.Random(3)
+    x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
+    _, _, alpha, _, ae = F.stats(f, x)
+    e = F.line(b"mode" * 8, F.ROLE_EA, 0)
+    mags = [0] * 8
+    for c in e:
+        mags[c & 7] += 1
+    law, idle = F._law(tuple(mags)), 16 ** mags[0] * 2 ** (F.R - mags[0])
+    for b0 in (0, 16 * 9):
+        cs = [fp32.mul(alpha, w) for w in x[b0:b0 + 16]]
+        ys = [F._atom_sum(c, ae) for c in cs]
+        seen = Counter(F.block_scale(f, max(F.noise_atom(c, e, ae, [rng.randrange(16) for _ in range(F.R)]) & 0x7FFFFFFF
+                                            for c in cs))[0] for _ in range(600))
+        mode = F._modal_byte(f, law, idle, ys, cs)
+        assert seen.most_common(1)[0][0] == mode
+        cum = lambda b: math.prod(F._below(law, idle, y, c, F._above(f, b)) for y, c in zip(ys, cs))  # noqa: E731
+        for b, n in seen.items():
+            p = (cum(b) - cum(b - 1)) / F.LINES ** 16
+            assert abs(n / 600 - p) <= 4.5 * math.sqrt(p * (1 - p) / 600) + 1e-9
+
+
+def test_window_saving_against_the_chunk_enumeration():
+    """`_chunk` against the census's enumeration of a chunk's 81 pair-state combinations (``dnc2.py``: excess = the smallest
+    m − 2 changed pairs' counts), and `window_saving` at its ends: all codes fixed save min(1, ½ + ½ + ½), all changing
+    nothing."""
+    import random
+    from itertools import product
+    rng = random.Random(2)
+    for _ in range(20):
+        pairs = [(rng.random(), rng.random()) for _ in range(4)]
+        want = [0.0] * (F.XM + 1)
+        for js in product(range(3), repeat=4):
+            pr = 1.0
+            for (a, b), j in zip(pairs, js):
+                pr *= ((1 - a) * (1 - b), a * (1 - b) + (1 - a) * b, a * b)[j]
+            dev = sorted(j for j in js if j)
+            want[min(sum(dev[:len(dev) - 2]) if len(dev) > 2 else 0, F.XM)] += pr
+        assert all(abs(u - v) < 1e-12 for u, v in zip(F._chunk(pairs), want))
+    for fmt in FMTS:
+        f = F.FORMATS[fmt]
+        assert F.window_saving(f, [0.0] * 128) == 1.0 and F.window_saving(f, [1.0] * 128) == 0.0
+    # one reliable code per block can't make 2:4 inside it; eight per block can
+    one = [0.0 if t % 16 == 0 else 0.5 for t in range(128)]
+    eight = [0.0 if t % 16 < 8 else 0.5 for t in range(128)]
+    assert F.window_saving(F.NVFP4, one) < 1e-5 < 0.4 < F.window_saving(F.NVFP4, eight)
+    assert float(F.C_PATCH) == 16.92 / 128 and F._VX[F.XM] == 0.0 < F._VX[F.XM - 1]
+
+
+def family_rows(name: str, rows: int, k: int, seed: int) -> list[list[int]]:
+    """Theory §6.2's row families (``cheap-binding/pearlc4-fix``): the assessor's spike rows (14 of 16 at 8.9ρ, the two
+    ρ samples Gaussian; ``fix_check.py``), narrow-cell rows (one max at 8.9ρ per block, the rest centred on narrow E2M1
+    cells; ``dnc_attack.py``), a max at a fixed offset (S = 6, Gaussian elsewhere) and Gaussian rows, as BF16 words."""
+    import random
+    rng = random.Random(seed)
+    col = [(rng.choice((-1, 1)), rng.choice((0.0, 0.5, 1.0, 1.5))) for _ in range(k)]
+    samp = [1.0 if rng.random() < 0.275 else 0.5 for _ in range(k // 8)]
+    signs = [rng.choice((-1, 1)) for _ in range(k // 16)]
+    out = []
+    for _ in range(rows):
+        rs = rng.choice((-1, 1))
+        if name == "spike":
+            x = [rng.gauss(0, 1) if t % 16 in (0, 8) else 8.9 * rs * signs[t // 16] for t in range(k)]
+        elif name == "narrow":
+            u = 8.9 / 6
+            x = [rs * col[t][0] * col[t][1] * u for t in range(k)]
+            for t in range(0, k, 8):
+                x[t] = rng.choice((-1, 1)) * samp[t // 8] * u
+            for t in range(1, k, 16):
+                x[t] = 8.9 * rs
+        else:
+            x = [rng.gauss(0, 1) for _ in range(k)]
+            if name == "offset":
+                for t in range(1, k, 16):
+                    x[t] = 6.0 * rs * signs[t // 16]
+        out.append([P.f32_to_bf16(v) for v in x])
+    return out
+
+
+def f1_per_mac(fmt: F.Fmt, xs: list[list[int]], seed: bytes) -> tuple[float, float]:
+    """F1′ per MAC over rows given as BF16 words, and their blocks' modal-byte share."""
+    k = len(xs[0])
+    es = [F.line(seed, F.ROLE_EA, i) for i in range(len(xs))]
+    side = F.form(fmt, [[w << 16 for w in x] for x in xs], es, F.basis(seed, F.ROLE_FA, k))
+    units = off = 0
+    for i in range(len(xs)):
+        u, _, o = F.f1_row(fmt, side, i, es[i], F.salt_dead(fmt, side.x[i], side.alpha[i], side.ae[i]),
+                           F.dead_blocks(fmt, side.x[i]))
+        units, off = units + u, off + o
+    return float(units) / (len(xs) * k), 1 - off / (len(xs) * k / fmt.block)
+
+
+def test_f1_prices_the_base_split_families():
+    """Theory §6.2's table on the exact law (NVFP4, 4 rows x k = 1,024): F1′ charges the spike rows 0.8+ and the
+    narrow-cell rows 0.2+ per MAC (the census's Gaussian law: 0.917 and 0.289), and the max-at-offset and Gaussian rows
+    nearly nothing; their modal-byte shares straddle the census's 0.935, 0.539 and 0.684."""
+    got = {name: f1_per_mac(F.NVFP4, family_rows(name, 4, 1024, 11), b"\x05" * 32)
+           for name in ("spike", "narrow", "offset", "gauss")}
+    assert got["spike"][0] > 0.8 and got["spike"][1] > 0.85
+    assert 0.2 < got["narrow"][0] < 0.5 and 0.45 < got["narrow"][1] < 0.75
+    assert got["offset"][0] < 0.01 and 0.55 < got["offset"][1] < 0.8
+    assert got["gauss"][0] == 0 and got["gauss"][1] < 0.5
+
+
+def test_f1_rejects_a_spike_tile_the_old_item_1_let_through():
+    """The assessor's rows (`family_rows` spike) on A, Gaussian B, 4 x 4 of a 4 x 1,024 x 1,024 unit: the witness finds
+    every code salt-live and no block screened, so every other item is 0 (item 1 was too), and F1′ charges them past the
+    cap."""
+    s, k = V.scheme("nvfp4", False), 1024
+    ctx = V.ctx_of("spike", (4, k, 1024), 0, 0)
+    a_rows = [F.bf16_row(x) for x in family_rows("spike", 4, k, 7)]
+    b_rows = [F.bf16_row(x) for x in family_rows("gauss", 4, k, 8)]
+    tile = type(s.tiles(Shape(64, k, 64))[0])(range(4), range(4))
+    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+    record = W.UnitRecord(ctx.matmul, 4, k)
+    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
+    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
+    assert reason is not None and reason.startswith("the replayed debit")
+    assert d.counts["salt_dead_a"] == d.counts["screened_blocks_a"] == 0 and d.total == d.f1 > 0.5 * 16 * k > 100 * cap
+
+
+def test_f2_c_l_and_the_saving_follow_the_theory_table():
+    """§6.3's table: c_L, its depth, and F2 on the flattest rows (f = 0.9996) and one-max rows (0.965) per GEMM shape;
+    MXFP4's shaped rows (f = 1) at 8,192³ and the domain's largest, depth ≤ log2(k/32)."""
+    table = (((8192, 8192, 8192), 8, 0.81, 18.9, 0.0), ((16384, 16384, 16384), 9, 0.71, 29.0, 1.3),
+             ((32768, 32768, 32768), 10, 0.62, 37.8, 10.1), ((65536, 65536, 65536), 11, 0.54, 45.5, 17.8),
+             ((1 << 24, 1 << 16, 1 << 24), 12, 0.40, 59.3, 31.7))
+    for (m, k, n), depth, cl, flat, one in table:
+        got = F.c_l(m, k, n, 16)
+        at = 2 * Fraction(7, 8) ** depth + Fraction(17, 4) * (Fraction(1, m) + Fraction(1, n)) * (
+            Fraction(7, 4) ** depth - 1) / Fraction(3, 4)
+        assert got == at and round(float(got), 2) == cl
+        for f, want in ((Fraction(9996, 10000), flat), (Fraction(965, 1000), one)):
+            assert round(100 * float(F.f2_save(F.NVFP4, Shape(m, k, n), f, f)), 1) == want
+    assert round(100 * float(F.f2_save(F.MXFP4, Shape(8192, 8192, 8192), Fraction(1), Fraction(1))), 1) == 19.2
+    assert round(100 * float(F.f2_save(F.MXFP4, Shape(1 << 24, 1 << 16, 1 << 24), Fraction(1), Fraction(1))), 1) == 53.9
+    assert F.c_l(64, 16, 64, 16) is None and F.f2_save(F.NVFP4, Shape(64, 16, 64), Fraction(1), Fraction(1)) == 0
+    # honest tiles: F2 is positive only above f_A + f_B = 2 − (1 − c_L)/4, 1.85 at the domain's largest c_L
+    assert F.f2_save(F.NVFP4, Shape(1 << 24, 1 << 16, 1 << 24), Fraction(92, 100), Fraction(92, 100)) == 0
+
+
+def test_f2_charges_a_tile_whose_realised_bytes_are_flat():
+    """F2 reads the realised scale bytes: a 4 x 4 Gaussian tile at the domain's largest NVFP4 GEMM (depth ≤ 6 at k =
+    1,024) is 0, and the same tile with every byte set to one value (f_A = f_B = 1) is charged 1 − c_L per chain MAC."""
+    f, k, shape = F.NVFP4, 1024, Shape(1 << 24, 1024, 1 << 24)
+    xs = [[w << 16 for w in x] for x in family_rows("gauss", 4, k, 5)]
+    e = [F.line(b"\x09" * 32, F.ROLE_EA, i) for i in range(4)]
+    a, b = F.form(f, xs, e, F.basis(b"\x0a" * 32, F.ROLE_FA, k)), F.form(f, xs, e, F.basis(b"\x0a" * 32, F.ROLE_FB, k))
+    d = F.tile_debit(f, a, b, e, e, range(4), range(4), shape)
+    assert d.f2 == 0 and Fraction(d.counts["f_a"]) < Fraction(1, 2)
+    for side in (a, b):
+        side.scales = [[0x70] * len(r) for r in side.scales]
+    d = F.tile_debit(f, a, b, e, e, range(4), range(4), shape)
+    assert d.counts["f_a"] == d.counts["f_b"] == "1" and d.f2 == (1 - F.c_l(shape.m, k, shape.n, 16)) * 16 * k > 0
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():

@@ -21,10 +21,10 @@ many fall outside D-SB's byte range (`device_scales`).
 **`verify`** recomputes everything from the transcript and the scheme: the salt, the records against the workload, the
 draws, and on every opened tile (`pearl_c_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
-rows passing the per-row rules and excluded rows failing them, and the replayed debit (`pearl_c4.tile_debit`: 2:4 groups on
-salt-dead codes, identity atoms, dead × dead pairs, salt-dead or unneeded A forming, sub-grid blocks, D-24's 2:4 row
-windows) under the cap, ρ = 1/400 of the credited cells' creditOf.  Its report carries every tile's debit and the accept
-line (`accept_line`).
+rows passing the per-row rules and excluded rows failing them, and the replayed debit (`pearl_c4.tile_debit`: F1′'s base
+split from the drawn E lines and realised scale bytes, identity atoms, dead × dead pairs, salt-dead or unneeded A forming,
+sub-grid blocks, D-24's 2:4 row windows, F2's int8 route on flat scales) under the cap, ρ = 1/400 of the credited cells'
+creditOf.  Its report carries every tile's debit and the accept line (`accept_line`).
 
   python -m verity_pouw.schemes.pearl_c4_replay prove DUMP --run RUN --out transcript.json [--t 8] [--workers N]
   python -m verity_pouw.schemes.pearl_c4_replay verify transcript.json --out verify.json [--path P] [--commit SHA]

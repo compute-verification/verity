@@ -15,6 +15,7 @@ from pathlib import Path
 
 from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c4 as F
+from verity_pouw.schemes import pearl_c_work as W
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c4.json"
 #: (case, format, shape, unit index, weight id, test instance); the tile is the whole test shape, or the first 64 x 64
@@ -66,6 +67,8 @@ def case_vector(case, fmt, shape, index, weight, test) -> dict:
     ops = s.encode(ctx, noise, a, b, tile)
     checked = s.checked(ctx, ops)
     useful = s.useful(ctx, noise, ops, checked)
+    _, cap = s.tile_cap(W.UnitRecord(ctx.matmul, shape[0], shape[1]), ops, range(len(tile.rows)), range(len(tile.cols)))
+    modes, p = F.row_law(s.fmt, ops.a.x[0], ops.a.alpha[0], ops.a.ae[0], ops.e_a[0])
     return {
         "case": case, "scheme": s.name, "shape": list(shape),
         "tile": {"rows": [tile.rows[0], tile.rows[-1] + 1], "cols": [tile.cols[0], tile.cols[-1] + 1]},
@@ -82,6 +85,9 @@ def case_vector(case, fmt, shape, index, weight, test) -> dict:
         "c_0": checked.c[0][:4], "u_0": checked.u[0][:4],
         "leaf": s.digest(ctx, noise, checked).hex(), "tickets": [t.hex() for t in s.tickets(noise, checked)],
         "useful_sha256": sha(json.dumps(useful).encode()), "useful_00": useful[0][0],
+        "debit": s.last_debit.to_json(), "cap": str(cap),
+        "f1_a0": {"modal_bytes_sha256": sha(bytes(modes)), "modal_bytes": modes[:8],
+                  "p_sha256": sha(struct.pack(f"<{len(p)}d", *p)), "p": [v.hex() for v in p[:8]]},
     }
 
 

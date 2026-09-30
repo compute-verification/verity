@@ -461,8 +461,16 @@ useful    U/(α_A·α_B), glue
   passes the cap. Item 4 charges the reference's witness (`salt_dead`) alone, not every element of a screened block.
   This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units:
-  1. per row and 4-group with at least 2 salt-dead codes, 0.5 per MAC (1 when all 4 are), on every word the row feeds,
-     for A′ and for B̃;
+  1. F1′, the base split's saving (theory §6.2; it replaces 2:4 groups of salt-dead codes), per row of A′ and of B̃
+     and aligned 128 of k: 128·max(0, S_w − min(c·M_w, 1/8)) on every word the row feeds, c = 16.92/128.
+     - The law is exact, given the row's E line: the line sum over an element's 16^32 F lines, and the atom's one RZ
+       rounding (`row_law`). A block's modal byte is the product formula's argmax, and p_t = 1 − max_c P(code_t = c)
+       at it, 0 on witness-dead codes and screened blocks.
+     - S_w = min(1, E[max(0, ½ − c·X_w)] + Σ_h E[max(0, ½ − c·N_h)]), with X_w the excess beyond 2:4 at sorted
+       pairing inside each block and N_h the changed codes per k64 half (`window_saving`). M_w counts the window's
+       blocks whose realised byte is not modal.
+     - The DPs run in IEEE doubles from the correctly rounded p_t: the one departure from exact arithmetic,
+       deterministic and pinned by the vectors.
   2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
   3. per block screened on both the A row and the B row, one block of MACs per pair-word;
   4. per salt-dead A element (the reference's witness, `salt_dead`) or unneeded one (every credited B code at its
@@ -472,6 +480,9 @@ useful    U/(α_A·α_B), glue
   - and D-24: per row and aligned 128 of k whose every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0), 0.5 per MAC
     on every word it feeds. It is charged per row window rather than per 16-row span, since a cheaper computation may
     gather any 16 such rows; the literal spans are counted.
+  - and F2, the masked int8 route on flat scales (theory §6.3): max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain MAC of the
+    credited words. f_A and f_B are the credited rows' shares of blocks at their most common realised byte, and
+    c_L = min over 1 ≤ L ≤ log₂(k/B) of 2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75 at the unit's (m, k, n).
   - A code is salt-dead unless two draws in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
     F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
     high.
@@ -498,13 +509,15 @@ useful    U/(α_A·α_B), glue
   - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
     accept line.
 
-  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192. Its shortcuts are in every report: the draws' beacon is
+  It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about half a CPU-minute (0.25 CPU-s per
+  Gaussian row, measured on a cloud-agent VM). Its shortcuts are in every report: the draws' beacon is
   Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label, and the transcript tree and the records
   are built on the host after timing.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
-  and one 64 × 1,024 × 64 NVFP4 tile.
+  and one 64 × 1,024 × 64 NVFP4 tile, each with its whole-tile debit by item and A row 0's F1′ law (its modal bytes and
+  its p_t as exact doubles).
 
 ## Not here yet
 
