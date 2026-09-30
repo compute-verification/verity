@@ -3789,6 +3789,19 @@
    "assumptions": [],
    "type_hash": "e4a8f84b426237c60534001faa37ebae8986e0d2a91252242e8ba7152fbe44d0"
   },
+  "FlockSoundness.ZK.padsOnto_monomial": {
+   "signature": [
+    "FlockSoundness.ZK.padsOnto_monomial {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]",
+    "  [DecidableEq K] {W Salt Seed D Hi VL : Type} (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (s : Nat)",
+    "  (x : Fin 2 → Fin T.nQ → F) (hx : ∀ (r : Fin 2), Function.Injective (x r))",
+    "  (h0 : ∀ (r : Fin 2) (k : Fin T.nQ), Ne (x r k) 0) (hQ : instLENat.le T.nQ T.nPad)",
+    "  (hCp :",
+    "    ∀ (r : Fin 2) (k : Fin T.nQ) (j : Fin T.nPad), Eq (T.Cp r k j) (instHPow.hPow (x r k) (instHAdd.hAdd s j.val))) :",
+    "  T.PadsOnto"
+   ],
+   "assumptions": [],
+   "type_hash": "25c4d6dfc597023c721eb7f8ebafae1132a172b9b32ad8dfc8af80671fbc1d10"
+  },
   "FlockSoundness.ZK.run_eq_iff": {
    "signature": [
     "FlockSoundness.ZK.run_eq_iff.{u_1, u_2, u_3} {Ω : Type u_1} {M : Type u_2} {C : Type u_3} {n : Nat} [Inhabited M]",
@@ -3995,8 +4008,7 @@
    ],
    "assumptions": [],
    "type_hash": "7e0c11a4d90441db227b441f593fc687e9eca34586574971bc5863213962da4a"
-  },
-  "FlockSoundness.ZK.padsOnto_monomial": {}
+  }
  },
  "reads": {
   "Flock.CircuitType": {
@@ -7382,7 +7394,8 @@
     "FlockSoundness.ZK.Table.table_prefinal_indep",
     "FlockSoundness.ZK.Table.table_prefinal_translate",
     "FlockSoundness.ZK.Table.table_shvzk",
-    "FlockSoundness.ZK.padOnto_M1"
+    "FlockSoundness.ZK.padOnto_M1",
+    "FlockSoundness.ZK.padsOnto_monomial"
    ]
   }
  },
