@@ -9,13 +9,13 @@
   and GP-01 recomposed (``eos-truncated``); then, with a rank profile (default ``derived_<ROLE>_tp<W>``; ``--fold-profile ''``
   = collective-level only, named), the per-rank fold Match (``tp-fold-match``).
 * **Commit**: the manifest over the W ranks, complete, then ``tp-commit`` with the windowed staging in its environment
-  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``: flags it does not have) and ``--require-fold-match``
+  (``VERITY_WINDOW_MB`` / ``VERITY_WINDOW_SLOTS`` / ``VERITY_RETAIN``, and a config run's ``VERITY_STAGING_BOUNDED``: flags it does not have) and ``--require-fold-match``
   when a fold Match is on disk.  The ranks run the guarded-max FA2 tap build and every tap the manifest names the family of
   (``row_records.applicable_taps``), as the single-GPU row does.
 
 A **config run** (``--config-run 1``, world 2 only: ``row.run_row`` refuses a larger one): the Build, the strict word check of its
-manifest over the W ranks' components, ONE instrumented ``tp-commit`` (``--pairs 1 --warmup 1 --only-arm instrumented --bounded-staging
---replay-k K``: K units over the world, split across the ranks) with no Match directory, no fold Match and no value check, and
+manifest over the W ranks' components, ONE instrumented ``tp-commit`` (``--pairs 1 --warmup 1 --only-arm instrumented --replay-k K``:
+K units over the world, split across the ranks; bounded staging) with no Match directory, no fold Match and no value check, and
 ``config_record.json`` (``pipeline.config_record``, per rank and in total), written however the run ends.
 
 Evidence: ``build/rank<r>/``, ``match/``, ``manifest.json``, ``commit/`` under the row dir.  Exit codes: those of the
@@ -350,7 +350,9 @@ class TpRow(Row):
         if ck.window_mb > 0:
             self.child_env.update({"VERITY_WINDOW_MB": str(ck.window_mb), "VERITY_WINDOW_SLOTS": str(ck.window_slots)})
         self.child_env["VERITY_RETAIN"] = ck.retain
-        self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}")
+        if self.config_run:
+            self.child_env["VERITY_STAGING_BOUNDED"] = "1"
+        self.log(f"commit staging: window_mb={ck.window_mb} slots={ck.window_slots} retain={ck.retain}{' bounded' if self.config_run else ''}")
         rc_k = self.run_tl("commit.tp_commit", to_k, f"{d}/commit.log", self.commit_cmd(taps))
         keys = ("PASS", "FAIL", "sampled replay", "match oracle", "weights pin", "cross-rank collectives", "fold-Match", "C2 population", "coverage")
         tagged = _grep(f"{d}/commit.log", lambda s: s.startswith("[tp2commit] ") and s[12:].lstrip(" ").startswith(keys))
@@ -374,8 +376,8 @@ class TpRow(Row):
         """`tp-commit`'s command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources the ranks attach."""
         ck, d = self.ck_, self.d
         brk = [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
-        if self.config_run:                       # one instrumented run, bounded staging, k units over the ranks; no Match to compare against
-            match, arms = [], ["--pairs", "1", "--warmup", "1", "--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
+        if self.config_run:                       # one instrumented run, k units over the ranks; no Match to compare against
+            match, arms = [], ["--pairs", "1", "--warmup", "1", "--only-arm", "instrumented", "--replay-k", str(ck.replay_k)]
         else:
             match, arms = ["--match-dir", self.M], ["--pairs", str(ck.pairs), "--warmup", "2", "--value-check"]
         cmd = self.cli("tp-commit", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--committer", "native_collect_v2b",

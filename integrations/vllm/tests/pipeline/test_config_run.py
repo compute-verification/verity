@@ -145,7 +145,7 @@ def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_p
     t.fold_profile = "derived_LLAMA32_1B_tp2"
     cmd = t.commit_cmd([])
     assert cmd[cmd.index("--pairs") + 1] == "1" and cmd[cmd.index("--warmup") + 1] == "1"
-    assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and "--bounded-staging" in cmd and cmd[cmd.index("--replay-k") + 1] == "460"
+    assert cmd[cmd.index("--only-arm") + 1] == "instrumented" and cmd[cmd.index("--replay-k") + 1] == "460"
     assert not {"--match-dir", "--require-fold-match", "--value-check"} & set(cmd)
     assert cmd.count("--build-rank") == 2 and cmd[cmd.index("--required-manifest") + 1] == f"{t.d}/manifest.json"
     row = _tp(tmp_path / "row")
@@ -160,13 +160,17 @@ def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_p
 
 def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
     from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline.tp.commit import replay_k_per_rank
+    from verity_vllm.pipeline.tp.config_run import only_arm_summary, replay_k_per_rank
     t = _tp(tmp_path, "--config-run", "1", "--replay-k", "460")
     cmd = t.commit_cmd([])
     args = cli.parse("tp-commit", cmd[cmd.index("tp-commit") + 1:], {})
-    assert (args.only_arm, args.bounded_staging, args.replay_k, args.pairs, args.warmup, args.match_dir) == ("instrumented", True, 460, 1, 1, None)
+    assert (args.only_arm, args.replay_k, args.pairs, args.warmup, args.match_dir) == ("instrumented", 460, 1, 1, None)
     assert replay_k_per_rank(460, 2) == {"0": 230, "1": 230} and replay_k_per_rank(461, 2) == {"0": 231, "1": 230}
     assert replay_k_per_rank(None, 2) is None
+    one = [{"arm": "instrumented"}]
+    assert only_arm_summary("instrumented", one, one, [True]) == {"only_arm": "instrumented", "runs": 1, "commit_pass": True}
+    assert only_arm_summary("instrumented", one, one, [False])["commit_pass"] is False
+    assert only_arm_summary("instrumented", one, [], [])["commit_pass"] is False, "no instrumented run is not a pass"
 
 
 @pytest.mark.parametrize("commit_pass,expect", [(True, None), (False, 12)])
@@ -191,6 +195,7 @@ def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pas
             t.commit()
         assert e.value.rc == expect
     assert ran == ["commit.tp_commit"], "the config run's Commit reuses the Build's complete manifest"
+    assert t.child_env["VERITY_STAGING_BOUNDED"] == "1", "the ranks stage bounded, as the single-GPU config run's --bounded-staging"
 
 
 # ---------------------------------------------------------------------------------------------------------------- the config record
