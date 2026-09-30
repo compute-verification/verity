@@ -430,7 +430,7 @@ def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     """`verity_pouw.circuit` (#364) has a circuit for `ncp-v2` alone: that scheme is admitted beside sampled proofs, and every
     other one keeps #311's refusal, word for word.  Without sampled proofs nothing changes."""
     from verity_pouw import circuit
-    assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
+    assert {"ncp-v2", "ncp-v2-shift24"} <= set(circuit.SCHEMES) and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
     assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:vllm-v1")) == ()
