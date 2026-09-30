@@ -963,7 +963,7 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
         why.append(f"--compiled-taps {args.compiled_taps} (Inductor hooks / runner patches are process-wide)")
     if args.arms:
         why.append("--arms (multi-committer arms)")
-    if args.only_arm:
+    if args.only_arm == "control" or (args.only_arm and args.compiled_taps != "off"):
         why.append(f"--only-arm {args.only_arm} (paired-process protocol)")
     if args.late_read:
         why.append("--late-read (mutates native_collect.GATHER_FLUSH_LEAVES)")
