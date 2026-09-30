@@ -222,6 +222,36 @@ def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
     assert F.two_four_windows([0x1, 0x9, 0, 0] * 32 + [0x1] * 128) == [True, False]
 
 
+def test_scale_bytes_have_one_encoding_and_no_zero():
+    """sm_120 reads a UE4M3 scale from its low 7 bits (the assessor's run of all 256 bytes), so every replayed step does too;
+    the domain rejects bit 7 (a second encoding of the same C̃) and a zero scale (a noise block's products zeroed), and
+    honest forming writes neither: its bytes over an amax sweep from 0 to FP32's largest stay in [0x01, 0x7E]."""
+    f = F.NVFP4
+    assert all(F.scale_dyadic(f, 0x80 | b) == F.scale_dyadic(f, b) for b in range(0x7F))
+    codes, other = list(range(16)) * 8, [(3 * c + 5) % 16 for c in range(128)]
+    scales = [0x38, 0x01, 0x7E, 0x30, 0x40, 0x10, 0x07, 0x39]
+    high = [0x80 | s for s in scales]
+    assert F.chain(f, codes, other, high, scales) == F.chain(f, codes, other, scales, scales) != 0
+    assert F.word_replay(f, codes, other, scales, high) == F.word_replay(f, codes, other, scales, scales)
+    assert F.scale_bytes_ok(f, range(0x01, 0x7F))
+    assert not any(F.scale_bytes_ok(f, [b]) for b in [0x00, 0x7F, *range(0x80, 0x100)])
+    assert F.scale_bytes_ok(F.MXFP4, range(0xFF)) and not F.scale_bytes_ok(F.MXFP4, [0xFF])
+    sweep = [0, 1, 0x00400000, *range(0x00800000, 0x7F800000, 0x00100001), 0x7F7FFFFF]
+    assert {F.block_scale(f, w)[0] for w in sweep} <= set(range(0x01, 0x7F))
+    assert F.scale_bytes_ok(F.MXFP4, [F.block_scale(F.MXFP4, w)[0] for w in sweep])
+    side = F.form(f, [F.parse_row(r, K) for r in V.rows("scales", "A", 4, K)], [F.line(b"e" * 32, 0, i) for i in range(4)],
+                  F.basis(b"f" * 32, F.ROLE_FA, K))
+    F.check_scale_bytes(f, side)
+    side.scales[2][1] = 0x80 | side.scales[2][1]
+    with pytest.raises(P.Reject):
+        F.check_scale_bytes(f, side)
+    side.scales[2][1] = 0
+    with pytest.raises(P.Reject):
+        F.check_scale_bytes(f, side)
+    counts = R.device_scales(f, bytes([0x38, 0x00, 0x80, 0xB8, 0x7F, 0x01]))
+    assert counts == {"bytes": 6, "outside_range": 4, "min": 0, "max": 0xB8, "bit7": 2, "zero": 1, "nan": 1}
+
+
 def lifecycle(s: F.PearlC4, real=20):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 has a dead block; B passes."""
     rows_a = V.rows("work-life", "A", real, K) + [F.bf16_row([0] * K)] * (32 - real)
@@ -261,7 +291,9 @@ def device_dump(path, s: F.PearlC4, swap_leaves=False, flip_root_a=False) -> Non
 def test_replay_accepts_the_device_transcript(tmp_path):
     s = V.scheme("nvfp4", True)
     device_dump(tmp_path, s)
+    (tmp_path / "scales_b.bin").write_bytes(bytes([0x38, 0x01, 0x7E]))
     t = json.loads(json.dumps(R.prove(tmp_path, "r-test", 8, scheme=s)))
+    assert list(t["device_scales"]) == ["b"] and t["device_scales"]["b"]["outside_range"] == 0
     assert t["records"] == [{"real_rows": 20, "k_kept": K, "excluded_a": [3], "excluded_b": []}]
     assert t["host_roots_match"] == {"a": True, "b": True} and [o["tile"] for o in t["openings"]] == [0, 1]
     rep = R.verify(t, scheme=s)

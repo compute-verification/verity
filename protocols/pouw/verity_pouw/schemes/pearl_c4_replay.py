@@ -5,7 +5,9 @@
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,
 the unit's m rows with its zero filler) and B's, the device's A and B roots (`audit.commit_rows`, SHA-256 whole-row leaves),
 and its tile leaves (`pearl_c.leaf`, one per tile in the scheme's order), beside ``call.json`` (the scheme, the unit's
-shape, matmul index and weight, its real rows, and the epoch beacon the call's salt was derived from).
+shape, matmul index and weight, its real rows, and the epoch beacon the call's salt was derived from).  The scale bytes
+the device's forming wrote may ride along; they are not committed (the verifier forms its own), and `prove` reports how
+many fall outside D-SS's byte range (`device_scales`).
 
 **`prove`** makes transcript v0 (`FORMAT`) from a dump, on the host:
 
@@ -86,15 +88,30 @@ def _rows(data: bytes, count: int, k: int) -> list[bytes]:
 # ---- the dump ---------------------------------------------------------------------------------------------------------
 
 def write_dump(path: str | os.PathLike, call: dict, rows_a: bytes, rows_b: bytes, root_a: bytes, root_b: bytes,
-               leaves: bytes) -> None:
+               leaves: bytes, scales_a: bytes | None = None, scales_b: bytes | None = None) -> None:
     """A call's dump: ``call.json`` (``scheme``, ``shape`` [m, k, n] of the unit, ``index``, ``weight``, ``real_rows``,
-    ``epoch_beacon`` hex, and anything else the caller records) and the device's bytes."""
+    ``epoch_beacon`` hex, and anything else the caller records) and the device's bytes, with the scale bytes its forming
+    wrote when given (not committed: `prove` counts them, `device_scales`)."""
     p = Path(path)
     p.mkdir(parents=True, exist_ok=True)
     for name, data in (("xa.bin", rows_a), ("xb.bin", rows_b), ("root_a.bin", root_a), ("root_b.bin", root_b),
-                       ("leaves.bin", leaves)):
-        (p / name).write_bytes(data)
+                       ("leaves.bin", leaves), ("scales_a.bin", scales_a), ("scales_b.bin", scales_b)):
+        if data is not None:
+            (p / name).write_bytes(data)
     (p / "call.json").write_text(json.dumps(call, indent=1, sort_keys=True) + "\n")
+
+
+def device_scales(fmt: F.Fmt, data: bytes) -> dict:
+    """What a device's formed scale bytes hold against D-SS's range (`pearl_c4.scale_bytes_ok`)."""
+    counts = [data.count(bytes([b])) for b in range(256)]
+    out = {"bytes": len(data), "outside_range": sum(c for b, c in enumerate(counts) if not F.scale_bytes_ok(fmt, [b])),
+           "min": min((b for b in range(256) if counts[b]), default=None),
+           "max": max((b for b in range(256) if counts[b]), default=None)}
+    if fmt is F.NVFP4:
+        out |= {"bit7": sum(counts[128:]), "zero": counts[0], "nan": counts[0x7F]}
+    else:
+        out |= {"nan": counts[0xFF]}
+    return out
 
 
 def draw_beacon(transcript_root: bytes, records_digest: bytes) -> W.Beacon:
@@ -179,6 +196,8 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
         "committed_round": COMMITTED_ROUND, "draw": {"round": beacon.round, "value": _hex(beacon.value)}, "t": t,
         "openings": openings, "shortcuts": list(SHORTCUTS),
         "host_roots_match": {"a": tree_a.commitment.root == root_a, "b": tree_b.commitment.root == root_b},
+        "device_scales": {side: device_scales(s.fmt, (p / f"scales_{side}.bin").read_bytes())
+                          for side in ("a", "b") if (p / f"scales_{side}.bin").exists()},
     }
 
 
@@ -292,7 +311,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         Path(args.out).write_text(json.dumps(t) + "\n")
         print(f"transcript {args.out}: {len(t['openings'])} tiles opened, excluded rows "
               f"{len(t['records'][0]['excluded_a'])} of A, {len(t['records'][0]['excluded_b'])} of B, host roots "
-              f"{t['host_roots_match']}")
+              f"{t['host_roots_match']}, device scale bytes {t['device_scales']}")
         return 0
     raw = Path(args.transcript).read_bytes()
     t = json.loads(raw)

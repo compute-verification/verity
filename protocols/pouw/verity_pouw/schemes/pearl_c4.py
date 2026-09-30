@@ -58,8 +58,12 @@ cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/4
 
 A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
 codes, not on the atom's word.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
-gather any 16 such rows), and the literal spans are counted.  D-SS's scale-byte range and spread bound (2^15.8, implied by
-D-NF) are counted, not enforced: items 2 and 5 charge what they would exclude.
+gather any 16 such rows), and the literal spans are counted.  D-SS's spread bound (2^15.8, implied by D-NF) is counted, not
+enforced: items 2 and 5 charge what it would exclude.  D-SS's scale-byte range is enforced (`scale_bytes_ok`, server.md
+09:38Z): no UE4M3 byte with bit 7 set, which sm_120 reads from its low 7 bits (a second encoding of the same C̃), and no
+zero scale, which would zero a noise block's products.  The verifier forms every scale from the committed rows, so no
+prover's byte reaches the checked values; the rule guards that forming, and every replayed step reads bytes as the
+hardware does (`hw_scales`).
 
 **Stand-ins.**  The atoms are the RTX 5090 pins (`BLACKWELL_SM120_NVF4`, `_MXF4`, `HOPPER_BF16_M16N8K16`), pending GPU 4's
 RTX PRO recheck.  The E2M1, UE4M3 and UE8M0 casts are modelled from the PTX ISA, not captured.  A negative value that
@@ -305,11 +309,31 @@ def clean(fmt: Fmt, x: Sequence[int]) -> tuple[list[int], list[int], int]:
 
 # ---- the chain and the clean-up --------------------------------------------------------------------------------
 
+def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
+    """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (the
+    assessor's run of all 256 bytes, ``r20260930-093120-b2f2``); UE8M0 bytes as written.  Every replayed step reads
+    scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one."""
+    return [s & 0x7F for s in scales] if fmt is NVFP4 else list(scales)
+
+
+def scale_bytes_ok(fmt: Fmt, scales: Sequence[int]) -> bool:
+    """D-SS's range, enforced (`check_scale_bytes`): one encoding per scale, no zero scale on a block that carries noise
+    (every block does), and no NaN.  UE4M3 in [0x01, 0x7E] (bit 7 clear, not 0x00, not 0x7F); UE8M0, whose 8 bits are all
+    its exponent and which has no zero, short of its NaN 0xFF.  Honest forming meets it by construction (`block_scale`)."""
+    return all(UE4M3_MIN <= s <= 0x7E for s in scales) if fmt is NVFP4 else all(0 <= s < 0xFF for s in scales)
+
+
+def check_scale_bytes(fmt: Fmt, side: Formed) -> None:
+    for row in side.scales:
+        if not scale_bytes_ok(fmt, row):
+            raise P.Reject("a formed scale byte is outside D-SS's range (bit 7 set, a zero scale or NaN)")
+
+
 def chain(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scales: Sequence[int], b_scales: Sequence[int]) -> int:
     """The atom chained from +0 over the full k, no promotion."""
     if len(a_codes) % ATOM:
         raise P.Reject("the chain multiplies in atoms of k = 64")
-    return _finite(fmt.atom.chain(0, a_codes, b_codes, a_scales, b_scales))
+    return _finite(fmt.atom.chain(0, a_codes, b_codes, hw_scales(fmt, a_scales), hw_scales(fmt, b_scales)))
 
 
 @lru_cache(maxsize=16)
@@ -390,11 +414,11 @@ def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
 
 
 def scale_dyadic(fmt: Fmt, byte: int) -> tuple[int, int]:
-    """A scale byte's value as m·2^e (the atom's scaleDyadic): UE4M3 (8 + m, e − 10), or (m, −9) at exponent field 0;
-    UE8M0 (8, byte − 130)."""
+    """A scale byte's value as m·2^e (the atom's scaleDyadic): UE4M3 (8 + m, e − 10), or (m, −9) at exponent field 0,
+    from the low 7 bits as the hardware reads them (`hw_scales`); UE8M0 (8, byte − 130)."""
     if fmt is MXFP4:
         return 8, byte - 130
-    e, m = byte >> 3, byte & 7
+    e, m = (byte & 0x7F) >> 3, byte & 7
     return (8 + m, e - 10) if e else (m, -9)
 
 
@@ -458,11 +482,6 @@ def spread_ok(fmt: Fmt, scales: Sequence[int]) -> bool:
     return min(vals) > 0 and (max(vals) / min(vals)) ** 5 <= 2 ** SPREAD_X5
 
 
-def scale_bytes_ok(fmt: Fmt, scales: Sequence[int]) -> bool:
-    """D-SS's range: never zero, never saturated (UE4M3 in [0x01, 0x7E]; UE8M0 short of its NaN, 0xFF)."""
-    return all(UE4M3_MIN <= s <= 0x7E for s in scales) if fmt is NVFP4 else all(s < 0xFF for s in scales)
-
-
 def word_replay(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scales: Sequence[int],
                 b_scales: Sequence[int]) -> tuple[int, int, int]:
     """One word's chain replayed from +0: (C̃, identity atoms, sub-grid blocks).
@@ -473,6 +492,7 @@ def word_replay(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scal
     (item 5)."""
     atom, ns = fmt.atom, ATOM // fmt.block
     steps = len(a_codes) // ATOM
+    a_scales, b_scales = hw_scales(fmt, a_scales), hw_scales(fmt, b_scales)
     da, db = [scale_dyadic(fmt, s) for s in a_scales], [scale_dyadic(fmt, s) for s in b_scales]
     terms, w, subgrid = [], [0], 0
     for s in range(steps):
@@ -549,8 +569,6 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
               "forming_elements": elements, "unneeded_positions": sum(unneeded),
               "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
               + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
-              "dss_scale_rows": sum(not scale_bytes_ok(fmt, a.scales[i]) for i in rows)
-              + sum(not scale_bytes_ok(fmt, b.scales[j]) for j in cols),
               "words": len(rows) * len(cols)}
     return Debit(two_four, ATOM * identity, fmt.block * pairs, Fraction(FORMING_CREDITED * elements * len(cols), n),
                  fmt.block * subgrid, windows, counts)
@@ -642,7 +660,9 @@ class PearlC4:
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
               k: int) -> tuple[Formed, list[list[int]]]:
         e = [line(seed_e, role_e, i) for i in idx]
-        return form(self.fmt, [parse_row(r, k) for r in rows], e, basis(seed_b, role_f, k)), e
+        side = form(self.fmt, [parse_row(r, k) for r in rows], e, basis(seed_b, role_f, k))
+        check_scale_bytes(self.fmt, side)
+        return side, e
 
     def encode(self, ctx: Context, noise: C.Noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> C.Ops | None:
         """The tile's formed operands and peel factors; the last tile's are kept, since the work law encodes a drawn tile
@@ -681,5 +701,5 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "e2m1", "form", "line", "row_passes",
-           "salt_dead", "tile_debit", "word_replay"]
+__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "e2m1", "form", "hw_scales", "line",
+           "row_passes", "salt_dead", "scale_bytes_ok", "tile_debit", "word_replay"]
