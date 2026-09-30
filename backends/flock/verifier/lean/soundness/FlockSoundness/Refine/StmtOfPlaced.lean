@@ -108,7 +108,6 @@ theorem lkCnt_cast (lk : LookupTable) (hb : lk.bits ≤ 32) (i c : ℕ) :
     · exact Nat.cast_one
     ext ⟨h, l, j⟩
     simp only [Finset.mem_filter, Finset.mem_product, Finset.mem_range, Finset.mem_singleton, Prod.mk.injEq]
-    dsimp only
     constructor
     · rintro ⟨⟨hh, -, -⟩, hlc, -, hjb, hi⟩
       obtain ⟨-, -, hj, hh'⟩ := fwd h j hh hjb hi
@@ -137,7 +136,7 @@ theorem lkSide_cast (b : Sparse) (lko : Option LookupTable)
   | none => rfl
   | some lk =>
     obtain ⟨hw, hb⟩ := hl lk rfl
-    unfold lkSide
+    show ((if c < b.width then lkCnt lk i c else 0 : ℕ) : ZMod 2) = lookupEntry (some lk) i c
     by_cases hc : c < b.width
     · rw [if_pos hc]
       exact lkCnt_cast lk hb i c
@@ -189,7 +188,8 @@ theorem dCnt_cast (d : Array (ℕ × ℕ)) (i c : ℕ) : ((dCnt d i c : ℕ) : Z
   unfold dCnt deltaEntry
   rw [List.count_eq_length_filter]
   congr 2
-  funext x
+  apply List.filter_congr
+  intro x _
   simp
 
 /-- **`stmtOf`'s `A₀` is `placedA`**, under `PlacedWF`. -/
@@ -212,8 +212,8 @@ theorem stmtOf_B₀ (st : Stmt) (h : StmtWF st) (hw : PlacedWF st)
 and regions, with `A₀ = placedA st` and `B₀ = placedB st`. -/
 theorem stmtOf_eq_placed (st : Stmt) (h : StmtWF st) (hw : PlacedWF st)
     (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
-    ({ m := st.m, kLog := st.c.kLog, hk := h.hk, hk6 := h.hk6, pin := ⟨st.pin, h.pin⟩, A₀ := placedA st,
-      B₀ := placedB st, regions := regions } : Model.Statement) = stmtOf st h regions := by
+    Model.Statement.mk st.m st.c.kLog h.hk h.hk6 ⟨st.pin, h.pin⟩ (placedA st) (placedB st) regions =
+      stmtOf st h regions := by
   rw [← stmtOf_A₀ st h hw regions, ← stmtOf_B₀ st h hw regions]
 
 end FlockSoundness.Refine
