@@ -90,7 +90,7 @@ def f32_to_e2m1_sat_batch(a: np.ndarray, nan: int) -> tuple[np.ndarray, None]:
     code = np.zeros(u.shape, dtype=np.uint8)
     for bound, up in E2M1_UP:
         code += ((mag > bound) | ((mag == bound) if up else False)).astype(np.uint8)
-    return np.where(mag > 0x7F800000, np.uint8(nan), code) | sign, None
+    return np.where(mag > 0x7F800000, np.uint8(nan), code | sign), None
 
 
 _E4M3_TO_F32 = None

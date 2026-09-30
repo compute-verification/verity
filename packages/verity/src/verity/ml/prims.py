@@ -33,7 +33,8 @@ A16 = Array(16, BF16)
 A32_8 = Array(32, E4M3)
 A64_4 = Array(64, E2M1)
 A4_8 = Array(4, E4M3)            # four UE4M3 block-scale bytes (the E4M3 encoding with the sign bit clear)
-#: `cvt.rn.satfinite.e2m1x2.f32`'s code for a NaN input (E2M1 has none), with the input's sign bit
+#: `cvt.rn.satfinite.e2m1x2.f32`'s code for a NaN input (E2M1 has none): +6, measured on the RTX PRO 6000 for every NaN element
+#: of `cvt_fp16_to_fp4` (whose FMUL hands it the canonical +NaN; the sign of a NaN input is not observable there, and dropped)
 E2M1_NAN_CODE = 0x7
 
 __all__ = ["A16", "A32_8", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "BlackwellE4m3QmmaDot32",
@@ -130,7 +131,8 @@ def BlackwellNvf4OmmaDot64(acc: int, *ab: int) -> int:
 
 
 @primitive("F32ToE2m1Sat", 1, [("x", F32)], E2M1,
-           conformance="exact-model-tested; NVFP4 activation quantization on the RTX PRO 6000 (vllm::cvt_fp16_to_fp4)")
+           conformance="exact-model-tested; every element of vllm::cvt_fp16_to_fp4 on the RTX PRO 6000 (run r20260930-091510-b35b: "
+                       "NaN, +-inf, signed zeros and the E2M1 rounding midpoints included)")
 def F32ToE2m1Sat(x: int) -> int:
     """`cvt.rn.satfinite.e2m1x2.f32` (SASS `F2FP.SATFINITE.E2M1.F32.PACK_AB`), one lane: `cast.f32_to_e2m1_sat_word`."""
     return cast.f32_to_e2m1_sat_word(x, E2M1_NAN_CODE)

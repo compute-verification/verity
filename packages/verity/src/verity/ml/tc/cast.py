@@ -121,10 +121,10 @@ E2M1_UP: tuple[tuple[int, bool], ...] = ((0x3E800000, False), (0x3F400000, True)
 def f32_to_e2m1_sat_word(u: int, nan: int = 0x7) -> int:
     """``cvt.rn.satfinite.e2m1x2.f32``, one lane (SASS ``F2FP.SATFINITE.E2M1.F32.PACK_AB``): the sign bit kept (a signed zero
     included), the magnitude rounded to nearest even onto the E2M1 grid, ``|x| > 5`` and ±inf saturated to ±6 (code 7).  E2M1
-    has no NaN: a NaN input gives ``nan`` (with its sign bit)."""
+    has no NaN: a NaN input gives the code ``nan``, its sign dropped (as the E4M3 cast drops it)."""
     u &= 0xFFFFFFFF
     sign = 0x8 if u >> 31 else 0
     mag = u & 0x7FFFFFFF
     if mag > 0x7F800000:
-        return sign | nan
+        return nan
     return sign | sum(1 for bound, up in E2M1_UP if mag > bound or (up and mag == bound))
