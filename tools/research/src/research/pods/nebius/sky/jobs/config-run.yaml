@@ -10,8 +10,8 @@
 #   small dense, B <= 16 (#4, #101)     --memory 192                                 94-188 GB
 #   long context 4096/512 (#11, #39)    --memory 512                                 the Build alone peaks at ~486 GiB
 #   TP2 (#70, #75)                      --gpus RTXPRO6000:2 --cpus 32 --memory 384   >= 377 GB
-# A row can't be checkpointed yet (5-11 h), so a preempted row restarts from scratch: size the night so its rows fit circuits'
-# nominal quota, which nothing reclaims.
+# A row can't be checkpointed yet (5-11 h): circuits never borrows (kueue.yaml), so a row runs on circuits' own quota, which no
+# reclaim takes back. No config run is admitted in the quiet hour, 12:30-13:30Z.
 name: config-run
 
 resources:

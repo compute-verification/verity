@@ -16,6 +16,7 @@
 #    usage_report.py's sample to /workspace/usage/queues.jsonl.
 # Idempotent: each step checks first. It installs the files beside it (kueue.yaml, sky-config.yaml, usage_report.py).
 set -euo pipefail
+export PATH=$HOME/.local/bin:/usr/local/bin:$PATH KUBECONFIG=${KUBECONFIG:-$HOME/.kube/config}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 mode=${1:---plan}
 case $mode in --plan|--apply) ;; *) echo "usage: cluster_up.sh --plan | --apply" >&2; exit 2 ;; esac
@@ -45,7 +46,7 @@ After=network-online.target
 
 [Service]
 User=$USER
-Environment=HOME=$HOME SKYPILOT_DISABLE_USAGE_COLLECTION=1 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=$HOME KUBECONFIG=$HOME/.kube/config SKYPILOT_DISABLE_USAGE_COLLECTION=1 PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=$HOME/.local/bin/sky api start --host 127.0.0.1 --foreground
 Restart=always
 RestartSec=10
@@ -56,6 +57,8 @@ WantedBy=multi-user.target"
 fi
 run sudo systemctl daemon-reload
 run sudo systemctl enable --now sky-api.service
+[ "$mode" = --plan ] || for _ in $(seq 60); do curl -sf http://127.0.0.1:46580/api/health > /dev/null && break; sleep 2; done
+command -v socat > /dev/null || run sudo apt-get install -y -q socat    # sky's Kubernetes port-forward mode needs it
 
 step "2. the SSH Node Pool $POOL"
 [ -f ~/.ssh/vy-pool ] || run ssh-keygen -q -t ed25519 -N "" -C "vy-pool@$MACHINE" -f ~/.ssh/vy-pool
@@ -82,6 +85,57 @@ if [ -n "$node" ] || [ "$mode" = --plan ]; then
 else
   echo "no node with address $IP in $CTX" >&2; exit 1
 fi
+
+step "2b. GPUs kept for direct runs: ${VY_DIRECT_GPUS:=4,5,6,7} (nvidia-smi indices; none: all GPUs to Kubernetes)"
+# While lanes still run GPU work directly (research run --on, outside Kubernetes), a placeholder pod, vy-system/direct-gpus, holds
+# those GPUs through the device plugin, so no job is scheduled onto them. The plugin picks the devices, so the pod is made until
+# one holds exactly VY_DIRECT_GPUS (the plugin hands the next pod the rest). Device minors are not nvidia-smi indices here
+# (index 0 is /dev/nvidia7): the check maps each through `nvidia-smi -q`. Cutover: VY_DIRECT_GPUS=none deletes the holder.
+held() {   # the nvidia-smi indices pod $1 holds, sorted, comma-joined
+  local d m i out=""
+  for d in $("${KUBECTL[@]}" -n vy-system exec "$1" -- ls /dev 2>/dev/null | grep -E '^nvidia[0-9]+$'); do
+    m=${d#nvidia}
+    for i in $(nvidia-smi --query-gpu=index --format=csv,noheader); do
+      [ "$(nvidia-smi -q -i "$i" | awk '/Minor Number/ {print $NF}')" = "$m" ] && out="$out $i"
+    done
+  done
+  echo "$out" | tr ' ' '\n' | grep . | sort -n | paste -sd, -
+}
+holder() {   # holder NAME COUNT: a pod holding COUNT GPUs, not managed by Kueue
+  "${KUBECTL[@]}" apply -f - > /dev/null <<Y
+apiVersion: v1
+kind: Pod
+metadata: {name: $1, namespace: vy-system, labels: {app: direct-gpus}}
+spec:
+  priorityClassName: system-node-critical
+  runtimeClassName: nvidia
+  terminationGracePeriodSeconds: 1
+  containers:
+  - {name: hold, image: "busybox:1.36", command: [sh, -c, "sleep 2147483647"], resources: {limits: {nvidia.com/gpu: $2}}}
+Y
+  "${KUBECTL[@]}" -n vy-system wait --for=condition=Ready "pod/$1" --timeout=180s > /dev/null
+}
+if [ "$VY_DIRECT_GPUS" = none ]; then
+  run "${KUBECTL[@]}" -n vy-system delete pod direct-gpus direct-gpus-try --ignore-not-found
+elif [ "$mode" = --plan ]; then
+  echo "   would hold GPUs $VY_DIRECT_GPUS in vy-system/direct-gpus (now: $(held direct-gpus 2>/dev/null || echo none))"
+elif [ "$(held direct-gpus)" != "$VY_DIRECT_GPUS" ] && [ "$(held direct-gpus-try 2>/dev/null)" != "$VY_DIRECT_GPUS" ]; then
+  n=$(echo "$VY_DIRECT_GPUS" | tr ',' '\n' | grep -c .)
+  "${KUBECTL[@]}" create namespace vy-system --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f - > /dev/null
+  "${KUBECTL[@]}" -n vy-system delete pod direct-gpus direct-gpus-try --ignore-not-found --wait=true > /dev/null
+  holder direct-gpus "$n"
+  if [ "$(held direct-gpus)" != "$VY_DIRECT_GPUS" ]; then
+    holder direct-gpus-try "$n"
+    "${KUBECTL[@]}" -n vy-system delete pod direct-gpus --wait=true > /dev/null
+    [ "$(held direct-gpus-try)" = "$VY_DIRECT_GPUS" ] || { echo "   the device plugin gave neither holder GPUs $VY_DIRECT_GPUS" >&2; exit 1; }
+    echo "   holding GPUs $VY_DIRECT_GPUS in vy-system/direct-gpus-try"
+  fi
+fi
+for p in direct-gpus direct-gpus-try; do
+  h=$(held "$p" 2>/dev/null || true)
+  [ -n "$h" ] && echo "   vy-system/$p holds GPUs $h for direct runs"
+done
+echo "   Kubernetes may allocate: $("${KUBECTL[@]}" describe node "${node:-x}" 2>/dev/null | awk '/Allocated resources/,0' | awk '$1 == "nvidia.com/gpu" {print 8 - $2}') of 8 GPUs"
 
 step "3. Kueue $KUEUE and the queues"
 if ! "${KUBECTL[@]}" -n kueue-system get deployment kueue-controller-manager > /dev/null 2>&1; then
@@ -142,6 +196,24 @@ WantedBy=timers.target"
 fi
 run sudo systemctl daemon-reload
 run sudo systemctl enable --now vy-usage.timer
+
+run sudo install -m 755 "$SRC/quiet_hour.sh" /usr/local/bin/vy-quiet-hour
+for what in hold:12:30 release:13:30; do
+  verb=${what%%:*}
+  at=${what#*:}
+  if [ ! -f "/etc/systemd/system/vy-quiet-$verb.timer" ]; then
+    if [ "$mode" = --apply ]; then
+      printf '[Unit]\nDescription=quiet hour: %s circuits admissions\n\n[Service]\nType=oneshot\nExecStart=/usr/local/bin/vy-quiet-hour %s\n' "$verb" "$verb" \
+        | sudo tee "/etc/systemd/system/vy-quiet-$verb.service" > /dev/null
+      printf '[Unit]\nDescription=quiet hour %s at %sZ\n\n[Timer]\nOnCalendar=*-*-* %s:00 UTC\n\n[Install]\nWantedBy=timers.target\n' "$verb" "$at" "$at" \
+        | sudo tee "/etc/systemd/system/vy-quiet-$verb.timer" > /dev/null
+    else
+      echo "   would write vy-quiet-$verb.timer ($at UTC daily)"
+    fi
+  fi
+done
+run sudo systemctl daemon-reload
+run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
 
 step "done"
 echo "   check:  sky check ssh && sky gpus list --infra ssh/$POOL && ${KUBECTL[*]} get clusterqueues"

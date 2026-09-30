@@ -1,11 +1,12 @@
-# A timed prover run (a bench cell) on the Nebius cluster: queue provers, priority prover-bench, in a quiet window.
+# A timed prover run (a bench cell) on the Nebius cluster: queue provers, priority prover-bench.
 #
 #   sky jobs launch -n bench-<cell> tools/research/src/research/pods/nebius/sky/jobs/prover-bench.yaml \
 #     --env CMD='...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
 #
-# The quiet window is a required pod anti-affinity against pods labelled verity.dev/build=true (config runs). The scheduler enforces
-# it both ways: the bench waits until no Build runs on the node, and no Build starts on a node while the bench runs. Keep cells
-# short (minutes to about 1 h), since on one server a bench holds every Build back. Record the clocks with every timed result.
+# Benches run alongside Builds, so each is labelled ov.noisy=true (pod label, and OV_NOISY in the run's environment for its
+# record). The quiet hour, 12:30-13:30Z, admits no config run (quiet_hour.sh): a bench re-measured then is submitted with
+#   sed 's/ov.noisy: "true"/ov.noisy: "false"/; s/OV_NOISY: "true"/OV_NOISY: "false"/' prover-bench.yaml > /tmp/quiet-bench.yaml
+# Record the clocks with every timed result.
 # Resources: 18 vCPU, so the M0 prover's 17-core bursts aren't throttled mid-measurement; its RAM peak of 2-17 GiB.
 name: prover-bench
 
@@ -24,6 +25,7 @@ envs:
   CAMPAIGN: nebius-bench
   RESEARCH_RUNS: /workspace/research/runs
   CARGO_TARGET_DIR: /workspace/cache/cargo-target
+  OV_NOISY: "true"
 
 secrets:
   R2_ENDPOINT: null
@@ -44,15 +46,8 @@ config:
         labels:
           kueue.x-k8s.io/queue-name: provers
           kueue.x-k8s.io/priority-class: prover-bench
-          verity.dev/quiet: "true"
+          ov.noisy: "true"
       spec:
-        affinity:
-          podAntiAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-            - topologyKey: kubernetes.io/hostname
-              namespaceSelector: {}
-              labelSelector:
-                matchLabels: {verity.dev/build: "true"}
         containers:
         - volumeMounts:
           - {name: workspace, mountPath: /workspace}

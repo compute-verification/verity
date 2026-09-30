@@ -1,13 +1,16 @@
 # Kueue on the Nebius cluster (Kueue v0.19.6, applied by cluster_up.sh). The weekly retune edits only this file: the nominalQuota
 # lines below, from usage_report.py's summary.
 #
-# One cohort (nebius), two ClusterQueues. Either may borrow the other's idle capacity (no borrowingLimit), and a queue reclaiming
-# its own nominal quota preempts the borrower whatever its priority (reclaimWithinCohort: Any). Within a queue, and when
-# borrowing, only lower priorities are preempted.
+# One cohort (nebius), two ClusterQueues. provers may borrow circuits' idle capacity, and circuits reclaiming it preempts the
+# borrower whatever its priority (reclaimWithinCohort: Any). circuits never borrows (borrowingLimit 0): a config run can't be
+# checkpointed, so it must never sit on quota a reclaim could take back. Within a queue, only lower priorities are preempted.
+# quiet_hour.sh holds circuits' admissions 12:30-13:30Z (stopPolicy: Hold) so benches can re-measure without new Builds.
 #
-# The nominal quotas sum to less than vy-nebius-1's allocatable (192 vCPU, ~1,690 GiB): Kueue admits by quota, not by what the
-# scheduler can place, so a quota past allocatable admits pods that stay Pending. The rest goes to k3s, Kueue, SkyPilot's pods
-# and the DCGM exporter. Asked for: circuits 4 GPU / 144 vCPU / ~1.3 TiB, provers 4 GPU / 48 vCPU / ~400 GiB.
+# Kueue admits by quota, not by what the scheduler can place: keep the sums at or under vy-nebius-1's allocatable (192 vCPU,
+# ~1,690 GiB), or it admits pods that stay Pending.
+# While lanes still run GPU work directly on GPUs 4-7 (research run --on, outside Kubernetes), the device plugin offers
+# Kubernetes GPUs 0-3 only (cluster_up.sh, VY_K8S_GPUS), so provers' GPU quota is 0 and its GPU jobs borrow circuits' idle
+# GPUs. When direct GPU runs stop: VY_K8S_GPUS=all, and provers' nvidia.com/gpu nominalQuota back to 4.
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ResourceFlavor
 metadata: {name: vy-nebius-1}
@@ -30,9 +33,9 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 4}
-      - {name: cpu, nominalQuota: 142}
-      - {name: memory, nominalQuota: 1280Gi}
+      - {name: nvidia.com/gpu, nominalQuota: 4, borrowingLimit: 0}
+      - {name: cpu, nominalQuota: 144, borrowingLimit: 0}
+      - {name: memory, nominalQuota: 1280Gi, borrowingLimit: 0}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
@@ -50,8 +53,8 @@ spec:
     flavors:
     - name: vy-nebius-1
       resources:
-      - {name: nvidia.com/gpu, nominalQuota: 4}
-      - {name: cpu, nominalQuota: 46}
+      - {name: nvidia.com/gpu, nominalQuota: 0}
+      - {name: cpu, nominalQuota: 48}
       - {name: memory, nominalQuota: 384Gi}
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
