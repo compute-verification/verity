@@ -48,7 +48,10 @@ EXTRA = {
     "cuStreamCreate": [P(vp), u], "cuStreamWaitEvent": [vp, vp, u], "cuStreamSynchronize": [vp],
     "cuStreamBeginCapture_v2": [vp, i32], "cuStreamEndCapture": [vp, P(vp)], "cuGraphInstantiateWithFlags": [P(vp), vp, C.c_ulonglong],
     "cuGraphLaunch": [vp, vp], "cuGraphExecDestroy": [vp], "cuGraphDestroy": [vp], "cuDeviceGetUuid_v2": [C.c_char_p, i32],
+    "cuCtxGetStreamPriorityRange": [P(i32), P(i32)], "cuStreamCreateWithPriority": [P(vp), u, i32],
+    "cuGraphGetNodes": [vp, vp, P(sz)], "cuGraphNodeGetType": [vp, P(i32)], "cuGraphKernelNodeGetAttribute": [vp, i32, vp],
 }
+USE_NODE_PRIORITY, ATTR_PRIORITY = 8, 8                     # CUDA_GRAPH_INSTANTIATE_FLAG_USE_NODE_PRIORITY, CU_LAUNCH_ATTRIBUTE_PRIORITY
 M, N, K = 32, 8192, 8192
 CALLS, WSETS = 32, 4
 MAX_DYN, SMEM_OPTIN = 8, 97
@@ -83,6 +86,12 @@ class Bench(R.Dev):
         self.s1, self.s2 = vp(), vp()
         self.ck("cuStreamCreate", C.byref(self.s1), 1)
         self.ck("cuStreamCreate", C.byref(self.s2), 1)
+        least, greatest = i32(), i32()                       # the "priorities" arms: the chain's stream first, the side stream last
+        self.ck("cuCtxGetStreamPriorityRange", C.byref(least), C.byref(greatest))
+        self.h1, self.h2 = vp(), vp()
+        self.ck("cuStreamCreateWithPriority", C.byref(self.h1), 1, greatest.value)
+        self.ck("cuStreamCreateWithPriority", C.byref(self.h2), 1, least.value)
+        self.priority_range = (least.value, greatest.value)
         self.args: list = []
         self.dyn: dict[str, int] = {}
 
@@ -126,13 +135,26 @@ class Bench(R.Dev):
     def wait(self, stream, e) -> None:
         self.ck("cuStreamWaitEvent", stream, e, 0)
 
-    def graph(self, body) -> vp:
-        self.ck("cuStreamBeginCapture_v2", self.s1, 0)       # CU_STREAM_CAPTURE_MODE_GLOBAL
+    def graph(self, body, origin=None, prio: bool = False) -> tuple[vp, list[int]]:
+        """The captured graph, and its kernel nodes' priorities (instantiated to honour them when prio)."""
+        origin = origin or self.s1
+        self.ck("cuStreamBeginCapture_v2", origin, 0)        # CU_STREAM_CAPTURE_MODE_GLOBAL
         body()
         g, ge = vp(), vp()
-        self.ck("cuStreamEndCapture", self.s1, C.byref(g))
-        self.ck("cuGraphInstantiateWithFlags", C.byref(ge), g, 0)
-        return ge
+        self.ck("cuStreamEndCapture", origin, C.byref(g))
+        n = sz()
+        self.ck("cuGraphGetNodes", g, None, C.byref(n))
+        nodes = (vp * n.value)()
+        self.ck("cuGraphGetNodes", g, nodes, C.byref(n))
+        seen = set()
+        for node in nodes:
+            t, val = i32(), C.create_string_buffer(64)
+            self.ck("cuGraphNodeGetType", node, C.byref(t))
+            if t.value == 0:                                 # CU_GRAPH_NODE_TYPE_KERNEL
+                self.ck("cuGraphKernelNodeGetAttribute", node, ATTR_PRIORITY, val)
+                seen.add(int.from_bytes(val.raw[:4], "little", signed=True))
+        self.ck("cuGraphInstantiateWithFlags", C.byref(ge), g, USE_NODE_PRIORITY if prio else 0)
+        return ge, sorted(seen)
 
     def replay_ms(self, ge, reps: int) -> list[float]:
         out = []
@@ -360,7 +382,8 @@ def rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
 #: Candidates that change the protocol, measured only: "overlap" (the one-launch commitment on the side stream beside the
 #: GEMM, as if the noise didn't wait for A's root) and "blkpre" (the per-block Merkle row layout, hash_rows_blk, then
 #: hash_tree_small, keys so). The post-GEMM hashing: "none", "pushed", "serial" (tuned, on the GEMM's stream), "side"
-#: (tuned, on the side stream).
+#: (tuned, on the side stream). An arm named "…, priorities" runs the chain on the highest-priority stream and the side
+#: stream at the lowest, in a graph instantiated to honour its nodes' priorities.
 ARMS = [
     ("plain fp32 rows", ROW_F32, "none", "none"), ("plain bf16 rows", ROW_BF16, "none", "none"),
     ("h1 as pushed", ROW_F32, "pushed", "pushed"), ("h1 tuned", ROW_F32, "tuned", "serial"),
@@ -369,12 +392,15 @@ ARMS = [
     ("A tuned, keys early", ROW_F32, "keys", "none"), ("A tuned, keys precomputed", ROW_F32, "pre", "none"),
     ("A in one launch, keys precomputed", ROW_F32, "onepre", "none"), ("A in its producer", ROW_F32, "producer", "none"),
     ("h1 tuned, keys precomputed, side stream", ROW_F32, "pre", "side"),
+    ("h1 tuned, keys precomputed, side stream, priorities", ROW_F32, "pre", "side"),
     ("h1 A in one launch, keys precomputed, side stream", ROW_F32, "onepre", "side"),
     ("candidate: A overlapped with the GEMM", ROW_F32, "overlap", "none"),
     ("candidate: A block layout", ROW_F32, "blkpre", "none"),
     ("candidate: h1 A block layout, side stream", ROW_F32, "blkpre", "side"),
+    ("candidate: h1 A block layout, side stream, priorities", ROW_F32, "blkpre", "side"),
     ("candidate: A bf16 rows, keys precomputed", ROW_BF16, "pre", "none"),
     ("candidate: h1 bf16 rows, keys precomputed, side stream", ROW_BF16, "pre", "side"),
+    ("candidate: h1 bf16 rows, keys precomputed, side stream, priorities", ROW_BF16, "pre", "side"),
 ]
 
 
@@ -419,7 +445,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
     a_tree, a_keys, counter = d.alloc(32 * 2 * m), d.alloc(32 * 16), d.alloc(16)
     slots = [{"c": d.alloc(4 * 64 * n), "u": d.alloc(4 * 64 * n), "dg": d.alloc(32 * 64 * (n // 32)), "lv": d.alloc(32 * 256),
               "tree": d.alloc(32 * 2 * 256), "keys": d.alloc(32 * 16)} for _ in range(2)]
-    out: dict = {"calls_per_graph": CALLS, "weight_sets": WSETS, "shape": f"m{m}-n{n}-k{k}"}
+    out: dict = {"calls_per_graph": CALLS, "weight_sets": WSETS, "shape": f"m{m}-n{n}-k{k}", "priority_range": d.priority_range}
 
     def commit_a(s, amode: str, rb: int) -> None:
         if amode in ("pushed", "tuned"):
@@ -434,7 +460,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
             d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
 
     def call(i: int, rb: int, amode: str, post: str, st: dict) -> None:
-        s1, s2 = d.s1, d.s2
+        s1, s2 = st["streams"]
         sl = slots[i % 2]
         early = amode in EARLY
         if early:                                            # the level keys, from the domain id alone, beside the producer
@@ -473,18 +499,20 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
         else:
             launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
 
-    graphs = {}
+    graphs, prios = {}, {}
     for name, rb, amode, post in ARMS:
-        def body(rb=rb, amode=amode, post=post):
-            st: dict = {"joins": []}
+        streams = (d.h1, d.h2) if name.endswith(", priorities") else (d.s1, d.s2)
+
+        def body(rb=rb, amode=amode, post=post, streams=streams):
+            st: dict = {"joins": [], "streams": streams}
             for i in range(CALLS):
                 call(i, rb, amode, post, st)
             for e in [st.get("a_done")] + st["joins"][-1:]:
                 if e is not None:
-                    d.wait(d.s1, e)
+                    d.wait(streams[0], e)
             if amode in EARLY:
-                d.wait(d.s1, d.event(d.s2))
-        graphs[name] = d.graph(body)
+                d.wait(streams[0], d.event(streams[1]))
+        graphs[name], prios[name] = d.graph(body, streams[0], name.endswith(", priorities"))
     d.go(None, "hash_node_keys", 1, 32, (a_keys, dom_a), (depth,))     # the "pre" arms' table (every arm writes the same keys)
     d.sync()
     for ge in graphs.values():                               # warm every graph once
@@ -500,7 +528,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None) -> dict:
     for name, rb, amode, post in ARMS:
         ms = raw[name]
         out[name] = {"rows_bytes": rb, "a": amode, "post": post, "per_call_us": statistics.median(ms) * 1e3 / CALLS, "raw_ms": ms,
-                     "sm_mhz": clk[name]}
+                     "sm_mhz": clk[name], "node_priorities": prios[name]}
     if tdir:                                                 # each verified arm once more; its last call's output, for the verifier
         os.makedirs(tdir, exist_ok=True)
         run = os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local"
