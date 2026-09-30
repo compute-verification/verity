@@ -349,7 +349,11 @@ def clean(fmt: Fmt, x: Sequence[int]) -> tuple[list[int], list[int], int]:
 def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
     """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (the
     assessor's run of all 256 bytes, ``r20260930-093120-b2f2``); UE8M0 bytes as written.  Every replayed step reads
-    scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one."""
+    scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one.  It is the decode the Lean
+    `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows (research store
+    ``internal/pouw-fp8/pearl-c4-scale-decode/``, bc-5a715b19's review).  Four of them are NaN accumulators whose scale
+    bytes set bit 7: valid scales under this decode, invalid under `verity.ml.tc`'s own, and outside the model through
+    the accumulator."""
     return [s & 0x7F for s in scales] if fmt is NVFP4 else list(scales)
 
 
