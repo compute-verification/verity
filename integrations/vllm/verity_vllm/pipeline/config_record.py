@@ -145,6 +145,18 @@ def tp_commit_part(d: Path, world: int) -> tuple[dict[str, Any], dict[str, Any]]
     return commit, replay
 
 
+ENGINE_KEYS = ("VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE", "vllm_batch_invariant_mode",
+               "torch_allow_bf16_reduced_precision_reduction", "torch_preferred_blas_library", "compute_capability")
+
+
+def engine_part(d: Path) -> dict[str, Any] | None:
+    """The batch-invariant configuration the instrumented run's replay measured in the engine's process (`engine_of_record`): the
+    cuBLAS(Lt) workspace pin its kernel selection is conditioned on, among the rest.  None when the Commit recorded no replay."""
+    runs = [r for r in _jsonl(d / "commit" / "runs.jsonl") if r.get("arm") != "control"]
+    eor = (((runs[-1].get("commit") or {}).get("sampled_replay") or {}).get("engine_of_record") if runs else None) or None
+    return {k: eor.get(k) for k in ENGINE_KEYS} if eor else None
+
+
 def timing_part(d: Path) -> dict[str, Any]:
     """Per arm, the run's wall and its engine steps' prefill (the first step) and mean decode time; with the control arm (the config
     run's `--config-baseline 1`), the extraction slowdown per phase: instrumented / control."""
@@ -169,7 +181,7 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
     if why == "commit FAIL" and commit.get("reason"):
         why = f"commit FAIL: {commit['reason']}"
     return {"schema": SCHEMA, "config": config_of(row), "tree": tree, "device": device, "outcome": "PASS" if why is None else "FAIL",
-            "why": why, "build": build, "word_check": word, "commit": commit, "replay": replay, "timing": timing_part(d),
+            "why": why, "build": build, "word_check": word, "commit": commit, "replay": replay, "engine": engine_part(d), "timing": timing_part(d),
             "stages": stages or {}}
 
 
