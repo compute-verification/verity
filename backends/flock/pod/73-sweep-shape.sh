@@ -9,6 +9,8 @@
 #   MODE=shape ROW=<row slug> SHAPE=<shape digest>   (one GPU)
 #              proves it (70-class-sweep.sh) with the same settings, so a staged shape comes from the cache; SELFTEST=1
 #              SELFTEST_GPU=1 for its selftest on the GPU (the device's proofs and transcripts against the CPU's, byte for byte)
+#   SHAPES=<digest>,<digest>,... in place of SHAPE: those shapes one after another in one job, each into out/<k>/ (k from 1);
+#              SELFTEST_SHAPES=<digest>,<digest> selftests only those. The job fails if any shape did
 # env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  SM=120  and 70-class-sweep.sh's (SELFTEST=0 here)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -52,7 +54,10 @@ print(f"{len(rows)} shapes, {sum(s['row_units'] or 0 for _, s in rows)} row unit
 EOF
   cp $R/out/program.json $R/out/cut/counts.json $R/out/shapes.tsv $D/ ;;
 stage|shape)
-  $(command -v python3) - $D/counts.json $SHAPE $R/out/defs.json <<'EOF' || exit 1
+  rc=0; k=0; SHAPES=${SHAPES:-$SHAPE}
+  for SHAPE in ${SHAPES//,/ }; do
+  k=$((k + 1)); O=$R/out/$k; mkdir -p $O
+  $(command -v python3) - $D/counts.json $SHAPE $O/defs.json <<'EOF' || { rc=1; continue; }
 import json, sys
 c, s = json.load(open(sys.argv[1])), sys.argv[2]
 holders = {fid: per for fid, per in c["per_definition"].items() if s in per}
@@ -64,7 +69,10 @@ fid = min(holders, key=lambda f: (sum(holders[f].values()), f))
 row = c["shapes"][s]["row_units"] or holders[fid][s] * c["calls"][fid]
 json.dump({fid: max(1, round(row / holders[fid][s]))}, open(sys.argv[3], "w"))
 EOF
-  echo $SHAPE > $R/out/shapes.txt
-  OUT=$R/out bash backends/flock/pod/70-class-sweep.sh DEFS=$R/out/defs.json SHAPES=$R/out/shapes.txt SELECT=${SELECT:-units} \
-    SELFTEST=${SELFTEST:-0} SELFTEST_LARGEST=0 STAGE_ONLY=$([ $MODE = stage ] && echo 1 || echo 0) || exit 1 ;;
+  echo $SHAPE > $O/shapes.txt
+  st=${SELFTEST:-0}; case ",${SELFTEST_SHAPES:-}," in *",$SHAPE,"*) st=1 ;; esac
+  OUT=$O bash backends/flock/pod/70-class-sweep.sh DEFS=$O/defs.json SHAPES=$O/shapes.txt SELECT=${SELECT:-units} \
+    SELFTEST=$st SELFTEST_LARGEST=0 STAGE_ONLY=$([ $MODE = stage ] && echo 1 || echo 0) || rc=1
+  done
+  exit $rc ;;
 esac
