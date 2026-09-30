@@ -1,8 +1,9 @@
 """Pearl-C's sm_120 GPU check fixture, built off the card (needs verity and numpy): inputs at a small shape and every buffer
 pearl_c_sm120.cu's kernels write, in its row-major layout, for forming v1 on `pearl_c_device.SM120` (G = 4) and
 `SM120_UNPROMOTED`.  Forming, lines and hashes come from `verity_pouw.schemes.pearl_c` on the device record; the products
-over every cell are batched in numpy with `verity.ml.kernels.group_sum_total_batch` on the record's atom and peel step
-(the H100 fixture's helpers, `benchmarks/pouw/pearl_c/fixture.py`, do the rest), and one whole 64 x 64 tile per variant is
+over every cell are batched in numpy (the chains by the twin, `benchmarks/pouw/pearl_c/twin.py`, the peel with
+`verity.ml.kernels.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
+`benchmarks/pouw/pearl_c/fixture.py`, do the rest), and one whole 64 x 64 tile per variant is
 recomputed by the scheme (`encode`, `checked`, `digest`, `tickets`) and must agree.  run.py compares the device's buffers
 with these bytes before it times anything.
 
@@ -25,9 +26,17 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("pearl_c_h100_fixture", HERE.parent / "pearl_c" / "fixture.py")
-H = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(H)
+
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+H = _load("pearl_c_h100_fixture", HERE.parent / "pearl_c" / "fixture.py")
+W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 
 from verity.commitments.turboshake import turboshake128  # noqa: E402
 from verity.ml.kernels import group_sum_total_batch  # noqa: E402
@@ -46,24 +55,10 @@ def rowmajor(x: np.ndarray) -> bytes:
     return np.ascontiguousarray(x, np.uint8).tobytes()
 
 
-def chain_np(device: Device, a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray) -> np.ndarray:
-    """C.chain on `device` for the cells (ii[c], jj[c]) of codes a (rows x k) and b."""
-    k, total = a.shape[1], np.zeros(len(ii), np.uint32)
-    window = device.window if device.g else k
-    for ws in range(0, k, window):
-        local = np.zeros(len(ii), np.uint32)
-        for s in range(ws, min(ws + window, k), C.SLICE):
-            local = group_sum_total_batch(device.atom, local, a[ii, s:s + C.SLICE], b[jj, s:s + C.SLICE])[0]
-        if not device.g:
-            return local
-        total = (total.view(np.float32) + local.view(np.float32)).view(np.uint32)
-        total[total == 0x80000000] = 0
-    return total
-
-
 def product(device: Device, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """C.chain on `device` for every cell of codes a (rows x k) and b, through the twin's batched chain."""
     ii, jj = H.grid(a.shape[0], b.shape[0])
-    return chain_np(device, a, b, ii, jj).reshape(a.shape[0], b.shape[0])
+    return W.chain(a, b, ii, jj, device=device).reshape(a.shape[0], b.shape[0])
 
 
 def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np.ndarray:

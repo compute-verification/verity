@@ -7,6 +7,7 @@ naming a CUDA >= 12.8 toolkit, the real sm_120a build passes the gate."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -20,10 +21,20 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 H100_DIR = HERE.parent / "pearl_c"
-sys.path.insert(0, str(HERE))
 
-import fixture as F  # noqa: E402
-import sass_gate as S  # noqa: E402
+
+def load(name: str, path: Path):
+    """The module at `path` under its own name: #449's tree has a fixture.py too, and the suite imports both trees in one
+    process."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+F = load("pearl_c_sm120_fixture", HERE / "fixture.py")
+S = load("pearl_c_sm120_sass_gate", HERE / "sass_gate.py")
+W = F.W
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
 SM120_MAX_DYN = 101376                   # sm_120's opt-in dynamic shared memory per block (99 KB)
@@ -132,6 +143,33 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
     funcs, problems = S.gate(ptxas.read_text(), sass.read_text())
     assert not problems, problems
     assert funcs["gemm_pearlc"]["HMMA"] == 64 and funcs["gemm_pearlc"]["QMMA"] % 32 == 0
+
+
+@pytest.mark.parametrize("device", ["sm120", "sm120-unpromoted"])
+def test_twin_tile_is_the_scheme_on_the_record(device):
+    """#449's twin on each sm_120 record, the bench arm's gate: a tile half of filler rows, and one on rows the caller
+    passes, through `pearl_c` itself."""
+    from verity_pouw.protocol import Context, Matmul, Tile
+    from verity_pouw.protocol import Shape as MShape
+    from verity_pouw.schemes import pearl_c as C
+    from verity_pouw.schemes.pearl_c_device import DEVICES
+
+    dev, small = DEVICES[device], W.Shape("small", 96, 128, 256)
+    jb = W.job(small, dev)
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", device=dev)
+    noise = C.Noise(jb.seeds["seed_a"], jb.seeds["seed_b"])
+    ctx = Context(bytes(32), Matmul(0, MShape(small.m, small.k, small.n), 0), bytes(32), bytes(32))
+    own = W.tile(jb, 64, 64)
+    given = W.tile(jb, 0, 0, W.gen_f32(np.arange(64), small.k, 7), W.gen_f32(np.arange(64), small.k, 8))
+    assert (own.a.words[small.m_real - 64:] == 0).all() and not (given.a.words == W.a_words(small, jb.seeds, np.arange(64))).all()
+    for (r0, c0), t in (((64, 64), own), ((0, 0), given)):
+        ra, rb = [r.astype("<u4").tobytes() for r in t.a.words], [r.astype("<u4").tobytes() for r in t.b.words]
+        ops = s.encode(ctx, noise, ra, rb, Tile(tuple(range(r0, r0 + 64)), tuple(range(c0, c0 + 64))))
+        checked = s.checked(ctx, ops)
+        assert ops.a.codes == t.a.codes.tolist() and ops.b.codes == t.b.codes.tolist()
+        assert ops.a.alpha == t.a.alpha.tolist() and ops.b.alpha == t.b.alpha.tolist()
+        assert checked.c == t.c.tolist() and checked.u == t.u.tolist()
+        assert s.digest(ctx, noise, checked) == t.leaf and s.tickets(noise, checked) == t.tickets
 
 
 @pytest.fixture(scope="module")

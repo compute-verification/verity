@@ -7,7 +7,9 @@ sampled 64 x 64 tiles per shape the bytes the H100 kernels must write there, fro
 * the adopted baseline's y (e4m3(αx) through the same chain, then the glue).
 
 bench.py compares the device's buffers with them before it times a shape.  benchmarks/pouw/tests/test_pearl_c_bench.py holds
-the twin to `pearl_c`'s scalar reference and the fixture, and `gen_f32` to its CUDA source.
+the twin to `pearl_c`'s scalar reference and the fixture, and `gen_f32` to its CUDA source.  Every step runs on a device
+record (`pearl_c_device`, the H100's by default; the sm_120 arm uses SM120 and SM120_UNPROMOTED), and `tile` takes the rows
+themselves when the caller generated them.
 
   uv run python benchmarks/pouw/pearl_c/twin.py OUT.json [label ...]     (default: every shape in SHAPES)
 """
@@ -17,17 +19,18 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
 from verity.commitments.turboshake import turboshake128
 from verity.ml.kernels import group_sum_total_batch
-from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_u as U
 from verity_pouw.schemes import pearl_kw as P
+from verity_pouw.schemes.pearl_c_device import H100, Device
 
 SCHEMA = "verity-pouw/pearl-c-bench/v1"
 T = C.TILE                        # the leaf's tile, 64 x 64
@@ -116,19 +119,23 @@ def f32(words: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(words, np.uint32).view(np.float32)
 
 
-def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, block: int = 1 << 16) -> np.ndarray:
-    """`pearl_c.chain` for the cells (ii, jj) of code matrices a and b: +0 per 128 products, four k32 atoms, one FP32 add."""
+def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, block: int = 1 << 16, device: Device = H100
+          ) -> np.ndarray:
+    """`pearl_c.chain` on `device` for the cells (ii, jj) of code matrices a and b: +0 per window of G atoms, one FP32 add
+    per window (on the H100, 128 products); unpromoted, one accumulator over all of k."""
     out = np.empty(len(ii), np.uint32)
     k = a.shape[1]
+    window = device.window if device.g else k
     for lo in range(0, len(ii), block):
         ci, cj = ii[lo:lo + block], jj[lo:lo + block]
         total = np.zeros(len(ci), np.uint32)
-        for ws in range(0, k, C.WINDOW):
+        for ws in range(0, k, window):
             local = np.zeros(len(ci), np.uint32)
-            for s in range(ws, min(ws + C.WINDOW, k), C.SLICE):
-                local = group_sum_total_batch(HOPPER_E4M3_K32, local, a[ci, s:s + C.SLICE], b[cj, s:s + C.SLICE])[0]
-            total = (f32(total) + f32(local)).view(np.uint32)
-        total[total == 0x80000000] = 0
+            for s in range(ws, min(ws + window, k), C.SLICE):
+                local = group_sum_total_batch(device.atom, local, a[ci, s:s + C.SLICE], b[cj, s:s + C.SLICE])[0]
+            total = (f32(total) + f32(local)).view(np.uint32) if device.g else local
+        if device.g:
+            total[total == 0x80000000] = 0
         out[lo:lo + block] = total
     return out
 
@@ -150,9 +157,9 @@ class Side:
     quant: np.ndarray             # rows x k, E4M3: the adopted quantizer's e4m3(α·x)
 
 
-def form(words: np.ndarray, e_rows: list[list[int]], basis: np.ndarray, block: int = 1 << 18) -> Side:
-    """`pearl_c.form_v1` with the noise atoms batched: per row the pinned statistics and E′, then per element one
-    HOPPER_E4M3_K32 step with α·x as its accumulator, then the cast."""
+def form(words: np.ndarray, e_rows: list[list[int]], basis: np.ndarray, block: int = 1 << 18, device: Device = H100) -> Side:
+    """`pearl_c.form_v1` with the noise atoms batched: per row the pinned statistics and E′, then per element one step of
+    the device's atom with α·x as its accumulator, then the cast."""
     rows, k = words.shape
     stats = [C.s5_stats([int(v) for v in row]) for row in words]
     alpha, beta = (np.array([s[i] for s in stats], np.uint32) for i in (2, 3))
@@ -162,7 +169,7 @@ def form(words: np.ndarray, e_rows: list[list[int]], basis: np.ndarray, block: i
     d = np.empty(rows * k, np.uint32)
     for lo in range(0, rows * k, block):
         sl = slice(lo, lo + block)
-        d[sl] = group_sum_total_batch(HOPPER_E4M3_K32, acc[sl], ep[ii[sl]], basis[tt[sl]])[0]
+        d[sl] = group_sum_total_batch(device.atom, acc[sl], ep[ii[sl]], basis[tt[sl]])[0]
     return Side(words, alpha, beta, ep.astype(np.uint8), fp8(d).reshape(rows, k), fp8(acc).reshape(rows, k))
 
 
@@ -182,14 +189,15 @@ class Job:
     fa: np.ndarray
     fb: np.ndarray
     g: np.ndarray
+    device: Device = field(default=H100)
 
 
-def job(shape: Shape) -> Job:
-    sd = seeds(shape)
+def job(shape: Shape, device: Device = H100, sd: dict | None = None) -> Job:
+    sd = sd or seeds(shape)
     fa, fb = (np.array(C._basis(sd["seed_b"], side, shape.k, C.LINE_NORM_V1), np.int64) for side in (0, 1))
     gi, gj = cells(U.R, U.R)
-    g = chain(fb.T.copy(), fa.T.copy(), gi, gj).reshape(U.R, U.R)
-    return Job(shape, sd, fa, fb, g)
+    g = chain(fb.T.copy(), fa.T.copy(), gi, gj, device=device).reshape(U.R, U.R)
+    return Job(shape, sd, fa, fb, g, device)
 
 
 def a_words(shape: Shape, sd: dict, rows: np.ndarray) -> np.ndarray:
@@ -220,28 +228,31 @@ class Tile:
                 "alpha_b": sha(self.b.alpha.astype("<u4").tobytes()), "rows": sha(b"".join(self.row_commits))}
 
 
-def tile(jb: Job, r0: int, c0: int) -> Tile:
-    """The tile at (r0, c0) as the kernels compute it, from its 64 A rows and 64 B rows alone."""
-    shape, sd, k = jb.shape, jb.seeds, jb.shape.k
+def tile(jb: Job, r0: int, c0: int, a_rows: np.ndarray | None = None, b_rows: np.ndarray | None = None) -> Tile:
+    """The tile at (r0, c0) as the kernels compute it on the job's device, from its 64 A rows and 64 B rows alone (FP32
+    words; `gen_f32`'s unless given)."""
+    shape, sd, k, dev = jb.shape, jb.seeds, jb.shape.k, jb.device
     rows, cols = np.arange(r0, r0 + T), np.arange(c0, c0 + T)
-    a = form(a_words(shape, sd, rows), [P.sample_line(sd["seed_a"], 0, 0, int(i)) for i in rows], jb.fa)
-    b = form(gen_f32(cols, k, sd["gen_b"]), [P.sample_line(sd["seed_b"], 1, 0, int(j)) for j in cols], jb.fb)
+    a_rows = a_words(shape, sd, rows) if a_rows is None else a_rows
+    b_rows = gen_f32(cols, k, sd["gen_b"]) if b_rows is None else b_rows
+    a = form(a_rows, [P.sample_line(sd["seed_a"], 0, 0, int(i)) for i in rows], jb.fa, device=dev)
+    b = form(b_rows, [P.sample_line(sd["seed_b"], 1, 0, int(j)) for j in cols], jb.fb, device=dev)
     ri, rq = cells(T, U.R)
-    af = chain(a.codes.astype(np.int64), jb.fb.T.copy(), ri, rq).reshape(T, U.R)
-    bf = chain(b.codes.astype(np.int64), jb.fa.T.copy(), ri, rq).reshape(T, U.R)
+    af = chain(a.codes.astype(np.int64), jb.fb.T.copy(), ri, rq, device=dev).reshape(T, U.R)
+    bf = chain(b.codes.astype(np.int64), jb.fa.T.copy(), ri, rq, device=dev).reshape(T, U.R)
     bf16 = lambda ep: [[C._bf16_of_code(int(x)) for x in row] for row in ep]  # noqa: E731
     pa = np.array([U.pa_row(e, [int(v) for v in f]) for e, f in zip(bf16(a.ep), af)], np.int64)
     pb = np.array([U.pb_row(e, [int(v) for v in f], jb.g.tolist()) for e, f in zip(bf16(b.ep), bf)], np.int64)
     ti, tj = cells(T, T)
-    c = chain(a.codes.astype(np.int64), b.codes.astype(np.int64), ti, tj)
+    c = chain(a.codes.astype(np.int64), b.codes.astype(np.int64), ti, tj, device=dev)
     u = c.copy()
     for s in range(0, U.PEEL_K, 16):
-        u = group_sum_total_batch(HOPPER_BF16_WGMMA_K16, u, pa[ti, s:s + 16], pb[tj, s:s + 16])[0]
+        u = group_sum_total_batch(dev.peel, u, pa[ti, s:s + 16], pb[tj, s:s + 16])[0]
     c, u = c.reshape(T, T), u.reshape(T, T)
     checked = C.Checked(c.tolist(), u.tolist())
     tickets = C.PearlC(forming="v1").tickets(C.Noise(sd["seed_a"], sd["seed_b"]), checked)
     ia, ib = (np.float32(1.0) / f32(side.alpha) for side in (a, b))
-    q = chain(a.quant.astype(np.int64), b.quant.astype(np.int64), ti, tj).reshape(T, T)
+    q = chain(a.quant.astype(np.int64), b.quant.astype(np.int64), ti, tj, device=dev).reshape(T, T)
     y = rne_bf16(((f32(q) * ia[:, None]).astype(np.float32) * ib[None, :]).astype(np.float32).view(np.uint32))
     row = a.words[0].astype("<u4").tobytes()
     commits = [turboshake128(row[s:s + SEGMENT], D_ROWS, 32) for s in range(0, len(row), SEGMENT)]
@@ -266,15 +277,16 @@ def _tile_job(args) -> dict:
     return tile(jb, r0, c0).expected()
 
 
-def build(shapes: list[Shape], processes: int | None = None) -> dict:
+def build(shapes: list[Shape], processes: int | None = None, device: Device = H100) -> dict:
     with Pool(processes) as pool:
-        jobs = pool.map(job, shapes)
+        jobs = pool.map(partial(job, device=device), shapes)
         work = [(jb, r0, c0) for jb in jobs for r0, c0 in samples(jb.shape)]
         done = pool.map(_tile_job, work, chunksize=1)
     per = {s.label: [] for s in shapes}
     for (jb, _, _), exp in zip(work, done):
         per[jb.shape.label].append(exp)
-    return {"schema": SCHEMA, "scheme": C.NAME_V1, "tile": T, "shapes": [entry(s, per[s.label]) for s in shapes]}
+    return {"schema": SCHEMA, "scheme": C.PearlC(forming="v1", device=device).name, "tile": T,
+            "shapes": [entry(s, per[s.label]) for s in shapes]}
 
 
 if __name__ == "__main__":
