@@ -38,11 +38,13 @@ def _tail(path: str, n: int = 240) -> str:
 
 def word_check(row: Any) -> None:
     """The strict word check of the Build's manifest (`epoch word-check`, as a row of record's job runs it) before any Commit; a FAIL stops
-    the run (exit 20)."""
+    the run (exit 20).  A raised VERITY_QWORD_MAX_GATES passes only when VERITY_QWORD_MAX_GATES_ALLOWED names the same value (the GO's
+    allowance for the row)."""
     env = row.env.environ
     rc = row.run_tl("build.word_check", WORD_CHECK_TIMEOUT, f"{row.d}/strict_word.log",
                     row.cli("epoch", "word-check", row.row, row.d, "--out", f"{row.d}/strict_word.json", "--world", str(getattr(row, "W", 1)),
-                            "--build-word-check", env.get("VERITY_WORD_CHECK", ""), "--build-max-gates", env.get("VERITY_QWORD_MAX_GATES", "")))
+                            "--build-word-check", env.get("VERITY_WORD_CHECK", ""), "--build-max-gates", env.get("VERITY_QWORD_MAX_GATES", ""),
+                            "--allowed-max-gates", env.get("VERITY_QWORD_MAX_GATES_ALLOWED", "")))
     row.verdict("word-check", "PASS" if rc == 0 else "FAIL", f"rc={rc} {_tail(f'{row.d}/strict_word.log')}")
     if rc != 0:
         row.log("strict word check FAIL -> stop")

@@ -34,6 +34,17 @@ def test_a_config_run_skips_the_match_and_word_checks_the_build(tmp_path, monkey
     assert calls == ["prepare", "build", "word_check", "commit", "research_result", "config_record", "timeline_report"]
 
 
+def test_the_word_check_gets_the_row_s_allowed_max_gates(tmp_path):
+    from types import SimpleNamespace
+    seen = {}
+    env = {"VERITY_QWORD_MAX_GATES": "GumbelTopPTokenSelect_v2=30000000", "VERITY_QWORD_MAX_GATES_ALLOWED": "GumbelTopPTokenSelect_v2=30000000"}
+    row = SimpleNamespace(env=SimpleNamespace(environ=env), d=str(tmp_path), row=ROW, cli=lambda *a: list(a),
+                          run_tl=lambda name, to, log, cmd: seen.setdefault("cmd", cmd) and 0, verdict=lambda *a: None)
+    RC.word_check(row)
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--build-max-gates") + 1] == cmd[cmd.index("--allowed-max-gates") + 1] == "GumbelTopPTokenSelect_v2=30000000"
+
+
 def test_a_config_run_that_stops_still_writes_its_record(tmp_path, monkeypatch):
     r = _row(tmp_path, "--config-run", "1")
     calls = []
