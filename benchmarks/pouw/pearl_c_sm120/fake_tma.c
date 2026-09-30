@@ -1,4 +1,4 @@
-// #449's CPU stand-in for libcuda.so.1 (../pearl_c/fake_cuda.c, unchanged) with the entry point the mainloop's host side adds,
+// #449's CPU stand-in for libcuda.so.1 (../pearl_c/fake_cuda.c) with the entry point the mainloop's host side adds,
 // cuTensorMapEncodeTiled.  It refuses what mainloop_sm120.cuh doesn't take (not UINT8, rank 2, SWIZZLE_128B, L2 promotion
 // 128B, no interleave, no fill; a box other than 128 bytes by 1..256 rows; element strides other than 1) and what the driver
 // refuses (a map not 64-byte aligned, an address not 16-byte aligned, a row stride that isn't a multiple of 16 or isn't the
