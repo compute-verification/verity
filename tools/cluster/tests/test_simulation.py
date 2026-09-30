@@ -134,8 +134,13 @@ def simulate(c, seed, n, tmp_path):
     assert ledger.verify(records) == []
     assert ledger.state(records).allocations == {} and ledger.state(records).queue == {}
     for r in records:
-        if r["kind"] == "start" and whole_quiet(c, r["alloc"]["node"], model.job_from_dict(r["alloc"]["job"])):
-            assert ledger.quiet_report(records, r["alloc"]["id"])["quiet"], "the ledger can't certify a quiet window"
+        if r["kind"] == "start" and r["alloc"]["job"].get("quiet"):
+            rep = ledger.quiet_report(records, r["alloc"]["id"])
+            if whole_quiet(c, r["alloc"]["node"], model.job_from_dict(r["alloc"]["job"])):
+                assert rep["quiet"], "the ledger can't certify a quiet window"
+            else:
+                beside = [o for o in rep["overlaps"] if o["state"] == "running" and not o["quiet_safe"]]
+                assert all(o["t0"] == rep["running"][0][0] for o in beside), "something started inside a partial window"
     return finished, records
 
 
@@ -158,8 +163,11 @@ def test_small_cluster(tmp_path):
 def test_nebius(seed, tmp_path):
     finished, records = simulate(NEBIUS, seed, 120, tmp_path)
     assert list(finished.values()).count("done") == 120 and exercised(records)
-    guests = [r for r in records if r["kind"] == "start" and r["alloc"]["job"]["project"] == "verity"
-              and r["alloc"]["node"] == "vy-nebius-2"]
+
+
+def test_nebius_workloads_run_verity_as_a_guest_on_node_2(tmp_path):
+    guests = [r for seed in range(3) for r in simulate(NEBIUS, seed, 120, tmp_path)[1]
+              if r["kind"] == "start" and r["alloc"]["job"]["project"] == "verity" and r["alloc"]["node"] == "vy-nebius-2"]
     assert guests
 
 

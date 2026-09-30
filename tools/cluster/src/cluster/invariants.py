@@ -36,12 +36,13 @@ def check(cluster: Cluster, node: str, allocations: Iterable[Allocation], now: i
         elif a.cpus & nd.pooled_cpus:
             out.append(f"{node}: {a.id} holds a reserved pool's CPUs")
     quiet = [a for a in mine if a.job.quiet and a.state == "running"]
-    whole = [a for a in quiet if whole_quiet(cluster, node, a.job)]
-    if whole and len(quiet) > 1:
+    if len(quiet) > 1:
         out.append(f"{node}: two quiet jobs run at once")
-    if whole:
-        out += [f"{node}: {a.id} runs beside quiet {whole[0].id}" for a in mine
-                if a is not whole[0] and a.state == "running" and not a.job.quiet_safe]
+    if quiet:
+        q, whole, shared_now = quiet[0], whole_quiet(cluster, node, quiet[0].job), in_share(cluster, node, mine)
+        out += [f"{node}: {a.id} runs beside quiet {q.id}" for a in mine
+                if a is not q and a.state == "running" and not a.job.quiet_safe
+                and (whole or _displaceable(cluster, node, q, a, shared_now))]
     else:
         out += [f"{node}: {a.id} is frozen with no quiet job" for a in mine if a.state == "frozen"]
     ends = nd.admission_ends
@@ -52,7 +53,7 @@ def check(cluster: Cluster, node: str, allocations: Iterable[Allocation], now: i
         n = a.job.length_s
         if ends is not None and a.job.kind != "service" and (n is None or a.started + n > ends):
             out.append(f"{node}: {a.id} admitted past the admission end")
-        if any(whole_quiet(cluster, node, b.job) and b.state == "running" for b in before if b.node == node) and not a.job.quiet:
+        if any(b.job.quiet and b.state == "running" for b in before if b.node == node) and not a.job.quiet:
             out.append(f"{node}: {a.id} started inside a quiet window")
     for a in mine:
         if nd.owner != a.job.project:
@@ -91,3 +92,9 @@ def check(cluster: Cluster, node: str, allocations: Iterable[Allocation], now: i
                 cluster.rank(victim.job, node, victim.id in shared):
             out.append(f"{node}: {victim.id} evicted by an equal or lower rank ({e.by})")
     return out
+
+
+def _displaceable(cluster: Cluster, node: str, q: Allocation, a: Allocation, shared: frozenset[str]) -> bool:
+    """Whether quiet `q` may evict (GPU work) or freeze (CPU work) `a`: what a partial window clears (plan rule 3)."""
+    lower = cluster.rank(a.job, node, a.id in shared) < cluster.rank(q.job, node, q.id in shared)
+    return lower and (a.job.preempt == "requeue" if a.gpus else a.job.preempt in ("freeze", "requeue"))

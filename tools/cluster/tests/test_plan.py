@@ -94,6 +94,17 @@ def test_quiet_job_waits_for_a_session_it_may_not_stop_and_the_node_backfills_me
     assert "reserved for w-1" in w["o-1"].reason
 
 
+def test_a_one_gpu_window_clears_the_node_of_fill_but_starts_beside_a_session_it_may_not_stop():
+    """Rule 3's partial window, as `gpu-lease --timed` runs today (infra's and PoUW's rulings until the 7 Oct clamp)."""
+    session = alloc(job("s-1", gpus=1, kind="session", priority="session", preempt="never", max_s=900), (0,), "0-1")
+    fill = alloc(job("f-1", gpus=1, priority="fill", max_s=3000), (1,), "2-3")
+    acts = plan(one(), "n1", [session, fill], [job("w-1", gpus=1, priority="timed", quiet=True, max_s=600)], T0)
+    assert by_job(acts, Start)["w-1"].alloc.gpus == (1,) and [a.alloc for a in acts if isinstance(a, Evict)] == [fill.id]
+    full = [alloc(job(f"s-{i}", gpus=1, kind="session", priority="session", preempt="never", max_s=900), (i,), str(i))
+            for i in range(8)]
+    assert "waits for" in by_job(plan(one(), "n1", full, [job("w-1", gpus=1, priority="timed", quiet=True)], T0), Wait)["w-1"].reason
+
+
 def test_whole_node_request_is_not_starved_by_short_leases():
     lease = alloc(job("a-1", gpus=1, preempt="never", max_s=900), (0,), "0-1")
     big = job("b-1", gpus=8, priority="work", preempt="never")
