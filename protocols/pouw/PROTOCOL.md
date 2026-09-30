@@ -360,10 +360,35 @@ useful    U/(α_A·α_B), glue
     partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite.
     - Only ρ depends on A alone. The model adopts s, ρ and α as its own FP8 quantizer, so W_ref counts 68 units per
       element of forming, 64 of them credited (the lane's `Costs.adopted`).
+    - `wref` is Lean's `wrefOf` and `credit_of` its `creditOf`, pinned on a grid of shapes. The weight side (B's forming,
+      B̃·F_A, G, P_B) is `job_cost`, once per weight and epoch, in neither.
     - Its domain is TT_OUT's: 128 ∣ k (whole promotion groups), and on every row of both operands the noise floor ρ·α ≥ 1
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
+- **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
+  - `word_flags` flags an atom when some set of its promotion group's atoms containing it, skipped jointly, leaves the
+    word's output unchanged. The later promotions are tested by intervals found backward by bisection.
+  - It equals P1's 552 Lean-checked word vectors (`tests/vectors/pearl_c_skip_vectors*.txt.gz`).
+  - A tile's chain debit is 40 units per flagged atom-word, summed over its words. The forming debit's per-tile rule
+    is pending from P3's owner, so `forming_elements` is a stub that returns 0.
+  - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the
+    cap.
+- **The work law** (`schemes/pearl_c_work.py`) is what the verifier credits, draws and checks.
+  - A weight's `Split` holds at most ⌊k/100⌋ side channels. The unit reads the kept channels zero-padded to `k_unit`,
+    and credit is on the kept width, so padding earns nothing. The audit recomputes S by the pinned rule through
+    `split_check`, which the model integration supplies.
+  - Before the draws the prover declares a record per matmul: its real rows (the rest are zero filler), its kept width,
+    and its excluded rows. `records_root` binds the records and the splits.
+  - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
+    earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
+  - A cell's draw weight is its row's share of `wrefOf` at the kept width. An accepted unit is credited
+    (1 − ρ)·`creditOf` over its credited cells.
+  - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
+    credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
+    is at most ρ·`creditOf` of the tile, with ρ = 1/400.
+  - The draws are keyed by a beacon round published after the verifier recorded the commitment (the transcript root and
+    the records root), through `derive`.
 - **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
   Keccak-f[1600].
 - **U's exact order, CPU-pinned** (`schemes/pearl_c_u.py`), for the Lean model of the clean-up.

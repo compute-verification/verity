@@ -5,7 +5,8 @@
 #                    128-deep block in every GEMM, 4 HGMMA in gemm_pearlc's peel and one QGMMA in each forming kernel
 #   sass.json        registers and tensor-core, bulk-copy and local-memory instruction counts per kernel
 #   check/           fixture.py's inputs and expected buffers (needs verity and numpy)
-#   run.py, run.sh, vendor.py, toolchain.txt, source.txt (the verity commit), MANIFEST.sha256
+#   bench.json       the fixed-shape bench's shapes, keys and sampled tiles with the CPU twin's bytes (twin.py; committed)
+#   run.py, bench.py, run.sh, vendor.py, toolchain.txt, source.txt (the verity commit), MANIFEST.sha256
 # Usage: bash benchmarks/pouw/pearl_c/build.sh [OUT]   (default /tmp/pearl-c-ship; C9 names CUDA 12.9.1, default /tmp/cuda-12.9.1)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
@@ -53,7 +54,7 @@ print(f"pearl_c.cubin: {len(funcs)} kernels; GEMMs " + ", ".join(f"{n} {funcs[n]
 EOF
 rm "$OUT/pearl_c.sass"
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c/fixture.py "$OUT/check")
-cp "$HERE/run.py" "$HERE/run.sh" "$HERE/vendor.py" "$OUT/"
+cp "$HERE/run.py" "$HERE/bench.py" "$HERE/bench.json" "$HERE/run.sh" "$HERE/vendor.py" "$OUT/"
 "$C9/bin/nvcc" --version | tail -2 > "$OUT/toolchain.txt"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c protocols/pouw packages/verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)

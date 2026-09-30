@@ -8,6 +8,7 @@ import hashlib
 import json
 import random
 import struct
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -184,8 +185,7 @@ def test_registry_and_domain():
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 1))
     sh = Shape(128, 2048, 256)
-    windows = 2048 // 128
-    assert s.wref(sh) == (128 * 256 + 128 * 32 + 256 * 32) * (2048 + 32 * windows) + 2 * 64 * 128 * 256 + 320 * (128 + 256) * 2048
+    assert s.wref(sh) == 128 * 256 * (2048 + 32 * 16) + 128 * 2048 * 32 + 2 * 64 * 128 * 256 + 320 * 128 * 2048
 
 
 @pytest.mark.parametrize("case", [c["case"] for c in PINNED["cases"]])
@@ -298,9 +298,39 @@ def test_v1_registry_and_cost():
     assert dict(get("pearl-c-h100-v0").certificate.parameters)["forming"] == "v0"
     sh = Shape(128, 2048, 256)
     v0, v1 = get("pearl-c-h100-v0").wref(sh), s.wref(sh)
-    assert v0 - v1 == (C.FORMING_V0_UNITS - C.FORMING_V1_UNITS) * (128 + 256) * 2048
+    assert v0 - v1 == (C.FORMING_V0_UNITS - C.FORMING_V1_UNITS) * 128 * 2048
     with pytest.raises(ValueError):
         C.PearlC(forming="v2")
+    with pytest.raises(ValueError):
+        get("pearl-c-h100-v0").credit_of(sh)
+
+
+def wref_of(m: int, k: int, n: int, fs: int = 64, qa: int = 4) -> Fraction:
+    """`Game.lean`'s `wrefOf Params.pi Costs.adopted` (r = 32, G = 4): `creditOf` + qa·m·k."""
+    mkn = Fraction(m * k * n)
+    return mkn + mkn / 4 + m * k * 32 + 4 * 32 * m * n + fs * m * k + qa * m * k
+
+
+@pytest.mark.parametrize("m", [1, 32, 128, 2048])
+@pytest.mark.parametrize("k,n", [(128, 128), (1024, 64), (3584, 4608), (3584, 37888), (18944, 3584), (65536, 16)])
+def test_wref_is_leans_wref_of(m, k, n):
+    """Red team F2: W_ref is Lean's `wrefOf` on every unit shape, and the credit its `creditOf`; the weight side is not in
+    either, at any m."""
+    s = get("pearl-c-h100-v1")
+    sh = Shape(m, k, n)
+    assert s.wref(sh) == wref_of(m, k, n) and s.credit_of(sh) == wref_of(m, k, n) - 4 * m * k
+    assert s.wref(Shape(2 * m, k, n)) == 2 * s.wref(sh)
+
+
+def test_lifecycle_work_has_no_weight_side():
+    """Red team F2: two calls on one weight give W = the two units' `wrefOf`; the weight side is `job_cost`, apart."""
+    from verity_pouw.audit import Epoch, Prover, Verifier, Workload
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
+    work = Workload((Matmul(0, Shape(32, k, 16), 9), Matmul(1, Shape(16, k, 16), 9)))
+    epoch = Epoch.start(work, Prover(s, {9: CV.rows_f32("job", "B", 16, k)}).weight_roots, b"beacon")
+    assert Verifier(s, epoch).work == s.wref(Shape(48, k, 16)) == wref_of(48, k, 16)
+    assert s.job_cost(16, k) == 68 * 16 * k + 16 * 32 * (k + 32) + 32 * 32 * (k + 32) + 32 * 16 * 32 * 32
 
 
 def test_v1_lifecycle_on_a_test_instance():

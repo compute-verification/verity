@@ -202,8 +202,9 @@ class Pipeline:
         v1 = forming == "v1"
         rowa, rowb = (4 * k, 4 * k) if v1 else (k + k // 4, k + k // 4)
         self.row_bytes, self.segment = rowa, 1024 if v1 else 1280
-        if m % 128 or n % 128 or k % 1024:
-            raise ValueError(f"the kernels take m, n multiples of 128 and k a multiple of 1,024, not {(m, n, k)}")
+        k_align = 256 if v1 else 1024      # whole row-hash segments: 1,024 bytes of FP32 words, 1,280 of FP10
+        if m % 128 or n % 128 or k % k_align:
+            raise ValueError(f"the kernels take m, n multiples of 128 and k a multiple of {k_align}, not {(m, n, k)}")
         sizes = {
             "ea_codes": m * 32, "ea_tiled": m * 32, "eb_codes": n * 32, "eb_tiled": n * 32,
             "fa_codes": k * 32, "fa_tiled": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fb_tiled": k * 32, "fbT32": 32 * k,
@@ -410,8 +411,17 @@ def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) 
         else:
             dev.launch("gen_fp10", cdiv(rows * rowb // 4, 256), 256, p=(x,), i=(rows, k, seed))
     pipe = Pipeline(dev, m, n, k, forming, keys, xa, xb)
-    steps = pipe.steps()
     pipe.run_all()
+    out = measure(dev, nv, pipe, reps, gates)
+    pipe.free()
+    for p_ in (xa, xb, *keys.values()):
+        dev.free(p_)
+    return out
+
+
+def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
+    """The timed part of `timing` on a pipeline whose kernels have run once: medians, phases, ratios, consistency."""
+    m, n, k, forming, steps = pipe.m, pipe.n, pipe.k, pipe.forming, pipe.steps()
     before = nv.read()
     med, runs = {}, {}
     for name, phase, f in steps:
@@ -452,9 +462,6 @@ def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) 
                                 "no_hash_e2e": round(out["unit_e2e_no_hash_ms"] / base, 4),
                                 "chain_only": round(med["gemm_ct"] / med["gemm_plain"], 4),
                                 "with_job": round((out["unit_e2e_ms"] + out["job_ms"]) / (base + job), 4)}
-    pipe.free()
-    for p_ in (xa, xb, *keys.values()):
-        dev.free(p_)
     return out
 
 
