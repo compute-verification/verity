@@ -32,7 +32,7 @@ from verity_vllm.program.kernels import _jit
 
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "rms_triton_model.cpp"
-LIB = _jit.lib_path("librms_triton_model.so")          # build product (cpp/build/, gitignored), compiled on first use
+LIB = _jit.lib_path("librms_triton_model.so")          # build product (the _jit cache, outside the checkout), compiled on first use
 
 TABLE_N = 1 << 23
 SQRT_T0 = 0x3F800000  # sqrt(1.0) = 1.0
