@@ -49,8 +49,9 @@ def test_selection_per_target_profile():
 
 
 def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
-    """cc 12.0 (the RTX PRO 6000): vLLM has no tuned family for it, so every shape takes the default tiling, and `tl.dot` is
-    `mma.sync.m16n8k16`, whose sm_120 model is core's HOPPER_BF16_M16N8K16: the Definition is Hopper's `Gemm_v2`."""
+    """cc 12.0 (the RTX PRO 6000): vLLM has no tuned family for it, so a Triton launch takes the default tiling (the pinned vLLM keeps
+    the bf16 linear on cuBLASLt there), and the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is core's HOPPER_BF16_M16N8K16: the
+    Definition is Hopper's `Gemm_v2`."""
     from verity.ml.tc.instructions import INSTRUCTIONS
     from verity.ml.tc.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
 
@@ -273,7 +274,8 @@ def test_bet_a_pins_the_hopper_tile_on_a_hopper_target(observed):
 
 
 def test_bet_a_pins_the_default_tile_and_188_sms_on_the_pro6000(observed):
-    """cc 12.0 is registered: Bet A pins the default tiling for every shape (Hopper's tuned rows included) and the target's 188 SMs."""
+    """cc 12.0 is registered: a persistent-matmul launch there must show the default tiling for every shape (Hopper's tuned rows
+    included) and the target's 188 SMs."""
     VB.observe_target_profile(PRO6000_TP)
     for M, N, K in ((1, 2048, 2048), (32, 2048, 2048), (2, 151936, 2048)):
         pins, src = VB.gemm_pins_for(M, N, K)
