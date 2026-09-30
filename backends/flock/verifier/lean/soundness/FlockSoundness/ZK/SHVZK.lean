@@ -388,6 +388,105 @@ theorem table_shvzk (hrank : T.Rank) (hpad : T.PadOnto)
   ((SameDist.of_const (T.card_realCore hrank hpad hW hpads hβ w) (T.card_simCore hpad hW w0)).comp T.psi).of_eq
     (T.psi_realCore hW hβ w hreg hinner) (T.psi_simCore hW w0)
 
+/-! ## Lemma A: the pre-final view doesn't depend on the witness -/
+
+/-- **The pre-final view in world `W₀`** (§4.2): every message up to the last coin opening, with every level-0 leaf,
+every pads-tree leaf and every `τ`-commitment ideal. It holds `final_c + h_fc` too, which Lemma A's translation matches
+as well. -/
+@[ext] structure PreView where
+  sHat : Fin T.nC → Fin 128 → F
+  sReg : Fin T.nR → Fin 128 → F
+  masked : Fin 2 → Fin T.nE → F
+  y1 : Fin 2 → Fin T.L → K
+  ybar : Fin 2 → Fin T.tpad → K
+  lig : Fin 2 → VL
+  inner : Fin 2 → F × F
+  Y1 : Fin 2 → PadIdx T.nE → F
+  Y2 : Fin 2 → Fin T.nPad → F
+  leaves0 : (Fin T.nS → D) × (Fin T.nU → D)
+  tauCom : Fin 2 → D
+  leavesP : Fin 2 → (Fin T.nQ → D) × (Fin T.nPU → D)
+
+/-- The prover's pre-final messages in world `W₀`, on witness `w` and randomness `ω`. -/
+noncomputable def preView (w : W) (ω : T.Rand) : T.PreView :=
+  let v := T.view w ω
+  let s := ω.2.2.2.2.2.2
+  { sHat := v.sHat, sReg := v.sReg, masked := v.masked, y1 := v.y1, ybar := v.ybar, lig := v.lig, inner := v.inner
+    Y1 := v.Y1, Y2 := v.Y2
+    leaves0 := (fun q => T.ideal (s.2.1 q), fun q => T.ideal (s.2.2.1 q))
+    tauCom := fun r => T.ideal (s.2.2.2.2.2.2.2.1 r)
+    leavesP := fun r => (fun k => T.ideal (s.2.2.2.2.1 r k), fun k => T.ideal (s.2.2.2.2.2.1 r k)) }
+
+/-- **Lemma A's translation** (§4.2): for witnesses `w`, `w'` that carry the public region data, a translation of the
+prover's randomness maps `w`'s pre-final view to `w'`'s. Block by block, each amount reads only earlier blocks:
+
+1. the mask slot, `u' := u + Δ` with `Φ(Δ) = ν(w) − ν(w')`, which the rank check makes solvable (step 2);
+2. the extra lanes, `R' := R + (W^r)⁻¹(y₁^r(w, u) − y₁^r(w', u'))`, so `y₁'^r` agrees (step 3); the paddings are unchanged
+   (step 1);
+3. the pads, `h'_i := h_i + v_i(w, u, R) − v_i(w', u', R')`, and `h'_tx`, `h'_ty` so that `ρ_in`, `σ_in` agree (step 4);
+4. the inner mask, `μ' := μ + (h − h')/β` over the full pad vectors, so `Y₁` agrees (step 5); `pad_h`, `pad_μ` and every
+   salt and seed are unchanged (step 1). -/
+theorem table_prefinal_translate (hrank : T.Rank)
+    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0)
+    (w w' : W) (hreg : T.sReg w = T.pubReg) (hreg' : T.sReg w' = T.pubReg) :
+    ∃ (d₀ : T.Mask) (d₁ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad)
+      (d₂ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → Fin 2 → (Fin T.nE → F) × F × F)
+      (d₃ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → (Fin 2 → (Fin T.nE → F) × F × F) →
+        (Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F) × T.Seeds),
+      ∀ ω, T.preView w ω = T.preView w' (ω.1 + d₀, ω.2.1 + d₁ ω.1, ω.2.2.1 + d₂ ω.1 ω.2.1,
+        ω.2.2.2 + d₃ ω.1 ω.2.1 ω.2.2.1) := by
+  obtain ⟨Δ, hΔ⟩ := T.maskHom_surjective hrank (T.nu w - T.nu w')
+  let dR : T.Mask → T.XLanes := fun u r i c =>
+    ![(T.Winv r (T.y1 w u r c - T.y1 w' (u + Δ) r c)).1, (T.Winv r (T.y1 w u r c - T.y1 w' (u + Δ) r c)).2] i
+  let d₁ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad := fun u => (0, dR u, 0)
+  let dv : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → Fin 2 → Fin T.nE → F := fun u b r =>
+    T.vals r w u b.2.1 - T.vals r w' (u + Δ) (b.2.1 + dR u)
+  let d₂ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → Fin 2 → (Fin T.nE → F) × F × F :=
+    fun u b r => (dv u b r, -(T.ζ r * dv u b r T.ia), -(dv u b r T.ib))
+  let d₃ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → (Fin 2 → (Fin T.nE → F) × F × F) →
+      (Fin 2 → Fin T.nPad → F) × (Fin 2 → Fin T.nPad → F) × (Fin 2 → PadIdx T.nE → F) × T.Seeds :=
+    fun u b h => (0, 0, fun r i => (T.hFull (h r) i - T.hFull ((h + d₂ u b) r) i) / T.β r, 0)
+  refine ⟨Δ, d₁, d₂, d₃, fun ω => ?_⟩
+  obtain ⟨u, ⟨μ0, R, μR⟩, h, ⟨padh, padμ, μ, s⟩⟩ := ω
+  have hy : ∀ r c, T.y1' w u R r c = T.y1' w' (u + Δ) (R + dR u) r c := by
+    intro r c
+    have e : T.Wr r (dR u r 0 c) (dR u r 1 c) = T.y1 w u r c - T.y1 w' (u + Δ) r c := T.Wr_Winv (hW r) _
+    simp only [y1', Pi.add_apply, Wr_add, e]
+    ring
+  have hy' : T.y1' w u R = T.y1' w' (u + Δ) (R + dR u) := funext fun r => funext fun c => hy r c
+  apply PreView.ext
+  all_goals simp only [preView, view, d₁, d₂, d₃, dv, Prod.mk_add_mk, Pi.add_apply, add_zero]
+  all_goals (try rfl)
+  case sHat =>
+    rw [map_add, hΔ]
+    abel
+  case sReg => rw [hreg, hreg']
+  case masked =>
+    funext r i
+    simp only [Prod.fst_add, Pi.add_apply, Pi.sub_apply]
+    ring
+  case y1 => exact hy'
+  case lig => rw [hy']
+  case inner =>
+    funext r
+    simp only [innerMsg, Prod.fst_add, Prod.snd_add, Pi.add_apply, Pi.sub_apply]
+    refine Prod.ext ?_ ?_ <;> simp only [] <;> ring
+  case Y1 =>
+    funext r i
+    field_simp [hβ r]
+    ring
+
+/-- **Lemma A** (§4.2, `card_fiber_eq_of_triShift` applied to its translation): at a fixed non-degenerate coin vector, in
+world `W₀`, the pre-final views on any two witnesses carrying the public region data take every value equally often.
+Lemma A needs no other property of the witnesses, so it holds for the dummy one. -/
+theorem table_prefinal_indep (hrank : T.Rank)
+    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hβ : ∀ r, T.β r ≠ 0)
+    (w w' : W) (hreg : T.sReg w = T.pubReg) (hreg' : T.sReg w' = T.pubReg) :
+    SameDist (T.preView w) (T.preView w') := by
+  classical
+  obtain ⟨d₀, d₁, d₂, d₃, h⟩ := T.table_prefinal_translate hrank hW hβ w w' hreg hreg'
+  exact SameDist.of_card_fiber_eq (card_fiber_eq_of_triShift4 _ _ d₀ d₁ d₂ d₃ h)
+
 end Table
 
 end FlockSoundness.ZK
