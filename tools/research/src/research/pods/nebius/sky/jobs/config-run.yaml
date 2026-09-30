@@ -6,7 +6,9 @@
 #                              460-unit host replay, config_record.json: about 5-15 min for a small or medium cell
 # Config runs have no Match stage. Both tasks use the same row directory on the host (SWEEP_DIR/<row>): the Commit reads the Build's
 # Programs and manifest there. Each `row stage` publishes its own Attempt; the gpu task's carries ov.noisy (it runs beside Builds).
-# Full rows (Build, Match, Commit) use config-run-row.yaml.
+# Full rows (Build, Match, Commit) use config-run-row.yaml. This is the coverage default: the GPU is held only for the Commit.
+# Needs #536 in the submitted tree: without it the GPU-less Build fails with "Device string must not be empty". Its build task
+# finds libcuda.so.1 in /workspace/jobs/cuda-driver, which cluster_up.sh keeps in step with the host's driver.
 #
 #   VY_ROW_CLASS=dense tools/research/src/research/pods/nebius/sky/submit.sh config-run cov-k07 \
 #     --env ROW=<row> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
@@ -69,26 +71,26 @@ secrets:
 
 setup: |
   set -euo pipefail
-  # the task runs from its own copy of $SRC: the job user (uid 1000) can't write the synced tree, which is research's, and a
-  # later `research pods sync` of the same lane can't change the code under a running job (one copy per pod)
-  JOB_SRC=/workspace/jobs/src/$(hostname)
-  rm -rf "$JOB_SRC" && mkdir -p "$JOB_SRC" && cp -a "$SRC"/. "$JOB_SRC"/
-  export SRC=$JOB_SRC
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
   [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
   [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
   chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
   cd "$SRC/integrations/vllm"
-  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf \
-    bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"     # skipped, without the lock, once this tree, role and venv passed
 
 run: |
   set -euo pipefail
   export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
-  export SRC=/workspace/jobs/src/$(hostname)
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   cd "$SRC/integrations/vllm"
   export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  # a pod with no GPU has no driver libraries, but importing vLLM's CUDA platform (#536) loads libcuda.so.1: the host's copy, which
+  # can't reach a GPU without the /dev/nvidia* devices a GPU-less pod lacks (cluster_up.sh keeps it in step with the driver)
+  export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   "$PY" -m verity_vllm.pipeline.cli row stage build "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
 
 config:
@@ -154,20 +156,17 @@ secrets:
 
 setup: |
   set -euo pipefail
-  # the task runs from its own copy of $SRC: the job user (uid 1000) can't write the synced tree, which is research's, and a
-  # later `research pods sync` of the same lane can't change the code under a running job (one copy per pod)
-  JOB_SRC=/workspace/jobs/src/$(hostname)
-  rm -rf "$JOB_SRC" && mkdir -p "$JOB_SRC" && cp -a "$SRC"/. "$JOB_SRC"/
-  export SRC=$JOB_SRC
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm
   cd "$SRC/integrations/vllm"
-  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf \
-    bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"     # skipped, without the lock, once this tree, role and venv passed
 
 run: |
   set -euo pipefail
   export PATH=/workspace/jobs/venv312/bin:$PATH    # the venv's tools (ninja for vLLM/FlashInfer JIT builds)
-  export SRC=/workspace/jobs/src/$(hostname)
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   cd "$SRC/integrations/vllm"
   export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/tools/research/src
