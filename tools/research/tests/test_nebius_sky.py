@@ -58,7 +58,7 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
     assert "reclaimWithinCohort: Never" in backfill and "borrowWithinCohort: {policy: Never}" in backfill and "borrowingLimit" not in backfill
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev", "backfill"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits-gpu", "circuits", "prover-bench", "dev", "backfill"]
     # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
     # file with regexes, so check it here
     assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
@@ -76,7 +76,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert queue in local and prio in priorities, f.name
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
-    assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits"),
+    assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits-gpu"),
                     "port-capture": ("circuits", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
@@ -88,6 +88,7 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
     assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
     assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
+    assert "kueue.x-k8s.io/priority-class: circuits-gpu" in gpu and "kueue.x-k8s.io/priority-class: circuits\n" in build  # Commits first
     assert build.count("kueue.x-k8s.io/queue-name: circuits") == gpu.count("kueue.x-k8s.io/queue-name: circuits") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
@@ -121,7 +122,7 @@ def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
                 continue
             cpus = int(re.search(r"^  cpus: (\d+)", task, re.M).group(1))
             threads = int(re.search(r'^  OMP_NUM_THREADS: "(\d+)"', task, re.M).group(1))    # SkyPilot's runner sets 1
-            assert threads == cpus or (f.stem == "config-run" and "\nname: build" in task and (cpus, threads) == (4, 16)), f.name
+            assert threads == cpus or (f.stem == "config-run" and (cpus, threads) in {("\nname: build" in task) and (4, 16) or (4, 8)}), f.name
         assert "RESEARCH_RUNS: /workspace/jobs/runs" in t and "workdir" not in t, f.name
         assert "--python 3.12" in t, f.name                                               # the image's python is 3.10
 
