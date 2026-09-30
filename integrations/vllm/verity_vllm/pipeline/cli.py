@@ -79,6 +79,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "rmsnorm-fused-sweep": ("verity_vllm.program.registry.rmsnorm_fused_sweep", "fused rms-norm summation-tree sweep"),
     "root-policy": ("verity_vllm.check.root_policy", "root closure check"),
     "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
+    "sweep": ("verity_vllm.pipeline.sweep", "a night's config runs on one host, packed onto its GPUs by RAM and CPU (plan, run)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
     "sampling-rng": ("verity_vllm.program.kernels.sampling_rng", "sampler noise recomputation"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
