@@ -85,6 +85,11 @@ STAGE_KEY_FLAGS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Output-changing flags keyed only when set (off, they leave the derivation of every run without them as it was).
+KEY_FLAGS_WHEN_SET: dict[str, tuple[str, ...]] = {
+    "commit": ("replay_deferred",),   # the Commit seals a replay bundle and leaves its verdict pending
+}
+
 # Recorded but NOT key: footprint / schedule / implementation knobs.
 NON_KEY_FLAGS = (
     "retain",
@@ -221,6 +226,10 @@ def parse(argv: list[str], *, stage: str) -> dict[str, Any]:
     out["t"] = flags.pop("t", None)
     for k, default in STAGE_KEY_FLAGS.get(stage, {}).items():
         out[k] = flags.pop(k, default)
+    for k in KEY_FLAGS_WHEN_SET.get(stage, ()):
+        v = flags.pop(k, None)
+        if v not in (None, "0", False):
+            out[k] = v
     for k in NON_KEY_FLAGS:
         if k in flags:
             out[k] = flags.pop(k)
@@ -265,7 +274,7 @@ def _tool(stage: str) -> Tool:
         version="1",
         command=[*COMMAND, stage],
         closure=CLOSURE,
-        key_params=[*ROW_KEY_PARAMS, *STAGE_KEY_FLAGS[stage].keys()],
+        key_params=[*ROW_KEY_PARAMS, *STAGE_KEY_FLAGS[stage].keys(), *KEY_FLAGS_WHEN_SET.get(stage, ())],
         key_conditions=["hw.family", f"tool.{name}.torch", f"tool.{name}.vllm"],
         param_artifacts=[],
         produces=PRODUCES[stage],
@@ -286,6 +295,7 @@ __all__ = [
     "DEFAULT_QUERY",
     "ROW_KEY_PARAMS",
     "STAGE_KEY_FLAGS",
+    "KEY_FLAGS_WHEN_SET",
     "NON_KEY_FLAGS",
     "PRODUCES",
     "VLLM_BUILD",

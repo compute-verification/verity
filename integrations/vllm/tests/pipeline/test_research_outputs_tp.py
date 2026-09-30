@@ -129,6 +129,41 @@ def test_tp1_commit_reads_the_verdict_of_record(tmp_path):
     assert (v["meta"]["decision_record"], v["meta"]["outcome"], v["meta"]["n_runs"], v["meta"]["runs_failed"]) == ("verdict.json", "PASS", 6, 0)
 
 
+def _config_commit(d: Path, outcome: str = "PASS") -> None:
+    _w(d / "commit" / "verdict.json", {"verdict": "PASS"})
+    _w(d / "commit" / "summary.json", {"pass": True})
+    _w(d / "config_record.json", {"schema": "verity-vllm/config-record/v1", "outcome": outcome, "why": None,
+                                  "replay": {"equal": 460, "k": 460}})
+    with open(d / "stages.txt", "a") as f:
+        f.write(f"commit PASS 2026-09-23T00:00:02Z rc=0\nconfig {outcome} 2026-09-23T00:00:03Z replay 460/460 equal\n")
+
+
+def test_config_run_commit_decides_in_its_config_record_at_tp1_and_tp(tmp_path):
+    t1 = tmp_path / "t1"
+    _w(t1 / "stages.txt", "build PASS 2026-09-23T00:00:00Z rc=0\n")
+    for d, row in ((t1, "smollm2-135m__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"), (_tp_dir(tmp_path, world=2), ROW)):
+        _config_commit(d)
+        run = tmp_path / f"run_{d.name}"
+        doc = ro.build_outputs(d, row, "commit", run, {"build": "art:" + "f" * 64})
+        v = next(e for e in doc["outputs"] if e["name"] == "verdict")
+        assert v["meta"]["decision_record"] == "config_record.json" and "decision_record_missing" not in v["meta"]
+        assert (v["meta"]["outcome"], v["meta"]["replay_equal"], v["meta"]["replay_k"]) == ("PASS", 460, 460)
+        assert (run / "outputs" / "verdict" / "config_record.json").is_file()
+        assert (run / "outputs" / "verdict" / "commit" / "verdict.json").is_file()
+
+
+def test_config_run_commit_pass_without_its_config_record_is_refused(tmp_path):
+    d = tmp_path / "row"
+    _config_commit(d)
+    (d / "config_record.json").unlink()
+    try:
+        ro.build_outputs(d, "smollm2-135m__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager", "commit", tmp_path / "run", {})
+    except ValueError as e:
+        assert "config_record.json" in str(e)
+    else:
+        raise AssertionError("a PASS config-run Commit without config_record.json published")
+
+
 def test_tp1_layout_unchanged(tmp_path):
     d = tmp_path / "row"
     _w(d / "build_summary.json", {"request": {"program_digest": "r" * 64}, "step": {"program_digest": "s" * 64}})
