@@ -294,6 +294,10 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     template statement's `TableClass`, with no hypothesis. Its slots are the VUs, each placed at `Typed.col st.c tb g`
     (`TemplateLayout.placement`). Each input copies its message bit (`setupH_inputCopy`), since the composed rows' first
     columns are the unit's input columns in order (`order_sound`). There are no forced-zero rows.
+  - **The placed matrices are `stmtOf`'s** (`Refine/StmtOfPlaced.lean`). Under three layout facts (`PlacedWF`: sparse
+    columns inside their width, a lookup's low minterms inside its net's `B` width, at most 32 output bits),
+    `stmtOf st`'s `A₀` and `B₀` are `placedA st` and `placedB st` (`stmtOf_A₀`, `stmtOf_B₀`, `stmtOf_eq_placed`). So a
+    table class built over the placement's model is one over the refinement's (`setupH_templateTableClass_stmtOf`).
   - Still to prove:
     - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`).
 
