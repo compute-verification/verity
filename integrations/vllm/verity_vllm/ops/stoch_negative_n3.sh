@@ -26,11 +26,11 @@ N=$OUT/N3; mkdir -p "$N"
 log() { echo "$(date -u +%FT%TZ) [stoch-neg-N3 $ROW] $*" | tee -a "$OUT/negatives.log"; }
 MML=$($PY312 -c "import json;w=json.load(open('$WL'));print(max(r['prompt_len']+r['max_tokens'] for r in w['requests']))")
 # default mutation (empty N3_MUTATION): the first non-first request whose arrival moved 9 engine steps earlier changes r0's declared S
-# somewhere (crosses a live-count boundary of SplitsFor_v1 at the row's num_SMs: 4/5 at 142, 5/6 at 188); an explicit N3_MUTATION
+# somewhere (crosses a live-count boundary of SplitsFor_v1 at the Builds' num_SMs: 4/5 at 142, 5/6 at 188); an explicit N3_MUTATION
 # is python over the manifest dict `w`
 MUT=${N3_MUTATION:-}
 # the mutated manifest + the declared schedules before/after (the negative is vacuous if r0's schedule does not change), at the
-# num_SMs of the row's own Builds (sampling.geometry.num_sms)
+# num_SMs the Builds under $D declare (sampling.geometry.num_sms)
 $PY312 - "$WL" "$N/workload.json" "$MUT" "$N/schedules.json" "$D" <<'EOF' || { log "N3: no schedule (see above)"; exit 2; }
 import glob, json, sys
 from verity_vllm.pipeline.build import declared_live_counts
@@ -38,7 +38,7 @@ from verity_vllm.program.registry.topp_split import splits_for
 nsms = {int(g["num_sms"]) for p in glob.glob(f"{sys.argv[5]}/build_request*/result.json")
         for g in [((json.load(open(p)).get("sampling") or {}).get("geometry") or {})] if g.get("num_sms") is not None}
 if len(nsms) != 1:
-    sys.exit(f"the row's Builds ({sys.argv[5]}/build_request*/result.json) declare num_SMs {sorted(nsms)}, not one value: "
+    sys.exit(f"the Builds ({sys.argv[5]}/build_request*/result.json) declare num_SMs {sorted(nsms)}, not one value: "
              "the declared split schedule has no constant")
 NSM = nsms.pop()
 w = json.load(open(sys.argv[1])); w0 = json.loads(json.dumps(w))
