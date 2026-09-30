@@ -2162,7 +2162,10 @@ impl Stmt {
                 }).collect()
             } else {
                 let t0 = Instant::now();
+                let one_pass = net.one_pass();
+                let flat_s = t0.elapsed().as_secs_f64();
                 let (eval_ns, eval_max, lanes_ns) = (AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0));
+                let (ref_ns, ref_max) = (AtomicU64::new(0), AtomicU64::new(0));
                 let check = std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1");
                 let items = ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
                     let te = Instant::now();
@@ -2170,7 +2173,11 @@ impl Stmt {
                     let (zz, aa, bq) = net.eval64_flat(|col| cols[col]);
                     let e = te.elapsed().as_nanos() as u64;
                     if check {
+                        let tr = Instant::now();
                         let want = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
+                        let r = tr.elapsed().as_nanos() as u64;
+                        ref_ns.fetch_add(r, Ordering::Relaxed);
+                        ref_max.fetch_max(r, Ordering::Relaxed);
                         assert!(want.0 == zz && want.1 == aa && want.2 == bq, "circuit {ni}, group {gi}: the one-pass evaluation is not eval64's");
                     }
                     let tl = Instant::now();
@@ -2183,8 +2190,10 @@ impl Stmt {
                 if unit_profile() {
                     let s = |x: &AtomicU64| x.load(Ordering::Relaxed) as f64 * 1e-9;
                     eprintln!("UNITPROF\t{}", serde_json::json!({"part": "slot_zab", "circuit": ni, "rows": net.useful, "slots": ins.len(),
+                        "one_pass": one_pass, "flat_s": flat_s,
                         "groups": ins.len().div_ceil(64), "wall_s": t0.elapsed().as_secs_f64(), "eval_sum_s": s(&eval_ns),
-                        "eval_max_s": s(&eval_max), "lanes_sum_s": s(&lanes_ns), "check": check}));
+                        "eval_max_s": s(&eval_max), "lanes_sum_s": s(&lanes_ns), "check": check, "eval64_sum_s": s(&ref_ns),
+                        "eval64_max_s": s(&ref_max)}));
                 }
                 items
             };
