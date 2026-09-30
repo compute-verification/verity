@@ -379,7 +379,7 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 `research slack` (`slack.py`) is the coordination API on Slack: handles ask one another (`ask`), announce to some or all
 (`announce`), and close each thread with 👀/✅/❌ (`pickup`, `done`, `decline`; `roster` for an announcement). The conventions
 (only handle holders are on Slack, who subscribes to what, the wake recipe, the norms) are the `using-slack` skill, and
-`.agents/skills/using-slack/registry.json` names the handles (user groups), the two channels and the humans the commands
+`.agents/skills/using-slack/registry.json` names the handles (user groups), the channels and the humans the commands
 check against. It speaks the Web API over `urllib` with `$SLACK_BOT_TOKEN`, never prints a token, and `$SLACK_API_URL` points
 it elsewhere: `tests/test_slack.py` runs every subcommand against a fake Web API on a local port. `--dry-run` sends nothing
 and prints each request. `match` reads the thread (`conversations.replies`) only for a reply that tags no one;

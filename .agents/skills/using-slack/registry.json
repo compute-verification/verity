@@ -26,57 +26,78 @@
           "bot_id": null
         }
       ]
+    },
+    "approvals": {
+      "id": "C0C5UCA0S0Z",
+      "purpose": "Approval requests with Approve/Deny buttons; only Daniel (U0BEN96ES8Y) decides. Every top-level post is addressed to the subscribers.",
+      "subscribers": [
+        "infra"
+      ]
     }
   },
   "handles": [
     {
       "handle": "infra",
-      "holder": "the infra coordinator (in the top-level Project; took over node-2 ops at 18:57Z, and owns one-cluster and the GitHub broker)",
+      "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0C5APDSYF9"
     },
     {
       "handle": "proofs",
-      "holder": "the research coordinator (bc-8ece7cde), or the Verity root's successor",
+      "holder": "the proofs coordinator (bc-8416bc72-c4cc-5551-93a8-b14a6e5f95d4); the research coordinator (bc-8ece7cde) keeps running the merge trains",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0C5Q6KJZTQ"
     },
     {
       "handle": "circuits",
-      "holder": "the vLLM coordinator (bc-ecac3029)",
+      "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": "S0C5U3LHMFT"
     },
     {
       "handle": "compute-accounting",
-      "holder": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
+      "holder": "the accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
       "remit": "Proof of useful work: protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD"
     },
     {
       "handle": "memory-accounting",
-      "holder": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
+      "holder": "the accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
       "remit": "Proof of useful space: protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE"
     },
     {
       "handle": "network-accounting",
-      "holder": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
+      "holder": "the accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
       "remit": "Network accounting: the network warden (protocols/network_warden) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L"
     },
     {
       "handle": "console",
-      "holder": "the website worker (bc-41cff24f), moving to a worker on Daniel's laptop",
+      "holder": "the console coordinator (bc-ddee017b-705a-5429-a92e-fed2ba6ea491)",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
       "usergroup": "S0C5LSDENA1"
+    },
+    {
+      "handle": "old-accounting",
+      "holder": "the old pous coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
+      "remit": "Advising its successor, the accounting coordinator: handing off to it and relaying the old pous workers' results.",
+      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-accounting",
+      "usergroup": null
+    },
+    {
+      "handle": "old-circuits-and-proofs",
+      "holder": "two holders: the old vLLM coordinator (bc-ecac3029) and the old research coordinator (bc-8ece7cde)",
+      "remit": "Advising their successors, the circuits and proofs coordinators: handing off to them and relaying the old vLLM and research workers' results.",
+      "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-circuits, note:20260930T1955Z-handoff-from-infra-slack-advisor-proofs",
+      "usergroup": null
     }
   ]
 }

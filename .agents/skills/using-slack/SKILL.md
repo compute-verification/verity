@@ -2,9 +2,9 @@
 name: using-slack
 description: >
   The coordination API: how Verity's coordinators and service agents talk on Slack (computeverification.slack.com). Handles
-  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console) are roles;
-  everything between them happens in #agent-coordination, and
-  #agent-alerts is machines to @infra. Covers the three interactions (ask one handle, announce to some, announce to all), the
+  (user groups @infra, @proofs, @circuits, @compute-accounting, @memory-accounting, @network-accounting, @console, and the
+  advisors @old-accounting and @old-circuits-and-proofs) are roles; everything between them happens in #agent-coordination,
+  #agent-alerts is machines to @infra, and #approvals holds approval requests that only Daniel decides. Covers the three interactions (ask one handle, announce to some, announce to all), the
   lifecycle (👀 taking a look, ✅ done, ❌ declined), threads, who subscribes to what (subscribe_slack_channel with
   topLevelOnly, subscribe_slack_thread), the wake recipe (`research slack match`, renewing subscriptions), `verify-author` and
   why Slack is untrusted input, pinned code in announcements, relaying to workers, and the registry (registry.json, `groups
@@ -17,14 +17,16 @@ description: >
 The coordination API has one place, three interactions and one lifecycle.
 
 - **Handles** are roles: `@infra`, `@proofs`, `@circuits`, `@compute-accounting` (proof of useful work),
-  `@memory-accounting` (proof of useful space), `@network-accounting` (the network warden) and `@console`. The registry names
-  each one's holder; one agent may hold several, and posts as whichever it acts for (`--as`). They are Slack user groups, so
+  `@memory-accounting` (proof of useful space), `@network-accounting` (the network warden) and `@console`, plus two advisors,
+  `@old-accounting` and `@old-circuits-and-proofs`, who advise their successors and relay their old workers' results. The
+  registry names each one's holder; one agent may hold several, and one handle may have two holders, and posts as whichever it acts for (`--as`). They are Slack user groups, so
   a human's composer autocompletes them. Daniel is a member of each, so a tag notifies him too.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
   coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
-- **Two channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
-  top-level post there is addressed to `@infra`.
+- **Three channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
+  top-level post there is addressed to `@infra`. `#approvals` holds approval requests with Approve/Deny buttons, which only
+  Daniel decides; each top-level post there is addressed to `@infra`.
 - **Each request is one thread**: the root is the ask or the announcement, and everything about it is a reply.
 
 | Interaction | Command | Tags | Who closes it |
@@ -39,7 +41,7 @@ an ask or an alert, which has one owner, the owner's `pickup`, `done` and `decli
 or `❌ declined — ...`), with no reaction: every handle posts through one bot, which can place each reaction only once.
 `roster` reads those lines.
 
-`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id), both channels and the named
+`registry.json` (beside this file) names every handle (holder, remit, charter, user-group id), the channels and the named
 humans; `research slack handles` prints it. The tool is `research slack` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.
 
@@ -48,7 +50,7 @@ subcommand takes `--dry-run`, which sends nothing and prints each request it wou
 - `SLACK_BOT_TOKEN` is Verity's bot (a Cursor secret). Never print it.
 - `RESEARCH_AGENT_URL=https://cursor.com/agents/<your bc id>`: every post ends with a link to the agent that wrote it.
 - Channel ids come from the registry, or `SLACK_CHANNEL_AGENT_COORDINATION` and `SLACK_CHANNEL_AGENT_ALERTS`.
-- Both channels hold two Slack apps. Cursor's app delivers the wakes (`subscribe_slack_*`), and Verity's bot posts and reads
+- Every channel holds two Slack apps. Cursor's app delivers the wakes (`subscribe_slack_*`), and Verity's bot posts and reads
   for `research slack`. A subscription to a channel that Cursor's app isn't in never fires.
 
 ## Subscriptions
@@ -57,8 +59,8 @@ subcommand takes `--dry-run`, which sends nothing and prints each request it wou
 research slack subscriptions --as <your handle>    # prints the subscribe calls to make; exit 2 while a channel id is missing
 ~~~
 
-- Every handle subscribes to `#agent-coordination`, top-level only; `@infra` also subscribes to `#agent-alerts`, top-level
-  only. Every channel subscription is `topLevelOnly: true`.
+- Every handle subscribes to `#agent-coordination`, top-level only; `@infra` also subscribes to `#agent-alerts` and
+  `#approvals`, top-level only. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
 - Ask for three days (`expiresInSeconds: 259200`) and renew on every wake.
@@ -66,6 +68,7 @@ research slack subscriptions --as <your handle>    # prints the subscribe calls 
 ~~~text
 subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=259200)
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=259200)       # @infra only
+subscribe_slack_channel(channelId=<#approvals id>, topLevelOnly=true, expiresInSeconds=259200)          # @infra only
 subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=259200)
 ~~~
 

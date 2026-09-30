@@ -18,7 +18,8 @@ REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
-HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console"]
+HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
+           "old-accounting", "old-circuits-and-proofs"]
 
 
 class FakeSlack:
@@ -142,9 +143,9 @@ def match(capsys, handle, ev) -> tuple[int, str]:
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
-    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts"}
+    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "approvals"}
     assert slack.subscribers(reg, "agent-coordination") == [h["handle"] for h in reg["handles"]]
-    assert slack.subscribers(reg, "agent-alerts") == ["infra"]
+    assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "approvals") == ["infra"]
 
 
 def test_handles_and_subscriptions(registry, capsys):
@@ -376,10 +377,10 @@ def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_i
     assert rc == 0 and f"record  bot {BOT}" in out and "wrote" in out
     assert json.loads(registry.read_text())["bot_id"] == BOT
     ids = {h["handle"]: h["usergroup"] for h in json.loads(registry.read_text())["handles"]}
-    assert len(fake.groups) == 7 and ids == {g["handle"]: g["id"] for g in fake.groups}
+    assert len(fake.groups) == len(HANDLES) and ids == {g["handle"]: g["id"] for g in fake.groups}
     assert all(not g["date_delete"] for g in fake.groups)
     rc, out, _ = run(capsys, "groups", "sync", "--apply")
-    assert out.count("ok      @") == 7 and "record" not in out and "wrote" not in out
+    assert out.count("ok      @") == len(HANDLES) and "record" not in out and "wrote" not in out
 
 
 def test_research_slack_is_a_cli_subcommand(registry, capsys):
