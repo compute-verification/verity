@@ -13,6 +13,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels import rows as RK
 from verity_vllm.program.kernels.kernel_registry import Declined
 from verity_vllm.program.registry import gemm_bias
+from verity_vllm.program.registry import gemm_targets as GT
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import targets as TG
 from verity_vllm.query import word as W
@@ -83,7 +84,7 @@ def test_bound_on_cc_12_only_where_the_linear_is_cublaslt():
     assert TG.gemm_bias_spec(ada, 2048, 3072).id == bind(gemm_bias.GemmBias, K=2048, N=3072).id
     with pytest.raises(TG.UnregisteredTarget, match="with a bias on hopper"):
         TG.gemm_bias_spec(hopper, 2048, 3072)
-    assert TG.F32_BIAS_EPILOGUE_FAMILIES == ("blackwell_consumer",)
+    assert {key for key, gt in GT.REGISTERED.items() if gt.bias_epilogue == "f32"} == {"blackwell_consumer"}
 
 
 def test_q_word_cuts_one_unit_per_output_word_with_no_committed_interior():
