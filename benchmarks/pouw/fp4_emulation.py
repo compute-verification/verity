@@ -20,6 +20,7 @@ section 1-2; i.i.d. noise stands in for the rank-r lines, as in ``fp4_census.py`
 
     python benchmarks/pouw/fp4_emulation.py selftest
     python benchmarks/pouw/fp4_emulation.py routes --k 8192 --rows 64 --cols 64 --hot-bits 8,10,12 --out routes.json
+    python benchmarks/pouw/fp4_emulation.py routes --hot-rule row --hot-bits 14,15,16 --out routes-row.json
 """
 
 from __future__ import annotations
@@ -354,13 +355,28 @@ def bf16_normalise(total: np.ndarray, maxe: np.ndarray) -> np.ndarray:
     return np.where(nz & (m24 > 0), bits, 0).astype(np.uint32)
 
 
-def hot_accumulator(p: Problem, hot_bits: int) -> np.ndarray:
-    """H = 1.5 * 2^E_H per word, with the grid 2^(E_H - 23) at 2^-hot_bits of the word's RMS atom sum."""
+def hot_accumulator(p: Problem, hot_bits: int, rule: str = "word") -> np.ndarray:
+    """H = 1.5 * 2^E_H, with the grid 2^(E_H - 23) at 2^-hot_bits of the word's RMS atom sum (``word``), or of the row's
+    largest one, one H per row (``row``: the cheap form, H held in the accumulator registers)."""
 
     s = p.step_sums().astype(np.float64) * 2.0 ** -20
     rms = np.sqrt((s ** 2).mean(axis=0))
+    if rule == "row":
+        rms = np.broadcast_to(rms.max(axis=1, keepdims=True), rms.shape)
     eh = np.floor(np.log2(np.maximum(rms, 2.0 ** -100))).astype(np.int64) + 23 - hot_bits
     return ((eh + 127) << 23 | (1 << 22)).astype(np.uint32)
+
+
+def merged_k128(p: Problem, c0: np.ndarray) -> np.ndarray:
+    """The chain with each pair of atoms merged into one align-add over 8 groups: the 2:4-sparse m16n8k128 route on a 2:4
+    span, which merges two atoms' align-adds (GPU 4's measured merged-vs-chained differences rule out two internal k64 steps;
+    the one-add-over-8-groups form is this model's hypothesis)."""
+
+    c = c0.copy()
+    for t in range(p.nblk // 8):
+        b = slice(8 * t, 8 * t + 8)
+        c = nvf4_step(c, list(p.mant[b]), list(p.x[b]), list(p.part[b]))
+    return c
 
 
 # --- commands --------------------------------------------------------------------------------------------------------
@@ -420,11 +436,12 @@ def routes(args) -> dict:
         bf = p.bf16_fold(zero)
         n = nat.size
         cold = {"words": n, "exact_rz": float((rz == nat).mean()), "exact_rn": float((rn == nat).mean()),
-                "bf16_fold": float((bf == nat).mean())}
+                "bf16_fold": float((bf == nat).mean()), "merged_k128": float((merged_k128(p, zero) == nat).mean())}
         hot = {}
         s_exact = p.step_sums().sum(axis=0).astype(np.float64) * 2.0 ** -20
         for h in hot_bits:
-            H = hot_accumulator(p, h)
+            H = hot_accumulator(p, h, args.hot_rule)
+            eh = ((H.astype(np.int64) >> 23) & 0xFF) - 127
             nat_h, same = p.native(H, record=True)
             rz_h, _ = p.exact(H)
             sf = p.step_floor(H)
@@ -434,6 +451,10 @@ def routes(args) -> dict:
             scale = np.sqrt((s_exact ** 2).mean())
             hot[str(h)] = {"identity_atoms": same / (n * (p.nblk // 4)), "exact_rz": float((rz_h == nat_h).mean()),
                            "step_floor": float((sf == nat_h).mean()), "bf16_fold": float((bf_h == nat_h).mean()),
+                           "merged_k128": float((merged_k128(p, H) == nat_h).mean()),
+                           # (word, block) pairs whose largest possible term (2^19 at 2^X) is below H's inner grid 2^(E_H - 35):
+                           # they add exactly 0, so the scales alone say they can be skipped
+                           "dead_pairs": float(((p.x + 19) < (eh - 35)[None]).mean()),
                            "rel_err_rms": float(np.sqrt((err ** 2).mean()) / scale),
                            "rel_bias": float(err.mean() / scale)}
         res["families"][fam] = {"cold": cold, "hot": hot, "seconds": round(time.time() - t0, 1)}
@@ -450,6 +471,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--delta", type=float, default=0.25)
     ap.add_argument("--families", default="gaussian,t4,massive,spread,spread-both")
     ap.add_argument("--hot-bits", default="8,10,12")
+    ap.add_argument("--hot-rule", choices=["word", "row"], default="word")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)

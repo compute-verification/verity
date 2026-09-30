@@ -74,9 +74,11 @@ def parse_fp4_routes(argv: list[str]) -> dict:
     ap.add_argument("--cols", type=int, default=64)
     ap.add_argument("--families", default="gaussian,t4,massive,spread,spread-both")
     ap.add_argument("--hot-bits", default="8,10,12")
+    ap.add_argument("--hot-rule", default="word")
     ap.add_argument("--seed", type=int, default=20260930)
     ns, _ = ap.parse_known_args(argv)
-    return {"cmd": ns.cmd, "k": ns.k, "rows": ns.rows, "cols": ns.cols, "families": ns.families, "hot_bits": ns.hot_bits, "seed": ns.seed}
+    return {"cmd": ns.cmd, "k": ns.k, "rows": ns.rows, "cols": ns.cols, "families": ns.families, "hot_bits": ns.hot_bits,
+            "hot_rule": ns.hot_rule, "seed": ns.seed}
 
 
 FP4_EMULATION_CLOSURE = ["benchmarks/pouw/fp4_emulation.py", "benchmarks/pouw/kernels/fp4_emulation.cu",
@@ -103,5 +105,5 @@ POUW_FP4_EMULATION = Tool(name="pouw_fp4_emulation", version="1", command=["pyth
                           produces=["bench-result/v1", "run-files/v1"], parse=parse_fp4_emulation)
 #: The same routes' bit-exactness on real-length chains, on the CPU (the pinned atom and BF16 step, vectorised).
 POUW_FP4_ROUTES = Tool(name="pouw_fp4_routes", version="1", command=["python", "benchmarks/pouw/fp4_emulation.py"],
-                       closure=FP4_EMULATION_CLOSURE, key_params=["cmd", "k", "rows", "cols", "families", "hot_bits", "seed"],
+                       closure=FP4_EMULATION_CLOSURE, key_params=["cmd", "k", "rows", "cols", "families", "hot_bits", "hot_rule", "seed"],
                        produces=["bench-result/v1", "run-files/v1"], parse=parse_fp4_routes)
