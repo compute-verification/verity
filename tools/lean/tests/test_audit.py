@@ -7,6 +7,7 @@ import importlib.util
 import json
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -314,6 +315,37 @@ def test_a_file_changed_during_the_run_is_reported(tmp_path):
     late.write_text("y")
     assert A.tampered(seals, [late]) == [str(tool), str(late)]
     assert A.killed(-9) and A.killed(137) and not A.killed(1)
+
+
+def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
+    """`b` requires `a` by path, and `c` requires nothing. Each fake audit blocks on the event it needs, so the run finishes
+    only when `c` runs beside `a`'s build, and `b`'s build beside the rest of `a`'s audit."""
+    a, b, c = tmp_path / "a", tmp_path / "a" / "b", tmp_path / "c"
+    for p in (a, b, c):
+        p.mkdir(parents=True, exist_ok=True)
+        (p / A.POLICY).write_text("{}")
+    (b / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "a", "dir": ".."}]}))
+    started = {p.name: threading.Event() for p in (a, b, c)}
+    events = []
+
+    def fake(pkg, out, build, update, replay, fresh, log=print, built=lambda: None):
+        events.append(("start", pkg.name))
+        started[pkg.name].set()
+        if pkg.name == "a":
+            started["c"].wait()
+            built()
+            events.append(("built", "a"))
+            started["b"].wait()
+        else:
+            built()
+        return {"package": str(pkg), "seconds": {}, "failures": ["fake"] if pkg.name == "c" else []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    assert A.main([str(a), str(b), str(c), "--out", str(out)]) == 1
+    assert events.index(("built", "a")) < events.index(("start", "b"))
+    doc = json.loads((out / "audit.json").read_text())
+    assert [r["package"] for r in doc["packages"]] == [str(a), str(b), str(c)] and doc["failed"] == [str(c)]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
