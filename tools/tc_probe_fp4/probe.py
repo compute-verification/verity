@@ -68,7 +68,9 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
     dry run where MODEL's words stand in for the device; refused under a research run), ``--corrupt-word`` (one flipped bit in the
     first gated family: the run must fail).
   * casts (``--instruction cvt_*``, ``cast.py``); the 2:4 sparse ``mma.sp`` m16n8k128 rows (``--instruction sp_nvf4 | sp_mxf4``,
-    ``sparse.py``: a capture over named candidates, the first of which is the dense pinned model on the compressed operands).
+    ``sparse.py``: a capture over named candidates, the first of which is the dense pinned model on the compressed operands);
+    T1's merged k128 route (``--instruction sp_nvf4_t1``, ``t1_merged.py``: the sparse k128 from C = H against two chained dense
+    atoms from C = H, on the operands of ``fp4_emulation.py routes`` at 1ad1aaa2, for each ``--hot-bits`` h and C = +0).
   * ``scale_split_twins`` (nvf4, mxf4): tile pairs with equal scaled products and accumulators but A's scale halved into its
     nibbles; ``twins`` counts the words the pair's members differ in, and any difference on the device means no model that
     reads only the exact products and the accumulator (no ``GroupSum``) computes the instruction.
@@ -139,6 +141,8 @@ CAST_INSTRUCTIONS = ("cvt_e2m1x2_f32", "cvt_f16x2_e2m1x2", "cvt_ue8m0x2_f32_rz",
                      "cvt_e4m3x2_f32_ue4m3")
 #: the 2:4 sparse mma.sp rows (sparse.py; mma_fp4.cu's sparse_tiles_kernel), dispatched like the casts
 SPARSE_INSTRUCTIONS = ("sp_nvf4", "sp_mxf4")
+#: T1's merged k128 route (t1_merged.py): the sparse NVF4 row against the dense one's two-atom chain, from the hot accumulator
+T1_INSTRUCTIONS = ("sp_nvf4_t1",)
 #: mma.sync instruction -> RowKind of mma_fp4.cu's generic kernel (single tiles of the new rows, and every in-register chain)
 ROW_KIND = {"nvf4": 0, "mxf4": 1, "f8f6f4": 2, "f8f6f4_e2m1_e4m3": 3, "f8f6f4_e4m3_e2m1": 4, "mxf8f6f4_e2m1": 5, "mxf8f6f4_e2m1_e4m3": 6,
             "mxf8f6f4_e4m3_e2m1": 7}
@@ -1234,7 +1238,8 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--instruction", default="nvf4", choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS))
+    ap.add_argument("--instruction", default="nvf4",
+                    choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS) + list(T1_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--chain2", action="store_true", help="tcgen05: pair each family's tiles into K=128 chains (two MMAs on one TMEM accumulator)")
@@ -1257,10 +1262,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fake-silicon", default=None, metavar="MODEL", help="dry run on the CPU: MODEL's words stand in for the device")
     ap.add_argument("--corrupt-word", action="store_true", help="flip one bit of the first gated family's first word (the gate must fail)")
     ap.add_argument("--sass-only", action="store_true", help="build and run the SASS gate only (no device)")
+    ap.add_argument("--hot-bits", default="14,15,16", help="sp_nvf4_t1: the h of each hot accumulator H (C = +0 always runs)")
+    ap.add_argument("--model-sample", type=int, default=4096,
+                    help="sp_nvf4_t1: span words per accumulator checked against the pinned models (and 1/64 as many whole chains)")
     args = ap.parse_args(argv)
     if args.instruction in CAST_INSTRUCTIONS:
         import cast
         return cast.main(args)
+    if args.instruction in T1_INSTRUCTIONS:
+        import t1_merged
+        return t1_merged.main(args)
     if args.instruction in SPARSE_INSTRUCTIONS:
         import sparse
         return sparse.main(args)

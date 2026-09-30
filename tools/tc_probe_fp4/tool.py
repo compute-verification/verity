@@ -47,6 +47,8 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--expect-uuid", default=None)              # a guard (stops a run on the wrong GPU), not part of the answer
     ap.add_argument("--fake-silicon", default=None)             # dry run; probe.py refuses it under a research run
     ap.add_argument("--sass-only", action="store_true")
+    ap.add_argument("--hot-bits", default="14,15,16")            # sp_nvf4_t1: the hot accumulators' h
+    ap.add_argument("--model-sample", type=int, default=4096)   # sp_nvf4_t1: words checked against the pinned models
     ns, unknown = ap.parse_known_args(argv[idx + 1:])
     out = vars(ns)
     if out["arch"] is None:  # probe.py's default: sm_120a for the mma.sync instructions, sm_100a for the tcgen05 ones
@@ -112,7 +114,8 @@ TC_PROBE_FP4 = Tool(
     command=["python", "tools/tc_probe_fp4/probe.py"],
     closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
     key_params=["instruction", "arch", "families", "seed", "n", "group", "sweep", "golden_per_family", "replay_autoproof", "sass_check",
-                "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only"],
+                "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only", "hot_bits",
+                "model_sample"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_autoproof"],
     caches=["nvcc"],

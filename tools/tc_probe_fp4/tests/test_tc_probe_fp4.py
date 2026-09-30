@@ -22,9 +22,11 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 
 import cast  # noqa: E402
+import fp4_emulation_1ad1aaa2 as E  # noqa: E402
 import k32  # noqa: E402
 import probe as P  # noqa: E402
 import sparse as S  # noqa: E402
+import t1_merged as T  # noqa: E402
 import tool  # noqa: E402
 import w1_price as W  # noqa: E402
 
@@ -349,10 +351,79 @@ def test_clock_label_needs_every_sample_at_the_lock():
     assert W.clock_label([None], [2100.0], 2100) == "unlocked"
 
 
+def test_t1_emulation_is_1ad1aaa2_verbatim():
+    assert T.emulation_gate() is None
+
+
+@pytest.mark.parametrize("fam", ["gaussian", "t4", "massive", "spread", "spread-both"])
+def test_t1_quantizer_without_the_shortcut_is_routes_quantizer(fam):
+    """Without the pruning and at routes' per-16 scales, the capture's quantizer draws and returns what routes' does."""
+    x1, x2 = (E.family(fam, "A", 8, 512, rng) for rng in (np.random.default_rng(4), np.random.default_rng(4)))
+    rng1, rng2 = np.random.default_rng(9), np.random.default_rng(9)
+    want_c, want_s = E.quantize_pearl_c4(x1, 0.25, rng1)
+    got_c, got_s, keep = T.quantize(x2, 0.25, rng2, prune=False, block=16)
+    assert keep is None and np.array_equal(want_c, got_c) and np.array_equal(want_s, got_s)
+    assert rng1.integers(1 << 30) == rng2.integers(1 << 30)
+
+
+def test_t1_operands_are_2of4_under_d24_and_the_hardware():
+    o = T.operands("t4", 20260930, rows=16, cols=8, k=512)
+    assert T.structure_failures(o) == []
+    nz = (o.ca & 7) != 0
+    assert (nz.reshape(16, -1, 4).sum(axis=2) <= 2).all()
+    pairs = nz.reshape(16, -1, 4, 2).any(axis=3)
+    p0, p1 = o.meta & 3, o.meta >> 2
+    allowed = np.zeros_like(pairs)
+    np.put_along_axis(allowed, p0[..., None].astype(np.int64), True, axis=2)
+    np.put_along_axis(allowed, p1[..., None].astype(np.int64), True, axis=2)
+    assert not (pairs & ~allowed).any()
+    assert np.array_equal(o.sa16[:, 0::2], o.sa16[:, 1::2])
+
+
+def test_t1_vectorised_fakes_are_the_pinned_models():
+    """The dry run's devices: the dense one is BLACKWELL_SM120_NVF4 chained, the sparse ones sparse.gather_dense and
+    logical_g16 (the emulation's merged_k128), word for word on hot and cold accumulators."""
+    rng = np.random.default_rng(12)
+    n = 6
+    As = rng.integers(0, 16, (n, 16, 64)).astype(np.uint8)
+    META = S.META_VALID[rng.integers(0, 6, (n, 16, 16))]
+    B = rng.integers(0, 16, (n, 8, 128)).astype(np.uint8)
+    SFA, SFB = P.UE4M3_VALID[rng.integers(0, 127, (n, 16, 4))], P.UE4M3_VALID[rng.integers(0, 127, (n, 8, 4))]
+    C = P.f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-10, 30, (n, 16, 8)))).astype(np.float32))
+    C[0] = 0
+    A, SA, SB = S.expand(As, META), S.model_scales(SFA), S.model_scales(SFB)
+    models = S.candidates("sp_nvf4")
+    for fake, model in (("gather4", "gather_dense"), ("merged_k128", "logical_g16")):
+        want, err = S.model_words(models[model], A, B, SA, SB, C)
+        assert not err.any() and np.array_equal(T.FakeSparseT1(fake).tiles("sp_nvf4", As, B, META, SFA, SFB, C), want)
+    two = S.model_words(S.TwoHalves("two", M.BLACKWELL_SM120_NVF4), A, B, SA, SB, C)[0]
+    assert np.array_equal(T.FakeDenseT1().tiles("nvf4", A, B, C, SA, SB, steps=2), two)
+
+
+@pytest.mark.slow
+def test_t1_dry_run_records_the_finding_and_fails_closed(no_nvcc, tmp_path):
+    """The whole driver on the CPU at routes' size (one family, one hot h): the dense words are the pinned chain's, and one
+    flipped dense word fails the run."""
+    base = ["--instruction", "sp_nvf4_t1", "--fake-silicon", "gather4", "--seed", "20260930", "--families", "gaussian",
+            "--hot-bits", "14", "--model-sample", "64"]
+    assert P.main(base + ["--out", str(tmp_path / "ok")]) == 0
+    doc = json.loads((tmp_path / "ok" / "probe_results.json").read_text())
+    for name, r in doc["families"]["gaussian"].items():
+        assert r["emulation"]["native_vs_dense_hw"] == {"span": r["span"]["words"], "chain": r["chain"]["words"]}
+        assert r["emulation"]["gather4_vs_sparse_hw"] == {"span": r["span"]["words"], "chain": r["chain"]["words"]}
+        assert r["span"]["matched_exact"] == r["span"]["exact_spans"]
+        assert r["pinned_sample"]["gather_dense_mismatches"] == r["pinned_sample"]["dense_mismatches"] == 0
+    assert doc["finding"]["cold"]["gaussian"]["span"] == [262144, 262144]
+    assert doc["finding"]["h14"]["gaussian"]["span"][0] < 262144
+    assert (tmp_path / "ok" / "t1_gaussian.npz").exists()
+    assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) == 1
+
+
 def test_store_declarations_keep_guards_out_of_the_derivation():
     p = tool.TC_PROBE_FP4.parse(["python", "tools/tc_probe_fp4/probe.py", "--instruction", "f8f6f4", "--out", "x",
                                  "--expect-uuid", "GPU-1", "--chain", "4"])
     assert p["instruction"] == "f8f6f4" and p["chain"] == 4 and "expect_uuid" not in p and p["arch"] == "sm_120a"
+    assert set(p) <= set(tool.TC_PROBE_FP4.key_params) | {"out", "procs"}
     q = tool.TC_PRICE_FP4.parse(["python", "tools/tc_probe_fp4/w1_price.py", "--out", "x", "--rows", "mxf4,nvf4,",
                                  "--expect-uuid", "GPU-1", "--max-seconds", "60"])
     assert q["rows"] == "mxf4,nvf4" and not {"out", "expect_uuid", "max_seconds"} & set(q)
@@ -368,6 +439,7 @@ def test_offline_sass_gates(tmp_path):
                 ["probe.py", "--instruction", "f8f6f4", "--out", str(tmp_path / "p"), "--sass-only"],
                 ["probe.py", "--instruction", "cvt_e2m1x2_f32", "--out", str(tmp_path / "c"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4", "--out", str(tmp_path / "sp"), "--sass-only"],
+                ["probe.py", "--instruction", "sp_nvf4_t1", "--out", str(tmp_path / "t1"), "--sass-only"],
                 ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])
