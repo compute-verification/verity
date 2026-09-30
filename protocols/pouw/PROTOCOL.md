@@ -319,10 +319,63 @@ not a tile unit or is not its closure's first unit: a tile mapped to its X strip
 
 The profile is `Stratified` over the tile strata, and its `harm_bound`, at W_ref per tile, bounds the unsound work.
 
+## `pearl-c-h100-v0` and `pearl-c-h100-v1`: Pearl-C, Pearl's product with its noisy clean-up checked (`schemes/pearl_c.py`)
+
+The cheap-binding lane's H100 candidate (research store `docs/pouw/cheap-binding.md` §1). It takes Pearl's H100 product
+and output tickets, and adds #311's noisy clean-up pinned bit for bit, so that the useful output U is a checked value.
+γ rests on the named conjecture TT_OUT(1/400), not on counting, so the certificate names no γ_0. The module's docstring
+states every step.
+
+~~~text
+seeds     seed_B = H_"pearl-c/v0/seed-B"(salt ‖ root_B);  seed_A = H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64)
+forming   v0, #311's as ported (`pearl_kw`): FP10 rows, exact norms, α, β, N = E·Fᵀ, X̃ = fp8(clamp(fma(α, X, β·N)))
+          v1, §5's: FP32 rows x; s = max|x|, ρ = RMS over every 8th position, α = 448/max(s + 4ρ, 2^−32), σ = ρ,
+          β_row = (σ·α)·√r/(256·16), E′ = e4m3(β_row·E), X̃ = e4m3(HOPPER_E4M3_K32.step(C = α·x, E′_row, F line)),
+          with F_A and F_B's lines at L2 norm 16 (E's at Pearl's 256)
+chain     C̃ = the H100 replay of A′·B̃ᵀ: a +0 accumulator per 128 products chains four HOPPER_E4M3_K32 atoms,
+          promoted by one FP32 nearest-even add (−0 → +0)
+peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)·G − B̃·F_A) ‖ −bf16(β_B·E_B)],  G = F_Bᵀ·F_A
+          (v1: bf16(E′) in place of bf16(β·E));
+          U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_WGMMA_K16 steps into C̃'s word
+leaf      TurboSHAKE128 (D = 0x21) per tile row and 32-column chunk over its C̃ then U words, then TurboSHAKE128
+          (D = 0x22) over those digests
+tickets   Pearl's lottery over C̃ per 16 × 16 subtile
+useful    U/(α_A·α_B), glue
+~~~
+
+- **Pinned where #311 isn't.** #311 runs G and the B-side factor on a tolerance path.
+  - Here G, A′·F_B and B̃·F_A are the same FP8 chain as C̃ (A′·F_B is the product's 32 fused columns).
+  - (β_B·E_B)·G is a sequential FP32 FMA chain from +0.
+  - The peel is the BF16 wgmma accumulating into C̃'s register.
+- **Conformance.**
+  - The chain equals Pearl's own Rust H100 replay at `284b147b`: the pinned matmuls, and both 16 × 16 H100 tiles
+    after `pearl_kw`'s forming (`tests/vectors/pearl_kw.json`).
+  - It equals `pearl_kw.replay` on random codes, partial windows included.
+  - The scheme's own vectors are `tests/vectors/pearl_c.json`: for each forming, a 16 × 16 × 128 test instance and one
+    64 × 1,024 × 64 tile.
+- **Two formings.**
+  - v0 is the port, not the design: it keeps #311's FP10 decode and exact norms, whose A-only work the red team counts
+    as skippable (X-PC-2).
+  - v1 is the rework (`cheap-binding.md` §5), with its roundings pinned in the module docstring: the order of ρ's
+    partial sums, α and β_row's FP32 steps, and the 2^−32 floor that keeps an all-zero row finite.
+    - Only ρ depends on A alone. The model adopts s, ρ and α as its own FP8 quantizer, so W_ref counts 68 units per
+      element of forming, 64 of them credited (the lane's `Costs.adopted`).
+    - Its domain rules are Pearl's with σ for δ·l2: σ·α ≥ 1 on every row, and at most 1/64 of each side's entries at
+      |x| ≥ 8σ.
+- **The TurboSHAKE128 reference** is `verity.commitments.turboshake`, checked against RFC 9861 and `hashlib`'s
+  Keccak-f[1600].
+- **U's exact order, CPU-pinned** (`schemes/pearl_c_u.py`), for the Lean model of the clean-up.
+  - It states the chain with its promotion, the fused columns, the factors' single BF16 roundings, P_B's FMA chain and the
+    four K16 steps, and both tensor-core steps as integer grouped sums.
+  - It equals `pearl_c` bit for bit.
+  - Its vectors (`tests/vectors/pearl_c_u.json`) are cells of the H100 kernel's gate problem, and they agree with the
+    gate's expected buffers, whose hashes they record.
+  - The H100 capture confirms it on silicon.
+
 ## Not here yet
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
-  are gated by these vectors when they land.
+  are gated by these vectors when they land. Pearl-C's H100 kernel is `benchmarks/pouw/pearl_c/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
