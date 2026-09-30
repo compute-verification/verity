@@ -35,6 +35,9 @@ rm "$OUT/sass.txt"
 NEW=$(objdump -T "$OUT/pouw_hash_bench" | grep -oE "GLIBC_2\.[0-9]+" | sort -uV | awk -F. '$2 > 35' | tr '\n' ' ')
 [ -z "$NEW" ] || { echo "REFUSED: pouw_hash_bench needs $NEW (newer than 2.35)" >&2; exit 1; }
 cp "$HERE/run.sh" "$HERE/check.py" "$HERE/pouw_hash.cuh" "$HERE/vectors.cuh" "$HERE/pouw_hash_check.cu" "$HERE/pouw_hash_bench.cu" "$OUT/"
+# every file 0644, as pearl_c/ship.sh commits them, so the shipped repo's checkout is clean for `research run --source`;
+# run.sh makes the binary executable on the machine
+chmod 0644 "$OUT/pouw_hash_bench"
 "$C9/bin/nvcc" --version | tail -2 > "$OUT/toolchain.txt"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pouw_hash; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
