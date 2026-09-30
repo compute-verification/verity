@@ -500,7 +500,7 @@ def main() -> None:
     unit_secs: list[float] = []
 
     def prep_of(item):
-        fam, _, u = item.split(":", 1)[1].partition("@")
+        fam, _, u = item.split(":", 1)[1].rpartition("@")
         return ahead.submit(prep, pool, fam, args.k, args.rows, int(u), args.mode)
 
     def fits(units: int) -> bool:
