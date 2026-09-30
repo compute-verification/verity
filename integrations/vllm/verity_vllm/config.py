@@ -88,6 +88,7 @@ TARGETS: dict[str, tuple[int, int]] = {
     "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
     "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
     "b200": (10, 0), "gb200": (10, 0),
+    "rtxpro6000": (12, 0),
 }
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
