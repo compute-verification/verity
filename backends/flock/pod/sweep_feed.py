@@ -160,8 +160,9 @@ def shape_item(env: str, res: dict) -> dict:
 def wholerow(b: dict, d: dict, w: set) -> tuple[list[tuple[str, dict]], dict]:
     """(b): the row's statements of one shape proved outright, in chunks of `chunk` statements (one GPU job each, `parallel` at once),
     until the measured cost agrees with the per-shape extrapolation (`extrap_s` a statement, from the shape's one-statement record)
-    within `tol`, over at least `min_chunks` chunks; or the row is proved. Measured = the chunks' job seconds (the GPU held, start-up
-    included) per accepted statement, times the row's statements; also the prove seconds alone."""
+    within `tol`, over at least `min_chunks` chunks; or the row is proved. Measured = the chunks' prove seconds per accepted
+    statement, times the row's statements (what `extrap_s` measures); also the job seconds, the GPU held, which the loopback verifier
+    (single-threaded, about 7 s a statement, in series with the prover) dominates."""
     row, digest, total, chunk = b["row"], b["shape"], int(b["statements"]), int(b["chunk"])
     t = f"b-{tag(row)}-{digest[:8]}"
     ids = [(f"{t}-r{i}", i, min(chunk, total - i)) for i in range(0, total, chunk)]
@@ -173,8 +174,8 @@ def wholerow(b: dict, d: dict, w: set) -> tuple[list[tuple[str, dict]], dict]:
     extrap = total * float(b["extrap_s"])
     st = {"chunks_done": len(ok), "chunks_failed": len(ended) - len(ok), "statements": n, "of": total, "gpu_h_used": round(job_s / 3600, 3),
           "extrapolated_gpu_h": round(extrap / 3600, 3),
-          "measured_gpu_h": round(job_s / n * total / 3600, 3) if n else None,
-          "measured_prove_only_gpu_h": round(prove_s / n * total / 3600, 3) if n else None,
+          "measured_gpu_h": round(prove_s / n * total / 3600, 3) if n else None,
+          "measured_gpu_held_h": round(job_s / n * total / 3600, 3) if n else None,
           "runs": [x.get("run") for x in ok]}
     st["gap"] = round(st["measured_gpu_h"] / st["extrapolated_gpu_h"] - 1, 4) if n else None
     stopped = STATE / "b-stop.json"
