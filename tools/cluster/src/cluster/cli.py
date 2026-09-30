@@ -9,8 +9,8 @@
   cluster agent DESCRIPTION.toml --out DIR [--mode shadow|live] [--hours H] [--stop-file P] [--copy-to DIR]
   cluster shadow replay DESCRIPTION.toml --sampler UTIL.jsonl[.gz] --preempted LOG[.gz] --out DIR
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
-  cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W --max-s S [--gpus N ...]
-                                                        # the node and executor wrapper as JSON; exit 3 with {"refused"}
+  cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W [--kind K] [--max-s S] [--gpus N ...]
+                                                        # the node, wrappers and kind as JSON; exit 3 with {"refused"}
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
@@ -94,28 +94,30 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--project", required=True)
     sb.add_argument("--submitter", required=True)
     sb.add_argument("--class", dest="priority", default="work")
-    sb.add_argument("--gpus", type=int, default=0)
+    sb.add_argument("--kind", default="adhoc", help="the job's kind, from kinds/<owner>.toml beside the descriptions")
+    sb.add_argument("--question", default="", help="the research question it answers (default: its kind's)")
+    sb.add_argument("--gpus", type=int)
     sb.add_argument("--gpu-model")
-    sb.add_argument("--cpus", type=int, default=1)
-    sb.add_argument("--mem-gb", type=int, default=8)
-    sb.add_argument("--max-s", type=int, required=True)
+    sb.add_argument("--cpus", type=int)
+    sb.add_argument("--mem-gb", type=int)
+    sb.add_argument("--max-s", type=int, help="its longest run (default: its kind's max_wall_min)")
     sb.add_argument("--custody-s", type=int, default=0)
     sb.add_argument("--preempt", choices=("requeue", "never"), default="requeue")
-    sb.add_argument("--quiet", action="store_true")
+    sb.add_argument("--quiet", action="store_true", default=None)
     sb.add_argument("--node")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
     a = ap.parse_args(argv)
 
     if a.cmd == "submit":
-        from . import submit
+        from . import kinds, submit
         c = model.load(a.description)
-        j = submit.job(run_id=a.run_id, project=a.project, submitter=a.submitter, priority=a.priority, gpus=a.gpus,
-                       gpu_model=a.gpu_model, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s, custody_s=a.custody_s,
-                       preempt=a.preempt, quiet=a.quiet, node=a.node,
-                       gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x), submitted=a.now)
         try:
-            out = submit.resolve(c, j, a.run_id, a.now)
-        except submit.Refused as e:
+            out = submit.submit(c, kinds.load(kinds.kinds_dir(a.description)), run_id=a.run_id, now=a.now, kind=a.kind,
+                                question=a.question, gpus=a.gpus, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s,
+                                quiet=a.quiet, preempt=a.preempt, project=a.project, submitter=a.submitter,
+                                priority=a.priority, gpu_model=a.gpu_model, custody_s=a.custody_s, node=a.node,
+                                gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x))
+        except (submit.Refused, ValueError) as e:
             print(json.dumps({"refused": str(e)}))
             return 3
         print(json.dumps(out, sort_keys=True))
