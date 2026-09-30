@@ -175,6 +175,48 @@ def test_a_path_rule_requires_its_step_for_a_change_under_the_path(tmp_path, mon
     assert merge_main(["feat", "--dry-run"]) == 0
 
 
+def test_a_stacked_train_meets_the_steps_the_declaration_main_gained_from_the_train_ahead(tmp_path, monkeypatch, capsys):
+    """A adds the rule that `agree` must pass for a change under flock/; C, checked on A, changes flock/. Once A lands, C merges
+    tree-identically, and the steps are read from main's declaration (now A's) against the diff from main's tip (C's flock/
+    change): an attempt of C that skipped `agree` is refused, one where it passed lands."""
+    import sys
+
+    main, _feat, _tip = _repos(tmp_path)
+    decl = "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1'{})\n"
+    (main / "tools" / "check").mkdir(parents=True)
+    (main / "tools" / "check" / "tool.py").write_text(decl.format(""))
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "no rule")
+    _git(main, "checkout", "-q", "-b", "A")
+    (main / "tools" / "check" / "tool.py").write_text(decl.format(", merge_requires={'agree': ['flock/']}"))
+    _git(main, "commit", "-q", "-am", "A: the rule")
+    _git(main, "checkout", "-q", "-b", "C")
+    (main / "flock").mkdir()
+    (main / "flock" / "x.txt").write_text("x\n")
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "C: a flock change, on A")
+    c = _git(main, "rev-parse", "HEAD")
+    _git(main, "checkout", "-q", "main")
+    _git(main, "worktree", "add", "-q", str(tmp_path / "c"), c)
+
+    def run(status: str) -> int:
+        monkeypatch.chdir(tmp_path / "c")
+        return research_main(["run", "--runs-dir", str(tmp_path / "runs"), "--project", "t", "--no-sampler", "--tool", "check",
+                              "--cwd", "source", "--", sys.executable, "-c", _RESULT % status])
+
+    assert run("skipped") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["C", "--dry-run"]) == 0                  # main's own declaration has no rule yet
+    _git(main, "merge", "-q", "--no-ff", "-m", "A lands", "A")
+    assert subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", c], cwd=main).returncode == 1    # main moved past C's base
+    assert merge_main(["C", "--dry-run"]) == 1
+    assert "changes flock/, where `check` must have run agree" in capsys.readouterr().err
+    assert run("passed") == 0
+    monkeypatch.chdir(main)
+    assert merge_main(["C"]) == 0, capsys.readouterr().err
+    assert _git(main, "rev-parse", "HEAD^{tree}") == _git(main, "rev-parse", f"{c}^{{tree}}") and _git(main, "rev-parse", "HEAD^2") == c
+
+
 def test_a_path_rule_leaves_out_what_its_patterns_name():
     from research.merge import rule_touches
 
