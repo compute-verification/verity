@@ -367,18 +367,24 @@ extern "C" __global__ void __launch_bounds__(128) lines(const Args a) {
 constexpr uint32_t S5_LINE = 0x3AB504F3;   // f32(sqrt(32) / (256 * 16))
 constexpr float S5_FLOOR = 0x1p-32f;
 
-// one warp per FP32 row: s = max|x|, rho (32 partial FMA chains over every 8th position, then the xor butterfly), alpha,
-// beta_row.  p0 rows (rows x k words), p1 alpha, p2 beta, p3 1/alpha (glue), p4 (s, rho) per row; i0 rows, i1 k
+// one warp per FP32 row, one pass: s = max|x|, rho (32 partial FMA chains, chain c over positions 8c + 256i in order of i,
+// then the xor butterfly), alpha, beta_row.  Lane l reads x[256i + 4l ..] and x[256i + 128 + 4l ..], so chain c's position is
+// the first (c < 16) or second (c >= 16) vector's x of lane 2 (c mod 16).  p0 rows (rows x k words), p1 alpha, p2 beta,
+// p3 1/alpha (glue), p4 (s, rho) per row; i0 rows, i1 k (a multiple of 256)
 extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
   if (row >= rows) return;
-  const float* x = reinterpret_cast<const float*>(a.p[0]) + (size_t)row * k;
+  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
+  const int src = 2 * (lane & 15);
   float s = 0.0f, part = 0.0f;
-  for (int j = lane * 4; j < k; j += 128) {
-    const float4 v = *reinterpret_cast<const float4*>(x + j);
-    s = fmaxf(s, fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))));
+#pragma unroll 4
+  for (int j = lane; j < k / 4; j += 64) {
+    const float4 v = x[j], w = x[j + 32];
+    s = fmaxf(s, fmaxf(fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))),
+                       fmaxf(fmaxf(fabsf(w.x), fabsf(w.y)), fmaxf(fabsf(w.z), fabsf(w.w)))));
+    const float lo = __shfl_sync(~0u, v.x, src), hi = __shfl_sync(~0u, w.x, src), e = lane < 16 ? lo : hi;
+    part = __fmaf_rn(e, e, part);
   }
-  for (int p = 8 * lane; p < k; p += 256) part = __fmaf_rn(x[p], x[p], part);
 #pragma unroll
   for (int o = 16; o; o >>= 1) { s = fmaxf(s, __shfl_xor_sync(~0u, s, o)); part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o)); }
   if (lane) return;
@@ -406,26 +412,37 @@ extern "C" __global__ void eprime(const Args a) {
 
 // X~ = e4m3(D), D = the atom with alpha x as its accumulator over E' and the F lines: per warp 16 rows x 128 of depth, sixteen
 // m16n8k32 atoms (A = the rows' E', B = eight F lines, C = alpha x).  p0 rows (FP32), p1 alpha, p2 E' codes (rows x 32), p3 F
-// lines (k x 32), p4 out codes (rows x k); i0 rows, i1 k.  grid (k / 128, rows / 64), 128 threads
+// lines (k x 32), p4 out codes (rows x k); i0 rows, i1 k.  grid (k / 128, rows / 64), 128 threads.  The block's 64 x 128 FP32
+// tile is staged by cp.async first (a warp's copy is one row's 512 bytes), so every row is read whole and at once.
 constexpr int FORM_ROW = 144;   // shared bytes per staged row: 128 codes, padded so the quads' stores hit distinct banks
+constexpr int FORM_X = 544;     // shared bytes per staged FP32 row: 512, padded so a half-warp's float2 reads hit 32 banks
 extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) {
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
+  __shared__ __align__(16) uint8_t sX[64 * FORM_X];
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, g = lane / 4, q = lane % 4, k = a.i[1];
   const int t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, rw = r0 + 16 * warp;
   const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]);
-  const float* x = reinterpret_cast<const float*>(a.p[0]);
+  const uint8_t* x = reinterpret_cast<const uint8_t*>(a.p[0]) + ((size_t)r0 * k + t0) * 4;
   const float* alpha = reinterpret_cast<const float*>(a.p[1]);
+#pragma unroll
+  for (int j = 0; j < 16; j++) {
+    const int r = warp + 4 * j;
+    cp16(sX + r * FORM_X + 16 * lane, x + (size_t)r * k * 4 + 16 * lane);
+  }
+  cp_commit();
   const uint32_t fa[4] = {ld32(E + (size_t)(rw + g) * 32 + 4 * q), ld32(E + (size_t)(rw + g + 8) * 32 + 4 * q),
                           ld32(E + (size_t)(rw + g) * 32 + 16 + 4 * q), ld32(E + (size_t)(rw + g + 8) * 32 + 16 + 4 * q)};
   const float al0 = alpha[rw + g], al1 = alpha[rw + g + 8];
-  const float* x0 = x + (size_t)(rw + g) * k + t0 + 2 * q;
-  const float* x1 = x0 + (size_t)8 * k;
+  cp_wait<0>();
+  __syncthreads();
+  const uint8_t* x0 = sX + (16 * warp + g) * FORM_X + 8 * q;
+  const uint8_t* x1 = x0 + 8 * FORM_X;
 #pragma unroll 4
   for (int nb = 0; nb < 16; nb++) {
     const uint8_t* line = F + (size_t)(t0 + 8 * nb + g) * 32 + 4 * q;
     const uint32_t fb[2] = {ld32(line), ld32(line + 16)};
-    const float2 v0 = *reinterpret_cast<const float2*>(x0 + 8 * nb), v1 = *reinterpret_cast<const float2*>(x1 + 8 * nb);
+    const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * nb), v1 = *reinterpret_cast<const float2*>(x1 + 32 * nb);
     float d[4] = {__fmul_rn(al0, v0.x), __fmul_rn(al0, v0.y), __fmul_rn(al1, v1.x), __fmul_rn(al1, v1.y)};
     qmma(d, fa, fb);
     const int c = 8 * nb + 2 * q;
@@ -592,17 +609,72 @@ DEV void store32(uint8_t* p, const uint64_t* h) {
   reinterpret_cast<ulonglong2*>(p)[1] = make_ulonglong2(h[2], h[3]);
 }
 
-// message digests: TurboSHAKE128(le32 C~ of the 32-column chunk || le32 U of the chunk, D = 0x21) per (row, chunk).
+// TurboSHAKE128 of a warp's 32 messages, one a lane, each NL little-endian 64-bit lanes, staged 16 lanes (128 bytes) at a time
+// through `ring` (the warp's 4 KB): chunk c of message s is the 8 16-byte pieces at chunk(c) + s * stride.  A load covers 4
+// messages' 128 bytes, and the next chunk's loads are in flight while this one is absorbed.  Piece p of message s sits at slot
+// p ^ (s & 7) of its 128-byte row, so the stores and the lanes' reads spread over the banks.  Messages past `live` read zeros.
+template <int NL, uint64_t DS, class Chunk>
+DEV void turboshake_warp(const Chunk& chunk, size_t stride, int live, uint4* ring, uint64_t* out) {
+  static_assert(NL % 16 == 0, "whole chunks");
+  const int lane = threadIdx.x % 32;
+  uint4 pre[8];
+  auto fetch = [&](int c) {
+    const uint4* base = chunk(c);
+#pragma unroll
+    for (int r = 0; r < 8; r++) {
+      const int s = lane / 8 + 4 * r;
+      pre[r] = s < live ? base[s * stride + lane % 8] : make_uint4(0, 0, 0, 0);
+    }
+  };
+  auto stage = [&]() {
+    __syncwarp();
+#pragma unroll
+    for (int r = 0; r < 8; r++) {
+      const int s = lane / 8 + 4 * r;
+      ring[s * 8 + ((lane % 8) ^ (s & 7))] = pre[r];
+    }
+    __syncwarp();
+  };
+  const uint64_t* mine = reinterpret_cast<const uint64_t*>(ring + lane * 8);
+  auto word = [&](int i) {
+    if ((i & 15) == 0) {
+      stage();
+      if (i + 16 < NL) fetch((i >> 4) + 1);
+    }
+    return mine[2 * (((i & 15) >> 1) ^ (lane & 7)) + (i & 1)];
+  };
+  uint64_t s[25];
+#pragma unroll
+  for (int i = 0; i < 25; i++) s[i] = 0;
+  fetch(0);
+#pragma unroll 1
+  for (int b = 0; b < NL / 21; b++) {
+#pragma unroll
+    for (int w = 0; w < 21; w++) s[w] ^= word(b * 21 + w);
+    keccak12(s);
+  }
+  constexpr int rem = NL % 21;
+#pragma unroll
+  for (int w = 0; w < rem; w++) s[w] ^= word(NL / 21 * 21 + w);
+  s[rem] ^= DS;
+  s[20] ^= 0x8000000000000000ULL;
+  keccak12(s);
+#pragma unroll
+  for (int i = 0; i < 4; i++) out[i] = s[i];
+}
+
+// message digests: TurboSHAKE128(le32 C~ of the 32-column chunk || le32 U of the chunk, D = 0x21) per (row, chunk); message t
+// is C~'s and U's 128 bytes at 128 t.  A warp hashes 32 consecutive messages.
 // p0 C~ (rows x cols), p1 U, p2 out (rows x cols/32 x 32 B); i0 rows, i1 cols
 extern "C" __global__ void __launch_bounds__(128) hash_msg(const Args a) {
-  const int cols = a.i[1], per = cols / 32;
-  const size_t m = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (m >= (size_t)a.i[0] * per) return;
-  const uint64_t* c = reinterpret_cast<const uint64_t*>(a.p[0]) + m * 16;
-  const uint64_t* u = reinterpret_cast<const uint64_t*>(a.p[1]) + m * 16;
+  __shared__ uint4 ring[4][256];
+  const size_t total = (size_t)a.i[0] * (a.i[1] / 32), t0 = (size_t)(blockIdx.x * 4 + threadIdx.x / 32) * 32, t = t0 + threadIdx.x % 32;
+  if (t0 >= total) return;
+  const uint4* c = reinterpret_cast<const uint4*>(a.p[0]) + t0 * 8;
+  const uint4* u = reinterpret_cast<const uint4*>(a.p[1]) + t0 * 8;
   uint64_t h[4];
-  turboshake<32, 0x21>([&](int i) { return i < 16 ? c[i] : u[i - 16]; }, h);
-  store32(reinterpret_cast<uint8_t*>(a.p[2]) + m * 32, h);
+  turboshake_warp<32, 0x21>([&](int ch) { return ch ? u : c; }, 8, (int)min((size_t)32, total - t0), ring[threadIdx.x / 32], h);
+  if (t < total) store32(reinterpret_cast<uint8_t*>(a.p[2]) + t * 32, h);
 }
 
 // tile leaves: TurboSHAKE128 of a 64 x 64 tile's 128 message digests (rows in order, 2 chunks each), D = 0x22.
@@ -618,17 +690,17 @@ extern "C" __global__ void __launch_bounds__(64) hash_leaf(const Args a) {
   store32(reinterpret_cast<uint8_t*>(a.p[1]) + (size_t)t * 32, h);
 }
 
-// A's commitment, modeled: TurboSHAKE128 of each 1,024-byte segment of an FP32 row, D = 0x23.  p0 rows, p1 out (rows x segs x
-// 32 B); i0 rows, i1 row bytes
+// A's commitment, modeled: TurboSHAKE128 of each 1,024-byte segment of an FP32 row, D = 0x23.  The rows are contiguous and
+// whole segments, so segment t is the 1,024 bytes at 1,024 t; a warp hashes 32 consecutive segments.  p0 rows, p1 out
+// (rows x segs x 32 B); i0 rows, i1 row bytes (a multiple of 1,024)
 extern "C" __global__ void __launch_bounds__(128) hash_rows_f32(const Args a) {
-  constexpr int NL = 128;
-  const int rs = a.i[1], segs = rs / (8 * NL);
-  const size_t t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= (size_t)a.i[0] * segs) return;
-  const uint64_t* src = reinterpret_cast<const uint64_t*>(a.p[0] + (t / segs) * rs + (t % segs) * 8 * NL);
+  __shared__ uint4 ring[4][256];
+  const size_t total = (size_t)a.i[0] * (a.i[1] / 1024), t0 = (size_t)(blockIdx.x * 4 + threadIdx.x / 32) * 32, t = t0 + threadIdx.x % 32;
+  if (t0 >= total) return;
+  const uint4* src = reinterpret_cast<const uint4*>(a.p[0]) + t0 * 64;
   uint64_t h[4];
-  turboshake<NL, 0x23>([&](int i) { return src[i]; }, h);
-  store32(reinterpret_cast<uint8_t*>(a.p[1]) + t * 32, h);
+  turboshake_warp<128, 0x23>([&](int ch) { return src + 8 * ch; }, 64, (int)min((size_t)32, total - t0), ring[threadIdx.x / 32], h);
+  if (t < total) store32(reinterpret_cast<uint8_t*>(a.p[1]) + t * 32, h);
 }
 
 // words differing between two buffers: p0, p1 (u32), p2 counter (u64); i0 count (in words, < 2^31 per launch)
