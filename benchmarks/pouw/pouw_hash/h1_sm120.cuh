@@ -269,7 +269,7 @@ DEV void h1_top(uint64_t tree, const uint32_t* dom, uint64_t count, uint64_t wid
 // Dynamic shared memory: max(4 warps rows_w_words(rb), 32 (width + 32)) bytes.
 // p0 A's rows, p1 the tree (level 0 at offset 0), p2 the domain id, p3 the counter (u32), p4 E_A's line key out, p5 the unit
 // (salt ‖ root_B ‖ u64 index ‖ blake3("pearl-c/v0/seed-A"), 104 B), p6 seed_A out (0: none); i0 rows, i1 row bytes, i2 width
-extern "C" __global__ void __launch_bounds__(1024) h1_commit(const Args a) {
+extern "C" __global__ void __launch_bounds__(256) h1_commit(const Args a) {
   extern __shared__ uint32_t sh[];
   const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
   const uint64_t count = (uint64_t)a.i[0], width = (uint64_t)a.i[2], row = (uint64_t)blockIdx.x * (blockDim.x / 32) + warp;
