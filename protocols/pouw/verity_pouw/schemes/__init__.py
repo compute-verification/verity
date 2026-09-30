@@ -9,10 +9,10 @@ from typing import Any
 from ..protocol import PoUWScheme
 
 
-def _ncp(perm: str) -> Callable[..., PoUWScheme]:
+def _ncp(perm: str, version: int = 1) -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
         from .ncp import NCP
-        return NCP(perm, **config)
+        return NCP(perm, version=version, **config)
     return make
 
 
@@ -25,6 +25,7 @@ def _pearl(**config: Any) -> PoUWScheme:
 SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "ncp-v1": _ncp("word"),
     "ncp-v1-shift24": _ncp("shift24"),
+    "ncp-v2": _ncp("word", version=2),
     "pearl-fp8-v4": _pearl,
 }
 

@@ -1,0 +1,198 @@
+{
+ "schema": "verity-pouw/ncp-vectors/v1",
+ "scheme": "ncp-v2",
+ "cases": [
+  {
+   "case": "small-word",
+   "scheme": "ncp-v2",
+   "shape": [
+    16,
+    64,
+    64
+   ],
+   "tile": {
+    "rows": [
+     0,
+     16
+    ],
+    "cols": [
+     16,
+     32
+    ]
+   },
+   "index": 7,
+   "weight": 3,
+   "salt": "933eb10d9ecfccf0cc5d3a1ad77e92bb615473665e9a17f0c36e5ccdb6652a76",
+   "root_a": "f2a9f4fb0b7b9230582fbe48374ac7cfa264bfd90b745ed6dfbce280c7843128",
+   "root_b": "aa94ef5e4f6c3b90726108491db399a4bb6efc2129b6fd20e2ef08fa71fdea33",
+   "x_row0": [
+    -71,
+    39,
+    29,
+    -57,
+    -54,
+    10,
+    13,
+    17,
+    -30,
+    -38,
+    -66,
+    37,
+    79,
+    -3,
+    -42,
+    4
+   ],
+   "y_col0": [
+    -42,
+    0,
+    -28,
+    -38,
+    25,
+    71,
+    21,
+    52,
+    17,
+    -23,
+    -57,
+    40,
+    28,
+    47,
+    7,
+    10
+   ],
+   "digest": "387a99560aa358358f0ac35d4836173123d29f1749aabd86ea93cee79df5f82c",
+   "useful_sha256": "5bda59c0e5029b455edca50a9dc3d00dcbc01405831907679a83037fc0469008",
+   "useful_00": -1409,
+   "strip_digest": "515431e7b945b2cdb2ef20b040576773be207ae4551d17a657b12d138b0922f3"
+  },
+  {
+   "case": "small-word-strip1",
+   "scheme": "ncp-v2",
+   "shape": [
+    32,
+    64,
+    64
+   ],
+   "tile": {
+    "rows": [
+     16,
+     32
+    ],
+    "cols": [
+     0,
+     16
+    ]
+   },
+   "index": 9,
+   "weight": 4,
+   "salt": "a0f6e19a4ddd02af0d9d6f71b04629f63385eaa91ceb473d7cbf8b0aba27feb5",
+   "root_a": "6971c285a13604a95700a27b86566a524ae1cb097082b79b052e73d9a78ae90f",
+   "root_b": "1e37feb507a14a9acf9b7ec0f0cdee603c7ae6f7c49ec06927f57f85d0d62911",
+   "x_row0": [
+    16,
+    23,
+    -23,
+    21,
+    -28,
+    42,
+    -37,
+    31,
+    45,
+    -20,
+    7,
+    17,
+    40,
+    -16,
+    -68,
+    -61
+   ],
+   "y_col0": [
+    -5,
+    24,
+    -20,
+    -19,
+    -43,
+    20,
+    1,
+    38,
+    21,
+    -38,
+    62,
+    20,
+    26,
+    89,
+    -11,
+    65
+   ],
+   "digest": "a0e0d0d29733f6d8b35386ad455be3a6cd44fdbb3575574e3d16e517d10c10a2",
+   "useful_sha256": "8bc9e48b42b6c97c5e2e01d72c832c6c01df0d4e8c7c8684a89d4e778bbafdd7",
+   "useful_00": -7884,
+   "strip_digest": "a326c1cfb51ab10b96c6430f0ae20f53575ad131f9379955a11e5c6b5877eb71"
+  },
+  {
+   "case": "lead-word",
+   "scheme": "ncp-v2",
+   "shape": [
+    16,
+    1088,
+    1600
+   ],
+   "tile": {
+    "rows": [
+     0,
+     16
+    ],
+    "cols": [
+     48,
+     64
+    ]
+   },
+   "index": 18446744073709551615,
+   "weight": 11,
+   "salt": "dc8580b215333f1597c39e0fcd75bca4d08459dc9cc61ebd70ed95496da15844",
+   "root_a": "2446df298489a2047e9ce8905b7a062df7362045f02f1f543185e2d78256635f",
+   "root_b": "89f58f85d8333d3cb73f360dba6d4e56409f98d132ad4e152ccaac090929890f",
+   "x_row0": [
+    60,
+    -18,
+    12,
+    2,
+    16,
+    70,
+    34,
+    -15,
+    57,
+    -43,
+    20,
+    -38,
+    9,
+    -44,
+    7,
+    -4
+   ],
+   "y_col0": [
+    3,
+    38,
+    -47,
+    -39,
+    2,
+    8,
+    -11,
+    -29,
+    58,
+    12,
+    -17,
+    41,
+    -63,
+    47,
+    31,
+    5
+   ],
+   "digest": "f88b8b2e09ba25fbaf013ceb3894c477cf5b7544a3f432507e16cfa2f4e6d6d3",
+   "useful_sha256": "c6bb1c8b3fbf54e52cfeb4923bf655bc697d7ab0f4dc90a230f0c3d86b6eba85",
+   "useful_00": -89144,
+   "strip_digest": "a484b2fa54268af0c668ff3d641937db845420dd4aa41671c881f4bada7f5e2e"
+  }
+ ]
+}
