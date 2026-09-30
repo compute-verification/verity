@@ -158,11 +158,12 @@ def check(kind_name: str, src: str, y: bytes, a: bytes, sf: bytes | None, m: int
 def preflight_y(src: str, m: int, n: int, seed: int) -> bytes:
     """A y whose derive exercises the kinds' edge cases: random full-entropy rows, rows of small integers (exact ties in every
     format after scaling), a zero row, a row of negative zeros, rows with one large outlier (underflow to zero and
-    subnormals), and a row of the same value."""
+    subnormals), a row of the same value, a row of FP32 subnormals (a row scale past 2^127) and a row near FP32's top (past
+    2^-126)."""
     rng = np.random.default_rng(seed)
     rows = []
     for r in range(m):
-        t = r % 7
+        t = r % 9
         if t == 0:
             v = rng.standard_normal(n) * 2.0 ** rng.integers(-8, 12)
         elif t == 1:
@@ -176,8 +177,12 @@ def preflight_y(src: str, m: int, n: int, seed: int) -> bytes:
             v[rng.integers(n)] = 2.0 ** 30
         elif t == 5:
             v = np.full(n, 3.0 * 2.0 ** rng.integers(-5, 5))
-        else:
+        elif t == 6:
             v = rng.standard_normal(n) * np.exp(rng.standard_normal(n) * 3)
+        elif t == 7:
+            v = rng.standard_normal(n) * 2.0 ** -140
+        else:
+            v = np.clip(rng.standard_normal(n), -7, 7) * 2.0 ** 125
         rows.append(v)
     y = np.array(rows)
     if src == "bf16":

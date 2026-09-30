@@ -7,6 +7,7 @@
 #include <cuda_fp8.h>
 #include <cuda_runtime.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -279,9 +280,12 @@ int ph_xor_byte(void* p, size_t off, int mask, void* stream) {
 // saturating, with real block scales (UE8M0 per 32, UE4M3 per 16) in the 128 x 4 tiled layout.  derive.py's numpy twin must
 // give the same bytes (checked on the device by the preflight, and on every chain by its gate).
 
+// It is in the plain GEMM's divisor too, so it is kept to about a launch: a block per row, 8 columns per thread in registers,
+// 16-byte loads and stores where y and A allow them, block amaxes by lane shuffles.
+
 enum { DY_BF16 = 0, DY_INT32 = 1, DY_F32 = 2 };
 enum { DV_F32 = 0, DV_BF16 = 1, DV_E4M3 = 2, DV_MXFP8 = 3, DV_NVFP4 = 4, DV_MXFP4 = 5, DV_INT8 = 6, DV_KINDS = 7 };
-constexpr int DERIVE_THREADS = 256;
+constexpr int DERIVE_MAX_THREADS = 1024;
 
 __device__ __forceinline__ int derive_t(int kind) {
   switch (kind) {
@@ -297,6 +301,43 @@ __device__ __forceinline__ float dy_load(int src, const void* y, size_t i) {
   if (src == DY_BF16) return __uint_as_float(uint32_t(static_cast<const uint16_t*>(y)[i]) << 16);
   if (src == DY_INT32) return __int2float_rn(static_cast<const int32_t*>(y)[i]);
   return static_cast<const float*>(y)[i];
+}
+
+// y[i .. i + 7]; `vec`: i is a multiple of 8 and y is 16-byte aligned.
+__device__ __forceinline__ void dy_load8(int src, const void* y, size_t i, bool vec, float* v) {
+  if (!vec) {
+    for (int j = 0; j < 8; ++j) v[j] = dy_load(src, y, i + j);
+  } else if (src == DY_BF16) {
+    const uint4 q = *reinterpret_cast<const uint4*>(static_cast<const uint16_t*>(y) + i);
+    const uint32_t w[4] = {q.x, q.y, q.z, q.w};
+    for (int j = 0; j < 4; ++j) {
+      v[2 * j] = __uint_as_float(w[j] << 16);
+      v[2 * j + 1] = __uint_as_float(w[j] & 0xffff0000u);
+    }
+  } else {
+    const uint4* p = reinterpret_cast<const uint4*>(static_cast<const uint32_t*>(y) + i);
+    const uint4 q0 = p[0], q1 = p[1];
+    const uint32_t w[8] = {q0.x, q0.y, q0.z, q0.w, q1.x, q1.y, q1.z, q1.w};
+    for (int j = 0; j < 8; ++j) v[j] = src == DY_INT32 ? __int2float_rn(int32_t(w[j])) : __uint_as_float(w[j]);
+  }
+}
+
+// x * 2^s rounded once, which is ldexpf's result: a multiply by the exact power of two where it is a float.
+__device__ __forceinline__ float scale2(float x, int s) {
+  if (s < -149 || s > 127) return ldexpf(x, s);
+  return __fmul_rn(x, s >= -126 ? __int_as_float((s + 127) << 23) : __int_as_float(1 << (s + 149)));
+}
+
+__device__ __forceinline__ void put_bytes(uint8_t* p, const uint8_t* b, int nb, bool vec) {
+  if (!vec) {
+    for (int i = 0; i < nb; ++i) p[i] = b[i];
+  } else if (nb >= 16) {
+    for (int i = 0; i < nb; i += 16) *reinterpret_cast<uint4*>(p + i) = *reinterpret_cast<const uint4*>(b + i);
+  } else if (nb == 8) {
+    *reinterpret_cast<uint2*>(p) = *reinterpret_cast<const uint2*>(b);
+  } else {
+    *reinterpret_cast<uint32_t*>(p) = *reinterpret_cast<const uint32_t*>(b);
+  }
 }
 
 __device__ __forceinline__ uint8_t e4m3_rne(float x) {
@@ -333,61 +374,81 @@ __device__ __forceinline__ float block_max(float v, float* red) {
   return red[0];
 }
 
+// Each thread holds columns c0 .. c0 + 7 of a pass, so a scale block spans 2 (NVFP4) or 4 (MX) adjacent lanes. `yvec`: n % 8 ==
+// 0 and y 16-byte aligned; `avec`: A 16-byte aligned (k % 8 == 0 always).
 __global__ void k_derive(int src, const void* __restrict__ y, int n, int kind, uint8_t* __restrict__ a,
-                         uint8_t* __restrict__ sf, int k) {
+                         uint8_t* __restrict__ sf, int k, bool yvec, bool avec) {
   __shared__ float red[32];
   const int r = blockIdx.x;
   const size_t yr = size_t(r) * n, ar = size_t(r) * k;
-  float amax = 0.f;
-  for (int c = threadIdx.x; c < n; c += blockDim.x) amax = fmaxf(amax, fabsf(dy_load(src, y, yr + c)));
+  float amax = 0.f, v[8];
+  if (yvec) {
+    for (int c = 8 * threadIdx.x; c < n; c += 8 * blockDim.x) {
+      dy_load8(src, y, yr + c, true, v);
+      for (int j = 0; j < 8; ++j) amax = fmaxf(amax, fabsf(v[j]));
+    }
+  } else {
+    for (int c = threadIdx.x; c < n; c += blockDim.x) amax = fmaxf(amax, fabsf(dy_load(src, y, yr + c)));
+  }
   amax = block_max(amax, red);
   int e = 0;
   if (amax > 0.f && isfinite(amax)) frexpf(amax, &e);
   const int shift = amax > 0.f && isfinite(amax) ? derive_t(kind) - e : 0;
-  auto x = [&](int c) { return ldexpf(dy_load(src, y, yr + c % n), shift); };
-  switch (kind) {
-    case DV_F32:
-      for (int c = threadIdx.x; c < k; c += blockDim.x) reinterpret_cast<float*>(a)[ar + c] = x(c);
-      break;
-    case DV_BF16:
-      for (int c = threadIdx.x; c < k; c += blockDim.x)
-        reinterpret_cast<uint16_t*>(a)[ar + c] = __bfloat16_as_ushort(__float2bfloat16_rn(x(c)));
-      break;
-    case DV_E4M3:
-      for (int c = threadIdx.x; c < k; c += blockDim.x) a[ar + c] = e4m3_rne(x(c));
-      break;
-    case DV_INT8:
-      for (int c = threadIdx.x; c < k; c += blockDim.x) a[ar + c] = uint8_t(int8_t(fminf(fmaxf(rintf(x(c)), -127.f), 127.f)));
-      break;
-    default: {  // block-scaled: MXFP8 (E4M3, UE8M0 per 32), NVFP4 (E2M1, UE4M3 per 16), MXFP4 (E2M1, UE8M0 per 32)
-      const int bs = kind == DV_NVFP4 ? 16 : 32, cols = k / bs;
-      for (int b = threadIdx.x; b < cols; b += blockDim.x) {
-        float v[32], bmax = 0.f;
-        for (int i = 0; i < bs; ++i) {
-          v[i] = x(b * bs + i);
-          bmax = fmaxf(bmax, fabsf(v[i]));
-        }
-        uint8_t code[32], scale;
+  const int bs = kind == DV_NVFP4 ? 16 : 32, lanes = bs / 8;
+  const size_t elem2 = kind == DV_F32 ? 8 : kind == DV_BF16 ? 4 : kind == DV_NVFP4 || kind == DV_MXFP4 ? 1 : 2;  // 2 x bytes
+  for (int base = 0; base < k; base += 8 * blockDim.x) {
+    const int c0 = base + 8 * threadIdx.x;
+    const bool on = c0 < k;
+    if (on) {
+      if (yvec) {
+        dy_load8(src, y, yr + c0 % n, true, v);
+      } else {
+        for (int j = 0; j < 8; ++j) v[j] = dy_load(src, y, yr + (c0 + j) % n);
+      }
+      for (int j = 0; j < 8; ++j) v[j] = scale2(v[j], shift);
+    } else {
+      for (int j = 0; j < 8; ++j) v[j] = 0.f;
+    }
+    alignas(16) uint8_t out[32];
+    switch (kind) {
+      case DV_F32:
+        for (int j = 0; j < 8; ++j) reinterpret_cast<float*>(out)[j] = v[j];
+        break;
+      case DV_BF16:
+        for (int j = 0; j < 8; ++j) reinterpret_cast<uint16_t*>(out)[j] = __bfloat16_as_ushort(__float2bfloat16_rn(v[j]));
+        break;
+      case DV_E4M3:
+        for (int j = 0; j < 8; ++j) out[j] = e4m3_rne(v[j]);
+        break;
+      case DV_INT8:
+        for (int j = 0; j < 8; ++j) out[j] = uint8_t(int8_t(fminf(fmaxf(rintf(v[j]), -127.f), 127.f)));
+        break;
+      default: {  // block-scaled: MXFP8 (E4M3, UE8M0 per 32), NVFP4 (E2M1, UE4M3 per 16), MXFP4 (E2M1, UE8M0 per 32)
+        float bmax = 0.f;
+        for (int j = 0; j < 8; ++j) bmax = fmaxf(bmax, fabsf(v[j]));
+        for (int o = 1; o < lanes; o <<= 1) bmax = fmaxf(bmax, __shfl_xor_sync(0xffffffffu, bmax, o));
+        uint8_t code[8], scale;
         if (kind == DV_NVFP4) {
           scale = e4m3_rne(__fdiv_rn(bmax, 6.f));
-          float s = e4m3_value(scale);
-          for (int i = 0; i < bs; ++i) code[i] = s > 0.f ? e2m1_rne(__fdiv_rn(v[i], s)) : 0;
+          const float s = e4m3_value(scale);
+          for (int j = 0; j < 8; ++j) code[j] = s > 0.f ? e2m1_rne(__fdiv_rn(v[j], s)) : 0;
         } else {
           int eb = 0;
           if (bmax > 0.f) frexpf(bmax, &eb);
           int xs = bmax > 0.f ? eb - 1 - (kind == DV_MXFP8 ? 8 : 2) : -127;
           xs = xs < -127 ? -127 : xs > 127 ? 127 : xs;
           scale = uint8_t(xs + 127);
-          for (int i = 0; i < bs; ++i) code[i] = kind == DV_MXFP8 ? e4m3_rne(ldexpf(v[i], -xs)) : e2m1_rne(ldexpf(v[i], -xs));
+          for (int j = 0; j < 8; ++j) code[j] = kind == DV_MXFP8 ? e4m3_rne(scale2(v[j], -xs)) : e2m1_rne(scale2(v[j], -xs));
         }
         if (kind == DV_MXFP8) {
-          for (int i = 0; i < bs; ++i) a[ar + size_t(b) * bs + i] = code[i];
+          for (int j = 0; j < 8; ++j) out[j] = code[j];
         } else {
-          for (int i = 0; i < bs; i += 2) a[(ar + size_t(b) * bs + i) / 2] = uint8_t(code[i] | (code[i + 1] << 4));
+          for (int j = 0; j < 8; j += 2) out[j / 2] = uint8_t(code[j] | (code[j + 1] << 4));
         }
-        sf[sf_offset(r, b, cols)] = scale;
+        if (on && (threadIdx.x & (lanes - 1)) == 0) sf[sf_offset(r, c0 / bs, k / bs)] = scale;
       }
     }
+    if (on) put_bytes(a + (ar + c0) * elem2 / 2, out, int(8 * elem2 / 2), avec);
   }
 }
 
@@ -395,9 +456,13 @@ __global__ void k_derive(int src, const void* __restrict__ y, int n, int kind, u
 int ph_derive(int src, const void* y, int m, int n, int kind, void* a, void* sf, int k, void* stream) {
   if (kind < 0 || kind >= DV_KINDS || src < DY_BF16 || src > DY_F32) return fail_arg("ph_derive: unknown kind or source");
   const bool blocked = kind == DV_MXFP8 || kind == DV_NVFP4 || kind == DV_MXFP4;
-  if (m <= 0 || n <= 0 || k <= 0 || (blocked && (k % 32 || !sf))) return fail_arg("ph_derive: bad shape or no scale buffer");
-  k_derive<<<m, DERIVE_THREADS, 0, cudaStream_t(stream)>>>(src, y, n, kind, static_cast<uint8_t*>(a),
-                                                          static_cast<uint8_t*>(sf), k);
+  if (m <= 0 || n <= 0 || k <= 0 || k % 8 || (blocked && (k % 32 || !sf)))
+    return fail_arg("ph_derive: bad shape (k a multiple of 8, of 32 when block-scaled) or no scale buffer");
+  const int groups = (std::max(n, k) + 7) / 8;
+  const int threads = std::min(DERIVE_MAX_THREADS, std::max(32, (groups + 31) / 32 * 32));
+  const bool yvec = n % 8 == 0 && reinterpret_cast<uintptr_t>(y) % 16 == 0, avec = reinterpret_cast<uintptr_t>(a) % 16 == 0;
+  k_derive<<<m, threads, 0, cudaStream_t(stream)>>>(src, y, n, kind, static_cast<uint8_t*>(a), static_cast<uint8_t*>(sf), k,
+                                                    yvec, avec);
   CK(cudaGetLastError());
   return 0;
 }

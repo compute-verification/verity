@@ -696,39 +696,46 @@ def print_plan(args) -> int:
 
 PREFLIGHT_UNITS = 4099
 #: the derive preflight's y: rows past two 128-row scale tiles, n != k (columns wrap), k past one 4-block scale tile
-PREFLIGHT_DERIVE = (160, 384, 1024)
+#: (m, n, k, byte offset of y and A): scale tiles past one 128-row tile with columns wrapping (n < k); n % 8 != 0, y and A off
+#: 16-byte alignment, k < n and a partial warp (the kernel's scalar paths); several passes per row with a partial last one
+PREFLIGHT_DERIVE = ((160, 384, 1024, 0), (40, 3004, 2080, 4), (9, 4096, 16448, 0))
 
 
 def preflight_derive(dev, seed: int = 11) -> dict:
     """Every derive kind from every y format, on the device, against `derive.py`'s twin (what the chain gate checks with);
     the scale buffers are filled with 0xEE first, and no byte outside the scales' places may change."""
-    m, n, k = PREFLIGHT_DERIVE
-    ybuf, abuf, sbuf = dev.alloc(m * n * 4), dev.alloc(m * k * 4), dev.alloc(B.scale_bytes("ue4m3/16", m, k))
+    ynb = max(m * n * 4 + off for m, n, k, off in PREFLIGHT_DERIVE)
+    anb = max(m * k * 4 + off for m, n, k, off in PREFLIGHT_DERIVE)
+    snb = max(B.scale_bytes("ue4m3/16", m, k) for m, n, k, off in PREFLIGHT_DERIVE)
+    ybuf, abuf, sbuf = dev.alloc(ynb), dev.alloc(anb), dev.alloc(snb)
     out, bad = [], []
     try:
-        for src in DV.SRC:
-            y = DV.preflight_y(src, m, n, seed)
-            dev.write(ybuf.ptr, y)
-            for name, kind in DV.KINDS.items():
-                dev.memset(sbuf.ptr, 0xEE, sbuf.nbytes)
-                dev.derive(DV.SRC[src], ybuf.ptr, m, n, kind.id, abuf.ptr, sbuf.ptr, k)
-                dev.sync()
-                sf = dev.read(sbuf.ptr, sbuf.nbytes)
-                r = DV.check(name, src, y, dev.read(abuf.ptr, DV.a_bytes(kind, m, k)), sf, m, n, k)
-                if kind.block > 1:
-                    used = set(DV.sf_offsets(m, k // kind.block).ravel().tolist())
-                    r["stray_scale_bytes"] = sum(1 for i, b in enumerate(sf) if b != 0xEE and i not in used)
-                    r["ok"] = r["ok"] and r["stray_scale_bytes"] == 0
-                out.append(r)
-                if not r["ok"]:
-                    bad.append(f"{src}->{name}")
+        for m, n, k, off in PREFLIGHT_DERIVE:
+            for src in DV.SRC:
+                y = DV.preflight_y(src, m, n, seed)
+                dev.write(ybuf.ptr + off, y)
+                for name, kind in DV.KINDS.items():
+                    dev.memset(sbuf.ptr, 0xEE, sbuf.nbytes)
+                    dev.derive(DV.SRC[src], ybuf.ptr + off, m, n, kind.id, abuf.ptr + off, sbuf.ptr, k)
+                    dev.sync()
+                    sf = dev.read(sbuf.ptr, sbuf.nbytes)
+                    r = DV.check(name, src, y, dev.read(abuf.ptr + off, DV.a_bytes(kind, m, k)), sf, m, n, k)
+                    if kind.block > 1:
+                        used = set(DV.sf_offsets(m, k // kind.block).ravel().tolist())
+                        r["stray_scale_bytes"] = sum(1 for i, b in enumerate(sf) if b != 0xEE and i not in used)
+                        r["ok"] = r["ok"] and r["stray_scale_bytes"] == 0
+                    r["shape"] = [m, n, k, off]
+                    out.append(r)
+                    if not r["ok"]:
+                        bad.append(f"{m}x{n}x{k}+{off}: {src}->{name}")
     finally:
         for b in (ybuf, abuf, sbuf):
             dev.free(b)
     if bad:
         raise RuntimeError(f"the device derive differs from derive.py's twin for {bad}: "
                            f"{[r for r in out if not r['ok']][:2]}")
-    return {"shape": {"m": m, "n": n, "k": k}, "cases": [{k: r[k] for k in ("src", "kind", "a_bytes", "ok")} for r in out]}
+    return {"shapes": [list(s) for s in PREFLIGHT_DERIVE],
+            "cases": [{k: r[k] for k in ("shape", "src", "kind", "a_bytes", "ok")} for r in out]}
 
 
 def preflight_fill(dev, seed: int = 7) -> dict:
