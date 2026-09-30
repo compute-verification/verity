@@ -58,17 +58,28 @@ class _Tables:
         self.callees: dict[str, int] = {}
         self.types: dict[str, int] = {}
         self.type_json: list[Any] = []
+        self._seen: dict[int, tuple[Any, int]] = {}  # id(type or definition) -> (it, its index), so each object is keyed once
 
     def callee(self, fid: str) -> int:
         return self.callees.setdefault(fid, len(self.callees))
 
+    def callee_of(self, f: FunctionDefinition) -> int:
+        hit = self._seen.get(id(f))
+        if hit is None or hit[0] is not f:
+            hit = self._seen[id(f)] = (f, self.callee(_spec_id(f)))
+        return hit[1]
+
     def type(self, t) -> int:
+        hit = self._seen.get(id(t))
+        if hit is not None and hit[0] is t:
+            return hit[1]
         j = t.to_json()
         key = json.dumps(j, sort_keys=True, separators=(",", ":"))
         i = self.types.get(key)
         if i is None:
             i = self.types[key] = len(self.type_json)
             self.type_json.append(j)
+        self._seen[id(t)] = (t, i)
         return i
 
     def to_json(self) -> dict:
@@ -166,8 +177,7 @@ class _BodyEncoder:
             raise ValueError(f"{schema} bodies are encoded within a descriptor (interning tables)")
 
     def fn(self, f: FunctionDefinition) -> Any:
-        fid = _spec_id(f)
-        return fid if self.tables is None else self.tables.callee(fid)
+        return _spec_id(f) if self.tables is None else self.tables.callee_of(f)
 
     def type(self, t) -> Any:
         return t.to_json() if self.tables is None else self.tables.type(t)
@@ -293,8 +303,12 @@ def encode_program(program, schema: str = SCHEMA) -> dict:
     # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
     # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
     dup_objects: set[tuple[str, int]] = set()
+    visited: dict[int, FunctionDefinition] = {}  # a second visit of the same object changes nothing
 
     def visit(fn: FunctionDefinition) -> None:
+        if visited.get(id(fn)) is fn:
+            return
+        visited[id(fn)] = fn
         fid = _spec_id(fn)
         prev = seen.get(fid)
         if prev is not None:
