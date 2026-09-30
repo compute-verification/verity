@@ -81,6 +81,21 @@ def parse_fp4_routes(argv: list[str]) -> dict:
             "hot_rule": ns.hot_rule, "seed": ns.seed}
 
 
+def parse_ue4m3_scale(argv: list[str]) -> dict:
+    ap = _parser()
+    ap.add_argument("cmd", nargs="?", default="run")
+    ap.add_argument("--seconds", type=float, default=0.2)
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--clock-mhz", type=float, default=0.0)
+    ns, _ = ap.parse_known_args(argv)
+    return {"cmd": ns.cmd, "seconds": ns.seconds, "reps": ns.reps, "clock_mhz": ns.clock_mhz}
+
+
+UE4M3_SCALE_CLOSURE = ["benchmarks/pouw/ue4m3_scale.py", "benchmarks/pouw/kernels/ue4m3_scale.cu",
+                       "benchmarks/pouw/kernels/ue4m3_scale_gpu.py", "benchmarks/pouw/run_result.py",
+                       "benchmarks/pouw/fp4_emulation.py", "packages/verity/src/verity/ml/tc/**",
+                       "packages/verity/src/verity/errors.py"]
+
 FP4_EMULATION_CLOSURE = ["benchmarks/pouw/fp4_emulation.py", "benchmarks/pouw/kernels/fp4_emulation.cu",
                          "benchmarks/pouw/kernels/fp4_emulation_gpu.py", "benchmarks/pouw/run_result.py",
                          "packages/verity/src/verity/ml/tc/**", "packages/verity/src/verity/errors.py"]
@@ -103,6 +118,10 @@ POUW_FP4_EMULATION = Tool(name="pouw_fp4_emulation", version="1", command=["pyth
                           closure=FP4_EMULATION_CLOSURE,
                           key_params=["cmd", "family", "seed", "check_atoms", "seconds", "reps"],
                           produces=["bench-result/v1", "run-files/v1"], parse=parse_fp4_emulation)
+#: Pearl-C4's block-scale step on sm_120a: exact variants of the UE4M3 encode and div.rn reciprocal, gated, then timed.
+POUW_UE4M3_SCALE = Tool(name="pouw_ue4m3_scale", version="1", command=["python", "benchmarks/pouw/kernels/ue4m3_scale_gpu.py"],
+                        closure=UE4M3_SCALE_CLOSURE, key_params=["cmd", "seconds", "reps", "clock_mhz"],
+                        produces=["bench-result/v1", "run-files/v1"], parse=parse_ue4m3_scale)
 #: The same routes' bit-exactness on real-length chains, on the CPU (the pinned atom and BF16 step, vectorised).
 POUW_FP4_ROUTES = Tool(name="pouw_fp4_routes", version="1", command=["python", "benchmarks/pouw/fp4_emulation.py"],
                        closure=FP4_EMULATION_CLOSURE, key_params=["cmd", "k", "rows", "cols", "families", "hot_bits", "hot_rule", "seed"],
