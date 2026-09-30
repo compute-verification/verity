@@ -39,15 +39,31 @@ def _spec_histogram(program) -> dict[str, int]:
     return dict(sorted(h.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
-def _instance_sequence(program) -> list[dict]:
-    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py)."""
+def _instance_rows(program):
+    """The flat body as (spec, argument runs) rows — the comparator's unit (compare.py), one at a time."""
     from verity.ir.codec import _spec_id
     from verity.ir.refs import runs
-    rows = []
     for k, n in enumerate(program.fn.body.nodes):
-        rows.append({"i": k, "spec": _spec_id(n.fn), "form": n.form, "name": n.name,
-                     "args": [[list(r) for r in runs(a.refs)] for a in n.args]})
-    return rows
+        yield {"i": k, "spec": _spec_id(n.fn), "form": n.form, "name": n.name, "args": [[list(r) for r in runs(a.refs)] for a in n.args]}
+
+
+def _instance_sequence(program) -> list[dict]:
+    return list(_instance_rows(program))
+
+
+def _write_instances(f, head: dict, rows, chunk: int = 4096) -> None:
+    """`json.dump({**head, "rows": list(rows)}, f)`, the same text, written a chunk of rows at a time with `json.dumps` (its C encoder;
+    `json.dump` to a file always runs the Python one) and without the rows list."""
+    f.write(json.dumps(head)[:-1] + (', "rows": [' if head else '"rows": ['))
+    batch, first = [], True
+    for r in rows:
+        batch.append(r)
+        if len(batch) == chunk:
+            f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
+            batch, first = [], False
+    if batch:
+        f.write(("" if first else ", ") + json.dumps(batch)[1:-1])
+    f.write("]}")
 
 
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers, this driver,
@@ -537,9 +553,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
             json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
             with gzip.open(os.path.join(out, "instances.json.gz"), "wt") as f:
-                json.dump({"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
-                           "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None,
-                           "rows": _instance_sequence(program)}, f)
+                _write_instances(f, {"schema": "cb-a/instance-sequence/v1", "digest": digest, "correspondence_digest": corr_digest,
+                                     "params": [[n, str(t)] for n, t in program.fn.body.params] if hasattr(program.fn.body, "params") else None},
+                                 _instance_rows(program))
             # the artifact wrapper: identity = H(construction version || target profile || applicability || Program digest); digest unchanged
             art = ArtifactIdentity.build(construction_version(VLLM_BINDING_RULES), target,
                                          applicability_conditions(target, applied, res["attention_impls_observed"], res["export_facts"], sampling, res.get("tp"), launch), digest)
