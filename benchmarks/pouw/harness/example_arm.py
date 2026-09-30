@@ -69,7 +69,7 @@ class ExampleFp8:
         self._cands: dict = {}
 
     def build(self, ctx: dict) -> dict:
-        return {"kernels": "cuBLASLt (the harness's libpouw_harness.so)", "not_a_pouw_scheme": True}
+        return {"kernels": "cuBLASLt (the harness's libpouw_harness.so)", "not_a_pouw_scheme": True, "binaries": []}
 
     def domain(self, shape: Shape) -> str | None:
         return None if shape.m * shape.n * 2 <= MAX_D_BYTES else f"D is over {MAX_D_BYTES} bytes (the gate reads it)"

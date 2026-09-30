@@ -7,14 +7,17 @@
   python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
 
 The contract with arms (`arm.py`) and the steps are published in the project store's `internal/pouw/rtx-pro/workers/
-6-harness.md` ("Arm interface"). Per run: identity (`identity.py`), the fill and derive preflights; per shape: operand sets;
-gates, with the negative controls at the first shape before anything is timed; the baselines' autotune; at decode shapes, the
-dependent chains (`chain.py`) and their gates; interleaved timing of everything, the same way; the consistency gate; the
-report (`report.py`). Every failure stops what it guards and writes no timing for it.
+6-harness.md` ("Arm interface"). Per run: identity (`identity.py`), the fill and derive preflights; the SASS gate
+(`sass_gate.py`) on every arm's declared binaries and every mapped library with device code; per shape: operand sets; gates,
+with the negative controls at the first shape before anything is timed; the baselines' autotune; at decode shapes, the
+dependent chains (`chain.py`) and their gates; the SASS gate again on anything loaded since; interleaved timing of
+everything, the same way; the consistency gate; the report (`report.py`). Every failure stops what it guards and writes no
+timing for it.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its
-gate, or it couldn't run); 6 the consistency gate rejected an arm; 143 terminated (SIGTERM: a timeout or the fill queue's
-preemption). The JSON (`--out`) is written in every case.
+gate, or it couldn't run); 6 the consistency gate rejected an arm; 7 the SASS gate refused a binary (an FP32 .FTZ instruction,
+or a binary it couldn't read); 143 terminated (SIGTERM: a timeout or the fill queue's preemption). The JSON (`--out`) is
+written in every case.
 """
 
 from __future__ import annotations
@@ -39,10 +42,12 @@ import derive as DV
 import fill as F
 import identity as I
 import report as R
+import sass_gate as SG
 import schedule as S
 import shapes as SH
 
 EXIT_OK, EXIT_USAGE, EXIT_DEVICE, EXIT_NEGATIVE, EXIT_CONSISTENCY, EXIT_TERMINATED = 0, 2, 3, 5, 6, 143
+EXIT_SASS = SG.EXIT_FAIL
 METHODS = ("graph", "burst")
 DECODE_METHODS = ("dependent-chain", "independent")
 #: an arm's `inputs` -> the operands' fill format, and the family whose scale factors it gets
@@ -144,6 +149,7 @@ class Bench:
         self.items: list[dict] = []
         self.rejected: list[dict] = []
         self.chained = False
+        self.sass: SG.Gate | None = None
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
@@ -631,6 +637,8 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
                     e.chain.release()
             entries += kept
             row["decode_method"] = "dependent-chain"
+        if bench.sass is not None:
+            bench.sass.check(bench.sass.discover(), "mapped")
         order_seed = B.hash_seed(f"{args.seed}/{shape.label}/order")
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
@@ -848,7 +856,7 @@ def main(argv: list[str] | None = None) -> int:
 
     out: dict = {"harness": {"interface": A.VERSION, "argv": sys.argv if argv is None else argv, "started": now()},
                  "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}, "shapes": [], "arms": {}}
-    code, bench, lock, uuid = EXIT_DEVICE, None, None, None
+    code, bench, lock, uuid, sass = EXIT_DEVICE, None, None, None, None
     signal.signal(signal.SIGTERM, _terminated)
     try:
         import native as N
@@ -875,15 +883,19 @@ def main(argv: list[str] | None = None) -> int:
         out["clocks"] = lock or {"locked": False}
         out["clocks"]["label"] = "locked" if (lock or {}).get("locked") else args.clock_label or "unlocked"
         arms = [A.load(s) for s in args.arm]
+        sass = SG.Gate(log)
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
+            build = a.build({"device": dev, "arch": "sm_120a", "out_dir": str(args.out.parent)})
             out["arms"][a.name] = {"stream": a.stream, "precision": a.precision, "inputs": a.inputs,
-                                   "flag_sets": {r: sorted(f) for r, f in a.flag_sets.items()},
-                                   "build": a.build({"device": dev, "arch": "sm_120a", "out_dir": str(args.out.parent)})}
+                                   "flag_sets": {r: sorted(f) for r, f in a.flag_sets.items()}, "build": build}
+            sass.check(SG.declared(a.name, build), f"arm:{a.name}")
+        sass.check(sass.discover(), "mapped")
         kernels = B.cutlass_kernels(dev)
         out["cutlass_kernels"] = kernels
         lt_ws = dev.alloc(B.LT_WORKSPACE)
         bench = Bench(dev, nvml, args.reps, tuple(args.methods), log)
+        bench.sass = sass
         fams = [B.FAMILIES[f] for f in args.families]
         for i, shape in enumerate(SH.select(args.shapes)):
             log(f"shape {shape.label}")
@@ -895,6 +907,8 @@ def main(argv: list[str] | None = None) -> int:
         code, out["error"] = EXIT_USAGE, f"identity: {ex}"
     except NegativeControlFailed as ex:
         code, out["error"] = EXIT_NEGATIVE, f"negative control: {ex}"
+    except SG.SassGateFailed as ex:
+        code, out["error"] = EXIT_SASS, f"sass gate: {ex}"
     except Exception as ex:  # noqa: BLE001 - recorded in the JSON with its traceback
         code, out["error"] = EXIT_DEVICE, f"{type(ex).__name__}: {ex}"
         out["traceback"] = traceback.format_exc()
@@ -903,6 +917,8 @@ def main(argv: list[str] | None = None) -> int:
             import native as N
 
             out["clocks"]["reset"] = N.smi(uuid, "-rgc")
+        if sass is not None:
+            out["sass_gate"] = sass.report()
         if bench is not None:
             out["gates"] = [{"key": list(k), **v} for k, v in bench.ledger.records.items()]
             out["negative_controls"] = bench.negatives

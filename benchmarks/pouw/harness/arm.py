@@ -5,6 +5,11 @@ interface"); this module is that contract in code, and `check_arm` is what the h
 An arm is any object with the members of `Arm`; the harness loads it by ``module:Class`` (``--arm``), constructs it with no
 arguments, and calls `build` once. Device pointers and CUDA streams are Python ints; everything runs in the device's primary
 context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
+
+`build` returns the arm's build record (JSON), which names its ``binaries`` (v0.3): the path of every cubin, fatbin or
+library its kernels are loaded from, ``[]`` if they all come from libraries mapped into the process (those the SASS gate
+finds itself; a cubin loaded with ``cuModuleLoadData`` is never mapped, so it must be listed). `sass_gate.py` passes each
+before anything is timed: no FP32 FADD, FFMA or FMUL with .FTZ, so no -ftz=true or --use_fast_math build.
 """
 
 from __future__ import annotations
@@ -13,7 +18,7 @@ import importlib
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-VERSION = "v0.2"
+VERSION = "v0.3"
 
 STREAMS = ("fp8", "fp4")
 INPUTS = ("f32", "bf16", "e4m3", "e2m1-nv", "e2m1-mx", "int8")
