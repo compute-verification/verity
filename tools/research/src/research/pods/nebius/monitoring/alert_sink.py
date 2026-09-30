@@ -3,8 +3,8 @@
     python3 alert_sink.py [--listen 127.0.0.1:9403] [--dir /workspace/monitoring/alerts]
 
 Grafana's contact point `markdown-files` (alerting.yaml) POSTs each notification to /grafana. Its firing alerts become notes,
-<dir>/outbox/<YYYYMMDDTHHMMZ>-alert-<rule>-<id>.md, with the lane contract's front matter, for root's lane (`lane: verity-root`;
-the steward's alert_pull.sh also copies each to node1-dispatcher, which owns utilization). Each alert names the pod's SkyPilot job
+<dir>/outbox/<YYYYMMDDTHHMMZ>-alert-<rule>-<id>.md, with the lane contract's front matter, for the infra coordinator's lane
+(`lane: infra`; the steward's alert_pull.sh also copies each to node1-dispatcher, which owns utilization). Each alert names the pod's SkyPilot job
 and, from the job name's prefix (lanes.tsv), its owning lane. A Commit whose timeline shows `validate.sampled_replay` open is running
 its CPU replay while holding the GPU, by design until Daniel rules on moving replay off the GPU: those alerts go in a separate note
 tagged `replay-on-gpu`, apart from real stalls (they still count as idle in every busy % number). Every notification, resolved ones
@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-LANE = "verity-root"
+LANE = "infra"          # the infra coordinator (bc-17cc41f1) since 18:45Z; verity-root before
 REPLAY = "validate.sampled_replay"
 RUNS = "/workspace/jobs/runs"
 ROW_GLOBS = ("/workspace/cp/*/{row}/timeline.jsonl", "/workspace/jobs/*/{row}/timeline.jsonl", "/workspace/jobs/*/*/{row}/timeline.jsonl")
