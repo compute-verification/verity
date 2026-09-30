@@ -220,7 +220,7 @@ def _f32_bias_kind(ctx, add, K: int, N: int, own_rows: int, dot):
         V, T = TG.gemv_bias_geometry(active_target_profile(), K, N)
     except TG.UnregisteredTarget as e:
         refuse("numerics_unregistered", add, ctx.module_path(add), str(e))
-    return ctx.kind("gemv_bias_f32", add, K=K, N=N, V=V, T=T)
+    return ctx.kind("gemv_bias_f32", add, K=K, N=N, VEC=V, THREADS=T)
 
 
 def _request_step(ctx) -> int:
