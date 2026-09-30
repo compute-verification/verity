@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # h1_bench.py's ship, built off the node:
-#   hash_sm120a.cubin  hash.cu with CUDA 12.9.1 for sm_120a, build.sh's flags: the -h1 kernels as pushed and the tuned ones
+#   hash_sm120a.cubin  hash.cu (hash.cuh and hash_sm120.cuh) with CUDA 12.9.1 for sm_120a, build.sh's flags: the -h1 kernels as pushed and the tuned ones
 #                      (hash_rows_w, hash_tree_small, hash_leaf_p, hash_msg_v), refused on a ptxas warning, spill or stack frame
 #   h1_standin.cubin   h1_standin.cu: the decode GEMM's weight traffic (not a GEMM), derive_rows and the read-only L2 flush
 #   h1_vectors.json    the device gates, from the verifier's reference (h1_vectors.py; needs verity and blake3)

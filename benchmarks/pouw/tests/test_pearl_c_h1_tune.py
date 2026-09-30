@@ -115,21 +115,3 @@ def test_the_tile_tree_in_one_launch():
     want = MerkleTree(d, {i: vals[32 * i:32 * i + 32] for i in range(t)}, lambda _: TILE).commitment.root
     assert tree.raw[32 * (2 * t - 2):32 * (2 * t - 1)] == want
 
-
-@pytest.mark.parametrize("m,rb", [(32, 32768), (32, 16384), (5, 900), (3, 1024), (1, 64)])
-def test_the_fused_row_tree_is_merkle_trees_every_level(m, rb):
-    """hash_rows_tree: every row's leaf, the pads and every level in one CTA, where hash_rows_w, hash_pad and hash_tree_small
-    leave them, and the root MerkleTree's."""
-    rows = data(f"fused {m} {rb}", m * rb)
-    d = CommitmentDomain(BINDING, 7, RangeIndexedDomain(m), hash="blake3")
-    width = 1 << max(0, (m - 1).bit_length())
-    dom = T.buffer(d.domain_id)
-    fused, split = T.buffer(32 * 2 * width), T.buffer(32 * 2 * width)
-    T.launch("hash_rows_tree", 1, 32 * m, [T.buffer(rows), fused, dom], [m, rb], smem=4 * (m * T.rows_w_words(rb) + 16 * width))
-    T.launch("hash_rows_w", -(-m // 4), 128, [T.buffer(rows), split, dom], [m, rb], smem=4 * 4 * T.rows_w_words(rb))
-    if width > m:
-        T.launch("hash_pad", 1, 128, [split, dom], [m, width])
-    T.launch("hash_tree_small", 1, max(1, width // 2), [split, dom], [width])
-    assert fused.raw[:32 * (2 * width - 1)] == split.raw[:32 * (2 * width - 1)]
-    root = MerkleTree(d, {r: rows[r * rb:(r + 1) * rb] for r in range(m)}, lambda _: ROW).commitment.root
-    assert fused.raw[32 * (2 * width - 2):32 * (2 * width - 1)] == root

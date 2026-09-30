@@ -1,4 +1,4 @@
-"""A host build of `hash.cuh` that runs its kernels thread for thread, for byte tests of the -h1 kernels without a GPU.
+"""A host build of `hash.cuh` and `hash_sm120.cuh` that runs its kernels thread for thread, for byte tests of the -h1 kernels without a GPU.
 
 Every CUDA thread of a block is a host thread; `__syncthreads` and `__syncwarp` are one barrier over the block (stronger than
 a warp's, which the kernels here allow: every thread of a block reaches the same syncs), which a thread leaves when it
@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 
 HERE = Path(__file__).parent
-KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_rows_tree", "hash_pad", "hash_nodes",
+KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_nodes",
            "hash_tree_leaves", "hash_tree_small")
 
 PRELUDE = r"""
@@ -50,7 +50,8 @@ static std::vector<uint32_t> twin_dyn;
 
 
 def _source() -> str:
-    body = (HERE / "hash.cuh").read_text().replace("extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();")
+    body = ((HERE / "hash.cuh").read_text() + (HERE / "hash_sm120.cuh").read_text()).replace(
+        "extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace("#pragma once", "")
     runs = "".join(
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
         f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block;\n"
@@ -58,7 +59,7 @@ def _source() -> str:
         f"    blockIdx.x = b; std::barrier<> bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
         f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.arrive_and_drop(); }});\n"
         f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in KERNELS)
-    return PRELUDE + re.sub(r'#include "hash.cuh"', "", body) + runs
+    return PRELUDE + re.sub(r'#include "hash(_sm120)?.cuh"', "", body) + runs
 
 
 class Args(C.Structure):

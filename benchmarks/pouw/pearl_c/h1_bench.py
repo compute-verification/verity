@@ -170,13 +170,9 @@ def launch_tree(d: Bench, s, form: str, tree_p: int, dom_p: int, width: int) -> 
 
 def launch_a(d: Bench, s, form: str, rows_p: int, tree_p: int, dom_p: int, m: int, rb: int) -> None:
     """A's commitment: row leaves and tree.  pushed: hash_rows and a hash_nodes launch per level; tuned: hash_rows_w and
-    hash_tree_small; fused: hash_rows_tree, the whole tree in one CTA (m <= 32)."""
-    if form == "fused":
-        width = 1 << max(0, (m - 1).bit_length())
-        d.go(s, "hash_rows_tree", 1, 32 * m, (rows_p, tree_p, dom_p), (m, rb), smem=4 * (m * rows_w_words(rb) + 16 * width))
-    else:
-        launch_rows(d, s, form, rows_p, tree_p, dom_p, m, rb)
-        launch_tree(d, s, form, tree_p, dom_p, m)
+    hash_tree_small.  (A fused one-CTA form, r20260930-074624-555a, put every chunk on one SM: 187 us against 37.)"""
+    launch_rows(d, s, form, rows_p, tree_p, dom_p, m, rb)
+    launch_tree(d, s, form, tree_p, dom_p, m)
 
 
 def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: int, tree_p: int, keys: dict, dom_t: int,
@@ -221,7 +217,7 @@ def gates(d: Bench, V: dict) -> dict:
     for label, t in V["trees"].items():
         rows = shake(t["tag"], t["m"] * t["rb"])
         dp = d.put(bytes.fromhex(t["domain"]))
-        for form in ("pushed", "tuned", "fused"):
+        for form in ("pushed", "tuned"):
             rp, tp = d.put(rows), d.alloc(32 * 2 * t["m"])
             launch_a(d, None, form, rp, tp, dp, t["m"], t["rb"])
             d.sync()
@@ -320,7 +316,7 @@ def decode(d: Bench, reps: int) -> dict:
         if rb == ROW_F32:
             d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_F32]), (m * k,))
         if arm != "plain" and stage in ("all", "before"):
-            form = "pushed" if arm == "h1" else "fused" if arm.startswith("h1-fused") else "tuned"
+            form = "pushed" if arm == "h1" else "tuned"
             launch_a(d, s1, form, rows[rb], a_tree, dom_a, m, rb)
         if len(joins) >= 2:                                   # the side stream's slot from two calls back is free again
             d.wait(s1, joins[-2])
@@ -337,9 +333,8 @@ def decode(d: Bench, reps: int) -> dict:
             launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], keys, dom_t, tiled, n)
 
     arms = [("plain", ROW_F32, "all"), ("plain", ROW_BF16, "all"), ("h1", ROW_F32, "all"), ("h1-tuned", ROW_F32, "all"),
-            ("h1-tuned-side", ROW_F32, "all"), ("h1-fused", ROW_F32, "all"), ("h1-fused-side", ROW_F32, "all"),
-            ("h1", ROW_F32, "before"), ("h1-tuned", ROW_F32, "before"), ("h1-fused", ROW_F32, "before"),
-            ("h1-fused-side", ROW_BF16, "all"), ("h1-fused", ROW_BF16, "before")]
+            ("h1-tuned-side", ROW_F32, "all"), ("h1", ROW_F32, "before"), ("h1-tuned", ROW_F32, "before"),
+            ("h1-tuned", ROW_BF16, "all"), ("h1-tuned-side", ROW_BF16, "all")]
     graphs = {}
     for arm, rb, stage in arms:
         def body(arm=arm, rb=rb, stage=stage):
