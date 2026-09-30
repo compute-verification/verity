@@ -58,7 +58,8 @@ submit() {
   { read -r tree; read -r row; read -r repo; read -r rev; read -r mem; read -r max_min; } < <(item_get "$item" tree ROW REPO REVISION mem max_min)
   [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("template"))' "$item")" = config-run ] \
     || { echo "ITEM: a config-run item" >&2; exit 2; }
-  mem=${mem:-${VY_N2_MEM_GB:-64}} max_min=${VY_MAX_MIN:-${max_min:-130}}
+  # node 2 caps a guest with MemoryMax, node 1 only requests: a Build has used 2-3x its request (the steward, 18:05Z), so 3x, in 64-256
+  mem=${VY_N2_MEM_GB:-$(( ${mem:-32} * 3 < 64 ? 64 : ${mem:-32} * 3 > 256 ? 256 : ${mem:-32} * 3 ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
   local src model
   src=$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")
   model=/workspace/hf/hub/models--${repo//\//--}
