@@ -3613,16 +3613,22 @@ fn main() {
             let dump = arg("--dump", "");
             let split = (tables > 1).then(|| session_tables(&st, &inst, None, tables).ok()).flatten();
             let base = Plan { gpu: flag("--gpu"), tables, split, ..Plan::default() };
-            // the next session's witness is built beside this one (FC_PIPELINE=0: each session builds its own when it starts)
+            // the next sessions' witnesses are built beside this one, FC_PIPELINE_DEPTH (default 1) of them at a time: a deep unit's
+            // host witness is a few lane groups, so several share the cores (FC_PIPELINE=0: each session builds its own when it starts)
             let pipeline = tables <= 1 && std::env::var("FC_PIPELINE").as_deref() != Ok("0");
+            let depth = std::env::var("FC_PIPELINE_DEPTH").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1).max(1);
             let seeds: Vec<ProverSeed> = (0..warm + runs).map(|_| ProverSeed::from_os()).collect();
-            let mut next = None;
+            let mut ahead: std::collections::VecDeque<(usize, std::thread::JoinHandle<Prebuilt>)> = std::collections::VecDeque::new();
             for run in 0..warm + runs {
                 let mut plan = base.clone();
                 if pipeline {
-                    plan.prebuilt = next.take().map(|h| Arc::new(Mutex::new(Some(h))));
-                    if run + 1 < warm + runs {
-                        next = Some(prebuild(&st, &inst, &base, seeds[run + 1]));
+                    if ahead.front().is_some_and(|(r, _)| *r == run) {
+                        let (_, h) = ahead.pop_front().expect("this run's witness");
+                        plan.prebuilt = Some(Arc::new(Mutex::new(Some(h))));
+                    }
+                    let from = ahead.back().map_or(run + 1, |(r, _)| r + 1);
+                    for r in from..(run + 1 + depth).min(warm + runs) {
+                        ahead.push_back((r, prebuild(&st, &inst, &base, seeds[r])));
                     }
                 }
                 let mut tcp = TcpTransport::connect(&arg("--verifier", "127.0.0.1:7500")).unwrap();
