@@ -43,6 +43,7 @@ envs:
   CAMPAIGN: nebius-sweep
   HF_HOME: /workspace/hf
   CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
   HF_HUB_OFFLINE: "1"
   SWEEP_DIR: /workspace/cp/sweep
   PY: /workspace/jobs/venv312/bin/python
@@ -120,6 +121,7 @@ envs:
   CAMPAIGN: nebius-sweep
   HF_HOME: /workspace/hf
   CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
   HF_HUB_OFFLINE: "1"
   SWEEP_DIR: /workspace/cp/sweep
   PY: /workspace/jobs/venv312/bin/python

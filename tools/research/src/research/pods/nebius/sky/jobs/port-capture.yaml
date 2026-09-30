@@ -26,6 +26,7 @@ envs:
   CAMPAIGN: vllm-sm120-port
   HF_HOME: /workspace/hf
   CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
   HF_HUB_OFFLINE: "1"
   RESEARCH_RUNS: /workspace/jobs/runs
   UV_CACHE_DIR: /workspace/jobs/cache/uv
