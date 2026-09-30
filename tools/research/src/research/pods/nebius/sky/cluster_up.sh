@@ -15,12 +15,14 @@
 # 4. ~/.sky/config.yaml from sky-config.yaml (when absent), and the usage sampler: a 5-minute systemd timer appending
 #    usage_report.py's sample to /workspace/usage/queues.jsonl.
 # Idempotent: each step checks first. It installs the files beside it (kueue.yaml, sky-config.yaml, usage_report.py).
+# Another server runs its own single-node cluster from the same code, e.g. the PoUW server:
+#   VY_MACHINE=vy-nebius-2 VY_POOL=vy-nebius-2 VY_QUEUES=kueue-pouw.yaml VY_DIRECT_GPUS=none cluster_up.sh --apply
 set -euo pipefail
 export PATH=$HOME/.local/bin:/usr/local/bin:$PATH KUBECONFIG=${KUBECONFIG:-$HOME/.kube/config}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 mode=${1:---plan}
 case $mode in --plan|--apply) ;; *) echo "usage: cluster_up.sh --plan | --apply" >&2; exit 2 ;; esac
-POOL=vy-nebius
+POOL=${VY_POOL:-vy-nebius}
 CTX=ssh-$POOL
 MACHINE=${VY_MACHINE:-vy-nebius-1}
 SKY_VERSION=0.13.0
@@ -33,7 +35,8 @@ step() { echo "== $*"; }
 run() { if [ "$mode" = --apply ]; then "$@"; else echo "   would run: $*"; fi; }
 
 [ -f /var/lib/vy-setup.done ] || { echo "not the Nebius server (no /var/lib/vy-setup.done)" >&2; exit 1; }
-[ -f "$SRC/kueue.yaml" ] || { echo "no kueue.yaml beside $0: run it from a synced checkout" >&2; exit 1; }
+QUEUES=$SRC/${VY_QUEUES:-kueue.yaml}
+[ -f "$QUEUES" ] || { echo "no $QUEUES beside $0: run it from a synced checkout" >&2; exit 1; }
 echo "machine $MACHINE, private address $IP, pool $POOL, files from $SRC ($mode)"
 
 step "1. SkyPilot $SKY_VERSION and its API server"
@@ -86,7 +89,8 @@ else
   echo "no node with address $IP in $CTX" >&2; exit 1
 fi
 
-step "2b. GPUs kept for direct runs: ${VY_DIRECT_GPUS:=4,5,6,7} (nvidia-smi indices; none: all GPUs to Kubernetes)"
+[ -n "${VY_DIRECT_GPUS:-}" ] || VY_DIRECT_GPUS=$(cat /etc/vy/direct-gpus 2>/dev/null || echo 4,5,6,7)
+step "2b. GPUs kept for direct runs: $VY_DIRECT_GPUS (nvidia-smi indices; none: all GPUs to Kubernetes)"
 # While lanes still run GPU work directly (research run --on, outside Kubernetes), a placeholder pod, vy-system/direct-gpus, holds
 # those GPUs through the device plugin, so no job is scheduled onto them. The plugin picks the devices, so the pod is made until
 # one holds exactly VY_DIRECT_GPUS (the plugin hands the next pod the rest). Device minors are not nvidia-smi indices here
@@ -131,6 +135,9 @@ elif [ "$(held direct-gpus)" != "$VY_DIRECT_GPUS" ] && [ "$(held direct-gpus-try
     echo "   holding GPUs $VY_DIRECT_GPUS in vy-system/direct-gpus-try"
   fi
 fi
+# gpu-lease hands out only these (and nothing once they're `none`), so a direct lease never lands on a GPU Kubernetes owns.
+if [ "$mode" = --apply ]; then echo "$VY_DIRECT_GPUS" | sudo tee /etc/vy/direct-gpus > /dev/null; else echo "   would write /etc/vy/direct-gpus: $VY_DIRECT_GPUS"; fi
+run sudo install -m 755 "$SRC/../../sh/gpu_lease.sh" /usr/local/bin/gpu-lease
 for p in direct-gpus direct-gpus-try; do
   h=$(held "$p" 2>/dev/null || true)
   [ -n "$h" ] && echo "   vy-system/$p holds GPUs $h for direct runs"
@@ -158,15 +165,29 @@ sys.stdout.write(s.replace("integrations:\n  frameworks:\n", "integrations:\n  f
     echo "   would add the plain-pod framework (\"pod\") to kueue-manager-config and restart Kueue"
   fi
 fi
-run "${KUBECTL[@]}" apply -f "$SRC/kueue.yaml"
+# kueue.yaml holds the target split (provers 4 GPUs); provers gives up one GPU per GPU held for direct runs.
+direct=$([ "$VY_DIRECT_GPUS" = none ] && echo 0 || echo "$VY_DIRECT_GPUS" | tr ',' '\n' | grep -c .)
+python3 - "$QUEUES" "$direct" > /tmp/kueue-rendered.yaml <<'PY'
+import re, sys
+text, direct = open(sys.argv[1]).read(), int(sys.argv[2])
+head, sep, rest = text.partition("metadata: {name: provers}")
+m = re.search(r"\{name: nvidia.com/gpu, nominalQuota: (\d+)", rest) if sep else None
+if m is None:
+    sys.stdout.write(text)
+    sys.exit(0)
+gpus = max(0, int(m.group(1)) - direct)
+sys.stdout.write(head + sep + rest[:m.start()] + "{name: nvidia.com/gpu, nominalQuota: %d" % gpus + rest[m.end():])
+PY
+echo "   provers GPU quota: $(grep -A20 'name: provers}' /tmp/kueue-rendered.yaml | grep -o 'nvidia.com/gpu, nominalQuota: [0-9]*' | head -1)"
+run "${KUBECTL[@]}" apply -f /tmp/kueue-rendered.yaml
 "${KUBECTL[@]}" -n gpu-operator get svc dcgm-exporter > /dev/null 2>&1 && echo "   dcgm-exporter: present" \
   || echo "   dcgm-exporter: MISSING (the GPU operator's install in step 2 failed: see sky ssh up's log); usage_report samples without GPU utilization"
 
 step "4. SkyPilot config and the usage sampler"
 if [ ! -f ~/.sky/config.yaml ]; then
-  run install -m 644 "$SRC/sky-config.yaml" ~/.sky/config.yaml
+  if [ "$mode" = --apply ]; then sed "s|infra: ssh/vy-nebius$|infra: ssh/$POOL|" "$SRC/sky-config.yaml" > ~/.sky/config.yaml; else echo "   would write ~/.sky/config.yaml (controller on ssh/$POOL)"; fi
   run sudo systemctl restart sky-api.service
-elif ! cmp -s "$SRC/sky-config.yaml" ~/.sky/config.yaml; then
+elif ! sed "s|infra: ssh/vy-nebius$|infra: ssh/$POOL|" "$SRC/sky-config.yaml" | cmp -s - ~/.sky/config.yaml; then
   echo "   ~/.sky/config.yaml differs from sky-config.yaml: left as it is"
 fi
 # Jobs run as the image's user (uid 1000), not research: /workspace/jobs is where they write (runs, uv, the vLLM venv, caches).
@@ -199,8 +220,8 @@ fi
 run sudo systemctl daemon-reload
 run sudo systemctl enable --now vy-usage.timer
 
-run sudo install -m 755 "$SRC/quiet_hour.sh" /usr/local/bin/vy-quiet-hour
-for what in hold:12:30 release:13:30; do
+grep -q "metadata: {name: circuits}" "$QUEUES" && run sudo install -m 755 "$SRC/quiet_hour.sh" /usr/local/bin/vy-quiet-hour
+grep -q "metadata: {name: circuits}" "$QUEUES" && for what in hold:12:30 release:13:30; do
   verb=${what%%:*}
   at=${what#*:}
   if [ ! -f "/etc/systemd/system/vy-quiet-$verb.timer" ]; then
@@ -215,7 +236,7 @@ for what in hold:12:30 release:13:30; do
   fi
 done
 run sudo systemctl daemon-reload
-run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
+grep -q "metadata: {name: circuits}" "$QUEUES" && run sudo systemctl enable --now vy-quiet-hold.timer vy-quiet-release.timer
 
 step "done"
 echo "   check:  sky check ssh && sky gpus list --infra ssh/$POOL && ${KUBECTL[*]} get clusterqueues"
