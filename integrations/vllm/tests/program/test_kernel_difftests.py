@@ -1,6 +1,7 @@
-"""The kernel difftest adapters without a GPU (`registry.rope_difftest`, `registry.moe_difftest`): their cases carry every edge kind
-admission requires, each case binds a spec whose parameters take exactly the case's input words, the rotary spec is the NeoX rotation
-of the query and the key by one cache row, and the fused-MoE spec reads each (token, slot) pair's own expert id and routed weight."""
+"""The kernel difftest adapters without a GPU (`registry.rope_difftest`, `registry.moe_difftest`, `registry.collectives_difftest`): their cases
+carry every edge kind admission requires, each case binds a spec whose parameters take exactly the case's input words, the rotary spec
+is the NeoX rotation of the query and the key by one cache row, the fused-MoE spec reads each (token, slot) pair's own expert id and
+routed weight, and the two-rank collectives are a bf16 add and a concatenation in rank order."""
 from __future__ import annotations
 
 import random
@@ -13,6 +14,7 @@ from verity.ir.defs import bind
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import moe_difftest as MD
 from verity_vllm.program.registry import rope_difftest as RD
+from verity_vllm.program.registry import collectives_difftest as TD
 from verity_vllm.program.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
 from verity_vllm.properties import admission as A
 
@@ -23,7 +25,7 @@ def _words(c: dict, seed: int) -> list[np.ndarray]:
             for s in c["inputs"]]
 
 
-@pytest.mark.parametrize("mod,n", [(RD, 48), (MD, 20)])
+@pytest.mark.parametrize("mod,n", [(RD, 48), (MD, 20), (TD, 30)])
 def test_cases_carry_every_edge_kind_and_bind_their_inputs(mod, n):
     rng = random.Random(3)
     kinds = set()
@@ -91,3 +93,16 @@ def test_moe_cases_route_distinct_experts_and_take_both_block_schedules():
         assert all(len(set(ids[t * TOPK:(t + 1) * TOPK])) == TOPK for t in range(M)) and max(ids) < E
         naive.add(M * TOPK * 4 <= E)
     assert naive == {True, False}
+
+
+def test_two_rank_collectives_are_a_bf16_add_and_a_concatenation_in_rank_order():
+    f = lambda w: (w.astype(np.uint32) << 16).view(np.float32)
+    for i in range(10):
+        c = TD.cases(random.Random(i), i)
+        c["inputs"] = [dict(s, kind="random") for s in c["inputs"]]
+        a, b = _words(c, i)
+        got = np.asarray(A.evaluate_spec(TD.spec(c["statics"]), [a, b]), dtype=np.uint16)
+        if c["statics"]["op"] == "all_gather":
+            assert np.array_equal(got, np.concatenate([a, b]))
+        else:
+            assert np.array_equal(got, _bf16_rne(f(a) + f(b)))
