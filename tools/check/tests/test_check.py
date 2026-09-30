@@ -184,6 +184,30 @@ def test_the_steps_see_the_trees_packages_only(monkeypatch):
     assert "PYTHONPATH" not in env and "RESEARCH_SOURCE_SHA" not in env and "PYTHONPYCACHEPREFIX" not in env
 
 
+def test_a_recorded_runs_steps_require_the_store_and_get_its_custody_dir(tmp_path, monkeypatch):
+    """The steps lose RESEARCH_*, so the run's custody key reaches `store_io` as CHECK_STORE_CUSTODY, and the store is required."""
+    run = tmp_path / "research" / "runs" / "r1"
+    run.mkdir(parents=True)
+    custody = tmp_path / "research" / "requests" / "r1" / "custody"
+    custody.mkdir(parents=True)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    env = CHECK.env()
+    assert env[CHECK.STORE_REQUIRED_ENV] == "1" and CHECK.CUSTODY_ENV not in env, "no key staged: required, nothing to pass"
+    (custody / "store.toml").write_text("[remote]\n")
+    (custody / "cred.json").write_text("{}")
+    env = CHECK.env()
+    assert env[CHECK.CUSTODY_ENV] == str(custody.resolve()) and not any(k.startswith("RESEARCH_") for k in env)
+    assert CHECK.CUSTODY_ENV not in CHECK._env_key(env), "the per-run path must not change what a pass is keyed on"
+    monkeypatch.delenv("RESEARCH_RUN_ID")
+    assert CHECK.STORE_REQUIRED_ENV not in CHECK.env() and CHECK.CUSTODY_ENV not in CHECK.env()
+
+
+def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setenv("VERITY_SKIP_STORE", "1")
+    assert CHECK.main([]) == 2
+
 def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", tmp_path / "verifier")
     (pt,), (cc, build), (lean,) = CHECK.groups(tmp_path, 16)

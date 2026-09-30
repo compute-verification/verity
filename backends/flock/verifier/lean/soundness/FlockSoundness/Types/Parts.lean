@@ -15,8 +15,11 @@ checks the part structure that reading needs (`partsChecked`), and these lemmas 
    part's constant or a part's bound input. Each callee's input rows are self rows, and its constant row is
    `[const]·[const]`.
 4. **The own rows** (`own_reads`, `unit_const_row`, `order_cols`): each reads only own and part columns. So the entries
-   `crossOf` takes, those at or past `u.size`, are part columns. The constant row is `[const]·[const]`, and the order
+   `crossOf` takes, those at or past    `u.size`, are part columns. The constant row is `[const]·[const]`, and the order
    lists only own and part columns.
+5. **A part's reads** (`part_reads`, `callee_prod`): the unit's reads cover a part's rows exactly as its callee's reads,
+   shifted, cover the callee's rows. A covered callee row is a product row `a · []`, and its read's low minterms are
+   callee rows. Both are about part rows only, so a flat unit's inline reads over its own rows are untouched.
 -/
 
 namespace FlockSoundness.Types.Dag
@@ -54,13 +57,14 @@ theorem partsChecked_spec {done : Array D} {unit : Nat} (h : partsChecked done u
           x < (done.getD unit default).size ∨ inPart done (done.getD unit default) x = true) ∧
       (done.getD unit default).rows.getD (done.getD unit default).const ([], []) =
         ([(done.getD unit default).const], [(done.getD unit default).const]) ∧
-      ∀ c ∈ order done (done.getD unit default),
-        c < (done.getD unit default).size ∨ inPart done (done.getD unit default) c = true := by
+      (∀ c ∈ order done (done.getD unit default),
+        c < (done.getD unit default).size ∨ inPart done (done.getD unit default) c = true) ∧
+      ∀ p ∈ (done.getD unit default).parts, partReadsOk done (done.getD unit default) p.1 p.2 = true := by
   unfold partsChecked at h
   simp only [Bool.and_eq_true, Array.all_eq_true_iff_forall_mem, List.all_eq_true, decide_eq_true_eq,
     List.mem_range, Bool.or_eq_true, beq_iff_eq] at h
-  obtain ⟨⟨⟨⟨⟨⟨hp, hz⟩, hd⟩, he⟩, ho⟩, hc⟩, hord⟩ := h
-  exact ⟨hp, hz, (distinctFrom_spec _ _ hd).2, he, ho, hc, hord⟩
+  obtain ⟨⟨⟨⟨⟨⟨⟨hp, hz⟩, hd⟩, he⟩, ho⟩, hc⟩, hord⟩, hrd⟩ := h
+  exact ⟨hp, hz, (distinctFrom_spec _ _ hd).2, he, ho, hc, hord, hrd⟩
 
 variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
   {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
@@ -243,10 +247,37 @@ theorem order_cols (hd : deriveChecked types ls info words unit = .ok done) :
     ∀ c ∈ order done (done.getD unit default), c < (done.getD unit default).size ∨
       ∃ p ∈ (done.getD unit default).parts, p.2 ≤ c ∧ c < p.2 + (done.getD p.1 default).size := by
   intro c hc
-  rcases (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.2.2 c hc with h | h
+  rcases (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.2.2.1 c hc with h | h
   · exact Or.inl h
   · unfold inPart at h
     simp only [Array.any_eq_true', Bool.and_eq_true, decide_eq_true_eq] at h
     exact Or.inr h
+
+/-- **A part's rows are covered exactly by its callee's reads, shifted**: at callee row `c`, the unit's read covering
+`b + c` is the callee's read covering `c`, shifted by `b`, or none. -/
+theorem part_reads (hd : deriveChecked types ls info words unit = .ok done) {p : Nat × Nat}
+    (hp : p ∈ (done.getD unit default).parts) {c : Nat} (hc : c < (done.getD p.1 default).size) :
+    (done.getD unit default).reads.find? (·.covers (p.2 + c)) =
+      ((done.getD p.1 default).reads.find? (·.covers c)).map (·.shift p.2) := by
+  have h := (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.2.2.2 p hp
+  unfold partReadsOk at h
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at h
+  exact beq_iff_eq.mp (h.2 c hc).1
+
+/-- **A callee's covered row is a product row `a · []`, and its read's low minterms are callee rows.** -/
+theorem callee_prod (hd : deriveChecked types ls info words unit = .ok done) {p : Nat × Nat}
+    (hp : p ∈ (done.getD unit default).parts) {c : Nat} (hc : c < (done.getD p.1 default).size) {r : ReadRec}
+    (hr : (done.getD p.1 default).reads.find? (·.covers c) = some r) :
+    ((done.getD p.1 default).rows.getD c ([], [])).2 = [] ∧
+      ∀ l < 2 ^ r.lo, r.loTop + l < (done.getD p.1 default).size := by
+  have h := (partsChecked_spec (deriveChecked_parts hd)).2.2.2.2.2.2.2 p hp
+  unfold partReadsOk at h
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range, Array.all_eq_true_iff_forall_mem,
+    decide_eq_true_eq] at h
+  have hrow := (h.2 c hc).2
+  rw [hr] at hrow
+  refine ⟨List.isEmpty_iff.mp hrow, fun l hl => ?_⟩
+  have := h.1 r (Array.mem_of_find?_eq_some hr)
+  omega
 
 end FlockSoundness.Types.Dag

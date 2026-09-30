@@ -397,11 +397,23 @@ def deltaEntryOk (done : Array D) (u : D) (e : Nat × Option (List Nat)) : Bool 
     (e.1 == p.2 + (done.getD p.1 default).const && e.2.isNone) ||
       (e.2.isSome && (done.getD p.1 default).inCols.any (p.2 + · == e.1))
 
+/-- **Part `(j, b)`'s reads**: at each callee row `c`, the unit's read covering `b + c` is the callee's read covering `c`,
+shifted, or none when the callee has none. A covered callee row is a product row `a · []`, whose table-direct side is the
+read's. Each callee read's low minterms are callee rows. -/
+def partReadsOk (done : Array D) (u : D) (j b : Nat) : Bool :=
+  let sub := done.getD j default
+  sub.reads.all (fun r => decide (r.loTop + 2 ^ r.lo ≤ sub.size)) &&
+    (List.range sub.size).all fun c =>
+      u.reads.find? (·.covers (b + c)) == (sub.reads.find? (·.covers c)).map (·.shift b) &&
+        match sub.reads.find? (·.covers c) with
+        | some _ => (sub.rows.getD c ([], [])).2.isEmpty
+        | none => true
+
 /-- **The unit's parts, as its template statement reads them** (`Typed.templateOf`): each part is placed (`partOk`), and
 the parts follow one another by base; Δ has one entry per row, each the unit's constant, a part's constant or a part's
 bound input; each of the unit's own rows reads only its own and its parts' rows. The unit's constant row is
 `[const]·[const]`, so that its root net's constant reads nothing but itself, and its order lists only own and part
-columns. -/
+columns. Each part's rows are read as its callee's reads read them (`partReadsOk`). -/
 def partsChecked (done : Array D) (unit : Nat) : Bool :=
   let u := done.getD unit default
   u.parts.all (fun p => partOk done unit u p.1 p.2) &&
@@ -410,7 +422,8 @@ def partsChecked (done : Array D) (unit : Nat) : Bool :=
     ((List.range u.size).all fun c =>
       ((u.rows.getD c ([], [])).1 ++ (u.rows.getD c ([], [])).2).all fun x => decide (x < u.size) || inPart done u x) &&
     u.rows.getD u.const ([], []) == ([u.const], [u.const]) &&
-    (order done u).all fun c => decide (c < u.size) || inPart done u c
+    ((order done u).all fun c => decide (c < u.size) || inPart done u c) &&
+    u.parts.all fun p => partReadsOk done u p.1 p.2
 
 /-- **The rows the verifier uses**: `deriveAll`'s, once every layout's pass the check, the unit's are in logical order, and
 its parts are as its template reads them. -/
