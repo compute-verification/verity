@@ -5,7 +5,9 @@ GPU 3's pearlc_activations.py (the shipped tree 5f1cb93e, benchmarks/pouw) measu
 real activations with noise on both operands. This is the fork's version: the activations are formed as today (§5's forming,
 delta 1, norm-16 lines), and the weights carry no noise: they are the deployed codes, per-row E4M3 of either the checkpoint
 as registered ('plain') or the keyed rotation ('rot': y = (x R)(W R)^T for q/k/v/gate/up, whose activations are rotated
-too, and y = x (R^T W)^T for o/down). Per sampled 64 x 8 tile: v1's debit (P1's jointFlags under G = 4) with cross-group
+too, and y = x (R^T W)^T for o/down); 'rot-fold', the same with the RMSNorm scale folded into the weights as deployed
+(x / gamma and W diag(gamma) before rotating); and 'rotx', rot-fold with the massive-activation channels unmixed (the split
+rotation). Per mode, the share of activation rows the fork's row rules admit (noise floor and liveness). Per sampled 64 x 8 tile: v1's debit (P1's jointFlags under G = 4) with cross-group
 sets and the transfer test, and v2's lone-skip flags (debit_pure, G = 0), against the caps 1/400 and 1/1,000.
 
 Chunks: layer regexes, one JSON each (the checkpoint). Exit 0 when all are done, 99 while any remain, 143 when preempted;
@@ -41,6 +43,27 @@ def rot_np(d, seed):
     return (q * torch.sign(torch.diagonal(r))).numpy()
 
 
+def split_np(d, s, seed):
+    """The split rotation (aw_gpu.split_rot_matrix's construction): the channels s unmixed at keyed positions, a Haar
+    rotation on the rest."""
+    pos = np.random.default_rng([seed, d, 0x53504C54]).permutation(d)
+    comp = np.array(sorted(set(range(d)) - set(s)))
+    q = np.zeros((d, d))
+    if s:
+        q[np.array(s), pos[:len(s)]] = 1.0
+    q[comp[:, None], pos[len(s):][None, :]] = rot_np(d - len(s), seed)
+    return q
+
+
+def norm_of(n):
+    layer = n.rsplit(".", 2)[0]
+    if n.endswith(("q_proj", "k_proj", "v_proj")):
+        return layer + ".input_layernorm"
+    if n.endswith(("gate_proj", "up_proj")):
+        return layer + ".post_attention_layernorm"
+    return None
+
+
 def main():
     signal.signal(signal.SIGTERM, on_term)
     ap = argparse.ArgumentParser()
@@ -53,7 +76,12 @@ def main():
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--max-seconds", type=float, default=1200)
+    ap.add_argument("--modes", default="plain,rot",
+                    help="also rot-fold (the rotation with the RMSNorm scale folded into the weights, as deployed) and rotx "
+                         "(rot-fold with --split-channels unmixed)")
+    ap.add_argument("--split-channels", default="", help="rotx: comma list (Qwen2.5-7B's calibration: 458,2570,2718)")
     args = ap.parse_args()
+    modes = args.modes.split(",")
     sys.path.insert(0, args.census_src)
     import pearlc_census as C
     from pearlc_activations import row_rules
@@ -73,6 +101,8 @@ def main():
         text = "\n\n".join(load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1", split="test")["text"])
         chunk_ids = tok(text, return_tensors="pt").input_ids[0][:2048].unsqueeze(0)
         R = rot_np(model.config.hidden_size, args.seed)
+        Rx = (split_np(model.config.hidden_size, [int(c) for c in args.split_channels.split(",") if c], args.seed)
+              if "rotx" in modes else None)
     for cname, rx in todo:
         if PRE["flag"] or time.time() - t0 > args.max_seconds:
             break
@@ -83,17 +113,25 @@ def main():
             k = X.shape[1]
             rec = {"layer": name, "k": k}
             out_rot = name.endswith(("o_proj", "down_proj"))
-            for mode in ("plain", "rot"):
-                if mode == "rot" and out_rot:
-                    Xm, Wm = X, R.T @ W
+            gam = model.get_submodule(norm_of(name)).weight.detach().float().numpy().astype(np.float64) if norm_of(name) else None
+            if gam is not None:
+                gam = np.where(np.abs(gam) < 1e-12, 1e-12, gam)
+            for mode in modes:
+                Rm = Rx if mode == "rotx" else R
+                if mode != "plain" and out_rot:
+                    Xm, Wm = X, Rm.T @ W
                 elif mode == "rot":
                     Xm, Wm = X @ R, W @ R
+                elif mode in ("rot-fold", "rotx"):
+                    Xm, Wm = (X / gam) @ Rm, (W * gam) @ Rm
                 else:
                     Xm, Wm = X, W
                 fA, lA, _ = row_rules(Xm, 1.0)
                 ia = np.flatnonzero(fA & lA)
+                share = {"rows_admissible_share": round(len(ia) / len(Xm), 6), "rows_failing_floor": int((~fA).sum()),
+                         "rows_failing_liveness": int((fA & ~lA).sum())}
                 if k % 128 or len(ia) < 64:
-                    rec[mode] = {"skipped": "fewer than 64 admissible rows"}
+                    rec[mode] = {"skipped": "fewer than 64 admissible rows", **share}
                     continue
                 FcA = C.enc(C.unit_lines(k, rng) * (16.0 / np.sqrt(32)))
                 tiles = []
@@ -116,9 +154,11 @@ def main():
                                   "v1_cross_group_mean": float(size.mean()) / T, "v1_cross_group_max": float(size.max()) / T,
                                   "v2_debit_share": float(fpure.sum(1).mean()) / T,
                                   "v2_debit_max_word": float(fpure.sum(1).max()) / T, **{f"transfer_{k2}": v for k2, v in tr.items()}})
-                rec[mode] = {"tiles": tiles, "B_ratio_max": float((np.abs(Wm).max(1) / np.sqrt((Wm[:, ::8] ** 2).mean(1))).max())}
-            print(json.dumps({"layer": name, **{m: {k2: round(v, 6) for k2, v in rec[m]["tiles"][0].items() if isinstance(v, float)}
-                                                for m in ("plain", "rot") if "tiles" in rec.get(m, {})}}), flush=True)
+                rec[mode] = {"tiles": tiles, "B_ratio_max": float((np.abs(Wm).max(1) / np.sqrt((Wm[:, ::8] ** 2).mean(1))).max()),
+                             **share}
+            print(json.dumps({"layer": name, **{m: {**{k2: round(v, 6) for k2, v in rec[m]["tiles"][0].items() if isinstance(v, float)},
+                                                    "rows_admissible_share": rec[m]["rows_admissible_share"]}
+                                                for m in modes if "tiles" in rec.get(m, {})}}), flush=True)
             return rec
 
         def hook(mod, inputs, name=None):
@@ -164,13 +204,16 @@ def write_result(run, out, names):
         except ValueError:
             pass
         for r in json.loads(f.read_text())["records"]:
-            for mode in ("plain", "rot"):
+            for mode in ("plain", "rot", "rot-fold", "rotx"):
+                if "rows_admissible_share" in r.get(mode, {}):
+                    agg.setdefault((mode, "rows_admissible_share"), []).append(r[mode]["rows_admissible_share"])
                 for t in r.get(mode, {}).get("tiles", []):
                     for key in ("v1_debit_share", "v1_debit_max_word", "v1_cross_group_mean", "v2_debit_share"):
                         agg.setdefault((mode, key), []).append(t[key])
     for (mode, key), vals in sorted(agg.items()):
-        meas += [{"name": f"{mode}/{key}/mean", "value": float(np.mean(vals)), "unit": "fraction of atoms"},
-                 {"name": f"{mode}/{key}/max", "value": float(np.max(vals)), "unit": "fraction of atoms"}]
+        unit = "fraction of rows" if key == "rows_admissible_share" else "fraction of atoms"
+        meas += [{"name": f"{mode}/{key}/mean", "value": float(np.mean(vals)), "unit": unit},
+                 {"name": f"{mode}/{key}/max", "value": float(np.max(vals)), "unit": unit}]
     doc = {"schema": "research/result/v0.1", "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
            "workload_fingerprint": {"workload": "approved-weights/debit/v1", "source_sha": os.environ.get("RESEARCH_SOURCE_SHA", ""),
                                     "chunks": names},
