@@ -91,6 +91,9 @@ UPLOAD_SLOTS = 1024
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
 GRAPH_ROWS = 256
+#: with ``graphs``, each weight's slot of per-call inputs its graph reads: dom_a ‖ unit (136 bytes, padded), and the byte
+#: offsets of the call's leaves, flags and A root in the pass's buffers (three int64)
+SLOT_BYTES = 144
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
 WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b")
@@ -212,6 +215,11 @@ class Kernel:
 _KERNELS: dict[tuple[str, str], Kernel] = {}
 
 
+def torch_uint8() -> Any:
+    import torch
+    return torch.uint8
+
+
 def _zeros(n: int, device: Any) -> Any:
     import torch
     return torch.zeros(max(n, 16), dtype=torch.uint8, device=device)
@@ -317,6 +325,25 @@ def _screen_kernel():
             tl.store(out + 2 * row + 1, ((1 - floor) * (1 - sure_fail) * (1 - sure_pass)).to(tl.uint8))
         _SCREEN_KERNEL.append(kernel)
     return _SCREEN_KERNEL[0]
+
+
+_COPY_KERNEL: list = []
+
+
+def _copy_kernel():
+    """n bytes from src to dst at the byte offset `offs[which]`, read on the device (a graph's scatter into the pass)."""
+    if not _COPY_KERNEL:
+        import triton
+        import triton.language as tl
+
+        @triton.jit
+        def copy_at(src, dst, offs, which, n, BLOCK: tl.constexpr):
+            o = tl.load(offs + which)
+            i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+            live = i < n
+            tl.store(dst + o + i, tl.load(src + i, mask=live), mask=live)
+        _COPY_KERNEL.append(copy_at)
+    return _COPY_KERNEL[0]
 
 
 def fused_screen_available() -> bool:
@@ -557,6 +584,15 @@ class PearlCDeviceRun:
         self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.fused_screen = self.device.type == "cuda" and fused_screen_available()
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
+        if self.graphs:
+            import torch
+            self.order = {w: i for i, w in enumerate(sorted(self.weights))}
+            self.key_slots = _zeros(len(self.order) * SLOT_BYTES, self.device)[:len(self.order) * SLOT_BYTES].view(-1, SLOT_BYTES)
+            self.offs = torch.zeros((len(self.order), 3), dtype=torch.int64, device=self.device)
+            self._host_keys = torch.zeros((len(self.order), SLOT_BYTES), dtype=torch.uint8, pin_memory=True)
+            self._host_offs = torch.zeros((len(self.order), 3), dtype=torch.int64, pin_memory=True)
+            self._slots_copied: Any = None     # the event after the last whole-forward slot upload
+            self._predicted: dict[int, tuple] = {}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
         self.pipes: dict[tuple[int, int, frozenset, bool], tuple[Any, list[Any]]] = {}
         self.stream = lambda: _stream(self.device)
@@ -654,15 +690,21 @@ class PearlCDeviceRun:
         """Every buffer a call of `sh` writes: its own, and the ring's other sets."""
         return [*sh.b.values(), *(t for st in sh.sets[1:] for t in st.values())]
 
+    def _graphed(self, m16: int) -> bool:
+        """Whether calls of m₁₆ rows replay as graphs (`graphs`, the serial schedule), reading their keys and offsets from
+        their weight's slot."""
+        return self.graphs and m16 <= GRAPH_ROWS and not self.schedule.side and self.schedule.main_priority != "greatest"
+
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups."""
-        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name)
+        key = (w, sh.m16, self.omit, self.hashing, self.schedule.name, self._graphed(sh.m16))
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
                     "leaves": 0}
-            keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": sh.keys.data_ptr(),
-                    "unit": sh.keys.data_ptr() + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
+            kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
+            keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": kp,
+                    "unit": kp + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant)
             names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
@@ -725,11 +767,11 @@ class PearlCDeviceRun:
         cuda = self.device.type == "cuda"
         caller = self.torch_stream(raw) if cuda else None
         main = self.main if self.schedule.main_priority == "greatest" else None
-        if self.graphs and not side and main is None and m16 <= GRAPH_ROWS:
+        if self._graphed(m16):
             if self.hashing:
-                self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), caller)
+                self._slot(w, index, m16, m, caller)
             y, screened = self._replay(w, sh, pipe, raw, tiles, m)
-            return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened)
+            return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened, scattered=self.hashing)
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
         lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
@@ -768,6 +810,41 @@ class PearlCDeviceRun:
         return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias,
                            rows=x2 if x2.is_contiguous() and x2.dtype == torch.bfloat16 else None)
 
+    def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
+        """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""
+        return 32 * tiles_at, 2 * flags_at, 32 * index
+
+    def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
+        """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every
+        weight's slot for the rest of the forward is predicted (the next indices, the same m, the pass's running offsets) and
+        uploaded in one copy; a call whose slot doesn't hold its own values (another order or m) gets them uploaded alone, so
+        the bytes don't depend on the prediction."""
+        import numpy as np
+        cur, R = self.cur, self.kernel.run
+        want = (index, m16, cur.tiles, cur.flag_rows)
+        pos = self.order[w]
+        if pos == 0:
+            if self._slots_copied is not None:
+                self._slots_copied.synchronize()
+            keys, offs = self._host_keys.numpy(), self._host_offs.numpy()
+            tiles_at, flags_at = cur.tiles, cur.flag_rows
+            for v, i in sorted(self.order.items(), key=lambda kv: kv[1]):
+                keys[i, :136] = np.frombuffer(self.keys(self.roots[v], index + i, m16), np.uint8)
+                offs[i] = self._offsets(index + i, tiles_at, flags_at)
+                self._predicted[v] = (index + i, m16, tiles_at, flags_at)
+                tiles_at += R.cdiv(m16, R.TILE) * (self.weights[v].n // R.TILE)
+                flags_at += m
+            self.key_slots.copy_(self._host_keys, non_blocking=True)
+            self.offs.copy_(self._host_offs, non_blocking=True)
+            import torch
+            self._slots_copied = self._slots_copied or torch.cuda.Event()
+            self._slots_copied.record(stream)
+        if self._predicted.get(w) != want:
+            self.uploads.put(self.key_slots[pos], self.keys(self.roots[w], index, m16), stream)
+            self.uploads.put(self.offs[pos].view(torch_uint8()), np.array(self._offsets(index, cur.tiles, cur.flag_rows),
+                                                                             "<i8").tobytes(), stream)
+            self._predicted[w] = want
+
     def _replay(self, w: int, sh: _Shape, pipe: Any, raw: int, tiles: int, m: int) -> tuple[Any, bool]:
         """The call's steps as one CUDA graph on the caller's stream (`graphs`): captured at the pipeline's first call, after
         one eager run of the same steps (their first use syncs: the GEMMs' shared-memory probes), on buffers of the graph's
@@ -790,6 +867,8 @@ class PearlCDeviceRun:
             steps = _steps(pipe, names)
             if screen:
                 steps = [*steps, lambda: screen_into(g.flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)]
+            if self.hashing:
+                steps = [*steps, self._scatter(w, sh, pipe, g, tiles, m if screen else 0)]
             self.kernel.dev.stream = raw
             try:
                 for f in steps:
@@ -811,21 +890,31 @@ class PearlCDeviceRun:
             self._graphs[key] = g
         else:
             g.graph.replay()
-        if self.hashing:
-            self.leaves[32 * self.cur.tiles:32 * (self.cur.tiles + tiles)].copy_(g.leaves[:32 * tiles])
-        if screen:
-            self.flag_buf[self.cur.flag_rows:self.cur.flag_rows + m].copy_(g.flags)
         return g.y.clone(), screen
 
+    def _scatter(self, w: int, sh: _Shape, pipe: Any, g: _Graph, tiles: int, flag_rows: int):
+        """The graph's last step: the call's leaves, flags (when it screened) and A root into the pass's buffers, at the
+        offsets in its weight's slot."""
+        size, offs = pipe.size["tree_a"], self.offs[self.order[w]]
+        root, flags, copy = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), _copy_kernel()
+
+        def scatter():
+            copy[(-(-32 * tiles // 1024),)](g.leaves, self.leaves, offs, 0, 32 * tiles, BLOCK=1024)
+            if flag_rows:
+                copy[(-(-2 * flag_rows // 1024),)](g.flags, flags, offs, 1, 2 * flag_rows, BLOCK=1024)
+            copy[(1,)](root, self.roots_buf, offs, 2, 32, BLOCK=1024)
+        return scatter
+
     def _after(self, cur: _Pass, w: int, wt: _Weight, sh: _Shape, pipe: Any, index: int, m: int, k: int, m16: int, tiles: int,
-               y: Any, lead: Any, bias: Any, screened: bool = False, rows: Any = None) -> Any:
+               y: Any, lead: Any, bias: Any, screened: bool = False, rows: Any = None, scattered: bool = False) -> Any:
         """A call's records after its steps: its matmul, A's root, the screen (unless a graph `screened` it), the retained
         files, and y.  The screen reads `rows` (the call's BF16 x, whose widening to A's FP32 words is exact) when given, at
-        half the bytes of A's words."""
+        half the bytes of A's words.  A graph that `scattered` wrote A's root, the leaves and (when it screened) the flags."""
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
         if self.hashing:
             size = pipe.size["tree_a"]
-            self.roots_buf[32 * index:32 * index + 32].copy_(sh.b["tree_a"][size - 32:size])
+            if not scattered:
+                self.roots_buf[32 * index:32 * index + 32].copy_(sh.b["tree_a"][size - 32:size])
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
             if not screened:
                 screen_into(flags, sh.xa[:m] if rows is None else rows, sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)
