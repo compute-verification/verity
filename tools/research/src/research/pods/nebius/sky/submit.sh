@@ -36,7 +36,7 @@ remote=${VY_INFRA_REMOTE:-origin}
 ref=$remote/${VY_INFRA_BRANCH:-infra/nebius}
 rel=$(git -C "$here" rev-parse --show-prefix); rel=${rel%/}
 stale=""
-if ! git -C "$repo" fetch -q "$remote" "${ref#"$remote"/}" 2> /dev/null; then
+if ! GIT_TERMINAL_PROMPT=0 git -C "$repo" fetch -q "$remote" "${ref#"$remote"/}" 2> /dev/null < /dev/null; then   # never prompt
   stale="could not fetch $ref, so this checkout's templates can't be checked"
 elif ! git -C "$repo" cat-file -e "$ref:$rel/jobs/$template.yaml" 2> /dev/null; then
   stale="jobs/$template.yaml is not on $ref (a private copy)"

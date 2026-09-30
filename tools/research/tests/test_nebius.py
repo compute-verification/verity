@@ -285,6 +285,25 @@ def test_check_slot_pins_a_check_to_a_free_slot_with_the_pods_python(tmp_path):
     assert r.stdout.startswith("/opt/check-toolchain/bin:")
 
 
+
+def test_a_short_check_takes_a_short_slot_while_every_train_slot_is_held(tmp_path):
+    """--short: a lane's short check doesn't queue behind the trains. With both check slots held it still starts, in check-s1, on
+    the check slots' CPUs, at nice 10, so the trains keep first claim on the cores."""
+    slot = NEBIUS / "check_slot.sh"
+    env = {**os.environ, "VY_CHECK_SLOTS": "0 0", "VY_CHECK_LOCKS": str(tmp_path), "VY_CHECK_WAIT": "0"}
+    held = [subprocess.Popen(["flock", str(tmp_path / f"check-{s}.lock"), "bash", "-c", "echo ready; read x"], stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, text=True) for s in ("a", "b")]
+    try:
+        assert [h.stdout.readline().strip() for h in held] == ["ready", "ready"]
+        assert subprocess.run(["bash", str(slot), "true"], env=env, capture_output=True, text=True).returncode == 75
+        r = subprocess.run(["bash", str(slot), "--short", "bash", "-c", "echo $(nice) $(taskset -cp $$ | sed 's/.*: //')"], env=env,
+                           capture_output=True, text=True)
+        assert r.returncode == 0 and "check-s1" in r.stderr and r.stdout.split() == ["10", "0"], (r.stdout, r.stderr)
+    finally:
+        for h in held:
+            h.stdin.close()
+            h.wait()
+
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------
 
 def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
