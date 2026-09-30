@@ -4,7 +4,7 @@ A config run (`--config-run 1`) is the Build, the strict word check of its manif
 --only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay stratified by family, and
 `config_record.json` (`config_record`), written however the run ends.  No Match, no manifest-verify rebuild, no VU export: the Commit's
 decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match there is no account
-for the executed-prefix class (R17-26/27) to link to: when every request ran to its cap the class has nothing to classify and the
+for the executed-prefix class (`check.executed_prefix`) to link to: when every request ran to its cap the class has nothing to classify and the
 replay's population is the whole manifest; a request stopped before its cap fails the Commit by name, as a missing input.  Every derive of
 a Build goes through the host's Program cache when one is named (`derive_cached`, `pipeline.program_cache`).
 """
