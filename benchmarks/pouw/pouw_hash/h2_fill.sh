@@ -23,7 +23,7 @@ trap '[ -n "$kid" ] && kill -TERM "$kid" 2>/dev/null; wait; [ -n "$name" ] && ec
 [ "${GPU_LEASE_UUID:-}" = "$WANT" ] || { echo "lease UUID ${GPU_LEASE_UUID:-none} is not die $DIE's $WANT" >&2; exit 1; }
 (cd "$S" && sha256sum -c --quiet MANIFEST.sha256) || { echo "the ship's manifest does not check" >&2; exit 1; }
 [ "$(sha256sum < "$S/pearl_c_sm120.cubin" | cut -c1-64)" = @CUBIN@ ] || { echo "not the ship's cubin" >&2; exit 1; }
-export CUDA_DEVICE_ORDER=PCI_BUS_ID OMP_NUM_THREADS=8 PYTHONPATH="$S/py"
+export CUDA_DEVICE_ORDER=PCI_BUS_ID OMP_NUM_THREADS=8 PYTHONPATH="$S/py" PYTHONDONTWRITEBYTECODE=1
 # name|SHAPE: decode first, then prefill
 CHUNKS=(
 "m32-n8192-k8192|32x8192x8192"

@@ -11,7 +11,7 @@ V=$ROOT/packages/verity/src/verity
 mkdir -p "$OUT/py/verity/commitments"
 cp "$V/__init__.py" "$V/errors.py" "$OUT/py/verity/"
 cp "$V"/commitments/*.py "$OUT/py/verity/commitments/"
-(cd /tmp && python3 -I -c "import sys; sys.path.insert(0, '$OUT/py'); import verity.commitments.merkle; assert 'numpy' not in sys.modules")
+(cd /tmp && python3 -I -B -c "import sys; sys.path.insert(0, '$OUT/py'); import verity.commitments.merkle; assert 'numpy' not in sys.modules")
 git -C "$ROOT" status --porcelain -- benchmarks/pouw/pouw_hash packages/verity/src/verity/commitments >> "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"
