@@ -542,7 +542,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)},
-                                 PPD.tree_hash(scheme))
+                                 PPD.SCHEMES[scheme][1], PPD.tree_hash(scheme))
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     roots = {}
     for w, layer in enumerate(layers):
