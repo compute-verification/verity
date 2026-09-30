@@ -9,8 +9,9 @@ On vy-nebius-2 the agent (`cluster agent`) runs beside today's tools. In shadow 
 `nebius2` (owner lines, wait files and `preempted.log`, reading locks from their holders' `/proc/<pid>/fdinfo`, never
 through a lock), mirrors what it did into the ledger, and records what the planner would have done (`shadow.py`). In live
 mode it holds `/run/gpu-lease/agent.lock` and carries the plan out. `cluster shadow replay` runs the shadow over a day's
-copied logs, and `cluster shadow evaluate` is the pass bar. Node 1 has nothing yet: its executor under the one queue is
-kueue-fold's.
+copied logs, and `cluster shadow evaluate` is the pass bar. On vy-nebius-1, `nebius1` reads Kueue's pods and Workloads and
+DCGM's GPU-to-pod labels as allocations and a queue, and `python -m cluster.nebius1 DESCRIPTION [--save|--from SNAPSHOT]`
+prints what the planner would do beside Kueue. Node 1's executor under the one queue is kueue-fold's.
 
 ## Layout
 
@@ -23,6 +24,7 @@ src/cluster/
 ├── route.py    place(): which node's queue a job enters
 ├── ledger.py   the append-only, hash-chained ledger; state (the one source of lease and queue state), state.json,
 │               gpu-lease/usage/v1 ingest, history, quiet_report, failures, usage
+├── nebius1.py  node 1's Kueue as the model sees it: pods, Workloads, DCGM's GPU-to-pod labels; read(), live and read-only
 ├── nebius2.py  node 2's gpu-lease as the model sees it: owner lines, wait files, preempted.log; read(), live and read-only
 ├── shadow.py   the planner beside gpu-lease: mirror into the ledger, plan, divergences; replay(); evaluate(), the pass bar
 ├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
