@@ -40,6 +40,7 @@ REGISTRY: dict[str, str] = {
     "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
     "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
     "vllm.commit": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_COMMIT",
+    "vllm.replay": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_REPLAY",
 }
 
 
