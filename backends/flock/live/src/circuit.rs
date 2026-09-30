@@ -25,7 +25,14 @@
 //! public cut words or native words in META) is refused at parse; a template's tail is a slot type of the circuit or the
 //! template has no statement here.
 
-use std::{collections::BTreeMap, sync::OnceLock};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Instant,
+};
 
 use flock_core::{
     lincheck::{LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
@@ -1677,6 +1684,28 @@ pub(crate) fn lanes(v: &[u64], n: usize, uw: usize) -> Vec<Vec<F128>> {
     out
 }
 
+/// Up to 64 lanes' first `words` words as bit-sliced rows (`lanes`' inverse): bit l of row c is bit c of lane l.
+fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
+    let mut out = vec![0u64; words * WORD];
+    for (w, rows) in out.chunks_exact_mut(WORD).enumerate() {
+        for (h, half) in rows.chunks_exact_mut(64).enumerate() {
+            let mut t = [0u64; 64];
+            for (x, r) in t.iter_mut().zip(grp) {
+                *x = r.get(w).map_or(0, |v| if h == 0 { v.lo } else { v.hi });
+            }
+            transpose64(&mut t);
+            half.copy_from_slice(&t);
+        }
+    }
+    out
+}
+
+/// `FC_UNIT_PROFILE=1`: the host witness's parts as `UNITPROF` lines on stderr.
+pub fn unit_profile() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("FC_UNIT_PROFILE").as_deref() == Ok("1"))
+}
+
 fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
@@ -2132,11 +2161,32 @@ impl Stmt {
                     (x, f(zz), f(aa), f(bq))
                 }).collect()
             } else {
-                ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
-                    let (zz, aa, bq) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
+                let t0 = Instant::now();
+                let (eval_ns, eval_max, lanes_ns) = (AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0));
+                let check = std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1");
+                let items = ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
+                    let te = Instant::now();
+                    let cols = bit_rows(grp, net.in_words);
+                    let (zz, aa, bq) = net.eval64_flat(|col| cols[col]);
+                    let e = te.elapsed().as_nanos() as u64;
+                    if check {
+                        let want = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l)));
+                        assert!(want.0 == zz && want.1 == aa && want.2 == bq, "circuit {ni}, group {gi}: the one-pass evaluation is not eval64's");
+                    }
+                    let tl = Instant::now();
                     let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
+                    eval_ns.fetch_add(e, Ordering::Relaxed);
+                    eval_max.fetch_max(e, Ordering::Relaxed);
+                    lanes_ns.fetch_add(tl.elapsed().as_nanos() as u64, Ordering::Relaxed);
                     z.into_iter().zip(a).zip(b).enumerate().map(move |(l, ((z, a), b))| (64 * gi + l, z, a, b))
-                }).collect()
+                }).collect();
+                if unit_profile() {
+                    let s = |x: &AtomicU64| x.load(Ordering::Relaxed) as f64 * 1e-9;
+                    eprintln!("UNITPROF\t{}", serde_json::json!({"part": "slot_zab", "circuit": ni, "rows": net.useful, "slots": ins.len(),
+                        "groups": ins.len().div_ceil(64), "wall_s": t0.elapsed().as_secs_f64(), "eval_sum_s": s(&eval_ns),
+                        "eval_max_s": s(&eval_max), "lanes_sum_s": s(&lanes_ns), "check": check}));
+                }
+                items
             };
             items
         }
@@ -2396,6 +2446,22 @@ mod tests {
                 }
             }
             assert!(*got == want, "lane {l}");
+        }
+    }
+
+    #[test]
+    fn bit_rows_are_the_lanes_bits() {
+        let mut s = 0x1234_5678_9abc_def1u64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let (n, words) = (41, 5);
+        let grp: Vec<Vec<F128>> = (0..n).map(|_| (0..words).map(|_| F128::new(r(), r())).collect()).collect();
+        let rows = bit_rows(&grp, words);
+        assert_eq!(rows.len(), words * WORD);
+        for (c, &x) in rows.iter().enumerate() {
+            assert_eq!(x >> n, 0, "row {c} has bits past the lanes");
+            for (l, v) in grp.iter().enumerate() {
+                assert_eq!((x >> l) & 1, bit(&v[c / WORD], c % WORD), "row {c} lane {l}");
+            }
         }
     }
 
