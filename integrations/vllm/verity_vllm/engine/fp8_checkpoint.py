@@ -359,6 +359,19 @@ def _make_into(snapshots: Path, base_dir: Path, base: dict[str, Any]) -> dict[st
     return dict(pin, local_path=str(final))
 
 
+def remake(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | None = None) -> tuple[dict[str, Any], list[str]]:
+    """Re-make a recipe pin on this host from its BF16 pin (checked first): (the made pin, what differs from `entry`).  The
+    snapshot goes to `entry["local_path"]`, or beside the base under `hf_home`."""
+    base = base_entry(entry, entries)
+    final = snapshot_dir(hf_home, entry["repo"], entry["revision"]) if hf_home else Path(entry["local_path"])
+    pin = _make_into(final.parent, verified_base(base, hf_home), base)
+    bad = [fn for fn, d in sorted(entry["files"].items()) if d.get("sha256") and pin["files"].get(fn, {}).get("sha256") != d["sha256"]]
+    bad += sorted(set(pin["files"]) - set(entry["files"]))
+    if pin["revision"] != entry["revision"]:
+        bad.append(f"revision {pin['revision']}")
+    return pin, bad
+
+
 @dataclass(frozen=True, kw_only=True)
 class MakeOptions:
     """Re-make a registered FP8 pin (`recipe` in checkpoints.json) from its BF16 pin and check every file's sha256."""
@@ -392,13 +405,7 @@ def main(a: MakeOptions | PinOptions) -> int:
         entry = next((c for c in entries if c.get("role") == a.role), None)
         if entry is None:
             raise UsageError(f"no checkpoints.json entry with role {a.role!r}")
-        base = base_entry(entry, entries)
-        final = snapshot_dir(a.hf_home, entry["repo"], entry["revision"]) if a.hf_home else Path(entry["local_path"])
-        pin = _make_into(final.parent, verified_base(base, a.hf_home), base)
-        bad = [fn for fn, d in sorted(entry["files"].items()) if d.get("sha256") and pin["files"].get(fn, {}).get("sha256") != d["sha256"]]
-        bad += sorted(set(pin["files"]) - set(entry["files"]))
-        if pin["revision"] != entry["revision"]:
-            bad.append(f"revision {pin['revision']}")
+        pin, bad = remake(entry, entries, a.hf_home)
         print(json.dumps({"role": a.role, "local_path": pin["local_path"], "ok": not bad, "mismatch": bad}))
         return 1 if bad else 0
     base = next((c for c in entries if c.get("role") == a.base_role and c.get("safetensors_sha256")), None) \
