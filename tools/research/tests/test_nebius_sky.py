@@ -42,7 +42,8 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
     assert set(q) == {"circuits", "provers", "backfill"} and set(q["backfill"].values()) == {0}          # backfill only borrows
     assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 3)       # tonight: coverage is the binding workstream
-    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (112, 64)           # checks and pinned benches run outside Kueue
+    assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (124, 64)
+    assert sum(x["cpu"] for x in q.values()) + CONTROLLER["cpu"] <= NODE["cpu"]              # every admitted pod can be placed           # checks and pinned benches run outside Kueue
     for res, cap in NODE.items():
         assert sum(x[res] for x in q.values()) <= cap, res
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
@@ -115,8 +116,12 @@ def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
 def test_jobs_write_only_under_workspace_jobs_and_set_their_thread_count():
     for f in sorted((SKY / "jobs").glob("*.yaml")):
         t = f.read_text()
-        cpus = re.search(r"^  cpus: (\d+)", t, re.M).group(1)
-        assert f'OMP_NUM_THREADS: "{cpus}"' in t, f.name                                  # SkyPilot's runner sets 1
+        for task in t.split("\n---\n"):
+            if "\nresources:" not in task:
+                continue
+            cpus = int(re.search(r"^  cpus: (\d+)", task, re.M).group(1))
+            threads = int(re.search(r'^  OMP_NUM_THREADS: "(\d+)"', task, re.M).group(1))    # SkyPilot's runner sets 1
+            assert threads == cpus or (f.stem == "config-run" and "\nname: build" in task and (cpus, threads) == (4, 16)), f.name
         assert "RESEARCH_RUNS: /workspace/jobs/runs" in t and "workdir" not in t, f.name
         assert "--python 3.12" in t, f.name                                               # the image's python is 3.10
 

@@ -31,7 +31,7 @@ name: build
 
 resources:
   infra: ssh/vy-nebius
-  cpus: 16
+  cpus: 4          # the request Kueue counts; a Build uses ~2-9 cores (15:52Z) and bursts onto idle ones: no CPU limit
   labels:
     budget-line: nebius-config-run
   memory: 160
