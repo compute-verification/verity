@@ -28,7 +28,9 @@ rows, zero-padded to a multiple of 128 channels as `pearlc_headline.py` pads the
 --merge forms each linear's whole admitted unit (A: its admissible token rows, B: its admissible weight rows, trimmed to
 multiples of 32 and 16; its own seeds, so the tiles are unchanged) and reports `fp8-merge-rate/sm120`
 (`sm120_exact/run.py`'s `merge_stats`: Strassen's 10 pre-adds per element and per 16 x 32 / 32 x 8 fragment, the fragment
-pairs where all 10 are E4M3, and the diagonal pair's largest all-E4M3 block).
+pairs where all 10 are E4M3, and the diagonal pair's largest all-E4M3 block). --pairing ROWS forms ROWS sampled admitted rows
+per side (own seeds again) and lets the greedy adversarial pairing (`sm120_exact/pairing.py`'s `pair_unit`: any row, column
+and k permutation) look for a 16 x 32 A or 8 x 32 B fragment whose 5 pre-adds are all E4M3.
 
 Each tile reports its rows' debit (a token row's share over its words of the tile, a weight row's over its 64). A 64x8 tile sees
 a token row through 8 words, so one flagged atom is 1/(8T) of it; --tile-cols N widens the tile to 64 x N, and --rows-by ratio
@@ -131,6 +133,9 @@ def main() -> None:
     ap.add_argument("--replay", default="", help="a pearlc_capture.py directory: X from its manifest, W from the model's safetensors")
     ap.add_argument("--split", action="store_true", help="admission with the channel split, |S| <= k/100; tiles from the split unit")
     ap.add_argument("--merge", action="store_true", help="fp8-merge-rate/sm120 on each linear's admitted rows (sm120_exact.run)")
+    ap.add_argument("--pairing", type=int, default=0, metavar="ROWS",
+                    help="fp8-merge-rate/sm120 under the greedy adversarial pairing (sm120_exact.pairing) on ROWS sampled "
+                    "admitted rows per side (0: off)")
     ap.add_argument("--out", default="pearlc_activations.json")
     args = ap.parse_args()
     C.set_atom(args.atom)
@@ -176,6 +181,17 @@ def main() -> None:
             b = C.form_s5(XB, FmB, args.delta, args.line_norm, mr)[0]
             rec["merge"] = {"rows": [len(ra), len(rb)], **merge_stats(a, b, args.seed)}
             del XA, XB, a, b
+        if args.pairing and len(ia) >= 2 and len(ib) >= 2:
+            from sm120_exact.pairing import pair_unit
+            pr = C._rng("pairing", name, kpad)
+            FpA, FpB = (C.enc(C.unit_lines(kpad, pr) * (args.line_norm / np.sqrt(32))) for _ in range(2))
+            sa, sb = (np.sort(pr.choice(i, min(len(i), args.pairing), replace=False)) for i in (ia, ib))
+            XA, XB = np.zeros((len(sa), kpad)), np.zeros((len(sb), kpad))
+            XA[:, :X.shape[1]], XB[:, :W.shape[1]] = X[sa], W[sb]
+            sides = {"A": (C.form_s5(XA, FpA, args.delta, args.line_norm, pr)[0], np.ones(len(sa), bool)),
+                     "B": (C.form_s5(XB, FpB, args.delta, args.line_norm, pr)[0], np.ones(len(sb), bool))}
+            rec["pairing"] = {"rows": [len(sa), len(sb)], **pair_unit(sides, kpad, kpad, 128, 4, pr)}
+            del XA, XB, sides
         tiles, nc = [], args.tile_cols
         if kpad % 128 == 0 and len(ia) >= 64 and len(ib) >= nc:
             FcA = C.enc(C.unit_lines(kpad, rng) * (args.line_norm / np.sqrt(32)))
@@ -305,6 +321,14 @@ def main() -> None:
             "pair_A_max": max(r["merge"]["pair_A"] for r in merged), "pair_B_max": max(r["merge"]["pair_B"] for r in merged),
             "hits_by_linear": {r["layer"]: {n: v["frag_hits"] for n, v in r["merge"]["preadds"].items() if v["frag_hits"]}
                                for r in merged if r["merge"]["preadd_frag_hits"]}}
+    paired = [r for r in layers if "pairing" in r]
+    if paired:
+        doc["summary"]["pairing"] = {
+            "linears": len(paired),
+            "fragments": {m: sum(r["pairing"][m]["fragment"] for r in paired) for m in ("A_only", "B_only", "joint")},
+            "most_A_pairs": max(r["pairing"]["A_only"]["reached_with_32_k_pairs"][0] for r in paired),
+            "most_B_pairs": max(r["pairing"]["B_only"]["reached_with_32_k_pairs"][1] for r in paired),
+            "most_joint_pairs": max(sum(r["pairing"]["joint"]["reached_with_32_k_pairs"][:2]) for r in paired)}
     out = Path(args.out)
     out.write_text(json.dumps(doc, indent=1) + "\n")
     s = doc["summary"]
