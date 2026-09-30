@@ -213,6 +213,8 @@ _PRO6000_E4M3 = (_PRO6000_FP8 + ": run r20260930-063457-5410 (GPU-83455c5b-f2a1-
                  "two-HMMA lowering 3,049,017")
 _PRO6000_E5M2 = (_PRO6000_FP8 + ": run r20260930-063527-4d6b (GPU-6fbd6701-ccfb-e008-dc6e-986175046bc7, SASS QMMA.16832.F32.E5M2.E5M2), "
                  "25,041,024 elements, 0 mismatches against BLACKWELL_SM120_E5M2_M16N8K32; Ada's pipeline with e5m2 products misses 15,747,373")
+_PRO6000_E5M2_SECOND = ("a second PRO 6000 die: run r20260930-073650-c9c5 (GPU-5f1149a4-e5f5-1007-ec78-7cd350a69a4f), 6,440,960 elements, "
+                        "0 mismatches")
 
 
 def _i(**kw) -> Instruction:
@@ -372,10 +374,11 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(16, 8, 32),
             a_dtype="e5m2", b_dtype="e5m2", acc_dtype="f32", scale=None,
             model=BLACKWELL_SM120_E5M2_M16N8K32,
-            status="hypothesis",
-            dossier="art:164a66c8084c4afd42d3b4ecb2f30676e6364a17e6e5877bed07cefc8ddd04a5",
+            status="pinned",
+            dossier="art:fc4bb8915dd22f22b3d0260a00a6d694750322852c5163ddb80a05948370a94f",
             anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
-            evidence=(_PRO6000_E5M2, "model = sm120.mma.m16n8k32.e4m3's pipeline (groups (32,), width 26, floor -133) with e5m2 products"),
+            evidence=(_PRO6000_E5M2, _PRO6000_E5M2_SECOND,
+                      "model = sm120.mma.m16n8k32.e4m3's pipeline (groups (32,), width 26, floor -133) with e5m2 products"),
         ),
         _i(
             id="sm120.mma.m16n8k64.e2m1.nvf4",
