@@ -817,15 +817,21 @@ template <int FMT, int BM, int BN, int MODE> DEV void gemm_body(const Args& a) {
 GEMMS(nv, NVFP4)
 GEMMS(mx, MXFP4)
 
-// tile leaves: TurboSHAKE128 of a 64 x 64 tile's 128 message digests (rows in order, 2 chunks each), 0x22.
-// p0 digests, p1 out (tiles row-major x 32 B); i0 m, i1 n
+// tile leaves: TurboSHAKE128 of a tile's message digests (its rows in order, 2 chunks each), 0x22: 128 digests, or 2r for the
+// r = 16, 32 or 48 rows of a last tile row that A's rows don't fill (the scheme's partial tiles; the padded rows' digests
+// are left out).  p0 digests (padded rows x n/32 x 32 B), p1 out (tiles row-major x 32 B); i0 A's rows (tiles are
+// ceil(rows/64) x n/64), i1 n
 extern "C" __global__ void __launch_bounds__(64) leaves(const Args a) {
   const int tn = a.i[1] / 64, per = a.i[1] / 32, t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= a.i[0] / 64 * tn) return;
-  const int ti = t / tn, tj = t % tn;
+  if (t >= (a.i[0] + 63) / 64 * tn) return;
+  const int ti = t / tn, tj = t % tn, r = min(64, a.i[0] - 64 * ti);
   const uint64_t* dg = reinterpret_cast<const uint64_t*>(a.p[0]);
+  const auto lane = [&](int i) { return dg[((size_t)(64 * ti + i / 8) * per + 2 * tj + (i / 4) % 2) * 4 + i % 4]; };
   uint64_t h[4];
-  ph::pearlc::tile_leaf([&](int i) { return dg[((size_t)(64 * ti + i / 8) * per + 2 * tj + (i / 4) % 2) * 4 + i % 4]; }, h);
+  if (r == 16) ph::ts128<128>(ph::pearlc::D_LEAF, lane, h);
+  else if (r == 32) ph::ts128<256>(ph::pearlc::D_LEAF, lane, h);
+  else if (r == 48) ph::ts128<384>(ph::pearlc::D_LEAF, lane, h);
+  else ph::pearlc::tile_leaf(lane, h);
   ulonglong2* out = reinterpret_cast<ulonglong2*>(a.p[1] + (size_t)t * 32);
   out[0] = make_ulonglong2(h[0], h[1]);
   out[1] = make_ulonglong2(h[2], h[3]);

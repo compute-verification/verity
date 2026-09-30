@@ -309,7 +309,8 @@ class Pipeline:
             p=[b["a_codes"], b["a_scales"], b["b_codes"], b["b_scales"], b["pa"], b["pb"], b["a_inv"], b["b_inv"], b["y"],
                b["digests"], b.get("c", 0), b.get("u", 0)], i=[m, n, k])))
         if mode == "hash":
-            out.append(("leaves", (cdiv((m // 64) * (n // 64), 64), 64), dict(p=[b["digests"], b["leaves"]], i=[m, n])))
+            out.append(("leaves", (cdiv(cdiv(self.rows_a, 64) * (n // 64), 64), 64), dict(p=[b["digests"], b["leaves"]],
+                                                                                          i=[self.rows_a, n])))
         return out
 
     def launch(self, stream: int = 0, mode: str = "hash") -> None:
@@ -346,9 +347,19 @@ def diff(name: str, got: bytes, want: bytes) -> dict:
     return out
 
 
+def device_bytes(pl: Pipeline, name: str, nbytes: int) -> bytes:
+    """A buffer as the fixture holds it: for A's scales (k-tile major) with m padded, each k-tile's first rows_a rows."""
+    got = pl.dev.read(pl.buf[name], pl.sizes.get(name, nbytes))
+    if name == "a_scales" and pl.rows_a != pl.m:
+        per = 128 // pl.blk
+        got = np.frombuffer(got, np.uint8).reshape(pl.k // 128, pl.m, per)[:, :pl.rows_a].tobytes()
+    return got[:nbytes]
+
+
 def check_fmt(dev: Dev, d: Path) -> bool:
     mf = json.loads((d / "manifest.json").read_text())
-    m, n, k = mf["shape"]["m"], mf["shape"]["n"], mf["shape"]["k"]
+    rows_a, n, k = mf["shape"]["m"], mf["shape"]["n"], mf["shape"]["k"]
+    m = cdiv(rows_a, 64) * 64
     want = {name: (d / f"{name}.bin").read_bytes() for name in mf["files"]}
     for name, meta in mf["files"].items():
         if hashlib.sha256(want[name]).hexdigest() != meta["sha256"]:
@@ -359,21 +370,22 @@ def check_fmt(dev: Dev, d: Path) -> bool:
             continue
         wide = bm == 64 and m % 32 == 0 and n % 32 == 0
         pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, bn=bn, store_cu=True, split=k // 64 // 8 if bm == 64 else 1,
-                      chain_h=32 if wide else 16)
+                      chain_h=32 if wide else 16, rows_a=rows_a)
         for name in ("xa", "xb", "salt", "dom_a", "dom_b"):
             dev.write(pl.buf[name], want[name])
         pl.weight_side()
         dev.sync()
-        rows = [diff(name, dev.read(pl.buf[name], len(want[name])), want[name]) for name in WRITTEN["weight"]]
+        rows = [diff(name, device_bytes(pl, name, len(want[name])), want[name]) for name in WRITTEN["weight"]]
         for mode in MODES:
             pl.launch(mode=mode)
             dev.sync()
             for name in WRITTEN[mode]:
                 src = "y" if name == "y_plain" else name
-                rows.append(diff(name, dev.read(pl.buf[src], len(want[name])), want[name]) | {"mode": mode})
+                rows.append(diff(name, device_bytes(pl, src, len(want[name])), want[name]) | {"mode": mode})
         pl.free()
         for r in rows:
-            r.update(fmt=mf["fmt"], bm=bm, bn=bn, split=[pl.split_a, pl.split_b], chain_h=pl.chain_h, shape=[m, n, k])
+            r.update(fmt=mf["fmt"], bm=bm, bn=bn, split=[pl.split_a, pl.split_b], chain_h=pl.chain_h, shape=[m, n, k],
+                     rows_a=rows_a)
             emit(r)
             ok &= r["mismatches"] == 0
     return ok
