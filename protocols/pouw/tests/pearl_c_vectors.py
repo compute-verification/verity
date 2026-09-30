@@ -5,8 +5,9 @@ Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is an FP
 of SHAKE256("verity/pouw/pearl-c-vectors/v1", c, name, "codes", i) clamped to ±127 and whose k/8 BF16 scales are
 2^(−4 − (b mod 5)) for the bytes of SHAKE256(…, "scales", i).  A v1 row (FP32 words) is that row opened, each nonzero word's
 low 16 mantissa bits replaced by the 16-bit words of SHAKE256(…, "fraction", i).  The context's salt and roots are SHA-256
-of their labels.  A ``-h1`` case (hashing format h1) reads its h0 twin's inputs, and adds A's ``frame-b3`` row root over the
-tile's A rows, row 0's leaf and the first message digest."""
+of their labels.  A ``-h1`` case (hashing format h1) reads its h0 twin's inputs (its label without ``-h1``), and adds A's
+``frame-b3`` row root over the tile's A rows, row 0's leaf and the first message digest.  ``decode-32-v1-h1`` is decode's
+partial tile: 32 rows of a 64-column tile, its leaf over 64 digests."""
 
 from __future__ import annotations
 
@@ -27,7 +28,8 @@ CASES = (("test-16", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v0"),
          ("test-16-v1", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1"),
          ("prod-64-v1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1"),
          ("test-16-v1-h1", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1", "h1"),
-         ("prod-64-v1-h1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1", "h1"))
+         ("prod-64-v1-h1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1", "h1"),
+         ("decode-32-v1-h1", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h1"))
 
 
 def shake(case: str, name: str, part: str, i: int, n: int) -> bytes:

@@ -124,6 +124,7 @@ says `statement_machinery: excluded` (the skip-authentication diagnostic says
 
 ~~~sh
 uv run pytest backends/sp1/tests                # Python driver over the recorded vectors; execute only
+uv run research data fetch-fixtures backends/sp1 fixtures/lean-vectors   # the vectors are fetched fixtures (fixtures/artifacts.json)
 cd backends/sp1 && cargo test --release -p veritor-zk-common   # kernel unit tests + cross-language vectors
 ~~~
 

@@ -1,7 +1,8 @@
 // CPU stand-in for libcuda.so.1, for run.py's dry run off the pod (tests/test_pearl_c_kernel.py): "device" memory is host
 // memory, copies and memsets are bounds-checked against their allocation, a launch fails as the driver's does when its
-// dynamic shared memory exceeds 48 KB without cuFuncSetAttribute, and every allocation and launch (name, grid, block, dynamic
-// shared memory, the 16 pointers and 16 ints of Args) is appended to $FAKE_LOG as one JSON line.  Kernels do nothing, except
+// dynamic shared memory exceeds 48 KB without cuFuncSetAttribute, and every allocation, stream, stream wait and launch (name,
+// stream, grid, block, dynamic shared memory, the 16 pointers and 16 ints of Args) is appended to $FAKE_LOG as one JSON line.
+// Streams are handles only: work runs in issue order, and a launch or wait on a destroyed stream fails.  Kernels do nothing, except
 // the *_smem probes, which write $FAKE_SMEM (default 197728).  Functions are the names in $FAKE_KERNELS (comma-separated).
 #include <stdint.h>
 #include <stdio.h>
@@ -110,17 +111,32 @@ CUresult CUDAAPI cuMemcpyDtoD_v2(CUdeviceptr d, CUdeviceptr s, size_t n) {
 }
 CUresult CUDAAPI cuMemGetInfo_v2(size_t* f, size_t* t) { *f = 80ull << 30; *t = 80ull << 30; return CUDA_SUCCESS; }
 
+struct Stream { int live; };
+static int stream_ok(CUstream s) { return !s || ((struct Stream*)s)->live == 1; }
+CUresult CUDAAPI cuStreamCreate(CUstream* s, unsigned flags) {
+  if (flags > 1) return CUDA_ERROR_INVALID_VALUE;
+  struct Stream* q = calloc(1, sizeof *q);
+  q->live = 1; *s = q;
+  fprintf(log_file(), "{\"op\":\"stream\",\"ptr\":%llu}\n", (unsigned long long)(uintptr_t)q);
+  return CUDA_SUCCESS;
+}
+CUresult CUDAAPI cuStreamDestroy_v2(CUstream s) {
+  if (!s || !stream_ok(s)) return CUDA_ERROR_INVALID_HANDLE;
+  ((struct Stream*)s)->live = 0; return CUDA_SUCCESS;
+}
+
 struct Args { uint64_t p[16]; int32_t i[16]; };
 CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned gx, unsigned gy, unsigned gz, unsigned bx, unsigned by, unsigned bz,
                                 unsigned smem, CUstream s, void** params, void** extra) {
-  (void)s; (void)extra;
+  (void)extra;
   const int i = (int)(uintptr_t)f - 1;
-  if (i < 0 || i >= g_nfn || !params) return CUDA_ERROR_INVALID_HANDLE;
+  if (i < 0 || i >= g_nfn || !params || !stream_ok(s)) return CUDA_ERROR_INVALID_HANDLE;
   if (!gx || !gy || !gz || bx * by * bz > 1024 || !bx) return CUDA_ERROR_INVALID_VALUE;
   if ((int)smem > g_maxdyn[i]) return CUDA_ERROR_INVALID_VALUE;
   const struct Args* a = params[0];
   FILE* L = log_file();
-  fprintf(L, "{\"op\":\"launch\",\"name\":\"%s\",\"grid\":[%u,%u,%u],\"block\":%u,\"smem\":%u,\"p\":[", g_names[i], gx, gy, gz, bx, smem);
+  fprintf(L, "{\"op\":\"launch\",\"name\":\"%s\",\"stream\":%llu,\"grid\":[%u,%u,%u],\"block\":%u,\"smem\":%u,\"p\":[", g_names[i],
+          (unsigned long long)(uintptr_t)s, gx, gy, gz, bx, smem);
   for (int j = 0; j < 16; j++) fprintf(L, "%s%llu", j ? "," : "", (unsigned long long)a->p[j]);
   fprintf(L, "],\"i\":[");
   for (int j = 0; j < 16; j++) fprintf(L, "%s%d", j ? "," : "", a->i[j]);
@@ -137,7 +153,15 @@ CUresult CUDAAPI cuLaunchKernel(CUfunction f, unsigned gx, unsigned gy, unsigned
 }
 struct Ev { double t; };
 CUresult CUDAAPI cuEventCreate(CUevent* e, unsigned flags) { (void)flags; *e = (CUevent)calloc(1, sizeof(struct Ev)); return CUDA_SUCCESS; }
-CUresult CUDAAPI cuEventRecord(CUevent e, CUstream s) { (void)s; ((struct Ev*)e)->t = g_ms; return CUDA_SUCCESS; }
+CUresult CUDAAPI cuEventRecord(CUevent e, CUstream s) {
+  if (!stream_ok(s)) return CUDA_ERROR_INVALID_HANDLE;
+  ((struct Ev*)e)->t = g_ms; return CUDA_SUCCESS;
+}
+CUresult CUDAAPI cuStreamWaitEvent(CUstream s, CUevent e, unsigned flags) {
+  if (!stream_ok(s) || !e || flags) return CUDA_ERROR_INVALID_VALUE;
+  fprintf(log_file(), "{\"op\":\"wait\",\"stream\":%llu}\n", (unsigned long long)(uintptr_t)s);
+  return CUDA_SUCCESS;
+}
 CUresult CUDAAPI cuEventSynchronize(CUevent e) { (void)e; return CUDA_SUCCESS; }
 CUresult CUDAAPI cuEventElapsedTime(float* ms, CUevent a, CUevent b) { *ms = (float)(((struct Ev*)b)->t - ((struct Ev*)a)->t); return CUDA_SUCCESS; }
 CUresult CUDAAPI cuEventDestroy_v2(CUevent e) { free(e); return CUDA_SUCCESS; }

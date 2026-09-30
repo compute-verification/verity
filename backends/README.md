@@ -23,7 +23,9 @@ C-Flock is the one active backend family. The others are frozen: kept, still in 
 
 `check` (`tools/check/check.py`) is the merge gate. Its pytest step runs every test suite (`tools/check/suites.py`, skill
 `testing`): each family below with Python tests is one suite, configured in its own `pyproject.toml`, and a pass is reused
-while the suite's inputs are unchanged. It has no `cargo` step, so no Rust test under `backends/` runs in it. Its Lean steps build C-Flock's Lean verifier, check
+while the suite's inputs are unchanged. It has no `cargo` step, so no Rust test under `backends/` runs in it. The frozen
+crates' proofs, systems and vectors are fetched fixtures (`fixtures/artifacts.json`): run
+`uv run research data fetch-fixtures backends/<crate>` before their `cargo test` (`include_bytes!` needs the files to compile). Its Lean steps build C-Flock's Lean verifier, check
 its partition check against `verity.ir.partition` on random cuts, and audit every Lake package; the Lean verifier's
 agreement with upstream's Rust verifier runs only when the run is sent its input bundle.
 

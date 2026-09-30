@@ -15,7 +15,8 @@ only, nothing built on the pod).
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.  Exit 3: not an H100 SXM; 4: a check failed.
 
-  python3 run.py [check.json]      (env: SHAPES="8192 16384", REPS=5, PEARLC_LIBCUDA, PEARLC_LIBNVML)
+  python3 run.py [check.json]      (env: SHAPES="8192 16384", REPS=5, HASH_STREAM=1 (the timing's hashing on a side stream,
+                                    `Pipeline`), PEARLC_LIBCUDA, PEARLC_LIBNVML)
 """
 
 from __future__ import annotations
@@ -47,7 +48,9 @@ CUDA = {
     "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
     "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
+    "cuStreamCreate": [P(vp), u], "cuStreamWaitEvent": [vp, vp, u], "cuStreamDestroy_v2": [vp],
 }
+CU_STREAM_NON_BLOCKING, CU_EVENT_DISABLE_TIMING = 1, 2
 NVML = {
     "nvmlInit_v2": [], "nvmlDeviceGetHandleByIndex_v2": [u, P(vp)], "nvmlSystemGetDriverVersion": [C.c_char_p, u],
     "nvmlDeviceGetClockInfo": [vp, i32, P(u)], "nvmlDeviceGetCurrentClocksThrottleReasons": [vp, P(C.c_ulonglong)],
@@ -156,7 +159,8 @@ class Dev:
     def copy(self, dst: int, src: int, n: int) -> None:
         self.ck("cuMemcpyDtoD_v2", u64(dst), u64(src), n)
 
-    def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=()) -> None:
+    def launch(self, name: str, grid, block: int, smem: int = 0, p=(), i=(), stream=None) -> None:
+        """Launch `name` on `stream` (None: the legacy default stream, which everything else uses)."""
         a = Args()
         for j, v in enumerate(p):
             a.p[j] = v
@@ -164,20 +168,34 @@ class Dev:
             a.i[j] = v
         g = tuple(grid) + (1,) * (3 - len(grid)) if isinstance(grid, (tuple, list)) else (grid, 1, 1)
         params = (vp * 1)(C.addressof(a))
-        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, None, params, None)
+        self.ck("cuLaunchKernel", self.fn(name), g[0], g[1], g[2], block, 1, 1, smem, stream, params, None)
+
+    def stream(self) -> vp:
+        """A non-blocking stream: it neither waits for nor holds up the default stream, except through `wait`."""
+        s = vp()
+        self.ck("cuStreamCreate", C.byref(s), CU_STREAM_NON_BLOCKING)
+        return s
+
+    def wait(self, waiter, on) -> None:
+        """Work issued to stream `waiter` from here on waits for the work issued so far to stream `on`."""
+        e = vp()
+        self.ck("cuEventCreate", C.byref(e), CU_EVENT_DISABLE_TIMING)
+        self.ck("cuEventRecord", e, on)
+        self.ck("cuStreamWaitEvent", waiter, e, 0)
+        self.ck("cuEventDestroy_v2", e)
 
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
 
-    def timed(self, body, reps: int) -> list[float]:
+    def timed(self, body, reps: int, stream=None) -> list[float]:
         out = []
         for _ in range(reps):
             a, b, ms = vp(), vp(), C.c_float()
             self.ck("cuEventCreate", C.byref(a), 0)
             self.ck("cuEventCreate", C.byref(b), 0)
-            self.ck("cuEventRecord", a, None)
+            self.ck("cuEventRecord", a, stream)
             body()
-            self.ck("cuEventRecord", b, None)
+            self.ck("cuEventRecord", b, stream)
             self.ck("cuEventSynchronize", b)
             self.ck("cuEventElapsedTime", C.byref(ms), a, b)
             self.cu.cuEventDestroy_v2(a)
@@ -199,19 +217,30 @@ def pow2(n: int) -> int:
     return 1 << max(n - 1, 0).bit_length()
 
 
+def depth(n: int) -> int:
+    """Levels of nodes above the leaves of a frame-b3 tree over n leaves."""
+    return pow2(n).bit_length() - 1
+
+
 class Pipeline:
-    """One (shape, forming) instance: its buffers and its kernels in order, each a (name, phase, launch) step."""
+    """One (shape, forming) instance: its buffers and its kernels in order, each a (name, phase, launch) step.
+
+    The hashing phase's launches go to `hash_stream` (default: the default stream, like the rest).  On a side stream they
+    fence themselves: the side stream waits for the default stream's work before the first kernel that reads C~ and U
+    (hash_msg), and the default stream waits for the side stream after the tile tree, so A's rows hash beside the forming
+    and the GEMMs and a unit ends when its tile root is written."""
 
     GEMM_SMEM: dict[str, int] = {}
 
-    def __init__(self, dev: Dev, m: int, n: int, k: int, forming: str, keys: dict[str, int], xa: int, xb: int):
-        self.dev, self.m, self.n, self.k, self.forming, self.keys = dev, m, n, k, forming, keys
+    def __init__(self, dev: Dev, m: int, n: int, k: int, forming: str, keys: dict[str, int], xa: int, xb: int,
+                 hash_stream=None):
+        self.dev, self.m, self.n, self.k, self.forming, self.keys, self.hs = dev, m, n, k, forming, keys, hash_stream
         v1 = forming == "v1"
         rowa, rowb = (4 * k, 4 * k) if v1 else (k + k // 4, k + k // 4)
         self.row_bytes = rowa
         if m % 128 or n % 128 or k % 128:
             raise ValueError(f"the kernels take m, n and k multiples of 128, not {(m, n, k)}")
-        self.tiles = (m // 64) * (n // 64)
+        self.tiles = cdiv(m, 64) * (n // 64)
         sizes = {
             "ea_codes": m * 32, "ea_tiled": m * 32, "eb_codes": n * 32, "eb_tiled": n * 32,
             "fa_codes": k * 32, "fa_tiled": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fb_tiled": k * 32, "fbT32": 32 * k,
@@ -220,8 +249,9 @@ class Pipeline:
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n,
             "at": m * k, "bt": n * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
-            "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "tickets": (m // 16) * (n // 16) * 32,
+            "digests": m * n, "leaves": self.tiles * 32, "tickets": (m // 16) * (n // 16) * 32,
             "tree_a": (2 * pow2(m) - 1) * 32, "tree_t": (2 * pow2(self.tiles) - 1) * 32,
+            "keys_a": 32 * depth(m), "keys_t": 32 * depth(self.tiles),
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2, "diff": 8,
         }
         if v1:
@@ -255,16 +285,27 @@ class Pipeline:
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms), 384, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, 8))
 
-    def levels(self, name: str, count: int, dom: str) -> None:
-        """A frame-b3 tree over `count` leaves already at level 0 of buffer `name`: its pads, then each level above."""
-        d, base, width = self.dev, self.b[name], pow2(count)
+    def levels(self, name: str, count: int, dom: str, keys: str) -> None:
+        """A frame-b3 tree over `count` leaves already at level 0 of buffer `name`: its pads, its level keys (into buffer
+        `keys`), then each level above."""
+        d, s, base, width, lk = self.dev, self.hs, self.b[name], pow2(count), self.b[keys]
         if width > count:
-            d.launch("hash_pad", cdiv(width - count, 128), 128, p=(base, self.keys[dom]), i=(count, width))
+            d.launch("hash_pad", cdiv(width - count, 128), 128, p=(base, self.keys[dom]), i=(count, width), stream=s)
+        if width > 1:
+            d.launch("hash_node_keys", 1, 32, p=(lk, self.keys[dom]), i=(depth(count),), stream=s)
         off, level = 0, 0
         while width > 1:
-            d.launch("hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), self.keys[dom]),
-                     i=(level, width // 2))
+            d.launch("hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), lk + 32 * level),
+                     i=(level, width // 2), stream=s)
             off, width, level = off + width, width // 2, level + 1
+
+    def fence_in(self) -> None:
+        if self.hs is not None:
+            self.dev.wait(self.hs, None)
+
+    def fence_out(self) -> None:
+        if self.hs is not None:
+            self.dev.wait(None, self.hs)
 
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, v1 = self.dev, self.b, self.m, self.n, self.k, self.forming == "v1"
@@ -306,18 +347,21 @@ class Pipeline:
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b[noise_a], b["beta_a"], b["af"], b["pa_t"]), i=(m, fl))),
                    ("gemm_pearlc", lambda: self.gemm("gemm_pearlc", "at", "bt", m, n, out=("c", "u", "y"), pa=b["pa_t"],
                                                      pb=b["pb_t"], rs=b["ia_a"], cs=b["ia_b"]))]
+        hs = self.hs
         hashing = [("hash_rows", lambda: d.launch("hash_rows", m, 256, p=(b["xa"], b["tree_a"], self.keys["dom_a"]),
-                                                  i=(m, self.row_bytes))),
-                   ("tree_a", lambda: self.levels("tree_a", m, "dom_a")),
-                   ("hash_msg", lambda: d.launch("hash_msg", cdiv(m * n // 32, 128), 128,
-                                                 p=(b["c"], b["u"], b["digests"], self.keys["k_msg"]), i=(m, n))),
+                                                  i=(m, self.row_bytes), stream=hs)),
+                   ("tree_a", lambda: self.levels("tree_a", m, "dom_a", "keys_a")),
+                   ("hash_msg", lambda: (self.fence_in(), d.launch("hash_msg", cdiv(m * n // 32, 128), 128,
+                                                                   p=(b["c"], b["u"], b["digests"], self.keys["k_msg"]),
+                                                                   i=(m, n), stream=hs))),
                    ("hash_leaf", lambda: d.launch("hash_leaf", cdiv(self.tiles, 64), 64, p=(b["digests"], b["leaves"],
-                                                                                           self.keys["k_leaf"]), i=(m, n))),
+                                                                                           self.keys["k_leaf"]), i=(m, n),
+                                                  stream=hs)),
                    ("tickets", lambda: d.launch("tickets", cdiv((m // 16) * (n // 16), 128), 128,
-                                                p=(b["c"], b["tickets"], self.keys["jackpot"]), i=(m, n))),
+                                                p=(b["c"], b["tickets"], self.keys["jackpot"]), i=(m, n), stream=hs)),
                    ("tree_t", lambda: (d.launch("hash_tree_leaves", cdiv(self.tiles, 128), 128,
-                                                p=(b["leaves"], b["tree_t"], self.keys["dom_t"]), i=(self.tiles,)),
-                                       self.levels("tree_t", self.tiles, "dom_t")))]
+                                                p=(b["leaves"], b["tree_t"], self.keys["dom_t"]), i=(self.tiles,), stream=hs),
+                                       self.levels("tree_t", self.tiles, "dom_t", "keys_t"), self.fence_out()))]
         plain_in_a, plain_in_b = ("xa", "xb") if v1 else ("xa_bf16", "xb_bf16")
         prep = [] if v1 else [
             ("open_a", lambda: d.launch("open_rows", cdiv(m * k // 8, 256), 256, p=(b["xa"], b["xa_bf16"]), i=(m, k))),
@@ -434,12 +478,17 @@ def timing(dev: Dev, nv: Nvml, size: int, forming: str, reps: int, gates: dict) 
             dev.launch("gen_f32", cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))
         else:
             dev.launch("gen_fp10", cdiv(rows * rowb // 4, 256), 256, p=(x,), i=(rows, k, seed))
-    pipe = Pipeline(dev, m, n, k, forming, keys, xa, xb)
+    dev.sync()
+    hs = dev.stream() if os.environ.get("HASH_STREAM") else None
+    pipe = Pipeline(dev, m, n, k, forming, keys, xa, xb, hash_stream=hs)
     pipe.run_all()
     out = measure(dev, nv, pipe, reps, gates)
+    out["hash_stream"] = hs is not None
     pipe.free()
     for p_ in (xa, xb, *keys.values()):
         dev.free(p_)
+    if hs is not None:
+        dev.ck("cuStreamDestroy_v2", hs)
     return out
 
 
@@ -452,7 +501,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         if phase in UNIT_PHASES + ("job",) and not gates["pearl_c"] or \
                 phase in ("plain", "plain_job", "adopted", "adopted_job") and not gates["plain"]:
             continue
-        t = dev.timed(f, reps)
+        t = dev.timed(f, reps, pipe.hs if phase == "hashing" else None)
         runs[name], med[name] = [round(x, 4) for x in t], statistics.median(t)
     after = nv.read()
     phases = {ph: sum(med.get(nm, 0.0) for nm, p, _ in steps if p == ph) for ph in ("job",) + UNIT_PHASES}

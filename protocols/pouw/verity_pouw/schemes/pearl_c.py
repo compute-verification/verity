@@ -360,7 +360,8 @@ class PearlC:
             gamma0=None,
             omega=Fraction(1),
             claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability") if hashing == "h0"
-            else ("tt-out", "random-oracle", "xof/blake3", "cr/blake3", "device-reproducibility", "beacon-unpredictability"),
+            else ("tt-out", "random-oracle", "xof/blake3", "cr/blake3", "cr/sha-256", "device-reproducibility",
+                  "beacon-unpredictability"),
             theorems=("Pouw.Proofs.workWeightedSampling",),
             hypotheses=(
                 "TT_OUT(1/400) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 program "
@@ -374,11 +375,13 @@ class PearlC:
         )
 
     def check(self, matmul: Matmul) -> None:
-        s = matmul.shape
-        if not (self.k_min <= s.k <= 1 << 16 and s.k % WINDOW == 0 and s.m % self.tile[0] == 0 and s.n % self.tile[1] == 0
+        """The domain: whole promotion groups, whole column tiles, and down the rows whole ticket subtiles (whole tiles, for
+        a test instance's tile under 16 rows), so the last row tile may be partial (decode's 32 x 64 tile)."""
+        s, rows = matmul.shape, min(self.tile[0], P.TILE)
+        if not (self.k_min <= s.k <= 1 << 16 and s.k % WINDOW == 0 and s.m % rows == 0 and s.n % self.tile[1] == 0
                 and s.m <= 1 << 24 and s.n <= 1 << 24):
             raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 128 | k (whole promotion groups), "
-                              f"tiles of {self.tile}, m, n <= 2^24")
+                              f"{rows} | m, {self.tile[1]} | n, m, n <= 2^24")
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)

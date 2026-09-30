@@ -181,9 +181,11 @@ def digests(c: np.ndarray, u: np.ndarray) -> list[bytes]:
 
 
 def leaves(dg: list[bytes], m: int, n: int) -> list[bytes]:
+    """The tile leaves, row-major; the last row tile is partial when 64 ∤ m (decode's 32 x 64: 64 digests)."""
     per = n // C.CHUNK
-    return [keyed(C.H1_KEYS["leaf"], b"".join(dg[r * per + 2 * tj + h] for r in range(64 * ti, 64 * ti + 64) for h in range(2)))
-            for ti in range(m // 64) for tj in range(n // 64)]
+    return [keyed(C.H1_KEYS["leaf"], b"".join(dg[r * per + 2 * tj + h] for r in range(64 * ti, min(64 * ti + 64, m))
+                                              for h in range(2)))
+            for ti in range(-(-m // 64)) for tj in range(n // 64)]
 
 
 def tickets(c: np.ndarray, seed_a: bytes) -> list[bytes]:

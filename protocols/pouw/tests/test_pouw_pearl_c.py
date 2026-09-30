@@ -181,7 +181,9 @@ def test_registry_and_domain():
     s = get("pearl-c-h100-v0")
     assert isinstance(s, PoUWScheme) and s.name == "pearl-c-h100-v0" and s.certificate.conjecture == "tt-out"
     s.check(Matmul(0, Shape(64, 1024, 64), 1))
-    for bad in (Shape(64, 992, 64), Shape(64, 1 << 17, 64), Shape(48, 1024, 64), Shape(64, 1040, 64)):
+    s.check(Matmul(0, Shape(32, 1024, 64), 1))
+    s.check(Matmul(0, Shape(112, 1024, 64), 1))
+    for bad in (Shape(64, 992, 64), Shape(64, 1 << 17, 64), Shape(40, 1024, 64), Shape(64, 1040, 64), Shape(64, 1024, 96)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 1))
     sh = Shape(128, 2048, 256)

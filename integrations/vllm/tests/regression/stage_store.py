@@ -45,7 +45,7 @@ def main(argv=None) -> int:
     ap.add_argument("--no-preserve", action="store_true", help="local store only (no remote push)")
     ap.add_argument("--snapshot", action="store_true", help="freeze/refresh the snapshot over every artifact id now in fixtures.toml")
     a = ap.parse_args(argv)
-    if not store_io.reachable():
+    if not store_io.reachable(need_remote=not a.no_preserve):
         print("store not reachable here", file=sys.stderr)
         return 2
     want = {int(x) for x in a.rows.split(",")} if a.rows else None

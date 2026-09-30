@@ -13,17 +13,24 @@ same bytes with SHA-512, so its domain id, leaves, pads, nodes and roots are 64 
 SHA-512 identity (``frame_v3/PROTOCOL.md`` §6).  ``binding`` stays the caller's 32-byte SHA-256 identity digest until the
 re-baseline moves identities to SHA-512.
 
-A domain with ``hash="blake3"`` (``frame-b3``) is a tree mode for latency: its domain id is BLAKE3 over the same framed domain
-message, and every leaf, node, pad and empty root is BLAKE3 keyed by that id over a compact message, so that a node is two
-compressions and a leaf streams its value through BLAKE3's own chunk tree (a 32 KB value: 32 chunks in parallel, then 5 parent
-levels).  The messages, integers little-endian: leaf ``0x01 ‖ u64 rank ‖ u64 position ‖ u16 len(schema) ‖ schema ‖ value``,
-node ``0x02 ‖ u8 level ‖ u64 index ‖ left ‖ right``, pad ``0x03 ‖ u64 rank``, empty ``0x04``.  The SP1 kernel does not mirror it.
+A domain with ``hash="blake3"`` (``frame-b3``) is a tree mode for latency.  Its domain id is BLAKE3 over the same framed domain
+message; leaves, pads and the empty root are BLAKE3 keyed by that id, and a level's nodes are BLAKE3 keyed by the level's key.
+Integers are little-endian:
+
+- leaf: ``H = 0x01 ‖ u64 rank ‖ u64 position ‖ u16 len(schema) ‖ schema``, zero-padded to a whole 64-byte block, then the value,
+  which so starts block-aligned and streams through BLAKE3's own chunk tree (a 32 KB value: 33 chunks in parallel, then 6 levels);
+- node at level l: ``left ‖ right`` under the key ``keyed(domain id, 0x02 ‖ u8 l)``: one 64-byte block, one compression (the
+  tree's shape is fixed by the domain's count, so no index is hashed);
+- pad: ``0x03 ‖ u64 rank``; empty root: ``0x04``.
+
+The SP1 kernel does not mirror it.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from verity.errors import ProtocolError
 
@@ -51,10 +58,17 @@ def _hash(tag: bytes, *parts: bytes, hash: str = "sha256") -> bytes:
     return _blake3.blake3(message) if hash == "blake3" else sha(hash)(message).digest()
 
 
-def blake3_node(domain_id: bytes, level: int, index: int, left: bytes, right: bytes) -> bytes:
-    """A ``frame-b3`` node: two compressions (module docstring)."""
+@lru_cache(maxsize=4096)
+def blake3_node_key(domain_id: bytes, level: int) -> bytes:
+    """The key of a ``frame-b3`` tree's level: ``keyed(domain id, 0x02 ‖ u8 level)``."""
 
-    return _blake3.keyed(domain_id, b"\x02" + level.to_bytes(1, "little") + index.to_bytes(8, "little") + left + right)
+    return _blake3.keyed(domain_id, b"\x02" + level.to_bytes(1, "little"))
+
+
+def blake3_node(domain_id: bytes, level: int, index: int, left: bytes, right: bytes) -> bytes:
+    """A ``frame-b3`` node: ``left ‖ right`` under its level's key, one compression (module docstring); ``index`` is not hashed."""
+
+    return _blake3.keyed(blake3_node_key(domain_id, level), left + right)
 
 
 def merkle_depth(count: int) -> int:
@@ -167,7 +181,8 @@ class CommitmentDomain:
 
         if self.hash == "blake3":
             name = schema.encode("utf-8")
-            return b"\x01" + rank.to_bytes(8, "little") + position.to_bytes(8, "little") + len(name).to_bytes(2, "little") + name
+            head = b"\x01" + rank.to_bytes(8, "little") + position.to_bytes(8, "little") + len(name).to_bytes(2, "little") + name
+            return head + bytes(-len(head) % 64)
         parts = (self.domain_id, _uint(rank), _uint(position), schema.encode("utf-8"))
         out = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF
         for part in parts:

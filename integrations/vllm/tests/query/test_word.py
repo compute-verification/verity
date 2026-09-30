@@ -316,3 +316,94 @@ def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifie
     part = PO.evaluate(P)
     assert part.population == sum(W.unit_rule(f)["units_per_call"] for f in fns) and len(part.calls) == 3
     assert PO.owners_digest(part) == PO.owners_digest(PO.evaluate(P))
+
+
+def test_a_wide_gate_skips_the_calls_parameters_unresolved_and_its_graph_is_unchanged(monkeypatch):
+    """`EmbeddingShard_v1`'s gathers are wide gates over a strided (transposed) view of the Call's own table: operands a wide gate never
+    lists.  Skipping them unresolved gives the graph that resolving every operand gives (the OLMoE shard's cut: 29 s -> 0.06 s)."""
+    from verity.ir import cut
+    from verity.ir.layout import resolve
+    fn = _fn("EmbeddingShard_v1", VS=cut.WIDE_FAN_IN + 3, H=4, START=0)
+    enumerated = []
+
+    def every_operand(gate, call):
+        s, body = gate.scope, gate.scope.spec.body
+        k = body.node_at(gate.index - s.offset)
+        node = body.nodes[k]
+        m = (gate.index - s.offset - body.offsets[k]) // node.fn.gates if node.form == "batch" else 0
+        for a, ax in zip(node.args, node.axes if node.form == "batch" else (None,) * len(node.args)):
+            refs = cut.member_refs(a, ax, m)
+            for j in range(len(refs)):
+                enumerated.append(1)
+                yield resolve(s, refs[j])
+
+    fast = cut.CallGraph(fn)
+    monkeypatch.setattr(cut, "_wide_operands", every_operand)
+    full = cut.CallGraph(fn)
+    assert len(enumerated) > 4 * cut.WIDE_FAN_IN
+    for a in ("n", "keep", "width", "prim", "scope", "external", "src", "dst", "input_ids", "input_reads", "outputs", "returned_inputs",
+              "recomputed", "total", "free", "free_by_prim"):
+        assert getattr(fast, a) == getattr(full, a), a
+
+
+#: forking happens in a fresh interpreter: a pytest-xdist worker has threads, and a fork beside them may deadlock
+PREFETCH_PROBE = """
+import json, multiprocessing
+from verity_vllm.query import word as W
+from verity_vllm.query.program_view import spec_base, spec_statics
+specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}",
+         "NoSuch_v1{N=1}"]
+n = W.prefetch(specs, jobs=2)
+memo = W._RULES.get(tuple(sorted(W.gate_limits(None).items())), {})
+same = all(rule == W.unit_rule(W.specialization(spec_base(fid), spec_statics(fid)), X, W_, e, memo={}) for (fid, X, W_, e), rule in memo.items())
+print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n": n, "families": sorted({k[0].split("{")[0] for k in memo}),
+                  "same": same}))
+"""
+
+
+def test_prefetch_memos_the_rules_the_check_computes_in_place():
+    """`word.prefetch` cuts in forked processes what `check_calls` would cut one after another -- the bodies cut as a whole, then each
+    separable body over its memoed members -- and memos exactly those rules; a spec that does not resolve is left to the check."""
+    import json
+    import subprocess
+    import sys
+    r = json.loads(subprocess.run([sys.executable, "-c", PREFETCH_PROBE], capture_output=True, text=True, check=True).stdout)
+    if not r["fork"]:
+        assert r["n"] == 0 and r["families"] == []
+        return
+    assert r["families"] == ["AttentionHead_v3", "Attention_v3", "EmbeddingShard_v1", "RMSNormTriton_v1"] and r["n"] == 4 and r["same"], r
+
+
+def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp_path):
+    """`--jobs`: the word check's rules prefetched and the components built in forked processes (`manifest.build_components`) give the
+    manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported."""
+    import gzip
+    import json
+    import shutil
+    import subprocess
+    import sys
+    from collections import Counter
+    from pathlib import Path
+    from tests.check.test_sampled_replay import LP, T
+    d = tmp_path / "row" / f"build_request_LP{LP}_T{T}"
+    d.mkdir(parents=True)
+    _program_dir(d)
+    with gzip.open(d / "instances.json.gz", "rt") as f:
+        hist = Counter(r["spec"] for r in json.load(f)["rows"])
+    (d / "result.json").write_text(json.dumps(dict(json.loads((d / "result.json").read_text()), spec_histogram=dict(hist))))
+    fx = {"fixture": "t", "requests": [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]}
+    (tmp_path / "wl.json").write_text(json.dumps(fx))
+
+    def build_global(jobs: int, out: str) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(tmp_path / "wl.json"),
+                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), "--out", str(tmp_path / out)],
+                              cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+
+    for jobs in (1, 3):
+        assert build_global(jobs, f"m{jobs}.json").returncode == 0
+    assert (tmp_path / "m1.json").read_bytes() == (tmp_path / "m3.json").read_bytes()
+    shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
+    fx["requests"][1]["max_tokens"] = T
+    (tmp_path / "wl.json").write_text(json.dumps(fx))
+    p = build_global(3, "bad.json")
+    assert p.returncode != 0 and f"request r1: Program has {T + 1} steps" in p.stderr, p.stderr[-2000:]
