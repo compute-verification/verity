@@ -270,7 +270,7 @@ def test_the_two_2of4_predicates_differ_by_hand():
 def test_dss_dead_reads_the_every_eighth_rms():
     X = np.ones((2, 64))
     X[0, 17] = 12.5                                                     # off the every-8th grid: rho stays 1
-    X[0, 49] = 11.0                                                     # dead at 10 rho (pearl_c4 at 5f0a1529), not at 12
+    X[0, 49] = 11.0                                                     # dead at sqrt(90) rho and 10 rho, not at 12
     X[1, 16] = 1000.0                                                   # on it: rho = sqrt((1000^2 + 7) / 8), 10 rho > 1000
     assert C.dss_dead(X, "nvf4").tolist() == [[False, True, False, True], [False, False, False, False]]
     assert C.dss_dead(X, "nvf4", 12.0).tolist() == [[False, True, False, False], [False, False, False, False]]
@@ -293,7 +293,7 @@ def test_the_falsifier_families_sit_where_they_claim(fmt):
     """Spiky and stride rows pass the reference's row rule at 10 rho, except the proposer's stride rows (rho = amax/10
     on average), which sit on the screen; stride rows put rho near a tenth of the block amax, Gaussians near a half."""
     rng = np.random.default_rng(16)
-    adm = {f: C.rows_admitted(C.family(f, 64, 4096, rng)[0], fmt)["both"].mean()
+    adm = {f: C.rows_admitted(C.family(f, 64, 4096, rng)[0], fmt, dead_rho=10.0)["both"].mean()
            for f in ("spiky-row", "stride-row", "stride-row-tight", "stride-row-grid", "gaussian")}
     assert adm["spiky-row"] == adm["stride-row-grid"] == adm["gaussian"] == 1.0
     assert adm["stride-row-tight"] > 0.8 and adm["stride-row"] < adm["stride-row-tight"]
@@ -337,6 +337,23 @@ def test_debit_census_2of4_term_granularity_and_span_words():
     assert r["item1"]["witness"]["span_either"]["max"] == 0.0 and r["windows_d24"]["max"] == 0.0
     S = C.debit_census(atom, fmt, *C.family("sparse-2of4", 32, 1024, rng), "none", 0.25, rng, 32)
     assert S["operands"]["A"]["formed_span_d24"] == 1.0 and S["v1"]["k128_span_words_equal_on_2of4"]["span_d24"]["equal"] == 1.0
+
+
+def test_debit_screen_charges_dead_blocks_where_the_cap_rejected_rows():
+    """The 10:35Z rule on one A row with two dead blocks of 64 (spread magnitudes off the every-8th grid, so rho stays
+    the row's and the blocks' codes stay salt-live): the cap rejects the row's tiles, the debit screen admits them and
+    counts the blocks' elements as salt-dead in item 4, and the noise and every other term are the same."""
+    atom, fmt = C.atoms_from(C.parse_args(["debit", "--atom", "blackwell_sm120_nvf4_m16n8k64"]))["blackwell_sm120_nvf4_m16n8k64"]
+    A, B = C.family("gaussian", 32, 1024, np.random.default_rng(12))
+    off_grid = np.r_[17:24, 25:32, 33:40, 41:48]
+    A[3, off_grid] = np.random.default_rng(11).uniform(8.0, 12.0, off_grid.size) * np.resize([1, -1, -1], off_grid.size)
+    assert C.dss_dead(A[3:4], fmt)[0, :4].tolist() == [False, True, True, False]
+    assert not C.witness_salt_dead(A[3:4], fmt)[0, off_grid].all()
+    cap, deb = (C.debit_census(atom, fmt, A, B, "row", 0.25, np.random.default_rng(10), 32, screen=s) for s in ("cap", "debit"))
+    assert cap["tiles_admitted"] == 0.5 and deb["tiles_admitted"] == 1.0
+    assert deb["item4"]["max"] > cap["item4"]["max"] and deb["item3"] == cap["item3"] and deb["item1"] == cap["item1"]
+    t = deb["v1"]["tile_debit_total"]["witness"]["g4"]
+    assert t["tiles_admitted_under_rho"] == deb["tiles_admitted"] * (1 - t["over_rho_admitted"])
 
 
 def test_debit_census_exact_tiles_bound_the_step_count_from_above():

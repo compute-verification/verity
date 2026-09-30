@@ -636,14 +636,15 @@ def witness_salt_dead(X: np.ndarray, fmt: str, delta: float = 0.25) -> np.ndarra
     return ((code(c - amp) == mid) & (code(c + amp) == mid)).reshape(rows, k)
 
 
-DEAD_RHO = 10.0                                   # pearl_c4.DEAD_RHO at 5f0a1529 (12 before it)
+DEAD_RHO = float(np.sqrt(90.0))                   # the screen (clean amax_b)^2 > 90 rho^2 (DEAD_RHO_SQ, #534); 10 at 5f0a1529
 
 
 def dss_dead(X: np.ndarray, fmt: str, dead_rho: float = DEAD_RHO) -> np.ndarray:
-    """D-SS's salt-free screen per (row, block): clean amax_b > dead_rho * rho, rho the RMS over every 8th position."""
+    """D-SS's salt-free screen per (row, block): clean amax_b^2 > dead_rho^2 * rho^2, rho^2 the mean square over every 8th
+    position (sqrt(90)^2 is exactly 90 in float64)."""
     blk = 16 if fmt == "nvf4" else 32
-    rho = np.sqrt((X[:, ::8] ** 2).mean(1))
-    return np.abs(X).reshape(X.shape[0], -1, blk).max(-1) > dead_rho * rho[:, None]
+    rho_sq = (X[:, ::8] ** 2).mean(1)
+    return np.abs(X).reshape(X.shape[0], -1, blk).max(-1) ** 2 > dead_rho ** 2 * rho_sq[:, None]
 
 
 def rows_admitted(X: np.ndarray, fmt: str, delta: float = 0.25, dead_rho: float = DEAD_RHO) -> dict[str, np.ndarray]:
@@ -673,7 +674,7 @@ def _tile_stats(x: np.ndarray, rho: float) -> dict:
 
 def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str, delta: float, rng, rows: int,
                  tile: int = 16, skip_tiles: int = 2, hot_bits: int = 14, rho: float = 1 / 400,
-                 hot_rule: str = "row", n: int | None = None, dead_rho: float = DEAD_RHO) -> dict:
+                 hot_rule: str = "row", n: int | None = None, dead_rho: float = DEAD_RHO, screen: str = "debit") -> dict:
     """The per-tile debit of §2 on every word of ``rows`` x ``rows`` (A rows x B rows), as a share of the tile's chain MACs
     against the cap rho, for v1's chains from +0 and v2's (T1) from H (``hot_start``).
 
@@ -689,8 +690,11 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     formed 16-row spans of A' and B', and per version, whether the merged k128 step reproduces the chain's words over
     each span, on all spans and on 2:4 spans.  ``tile_debit_total`` adds items 2 and 5 (identity steps), 3, 4 and the
     D-24 windows to item 1 at each level and unit; the reference's total is ``witness``/``g4``.  Dead blocks are D-SS's at
-    ``dead_rho``, and a tile is admitted when every row of both its sides passes the reference's row rule
-    (``rows_admitted``); each side's dead share and row admission at 12 rho is reported beside."""
+    ``dead_rho``. With ``screen="cap"`` a tile is admitted when every row of both its sides passes the reference's row
+    rule at 5f0a1529 (``rows_admitted``: D-NF and at most one dead block in 64). With ``screen="debit"`` (the 10:35Z rule)
+    the cap is gone: every element of a dead block counts as salt-dead in item 4, a tile is admitted when every row
+    passes D-NF, and ``tiles_admitted_under_rho`` is the share whose total stays within rho (the rest are rejected).
+    Each side's dead share and row admission at 12 rho is reported beside."""
     ya, yb = noisy(A, fmt, noise, delta, rng), noisy(B, fmt, noise, delta, rng)
     ca, sa, _ = quantize(ya, fmt)
     cb, sb, _ = quantize(yb, fmt)
@@ -702,7 +706,8 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     n = n or K
     blk = 16 if fmt == "nvf4" else 32
     out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(nt), "k": int(K), "n": int(n), "rho": rho,
-           "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles, "dead_rho": dead_rho, "operands": {}}
+           "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles, "dead_rho": dead_rho, "screen": screen,
+           "operands": {}}
     formed, terms, dead, sdead, windows, admit = {}, {}, {}, {}, {}, {}
     share = lambda sp, live: {"change_density": float(live.mean()), "g4_ge2_dead": float(sp["g4"].mean()),
                               "g4_all_dead": float(sp["g4_dead"].mean()), "p8_le2_live_pairs": float(sp["p8"].mean()),
@@ -714,7 +719,7 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
         windows[side] = {p: f[p].reshape(rr, -1, 128 // w).all(-1).sum(1) for p, w in (("g4", 4), ("p8", 8))}
         dead[side] = dss_dead(X[:rr], fmt, dead_rho)
         adm, d12 = rows_admitted(X[:rr], fmt, delta, dead_rho), dss_dead(X[:rr], fmt, 12.0)
-        admit[side] = adm["both"]
+        admit[side] = adm["both"] if screen == "cap" else adm["dnf"]
         sdead[side] = witness_salt_dead(X[:rr], fmt, delta)
         sp = span_2of4(~sdead[side], tile)
         terms[side] = {"witness": two_four_term(sp, tile)}
@@ -739,7 +744,8 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     admitted = (admit["A"].reshape(-1, tile).all(1)[:, None] & admit["B"].reshape(-1, tile).all(1)[None, :]).ravel()
     dA, dB = (dead[x].reshape(-1, tile, dead[x].shape[1]).sum(1).astype(np.float64) for x in "AB")
     item3 = (dA @ dB.T) * blk / (tile * tile * K)
-    sd = sdead["A"].reshape(nta, tile, K).sum(1).astype(np.float64)                 # salt-dead A elements per position
+    sd_a = sdead["A"] | np.repeat(dead["A"], blk, 1) if screen == "debit" else sdead["A"]
+    sd = sd_a.reshape(nta, tile, K).sum(1).astype(np.float64)                       # salt-dead A elements per position
     unneeded = ((cb[:rb] & 7) == 0).reshape(ntb, tile, K).all(1).astype(np.float64)   # no B' row of the tile needs t
     item4 = F_S * (sd.sum(1)[:, None] + (tile - sd) @ unneeded.T) * tile / n / (tile * tile * K)
     win = {p: 4.0 * (windows["A"][p].reshape(nta, tile).sum(1)[:, None]
@@ -792,7 +798,8 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
             out[name]["tile_debit_total"] = {lvl: {u: {
                 "max": float(x.max()), "over_rho": float((x > rho).mean()),
                 "max_admitted": float(x[admitted].max()) if admitted.any() else None,
-                "over_rho_admitted": float((x[admitted] > rho).mean()) if admitted.any() else None}
+                "over_rho_admitted": float((x[admitted] > rho).mean()) if admitted.any() else None,
+                "tiles_admitted_under_rho": float((admitted & (x <= rho)).mean())}
                 for u, x in d.items()} for lvl, d in tot.items()}
     return out
 
@@ -1074,7 +1081,7 @@ def cmd_debit(args) -> dict:
             for noise in args.noise.split(","):
                 try:
                     r = debit_census(atom, fmt, A, B, noise, args.delta, rng, args.pairs, hot_bits=args.hot_bits,
-                                     hot_rule=args.hot_rule, n=label["n"], dead_rho=args.dead_rho)
+                                     hot_rule=args.hot_rule, n=label["n"], dead_rho=args.dead_rho, screen=args.screen)
                 except OverflowError as e:
                     r = {"outside_model": str(e)}
                 res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
@@ -1093,7 +1100,9 @@ def cmd_debit(args) -> dict:
                         "item3_max": round(r["item3"]["max"], 6), "item4_max": round(r["item4"]["max"], 6),
                         "windows_d24_max": round(r["windows_d24"]["max"], 6), "tiles_admitted": r["tiles_admitted"],
                         **{f"rows_admitted_{s}": round(r["operands"][s]["rows_admitted"], 4) for s in "AB"},
-                        **{f"{v}_total_ref_max": round(tot(v, "witness", "g4"), 6) for v in ("v1", "v2")}}
+                        **{f"{v}_total_ref_max": round(tot(v, "witness", "g4"), 6) for v in ("v1", "v2")},
+                        **{f"{v}_tiles_admitted_under_rho": r[v]["tile_debit_total"]["witness"]["g4"]["tiles_admitted_under_rho"]
+                           for v in ("v1", "v2") if "tile_debit_total" in r.get(v, {})}}
                        if "item1" in r else {})}),
                     flush=True)
     return res
@@ -1193,7 +1202,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--partner-blocks", type=int, default=256, help="merge: k-blocks the adaptive partner search covers")
     ap.add_argument("--hot-bits", type=int, default=14, help="debit: v2's H has its grid at 2^-hot_bits of the RMS atom sum")
     ap.add_argument("--hot-rule", choices=["row", "word"], default="row", help="debit: whose RMS atom sum sets v2's H")
-    ap.add_argument("--dead-rho", type=float, default=DEAD_RHO, help="debit: D-SS's dead block is clean amax_b > dead_rho * rho")
+    ap.add_argument("--dead-rho", type=float, default=DEAD_RHO,
+                    help="debit: D-SS's dead block is clean amax_b^2 > dead_rho^2 * rho^2 (default sqrt(90))")
+    ap.add_argument("--screen", choices=["debit", "cap"], default="debit",
+                    help="debit: dead blocks charged in item 4, no row cap (10:35Z); cap: at most one dead block in 64")
     ap.add_argument("--n", type=int, default=0,
                     help="debit: output width for the forming term (default: Qwen2.5-7B's per linear with --acts, else k)")
     ap.add_argument("--seed", type=int, default=20260930)
