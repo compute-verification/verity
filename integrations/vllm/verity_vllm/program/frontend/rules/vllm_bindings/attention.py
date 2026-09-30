@@ -207,9 +207,10 @@ class UnifiedAttentionWithOutputRule(StateRule):
             refuse("numerics_unregistered", node, mp, f"layer {layer_name!r} request step {req_step}: invalid declared launch context -- {e}",
                    launch_context="invalid", request_step=req_step, own_rows=own_rows)
         if not accepted:
-            if role != "attention":
+            if role != "attention" and not (role == "attention_softcap" and TG.fa2_check_inf(tp)):
                 refuse("numerics_unregistered", node, mp, f"layer {layer_name!r}: kind {role!r} has no target-keyed variant on {tp.tensor_core_family} "
-                       f"(FA{tp.effective_flash_attn_version()}); only the plain causal GQA chain is registered off the accepted target")
+                       f"(FA{tp.effective_flash_attn_version()}); off the accepted target only the plain causal GQA chain is registered, "
+                       f"and the softcapped one under FA2's per-iteration Check_inf")
             geom = TG.attention_geometry(tp, D, launch_sq, NH, KVH)
         # FA3's per-iteration Check_inf chain (`fa3_construction = check-inf-per-iteration`): each row's tile decides which of its key blocks
         # the kernel guards -- the row's index among this request's query rows at the step (i on the prefill, 0 on a decode step)
@@ -227,7 +228,8 @@ class UnifiedAttentionWithOutputRule(StateRule):
             else:
                 fn = ctx.kind("attention_dot", node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
                               **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if P0 == 0 else 0)} if check_inf else {}),
-                              **({"FA2_MASKED_FROM": TG.fa2_masked_from(tp, P, D, launch_sq, i if P0 == 0 else 0, own_rows)} if check_inf2 else {}))
+                              **({"FA2_MASKED_FROM": TG.fa2_masked_from(tp, P, D, launch_sq, i if P0 == 0 else 0, own_rows)} if check_inf2 else {}),
+                              **extra)
             kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), klog.cut(P))
             vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), vlog.cut(P))
             outs.append(ctx.call(fn, qrows[i], kcat, vcat, node=node, rule=self, name=f"{ctx.hint_name(node)}[t={P - 1}]"))
