@@ -110,7 +110,12 @@ def _set_codes_rows(mod, w, fmt, lo):
 class Shards:
     def __init__(self, snap, dev):
         from safetensors import safe_open
-        idx = json.loads(Path(snap, "model.safetensors.index.json").read_text())["weight_map"]
+        ip = Path(snap, "model.safetensors.index.json")
+        if ip.exists():
+            idx = json.loads(ip.read_text())["weight_map"]
+        else:
+            with safe_open(str(Path(snap, "model.safetensors")), framework="pt", device="cpu") as f:
+                idx = {k: "model.safetensors" for k in f.keys()}
         self.where = idx
         self.dev = dev
         self.files = {f: safe_open(str(Path(snap, f)), framework="pt", device="cpu") for f in set(idx.values())}
@@ -132,10 +137,11 @@ def build(snap, dev):
             if isinstance(child, torch.nn.Linear) and full != "lm_head":
                 setattr(mod, cname, CompactLinear(child.out_features, child.in_features, dev))
                 names.append(full)
-    for pname, p in list(model.named_parameters()):
+    for pname, p in list(model.named_parameters(remove_duplicate=False)):
         if p.is_meta:
             mod = model.get_submodule(pname.rsplit(".", 1)[0])
-            mod._parameters[pname.rsplit(".", 1)[1]] = torch.nn.Parameter(shards.get(pname).to(torch.bfloat16), requires_grad=False)
+            src = pname if pname in shards.where or not getattr(cfg, "tie_word_embeddings", False) else "model.embed_tokens.weight"
+            mod._parameters[pname.rsplit(".", 1)[1]] = torch.nn.Parameter(shards.get(src).to(torch.bfloat16), requires_grad=False)
     rot = model.model.rotary_emb
     model.model.rotary_emb = type(rot)(config=cfg, device=dev)
     left = [n for n, t in list(model.named_parameters()) + list(model.named_buffers()) if t.is_meta]
