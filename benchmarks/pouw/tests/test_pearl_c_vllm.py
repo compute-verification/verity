@@ -141,6 +141,9 @@ class RecordingDev:
     def read(self, p, n):
         return bytes(n)
 
+    def tmap(self, ptr, depth, rows, box_rows=128):
+        return bytes(128)
+
 
 @pytest.fixture
 def device_run():
@@ -187,6 +190,17 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
     assert [n for n, *_ in dev.log][-2:] == ["hash_tree_leaves", "hash_tree_small"] and dev.log[-2][3] == (10,)
     assert out["units"] == 3 and out["tiles"] == 10 and len(out["transcript_root"]) == 64
     assert run.commits["transcript_root"] == out["transcript_root"]
+
+
+def test_a_call_over_whole_128_row_tiles_runs_gpu_1s_fused_path(device_run):
+    """At m a multiple of 128 the pipeline is fused: gemm_pearlc_b writes y and the message digests, and hash_msg isn't a step."""
+    make, kernel, weights, *_ = device_run
+    run = make()
+    kernel.dev.log.clear()
+    y = run.gemm(0, torch.randn(128, 1024).to(torch.bfloat16), weights[0], None)
+    names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
+    assert run.pipes[(0, 128, frozenset(), True)][0].fused and "hash_msg_v" not in names
+    assert names[-2:] == ["gemm_pearlc_b", "hash_leaf_p"] and {n: p for n, _, p, _ in kernel.dev.log}["gemm_pearlc_b"][4] == y.data_ptr()
 
 
 def test_nohash_forms_and_multiplies_without_hashing(device_run):

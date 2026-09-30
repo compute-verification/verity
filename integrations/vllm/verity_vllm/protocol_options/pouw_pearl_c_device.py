@@ -259,8 +259,12 @@ def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: 
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
+    """The named steps in order.  A tree's pads and level keys exist only where the tree needs them, and on the fused path
+    (``pipe.fused``: 128 x 128 tiles over every row) ``gemm_pearlc`` writes the message digests itself, so ``hash_msg`` isn't
+    a step."""
     by = {name: f for name, _, f in pipe.steps()}
-    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_"))]
+    optional = {"hash_msg"} if getattr(pipe, "fused", False) else set()
+    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_")) and x not in optional]
     if missing:
         raise RuntimeError(f"the kernel's pipeline has no steps {missing}")
     return [by[x] for x in names if x in by]
