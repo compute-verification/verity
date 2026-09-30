@@ -51,6 +51,9 @@ RB, WSETS = 4 * K, 4
 #: "tail" launched with the next call's GEMM)
 ARMS = {"nohash": (None, False, None), "h3s": ("h3", False, None), "h3o": ("h3", True, "next"), "h3g": ("h3", True, "tail"),
         "h2s": ("h2", False, None), "h2o": ("h2", False, "next"), "h2g": ("h2", False, "tail")}
+#: references, not rows: nohashc is nohash with the coalesced producer's plain twin (derive_rows_coal), which splits the
+#: fused producer's cost into its layout and its hashing
+REFS = {"nohashc": (None, False, None)}
 #: cuBLASLt's enum values: compute and scale types, matmul-descriptor and preference attributes, data types
 COMPUTE_32F, R_32F, R_8F_E4M3, R_16BF = 68, 0, 28, 14
 DESC_TRANSA, DESC_TRANSB, PREF_MAX_WORKSPACE, OP_N, OP_T = 3, 4, 1, 0, 1
@@ -124,6 +127,9 @@ def main() -> None:
     ap.add_argument("--transcripts")
     ap.add_argument("--reps", type=int, default=60)
     ap.add_argument("--calls", type=int, default=32)
+    ap.add_argument("--refs", action="store_true", help="also build REFS")
+    ap.add_argument("--profile", help="comma-separated graph names: replay each 3 times between cuProfilerStart and "
+                                      "cuProfilerStop (each after an L2 flush), then stop; no baseline, timing or transcripts")
     args = ap.parse_args()
     calls = args.calls
     R = load(os.path.join(args.gpu1, "run.py"), "gpu1_run")
@@ -151,7 +157,8 @@ def main() -> None:
                     "cuGraphInstantiateWithFlags": [P(vp), vp, C.c_ulonglong], "cuGraphLaunch": [vp, vp],
                     "cuStreamWaitEvent": [vp, vp, C.c_uint], "cuCtxGetStreamPriorityRange": [P(C.c_int), P(C.c_int)],
                     "cuStreamCreateWithPriority": [P(vp), C.c_uint, C.c_int], "cuGraphGetNodes": [vp, vp, P(C.c_size_t)],
-                    "cuGraphNodeGetType": [vp, P(C.c_int)], "cuGraphKernelNodeGetAttribute": [vp, C.c_int, vp]})
+                    "cuGraphNodeGetType": [vp, P(C.c_int)], "cuGraphKernelNodeGetAttribute": [vp, C.c_int, vp],
+                    "cuProfilerStart": [], "cuProfilerStop": []})
     nv = R.Nvml(dev.uuid)
     res["clocks_idle"] = nv.read()
     man_path = os.path.join(args.gpu1, "check", "check.json")
@@ -260,7 +267,7 @@ def main() -> None:
         return ge, pr
 
     def chain(v: str, arm: str) -> None:
-        fmt, a_side, t_place = ARMS[arm]
+        fmt, a_side, t_place = {**ARMS, **REFS}[arm]
         ps = pipes[v]
         a_rec, t_rec, pending = [False] * WSETS, [False] * WSETS, None
 
@@ -280,7 +287,9 @@ def main() -> None:
             y_prev = y_in if i == 0 else ps[(i - 1) % WSETS].b["y"]
             if a_rec[w]:
                 dev.ck("cuStreamWaitEvent", s, evs[f"a{w}"], 0)
-            if fmt is None:
+            if arm == "nohashc":
+                Kn.go("derive_rows_coal", M_REAL, 1024, (y_prev, xa), (M_REAL, RB, N))
+            elif fmt is None:
                 Kn.go("derive_rows", -(-M_REAL * RB // 2 // 256), 256, (y_prev, xa), (M_REAL * RB // 2,))
             else:
                 Kn.go("derive_rows_b3s_coal", M_REAL, 1024, (y_prev, xa, b["tree_a"], keys["dom_a"], rtmpl, segkeys, seedk, saltp, rootbp,
@@ -326,9 +335,25 @@ def main() -> None:
 
     graphs, prios = {}, {}
     for v in R.VARIANT_G:
-        for arm in ARMS:
+        for arm in [*ARMS, *(REFS if args.refs or args.profile else ())]:
             graphs[f"{v} {arm}"], prios[f"{v} {arm}"] = capture(lambda v=v, arm=arm: chain(v, arm))
     res["node_priorities"], res["stream_priorities"] = prios, {"least": least.value, "greatest": greatest.value}
+    if args.profile:
+        ev0 = vp()
+        dev.ck("cuEventCreate", C.byref(ev0), 0)
+        res["profile_order"] = [nm for nm in args.profile.split(",") for _ in range(3)]
+        for nm in res["profile_order"]:                    # warm, outside the profiled range
+            dev.ck("cuGraphLaunch", graphs[nm], s)
+        dev.sync()
+        dev.ck("cuProfilerStart")
+        for nm in res["profile_order"]:
+            Kn.go("l2_flush", 4 * dev.sms, 256, (fl, sink), ((512 << 20) // 4,), stream=s)
+            dev.ck("cuGraphLaunch", graphs[nm], s)
+            dev.ck("cuEventRecord", ev0, s)
+            dev.ck("cuEventSynchronize", ev0)
+        dev.ck("cuProfilerStop")
+        save()
+        return
 
     # cuBLASLt at m = 32 on the same four weight sets (GPU 1's plainq codes), autotuned: each heuristic algorithm's CALLS-call
     # graph timed, the fastest kept
@@ -401,6 +426,7 @@ def main() -> None:
                           "sm_mhz_median": statistics.median(c) if (c := [x for x in clk[nm] if x is not None]) else None}
                      for nm in graphs}
     plain = med["plain cublaslt"]
+    res["refs"] = {nm: round(med[nm], 6) for nm in graphs if nm.split()[-1] in REFS}
     res["baseline"] = {"graph": "plain cublaslt", "per_call_ms": round(plain, 6)}
     res["rows"] = {}
     for v in R.VARIANT_G:
