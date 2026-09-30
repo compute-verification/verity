@@ -7,7 +7,8 @@ entries with |x| ≥ 8σ), the rules `OperandOK` applies. A unit is admissible o
 64-row token tiles and 8-row weight tiles with every row admissible is reported too. On sampled tiles of admissible rows,
 64 tokens × 8 output channels, §5's forming (bit-exact atom-mix, E4M3 noise lines of norm --line-norm, one cast) and the
 G4 chain give each word's replayed debit (`pearlc_census.debit`, P1's option (A): every atom of a within-group joint skip
-that leaves the ticket word unchanged), P3's not-needed share, and the tile's undebited residual (exact runs across it).
+that leaves the ticket word unchanged), P3's not-needed share, the tile's undebited residual (exact runs across it), and
+P1's greedy cross-group joint set on --cross-words words per tile (`pearlc_census.cross_group`), which no debit covers.
 
     python benchmarks/pouw/pearlc_activations.py --tiles 2 --out pearlc_activations.json
 
@@ -55,6 +56,7 @@ def main() -> None:
     ap.add_argument("--delta", type=float, default=1.0)
     ap.add_argument("--line-norm", type=float, default=16.0)
     ap.add_argument("--tiles", type=int, default=2, help="sampled 64x8 tiles of admissible rows per layer")
+    ap.add_argument("--cross-words", type=int, default=4, help="words per tile for P1's greedy cross-group search")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--threads", type=int, default=3)
     ap.add_argument("--out", default="pearlc_activations.json")
@@ -95,14 +97,19 @@ def main() -> None:
                 tid, tex, _, _ = C.chain(A, B, 4)
                 flags, eF = C.debit(A, B, 4)
                 per_word = flags.sum(1)
+                size, beyond = C.cross_group(A, B, flags, np.unique(np.linspace(0, len(A) - 1, args.cross_words).astype(int)), 4)
                 tiles.append({"debit_share": float(per_word.mean()) / T, "debit_eF_share": float(eF.mean()) / T,
                               "debit_max_word_share": float(per_word.max()) / T, "not_needed_share": C.not_needed_share(flags, 64, 8),
-                              "tile_identity_share": float(tid.sum()) / T, "residual_share": C.exact_run_atoms(tex) / T})
+                              "tile_identity_share": float(tid.sum()) / T, "residual_share": C.exact_run_atoms(tex) / T,
+                              "cross_group_share_mean": float(size.mean()) / T, "cross_group_share_max": float(size.max()) / T,
+                              "cross_group_beyond_debit_mean": float(beyond.mean()) / T})
         rec["tiles"] = tiles
         if tiles:
             rec["debit_share_mean"] = round(float(np.mean([t["debit_share"] for t in tiles])), 6)
             rec["debit_share_max"] = round(float(max(t["debit_share"] for t in tiles)), 6)
             rec["residual_share_max"] = round(float(max(t["residual_share"] for t in tiles)), 6)
+            rec["cross_group_share_mean"] = round(float(np.mean([t["cross_group_share_mean"] for t in tiles])), 6)
+            rec["cross_group_share_max"] = round(float(max(t["cross_group_share_max"] for t in tiles)), 6)
         print(json.dumps({k2: v for k2, v in rec.items() if k2 != "tiles"}), flush=True)
         return rec
 
@@ -129,7 +136,9 @@ def main() -> None:
                        "B_tiles8_admissible_min": min(r["B_tiles8_admissible"] for r in layers),
                        "debit_share_max": max((r["debit_share_max"] for r in measured), default=0.0),
                        "debit_share_mean": float(np.mean([r["debit_share_mean"] for r in measured])) if measured else 0.0,
-                       "residual_share_max": worst_resid},
+                       "residual_share_max": worst_resid,
+                       "cross_group_share_mean": float(np.mean([r["cross_group_share_mean"] for r in measured])) if measured else 0.0,
+                       "cross_group_share_max": max((r["cross_group_share_max"] for r in measured), default=0.0)},
            "seconds": round(time.time() - t0, 1)}
     out = Path(args.out)
     out.write_text(json.dumps(doc, indent=1) + "\n")

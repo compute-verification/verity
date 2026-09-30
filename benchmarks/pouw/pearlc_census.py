@@ -191,6 +191,7 @@ def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: 
 FAMILIES = ("gaussian", "spike1-first", "spikes-first", "spikes-permuted", "spikes-groupstart", "constant",
             "coherent-gaussian", "orthogonal-FA", "duplicated")
 ACTIVATION_FAMILIES = ("zero-row", "zero-slices", "sparse10", "rank1", "saturated", "grid-aligned", "in-span-FA")
+OUTLIER_FAMILIES = ("outliers-first", "outliers-groupstart")
 FREEZE_FAMILIES = ("aligned-spikes-r64", "aligned-spikes-r160", "aligned-spikes-r220", "aligned-spikes-r300",
                    "aligned-spikes-pm1-r64", "aligned-spikes-pm1-r220", "aligned-spikes-pm1-r300", "aligned-spikes-pm1-r444")
 
@@ -228,6 +229,17 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
     if name in ("constant", "coherent-gaussian"):
         v = rng.choice([-1.0, 1.0], k) if name == "constant" else rng.standard_normal(k)
         return np.tile(v, (rows, 1)), np.tile(v, (cols, 1))
+    if name in ("outliers-first", "outliers-groupstart"):
+        # P1's outlier families (pearlc_freeze_census.py): a +-1e-3 background and k/64 - 1 outliers of +-1, first or 64 per
+        # 128-deep group; one sign vector for every row, so every word sees P1's sign-matched pair.
+        sgn = rng.choice([-1.0, 1.0], k)
+        A = 1e-3 * rng.choice([-1.0, 1.0], (rows, k))
+        B = 1e-3 * rng.choice([-1.0, 1.0], (cols, k))
+        pos = np.arange(L) if name == "outliers-first" else \
+            np.concatenate([np.arange(g * 128, g * 128 + 64) for g in range(max(1, L // 64))])[:L]
+        A[:, pos] = sgn[pos]
+        B[:, pos] = sgn[pos]
+        return A, B
     if name.startswith("aligned-spikes-"):
         # Two spikes per 128-deep group, at the same positions in every row of A and B, off the every-8th grid so that rho is
         # the background's: s/rho = R, which the noise floor allows up to 444 and liveness allows at k/64 entries. The
@@ -334,6 +346,82 @@ def group_sums(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np
     return np.stack(out, 1), total
 
 
+def _f32(x) -> np.float32:
+    return np.float32(x)
+
+
+def cross_group(a: np.ndarray, b: np.ndarray, flags: np.ndarray, words: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
+    """P1's greedy joint set (pearlc_freeze_census.py, §6.2) for the sampled words: atom pairs from two different groups
+    whose joint skip leaves the ticket word unchanged while neither atom alone does, packed greedily, then every single
+    atom that keeps it unchanged; each set is replayed from scratch. A lower bound on the largest jointly skippable set,
+    whose cross-group part no replay-local debit covers (`joint_cross_group`). Returns the set size and its atoms outside
+    the debit's flags, per sampled word."""
+    T = a.shape[1] // 32
+    n = -(-T // G)
+    sizes, beyond = np.zeros(len(words), dtype=np.int64), np.zeros(len(words), dtype=np.int64)
+    for w_i, p in enumerate(words):
+        ap, bp = a[p:p + 1], b[p:p + 1]
+
+        def gword(g: int, S: set) -> np.float32:
+            C, _ = group_run(ap, bp, list(range(g * G, min((g + 1) * G, T))), frozenset(S))
+            return _f32(C[0])
+
+        W = np.array([gword(g, set()) for g in range(n)], dtype=np.float32)
+        pre = np.zeros(n + 1, dtype=np.float32)
+        for g in range(n):
+            pre[g + 1] = _f32(pre[g] + W[g])
+        out = pre[n]
+
+        def output(W2: np.ndarray) -> np.float32:
+            t = np.float32(0)
+            for h in range(n):
+                t = _f32(t + W2[h])
+            return t
+
+        Wskip = np.array([gword(t // G, {t}) for t in range(T)], dtype=np.float32)
+        alone = np.array([output(np.where(np.arange(n) == t // G, Wskip[t], W)) == out for t in range(T)])
+        pairs = []
+        WsG = np.full(n * G, np.nan, dtype=np.float32)
+        WsG[:T] = Wskip
+        WsG = WsG.reshape(n, G)
+        for t1 in range(T):
+            g1 = t1 // G
+            if alone[t1] or g1 + 1 >= n:
+                continue
+            run = np.empty(n + 1, dtype=np.float32)
+            run[g1 + 1] = _f32(pre[g1] + Wskip[t1])
+            for h in range(g1 + 1, n):
+                run[h + 1] = _f32(run[h] + W[h])
+            # X[i, j]: the final total with atom j of group g1 + 1 + i skipped as well
+            X = (run[g1 + 1:n, None] + WsG[g1 + 1:n]).astype(np.float32)
+            for h in range(g1 + 2, n):
+                X[:h - g1 - 1] = (X[:h - g1 - 1] + W[h]).astype(np.float32)
+            for i, j in np.argwhere(X == out):
+                t2 = (g1 + 1 + int(i)) * G + int(j)
+                if t2 < T and not alone[t2]:
+                    pairs.append((t1, t2))
+        S: set = set()
+        Wcur = W.copy()
+
+        def try_add(new: set):
+            S2 = S | new
+            W2 = Wcur.copy()
+            for g in {t // G for t in new}:
+                W2[g] = gword(g, S2)
+            return (S2, W2) if output(W2) == out else None
+
+        for t1, t2 in pairs:
+            if t1 not in S and t2 not in S and (r := try_add({t1, t2})):
+                S, Wcur = r
+        for t in range(T):
+            if t not in S and (r := try_add({t})):
+                S, Wcur = r
+        assert output(np.array([gword(g, S) for g in range(n)], dtype=np.float32)) == out, p
+        sizes[w_i] = len(S)
+        beyond[w_i] = sum(1 for t in S if not flags[p, t])
+    return sizes, beyond
+
+
 def not_needed_share(flags: np.ndarray, rows: int, cols: int) -> float:
     """P3's `needed`, on the tile: the share of (A row, atom) pairs that no word of the row needs (every word (i, j) has the
     atom flagged). A whole unit's rows meet many more columns, so the unit's share is at most the tile's."""
@@ -367,7 +455,7 @@ def val(codes: np.ndarray) -> np.ndarray:
 
 
 def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming: str = "census",
-         line_norm: float = 256.0, with_debit: bool = False) -> list[dict]:
+         line_norm: float = 256.0, with_debit: bool = False, cross_words: int = 0) -> list[dict]:
     rng = _rng(run, fam, k, delta)
     FA, FB = lines(k, _rng(run, "FA", k)), lines(k, _rng(run, "FB", k))
     XA, XB = family(fam, rows, cols, k, FA, rng)
@@ -407,6 +495,13 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
             row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
                         "debit_eF_share": round(float(eF.mean()) / T, 6), "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
                         "tile_all_flagged_share": round(float(flags.all(0).mean()), 6), "residual_share": exact_run_atoms(tex) / T})
+            if cross_words:
+                sample = np.unique(np.linspace(0, len(A) - 1, cross_words).astype(int))
+                size, beyond = cross_group(A, B, flags, sample, G)
+                row.update({"cross_group_words": len(sample), "cross_group_share_mean": round(float(size.mean()) / T, 6),
+                            "cross_group_share_max": round(float(size.max()) / T, 6),
+                            "cross_group_beyond_debit_mean": round(float(beyond.mean()) / T, 6),
+                            "cross_group_beyond_debit_max": round(float(beyond.max()) / T, 6)})
             if forming == "s5":
                 a2 = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A", "salt-2"))[0]
                 b2 = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B", "salt-2"))[0]
@@ -430,6 +525,8 @@ def main() -> None:
     ap.add_argument("--line-norm", type=float, default=256.0)
     ap.add_argument("--debit", action="store_true",
                     help="replay each word's debit (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
+    ap.add_argument("--cross-words", type=int, default=0,
+                    help="with --debit: run P1's greedy cross-group search on this many words per cell")
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()
     bad = selftest()
@@ -441,7 +538,7 @@ def main() -> None:
     for delta in map(float, args.deltas.split(",")):
         for k in map(int, args.ks.split(",")):
             for fam in args.families.split(","):
-                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm, args.debit):
+                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm, args.debit, args.cross_words):
                     rows_out.append(r)
                     print(json.dumps(r), flush=True)
     key = "residual_share" if args.debit else "skippable_share"

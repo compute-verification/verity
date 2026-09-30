@@ -54,3 +54,13 @@ def test_pm1_background_skips_whole_atoms_and_the_debit_covers_them():
             if r["layout"] == "G4"]
     assert rows[0]["rules_ok"] and rows[0]["tile_identity_atoms"] > 0
     assert rows[0]["debit_share"] >= rows[0]["tile_identity_atoms"] / rows[0]["atoms"]
+
+
+def test_cross_group_finds_cancelling_groups():
+    import numpy as np
+    a, b = np.zeros((1, 256), dtype=np.uint8), np.zeros((1, 256), dtype=np.uint8)
+    a[0, 0:128:32], b[0, 0:128:32] = 0x38, 0x38      # +1 in each atom of group 0
+    a[0, 128:256:32], b[0, 128:256:32] = 0xB8, 0x38  # -1 in each atom of group 1: the output is 0 (joint_cross_group)
+    flags, _ = C.debit(a, b, 4)
+    size, beyond = C.cross_group(a, b, flags, np.array([0]), 4)
+    assert not flags.any() and size[0] == 8 and beyond[0] == 8
