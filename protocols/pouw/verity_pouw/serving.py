@@ -52,10 +52,12 @@ HASH_FORMATS: dict[str, HashFormat] = {
     "h3": HashFormat("h3", "blake3-s256", "pearl-c/h1/message", "pearl-c/h1/leaf", "row", row_cap=True),
 }
 
-FP8_DEVICES = ("h100", "sm120")
-FP8_FORMINGS = ("v0", "v1", "v2", "v2-hot")
+#: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``
+FP8_DEVICES = ("h100", "sm120", "sm120-unpromoted")
+FP8_FORMINGS = ("v0", "v1")
 FP4_PRECISIONS = ("nvfp4", "mxfp4")
-_FP8 = re.compile(r"pearl-c-(?P<device>[a-z0-9]+)-(?P<forming>v2-hot|v[0-9]+)(?:-(?P<hashing>h[0-9]+))?(?:@(?P<prices>[a-z0-9_]+))?")
+_FP8 = re.compile(r"pearl-c-(?P<device>[a-z0-9]+(?:-(?!v[0-9])[a-z0-9]+)*)-(?P<forming>v[0-9]+)(?:-(?P<hashing>h[0-9]+))?"
+                  r"(?:@(?P<prices>[a-z0-9_]+))?")
 _FP4 = re.compile(r"pearl-c-(?P<precision>nvfp4|mxfp4)-(?P<forming>v[0-9]+)(?:-(?P<hashing>h[0-9]+))?")
 
 

@@ -21,10 +21,11 @@ from verity_pouw.serving import (
     variant_refusals,
 )
 
-#: every Pearl-C name registered or recorded on the open PRs (#449, #540, #548, #549, #555) and the ones their panel lines name
+#: every Pearl-C name registered on the open PRs: #449 and #540 (`schemes.SCHEMES`, `pouw_pearl_c_device.SCHEMES`), #548
+#: (Pearl-C4), #532, #549 and #555 (-h2, -h3), and PearlC's price-override spelling
 NAMES_IN_USE = ("pearl-c-h100-v0", "pearl-c-h100-v1", "pearl-c-h100-v1-h1", "pearl-c-h100-v1-h2", "pearl-c-h100-v1-h3",
-                "pearl-c-h100-v1@sm_120", "pearl-c-sm120-v1", "pearl-c-sm120-v1-h1", "pearl-c-sm120-v2",
-                "pearl-c-sm120-v2-hot", "pearl-c-sm120-v2-hot-h3", "pearl-c-nvfp4-v0", "pearl-c-mxfp4-v0")
+                "pearl-c-h100-v1@sm_120", "pearl-c-sm120-v1", "pearl-c-sm120-v1-h1", "pearl-c-sm120-unpromoted-v1-h1",
+                "pearl-c-nvfp4-v0", "pearl-c-mxfp4-v0")
 
 
 @pytest.mark.parametrize("name", NAMES_IN_USE)
@@ -33,8 +34,8 @@ def test_every_name_in_use_parses_and_prints_back(name):
 
 
 def test_the_parts_are_the_names_parts():
-    s = SchemeId.parse("pearl-c-sm120-v2-hot-h3")
-    assert (s.family, s.device, s.forming, s.precision, s.hashing, s.prices) == ("pearl-c", "sm120", "v2-hot", "e4m3", "h3", None)
+    s = SchemeId.parse("pearl-c-sm120-unpromoted-v1-h1")
+    assert (s.family, s.device, s.forming, s.precision, s.hashing, s.prices) == ("pearl-c", "sm120-unpromoted", "v1", "e4m3", "h1", None)
     c4 = SchemeId.parse("pearl-c-nvfp4-v0")
     assert (c4.family, c4.device, c4.precision, c4.hashing) == ("pearl-c4", "sm120", "nvfp4", "h0")
     assert SchemeId.parse("pearl-c-h100-v1@sm_120").prices == "sm_120"
@@ -49,6 +50,7 @@ def test_the_hashing_format_is_a_switch():
 
 @pytest.mark.parametrize("name, why", [
     ("pearl-c-a100-v1-h1", "device 'a100'"),
+    ("pearl-c-sm120-hot-v1-h1", "device 'sm120-hot'"),
     ("pearl-c-sm120-v9-h1", "forming 'v9'"),
     ("pearl-c-sm120-v1-h7", "hashing 'h7'"),
     ("pearl-fp8-v4", "not a Pearl-C scheme name"),
