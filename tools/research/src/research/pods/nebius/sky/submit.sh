@@ -96,8 +96,8 @@ if [ -n "${VY_ROW_CLASS:-}${VY_BUILD_MEMORY:-}${VY_GPU_MEMORY:-}" ]; then   # co
   python3 - "$yaml" "${VY_ROW_CLASS:-}" "${VY_BUILD_MEMORY:-}" "${VY_GPU_MEMORY:-}" > "$rendered" <<'PY'
 import re, sys
 text, cls, build_gb, gpu_gb = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4]
-table = {"small": (64, 64, 1), "dense": (160, 64, 1), "long": (160, 64, 1), "moe": (256, 64, 1), "b64": (256, 64, 1),
-         "tp2": (160, 128, 2)}                          # the gpu task: 64 GB per GPU, the GPU queue's fixed share
+table = {"small": (64, 64, 1), "dense": (160, 170, 1), "long": (160, 170, 1), "moe": (256, 170, 1), "b64": (256, 170, 1),
+         "tp2": (160, 340, 2)}                          # the gpu task: batch 8+ Commits use ~130 GiB (epoch-run 16:35Z)
 if cls and cls not in table:
     sys.exit(f"VY_ROW_CLASS={cls}: one of {sorted(table)}")
 parts = text.split("\n---\n")

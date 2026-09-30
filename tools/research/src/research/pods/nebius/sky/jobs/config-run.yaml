@@ -16,14 +16,15 @@
 #   (or VY_BUILD_MEMORY=<GB> VY_GPU_MEMORY=<GB>, e.g. from `verity-vllm sweep plan`'s ram_gb, instead of a class)
 #
 # Build memory per class, provisional (the coordinator's table; epoch-run's measured peaks replace it: a 4k-context Build uses
-# 100-127 GiB). The gpu task requests a fixed 64 GB per GPU, the GPU queue's share (a Commit uses ~6 GiB; VY_GPU_MEMORY overrides):
+# 100-127 GiB). The gpu task requests 64 GB below batch 8 (a Commit uses ~6 GiB there); batch 8 and up use ~130 GiB (the pinned
+# staging pool alone is 105 GiB; epoch-run 16:35Z), so those pass VY_GPU_MEMORY=170 or a class below:
 #   class   build task   gpu task          vLLM deployments
-#   small   64 GB        64 GB             small dense, B <= 16 (bounded staging)
-#   dense   160 GB       64 GB             1-7B dense, B 8-32   <- default below
-#   long    160 GB       64 GB             long context 4096/512 (the measured Build peak is 124.5 GB, #11)
-#   moe     256 GB       64 GB             OLMoE, Qwen3-30B-A3B
-#   b64     256 GB       64 GB             batch 64
-#   tp2     160 GB       128 GB, 2 GPUs    TP2 (per-rank Builds in one task; #499, until then TP deployments are unsupported)
+#   small   64 GB        64 GB             small dense, B < 8 (bounded staging)
+#   dense   160 GB       170 GB            1-7B dense, B 8-32
+#   long    160 GB       170 GB            long context 4096/512 (the measured Build peak is 124.5 GB, #11)
+#   moe     256 GB       170 GB            OLMoE, Qwen3-30B-A3B
+#   b64     256 GB       170 GB            batch 64
+#   tp2     160 GB       340 GB, 2 GPUs    TP2 (per-rank Builds in one task; #499, until then TP deployments are unsupported)
 name: config-run
 
 ---
@@ -127,7 +128,7 @@ resources:
   cpus: 4          # 4 per GPU (submit.sh's tp2 class: 8), the GPU queue's fixed share; a Commit uses ~2-4 cores and bursts
   labels:
     budget-line: nebius-config-run
-  memory: 64         # per GPU, fixed: a Commit uses ~6 GiB, so it never waits on memory behind Builds
+  memory: 64         # below batch 8 (a Commit uses ~6 GiB); batch 8+ ~130 GiB: VY_GPU_MEMORY=170 (the class table above)
 
 envs:
   SRC: /workspace/research/checkout
