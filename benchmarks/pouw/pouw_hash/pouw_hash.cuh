@@ -645,6 +645,11 @@ PH_HD int digest_index(int region, int lane) { return 2 * (16 * region + quad_ro
 // regions: region p's chunk h is m16 block 2p + h, so frag(a, j, i) is array a's c[i] of m16 block 2p + (j >> 2), n8 block
 // j & 3, and lane's digest is of the warp's row narrow_row(p, lane) and its one chunk.
 PH_HD int narrow_row(int p, int lane) { return 16 * (2 * p + quad_chunk(lane)) + quad_row(lane); }
+// Hashing format -h1's message key k_msg = blake3("pearl-c/h1/message") (`pearl_c.H1_KEYS["message"]`), as BLAKE3's key words.
+PH_HD void h1_msg_key(uint32_t key[8]) {
+  key[0] = 0x63f41c07u, key[1] = 0xf6d6a577u, key[2] = 0x6c8a112eu, key[3] = 0x93cd1b4du;
+  key[4] = 0xaf81d7d8u, key[5] = 0xdd0bef04u, key[6] = 0x1301f984u, key[7] = 0xd101e881u;
+}
 // A's commitment, modeled: TurboSHAKE128 of one row segment of NL lanes (FP32 rows: 128, FP10 rows: 160), 0x23.
 template <int NL, class Lane>
 PH_HD void row_segment(const Lane& lane, uint64_t d[4]) {

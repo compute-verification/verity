@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
     o.b3fine_warp[i] = o.b3fine[0][i], o.b3fine_block[i] = o.b3fine[2][i];
   }
   uint32_t key[8];
-  b3_test_key(key);
+  ph::pearlc::h1_msg_key(key);
   for (int lane = 0; lane < 32; ++lane) {
     uint8_t msg[256], out[32];
     for (int a = 0; a < 2; ++a)
@@ -91,7 +91,7 @@ __global__ void k_check_quad(CheckOut* o, uint64_t* dg) {
   __syncwarp();
   if (lane == 0) ph::pearlc::tile_leaf([&](int i) { return dg[i]; }, o->pc_leaf_narrow);
   uint32_t key[8], h[8];
-  b3_test_key(key);
+  ph::pearlc::h1_msg_key(key);
   ph::quad_msg_digest_b3<2>([&](int a, int j, int i) { return quad_frag(lane, a, j, i); }, key, scratch, h);
   for (int i = 0; i < 8; ++i) o->quad_b3[lane][i] = h[i];
   ph::b3_iv(key);

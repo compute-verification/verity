@@ -114,7 +114,7 @@ def expected() -> dict[tuple, str]:
         out["sha256 bytes", n, 0] = hashlib.sha256(ptn(n)).hexdigest()
     for nw in (0, 1, 13, 14, 16, 30, 64):
         out["sha256 words", nw, 0] = hashlib.sha256(ptn(4 * nw)).hexdigest()
-    key = bytes(range(32))
+    key = B3.blake3(b"pearl-c/h1/message")   # -h1's k_msg, which pearlc::h1_msg_key pins
     for n in (0, 1, 63, 64, 65, 104, 1023, 1024):
         plain, keyed = blake3_pkg.blake3(ptn(n)).digest(), blake3_pkg.blake3(ptn(n), key=key).digest()
         assert plain == B3.blake3(ptn(n)) and keyed == B3.keyed(key, ptn(n))

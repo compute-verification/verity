@@ -425,7 +425,7 @@ __global__ void __launch_bounds__(32 * WARPS) k_epi(int tiles, int ksteps, Rec* 
           ph::quad_msg_digest<2>(frag, ph::pearlc::D_MESSAGE, scratch, d);
         } else {
           uint32_t key[8], h[8];
-          b3_test_key(key);
+          ph::pearlc::h1_msg_key(key);
           ph::quad_msg_digest_b3<2>(frag, key, scratch, h);
 #pragma unroll
           for (int i = 0; i < 4; ++i) d[i] = ph::lane_u32x2(h[2 * i], h[2 * i + 1]);
@@ -567,7 +567,7 @@ static int check_uuid(const cudaDeviceProp& prop) {
 }
 
 // epi's gate: warp 0's first tile, hashed in the kernel, against the header on the host over the same words (HASH 1:
-// pearlc::msg_digest; 2: blake3_chunk under b3_test_key, over the message's 256 bytes)
+// pearlc::msg_digest; 2: blake3_chunk under pearlc::h1_msg_key, over the message's 256 bytes)
 template <int HASH, int W, int PP = 0>
 static bool epi_gate(uint64_t* dg, uint32_t* y, uint32_t* cap, size_t base) {
   CK(cudaMemset(cap, 0, 4096 * 4)); CK(cudaMemset(dg, 0, 64 * 32 * 2));
@@ -581,7 +581,7 @@ static bool epi_gate(uint64_t* dg, uint32_t* y, uint32_t* cap, size_t base) {
   CK(cudaMemcpy(hc.data(), cap, 4096 * 4, cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(hd.data(), dg, 64 * 32, cudaMemcpyDeviceToHost));
   uint32_t key[8];
-  b3_test_key(key);
+  ph::pearlc::h1_msg_key(key);
   int bad = 0, nonzero = 0;
   for (int x : hc) nonzero += x != 0;
   for (int reg = 0; reg < 2; ++reg)

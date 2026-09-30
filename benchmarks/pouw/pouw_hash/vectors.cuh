@@ -119,9 +119,6 @@ PH_HD uint64_t ptn_lane(int j) {
 PH_HD uint32_t ptn_le_word(int j) {
   return (uint32_t)ptn(4 * j) | (uint32_t)ptn(4 * j + 1) << 8 | (uint32_t)ptn(4 * j + 2) << 16 | (uint32_t)ptn(4 * j + 3) << 24;
 }
-PH_HD void b3_test_key(uint32_t key[8]) {
-  for (int i = 0; i < 8; ++i) key[i] = (uint32_t)(4 * i) | (uint32_t)(4 * i + 1) << 8 | (uint32_t)(4 * i + 2) << 16 | (uint32_t)(4 * i + 3) << 24;
-}
 // The m = 32 tile leaf over 256 lanes (64 digests): flat, TurboSHAKE128 under D_LEAF (13 permutations); two-level, 4 sub-leaves
 // of 64 lanes under D_SUBLEAF (4 each, in parallel), then their 4 digests under D_TOPLEAF (1).
 template <class Lane>
@@ -206,7 +203,7 @@ PH_HD void run_checks(uint8_t* buf, CheckOut* o) {
       put_be(o->shaw[i], h);
     }
     uint32_t key[8];
-    for (int i = 0; i < 8; ++i) key[i] = (uint32_t)(4 * i) | (uint32_t)(4 * i + 1) << 8 | (uint32_t)(4 * i + 2) << 16 | (uint32_t)(4 * i + 3) << 24;
+    ph::pearlc::h1_msg_key(key);
 #pragma unroll 1
     for (int i = 0; i < NB3; ++i) {
       ph::blake3_chunk(nullptr, buf, b3_case(i), o->b3[i]);
