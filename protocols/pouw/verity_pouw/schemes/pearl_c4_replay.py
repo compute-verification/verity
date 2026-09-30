@@ -140,7 +140,7 @@ def _scheme(t: dict, scheme: F.PearlC4 | None) -> F.PearlC4:
 
 def _epoch(t: dict, workload: au.Workload) -> au.Epoch:
     roots = {int(w): bytes.fromhex(r) for w, r in t["weight_roots"].items()}
-    return au.Epoch.start(workload, roots, bytes.fromhex(t["epoch_beacon"]))
+    return au.Epoch.unverified(workload, roots, bytes.fromhex(t["epoch_beacon"]))
 
 
 def _unit(t: dict) -> Matmul:
@@ -160,7 +160,7 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     rows_a, rows_b = _rows((p / "xa.bin").read_bytes(), m, k), _rows((p / "xb.bin").read_bytes(), n, k)
     root_a, root_b, leaves = ((p / nm).read_bytes() for nm in ("root_a.bin", "root_b.bin", "leaves.bin"))
     workload = au.Workload((unit,))
-    epoch = au.Epoch.start(workload, {unit.weight: root_b}, bytes.fromhex(call["epoch_beacon"]))
+    epoch = au.Epoch.unverified(workload, {unit.weight: root_b}, bytes.fromhex(call["epoch_beacon"]))
     refs = au.tile_refs(s, workload)
     if len(leaves) != 32 * len(refs):
         raise ValueError(f"{len(leaves)} bytes of leaves are not {len(refs)} tile leaves")
@@ -252,7 +252,7 @@ def verify(t: dict, workers: int = 1, scheme: F.PearlC4 | None = None) -> dict:
         return [v for v, _ in out]
 
     try:
-        out = W.audit(s, epoch, _Openings(au.tile_refs(s, workload), t["openings"]), transcript, splits, records,
+        out = W.audit_replay(s, epoch, _Openings(au.tile_refs(s, workload), t["openings"]), transcript, splits, records,
                       t["committed_round"], beacon, t["t"], tile_map=tile_map)
     except KeyError as e:
         return report | {"accepted": False, "reason": str(e)}

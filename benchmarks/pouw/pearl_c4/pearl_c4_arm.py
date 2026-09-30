@@ -198,7 +198,7 @@ class _PearlC4:
             raw = self.d.read(operands.b.ptr, n * k * 2)
             root_b = au.commit_rows(au.weight_binding(weight), -2, [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(n)])
             unit = Matmul(0, PShape(m_pad, k, n), weight)
-            self._epochs[key] = beacon, au.Epoch.start(au.Workload((unit,)), {weight: root_b.commitment.root}, beacon).salt
+            self._epochs[key] = beacon, au.Epoch.unverified(au.Workload((unit,)), {weight: root_b.commitment.root}, beacon).salt
         return self._epochs[key]
 
     @staticmethod

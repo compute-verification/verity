@@ -204,7 +204,7 @@ def test_lifecycle_on_a_test_instance():
     rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
 
@@ -364,7 +364,7 @@ def test_lifecycle_work_has_no_weight_side():
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1"), 128
     work = Workload((Matmul(0, Shape(32, k, 16), 9), Matmul(1, Shape(16, k, 16), 9)))
-    epoch = Epoch.start(work, Prover(s, {9: CV.rows_f32("job", "B", 16, k)}).weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, Prover(s, {9: CV.rows_f32("job", "B", 16, k)}).weight_roots, b"beacon")
     assert Verifier(s, epoch).work == s.wref(Shape(48, k, 16)) == wref_of(48, k, 16)
     assert s.job_cost(16, k) == 68 * 16 * k + 16 * 32 * (k + 32) + 32 * 32 * (k + 32) + 32 * 16 * 32 * 32
 
@@ -376,7 +376,7 @@ def test_v1_lifecycle_on_a_test_instance():
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
 
@@ -407,7 +407,7 @@ def test_h1_lifecycle_commits_with_frame_b3():
     work = Workload((Matmul(3, Shape(32, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
     assert prover.weight_roots[9] == commit_rows(weight_binding(9), -2, rows_b, "blake3").commitment.root
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     assert tr.activation_roots[0] == commit_rows(activation_binding(epoch.salt, 3), 3, rows_a, "blake3").commitment.root
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted

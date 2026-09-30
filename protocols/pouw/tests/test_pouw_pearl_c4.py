@@ -16,6 +16,8 @@ from fractions import Fraction
 
 import pytest
 
+import quicknet as Q
+
 import pearl_c4_vectors as V
 from verity.commitments.turboshake import turboshake128
 from verity.errors import InvalidArtifact
@@ -30,7 +32,8 @@ from verity_pouw.schemes import pearl_c_work as W
 from verity_pouw.schemes import pearl_kw as P
 
 K = 128
-BEFORE, AFTER = 4, W.Beacon(5, b"beacon round 5")
+AFTER = Q.LATEST
+BEFORE = Q.recorded_before(AFTER)
 FMTS = ("nvfp4", "mxfp4")
 
 
@@ -810,7 +813,7 @@ def lifecycle(s: F.PearlC4, real=20):
     rows_b = V.rows("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
     prover = Prover(s, {9: rows_b})
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
 
@@ -959,7 +962,7 @@ def test_replay_rejects(tmp_path):
     def hide(t):
         t["records"][0]["excluded_a"] = []
         unit = Matmul(3, Shape(32, K, 16), 9)
-        epoch = Epoch.start(Workload((unit,)), {9: bytes.fromhex(t["weight_roots"]["9"])}, b"beacon")
+        epoch = Epoch.unverified(Workload((unit,)), {9: bytes.fromhex(t["weight_roots"]["9"])}, b"beacon")
         rec = W.UnitRecord(unit, 20, K)
         beacon = R.draw_beacon(bytes.fromhex(t["transcript"]["root"]),
                                W.records_root(epoch.salt, epoch.weights_root, {9: W.Split(K)}, [rec]))

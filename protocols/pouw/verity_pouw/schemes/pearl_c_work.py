@@ -38,8 +38,12 @@ red team F1, F2 and F5–F8, research store ``internal/pouw/red-team-pearl-c-vll
 * **The sampling guarantee is per credited cell.** The draws are weighted by the credited cells' `wref`, and a drawn
   tile's uncredited cells (filler, excluded or voluntary) never count as coverage. Volunteering a tile's other rows only
   lowers that tile's weight to its credited cells, which is exactly the bound claimed.
-* **The draws (F8)** are keyed by a beacon round published after the verifier recorded the prover's commitment (the
-  transcript root and the records root), through `verity.randomness.derive`.
+* **The draws (F8)** are keyed by a drand quicknet round published after the verifier recorded the prover's commitment
+  (the transcript root and the records root), through `verity.randomness.derive`.
+  - `audit` verifies the round's BLS signature against the pinned key (`verity_pouw.beacon`).
+  - It requires the round to be at least 2 rounds after the one due at `recorded_at`, the verifier's clock at the
+    commitment.
+  - `audit_replay` keeps the unverified draw for replays whose draws are Fiat–Shamir on the commitment.
 * **Other row formats.** A scheme with its own row encoding, per-row rules and debit (`pearl_c4`) brings
   `parse_row(row, k)`, `row_passes(words)` and `tile_cap(record, ops, rows, cols)`; Pearl-C v1's are this module's.
 """
@@ -57,6 +61,7 @@ from math import lcm
 
 from verity.randomness import derive
 
+from .. import beacon as B
 from ..audit import Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile
 from ..protocol import Context, Matmul, Shape, Tile, tagged
 from . import pearl_c as C
@@ -370,13 +375,39 @@ def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records:
 
 
 def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
-          records: Sequence[UnitRecord], committed_round: int, beacon: Beacon, t: int,
-          split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
-    """Check the splits and the records, draw t tiles by the records' credit with the beacon round after the commitment,
-    open one tile per excluded row, and accept iff every opened tile passes `check_drawn`.  `committed_round` is the latest
-    beacon round when the verifier recorded the commitment; `split_check(weight, split)` recomputes S from the calibration
-    data by the pinned rule, and is required when any S is nonempty.  `tile_map(f, picks)` applies `check_drawn` to the
-    opened tiles in order (a process pool's map checks them in parallel)."""
+          records: Sequence[UnitRecord], recorded_at: float, beacon: B.Round, t: int,
+          split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map,
+          chain: B.Chain = B.QUICKNET) -> WorkAudit:
+    """Check the splits and the records, draw t tiles by the records' credit with a verified beacon round after the
+    commitment, open one tile per excluded row, and accept iff every opened tile passes `check_drawn`.
+    - `recorded_at` is the verifier's clock (UNIX s) when it recorded the commitment (the transcript root and the
+      records root). The draw's round must be a verified round of `chain` at least `beacon.MARGIN` rounds after the one
+      due then (`beacon.check_after`), never read against a lagging view of the latest round.
+    - `split_check(weight, split)` recomputes S from the calibration data by the pinned rule, and is required when any S
+      is nonempty.
+    - `tile_map(f, picks)` applies `check_drawn` to the opened tiles in order (a process pool's map checks them in
+      parallel)."""
+    reason = B.check_after(chain, beacon, recorded_at)
+    if reason is not None:
+        return _audit(scheme, epoch, prover, transcript, splits, records, 0, Beacon(beacon.round, beacon.value), t,
+                      split_check, tile_map, reason)
+    return _audit(scheme, epoch, prover, transcript, splits, records, B.round_at(chain, recorded_at),
+                  Beacon(beacon.round, beacon.value), t, split_check, tile_map)
+
+
+def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
+                 records: Sequence[UnitRecord], committed_round: int, beacon: Beacon, t: int,
+                 split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
+    """`audit` with an unverified draw, for replays of recorded runs whose draws are Fiat–Shamir on the commitment
+    (`pearl_c4_replay`): the beacon's round must only exceed `committed_round`.  It supports no claim of
+    `beacon-unpredictability`."""
+    return _audit(scheme, epoch, prover, transcript, splits, records, committed_round, beacon, t, split_check, tile_map)
+
+
+def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
+           records: Sequence[UnitRecord], committed_round: int, beacon: Beacon, t: int,
+           split_check: Callable[[int, Split], bool] | None, tile_map: Callable, beacon_reason: str | None = None
+           ) -> WorkAudit:
     if getattr(scheme, "forming", "v1") != "v1":
         raise ValueError("the work law is stated for forming v1")
     w_ref, credit = work(scheme, records)
@@ -386,6 +417,8 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
         return WorkAudit(Audit(False, (), (Verdict(-1, False, reason),), None), w_ref, credit, job)
 
     reason = check_records(epoch, splits, records)
+    if reason is None:
+        reason = beacon_reason
     if reason is None and len(transcript.activation_roots) != len(records):
         reason = "the transcript does not have one activation root per record"
     if reason is None and beacon.round <= committed_round:

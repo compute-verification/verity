@@ -9,6 +9,8 @@ from fractions import Fraction
 
 import pytest
 
+import quicknet as Q
+
 import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
 from verity_pouw.audit import Epoch, Prover, Workload
@@ -20,7 +22,8 @@ from verity_pouw.schemes import pearl_kw as P
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
 K = 128
-BEFORE, AFTER = 4, W.Beacon(5, b"beacon round 5")
+AFTER = Q.LATEST
+BEFORE = Q.recorded_before(AFTER)
 
 
 def record(real=20, excluded_a=(), excluded_b=(), k=K, kept=K) -> W.UnitRecord:
@@ -154,7 +157,7 @@ def lifecycle(rows_a=None, real=20, scheme=S):
     rows_b = CV.rows_f32("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
     prover = Prover(scheme, {9: rows_b})
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
 
@@ -237,7 +240,8 @@ def test_audit_rejects_what_the_red_team_found():
     pads = audit([W.UnitRecord(u, 32, K, (3,))])
     assert not pads.audit.accepted and "is credited but fails" in reasons(pads)
     honest = [W.UnitRecord(u, 20, K, (3,))]
-    assert "not after the commitment" in reasons(audit(honest, before=5))
+    assert "not at least 2 rounds after" in reasons(audit(honest, before=BEFORE + 3))
+    assert "does not verify" in reasons(audit(honest, beacon=type(AFTER)(AFTER.round, bytes(48))))
     wide = {9: W.Split(K + 2, (7,), b"calib")}
     assert "not its weight's split" in reasons(audit(honest, splits=wide))
     narrow = {9: W.Split(K + 1, (7,), b"calib")}
@@ -265,7 +269,7 @@ def test_aligned_spike_unit_is_rejected_by_the_cap():
         rows_a, rows_b = spiked_rows(k, t, 100, spike), spiked_rows(k, t, 900, spike)
         work = Workload((Matmul(0, Shape(t, k, t), 1),))
         prover = Prover(s, {1: rows_b})
-        epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+        epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
         tr = prover.prove(epoch, {0: rows_a})
         splits = {1: W.Split(k)}
         records = W.declare(s, epoch, {0: rows_a}, {1: rows_b}, splits)
