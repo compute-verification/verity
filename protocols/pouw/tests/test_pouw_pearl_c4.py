@@ -1,12 +1,16 @@
-"""``pearl-c-nvfp4-v0`` and ``pearl-c-mxfp4-v0`` (`pearl_c4`): the casts, the noise lines, the noise atom, the clean-up's
+"""``pearl-c-nvfp4-v0`` (`pearl_c4`), with MXFP4 as its contrast line: the casts, the noise lines, the noise atom, the clean-up's
 algebra, the chain's exactness on the domain (which the design's argument turns on), the accounting, the per-row rules and
 debit, the work law through `pearl_c_work`, and the pinned vectors."""
 
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import pickle
+import random
+import types
+from collections import Counter
 from fractions import Fraction
 
 import pytest
@@ -17,6 +21,7 @@ from verity.ml.tc import fp32
 from verity_pouw.audit import Epoch, Prover, Workload
 from verity_pouw.protocol import DomainError, Matmul, Shape
 from verity_pouw.schemes import get
+from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c4 as F
 from verity_pouw.schemes import pearl_c4_replay as R
 from verity_pouw.schemes import pearl_c_work as W
@@ -149,8 +154,14 @@ def test_accounting_at_8192():
 
 
 def test_domain_and_registry():
-    s = get("pearl-c-mxfp4-v0")
-    assert isinstance(s, F.PearlC4) and s.fmt is F.MXFP4 and s.name == "pearl-c-mxfp4-v0"
+    """Pearl-C4 claims NVFP4 only (Daniel, 15:34Z): MXFP4 stays constructible as the contrast line, unregistered and with a
+    certificate that claims nothing."""
+    s = get("pearl-c-nvfp4-v0")
+    assert isinstance(s, F.PearlC4) and s.fmt is F.NVFP4 and not s.contrast and "tt-out/fp4-sm120" in s.certificate.claims
+    with pytest.raises(KeyError):
+        get("pearl-c-mxfp4-v0")
+    mx = F.PearlC4("mxfp4")
+    assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
     s.check(Matmul(0, Shape(64, 1024, 64), 0))
     for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64)):
         with pytest.raises(DomainError):
@@ -195,27 +206,26 @@ def test_row_rules_and_debit(fmt):
     e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
     a = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FA, 1024))
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
-    shape = Shape(64, 1024, 4096)
-    clean = F.tile_debit(f, a, b, e, e, [1, 2, 3], [1, 2, 3], shape)
-    assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0
+    clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
+    assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
+    # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare draws (a trace, under
+    # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 1% of this tile's cap)
+    assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 1)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
     # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
-    assert clean.f2 == 0 and clean.total == clean.f1 + clean.forming + clean.identity
-    assert (clean.identity == 0) == (fmt == "nvfp4")
+    assert clean.total == clean.forming + clean.identity + clean.split and (clean.identity == 0) == (fmt == "nvfp4")
     # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
     # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
-    d = F.tile_debit(f, a, b, e, e, [0, 1], [0, 1], shape)
-    f1 = [F.f1_row(f, side, i, e[i], F.salt_dead(f, side.x[i], side.alpha[i], side.ae[i]), F.dead_blocks(f, side.x[i]))[0]
-          for side in (a, b) for i in (0, 1)]
-    assert d.dead_pairs == f.block and d.f1 == 2 * sum(f1) and d.f2 == d.identity == d.subgrid == d.windows == 0
+    d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096, e, e)
+    assert d.dead_pairs == f.block and d.identity == d.subgrid == d.windows == 0
     unneeded = [all(b.codes[j][t] & 7 == 0 for j in (0, 1)) for t in range(1024)]
     witness = sum(p or u for i in (0, 1) for p, u in zip(F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i]), unneeded))
     assert d.counts["screened_blocks_a"] == d.counts["screened_blocks_b"] == 1 and d.counts["forming_elements"] == witness
     assert d.forming == Fraction(F.FORMING_CREDITED * witness * 2, 4096)
-    assert d.total == d.dead_pairs + d.f1 + d.forming
+    assert d.total == d.dead_pairs + d.split + d.int8 + d.forming
 
 
 def screened_tile(blocks: int, b_blocks: int = 0):
@@ -240,270 +250,49 @@ def witness_elements(s, ops) -> int:
                for p, u in zip(F.salt_dead(s.fmt, ops.a.x[i], ops.a.alpha[i], ops.a.ae[i]), unneeded))
 
 
-@pytest.mark.parametrize("blocks", (2, 16))
-def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness_and_by_f1(blocks):
-    """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
-    witness's salt-dead elements (not every element of a screened block), and no block pair is screened (server.md
-    11:32Z).  F1′ counts a screened block's codes as never changing (theory §6.2), so 16 of them, two whole row windows,
-    cost row 0 about 2·128·(1 − 1/8) per word: over the cap of a 4 x 4 tile (its 16 cells' share, about 56), under a
-    64 x 64 tile's (about 11,500)."""
-    s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
-    assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
-    assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:blocks * s.fmt.block]) <= blocks
-    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
-    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
-    assert d.counts["screened_blocks_a"] == blocks and d.dead_pairs == 0
-    assert d.counts["forming_elements"] == witness_elements(s, ops) < blocks * s.fmt.block
+def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness():
+    """Two screened blocks in 64, past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only
+    the witness's salt-dead elements (not every element of a screened block, server.md 11:32Z), no block pair is
+    screened, and the tile stays under ρ."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(2)
+    assert sum(F.dead_blocks(s.fmt, x)) == 2 > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
+    assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:2 * s.fmt.block]) <= 2
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
+    d = s.last_debit
+    assert d.counts["screened_blocks_a"] == 2 and d.dead_pairs == 0
+    assert d.counts["forming_elements"] == witness_elements(s, ops) < 2 * s.fmt.block
     assert d.forming == Fraction(F.FORMING_CREDITED * witness_elements(s, ops) * 4, 1024)
-    if blocks == 2:
-        assert reason is None and 0 < d.total <= cap
-    else:
-        assert d.counts["f1_windows_a"] >= 2 and 4 * 2 * 128 * Fraction(7, 8) <= d.f1 and d.total > cap
-        assert reason.startswith("the replayed debit")
-        assert d.f1 * 64 / 4 < cap * 64 * 64 / 16           # row 0 feeding 64 columns, against a 64 x 64 tile's cap
+    assert 0 < d.total <= s.tile_cap(record, ops, range(4), range(4))[1]
+
+
+def test_a_row_whose_screened_blocks_pass_r1_is_rejected():
+    """Sixteen screened, otherwise salt-live blocks on A alone: item 4 stays on the witness, but F1′ charges the blocks'
+    codes, which next to a 9.75ρ max change rarely (σ' ≈ 0.15 E2M1 units), so the row's own F1′ passes R1's bound and,
+    declared credited, it fails the tile."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(16)
+    assert F.row_passes(s.fmt, x) and sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:16 * s.fmt.block]) <= 16
+    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
+    assert reason is not None and "R1's bound" in reason
+    assert s.row_over_debit(record, ops, "A", 0) and not any(s.row_over_debit(record, ops, "A", p) for p in (1, 2, 3))
+    s.tile_cap(record, ops, range(4), range(4))
+    d = s.last_debit
+    assert d.counts["screened_blocks_a"] == 16 and d.dead_pairs == 0 and d.split > 0
+    assert d.counts["forming_elements"] == witness_elements(s, ops) < 16 * s.fmt.block
 
 
 def test_blocks_both_operands_screen_push_the_tile_past_rho_by_item_3():
-    """Four blocks screened on A row 0 and B row 0 alike: 4 pairs on word (0, 0), 16 units each, pass the tile's cap
-    (16 cells' share of creditOf at ρ = 1/400, about 56 units) by item 3 alone; F1′ charges the same four on A alone, half
-    of one row window, past a 4 x 4 tile's cap too."""
+    """Four blocks screened on A row 0 and B row 0 alike: 4 pairs on word (0, 0), 16 units each, pass the tile's cap (16
+    cells' share of creditOf at ρ = 1/400, about 56 units) by item 3 alone, so the tile is rejected; the same four on A
+    alone leave item 3 at zero and item 4 on the witness."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
-    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
-    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
-    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is not None
+    cap = s.tile_cap(record, ops, range(4), range(4))[1]
+    d = s.last_debit
     assert d.counts["dead_pairs"] == 4 and d.dead_pairs == 4 * s.fmt.block > cap
     assert d.counts["forming_elements"] == witness_elements(s, ops)
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4)
-    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is not None
-    assert s.last_debit.dead_pairs == 0 and s.last_debit.f1 > cap
-
-
-def two_draw_row(k: int = 128) -> tuple[list[int], list[int], list[int]]:
-    """A row, its E line with codes at two positions (the rest 0, so 16^30 of every 16^32 lines share each (f_3, f_17)
-    pair) and the row's positions whose E code is nonzero."""
-    x = F.parse_row(V.rows("law", "A", 1, k)[0], k)
-    e = [0] * F.R
-    e[3], e[17] = 0x6, 0xB
-    return x, e, [3, 17]
-
-
-def brute(fmt: F.Fmt, c: int, ae: int, e: list[int], at: list[int]) -> list[int]:
-    """The noise atom's D on each of the 256 (f_3, f_17) pairs, every other F code 0."""
-    out = []
-    for f1 in range(16):
-        for f2 in range(16):
-            f = [0] * F.R
-            f[at[0]], f[at[1]] = f1, f2
-            out.append(F.noise_atom(c, e, ae, f))
-    return out
-
-
-def test_the_line_sum_law_is_exact():
-    """`_law` against direct enumeration on an E line with four nonzero codes, and its total and second moment in
-    general: 16^32 lines, E[S²] = 34.25·Σ_r h(e_r)² (a uniform nibble's E[h²] is 548/16)."""
-    from collections import Counter
-    from itertools import product
-    e = [3, 0, 12, 9] + [0] * 28
-    mags = [0] * 8
-    for c in e:
-        mags[c & 7] += 1
-    lo, cdf = F._law(tuple(mags))
-    direct = Counter(sum(F._H[a] * F._H[b] for a, b in zip(e, fs)) for fs in product(range(16), repeat=4))
-    pmf = [cdf[0]] + [cdf[j] - cdf[j - 1] for j in range(1, len(cdf))]
-    assert pmf == [direct.get(s, 0) * 16 ** 28 for s in range(lo, lo + len(cdf))]
-    e = F.line(b"law" * 11, F.ROLE_EA, 0)
-    mags = [0] * 8
-    for c in e:
-        mags[c & 7] += 1
-    lo, cdf = F._law(tuple(mags))
-    pmf = [cdf[0]] + [cdf[j] - cdf[j - 1] for j in range(1, len(cdf))]
-    assert cdf[-1] == F.LINES and sum(n * (lo + j) for j, n in enumerate(pmf)) == 0
-    assert sum(n * (lo + j) ** 2 for j, n in enumerate(pmf)) * 16 == F.LINES * 548 * sum(F._H[c] ** 2 for c in e)
-
-
-@pytest.mark.parametrize("fmt", FMTS)
-def test_p_and_the_scale_masses_match_the_noise_atom_line_by_line(fmt):
-    """On `two_draw_row`'s E line every line is one of 256 classes of 16^30, so each element's exact law is enumerable:
-    p_t (`_p_change`) and P(|D_t| < `_above`(b)) (`_below`) equal the counts over the noise atom's own words, lines whose
-    every product is zero (D = C) included, at every scale byte the row's blocks can take."""
-    f = F.FORMATS[fmt]
-    x, e, at = two_draw_row()
-    _, _, alpha, _, ae = F.stats(f, x)
-    mags = [0] * 8
-    for c in e:
-        mags[c & 7] += 1
-    law, idle, weight = F._law(tuple(mags)), 16 ** 30 * 4, 16 ** 30
-    for t in range(0, len(x), 5):
-        c = fp32.mul(alpha, x[t])
-        y, ds = F._atom_sum(c, ae), brute(f, c, ae, e, at)
-        for byte in sorted({F.block_scale(f, d & 0x7FFFFFFF)[0] for d in ds} | {F.block_scale(f, c & 0x7FFFFFFF)[0]}):
-            from collections import Counter
-            values = Counter(F.e2m1_value(F.e2m1(fp32.mul(d, F.recip(f, byte)))) for d in ds)
-            assert F._p_change(f, law, idle, y, c, byte) == (F.LINES - max(values.values()) * weight) / F.LINES
-            u = F._above(f, byte)
-            assert F._below(law, idle, y, c, u) == weight * sum(u is None or d & 0x7FFFFFFF < u for d in ds)
-            assert all((F.block_scale(f, d & 0x7FFFFFFF)[0] <= byte) == (u is None or d & 0x7FFFFFFF < u) for d in ds)
-
-
-def test_the_modal_byte_is_the_realised_bytes_mode():
-    """A block's modal byte from the product formula against 600 formings of it (each element's F line drawn afresh):
-    the most frequent realised byte, and every byte's predicted probability within 4.5 standard errors."""
-    import math
-    import random
-    from collections import Counter
-    f, rng = F.NVFP4, random.Random(3)
-    x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
-    _, _, alpha, _, ae = F.stats(f, x)
-    e = F.line(b"mode" * 8, F.ROLE_EA, 0)
-    mags = [0] * 8
-    for c in e:
-        mags[c & 7] += 1
-    law, idle = F._law(tuple(mags)), 16 ** mags[0] * 2 ** (F.R - mags[0])
-    for b0 in (0, 16 * 9):
-        cs = [fp32.mul(alpha, w) for w in x[b0:b0 + 16]]
-        ys = [F._atom_sum(c, ae) for c in cs]
-        seen = Counter(F.block_scale(f, max(F.noise_atom(c, e, ae, [rng.randrange(16) for _ in range(F.R)]) & 0x7FFFFFFF
-                                            for c in cs))[0] for _ in range(600))
-        mode = F._modal_byte(f, law, idle, ys, cs)
-        assert seen.most_common(1)[0][0] == mode
-        cum = lambda b: math.prod(F._below(law, idle, y, c, F._above(f, b)) for y, c in zip(ys, cs))  # noqa: E731
-        for b, n in seen.items():
-            p = (cum(b) - cum(b - 1)) / F.LINES ** 16
-            assert abs(n / 600 - p) <= 4.5 * math.sqrt(p * (1 - p) / 600) + 1e-9
-
-
-def test_window_saving_against_the_chunk_enumeration():
-    """`_chunk` against the census's enumeration of a chunk's 81 pair-state combinations (``dnc2.py``: excess = the smallest
-    m − 2 changed pairs' counts), and `window_saving` at its ends: all codes fixed save min(1, ½ + ½ + ½), all changing
-    nothing."""
-    import random
-    from itertools import product
-    rng = random.Random(2)
-    for _ in range(20):
-        pairs = [(rng.random(), rng.random()) for _ in range(4)]
-        want = [0.0] * (F.XM + 1)
-        for js in product(range(3), repeat=4):
-            pr = 1.0
-            for (a, b), j in zip(pairs, js):
-                pr *= ((1 - a) * (1 - b), a * (1 - b) + (1 - a) * b, a * b)[j]
-            dev = sorted(j for j in js if j)
-            want[min(sum(dev[:len(dev) - 2]) if len(dev) > 2 else 0, F.XM)] += pr
-        assert all(abs(u - v) < 1e-12 for u, v in zip(F._chunk(pairs), want))
-    for fmt in FMTS:
-        f = F.FORMATS[fmt]
-        assert F.window_saving(f, [0.0] * 128) == 1.0 and F.window_saving(f, [1.0] * 128) == 0.0
-    # one reliable code per block can't make 2:4 inside it; eight per block can
-    one = [0.0 if t % 16 == 0 else 0.5 for t in range(128)]
-    eight = [0.0 if t % 16 < 8 else 0.5 for t in range(128)]
-    assert F.window_saving(F.NVFP4, one) < 1e-5 < 0.4 < F.window_saving(F.NVFP4, eight)
-    assert float(F.C_PATCH) == 16.92 / 128 and F._VX[F.XM] == 0.0 < F._VX[F.XM - 1]
-
-
-def family_rows(name: str, rows: int, k: int, seed: int) -> list[list[int]]:
-    """Theory §6.2's row families (``cheap-binding/pearlc4-fix``): the assessor's spike rows (14 of 16 at 8.9ρ, the two
-    ρ samples Gaussian; ``fix_check.py``), narrow-cell rows (one max at 8.9ρ per block, the rest centred on narrow E2M1
-    cells; ``dnc_attack.py``), a max at a fixed offset (S = 6, Gaussian elsewhere) and Gaussian rows, as BF16 words."""
-    import random
-    rng = random.Random(seed)
-    col = [(rng.choice((-1, 1)), rng.choice((0.0, 0.5, 1.0, 1.5))) for _ in range(k)]
-    samp = [1.0 if rng.random() < 0.275 else 0.5 for _ in range(k // 8)]
-    signs = [rng.choice((-1, 1)) for _ in range(k // 16)]
-    out = []
-    for _ in range(rows):
-        rs = rng.choice((-1, 1))
-        if name == "spike":
-            x = [rng.gauss(0, 1) if t % 16 in (0, 8) else 8.9 * rs * signs[t // 16] for t in range(k)]
-        elif name == "narrow":
-            u = 8.9 / 6
-            x = [rs * col[t][0] * col[t][1] * u for t in range(k)]
-            for t in range(0, k, 8):
-                x[t] = rng.choice((-1, 1)) * samp[t // 8] * u
-            for t in range(1, k, 16):
-                x[t] = 8.9 * rs
-        else:
-            x = [rng.gauss(0, 1) for _ in range(k)]
-            if name == "offset":
-                for t in range(1, k, 16):
-                    x[t] = 6.0 * rs * signs[t // 16]
-        out.append([P.f32_to_bf16(v) for v in x])
-    return out
-
-
-def f1_per_mac(fmt: F.Fmt, xs: list[list[int]], seed: bytes) -> tuple[float, float]:
-    """F1′ per MAC over rows given as BF16 words, and their blocks' modal-byte share."""
-    k = len(xs[0])
-    es = [F.line(seed, F.ROLE_EA, i) for i in range(len(xs))]
-    side = F.form(fmt, [[w << 16 for w in x] for x in xs], es, F.basis(seed, F.ROLE_FA, k))
-    units = off = 0
-    for i in range(len(xs)):
-        u, _, o = F.f1_row(fmt, side, i, es[i], F.salt_dead(fmt, side.x[i], side.alpha[i], side.ae[i]),
-                           F.dead_blocks(fmt, side.x[i]))
-        units, off = units + u, off + o
-    return float(units) / (len(xs) * k), 1 - off / (len(xs) * k / fmt.block)
-
-
-def test_f1_prices_the_base_split_families():
-    """Theory §6.2's table on the exact law (NVFP4, 4 rows x k = 1,024): F1′ charges the spike rows 0.8+ and the
-    narrow-cell rows 0.2+ per MAC (the census's Gaussian law: 0.917 and 0.289), and the max-at-offset and Gaussian rows
-    nearly nothing; their modal-byte shares straddle the census's 0.935, 0.539 and 0.684."""
-    got = {name: f1_per_mac(F.NVFP4, family_rows(name, 4, 1024, 11), b"\x05" * 32)
-           for name in ("spike", "narrow", "offset", "gauss")}
-    assert got["spike"][0] > 0.8 and got["spike"][1] > 0.85
-    assert 0.2 < got["narrow"][0] < 0.5 and 0.45 < got["narrow"][1] < 0.75
-    assert got["offset"][0] < 0.01 and 0.55 < got["offset"][1] < 0.8
-    assert got["gauss"][0] == 0 and got["gauss"][1] < 0.5
-
-
-def test_f1_rejects_a_spike_tile_the_old_item_1_let_through():
-    """The assessor's rows (`family_rows` spike) on A, Gaussian B, 4 x 4 of a 4 x 1,024 x 1,024 unit: the witness finds
-    every code salt-live and no block screened, so every other item is 0 (item 1 was too), and F1′ charges them past the
-    cap."""
-    s, k = V.scheme("nvfp4", False), 1024
-    ctx = V.ctx_of("spike", (4, k, 1024), 0, 0)
-    a_rows = [F.bf16_row(x) for x in family_rows("spike", 4, k, 7)]
-    b_rows = [F.bf16_row(x) for x in family_rows("gauss", 4, k, 8)]
-    tile = type(s.tiles(Shape(64, k, 64))[0])(range(4), range(4))
-    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
-    record = W.UnitRecord(ctx.matmul, 4, k)
-    reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
-    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
-    assert reason is not None and reason.startswith("the replayed debit")
-    assert d.counts["salt_dead_a"] == d.counts["screened_blocks_a"] == 0 and d.total == d.f1 > 0.5 * 16 * k > 100 * cap
-
-
-def test_f2_c_l_and_the_saving_follow_the_theory_table():
-    """§6.3's table: c_L, its depth, and F2 on the flattest rows (f = 0.9996) and one-max rows (0.965) per GEMM shape;
-    MXFP4's shaped rows (f = 1) at 8,192³ and the domain's largest, depth ≤ log2(k/32)."""
-    table = (((8192, 8192, 8192), 8, 0.81, 18.9, 0.0), ((16384, 16384, 16384), 9, 0.71, 29.0, 1.3),
-             ((32768, 32768, 32768), 10, 0.62, 37.8, 10.1), ((65536, 65536, 65536), 11, 0.54, 45.5, 17.8),
-             ((1 << 24, 1 << 16, 1 << 24), 12, 0.40, 59.3, 31.7))
-    for (m, k, n), depth, cl, flat, one in table:
-        got = F.c_l(m, k, n, 16)
-        at = 2 * Fraction(7, 8) ** depth + Fraction(17, 4) * (Fraction(1, m) + Fraction(1, n)) * (
-            Fraction(7, 4) ** depth - 1) / Fraction(3, 4)
-        assert got == at and round(float(got), 2) == cl
-        for f, want in ((Fraction(9996, 10000), flat), (Fraction(965, 1000), one)):
-            assert round(100 * float(F.f2_save(F.NVFP4, Shape(m, k, n), f, f)), 1) == want
-    assert round(100 * float(F.f2_save(F.MXFP4, Shape(8192, 8192, 8192), Fraction(1), Fraction(1))), 1) == 19.2
-    assert round(100 * float(F.f2_save(F.MXFP4, Shape(1 << 24, 1 << 16, 1 << 24), Fraction(1), Fraction(1))), 1) == 53.9
-    assert F.c_l(64, 16, 64, 16) is None and F.f2_save(F.NVFP4, Shape(64, 16, 64), Fraction(1), Fraction(1)) == 0
-    # honest tiles: F2 is positive only above f_A + f_B = 2 − (1 − c_L)/4, 1.85 at the domain's largest c_L
-    assert F.f2_save(F.NVFP4, Shape(1 << 24, 1 << 16, 1 << 24), Fraction(92, 100), Fraction(92, 100)) == 0
-
-
-def test_f2_charges_a_tile_whose_realised_bytes_are_flat():
-    """F2 reads the realised scale bytes: a 4 x 4 Gaussian tile at the domain's largest NVFP4 GEMM (depth ≤ 6 at k =
-    1,024) is 0, and the same tile with every byte set to one value (f_A = f_B = 1) is charged 1 − c_L per chain MAC."""
-    f, k, shape = F.NVFP4, 1024, Shape(1 << 24, 1024, 1 << 24)
-    xs = [[w << 16 for w in x] for x in family_rows("gauss", 4, k, 5)]
-    e = [F.line(b"\x09" * 32, F.ROLE_EA, i) for i in range(4)]
-    a, b = F.form(f, xs, e, F.basis(b"\x0a" * 32, F.ROLE_FA, k)), F.form(f, xs, e, F.basis(b"\x0a" * 32, F.ROLE_FB, k))
-    d = F.tile_debit(f, a, b, e, e, range(4), range(4), shape)
-    assert d.f2 == 0 and Fraction(d.counts["f_a"]) < Fraction(1, 2)
-    for side in (a, b):
-        side.scales = [[0x70] * len(r) for r in side.scales]
-    d = F.tile_debit(f, a, b, e, e, range(4), range(4), shape)
-    assert d.counts["f_a"] == d.counts["f_b"] == "1" and d.f2 == (1 - F.c_l(shape.m, k, shape.n, 16)) * 16 * k > 0
+    s.tile_cap(record, ops, range(4), range(4))
+    assert s.last_debit.dead_pairs == 0 and s.last_debit.counts["forming_elements"] == witness_elements(s, ops)
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
@@ -517,6 +306,225 @@ def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
     word, identity, subgrid = F.word_replay(f, top + low, top + low, [0x7E] * 4 + [0x01] * 4, [0x7E] * 4 + [0x01] * 4)
     assert (identity, subgrid) == (1, 4) and word == F.chain(f, top, top, [0x7E] * 4, [0x7E] * 4)
     assert F.two_four_windows([0x1, 0x9, 0, 0] * 32 + [0x1] * 128) == [True, False]
+
+
+def _row(values) -> list[int]:
+    return F.parse_row(F.bf16_row([P.f32_to_bf16(v) for v in values]), len(values))
+
+
+_COLS = random.Random(7)
+_BLOCK_SIGN = [_COLS.choice((-1, 1)) for _ in range(4096 // 16)]
+_CELL = [_COLS.choice((0.0, 0.5, 1.0, 1.5)) for _ in range(4096)]
+_SIGN = [_COLS.choice((-1, 1)) for _ in range(4096)]
+_SAMPLE = [1.0 if _COLS.random() < 0.275 else 0.5 for _ in range(4096)]
+
+
+def spike_row(i: int, k: int = 1024, s: float = 8.9, top: float | None = None) -> list[int]:
+    """The assessor's base-split rows (fp4-base-split-break.md): every 8th position at ±1 (ρ = 1), 14 spikes per block at
+    s·ρ off ρ's positions, signed by a row sign times a block sign.  `top` puts one entry in the last block (screened)
+    that sets α so the spikes' block max centres UE4M3's byte 384: every scale then sits at one byte."""
+    rng = random.Random(i)
+    rs = 1 if i % 2 else -1
+    v = [rng.choice((-1.0, 1.0)) if t % 8 == 0 else s * rs * _BLOCK_SIGN[t // 16] for t in range(k)]
+    if top is not None:
+        v[k - 15] = top
+    return _row(v)
+
+
+def narrow_cell_row(i: int, k: int = 1024, s: float = 8.9) -> list[int]:
+    """One max per block at s·ρ, and every other code, ρ's samples included, at the centre of a narrow E2M1 cell (0,
+    ±0.5, ±1 or ±1.5 of s/6), in a rank-one pattern: no code is near-deterministic at ε = 5%, yet the split pays
+    (theory-pearl-c4-domain.md §6.1)."""
+    u, rs = s / 6, 1 if i % 2 else -1
+    v = [rs * _SIGN[t] * (_SAMPLE[t] if t % 8 == 0 else _CELL[t]) * u for t in range(k)]
+    for b in range(k // 16):
+        v[16 * b + 1] = s * rs
+    return _row(v)
+
+
+def formed(f: F.Fmt, rows, role_e: int, role_f: int, k: int):
+    e = [F.line(b"\x03" * 32, role_e, i) for i in range(len(rows))]
+    return F.form(f, rows, e, F.basis(b"\x04" * 32, role_f, k)), e
+
+
+@pytest.mark.parametrize("family", [spike_row, narrow_cell_row], ids=["spike", "narrow-cell"])
+def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
+    """F1′ (theory §6.2): the assessor's spike rows, which the support witness reads as salt-live (every other item 0),
+    and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the cap, while
+    the Gaussian side carries nothing."""
+    f, k, n = F.NVFP4, 1024, 4096
+    rows = [family(i) for i in range(4)]
+    assert all(F.row_passes(f, x) and not any(F.dead_blocks(f, x)) for x in rows)
+    a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
+    b, e_b = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "B", 4, k)], F.ROLE_EB, F.ROLE_FB, k)
+    d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b)
+    cap = F.CAP * Fraction(F.PearlC4().credit_of(Shape(1, k, n)), n) * 16
+    assert d.split > 50 * cap
+    gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k) for j in range(4)]
+    assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) < Fraction(1, 10 ** 4)
+    if family is spike_row:
+        assert d.counts["salt_dead_a"] == 0
+
+
+def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
+    """A block keeps its scale under any reordering, so reliable codes one per aligned pair (0 and ½ alternating) are
+    paired together: every chunk keeps two unchanged pairs and the 2:4 pass always fits (S_w = ½).  All reliable: the
+    capped sum, 1; all changing half the time: nothing."""
+    f = F.NVFP4
+    assert F.split_saving(f, [0.0, 0.5] * 64) == pytest.approx(0.5)
+    assert F.split_saving(f, [0.0] * 128) == 1.0
+    assert F.split_saving(f, [0.5] * 128) < 1e-4
+
+
+def test_f1_prime_puts_the_correction_inside_the_expectation():
+    """κ inside (ratings.md 15:18Z condition 1): a cheater routes each row after the salt, so F1′ charges
+    E[max(0, R − κ)] per route, never less than max(0, E[R] − κ), and κ = 0 leaves S_w as it was."""
+    f = F.NVFP4
+    p = [0.0] * 16 + [0.45] * 112
+    base = F.split_saving(f, p)
+    for kappa in (0.02, 0.066, 0.125):
+        inside = F.split_saving(f, p, kappa)
+        assert inside <= base and inside >= max(0.0, base - 2 * kappa)
+    rare = [0.0, 0.5] * 64
+    assert F.split_saving(f, rare, 0.125) > 0 and F.split_saving(f, [0.3] * 128, 0.0) == pytest.approx(F.split_saving(f, [0.3] * 128))
+
+
+def test_f1_prime_reads_the_exact_noise_law():
+    """p_t under the exact law given E (ratings.md 15:18Z condition 2): the pmf of Σ (2E_r)(2F_r) has the Gaussian's
+    variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled by 12."""
+    e = tuple(F.line(b"\x05" * 32, F.ROLE_EA, 0))
+    lo, pmf = F.noise_law(e)
+    assert sum(pmf) == pytest.approx(1.0) and lo == -(len(pmf) - 1) // 2
+    assert pmf == pytest.approx(pmf[::-1])
+    var = sum(q * (lo + i) ** 2 for i, q in enumerate(pmf)) / 16
+    assert var == pytest.approx(8.5625 * sum(float(F.e2m1_value(c)) ** 2 for c in e))
+    lo, pmf = F.noise_law((0x7,) + (0,) * 31)
+    assert lo == -144 and pmf[0] == pytest.approx(1 / 16) and pmf[144] == pytest.approx(2 / 16)
+
+
+def two_draw_row(k: int = 128) -> tuple[list[int], tuple[int, ...], list[int]]:
+    """A row, an E line with codes at two positions and 0 elsewhere (so an element's noise takes one of 256 equally likely
+    values, by its F line's codes there), and those positions."""
+    x = F.parse_row(V.rows("law", "A", 1, k)[0], k)
+    e = [0] * F.R
+    e[3], e[17] = 0x6, 0xB
+    return x, tuple(e), [3, 17]
+
+
+def atom_words(c: int, e, ae: int, at) -> list[int]:
+    """The noise atom's D on each of the 256 pairs of F codes at `at`, every other F code 0."""
+    out = []
+    for f1 in range(16):
+        for f2 in range(16):
+            f = [0] * F.R
+            f[at[0]], f[at[1]] = f1, f2
+            out.append(F.noise_atom(c, e, ae, f))
+    return out
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_change_probabilities_match_the_noise_atom_line_by_line(fmt):
+    """The law against the noise atom itself: on `two_draw_row`'s E line each element's D is one of 256 equally likely
+    words, so its p_t is enumerable.  `change_probabilities`' p_t at the block's modal byte is 1 − the most common code
+    value's share of the atom's words there, to 1e-12 (the law leaves out the atom's one RZ rounding, which moves no word
+    across a cell edge here), and 0 on salt-dead codes."""
+    f = F.FORMATS[fmt]
+    x, e, at = two_draw_row()
+    _, _, alpha, _, ae = F.stats(f, x)
+    dead = F.salt_dead(f, x, alpha, ae)
+    p, modes = F.change_probabilities(f, x, alpha, e, ae, dead)
+    for t in range(0, len(x), 3):
+        byte = modes[t // f.block]
+        r = fp32.div(F.ONE, F.ue4m3_word(byte)) if f is F.NVFP4 else F.pow2_word(127 - byte)
+        codes = Counter(F.e2m1_value(F.e2m1(fp32.mul(d, r))) for d in atom_words(fp32.mul(alpha, x[t]), e, ae, at))
+        assert p[t] == (0.0 if dead[t] else pytest.approx(1 - max(codes.values()) / 256, abs=1e-12))
+
+
+def test_the_modal_byte_is_the_realised_bytes_mode():
+    """`modal_byte` against 600 formings of two NVFP4 blocks under one E line, every element's F line drawn afresh: the
+    most frequent realised byte."""
+    f, rng = F.NVFP4, random.Random(3)
+    x = F.parse_row(V.rows("mode", "A", 1, 1024)[0], 1024)
+    _, _, alpha, _, ae = F.stats(f, x)
+    e = tuple(F.line(b"mode" * 8, F.ROLE_EA, 0))
+    cdf, sigma = F._below_law(e, F._scale_value(F.NVFP4, ae) / 64), F.noise_sigma(e, ae)
+    for b0 in (0, 16 * 9):
+        cs = [fp32.mul(alpha, w) for w in x[b0:b0 + 16]]
+        seen = Counter(F.block_scale(f, max(F.noise_atom(c, e, ae, [rng.randrange(16) for _ in range(F.R)]) & 0x7FFFFFFF
+                                            for c in cs))[0] for _ in range(600))
+        assert seen.most_common(1)[0][0] == F.modal_byte(f, [F.P.f32_of_bits(c) for c in cs], cdf, sigma)
+
+
+def r1_tile():
+    """A 4 x 4 credited tile of a 4 x 1024 x 4096 NVFP4 unit: A row 0 the assessor's spike row, rows 1–3 and B Gaussian."""
+    s, k = V.scheme("nvfp4", False), 1024
+    ctx = V.ctx_of("r1", (4, k, 4096), 0, 0)
+    a_rows = [F.bf16_row([x >> 16 for x in spike_row(0, k)])] + V.rows("r1", "A", 3, k)
+    b_rows = V.rows("r1", "B", 4, k)
+    tile = type(s.tiles(Shape(64, k, 64))[0])(range(4), range(4))
+    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+    return s, ctx, tile, a_rows, b_rows, ops
+
+
+def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
+    """R1 (ratings.md 15:18Z condition 4): the spike row's own F1′ passes ρ·(its cell credit), so it must be declared
+    excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it fails the
+    tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest prover's
+    declaration finds exactly row 0."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k = ctx.matmul.shape.k
+    assert all(F.row_passes(s.fmt, F.parse_row(r, k)) for r in a_rows + b_rows)
+    assert s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, "A", 0)
+    assert not any(s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, side, p) for side in "AB" for p in (1, 2, 3))
+    assert W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("A row 0 is credited") and "R1's bound" in reason
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0, 1)), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("A row 1 is excluded but passes the per-row rules")
+    assert s.r1_rows(ctx, a_rows, b_rows, k) == ({0}, set())
+
+
+def test_f2_depth_cost_is_the_pinned_formula():
+    """c_L (bc-d9842080, 13:35Z) at W1's int8 leaf of 2 slots, the FP4 conditions' (ratings.md 15:18Z), with depth capped
+    only by log2(k/block): 0.808 / 0.707 / 0.619 / 0.542 at 8k–64k³."""
+    f = F.NVFP4
+    assert F.INT8_LEAF_SLOTS == 2
+    got = [F.int8_depth_cost(f, s, s, s) for s in (8192, 16384, 32768, 65536)]
+    assert got == pytest.approx([0.808, 0.707, 0.619, 0.542], abs=6e-4)
+    assert F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24) == pytest.approx(0.403, abs=6e-4)
+    assert F.int8_depth_cost(f, 1 << 24, 16, 1 << 24) == 2.0
+    assert F.int8_depth_cost(F.MXFP4, 1 << 24, 1 << 16, 1 << 24) > F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24)
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_f2_reads_flatness_per_row_and_per_block_column_class(fmt):
+    """F2 on the tile's realised scale bytes: flat at one byte, the route's whole 1 − c_L; flat per row (row factors of
+    two) or per block-column class (two classes a byte apart, each a sub-GEMM over half of k), the same, where the tile's
+    modal share (0.5) alone would read nothing; bytes spread as honest ones are, nothing."""
+    f, m, n, k = F.FORMATS[fmt], 1 << 24, 1 << 24, 8192
+    nb, base = k // f.block, 0x50 if fmt == "nvfp4" else 120
+    full, half = 1 - F.int8_depth_cost(f, m, k, n), 1 - F.int8_depth_cost(f, m, k // 2, n)
+    flat = [[base] * nb for _ in range(8)]
+    assert F.int8_saving(f, flat, flat, m, n) == pytest.approx(full) and full > 0
+    shifted = [[base + (8 if fmt == "nvfp4" else 1) * (r % 2)] * nb for r in range(8)]
+    assert F.int8_saving(f, shifted, flat, m, n) == pytest.approx(full)
+    two = [[base + c % 2 for c in range(nb)] for _ in range(8)]
+    assert F.int8_saving(f, two, two, m, n) == pytest.approx(half) and half > 0
+    rng = random.Random(1)
+    honest = [[base + rng.randrange(6) for _ in range(nb)] for _ in range(8)]
+    assert F.int8_saving(f, honest, honest, m, n) == 0
+
+
+def test_f2_charges_a_formed_tile_whose_scales_sit_at_one_byte():
+    """The flattest rows (fp4-int8-route.md 12:00Z): spike rows with α tuned so every block max centres byte 384, on both
+    sides.  Their realised scales sit at one byte, so F2 charges the masked int8 route's saving on every chain MAC."""
+    f, k, m = F.NVFP4, 4096, 1 << 24
+    rows = [spike_row(i, k, top=9.88) for i in range(4)]
+    a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
+    b, e_b = formed(f, rows, F.ROLE_EB, F.ROLE_FB, k)
+    d = F.tile_debit(f, a, b, range(4), range(4), m, e_a, e_b, m)
+    save = F.int8_saving(f, a.scales, b.scales, m, m)
+    assert save > 0 and d.int8 == Fraction(save) * 16 * k
 
 
 def test_scale_bytes_have_one_encoding_and_no_zero():
@@ -670,6 +678,40 @@ def test_replay_rejects(tmp_path):
     assert bad(lambda t: t["draw"].update(value="00" * 32))["reason"].startswith("the draws' beacon is not")
     assert "A row 3 is credited but fails" in bad(hide)["reason"]
     assert bad(lambda t: t["openings"].pop(0))["reason"] == "'the transcript does not open tile 0'"
+
+
+def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:
+    """`s` with B̃'s noise keyed by `salt` in place of the job's: a weight forming reused from another epoch, or one
+    keyed by no salt."""
+    cheat = copy.copy(s)
+
+    def noise(self, ctx):
+        return C.Noise(F.PearlC4.noise(self, ctx).seed_a, F.seed_b(salt, ctx.root_b))
+
+    cheat.noise = types.MethodType(noise, cheat)
+    return cheat
+
+
+def test_b_tilde_is_keyed_by_this_jobs_salt(tmp_path):
+    """D-SK: B̃'s noise is keyed by the job's salt (seed-B = keyed(salt ‖ root_b)), so B̃ exists only once the salt
+    does, and the salt-free base split is two-sided.  The verifier forms B̃ itself from that seed, so a prover whose B̃
+    was formed under another epoch's salt, or under none, fails the checked values of a drawn tile, in the work law and
+    in the device replay."""
+    s = V.scheme("nvfp4", True)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits = {9: W.Split(K)}
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    assert W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8).audit.accepted
+    for n, salt in enumerate((b"another epoch's salt", b"")):
+        cheat = stale_b(s, salt)
+        assert F.seed_b(salt, prover.weight_roots[9]) != F.seed_b(epoch.salt, prover.weight_roots[9])
+        liar = Prover(cheat, {9: rows_b})
+        out = W.audit(s, epoch, liar, liar.prove(epoch, {3: rows_a}), splits, records, BEFORE, AFTER, 8)
+        assert not out.audit.accepted
+        assert {v.reason for v in out.audit.verdicts if not v.ok} == {"checked values"}
+        device_dump(tmp_path / str(n), cheat)
+        rep = R.verify(R.prove(tmp_path / str(n), "r-test", 8, scheme=s), scheme=s)
+        assert not rep["accepted"] and rep["reason"] == "checked values"
 
 
 def test_pinned_vectors_fast():

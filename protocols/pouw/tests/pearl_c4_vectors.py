@@ -68,7 +68,9 @@ def case_vector(case, fmt, shape, index, weight, test) -> dict:
     checked = s.checked(ctx, ops)
     useful = s.useful(ctx, noise, ops, checked)
     _, cap = s.tile_cap(W.UnitRecord(ctx.matmul, shape[0], shape[1]), ops, range(len(tile.rows)), range(len(tile.cols)))
-    modes, p = F.row_law(s.fmt, ops.a.x[0], ops.a.alpha[0], ops.a.ae[0], ops.e_a[0])
+    dead = F.salt_dead(s.fmt, ops.a.x[0], ops.a.alpha[0], ops.a.ae[0])
+    p, modes = F.change_probabilities(s.fmt, ops.a.x[0], ops.a.alpha[0], ops.e_a[0], ops.a.ae[0], dead)
+    lo, pmf = F.noise_law(tuple(ops.e_a[0]))
     return {
         "case": case, "scheme": s.name, "shape": list(shape),
         "tile": {"rows": [tile.rows[0], tile.rows[-1] + 1], "cols": [tile.cols[0], tile.cols[-1] + 1]},
@@ -86,8 +88,10 @@ def case_vector(case, fmt, shape, index, weight, test) -> dict:
         "leaf": s.digest(ctx, noise, checked).hex(), "tickets": [t.hex() for t in s.tickets(noise, checked)],
         "useful_sha256": sha(json.dumps(useful).encode()), "useful_00": useful[0][0],
         "debit": s.last_debit.to_json(), "cap": str(cap),
-        "f1_a0": {"modal_bytes_sha256": sha(bytes(modes)), "modal_bytes": modes[:8],
-                  "p_sha256": sha(struct.pack(f"<{len(p)}d", *p)), "p": [v.hex() for v in p[:8]]},
+        "f1_a0": {"noise_law_lo": lo, "noise_law_sha256": sha(struct.pack(f"<{len(pmf)}d", *pmf)),
+                  "modal_bytes_sha256": sha(bytes(modes)), "modal_bytes": modes[:8],
+                  "p_sha256": sha(struct.pack(f"<{len(p)}d", *p)), "p": [v.hex() for v in p[:8]],
+                  "split_units": str(F.split_units(s.fmt, p, modes, ops.a.scales[0]))},
     }
 
 

@@ -1,4 +1,6 @@
-"""``pearl-c-nvfp4-v0`` and ``pearl-c-mxfp4-v0``: Pearl-C on sm_120's block-scaled FP4 (``mma.sync kind::mxf4nvf4``).
+"""``pearl-c-nvfp4-v0``: Pearl-C on sm_120's block-scaled FP4 (``mma.sync kind::mxf4nvf4``), NVFP4 only.  MXFP4
+(``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain (Daniel, 15:34Z): same forming and
+chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
 The design is research store ``internal/pouw/rtx-pro/fp4-design.md`` (GPU 5's lane).  It is Pearl-C (`pearl_c`) with the
 FP8 product replaced by the E2M1 one: the noise enters inside one atom per element, one noisy cast forms the operand,
@@ -50,36 +52,34 @@ reference's witness alone, not every element of a screened block (server.md 11:3
 over its credited words (`tile_debit`):
 
 ~~~text
-F1′ base split   per row of A′ and of B̃ and aligned 128 of k: 128·max(0, S_w − min(c·M_w, 1/8)) on every word the row
-                 feeds, c = 16.92/128 (theory §6.2; it replaces item 1, 2:4 groups of salt-dead codes)
+1  F1′ split     per row and aligned 128 of k: 128·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]),
+                 κ = min(c·M_w, 0.125), on every word the row feeds (below)
+1b F2 int8      per tile: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain MAC, f the realised scale bytes' flatness (below)
 2  identity      per atom whose lone skip leaves the word unchanged: 64 per atom-word
 3  dead pairs    per block screened on both the A row and the B row: `block` per pair-word
 4  forming       per salt-dead (the reference's witness, `salt_dead`) or unneeded A element: f_s · |cols|/n
 5  sub-grid      per (word, block) with 2304·m_a·m_b·2^(e_a+e_b−2) below its step's grid (it adds exactly 0): `block`
 D-24 windows     per row and aligned 128 of k whose every 4-group has ≤ 2 nonzero codes: 0.5 per MAC, on every word it feeds
-F2 int8 route    per tile: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain MAC of its credited words (theory §6.3)
 cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
 ~~~
 
-**F1′** prices the base split A′ = A0 + ΔA (A0 each code's modal value, ΔA 2:4 plus a CUDA-core patch, or a skipped or
-patched k64 atom) at its expected saving under the noise law given the row's E line, less A0's scale corrections
-(`f1_row`).  The law is exact: S = Σ_r h(e_r)·h(f_r) over an element's 16^32 F lines (`_law`, integer generating
-functions), and the atom is D = RZ32(C truncated onto its grid + S·a_E/64) (`_atom_sum`; D = C on a line with no nonzero
-product), so each P(code = c) at a byte and each P(|D| below a byte's ceiling) is a count ratio.  A block's modal byte is
-the product formula's argmax over its elements (the smaller on a tie), p_t = 1 − max_c P(code_t = c) at it, and p_t = 0
-on witness-dead codes and screened blocks (`row_law`).  S_w = min(1, E[max(0, ½ − c·X_w)] + Σ_h E[max(0, ½ − c·N_h)]):
-X_w the excess beyond 2:4 at the cheater's layout inside each block (sorted p, neighbours paired, chunks of alternate
-pairs), N_h the changed codes in each aligned k64 half (`window_saving`).  M_w counts the window's blocks whose realised
-byte is not their modal one.  The DPs run in IEEE doubles from the correctly rounded p_t, and S_w enters the debit as its
-exact double, the one departure from exact arithmetic (deterministic, and pinned by the vectors).  MXFP4 sorts each
-32-block and chunks every 16 sorted codes as NVFP4 does a block (GPU 5's extension; §6.2 states the 16-block).
-
-**F2** prices the masked int8 route on flat scales (`f2_save`): f_A and f_B are the credited rows' shares of blocks at
-their most common realised byte, and c_L = min over 1 ≤ L ≤ log2(k/B) of 2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75
-at the unit's (m, k, n) (`c_l`).
+**F1′ and F2** (theory §6.2–6.3, the fix for the assessor's D on ``tt-out/fp4-sm120``, fp4-base-split-break.md; the
+assessor's FP4 conditions, ratings.md 15:18Z).  F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving
+under the exact noise law given this salt's E lines (`noise_law`): p_t = P(code ≠ modal code) at the block's modal scale
+byte (`change_probabilities`); per window, min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]) with R_24 one 2:4 pass
+plus a CUDA-core patch of the excess, R_skip a skip or patch per k64 atom, at the cheater's best layout inside each block,
+and κ inside the expectation, A0's scale corrections: one FFMA per word for each of the M_w blocks whose realised byte
+is not their modal byte (`split_saving`, `split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at
+one tile byte, per row, and per block-column class (`int8_saving`), with c_L bc-d9842080's formula at W1's int8 leaf (`int8_depth_cost`).
+They are the rows `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2
+charges the masked int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain
+claim `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
+and D-SK stays.  **R1** (theory §6.8): a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by
+the prover (`r1_rows`, through `pearl_c_work.declare`) and checked on drawn tiles (`row_over_debit`, through
+`pearl_c_work.check_opened`); it is still formed, checked and hashed.
 
 A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
-codes, not on the atom's word.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
+codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
 gather any 16 such rows), and the literal spans are counted.  D-SS's spread bound (2^15.8, implied by D-NF) is counted, not
 enforced: items 2 and 5 charge what it would exclude.  D-SB is enforced on every formed side before hashing
 (`check_scale_bytes`, server.md 10:32Z): every block scale in 0x01–0x7E (UE8M0: short of 0xFF) and every a_E at most 0x7E,
@@ -96,15 +96,13 @@ rounds to zero keeps its sign (code 0x8); no checked word depends on it.
 
 from __future__ import annotations
 
+import itertools
 import math
 import struct
-from bisect import bisect_left
-from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
-from itertools import accumulate
 
 from verity.commitments.blake3 import blake3, keyed
 from verity.commitments.turboshake import turboshake128
@@ -150,6 +148,11 @@ CAP = Fraction(1, 400)
 SPAN_K = 128                       # D-24: one mma.sp m16n8k128 takes 16 rows x 128 of k
 SPREAD_X5 = 79                     # D-SS: spread ≤ 2^15.8, as spread^5 ≤ 2^79
 GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 products of 6 x 6
+#: F1′ and F2's prices in FP4 units: a CUDA-core FFMA 16.92 (the measured 8.46 FP8 units x 2), the dense correction of
+#: A0's block scales at least 0.125 per MAC (an FP8 GEMM over k/16), the int8 route's patch 4 slots per useful MAC per side,
+#: and its int8 leaf at W1's issue ratio, 2 slots per MAC (the assessor's FP4 conditions, ratings.md 15:18Z; the
+#: wall-time window below it, 1.81, is `concurrent-budgets/sm120`'s, not the rule's).
+FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 2
 
 _E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
 _E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
@@ -230,16 +233,14 @@ def pow2_word(e: int) -> int:
     return (e + 127) << 23 if e >= -126 else 1 << (e + 149)
 
 
-def recip(fmt: Fmt, byte: int) -> int:
-    """The FP32 reciprocal the cast multiplies by at a block scale byte: nearest even for UE4M3, exact for UE8M0."""
-    return fp32.div(ONE, ue4m3_word(byte)) if fmt is NVFP4 else pow2_word(127 - byte)
-
-
 def block_scale(fmt: Fmt, amax: int) -> tuple[int, int]:
     """(scale byte, FP32 reciprocal) of a block with |max| amax, by `fmt`'s rule (module docstring)."""
     v = fp32.mul(amax, SIXTH)
-    s = max(ue4m3(v), UE4M3_MIN) if fmt is NVFP4 else ue8m0_up(v)
-    return s, recip(fmt, s)
+    if fmt is NVFP4:
+        s = max(ue4m3(v), UE4M3_MIN)
+        return s, fp32.div(ONE, ue4m3_word(s))
+    s = ue8m0_up(v)
+    return s, pow2_word(127 - s)
 
 
 # ---- rows, statistics, lines ---------------------------------------------------------------------------------------
@@ -278,6 +279,14 @@ def line(seed: bytes, role: int, index: int) -> list[int]:
 
 
 @lru_cache(maxsize=16)
+def seed_b(salt: bytes, root_b: bytes) -> bytes:
+    """B̃'s noise seed, keyed by this job's salt and B's root.  So B̃ exists only once the salt does, and no program
+    can precompute with it: the salt-free base split is two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater
+    paying both corrections), which is what ties it on the stride rows (TT_OUT-FP4's rule D-SK,
+    theory-pearl-c4-domain.md §2)."""
+    return keyed(blake3(LABELS["seed-B"]), salt + root_b)
+
+
 def basis(seed_b: bytes, role: int, k: int) -> tuple[tuple[int, ...], ...]:
     """F_A (ROLE_FA) or F_B (ROLE_FB): k lines of 32 codes, line t for position t."""
     return tuple(tuple(line(seed_b, role, t)) for t in range(k))
@@ -497,6 +506,258 @@ def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
     return dead
 
 
+def _scale_value(fmt: Fmt, byte: int) -> float:
+    m, e = scale_dyadic(fmt, byte)
+    return m * 2.0 ** e
+
+
+def noise_sigma(e_row: Sequence[int], ae: int) -> float:
+    """The noise's standard deviation in the atom's C units given this salt's E line: a_E·2^-4·‖E‖·√8.5625 (F uniform)."""
+    return _scale_value(NVFP4, ae) / 16 * math.sqrt(8.5625 * sum(float(e2m1_value(c)) ** 2 for c in e_row))
+
+
+_F2 = (0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12)    # 2·value of each E2M1 code, in half units
+
+
+def _pmf_conv(a: tuple[int, tuple[float, ...]], b: tuple[int, tuple[float, ...]]) -> tuple[int, tuple[float, ...]]:
+    (la, pa), (lb, pb) = a, b
+    nz = [(j, y) for j, y in enumerate(pb) if y]
+    out = [0.0] * (len(pa) + len(pb) - 1)
+    for i, x in enumerate(pa):
+        if x:
+            for j, y in nz:
+                out[i + j] += x * y
+    return la + lb, tuple(out)
+
+
+@lru_cache(maxsize=64)
+def _f_power(m: int) -> tuple[int, tuple[float, ...]]:
+    """The law of the sum of m independent uniform draws of 2·F (F one E2M1 code), on the integers from its lowest value."""
+    if m == 0:
+        return 0, (1.0,)
+    if m == 1:
+        pmf = [0.0] * 25
+        for v in _F2:
+            pmf[v + 12] += 1 / 16
+        return -12, tuple(pmf)
+    return _pmf_conv(_f_power(m // 2), _f_power(m - m // 2))
+
+
+@lru_cache(maxsize=512)
+def noise_law(e_row: tuple[int, ...]) -> tuple[int, tuple[float, ...]]:
+    """The exact law of n = Σ_r (2E_r)·(2F_r) given this salt's E line, F_r uniform over the 16 E2M1 codes and independent
+    (one element's noise is a_E·2^-6·n): (lowest value, pmf over the consecutive integers from it).  F is symmetric, so
+    only |E_r| matters, and each magnitude's m-fold sum is a stretched power of one draw's law."""
+    law: tuple[int, tuple[float, ...]] = (0, (1.0,))
+    for v in sorted({abs(_F2[c]) for c in e_row} - {0}):
+        lo, pmf = _f_power(sum(1 for c in e_row if abs(_F2[c]) == v))
+        stretched = [0.0] * ((len(pmf) - 1) * v + 1)
+        stretched[::v] = pmf
+        law = _pmf_conv(law, (lo * v, tuple(stretched)))
+    return law
+
+
+@lru_cache(maxsize=512)
+def _noise_cdf(e_row: tuple[int, ...]) -> tuple[int, tuple[float, ...]]:
+    lo, pmf = noise_law(e_row)
+    return lo, (0.0, *itertools.accumulate(pmf))
+
+
+def _below_law(e_row: tuple[int, ...], scale: float) -> Callable[[float], float]:
+    """y ↦ P(noise < y) for noise = scale·n, n ~ `noise_law(e_row)`."""
+    lo, cum = _noise_cdf(e_row)
+
+    def f(y: float) -> float:
+        i = math.ceil(y / scale) - lo if math.isfinite(y) else (len(cum) if y > 0 else 0)
+        return cum[min(max(i, 0), len(cum) - 1)]
+    return f
+
+
+def _below(v: Sequence[float], cdf: Callable[[float], float], u: float) -> float:
+    """P(every |v_t + noise| < u), the noise independent per element given E."""
+    p = 1.0
+    for x in v:
+        p *= max(0.0, cdf(u - x) - cdf(-u - x))
+    return p
+
+
+def modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], sigma: float) -> int:
+    """A block's most likely noisy scale byte under the law given E (salt-free given E): the byte whose amax interval
+    [6·lower midpoint, 6·upper midpoint) holds the noisy amax most often.  Among the bytes the clean amax ± 6σ reaches."""
+    top = max(abs(x) for x in v)
+    lo_b = block_scale(fmt, P.f32_bits(max(top - 6 * sigma, 0.0)))[0]
+    hi_b = block_scale(fmt, P.f32_bits(top + 6 * sigma))[0]
+    if fmt is MXFP4:
+        edges = {s: (3 * _scale_value(fmt, s), 6 * _scale_value(fmt, s)) for s in range(lo_b, hi_b + 1)}
+    else:
+        def mid(s, t):
+            return 3 * (_scale_value(fmt, s) + _scale_value(fmt, t))
+        edges = {s: (mid(s - 1, s) if s > UE4M3_MIN else 0.0, mid(s, s + 1) if s < UE4M3_TOP else math.inf)
+                 for s in range(lo_b, hi_b + 1)}
+    return max(edges, key=lambda s: (_below(v, cdf, edges[s][1]) - _below(v, cdf, edges[s][0]), -s))
+
+
+def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int,
+                         dead: Sequence[bool]) -> tuple[list[float], list[int]]:
+    """Per element, P(its code ≠ its modal code) at its block's modal scale byte, under the exact noise law given this
+    salt's E line (`noise_law`; the Gaussian at σα under-charges some families up to 20×), and 0 on salt-dead codes;
+    with the blocks' modal bytes (F1′'s p_t, theory-pearl-c4-domain.md §6.2).  The atom's one RZ rounding of C + noise,
+    2^-23 relative, is not modelled."""
+    e = tuple(e_row)
+    cdf = _below_law(e, _scale_value(NVFP4, ae) / 64)
+    sigma = noise_sigma(e_row, ae)
+    p, modes = [], []
+    for b in range(0, len(x), fmt.block):
+        v = [P.f32_of_bits(fp32.mul(alpha, w)) for w in x[b:b + fmt.block]]
+        mode = modal_byte(fmt, v, cdf, sigma)
+        modes.append(mode)
+        vs = _scale_value(fmt, mode)
+        edges = [-m * vs for m in reversed(_E2M1_MIDPOINTS)] + [m * vs for m in _E2M1_MIDPOINTS]
+        for t, vt in enumerate(v):
+            if dead[b + t]:
+                p.append(0.0)
+                continue
+            c = [0.0] + [cdf(e - vt) for e in edges] + [1.0]
+            p.append(1.0 - max(c[i + 1] - c[i] for i in range(len(c) - 1)))
+    return p, modes
+
+
+_EXCESS_MAX = 4                    # 0.5 − c·x < 0 from x = 4 on
+
+
+def _pair_excess(js: tuple[int, ...]) -> int:
+    dev = sorted(j for j in js if j)
+    return min(sum(dev[:len(dev) - 2]) if len(dev) > 2 else 0, _EXCESS_MAX)
+
+
+_COMBOS = [(js, _pair_excess(js)) for js in itertools.product(range(3), repeat=4)]
+
+
+def _conv(a: Sequence[float], b: Sequence[float]) -> list[float]:
+    out = [0.0] * (_EXCESS_MAX + 1)
+    for i, x in enumerate(a):
+        for j, y in enumerate(b):
+            out[min(i + j, _EXCESS_MAX)] += x * y
+    return out
+
+
+def _chunk(pairs: Sequence[tuple[float, float]]) -> list[float]:
+    """One 8-chunk's excess (changed elements beyond 2:4, patched): if m > 2 of its 4 pairs change, the m − 2 pairs with
+    the fewest changed elements."""
+    pj = [((1 - a) * (1 - b), a * (1 - b) + (1 - a) * b, a * b) for a, b in pairs]
+    out = [0.0] * (_EXCESS_MAX + 1)
+    for js, x in _COMBOS:
+        out[x] += pj[0][js[0]] * pj[1][js[1]] * pj[2][js[2]] * pj[3][js[3]]
+    return out
+
+
+def _block_excess(p: Sequence[float]) -> list[float]:
+    """A block's excess at the cheater's layout: the block keeps its scale under any reordering, so its codes are sorted
+    by change probability, neighbours paired (reliable with reliable), and the pairs dealt round-robin to its chunks."""
+    s = sorted(p)
+    pairs = [(s[i], s[i + 1]) for i in range(0, len(s), 2)]
+    n = len(s) // 8
+    d = [1.0] + [0.0] * _EXCESS_MAX
+    for c in range(n):
+        d = _conv(d, _chunk(pairs[c::n]))
+    return d
+
+
+def _changed(p: Sequence[float]) -> list[float]:
+    """Changed codes among p, truncated at _EXCESS_MAX (Poisson-binomial)."""
+    d = [1.0] + [0.0] * _EXCESS_MAX
+    for q in p:
+        nd = [x * (1 - q) for x in d]
+        for i in range(_EXCESS_MAX):
+            nd[i + 1] += d[i] * q
+        nd[_EXCESS_MAX] += d[_EXCESS_MAX] * q
+        d = nd
+    return d
+
+
+def split_saving(fmt: Fmt, p: Sequence[float], kappa: float = 0.0) -> float:
+    """F1′'s per-MAC charge on one aligned 128-window, with A0's scale correction κ inside the expectation (a cheater who
+    sees the salt routes each row after it):  min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]), where
+    R_24 = max(0, ½ − c·X) is one 2:4 pass plus a CUDA-core patch of the excess X, and R_skip = Σ_h max(0, ½ − c·N_h)
+    skips or patches each aligned k64 atom.  The sum bounds E[max(0, max(R_24, R_skip) − κ)] on any law."""
+    c = FFMA_UNITS / SPAN_K
+    gain = [max(0.0, 0.5 - c * x) for x in range(_EXCESS_MAX + 1)]
+    d = [1.0] + [0.0] * _EXCESS_MAX
+    for b in range(0, SPAN_K, fmt.block):
+        d = _conv(d, _block_excess(p[b:b + fmt.block]))
+    s = sum(x * max(0.0, g - kappa) for x, g in zip(d, gain))
+    h0, h1 = _changed(p[:ATOM]), _changed(p[ATOM:SPAN_K])
+    s += sum(x * y * max(0.0, gain[i] + gain[j] - kappa) for i, x in enumerate(h0) for j, y in enumerate(h1))
+    return min(1.0, s)
+
+
+def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int], scales: Sequence[int]) -> Fraction:
+    """F1′ per word the row feeds, in FP4 units: 128·`split_saving` per window at κ = min(c·M_w, 0.125), M_w the window's
+    blocks whose realised scale byte is not their modal byte (each costs A0's part one correction FFMA per word; a dense
+    correction GEMM over k/16 in FP8 costs at least 0.125 per MAC)."""
+    c, per = FFMA_UNITS / SPAN_K, SPAN_K // fmt.block
+    hw = hw_scales(fmt, scales)
+    total = 0.0
+    for w in range(0, len(p) - len(p) % SPAN_K, SPAN_K):
+        b0 = w // fmt.block
+        moved = sum(hw[b] != modes[b] for b in range(b0, b0 + per))
+        total += SPAN_K * split_saving(fmt, p[w:w + SPAN_K], min(c * moved, DENSE_CORRECTION))
+    return Fraction(total)
+
+
+def int8_depth_cost(fmt: Fmt, m: int, k: int, n: int) -> float:
+    """F2's c_L (bc-d9842080, nvfp4-int8-flatness-break.md 13:35Z; ratings.md 15:18Z): the masked int8-Strassen
+    route's cost per honest MAC before its patch, min over 1 ≤ L ≤ log2(k/block) of `INT8_LEAF_SLOTS`·(7/8)^L +
+    4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75 (int8 leaves, Strassen–Winograd's pre-adds on both sides, every post-add a free
+    merge: the adversary's best, which measured kernels don't approach); 2 (no route) below one level."""
+    levels = (k // fmt.block).bit_length() - 1
+    return min((INT8_LEAF_SLOTS * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75 for L in range(1, levels + 1)),
+               default=2.0)
+
+
+def _share(rows: Sequence[Sequence[int]]) -> float:
+    cells = [s for r in rows for s in r]
+    return max(cells.count(s) for s in set(cells)) / len(cells) if cells else 0.0
+
+
+def _row_share(rows: Sequence[Sequence[int]]) -> float:
+    """The mean over rows of each row's own modal share: flatness up to per-row scale factors, which the route absorbs."""
+    return sum(_share([r]) for r in rows) / len(rows) if rows else 0.0
+
+
+def _labels(rows: Sequence[Sequence[int]]) -> list[int]:
+    """Per block column, its modal byte offset from each row's modal byte."""
+    modes = [max(set(r), key=lambda s: (r.count(s), -s)) for r in rows]
+    out = []
+    for b in range(len(rows[0])):
+        offs = [r[b] - m for r, m in zip(rows, modes)]
+        out.append(max(set(offs), key=lambda o: (offs.count(o), -o)))
+    return out
+
+
+def int8_saving(fmt: Fmt, a_scales: Sequence[Sequence[int]], b_scales: Sequence[Sequence[int]], m: int, n: int) -> float:
+    """F2 per chain MAC (theory-pearl-c4-domain.md §6.3): the masked int8 route's saving max(0, 1 − c_L − 4·(2 − f_A −
+    f_B)) on the tile's realised scale bytes, at the largest of three readings of flatness: the tile's modal byte; each
+    row's own modal byte (row factors); and per block-column class (the class of a column is its modal byte offset from
+    each row's modal byte, on A′ and B̃ together), each class a sub-GEMM over its own k with row factors free."""
+    a = [hw_scales(fmt, s) for s in a_scales]
+    b = [hw_scales(fmt, s) for s in b_scales]
+    nb = len(a[0])
+    k = nb * fmt.block
+
+    def save(fa: float, fb: float, kk: int) -> float:
+        return max(0.0, 1 - int8_depth_cost(fmt, m, kk, n) - INT8_PATCH_SLOTS * (2 - fa - fb))
+
+    best = max(save(_share(a), _share(b), k), save(_row_share(a), _row_share(b), k))
+    classes: dict[tuple[int, int], list[int]] = {}
+    for col, key in enumerate(zip(_labels(a), _labels(b))):
+        classes.setdefault(key, []).append(col)
+    split = sum(len(cols) / nb * save(_row_share([[r[c] for c in cols] for r in a]),
+                                      _row_share([[r[c] for c in cols] for r in b]), len(cols) * fmt.block)
+                for cols in classes.values())
+    return max(best, split)
+
+
 def two_four_windows(codes: Sequence[int]) -> list[bool]:
     """D-24, per aligned 128 of k: every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0)."""
     return [all(sum(1 for c in codes[q:q + 4] if c & 7) <= 2 for q in range(w, w + SPAN_K, 4))
@@ -547,301 +808,13 @@ def word_replay(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scal
     return w[-1], identity, subgrid
 
 
-# ---- F1′ and F2: the base split and the masked int8 route (theory-pearl-c4-domain.md §6.2–6.5) --------------------
-
-PATCH = Fraction(1692, 100)        # the CUDA-core patch in FP4 units: one FFMA per word (§6.1)
-C_PATCH = PATCH / SPAN_K           # c, the patch per MAC of a row window
-A0_DENSE = Fraction(1, 8)          # a dense FP8 correction GEMM over k/16, per MAC: the most A0's scale corrections cost
-F2_SLOTS = 4                       # F2's patch: FP4 slots per useful MAC per side
-XM = 4                             # ½ − 4c < 0: past 3 excess or changed codes nothing is saved, so the DPs stop at 4
-LINES = 16 ** R                    # one element's F lines, 2^128
-_H = tuple(-_E2M1_HALVES[c & 7] if c & 8 else _E2M1_HALVES[c & 7] for c in range(16))
-_SLOT = 17                         # bytes per coefficient in `_law`'s packing: every count is at most 2^128
-_VX = tuple(float(max(Fraction(0), Fraction(1, 2) - C_PATCH * x)) for x in range(XM + 1))
-
-
-@lru_cache(maxsize=4096)
-def _law(mags: tuple[int, ...]) -> tuple[int, tuple[int, ...]]:
-    """The noise atom's line sum S = Σ_r h(e_r)·h(f_r) (quarters, h the E2M1 numerator) over one element's 16^32 F lines,
-    for an E line with mags[c] codes of |numerator| `_E2M1_HALVES[c]`: (lo, cdf), cdf[j] the lines with S ≤ lo + j.
-
-    Every f_r is uniform over the 16 nibbles, so S's generating function is Π_a (Σ_f z^(a·h(f)))^(n_a); it is multiplied
-    exactly as integers, `_SLOT` bytes per coefficient (Kronecker substitution)."""
-    poly, offset = 1, 0
-    for a, n in zip(_E2M1_HALVES, mags, strict=True):
-        if n and a:
-            poly *= sum(1 << (8 * _SLOT * a * (h + 12)) for h in _H) ** n
-            offset += 12 * a * n
-        elif n:
-            poly *= 16 ** n
-    raw = poly.to_bytes((2 * offset + 1) * _SLOT, "little")
-    return -offset, tuple(accumulate(int.from_bytes(raw[j:j + _SLOT], "little") for j in range(0, len(raw), _SLOT)))
-
-
-def _atom_sum(c_word: int, ae: int) -> tuple[int, int, int] | None:
-    """(A, Q, g): on a line of sum S with a nonzero product, the noise atom's exact sum is (A + S·Q)·2^g (C truncated toward
-    zero onto the step's grid 2^g, and both noise groups' scaled dots, exact on it), so D = RZ32((A + S·Q)·2^g).  A line
-    whose every product is zero anchors no grid, and its D is C.  None when a_E's mantissa is zero: every line is so."""
-    (ma, ea), (mf, ef) = scale_dyadic(NVFP4, ae), scale_dyadic(NVFP4, NOISE_F_SCALE)
-    if not ma:
-        return None
-    unit = ea + ef - 2
-    g = BLACKWELL_SM120_NVF4.grid(c_word, [(1, unit, True)])
-    if g > unit:
-        raise P.Reject("the noise atom's grid lies above its group dots' unit")
-    return int(math.ldexp(P.f32_of_bits(c_word), -g)), ma * mf << (unit - g), g
-
-
-def _dyadic(word: int) -> tuple[int, int]:
-    """A positive finite FP32 word as m·2^e."""
-    field, frac = word >> 23 & 0xFF, word & 0x7FFFFF
-    return (frac | 1 << 23, field - 150) if field else (frac, -149)
-
-
-def _s_from(y: tuple[int, int, int], word: int) -> int:
-    """The least S with (A + S·Q)·2^g at least the positive FP32 value `word`."""
-    a, q, g = y
-    m, e = _dyadic(word)
-    if e >= g:
-        return -((a - (m << (e - g))) // q)
-    return -(((a << (g - e)) - m) // (q << (g - e)))
-
-
-def _s_to(y: tuple[int, int, int], word: int) -> int:
-    """The greatest S with (A + S·Q)·2^g at most minus the positive FP32 value `word`."""
-    a, q, g = y
-    m, e = _dyadic(word)
-    if e >= g:
-        return (-(m << (e - g)) - a) // q
-    return (-m - (a << (g - e))) // (q << (g - e))
-
-
-def _least(pred) -> int | None:
-    """The least finite non-negative FP32 word with `pred`, monotone in the word; None when no finite word has it."""
-    lo, hi = 0, 0x7F800000
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if pred(mid):
-            hi = mid
-        else:
-            lo = mid + 1
-    return lo if lo < 0x7F800000 else None
-
-
-@lru_cache(maxsize=None)
-def _cells(fmt: Fmt, byte: int) -> tuple[int, ...]:
-    """τ_1 … τ_7 at a block scale byte: τ_j is the least FP32 magnitude whose cast has |code| ≥ j.  Since D = RZ32(y), the
-    code's value is sign(y)·j exactly when τ_j ≤ |y| < τ_(j+1)."""
-    r = recip(fmt, byte)
-
-    def at_least(j: int):
-        def pred(w: int) -> bool:
-            v = fp32.mul(w, r)
-            return (v >> 23) & 0xFF == 0xFF or e2m1(v) & 7 >= j
-        return pred
-    return tuple(_least(at_least(j)) for j in range(1, 8))
-
-
-@lru_cache(maxsize=None)
-def _above(fmt: Fmt, byte: int) -> int | None:
-    """The least FP32 magnitude whose block scale byte exceeds `byte`: a block's scale is at most `byte` exactly when its
-    amax lies below it (None: at every finite amax)."""
-    return _least(lambda w: block_scale(fmt, w)[0] > byte)
-
-
-def _upto(cdf: Sequence[int], lo: int, s: int) -> int:
-    j = s - lo
-    return 0 if j < 0 else cdf[min(j, len(cdf) - 1)]
-
-
-def _below(law: tuple[int, tuple[int, ...]], idle: int, y, c_word: int, u: int | None) -> int:
-    """The F lines on which one element's |D| lies below the FP32 magnitude u (all of them when u is None)."""
-    if u is None:
-        return LINES
-    stay = idle if c_word & 0x7FFFFFFF < u else 0
-    if y is None:
-        return stay
-    lo, cdf = law
-    s_lo, s_hi = _s_to(y, u) + 1, _s_from(y, u) - 1
-    n = _upto(cdf, lo, s_hi) - _upto(cdf, lo, s_lo - 1)
-    return n - (idle if s_lo <= 0 <= s_hi else 0) + stay
-
-
-def _modal_byte(fmt: Fmt, law, idle: int, ys: Sequence, cs: Sequence[int]) -> int:
-    """One block's most likely scale byte given E (the smaller on a tie), by the product formula: P(byte ≤ b) is
-    Π_t P(|D_t| below `_above`(b)), since the block's atoms are independent given E (their F lines are).  The search starts
-    at the median byte and widens while a byte's mass could still reach the best: P(byte = b) ≤ P(byte ≤ b) below it and
-    ≤ P(byte ≥ b) above it."""
-    bottom, top, whole, memo = block_scale(fmt, 0)[0], block_scale(fmt, 0x7F7FFFFF)[0], LINES ** len(cs), {}
-
-    def cum(b: int) -> int:
-        if b < bottom:
-            return 0
-        if b not in memo:
-            u, v = _above(fmt, b), 1
-            for y, c in zip(ys, cs):
-                v *= _below(law, idle, y, c, u)
-                if not v:
-                    break
-            memo[b] = v
-        return memo[b]
-    lo, hi = bottom, top
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if 2 * cum(mid) >= whole:
-            hi = mid
-        else:
-            lo = mid + 1
-    mode, best = lo, cum(lo) - cum(lo - 1)
-    b = lo - 1
-    while b >= bottom and cum(b) >= best:
-        if cum(b) - cum(b - 1) >= best:
-            mode, best = b, cum(b) - cum(b - 1)
-        b -= 1
-    b = lo + 1
-    while b <= top and whole - cum(b - 1) > best:
-        if cum(b) - cum(b - 1) > best:
-            mode, best = b, cum(b) - cum(b - 1)
-        b += 1
-    return mode
-
-
-def _p_change(fmt: Fmt, law, idle: int, y, c_word: int, byte: int) -> float:
-    """p_t = 1 − max_c P(code_t = c) for one element at the block scale byte, over its F lines (values: −0 is 0)."""
-    if y is None:
-        return 0.0
-    lo, cdf = law
-    taus = _cells(fmt, byte)
-    edges = [_s_to(y, t) for t in reversed(taus)] + [_s_from(y, t) - 1 for t in taus]
-    cum = [_upto(cdf, lo, s) for s in edges] + [LINES]
-    counts = [cum[0]] + [cum[j] - cum[j - 1] for j in range(1, len(cum))]
-    if idle:
-        code = e2m1(fp32.mul(c_word, recip(fmt, byte)))
-        counts[bisect_left(edges, 0)] -= idle
-        counts[7 - (code & 7) if code & 8 else 7 + (code & 7)] += idle
-    return (LINES - max(counts)) / LINES
-
-
-def row_law(fmt: Fmt, x: Sequence[int], alpha: int, ae: int, e_line: Sequence[int]) -> tuple[list[int], list[float]]:
-    """F1′'s law of one row given its E line (§6.2, exact): each block's modal scale byte, and each element's p_t at it
-    (before `f1_row` zeroes the witness-dead and screened ones).  The p_t are IEEE doubles, each the exact count ratio
-    correctly rounded."""
-    mags = [0] * 8
-    for e in e_line:
-        mags[e & 7] += 1
-    law = _law(tuple(mags))
-    idle = 16 ** mags[0] * 2 ** (R - mags[0])
-    cs = [fp32.mul(alpha, w) for w in x]
-    ys = [_atom_sum(c, ae) for c in cs]
-    modes, p = [], []
-    for b in range(0, len(x), fmt.block):
-        mode = _modal_byte(fmt, law, idle, ys[b:b + fmt.block], cs[b:b + fmt.block])
-        modes.append(mode)
-        p.extend(_p_change(fmt, law, idle, y, c, mode) for y, c in zip(ys[b:b + fmt.block], cs[b:b + fmt.block]))
-    return modes, p
-
-
-def _conv(a: Sequence[float], b: Sequence[float]) -> list[float]:
-    out = [0.0] * (XM + 1)
-    for i, u in enumerate(a):
-        for j, v in enumerate(b):
-            out[min(i + j, XM)] += u * v
-    return out
-
-
-def _chunk(pairs: Sequence[tuple[float, float]]) -> list[float]:
-    """One chunk's excess beyond 2:4: two of its 4 pairs change for free; past that, the cheapest changed pairs' changed
-    elements (a pair changes 0, 1 or 2 of its codes)."""
-    d = {(0, 0): 1.0}
-    for a, b in pairs:
-        steps = (((0, 0), (1 - a) * (1 - b)), ((1, 0), a * (1 - b) + (1 - a) * b), ((0, 1), a * b))
-        nd: dict[tuple[int, int], float] = {}
-        for (n1, n2), v in d.items():
-            for (d1, d2), w in steps:
-                nd[n1 + d1, n2 + d2] = nd.get((n1 + d1, n2 + d2), 0.0) + v * w
-        d = nd
-    out = [0.0] * (XM + 1)
-    for (n1, n2), v in d.items():
-        extra = max(0, n1 + n2 - 2)
-        out[min(min(extra, n1) + 2 * max(0, extra - n1), XM)] += v
-    return out
-
-
-def _changed(ps: Sequence[float]) -> list[float]:
-    """The number of changed codes among independent ones, truncated at XM (Poisson-binomial)."""
-    d = [1.0] + [0.0] * XM
-    for q in ps:
-        nd = [v * (1 - q) for v in d]
-        for n in range(XM):
-            nd[n + 1] += d[n] * q
-        nd[XM] += d[XM] * q
-        d = nd
-    return d
-
-
-def window_saving(fmt: Fmt, p: Sequence[float]) -> float:
-    """S_w over one aligned 128 of k: min(1, E[max(0, ½ − c·X_w)] + Σ_h E[max(0, ½ − c·N_h)]), X_w the excess beyond 2:4
-    at the cheater's best layout inside each block (sorted p, neighbours paired, chunks of alternate pairs, per 16 sorted
-    codes), N_h the changed codes in each aligned k64 half."""
-    x = None
-    for b in range(0, SPAN_K, fmt.block):
-        s = sorted(p[b:b + fmt.block])
-        pairs = list(zip(s[0::2], s[1::2]))
-        block = None
-        for g in range(0, len(pairs), 8):
-            for chunk in (pairs[g:g + 8:2], pairs[g + 1:g + 8:2]):
-                block = _chunk(chunk) if block is None else _conv(block, _chunk(chunk))
-        x = block if x is None else _conv(x, block)
-    total = sum(v * w for v, w in zip(x, _VX))
-    for h in (p[:ATOM], p[ATOM:SPAN_K]):
-        total += sum(v * w for v, w in zip(_changed(h), _VX))
-    return min(1.0, total)
-
-
-def f1_row(fmt: Fmt, side: Formed, i: int, e_line: Sequence[int], dead: Sequence[bool],
-           screened: Sequence[bool]) -> tuple[Fraction, int, int]:
-    """F1′ for row i of a formed side (§6.2): its charge per word it feeds, Σ_w 128·max(0, S_w − min(c·M_w, 1/8)) with
-    p_t = 0 on witness-dead codes and screened blocks and M_w the window's blocks whose realised scale byte is not
-    their modal byte; and the windows charged and the blocks off their modal byte."""
-    modes, p = row_law(fmt, side.x[i], side.alpha[i], side.ae[i], e_line)
-    p = [0.0 if d or screened[t // fmt.block] else q for t, (q, d) in enumerate(zip(p, dead, strict=True))]
-    per, units, charged = SPAN_K // fmt.block, Fraction(0), 0
-    off = [m != r for m, r in zip(modes, side.scales[i], strict=True)]
-    for w in range(len(p) // SPAN_K):
-        d = Fraction(window_saving(fmt, p[w * SPAN_K:(w + 1) * SPAN_K])) - min(C_PATCH * sum(off[w * per:(w + 1) * per]),
-                                                                              A0_DENSE)
-        if d > 0:
-            units, charged = units + SPAN_K * d, charged + 1
-    return units, charged, sum(off)
-
-
-def c_l(m: int, k: int, n: int, block: int) -> Fraction | None:
-    """F2's cost per useful MAC of the int8 route at its best depth 1 ≤ L ≤ log2(k/B) (§6.3): int8 leaves at 2 slots,
-    (7/8)^L of them under Strassen–Winograd, and its pre-adds on both sides, every post-add a free merge.  None when
-    k < 2B."""
-    return min((2 * Fraction(7, 8) ** L + Fraction(17, 4) * (Fraction(1, m) + Fraction(1, n)) * (Fraction(7, 4) ** L - 1)
-                / Fraction(3, 4) for L in range(1, (k // block).bit_length())), default=None)
-
-
-def modal_share(scales: Sequence[Sequence[int]]) -> Fraction:
-    """The share of blocks at the most common realised scale byte."""
-    counts = Counter(s for row in scales for s in row)
-    return Fraction(max(counts.values()), sum(counts.values()))
-
-
-def f2_save(fmt: Fmt, shape: Shape, f_a: Fraction, f_b: Fraction) -> Fraction:
-    """F2's saving per chain MAC: max(0, 1 − c_L − 4·(2 − f_A − f_B)), c_L at the tile's GEMM."""
-    cl = c_l(shape.m, shape.k, shape.n, fmt.block)
-    return Fraction(0) if cl is None else max(Fraction(0), 1 - cl - F2_SLOTS * (2 - f_a - f_b))
-
-
 @dataclass(frozen=True)
 class Debit:
     """A drawn tile's replayed debit over its credited words in FP4 units, by item (module docstring), and the counts
     behind it and behind the domain checks."""
 
-    f1: Fraction
-    f2: Fraction
+    split: Fraction
+    int8: Fraction
     identity: int
     dead_pairs: int
     forming: Fraction
@@ -851,28 +824,27 @@ class Debit:
 
     @property
     def total(self) -> Fraction:
-        return self.f1 + self.f2 + self.identity + self.dead_pairs + self.forming + self.subgrid + self.windows
+        return self.split + self.int8 + self.identity + self.dead_pairs + self.forming + self.subgrid + self.windows
 
     def to_json(self) -> dict:
-        return {"total": str(self.total), "f1": str(self.f1), "f2": str(self.f2), "identity": self.identity,
+        return {"total": str(self.total), "split": str(self.split), "int8": str(self.int8), "identity": self.identity,
                 "dead_pairs": self.dead_pairs, "forming": str(self.forming), "subgrid": self.subgrid,
                 "windows": self.windows, "counts": dict(self.counts)}
 
 
-def tile_debit(fmt: Fmt, a: Formed, b: Formed, e_a: Sequence[Sequence[int]], e_b: Sequence[Sequence[int]],
-               rows: Sequence[int], cols: Sequence[int], shape: Shape) -> Debit:
+def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int,
+               e_a: Sequence[Sequence[int]], e_b: Sequence[Sequence[int]], m: int | None = None) -> Debit:
     """The debit over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
-    their E lines e_a and e_b) in a unit of `shape`."""
-    n = shape.n
+    this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n)."""
+    m = n if m is None else m
     dead_a = {i: salt_dead(fmt, a.x[i], a.alpha[i], a.ae[i]) for i in rows}
     dead_b = {j: salt_dead(fmt, b.x[j], b.alpha[j], b.ae[j]) for j in cols}
-    blocks_a, blocks_b = {i: dead_blocks(fmt, a.x[i]) for i in rows}, {j: dead_blocks(fmt, b.x[j]) for j in cols}
-    f1_a = {i: f1_row(fmt, a, i, e_a[i], dead_a[i], blocks_a[i]) for i in rows}
-    f1_b = {j: f1_row(fmt, b, j, e_b[j], dead_b[j], blocks_b[j]) for j in cols}
-    f1 = len(cols) * sum(u for u, _, _ in f1_a.values()) + len(rows) * sum(u for u, _, _ in f1_b.values())
-    f_a, f_b = modal_share([a.scales[i] for i in rows]), modal_share([b.scales[j] for j in cols])
-    save = f2_save(fmt, shape, f_a, f_b)
-    f2 = save * len(rows) * len(cols) * len(a.codes[0])
+    law_a = {i: change_probabilities(fmt, a.x[i], a.alpha[i], e_a[i], a.ae[i], dead_a[i]) for i in rows}
+    law_b = {j: change_probabilities(fmt, b.x[j], b.alpha[j], e_b[j], b.ae[j], dead_b[j]) for j in cols}
+    split = (len(cols) * sum(split_units(fmt, *law_a[i], a.scales[i]) for i in rows)
+             + len(rows) * sum(split_units(fmt, *law_b[j], b.scales[j]) for j in cols))
+    k = len(a.codes[0])
+    int8 = Fraction(int8_saving(fmt, [a.scales[i] for i in rows], [b.scales[j] for j in cols], m, n)) * len(rows) * len(cols) * k
     win_a = {i: two_four_windows(a.codes[i]) for i in range(len(a.codes))}
     win_b = {j: two_four_windows(b.codes[j]) for j in cols}
     windows = SPAN_K // 2 * (len(cols) * sum(sum(win_a[i]) for i in rows) + len(rows) * sum(sum(win_b[j]) for j in cols))
@@ -881,6 +853,7 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, e_a: Sequence[Sequence[int]], e_b
         for j in cols:
             _, idn, sg = word_replay(fmt, a.codes[i], b.codes[j], a.scales[i], b.scales[j])
             identity, subgrid = identity + idn, subgrid + sg
+    blocks_a, blocks_b = {i: dead_blocks(fmt, a.x[i]) for i in rows}, {j: dead_blocks(fmt, b.x[j]) for j in cols}
     pairs = sum(p and q for i in rows for j in cols for p, q in zip(blocks_a[i], blocks_b[j]))
     unneeded = [all(b.codes[j][t] & 7 == 0 for j in cols) for t in range(len(a.codes[0]))]
     elements = sum(d or u for i in rows for d, u in zip(dead_a[i], unneeded))
@@ -895,11 +868,8 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, e_a: Sequence[Sequence[int]], e_b
               "forming_elements": elements, "screened_only_elements": screened_only, "unneeded_positions": sum(unneeded),
               "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
               + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
-              "f1_windows_a": sum(w for _, w, _ in f1_a.values()), "f1_windows_b": sum(w for _, w, _ in f1_b.values()),
-              "off_modal_blocks_a": sum(o for _, _, o in f1_a.values()),
-              "off_modal_blocks_b": sum(o for _, _, o in f1_b.values()),
-              "f_a": str(f_a), "f_b": str(f_b), "f2_save": str(save), "words": len(rows) * len(cols)}
-    return Debit(f1, f2, ATOM * identity, fmt.block * pairs, Fraction(FORMING_CREDITED * elements * len(cols), n),
+              "words": len(rows) * len(cols)}
+    return Debit(split, int8, ATOM * identity, fmt.block * pairs, Fraction(FORMING_CREDITED * elements * len(cols), n),
                  fmt.block * subgrid, windows, counts)
 
 
@@ -915,6 +885,10 @@ class PearlC4:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         self.fmt = FORMATS[fmt]
         self.name = NAMES[fmt]
+        #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
+        #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
+        #: D on honest coverage and Pearl-C4 claims NVFP4 alone (ratings.md 15:12Z; Daniel, 15:34Z).
+        self.contrast = self.fmt is MXFP4
         self.k_min, self.tile = k_min, tile
         self.last_debit: Debit | None = None
         self._encoded: tuple | None = None
@@ -925,7 +899,9 @@ class PearlC4:
             claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
                     "beacon-unpredictability"),
             hypotheses=(
-                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB), as the theory lane states it, proposed and "
+                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
+                "this job's salt, seed-B = keyed(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
+                "F2 (theory §6.2–6.3; the assessor's FP4 conditions, ratings.md 15:18Z), as the theory lane states it, proposed and "
                 "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
                 "the cap for less than their credit less the debit (research store "
                 "internal/pouw/rtx-pro/theory-pearl-c4-domain.md §2)",
@@ -935,14 +911,25 @@ class PearlC4:
             ),
             allowances=(
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
-                "savings no replay reaches (cross-atom cancellation, and theory §6.5's open routes: gathering across "
-                "blocks on operands flat on both sides, layouts inside a block other than sorted pairing, regrouping "
-                "after the salt) are TT_OUT-FP4's; the replayed debit charges the rest (tile_debit, F1′ and F2 included)",
+                "savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
+                "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
+                "(tile_debit)",
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
                         ("delta_inv", 4), ("dead_rho_sq", DEAD_RHO_SQ)),
         )
+        if self.contrast:
+            self.certificate = Certificate(
+                conjecture="none: a contrast line outside Pearl-C4's claimed domain (NVFP4 only)",
+                gamma0=None,
+                omega=Fraction(1),
+                claims=(),
+                hypotheses=(),
+                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′ (ratings.md 15:12Z), and "
+                            "Pearl-C4 claims NVFP4 alone (Daniel, 15:34Z)",),
+                parameters=self.certificate.parameters,
+            )
 
     def check(self, matmul: Matmul) -> None:
         s = matmul.shape
@@ -969,9 +956,12 @@ class PearlC4:
         return (FORMING_CREDITED + FORMING_UNCREDITED) * n * k + n * R * k + R * R * k + FP32_UNITS * n * R * R
 
     def noise(self, ctx: Context) -> C.Noise:
-        lab = lambda m, r: keyed(blake3(LABELS[r]), m)  # noqa: E731
-        return C.Noise(lab(ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little"), "seed-A"),
-                       lab(ctx.salt + ctx.root_b, "seed-B"))
+        """The unit's seeds: A's keyed by the job's salt, both roots and the unit, B̃'s by `seed_b`.  The verifier forms
+        both sides itself from these seeds on every drawn tile, so a word derived from any other B̃ fails its checked
+        values."""
+        unit = ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little")
+        seed_a = keyed(blake3(LABELS["seed-A"]), unit)
+        return C.Noise(seed_a, seed_b(ctx.salt, ctx.root_b))
 
     def parse_row(self, row: bytes, k: int) -> list[int]:
         return parse_row(row, k)
@@ -983,9 +973,40 @@ class PearlC4:
         """(debit, cap) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times the
         credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in `last_debit`."""
         s = record.matmul.shape
-        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, ops.e_a, ops.e_b, rows, cols, s)
+        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m)
         cell = Fraction(self.credit_of(Shape(1, record.k_kept, s.n)), s.n)
         return self.last_debit.total, CAP * cell * len(rows) * len(cols)
+
+    def _row_f1(self, side: Formed, e_rows: Sequence[Sequence[int]], pos: int) -> Fraction:
+        x = side.x[pos]
+        dead = salt_dead(self.fmt, x, side.alpha[pos], side.ae[pos])
+        p, modes = change_probabilities(self.fmt, x, side.alpha[pos], e_rows[pos], side.ae[pos], dead)
+        return split_units(self.fmt, p, modes, side.scales[pos])
+
+    def _r1_cap(self, k_kept: int, n: int) -> Fraction:
+        return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
+
+    def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
+        """R1 (theory-pearl-c4-domain.md §6.8; ratings.md 15:18Z condition 4): whether the row at tile position `pos` of
+        A′ ("A") or B̃ ("B") carries an F1′ per word above ρ·(its cell credit), and so must be declared excluded.  An
+        excluded row is still formed, checked and hashed; it earns nothing."""
+        formed, e_rows = (ops.a, ops.e_a) if side == "A" else (ops.b, ops.e_b)
+        return self._row_f1(formed, e_rows, pos) > self._r1_cap(record.k_kept, record.matmul.shape.n)
+
+    def r1_rows(self, ctx: Context, a_rows: Sequence[bytes], b_rows: Sequence[bytes], k_kept: int) -> tuple[set[int], set[int]]:
+        """R1 over a whole unit, for an honest prover's declaration (`pearl_c_work.declare`): the A rows and the weight's
+        B rows that pass the per-row rules but whose F1′ per word passes ρ·(their cell credit)."""
+        noise, k, n = self.noise(ctx), ctx.matmul.shape.k, ctx.matmul.shape.n
+        cap = self._r1_cap(k_kept, n)
+        out: tuple[set[int], set[int]] = (set(), set())
+        for rows, role_e, role_f, seed_e, dest in ((a_rows, ROLE_EA, ROLE_FA, noise.seed_a, out[0]),
+                                                   (b_rows, ROLE_EB, ROLE_FB, noise.seed_b, out[1])):
+            live = [i for i, row in enumerate(rows) if row_passes(self.fmt, parse_row(row, k))]
+            if not live:
+                continue
+            side, e = self._side([rows[i] for i in live], live, role_e, role_f, seed_e, noise.seed_b, k)
+            dest.update(i for p, i in enumerate(live) if self._row_f1(side, e, p) > cap)
+        return out
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
               k: int) -> tuple[Formed, list[list[int]]]:
@@ -1031,6 +1052,5 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "c_l", "clean", "e2m1", "f1_row", "f2_save", "form",
-           "hw_scales", "line", "modal_share", "recip", "row_law", "row_passes", "salt_dead", "scale_bytes_ok", "tile_debit",
-           "window_saving", "word_replay"]
+__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "e2m1", "form", "hw_scales", "line",
+           "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]

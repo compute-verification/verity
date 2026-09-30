@@ -17,8 +17,9 @@ from fractions import Fraction
 from pathlib import Path
 
 RHO = Fraction(1, 400)
-#: The debit's items; `two_four` is the retired item 1, which summaries replayed before F1′ carry in its place.
-TERMS = ("f1", "f2", "two_four", "identity", "dead_pairs", "forming", "subgrid", "windows")
+#: The debit's items (F1′ is `split`, F2 `int8`); `two_four` is the retired item 1, which summaries replayed before F1′
+#: carry in their place.
+TERMS = ("split", "int8", "two_four", "identity", "dead_pairs", "forming", "subgrid", "windows")
 
 
 def x_files(summary: dict, manifest: Path | None = None) -> dict[str, str]:

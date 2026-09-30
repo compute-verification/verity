@@ -170,6 +170,21 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     assert out.credit == (1 - D.CAP) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
 
 
+def test_r1_is_a_no_op_on_pearl_c():
+    """R1, the salted per-row credit rule `check_opened` and `declare` now consult, is Pearl-C4's (its F1′ bound).
+    Pearl-C (FP8) brings no hook, so an excluded row that passes the per-row rules still fails its tile, and declaring
+    with the transcript gives the same records as without."""
+    epoch, prover, tr, rows_a, rows_b = lifecycle()
+    assert not hasattr(S, "row_over_debit") and not hasattr(S, "r1_rows")
+    plain = W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20}, transcript=tr) == plain
+    u = epoch.workload.matmuls[0]
+    tile = S.tiles(u.shape)[0]
+    rec = W.UnitRecord(u, 20, K, (0, 3), ())
+    reason = W.check_opened(S, rec, tile, [rows_a[i] for i in tile.rows], [rows_b[j] for j in tile.cols], None)
+    assert reason == "A row 0 is excluded but passes the per-row rules"
+
+
 def test_audit_under_hashing_h1():
     """The work law's audit is the same under hashing format -h1: its openings verify against frame-b3 roots."""
     h1 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1")
