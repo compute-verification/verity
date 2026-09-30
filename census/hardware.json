@@ -93,7 +93,7 @@
   },
   {
     "id": "rtx-pro-6000-server/e4m3",
-    "name": "RTX PRO 6000 Server",
+    "name": "RTX PRO 6000",
     "device": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
     "dtype": "e4m3",
     "rate": "fp8 (e4m3) dense tensor-core peak, fp32 accumulate",
