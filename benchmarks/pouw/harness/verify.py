@@ -26,7 +26,9 @@ Per shape, the commands run again on the control, and their exit codes don't fai
 Then every arm row of every shape, verified or not, becomes one attempt record (`ledger.py`, ``kernel-attempt/v1``) under
 the run's ``ledger/``: ``--tier`` says what kind of run it was (2a a one-GPU screen, 2b a timed whole-node window; only 2b
 rows can stand on the panel's plots), ``--hypothesis`` is the attempt's one line, ``--parent`` the attempt it changes, and
-``--outcome``/``--reason`` the lane's verdict when it already has one. ``--publish`` puts the records into the evidence store
+``--outcome``/``--reason`` the lane's verdict when it already has one. γ is looked up from the Lean-pinned price twins on
+the priced path the variant declares, never typed: an arm whose lineage declares ``gamma`` gets no record, and the run
+says so. ``--publish`` puts the records into the evidence store
 (``--push``: onto its remote); a publish that fails is reported and doesn't change the exit code, and ``ledger.py publish
 RUN_DIR`` retries it from wherever the run's files are.
 """
@@ -228,6 +230,9 @@ def ledger(result: dict, a: argparse.Namespace, log) -> dict:
         recs = L.records(result, run_id=a.run_id, commit=a.commit, tier=a.tier, hypothesis=a.hypothesis, parent=a.parent,
                          outcome=a.outcome, reason=a.reason, by=a.by)
         out["records"] = [str(p.relative_to(run_dir)) for p in L.write(run_dir, recs)]
+        out["refused"] = L.typed_gamma(result)
+        for arm, why in out["refused"].items():
+            log(f"ledger: REFUSED {arm}'s records: {why}")
         for r in recs:
             if r["meta"]["missing"]:
                 log(f"ledger: {r['meta']['arm']} {r['meta']['shape']} lacks {', '.join(r['meta']['missing'])}")

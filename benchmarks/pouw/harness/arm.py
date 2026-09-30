@@ -35,11 +35,15 @@ The record may also name the kernel it runs and what the attempt is (v0.5), whic
 evidence-store record (`ledger.py`, kind ``kernel-attempt/v1``):
 
 - ``variant``: the kernel as `verity_pouw.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
-  schemes, the digest of the sources it was built from, the binary's digest, the priced path).
+  schemes, the digest of the sources it was built from, the binary's digest, and ``prices``: the priced path it runs,
+  such as ``cast-8.72`` or ``lut256``, `price_twins`' names).
 - ``lineage``: ``parent`` (the art: id of the attempt it changes, or that attempt's variant id), ``approach``
   (``<campaign>/<slug>``), ``mechanism`` (namespaced tags such as ``pipeline:tma-ws``), ``hypothesis`` (one line), ``panel``
-  (``{"line", "version", "attempt"?, "change"?}``), ``scheme``, ``schedule``, ``phase_groups`` (each chain phase, before,
-  gemm and after, as `verity_pouw.serving.GROUPS`), and ``gamma`` (γ at both FP32 prices when `Work.gamma` has one).
+  (``{"line", "version", "attempt"?, "change"?}``), ``scheme``, ``schedule``, and ``phase_groups`` (each chain phase,
+  before, gemm and after, as `verity_pouw.serving.GROUPS`).
+
+γ is never declared here: the ledger looks it up from the Lean-pinned price twins of the panel version's statement on the
+variant's priced path, at both FP32 prices. A lineage with ``gamma`` gets no record.
 """
 
 from __future__ import annotations

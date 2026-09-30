@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
 import arm as A  # noqa: E402
 import ledger as L  # noqa: E402
+import price_twins as P  # noqa: E402
 import verify as V  # noqa: E402
 
 RUN, COMMIT = "r20260930-170000-abcd", "0123456789abcdef0123456789abcdef01234567"
@@ -62,10 +63,14 @@ def variant(tmp_path: Path, text: str = "kernel v1") -> dict:
                             root=d, binaries=[d / "k.cubin"], prices="cast-8.72")
 
 
-GAMMA = {"8": {"cap": "3/1000", "floor": "1/1000"}, "1047/125": {"cap": "29/10000", "floor": "1/1000"}, "basis": "Derived"}
+#: an arm's own `Work.gamma` (GPU 1's `pearlc_arm.gamma`: its device record's readings at one price), which the ledger keeps
+#: as the arm's claim and never publishes
+ARM_GAMMA = {"cap": "3/1000", "floor": "1/1000", "basis": "Derived at the device record's prices"}
+#: γ of v2-hot on the wide-store cast at 8,192³, the larger of its two twins (the loop price's), from the pins
+V2_HOT_872 = P.lookup(P.load(), "pearl-c-sm120/v2-hot", "cast-8.72", 8192, 8192)
 
 
-def result(run_dir: Path, var: dict | None, *, gamma=GAMMA, control: bool = True, lineage: dict | None = None) -> Path:
+def result(run_dir: Path, var: dict | None, *, gamma=ARM_GAMMA, control: bool = True, lineage: dict | None = None) -> Path:
     """A bench.py result for one arm `pc` at both headlines, with gates, controls, the SASS gate and a decode split."""
     shapes = []
     for label, (phase, m) in SHAPES.items():
@@ -157,21 +162,108 @@ def records_of(tmp_path: Path) -> dict[str, dict]:
     return records(run_dir)
 
 
-# ---- γ at both FP32 prices -----------------------------------------------------------------------------------------------------
+# ---- γ at both FP32 prices, from the price twins ---------------------------------------------------------------------------
+
+#: pins as the Lean store and the staged twins print them (price-twins-lean, 30 Sep): v2 at the statement's cast and 8.00
+#: (in the Lean store), v2 on the wide-store cast at the loop price, a rounded twin (the loop price at the record's own cast),
+#: v2-hot's value lemma, and Pearl-C4's chain-only value lemma
+PINS = {
+    "Pouw.PearlC.pearlCGammaSm120v2Cap1000_8192": {"type_hash": "0000000064832e60", "signature": [
+        "Pouw.PearlC.pearlCGammaSm120v2Cap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]",
+        "  (CM : Pouw.PearlC.CostModel Q R S) (sem : Pouw.PearlC.PearlCSem Q R S)",
+        "  (hTT : Pouw.PearlC.Assumptions.TTOutPearlCDev CM (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem (1 / 1000)) :",
+        "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDev (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem (1 / 1000))",
+        "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192)",
+        "    (↑(216793 / 59950000)) Pouw.PearlC.εPearlC"]},
+    "Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72Cap1000_8192": {"type_hash": "x", "signature": [
+        "Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72Cap1000_8192 {Q R S : Type} (CM : Pouw.PearlC.CostModel Q R S)",
+        "  (hTT : Pouw.PearlC.Assumptions.TTOutPearlCDev CM (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)) :",
+        "  Pouw.PearlC.Gγ CM",
+        "    (Pouw.PearlC.pearlCProtocolDevK (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
+        "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
+        "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192)",
+        "    (1555901 / 419688350).cast Pouw.PearlC.εPearlC"]},
+    "Pouw.PearlC.pearlCGammaSm120v2LoopCap1000_8192": {"type_hash": "y", "signature": [
+        "Pouw.PearlC.pearlCGammaSm120v2LoopCap1000_8192 (hp : Eq d.prices Pouw.PearlC.Prices.sm120Loop)",
+        "  Pouw.PearlC.Gγ CM (Pouw.PearlC.pearlCProtocolDev (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000))",
+        "    (522517 / 139900000).cast Pouw.PearlC.εPearlC"]},
+    "Pouw.PearlC.gammaHot_sm120v2HotLoopCast8_publicConst64_8192": {"type_hash": "z", "signature": [
+        "Pouw.PearlC.gammaHot_sm120v2HotLoopCast8_publicConst64_8192 (d : Pouw.PearlC.PearlCDevice) (hG : Eq d.G 0)",
+        "  (hp : Eq d.prices Pouw.PearlC.Prices.sm120Loop) :",
+        "  Eq",
+        "    (Pouw.PearlC.gammaHot d (Pouw.PearlC.HotSizing.publicConst 64) (instHSub.hSub 8 (8953 / 1000)) (1 / 1000)",
+        "      Pouw.PearlC.sh8192)",
+        "    (1521365753 / 420071150000)"]},
+    "Pouw.PearlC.gammaFp4ChainOnly_sm120Loop_lut256_8192": {"type_hash": "w", "signature": [
+        "Pouw.PearlC.gammaFp4ChainOnly_sm120Loop_lut256_8192 (d : Pouw.PearlC.Fp4Device)",
+        "  (hp : Eq d.prices (Pouw.PearlC.Fp4Prices.sm120At (1047 / 125) Pouw.PearlC.Fp4ScalePath.lut256)) :",
+        "  And",
+        "    (Rat.instLT.lt 0",
+        "      (instHSub.hSub (Pouw.PearlC.creditFp4ChainOnly d Pouw.PearlC.sh8192)",
+        "        (instHMul.hMul (1 / 400) (Pouw.PearlC.creditFp4 d Pouw.PearlC.sh8192))))",
+        "    (Eq (Pouw.PearlC.gammaFp4ChainOnly d (1 / 400) Pouw.PearlC.sh8192) (26680734301 / 1376663200000))"]},
+    "Pouw.PearlC.pearlCGammaUOnlySm120v2Cap1000_8192": {"type_hash": "u", "signature": ["U-only messages"]},
+}
 
 
-def test_gamma_publishes_the_larger_of_the_two_prices_and_only_with_both():
-    g = L.gamma_block(GAMMA, None)
-    assert g["published"] == "3/1000" and g["missing"] == []
-    assert set(g["by_price"]) == {"8", "1047/125"}
-    spelled = L.gamma_block({"8.00": "0.0036162", "8.376": "0.0036218", "reading": "forming-credited"}, None)
-    assert spelled["published"] == str(Fraction("0.0036218")) and spelled["reading"] == "forming-credited"
-    one = L.gamma_block({"8": {"cap": "3/1000"}}, None)
-    assert one["published"] is None and one["missing"] == ["gamma at FADD 1047/125 (cap)"]
-    flat = L.gamma_block({"cap": "3/1000", "floor": "1/1000", "basis": "one price"}, None)
-    assert flat["published"] is None and "unstated" in flat["by_price"] and len(flat["missing"]) == 2
-    assert L.gamma_block(flat, {"8": "1/100", "1047/125": "1/50"})["published"] == "1/50"
-    assert len(L.gamma_block(None, None)["missing"]) == 2
+def test_price_twins_read_each_pin_s_statement_path_price_and_value_and_skip_what_has_no_priced_path():
+    rows = {r["pin"].removeprefix("Pouw.PearlC."): r
+            for r in P.extract(PINS, "t", {"Pouw.PearlC.pearlCGammaSm120v2Cap1000_8192": "0000000064832e60"})}
+    assert set(rows) == {"pearlCGammaSm120v2Cap1000_8192", "pearlCGammaSm120v2LoopCast8p72Cap1000_8192",
+                         "gammaHot_sm120v2HotLoopCast8_publicConst64_8192", "gammaFp4ChainOnly_sm120Loop_lut256_8192"}
+    stmt = rows["pearlCGammaSm120v2Cap1000_8192"]
+    assert (stmt["statement"], stmt["path"], stmt["fadd"], stmt["reading"], stmt["kind"], stmt["shape"], stmt["status"]) == \
+        ("pearl-c-sm120/v2", "cast-8", Fraction(8), "forming-credited", "unit", 8192, "pinned")
+    assert stmt["gamma"] == Fraction(216793, 59950000)
+    wide = rows["pearlCGammaSm120v2LoopCast8p72Cap1000_8192"]
+    assert (wide["path"], wide["fadd"], wide["gamma"], wide["status"]) == ("cast-8.72", Fraction(1047, 125),
+                                                                           Fraction(1555901, 419688350), "staged")
+    hot = rows["gammaHot_sm120v2HotLoopCast8_publicConst64_8192"]
+    assert (hot["statement"], hot["sizing"], hot["kind"], hot["gamma"]) == ("pearl-c-sm120/v2-hot", "publicConst64", "value",
+                                                                           Fraction(1521365753, 420071150000))
+    fp4 = rows["gammaFp4ChainOnly_sm120Loop_lut256_8192"]
+    assert (fp4["statement"], fp4["path"], fp4["reading"], fp4["gamma"]) == ("pearl-c-fp4/v1", "lut256", "chain-only",
+                                                                             Fraction(26680734301, 1376663200000))
+
+
+def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
+    bad = {k: v for k, v in PINS.items() if "v2LoopCast8p72" in k}
+    (name, pin), = bad.items()
+    with pytest.raises(P.TwinError, match="device record and prices"):
+        P.parse(name, {"signature": [line.replace("sm120Loop", "sm120") for line in pin["signature"]]})
+    with pytest.raises(P.TwinError, match="prices the cast"):
+        P.parse(name, {"signature": [line.replace("(218 / 25)", "16") for line in pin["signature"]]})
+
+
+@pytest.mark.parametrize("statement, path, reading, published, at", [
+    # the panel's published figures (docs/pouw/panel.md, 30 Sep 16:00Z), each from its pin, the larger of the two prices
+    ("pearl-c-sm120/v1", "cast-32.06", "forming-credited", "0.77888%", "8"),
+    ("pearl-c-sm120/v1", "cast-16", "forming-credited", "0.60019%", "1047/125"),
+    ("pearl-c-sm120/v1", "cast-8", "forming-credited", "0.51105%", "1047/125"),
+    ("pearl-c-sm120/v1", "cast-32.06", "chain-only", "1.22614%", "8"),
+    ("pearl-c-sm120/v2", "cast-8", "forming-credited", "0.36218%", "1047/125"),
+    ("pearl-c-sm120/v2", "cast-8.72", "forming-credited", "0.37073%", "1047/125"),
+    ("pearl-c-sm120/v2", "cast-16", "forming-credited", "0.45706%", "1047/125"),
+    ("pearl-c-sm120/v2", "cast-8.72", "chain-only", "0.84608%", "1047/125"),
+    ("pearl-c-sm120/v2-hot", "cast-32.06", "forming-credited", "0.64670%", "1047/125"),
+    ("pearl-c-sm120/v1-hot", "cast-8", "forming-credited", "0.51176%", "1047/125"),
+    ("pearl-c-fp4/v1", "lut256", "forming-credited", "0.71732%", "1047/125"),
+    ("pearl-c-fp4/v1", "lut256", "chain-only", "1.93807%", "1047/125"),
+])
+def test_the_checked_in_table_gives_the_panel_s_published_gamma(statement, path, reading, published, at):
+    g = P.lookup(P.load(), statement, path, 8192, 8192, reading=reading)
+    assert g["missing"] == [] and f"{float(Fraction(g['published'])) * 100:.5f}%" == published and g["published_at"] == at
+    assert set(g["by_price"]) == {"8", "1047/125"} and all(v["pin"].startswith("Pouw.PearlC.") for v in g["by_price"].values())
+
+
+def test_a_lookup_names_what_it_lacks_and_the_table_stays_small():
+    t = P.load()
+    assert P.lookup(t, "pearl-c-sm120/v2", None, 8192, 8192)["missing"] == [
+        "the priced path (GateRecord.prices, from the variant's prices)"]
+    assert "a pinned cube" in P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", 3584, 18944)["missing"][0]
+    assert P.lookup(t, "pearl-c-sm120/v2", "cast-9", 8192, 8192)["published"] is None
+    assert P.statement("pearl-c-sm120", "v2-hot-h3") == "pearl-c-sm120/v2-hot" and P.statement("x", None) is None
+    assert P.TABLE.stat().st_size < 256 * 1024
 
 
 # ---- verify.py writes the records ----------------------------------------------------------------------------------------------
@@ -196,7 +288,8 @@ def test_verify_writes_one_record_per_arm_and_shape_with_everything_the_ledger_k
     assert m["metrics"]["sm_clock"] == {"arm": [2090.0, 2092.0], "base": [2091.0, 2093.0]}
     assert m["steps"]["phases"]["gemm"] == 0.05 and m["steps"]["hashing_ms"] == 0.16
     assert m["steps"]["phase_groups"]["after"] == ["tile_hash", "screen"]
-    assert m["gamma"]["published"] == "3/1000"
+    assert m["gamma"]["published"] == V2_HOT_872["published"] and m["gamma"]["path"] == "cast-8.72"
+    assert m["gamma"]["by_price"] == V2_HOT_872["by_price"] and m["gamma"]["arm_claim"] == ARM_GAMMA
     assert m["hypothesis"] == "tile hashing on the side lane hides it under the next call"
     assert m["mechanism"] == ["cast:packed-sts64", "hash:side-stream"] and m["approach"] == "pouw/pearl-c-sm120"
     assert m["verify"]["accepted"] and RUN in m["verify"]["transcript"]
@@ -218,7 +311,8 @@ def test_the_run_s_flags_win_over_the_arm_s_lineage_and_a_bare_arm_still_gets_a_
     m = r["meta"]
     assert m["hypothesis"] == "a run's own line" and m["parent"] == "pearl-c-sm120/0123456789ab" and r["refs"] == {}
     assert m["tier"] == "2a" and r["labels"] == [[L.KERNEL_OUTCOME, "dropped"], [L.KERNEL_REASON, "slower than its parent"]]
-    assert m["missing"] == ["variant", "gamma at FADD 8 (cap)", "gamma at FADD 1047/125 (cap)"]
+    assert m["missing"] == ["variant", "the priced path (GateRecord.prices, from the variant's prices)"]
+    assert m["gamma"]["published"] is None and m["gamma"]["arm_claim"] is None
     assert m["gate"]["variant"] is None and m["gate"]["controls_rejected"]
 
 
@@ -328,7 +422,8 @@ def test_store_records_come_back_as_panel_rows_under_the_panel_s_rules(tmp_path)
     r = rows[DECODE]
     assert r["kind"] == "measured" and r["line"] == "pearl-c-sm120" and r["version"] == "v2-hot" and r["attempt"] is None
     assert r["verifier"]["negative_control"].startswith("REJECT") and r["sm_clock_mhz"]["baseline"] == [2091.0, 2093.0]
-    assert r["gamma"] == 0.003 and r["decode_method"] == "dependent-chain" and r["precision"] == "fp8"
+    assert r["gamma"] == float(Fraction(V2_HOT_872["published"])) and r["decode_method"] == "dependent-chain"
+    assert r["precision"] == "fp8" and "γ cast-8.72 at FADD 1047/125, the larger, from staged price twins" in r["description"]
     assert r["source"].endswith("(kernel-attempt/v1)") and var["id"] in r["description"] and "store_refused" not in r
 
     screen = tmp_path / "screen" / RUN
@@ -365,3 +460,25 @@ def test_the_ledger_s_words_are_the_store_s():
     assert (L.KERNEL_OUTCOME, L.KERNEL_REASON) == (vocab.KERNEL_OUTCOME, vocab.KERNEL_REASON)
     assert vocab.check(L.KERNEL_OUTCOME, "frontier") is None and vocab.check(L.KERNEL_OUTCOME, "maybe")
     assert L.KIND in kinds.KINDS
+
+
+def test_an_arm_that_types_gamma_in_gets_no_record_and_the_run_says_so(tmp_path, capsys):
+    run_dir = tmp_path / RUN
+    lineage = {"hypothesis": "x", "gamma": {"8": "1/1000", "1047/125": "1/1000"}}
+    code, res = verify(result(run_dir, variant(tmp_path), lineage=lineage), "--tier", "2b", "--publish")
+    assert code == V.EXIT_OK and res["verification"]["ok"]
+    assert res["ledger"]["records"] == [] and res["ledger"]["published"] == []
+    assert "typed into its lineage" in res["ledger"]["refused"]["pc"]
+    assert "REFUSED pc's records" in capsys.readouterr().err
+    assert L.records(json.loads((run_dir / "bench.json").read_text()), run_id=RUN, commit=COMMIT) == []
+    assert L.attempts() == []
+
+
+def test_a_scheme_that_isn_t_the_panel_version_s_device_record_publishes_no_gamma(tmp_path):
+    run_dir = tmp_path / RUN
+    lineage = {"hypothesis": "x", "scheme": "pearl-c-sm120-v1-h3"}
+    verify(result(run_dir, variant(tmp_path), lineage=lineage), "--tier", "2b")
+    g = records(run_dir)[PREFILL]["meta"]["gamma"]
+    assert g["published"] is None and "scheme pearl-c-sm120-v1-h3 isn't pearl-c-sm120/v2-hot's device record" in g["missing"]
+    assert L._scheme_conflict("pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120/v2") is None
+    assert L._scheme_conflict("pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120/v1")

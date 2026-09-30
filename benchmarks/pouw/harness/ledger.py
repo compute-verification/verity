@@ -7,6 +7,11 @@ id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, t
 metrics and the per-step time split, γ at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
 that change after the run are labels on it (`KERNEL_OUTCOME`, `KERNEL_REASON`), since a record is immutable.
 
+γ is never typed. It is looked up (`price_twins.lookup`) from the Lean-pinned price twins of the attempt's statement (its
+panel line and version) on the priced path it ran (the gate's ``prices``, from the variant's), at both FP32 prices, and the
+larger is published. An arm whose lineage declares ``gamma`` gets no record (`typed_gamma`); the arm's own `Work.gamma`
+is kept as ``arm_claim`` and never published.
+
   python ledger.py publish RUN_DIR|RESULT_JSON [--store ROOT] [--push] [--by LANE]   records verify.py wrote -> the store
   python ledger.py outcome ART OUTCOME --reason TEXT --by LANE [--store ROOT] [--push]   label an attempt after the fact
   python ledger.py rows [--store ROOT] [--refresh] [--json]   the store's attempts as `panel.py` rows
@@ -24,10 +29,13 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import sys
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Iterable
+
+import price_twins as P
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -42,9 +50,6 @@ TIERS = ("1", "2a", "2b", "3")
 OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 #: label keys (`research.store.vocab`): the producing lane about its own attempt
 KERNEL_OUTCOME, KERNEL_REASON = "kernel_outcome", "kernel_reason"
-#: the FP32 add's two W1 prices every γ is published at, the larger reading winning: the cheapest bit-exact FADD and the
-#: measured loop price (the panel's rule, bc-824e54a2 12:16Z)
-FADD_PRICES = (Fraction(8), Fraction(1047, 125))
 #: a call's step groups, as `verity_pouw.serving.GROUPS` (#567) names them; checked against it when it is importable
 GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 PHASES = ("before", "gemm", "after")
@@ -139,56 +144,62 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
     return rec
 
 
-# ---- γ at both FP32 prices ------------------------------------------------------------------------------------------------------
+# ---- γ at both FP32 prices, from the Lean-pinned price twins ------------------------------------------------------------------
 
 
-def _price(key: str) -> Fraction | None:
-    try:
-        f = Fraction(str(key))
-    except (ValueError, ZeroDivisionError):
-        return None
-    return f if f in FADD_PRICES else None
-
-
-def gamma_block(work_gamma: dict | None, declared: dict | None) -> dict:
-    """γ as the record keeps it: ``by_price`` (each FP32 price's readings, as exact strings), the ``reading`` the panel
-    publishes (``cap``, forming credited under the debit cap, unless declared), ``published`` (the larger of the two prices'
-    readings) and what is ``missing``. `declared` (the lineage's ``gamma``) wins over the arm's `Work.gamma`; a flat dict of
-    readings is a reading at one unstated price, which publishes nothing."""
-    src = declared if declared else work_gamma
-    out: dict = {"by_price": {}, "reading": "cap", "published": None, "basis": None, "missing": []}
-    if not isinstance(src, dict) or not src:
-        out["missing"] = [f"gamma at FADD {p} (cap)" for p in FADD_PRICES]
-        return out
-    out["reading"] = str(src.get("reading", "cap"))
-    out["basis"] = src.get("basis")
-    for k, v in src.items():
-        p = _price(k)
-        if p is None:
-            continue
-        readings = v if isinstance(v, dict) else {out["reading"]: v}
-        out["by_price"][str(p)] = {str(r): str(Fraction(str(x))) for r, x in readings.items()
-                                  if not isinstance(x, (dict, list)) and _is_number(x)}
-    if not out["by_price"]:
-        out["by_price"]["unstated"] = {str(r): str(x) for r, x in src.items() if r not in ("basis", "reading")}
-    vals = []
-    for p in FADD_PRICES:
-        r = out["by_price"].get(str(p), {}).get(out["reading"])
-        if r is None:
-            out["missing"].append(f"gamma at FADD {p} ({out['reading']})")
-        else:
-            vals.append(Fraction(r))
-    if len(vals) == len(FADD_PRICES):
-        out["published"] = str(max(vals))
+def typed_gamma(result: dict) -> dict[str, str]:
+    """The arms whose build record types γ in (a lineage ``gamma``): they get no record, since γ comes from the pins."""
+    out = {}
+    for name, arm in (result.get("arms") or {}).items():
+        lineage = ((arm or {}).get("build") or {}).get("lineage") or {}
+        if "gamma" in lineage:
+            out[name] = ("γ is typed into its lineage: the ledger looks γ up from the Lean-pinned price twins on the "
+                         "priced path the attempt ran (the variant's prices), so drop lineage.gamma and declare the path")
     return out
 
 
-def _is_number(x: Any) -> bool:
+#: `verity_pouw.serving.SchemeId`'s FP8 grammar (#567), where the device names the record: sm120 (G = 4) is the panel's v1,
+#: sm120-unpromoted its v2; an older name (``pearl-c-sm120-v2-hot-h3``) isn't checked
+_SCHEME = re.compile(r"pearl-c-(?P<device>sm120|sm120-unpromoted)-(?:v0|v1)(?:-h[0-9]+)?(?:@[a-z0-9_]+)?")
+
+
+def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
+    """The scheme's device record against the panel version's statement."""
+    m = _SCHEME.fullmatch(scheme or "")
+    if m is None or not statement or not statement.startswith("pearl-c-sm120/"):
+        return None
+    if (m["device"] == "sm120-unpromoted") != statement.split("/", 1)[1].startswith("v2"):
+        return f"scheme {scheme} isn't {statement}'s device record"
+    return None
+
+
+def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate: dict, shape: dict,
+          arm_claim: Any) -> dict:
+    """γ as the record keeps it: the forming-credited twins at both FP32 prices and the larger published, the chain-only
+    reading beside it, every pin with its status (pinned in the Lean store, or staged), and the arm's own derivation kept
+    as ``arm_claim``, never published."""
+    stmt = P.statement((panel or {}).get("line"), (panel or {}).get("version"))
+    if twins is None:
+        out = {"statement": stmt, "path": gate.get("prices"), "published": None, "by_price": {},
+               "missing": ["the price-twin table (price_twins.json)"]}
+    else:
+        out = P.lookup(twins, stmt, gate.get("prices"), shape.get("n"), shape.get("k"))
+        co = P.lookup(twins, stmt, gate.get("prices"), shape.get("n"), shape.get("k"), reading="chain-only")
+        out["chain_only"] = {"published": co["published"], "published_at": co["published_at"],
+                             "pins": sorted(v["pin"] for v in co["by_price"].values())}
+    conflict = _scheme_conflict(scheme, stmt)
+    if conflict:
+        out["missing"].append(conflict)
+        out["published"] = None
+    out["arm_claim"] = arm_claim
+    return out
+
+
+def _twins() -> list[dict] | None:
     try:
-        Fraction(str(x))
-    except (ValueError, ZeroDivisionError):
-        return False
-    return True
+        return P.load()
+    except (OSError, ValueError, KeyError):
+        return None
 
 
 # ---- one record per (arm, shape) ------------------------------------------------------------------------------------------------
@@ -275,10 +286,11 @@ def _steps(r: dict, chain: dict | None, lineage: dict) -> dict:
 
 def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", hypothesis: str | None = None,
             parent: str | None = None, outcome: str | None = None, reason: str | None = None, by: str | None = None,
-            time: str | None = None) -> list[dict]:
+            time: str | None = None, twins: list[dict] | None | str = "table") -> list[dict]:
     """One record per arm row of every shape in a verified result (`verify.py`'s rewritten RESULT_JSON): ``kind``,
     ``meta``, ``refs`` and the ``labels`` to assert. `hypothesis`, `parent`, `outcome` and `reason` (the run's, from
-    verify.py's flags) win over the arm's lineage."""
+    verify.py's flags) win over the arm's lineage. An arm that types γ in (`typed_gamma`) gets none. `twins` is the
+    price-twin table (default: `price_twins.json`)."""
     if tier not in TIERS:
         raise LedgerError(f"tier {tier!r} is not one of {TIERS}")
     if outcome is not None and outcome not in OUTCOMES:
@@ -288,9 +300,13 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
     hypothesis, reason = one_line(hypothesis, "the hypothesis"), one_line(reason, "the reason")
     verification = {(v["arm"], v["shape"]): v for v in (result.get("verification") or {}).get("rows", [])}
     versions = result.get("versions") or {}
+    refused = typed_gamma(result)
+    table = _twins() if twins == "table" else twins
     out = []
     for shape in result.get("shapes", []):
         for name, r in (shape.get("arms") or {}).items():
+            if name in refused:
+                continue
             arm = (result.get("arms") or {}).get(name) or {}
             build = arm.get("build") or {}
             lineage = dict(build.get("lineage") or {})
@@ -313,9 +329,9 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
                 "gates": {"version": GATES, "arm_interface": (result.get("harness") or {}).get("interface"),
                           "verify": (result.get("verification") or {}).get("interface"),
                           "sass_gate": (result.get("sass_gate") or {}).get("version")},
-                "gate": _gate(result, name, shape, variant, v, run_id),
+                "gate": (gate := _gate(result, name, shape, variant, v, run_id)),
                 "metrics": _metrics(r, p), "steps": _steps(r, chain, lineage),
-                "gamma": gamma_block(r.get("gamma"), lineage.get("gamma")),
+                "gamma": gamma(table, panel, lineage.get("scheme") or build.get("scheme"), gate, shape, r.get("gamma")),
                 "work": {"w_ref": r.get("w_ref"), "credited": r.get("credited"), "unit": r.get("unit")},
                 "verify": {"accepted": bool(v.get("accepted")), "why": v.get("why"), "commit": p.get("verifier_commit"),
                            "accept": p.get("verifier_accept"), "transcript": p.get("transcript"),
@@ -467,6 +483,13 @@ def panel_row(art: str, meta: dict, labels: dict) -> dict | None:
         what.append(f"variant {meta['variant']}" + (f", parent {meta['parent']}" if meta.get("parent") else ""))
     if meta.get("mechanism"):
         what.append("mechanism " + ", ".join(meta["mechanism"]))
+    gm = meta.get("gamma") or {}
+    if g is not None:
+        what.append(f"γ {gm.get('path')} at FADD {gm.get('published_at')}, the larger, from "
+                    + ("staged price twins (not yet in the Lean store)" if "staged" in (gm.get("pins") or []) else
+                       "Lean-store price twins"))
+    else:
+        what.append("γ not published: " + "; ".join(gm.get("missing") or ["no price twin"]))
     if outcome:
         what.append(f"outcome {outcome}" + (f": {reason}" if reason else ""))
     row = {"attempt": panel.get("attempt"), "line": panel["line"], "version": panel["version"],
