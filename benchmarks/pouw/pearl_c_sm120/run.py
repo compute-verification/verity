@@ -13,7 +13,10 @@
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
    (the weight side; the call's forming, GEMM, clean-up and hashing), the call end to end with and without hashing, and
-   consistency checks (C~ of gemm_ct equals gemm_pearlc's; a second gemm_pearlc gives the same U).  NVML's clocks, power and
+   consistency checks (C~ of gemm_ct equals gemm_pearlc's; a second gemm_pearlc gives the same U), and at m a multiple of
+   128 the fused call: gemm_pearlc_h computes the message digests from registers in its epilogue and stores neither C~ nor
+   U, only y (its digests and their leaves checked byte for byte like hash_msg's and hash_leaf's), replacing gemm_pearlc +
+   hash_msg; gemm_pearlc_s is the same kernel without the hashing, the control that prices it.  NVML's clocks, power and
    throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
@@ -252,7 +255,8 @@ def gemm_tile(name: str) -> tuple[int, int]:
 class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `job` (the weight side, once per weight and epoch), `forming`, `gemm` (gemm_ct, the chain alone, for the split),
-    `cleanup` and `hashing` (the call), and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of
+    `cleanup` and `hashing` (the call), `fused` (on 128 x 128 tiles: the chain with the digests in its epilogue, its hash-free
+    control and the digests' leaves), and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of
     128 only).  The chain runs on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the
     32-column words on 128 x 32 CTA tiles, but A'F_B at 64 x 64 on the `words` kernel's warp tiles."""
 
@@ -288,6 +292,7 @@ class Pipeline:
             "at": m * k, "bt": n * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2,
             "digests": m * n, "leaves": (m // 64) * (n // 64) * 32, "rows": m * (4 * k // 1024) * 32,
+            "digests_h": m * n, "leaves_h": (m // 64) * (n // 64) * 32,
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
         }
@@ -297,7 +302,8 @@ class Pipeline:
             if self.owned and name not in ("xa", "xb"):
                 self.dev.free(p)
 
-    def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0):
+    def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
+             dg=0):
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -307,7 +313,7 @@ class Pipeline:
             self.dev.ck("cuFuncSetAttribute", self.dev.fn(name), MAX_DYN, self.GEMM_SMEM[name])
         tm, bn = gemm_tile(name)
         tiles = (M // tm) * (N // bn)
-        ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0]
+        ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg]
         for slot, key in zip((2, 3, 4), out):
             ptrs[slot] = self.b[key] if key else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
@@ -360,6 +366,11 @@ class Pipeline:
                                                   i=(m, n))),
                    ("hash_rows", lambda: d.launch("hash_rows_f32", cdiv(self.m_real * segs, 128), 128, p=(b["xa"], b["rows"]),
                                                   i=(self.m_real, self.row_bytes)))]
+        fused = [(nm, lambda nm=nm, dg=dg: self.gemm(nm + sx, "at", "bt", m, n, out=(None, None, "y"), pa=b["pa_t"], pb=b["pb_t"],
+                                                    rs=b["ia_a"], cs=b["ia_b"], dg=b[dg] if dg else 0))
+                 for nm, dg in (("gemm_pearlc_s", None), ("gemm_pearlc_h", "digests_h"))]
+        fused.append(("hash_leaf_h", lambda: d.launch("hash_leaf", cdiv((m // 64) * (n // 64), 64), 64,
+                                                      p=(b["digests_h"], b["leaves_h"]), i=(m, n))))
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
         plain = [("plainq_a", lambda: d.launch("plainq", m, 256, p=(b["xa"], b["qa"], b["sa"]), i=(m, k))),
                  ("gemm_plain", lambda: self.gemm("gemm_plain", "qa", "qb", m, n, out=(None, None, "y_plain"), rs=b["sa"], cs=b["sb"])),
@@ -372,6 +383,8 @@ class Pipeline:
                                                     cs=b["ia_b"]))]
         tag = lambda phase, xs: [(nm, phase, f) for nm, f in xs]  # noqa: E731
         out = tag("job", job) + tag("forming", forming) + tag("gemm", gemm) + tag("cleanup", cleanup) + tag("hashing", hashing)
+        if self.bm == BM:
+            out += tag("fused", fused)
         if m % BM == 0:
             out += tag("plain_job", plain_job) + tag("plain", plain) + tag("adopted_job", adopted_job) + tag("adopted", adopted)
         return out
@@ -393,7 +406,9 @@ class Pipeline:
 
 PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "qa_s5", "qb_s5", "y_adopt"}
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
-               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)))
+               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)),
+               ("gemm_pearlc_h", ("y", "digests_h")))
+FUSED_ALIASES = {"c2": "c", "digests_h": "digests"}
 #: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
 
@@ -426,6 +441,8 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             res[name] = compare(dev, pipe, name, want(name))
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
+            if name in ("digests", "leaves"):
+                res[f"{name}@gemm_pearlc_h"] = compare(dev, pipe, name, want(name), alias=name + "_h")
         small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
         for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
             steps = {nm: fn for nm, _, fn in p_.steps()}
@@ -443,7 +460,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                     p_.gemm = real
                     dev.sync()
                     for o in outs:
-                        res[f"{o}@{tag}" + (f"grid{grid}" if grid else "")] = compare(dev, pipe, o, want("c" if o == "c2" else o))
+                        res[f"{o}@{tag}" + (f"grid{grid}" if grid else "")] = compare(dev, pipe, o, want(FUSED_ALIASES.get(o, o)))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
@@ -490,7 +507,7 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
     before = nv.read()
     med, runs = {}, {}
     for name, phase, f in steps:
-        if phase in CALL_PHASES + ("job",) and not gates["pearl_c"] or \
+        if phase in CALL_PHASES + ("job", "fused") and not gates["pearl_c"] or \
                 phase in ("plain", "plain_job", "adopted", "adopted_job") and not gates["plain"]:
             continue
         t = dev.timed(f, reps)
@@ -510,6 +527,12 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
         out.update({"split_ms": {kk: round(v, 4) for kk, v in split.items()}, "call_sum_ms": round(sum(split.values()), 4),
                     "call_e2e_ms": round(e2e, 4), "call_e2e_no_hash_ms": round(e2e_nh, 4), "job_ms": round(phases["job"], 4),
                     "pearlc_tflops": round(2 * m * n * k / med["gemm_pearlc"] / 1e9, 1)})
+        if "gemm_pearlc_h" in med:
+            by = {nm: f for nm, _, f in steps}
+            fused = [f for nm, p, f in steps if p == "forming"] + [by[x] for x in ("af", "pa", "gemm_pearlc_h", "hash_leaf_h", "hash_rows")]
+            e2e_f = statistics.median(dev.timed(lambda: [f() for f in fused], reps))
+            out.update({"call_e2e_fused_ms": round(e2e_f, 4), "fused_hash_ms": round(med["gemm_pearlc_h"] - med["gemm_pearlc_s"], 4),
+                        "cu_stores_ms": round(med["gemm_pearlc"] - med["gemm_pearlc_s"], 4)})
         out["consistency"] = {"c_ct_vs_pearlc_words_differing": pipe.diff("c2", "c")}
         dev.copy(pipe.b["c2"], pipe.b["u"], pipe.size["u"])
         [f for nm, _, f in steps if nm == "gemm_pearlc"][0]()
@@ -523,6 +546,8 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             fastest = min(med["gemm_plain"], med["gemm_fast"])
             out["ratio_vs_own_plain_gemm"] = {"call_e2e": round(e2e / fastest, 4), "no_hash_e2e": round(e2e_nh / fastest, 4),
                                               "chain_only": round(med["gemm_ct"] / fastest, 4)}
+            if "call_e2e_fused_ms" in out:
+                out["ratio_vs_own_plain_gemm"]["call_e2e_fused"] = round(out["call_e2e_fused_ms"] / fastest, 4)
     return out
 
 
@@ -573,6 +598,9 @@ def main(argv: list[str]) -> int:
             if "split_ms" in row:
                 print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms, no hashing {row['call_e2e_no_hash_ms']:.3f} ms; split "
                       f"{row['split_ms']}", file=sys.stderr)
+            if "call_e2e_fused_ms" in row:
+                print(f"{label} {variant}: fused call {row['call_e2e_fused_ms']:.3f} ms (digests in the epilogue "
+                      f"{row['fused_hash_ms']:.3f} ms, C~ and U stores {row['cu_stores_ms']:.3f} ms)", file=sys.stderr)
             if "ratio_vs_own_plain_gemm" in row:
                 s, r = row["split_ms"], row["ratio_vs_own_plain_gemm"]
                 print(f"{label} {variant}: call {row['call_e2e_ms']:.3f} ms = {r['call_e2e']:.3f}x this build's plain FP8 GEMM "
