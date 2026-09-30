@@ -28,7 +28,7 @@ deviation is σ·α up to a_E's rounding; F's scale 2^-4 in the atom keeps a_E n
 chain     C̃_ij = the atom (NVF4 or MXF4, the scheme's kind) chained from +0 over A′_i · B̃_j, k/64 steps, no promotion
 fused     AF_ip = chain(A′_i, F_B[:, p]) at scale 1.0 (32 extra columns);  BF_jq = chain(B̃_j, F_A[:, q]) and
           G_pq = chain(F_B[:, p], F_A[:, q]) once per job
-peel      Ẽ = bf16(E · a_E · 2^-4) (exact);  P_A,i = [Ẽ_A,i ‖ RNE_bf16(AF_i)],
+peel      Ẽ = bf16(E · a_E · 2^-4) (exact, E's sign kept);  P_A,i = [Ẽ_A,i ‖ RNE_bf16(AF_i)],
           P_B,j = [RNE_bf16(FP32 add(Σ_p fma(Ẽ_B,jp, G_pq), −BF_jq)) ‖ −Ẽ_B,j];
           U_ij = C̃_ij, then four HOPPER_BF16_M16N8K16 steps (sm_120 mma.sync m16n8k16) over P_A,i · P_B,j
 leaf      pearl_c.leaf over C̃ ‖ U;  tickets: Pearl's lottery over C̃ (pearl_c.PearlC.tickets)
@@ -292,9 +292,9 @@ def gram(fmt: Fmt, seed_b: bytes, k: int) -> tuple[tuple[int, ...], ...]:
 
 
 def e_tilde(e_row: Sequence[int], ae: int) -> list[int]:
-    """Ẽ = bf16(E · a_E · 2^-4), exact: E2M1 times UE4M3 has at most 6 significant bits."""
+    """Ẽ = bf16(E · a_E · 2^-4), exact (E2M1 times UE4M3 has at most 6 significant bits), with E's sign: code 0x8 is −0."""
     scale = Fraction(P.fp8_to_f32(ae)) / 16
-    return [P.bf16_of_fraction(e2m1_value(e) * scale) for e in e_row]
+    return [P.bf16_of_fraction(e2m1_value(e & 7) * scale) | (0x8000 if e & 8 else 0) for e in e_row]
 
 
 def peel_factors_a(fmt: Fmt, side: Formed, e_rows: Sequence[Sequence[int]], seed_b: bytes, k: int) -> list[list[int]]:
