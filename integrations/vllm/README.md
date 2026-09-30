@@ -230,9 +230,10 @@ weights they read, sampled proofs commits what the model computed) and uninstall
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity_pouw`, `verity_pous` and `verity_sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
 bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
-`traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
+`traced_as`: PoUW's `ncp-v2` and `ncp-v2-shift24`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
-PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `beacon` (hex, at least 32 bytes),
+PoUW is refused beside sampled proofs until its adapter executes a scheme with a circuit (it executes `ncp-v1` and
+`ncp-v1-shift24`, which have none).  PoUW's settings are `beacon` (hex, at least 32 bytes),
 `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its

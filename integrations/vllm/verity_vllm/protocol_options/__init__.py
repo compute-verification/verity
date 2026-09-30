@@ -23,9 +23,9 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
 not wired); two executors at one site; beside sampled proofs, an executor whose protocol package has no circuit for its
-scheme (`CIRCUITS`, `traced_as`: every PoUW scheme but ``ncp-v2``, and Pearl's noise-dependent output for good);
-with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
-whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
+scheme (`CIRCUITS`, `traced_as`: every PoUW scheme that is not a key of ``verity_pouw.circuit.SCHEMES``, and Pearl's
+noise-dependent output for good); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards
+(``keeps_weight_copy``); and whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
 ``Installed.weights()``; the Commit's replay reads and re-registers the live weights through `weights_view` /
@@ -39,9 +39,9 @@ Program describes: POUS's decode is bit-identical and leaves the circuit untouch
 protocol package has a circuit for its scheme (``traced_as``).
 
 **Circuits.**  What sampled proofs traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
-`verity_pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
-executed call).  The selector admits an executor beside sampled proofs only for a scheme with a circuit, and `traced_as`
-gives the Commit the circuit of each executed call.
+`verity_pouw.circuit`, whose ``SCHEMES`` maps each scheme with a circuit to the P it pins, and whose
+``traced_as(scheme, m, k, n)`` is the circuit of one executed call).  The selector admits an executor beside sampled
+proofs only for a scheme with a circuit, and `traced_as` gives the Commit the circuit of each executed call.
 """
 from __future__ import annotations
 
@@ -69,7 +69,8 @@ ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
 #: install order, is innermost first at every site.
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
-#: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
+#: ``SCHEMES`` (the schemes with a circuit; only ``scheme in SCHEMES`` is read, so its keys, whatever it maps them to) and
+#: ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
 CIRCUITS = {"pouw": "verity_pouw.circuit"}
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
 
