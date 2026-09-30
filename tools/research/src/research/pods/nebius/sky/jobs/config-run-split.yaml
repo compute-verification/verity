@@ -1,0 +1,147 @@
+# PROPOSAL, pending the vLLM coordinator's agreement (lanes/vllm-coordinator/): a config run as two chained managed-job tasks.
+#   build: CPU only (0 GPU), queue circuits: `row stage build` (derives in parallel, --build-jobs auto on the task's vCPUs)
+#   gpu:   1 GPU, queue circuits: `row stage match`, then `row stage commit` (capture, replay and the Commit's engine)
+# A GPU is held only for the second task, so 4 GPUs serve many rows while their Builds pack circuits' 144 vCPU. Both tasks run on
+# the same node and share the row's directory on the host (SWEEP_DIR=/workspace/cp/sweep/<row>); the second starts only after the
+# first succeeds (SkyPilot pipelines are sequential).
+#
+#   VY_ROW_CLASS=dense tools/research/src/research/pods/nebius/sky/submit.sh config-run-split row-23 \
+#     --env ROW=<row> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
+#
+# Memory per class (submit.sh rewrites the two memory lines from VY_ROW_CLASS; the numbers are to be confirmed by the coordinator):
+#   class   build task   gpu task    rows
+#   small   64 GB        96 GB       small dense, B <= 16 (#4, #101)
+#   dense   160 GB       192 GB      1-7B dense, B 8-64 (#23, #60, #67, #68)   <- default below
+#   long    160 GB       256 GB      long context 4096/512 (#11, #39): the Build's measured peak is 124.5 GB
+#   tp2     160 GB       384 GB      TP2 (#70, #75), gpu task with RTXPRO6000:2
+# The row can't be checkpointed yet: circuits never borrows, so neither task can be preempted by a reclaim.
+name: config-run-split
+
+---
+
+name: build
+
+resources:
+  infra: ssh/vy-nebius
+  cpus: 16
+  labels:
+    budget-line: nebius-config-run
+  memory: 160
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "16"
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  HF_HUB_OFFLINE: "1"
+  SWEEP_DIR: /workspace/cp/sweep
+  PY: /workspace/jobs/venv312/bin/python
+  PY312: /workspace/jobs/venv312/bin/python
+  RESEARCH_PY: /workspace/jobs/bin/py312
+  RESEARCH_RUNS: /workspace/jobs/runs
+  BUILD_JOBS: auto
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
+  chmod +x /workspace/jobs/bin/py312
+  cd "$SRC/integrations/vllm"
+  flock /workspace/jobs/.vllm-bootstrap.lock env WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE" --cpu
+
+run: |
+  set -euo pipefail
+  cd "$SRC/integrations/vllm"
+  export PYTHONPATH=$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  "$PY" -m verity_vllm.pipeline.cli row stage build "$ROW" "$ROLE" "$REPO" "$REVISION"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: circuits
+          kueue.x-k8s.io/priority-class: circuits
+          verity.dev/build: "true"
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
+
+---
+
+name: gpu
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 8
+  labels:
+    budget-line: nebius-config-run
+  memory: 192
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "8"
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  HF_HUB_OFFLINE: "1"
+  SWEEP_DIR: /workspace/cp/sweep
+  PY: /workspace/jobs/venv312/bin/python
+  PY312: /workspace/jobs/venv312/bin/python
+  RESEARCH_PY: /workspace/jobs/bin/py312
+  RESEARCH_RUNS: /workspace/jobs/runs
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  cd "$SRC/integrations/vllm"
+  flock /workspace/jobs/.vllm-bootstrap.lock env WORK=/workspace/jobs HF_HOME=/workspace/hf bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE"
+
+run: |
+  set -euo pipefail
+  cd "$SRC/integrations/vllm"
+  export PYTHONPATH=$SRC/tools/research/src
+  "$PY" -m verity_vllm.pipeline.cli row stage match "$ROW" "$ROLE" "$REPO" "$REVISION"
+  "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: circuits
+          kueue.x-k8s.io/priority-class: circuits
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
