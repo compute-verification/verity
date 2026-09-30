@@ -51,7 +51,10 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     assert circuits.count("borrowingLimit: 0") == 3 and "borrowingLimit" not in text.split("metadata: {name: provers}")[1]
     assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["sweep-night", "circuits", "prover-bench", "dev"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
+    # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
+    # file with regexes, so check it here
+    assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
 
 
 def test_every_job_template_names_a_defined_queue_and_priority():
@@ -67,7 +70,7 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
     assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits"),
-                    "port-capture": ("circuits", "circuits"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+                    "port-capture": ("circuits", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
 def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):

@@ -69,13 +69,23 @@ if [ "${#missing[@]}" -gt 0 ]; then
   echo "  sudo apt-get install -y rsync openssh-client git python3 curl   # and uv: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
   exit 2
 fi
-command -v sky > /dev/null || uv tool install -q "skypilot[kubernetes]==0.13.0"
-if ! curl -sf "$endpoint/api/health" > /dev/null; then
+tunnel() {
+  # the ssh tunnel to the API server, (re)opened unless it answers. A dropped tunnel whose ssh still holds the port is closed
+  # first (ExitOnForwardFailure would refuse the new one), and keepalives end a dead connection within ~45 s
+  curl -sf "$endpoint/api/health" > /dev/null && return 0
+  pkill -f "^(/usr/bin/)?ssh .*-L $port:127.0.0.1:46580 " 2> /dev/null || true
+  local ssh_cmd
   ssh_cmd=$(research pods ssh "$machine" --print)
   # shellcheck disable=SC2086
-  ${ssh_cmd% *} -f -N -o ExitOnForwardFailure=yes -L "$port:127.0.0.1:46580" "${ssh_cmd##* }"
-  for _ in $(seq 20); do curl -sf "$endpoint/api/health" > /dev/null && break; sleep 1; done
-fi
+  ${ssh_cmd% *} -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+    -L "$port:127.0.0.1:46580" "${ssh_cmd##* }"
+  for _ in $(seq 20); do curl -sf "$endpoint/api/health" > /dev/null && return 0; sleep 1; done
+  echo "submit.sh: the API server doesn't answer at $endpoint through the tunnel to $machine" >&2
+  return 1
+}
+
+command -v sky > /dev/null || uv tool install -q "skypilot[kubernetes]==0.13.0"
+tunnel
 sky api info 2>/dev/null | grep -q "$endpoint" || sky api login -e "$endpoint" > /dev/null
 dest=/workspace/research/trees/$lane
 research pods sync "$machine" "$repo" --dest "$dest"
@@ -106,5 +116,6 @@ sys.stdout.write("\n---\n".join(parts))
 PY
   yaml=$rendered
 fi
+tunnel    # the sync can take minutes, long enough for a tunnel to drop
 sky jobs launch -y -d -n "$name" "$yaml" --infra "ssh/$pool" --env "SRC=$dest" "${secrets[@]}" "$@"
 sky jobs queue 2>/dev/null | awk -v n="$name" 'NR <= 3 || $0 ~ n' | head -6

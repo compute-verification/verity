@@ -1,6 +1,8 @@
 # A port-lane capture on the Nebius cluster (the sm_120 GEMM correspondence, the FA2 capture, the e4m3 step probe, the 188-SM
-# kernels): queue circuits, priority circuits. Its bootstrap is CPU-only (the venv, vLLM, the checkpoints; no native taps: a capture
-# doesn't use them; Commits that do run through config-run), writing its record under /workspace/jobs, never into the tree.
+# kernels): queue circuits, priority capture (above the sweep, so it takes the next free GPU, and never evicted by a later row).
+# Its bootstrap is CPU-only (the venv, vLLM, the checkpoints; no native taps: a capture doesn't use them; Commits that do run
+# through config-run), writing its record under /workspace/jobs, never into the tree. It runs no Build, so it doesn't block a
+# prover bench.
 #
 #   sky jobs launch -n capture-<what> tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml \
 #     --env CMD='python -m tc_probe ...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
@@ -69,7 +71,7 @@ config:
       metadata:
         labels:
           kueue.x-k8s.io/queue-name: circuits
-          kueue.x-k8s.io/priority-class: circuits
+          kueue.x-k8s.io/priority-class: capture
       spec:
         containers:
         - volumeMounts:
