@@ -206,11 +206,15 @@ class TpRow(Row):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
         self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
-        ok = self.guarded_summary()
+        ok, rc = self.guarded_summary(), None
+        if ok == "PASS":                    # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
+            rc = self.manifest_global("build.required_manifest", self.to_b)
+            self.log(f"build manifest rc={rc}: {R.tp_manifest_line(self.d) or 'no manifest.json'}")
+            ok = "PASS" if rc == 0 else "FAIL"
         wall = int(time.time()) - t0
         digest, digests = R.tp_build_digests(self.d)
         wds = "/".join(R.tp_rank_workload_digest(self.bdir, r)[:16] for r in range(self.W))
-        self.verdict("build", ok, f"rc={0 if ok == 'PASS' else 1} wall={wall}s digest={digest} digests_r1..={digests} workload_digests_r0..={wds} shapes={nsh}")
+        self.verdict("build", ok, f"rc={0 if ok == 'PASS' else 1} manifest_rc={rc} wall={wall}s digest={digest} digests_r1..={digests} workload_digests_r0..={wds} shapes={nsh}")
         self.tl("stage.build", "end", ("ok", ok), ("wall_s", wall))
         if ok != "PASS":
             hits = Counter(ln for p in sorted(glob.glob(f"{self.bdir}/rank*/*.log"))
@@ -219,10 +223,7 @@ class TpRow(Row):
             self.log(f"BUILD FAIL -> stop ({top})")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10)
-        rc = self.manifest_global("build.required_manifest", self.to_b)
-        self.log(f"build manifest rc={rc}: {R.tp_manifest_line(self.d) or 'no manifest.json'}")
-        if rc == 0:
-            self.call_boundaries(self.to_b)
+        self.call_boundaries(self.to_b)      # the Build passed, so its manifest was complete
 
     def guarded_summary(self) -> str:
         try:

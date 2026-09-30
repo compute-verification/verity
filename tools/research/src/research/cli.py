@@ -15,6 +15,8 @@
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|sync|land|eject [--shadow] [--dry-run]          # the merge queue: ready PRs on `next`, `main` fast-forwarded to
                                                  # the newest commit on it with a passing check (research/queue.py)
+  research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
+                                                 # rewritten history, the old-history guard, the commit-map/v1 payload (research/commitmap.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
   research pods create <runpod flags> --max-hours H [--first-idle-min 20] [--require-reference-part] [--register --project P] [--allow-duplicate]
                                                  # only under a budget line the guard has read (exit 6); at most one live pod per --name (exit 4
@@ -844,6 +846,10 @@ def main(argv: list[str] | None = None) -> int:
         from .queue import main as queue_main
 
         return queue_main(rest)
+    if cmd == "git":
+        from .commitmap import main as git_main
+
+        return git_main(rest)
     print(f"research: unknown command {cmd!r}\n\n{__doc__.strip()}", file=sys.stderr)
     return 2
 

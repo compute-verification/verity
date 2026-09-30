@@ -233,6 +233,15 @@ def test_a_failed_list_is_logged_and_the_guard_keeps_polling(tmp_path, guard_dir
     assert json.loads((guard_dir / "guard-budgets.json").read_text())["last_ok_poll"] == T0
 
 
+def live_helper() -> subprocess.Popen:
+    """A process whose command line names `guard`, returned once its Python runs.  `Popen` returns while the child is still inside
+    execve, before the kernel records the new argument area, so /proc/<pid>/cmdline can read empty then (measured 2026-09-29: 40 %
+    of spawns on an idle VM, 95 % under load); the child's own line on stdout comes after it is in place."""
+    p = subprocess.Popen([sys.executable, "-c", "import os, signal; os.write(1, b'ready\\n'); signal.pause()", "guard"], stdout=subprocess.PIPE)
+    assert p.stdout is not None and p.stdout.readline() == b"ready\n", "the helper did not start"
+    return p
+
+
 def one_fake_poll(monkeypatch) -> None:
     """The CLI's `run` becomes one poll against a fake API: whatever a test's pid check says, it cannot reach a real loop."""
     real = G.run
@@ -264,7 +273,7 @@ def test_the_cli_refuses_a_second_guard_and_status_stop_read_the_recorded_pid(tm
     assert research_main(["pods", "guard", "status"]) == 2
     (tmp_path / "budgets.toml").write_text(TOML)
     G.run(cfg(tmp_path), FakeRunPod([pod("a", "vy-a-1", 1, 5)]), clock=lambda: T0, sleep=lambda s: None, iterations=1)
-    other = subprocess.Popen([sys.executable, "-c", "import signal; signal.pause()", "guard"])
+    other = live_helper()
     monkeypatch.setattr(G, "_alive", lambda pid: pid == other.pid and other.poll() is None)
     try:
         (guard_dir / "guard-budgets.pid").write_text(f"{other.pid}\n")
@@ -278,15 +287,17 @@ def test_the_cli_refuses_a_second_guard_and_status_stop_read_the_recorded_pid(tm
         assert other.wait() == -signal.SIGTERM
     finally:
         other.kill()
+        other.stdout.close()
     assert research_main(["pods", "guard", "stop"]) == 1
 
 
 def test_a_live_guard_is_recognised_by_its_command_line(tmp_path):
     assert G._alive(99999999) is False
-    other = subprocess.Popen([sys.executable, "-c", "import signal; signal.pause()", "guard"])
+    other = live_helper()
     try:
         assert G._alive(other.pid)
     finally:
         other.kill()
         other.wait()
+        other.stdout.close()
     assert not G._alive(other.pid)

@@ -32,6 +32,8 @@ KINDS: dict[str, str] = {
     "frozen-evidence/v1": "files the frozen r20 campaign's code still reads (the overhead ledger, recorded run results), no longer tracked: "
                           "payload tree at their former repository paths; meta {name, from_commit, note}; pinned by "
                           "verity_numerical.bench.frozen.EVIDENCE",
+    "commit-map/v1": "a history rewrite's commit map (research.commitmap): payload file of `<old> <new> <same-tree 0|1>` lines; meta {from, to, "
+                     "tool, args}; applies once labelled commit_map=accepted by its approver",
     "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_numerical.bench.input_sets; the vllm-vu-set/v1 "
                     "layout): payload tree = manifest.json + index.json + flat port arrays; meta {set, subcircuit, template, "
                     "parameters, source, n, content_digest, schema, relation, seed?, row?, model?, research_run?}",

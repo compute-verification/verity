@@ -80,14 +80,39 @@ class Traced:
         an = anchors.weight_inputs()
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
-    def draw(self, key, law, anchors):
+    def draw(self, law, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
-        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96)."""
+        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96), under the key of
+        ``ledger``, the window's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
+        the caller. The draw is refused for a ledger not opened from a receipt or whose draw was sent, and for a call the
+        receipt doesn't list or the window already holds, before anything is drawn. So every call's commitment precedes
+        the key (C1), and each call of a window draws under a context of its own: the product law root's window pin takes
+        as M1."""
         from . import plan
+        from .anchors import Ledger
 
-        anchors.check(self.shape)
+        if not isinstance(ledger, Ledger):
+            raise TypeError("a call is drawn only under its window's Ledger")
+        ledger.check_draw()
+        ledger.admit(anchors, self.shape)
         index = anchors.call_index
-        return plan.draw(key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+        return plan.draw(ledger.key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+
+    def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
+        """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under
+        the call's commitment as the window's receipt lists it (`Ledger.commitment`, by call index), never one supplied
+        with the openings. ``domain`` is the verifier's row domain for the call (`audit.rows_domain`)."""
+        from verity.commitments import Commitment, VerificationLimits, verify_opening
+
+        from ..audit import ROW_SCHEMA
+        from ..protocol import DomainError
+
+        root = ledger.commitment(anchors)
+        if sorted(o.position for o in openings) != sorted(r for kind, r in plan.openings if kind == "a"):
+            raise DomainError("the openings are not the plan's A rows, once each")
+        commitment, limits = Commitment(root, domain.count), VerificationLimits() if limits is None else limits
+        if not all(verify_opening(domain, commitment, o, ROW_SCHEMA, limits) for o in openings):
+            raise DomainError("an A row does not open under the call's commitment on the window's receipt")
 
     def widen(self, unit_draw, law):
         """The verifier's plan for a work draw its verifier of record issued (`plan.widen`), over its own layout, never a

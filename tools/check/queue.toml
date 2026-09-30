@@ -1,0 +1,22 @@
+# The merge queue's admission rules (`research queue`, tools/research/src/research/queue.py): the grants a change needs before it
+# enters `next`. A grant is a `grant = {role}` label on `pr:{number}@{head sha}` in the evidence store
+# (`research data label pr:{n}@{sha} grant {role} --by {lane}`); the roles are research.store.vocab.GRANT_ROLES. `paths` use
+# `merge_requires`' syntax: path prefixes, and `!` patterns leaving files out (a pattern without `/` matches a file's name).
+# The research coordinator owns this file: these are the gates it applies by hand today.
+
+hold_label = "hold"
+
+# The vLLM coordinator's verdict on changes to the integration.
+[[grant]]
+role = "vllm-coordinator"
+paths = ["integrations/vllm/", "!README.md"]
+
+# A named statement reviewer for any change to a pinned statement or to a definition a pin reads (lane contract §5).
+[[grant]]
+role = "statement-reviewer"
+lean_audit = ["pins", "reads"]
+
+# The red team for changes to what C-Flock proves: the prover's circuits, the verifier of record and its proofs.
+[[grant]]
+role = "red-team"
+paths = ["backends/flock/", "!README.md", "!PROTOCOL.md", "!*/tests/*"]

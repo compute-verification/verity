@@ -60,7 +60,8 @@ def test_a_table_not_given_is_refused(attn, tmp_path):
 def test_the_verifiers_rows_are_the_writers(attn, tmp_path):
     """Through `deriveChecked`, the rows are the writer's `rows/` byte for byte: the root, the tensor-core part, each read's
     generated layout with its `READ` line (ex2 k 23, rcp k 24), and `delta.txt`. Deriving and checking the full template
-    takes minutes, so it runs with `--slow`; GEMM's derivation (`test_lean_typed_template.py`) runs in every `check`."""
+    takes minutes, so it is marked `slow` (`tools/check/suites.py --quick` leaves it out); GEMM's derivation
+    (`test_lean_typed_template.py`) is not."""
     p = subprocess.run([str(BIN), "typed-rows", str(attn / "circuit.txt"), "--tables", str(attn / "tables"),
                         "--out", str(tmp_path / "rows")], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr
