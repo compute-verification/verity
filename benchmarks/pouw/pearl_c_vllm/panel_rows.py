@@ -38,7 +38,7 @@ def interleaving(summary: dict) -> str:
 BY = os.environ.get("PANEL_BY", "bc-dd22acf8")
 
 
-def rows(e2e: dict, verdicts: dict[str, dict], panel: str) -> list[list[str]]:
+def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[float, str] | None = None) -> list[list[str]]:
     res, summary, run = e2e["results"], e2e["summary"], e2e.get("run")
     bad = [f"gates of {m}" for m, ok in summary["gates"].items() if not ok]
     bad += [f"{p}: its commitment did not repeat" for p in ("prefill", "decode")
@@ -65,6 +65,10 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str) -> list[list[str]]:
                 f"pouw_pearl_c_device{' (--graphs: each decode call one CUDA graph, #593)' if e2e.get('graphs') else ''}; "
                 f"{phase} {'one 8,192-token prompt' if phase == 'prefill' else '32 sequences, per step'}; "
                 f"over stock vLLM FP8 {s['slowdown_vs_fp8']:.3f}x ({split}), over BF16 {s['slowdown_vs_bf16']:.3f}x; "
+                + (f"over stock FP8 as vLLM serves it (compiled, CUDA graphs) {s['slowdown_vs_fp8_graphs']:.3f}x; "
+                   if "slowdown_vs_fp8_graphs" in s else "")
+                + (f"kernel-time ratio {kernel_ratio[0]:.2f}x (Pearl-C's GPU ms a step over stock FP8's, {kernel_ratio[1]}); "
+                   if kernel_ratio and phase == "decode" else "")
                 + interleaving(summary))
         cmd = [sys.executable, panel, "append", "--line", "pearl-c-sm120", "--version", version, "--precision", "fp8",
                "--phase", phase, "--shape", s["shape"], "--kind", "measured", "--slowdown", f"{s['slowdown_vs_fp8']:.4f}",
@@ -85,10 +89,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("verify_dir", type=Path)
     p.add_argument("--panel", default=PANEL)
     p.add_argument("--append", action="store_true")
+    p.add_argument("--kernel-ratio", type=float, help="decode's kernel-time ratio (served_profile.py's GPU ms a step, Pearl-C over "
+                   "stock FP8), published beside the eager ratio until both arms run with CUDA graphs (the 19:58Z ruling)")
+    p.add_argument("--kernel-ratio-run", help="the profile run the kernel-time ratio comes from")
     a = p.parse_args(argv)
+    if (a.kernel_ratio is None) != (a.kernel_ratio_run is None):
+        raise SystemExit("--kernel-ratio and --kernel-ratio-run go together")
     verdicts = {x: json.loads((a.verify_dir / f"{x}-verify.json").read_text()) for x in ("prefill", "decode", "control", "control-leaves")
                 if x != "control-leaves" or (a.verify_dir / f"{x}-verify.json").exists()}
-    first, second = rows(json.loads(a.e2e.read_text()), verdicts, a.panel)
+    first, second = rows(json.loads(a.e2e.read_text()), verdicts, a.panel,
+                         (a.kernel_ratio, a.kernel_ratio_run) if a.kernel_ratio is not None else None)
     if not a.append:
         print(shlex.join(first))
         print(shlex.join([*second, "--attempt", "<the prefill row's attempt>"]))

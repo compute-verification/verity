@@ -111,14 +111,6 @@ def digest_keys(hashing: str) -> dict[str, bytes] | None:
     return None if f.message_key() is None else {"message": f.message_key(), "leaf": f.leaf_key()}
 
 
-def digest_keys(hashing: str) -> dict[str, bytes] | None:
-    """A hashing format's BLAKE3 keys of the message digests and the tile leaf (``message``, ``leaf``): h1's labels under h1
-    and h2, none under h0 (TurboSHAKE128)."""
-    if hashing not in HASHINGS:
-        raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
-    return None if hashing == "h0" else H1_KEYS
-
-
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
 #: of the H100's prices; v0 is priced on the H100 only
 FORMING_V0_UNITS = 320
