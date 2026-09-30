@@ -1,7 +1,8 @@
 """FA2 on a target: the stock vllm-flash-attn kernel vLLM launches there, against the attention Definitions a target can bind.
 
-One GPU process writes `<out>/fa2_target_capture.json`, sealed like `fa_tap_exactness.json` (its `digest` is the sha256 of the canonical
-JSON of every other field).  The device gate runs first and nothing else runs when it fails (exit 3):
+One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`properties.record`).  `ok` = the
+gate, MUFU, every launch's tile and determinism, the engine, and every row equal to fa2_check_inf and, on its finite heads, to v2_hopper.
+The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     nvidia-smi driver, compute capability and `multi_processor_count` against `--min-driver`, `--want-cc`, `--want-sms`.
   binary   the SASS and PTX the installed `_vllm_fa2_C` carries (cuobjdump): a cubin for this arch, or the driver's JIT of compute_80 PTX.
@@ -201,14 +202,24 @@ def _widen(t: dict[str, Any], seed: int) -> None:
         t[name] = (x.to(torch.float32) * torch.exp2(e)).to(torch.bfloat16)
 
 
-def _kernel_names(op, args: tuple) -> list[str]:
-    import torch
-    from torch.profiler import ProfilerActivity, profile
+LABEL = "fa2-capture/launch/"
 
-    with profile(activities=[ProfilerActivity.CUDA]) as prof:
-        G._call(op, args)
-        torch.cuda.synchronize()
-    return sorted({e.key for e in prof.key_averages() if "flash" in e.key.lower()})
+
+def kernels_by_launch(prof) -> dict[int, list[str]]:
+    """The FA kernels each launch ran, from ONE profiler session (a session per launch stops recording device activity after about
+    20 sessions): a device kernel belongs to launch i when it starts inside the host window of the `LABEL + i` range, which closes
+    after a synchronize."""
+    from torch.autograd import DeviceType
+
+    ev = list(prof.events())
+    windows = {int(e.name[len(LABEL):]): e.time_range for e in ev if e.name.startswith(LABEL)}
+    out: dict[int, set[str]] = {i: set() for i in windows}
+    for e in ev:
+        if e.device_type == DeviceType.CUDA and "flash" in e.name.lower():
+            for i, w in windows.items():
+                if w.start <= e.time_range.start <= w.end:
+                    out[i].add(e.name)
+    return {i: sorted(s) for i, s in out.items()}
 
 
 _TRAITS = re.compile(r"Flash_fwd_kernel_traits<(\d+), (\d+), (\d+), (\d+),")
@@ -313,7 +324,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     sq_max = max(c["seqlens_q"])
     twin = {"v2_hopper": DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], "v3_ampere": DR.TC_DOT16_BY_PRIM["AmpereBF16TcDot16_v2"]}
     rec: dict[str, Any] = {"rows": 0, "heads": 0, "nonfinite_heads": 0, "reference_heads": 0, "self_check_mismatch": 0,
-                           **{f"{n}_mismatch": 0 for n in VARIANTS}, "first_mismatch": {}}
+                           **{f"{n}_mismatch": 0 for n in VARIANTS}, **{f"{n}_mismatch_finite": 0 for n in VARIANTS}, "first_mismatch": {}}
     tok = 0
     for seq, (sq, sk) in enumerate(zip(c["seqlens_q"], c["seqlens_k"])):
         keys = np.arange(sk)
@@ -346,6 +357,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
             for name in VARIANTS:
                 bad = np.flatnonzero((want[name] != got).any(axis=1))
                 rec[f"{name}_mismatch"] += int(bad.size)
+                rec[f"{name}_mismatch_finite"] += int(np.count_nonzero(~nonfinite[bad]))
                 if bad.size and name not in rec["first_mismatch"]:
                     h = int(bad[0])
                     rec["first_mismatch"][name] = {"token": tok + r, "head": h, "T": T, "guarded_from": gfrom, "nonfinite": bool(nonfinite[h]),
@@ -362,9 +374,8 @@ def gpu_case(op, c: dict[str, Any], D: int, seed: int) -> tuple[dict[str, Any], 
     args = G._vllm_args(2, c, t)
     out1, _ = G._call(op, args)
     out2, _ = G._call(op, args)
-    names = _kernel_names(op, args)
     launch = {"case": c["name"], "D": D, "H": c["H"], "Hk": c["Hk"], "seqlens_q": c["seqlens_q"], "seqlens_k": c["seqlens_k"],
-              "deterministic": G._same(out1, out2), **launch_geometry(names, D)}
+              "deterministic": G._same(out1, out2)}
     job = {"case": {k: c[k] for k in ("name", "H", "Hk", "seqlens_q", "seqlens_k")}, "D": D, "q": G._words(t["q"]), "k": G._words(t["k"]),
            "v": G._words(t["v"]), "out": G._words(out1), "block_table": t["block_table"].cpu().numpy()}
     return launch, job
@@ -396,7 +407,8 @@ def _verdict(doc: dict[str, Any]) -> bool:
     launches, rows = doc["launches"], doc["cases"]
     return (doc["gate"]["ok"] and doc["mufu"].get("ok") is True and doc["engine"].get("ok") is True
             and bool(launches) and all(x["ok"] and x["deterministic"] for x in launches)
-            and bool(rows) and all(x.get("v2_hopper_mismatch") == 0 and x.get("self_check_mismatch") == 0 for x in rows))
+            and bool(rows) and all(x.get("v2_hopper_mismatch_finite") == 0 and x.get("fa2_check_inf_mismatch") == 0
+                                   and x.get("self_check_mismatch") == 0 for x in rows))
 
 
 def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, only: list[str] | None, skip_engine: bool) -> dict[str, Any]:
@@ -429,25 +441,35 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
     for k, b in doc["mufu"]["builds"].items():
         print(f"[fa2-capture] mufu {k}: ok={b.get('ok')} ex2!={b.get('ex2_entries_differing')} rcp!={b.get('rcp_entries_differing')} "
               f"verify={ {x: (b.get('verify') or {}).get(x) for x in ('ex2_mismatches', 'rcp_mismatches')} } {b.get('error', '')}", flush=True)
+    from torch.profiler import ProfilerActivity, profile, record_function
+
     op = torch.ops._vllm_fa2_C.varlen_fwd
     doc["launches"], jobs = [], []
-    for i, c in enumerate(case_list()):
-        if only and c["name"] not in only:
-            continue
-        for D in c["hdims"]:
-            launch, job = gpu_case(op, c, D, 1000 * D + i)
-            doc["launches"].append(launch)
-            jobs.append(job)
-            print(f"[fa2-capture] launch hd{D} {c['name']:24s} traits={launch['traits']} ok={launch['ok']} det={launch['deterministic']}", flush=True)
+    with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+        for i, c in enumerate(case_list()):
+            if only and c["name"] not in only:
+                continue
+            for D in c["hdims"]:
+                with record_function(f"{LABEL}{len(jobs)}"):
+                    launch, job = gpu_case(op, c, D, 1000 * D + i)
+                    torch.cuda.synchronize()
+                doc["launches"].append(launch)
+                jobs.append(job)
+    names = kernels_by_launch(prof)
+    for i, launch in enumerate(doc["launches"]):
+        launch.update(launch_geometry(names.get(i, []), launch["D"]))
+        print(f"[fa2-capture] launch hd{launch['D']} {launch['case']:24s} traits={launch['traits']} ok={launch['ok']} "
+              f"det={launch['deterministic']}", flush=True)
     doc["cases"] = []
     with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as ex:
         for rec in ex.map(compare, jobs):
             doc["cases"].append(rec)
             print(f"[fa2-capture] rows hd{rec['D']} {rec['case']:24s} rows={rec['rows']} heads={rec['heads']} nonfinite={rec['nonfinite_heads']} "
-                  + " ".join(f"{n}!={rec[f'{n}_mismatch']}" for n in VARIANTS) + f" self!={rec['self_check_mismatch']}", flush=True)
+                  + " ".join(f"{n}!={rec[f'{n}_mismatch']}(finite {rec[f'{n}_mismatch_finite']})" for n in VARIANTS)
+                  + f" self!={rec['self_check_mismatch']}", flush=True)
     doc["engine"] = {"skipped": True, "ok": True} if skip_engine else engine((p.major, p.minor), int(p.multi_processor_count))
     print(f"[fa2-capture] engine {json.dumps(doc['engine'])[:600]}", flush=True)
-    doc["totals"] = {n: sum(x[f"{n}_mismatch"] for x in doc["cases"]) for n in VARIANTS}
+    doc["totals"] = {k: sum(x[k] for x in doc["cases"]) for n in VARIANTS for k in (f"{n}_mismatch", f"{n}_mismatch_finite")}
     doc["totals"].update(rows=sum(x["rows"] for x in doc["cases"]), heads=sum(x["heads"] for x in doc["cases"]),
                          nonfinite_heads=sum(x["nonfinite_heads"] for x in doc["cases"]))
     doc = seal_record(doc, _verdict(doc))
