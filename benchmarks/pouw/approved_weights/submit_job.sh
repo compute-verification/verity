@@ -24,7 +24,7 @@ HELD=/workspace/pouw/approved-weights/held
 if [ ! -e "$FILL/queue/$JOB.sh" ] && [ ! -e "$FILL/running/$JOB.sh" ] && [ ! -e "$FILL/done/$JOB.sh" ] && [ ! -e "$HELD/$JOB.sh" ]; then
   cat > "$D/$JOB.sh" << EOF
 #!/usr/bin/env bash
-# fill: owner=bc-8412d697-8e5a-51be-834a-b61a695bcc03 gpus=$GPUS max_min=25 cpus=8 project=pous mem_gb=$MEM
+# fill: owner=bc-8412d697-8e5a-51be-834a-b61a695bcc03 gpus=$GPUS max_min=${AW_MAXMIN:-8} cpus=8 project=pous mem_gb=$MEM prio=${AW_PRIO:-5}
 # Approved weights (bc-8412d697), docs/pouw/approved-weights.md "Scale": $NAME. Code: benchmarks/pouw/approved_weights/$SCRIPT
 # at $SHA (branch cursor/approved-weights-gpu-cc03), as research run shipped it. Checkpoints in $D/out; exit 0 when done,
 # 99 while chunks remain, 143 when preempted. A waiting research run collects the result.
