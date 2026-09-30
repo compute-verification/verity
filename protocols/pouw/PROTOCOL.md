@@ -107,6 +107,33 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
   within `wref` (`AdmitsRef`), and the byte-level noise expansion here (the Lean takes any expansion of H's answers with
   the stated ranges).
 
+## `ncp-v2`: `ncp-v1` with the noise bound to each strip
+
+`ncp-v2` is `ncp-v1` with one change: E₁'s rows are bound to the digest of their own 16-row strip of A, not to root_A,
+the commitment root of all the unit's A rows. A tile, which reads whole strips, then derives its own noise from the rows it
+reads, and no call-wide root has to exist before the GEMM starts. This is the tile-local noise of the sampled-proofs
+circuit design (the POUS store's `docs/pouw/sampled-proofs-circuit.md` §2.1 and §5, recommended and adopted when Daniel
+deferred its decisions, 29 Sep).
+
+~~~text
+D_s      SHAKE256("verity/pouw/ncp/strip/v2" ‖ 0 ‖ frame(row 16s) ‖ … ‖ frame(row 16s + 15))[:32], rows as int7 bytes
+E₁       row i = low 6 bits − 31 of SHAKE256("verity/pouw/ncp/E1/v2" ‖ 0 ‖ frame(salt, index, D_(i div 16), weight, i))
+F₁       column j from SHAKE256("verity/pouw/ncp/F1/v2" ‖ 0 ‖ frame(salt, weight, j)), per (epoch, weight)
+digest   SHAKE256("verity/pouw/ncp/tile/v2" ‖ 0 ‖ words)[:32], words as ncp-v1's
+tiles    16 × 16, each one strip; a tile whose rows are not whole, aligned strips is not a well-formed operand
+~~~
+
+- **Everything else is `ncp-v1`'s:** R, β, the checked values, the domain, `wref` and the certificate. The certificate
+  adds the parameter `strip = 16`. Vectors: `tests/vectors/ncp_v2.json` (`tests/pouw_vectors.py`). Its useful output
+  equals `ncp-v1`'s on the same inputs, since both are exactly A·Bᵀ.
+- **Why the statements are unchanged.** The noise must be a random-oracle output of the unit's committed operand rows,
+  unknown until they are fixed (otherwise A = −E₁ zeroes a block). D_s is a hash of the strip's committed rows, so E₁
+  still is one, and the Lean reduction reads nothing more of the noise: it takes any expansion of H's answers with the
+  stated ranges. Grinding a strip (editing one entry to re-roll D_s) is a hash query, inside TTNCP_U's error term for q
+  queries, as re-rolling root_A was.
+- **The executor** (`verity_vllm.protocol_options.pouw`) computes D_s once per strip and F₁ per call; nothing
+  weight-derived outlives a call.
+
 ## `pearl-fp8-v4`: Pearl's FP8 scheme (`schemes/pearl_kw.py`)
 
 Pearl's certificate-v4 FP8 scheme, as published: the whitepaper "Pearl Floating Point Scheme Specification" (Sep 2026)
@@ -143,3 +170,6 @@ docstring states every parameter.
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
   are gated by these vectors when they land.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
+- Work counted on a unit's real rows. `Verifier.work` and `tickets` read the declared shape, whose m includes the rows a
+  unit is padded with (16 ∣ m), so filler rows are credited. The Pearl-C statement review's item 5 fixes this for
+  `audit.py` (real rows committed in the unit record before the draws), and applies to NCP's units unchanged.

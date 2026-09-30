@@ -21,6 +21,19 @@ inside each, so forming E₂ is a free word move under W1 with byte moves priced
 re-checks the rejection rule, minrank.md's hypotheses and λ₃ ≥ 16 at the k the MVP uses.  ``ncp-v1-shift24`` uses the shift by 24, admissible with
 independent checkpoints for every k >= 1024 with 16 | k (Lean `shiftBy24_admissible`, `independentWitness`), which the
 Lean calls a witness, not a proposal.
+
+``ncp-v2`` is ``ncp-v1`` with E₁ bound to each 16-row strip of A instead of to root_A, the commitment root of all the
+unit's A rows, so a tile derives its own noise from the rows it reads and no call-wide root has to exist before the GEMM
+(the sampled-proofs circuit's tile-local noise):
+
+    D_s                      the strip digest: SHAKE256("verity/pouw/ncp/strip/v2", rows 16s … 16s+15 as int7 bytes)[:32]
+    E₁                       row i = SHAKE256("verity/pouw/ncp/E1/v2", salt, index, D_(i//16), weight, i)
+    F₁                       column j = SHAKE256("verity/pouw/ncp/F1/v2", salt, weight, j), per (epoch, weight)
+
+Everything else, the digest's words (under the tile tag ``verity/pouw/ncp/tile/v2``), P, β, the domain and the
+certificate, is ``ncp-v1``'s.  Tiles are whole strips (16 rows, 16 | m).  The noise is still a random-oracle output of the
+unit's committed rows, which is all the Lean reduction reads of it (it takes any expansion of H's answers with the stated
+ranges), so the certificate's statements are unchanged.
 """
 
 from __future__ import annotations
@@ -37,7 +50,14 @@ from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, g
 
 NAME = "ncp-v1"
 NAME_SHIFT24 = "ncp-v1-shift24"
+NAME_V2 = "ncp-v2"
 D = 16
+#: ``ncp-v2``'s noise unit: E₁'s rows are bound to the digest of their 16-row strip of A
+STRIP = 16
+#: (E₁, F₁, tile digest) tags per version
+TAGS = {1: ("verity/pouw/ncp/E1/v1", "verity/pouw/ncp/F1/v1", "verity/pouw/ncp/tile/v1"),
+        2: ("verity/pouw/ncp/E1/v2", "verity/pouw/ncp/F1/v2", "verity/pouw/ncp/tile/v2")}
+STRIP_TAG = "verity/pouw/ncp/strip/v2"
 M32 = (1 << 32) - 1
 WORD_P_SEED = b"pous-pouw-ncp-Pword-v1"
 #: Route U's bias: X + β is u8 on the int7 domain for 127 <= β <= 129 with an unsigned P (Lean `biasU8Iff`)
@@ -52,6 +72,24 @@ def xof(tag: str, n: int, *parts: Part) -> bytes:
 
 def noise_row(tag: str, k: int, *parts: Part) -> list[int]:
     return [(b & 63) - 31 for b in xof(tag, k, *parts)]
+
+
+def strip_digest(rows: Sequence[bytes]) -> bytes:
+    """``ncp-v2``'s D_s: SHAKE256 over one 16-row strip of A, each row framed as its int7 bytes, 32 bytes."""
+    if len(rows) != STRIP:
+        raise ValueError(f"a strip is {STRIP} rows, not {len(rows)}")
+    return xof(STRIP_TAG, 32, *rows)
+
+
+def e1_parts(version: int, ctx: Context, i: int, strip: bytes | None) -> tuple[Part, ...]:
+    """The parts row i of E₁ is derived from: (salt, index, root_A, weight, i) under ``ncp-v1``, and (salt, index, D_s,
+    weight, i) under ``ncp-v2``, with ``strip`` the digest of row i's strip."""
+    u = ctx.matmul
+    if version == 1:
+        return (ctx.salt, u.index, ctx.root_a, u.weight, i)
+    if strip is None:
+        raise ValueError("ncp-v2 derives E₁ from its strip's digest")
+    return (ctx.salt, u.index, strip, u.weight, i)
 
 
 def shift_perm(k: int, c: int = 24) -> tuple[tuple[int, ...], tuple[int, ...]]:
@@ -210,11 +248,23 @@ def route_u_shift(unbiased: list[list[list[int]]], y: Sequence[Sequence[int]], b
     return out
 
 
-def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[int]], b: list[list[int]], tile: Tile) -> Ops:
+def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[int]], b: list[list[int]], tile: Tile,
+          version: int = 1, strips: dict[int, bytes] | None = None) -> Ops:
+    """The tile's operands, with its noise rows derived under ``version`` (``strips``: strip index -> D_s, for v2)."""
     u, k = ctx.matmul, ctx.matmul.shape.k
-    e1 = [noise_row("verity/pouw/ncp/E1/v1", k, ctx.salt, u.index, ctx.root_a, u.weight, i) for i in tile.rows]
-    f1 = [noise_row("verity/pouw/ncp/F1/v1", k, ctx.salt, u.weight, j) for j in tile.cols]
+    e1_tag, f1_tag, _ = TAGS[version]
+    e1 = [noise_row(e1_tag, k, *e1_parts(version, ctx, i, (strips or {}).get(i // STRIP))) for i in tile.rows]
+    f1 = [noise_row(f1_tag, k, ctx.salt, u.weight, j) for j in tile.cols]
     return assemble(a, b, e1, f1, pi, sigma)
+
+
+def tile_strips(tile: Tile, a_rows: Sequence[bytes]) -> dict[int, bytes] | None:
+    """D_s for every strip a tile covers (``a_rows[i]`` is row ``tile.rows[i]``), or None when the tile's rows are not
+    whole, aligned strips."""
+    rows = list(tile.rows)
+    if len(rows) % STRIP or rows != list(range(rows[0], rows[0] + len(rows))) or rows[0] % STRIP:
+        return None
+    return {(rows[0] + o) // STRIP: strip_digest(a_rows[o:o + STRIP]) for o in range(0, len(rows), STRIP)}
 
 
 class NCP:
@@ -222,11 +272,17 @@ class NCP:
     n in [1600, 2^16] (Ω* = 1 + 8/1600 over the credited 3·m·k·n, so γ <= 1%).  Smaller bounds make a test instance,
     whose certificate has no γ."""
 
-    def __init__(self, perm: str = "word", k_min: int = 1088, n_min: int = 1600, tile: tuple[int, int] = (16, 16)):
+    def __init__(self, perm: str = "word", k_min: int = 1088, n_min: int = 1600, tile: tuple[int, int] = (16, 16),
+                 version: int = 1):
         if perm not in ("word", "shift24"):
             raise ValueError("perm is 'word' or 'shift24'")
-        self.perm, self.k_min, self.n_min, self.tile = perm, k_min, n_min, tile
-        self.name = NAME if perm == "word" else NAME_SHIFT24
+        if version not in TAGS:
+            raise ValueError(f"version is one of {sorted(TAGS)}")
+        if version == 2 and (perm != "word" or tile[0] % STRIP):
+            raise ValueError(f"ncp-v2 uses the word P and tiles of whole {STRIP}-row strips")
+        self.perm, self.k_min, self.n_min, self.tile, self.version = perm, k_min, n_min, tile, version
+        self.name = NAME_V2 if version == 2 else NAME if perm == "word" else NAME_SHIFT24
+        self.e1_tag, self.f1_tag, self.tile_tag = TAGS[version]
         self.beta = BETA
         lead = k_min >= 1088 and n_min >= 1600
         self.certificate = Certificate(
@@ -249,7 +305,8 @@ class NCP:
                         *(("P v1.1's checkpoint independence and MinRank 16 at each k (script-certified; not in Lean)",)
                           if perm == "word" else ())),
             allowances=("the free final value, d/(3k) per output entry, inside γ_0",),
-            parameters=(("beta", BETA), ("f", FORM_UNITS), ("n0", n_min), ("k_max", 1 << 16)),
+            parameters=(("beta", BETA), ("f", FORM_UNITS), ("n0", n_min), ("k_max", 1 << 16),
+                        *((("strip", STRIP),) if version == 2 else ())),
         )
 
     def check(self, matmul: Matmul) -> None:
@@ -280,7 +337,14 @@ class NCP:
     def encode(self, ctx: Context, noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> Ops | None:
         k = ctx.matmul.shape.k
         a, b = int7_rows(a_rows, k), int7_rows(b_rows, k)
-        return None if a is None or b is None else stack(ctx, *noise, a, b, tile)
+        if a is None or b is None:
+            return None
+        strips = None
+        if self.version == 2:
+            strips = tile_strips(tile, a_rows)
+            if strips is None:
+                return None
+        return stack(ctx, *noise, a, b, tile, self.version, strips)
 
     def admissible(self, ctx: Context, ops: Ops) -> bool:
         return True
@@ -293,7 +357,7 @@ class NCP:
         steps = len(checked[0][0]) if checked and checked[0] else 0
         words = b"".join(checked[i][j][t].to_bytes(4, "little")
                          for t in range(steps) for i in range(len(checked)) for j in range(len(checked[i])))
-        return hashlib.shake_256(b"verity/pouw/ncp/tile/v1\0" + words).digest(32)
+        return hashlib.shake_256(self.tile_tag.encode() + b"\0" + words).digest(32)
 
     def useful(self, ctx: Context, noise, ops: Ops, checked) -> list[list[int]]:
         return [[s[-1] - (1 << 32) if s[-1] >> 31 else s[-1] for s in row] for row in checked]

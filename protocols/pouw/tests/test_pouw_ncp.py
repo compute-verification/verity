@@ -1,4 +1,5 @@
-"""``ncp-v1``: the pinned vectors, the production P, the int8 range, and the useful output exactly A·Bᵀ."""
+"""``ncp-v1`` and ``ncp-v2``: the pinned vectors, the production P, the int8 range, and the useful output exactly A·Bᵀ;
+``ncp-v2``'s noise bound to each tile's own strip."""
 
 from __future__ import annotations
 
@@ -14,10 +15,12 @@ from verity_pouw.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity_pouw.schemes import get, ncp
 
 PINNED = json.loads((Path(__file__).with_name("vectors") / "ncp.json").read_text())
+PINNED_V2 = json.loads((Path(__file__).with_name("vectors") / "ncp_v2.json").read_text())
 
 
 def test_vectors_are_pinned():
     assert MV.vectors() == PINNED
+    assert MV.vectors_v2() == PINNED_V2
 
 
 @pytest.mark.parametrize("kind", NL.CASES)
@@ -49,10 +52,11 @@ def test_production_p_is_the_research_stores():
     assert PINNED["word_p_sha256"]["4096"] == "24e68f30edbe538e2842266ac6b917a8a0ccf3ee0b4f8bf2cb1d8fe5c5943854"
 
 
-@pytest.mark.parametrize("case", MV.CASES, ids=[c[0] for c in MV.CASES])
-def test_tile_output_is_exact_and_in_range(case):
+@pytest.mark.parametrize("case,version", [(c, 1) for c in MV.CASES] + [(c, 2) for c in MV.CASES_V2],
+                         ids=[f"v1-{c[0]}" for c in MV.CASES] + [f"v2-{c[0]}" for c in MV.CASES_V2])
+def test_tile_output_is_exact_and_in_range(case, version):
     name, perm, shape, r, c, index, weight = case
-    s, ctx = MV.scheme(perm, shape), MV.ctx_of(name, shape, index, weight)
+    s, ctx = MV.scheme(perm, shape, version), MV.ctx_of(name, shape, index, weight)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
     a, b = MV.rows(name, "A", len(tile.rows), shape[1], r[0]), MV.rows(name, "B", len(tile.cols), shape[1], c[0])
     ops = s.encode(ctx, s.noise(ctx), a, b, tile)
@@ -73,8 +77,45 @@ def test_interface_and_names():
     assert dict(cert.parameters) == {"beta": 128, "f": 24, "n0": 1600, "k_max": 1 << 16}    # red-team R13-4
     assert float(1 - Fraction(199, 200) / (1 + Fraction(24, 3 * 1024))) > 0.0127            # 1.27% at n = 1024: why n0 is recorded
     assert ncp.NCP(k_min=64, n_min=64).certificate.gamma is None                              # a test instance
+    v2 = get("ncp-v2")
+    assert isinstance(v2, PoUWScheme) and v2.name == "ncp-v2" and v2.version == 2
+    assert v2.certificate.gamma == cert.gamma and v2.certificate.theorems == cert.theorems
+    assert dict(v2.certificate.parameters) == {**dict(cert.parameters), "strip": 16}
     with pytest.raises(KeyError):
-        get("ncp-v2")
+        get("ncp-v3")
+    for bad in ({"perm": "shift24", "version": 2}, {"tile": (8, 16), "version": 2}, {"version": 3}):
+        with pytest.raises(ValueError):
+            ncp.NCP(**bad)
+
+
+def _v2_tile(case: str, m: int, r: tuple[int, int], rows_a: list[bytes] | None = None):
+    """An ``ncp-v2`` test tile over a (m, 64, 64) unit: its context, noise and A strip (or the given one)."""
+    s, ctx = ncp.NCP(k_min=64, n_min=64, version=2), MV.ctx_of(case, (m, 64, 64), 5, 1)
+    tile = Tile(tuple(range(*r)), tuple(range(16)))
+    a = rows_a if rows_a is not None else MV.rows(case, "A", 16, 64, r[0])
+    return s, ctx, tile, a, MV.rows(case, "B", 16, 64)
+
+
+def test_v2_noise_is_bound_to_the_tiles_own_strip_not_to_root_a():
+    """E₁ reads D_s of its own 16 rows: another root_A leaves the tile unchanged, one changed entry of the strip changes
+    every E₁ row of it (and so X), and the useful output stays A·Bᵀ."""
+    s, ctx, tile, a, b = _v2_tile("strip", 32, (16, 32))
+    ops = s.encode(ctx, s.noise(ctx), a, b, tile)
+    other_root = type(ctx)(ctx.salt, ctx.matmul, bytes(32), ctx.root_b)
+    assert s.encode(other_root, s.noise(other_root), a, b, tile) == ops
+    edited = [bytes([(a[3][0] + 1) & 0x3F]) + a[3][1:] if i == 3 else r for i, r in enumerate(a)]
+    moved = s.encode(ctx, s.noise(ctx), edited, b, tile)
+    assert all(mx[:64] != ox[:64] for mx, ox in zip(moved.x, ops.x))
+    assert s.useful(ctx, None, moved, s.checked(ctx, moved)) == [
+        [sum(p * q for p, q in zip(x, y)) for y in ncp.int7_rows(b, 64)] for x in ncp.int7_rows(edited, 64)]
+
+
+def test_v2_tiles_are_whole_strips():
+    s, ctx, _, a, b = _v2_tile("whole", 32, (0, 16))
+    assert s.encode(ctx, s.noise(ctx), a[:8], b, Tile(tuple(range(8)), tuple(range(16)))) is None
+    assert s.encode(ctx, s.noise(ctx), a, b, Tile(tuple(range(8, 24)), tuple(range(16)))) is None
+    with pytest.raises(ValueError):
+        ncp.strip_digest(a[:15])
 
 
 @pytest.mark.parametrize("shape", [(16, 1024, 2048), (16, 2048, 1536), (8, 2048, 2048), (16, 2040, 2048), (16, 2048, 1 << 17)])
