@@ -456,7 +456,8 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 
 # ---- the panel rows -----------------------------------------------------------------------------------------------
 
-def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure: str | None = None) -> tuple[dict, dict]:
+def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure: str | None = None,
+               graphed: bool = False) -> tuple[dict, dict]:
     reps = lambda mhz: {"prefill_8192": [{"clock": {"sm_mhz": mhz}}] * 3, "decode_b32": [{"clock": {"sm_mhz": mhz - 3}}] * 3}
     split = {key: {"shape": shape, "fp8_s": 1.0, "nohash_s": 1.5, "slowdown_vs_fp8": 2.5, "gemm_x_fp8": 1.2, "hashing_x_fp8": 1.0,
                    "else_x_fp8": 0.3, "slowdown_vs_bf16": 1.6} for key, shape in (("prefill_8192", "e2e-llama31-8b-vllm-m8192"),
@@ -464,6 +465,10 @@ def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure:
     e2e = {"scheme": SCHEME, "run": RUN, "results": {"pearlc": {"reps": reps(2085)}, "fp8": {"reps": reps(2090)}},
            "summary": {"gates": {"arm": True}, "split": split, "interleave": interleave, "resident_failure": failure,
                        "verify_pass": {"prefill": {"same_commitment_as_timed": True}, "decode": {"same_commitment_as_timed": True}}}}
+    if graphed:
+        e2e["results"]["fp8-graphs"] = {"reps": reps(2080)}
+        for x in split.values():
+            x.update(fp8_graphs_s=0.5, slowdown_vs_fp8_graphs=5.0)
     t = lambda p: f"{RUN}:/workspace/pouw/mvp-e2e/passes/{RUN}/{p}/manifest.json sha256:{'ab' * 32}"
     verdicts = {p: {"accepted": p != "control" or control_accepted, "verifier_commit": "c7033d67", "transcript": t(p),
                     "line": f"{'ACCEPT' if p != 'control' or control_accepted else 'REJECT'} {SCHEME} pouw:{SCHEME}: ...; transcript {t(p)}"}
@@ -486,6 +491,22 @@ def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
     assert "ABAB blocks" in blocks[0][blocks[0].index("--description") + 1] and "OutOfMemoryError" in blocks[1][blocks[1].index("--description") + 1]
     with pytest.raises(SystemExit, match="negative control was not rejected"):
         PR.rows(*e2e_result(control_accepted=True), "panel.py")
+
+
+def test_with_graphed_fp8_decode_heads_over_it_and_the_eager_row_is_beside_it():
+    """The root's 21:33Z ruling: decode's headline row is over stock FP8 under CUDA graphs, the eager row beside it at the
+    shape's -eager name, in the same attempt; both behind the same gate, and prefill keeps its one row."""
+    PR = load("pearl_c_vllm_panel_rows", KERNEL.parent / "pearl_c_vllm" / "panel_rows.py")
+    rows = PR.rows(*e2e_result(graphed=True), "panel.py")
+    args = [dict(zip(r[3::2], r[4::2])) for r in (x[:-2] if "--decode-method" in x else x for x in rows)]
+    assert [(a["--phase"], a["--shape"]) for a in args] == [
+        ("prefill", "e2e-llama31-8b-vllm-m8192"), ("decode", "e2e-llama31-8b-vllm-m32"), ("decode", "e2e-llama31-8b-vllm-m32-eager")]
+    head, eager = args[1], args[2]
+    assert (head["--slowdown"], head["--hash-free"], eager["--slowdown"], eager["--hash-free"]) == ("5.0000", "3.0000", "2.5000", "1.5000")
+    assert set(head["--sm-clock-base"].split(",")) == {"2077"} and set(eager["--sm-clock-base"].split(",")) == {"2087"}
+    assert head["--description"].startswith("Headline, over stock FP8 as vLLM serves it") and rows[1][-2:] == rows[2][-2:]
+    with pytest.raises(SystemExit, match="negative control was not rejected"):
+        PR.rows(*e2e_result(control_accepted=True, graphed=True), "panel.py")
 
 
 # ---- the e2e's schedule and its assembly --------------------------------------------------------------------------

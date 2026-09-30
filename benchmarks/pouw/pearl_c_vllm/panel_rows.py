@@ -1,5 +1,6 @@
-"""The e2e's two panel rows (research store ``internal/pouw/panel/add-a-row.md``), from the window's ``e2e.json`` and the
-verify job's ``prefill-verify.json``, ``decode-verify.json`` and ``control-verify.json``, as ``panel.py append`` commands.
+"""The e2e's panel rows (research store ``internal/pouw/panel/add-a-row.md``), from the window's ``e2e.json`` and the verify
+job's ``prefill-verify.json``, ``decode-verify.json`` and ``control-verify.json`` (and ``control-leaves-verify.json`` where the
+window retained it), as ``panel.py append`` commands.
 
   python benchmarks/pouw/pearl_c_vllm/panel_rows.py E2E_JSON VERIFY_DIR [--panel PANEL_PY] [--append]
 
@@ -9,6 +10,10 @@ engines could not stay resident, which the row's description then says; ``--hash
 are every rep's SM clock, the arm's and the ``fp8`` baseline's.  Refused, with the reason, unless every gate held, both verify
 passes repeated their timed commitments and were accepted, and the negative control was rejected.  The decode row is the
 prefill row's attempt, another phase of it (``--attempt``).  Without ``--append`` it prints the commands.
+
+When the window also timed stock FP8 as vLLM serves it (``--fp8-graphs``), decode's headline row is over that graphed
+baseline (``slowdown_vs_fp8_graphs``, its reps' clocks as the base's) at the decode shape, and the eager row goes beside it
+at the same shape with `EAGER_SUFFIX`, in the same attempt: the root's panel ruling (21:33Z).  Both pass the same gate.
 """
 from __future__ import annotations
 
@@ -22,6 +27,8 @@ import sys
 from pathlib import Path
 
 PANEL = "/cursor/stores/bc-b729c175-2ef6-418e-98fe-10896709028b/internal/pouw/panel/panel.py"
+#: the decode shape's suffix for the row over eager stock FP8, beside the headline over graphed FP8
+EAGER_SUFFIX = "-eager"
 PHASES = {"prefill_8192": ("prefill", "prefill_8192", "prefill", "s"), "decode_b32_step": ("decode", "decode_b32", "decode", "step_s")}
 
 
@@ -79,8 +86,25 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
                "--sm-clock-base", clocks["fp8"], "--by", BY]
         if phase == "decode":
             cmd += ["--decode-method", "dependent-chain"]
+            if "slowdown_vs_fp8_graphs" in s and "fp8-graphs" in res:
+                out.append(headline_over_graphed(cmd, s, res, reps, desc))
+                cmd[cmd.index("--shape") + 1] = s["shape"] + EAGER_SUFFIX
         out.append(cmd)
     return out
+
+
+def headline_over_graphed(eager: list[str], s: dict, res: dict, reps: str, desc: str) -> list[str]:
+    """Decode's headline row: the eager row's command over the graphed baseline instead, its slowdown, hash-free ratio and
+    base clocks the ``fp8-graphs`` reps'."""
+    cmd = list(eager)
+    for flag, value in (("--slowdown", f"{s['slowdown_vs_fp8_graphs']:.4f}"),
+                        ("--hash-free", f"{s['nohash_s'] / s['fp8_graphs_s']:.4f}"),
+                        ("--sm-clock-base", ",".join(str(r["clock"]["sm_mhz"]) for r in res["fp8-graphs"]["reps"][reps])),
+                        ("--description", "Headline, over stock FP8 as vLLM serves it (compiled, CUDA graphs), both arms under "
+                                          f"CUDA graphs; the row over eager stock FP8 is beside it at {s['shape']}{EAGER_SUFFIX}. "
+                                          + desc)):
+        cmd[cmd.index(flag) + 1] = value
+    return cmd
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -97,18 +121,20 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--kernel-ratio and --kernel-ratio-run go together")
     verdicts = {x: json.loads((a.verify_dir / f"{x}-verify.json").read_text()) for x in ("prefill", "decode", "control", "control-leaves")
                 if x != "control-leaves" or (a.verify_dir / f"{x}-verify.json").exists()}
-    first, second = rows(json.loads(a.e2e.read_text()), verdicts, a.panel,
-                         (a.kernel_ratio, a.kernel_ratio_run) if a.kernel_ratio is not None else None)
+    first, *rest = rows(json.loads(a.e2e.read_text()), verdicts, a.panel,
+                        (a.kernel_ratio, a.kernel_ratio_run) if a.kernel_ratio is not None else None)
     if not a.append:
         print(shlex.join(first))
-        print(shlex.join([*second, "--attempt", "<the prefill row's attempt>"]))
+        for cmd in rest:
+            print(shlex.join([*cmd, "--attempt", "<the prefill row's attempt>"]))
         return 0
     out = subprocess.run(first, check=True, capture_output=True, text=True).stdout
     print(out, end="")
     attempt = re.search(r"appended attempt (\d+)", out)
     if not attempt:
-        raise SystemExit("panel.py did not say which attempt it appended; append the decode row with --attempt by hand")
-    subprocess.run([*second, "--attempt", attempt.group(1)], check=True)
+        raise SystemExit("panel.py did not say which attempt it appended; append the decode rows with --attempt by hand")
+    for cmd in rest:
+        subprocess.run([*cmd, "--attempt", attempt.group(1)], check=True)
     return 0
 
 
