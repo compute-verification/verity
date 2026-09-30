@@ -743,6 +743,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--max-ands", type=int, default=1 << 24, help="skip classes above this many ANDs (reported)")
     ap.add_argument("--only", default=None, help="comma-separated shape prefixes")
     ap.add_argument("--selftest-only", action="store_true", help="stage and run the selftest cases only (no loopback session), into selftests.jsonl")
+    ap.add_argument("--stage-only", action="store_true", help="stage only, into staged.jsonl (with FLOCK_STAGE_CACHE: a later run with "
+                    "the same settings proves from the cache, so a GPU job holds its GPU only to prove)")
     ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
@@ -787,7 +789,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     salt_key = hashlib.sha256(b"verity/flock/class-statement/stress-salts\0" + str(a.seed).encode()).digest()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    results = out / ("selftests.jsonl" if a.selftest_only else "results.jsonl")
+    results = out / ("selftests.jsonl" if a.selftest_only else "staged.jsonl" if a.stage_only else "results.jsonl")
     done = {json.loads(ln)["shape"] for ln in results.read_text().splitlines()} if results.exists() else set()
     row_units: dict[str, int] = {}
     per_definition: dict[str, dict[str, int]] = {}
@@ -820,7 +822,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for rec in _staged(jobs, a.jobs):
         s, cl = rec["shape"], classes[rec["shape"]]
         t0 = time.time() - rec.pop("stage_wall_s", 0)
-        if "stage" in rec:
+        if "stage" in rec and not a.stage_only:
             d = out / s[:16]
             try:
                 if not a.selftest_only:

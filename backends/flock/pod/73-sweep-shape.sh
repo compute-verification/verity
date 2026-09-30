@@ -3,15 +3,19 @@
 #   MODE=cut   ROW=<row slug> BUILD=<the row's Build dir, with build_request/instances.json.gz>
 #              the row's program graph (verity_vllm program-graph) and class_statement --counts-only under SELECT, into
 #              $SWEEP/$ROW/ (program.json, counts.json, shapes.tsv: shape, word gates, row units, its Definitions) and the run's out/
-#   MODE=shape ROW=<row slug> SHAPE=<shape digest>
-#              that one shape (70-class-sweep.sh), from the Definitions of $SWEEP/$ROW/counts.json that hold it, at their row Call
-#              counts; SELFTEST=1 SELFTEST_GPU=1 for its selftest on the GPU (the device's proofs and transcripts against the CPU's)
-# env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  and 70-class-sweep.sh's (SELFTEST=0 here)
+#   MODE=stage ROW=<row slug> SHAPE=<shape digest>   (no GPU)
+#              builds the prover and stages that one shape into FLOCK_STAGE_CACHE, from the Definitions of $SWEEP/$ROW/counts.json
+#              that hold it, at their row Call counts
+#   MODE=shape ROW=<row slug> SHAPE=<shape digest>   (one GPU)
+#              proves it (70-class-sweep.sh) with the same settings, so a staged shape comes from the cache; SELFTEST=1
+#              SELFTEST_GPU=1 for its selftest on the GPU (the device's proofs and transcripts against the CPU's, byte for byte)
+# env: SWEEP=/workspace/jobs/sweep2  SELECT=units  FLOCK_WORK=/workspace/jobs/flock-sweep2  SM=120  and 70-class-sweep.sh's (SELFTEST=0 here)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/sweep-shape}; mkdir -p $R/out
 SWEEP=${SWEEP:-/workspace/jobs/sweep2}; D=$SWEEP/$ROW; mkdir -p $D
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/flock-sweep2}; mkdir -p $FLOCK_WORK/home; export HOME=$FLOCK_WORK/home
+export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} SM=${SM:-120}
 unset CARGO_TARGET_DIR
 [ -n "${RAYON_NUM_THREADS:-}" ] || export RAYON_NUM_THREADS=${OMP_NUM_THREADS:-$(nproc)}
 for c in $FLOCK_WORK/cuda-root /workspace/cache/flock/cuda-root; do
@@ -44,7 +48,7 @@ with open(sys.argv[2], "w") as f:
 print(f"{len(rows)} shapes, {sum(s['row_units'] or 0 for _, s in rows)} row units")
 EOF
   cp $R/out/program.json $R/out/cut/counts.json $R/out/shapes.tsv $D/ ;;
-shape)
+stage|shape)
   $(command -v python3) - $D/counts.json $SHAPE $R/out/defs.json <<'EOF' || exit 1
 import json, sys
 c = json.load(open(sys.argv[1]))
@@ -55,5 +59,5 @@ json.dump(defs, open(sys.argv[3], "w"))
 EOF
   echo $SHAPE > $R/out/shapes.txt
   OUT=$R/out bash backends/flock/pod/70-class-sweep.sh DEFS=$R/out/defs.json SHAPES=$R/out/shapes.txt SELECT=${SELECT:-units} \
-    SELFTEST=${SELFTEST:-0} SELFTEST_LARGEST=0 || exit 1 ;;
+    SELFTEST=${SELFTEST:-0} SELFTEST_LARGEST=0 STAGE_ONLY=$([ $MODE = stage ] && echo 1 || echo 0) || exit 1 ;;
 esac
