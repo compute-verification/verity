@@ -144,9 +144,18 @@ def near_dups(c, width, D, fp4):
     return best, flagged
 
 
-def census_matrix(w, fmt, name, rot, seed, dev):
+def census_matrix(w, fmt, name, form, seed, dev, blk=None):
+    """form: plain, rot (the full keyed Haar) or blk8s (rung 3 as §8j fixed it: the 8-block Haar with gamma kept per block;
+    blk = (Q, fold, side positions) for this linear, fold the columns' gamma / g_keep on the input side). Under blk8s the
+    massive channels' columns of q/k/v/gate/up leave the chain (zeroed here); their rows of o/down stay in, conservatively."""
     t0 = time.time()
-    if rot and name.endswith(("o_proj", "down_proj")):
+    rot = form != "plain"
+    if form == "blk8s" and name.endswith(("o_proj", "down_proj")):
+        w = blk[0].T @ w
+    elif form == "blk8s":
+        w = (w * blk[1][None, :]) @ blk[0]
+        w[:, blk[2]] = 0.0
+    elif rot and name.endswith(("o_proj", "down_proj")):
         w = G.rot_matrix(w.shape[0], dev, seed).T @ w
     elif rot:
         w = w @ G.rot_matrix(w.shape[1], dev, seed)
@@ -154,7 +163,7 @@ def census_matrix(w, fmt, name, rot, seed, dev):
     c = nvfp4_codes(w) if fp4 else fp8_codes(w)
     torch.cuda.synchronize()
     t_derive = time.time() - t0
-    rec = {"form": f"{fmt}-{'rot' if rot else 'plain'}", **spikes(w)}
+    rec = {"form": f"{fmt}-{form}", **spikes(w)}
     zs, s64 = zero_stats(c, fp4)
     rec.update(zs)
     t1 = time.time()
@@ -198,7 +207,11 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--max-seconds", type=float, default=900)
+    ap.add_argument("--forms", default="plain,rot", help="plain, rot, blk8s (the last needs --calibration)")
+    ap.add_argument("--calibration", default="", help="model=calibration.json,... (aw_fold / aw_scale: channels and profile)")
     args = ap.parse_args()
+    forms = args.forms.split(",")
+    cals = dict(kv.split("=", 1) for kv in args.calibration.split(",") if kv)
     t0 = time.time()
     torch.backends.cuda.matmul.allow_tf32 = False
     dev = torch.device("cuda")
@@ -230,17 +243,38 @@ def main():
             return files[f].get_tensor(t).to(dev)
         recs, tc = [], time.time()
         keys = sorted(idx) if idx else None
+        blkq = None
+        if "blk8s" in forms:
+            import aw_fold as FD
+            cal = json.loads(Path(cals[model]).read_text())
+            d = json.loads(Path(snap, "config.json").read_text())["hidden_size"]
+            q, bid = FD.block_rotation(d, cal["channels"], cal["profile"], 8, dev, args.seed)
+            bid = bid.to(dev)
+            side = torch.tensor([int(q[c_].argmax()) for c_ in cal["channels"]], device=dev)
+
+            def fold(norm):
+                gam = get(norm).float()
+                gk = gam.clone()
+                for b in range(8):
+                    gk[bid == b] = gam[bid == b].pow(2).mean().sqrt()
+                return gam / gk.to(torch.bfloat16).float()
+            blkq = (q, fold, side)
         for L in range(lo, hi):
             for role in ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"):
                 part = "self_attn" if role in ("q_proj", "k_proj", "v_proj", "o_proj") else "mlp"
                 t = f"model.layers.{L}.{part}.{role}.weight"
                 w = get(t).float()
                 name = t[:-7]
+                blk = None
+                if blkq is not None:
+                    norm = None if role in ("o_proj", "down_proj") else \
+                        f"model.layers.{L}.{'input_layernorm' if part == 'self_attn' else 'post_attention_layernorm'}.weight"
+                    blk = (blkq[0], blkq[1](norm) if norm else None, blkq[2])
                 for fmt in ("fp8", "nvfp4"):
-                    for rot in (False, True):
+                    for form in forms:
                         if PRE["flag"]:
                             break
-                        r = census_matrix(w, fmt, name, rot, args.seed, dev)
+                        r = census_matrix(w, fmt, name, form, args.seed, dev, blk)
                         recs.append({"linear": name, "n": w.shape[0], "k": w.shape[1], **r})
                 del w
                 torch.cuda.empty_cache()
@@ -256,7 +290,7 @@ def main():
                "seconds": round(time.time() - tc, 1), "gpu": torch.cuda.get_device_name(0),
                "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""), "fadd_units": FADD}
         (out / f"{cname}.json").write_text(json.dumps(doc, indent=1))
-        print(json.dumps({"chunk": cname, "linears": len(recs) // 4, "seconds": doc["seconds"], "planted": adv}), flush=True)
+        print(json.dumps({"chunk": cname, "linears": len(recs) // (2 * len(forms)), "seconds": doc["seconds"], "planted": adv}), flush=True)
     done = all((out / f"{c}.json").exists() for c in names)
     rd = os.environ.get("RESEARCH_RUN_DIR")
     if rd:
