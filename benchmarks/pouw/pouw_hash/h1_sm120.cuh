@@ -161,9 +161,9 @@ DEV void h1_levels(uint32_t (*sh)[8], const uint32_t (*keys)[8], uint64_t tree, 
 // leaves), p4 out (seed_A ‖ line key ‖ jackpot key, 96 B; 0: none), p5 blake3("pearl-c/v0/seed-A"), p6 salt, p7 root_B,
 // p8 the level keys out (32 B a level; 0: none); i0 leaves, i1 width (a power of two), i2 the matmul's index
 extern "C" __global__ void __launch_bounds__(1024) h1_tree(const Args a) {
-  extern __shared__ uint32_t smem[];
-  uint32_t (*keys)[8] = reinterpret_cast<uint32_t(*)[8]>(smem);
-  uint32_t (*sh)[8] = keys + 32;
+  extern __shared__ uint32_t sh[];
+  uint32_t (*keys)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
+  uint32_t (*nodes)[8] = keys + 32;
   __shared__ bool last;
   const uint64_t tree = a.p[0], count = (uint64_t)a.i[0], tw = (uint64_t)a.i[1];
   const int depth = 63 - __clzll((long long)tw), S = (int)(tw < 2ull * blockDim.x ? tw : 2ull * blockDim.x), ls = 31 - __clz(S);
@@ -189,10 +189,10 @@ extern "C" __global__ void __launch_bounds__(1024) h1_tree(const Args a) {
       load_key(tree + 32 * i, h);
     }
 #pragma unroll
-    for (int q = 0; q < 8; q++) sh[j][q] = h[q];
+    for (int q = 0; q < 8; q++) nodes[j][q] = h[q];
   }
   __syncthreads();
-  h1_levels(sh, keys, tree, tw, 0, first, S);
+  h1_levels(nodes, keys, tree, tw, 0, first, S);
   if (gridDim.x > 1) {
     if (threadIdx.x == 0) {
       __threadfence();
@@ -202,9 +202,9 @@ extern "C" __global__ void __launch_bounds__(1024) h1_tree(const Args a) {
     if (!last) return;
     __threadfence();
     const uint64_t lvl = 2 * tw - (2 * tw >> ls);
-    for (int j = threadIdx.x; j < (int)gridDim.x; j += blockDim.x) ld_cv_cg(tree + 32 * (lvl + j), sh[j]);
+    for (int j = threadIdx.x; j < (int)gridDim.x; j += blockDim.x) ld_cv_cg(tree + 32 * (lvl + j), nodes[j]);
     __syncthreads();
-    h1_levels(sh, keys, tree, tw, ls, 0, gridDim.x);
+    h1_levels(nodes, keys, tree, tw, ls, 0, gridDim.x);
   }
   if (!a.p[4] || threadIdx.x != 0) return;
   const uint32_t* salt = reinterpret_cast<const uint32_t*>(a.p[6]);
@@ -212,7 +212,7 @@ extern "C" __global__ void __launch_bounds__(1024) h1_tree(const Args a) {
   uint32_t m[16], cv[8], seed[8], h[8];
   load_key(a.p[5], cv);
 #pragma unroll
-  for (int i = 0; i < 8; i++) m[i] = salt[i], m[8 + i] = sh[0][i];
+  for (int i = 0; i < 8; i++) m[i] = salt[i], m[8 + i] = nodes[0][i];
   b3c(cv, m, 0, 64, B3_KEYED | B3_START, cv);
 #pragma unroll
   for (int i = 0; i < 16; i++) m[i] = i < 8 ? root_b[i] : 0u;
