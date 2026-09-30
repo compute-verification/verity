@@ -1,0 +1,38 @@
+{
+ "schema": "verity-pouw/bench-shapes/v1",
+ "why": "PoUW alone on fixed matmul shapes: no served model. Each set names where its (k, n) come from; m is the set's rows.",
+ "sets": {
+  "baseline": {
+   "why": "#389's and #435's model, Qwen2.5-0.5B: its four fused linears (qkv with bias, o, gate_up, down), measured there through the served pipeline and redone here alone",
+   "source": "#389 row qwen25-05b__bf16__rtx4090__tp1__b1__i32__o2__mixed__greedy__bi-eager; #435's fused bench (benchmarks/pouw/ncp2_gpu_bench.py QWEN05)",
+   "shapes": [[896, 1152], [896, 896], [896, 9728], [4864, 896]],
+   "rows": [16, 32, 256, 2048],
+   "layers": 24
+  },
+  "census": {
+   "why": "the GEMMs (Gemm_v1 and Gemm_v2 templates) of census workloads, at decode and prefill rows",
+   "workloads": ["vllm/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager",
+                 "vllm/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"],
+   "rows": [16, 2048],
+   "max_n": 65536
+  },
+  "square": {
+   "why": "the square headline shapes (the 8,192³ PoUW headline and 4,096³)",
+   "mkn": [[4096, 4096, 4096], [8192, 8192, 8192]]
+  }
+ },
+ "figures": {
+  "why": "the numbers the baseline redoes, as measured through the served pipeline",
+  "#435": {
+   "source": "project store docs/pouw/gpu-path-plan.md: fused gates and timings r20260929-222904-ac4b, vLLM r20260929-223044-e138, #435 at 3e5e9108, RTX 4090",
+   "prefill_forward_2048_rows_s": 2.04,
+   "decode_call_ms": {"896": 4.6, "4864": 24.0},
+   "tile_word_rate_tb_s": [0.33, 0.50],
+   "vs_bf16_vllm": {"prefill": 102, "decode_b32": 136}
+  },
+  "#389": {
+   "source": "project store docs/pouw/mvp-e2e.md: CPU gate r20260929-181416-4376 (the commit alone, one layer x 24 at 16 rows); row r20260929-182429-321d",
+   "cpu_forward_16_rows_s": {"Ryzen 7950X": 20.1, "EPYC 75F3": 35.4, "EPYC 7763": 36.9}
+  }
+ }
+}
