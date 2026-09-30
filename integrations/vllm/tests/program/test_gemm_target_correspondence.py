@@ -31,6 +31,8 @@ def test_linear_shapes_of_dense_moe_and_sharded_configs():
                                                               "lm_head": (2048, 75968)}
     assert G.linear_shapes(_config("OLMOE"), tp=2) == {"qkv_proj": (2048, 3072), "o_proj": (1024, 2048), "router": (2048, 64),
                                                       "lm_head": (2048, 25152)}
+    assert G.linear_shapes(_config("PYTHIA160M")) == {"qkv_proj": (768, 2304), "o_proj": (768, 768), "up_proj": (768, 3072),
+                                                     "down_proj": (3072, 768), "lm_head": (768, 50304)}
     with pytest.raises(ValueError, match="tp=3"):
         G.linear_shapes(_config("LLAMA32_1B"), tp=3)
 

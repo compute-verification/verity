@@ -65,7 +65,11 @@ def linear_shapes(config: dict, tp: int = 1) -> dict[str, tuple[int, int]]:
         inter = int(config["intermediate_size"])
         if inter % tp:
             raise UsageError(f"intermediate size {inter} does not split over tp={tp}")
-        shapes["gate_up_proj"] = (H, 2 * inter // tp)
+        # GPT-NeoX-style configs (the ones carrying `rotary_pct`) have an ungated MLP: one up projection, not a merged gate and up
+        if "rotary_pct" in config:
+            shapes["up_proj"] = (H, inter // tp)
+        else:
+            shapes["gate_up_proj"] = (H, 2 * inter // tp)
         shapes["down_proj"] = (inter // tp, H)
     if V % tp:
         raise UsageError(f"padded vocabulary {V} does not split over tp={tp}")
@@ -168,18 +172,21 @@ def _case_plan(a: CaptureOptions) -> list[dict[str, Any]]:
     bias_shapes = {s for s in a.bias_shapes.split(",") if s}
     base = [f for f in a.families.split(",") if f]
     stress = [f for f in a.stress_families.split(",") if f]
-    plan = []
+    plan: dict[tuple, dict[str, Any]] = {}
     for path in [p for p in a.configs.split(",") if p]:
-        config = json.loads(Path(path).read_text())
+        config, label = json.loads(Path(path).read_text()), Path(path).name.split(".")[0]
         for tp in [int(t) for t in a.tp.split(",") if t]:
             for shape, (K, N) in linear_shapes(config, tp).items():
                 fams = list(base) + (["randn_bias"] if shape in bias_shapes else [])
                 fams += [f for f in stress if shape in stress_shapes]
                 for family in fams:
                     for M in ms if family in base or family == "randn_bias" else sorted(stress_ms):
-                        plan.append({"config": Path(path).name.split(".")[0], "tp": tp, "shape": shape, "K": K, "N": N,
-                                     "family": family, "M": M})
-    return plan
+                        key = (K, N, family, M)
+                        if key in plan:
+                            plan[key]["also"].append(f"{label} tp{tp} {shape}")
+                            continue
+                        plan[key] = {"config": label, "tp": tp, "shape": shape, "K": K, "N": N, "family": family, "M": M, "also": []}
+    return list(plan.values())
 
 
 def capture(a: CaptureOptions) -> int:
