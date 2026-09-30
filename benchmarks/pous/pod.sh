@@ -31,6 +31,32 @@ esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
 AUDITS=${AUDITS:-20}
 mkdir -p "$W" "$O/bench"
+# band-gpu's Python: torch pinned (TORCH_VERSION) from the PyTorch index for the pod's nvcc (cu126 below CUDA 12.8, cu128 from it)
+gpu_env() {
+  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
+  local minor
+  minor=$(nvcc --version 2>/dev/null | sed -n 's/.*release 12\.\([0-9]*\).*/\1/p')
+  TORCH_CUDA=${TORCH_CUDA:-$([ "${minor:-8}" -ge 8 ] && echo cu128 || echo cu126)}
+  TORCH_VERSION=${TORCH_VERSION:-2.7.1}
+  local venv=$W/gpu312-torch$TORCH_VERSION-$TORCH_CUDA
+  PY=$venv/bin/python
+  [ -x "$PY" ] || { uv venv -q "$venv" --python 3.12 && uv pip install -q --python "$PY" numpy ninja \
+    && uv pip install -q --python "$PY" "torch==$TORCH_VERSION" --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"; } || return 3
+  "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))' || return 3
+  export PATH=$(dirname "$PY"):$PATH
+}
+# the host facts a result is re-derived with, and two distinct physical cores (not SMT siblings) for the verifier and responder
+record_host() {
+  nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-before.txt" 2>&1 || true
+  nvcc --version > "$O/nvcc.txt" 2>&1 || true
+  lscpu -e > "$O/lscpu.txt" 2>&1 || true
+  uv pip freeze --python "$PY" > "$O/pip-freeze.txt" 2>/dev/null || true
+  if [ -n "${NVME_DIR:-}" ]; then
+    mkdir -p "$NVME_DIR"; findmnt -T "$NVME_DIR" > "$O/nvme-mount.txt" 2>&1; lsblk -o NAME,MODEL,TRAN,ROTA,SIZE > "$O/lsblk.txt" 2>&1
+  fi
+  read -r VCPU RCPU <<< "$(lscpu -p=CPU,CORE 2>/dev/null | grep -v '^#' | awk -F, '!seen[$2]++ {print $1}' | sed -n '3p;4p' | tr '\n' ' ')"
+  VCPU=${VCPU:-3}; RCPU=${RCPU:-2}
+}
 nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
 command -v uv >/dev/null || { python3 -m pip install -q uv || exit 3; }
@@ -63,20 +89,13 @@ if [ "$IMPL" = vllm-gpu ]; then
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl vllm-gpu --impl-tree "$W/impl" --impl-commit "${IMPL_COMMIT:-unknown}" \
     --build-dir "$W/pous_build" --python "$PY" --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS"
 elif [ "$IMPL" = band-gpu ]; then
-  export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda} PATH=/usr/local/cuda/bin:$PATH
-  CUV=$(nvcc --version 2>/dev/null | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/cu\1\2/p')
-  TORCH_CUDA=${TORCH_CUDA:-${CUV:-cu128}}
-  PY=$W/gpu312-$TORCH_CUDA/bin/python
-  [ -x "$PY" ] || { uv venv -q "$W/gpu312-$TORCH_CUDA" --python 3.12 && uv pip install -q --python "$PY" numpy ninja \
-    && uv pip install -q --python "$PY" torch --index-url "https://download.pytorch.org/whl/$TORCH_CUDA"; } || exit 3
-  "$PY" -c 'import torch; assert torch.cuda.is_available(), "torch sees no CUDA device"; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))' || exit 3
-  export PATH=$(dirname "$PY"):$PATH
-  nvidia-smi -q -d CLOCK,PERFORMANCE > "$O/clocks-before.txt" 2>&1 || true
+  gpu_env || exit 3
+  record_host
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
-    --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$(nproc)" --verifier-cpu 3 --responder-cpu 2 \
-    ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
+    --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$(nproc)" --verifier-cpu "$VCPU" \
+    --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"}
   RC=$?
-  nvidia-smi -q -d CLOCK,PERFORMANCE > "$O/clocks-after.txt" 2>&1 || true
+  nvidia-smi -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-after.txt" 2>&1 || true
   exit $RC
 elif [ "$IMPL" = p2-gpu ]; then
   # P2's kernels (benchmarks/pous/p2_gpu): CGBN at its pinned commit, libgmp for CGBN's host pass, nvcc for the device's arch

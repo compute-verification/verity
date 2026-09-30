@@ -1,8 +1,8 @@
 """The POUS-only harness (`benchmarks/pous/band_gpu/harness.py`, `bench.py --impl band-gpu`) on CPU: the band's reference codec
 stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the verifier is the
-harness's own `live.py` process.  The harness's timer and the verifier's clock (`live.py --ticks`) are injected, so no outcome
-here depends on a clock or on the machine's load: what is checked is that each step runs and each gate decides, not the
-numbers."""
+harness's own `live.py` process.  The harness's timer is injected and the verifier runs on its logical clock (`--clock
+logical`: each answer's time is the responder's reported one), so no outcome here depends on a clock or on the machine's
+load: what is checked is that each step runs and each gate and control decides, not the numbers."""
 from __future__ import annotations
 
 import hashlib
@@ -135,7 +135,7 @@ def _vectors(params):
 
 def _args(tmp_path, **kw):
     base = {"scheme": BAND, "max_segments": 0, "kernels": "", "build_dir": str(tmp_path / "build"), "reference_segments": 2,
-            "workers": 2, "tokens": "1,8", "reps": 1, "load_tokens": 0, "audits": 2, "pings": 20, "allowance": "max", "k": 0, "deadline_ns": 0, "ticks": True,
+            "workers": 2, "tokens": "1,8", "reps": 1, "load_tokens": 0, "audits": 2, "pings": 20, "allowance": "max", "k": 0, "deadline_ns": 0, "clock": "logical",
             "verifier_cpu": None, "responder_cpu": None, "step_reps": 3, "nvme_dir": "", "nvme_samples": 8, "impl_commit": None}
     return types.SimpleNamespace(**{**base, **kw})
 
@@ -148,31 +148,44 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
                                   vectors=_vectors(params))
     gates = body["gates"]
     assert body["segments"] == 3 and body["blocks"] == 48 and body["weight_bytes"] == 2560
-    for g in ("vector", "reference_encode", "round_trip", "timed_audit", "negative_control", "segment_tags"):
+    for g in ("vector", "reference_encode", "round_trip", "timed_audit", "value_control", "late_control", "recompute_control",
+              "segment_tags"):
         assert gates[g]["passed"], (g, gates[g])
     assert gates["reference_encode"]["segments"] == [0, 2]
     assert not gates["certificate"]["passed"] and "no certificate" in gates["certificate"]["reason"]   # the small point has none
     m = body["metrics"]
     assert m["loop"]["tokens"] == [1, 8] and m["loop"]["tensors"] == 3 and set(m["loop"]["overhead"]) == {1, 8}
-    honest, negative = m["audit"], m["negative_audit"]
+    honest, value, late, rec = m["audit"], m["value_control"], m["late_control"], m["recompute_control"]
     from verity_pous import audit
 
     assert honest["audits_accepted"] == 2 and honest["k"] == audit.CHALLENGES and honest["responder"]["answered"] == 2 * audit.CHALLENGES
     assert set(honest["margin_s"]) >= {"min", "p50", "max"} and honest["limit_ns"] > honest["deadline_ns"]
-    assert negative["audits_accepted"] == 0 and negative["wrong"] > 0
+    limit = m["calibration"]["limit_ns"]
+    assert honest["limit_fixed_before_load"] and honest["limit_ns"] == limit == m["deadline"]["limit_ns"]      # one limit for all
+    assert m["deadline"]["allowance_kind"] == "loopback" and late["limit_ns"] == rec["limit_ns"] == limit
+    assert len(honest["records"]) == 2 and all(len(r["source"]) == 64 and len(r["answers"]) == audit.CHALLENGES
+                                               for r in honest["records"])                                    # re-derivable
+    assert value["audits_accepted"] == 0 and value["wrong"] > 0                                               # rejects on value
+    assert late["audits_accepted"] == 0 and late["late"] > 0 and late["wrong"] == 0                           # rejects on time
+    assert rec["wrong"] == 0 and rec["late"] > 0 and rec["dropped_blocks"] == 3                               # recomputed right, late
+    assert rec["margin_s"]["min"] < 0 and "cliff" in rec["pattern"]
+    assert m["loop"]["plain_graphed"][1] == {"graphed": False, "reason": "no CUDA graph backend (CPU stand-in)"}
+    assert all(len(r) == 1 for r in m["loop"]["plain_reps_s"].values())                                      # every rep kept
     assert m["step_floor"] is None and m["nvme"]["block_read_s"]["n"] == 8 and not list(nvme.iterdir())
     names = {r["name"] for r in body["measurements"]}
     assert {"encode_GBps", "decode_overhead_T1", "decode_overhead_T8", "audit_margin_min_s", "nvme_block_read_p99.9_s"} <= names
     assert body["profile"] is not None and not body["profile"]["certified"]
 
 
-def test_a_wrong_encoding_fails_the_reference_gate_though_its_own_leaves_audit(tmp_path):
+def test_a_wrong_encoding_stops_the_run_before_anything_is_timed(tmp_path):
     params = _small()
     body = _bench().BandGpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(params, flip_last=True), base=params,
                                   vectors=_vectors(params))
-    assert body["gates"]["vector"]["passed"] and body["gates"]["timed_audit"]["passed"]
+    assert body["gates"]["vector"]["passed"]
     assert not body["gates"]["reference_encode"]["passed"] and body["gates"]["reference_encode"]["equal"] == [True, False]
     assert not body["gates"]["round_trip"]["passed"]
+    assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]   # a failed gate stops
+    assert "timed_audit" not in body["gates"] and body["profile"] is None
 
 
 def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_is_flagged():
@@ -182,11 +195,14 @@ def test_the_step_floor_is_the_fastest_kernel_and_a_call_under_the_certificate_i
     def step(settings, reps):
         return [4e-4] if settings.get("pair") else times[0]
 
-    fake = harness.Backend("cpu", None, None, None, None, None, None, step)
-    got = harness.step_floor(fake, 2, 483_000)
+    fake = harness.Backend("cpu", None, None, None, None, None, None, step=step, clock_mhz=lambda: 2000.0)
+    facts = {"before": {"clocks.max.sm": "2500"}}
+    got = harness.step_floor(fake, 2, 483_000, facts)
     assert got["fastest"] == "pair" and got["min_s"] == 4e-4 and got["below_certificate"]
-    assert set(got["variants"]) == set(harness.STEP_VARIANTS)
-    assert not harness.step_floor(fake, 2, 300_000)["below_certificate"]
+    assert set(got["variants"]) == set(harness.STEP_VARIANTS) and "upper bound" in got["label"]
+    assert got["sampled_sm_mhz"] == 2000.0 and got["at_max_clock_s"] == 4e-4 * 2000 / 2500                  # scaled to max
+    assert got["at_plus15pct_overclock_s"] == got["at_max_clock_s"] / 1.15
+    assert not harness.step_floor(fake, 2, 300_000, facts)["below_certificate"]
 
 
 def test_the_kernel_settings_and_the_loop_layout():

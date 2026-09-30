@@ -32,9 +32,10 @@ Implementations (`IMPLS`), each adding one class:
     record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only harness
-  (`band_gpu/harness.py`): encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs, timed
-  audits against the native responder under that loop with their deadline margin, the `Π₂` step floor, and optionally one
-  block's read latency from NVMe.
+  (`band_gpu/harness.py`): kernel gates that stop the run when they fail, encode GB/s, `C` resident, decode overhead on a
+  synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable), the limit fixed before any load, timed audits
+  under that loop with value, late and recompute controls, the `Π₂` step floor (an upper bound on an attacker's), and
+  optionally one block's read latency from NVMe.
 """
 
 from __future__ import annotations
@@ -293,6 +294,9 @@ class BandGpu:
 
         body = harness.run(a, ws, out, w_segment=_w_segment, tag_segments=TAG_SEGMENTS, **kw)
         scheme, extra, rows = body.pop("scheme_obj"), body.pop("extra_gaps"), body.pop("tag_rows")
+        if body["metrics"] is None:
+            body["profile"] = None
+            return body
         audit = body["metrics"]["audit"]
         k, limit = int(audit.get("k") or 0), int(audit.get("limit_ns") or 0)
         gate, gaps = certificate_gate(scheme, k, limit)
@@ -449,13 +453,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scratch", default="/tmp/pous-bench", help="large inputs (C, keys), kept out of the run directory")
     ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over the run of record's, as JSON (harness.SWITCHES)")
     ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu: the synthetic loop's token counts T")
-    ap.add_argument("--reps", type=int, default=5, help="band-gpu: timed repetitions after one warm-up; medians are reported")
+    ap.add_argument("--reps", type=int, default=20, help="band-gpu: timed repetitions after one warm-up; every rep is recorded")
     ap.add_argument("--reference-segments", type=int, default=2, help="band-gpu: segments of C checked against verity_pous")
     ap.add_argument("--pings", type=int, default=5000, help="band-gpu: round-trip calibration pings before and after the audits")
     ap.add_argument("--k", type=int, default=0, help="band-gpu: challenges per audit (0: the certificate's)")
     ap.add_argument("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
                     help="band-gpu: the calibration quantile added to the 0.5 ms deadline")
     ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
+    ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
+                    help="band-gpu: time answers on the verifier's clock (wall) or by the responder's reported time (logical)")
     ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu: the verifier process's core")
     ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu: the responder thread's core")
     ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu: T of the POUS forwards run during the audit (0: none)")
@@ -480,15 +486,18 @@ def main(argv: list[str] | None = None) -> int:
     doc["wall_s"] = time.perf_counter() - t
     doc["passed"] = all(g.get("passed") for g in doc["gates"].values())
     (out / "bench-result.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    ewb = doc["metrics"]["ewb"]
+    ewb = (doc.get("metrics") or {}).get("ewb")
     print(json.dumps({"scheme": a.scheme, "impl": a.impl, "weight_set": a.weight_set, "passed": doc["passed"],
-                      "ewb_MBps": {t: round(v / 1e6, 1) for t, v in ewb.items()} if isinstance(ewb, dict) else round(ewb / 1e6, 3),
+                      "ewb_MBps": {t: round(v / 1e6, 1) for t, v in ewb.items()} if isinstance(ewb, dict)
+                      else (round(ewb / 1e6, 3) if ewb is not None else None),
                       "gates": {g: v.get("passed") for g, v in doc["gates"].items()}}), flush=True)
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     if run_dir:
-        rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
-                else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
-        rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}, *measurements]
+        rows = []
+        if doc["passed"]:        # a failed gate publishes no measurement, so no table can show a number from a wrong kernel
+            rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
+                    else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
+            rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}, *measurements]
         result = out.resolve() / "bench-result.json"
         rel = str(result.relative_to(Path(run_dir).resolve())) if result.is_relative_to(Path(run_dir).resolve()) else str(result)
         Path(run_dir, "result.json").write_text(json.dumps({

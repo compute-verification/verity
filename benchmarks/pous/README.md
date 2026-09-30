@@ -26,16 +26,22 @@ Implementations:
 
 - `band-gpu`: the same band and dense kernels, moved into `band_gpu/` with no vLLM dependency, run by the POUS-only
   harness `band_gpu/harness.py` (steps and metrics in its docstring):
-  - gates: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity_pous`'s encoding, and the
-    round trip;
+  - kernel gates first: the pinned whole-segment vector on the device, sampled segments of `C` equal to `verity_pous`'s
+    encoding, and the round trip. A failed gate stops the run: nothing is timed and no measurement is published;
   - encode GB/s, with `C` then resident;
   - decode overhead on a synthetic loop of the weight set's GEMMs at T = 1, 8, 32 and 2048 tokens, against the same GEMMs
-    on plaintext;
-  - timed audits against the native responder, from a verifier process (`band_gpu/live.py`) while POUS forwards run, with
-    the honest deadline margin and the certificate's headroom, and a negative control;
-  - the `Π₂` step floor against the certificate's 483 µs, over the Feistel kernel variants;
+    on plaintext, both forwards from a CUDA graph where the path is capturable, the plain arm's bandwidth against a measured
+    device copy, and every T where it is launch-bound flagged; every rep is recorded;
+  - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote verifier's round trip
+    adds to it), then timed audits against the native responder under POUS forwards, and three controls against that one
+    limit: a value control (one block in ten zeroed), a late control (one answer in ten held past the limit, which must
+    reject on time alone), and a recompute control (a fraction of `C` dropped, each challenged dropped block recomputed on
+    the device from its kept parents, as an adversary would: its latency against the limit is the measured margin);
+  - the `Π₂` step floor, the fastest honest kernel (an upper bound on an attacker's), with the SM clock sampled while it
+    runs, the floor scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;
-  - the GPU's clocks and throttle reasons before and after.
+  - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
+    CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`.
@@ -57,4 +63,6 @@ research run --on <L40S pod> --project verity --source . --cwd source --send imp
   -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=4e49163193c3750dad580f3a28f5428fbb722a8a
 research run --on <L40S pod> --project verity --source . --cwd source --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=qwen2.5-7b/layer0+head]                     # experimental P2
+research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
+  -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]
 ~~~
