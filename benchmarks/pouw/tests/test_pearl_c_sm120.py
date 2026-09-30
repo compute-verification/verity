@@ -175,7 +175,8 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
     assert not problems, problems
     for name in ("gemm_pearlc", "gemm_pearlc_u"):
         assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
-    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "h1_rows_p", "h1_tree"} <= set(funcs)
+    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "h1_rows_p", "h1_tree", "h1_commit",
+            "h1_tiles"} <= set(funcs)
 
 
 @pytest.mark.slow
@@ -237,9 +238,11 @@ KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
 HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm120.cuh")) + \
     (HERE.parent / "pouw_hash" / "h1_sm120.cuh").read_text()
 #: the -h1 kernels (#449's hash.cuh, hash_sm120.cuh and h1_sm120.cuh) the pipeline launches at the dry run's shapes, the
-#: trees under both forms: no pads (every count a power of two) and no level wider than hash_tree_small's
-H1_LAUNCHED = {"h1_rows_p", "h1_tree", "hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p",
-               "hash_tree_leaves"}
+#: trees under every form: no pads (every count a power of two) and no level wider than hash_tree_small's. h1_commit is
+#: not among them: A's 1024-row tree is wider than one CTA folds (width <= 2 * blockDim), and the arm's dry run (m = 32)
+#: launches it
+H1_LAUNCHED = {"h1_rows_p", "h1_tree", "h1_tiles", "seed_line_a", "hash_rows_w", "hash_tree_small", "hash_node_keys",
+               "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
 
 
 def form_rates() -> list[str]:
@@ -305,6 +308,12 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
     if name == "h1_tree":
         return {0: 32 * (2 * i[1] - 1), 1: 32, 2: 4, 3: 32 * i[0]}
+    if name == "h1_commit":
+        return {0: i[0] * i[1], 1: 32 * (2 * i[2] - 1), 2: 32, 3: 4, 4: 32, 5: 104, 6: 32}
+    if name == "h1_tiles":
+        tiles = -(-i[0] // 64) * (i[1] // 64)
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], 3: 32, 4: 32 * tiles, 5: 32, 6: 32 * (2 * i[2] - 1), 7: 32,
+                8: 4}
     if name == "hash_tree_small":
         return {0: 32 * (2 * i[0] - 1), 1: 32 * (i[0].bit_length() - 1)}
     if name == "hash_tree_leaves":
@@ -336,7 +345,8 @@ def threads(name: str, i: list[int]) -> int:
             "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "h1_rows_p": lambda: 32 * i[0],
-            "h1_tree": lambda: i[1] // 2, "hash_tree_leaves": lambda: i[0],
+            "h1_tree": lambda: i[1] // 2, "hash_tree_leaves": lambda: i[0], "h1_commit": lambda: 32 * i[0],
+            "h1_tiles": lambda: 128 * -(-i[0] // 64) * (i[1] // 64),
             "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1,
             "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
 
@@ -442,7 +452,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3)}:
+            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
@@ -624,7 +634,7 @@ def transcript(run: Path, arm: str, label: str) -> tuple[dict, Path]:
 def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy, the
     kernels each role's step needs and no others (nohash: no tree of A, no seed_A, no E_A lines, no hashes), E_A's line key
-    seed_line_a's from A's root, each operand set's E_A lines and call buffers its own, the phases the call's launches split
+    h1_commit's from A's root, each operand set's E_A lines and call buffers its own, the phases the call's launches split
     before, at and after the chain, every footprint allocated; the gate fails (the stand-in computes nothing, so seed_A isn't
     the scheme's and no twin tile matches) naming every output in full; freeing set 0's gated hash calls launches each once
     more, synchronously, and writes its transcript with the trees' frame-b3 sizes; nothing leaks."""
@@ -647,9 +657,9 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     def chain(shape: str, role: str = "hash") -> str:
         return ("gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_b") + sx if fused[shape] else "gemm_pearlc_d" + sx
 
-    commit = ["h1_rows_p", "h1_tree", "seed_line_a", "lines"]
+    commit = ["h1_commit", "lines"]                  # A's trees (256 and 32 rows) fit h1_commit's last CTA
     forming = lambda shape: ["stats_s5", "eprime", "form_s5", words[shape] + sx, "pa"]  # noqa: E731
-    hashes = lambda shape: ([] if fused[shape] else ["hash_msg_v"]) + ["hash_leaf_p", "h1_tree"]  # noqa: E731
+    hashes = lambda shape: ["hash_leaf_p", "h1_tree"] if fused[shape] else ["h1_tiles"]  # noqa: E731
     weight = (["hash_node_keys", "h1_rows_p", "h1_tree", "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
               + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"])
     got, allocs = windows(tmp_path / "dry.jsonl")
@@ -694,14 +704,14 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         assert names == want, mark
         by = {ev.get("name"): ev for ev in evs}
         if mark["role"] != "nohash":
-            seed, lines, gemm = by["seed_line_a"], by["lines"], by[chain(sh)]
-            assert lines["p"][0] == seed["p"][2] and seed["p"][1] == mark["keys"]["unit"]
+            seed, lines, gemm = by["h1_commit"], by["lines"], by[chain(sh)]
+            assert lines["p"][0] == seed["p"][4] and seed["p"][5] == mark["keys"]["unit"]
             assert lines["i"][2] == A.padded({"pre": 256, "dec": 32}[sh])
             assert by["eprime"]["p"][0] == lines["p"][1]
             if fused[sh]:        # the digests gemm_pearlc_b writes under the message key are those the tile leaves read
                 assert gemm["p"][9] == by["hash_leaf_p"]["p"][0] and gemm["p"][11] == mark["keys"]["k_msg"] and not gemm["p"][2]
             else:
-                assert by["hash_msg_v"]["p"][:2] == gemm["p"][2:4] and by["hash_msg_v"]["p"][2] == by["hash_leaf_p"]["p"][0]
+                assert by["h1_tiles"]["p"][:2] == gemm["p"][2:4]
         e = by["eprime"]["p"][0]
         assert ea.setdefault((mark["shape"], mark["set"]), e) == e
     for shape in ("pre", "dec"):

@@ -20,9 +20,9 @@
    a second gemm_pearlc gives the same U; gemm_pearlc_s's and gemm_pearlc_b's y and gemm_pearlc_b's digests equal the
    unfused call's; form_s5_scalar, timed beside form_s5, and the RATE kernels write form_s5's codes).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
-   within it (form_rate less form_rate_nocast); `alt_ms` times the trees' steps under ALT_FORMS.  The timing's keys and
-   domain ids are stand-ins of the same sizes (diagnostic only; the arm's calls run on a real epoch).  NVML's clocks, power
-   and throttle reasons before and after.
+   within it (form_rate less form_rate_nocast); `alt_ms` times the commitment's and hashing's steps under TIMED_FORMS
+   (ALT_FORMS and `p,one`).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic only; the arm's
+   calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
@@ -270,11 +270,15 @@ def cdiv(a: int, b: int) -> int:
 
 TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
 #: the forms of the row leaves and of the trees: `p` h1_rows_p (h1_sm120.cuh: hash_rows_w's warp a row, its loads under
-#: L2::256B) and `one` h1_tree (a whole tree in one launch), or ALT_FORMS, hash_rows_w and hash_nodes a level a launch down to
-#: hash_tree_small, the same bytes: the check reruns them against the fixture, the timing prices them as `alt_ms` and the
-#: arm's gate relaunches under them.  PEARLC_A_FORMS=w,nodes makes those the call's.
-ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "p,one").split(",")
+#: L2::256B) and `one` h1_tree (a whole tree in one launch); `fold` is `one` with, where the tree fits one CTA's top
+#: (decode), A's commitment in one launch (h1_commit: rows, tree, seed_A and E_A's line key) and the unfused call's hashing in
+#: one (h1_tiles: digests, tile leaves and tile tree).  ALT_FORMS, hash_rows_w and hash_nodes a level a launch down to
+#: hash_tree_small, write the same bytes: the check reruns them against the fixture, the timing prices them and `one` as
+#: `alt_ms`, and the arm's gate relaunches under them.  PEARLC_A_FORMS=w,nodes makes those the call's.
+ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "p,fold").split(",")
 ALT_FORMS = ("w", "nodes")
+TIMED_FORMS = (ALT_FORMS, ("p", "one"))
+TILES_CTA = 128                                # h1_tiles' threads a CTA: a tile's 2 x 64 digests
 #: h1_tree's threads a CTA before the last CTA's roots need more: 64 CTAs of 64 cover A's 8,192 rows, 128 the tile tree's 16,384
 TREE_CTA = 64
 
@@ -334,9 +338,9 @@ class Pipeline:
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, and `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
-    BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a`.  `rows_form`
-    and `tree_form` pick the kernels of the trees' row leaves and levels (ROWS_FORM and TREE_FORM, or ALT_FORMS) for the steps
-    made after they're set."""
+    BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a` (h1_commit under
+    `fold`).  `rows_form` and `tree_form` pick the kernels of the trees' row leaves and levels (ROWS_FORM and TREE_FORM, or
+    ALT_FORMS) for the steps made after they're set."""
 
     GEMM_SMEM: dict[str, int] = {}
 
@@ -407,7 +411,7 @@ class Pipeline:
         is zero between launches).  `nodes` (level 0 written, pads included): hash_nodes a level at a time down to TREE_SMALL
         nodes, then hash_tree_small for the rest in one launch."""
         d, base, lk = self.dev, self.b[f"tree_{tag}"], self.b[f"keys_{tag}"]
-        if self.tree_form == "one":
+        if self.tree_form in ("one", "fold"):
             width = pow2(count)
             grid, t = tree_grid(width, leaves is not None)
             smem = 32 * (min(width, 2 * t) + 32)
@@ -448,6 +452,21 @@ class Pipeline:
         return [(f"hash_rows_{tag}", lambda: d.launch(kernel, cdiv(count, warps), 32 * warps, smem,
                                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
+
+    def commit_a(self) -> list[tuple[str, object]]:
+        """A's commitment: its row tree, then seed_A and E_A's line key from the root (seed_line_a); under `fold`, where the
+        tree fits h1_rows_p's last CTA (decode), h1_commit, all of it in one launch."""
+        d, b, rb, mr, kk = self.dev, self.b, self.row_bytes, self.m_real, self.keys
+        warps, width = 1 if mr <= d.sms else ROWS_WARPS, pow2(mr)
+        if self.tree_form == "fold" and self.rows_form == "p" and width <= 64 * warps:
+            smem = max(4 * warps * rows_w_words(rb), 32 * (width + 32))
+            if smem > 48 * 1024:
+                d.ck("cuFuncSetAttribute", d.fn("h1_commit"), MAX_DYN, smem)
+            return [("commit_a", lambda: d.launch("h1_commit", cdiv(mr, warps), 32 * warps, smem,
+                                                  p=(b["xa"], b["tree_a"], kk["dom_a"], b["ctr_a"], b["line_a"], kk["unit"],
+                                                     b["seed_a"]), i=(mr, rb, width)))]
+        return self.row_tree("a", "xa", mr, "dom_a") + [
+            ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
 
     def form_scalar_launch(self, tag: str) -> None:
         b, rows = self.b, self.m if tag == "a" else self.n
@@ -545,15 +564,19 @@ class Pipeline:
         mr, kk, tiles = self.m_real, self.keys, self.tiles
         epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
         unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
-        commit = self.row_tree("a", "xa", mr, "dom_a") + [
-            ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
+        commit = self.commit_a()
+        one, tw = self.tree_form in ("one", "fold"), pow2(tiles)
         hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + [
                    ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, 32), 128, p=(b["digests"], b["leaves"], kk["k_leaf"]),
                                                   i=(mr, n))),
-                   *([] if self.tree_form == "one" else [
+                   *([] if one else [
                        ("tree_leaves_t", lambda: d.launch("hash_tree_leaves", cdiv(tiles, 128), 128,
                                                           p=(b["leaves"], b["tree_t"], kk["dom_t"]), i=(tiles,)))]),
-                   ("tree_t", lambda: self.levels("t", tiles, "dom_t", leaves="leaves" if self.tree_form == "one" else None))]
+                   ("tree_t", lambda: self.levels("t", tiles, "dom_t", leaves="leaves" if one else None))]
+        if self.tree_form == "fold" and not self.fused and tw <= 2 * TILES_CTA:
+            hashing = [("tiles_t", lambda: d.launch("h1_tiles", tiles, TILES_CTA, 32 * max(132, tw + 32),
+                                                    p=(b["c"], b["u"], b["digests"], kk["k_msg"], b["leaves"], kk["k_leaf"],
+                                                       b["tree_t"], kk["dom_t"], b["ctr_t"]), i=(mr, n, tw)))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
         plain = [("plainq_a", lambda: d.launch("plainq", m, 256, p=(b["xa"], b["qa"], b["sa"]), i=(m, k))),
                  ("gemm_plain", lambda: self.gemm("gemm_plain", "qa", "qb", m, n, out=(None, None, "y_plain"), rs=b["sa"], cs=b["sb"])),
@@ -818,11 +841,12 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             out["ratio_vs_own_plain_gemm"] = {"call_e2e": round(e2e / fastest, 4), "no_hash_e2e": round(e2e_nh / fastest, 4),
                                               "chain_only": round(med["gemm_ct"] / fastest, 4)}
     if gates["pearl_c"]:
-        alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
-        alt.rows_form, alt.tree_form = ALT_FORMS
-        out["alt_forms"] = "+".join(ALT_FORMS)
-        out["alt_ms"] = {nm: round(statistics.median(dev.timed(f, reps)), 4) for nm, p, f in alt.steps()
-                         if p in ("commit", "hashing") and nm.startswith(("hash_rows", "tree_"))}
+        out["alt_ms"] = {}
+        for forms in TIMED_FORMS:
+            alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
+            alt.rows_form, alt.tree_form = forms
+            out["alt_ms"].update({f"{nm}@{','.join(forms)}": round(statistics.median(dev.timed(f, reps)), 4)
+                                  for nm, p, f in alt.steps() if p in ("commit", "hashing")})
     return out
 
 
