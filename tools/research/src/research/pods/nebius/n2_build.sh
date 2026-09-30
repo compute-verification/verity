@@ -159,6 +159,8 @@ EOF
   push_attempt "$run_id"
   ssh "$N1" "KUBECONFIG=\$HOME/.kube/config /workspace/jobs/venv312/bin/python $DISPATCH submit config-run n2-build/$KEY --tree $TREE --task 1 \
     $(printf '%q ' "${COMMIT_ARGS[@]}")"
+  # node 1 holds the row, the run and the Attempt now (node2-ops: delete a Build's outputs once they're back); the tree stays for reuse
+  rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
   echo "n2-build $KEY: Build $run_id on node 2, Commit submitted on node 1"
 }
 
