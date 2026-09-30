@@ -182,7 +182,7 @@ def test_the_tp2_config_run_s_commit_decides_by_its_one_run(tmp_path, commit_pas
     monkeypatch.setattr(R_, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
     monkeypatch.setattr(R_, "tp_manifest_complete", lambda d: True)
     monkeypatch.setattr(R_, "applicable_taps", lambda man, ck: [])
-    Path(t.hidden_so).parent.mkdir(parents=True, exist_ok=True)
+    t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")      # never the host's pod-layout build (unreadable to other users on node 1)
     Path(t.hidden_so).touch()
     ran = []
     monkeypatch.setattr(t, "manifest_global", lambda *a: ran.append("manifest_global") or 0)
