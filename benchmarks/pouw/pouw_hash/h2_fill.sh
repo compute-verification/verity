@@ -3,7 +3,7 @@
 # GPU 2 (hashing, bc-7442ca43): the -h2 hash bench on die @DIE@ (@UUID@) at the 13 panel shapes (hashing-forms-by-shape.md's),
 # for the served path's per-die hashing numbers; -h1 beside it in the same process, both variants. Untimed screen: diagnostic
 # CUDA-event and CUDA-graph medians at the node's clocks (locked-2100 unless the clock record says otherwise), not panel rows.
-# Instantiated from benchmarks/pouw/pouw_hash/h2_fill.sh (sed @DIE@, @UUID@, @SHIP@, @CUBIN@, @SRC@).
+# Instantiated from benchmarks/pouw/pouw_hash/h2_fill.sh, its placeholders filled by sed.
 # Ship: @SHIP@ (h2_ship.sh at @SRC@: pearl_c_sm120.cubin sha256 @CUBIN@, the in-kernel -h2 segment keys of 997ac6bd, and
 # #596's decode spread). Each chunk is one shape: PASSES fresh processes of h2_bench.py, each run.py's fixture check, then per
 # (variant, format) the bit-exact gate of every hashed buffer (sampled, fixed seed) before any timing, then timing rounds for
