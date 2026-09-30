@@ -174,16 +174,61 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
     assert pouw == (SKY / "kueue-pouw.yaml").read_text()
 
 
-def test_every_template_runs_from_a_job_private_tree_and_bootstraps_outside_it():
+def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
+    """uid 1000 can't write the synced tree, so every task runs from a copy. vLLM tasks share one copy per tree content (their taps
+    then compile once) and bootstrap through vllm_bootstrap.sh; prover tasks, which write into their tree, keep one copy per pod."""
     for f in sorted((SKY / "jobs").glob("*.yaml")):
         t = f.read_text()
         tasks = t.count("\nsetup: |")
-        assert t.count('JOB_SRC=/workspace/jobs/src/$(hostname)') == tasks >= 1, f.name        # uid 1000 can't write the synced tree
-        assert t.count("export SRC=/workspace/jobs/src/$(hostname)") == tasks, f.name
-        for line in (ln for ln in t.replace("\\\n", " ").splitlines() if "pod_bootstrap.sh" in ln):
-            assert "env -u REPO" in line and re.search(r'--out "?/workspace/jobs/', line), (f.name, line)
+        if f.stem.startswith("prover-"):
+            assert t.count('JOB_SRC=/workspace/jobs/src/$(hostname)') == tasks >= 1, f.name
+            assert t.count("export SRC=/workspace/jobs/src/$(hostname)") == tasks, f.name
+            continue
+        assert t.count('job_tree.sh" "$SRC")') == t.count('job_tree.sh" --mine)') == tasks >= 1, f.name
+        assert "pod_bootstrap.sh" not in t and t.count('vllm_bootstrap.sh" ') == tasks, f.name
+        for line in (ln for ln in t.splitlines() if 'vllm_bootstrap.sh" ' in ln):
+            assert re.search(r'--out "?/workspace/jobs/', line), (f.name, line)
     capture = (SKY / "jobs" / "port-capture.yaml").read_text()
-    assert "pod_bootstrap.sh --cpu --out" in capture                                           # a capture needs no native taps
+    assert 'vllm_bootstrap.sh" --cpu --out' in capture and "pod-$(hostname)" in capture     # no native taps; $CMD gets its own copy
+
+
+def test_a_job_tree_is_one_copy_per_content_and_a_passed_bootstrap_skips_the_lock(tmp_path):
+    """job_tree.sh: two pods with the same synced tree get the same copy, made once; a changed file makes a new one. vllm_bootstrap.sh:
+    the second call with the same tree, arguments and venv skips pod_bootstrap.sh without opening the host-wide lock."""
+    import os
+    import shutil
+    import subprocess
+    synced = tmp_path / "synced"
+    sky = synced / "tools/research/src/research/pods/nebius/sky"
+    sky.mkdir(parents=True)
+    for s in ("job_tree.sh", "vllm_bootstrap.sh"):
+        shutil.copy(SKY / s, sky / s)
+    ops = synced / "integrations/vllm/verity_vllm/ops"
+    ops.mkdir(parents=True)
+    (ops / "pod_bootstrap.sh").write_text('echo run >> "$WORK/count"; echo BOOTSTRAP-OK\n')
+    jobs, trees = tmp_path / "jobs", tmp_path / "jobs" / "src"
+    (jobs / "venv312/lib/python3.12/site-packages/torch").mkdir(parents=True)
+    env = {**os.environ, "VY_JOB_TREES": str(trees), "VY_JOBS": str(jobs), "HF_HOME": str(tmp_path / "hf")}
+
+    def tree(src: Path) -> str:
+        return subprocess.run(["bash", str(src / "tools/research/src/research/pods/nebius/sky/job_tree.sh"), str(src)], env=env,
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    a, b = tree(synced), tree(synced)
+    assert a == b and Path(a, ".copied").exists() and Path(a).parent == trees
+    assert subprocess.run(["bash", str(sky / "job_tree.sh"), "--mine"], env=env, capture_output=True, text=True, check=True).stdout.strip() == a
+    (synced / "integrations/vllm/new.py").write_text("x = 1\n")
+    assert tree(synced) != a
+
+    boot = Path(a) / "tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh"
+    first = subprocess.run(["bash", str(boot), "--cases", "B0", "--cpu", "--out", str(jobs / "b")], env=env, capture_output=True, text=True, check=True)
+    assert first.stdout.strip().endswith("BOOTSTRAP-OK") and (jobs / "count").read_text() == "run\n"
+    (jobs / ".vllm-bootstrap.lock").unlink()
+    again = subprocess.run(["bash", str(boot), "--cases", "B0", "--cpu", "--out", str(jobs / "b")], env=env, capture_output=True, text=True, check=True)
+    assert "cached" in again.stdout and again.stdout.strip().endswith("BOOTSTRAP-OK")
+    assert (jobs / "count").read_text() == "run\n" and not (jobs / ".vllm-bootstrap.lock").exists()      # no rerun, no lock taken
+    other = subprocess.run(["bash", str(boot), "--cases", "B1", "--cpu", "--out", str(jobs / "b")], env=env, capture_output=True, text=True, check=True)
+    assert "cached" not in other.stdout and (jobs / "count").read_text() == "run\nrun\n"                  # another role bootstraps
 
 
 def test_submit_names_the_tools_it_is_missing(tmp_path):
