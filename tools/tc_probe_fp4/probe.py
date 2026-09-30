@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import multiprocessing as mp
 import os
@@ -153,6 +154,20 @@ def build(arch: str, out: Path, source: str = "mma_fp4.cu") -> tuple[Path, str]:
     nvcc = subprocess.run([nvcc_bin(), "--version"], capture_output=True, text=True, check=True).stdout.strip().splitlines()[-2:]
     subprocess.run([nvcc_bin(), "-O2", *arch_flags(arch), "-Xcompiler", "-fPIC", "-shared", "-o", str(so), str(HERE / source)], check=True)
     return so, " / ".join(line.strip() for line in nvcc)
+
+
+def prebuilt(path: str) -> tuple[Path, str]:
+    """A library ``build`` produced on another host (``--library``; the cluster's job containers have no CUDA toolkit): the path
+    and its toolchain identity (``<so>.nvcc``, else the ``nvcc`` of a ``build.json`` beside it) plus its sha256."""
+    so = Path(path)
+    sidecar, record = Path(f"{so}.nvcc"), so.parent / "build.json"
+    if sidecar.exists():
+        ident = sidecar.read_text().strip()
+    elif record.exists():
+        ident = json.loads(record.read_text()).get("nvcc") or "unknown toolchain"
+    else:
+        ident = "unknown toolchain"
+    return so, f"{ident} (prebuilt {so.name}, sha256 {hashlib.sha256(so.read_bytes()).hexdigest()})"
 
 
 def sass_check(so: Path) -> dict:
@@ -1099,6 +1114,8 @@ def main() -> int:
     ap.add_argument("--golden-per-family", type=int, default=60)
     ap.add_argument("--families", default=None, help="comma list (default all)")
     ap.add_argument("--sass-check", action="store_true")
+    ap.add_argument("--library", default=None, help="load this library (a build of the same source and arch on a host with the CUDA "
+                    "toolkit) instead of compiling")
     args = ap.parse_args()
     # the remote runner passes argv without a shell: `$RESEARCH_RUN_DIR` arrives literally and is expanded here
     args.replay_autoproof = [os.path.expandvars(p) for p in args.replay_autoproof]
@@ -1112,7 +1129,7 @@ def main() -> int:
     if args.chain2 and not tcgen05:
         ap.error("--chain2 is a tcgen05 option")
 
-    so, nvcc = build(args.arch, out, SOURCE[instr])
+    so, nvcc = prebuilt(os.path.expandvars(args.library)) if args.library else build(args.arch, out, SOURCE[instr])
     probe = Probe(so)
     if tcgen05 and args.smem_strides:
         probe.smem = dict(zip(("lbo_a", "sbo_a", "lbo_b", "sbo_b"), (int(x) for x in args.smem_strides.split(","))))
