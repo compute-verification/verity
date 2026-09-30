@@ -343,6 +343,23 @@ def gemm_coordinate_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     return kernel
 
 
+def block_scaled_coordinate_kernel(steps: Mapping[Any, tuple[BlockScaledAlignAdd, Callable[..., Any]]]) -> Callable[..., Any]:
+    """`GemmCoordinateNvf4_v1` / `GemmCoordinateMxf4_v1{K, DOT}` for the ``DOT`` steps in ``steps`` (by identity; each with its
+    model and total step kernel): K/64 steps from `+0`, then `cvt.rn.bf16.f32`."""
+
+    def kernel(x: np.ndarray, w: np.ndarray, sx: np.ndarray, sw: np.ndarray, *, K: int, DOT: Any):
+        entry = steps.get(DOT)
+        if entry is None:
+            return NotImplemented
+        model, fire = entry
+        ns = model.scales_per_step
+        acc, declined = chain_batch(lambda acc, *ops: fire(model, acc, *ops), model.k, K // model.k, x, w, sx, sw,
+                                    per_step=(model.k, model.k, ns, ns))
+        return f2fp_bf16_batch(acc)[0], declined
+
+    return kernel
+
+
 def gemm_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     """`Gemm_v2{K, N, DOT}`: ``x (B, K)``, ``w (B, N, K)`` -> ``(B, N)``, one coordinate per output."""
     coord = gemm_coordinate_kernel(steps)
