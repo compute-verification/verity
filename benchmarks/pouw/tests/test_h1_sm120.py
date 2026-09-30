@@ -4,7 +4,8 @@ another): A's row leaves at every alignment against `verity.commitments`' frame-
 level keys, the tile tree's own leaves, the levels above the CTAs' roots in the last CTA) against #449's kernels level for
 level and `MerkleTree`'s root, with seed_A at A's root against the scheme's derivation; and decode's commitments in one
 launch each (h1_commit: A's row leaves, tree, seed_A and E_A's line key; h1_tiles: the message digests, tile leaves and tile
-tree) against the same references and hash_msg_v's and hash_leaf_p's."""
+tree) against the same references and hash_msg_v's and hash_leaf_p's; the level-key table (h1_level_keys) against
+hash_node_keys, and the three tree kernels with their level keys read from it."""
 from __future__ import annotations
 
 import ctypes as C
@@ -67,7 +68,8 @@ def build() -> C.CDLL:
         f"  for (int b = 0; b < grid; b++) {{\n"
         f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
         f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"
-        f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in ("h1_rows", "h1_rows_p", "h1_tree", "h1_commit", "h1_tiles"))
+        f"    for (auto& th : ts) th.join();\n  }}\n}}\n"
+        for k in ("h1_rows", "h1_rows_p", "h1_level_keys", "h1_tree", "h1_commit", "h1_tiles"))
     out = Path(tempfile.mkdtemp(prefix="h1-sm120-simt-"))
     (out / "twin.cpp").write_text(T._source().replace(T.PRELUDE, T.PRELUDE + EXTRA, 1) + body + runs)
     subprocess.run([cxx, "-O1", "-std=c++20", "-pthread", "-shared", "-fPIC", "-o", str(out / "twin.so"), str(out / "twin.cpp")],
@@ -133,6 +135,33 @@ def reference(tree: bytes, count: int, width: int, dom: bytes, leaves: bytes | N
     return ref.raw, keys.raw[:32 * depth]
 
 
+def level_keys(dom: bytes, width: int, table: str | None) -> tuple[int | C.Array, object]:
+    """The level-key pointer of h1_tree, h1_commit and h1_tiles and what keeps it alive: 0 (`table` None: from the domain
+    id), hash_node_keys' keys of `dom` ("keys"), or those with every byte flipped ("flipped"); a level past the tree's too."""
+    if table is None:
+        return 0, None
+    depth = width.bit_length() - 1
+    keys = T.buffer(32 * (depth + 1))
+    T.launch("hash_node_keys", 1, 32, [keys, T.buffer(dom)], [depth + 1])
+    if table == "flipped":
+        keys = T.buffer(bytes(x ^ 0xFF for x in keys.raw))
+    return C.addressof(keys), keys
+
+
+@pytest.mark.parametrize("n,depth", [(1, 0), (1, 1), (3, 6), (2, 22), (9, 3)])
+def test_h1_level_keys_is_hash_node_keys_per_domain(n, depth):
+    """The table over n domains (more than one CTA's threads at 9 x 3 and 2 x 22 on CTAs of 16): each domain's row the
+    level keys hash_node_keys writes for it, and nothing written past the table."""
+    doms = [CommitmentDomain(BINDING, j, RangeIndexedDomain(1 << depth), hash="blake3").domain_id for j in range(n)]
+    table = T.buffer(32 * n * depth + 32)
+    launch("h1_level_keys", -(-n * depth // 16), 16, [T.buffer(b"".join(doms)), table], [n, depth])
+    for j, dom in enumerate(doms):
+        want = T.buffer(32 * max(1, depth))
+        T.launch("hash_node_keys", 1, 32, [want, T.buffer(dom)], [depth])
+        assert table.raw[32 * depth * j:32 * depth * (j + 1)] == want.raw[:32 * depth]
+    assert table.raw[32 * n * depth:] == bytes(32)
+
+
 def grid(width: int, cta: int, leaves: bool) -> tuple[int, int]:
     """run.py's Pipeline.tree_grid."""
     t = max(1, min(width // 2, cta))
@@ -142,14 +171,19 @@ def grid(width: int, cta: int, leaves: bool) -> tuple[int, int]:
     return g, (min(width, 1024) if g == 1 and leaves else t)
 
 
+TABLES = [None, "keys", "flipped"]
+
+
 @pytest.mark.parametrize("count", [1, 2, 3, 5, 32, 100, 128, 256, 1000])
 @pytest.mark.parametrize("cta", [1, 4, 64])
 @pytest.mark.parametrize("tile", [False, True])
-def test_h1_tree_is_the_frame_b3_tree_in_one_launch(count, cta, tile):
+@pytest.mark.parametrize("table", TABLES)
+def test_h1_tree_is_the_frame_b3_tree_in_one_launch(count, cta, tile, table):
     """A tree over `count` leaves at level 0 (A's rows), or with `tile` over the tile tree's 32-byte values with its leaves
     hashed in the launch: every node and level key equal to #449's kernels', the root to MerkleTree's, on one CTA or on up to
     2 × threads CTAs with the last CTA's levels (cta = 1 and 4 at these widths), and the counter back at zero after it; A's
-    tree with seed_A, its line key and jackpot key at the root as the scheme derives them."""
+    tree with seed_A, its line key and jackpot key at the root as the scheme derives them.  The level keys computed, or read
+    from a table (level_keys): the same tree, and a flipped table's keys in every level above level 0."""
     width = 1 << max(0, (count - 1).bit_length())
     d = CommitmentDomain(BINDING, 7, RangeIndexedDomain(count), hash="blake3")
     vals = [data(f"v {count} {i}", 32) for i in range(count)]
@@ -162,9 +196,15 @@ def test_h1_tree_is_the_frame_b3_tree_in_one_launch(count, cta, tile):
     dom, ctr, keys, out = T.buffer(d.domain_id), T.buffer(4), T.buffer(32 * 32), T.buffer(96)
     salt, root_b = data("salt", 32), data("root-B", 32)
     sp = [0, 0, 0, 0] if tile else [out, T.buffer(SEED_KEY), T.buffer(salt), T.buffer(root_b)]
-    launch("h1_tree", g, t, [tree, dom, ctr, T.buffer(b"".join(vals)) if tile else 0, *sp, keys], [count, width, 9],
+    lk, lk_buf = level_keys(d.domain_id, width, table)
+    launch("h1_tree", g, t, [tree, dom, ctr, T.buffer(b"".join(vals)) if tile else 0, *sp, keys, lk], [count, width, 9],
            smem=32 * (s + 32))
-    assert tree.raw == want and keys.raw[:len(want_keys)] == want_keys and ctr.raw[:4] == bytes(4)
+    assert ctr.raw[:4] == bytes(4)
+    if table == "flipped":
+        assert keys.raw[:len(want_keys)] == lk_buf.raw[:len(want_keys)]
+        assert tree.raw[:32 * width] == want[:32 * width] and (width == 1 or tree.raw[-32:] != want[-32:])
+        return
+    assert tree.raw == want and keys.raw[:len(want_keys)] == want_keys
     root = MerkleTree(d, dict(enumerate(vals)), lambda _: TILE if tile else ROW).commitment.root
     assert tree.raw[-32:] == root
     if not tile:
@@ -173,10 +213,12 @@ def test_h1_tree_is_the_frame_b3_tree_in_one_launch(count, cta, tile):
 
 @pytest.mark.parametrize("count,rb,warps", [(1, 36, 1), (3, 4096, 1), (5, 987, 2), (32, 32768, 1), (33, 4096, 1), (64, 64, 1),
                                             (100, 1040, 2)])
-def test_h1_commit_is_a_s_tree_and_seed_in_one_launch(count, rb, warps):
+@pytest.mark.parametrize("table", TABLES)
+def test_h1_commit_is_a_s_tree_and_seed_in_one_launch(count, rb, warps, table):
     """A's rows (one to 100, decode's 32 of k = 8,192, unaligned lengths, pads) hashed, built into the tree by the last CTA
     and seed_A and E_A's line key derived at its root in one launch: every node equal to #449's kernels' over the frame-b3
-    row leaves, the root to MerkleTree's, seed_A and the line key the scheme's, and the counter back at zero."""
+    row leaves, the root to MerkleTree's, seed_A and the line key the scheme's, and the counter back at zero.  The level keys
+    computed or read from a table: the same bytes, and under a flipped table another root (above one row)."""
     width = 1 << max(0, (count - 1).bit_length())
     grid, block = -(-count // warps), 32 * warps
     assert width <= 2 * block
@@ -191,7 +233,11 @@ def test_h1_commit_is_a_s_tree_and_seed_in_one_launch(count, rb, warps):
     tree, dom, ctr, line, seed = T.buffer(32 * (2 * width - 1)), T.buffer(d.domain_id), T.buffer(4), T.buffer(32), T.buffer(32)
     unit = T.buffer(salt + root_b + index.to_bytes(8, "little") + SEED_KEY)
     smem = max(4 * warps * T.rows_w_words(rb), 32 * (width + 32))
-    launch("h1_commit", grid, block, [src, tree, dom, ctr, line, unit, seed], [count, rb, width], smem=smem)
+    lk, _keys = level_keys(d.domain_id, width, table)
+    launch("h1_commit", grid, block, [src, tree, dom, ctr, line, unit, seed, lk], [count, rb, width], smem=smem)
+    if table == "flipped":
+        assert tree.raw[:32 * width] == want[:32 * width] and (width == 1 or tree.raw[-32:] != want[-32:])
+        return
     root = MerkleTree(d, dict(enumerate(vals)), lambda _: ROW).commitment.root
     assert tree.raw == want and tree.raw[-32:] == root and ctr.raw[:4] == bytes(4)
     keys = seed_a_keys(salt, root, root_b, index)
@@ -199,10 +245,12 @@ def test_h1_commit_is_a_s_tree_and_seed_in_one_launch(count, rb, warps):
 
 
 @pytest.mark.parametrize("rows,cols", [(17, 64), (5, 256), (40, 128), (32, 1024), (64, 512), (1, 16384)])
-def test_h1_tiles_is_the_tile_tree_in_one_launch(rows, cols):
+@pytest.mark.parametrize("table", TABLES)
+def test_h1_tiles_is_the_tile_tree_in_one_launch(rows, cols, table):
     """Decode's hashing in one launch, a CTA a tile (one tile to 256, full tiles of 64 rows and partial ones of 1, 5, 17,
     32 and 40 rows, so one to four chunks a leaf): the digests hash_msg_v's, the tile leaves hash_leaf_p's, the tile tree
-    #449's kernels' over them and its root MerkleTree's, and the counter back at zero."""
+    #449's kernels' over them and its root MerkleTree's, and the counter back at zero.  The level keys computed or read from
+    a table: the same bytes, and under a flipped table another root (above one tile)."""
     tiles = -(-rows // 64) * (cols // 64)
     width = 1 << max(0, (tiles - 1).bit_length())
     words = data(f"tiles {rows} {cols}", 8 * rows * cols)
@@ -215,8 +263,12 @@ def test_h1_tiles_is_the_tile_tree_in_one_launch(rows, cols):
     want, _ = reference(bytes(32 * (2 * width - 1)), tiles, width, d.domain_id, ref_leaves.raw)
     dg, leaves, tree = T.buffer(rows * cols), T.buffer(32 * tiles), T.buffer(32 * (2 * width - 1))
     dom, ctr = T.buffer(d.domain_id), T.buffer(4)
-    launch("h1_tiles", tiles, 128, [c, u, dg, k_msg, leaves, k_leaf, tree, dom, ctr], [rows, cols, width],
+    lk, _keys = level_keys(d.domain_id, width, table)
+    launch("h1_tiles", tiles, 128, [c, u, dg, k_msg, leaves, k_leaf, tree, dom, ctr, lk], [rows, cols, width],
            smem=32 * max(132, width + 32))
+    if table == "flipped":
+        assert tree.raw[:32 * width] == want[:32 * width] and (width == 1 or tree.raw[-32:] != want[-32:])
+        return
     root = MerkleTree(d, {t: ref_leaves.raw[32 * t:32 * t + 32] for t in range(tiles)}, lambda _: TILE).commitment.root
     assert dg.raw == ref_dg.raw and leaves.raw == ref_leaves.raw
     assert tree.raw == want and tree.raw[-32:] == root and ctr.raw[:4] == bytes(4)

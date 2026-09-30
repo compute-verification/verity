@@ -128,6 +128,25 @@ DEV void h1_label(const char* s, int n, uint32_t w[16]) {
   }
 }
 
+// level l's key of a frame-b3 tree, keyed(domain id, 0x02 ‖ u8 l): from the level-key table lk (32 B a level) or, at lk = 0,
+// from the domain id
+DEV void h1_level_key(uint64_t lk, const uint32_t* dom, int l, uint32_t* k) {
+  if (lk) load_key(lk + 32ull * l, k);
+  else b3_short<2>(dom, [&](int j) { return j == 0 ? 2u : (uint32_t)l; }, k);
+}
+
+// The level-key table of i0 domains (p0, 32 B each): domain d's key of level l < i1 at p1 + 32 (i1 d + l), hash_node_keys'
+// bytes.  The keys depend on the domain id alone, so one launch before the calls (every unit of an epoch whose domains are
+// known) takes them off each call's path: h1_tree's p9, h1_commit's p7 and h1_tiles' p9 read a domain's row of it.
+extern "C" __global__ void __launch_bounds__(128) h1_level_keys(const Args a) {
+  const int t = blockIdx.x * blockDim.x + threadIdx.x, depth = a.i[1];
+  if (t >= a.i[0] * depth) return;
+  uint32_t dom[8], h[8];
+  load_key(a.p[0] + 32ull * (t / depth), dom);
+  h1_level_key(0, dom, t % depth, h);
+  store_cv(a.p[1] + 32ull * t, h);
+}
+
 // the levels above a run of `width` nodes in sh (a power of two, width <= 2 blockDim), level `l0` of the tree at `off`
 // nodes into it (`first` the run's first node there), each level written back to sh[0 …) and to the tree; the root ends
 // in sh[0].  keys: the level keys in shared memory.
@@ -159,7 +178,8 @@ DEV void h1_levels(uint32_t (*sh)[8], const uint32_t (*keys)[8], uint64_t tree, 
 // 32 (S + 32) bytes.
 // p0 the tree (level 0 at offset 0), p1 the domain id, p2 the counter (u32), p3 tile leaves (32 B each; 0: level 0 holds the
 // leaves), p4 out (seed_A ‖ line key ‖ jackpot key, 96 B; 0: none), p5 blake3("pearl-c/v0/seed-A"), p6 salt, p7 root_B,
-// p8 the level keys out (32 B a level; 0: none); i0 leaves, i1 width (a power of two), i2 the matmul's index
+// p8 the level keys out (32 B a level; 0: none), p9 the level keys in (h1_level_keys' row; 0: from p1); i0 leaves, i1 width
+// (a power of two), i2 the matmul's index
 extern "C" __global__ void __launch_bounds__(1024) h1_tree(const Args a) {
   extern __shared__ uint32_t sh[];
   uint32_t (*keys)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
@@ -171,7 +191,7 @@ extern "C" __global__ void __launch_bounds__(1024) h1_tree(const Args a) {
   uint32_t dom[8];
   load_key(a.p[1], dom);
   for (int l = threadIdx.x; l < depth; l += blockDim.x) {
-    b3_short<2>(dom, [&](int j) { return j == 0 ? 2u : (uint32_t)l; }, keys[l]);
+    h1_level_key(a.p[9], dom, l, keys[l]);
     if (a.p[8] && blockIdx.x == 0) store_cv(a.p[8] + 32ull * l, keys[l]);
   }
   for (int j = threadIdx.x; j < S; j += blockDim.x) {
@@ -244,11 +264,12 @@ DEV bool h1_arrive(uint64_t p) {
 }
 
 // A frame-b3 tree of `width` (a power of two, <= 2 blockDim) over level 0's first `count` nodes, which the grid wrote: the
-// pads, the level keys and every level above (h1_levels), in one CTA.  The root ends in nodes[0].
-DEV void h1_top(uint64_t tree, const uint32_t* dom, uint64_t count, uint64_t width, uint32_t (*nodes)[8], uint32_t (*keys)[8]) {
+// pads, the level keys (from the table lk, or the domain id at lk = 0) and every level above (h1_levels), in one CTA.  The
+// root ends in nodes[0].
+DEV void h1_top(uint64_t tree, const uint32_t* dom, uint64_t count, uint64_t width, uint32_t (*nodes)[8], uint32_t (*keys)[8],
+                uint64_t lk) {
   const int depth = 63 - __clzll((long long)width);
-  for (int l = threadIdx.x; l < depth; l += blockDim.x)
-    b3_short<2>(dom, [&](int j) { return j == 0 ? 2u : (uint32_t)l; }, keys[l]);
+  for (int l = threadIdx.x; l < depth; l += blockDim.x) h1_level_key(lk, dom, l, keys[l]);
   for (uint64_t j = threadIdx.x; j < width; j += blockDim.x) {
     uint32_t h[8];
     if (j >= count) {
@@ -268,7 +289,8 @@ DEV void h1_top(uint64_t tree, const uint32_t* dom, uint64_t count, uint64_t wid
 // the last CTA by p3's counter the tree (h1_top), and from its root seed_A and E_A's line key as seed_line_a derives them.
 // Dynamic shared memory: max(4 warps rows_w_words(rb), 32 (width + 32)) bytes.
 // p0 A's rows, p1 the tree (level 0 at offset 0), p2 the domain id, p3 the counter (u32), p4 E_A's line key out, p5 the unit
-// (salt ‖ root_B ‖ u64 index ‖ blake3("pearl-c/v0/seed-A"), 104 B), p6 seed_A out (0: none); i0 rows, i1 row bytes, i2 width
+// (salt ‖ root_B ‖ u64 index ‖ blake3("pearl-c/v0/seed-A"), 104 B), p6 seed_A out (0: none), p7 the level keys (h1_level_keys'
+// row; 0: from p2); i0 rows, i1 row bytes, i2 width
 extern "C" __global__ void __launch_bounds__(256) h1_commit(const Args a) {
   extern __shared__ uint32_t sh[];
   const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
@@ -285,7 +307,7 @@ extern "C" __global__ void __launch_bounds__(256) h1_commit(const Args a) {
   if (!h1_arrive(a.p[3])) return;
   uint32_t (*keys)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
   uint32_t (*nodes)[8] = keys + 32;
-  h1_top(a.p[1], dom, count, width, nodes, keys);
+  h1_top(a.p[1], dom, count, width, nodes, keys, a.p[7]);
   if (threadIdx.x) return;
   const uint8_t* unit = reinterpret_cast<const uint8_t*>(a.p[5]);
   uint32_t key[8], seed[8], h[8], m[16];
@@ -304,7 +326,8 @@ extern "C" __global__ void __launch_bounds__(256) h1_commit(const Args a) {
 // level 0 (h1_tree's from p3), and in the last CTA by p8's counter the levels above (h1_top).  The digests and the tile
 // leaves are written too.  Launch one CTA a tile; dynamic shared memory 32 max(132, width + 32) bytes.
 // p0 C~ (rows x cols FP32), p1 U, p2 digests out, p3 the message key, p4 tile leaves out, p5 the leaf key, p6 the tile tree
-// (level 0 at offset 0), p7 its domain id, p8 the counter (u32); i0 rows, i1 cols, i2 the tree's width
+// (level 0 at offset 0), p7 its domain id, p8 the counter (u32), p9 its level keys (h1_level_keys' row; 0: from p7); i0 rows,
+// i1 cols, i2 the tree's width
 extern "C" __global__ void __launch_bounds__(128) h1_tiles(const Args a) {
   extern __shared__ uint32_t sh[];
   uint32_t (*dg)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
@@ -377,5 +400,5 @@ extern "C" __global__ void __launch_bounds__(128) h1_tiles(const Args a) {
   }
   if (!h1_arrive(a.p[8])) return;
   uint32_t (*keys)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
-  h1_top(a.p[6], dom, gridDim.x, (uint64_t)a.i[2], keys + 32, keys);
+  h1_top(a.p[6], dom, gridDim.x, (uint64_t)a.i[2], keys + 32, keys, a.p[9]);
 }

@@ -276,8 +276,10 @@ TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_smal
 #: buffers are those the vLLM path (#540) runs by name.  `p` is h1_rows_p (h1_sm120.cuh: hash_rows_w's loads under
 #: L2::256B) and `one` h1_tree (a whole tree in one launch); `fold` is `one` with, where the tree fits one CTA's top
 #: (decode), A's commitment in one launch (h1_commit: rows, tree, seed_A and E_A's line key, step `commit_a`) and the unfused
-#: call's hashing in one (h1_tiles: digests, tile leaves and tile tree, step `tiles_t`).  The check reruns every form but the
-#: call's against the fixture, the timing prices them as `alt_ms`, and the arm's gate relaunches under ALT_FORMS.
+#: call's hashing in one (h1_tiles: digests, tile leaves and tile tree, step `tiles_t`).  Every form's levels read their keys
+#: from `keys_<tag>`, which tree_setup's `node_keys_<tag>` writes outside the call (the unit's; B's, the epoch's).  The check
+#: reruns every form but the call's against the fixture, the timing prices them as `alt_ms`, and the arm's gate relaunches
+#: under ALT_FORMS.
 ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "w,nodes").split(",")
 ALT_FORMS = ("w", "nodes")
 FORMS = (ALT_FORMS, ("p", "one"), ("p", "fold"))
@@ -431,14 +433,15 @@ class Pipeline:
 
     def tree_one(self, tag: str, count: int, dom: str, leaves: str | None = None) -> None:
         """The `one` and `fold` forms' levels: h1_tree, the whole tree in one launch over its leaves (or, from `leaves`, the
-        tile tree's frame-b3 leaves too), level 0's pads included; its counter `ctr_<tag>` is zero between launches."""
-        d, width = self.dev, pow2(count)
+        tile tree's frame-b3 leaves too), level 0's pads included, its level keys read from `keys_<tag>` (tree_setup's); its
+        counter `ctr_<tag>` is zero between launches."""
+        d, b, width = self.dev, self.b, pow2(count)
         grid, t = tree_grid(width, leaves is not None)
         smem = 32 * (min(width, 2 * t) + 32)
         if smem > 48 * 1024:
             d.ck("cuFuncSetAttribute", d.fn("h1_tree"), MAX_DYN, smem)
-        d.launch("h1_tree", grid, t, smem, p=(self.b[f"tree_{tag}"], self.keys[dom], self.b[f"ctr_{tag}"],
-                                              self.b[leaves] if leaves else 0), i=(count, width))
+        d.launch("h1_tree", grid, t, smem, p=(b[f"tree_{tag}"], self.keys[dom], b[f"ctr_{tag}"], b[leaves] if leaves else 0,
+                                              0, 0, 0, 0, 0, b[f"keys_{tag}"]), i=(count, width))
 
     def tree_setup(self, tag: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree's pads and level keys (hash_pad, hash_node_keys): its domain's alone, so once per unit."""
@@ -468,7 +471,7 @@ class Pipeline:
 
     def commit_a(self) -> list[tuple[str, object]]:
         """A's commitment: its row tree, then seed_A and E_A's line key from the root (seed_line_a); under `fold`, where the
-        tree fits h1_rows_p's last CTA (decode), h1_commit, all of it in one launch."""
+        tree fits h1_rows_p's last CTA (decode), h1_commit, all of it in one launch but the level keys (`keys_a`, the unit's)."""
         d, b, rb, mr, kk = self.dev, self.b, self.row_bytes, self.m_real, self.keys
         warps, width = 1 if mr <= d.sms else ROWS_WARPS, pow2(mr)
         if self.tree_form == "fold" and self.rows_form == "p" and width <= 64 * warps:
@@ -477,7 +480,7 @@ class Pipeline:
                 d.ck("cuFuncSetAttribute", d.fn("h1_commit"), MAX_DYN, smem)
             return [("commit_a", lambda: d.launch("h1_commit", cdiv(mr, warps), 32 * warps, smem,
                                                   p=(b["xa"], b["tree_a"], kk["dom_a"], b["ctr_a"], b["line_a"], kk["unit"],
-                                                     b["seed_a"]), i=(mr, rb, width)))]
+                                                     b["seed_a"], b["keys_a"]), i=(mr, rb, width)))]
         return self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
 
@@ -591,7 +594,7 @@ class Pipeline:
         if self.tree_form == "fold" and not self.fused and tw <= 2 * TILES_CTA:
             hashing = [("tiles_t", lambda: d.launch("h1_tiles", tiles, TILES_CTA, 32 * max(132, tw + 32),
                                                     p=(b["c"], b["u"], b["digests"], kk["k_msg"], b["leaves"], kk["k_leaf"],
-                                                       b["tree_t"], kk["dom_t"], b["ctr_t"]), i=(mr, n, tw)))]
+                                                       b["tree_t"], kk["dom_t"], b["ctr_t"], b["keys_t"]), i=(mr, n, tw)))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
         plain = [("plainq_a", lambda: d.launch("plainq", m, 256, p=(b["xa"], b["qa"], b["sa"]), i=(m, k))),
                  ("gemm_plain", lambda: self.gemm("gemm_plain", "qa", "qb", m, n, out=(None, None, "y_plain"), rs=b["sa"], cs=b["sb"])),

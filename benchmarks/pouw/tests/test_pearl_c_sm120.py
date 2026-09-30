@@ -199,8 +199,8 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
     assert not problems, problems
     for name in ("gemm_pearlc", "gemm_pearlc_u"):
         assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
-    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "h1_rows_p", "h1_tree", "h1_commit",
-            "h1_tiles"} <= set(funcs)
+    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "h1_rows_p", "h1_level_keys", "h1_tree",
+            "h1_commit", "h1_tiles"} <= set(funcs)
 
 
 @pytest.mark.slow
@@ -267,6 +267,8 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 #: launches it
 H1_LAUNCHED = {"h1_rows_p", "h1_tree", "h1_tiles", "seed_line_a", "hash_rows_w", "hash_tree_small", "hash_node_keys",
                "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
+#: the one-launch tree kernels' (domain id, level keys) pointer slots
+LEVEL_KEYS = {"h1_tree": (1, 9), "h1_commit": (2, 7), "h1_tiles": (7, 9)}
 
 
 def form_kernels() -> list[str]:
@@ -334,14 +336,15 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: i[0] * i[1], 1: -(-i[0] // 64) * (i[1] // 64) * 32, 2: 32}
     if name in ("hash_rows_w", "h1_rows_p"):
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
+    levels = lambda width: 32 * (width.bit_length() - 1)  # noqa: E731
     if name == "h1_tree":
-        return {0: 32 * (2 * i[1] - 1), 1: 32, 2: 4, 3: 32 * i[0]}
+        return {0: 32 * (2 * i[1] - 1), 1: 32, 2: 4, 3: 32 * i[0], 9: levels(i[1])}
     if name == "h1_commit":
-        return {0: i[0] * i[1], 1: 32 * (2 * i[2] - 1), 2: 32, 3: 4, 4: 32, 5: 104, 6: 32}
+        return {0: i[0] * i[1], 1: 32 * (2 * i[2] - 1), 2: 32, 3: 4, 4: 32, 5: 104, 6: 32, 7: levels(i[2])}
     if name == "h1_tiles":
         tiles = -(-i[0] // 64) * (i[1] // 64)
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], 3: 32, 4: 32 * tiles, 5: 32, 6: 32 * (2 * i[2] - 1), 7: 32,
-                8: 4}
+                8: 4, 9: levels(i[2])}
     if name == "hash_tree_small":
         return {0: 32 * (2 * i[0] - 1), 1: 32 * (i[0].bit_length() - 1)}
     if name == "hash_tree_leaves":
@@ -715,6 +718,13 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls, forms):
             call = copy + commit + forming(sh) + [chain(sh)] + hashes(sh)
             assert all(ev["stream"] == 0 for ev in evs)
             assert names == weight + call + copy + forming(sh) + [chain(sh, "nohash")] + weight + call
+            keys_of: dict[int, int] = {}
+            for ev in evs:      # each one-launch tree reads the level keys hash_node_keys last wrote under its domain
+                if ev.get("name") == "hash_node_keys":
+                    keys_of[ev["p"][1]] = ev["p"][0]
+                elif ev.get("name") in LEVEL_KEYS:
+                    dom, lk = LEVEL_KEYS[ev["name"]]
+                    assert ev["p"][lk] == keys_of[ev["p"][dom]], ev["name"]
             man, _ = transcript(tmp_path / "run", arm.name, mark["shape"])
             neg, _ = transcript(tmp_path / "run", arm.name, mark["shape"], root="negative")
             m, n = man["shape"]["m"], man["shape"]["n"]
