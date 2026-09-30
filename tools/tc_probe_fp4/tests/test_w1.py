@@ -2,8 +2,9 @@
 
 The fake run passes every gate and turns its rates into prices in the unit; a flipped gate word fails the run before anything is
 timed; the SASS loop gate rejects a loop with a missing or an extra watched instruction, and pins add.rn.f32x2's sm_120a lowering
-(two FADDs, no FADD2); the packed add's gate words tell its halves apart; the cast gate's packing (hi operand in the upper byte) is
-pinned; the tool declarations resolve their key params.  With nvcc on the PATH, the real build's loops are
+(two FADDs, no FADD2); the packed add's gate words tell its halves apart; the casts' packing (hi operand in the upper byte or
+nibble) and the E2M1 reference's grid, ties and saturation are pinned; the three-loop split recovers known costs; the tool
+declarations resolve their key params.  With nvcc on the PATH, the real build's loops are
 checked.
 """
 from __future__ import annotations
@@ -44,6 +45,9 @@ def test_fake_run_prices(tmp_path, no_nvcc):
     assert p["f2fp_e4m3x2 per instruction (2 codes)"] == pytest.approx(2 * p["f2fp_e4m3x2 per code"])
     assert p["fadd_f32x2 per word"] == pytest.approx(1024 / 128, rel=1e-6) == p["fadd_pairs per word"]
     assert p["fadd_f32x2 per instruction (2 words)"] == pytest.approx(2 * p["fadd_f32x2 per word"])
+    assert p["f2fp_e2m1x2 per code"] == pytest.approx(1024 / 64, rel=1e-6) == p["f2fp_e2m1x2_x2 per code"]
+    assert p["f2fp_e2m1x2 per instruction (2 codes)"] == pytest.approx(2 * p["f2fp_e2m1x2 per code"])
+    assert "e2m1_split" not in res["prices"]  # no SASS counts without nvcc
 
 
 @pytest.mark.parametrize("op", [10, 11])
@@ -59,7 +63,7 @@ def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
     assert "timing" not in res and "prices" not in res
 
 
-@pytest.mark.parametrize("op", [8, 9])
+@pytest.mark.parametrize("op", [8, 9, 12, 13, 14])
 def test_gate_words_are_not_vacuous(op):
     rows = w1.timing_rows(op, np.random.default_rng(w1.F8.SEED_DEFAULT))
     assert w1.expected_words(op, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
@@ -112,6 +116,45 @@ def test_f2fp_packing_pinned():
         want[k % 8] += ((f << 8) | xs[k]) | (((xs[k] << 8) | f) << 16)
         want[k % 8] += ((g << 8) | xs[k]) | (((xs[k] << 8) | g) << 16)
     assert h[0].tolist() == [w % 2**32 for w in want] and all(want)
+
+
+def test_e2m1_ref_grid_ties_saturation_and_sign():
+    x = np.array([0, 0.25, 0.3, 0.75, 1.25, 1.75, 2.5, 3.5, 5, 5.1, 6, 7, 1e30, -0.0, -0.1, -6, -100], np.float32)
+    assert w1.e2m1_ref(x.view(np.uint32)).tolist() == [0, 0, 1, 2, 2, 4, 4, 6, 6, 7, 7, 7, 7, 8, 8, 15, 15]
+
+
+def test_e2m1_packing_pinned():
+    """f = 1 (code 2), g = 1.25 (a tie, to code 2), and 16 constants from 0.25 in quarter-binade steps, which cross every tie of
+    the grid below 4; byte i of a packed word is Q(f, x), Q(x, f), Q(g, x), Q(x, g) with Q(hi, lo) = code(hi) << 4 | code(lo)."""
+    rows = np.zeros((32, 8), np.uint32)
+    rows[:, 0] = np.float32(1.0).view(np.uint32)
+    rows[:, 1] = np.float32(0.25).view(np.uint32)
+    cx = [0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4, 5, 6]
+    want = [0] * 8
+    for k in range(16):
+        want[k % 8] += (2 << 4 | cx[k]) | (cx[k] << 4 | 2) << 8 | (2 << 4 | cx[k]) << 16 | (cx[k] << 4 | 2) << 24
+    assert w1.f2fp_e2m1_model(1, rows, 16, packed=True)[0].tolist() == [w % 2**32 for w in want]
+    want = [0] * 8
+    for k in range(16):
+        want[k % 8] += (2 << 4 | cx[k]) + (cx[k] << 4 | 2)
+        want[(k + 1) % 8] += (2 << 4 | cx[k]) + (cx[k] << 4 | 2)
+    assert w1.f2fp_e2m1_model(1, rows, 16, packed=False)[0].tolist() == want
+
+
+def test_split_recovers_the_costs():
+    loops = {"f2fp_e2m1x2": {w1.OPS[12][1]: 64, "IADD3": 10, "UIADD3": 1, "UISETP.NE.AND": 1, "BRA.U": 1},
+             "f2fp_e2m1x2_u8": {w1.OPS[13][1]: 64, "LOP3.LUT": 64, "IADD3": 34, "UIADD3": 1, "UISETP.NE.AND": 1, "BRA.U": 1},
+             "f2fp_e2m1x2_x2": {w1.OPS[14][1]: 128, "IADD3": 18, "UIADD3": 1, "UISETP.NE.AND": 1, "BRA.U": 1}}
+    a, b, c = 0.49, 0.52, 0.02
+    rates = {}
+    for op in w1.E2M1_OPS:
+        name, opcode, per_loop, work, _ = w1.OPS[op]
+        n = loops[name]
+        s = sum(v for k, v in n.items() if k != opcode and not k.startswith(("U", "BRA")))
+        rates[name] = per_loop * work / (a * n[opcode] + b * s + c * 3)
+    sp = w1.split({"rates_per_sm_per_clock": rates, "unit_rate_per_sm_per_clock": 1024.0}, loops)
+    assert sp["ok"] and [sp["a_per_cast"], sp["b_per_support"], sp["c_per_uniform"]] == pytest.approx([a, b, c])
+    assert sp["cast_alone_price_per_code"] == pytest.approx(1024 * a / 64)
 
 
 def test_tool_declarations_resolve():

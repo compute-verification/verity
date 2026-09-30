@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """W1 price microbenchmarks on sm_120 (the RTX PRO 6000): issue rates per SM per clock of the dense FP8 atom (f32 and f16
 accumulation), the block-scaled mxf8f6f4 and nvf4 atoms, BF16 and FP16 mma.sync, FP32 FADD and FFMA, the packed add.rn.f32x2 and
-the same adds as plain C pairs, and the E4M3 cast, and the prices W1 reads off them.
+the same adds as plain C pairs, the E4M3 cast and the E2M1 cast (three loops, whose split gives the cast's own cost), and the prices
+W1 reads off them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
 
@@ -14,9 +15,9 @@ their clock label (unlocked unless the operator says otherwise, e.g. locked-2100
 Gates, in order, before anything is timed: the device (``fp8.identity_gate``: one visible device, its UUID, sm_120); the SASS gate
 (each op's loop body holds exactly its instruction, NACC x UNROLL MMAs or 64 scalar instructions, and its full loop composition is
 recorded); the numeric gate (all-ones operands give exact integers for every atom and FADD / FFMA, and for the packed and paired
-adds 1 in the low word and 2 in the high, so a swapped half shows; the cast is checked against
-``fp8.cvt_ref`` on the timing data, and an op whose expected words are all zero fails as vacuous); one block per SM (distinct
-%smid).  A failed gate writes no measurements.  ``--fake-silicon``
+adds 1 in the low word and 2 in the high, so a swapped half shows; the casts are checked against
+``fp8.cvt_ref`` and ``e2m1_ref`` on the timing data, and an op whose expected words are all zero fails as vacuous); one block per
+SM (distinct %smid).  A failed gate writes no measurements.  ``--fake-silicon``
 replaces the device with a model that returns the gate's words and cycles from the Public datasheet rates (a CPU dry run of the
 plumbing, refused under research run); ``--corrupt-word I`` flips one bit of one gate word, and the run must then fail.
 """
@@ -61,15 +62,21 @@ OPS = [
     # sm_120a has no FADD2: each add.rn.f32x2 is two FADDs (sm_100a's ptxas gives one FADD2), and plain C pairs stay FADDs
     ("fadd_f32x2", "FADD", 2 * NCHAIN * SUNROLL, 32, "word"),
     ("fadd_pairs", "FADD", 2 * NCHAIN * SUNROLL, 32, "word"),
+    ("f2fp_e2m1x2", "F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
+    ("f2fp_e2m1x2_u8", "F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
+    ("f2fp_e2m1x2_x2", "F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C", 4 * NCHAIN * 4, 64, "code"),
 ]
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
-           "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate", "fadd_f32x2_rate", "fadd_pairs_rate"]  # w1_prices.cu's KERNELS, in op order
+           "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate", "fadd_f32x2_rate", "fadd_pairs_rate",
+           "f2fp_e2m1_rate", "f2fp_e2m1_u8_rate", "f2fp_e2m1_x2_rate"]  # w1_prices.cu's KERNELS, in op order
+E2M1_OPS = (12, 13, 14)
+E2M1_NK = {12: 2 * NCHAIN, 13: 2 * NCHAIN, 14: 4 * NCHAIN}  # constants per lane in each E2M1 loop
 _WATCHED = re.compile(r"^(?:[A-Z]*MMA|F2FP|F2F|FADD2?|FFMA2?|FMUL2?|UF2FP|UFADD|UFFMA)(?:\.|$)")
 # Public (datasheet) dense rates per SM per clock, the fake device's cycles: RTX PRO 6000 Blackwell, 188 SMs.  Estimated, never output.
 _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 1024, "omma_nvf4": 2048, "hmma_bf16_f32": 512,
               "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64, "f2fp_e4m3x2_u16": 64, "fadd_f32x2": 128,
-              "fadd_pairs": 128}
+              "fadd_pairs": 128, "f2fp_e2m1x2": 64, "f2fp_e2m1x2_u8": 64, "f2fp_e2m1x2_x2": 64}
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
@@ -207,6 +214,43 @@ def f2fp_model(iters: int, rows: np.ndarray, packed: bool = True) -> np.ndarray:
     return h
 
 
+E2M1_GRID = np.array([0, 0.5, 1, 1.5, 2, 3, 4, 6], np.float64)
+
+
+def e2m1_ref(words) -> np.ndarray:
+    """cvt.rn.satfinite.e2m1x2.f32's code of each finite FP32 word: the nearest point of the E2M1 grid, a tie to the even code,
+    |x| > 6 to 6, the sign kept (a negative that rounds to zero is 0x8): the rule GPU 4's ``cast.ref_e2m1`` matched bit for bit on
+    1,041,112 elements (r20260930-072940-33b5)."""
+    w = np.asarray(words, np.uint32)
+    a = np.abs(w.view(np.float32).astype(np.float64))
+    mids = (E2M1_GRID[1:] + E2M1_GRID[:-1]) / 2
+    idx = np.searchsorted(mids, a, side="left")
+    tie = (idx < len(mids)) & (a == mids[np.minimum(idx, len(mids) - 1)])
+    idx = np.minimum(np.where(tie & (idx % 2 == 1), idx + 1, idx), 7)
+    return (idx.astype(np.uint32) | ((w >> 31) << 3)).astype(np.uint32)
+
+
+def f2fp_e2m1_model(iters: int, rows: np.ndarray, nk: int, packed: bool) -> np.ndarray:
+    """h[lane][8] of the E2M1 loops, mod 2^32, with Q(hi, lo) = code(hi) << 4 | code(lo) and x_k = base + k * 2^25 / nk: packed,
+    chain k % 8 adds the word Q(f, x_k) | Q(x_k, f) << 8 | Q(g, x_k) << 16 | Q(x_k, g) << 24; zero-extended, chain k % 8 adds
+    Q(f, x_k) + Q(x_k, f) and chain (k + 1) % 8 the same for g."""
+    rows = np.asarray(rows, np.uint32).reshape(32, 8)
+    h = np.zeros((32, NCHAIN), np.uint32)
+    cx = e2m1_ref(rows[:, 1:2] + np.arange(nk, dtype=np.uint32) * np.uint32((1 << 25) // nk))
+    for it in range(iters):
+        cf, cg = (e2m1_ref(rows[:, 0] + np.uint32(it + off))[:, None] for off in (0, 1 << 21))
+        if packed:
+            w = ((cf << 4) | cx) | (((cx << 4) | cf) << 8) | (((cg << 4) | cx) << 16) | (((cx << 4) | cg) << 24)
+            for k in range(nk):
+                h[:, k % NCHAIN] += w[:, k]
+        else:
+            vf, vg = ((cf << 4) | cx) + ((cx << 4) | cf), ((cg << 4) | cx) + ((cx << 4) | cg)
+            for k in range(nk):
+                h[:, k % NCHAIN] += vf[:, k]
+                h[:, (k + 1) % NCHAIN] += vg[:, k]
+    return h
+
+
 def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     """(THREADS, 16) chk words of one block: all-ones MMA accumulators are k * UNROLL * iters, FADD / FFMA chains SUNROLL * iters."""
     name, _, _, work, _ = OPS[op]
@@ -223,6 +267,8 @@ def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     elif op in (10, 11):
         w[:, 0:2 * NCHAIN:2] = np.float32(SUNROLL * iters).view(np.uint32)
         w[:, 1:2 * NCHAIN:2] = np.float32(2 * SUNROLL * iters).view(np.uint32)
+    elif op in E2M1_OPS:
+        w[:, :NCHAIN] = np.tile(f2fp_e2m1_model(iters, rows, E2M1_NK[op], packed=op != 13), (THREADS // 32, 1))
     else:
         w[:, :NCHAIN] = np.tile(f2fp_model(iters, rows, packed=op == 8), (THREADS // 32, 1))
     return w
@@ -253,6 +299,9 @@ def timing_rows(op: int, rng) -> np.ndarray:
     elif op in (10, 11):
         r[:, :2] = np.float32(rng.uniform(1, 2, (32, 2))).view(np.uint32)
         r[:, 2:4] = np.float32(rng.uniform(2**-10, 2**-9, (32, 2)) * rng.choice([-1, 1], (32, 2))).view(np.uint32)
+    elif op in E2M1_OPS:  # f over every E2M1 code and past saturation, the constants over [0.25, 8); random signs
+        r[:, 0] = np.float32(rng.uniform(0.25, 8, 32) * rng.choice([-1, 1], 32)).view(np.uint32)
+        r[:, 1] = np.float32(rng.uniform(0.25, 0.5, 32) * rng.choice([-1, 1], 32)).view(np.uint32)
     else:
         r[:, 0] = np.float32(rng.uniform(1, 2, 32)).view(np.uint32)
         r[:, 1] = np.float32(rng.uniform(0.25, 0.5, 32)).view(np.uint32)
@@ -267,7 +316,8 @@ def numeric_gate(dev, rng) -> tuple[dict, dict[int, np.ndarray]]:
         chk, _, sm, _ = dev.run(op, GATE_ITERS, rows)
         want = expected_words(op, GATE_ITERS, rows)
         diff = np.argwhere(chk != want[None])
-        res[name] = {"iters": GATE_ITERS, "data": "all-ones" if op in GATE_ROW else "timing rows vs fp8.cvt_ref",
+        ref = "e2m1_ref" if op in E2M1_OPS else "fp8.cvt_ref"
+        res[name] = {"iters": GATE_ITERS, "data": "all-ones" if op in GATE_ROW else f"timing rows vs {ref}",
                      "mismatches": int(len(diff)), "vacuous": not want[:, :NCHAIN].any(),
                      "distinct_sms": int(len(set(sm.tolist()))), "blocks": int(len(sm))}
         if len(diff):
@@ -317,8 +367,35 @@ def prices(tim: dict) -> dict:
         out["price_units"][f"{name} per {per}"] = unit / rate[name]
     out["price_units"]["f2fp_e4m3x2 per instruction (2 codes)"] = 2 * unit / rate["f2fp_e4m3x2"]
     out["price_units"]["fadd_f32x2 per instruction (2 words)"] = 2 * unit / rate["fadd_f32x2"]
+    out["price_units"]["f2fp_e2m1x2 per instruction (2 codes)"] = 2 * unit / rate["f2fp_e2m1x2"]
     out["f16_over_f32_accumulate"] = rate["qmma_e4m3_f16"] / unit
     return out
+
+
+def split(pr: dict, loops: dict[str, dict], ops=E2M1_OPS) -> dict:
+    """F2FP's own cost from three loops (Derived): each loop's SM-clocks per warp per iteration, tau = per_loop * work / rate, solved
+    exactly as tau = a F + b S + c U over its SASS counts: F the cast, U the uniform-datapath and branch instructions, S the rest.
+    The alone price per code is the unit rate times a / 64."""
+    rows, tau = [], []
+    detail = {}
+    for op in ops:
+        name, opcode, per_loop, work, _ = OPS[op]
+        body = loops[name]
+        f = body.get(opcode, 0)
+        u = sum(v for k, v in body.items() if k.startswith(("U", "BRA")))
+        s = sum(body.values()) - f - u
+        t = per_loop * work / pr["rates_per_sm_per_clock"][name]
+        rows.append([f, s, u])
+        tau.append(t)
+        detail[name] = {"F": f, "S": s, "U": u, "tau": t}
+    try:
+        a, b, c = (float(v) for v in np.linalg.solve(np.array(rows, float), np.array(tau)))
+    except np.linalg.LinAlgError:
+        return {"ok": False, "detail": "singular loop counts", "loops": detail}
+    work = OPS[ops[0]][3]
+    return {"ok": True, "model": "tau = a F + b S + c U, SM-clocks per warp per loop iteration", "loops": detail,
+            "a_per_cast": a, "b_per_support": b, "c_per_uniform": c, "cast_alone_codes_per_sm_per_clock": work / a,
+            "cast_alone_price_per_code": pr["unit_rate_per_sm_per_clock"] * a / work}
 
 
 # --- main ---------------------------------------------------------------------------------------------------------------------------
@@ -359,6 +436,8 @@ def run(args) -> tuple[int, dict]:
         return finish(out, args, res, failures, ident, t0)
     res["timing"] = timing(dev, rows_t, args.reps, args.target_cycles, ident.get("gpu_uuid"))
     res["prices"] = prices(res["timing"])
+    if res["sass"].get("kernels"):
+        res["prices"]["e2m1_split"] = split(res["prices"], {k: r["loop"] for k, r in res["sass"]["kernels"].items()})
     return finish(out, args, res, failures, ident, t0)
 
 
@@ -375,6 +454,12 @@ def finish(out: Path, args, res: dict, failures: list[str], ident: dict | None, 
         meas += [{"name": f"price.{k}", "value": v, "unit": "W1 units", "label": label} for k, v in (pr.get("price_units") or {}).items()]
         if pr:
             meas.append({"name": "ratio.qmma_e4m3_f16_over_f32", "value": pr["f16_over_f32_accumulate"], "unit": "1", "label": label})
+        sp = pr.get("e2m1_split") or {}
+        if sp.get("ok"):
+            derived = "Derived (three-loop split of Measured " + res["clocks"] + " rates over their SASS counts)"
+            meas += [{"name": f"split.e2m1.{k}", "value": sp[k], "unit": u, "label": derived}
+                     for k, u in (("a_per_cast", "SM-clocks/warp instruction"), ("b_per_support", "SM-clocks/warp instruction"),
+                                  ("c_per_uniform", "SM-clocks/warp instruction"), ("cast_alone_price_per_code", "W1 units"))]
         doc = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": run_id, "arch": F8.ARCH,
                "sku": (ident or {}).get("device"), "driver": (ident or {}).get("driver"), "gpu_uuid": (ident or {}).get("gpu_uuid"),
                "uuid_checked": (ident or {}).get("uuid_checked"), "nvcc": res.get("nvcc"), "clocks": res["clocks"],

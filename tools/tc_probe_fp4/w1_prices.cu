@@ -16,6 +16,9 @@
 //    9  f2fp_u16_rate          the same, each result zero-extended (+ one 3-input add per two converts)            64 elements
 //   10  fadd_f32x2_rate        add.rn.f32x2 (PTX 8.6; sm_120a lowers each to two FADD, sm_100a to one FADD2)       64 words
 //   11  fadd_pairs_rate        two independent C-level f32 adds per chain pair (does ptxas pair them on its own?)   32 words
+//   12  f2fp_e2m1_rate         cvt.rn.satfinite.e2m1x2.f32, four to a word (ptxas chains them through MERGE_C)     64 elements
+//   13  f2fp_e2m1_u8_rate      the same, each result zero-extended (+ one LOP3 and half a 3-input add per convert)  64 elements
+//   14  f2fp_e2m1_x2_rate      op 12 with 32 constants: twice the converts over the same per-iteration overhead     64 elements
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -270,9 +273,85 @@ __global__ void __launch_bounds__(THREADS) fadd_pairs_rate(const uint32_t* __res
     for (int j = 0; j < 2 * NCHAIN; j++) chk[(size_t)tid * CHK + j] = __float_as_uint(x[j]);
 }
 
+// Four E2M1 pairs in one word, as an FP4 quantizer packs them: byte i = code(a_i) << 4 | code(b_i).
+__device__ __forceinline__ uint32_t cvt_e2m1x8(float a0, float b0, float a1, float b1, float a2, float b2, float a3, float b3) {
+    uint32_t r;
+    asm volatile("{ .reg .b8 q0, q1, q2, q3; cvt.rn.satfinite.e2m1x2.f32 q0, %1, %2; cvt.rn.satfinite.e2m1x2.f32 q1, %3, %4;"
+                 " cvt.rn.satfinite.e2m1x2.f32 q2, %5, %6; cvt.rn.satfinite.e2m1x2.f32 q3, %7, %8; mov.b32 %0, {q0, q1, q2, q3}; }"
+                 : "=r"(r) : "f"(a0), "f"(b0), "f"(a1), "f"(b1), "f"(a2), "f"(b2), "f"(a3), "f"(b3));
+    return r;
+}
+
+__device__ __forceinline__ uint32_t cvt_e2m1x2_u32(float hi, float lo) {
+    uint32_t r;
+    asm volatile("{ .reg .b8 t; cvt.rn.satfinite.e2m1x2.f32 t, %1, %2; cvt.u32.u8 %0, t; }" : "=r"(r) : "f"(hi), "f"(lo));
+    return r;
+}
+
+// E2M1 casts: three loops whose F2FP, support and per-iteration counts differ, so w1.py's split solves for F2FP's own cost.  Per
+// iteration each of NK per-lane constants x_k meets the iteration's two values f, g in both orders.  Row word 0 = f's start word
+// (g = f + 2^21), word 1 = the constants' base word (x_k = base + k * 2^25 / NK: NK points over four binades of the grid).
+template <int NK>
+__device__ __forceinline__ void e2m1_consts(const uint32_t* row, float* xs) {
+#pragma unroll
+    for (int k = 0; k < NK; k++) xs[k] = __uint_as_float(row[1] + (uint32_t)k * ((1u << 25) / NK));
+}
+
+template <int NK>
+__device__ __forceinline__ void e2m1_packed(const uint32_t* row, uint32_t* h, int iters) {
+    float xs[NK];
+    e2m1_consts<NK>(row, xs);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+        const float f = __uint_as_float(row[0] + (uint32_t)it);
+        const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
+#pragma unroll
+        for (int k = 0; k < NK; k++) h[k % NCHAIN] += cvt_e2m1x8(f, xs[k], xs[k], f, g, xs[k], xs[k], g);
+    }
+}
+
+__global__ void __launch_bounds__(THREADS) f2fp_e2m1_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                          long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint32_t h[NCHAIN] = {};
+    e2m1_packed<2 * NCHAIN>(row, h, iters);
+    RATE_EPILOGUE
+    for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
+}
+
+__global__ void __launch_bounds__(THREADS) f2fp_e2m1_u8_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                             long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint32_t h[NCHAIN] = {};
+    float xs[2 * NCHAIN];
+    e2m1_consts<2 * NCHAIN>(row, xs);
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+        const float f = __uint_as_float(row[0] + (uint32_t)it);
+        const float g = __uint_as_float(row[0] + (uint32_t)it + (1u << 21));
+#pragma unroll
+        for (int k = 0; k < 2 * NCHAIN; k++) {
+            h[k % NCHAIN] += cvt_e2m1x2_u32(f, xs[k]) + cvt_e2m1x2_u32(xs[k], f);
+            h[(k + 1) % NCHAIN] += cvt_e2m1x2_u32(g, xs[k]) + cvt_e2m1x2_u32(xs[k], g);
+        }
+    }
+    RATE_EPILOGUE
+    for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
+}
+
+__global__ void __launch_bounds__(THREADS) f2fp_e2m1_x2_rate(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,
+                                                             long long* __restrict__ cycles, int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint32_t h[NCHAIN] = {};
+    e2m1_packed<4 * NCHAIN>(row, h, iters);
+    RATE_EPILOGUE
+    for (int j = 0; j < NCHAIN; j++) chk[(size_t)tid * CHK + j] = h[j];
+}
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
-                          fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate};
+                          fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate,
+                          f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace
