@@ -652,3 +652,14 @@ def test_a_capture_replay_counts_the_model_and_the_other_tile_positions() -> Non
     (ref,) = trust.INDEPENDENT_REFERENCES["sm90.wgmma.m64n8k16.bf16"]
     assert ref.kind == "second-compiled-path" and ref.replay in clean["file"]
     assert all((REPO_ROOT / p).is_file() for p in ref.paths)
+
+
+def test_the_sm120_fp8_target_is_anchored_on_the_pro_6000_and_computes_on_its_pipeline():
+    """The target names its conformance device; trust matches evidence to it by SKU family and, with the instruction not yet in
+    the registry, computes on the target's own pipeline.  The sm_120 instruction default (the RTX 5090) is unchanged."""
+    from verity.ml.tc.models import BLACKWELL_SM120_E4M3_M16N8K32
+
+    s = trust.subjects("fp8-sm120-mma-draft/2026-09-30")
+    assert s.model is BLACKWELL_SM120_E4M3_M16N8K32 and s.instruction == "sm120.mma.m16n8k32.e4m3"
+    assert s.anchor_sku == "NVIDIA RTX PRO 6000 Blackwell Server Edition" and trust.sku_family(s.anchor_sku) == "rtxpro6000"
+    assert trust.ANCHOR_SKU["sm_120"] == "NVIDIA GeForce RTX 5090" and trust.sku_family(trust.ANCHOR_SKU["sm_120"]) == "rtx5090"
