@@ -16,6 +16,15 @@ the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) l
             retargeted onto `main` (`research merge --sweep`'s rule).  This needs the App's Pull requests (write).
 A train with `land: false` stops at `would-land`: the shadow run beside the RC's `research merge`.
 
+Lean records.  GitHub's Merges API runs no custom merge driver, so a merge step whose two sides both changed a `lean-audit.json`
+is prepared first: the service computes the record merge with `tools/lean/merge.py`'s `merge()` (#447), writes the result onto
+both sides (one small commit on the train, one on top of the PR's head, through the Git Data API), and the Merges API then sees
+identical records and merges every other file as usual.  When `merge()` refuses, both sides get the train's record instead, the
+build carries on, and the train is `regenerating`: a `lean-regen` job rebuilds the refused packages' records on the train's tip,
+and the service commits the regenerated `lean-audit.json` files from the run's record in the store onto the train before its
+merge check.  `merge_record` here is a stand-in for `merge()` on records without `reads`, with `record_text` for audit.py's
+`text()`; the site ports the real ones, and the train cases pin their output byte for byte.
+
 `FakeGitHub` and `FakeStore` stand in for GitHub and the store's R2 bucket; `train_vectors.json` pins every rule against them,
 and the site's TypeScript runs the same file with the same two fakes.
 """
@@ -30,12 +39,19 @@ from .model import DEFAULT_MAX_ATTEMPTS, JobService, Refused, check_line
 
 REPO = "danielreuter/verity"
 HOLD = "hold"
+RECORD = "lean-audit.json"
+#: audit.py's ORDER and merge.py's SORTED / NESTED, for the stand-in record merge
+ORDER = ("roots", "exempt", "axioms", "assumptions", "meaning", "escapes", "compile_time", "dependency_unchecked", "layers",
+         "upstream", "pins", "reads", "dependencies")
+SORTED = {"pins", "reads", "dependencies", "compile_time"}
+NESTED = {"upstream"}
+_MISSING = object()
 REBUILDS = 3
 TRAIN_TIMEOUT_S = 2 * 3600
 LEASE_MARGIN_S = 900
 TOOL_PY = "tools/check/tool.py"
 MERGE_REQUIRES = re.compile(r"merge_requires\s*=\s*(\{.*?\})\s*\)", re.S)
-TRAIN_STATES = ("checking", "landed", "would-land", "failed", "stuck", "refused", "cancelled")
+TRAIN_STATES = ("regenerating", "checking", "landed", "would-land", "failed", "stuck", "refused", "cancelled")
 
 
 @dataclass
@@ -104,6 +120,11 @@ class FakeGitHub:
         self._move(ref, sha)
         return 200
 
+    def commit(self, sha: str, parent: str, files: dict[str, str], message: str) -> str:
+        """The Git Data API's blobs, a tree on `parent`'s and a commit, as one step."""
+        self.commits[sha] = {"parents": [parent], "files": dict(files), "message": message}
+        return sha
+
     def push(self, ref: str, sha: str, parents: list[str], files: dict) -> None:
         """Someone else's push (a vector step): a new commit, and `ref` moved to it with no fast-forward rule."""
         self.commits[sha] = {"parents": parents, "files": files}
@@ -119,7 +140,76 @@ class FakeGitHub:
 @dataclass
 class FakeStore:
     attempts: dict[str, dict] = field(default_factory=dict)     # attempts/{run id}.json
-    manifests: dict[str, dict] = field(default_factory=dict)    # an art id's manifest, whose `meta` a result's document is
+    manifests: dict[str, dict] = field(default_factory=dict)    # an art id's manifest: a result's `meta`, a run record's `payload.files`
+    objects: dict[str, str] = field(default_factory=dict)       # objects/sha256/{hex}
+
+    def run_file(self, run_id: str, path: str) -> str | None:
+        """A file of a run, from its custody: the Attempt's `outputs.run_record` tree, then the object its entry names."""
+        rr = ((self.attempts.get(run_id) or {}).get("outputs") or {}).get("run_record")
+        files = ((self.manifests.get(rr or "") or {}).get("payload") or {}).get("files", [])
+        sha = next((f["sha256"] for f in files if f.get("path") == path), None)
+        return self.objects.get(sha) if sha else None
+
+
+def _one(path, o, a, b, why):
+    if a == b:
+        return a
+    if a == o:
+        return b
+    if b == o:
+        return a
+    why.append(f"{path}: " + ("removed on one side and changed on the other" if a is _MISSING or b is _MISSING else
+                              "added on both sides, differently" if o is _MISSING else "changed on both sides, differently"))
+    return a
+
+
+def _keys(section, a, b):
+    ks = list(a) + [k for k in b if k not in a]
+    return sorted(ks) if section in SORTED else ks
+
+
+def _entries(path, o, a, b, why, depth=1):
+    out = {}
+    for k in _keys(path, a, b):
+        x, y, z = o.get(k, _MISSING), a.get(k, _MISSING), b.get(k, _MISSING)
+        if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is _MISSING or isinstance(x, dict)):
+            v = _entries(f"{path}[{k}]", {} if x is _MISSING else x, y, z, why, depth - 1)
+        else:
+            v = _one(f"{path}[{k}]", x, y, z, why)
+        if v is not _MISSING:
+            out[k] = v
+    return out
+
+
+def merge_record(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
+    """merge.py's `merge()` for records without `reads` (the train cases have none): (the merged record, why it's refused)."""
+    if any("reads" in r for r in (base, ours, theirs)):
+        raise NotImplementedError("the stand-in merges records without `reads`; the site ports tools/lean/merge.py")
+    why: list[str] = []
+    out = {}
+    for k in _keys("", ours, theirs):
+        o, a, b = base.get(k, _MISSING), ours.get(k, _MISSING), theirs.get(k, _MISSING)
+        if isinstance(a, dict) and isinstance(b, dict) and (o is _MISSING or isinstance(o, dict)):
+            v = _entries(k, {} if o is _MISSING else o, a, b, why, 2 if k in NESTED else 1)
+        else:
+            v = _one(k, o, a, b, why)
+        if v is not _MISSING:
+            out[k] = v
+    return out, why
+
+
+def _layout(v, pad: str = "") -> str:
+    if isinstance(v, dict) and v:
+        return "{\n" + ",\n".join(f"{pad} {json.dumps(k, ensure_ascii=False)}: {_layout(x, pad + ' ')}" for k, x in v.items()) + f"\n{pad}}}"
+    one = json.dumps(v, ensure_ascii=False)
+    if not isinstance(v, list) or not v or (len(one) + len(pad) < 110 and not any(isinstance(x, (dict, list)) for x in v)):
+        return one
+    return "[\n" + ",\n".join(f"{pad} {_layout(x, pad + ' ')}" for x in v) + f"\n{pad}]"
+
+
+def record_text(record: dict) -> str:
+    """audit.py's `text()`: the sections in ORDER, then the rest, laid out one entry per line."""
+    return _layout({k: record[k] for k in ORDER if k in record} | {k: v for k, v in record.items() if k not in ORDER}) + "\n"
 
 
 @dataclass
@@ -135,6 +225,7 @@ class Train:
     line: str | None = None         # passed on to its merge-check jobs
     state: str = "checking"
     why: str | None = None
+    regen: list[str] = field(default_factory=list)   # the packages whose record merge() refused, regenerated before the check
     rebuilds: int = 0
     run_id: str | None = None
     landed_at: float | None = None
@@ -148,7 +239,8 @@ class TrainService(JobService):
 
     def view_train(self, t: Train) -> dict:
         return {"id": t.id, "state": t.state, "why": t.why, "prs": t.prs, "base": t.base, "tip": t.tip, "job": t.job, "land": t.land,
-                "rebuilds": t.rebuilds, "run_id": t.run_id, "branch": f"train/{t.id}", "by": t.by, "landed_at": self.iso(t.landed_at)}
+                "rebuilds": t.rebuilds, "run_id": t.run_id, "branch": f"train/{t.id}", "by": t.by, "landed_at": self.iso(t.landed_at),
+                "regen": t.regen}
 
     def _route(self, method, path, query, token, body, now):
         if method == "POST" and path == "/api/trains":
@@ -190,26 +282,66 @@ class TrainService(JobService):
         heads = [{"number": n, "head": self.github.prs[n]["head"]} for n in numbers]
         tid = len(self.trains) + 1
         base = self.github.refs["main"]
-        tip, conflict = self._build(tid, base, heads)
+        tip, conflict, regen = self._build(tid, base, heads)
         if conflict is not None:
             self._event(now, "train.refused", f"train:{tid}", t.name, {"conflict": conflict})
             self.trains[tid] = Train(tid, heads, base, base, None, land, req, t.name, body.get("line"), "refused",
                                      f"#{conflict} doesn't merge onto the train")
             raise Refused(409, f"#{conflict} doesn't merge onto the train so far")
-        job = self._check(tid, tip, base, req, body.get("line"), t, now)
-        self.trains[tid] = tr = Train(tid, heads, base, tip, job, land, req, t.name, body.get("line"))
-        self._event(now, "train.built", f"train:{tid}", t.name, {"prs": numbers, "tip": tip, "job": job})
+        self.trains[tid] = tr = Train(tid, heads, base, tip, None, land, req, t.name, body.get("line"))
+        self._next_job(tr, regen, t, now)
+        self._event(now, "train.built", f"train:{tid}", t.name, {"prs": numbers, "tip": tip, "job": tr.job, "regen": regen})
         return 201, self.view_train(tr)
 
-    def _build(self, tid: int, base: str, heads: list[dict]) -> tuple[str, int | None]:
-        branch = f"train/{tid}"
-        self.github.refs[branch] = base
+    def _next_job(self, tr: Train, regen: list[str], t, now: float) -> None:
+        """The tip's `lean-regen` when a record merge was refused, else its `merge-check`."""
+        tr.regen = regen
+        if regen:
+            tr.state = "regenerating"
+            body = {"kind": "lean-regen", "dedupe_key": f"lean-regen:{tr.tip}", "line": tr.line,
+                    "payload": {"repo": REPO, "commit": tr.tip, "packages": regen, "train": tr.id, "timeout_s": TRAIN_TIMEOUT_S},
+                    "requirements": {"min_lease_s": TRAIN_TIMEOUT_S + LEASE_MARGIN_S}}
+            tr.job = self.add(t, body, now)[1]["id"]
+        else:
+            tr.state = "checking"
+            tr.job = self._check(tr.id, tr.tip, tr.base, tr.requirements, tr.line, t, now)
+
+    def _build(self, tid: int, base: str, heads: list[dict]) -> tuple[str, int | None, list[str]]:
+        """(the tip, the PR that didn't merge or None, the packages whose record merge was refused)."""
+        gh, branch, regen = self.github, f"train/{tid}", set()
+        gh.refs[branch] = base
         for p in heads:
-            status, _ = self.github.merge(branch, p["head"], f"Train {tid}: #{p['number']}\n\nTrain: {tid}\nPR: #{p['number']}\nHead: {p['head']}")
+            head = self._prepare_records(tid, branch, p, regen)
+            status, _ = gh.merge(branch, head, f"Train {tid}: #{p['number']}\n\nTrain: {tid}\nPR: #{p['number']}\nHead: {p['head']}")
             if status == 409:
-                del self.github.refs[branch]
-                return base, p["number"]
-        return self.github.refs[branch], None
+                del gh.refs[branch]
+                return base, p["number"], []
+        return gh.refs[branch], None, sorted(regen)
+
+    def _prepare_records(self, tid: int, branch: str, p: dict, regen: set) -> str:
+        """For each `lean-audit.json` both sides changed since their merge base, put one record on both: merge()'s, or the
+        train's when it refuses (and the package is regenerated).  Returns the head to merge: the PR's, or one on top of it."""
+        gh, tip, head = self.github, self.github.refs[branch], p["head"]
+        if gh.is_ancestor(head, tip):
+            return head
+        mb = gh.merge_base(tip, head)
+        tt, th, tb = gh.tree(tip), gh.tree(head), gh.tree(mb)
+        both = sorted(x for x in gh.changed(mb, tip) & gh.changed(mb, head)
+                      if x.rsplit("/", 1)[-1] == RECORD and x in tt and x in th and tt[x] != th[x])
+        ours, theirs = {}, {}
+        for path in both:
+            merged, why = merge_record(json.loads(tb.get(path) or "{}"), json.loads(tt[path]), json.loads(th[path]))
+            if why:
+                theirs[path] = tt[path]
+                regen.add(path.rsplit("/", 1)[0] if "/" in path else ".")
+            else:
+                ours[path] = theirs[path] = record_text(merged)
+        if not both:
+            return head
+        msg = f"Train {tid}: lean-audit.json for #{p['number']}, merged by tools/lean/merge.py"
+        if ours:
+            gh.refs[branch] = gh.commit(f"{tip}.rec", tip, ours, msg)
+        return gh.commit(f"{head}.rec", head, theirs, msg)
 
     def _check(self, tid: int, tip: str, base: str, req: dict, line: str | None, t, now: float) -> int:
         body = {"kind": "merge-check", "dedupe_key": f"merge-check:{tip}", "max_attempts": DEFAULT_MAX_ATTEMPTS, "line": line,
@@ -218,7 +350,7 @@ class TrainService(JobService):
         return self.add(t, body, now)[1]["id"]
 
     def cancel_train(self, t, tr: Train, now: float) -> tuple[int, dict]:
-        if tr.state != "checking":
+        if tr.state not in ("checking", "regenerating"):
             raise Refused(409, f"the train is already {tr.state}")
         j = self.jobs[tr.job]
         if j.enqueued_by == t.name and j.state in ("queued", "running"):
@@ -234,12 +366,14 @@ class TrainService(JobService):
         """Every train in `checking` whose job has finished: landed, would-land, rebuilt, failed or stuck.  Returns their ids."""
         moved = []
         for tr in sorted(self.trains.values(), key=lambda t: t.id):
-            if tr.state != "checking" or self.jobs[tr.job].state in ("queued", "running"):
+            if tr.state not in ("checking", "regenerating") or self.jobs[tr.job].state in ("queued", "running"):
                 continue
             moved.append(tr.id)
             j = self.jobs[tr.job]
             tr.run_id = (j.result or {}).get("run_id")
-            if j.state == "failed":
+            if tr.state == "regenerating":
+                self._regenerated(tr, j, now)
+            elif j.state == "failed":
                 self._end(tr, "failed", f"the check of {tr.tip} failed (run {tr.run_id})", now)
             elif j.state != "done":
                 self._end(tr, "stuck", f"the check of {tr.tip} is {j.state}: no verdict", now)
@@ -256,6 +390,28 @@ class TrainService(JobService):
             else:
                 self._rebuild(tr, now)
         return moved
+
+    def _regenerated(self, tr: Train, j, now: float) -> None:
+        """A finished `lean-regen`: its records committed onto the train, then the merge check of the new tip."""
+        pkgs = ", ".join(tr.regen)
+        if j.state == "failed":
+            return self._end(tr, "failed", f"the regeneration of {pkgs} failed (run {tr.run_id})", now)
+        if j.state != "done":
+            return self._end(tr, "stuck", f"the regeneration of {pkgs} is {j.state}", now)
+        files = {}
+        for pkg in tr.regen:
+            path = RECORD if pkg == "." else f"{pkg}/{RECORD}"
+            text = self.store.run_file(tr.run_id or "", f"records/{path}")
+            if text is None:
+                return self._end(tr, "stuck", f"run {tr.run_id} has no records/{path}", now)
+            files[path] = text
+        branch = f"train/{tr.id}"
+        tip = self.github.commit(f"{tr.tip}.regen", tr.tip, files, f"Train {tr.id}: regenerated {pkgs} (run {tr.run_id})")
+        self.github.update_ref(branch, tip)
+        by = next(t for t in self.tokens.values() if t.name == tr.by)
+        tr.tip, tr.regen, tr.run_id = tip, [], None
+        tr.state, tr.job = "checking", self._check(tr.id, tip, tr.base, tr.requirements, tr.line, by, now)
+        self._event(now, "train.regenerated", f"train:{tr.id}", "cron", {"tip": tip, "job": tr.job, "records": sorted(files)})
 
     def gate(self, tr: Train) -> str | None:
         """Why `tr.tip` may not land, or None: `research merge`'s gate, on the Attempt of the job's run."""
@@ -289,14 +445,14 @@ class TrainService(JobService):
             self._end(tr, "stuck", f"main moved {REBUILDS + 1} times under the train", now)
             return
         base = self.github.refs["main"]
-        tip, conflict = self._build(tr.id, base, tr.prs)
+        tip, conflict, regen = self._build(tr.id, base, tr.prs)
         if conflict is not None:
             self._end(tr, "refused", f"#{conflict} doesn't merge onto main's new tip {base}", now)
             return
         by = next(t for t in self.tokens.values() if t.name == tr.by)
         tr.base, tr.tip, tr.rebuilds, tr.run_id = base, tip, tr.rebuilds + 1, None
-        tr.job = self._check(tr.id, tip, base, tr.requirements, tr.line, by, now)
-        self._event(now, "train.rebuilt", f"train:{tr.id}", "cron", {"base": base, "tip": tip, "job": tr.job})
+        self._next_job(tr, regen, by, now)
+        self._event(now, "train.rebuilt", f"train:{tr.id}", "cron", {"base": base, "tip": tip, "job": tr.job, "regen": regen})
 
     def _end(self, tr: Train, state: str, why: str | None, now: float) -> None:
         tr.state, tr.why = state, why
