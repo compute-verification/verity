@@ -2,11 +2,18 @@
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
+import email.message
 import http.server
 import io
 import itertools
 import json
+import os
+import re
+import shutil
+import socketserver
+import tempfile
 import threading
+import urllib.error
 import urllib.parse
 from pathlib import Path
 
@@ -185,26 +192,209 @@ def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_fil
     assert fake.messages[COORD][0]["text"].startswith("@console a frontend")
 
 
-def test_no_token_is_an_error_and_dry_run_sends_nothing(fake, registry, capsys, monkeypatch):
+def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(fake, registry, capsys, monkeypatch):
     monkeypatch.delenv("SLACK_BOT_TOKEN")
+    rc, _, err = run(capsys, "ask", "--as", "memory-accounting", "--to", "infra", "--text", "x")
+    assert rc == 2 and "Cursor identity socket" in err and not fake.calls                  # conftest points it at no socket
+    monkeypatch.setenv("RESEARCH_SLACK_VIA", "direct")
     rc, _, err = run(capsys, "ask", "--as", "memory-accounting", "--to", "infra", "--text", "x")
     assert rc == 2 and "SLACK_BOT_TOKEN is not set" in err
     rc, _, err = run(capsys, "ask", "--as", "memory-accounting", "--to", "infra", "--text", "x", "--dry-run")
     assert rc == 0 and "dry-run: chat.postMessage" in err and not fake.calls
+    monkeypatch.setenv("RESEARCH_SLACK_VIA", "carrier-pigeon")
+    rc, _, err = run(capsys, "pickup", "--thread", "1.0")
+    assert rc == 2 and "RESEARCH_SLACK_VIA" in err
 
 
-@pytest.mark.parametrize("argv", [
+DRY_RUNS = [
     ["ask", "--as", "memory-accounting", "--to", "infra", "--text", "x"], ["announce", "--as", "infra", "--text", "x"],
     ["reply", "--as", "memory-accounting", "--thread", "1.0", "--text", "x"], ["pickup", "--thread", "1.0"],
     ["done", "--as", "memory-accounting", "--thread", "1.0", "--link", "https://x"], ["decline", "--as", "memory-accounting", "--thread", "1.0", "--why", "no"],
     ["roster", "--thread", "1.0"], ["read", "--since", "1.0"],
     ["match", "--as", "memory-accounting", "--event", '{"text":"x","ts":"2.0","thread_ts":"1.0","channel":"CCOORD"}'],
     ["verify-author", "--event", '{"ts":"1.0","channel":"CCOORD"}'], ["groups", "sync", "--apply"],
-])
+]
+
+
+@pytest.mark.parametrize("argv", DRY_RUNS)
 def test_every_subcommand_has_a_dry_run_that_sends_nothing(fake, registry, capsys, argv):
     slack.main([*argv, "--dry-run"])
     assert not fake.calls
     assert TOKEN not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv", DRY_RUNS)
+def test_every_dry_run_via_the_broker_sends_nothing_and_fetches_no_identity(broker, registry, capsys, argv):
+    slack.main([*argv, "--dry-run"])
+    err = capsys.readouterr().err
+    assert not broker.requests and not broker.identities and not broker.state.calls
+    assert ("(via the broker)" in err or argv[0] == "verify-author") and OIDC not in err     # verify-author's dry run calls nothing
+
+
+# --- the broker transport ----------------------------------------------------------------------------------------------------
+
+OIDC = "dummy-cursor-oidc-identity"
+
+
+class FakeBroker:
+    """The broker's route as a transport: checks the identity and the allowlist, then answers from the FakeSlack state."""
+
+    def __init__(self, state: FakeSlack):
+        self.state, self.requests, self.identities, self.fail = state, [], [], None
+
+    def oidc(self, aud: str) -> str:
+        self.identities.append(aud)
+        return OIDC
+
+    def __call__(self, url: str, data: bytes, headers: dict) -> dict:
+        req = json.loads(data)
+        self.requests.append((url, req, headers))
+        if self.fail:
+            raise self.fail
+        if headers.get("Authorization") != f"Bearer {OIDC}":
+            raise http_error(401, {"error": "invalid_identity"})
+        if req["method"] not in slack.BROKER_METHODS:
+            raise http_error(403, {"error": "method_not_allowed"})
+        return self.state.handle(req["method"], req["args"], f"Bearer {TOKEN}")
+
+
+def http_error(code: int, body: dict | str, **headers) -> urllib.error.HTTPError:
+    msg = email.message.Message()
+    for k, v in headers.items():
+        msg[k.replace("_", "-")] = v
+    raw = body if isinstance(body, str) else json.dumps(body)
+    return urllib.error.HTTPError(slack.BROKER, code, "x", msg, io.BytesIO(raw.encode()))
+
+
+@pytest.fixture
+def broker(fake, monkeypatch):
+    b = FakeBroker(fake)
+    monkeypatch.delenv("SLACK_BOT_TOKEN")
+    monkeypatch.setattr(slack, "post", b)
+    monkeypatch.setattr(slack, "oidc_token", b.oidc)
+    return b
+
+
+def test_the_transport_is_direct_with_a_token_and_the_broker_without_or_when_forced(monkeypatch):
+    assert slack.via(TOKEN) == "direct" and slack.via(None) == "broker" and slack.via("") == "broker"
+    monkeypatch.setenv("RESEARCH_SLACK_VIA", "broker")
+    assert slack.via(TOKEN) == "broker" and slack.Slack(TOKEN).token is None                # the bot token never goes to the broker
+    monkeypatch.setenv("RESEARCH_SLACK_VIA", "direct")
+    assert slack.via(None) == "direct"
+
+
+def test_with_a_token_nothing_reaches_the_broker(fake, registry, capsys, monkeypatch):
+    b = FakeBroker(fake)
+    monkeypatch.setattr(slack, "oidc_token", b.oidc)
+    assert run(capsys, "pickup", "--thread", "1.0")[0] == 0
+    assert fake.calls == [("reactions.add", {"channel": COORD, "timestamp": "1.0", "name": "eyes"})] and not b.identities
+
+
+def test_without_a_token_every_call_goes_through_the_broker(broker, registry, capsys):
+    rc, out, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "4 GPUs?")
+    assert rc == 0 and out.split()[0] == broker.state.messages[COORD][0]["ts"]
+    url, req, headers = broker.requests[0]
+    assert url == slack.BROKER and broker.identities == [slack.BROKER]                      # one identity per process, aud = the route
+    assert req["method"] == "chat.postMessage" and set(req) == {"method", "args"}
+    assert req["args"]["channel"] == COORD and req["args"]["username"] == "compute-accounting" and req["args"]["unfurl_links"] == "false"
+    assert headers == {"Authorization": f"Bearer {OIDC}", "Content-Type": "application/json"}
+    assert [r[1]["method"] for r in broker.requests] == ["chat.postMessage", "chat.getPermalink"]
+    assert OIDC not in out + err and TOKEN not in json.dumps([r[1:] for r in broker.requests])
+    t = broker.state.messages[COORD][0]["ts"]
+    assert run(capsys, "done", "--as", "infra", "--thread", t, "--link", "https://x/pull/1")[0] == 0
+    assert (COORD, t, "white_check_mark") in broker.state.reactions
+    assert run(capsys, "verify-author", "--event", json.dumps({"ts": t, "channel": COORD}))[0] == 0
+
+
+def test_forcing_the_broker_with_a_token_present(broker, registry, capsys, monkeypatch):
+    monkeypatch.setenv("SLACK_BOT_TOKEN", TOKEN)
+    monkeypatch.setenv("RESEARCH_SLACK_VIA", "broker")
+    assert run(capsys, "pickup", "--thread", "1.0")[0] == 0
+    (_, req, headers), = broker.requests
+    assert req == {"method": "reactions.add", "args": {"channel": COORD, "timestamp": "1.0", "name": "eyes"}}
+    assert TOKEN not in json.dumps([req, headers])
+
+
+@pytest.mark.parametrize("fail, says", [
+    (http_error(401, {"error": "invalid_identity"}), "rejected this agent's Cursor identity (HTTP 401 invalid_identity)"),
+    (http_error(403, {"error": "forbidden_repo"}), "refused the call (HTTP 403 forbidden_repo)"),
+    (http_error(403, {"error": f"Bearer {OIDC}"}), "refused the call (HTTP 403)"),                  # only a short code is echoed
+    (http_error(403, "<html>nope</html>"), "refused the call (HTTP 403)"),
+    (http_error(413, {"error": "too_large"}), "larger than the broker takes"),
+    (http_error(429, {"error": "rate_limited"}, Retry_After="30"), "rate limiting (HTTP 429 rate_limited; retry after 30 s)"),
+    (http_error(503, {"error": "slack_disabled"}), "down or switched off (HTTP 503 slack_disabled)"),
+    (http_error(502, ""), "down or switched off (HTTP 502)"),
+    (urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")), "the Slack broker is unreachable"),
+])
+def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, registry, capsys, fail, says):
+    broker.fail = fail
+    rc, out, err = run(capsys, "pickup", "--thread", "1.0")
+    assert rc == 2 and says in err and err.startswith("research slack: reactions.add: ")
+    assert OIDC not in out + err
+
+
+def test_a_slack_error_through_the_broker_is_slacks_own(broker, registry, capsys):
+    t = broker.state.add(COORD, text="x", user="UDANIEL")["ts"]
+    assert run(capsys, "pickup", "--thread", t)[0] == 0
+    rc, _, err = run(capsys, "pickup", "--thread", t)
+    assert rc == 2 and "reactions.add: already_reacted" in err
+
+
+def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
+    with pytest.raises(slack.SlackError, match="not in BROKER_METHODS"):
+        slack.Slack(None).call("chat.delete", channel=COORD, ts="1.0")
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", "1.0", "--text", "x" * slack.BROKER_MAX_BODY)
+    assert rc == 2 and "more than the broker takes" in err and not broker.requests
+
+
+def test_broker_methods_are_exactly_the_methods_this_module_calls():
+    src = Path(slack.__file__).read_text()
+    called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
+    assert called == set(slack.BROKER_METHODS) and len(slack.BROKER_METHODS) == len(called)
+
+
+@pytest.fixture
+def identity_socket(monkeypatch):
+    """A fake cursor-agent socket: answers POST /v1/tokens/oidc with `answer` (status, body) and records each request's body."""
+    state = {"answer": (200, {"token": OIDC}), "seen": []}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            state["seen"].append((self.path, json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+            status, body = state["answer"]
+            out = json.dumps(body).encode()
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def address_string(self):
+            return "unix"
+
+        def log_message(self, *a):
+            pass
+
+    class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        daemon_threads = True
+
+    d = tempfile.mkdtemp(prefix="sock")                                   # AF_UNIX paths are short; pytest's tmp_path may not be
+    srv = Server(os.path.join(d, "api.sock"), Handler)
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
+    monkeypatch.setenv("CURSOR_AGENT_SOCKET", srv.server_address)
+    yield state
+    srv.shutdown()
+    srv.server_close()
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_socket):
+    assert slack.oidc_token(slack.BROKER) == OIDC
+    assert identity_socket["seen"] == [("/v1/tokens/oidc", {"aud": slack.BROKER})]
+    for answer, says in [((403, {}), "Cursor refused"), ((500, {}), "unavailable (HTTP 500)"),
+                         ((200, {"token": "two words"}), "invalid identity"), ((200, {}), "invalid identity")]:
+        identity_socket["answer"] = answer
+        with pytest.raises(slack.SlackError, match=re.escape(says)):
+            slack.oidc_token(slack.BROKER)
 
 
 def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):

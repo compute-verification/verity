@@ -24,6 +24,10 @@ Every subcommand takes `--dry-run` (no request reaches Slack; each one it would 
 a channel's id is $SLACK_CHANNEL_<KEY> (upper case, `-` as `_`) or the registry's, and `--channel-id` overrides both. The token
 is $SLACK_BOT_TOKEN and is never printed; $SLACK_API_URL points the client at another Web API (the tests' fake). Stdlib only.
 
+Without $SLACK_BOT_TOKEN (or with RESEARCH_SLACK_VIA=broker) every call goes through Verity's Slack broker instead: a POST of
+`{"method", "args"}` to BROKER with this agent's Cursor OIDC token, answered with Slack's response unchanged. The broker holds the
+bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on the token.
+
 A post is addressed to HANDLE when it mentions the handle (its user group `<!subteam^ID>`, or plain `@handle`), is an
 announcement that tags no handle, is top-level in a channel HANDLE subscribes to by name (#agent-alerts), or is a reply in a
 thread whose root addressed HANDLE or where HANDLE has posted. A status line (✅/❌) is addressed only to the thread's author,
@@ -31,9 +35,11 @@ and a handle's own posts never are."""
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
+import socket
 import sys
 import urllib.error
 import urllib.parse
@@ -45,6 +51,12 @@ SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 FRONT_DOOR = "agent-coordination"
 DEFAULT_API = "https://slack.com/api/"
+BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
+#: every Web API method this module calls, and so exactly what the broker's route allows (the tests check the two agree)
+BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
+                  "reactions.add", "usergroups.create", "usergroups.enable", "usergroups.list", "usergroups.update")
+BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
+ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 EVERY = "every handle"
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
@@ -144,36 +156,129 @@ def tag(h: dict) -> str:
 
 # --- the Web API ------------------------------------------------------------------------------------------------------------
 
-class Slack:
-    """A minimal Web API client: form-encoded POSTs with a bearer token. With `dry_run`, nothing is sent: each call is printed
-    (method and parameters, never the token) and answered with an empty `ok` response."""
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.URLError("redirected; refusing to forward the bearer token")
 
-    def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None):
-        self.token, self.dry_run, self.log = token, dry_run, log
+
+def post(url: str, data: bytes, headers: dict[str, str]) -> dict:
+    """The one HTTP exchange: POST `data`, parse the JSON answer. Raises urllib's errors for the caller to map."""
+    req = urllib.request.Request(url, data=data, method="POST", headers=headers)
+    with urllib.request.build_opener(_NoRedirect).open(req, timeout=30) as r:
+        return json.load(r)
+
+
+# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py, sha256
+# 34ea37fb0126e20a22160649e502565d7b443d6bfd9feb438528bff3163a7886) reads it in `oidc_token()`.
+class _UnixHTTP(http.client.HTTPConnection):
+    def __init__(self, path: str):
+        super().__init__("cursor-agent", timeout=10)
+        self.unix_path = path
+
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect(self.unix_path)
+
+
+def oidc_token(aud: str) -> str:
+    """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket."""
+    conn = _UnixHTTP(os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock"))
+    try:
+        conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud}), {"Content-Type": "application/json"})
+        r = conn.getresponse()
+        if r.status == 403:
+            raise SlackError("Cursor refused this agent's identity (the broker needs a Cursor agent's OIDC token)")
+        if r.status != 200:
+            raise SlackError(f"the Cursor identity service is unavailable (HTTP {r.status})")
+        token = json.loads(r.read(32768)).get("token")
+    except (OSError, http.client.HTTPException, ValueError, AttributeError):
+        raise SlackError("the Cursor identity socket the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)") from None
+    finally:
+        conn.close()
+    if not isinstance(token, str) or not token or any(c.isspace() for c in token):
+        raise SlackError("Cursor returned an invalid identity token")
+    return token
+
+
+def via(token: str | None) -> str:
+    """`direct` (the bot token, to Slack) or `broker`: the broker only without a token, or when RESEARCH_SLACK_VIA says so."""
+    forced = os.environ.get("RESEARCH_SLACK_VIA", "")
+    if forced not in ("", "direct", "broker"):
+        raise SlackError(f"RESEARCH_SLACK_VIA={forced!r}: expected broker or direct")
+    return forced or ("direct" if token else "broker")
+
+
+def _code(e: urllib.error.HTTPError) -> str:
+    """The broker's short error code (`{"error": "method_not_allowed"}`), or ''; nothing else of a response is echoed."""
+    try:
+        code = json.loads(e.read(4096)).get("error")
+    except (OSError, ValueError, AttributeError):
+        return ""
+    return f" {code}" if isinstance(code, str) and ERROR_CODE_RE.match(code) else ""
+
+
+def broker_error(method: str, e: urllib.error.HTTPError) -> str:
+    why = f"HTTP {e.code}{_code(e)}"
+    if e.code == 401:
+        return f"{method}: the Slack broker rejected this agent's Cursor identity ({why}); set SLACK_BOT_TOKEN or ask @infra"
+    if e.code == 403:
+        return f"{method}: the Slack broker refused the call ({why}): it serves danielreuter/verity's agents and BROKER_METHODS only"
+    if e.code == 413:
+        return f"{method}: the request is larger than the broker takes ({why}); put the content in a file and link it"
+    if e.code == 429:
+        return f"{method}: the Slack broker is rate limiting ({why}; retry after {e.headers.get('Retry-After')} s)"
+    if e.code >= 500:
+        return f"{method}: the Slack broker is down or switched off ({why}); set SLACK_BOT_TOKEN or ask @infra"
+    return f"{method}: the Slack broker answered {why}"
+
+
+class Slack:
+    """A minimal Web API client: form-encoded POSTs with the bot token (`direct`), or the same arguments as JSON to the broker
+    with this agent's OIDC token (`broker`, see `via`). With `dry_run`, nothing is sent and no token is fetched: each call is
+    printed (method and parameters, never a token) and answered with an empty `ok` response."""
+
+    def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None, transport=None):
+        self.via = via(token)
+        self.token = token if self.via == "direct" else None
+        self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, None
         self.base = (base or os.environ.get("SLACK_API_URL") or DEFAULT_API).rstrip("/") + "/"
-        if not dry_run and not token:
+        if not dry_run and self.via == "direct" and not token:
             raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
 
     def call(self, method: str, **params: Any) -> dict:
         params = {k: v for k, v in params.items() if v is not None}
         if self.dry_run:
-            print(f"dry-run: {method} {json.dumps(params, sort_keys=True)}", file=self.log or sys.stderr)
+            print(f"dry-run: {method} {json.dumps(params, sort_keys=True)}" + (" (via the broker)" if self.via == "broker" else ""),
+                  file=self.log or sys.stderr)
             return {"ok": True, "dry_run": True}
-        body = urllib.parse.urlencode({k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in params.items()})
-        req = urllib.request.Request(self.base + method, data=body.encode(), method="POST",
-                                     headers={"Authorization": f"Bearer {self.token}",
-                                              "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
+        args = {k: json.dumps(v) if isinstance(v, (dict, list)) else str(v) for k, v in params.items()}
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                out = json.load(r)
+            out = self._broker(method, args) if self.via == "broker" else self.transport(
+                self.base + method, urllib.parse.urlencode(args).encode(),
+                {"Authorization": f"Bearer {self.token}", "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
         except urllib.error.HTTPError as e:
+            if self.via == "broker":
+                raise SlackError(broker_error(method, e)) from None
             hint = f" (rate limited; retry after {e.headers.get('Retry-After')} s)" if e.code == 429 else ""
             raise SlackError(f"{method}: HTTP {e.code}{hint}") from None
         except (urllib.error.URLError, OSError, ValueError) as e:
-            raise SlackError(f"{method}: {type(e).__name__}: {e}") from None
+            where = "the Slack broker is unreachable" if self.via == "broker" else type(e).__name__
+            raise SlackError(f"{method}: {where}: {getattr(e, 'reason', e)}") from None
+        if not isinstance(out, dict):
+            raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
             raise SlackError(f"{method}: {out.get('error', 'not ok')}" + (f" (needed scope {out['needed']})" if out.get("needed") else ""))
         return out
+
+    def _broker(self, method: str, args: dict[str, str]) -> dict:
+        if method not in BROKER_METHODS:
+            raise SlackError(f"{method}: not in BROKER_METHODS, so the broker would refuse it")
+        body = json.dumps({"method": method, "args": args}).encode()
+        if len(body) > BROKER_MAX_BODY:
+            raise SlackError(f"{method}: {len(body)} bytes is more than the broker takes ({BROKER_MAX_BODY}); put the content in a file and link it")
+        self._oidc = self._oidc or oidc_token(BROKER)
+        return self.transport(BROKER, body, {"Authorization": f"Bearer {self._oidc}", "Content-Type": "application/json"})
 
     def paged(self, method: str, key: str, limit: int | None = None, **params: Any) -> list[dict]:
         items: list[dict] = []
