@@ -1,86 +1,65 @@
 {
   "schema": "verity/slack-registry/v1",
   "workspace": "compute",
+  "bot_id": null,
   "humans": [
     {"name": "Daniel Reuter", "slack_user": null}
   ],
   "channels": {
     "agent-coordination": {
       "id": null,
-      "owner": null,
-      "purpose": "The front door: anyone asks anyone by tagging a handle, one thread per request.",
-      "contract": ".agents/skills/using-slack/SKILL.md",
-      "subscribe": {"who": "every coordinator and service agent; workers never", "top_level_only": true, "owner_full": false}
-    },
-    "infra": {
-      "id": null,
-      "owner": "infra-coordinator",
-      "purpose": "Infra's service channel: its announcements top-level and its pinned contract; everyone else replies in threads.",
-      "contract": null,
-      "subscribe": {"who": "every agent that runs jobs on Verity's machines, workers included", "top_level_only": true, "owner_full": true}
-    },
-    "console": {
-      "id": null,
-      "owner": "console-agent",
-      "purpose": "The console's service channel: its announcements top-level and its pinned contract; everyone else replies in threads.",
-      "contract": null,
-      "subscribe": {"who": "every agent that publishes to or reads the console", "top_level_only": true, "owner_full": true}
+      "purpose": "Everything between handle holders: asks (tag one handle), announcements (tag some, or none for all), their threads.",
+      "subscribers": "every handle"
     },
     "agent-alerts": {
       "id": null,
-      "owner": "infra-coordinator",
-      "purpose": "Machine alerts (guards, leases, OOM, disk, backups), posted by the alerting bots.",
-      "contract": null,
-      "subscribe": {"who": "infra-coordinator only", "top_level_only": true, "owner_full": true},
-      "authors": {"bots": [{"name": "alerts", "bot_id": null}]}
+      "purpose": "Machine alerts. Every top-level post is addressed to the subscribers.",
+      "subscribers": ["infra"],
+      "bots": [{"name": "grafana", "bot_id": null}]
     }
   },
   "handles": [
     {
-      "handle": "top-level",
-      "owner": "the top-level coordinator of Daniel's one-Project structure (to be launched)",
+      "handle": "lead",
+      "holder": "the top-level coordinator of Daniel's one-Project structure (to be launched)",
       "remit": "Verity's top-level coordination: priorities across the workstreams, and what goes to Daniel.",
       "charter": "note:20260930T1730Z-reply-from-verity-root-project-restructure",
       "usergroup": null
     },
     {
-      "handle": "infra-coordinator",
-      "owner": "the infra coordinator (to be launched; takes over nebius-infra, node1-dispatcher, node-2 ops, one-cluster and the GitHub broker)",
-      "remit": "Machines and task infra: utilization, the scheduler, buying compute, and one API for agents' jobs.",
+      "handle": "infra",
+      "holder": "the infra coordinator (to be launched; takes over nebius-infra, node1-dispatcher, node-2 ops, one-cluster and the GitHub broker)",
+      "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
-      "usergroup": null,
-      "bot_id": null,
-      "token_env": "SLACK_INFRA_BOT_TOKEN"
+      "usergroup": null
     },
     {
-      "handle": "pouw-coordinator",
-      "owner": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
+      "handle": "console",
+      "holder": "the website worker (bc-41cff24f)",
+      "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
+      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
+      "usergroup": null
+    },
+    {
+      "handle": "pouw",
+      "holder": "the pous Project coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
       "remit": "Proof of useful work and proof of useful space: protocols/pouw, protocols/pous and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": null
     },
     {
-      "handle": "circuit-coordinator",
-      "owner": "the vLLM coordinator (bc-ecac3029)",
+      "handle": "circuit",
+      "holder": "the vLLM coordinator (bc-ecac3029)",
       "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
       "usergroup": null
     },
     {
-      "handle": "proof-coordinator",
-      "owner": "the research coordinator (bc-8ece7cde), or the Verity root's successor",
+      "handle": "proof",
+      "holder": "the research coordinator (bc-8ece7cde), or the Verity root's successor",
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": null
-    },
-    {
-      "handle": "console-agent",
-      "owner": "the website worker (bc-41cff24f)",
-      "remit": "The live console and docs site: panels, formats, and what agents publish to them.",
-      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (console)",
-      "usergroup": null,
-      "bot_id": null,
-      "token_env": "SLACK_CONSOLE_BOT_TOKEN"
     }
   ]
 }

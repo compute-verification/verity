@@ -3,6 +3,7 @@ way the real one returns them. No real token or workspace is involved (conftest 
 from __future__ import annotations
 
 import http.server
+import io
 import itertools
 import json
 import threading
@@ -14,9 +15,9 @@ import pytest
 from research import slack
 
 REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
-TOKEN = "dummy-shared-bot"
-INFRA_TOKEN = "dummy-infra-bot"
-BOT, INFRA_BOT = "B0SHARED", "B0INFRA"
+TOKEN = "dummy-verity-bot"
+BOT = "B0VERITY"
+COORD, ALERTS = "CCOORD", "CALERTS"
 
 
 class FakeSlack:
@@ -25,7 +26,6 @@ class FakeSlack:
         self.groups: list[dict] = []
         self.reactions: list[tuple[str, str, str]] = []
         self.calls: list[tuple[str, dict]] = []
-        self.auth: list[str] = []
         self._ts = itertools.count(1)
         self.page = 200
 
@@ -37,13 +37,11 @@ class FakeSlack:
 
     def handle(self, method: str, p: dict, auth: str) -> dict:
         self.calls.append((method, p))
-        self.auth.append(auth)
-        if auth not in (f"Bearer {TOKEN}", f"Bearer {INFRA_TOKEN}"):
+        if auth != f"Bearer {TOKEN}":
             return {"ok": False, "error": "invalid_auth"}
         ch = p.get("channel")
         if method == "chat.postMessage":
-            bot = INFRA_BOT if auth == f"Bearer {INFRA_TOKEN}" else BOT
-            m = self.add(ch, text=p["text"], username=p.get("username"), bot_id=bot, **({"thread_ts": p["thread_ts"]} if p.get("thread_ts") else {}))
+            m = self.add(ch, text=p["text"], username=p.get("username"), bot_id=BOT, **({"thread_ts": p["thread_ts"]} if p.get("thread_ts") else {}))
             return {"ok": True, "channel": ch, "ts": m["ts"], "message": m}
         if method == "chat.getPermalink":
             return {"ok": True, "permalink": f"https://compute.slack.com/archives/{ch}/p{p['message_ts'].replace('.', '')}"}
@@ -62,6 +60,8 @@ class FakeSlack:
             nxt = start + len(page)
             return {"ok": True, "messages": page, "response_metadata": {"next_cursor": str(nxt) if nxt < len(msgs) else ""}}
         if method == "reactions.add":
+            if (ch, p["timestamp"], p["name"]) in self.reactions:
+                return {"ok": False, "error": "already_reacted"}                     # one reaction per emoji per user, like Slack
             self.reactions.append((ch, p["timestamp"], p["name"]))
             return {"ok": True}
         if method == "usergroups.list":
@@ -100,7 +100,6 @@ def fake(monkeypatch):
     t.start()
     monkeypatch.setenv("SLACK_API_URL", f"http://127.0.0.1:{srv.server_address[1]}/api/")
     monkeypatch.setenv("SLACK_BOT_TOKEN", TOKEN)
-    monkeypatch.setenv("SLACK_INFRA_BOT_TOKEN", INFRA_TOKEN)
     monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-test")
     yield state
     srv.shutdown()
@@ -110,14 +109,14 @@ def fake(monkeypatch):
 @pytest.fixture
 def registry(tmp_path, monkeypatch):
     reg = json.loads(REAL_REGISTRY.read_text())
-    ids = {"agent-coordination": "CCOORD", "infra": "CINFRA", "console": "CCONSOLE", "agent-alerts": "CALERTS"}
-    for k, cid in ids.items():
-        reg["channels"][k]["id"] = cid
-    reg["channels"]["agent-alerts"]["authors"]["bots"][0]["bot_id"] = "BALERTS"
+    reg["bot_id"] = BOT
+    reg["channels"]["agent-coordination"]["id"] = COORD
+    reg["channels"]["agent-alerts"]["id"] = ALERTS
+    reg["channels"]["agent-alerts"]["bots"][0]["bot_id"] = "BGRAFANA"
     reg["humans"][0]["slack_user"] = "UDANIEL"
     for h in reg["handles"]:
-        if h["handle"] == "infra-coordinator":
-            h["usergroup"], h["bot_id"] = "SINFRA", INFRA_BOT
+        if h["handle"] == "infra":
+            h["usergroup"] = "SINFRA"
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(reg))
     monkeypatch.setenv("RESEARCH_SLACK_REGISTRY", str(path))
@@ -130,63 +129,68 @@ def run(capsys, *argv) -> tuple[int, str, str]:
     return rc, out.out, out.err
 
 
+def match(capsys, handle, ev) -> tuple[int, str]:
+    rc, _, err = run(capsys, "match", "--as", handle, "--event", ev if isinstance(ev, str) else json.dumps(ev), "--why")
+    return rc, err
+
+
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
-    assert {h["handle"] for h in reg["handles"]} == {"top-level", "infra-coordinator", "pouw-coordinator", "circuit-coordinator",
-                                                     "proof-coordinator", "console-agent"}
-    assert set(reg["channels"]) == {"agent-coordination", "infra", "console", "agent-alerts"}
-    assert all(c["subscribe"]["top_level_only"] for c in reg["channels"].values())
-    assert reg["channels"]["infra"]["owner"] == "infra-coordinator" and reg["channels"]["console"]["owner"] == "console-agent"
+    assert [h["handle"] for h in reg["handles"]] == ["lead", "infra", "console", "pouw", "circuit", "proof"]
+    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts"}
+    assert slack.subscribers(reg, "agent-coordination") == [h["handle"] for h in reg["handles"]]
+    assert slack.subscribers(reg, "agent-alerts") == ["infra"]
 
 
-def test_handles_lists_the_registry(registry, capsys):
+def test_handles_and_subscriptions(registry, capsys):
     rc, out, _ = run(capsys, "handles")
-    assert rc == 0 and "@infra-coordinator" in out and "SINFRA" in out and "#infra" in out and "the owner in full" in out
+    assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
+    rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
+    assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and f'channelId="{ALERTS}", topLevelOnly=true' in out
+    rc, out, _ = run(capsys, "subscriptions", "--as", "pouw")
+    assert rc == 0 and COORD in out and ALERTS not in out
 
 
-def test_post_uses_the_handle_as_username_links_the_agent_and_prints_ts_and_permalink(fake, registry, capsys):
-    rc, out, err = run(capsys, "post", "--as", "pouw-coordinator", "--text", "@infra-coordinator: a pod for 2 h? spec: notes/x.md")
+def test_subscriptions_fail_visibly_without_channel_ids(capsys):
+    rc, out, _ = run(capsys, "subscriptions", "--as", "pouw", "--registry", str(REAL_REGISTRY))
+    assert rc == 2 and "id not recorded" in out
+
+
+def test_ask_tags_one_owner_with_its_user_group_and_links_the_agent(fake, registry, capsys):
+    rc, out, err = run(capsys, "ask", "--as", "pouw", "--to", "@infra", "--text", "4 GPUs on node 2 for 6 h, by 20:00Z. Spec: notes/x.md")
     assert rc == 0
     ts, link = out.split()
-    m = fake.messages["CCOORD"][0]
-    assert m["ts"] == ts and m["username"] == "pouw-coordinator" and link.endswith(ts.replace(".", ""))
-    assert "<https://cursor.com/agents/bc-test|@pouw-coordinator's agent>" in m["text"]
+    m = fake.messages[COORD][0]
+    assert m["ts"] == ts and m["username"] == "pouw" and link.endswith(ts.replace(".", ""))
+    assert m["text"].startswith("<!subteam^SINFRA|@infra> 4 GPUs")
+    assert "<https://cursor.com/agents/bc-test|@pouw's agent>" in m["text"]
     assert TOKEN not in out + err
+    assert run(capsys, "ask", "--as", "pouw", "--to", "@pouw", "--text", "x")[0] == 2
+    assert run(capsys, "ask", "--as", "pous-worker-3", "--to", "@infra", "--text", "x")[0] == 2      # workers aren't on Slack
 
 
-def test_post_reads_the_body_from_a_file_and_replies_in_a_thread(fake, registry, capsys, tmp_path):
-    root = fake.add("CCOORD", text="<!subteam^SINFRA|@infra-coordinator> ask", user="UDANIEL")
-    body = tmp_path / "msg.md"
-    body.write_text("see PR 12")
-    assert run(capsys, "post", "--as", "infra-coordinator", "--thread", root["ts"], "--file", str(body))[0] == 0
-    assert fake.messages["CCOORD"][-1]["thread_ts"] == root["ts"] and fake.messages["CCOORD"][-1]["text"].startswith("see PR 12")
-
-
-def test_only_the_owner_posts_top_level_in_a_service_channel_and_with_its_own_token(fake, registry, capsys):
-    rc, _, err = run(capsys, "post", "--as", "pouw-coordinator", "--channel", "infra", "--text", "hello")
-    assert rc == 2 and "only its owner @infra-coordinator" in err and not fake.calls
-    root = fake.add("CINFRA", text="contract", username="infra-coordinator", bot_id=INFRA_BOT)
-    assert run(capsys, "post", "--as", "pouw-coordinator", "--channel", "infra", "--thread", root["ts"], "--text", "q")[0] == 0
-    assert fake.auth[-2] == f"Bearer {TOKEN}"
-    assert run(capsys, "post", "--as", "infra-coordinator", "--channel", "infra", "--text", "notice")[0] == 0
-    assert fake.messages["CINFRA"][-1]["bot_id"] == INFRA_BOT
+def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_file(fake, registry, capsys, tmp_path):
+    body = tmp_path / "ask.md"
+    body.write_text("a frontend for the pous panel: spec in PR 12")
+    assert run(capsys, "ask", "--as", "pouw", "--to", "console", "--file", str(body))[0] == 0
+    assert fake.messages[COORD][0]["text"].startswith("@console a frontend")
 
 
 def test_no_token_is_an_error_and_dry_run_sends_nothing(fake, registry, capsys, monkeypatch):
     monkeypatch.delenv("SLACK_BOT_TOKEN")
-    rc, _, err = run(capsys, "post", "--as", "top-level", "--text", "x")
+    rc, _, err = run(capsys, "ask", "--as", "lead", "--to", "infra", "--text", "x")
     assert rc == 2 and "SLACK_BOT_TOKEN is not set" in err
-    rc, out, err = run(capsys, "post", "--as", "top-level", "--text", "x", "--dry-run")
+    rc, _, err = run(capsys, "ask", "--as", "lead", "--to", "infra", "--text", "x", "--dry-run")
     assert rc == 0 and "dry-run: chat.postMessage" in err and not fake.calls
 
 
 @pytest.mark.parametrize("argv", [
-    ["read", "--since", "1.0"], ["match", "--handle", "top-level", "--event", '{"text":"x","ts":"2.0","thread_ts":"1.0"}'],
-    ["pickup", "--thread", "1.0"], ["done", "--as", "top-level", "--thread", "1.0", "--link", "https://x"],
-    ["announce", "--channel", "console", "--as", "console-agent", "--action", "reload the panel", "--verify", "true"],
-    ["ack", "--channel", "infra", "--thread", "1.0", "--as", "top-level", "--status", "done"],
-    ["roster", "--channel", "infra", "--thread", "1.0"], ["verify-author", "--channel", "infra", "--event", '{"ts":"1.0"}'],
-    ["groups", "sync", "--apply"],
+    ["ask", "--as", "lead", "--to", "infra", "--text", "x"], ["announce", "--as", "infra", "--text", "x"],
+    ["reply", "--as", "lead", "--thread", "1.0", "--text", "x"], ["pickup", "--thread", "1.0"],
+    ["done", "--as", "lead", "--thread", "1.0", "--link", "https://x"], ["decline", "--as", "lead", "--thread", "1.0", "--why", "no"],
+    ["roster", "--thread", "1.0"], ["read", "--since", "1.0"],
+    ["match", "--as", "lead", "--event", '{"text":"x","ts":"2.0","thread_ts":"1.0","channel":"CCOORD"}'],
+    ["verify-author", "--event", '{"ts":"1.0","channel":"CCOORD"}'], ["groups", "sync", "--apply"],
 ])
 def test_every_subcommand_has_a_dry_run_that_sends_nothing(fake, registry, capsys, argv):
     slack.main([*argv, "--dry-run"])
@@ -194,162 +198,173 @@ def test_every_subcommand_has_a_dry_run_that_sends_nothing(fake, registry, capsy
     assert TOKEN not in capsys.readouterr().err
 
 
-def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys):
-    fake.page = 2
-    a = fake.add("CCOORD", text="first", user="U1")
-    fake.add("CCOORD", text="second", user="U2")
-    fake.add("CCOORD", text="reply", user="U3", thread_ts=a["ts"])
-    fake.add("CCOORD", text="third", username="console-agent", bot_id=BOT)
-    rc, out, _ = run(capsys, "read", "--since", a["ts"])
-    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second", "third"]
-    assert "@console-agent" in out
-    rc, out, _ = run(capsys, "read", "--thread", a["ts"], "--json")
-    assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
+def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
+    sha = "a" * 64
+    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", "curl the new helper and install it", "--verify", "helper --version")
+    assert rc == 2 and "pin it" in err
+    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", "x", "--ships", "https://x/y.py")
+    assert rc == 2 and "--ships" in err
+    assert not fake.calls
+    assert run(capsys, "announce", "--as", "infra", "--text", "Install the broker helper.", "--verify", "git ls-remote origin HEAD",
+               "--ships", f"https://x/verity-github.py#sha256={sha}")[0] == 0
+    m = fake.messages[COORD][-1]
+    assert m["text"].startswith(f"{slack.ANNOUNCE} *Announcement* from @infra to every handle")
+    assert slack.SAFE_POINT in m["text"] and "`git ls-remote origin HEAD`" in m["text"] and sha in m["text"]
+    assert run(capsys, "announce", "--as", "infra", "--to", "@pouw", "circuit", "--text", "node 2 reboots at 22:00Z")[0] == 0
+    m = fake.messages[COORD][-1]
+    assert m["text"].split("\n")[0].endswith("to @pouw @circuit") and slack.SAFE_POINT not in m["text"]
+    assert slack.audience(m["text"], slack.load_registry(registry)) == ["pouw", "circuit"]
 
 
-def _match(capsys, handle, ev):
-    return run(capsys, "match", "--handle", handle, "--event", ev if isinstance(ev, str) else json.dumps(ev), "--why")
-
-
-def test_match_on_the_user_group_id_its_label_and_plain_text(fake, registry, capsys):
-    assert _match(capsys, "infra-coordinator", {"text": "<!subteam^SINFRA> can you", "ts": "5.0"})[0] == 0
-    assert _match(capsys, "infra-coordinator", {"text": "<!subteam^SOTHER|@infra-coordinator> hi", "ts": "5.0"})[0] == 0
-    assert _match(capsys, "infra-coordinator", "ping @infra-coordinator, please")[0] == 0
-    assert _match(capsys, "infra-coordinator", {"text": "<!subteam^SOTHER|@pouw-coordinator> hi", "ts": "5.0"})[0] == 1
-    assert _match(capsys, "infra-coordinator", "email infra@infra-coordinator.dev or @infra-coordinator-2")[0] == 1
-    assert _match(capsys, "pouw-coordinator", {"event": {"type": "message", "text": "@pouw-coordinator hi", "ts": "5.0"}})[0] == 0
+def test_match_an_ask_only_for_its_owner(fake, registry, capsys):
+    ask = {"text": "<!subteam^SINFRA|@infra> GPUs?", "ts": "5.0", "channel": COORD, "username": "pouw", "bot_id": BOT}
+    assert match(capsys, "infra", ask)[0] == 0
+    assert all(match(capsys, h, ask)[0] == 1 for h in ("lead", "console", "pouw", "circuit", "proof"))
+    assert match(capsys, "infra", {"text": "<!subteam^SOTHER|@infra> hi", "ts": "5.0"})[0] == 0
+    assert match(capsys, "console", "ping @console, please")[0] == 0
+    assert match(capsys, "infra", "email infra@infra.dev or @infra-2")[0] == 1
+    assert match(capsys, "infra", {"event": {"type": "message", "text": "@infra hi", "ts": "5.0"}})[0] == 0
+    assert match(capsys, "infra", {"text": "@infra note to self", "ts": "5.0", "username": "infra", "bot_id": BOT})[0] == 1
     assert not fake.calls
 
 
-def test_match_ignores_the_handles_own_posts(fake, registry, capsys):
-    ev = {"text": "@infra-coordinator note to self", "ts": "5.0", "username": "infra-coordinator", "bot_id": BOT}
-    assert _match(capsys, "infra-coordinator", ev)[0] == 1
+def test_match_announcements_to_all_and_to_some(fake, registry, capsys):
+    to_all = {"text": f"{slack.ANNOUNCE} *Announcement* from @infra to every handle\nbroker", "ts": "6.0", "channel": COORD,
+              "username": "infra", "bot_id": BOT}
+    assert [h for h in ("lead", "infra", "console", "pouw", "circuit", "proof") if match(capsys, h, to_all)[0] == 0] == \
+        ["lead", "console", "pouw", "circuit", "proof"]
+    to_some = {**to_all, "text": f"{slack.ANNOUNCE} *Announcement* from @infra to @pouw <!subteam^SX|@circuit>\nreboot"}
+    assert [h for h in ("lead", "console", "pouw", "circuit", "proof") if match(capsys, h, to_some)[0] == 0] == ["pouw", "circuit"]
 
 
-def test_match_a_reply_in_a_thread_the_handle_posted_in_or_was_tagged_at_the_root(fake, registry, capsys):
-    root = fake.add("CCOORD", text="question for <!subteam^SINFRA>", user="UDANIEL")
-    reply = fake.add("CCOORD", text="any news?", user="UDANIEL", thread_ts=root["ts"])
-    assert _match(capsys, "infra-coordinator", {**reply, "channel": "CCOORD"})[0] == 0
-    assert _match(capsys, "pouw-coordinator", {**reply, "channel": "CCOORD"})[0] == 1
-    fake.add("CCOORD", text="on it", username="pouw-coordinator", bot_id=BOT, thread_ts=root["ts"])
-    later = fake.add("CCOORD", text="thanks", user="UDANIEL", thread_ts=root["ts"])
-    rc, _, err = _match(capsys, "pouw-coordinator", {**later, "channel": "CCOORD"})
-    assert rc == 0 and "posted in it" in err
-    assert _match(capsys, "console-agent", {**later, "channel": "CCOORD"})[0] == 1
+def test_match_in_threads_participants_and_status_lines(fake, registry, capsys):
+    root = fake.add(COORD, text="<!subteam^SINFRA|@infra> a pod?", username="pouw", bot_id=BOT)
+    fake.add(COORD, text="which node?", username="infra", bot_id=BOT, thread_ts=root["ts"])
+    reply = fake.add(COORD, text="node 2", username="pouw", bot_id=BOT, thread_ts=root["ts"])
+    rc, why = match(capsys, "infra", {**reply, "channel": COORD})
+    assert rc == 0 and "posted in it" in why
+    assert match(capsys, "console", {**reply, "channel": COORD})[0] == 1
+    human = fake.add(COORD, text="any news?", user="UDANIEL", thread_ts=root["ts"])
+    assert match(capsys, "infra", {**human, "channel": COORD})[0] == 0 and match(capsys, "pouw", {**human, "channel": COORD})[0] == 0
+
+    ann = fake.add(COORD, text=f"{slack.ANNOUNCE} *Announcement* from @infra to every handle\nx", username="infra", bot_id=BOT)
+    done = fake.add(COORD, text=f"{slack.DONE} done \u2014 v2", username="pouw", bot_id=BOT, thread_ts=ann["ts"])
+    rc, why = match(capsys, "infra", {**done, "channel": COORD})
+    assert rc == 0 and "status line" in why
+    fake.add(COORD, text=f"{slack.DONE} done", username="circuit", bot_id=BOT, thread_ts=ann["ts"])
+    assert match(capsys, "circuit", {**done, "channel": COORD})[0] == 1                 # another handle's status line: not for you
+    question = fake.add(COORD, text="does this need a restart?", username="circuit", bot_id=BOT, thread_ts=ann["ts"])
+    assert match(capsys, "infra", {**question, "channel": COORD})[0] == 0
+    assert match(capsys, "proof", {**question, "channel": COORD})[0] == 1                # the root was to all, but proof isn't in the thread
 
 
-def test_a_worker_posts_under_its_lane_name_and_matches_replies_in_its_own_thread(fake, registry, capsys):
-    rc, out, _ = run(capsys, "post", "--as", "pous-worker-3", "--text", "<!subteam^SINFRA> a pod? by 20:00Z: notes/x.md")
-    ts = out.split()[0]
-    assert rc == 0 and fake.messages["CCOORD"][0]["username"] == "pous-worker-3"
-    reply = fake.add("CCOORD", text="yes, vy-4", username="infra-coordinator", bot_id=BOT, thread_ts=ts)
-    assert _match(capsys, "pous-worker-3", {**reply, "channel": "CCOORD"})[0] == 0
-    own = fake.add("CCOORD", text="thanks", username="pous-worker-3", bot_id=BOT, thread_ts=ts)
-    assert _match(capsys, "pous-worker-3", {**own, "channel": "CCOORD"})[0] == 1
-    assert run(capsys, "post", "--as", "Not A Lane", "--text", "x")[0] == 2
+def test_match_alerts_are_for_infra_only(fake, registry, capsys):
+    alert = fake.add(ALERTS, text="\U0001f534 FIRING [critical] vy-nebius-2: disk 95%", bot_id="BGRAFANA", username="grafana")
+    assert match(capsys, "infra", {**alert, "channel": ALERTS})[0] == 0
+    assert match(capsys, "pouw", {**alert, "channel": ALERTS})[0] == 1
+    resolved = fake.add(ALERTS, text="\u2705 RESOLVED disk 70%", bot_id="BGRAFANA", username="grafana", thread_ts=alert["ts"])
+    assert match(capsys, "infra", {**resolved, "channel": ALERTS})[0] == 0
 
 
 def test_match_reads_the_event_from_a_file_or_stdin(fake, registry, capsys, tmp_path, monkeypatch):
     p = tmp_path / "ev.json"
-    p.write_text(json.dumps({"text": "@top-level decide", "ts": "1.0"}))
-    assert _match(capsys, "top-level", f"@{p}")[0] == 0
-    import io
-    monkeypatch.setattr("sys.stdin", io.StringIO("@top-level again"))
-    assert _match(capsys, "top-level", "-")[0] == 0
+    p.write_text(json.dumps({"text": "@lead decide", "ts": "1.0"}))
+    assert match(capsys, "lead", f"@{p}")[0] == 0
+    monkeypatch.setattr("sys.stdin", io.StringIO("@lead again"))
+    assert match(capsys, "lead", "-")[0] == 0
 
 
-def test_pickup_and_done_react_and_link_the_result(fake, registry, capsys):
-    root = fake.add("CCOORD", text="<!subteam^SINFRA> need a pod", user="UDANIEL")
+def test_the_ask_lifecycle_pickup_reply_done_and_decline(fake, registry, capsys):
+    root = fake.add(COORD, text="<!subteam^SINFRA|@infra> need a pod", user="UDANIEL")
     assert run(capsys, "pickup", "--thread", root["ts"])[0] == 0
-    assert run(capsys, "done", "--as", "infra-coordinator", "--thread", root["ts"], "--link", "https://github.com/x/pull/1")[0] == 0
-    assert fake.reactions == [("CCOORD", root["ts"], "eyes"), ("CCOORD", root["ts"], "white_check_mark")]
-    assert "https://github.com/x/pull/1" in fake.messages["CCOORD"][-1]["text"]
+    assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "buying one needs your OK: $3/h for 6 h")[0] == 0
+    assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://github.com/x/pull/1")[0] == 0
+    assert fake.reactions == [(COORD, root["ts"], "eyes"), (COORD, root["ts"], "white_check_mark")]
+    assert fake.messages[COORD][-1]["text"].startswith(f"{slack.DONE} done \u2014 https://github.com/x/pull/1")
+    other = fake.add(COORD, text="<!subteam^SINFRA|@infra> delete node 1", username="pouw", bot_id=BOT)
+    assert run(capsys, "decline", "--as", "infra", "--thread", other["ts"], "--why", "a node change needs Daniel")[0] == 0
+    assert (COORD, other["ts"], "x") in fake.reactions
 
 
-def test_announce_is_the_channel_owners_and_carries_the_safe_point_verify_and_pin(fake, registry, capsys):
-    sha = "a" * 64
-    rc, _, err = run(capsys, "announce", "--channel", "infra", "--as", "pouw-coordinator", "--action", "x", "--verify", "true")
-    assert rc == 2 and "only its owner" in err
-    rc, _, err = run(capsys, "announce", "--channel", "agent-coordination", "--as", "top-level", "--action", "x", "--verify", "true")
-    assert rc == 2 and "service channel" in err
-    rc, _, err = run(capsys, "announce", "--channel", "infra", "--as", "infra-coordinator", "--action", "curl the new helper and install it",
-                     "--verify", "helper --version")
-    assert rc == 2 and "pin it" in err
-    rc, _, err = run(capsys, "announce", "--channel", "infra", "--as", "infra-coordinator", "--action", "a", "--verify", "b", "--ships", "https://x/y.py")
-    assert rc == 2 and "--ships" in err
-    assert not fake.calls
-    rc, out, _ = run(capsys, "announce", "--channel", "infra", "--as", "infra-coordinator", "--action", "install the broker helper",
-                     "--verify", "git ls-remote origin HEAD", "--ships", f"https://x/verity-github.py#sha256={sha}")
-    assert rc == 0
-    m = fake.messages["CINFRA"][0]
-    assert m["bot_id"] == INFRA_BOT and m["username"] == "infra-coordinator"
-    assert slack.SAFE_POINT in m["text"] and "`git ls-remote origin HEAD`" in m["text"] and sha in m["text"]
-    assert "research slack ack --channel infra" in m["text"]
+def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
+    run(capsys, "announce", "--as", "infra", "--to", "@pouw", "@circuit", "@proof", "--text", "node 2 reboots at 22:00Z")
+    t = fake.messages[COORD][-1]["ts"]
+    assert run(capsys, "done", "--as", "pouw", "--thread", t)[0] == 0
+    assert run(capsys, "decline", "--as", "circuit", "--thread", t, "--why", "a job runs until 23:00Z")[0] == 0
+    assert run(capsys, "done", "--as", "console", "--thread", t)[0] == 0                   # not addressed: not counted
+    assert not [r for r in fake.reactions if r[1] == t]                                    # one bot can't carry many agents' reactions
+    fake.add(COORD, text=f"{slack.DONE} done", user="UINTRUDER", thread_ts=t)              # a human's line is no status of a handle
+    rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
+    rows = {r["handle"]: r for r in json.loads(out)}
+    assert rc == 1 and set(rows) == {"pouw", "circuit", "proof"}
+    assert rows["pouw"]["status"] == "done" and rows["circuit"] == {**rows["circuit"], "status": "declined", "detail": "a job runs until 23:00Z"}
+    assert rows["proof"]["status"] == "missing"
+    run(capsys, "done", "--as", "circuit", "--thread", t)
+    run(capsys, "done", "--as", "proof", "--thread", t)
+    assert run(capsys, "roster", "--thread", t)[0] == 0
+    ask = fake.add(COORD, text="<!subteam^SINFRA|@infra> x", username="pouw", bot_id=BOT)
+    assert run(capsys, "roster", "--thread", ask["ts"])[0] == 2
 
 
-def test_ack_and_roster_against_the_registry(fake, registry, capsys):
-    ann = fake.add("CINFRA", text="Required action", username="infra-coordinator", bot_id=INFRA_BOT)
-    t = ann["ts"]
-    for who, status, note in (("pouw-coordinator", "done", None), ("circuit-coordinator", "blocked", "a job runs until 20:00Z"),
-                              ("pous-worker-3", "done", None)):
-        argv = ["ack", "--channel", "infra", "--thread", t, "--as", who, "--status", status] + (["--note", note] if note else [])
-        assert run(capsys, *argv)[0] == 0
-    fake.add("CINFRA", text="ACK done", user="UINTRUDER", thread_ts=t)                    # a human's text is no ack
-    rc, out, _ = run(capsys, "roster", "--channel", "infra", "--thread", t, "--json")
-    rows = {r["name"]: r for r in json.loads(out)}
-    assert rc == 1
-    assert rows["pouw-coordinator"]["status"] == "done" and rows["circuit-coordinator"]["note"] == "a job runs until 20:00Z"
-    assert rows["proof-coordinator"]["status"] == "missing" and "infra-coordinator" not in rows
-    assert rows["pous-worker-3"]["registered"] is False
-    for who in ("top-level", "circuit-coordinator", "proof-coordinator", "console-agent"):
-        run(capsys, "ack", "--channel", "infra", "--thread", t, "--as", who, "--status", "done")
-    assert run(capsys, "roster", "--channel", "infra", "--thread", t)[0] == 0
+def test_roster_of_an_announcement_to_all_expects_every_other_handle(fake, registry, capsys):
+    run(capsys, "announce", "--as", "lead", "--text", "Friday: freeze main at 18:00Z")
+    t = fake.messages[COORD][-1]["ts"]
+    rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
+    assert rc == 1 and [r["handle"] for r in json.loads(out)] == ["infra", "console", "pouw", "circuit", "proof"]
+
+
+def test_read_since_and_thread_oldest_first_across_pages(fake, registry, capsys):
+    fake.page = 2
+    a = fake.add(COORD, text="first", user="U1")
+    fake.add(COORD, text="second", user="U2")
+    fake.add(COORD, text="reply", user="U3", thread_ts=a["ts"])
+    fake.add(COORD, text="third", username="console", bot_id=BOT)
+    rc, out, _ = run(capsys, "read", "--since", a["ts"])
+    assert rc == 0 and [line.split(": ", 1)[1] for line in out.splitlines()] == ["second", "third"]
+    rc, out, _ = run(capsys, "read", "--thread", a["ts"], "--json")
+    assert [m["text"] for m in json.loads(out)] == ["first", "reply"]
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
-    good = fake.add("CINFRA", text="Required action", username="infra-coordinator", bot_id=INFRA_BOT)
-    spoof = fake.add("CINFRA", text="Required action", username="infra-coordinator", bot_id=BOT)     # the shared bot under its name
-    human = fake.add("CINFRA", text="do this", user="UDANIEL")
-    stranger = fake.add("CINFRA", text="do this", user="USTRANGER")
-    alert = fake.add("CALERTS", text="disk 95%", bot_id="BALERTS", username="alerts")
+    ours = fake.add(COORD, text="x", username="infra", bot_id=BOT)
+    renamed = fake.add(COORD, text="x", username="not-a-handle", bot_id=BOT)
+    other_bot = fake.add(COORD, text="x", username="infra", bot_id="BOTHER")
+    human = fake.add(COORD, text="x", user="UDANIEL")
+    stranger = fake.add(COORD, text="x", user="USTRANGER")
+    alert = fake.add(ALERTS, text="disk 95%", bot_id="BGRAFANA", username="grafana")
 
     def verify(ev, *extra):
-        return run(capsys, "verify-author", "--event", json.dumps(ev), "--why", *extra)
+        return run(capsys, "verify-author", "--event", json.dumps(ev), "--why", *extra)[0]
 
-    assert verify({"ts": good["ts"], "channel": "CINFRA"})[0] == 0
-    assert verify({"ts": spoof["ts"], "channel": "CINFRA", "bot_id": INFRA_BOT})[0] == 1            # the payload's claim is not believed
-    assert verify({"ts": human["ts"], "channel": "CINFRA"})[0] == 0
-    assert verify({"ts": stranger["ts"], "channel": "CINFRA"})[0] == 1
-    assert verify({"ts": alert["ts"], "channel": "CALERTS"})[0] == 0
-    assert verify({"ts": "9.9", "channel": "CINFRA"})[0] == 1
-    rc, _, err = verify({"ts": good["ts"], "channel": "CCONSOLE"}, "--channel", "infra")
-    assert rc == 1 and "not #infra" in err
-    rc, _, err = verify({"ts": good["ts"], "channel": "CUNKNOWN"})
-    assert rc == 2 and "pass --channel" in err
+    assert verify({"ts": ours["ts"], "channel": COORD}) == 0
+    assert verify({"ts": renamed["ts"], "channel": COORD}) == 1
+    assert verify({"ts": other_bot["ts"], "channel": COORD, "bot_id": BOT}) == 1             # the payload's claim is not believed
+    assert verify({"ts": human["ts"], "channel": COORD}) == 0
+    assert verify({"ts": stranger["ts"], "channel": COORD}) == 1
+    assert verify({"ts": alert["ts"], "channel": ALERTS}) == 0
+    assert verify({"ts": "9.9", "channel": COORD}) == 1
+    assert verify({"ts": ours["ts"], "channel": "CUNKNOWN"}, "--channel", "agent-coordination") == 1
 
 
-def test_verify_author_allows_nobody_when_the_allowlist_has_no_ids(fake, registry, capsys):
+def test_verify_author_allows_nobody_when_the_registry_has_no_ids(fake, registry, capsys):
     reg = json.loads(registry.read_text())
-    reg["humans"][0]["slack_user"] = None
-    for h in reg["handles"]:
-        h.pop("bot_id", None)
+    reg["humans"][0]["slack_user"], reg["bot_id"] = None, None
     registry.write_text(json.dumps(reg))
-    for m in (fake.add("CINFRA", text="x", user="UDANIEL"), fake.add("CINFRA", text="x", username="infra-coordinator", bot_id=INFRA_BOT)):
-        assert run(capsys, "verify-author", "--event", json.dumps({"ts": m["ts"], "channel": "CINFRA"}))[0] == 1
+    for m in (fake.add(COORD, text="x", user="UDANIEL"), fake.add(COORD, text="x", username="infra", bot_id=BOT)):
+        assert run(capsys, "verify-author", "--event", json.dumps({"ts": m["ts"], "channel": COORD}))[0] == 1
 
 
 def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_ids(fake, registry, capsys):
-    fake.groups = [{"id": "SINFRA", "name": "infra-coordinator", "handle": "infra-coordinator", "description": "old", "date_delete": 0},
-                   {"id": "SPROOF", "name": "proof-coordinator", "handle": "proof-coordinator", "description": "", "date_delete": 1700000000}]
+    fake.groups = [{"id": "SINFRA", "name": "infra", "handle": "infra", "description": "old", "date_delete": 0},
+                   {"id": "SPROOF", "name": "proof", "handle": "proof", "description": "", "date_delete": 1700000000}]
     before = registry.read_text()
     rc, out, _ = run(capsys, "groups", "sync")
-    assert rc == 0 and "create  @pouw-coordinator" in out and "update  @infra-coordinator" in out and "enable  @proof-coordinator" in out
+    assert rc == 0 and "create  @pouw" in out and "update  @infra" in out and "enable  @proof" in out
     assert "plan only" in out and registry.read_text() == before
     assert {m for m, _ in fake.calls} == {"usergroups.list"}
     rc, out, _ = run(capsys, "groups", "sync", "--apply")
     assert rc == 0 and "wrote" in out
-    reg = json.loads(registry.read_text())
-    ids = {h["handle"]: h["usergroup"] for h in reg["handles"]}
+    ids = {h["handle"]: h["usergroup"] for h in json.loads(registry.read_text())["handles"]}
     assert len(fake.groups) == 6 and ids == {g["handle"]: g["id"] for g in fake.groups}
     assert all(not g["date_delete"] for g in fake.groups)
     rc, out, _ = run(capsys, "groups", "sync", "--apply")

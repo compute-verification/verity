@@ -1,30 +1,33 @@
-"""`research slack`: agents' side of Slack (the conventions are `.agents/skills/using-slack/SKILL.md`).
+"""`research slack`: the coordination API on Slack (the conventions are `.agents/skills/using-slack/SKILL.md`).
 
-Handles are addresses (Slack user groups), channels are places, threads are conversations; the registry
-(`.agents/skills/using-slack/registry.json`) names all three.
+Handles (Slack user groups: @infra, @pouw, ...) are roles, each held by one agent; only handle holders and named humans are on
+Slack, and a coordinator relays to its own workers. Everything between handles happens in #agent-coordination: an ask tags one
+handle, an announcement tags some (or none, for every handle), and each is one thread. #agent-alerts is machines to infra.
+`.agents/skills/using-slack/registry.json` names the handles, channels and humans.
 
-  research slack handles [--json]                                   # the registry: handles, channels, humans
-  research slack post --as HANDLE [--channel KEY] [--thread TS] [--text T | --file PATH] [--agent-url URL]   # `<ts> <permalink>`
-  research slack read [--channel KEY] --thread TS | --since TS [--limit N] [--json]
-  research slack match --handle HANDLE --event JSON|TEXT|@PATH|- [--why]      # exit 0 addressed, 1 not, 2 error
-  research slack pickup --channel KEY --thread TS                    # the owner's 👀 on a request
-  research slack done --as HANDLE --channel KEY --thread TS --link URL   # ✅ on the request, and the result's link in its thread
-  research slack announce --channel SERVICE --as OWNER --action TEXT --verify CMD [--ships URL#sha256=HEX | git:SHA]...
-  research slack ack --channel KEY --thread TS --as NAME --status done|blocked [--note TEXT]
-  research slack roster --channel KEY --thread TS [--json]           # acks against the registry; exit 0 only when all are done
-  research slack verify-author --event JSON|@PATH|- [--channel KEY] [--why]   # exit 0 only for an allowlisted author
-  research slack groups sync [--apply]                               # one user group per handle; a plan unless --apply
+  research slack handles [--json]                                  # the registry
+  research slack subscriptions --as HANDLE                         # the subscribe calls this handle's holder makes
+  research slack ask --as HANDLE --to @OWNER [--text T | --file PATH]            # 1:1; prints `<ts> <permalink>`
+  research slack announce --as HANDLE [--to @A @B ...] [--text T | --file PATH] [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...
+  research slack reply --as HANDLE --thread TS [--text T | --file PATH]
+  research slack pickup --thread TS                                # 👀 on an ask you own
+  research slack done --as HANDLE --thread TS [--link URL] [--note T]            # ✅: a status line, and the reaction on an ask
+  research slack decline --as HANDLE --thread TS --why T           # ❌ the same way
+  research slack roster --thread TS [--json]                       # an announcement's status lines; exit 0 when all are done
+  research slack match --as HANDLE --event JSON|TEXT|@PATH|- [--why]            # exit 0 addressed, 1 not, 2 error
+  research slack verify-author --event JSON|@PATH|- [--why]        # exit 0 only for our bot, a channel's bot or a named human
+  research slack read --thread TS | --since TS [--limit N] [--json]
+  research slack groups sync [--apply]                             # one user group per handle; a plan unless --apply
 
-Every subcommand takes `--dry-run` (no request reaches Slack; each one it would send is printed, the token never) and
-`--registry PATH` (default $RESEARCH_SLACK_REGISTRY, else the checkout's). `--channel KEY` is a registry channel
-(`agent-coordination` by default where there is one); its id is $SLACK_CHANNEL_<KEY> (upper case, `-` as `_`) or the
-registry's, and `--channel-id` overrides both. The token is $SLACK_BOT_TOKEN; a handle's top-level posts in a channel it owns
-use the variable its `token_env` names, so that its bot is a distinct author. No token is ever printed. $SLACK_API_URL points
-the client at another Web API (the tests' fake). Stdlib only.
+Every subcommand takes `--dry-run` (no request reaches Slack; each one it would send is printed, the token never),
+`--registry PATH` (default $RESEARCH_SLACK_REGISTRY, else the checkout's) and `--channel KEY` (default agent-coordination);
+a channel's id is $SLACK_CHANNEL_<KEY> (upper case, `-` as `_`) or the registry's, and `--channel-id` overrides both. The token
+is $SLACK_BOT_TOKEN and is never printed; $SLACK_API_URL points the client at another Web API (the tests' fake). Stdlib only.
 
-A message is addressed to HANDLE when it mentions the handle's user group (`<!subteam^ID>` or `<!subteam^ID|@handle>`, the ID
-from the registry), names `@handle` in plain text, or is a reply in a thread whose root mentions the handle or where the handle
-has posted. The handle's own posts never are (an agent must not wake itself)."""
+A post is addressed to HANDLE when it mentions the handle (its user group `<!subteam^ID>`, or plain `@handle`), is an
+announcement that tags no handle, is top-level in a channel HANDLE subscribes to by name (#agent-alerts), or is a reply in a
+thread whose root addressed HANDLE or where HANDLE has posted. A status line (✅/❌) is addressed only to the thread's author,
+and a handle's own posts never are."""
 from __future__ import annotations
 
 import argparse
@@ -42,12 +45,16 @@ SCHEMA = "verity/slack-registry/v1"
 REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 FRONT_DOOR = "agent-coordination"
 DEFAULT_API = "https://slack.com/api/"
+EVERY = "every handle"
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
-ACK_RE = re.compile(r"^ACK (done|blocked)\b(?: \u2014 (.*?))?(?:\n|$)")
+ANNOUNCE = "\U0001f4e3"                                            # 📣
+DONE, DECLINED, TAKING = "\u2705", "\u274c", "\U0001f440"         # ✅ ❌ 👀
+STATUS_RE = re.compile(rf"^({DONE} done|{DECLINED} declined)\b(?: \u2014 (.*?))?(?:\n|$)")
 PIN_RE = re.compile(r"^(?:https?://\S+#sha256=[0-9a-f]{64}|git:[0-9a-f]{40})$")
 SHIPS_CODE_RE = re.compile(r"\b(curl|wget|pip install|uv (?:pip|sync|tool)|git (?:pull|merge|checkout|fetch)|install|download|upgrade)\b", re.I)
 SAFE_POINT = "Apply at your next safe point; don't interrupt running jobs."
+EXPIRES_S = 259200
 PAGE = 200
 
 
@@ -81,17 +88,16 @@ def load_registry(path: Path) -> dict:
         if not NAME_RE.match(name) or name in handles:
             raise SlackError(f"registry {path}: bad or duplicate handle {name!r}")
         handles.add(name)
-        for k in ("owner", "remit", "charter"):
+        for k in ("holder", "remit", "charter"):
             if not isinstance(h.get(k), str) or not h[k]:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
-    for key, ch in (reg.get("channels") or {}).items():
-        if not NAME_RE.match(key) or not isinstance(ch, dict):
-            raise SlackError(f"registry {path}: bad channel {key!r}")
-        if ch.get("owner") is not None and ch["owner"] not in handles:
-            raise SlackError(f"registry {path}: #{key}'s owner @{ch['owner']} is not a handle")
-        for k in ("purpose", "subscribe"):
-            if not ch.get(k):
-                raise SlackError(f"registry {path}: #{key} has no {k}")
+    chans = reg.get("channels") or {}
+    if FRONT_DOOR not in chans:
+        raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
+    for key, ch in chans.items():
+        subs = ch.get("subscribers")
+        if not NAME_RE.match(key) or not ch.get("purpose") or not (subs == EVERY or (isinstance(subs, list) and set(subs) <= handles)):
+            raise SlackError(f"registry {path}: #{key} needs a purpose and subscribers ({EVERY!r} or a list of handles)")
     return reg
 
 
@@ -103,33 +109,36 @@ def entry(reg: dict, handle: str) -> dict:
     raise SlackError(f"unknown handle @{handle}; the registry has " + ", ".join("@" + h["handle"] for h in reg["handles"]))
 
 
-def speaker(reg: dict, name: str) -> dict:
-    """A registry handle's entry, or, for a worker (which has none), its lane name as a bare entry."""
-    name = name.lstrip("@")
-    if any(h["handle"] == name for h in reg["handles"]):
-        return entry(reg, name)
-    if not NAME_RE.match(name):
-        raise SlackError(f"{name!r} is neither a registry handle nor a lane name (lowercase letters, digits, . _ -)")
-    return {"handle": name}
+def subscribers(reg: dict, key: str) -> list[str]:
+    subs = reg["channels"][key]["subscribers"]
+    return [h["handle"] for h in reg["handles"]] if subs == EVERY else list(subs)
+
+
+def _env(key: str) -> str:
+    return "SLACK_CHANNEL_" + key.upper().replace("-", "_").replace(".", "_")
 
 
 def channel_key(ns: argparse.Namespace, reg: dict) -> str:
-    key = (ns.channel or "").lstrip("#")
-    chans = reg.get("channels") or {}
-    if not key:
-        raise SlackError("pass --channel (one of " + ", ".join(sorted(chans)) + ")")
-    if key not in chans:
-        raise SlackError(f"no channel #{key} in the registry (it has {', '.join(sorted(chans)) or 'none'})")
+    key = (ns.channel or FRONT_DOOR).lstrip("#")
+    if key not in reg["channels"]:
+        raise SlackError(f"no channel #{key} in the registry (it has {', '.join(sorted(reg['channels']))})")
     return key
 
 
-def channel_id(ns: argparse.Namespace, reg: dict) -> str:
-    key = channel_key(ns, reg)
-    env = "SLACK_CHANNEL_" + key.upper().replace("-", "_").replace(".", "_")
-    cid = ns.channel_id or os.environ.get(env) or reg["channels"][key].get("id")
+def channel_id(ns: argparse.Namespace, reg: dict, key: str | None = None) -> str:
+    key = key or channel_key(ns, reg)
+    cid = (ns.channel_id if key == channel_key(ns, reg) else None) or os.environ.get(_env(key)) or reg["channels"][key].get("id")
     if not cid:
-        raise SlackError(f"no channel id for #{key}: pass --channel-id, set {env}, or record its id in the registry")
+        raise SlackError(f"no channel id for #{key}: pass --channel-id, set {_env(key)}, or record its id in the registry")
     return cid
+
+
+def key_of(reg: dict, cid: str) -> str | None:
+    return next((k for k, c in reg["channels"].items() if cid in (c.get("id"), os.environ.get(_env(k)))), None)
+
+
+def tag(h: dict) -> str:
+    return f"<!subteam^{h['usergroup']}|@{h['handle']}>" if h.get("usergroup") else f"@{h['handle']}"
 
 
 # --- the Web API ------------------------------------------------------------------------------------------------------------
@@ -138,12 +147,11 @@ class Slack:
     """A minimal Web API client: form-encoded POSTs with a bearer token. With `dry_run`, nothing is sent: each call is printed
     (method and parameters, never the token) and answered with an empty `ok` response."""
 
-    def __init__(self, token: str | None, *, token_env: str = "SLACK_BOT_TOKEN", base: str | None = None, dry_run: bool = False,
-                 log=None):
+    def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None):
         self.token, self.dry_run, self.log = token, dry_run, log
         self.base = (base or os.environ.get("SLACK_API_URL") or DEFAULT_API).rstrip("/") + "/"
         if not dry_run and not token:
-            raise SlackError(f"{token_env} is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
+            raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
 
     def call(self, method: str, **params: Any) -> dict:
         params = {k: v for k, v in params.items() if v is not None}
@@ -176,9 +184,13 @@ class Slack:
             if not cursor or (limit and len(items) >= limit):
                 return items[:limit] if limit else items
 
+    def root(self, channel: str, thread: str) -> dict | None:
+        msgs = self.call("conversations.replies", channel=channel, ts=thread, limit=1).get("messages", [])
+        return next((m for m in msgs if m.get("ts") == thread), None)
 
-def client(ns: argparse.Namespace, token_env: str = "SLACK_BOT_TOKEN") -> Slack:
-    return Slack(os.environ.get(token_env), token_env=token_env, dry_run=ns.dry_run)
+
+def client(ns: argparse.Namespace) -> Slack:
+    return Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=ns.dry_run)
 
 
 def _footer(handle: str, url: str | None) -> str:
@@ -188,26 +200,13 @@ def _footer(handle: str, url: str | None) -> str:
     return f"_posted by <{url}|@{handle}'s agent>_"
 
 
-def _post(api: Slack, ch: str, name: str, text: str, thread: str | None = None) -> str:
-    out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=name, text=text, unfurl_links="false", unfurl_media="false")
+def _post(api: Slack, ch: str, handle: str, text: str, url: str | None, thread: str | None = None) -> str:
+    out = api.call("chat.postMessage", channel=ch, thread_ts=thread, username=handle, text=f"{text}\n\n{_footer(handle, url)}",
+                   unfurl_links="false", unfurl_media="false")
     ts = out.get("ts") or "DRY-RUN"
     link = api.call("chat.getPermalink", channel=ch, message_ts=ts).get("permalink") or "-"
     print(f"{ts} {link}")
     return ts
-
-
-def _owner_check(reg: dict, key: str, handle: str, what: str) -> dict:
-    """Top-level posts in a channel with an owner are the owner's (and named humans', who don't use this tool)."""
-    ch = reg["channels"][key]
-    if ch.get("owner") and handle != ch["owner"]:
-        raise SlackError(f"#{key}: only its owner @{ch['owner']} {what}; everyone else replies in threads (--thread TS)")
-    return ch
-
-
-def _token_env(reg: dict, key: str, handle: str, top_level: bool) -> str:
-    h = speaker(reg, handle)
-    owns = reg["channels"][key].get("owner") == handle
-    return h.get("token_env", "SLACK_BOT_TOKEN") if top_level and owns else "SLACK_BOT_TOKEN"
 
 
 # --- addressing and authorship ----------------------------------------------------------------------------------------------
@@ -230,9 +229,9 @@ def parse_event(raw: str) -> dict:
     return ev
 
 
-def by_handle(msg: dict, handle: str) -> bool:
-    """Posted by this handle: a bot message under its username (`post --as`)."""
-    return bool(msg.get("bot_id")) and msg.get("username") == handle
+def by_handle(msg: dict | None, handle: str) -> bool:
+    """Posted by this handle: a bot message under its username."""
+    return bool(msg) and bool(msg.get("bot_id")) and msg.get("username") == handle
 
 
 def mentions(text: str, h: dict) -> str | None:
@@ -247,27 +246,60 @@ def mentions(text: str, h: dict) -> str | None:
     return None
 
 
-def addressed(ev: dict, h: dict, api: Slack | None, channel: str | None) -> str | None:
-    """Why the message event `ev` is addressed to `h`, or None. Looks up the thread only when the message is a reply."""
-    handle = h["handle"]
+def tagged(text: str, reg: dict) -> list[str]:
+    return [h["handle"] for h in reg["handles"] if mentions(text, h)]
+
+
+def is_announcement(msg: dict | None) -> bool:
+    return bool(msg) and (msg.get("text") or "").startswith(ANNOUNCE)
+
+
+def audience(text: str, reg: dict) -> list[str]:
+    """The handles an announcement's header tags after ` to ` (the header also names its author); empty means every handle."""
+    first = (text or "").split("\n", 1)[0]
+    return tagged(first.split(" to ", 1)[1], reg) if " to " in first else []
+
+
+def is_status(text: str) -> bool:
+    return bool(STATUS_RE.match(text or ""))
+
+
+def addressed(ev: dict, h: dict, reg: dict, key: str | None, api: Slack | None) -> str | None:
+    """Why the post `ev` (in channel `key`, when known) is addressed to `h`, or None."""
+    handle, text = h["handle"], ev.get("text", "")
     if by_handle(ev, handle):
         return None
-    if why := mentions(ev.get("text", ""), h):
-        return why
     thread = ev.get("thread_ts")
-    if not thread or thread == ev.get("ts") or api is None:
+    if not thread or thread == ev.get("ts"):
+        if key and key != FRONT_DOOR and handle in subscribers(reg, key):
+            return f"top-level post in #{key}, which @{handle} subscribes to"
+        if why := mentions(text, h):
+            return why
+        if is_announcement(ev) and not audience(text, reg):
+            return "an announcement to every handle"
         return None
-    ch = ev.get("channel") or channel
+    if not is_status(text) and (why := mentions(text, h)):
+        return why
+    if api is None:
+        return None
+    ch = ev.get("channel") or (channel_id_for(reg, key) if key else None)
     if not ch:
-        raise SlackError("the event is a thread reply with no channel, and no --channel is known")
-    for m in api.paged("conversations.replies", "messages", channel=ch, ts=thread):
-        if m.get("ts") == ev.get("ts"):
-            continue
-        if by_handle(m, handle):
-            return f"thread {thread}: @{handle} posted in it"
-        if m.get("ts") == thread and mentions(m.get("text", ""), h):
-            return f"thread {thread}: its root addresses @{handle}"
+        raise SlackError("the event is a thread reply with no channel, and no --channel id is known")
+    msgs = api.paged("conversations.replies", "messages", channel=ch, ts=thread)
+    root = next((m for m in msgs if m.get("ts") == thread), None)
+    if is_status(text):
+        return f"a status line on @{handle}'s post" if by_handle(root, handle) else None
+    if by_handle(root, handle) or any(by_handle(m, handle) for m in msgs if m.get("ts") != ev.get("ts")):
+        return f"thread {thread}: @{handle} posted in it"
+    if root and mentions(root.get("text", ""), h):
+        return f"thread {thread}: its root addresses @{handle}"
+    if key and key != FRONT_DOOR and handle in subscribers(reg, key):
+        return f"thread {thread} in #{key}, which @{handle} subscribes to"
     return None
+
+
+def channel_id_for(reg: dict, key: str) -> str | None:
+    return os.environ.get(_env(key)) or reg["channels"][key].get("id")
 
 
 def fetch_message(api: Slack, ch: str, ts: str, thread: str | None) -> dict | None:
@@ -280,17 +312,15 @@ def fetch_message(api: Slack, ch: str, ts: str, thread: str | None) -> dict | No
 
 
 def author_allowed(msg: dict, reg: dict, key: str) -> str | None:
-    """Why `msg`'s author may post top-level in #key, or None: the channel owner's own bot (its handle's `bot_id`, under its
-    username), a bot the channel lists in `authors.bots` (machine alerts), or a named human (`humans`, by Slack user id).
-    An entry without an id allows nobody."""
-    ch = reg["channels"][key]
-    bots = list((ch.get("authors") or {}).get("bots", []))
-    if ch.get("owner"):
-        bots.append({"handle": ch["owner"], "bot_id": entry(reg, ch["owner"]).get("bot_id")})
+    """Why `msg`'s author is one of ours, or None: Verity's bot (the registry's `bot_id`, under a handle's username), a bot the
+    channel lists (`bots`: alerting), or a named human (`humans`, by Slack user id). An entry without an id allows nobody."""
     if msg.get("bot_id"):
-        for b in bots:
-            if b.get("bot_id") and msg["bot_id"] == b["bot_id"] and (not b.get("handle") or msg.get("username") == b["handle"]):
-                return f"bot {b['bot_id']} (@{b.get('handle') or msg.get('username')})"
+        handles = {h["handle"] for h in reg["handles"]}
+        if reg.get("bot_id") and msg["bot_id"] == reg["bot_id"] and msg.get("username") in handles:
+            return f"Verity's bot as @{msg['username']}"
+        for b in reg["channels"][key].get("bots", []):
+            if b.get("bot_id") and msg["bot_id"] == b["bot_id"]:
+                return f"#{key}'s bot {b['name']} ({b['bot_id']})"
         return None
     for p in reg.get("humans", []):
         if p.get("slack_user") and msg.get("user") == p["slack_user"]:
@@ -300,48 +330,158 @@ def author_allowed(msg: dict, reg: dict, key: str) -> str | None:
 
 # --- subcommands ------------------------------------------------------------------------------------------------------------
 
+def _body(ns: argparse.Namespace) -> str:
+    if ns.text is not None:
+        text = ns.text
+    elif ns.file and ns.file != "-":
+        text = Path(ns.file).read_text()
+    else:
+        text = sys.stdin.read()
+    if not text.strip():
+        raise SlackError("empty message")
+    return text.rstrip()
+
+
 def cmd_handles(ns: argparse.Namespace, reg: dict) -> int:
     if ns.json:
-        print(json.dumps(reg, indent=2))
+        print(json.dumps(reg, indent=2, ensure_ascii=False))
         return 0
-    print(f"workspace {reg.get('workspace')}")
-    for key, ch in (reg.get("channels") or {}).items():
-        own = f"owner @{ch['owner']}" if ch.get("owner") else "no owner"
-        sub = ch["subscribe"]
-        mode = f"topLevelOnly={str(bool(sub.get('top_level_only'))).lower()}" + ("; the owner in full" if sub.get("owner_full") else "")
-        print(f"#{key:<20} {ch.get('id') or 'id not recorded':<12} {own}\n  {ch['purpose']}\n  subscribe: {sub.get('who')} ({mode})"
-              f"\n  contract: {ch.get('contract') or 'not pinned yet'}")
+    print(f"workspace {reg.get('workspace')}  bot {reg.get('bot_id') or 'id not recorded'}")
+    for key, ch in reg["channels"].items():
+        subs = ch["subscribers"] if ch["subscribers"] == EVERY else ", ".join("@" + s for s in ch["subscribers"])
+        print(f"#{key:<20} {ch.get('id') or 'id not recorded':<12} subscribers: {subs}\n  {ch['purpose']}")
     for h in reg["handles"]:
-        print(f"@{h['handle']:<22} {h.get('usergroup') or '-':<12} {h['owner']}\n  {h['remit']}\n  charter: {h['charter']}")
+        print(f"@{h['handle']:<10} {h.get('usergroup') or '-':<12} {h['holder']}\n  {h['remit']}\n  charter: {h['charter']}")
     for p in reg.get("humans", []):
         print(f"human {p['name']} ({p.get('slack_user') or 'user id not recorded'})")
     return 0
 
 
-def _body(ns: argparse.Namespace) -> str:
-    if ns.text is not None:
-        return ns.text
-    if ns.file and ns.file != "-":
-        return Path(ns.file).read_text()
-    return sys.stdin.read()
+def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
+    h = entry(reg, ns.handle)
+    missing = False
+    for key in reg["channels"]:
+        if h["handle"] in subscribers(reg, key):
+            cid = channel_id_for(reg, key)
+            missing |= not cid
+            print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
+                  f"expiresInSeconds={EXPIRES_S})   # #{key}")
+    print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) for each thread @{h['handle']} "
+          f"starts, replies in or picks up (not for a status line alone); renew on every wake")
+    return 2 if missing else 0
 
 
-def cmd_post(ns: argparse.Namespace, reg: dict) -> int:
-    h = speaker(reg, ns.handle)
-    key = channel_key(ns, reg)
-    if not ns.thread:
-        _owner_check(reg, key, h["handle"], "posts top-level")
-    footer = _footer(h["handle"], ns.agent_url)
-    text = _body(ns).rstrip()
-    if not text:
-        raise SlackError("empty message")
-    api = client(ns, _token_env(reg, key, h["handle"], not ns.thread))
-    _post(api, channel_id(ns, reg), h["handle"], f"{text}\n\n{footer}", ns.thread)
+def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
+    h, owner = entry(reg, ns.handle), entry(reg, ns.to)
+    if owner["handle"] == h["handle"]:
+        raise SlackError("an ask goes to another handle")
+    _post(client(ns), channel_id(ns, reg, FRONT_DOOR), h["handle"], f"{tag(owner)} {_body(ns)}", ns.agent_url)
     return 0
 
 
-def _who(m: dict) -> str:
-    return "@" + m["username"] if m.get("username") else m.get("user") or m.get("bot_id") or "?"
+def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
+    h = entry(reg, ns.handle)
+    to = [entry(reg, t) for t in ns.to]
+    body = _body(ns)
+    for pin in ns.ships:
+        if not PIN_RE.match(pin):
+            raise SlackError(f"--ships {pin!r}: pin code as URL#sha256=<64 hex> or git:<40-hex commit>")
+    if not ns.ships and SHIPS_CODE_RE.search(f"{body}\n{ns.verify or ''}"):
+        raise SlackError("the announcement fetches or installs code: pin it with --ships URL#sha256=HEX or git:SHA")
+    audience = " ".join(tag(t) for t in to) if to else "every handle"
+    lines = [f"{ANNOUNCE} *Announcement* from @{h['handle']} to {audience}", body]
+    if ns.verify:
+        lines += [f"*{SAFE_POINT}*", f"*Verify:* `{ns.verify}`"]
+    for pin in ns.ships:
+        url, _, sha = pin.partition("#sha256=")
+        lines.append(f"*Pinned:* commit `{pin[4:]}`" if pin.startswith("git:") else f"*Pinned:* {url} sha256 `{sha}` (don't run it if the checksum fails)")
+    lines.append(f"*Reply with a status line:* `research slack done --thread <this ts>` or `research slack decline --thread <this ts> --why ...`")
+    _post(client(ns), channel_id(ns, reg, FRONT_DOOR), h["handle"], "\n".join(lines), ns.agent_url)
+    return 0
+
+
+def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
+    h = entry(reg, ns.handle)
+    _post(client(ns), channel_id(ns, reg), h["handle"], _body(ns), ns.agent_url, ns.thread)
+    return 0
+
+
+def cmd_pickup(ns: argparse.Namespace, reg: dict) -> int:
+    client(ns).call("reactions.add", channel=channel_id(ns, reg), timestamp=ns.thread, name="eyes")
+    return 0
+
+
+def _status(ns: argparse.Namespace, reg: dict, word: str, reaction: str, detail: str | None) -> int:
+    """A status line in the thread; on an ask or an alert (one owner), also the reaction on its root. On an announcement the
+    line alone carries it: every handle posts through one bot, which can place each reaction only once."""
+    h = entry(reg, ns.handle)
+    api, ch = client(ns), channel_id(ns, reg)
+    detail = " ".join((detail or "").split())
+    _post(api, ch, h["handle"], f"{word}" + (f" \u2014 {detail}" if detail else ""), ns.agent_url, ns.thread)
+    if not is_announcement(api.root(ch, ns.thread)):
+        api.call("reactions.add", channel=ch, timestamp=ns.thread, name=reaction)
+    return 0
+
+
+def cmd_done(ns: argparse.Namespace, reg: dict) -> int:
+    return _status(ns, reg, f"{DONE} done", "white_check_mark", " ".join(x for x in (ns.link, ns.note) if x))
+
+
+def cmd_decline(ns: argparse.Namespace, reg: dict) -> int:
+    return _status(ns, reg, f"{DECLINED} declined", "x", ns.why)
+
+
+def cmd_roster(ns: argparse.Namespace, reg: dict) -> int:
+    msgs = client(ns).paged("conversations.replies", "messages", channel=channel_id(ns, reg), ts=ns.thread)
+    root = next((m for m in msgs if m.get("ts") == ns.thread), None)
+    if not ns.dry_run and not is_announcement(root):
+        raise SlackError(f"{ns.thread} is not an announcement")
+    aud = audience((root or {}).get("text", ""), reg) or [h["handle"] for h in reg["handles"]]
+    expected = [n for n in aud if n != (root or {}).get("username")]
+    status: dict[str, dict] = {}
+    for m in msgs:
+        if m.get("ts") != ns.thread and m.get("username") in expected and m.get("bot_id") and (mt := STATUS_RE.match(m.get("text", ""))):
+            status[m["username"]] = {"status": mt.group(1).split()[1], "detail": mt.group(2) or "", "ts": m["ts"]}
+    rows = [{"handle": n, **status.get(n, {"status": "missing"})} for n in expected]
+    if ns.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+    else:
+        for r in rows:
+            print(f"{r['status']:<9} @{r['handle']}" + (f"  {r['detail']}" if r.get("detail") else ""))
+    return 0 if all(r["status"] == "done" for r in rows) else 1
+
+
+def cmd_match(ns: argparse.Namespace, reg: dict) -> int:
+    h = entry(reg, ns.handle)
+    ev = parse_event(ns.event)
+    key = key_of(reg, ev["channel"]) if ev.get("channel") else channel_key(ns, reg)
+    reply = ev.get("thread_ts") and ev.get("thread_ts") != ev.get("ts")
+    api = client(ns) if reply and not by_handle(ev, h["handle"]) else None
+    why = addressed(ev, h, reg, key, api)
+    if ns.why:
+        print(why or "not addressed", file=sys.stderr)
+    return 0 if why else 1
+
+
+def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
+    """Fail closed: exit 0 only when the message, fetched from Slack by channel and ts, has an author the registry names.
+    With --dry-run the event's own fields are judged (a test of the allowlist, not of a real post)."""
+    ev = parse_event(ns.event)
+    key = (key_of(reg, ev["channel"]) if ev.get("channel") and not ns.channel else None) or channel_key(ns, reg)
+    ch = channel_id(ns, reg, key)
+    why = None
+    if ev.get("channel") and ev["channel"] != ch:
+        why_not = f"posted in {ev['channel']}, not #{key} ({ch})"
+    elif not ev.get("ts"):
+        why_not = "the event has no ts to look the message up by"
+    else:
+        msg = ev if ns.dry_run else fetch_message(client(ns), ch, ev["ts"], ev.get("thread_ts"))
+        why = author_allowed(msg, reg, key) if msg else None
+        who = "@" + msg["username"] if msg and msg.get("username") else (msg or {}).get("user") or (msg or {}).get("bot_id")
+        why_not = "no such message in the channel" if msg is None else f"author {who} is not in the registry"
+    if ns.why:
+        print(f"allowed: {why}" if why else f"not allowed: {why_not}", file=sys.stderr)
+    return 0 if why else 1
 
 
 def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
@@ -352,109 +492,13 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         msgs = api.paged("conversations.history", "messages", ns.limit, channel=ch, oldest=ns.since)
         msgs = [m for m in msgs if m.get("ts") != ns.since][::-1]                   # oldest first; `oldest` is inclusive at the edge
     if ns.json:
-        print(json.dumps(msgs, indent=2))
+        print(json.dumps(msgs, indent=2, ensure_ascii=False))
         return 0
     for m in msgs:
         thread = f" [thread {m['thread_ts']}]" if m.get("thread_ts") and m.get("thread_ts") != m.get("ts") else ""
-        print(f"{m.get('ts')}{thread} {_who(m)}: {m.get('text', '')}")
+        who = "@" + m["username"] if m.get("username") else m.get("user") or m.get("bot_id") or "?"
+        print(f"{m.get('ts')}{thread} {who}: {m.get('text', '')}")
     return 0
-
-
-def cmd_match(ns: argparse.Namespace, reg: dict) -> int:
-    h = speaker(reg, ns.handle)
-    ev = parse_event(ns.event)
-    reply = ev.get("thread_ts") and ev.get("thread_ts") != ev.get("ts")
-    needs_thread = reply and not mentions(ev.get("text", ""), h) and not by_handle(ev, h["handle"])
-    api = client(ns) if needs_thread else None
-    ch = ev.get("channel") or (channel_id(ns, reg) if needs_thread and not ev.get("channel") else None)
-    why = addressed(ev, h, api, ch)
-    if ns.why:
-        print(why or "not addressed", file=sys.stderr)
-    return 0 if why else 1
-
-
-def cmd_pickup(ns: argparse.Namespace, reg: dict) -> int:
-    client(ns).call("reactions.add", channel=channel_id(ns, reg), timestamp=ns.thread, name="eyes")
-    return 0
-
-
-def cmd_done(ns: argparse.Namespace, reg: dict) -> int:
-    h = speaker(reg, ns.handle)
-    api, ch = client(ns), channel_id(ns, reg)
-    _post(api, ch, h["handle"], f":white_check_mark: {ns.link}\n\n{_footer(h['handle'], ns.agent_url)}", ns.thread)
-    api.call("reactions.add", channel=ch, timestamp=ns.thread, name="white_check_mark")
-    return 0
-
-
-def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
-    """Fail closed: exit 0 only when the message, fetched from Slack by channel and ts, was written by an author the channel
-    allows. With --dry-run the event's own fields are judged (a test of the allowlist, not of a real post)."""
-    ev = parse_event(ns.event)
-    if not ns.channel and ev.get("channel"):
-        ns.channel = next((k for k, c in (reg.get("channels") or {}).items()
-                           if ev["channel"] in (c.get("id"), os.environ.get("SLACK_CHANNEL_" + k.upper().replace("-", "_")))), None)
-    key, ch = channel_key(ns, reg), channel_id(ns, reg)
-    why = None
-    if ev.get("channel") and ev["channel"] != ch:
-        why_not = f"posted in {ev['channel']}, not #{key} ({ch})"
-    elif not ev.get("ts"):
-        why_not = "the event has no ts to look the message up by"
-    else:
-        msg = ev if ns.dry_run else fetch_message(client(ns), ch, ev["ts"], ev.get("thread_ts"))
-        why = author_allowed(msg, reg, key) if msg else None
-        why_not = "no such message in the channel" if msg is None else f"author {_who(msg)} is not allowed to post top-level in #{key}"
-    if ns.why:
-        print(f"allowed: {why}" if why else f"not allowed: {why_not}", file=sys.stderr)
-    return 0 if why else 1
-
-
-def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
-    h = entry(reg, ns.handle)
-    key = channel_key(ns, reg)
-    ch = _owner_check(reg, key, h["handle"], "announces")
-    if not ch.get("owner"):
-        raise SlackError(f"#{key} has no owner: announcements go in a service channel")
-    for pin in ns.ships:
-        if not PIN_RE.match(pin):
-            raise SlackError(f"--ships {pin!r}: pin code as URL#sha256=<64 hex> or git:<40-hex commit>")
-    if not ns.ships and SHIPS_CODE_RE.search(f"{ns.action}\n{ns.verify}"):
-        raise SlackError("the action or its verify command fetches or installs code: pin it with --ships URL#sha256=HEX or git:SHA")
-    lines = [f":rotating_light: *Required action* from @{h['handle']}", ns.action.strip(), f"*{SAFE_POINT}*", f"*Verify:* `{ns.verify}`"]
-    for pin in ns.ships:
-        url, _, sha = pin.partition("#sha256=")
-        lines.append(f"*Pinned:* commit `{pin[4:]}`" if pin.startswith("git:") else f"*Pinned:* {url} sha256 `{sha}` (don't run it if the checksum fails)")
-    lines.append(f"*Confirm in this thread:* `research slack ack --channel {key} --thread <this message's ts> --as <you> --status done|blocked [--note ...]`")
-    lines.append(_footer(h["handle"], ns.agent_url))
-    _post(client(ns, _token_env(reg, key, h["handle"], True)), channel_id(ns, reg), h["handle"], "\n".join(lines))
-    return 0
-
-
-def cmd_ack(ns: argparse.Namespace, reg: dict) -> int:
-    name = speaker(reg, ns.handle)["handle"]
-    note = " ".join((ns.note or "").split())
-    text = f"ACK {ns.status}" + (f" \u2014 {note}" if note else "") + "\n\n" + _footer(name, ns.agent_url)
-    _post(client(ns), channel_id(ns, reg), name, text, ns.thread)
-    return 0
-
-
-def cmd_roster(ns: argparse.Namespace, reg: dict) -> int:
-    msgs = client(ns).paged("conversations.replies", "messages", channel=channel_id(ns, reg), ts=ns.thread)
-    acks: dict[str, dict] = {}
-    for m in msgs:
-        if m.get("ts") == ns.thread or not m.get("bot_id") or not m.get("username"):
-            continue
-        if mt := ACK_RE.match(m.get("text", "")):
-            acks[m["username"]] = {"status": mt.group(1), "note": mt.group(2) or "", "ts": m["ts"]}
-    owner = reg["channels"][channel_key(ns, reg)].get("owner")
-    expected = [h["handle"] for h in reg["handles"] if h["handle"] != owner]
-    rows = [{"name": n, "registered": True, **acks.get(n, {"status": "missing"})} for n in expected]
-    rows += [{"name": n, "registered": False, **a} for n, a in sorted(acks.items()) if n not in expected]
-    if ns.json:
-        print(json.dumps(rows, indent=2))
-    else:
-        for r in rows:
-            print(f"{r['status']:<8} @{r['name']}{'' if r['registered'] else ' (not in the registry)'}" + (f"  {r['note']}" if r.get("note") else ""))
-    return 0 if all(r["status"] == "done" for r in rows if r["registered"]) else 1
 
 
 def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
@@ -495,75 +539,68 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
 
 
 def main(argv: list[str]) -> int:
-    def common(channel: str | None) -> argparse.ArgumentParser:
-        c = argparse.ArgumentParser(add_help=False)
-        c.add_argument("--dry-run", action="store_true", help="send nothing to Slack; print each request instead")
-        c.add_argument("--registry", default=None, help="the registry (default $RESEARCH_SLACK_REGISTRY or the checkout's)")
-        c.add_argument("--channel", default=channel, metavar="KEY", help="a registry channel" + (f" (default {channel})" if channel else ""))
-        c.add_argument("--channel-id", default=None, metavar="ID", help="the channel's Slack id (default $SLACK_CHANNEL_<KEY>, else the registry's)")
-        return c
+    c = argparse.ArgumentParser(add_help=False)
+    c.add_argument("--dry-run", action="store_true", help="send nothing to Slack; print each request instead")
+    c.add_argument("--registry", default=None, help="the registry (default $RESEARCH_SLACK_REGISTRY or the checkout's)")
+    c.add_argument("--channel", default=None, metavar="KEY", help=f"a registry channel (default {FRONT_DOOR})")
+    c.add_argument("--channel-id", default=None, metavar="ID", help="its Slack id (default $SLACK_CHANNEL_<KEY>, else the registry's)")
 
-    def agent_url(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--agent-url", default=None, help="footer link to the posting agent (default $RESEARCH_AGENT_URL)")
-
-    front, anyc = common(FRONT_DOOR), common(None)
     ap = argparse.ArgumentParser(prog="research slack", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("handles", parents=[anyc], help="list the registry")
+
+    def cmd(name: str, help: str, *, as_: bool = False, thread: bool = False, body: bool = False, url: bool = False) -> argparse.ArgumentParser:
+        p = sub.add_parser(name, parents=[c], help=help)
+        if as_:
+            p.add_argument("--as", dest="handle", required=True, metavar="HANDLE", help="the handle you hold")
+        if thread:
+            p.add_argument("--thread", required=True, metavar="TS", help="the thread's root ts")
+        if body:
+            p.add_argument("--text", default=None)
+            p.add_argument("--file", default=None, metavar="PATH", help="the body from PATH (`-` or neither: stdin)")
+        if url:
+            p.add_argument("--agent-url", default=None, help="footer link to the posting agent (default $RESEARCH_AGENT_URL)")
+        return p
+
+    cmd("handles", "the registry").add_argument("--json", action="store_true")
+    cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
+    cmd("ask", "1:1: tag one handle in #agent-coordination", as_=True, body=True, url=True).add_argument("--to", required=True, metavar="@OWNER")
+    p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True, url=True)
+    p.add_argument("--to", nargs="+", default=[], metavar="@HANDLE", help="the handles it's for (default: every handle)")
+    p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
+    p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
+    cmd("reply", "a post in a thread", as_=True, thread=True, body=True, url=True)
+    cmd("pickup", "\U0001f440 on an ask or alert you own", thread=True)
+    p = cmd("done", "\u2705 a status line, and the reaction on an ask or alert", as_=True, thread=True, url=True)
+    p.add_argument("--link", default=None, metavar="URL", help="the result: a PR, file or art: id")
+    p.add_argument("--note", default=None)
+    cmd("decline", "\u274c a status line, and the reaction on an ask or alert", as_=True, thread=True, url=True).add_argument("--why", required=True)
+    p = cmd("roster", "an announcement's status lines; exit 0 only when every addressed handle is done", thread=True)
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("post", parents=[front], help="post as a handle; prints `<ts> <permalink>`")
-    p.add_argument("--as", dest="handle", required=True, help="your handle, or your lane name if you have none")
-    p.add_argument("--thread", default=None, metavar="TS")
-    p.add_argument("--text", default=None)
-    p.add_argument("--file", default=None, metavar="PATH", help="the message body from PATH (`-` or neither: stdin)")
-    agent_url(p)
-    p = sub.add_parser("read", parents=[front], help="channel or thread history, oldest first")
+    p = cmd("match", "exit 0 if the post is addressed to you, 1 if not, 2 on error", as_=True)
+    p.add_argument("--event", required=True, help="the message event as JSON, plain text, @PATH or - (stdin)")
+    p.add_argument("--why", action="store_true", help="print the reason (or `not addressed`) on stderr")
+    p = cmd("verify-author", "exit 0 only when the post's author is in the registry")
+    p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
+    p.add_argument("--why", action="store_true", help="print the verdict on stderr")
+    p = cmd("read", "channel or thread history, oldest first")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--thread", default=None, metavar="TS")
     g.add_argument("--since", default=None, metavar="TS")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--json", action="store_true")
-    p = sub.add_parser("match", parents=[front], help="exit 0 if the event is addressed to the handle, 1 if not, 2 on error")
-    p.add_argument("--handle", required=True, help="your handle, or your lane name if you have none")
-    p.add_argument("--event", required=True, help="the message event as JSON, plain text, @PATH or - (stdin)")
-    p.add_argument("--why", action="store_true", help="print the reason (or `not addressed`) on stderr")
-    p = sub.add_parser("pickup", parents=[front], help="react :eyes: on a request you own")
-    p.add_argument("--thread", required=True, metavar="TS")
-    p = sub.add_parser("done", parents=[front], help="react :white_check_mark: on a request and reply with the result's link")
-    p.add_argument("--as", dest="handle", required=True)
-    p.add_argument("--thread", required=True, metavar="TS")
-    p.add_argument("--link", required=True, metavar="URL", help="the result: a file, PR or art: id")
-    agent_url(p)
-    p = sub.add_parser("announce", parents=[anyc], help="the channel owner's one required action, with its verify command and pinned code")
-    p.add_argument("--as", dest="handle", required=True, help="the channel's owner")
-    p.add_argument("--action", required=True, help="the single action every subscriber takes")
-    p.add_argument("--verify", required=True, metavar="CMD", help="the command that shows the action took")
-    p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code the action runs, pinned")
-    agent_url(p)
-    p = sub.add_parser("ack", parents=[anyc], help="confirm an announcement in its thread")
-    p.add_argument("--thread", required=True, metavar="TS")
-    p.add_argument("--as", dest="handle", required=True, help="your handle, or your lane name if you have none")
-    p.add_argument("--status", required=True, choices=["done", "blocked"])
-    p.add_argument("--note", default=None)
-    agent_url(p)
-    p = sub.add_parser("roster", parents=[anyc], help="who acked an announcement and who didn't; exit 0 only when every handle is done")
-    p.add_argument("--thread", required=True, metavar="TS")
-    p.add_argument("--json", action="store_true")
-    p = sub.add_parser("verify-author", parents=[anyc], help="exit 0 only when the post's author may post top-level in the channel")
-    p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
-    p.add_argument("--why", action="store_true", help="print the verdict on stderr")
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
-    p = gsub.add_parser("sync", parents=[anyc], help="create or update a user group per handle; a plan unless --apply")
-    p.add_argument("--apply", action="store_true")
+    gsub.add_parser("sync", parents=[c], help="create or update a user group per handle; a plan unless --apply").add_argument("--apply", action="store_true")
+
     ns = ap.parse_args(argv)
     try:
         path = registry_path(ns.registry)
         reg = load_registry(path)
         if ns.cmd == "groups":
             return cmd_groups_sync(ns, reg, path)
-        return {"handles": cmd_handles, "post": cmd_post, "read": cmd_read, "match": cmd_match, "pickup": cmd_pickup, "done": cmd_done,
-                "announce": cmd_announce, "ack": cmd_ack, "roster": cmd_roster, "verify-author": cmd_verify_author}[ns.cmd](ns, reg)
+        return {"handles": cmd_handles, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
+                "pickup": cmd_pickup, "done": cmd_done, "decline": cmd_decline, "roster": cmd_roster, "match": cmd_match,
+                "verify-author": cmd_verify_author, "read": cmd_read}[ns.cmd](ns, reg)
     except SlackError as e:
         print(f"research slack: {e}", file=sys.stderr)
         return 2
