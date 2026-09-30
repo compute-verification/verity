@@ -130,7 +130,8 @@ exited 0, 1 otherwise, 2 on a usage error (no run id, no commit). An arm without
 
 **Poisoned transcripts and the no-write control** (panel rule, server.md 11:50Z). An arm with `dump` (arm interface v0.5)
 lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,
-default `call.outputs`) is filled with 0xA5, the weight side and the call run, and the arm's `dump` writes
+default `call.outputs`; never an operand, since poisoning one changes what the call computes, so an overlap is refused and the
+row gets no control) is filled with 0xA5, the weight side and the call run, and the arm's `dump` writes
 `transcripts/<arm>/<shape>/`; then the buffers are poisoned again, nothing is launched, and `dump` writes
 `negative/<arm>/<shape>/`, which the verifier must reject. The run's JSON says what was poisoned and how many bytes the call
 wrote (`poisoning`). `verify.py` judges the control at the transcript's path under `negative/` unless the declaration names

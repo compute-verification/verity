@@ -1194,3 +1194,16 @@ def test_dump_transcripts_poisons_every_dumping_arm_s_hash_call_and_records_the_
     lone = DumpingArm()
     lone.name = "no-hash-call"
     assert H.dump_transcripts(b, dev, SHAPE, [lone], [], Path("."))[0]["error"] == "no gated hash call at this shape"
+
+
+def test_a_transcript_buffer_over_an_operand_is_refused_before_anything_is_poisoned(tmp_path):
+    b, dev = bench()
+    arm, sets = DumpingArm(), opsets(dev, 1)
+    call = FakeCall(dev, 1.0)
+    dev.write(sets[0].a.ptr, b"\x07" * 64)
+    call.transcript_buffers = {"root": call.outputs["root"], "a": A.Buffer(sets[0].a.ptr + 32, 16)}
+    entries = [H.Entry(("arm", SHAPE.label, arm.name, "hash"), "arm", [call])]
+    rec = H.dump_transcripts(b, dev, SHAPE, [arm], entries, tmp_path, {arm.name: sets})[0]
+    assert rec["by"] == "harness" and "a overlaps operand a" in rec["error"] and not (tmp_path / "transcripts").exists()
+    assert dev.read(sets[0].a.ptr, 64) == b"\x07" * 64
+    assert H.operand_overlaps({"root": call.outputs["root"]}, sets[0]) == []

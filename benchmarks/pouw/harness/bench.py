@@ -376,13 +376,27 @@ def _poison(dev, bufs: dict[str, A.Buffer]) -> None:
         raise RuntimeError(f"poisoning left bytes unpoisoned: {left}")
 
 
-def poison_dump(dev, arm, shape, call, out_dir: Path) -> dict:
+def operand_overlaps(bufs: dict[str, A.Buffer], operands: A.OperandSet | None) -> list[str]:
+    """Each transcript buffer that overlaps one of the call's operands. Poisoning it would have the dumped call compute from
+    0xA5 operands, a transcript the verifier can accept that isn't of the shape's operands."""
+    if operands is None:
+        return []
+    ops = {n: b for n in ("a", "b", "a_scale", "b_scale") if (b := getattr(operands, n)) is not None}
+    return [f"{t} overlaps operand {o}" for t, x in bufs.items() for o, y in ops.items()
+            if x.ptr < y.ptr + y.nbytes and y.ptr < x.ptr + x.nbytes]
+
+
+def poison_dump(dev, arm, shape, call, out_dir: Path, operands: A.OperandSet | None = None) -> dict:
     """The arm's transcript from poisoned buffers, then its no-write control's. Every buffer the transcript reads is filled
     with 0xA5; the weight side and the call run; the arm writes its transcript under ``transcripts/<arm>/<shape>/``
     (`arm.dump`, reading the device, computing nothing). The buffers are poisoned again and, with nothing launched, the
     arm dumps under ``negative/<arm>/<shape>/``: the verifier must reject that one, so an output an earlier call or a setup
-    step left behind can't pass as this call's. ``written`` is each buffer's bytes the call changed from the poison."""
+    step left behind can't pass as this call's. ``written`` is each buffer's bytes the call changed from the poison.
+    A transcript buffer that overlaps the call's `operands` is refused before anything is poisoned."""
     bufs = transcript_buffers(call)
+    clash = operand_overlaps(bufs, operands)
+    if clash:
+        raise ValueError(f"transcript buffers overlap the call's operands, which poisoning would overwrite: {'; '.join(clash)}")
     rec: dict = {"arm": arm.name, "shape": shape.label, "by": "harness", "poison": f"0x{POISON:02X}",
                  "buffers": {n: b.nbytes for n, b in bufs.items()},
                  "transcript_dir": f"transcripts/{arm.name}/{shape.label}", "control_dir": f"negative/{arm.name}/{shape.label}"}
@@ -403,9 +417,11 @@ def poison_dump(dev, arm, shape, call, out_dir: Path) -> dict:
     return rec
 
 
-def dump_transcripts(bench: Bench, dev, shape, arms: list, entries: list, out_dir: Path) -> list[dict]:
-    """`poison_dump` on each arm's hash call at this shape, after the timed items (nothing here is timed). An arm without
-    `dump` writes its own transcripts, unpoisoned by the harness, and says so in the record."""
+def dump_transcripts(bench: Bench, dev, shape, arms: list, entries: list, out_dir: Path,
+                     operands: dict[str, list[A.OperandSet]] | None = None) -> list[dict]:
+    """`poison_dump` on each arm's hash call at this shape, after the timed items (nothing here is timed), on the arm's
+    first operand set (`operands[arm]`, which that call was prepared on). An arm without `dump` writes its own transcripts,
+    unpoisoned by the harness, and says so in the record."""
     recs = []
     for a in arms:
         if not callable(getattr(a, "dump", None)):
@@ -417,8 +433,9 @@ def dump_transcripts(bench: Bench, dev, shape, arms: list, entries: list, out_di
         if e is None:
             recs.append({"arm": a.name, "shape": shape.label, "by": "harness", "error": "no gated hash call at this shape"})
             continue
+        sets = (operands or {}).get(a.name)
         try:
-            recs.append(poison_dump(dev, a, shape, e.calls[0], out_dir))
+            recs.append(poison_dump(dev, a, shape, e.calls[0], out_dir, sets[0] if sets else None))
         except Exception as ex:  # noqa: BLE001 - recorded; the verifier then finds no transcript and accepts nothing
             recs.append({"arm": a.name, "shape": shape.label, "by": "harness", "error": f"{type(ex).__name__}: {ex}"})
     bench.poisoning += recs
@@ -833,7 +850,7 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         row["order_seed"] = order_seed
         per = bench.timed(entries, plan["burst"], order_seed)
         row["summary"] = summarize(per, bench.items)
-        row["poisoning"] = dump_transcripts(bench, dev, shape, arms, entries, args.out.parent)
+        row["poisoning"] = dump_transcripts(bench, dev, shape, arms, entries, args.out.parent, arm_sets)
         row.update(shape_report(shape, fams, arms, entries, per, bench, unchained))
     finally:
         free_entries(bench, entries)
