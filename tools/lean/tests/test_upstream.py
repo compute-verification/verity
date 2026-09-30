@@ -67,6 +67,7 @@ def package(tmp_path: Path, watch: dict | None = None) -> tuple[Path, Path, str]
     return pkg, pkg / ".lake" / "packages" / "Lib", rev
 
 
+@pytest.mark.slow
 def test_the_scan_matches_statements_not_docstrings_proofs_or_other_names(tmp_path):
     pkg, repo, rev = package(tmp_path)
     scanned = {"baseline": "scripts/axiom_baseline.json", "sources": ["Lib"]}
@@ -107,6 +108,7 @@ def test_a_missing_checkout_is_named(tmp_path):
     assert U.pinned(pkg, cfg)[1][0].startswith(f"upstream: {repo} is not a git checkout")
 
 
+@pytest.mark.slow
 def test_fetch_clones_a_missing_checkout_from_the_manifest_at_the_pinned_revision(tmp_path, capsys):
     """The weekly look at upstream's head runs on a machine that never built the package: `--fetch` needs git, not `setup.sh`."""
     pkg, repo, rev = package(tmp_path, {"mca": {**WATCH["mca"], "ack": ["Lib.by_cases", "Lib.proved_one"]}})
@@ -124,6 +126,7 @@ def test_fetch_clones_a_missing_checkout_from_the_manifest_at_the_pinned_revisio
     assert U.main([str(pkg), "--fetch"]) == 0                       # the pinned revision, from the clone
 
 
+@pytest.mark.slow
 def test_the_command_exits_1_on_news_and_ack_records_them(tmp_path, capsys):
     pkg, repo, rev = package(tmp_path)
     assert U.main([str(pkg)]) == 1

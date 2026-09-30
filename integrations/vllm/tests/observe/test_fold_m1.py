@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import time
 from collections import Counter
 from pathlib import Path
 
@@ -42,11 +41,9 @@ pytestmark = pytest.mark.skipif(_available() is not None, reason=str(_available(
 @pytest.fixture(scope="module")
 def m1():
     from verity_vllm.check.fold_compare import fold_log, load_profile
-    t0 = time.time()
     r = fold_log(LOG, load_profile(PROFILE), strict=None, with_program=True)
-    total = time.time() - t0
     print(f"\nM1 fold: {len(r.body.nodes)} instances, program gates={r.program.gates if r.program else None}, "
-          f"timings={r.timings}, total={total:.1f}s, digest={r.digest}")
+          f"timings={r.timings}, digest={r.digest}")
     return r
 
 

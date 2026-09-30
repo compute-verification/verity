@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from verity.ir.defs import bind as ir_bind
-from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
@@ -60,6 +60,7 @@ PROFILE_B1_EAGER = Vocabulary(
     kinds={
         "gemm": lambda K, N: ir_bind(b1.Gemm, K=K, N=N),
         "bias_add": lambda N: ir_bind(b1.BiasAdd, N=N),
+        "gemm_bias": lambda K, N: ir_bind(_gemm_bias.GemmBias, K=K, N=N),
         "rmsnorm": lambda N, EPS: ir_bind(b1.RMSNormTriton, N=N, EPS=EPS),
         "rmsnorm_fused": lambda N, EPS: ir_bind(b1.RMSNormFusedCuda, N=N, EPS=EPS),
         "rope": lambda NHEADS, D: ir_bind(b1.RoPE, NHEADS=NHEADS, D=D),
@@ -72,6 +73,7 @@ PROFILE_B1_EAGER = Vocabulary(
     notes={
         "gemm": "Gemm_v1{K,N}: vLLM batch-invariant Triton matmul (AmpereBF16TcDot16 chains), bf16 in/out",
         "bias_add": "BiasAdd_v1{N}: aten.add(bf16, bf16)",
+        "gemm_bias": "GemmBias_v1{K,N}: Gemm_v1 then BiasAdd_v1 per output word (the batch-invariant linear with a bias)",
         "rmsnorm": "RMSNormTriton_v1{N,EPS}: vLLM batch-invariant Triton _rms_norm_kernel",
         "rmsnorm_fused": "RMSNormFusedCuda_v2{N,EPS}: vLLM CUDA fused_add_rms_norm (generic kernel)",
         "rope": "RoPE_v1{NHEADS,D}: vLLM _C.rotary_embedding NeoX, bf16 cos/sin cache row as Input",

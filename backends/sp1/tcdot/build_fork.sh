@@ -71,7 +71,7 @@ if [ "$(git -C "$FORK" rev-parse HEAD 2>/dev/null || true)" != "$EXPECT_HEAD" ];
   git -C "$FORK" remote add origin https://github.com/succinctlabs/sp1.git
   git -C "$FORK" fetch -q --depth 1 origin "$BASE"
   git -C "$FORK" checkout -q FETCH_HEAD
-  GIT_COMMITTER_NAME="Daniel Reuter" GIT_COMMITTER_EMAIL="dreuter14@gmail.com" \
+  GIT_COMMITTER_NAME="Daniel Reuter" GIT_COMMITTER_EMAIL="62895916+danielreuter@users.noreply.github.com" \
     git -C "$FORK" am -q --committer-date-is-author-date "$HERE"/sp1-patches/000[1-3]-*.patch
   GIT_COMMITTER_NAME="verity sp1-tcdot lane" GIT_COMMITTER_EMAIL="lane@verity.local" \
     git -C "$FORK" am -q --committer-date-is-author-date "$HERE"/sp1-patches/000[4-9]-*.patch "${EXTRA[@]}"
