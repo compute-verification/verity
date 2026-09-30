@@ -13,6 +13,7 @@ from typing import Callable
 
 from verity.ir.defs import bind as ir_bind
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
+from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import fp8_packed as _fp8p
@@ -250,10 +251,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # attention) the block size / epilogue as declared statics — bound by the vLLM rules when the active TargetProfile is not the
            # accepted records' (Ampere-family step under FA2); those keep `gemm` / `attention` above, so their digests do not move.
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
-           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`; an optional
-           # static, so the role and its note -- and with them this vocabulary's version -- stay as they were)
-           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None:
-               ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
+           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
+           # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
+           # this vocabulary's version -- stay as they were
+           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None:
+               ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+               if FA2_MASKED_FROM is not None
+               else ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
                else ir_bind(_f3.AttentionV4, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
            # [R13 X-08] `scale_tensor` (generic bf16 row x 0-d bf16 tensor) and [R15 dense] the other op-shaped elementwise / activation /
            # softcap kinds come from `_dense_kinds()` above (promoted from quarantine.dense; Gemma-2's ops were the first instances)
@@ -267,6 +271,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_router_topk_ordered_norm": lambda E, TOPK, VPT: ir_bind(_moe.MoeRouterTopKOrderedNorm, E=E, TOPK=TOPK, VPT=VPT),
            "moe_expert_gemm": lambda E, K, N: ir_bind(_moe.MoeExpertGemm, E=E, K=K, N=N),
            "moe_expert_gemm_w": lambda E, K, N: ir_bind(_moe.MoeExpertGemmW, E=E, K=K, N=N),
+           # the same launches with the k16 step as a static, bound when the active target's fused_moe_kernel runs another step than
+           # the Ampere/Ada one (`registry.targets.moe_expert_dot`); those above keep the `_v1` records' digests
+           "moe_expert_gemm_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT),
+           "moe_expert_gemm_w_dot": lambda E, K, N, DOT: ir_bind(_moe.MoeExpertGemmWV2, E=E, K=K, N=N, DOT=DOT),
            "moe_sum": lambda TOPK, H: ir_bind(_moe.MoeSum, TOPK=TOPK, H=H),
            # [R17-42 route A (3)] the fused-MoE block under `TargetProfile.moe_construction = "padded"` as ONE kind per token: the fixed-slot
            # construction from the router logits (`registry.moe_pad.MoeFfnFixedL_v1`: ALL E expert bodies on their own weights, the TOPK slot
@@ -323,6 +331,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "moe_expert_gemm": "MoeExpertGemm_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=False) for one (token, slot) pair — bf16_rne(DotBf16(x, W[e][n,:])), "
                               "e an I32 value operand (gather over the expert axis inside the body)",
            "moe_expert_gemm_w": "MoeExpertGemmW_v1{E,K,N}: fused_moe_kernel(MUL_ROUTED_WEIGHT=True) — bf16_rne(f32mul(DotBf16(x, W[e][n,:]), g)), g the pair's routed weight",
+           "moe_expert_gemm_dot": "MoeExpertGemm_v2{E,K,N,DOT}: MoeExpertGemm_v1 with the target's k16 step DOT — bf16_rne(DotBf16_v2{K,DOT}(x, W[e][n,:]))",
+           "moe_expert_gemm_w_dot": "MoeExpertGemmW_v2{E,K,N,DOT}: MoeExpertGemmW_v1 with the target's k16 step DOT — "
+                                    "bf16_rne(f32mul(DotBf16_v2{K,DOT}(x, W[e][n,:]), g))",
            "moe_sum": "MoeSum_v1{TOPK,H}: _moe_C.moe_sum — per token, ascending-k f32 sum of the TOPK weighted expert rows from +0, one bf16 RNE",
            "moe_ffn_fixed": "MoeFfnFixedL_v1{E,TOPK,VPT,H,I}: [R17-42 padded] the whole fused block of one token from its router logits -- "
                             "MoeRouterTopK_v1 -> ALL E MoeExpertBody_v1{H,I} on their own weights (g_e the routed weight of the slot the router "
