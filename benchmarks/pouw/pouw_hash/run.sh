@@ -15,6 +15,7 @@ cd "$(dirname "$0")"
 MODE=${1:-run}
 OUT=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$OUT"
 if ! sha256sum -c MANIFEST.sha256 > "$OUT/inputs.check" 2>&1; then echo "REFUSED: the tree does not match MANIFEST.sha256"; exit 5; fi
+chmod +x pouw_hash_bench   # a shipped repo (pearl_c/ship.sh) checks every file out 100644
 WANT=${POUW_EXPECT_UUID:-}
 if [ "$WANT" = pod ]; then
   [ "$(nvidia-smi --query-gpu=uuid --format=csv,noheader | wc -l)" = 1 ] || { echo "REFUSED: POUW_EXPECT_UUID=pod with more than one GPU"; exit 3; }

@@ -8,8 +8,8 @@
 #                     to its reference
 #   sass.json         registers, local memory and the opcode census per kernel; ptxas.txt
 #   run.sh, check.py, the sources, toolchain.txt, source.txt (the verity commit), MANIFEST.sha256
-# Usage: bash benchmarks/pouw/pouw_hash/build.sh [OUT]   (default /tmp/pouw-hash-ship; C9 names CUDA 12.9.1, default
-# /tmp/cuda-12.9.1). Ship it with benchmarks/pouw/pearl_c/ship.sh OUT REPO, then `research run --source REPO --cwd source`.
+# Usage: bash benchmarks/pouw/pouw_hash/build.sh [OUT]   (default /tmp/pouw-hash-ship; C9 names CUDA 12.9, default
+# /tmp/cuda-12.9.1 as the store's code/pouw-gpu-constants/h100/fetch_cuda.py 12.9.1 lays it out, or /usr/local/cuda-12.9). Ship it with benchmarks/pouw/pearl_c/ship.sh OUT REPO, then `research run --source REPO --cwd source`.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 C9=${C9:-/tmp/cuda-12.9.1}; OUT=${1:-/tmp/pouw-hash-ship}
@@ -21,13 +21,13 @@ g++ -O2 -std=c++17 -Wall -Wextra -Wno-unknown-pragmas -ffp-contract=off -x c++ -
 (cd "$ROOT" && uv run python "$HERE/check.py" "$OUT/host_check.jsonl")
 rm "$OUT/pouw_hash_host"
 NVCC=("$C9/bin/nvcc" -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -I "$HERE"
-      -I "$C9/nvml/include")
+      -I "$C9/nvml/include" -I "$C9/include")   # nvml.h: the redist's nvml/ (fetch_cuda.py) or an apt install's include/
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 "${NVCC[@]}" -c -o "$TMP/check.o" "$HERE/pouw_hash_check.cu" 2> "$TMP/check.txt" &
 "${NVCC[@]}" -c -o "$TMP/bench.o" "$HERE/pouw_hash_bench.cu" 2> "$TMP/bench.txt" || { cat "$TMP/bench.txt" >&2; exit 1; }
 wait $! || { cat "$TMP/check.txt" >&2; exit 1; }
 cat "$TMP/check.txt" "$TMP/bench.txt" > "$OUT/ptxas.txt"
-"$C9/bin/nvcc" -gencode arch=compute_120a,code=sm_120a -L "$C9/lib" -L "$C9/lib/stubs" -L "$C9/nvml/lib/stubs" \
+"$C9/bin/nvcc" -gencode arch=compute_120a,code=sm_120a -L "$C9/lib" -L "$C9/lib/stubs" -L "$C9/nvml/lib/stubs" -L "$C9/lib64/stubs" \
   -o "$OUT/pouw_hash_bench" "$TMP/check.o" "$TMP/bench.o" -lnvidia-ml
 "$C9/bin/cuobjdump" -sass "$OUT/pouw_hash_bench" > "$OUT/sass.txt"
 python3 "$HERE/sass.py" "$OUT/ptxas.txt" "$OUT/sass.txt" "$OUT/sass.json" | c++filt

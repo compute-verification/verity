@@ -373,6 +373,11 @@ static void row(const char* filter, const char* group, const char* name, Kern ke
   int occ = 0;
   CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, kern, threads, smem));
   const int bps = blocks_per_sm ? std::min(blocks_per_sm, occ) : occ;
+  if (bps == 0) {   // e.g. the sweep's 32 warps of a kernel over 64 registers: not resident on one SM
+    printf("{\"group\":\"%s\",\"name\":\"%s\",\"skipped\":\"no block of %d threads fits on an SM (%d registers)\"%s}\n", group, name,
+           threads, fa.numRegs, extra);
+    return;
+  }
   const int blocks = threads == 1 ? 1 : g_sms * bps;
   Rec* rec;
   CK(cudaMalloc(&rec, blocks * sizeof(Rec)));
