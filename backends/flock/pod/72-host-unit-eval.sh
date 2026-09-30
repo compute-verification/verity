@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # The host unit evaluation (IrUnitNet::eval64_flat, and the host slots written straight from its lane groups) at the GEMM
 # coordinates' largest statements: one attempt of 71-gemm-slowdown.sh with the UNITPROF profile on (FC_UNIT_PROFILE); then, in
-# the same job, 71's timed sweep on the path before it (BASE: FC_UNIT_FLAT=0 FC_UNIT_FUSED=0, out/base/result.json); the sweep
-# with every session building its own witness (NOPIPE: FC_PIPELINE=0, out/nopipe/result.json); then the equality check (CHECK:
+# the same job, 71's timed sweep on the path before it (BASE: FC_UNIT_FLAT=0 FC_UNIT_FUSED=0, out/base/result.json); one sweep
+# per pipeline depth in DEPTHS (out/d<depth>/result.json); the sweep with every session building its own witness (NOPIPE:
+# FC_PIPELINE=0, out/nopipe/result.json); then the equality check (CHECK:
 # FC_UNIT_CHECK runs eval64 beside the one pass on every lane group, and packs the host slots unfused beside the fused ones, and
 # asserts they agree; eval64's time in the UNITPROF lines). UNITPROF lines: out/unitprof.tsv.
 # Run from the verity tree (research run --cwd source), in a Kueue job (FLOCK_WORK under /workspace/jobs).
 # env: FLOCK_WORK=/workspace/jobs/flock-v2  SEED_CACHE= (a stage cache to hard-link from: statements of the same staging code)
-#      TORCH= (a torch venv for the native GEMMs)  BASE=1  NOPIPE=1  CHECK=1  and any KEY=VALUE for 71-gemm-slowdown.sh
+#      TORCH= (a torch venv for the native GEMMs)  BASE=1  DEPTHS=  NOPIPE=1  CHECK=1  and any KEY=VALUE for 71-gemm-slowdown.sh
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 R=${RESEARCH_RUN_DIR:-/tmp/hue}; mkdir -p $R/out
@@ -37,6 +38,11 @@ if [ "${BASE:-1}" = 1 ]; then
     WARM=${WARM:-1} RUNS=${RUNS:-3} || exit 1
   slowdown base || exit 1
 fi
+for d in ${DEPTHS:-}; do
+  FC_UNIT_PROFILE=1 FC_PIPELINE_DEPTH=$d OUT=$R/out/d$d RESEARCH_RUN_DIR=$R/out/d$d bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" \
+    WARM=${WARM:-1} RUNS=${RUNS:-3} || exit 1
+  slowdown d$d || exit 1
+done
 if [ "${NOPIPE:-1}" = 1 ]; then
   FC_UNIT_PROFILE=1 FC_PIPELINE=0 OUT=$R/out/nopipe RESEARCH_RUN_DIR=$R/out/nopipe bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" WARM=${WARM:-1} RUNS=${RUNS:-3} || exit 1
   slowdown nopipe || exit 1
