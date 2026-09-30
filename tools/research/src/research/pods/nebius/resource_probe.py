@@ -11,7 +11,8 @@ Sources, all cheap: statvfs of `/` and `/workspace`; `/proc/meminfo`; the ramloc
 convention); replay RAM to come (node 1: Kueue's pending `*-replay-*` Workloads' memory requests, floored at a bundle's size;
 node 2: queued `*replay*` fill jobs' `mem_gb=` and running `*commit*` jobs, see replay_queue_fill); GPU memory held at 0% for 15 min (node 1: Prometheus'
 DCGM series; node 2: the tail of the utilisation sampler's JSONL, so a timed window is never disturbed); finished run dirs
-without `.custody`, `.fetched` or `preserved.json`. Inode growth per hour compares with the previous reading in `--state`.
+without `.custody`, `.fetched` or `preserved.json`. Inode growth per hour compares with a base reading kept in `--state`, at
+least 15 min old (so one burst between two close ticks isn't an hourly rate) and replaced once it is an hour old.
 The watermarks are the resource steward's policy (research-notes `lanes/resource-steward/`).
 """
 from __future__ import annotations
@@ -36,6 +37,7 @@ LIMITS: dict[str, dict[str, float]] = {
 }
 COMMON = {"root_free_gb": 60.0, "root_hard_free_gb": 45.0, "inode_pct": 80.0, "mem_avail_pct": 10.0, "idle_gpu_gib": 20.0,
           "idle_gpu_s": 900.0, "unpreserved_runs": 10, "unpreserved_age_s": 3600.0, "inode_growth_per_h": 100_000,
+          "inode_rate_min_s": 900.0, "inode_base_max_s": 3600.0,
           "replay_share": 0.5, "replay_floor_gb": 90.0}
 PROMETHEUS = os.environ.get("VY_PROMETHEUS", "http://10.43.136.178")
 DCGM = 'service="nvidia-dcgm-exporter"'
@@ -207,7 +209,7 @@ def evaluate(r: dict[str, Any], prev: dict[str, Any] | None, lim: dict[str, floa
         if d["ipct"] >= lim["inode_pct"]:
             b.append(f"{d['path']} inodes {d['ipct']:.1f}% >= {lim['inode_pct']:.0f}%")
         p = ((prev or {}).get("disk") or {}).get(k)
-        if p and r["t"] > p.get("t", r["t"]) + 60:
+        if p and r["t"] >= p.get("t", r["t"]) + lim["inode_rate_min_s"]:
             rate = (d["iused"] - p["iused"]) / (r["t"] - p["t"]) * 3600
             if rate > lim["inode_growth_per_h"]:
                 b.append(f"{d['path']} gaining {rate:,.0f} inodes/h > {lim['inode_growth_per_h']:,.0f}")
@@ -269,8 +271,11 @@ def main() -> int:
     except (OSError, ValueError):
         prev = None
     try:
+        lim = {**COMMON, **LIMITS[ns.node]}
         r = read(ns.node, now=time.time(), home=Path.home())
-        r["breaches"] = evaluate(r, prev, {**COMMON, **LIMITS[ns.node]})
+        base = (prev or {}).get("rate_base")
+        r["breaches"] = evaluate(r, base, lim)
+        r["rate_base"] = base if base and r["t"] - base.get("t", 0) < lim["inode_base_max_s"] else {"t": r["t"], "disk": r["disk"]}
     except Exception as e:  # noqa: BLE001
         print(f"probe failed: {type(e).__name__}: {e}")
         return 2

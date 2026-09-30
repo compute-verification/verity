@@ -61,6 +61,7 @@ def test_inode_growth_rate_uses_the_previous_reading():
     assert P.evaluate(reading(iused=7_030_000, t=T0 + 1200), prev, lim("n1")) == []          # 30k in 20 min = 90k/h
     b = P.evaluate(reading(iused=7_060_000, t=T0 + 1200), prev, lim("n1"))                  # 60k in 20 min = 180k/h
     assert len(b) == 1 and "inodes/h" in b[0]
+    assert P.evaluate(reading(iused=7_060_000, t=T0 + 300), prev, lim("n1")) == []           # a 5-min burst is not a rate
 
 
 def test_replay_queue_against_half_of_available_ram_after_reservations():
