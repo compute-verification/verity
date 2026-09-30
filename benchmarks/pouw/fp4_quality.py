@@ -24,6 +24,10 @@ Quantization is exact emulation: values are rounded onto the format's grid and c
     python benchmarks/pouw/fp4_quality.py --eval-windows 4 --seqlen 512                  # CPU, the FP8 lane's subset
     python benchmarks/pouw/fp4_quality.py --device cuda --eval-windows 0 --seqlen 2048   # GPU: the whole test split
     python benchmarks/pouw/fp4_quality.py ... --dump-acts DIR --dump-layers 0,3,13,27   # real operands for fp4_census.py real
+    python benchmarks/pouw/fp4_quality.py ... --parts DIR --budget-s 900                  # resumable chunks, one variant each
+
+Each variant runs through all layers before the next (the hidden state stays on the device); with ``--parts`` a finished
+variant's token NLLs are kept, so a stopped run resumes at the next variant.
 """
 from __future__ import annotations
 
@@ -100,7 +104,7 @@ def block_noise(x: torch.Tensor, fmt: str, sigma_c: float, gen: torch.Generator)
     blk = 16 if fmt == "nvf4" else 32
     xb = x.reshape(r, k // blk, blk)
     s = xb.abs().amax(-1, keepdim=True) / 6.0
-    z = torch.randn(xb.shape, generator=gen, device="cpu").to(x.device)
+    z = torch.randn(xb.shape, generator=gen, device=gen.device)
     return (sigma_c * s * z).reshape(r, k)
 
 
@@ -112,7 +116,7 @@ def pouw_operand(x: torch.Tensor, fmt: str, sigma_c: float, gen: torch.Generator
 def row_noise(x: torch.Tensor, delta: float, gen: torch.Generator) -> torch.Tensor:
     """RMS delta of each row's RMS rho (the design's row-relative noise floor; secure for gamma at delta >= 1/8)."""
     rho = x.pow(2).mean(1, keepdim=True).sqrt()
-    z = torch.randn(x.shape, generator=gen, device="cpu").to(x.device)
+    z = torch.randn(x.shape, generator=gen, device=gen.device)
     return delta * rho * z
 
 
@@ -143,11 +147,15 @@ def main() -> None:
     ap.add_argument("--dump-rows", type=int, default=128)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="fp4_quality.json")
+    ap.add_argument("--parts", default="", help="directory of per-variant token NLLs; a variant already there is loaded, not rerun")
+    ap.add_argument("--budget-s", type=float, default=0.0,
+                    help="with --parts: stop after the first variant that ends past this many seconds and exit 99 (rerun to continue)")
     args = ap.parse_args()
     torch.set_num_threads(args.threads)
     dev = torch.device(args.device)
     variants = tuple(v for v in args.variants.split(",") if v)
-    assert variants[0] == "bf16", "bf16 is the reference and runs first"
+    assert variants[0] == "bf16", "bf16 is the reference and comes first"
+    assert not args.budget_s or args.parts, "--budget-s needs --parts to keep the finished variants"
     path = Path(snapshot_download(args.model, allow_patterns=["*.json", "*.safetensors", "tokenizer*", "*.txt"]))
     cfg = AutoConfig.from_pretrained(path)
     cfg._attn_implementation = "sdpa"
@@ -166,90 +174,112 @@ def main() -> None:
     nwin = test.numel() // T if args.eval_windows == 0 else args.eval_windows
     ev = torch.stack([test[w * T:(w + 1) * T] for w in range(nwin)])
     emb = tensor("model.embed_tokens.weight")
-    hs = {v: emb[ev].to(torch.float32) for v in variants}               # kept on the CPU, moved per window batch
+    h0 = emb[ev].to(torch.float32)
     del emb
     rot = Q.Qwen2RotaryEmbedding(config=cfg).to(dev)
     pos = torch.arange(T, device=dev)[None]
+    norm_w = tensor("model.norm.weight").to(torch.float32).to(dev)
+    head = (tensor("lm_head.weight") if "lm_head.weight" in names else tensor("model.embed_tokens.weight")).to(torch.float32).to(dev)
     dump_layers = {int(x) for x in args.dump_layers.split(",") if x} if args.dump_acts else set()
     if args.dump_acts:
         Path(args.dump_acts).mkdir(parents=True, exist_ok=True)
-    state = {"mode": "bf16", "call": 0, "capture": None}
+    # The noise is drawn on the compute device, so a CPU and a GPU run see different (equally distributed) draws.
+    key = {"model": args.model, "seqlen": T, "windows": nwin, "sigma_c": args.sigma_c, "delta": args.delta, "seed": args.seed,
+           "noise_device": dev.type}
+    parts = Path(args.parts) if args.parts else None
+    if parts:
+        parts.mkdir(parents=True, exist_ok=True)
+    state = {"call": 0, "capture": None}
     t0 = time.time()
-    for i in range(cfg.num_hidden_layers):
-        layer = Q.Qwen2DecoderLayer(cfg, i)
-        pre = f"model.layers.{i}."
-        layer.load_state_dict({kk[len(pre):]: tensor(kk).to(torch.float32) for kk in names if kk.startswith(pre)})
-        layer.eval().to(dev)
-        mods = {name: layer.get_submodule(name) for name in LINEARS}
-        cache: dict = {}
 
-        def weight(name: str, mod, mode: str) -> torch.Tensor:
-            if (name, mode) not in cache:
-                w = mod.weight
-                if mode in ("fp8", "nvf4", "mxf4", "nvf4_w4a16", "mxf4_w4a16"):
-                    w = QUANT[mode.split("_")[0]](w)
-                elif mode.startswith("pouwrow_"):
-                    w = pouw_operand_row(w, mode[8:], args.delta, torch.Generator().manual_seed(seed_of(args.seed, i, name, "B")))
-                elif mode.startswith("pouw_"):
-                    w = pouw_operand(w, mode[5:], args.sigma_c, torch.Generator().manual_seed(seed_of(args.seed, i, name, "B")))
-                cache[(name, mode)] = w
-            return cache[(name, mode)]
+    def run_variant(mode: str) -> np.ndarray:
+        """Token NLLs of one variant, the hidden state kept on the device and the model streamed one layer at a time."""
+        hid = h0.to(dev)
+        for i in range(cfg.num_hidden_layers):
+            with dev:
+                layer = Q.Qwen2DecoderLayer(cfg, i)
+            pre = f"model.layers.{i}."
+            layer.load_state_dict({kk[len(pre):]: tensor(kk).to(dev).to(torch.float32) for kk in names if kk.startswith(pre)})
+            layer.eval()
+            mods = {name: layer.get_submodule(name) for name in LINEARS}
+            cache: dict = {}
 
-        def make_fwd(name, mod):
-            def fwd(x):
-                mode = state["mode"]
-                shape = x.shape
-                x2 = x.reshape(-1, shape[-1])
-                if state["capture"] is not None:
-                    state["capture"].setdefault(name, []).append(x2[: args.dump_rows].detach().float().cpu().numpy())
-                if mode in ("fp8", "nvf4", "mxf4"):
-                    x2 = QUANT[mode](x2)
-                elif mode.startswith("pouwrow_"):
-                    gen = torch.Generator().manual_seed(seed_of(args.seed, i, name, "A", state["call"]))
-                    x2 = pouw_operand_row(x2, mode[8:], args.delta, gen)
-                elif mode.startswith("pouw_"):
-                    gen = torch.Generator().manual_seed(seed_of(args.seed, i, name, "A", state["call"]))
-                    x2 = pouw_operand(x2, mode[5:], args.sigma_c, gen)
-                y = x2 @ weight(name, mod, mode).T
-                if mod.bias is not None:
-                    y = y + mod.bias
-                return y.reshape(*shape[:-1], -1)
-            return fwd
+            def weight(name: str, mod) -> torch.Tensor:
+                if name not in cache:
+                    w = mod.weight
+                    gen = torch.Generator(device=dev).manual_seed(seed_of(args.seed, i, name, "B"))
+                    if mode in ("fp8", "nvf4", "mxf4", "nvf4_w4a16", "mxf4_w4a16"):
+                        w = QUANT[mode.split("_")[0]](w)
+                    elif mode.startswith("pouwrow_"):
+                        w = pouw_operand_row(w, mode[8:], args.delta, gen)
+                    elif mode.startswith("pouw_"):
+                        w = pouw_operand(w, mode[5:], args.sigma_c, gen)
+                    cache[name] = w
+                return cache[name]
 
-        for name, mod in mods.items():
-            mod.forward = make_fwd(name, mod)
-        for v in variants:
-            state["mode"] = v
+            def make_fwd(name, mod):
+                def fwd(x):
+                    shape = x.shape
+                    x2 = x.reshape(-1, shape[-1])
+                    if state["capture"] is not None:
+                        state["capture"].setdefault(name, []).append(x2[: args.dump_rows].detach().float().cpu().numpy())
+                    gen = torch.Generator(device=dev).manual_seed(seed_of(args.seed, i, name, "A", state["call"]))
+                    if mode in ("fp8", "nvf4", "mxf4"):
+                        x2 = QUANT[mode](x2)
+                    elif mode.startswith("pouwrow_"):
+                        x2 = pouw_operand_row(x2, mode[8:], args.delta, gen)
+                    elif mode.startswith("pouw_"):
+                        x2 = pouw_operand(x2, mode[5:], args.sigma_c, gen)
+                    y = x2 @ weight(name, mod).T
+                    if mod.bias is not None:
+                        y = y + mod.bias
+                    return y.reshape(*shape[:-1], -1)
+                return fwd
+
+            for name, mod in mods.items():
+                mod.forward = make_fwd(name, mod)
             outs = []
             for b0 in range(0, nwin, args.window_batch):
-                h = hs[v][b0:b0 + args.window_batch].to(dev)
+                h = hid[b0:b0 + args.window_batch]
                 state["call"] = b0
-                state["capture"] = {} if (v == "bf16" and i in dump_layers and b0 == 0) else None
+                state["capture"] = {} if (mode == "bf16" and i in dump_layers and b0 == 0) else None
                 pe = rot(h, pos.expand(h.shape[0], T))
                 with torch.no_grad():
                     o = layer(h, position_ids=pos.expand(h.shape[0], T), position_embeddings=pe)
-                outs.append((o[0] if isinstance(o, tuple) else o).float().cpu())
+                outs.append((o[0] if isinstance(o, tuple) else o).float())
                 if state["capture"]:
                     rows = {n: np.concatenate(x)[: args.dump_rows] for n, x in state["capture"].items()}
                     np.savez(Path(args.dump_acts) / f"layer{i:02d}.npz",
                              **{f"{n}/x": rows[n].astype(np.float32) for n in rows},
                              **{f"{n}/w": mods[n].weight[: args.dump_rows].detach().float().cpu().numpy() for n in rows})
                     state["capture"] = None
-            hs[v] = torch.cat(outs)
-            for key in [kk for kk in cache if kk[1] == v]:
-                del cache[key]
-        del layer, cache
-        print(json.dumps({"layer": i, "seconds": round(time.time() - t0, 1)}), flush=True)
-    norm_w = tensor("model.norm.weight").to(torch.float32).to(dev)
-    head = (tensor("lm_head.weight") if "lm_head.weight" in names else tensor("model.embed_tokens.weight")).to(torch.float32).to(dev)
-    nll = {}
-    for v in variants:
+            hid = torch.cat(outs)
+            del layer, cache, outs
+            print(json.dumps({"variant": mode, "layer": i, "seconds": round(time.time() - t0, 1)}), flush=True)
         per = []
-        for w in range(nwin):
-            h = hs[v][w].to(dev)
-            h = h * torch.rsqrt(h.pow(2).mean(-1, keepdim=True) + cfg.rms_norm_eps) * norm_w
-            per.append(F.cross_entropy((h @ head.T)[:-1], ev[w, 1:].to(dev), reduction="none").cpu())
-        nll[v] = torch.cat(per).numpy().astype(np.float64)
+        with torch.no_grad():
+            for w in range(nwin):
+                h = hid[w] * torch.rsqrt(hid[w].pow(2).mean(-1, keepdim=True) + cfg.rms_norm_eps) * norm_w
+                per.append(F.cross_entropy((h @ head.T)[:-1], ev[w, 1:].to(dev), reduction="none").cpu())
+        return torch.cat(per).numpy().astype(np.float64)
+
+    nll, seconds = {}, {}
+    for n, v in enumerate(variants):
+        part = parts / f"{v}.npz" if parts else None
+        if part and part.exists():
+            z = np.load(part)
+            if json.loads(str(z["key"])) == key:
+                nll[v], seconds[v] = z["nll"], float(z["seconds"])
+                continue
+        t1 = time.time()
+        nll[v] = run_variant(v)
+        seconds[v] = round(time.time() - t1, 1)
+        if part:
+            np.savez(part.with_suffix(".tmp.npz"), nll=nll[v], key=json.dumps(key), seconds=seconds[v])
+            part.with_suffix(".tmp.npz").replace(part)
+        if args.budget_s and time.time() - t0 >= args.budget_s and n + 1 < len(variants):
+            print(json.dumps({"stopped": "budget", "done": list(nll), "seconds": round(time.time() - t0, 1)}), flush=True)
+            sys.exit(99)
     res = {}
     for v in variants:
         d = nll[v] - nll["bf16"]
@@ -266,8 +296,9 @@ def main() -> None:
             res[f"{a}_vs_{b}"] = {"pct": float(100 * (math.exp(d.mean()) - 1)),
                                   "pct_se": float(100 * blocks.std(ddof=1) / math.sqrt(nwin)) if nwin > 1 else float("nan")}
     doc = {"tool": "pouw_fp4_quality", "model": args.model, "dataset": "wikitext-2-raw-v1:test", "seqlen": T, "windows": nwin,
-           "device": args.device, "sigma_c": args.sigma_c, "lm_head": "BF16 in every variant", "variants": list(variants),
-           "quality": res, "dump_acts": args.dump_acts or None, "seconds": round(time.time() - t0, 1)}
+           "device": args.device, "noise_device": dev.type, "sigma_c": args.sigma_c, "delta": args.delta, "seed": args.seed,
+           "lm_head": "BF16 in every variant", "variants": list(variants), "quality": res, "dump_acts": args.dump_acts or None,
+           "variant_seconds": seconds, "seconds": round(time.time() - t0, 1)}
     out = Path(args.out)
     out.write_text(json.dumps(doc, indent=1) + "\n")
     run_result.write(out, all(math.isfinite(res[v]["ppl"]) for v in variants), "fp4-quality",
