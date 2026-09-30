@@ -821,7 +821,8 @@ SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
 #: the trees and what follows A's root, rewritten under ALT_FORMS by those phases' steps and held to the fixture again
 FORM_BUFFERS = ("tree_a", "tree_b", "tree_t", "keys_a", "keys_b", "keys_t", "seed_a", "line_a")
 FORM_PHASES = ("epoch", "unit", "commit", "hashing")
-#: forming's per-row words and codes of each side, rewritten under OTHER_FORMINGS by those phases' steps and held to the fixture
+#: forming's per-row words and codes of each side, rewritten under OTHER_FORMINGS by forming_phases' steps and held to the
+#: fixture
 FORMING_BUFFERS = (*(f"{x}_{t}" for t in "ab" for x in ("alpha", "beta", "ia", "aux", "live")), "ea_codes", "eb_codes",
                    "epa_codes", "epb_codes", "at", "bt", "hot_a")
 #: A's of them, which a rows form `s` rerun writes from the commitment on (its hash_rows_a writes stats_a's words)
@@ -829,6 +830,11 @@ FORMING_A = tuple(nm for nm in FORMING_BUFFERS if nm.endswith("_a") or nm in ("e
 #: the screen's gate: fixture.screen_rows (xs) through stats_s5, its verdicts held to the fixture's (live_s)
 SCREEN_FILES = ("xs", "live_s")
 FORMING_PHASES = ("job", "forming")
+
+
+def forming_phases(rows_form: str) -> tuple[str, ...]:
+    """The phases whose steps write FORMING_BUFFERS: under rows form `s` the commitment's too (hash_rows_a writes A's words)."""
+    return FORMING_PHASES + (("commit",) if rows_form == "s" else ())
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -913,7 +919,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         for forming in OTHER_FORMINGS:
             alt = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, fused=False)
             alt.forming_form = forming
-            rerun(alt, FORMING_PHASES, FORMING_BUFFERS, f"forming={forming}")
+            rerun(alt, forming_phases(alt.rows_form), FORMING_BUFFERS, f"forming={forming}")
         pipe.free()
         dev.free(xa)
         dev.free(xb)

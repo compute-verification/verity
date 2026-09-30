@@ -592,6 +592,8 @@ def test_bound_steps_launch_what_unbound_steps_do(monkeypatch):
             ["gemm_pearlc_w_hu"] if pipe.hash_warps else ["gemm_pearlc_b_hu"] if m == 128 else ["gemm_pearlc_d"])
         assert [nm for nm, _, _ in bound] == [nm for nm, _, _ in unbound]
         assert ("stats_a" in names) == (forms[0] != "s")
+        assert {"hash_rows_a" if forms[0] == "s" else "stats_a", "stats_b"} <= {
+            nm for nm, phase, _ in bound if phase in RUN.forming_phases(forms[0])}
         first = calls(bound)
         assert first == calls(unbound) == calls(bound), (m, forms, forming)
         dev.stream = 77
