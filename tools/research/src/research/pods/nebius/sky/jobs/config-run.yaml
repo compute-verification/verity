@@ -241,8 +241,12 @@ run: |
   # <<< commit watchdog
   deferred=()
   [ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)
+  rc=0
   watch_commit "$SWEEP_DIR/$ROW/commit.log" "$RESEARCH_RUNS/$run_id" "${research[@]}" run --id "$run_id" --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
-    ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"}
+    ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"} || rc=$?
+  # a failed Commit's sealed bundle is never replayed (the replay task doesn't run), and a retry seals a new one
+  if [ "$rc" != 0 ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*; fi
+  exit "$rc"
 
 config:
   ssh:
