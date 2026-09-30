@@ -157,9 +157,11 @@ def main() -> None:
                     help="also time each hashing part alone, interleaved with the arms (a diagnostic breakdown; no transcripts)")
     ap.add_argument("--chain", type=int, default=0,
                     help="CALLS dependent calls a graph, the hashing beside forming (CHAIN_ARMS) against it in series")
+    ap.add_argument("--profile", help="comma-separated graph names: replay each 3 times, each after an L2 flush, then stop "
+                                      "(no timing, no transcripts; for nsys)")
     args = ap.parse_args()
-    if not (args.transcripts or args.components):
-        ap.error("--transcripts is required unless --components")
+    if not (args.transcripts or args.components or args.profile):
+        ap.error("--transcripts is required unless --components or --profile")
     if args.chain and args.components:
         ap.error("--chain and --components are separate runs")
     M = N = K = args.size
@@ -441,6 +443,13 @@ def main() -> None:
 
     for ge in graphs.values():
         replay(ge)
+    if args.profile:                                         # for a profiler's timeline: each graph PROFILE times, in order
+        res["profile_order"] = [nm for nm in args.profile.split(",") for _ in range(3)]
+        for nm in res["profile_order"]:
+            replay(graphs[nm])
+        dev.sync()
+        save()
+        return
     raw = {nm: [] for nm in graphs}
     clk = {nm: [] for nm in graphs}
     before = nv.read()
