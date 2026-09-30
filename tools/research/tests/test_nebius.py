@@ -582,3 +582,51 @@ def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quie
     (fill / "status.txt").write_text("2026-09-30T21:00:00Z free GPUs 0/2, kept free -, waiters -, timed True, window waiting False\n")
     monkeypatch.setattr(sys, "argv", ["publish_pool.py", "--out", str(out), "--no-push"])
     assert pp.main() == 0 and not out.exists()
+
+
+def test_publish_pool_flags_an_idle_lease_and_an_unleased_gpu_process_once_and_ranks_kinds_by_idle_gpu_h(tmp_path, monkeypatch):
+    util, fill, proc = tmp_path / "util", tmp_path / "fill", tmp_path / "proc"
+    for d in (util, fill / "queue", fill / "running", fill / "done"):
+        d.mkdir(parents=True)
+    (fill / "done" / "kt-e70b-fold-pc.sh").write_text("# fill: owner=bc-a gpus=1 max_min=20 kind=pouw-kt-gpu1\n")
+    (fill / "done" / "pad-x.sh").write_text("# fill: owner=bc-b gpus=1 max_min=20 filler=idle-gpu\n")
+    (fill / "queue" / "q.sh").write_text("# fill: owner=bc-a gpus=1 max_min=30\n")
+    for pid, cg, ppid in ((11, "0::/user.slice/gpu-lease-10.scope\n", 10), (21, "0::/user.slice/tmux.scope\n", 20),
+                          (20, "0::/user.slice/tmux.scope\n", 1)):
+        (proc / str(pid)).mkdir(parents=True)
+        (proc / str(pid) / "cgroup").write_text(cg)
+        (proc / str(pid) / "stat").write_text(f"{pid} (python3) S {ppid} 0 0\n")
+    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.timezone.utc)
+    idle = "pid=10 run=- who=fill:bc-a since=2026-09-30T20:50:00Z scope=gpu-lease-10 cmd=bash /workspace/pouw/fill/running/kt-e70b-fold-pc"
+    with open(util / "2026-09-30.jsonl", "w") as f:
+        for s in range(0, 300, 12):
+            t = (now - datetime.timedelta(seconds=300 - s)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            f.write(json.dumps({"t": t, "cpu_busy": 0.2, "gpus": [
+                {"i": 0, "util": 12 if s < 24 else 3, "smact": 0.02, "lease": idle, "procs": [{"pid": 11, "mib": 900, "cmd": "python3 kt.py"}]},
+                {"i": 1, "util": 60, "smact": 0.3, "lease": None, "procs": [{"pid": 21, "mib": 4000, "cmd": "python3 stray.py"}]},
+            ]}) + "\n")
+    usage = tmp_path / "lease-usage.jsonl"
+    rec = {"schema": "gpu-lease/usage/v1", "end": "2026-09-30T20:30:00Z"}
+    usage.write_text("".join(json.dumps(r) + "\n" for r in [
+        {**rec, "who": "fill:bc-a", "cmd": "bash /workspace/pouw/fill/running/kt-e70b-fold-pc.sh", "gpus": [{"held_s": 3600, "busy_s": 1800}]},
+        {**rec, "who": "fill:bc-b", "cmd": "bash /workspace/pouw/fill/running/pad-x.sh", "gpus": [{"held_s": 360, "busy_s": 360}]},
+        {**rec, "who": "session:bc-c", "cmd": "python3 bench.py", "gpus": [{"held_s": 720, "busy_s": 720}]},
+        {**rec, "end": "2026-09-29T20:00:00Z", "who": "fill:bc-a", "cmd": "x", "gpus": [{"held_s": 9999, "busy_s": 0}]},
+    ]))
+    for k, v in {"UTIL_OUT_DIR": util, "FILL_DIR": fill, "POOL_PROC": proc, "LEASE_USAGE": usage,
+                 "POOL_ALERTS": tmp_path / "alerts.jsonl", "POOL_STATE": tmp_path / "state.json"}.items():
+        monkeypatch.setenv(k, str(v))
+    spec = importlib.util.spec_from_file_location("publish_pool_monitors_under_test", NEBIUS / "publish_pool.py")
+    pp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pp)
+    n2 = pp.build(now)["nodes"]["n2"]
+    assert [(m["kind"], m["gpu"]) for m in n2["monitors"]] == [("gpu-idle-in-lease", 0), ("gpu-unleased", 1)]
+    assert n2["monitors"][0]["job_kind"] == "pouw-kt-gpu1" and n2["monitors"][0]["owner"] == "bc-a"
+    assert n2["unlabeled_waiting"] == 1
+    assert [(k["kind"], k["leased_gpu_h"], k["useful_gpu_h"], k["idle_gpu_h"], k["efficiency"]) for k in n2["kinds"]] == [
+        ("pouw-kt-gpu1", 1.0, 0.5, 0.5, 0.5), ("unlabeled:pad-x", 0.1, 0.0, 0.1, 0.0), ("direct:session:bc-c", 0.2, 0.2, 0.0, 1.0)]
+    pp.alert(n2["monitors"], now)
+    pp.alert(n2["monitors"], now + datetime.timedelta(minutes=5))
+    assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 2
+    pp.alert(n2["monitors"], now + datetime.timedelta(minutes=31))
+    assert len((tmp_path / "alerts.jsonl").read_text().splitlines()) == 4

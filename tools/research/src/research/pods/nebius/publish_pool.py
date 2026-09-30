@@ -10,6 +10,13 @@ Busy is the hourly report's rule: a GPU sample is busy when util >= 1% or SM act
 lease's fill job carries `filler=` in its header, else useful. `ready_gpu_h` is the queued GPU jobs' `max_min` summed (the
 most their next runs may take), against the 12 GPU-h watermark.
 
+Monitors, appended to node_ops' `alerts.jsonl` once per lease or process (again after 30 min while it lasts):
+- `gpu-idle-in-lease`: a lease held for the whole last 5 min whose GPU's mean util over them is under 10%.
+- `gpu-unleased`: a process on a GPU that no lease holds, or outside the holding lease's scope and process tree.
+`kinds` is each kind's leases that ended in the last 24 h (`gpu-lease/usage/v1`): leased and useful GPU-h (a filler job's busy
+time counts as leased only). A job's kind is its header's `kind=`, else `unlabeled:<first two words of its name>`, or
+`direct:<who>` outside the fill queue.
+
     publish_pool.py [--out FILE] [--no-push]
 """
 from __future__ import annotations
@@ -28,12 +35,24 @@ FILL = Path(os.environ.get("FILL_DIR", "/workspace/pouw/fill"))
 OUT = Path(os.environ.get("POOL_OUT", "/workspace/pouw/infra/infra-pool.json"))
 DEST_HOST = os.environ.get("POOL_DEST_HOST", "vy-n1")
 DEST = os.environ.get("POOL_DEST", "/workspace/usage/infra-pool.json")
+USAGE = Path(os.environ.get("LEASE_USAGE", "/workspace/research/lease-usage.jsonl"))
+ALERTS = Path(os.environ.get("POOL_ALERTS", "/workspace/pouw/infra/alerts.jsonl"))
+STATE = Path(os.environ.get("POOL_STATE", "/workspace/pouw/infra/pool-monitor-state.json"))
+PROC = Path(os.environ.get("POOL_PROC", "/proc"))
 NODE, HOST, CPUS, WATERMARK_GPU_H = "n2", "vy-nebius-2", 192, 12
+IDLE_UTIL, IDLE_S, REALERT_S = 10, 300, 1800
 FOLDERS = ("queue", "running", "done", "failed", "withdrawn")
 
 
 def ts(s: str) -> datetime:
     return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def ts_or_none(s: str | None) -> datetime | None:
+    try:
+        return ts(s) if s else None
+    except ValueError:
+        return None
 
 
 def tail_records(files: list[Path], since: datetime) -> list[dict]:
@@ -96,6 +115,118 @@ def fill_job(lease: str, known: dict[str, dict]) -> dict | None:
     return next((h for h in hits if "filler" in h), hits[0] if hits else None)
 
 
+def field(lease: str, k: str) -> str | None:
+    m = re.search(rf"\b{k}=(\S+)", lease or "")
+    return m.group(1) if m else None
+
+
+def kind_of(lease: str, known: dict[str, dict]) -> str:
+    job = fill_job(lease, known)
+    if job and job.get("kind"):
+        return str(job["kind"])
+    m = re.search(r"/fill/running/(\S+)", lease)
+    if m:
+        return "unlabeled:" + "-".join(m.group(1).removesuffix(".sh").split("-")[:2])
+    return f"direct:{field(lease, 'who') or '?'}"
+
+
+def owner_of(lease: str) -> str | None:
+    who = field(lease, "who")
+    return who.removeprefix("fill:") if who else None
+
+
+def leased_pid(pid: int, lease: str) -> bool | None:
+    """Whether a GPU process belongs to the lease: in its scope or under its pid. None when the process is gone."""
+    try:
+        cg = (PROC / str(pid) / "cgroup").read_text()
+    except OSError:
+        return None
+    scope, top = field(lease, "scope"), field(lease, "pid")
+    if scope and scope != "-" and f"/{scope}.scope" in cg:
+        return True
+    for _ in range(64):
+        if top and str(pid) == top:
+            return True
+        try:
+            pid = int((PROC / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()[1])
+        except (OSError, IndexError, ValueError):
+            return False
+        if pid <= 1:
+            return False
+    return False
+
+
+def monitors(r5: list[dict], now: datetime, known: dict[str, dict]) -> list[dict]:
+    if not r5:
+        return []
+    found, last = [], r5[-1]
+    for g in last.get("gpus", []):
+        lease = g.get("lease") or ""
+        pid, since = field(lease, "pid"), field(lease, "since")
+        start = ts_or_none(since)
+        if lease and pid and start and start <= now - timedelta(seconds=IDLE_S):
+            utils = [x.get("util") or 0 for r in r5 for x in r.get("gpus", []) if x.get("i") == g["i"] and field(x.get("lease"), "pid") == pid]
+            if utils and sum(utils) / len(utils) < IDLE_UTIL:
+                found.append({"kind": "gpu-idle-in-lease", "key": f"idle:{pid}:{g['i']}", "gpu": g["i"], "owner": owner_of(lease),
+                              "job_kind": kind_of(lease, known), "mean_util_5m": round(sum(utils) / len(utils), 1), "lease_since": since,
+                              "msg": f"GPU {g['i']} leased since {since} by {field(lease, 'who')} ({kind_of(lease, known)}) averaged "
+                                     f"{sum(utils) / len(utils):.1f}% util over the last 5 min"})
+        for p in g.get("procs") or []:
+            if leased_pid(int(p["pid"]), lease) is False:
+                found.append({"kind": "gpu-unleased", "key": f"unleased:{p['pid']}:{g['i']}", "gpu": g["i"], "pid": p["pid"],
+                              "cmd": (p.get("cmd") or "")[:120], "lease": field(lease, "who"),
+                              "msg": f"pid {p['pid']} uses GPU {g['i']} ({p.get('mib')} MiB) outside any lease of it"
+                                     f"{' (held by ' + field(lease, 'who') + ')' if lease else ''}: {(p.get('cmd') or '')[:80]}"})
+    return found
+
+
+def alert(found: list[dict], now: datetime) -> None:
+    try:
+        state = json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        state = {}
+    t = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    new = [a for a in found if a["key"] not in state or ts(state[a["key"]]) <= now - timedelta(seconds=REALERT_S)]
+    if new:
+        with open(ALERTS, "a") as f:
+            f.write("".join(json.dumps({"t": t, **a}) + "\n" for a in new))
+    state = {k: v for k, v in state.items() if ts(v) > now - timedelta(days=1)} | {a["key"]: t for a in new}
+    tmp = STATE.with_name(STATE.name + ".tmp")
+    tmp.write_text(json.dumps(state))
+    tmp.replace(STATE)
+
+
+def kinds(now: datetime, known: dict[str, dict]) -> list[dict]:
+    """Each kind's leases that ended in the last 24 h, the most idle first."""
+    since, out = now - timedelta(days=1), {}
+    try:
+        lines = USAGE.read_text(errors="replace").splitlines()
+    except OSError:
+        return []
+    for line in lines[-20000:]:
+        try:
+            r = json.loads(line)
+            if (ts_or_none(r.get("end")) or since) < since:
+                continue
+        except (ValueError, KeyError, TypeError):
+            continue
+        lease = f"who={r.get('who')} cmd={r.get('cmd') or ''}"
+        k = kind_of(lease, known)
+        filler = bool((fill_job(lease, known) or {}).get("filler"))
+        e = out.setdefault(k, {"kind": k, "owners": set(), "leases": 0, "leased_gpu_h": 0.0, "useful_gpu_h": 0.0})
+        e["owners"].add(owner_of(lease) or "?")
+        e["leases"] += 1
+        for g in r.get("gpus") or []:
+            e["leased_gpu_h"] += (g.get("held_s") or 0) / 3600
+            e["useful_gpu_h"] += 0 if filler else (g.get("busy_s") or 0) / 3600
+    rows = []
+    for e in out.values():
+        rows.append({**e, "owners": sorted(e["owners"]), "leased_gpu_h": round(e["leased_gpu_h"], 2),
+                     "useful_gpu_h": round(e["useful_gpu_h"], 2), "idle_gpu_h": round(e["leased_gpu_h"] - e["useful_gpu_h"], 2),
+                     "efficiency": round(e["useful_gpu_h"] / e["leased_gpu_h"], 4) if e["leased_gpu_h"] else None})
+    return sorted(rows, key=lambda x: -x["idle_gpu_h"])
+
+
 def busy(g: dict) -> bool:
     return (g.get("util") or 0) >= 1 or (g.get("smact") or 0) >= 0.01
 
@@ -132,6 +263,7 @@ def build(now: datetime) -> dict:
         gpus.append({"index": g["i"], "busy_5m": mean([float(x) for x in per]), "holder": who.group(1) if who else None,
                      "class": cls})
     queued = js["queue"]
+    found = monitors(r5, now, known)
     return {"schema": "infra-pool/v1", "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "watermark_gpu_h": WATERMARK_GPU_H,
             "nodes": {NODE: {
                 "host": HOST, "sampled_at": last.get("t"), "samples_5m": len(r5), "samples_1h": len(recs),
@@ -144,6 +276,9 @@ def build(now: datetime) -> dict:
                 "waiting_gpu": sum(1 for h in queued.values() if h["gpus"]),
                 "waiting_cpu": sum(1 for h in queued.values() if not h["gpus"]),
                 "lease_waiters": len(last.get("lease_waiters") or []),
+                "unlabeled_waiting": sum(1 for h in queued.values() if "kind" not in h),
+                "monitors": found,
+                "kinds": kinds(now, known),
                 "timed_window": False}}}
 
 
@@ -161,7 +296,10 @@ def main() -> int:
     a = ap.parse_args()
     if timed_window():
         return 0
-    doc = build(datetime.now(timezone.utc).replace(microsecond=0))
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    doc = build(now)
+    if not a.no_push:
+        alert(doc["nodes"][NODE]["monitors"], now)
     tmp = a.out.with_name(a.out.name + ".tmp")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     tmp.replace(a.out)
