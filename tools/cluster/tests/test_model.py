@@ -35,7 +35,8 @@ def test_the_nebius_description_loads():
     assert cpuset.format(n1.pools["checks"]) == "8-95" and n2.pools == {}
     assert [(w.name, w.gpus, w.borrow_gpus) for w in c.workstreams] == [("provers", 3, 0), ("deployments-gpu", 5, 2)]
     order = sorted(c.priorities, key=c.priorities.get, reverse=True)
-    assert order.index("bench") < order.index("work") < order.index("capture") < order.index("fill")
+    # kueue.yaml's order is policy (the steward, 30 Sep 19:40Z)
+    assert order.index("capture") < order.index("work") < order.index("bench") < order.index("dev") < order.index("fill")
 
 
 def test_validation_names_each_problem():

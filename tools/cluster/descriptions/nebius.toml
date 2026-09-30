@@ -16,10 +16,11 @@ drain_s = 7200  # admissions end 2 h before the stop, leaving the final backups 
 service = 1000  # the node's own daemons: sampler, exporters, the node agent
 timed = 900     # quiet whole-node windows
 session = 700   # a lease taken by hand: a kernel inner loop, a debugger
-bench = 600     # M0's pinned prover benches, second in Verity's order (the research coordinator, 17:22Z)
-work = 500      # a lane's queued work; vLLM deployments, third in Verity's order
-capture = 400   # port captures, fourth in Verity's order. The live kueue.yaml puts captures (1100) above deployments
-                # (600, 500) and prover benches (300): the steward says which order is policy (asked 30 Sep, lanes/nebius-infra/)
+# capture > work > bench is kueue.yaml's order, which is policy (the steward, 30 Sep 19:40Z): capture 1100 > sweep-night
+# 1000 > a vLLM deployment's GPU work 600 > its CPU work 500 > prover-bench 300 > dev 100 > backfill 10
+capture = 600   # port captures
+work = 500      # a lane's queued work: vLLM deployments, sweep-night
+bench = 300     # M0's pinned prover benches
 dev = 100
 fill = 10       # backfill: sweeps, censuses, anything that resumes from checkpoints
 
