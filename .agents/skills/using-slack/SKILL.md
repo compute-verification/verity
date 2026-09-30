@@ -33,6 +33,8 @@ contract, who subscribes and how) and the named humans. `research slack handles`
   `verify-author` can tell it apart from everyone else. Never print a token.
 - `RESEARCH_AGENT_URL=https://cursor.com/agents/<your bc id>`: every post links the agent that wrote it.
 - Channel ids come from the registry (or `SLACK_CHANNEL_<KEY>`, e.g. `SLACK_CHANNEL_AGENT_COORDINATION`).
+- Two Slack apps are in each channel: Cursor's, which delivers the wakes (`subscribe_slack_*`), and Verity's bot, which
+  posts and reads for `research slack`. A subscription to a channel Cursor's app isn't in never fires.
 
 ## Subscriptions
 

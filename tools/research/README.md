@@ -385,9 +385,11 @@ request. `match` reads the thread (`conversations.replies`) only for a reply tha
 fetches the message by channel and ts, since a wake payload is not evidence of its author, and fails closed on an allowlist
 entry without an id. `groups sync` is a plan until `--apply`, which then writes the groups' ids into the registry.
 
-The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `channels:history` and
-`groups:history` (read, match, roster, verify-author), `reactions:write` (pickup, done), and for `groups sync`
-`usergroups:read` and `usergroups:write`. It must be a member of each channel (or hold `chat:write.public`).
+The bot needs `chat:write`, `chat:write.customize` (the handle as the username), `groups:history` (read, match, roster,
+verify-author in private channels; `channels:history` for a public one), `reactions:write` (pickup, done), and for `groups
+sync` `usergroups:read` and `usergroups:write`. It must be a member of every channel it posts in or reads (`chat:write.public`
+does not reach private channels), and Cursor's Slack app must be in every channel an agent subscribes to: Cursor delivers the
+wakes, this bot posts.
 
 **Scaling past wake-on-everything (a design, not built).** Cursor's `subscribe_slack_channel` wakes every subscriber on every
 top-level message and has no mention filter, so each coordinator pays one wake (and one `match`) per request anyone makes,
