@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity.ir.defs import REGISTRY
-from verity_flock import fp, gf2
+from verity_flock import fp, gf2, unit_fp4
 from verity_flock import ir_lower as IL
 
 P = pytest.importorskip("verity_vllm.program.registry.prims")
@@ -193,10 +193,14 @@ def test_the_other_rows_pieces_match_the_ir_primitives(name):
     assert [(v, g) for v, g in zip(vecs, got) if g != p.evaluate(*v)] == []
 
 
-def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding():
-    """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` (the total model): E4M3 NaNs (0x7F, 0xFF), zeros, subnormals, the largest
-    magnitudes, accumulators of every class (the 14-bit adder truncates them too), bit for bit."""
-    from verity.ml.prims import HopperE4m3QgmmaDot32 as Q
+@pytest.mark.parametrize("name", ["HopperE4m3QgmmaDot32_v1", "BlackwellE4m3QmmaDot32_v1"])
+def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding(name):
+    """``fp.tc_dot_e4m3`` = ``HopperE4m3QgmmaDot32`` and sm_120's ``BlackwellE4m3QmmaDot32`` (the total models): E4M3 NaNs (0x7F,
+    0xFF), zeros, subnormals, the largest magnitudes, accumulators of every class (Hopper's 14-bit adder truncates them too, sm_120's
+    26-bit one does not), bit for bit."""
+    import verity.ml.prims  # noqa: F401  (registers the steps)
+
+    Q = REGISTRY[name]
 
     rng = random.Random(12)
     specials8 = [0x00, 0x80, 0x7F, 0xFF, 0x01, 0x81, 0x07, 0x7E, 0xFE, 0x08, 0x38]
@@ -213,8 +217,85 @@ def test_the_fp8_tensor_core_step_matches_the_ir_on_every_encoding():
         acc = (rng.getrandbits(1) << 31) | (rng.randint(110, 140) << 23) | rng.getrandbits(23) if small else \
             rng.choice(specials32) if rng.random() < 0.1 else rng.getrandbits(32)
         vecs.append([acc] + [e4(small) for _ in range(64)])
-    got = run_piece(IL.PIECES["HopperE4m3QgmmaDot32_v1"], [32] + [8] * 64, 32, vecs)
+    got = run_piece(IL.PIECES[name], [32] + [8] * 64, 32, vecs)
     assert [(v, g) for v, g in zip(vecs, got) if g != Q.evaluate(*v)] == []
+
+
+def _fp4_vectors(rng: random.Random, n: int, scale) -> list[list[int]]:
+    """Accumulators of every class (NaN payloads, infinities, subnormals, huge and ordinary), E2M1 codes (random, mostly zero, and
+    pairs cancelling within each group, or none at all), and ``scale(rng, family)`` bytes."""
+    special32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC12345, 0x7F800001, 0x7F7FFFFF, 0xFF7FFFFF, 1, 0x80000001]
+
+    def acc() -> int:
+        r, s = rng.random(), rng.getrandbits(1) << 31
+        return rng.choice(special32) if r < 0.08 else s | rng.getrandbits(23) if r < 0.2 else \
+            s | (rng.randint(90, 160) << 23) | rng.getrandbits(23) if r < 0.45 else s | (rng.randint(0, 254) << 23) | rng.getrandbits(23)
+
+    vecs = []
+    for t in range(n):
+        fam = t % 7
+        a = [rng.choice([0, 8]) if fam == 1 and rng.random() < 0.8 else rng.randint(0, 15) for _ in range(64)]
+        b = [x ^ 8 if i % 2 else x for i, x in enumerate(a)] if fam == 2 else [rng.randint(0, 15) for _ in range(64)]
+        if fam == 6:
+            a = b = [0] * 64
+        vecs.append([acc()] + a + b + scale(rng, fam))
+    return vecs
+
+
+def test_the_nvf4_step_matches_the_ir_on_every_encoding():
+    """``unit_fp4.step_total`` = ``BlackwellNvf4OmmaDot64``: NaN scale bytes (low seven bits 0x7F, either bit 7), bit 7 set on
+    ordinary scales (ignored), zero and subnormal scale mantissas, the top exponent field, NaN and infinite accumulators, cancelling
+    groups, bit for bit."""
+    from verity.ml.prims import BlackwellNvf4OmmaDot64 as Q
+
+    def scale(rng, fam):
+        def one():
+            r = rng.random()
+            return rng.choice([0x7F, 0xFF]) if r < 0.02 else (rng.getrandbits(1) << 7) | rng.randint(0, 7) if r < 0.2 else \
+                rng.choice([0x78, 0x79, 0x7E, 0x70, 0xF8, 0xFE]) if r < 0.3 else rng.randint(0, 0xFF)
+        return [one() for _ in range(8)]
+
+    vecs = _fp4_vectors(random.Random(13), 3000, scale)
+    got = run_piece(IL.PIECES["BlackwellNvf4OmmaDot64_v1"], [32] + [4] * 128 + [8] * 8, 32, vecs)
+    assert [(v, g) for v, g in zip(vecs, got) if g != Q.evaluate(*v)] == []
+
+
+def _mxf4_reference(acc: int, *ab: int) -> int:
+    """``BLACKWELL_SM120_MXF4.step_scaled`` with the measured rules outside it (``models._FP4_RE_EDGES``): a NaN scale (0xFF) or
+    accumulator gives 0x7FFFFFFF, an infinite accumulator itself, a sum leaving binary32 the infinity of its sign."""
+    from verity.ml.tc import models as TM
+    from verity.ml.tc.errors import InvalidArtifact
+
+    a, b, sa, sb = list(ab[:64]), list(ab[64:128]), list(ab[128:130]), list(ab[130:132])
+    if 0xFF in sa + sb:
+        return 0x7FFFFFFF
+    if acc & 0x7F800000 == 0x7F800000:
+        return 0x7FFFFFFF if acc & 0x7FFFFF else acc
+    M = TM.BLACKWELL_SM120_MXF4
+    try:
+        return M.step_scaled(acc, a, b, sa, sb)
+    except InvalidArtifact:
+        terms = M.group_terms(a, b, sa, sb)
+        acc_m, acc_e = TM._fp32_dyadic(acc)
+        anchors = [u - M.frac_bits for _, u, p in terms if p] + ([max(1, acc >> 23 & 0xFF) - 127 - (M.acc_window - 1)] if acc_m else [])
+        lsb = max(*anchors, M.grid_floor)
+        total = sum(TM._trunc_rz_to_grid(m, u, lsb) for m, u, _ in terms if m) + (TM._trunc_rz_to_grid(acc_m, acc_e, lsb) if acc_m else 0)
+        return 0xFF800000 if total < 0 else 0x7F800000
+
+
+def test_the_mxf4_step_matches_the_model_on_every_encoding():
+    """``unit_fp4.step_total(ue8m0=True)`` = the MXFP4 step: UE8M0 NaN scales, scales deep enough that the -174 floor binds and sums
+    fall below the subnormal grid (+0), and large enough that they leave binary32 (the infinity of the sum's sign), bit for bit."""
+    def scale(rng, fam):
+        lo, hi = {3: (0, 20), 4: (230, 254), 5: (100, 150)}.get(fam, (0, 254))
+        return [0xFF if rng.random() < 0.03 else rng.randint(lo, hi) for _ in range(4)]
+
+    vecs = _fp4_vectors(random.Random(14), 3500, scale)
+    got = run_piece(lambda C, acc, *ab: unit_fp4.step_total(C, acc, ab[:64], ab[64:128], ab[128:130], ab[130:132], ue8m0=True),
+                    [32] + [4] * 128 + [8] * 4, 32, vecs)
+    want = [_mxf4_reference(*v) for v in vecs]
+    assert {0x7F800000, 0xFF800000, 0} <= set(want) and any(w & 0x7F800000 == 0 and w & 0x7FFFFF for w in want)
+    assert [(v, g, w) for v, g, w in zip(vecs, got, want) if g != w] == []
 
 
 @pytest.mark.parametrize("name,table", [("MufuTanh_v1", "tanh_mufu"), ("TanhF32Rn_v1", "tanh_rn")])
