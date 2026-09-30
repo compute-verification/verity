@@ -6,11 +6,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as AMP
 from verity.ml.tc.total import HOPPER_BF16_WGMMA_K16 as HOP, tc_dot_total
 
 VECTORS = Path(__file__).resolve().parents[2] / "lean" / "Verity" / "TC" / "Vectors.lean"
+PIPES = {"HOPPER_BF16_WGMMA_K16": HOP, "AMPERE_BF16_M16N8K16": AMP}
 THEOREM = re.compile(
-    r"theorem v\d+ : tcDotTotal HOPPER_BF16_WGMMA_K16 (0x[0-9a-f]+)\s*\[([^\]]*)\]\s*\[([^\]]*)\] =\s*(0x[0-9a-f]+) :=")
+    r"theorem \w+ : tcDotTotal (\w+) (0x[0-9a-f]+)\s*\[([^\]]*)\]\s*\[([^\]]*)\] =\s*(0x[0-9a-f]+) :=")
 
 
 def _words(text: str) -> list[int]:
@@ -19,10 +21,11 @@ def _words(text: str) -> list[int]:
 
 def test_lean_vectors_are_the_python() -> None:
     vectors = THEOREM.findall(VECTORS.read_text())
-    assert len(vectors) >= 48
+    assert sum(p == "HOPPER_BF16_WGMMA_K16" for p, *_ in vectors) >= 48
+    assert sum(p == "AMPERE_BF16_M16N8K16" for p, *_ in vectors) >= 24
     words = set()
-    for acc, a, b, d in vectors:
-        assert tc_dot_total(HOP, int(acc, 16), _words(a), _words(b)) == int(d, 16), (acc, a, b)
+    for pipe, acc, a, b, d in vectors:
+        assert tc_dot_total(PIPES[pipe], int(acc, 16), _words(a), _words(b)) == int(d, 16), (pipe, acc, a, b)
         words.add(int(d, 16))
     # the vectors reach every kind of result word: NaN, both infinities, +0, and finite words of both signs
     assert {0x7FFFFFFF, 0x7F800000, 0xFF800000, 0} <= words
