@@ -98,6 +98,8 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
     if job.node is not None and job.node != node:
         return f"pinned to {job.node}"
     n = cluster.nodes[node]
+    if job.gpus and job.gpu_model and job.gpu_model != n.gpu_model:
+        return f"its GPUs are {n.gpu_model or 'undescribed'}, not {job.gpu_model}"
     standing = cluster.standing(job.project, node)
     if standing is None:
         return f"{job.project} has no share on {node}"
@@ -123,7 +125,7 @@ def static_refusal(cluster: Cluster, node: str, job: Job, now: int) -> str | Non
         return f"would run past {node}'s admission end {ends}"
     if job.pool is not None and job.pool not in n.pools:
         return f"{node} has no CPU pool {job.pool!r}"
-    allowed = _allowed_cpus(cluster, n, job)
+    allowed = allowed_cpus(cluster, n, job)
     if job.gpus > len(n.gpus) or job.cpus > len(allowed) or job.memory_gib > n.memory_gib:
         return f"larger than {node} allows ({job.gpus} GPUs, {job.cpus} CPUs, {job.memory_gib} GiB)"
     if set(job.gpu_ids) - {g.index for g in n.gpus}:
@@ -167,7 +169,7 @@ def fit(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allocation],
         if len(free_gpus) < job.gpus:
             return "no GPUs free"
         gpus = _pick_gpus(n, free_gpus, job.gpus)
-    free_cpus = _allowed_cpus(cluster, n, job) - used_cpus
+    free_cpus = allowed_cpus(cluster, n, job) - used_cpus
     if len(free_cpus) < job.cpus:
         return "no CPUs free"
     return gpus, _pick_cpus(n, free_cpus, job.cpus, gpus)
@@ -381,7 +383,7 @@ def _without(occ, gone):
     return [a for a in occ if a.id not in ids]
 
 
-def _allowed_cpus(cluster: Cluster, n: Node, job: Job) -> frozenset[int]:
+def allowed_cpus(cluster: Cluster, n: Node, job: Job) -> frozenset[int]:
     """A job naming a pool gets that pool's CPUs; any other job gets the CPUs outside every pool. A guest's share narrows
     either."""
     base = n.pools.get(job.pool, frozenset()) if job.pool is not None else n.cpus - n.pooled_cpus
@@ -419,4 +421,4 @@ def _pick_cpus(n: Node, free: frozenset[int], count: int, gpus: tuple[int, ...])
 
 
 __all__ = ["Action", "Evict", "Expire", "Freeze", "Idle", "OWNER", "Refuse", "Start", "Thaw", "Wait", "apply", "fit", "idle",
-           "in_share", "job_in_share", "plan", "static_refusal"]
+           "in_share", "job_in_share", "plan", "static_refusal", "allowed_cpus"]

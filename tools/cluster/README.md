@@ -15,6 +15,12 @@ evaluate` is the pass bar. On vy-nebius-1, `nebius1` reads Kueue's pods and Work
 allocations and a queue, and `python -m cluster.nebius1 DESCRIPTION [--save|--from SNAPSHOT]` prints what the planner would
 do beside Kueue. Node 1's executor under the one queue is kueue-fold's.
 
+A lane submits with `research run --queue` (tools/research): it declares the job's class and resources, `cluster submit`
+places it and names the wrapper its node's executor runs it under (`submit.py`: `gpu-lease --wait` for node 2's GPUs, a
+capped and pinned systemd scope for CPU jobs), and the machine-side runner runs inside that wrapper, so the run's custody
+finishes before the allocation is released. Node 1's GPUs wait for kueue-fold's executor; such a job goes to node 2 or is
+refused.
+
 ## Layout
 
 ~~~text
@@ -30,7 +36,8 @@ src/cluster/
 ├── nebius2.py  node 2's gpu-lease as the model sees it: owner lines, wait files, preempted.log; read(), live and read-only
 ├── shadow.py   the planner beside gpu-lease: mirror into the ledger, plan, divergences; replay(); evaluate(), the pass bar
 ├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
-└── cli.py      cluster validate | plan | ledger … | agent | shadow replay | shadow evaluate
+├── submit.py   the submit path: a declared job's placement and its node executor's wrapper (research run --queue)
+└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
                 and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
@@ -64,6 +71,7 @@ the ledger replays into exactly the simulator's allocations and queue.
 uv run tools/check/suites.py cluster
 uv run cluster validate tools/cluster/descriptions/nebius.toml
 uv run cluster plan tools/cluster/descriptions/nebius.toml SNAPSHOT.json    # snapshot shape: cli.py's docstring
+uv run cluster submit tools/cluster/descriptions/nebius.toml --run-id R --now T --project P --submitter W --max-s S [--gpus N ...]
 uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
