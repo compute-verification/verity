@@ -214,7 +214,7 @@ def test_bench_dry_run(small_fixture, tmp_path):
             allocs[ev["ptr"]] = ev["bytes"]
         elif ev["op"] == "free":
             allocs.pop(ev["ptr"])
-        else:
+        elif ev["op"] == "launch":
             name, p, i = ev["name"], ev["p"], ev["i"]
             for slot, size in needs(name, p, i).items():
                 if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3), ("lines", 4)}:
