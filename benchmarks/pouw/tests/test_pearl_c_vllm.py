@@ -320,7 +320,7 @@ def test_the_pipelines_h2_templates_bind_the_audits_schemas():
 def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin`: each is `MerkleTree`'s root in the scheme's tree hash (frame-b3 or frame-b3s)."""
-    hashing = PPD.SCHEMES[scheme][2]
+    hashing = PPD.scheme_of(scheme).hashing
     h = PPD.scheme_of(scheme).commitment_hash
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
@@ -366,7 +366,8 @@ def bf16_file(rows: list[bytes]) -> bytes:
     return b"".join((np.frombuffer(r, "<u4") >> 16).astype("<u2").tobytes() for r in rows)
 
 
-@pytest.fixture(params=sorted(PPD.SCHEMES))
+#: the reference verifier's Skip debit has no rule without promotion, so v2 (sm120-unpromoted) isn't provable here
+@pytest.fixture(params=sorted(s for s in PPD.SCHEMES if "unpromoted" not in s))
 def honest_pass(tmp_path, request):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each device scheme (-h1 and -h2 trees)."""
@@ -740,7 +741,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
     with pytest.raises(KeyError, match="this device path runs"):
-        PPD.scheme_of("pearl-c-sm120-v1-h2")
+        PPD.scheme_of("pearl-c-sm120-v1-h3")
 
 
 # ---- the schedule as data ---------------------------------------------------------------------------------------------
