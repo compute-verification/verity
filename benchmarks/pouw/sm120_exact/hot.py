@@ -390,7 +390,7 @@ def main() -> None:
         sys.exit(5)
     dev.load(cubin)
 
-    pool = Pool(args.procs)
+    pool = Pool(args.procs, initializer=load_ref, initargs=(args.ref,))
     ahead = ThreadPoolExecutor(1)
     unit_secs: list[float] = []
 
