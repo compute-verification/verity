@@ -1219,11 +1219,21 @@ def lease_extend_s(harness_args: list[str]) -> float | None:
     (research.pods.lease.RUN_MARGIN_S); None without a --timeout."""
     from .pods.lease import RUN_MARGIN_S
 
-    try:
-        t = float(flag_value(harness_args, "--timeout") or "")
-    except ValueError:
+    t = timeout_seconds(flag_value(harness_args, "--timeout"))
+    return t + RUN_MARGIN_S if t and t > 0 else None
+
+
+def timeout_seconds(text: str | None) -> float | None:
+    """A --timeout (`1.5`, `900`, `40m`, `6h`, `7d`: seconds or credentials.parse_ttl's grammar) in seconds; None when absent.
+    ValueError when malformed."""
+    from .store.credentials import parse_ttl
+
+    if text is None:
         return None
-    return t + RUN_MARGIN_S if t > 0 else None
+    try:
+        return float(text)
+    except ValueError:
+        return float(parse_ttl(text))
 
 
 def lease_line(lz: dict[str, Any] | None, asked: float | None, machine: str) -> str:
@@ -1409,6 +1419,15 @@ def fetch(local_dir: Path, *, everything: bool = False) -> dict[str, Any]:
     st = _read_json(local_dir / "status.json") or {}
     rec["last_observed"] = {"state": st.get("state"), "rc": st.get("rc"), "at_utc": rec["observed_utc"]}
     rec.pop("last_fetch_error", None)
+    rec.pop("launcher_exited", None)
+    pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
+    if not st and isinstance(pid, int):
+        # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
+        probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
+                                          f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=120)
+        lines = probe.stdout.decode(errors="replace").splitlines() if probe.returncode == 0 else []
+        if lines and lines[0] == "exited":
+            rec["launcher_exited"] = {"at_utc": rec["observed_utc"], "runner_pid": pid, "last_line": (lines[1] if len(lines) > 1 else "")[-300:]}
     if everything:
         manifest = _verify_and_manifest(ssh, rd, local_dir, rec)
         rec["preserved"] = manifest is not None
