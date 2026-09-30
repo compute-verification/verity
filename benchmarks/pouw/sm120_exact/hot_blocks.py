@@ -524,13 +524,17 @@ def write_staircase(out: Path, names: list[str], starts: list[int], fh, tasks: l
                 continue
             w = windows.setdefault((t, L), {"t": t, "L": L, "closest": None, "found": {}})
             for side, by, M, N, f, i in stair_points(r, L, st):
+                q = N / f
+                closer = w["closest"] is None or q > w["closest"]["ratio"]
+                found = N >= f and (nm not in w["found"] or q > w["found"][nm]["ratio"])
+                if not (closer or found):
+                    continue
                 via = st[L][2][i]
-                pt = {"M": M, "N": N, "floor": f, "margin": round(f - N, 1), "ratio": round(N / f, 4), "side": side,
-                      "by": by, "unit": nm, "family": fam, "step_rows": st[L][0][i],
-                      "via_rows": via.get("rows_needed") if via else None}
-                if w["closest"] is None or pt["ratio"] > w["closest"]["ratio"]:
+                pt = {"M": M, "N": N, "floor": f, "margin": round(f - N, 1), "ratio": q, "side": side, "by": by,
+                      "unit": nm, "family": fam, "step_rows": st[L][0][i], "via_rows": via.get("rows_needed") if via else None}
+                if closer:
                     w["closest"] = pt
-                if N >= f and (nm not in w["found"] or pt["ratio"] > w["found"][nm]["ratio"]):
+                if found:
                     w["found"][nm] = pt
             for pL, pM in probes:
                 if pL == L:
