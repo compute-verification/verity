@@ -384,6 +384,54 @@ def debit_pure(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return flags
 
 
+def greedy_pure(ap: np.ndarray, bp: np.ndarray) -> set:
+    """The greedy joint set of one word with no promotion (`ap`, `bp`: (1, k) codes): atom pairs whose joint skip leaves the
+    final value unchanged while neither atom alone does, packed greedily, then every single atom that keeps it unchanged.
+    It lower-bounds the largest jointly skippable set, the unpromoted chain's cross-atom hole. Replayed before return."""
+    T = ap.shape[1] // 32
+    A = [ap[:, 32 * t:32 * t + 32] for t in range(T)]
+    B = [bp[:, 32 * t:32 * t + 32] for t in range(T)]
+
+    def run(S: set) -> float:
+        C = np.zeros(1)
+        for t in range(T):
+            if t not in S:
+                C, _ = step(C, A[t], B[t])
+        return float(C[0])
+
+    final = run(set())
+    alone = np.array([run({t}) == final for t in range(T)])
+    pairs = []
+    for t1 in range(T):
+        if alone[t1]:
+            continue
+        # every second atom t2 > t1 at once: batch b skips t1 and atom t1 + 1 + b
+        nb = T - t1 - 1
+        if nb <= 0:
+            continue
+        C = np.zeros(1)
+        for t in range(t1):
+            C, _ = step(C, A[t], B[t])
+        X = np.repeat(C, nb)
+        for h in range(t1 + 1, T):
+            live = np.arange(nb) != h - t1 - 1
+            D, _ = step(X, np.repeat(A[h], nb, 0), np.repeat(B[h], nb, 0))
+            X = np.where(live, D, X)
+        for b in np.flatnonzero(X == final):
+            t2 = t1 + 1 + int(b)
+            if not alone[t2]:
+                pairs.append((t1, t2))
+    S: set = set()
+    for t1, t2 in pairs:
+        if t1 not in S and t2 not in S and run(S | {t1, t2}) == final:
+            S |= {t1, t2}
+    for t in range(T):
+        if t not in S and run(S | {t}) == final:
+            S.add(t)
+    assert run(S) == final
+    return S
+
+
 def ticket(a: np.ndarray, b: np.ndarray, G: int) -> np.ndarray:
     """Each word's ticket: the promoted FP32 total (G > 0), or the one unpromoted chain's value (G = 0)."""
     T = a.shape[1] // 32
@@ -599,6 +647,15 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
             row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
                         "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
                         "tile_all_flagged_share": round(float(flags.all(0).mean()), 6)})
+            if cross_words:
+                sample = np.unique(np.linspace(0, len(A) - 1, cross_words).astype(int))
+                sets = [greedy_pure(A[p:p + 1], B[p:p + 1]) for p in sample]
+                size = np.array([len(S) for S in sets])
+                beyond = np.array([sum(1 for t in S if not flags[p, t]) for S, p in zip(sets, sample)])
+                row.update({"cross_group_words": len(sample), "cross_group_share_mean": round(float(size.mean()) / T, 6),
+                            "cross_group_share_max": round(float(size.max()) / T, 6),
+                            "cross_group_beyond_debit_mean": round(float(beyond.mean()) / T, 6),
+                            "cross_group_beyond_debit_max": round(float(beyond.max()) / T, 6)})
         if G and with_debit:
             flags, eF = debit(A, B, G)
             per_word = flags.sum(1)
