@@ -123,6 +123,7 @@ import FlockSoundness.Types.Program
 import FlockSoundness.Types.ProgramPlaces
 import FlockSoundness.Types.ProgramE2E
 import FlockSoundness.ComposePlace
+import FlockSoundness.Binding
 import FlockSoundness.ZK.Masking
 import FlockSoundness.ZK.Adaptivity
 import FlockSoundness.ZK.CoinBinding
