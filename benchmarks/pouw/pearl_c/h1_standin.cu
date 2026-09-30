@@ -480,7 +480,7 @@ extern "C" __global__ void __launch_bounds__(256) derive_rows_b3s_wide(const Arg
   __shared__ __align__(16) uint32_t seg[16 * COAL_PAD];
   __shared__ uint32_t lv[16][8];
   __shared__ int last;
-  const uint32_t rb = (uint32_t)a.i[1], n = (uint32_t)a.i[2], per = rb / 4096, segs = rb / B3S_SEG;
+  const uint32_t rb = (uint32_t)a.i[1], n = (uint32_t)a.i[2], per = rb / 4096;
   const uint64_t r = blockIdx.x / per;
   const uint32_t c = blockIdx.x % per, tid = threadIdx.x, q = 256 * c + tid;
   const uint4 v = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n)[(8 * q % n) / 8];
