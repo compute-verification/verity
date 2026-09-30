@@ -150,3 +150,28 @@ def test_base_split_reads_dumped_activations(tmp_path):
     assert {(r["source"], r["linear"], r["k"], r["noise"]) for r in res["results"]} == {("layer00", "mlp.up_proj", 256, "row")}
     assert len(res["results"]) == len(C.atoms_from(args))
     assert all(r["cheater_A_cost_per_dense_mac"] == 1.0 for r in res["results"])
+
+
+@pytest.mark.parametrize("fmt", ["nvf4", "mxf4"])
+def test_fp4_representable_by_hand(fmt):
+    """A block is q/2 * s.  7 = 2 * 3.5 fits under a UE4M3 scale but not under a power of two (any scale fits one value);
+    {6, 1} and {1.5, 0.5} are already on the grid; {6, 5} is off every grid (6:5 is no ratio of E2M1 values); zero fits."""
+    blocks = {"seven": [14], "six_one": [12, 2], "six_five": [12, 10], "zero": [0, 0], "three_halves": [3, 1]}
+    N = np.array([(v + [0] * 16)[:16] for v in blocks.values()], dtype=np.int64)
+    strict, anyscale = C.fp4_representable(N, np.full(len(N), -1), fmt)
+    got = dict(zip(blocks, zip(strict.tolist(), anyscale.tolist())))
+    assert got["seven"] == ((fmt == "nvf4"), True)                       # 3.5 is UE4M3, not 2^e; any scale 7/6 works
+    assert got["six_one"] == (True, True) and got["zero"] == (True, True) and got["three_halves"] == (True, True)
+    assert got["six_five"] == (False, False)
+
+
+def test_merge_rate_sees_duplicates_and_is_small_on_salted_gaussians():
+    """Duplicate rows cancel under '-' and merge under '+' (2v fits, a scale doubling); salted Gaussian blocks almost never
+    sum onto one FP4 value, so epsilon_R is small there."""
+    rng = np.random.default_rng(4)
+    x = rng.standard_normal((32, 512))
+    dup = C.merge_rate("nvf4", np.repeat(x[::2], 2, axis=0), "none", 0.25, rng)["patterns"]["adjacent-row"]
+    assert dup["dup"] == 1.0 and dup["-"]["cancel"] == 1.0 and dup["+"]["eps_any_scale"] == 1.0
+    g = C.merge_rate("nvf4", x, "row", 0.25, rng)
+    assert 0.0 < g["zero_codes"] < 0.2 and g["zero_blocks"] == 0.0
+    assert g["eps_R_strict_max"] <= g["eps_R_any_scale_max"] < 0.01

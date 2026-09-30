@@ -19,6 +19,7 @@ sigma_c code units per block, after the block scale).
     python benchmarks/pouw/fp4_census.py synth --k 8192 --pairs 128 --out synth.json
     python benchmarks/pouw/fp4_census.py real --acts acts_dir --out real.json      # npz files from fp4_quality.py --dump-acts
     python benchmarks/pouw/fp4_census.py basesplit --noise row --delta 0.25 [--acts acts_dir] --out split.json
+    python benchmarks/pouw/fp4_census.py merge --noise none,row --delta 0.25 [--acts acts_dir] --out merge.json
     python benchmarks/pouw/fp4_census.py breakeven
 """
 from __future__ import annotations
@@ -505,6 +506,110 @@ def base_split(fmt: str, A: np.ndarray, noise: str, delta: float, rng, tile_rows
             **salt_dead}
 
 
+# ---- merge rate (the FP4-tile model's epsilon_R) ---------------------------------------------------------------------
+
+#: Two-block pre-add patterns: X-blocks (row, k-block) paired at the finest level (adjacent) and at one Strassen level
+#: (halves of the rows or of the k-blocks, and the diagonal A11 + A22).
+MERGE_PATTERNS = ("adjacent-k", "adjacent-row", "strassen-k", "strassen-row", "strassen-diag")
+
+
+def block_ints(codes: np.ndarray, sc: np.ndarray, fmt: str) -> tuple[np.ndarray, np.ndarray]:
+    """Blocks as exact integers: (rows, nb, blk) N and (rows, nb) E with value = N * 2^E (in units of the global g)."""
+    rows, k = codes.shape
+    blk = 16 if fmt == "nvf4" else 32
+    m, e = scale_pairs("ue4m3" if fmt == "nvf4" else "ue8m0", sc)
+    return numerators(codes).reshape(rows, k // blk, blk) * m[..., None], e - 1   # value = (n/2) * m * 2^e
+
+
+def fp4_representable(N: np.ndarray, E: np.ndarray, fmt: str) -> tuple[np.ndarray, np.ndarray]:
+    """Per block (P, blk) of values N * 2^E: (on the E2M1 grid under one scale of the format, under any scale > 0).
+
+    The block is q_j/2 * s for codes q_j in E2M1's halves {0,1,2,3,4,6,8,12}; the largest |N_j| = M fixes q_max, hence
+    s = 2 M 2^E / q_max, so each of the 7 choices of q_max is one exact integer test.  "One scale of the format" is a
+    UE4M3 value (nvf4, the operand's global g kept) or a power of two 2^-127..2^127 (mxf4).  An all-zero block passes both.
+    """
+    M = np.abs(N).max(-1)
+    zero = M == 0
+    Ms = np.where(zero, 1, M)
+    strict, anyscale = zero.copy(), zero.copy()
+    for qmax in (1, 2, 3, 4, 6, 8, 12):
+        num = N * qmax
+        ok = ~zero & (num % Ms[:, None] == 0).all(-1) & np.isin(np.abs(num // Ms[:, None]), E2M1_NUM).all(-1)
+        anyscale |= ok
+        dyadic = (qmax % 3 != 0) | (M % 3 == 0)
+        s = np.ldexp(2.0 * Ms / qmax, E)
+        if fmt == "nvf4":
+            fits = np.isin(s, E4M3_FIN[1:])
+        else:
+            mant, ex = np.frexp(s)
+            fits = (mant == 0.5) & (ex - 1 >= -127) & (ex - 1 <= 127)
+        strict |= ok & dyadic & fits
+    return strict, anyscale
+
+
+def merge_rate(fmt: str, A: np.ndarray, noise: str, delta: float, rng) -> dict:
+    """epsilon_R: how often a sum or difference of two salted input blocks is itself one FP4 value (FP4-tile model §2.3).
+
+    Per pattern and sign, over the pairs whose two blocks are both nonzero: ``eps_strict`` = the merged block is
+    FP4-representable under one scale of the format; ``eps_any_scale`` = on the E2M1 grid under any common factor (an
+    upper bound); ``cancel`` = the blocks cancel exactly (a duplicate up to sign); ``dup`` = v1 = +-v2 (either sign).
+    """
+    codes, sc, g = quantize(noisy(A, fmt, noise, delta, rng), fmt)
+    N, E = block_ints(codes, sc, fmt)
+    rows, nb, blk = N.shape
+    live = np.abs(N).max(-1) > 0
+    out = {"zero_codes": float(((codes & 7) == 0).mean()), "zero_blocks": float((~live).mean()), "blocks": int(rows * nb),
+           "patterns": {}}
+    h, hk = rows // 2, nb // 2
+    idx = {"adjacent-k": ((slice(None), slice(0, 2 * hk, 2)), (slice(None), slice(1, 2 * hk, 2))),
+           "adjacent-row": ((slice(0, 2 * h, 2), slice(None)), (slice(1, 2 * h, 2), slice(None))),
+           "strassen-k": ((slice(None), slice(0, hk)), (slice(None), slice(hk, 2 * hk))),
+           "strassen-row": ((slice(0, h), slice(None)), (slice(h, 2 * h), slice(None))),
+           "strassen-diag": ((slice(0, h), slice(0, hk)), (slice(h, 2 * h), slice(hk, 2 * hk)))}
+    worst = 0.0
+    for pat in MERGE_PATTERNS:
+        a, b = idx[pat]
+        N1, E1, N2, E2 = N[a].reshape(-1, blk), E[a].reshape(-1), N[b].reshape(-1, blk), E[b].reshape(-1)
+        both = live[a].reshape(-1) & live[b].reshape(-1)
+        lo = np.minimum(E1, E2)
+        far = np.abs(E1 - E2) > 40                                      # the smaller block sits below 40 bits: never on a 2-bit grid
+        s1, s2 = np.minimum(E1 - lo, 40), np.minimum(E2 - lo, 40)
+        A1, A2 = N1 << s1[:, None], N2 << s2[:, None]
+        dup = both & ~far & ((A1 == A2).all(-1) | (A1 == -A2).all(-1))
+        row = {"pairs": int(both.sum())}
+        for sign, S in (("+", A1 + A2), ("-", A1 - A2)):
+            strict, anyscale = fp4_representable(S, lo, fmt)
+            nz = np.abs(S).max(-1) > 0
+            n = max(1, int(both.sum()))
+            r = {"eps_strict": float((both & ~far & nz & strict).sum() / n),
+                 "eps_any_scale": float((both & ~far & nz & anyscale).sum() / n),
+                 "cancel": float((both & ~nz).sum() / n)}
+            worst = max(worst, r["eps_strict"])
+            row[sign] = r
+        row["dup"] = float(dup.sum() / max(1, int(both.sum())))
+        out["patterns"][pat] = row
+    out["eps_R_strict_max"] = worst
+    out["eps_R_any_scale_max"] = max(out["patterns"][p][s]["eps_any_scale"] for p in MERGE_PATTERNS for s in "+-")
+    return out
+
+
+def cmd_merge(args) -> dict:
+    """epsilon_R per format, operand and noise: the FP4-tile model's merge rate, on the confirmed atom's formats."""
+    rng = np.random.default_rng(args.seed)
+    res = {"k": args.k, "pairs": args.pairs, "seed": args.seed, "noise": args.noise, "delta": args.delta,
+           "acts": str(args.acts) if args.acts else None, "operand": args.operand, "patterns": list(MERGE_PATTERNS),
+           "results": []}
+    for name, (atom, fmt) in atoms_from(args).items():
+        for label, A in operands(args, rng):
+            for noise in args.noise.split(","):
+                r = merge_rate(fmt, A, noise, args.delta, rng)
+                res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
+                print(json.dumps({"format": fmt, **label, "noise": noise, "zero_codes": round(r["zero_codes"], 4),
+                                  "zero_blocks": round(r["zero_blocks"], 4), "eps_R_strict_max": round(r["eps_R_strict_max"], 5),
+                                  "eps_R_any_scale_max": round(r["eps_R_any_scale_max"], 5)}), flush=True)
+    return res
+
+
 def atoms_from(args) -> dict[str, tuple[Atom, str]]:
     from verity.ml.tc.models import MODELS
     out = {}
@@ -566,28 +671,29 @@ def cmd_real(args) -> dict:
     return res
 
 
+def operands(args, rng):
+    """One side's operands (--operand a: activations, b: weights): the synthetic families, or with --acts the real rows
+    fp4_quality.py --dump-acts wrote."""
+    side = getattr(args, "operand", "a")
+    if not args.acts:
+        for fam in FAMILIES if args.families == "all" else tuple(args.families.split(",")):
+            yield {"family": fam}, family(fam, max(args.pairs, 64), args.k, rng)[0 if side == "a" else 1]
+        return
+    for f in sorted(Path(args.acts).glob("*.npz")):
+        d = np.load(f)
+        for lin in sorted({key.rsplit("/", 1)[0] for key in d.files}):
+            X = d[f"{lin}/{'x' if side == 'a' else 'w'}"].astype(np.float64)
+            X = X[:, : args.max_k] if args.max_k else X
+            yield {"source": f.stem, "linear": lin, "k": int(X.shape[1])}, X
+
+
 def cmd_basesplit(args) -> dict:
     """The base-split falsifier (design X-FP4-1): per family/format/noise, how cheap the salt-free split is (A side)."""
     rng = np.random.default_rng(args.seed)
     res = {"k": args.k, "pairs": args.pairs, "seed": args.seed, "noise": args.noise, "delta": args.delta,
            "acts": str(args.acts) if args.acts else None, "results": []}
-    fams = FAMILIES if args.families == "all" else tuple(args.families.split(","))
-
-    def operands():
-        """Synthetic families, or with --acts the real activation rows that fp4_quality.py --dump-acts wrote."""
-        if not args.acts:
-            for fam in fams:
-                yield {"family": fam}, family(fam, max(args.pairs, 64), args.k, rng)[0]
-            return
-        for f in sorted(Path(args.acts).glob("*.npz")):
-            d = np.load(f)
-            for lin in sorted({key.rsplit("/", 1)[0] for key in d.files}):
-                X = d[f"{lin}/x"].astype(np.float64)
-                X = X[:, : args.max_k] if args.max_k else X
-                yield {"source": f.stem, "linear": lin, "k": int(X.shape[1])}, X
-
     for name, (atom, fmt) in atoms_from(args).items():
-        for label, A in operands():
+        for label, A in operands(args, rng):
             for noise in args.noise.split(","):
                 if noise == "none":
                     continue                                            # the split needs a salt: noise is what the base can't guess
@@ -643,7 +749,7 @@ def breakeven(prices: dict) -> dict:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["selftest", "synth", "real", "basesplit", "breakeven"])
+    ap.add_argument("cmd", choices=["selftest", "synth", "real", "basesplit", "merge", "breakeven"])
     ap.add_argument("--atom", action="append", default=None)
     ap.add_argument("--frac-bits", type=int, default=None)
     ap.add_argument("--acc-window", type=int, default=None)
@@ -653,6 +759,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--noise", default="none,row,block")
     ap.add_argument("--delta", type=float, default=1.0)
     ap.add_argument("--acts", default=None)
+    ap.add_argument("--operand", choices=["a", "b"], default="a", help="basesplit/merge: activations (a) or weights (b)")
     ap.add_argument("--max-k", type=int, default=0)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="")
@@ -682,13 +789,17 @@ def main() -> None:
     if not all(v["step_mismatches"] == 0 and v["chain_mismatches"] == 0 for v in rep.values()):
         print(json.dumps({"selftest": rep}))
         sys.exit("the vectorised atom disagrees with verity.ml.tc: no census")
-    doc = {"synth": cmd_synth, "real": cmd_real, "basesplit": cmd_basesplit}[args.cmd](args)
+    doc = {"synth": cmd_synth, "real": cmd_real, "basesplit": cmd_basesplit, "merge": cmd_merge}[args.cmd](args)
     doc.update({"tool": "pouw_fp4_census", "cmd": args.cmd, "atoms": args.atom, "selftest": rep, "seconds": round(time.time() - t0, 1)})
     if args.out:
         out = Path(args.out)
         out.write_text(json.dumps(doc, indent=1) + "\n")
         es = [r["words"]["exact_steps"] for r in doc["results"] if "words" in r]
-        if es:
+        eps = [r["eps_R_strict_max"] for r in doc["results"] if "eps_R_strict_max" in r]
+        if eps:
+            run_result.write(out, True, f"fp4-census-{args.cmd}", f"{len(eps)} cells; eps_R (strict) max {max(eps):.5f}",
+                             [("cells", len(eps), "count"), ("eps_R_strict_max", max(eps), "fraction")])
+        elif es:
             run_result.write(out, True, f"fp4-census-{args.cmd}", f"{len(doc['results'])} cells; exact steps {min(es):.4f}..{max(es):.4f}",
                              [("cells", len(doc["results"]), "count"), ("exact_steps_max", max(es), "fraction")])
         else:
