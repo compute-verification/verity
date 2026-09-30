@@ -204,7 +204,7 @@ def measure(i: int, X: np.ndarray, W: np.ndarray, args, rng, tiles: bool) -> dic
             ii, jj = np.meshgrid(np.arange(64), np.arange(8), indexing="ij")
             A, B = a[ii.ravel()], b[jj.ravel()]
             T = kpad // 32
-            tid, tex, _, _ = C.chain(A, B, 4)
+            tid, tex = C.chain(A, B, 4)[:2]
             flags, eF = C.debit(A, B, 4)
             size, beyond = C.cross_group(A, B, flags, np.unique(np.linspace(0, len(A) - 1, args.cross_words).astype(int)), 4)
             rec["tiles"].append({"rules_ok_padded": bool(flA and lvA and flB and lvB),

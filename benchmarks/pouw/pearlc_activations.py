@@ -98,7 +98,7 @@ def main() -> None:
                 ii, jj = np.meshgrid(np.arange(64), np.arange(8), indexing="ij")
                 A, B = a[ii.ravel()], b[jj.ravel()]
                 T = k // 32
-                tid, tex, _, _ = C.chain(A, B, 4)
+                tid, tex = C.chain(A, B, 4)[:2]
                 flags, eF = C.debit(A, B, 4)
                 per_word = flags.sum(1)
                 sample = np.unique(np.linspace(0, len(A) - 1, args.cross_words).astype(int))
