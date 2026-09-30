@@ -156,8 +156,27 @@ def test_the_sm120_nvfp4_step_is_the_pinned_block_scaled_model() -> None:
         checked += 1
     assert checked > 250
     assert step.evaluate(0, *([0x2] * 128), *([0x38] * 8)) == 0x42800000      # 64 * (1 * 1) at scales 1 * 1
-    with pytest.raises(InvalidArtifact):
-        step.evaluate(0, *([0x2] * 128), *([0x7F] * 8))                         # 0x7F is not a UE4M3 scale
+
+
+def test_the_sm120_nvfp4_step_is_total_as_measured_outside_ue4m3() -> None:
+    """r20260930-093614-53fd: a NaN-coded scale byte gives NaN over any accumulator; else NaN / ±inf accumulators pass through;
+    else bit 7 of a scale byte is ignored."""
+    step = P.BlackwellNvf4OmmaDot64
+    rng = random.Random(10)
+    codes = [rng.getrandbits(4) for _ in range(128)]
+    scales = [rng.randrange(0x20, 0x48) for _ in range(8)]
+    for bad in (0x7F, 0xFF):
+        for acc in (0, ONE32, PINF32, NINF32, NAN32):
+            s = list(scales)
+            s[rng.randrange(8)] = bad
+            assert step.evaluate(acc, *codes, *s) == 0x7FFFFFFF
+    assert step.evaluate(NAN32, *codes, *scales) == step.evaluate(0xFFC00001, *codes, *scales) == 0x7FFFFFFF
+    assert step.evaluate(PINF32, *codes, *scales) == PINF32 and step.evaluate(NINF32, *codes, *scales) == NINF32
+    for acc in (0, ONE32, 0xC1200000):
+        assert step.evaluate(acc, *codes, *[s | 0x80 for s in scales]) == step.evaluate(acc, *codes, *scales)
+    rnd = [(rng.getrandbits(32), [rng.getrandbits(4) for _ in range(128)], [rng.getrandbits(8) for _ in range(8)]) for _ in range(500)]
+    for acc, c, s in rnd:
+        step.evaluate(acc, *c, *s)                                                # defined on every encoding
 
 
 def test_the_e2m1_cast_rounds_to_nearest_even_and_saturates() -> None:
