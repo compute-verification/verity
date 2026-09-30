@@ -1,6 +1,6 @@
-"""PoUW alone on fixed matmul shapes, on one RTX 4090 (W1): `ncp-v2`'s fused prover against the plain int8 and FP8 GEMM of
-the same shape, with hashing included and reported separately; γ_0 and Ω* from the scheme's certificate; samples per bit.
-No served model.
+"""PoUW alone on fixed matmul shapes, on one RTX 4090 (W1): `ncp-v2`'s fused prover against the fastest plain GEMM of the
+same shape, with hashing included and reported separately; γ_0 and Ω* from the scheme's certificate; samples per bit with
+the verifier's cost per draw. No served model.
 
     python benchmarks/pouw/pouw_bench.py --dry-run --out DRY.json    (CPU: everything below that needs no GPU)
     python benchmarks/pouw/pouw_bench.py --out RESULT.json           (the pod: gates, then timings; honest calls only)
@@ -15,36 +15,56 @@ list runs as given there); a variant's `-D` flags go on both its nvcc build and 
 ``rows=0,sha=0``, the tile layout before change 3 (every running sum in shared memory, nvcc's SHA-256 round), which is the
 baseline, then change 3's default. Change 2's tree pass is in every build since #464, and change 1 is the ``async`` arm.
 
-**Gates before timing**, per variant, each stopping the run at its first difference:
-- the CPU twin built with the variant's flags against `pouw_native`, on `pouw_device.gate_calls` with the baseline linears
-  and one 16-row call per other (k, n) timed (every arm below commits exactly these leaves);
-- on the pod, the device's hashes against hashlib, the fused kernel against `pouw_native` on the same calls, and change 1's
-  async path (every served y against its committed y, and each root after the drain).
+**Gates**, each stopping the run at its first difference:
+- per variant, the CPU twin built with the variant's flags against `pouw_native`, on `pouw_device.gate_calls` with the
+  baseline linears and one 16-row call per other (k, n) timed; on the pod, the device's hashes against hashlib, the fused
+  kernel against `pouw_native` on the same calls, and change 1's async path;
+- before each shape is timed, every prover arm's flags at that shape, on the first of the operand sets it is timed on
+  (`gate_shape`): the fused kernel's root, every leaf, the weight side's Y leaves and y against the independent device build
+  (`ncp2_kernels.cu`, by `ncp2_gpu_bench.gate_timed`), with units drawn from the root against `pouw_native`, twice for the
+  cached Y leaves (a miss, then a hit); the timed entry point's root; ``nohash``'s y; and change 1's served y and each root
+  after the drain. Every operand set of every shape has its own weight id, so no Y-leaf cache entry is shared;
+- after a shape is timed, a consistency gate (`consistency`): where the plain int8 GEMM is compute-bound, a ``nohash`` call,
+  which does W_ref/mkn plain products' MACs, takes at least that many plain int8 GEMMs (`EFFICIENCY_FLOOR`), or work was
+  skipped.
 
 **Arms, per shape and variant** (honest calls only; no tamper arm, and nothing whose γ is unproved):
-- ``int8``: cuBLASLt ``torch._int_mm`` (m padded to 32 rows where it needs more than 16), ``fp8``: cuBLASLt
-  ``torch._scaled_mm`` (e4m3 in, FP32 accumulate, BF16 out), ``bf16``: ``torch.mm``. These are the baseline: the plain GEMM
-  of the same (m, k, n).
+- the plain GEMM of the same (m, k, n): ``int8``, cuBLASLt ``torch._int_mm`` (m padded to 32 rows where it needs more than
+  16); ``serve``, the int8 serving path (the same product and `ncp2_dequant`, as change 1 serves y); ``fp8``, cuBLASLt
+  ``torch._scaled_mm`` (e4m3 in, FP32 accumulate, BF16 out), which runs at half the int8 rate on a GeForce RTX 4090;
+  ``bf16``, ``torch.mm``. Each is also autotuned (``*_tuned``, `--autotune inductor`: Inductor's max-autotune, ATen's
+  cuBLASLt call against its Triton templates, timed on the device, its pick recorded). The plain path is the fastest of
+  serve, FP8 and BF16, each at the better of its default and its autotuned call.
 - ``nohash``: the fused kernel with every hash and XOF left out and a stand-in noise, the arithmetic alone.
 - ``sync``: the fused kernel committing every leaf (`pouw_device.FusedCommitter`), the prover's time per call.
-- ``async``: change 1 (`pouw_device.AsyncCommitter`): y served from the exact int8 product, the commit on side streams;
-  a run of calls then the drain, per call.
+- ``async``: change 1 (`pouw_device.AsyncCommitter`): y served from the exact int8 product, the commit on side streams.
 
-Every arm is the median of CUDA-event repetitions with the L2 flushed before each. The prover's overhead is ``sync`` over
-the plain GEMM; hashing, reported separately, is ``sync`` less ``nohash``.
+**Timing**, every arm the same way (`Clock`): bursts of the same number of calls between CUDA events, cycling through the
+shape's operand sets (distinct weights and activations, past twice the L2 in all), each burst after a read of 4× the L2
+(the buffer zeroed once, so the flush leaves no dirty lines; `flush_control` also times int8 and serve after a write
+flush), the arms' order rotated each rep. ``async``'s burst ends when its last commit on the side streams does. An arm's
+figure is its median per-call time over the reps. Every rep is saved, with the device's clocks, temperature, power and
+throttle reasons before and after it, beside the versions (torch, CUDA, cuBLASLt, Triton, driver, nvcc).
 
-**W1:** each shape's Ω = W_ref / the credited 3·m·k·n and its γ = 1 − (1 − γ_0)/Ω where the shape is in the scheme's domain,
-beside the certificate's Ω* and γ over the domain (`verity_pouw.schemes.ncp.NCP`). **Samples per bit:** work-weighted
-sampling gives δ_s = (1 − ε_s)^t (Lean `workWeightedSampling`), so a bit of soundness costs 1/−log₂(1 − ε_s) draws, whatever
-the shape.
+**Reported:** the prover's overhead, ``sync`` over the plain path; hashing and XOF (incremental), reported separately,
+``sync`` less ``nohash``; ``async`` over the plain path; and each over int8, serve and FP8. Beside them, W1's W_ref/mkn,
+the slowdown the certificate charges against the plain product, and Ω = W_ref / the credited 3·m·k·n with γ = 1 − (1 − γ_0)/Ω
+where the shape is in the scheme's domain, beside the certificate's Ω* and γ over the domain (`verity_pouw.schemes.ncp.NCP`);
+those are derived from the certificate, not measured. **Samples per bit**, our definition until the measurement plan is
+readable: work-weighted sampling gives δ_s = (1 − ε_s)^t (Lean `workWeightedSampling`), so a bit of soundness costs
+1/−log₂(1 − ε_s) draws; with the verifier's cost per draw at each shape (`verifier_draw`, `opened_bytes`), each bit's CPU
+seconds and opened bytes. The ``forwards`` are synthetic: the baseline linears' per-call medians summed over 24 layers.
 """
 from __future__ import annotations
 
 import argparse
+import ctypes
+import itertools
 import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -52,11 +72,15 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parent))
 
+import ncp2_gpu_bench as G  # noqa: E402
 from ncp2_gpu_bench import TILE_MACROS, absorbed, call_accounting  # noqa: E402
 from verity_pouw.protocol import DomainError, Matmul, Shape  # noqa: E402
 from verity_pouw.schemes import ncp  # noqa: E402
+from verity_vllm.protocol_options import pouw_circuit as PC  # noqa: E402
 from verity_vllm.protocol_options import pouw_device as PD  # noqa: E402
 from verity_vllm.protocol_options import pouw_native as PN  # noqa: E402
 
@@ -131,11 +155,13 @@ def certificate() -> dict:
 
 
 def w1(m: int, k: int, n: int) -> dict:
-    """Ω = W_ref / 3·m·k·n (route U, W1 on the 4090) and γ = 1 − (1 − γ_0)/Ω where the shape is in the domain."""
+    """W_ref / m·k·n, the slowdown W1 (route U on the 4090) charges against the plain product; Ω = W_ref / the credited
+    3·m·k·n; and γ = 1 − (1 − γ_0)/Ω where the shape is in the domain. Derived from the certificate, not measured."""
     s = ncp.NCP()
     shape = Shape(m, k, n)
-    omega = Fraction(s.wref(shape), 3 * shape.wmm)
-    out = {"omega": float(omega), "hashed_bytes_per_mac": hashed_bytes_per_mac(m, k, n)}
+    wref = Fraction(s.wref(shape), shape.wmm)
+    omega = wref / 3
+    out = {"w1_x_mkn": float(wref), "omega": float(omega), "hashed_bytes_per_mac": hashed_bytes_per_mac(m, k, n)}
     try:
         s.check(Matmul(1, shape, 2))
     except DomainError as e:
@@ -158,9 +184,51 @@ def samples_per_bit(eps: float) -> float:
     return 1 / -math.log2(1 - eps)
 
 
-def sampling() -> list[dict]:
+SAMPLING_DEFINITION = (
+    "ours, until the measurement plan (docs/protocol-measurement-plan.md) is readable: draws per bit of soundness under "
+    "work-weighted draws with replacement, δ_s = (1 − ε_s)^t, so 1/−log₂(1 − ε_s); a draw's cost is `pouw_native` "
+    "recomputing one drawn tile on the CPU (its X and Y strips, checkpoints and leaf, a fresh verifier each draw) and the "
+    "bytes it opens (the tile's 16 A rows and 16 B rows with their scales and ids, its leaf and its path in the units tree; "
+    "the inputs' own openings not counted); per bit is draws per bit times either")
+
+
+def draws() -> list[dict]:
     return [{"eps_s": e, "samples_per_bit": samples_per_bit(e), f"draws_for_{LAMBDA}_bits": math.ceil(LAMBDA * samples_per_bit(e))}
             for e in EPSILONS]
+
+
+def verifier_draw(k: int, n: int, count: int = 3) -> dict:
+    """The verifier's CPU time for one drawn tile of a 16-row call at (k, n) (a tile's cost does not depend on m), each draw
+    by a fresh `pouw_native` verifier, so no strip it formed for another draw is reused: the median of ``count``."""
+    call = PD.gate_call(f"draw k={k} n={n}", D, k, n, layer=5, site=0, weight=700)
+    times = []
+    for j in range(count):
+        t0 = time.perf_counter()
+        nat = PN.Native(call, SCHEME)
+        PC.unit_leaf(nat.outputs(nat.index("tile", 0, (7919 * j) % (n // D))))
+        times.append(time.perf_counter() - t0)
+    return {"k": k, "n": n, "tile_s": sorted(times)[len(times) // 2], "raw_s": times}
+
+
+def opened_bytes(m: int, k: int, n: int) -> int:
+    """A drawn tile's opening: its 16 A rows and 16 B rows (k bytes each) with their scales and ids (4 bytes each), its leaf,
+    and its path in the call's units tree."""
+    ms, ns = m // D, n // D
+    population = 3 * ms + ms * ns + ms * ns * D * D
+    return 2 * D * k + 4 * D * 4 + 32 + 32 * math.ceil(math.log2(population))
+
+
+def sampling(shapes: list[dict]) -> dict:
+    """Draws per bit at each ε_s, and at each shape the verifier's cost per draw and per bit (`SAMPLING_DEFINITION`)."""
+    cost = {kn: verifier_draw(*kn) for kn in sorted({(s["k"], s["n"]) for s in shapes})}
+    per_shape = []
+    for s in shapes:
+        c, opened = cost[(s["k"], s["n"])], opened_bytes(s["m"], s["k"], s["n"])
+        per_shape.append({"m": s["m"], "k": s["k"], "n": s["n"], "tile_s": c["tile_s"], "opened_bytes": opened,
+                          "per_bit": [{"eps_s": e, "verifier_s": samples_per_bit(e) * c["tile_s"],
+                                       "opened_bytes": samples_per_bit(e) * opened} for e in EPSILONS]})
+    return {"definition": SAMPLING_DEFINITION, "cpu": _cpu_name(), "draws": draws(), "verifier_draws": list(cost.values()),
+            "shapes": per_shape}
 
 
 # ---- variants -------------------------------------------------------------------------------------------------------------
@@ -329,20 +397,35 @@ def _cpu_name() -> str:
 # ---- derived metrics ----------------------------------------------------------------------------------------------------------
 
 
+PLAIN = ("int8", "serve", "fp8", "bf16")
+#: the plain paths a deployment would serve the product by; int8 alone lacks the dequantization the prover's y includes
+SERVED = ("serve", "fp8", "bf16")
+
+
 def derive(row: dict) -> dict:
-    """From one shape's timings: the prover's time over each plain GEMM (hashing included), the same kernel with nothing
-    hashed, and hashing alone (``sync`` less ``nohash``), reported separately; change 1's per-call time likewise."""
-    out: dict = {"hashing_ms": row["sync_ms"] - row["nohash_ms"]}
+    """From one shape's medians: each plain GEMM at the better of its default and autotuned call; the plain path, the fastest
+    of `SERVED`; the prover (``sync``), the same kernel with nothing hashed (``nohash``), hashing and XOF alone (``sync``
+    less ``nohash``) and change 1 (``async``), each over the plain path and over int8, serve and FP8."""
+    out: dict = {}
+    for kind in PLAIN:
+        got = {k: row[f"{k}_ms"] for k in (kind, f"{kind}_tuned") if row.get(f"{k}_ms")}
+        if got:
+            out[f"{kind}_best"] = min(got, key=got.get)
+            out[f"{kind}_best_ms"] = got[out[f"{kind}_best"]]
+    served = {k: out[f"{k}_best_ms"] for k in SERVED if f"{k}_best_ms" in out}
+    out["plain_path"] = min(served, key=served.get)
+    out["plain_ms"] = served[out["plain_path"]]
+    out["hashing_ms"] = row["sync_ms"] - row["nohash_ms"]
     out["hashing_share"] = out["hashing_ms"] / row["sync_ms"]
-    for plain in ("int8", "fp8", "bf16"):
-        base = row.get(f"{plain}_ms")
-        if not base:
+    for base in ("plain", "int8", "serve", "fp8"):
+        ms = out.get("plain_ms") if base == "plain" else out.get(f"{base}_best_ms")
+        if not ms:
             continue
-        out[f"prover_x_{plain}"] = row["sync_ms"] / base
-        out[f"arithmetic_x_{plain}"] = row["nohash_ms"] / base
-        out[f"hashing_x_{plain}"] = out["hashing_ms"] / base
-        if "async_ms_per_call" in row:
-            out[f"async_x_{plain}"] = row["async_ms_per_call"] / base
+        out[f"prover_x_{base}"] = row["sync_ms"] / ms
+        out[f"arithmetic_x_{base}"] = row["nohash_ms"] / ms
+        out[f"hashing_x_{base}"] = out["hashing_ms"] / ms
+        if row.get("async_ms"):
+            out[f"async_x_{base}"] = row["async_ms"] / ms
     if row.get("sync_tile_ms"):
         acc = call_accounting(row["m"], row["k"], row["n"])
         count, length = acc["messages"]["tile words"]
@@ -350,112 +433,333 @@ def derive(row: dict) -> dict:
     return out
 
 
+#: the consistency gate's kernel-efficiency floor e: a ``nohash`` call does W_ref/mkn plain products' MACs, so where the plain
+#: int8 GEMM is compute-bound (m·k·n at least `COMPUTE_BOUND_MACS`) it takes at least e·W_ref/mkn plain int8 GEMMs
+EFFICIENCY_FLOOR = 1.0
+COMPUTE_BOUND_MACS = 1 << 32
+
+
+def consistency(row: dict) -> dict | None:
+    """The consistency gate at a compute-bound shape (None elsewhere): ``nohash`` against e·W_ref/mkn plain int8 GEMMs."""
+    if row["m"] * row["k"] * row["n"] < COMPUTE_BOUND_MACS:
+        return None
+    floor = EFFICIENCY_FLOOR * row["w1_x_mkn"] * row["int8_best_ms"]
+    return {"nohash_ms": row["nohash_ms"], "floor_ms": floor, "efficiency_floor": EFFICIENCY_FLOOR,
+            "ok": row["nohash_ms"] >= floor}
+
+
 def forwards(rows: list[dict], spec: dict) -> dict:
-    """The baseline set per variant and m: a 24-layer forward of the four linears, per arm, beside #435's figures."""
+    """The baseline set per variant and m, synthetic: the four linears' per-call medians summed over 24 layers, per arm (not
+    a served forward: no attention, norms or launches between them), beside #435's served figures."""
     base = spec["sets"]["baseline"]
     want = {tuple(kn) for kn in base["shapes"]}
     out: dict = {}
     for r in rows:
         if r.get("set") != "baseline" or "error" in r or (r["k"], r["n"]) not in want:
             continue
-        f = out.setdefault(r["variant"], {}).setdefault(str(r["m"]), {"calls": 0})
+        f = out.setdefault(r["variant"], {}).setdefault(str(r["m"]), {"calls": 0, "synthetic": True})
         f["calls"] += 1
-        for arm in ("int8_ms", "fp8_ms", "bf16_ms", "nohash_ms", "sync_ms", "async_ms_per_call"):
+        for arm in ("plain_ms", "int8_best_ms", "serve_best_ms", "fp8_best_ms", "nohash_ms", "sync_ms", "async_ms"):
             if arm in r:
                 f[arm] = f.get(arm, 0.0) + base["layers"] * r[arm]
     for per in out.values():
         for f in per.values():
-            if f["calls"] == len(want) and f.get("int8_ms"):
-                f["prover_x_int8"] = f["sync_ms"] / f["int8_ms"]
+            if f["calls"] == len(want) and f.get("plain_ms"):
+                f["prover_x_plain"] = f["sync_ms"] / f["plain_ms"]
     return out
 
 
 # ---- on the pod --------------------------------------------------------------------------------------------------------------
 
 
-def _timer(torch, fn, reps: int, budget_s: float) -> tuple[float, int]:
-    """The median of CUDA-event repetitions, the L2 flushed (a 256 MB write) before each: at least 3, at most ``reps``, and
-    as many as fit ``budget_s`` after a first measure."""
-    flush = torch.empty(256 << 20, dtype=torch.uint8, device="cuda")
+#: each prover arm's flags; `gate_shape` gates every one at every timed shape
+ARM_FLAGS = {"nohash": PD.TIME_TILES, "sync": PD.HASH | PD.TIME_TILES | PD.CACHE_Y, "async": PD.HASH | PD.CACHE_Y}
+#: a shape's operand sets: enough that their int8 bytes pass twice the L2, at least 2 and at most this many
+MAX_SETS = 128
+#: calls in a burst, at least; with more operand sets, a burst is each of them once
+MIN_BURST = 4
+#: Inductor's GEMM autotuning, for the ``*_tuned`` arms
+AUTOTUNE = "max-autotune-no-cudagraphs"
 
-    def once() -> float:
-        flush.zero_()
-        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        a.record()
-        fn()
-        b.record()
+
+def set_count(m: int, k: int, n: int, l2: int) -> int:
+    return min(MAX_SETS, max(2, -(-2 * l2 // ((m + n) * k))))
+
+
+def rotation(names: list[str], rep: int) -> list[str]:
+    """The arms' order in rep ``rep``: rotated by one each rep, so over len(names) reps each arm runs once in each place."""
+    return names[rep % len(names):] + names[:rep % len(names)]
+
+
+def weight_id(shape_index: int, i: int) -> int:
+    """Operand set ``i`` of the ``shape_index``-th shape: a weight id no other set of any shape has."""
+    return ((shape_index + 1) << 32) | i
+
+
+def sensors():
+    """A reader of the device's SM and memory clocks, temperature, power and throttle reasons: NVML's through pynvml where it
+    is installed, else nvidia-smi's, else None."""
+    dev = (os.environ.get("CUDA_VISIBLE_DEVICES") or "0").split(",")[0]
+    dev = int(dev) if dev.isdigit() else 0
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        h = pynvml.nvmlDeviceGetHandleByIndex(dev)
+        reasons = getattr(pynvml, "nvmlDeviceGetCurrentClocksEventReasons", None) or pynvml.nvmlDeviceGetCurrentClocksThrottleReasons
+        return lambda: {"sm_mhz": pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM),
+                        "mem_mhz": pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_MEM),
+                        "temp_c": pynvml.nvmlDeviceGetTemperature(h, pynvml.NVML_TEMPERATURE_GPU),
+                        "power_w": pynvml.nvmlDeviceGetPowerUsage(h) / 1e3, "throttle": hex(reasons(h))}
+    except Exception:  # noqa: BLE001 -- no pynvml, or no NVML behind it: nvidia-smi below
+        pass
+    if not shutil.which("nvidia-smi"):
+        return lambda: None
+    keys = ("sm_mhz", "mem_mhz", "temp_c", "power_w", "throttle")
+    for reasons in ("clocks_event_reasons.active", "clocks_throttle_reasons.active"):
+        query = ["nvidia-smi", "-i", str(dev), f"--query-gpu=clocks.sm,clocks.mem,temperature.gpu,power.draw,{reasons}",
+                 "--format=csv,noheader,nounits"]
+        if subprocess.run(query, capture_output=True).returncode == 0:
+            def smi(query=query) -> dict:
+                values = [v.strip() for v in subprocess.run(query, capture_output=True, text=True).stdout.split(",")]
+                return {k: (v if k == "throttle" else float(v)) for k, v in zip(keys, values)}
+            return smi
+    return lambda: None
+
+
+def versions(torch) -> dict:
+    """What a number here depends on beyond the source: the device, torch, CUDA, cuBLASLt, Triton, the driver, nvcc, and the
+    power limit and clocks nvidia-smi reports."""
+    props = torch.cuda.get_device_properties(torch.cuda.current_device())
+    out: dict = {"device": props.name, "capability": f"{props.major}.{props.minor}", "sms": props.multi_processor_count,
+                 "l2_bytes": props.L2_cache_size, "memory_bytes": props.total_memory, "torch": torch.__version__,
+                 "cuda": torch.version.cuda, "python": sys.version.split()[0], "numpy": np.__version__}
+    try:
+        import triton
+        out["triton"] = triton.__version__
+    except ImportError:
+        out["triton"] = None
+    try:
+        lt = ctypes.CDLL("libcublasLt.so.12")
+        lt.cublasLtGetVersion.restype = ctypes.c_size_t
+        out["cublaslt"] = int(lt.cublasLtGetVersion())
+    except (OSError, AttributeError):
+        out["cublaslt"] = None
+    nvcc = PD.nvcc()
+    out["nvcc"] = subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1] if nvcc else None
+    if shutil.which("nvidia-smi"):
+        keys = ("driver_version", "power.limit", "clocks.applications.graphics", "clocks.applications.memory", "clocks.max.sm",
+                "clocks.max.mem", "persistence_mode", "pstate")
+        r = subprocess.run(["nvidia-smi", "-i", "0", f"--query-gpu={','.join(keys)}", "--format=csv,noheader"], capture_output=True,
+                           text=True)
+        out["nvidia_smi"] = dict(zip(keys, (v.strip() for v in r.stdout.split(",")))) if r.returncode == 0 else r.stderr[-300:]
+    return out
+
+
+class Clock:
+    """Every arm's clock: CUDA events around a burst of calls, after a read of 4× the L2 (the buffer zeroed once, so the
+    flush leaves no dirty lines in the L2; ``write`` flushes by writing it instead, for the control), with the sensors read
+    before and after."""
+
+    def __init__(self, torch) -> None:
+        self.torch = torch
+        self.l2 = torch.cuda.get_device_properties(torch.cuda.current_device()).L2_cache_size
+        self.buf = torch.zeros(self.l2, dtype=torch.float32, device="cuda")
+        self.sink = torch.zeros((), dtype=torch.float32, device="cuda")
+        self.sample = sensors()
+
+    def burst(self, call, count: int, end=None, write: bool = False) -> dict:
+        torch = self.torch
         torch.cuda.synchronize()
-        return a.elapsed_time(b)
+        before = self.sample()
+        if write:
+            self.buf.zero_()
+        else:
+            torch.sum(self.buf, 0, out=self.sink)
+        e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        e0.record()
+        for i in range(count):
+            call(i)
+        if end is not None:
+            end()
+        e1.record()
+        e1.synchronize()
+        return {"ms": e0.elapsed_time(e1) / count, "before": before, "after": self.sample()}
 
-    once()
-    first = once()
-    n = max(3, min(reps, int(budget_s * 1e3 / max(first, 1e-3))))
-    times = sorted([first] + [once() for _ in range(n - 1)])
-    return times[len(times) // 2], n
+
+def operand_sets(torch, m: int, k: int, n: int, l2: int, shape_index: int) -> list[dict]:
+    """A shape's operand sets (`set_count`), each with its own weight id and its operands for every arm, from its own seed."""
+    out = []
+    for i in range(set_count(m, k, n, l2)):
+        weight = weight_id(shape_index, i)
+        g = torch.Generator(device="cuda").manual_seed(weight)
+        a = torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g)
+        abf = torch.randn(m, k, dtype=torch.bfloat16, device="cuda", generator=g)
+        bbf = torch.randn(n, k, dtype=torch.bfloat16, device="cuda", generator=g)
+        out.append({"weight": weight, "a": a, "a32": a if m > 16 else torch.cat([a, a.new_zeros((32 - m, k))]),
+                    "b": torch.randint(-64, 64, (n, k), dtype=torch.int8, device="cuda", generator=g),
+                    "s": torch.full((m,), 1e-3, dtype=torch.float32, device="cuda").view(torch.int32),
+                    "t": torch.full((n,), 1e-2, dtype=torch.float32, device="cuda").view(torch.int32),
+                    "bias": torch.zeros(n, dtype=torch.int16, device="cuda"), "abf": abf, "bbf": bbf,
+                    "af8": abf.to(torch.float8_e4m3fn), "bf8": bbf.to(torch.float8_e4m3fn)})
+    return out
 
 
-def time_shape(torch, shape: dict, reps: int, budget_s: float, streams: int) -> dict:
+def gate_shape(torch, o: dict, rowids, colids, streams: int) -> list[dict]:
+    """Every prover arm's flags at a timed shape, on operand set ``o`` (the first it is timed on), against the independent
+    device build (`ncp2_gpu_bench.reference`, `ncp2_kernels.cu`): ``sync``'s by `ncp2_gpu_bench.gate_timed` (root, every leaf,
+    the weight side's Y leaves, y, and units drawn from the root against `pouw_native`), a Y-leaf cache miss and then a hit,
+    and its root through the timed entry point (`FusedCommitter`); ``nohash``'s y; and change 1's served y and each root
+    after the drain, a miss's and a hit's. Stops the run at the first difference."""
+    args = (o["a"], o["s"], o["b"], o["t"], o["bias"], 1, 2, o["weight"], rowids, colids)
+    call = G.host_call(*args, salt=SALT)
+    ref = G.reference(call)
+    y_of = lambda y: bool(np.array_equal(y.cpu().numpy().view(np.uint16), ref["y"]))  # noqa: E731
+    out = [{"arm": "sync", "cache": c} | G.gate_timed(call, ARM_FLAGS["sync"]) for c in ("miss", "hit")]
+    root = np.zeros(32, np.uint8)
+    y = PD.FusedCommitter(SCHEME, SALT, ARM_FLAGS["sync"])(*args, root=root)
+    torch.cuda.synchronize()
+    out.append({"arm": "sync", "entry": "FusedCommitter", "root": root.tobytes() == ref["root"], "y": y_of(y)})
+    out.append({"arm": "nohash", "flags": ARM_FLAGS["nohash"], "y": y_of(PD.FusedCommitter(SCHEME, SALT, ARM_FLAGS["nohash"])(*args))})
+    c = PD.AsyncCommitter(SCHEME, SALT, ARM_FLAGS["async"], streams=streams)
+    served = [c(*args) for _ in range(2)]
+    drained = c.drain()
+    c.close()
+    out.append({"arm": "async", "flags": ARM_FLAGS["async"], "y": all(y_of(y) for y in served),
+                "roots": drained["roots"] == [ref["root"]] * 2, "mismatched_words": drained["mismatched_words"]})
+    for g in out[2:]:
+        if not (g["y"] and g.get("root", True) and g.get("roots", True) and not g.get("mismatched_words")):
+            raise SystemExit(f"timed gate {tuple(o['a'].shape)}x{o['b'].shape[0]} {g['arm']}: {g}")
+    return out
+
+
+def _autotune_log() -> list:
+    """Inductor's pick for each GEMM it autotunes, appended as it tunes (empty where this torch reports none)."""
+    log: list = []
+    try:
+        from torch._inductor import select_algorithm
+
+        def saver(timings, name, *_rest) -> None:
+            best = min(timings, key=timings.get)
+            log.append({"op": name, "best": getattr(best, "name", str(best)), "best_ms": float(timings[best]),
+                        "choices": len(timings)})
+
+        select_algorithm.add_feedback_saver(saver)
+    except (ImportError, AttributeError):
+        pass
+    return log
+
+
+def time_shape(torch, clock: Clock, shape: dict, shape_index: int, args, tune_log: list) -> dict:
+    """One shape: its gate (`gate_shape`), then every arm timed the same way (`Clock`), the arms' order rotated each rep,
+    reps as many as ``args.budget_s`` fits after the first (at least 3, at most ``args.reps``), then the flush control and the
+    consistency gate."""
     m, k, n = shape["m"], shape["k"], shape["n"]
-    row: dict = dict(shape)
-    g = torch.Generator(device="cuda").manual_seed(m * 1_000_003 + k * 1009 + n)
-    a = torch.randint(-64, 64, (m, k), dtype=torch.int8, device="cuda", generator=g)
-    b = torch.randint(-64, 64, (n, k), dtype=torch.int8, device="cuda", generator=g)
-    s = torch.full((m,), 1e-3, dtype=torch.float32, device="cuda").view(torch.int32)
-    t = torch.full((n,), 1e-2, dtype=torch.float32, device="cuda").view(torch.int32)
-    bias = torch.zeros(n, dtype=torch.int16, device="cuda")
+    ops = operand_sets(torch, m, k, n, clock.l2, shape_index)
+    sets, count = len(ops), max(len(ops), MIN_BURST)
     rowids = torch.arange(m, dtype=torch.int32, device="cuda")
     colids = torch.arange(n, dtype=torch.int32, device="cuda")
+    row: dict = dict(shape) | {"weights": [o["weight"] for o in ops], "sets": sets, "burst": count, "int8_m": ops[0]["a32"].shape[0],
+                               "operand_bytes": sets * (m + n) * k, "l2_bytes": clock.l2}
+    row["gates"] = gate_shape(torch, ops[0], rowids, colids, args.streams)
 
-    wide = a if m > 16 else torch.cat([a, a.new_zeros((32 - m, k))])
-    row["int8_m"] = wide.shape[0]
-    row["int8_ms"], row["int8_reps"] = _timer(torch, lambda: torch._int_mm(wide, b.T), reps, budget_s)
-    abf = torch.randn(m, k, dtype=torch.bfloat16, device="cuda", generator=g)
-    bbf = torch.randn(n, k, dtype=torch.bfloat16, device="cuda", generator=g)
-    row["bf16_ms"], row["bf16_reps"] = _timer(torch, lambda: abf @ bbf.T, reps, budget_s)
-    af8, bf8, one = abf.to(torch.float8_e4m3fn), bbf.to(torch.float8_e4m3fn), torch.ones((), device="cuda")
-    try:
-        row["fp8_ms"], row["fp8_reps"] = _timer(
-            torch, lambda: torch._scaled_mm(af8, bf8.T, scale_a=one, scale_b=one, out_dtype=torch.bfloat16), reps, budget_s)
-    except RuntimeError as e:
-        row["fp8_error"] = str(e)[:200]
-    del wide, abf, bbf, af8, bf8
+    lib, one, forward = PD.fused(), torch.ones((), device="cuda"), itertools.count(10)
+    gemm = {"int8": lambda a, b: torch._int_mm(a, b.t()), "bf16": lambda a, b: torch.mm(a, b.t()),
+            "fp8": lambda a, b: torch._scaled_mm(a, b.t(), scale_a=one, scale_b=one, out_dtype=torch.bfloat16)}
+    operands = {"int8": ("a32", "b"), "fp8": ("af8", "bf8"), "bf16": ("abf", "bbf")}
 
-    ys = {}
-    for arm, flags in (("nohash", PD.TIME_TILES), ("sync", PD.HASH | PD.TIME_TILES | PD.CACHE_Y)):
-        c = PD.FusedCommitter(SCHEME, SALT, flags)
-        ys[arm] = c(a, s, b, t, bias, 1, 2, n, rowids, colids)
-        torch.cuda.synchronize()
-        c.tile_ms()
-        forward = [2]
+    def plain(kind: str, fn):
+        x, w = operands[kind]
+        return lambda i: fn(ops[i % sets][x], ops[i % sets][w])
 
-        def call(c=c, forward=forward) -> None:
-            c(a, s, b, t, bias, forward[0], 2, n, rowids, colids)
-            forward[0] += 1
+    def serve(fn):
+        def call(i: int) -> None:
+            o = ops[i % sets]
+            z = fn(o["a32"], o["b"])[:m].contiguous()
+            y = torch.empty((m, n), dtype=torch.int16, device="cuda")
+            if lib.ncp2_dequant(m, n, z.data_ptr(), o["s"].data_ptr(), o["t"].data_ptr(), o["bias"].data_ptr(), y.data_ptr(),
+                                torch.cuda.current_stream().cuda_stream):
+                raise RuntimeError(f"ncp2_dequant {m}x{n}")
+        return call
 
-        row[f"{arm}_ms"], row[f"{arm}_reps"] = _timer(torch, call, reps, budget_s)
-        tile, calls = c.tile_ms()
-        row[f"{arm}_tile_ms"] = tile / max(1, calls)
+    def fused(c):
+        def call(i: int) -> None:
+            o = ops[i % sets]
+            c(o["a"], o["s"], o["b"], o["t"], o["bias"], next(forward), 2, o["weight"], rowids, colids)
+        return call
 
-    c = PD.AsyncCommitter(SCHEME, SALT, PD.HASH | PD.CACHE_Y, streams=streams)
-    served = c(a, s, b, t, bias, 1, 2, n, rowids, colids)
-    c.drain()
-    runs = max(4, min(64, int(budget_s * 1e3 / max(row["sync_ms"], 1e-3))))
+    exact = PD.AsyncCommitter(SCHEME, SALT, ARM_FLAGS["async"], streams=args.streams)
+    arms: dict = {kind: (plain(kind, gemm[kind]), None) for kind in operands}
+    arms["serve"] = (serve(gemm["int8"]), None)
+    for arm in ("nohash", "sync"):
+        arms[arm] = (fused(PD.FusedCommitter(SCHEME, SALT, ARM_FLAGS[arm])), None)
+    arms["async"] = (fused(exact), lambda: [torch.cuda.current_stream().wait_stream(st) for st in exact.streams])
+    row["autotune"] = {}
+    if args.autotune == "inductor":
+        for kind in operands:
+            fn, seen = torch.compile(gemm[kind], mode=AUTOTUNE, dynamic=False), len(tune_log)
+            try:
+                for i in range(sets):
+                    plain(kind, fn)(i)
+                torch.cuda.synchronize()
+            except Exception as e:  # noqa: BLE001 -- an arm Inductor can't build is left out, and why is recorded
+                row["autotune"][kind] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+                continue
+            arms[f"{kind}_tuned"] = (plain(kind, fn), None)
+            if kind == "int8":
+                arms["serve_tuned"] = (serve(fn), None)
+            row["autotune"][kind] = {"picks": tune_log[seen:]}
+
+    for _name, (call, end) in arms.items():                    # warm: Y leaves cached, workspaces grown, kernels loaded
+        for i in range(count):
+            call(i)
+        if end is not None:
+            end()
     torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    for i in range(runs):
-        c(a, s, b, t, bias, 100 + i, 2, n, rowids, colids)
-    drained = c.drain()
-    row["async_ms_per_call"], row["async_calls"] = (time.perf_counter() - t0) * 1e3 / runs, runs
-    row["serve_ms"], row["serve_reps"] = _timer(torch, lambda: c.serve(a, s, b, t, bias), reps, budget_s)
-    c.close()
-    if drained["mismatched_words"] or drained["calls"] != runs:
-        raise SystemExit(f"async {m}x{k}x{n}: {drained['mismatched_words']} served words differ from the committed y "
-                         f"over {drained['calls']} of {runs} calls")
-    row["y_equal"] = bool(torch.equal(ys["sync"], ys["nohash"]) and torch.equal(ys["sync"], served))
-    if not row["y_equal"]:
-        raise SystemExit(f"{m}x{k}x{n}: the arms serve different y")
-    row |= derive(row)
-    del a, b
+    exact.drain()
+    exact.tile_ms()
+
+    names, raw = list(arms), {a: [] for a in arms}
+    reps, rep = None, 0
+    while reps is None or rep < reps:
+        for a in rotation(names, rep):
+            call, end = arms[a]
+            r = clock.burst(call, count, end)
+            if a in ("nohash", "sync"):
+                tile, calls = exact.tile_ms()                   # the library's tile events, whichever committer timed them
+                r["tile_ms"] = tile / max(1, calls)
+            if a == "async":
+                drained = exact.drain()
+                if drained["mismatched_words"] or drained["calls"] != count:
+                    raise SystemExit(f"async {m}x{k}x{n}: {drained['mismatched_words']} served words differ from the committed y "
+                                     f"over {drained['calls']} of {count} calls")
+            raw[a].append(r)
+        if reps is None:
+            slowest = max(raw[a][0]["ms"] for a in names) * count / 1e3
+            reps = max(3, min(args.reps, 1 + int(args.budget_s / max(slowest, 1e-6))))
+        rep += 1
+    exact.close()
+    median = lambda v: sorted(v)[len(v) // 2]  # noqa: E731
+    for a in names:
+        row[f"{a}_ms"] = median([r["ms"] for r in raw[a]])
+        if a in ("nohash", "sync"):
+            row[f"{a}_tile_ms"] = median([r["tile_ms"] for r in raw[a]])
+    row["reps"], row["raw"] = reps, raw
+    row["flush_control"] = {}
+    for a in ("int8", "serve"):
+        both = {"read": [], "write": []}
+        for _ in range(3):
+            for kind in both:
+                both[kind].append(clock.burst(arms[a][0], count, write=kind == "write")["ms"])
+        row["flush_control"][a] = {f"{kind}_ms": median(v) for kind, v in both.items()} | {"raw": both}
+    row |= w1(m, k, n) | derive(row)
+    row["consistency"] = consistency(row)
+    if row["consistency"] and not row["consistency"]["ok"]:
+        raise SystemExit(f"consistency gate {m}x{k}x{n}: nohash {row['nohash_ms']:.4f} ms is under "
+                         f"{row['consistency']['floor_ms']:.4f} ms, e·W_ref/mkn plain int8 GEMMs: work was skipped")
+    torch.cuda.synchronize()
+    lib.ncp2_fused_reset_cache()
+    del ops, arms
     torch.cuda.empty_cache()
     return row
 
@@ -470,9 +774,12 @@ def main() -> None:
     ap.add_argument("--tile-variants", default=VARIANTS, help="builds as ncp2_gpu_bench takes them, ';'-separated, each like "
                                                               "rows=8,unroll=2,sha=1 (default: before change 3, then its default)")
     ap.add_argument("--sets", default="baseline,census,square")
-    ap.add_argument("--reps", type=int, default=20)
-    ap.add_argument("--budget-s", type=float, default=1.0, help="per arm and shape, after a first measure")
+    ap.add_argument("--reps", type=int, default=20, help="at most, per arm and shape; at least 3")
+    ap.add_argument("--budget-s", type=float, default=2.0, help="per arm and shape: reps after the first while the slowest "
+                                                                  "arm's bursts fit")
     ap.add_argument("--streams", type=int, default=4, help="change 1's side streams")
+    ap.add_argument("--autotune", choices=("inductor", "none"), default="inductor",
+                    help="the plain GEMMs' autotuned arms (Inductor's max-autotune), or none")
     ap.add_argument("--cpu-rows", type=int, default=D, help="rows of the #389 CPU commit (0: skip it)")
     ap.add_argument("--shapes", type=Path, default=SHAPES)
     ap.add_argument("--census", type=Path, default=CENSUS)
@@ -485,11 +792,18 @@ def main() -> None:
     shapes = bench_shapes(sets, spec, workloads)
     variants = parse_variants(args.tile_variants)
     res: dict = {
-        "schema": "verity-pouw/pouw-bench/v1", "scheme": SCHEME, "dry_run": args.dry_run,
-        "baseline": "the plain GEMM of the same (m, k, n): cuBLASLt int8 (torch._int_mm, m padded to 32 where it needs more "
-                    "than 16 rows) and FP8 (torch._scaled_mm: e4m3, FP32 accumulate, BF16 out), and BF16 (torch.mm); each the "
-                    "median of CUDA-event repetitions with the L2 flushed before each",
-        "certificate": certificate(), "sampling": sampling(), "figures": spec["figures"],
+        "schema": "verity-pouw/pouw-bench/v2", "scheme": SCHEME, "dry_run": args.dry_run, "autotune": args.autotune,
+        "baseline": "the plain path of the same (m, k, n): the fastest of the int8 serving path (cuBLASLt torch._int_mm, m "
+                    "padded to 32 where it needs more than 16 rows, and ncp2_dequant), FP8 (torch._scaled_mm: e4m3, FP32 "
+                    "accumulate, BF16 out; half the int8 rate on a GeForce RTX 4090) and BF16 (torch.mm), each at the better "
+                    "of its default and its autotuned call",
+        "timing": "every arm the same way: bursts of the same number of calls between CUDA events, cycling operand sets "
+                  "past twice the L2, each burst after a read of 4x the L2 (no dirty lines), the arms' order rotated each "
+                  "rep; the median per-call time over reps, every rep saved with the sensors before and after",
+        "derived": "w1_x_mkn, omega and gamma are derived from the certificate, not measured",
+        "hashing": "hashing and XOF (incremental): sync less nohash, which leaves out every hash and the XOF noise; the "
+                   "weight side's Y leaves are cached per weight (CACHE_Y) and not in any arm",
+        "certificate": certificate(), "sampling": sampling(shapes), "figures": spec["figures"],
         "shapes": [s | w1(s["m"], s["k"], s["n"]) for s in shapes], "variants": {}}
 
     def save(key: str | None = None, value=None) -> None:
@@ -501,13 +815,20 @@ def main() -> None:
     save()
     calls = gate_calls(spec, gate_shapes(shapes, spec))
     refs = {name: PN.commit_call(0, SCHEME, call) for name, call in calls}
-    torch = None
+    torch = clock = None
+    tune_log: list = []
     if not args.dry_run:
         import torch
 
-        from ncp2_gpu_bench import gate_async, gate_hashes
+        torch._dynamo.config.cache_size_limit = 1 << 12              # a compile per shape and plain GEMM, none evicted
+        if hasattr(torch._dynamo.config, "accumulated_cache_size_limit"):
+            torch._dynamo.config.accumulated_cache_size_limit = 1 << 14
+        tune_log = _autotune_log()
+        clock = Clock(torch)
         res["device"] = torch.cuda.get_device_name()
-        res["hash_gate"] = gate_hashes()
+        res["versions"] = versions(torch)
+        res["sensors_idle"] = clock.sample()
+        res["hash_gate"] = G.gate_hashes()
     rows: list[dict] = []
     for name, flags in variants:
         use(flags)
@@ -517,13 +838,14 @@ def main() -> None:
         if torch is None:
             continue
         v["fused_gate"] = device_gate(calls, refs)
-        v["async_gate"] = gate_async(torch)
+        v["async_gate"] = G.gate_async(torch)
         save()
-        for shape in shapes:
+        for index, shape in enumerate(shapes):
             try:
-                rows.append({"variant": name} | time_shape(torch, shape, args.reps, args.budget_s, args.streams))
+                rows.append({"variant": name} | time_shape(torch, clock, shape, index, args, tune_log))
             except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
                 rows.append({"variant": name, **shape, "error": str(e)[:300]})
+                PD.fused().ncp2_fused_reset_cache()
                 torch.cuda.empty_cache()
             res["timings"] = rows
             save()
@@ -536,7 +858,7 @@ def main() -> None:
     import run_result
 
     ms = [(f"{r['variant']}.{r['set']}.{r['m']}x{r['k']}x{r['n']}.{key}", r[key], "ratio") for r in rows if "error" not in r
-          for key in ("prover_x_int8", "prover_x_fp8", "hashing_x_int8") if key in r]
+          for key in ("prover_x_plain", "hashing_x_plain", "async_x_plain") if key in r]
     run_result.write(args.out, not any("error" in r for r in rows), "pouw_bench: every variant's gates passed before its timings",
                      f"{len(variants)} variants, {len(shapes)} shapes, {len(rows)} timed", ms)
 
@@ -544,7 +866,10 @@ def main() -> None:
 def _report(res: dict) -> None:
     c = res["certificate"]
     print(f"certificate: {c['conjecture']}, γ_0 = {c['gamma0']}, Ω* = {c['omega_star']}, γ = {c['gamma']:.4%} over the domain")
-    print("samples per bit: " + "; ".join(f"ε_s {s['eps_s']:.1%}: {s['samples_per_bit']:.1f}" for s in res["sampling"]))
+    print("samples per bit (our definition): " + "; ".join(f"ε_s {s['eps_s']:.1%}: {s['samples_per_bit']:.1f}"
+                                                           for s in res["sampling"]["draws"]))
+    for d in res["sampling"]["verifier_draws"]:
+        print(f"  a drawn tile at k={d['k']} n={d['n']}: {d['tile_s'] * 1e3:.1f} ms on the verifier's CPU")
     for name, v in res["variants"].items():
         ru = (v.get("resource_usage") or {}).get("kf_tiles<1>")
         print(f"{name}: twin gate {len(v['twin_gate'])} calls pass" + (f"; kf_tiles<1> {ru['registers']} registers, "
@@ -553,9 +878,10 @@ def _report(res: dict) -> None:
         if "error" in r:
             print(f"{r['variant']} {r['m']}x{r['k']}x{r['n']}: {r['error']}")
         else:
-            print(f"{r['variant']} {r['m']}x{r['k']}x{r['n']}: prover {r['prover_x_int8']:.1f}x int8, "
-                  f"{r.get('prover_x_fp8', float('nan')):.1f}x FP8; hashing {r['hashing_x_int8']:.1f}x int8 "
-                  f"({r['hashing_share']:.0%} of the prover); async {r.get('async_x_int8', float('nan')):.1f}x int8")
+            print(f"{r['variant']} {r['m']}x{r['k']}x{r['n']}: prover {r['prover_x_plain']:.1f}x the plain path "
+                  f"({r['plain_path']}), {r['prover_x_int8']:.1f}x int8; hashing and XOF {r['hashing_x_plain']:.1f}x "
+                  f"({r['hashing_share']:.0%} of the prover); async {r.get('async_x_plain', float('nan')):.1f}x; "
+                  f"W1 charges {r['w1_x_mkn']:.2f}x (Ω {r['omega']:.4f}); {r['reps']} reps of {r['burst']} calls")
     if "cpu_389" in res:
         cpu = res["cpu_389"]
         print(f"#389 path on {cpu['cpu']} ({cpu['threads']} threads): a forward at {cpu['rows']} rows {cpu['forward_native_s']:.1f} s "
