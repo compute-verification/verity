@@ -106,6 +106,10 @@ def test_a_snapshot_round_trips_and_the_command_plans_from_it(c, tmp_path, capsy
     lines = [json.loads(x) for x in capsys.readouterr().out.splitlines()]
     assert lines[0]["alloc"].startswith("k8s-p1@") and lines[0]["gpus"] == [4]
     assert lines[1]["cpu_allocations"] == 0 and lines[1]["queued"] == 0
+    assert nebius1.main([str(DESC), "--from", str(snap), "--report"]) == 0
+    (rep,) = [json.loads(x) for x in capsys.readouterr().out.splitlines()]
+    (al,) = [model.allocation_from_dict(d) for d in rep["allocations"]]
+    assert (rep["node"], al.gpus, al.job.id, rep["queue"]) == (nebius1.NODE, (4,), "k8s-p1", [])
 
 
 @pytest.mark.parametrize("q, gib", [("170G", 158), ("96Gi", 96), ("512Mi", 1), ("1Ti", 1024), (None, 1)])

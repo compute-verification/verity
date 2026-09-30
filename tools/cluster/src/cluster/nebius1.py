@@ -190,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("description")
     ap.add_argument("--save")
     ap.add_argument("--from", dest="source")
+    ap.add_argument("--report", action="store_true", help="one JSON object: the node's allocations and queue as model dicts")
     a = ap.parse_args(argv)
     cluster = model.load(a.description)
     obs = load(json.loads(open(a.source).read())) if a.source else read(int(time.time()))
@@ -198,6 +199,10 @@ def main(argv: list[str] | None = None) -> int:
             json.dump(save(obs), f)
     allocs, queue = from_k8s(cluster, obs)
     out = sys.stdout
+    if a.report:
+        out.write(json.dumps({"t": obs.t, "node": NODE, "allocations": [model.allocation_to_dict(al) for al in allocs],
+                              "queue": [model.job_to_dict(j) for j in queue]}) + "\n")
+        return 0
     for al in allocs:
         if al.gpus:
             out.write(json.dumps({"alloc": al.id, "gpus": al.gpus, "priority": al.job.priority, "workstream": al.job.workstream,
