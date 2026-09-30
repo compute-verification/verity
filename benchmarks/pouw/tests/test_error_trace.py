@@ -24,7 +24,7 @@ def operands(m=6, n=5, k=64, seed=0):
     al_a, al_b = torch.full((m,), 8.0), torch.full((n,), 16.0)
     at = ET.e4m3((al_a[:, None] * x.float()).double() + epa.double() @ fa.double().T)
     bt = ET.e4m3((al_b[:, None] * w.float()).double() + epb.double() @ fb.double().T)
-    return x, w, at, bt, epa, epb, fa, fb, 1 / al_a, 1 / al_b
+    return x, w, ET.natural(at), ET.natural(bt), epa, epb, fa, fb, 1 / al_a, 1 / al_b
 
 
 def test_the_split_sums_to_the_error_and_an_exact_device_leaves_only_the_cast():
@@ -32,7 +32,7 @@ def test_the_split_sums_to_the_error_and_an_exact_device_leaves_only_the_cast():
     ref = x.float() @ w.float().T
     f = torch.float64
     exact = at.to(f) @ bt.to(f).T
-    clean = (at.to(f) - epa.to(f) @ fa.to(f).T) @ (bt.to(f) - epb.to(f) @ fb.to(f).T).T
+    clean = (ET.natural(at.to(f)) - epa.to(f) @ fa.to(f).T) @ (ET.natural(bt.to(f)) - epb.to(f) @ fb.to(f).T).T
     s = ia_a.to(f)[:, None] * ia_b.to(f)[None, :]
     sp = ET.split(ref, clean * s, exact, clean, at, bt, epa, epb, fa, fb, ia_a, ia_b)
     assert all(float(sp["parts"][p].abs().max()) == 0.0 for p in ("chain", "peel", "out"))
@@ -67,6 +67,17 @@ def test_the_noise_law_reads_rms_over_rho():
     noise = noise / (noise ** 2).mean(1, keepdim=True).sqrt() * rho[:, None]
     law = ET.noise_law(x, noise)
     assert law["p50"] == pytest.approx(1.0, abs=1e-5) and law["max_over_rho_p50"] > 2
+
+
+def test_k32_order_is_its_own_inverse_and_puts_column_8b_2q_s_at_byte_8q_2b_s():
+    cols = torch.arange(64).repeat(3, 1)
+    k32 = ET.natural(cols)
+    assert torch.equal(ET.natural(k32), cols)
+    assert all(int(k32[0, 32 * blk + 8 * q + 2 * b + s]) == 32 * blk + 8 * b + 2 * q + s
+               for blk in range(2) for q in range(4) for b in range(4) for s in range(2))
+    g = torch.Generator().manual_seed(3)
+    a, b = torch.randn(4, 64, generator=g), torch.randn(5, 64, generator=g)
+    assert torch.allclose(ET.natural(a) @ ET.natural(b).T, a @ b.T, atol=1e-5)
 
 
 def test_e4m3_saturates_and_rounds_to_nearest_even():

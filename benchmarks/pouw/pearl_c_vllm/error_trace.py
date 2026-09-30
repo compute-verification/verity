@@ -15,8 +15,9 @@ Pearl-C's error split exactly into its parts.
   dynamic activation scale where CUTLASS runs), exactly: the FP8 engine, in a child process, applies each of its own linears'
   ``quant_method.apply`` to the captured inputs.  Its first linear's input from its own forward must equal the captured one.
 - **pearlc:** `PearlCDeviceRun.gemm` as served (v1, the fused chain).
-- **Pearl-C's split** (`split`), exact in FP64: with A′ and B̃ the codes the forming wrote, N_A = E′_A·F_Aᵀ and N_B = E′_B·F_Bᵀ
-  the injected noise from its own factors, and s = 1/(α_A ⊗ α_B):
+- **Pearl-C's split** (`split`), exact in FP64: with A′ and B̃ the codes the forming wrote (read in column order: form_s5
+  stores them in K32 order, `natural`), N_A = E′_A·F_Aᵀ and N_B = E′_B·F_Bᵀ the injected noise from its own factors, and
+  s = 1/(α_A ⊗ α_B):
   - ``cast_noise`` = (A′ − N_A)(B̃ − N_B)ᵀ·s − x·Wᵀ: the E4M3 cast of the noisy operands, everything after it exact;
   - ``chain`` = (C̃ − A′B̃ᵀ)·s: the accumulator path (the unfused ``gemm_pearlc`` on the same buffers stores C̃ and U, and its
     y must equal the served y bit for bit);
@@ -85,11 +86,22 @@ def rows(e, ref) -> dict:
             "row_max": float(r.max())}
 
 
+#: form_s5's K32 order (pearl_c_sm120.cu): within each aligned 32 of k, byte 8q + 2b + s holds column 8b + 2q + s.  It is
+#: its own inverse, and a product over k of two operands in it is unchanged.
+K32 = [8 * b + 2 * q + s for q in range(4) for b in range(4) for s in range(2)]
+
+
+def natural(codes):
+    """Codes in K32 order (form_s5's A′ and B̃) in column order, or the reverse."""
+    return codes.reshape(*codes.shape[:-1], -1, 32)[..., K32].reshape(codes.shape)
+
+
 def split(ref, y, c, u, at, bt, epa, epb, fa, fb, ia_a, ia_b) -> dict:
-    """Pearl-C's y − ref as its four exact parts (this module's docstring), in FP64: {part: tensor}, and the clean operands."""
+    """Pearl-C's y − ref as its four exact parts (this module's docstring), in FP64: {part: tensor}, and the clean operands.
+    `at` and `bt` are form_s5's codes, in K32 order; the noise and the reference are in column order."""
     import torch
     f = torch.float64
-    a1, b1 = at.to(f), bt.to(f)
+    a1, b1 = natural(at.to(f)), natural(bt.to(f))
     na, nb = epa.to(f) @ fa.to(f).T, epb.to(f) @ fb.to(f).T
     ca, cb = a1 - na, b1 - nb
     s = ia_a.to(f)[:, None] * ia_b.to(f)[None, :]
@@ -257,8 +269,8 @@ def trace_linear(run, kernel, w: int, name: str, layer, x, weight, y_fp8) -> dic
     expected = (one["a_clean"]["all"] ** 2 * gain["a"] + one["b_clean"]["all"] ** 2 * gain["b"]) ** 0.5
     form_a = e4m3((al_a[:, None] * xf).double() + sp["na"])
     form_b = e4m3((al_b[:, None] * wf).double() + sp["nb"])
-    forming = {"a_codes_differ": float((form_a.view(torch.uint8) != at.view(torch.uint8)).float().mean()),
-               "b_codes_differ": float((form_b.view(torch.uint8) != bt.view(torch.uint8)).float().mean())}
+    forming = {"a_codes_differ": float((form_a.view(torch.uint8) != natural(at.view(torch.uint8))).float().mean()),
+               "b_codes_differ": float((form_b.view(torch.uint8) != natural(bt.view(torch.uint8))).float().mean())}
     return {"w": w, "name": name, "kind": kind(name), "m": m, "n": n, "k": k, "error": errors, "one_sided": one,
             "parts": part_err, "share": share, "identity_max_rel": identity,
             "served_equals_unfused": bool(torch.equal(y_pc, y2)),
