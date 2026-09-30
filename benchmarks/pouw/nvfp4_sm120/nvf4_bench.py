@@ -23,7 +23,7 @@ nvf4_bench.cubin is nvf4_bench.cu built off the card:
    median and TFLOPS; NVML clocks before and after.  STEADY=N: then batches of N back to back per kernel, NVML during.
 
   python3 nvf4_bench.py CUBIN   (env: NVF4_EXPECT_UUID, SHAPE=8192, SMALL="256x128x128 512x256x1024 768x384x640",
-                                 KERNELS="nv256 nv256_r nv256_o", SCALES="0 1", TIME_SCALES=1, GATE_REPEATS=3, REPS=20,
+                                 KERNELS="nv256_o nv256_k64 nv256_k64_o", SCALES="0 1", TIME_SCALES=1, GATE_REPEATS=3, REPS=20,
                                  RASTER=8, HARNESS_LIB, CUTLASS="cutlass3x_nvfp4_256x128x128_coop ...", LT=1,
                                  MODEL_SAMPLES=4096, FULL_MODEL=131072, STEADY, STEADY_ROUNDS=4, ONLY_CHECK,
                                  PROFILE=1: after timing, one launch of each timed kernel between cuProfilerStart and
@@ -44,7 +44,7 @@ import time
 
 NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR = 16, 8, 75, 76
-UINT8, SWIZZLE_64B, L2_128B = 0, 2, 2
+UINT8, SWIZZLE_32B, SWIZZLE_64B, L2_128B = 0, 1, 2, 2
 NVFP4 = 5  # the harness's kind
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
@@ -329,13 +329,15 @@ class Bench:
         self.dev = dev
         self.raster = int(os.environ.get("RASTER", "8"))
 
-    def tmap(self, ptr: int, k: int, rows: int, box_rows: int) -> bytes:
-        """A CUtensorMap over a row-major rows x (k / 2) byte matrix: box_rows x 64-byte boxes, SWIZZLE_64B."""
+    def tmap(self, ptr: int, k: int, rows: int, box_rows: int, row_bytes: int) -> bytes:
+        """A CUtensorMap over a row-major rows x (k / 2) byte matrix: box_rows x row_bytes boxes, SWIZZLE_64B (64-byte rows)
+        or SWIZZLE_32B (32-byte rows)."""
         raw = C.create_string_buffer(256)
         at = (C.addressof(raw) + 63) & ~63
         dims, strides = (u64 * 2)(k // 2, rows), (u64 * 1)(k // 2)
-        box, estr = (u * 2)(64, box_rows), (u * 2)(1, 1)
-        self.dev.ck("cuTensorMapEncodeTiled", vp(at), UINT8, 2, vp(ptr), dims, strides, box, estr, 0, SWIZZLE_64B, L2_128B, 0)
+        box, estr = (u * 2)(row_bytes, box_rows), (u * 2)(1, 1)
+        swizzle = {64: SWIZZLE_64B, 32: SWIZZLE_32B}[row_bytes]
+        self.dev.ck("cuTensorMapEncodeTiled", vp(at), UINT8, 2, vp(ptr), dims, strides, box, estr, 0, swizzle, L2_128B, 0)
         return C.string_at(at, 128)
 
     def operands(self, m: int, n: int, k: int, scales: int, seed: int) -> dict:
@@ -345,7 +347,8 @@ class Bench:
             dev.launch("nv_gen_codes", cdiv(words, 256), 256, p=(ops[key],), i=(words, seed + j))
         for j, (key, words) in enumerate((("sfa", m * k // 64), ("sfb", n * k // 64))):
             dev.launch("nv_gen_scales", cdiv(words, 256), 256, p=(ops[key],), i=(words, seed + 2 + j, scales))
-        ops["maps"] = dev.put(self.tmap(ops["a"], k, m, 256) + self.tmap(ops["b"], k, n, 128))
+        for rb in (64, 32):
+            ops[f"maps{rb}"] = dev.put(self.tmap(ops["a"], k, m, 256, rb) + self.tmap(ops["b"], k, n, 128, rb))
         dev.sync()
         return ops
 
@@ -364,13 +367,14 @@ class Bench:
         return self.dev.smem[name]
 
     def gemm(self, name: str, ops: dict, c: int, m: int, n: int, k: int, grid: int | None = None) -> None:
-        """Header kernel `name` (nv256_w, nv256_b, ...): TM from the name, 8 consumer warps a 256-row tile, a producer
-        warpgroup."""
+        """Header kernel `name` (nv256_w, nv256_k64_b, ...): TM from the name, 8 consumer warps a 256-row tile, a producer
+        warpgroup; 64-deep stages (32-byte boxes) if the name has _k64, else 128-deep (64-byte)."""
         smem = self.prep(name)
         tm = int(name[2:5])
         tiles = (m // tm) * (n // 128)
         g = min(tiles, grid or self.dev.sms)
-        self.dev.launch(name, g, 32 * 2 * (tm // 64) + 128, smem, p=[ops["sfa"], ops["sfb"], c] + [0] * 7 + [ops["maps"]],
+        maps = ops["maps32"] if "_k64" in name else ops["maps64"]
+        self.dev.launch(name, g, 32 * 2 * (tm // 64) + 128, smem, p=[ops["sfa"], ops["sfb"], c] + [0] * 7 + [maps],
                         i=(m, n, k, self.raster))
 
     def ref(self, ops: dict, c: int, m: int, n: int, k: int) -> None:
@@ -597,7 +601,7 @@ def main(argv: list[str]) -> int:
     harness = Harness(os.environ["HARNESS_LIB"]) if os.environ.get("HARNESS_LIB") else None
     if harness:
         emit({"kind": "harness", "lib_sha256": harness.sha256, "nvfp4_kernels": sorted(harness.index)})
-    kernels = os.environ.get("KERNELS", "nv256 nv256_r nv256_o").split()
+    kernels = os.environ.get("KERNELS", "nv256_o nv256_k64 nv256_k64_o").split()
     s = int(os.environ.get("SHAPE", "8192"))
     shapes = [tuple(int(x) for x in t.split("x")) for t in os.environ.get("SMALL", "256x128x128 512x256x1024 768x384x640").split()]
     shapes.append((s, s, s))
