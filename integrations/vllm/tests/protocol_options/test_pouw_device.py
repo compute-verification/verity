@@ -3,6 +3,7 @@ a record gets wrong."""
 from __future__ import annotations
 
 import ctypes
+import dataclasses
 import hashlib
 import os
 
@@ -67,29 +68,42 @@ def test_the_gate_calls_reach_the_dequantizations_rounding_and_special_values():
 @pytest.fixture(scope="module")
 def five_strips():
     call = dict(PD.gate_calls())["five-strips"]
-    return call, PN.Native(call), PN.commit_call(0, "ncp-v2", call)
+    return call, PN.Native(call, "ncp-v2"), PN.commit_call(0, "ncp-v2", call)
 
 
-@pytest.mark.parametrize("role, where", [("digest", (3,)), ("node", (2,)), ("key", ()), ("form_y", (1,)), ("form_x", (4,)),
-                                         ("tile", (2, 1)), ("dequant", (4, 2, 37))])
+@pytest.mark.parametrize("role, where", [("digest", (3,)), ("node", (2,)), ("key", ()), ("form_x", (4,)), ("tile", (2, 1)),
+                                         ("dequant", (4, 2, 37))])
 def test_the_gate_names_the_first_wrong_unit(five_strips, role, where):
     call, nat, ref = five_strips
     u = nat.index(role, *where)
-    bad = PN.commit_call(0, "ncp-v2", call, tamper={(u, 0): int(nat.outputs(u)[0]) ^ 1})
+    bad = PN.commit_call(0, "ncp-v2", call, tamper={(u, 0): int(nat.outputs(u)[0]) ^ 1}, side=ref.side)
     got = PD.first_difference(ref, bad)
     assert got.startswith(f"unit {u} ({role} {where}) has the wrong leaf"), got
     if role == "dequant":
         assert "y[66, 37]" in got and "from z, s, t, bias" in got
 
 
+def test_the_gate_names_the_first_wrong_y_unit_of_the_weight_side(five_strips):
+    call, _nat, ref = five_strips
+    side = PN.commit_weight("ncp-v2", call, tamper={(1, 0): int(ref.side.opening(1)[0]) ^ 1})
+    assert PD.first_difference(ref, PN.commit_call(0, "ncp-v2", call, side=side)) == "Y unit 1 of the weight side has the wrong leaf"
+
+
+def test_a_build_refuses_a_weight_side_whose_y_leaves_are_not_its_own(five_strips):
+    call, _nat, ref = five_strips
+    side = PN.commit_weight("ncp-v2", call, tamper={(0, 5): int(ref.side.opening(0)[5]) ^ 1})
+    with pytest.raises(ValueError, match="Y unit leaves are not the weight side's"):
+        PD.commit_call(0, "ncp-v2", call, side=side)
+    assert PD.first_difference(ref, PD.commit_call(0, "ncp-v2", call, side=ref.side)) is None
+
+
 def test_the_gate_names_a_wrong_served_entry_and_a_wrong_inputs_digest(five_strips):
     _call, _nat, ref = five_strips
     y = ref.y.copy()
     y[5, 7] ^= 1
-    served = PC.CallRecord(ref.index, ref.scheme, ref.call, ref.inputs, ref.leaves, ref.root, y, ref.opening)
+    served = dataclasses.replace(ref, y=y)
     assert PD.first_difference(ref, served) == f"served y[5, 7] is {int(y[5, 7]):#06x}, not {int(ref.y[5, 7]):#06x}"
-    inputs = PC.CallRecord(ref.index, ref.scheme, ref.call, bytes(32), ref.leaves, ref.root, ref.y, ref.opening)
-    assert PD.first_difference(ref, inputs) == "the inputs' digest differs"
+    assert PD.first_difference(ref, dataclasses.replace(ref, inputs=bytes(32))) == "the inputs' digest differs"
 
 
 def test_the_build_is_keyed_by_its_sources(tmp_path, monkeypatch):
@@ -145,8 +159,8 @@ def test_the_low_byte_variant_hashes_each_checkpoints_low_byte(five_strips):
     """The timed-only variant (cheap binding's row 4): the kernel's function on the CPU equals the reference built from
     `pouw_native`'s own tile words."""
     call, nat, _ref = five_strips
-    b, _t = nat.weight(0, call.shape.n)
-    y, c0 = nat.y_block(b, 0)
+    b, _t = nat.side.read(0, call.shape.n)
+    y, c0 = nat.side.block(b, 0)
     for rs, cs in ((0, 0), (2, 1), (4, 2)):
         words = nat.outputs(nat.index("tile", rs, cs))
         got = PD.tile_lowbyte_host(nat.x_strip(rs), y[16 * cs:16 * cs + 16], c0[16 * cs:16 * cs + 16], nat.steps)
@@ -183,7 +197,7 @@ def test_the_low_byte_check_names_a_wrong_leaf(five_strips):
     u = nat.index("tile", 1, 1)
     good = ref.leaves[:32 * nat.base["tile"]] + b"".join(PD.lowbyte_leaf(ref.opening(v)) for v in range(nat.base["tile"], nat.base["dequant"])) \
         + ref.leaves[32 * nat.base["dequant"]:]
-    rec = lambda leaves: PC.CallRecord(0, "ncp-v2", ref.call, ref.inputs, leaves, PC.units_root(leaves), ref.y, ref.opening)
+    rec = lambda leaves: dataclasses.replace(ref, leaves=leaves, root=PC.units_root(leaves))
     assert PD.lowbyte_difference(ref, rec(good)) is None
     bad = good[:32 * u] + bytes(32) + good[32 * u + 32:]
     assert PD.lowbyte_difference(ref, rec(bad)).startswith(f"unit {u} (tile (1, 1)) has the wrong low-byte leaf")

@@ -1,6 +1,7 @@
 """CPU contract tests for `ncp2_gpu_bench`'s accounting: the bytes each leaf hash absorbs per Qwen2.5-0.5B forward."""
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import sys
 from pathlib import Path
@@ -221,10 +222,10 @@ def test_the_fused_gate_runs_through_the_cpu_twin(monkeypatch):
     def timed(i, s, call, on="device", flags=B.PD.HASH):
         rec = B.PD.commit_call(i, s, call, on="twin")
         if flags & B.PD.LOWBYTE:
-            nat = B.PN.Native(call)
+            nat = B.PN.Native(call, "ncp-v2")
             lo, hi = nat.base["tile"], nat.base["dequant"]
             leaves = rec.leaves[:32 * lo] + b"".join(B.PD.lowbyte_leaf(rec.opening(u)) for u in range(lo, hi)) + rec.leaves[32 * hi:]
-            rec = PC.CallRecord(rec.index, rec.scheme, rec.call, rec.inputs, leaves, PC.units_root(leaves), rec.y, rec.opening)
+            rec = dataclasses.replace(rec, leaves=leaves, root=PC.units_root(leaves))
         return rec, 1.0
 
     monkeypatch.setattr(B.PD, "commit_call_timed", timed)
@@ -289,7 +290,7 @@ class _FT:
 
 def test_the_fused_timings_cover_every_shape_and_mode(monkeypatch):
     class Committer:
-        def __init__(self, salt, flags):
+        def __init__(self, scheme, salt, flags):
             self.flags, self.n = flags, 0
 
         def __call__(self, a, s, b, t, bias, forward, position, weight, rowids, colids):

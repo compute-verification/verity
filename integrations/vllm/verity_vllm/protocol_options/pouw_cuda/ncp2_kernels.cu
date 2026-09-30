@@ -96,8 +96,9 @@ __global__ void k_y(const int8_t* b, int n, int k, const uint8_t* salt, uint64_t
   c0[j] = form_y_col(b + (size_t)j * k, f + (size_t)j * k, inv, k, y + (size_t)j * 3 * k);
 }
 
-// One thread per strip unit: the ns form_y units, then the ms form_x units.
-__global__ void k_form_leaves(int ms, int ns, int k3, const uint8_t* x, const uint8_t* y, const uint32_t* c0, uint8_t* leaves) {
+// One thread per strip unit: the weight side's ns Y units into ``yleaves``, then the call's ms form_x units.
+__global__ void k_form_leaves(int ms, int ns, int k3, const uint8_t* x, const uint8_t* y, const uint32_t* c0, uint8_t* leaves,
+                              uint8_t* yleaves) {
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= ms + ns) return;
   Sha256 h;
@@ -105,10 +106,11 @@ __global__ void k_form_leaves(int ms, int ns, int k3, const uint8_t* x, const ui
   if (i < ns) {
     unit_leaf_bytes(h, y + (size_t)i * D * k3, (size_t)D * k3);
     for (int c = 0; c < D; ++c) sha256_u32le(h, c0[i * D + c]);
+    sha256_final(h, yleaves + 32 * (size_t)i);
   } else {
     unit_leaf_bytes(h, x + (size_t)(i - ns) * D * k3, (size_t)D * k3);
+    sha256_final(h, leaves + 32 * (size_t)(2 * ms + i - ns));
   }
-  sha256_final(h, leaves + 32 * (size_t)(2 * ms + i));
 }
 
 // A block per tile of the chunk from ``tile0``, a thread per output (r, c): every checkpoint into ck[tile][t][r][c].
@@ -147,20 +149,20 @@ __global__ void k_units_level(const uint8_t* in, size_t count, uint8_t* out) {
   }
 }
 
-// `ncp2_host.cpp`'s `ncp2_commit` on the device, and the units root; ``ms_out`` is the device time from the first kernel to
-// the root, the inputs already resident. Returns 0, 1 for a shape outside the strips, or a CUDA error code.
+// `ncp2_host.cpp`'s `ncp2_commit` on the device, and the call's units root; ``ms_out`` is the device time from the first
+// kernel to the root, the inputs already resident. Returns 0, 1 for a shape outside the strips, or a CUDA error code.
 extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b, const uint32_t* t,
                            const uint16_t* bias, const uint8_t* salt, uint64_t forward, uint64_t position, uint64_t weight,
                            const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv,
-                           uint8_t* leaves, uint16_t* y_out, uint8_t* root, float* ms_out) {
+                           uint8_t* leaves, uint8_t* yleaves, uint16_t* y_out, uint8_t* root, float* ms_out) {
   if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D || m / D > (1 << 19)) return 1;
   const int ms = m / D, ns = n / D, steps = 3 * k / D, k3 = 3 * k;
-  const size_t tiles = (size_t)ms * ns, population = 3 * (size_t)ms + ns + tiles + tiles * D * D;
-  const size_t tile_base = 3 * (size_t)ms + ns, deq_base = tile_base + tiles;
+  const size_t tiles = (size_t)ms * ns, population = 3 * (size_t)ms + tiles + tiles * D * D;
+  const size_t tile_base = 3 * (size_t)ms, deq_base = tile_base + tiles;
   Dev<int8_t> da, db, de, df;
   Dev<uint32_t> ds, dt, drow, dcol, dpi, dinv, dc0, dck;
   Dev<uint16_t> dbias, dy;
-  Dev<uint8_t> dsalt, rows, strips, nodes, key, x, y, lv, lv2, lv3;
+  Dev<uint8_t> dsalt, rows, strips, nodes, key, x, y, lv, lv2, lv3, ylv;
   CK(da.put(a, (size_t)m * k));
   CK(db.put(b, (size_t)n * k));
   CK(ds.put(s, m));
@@ -182,6 +184,7 @@ extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t*
   CK(dc0.alloc(n));
   CK(dy.alloc((size_t)m * n));
   CK(lv.alloc(population * 32));
+  CK(ylv.alloc((size_t)ns * 32));
   CK(lv2.alloc((population + 1) / 2 * 32));
   CK(lv3.alloc(((population + 1) / 2 + 1) / 2 * 32));
   const size_t per_tile = (size_t)steps * D * D, chunk = (256u << 20) / (per_tile * 4) ? (256u << 20) / (per_tile * 4) : 1;
@@ -197,7 +200,7 @@ extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t*
   k_tree_key<<<1, 1>>>(strips.p, ms, nodes.p, dsalt.p, forward, position, weight, key.p, lv.p);
   k_x<<<blocks(m, 64), 64>>>(da.p, m, k, key.p, drow.p, dpi.p, de.p, x.p);
   k_y<<<blocks(n, 64), 64>>>(db.p, n, k, dsalt.p, weight, dcol.p, dinv.p, df.p, y.p, dc0.p);
-  k_form_leaves<<<blocks(ms + ns, 64), 64>>>(ms, ns, k3, x.p, y.p, dc0.p, lv.p);
+  k_form_leaves<<<blocks(ms + ns, 64), 64>>>(ms, ns, k3, x.p, y.p, dc0.p, lv.p, ylv.p);
   for (size_t tile0 = 0; tile0 < tiles; tile0 += chunk) {
     size_t count = tiles - tile0 < chunk ? tiles - tile0 : chunk;
     k_tiles<<<(unsigned)count, D * D>>>(ns, steps, k3, x.p, y.p, dc0.p, tile0, dck.p);
@@ -216,6 +219,7 @@ extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t*
   CK(cudaGetLastError());
   CK(cudaEventElapsedTime(ms_out, t0, t1));
   CK(cudaMemcpy(leaves, lv.p, population * 32, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(yleaves, ylv.p, (size_t)ns * 32, cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(root, in, 32, cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(y_out, dy.p, (size_t)m * n * sizeof(uint16_t), cudaMemcpyDeviceToHost));
   cudaEventDestroy(t0);

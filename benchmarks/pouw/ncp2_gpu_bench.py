@@ -194,7 +194,7 @@ def fused_timings(torch, reps: int, save=lambda part: None) -> dict:
             colids = torch.arange(n, dtype=torch.int32, device="cuda")
             ys = {}
             for mode, flags in FUSED_MODES.items():
-                c = PD.FusedCommitter(bytes(range(32)), flags)
+                c = PD.FusedCommitter("ncp-v2", bytes(range(32)), flags)
                 ys[mode] = c(a, s, b, t, bias, 1, 2, n, rowids, colids)
                 torch.cuda.synchronize()
                 c.tile_ms()
@@ -236,10 +236,10 @@ def gate_route_u(ext, torch) -> list[dict]:
     calls.append((f"linear k={k} n={n} m={m}", PD.gate_call(f"linear k={k} n={n} m={m}", m, k, n, layer=11, site=2, weight=46)))
     out = []
     for name, call in calls:
-        nat, sh = PN.Native(call), call.shape
+        nat, sh = PN.Native(call, "ncp-v2"), call.shape
         x = np.concatenate([nat.x_strip(rs) for rs in range(sh.m // D)])
-        b, _t = nat.weight(0, sh.n)
-        y, c0 = nat.y_block(b, 0)
+        b, _t = nat.side.read(0, sh.n)
+        y, c0 = nat.side.block(b, 0)
         want = np.concatenate([nat.tiles(nat._x64(nat.x_strip(rs)), y, c0) for rs in range(sh.m // D)], axis=1)   # [t, m, n]
         for cfg in _cfgs(sh.m, sh.n):
             cz, ck = ext.ncp_route_u(torch.from_numpy(x).cuda(), torch.from_numpy(y).cuda(), cfg)

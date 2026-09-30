@@ -223,20 +223,20 @@ HD const uint8_t* rfc6962_fast(const uint8_t* strips, int lo, int hi, uint8_t* n
   }
 }
 
-// K in one Keccak block: tag, salt, forward, position, weight id and D_A's words as lanes fill 16 lanes (128 bytes).
+// K in one Keccak block: D_A's words as lanes, then the tag, salt, forward, position and weight id, fill 16 lanes (128 bytes).
 HD void call_key_fast(const uint8_t salt[32], uint64_t forward, uint64_t position, uint64_t weight, const uint8_t da[64],
                       uint8_t out[32]) {
   uint64_t s[25];
 #pragma unroll
   for (int i = 0; i < 25; ++i) s[i] = 0;
-  s[0] = le64((const uint8_t*)NCP2_TAG_KEY);
 #pragma unroll
-  for (int i = 0; i < 4; ++i) s[1 + i] = le64(salt + 8 * i);
-  s[5] = forward;
-  s[6] = position;
-  s[7] = weight;
+  for (int w = 0; w < 8; ++w) s[w] = be64(da + 8 * w);
+  s[8] = le64((const uint8_t*)NCP2_TAG_KEY);
 #pragma unroll
-  for (int w = 0; w < 8; ++w) s[8 + w] = be64(da + 8 * w);
+  for (int i = 0; i < 4; ++i) s[9 + i] = le64(salt + 8 * i);
+  s[13] = forward;
+  s[14] = position;
+  s[15] = weight;
   s[16] ^= 0x1Full ^ (0x80ull << 56);
   keccak_p<24>(s);
 #pragma unroll

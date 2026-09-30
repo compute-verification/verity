@@ -29,16 +29,16 @@ extern "C" int ncp2_hash(int kind, int ds, const uint8_t* data, const uint64_t* 
   return 0;
 }
 
-// One call's every unit leaf, in the partition's numbering (`pouw_native.Native.base`), and its served y. The weight's rows
-// are passed whole. Returns 0, or 1 for a shape outside 16-row and 16-column strips.
+// One call's every unit leaf, in the partition's numbering (`pouw_native.Native.base`), its weight side's Y unit leaves
+// (``yleaves``, one per column strip) and its served y. The weight's rows are passed whole. Returns 0, or 1 for a shape
+// outside 16-row and 16-column strips.
 extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b, const uint32_t* t,
                            const uint16_t* bias, const uint8_t* salt, uint64_t forward, uint64_t position, uint64_t weight,
                            const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv,
-                           uint8_t* leaves, uint16_t* y_out) {
+                           uint8_t* leaves, uint8_t* yleaves, uint16_t* y_out) {
   if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D || m / D > (1 << 19)) return 1;
   const int ms = m / D, ns = n / D, steps = 3 * k / D, k3 = 3 * k;
-  const size_t digest = 0, node = ms, key = 2 * ms - 1, form_y = 2 * ms, form_x = 2 * ms + ns, tile = 3 * ms + ns,
-               deq = 3 * ms + ns + (size_t)ms * ns;
+  const size_t digest = 0, node = ms, key = 2 * ms - 1, form_x = 2 * ms, tile = 3 * ms, deq = 3 * ms + (size_t)ms * ns;
   auto leaf = [&](size_t u) { return leaves + 32 * u; };
 
   Buf<uint8_t> rows((size_t)m * 64), strips((size_t)ms * 64), nodes((size_t)(ms > 1 ? ms - 1 : 1) * 64);
@@ -78,7 +78,7 @@ extern "C" int ncp2_commit(int m, int k, int n, const int8_t* a, const uint32_t*
     unit_leaf_begin(h);
     unit_leaf_bytes(h, &y[(size_t)cs * D * k3], (size_t)D * k3);
     for (int c = 0; c < D; ++c) sha256_u32le(h, c0[cs * D + c]);
-    sha256_final(h, leaf(form_y + cs));
+    sha256_final(h, yleaves + 32 * (size_t)cs);
   }
 
   Buf<uint32_t> ck((size_t)steps * D * D);
@@ -110,11 +110,10 @@ struct ArrRun {
 extern "C" int ncp2_commit_fast(int m, int k, int n, const int8_t* a, const uint32_t* s, const int8_t* b, const uint32_t* t,
                                 const uint16_t* bias, const uint8_t* salt, uint64_t forward, uint64_t position, uint64_t weight,
                                 const uint32_t* rowids, const uint32_t* colids, const uint32_t* pi, const uint32_t* inv,
-                                uint8_t* leaves, uint16_t* y_out) {
+                                uint8_t* leaves, uint8_t* yleaves, uint16_t* y_out) {
   if (m <= 0 || n <= 0 || k <= 0 || m % D || n % D || (3 * k) % D || m / D > (1 << 19)) return 1;
   const int ms = m / D, ns = n / D, steps = 3 * k / D, k3 = 3 * k;
-  const size_t node = ms, key = 2 * ms - 1, form_y = 2 * ms, form_x = 2 * ms + ns, tile = 3 * ms + ns,
-               deq = 3 * ms + ns + (size_t)ms * ns;
+  const size_t node = ms, key = 2 * ms - 1, form_x = 2 * ms, tile = 3 * ms, deq = 3 * ms + (size_t)ms * ns;
   auto leaf = [&](size_t u) { return leaves + 32 * u; };
   Buf<uint8_t> rows((size_t)m * 64), strips((size_t)ms * 64), nodes((size_t)(ms > 1 ? ms - 1 : 1) * 64);
   for (int i = 0; i < m; ++i) row_digest_fast(a + (size_t)i * k, k, &rows[(size_t)i * 64]);
@@ -153,7 +152,7 @@ extern "C" int ncp2_commit_fast(int m, int k, int n, const int8_t* a, const uint
     wl_init(wl);
     wl_bytes(wl, &y[(size_t)cs * D * k3], (size_t)D * k3);
     wl_block(wl, &c0[(size_t)cs * D]);
-    wl_final(wl, leaf(form_y + cs));
+    wl_final(wl, yleaves + 32 * (size_t)cs);
   }
   uint32_t run[D * D];
   for (int rs = 0; rs < ms; ++rs)

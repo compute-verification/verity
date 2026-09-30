@@ -561,18 +561,18 @@ HD const uint8_t* rfc6962(const uint8_t* strips, int lo, int hi, uint8_t* nodes,
   }
 }
 
-// K = SHAKE256("ncp2-key" ‖ salt ‖ forward ‖ position ‖ weight id ‖ D_A as lanes)[:32].
+// K = SHAKE256(D_A as lanes ‖ "ncp2-key" ‖ salt ‖ forward ‖ position ‖ weight id)[:32].
 HD void call_key(const uint8_t salt[32], uint64_t forward, uint64_t position, uint64_t weight, const uint8_t da[64],
                  uint8_t out[32]) {
   Shake256 x;
   x.init();
+  for (int w = 0; w < 8; ++w)
+    for (int i = 7; i >= 0; --i) x.byte(da[8 * w + i]);
   x.bytes((const uint8_t*)NCP2_TAG_KEY, 8);
   x.bytes(salt, 32);
   x.u64le(forward);
   x.u64le(position);
   x.u64le(weight);
-  for (int w = 0; w < 8; ++w)
-    for (int i = 7; i >= 0; --i) x.byte(da[8 * w + i]);
   x.pad(SHAKE_DS);
   for (int i = 0; i < 32; ++i) out[i] = x.squeeze();
 }

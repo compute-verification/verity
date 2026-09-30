@@ -5,12 +5,15 @@
 exact dequantization and each unit's SHA-256 leaf), in functions that compile for the host and the device. `host()` builds
 them for the CPU with the system C++ compiler, keyed by what it compiles, and `commit_call` commits a call through that
 build; `device()` builds `ncp2_kernels.cu` with nvcc, whose committer calls the same functions and is driven the same way.
-`first_difference` is the gate: the first unit, in the partition's numbering, whose leaf a record gets wrong, named by role
-and place, or the first wrong served entry. A device committer passes when it names nothing on `gate_calls`.
+Each build returns the call's unit leaves and its weight side's Y unit leaves; the first call on a weight makes the weight
+side's record from them, and a later call's must be that record's. `first_difference` is the gate: the first unit, in the
+partition's numbering, whose leaf a record gets wrong, named by role and place, the first wrong Y unit of its weight side,
+or the first wrong served entry. A device committer passes when it names nothing on `gate_calls`.
 """
 from __future__ import annotations
 
 import ctypes
+import dataclasses
 import hashlib
 import os
 import shutil
@@ -42,7 +45,7 @@ HASHES = {"sha256": (0, 32), "sha512": (1, 64), "shake256": (2, None), "turbosha
 
 _u8, _u16, _u32, _u64 = (np.ctypeslib.ndpointer(t, flags="C_CONTIGUOUS") for t in (np.uint8, np.uint16, np.uint32, np.uint64))
 _i8 = np.ctypeslib.ndpointer(np.int8, flags="C_CONTIGUOUS")
-_COMMIT = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [ctypes.c_uint64] * 3 + [_u32] * 4 + [_u8, _u16]
+_COMMIT = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [ctypes.c_uint64] * 3 + [_u32] * 4 + [_u8, _u8, _u16]
 
 
 @dataclass
@@ -153,7 +156,7 @@ def fused() -> ctypes.CDLL:
     dll = _build(_need(nvcc(), "nvcc"), FUSED_SOURCES, cuda_flags(), "libncp2_fused.so")
     vp, fp = ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)
     dll.ncp2_fused.argtypes = ([ctypes.c_int] * 3 + [vp] * 5 + [_u8] + [ctypes.c_uint64] * 3 + [vp] * 4
-                               + [ctypes.c_int, ctypes.c_uint64, vp, vp, vp])
+                               + [ctypes.c_int, ctypes.c_uint64, vp, vp, vp, vp])
     dll.ncp2_fused_host.argtypes = _COMMIT + [_u8, fp, ctypes.c_int]
     dll.ncp2_fused_tile_ms.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint64)]
     dll.ncp2_fused_reset_cache.argtypes = []
@@ -203,15 +206,29 @@ def hash_many(kind: str, msgs: Sequence[bytes], out: int | None = None, ds: int 
     return [res[i * width:(i + 1) * width].tobytes() for i in range(len(msgs))]
 
 
-def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH) -> tuple[PC.CallRecord, float | None]:
-    sh, nat = call.shape, PN.Native(call)
+def side_of(scheme: str, call: PC.Call, yleaves: bytes, b: np.ndarray) -> PC.WeightRecord:
+    """The call's weight side's record from a build's Y unit leaves and the weight's rows ``b`` as read: its inputs' digest
+    and what each call on it reads (`WeightRecord.reads`) computed on the host, once per run and weight."""
+    nw = PN.NativeWeight(call.b, scheme, call.salt, call.weight, call.colids)
+    rd = PC.RowsDigest(nw.n, nw.k)
+    rd.update(b)
+    return PC.WeightRecord(scheme, call.b, call.salt, call.weight, nw.colids,
+                           PC.weight_inputs_digest(rd.digest(), call.salt, call.weight, nw.colids), yleaves,
+                           PC.units_root(yleaves), nw.outputs, nw.reads())
+
+
+def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH,
+            side: PC.WeightRecord | None = None) -> tuple[PC.CallRecord, float | None]:
+    sh = call.shape
+    nw = PN.NativeWeight(call.b, scheme, call.salt, call.weight, call.colids)
+    nat = PN.Native(call, scheme, side=nw)
     b, t = call.b.rows(0, call.b.n)
-    leaves = np.zeros(nat.population * 32, np.uint8)
+    leaves, yleaves = np.zeros(nat.population * 32, np.uint8), np.zeros(nw.population * 32, np.uint8)
     y = np.zeros((sh.m, sh.n), np.uint16)
     c = lambda v, dt: np.ascontiguousarray(v, dt)
     args = [sh.m, sh.k, sh.n, c(call.a, np.int8), c(call.s, np.uint32), c(b, np.int8), c(t, np.uint32), c(call.bias, np.uint16),
             np.frombuffer(call.salt, np.uint8).copy(), call.forward, call.position, call.weight, c(call.rowids, np.uint32),
-            c(call.colids, np.uint32), c(nat.pi, np.uint32), c(nat.inv, np.uint32), leaves, y]
+            c(call.colids, np.uint32), c(nat.pi, np.uint32), c(nw.inv, np.uint32), leaves, yleaves, y]
     root, ms = np.zeros(32, np.uint8), ctypes.c_float(0)
     lib = _lib(on)
     if on == "fused":
@@ -221,42 +238,52 @@ def _commit(on: str, index: int, scheme: str, call: PC.Call, flags: int = HASH) 
         rc = commit(*args, *((root, ctypes.byref(ms)) if on == "device" else ()))
     if rc:
         raise ValueError(f"{sh}: outside 16-row and 16-column strips" if rc == 1 else f"CUDA error {rc}")
-    blob = leaves.tobytes()
+    blob, ylv = leaves.tobytes(), yleaves.tobytes()
     root_b = root.tobytes() if on in ("device", "fused") else units_root_twin(blob) if on == "twin" else PC.units_root(blob)
-    rec = PC.CallRecord(index, scheme, call, PC.inputs_digest(call, PC.weight_digest(call.b)), blob, root_b, y, nat.outputs)
+    if side is None:
+        side = side_of(scheme, call, ylv, b)
+    elif ylv != side.leaves:
+        raise ValueError(f"{sh}: the {on} build's Y unit leaves are not the weight side's")
+    rec = PC.CallRecord(index, scheme, call, PC.inputs_digest(call, side.reads), blob, root_b, y, side, nat.outputs, nat.read)
     return rec, (ms.value if on in ("device", "fused") else None)
 
 
-def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host", flags: int = HASH) -> PC.CallRecord:
-    """One call committed by the ``on`` build: "host" (`ncp2.cuh`), "twin" (`ncp2_fast.cuh`, the serving kernel's CPU twin) or "device" (`ncp2_kernels.cu`); the twin and device records carry their own units root. A record opens units
-    through `pouw_native`. ``flags`` are the fused build's (`ncp2_fused`)."""
-    return _commit(on, index, scheme, call, flags)[0]
+def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host", flags: int = HASH,
+                side: PC.WeightRecord | None = None) -> PC.CallRecord:
+    """One call committed by the ``on`` build: "host" (`ncp2.cuh`), "twin" (`ncp2_fast.cuh`, the serving kernel's CPU twin),
+    "device" (`ncp2_kernels.cu`) or "fused" (`ncp2_fused.cu`); the twin and device records carry their own units root. Its
+    weight side is ``side``, whose Y unit leaves the build's must be, or made from the build's when None (`side_of`). A record
+    opens units through `pouw_native`. ``flags`` are the fused build's (`ncp2_fused`)."""
+    return _commit(on, index, scheme, call, flags, side)[0]
 
 
-def commit_call_timed(index: int, scheme: str, call: PC.Call, on: str = "device", flags: int = HASH) -> tuple[PC.CallRecord, float]:
+def commit_call_timed(index: int, scheme: str, call: PC.Call, on: str = "device", flags: int = HASH,
+                      side: PC.WeightRecord | None = None) -> tuple[PC.CallRecord, float]:
     """`commit_call` on a device build ("device" or "fused"), and its device time in ms, the inputs resident."""
-    rec, ms = _commit(on, index, scheme, call, flags)
+    rec, ms = _commit(on, index, scheme, call, flags, side)
     return rec, float(ms)
 
 
 class FusedCommitter:
-    """Linear calls committed on the device by `ncp2_fused` from torch tensors on the current stream: A (m × k int8, m a
-    multiple of 16), the row scales' FP32 encodings (int32), the weight's int7 rows and scale encodings, the bias's BF16
-    encodings (int16), the row and column ids (int32); the served y comes back as BF16 encodings (int16, m × n).
+    """Linear calls of ``scheme`` committed on the device by `ncp2_fused` from torch tensors on the current stream: A (m × k
+    int8, m a multiple of 16), the row scales' FP32 encodings (int32), the weight's int7 rows and scale encodings, the bias's
+    BF16 encodings (int16), the row and column ids (int32); the served y comes back as BF16 encodings (int16, m × n).
     ``flags`` are `HASH`, `TIME_TILES` and `CACHE_Y`."""
 
-    def __init__(self, salt: bytes, flags: int) -> None:
-        self.lib, self.salt, self.flags = fused(), np.frombuffer(salt, np.uint8).copy(), flags
+    def __init__(self, scheme: str, salt: bytes, flags: int) -> None:
+        self.lib, self.kind = fused(), PC.kind_of(scheme)
+        self.salt, self.flags = np.frombuffer(salt, np.uint8).copy(), flags
         self._perms: dict[int, tuple] = {}
 
     def perm(self, k: int):
         import torch
         if k not in self._perms:
-            pi = np.asarray(ncp2.perm(PC.KIND, k), np.int64)
+            pi = np.asarray(ncp2.perm(self.kind, k), np.int64)
             self._perms[k] = tuple(torch.tensor(v.astype(np.int32), device="cuda") for v in (pi, np.argsort(pi)))
         return self._perms[k]
 
-    def __call__(self, a, s, b, t, bias, forward: int, position: int, weight: int, rowids, colids, root: np.ndarray | None = None):
+    def __call__(self, a, s, b, t, bias, forward: int, position: int, weight: int, rowids, colids, root: np.ndarray | None = None,
+                 yleaves: np.ndarray | None = None):
         import torch
         (m, k), n = a.shape, b.shape[0]
         y = torch.empty((m, n), dtype=torch.int16, device=a.device)
@@ -264,7 +291,8 @@ class FusedCommitter:
         rc = self.lib.ncp2_fused(m, k, n, a.data_ptr(), s.data_ptr(), b.data_ptr(), t.data_ptr(), bias.data_ptr(), self.salt, forward,
                                  position, weight, rowids.data_ptr(), colids.data_ptr(), pi.data_ptr(), inv.data_ptr(), self.flags,
                                  torch.cuda.current_stream().cuda_stream, y.data_ptr(),
-                                 None if root is None else root.ctypes.data, None)
+                                 None if root is None else root.ctypes.data, None,
+                                 None if yleaves is None else yleaves.ctypes.data)
         if rc:
             raise RuntimeError(f"ncp2_fused {m}x{k}x{n}: " + ("outside the strips" if rc == 1 else f"CUDA error {rc}"))
         return y
@@ -281,23 +309,28 @@ class FusedCommitter:
 def lowbyte_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
     """`first_difference` for a record committed with `LOWBYTE`: its tile leaves against `lowbyte_leaf` of ``ref``'s tile
     words, every other leaf and the served y against ``ref``."""
-    nat = PN.Native(ref.call)
+    nat = PN.Native(ref.call, ref.scheme)
     lo, hi = nat.base["tile"], nat.base["dequant"]
     for u in range(lo, hi):
         if got.leaf(u) != lowbyte_leaf(ref.opening(u)):
             role, where = nat.locate(u)
             return f"unit {u} ({role} {where}) has the wrong low-byte leaf"
     patched = got.leaves[:32 * lo] + ref.leaves[32 * lo:32 * hi] + got.leaves[32 * hi:]
-    rec = PC.CallRecord(got.index, got.scheme, got.call, got.inputs, patched, PC.units_root(patched), got.y, got.opening)
-    return first_difference(ref, rec)
+    return first_difference(ref, dataclasses.replace(got, leaves=patched, root=PC.units_root(patched)))
 
 
 def first_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
-    """None when ``got`` commits what ``ref`` does: its inputs' digest, every unit's leaf, the root and the served y. Otherwise
-    the first difference: the first wrong unit in the partition's numbering (its role and place, and for a dequantization
-    unit its arguments and both values), or the first wrong served entry."""
+    """None when ``got`` commits what ``ref`` does: its weight side's Y unit leaves, inputs' digest and root, its inputs'
+    digest, every unit's leaf, the root and the served y. Otherwise the first difference: the first wrong Y unit, the first
+    wrong unit in the partition's numbering (its role and place, and for a dequantization unit its arguments and both
+    values), or the first wrong served entry."""
     if got.shape != ref.shape:
         return f"shape {got.shape} is not {ref.shape}"
+    if got.side.leaves != ref.side.leaves:
+        a, b = (np.frombuffer(r.side.leaves, np.uint8).reshape(-1, 32) for r in (ref, got))
+        return f"Y unit {int(np.flatnonzero((a != b).any(axis=1))[0])} of the weight side has the wrong leaf"
+    if (got.side.inputs, got.side.root) != (ref.side.inputs, ref.side.root):
+        return "the weight side's inputs' digest or root differs"
     if got.inputs != ref.inputs:
         return "the inputs' digest differs"
     if len(got.leaves) != len(ref.leaves):
@@ -305,7 +338,7 @@ def first_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
     if got.leaves != ref.leaves:
         a, b = np.frombuffer(ref.leaves, np.uint8).reshape(-1, 32), np.frombuffer(got.leaves, np.uint8).reshape(-1, 32)
         u = int(np.flatnonzero((a != b).any(axis=1))[0])
-        nat = PN.Native(ref.call)
+        nat = PN.Native(ref.call, ref.scheme)
         role, where = nat.locate(u)
         msg = f"unit {u} ({role} {where}) has the wrong leaf"
         if role == "dequant":
@@ -412,6 +445,7 @@ __all__ = [
     "gate_call",
     "gate_calls",
     "hash_many",
+    "side_of",
     "host",
     "lowbyte_difference",
     "lowbyte_leaf",

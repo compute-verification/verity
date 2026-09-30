@@ -71,7 +71,7 @@ def ncp2_committer(mode: str):
     from verity_vllm.protocol_options import pouw_device as PD
     PD.configure(build_dir=os.environ.get("VERITY_POUW_CUDA_BUILD"), arch=os.environ.get("VERITY_POUW_CUDA_ARCH"))
     flags = {"ncp2": PD.HASH | PD.CACHE_Y, "ncp2-nohash": 0, "ncp2-lowbyte": PD.HASH | PD.CACHE_Y | PD.LOWBYTE}[mode]
-    return PD.FusedCommitter(bytes(range(32)), flags | PD.TIME_TILES)
+    return PD.FusedCommitter("ncp-v2", bytes(range(32)), flags | PD.TIME_TILES)
 
 
 def ncp2_self_check(committer) -> dict:
@@ -87,7 +87,7 @@ def ncp2_self_check(committer) -> dict:
     b, t = call.b.rows(0, call.b.n)
     cuda = lambda v, dt: torch.from_numpy(np.ascontiguousarray(v).view(dt)).cuda()
     word = committer.flags & PD.HASH and not committer.flags & PD.LOWBYTE
-    c, root = PD.FusedCommitter(call.salt, committer.flags & ~PD.CACHE_Y), np.zeros(32, np.uint8)
+    c, root = PD.FusedCommitter("ncp-v2", call.salt, committer.flags & ~PD.CACHE_Y), np.zeros(32, np.uint8)
     y = c(cuda(call.a, np.int8), cuda(call.s, np.int32), cuda(b, np.int8), cuda(t, np.int32), cuda(call.bias, np.int16), call.forward,
           call.position, call.weight, cuda(call.rowids, np.int32), cuda(call.colids, np.int32), root=root if word else None)
     torch.cuda.synchronize()
