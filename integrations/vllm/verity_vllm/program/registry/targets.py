@@ -254,19 +254,15 @@ def gemm_spec(profile, K: int, N: int):
     return bind(b1.GemmV2, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
 
 
-#: the tensor-core families whose bf16 linear with a bias is cuBLASLt's GEMM with the bias in the FP32 epilogue, measured (the
-#: GEMM target's evidence).  cc 9.0 very likely is too (cuBLASLt under VLLM_BATCH_INVARIANT=1) but has no recorded biased linear yet.
-F32_BIAS_EPILOGUE_FAMILIES = ("blackwell_consumer",)
-
-
 def gemm_bias_spec(profile, K: int, N: int):
     """The registered Definition of a bf16 linear WITH a bias on the declared target: `GemmBias_v1{K,N}` on the Ampere family (the Triton
-    linear adds the bias in bf16 after the rounding), `GemmBiasF32Epilogue_v1{K,N,DOT}` where the linear is cuBLASLt's (M >= 2; at M = 1
-    cuBLAS runs a gemv: `gemv_bias_spec`), refused by name elsewhere."""
+    linear adds the bias in bf16 after the rounding), `GemmBiasF32Epilogue_v1{K,N,DOT}` where the GEMM target records the bias in
+    cuBLASLt's FP32 epilogue (`GemmTarget.bias_epilogue == "f32"`, M >= 2; at M = 1 cuBLAS runs a gemv: `gemv_bias_spec`), refused by
+    name elsewhere."""
     fam = target_family(profile)
     if fam == "ampere":
         return bind(gemm_bias.GemmBias, K=int(K), N=int(N))
-    if fam in F32_BIAS_EPILOGUE_FAMILIES:
+    if gemm_target(profile).bias_epilogue == "f32":
         return bind(gemm_bias.GemmBiasF32Epilogue, K=int(K), N=int(N), DOT=tensor_core_dot(profile))
     raise UnregisteredTarget(f"bf16 linear with a bias on {fam} ({profile.capability_str}): no registered binding")
 
@@ -318,5 +314,5 @@ def describe(profile) -> dict[str, Any]:
 
 __all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "F32_BIAS_EPILOGUE_FAMILIES", "gemm_bias_spec", "gemv_bias_spec", "attention_spec", "describe",
+           "gemm_bias_spec", "gemv_bias_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
