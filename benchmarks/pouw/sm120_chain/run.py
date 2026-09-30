@@ -4,7 +4,7 @@ probes, each gated before it is timed (chain.cu; the attacker's measurement, a c
 
 1. Identity: exactly one visible device, `CUDA_VISIBLE_DEVICES` equal to --gpu with `CUDA_DEVICE_ORDER=PCI_BUS_ID`, an
    RTX PRO 6000 at cc 12.0 whose UUID is --expect-uuid (`internal/pouw/rtx-pro/server.md`'s table); NVML by that UUID.
-   Exit 3 otherwise.
+   Exit 3 otherwise.  Where the queue assigns the GPU, `--expect-uuid record` records the UUID instead of checking it.
 2. Build and SASS gate: chain.cu with nvcc >= 12.8 for sm_120a, no spills or local memory, and per k-step of 128 exactly
    64 `QMMA.16832.F32.E4M3.E4M3` (+ 64 FADD, the promotions, in chain_honest only), 64 IMMA in chain_int8, 64 F16 QMMA in
    chain_f16acc.  Exit 5 otherwise.
@@ -296,7 +296,8 @@ def gate(dev: Dev, a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gpu", type=int, default=3)
-    ap.add_argument("--expect-uuid", required=True)
+    ap.add_argument("--expect-uuid", required=True,
+                    help="the GPU's UUID from server.md's table; `record` where the queue assigns the GPU (the UUID is recorded)")
     ap.add_argument("--shapes", default="8192x8192x8192", help="MxNxK, comma-separated; multiples of 128")
     ap.add_argument("--reps", type=int, default=20, help="timed reps per shape; 0: the gates and the unpromoted chain only")
     ap.add_argument("--calls", type=int, default=4)
@@ -315,7 +316,8 @@ def main() -> None:
     dev = Dev()
     ident = {"name": dev.name, "uuid": dev.uuid, "cc": list(dev.cc), "sms": dev.sms, "cuda_driver_api": dev.driver,
              "visible_devices": dev.count}
-    if dev.count != 1 or dev.uuid != args.expect_uuid or dev.cc != (12, 0) or "RTX PRO 6000" not in dev.name:
+    uuid_ok = args.expect_uuid == "record" or dev.uuid == args.expect_uuid
+    if dev.count != 1 or not uuid_ok or dev.cc != (12, 0) or "RTX PRO 6000" not in dev.name:
         emit(fh, {"refused": "identity", **ident, "expect_uuid": args.expect_uuid})
         sys.exit(3)
     nvml = Nvml(dev.uuid)
