@@ -568,6 +568,39 @@ def two_four_term(sp: dict, rows: int = 16) -> dict[str, np.ndarray]:
             "span_either": per_span(sp["span_d24"] | sp["span_pairs"])}
 
 
+def witness_salt_dead(X: np.ndarray, fmt: str, delta: float = 0.25) -> np.ndarray:
+    """Per element, the Pearl-C4 reference's ``salt_dead`` (``pearl_c4.py`` at 524d0c2b), in float64: an element is
+    salt-live when two of the noise support's draws give it two codes, the draws being the noise atom at +-72 a_E (E = +6
+    on the row, F_t = +-6) and 0, with every other element of its block unmoved.  The row is at the reference's forming
+    scale: alpha = 2688 / (s + 4 delta rho) (a power of two for MXFP4), a_E = UE4M3(delta rho alpha 16 / sqrt(2346.125)),
+    block scales by its rule (UE4M3 of amax/6 with floor 0x01; UE8M0 rounded up)."""
+    blk = 16 if fmt == "nvf4" else 32
+    rows, k = X.shape
+    rho = np.sqrt((X[:, ::8] ** 2).mean(1))
+    alpha = 2688.0 / np.maximum(np.abs(X).max(1) + 4 * delta * rho, 2.0 ** -32)
+    if fmt == "mxf4":
+        alpha = np.exp2(np.floor(np.log2(alpha)))
+    m, e = scale_pairs("ue4m3", e4m3_codes_unsigned(delta * rho * alpha * 16 / np.sqrt(2346.125)))
+    amp = 72.0 * np.ldexp(m.astype(np.float64), e)[:, None, None]
+    c = (alpha[:, None] * X).reshape(rows, k // blk, blk)
+    mags = np.abs(c)
+    top = mags.max(-1, keepdims=True)
+    rest = np.where(mags == top, np.sort(mags, -1)[..., -2:-1], top)
+
+    def code(v):
+        amax = np.maximum(np.abs(v), rest) / E2M1_MAX
+        if fmt == "nvf4":
+            sm, se = scale_pairs("ue4m3", np.maximum(e4m3_codes_unsigned(amax), 1))
+            s = np.ldexp(sm.astype(np.float64), se)
+        else:
+            s = np.exp2(np.ceil(np.log2(np.maximum(amax, 2.0 ** -127))))
+        q = e2m1_codes(v / s)
+        return np.where(q & 7, q, 0)
+
+    mid = code(c)
+    return ((code(c - amp) == mid) & (code(c + amp) == mid)).reshape(rows, k)
+
+
 def dss_dead(X: np.ndarray, fmt: str) -> np.ndarray:
     """D-SS's salt-free screen per (row, block): clean amax_b > 12 rho, rho the RMS over every 8th position of the row."""
     blk = 16 if fmt == "nvf4" else 32
@@ -599,12 +632,16 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
 
     Replayed per chain version: identity atoms (item 2) and sub-grid groups (item 5).  On every tile identity atoms are
     counted as identity steps (a lower bound on the debit's lone-skip test); on ``skip_tiles`` whole tiles (the worst by
-    that count, and random ones) by the lone-skip test itself.  Per operand, the same for v1 and v2: the 2:4 term
-    (item 1) at each unit of ``two_four_term``, with salt-dependence read on the codes or on the values the MMA sees
-    (code times block scale; a changed scale changes its whole block); D-SS's dead blocks (``dss_dead``), their
-    dead x dead pairs (item 3, one block's MACs per pair-word) and the forming of A's dead elements (item 4, f_s times
-    |cols| / n, n the output width, default k).  Both 2:4 predicates are counted on the formed spans of A' and B', and per
-    version, whether the merged k128 step reproduces the chain's words over each span, all spans and 2:4 spans."""
+    that count, and random ones) by the lone-skip test itself.  Per operand, the same for v1 and v2, as the Pearl-C4
+    reference's ``tile_debit`` charges them: the 2:4 term (item 1) on its salt-dead codes (``witness_salt_dead``) at each
+    unit of ``two_four_term`` (its own is ``g4``); dead x dead pairs of D-SS's dead blocks (item 3, one block's MACs per
+    pair-word); the forming of salt-dead or unneeded A elements (item 4, f_s times |cols| / n, n the output width,
+    default k); and D-24's row windows on the formed codes (0.5 per MAC per row and aligned 128 of k), with the
+    instruction's pair rule beside it.  Item 1 is also read on one salt's changes (``code``; ``value``: code times block
+    scale, as the MMA sees it), which TT_OUT-FP4 carries rather than debits.  Both 2:4 predicates are counted on the
+    formed 16-row spans of A' and B', and per version, whether the merged k128 step reproduces the chain's words over
+    each span, on all spans and on 2:4 spans.  ``tile_debit_total`` adds items 2 and 5 (identity steps), 3, 4 and the
+    D-24 windows to item 1 at each level and unit; the reference's total is ``witness``/``g4``."""
     ya, yb = noisy(A, fmt, noise, delta, rng), noisy(B, fmt, noise, delta, rng)
     ca, sa, _ = quantize(ya, fmt)
     cb, sb, _ = quantize(yb, fmt)
@@ -617,25 +654,32 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     blk = 16 if fmt == "nvf4" else 32
     out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(nt), "k": int(K), "n": int(n), "rho": rho,
            "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles, "operands": {}}
-    formed, terms, dead = {}, {}, {}
+    formed, terms, dead, sdead, windows = {}, {}, {}, {}, {}
+    share = lambda sp, live: {"change_density": float(live.mean()), "g4_ge2_dead": float(sp["g4"].mean()),
+                              "g4_all_dead": float(sp["g4_dead"].mean()), "p8_le2_live_pairs": float(sp["p8"].mean()),
+                              "span_d24": float(sp["span_d24"].mean()), "span_pairs": float(sp["span_pairs"].mean())}
     for side, c, s, X, rr in (("A", ca, sa, A, ra), ("B", cb, sb, B, rb)):
         c0, s0, _ = quantize(X, fmt)
         c, s, c0, s0 = c[:rr], s[:rr], c0[:rr], s0[:rr]
-        formed[side] = span_2of4((c & 7) != 0, tile)
+        f = formed[side] = span_2of4((c & 7) != 0, tile)
+        windows[side] = {p: f[p].reshape(rr, -1, 128 // w).all(-1).sum(1) for p, w in (("g4", 4), ("p8", 8))}
         dead[side] = dss_dead(X[:rr], fmt)
-        o = {"spans": int(formed[side]["span_d24"].size), "formed_span_d24": float(formed[side]["span_d24"].mean()),
-             "formed_span_pairs": float(formed[side]["span_pairs"].mean()),
+        sdead[side] = witness_salt_dead(X[:rr], fmt, delta)
+        sp = span_2of4(~sdead[side], tile)
+        terms[side] = {"witness": two_four_term(sp, tile)}
+        o = {"spans": int(f["span_d24"].size), "formed_span_d24": float(f["span_d24"].mean()),
+             "formed_span_pairs": float(f["span_pairs"].mean()),
+             "formed_row_windows_d24": float(windows[side]["g4"].sum() / f["span_d24"].size / tile),
+             "formed_row_windows_pairs": float(windows[side]["p8"].sum() / f["span_d24"].size / tile),
              "dss_dead_blocks": float(dead[side].mean()),
-             "dss_rows_admitted": float((64 * dead[side].sum(1) <= dead[side].shape[1]).mean())}
+             "dss_rows_admitted": float((64 * dead[side].sum(1) <= dead[side].shape[1]).mean()),
+             "witness": share(sp, ~sdead[side])}
         if noise != "none":
             (N1, E1), (N0, E0) = block_ints(c, s, fmt), block_ints(c0, s0, fmt)
             val = lambda N, E: np.ldexp(N.astype(np.float64), E[..., None]).reshape(rr, -1)
-            terms[side] = {}
             for lvl, live in (("code", c != c0), ("value", val(N1, E1) != val(N0, E0))):
                 sp = span_2of4(live, tile)
-                o[lvl] = {"change_density": float(live.mean()), "g4_ge2_dead": float(sp["g4"].mean()),
-                          "g4_all_dead": float(sp["g4_dead"].mean()), "p8_le2_live_pairs": float(sp["p8"].mean()),
-                          "span_d24": float(sp["span_d24"].mean()), "span_pairs": float(sp["span_pairs"].mean())}
+                o[lvl] = share(sp, live)
                 terms[side][lvl] = two_four_term(sp, tile)
         out["operands"][side] = o
     nta, ntb = ra // tile, rb // tile
@@ -643,15 +687,19 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     admitted = (adm(dead["A"])[:, None] & adm(dead["B"])[None, :]).ravel()
     dA, dB = (dead[x].reshape(-1, tile, dead[x].shape[1]).sum(1).astype(np.float64) for x in "AB")
     item3 = (dA @ dB.T) * blk / (tile * tile * K)
-    item4 = np.broadcast_to((F_S * blk * dA.sum(1) * tile / n / (tile * tile * K))[:, None], (nta, ntb))
-    operand_units = {}
-    if noise != "none":
-        out["item1"] = {lvl: {u: _tile_stats((terms["A"][lvl][u][:, None] + terms["B"][lvl][u][None, :]).ravel(), rho)
-                              for u in TWO_FOUR_UNITS} for lvl in ("code", "value")}
-        out["item3"], out["item4"] = _tile_stats(item3.ravel(), rho), _tile_stats(item4.ravel(), rho)
-        out["tiles_admitted"] = float(admitted.mean())
-        operand_units = {lvl: {u: (terms["A"][lvl][u][:, None] + terms["B"][lvl][u][None, :] + item3 + item4).ravel()
-                               for u in TWO_FOUR_UNITS} for lvl in ("code", "value")}
+    sd = sdead["A"].reshape(nta, tile, K).sum(1).astype(np.float64)                 # salt-dead A elements per position
+    unneeded = ((cb[:rb] & 7) == 0).reshape(ntb, tile, K).all(1).astype(np.float64)   # no B' row of the tile needs t
+    item4 = F_S * (sd.sum(1)[:, None] + (tile - sd) @ unneeded.T) * tile / n / (tile * tile * K)
+    win = {p: 4.0 * (windows["A"][p].reshape(nta, tile).sum(1)[:, None]
+                     + windows["B"][p].reshape(ntb, tile).sum(1)[None, :]) / K for p in ("g4", "p8")}
+    levels = ("witness", "code", "value") if noise != "none" else ("witness",)
+    out["item1"] = {lvl: {u: _tile_stats((terms["A"][lvl][u][:, None] + terms["B"][lvl][u][None, :]).ravel(), rho)
+                          for u in TWO_FOUR_UNITS} for lvl in levels}
+    out["item3"], out["item4"] = _tile_stats(item3.ravel(), rho), _tile_stats(item4.ravel(), rho)
+    out["windows_d24"], out["windows_pairs"] = _tile_stats(win["g4"].ravel(), rho), _tile_stats(win["p8"].ravel(), rho)
+    out["tiles_admitted"] = float(admitted.mean())
+    operand_units = {lvl: {u: (terms["A"][lvl][u][:, None] + terms["B"][lvl][u][None, :] + item3 + item4
+                               + win["g4"]).ravel() for u in TWO_FOUR_UNITS} for lvl in levels}
     cold = None
     for name in ("v1", "v2"):
         acc0 = np.zeros(len(ia)) if name == "v1" else hot_start(cold["rms"], ia, ra, hot_bits, hot_rule)
@@ -980,11 +1028,13 @@ def cmd_debit(args) -> dict:
                     **{f"{v}_k128_equal": r[v]["merged_k128_words_equal"] for v in ("v1", "v2") if v in r},
                     **{f"formed_{p}_{s}": r["operands"][s][f"formed_span_{p}"] for p in ("d24", "pairs") for s in "AB"
                        if "operands" in r},
-                    **({"item1_g4_code_max": round(r["item1"]["code"]["g4"]["max"], 4),
-                        "item1_span_either_value_max": round(r["item1"]["value"]["span_either"]["max"], 6),
+                    **({"item1_witness_g4_max": round(r["item1"]["witness"]["g4"]["max"], 6),
+                        "item1_witness_span_max": round(r["item1"]["witness"]["span_either"]["max"], 6),
+                        **({"item1_code_g4_max": round(r["item1"]["code"]["g4"]["max"], 4)} if "code" in r["item1"] else {}),
                         "item3_max": round(r["item3"]["max"], 6), "item4_max": round(r["item4"]["max"], 6),
-                        "tiles_admitted": r["tiles_admitted"],
-                        "v2_total_span_value_max": round(tot("v2", "value", "span_either"), 6)} if "item1" in r else {})}),
+                        "windows_d24_max": round(r["windows_d24"]["max"], 6), "tiles_admitted": r["tiles_admitted"],
+                        **{f"{v}_total_ref_max": round(tot(v, "witness", "g4"), 6) for v in ("v1", "v2")}}
+                       if "item1" in r else {})}),
                     flush=True)
     return res
 

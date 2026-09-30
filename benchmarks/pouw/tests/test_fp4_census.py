@@ -274,6 +274,18 @@ def test_dss_dead_reads_the_every_eighth_rms():
     assert C.dss_dead(X, "nvf4").tolist() == [[False, True, False, False], [False, False, False, False]]
 
 
+@pytest.mark.parametrize("fmt", ["nvf4", "mxf4"])
+def test_witness_salt_dead_keeps_only_blocks_the_noise_cannot_move(fmt):
+    """A block one element dominates (off the every-8th grid, so rho stays the row's) keeps every code under the noise
+    support's extremes, about 6 rho: its top stays the block's maximum and the rest stay 0.  Gaussian blocks are live."""
+    blk = 16 if fmt == "nvf4" else 32
+    X = np.random.default_rng(15).standard_normal((1, 4 * blk))
+    X[0, blk + 1] = 1000.0
+    d = C.witness_salt_dead(X, fmt).reshape(4, blk)
+    assert d[1].all() and d[[0, 2, 3]].mean() < 0.2
+    assert C.dss_dead(X, fmt).tolist() == [[False, True, False, False]]
+
+
 def test_debit_census_2of4_term_granularity_and_span_words():
     """On salted Gaussians the per-4-group 2:4 term is hundreds of rho while no span is 2:4, so the span units charge 0;
     v1's exact chains merge identically on every span, and T1's H makes some spans differ."""
@@ -285,7 +297,8 @@ def test_debit_census_2of4_term_granularity_and_span_words():
     assert all(r["item1"][lvl][u]["max"] == 0.0 for lvl in ("code", "value") for u in ("span_d24", "span_pairs"))
     assert r["operands"]["A"]["value"]["change_density"] >= r["operands"]["A"]["code"]["change_density"]
     assert r["v1"]["k128_span_words_equal"] == 1.0 and 0.5 < r["v2"]["k128_span_words_equal"] < 1.0
-    assert r["v1"]["tile_debit_total"]["value"]["span_either"]["max"] == r["v1"]["tile_debit_share"]["max"]
+    assert r["v1"]["tile_debit_total"]["witness"]["g4"]["max"] >= r["v1"]["tile_debit_share"]["max"]
+    assert r["item1"]["witness"]["span_either"]["max"] == 0.0 and r["windows_d24"]["max"] == 0.0
     S = C.debit_census(atom, fmt, *C.family("sparse-2of4", 32, 1024, rng), "none", 0.25, rng, 32)
     assert S["operands"]["A"]["formed_span_d24"] == 1.0 and S["v1"]["k128_span_words_equal_on_2of4"]["span_d24"]["equal"] == 1.0
 
