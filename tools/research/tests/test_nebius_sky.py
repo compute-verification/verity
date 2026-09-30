@@ -174,6 +174,15 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
     assert pouw == (SKY / "kueue-pouw.yaml").read_text()
 
 
+def test_the_coverage_build_task_has_no_gpu_but_finds_the_hosts_cuda_driver():
+    """A GPU-less pod has no driver libraries, yet vLLM's CUDA platform (#536) loads libcuda.so.1 at import: the build task puts the
+    host's copy, which cluster_up.sh maintains, on LD_LIBRARY_PATH."""
+    head, build, gpu = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
+    assert "accelerators" not in build and "LD_LIBRARY_PATH=/workspace/jobs/cuda-driver" in build
+    assert "accelerators: RTXPRO6000:1" in gpu and "cuda-driver" not in gpu
+    assert "/workspace/jobs/cuda-driver" in (SKY / "cluster_up.sh").read_text()
+
+
 def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
     """uid 1000 can't write the synced tree, so every task runs from a copy. vLLM tasks share one copy per tree content (their taps
     then compile once) and bootstrap through vllm_bootstrap.sh; prover tasks, which write into their tree, keep one copy per pod."""
