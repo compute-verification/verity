@@ -72,7 +72,7 @@ after its level-0 cap):
   evaluations. That is at most 2^-128 up to `t ≈ 2^110.7` (m = 35) to `2^117` (m = 22).
 - **No random oracle and no knowledge assumption** is used.
 
-### 1.3 Knowledge soundness (`table_knowledge_sound`, `table_knowledge_sound_joint`; `registered_weights` to write)
+### 1.3 Knowledge soundness (`table_knowledge_sound`, `table_knowledge_sound_joint`; `registered_weights`)
 
 It is needed for any claim about which data a proof used ("these proofs used the registered weights"), and for the
 recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
@@ -114,13 +114,22 @@ link term per audit.
   - `one_le_fail_add_B'` is the audit's `cover`, for any link event that commitment implies.
 - **The expected-time extractor** (DESIGN.md §3) uses `k` reruns in which the session accepts:
   `ε·Pr[fails] ≤ ε_c⁻ + N₀ε/(ek) + √(k·Adv₀)` (`joint_le_accB`). `analysisBE`'s `cover` absorbs the middle term.
-- **The link theorem** (`flock_batched_linkSoundE`, DESIGN.md §3): under A2 and `ValueBinding` (named), `δ_link` is
-  at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`. It dominates the audit's hash term.
-- **Not yet:** the canonical HM96 values and `registered_weights`. Both need the SHA-512 leaf layout in the model,
-  which also discharges `ValueBinding`.
-- **`registered_weights`.** Given the registrant's opening `(W, R)` of a root, the extracted rows equal `W` wherever the
-  statement links that root, or Halevi–Micali binding gives a SHA-512 collision. So
-  `Pr[accepted ∧ rows ≠ W] ≤ κ + Adv_CR(B_link)`.
+- **The link theorem** (`flock_batched_linkSoundE`, DESIGN.md §3): given `ValueBinding` (named), at each prover whose
+  link finders satisfy A2 (`LinkCR`), `δ_link` is at most `Q_s(2(1+k)t'/2^256 + …)/(1 − ρ)`, `Q_s ≤ N_s`; at any other
+  prover the bound is `⊤` (`linkBoundCR`). A2 is not asked of every prover at once: a prover can hard-code a collision.
+  It dominates the audit's hash term.
+- **The value binding** (`Binding/`). `ValueBinding` is built from the serving rows' `hm96-sha512/row/v1` leaves
+  (`HmRows.binding`): a commit string's commitment is its leaf `SHA-512(leaf_prefix ‖ b ‖ c)` under the executable's
+  key, and `collide` is an explicit extractor (`ExplicitLeaf.hm96`, `hm96Pair_spec`): two different rows with one leaf
+  give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
+  carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
+  layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
+  the end-to-end theorems with that binding.
+- **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
+  its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
+  committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
+  `HmRowComputes` for rows, `HmRows.registered_weights_hm96`; for the message the audit's extractor settles on,
+  `registered_weights_extracted`).
 
 ### 1.4 Status
 
@@ -147,7 +156,7 @@ link term per audit.
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`) | proved |
-| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` **to write**; required for sampled audits (§4) |
+| Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3, another lane; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices and L1 proved; the link from `setupH`'s unit net to the derived rows remains |
 | The executable Lean verifier refines the model | 2 | with `flock-verifier` | **to write** |
 | Reference prover: completeness and zero knowledge | 3, 1e | after M1 (§3) | planned |
@@ -287,10 +296,11 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
       input field (`unitShape_of`).
     - Each input of VU `g` copies its message bit: the block rows at its position read exactly `copySrc g w`
       (`input_rows`). As a model `CopyRow` (`input_copy`, and `setupH_inputCopy` for an accepted statement), that is a
-      table class's `copy`, when the message bit's position is in the block.
+      table class's `copy`. The message bit is a column of the block (`setupH_copySrc_lt`): it is in a `sha512x3`
+      slot's message port (`msgCol_lt`), and the file has a row, since the instance's inputs are its rows' words
+      (`CheckFactsT.ins`) and the unit's inputs its type's (`unit_inCols_size`, `read_template_ty`).
   - Still to prove:
-    - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`);
-    - the message bit's position in the block, for `setupH_inputCopy`.
+    - `NetRows` for a flat typed class, whose unit net #307 builds from `derive`'s rows (`Typed.netOfD_ok`).
 
 ### 1.6 Proved from the libraries, not assumed
 
@@ -389,7 +399,13 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 - **Binding of the verifier's coin commitment** (§2: a SHA-512 Merkle root over Halevi–Micali coin commitments), under
   SHA-512 collision resistance. Against quantum verifiers it needs a collapse-binding commitment (DESIGN.md §9).
 - **Uniformity of opened columns** of a padded Reed–Solomon codeword when the queries are at most the padding (the
-  AHIV22 Lemma 4.15 condition). This is to be proved, not assumed.
+  AHIV22 Lemma 4.15 condition). **Proved** (`FlockSoundness/ZK/Masking.lean`), with the standard axioms only:
+  - `padded_openings_uniform`: at distinct points where the padding's factor doesn't vanish, every vector of opened
+    values is reached by the same number of paddings, whatever the message is;
+  - `level0_openings_uniform`: the same at M1's level 0, whose padding `(X_L + κ)·μ` combines the first `t_pad`
+    novel-basis polynomials;
+  - `card_translate_fiber`: any value masked by the image of uniform randomness under a surjective additive map is
+    uniform. The pads, the mask slot, the extra-lane pairs and the paddings are all instances.
 
 ## 4. One root across many proofs
 
@@ -417,8 +433,9 @@ The weights are committed once and every later proof opens that root. The analys
 
 ## 5. What remains (by a16z stage)
 
-1. **Knowledge soundness, the rest** (§1.3). The table theorems and the link theorem are proved. Remaining: the
-   canonical `hm96` values, then `registered_weights`, which need the SHA-512 leaf layout (it discharges `ValueBinding`).
+1. **Knowledge soundness, the rest** (§1.3). The table theorems, the link theorem and `registered_weights` are proved.
+   Remaining: the canonical `hm96` values, and discharging what the rows' value binding (`Binding/`) takes:
+   `HmRowComputes` (phase 2i) and the layout's facts.
 2. **Stage 2, refinement to `Flock.Verify`** (with lane `flock-verifier`): the executable verifier accepts only if the
    model accepts.
 3. **Stages 1e and 3, zero knowledge and the reference prover** (§3), after M1's masking spec: first the special
