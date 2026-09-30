@@ -4,7 +4,8 @@ probes, each gated before it is timed (chain.cu; the attacker's measurement, a c
 
 1. Identity: exactly one visible device, `CUDA_VISIBLE_DEVICES` equal to --gpu with `CUDA_DEVICE_ORDER=PCI_BUS_ID`, an
    RTX PRO 6000 at cc 12.0 whose UUID is --expect-uuid (`internal/pouw/rtx-pro/server.md`'s table); NVML by that UUID.
-   Exit 3 otherwise.  Where the queue assigns the GPU, `--expect-uuid record` records the UUID instead of checking it.
+   Exit 3 otherwise.  Under `gpu-lease 1`, `--gpu lease --expect-uuid lease` takes the leased index and checks the CUDA
+   device against nvidia-smi's UUID for it; where the queue assigns the GPU, `--expect-uuid record` records the UUID.
 2. Build and SASS gate: chain.cu with nvcc >= 12.8 for sm_120a, no spills or local memory, and per k-step of 128 exactly
    64 `QMMA.16832.F32.E4M3.E4M3` (+ 64 FADD, the promotions, in chain_honest only), 64 IMMA in chain_int8, 64 F16 QMMA in
    chain_f16acc.  Exit 5 otherwise.
@@ -21,6 +22,7 @@ probes, each gated before it is timed (chain.cu; the attacker's measurement, a c
    --reps 0 stops after the gates and the unpromoted chain's success: a correctness run on the GPU alone.
 
   CUDA_VISIBLE_DEVICES=3 CUDA_DEVICE_ORDER=PCI_BUS_ID python benchmarks/pouw/sm120_chain/run.py --expect-uuid GPU-...
+  gpu-lease 1 -- python3 benchmarks/pouw/sm120_chain/run.py --gpu lease --expect-uuid lease --clock-label locked-2100
 """
 from __future__ import annotations
 
@@ -295,9 +297,11 @@ def gate(dev: Dev, a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray,
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--gpu", type=int, default=3)
+    ap.add_argument("--gpu", default="3", help="the PCI-bus index; `lease`: the one gpu-lease put in CUDA_VISIBLE_DEVICES")
     ap.add_argument("--expect-uuid", required=True,
-                    help="the GPU's UUID from server.md's table; `record` where the queue assigns the GPU (the UUID is recorded)")
+                    help="the GPU's UUID from server.md's table; `lease`: nvidia-smi's UUID for the leased index; `record` where "
+                         "the queue assigns the GPU (the UUID is recorded)")
+    ap.add_argument("--clock-label", default="unlocked", help="how the run line held the clocks (node 2: locked-2100)")
     ap.add_argument("--shapes", default="8192x8192x8192", help="MxNxK, comma-separated; multiples of 128")
     ap.add_argument("--reps", type=int, default=20, help="timed reps per shape; 0: the gates and the unpromoted chain only")
     ap.add_argument("--calls", type=int, default=4)
@@ -310,19 +314,27 @@ def main() -> None:
     fh = open(out_dir / "sm120_chain.jsonl", "w")
     census.set_atom(ATOM)
 
-    if os.environ.get("CUDA_VISIBLE_DEVICES") != str(args.gpu) or os.environ.get("CUDA_DEVICE_ORDER") != "PCI_BUS_ID":
-        emit(fh, {"refused": f"need CUDA_VISIBLE_DEVICES={args.gpu} and CUDA_DEVICE_ORDER=PCI_BUS_ID"})
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+    index = visible if args.gpu == "lease" and visible.isdigit() else args.gpu
+    if visible != index or os.environ.get("CUDA_DEVICE_ORDER") != "PCI_BUS_ID":
+        emit(fh, {"refused": f"need CUDA_VISIBLE_DEVICES={args.gpu} (one index) and CUDA_DEVICE_ORDER=PCI_BUS_ID"})
         sys.exit(3)
+    expect = args.expect_uuid
+    if expect == "lease":
+        # nvidia-smi counts in PCI-bus order too, so the leased index names the GPU the lease holds
+        expect = subprocess.run(["nvidia-smi", "-i", index, "--query-gpu=uuid", "--format=csv,noheader"],
+                                capture_output=True, text=True).stdout.strip()
     dev = Dev()
     ident = {"name": dev.name, "uuid": dev.uuid, "cc": list(dev.cc), "sms": dev.sms, "cuda_driver_api": dev.driver,
-             "visible_devices": dev.count}
-    uuid_ok = args.expect_uuid == "record" or dev.uuid == args.expect_uuid
+             "visible_devices": dev.count, "pci_index": index, "expect_uuid": expect}
+    uuid_ok = expect == "record" or dev.uuid == expect
     if dev.count != 1 or not uuid_ok or dev.cc != (12, 0) or "RTX PRO 6000" not in dev.name:
         emit(fh, {"refused": "identity", **ident, "expect_uuid": args.expect_uuid})
         sys.exit(3)
     nvml = Nvml(dev.uuid)
-    ident["uuid_checked"] = args.expect_uuid != "record"
-    emit(fh, {"identity": {**ident, "nvml_driver": nvml.driver, "numpy": np.__version__, "atom": ATOM}})
+    ident["uuid_checked"] = expect != "record"
+    emit(fh, {"identity": {**ident, "nvml_driver": nvml.driver, "numpy": np.__version__, "atom": ATOM,
+                           "clock_label": args.clock_label}})
 
     cubin, rec = build(out_dir, args.nvcc)
     emit(fh, {"build": rec})
@@ -386,7 +398,7 @@ def main() -> None:
                "promotion_w1_share_public": round((8 / 128) / (1 + 8 / 128), 5),
                "int8_over_honest": round(med["int8"] / med["honest"], 5),
                "f16acc_over_honest": round(med["f16acc"] / med["honest"], 5), **attack,
-               "clocks": "recorded per item (NVML); locked only if the run line locked them"}
+               "clocks": f"{args.clock_label}; recorded per item (NVML)"}
         emit(fh, {"summary": row})
         summary.append(row)
         for p in (da, db, *outs.values()):
