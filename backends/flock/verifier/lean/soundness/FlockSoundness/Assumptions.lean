@@ -10,9 +10,11 @@ uses one takes it as a hypothesis: the development declares no `axiom`, so `#pri
 lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
 vacuous but can never make Lean prove something false.
 
-There are four. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term. Assumption 3 is a
-hypothesis about the byte source the verifier draws its units from. Assumption 4 is a hypothesis about one test of
-`verity.randomness`'s keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret.
+There are four, and one circuit fact. Assumption 2 is a hypothesis about one explicit finder, for the audit's link term.
+Assumption 3 is a hypothesis about the byte source the verifier draws its units from. Assumption 4 is a hypothesis about
+one test of `verity.randomness`'s keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret.
+`HmRowComputes` is not cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit
+that is still to prove (phase 2i), named here so that the value binding's theorems take it as a hypothesis.
 Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is proved
 (`mcaError_le_bchks25`, from DKT26). Merkle binding is proved too (VCVio's binding theorem,
 `Merkle`), and SHA-256's collision resistance enters the compiled theorem as an explicit
@@ -110,5 +112,22 @@ in a hardware RNG. The CSPRNG is idealized as exactly uniform; the true bound ca
 advantage. Re-read this on any other platform. -/
 def UniformSecret {Ω : Type} [Fintype Ω] {S : ℕ} (sec : Ω → Fin S → Fin 256) : Prop :=
   ∀ E : (Fin S → Fin 256) → Prop, prCoin (fun ω => E (sec ω)) = prCoin E
+
+/-- **`HmRowComputes` (`circuit/hm96-sha512-row`): the circuit's row hashing computes the `hm96-sha512/row/v1` commit
+string**, the circuit side of the value binding (verified-lowering design, phase 2i).
+
+The circuit hashes each serving row in `sha512x3` slots, SHA-512 compressions chained from the row prefix's midstate and
+closed by the padding compression, then outputs the row's commit string `b ‖ c` from an `hm96` slot, under the row's
+private salt `y`: `x = H(row)`, `b = x ⊕ M·y`, `c = H(salt_prefix ‖ y)` (`Flock.Hm96`, `Flock.HmRow`). The statement is
+that the slots compute this: at every `w` the circuit's constraints accept (`sat w`), the commit string the `hm96` slot
+outputs (`bc w`) is the one computed from the row's bytes (`row w`) and the salt (`salt w`) that the slots read, for `H`
+SHA-512 on bytes, the salt prefix and the mask `y ↦ M·y`.
+
+It is a fact about the slot circuits and their wiring, not about SHA-512, and it is not cryptographic: phase 2i is to
+prove it from the `sha512x3` and `hm96` sections of the circuit file. The theorems that bind rows to registered digests
+(`Binding`) take it for the rows the drawn units' tables read. -/
+def HmRowComputes {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List UInt8) (mask : List UInt8 → List UInt8)
+    (sat : W → Prop) (row salt bc : W → List UInt8) : Prop :=
+  ∀ w, sat w → bc w = List.zipWith (· ^^^ ·) (H (row w)) (mask (salt w)) ++ H (saltPrefix ++ salt w)
 
 end FlockSoundness.Assumptions
