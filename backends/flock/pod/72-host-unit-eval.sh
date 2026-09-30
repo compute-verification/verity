@@ -25,6 +25,7 @@ export RAYON_NUM_THREADS=${RAYON_NUM_THREADS:-${OMP_NUM_THREADS:-$(nproc)}}
 SW=(DEFS=backends/flock/pod/gemm-coordinates.defs.json BATCH=auto BATCH_ANDS=${BATCH_ANDS:-4294967296}
     MAX_STATEMENT_BITS=${MAX_STATEMENT_BITS:-17179869184} SELFTEST=0)
 PY=$FLOCK_WORK/flock-circuit/py/bin/python3
+# each later sweep's class_statement writes its result.json to its own RESEARCH_RUN_DIR: the attempt's result.json stays 71's
 # sweep NAME's slowdowns: out/NAME/result.json, and out/NAME/out/slowdown.json (compute writes it to out/ beside its --result)
 slowdown() {
   mkdir -p $R/out/$1/out
@@ -32,16 +33,16 @@ slowdown() {
     --result $R/out/$1/result.json
 }
 if [ "${BASE:-1}" = 1 ]; then
-  FC_UNIT_PROFILE=1 FC_UNIT_FLAT=0 FC_UNIT_FUSED=0 OUT=$R/out/base bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" \
+  FC_UNIT_PROFILE=1 FC_UNIT_FLAT=0 FC_UNIT_FUSED=0 OUT=$R/out/base RESEARCH_RUN_DIR=$R/out/base bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" \
     WARM=${WARM:-1} RUNS=${RUNS:-3} || exit 1
   slowdown base || exit 1
 fi
 if [ "${NOPIPE:-1}" = 1 ]; then
-  FC_UNIT_PROFILE=1 FC_PIPELINE=0 OUT=$R/out/nopipe bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" WARM=${WARM:-1} RUNS=${RUNS:-3} || exit 1
+  FC_UNIT_PROFILE=1 FC_PIPELINE=0 OUT=$R/out/nopipe RESEARCH_RUN_DIR=$R/out/nopipe bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" WARM=${WARM:-1} RUNS=${RUNS:-3} || exit 1
   slowdown nopipe || exit 1
 fi
 if [ "${CHECK:-1}" = 1 ]; then
-  FC_UNIT_CHECK=1 FC_UNIT_PROFILE=1 FC_PIPELINE=0 OUT=$R/out/check bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" WARM=0 RUNS=1 || exit 1
+  FC_UNIT_CHECK=1 FC_UNIT_PROFILE=1 FC_PIPELINE=0 OUT=$R/out/check RESEARCH_RUN_DIR=$R/out/check bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" WARM=0 RUNS=1 || exit 1
   $PY -c "import json, sys; rs = [json.loads(l) for l in open(sys.argv[1]) if l.startswith('{')]
 sys.exit(0 if rs and all((r.get('live') or {}).get('accepted') for r in rs) else 1)" $R/out/check/classes/results.jsonl \
     || { echo "a statement of the check sweep was not accepted"; exit 1; }
