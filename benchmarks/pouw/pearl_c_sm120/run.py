@@ -6,7 +6,8 @@
    12.0, an "NVIDIA RTX PRO 6000 Blackwell" name, and its UUID equal to PEARLC_EXPECT_UUID (server.md's table).  NVML is
    addressed by that UUID, never by index (NVML ignores CUDA_VISIBLE_DEVICES).  A mismatch exits 3 before any launch.
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
-   compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`), on the unfused call
+   compared byte for byte with the fixture, for each variant (`sm120`, G = 4, `sm120-unpromoted`, and `sm120-hot`, v2-hot's
+   unpromoted chain from each row's H_i), on the unfused call
    (C~ and U stored, hash_msg's digests); the GEMMs, with gemm_pearlc_s (y alone) and the fused gemm_pearlc_b (y and the
    message digests from registers), are re-run on all, 1 and 3 CTAs and compared again (`<buffer>@<step>/<tile>/grid<n>`), and
    the chain's 64 x 64 kernels (decode's) too.  A variant is timed only if all of its buffers match (C~ and U bit-exact
@@ -28,7 +29,7 @@
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
-  python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted",
+  python3 run.py [check.json]   (env: PEARLC_EXPECT_UUID, SHAPES="8192", REPS=5, VARIANTS="sm120 sm120-unpromoted sm120-hot",
                                  PEARLC_LIBCUDA, PEARLC_LIBNVML)
 
 Dry runs on a stand-in driver only: PEARLC_ANY_GPU=1 skips the identity check, and PEARLC_UNGATED=1 (refused without it)
@@ -51,7 +52,9 @@ SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR = 16, 8, 75, 76
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
-VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
+VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0, "sm120-hot": 0}
+#: v2-hot: the unpromoted chain from each row's H_i (hot_a), U the peel of fl(C~ - H_i); the _hu GEMMs, the _u words
+HOT_VARIANTS = {"sm120-hot"}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
 ML_MAPS = {("at", "bt"): 0, ("qa", "qb"): 1, ("qa_s5", "qb_s5"): 2}
@@ -293,7 +296,7 @@ def gemm_tile(name: str) -> tuple[int, int]:
     """A GEMM kernel's CTA tile (rows, columns): 64 x 64 for the _d kernels, 128 x 32 for gemm_words, else 128 x 128."""
     if name.startswith("gemm_words"):
         return (BM, 32)
-    return (BM_D, BM_D) if name.endswith(("_d", "_d_u")) else (BM, BM)
+    return (BM_D, BM_D) if name.endswith(("_d", "_d_u", "_d_hu")) else (BM, BM)
 
 
 def is_ml(name: str) -> bool:
@@ -305,7 +308,8 @@ class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `epoch` (B's frame-b3 row tree, whose root the epoch's salt and seed_B follow), `unit` (the level keys and pads of A's
     tree and the tile tree, which depend on their domains alone), `job` (the weight side, once per weight and epoch), then
-    the call: `commit` (A's row tree, and E_A's line key from its root on the device: `seed_line_a`), `forming`, `gemm`
+    the call: `commit` (A's row tree, and E_A's line key from its root on the device: `seed_line_a`), `forming` (with v2-hot's
+    `hot_a`, the rows' start words from E_A's line key and forming's alpha and rho, after `stats_a`), `gemm`
     (gemm_ct, the chain alone, for the split), `cleanup` and `hashing` (-h1: the message digests, the tile leaves and the tile
     tree); and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  The chain runs
     on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the 32-column words on 128 x 32 CTA
@@ -327,8 +331,9 @@ class Pipeline:
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
         self.m_real = m if m_real is None else m_real
-        self.g = VARIANT_G[variant]
-        self.suffix = "" if self.g else "_u"
+        self.g, self.hot = VARIANT_G[variant], variant in HOT_VARIANTS
+        self.wsuffix = "" if self.g else "_u"
+        self.suffix = "_hu" if self.hot else self.wsuffix
         self.bm = bm or (BM if m % BM == 0 else BM_D)
         if m % self.bm or n % BM or k % 1024:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of 128 and k of 1024, not {(m, n, k)}")
@@ -376,7 +381,7 @@ class Pipeline:
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
             "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
-            "line_a": 32, "seed_a": 32, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
+            "line_a": 32, "seed_a": 32, "hot_a": 4 * m, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
@@ -438,7 +443,7 @@ class Pipeline:
                 self.dev.free(p)
 
     def gemm(self, name: str, a: str, b: str, M: int, N: int, grid: int | None = None, out=("c",), pa=0, pb=0, rs=0, cs=0,
-             dg=0, key=0):
+             dg=0, key=0, hot=0):
         if name not in self.GEMM_SMEM:
             probe = self.dev.alloc(16)
             self.dev.launch(name + "_smem", 1, 1, p=(probe,))
@@ -448,7 +453,7 @@ class Pipeline:
             self.dev.ck("cuFuncSetAttribute", self.dev.fn(name), MAX_DYN, self.GEMM_SMEM[name])
         tm, bn = gemm_tile(name)
         tiles = (M // tm) * (N // bn)
-        ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, 0, key]
+        ptrs = [self.b[a], self.b[b], 0, 0, 0, 0, 0, 0, 0, dg, 0, key, hot]
         for slot, x in zip((2, 3, 4), out):
             ptrs[slot] = self.b[x] if x else 0
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
@@ -463,7 +468,7 @@ class Pipeline:
         and where fusable `gemm_pearlc_b` (y and the message digests from registers)."""
         d, b, m, n, mr, sx, kk = self.dev, self.b, self.m, self.n, self.m_real, self.suffix, self.keys
         tile = "_d" if self.bm == BM_D else ""
-        peel = lambda: {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}  # noqa: E731
+        peel = lambda: {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"], **self.hot_arg()}  # noqa: E731
         out = {"gemm_pearlc_cu": lambda: self.gemm(f"gemm_pearlc{tile}{sx}", "at", "bt", m, n, out=("c", "u", "y"), **peel()),
                "hash_msg": lambda: d.launch("hash_msg_v", cdiv(mr * n // 32, 128), 128, p=(b["c"], b["u"], b["digests"], kk["k_msg"]),
                                             i=(mr, n))}
@@ -474,13 +479,17 @@ class Pipeline:
                                                      key=kk["k_msg"], **peel())
         return out
 
+    def hot_arg(self) -> dict[str, int]:
+        """The chain GEMMs' H (p12) under v2-hot, else nothing."""
+        return {"hot": self.b["hot_a"]} if self.hot else {}
+
     def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
         tile, a block per m16 row."""
         if M % BM == 0 and not warps:
-            self.gemm("gemm_words" + self.suffix, a, b, M, 32, out=(out,))
+            self.gemm("gemm_words" + self.wsuffix, a, b, M, 32, out=(out,))
         else:
-            self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
+            self.dev.launch("words" + self.wsuffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
 
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
@@ -508,9 +517,11 @@ class Pipeline:
                ("bf", lambda: self.words("bt", "faT32", n, "bf")),
                ("g", lambda: self.words("fbT128", "faT32", 128, "g")),
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b["epb_codes"], 0, b["bf"], b["g"], b["pb_t"]), i=(n,)))]
-        forming = [lines("ea", b["line_a"], 0, 0, m, "ea_codes"),
-                   *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
-        gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
+        side_a = form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
+        hot = [("hot_a", lambda: d.launch("hot_a", cdiv(m, 128), 128, p=(b["line_a"], b["alpha_a"], b["aux_a"], b["hot_a"]),
+                                          i=(m,)))] if self.hot else []
+        forming = [lines("ea", b["line_a"], 0, 0, m, "ea_codes"), side_a[0], *hot, *side_a[1:]]
+        gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",), **self.hot_arg()))]
         cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", warps=self.bm == BM_D)),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", chain["gemm_pearlc_b" if self.fused else "gemm_pearlc_cu"])]
@@ -894,7 +905,7 @@ def main(argv: list[str]) -> int:
     dev.open()
     env2 = {"kind": "mem", "free_total": dev.free_mem()}
     emit(env2)
-    variants = os.environ.get("VARIANTS", "sm120 sm120-unpromoted").split()
+    variants = os.environ.get("VARIANTS", "sm120 sm120-unpromoted sm120-hot").split()
     t0 = time.time()
     res = check(dev, man, base, variants)
     emit({"kind": "check", "shape": man["shape"], "seconds": round(time.time() - t0, 2), "variants": res})

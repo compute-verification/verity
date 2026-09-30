@@ -69,6 +69,8 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control for a fused epilogue's digests
 //   PEARLC_B  PEARLC_S with the -h1 message digests of C~ and U from registers (ml_body only)
+// HOT (v2-hot, G = 0; the _hu kernels): row i's words start their accumulator at H_i (p12, one FP32 word a row: hot_a's)
+// instead of +0, C~ is that chain's word, and U is the peel of fl(C~ - H_i) (nearest even), H_i removed before the peel.
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_B };
 constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
@@ -108,12 +110,35 @@ DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) 
   *reinterpret_cast<uint32_t*>(p) = f2bf(__fmul_rn(__fmul_rn(a, sr), sc0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(b, sr), sc1)) << 16;
 }
 
-template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
+// the start words of rows row0 + 16 mi and row0 + 16 mi + 8 into their accumulators (rows g and g + 8 of each m16 block)
+template <int MI, int NI> DEV void hot_start(float (&acc)[MI][NI][4], const float* H, int row0) {
+#pragma unroll
+  for (int mi = 0; mi < MI; mi++) {
+    const float h0 = H[row0 + 16 * mi], h1 = H[row0 + 16 * mi + 8];
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++) { acc[mi][ni][0] = h0; acc[mi][ni][1] = h0; acc[mi][ni][2] = h1; acc[mi][ni][3] = h1; }
+  }
+}
+// fl(C~ - H_i) in place, one FADD a word
+template <int MI, int NI> DEV void hot_remove(float (&total)[MI][NI][4], const float* H, int row0) {
+#pragma unroll
+  for (int mi = 0; mi < MI; mi++) {
+    const float h0 = H[row0 + 16 * mi], h1 = H[row0 + 16 * mi + 8];
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++) {
+      total[mi][ni][0] = __fsub_rn(total[mi][ni][0], h0); total[mi][ni][1] = __fsub_rn(total[mi][ni][1], h0);
+      total[mi][ni][2] = __fsub_rn(total[mi][ni][2], h1); total[mi][ni][3] = __fsub_rn(total[mi][ni][3], h1);
+    }
+  }
+}
+
+template <int MODE, int TM, int BN, int G, bool HOT = false> DEV void gemm_body(const Args& a) {
   constexpr int WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
   constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S;
   constexpr bool STORE_CU = MODE == M_PEARLC || MODE == M_CT, PROMOTE = G > 0;
   constexpr int PERIOD = PROMOTE ? G / 2 : 1;
   static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
+  static_assert(!HOT || G == 0, "v2-hot is unpromoted");
   constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
   static_assert(WARPS_M * WARPS_N == 8 && MI >= 1 && NI % 2 == 0, "8 warps of 16k x 32 columns");
   extern __shared__ __align__(128) uint8_t smem[];
@@ -131,6 +156,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
   const float* rs = reinterpret_cast<const float*>(a.p[7]);
   const float* cs = reinterpret_cast<const float*>(a.p[8]);
+  const float* H = reinterpret_cast<const float*>(a.p[12]);
   // ldmatrix.x4 row addresses: A's four 8 x 16-byte matrices are (rows 0-7, 8-15) x (k 0-15, 16-31) in fragment order, B's
   // (k 0-15, 16-31) x (columns 0-7, 8-15) of two n8 blocks
   const int a_row = wm * WM + (lane & 15), a_half = lane >> 4;
@@ -161,6 +187,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
       for (int ni = 0; ni < NI; ni++)
 #pragma unroll
         for (int e = 0; e < 4; e++) { acc[mi][ni][e] = 0.0f; total[mi][ni][e] = 0.0f; }
+    if constexpr (HOT) hot_start(acc, H, tm * TM + wm * WM + g);
 
     for (int kb = 0; kb < KB; kb++) {
       cp_wait<STAGES - 2>();
@@ -243,6 +270,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
         }
     }
     if constexpr (PEEL) {
+      if constexpr (HOT) hot_remove(total, H, row0);
       const uint32_t pa0 = sa(sPA), pb0 = sa(sPB);
 #pragma unroll
       for (int s = 0; s < 4; s++) {
@@ -286,16 +314,17 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
 // fused one (bc-7442ca43's gemm_pearlc_b: each (row, 32-column chunk)'s message of C~ and U hashed from registers by
 // pouw_hash's quad_msg_digest_b3, BLAKE3 keyed by blake3("pearl-c/h1/message"), into p9 in hash_msg_v's layout), its 1 KB of
 // scratch per warp in the tail stage's P_A rows once every consumer has read its peel fragments.  p10 the four tensor maps
-// (ml::Maps; P_A, P_B the peel's, else A, B again), p11 the message key.
+// (ml::Maps; P_A, P_B the peel's, else A, B again), p11 the message key, p12 H (HOT).
 constexpr int ML_NT = 384;
 template <int G> constexpr int ML_RP = G ? 24 : 40;   // the producer's registers: the mainloop's recommended v1 and v2
 template <int G> constexpr int ML_U = G ? 1 : 2;      // stages per K-loop iteration (v1 at 2 spills under nvcc 13.0)
-template <int MODE, int G> DEV void ml_body(const Args& a) {
+template <int MODE, int G, bool HOT = false> DEV void ml_body(const Args& a) {
   constexpr bool PEEL = MODE >= M_PEARLC, HASH = MODE == M_PEARLC_B;
   constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
   using L = ml::Mainloop<128, 128, G, 3, PEEL, 1, ML_RP<G>>;
   constexpr int MI = L::MI, NI = L::NI;
   static_assert(L::NT == ML_NT && MI == 4 && NI == 4, "gemm_body's 128 x 128 fragments: 8 warps of 64 x 32");
+  static_assert(!HOT || (G == 0 && MODE != M_PLAIN), "v2-hot is the unpromoted chain");
   extern __shared__ __align__(1024) uint8_t ml_smem[];
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
   const int tiles_m = M / 128, tiles_n = N / 128;
@@ -305,7 +334,12 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
     int tm, tn;
     ml::raster(t, tiles_m, tiles_n, group, tm, tn);
     float acc[MI][NI][4], total[MI][NI][4];
-    ml.template tile<ML_U<G>, true>(K, acc, total);
+    if constexpr (HOT) {
+      uint32_t tid;
+      asm volatile("mov.u32 %0, %%tid.x;" : "=r"(tid));
+      hot_start(acc, reinterpret_cast<const float*>(a.p[12]), tm * 128 + tid / 32 / L::WARPS_N * L::WM + (tid % 32 >> 2));
+    }
+    ml.template tile<ML_U<G>, true, HOT>(K, acc, total);
     // a block boundary (never taken): scheduled among the chain's last MMAs, the plain epilogue spills v1
     if (MODE == M_PLAIN && K < 0) __trap();
     uint32_t tid;
@@ -352,6 +386,7 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
 #pragma unroll
             for (int e = 0; e < 4; e++) acc[mi][ni][e] = total[mi][ni][e];   // C~, beside U
       }
+      if constexpr (HOT) hot_remove(total, reinterpret_cast<const float*>(a.p[12]), row0);
       const uint32_t pa0 = ml.tail_wait(), pb0 = pa0 + L::A_BYTES;
       // with C~ held beside U, one step's fragments at a time (hoisting all four spills v1)
 #pragma unroll(HASH ? 1 : 4)
@@ -437,6 +472,19 @@ GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
 GEMM(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_u, M_CT, 128, 32, 0)
+// _hu: v2-hot (HOT, G = 0), p12 H (one FP32 word per row of A); its 32-column words are the _u kernels'
+#define ML_GEMM_HOT(NAME, MODE)                                                                                    \
+  extern "C" __global__ void __launch_bounds__(ML_NT, 1) NAME(const Args a) { ml_body<MODE, 0, true>(a); } \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = ml::Mainloop<128, 128, 0, 3, true, 1, ML_RP<0>>::SMEM; }
+#define GEMM_HOT(NAME, MODE, TM, BN)                                                                                \
+  extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, 0, true>(a); } \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN>(); }
+ML_GEMM_HOT(gemm_ct_hu, M_CT)
+ML_GEMM_HOT(gemm_pearlc_hu, M_PEARLC)
+ML_GEMM_HOT(gemm_pearlc_s_hu, M_PEARLC_S)
+ML_GEMM_HOT(gemm_pearlc_b_hu, M_PEARLC_B)
+GEMM_HOT(gemm_ct_d_hu, M_CT, 64, 64)
+GEMM_HOT(gemm_pearlc_d_hu, M_PEARLC, 64, 64)
 // The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8
 // output tile over all of K, the chain in the GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0),
 // fragments loaded straight from global memory through a ring of D atoms in registers, so D atoms' loads are in flight
@@ -568,6 +616,28 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   reinterpret_cast<float*>(a.p[2])[row] = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
   reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
   reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
+}
+
+// v2-hot's H_i (v2-hot-start-rule.md, the public constant c0 = 64): bit 31 and bits 0-22 of the first word of the keyed line
+// hash of E_A's line key at (side 0, factor 2, line i), `lines`' block, and the exponent field e_i + 127 with t = fl32(alpha_i
+// rho_i), e_i = E(t) + 10 + [M(t) >= 0x3504F4] (floor(log2(sqrt(32 16) 64 t))).  e_i is in [10, 16] on the domain (t in
+// [1, 448 / 5]); off it (a row the scheme rejects) the field is taken mod 256.  p0 E_A's line key, p1 alpha, p2 (s, rho) per
+// row (stats_s5's p4), p3 out H (FP32 words); i0 rows
+extern "C" __global__ void __launch_bounds__(128) hot_a(const Args a) {
+  const int row = blockIdx.x * blockDim.x + threadIdx.x;
+  if (row >= a.i[0]) return;
+  const uint32_t* key = reinterpret_cast<const uint32_t*>(a.p[0]);
+  uint32_t kw[8], msg[16], h[8];
+#pragma unroll
+  for (int i = 0; i < 8; i++) kw[i] = key[i];
+#pragma unroll
+  for (int i = 0; i < 16; i++) msg[i] = 0;
+  msg[0] = 2u << 8 | ((uint32_t)row & 0xFFFF) << 16;
+  msg[1] = (uint32_t)row >> 16;
+  blake3_block(kw, msg, h);
+  const float t = __fmul_rn(reinterpret_cast<const float*>(a.p[1])[row], reinterpret_cast<const float*>(a.p[2])[2 * row + 1]);
+  const uint32_t tb = __float_as_uint(t), e = (tb >> 23 & 0xFF) + 10 + ((tb & 0x7FFFFF) >= 0x3504F4);
+  reinterpret_cast<uint32_t*>(a.p[3])[row] = (h[0] & 0x807FFFFFu) | (e & 0xFF) << 23;
 }
 
 // E' = e4m3(beta_row E) per row.  p0 E codes (rows x 32), p1 beta (f32), p2 out E' codes (rows x 32); i0 rows

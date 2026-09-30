@@ -22,6 +22,8 @@ WANT = {**{g: (64, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_ct_u
         **{g: (64, 64) for g in ("gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u")},
         "gemm_pearlc_b": (64, 16), "gemm_pearlc_b_u": (64, 16),
         "gemm_pearlc_d": (8, 16), "gemm_pearlc_d_u": (8, 16),
+        "gemm_ct_hu": (64, 0), "gemm_pearlc_hu": (64, 64), "gemm_pearlc_s_hu": (64, 64), "gemm_pearlc_b_hu": (64, 16),
+        "gemm_ct_d_hu": (8, 0), "gemm_pearlc_d_hu": (8, 16),
         "words": (1, 0), "words_u": (1, 0), "form_s5": (1, 0), "form_s5_r144": (1, 0), "form_s5_scalar": (1, 0),
         **{f: (1, 0) for f in ("form_rate", "form_rate_r144", "form_rate_scalar", "form_rate_nocast", "form_rate_nocast_r144",
                                "form_rate_atoms")}}

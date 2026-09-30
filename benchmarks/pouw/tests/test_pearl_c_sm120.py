@@ -89,13 +89,16 @@ def gemms() -> list[tuple[str, str, int, int, int]]:
     """Every GEMM kernel (name, mode, tile, G): the 128 x 128 ones on the mainloop (ML_GEMM), the others on gemm_body."""
     return ([(n, m, 128, 128, int(g)) for n, m, g in re.findall(r"^ML_GEMM\((\w+), (M_\w+), (\d+)\)", SOURCE, re.M)]
             + [(n, m, int(tm), int(bn), int(g))
-               for n, m, tm, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)])
+               for n, m, tm, bn, g in re.findall(r"^GEMM\((\w+), (M_\w+), (\d+), (\d+), (\d+)\)", SOURCE, re.M)]
+            + [(n, m, 128, 128, 0) for n, m in re.findall(r"^ML_GEMM_HOT\((\w+), (M_\w+)\)", SOURCE, re.M)]
+            + [(n, m, int(tm), int(bn), 0)
+               for n, m, tm, bn in re.findall(r"^GEMM_HOT\((\w+), (M_\w+), (\d+), (\d+)\)", SOURCE, re.M)])
 
 
 def gemm_tile(name: str) -> tuple[int, int]:
     if name.startswith("gemm_words"):
         return (128, 32)
-    return (64, 64) if name.endswith(("_d", "_d_u")) else (128, 128)
+    return (64, 64) if name.endswith(("_d", "_d_u", "_d_hu")) else (128, 128)
 
 
 def test_gemms_fit_sm120_shared_memory():
@@ -106,12 +109,17 @@ def test_gemms_fit_sm120_shared_memory():
     assert "*out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM;" in SOURCE
     names = {n for n, *_ in gemms()}
     ml = {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u",
-          "gemm_pearlc_b", "gemm_pearlc_b_u"}
-    assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u"}
+          "gemm_pearlc_b", "gemm_pearlc_b_u", "gemm_ct_hu", "gemm_pearlc_hu", "gemm_pearlc_s_hu", "gemm_pearlc_b_hu"}
+    assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u",
+                          "gemm_ct_d_hu", "gemm_pearlc_d_hu"}
+    assert "*out = ml::Mainloop<128, 128, 0, 3, true, 1, ML_RP<0>>::SMEM;" in SOURCE
+    for name in names:
+        if name.endswith("_hu"):
+            assert S.WANT[name] == S.WANT[name.removesuffix("_hu") + "_u"], name   # the unpromoted chain's atoms and peel
     for name, mode, tm, bn, g in gemms():
         assert (ML_SMEM if name in ml else gemm_smem(mode, tm, bn)) <= SM120_MAX_DYN, name
         assert (tm, bn) == gemm_tile(name) and (name in ml) == ((tm, bn) == (128, 128))
-        assert g in (0, 4) and (g == 0) == (name.endswith("_u") or name == "gemm_fast")
+        assert g in (0, 4) and (g == 0) == (name.endswith(("_u", "_hu")) or name == "gemm_fast")
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
     assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
                               "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
@@ -155,7 +163,8 @@ def test_kernel_constants_match_the_reference():
     from verity.commitments.blake3 import blake3
     assert F.unit_block(b"s" * 32, b"b" * 32, 7)[72:] == blake3(C.LABELS["seed-A"]) == blake3(b"pearl-c/v0/seed-A")
     variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
-    assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
+    assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0, F.HOT: 0}
+    assert RUN.HOT_VARIANTS == {F.HOT}
     promoted = {g for *_, g in gemms() if g}
     assert promoted == {SM120.g} and SM120.window % const("BK") == 0 and SM120_UNPROMOTED.g is None
 
@@ -199,7 +208,16 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
     assert not problems, problems
     for name in ("gemm_pearlc", "gemm_pearlc_u"):
         assert funcs[name]["HMMA"] == 64 and funcs[name]["QMMA"] % 32 == 0
-    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a"} <= set(funcs)
+    assert {"hash_rows_w", "hash_tree_small", "hash_msg_v", "hash_leaf_p", "seed_line_a", "hot_a"} <= set(funcs)
+    # v2-hot's honest cost: the unpromoted chain's atoms and peel, and one FADD (H_i's removal) a word of the peeled modes
+    fadds = {}
+    for f, body in re.findall(r"Function : (\w+)\n(.*?)(?=\n\s+Function : |\Z)", sass.read_text(), re.S):
+        fadds[f] = len(re.findall(r"\bFADD\b", body))
+    for hu in [n for n in funcs if n.endswith("_hu")]:
+        u = hu.removesuffix("_hu") + "_u"
+        assert (funcs[hu]["QMMA"], funcs[hu]["HMMA"]) == (funcs[u]["QMMA"], funcs[u]["HMMA"]), hu
+        words = 0 if "_ct" in hu else 16 if hu.endswith("_d_hu") else 64
+        assert fadds[hu] - fadds[u] == words, (hu, fadds[hu], fadds[u])
 
 
 @pytest.mark.slow
@@ -241,15 +259,19 @@ def small_fixture(tmp_path_factory):
 def test_fixture_agrees_with_the_scheme(small_fixture):
     man = json.loads((small_fixture / "check.json").read_text())
     assert man["shape"] == [128, 128, 1024] and man["layout"] == "rowmajor, k32"
-    assert set(man["variants"]) == {"sm120", "sm120-unpromoted"}
+    assert set(man["variants"]) == {"sm120", "sm120-unpromoted", F.HOT}
     cs = {}
     for variant, spec in man["variants"].items():
-        assert spec["crosscheck"]["agree"] and spec["scheme"] == f"pearl-c-{variant}-v1-h1"
+        assert spec["crosscheck"]["agree"] and spec["scheme"] == (None if variant == F.HOT else f"pearl-c-{variant}-v1-h1")
         c = np.frombuffer((small_fixture / variant / "c.bin").read_bytes(), "<u4")
         u = np.frombuffer((small_fixture / variant / "u.bin").read_bytes(), "<u4")
         assert c.size == u.size == 128 * 128 and (c != u).mean() > 0.99
         cs[variant] = c
     assert (cs["sm120"] != cs["sm120-unpromoted"]).any()
+    hot = np.frombuffer((small_fixture / F.HOT / "hot_a.bin").read_bytes(), "<u4")
+    exps = (hot >> 23 & 0xFF).astype(int) - 127
+    assert hot.size == 128 and ((10 <= exps) & (exps <= 16)).all() and 0 < (hot >> 31).sum() < 128
+    assert (cs[F.HOT] != cs["sm120-unpromoted"]).mean() > 0.99
     y_plain = (small_fixture / man["common"]["y_plain"]["file"]).read_bytes()
     y_fast = (small_fixture / man["common"]["y_fast"]["file"]).read_bytes()
     assert len(y_plain) == len(y_fast) == 2 * 128 * 128
@@ -299,7 +321,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name.startswith("gemm_") and not name.endswith("_smem"):
         M, N, K = i[:3]
         need = {0: M * K, 1: N * K}
-        base = name.removesuffix("_u").removesuffix("_d")
+        if name.endswith("_hu"):
+            need[12] = 4 * M                          # H, a start word per row
+        base = name.removesuffix("_hu").removesuffix("_u").removesuffix("_d")
         if base in ("gemm_plain", "gemm_fast"):
             need.update({4: 2 * M * N, 7: 4 * M, 8: 4 * N})
         elif base in ("gemm_ct", "gemm_words"):
@@ -341,6 +365,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 64 * i[1], 1: 32 * i[1], 2: 32}
     if name == "seed_line_a":
         return {0: 32, 1: 104, 2: 32, 3: 32}
+    if name == "hot_a":
+        return {0: 32, 1: 4 * i[0], 2: 8 * i[0], 3: 4 * i[0]}
     if name == "quant_s5":
         return {0: 4 * i[0] * i[1], 1: 4 * i[0], 2: i[0] * i[1]}
     if name == "plainq":
@@ -360,7 +386,7 @@ def threads(name: str, i: list[int]) -> int:
             "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "hash_tree_leaves": lambda: i[0],
-            "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1,
+            "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1, "hot_a": lambda: i[0],
             "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
 
 
@@ -420,8 +446,8 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     kinds = [x["kind"] for x in rows]
-    assert kinds[:3] == ["env", "mem", "check"] and kinds.count("timing") == 2
-    assert set(rows[2]["variants"]) == {"sm120", "sm120-unpromoted"}
+    assert kinds[:3] == ["env", "mem", "check"] and kinds.count("timing") == 3
+    assert set(rows[2]["variants"]) == {"sm120", "sm120-unpromoted", F.HOT}
     for t in rows[3:]:
         assert t["gates"]["ungated"] and {"split_ms", "call_e2e_ms", "ratio_vs_own_plain_gemm", "consistency", "job_ms"} <= set(t)
         assert set(t["split_ms"]) == {"commit", "forming", "gemm", "cleanup", "hashing"}
