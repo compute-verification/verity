@@ -17,3 +17,6 @@ packages = ["verity_network_warden"]
 
 [tool.uv.sources]
 verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
