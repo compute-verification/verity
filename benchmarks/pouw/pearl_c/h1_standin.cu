@@ -390,3 +390,80 @@ extern "C" __global__ void __launch_bounds__(256) derive_rows_v16(const Args a) 
   const uint4 v = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n)[(8 * q % n) / 8];
   reinterpret_cast<uint4*>(a.p[1] + r * rb)[q] = make_uint4(v.x ^ 0x3C003C00u, v.y ^ 0x3C003C00u, v.z ^ 0x3C003C00u, v.w ^ 0x3C003C00u);
 }
+
+// derive_rows_b3s_split: derive_rows_b3s's thread-a-segment producer in CTAs of 32 threads, so A's stores spread over
+// m · segs / 32 SMs rather than m, each segment's leaf to p10 (32 B, row-major); the last CTA of each row (a u32 counter a row
+// in p11, which it resets) reads the row's leaves back through L2 and builds the row's segment tree and, with i4 = 2, -h3's
+// row seed.  The hashed words are the stored words.  Arguments as derive_rows_b3s's modes 1 and 2, plus p10 the segment leaves
+// and p11 the counters; launched with m · (rb / 256) / 32 CTAs of 32 threads (rb / 256 a multiple of 32, at most 256).
+DEV uint32_t ld_cg(const uint32_t* p) {
+#ifdef __CUDA_ARCH__
+  return __ldcg(p);
+#else
+  return *p;
+#endif
+}
+extern "C" __global__ void __launch_bounds__(32) derive_rows_b3s_split(const Args a) {
+  __shared__ uint32_t lv[256][8];
+  __shared__ int last;
+  const uint32_t rb = (uint32_t)a.i[1], segs = rb / B3S_SEG, per = segs / 32;
+  const uint64_t r = blockIdx.x / per;
+  const uint32_t j = (blockIdx.x % per) * 32 + threadIdx.x;
+  uint32_t dom[8], tmpl[16], key[8], w[64], h[8];
+  load_key(a.p[3], dom);
+#pragma unroll
+  for (int q = 0; q < 16; q++) tmpl[q] = reinterpret_cast<const uint32_t*>(a.p[4])[q];
+  b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], r, r, rb, j, key);
+  derive_segment(a, r, j, w);
+  b3s_segment_regs(key, w, h);
+  store_cv(a.p[10] + 32 * (r * segs + j), h);
+  __threadfence();
+  __syncthreads();
+  if (threadIdx.x == 0) last = atomicAdd(reinterpret_cast<unsigned*>(a.p[11]) + r, 1u) == per - 1;
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  const uint32_t* leaves = reinterpret_cast<const uint32_t*>(a.p[10] + 32 * r * segs);
+  for (uint32_t i = threadIdx.x; i < segs; i += 32)
+#pragma unroll
+    for (int q = 0; q < 8; q++) lv[i][q] = ld_cg(leaves + 8 * i + q);
+  __syncthreads();
+  int level = 0;
+  for (uint32_t wd = segs; wd > 1; wd = (wd + 1) / 2, level++) {
+    const uint32_t half = wd / 2;
+    uint32_t lk[8], out[4][8];
+    load_key(a.p[5] + 32ull * level, lk);
+#pragma unroll
+    for (int k = 0; k < 4; k++) {
+      const uint32_t i = threadIdx.x + 32 * k;
+      if (i < half) {
+        uint32_t m[16];
+#pragma unroll
+        for (int q = 0; q < 8; q++) { m[q] = lv[2 * i][q]; m[8 + q] = lv[2 * i + 1][q]; }
+        blake3_block(lk, m, out[k]);
+      } else if (i == half && (wd & 1)) {
+#pragma unroll
+        for (int q = 0; q < 8; q++) out[k][q] = lv[wd - 1][q];
+      }
+    }
+    __syncthreads();
+#pragma unroll
+    for (int k = 0; k < 4; k++) {
+      const uint32_t i = threadIdx.x + 32 * k;
+      if (i < half || (i == half && (wd & 1))) {
+#pragma unroll
+        for (int q = 0; q < 8; q++) lv[i][q] = out[k][q];
+      }
+    }
+    __syncthreads();
+  }
+  if (threadIdx.x == 0) {
+    store_cv(a.p[2] + 32 * r, lv[0]);
+    if (a.i[4] == 2) {
+      uint32_t sd[8];
+      b3_seed(a.p[6], a.p[7], lv[0], a.p[8], (uint64_t)(uint32_t)a.i[5] << 32 | r, sd);
+      store_cv(a.p[9] + 32 * r, sd);
+    }
+    reinterpret_cast<unsigned*>(a.p[11])[r] = 0;
+  }
+}

@@ -245,3 +245,34 @@ def test_the_coalesced_producer_stores_the_rows_and_commits_those_bytes(m, rb, n
         out = T.buffer(m * rb)
         T.launch(kernel, grid, blk, [y, out], [m, rb, n])
         assert out.raw == wide.raw, kernel
+
+
+@pytest.mark.parametrize("m,rb,n", [(2, 32768, 8192), (3, 8192, 4096)])
+def test_the_split_producer_commits_its_stores_and_resets_its_counters(m, rb, n):
+    """derive_rows_b3s_split (a thread a segment in CTAs of 32; the last CTA of each row builds its segment tree and seed): its
+    A is derive_rows_wide's, its row leaves and -h3 row seeds are the reference's over those bytes, and its per-row counters
+    are back at zero, so a second launch (as a graph replays) gives the same."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "protocols" / "pouw"))
+    from verity.commitments.blake3 import blake3
+    from verity_pouw.protocol import Context, Matmul, Shape
+    from verity_pouw.schemes import pearl_c as PC
+
+    index = 5
+    salt, root_b = hashlib.sha256(b"split salt").digest(), hashlib.sha256(b"split root_B").digest()
+    ctx = Context(salt, Matmul(index, Shape(m, rb // 4, 64), 0), bytes(32), root_b)
+    d = PC.activation_domain(ctx, "h3")
+    y = T.buffer(data(f"split y {m} {rb} {n}", 2 * m * n))
+    wide = T.buffer(m * rb)
+    T.launch("derive_rows_wide", -(-m * rb // 2 // 256), 256, [y, wide], [m, rb, n])
+    rows = [wide.raw[r * rb:(r + 1) * rb] for r in range(m)]
+    tmpl, tlen = template(ROW)
+    segs = rb // 256
+    a2, leaves, seeds, segl, counters = T.buffer(m * rb), T.buffer(32 * m), T.buffer(32 * m), T.buffer(32 * m * segs), T.buffer(4 * m)
+    args = [y, a2, leaves, T.buffer(d.domain_id), T.buffer(tmpl), T.buffer(level_keys(d.domain_id)),
+            T.buffer(blake3(b"pearl-c/v0/seed-A")), T.buffer(salt), T.buffer(root_b), seeds, segl, counters]
+    for _ in range(2):
+        T.launch("derive_rows_b3s_split", m * segs // 32, 32, args, [m, rb, n, tlen, 2, index])
+        assert a2.raw == wide.raw and counters.raw[:4 * m] == bytes(4 * m)
+        assert [leaves.raw[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(r, r, ROW, rows[r]) for r in range(m)]
+        assert seeds.raw == b"".join(PC.row_seed(ctx, r, rows[r]) for r in range(m))
