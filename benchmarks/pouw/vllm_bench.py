@@ -11,7 +11,9 @@ vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
   NCP's useful workload without the protocol;
 - ``ncp``: the same int7 operands through NCP: X = [A + E₁ | A + E₂ | −(A + E₃)], Y = [B + F₁ ; B + F₂ ; B + F₃] with the
   word-granular production P, one (m, 3k, n) s8 GEMM that reads every accumulator once per 16-deep step (the kernel gated
-  by ``gemm_bench.py``).  X·Yᵀ = A·Bᵀ exactly, so its tokens must equal ``w7a7``'s;
+  by ``gemm_bench.py``).  X·Yᵀ = A·Bᵀ exactly, so its tokens must equal ``w7a7``'s.  Both operands are formed in every call
+  (`ncp_x`, `ncp_y`, F₁ drawn anew) and dropped after its GEMM: the layer keeps only its int7 weight, as ``w7a7`` does, and
+  no weight-derived copy stays resident across forwards;
 - ``pearl``: Pearl's noisy quantization to e4m3 (rank-32 noise lines of norm 256, δ = 1), the windowed e4m3 GEMM of the
   ``ada`` device, and the peel back to BF16.
 
@@ -53,12 +55,30 @@ def int7(x, dim):
     return torch.clamp(torch.round(x.float() / s), -64, 63).to(torch.int8), s
 
 
+def ncp_x(Aq, pi, gen):
+    """X = [A + E₁ | A + E₂ | −(A + E₁ + E₂)] for the int7 rows A, E₁ drawn now and E₂ = E₁ word-permuted by ``pi``."""
+    import torch
+    E1 = torch.randint(-31, 33, tuple(Aq.shape), dtype=torch.int8, device=Aq.device, generator=gen)
+    E2 = E1[:, pi]
+    return torch.cat([Aq + E1, Aq + E2, -(Aq + E1 + E2)], dim=1).view(torch.uint8).contiguous()
+
+
+def ncp_y(Wq, pi, gen):
+    """Y = [B + F₁ ; B + F₂ ; B + F₁ + F₂] for the int7 weight B, F₁ drawn now and F₂ its negation under ``pi``, so that
+    X·Yᵀ = A·Bᵀ.  Formed for one call and dropped after it: 3 B per weight that never outlives the GEMM."""
+    import torch
+    F1 = torch.randint(-31, 33, tuple(Wq.shape), dtype=torch.int8, device=Wq.device, generator=gen)
+    F2 = torch.empty_like(F1)
+    F2[:, pi] = -F1
+    return torch.cat([Wq + F1, Wq + F2, Wq + F1 + F2], dim=1).view(torch.uint8).contiguous()
+
+
 def install(model, mode: str) -> dict:
     """Wrap every LinearBase layer's quant_method.apply (found by type) for `mode`; returns the shared stats."""
     import torch
     from vllm.model_executor.layers.linear import LinearBase
 
-    stats = {"calls": 0, "macs": 0, "transcript_bytes": 0, "layers": 0}
+    stats = {"calls": 0, "macs": 0, "transcript_bytes": 0, "layers": 0, "y_formed_bytes": 0}
     ext = None
     if mode in ("ncp", "pearl"):
         from kernels import load
@@ -80,19 +100,12 @@ def install(model, mode: str) -> dict:
         if mode in ("w7a7", "ncp"):
             Wq, sw = int7(W, 1)
             st["sw"] = sw.view(1, n)
-            if mode == "w7a7":
-                st["Wt"] = Wq.contiguous()
-            else:
+            st["Wt"] = Wq.contiguous()
+            if mode == "ncp":
                 if k not in perms:
                     from verity_pouw.schemes.ncp import word_perm
                     perms[k] = torch.tensor(word_perm(k)[0], device="cuda", dtype=torch.long)
-                pi = perms[k]
-                F1 = torch.randint(-31, 33, (n, k), dtype=torch.int8, device="cuda", generator=gen)
-                F2 = torch.empty_like(F1)
-                F2[:, pi] = -F1
-                st["Y"] = torch.cat([Wq + F1, Wq + F2, Wq + F1 + F2], dim=1).view(torch.uint8).contiguous()
-                st["pi"] = pi
-                del F1, F2
+                st["pi"] = perms[k]
             layer.weight.data = torch.empty(0, dtype=W.dtype, device=W.device)
         elif mode == "pearl":
             Wf = W.float()
@@ -132,10 +145,10 @@ def install(model, mode: str) -> dict:
                 mp = (m + 15) // 16 * 16 if cfg else (m + 127) // 128 * 128
                 if mp != m:
                     Aq = torch.cat([Aq, torch.zeros(mp - m, k, dtype=torch.int8, device=Aq.device)])
-                E1 = torch.randint(-31, 33, (mp, k), dtype=torch.int8, device=Aq.device, generator=gen)
-                E2 = E1[:, st["pi"]]
-                X = torch.cat([Aq + E1, Aq + E2, -(Aq + E1 + E2)], dim=1).view(torch.uint8).contiguous()
-                C, _, _ = ext.ncp_gemm(X, st["Y"], 1, cfg)
+                Y = ncp_y(st["Wt"], st["pi"], gen)
+                C, _, _ = ext.ncp_gemm(ncp_x(Aq, st["pi"], gen), Y, 1, cfg)
+                del Y
+                stats["y_formed_bytes"] += 3 * n * k
                 stats["transcript_bytes"] += 4 * m * n * (3 * k // 16)
                 y = (C[:m].float() * sx * st["sw"]).to(x.dtype)
             else:

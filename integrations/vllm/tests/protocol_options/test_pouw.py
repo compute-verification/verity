@@ -105,6 +105,23 @@ def test_a_layer_outside_the_domain_is_refused_at_install_and_leaves_nothing():
     assert hooks.live("pouw:ncp-v1") == () and model.layers[0].quant_method.apply == before
 
 
+
+@pytest.mark.parametrize("quantized", ["float8_e4m3fn", "int8"])
+def test_a_quantized_layer_is_refused_at_install_not_misread(quantized):
+    """The executor quantizes an unquantized weight itself; a layer served quantized (an FP8 checkpoint's float8, an int8
+    one) is refused by name before anything is patched, never read as if it were the model's weight."""
+    w = _rng(1).standard_normal((N, K), np.float32)
+    if quantized == "int8":
+        q = np.clip(np.rint(w * 16), -127, 127).astype(np.int8)
+    else:
+        torch = pytest.importorskip("torch")
+        q = torch.from_numpy(w).to(getattr(torch, quantized))
+    model = Model(_rng(2).standard_normal((N, K), np.float32), q)
+    before = [layer.quant_method.apply for layer in model.layers]
+    with pytest.raises(ValueError, match=rf"linear 1: its weight is {quantized}, .*refused, not misread"):
+        PO.install(model, _serve("pouw:ncp-v1"))
+    assert hooks.live("pouw:ncp-v1") == () and [layer.quant_method.apply for layer in model.layers] == before
+
 # --- install, serve, close ---------------------------------------------------------------------------------------------------
 
 def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exactly(tmp_path):
