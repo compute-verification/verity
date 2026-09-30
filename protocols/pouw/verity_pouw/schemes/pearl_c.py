@@ -361,13 +361,13 @@ def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f:
 
 
 def message_digest(msg: bytes, hashing: str = "h0") -> bytes:
-    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or under h1 and h2 BLAKE3 keyed by its label."""
-    return keyed(H1_KEYS["message"], msg) if hashing in ("h1", "h2") else turboshake128(msg, D_MESSAGE, 32)
+    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or under h1, h2 and h3 BLAKE3 keyed by its label."""
+    return keyed(H1_KEYS["message"], msg) if hashing != "h0" else turboshake128(msg, D_MESSAGE, 32)
 
 
 def leaf(checked: Checked, hashing: str = "h0") -> bytes:
     """The tile leaf over the per-(row, 32-column chunk) message digests, row-major, chunks in order: TurboSHAKE128
-    (D = 0x22), or under h1 and h2 BLAKE3 keyed by its label (a tree over 1 KB chunks of digests)."""
+    (D = 0x22), or under h1, h2 and h3 BLAKE3 keyed by its label (a tree over 1 KB chunks of digests)."""
     digests = []
     for crow, urow in zip(checked.c, checked.u):
         for h in range(0, len(crow), CHUNK):
@@ -375,7 +375,7 @@ def leaf(checked: Checked, hashing: str = "h0") -> bytes:
                 struct.pack(f"<{len(urow[h:h + CHUNK])}I", *urow[h:h + CHUNK])
             digests.append(message_digest(msg, hashing))
     joined = b"".join(digests)
-    return keyed(H1_KEYS["leaf"], joined) if hashing in ("h1", "h2") else turboshake128(joined, D_LEAF, 32)
+    return keyed(H1_KEYS["leaf"], joined) if hashing != "h0" else turboshake128(joined, D_LEAF, 32)
 
 
 class PearlC:

@@ -389,9 +389,9 @@ def test_h2_is_h1_with_frame_b3s_trees():
     rng = random.Random(5)
     grid = lambda: [[rng.getrandbits(32) for _ in range(64)] for _ in range(4)]  # noqa: E731
     checked = C.Checked(grid(), grid())
-    assert C.leaf(checked, "h2") == C.leaf(checked, "h1")
+    assert C.leaf(checked, "h2") == C.leaf(checked, "h1") == C.leaf(checked, "h3") != C.leaf(checked, "h0")
     msg = bytes(range(256))
-    assert C.message_digest(msg, "h2") == C.message_digest(msg, "h1")
+    assert C.message_digest(msg, "h2") == C.message_digest(msg, "h1") == C.message_digest(msg, "h3") != C.message_digest(msg, "h0")
 
 
 def test_h2_lifecycle_commits_with_frame_b3s():
