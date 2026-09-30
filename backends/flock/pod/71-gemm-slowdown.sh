@@ -3,12 +3,13 @@
 # the CPU prover's, and the device paths agree), then both GEMM coordinates timed at their largest statement, then the same GPU's
 # native GEMMs; result.json carries the prefill and decode slowdowns. Run from the verity tree (research run --cwd source).
 # env: GATE=1 (0: skip the gate)  WARM=1 RUNS=3  BATCH_ANDS=2^32 MAX_STATEMENT_BITS=2^34  ITERS=100
+#      DEFS=backends/flock/pod/gemm-coordinates.defs.json (the Call counts: gemm-coordinates-4k fills 256 tiles of K = 2048)
 #      GPUS="4 5 6 7" (on a machine with /run/gpu-lease: take the first free of these, as gpu-lease does)
 #      any other KEY=VALUE reaches the prover's environment (FC_NATIVE_SHA=0, FC_HOST_PINNED=0, ...)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); R=${RESEARCH_RUN_DIR:-/tmp/ovg}; mkdir -p $R/out
-DEFS=$REPO/backends/flock/pod/gemm-coordinates.defs.json
+DEFS=$REPO/${DEFS:-backends/flock/pod/gemm-coordinates.defs.json}
 if [ -d /run/gpu-lease ] && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
   for i in ${GPUS:-4 5 6 7}; do
     exec 9>>/run/gpu-lease/$i.lock
