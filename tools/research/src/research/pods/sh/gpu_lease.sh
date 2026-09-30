@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Share one machine's GPUs between concurrent runs: one lock file per GPU, held with flock(1).
 #
-#   gpu-lease N [--wait] [--on LIST] [--max-min M] [--mem-gb G] -- CMD...
+#   gpu-lease N [--wait] [--on LIST] [--max-min M] [--mem-gb G] [--preemptible] -- CMD...
 #                                                take N free GPUs and run CMD with CUDA_VISIBLE_DEVICES naming them
 #   gpu-lease status                             one line per GPU: index, free or held, and the holder: minutes held, pid, run
 #                                                id, who, UUID, start and command
@@ -36,6 +36,11 @@
 # cgroup (the scope `gpu-lease-<pid>`, named in the user journal) instead of the kernel choosing a victim for the whole machine.
 # G is --mem-gb, else $GPU_LEASE_MEM_GB_PER_GPU (default 90% of MemTotal over the GPU count) per GPU leased; --mem-gb 0 runs
 # uncapped.  Where this user's systemd can't make a scope (a container, no lingering), CMD runs uncapped and gpu-lease says so.
+#
+# --preemptible marks a lease that may be stopped for a waiter (fill work: a quality run, a sweep that resumes from its checkpoints).
+# The oldest waiter, when the free GPUs and the preemptible leases together cover what it needs, stops the newest preemptible
+# leases: SIGTERM to the whole scope (else the pid), SIGKILL 30 s later, each logged to $GPU_LEASE_DIR/preempted.log.  The stopped
+# job exits 143 and restarts however its launcher restarts it.  A request without --wait preempts nothing.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -68,7 +73,42 @@ uuid_table() {
   fi
 }
 
-usage() { echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--max-min M] [--mem-gb G] -- CMD... | gpu-lease status" >&2; exit 2; }
+usage() {
+  echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] [--max-min M] [--mem-gb G] [--preemptible] -- CMD... | gpu-lease status" >&2
+  exit 2
+}
+
+stop_lease() {
+  # SIGTERM GPU $1's preemptible lease (its scope, else its pid); SIGKILL once 30 s have passed since
+  local owner pid unit t sig=TERM
+  owner=$(cat "$dir/$1.owner" 2>/dev/null) || return 0
+  pid=$(echo "$owner" | sed -n 's/^pid=\([0-9]*\) .*/\1/p')
+  unit=$(echo "$owner" | sed -n 's/.* scope=\([^ ]*\) .*/\1/p')
+  t=$(echo "$owner" | sed -n 's/.* preempted=\([0-9]*\)$/\1/p')
+  if [ -n "$t" ]; then
+    [ $(($(date -u +%s) - t)) -ge 30 ] || return 0
+    sig=KILL
+  fi
+  [ -n "$pid" ] || return 0
+  if [ -z "$unit" ] || ! systemctl --user kill --signal="$sig" "$unit.scope" 2> /dev/null; then kill -s "$sig" "$pid" 2> /dev/null; fi
+  echo "${owner% preempted=*} preempted=$(date -u +%s)" > "$dir/$1.owner"
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) SIG$sig GPU $1 for pid $$ (n=$n, who=${who// /_}): $owner" >> "$dir/preempted.log"
+}
+
+preempt_for() {
+  # the oldest waiter stops the newest preemptible leases when, with the free GPUs, they cover what it needs
+  local want=$1 i fd owner free=0
+  local -a pre=()
+  for i in "${CANDIDATES[@]}"; do
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then free=$((free + 1)); exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    owner=$(cat "$dir/$i.owner" 2>/dev/null)
+    case " $owner " in *" preempt=1 "*) pre+=("$(echo "$owner" | sed -n 's/.*since=\([^ ]*\).*/\1/p') $i") ;; esac
+  done
+  [ "$free" -lt "$want" ] && [ $((free + ${#pre[@]})) -ge "$want" ] || return 0
+  printf '%s\n' "${pre[@]}" | sort -r | head -n $((want - free)) | while read -r _ i; do stop_lease "$i"; done
+}
 
 live_waiters() {
   # the queued --wait requests, oldest first; a file whose waiter is gone (its lock free) is removed
@@ -164,10 +204,11 @@ take() {
 if [ "$1" = status ]; then status; exit 0; fi
 n=$1; shift
 case $n in ''|*[!0-9]*|0) usage ;; esac
-wait=0 on="" maxmin="" memgb=""
+wait=0 on="" maxmin="" memgb="" preempt=""
 while [ $# -gt 0 ] && [ "$1" != -- ]; do
   case $1 in
     --wait) wait=1 ;;
+    --preemptible) preempt=1 ;;
     --on) [ $# -ge 2 ] || usage; on=$2; shift ;;
     --max-min) [ $# -ge 2 ] || usage; maxmin=$2; shift; case $maxmin in ''|*[!0-9]*|0) usage ;; esac ;;
     --mem-gb) [ $# -ge 2 ] || usage; memgb=$2; shift; case $memgb in ''|*[!0-9]*) usage ;; esac ;;
@@ -205,6 +246,7 @@ mkdir -p "$dir" 2>/dev/null
 [ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
 
 who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 MYWAIT=""
 until { [ -z "$(ahead)" ] || may_backfill; } && take "$n"; do
   if [ "$wait" != 1 ]; then
@@ -217,6 +259,7 @@ until { [ -z "$(ahead)" ] || may_backfill; } && take "$n"; do
     fi
     exit 75
   fi
+  [ -n "$(ahead)" ] || preempt_for "$n"
   if [ -z "$MYWAIT" ]; then
     exec {wfd}>"$dir/.wait.$$"
     flock -x "$wfd"
@@ -233,7 +276,6 @@ if [ "$memgb" != 0 ]; then
     per=${GPU_LEASE_MEM_GB_PER_GPU:-$(awk -v n="$(gpu_count)" '/^MemTotal:/ {printf "%d", $2 * 0.9 / 1048576 / (n > 0 ? n : 1)}' /proc/meminfo)}
     memgb=$((per * n))
   fi
-  export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
   if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
     scope=(systemd-run --user --scope --quiet --collect --unit "gpu-lease-$$" -p "MemoryMax=${memgb}G" -p MemorySwapMax=0 --)
   else
@@ -250,7 +292,7 @@ for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
   uuids+=("${u:--}")
   echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
-    "cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
+    "${preempt:+preempt=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
 done
 CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
 GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")

@@ -11,6 +11,7 @@
 #   2. ships this checkout's git-visible files to /workspace/research/trees/$VY_LANE on the host (`research pods sync`):
 #      jobs run from there (SRC), not from an upload;
 #   3. runs `sky jobs launch` with the R2 credentials as secrets (from this environment) and prints the job's queue line.
+# VY_ROW_CLASS=small|dense|long|tp2 sizes config-run-split's two tasks (its header's table).
 # VY_LANE defaults to this checkout's branch name. KUBECONFIG is unset: the SkyPilot client forwards it to the server.
 # Another server's cluster (its own API server): VY_MACHINE=vy-nebius-2 VY_POOL=vy-nebius-2 VY_SKY_PORT=46581.
 set -euo pipefail
@@ -42,5 +43,24 @@ dest=/workspace/research/trees/$lane
 research pods sync "$machine" "$repo" --dest "$dest"
 secrets=()
 for s in R2_ENDPOINT R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do secrets+=(--secret "$s"); done
+if [ -n "${VY_ROW_CLASS:-}" ]; then   # config-run-split: the build and gpu tasks' memory (and TP2's GPUs) per row class
+  rendered=$(mktemp --suffix=.yaml)
+  python3 - "$yaml" "$VY_ROW_CLASS" > "$rendered" <<'PY'
+import re, sys
+text, cls = open(sys.argv[1]).read(), sys.argv[2]
+table = {"small": (64, 96, 1), "dense": (160, 192, 1), "long": (160, 256, 1), "tp2": (160, 384, 2)}
+if cls not in table:
+    sys.exit(f"VY_ROW_CLASS={cls}: one of {sorted(table)}")
+build, gpu, n = table[cls]
+parts = text.split("\n---\n")
+if len(parts) != 3:
+    sys.exit("VY_ROW_CLASS applies to a two-task pipeline template (config-run-split)")
+parts[1] = re.sub(r"(?m)^  memory: \d+$", f"  memory: {build}", parts[1])
+parts[2] = re.sub(r"(?m)^  memory: \d+$", f"  memory: {gpu}", parts[2])
+parts[2] = re.sub(r"(?m)^  accelerators: RTXPRO6000:\d+$", f"  accelerators: RTXPRO6000:{n}", parts[2])
+sys.stdout.write("\n---\n".join(parts))
+PY
+  yaml=$rendered
+fi
 sky jobs launch -y -d -n "$name" "$yaml" --infra "ssh/$pool" --env "SRC=$dest" "${secrets[@]}" "$@"
 sky jobs queue 2>/dev/null | awk -v n="$name" 'NR <= 3 || $0 ~ n' | head -6

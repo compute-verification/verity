@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -214,6 +215,64 @@ def test_gpu_lease_backfills_a_short_request_ahead_of_a_waiter_that_cannot_start
             p.wait()
     assert subprocess.run(["bash", str(GPU_LEASE), "1", "--max-min", "x", "--", "true"], env=env, capture_output=True).returncode == 2
     assert subprocess.run(["bash", str(GPU_LEASE), "1", "--max-min", "1", "--", "sh", "-c", "exit 3"], env=env).returncode == 3
+
+
+@needs_flock
+def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path):
+    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1"}
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause], env=env,
+                            stdout=subprocess.PIPE, text=True)
+    assert fill.stdout.readline().strip() == "ready"
+    held = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout
+    assert "preempt=1" in held
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "echo", "got"], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 0 and r.stdout.strip() == "got"
+    assert fill.wait() != 0 and "SIGTERM GPU 0" in (tmp_path / "gl" / "preempted.log").read_text()
+    ordinary = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", *pause], env=env, stdout=subprocess.PIPE,
+                                text=True)
+    try:
+        assert ordinary.stdout.readline().strip() == "ready"
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and ordinary.poll() is None
+    finally:
+        ordinary.terminate()
+        ordinary.wait()
+
+
+needs_taskset = pytest.mark.skipif(shutil.which("taskset") is None or shutil.which("flock") is None, reason="needs taskset and flock")
+
+
+@needs_taskset
+def test_check_slot_pins_a_check_to_a_free_slot_with_the_pods_python(tmp_path):
+    slot = NEBIUS / "check_slot.sh"
+    env = {**{k: v for k, v in os.environ.items() if k != "UV_PYTHON"}, "VY_CHECK_SLOTS": "0 0", "VY_CHECK_LOCKS": str(tmp_path),
+           "VY_CHECK_WAIT": "0"}
+    show = "echo $UV_PYTHON $(taskset -cp $$ | sed 's/.*: //')"
+    first = subprocess.Popen(["bash", str(slot), "bash", "-c", f"{show}; read x"], env=env, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        assert first.stdout.readline().split() == ["3.14.7", "0"]
+        second = subprocess.run(["bash", str(slot), "bash", "-c", show], env=env, capture_output=True, text=True)
+        assert second.returncode == 0 and "check-b" in second.stderr
+        other = subprocess.Popen(["flock", str(tmp_path / "check-b.lock"), "bash", "-c", "echo ready; read x"], stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, text=True)
+        try:
+            assert other.stdout.readline().strip() == "ready"
+            busy = subprocess.run(["bash", str(slot), "true"], env=env, capture_output=True, text=True)
+            assert busy.returncode == 75 and "every check slot is busy" in busy.stderr
+        finally:
+            other.stdin.close()
+            other.wait()
+    finally:
+        first.stdin.close()
+        first.wait()
+    slots_file = tmp_path / "check-slots"
+    slots_file.write_text("0\n")
+    r = subprocess.run(["bash", str(slot), "bash", "-c", show], env={**env, "VY_CHECK_SLOTS": "", "VY_CHECK_SLOTS_FILE": str(slots_file),
+                       "UV_PYTHON": "3.12"}, capture_output=True, text=True)
+    assert r.stdout.split() == ["3.12", "0"]
 
 
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------

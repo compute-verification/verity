@@ -66,8 +66,23 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert queue in local and prio in priorities, f.name
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
-    assert seen == {"config-run": ("circuits", "circuits"), "port-capture": ("circuits", "circuits"),
-                    "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+    assert seen == {"config-run": ("circuits", "circuits"), "config-run-split": ("circuits", "circuits"),
+                    "port-capture": ("circuits", "circuits"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
+
+
+def test_the_split_config_run_holds_a_gpu_only_in_its_second_task(tmp_path):
+    import subprocess
+    text = (SKY / "jobs" / "config-run-split.yaml").read_text()
+    head, build, gpu = text.split("\n---\n")
+    assert "accelerators" not in build and "row stage build" in build and 'verity.dev/build: "true"' in build
+    assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" in gpu and "row stage commit" in gpu
+    assert build.count("kueue.x-k8s.io/queue-name: circuits") == gpu.count("kueue.x-k8s.io/queue-name: circuits") == 1
+    sub = (SKY / "submit.sh").read_text()
+    (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
+    out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run-split.yaml"), "tp2"],
+                         capture_output=True, text=True, check=True).stdout
+    _, b2, g2 = out.split("\n---\n")
+    assert "  memory: 160" in b2 and "  memory: 384" in g2 and "accelerators: RTXPRO6000:2" in g2
 
 
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
