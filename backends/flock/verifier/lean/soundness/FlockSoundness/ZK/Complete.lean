@@ -18,6 +18,8 @@ What masking adds to a table keeps the verifier accepting:
 * **`padOnto_M1`.** Lemma B's row (ii) for M1's code (`zk::lane_codeword`): at distinct opened positions, no more than
   `t_pad` of them, a padding `(X_L + κ)·μ` over the first `t_pad` novel-basis polynomials reaches every vector of values,
   given `X_L + κ ≠ 0` there (`Assumptions.PadNonvanishing`, §1.2).
+* **`padsOnto_monomial`.** Row (viii) for the pads code: at distinct nonzero points, no more than the padding's length,
+  the padding `x^s·Σ_j pad_j·x^j` reaches every vector of values.
 
 What the clear protocol needs for completeness (the zerocheck, lincheck and ring-switch rounds, Ligerito from `y₁'` on) is
 the unmasked protocol's own completeness, which masking doesn't change and this file doesn't prove.
@@ -127,6 +129,32 @@ theorem padOnto_M1 {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi 
   simp only [eval_finsetSum, eval_mul, eval_C] at this
   rw [← this, Finset.mul_sum]
   exact Finset.sum_congr rfl fun j _ => by rw [e]; ring
+
+/-- **Lemma B's row (viii) for the pads code** (§2.4 line 0, `Code(m) = Σ_i m_i·X^i` at the points of the pads tree): when
+rep `r`'s opened pads positions are distinct nonzero points `x r k`, at most `nPad` of them, and the padding's
+coefficient at position `k` is `x^(s + j)` (the padding follows the `s` pads), the padding reaches every vector of values
+there. This is T4 with the monomials and `g(x) = x^s`. -/
+theorem padsOnto_monomial {W Salt Seed D Hi VL : Type} (T : Table F K W Salt Seed D Hi VL) (s : ℕ) (x : Fin 2 → Fin T.nQ → F)
+    (hx : ∀ r, Function.Injective (x r)) (h0 : ∀ r k, x r k ≠ 0) (hQ : T.nQ ≤ T.nPad)
+    (hCp : ∀ r k j, T.Cp r k j = x r k ^ (s + j.val)) : T.PadsOnto := by
+  intro r y
+  let b : Fin T.nPad → F[X] := fun j => (Polynomial.X : F[X]) ^ j.val
+  have hspan : ∀ P : F[X], P.degree < Fintype.card (Fin T.nQ) → ∃ m : Fin T.nPad → F, ∑ k, C (m k) * b k = P := by
+    intro P hP
+    by_cases hP0 : P = 0
+    · exact ⟨0, by simp [hP0]⟩
+    have hdeg : P.natDegree < T.nPad :=
+      lt_of_lt_of_le ((Polynomial.natDegree_lt_iff_degree_lt hP0).2 (by simpa using hP)) hQ
+    refine ⟨fun j => P.coeff j.val, ?_⟩
+    conv_rhs => rw [P.as_sum_range' T.nPad hdeg]
+    rw [← Fin.sum_univ_eq_sum_range (fun i => monomial i (P.coeff i))]
+    simp only [b, C_mul_X_pow_eq_monomial]
+  obtain ⟨p, hp⟩ := padding_surjective b (x r) (hx r) (fun k => x r k ^ s) (fun k => pow_ne_zero _ (h0 r k)) hspan y
+  refine ⟨p, funext fun k => ?_⟩
+  have : x r k ^ s * (∑ j, C (p j) * b j).eval (x r k) = y k := congrFun hp k
+  simp only [b, eval_finsetSum, eval_mul, eval_C, eval_pow, Polynomial.eval_X] at this
+  rw [← this, Finset.mul_sum]
+  exact Finset.sum_congr rfl fun j _ => by rw [hCp, pow_add]; ring
 
 /-! ## The masked verifier's inner check -/
 
