@@ -141,6 +141,7 @@ theorem build_placed {name : String} {table : ByteArray} {n lo bits : ℕ} {net 
   cases h
   have htop := decode_top hc'.1 s1
   rw [hd1] at htop
+  dsimp only at htop
   have hm2 : bd1.a.size ≤ bd2.a.size := by
     have := decode_mono (n - lo) bd1 ((List.range (n - lo)).map (lo + ·)); rwa [hd2] at this
   have e1a := forIn_range_pure (fun r : Lookup.Builder => r.a.size) (fun i r => by split <;> simp) hs1
