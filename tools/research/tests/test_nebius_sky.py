@@ -241,7 +241,7 @@ def test_submit_names_the_tools_it_is_missing(tmp_path):
         if path := shutil.which(tool):
             os.symlink(path, bin_dir / tool)
     r = subprocess.run(["bash", str(SKY / "submit.sh"), "prover-dev", "x", "--allow-stale"], capture_output=True, text=True,
-                       env={"PATH": str(bin_dir), "HOME": str(tmp_path)})
+                       env={"PATH": str(bin_dir), "HOME": str(tmp_path), "VY_INFRA_REMOTE": str(tmp_path / "no-remote")})  # no network
     assert r.returncode == 2 and "missing on this machine: uv rsync" in r.stderr
 
 
