@@ -33,6 +33,20 @@ read-only L2 flush.
    gemm_pearlc launch after it; its digests stay the fused kernel's. The negative control (nc) is nohash dumped as an -h3
    transcript, which the verifier must reject. A's rows aren't in a transcript: row r is `a_half(tag, r)` twice.
 
+3. --chain CALLS: each arm is CALLS dependent calls in one graph (call i's producer reads y's slice i), per call its time
+   over CALLS, so the hashing can run beside the next kernels instead of in series (CHAIN_ARMS):
+   - h3s, h2s: step 1's -h3 and -h2 calls, back to back;
+   - h3o: A's tree and seed on a side stream as soon as the producer is done, beside forming (under -h3 forming needs only
+     the producer's row seeds; E_A's lines use a fixed stand-in key, not seed_line_a's, so nothing on the chain reads what
+     the side stream writes), and the tile hashing on a low-priority side stream as soon as the GEMM is done, beside the
+     next call's producer and forming, into slot i % 2 of digests, leaves and tile tree, which call i + 2's GEMM waits for.
+     The next producer waits for A's tree (it rewrites A's leaves); the graph ends when every side stream has joined;
+   - h3oe: h3o with the tile hashing at the chain's priority;
+   - h2o, h2oe: the same tile hashing beside the next call; -h2's forming needs A's root, so A's tree stays in series.
+   Beside forming, the trees' hash_tree_small runs on 128 threads above 256 nodes (hash_nodes below): at 1,024 threads of
+   64 registers it needs a whole SM. Graphs honour their nodes' priorities (USE_NODE_PRIORITY). Transcripts are the last
+   call's, whose y is the arm's own.
+
 GPU 1's kernel has no staggered form of the fused digests (two consumer groups half a tile apart, GPU 2's K3), so only the
 lockstep form is measured.
 """
@@ -56,6 +70,12 @@ X3C = bytes(b ^ 0x3C for b in range(256))
 POISON = 0xA5
 ARMS = ("nohash", "h2", "h3", "h2u", "h3u")
 DUMPS = ("h2", "h3", "h2u", "h3u", "nc")
+#: --chain's arms: (format, A's tree and seed on a side stream beside forming, each call's tile hashing on a side stream
+#: beside the next call's producer and forming, that side stream's priority)
+CHAIN_ARMS = {"nohash": (None, False, False, None), "h3s": ("h3", False, False, None), "h3o": ("h3", True, True, "low"),
+              "h3oe": ("h3", True, True, "high"), "h2s": ("h2", False, False, None), "h2o": ("h2", False, True, "low"),
+              "h2oe": ("h2", False, True, "high")}
+USE_NODE_PRIORITY, ATTR_PRIORITY = 8, 8   # CUDA_GRAPH_INSTANTIATE_FLAG_USE_NODE_PRIORITY, CU_LAUNCH_ATTRIBUTE_PRIORITY
 
 
 def a_half(tag: str, r: int, nbytes: int) -> bytes:
@@ -135,9 +155,13 @@ def main() -> None:
     ap.add_argument("--size", type=int, default=8192, help="m = n = k (a dry run's smaller shape; the domains are 8,192's)")
     ap.add_argument("--components", action="store_true",
                     help="also time each hashing part alone, interleaved with the arms (a diagnostic breakdown; no transcripts)")
+    ap.add_argument("--chain", type=int, default=0,
+                    help="CALLS dependent calls a graph, the hashing beside forming (CHAIN_ARMS) against it in series")
     args = ap.parse_args()
     if not (args.transcripts or args.components):
         ap.error("--transcripts is required unless --components")
+    if args.chain and args.components:
+        ap.error("--chain and --components are separate runs")
     M = N = K = args.size
     RB = 4 * K
     R = load(os.path.join(args.gpu1, "run.py"), "gpu1_run")
@@ -166,7 +190,10 @@ def main() -> None:
     dev.open()
     R.bind(dev.cu, {"cuStreamCreate": [P(vp), C.c_uint], "cuStreamBeginCapture_v2": [vp, C.c_int],
                     "cuStreamEndCapture": [vp, P(vp)], "cuGraphInstantiateWithFlags": [P(vp), vp, C.c_ulonglong],
-                    "cuGraphLaunch": [vp, vp]})
+                    "cuGraphLaunch": [vp, vp], "cuStreamWaitEvent": [vp, vp, C.c_uint],
+                    "cuCtxGetStreamPriorityRange": [P(C.c_int), P(C.c_int)], "cuStreamCreateWithPriority": [P(vp), C.c_uint, C.c_int],
+                    "cuGraphGetNodes": [vp, vp, P(C.c_size_t)], "cuGraphNodeGetType": [vp, P(C.c_int)],
+                    "cuGraphKernelNodeGetAttribute": [vp, C.c_int, vp]})
     nv = R.Nvml(dev.uuid)
     res["clocks_idle"] = nv.read()
     man_path = os.path.join(args.gpu1, "check", "check.json")
@@ -198,11 +225,14 @@ def main() -> None:
     segkeys, seedk, saltp, rootbp = dev.alloc(32 * 16), dev.put(seed_key), dev.put(salt), dev.put(root_b)
     seeds = dev.alloc(32 * M)
     Kn.go("b3s_level_keys", 1, 32, (segkeys, keys["dom_a"]), (9,))
-    y_in, xa, xb = dev.alloc(2 * M * N), dev.alloc(M * RB), dev.alloc(N * RB)
+    calls, yb = max(1, args.chain), 2 * M * N                # --chain: call i's producer reads y's slice i
+    y_in, xa, xb = dev.alloc(yb * calls), dev.alloc(M * RB), dev.alloc(N * RB)
     fl, sink = dev.alloc(512 << 20), dev.alloc(16)
     dev.launch("gen_f32", -(-N * K // 256), 256, p=(xb,), i=(N, K, 12))
-    put_y = lambda tag: dev.ck("cuMemcpyHtoD_v2", u64(y_in), C.c_char_p(y_rows(tag, M, 2 * N)), 2 * M * N)  # noqa: E731
+    put_y = lambda tag, i=0: dev.ck("cuMemcpyHtoD_v2", u64(y_in + i * yb), C.c_char_p(y_rows(tag, M, 2 * N)), yb)  # noqa: E731
     put_y("prefill y timing")
+    for i in range(1, calls):
+        dev.copy(y_in + i * yb, y_in, yb)
     dev.sync()
 
     tiles = (M // 64) * (N // 64)
@@ -260,7 +290,140 @@ def main() -> None:
         dev.ck("cuGraphInstantiateWithFlags", C.byref(ge), g, 0)
         return ge
 
-    graphs = {f"{v} {arm}": graph(seq) for v, arms in seqs.items() for arm, seq in arms.items()}
+    def node_priorities(g) -> dict:
+        n = C.c_size_t()
+        dev.ck("cuGraphGetNodes", g, None, C.byref(n))
+        nodes = (vp * n.value)()
+        dev.ck("cuGraphGetNodes", g, nodes, C.byref(n))
+        seen: dict = {}
+        for node in nodes:
+            kind, val = C.c_int(), C.create_string_buffer(64)
+            dev.ck("cuGraphNodeGetType", node, C.byref(kind))
+            if kind.value == 0:                              # CU_GRAPH_NODE_TYPE_KERNEL
+                dev.ck("cuGraphKernelNodeGetAttribute", node, ATTR_PRIORITY, val)
+                p_ = int.from_bytes(val.raw[:4], "little", signed=True)
+                seen[str(p_)] = seen.get(str(p_), 0) + 1
+        return seen
+
+    def levels(base: int, lk: int, count: int, small: int, threads: int) -> None:
+        """A frame-b3 tree's levels, as GPU 1's Pipeline.levels launches them (hash_nodes a level a launch down to `small`
+        nodes, then hash_tree_small), with hash_tree_small on `threads` threads: at 1,024 threads of 64 registers it needs a
+        whole SM's register file, so beside forming it runs on 128."""
+        width, off, level = 1 << max(count - 1, 0).bit_length(), 0, 0
+        while width > small:
+            dev.launch("hash_nodes", -(-(width // 2) // 128), 128, p=(base + 32 * off, base + 32 * (off + width), lk + 32 * level),
+                       i=(level, width // 2))
+            off, width, level = off + width, width // 2, level + 1
+        if width > 1:
+            dev.launch("hash_tree_small", 1, min(threads, width // 2), p=(base + 32 * off, lk + 32 * level), i=(width,))
+
+    prios: dict = {}
+    if args.chain:
+        # Call i: A's producer, A's tree and seed, forming and the factors, the GEMM, the tile hashing, on the chain's stream
+        # (the highest priority).  "Beside": A's tree and seed on side_a (the same priority) once the producer is done,
+        # which the next call's producer waits for (it rewrites A's leaves); -h3's forming doesn't wait for A's root.  The
+        # tile hashing on a side stream once the GEMM is done, into slot i % 2 (digests, leaves, tile tree), which call
+        # i + 2's GEMM waits for.  The graph ends when every side stream has joined, so the last call's tile hashing counts.
+        least, greatest = C.c_int(), C.c_int()
+        dev.ck("cuCtxGetStreamPriorityRange", C.byref(least), C.byref(greatest))
+
+        def stream(priority: int) -> vp:
+            x = vp()
+            dev.ck("cuStreamCreateWithPriority", C.byref(x), 1, priority)
+            return x
+
+        s, side_a, side_hi, side_lo = (stream(greatest.value), stream(greatest.value), stream(greatest.value),
+                                       stream(least.value))
+        res["stream_priorities"] = {"least": least.value, "greatest": greatest.value}
+        evs = {k: vp() for k in ("p", "g", "a", "t0", "t1")}
+        for e in evs.values():
+            dev.ck("cuEventCreate", C.byref(e), 2)           # CU_EVENT_DISABLE_TIMING
+        line_h3 = dev.put(hashlib.shake_256(b"prefill -h3 E_A line key stand-in").digest(32))
+        slots = {v: [(p.b["digests"], p.b["leaves"], p.b["tree_t"]), (p.b["digests2"], dev.alloc(32 * tiles), dev.alloc(p.size["tree_t"]))]
+                 for v, p in pipes.items()}
+        dev.sync()
+
+        def on(stream_, fns) -> None:
+            old = dev.stream
+            dev.stream = stream_
+            for f in fns:
+                f()
+            dev.stream = old
+
+        def chain_graph(v: str, arm: str) -> vp:
+            fmt, a_side, t_side, prio = CHAIN_ARMS[arm]
+            pipe = pipes[v]
+            b = pipe.b
+            st = {nm: f for nm, _ph, f in pipe.steps()}
+            ex = pipe.extra()
+            sx = "" if v == "sm120" else "_u"
+            t_stream = side_lo if prio == "low" else side_hi
+            a_cfg = (256, 128) if a_side else (R.TREE_SMALL, 1024)
+            t_cfg = (256, 128) if t_side else (R.TREE_SMALL, 1024)
+            root_a = b["tree_a"] + pipe.size["tree_a"] - 32
+            commit = [lambda: levels(b["tree_a"], b["keys_a"], M, *a_cfg),
+                      lambda: dev.launch("seed_line_a", 1, 32, p=(root_a, keys["unit"], b["line_a"], b["seed_a"]))]
+            lines = (lambda: dev.launch("lines", -(-M // 128), 128, p=(line_h3, b["ea_codes"], 0, 0), i=(0, 0, M, R.NORM_256))) \
+                if a_side else st["lines_ea"]
+            forming = [lines, st["stats_a"], st["eprime_a"], st["form_a"], st["af"], st["pa"]]
+            dev.stream = s
+            dev.ck("cuStreamBeginCapture_v2", s, 0)
+            a_rec, t_rec = False, [False, False]
+            for i in range(calls):
+                yp = y_in + i * yb
+                dg, lv, tr = slots[v][i % 2]
+                if a_rec:
+                    dev.ck("cuStreamWaitEvent", s, evs["a"], 0)
+                if fmt is None:
+                    Kn.go("derive_rows_vec", -(-M * (RB // 256) // 128), 128, (yp, xa), (M, RB, N))
+                else:
+                    Kn.go("derive_rows_b3s", M, RB // 256, (yp, xa, b["tree_a"], keys["dom_a"], rtmpl, segkeys, seedk, saltp, rootbp, seeds),
+                          (M, RB, N, rt[1], 2 if fmt == "h3" else 1, index))
+                    if a_side:
+                        dev.ck("cuEventRecord", evs["p"], s)
+                        dev.ck("cuStreamWaitEvent", side_a, evs["p"], 0)
+                        on(side_a, commit)
+                        dev.ck("cuEventRecord", evs["a"], side_a)
+                        a_rec = True
+                    else:
+                        on(s, commit)
+                on(s, forming)
+                if t_side and t_rec[i % 2]:
+                    dev.ck("cuStreamWaitEvent", s, evs[f"t{i % 2}"], 0)
+                if fmt is None:
+                    ex["gemm_pearlc_s"]()
+                    continue
+                pipe.gemm("gemm_pearlc_b" + sx, "at", "bt", M, N, out=(None, None, "y"), dg=dg, key=keys["k_msg"], pa=b["pa_t"],
+                          pb=b["pb_t"], rs=b["ia_a"], cs=b["ia_b"])
+                hashing = [lambda dg=dg, lv=lv: dev.launch("hash_leaf_p", -(-tiles // 32), 128, p=(dg, lv, keys["k_leaf"]), i=(M, N)),
+                           lambda lv=lv, tr=tr: Kn.go("hash_leaves_b3s", -(-tiles // 128), 128, (lv, tr, keys["dom_t"], ttmpl),
+                                                      (tiles, 32, 0, tt[1])),
+                           lambda tr=tr: levels(tr, b["keys_t"], tiles, *t_cfg)]
+                if t_side:
+                    dev.ck("cuEventRecord", evs["g"], s)
+                    dev.ck("cuStreamWaitEvent", t_stream, evs["g"], 0)
+                    on(t_stream, hashing)
+                    dev.ck("cuEventRecord", evs[f"t{i % 2}"], t_stream)
+                    t_rec[i % 2] = True
+                else:
+                    on(s, hashing)
+            if a_rec:
+                dev.ck("cuStreamWaitEvent", s, evs["a"], 0)
+            for k in (0, 1):
+                if t_rec[k]:
+                    dev.ck("cuStreamWaitEvent", s, evs[f"t{k}"], 0)
+            g, ge = vp(), vp()
+            dev.ck("cuStreamEndCapture", s, C.byref(g))
+            dev.stream = None
+            prios[f"{v} {arm}"] = node_priorities(g)
+            dev.ck("cuGraphInstantiateWithFlags", C.byref(ge), g, USE_NODE_PRIORITY)
+            return ge
+
+        graphs = {f"{v} {arm}": chain_graph(v, arm) for v in R.VARIANT_G for arm in CHAIN_ARMS}
+        graphs.update({f"plain {arm}": graph(seq) for arm, seq in seqs["plain"].items()})
+        res["calls"], res["node_priorities"] = calls, prios
+    else:
+        graphs = {f"{v} {arm}": graph(seq) for v, arms in seqs.items() for arm, seq in arms.items()}
     ev = [vp(), vp()]
     for e in ev:
         dev.ck("cuEventCreate", C.byref(e), 0)
@@ -295,10 +458,11 @@ def main() -> None:
     res["baseline"] = {"graph": fastest, "ms": round(med[fastest], 5)}
     res["rows"] = {}
     for v in R.VARIANT_G:
-        for arm in ARMS[1:]:
-            h = med[f"{v} {arm}"] - med[f"{v} nohash"]
+        for arm in (list(CHAIN_ARMS)[1:] if args.chain else ARMS[1:]):   # per call: a chain's graph is `calls` calls
+            call, nohash = med[f"{v} {arm}"] / calls, med[f"{v} nohash"] / calls
+            h = call - nohash
             res["rows"][f"{v} {arm}"] = {"hashing_ms": round(h, 5), "slowdown_hashing_only": round(1 + h / med[fastest], 4),
-                                         "call_ms": round(med[f"{v} {arm}"], 5), "nohash_ms": round(med[f"{v} nohash"], 5)}
+                                         "call_ms": round(call, 5), "nohash_ms": round(nohash, 5)}
     if args.components:
         res["parts"] = {}
         for v in R.VARIANT_G:
@@ -325,31 +489,39 @@ def main() -> None:
         b, sz, ex = pipe.b, pipe.size, pipe.extra()
         poison = [(xa, M * RB), (seeds, 32 * M)] + [(b[nm], sz[nm]) for nm in ("tree_a", "seed_a", "line_a", "digests", "leaves",
                                                                                   "tree_t", "c", "u", "y")]
-        for arm in DUMPS:
-            tag = f"prefill A {v} {arm}"
-            put_y(tag)
+        if args.chain:                                       # the last call's outputs, from the last call's own y
+            poison += [(slots[v][1][1], 32 * tiles), (slots[v][1][2], sz["tree_t"]), (b["digests2"], sz["digests2"])]
+            dg, lv, tr = slots[v][(calls - 1) % 2]
+            specs = [(arm, CHAIN_ARMS[arm][0], arm, True, True) for arm in list(CHAIN_ARMS)[1:]] + [("nc", "h3", "nohash", True, False)]
+        else:
+            dg, lv, tr = b["digests"], b["leaves"], b["tree_t"]
+            specs = [(arm, "h2" if arm in ("h2", "h2u") else "h3", "nohash" if arm == "nc" else arm, arm not in ("h2u", "h3u"),
+                      arm in ("h2", "h3")) for arm in DUMPS]
+        for arm, fmt, gname, then_cu, fused in specs:
+            tag = f"prefill A {v} {arm}" + (" chain" if args.chain else "")
+            put_y(tag, calls - 1)
             for p_, n_ in poison:
                 dev.ck("cuMemsetD8_v2", u64(p_), POISON, n_)
             dev.sync()
-            replay(graphs[f"{v} {'nohash' if arm == 'nc' else arm}"], flush=False)
-            if arm not in ("h2u", "h3u"):
+            replay(graphs[f"{v} {gname}"], flush=False)
+            if then_cu:
                 ex["gemm_pearlc_cu"]()
             dev.sync()
-            fmt = "h2" if arm in ("h2", "h2u") else "h3"
             parts = [("a_tree", dev.read(b["tree_a"], sz["tree_a"]))]
             if fmt == "h3":
                 parts.append(("row_seeds", dev.read(seeds, 32 * M)))
             parts += [("unit_seed", dev.read(b["seed_a"], 32)), ("c", dev.read(b["c"], 4 * M * N)), ("u", dev.read(b["u"], 4 * M * N)),
-                      ("digests", dev.read(b["digests"], sz["digests"])), ("leaves", dev.read(b["leaves"], 32 * tiles)),
-                      ("tile_tree", dev.read(b["tree_t"], sz["tree_t"]))]
-            if arm in ("h2", "h3"):                          # the fused digests against hash_msg_v over the unfused C~ and U
-                dev.copy(b["digests2"], b["digests"], sz["digests"])
+                      ("digests", dev.read(dg, sz["digests"])), ("leaves", dev.read(lv, 32 * tiles)), ("tile_tree", dev.read(tr, sz["tree_t"]))]
+            if fused:                                        # the fused digests against hash_msg_v over the unfused C~ and U
+                if dg != b["digests2"]:
+                    dev.copy(b["digests2"], dg, sz["digests"])
                 ex["hash_msg"]()
                 dev.sync()
                 res["consistency"][f"{v} {arm}"] = {"digests_fused_vs_hash_msg_v_words_differing": pipe.diff("digests", "digests2")}
-            head = {"run": run, "arm": f"prefill {v} {arm}", "variant": v, "m": M, "rb": RB, "n": N, "hashing": fmt, "a": pa, "t": pt,
+            head = {"run": run, "arm": f"prefill {v} {arm}" + (f", call {calls - 1} of a {calls}-call chain" if args.chain else ""),
+                    "variant": v, "m": M, "rb": RB, "n": N, "hashing": fmt, "a": pa, "t": pt,
                     "a_rows_y": {"tag": tag, "half": RB // 2}, "sections": [[k, len(x)] for k, x in parts]}
-            path = os.path.join(args.transcripts, f"prefill-{'v1' if v == 'sm120' else 'v2'}-{arm}.bin")
+            path = os.path.join(args.transcripts, f"prefill-{'chain-' if args.chain else ''}{'v1' if v == 'sm120' else 'v2'}-{arm}.bin")
             h = hashlib.sha256()
             with open(path, "wb") as f:
                 for chunk in [json.dumps(head).encode() + b"\n"] + [x for _k, x in parts]:
