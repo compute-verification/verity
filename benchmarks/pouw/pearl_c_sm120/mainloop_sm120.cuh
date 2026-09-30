@@ -37,6 +37,12 @@ ML_DEV void mbar_wait(uint32_t bar, uint32_t parity) {
       "r"(parity)
       : "memory");
 }
+// a consumer warp's wait: try_wait's predicate is per thread, so the warp is reconverged before the ldmatrix and mma.sync
+// (.aligned) that follow
+ML_DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
+  mbar_wait(bar, parity);
+  __syncwarp();
+}
 ML_DEV void tma_acquire(const void* map) {
   asm volatile("fence.proxy.tensormap::generic.acquire.sys [%0], 128;" ::"l"(map) : "memory");
   asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory");
@@ -194,7 +200,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
     if (!LATE) mbar_arrive(done);
     advance();
     if (!LAST) {
-      mbar_wait(full(s), ph);
+      mbar_wait_warp(full(s), ph);
       load(fa[0], fb[0], stage(s), 0);
     }
     mma<false, false>(acc, total, fa[1], fb[1]);
@@ -210,7 +216,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
       for (int ni = 0; ni < NI; ni++)
 #pragma unroll
         for (int e = 0; e < 4; e++) total[mi][ni][e] = 0.0f;
-    mbar_wait(full(s), ph);
+    mbar_wait_warp(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
     stage_body<true, false, LATE>(acc, total, fa, fb);
 #pragma unroll U
@@ -257,7 +263,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
       mbar_arrive(empty(s));
       advance();
     }
-    if (J == 3 && !LAST) mbar_wait(full(sn), sn == 0 ? ph ^ 1 : ph);
+    if (J == 3 && !LAST) mbar_wait_warp(full(sn), sn == 0 ? ph ^ 1 : ph);
     if (!(LAST && J + 1 >= APS)) {
       const uint32_t sb = J + 1 < APS ? stage(s) : stage(sn);
 #pragma unroll
@@ -302,7 +308,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
       for (int ni = 0; ni < NI; ni++)
 #pragma unroll
         for (int e = 0; e < 4; e++) total[mi][ni][e] = 0.0f;
-    mbar_wait(full(s), ph);
+    mbar_wait_warp(full(s), ph);
     ldsm4(fa[0][0], stage(s) + a_off[0]);
 #pragma unroll
     for (int nj = 0; nj < NI / 2; nj++) {
@@ -317,7 +323,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL> struct Mainloop {
   }
   // the tail stage (TAIL): P_A's rows at the returned address, P_B's at + A_BYTES, both 128-byte rows in the SWIZZLE_128B layout
   ML_DEV uint32_t tail_wait() {
-    mbar_wait(full(s), ph);
+    mbar_wait_warp(full(s), ph);
     return stage(s);
   }
   ML_DEV void tail_release() {
