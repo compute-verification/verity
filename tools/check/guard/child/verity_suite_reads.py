@@ -10,9 +10,9 @@ It also traces what a per-test key narrowed to the files the tests use (`suites.
 - `F` a repository file opened or loaded as a shared library, outside the interpreter's environment and this tracer; a cached
   module (`__pycache__/*.pyc`) counts as its source, which the import read it for;
 - `L` a repository directory listed (`os.listdir`, `os.scandir`: imports, `glob`, `pkgutil` list what they search);
-- `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a Python that loads this
-  tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`, no `-I`, `-E` or
-  `-S`).
+- `X` a program started that this tracer won't see into, so what it reads is unknown: anything but a machine probe (`PROBES`)
+  or a Python that loads this tracer (the suite's PYTHONPATH, `VERITY_SUITE_READS` and a test module in `VERITY_SUITE_MODULE`,
+  and no `-I`, `-E` or `-S`).
 """
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ import sys
 #: a module's cached bytecode, by its source's directory and name
 _PYC = re.compile(r"^(.*?)(?:^|/)__pycache__/([^/]+?)\.[^/]+\.pyc$")
 _PYTHON = re.compile(r"^python(\d+(\.\d+)?)?$")
+#: programs that read no repository file, whatever they're given: they report on the machine (`platform` runs `uname`)
+PROBES = frozenset({"uname", "true", "false", "nproc", "getconf", "hostname", "id", "whoami", "ldconfig", "lscpu", "nvidia-smi"})
 
 
 class Reads:
@@ -69,6 +71,8 @@ class Reads:
         if not argv:
             return False
         exe = os.fsdecode(argv[0])
+        if os.path.basename(exe) in PROBES:
+            return True
         flags = [os.fsdecode(a) for a in argv[1:] if isinstance(a, (str, bytes))]
         if not (_PYTHON.match(os.path.basename(exe)) or os.path.realpath(exe) == os.path.realpath(sys.executable)):
             return False

@@ -223,7 +223,7 @@ def worktree() -> str:
         index = Path(tmp) / "index"
         real = ROOT / _git("rev-parse", "--git-path", "index").strip()
         if real.exists():
-            shutil.copyfile(real, index)
+            shutil.copy2(real, index)          # its mtime too: git re-reads an entry as recent as the index (racy git)
         env = dict(os.environ, GIT_INDEX_FILE=str(index))
         _git("add", "-A", env=env)
         return _git("write-tree", env=env).strip()

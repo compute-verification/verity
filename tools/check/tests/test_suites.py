@@ -510,7 +510,7 @@ def _traced_workspace(root: Path) -> None:
     for name, text in {"conftest.py": "import pathlib, sys\nsys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / 'lib'))\n",
                        "test_a.py": "from used import VALUE\n\ndef test_a():\n    assert VALUE == 1\n",
                        "test_b.py": "def test_b():\n    pass\n",
-                       "test_spawn.py": "import subprocess\n\ndef test_spawn():\n    subprocess.run(['true'], check=True)\n",
+                       "test_spawn.py": "import subprocess\n\ndef test_spawn():\n    subprocess.run(['sh', '-c', ':'], check=True)\n",
                        "test_probe.py": "import pathlib\n\ndef test_probe():\n    p = pathlib.Path(__file__).resolve().parents[2] / 'lib' / 'maybe.txt'\n"
                                         "    try:\n        p.read_text()\n    except FileNotFoundError:\n        pass\n"}.items():
         (root / "pkg" / "tests" / name).write_text(text)
@@ -571,6 +571,7 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.trace("subprocess.Popen", (None, ["git", "status"], None, None)) == ("X", "git")
     assert r.trace("subprocess.Popen", (None, ["uv", "run", "python"], None, None)) == ("X", "uv")
     assert r.trace("os.system", ("ls",)) == ("X", "os.system")
+    assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) is None       # a machine probe reads no repository file
     monkeypatch.delenv("VERITY_SUITE_MODULE")                  # outside a test module sitecustomize doesn't trace
     assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == ("X", sys.executable)
 
