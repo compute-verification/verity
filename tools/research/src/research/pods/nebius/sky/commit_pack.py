@@ -106,16 +106,20 @@ def bundle_ok(entry: dict, waiting: int, running: list[dict]) -> bool:
 
 
 def bundle_bytes(globs: list[str]) -> int:
-    """Bytes of the sealed replay bundles waiting on the node (a Commit's replay deletes its own)."""
-    total = 0
+    """Bytes of the sealed replay bundles waiting on the node (a Commit's replay deletes its own), each file once: a replay
+    of the TP2 lane's links the bundle it replays into its own sweep (research/runs/cfgtp2-cpu/P1, 4:50 PM PDT)."""
+    total, seen = 0, set()
     for g in globs:
         for d in Path("/").glob(g.lstrip("/")):
             for root, _, files in os.walk(d):
                 for name in files:
                     try:
-                        total += os.lstat(os.path.join(root, name)).st_size
+                        st = os.lstat(os.path.join(root, name))
                     except OSError:
                         continue
+                    if (st.st_dev, st.st_ino) not in seen:
+                        seen.add((st.st_dev, st.st_ino))
+                        total += st.st_size
     return total
 
 

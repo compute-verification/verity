@@ -273,6 +273,17 @@ def test_the_default_bundle_globs_count_every_sweep_on_node_1_but_not_published_
     assert not any(Path(published).match(g) for g in mod.BUNDLE_GLOBS)
 
 
+def test_a_bundle_linked_into_another_sweep_counts_once(pilot, tmp_path):
+    bundle = tmp_path / "cov" / "a" / "commit" / "replay_bundle_p0"
+    bundle.mkdir(parents=True)
+    (bundle / "part").write_bytes(b"x" * 10)
+    (tmp_path / "cov" / "b" / "commit").mkdir(parents=True)
+    (tmp_path / "cov" / "b" / "commit" / "replay_bundle_p0").symlink_to(bundle)
+    (tmp_path / "cov" / "c" / "commit" / "replay_bundle_p0").mkdir(parents=True)
+    os.link(bundle / "part", tmp_path / "cov" / "c" / "commit" / "replay_bundle_p0" / "part")
+    assert pilot.bundle_bytes(pilot.BUNDLE_GLOBS) == 10
+
+
 def test_claim_has_one_winner(pilot, tmp_path):
     spool = tmp_path / "spool"
     _queue(spool, "only", "exit 0")
