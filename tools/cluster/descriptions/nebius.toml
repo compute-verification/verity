@@ -54,7 +54,7 @@ owner = "pous"
 memory_gib = 1690
 stops_at = "2026-10-07T15:00:00Z"
 numa = { 0 = "0-95", 1 = "96-191" }
-# GPU topology assumed to match vy-nebius-1's (`nvidia-smi topo -m` there, 08:08Z); not yet read on this node.
+# GPUs 0-3 on NUMA 0 and 4-7 on NUMA 1, no NVLink, the NIC on NUMA 1 (node2-ops read it at 19:09Z, 30 Sep).
 gpus = [
   { index = 0, numa = 0 }, { index = 1, numa = 0 }, { index = 2, numa = 0 }, { index = 3, numa = 0 },
   { index = 4, numa = 1 }, { index = 5, numa = 1 }, { index = 6, numa = 1 }, { index = 7, numa = 1 },

@@ -6,19 +6,31 @@
   cluster ledger quiet LEDGER.jsonl ALLOC [--until T]
   cluster ledger failures LEDGER.jsonl [--since T]
   cluster ledger usage LEDGER.jsonl [--since T]         # held against busy GPU time per holder, lowest share first
+  cluster agent DESCRIPTION.toml --out DIR [--mode shadow|live] [--hours H] [--stop-file P] [--copy-to DIR]
+  cluster shadow replay DESCRIPTION.toml --sampler UTIL.jsonl[.gz] --preempted LOG[.gz] --out DIR
+  cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]]  # the pass bar; exit 0 when it passes, 2 when not
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
-Nothing here reads a clock or touches a node: `plan` is how a shadow run compares the planner's decisions with a live node's.
+Only `agent` reads a clock or touches a node (`agent.py`); `shadow replay` runs the same planner over a day's copied logs.
 """
 from __future__ import annotations
 
 import argparse
 import dataclasses
+import gzip
 import json
+import shutil
 import sys
+from pathlib import Path
 
 from . import ledger, model, plan
+
+
+def _lines(path: str) -> list[str]:
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt") as f:
+        return f.read().splitlines()
 
 
 def _action(a: plan.Action) -> dict:
@@ -51,7 +63,55 @@ def main(argv: list[str] | None = None) -> int:
     lu = lsub.add_parser("usage")
     lu.add_argument("path")
     lu.add_argument("--since", type=int, default=0)
+    ag = sub.add_parser("agent")
+    ag.add_argument("description")
+    ag.add_argument("--out", required=True)
+    ag.add_argument("--mode", choices=("shadow", "live"), default="shadow")
+    ag.add_argument("--hours", type=float)
+    ag.add_argument("--stop-file")
+    ag.add_argument("--copy-to", help="copy the output directory here when the agent stops (a run's declared outputs)")
+    ag.add_argument("--lease-dir", default="/run/gpu-lease")
+    ag.add_argument("--status", default="/workspace/pouw/fill/status.txt")
+    ag.add_argument("--tick-s", type=float, default=1.0)
+    sh = sub.add_parser("shadow")
+    ssub = sh.add_subparsers(dest="scmd", required=True)
+    sr = ssub.add_parser("replay")
+    sr.add_argument("description")
+    sr.add_argument("--sampler", required=True, nargs="+")
+    sr.add_argument("--preempted", required=True)
+    sr.add_argument("--out", required=True)
+    se = ssub.add_parser("evaluate")
+    se.add_argument("dir")
+    se.add_argument("--quiet-log")
     a = ap.parse_args(argv)
+
+    if a.cmd == "agent":
+        import time
+
+        from . import agent
+        fp = agent.Footprint()
+        agent.main_hook(fp)
+        c = model.load(a.description)
+        start = time.time()
+        summary = agent.run(c, Path(a.out), mode=a.mode, clock=time.time, sleep=time.sleep, lease_dir=Path(a.lease_dir),
+                            status=Path(a.status), stop_file=Path(a.stop_file) if a.stop_file else None,
+                            until=start + 3600 * a.hours if a.hours else None, tick_s=a.tick_s, footprint=fp)
+        if a.copy_to:
+            shutil.copytree(a.out, a.copy_to, dirs_exist_ok=True)
+        print(json.dumps(summary, sort_keys=True))
+        return 1 if summary.get("exception") or str(summary.get("stopped", "")).startswith("invariant") else 0
+    if a.cmd == "shadow":
+        from . import shadow
+        if a.scmd == "replay":
+            c = model.load(a.description)
+            rows = [json.loads(x) for f in a.sampler for x in _lines(f) if x.strip()]
+            shadow.replay(c, sorted(rows, key=lambda r: r["t"]), _lines(a.preempted), Path(a.out))
+            print(json.dumps(json.loads((Path(a.out) / "summary.json").read_text()), sort_keys=True))
+            return 0
+        q = [json.loads(x) for x in _lines(a.quiet_log) if x.strip()] if a.quiet_log else None
+        rep = shadow.evaluate(Path(a.dir), q)
+        print(json.dumps(rep, indent=1, sort_keys=True))
+        return 0 if rep["pass"] else 2
 
     if a.cmd == "validate":
         try:

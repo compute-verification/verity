@@ -5,9 +5,12 @@ which other projects borrow, priority classes, stop times), a pure planner that 
 across nodes, and a hash-chained allocation ledger with a failure feed and quiet-window reports. Stdlib only; it imports
 neither `verity` nor `research` (`tests/test_boundaries.py`).
 
-Nothing here runs on a node yet. `cluster plan` over a snapshot is how a shadow run compares the planner's decisions with
-what a node's current tools (`gpu-lease`, node 2's fill runner, node 1's Kueue) did. A cutover is a written plan that goes
-to Daniel first.
+On vy-nebius-2 the agent (`cluster agent`) runs beside today's tools. In shadow mode it observes `gpu-lease` through
+`nebius2` (owner lines, wait files and `preempted.log`, reading locks from their holders' `/proc/<pid>/fdinfo`, never
+through a lock), mirrors what it did into the ledger, and records what the planner would have done (`shadow.py`). In live
+mode it holds `/run/gpu-lease/agent.lock` and carries the plan out. `cluster shadow replay` runs the shadow over a day's
+copied logs, and `cluster shadow evaluate` is the pass bar. Node 1 has nothing yet: its executor under the one queue is
+kueue-fold's.
 
 ## Layout
 
@@ -20,9 +23,13 @@ src/cluster/
 ├── route.py    place(): which node's queue a job enters
 ├── ledger.py   the append-only, hash-chained ledger; state (the one source of lease and queue state), state.json,
 │               gpu-lease/usage/v1 ingest, history, quiet_report, failures, usage
-└── cli.py      cluster validate | plan | ledger verify | ledger quiet | ledger failures | ledger usage
+├── nebius2.py  node 2's gpu-lease as the model sees it: owner lines, wait files, preempted.log; read(), live and read-only
+├── shadow.py   the planner beside gpu-lease: mirror into the ledger, plan, divergences; replay(); evaluate(), the pass bar
+├── agent.py    the node agent: the tick loop (shadow or live), timed windows left alone, stop on exception or a rule broken
+└── cli.py      cluster validate | plan | ledger … | agent | shadow replay | shadow evaluate
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
-tests/          one scenario per rule (test_plan.py), and random workloads checked against every rule (test_simulation.py)
+tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
+                and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3)
 ~~~
 
 ## The rules
@@ -53,4 +60,6 @@ uv run tools/check/suites.py cluster
 uv run cluster validate tools/cluster/descriptions/nebius.toml
 uv run cluster plan tools/cluster/descriptions/nebius.toml SNAPSHOT.json    # snapshot shape: cli.py's docstring
 uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
+uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
+uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
 ~~~
