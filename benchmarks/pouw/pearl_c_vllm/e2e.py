@@ -165,6 +165,8 @@ def gate(run, weights: dict) -> list[dict]:
         out.append(screen_check(run, weights))
     if run.hashing and run.schedule.side:
         out.append(schedule_check(run, weights))
+    if run.hashing and getattr(run, "graphs", False):
+        out += graphs_check(run, weights)
     run.details["passes"].clear()
     run.gemm_ms()
     return out
@@ -188,6 +190,50 @@ def schedule_check(run, weights: dict) -> dict:
     run.begin(schedule=mine)
     return {"check": "schedule", "schedule": mine, "priorities": run.details["schedule"], "serial": commits["serial"],
             mine: commits[mine], "ok": commits["serial"] == commits[mine]}
+
+
+def graphs_check(run, weights: dict) -> list[dict]:
+    """With ``--graphs``, at every distinct (n, k): one m = 32 call made eagerly, then twice as a graph replay, each from a
+    fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
+    of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
+    import torch
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    out, seen = [], set()
+    gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
+    for w, W in weights.items():
+        if tuple(W.shape) in seen:
+            continue
+        seen.add(tuple(W.shape))
+        x = torch.randn(BATCH, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
+        got = []
+        for graphs in (False, True, True):
+            run.graphs = graphs
+            run.begin()
+            run.poison()
+            y = run.gemm(w, x, W, None).clone()
+            flags = run.flag_buf[:BATCH].clone()
+            c = run.end()
+            got.append((c["transcript_root"], c["activation_roots"], flags, y))
+        run.graphs = True
+        same = all(g[0] == got[0][0] and g[1] == got[0][1] and torch.equal(g[2], got[0][2]) and torch.equal(g[3], got[0][3])
+                   for g in got[1:])
+        out.append({"check": "graphs", "weight": w, "n": W.shape[0], "k": W.shape[1], "m": BATCH, "eager_equals_replay": same,
+                    "ok": same})
+    w, W = next(iter(weights.items()))
+    x = torch.randn(PREFILL, W.shape[1], device=W.device, generator=gen)
+    x[::97] = 0
+    x[1::89, 1::8] = 1e4
+    x = x.to(torch.bfloat16)
+    run.begin()
+    run.gemm(w, x, W, None)
+    sh = run.shapes[(PREFILL, W.shape[0], W.shape[1])]
+    a, b = torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device), torch.zeros((PREFILL, 2), dtype=torch.uint8, device=W.device)
+    PPD.screen_into(a, x, sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    PPD.screen_into(b, sh.xa[:PREFILL], sh.b["alpha_a"], sh.b["aux_a"], run.fused_screen)
+    run.end()
+    same = bool(torch.equal(a, b))
+    out.append({"check": "screen_bf16", "rows": PREFILL, "k": W.shape[1], "flagged": int(a.sum()), "flags_equal": same, "ok": same})
+    return out
 
 
 def screen_check(run, weights: dict) -> dict:
