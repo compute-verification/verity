@@ -559,9 +559,19 @@ def test_discovery_takes_mapped_device_code_and_leaves_nvidias_libraries_unscann
     g = SG.Gate(tools=TOOLS, cache=None)
     assert g.discover() == [str(libs[1])]
     assert g.report()["not_scanned"] == [{"path": str(libs[0]), "reason": "NVIDIA's library"}]
-    monkeypatch.setattr(SG, "mapped", lambda: [str(tmp_path / "libgone.so") + " (deleted)"])
-    with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
-        g.discover()
+    for gone in (str(tmp_path / "libgone.so") + " (deleted)", "/memfd:lib (deleted)", "/dev/shm/x (deleted)"):
+        monkeypatch.setattr(SG, "mapped", lambda gone=gone: [gone])
+        with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
+            g.discover()
+
+
+def test_shared_anonymous_memory_is_not_a_library(tmp_path, monkeypatch):
+    """The CUDA driver maps shared anonymous memory, which /proc/self/maps names '/dev/zero (deleted)'."""
+    anon = ["/dev/zero (deleted)", "/SYSV0000a1b2 (deleted)"]
+    monkeypatch.setattr(SG, "mapped", lambda: [*anon, str(a_library(tmp_path / "libarm.so"))])
+    g = SG.Gate(tools=TOOLS, cache=None)
+    assert g.discover() == [str(tmp_path / "libarm.so")]
+    assert g.report()["not_scanned"] == [{"path": p, "reason": "shared anonymous memory, not a file"} for p in anon]
 
 
 def test_this_process_maps_the_python_interpreter():

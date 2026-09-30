@@ -67,6 +67,9 @@ EXIT_FAIL = 7
 PINS = Path(__file__).with_name("sass_pins.json")
 NVIDIA_LIB = re.compile(r"lib(cublas|cublasLt|cudart|cuda|nvrtc|nvrtc-builtins|nvJitLink|cufft|cufftw|curand|cusparse|cusolver"
                         r"|cudnn\w*|nccl|cupti|nvToolsExt|nvperf_\w+|nvidia-[\w-]+)\.so(\.\d+)*")
+#: how /proc/self/maps names shared anonymous memory (mmap MAP_SHARED|MAP_ANONYMOUS, which the CUDA driver maps) and System V
+#: shared memory: no file is behind either, so neither is a library; any other deleted mapping fails the gate
+ANON_SHARED = re.compile(r"/dev/zero \(deleted\)|/SYSV[0-9a-f]{8} \(deleted\)")
 PTX_BAD = re.compile(r"\.(ftz|approx)\b|\bdiv\.full\b")
 FATBIN_MAGIC = 0xBA55ED50
 FATBIN_COMPRESSED = 0x2000
@@ -1295,6 +1298,9 @@ class Gate:
         """Mapped files with device code, NVIDIA's libraries aside (recorded as not scanned)."""
         out = []
         for p in mapped():
+            if ANON_SHARED.fullmatch(p):
+                self.not_scanned[p] = "shared anonymous memory, not a file"
+                continue
             if p.endswith(" (deleted)"):
                 raise SassGateFailed(f"{p} is mapped but deleted: the gate can't read it")
             if os.path.realpath(p) in self.records or p in self.not_scanned or not has_device_code(p):
