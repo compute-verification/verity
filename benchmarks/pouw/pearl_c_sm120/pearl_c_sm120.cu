@@ -71,8 +71,8 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control of PEARLC_H
 //   PEARLC_H  PEARLC_S, hashing C~ and U from registers instead of storing them: each (row, 32-column chunk)'s message
 //             digest of C~ and U (TurboSHAKE128, D = 0x21, into p9 in hash_msg's layout). C~ is kept in the promotion
-//             accumulators through the peel; each warp's scratch is its share of the pipeline's stages, free after the main
-//             loop.  128 x 128 tiles only (a 64 x 32 warp tile)
+//             accumulators through the peel; each warp's scratch is 1 KB (ph::QUAD_SCRATCH) of the pipeline's stages, free
+//             after the main loop.  128 x 128 tiles only (a 64 x 32 warp tile)
 //   PEARLC_B  PEARLC_H under hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") (32 bytes at p10), one chunk of
 //             four blocks per message, into p9 in hash.cuh's hash_msg layout
 enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_H, M_PEARLC_B };
@@ -122,7 +122,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   static_assert(G == 0 || G % 2 == 0, "a promotion window is whole 64-byte stages");
   constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
   static_assert(WARPS_M * WARPS_N == 8 && MI >= 1 && NI % 2 == 0, "8 warps of 16k x 32 columns");
-  constexpr int SCRATCH = WM * WN * 4;  // a warp's share of the stages: the quad transpose's scratch
+  constexpr int SCRATCH = ph::QUAD_SCRATCH;  // the quad transpose's scratch a warp, at the start of the stages
   static_assert(!HASH || (MI == 4 && NI == 4 && 8 * SCRATCH <= STAGES * (A_ST + B_ST)), "a hashed warp tile is 64 x 32");
   extern __shared__ __align__(128) uint8_t smem[];
   uint8_t* sA = smem;
