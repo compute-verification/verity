@@ -25,6 +25,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from verity.evaluation.batch import type_dtype, type_shape
+from verity_vllm.program.kernels.fp8_packed_rows import fp8_group_quant_packed
 from verity_vllm.program.kernels.kernel_registry import Declined, register
 
 #: spec family -> the registry reference that evaluates its relation (recorded in every report)
@@ -89,6 +90,7 @@ EVALUATORS = {
     # [R16 fp8] the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the VU -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
     "Fp8GroupQuant_v1": "verity_vllm.program.kernels.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
+    "Fp8GroupQuantPacked_v1": "verity_vllm.program.kernels.fp8_packed_rows.fp8_group_quant_packed_row (UE8M0 ceiling, x * 2^-e, four bytes a word)",
     "ScaledMmFp8Block_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps from +0 per 128-block, "
                            "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
     "ScaledMmFp8BlockSharedScale_v1": "verity_vllm.program.kernels.derived_rows.scaled_mm_fp8_block_row (ScaledMmFp8Block_v1's function and signature: "
@@ -715,7 +717,7 @@ def _sample_gumbel_split(rng: np.random.Generator, n: int, params: Sequence[Any]
 def _check_targets() -> dict[str, list]:
     """Family -> the small specialisations its self-check binds (the served statics are too wide for the gate reference)."""
     from verity.ir.defs import bind
-    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
+    from verity_vllm.program.registry import b1, fa3_check_inf, fp8, fp8_packed, gemm_bias, hopper, moe, moe_pad, sampling, topp_words
     P = b1.P
     fa2 = {"DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
     fa3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -741,6 +743,7 @@ def _check_targets() -> dict[str, list]:
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
         "GumbelTopPTokenSelect_v2": [bind(topp_words.GumbelTopPTokenSelectV2, V=16, S=4)],
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
+        "Fp8GroupQuantPacked_v1": [bind(fp8_packed.Fp8GroupQuantPacked, K=256, G=128), bind(fp8_packed.Fp8GroupQuantPacked, K=640, G=128)],
         "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=128, G=128)],
         "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=128, G=128)],
         "MoeRouterTopK_v1": [bind(moe.MoeRouterTopK, **router)],
@@ -779,6 +782,7 @@ _row("GumbelTopPTokenSelect_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sample_gumbel)
 _row("GumbelTopPTokenSelect_v2", gumbel_topp_split, (SAMPLED_MEMBER,), _sample_gumbel_split)
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
+_row("Fp8GroupQuantPacked_v1", fp8_group_quant_packed, ("0", "1"))
 _row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
 _row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))
 _row("MoeRouterTopK_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))

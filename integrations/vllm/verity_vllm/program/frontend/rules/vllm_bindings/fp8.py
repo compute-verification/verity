@@ -94,6 +94,71 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
                                 "tma_aligned_scales": bool(a.get("tma_aligned_scales", False))}, emitted=f"{fn.id} x{len(rows)}")
 
 
+class PerTokenGroupFp8QuantPackedRule(InPlaceRule):
+    """`_C.per_token_group_fp8_quant_packed(x bf16 [M, K], x_q! e4m3 [M, K], x_s_packed! int32 [M, ceil(K/G/4)], G, eps, fp8_min, fp8_max)`
+    (DeepGEMM's activation quantizer, `per_token_group_quant_fp8_packed_for_deepgemm`) -> `fp8_group_quant_packed{K,G}`
+    (Fp8GroupQuantPacked_v1) per token row; both allocations are rebound (`x_q` to port 0, `x_s_packed` to port 1).  `x_s_packed` is
+    allocated column-major and TMA-aligned (`empty_strided`): the layout is storage, the value is its logical [M, ceil(K/G/4)] words."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("PerTokenGroupFp8QuantPacked[vllm]", 1, "in-place-binding",
+                    applies_to="_C.per_token_group_fp8_quant_packed(x, Tensor! x_q, Tensor! x_s_packed, group_size, eps, fp8_min, fp8_max)",
+                    preconditions=("x is bf16 [M, K] with K % group_size == 0", "x_q is an unwritten allocation float8_e4m3fn [M, K]",
+                                   "x_s_packed is an unwritten allocation int32 [M, ceil(K/group_size/4)]",
+                                   "group_size == 128, eps == 1e-10f, fp8_min/max == -448/448 (the pinned Definition)"),
+                    evidence_domain="structural; numerics: Fp8GroupQuantPacked_v1 (per_token_group_quant_8bit_packed_register_kernel)")
+
+    def targets(self):
+        return _C_op("per_token_group_fp8_quant_packed")
+
+    @staticmethod
+    def _scalars(node) -> dict:
+        d = dict(zip(("x", "x_q", "x_s", "group_size", "eps", "fp8_min", "fp8_max"), node.args))
+        d.update(node.kwargs)
+        return d
+
+    def applies(self, node, ctx):
+        a = self._scalars(node)
+        if not all(k in a for k in ("x", "x_q", "x_s", "group_size", "eps", "fp8_min", "fp8_max")):
+            return "unexpected operator arity"
+        r = _row_value(ctx, a["x"], "x")
+        if r:
+            return r
+        xs_shape = shape(ctx, a["x"])
+        G = a["group_size"]
+        if len(xs_shape) != 2:
+            return f"x is {xs_shape}, not [M, K] (the packed scales are [M, K/G/4])"
+        if not isinstance(G, int) or G != FP8_QUANT_PINS["group_size"]:
+            return f"numerics_unregistered: group_size={G!r}; the packed kernel is group 128 only"
+        if xs_shape[-1] % G:
+            return f"K={xs_shape[-1]} is not a multiple of the group size {G}"
+        for key in ("eps", "fp8_min", "fp8_max"):
+            if not _f32_equal(a[key], FP8_QUANT_PINS[key]):
+                return f"numerics_unregistered: {key}={a[key]!r} differs from the pinned {FP8_QUANT_PINS[key]!r} (another kernel configuration)"
+        for name in ("x_q", "x_s"):
+            if not isinstance(ctx.val(a[name]), Alloc):
+                return f"{name} is not an unwritten allocation ({type(ctx.val(a[name])).__name__})"
+        if not dtype_is(ctx, a["x_q"], FP8_E4M3):
+            return f"numerics_unregistered: x_q has dtype {ctx.dtype_of(a['x_q'])}; the Definition quantises to float8_e4m3fn"
+        if not dtype_is(ctx, a["x_s"], torch.int32):
+            return f"x_s_packed has dtype {ctx.dtype_of(a['x_s'])}, not int32"
+        if shape(ctx, a["x_q"]) != xs_shape:
+            return f"x_q {shape(ctx, a['x_q'])} vs x {xs_shape}"
+        if shape(ctx, a["x_s"]) != (xs_shape[0], (xs_shape[1] // G + 3) // 4):
+            return f"x_s_packed {shape(ctx, a['x_s'])} vs x {xs_shape}: not [M, ceil(K/{G}/4)]"
+        return True
+
+    def emit(self, node, ctx):
+        a = self._scalars(node)
+        rows, lead = rows_of(ctx.coll(a["x"]))
+        K, G = rows[0].type.n, int(a["group_size"])
+        fn = ctx.kind("fp8_group_quant_packed", node, K=K, G=G)
+        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        ctx.rebind(a["x_q"], from_rows([o[0] for o in outs], lead), self, what="x_q")
+        ctx.rebind(a["x_s"], from_rows([o[1] for o in outs], lead), self, what="x_s_packed")
+        ctx.record(self, node, {"K": K, "G": G, "rows": len(rows), "eps": a["eps"], "fp8_min": a["fp8_min"], "fp8_max": a["fp8_max"]},
+                   emitted=f"{fn.id} x{len(rows)}")
+
+
 class CutlassScaledMmFp8BlockRule(InPlaceRule):
     """`_C.cutlass_scaled_mm(out! bf16 [.., N], a e4m3 [.., K], b = W.T ([K, N] view of e4m3 W [N, K]), a_scales f32 [.., K/G],
     b_scales = Ws.T ([K/G, N/G] view of f32 Ws [N/G, K/G]), bias None)` -> `scaled_mm_fp8_block{K,N,G}` per token row (the active target's

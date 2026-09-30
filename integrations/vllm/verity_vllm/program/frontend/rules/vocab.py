@@ -15,6 +15,7 @@ from verity.ir.defs import bind as ir_bind
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
+from verity_vllm.program.registry import fp8_packed as _fp8p
 from verity_vllm.program.registry import moe as _moe
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
@@ -296,6 +297,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # computed) and the scaled GEMM over e4m3 weights with f32 128x128 block scales as Inputs. `rules/vllm_bindings.py` asks for them.
            # SCALE is `TargetProfile.effective_fp8_scale_construction()`.
            "fp8_group_quant": lambda K, G: ir_bind(_fp8.Fp8GroupQuant, K=K, G=G),
+           # the same quantizer with packed UE8M0 scales, DeepGEMM's activation quantizer (`_C.per_token_group_fp8_quant_packed`)
+           "fp8_group_quant_packed": lambda K, G: ir_bind(_fp8p.Fp8GroupQuantPacked, K=K, G=G),
            "scaled_mm_fp8_block": lambda K, N, G, SCALE: ir_bind(_FP8_SCALE[SCALE], K=K, N=N, G=G)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
@@ -332,6 +335,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
            "fp8_group_quant": "Fp8GroupQuant_v1{K,G}: _C.per_token_group_fp8_quant on one bf16 row -> (x_q e4m3[K], x_s f32[K/G]); per group absmax fmaxf-fold "
                               "from eps 1e-10, s = absmax/448 (div.rn), q = e4m3(clamp(f32(x)/s, ±448)); both outputs computed",
+           "fp8_group_quant_packed": "Fp8GroupQuantPacked_v1{K,G}: _C.per_token_group_fp8_quant_packed on one bf16 row -> (x_q e4m3[K], the "
+                                     "packed UE8M0 scales i32[ceil(K/G/4)]); per group e = the UE8M0 ceiling of fmaxf(absmax/448, 1e-10), "
+                                     "q = e4m3(clamp(f32(x) * 2^-e, ±448))",
            "scaled_mm_fp8_block": "ScaledMmFp8BlockSharedScale_v1{K,N,G} (SCALE shared-per-block) or ScaledMmFp8Block_v1{K,N,G} (per-coordinate): blockwise "
                                   "_C.cutlass_scaled_mm on one token row -- per coordinate, ascending 128-tiles: temp = 4x HopperE4m3QgmmaDot32 from +0, "
                                   "acc = FFMA(temp, FMUL(x_s[kb], Ws[n//G][kb]), acc); cvt.rn.bf16.f32; shared-per-block forms each weight block's FMULs "
