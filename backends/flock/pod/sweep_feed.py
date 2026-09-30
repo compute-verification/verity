@@ -8,7 +8,7 @@ M0's pinned benches keep priority: a file is written only while `provers` has no
 `provers` depth of 2 counts anyone's pending workloads, so ours never fill it ahead of a bench).
 Ids are `<tag>-s<i>` (stage) and `<tag>-p<i>` (prove), `i` the shape's line in $SWEEP/<row>/shapes.tsv (smallest first), `tag` a
 digest of the row. Every 25th prove job selftests on the GPU (the device's proofs and transcripts against the CPU's). `--limit`: only
-the first N shapes of each row. State is the dispatcher's own: its ready directory, done.jsonl, and this lane's written.txt.
+the first N shapes of each row. State is the dispatcher's own: its ready directory and done.jsonl, and the feeder's $SWEEP_FEED_STATE/written.txt.
 """
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ LANE = "backend-sweep-2"
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready")) / LANE
 DONE = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch")) / "done.jsonl"
 SWEEP = Path(os.environ.get("SWEEP", "/workspace/jobs/sweep2"))
+STATE = Path(os.environ.get("SWEEP_FEED_STATE", "/workspace/jobs/sweep2-feed"))   # the feeder's (research's); SWEEP is the jobs'
 TREE = os.environ.get("SWEEP_TREE", f"/workspace/research/trees/{LANE}")
 SELFTEST_EVERY = 25
 STAGE_RES = {"cpus": 4, "memory": 96, "gpus": 0}
@@ -61,7 +62,7 @@ def done() -> dict[str, dict]:
 
 
 def written() -> set[str]:
-    p = SWEEP / "written.txt"
+    p = STATE / "written.txt"
     return set(p.read_text().split()) if p.exists() else set()
 
 
@@ -70,7 +71,8 @@ def write(item_id: str, item: dict) -> None:
     tmp = READY / f".{item_id}.tmp"
     tmp.write_text(json.dumps(item, sort_keys=True))
     tmp.rename(READY / f"{item_id}.json")
-    with open(SWEEP / "written.txt", "a") as f:
+    STATE.mkdir(parents=True, exist_ok=True)
+    with open(STATE / "written.txt", "a") as f:
         f.write(item_id + "\n")
 
 
