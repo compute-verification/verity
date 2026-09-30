@@ -316,8 +316,8 @@ def test_the_pipelines_h2_templates_bind_the_audits_schemas():
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-@pytest.mark.parametrize("scheme", sorted(PPD.SCHEMES))
-def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
+@pytest.mark.parametrize("scheme,rows_form", [(s, "w") for s in sorted(PPD.SCHEMES)] + [("pearl-c-sm120-v1-h2", "s")])
+def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, rows_form):
     """B's roots, each call's A root over its m₁₆ rows (filler zero), and the pass's tile tree over the leaves the calls wrote,
     their kernels run by `simt_twin`: each is `MerkleTree`'s root in the scheme's tree hash (frame-b3 or frame-b3s)."""
     hashing = PPD.scheme_of(scheme).hashing
@@ -330,15 +330,23 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h).commitment.root for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, BEACON).salt
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, BEACON, capacity=1 << 12)
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, BEACON, capacity=1 << 12,
+                              rows_form=rows_form)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
              (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
     for w, x in calls:
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-        want_rows = ["hash_rows_b3s"] if hashing == "h2" else ["hash_rows_w"]
+        want_rows = ["hash_rows_b3s" + ("_stats" if rows_form == "s" else "")] if hashing == "h2" else ["hash_rows_w"]
         assert names[:len(want_rows) + 2] == ["hash_node_keys", *want_rows, "hash_tree_small"], names
+        assert ("stats_s5" in names) == (rows_form == "w")
+        if rows_form == "s":
+            a = torch.zeros((32, 1024), dtype=torch.float32)
+            a[:x.shape[0]] = x.float()
+            alpha, aux = stats(a.numpy().view(np.uint32))
+            sh = run.shapes[(32, weights[w].shape[0], 1024)]
+            assert torch.equal(sh.b["alpha_a"][:4 * 32], alpha) and torch.equal(sh.b["aux_a"][:8 * 32], aux.reshape(-1))
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()

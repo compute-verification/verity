@@ -315,9 +315,10 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, *, variant: str, hashing: str) -> Any:
+              m_real: int | None = None, *, variant: str, hashing: str, rows_form: str = "w") -> Any:
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "t_row": 0, "t_tile": 0, "unit": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, hashing=hashing)
+    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, hashing=hashing,
+                               rows_form=rows_form)
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
@@ -347,8 +348,9 @@ class PearlCDeviceRun(GraphCalls):
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
-                 schedule: str | Schedule = SERIAL, graphs: bool = False):
+                 schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w"):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
+        self.rows_form = rows_form
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
@@ -480,9 +482,19 @@ class PearlCDeviceRun(GraphCalls):
         return [*sh.b.values(), *(t for st in sh.sets[1:] for t in st.values())]
 
 
+    def _rows(self) -> str:
+        """A's rows form: `rows_form`, but `w` without hashing, since `s`'s stats ride on A's row leaves."""
+        return self.rows_form if self.hashing else "w"
+
+    def _call_names(self) -> tuple[str, ...]:
+        """The call's step names: every call step but the hashing ones when hashing is off, but the omitted ones, and but
+        stats_a under rows form `s` (hash_rows_a writes it)."""
+        return tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit
+                     and not (x == "stats_a" and self._rows() == "s"))
+
     def _call_steps(self, pipe: Any) -> list[Any]:
-        """The call's steps in order: every call step but the hashing ones when hashing is off, and but the omitted ones."""
-        return _steps(pipe, tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit))
+        """The call's steps in order (`_call_names`)."""
+        return _steps(pipe, self._call_names())
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
         """The call's pipeline and its steps: the main lane's, and (with hashing) the side lane's, by the schedule's groups."""
@@ -495,8 +507,8 @@ class PearlCDeviceRun(GraphCalls):
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": kp, "unit": kp + 32,
                     **_constant_keys(self.const)}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
-                             hashing=self.scheme.hashing)
-            names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
+                             hashing=self.scheme.hashing, rows_form=self._rows())
+            names = self._call_names()
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
             if self.time_gemm and self.device.type == "cuda":
