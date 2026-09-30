@@ -57,8 +57,9 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 }
 
 // ---------------------------------------------------------------- the GEMM
-// A (M x K) and B (N x K) row-major E4M3.  One CTA of 8 warps per TM x BN tile: 128 x 128 (warp tile 64 x 32), or 64 x 64
-// (16 x 32) for decode's few rows, where 128 x 128 tiles leave most SMs idle; persistent over tiles in groups of `i[3]` tile
+// A (M x K) and B (N x K) row-major E4M3.  One CTA of 8 warps per TM x BN tile: 128 x 128 (warp tile 64 x 32), 64 x 64
+// (16 x 32) for decode's few rows, where 128 x 128 tiles leave most SMs idle, or 128 x 32 (16 x 32) for the 32-column words
+// (A'F_B, B~F_A, G) at M a multiple of 128; persistent over tiles in groups of `i[3]` tile
 // rows; a 4-deep cp.async pipeline of 64-byte stages (two atoms each).  G is the promotion period: every 32 G products (G / 2
 // stages) from +0, promoted by one FADD into the FP32 total; G = 0 is one accumulator over all of K (no promotion).  Every
 // output's chain is the same at either tile.  Modes:
@@ -273,7 +274,7 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
 }
 
 // G4: pearl-c-sm120-v1 (pearl_c_device.SM120); _u: unpromoted (SM120_UNPROMOTED); gemm_fast is the plain GEMM unpromoted;
-// _d: the 64 x 64 tile
+// _d: the 64 x 64 tile; gemm_words: the 128 x 32 tile
 #define GEMM(NAME, MODE, TM, BN, G)                                                                                 \
   extern "C" __global__ void __launch_bounds__(NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<MODE, TM, BN>(); }
@@ -287,33 +288,46 @@ GEMM(gemm_ct_d, M_CT, 64, 64, 4)
 GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_ct_d_u, M_CT, 64, 64, 0)
 GEMM(gemm_pearlc_d_u, M_PEARLC, 64, 64, 0)
+GEMM(gemm_words, M_CT, 128, 32, 4)
+GEMM(gemm_words_u, M_CT, 128, 32, 0)
 
-// The FP32 words of a 32-column product (A'F_B, B~F_A, G): one warp per m16 x n8 output tile over all of K, the chain in the
-// GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0), fragments loaded straight from global memory,
-// so M / 16 x 4 warps share the work where a 128 x 32 CTA tile gave M / 128 CTAs.  A block's 4 warps are one m16 row's 4 n8
-// tiles and share its A rows.  p0 A (M x K), p1 B (N x K), p2 out (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8, 32 G)
+// The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8
+// output tile over all of K, the chain in the GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0),
+// fragments loaded straight from global memory through a ring of D atoms in registers, so D atoms' loads are in flight
+// behind the chain.  A block's 4 warps are one m16 row's 4 n8 tiles and share its A rows.  p0 A (M x K), p1 B (N x K), p2 out
+// (M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8, 32 D)
 template <int G> DEV void words_body(const Args& a) {
+  constexpr int D = 16;
+  static_assert(D % (G > 0 ? G : 1) == 0, "the ring holds whole promotion windows");
   const int M = a.i[0], N = a.i[1], K = a.i[2], tn = N / 8, lane = threadIdx.x % 32, g = lane / 4, q = lane % 4;
   const int w = blockIdx.x * 4 + threadIdx.x / 32;
   if (w >= M / 16 * tn) return;
-  const int r0 = w / tn * 16, c0 = w % tn * 8;
+  const int r0 = w / tn * 16, c0 = w % tn * 8, J = K / 32;
   const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 4 * q;
   const uint8_t* A1 = A0 + (size_t)8 * K;
   const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 4 * q;
-  float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f}, total[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-#pragma unroll 16
-  for (int j = 0; j < K / 32; j++) {
+  uint32_t fa[D][4], fb[D][2];
+  auto load = [&](int j, uint32_t* x, uint32_t* y) {
     const int kk = 32 * j;
-    const uint32_t fa[4] = {ld32(A0 + kk), ld32(A1 + kk), ld32(A0 + kk + 16), ld32(A1 + kk + 16)};
-    const uint32_t fb[2] = {ld32(B0 + kk), ld32(B0 + kk + 16)};
-    if constexpr (G > 0) {
-      if (j % G == 0)
-        for (int e = 0; e < 4; e++) acc[e] = 0.0f;
-    }
-    qmma(acc, fa, fb);
-    if constexpr (G > 0) {
-      if (j % G == G - 1)
-        for (int e = 0; e < 4; e++) total[e] = __fadd_rn(total[e], acc[e]);
+    x[0] = ld32(A0 + kk); x[1] = ld32(A1 + kk); x[2] = ld32(A0 + kk + 16); x[3] = ld32(A1 + kk + 16);
+    y[0] = ld32(B0 + kk); y[1] = ld32(B0 + kk + 16);
+  };
+#pragma unroll
+  for (int d = 0; d < D; d++) load(d, fa[d], fb[d]);
+  float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f}, total[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+  for (int j0 = 0; j0 < J; j0 += D) {
+#pragma unroll
+    for (int d = 0; d < D; d++) {
+      if constexpr (G > 0) {
+        if (d % G == 0)
+          for (int e = 0; e < 4; e++) acc[e] = 0.0f;
+      }
+      qmma(acc, fa[d], fb[d]);
+      if constexpr (G > 0) {
+        if (d % G == G - 1)
+          for (int e = 0; e < 4; e++) total[e] = __fadd_rn(total[e], acc[e]);
+      }
+      load(min(j0 + D + d, J - 1), fa[d], fb[d]);
     }
   }
   float* out = reinterpret_cast<float*>(a.p[2]) + (size_t)(r0 + g) * N + c0 + 2 * q;

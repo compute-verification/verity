@@ -14,10 +14,10 @@ import sys
 QMMA, HMMA = "QMMA.16832.F32.E4M3.E4M3", "HMMA.16816.F32.BF16"
 MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: kernel: (QMMA multiple, HMMA count); a multiple of one stage's atoms: 128 x 128 tiles of 8 warps take 16 atoms per k32, 32
-#: per 64-deep stage, and 64 of the peel; 64 x 64 tiles (_d) 4 per k32, 8 per stage, and 16 of the peel; the words kernels
-#: one atom per k32 per warp
+#: per 64-deep stage, and 64 of the peel; 64 x 64 (_d) and 128 x 32 (gemm_words) tiles 4 per k32, 8 per stage, and 16 of the
+#: peel; the words kernels one atom per k32 per warp
 WANT = {**{g: (32, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_ct_u")},
-        **{g: (8, 0) for g in ("gemm_ct_d", "gemm_ct_d_u")},
+        **{g: (8, 0) for g in ("gemm_ct_d", "gemm_ct_d_u", "gemm_words", "gemm_words_u")},
         "gemm_pearlc": (32, 64), "gemm_pearlc_u": (32, 64), "gemm_pearlc_d": (8, 16), "gemm_pearlc_d_u": (8, 16),
         "words": (1, 0), "words_u": (1, 0), "form_s5": (1, 0)}
 

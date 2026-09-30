@@ -81,6 +81,8 @@ def gemms() -> list[tuple[str, str, int, int, int]]:
 
 
 def gemm_tile(name: str) -> tuple[int, int]:
+    if name.startswith("gemm_words"):
+        return (128, 32)
     return (64, 64) if name.endswith(("_d", "_d_u")) else (128, 128)
 
 
@@ -88,7 +90,7 @@ def test_gemms_fit_sm120_shared_memory():
     assert "STAGES * (TM + BN) * BK + (MODE == M_PEARLC ? (TM + BN) * PEEL_ROW : 0)" in SOURCE
     names = {n for n, *_ in gemms()}
     assert names == {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u",
-                     "gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u"}
+                     "gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u"}
     for name, mode, tm, bn, g in gemms():
         assert gemm_smem(mode, tm, bn) <= SM120_MAX_DYN, name
         assert (tm, bn) == gemm_tile(name)
@@ -235,7 +237,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         base = name.removesuffix("_u").removesuffix("_d")
         if base in ("gemm_plain", "gemm_fast"):
             need.update({4: 2 * M * N, 7: 4 * M, 8: 4 * N})
-        elif base == "gemm_ct":
+        elif base in ("gemm_ct", "gemm_words"):
+            assert base == "gemm_ct" or N == 32, name
             need[2] = 4 * M * N
         else:
             assert base == "gemm_pearlc", name
@@ -530,7 +533,7 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         assert all(t["failed"] for t in g["detail"]["twin_tiles"])
     assert rows[-1]["live"] == []
 
-    forming = lambda shape: ["stats_s5", "eprime", "form_s5", "words" + sx, "pa",  # noqa: E731
+    forming = lambda shape: ["stats_s5", "eprime", "form_s5", {"pre": "gemm_words", "dec": "words"}[shape] + sx, "pa",  # noqa: E731
                              {"pre": "gemm_pearlc", "dec": "gemm_pearlc_d"}[shape] + sx]
     hashes = ["hash_msg", "hash_leaf", "hash_rows_f32"]
     got, allocs = windows(log)
@@ -542,7 +545,7 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
         copy = ["copy"] if mark["shape"] == "dec" else []
         if mark["what"] == "weight":
-            assert names == ["lines"] * 3 + ["stats_s5", "eprime", "form_s5"] + ["words" + sx] * 2 + ["pb"]
+            assert names == ["lines"] * 3 + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"]
             continue
         if mark["what"] == "phases":
             parts: dict[str, list[dict]] = {}

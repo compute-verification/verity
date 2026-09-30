@@ -243,7 +243,9 @@ def cdiv(a: int, b: int) -> int:
 
 
 def gemm_tile(name: str) -> tuple[int, int]:
-    """A GEMM kernel's CTA tile (rows, columns): 64 x 64 for the _d kernels, else 128 x 128."""
+    """A GEMM kernel's CTA tile (rows, columns): 64 x 64 for the _d kernels, 128 x 32 for gemm_words, else 128 x 128."""
+    if name.startswith("gemm_words"):
+        return (BM, 32)
     return (BM_D, BM_D) if name.endswith(("_d", "_d_u")) else (BM, BM)
 
 
@@ -251,7 +253,8 @@ class Pipeline:
     """One (shape, variant) instance: its buffers and its kernels in order, each a (name, phase, launch) step.  Phases:
     `job` (the weight side, once per weight and epoch), `forming`, `gemm` (gemm_ct, the chain alone, for the split),
     `cleanup` and `hashing` (the call), and the baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of
-    128 only).  The chain runs on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either)."""
+    128 only).  The chain runs on 128 x 128 tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the
+    32-column words on 128 x 32 CTA tiles, but A'F_B at 64 x 64 on the `words` kernel's warp tiles."""
 
     GEMM_SMEM: dict[str, int] = {}
 
@@ -310,9 +313,13 @@ class Pipeline:
         ptrs[5], ptrs[6], ptrs[7], ptrs[8] = pa, pb, rs, cs
         self.dev.launch(name, min(tiles, grid or self.dev.sms), NT, self.GEMM_SMEM[name], p=ptrs, i=(M, N, self.k, RASTER))
 
-    def words(self, a: str, b: str, M: int, out: str) -> None:
-        """The FP32 words of an (M x K) by (32 x K) product: one warp per m16 x n8 tile, a block per m16 row."""
-        self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
+    def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
+        """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
+        tile, a block per m16 row."""
+        if M % BM == 0 and not warps:
+            self.gemm("gemm_words" + self.suffix, a, b, M, 32, out=(out,))
+        else:
+            self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
 
     def steps(self) -> list[tuple[str, str, object]]:
         d, b, m, n, k, sx = self.dev, self.b, self.m, self.n, self.k, self.suffix
@@ -343,7 +350,7 @@ class Pipeline:
         forming = [lines("ea", self.keys["line_a"], 0, 0, m, "ea_codes"),
                    *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
-        cleanup = [("af", lambda: self.words("at", "fbT32", m, "af")),
+        cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", warps=self.bm == BM_D)),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", lambda: self.gemm(pearlc, "at", "bt", m, n, out=("c", "u", "y"), pa=b["pa_t"], pb=b["pb_t"],
                                                      rs=b["ia_a"], cs=b["ia_b"]))]
@@ -386,7 +393,9 @@ class Pipeline:
 
 PLAIN_BUFFERS = {"qa", "qb", "sa", "sb", "y_plain", "y_fast", "qa_s5", "qb_s5", "y_adopt"}
 GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_plain", ("y_plain",)), ("gemm_fast", ("y_fast",)),
-               ("gemm_adopt", ("y_adopt",)))
+               ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)))
+#: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
+SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -421,7 +430,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
             steps = {nm: fn for nm, _, fn in p_.steps()}
             for grid in grids:
-                for step, outs in GEMM_RERUNS[:2] if p_ is small else GEMM_RERUNS:
+                for step, outs in SMALL_RERUNS if p_ is small else GEMM_RERUNS:
                     for o in outs:
                         dev.ck("cuMemsetD8_v2", u64(pipe.b[o]), 0xAB, pipe.size[o])
                     real = p_.gemm
