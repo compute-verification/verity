@@ -171,12 +171,14 @@ def write_summary(out: Path, names: list[str], starts: list[int], lines: list[in
     doc = {"tool": "pouw_sm120_exact_hot_width", "units": names, "starts": starts, "lines": lines, "min_len": min_len,
            "gate_mismatches": gates, "widest_over_lengths": widest}
     (out / "summary.json").write_text(jdump(doc, indent=1) + "\n")
-    top = max(max(max(v["Wc"][lines.index(16)], v["Wr"][lines.index(16)]) for v in d.values()) for d in widest.values())
-    fh.write(jdump({"summary": {"gate_mismatches": gates, "widest_at_16_lines": top}}) + "\n")
+    R0 = min(lines)
+    top = max(max(max(v["Wc"][lines.index(R0)], v["Wr"][lines.index(R0)]) for v in d.values()) for d in widest.values())
+    fh.write(jdump({"summary": {"gate_mismatches": gates, f"widest_at_{R0}_lines": top}}) + "\n")
     run_result.write(out / "summary.json", gates == 0, "sm120-exact-hot-width",
-                     f"{len(names)} units, starts {starts}, windows of {min_len}+ atoms: widest exact width with 16 lines "
+                     f"{len(names)} units, starts {starts}, windows of {min_len}+ atoms: widest exact width with {R0} lines "
                      f"{top}; gate mismatches {gates}",
-                     [("units", len(names), "count"), ("widest_width_16_lines", top, "count"), ("gate_mismatches", gates, "count")])
+                     [("units", len(names), "count"), (f"widest_width_{R0}_lines", top, "count"),
+                      ("gate_mismatches", gates, "count")])
 
 
 if __name__ == "__main__":
