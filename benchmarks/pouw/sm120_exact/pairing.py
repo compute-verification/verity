@@ -15,7 +15,9 @@ side for the joint search) that keeps the most k pairs, from --cands candidates 
 the rows that share the most codes); after each step, a greedy matching (lowest degree first) gives the k pairs usable at
 once. It stops at the fragment's size (16 A pairs, 8 B pairs) or when fewer than 32 k pairs remain, and restarts from the
 --seeds first pairs that keep the most k pairs and the --seeds that share the most codes, keeping the best run (or the first
-to reach a fragment). Candidates
+to reach a fragment). The joint search takes each step's pair from either side; --joint-policies adds joint searches that
+choose the side otherwise: `B-first` (B's pairs until it has its 8, then A's) and `balanced` (the side furthest from its
+need). Candidates
 are ranked on samples (the first step on 512 x 512 of its index pairs, later steps on 65,536 of the surviving k pairs) and the
 chosen one is applied exactly. The report per item: each step's pairs, surviving k pairs and matching, the largest block
 (pairs x matched k pairs), and whether a fragment was reached. A lower bound on the adversary: greedy, over --rows sampled
@@ -136,16 +138,21 @@ def first_steps(sides: dict, ks: np.ndarray, cands: int, rng: np.random.Generato
     return sim, first
 
 
+POLICIES = ("max", "B-first", "balanced")
+
+
 def search(sides: dict, ks: np.ndarray, k: int, which: tuple[str, ...], cands: int, seeds: int, rng: np.random.Generator,
-           sim: dict, first: dict) -> dict:
+           sim: dict, first: dict, policy: str = "max") -> dict:
     """Greedy over row pairs of the sides in `which` (A, B or both), sharing one k pairing, restarted from `seeds` first pairs
-    with the most surviving k pairs and `seeds` with the most shared codes; the best run is kept."""
-    pool = [t for s in which for t in first[s]]
+    with the most surviving k pairs and `seeds` with the most shared codes; the best run is kept. A joint search's `policy`
+    picks the side of each step: `max` whichever pair keeps the most k pairs, `B-first` B's pairs until it has its 8 (starting
+    from B's first pairs), `balanced` the side furthest from its need."""
+    pool = [t for s in (("B",) if policy == "B-first" else which) for t in first[s]]
     starts = [t[:2] for t in sorted(pool, key=lambda t: -t[2])[:seeds]]
     starts += [t[:2] for t in sorted(pool, key=lambda t: -int(sim[t[0]][t[1]]))[:seeds] if t[:2] not in starts]
     best = None
     for s, p in starts:
-        res = grow(sides, ks, k, which, cands, rng, sim, s, p)
+        res = grow(sides, ks, k, which, cands, rng, sim, s, p, policy)
         if best is None or rank(res) > rank(best):
             best = res
         if best["fragment"]:
@@ -158,7 +165,7 @@ def rank(res: dict) -> tuple:
     return res["fragment"], r[0] + r[1], r[2]
 
 
-def grow(sides, ks, k, which, cands, rng, sim, s0, p0) -> dict:
+def grow(sides, ks, k, which, cands, rng, sim, s0, p0, policy: str = "max") -> dict:
     chosen = {s: [] for s in which}
     used = {s: set() for s in which}
     edges, steps = None, []
@@ -173,9 +180,12 @@ def grow(sides, ks, k, which, cands, rng, sim, s0, p0) -> dict:
             pick = rng.choice(len(edges[0]), RANK_EDGES, replace=False)
             sub = (edges[0][pick], edges[1][pick])
         best = None
-        for s in which:
-            if len(chosen[s]) >= NEED[s]:
-                continue
+        open_ = [s for s in which if len(chosen[s]) < NEED[s]]
+        if policy == "B-first" and "B" in open_:
+            open_ = ["B"]
+        elif policy == "balanced" and open_:
+            open_ = [min(open_, key=lambda s: (len(chosen[s]) / NEED[s], s))]
+        for s in open_:
             X, ok = sides[s]
             for p in candidates(X, ok, used[s], cands, rng, sim[s]):
                 n = estimate(s, X, p, ks, sub, rng)
@@ -226,15 +236,23 @@ def item_sides(item: str, k: int, rows: int, acts: Path | None, seed: int) -> tu
     return sides, k, info
 
 
-def pair_unit(sides: dict, k: int, k_search: int, cands: int, seeds: int, rng: np.random.Generator) -> dict:
-    """The A-only, B-only and joint searches on one unit's codes: sides = {"A": (codes, row_ok), "B": (codes, row_ok)}."""
+def joint_label(policy: str) -> str:
+    return "joint" if policy == "max" else "joint_" + policy.replace("-", "_")
+
+
+def pair_unit(sides: dict, k: int, k_search: int, cands: int, seeds: int, rng: np.random.Generator,
+              policies: tuple[str, ...] = ("max",)) -> dict:
+    """The A-only, B-only and joint searches on one unit's codes: sides = {"A": (codes, row_ok), "B": (codes, row_ok)}; a
+    joint search per policy, `max`'s as `joint` and the others' after it (so `joint` is the same with or without them)."""
     t = time.time()
     ks = np.sort(rng.choice(k, min(k, k_search), replace=False))
     sim, first = first_steps(sides, ks, cands, rng)
     res = {"k_search": len(ks), "cands": cands, "seeds": seeds, "seconds_first_step": round(time.time() - t, 1)}
-    for label, which in (("A_only", ("A",)), ("B_only", ("B",)), ("joint", ("A", "B"))):
+    runs = [("A_only", ("A",), "max"), ("B_only", ("B",), "max"), ("joint", ("A", "B"), "max")]
+    runs += [(joint_label(p), ("A", "B"), p) for p in policies if p != "max"]
+    for label, which, policy in runs:
         ts = time.time()
-        res[label] = search(sides, ks, k, which, cands, seeds, rng, sim, first)
+        res[label] = search(sides, ks, k, which, cands, seeds, rng, sim, first, policy)
         res[label]["seconds"] = round(time.time() - ts, 1)
     return res
 
@@ -243,7 +261,8 @@ def run_item(item: str, args) -> dict:
     t = time.time()
     sides, k, info = item_sides(item, args.k, args.rows, Path(args.acts) if args.acts else None, args.seed)
     res = {"item": item, **info, "seconds_forming": round(time.time() - t, 1)}
-    res.update(pair_unit(sides, k, args.k_search, args.cands, args.seeds, census._rng("pairing-search", item, args.seed)))
+    res.update(pair_unit(sides, k, args.k_search, args.cands, args.seeds, census._rng("pairing-search", item, args.seed),
+                         tuple(args.joint_policies.split(","))))
     res["seconds"] = round(time.time() - t, 1)
     return res
 
@@ -281,11 +300,12 @@ def selftest() -> None:
     B[np.ix_(rows[:24], cols)] = x
     ks = np.arange(1024)
     sides = {"A": (A, np.ones(256, bool)), "B": (B, np.ones(256, bool))}
-    r2 = np.random.default_rng(2)
-    out = search(sides, ks, 1024, ("A", "B"), 64, 4, r2, *first_steps(sides, ks, 64, r2))
-    print(json.dumps({"selftest": "planted 40 x 80 block (A) and 24 x 80 (B)", "joint": out["reached_with_32_k_pairs"],
-                      "fragment": out["fragment"]}))
-    assert out["fragment"]
+    for policy in POLICIES:
+        r2 = np.random.default_rng(2)
+        out = search(sides, ks, 1024, ("A", "B"), 64, 4, r2, *first_steps(sides, ks, 64, r2), policy)
+        print(json.dumps({"selftest": "planted 40 x 80 block (A) and 24 x 80 (B)", "policy": policy,
+                          "joint": out["reached_with_32_k_pairs"], "fragment": out["fragment"]}))
+        assert out["fragment"]
     sides = {"A": (census.enc(rng.standard_normal((256, 1024)) * 40), np.ones(256, bool))}
     r3 = np.random.default_rng(3)
     rand = search(sides, ks, 1024, ("A",), 64, 4, r3, *first_steps(sides, ks, 64, r3))
@@ -304,11 +324,14 @@ def main() -> None:
     ap.add_argument("--cands", type=int, default=128, help="random row-pair candidates per step (plus as many similar pairs)")
     ap.add_argument("--seeds", type=int, default=4, help="restarts from the first pairs with the most k pairs (and as many "
                     "with the most shared codes)")
+    ap.add_argument("--joint-policies", default="max", help=f"comma list of the joint search's side policies, of {POLICIES}")
     ap.add_argument("--budget-min", type=float, default=6.5)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default=None)
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
+    if not set(args.joint_policies.split(",")) <= set(POLICIES):
+        ap.error(f"--joint-policies: each of {POLICIES}")
     if args.selftest:
         selftest()
         return
@@ -341,21 +364,22 @@ def main() -> None:
         state_path.write_text(json.dumps(state))
         secs.append(time.time() - ts)
     rows = [json.loads((out_dir / f"{x.replace(':', '-')}.json").read_text()) for x in items]
+    joints = [joint_label(p) for p in args.joint_policies.split(",")]
+    modes = ["A_only", "B_only", *dict.fromkeys(["joint", *joints])]
     summary = {"tool": "pouw_sm120_pairing", "items": [
         {"item": r["item"], "rows_ok": r["rows_ok"], **{s: r[s]["largest_block"] for s in ("A_only", "B_only")},
-         "joint": r["joint"]["reached_with_32_k_pairs"], "fragment": {s: r[s]["fragment"] for s in ("A_only", "B_only", "joint")}}
+         **{j: r[j]["reached_with_32_k_pairs"] for j in modes[2:]}, "fragment": {s: r[s]["fragment"] for s in modes}}
         for r in rows]}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")
-    frags = {s: sum(r[s]["fragment"] for r in rows) for s in ("A_only", "B_only", "joint")}
+    frags = {s: sum(r[s]["fragment"] for r in rows) for s in modes}
     bestA = max((r["A_only"]["largest_block"] for r in rows), key=lambda b: b[0] * b[2], default=(0, 0, 0))
     bestB = max((r["B_only"]["largest_block"] for r in rows), key=lambda b: b[1] * b[2], default=(0, 0, 0))
     run_result.write(path, True, "sm120-pairing",
-                     f"{len(rows)} items; fragments reached A-only {frags['A_only']}, B-only {frags['B_only']}, joint "
-                     f"{frags['joint']}; largest A block {bestA[0]} row pairs x {bestA[2]} k pairs, B {bestB[1]} x {bestB[2]} "
+                     f"{len(rows)} items; fragments reached " + ", ".join(f"{s} {frags[s]}" for s in modes) +
+                     f"; largest A block {bestA[0]} row pairs x {bestA[2]} k pairs, B {bestB[1]} x {bestB[2]} "
                      f"(a fragment needs 16 x 32 and 8 x 32)",
-                     [("items", len(rows), "count"), ("fragments_A_only", frags["A_only"], "count"),
-                      ("fragments_B_only", frags["B_only"], "count"), ("fragments_joint", frags["joint"], "count")])
+                     [("items", len(rows), "count"), *((f"fragments_{s}", frags[s], "count") for s in modes)])
 
 
 if __name__ == "__main__":
