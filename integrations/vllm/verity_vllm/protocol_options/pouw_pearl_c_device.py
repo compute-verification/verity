@@ -154,6 +154,20 @@ def _put(t: Any, data: bytes) -> None:
     t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
 
 
+class _TorchStream:
+    """torch's Stream object for the current stream, looked up again only when the raw handle changes: `Event.record()`
+    without a stream calls `torch.cuda.current_stream`, about 15 µs."""
+
+    def __init__(self):
+        self.raw, self.stream = None, None
+
+    def __call__(self, raw: int) -> Any:
+        if raw != self.raw:
+            import torch
+            self.raw, self.stream = raw, torch.cuda.current_stream()
+        return self.stream
+
+
 def _stream(device: Any) -> int:
     """The current stream's handle: torch's raw accessor, not `torch.cuda.current_stream`, which costs about 15 µs a call."""
     import torch
@@ -362,7 +376,8 @@ class _Uploads:
         self.view = self.host.numpy()
         self.events: list[Any] = [None] * slots
 
-    def put(self, dst: Any, data: bytes) -> None:
+    def put(self, dst: Any, data: bytes, stream: Any = None) -> None:
+        """`data` into `dst` on `stream` (torch's current stream when None)."""
         import numpy as np
         import torch
         i, n = self.i, len(data)
@@ -374,7 +389,7 @@ class _Uploads:
         if self.cuda:
             if self.events[i] is None:
                 self.events[i] = torch.cuda.Event()
-            self.events[i].record()
+            self.events[i].record(stream)
 
 
 def _weight_binding(w: int) -> bytes:
@@ -417,6 +432,7 @@ class PearlCDeviceRun:
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
+        self.torch_stream = _TorchStream()
         self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
         self.device = next(iter(weights.values())).device
         self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
@@ -506,9 +522,10 @@ class PearlCDeviceRun:
 
         def timed():
             a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            a.record()
+            stream = self.torch_stream(_stream(self.device))
+            a.record(stream)
             f()
-            b.record()
+            b.record(stream)
             self.events.append((a, b))
         return timed
 
@@ -547,9 +564,10 @@ class PearlCDeviceRun:
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
         pipe, steps = self._pipe(w, sh)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
+        raw = self.stream()
         if self.hashing:
-            self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16))
-        self.kernel.dev.stream = self.stream()
+            self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), self.torch_stream(raw) if self.uploads.cuda else None)
+        self.kernel.dev.stream = raw
         try:
             for f in steps:
                 f()
