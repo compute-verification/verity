@@ -6,11 +6,11 @@ import FlockSoundness.Audit.FlockLinked
 The link theorem's value layer (`Xplur`) is the plurality of a trial's readings at each commit string. On the constant
 and on the statement's zero, that plurality is the prover's only in form. Every satisfying message of every drawn unit's
 table decodes the constant to 1 (`UnitPlace.decode_one`) and the zero to 0 (its forced-zero rows). So the committed
-transcript here is `Xpub ones zeros Y`: 1 on `ones`, the gates the units' constants read; 0 on `zeros`, the statement's
-zero; and `Y` elsewhere.
+transcript here is `Xpub ones zeros vals`: 1 on `ones`, the gates the units' constants read; 0 on `zeros`, the statement's
+zero; and `vals` elsewhere.
 
 * `linkEvB_of_pub`: at a drawn unit, when the public wires decode to their values in every satisfying message of its
-  table (`PubDecodes`), the link event at `Xpub ones zeros Y` is the link event at `Y`. So the link theorem's bound holds
+  table (`PubDecodes`), the link event at `Xpub ones zeros vals` is the link event at `vals`. So the link theorem's bound holds
   unchanged for `Xpub ones zeros Xplur` (`flock_batched_linkSoundE_pub`), and with it the count curve and the drawn-unit
   bound (`flock_batched_count_public`, `flock_batched_drawn_public`).
 * `pubDecodes_of_place`: `PubDecodes` for the decoder that reads each drawn unit from its place. Two facts about the
@@ -34,20 +34,20 @@ local notation "𝔽" => FlockLevel3.GF128
 
 open Classical in
 /-- **The committed transcript with its public wires**: 1 on `ones` (the gates the units' constants read), 0 on `zeros`
-(the statement's zero) and `Y` elsewhere. -/
-noncomputable def Xpub {N : ℕ} (ones zeros : Finset (Fin N)) (Y : Fin N → Bool) : Fin N → Bool :=
-  fun g => if g ∈ ones then true else if g ∈ zeros then false else Y g
+(the statement's zero) and `vals` elsewhere. -/
+noncomputable def Xpub {N : ℕ} (ones zeros : Finset (Fin N)) (vals : Fin N → Bool) : Fin N → Bool :=
+  fun g => if g ∈ ones then true else if g ∈ zeros then false else vals g
 
-theorem Xpub_of_mem_ones {N : ℕ} {ones zeros : Finset (Fin N)} {Y : Fin N → Bool} {g : Fin N} (h : g ∈ ones) :
-    Xpub ones zeros Y g = true := by
+theorem Xpub_of_mem_ones {N : ℕ} {ones zeros : Finset (Fin N)} {vals : Fin N → Bool} {g : Fin N} (h : g ∈ ones) :
+    Xpub ones zeros vals g = true := by
   simp [Xpub, h]
 
-theorem Xpub_of_mem_zeros {N : ℕ} {ones zeros : Finset (Fin N)} {Y : Fin N → Bool} {g : Fin N} (h1 : g ∉ ones)
-    (h0 : g ∈ zeros) : Xpub ones zeros Y g = false := by
+theorem Xpub_of_mem_zeros {N : ℕ} {ones zeros : Finset (Fin N)} {vals : Fin N → Bool} {g : Fin N} (h1 : g ∉ ones)
+    (h0 : g ∈ zeros) : Xpub ones zeros vals g = false := by
   simp [Xpub, h1, h0]
 
-theorem Xpub_of_not_mem {N : ℕ} {ones zeros : Finset (Fin N)} {Y : Fin N → Bool} {g : Fin N} (h1 : g ∉ ones)
-    (h0 : g ∉ zeros) : Xpub ones zeros Y g = Y g := by
+theorem Xpub_of_not_mem {N : ℕ} {ones zeros : Finset (Fin N)} {vals : Fin N → Bool} {g : Fin N} (h1 : g ∉ ones)
+    (h0 : g ∉ zeros) : Xpub ones zeros vals g = vals g := by
   simp [Xpub, h1, h0]
 
 namespace Partition.IsRowsUnit
@@ -86,13 +86,13 @@ def PubDecodes (decode : DecoderB (C := C) (Reg := Reg) plan tab) (ones zeros : 
         (tabOf plan tab S R u).sch.level₀.logCols M) →
     ∀ g ∈ P.io u, (g ∈ ones → decode S R u M g = true) ∧ (g ∉ ones → g ∈ zeros → decode S R u M g = false)
 
-/-- **The link event at the public transcript is the link event at `Y`**, at a drawn unit whose table's satisfying
-messages decode the public wires to their values: a wire that decodes differently from `Xpub ones zeros Y` is not a
-public wire, so it decodes differently from `Y`. -/
+/-- **The link event at the public transcript is the link event at `vals`**, at a drawn unit whose table's satisfying
+messages decode the public wires to their values: a wire that decodes differently from `Xpub ones zeros vals` is not a
+public wire, so it decodes differently from `vals`. -/
 theorem linkEvB_of_pub {decode : DecoderB (C := C) (Reg := Reg) plan tab} {ones zeros : Finset (Fin C.N)}
     (hpub : P.PubDecodes plan tab decode ones zeros) {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)
-    {Y : Fin C.N → Bool} {T : Oracle 𝔽} (h : P.LinkEvB plan tab decode S R u (Xpub ones zeros Y) T) :
-    P.LinkEvB plan tab decode S R u Y T := by
+    {vals : Fin C.N → Bool} {T : Oracle 𝔽} (h : P.LinkEvB plan tab decode S R u (Xpub ones zeros vals) T) :
+    P.LinkEvB plan tab decode S R u vals T := by
   refine ⟨h.1, fun M hM hsat => ?_⟩
   obtain ⟨g, hg, hne⟩ := h.2 M hM hsat
   refine ⟨g, hg, fun heq => hne ?_⟩
