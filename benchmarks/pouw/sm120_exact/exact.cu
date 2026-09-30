@@ -55,6 +55,46 @@ __device__ __forceinline__ int dec(uint32_t c) {
   return (c & 0x80u) ? -mag : mag;
 }
 
+// P3's salt-dead screen (`Pouw.PearlC.SaltDead.saltDead`) over flat pairs: E' = e[r] at all 32 positions and F = +-f with
+// positions t < j negative, j = 0 .. 32.  Every product is +-|e f|, so the atom's output depends on the pair only through
+// the number j of sign disagreements.  out[r][l] = 1 when the code's value is the same for every j (salt-dead), else 0.
+extern "C" __global__ void dead_mask(const float* __restrict__ C, const uint8_t* __restrict__ e, uint32_t f,
+                                     uint8_t* __restrict__ out, int rows, int k) {
+  const int lane = threadIdx.x & 31, gid = lane >> 2, tig = lane & 3;
+  const long long blk = static_cast<long long>(blockIdx.x) * (blockDim.x >> 5) + (threadIdx.x >> 5);
+  const int kb = k >> 3;
+  if (blk >= static_cast<long long>(rows >> 4) * kb) return;
+  const int r0 = static_cast<int>(blk / kb) * 16, l0 = static_cast<int>(blk % kb) * 8;
+  const uint32_t ea = e[r0 + gid] * 0x01010101u, eb = e[r0 + gid + 8] * 0x01010101u;
+  const uint32_t a[4] = {ea, eb, ea, eb};
+  const float2 c01 = *reinterpret_cast<const float2*>(C + static_cast<size_t>(r0 + gid) * k + l0 + tig * 2);
+  const float2 c23 = *reinterpret_cast<const float2*>(C + static_cast<size_t>(r0 + gid + 8) * k + l0 + tig * 2);
+  const float c[4] = {c01.x, c01.y, c23.x, c23.y};
+  int v0[4] = {0, 0, 0, 0};
+  bool dead[4] = {true, true, true, true};
+  for (int j = 0; j <= 32; ++j) {
+    uint32_t b0 = 0, b1 = 0;
+#pragma unroll
+    for (int by = 0; by < 4; ++by) {
+      b0 |= (f | (tig * 4 + by < j ? 0x80u : 0u)) << (8 * by);
+      b1 |= (f | (16 + tig * 4 + by < j ? 0x80u : 0u)) << (8 * by);
+    }
+    float d[4];
+    mma_e4m3(d, a, b0, b1, c);
+    const uint32_t p = e4m3x2(d[0], d[1]), q = e4m3x2(d[2], d[3]);
+    const int v[4] = {dec(p & 0xFFu), dec(p >> 8), dec(q & 0xFFu), dec(q >> 8)};
+#pragma unroll
+    for (int x = 0; x < 4; ++x) {
+      if (j == 0) v0[x] = v[x];
+      else dead[x] &= v[x] == v0[x];
+    }
+  }
+  *reinterpret_cast<uint16_t*>(out + static_cast<size_t>(r0 + gid) * k + l0 + tig * 2) =
+      static_cast<uint16_t>(dead[0] | dead[1] << 8);
+  *reinterpret_cast<uint16_t*>(out + static_cast<size_t>(r0 + gid + 8) * k + l0 + tig * 2) =
+      static_cast<uint16_t>(dead[2] | dead[3] << 8);
+}
+
 __device__ __forceinline__ long long fix18(float x) { return __float2ll_rz(x * 262144.0f); }
 
 constexpr int FM = 64, FN = 64, FK = 128;

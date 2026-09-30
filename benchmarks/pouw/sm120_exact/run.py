@@ -23,7 +23,11 @@ products.  The lemma's region is 1,024 rows x 512 columns of a unit's output, al
    bitsets and on column bitsets; on the 8 aligned windows and the 2 densest others, `intersect_greedy` too (from the 4
    fullest rows, add the row keeping the most columns; it finds a planted block the count order misses).  The report's
    `lemma_block_found` is whether any search found 1,024 rows x 512 columns in any window.
-   The same A and B give the merge rates: Strassen's diagonal pair (sum and difference both E4M3, as pearlc_merge_rate.py)
+   The same forming gives the salt-dead share (`Pouw.PearlC.SaltDead.saltDead` at Π's β = σα·f32(√32/(256·16)), E flat at
+   ±44 so E' = e4m3(f32(β·44))): over the old support (F flat ±44), over the corrected one (F ±11/4, bc-3006c44a's Ruling
+   on F2), and with the census's own flat line (E' = e4m3(σα/16), F ±11/4); per side, all rows and Π's admitted rows,
+   the worst admitted row beside P3's 1/64 bound; `dead_mask` on the card, gated on 2,048 elements per screen against
+   census.step.  The same A and B give the merge rates: Strassen's diagonal pair (sum and difference both E4M3, as pearlc_merge_rate.py)
    and each of Strassen's 10 pre-adds, per element and per whole fragment (16 x 32 on A, 32 x 8 on B), and random pairs.
 5. Restartable: one JSON per item in --out, a state file, and exit 99 once --budget-min is spent while items remain; exit 0
    after summary.json.  An item started 3 times without finishing fails the job (exit 1).
@@ -54,7 +58,10 @@ import run_result  # noqa: E402
 from sm120_chain.run import Dev as ChainDev, Nvml, emit, i32, u64, vp  # noqa: E402
 
 ATOM = "sm120-e4m3-k32"
-KERNELS = ("form_codes", "chain_flags", "window_bits")
+KERNELS = ("form_codes", "chain_flags", "window_bits", "dead_mask")
+DEAD_BETA = np.float32(np.sqrt(32) / (256 * 16))  # Π's β_row = σα·f32(√32/(256·16)) (#449's pearl_c.py, LINE_NORM_V1 = 16)
+DEAD_SCREENS = {  # (E side, F's flat code): SaltDead.support before and after bc-3006c44a's Ruling on F2 (10:00Z)
+    "old_F44": ("scheme", 44.0), "new_F11/4": ("scheme", 2.75), "census_line_F11/4": ("census", 2.75)}
 LINE_NORM = 16.0
 WIN = 32
 REGION = (1024, 512)
@@ -84,16 +91,27 @@ class Dev(ChainDev):
         self.ck("cuMemcpyDtoH_v2", out.ctypes.data_as(vp), u64(p + offset), out.nbytes)
         return out
 
-    def form(self, Cf: np.ndarray, Ec: np.ndarray, Fc: np.ndarray) -> int:
+    def form(self, Cf: np.ndarray, Ec: np.ndarray, Fc: np.ndarray) -> tuple[int, int]:
+        """A' on the card; returns the codes' and C's device pointers."""
         rows, k = Cf.shape
         dc, de, df = self.put(Cf.astype(np.float32)), self.put(Ec), self.put(Fc)
         out = self.alloc(rows * k)
         warps = (rows // 16) * (k // 8)
         self.launch("form_codes", ((warps + 7) // 8, 1, 1), 256, 0, [u64(dc), u64(de), u64(df), u64(out), i32(rows), i32(k)])
         self.sync()
-        for p in (dc, de, df):
+        for p in (de, df):
             self.free(p)
-        return out
+        return out, dc
+
+    def dead(self, dc: int, e: np.ndarray, f: int, rows: int, k: int) -> np.ndarray:
+        de, out = self.put(e), self.alloc(rows * k)
+        warps = (rows // 16) * (k // 8)
+        self.launch("dead_mask", ((warps + 7) // 8, 1, 1), 256, 0, [u64(dc), u64(de), C.c_uint(f), u64(out), i32(rows), i32(k)])
+        self.sync()
+        mask = self.fetch(out, rows * k, np.uint8).reshape(rows, k)
+        self.free(de)
+        self.free(out)
+        return mask
 
     def chain(self, da: int, db: int, m: int, n: int, k: int) -> tuple[int, int]:
         flags, out = self.alloc(4 * (k // 1024) * m * n), self.alloc(4 * m * n)
@@ -149,7 +167,8 @@ def build(out: Path, nvcc: str) -> tuple[bytes, dict]:
 # ---- operands -----------------------------------------------------------------------------------------------------------
 
 def prep(X: np.ndarray, Fc: np.ndarray, rng: np.random.Generator):
-    """form_s5's host side with delta = 1: C = f32(alpha x) and E' (its first draw), and the rows' domain verdicts."""
+    """form_s5's host side with delta = 1: C = f32(alpha x) and E' (its first draw), the rows' domain verdicts, and each
+    row's flat E' code per salt-dead screen."""
     rows, k = X.shape
     s = np.abs(X).max(1)
     rho = np.sqrt((X[:, ::8] ** 2).mean(1))
@@ -162,19 +181,59 @@ def prep(X: np.ndarray, Fc: np.ndarray, rng: np.random.Generator):
     for r0 in range(0, rows, 512):
         Cf[r0:r0 + 512] = (alpha[r0:r0 + 512, None] * X[r0:r0 + 512]).astype(np.float32)
     Ec = census.enc(census.unit_lines(rows, rng) * (sig * alpha / LINE_NORM)[:, None])
-    return Cf, Ec, bool(floor_ok.all()), bool(live_ok.all())
+    beta = (sig.astype(np.float32) * alpha.astype(np.float32)).astype(np.float32) * DEAD_BETA
+    flat = {"scheme": census.enc((beta * np.float32(44.0)).astype(np.float32).astype(np.float64)),
+            "census": census.enc(sig * alpha / LINE_NORM)}
+    return Cf, Ec, floor_ok, live_ok, flat
 
 
 def operands(dev: Dev, fam: str, k: int, rows: int, run: int = 1):
-    """A and B's codes formed on the card (device pointers), with the host inputs kept for the gates."""
+    """A and B's codes formed on the card (device pointers, with C's), with the host inputs kept for the gates."""
     XA, XB, _, _ = census.family_rows(fam, k, 1.0, rows, rows, run)
     FcA, FcB = census.s5_lines(k, run, LINE_NORM)
     sides = {}
     for side, X, Fc in (("A", XA, FcA), ("B", XB, FcB)):
-        Cf, Ec, floor_ok, live_ok = prep(X, Fc, census._rng(run, fam, k, 1.0, f"unit-{side}"))
-        sides[side] = {"ptr": dev.form(Cf, Ec, Fc), "C": Cf, "E": Ec, "F": Fc, "floor_ok": floor_ok, "live_ok": live_ok}
+        Cf, Ec, floor_ok, live_ok, flat = prep(X, Fc, census._rng(run, fam, k, 1.0, f"unit-{side}"))
+        ptr, cptr = dev.form(Cf, Ec, Fc)
+        sides[side] = {"ptr": ptr, "cptr": cptr, "C": Cf, "E": Ec, "F": Fc, "row_ok": floor_ok & live_ok, "flat": flat,
+                       "floor_ok": bool(floor_ok.all()), "live_ok": bool(live_ok.all())}
     del XA, XB
     return sides
+
+
+def dead_twin(Cf: np.ndarray, e: np.ndarray, f: int, r: np.ndarray, l: np.ndarray) -> np.ndarray:
+    """SaltDead over the flat pairs for elements (r, l), by census.step: the value is the same for j = 0 .. 32."""
+    P = len(r)
+    vals = []
+    for j in range(33):
+        a = np.repeat(e[r][:, None], 32, 1)
+        b = np.full((P, 32), f, np.uint8)
+        b[:, :j] |= 0x80
+        D, _ = census.step(Cf[r, l].astype(np.float64), a, b)
+        vals.append(census.val(census.enc(D)))
+    v = np.stack(vals)
+    return (v == v[0]).all(0)
+
+
+def dead_stats(dev: Dev, side: dict, rows: int, k: int, rng: np.random.Generator) -> dict:
+    """Per screen: the salt-dead share of the side's elements, over all rows and over the rows Π admits, the worst admitted
+    row's share (P3's bound: 1/64), gated on 2,048 sampled elements against dead_twin."""
+    out, bad = {}, 0
+    ok = side["row_ok"]
+    for name, (eside, fval) in DEAD_SCREENS.items():
+        f = int(census.enc(np.array([fval]))[0])
+        e = side["flat"][eside]
+        mask = dev.dead(side["cptr"], e, f, rows, k)
+        r, l = rng.integers(0, rows, 2048), rng.integers(0, k, 2048)
+        bad += int((mask[r, l].astype(bool) != dead_twin(side["C"], e, f, r, l)).sum())
+        per_row = mask.sum(1, dtype=np.int64) / k
+        out[name] = {"share": round(float(per_row.mean()), 8),
+                     "share_admitted": round(float(per_row[ok].mean()), 8) if ok.any() else None,
+                     "worst_row_admitted": round(float(per_row[ok].max()), 8) if ok.any() else None,
+                     "admitted_rows_over_1/64": int((per_row[ok] > 1 / 64).sum()), "admitted_rows": int(ok.sum()),
+                     "f_code": hex(f)}
+    out["gate_mismatches"] = bad
+    return out
 
 
 def form_twin(Cf, Ec, Fc, r, l) -> np.ndarray:
@@ -309,7 +368,7 @@ def host_windows(planes: np.ndarray, t0: int, nt: int) -> np.ndarray:
 
 def pack_rows(ok: np.ndarray) -> np.ndarray:
     """(rows, cols) bools -> (rows, cols / 32) uint32, bit j % 32 of word j / 32 = column j."""
-    return np.packbits(ok, axis=1, bitorder="little").view(np.uint32)
+    return np.ascontiguousarray(np.packbits(np.ascontiguousarray(ok), axis=1, bitorder="little")).view(np.uint32)
 
 
 # ---- pearlc_exact_runs.py's metrics, ported line for line (E[i][j][t] for one T x T tile) ----------------------------------
@@ -478,7 +537,7 @@ def refcheck(dev: Dev, fh) -> dict:
                 wb += int((card != np.stack([pack_rows(h) for h in host])).sum())
             g["window_mismatches"] = wb
             dev.free(M)
-            for p in (flags, out, sides["A"]["ptr"], sides["B"]["ptr"]):
+            for p in (flags, out, *(sides[s][x] for s in "AB" for x in ("ptr", "cptr"))):
                 dev.free(p)
             E = corner.tolist()
             refm = reference_metrics(E, tile, T)
@@ -510,12 +569,16 @@ def unit(dev: Dev, fh, fam: str, k: int, rows: int, seed: int) -> dict:
                                                                     ("liveness", sides[s]["live_ok"])) if not v]}
     codes = {}
     bad = 0
+    res["salt_dead"] = {}
     for s in "AB":
         codes[s] = dev.fetch(sides[s]["ptr"], rows * k, np.uint8).reshape(rows, k)
         r, l = rng.integers(0, rows, 2048), rng.integers(0, k, 2048)
         bad += int((codes[s][r, l] != form_twin(sides[s]["C"], sides[s]["E"], sides[s]["F"], r, l)).sum())
+        res["salt_dead"][s] = dead_stats(dev, sides[s], rows, k, rng)
         sides[s]["C"] = None
+        dev.free(sides[s]["cptr"])
     res["form_gate"] = {"elements": 4096, "mismatches": bad}
+    dead_bad = sum(res["salt_dead"][s]["gate_mismatches"] for s in "AB")
     t_form = time.time()
     flags, out = dev.chain(sides["A"]["ptr"], sides["B"]["ptr"], m, n, k)
     t_chain = time.time()
@@ -527,7 +590,8 @@ def unit(dev: Dev, fh, fam: str, k: int, rows: int, seed: int) -> dict:
                          "word_mismatches": int((~same_words(words[ii * n + jj], fin)).sum()),
                          "sampled_steps_no_bit_lost": round(float(nolost.mean()), 6)}
     del words
-    res["ok"] = bad == 0 and res["chain_gate"]["flag_mismatches"] == 0 and res["chain_gate"]["word_mismatches"] == 0
+    res["ok"] = (bad == 0 and dead_bad == 0 and res["chain_gate"]["flag_mismatches"] == 0 and
+                 res["chain_gate"]["word_mismatches"] == 0)
     res["steps_exact"] = round(total / (m * n * T), 6)
     res["tile64"] = {k_: v for k_, v in reference_metrics(corner.tolist(), 64, T).items() if k_ not in ("rects", "dens")}
     if not res["ok"]:
@@ -669,6 +733,7 @@ def main() -> None:
                                                           "best_by_cols", "intersect_greedy", "lemma_block_found")})
             brief["merge"] = {x: res["merge"][x] for x in ("pair_A", "rand_A", "frag_both_A", "frag_both_B",
                                                             "preadd_frag_hits", "preadd_frags")}
+            brief["salt_dead_A"] = {n: res["salt_dead"]["A"][n]["share"] for n in DEAD_SCREENS}
             brief["seconds"] = res["seconds"]
         emit(fh, {"done": brief})
         state["done"].append(item)
@@ -691,7 +756,9 @@ def write_summary(out_dir: Path, items: list[str], fh) -> None:
                      "intersect_best": max([x for s in w["intersect_greedy"] for x in (s["rows_x_cols"], s["cols_x_rows"][::-1])],
                                            key=lambda x: x[0] * x[1], default=[0, 0]),
                      "lemma_block_found": w["lemma_block_found"], "tile64": r["tile64"]["row"],
-                     "merge_pair_A": mg["pair_A"], "merge_frag_hits": mg["preadd_frag_hits"], "merge_frags": mg["preadd_frags"]})
+                     "merge_pair_A": mg["pair_A"], "merge_frag_hits": mg["preadd_frag_hits"], "merge_frags": mg["preadd_frags"],
+                     "salt_dead": {s: {n: [v["share"], v["share_admitted"], v["worst_row_admitted"]]
+                                       for n, v in r["salt_dead"][s].items() if n != "gate_mismatches"} for s in "AB"}})
     doc = {"tool": "pouw_sm120_exact", "rows": rows,
            "refcheck": json.loads((out_dir / "refcheck.json").read_text())["tiles"]}
     path = out_dir / "summary.json"
