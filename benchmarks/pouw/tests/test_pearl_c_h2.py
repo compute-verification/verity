@@ -312,3 +312,102 @@ def test_the_tile_gemm_writes_the_stand_ins_words_and_its_epilogue_digests_them(
             assert dg.raw[32 * (n // 32 + 1):32 * (n // 32 + 2)] == PC.message_digest(msg, "h2")
         else:
             assert not any(dg.raw)
+
+
+def _scheme():
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "protocols" / "pouw"))
+    from verity_pouw.protocol import Context, Matmul, Shape
+    from verity_pouw.schemes import pearl_c as PC
+    return Context, Matmul, Shape, PC
+
+
+@pytest.mark.parametrize("m,rb", [(8, 1024), (3, 1300), (2, 32768)])
+def test_row_leaves_with_seeds_in_one_launch_are_the_schemes(m, rb):
+    """hash_rows_b3s_seed: hash_rows_b3s's row leaves (frame-b3s under the -h3 unit's activation domain) and, in the same
+    launch, each row's `pearl_c.row_seed`, equal to hash_rows_b3s then b3_seeds' mode 1."""
+    from verity.commitments.blake3 import blake3
+    Context, Matmul, Shape, PC = _scheme()
+    index = 5
+    salt, root_b = hashlib.sha256(b"fused seed salt").digest(), hashlib.sha256(b"fused seed root_B").digest()
+    ctx = Context(salt, Matmul(index, Shape(m, rb // 4, 64), 0), bytes(32), root_b)
+    d = PC.activation_domain(ctx, "h3")
+    rows = data(f"fused seed rows {m} {rb}", m * rb)
+    tmpl, tlen = template(ROW)
+    nseg = max(1, -(-rb // 256))
+    leaves, seeds = T.buffer(32 * m), T.buffer(32 * m)
+    T.launch("hash_rows_b3s_seed", m, 32 * -(-nseg // 32),
+             [T.buffer(rows), leaves, T.buffer(d.domain_id), T.buffer(level_keys(d.domain_id)), T.buffer(tmpl),
+              T.buffer(blake3(b"pearl-c/v0/seed-A")), T.buffer(salt), T.buffer(root_b), seeds], [m, rb, 0, tlen, index])
+    assert leaves.raw == rows_b3s(rows, m, rb, d)
+    assert [leaves.raw[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)]
+    assert [seeds.raw[32 * r:32 * r + 32] for r in range(m)] == [PC.row_seed(ctx, r, rows[r * rb:(r + 1) * rb]) for r in range(m)]
+
+
+@pytest.mark.parametrize("rows,n", [(32, 256), (96, 128), (64, 512)])
+def test_the_one_launch_tile_hashing_is_the_verifiers(rows, n):
+    """tile_hash_d (a CTA a tile, the last CTA the tree's top): its digests are hash_msg_v's, its leaves `pearl_c.leaf` of
+    each tile's C~ and U (decode's partial 32-row tiles, and whole ones), its tile tree every level of frame-b3s's tree
+    over those leaves (the verifier's `tree_levels`), and it leaves its counter at zero for the next call."""
+    import struct
+
+    from verity.commitments.blake3 import blake3
+    from verity.commitments.merkle import tree_levels
+    _, _, _, PC = _scheme()
+    tiles = -(-rows // 64) * (n // 64)
+    width = 1 << max(0, (tiles - 1).bit_length())
+    assert width == tiles
+    c, u = data(f"tile c {rows} {n}", 4 * rows * n), data(f"tile u {rows} {n}", 4 * rows * n)
+    d = domain(tiles, owner=9)
+    tmpl, tlen = template(TILE)
+    per = n // 32
+    dg, lv, tree, counter = T.buffer(32 * rows * per), T.buffer(32 * tiles), T.buffer(32 * (2 * width - 1)), T.buffer(16)
+    keys = T.buffer(32 * 16)
+    T.launch("hash_node_keys", 1, 32, [keys, T.buffer(d.domain_id)], [max(1, (width - 1).bit_length())])
+    kmsg, kleaf = T.buffer(PC.H1_KEYS["message"]), T.buffer(PC.H1_KEYS["leaf"])
+    T.launch("tile_hash_d", tiles, 128, [T.buffer(c), T.buffer(u), dg, lv, tree, keys, kmsg, kleaf, counter,
+                                         T.buffer(d.domain_id), T.buffer(tmpl)], [rows, n, tlen, width])
+    want_dg = T.buffer(32 * rows * per)
+    T.launch("hash_msg_v", -(-rows * per // 128), 128, [T.buffer(c), T.buffer(u), want_dg, kmsg], [rows, n])
+    assert dg.raw == want_dg.raw
+    cw, uw = struct.unpack(f"<{rows * n}I", c), struct.unpack(f"<{rows * n}I", u)
+    leaves = []
+    for t in range(tiles):
+        ti, tj = divmod(t, n // 64)
+        rs = range(64 * ti, min(rows, 64 * ti + 64))
+        leaves.append(PC.leaf(PC.Checked(c=[list(cw[r * n + 64 * tj:r * n + 64 * tj + 64]) for r in rs],
+                                         u=[list(uw[r * n + 64 * tj:r * n + 64 * tj + 64]) for r in rs]), "h3"))
+    assert [lv.raw[32 * t:32 * t + 32] for t in range(tiles)] == leaves
+    want = b"".join(b"".join(level) for level in tree_levels(d, [d.leaf(t, t, TILE, leaves[t]) for t in range(tiles)]))
+    assert tree.raw == want
+    assert counter.raw[:4] == bytes(4)
+    assert blake3(b"pearl-c/h1/leaf") == PC.H1_KEYS["leaf"]
+
+
+@pytest.mark.parametrize("m", [32, 8, 256])
+def test_a_trees_top_and_seed_in_one_launch_are_the_schemes(m):
+    """a_tree_seed: A's tree above its row leaves (every level: the verifier's `tree_levels`), seed_A over the root
+    (`pearl_c.unit_seed_a`) and E_A's line key keyed(seed_A, "pearl/v4/FP8/noise-line"), GPU 1's seed_line_a's outputs."""
+    from verity.commitments.blake3 import blake3, keyed
+    from verity.commitments.merkle import tree_levels
+    Context, Matmul, Shape, PC = _scheme()
+    index = 5
+    salt, root_b = hashlib.sha256(b"tree seed salt").digest(), hashlib.sha256(b"tree seed root_B").digest()
+    ctx = Context(salt, Matmul(index, Shape(m, 256, 64), 0), bytes(32), root_b)
+    d = PC.activation_domain(ctx, "h3")
+    leaves = [data(f"a leaf {m} {r}", 32) for r in range(m)]
+    tree = T.buffer(b"".join(leaves) + bytes(32 * (m - 1)))
+    keys = T.buffer(32 * 16)
+    T.launch("hash_node_keys", 1, 32, [keys, T.buffer(d.domain_id)], [max(1, (m - 1).bit_length())])
+    seed, line = T.buffer(32), T.buffer(32)
+    T.launch("a_tree_seed", 1, 128, [tree, keys, T.buffer(blake3(b"pearl-c/v0/seed-A")), T.buffer(salt), T.buffer(root_b), seed, line],
+             [m, index])
+    levels = tree_levels(d, leaves)
+    assert tree.raw == b"".join(b"".join(level) for level in levels)
+    root = levels[-1][0]
+    assert seed.raw == PC.unit_seed_a(salt, root, root_b, index)
+    assert line.raw == keyed(seed.raw, b"pearl/v4/FP8/noise-line")
+    none = T.buffer(32)
+    T.launch("a_tree_seed", 1, 128, [T.buffer(b"".join(leaves) + bytes(32 * (m - 1))), keys, T.buffer(blake3(b"pearl-c/v0/seed-A")),
+                                     T.buffer(salt), T.buffer(root_b), none], [m, index])
+    assert none.raw == seed.raw

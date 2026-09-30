@@ -21,6 +21,11 @@ over the 32 real rows, then hash_leaf_p (32-row tiles), the frame-b3s tile tree 
      and each call's tile hashing (hash_msg_v, leaves, tile tree) on a low-priority side stream once its GEMM is done;
    - h3g: h3o with each call's tile hashing launched with the next call's GEMM (a single-wave GEMM: 128 CTAs of 188 SMs);
    - h2o, h2g: the same tile hashing placements; -h2's forming needs A's root, so A's tree stays in series;
+   - h3q, h2q: h3p and h2p with fewer launches, spread over more CTAs: A's leaves and row seeds in one launch
+     (hash_rows_b3s_seed), A's tree, seed_A and line key in one (a_tree_seed; gated against GPU 1's seed_line_a before any
+     timing), and the tile hashing in one, a CTA a tile (tile_hash_d: the digests, the leaf from them in shared memory,
+     the tree leaf, and the tree's top in the last CTA), where hash_leaf_p ran 128 tiles on 4 CTAs;
+   - h3sq, h2sq: h3s and h2s (in series) with a_tree_seed and tile_hash_d;
    - h3p, h2p: h3g and h2g with the producer split. The chain's usual producer writes A, then stats_a (which needs only A)
      runs on the chain while a side stream hashes A's rows (hash_rows_b3s, reading A from L2) and makes -h3's row seeds
      (b3_seeds) or -h2's tree and seed_A. lines waits for them, and under -h3 A's tree and seed_A follow on the side.
@@ -53,13 +58,16 @@ RB, WSETS = 4 * K, 4
 #: (format, A's tree and seed beside forming, or "split": the chain's usual producer writes A, and A's leaves (hash_rows_b3s,
 #: reading A from L2), -h3's row seeds (b3_seeds) or -h2's tree and seed run on a side stream beside stats_a, which needs
 #: only A, while lines waits for them; the tile hashing's placement: None in series, "next" after its own GEMM, "tail"
-#: launched with the next call's GEMM)
-ARMS = {"nohash": (None, False, None), "h3s": ("h3", False, None), "h3o": ("h3", True, "next"), "h3g": ("h3", True, "tail"),
-        "h2s": ("h2", False, None), "h2o": ("h2", False, "next"), "h2g": ("h2", False, "tail"),
-        "h3p": ("h3", "split", "tail"), "h2p": ("h2", "split", "tail")}
+#: launched with the next call's GEMM; the fewer-launch kernels: hash_rows_b3s_seed for the split's A leaves and row seeds,
+#: a_tree_seed for A's tree, seed_A and the line key, tile_hash_d for the whole tile hashing)
+ARMS = {"nohash": (None, False, None, False), "h3s": ("h3", False, None, False), "h3o": ("h3", True, "next", False),
+        "h3g": ("h3", True, "tail", False), "h2s": ("h2", False, None, False), "h2o": ("h2", False, "next", False),
+        "h2g": ("h2", False, "tail", False), "h3p": ("h3", "split", "tail", False), "h2p": ("h2", "split", "tail", False),
+        "h3q": ("h3", "split", "tail", True), "h2q": ("h2", "split", "tail", True),
+        "h3sq": ("h3", False, None, True), "h2sq": ("h2", False, None, True)}
 #: references, not rows: nohashc is nohash with the coalesced producer's plain twin (derive_rows_coal), which splits the
 #: fused producer's cost into its layout and its hashing
-REFS = {"nohashc": (None, False, None)}
+REFS = {"nohashc": (None, False, None, False)}
 #: cuBLASLt's enum values: compute and scale types, matmul-descriptor and preference attributes, data types
 COMPUTE_32F, R_32F, R_8F_E4M3, R_16BF = 68, 0, 28, 14
 DESC_TRANSA, DESC_TRANSB, PREF_MAX_WORKSPACE, OP_N, OP_T = 3, 4, 1, 0, 1
@@ -272,8 +280,35 @@ def main() -> None:
         dev.ck("cuGraphInstantiateWithFlags", C.byref(ge), g, USE_NODE_PRIORITY if prio else 0)
         return ge, pr
 
+    counters = {v: [dev.alloc(16) for _ in range(WSETS)] for v in R.VARIANT_G}
+    dev.sync()
+
+    def a_tree(b, line: bool) -> None:
+        """a_tree_seed: A's tree top, seed_A and (with line) E_A's line key, into the pipeline's tree_a, seed_a and line_a."""
+        Kn.go("a_tree_seed", 1, 128, (b["tree_a"], b["keys_a"], seedk, saltp, rootbp, b["seed_a"], b["line_a"] if line else 0),
+              (M_REAL, index))
+
+    # the gate: a_tree_seed's seed_A and line key equal GPU 1's seed_line_a's over the same root, before anything is timed
+    gate = {}
+    for v, ps in pipes.items():
+        b, size = ps[0].b, ps[0].size
+        Kn.go("hash_rows_b3s", M_REAL, 128, (xa, b["tree_a"], keys["dom_a"], segkeys, rtmpl), (M_REAL, RB, 0, rt[1]))
+        levels(b["tree_a"], b["keys_a"], M_REAL, 1024)
+        dev.launch("seed_line_a", 1, 32, p=(b["tree_a"] + size["tree_a"] - 32, keys["unit"], b["line_a"], b["seed_a"]))
+        dev.sync()
+        want = dev.read(b["tree_a"], size["tree_a"]) + dev.read(b["seed_a"], 32) + dev.read(b["line_a"], 32)
+        a_tree(b, True)
+        dev.sync()
+        got = dev.read(b["tree_a"], size["tree_a"]) + dev.read(b["seed_a"], 32) + dev.read(b["line_a"], 32)
+        gate[v] = {"a_tree_seed_equals_levels_and_seed_line_a": got == want}
+    res["gates"] = gate
+    save()
+    if not all(g["a_tree_seed_equals_levels_and_seed_line_a"] for g in gate.values()) and not ungated:
+        print(f"a_tree_seed differs from GPU 1's seed_line_a: {gate}", flush=True)
+        sys.exit(5)
+
     def chain(v: str, arm: str) -> None:
-        fmt, a_side, t_place = {**ARMS, **REFS}[arm]
+        fmt, a_side, t_place, fk = {**ARMS, **REFS}[arm]
         ps = pipes[v]
         a_rec, t_rec, pending = [False] * WSETS, [False] * WSETS, None
 
@@ -303,7 +338,16 @@ def main() -> None:
                 leaves = [lambda b=b: Kn.go("hash_rows_b3s", M_REAL, 128, (xa, b["tree_a"], keys["dom_a"], segkeys, rtmpl), (M_REAL, RB, 0, rt[1]))]
                 tree = [lambda b=b: levels(b["tree_a"], b["keys_a"], M_REAL, 1024),
                         lambda b=b, root_a=root_a: dev.launch("seed_line_a", 1, 32, p=(root_a, keys["unit"], b["line_a"], b["seed_a"]))]
-                if fmt == "h3":                              # lines needs the row seeds; A's tree and seed_A only the tickets
+                if fk:
+                    tree = [lambda b=b: a_tree(b, fmt == "h2")]
+                if fmt == "h3" and fk:                       # the leaves and row seeds in one launch
+                    on(side_a, [lambda b=b: Kn.go("hash_rows_b3s_seed", M_REAL, 128, (xa, b["tree_a"], keys["dom_a"], segkeys, rtmpl, seedk,
+                                                                                      saltp, rootbp, seeds), (M_REAL, RB, 0, rt[1], index))])
+                    dev.ck("cuEventRecord", evs["s"], side_a)
+                    on(side_a, tree)
+                    dev.ck("cuEventRecord", evs[f"a{w}"], side_a)
+                    a_rec[w] = True
+                elif fmt == "h3":                            # lines needs the row seeds; A's tree and seed_A only the tickets
                     on(side_a, leaves + [lambda b=b: Kn.go("b3_seeds", 1, 128, (b["tree_a"], seeds, seedk, saltp, rootbp), (M_REAL, index, 1))])
                     dev.ck("cuEventRecord", evs["s"], side_a)
                     on(side_a, tree)
@@ -325,6 +369,8 @@ def main() -> None:
                 root_a = b["tree_a"] + pipe.size["tree_a"] - 32
                 commit = [lambda b=b: levels(b["tree_a"], b["keys_a"], M_REAL, 1024),
                           lambda b=b, root_a=root_a: dev.launch("seed_line_a", 1, 32, p=(root_a, keys["unit"], b["line_a"], b["seed_a"]))]
+                if fk:
+                    commit = [lambda b=b: a_tree(b, True)]
                 if a_side:
                     dev.ck("cuEventRecord", evs["p"], s)
                     dev.ck("cuStreamWaitEvent", side_a, evs["p"], 0)
@@ -348,6 +394,10 @@ def main() -> None:
                        lambda b=b: Kn.go("hash_leaves_b3s", -(-tiles // 128), 128, (b["leaves"], b["tree_t"], keys["dom_t"], ttmpl),
                                          (tiles, 32, 0, tt[1])),
                        lambda b=b: levels(b["tree_t"], b["keys_t"], tiles, 1024)]
+            if fk:                                           # the digests, leaves and tile tree in one launch, a CTA a tile
+                hashing = [lambda b=b, w=w: Kn.go("tile_hash_d", tiles, 128, (b["c"], b["u"], b["digests"], b["leaves"], b["tree_t"], b["keys_t"],
+                                                                         keys["k_msg"], keys["k_leaf"], counters[v][w], keys["dom_t"], ttmpl),
+                                                  (M_REAL, N, tt[1], tiles))]
             if t_place == "next":
                 side_hashing(hashing, w)
             elif t_place == "tail":

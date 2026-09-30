@@ -634,3 +634,201 @@ extern "C" __global__ void __launch_bounds__(256) standin_gemm_tile(const Args a
     store_cv(a.p[5] + 32 * ((uint64_t)t * (n / 32) + blk), h);
   }
 }
+
+// ---- decode's hashing in fewer launches, spread over more CTAs --------------------------------------------------------
+// hash_rows_b3s_seed: hash_rows_b3s (a CTA a row, a thread a segment, the row's segment tree in shared memory; the same
+// arguments p0-p4, i0-i3) whose thread 0 then writes -h3's row seed (b3_seeds' mode 1: ι = i4 · 2^32 + rank) into
+// p8 + 32 r, from the seed key p5, salt p6 and root_B p7: one launch where a split producer's side branch had two.
+extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_seed(const Args a) {
+  __shared__ uint32_t lv[B3S_MAX_SEGS][8];
+  const uint64_t row = blockIdx.x;
+  const uint32_t L = (uint32_t)a.i[1], nseg = L == 0 ? 1 : (L + B3S_SEG - 1) / B3S_SEG;
+  const int j = threadIdx.x;
+  const uint64_t rank = (uint64_t)a.i[2] + row;
+  const uint8_t* v = reinterpret_cast<const uint8_t*>(a.p[0]) + row * (uint64_t)L;
+  if ((uint32_t)j < nseg) {
+    uint32_t dom[8], tmpl[16], key[8], h[8];
+    load_key(a.p[2], dom);
+#pragma unroll
+    for (int w = 0; w < 16; w++) tmpl[w] = reinterpret_cast<const uint32_t*>(a.p[4])[w];
+    b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], rank, rank, L, (uint32_t)j, key);
+    b3s_segment(v, L, (uint32_t)j, key, (L % 16 == 0) && ((a.p[0] & 15) == 0), h);
+#pragma unroll
+    for (int i = 0; i < 8; i++) lv[j][i] = h[i];
+  }
+  __syncthreads();
+  int level = 0;
+  for (uint32_t w = nseg; w > 1; w = (w + 1) / 2, level++) {
+    const uint32_t half = w / 2;
+    uint32_t h[8];
+    if ((uint32_t)j < half) {
+      uint32_t lk[8], m[16];
+      load_key(a.p[3] + 32ull * level, lk);
+#pragma unroll
+      for (int q = 0; q < 8; q++) { m[q] = lv[2 * j][q]; m[8 + q] = lv[2 * j + 1][q]; }
+      blake3_block(lk, m, h);
+    } else if ((uint32_t)j == half && (w & 1)) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) h[q] = lv[w - 1][q];
+    }
+    __syncthreads();
+    if ((uint32_t)j < half || ((uint32_t)j == half && (w & 1))) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) lv[j][q] = h[q];
+    }
+    __syncthreads();
+  }
+  if (j == 0) {
+    uint32_t sd[8];
+    store_cv(a.p[1] + row * 32, lv[0]);
+    b3_seed(a.p[5], a.p[6], lv[0], a.p[7], (uint64_t)(uint32_t)a.i[4] << 32 | rank, sd);
+    store_cv(a.p[8] + row * 32, sd);
+  }
+}
+
+// Level l > 0 of a tree over `width` level-0 nodes (a power of two) starts `width · (2 - 2^(1-l))` nodes in: the levels
+// back to back, as hash_nodes and hash_tree_small lay them out.  The top of such a tree over at most 256 nodes, level 0
+// already in sm (8 words a node), under the level keys at keys_p, by up to 128 threads, each level stored at base as
+// it's made.
+DEV void tree_top_smem(uint32_t (*sm)[8], uint32_t width, uint64_t keys_p, uint64_t base) {
+  uint64_t off = width;
+  int level = 0;
+  for (uint32_t w = width; w > 1; w /= 2, level++) {
+    const uint32_t i = threadIdx.x;
+    uint32_t h[8];
+    if (i < w / 2) {
+      uint32_t lk[8], m[16];
+      load_key(keys_p + 32ull * level, lk);
+#pragma unroll
+      for (int q = 0; q < 8; q++) { m[q] = sm[2 * i][q]; m[8 + q] = sm[2 * i + 1][q]; }
+      blake3_block(lk, m, h);
+    }
+    __syncthreads();
+    if (i < w / 2) {
+#pragma unroll
+      for (int q = 0; q < 8; q++) sm[i][q] = h[q];
+      store_cv(base + 32 * (off + i), h);
+    }
+    __syncthreads();
+    off += w / 2;
+  }
+}
+
+// tile_hash_d: the post-GEMM hashing of a call in one launch, a CTA a 64 x 64 tile and a thread a (row, 32-column chunk):
+// the tile's message digests (b3_msg_digest from C~ and U, into p2 in hash_msg_v's layout), its leaf from those digests in
+// shared memory (hash_leaf_p's chunks, counters and parents, into p3 + 32 t), and the leaf's frame-b3s tree leaf
+// (hash_leaves_b3s's, into p4 + 32 t: the tile tree's level 0).  The last CTA (a u32 counter at p8, which it resets) reads
+// level 0 back through L2 (pads written by the unit) and builds the tile tree's levels above it.  p0 C~, p1 U (rows x cols
+// words), p2 digests, p3 leaves, p4 the tile tree, p5 its level keys, p6 the message key, p7 the leaf key, p8 the counter,
+// p9 the tile domain id, p10 the tile key template; i0 rows (real), i1 cols (a multiple of 64), i2 the template's length,
+// i3 the tile tree's width (a power of two, at most 256).  Launched with one CTA of 128 threads a tile.
+extern "C" __global__ void __launch_bounds__(128) tile_hash_d(const Args a) {
+  __shared__ uint32_t sm[256][8];
+  __shared__ uint32_t cvs[4][8];
+  __shared__ int last;
+  const int rows = a.i[0], cols = a.i[1], tn = cols / 64, per = cols / 32;
+  const int t = blockIdx.x, ti = t / tn, tj = t % tn, x = threadIdx.x;
+  const int r = min(64, rows - 64 * ti), nd = 2 * r, nch = (nd + 31) / 32;
+  if (x < nd) {
+    const size_t row = (size_t)(64 * ti + x / 2), col = (size_t)(64 * tj + 32 * (x % 2));
+    const uint4* c4 = reinterpret_cast<const uint4*>(reinterpret_cast<const uint32_t*>(a.p[0]) + row * cols + col);
+    const uint4* u4 = reinterpret_cast<const uint4*>(reinterpret_cast<const uint32_t*>(a.p[1]) + row * cols + col);
+    uint32_t c[32], u[32], key[8], h[8];
+#pragma unroll
+    for (int q = 0; q < 8; q++) {
+      const uint4 p = c4[q], s = u4[q];
+      c[4 * q] = p.x; c[4 * q + 1] = p.y; c[4 * q + 2] = p.z; c[4 * q + 3] = p.w;
+      u[4 * q] = s.x; u[4 * q + 1] = s.y; u[4 * q + 2] = s.z; u[4 * q + 3] = s.w;
+    }
+    load_key(a.p[6], key);
+    b3_msg_digest(c, u, key, h);
+    store_cv(a.p[2] + 32 * (row * per + 2 * tj + x % 2), h);
+#pragma unroll
+    for (int i = 0; i < 8; i++) sm[x][i] = h[i];
+  }
+  __syncthreads();
+  uint32_t key[8];
+  load_key(a.p[7], key);
+  if (x < nch) {
+    const int d0 = 32 * x, dn = min(32, nd - d0), blocks = (dn + 1) / 2;
+    uint32_t cv[8];
+#pragma unroll
+    for (int i = 0; i < 8; i++) cv[i] = key[i];
+#pragma unroll 1
+    for (int b = 0; b < blocks; b++) {
+      uint32_t m[16];
+      const int d = d0 + 2 * b;
+#pragma unroll
+      for (int i = 0; i < 8; i++) { m[i] = sm[d][i]; m[8 + i] = d + 1 < nd ? sm[d + 1][i] : 0u; }
+      const bool end = b == blocks - 1;
+      const uint32_t f = B3_KEYED | (b == 0 ? B3_START : 0) | (end ? B3_END | (nch == 1 ? B3_ROOT : 0) : 0);
+      b3c(cv, m, (uint64_t)x, end && (dn & 1) ? 32 : 64, f, cv);
+    }
+#pragma unroll
+    for (int i = 0; i < 8; i++) cvs[x][i] = cv[i];
+  }
+  __syncthreads();
+  if (x == 0) {
+    uint32_t h[8], l[8], r2[8];
+    if (nch == 1) {
+#pragma unroll
+      for (int i = 0; i < 8; i++) h[i] = cvs[0][i];
+    } else if (nch == 2) {
+      b3_parent(key, cvs[0], cvs[1], B3_ROOT, h);
+    } else if (nch == 3) {
+      b3_parent(key, cvs[0], cvs[1], 0, l);
+      b3_parent(key, l, cvs[2], B3_ROOT, h);
+    } else {
+      b3_parent(key, cvs[0], cvs[1], 0, l);
+      b3_parent(key, cvs[2], cvs[3], 0, r2);
+      b3_parent(key, l, r2, B3_ROOT, h);
+    }
+    store_cv(a.p[3] + 32 * (uint64_t)t, h);
+    uint32_t dom[8], tmpl[16], sk[8], m[16] = {0}, g[8];
+    load_key(a.p[9], dom);
+#pragma unroll
+    for (int w = 0; w < 16; w++) tmpl[w] = reinterpret_cast<const uint32_t*>(a.p[10])[w];
+    b3s_segment_key(dom, tmpl, (uint32_t)a.i[2], (uint64_t)t, (uint64_t)t, 32, 0, sk);
+#pragma unroll
+    for (int i = 0; i < 8; i++) m[i] = h[i];
+    b3c(sk, m, 0, 32, B3_KEYED | B3_START | B3_END | B3_ROOT, g);
+    store_cv(a.p[4] + 32 * (uint64_t)t, g);
+    __threadfence();
+    last = atomicAdd(reinterpret_cast<unsigned*>(a.p[8]), 1u) == gridDim.x - 1;
+  }
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  const uint32_t width = (uint32_t)a.i[3];
+  const uint32_t* lv0 = reinterpret_cast<const uint32_t*>(a.p[4]);
+  for (uint32_t i = x; i < width; i += blockDim.x)
+#pragma unroll
+    for (int q = 0; q < 8; q++) sm[i][q] = ld_cg(lv0 + 8 * i + q);
+  __syncthreads();
+  tree_top_smem(sm, width, a.p[5], a.p[4]);
+  if (x == 0) reinterpret_cast<unsigned*>(a.p[8])[0] = 0;
+}
+
+// a_tree_seed: A's tree above level 0 (the row leaves; pads written by the unit) in one CTA's shared memory, then seed_A over
+// its root (b3_seed with ι = i1: `pearl_c.unit_seed_a`) into p5 and, if p6, E_A's line key keyed(seed_A,
+// "pearl/v4/FP8/noise-line") into p6: GPU 1's seed_line_a's two outputs, one launch where there were two.  p0 the tree, p1
+// its level keys, p2 the seed key, p3 salt, p4 root_B, p5 seed_A, p6 the line key or 0; i0 the tree's width (a power of
+// two, at most 256), i1 the unit index.  One CTA of 128 threads.
+__constant__ uint8_t NOISE_LINE[23] = {'p', 'e', 'a', 'r', 'l', '/', 'v', '4', '/', 'F', 'P', '8', '/',
+                                       'n', 'o', 'i', 's', 'e', '-', 'l', 'i', 'n', 'e'};
+extern "C" __global__ void __launch_bounds__(128) a_tree_seed(const Args a) {
+  __shared__ uint32_t sm[256][8];
+  const uint32_t width = (uint32_t)a.i[0];
+  for (uint32_t i = threadIdx.x; i < width; i += blockDim.x) load_key(a.p[0] + 32ull * i, sm[i]);
+  __syncthreads();
+  tree_top_smem(sm, width, a.p[1], a.p[0]);
+  if (threadIdx.x) return;
+  uint32_t seed[8];
+  b3_seed(a.p[2], a.p[3], sm[0], a.p[4], (uint64_t)(uint32_t)a.i[1], seed);
+  store_cv(a.p[5], seed);
+  if (a.p[6]) {
+    uint32_t h[8];
+    b3_short<23>(seed, [&](int j) { return (uint32_t)NOISE_LINE[j]; }, h);
+    store_cv(a.p[6], h);
+  }
+}
