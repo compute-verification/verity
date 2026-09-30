@@ -2,7 +2,7 @@
 # Pearl-C4 on one leased GPU, from the shipped tree (build.sh): the tree against MANIFEST.sha256, the one visible GPU's identity
 # (a single index in CUDA_VISIBLE_DEVICES, as `gpu-lease 1` sets it; its UUID in NODE_UUIDS when that is set; cc 12.0), an
 # nvidia-smi trace of that GPU only, then
-#   bash run.sh [check]            dev.py check: every kernel on the fixture, every buffer byte for byte, both formats and CTA heights
+#   bash run.sh [check]            dev.py check: every kernel on both fixtures, every buffer byte for byte, both formats and CTA heights
 #   bash run.sh time [MxNxK ...]   the check, then dev.py's self-timing per format (default the two headline shapes; not a panel number)
 # Nothing is built here.  Python: $PY, else python3 when it has numpy, else `uv run --with numpy`.
 # Exit: 3 identity refused; 5 the tree does not match its manifest; 4 a buffer differs (nothing timed); else dev.py's.
@@ -28,7 +28,12 @@ nvidia-smi -i "$IDX" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,tempe
   --format=csv,nounits -lms 100 > "$OUT/smi_trace.csv" &
 SMI=$!
 trap 'kill $SMI 2> /dev/null' EXIT
-$PY dev.py check check --expect-uuid "$UUID" > "$OUT/check.jsonl"; RC=$?
+RC=0
+for d in check check2; do
+  [ -d "$d" ] || continue
+  $PY dev.py check "$d" --expect-uuid "$UUID" >> "$OUT/check.jsonl"; RC=$?
+  [ "$RC" -eq 0 ] || break
+done
 grep -h '"check"\|"refused"' "$OUT/check.jsonl"
 if [ "$RC" -eq 0 ] && [ "$MODE" = time ]; then
   SHAPES=("$@"); [ ${#SHAPES[@]} -gt 0 ] || SHAPES=(8192x8192x8192 64x8192x8192)
