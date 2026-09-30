@@ -240,9 +240,10 @@ leaf      pearl-c-h100's; tickets: Pearl's lottery over C̃
 useful    U/(α_A·α_B), glue
 ~~~
 
-- **The chain is exact on the domain:** each C̃ word is the exact dot product rounded once toward zero (a test). So rounding
-  binds no word to its order. The design's defense against a salt-free precomputation is that every code and every
-  block scale depends on the salt.
+- **The chain is exact on benign families:** there each C̃ word is the exact dot product rounded once toward zero (a
+  test), so rounding binds no word to its order. D₄ doesn't guarantee it (`Fp4Freeze.noLoss_gap`, an in-domain step
+  that drops a bit), so no claim rests on exactness: the debit's terms are replayed per run. The design's defense
+  against a salt-free precomputation is that every code and every block scale depends on the salt.
 - **B̃ is keyed by this job's salt (D-SK):** seed_B = H(salt ‖ root_B) (`seed_b`), and the verifier forms B̃ itself from
   it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its checked
   values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
