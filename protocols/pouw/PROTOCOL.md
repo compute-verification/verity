@@ -243,6 +243,11 @@ useful    U/(α_A·α_B), glue
 - **The chain is exact on the domain:** each C̃ word is the exact dot product rounded once toward zero (a test). So rounding
   binds no word to its order. The design's defense against a salt-free precomputation is that every code and every
   block scale depends on the salt.
+- **B̃ is keyed by this job's salt (D-SK):** seed_B = H(salt ‖ root_B) (`seed_b`), and the verifier forms B̃ itself from
+  it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its checked
+  values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
+  (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
+  stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
   strictly row-relative); and D-SS's dead share, at most one scale block in 64 is dead. A block is dead when its clean
   |max| exceeds 10ρ (theory §5: past about 10ρ a dominant element keeps its code on every draw of the noise).

@@ -248,6 +248,14 @@ def line(seed: bytes, role: int, index: int) -> list[int]:
 
 
 @lru_cache(maxsize=16)
+def seed_b(salt: bytes, root_b: bytes) -> bytes:
+    """B̃'s noise seed, keyed by this job's salt and B's root.  So B̃ exists only once the salt does, and no program
+    can precompute with it: the salt-free base split is two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater
+    paying both corrections), which is what ties it on the stride rows (TT_OUT-FP4's rule D-SK,
+    theory-pearl-c4-domain.md §2)."""
+    return keyed(blake3(LABELS["seed-B"]), salt + root_b)
+
+
 def basis(seed_b: bytes, role: int, k: int) -> tuple[tuple[int, ...], ...]:
     """F_A (ROLE_FA) or F_B (ROLE_FB): k lines of 32 codes, line t for position t."""
     return tuple(tuple(line(seed_b, role, t)) for t in range(k))
@@ -596,7 +604,9 @@ class PearlC4:
             claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
                     "beacon-unpredictability"),
             hypotheses=(
-                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS), as the theory lane states it, proposed and "
+                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
+                "this job's salt, seed-B = keyed(salt ‖ root_b), recomputed by the verifier), as the theory lane "
+                "states it, proposed and "
                 "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
                 "the cap for less than their credit less the debit (research store "
                 "internal/pouw/rtx-pro/theory-pearl-c4-domain.md §2)",
@@ -639,9 +649,12 @@ class PearlC4:
         return (FORMING_CREDITED + FORMING_UNCREDITED) * n * k + n * R * k + R * R * k + FP32_UNITS * n * R * R
 
     def noise(self, ctx: Context) -> C.Noise:
-        lab = lambda m, r: keyed(blake3(LABELS[r]), m)  # noqa: E731
-        return C.Noise(lab(ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little"), "seed-A"),
-                       lab(ctx.salt + ctx.root_b, "seed-B"))
+        """The unit's seeds: A's keyed by the job's salt, both roots and the unit, B̃'s by `seed_b`.  The verifier forms
+        both sides itself from these seeds on every drawn tile, so a word derived from any other B̃ fails its checked
+        values."""
+        unit = ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little")
+        seed_a = keyed(blake3(LABELS["seed-A"]), unit)
+        return C.Noise(seed_a, seed_b(ctx.salt, ctx.root_b))
 
     def parse_row(self, row: bytes, k: int) -> list[int]:
         return parse_row(row, k)
@@ -702,4 +715,4 @@ class PearlC4:
 
 
 __all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "e2m1", "form", "hw_scales", "line",
-           "row_passes", "salt_dead", "scale_bytes_ok", "tile_debit", "word_replay"]
+           "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]

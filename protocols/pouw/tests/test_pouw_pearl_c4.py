@@ -5,8 +5,10 @@ debit, the work law through `pearl_c_work`, and the pinned vectors."""
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import pickle
+import types
 from fractions import Fraction
 
 import pytest
@@ -17,6 +19,7 @@ from verity.ml.tc import fp32
 from verity_pouw.audit import Epoch, Prover, Workload
 from verity_pouw.protocol import DomainError, Matmul, Shape
 from verity_pouw.schemes import get
+from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c4 as F
 from verity_pouw.schemes import pearl_c4_replay as R
 from verity_pouw.schemes import pearl_c_work as W
@@ -339,6 +342,40 @@ def test_replay_rejects(tmp_path):
     assert bad(lambda t: t["draw"].update(value="00" * 32))["reason"].startswith("the draws' beacon is not")
     assert "A row 3 is credited but fails" in bad(hide)["reason"]
     assert bad(lambda t: t["openings"].pop(0))["reason"] == "'the transcript does not open tile 0'"
+
+
+def stale_b(s: F.PearlC4, salt: bytes) -> F.PearlC4:
+    """`s` with B̃'s noise keyed by `salt` in place of the job's: a weight forming reused from another epoch, or one
+    keyed by no salt."""
+    cheat = copy.copy(s)
+
+    def noise(self, ctx):
+        return C.Noise(F.PearlC4.noise(self, ctx).seed_a, F.seed_b(salt, ctx.root_b))
+
+    cheat.noise = types.MethodType(noise, cheat)
+    return cheat
+
+
+def test_b_tilde_is_keyed_by_this_jobs_salt(tmp_path):
+    """D-SK: B̃'s noise is keyed by the job's salt (seed-B = keyed(salt ‖ root_b)), so B̃ exists only once the salt
+    does, and the salt-free base split is two-sided.  The verifier forms B̃ itself from that seed, so a prover whose B̃
+    was formed under another epoch's salt, or under none, fails the checked values of a drawn tile, in the work law and
+    in the device replay."""
+    s = V.scheme("nvfp4", True)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits = {9: W.Split(K)}
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    assert W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8).audit.accepted
+    for n, salt in enumerate((b"another epoch's salt", b"")):
+        cheat = stale_b(s, salt)
+        assert F.seed_b(salt, prover.weight_roots[9]) != F.seed_b(epoch.salt, prover.weight_roots[9])
+        liar = Prover(cheat, {9: rows_b})
+        out = W.audit(s, epoch, liar, liar.prove(epoch, {3: rows_a}), splits, records, BEFORE, AFTER, 8)
+        assert not out.audit.accepted
+        assert {v.reason for v in out.audit.verdicts if not v.ok} == {"checked values"}
+        device_dump(tmp_path / str(n), cheat)
+        rep = R.verify(R.prove(tmp_path / str(n), "r-test", 8, scheme=s), scheme=s)
+        assert not rep["accepted"] and rep["reason"] == "checked values"
 
 
 def test_pinned_vectors_fast():
