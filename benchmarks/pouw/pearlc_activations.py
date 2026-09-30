@@ -106,7 +106,7 @@ def main() -> None:
     ap.add_argument("--delta", type=float, default=1.0)
     ap.add_argument("--line-norm", type=float, default=16.0)
     ap.add_argument("--tiles", type=int, default=2, help="sampled 64x8 tiles of admissible rows per layer")
-    ap.add_argument("--cross-words", type=int, default=4, help="words per tile for P1's greedy cross-group search")
+    ap.add_argument("--cross-words", type=int, default=4, help="words per tile for P1's greedy cross-group search; 0: none (the debit only)")
     ap.add_argument("--transfer", action="store_true", help="the reviewer's transfer test on the cross-group sample words")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--threads", type=int, default=3)
@@ -164,9 +164,10 @@ def main() -> None:
                 T = kpad // 32
                 tid, tex = C.chain(A, B, args.G)[:2]
                 sample = np.unique(np.linspace(0, len(A) - 1, args.cross_words).astype(int))
+                cross = len(sample) > 0
                 if args.G:
                     flags, eF = C.debit(A, B, args.G)
-                    size, beyond = C.cross_group(A, B, flags, sample, args.G)
+                    size, beyond = C.cross_group(A, B, flags, sample, args.G) if cross else (None, None)
                 else:
                     flags = C.debit_pure(A, B)
                     eF = flags.sum(1)
@@ -175,23 +176,30 @@ def main() -> None:
                     beyond = np.array([sum(1 for t in S if not flags[p, t]) for S, p in zip(sets, sample)])
                 per_word = flags.sum(1)
                 tr = {}
-                if args.transfer and args.G:
+                if args.transfer and args.G and cross:
                     a_sim = C.form_s5(XA, FcA, args.delta, args.line_norm, rng)[0]
                     b_sim = C.form_s5(XB, FcB, args.delta, args.line_norm, rng)[0]
                     tr = C.transfer(a_sim[ii.ravel()], b_sim[jj.ravel()], A, B, flags, sample, 4)
+                # A row's debit over its 8 words of the tile, a B row's over its 64: the tile's sample of each row's unit words
+                per_cell = per_word.reshape(64, 8)
                 tiles.append({"debit_share": float(per_word.mean()) / T, "debit_eF_share": float(eF.mean()) / T,
                               "debit_max_word_share": float(per_word.max()) / T, "not_needed_share": C.not_needed_share(flags, 64, 8),
+                              "row_debit_A": [round(float(x), 6) for x in per_cell.sum(1) / (8 * T)],
+                              "row_debit_B": [round(float(x), 6) for x in per_cell.sum(0) / (64 * T)],
                               "tile_identity_share": float(tid.sum()) / T, "residual_share": C.exact_run_atoms(tex) / T,
-                              "cross_group_share_mean": float(size.mean()) / T, "cross_group_share_max": float(size.max()) / T,
-                              "cross_group_beyond_debit_mean": float(beyond.mean()) / T, **tr,
+                              **({"cross_group_share_mean": float(size.mean()) / T, "cross_group_share_max": float(size.max()) / T,
+                                  "cross_group_beyond_debit_mean": float(beyond.mean()) / T} if cross else {}), **tr,
                               **({"rules_ok_padded": bool(flA and lvA and flB and lvB)} if args.split else {})})
         rec["tiles"] = tiles
         if tiles:
             rec["debit_share_mean"] = round(float(np.mean([t["debit_share"] for t in tiles])), 6)
             rec["debit_share_max"] = round(float(max(t["debit_share"] for t in tiles)), 6)
+            rec["row_debit_A_max"] = max(max(t["row_debit_A"]) for t in tiles)
+            rec["row_debit_B_max"] = max(max(t["row_debit_B"]) for t in tiles)
             rec["residual_share_max"] = round(float(max(t["residual_share"] for t in tiles)), 6)
-            rec["cross_group_share_mean"] = round(float(np.mean([t["cross_group_share_mean"] for t in tiles])), 6)
-            rec["cross_group_share_max"] = round(float(max(t["cross_group_share_max"] for t in tiles)), 6)
+            if "cross_group_share_mean" in tiles[0]:
+                rec["cross_group_share_mean"] = round(float(np.mean([t["cross_group_share_mean"] for t in tiles])), 6)
+                rec["cross_group_share_max"] = round(float(max(t["cross_group_share_max"] for t in tiles)), 6)
         print(json.dumps({k2: v for k2, v in rec.items() if k2 != "tiles"}), flush=True)
         return rec
 
@@ -230,6 +238,7 @@ def main() -> None:
         with torch.no_grad():
             model(chunk)
     measured = [r for r in layers if r.get("tiles")]
+    crossed = [r for r in measured if "cross_group_share_mean" in r]
     worst_resid = max((r["residual_share_max"] for r in measured), default=0.0)
     split = {}
     if args.split:
@@ -249,9 +258,11 @@ def main() -> None:
                        "A_row0_fail": sum(r["A_row0_fail"] for r in layers), **split,
                        "debit_share_max": max((r["debit_share_max"] for r in measured), default=0.0),
                        "debit_share_mean": float(np.mean([r["debit_share_mean"] for r in measured])) if measured else 0.0,
+                       "row_debit_A_max": max((r["row_debit_A_max"] for r in measured), default=0.0),
+                       "row_debit_B_max": max((r["row_debit_B_max"] for r in measured), default=0.0),
                        "residual_share_max": worst_resid,
-                       "cross_group_share_mean": float(np.mean([r["cross_group_share_mean"] for r in measured])) if measured else 0.0,
-                       "cross_group_share_max": max((r["cross_group_share_max"] for r in measured), default=0.0)},
+                       **({"cross_group_share_mean": float(np.mean([r["cross_group_share_mean"] for r in crossed])),
+                           "cross_group_share_max": max(r["cross_group_share_max"] for r in crossed)} if crossed else {})},
            "seconds": round(time.time() - t0, 1)}
     out = Path(args.out)
     out.write_text(json.dumps(doc, indent=1) + "\n")
