@@ -407,8 +407,21 @@ useful    U/(α_A·α_B), glue
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
+  - **Voluntary rows (V-EX;** research store `theory-pearl-c4-domain.md` §6.13, the assessor's B at 17:32Z**):** the
+    record may also give up up to ⌈m/64⌉ A rows (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`,
+    the same in every unit of the weight).
+    - They are committed in `records_root` beside the excluded rows, before the draws' beacon. A record without them
+      encodes exactly as before.
+    - A voluntary row earns no credit, and its words are still checked on every drawn tile that holds it.
+    - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
+    - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
+    - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
+      tile under, before the beacon.
   - A cell's draw weight is its row's share of `wrefOf` at the kept width. An accepted unit is credited
     (1 − ρ)·`creditOf` over its credited cells.
+  - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
+    never count as coverage. Volunteering a tile's other rows only lowers that tile's draw weight to its credited cells,
+    which is exactly the bound claimed.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
     is at most ρ times those cells' credit, with ρ = 1/400.
@@ -464,6 +477,21 @@ useful    U/(α_A·α_B), glue
   values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is two-sided
   (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on crafted
   stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
+- **The domain (`check`):** 1,024 ≤ k ≤ 2^16 with 128 | k, 64 × 64 tiles, m ≤ 2^24, and 128 ≤ n ≤ 2^18. The n ≥ 128
+  floor is B-OVF's (below): an MQA unit of one 64-wide KV head (n = 64) would need a 5.7% discount and is not claimed.
+- **B-OVF, a measured credit discount per n bucket (`B_OVF`, `b_ovf`, `credit_of`; the assessor's B at 18:45Z; theory
+  §6.12b):** creditOf(m, k, n) = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n_b)·mnk⌉, where n_b is the largest tabled n ≤ n.
+  - β = 3.42 / 2.00 / 1.11 / 0.49 / 0.17% at n_b = 128 / 256 / 512 / 1,024 / 2,048, and 0 from 4,096 up.
+  - It covers a layout for B̃'s residual chosen after the salt and shared by all n weight rows. At small n such a layout
+    fits the realised change pattern, and it can pay even where F1′ is near zero, so no factor on F1′ closes it.
+  - β is measured, not derived. It is the worst net saving that annealing plus exact block optimisation found over the
+    families R1 admits at 10×, after A0's gather and ρ, with a 1.5× margin on the gain, made non-increasing in n.
+    The evidence is research store `cheap-binding/pearlc4-fix/beta_table.py --mu 1.5` on `strong.jsonl` and
+    `strong_ext.jsonl`; exact optimisation stays within 1.02× of annealing at n = 256 and 512 (`exact256.jsonl`).
+  - R1's per-row bound and the tile cap read `credit_of`, so both tighten with it. The fork (`tt-out-aw`) takes the same
+    discount.
+  - Honest cost, from shapes alone: 0.50% of credit on Qwen2.5-0.5B, 0.23% on 1.5B, about 0.1% on 3B, 7B and
+    Llama-3.2-1B/3B, and at most 0.019% from 8B up.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
   strictly row-relative).
 - **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
@@ -482,7 +510,10 @@ useful    U/(α_A·α_B), glue
      - the charge is 128·min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]), where R_24 is one 2:4 pass plus a
        CUDA-core patch of the excess, and R_skip is a skip or patch per k64 atom;
      - it is taken at the cheater's sorted layout inside each block, with κ = min(c·M_w, 0.125) inside the expectation,
-       where c = 16.92/128 and M_w counts the window's blocks whose realised byte isn't their modal byte.
+       where c = 16.92/128 and M_w counts the window's blocks whose realised byte isn't their modal byte;
+     - B̃'s rows are charged `F1_B_OVERFIT` = 10 times it per window, capped at the window's MACs. That factor is
+       measured, not derived (`btilde_mirror.py`, `btilde_honest.py`); at n ≤ 1,024 a stronger search pays past it,
+       which B-OVF covers.
 
   1b. **F2, the masked int8 route's saving,** per tile on both operands: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain
       MAC.

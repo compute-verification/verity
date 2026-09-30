@@ -634,11 +634,28 @@ F1_EPS = 1e-12
 #: R1's tolerance band (the assessor's condition 3, 16:10Z): a row within this relative distance of its bound may be
 #: declared either way, and a tile's debit is compared with its cap at the same margin.  Soundness cost ≤ 10^-9·ρ.
 R1_TOLERANCE = 1e-9
-#: B̃'s overfit factor (theory-pearl-c4-domain.md §6.10, the assessor's 16:00Z mirror): a layout chosen after the salt for
-#: B̃'s residual is shared by all n weight rows and re-lays no A′, so it gains up to 6.8× F1′'s expectation on narrow
-#: weights (the hill-climb at G = n = 256, net of its gather and search).  B̃'s F1′ is charged at 10× that expectation,
-#: per window, capped at the window's MACs; A′'s at 1× (its layout must re-gather B̃, which doesn't pay at n ≤ 2^18).
+#: B̃'s overfit factor, measured, not derived (theory-pearl-c4-domain.md §6.12; research store
+#: cheap-binding/pearlc4-fix/btilde_mirror.py, btilde_honest.py): a layout chosen after the salt for B̃'s residual is
+#: shared by all n weight rows and re-lays no A′; its hill-climb needs 6.8× F1′'s expectation on the worst family.  B̃'s
+#: F1′ is charged at 10× that expectation, per window, capped at the window's MACs; A′'s at 1× (its layout must re-gather
+#: B̃, which doesn't pay at n ≤ 2^18).  A stronger search pays past 10× at n ≤ 1,024, which `B_OVF` covers.
 F1_B_OVERFIT = 10
+#: B-OVF, measured, not derived (theory-pearl-c4-domain.md §6.12b; the assessor's B, ratings.md 18:45Z): a unit's
+#: creditOf is discounted by β(n_b)·mnk, n_b the largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout
+#: annealed and block-optimised after the salt, over the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ,
+#: with a 1.5× margin on the measured gain and made non-increasing in n (research store cheap-binding/pearlc4-fix/
+#: beta_table.py --mu 1.5 on strong.jsonl, strong_ext.jsonl; exact block optimisation within 1.02× of annealing at
+#: n = 256 and 512, exact256.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
+B_OVF = ((128, Fraction(342, 10_000)), (256, Fraction(200, 10_000)), (512, Fraction(111, 10_000)),
+         (1024, Fraction(49, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+#: The claimed domain's least n: n = 64 (an MQA unit of one 64-wide KV head) would need 5.7% and is not claimed.
+B_OVF_MIN_N = B_OVF[0][0]
+
+
+def b_ovf(n: int) -> Fraction:
+    """B-OVF's β for a unit of n weight rows: the tabled value at the largest tabled n ≤ n.  Below the table (only a test
+    instance's n: the claimed domain has n ≥ `B_OVF_MIN_N`, `PearlC4.check`) the first bucket's."""
+    return next((b for nb, b in reversed(B_OVF) if nb <= n), B_OVF[0][1])
 
 
 def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
@@ -1001,12 +1018,13 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
 # ---- the scheme ---------------------------------------------------------------------------------------------------
 
 class PearlC4:
-    """Pearl-C on sm_120's FP4: ``k_min`` = 1024 and 64 x 64 tiles; smaller bounds make a test instance."""
+    """Pearl-C on sm_120's FP4: ``k_min`` = 1024, 64 x 64 tiles and ``n_min`` = 128 (`B_OVF_MIN_N`); smaller bounds make a
+    test instance."""
 
     tickets = C.PearlC.tickets
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
-                 f1: RowF1 | None = None):
+                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N):
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         self.fmt = FORMATS[fmt]
@@ -1019,7 +1037,7 @@ class PearlC4:
         #: D on honest coverage and Pearl-C4 claims NVFP4 alone (ratings.md 15:12Z; Daniel, 15:34Z).
         self.contrast = self.fmt is MXFP4
         self.r1_tolerance = R1_TOLERANCE
-        self.k_min, self.tile = k_min, tile
+        self.k_min, self.tile, self.n_min = k_min, tile, n_min
         self.last_debit: Debit | None = None
         self._encoded: tuple | None = None
         self._rows: tuple[C.Ops | None, RowF1 | None, RowTerms] = (None, None, {})
@@ -1044,11 +1062,13 @@ class PearlC4:
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
                 "savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
                 "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
-                "(tile_debit)",
+                "(tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
+                "(B_OVF, credit_of)",
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
-                        ("delta_inv", 4), ("dead_rho_sq", DEAD_RHO_SQ)),
+                        ("delta_inv", 4), ("dead_rho_sq", DEAD_RHO_SQ), ("n_min", n_min),
+                        ("b_ovf", tuple((nb, str(b)) for nb, b in B_OVF))),
         )
         if self.contrast:
             self.certificate = Certificate(
@@ -1065,9 +1085,9 @@ class PearlC4:
     def check(self, matmul: Matmul) -> None:
         s = matmul.shape
         if not (self.k_min <= s.k <= 1 << 16 and s.k % ALIGN_K == 0 and s.m % self.tile[0] == 0
-                and s.n % self.tile[1] == 0 and s.m <= 1 << 24 and s.n <= 1 << 18):
+                and s.n % self.tile[1] == 0 and s.m <= 1 << 24 and self.n_min <= s.n <= 1 << 18):
             raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 128 | k, tiles of "
-                              f"{self.tile}, m <= 2^24, n <= 2^18")
+                              f"{self.tile}, m <= 2^24, {self.n_min} <= n <= 2^18")
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
@@ -1079,8 +1099,10 @@ class PearlC4:
         return m * n * k + m * k * R + BF16_MAC_UNITS * PEEL_K * m * n + (FORMING_CREDITED + FORMING_UNCREDITED) * m * k
 
     def credit_of(self, shape: Shape) -> int:
-        """`wref` less A's uncredited forming, 19 units per element: creditOf = mnk + 32·mk + 256·mn + f_s·mk."""
-        return self.wref(shape) - FORMING_UNCREDITED * shape.m * shape.k
+        """`wref` less A's uncredited forming, 19 units per element, and B-OVF's discount rounded up:
+        creditOf = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n)·mnk⌉ (`b_ovf`).  R1's bound and the tile cap read it."""
+        m, k, n = shape.m, shape.k, shape.n
+        return self.wref(shape) - FORMING_UNCREDITED * m * k - math.ceil(b_ovf(n) * m * n * k)
 
     def job_cost(self, n: int, k: int) -> int:
         """The weight side, once per weight and epoch: B's forming, B̃·F_A and G as chains, and P_B's FP32 FMA chain."""

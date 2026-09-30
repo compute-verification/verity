@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import math
 import pickle
 import random
 import types
@@ -20,7 +21,7 @@ from verity.commitments.turboshake import turboshake128
 from verity.errors import InvalidArtifact
 from verity.ml.tc import fp32
 from verity_pouw.audit import Epoch, Prover, Workload
-from verity_pouw.protocol import DomainError, Matmul, Shape
+from verity_pouw.protocol import Context, DomainError, Matmul, Shape
 from verity_pouw.schemes import get
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c4 as F
@@ -163,12 +164,15 @@ def test_domain_and_registry():
         get("pearl-c-mxfp4-v0")
     mx = F.PearlC4("mxfp4")
     assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
-    s.check(Matmul(0, Shape(64, 1024, 64), 0))
+    s.check(Matmul(0, Shape(64, 1024, 128), 0))
     s.check(Matmul(0, Shape(64, 1024, 1 << 18), 0))
-    for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64),
-                Shape(64, 1024, 1 << 19)):
+    # n = 64, an MQA unit of one 64-wide KV head, would need B-OVF's 5.7% and is not claimed
+    for bad in (Shape(64, 1000, 128), Shape(64, 512, 128), Shape(64, 1 << 17, 128), Shape(60, 1024, 128),
+                Shape(64, 1024, 1 << 19), Shape(64, 1024, 64)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 0))
+    assert s.n_min == F.B_OVF_MIN_N == 128 and ("n_min", 128) in s.certificate.parameters
+    V.scheme("nvfp4", True).check(Matmul(0, Shape(16, 128, 16), 0))
 
 
 def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 256.0) -> bytes:
@@ -594,6 +598,42 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
         assert reason is None or ("R1" not in reason and "per-row rules" not in reason)
 
 
+def test_b_ovf_discounts_credit_by_its_pinned_table():
+    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b): creditOf less ⌈β(n_b)·mnk⌉, β the measured table
+    (`beta_table.py --mu 1.5`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from 4,096 up."""
+    assert F.B_OVF == ((128, Fraction(342, 10_000)), (256, Fraction(200, 10_000)), (512, Fraction(111, 10_000)),
+                       (1024, Fraction(49, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+    got = {n: F.b_ovf(n) for n in (128, 192, 256, 512, 896, 1024, 2047, 2048, 3584, 4096, 1 << 18)}
+    assert got == {128: Fraction(342, 10_000), 192: Fraction(342, 10_000), 256: Fraction(200, 10_000),
+                   512: Fraction(111, 10_000), 896: Fraction(111, 10_000), 1024: Fraction(49, 10_000),
+                   2047: Fraction(49, 10_000), 2048: Fraction(17, 10_000), 3584: Fraction(17, 10_000), 4096: 0,
+                   1 << 18: 0}
+    assert [b for _, b in F.B_OVF] == sorted((b for _, b in F.B_OVF), reverse=True)
+    s = F.PearlC4()
+    for m, k, n in ((64, 1024, 128), (2048, 3584, 512), (64, 8192, 896), (1, 1024, 1024), (64, 1024, 4096)):
+        shape = Shape(m, k, n)
+        plain = s.wref(shape) - F.FORMING_UNCREDITED * m * k
+        assert s.credit_of(shape) == plain - math.ceil(F.b_ovf(n) * m * n * k)
+        assert (s.credit_of(shape) < plain) == (n < 4096)
+    assert ("b_ovf", tuple((nb, str(b)) for nb, b in F.B_OVF)) in s.certificate.parameters
+
+
+def test_r1_and_the_tile_cap_read_the_discounted_credit(monkeypatch):
+    """R1's per-row bound and the tile cap are ρ times `credit_of`'s share, so B-OVF's discount tightens both: on a
+    unit of n = 1,024 (β = 0.49%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
+    k, n = record.k_kept, record.matmul.shape.n
+    disc = s.credit_of(Shape(1, k, n))
+    cap = s.tile_cap(record, ops, range(4), range(4))[1]
+    ratio = s.row_debit_ratio(record, ops, "B", 0)
+    assert cap == F.CAP * Fraction(disc, n) * 16
+    monkeypatch.setattr(F, "B_OVF", ((128, Fraction(0)),))
+    plain = s.credit_of(Shape(1, k, n))
+    assert plain - disc == math.ceil(Fraction(49, 10_000) * n * k) > 0
+    assert s.tile_cap(record, ops, range(4), range(4))[1] == cap * Fraction(plain, disc)
+    assert s.row_debit_ratio(record, ops, "B", 0) == ratio * Fraction(disc, plain)
+
+
 def test_a_drawn_tile_evaluates_each_rows_f1_once():
     """R1 on every row and the debit over the credited words read one evaluation of each row's F1′ per encoded tile (F1′
     is most of the verifier's per-tile cost), and the debit is the uncached one; other operands start afresh."""
@@ -779,6 +819,85 @@ def test_the_work_law_audits_pearl_c4():
     hides = W.audit(s, epoch, prover, tr, splits, [W.UnitRecord(epoch.workload.matmuls[0], 20, K)], BEFORE, AFTER, 8)
     assert not hides.audit.accepted
     assert any("A row 3 is credited but fails" in v.reason for v in hides.audit.verdicts if not v.ok)
+
+
+def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
+    """V-EX (theory §6.13, the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
+    earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row
+    the rules exclude stays excluded."""
+    s = V.scheme("nvfp4", True)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits = {9: W.Split(K)}
+    plain = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a={3: [3, 5]},
+                        voluntary_b={9: [2]})
+    assert records == [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3,), (), (5,), (2,))]
+    assert W.records_root(epoch.salt, epoch.weights_root, splits, records) != \
+        W.records_root(epoch.salt, epoch.weights_root, splits, plain)
+    assert W.exclusion_tiles(s, records) == W.exclusion_tiles(s, plain)
+    out = W.audit(s, epoch, prover, tr, splits, records, BEFORE, AFTER, 8)
+    assert out.audit.accepted and out.wref == W.cell_wref(s, records[0]) * 18 * 15
+    as_excluded = [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 5), ())]
+    reasons = [v.reason for v in W.audit(s, epoch, prover, tr, splits, as_excluded, BEFORE, AFTER, 8).audit.verdicts]
+    assert any("A row 5 is excluded but passes" in (r or "") for r in reasons)
+
+
+def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
+    """A voluntary row doesn't shelter the others: a credited row over R1's bound still fails its tile, and so does a
+    tile whose credited rows' debit passes the cap.  The spike row itself may be given up instead of excluded."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k = ctx.matmul.shape.k
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (1,)), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("A row 0 is credited") and "R1's bound" in reason
+    assert W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (0,)), tile, a_rows, b_rows, ops) is None
+
+    class NoR1(F.PearlC4):
+        def row_debit_ratio(self, record, ops, side, pos):
+            return Fraction(0)
+
+    s = NoR1("nvfp4")
+    ctx = V.ctx_of("dead", (2, 1024, 1024), 0, 0)
+    a_rows, b_rows = dead_rows(2), dead_rows(2)
+    tile = type(s.tiles(Shape(64, 1024, 64))[0])(range(2), range(2))
+    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 2, 1024, (), (), (0,)), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
+
+
+def test_v_ex_past_its_count_cap_fails_the_audit():
+    """At most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight: one each on 32 x 128 x 16."""
+    s = V.scheme("nvfp4", True)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits, u = {9: W.Split(K)}, epoch.workload.matmuls[0]
+    assert (W.voluntary_cap(32), W.voluntary_cap(16), W.voluntary_cap(65)) == (1, 1, 2)
+    for rec in (W.UnitRecord(u, 20, K, (3,), (), (5, 6)), W.UnitRecord(u, 20, K, (3,), (), (), (1, 2))):
+        out = W.audit(s, epoch, prover, tr, splits, [rec], BEFORE, AFTER, 8)
+        assert not out.audit.accepted and "more voluntary rows than V-EX allows" in out.audit.verdicts[0].reason
+    with pytest.raises(ValueError):
+        W.UnitRecord(u, 20, K, (3,), (), (3,))
+
+
+def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
+    """`volunteer`, the honest prover's remedy: on a scheme whose debit puts tile position 7 at 20 units per word against a
+    cap of 1 per credited word, it gives up A row 7 (not a column, which leaves the tile over), and the audit then
+    accepts; without it the tile fails."""
+
+    class Heavy(F.PearlC4):
+        def tile_cap(self, record, ops, rows, cols):
+            return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
+
+    s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)
+    epoch, prover, tr, rows_a, rows_b = lifecycle(s)
+    splits = {9: W.Split(K)}
+    records = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20})
+    va, vb = W.volunteer(s, epoch, tr, records, {3: rows_a}, {9: rows_b})
+    assert (va, vb) == ({3: [7]}, {})
+    fixed = W.declare(s, epoch, {3: rows_a}, {9: rows_b}, splits, real_rows={3: 20}, voluntary_a=va, voluntary_b=vb)
+    assert W.audit(s, epoch, prover, tr, splits, fixed, BEFORE, AFTER, 8).audit.accepted
+    tile = s.tiles(epoch.workload.matmuls[0].shape)[0]
+    ctx = Context(epoch.salt, epoch.workload.matmuls[0], tr.activation_roots[0], epoch.weight_roots[9])
+    ops = s.encode(ctx, s.noise(ctx), rows_a[:16], rows_b, tile)
+    assert "exceeds the cap" in W.check_opened(s, records[0], tile, rows_a[:16], rows_b, ops)
 
 
 def device_dump(path, s: F.PearlC4, swap_leaves=False, flip_root_a=False) -> None:
