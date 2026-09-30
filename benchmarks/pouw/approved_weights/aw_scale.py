@@ -30,8 +30,9 @@ import sys
 import time
 from pathlib import Path
 
-import torch
-import torch.nn.functional as F
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+import torch  # noqa: E402
+import torch.nn.functional as F  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aw_gpu as G  # noqa: E402
@@ -111,10 +112,11 @@ class Shards:
         from safetensors import safe_open
         idx = json.loads(Path(snap, "model.safetensors.index.json").read_text())["weight_map"]
         self.where = idx
-        self.files = {f: safe_open(str(Path(snap, f)), framework="pt", device=str(dev)) for f in set(idx.values())}
+        self.dev = dev
+        self.files = {f: safe_open(str(Path(snap, f)), framework="pt", device="cpu") for f in set(idx.values())}
 
     def get(self, name):
-        return self.files[self.where[name]].get_tensor(name)
+        return self.files[self.where[name]].get_tensor(name).to(self.dev)
 
 
 def build(snap, dev):
@@ -146,7 +148,9 @@ def build(snap, dev):
 def project(model, shards, names, rung, seed, dev):
     fmt = "nvfp4" if rung.endswith("@nvfp4") else "fp8"
     base = rung.split("@")[0]
-    for n in names:
+    for i, n in enumerate(names):
+        if i % 28 == 0:
+            torch.cuda.empty_cache()
         mod = model.get_submodule(n)
         w = shards.get(n + ".weight").to(torch.float32)
         mod.rin = mod.rout = None

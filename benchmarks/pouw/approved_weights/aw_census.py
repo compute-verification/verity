@@ -31,7 +31,8 @@ import sys
 import time
 from pathlib import Path
 
-import torch
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+import torch  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aw_gpu as G  # noqa: E402
@@ -88,38 +89,57 @@ def canon(c, fp4):
 def near_dups(c, width, D, fp4):
     """Every (row, block) with another row's same block at most D codes away: returns (best saving per (row, block) as a
     fraction of the block's chain cost, number of flagged (row, block))."""
-    cc = canon(c, fp4).to(torch.int64)
-    n, k = cc.shape
+    sign = 8 if fp4 else 0x80
+    mag = c & (sign - 1)
+    n, k = c.shape
+    c8 = torch.cat([c, torch.where(mag != 0, c ^ sign, c)])     # the rows and their negations: a negated block derives too
     nb = k // width
     chunks = D + 1
     cw = -(-width // chunks)
-    blk = cc.reshape(n, nb, width)
+    n2 = 2 * n
+    blk8 = c8.reshape(n2, nb, width)
+    blk = blk8.to(torch.int64)
     if chunks * cw > width:
-        blk = torch.cat([blk, torch.zeros(n, nb, chunks * cw - width, dtype=torch.int64, device=c.device)], 2)
+        blk = torch.cat([blk, torch.zeros(n2, nb, chunks * cw - width, dtype=torch.int64, device=c.device)], 2)
     pw = (torch.full((cw,), 1000003, dtype=torch.int64, device=c.device) ** torch.arange(cw, device=c.device))
-    h = (blk.reshape(n, nb, chunks, cw) * pw).sum(3).reshape(n, nb * chunks)
+    h = (blk.reshape(n2, nb, chunks, cw) * pw).sum(3).reshape(n2, nb * chunks)
+    del blk
     h = h * 1315423911 + torch.arange(nb * chunks, device=c.device) * 2654435761    # separate columns
     hs, idx = torch.sort(h, dim=0)
     best = torch.zeros(n, nb, device=c.device)
-    flagged = 0
+    keys = []
     for off in range(1, 5):
-        if off >= n:
+        if off >= n2:
             break
         eq = hs[off:] == hs[:-off]
         rr, col = torch.nonzero(eq, as_tuple=True)
         if rr.numel() == 0:
             continue
         a, b = idx[rr, col], idx[rr + off, col]
-        g = col // chunks
-        diff = (blk[a, g, :width] != blk[b, g, :width]).sum(1)
-        ok = diff <= D
-        if ok.any():
-            a, b, g, d = a[ok], b[ok], g[ok], diff[ok].float()
-            cost = FADD * 2 * d if fp4 else FADD * (d + 1 if width == 32 else d)     # a v2 atom also adds its basis partial
-            save = ((width - cost) / width).clamp_min(0)
-            flat = best.view(-1)
-            flat.scatter_reduce_(0, a * nb + g, save, reduce="amax")
-            flat.scatter_reduce_(0, b * nb + g, save, reduce="amax")
+        keep = (a % n) != (b % n)
+        a, b, col = a[keep], b[keep], col[keep]
+        neg = (a >= n) ^ (b >= n)                            # one side negated
+        ra, rb = a % n, b % n
+        lo_, hi_ = torch.minimum(ra, rb), torch.maximum(ra, rb)
+        keys.append(((lo_ * n + hi_) * 2 + neg.long()) * nb + col // chunks)
+    if keys:
+        key = torch.unique(torch.cat(keys))                  # one candidate per (pair, block), however many chunks it shares
+        step = max(1, (1 << 28) // width)
+        flat = best.view(-1)
+        for i in range(0, key.numel(), step):
+            kk = key[i:i + step]
+            g = kk % nb
+            neg = (kk // nb) % 2
+            pair = kk // nb // 2
+            a, b = pair // n, pair % n
+            diff = (blk8[a, g] != blk8[b + n * neg, g]).sum(1)
+            ok = diff <= D
+            if ok.any():
+                a, b, g, d = a[ok], b[ok], g[ok], diff[ok].float()
+                cost = FADD * 2 * d if fp4 else FADD * (d + 1 if width == 32 else d)     # a v2 atom also adds its basis partial
+                save = ((width - cost) / width).clamp_min(0)
+                flat.scatter_reduce_(0, a * nb + g, save, reduce="amax")
+                flat.scatter_reduce_(0, b * nb + g, save, reduce="amax")
     flagged = int((best > 0).sum())
     return best, flagged
 
@@ -206,8 +226,8 @@ def main():
         def get(t):
             f = idx[t] if idx else "model.safetensors"
             if f not in files:
-                files[f] = safe_open(str(Path(snap, f)), framework="pt", device="cuda")
-            return files[f].get_tensor(t)
+                files[f] = safe_open(str(Path(snap, f)), framework="pt", device="cpu")
+            return files[f].get_tensor(t).to(dev)
         recs, tc = [], time.time()
         keys = sorted(idx) if idx else None
         for L in range(lo, hi):
@@ -223,6 +243,7 @@ def main():
                         r = census_matrix(w, fmt, name, rot, args.seed, dev)
                         recs.append({"linear": name, "n": w.shape[0], "k": w.shape[1], **r})
                 del w
+                torch.cuda.empty_cache()
             if PRE["flag"]:
                 break
         if PRE["flag"]:
