@@ -2,9 +2,10 @@
 
 An arm whose gate recomputes outputs on the host (a numpy twin) can hand that work to `pool()`, a process pool sized by the
 job's CPUs (`cpus()`), so a gate's references are computed side by side instead of one after another. An arm may also have
-``prefetch(dev, call, shape, flags)``: before a flag set's first gate, the harness gives it every call it is about to gate
-(`bench._arm_gate`), so all their references are in flight while the first gate runs. A prefetch only starts work: the gate
-still takes what it compares against from the device as it is at the gate, and ignores a reference made from other inputs.
+``prefetch(dev, call, shape, flags)`` (optional, arm interface v0.6): before a flag set's first gate, the harness gives it
+every call it is about to gate (`bench._arm_gate`), so all their references are in flight while the first gate runs. A
+prefetch only starts work: the gate still takes what it compares against from the device as it is at the gate, and ignores
+a reference made from other inputs.
 """
 
 from __future__ import annotations

@@ -98,3 +98,17 @@ def test_an_arm_without_prefetch_is_gated_exactly_as_before():
     calls = [_Call(i, log) for i in range(4)]
     assert H._arm_gate(_Dev(log), _Arm(log), None, frozenset(), calls, [0, 3])()[0]
     assert log == ["launch 0", "sync", "gate 0", "launch 3", "sync", "gate 3"]
+
+
+def test_prefetch_is_optional_in_the_interface_but_refused_when_not_callable():
+    class Member(_PrefetchingArm):
+        name, stream, precision, inputs = "a", "fp8", "fp8-e4m3", "e4m3"
+        flag_sets = {"hash": frozenset({"h"}), "nohash": frozenset()}
+        build = domain = work = prepare = None
+
+    assert A.VERSION == "v0.6" and not hasattr(A.BenchArm, "prefetch")
+    A.check_arm(Member([]), {"fp8-e4m3"})
+    bad = Member([])
+    bad.prefetch = True
+    with pytest.raises(A.ArmError, match="prefetch must be callable"):
+        A.check_arm(bad, {"fp8-e4m3"})
