@@ -96,7 +96,7 @@ def disk_read() -> None:
         return
     if not shutil.which("fio"):
         return check("disk_read", False, "no fio", f">= {WANT['read_mib_s']}", "MiB/s")
-    f = Path("/workspace/.vy-check-fio")
+    f = Path("/workspace/cache/.vy-check-fio")   # /workspace itself is root's; runs are the research user
     try:
         r = run(["fio", "--name=seqread", f"--filename={f}", "--size=32G", "--rw=read", "--bs=1M", "--direct=1", "--ioengine=libaio",
                  "--iodepth=32", "--numjobs=1", "--runtime=30", "--time_based", "--output-format=json"], timeout=1800)
