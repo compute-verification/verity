@@ -175,12 +175,14 @@ run: |
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
   export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
-  # compiled kernels persist per tree on the host: every cell of a tree after the first skips Triton's JIT (vLLM's batch-invariant
-  # kernels). A compiled engine still gets a fresh Inductor dir and no vLLM compile cache (engine/env.py), so its record keeps its
-  # evidence of compilation
-  tree=$(basename "$SRC")
-  export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$tree VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$tree
-  mkdir -p "$TRITON_CACHE_DIR" "$VLLM_CACHE_ROOT"
+  # compiled kernels persist per tree on the host, so every cell of a tree after the first skips Triton's JIT of vLLM's
+  # batch-invariant kernels (the TP2 lane's lines, 14:45Z). Eager rows only: a compiled row records triton_cache_dir in its
+  # generated_kernels header. The fixed JIT build dirs only for trees whose native_jit stages its sources (#561); an older tree would
+  # rewrite their build.ninja and cost fixed trees a rebuild
+  case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
+  if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+    export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
+  fi
   # the Commit's Attempt cites the Build task's artifact (--input build=art:...), as `row chain` does
   build_run=$(cat "$SWEEP_DIR/$ROW/two-task-build-run" 2> /dev/null || true)
   build_art=""

@@ -116,6 +116,35 @@ sys.stdout.write("\n---\n".join(parts))
 PY
   yaml=$rendered
 fi
+# At most VY_MAX_WAITING_CELLS coverage cells (default 4) and VY_MAX_WAITING jobs in all (default 6) wait in Kueue: a job waiting for
+# quota still holds one of the SkyPilot controller's 8 launch slots (provision_timeout: -1), and with every slot held no other job
+# reaches Kueue. Until the dispatcher submits Kueue Jobs directly (postmortem action 3). A queue it can't read doesn't block: this
+# caps throughput loss, it guards no spend.
+wl=$(mktemp)
+research pods ssh "$machine" -- sudo k3s kubectl get workloads -A -o json > "$wl" 2> /dev/null || true
+python3 - "$wl" "$template" "${VY_MAX_WAITING_CELLS:-4}" "${VY_MAX_WAITING:-6}" <<'WAITING' || { rm -f "$wl"; exit 4; }
+import json, sys
+path, template, cells_max, all_max = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+try:
+    items = json.load(open(path)).get("items", [])
+except (OSError, ValueError, AttributeError):
+    sys.exit(0)
+def waiting(w):
+    st = w.get("status") or {}
+    done = any(c.get("type") == "Finished" and c.get("status") == "True" for c in st.get("conditions") or [])
+    return not st.get("admission") and not done
+pending = [w for w in items if waiting(w)]
+cells = sum((w.get("spec") or {}).get("queueName") == "circuits" for w in pending)
+why = ""
+if template in ("config-run", "config-run-row") and cells >= cells_max:
+    why = f"{cells} coverage cells already wait in Kueue (at most {cells_max}, VY_MAX_WAITING_CELLS): submit when one is admitted"
+elif len(pending) >= all_max:
+    why = f"{len(pending)} jobs already wait in Kueue (at most {all_max} of SkyPilot's 8 launch slots, VY_MAX_WAITING)"
+if why:
+    print(f"submit.sh: {why}", file=sys.stderr)
+    sys.exit(4)
+WAITING
+rm -f "$wl"
 tunnel    # the sync can take minutes, long enough for a tunnel to drop
 sky jobs launch -y -d -n "$name" "$yaml" --infra "ssh/$pool" --env "SRC=$dest" "${secrets[@]}" "$@"
 sky jobs queue 2>/dev/null | awk -v n="$name" 'NR <= 3 || $0 ~ n' | head -6

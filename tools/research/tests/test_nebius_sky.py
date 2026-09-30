@@ -34,13 +34,13 @@ def quotas(path: Path) -> dict[str, dict[str, float]]:
     for d in documents(path):
         if "kind: ClusterQueue" in d:
             name = re.search(r"metadata: \{name: (\S+)\}", d).group(1)
-            out[name] = {m[0]: ur.quantity(m[1]) for m in re.findall(r"\{name: (\S+), nominalQuota: ([^,}]+)", d)}
+            out[name] = {m[0]: ur.quantity(m[1].strip("\"")) for m in re.findall(r"\{name: (\S+), nominalQuota: ([^,}]+)", d)}
     return out
 
 
 def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     q = quotas(SKY / "kueue.yaml")
-    assert set(q) == {"circuits", "provers"}
+    assert set(q) == {"circuits", "provers", "backfill"} and set(q["backfill"].values()) == {0}          # backfill only borrows
     assert (q["circuits"]["nvidia.com/gpu"], q["provers"]["nvidia.com/gpu"]) == (5, 3)       # tonight: coverage is the binding workstream
     assert (q["circuits"]["cpu"], q["provers"]["cpu"]) == (112, 64)           # checks and pinned benches run outside Kueue
     for res, cap in NODE.items():
@@ -48,13 +48,16 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
     circuits = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: circuits}" in d and "ClusterQueue" in d)
-    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits and "borrowWithinCohort: {policy: Never}" in circuits
+    assert "{name: nvidia.com/gpu, nominalQuota: 5, borrowingLimit: 2}" in circuits
+    assert "borrowWithinCohort: {policy: LowerPriority, maxPriorityThreshold: 10}" in circuits          # it evicts only backfill to borrow
     provers = text.split("metadata: {name: provers}")[1].split("\n---\n")[0]
     assert provers.count("borrowingLimit: 0") == 3 == provers.count("nominalQuota")              # a borrowed bench is evicted by reclaim
-    assert text.count("    withinClusterQueue: Never") == 2 and "LowerPriority" not in text   # never evict a running Build
-    assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
+    assert text.count("    withinClusterQueue: Never") == 3 and text.count("policy: LowerPriority") == 1   # never evict a running Build
+    assert text.count("cohortName: nebius") == 3 and text.count("    reclaimWithinCohort: Any") == 2
+    backfill = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: backfill}" in d and "ClusterQueue" in d)
+    assert "reclaimWithinCohort: Never" in backfill and "borrowWithinCohort: {policy: Never}" in backfill and "borrowingLimit" not in backfill
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev", "backfill"]
     # an unquoted ": " inside a one-line value is invalid YAML (kubectl refused a description that had one); the tests read this
     # file with regexes, so check it here
     assert not [ln for ln in text.splitlines() if re.match(r"^\s*description: [^'\"].*: ", ln)]
@@ -206,12 +209,50 @@ def test_each_coverage_task_is_one_stage_attempt_whose_tool_reads_the_row():
     assert "two-task-build-run" in build and "two-task-build-run" in gpu and '--input "build=$build_art"' in gpu
 
 
-def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host():
-    """Each cell's Commit otherwise JIT-compiles vLLM's batch-invariant Triton kernels again (most of a small cell's warmup)."""
+def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
+    """Each cell's Commit otherwise JIT-compiles vLLM's batch-invariant Triton kernels and rebuilds hidden_gpu_tree again (most of a
+    small cell's 436 s GPU hold; 83-88 s with both). Eager rows only for the Triton cache, and the shared JIT dirs only for trees with
+    #561's staged sources."""
+    import subprocess
     for f in ("config-run.yaml", "config-run-row.yaml"):
         gpu = (SKY / "jobs" / f).read_text().split("\n---\n")[-1]
-        assert "TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$tree VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$tree" in gpu, f
-        assert gpu.index('SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine)') < gpu.index("tree=$(basename"), f
+        run = gpu[gpu.index("\nrun: |"):gpu.index("\nconfig:")]
+        start = run.index('  case "$ROW" in *__bi-eager)')
+        block = "\n".join(ln[2:] for ln in run[start:].split("\n")[:4])
+        assert run.index("job_tree.sh\" --mine") < start and block.endswith("fi"), f
+        for row, fixed, want in (("m__bi-eager", True, "/workspace/jobs/cache/triton/T|/workspace/jobs/cache/jit/hidden_gpu"),
+                                 ("m__bi-compiled", True, "|/workspace/jobs/cache/jit/hidden_gpu"),
+                                 ("m__bi-eager", False, "/workspace/jobs/cache/triton/T|")):
+            tree = tmp_path / ("fixed" if fixed else "old") / "T"
+            jit = tree / "integrations/vllm/verity_vllm/commit/committer/native_jit.py"
+            jit.parent.mkdir(parents=True, exist_ok=True)
+            jit.write_text("def staged_sources(): ...\n" if fixed else "def jit_load(): ...\n")
+            out = subprocess.run(["bash", "-c", block + '\necho "${TRITON_CACHE_DIR:-}|${HIDDEN_GPU_BUILD:-}"'], capture_output=True,
+                                 text=True, check=True, env={"PATH": "/usr/bin:/bin", "ROW": row, "SRC": str(tree)}).stdout.strip()
+            assert out == want, (f, row, fixed, out)
+
+
+def test_submit_caps_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
+    """A job waiting for quota holds one of SkyPilot's 8 launch slots: at most 4 coverage cells and 6 jobs in all may wait."""
+    import subprocess
+    sub = (SKY / "submit.sh").read_text()
+    (tmp_path / "waiting.py").write_text(sub[sub.index("\n", sub.index("<<'WAITING'")) + 1:sub.index("\nWAITING\n")])
+    assert sub.index("<<'WAITING'") > sub.index("<<'PY'") and sub.index("<<'WAITING'") < sub.index("sky jobs launch -y")
+
+    def check(template, queues, finished=0):
+        items = [{"spec": {"queueName": q}, "status": {}} for q in queues]
+        items += [{"spec": {"queueName": "circuits"}, "status": {"admission": {"clusterQueue": "circuits"}}}] * 3
+        items += [{"spec": {"queueName": "circuits"}, "status": {"conditions": [{"type": "Finished", "status": "True"}]}}] * finished
+        (tmp_path / "wl.json").write_text(json.dumps({"items": items}))
+        return subprocess.run(["python3", str(tmp_path / "waiting.py"), str(tmp_path / "wl.json"), template, "4", "6"],
+                              capture_output=True, text=True)
+    assert check("config-run", ["circuits"] * 3, finished=5).returncode == 0
+    r = check("config-run", ["circuits"] * 4)
+    assert r.returncode == 4 and "4 coverage cells" in r.stderr
+    assert check("prover-bench", ["circuits"] * 4).returncode == 0                 # the cell cap is coverage's; provers has its own slot
+    assert check("prover-bench", ["circuits"] * 4 + ["provers"] * 2).returncode == 4
+    (tmp_path / "wl.json").write_text("not json")
+    assert subprocess.run(["python3", str(tmp_path / "waiting.py"), str(tmp_path / "wl.json"), "config-run", "4", "6"]).returncode == 0
 
 
 def test_every_template_runs_from_a_job_tree_and_bootstraps_outside_it():
