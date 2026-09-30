@@ -244,6 +244,17 @@ run() {
   if [ -s "$marker" ]; then
     read -r run_id rc < "$marker"
   else
+    # a Commit stopped twice (the 30-min GPU cap, windows, waiters) goes back to node 1 rather than loop here
+    local tries
+    tries=$(( $(cat "$row_dir/.n2-tries" 2> /dev/null || echo 0) + 1 ))
+    echo "$tries" > "$row_dir/.n2-tries"
+    if [ "$tries" -gt "${VY_N2_COMMIT_TRIES:-2}" ]; then
+      rsync -a --rsync-path="sudo -n rsync" --chown=1000:1000 --mkpath --exclude=/.n2-tries "$row_dir/" "$N1:$row_dir/"
+      dispatch_n1 1
+      rm -rf "$row_dir" "$item"
+      echo "n2-commit $KEY: stopped $((tries - 1)) times on node 2; node 1 runs it"
+      return 0
+    fi
     (cd "$SRC/integrations/vllm" && bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" \
       --out "/workspace/jobs/bootstrap/$ROLE")
     export PATH=/workspace/jobs/venv312/bin:$CUDA_HOME/bin:$PATH PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src
@@ -325,15 +336,17 @@ held_commits() {
   KUBECONFIG=$HOME/.kube/config kubectl get jobs -l verity.dev/dispatch=node1 -o json > "$1/k8s.json"
   ssh -n "$N2" 'cd /workspace/jobs/hf/hub && for m in models--*; do for s in "$m"/snapshots/*; do [ -f "$s/config.json" ] && echo "$s"; done; done
     cd /workspace/hf/hub && for m in models--*; do for s in "$m"/snapshots/*; do [ -f "$s/config.json" ] && echo "$s"; done; done' > "$1/staged.txt" || true
-  python3 - "$1" "${VY_OFFLOAD_WAIT_S:-120}" << 'EOF'
+  python3 - "$1" "${VY_OFFLOAD_WAIT_S:-120}" "${VY_N2_WORKSTREAMS:-vllm-epoch-run n2-build}" << 'EOF'
 import calendar, json, os, re, sys, time
-d, wait = sys.argv[1], int(sys.argv[2])
+d, wait, streams = sys.argv[1], int(sys.argv[2]), sys.argv[3].split()
 staged = set(open(f"{d}/staged.txt").read().split())
 for j in json.load(open(f"{d}/k8s.json"))["items"]:
     a, lab, st = j["metadata"]["annotations"], j["metadata"]["labels"], j.get("status") or {}
     if lab.get("verity.dev/task") != "1" or not j["spec"].get("suspend") or st.get("succeeded") or st.get("failed"):
         continue
     if time.time() - calendar.timegm(time.strptime(j["metadata"]["creationTimestamp"], "%Y-%m-%dT%H:%M:%SZ")) < wait:
+        continue
+    if a.get("verity.dev/item", "").split("/")[0] not in streams:
         continue
     item = json.loads(a["verity.dev/item-json"])
     e = item.get("env") or {}
