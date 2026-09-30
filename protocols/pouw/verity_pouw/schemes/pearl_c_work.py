@@ -39,12 +39,13 @@ from bisect import bisect_right
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import partial
 from itertools import accumulate
 from math import lcm
 
 from verity.randomness import derive
 
-from ..audit import Audit, Epoch, Prover, Transcript, Verdict, Verifier, WorkProfile
+from ..audit import Audit, Epoch, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile
 from ..protocol import Context, Matmul, Shape, Tile, tagged
 from . import pearl_c as C
 from . import pearl_c_debit as D
@@ -292,13 +293,28 @@ class WorkAudit:
     job: int
 
 
+def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: Sequence[UnitRecord],
+                pick: tuple[int, Tile, TileOpening]) -> Verdict:
+    """One opened tile, (record position, tile, opening): `Verifier.check_tile`, then `check_opened`."""
+    pos, tile, opening = pick
+    v = Verifier(_TileRuleView(scheme), epoch).check_tile(transcript, opening)
+    if v.ok:
+        u = epoch.workload.matmuls[pos]
+        ctx = Context(epoch.salt, u, transcript.activation_roots[pos], epoch.weight_roots[u.weight])
+        a, b = [o.value for o in opening.a], [o.value for o in opening.b]
+        reason = check_opened(scheme, records[pos], tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, tile))
+        v = v if reason is None else Verdict(v.tile, False, reason)
+    return v
+
+
 def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
           records: Sequence[UnitRecord], committed_round: int, beacon: Beacon, t: int,
-          split_check: Callable[[int, Split], bool] | None = None) -> WorkAudit:
+          split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
     """Check the splits and the records, draw t tiles by the records' credit with the beacon round after the commitment,
-    open one tile per excluded row, and accept iff every opened tile passes `Verifier.check_tile` and `check_opened`.
-    `committed_round` is the latest beacon round when the verifier recorded the commitment; `split_check(weight, split)`
-    recomputes S from the calibration data by the pinned rule, and is required when any S is nonempty."""
+    open one tile per excluded row, and accept iff every opened tile passes `check_drawn`.  `committed_round` is the latest
+    beacon round when the verifier recorded the commitment; `split_check(weight, split)` recomputes S from the calibration
+    data by the pinned rule, and is required when any S is nonempty.  `tile_map(f, picks)` applies `check_drawn` to the
+    opened tiles in order (a process pool's map checks them in parallel)."""
     if getattr(scheme, "forming", "v1") != "v1":
         raise ValueError("the work law is stated for forming v1")
     w_ref, credit = work(scheme, records)
@@ -323,18 +339,8 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
     digest = records_root(epoch.salt, epoch.weights_root, splits, records)
     ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
     picks = draw(scheme, records, beacon, transcript.commitment.root, digest, epoch.salt, t) + exclusion_tiles(scheme, records)
-    verdicts = []
-    for pos, tile in picks:
-        tid = ids[(pos, tile.rows[0], tile.cols[0])]
-        opening = prover.open(epoch, tid)
-        v = verifier.check_tile(transcript, opening)
-        if v.ok:
-            u = epoch.workload.matmuls[pos]
-            ctx = Context(epoch.salt, u, transcript.activation_roots[pos], epoch.weight_roots[u.weight])
-            a, b = [o.value for o in opening.a], [o.value for o in opening.b]
-            reason = check_opened(scheme, records[pos], tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, tile))
-            v = v if reason is None else Verdict(tid, False, reason)
-        verdicts.append(v)
+    opened = [(pos, tile, prover.open(epoch, ids[(pos, tile.rows[0], tile.cols[0])])) for pos, tile in picks]
+    verdicts = list(tile_map(partial(check_drawn, scheme, epoch, transcript, records), opened))
     ok = all(v.ok for v in verdicts)
     profile = WorkProfile(scheme.name, int(w_ref), t, True, scheme.certificate) if ok else None
     return WorkAudit(Audit(ok, tuple(v.tile for v in verdicts), tuple(verdicts), profile), w_ref, credit, job)
