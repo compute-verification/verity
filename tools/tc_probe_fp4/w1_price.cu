@@ -8,8 +8,8 @@
 //                                  so the scale values the hardware reads change as a GEMM's do.  Unscaled kinds have MODE 0 only.
 //   price_latency_kernel<KIND>     one warp, one accumulator: LAT_UNROLL dependent MMAs per iteration, timed with clock64.
 //
-// Thread 0 of each block records its clock64 span, so the host has the SM clock of every launch (cycles / event time) and can
-// state the rate per SM per clock, which does not depend on the clock.  Nothing here checks the arithmetic (probe.py does):
+// Thread 0 of each block records its clock64 span, so the host has the SM clock of every launch (the longest span / event time:
+// blocks sharing an SM finish at different times) and can state the rate per SM per clock, which does not depend on the clock.  Nothing here checks the arithmetic (probe.py does):
 // the gates are finite, bit-identical outputs across two launches and the SASS count of the expected opcode per kernel.
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared -o libw1_price_sm_120a.so w1_price.cu

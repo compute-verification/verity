@@ -274,6 +274,9 @@ def test_w1_dry_run_records_and_its_gates_fail_closed(no_nvcc, tmp_path):
     names = {m["name"] for m in doc["measurements"]}
     assert "nvf4_const_scales_flop_per_sm_per_clock" in names and "f8f6f4_latency_cycles_per_mma" in names
     assert "op_cvt_e2m1x2_f32_fp8_mac_per_element" in names and "nvf4_quantize_fp8_mac_per_element" in names
+    # the fake's blocks end at 60..100% of the launch: the clock is the longest span's, never the median's
+    mhz = {m["name"]: m["value"] for m in doc["measurements"] if m["name"].endswith("_sm_mhz_median")}
+    assert mhz and all(v == pytest.approx(W.FakeW1.MHZ, rel=1e-3) for v in mhz.values())
     fp8 = doc["fp8_prices"]
     # the fake issues one K=32 MMA per 4 clocks per warp, K=64 per 8 and the sparse K=128 per 16: every row costs one FP8 MAC
     assert fp8["rows"]["f8f6f4_e4m3/const_scales"]["per_logical_mac"] == pytest.approx(1.0)

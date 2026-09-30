@@ -11,8 +11,8 @@ Each row is one ``mma.sync`` of ``rows_fp4.cuh`` (the mnemonic the probe's captu
               the scale values change as a GEMM's do
   latency     one warp, one accumulator, a dependent chain (cycles per MMA, from clock64)
 
-Every launch's SM clock is its thread-0 clock64 span over its event time, so each rate is also stated per SM per clock, which
-does not depend on the clock.  The rows:
+Every launch's SM clock is its longest thread-0 clock64 span over its event time, so each rate is also stated per SM per clock,
+which does not depend on the clock.  The rows:
 
   nvf4                 kind::mxf4nvf4 4X ue4m3 m16n8k64      OMMA  the honest dense NVFP4 rate (GPU 7's fp4_attack ``dense`` too)
   mxf4                 kind::mxf4nvf4 2X ue8m0 m16n8k64      OMMA
@@ -410,7 +410,12 @@ class FakeW1:
         cycles = iters * BODY * warps_per_sm * self._cpm(kind) * (1.01 if mode else 1.0)
         ms = cycles / (self.MHZ * 1e3)
         sink = np.full(nblocks * wpb * 32 * 4, float(kind + slot), np.float32) if want else None
-        return ms, sink, np.full(nblocks, int(cycles), np.int64)
+        return ms, sink, self._spans(nblocks, cycles)
+
+    @staticmethod
+    def _spans(nblocks: int, cycles: float) -> np.ndarray:
+        """Blocks sharing an SM finish at different times, as on silicon: only the longest span is the launch's."""
+        return (np.linspace(0.6, 1.0, nblocks) * cycles).astype(np.int64)
 
     def latency(self, kind, slot, iters):
         return np.zeros(128, np.float32), iters * LAT_UNROLL * (20 if kind in (0, 1) else 16)
@@ -427,7 +432,7 @@ class FakeW1:
         cycles = steps / per_clk
         ms = cycles / (self.MHZ * 1e3)
         sink = np.full(nblocks * tpb, op + slot, np.uint32) if want else None
-        return ms, sink, np.full(nblocks, int(cycles), np.int64)
+        return ms, sink, self._spans(nblocks, cycles)
 
     def teardown(self) -> None:
         pass
@@ -575,8 +580,10 @@ def main(argv: list[str] | None = None) -> int:
     for rep in range(args.reps):
         for item in items[rep % len(items):] + items[:rep % len(items)]:
             ms, _, cyc = launch(item, iters[item])
+            # the longest block's span is the launch's: blocks sharing an SM finish at different times, so a median span
+            # undercounts the clock (by 1.3x to 1.7x on node 2)
             launches[item_key(item)].append({"rep": rep, "ms": ms, "cycles_median": float(np.median(cyc)), "cycles_max": int(cyc.max()),
-                                             "sm_mhz": float(np.median(cyc)) / (ms * 1e3)})
+                                             "sm_mhz": float(cyc.max()) / (ms * 1e3)})
         samples.append(dev.clocks(identity.get("gpu_uuid")))
     latency = {}
     for row in rows:
