@@ -4,6 +4,7 @@ and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe 
 from __future__ import annotations
 
 import base64
+import datetime
 import gzip
 import importlib.util
 import json
@@ -512,3 +513,41 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
     monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
     assert fr.scope({"unit": "fill-verity-1"}, "freeze") and calls == [["systemctl", "--user", "freeze", "fill-verity-1.scope"]]
     assert not fr.scope({"unit": None}, "freeze") and len(calls) == 1
+
+
+def test_publish_pool_reports_busy_useful_holders_and_ready_gpu_h_and_stays_quiet_in_a_timed_window(tmp_path, monkeypatch):
+    util, fill = tmp_path / "util", tmp_path / "fill"
+    util.mkdir()
+    for d in ("queue", "running", "done"):
+        (fill / d).mkdir(parents=True)
+    (fill / "status.txt").write_text("2026-09-30T21:00:00Z free GPUs 0/2, kept free -, waiters -, timed False, window waiting False\n")
+    (fill / "running" / "work-a.sh").write_text("# fill: owner=bc-a gpus=1 max_min=20 project=pous\n")
+    (fill / "running" / "pad-b.sh").write_text("# fill: owner=bc-b gpus=1 max_min=20 project=pous filler=idle-gpu\n")
+    (fill / "queue" / "q1.sh").write_text("# fill: owner=bc-a gpus=1 max_min=30\n")
+    (fill / "queue" / "q2.sh").write_text("# fill: owner=bc-a gpus=0 max_min=30\n")
+    lease = "pid=1 run=- who=fill:{} since=x cmd=nice -n 19 taskset -c 96-127 bash /workspace/pouw/fill/running/{}"
+    now = datetime.datetime(2026, 9, 30, 21, 0, 0, tzinfo=datetime.timezone.utc)
+    with open(util / "2026-09-30.jsonl", "w") as f:
+        for s in range(0, 3600, 12):
+            t = now - datetime.timedelta(seconds=3600 - s)
+            recent = s >= 3300
+            f.write(json.dumps({"t": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "cpu_busy": 0.5 if recent else 0.1, "gpus": [
+                {"i": 0, "util": 90, "smact": 0.5, "lease": lease.format("bc-a", "work-a")},
+                {"i": 1, "util": 0 if recent else 90, "smact": 0.0 if recent else 0.4, "lease": lease.format("bc-b", "pad-b")},
+            ]}) + "\n")
+    monkeypatch.setenv("UTIL_OUT_DIR", str(util))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("publish_pool_under_test", NEBIUS / "publish_pool.py")
+    pp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pp)
+    n2 = pp.build(now)["nodes"]["n2"]
+    assert n2["gpu_busy_5m"] == 0.5 and 0.9 < n2["gpu_busy_1h"] < 1
+    assert 0.5 < n2["useful_share_1h"] < 0.6
+    assert n2["cpu_busy_5m"] == 0.5
+    assert [(g["index"], g["holder"], g["class"], g["busy_5m"]) for g in n2["gpus"]] == [
+        (0, "fill:bc-a", "pous", 1.0), (1, "fill:bc-b", "filler", 0.0)]
+    assert (n2["ready_gpu_h"], n2["waiting"], n2["waiting_gpu"], n2["waiting_cpu"]) == (0.5, 2, 1, 1)
+    out = tmp_path / "pool.json"
+    (fill / "status.txt").write_text("2026-09-30T21:00:00Z free GPUs 0/2, kept free -, waiters -, timed True, window waiting False\n")
+    monkeypatch.setattr(sys, "argv", ["publish_pool.py", "--out", str(out), "--no-push"])
+    assert pp.main() == 0 and not out.exists()
