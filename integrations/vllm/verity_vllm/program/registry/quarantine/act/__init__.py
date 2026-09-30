@@ -1,6 +1,5 @@
-"""verity_vllm.program.registry.quarantine.act — lane `vllm-coverage-defs` (overnight 2026-09-30): re-derived activation Definitions
-for vLLM d9105ea80 `csrc/libtorch_stable/activation_kernels.cu`, one module per definition (one `SEMANTIC_ID` each), a
-`*_difftest.py` adapter next to each.
+"""verity_vllm.program.registry.quarantine.act — re-derived activation Definitions for vLLM d9105ea80
+`csrc/libtorch_stable/activation_kernels.cu`, one module per definition (one `SEMANTIC_ID` each), a `*_difftest.py` adapter next to each.
 
   _C.silu_and_mul   act_and_mul_kernel<bf16, silu_kernel>   ->  SiluMul_v2{I} over SiluMulBf16_v2
 
