@@ -113,6 +113,19 @@ def test_identity_row_stops_on_a_wrong_uuid(tmp_path, no_nvcc, monkeypatch):
     assert code == 1 and "is not a single device" in res["failures"][0]
 
 
+def test_identity_gate_bootstrap_checks(monkeypatch):
+    class Dev:
+        def info(self):
+            return {"device": "NVIDIA GeForce RTX 5090", "compute_capability": "12.0", "sms": 170, "gpu_uuid": "GPU-00000000-0000-0000-0000-000000000000"}
+
+    smi = "NVIDIA GeForce RTX 5090, 570.153.02, 98.02, 00000000:01:00.0, 2000, 14000, 3000, 40, 100.0, 0x0"
+    monkeypatch.setattr(fp8.subprocess, "run", lambda *a, **k: type("P", (), {"returncode": 0, "stdout": smi})())
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    info, fails = fp8.identity_gate(Dev(), None)
+    assert fails == ["device 'NVIDIA GeForce RTX 5090' is not an RTX PRO 6000", "170 SMs, not 188", "driver 570.153.02 is older than 575"]
+    assert info["driver"] == "570.153.02" and info["uuid_checked"] is False
+
+
 def test_fake_silicon_refused_under_research_run(monkeypatch, tmp_path):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     assert fp8.main(["--row", "fadd", "--out", str(tmp_path), "--fake-silicon"]) == 2

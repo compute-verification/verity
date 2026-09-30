@@ -684,7 +684,11 @@ def layout_gate(dev, row: str, instr: str | None, rng) -> dict:
     return {"ok": all(v == 0 for v in checks.values()), "mismatches": checks}
 
 
-def identity_gate(dev, expect_uuid: str | None) -> tuple[dict, list[str]]:
+BOOTSTRAP = {"name": "RTX PRO 6000", "sms": 188, "min_driver": 575}  # server.md's bootstrap checks for the card
+
+
+def identity_gate(dev, expect_uuid: str | None, bootstrap: dict | None = None) -> tuple[dict, list[str]]:
+    boot = BOOTSTRAP if bootstrap is None else bootstrap
     info = dev.info()
     failures = []
     visible = os.environ.get("CUDA_VISIBLE_DEVICES")
@@ -699,8 +703,15 @@ def identity_gate(dev, expect_uuid: str | None) -> tuple[dict, list[str]]:
         info["driver"] = (info["nvidia_smi"] or {}).get("driver_version")
         if info["compute_capability"] != "12.0":
             failures.append(f"compute capability {info['compute_capability']} is not sm_120")
+        if boot.get("name") and boot["name"] not in info["device"]:
+            failures.append(f"device {info['device']!r} is not an {boot['name']}")
+        if boot.get("sms") and info["sms"] != boot["sms"]:
+            failures.append(f"{info['sms']} SMs, not {boot['sms']}")
+        major = int(str(info["driver"] or "0").split(".")[0] or 0)
+        if boot.get("min_driver") and major < boot["min_driver"]:
+            failures.append(f"driver {info['driver']} is older than {boot['min_driver']}")
     info.update({"hostname": platform.node(), "cuda_visible_devices": visible, "cuda_device_order": os.environ.get("CUDA_DEVICE_ORDER"),
-                 "expect_gpu_uuid": expect_uuid, "uuid_checked": bool(expect_uuid)})
+                 "expect_gpu_uuid": expect_uuid, "uuid_checked": bool(expect_uuid), "bootstrap": boot})
     return info, failures
 
 
