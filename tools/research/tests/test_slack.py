@@ -144,7 +144,7 @@ def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
     assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "approvals"}
-    assert slack.subscribers(reg, "agent-coordination") == [h["handle"] for h in reg["handles"]]
+    assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs"]
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "approvals") == ["infra"]
 
 
@@ -160,16 +160,16 @@ def test_handles_and_subscriptions(registry, capsys):
     rc, out, _ = run(capsys, "handles")
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
-    assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and f'channelId="{ALERTS}", topLevelOnly=true' in out
-    rc, out, _ = run(capsys, "subscriptions", "--as", "compute-accounting")
-    assert rc == 0 and COORD in out and ALERTS not in out
+    assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
+    rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
+    assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
 
 def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     reg = json.loads(registry.read_text())
     reg["channels"]["agent-coordination"]["id"] = None
     registry.write_text(json.dumps(reg))
-    rc, out, _ = run(capsys, "subscriptions", "--as", "compute-accounting")
+    rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
     assert rc == 2 and "id not recorded" in out
 
 

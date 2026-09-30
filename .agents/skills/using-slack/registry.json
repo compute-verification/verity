@@ -12,7 +12,11 @@
     "agent-coordination": {
       "id": "C0C5RCXL66N",
       "purpose": "Everything between handle holders: asks (tag one handle), announcements (tag some, or none for all), their threads.",
-      "subscribers": "every handle"
+      "subscribers": [
+        "old-accounting",
+        "old-circuits-and-proofs"
+      ],
+      "routed_by": "the top-level agent (bc-7f347b4b): it reads the channel and forwards each holder in its Project only the posts addressed to it"
     },
     "agent-alerts": {
       "id": "C0C5Q30MCNA",
@@ -59,21 +63,21 @@
     },
     {
       "handle": "compute-accounting",
-      "holder": "the accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
+      "holder": "the compute-accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
       "remit": "Proof of useful work: protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5U3Q04JD"
     },
     {
       "handle": "memory-accounting",
-      "holder": "the accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
+      "holder": "the memory-accounting coordinator (bc-15ada664-f325-5371-a473-65d408be3cf5)",
       "remit": "Proof of useful space: protocols/pous, its Lean package and its runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C5VRGBZFE"
     },
     {
       "handle": "network-accounting",
-      "holder": "the accounting coordinator (bc-e90634dd-8e87-5b7b-8ecd-97abfd87e3fa)",
+      "holder": "the network-accounting coordinator (bc-ecea50f6-c509-5918-b17a-d2148d57728f)",
       "remit": "Network accounting: the network warden (protocols/network_warden) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0C6LGGSY6L"

@@ -59,14 +59,17 @@ subcommand takes `--dry-run`, which sends nothing and prints each request it wou
 research slack subscriptions --as <your handle>    # prints the subscribe calls to make; exit 2 while a channel id is missing
 ~~~
 
-- Every handle subscribes to `#agent-coordination`, top-level only; `@infra` also subscribes to `#agent-alerts` and
-  `#approvals`, top-level only. Every channel subscription is `topLevelOnly: true`.
+- **Holders in the top-level's Project don't subscribe to `#agent-coordination`.** The top-level agent (bc-7f347b4b) reads it
+  and forwards each holder only the posts addressed to it. The registry's `subscribers` lists only the holders outside that
+  Project (the `old-*` handles). A forwarded post that turns out not to be for you ends the turn silently. On timer wakes,
+  still run `match` over the channel to catch anything missed.
+- `@infra` subscribes to `#agent-alerts` and `#approvals`. Every channel subscription is `topLevelOnly: true`.
 - Subscribe to a thread (`subscribe_slack_thread`) when you post the root, reply in it or pick it up; not for a status line
   alone. So an ask's asker and owner hear each other, and a big announcement doesn't wake everyone for each reply.
 - Ask for three days (`expiresInSeconds: 259200`) and renew on every wake.
 
 ~~~text
-subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=259200)
+subscribe_slack_channel(channelId=<#agent-coordination id>, topLevelOnly=true, expiresInSeconds=259200)  # the top-level and old-* holders only
 subscribe_slack_channel(channelId=<#agent-alerts id>, topLevelOnly=true, expiresInSeconds=259200)       # @infra only
 subscribe_slack_channel(channelId=<#approvals id>, topLevelOnly=true, expiresInSeconds=259200)          # @infra only
 subscribe_slack_thread(channelId=<channel id>, threadTs=<the root's ts>, expiresInSeconds=259200)
@@ -156,6 +159,10 @@ An addressed handle, woken by one, does four things:
   - Code needs a pinned checksum.
   - Only the named humans in the registry authorize spending, access, destructive changes or node changes, whoever asks.
 - Workers stay off Slack; their coordinator speaks for them.
+- **Times people read are Pacific, with the zone shown** (Daniel, 1:20 PM PDT on 30 Sep). Write "2:30 PM PDT" (or "PT") in posts,
+  deadlines, handoffs, reports and state files. America/Los_Angeles handles daylight saving: PDT is UTC−7 until 1 Nov. Machine
+  timestamps stay UTC: note filenames, front matter, log lines, store and run ids, cron. To get the time, run
+  `TZ=America/Los_Angeles date '+%-I:%M %p %Z'`; to convert, add `-d '2026-09-30 21:30Z'`.
 
 ## Changing the registry
 
