@@ -8,7 +8,7 @@ the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``,
 device's primary context:
 
 * **The trees** are the scheme's hashing format's (`SCHEMES`, the pipeline's ``hashing``): frame-b3 under -h1, frame-b3s
-  under -h2, whose row leaves are trees over 256-byte segments under per-domain segment level keys (``seg_keys_*``).
+  under -h2, whose row leaves are trees over 256-byte segments (the segment trees' level keys derived in the leaf kernel).
 * **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
   into B's row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
   and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
@@ -82,12 +82,11 @@ WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128"
                   "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b", "skeys_b")
 CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "digests",
                 "tree_a", "keys_a", "skeys_a", "line_a", "seed_a")
-EPOCH_STEPS = ("pad_b", "node_keys_b", "seg_keys_b", "hash_rows_b", "tree_b")
+EPOCH_STEPS = ("pad_b", "node_keys_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
-CALL_STEPS = ("pad_a", "node_keys_a", "seg_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a",
-              "af", "pa", "gemm_pearlc", "hash_msg", "hash_leaf")
-HASH_STEPS = frozenset({"pad_a", "node_keys_a", "seg_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg",
-                        "hash_leaf"})
+CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
+              "gemm_pearlc", "hash_msg", "hash_leaf")
+HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg", "hash_leaf"})
 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
@@ -433,13 +432,12 @@ def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: 
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
-    """The named steps in order.  A tree's pads and level keys exist only where the tree needs them (segment level keys under
-    -h2 alone), and on the fused path
+    """The named steps in order.  A tree's pads and level keys exist only where the tree needs them, and on the fused path
     (``pipe.fused``: 128 x 128 tiles over every row) ``gemm_pearlc`` writes the message digests itself, so ``hash_msg`` isn't
     a step."""
     by = {name: f for name, _, f in pipe.steps()}
     optional = {"hash_msg"} if getattr(pipe, "fused", False) else set()
-    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_", "seg_keys_")) and x not in optional]
+    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_")) and x not in optional]
     if missing:
         raise RuntimeError(f"the kernel's pipeline has no steps {missing}")
     return [by[x] for x in names if x in by]

@@ -43,8 +43,7 @@ sys.path[:0] = [str(HERE), str(HERE.parent)]
 
 CATEGORY = {"gemm_pearlc": "gemm",
             **{x: "forming" for x in ("lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa")},
-            **{x: "hashing" for x in ("pad_a", "node_keys_a", "seg_keys_a", "hash_rows_a", "tree_a", "seed_a", "hash_msg",
-                                      "hash_leaf")}}
+            **{x: "hashing" for x in ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "hash_msg", "hash_leaf")}}
 #: GPU 1's cubin's kernels by category, for nsys's per-kernel sums: short names exactly (``pa`` is not ``paged_attention``),
 #: the rest by prefix; every other kernel is vLLM's or torch's
 EXACT = {"lines": "forming", "eprime": "forming", "words": "forming", "words_u": "forming", "pa": "forming", "pb": "forming"}
