@@ -251,7 +251,8 @@ useful    U/(α_A·α_B), glue
   stride rows (theory §1). A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **Admission, per row and salt-free (`row_passes`):** D-NF, a_E is a normal UE4M3 (one a_E per row, so the noise is
   strictly row-relative); and D-SS's dead share, at most one scale block in 64 is dead. A block is dead when its clean
-  |max| exceeds 10ρ (theory §5: past about 10ρ a dominant element keeps its code on every draw of the noise).
+  |max|² exceeds 90·ρ², about 9.49ρ. The constant is exactly 90: ρ_D = 1/64 on the E2M1 code is proved in Lean for
+  any screen c·ρ² with c ≤ 90 (theory D-SS), and past about 11ρ a dominant element keeps its code on every draw.
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units:
   1. per row and 4-group with at least 2 salt-dead codes, 0.5 per MAC (1 when all 4 are), on every word the row feeds,
      for A′ and for B̃;

@@ -169,17 +169,18 @@ def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,)) -> bytes:
 
 
 @pytest.mark.parametrize("fmt", FMTS)
-def test_dead_screen_is_10_rho(fmt):
-    """ρ = 1 (every 8th position at 1.0): a block whose |max| is 10 is live, just past 10 (and 11, live under 12ρ) dead."""
+def test_dead_screen_is_90_rho_sq(fmt):
+    """ρ = 1 (every 8th position at 1.0): a block whose |max| is 9.4375 is live, 9.5 and 10 are dead.  The constant is
+    exactly 90 (ρ_D = 1/64 on the E2M1 code is proved for a screen c·ρ² with c ≤ 90), not 9.5² = 90.25."""
     f = F.FORMATS[fmt]
 
     def row(v):
         x = [P.f32_bits(1.0) if p % 8 == 0 else 0 for p in range(1024)]
         x[1] = P.f32_bits(v)
         return x
-    assert F.DEAD_RHO == 10
-    assert [F.dead_blocks(f, row(v))[0] for v in (10.0, 10.0625, 11.0)] == [False, True, True]
-    assert not any(F.dead_blocks(f, row(10.0))[1:])
+    assert F.DEAD_RHO_SQ == 90
+    assert [F.dead_blocks(f, row(v))[0] for v in (9.4375, 9.5, 10.0)] == [False, True, True]
+    assert not any(F.dead_blocks(f, row(9.4375))[1:])
 
 
 @pytest.mark.parametrize("fmt", FMTS)
