@@ -107,8 +107,9 @@ def gpu_env(tmp_path: Path, count: int = 3) -> dict[str, str]:
 
 @needs_flock
 def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and_keeps_cmds_status(tmp_path):
+    # started long ago, so the lease's held time is far past its 30 s of readings and the cap at held time doesn't bite
     env = {**gpu_env(tmp_path, count=2), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1", "GPU_LEASE_WHO": "bc-test",
-           "RESEARCH_RUN_DIR": str(tmp_path / "run")}
+           "RESEARCH_RUN_DIR": str(tmp_path / "run"), "GPU_LEASE_STARTED": "2026-01-01T00:00:00Z"}
     (tmp_path / "run").mkdir()
     # CMD writes the node sampler's readings as it runs, stamped inside the lease: GPU 0 busy (util), busy (SM activity 2%), idle;
     # the GPU it doesn't hold is busy throughout and must not count
@@ -127,6 +128,22 @@ def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and
         assert rec["gpus"] == [{"index": 0, "uuid": "GPU-a0", "held_s": rec["gpus"][0]["held_s"], "busy_s": 20, "sampled_s": 30}]
     free = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout
     assert [ln.split()[:2] for ln in free.splitlines() if ln and not ln.startswith("#")] == [["0", "free"], ["1", "free"]]
+
+
+@needs_flock
+def test_gpu_lease_caps_busy_and_sampled_time_at_the_held_time(tmp_path):
+    """Each reading counts a whole cadence, so readings near a lease's ends added up to more than it held (pous infra, 18:56Z).
+    Two busy readings of a cadence longer than any held time must record busy_s == sampled_s == held_s."""
+    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_UUID_TABLE": "GPU-a0", "GPU_LEASE_STARTED": "2026-01-01T00:00:00Z",
+           "GPU_LEASE_UTIL_CADENCE_S": str(10**10)}
+    reading = f'echo "{{\\"t\\":\\"$t\\",\\"gpus\\":[{{\\"i\\":0,\\"uuid\\":\\"GPU-a0\\",\\"util\\":90,\\"smact\\":0.9}}]}}" >> {tmp_path / "util-1.jsonl"}'
+    script = f"t=$(date -u +%Y-%m-%dT%H:%M:%SZ); {reading}; {reading}"
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", "sh", "-c", script], env=env,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    (rec,) = [json.loads(ln) for ln in (tmp_path / "lease-usage.jsonl").read_text().splitlines()]
+    (g,) = rec["gpus"]
+    assert g["held_s"] > 0 and g["busy_s"] == g["sampled_s"] == g["held_s"], g
 
 
 FILL_RUNNER = GPU_LEASE.parent.parent / "nebius" / "fill_runner.py"

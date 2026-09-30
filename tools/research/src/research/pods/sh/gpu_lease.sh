@@ -52,8 +52,9 @@
 # record to $RESEARCH_RUN_DIR/gpu-lease-usage.jsonl (published with the run) and to $GPU_LEASE_USAGE_LOG (default
 # /workspace/research/lease-usage.jsonl).  The readings come from $GPU_LEASE_UTIL_LOG, a glob of JSONL lines {"t", "gpus": [{"i",
 # "uuid", "util", "smact"}]} each covering $GPU_LEASE_UTIL_CADENCE_S seconds (default /workspace/pouw/infra/util/*.jsonl, every 10 s),
-# never from NVML, so a timed window stays quiet; with no log a lease records its held time alone.  Nothing is refused or stopped
-# on it, and CMD's exit status is gpu-lease's.
+# never from NVML, so a timed window stays quiet; with no log a lease records its held time alone.  Busy and sampled time are
+# capped at the held time.  Nothing is refused or stopped on it, and CMD's exit status is gpu-lease's.
+# GPU_LEASE_STARTED overrides the lease's start time, %Y-%m-%dT%H:%M:%SZ (tests).
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -265,6 +266,10 @@ for f in files:
                         v["sampled"] += cadence
                         v["busy"] += cadence if (util or 0) > 0 or (smact or 0) >= 0.01 else 0
 held = max(0, int((datetime.strptime(end, "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ")).total_seconds()))
+# each reading counts a whole cadence, so a lease's readings can add up to one cadence past its held time
+for v in gpus:
+    v["sampled"] = min(v["sampled"], held)
+    v["busy"] = min(v["busy"], v["sampled"])
 
 
 def hms(x: float) -> str:
@@ -378,7 +383,7 @@ if [ "$memgb" != 0 ]; then
     memgb=""
   fi
 fi
-started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+started=${GPU_LEASE_STARTED:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 ends=""
 [ -n "$maxmin" ] && ends=" until=$(date -u -d "@$(($(date -u -d "$started" +%s) + 60 * maxmin))" +%Y-%m-%dT%H:%M:%SZ)"
 [ -n "${table:-}" ] || table=$(uuid_table)
