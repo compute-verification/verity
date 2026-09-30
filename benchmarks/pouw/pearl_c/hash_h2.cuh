@@ -69,26 +69,37 @@ DEV void b3s_segment(const uint8_t* v, uint32_t L, uint32_t j, const uint32_t* k
   for (int i = 0; i < 8; i++) out[i] = cv[i];
 }
 
-// The segment tree's level keys: keyed(domain id, 0x06 ‖ u8 l) into p0 + 32 l for l < i0.  p0 out, p1 domain id; i0 levels
+// The segment tree's level-l node key, keyed(domain id, 0x06 ‖ u8 l)
+DEV void b3s_level_key(const uint32_t* dom, int l, uint32_t* h) {
+  uint32_t m[16] = {0};
+  m[0] = 0x06u | ((uint32_t)l << 8);
+  b3c(dom, m, 0, 2, B3_START | B3_END | B3_ROOT | B3_KEYED, h);
+}
+
+// The segment tree's level keys (b3s_level_key) into p0 + 32 l for l < i0.  p0 out, p1 domain id; i0 levels
 extern "C" __global__ void __launch_bounds__(32) b3s_level_keys(const Args a) {
   const int l = threadIdx.x;
   if (l >= a.i[0]) return;
-  uint32_t dom[8], m[16] = {0}, h[8];
+  uint32_t dom[8], h[8];
   load_key(a.p[1], dom);
-  m[0] = 0x06u | ((uint32_t)l << 8);
-  b3c(dom, m, 0, 2, B3_START | B3_END | B3_ROOT | B3_KEYED, h);
+  b3s_level_key(dom, l, h);
   store_cv(a.p[0] + 32ull * l, h);
 }
 
-// Row leaves: a CTA a row, a thread a segment (at least ⌈L / 256⌉ threads, a multiple of 32, at most 512), then the segment
+// Row leaves: a CTA a row, a thread a segment (at least ⌈L / 256⌉ threads, a multiple of 32, at most 512), the segment
+// tree's ⌈log2 segments⌉ level keys by as many threads after their segments (b3s_level_key, into shared memory), then the
 // tree in shared memory with the odd-node rule; row r's leaf (rank = position = i2 + r) into p1 + 32 r.  p0 rows (L bytes
-// each, back to back), p1 out, p2 domain id, p3 the segment level keys (32 B a level), p4 the key template (64 B); i0 rows,
-// i1 L (at most 512 segments), i2 the first row's rank, i3 the template's length
+// each, back to back), p1 out, p2 domain id, p3 (or 0) out, the level keys (32 B a level, b3s_level_keys' bytes, by the
+// first CTA), p4 the key template (64 B); i0 rows, i1 L (at most 512 segments), i2 the first row's rank, i3 the template's
+// length
+constexpr int B3S_MAX_LEVELS = 9;
+static_assert(1 << B3S_MAX_LEVELS == B3S_MAX_SEGS, "a row's segment tree has at most B3S_MAX_LEVELS levels");
 extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s(const Args a) {
   __shared__ uint32_t lv[B3S_MAX_SEGS][8];
+  __shared__ uint32_t lks[B3S_MAX_LEVELS][8];
   const uint64_t row = blockIdx.x;
   const uint32_t L = (uint32_t)a.i[1], nseg = L == 0 ? 1 : (L + B3S_SEG - 1) / B3S_SEG;
-  const int j = threadIdx.x;
+  const int j = threadIdx.x, levels = nseg > 1 ? 32 - __clz((int)(nseg - 1)) : 0;
   const uint64_t rank = (uint64_t)a.i[2] + row;
   const uint8_t* v = reinterpret_cast<const uint8_t*>(a.p[0]) + row * (uint64_t)L;
   if ((uint32_t)j < nseg) {
@@ -101,6 +112,12 @@ extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s(const Args a) {
     b3s_segment(v, L, (uint32_t)j, key, aligned, h);
 #pragma unroll
     for (int i = 0; i < 8; i++) lv[j][i] = h[i];
+    if (j < levels) {
+      b3s_level_key(dom, j, h);
+#pragma unroll
+      for (int i = 0; i < 8; i++) lks[j][i] = h[i];
+      if (row == 0 && a.p[3]) store_cv(a.p[3] + 32ull * j, h);
+    }
   }
   __syncthreads();
   int level = 0;
@@ -108,11 +125,10 @@ extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s(const Args a) {
     const uint32_t half = w / 2;
     uint32_t h[8];
     if ((uint32_t)j < half) {
-      uint32_t lk[8], m[16];
-      load_key(a.p[3] + 32ull * level, lk);
+      uint32_t m[16];
 #pragma unroll
       for (int q = 0; q < 8; q++) { m[q] = lv[2 * j][q]; m[8 + q] = lv[2 * j + 1][q]; }
-      blake3_block(lk, m, h);
+      blake3_block(lks[level], m, h);
     } else if ((uint32_t)j == half && (w & 1)) {
 #pragma unroll
       for (int q = 0; q < 8; q++) h[q] = lv[w - 1][q];

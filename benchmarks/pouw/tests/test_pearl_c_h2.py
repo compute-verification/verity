@@ -44,13 +44,13 @@ def level_keys(dom: bytes, levels: int = 10) -> bytes:
     return out.raw
 
 
-def rows_b3s(rows: bytes, m: int, rb: int, d: CommitmentDomain, rank0: int = 0, schema: str = ROW) -> bytes:
+def rows_b3s(rows: bytes, m: int, rb: int, d: CommitmentDomain, rank0: int = 0, schema: str = ROW, skeys=None) -> bytes:
+    """hash_rows_b3s's leaves; `skeys` (a buffer, or None for a null p3) takes the level keys its first CTA stores."""
     tmpl, tlen = template(schema)
     nseg = max(1, -(-rb // 256))
     out = T.buffer(32 * m)
     T.launch("hash_rows_b3s", m, 32 * -(-nseg // 32),
-             [T.buffer(rows if rows else b"\0"), out, T.buffer(d.domain_id), T.buffer(level_keys(d.domain_id)), T.buffer(tmpl)],
-             [m, rb, rank0, tlen])
+             [T.buffer(rows if rows else b"\0"), out, T.buffer(d.domain_id), skeys, T.buffer(tmpl)], [m, rb, rank0, tlen])
     return out.raw
 
 
@@ -69,6 +69,19 @@ def test_row_leaves_are_frame_b3s_at_every_length(rb):
     rows = data(f"b3s rows {rb}", m * rb)
     got = rows_b3s(rows, m, rb, d, rank0=5)
     assert [got[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(5 + r, 5 + r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)]
+
+
+@pytest.mark.parametrize("rb", [0, 256, 257, 1300, 16384, 32768])
+def test_row_leaves_store_their_level_keys(rb):
+    """hash_rows_b3s derives its segment tree's level keys itself (no b3s_level_keys launch before it): with p3 set, its
+    first CTA stores b3s_level_keys' bytes for the row's ⌈log2 segments⌉ levels there and nothing past them, and the leaves
+    are those of a null p3."""
+    m, d = 3, domain(8)
+    rows = data(f"b3s keys {rb}", m * rb)
+    levels = max(0, (max(1, -(-rb // 256)) - 1).bit_length())
+    skeys = T.buffer(b"\xa5" * 32 * 10)
+    assert rows_b3s(rows, m, rb, d, rank0=5, skeys=skeys) == rows_b3s(rows, m, rb, d, rank0=5)
+    assert skeys.raw[:32 * 10] == level_keys(d.domain_id, levels)[:32 * levels] + b"\xa5" * 32 * (10 - levels)
 
 
 @pytest.mark.parametrize("length", [0, 1, 32, 64, 200, 256])

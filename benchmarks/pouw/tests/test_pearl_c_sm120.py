@@ -263,7 +263,7 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 #: the -h1 kernels (#449's hash.cuh and hash_sm120.cuh) the pipeline launches at the dry run's shapes: no pads (every count a
 #: power of two) and no level wider than hash_tree_small's; and -h2's (hash_h2.cuh) in place of the leaves'
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
-H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s"}
+H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"hash_rows_b3s", "hash_leaves_b3s"}
 
 
 def form_kernels() -> list[str]:

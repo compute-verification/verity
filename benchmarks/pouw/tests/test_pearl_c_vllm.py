@@ -337,7 +337,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme):
         kernel.dev.log.clear()
         run.gemm(w, x, weights[w], None)
         names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-        want_rows = ["b3s_level_keys", "hash_rows_b3s"] if hashing == "h2" else ["hash_rows_w"]
+        want_rows = ["hash_rows_b3s"] if hashing == "h2" else ["hash_rows_w"]
         assert names[:len(want_rows) + 2] == ["hash_node_keys", *want_rows, "hash_tree_small"], names
     for index, (w, x) in enumerate(calls):
         a = torch.zeros((32, 1024), dtype=torch.float32)

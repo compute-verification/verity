@@ -335,7 +335,7 @@ class Pipeline:
 
     `hashing` is the trees' format, the message digests and tile leaves being the same in both: -h1 (frame-b3, a row leaf
     through BLAKE3's chunk tree, hash_rows_w) or -h2 (frame-b3s: a row leaf is a tree over its 256-byte segments,
-    hash_rows_b3s, under segment level keys b3s_level_keys writes once per domain, step `seg_keys_<tree>`; the tile tree's
+    hash_rows_b3s, under segment level keys it derives itself and its first CTA stores in `skeys_<tree>`; the tile tree's
     leaves hash_leaves_b3s).  Pads, node keys and every level above the leaves are frame-b3's in both.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
@@ -442,16 +442,9 @@ class Pipeline:
                                                              p=(b[f"keys_{tag}"], self.keys[dom]), i=(depth(count),))))
         return out
 
-    def seg_setup(self, tag: str, dom: str) -> list[tuple[str, object]]:
-        """-h2's segment level keys of a row tree (b3s_level_keys): its domain's alone, so once per unit; none under -h1."""
-        if self.hashing != "h2":
-            return []
-        d, b, levels = self.dev, self.b, b3s_levels(self.row_bytes)
-        return [(f"seg_keys_{tag}", lambda: d.launch("b3s_level_keys", 1, 32, p=(b[f"skeys_{tag}"], self.keys[dom]), i=(levels,)))]
-
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree over `count` FP32 rows of x, then its levels: -h1 hash_sm120.cuh's hash_rows_w (a warp a row), -h2
-        hash_h2.cuh's hash_rows_b3s (a CTA a row, a thread a segment)."""
+        hash_h2.cuh's hash_rows_b3s (a CTA a row, a thread a segment, the segment tree's level keys its own)."""
         d, b, rb = self.dev, self.b, self.row_bytes
         if self.hashing == "h2":
             threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
@@ -571,8 +564,8 @@ class Pipeline:
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", chain["gemm_pearlc_b" if self.fused else "gemm_pearlc_cu"])]
         mr, kk, tiles = self.m_real, self.keys, self.tiles
-        epoch = self.tree_setup("b", n, "dom_b") + self.seg_setup("b", "dom_b") + self.row_tree("b", "xb", n, "dom_b")
-        unit = self.tree_setup("a", mr, "dom_a") + self.seg_setup("a", "dom_a") + self.tree_setup("t", tiles, "dom_t")
+        epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
+        unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
         commit = self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
         hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + [
