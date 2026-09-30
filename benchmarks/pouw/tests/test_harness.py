@@ -778,6 +778,33 @@ def test_a_cutlass_tile_order_is_a_candidate_of_its_own_where_the_grid_tells_it_
                          sched_fams=frozenset({"mxfp4"}))
 
 
+def test_a_screen_only_run_screens_every_searched_candidate_and_times_nothing(monkeypatch):
+    enum = B.Candidate("nvfp4", "cublaslt", "lt13_nvfp4_0_algo70_tile20_st37", {"enumerated": 0})
+    order = B.Candidate("nvfp4", "cutlass", "cutlass3x_nvfp4_256x128x128_coop_sw2", {"swizzle": 2, "raster": 0})
+    plain = B.Candidate("nvfp4", "cutlass", "cutlass3x_nvfp4_256x128x128_coop", {"swap": 0})
+    screened_ = []
+
+    def fake_screen(bench, dev, shape, fam, so, cands, lt_ws, burst):
+        screened_.extend(c.name for c in cands)
+        return {c.name: 2.0 - i for i, c in enumerate(cands)}
+
+    def no_tune(*a, **k):
+        raise AssertionError("a screen-only run tunes nothing")
+
+    monkeypatch.setattr(H, "shape_plan", lambda *a: {"memory_bytes": 0, "sets": 2, "burst": 4})
+    monkeypatch.setattr(B, "cutlass_candidates", lambda *a, **k: ([], []))
+    monkeypatch.setattr(B, "allocate", lambda *a: argparse.Namespace(free=lambda dev: None))
+    monkeypatch.setattr(H, "gate_baselines", lambda *a: {"nvfp4": {"gated": [enum, plain, order], "all": [], "tried": []}})
+    monkeypatch.setattr(H, "screen", fake_screen)
+    monkeypatch.setattr(H, "tune_baselines", no_tune)
+    dev = argparse.Namespace(l2=128 << 20, mem_info=lambda: (1 << 40, 1 << 40))
+    args = argparse.Namespace(screen_only=True, seed=1, lt_candidates=32)
+    row = H.run_shape(None, dev, SHAPE, [B.FAMILIES["nvfp4"]], [], True, args, [], None)
+    assert row["screen_only"] and screened_ == [enum.name, order.name]
+    bc = row["baseline_candidates"]["nvfp4"]
+    assert list(bc["screen_ms"]) == [order.name, enum.name] and bc["gated"] == [enum.name, plain.name, order.name]
+
+
 def test_the_help_formats(capsys):
     with pytest.raises(SystemExit) as ex:
         H.parse(["--help"])

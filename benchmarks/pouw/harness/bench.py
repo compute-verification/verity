@@ -727,6 +727,13 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed,
                                frozenset(getattr(args, "lt_enumerate", None) or ()), lt_pick(args),
                                frozenset(getattr(args, "cutlass_sched", None) or ()))
+        if getattr(args, "screen_only", False):
+            for fam in fams:
+                wide = [c for c in gated[fam.name]["gated"] if searched(c)]
+                ms = screen(bench, dev, shape, fam, so, wide, lt_ws, plan["burst"]) if wide else {}
+                gated[fam.name]["screen_ms"] = dict(sorted(ms.items(), key=lambda kv: kv[1]))
+            row["screen_only"] = True
+            return row
         arm_ents, arm_sets = [], {}
         for a in arms:
             arm_sets[a.name] = arm_operand_sets(dev, a, so)
@@ -893,6 +900,10 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                         "along m or n, max swizzle 2, 4 or 8, where the grid is big enough for it), each gated and screened "
                         "with the enumerated configurations")
     p.add_argument("--screen-keep", type=int, default=SCREEN_KEEP)
+    p.add_argument("--screen-only", action="store_true",
+                   help="gate every candidate and screen the wide search's (one graph rep each), then stop: no tune, no arms, "
+                        "no timing. For a slice of a search too big for one run, whose best a later run times "
+                        "(--lt-enumerate-names)")
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")
     p.add_argument("--warmup-s", type=float, default=WARMUP_MS / 1e3,
