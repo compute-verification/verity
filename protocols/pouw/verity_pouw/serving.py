@@ -148,10 +148,10 @@ class Schedule:
 
 SERIAL = Schedule("serial")
 #: the measured deferred schedule (panel attempt 57, `prefill_fused.py`'s and `decode_chain.py`'s chains): the main lane at the
-#: greatest priority, the tile hashing and the screen beside it at the least
-DEFERRED = Schedule("deferred", frozenset({"tile_hash", "screen"}), ring=2, main_priority="greatest")
+#: greatest priority, each call's tile hashing beside it at the least.  The screen stayed on the main lane there, as in #564
+DEFERRED = Schedule("deferred", frozenset({"tile_hash"}), ring=2, main_priority="greatest")
 #: the same placement with the caller's stream left at its own priority (#564's first cut), kept to time against DEFERRED
-DEFERRED_CALLER = Schedule("deferred-caller", frozenset({"tile_hash", "screen"}), ring=2)
+DEFERRED_CALLER = Schedule("deferred-caller", frozenset({"tile_hash"}), ring=2)
 SCHEDULES = {s.name: s for s in (SERIAL, DEFERRED, DEFERRED_CALLER)}
 
 
