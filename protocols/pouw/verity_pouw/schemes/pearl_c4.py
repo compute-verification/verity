@@ -43,7 +43,8 @@ as Pearl-C's H100 argument had it.  The design rests instead on every code and e
 
 **The domain and the debit** are the theory lane's (research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
 §1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β
-and a_E's E4M3 byte v in 8 ≤ v < 128, a normal UE4M3 with bit 7 clear; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
+and a_E's E4M3 byte v in 8 ≤ v < 128, a normal UE4M3 with bit 7 clear; one a_E per row).  A block is screened when
+(clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
 and every element of it is charged as salt-dead (items 3 and 4), so a row with many screened blocks is rejected only when
 its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  A drawn tile's debit is replayed
 over its credited words (`tile_debit`):
