@@ -1,5 +1,5 @@
 # A port-lane capture on the Nebius cluster (the sm_120 GEMM correspondence, the FA2 capture, the e4m3 step probe, the 188-SM
-# kernels): queue circuits, priority capture (above the sweep, so it takes the next free GPU, and never evicted by a later row).
+# kernels): queue deployments-gpu, priority capture (above the sweep, so it takes the next free GPU, and never evicted by a later row).
 # Its bootstrap is CPU-only (the venv, vLLM, the checkpoints; no native taps: a capture doesn't use them; Commits that do run
 # through config-run), writing its record under /workspace/jobs, never into the tree. It runs no Build, so it doesn't block a
 # prover bench.
@@ -17,7 +17,7 @@ name: port-capture
 resources:
   infra: ssh/vy-nebius
   accelerators: RTXPRO6000:1
-  cpus: 16
+  cpus: 4
   labels:
     budget-line: nebius-port-capture
   memory: 192
@@ -71,7 +71,7 @@ config:
     pod_config:
       metadata:
         labels:
-          kueue.x-k8s.io/queue-name: circuits
+          kueue.x-k8s.io/queue-name: deployments-gpu
           kueue.x-k8s.io/priority-class: capture
       spec:
         terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
