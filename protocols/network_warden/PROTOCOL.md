@@ -2,9 +2,8 @@
 
 A spatial unit is the machines behind network wardens. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
-This package is the reference for the answer, in the terms of the Lean package `network-timing`. That package lives
-outside this repository for now, while the repo's Lean organization is planned. It pins every statement the tests
-mirror.
+This package is the reference for the answer, in the terms of its Lean package `network-timing` (`lean/`), which pins
+every statement the tests mirror.
 
 ## The warden (`grid`)
 
