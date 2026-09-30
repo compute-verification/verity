@@ -354,6 +354,17 @@ class CheckCorrespondenceOptions:
     cmd: str = field(default="check-correspondence", init=False)
 
 
+def incomplete_rc(man: dict[str, Any]) -> int:
+    """0 for a complete manifest; 4 for an incomplete one, named on stderr (the file is still written, for diagnosis): the Commit refuses
+    an incomplete manifest, so the row's Build fails here instead of passing with it."""
+    if man.get("complete") is not False:
+        return 0
+    um = man.get("unmodelled") or {}
+    print(f"manifest INCOMPLETE: {len(um)} unmodelled key(s), first {sorted(um)[:3]}; tp_peer_binding n_unbound "
+          f"{(man.get('tp_peer_binding') or {}).get('n_unbound')}", file=sys.stderr)
+    return 4
+
+
 COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions, "compare": CompareOptions, "check-correspondence": CheckCorrespondenceOptions}
 
 
@@ -374,7 +385,7 @@ def main(a: Any) -> int:
                     cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
-        return 0
+        return incomplete_rc(man)
     if a.cmd == "build-global":
         fx = _load_json(a.fixture)
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
@@ -385,7 +396,7 @@ def main(a: Any) -> int:
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
                           "tp_peer_binding_n_unbound": (man.get("tp_peer_binding") or {}).get("n_unbound"), "out": a.out}))
-        return 0
+        return incomplete_rc(man)
     if a.cmd == "compare":
         m1, m2 = _load_json(a.v1), _load_json(a.v2)
         cmp = compare(m1["identities"], m2["identities"], ignore_program_digest=a.ignore_program_digest)

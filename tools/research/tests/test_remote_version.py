@@ -8,13 +8,11 @@ import os
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
-
-import pytest
 
 from research import remote
 from research import runs as R
+from waits import wait_runner
 
 PY = sys.executable
 PKG = Path(remote.__file__).resolve().parent
@@ -57,13 +55,8 @@ def _launch_request(*args: str, pythonpath: str = SRC) -> subprocess.CompletedPr
 
 
 def _settled(run_dir: Path) -> dict:
-    deadline = time.time() + 30
-    while time.time() < deadline:
-        s = R.summarize(run_dir)
-        if s["state"] in (*R.TERMINAL, "refused"):
-            return s
-        time.sleep(0.1)
-    pytest.fail(f"run did not settle: {R.summarize(run_dir)}")
+    wait_runner(run_dir)
+    return R.summarize(run_dir)
 
 
 def test_launch_request_refuses_a_package_that_is_not_the_shipped_one_before_claiming(tmp_path):

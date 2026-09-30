@@ -67,11 +67,15 @@ def test_the_key_binds_every_anchored_field():
         assert R.key(other, R.root(other.a)) != base, field
 
 
-def test_the_program_evaluates_to_the_reference():
+@pytest.mark.parametrize("kind", ["shift24", "word"])
+def test_the_program_evaluates_to_the_reference(kind):
+    """Both P's: `ncp-v2`'s word P and `ncp-v2-shift24`'s shift by 24 (X-SPC-98)."""
     shape = ncp2.Shape(32, 64, 32)
     call = F.call(32, 64, 32)
-    ref = R.evaluate(call)
-    y, words = _outputs(shape, call)
+    ref = R.evaluate(call, kind)
+    out = evaluate(ncp2.linear(shape, kind), *call.args(kind))
+    mn, per = shape.m * shape.n, (shape.steps - 1) * 256
+    y, words = list(out[:mn]), [list(out[mn + i * per:mn + (i + 1) * per]) for i in range(4)]
     assert y == [v for row in ref.y for v in row]
     assert words == ref.words
 
@@ -85,6 +89,32 @@ def test_the_program_evaluates_to_the_reference_on_an_unbalanced_tree():
     y, words = _outputs(shape, call)
     assert y == [v for row in ref.y for v in row]
     assert words == ref.words
+
+
+def test_the_weight_program_evaluates_to_the_reference():
+    """`NcpWeight` commits each column's Y and c₀ as `schemes.ncp.assemble` has them, which the call reads."""
+    call = F.call(32, 64, 32)
+    ys, c0s = R.weight_outputs(call)
+    assert list(evaluate(ncp2.weight(ncp2.Shape(32, 64, 32)), *call.weight_args())) == [v for col in ys for v in col] + c0s
+
+
+@pytest.mark.slow
+def test_a_window_evaluates_to_its_calls():
+    """Two calls on one weight in one root (`NcpWindow`) give each call's reference outputs."""
+    shape = ncp2.Shape(16, 64, 16)
+    one = F.call(16, 64, 16, seed=3)
+    two = R.Call(**{**F.call(16, 64, 16, seed=4).__dict__, "b": one.b, "t": one.t, "bias": one.bias, "salt": one.salt,
+                    "weight": one.weight, "colids": one.colids, "forward": one.forward + 1})
+    args = one.weight_args()[:4] + [list(one.t), list(one.bias), [x & 0x7F for c in (one, two) for r in c.a for x in r],
+                                    [v for c in (one, two) for v in c.s]]
+    args += [[w for c in (one, two) for w in (c.forward & 0xFFFFFFFF, c.forward >> 32)],
+             [w for c in (one, two) for w in (c.position & 0xFFFFFFFF, c.position >> 32)], [i for c in (one, two) for i in c.rowids]]
+    out = evaluate(ncp2.window(shape, 2), *args)
+    mn, per = 256, (shape.steps - 1) * 256
+    for j, c in enumerate((one, two)):
+        ref = R.evaluate(c)
+        assert list(out[j * mn:(j + 1) * mn]) == [v for row in ref.y for v in row]
+        assert list(out[2 * mn + j * per:2 * mn + (j + 1) * per]) == ref.words[0]
 
 
 def test_shapes_outside_the_circuit_are_refused():

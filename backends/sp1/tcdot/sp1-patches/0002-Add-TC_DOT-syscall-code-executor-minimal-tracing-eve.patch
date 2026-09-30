@@ -1,5 +1,5 @@
 From fb4a0a2532d22a58eb9e5af1b68be22b647abc69 Mon Sep 17 00:00:00 2001
-From: Daniel Reuter <dreuter14@gmail.com>
+From: Daniel Reuter <62895916+danielreuter@users.noreply.github.com>
 Date: Sat, 22 Aug 2026 19:41:18 -0700
 Subject: [PATCH 2/3] Add TC_DOT syscall: code, executor (minimal + tracing),
  event, guest stub

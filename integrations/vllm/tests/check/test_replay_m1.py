@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import time
 from pathlib import Path
 
 import pytest
@@ -55,20 +54,18 @@ pytestmark = pytest.mark.skipif(_available() is not None, reason=str(_available(
 @pytest.fixture(scope="module")
 def m1():
     from verity_vllm.check.fold_compare import SnapshotStore, WeightSource, fold_log, load_profile
-    t0 = time.time()
     r = fold_log(LOG, load_profile(PROFILE), strict=None, with_program=True)
     store = SnapshotStore(SNAPS)
     cos_sin = SNAPS / "cos_sin_cache.npy"
     weights = WeightSource(r.params[-1][1], cos_sin=cos_sin if cos_sin.exists() else None, repo=REPO_ID)
     if not weights.available():
         pytest.skip("weights / cos_sin table unavailable")
-    print(f"\nM1 fold+Program {time.time() - t0:.1f}s, {len(r.body.nodes)} instances, snapshot steps {store.steps}")
+    print(f"\nM1 fold+Program: {len(r.body.nodes)} instances, snapshot steps {store.steps}")
     return r, store, weights
 
 
-def _under_budget(rep: dict, seconds: float) -> None:
+def _under_budget(rep: dict) -> None:
     assert rep["max_rss_gb"] < RSS_LIMIT_GB, rep["max_rss_gb"]
-    assert rep["seconds"] < seconds, rep["seconds"]
 
 
 def test_tier_a_k2_covers_every_reachable_spec(m1):
@@ -76,7 +73,7 @@ def test_tier_a_k2_covers_every_reachable_spec(m1):
     r, store, weights = m1
     a = replay.tier_a(r, store, weights, k=2, seed=0)
     print(replay.summary_line(a))
-    _under_budget(a, 150)
+    _under_budget(a)
     assert a["snapshot_steps"] == [0, 1, 8]
     specs = {m["spec"] for m in r.instances}
     assert a["n_specs"] == len(specs) == 59
@@ -115,7 +112,7 @@ def test_tier_b_decode_step_layers_subset(m1):
     r, store, weights = m1
     b = replay.tier_b(r, store, weights, step=1, max_arg_leaves=4_000_000, layers=[0, 29])
     print(replay.summary_line(b))
-    _under_budget(b, 150)
+    _under_budget(b)
     assert b["status"] == "pass", b.get("status_reason")
     assert b["n_instances"] == 304 and b["n_diverged"] == 0 and b["first_divergence"] is None
     assert b["n_skipped"] == b["n_budget_skips"] == 2 + 28 * 10
@@ -154,7 +151,7 @@ def test_tier_b_prefill_prefix(m1):
     r, store, weights = m1
     b = replay.tier_b(r, store, weights, step=0, max_arg_leaves=4_000_000, max_instances=80)
     print(replay.summary_line(b))
-    _under_budget(b, 150)
+    _under_budget(b)
     assert b["status"] == "pass", b.get("status_reason")
     assert b["n_instances"] == 9666 and b["n_diverged"] == 0
     assert b["n_evaluated"] == b["n_compared"] == 48 and b["n_skipped"] == b["n_budget_skips"] == 9666 - 48

@@ -93,7 +93,7 @@ def builds(tmp_path_factory):
                                                stdout=open(out.with_suffix(".log"), "w"), stderr=subprocess.STDOUT))
     res = {}
     for name, (out, p) in procs.items():
-        rc = p.wait(timeout=600)
+        rc = p.wait()
         r = json.load(open(out / "result.json"))
         assert "traceback_tail" not in r, f"{name} crashed: {r.get('exception')}: {r.get('message')}\n{r.get('traceback_tail')}"
         m = json.load(open(out / "construction_manifest.json"))

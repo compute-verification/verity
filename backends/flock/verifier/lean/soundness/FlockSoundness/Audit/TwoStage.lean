@@ -349,6 +349,15 @@ noncomputable def Refines.analysis₂ (r : Refines Pf Pc)
       exact Pf.mem_wrong.1 hv (Pf.correct_congr (fun g hg => (hno g hg).symm) hc)
     · exact Or.inl fun Y hY hc => h ⟨Y, hY, hc⟩
 
+/-- **The input unit in a two-stage audit** (named hypothesis `δ_in`), as `AnchorsSound` is for one stage: for every
+strategy, the session accepts while the committed coarse transcript's inputs differ from the anchors' values `a` with
+probability at most `δ_in`. -/
+def AnchorsSound₂ {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}
+    {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
+    (X : (R : Reg) → Cont₁ L₁ L₂ Reg Int session R → (Fin C.N → Bool)) (a : Fin C.N → Bool) (δin : ℝ≥0∞) : Prop :=
+  ∀ σ : Strategy (twoStage L₁ L₂ Reg Int session),
+    prob (fun o => o.1 = true ∧ ¬ C.InputsAgree (X (reg₂ σ) (cont₁ σ)) a) (twoStage L₁ L₂ Reg Int session) σ ≤ δin
+
 /-! ### The oracle layer
 
 The prover sends the coarse transcript, then the interior, as tables are sent at the oracle layer.

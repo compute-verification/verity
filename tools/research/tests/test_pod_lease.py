@@ -164,6 +164,17 @@ def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp
         _kill(first["lease_pid"], first["guard_pid"])
 
 
+def test_idle_min_zero_arms_the_lease_and_no_idle_guard(tmp_path, monkeypatch):
+    real = L.arm_script
+    monkeypatch.setattr(L, "arm_script", lambda seconds, **kw: real(seconds, **{**kw, "idle_min": 0}))
+    rep = _arm_locally(tmp_path)
+    try:
+        assert rep["lease_alive"] and rep["guard_pid"] is None and rep["guard_alive"] is False
+        assert not (tmp_path / "root" / "guard" / "guard.pid").exists()
+    finally:
+        _kill(rep["lease_pid"])
+
+
 def test_an_arm_that_fails_raises():
     with pytest.raises(RuntimeError, match="arming the lease failed"):
         L.arm(["ssh", "pod"], 60, run=lambda *a, **k: subprocess.CompletedProcess(a, 255, b"", b"ssh: connect refused"))

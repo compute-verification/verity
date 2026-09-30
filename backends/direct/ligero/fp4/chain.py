@@ -589,7 +589,7 @@ def _violating_columns(s, tb, W, pub) -> set:
 
 def _gate_result(args, R, cen, agg, honest_ok, detail, report, failures) -> dict:
     """The gate as a contract-valid ``bench-result/v1``: the honest sweep's timings (sum over its proofs) and, in
-    ``validation.detail``, the tier counts ``verity.proofs.trust`` reads (criterion Tc)."""
+    ``validation.detail``, the tier counts ``tools/tc_probe/trust.py`` reads (criterion Tc)."""
     interactive = R.interactive
     lay = R.layout(min(args.vus, args.batch // STEPS))
     cfg = R.cfg(lay.l)

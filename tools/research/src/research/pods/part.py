@@ -172,9 +172,10 @@ def create_leased(ns: Any, *, gate: Callable[[str, float], tuple[str | None, str
                   f"`research pods terminate {pod['id']}`", file=sys.stderr)
         return None, EXIT_FAILED
     rep = pod["lease"]
-    print(f"research pods create: pod {pod['id']} leased until {rep.get('expires_utc')} (lease loop pid {rep.get('lease_pid')}, idle guard "
-          f"pid {rep.get('guard_pid')}{'' if rep.get('guard_alive') else ' NOT RUNNING'}: terminates after {ns.first_idle_min:g} idle min "
-          f"before a first run, {ns.idle_min:g} after); `research pods extend {ns.name} --hours H` extends it", file=sys.stderr)
+    idle = (f"idle guard pid {rep.get('guard_pid')}{'' if rep.get('guard_alive') else ' NOT RUNNING'}: terminates after {ns.first_idle_min:g} "
+            f"idle min before a first run, {ns.idle_min:g} after") if ns.idle_min > 0 else "no idle guard (--idle-min 0)"
+    print(f"research pods create: pod {pod['id']} leased until {rep.get('expires_utc')} (lease loop pid {rep.get('lease_pid')}, {idle}); "
+          f"`research pods extend {ns.name} --hours H` extends it", file=sys.stderr)
     return pod, 0
 
 
@@ -248,7 +249,9 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--boot-lease", action="store_true",
                         help="also run the lease loop from the pod's start command, before sshd (RunPod images only; research.pods.lease)")
         ap.add_argument("--first-idle-min", type=float, default=20.0, help="the idle guard's limit before the pod's first run (default 20)")
-        ap.add_argument("--idle-min", type=float, default=90.0, help="the idle guard's limit after it (default 90)")
+        ap.add_argument("--idle-min", type=float, default=90.0,
+                        help="the idle guard's limit after it (default 90); 0 arms no idle guard (a pool pod kept up idle: its lease and "
+                             "budget line still bound it)")
         ap.add_argument("--require-reference-part", action="store_true", help="exit 3 (pod left running) unless the board is the reference part")
         ap.add_argument("--register", action="store_true", help="register the pod under --name once sshd answers (research pods register)")
         ap.add_argument("--project", default=None, help="--register: the project the machine is bound to")

@@ -23,7 +23,17 @@ KINDS: dict[str, str] = {
                         "(the tables --snapshot compared with), refs.cells; payload null",
     "verification-verdict/v1": "meta {result: PASS|FAIL, verifier, detail}; refs.proof, refs.verifier_attempt",
     "proof/v1": "payload = proof bytes; meta {statement_digest, backend, params}",
+    "evidence/v1": "a lane's evidence behind a note, which never goes in the notes (scripts, logs, JSON, plots): payload file or tree; "
+                   "meta {lane, what, run?}; the note cites the art: id",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
+                               "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
+                               "{notes_commit, files, bytes, note}",
+    "frozen-evidence/v1": "files the frozen r20 campaign's code still reads (the overhead ledger, recorded run results), no longer tracked: "
+                          "payload tree at their former repository paths; meta {name, from_commit, note}; pinned by "
+                          "verity_numerical.bench.frozen.EVIDENCE",
+    "commit-map/v1": "a history rewrite's commit map (research.commitmap): payload file of `<old> <new> <same-tree 0|1>` lines; meta {from, to, "
+                     "tool, args}; applies once labelled commit_map=accepted by its approver",
     "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_numerical.bench.input_sets; the vllm-vu-set/v1 "
                     "layout): payload tree = manifest.json + index.json + flat port arrays; meta {set, subcircuit, template, "
                     "parameters, source, n, content_digest, schema, relation, seed?, row?, model?, research_run?}",
@@ -42,7 +52,7 @@ KINDS: dict[str, str] = {
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
-    "trust-dossier/v1": "the computed trust level of one numerical target (verity.proofs.trust): meta = the TrustReport "
+    "trust-dossier/v1": "the computed trust level of one numerical target (tools/tc_probe/trust.py): meta = the TrustReport "
                         "(schema verity/trust-dossier/v1: level, criteria with evidence ids, D-entries, references, missing items, invalidation "
                         "triggers, relitigation procedure); refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; "
                         "labels target, instruction, level, anchor",

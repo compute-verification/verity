@@ -233,13 +233,48 @@ def test_a_failed_list_is_logged_and_the_guard_keeps_polling(tmp_path, guard_dir
     assert json.loads((guard_dir / "guard-budgets.json").read_text())["last_ok_poll"] == T0
 
 
-def test_the_cli_refuses_unreadable_budgets_a_second_guard_and_status_stop_read_the_recorded_pid(tmp_path, guard_dir, capsys):
+def live_helper() -> subprocess.Popen:
+    """A process whose command line names `guard`, returned once its Python runs.  `Popen` returns while the child is still inside
+    execve, before the kernel records the new argument area, so /proc/<pid>/cmdline can read empty then (measured 2026-09-29: 40 %
+    of spawns on an idle VM, 95 % under load); the child's own line on stdout comes after it is in place."""
+    p = subprocess.Popen([sys.executable, "-c", "import os, signal; os.write(1, b'ready\\n'); signal.pause()", "guard"], stdout=subprocess.PIPE)
+    assert p.stdout is not None and p.stdout.readline() == b"ready\n", "the helper did not start"
+    return p
+
+
+def one_fake_poll(monkeypatch) -> None:
+    """The CLI's `run` becomes one poll against a fake API: whatever a test's pid check says, it cannot reach a real loop."""
+    real = G.run
+    monkeypatch.setattr(G, "run", lambda c, api=None, **kw: real(c, FakeRunPod([]), poll_s=kw.get("poll_s", 60.0), log_path=kw.get("log_path"),
+                                                                 clock=lambda: T0, sleep=lambda s: pytest.fail("a second poll"), iterations=1))
+
+
+def test_the_guard_refuses_to_start_without_readable_budgets_or_a_runpod_key(tmp_path, monkeypatch, capsys):
+    from research.pods import runpod
+
+    monkeypatch.setattr(runpod, "CONFIG", tmp_path / "no-runpod-config.toml")      # a laptop's ~/.runpod/config.toml is not this test's
+    monkeypatch.delenv("RUNPOD_API_KEY", raising=False)
     assert research_main(["pods", "guard", "--budgets", str(tmp_path / "absent.toml")]) == 2
     assert "nothing to enforce" in capsys.readouterr().err
+    (tmp_path / "budgets.toml").write_text(TOML)
+    assert research_main(["pods", "guard", "--budgets", str(tmp_path / "budgets.toml")]) == G.EXIT_NO_KEY
+    assert "RUNPOD_API_KEY is not set" in capsys.readouterr().err
+    assert G.run(cfg(tmp_path), clock=lambda: T0, sleep=lambda s: pytest.fail("a guard without a key polled")) == G.EXIT_NO_KEY, \
+        "run itself refuses before its first poll when it would call the real API"
+    slept: list[float] = []
+    rcs = [0, G.EXIT_NO_KEY]
+    assert G.supervise(["guard"], 60.0, call=lambda c: rcs.pop(), sleep=slept.append, clock=lambda: T0) == 0 and slept == [60.0], \
+        "supervised, a guard without a key is tried again a poll later"
+
+
+def test_the_cli_refuses_a_second_guard_and_status_stop_read_the_recorded_pid(tmp_path, guard_dir, monkeypatch, capsys):
+    monkeypatch.setenv("RUNPOD_API_KEY", "not-a-real-key")
+    one_fake_poll(monkeypatch)
     assert research_main(["pods", "guard", "status"]) == 2
     (tmp_path / "budgets.toml").write_text(TOML)
     G.run(cfg(tmp_path), FakeRunPod([pod("a", "vy-a-1", 1, 5)]), clock=lambda: T0, sleep=lambda s: None, iterations=1)
-    other = subprocess.Popen([sys.executable, "-c", "import signal; signal.pause()", "guard"])
+    other = live_helper()
+    monkeypatch.setattr(G, "_alive", lambda pid: pid == other.pid and other.poll() is None)
     try:
         (guard_dir / "guard-budgets.pid").write_text(f"{other.pid}\n")
         assert research_main(["pods", "guard", "--budgets", str(tmp_path / "budgets.toml")]) == 3
@@ -252,4 +287,17 @@ def test_the_cli_refuses_unreadable_budgets_a_second_guard_and_status_stop_read_
         assert other.wait() == -signal.SIGTERM
     finally:
         other.kill()
+        other.stdout.close()
     assert research_main(["pods", "guard", "stop"]) == 1
+
+
+def test_a_live_guard_is_recognised_by_its_command_line(tmp_path):
+    assert G._alive(99999999) is False
+    other = live_helper()
+    try:
+        assert G._alive(other.pid)
+    finally:
+        other.kill()
+        other.wait()
+        other.stdout.close()
+    assert not G._alive(other.pid)

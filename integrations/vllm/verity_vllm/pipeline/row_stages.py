@@ -6,7 +6,9 @@
 * **Build**: the step Program, the request wrapper Program (``--lp``/``--t``, default the envelope; a stochastic row:
   its first request) and every other declared request shape, each under its launch context at B >= 2; then GP-01's
   workload Program (the row's Program digest) and the required-value manifest of record (``manifest build`` /
-  ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).
+  ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).  After a PASS Build the
+  row stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
+  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
   a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
@@ -16,7 +18,8 @@
   record (``verdict from-record``), whose outcome is the stage's decision.
 
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
-record incomplete at Commit; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
+record incomplete at Commit; 21 a call-boundary identity without a source the Commit attaches; 3 precheck FAIL; 2 no
+workload; 128+signal when cancelled.
 """
 from __future__ import annotations
 
@@ -357,6 +360,7 @@ class SingleRow(Row):
             self.log("BUILD FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10 if mrc == 0 else 13)
+        self.call_boundaries(to)
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:

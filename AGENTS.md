@@ -34,9 +34,13 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     in `tests/evaluation/test_evaluation.py`, which self-checks it.
   - `verity.ml`: exact hardware semantics of the tensor-core accumulator step
     (`verity.ml.tc`, stdlib only) and their IR registrations (`prims`,
-    `gemm`), with numpy kernels beside them (`kernels`; numpy is a core
-    dependency, kept out of `verity.ir` and `verity.ml.tc` by
-    `tests/test_boundaries.py`). `verity.ml.tc.relation` restates the step as witness columns +
+    `gemm`), the other IR primitives (`scalar`: integer, bit, select and
+    comparison operations; `fp32`: FP32 add, mul, FMA and divide, their
+    flush-to-zero forms, and BF16 element-wise arithmetic), the library of
+    hardware and protocol objects core owns (`library`), and numpy kernels
+    beside them (`kernels`; numpy is a core dependency, kept out of `verity.ir`
+    and `verity.ml.tc` by `tests/test_boundaries.py`). `verity.ml.tc.relation`
+    restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
     README for provenance).
@@ -63,8 +67,8 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
  audit: registration, the verifier's draw over a partition's proof units, and the
  audit record with its profile; `benchmarks/one_stage` runs it end to end with
- C-Flock's circuit prover (M0, `verity_flock.circuit`, which lands on `main` with
- PR #192; until then `--m0-pythonpath` names a checkout of it) and the Lean
+ C-Flock's circuit prover (M0, `verity_flock.circuit`, run from the pinned tree
+ that `--m0-pythonpath` names, not from the checkout) and the Lean
  verifier. `protocols/pous` (`verity_pous`) is proof of useful space: the reference
  codecs, setup and timed audit, its `PROTOCOL.md`, and its Lean package (`lean/`:
  pinned statements, proofs and a submission grader). `protocols/pouw` (`verity_pouw`)
@@ -105,9 +109,9 @@ Dependency direction (README "Development"): `ir <- evaluation <- ml`,
 without a frontend or runtime integration.
 
 ~~~text
-uv sync --all-packages --all-extras       # the whole workspace, editable, with torch for the vLLM integration's CPU tests
+uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 uv run tools/check/suites.py              # every test suite whose inputs changed since it last passed; --quick skips slow tests
-uv run python tools/check/check.py        # the check a merge requires; --record publishes it as an Attempt
+uv run --extra torch-cpu python tools/check/check.py  # the check a merge requires; --record publishes it as an Attempt
 ~~~
 
 ## Tests
@@ -116,6 +120,8 @@ Every package's tests live in its own `tests/` and run as one suite, in its own 
 workers), cached by input; the repository's own suite (`tests/`) holds only invariants of the whole tree. How to run them,
 what a suite may read (`[tool.verity.tests] inputs`), and the rules for slow tests, fixtures and dummy credentials:
 `.agents/skills/testing/SKILL.md`.
+No test depends on wall-clock time (no sleeps, clock readings or timeouts; wait on the event itself or inject the clock):
+`tests/test_no_wall_clock.py` enforces it, and its `ALLOWED` list, one reason per entry, holds the exceptions.
 
 ## Circuits
 
@@ -192,13 +198,13 @@ rather than accumulating them.
 
 - This repo: code, tests, small fixtures, and maintained current-truth docs only (`README.md`, `AGENTS.md`, `PROTOCOL.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`).
 - Lane reports, handoffs, findings, drafts: markdown under `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`, `kind: report|handoff|finding|draft`, `status`, `repo`, `origin`); cite them from here by id as `note:<id>`.
-- Evidence (explore JSON, plots, gate outputs, run results): `~/.research/notes/campaigns/<campaign>/assets/<lane>/...`, cited as `notes-asset:<path>`; the overhead ledger (`backends/numerical/reports/ledger/*.jsonl`) stays here for now.
+- Evidence and generated output (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports): the evidence store only, never Git, neither this repo nor the notes. `research run` publishes a run's outputs; anything else goes in with `research data put --kind K --file|--tree P --preserve`; cite it as `art:<id>`. Tables and reports are rendered on demand from code plus the store. An old `notes-asset:<path>` resolves through the notes README.
 - Architecture decisions: Notion (the coordinator publishes); no `docs/adr/` in the repo.
 - Evidence goes through `research run --tool … --campaign …`: every completed or failed run is auto-published as an Attempt in the evidence store (`~/.research/store`, `research data …`; contract in `tools/research/src/research/store/README.md`).
 - Findings and claims about a run are labels, never edits to a shared table: `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>` (a red-team verdict is another label by the red-team; tables pick a policy, `store_tables.py --proof-class-by 'red-team-*'`).
-- The ledger `backends/numerical/reports/ledger/*.jsonl` is frozen history (imported once by `ledger_to_store.py`); new rows are labels on the attempt they describe.
-- Repo-replicated inputs are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id.
-- `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`, anything under `reports/` or `results/`), and `.gitignore` keeps them out of `git add`.
+- The overhead ledger is frozen history, in the store with the run results the frozen backends' scripts read (`verity_numerical.bench.frozen`, at their former paths `backends/numerical/reports/ledger/*.jsonl`, `backends/*/results*`); every ledger claim is a label there (`ledger_to_store.py`), and new rows are labels on the attempt they describe.
+- Fixtures are registered in `fixtures/artifacts.json` (`{art id: path}`, `research data put --kind fixture/v1 --file …`); `tools/research/tests/test_repo_replicas.py` checks every entry hashes to its id. A tracked file is at most 256 KiB (`tests/test_repository.py`); a larger fixture's path is gitignored and `research data fetch-fixtures` fetches it (the store README §7.3).
+- `tests/test_repository.py` rejects report-genre files (`*HANDOFF*`, `*REPORT*`, `*URGENT*`, `*DRAFT*`, `*TRIAGE*`, `*STATUS*`) and generated output (anything under `reports/`, `results/`, `renders/`, `previews/`, `plots/`, `evidence/`, `assets/` or `outputs/`, image, PDF and HTML renders, `<YYYYMMDDTHHMMZ>-*` stamped files), and `.gitignore` keeps them out of `git add`. In the notes, `research notes sync` and the steward's snapshot leave `renders/`, `campaigns/*/assets/` and `lanes/*/evidence/` out, and the steward's renders go to the store.
 
 ## Lanes (worker agents)
 
@@ -214,3 +220,7 @@ origin lacks.
 
 When creating or modifying a skill in `.agents/skills/`, use
 `.agents/skills/authoring-skills/SKILL.md`.
+
+Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or `research merge`,
+a required review, a file every PR must update), assess its effect on research velocity with
+`.agents/skills/process-design/SKILL.md`.
