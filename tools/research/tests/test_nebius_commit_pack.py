@@ -70,6 +70,17 @@ def test_commit_pack_renders_one_gpu_workload_in_deployments_gpu(dispatch):
     assert "sky/commit_pack.py" in c["command"][-1] and (NEBIUS / "sky" / "commit_pack.py").exists()
 
 
+def test_a_class_sizes_each_of_config_runs_three_tasks(dispatch, tmp_path):
+    """A `class` item on config-run's three tasks (build, gpu, replay) used to raise in render, which failed every dispatcher tick."""
+    item = _item(_tree(tmp_path / "t"), "llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager", **{"class": "tp2"})
+    build, gpu, n = dispatch.classes()["tp2"]
+    want = [(None, build, 0), (4 * n, gpu, n), (8, 64, 0)]
+    for idx, (cpus, mem, gpus) in enumerate(want):
+        c = dispatch.render(item, "lane/tp2", idx, 0)["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
+        assert c["memory"] == f"{mem}G" and int(c.get("nvidia.com/gpu", 0)) == gpus, (idx, c)
+        assert cpus is None or c["cpu"] == str(cpus), (idx, c)
+
+
 @pytest.mark.parametrize("row, why", [
     (LLAMA_B8, None),
     ("smollm2-135m__bf16__rtxpro6000__tp1__b1__i1024__o128__mixed__greedy__bi-eager", None),

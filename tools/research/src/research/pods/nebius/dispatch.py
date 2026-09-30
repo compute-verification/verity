@@ -143,13 +143,14 @@ def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, 
     cls = item.get("class")
     if cls:
         table = classes()
-        if cls not in table or ntasks != 2:
-            raise ValueError(f"class {cls!r}: one of {sorted(table)}, for a two-task template")
+        if cls not in table or ntasks not in (2, 3):
+            raise ValueError(f"class {cls!r}: one of {sorted(table)}, for a pipeline template (build, gpu, and config-run's replay)")
         build, gpu, n = table[cls]
         if idx == 0:
             mem = build
-        else:
+        elif idx == 1:
             mem, gpus, cpus = gpu, n, 4 * n          # submit.sh: the GPU queue's fixed 4 vCPU per GPU
+        # config-run's replay task (idx 2) keeps its template resources, as submit.sh does without VY_REPLAY_MEMORY
     o = (item.get("resources") or {}).get(task.get("name") or str(idx)) or {}
     return int(o.get("cpus", cpus)), int(o.get("memory", mem)), int(o.get("gpus", gpus))
 
