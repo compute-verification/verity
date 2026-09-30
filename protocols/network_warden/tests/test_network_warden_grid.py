@@ -108,7 +108,7 @@ def test_warden_constant_rate_left_packed_fifo():
     rng = random.Random(4)
     p = GridParams(buckets=5, allocation=3, frame_bytes=2)
     w = Warden("responses", p)
-    sent = []
+    sent, out = [], []
     for _ in range(3):
         for _ in range(p.buckets):
             for _ in range(rng.randint(0, 5)):
@@ -119,8 +119,8 @@ def test_warden_constant_rate_left_packed_fifo():
             assert len(row) == p.allocation and row_left_packed(row)
         rec = w.close_window()
         assert rec.status == COMPLETE and left_packed(rec.grid)
-    out = [s for row in rec.grid for s in row if s is not None]
-    assert out == sent[len(sent) - len(w._queue) - len(out): len(sent) - len(w._queue)]  # queue order
+        out += [s for row in rec.grid for s in row if s is not None]
+    assert 0 < len(out) < len(sent) and out == sent[: len(out)]  # queue order, the queue carried across windows
 
 
 def test_warden_fail_closed_untimed_status():
