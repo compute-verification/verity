@@ -786,12 +786,13 @@ def test_arm_accounting_is_the_schemes(A):
     assert arm.domain(Shape("x", 24, 1024, 128))       # the scheme's own rule: 16 | m
 
 
-def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str, forms: str | None = None) -> list[dict]:
+def driver(A, ship: Path, arm_dir: Path, tmp: Path, cls: str, mode: str, *args: str, forms: str | None = None,
+           **env: str) -> list[dict]:
     """pearlc_arm_dry.py in `mode`, the run directory tmp/run and the rows under tmp/rows, the call under run.py's `forms`
     (PEARLC_A_FORMS, None its default); its JSON lines."""
     r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, mode, str(tmp / "run"),
                         *args], env=dry_env(ship, tmp / f"{mode}.jsonl", PEARLC_SHIP=str(ship), PEARLC_ROWS=str(tmp / "rows"),
-                                            PEARLC_A_FORMS=forms),
+                                            PEARLC_A_FORMS=forms, **env),
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     return [json.loads(x) for x in r.stdout.splitlines()]
@@ -977,6 +978,70 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     verdict = json.loads((tmp_path / "run" / "verify.json").read_text())
     assert verdict["ok"] and verdict["transcripts"][0]["accepted"] and verdict["transcripts"][0]["line"] == line
     assert not verdict["negative_controls"][0]["accepted"] and verdict["negative_controls"][0]["line"] == control
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("forms", ARM_FORMS)
+def test_the_harness_poisoned_dump_is_accepted_and_its_no_write_control_rejected(A, small_fixture, ship, arm_dir, tmp_path, forms):
+    """Arm interface v0.5, as `bench.poison_dump` drives it: `transcript_buffers` (every set buffer but the tensor maps and the
+    one-launch trees' counters, whose 0xA5 would keep a tree from folding its top) poisoned, the weight side and the call
+    rewrite what the transcript reads, and `dump`'s transcript is accepted; poisoned again with nothing launched, the control
+    is all poison and rejected.  Freeing the call then makes no transcript of its own."""
+    *_, restored = driver(A, ship, arm_dir, tmp_path, "PearlCSm120", "harness", str(small_fixture / "check.json"), forms=forms)
+    assert restored["ok"] and set(restored["transcribed"]) == {"fixture"}
+    rec = restored["poisoning"]
+    assert not set(rec["buffers"]) & set(A.UNPOISONED) and set(rec["buffers"]) == set(A.OWN + A.CALL) - set(A.UNPOISONED)
+    assert all(rec["written"][b] for b in A.HASHED + ("tree_b",))
+    man, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
+    neg, neg_path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture", root="negative")
+    assert "negative_control" not in man and neg["negative_control"] == A.HARNESS_NEGATIVE
+    assert all(set((neg_path.parent / f"{f}.bin").read_bytes()) == {A.POISON} for f in ("tree_a", "tree_t", "tree_b", "leaves"))
+    r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    line, control = r.stdout.splitlines()
+    sha, neg_sha = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (path, neg_path))
+    assert line.startswith("ACCEPT pearl-c-sm120-v1-h1 fixture: ") and line.endswith(f"; transcript sha256:{sha}; verifier test; run r-test")
+    assert control.startswith("REJECT negative control ") and f"sha256:{neg_sha}" in control
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS)
+def test_arm_build_names_its_variant_and_lineage(A, ship, arm_dir, tmp_path, cls):
+    """The build record's `lineage`: the forms' mechanism tags, the panel line and version, the chain's phases by step group,
+    PEARLC_LINEAGE's parent and panel attempt for this arm alone, no γ; its verifier names the control.  With the harness's
+    ledger (arm interface v0.5, #583) its `variant`: one id for both arms, the cubin's digest, the digest of the sources the
+    cubin's includes reach and run.py, both schemes, the forming's priced path."""
+    extra = {"pearl-c-sm120-v1-h1": {"parent": "art:" + "c" * 64, "panel": {"attempt": 67}}}
+    rec, = driver(A, ship, arm_dir, tmp_path, cls, "build", forms=FOLD, PEARLC_LINEAGE=json.dumps(extra))
+    arm = getattr(A, cls)()
+    lin = rec["lineage"]
+    assert "gamma" not in lin and lin["approach"] == "pouw/pearl-c-sm120" and lin["phase_groups"] == A.PHASE_GROUPS
+    assert lin["mechanism"] == ["hash:h1-commit-one-launch", "hash:h1-tiles-one-launch", "hash:h1-level-key-table",
+                                "forming:split", "epilogue:b"]
+    assert rec["forms"] == {"a": FOLD, "forming": "split", "epilogue": "b"}
+    if cls == "PearlCSm120":
+        assert lin["panel"] == {"line": "pearl-c-sm120", "version": "v1-h1", "attempt": 67} and lin["parent"] == "art:" + "c" * 64
+    else:
+        assert lin["panel"] == {"line": "pearl-c-sm120", "version": "v2-h1"} and "parent" not in lin
+    assert rec["verifier"]["control"] == "negative/{arm}/{shape}/manifest.json"
+    if not (arm_dir / "ledger.py").exists():
+        assert "variant" not in rec
+        return
+    sys.path.insert(0, str(arm_dir))
+    try:
+        L = load("ledger", arm_dir / "ledger.py")
+    finally:
+        sys.path.remove(str(arm_dir))
+    src = {p.relative_to(A.REPO).as_posix() for p in A.sources(A.HERE / "pearl_c_sm120.cu")}
+    assert src == {"benchmarks/pouw/pearl_c_sm120/pearl_c_sm120.cu", "benchmarks/pouw/pearl_c_sm120/mainloop_sm120.cuh",
+                   "benchmarks/pouw/pouw_hash/pouw_hash.cuh", "benchmarks/pouw/pouw_hash/h1_sm120.cuh",
+                   "benchmarks/pouw/pearl_c/hash_sm120.cuh", "benchmarks/pouw/pearl_c/hash.cuh", "benchmarks/pouw/pearl_c_sm120/run.py"}
+    v = rec["variant"]
+    assert v["source_sha256"] == L.source_sha256(A.sources(A.HERE / "pearl_c_sm120.cu"), A.REPO)
+    assert v["id"] == f"pearl-c-sm120/{v['source_sha256'][:12]}" and v["prices"] == "cast-8.72"
+    assert v["binary_sha256"] == hashlib.sha256((ship / "pearl_c_sm120.cubin").read_bytes()).hexdigest()
+    assert v["schemes"] == ["pearl-c-sm120-unpromoted-v1-h1", "pearl-c-sm120-v1-h1"] and arm.scheme.name in v["schemes"]
 
 
 @pytest.mark.slow

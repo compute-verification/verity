@@ -14,6 +14,10 @@ directory the arm writes its transcripts under (`build`'s out_dir); PEARLC_ROWS 
            of the whole call writes the fixture's bytes again, as the device would; the negative control's launches don't.
   stale:   accept, but no launch writes the fixture's bytes again: the transcript's call, like the negative control's,
            leaves the poisoned buffers as they are, as a kernel that skipped its writes would.
+  harness: accept, but before the call is freed the harness makes its transcript (arm interface v0.5, `bench.poison_dump`'s
+           steps): `transcript_buffers` poisoned, the weight side and the call, `dump`; poisoned again, nothing launched,
+           `dump` under negative/.
+  build:   the build record, one JSON line.
 """
 
 from __future__ import annotations
@@ -40,13 +44,46 @@ def mark(what: str, **kw) -> None:
 
 
 class HarnessDev:
-    """The harness's Device, as far as the arm touches it."""
+    """The harness's Device, as far as the arm and `poison_dump` touch it."""
 
-    def __init__(self):
-        self.stream = STREAM
+    def __init__(self, rd=None):
+        self.stream, self.rd = STREAM, rd
 
     def xor_byte(self, ptr: int, off: int, mask: int = 0x01, stream: int | None = None) -> None:
         mark("xor_byte", ptr=ptr, off=off, stream=stream)
+
+    def sync(self) -> None:
+        self.rd.sync()
+
+    def memset(self, ptr: int, value: int, nbytes: int) -> None:
+        self.rd.ck("cuMemsetD8_v2", A.R.u64(ptr), value, nbytes)
+
+    def count_eq(self, buf: Buffer, width: int, value: int) -> int:
+        assert width == 1
+        return self.rd.read(buf.ptr, buf.nbytes).count(bytes([value]))
+
+
+def poison_dump(dev: HarnessDev, arm, shape: Shape, call, out: Path) -> dict:
+    """`bench.poison_dump`'s steps: the call's transcript buffers poisoned, the weight side and the call, `dump`; then
+    poisoned again, nothing launched, `dump` under negative/."""
+    bufs = dict(getattr(call, "transcript_buffers", None) or call.outputs)
+
+    def poison() -> None:
+        dev.sync()
+        for b in bufs.values():
+            dev.memset(b.ptr, A.POISON, b.nbytes)
+        dev.sync()
+        assert all(dev.count_eq(b, 1, A.POISON) == b.nbytes for b in bufs.values())
+
+    poison()
+    call.weight_side(dev.stream)
+    call.launch(dev.stream)
+    dev.sync()
+    written = {n: b.nbytes - dev.count_eq(b, 1, A.POISON) for n, b in bufs.items()}
+    arm.dump(dev, call, shape, out / "transcripts" / arm.name / shape.label)
+    poison()
+    arm.dump(dev, call, shape, out / "negative" / arm.name / shape.label)
+    return {"buffers": sorted(bufs), "written": written}
 
 
 def write(rd, ptr: int, data: bytes) -> None:
@@ -103,7 +140,7 @@ def dry(arm) -> None:
                       "work": {s: vars(arm.work(Shape(s, *d))) for s, d in (("pre", (256, 1024, 128)), ("dec", (32, 1024, 128)))}}))
 
 
-def accept(arm, check: Path, rewrite: bool = True) -> None:
+def accept(arm, check: Path, rewrite: bool = True, harness: Path | None = None) -> None:
     man = json.loads(check.read_text())
     m, n, k = man["shape"]
     base = check.parent
@@ -142,14 +179,22 @@ def accept(arm, check: Path, rewrite: bool = True) -> None:
     print(json.dumps({"flipped": [what, r0 + 5, c0 + 7], "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
     write(rd, w[what] + off, word)
     g = arm.gate(None, call, shape, flags)
+    poisoning = poison_dump(HarnessDev(rd), arm, shape, call, harness) if harness else None
     call.free()
-    print(json.dumps({"restored": True, "ok": g.ok, "transcribed": arm.transcribed}), flush=True)
+    print(json.dumps({"restored": True, "ok": g.ok, "transcribed": arm.transcribed, "poisoning": poisoning}), flush=True)
 
 
 if __name__ == "__main__":
     arm = getattr(A, sys.argv[2])()
-    arm.build({"out_dir": sys.argv[4]})
+    rec = arm.build({"out_dir": sys.argv[4]})
+    mode = sys.argv[3]
+    if mode == "build":
+        print(json.dumps(rec))
+        sys.exit(0)
     s = A.R.C.c_void_p()
     arm.rd.ck("cuStreamCreate", A.R.C.byref(s), 1)
     STREAM = s.value
-    dry(arm) if sys.argv[3] == "dry" else accept(arm, Path(sys.argv[5]), rewrite=sys.argv[3] == "accept")
+    if mode == "dry":
+        dry(arm)
+    else:
+        accept(arm, Path(sys.argv[5]), rewrite=mode != "stale", harness=Path(sys.argv[4]) if mode == "harness" else None)
