@@ -54,6 +54,21 @@ Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay a
 ``result.json`` (``kind: tc-evidence/v1``; meta per store README §11: instruction, arch, sku, driver, nvcc, families, counts,
 model, model_agrees, first_mismatches (<= 20), seed, n; validation passes iff every replay and model mismatch count is zero).
 
+PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
+  * ``f8f6f4_e2m1_e4m3`` / ``f8f6f4_e4m3_e2m1`` (unscaled mixed), ``mxf8f6f4_e2m1`` / ``_e2m1_e4m3`` / ``_e4m3_e2m1`` (UE8M0
+    ``.scale_vec::1X``) run through ``mma_fp4.cu``'s ``row_tiles_kernel<kind>``; they and ``f8f6f4`` (now swept with the K=32
+    families of ``k32.py``, which also fixes ``--sweep`` for it: it used to generate K=64 operands) are captures whose finding is
+    which of ``k32.candidates`` reproduce every word (``candidate_finding``); ``--expect-model NAME`` makes one the gate (a
+    fresh-seed confirmation).  All of them lower to QMMA (SASS), where E4M3 x E4M3 is ``GroupSum`` (32,)/26/-133.
+  * ``--chain L``: every family's tiles regrouped into chains of L dependent MMAs kept in registers (the generic kernel), against
+    the models stepped L times; a chain layout check on exact integers runs first.
+  * ``--expect-uuid``: stops before any measurement unless the device CUDA opened has that UUID (identity is read from CUDA, and
+    nvidia-smi is queried for that GPU only: on a multi-GPU host its first line is some other GPU).
+  * ``--sass-only`` (the offline SASS gate: exactly one MMA per kernel, the row's kernel present), ``--fake-silicon MODEL`` (a CPU
+    dry run where MODEL's words stand in for the device; refused under a research run), ``--corrupt-word`` (one flipped bit in the
+    first gated family: the run must fail).
+  * casts (``--instruction cvt_*``, ``cast.py``).
+
 Lane tcgen05 -- the datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
 ``--instruction tcgen05_nvf4`` = ``tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X`` (UE4M3, registry id
 ``sm100.tcgen05.mma.e2m1.nvf4``), ``tcgen05_mxf4`` = the same mnemonic with ``.scale_vec::2X`` and the UE8M0 instruction
