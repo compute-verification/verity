@@ -40,6 +40,10 @@ Everything else is the protocol's (`audit`), the same for every scheme.
    - `Lottery(target)`, Pearl's mining rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf.
+The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`). `"blake3"` is
+`frame-b3` (`verity.commitments.merkle`): BLAKE3 keyed by the domain id over compact messages, so a node is two
+compressions and a row leaf streams through BLAKE3's chunk tree, for rows that must be committed within a decode step.
+
 7. **Profile.** When every selected tile passes, `WorkProfile`: for every ε_s in (0, 1] and every operator whose online cost
    is at most T, `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ (1 − ε_s)^t + η` (Lean `endToEnd`), with γ = 1 − (1 − γ_0)/Ω*,
    under the certificate's conjecture. A scheme with no γ_0 gets only the sampling half; a lottery gets neither.
@@ -157,7 +161,8 @@ peel      P_A = [bf16(β_A·E_A) ‖ bf16(A′·F_B)],  P_B = [bf16((β_B·E_B)�
           (v1: bf16(E′) in place of bf16(β·E));
           U = C̃ + P_A·P_Bᵀ as four HOPPER_BF16_WGMMA_K16 steps into C̃'s word
 leaf      TurboSHAKE128 (D = 0x21) per tile row and 32-column chunk over its C̃ then U words, then TurboSHAKE128
-          (D = 0x22) over those digests
+          (D = 0x22) over those digests; -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf")
+trees     A's rows, B's rows, the tile leaves: SHA-256 Merkle; -h1: frame-b3
 tickets   Pearl's lottery over C̃ per 16 × 16 subtile
 useful    U/(α_A·α_B), glue
 ~~~
@@ -185,6 +190,16 @@ useful    U/(α_A·α_B), glue
       (exact product) and liveness on the exact statistic, at most k/64 entries with x² ≥ 64ρ², where
       ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values (`live_row`).
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
+- **Hashing format -h1** (`pearl-c-h100-v1-h1`, `hashing="h1"`) is the hash cut's P4 and P5 (research store
+  `internal/pouw/hashing-sm120-options.md`).
+  - Its motivation: decode can't wait for A's commitment under SHA-256 over whole rows, a serial chain of 513
+    compressions per 32 KB row.
+  - The message digests and the tile leaf are BLAKE3 keyed by public labels, and every tree is `frame-b3`. A row's leaf
+    streams through BLAKE3's 1 KB chunk tree (about 22 serial compressions for a 32 KB row), and a node is two.
+  - Only the hashing changes: its vectors are the h0 cases' inputs, with the same C̃ and U words, a new leaf, and A's
+    `frame-b3` root, one row leaf and one message digest pinned.
+  - The certificate cites `xof/blake3` and `cr/blake3`. `cr/sha-256` and TurboSHAKE128 no longer back its commitments;
+    the draw's `derive` is unchanged.
 - **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
   - `word_flags` flags an atom when some set of its promotion group's atoms containing it, skipped jointly, leaves the
     word's output unchanged. The later promotions are tested by intervals found backward by bisection.

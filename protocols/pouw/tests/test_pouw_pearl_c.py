@@ -345,6 +345,40 @@ def test_v1_lifecycle_on_a_test_instance():
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
 
 
+def test_h1_hashes_with_blake3_throughout():
+    """Hashing format -h1 (P4, P5): the messages and the leaf are BLAKE3 keyed by public labels, and every tree is frame-b3."""
+    from verity.commitments.blake3 import blake3, keyed
+
+    s = get("pearl-c-h100-v1-h1")
+    assert s.name == "pearl-c-h100-v1-h1" and s.commitment_hash == "blake3" and dict(s.certificate.parameters)["hashing"] == "h1"
+    assert "xof/blake3" in s.certificate.claims and get("pearl-c-h100-v1").commitment_hash == "sha256"
+    assert C.H1_KEYS == {"message": blake3(b"pearl-c/h1/message"), "leaf": blake3(b"pearl-c/h1/leaf")}
+    rng = random.Random(3)
+    grid = lambda: [[rng.getrandbits(32) for _ in range(64)] for _ in range(4)]  # noqa: E731
+    checked = C.Checked(grid(), grid())
+    digests = b"".join(keyed(C.H1_KEYS["message"], struct.pack("<32I", *c[h:h + 32]) + struct.pack("<32I", *u[h:h + 32]))
+                       for c, u in zip(checked.c, checked.u) for h in (0, 32))
+    assert C.leaf(checked, "h1") == keyed(C.H1_KEYS["leaf"], digests) != C.leaf(checked)
+    with pytest.raises(ValueError):
+        C.PearlC(hashing="h2")
+
+
+def test_h1_lifecycle_commits_with_frame_b3():
+    from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, activation_binding, commit_rows, weight_binding
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1"), 128
+    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    prover = Prover(s, {9: rows_b})
+    assert prover.weight_roots[9] == commit_rows(weight_binding(9), -2, rows_b, "blake3").commitment.root
+    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    assert tr.activation_roots[0] == commit_rows(activation_binding(epoch.salt, 3), 3, rows_a, "blake3").commitment.root
+    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+    h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1"), epoch).check_tile(tr, prover.open(epoch, 0))
+    assert not h0.ok and h0.reason == "activation opening"
+
+
 def test_v1_domain_rules():
     """Pearl's row rules with σ: a zero row fails the noise floor (and stays finite), a side with more than 1/64 of its
     entries at |x| >= 8σ fails liveness; the generated rows pass."""

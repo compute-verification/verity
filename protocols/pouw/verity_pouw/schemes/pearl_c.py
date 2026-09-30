@@ -23,6 +23,9 @@ peel      P_A,i = [bf16(β_A,i · E_A,ip) ‖ RNE_bf16(AF_ip)],   P_B,j = [RNE_b
           U_ij = C̃_ij, then four HOPPER_BF16_WGMMA_K16 steps over P_A,i · P_B,j (k16 slices in order)
 leaf      for each tile row r and each 32-column chunk h: d_rh = TurboSHAKE128(le32 C̃ of the chunk ‖ le32 U of the chunk,
           D = 0x21); leaf = TurboSHAKE128(d_00 ‖ d_01 ‖ d_10 ‖ … , D = 0x22), 32 bytes each
+          (hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf") in their places)
+trees     A's rows, B's rows and the tile leaves: `verity_pouw.audit`'s framed SHA-256 Merkle trees
+          (-h1: `frame-b3`, BLAKE3 keyed by the domain id, each row leaf through BLAKE3's chunk tree)
 tickets   Pearl's lottery over C̃: per 16 x 16 subtile, the 16-lane fold (`pearl_kw.extract`) hashed as H_"jackpot"(z; seed_A)
 useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
 ~~~
@@ -79,6 +82,9 @@ TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
+#: Hashing formats: h0 (TurboSHAKE128 messages and leaf, SHA-256 trees) and h1 (BLAKE3 throughout, for decode latency)
+HASHINGS = ("h0", "h1")
+H1_KEYS = {r: blake3(f"pearl-c/h1/{r}".encode()) for r in ("message", "leaf")}
 #: W1 units (1 = one dense FP8 MAC on the H100): FADD 32 per word, a BF16 MAC 2
 FADD_UNITS, BF16_MAC_UNITS = 32, 2
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
@@ -314,25 +320,36 @@ def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f:
     return out
 
 
-def leaf(checked: Checked) -> bytes:
-    """TurboSHAKE128 over the per-(row, 32-column chunk) message digests, row-major, chunks in order."""
+def message_digest(msg: bytes, hashing: str = "h0") -> bytes:
+    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or under h1 BLAKE3 keyed by its label."""
+    return keyed(H1_KEYS["message"], msg) if hashing == "h1" else turboshake128(msg, D_MESSAGE, 32)
+
+
+def leaf(checked: Checked, hashing: str = "h0") -> bytes:
+    """The tile leaf over the per-(row, 32-column chunk) message digests, row-major, chunks in order: TurboSHAKE128
+    (D = 0x22), or under h1 BLAKE3 keyed by its label (a tree over 1 KB chunks of digests)."""
     digests = []
     for crow, urow in zip(checked.c, checked.u):
         for h in range(0, len(crow), CHUNK):
             msg = struct.pack(f"<{len(crow[h:h + CHUNK])}I", *crow[h:h + CHUNK]) + \
                 struct.pack(f"<{len(urow[h:h + CHUNK])}I", *urow[h:h + CHUNK])
-            digests.append(turboshake128(msg, D_MESSAGE, 32))
-    return turboshake128(b"".join(digests), D_LEAF, 32)
+            digests.append(message_digest(msg, hashing))
+    joined = b"".join(digests)
+    return keyed(H1_KEYS["leaf"], joined) if hashing == "h1" else turboshake128(joined, D_LEAF, 32)
 
 
 class PearlC:
-    """Pearl-C on the H100: ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles; smaller bounds make a test instance."""
+    """Pearl-C on the H100: ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles; smaller bounds make a test instance.
+    ``hashing`` h1 names the scheme ``…-h1`` and commits with BLAKE3 throughout (`commitment_hash`, `leaf`)."""
 
-    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0"):
+    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", hashing: str = "h0"):
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
-        self.name = NAME if forming == "v0" else NAME_V1
-        self.k_min, self.tile, self.forming = k_min, tile, forming
+        if hashing not in HASHINGS:
+            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h1 (BLAKE3)")
+        self.name = (NAME if forming == "v0" else NAME_V1) + ("-h1" if hashing == "h1" else "")
+        self.k_min, self.tile, self.forming, self.hashing = k_min, tile, forming, hashing
+        self.commitment_hash = "blake3" if hashing == "h1" else "sha256"
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
@@ -342,7 +359,8 @@ class PearlC:
             conjecture="tt-out",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability"),
+            claims=("tt-out", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability") if hashing == "h0"
+            else ("tt-out", "random-oracle", "xof/blake3", "cr/blake3", "device-reproducibility", "beacon-unpredictability"),
             theorems=("Pouw.Proofs.workWeightedSampling",),
             hypotheses=(
                 "TT_OUT(1/400) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 program "
@@ -352,7 +370,7 @@ class PearlC:
             ),
             allowances=(allowance, "the unscale is glue outside the checked values"),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", WINDOW),
-                        ("forming", forming), ("line_norm_f", self.line_norm)),
+                        ("forming", forming), ("line_norm_f", self.line_norm), ("hashing", hashing)),
         )
 
     def check(self, matmul: Matmul) -> None:
@@ -431,7 +449,7 @@ class PearlC:
         return Checked(c, u)
 
     def digest(self, ctx: Context, noise: Noise, checked: Checked) -> bytes:
-        return leaf(checked)
+        return leaf(checked, self.hashing)
 
     def tickets(self, noise: Noise, checked: Checked) -> list[bytes]:
         """Pearl's lottery tickets over C̃: one per 16 x 16 subtile, row-major, H_"jackpot"(fold; seed_A)."""

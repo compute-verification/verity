@@ -21,10 +21,10 @@ def _pearl(**config: Any) -> PoUWScheme:
     return PearlKW(**config)
 
 
-def _pearl_c(forming: str) -> Callable[..., PoUWScheme]:
+def _pearl_c(forming: str, hashing: str = "h0") -> Callable[..., PoUWScheme]:
     def make(**config: Any) -> PoUWScheme:
         from .pearl_c import PearlC
-        return PearlC(forming=forming, **config)
+        return PearlC(forming=forming, hashing=hashing, **config)
     return make
 
 
@@ -35,6 +35,7 @@ SCHEMES: dict[str, Callable[..., PoUWScheme]] = {
     "pearl-fp8-v4": _pearl,
     "pearl-c-h100-v0": _pearl_c("v0"),
     "pearl-c-h100-v1": _pearl_c("v1"),
+    "pearl-c-h100-v1-h1": _pearl_c("v1", "h1"),
 }
 
 
