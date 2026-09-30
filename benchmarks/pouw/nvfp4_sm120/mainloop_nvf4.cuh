@@ -116,8 +116,9 @@ struct Maps { uint8_t a[128], b[128]; };
 // gives the producer RP registers a thread and the consumers the rest (232 at TM = 256 and RP = 40, as in CUTLASS; 240 at
 // RP = 24).  Launch NT threads with __launch_bounds__(NT, 1) and SMEM bytes of dynamic shared memory at a 1,024-byte-aligned
 // address (`extern __shared__ __align__(1024)`).  BORDER: the MMA order inside a 64-deep step, 0 A-major (each A fragment's
-// 8 MMAs in a row), 1 B-major (each B fragment's 4, as CUTLASS).
-template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
+// 8 MMAs in a row), 1 B-major (each B fragment's 4, as CUTLASS).  LAG (TM = 256): the second 128 rows' warps start their
+// first tile LAG SM cycles after its first stage lands, so that the two warps of an SMSP reach their epilogues apart.
+template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LAG = 0> struct Mainloop {
   static constexpr int BN = 128, BK = 128, ROW = BK / 2, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
   static constexpr int REGS_P = RP, REGS_LAUNCH = 65536 / NT / 8 * 8, REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
                        REGS_C = REGS_FIT < 256 ? REGS_FIT : 256;
@@ -129,6 +130,7 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
   static constexpr int SMEM = SCRATCH + SCR_WARP * NCW + 16 * STAGES;
   static_assert(SLOTS >= 1, "a 512-byte scratch slot a consumer warp");
   static_assert(TM == 128 || TM == 256, "TM x 128 tiles of 64 x 64 warp tiles");
+  static_assert(LAG == 0 || TM == 256, "LAG staggers the two 128-row halves");
   static_assert(STAGE % 512 == 0 && A_BYTES % 512 == 0 && SF_OFF % 512 == 0, "boxes on SWIZZLE_64B's 512-byte period");
   static_assert(SMEM <= 99 * 1024, "sm_120's 99 KB a block");
 
@@ -276,8 +278,11 @@ template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0> struct Mainloop {
 #pragma unroll
           for (int e = 0; e < 4; e++) acc[mi][i][jl][e] = 0.0f;
     Frag f1;
-    if (!primed) {
+    if (!primed) {   // this warp's first tile
       mbar_wait_warp(full(s), ph);
+      if (LAG && (wm >> 1))
+        for (const long long t0 = clock64(); clock64() - t0 < LAG;) {
+        }
       load(f0, stage(s), 0);
     }
 #pragma unroll 1
