@@ -727,20 +727,23 @@ ARMS = [
     ("h2tw: leaves and segment trees in the wide producer, with its seed, deferred side stream, priorities", ROW_F32, "h2tw", "deferred"),
     ("h3tw: leaves, segment trees and row seeds in the wide producer, A alone, priorities", ROW_F32, "h3tw", "none"),
     ("h3tw: leaves, segment trees and row seeds in the wide producer, deferred side stream, priorities", ROW_F32, "h3tw", "deferred"),
+    # the verifier's negative control: an -h3 arm whose kernels write no commitment; its transcript must be rejected
+    ("negative control: h3 with no commitment written, deferred side stream, priorities", ROW_F32, "h3nc", "deferred"),
 ]
 #: A's producer: derive_rows over the first rb / 2 bytes' halves (the chain's), derive_rows_vec over whole rows, or
 #: derive_rows_b3s (the same words with -h2's segment leaves hashed as they are written, and for h2t / h3t each row's segment
 #: tree and -h3's row seed); the whole-row arms' baseline
 WHOLE_ROW, FUSED = ("plainw", "h2sw", "h3w"), ("h2f", "h3f", "h2t", "h3t")
 WHOLE_ROW_PLAIN = "plain fp32 rows, whole-row producer"
-H3_FAMILY = ("h3", "h3w", "h3f", "h3t", "h3v", "h3tc", "h3ts", "h3tw")
+H3_FAMILY = ("h3", "h3w", "h3f", "h3t", "h3v", "h3tc", "h3ts", "h3tw", "h3nc")
 SEEDED = ("h2s", "h2sw", "h2f", "h2t", "h2sv", "h2tc", "h2ts", "h2tw") + H3_FAMILY
 #: the other whole-row producers: derive_rows_v16 (a thread a 16-byte piece, the fastest plain one) and derive_rows_coal (a CTA
 #: a row, 1,024 threads, the coalesced fused producer's layout); each arm's matched plain chain
-WIDE16, COAL = ("plainv", "h2sv", "h3v", "h2tw", "h3tw"), ("plainc", "h2tc", "h3tc")
+WIDE16, COAL = ("plainv", "h2sv", "h3v", "h3nc"), ("plainc", "h2tc", "h3tc")
 MATCHED = {**{a: WHOLE_ROW_PLAIN for a in WHOLE_ROW + FUSED}, **{a: "plain fp32 rows, wide whole-row producer" for a in WIDE16},
            **{a: "plain fp32 rows, row-per-CTA producer" for a in COAL},
-           **{a: "plain fp32 rows, segment-per-thread producer in 32-thread CTAs" for a in ("plains", "h2ts", "h3ts")}}
+           **{a: "plain fp32 rows, segment-per-thread producer in 32-thread CTAs" for a in ("plains", "h2ts", "h3ts")},
+           **{a: "plain fp32 rows, wide whole-row producer" for a in ("h2tw", "h3tw")}}
 
 
 #: --preset p1: P1's prototype (hash_rows_seg, timing only) and its baselines, interleaved rep by rep
@@ -800,7 +803,8 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                          "h3 A alone, tree on its own stream, priorities", "h3, deferred side stream, priorities",
                          "h3t: leaves, segment trees and row seeds in the producer, A alone, priorities",
                          "h3tw: leaves, segment trees and row seeds in the wide producer, A alone, priorities",
-                         "h3tw: leaves, segment trees and row seeds in the wide producer, deferred side stream, priorities"]}
+                         "h3tw: leaves, segment trees and row seeds in the wide producer, deferred side stream, priorities",
+                         "negative control: h3 with no commitment written, deferred side stream, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -941,7 +945,7 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                 commit_a(s2, amode, rb)
                 st["a_done"] = d.event(s2)
             elif amode in H3_FAMILY:                         # -h3: the GEMM waits for the row leaves and their seeds only
-                if amode in ("h3t", "h3tc", "h3ts", "h3tw"):
+                if amode in ("h3t", "h3tc", "h3ts", "h3tw", "h3nc"):
                     pass                                     # the producer wrote them
                 elif amode == "h3f":                           # the producer hashed the segments: the segment trees and seeds
                     d.go(s1, "b3s_seg_trees", m, rb // 256, (segleaves, a_tree, a3_skeys, skey, salt3, rootb3, seeds),
@@ -1031,9 +1035,19 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
         run = os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local"
         sl = slots[(CALLS - 1) % 2]
         per, tiles = n // 32, (-(-m // 64)) * (n // 64)
+        outputs = [(a_tree, 32 * 2 * m), (seeds, 32 * m), (useed, 32), (segleaves, 32 * m * (ROW_F32 // 256)), (counters, 4 * m)]
+        outputs += [(slot[kk], size) for slot in slots for kk, size in (("dg", 32 * 64 * (n // 32)), ("lv", 32 * 256),
+                                                                          ("tree", 32 * 2 * 256))]
         for name, rb, amode, post in arms:
             if name not in VERIFY:
                 continue
+            # An arm must write every output it is verified on: poison them all first, and start its chain from its own y, so
+            # a stale output left by an arm before it (whose last call hashed the same A) can't pass the verifier.
+            for p_, size in outputs:
+                d.ck("cuMemsetD8_v2", C.c_uint64(p_), 0xA5, size)
+            d.ck("cuMemsetD8_v2", C.c_uint64(counters), 0, 4 * m)
+            d.ck("cuMemcpyHtoD_v2", C.c_uint64(y), C.c_char_p(shake(f"transcript y {name}", 2 * m * n)), 2 * m * n)
+            d.sync()
             d.replay_ms(graphs[name], 1)
             d.sync()
             parts = [("a_rows", d.read(rows[rb], m * rb)), ("a_tree", d.read(a_tree, 32 * (2 * m - 1)))]
