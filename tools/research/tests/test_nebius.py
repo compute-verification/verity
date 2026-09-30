@@ -342,3 +342,18 @@ def test_gpu_lease_hands_out_only_the_direct_run_gpus_the_cluster_leaves_it(tmp_
     allowed.write_text("none\n")
     r = subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True, text=True)
     assert r.returncode == 2 and "submit through the cluster's queues" in r.stderr
+
+
+def test_a_direct_run_sees_no_gpu_once_kueue_owns_every_gpu(tmp_path, monkeypatch):
+    """After the cutover (`/etc/vy/direct-gpus` = none) the runner blanks CUDA_VISIBLE_DEVICES for every direct run, even one whose
+    --env names a GPU; before it (a direct set) or on a machine without the file, the run's environment is left alone."""
+    split = tmp_path / "direct-gpus"
+    monkeypatch.setattr(remote, "DIRECT_GPUS_FILE", str(split))
+    req = {"env": {"CUDA_VISIBLE_DEVICES": "0"}}
+    for text, want in (("none\n", ""), ("4,5,6,7\n", "0")):
+        split.write_text(text)
+        rec: dict = {}
+        assert remote._runner_env(req, tmp_path / "runs", None, rec)["CUDA_VISIBLE_DEVICES"] == want
+        assert ("gpus" in rec) == (want == "")
+    split.unlink()
+    assert remote._runner_env(req, tmp_path / "runs", None, {})["CUDA_VISIBLE_DEVICES"] == "0"
