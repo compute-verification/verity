@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     failures: list[str] = []
     if sass["ok"] is False:
         failures.append("SASS gate: " + ", ".join(k for k, v in sass["kernels"].items() if not v["ok"]))
-    if args.expect_uuid and dev is not None and not args.fake_silicon and identity.get("gpu_uuid") != args.expect_uuid:
+    if args.expect_uuid and dev is not None and not args.fake_silicon and not P.uuid_allowed(identity.get("gpu_uuid"), args.expect_uuid):
         failures.append(f"device UUID {identity.get('gpu_uuid')} != expected {args.expect_uuid}: stopped before any measurement")
     if dev is None or failures:
         return finish(out, record, failures, args, None, t_all)

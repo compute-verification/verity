@@ -180,6 +180,11 @@ UE4M3_VALID = np.array([c for c in range(0x80) if c != 0x7F], dtype=np.uint8)  #
 # --- build -----------------------------------------------------------------------------------------------------------------------
 
 
+def uuid_allowed(uuid: str | None, expect: str) -> bool:
+    """``--expect-uuid`` is one UUID or a comma list (a lease picks the GPU: every UUID the host's table allows)."""
+    return uuid is not None and uuid in {u.strip() for u in expect.split(",") if u.strip()}
+
+
 def nvcc_bin() -> str:
     return shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc"
 
@@ -1151,7 +1156,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sass-check", action="store_true")
     ap.add_argument("--chain", type=int, default=1, metavar="L",
                     help="mma.sync: regroup each family's tiles into chains of L dependent MMAs kept in registers (generic kernel)")
-    ap.add_argument("--expect-uuid", default=None, help="stop before any measurement unless CUDA's device has this UUID")
+    ap.add_argument("--expect-uuid", default=None,
+                    help="stop before any measurement unless CUDA's device has this UUID (or one of a comma list)")
     ap.add_argument("--expect-model", default=None, help="the model whose mismatches gate this run (default: the row's primary model)")
     ap.add_argument("--fake-silicon", default=None, metavar="MODEL", help="dry run on the CPU: MODEL's words stand in for the device")
     ap.add_argument("--corrupt-word", action="store_true", help="flip one bit of the first gated family's first word (the gate must fail)")
@@ -1193,7 +1199,7 @@ def main(argv: list[str] | None = None) -> int:
                                                            "has_mxf4": True, "backend": "none (--sass-only)"}
     identity["nvcc"] = nvcc
     identity["arch"] = args.arch
-    if args.expect_uuid and not args.fake_silicon and not args.sass_only and identity.get("gpu_uuid") != args.expect_uuid:
+    if args.expect_uuid and not args.fake_silicon and not args.sass_only and not uuid_allowed(identity.get("gpu_uuid"), args.expect_uuid):
         msg = f"device UUID {identity.get('gpu_uuid')} != expected {args.expect_uuid}: stopped before any measurement"
         (out / "probe_results.json").write_text(json.dumps({"identity": identity, "failures": [msg]}, indent=1))
         print("FAILURES", [msg], flush=True)

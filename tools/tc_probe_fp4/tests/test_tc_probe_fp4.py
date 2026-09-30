@@ -172,6 +172,11 @@ def test_sparse_fake_capture_singles_out_the_truth(no_nvcc, tmp_path, instr, tru
     assert finding["agreeing"] == [truth], finding["mismatches"]
 
 
+def test_expect_uuid_takes_one_uuid_or_a_list():
+    assert P.uuid_allowed("GPU-a", "GPU-a") and P.uuid_allowed("GPU-a", "GPU-b, GPU-a")
+    assert not P.uuid_allowed("GPU-a", "GPU-b") and not P.uuid_allowed(None, "GPU-a") and not P.uuid_allowed("", ",")
+
+
 def test_sparse_gates_fail_closed(no_nvcc, tmp_path, monkeypatch):
     base = ["--instruction", "sp_nvf4", "--fake-silicon", "gather_dense", "--expect-model", "gather_dense", "--sweep", "--n-random", "8",
             "--procs", "1", "--families", SPARSE_FAMILIES]

@@ -251,7 +251,7 @@ def main(args) -> int:
                                                        "backend": "none (--sass-only)"}
     identity.update(nvcc=nvcc, arch=arch)
     failures: list[str] = []
-    if args.expect_uuid and dev is not None and not args.fake_silicon and identity.get("gpu_uuid") != args.expect_uuid:
+    if args.expect_uuid and dev is not None and not args.fake_silicon and not P.uuid_allowed(identity.get("gpu_uuid"), args.expect_uuid):
         msg = f"device UUID {identity.get('gpu_uuid')} != expected {args.expect_uuid}: stopped before any measurement"
         (out / "probe_results.json").write_text(json.dumps({"identity": identity, "failures": [msg]}, indent=1))
         print("FAILURES", [msg], flush=True)
