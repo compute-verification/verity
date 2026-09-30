@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from verity.ir.defs import REGISTRY
-from verity_flock import fp, gf2, unit_fp4
+from verity_flock import fp, gf2
 from verity_flock import ir_lower as IL
 
 P = pytest.importorskip("verity_vllm.program.registry.prims")
@@ -260,40 +260,18 @@ def test_the_nvf4_step_matches_the_ir_on_every_encoding():
     assert [(v, g) for v, g in zip(vecs, got) if g != Q.evaluate(*v)] == []
 
 
-def _mxf4_reference(acc: int, *ab: int) -> int:
-    """``BLACKWELL_SM120_MXF4.step_scaled`` with the measured rules outside it (``models._FP4_RE_EDGES``): a NaN scale (0xFF) or
-    accumulator gives 0x7FFFFFFF, an infinite accumulator itself, a sum leaving binary32 the infinity of its sign."""
-    from verity.ml.tc import models as TM
-    from verity.ml.tc.errors import InvalidArtifact
-
-    a, b, sa, sb = list(ab[:64]), list(ab[64:128]), list(ab[128:130]), list(ab[130:132])
-    if 0xFF in sa + sb:
-        return 0x7FFFFFFF
-    if acc & 0x7F800000 == 0x7F800000:
-        return 0x7FFFFFFF if acc & 0x7FFFFF else acc
-    M = TM.BLACKWELL_SM120_MXF4
-    try:
-        return M.step_scaled(acc, a, b, sa, sb)
-    except InvalidArtifact:
-        terms = M.group_terms(a, b, sa, sb)
-        acc_m, acc_e = TM._fp32_dyadic(acc)
-        anchors = [u - M.frac_bits for _, u, p in terms if p] + ([max(1, acc >> 23 & 0xFF) - 127 - (M.acc_window - 1)] if acc_m else [])
-        lsb = max(*anchors, M.grid_floor)
-        total = sum(TM._trunc_rz_to_grid(m, u, lsb) for m, u, _ in terms if m) + (TM._trunc_rz_to_grid(acc_m, acc_e, lsb) if acc_m else 0)
-        return 0xFF800000 if total < 0 else 0x7F800000
-
-
-def test_the_mxf4_step_matches_the_model_on_every_encoding():
-    """``unit_fp4.step_total(ue8m0=True)`` = the MXFP4 step: UE8M0 NaN scales, scales deep enough that the -174 floor binds and sums
+def test_the_mxf4_step_matches_the_ir_on_every_encoding():
+    """``unit_fp4.step_total(ue8m0=True)`` = ``BlackwellMxf4OmmaDot64``: UE8M0 NaN scales, scales deep enough that the -174 floor binds and sums
     fall below the subnormal grid (+0), and large enough that they leave binary32 (the infinity of the sum's sign), bit for bit."""
     def scale(rng, fam):
         lo, hi = {3: (0, 20), 4: (230, 254), 5: (100, 150)}.get(fam, (0, 254))
         return [0xFF if rng.random() < 0.03 else rng.randint(lo, hi) for _ in range(4)]
 
+    from verity.ml.prims import BlackwellMxf4OmmaDot64 as Q
+
     vecs = _fp4_vectors(random.Random(14), 3500, scale)
-    got = run_piece(lambda C, acc, *ab: unit_fp4.step_total(C, acc, ab[:64], ab[64:128], ab[128:130], ab[130:132], ue8m0=True),
-                    [32] + [4] * 128 + [8] * 4, 32, vecs)
-    want = [_mxf4_reference(*v) for v in vecs]
+    got = run_piece(IL.PIECES["BlackwellMxf4OmmaDot64_v1"], [32] + [4] * 128 + [8] * 4, 32, vecs)
+    want = [Q.evaluate(*v) for v in vecs]
     assert {0x7F800000, 0xFF800000, 0} <= set(want) and any(w & 0x7F800000 == 0 and w & 0x7FFFFF for w in want)
     assert [(v, g, w) for v, g, w in zip(vecs, got, want) if g != w] == []
 
