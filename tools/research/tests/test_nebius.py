@@ -4,6 +4,7 @@ and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe 
 from __future__ import annotations
 
 import base64
+import fcntl
 import gzip
 import importlib.util
 import json
@@ -339,6 +340,81 @@ def test_a_waiter_stops_a_preemptible_lease_and_leaves_an_ordinary_one(tmp_path)
     finally:
         ordinary.terminate()
         ordinary.wait()
+
+
+def hold_agent_lock(gl: Path) -> int:
+    """Stand in for `cluster agent --mode live`: hold agent.lock (the descriptor is not inherited by gpu-lease)."""
+    gl.mkdir(exist_ok=True)
+    fd = os.open(gl / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    return fd
+
+
+def queued(p: subprocess.Popen) -> str:
+    """The wait file gpu-lease names on stderr once it has queued."""
+    for line in p.stderr:
+        if "queued as " in line:
+            return line.rsplit("queued as ", 1)[1].strip()
+    raise AssertionError("gpu-lease never queued")
+
+
+@needs_flock
+def test_under_the_agent_a_request_queues_at_once_with_its_flags_and_takes_exactly_the_gpus_it_is_granted(tmp_path):
+    """GPU 0 is free, so gpu-lease's own rules would take it; under the agent it takes the granted GPU 2.  The wait file carries
+    what the agent's planner reads (tools/cluster's nebius2.job_of)."""
+    env = {**gpu_env(tmp_path), "GPU_LEASE_AGENT_POLL_S": "0.05"}
+    gl = tmp_path / "gl"
+    agent = hold_agent_lock(gl)
+    try:
+        p = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--timed", "--max-min", "5", "--mem-gb", "0", "--", "sh", "-c",
+                              'echo "$CUDA_VISIBLE_DEVICES"'], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        f = dict(kv.split("=", 1) for kv in (gl / queued(p)).read_text().split())
+        assert f["pid"] == str(p.pid) and f["n"] == "1" and f["max"] == "5" and f["timed"] == "1" and "preempt" not in f
+        (gl / f".grant.{p.pid}").write_text("2\n")
+        os.replace(gl / f".grant.{p.pid}", gl / f"grant.{p.pid}")
+        out, _ = p.communicate()
+        assert p.returncode == 0 and out.strip() == "2"
+        assert not list(gl.glob("wait.*")) and not list(gl.glob("grant.*"))
+    finally:
+        os.close(agent)
+
+
+@needs_flock
+def test_under_the_agent_gpu_lease_preempts_nothing_itself_and_falls_back_to_its_own_rules_once_the_agent_is_gone(tmp_path):
+    """Its own rules stop the preemptible lease before queueing; under the agent it has queued and stopped nothing.  Once
+    agent.lock is free it keeps its place, preempts by its own rules and runs."""
+    env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1", "GPU_LEASE_AGENT_POLL_S": "0.05"}
+    gl = tmp_path / "gl"
+    pause = [sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"]
+    fill = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--preemptible", "--mem-gb", "0", "--", *pause], env=env,
+                            stdout=subprocess.PIPE, text=True)
+    assert fill.stdout.readline().strip() == "ready"
+    agent = hold_agent_lock(gl)
+    p = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "echo", "got"], env=env,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        queued(p)
+        assert not (gl / "preempted.log").exists() and fill.poll() is None
+    finally:
+        os.close(agent)
+    out, _ = p.communicate()
+    assert p.returncode == 0 and out.strip() == "got"
+    assert fill.wait() != 0 and "SIGTERM GPU 0" in (gl / "preempted.log").read_text()
+    assert not list(gl.glob("wait.*"))
+
+
+@needs_flock
+def test_under_the_agent_a_request_without_wait_gives_up_when_no_grant_comes_and_a_free_agent_lock_is_no_agent(tmp_path):
+    env = {**gpu_env(tmp_path, count=2), "GPU_LEASE_AGENT_WAIT_S": "0"}
+    gl = tmp_path / "gl"
+    agent = hold_agent_lock(gl)
+    try:
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True, text=True)
+        assert r.returncode == 75 and "agent granted no 1 GPU(s)" in r.stderr and not list(gl.glob("wait.*"))
+    finally:
+        os.close(agent)
+    assert (gl / "agent.lock").exists()
+    assert subprocess.run(["bash", str(GPU_LEASE), "1", "--", "true"], env=env, capture_output=True).returncode == 0
 
 
 needs_taskset = pytest.mark.skipif(shutil.which("taskset") is None or shutil.which("flock") is None, reason="needs taskset and flock")
