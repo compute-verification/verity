@@ -14,8 +14,9 @@ with these bytes before it times anything.
 The instance is a one-unit epoch as `verity_pouw.audit` starts it, hashing format -h1: B's frame-b3 row tree, the salt from
 the beacon and B's root, A's frame-b3 row tree, and the noise from A's committed root (so E_A's line key is an output the
 device derives, `line_a`).  Writes OUT_DIR/check.json (the shape, keys, seeds, and per buffer its file, dtype and SHA-256)
-and the buffers as raw little-endian files: `common` (both row trees, seed_A and E_A's line key, lines, inputs, forming, the
-plain and adopted baselines) and per variant (`sm120`, `sm120-unpromoted`, and `sm120-hot`: v2-hot's H_i per row, then the
+and the buffers as raw little-endian files: `common` (both row trees, seed_A and E_A's line key, lines, inputs, forming,
+stats_s5's screen of the per-row rules on both sides' rows and on `screen_rows` (`xs`, `live_s`), the plain and adopted
+baselines) and per variant (`sm120`, `sm120-unpromoted`, and `sm120-hot`: v2-hot's H_i per row, then the
 unpromoted chain from it, `crosscheck_hot` in place of the scheme's) the chains and everything after them, through the
 message digests, the tile leaves and the tile tree.
 """
@@ -121,6 +122,61 @@ def hot_starts(seed_a: bytes, alpha: list[int], rho: list[int]) -> np.ndarray:
     return np.array(out, np.uint32)
 
 
+LIVE_BAND = 2.0 ** -10
+
+
+def screen_verdict(row: bytes) -> int:
+    """stats_s5's screen of the per-row rules (pearl_c_sm120.cu's row_verdict) on one row of FP32 words, bit for bit: 0 the row
+    passes `pearl_c_work.row_passes`, 1 it fails, 2 the screen leaves it open."""
+    x = np.frombuffer(row, "<u4")
+    k, words = x.size, [int(w) for w in x]
+    part = [0] * 32
+    for i, p in enumerate(range(0, k, C.S5_STRIDE)):
+        part[i % 32] = fp32.fma(words[p], words[p], part[i % 32])
+    for o in (16, 8, 4, 2, 1):
+        part = [fp32.add(part[j], part[j ^ o]) for j in range(32)]
+    _, rho, alpha, _ = C.s5_stats(words)
+    if not P.f32_of_bits(fp32.fma(rho, alpha, P.f32_bits(-1.0))) >= 0.0:
+        return 1
+    s64 = fp32.mul(P.f32_bits(64.0), part[0])
+    t = fp32.div(s64, P.f32_bits(float(-(-k // 8)))) if s64 & 0x7F800000 != 0x7F800000 else s64
+    if k > 1 << 20 or not 2.0 ** -96 <= P.f32_of_bits(t) <= 2.0 ** 126:
+        return 2
+    hi, lo = (P.f32_of_bits(fp32.mul(t, P.f32_bits(1 + s * LIVE_BAND))) for s in (1, -1))
+    q = x.view("<f4") * x.view("<f4")
+    dead, band = int((q > hi).sum()), int((~(q > hi) & ~(q < lo)).sum())
+    return 1 if 64 * dead > k else 0 if 64 * (dead + band) <= k else 2
+
+
+def screen_rows(k: int) -> list[bytes]:
+    """Rows for the screen's gate at depth k, each verdict and each way to reach it: Gaussian rows (pass), 15, 16 and 17
+    dead entries at 16 rho off the stride (k = 1,024: pass, pass, fail), 16 dead and one at the threshold (open), a
+    heavy-tailed batch (Student's t at 1, 2 and 3 degrees of freedom), one outlier over 444 rho (the floor), zeros (the
+    floor), and stride squares near 2^127 (the band would overflow: open)."""
+    rng, out = np.random.default_rng(29), []
+    gauss = lambda: rng.standard_normal(k).astype(np.float32)  # noqa: E731
+    def thr(x):
+        return 64.0 * float((x[::C.S5_STRIDE].astype(np.float64) ** 2).sum()) / len(range(0, k, C.S5_STRIDE))
+    off = [p for p in range(k) if p % C.S5_STRIDE]
+    for _ in range(8):
+        out.append(gauss())
+    for d, at in ((15, False), (16, False), (17, False), (16, True)):
+        x = gauss()
+        x[off[:d]] = np.float32(2 * np.sqrt(thr(x)))
+        if at:
+            x[off[d]] = np.float32(np.sqrt(thr(x)))
+        out.append(x)
+    for df in (1, 2, 3):
+        for _ in range(8):
+            out.append(rng.standard_t(df, k).astype(np.float32))
+    x = gauss()
+    x[1] = np.float32(1000 * np.abs(x).max())
+    out.append(x)
+    out.append(np.zeros(k, np.float32))
+    out.append(np.full(k, np.float32(1.2 * 2.0 ** 60)))
+    return [x.astype("<f4").tobytes() for x in out]
+
+
 def product_hot(device: Device, a: np.ndarray, b: np.ndarray, start: np.ndarray) -> np.ndarray:
     """The unpromoted chain on `device` for every cell of codes a and b, row i's accumulator starting at start[i]."""
     assert device.g is None
@@ -209,6 +265,10 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         o.put(f"ep{tag}_codes", np.array(side.ep, np.uint8), "u8")
         inv[tag] = H.recip(np.array(side.alpha, np.uint32))
         o.put(f"ia_{tag}", inv[tag], "u32")
+    for tag, rows in (("a", ra), ("b", rb), ("s", screen_rows(k))):
+        o.put(f"live_{tag}", np.array([screen_verdict(r) for r in rows], "<u4"), "u32")
+        if tag == "s":
+            o.put("xs", b"".join(rows), "u8")
     at, bt = np.array(a.codes, np.uint8), np.array(b.codes, np.uint8)
     o.put("at", rowmajor(k32(at)), "u8")
     o.put("bt", rowmajor(k32(bt)), "u8")

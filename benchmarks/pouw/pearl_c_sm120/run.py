@@ -12,7 +12,9 @@
    message digests from registers), are re-run on all, 1 and 3 CTAs and compared again (`<buffer>@<step>/<tile>/grid<n>`), and
    the chain's 64 x 64 kernels (decode's) too, the trees again under every form but the call's (OTHER_FORMS:
    `<buffer>@<rows>+<trees>`), and forming's per-row words and codes under the other forming (OTHER_FORMINGS:
-   `<buffer>@forming=<forming>`).  A variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU
+   `<buffer>@forming=<forming>`).  stats_s5's screen of the per-row rules (live_a, live_b: each row passes, fails, or is
+   left to the host's exact rule) is held to the fixture's on both sides and on fixture.screen_rows (`live_s@stats_s5`).
+   A variant is timed only if all of its buffers match (C~ and U bit-exact against the CPU
    reference), the plain baselines only if theirs do.  Exit 4 if any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
    (default 8192, m = n = k; or MxNxK, m padded to 64 rows): each kernel REPS times after a warm-up, its median, the phases
@@ -49,6 +51,7 @@ import os
 import statistics
 import sys
 import time
+import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
@@ -425,8 +428,8 @@ class Pipeline:
         return {
             "ea_codes": m * 32, "eb_codes": n * 32, "fa_codes": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fbT32": 32 * k,
             "fbT128": 128 * k, "g": 128 * 32 * 4,
-            "alpha_a": 4 * m, "beta_a": 4 * m, "ia_a": 4 * m, "aux_a": 8 * m, "epa_codes": m * 32,
-            "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
+            "alpha_a": 4 * m, "beta_a": 4 * m, "ia_a": 4 * m, "aux_a": 8 * m, "epa_codes": m * 32, "live_a": 4 * m,
+            "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32, "live_b": 4 * n,
             "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
             "line_a": 32, "seed_a": 32, "hot_a": 4 * m, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
@@ -582,17 +585,20 @@ class Pipeline:
                                                     i=(side, factor, count, norm)))
 
         def form_side(tag, rows, x, e_codes, f_codes, out, key, side):
-            """A side's forming as (its E line's step, the rest): split, the kernels by step; fold, form_rows then form_s5."""
-            ep, hot = f"ep{tag}_codes", tag == "a" and self.hot
+            """A side's forming as (its E line's step, the rest): split, the kernels by step; fold, form_rows then form_s5.  The
+            per-row rules' verdicts go to live_<tag> where the caller's buffers have it."""
+            ep, hot, live = f"ep{tag}_codes", tag == "a" and self.hot, f"live_{tag}"
             form = (f"form_{tag}", lambda: d.launch("form_s5", (k // 128, rows // 64), 128,
                                                     p=(b[x], b[f"alpha_{tag}"], b[ep], b[f_codes], b[out]), i=(rows, k)))
             if self.forming_form == "fold":
                 return [], [(f"stats_{tag}", lambda: d.launch(
                     "form_rows", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"], b[f"ia_{tag}"], b[f"aux_{tag}"], key,
-                                                        b[e_codes], b[ep], b["hot_a"] if hot else 0), i=(rows, k, side, NORM_256))), form]
+                                                        b[e_codes], b[ep], b["hot_a"] if hot else 0, b.get(live, 0)),
+                    i=(rows, k, side, NORM_256))), form]
             return [lines(f"e{tag}", key, side, 0, rows, e_codes)], [
                 (f"stats_{tag}", lambda: d.launch("stats_s5", cdiv(rows, 8), 256, p=(b[x], b[f"alpha_{tag}"], b[f"beta_{tag}"],
-                                                                                   b[f"ia_{tag}"], b[f"aux_{tag}"]), i=(rows, k))),
+                                                                                   b[f"ia_{tag}"], b[f"aux_{tag}"], b.get(live, 0)),
+                                                  i=(rows, k))),
                 *([("hot_a", lambda: d.launch("hot_a", cdiv(m, 128), 128, p=(b["line_a"], b["alpha_a"], b["aux_a"], b["hot_a"]),
                                               i=(m,)))] if hot else []),
                 (f"eprime_{tag}", lambda: d.launch("eprime", cdiv(rows, 128), 128, p=(b[e_codes], b[f"beta_{tag}"], b[ep]),
@@ -675,8 +681,10 @@ SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
 FORM_BUFFERS = ("tree_a", "tree_b", "tree_t", "keys_a", "keys_b", "keys_t", "seed_a", "line_a")
 FORM_PHASES = ("epoch", "unit", "commit", "hashing")
 #: forming's per-row words and codes of each side, rewritten under OTHER_FORMINGS by those phases' steps and held to the fixture
-FORMING_BUFFERS = (*(f"{x}_{t}" for t in "ab" for x in ("alpha", "beta", "ia", "aux")), "ea_codes", "eb_codes", "epa_codes",
-                   "epb_codes", "at", "bt", "hot_a")
+FORMING_BUFFERS = (*(f"{x}_{t}" for t in "ab" for x in ("alpha", "beta", "ia", "aux", "live")), "ea_codes", "eb_codes",
+                   "epa_codes", "epb_codes", "at", "bt", "hot_a")
+#: the screen's gate: fixture.screen_rows (xs) through stats_s5, its verdicts held to the fixture's (live_s)
+SCREEN_FILES = ("xs", "live_s")
 FORMING_PHASES = ("job", "forming")
 
 
@@ -703,11 +711,22 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         pipe.run_all()
         res = {}
         for name in [*common, *files]:
-            if name in ("xa", "xb"):
+            if name in ("xa", "xb", *SCREEN_FILES):
                 continue
             res[name] = compare(dev, pipe, name, want(name))
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
+        if "xs" in common:
+            verdicts = want("live_s")
+            rs = len(verdicts) // 4
+            scr = {"xs": dev.put(load("", common["xs"])), **{nm: dev.alloc(4 * rs * w) for nm, w in
+                                                              (("alpha", 1), ("beta", 1), ("ia", 1), ("aux", 2), ("live_s", 1))}}
+            dev.launch("stats_s5", cdiv(rs, 8), 256, p=(scr["xs"], scr["alpha"], scr["beta"], scr["ia"], scr["aux"], scr["live_s"]),
+                       i=(rs, k))
+            dev.sync()
+            res["live_s@stats_s5"] = compare(dev, types.SimpleNamespace(b=scr), "live_s", verdicts)
+            for p_ in scr.values():
+                dev.free(p_)
         for tag in ("a", "b"):
             for kernel in FORM_ALTS:
                 pipe.form_alt(tag, kernel)

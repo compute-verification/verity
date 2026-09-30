@@ -613,7 +613,7 @@ constexpr float S5_FLOOR = 0x1p-32f;
 // one warp per FP32 row, one pass: s = max|x|, rho (32 partial FMA chains, chain c over positions 8c + 256i in order of i,
 // then the xor butterfly), alpha, beta_row.  Lane l reads x[256i + 4l ..] and x[256i + 128 + 4l ..], so chain c's position is
 // the first (c < 16) or second (c >= 16) vector's x of lane 2 (c mod 16).  p0 rows (rows x k words), p1 alpha, p2 beta,
-// p3 1/alpha (glue), p4 (s, rho) per row; i0 rows, i1 k (a multiple of 256)
+// p3 1/alpha (glue), p4 (s, rho) per row, p5 (or 0) the per-row rules' verdicts (row_verdict); i0 rows, i1 k (a multiple of 256)
 // a row's s and rho's sum of squares by its warp (every lane gets both: the butterfly's adds are commutative)
 DEV void row_stats(const float4* x, int k, int lane, float& s, float& part) {
   const int src = 2 * (lane & 15);
@@ -630,25 +630,64 @@ DEV void row_stats(const float4* x, int k, int lane, float& s, float& part) {
   for (int o = 16; o; o >>= 1) { s = fmaxf(s, __shfl_xor_sync(~0u, s, o)); part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o)); }
 }
 
-// stats_s5's words of a row from (s, part): p1 alpha, p2 beta, p3 1/alpha, p4 (s, rho); returns alpha, rho and beta
-DEV float3 put_stats(const Args& a, int row, int k, float s, float part) {
+// a row's (alpha, rho, beta) from its (s, part)
+DEV float3 s5_of(float s, float part, int k) {
   const float rho = __fsqrt_rn(__fdiv_rn(part, (float)((k + 7) / 8)));
   const float alpha = __fdiv_rn(448.0f, fmaxf(__fadd_rn(s, __fmul_rn(4.0f, rho)), S5_FLOOR));
-  const float beta = __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE));
-  reinterpret_cast<float*>(a.p[1])[row] = alpha;
-  reinterpret_cast<float*>(a.p[2])[row] = beta;
-  reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
-  reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
-  return make_float3(alpha, rho, beta);
+  return make_float3(alpha, rho, __fmul_rn(__fmul_rn(rho, alpha), __uint_as_float(S5_LINE)));
 }
 
+// stats_s5's words of a row: p1 alpha, p2 beta, p3 1/alpha, p4 (s, rho)
+DEV void put_stats(const Args& a, int row, float s, float3 st) {
+  reinterpret_cast<float*>(a.p[1])[row] = st.x;
+  reinterpret_cast<float*>(a.p[2])[row] = st.z;
+  reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(st.x);
+  reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, st.y);
+}
+
+// The scheme's per-row rules (pearl_c_work.row_passes: the floor rho alpha >= 1, an exact product, and pearl_c.live_row) on
+// a row, screened by its warp (every lane gets the verdict): 0 the row passes, 1 it fails, 2 the screen leaves it open, for
+// the host to decide exactly (live_row on its words).  An entry is dead when x^2 ceil(k/8) >= 64 S, S the exact sum of the
+// row's stride-8 squares; the screen compares fl(x^2) with t = fl(64 part / ceil(k/8)) widened by LIVE_BAND each way, and
+// part is S to within (k/256 + 5) 2^-24 relative (its FMA chains and butterfly), so for k <= 2^20 an entry above the band is
+// surely dead and one below it surely live.  Rows whose t is under 2^-96 (where squares may round as subnormals) or whose
+// band would overflow are left open.  The floor: fma(rho, alpha, -1) >= 0 is rho alpha >= 1 exactly (no nonzero difference
+// rounds to zero).
+constexpr float LIVE_BAND = 0x1p-10f;
+DEV uint32_t row_verdict(const float4* x, int k, int lane, float part, float3 st) {
+  if (!(__fmaf_rn(st.y, st.x, -1.0f) >= 0.0f)) return 1;
+  const float t = __fdiv_rn(__fmul_rn(64.0f, part), (float)((k + 7) / 8));
+  if (k > (1 << 20) || !(t >= 0x1p-96f && t <= 0x1p126f)) return 2;
+  const float hi = __fmul_rn(t, 1.0f + LIVE_BAND), lo = __fmul_rn(t, 1.0f - LIVE_BAND);
+  uint32_t dead = 0, band = 0;
+#pragma unroll 4
+  for (int j = lane; j < k / 4; j += 32) {
+    const float4 v = x[j];
+    const float q[4] = {__fmul_rn(v.x, v.x), __fmul_rn(v.y, v.y), __fmul_rn(v.z, v.z), __fmul_rn(v.w, v.w)};
+#pragma unroll
+    for (int e = 0; e < 4; e++) {
+      dead += q[e] > hi;
+      band += !(q[e] > hi) && !(q[e] < lo);
+    }
+  }
+  dead = __reduce_add_sync(~0u, dead);
+  band = __reduce_add_sync(~0u, band);
+  return 64 * dead > (uint32_t)k ? 1 : 64 * (dead + band) <= (uint32_t)k ? 0 : 2;
+}
+
+// stats_s5, and with p5 each row's verdict (row_verdict, u32) from a second read of the row
 extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
   if (row >= rows) return;
+  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
   float s, part;
-  row_stats(reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4), k, lane, s, part);
-  if (lane) return;
-  put_stats(a, row, k, s, part);
+  row_stats(x, k, lane, s, part);
+  const float3 st = s5_of(s, part, k);
+  if (a.p[5]) {
+    const uint32_t v = row_verdict(x, k, lane, part, st);
+    if (!lane) reinterpret_cast<uint32_t*>(a.p[5])[row] = v;
+  }
+  if (!lane) put_stats(a, row, s, st);
 }
 
 // v2-hot's H_i (v2-hot-start-rule.md, the public constant c0 = 64): bit 31 and bits 0-22 of the first word of the keyed line
@@ -685,17 +724,23 @@ extern "C" __global__ void eprime(const Args a) {
   store_codes(a.p[2] + (size_t)row * 32, c);
 }
 
-// forming's per-row steps of one side in one launch, a warp a row: stats_s5 (p1 .. p4), the row's line of E (`lines` at side
-// i2, factor 0, line = row, under the line key p5: its codes to p6), E' = e4m3(beta E) (eprime, to p7) and, with p8, v2-hot's
-// H (hot_a, to p8): the bytes those kernels write.  p0 rows (rows x k words); i0 rows, i1 k (a multiple of 256), i2 side, i3
-// `lines`' norm
+// forming's per-row steps of one side in one launch, a warp a row: stats_s5 (p1 .. p4, and with p9 the verdicts), the row's
+// line of E (`lines` at side i2, factor 0, line = row, under the line key p5: its codes to p6), E' = e4m3(beta E) (eprime,
+// to p7) and, with p8, v2-hot's H (hot_a, to p8): the bytes those kernels write.  p0 rows (rows x k words); i0 rows, i1 k (a
+// multiple of 256), i2 side, i3 `lines`' norm
 extern "C" __global__ void __launch_bounds__(256) form_rows(const Args a) {
   const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
   if (row >= rows) return;
+  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
   float s, part;
-  row_stats(reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4), k, lane, s, part);
+  row_stats(x, k, lane, s, part);
+  const float3 st = s5_of(s, part, k);
+  if (a.p[9]) {
+    const uint32_t v = row_verdict(x, k, lane, part, st);
+    if (!lane) reinterpret_cast<uint32_t*>(a.p[9])[row] = v;
+  }
   if (lane == 0) {
-    const float3 st = put_stats(a, row, k, s, part);
+    put_stats(a, row, s, st);
     uint32_t h[8];
     line_hash(a.p[5], (uint32_t)a.i[2], 0, (uint32_t)row, h);
     uint8_t e[32], ep[32];

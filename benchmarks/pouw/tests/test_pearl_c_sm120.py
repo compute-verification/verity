@@ -278,6 +278,28 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
     assert len(y_plain) == len(y_fast) == 2 * 128 * 128
 
 
+def test_the_screen_never_contradicts_the_per_row_rules():
+    """stats_s5's screen (fixture.screen_verdict, row_verdict's twin) against pearl_c_work.row_passes: a row it passes
+    passes and a row it fails fails, on screen_rows (every verdict, and both ways to fail: the floor and the dead count)
+    and on heavy-tailed BF16-widened rows at two depths.  Its squares are numpy's FP32 products, which are fp32.mul's
+    subnormals included."""
+    from verity_pouw.schemes import pearl_c_work as PW
+    screen = F.screen_rows(1024)
+    v = [F.screen_verdict(r) for r in screen]
+    assert v[:12] == [0] * 8 + [0, 0, 1, 2] and v[-3:] == [1, 1, 2]
+    words = lambda r: [int(w) for w in np.frombuffer(r, "<u4")]  # noqa: E731
+    floor_ok = lambda r: (lambda st: F.P.f32_of_bits(st[1]) * F.P.f32_of_bits(st[2]) >= 1.0)(F.C.s5_stats(words(r)))  # noqa: E731
+    assert floor_ok(screen[10]) and not floor_ok(screen[-3])
+    rng = np.random.default_rng(5)
+    rows = screen + [(rng.standard_t(df, k).astype(np.float32).view("<u4") & 0xFFFF0000).astype("<u4").tobytes()
+                     for k in (1024, 2048) for df in (2, 3, 4) for _ in range(6)]
+    for r in rows:
+        verdict = F.screen_verdict(r)
+        assert verdict == 2 or (verdict == 0) == PW.row_passes(words(r)), verdict
+    x = np.array([1.5, 3e-20, 2.0 ** -70, 1.1e-23, 7.0 * 2.0 ** -80, 1.2 * 2.0 ** 60, 2.0 ** 65], np.float32)
+    assert [int(w) for w in (x * x).view("<u4")] == [F.fp32.mul(int(w), int(w)) for w in x.view("<u4")]
+
+
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
 KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
@@ -319,12 +341,13 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count}
     if name == "stats_s5":
         rows, k = i[:2]
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 4 * rows}
     if name == "eprime":
         return {0: 32 * i[0], 1: 4 * i[0], 2: 32 * i[0]}
     if name == "form_rows":
         rows, k = i[:2]
-        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 32, 6: 32 * rows, 7: 32 * rows, 8: 4 * rows}
+        return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows, 5: 32, 6: 32 * rows, 7: 32 * rows, 8: 4 * rows,
+                9: 4 * rows}
     if name.startswith("form_"):
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 32 * rows, 3: 32 * k, 4: rows * k}
@@ -516,7 +539,8 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6), ("form_rows", 8)}:
+            if not p[slot] and (name, slot) in {("seed_line_a", 3), ("h1_tree", 3), ("h1_commit", 6), ("form_rows", 8), ("form_rows", 9),
+                                                ("stats_s5", 5)}:
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
