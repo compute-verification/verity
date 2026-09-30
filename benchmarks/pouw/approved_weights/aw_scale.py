@@ -82,21 +82,28 @@ def e2m1_index(x):
     return (i + 8 * ((x < 0) & (i > 0))).to(torch.uint8)
 
 
-def set_codes(mod, w, fmt):
-    """Quantize the (already rotated) FP32 weight w into mod's deployed representation."""
+def set_codes(mod, w, fmt, rows=4096):
+    """Quantize the (already rotated) FP32 weight w into mod's deployed representation, in row blocks (the 70B model leaves
+    about 23 GB of the GPU for temporaries)."""
+    for lo in range(0, w.shape[0], rows):
+        _set_codes_rows(mod, w[lo:lo + rows], fmt, lo)
+    mod.fmt = fmt
+
+
+def _set_codes_rows(mod, w, fmt, lo):
+    hi = lo + w.shape[0]
     if fmt == "fp8":
         alpha = 448.0 / w.abs().amax(1, keepdim=True).clamp_min(1e-30)
-        mod.codes.copy_(G.e4m3_rn(w * alpha).to(torch.float8_e4m3fn).view(torch.uint8))
-        mod.rscale.copy_(1.0 / alpha)
+        mod.codes[lo:hi].copy_(G.e4m3_rn(w * alpha).to(torch.float8_e4m3fn).view(torch.uint8))
+        mod.rscale[lo:hi].copy_(1.0 / alpha)
     else:
         n, k = w.shape
         gs = w.abs().amax(1, keepdim=True).clamp_min(1e-30) / (6.0 * 448.0)
         v = (w / gs).reshape(n, k // 16, 16)
         s = G.e4m3_rn(v.abs().amax(2, keepdim=True) / 6.0).clamp_min(2.0 ** -9)
-        mod.codes.copy_(e2m1_index((v / s).clamp(-6.0, 6.0)).reshape(n, k))
-        mod.bscale.copy_(s.squeeze(2).to(torch.float8_e4m3fn))
-        mod.rscale.copy_(gs)
-    mod.fmt = fmt
+        mod.codes[lo:hi].copy_(e2m1_index((v / s).clamp(-6.0, 6.0)).reshape(n, k))
+        mod.bscale[lo:hi].copy_(s.squeeze(2).to(torch.float8_e4m3fn))
+        mod.rscale[lo:hi].copy_(gs)
 
 
 class Shards:
@@ -154,6 +161,7 @@ def project(model, shards, names, rung, seed, dev):
                 mod.rin = r.to(torch.bfloat16)
         set_codes(mod, w, fmt)
         del w
+    torch.cuda.empty_cache()
 
 
 def attach_affine(model, names, on):

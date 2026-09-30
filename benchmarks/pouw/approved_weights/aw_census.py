@@ -151,8 +151,7 @@ def census_matrix(w, fmt, name, rot, seed, dev):
         b1, f1 = near_dups(c, 128, 15, False)
         b2, f2 = near_dups(c, 32, 2, False)
         rec.update({"near_dup_groups_v1": f1, "near_dup_atoms_v2": f2})
-        s24 = 0.5 * s64.float().repeat_interleave(2, dim=1)          # 64-slices onto 128-groups: two per group
-        s24g = s24.reshape(n, k // 128, 2).mean(2)
+        s24g = 0.5 * s64.float().reshape(n, k // 128, 2).mean(2)    # a 128-group holds two 64-slices
         rec["skippable"] = float(torch.maximum(b1, s24g).mean())
         rec["skippable_v2"] = float(b2.mean())
     torch.cuda.synchronize()
