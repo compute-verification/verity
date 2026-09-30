@@ -6,7 +6,7 @@ pearl_c.cubin through run.py's driver.
 1. The gate check at check.json's shape: run.py's `check`, the $0.30 run's bit-exact gates.
 2. Per shape of bench.json (twin.py's): A's real rows and B generated on the device (`gen_f32`; filler rows stay zero),
    every kernel once, then each sampled 64 x 64 tile compared with the CPU twin: C̃, U, the leaf, Pearl's tickets, α on
-   both sides, the A row's commitments and the adopted baseline's y.  A shape is timed only when the check and its tiles
+   both sides, the A row's leaf in A's tree and the adopted baseline's y.  A shape is timed only when the check and its tiles
    pass (the baseline when its own buffers do); PEARLC_UNGATED=1 times regardless and says so.
 3. The timing: run.py's `measure`, then per shape
    - `prover_x`: the unit without hashing (A's forming, A′·F_B, P_A, the product with its peel) over the adopted baseline
@@ -35,7 +35,6 @@ import run as R
 HERE = os.path.dirname(os.path.abspath(__file__))
 T = 64                        # the leaf's tile
 SUBTILE = 16                  # Pearl's ticket subtile
-SEGMENT = 1024                # hash_rows_f32's bytes per A-row commitment
 
 # γ's constants (research store docs/pouw/cheap-binding.md §1; pearl_c.py's W_ref, H100 W1 units per MAC)
 GAMMA0 = RHO_CAP = Fraction(1, 400)
@@ -59,7 +58,6 @@ def gamma(n: int, k: int) -> dict[str, Fraction]:
 def tile_bytes(read, n: int, k: int, r0: int, c0: int) -> dict[str, bytes]:
     """The sampled tile's bytes as the kernels lay them out: read(buffer, offset, bytes)."""
     rows = range(r0, r0 + T)
-    segs = 4 * k // SEGMENT
     return {"leaf": read("leaves", 32 * ((r0 // T) * (n // T) + c0 // T), 32),
             "c": b"".join(read("c", 4 * (i * n + c0), 4 * T) for i in rows),
             "u": b"".join(read("u", 4 * (i * n + c0), 4 * T) for i in rows),
@@ -68,7 +66,7 @@ def tile_bytes(read, n: int, k: int, r0: int, c0: int) -> dict[str, bytes]:
             "y_adopt": b"".join(read("y_adopt", 2 * (i * n + c0), 2 * T) for i in rows),
             "alpha_a": read("alpha_a", 4 * r0, 4 * T),
             "alpha_b": read("alpha_b", 4 * c0, 4 * T),
-            "rows": read("rows", 32 * segs * r0, 32 * segs)}
+            "row_leaf": read("tree_a", 32 * r0, 32)}
 
 
 def compare_tile(got: dict[str, bytes], want: dict) -> list[str]:

@@ -3,7 +3,8 @@ sampled 64 x 64 tiles per shape the bytes the H100 kernels must write there, fro
 
 * `gen_f32`'s inputs (A's real rows; filler rows are zero);
 * §5's forming with its noise atoms batched, the chain, the fused A′·F_B and B̃·F_A, the peel factors and the peel;
-* the leaf and Pearl's tickets, and the A row's commitments;
+* the leaf and Pearl's tickets, and the A row's leaf in A's tree, all in hashing format -h1 (the verifier's: BLAKE3
+  messages and leaves, frame-b3 trees);
 * the adopted baseline's y (e4m3(αx) through the same chain, then the glue).
 
 bench.py compares the device's buffers with them before it times a shape.  benchmarks/pouw/tests/test_pearl_c_bench.py holds
@@ -22,17 +23,19 @@ from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
-from verity.commitments.turboshake import turboshake128
 from verity.ml.kernels import group_sum_total_batch
 from verity.ml.tc.models import HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32
+from verity_pouw.audit import ROW_SCHEMA, Epoch, Workload, activation_binding, rows_domain, transcript_domain
+from verity_pouw.protocol import Matmul
+from verity_pouw.protocol import Shape as MShape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_u as U
 from verity_pouw.schemes import pearl_kw as P
 
-SCHEMA = "verity-pouw/pearl-c-bench/v1"
+SCHEMA = "verity-pouw/pearl-c-bench/v2"
 T = C.TILE                        # the leaf's tile, 64 x 64
 ALIGN = 128                       # the kernels' granularity in m and n
-SEGMENT, D_ROWS = 1024, 0x23      # hash_rows_f32: bytes per A-row commitment, and its TurboSHAKE128 domain byte
+HASHING = "h1"
 QWEN7B = {"qkv": (4608, 3584), "o": (3584, 3584), "gate_up": (37888, 3584), "down": (3584, 18944)}   # (n, k) of each linear
 PREFILL_M, DECODE_M = 2048, 32
 
@@ -59,8 +62,9 @@ def _h(shape: Shape, role: str) -> bytes:
 
 
 def seeds(shape: Shape) -> dict:
-    """seed_A, seed_B (the scheme's noise seeds, fixed per shape) and gen_f32's 31-bit seeds for A and B."""
-    return {"seed_a": _h(shape, "seed-A"), "seed_b": _h(shape, "seed-B"),
+    """seed_A, seed_B (the scheme's noise seeds, fixed per shape), the salt A's rows are committed under (unit 0), and
+    gen_f32's 31-bit seeds for A and B."""
+    return {"seed_a": _h(shape, "seed-A"), "seed_b": _h(shape, "seed-B"), "salt": _h(shape, "salt"), "root_b": _h(shape, "root-B"),
             "gen_a": int.from_bytes(_h(shape, "gen-A")[:4], "little") >> 1,
             "gen_b": int.from_bytes(_h(shape, "gen-B")[:4], "little") >> 1}
 
@@ -210,14 +214,14 @@ class Tile:
     leaf: bytes
     tickets: list[bytes]          # the tile's 16 subtiles, row-major
     y_adopt: np.ndarray           # 64 x 64 BF16 words
-    row_commits: list[bytes]      # row r0's segments
+    row_leaf: bytes               # row r0's leaf in A's frame-b3 tree
 
     def expected(self) -> dict:
         sha = lambda raw: hashlib.sha256(raw).hexdigest()  # noqa: E731
         return {"tile": [self.r0, self.c0], "leaf": self.leaf.hex(), "c": sha(self.c.astype("<u4").tobytes()),
                 "u": sha(self.u.astype("<u4").tobytes()), "tickets": sha(b"".join(self.tickets)),
                 "y_adopt": sha(self.y_adopt.astype("<u2").tobytes()), "alpha_a": sha(self.a.alpha.astype("<u4").tobytes()),
-                "alpha_b": sha(self.b.alpha.astype("<u4").tobytes()), "rows": sha(b"".join(self.row_commits))}
+                "alpha_b": sha(self.b.alpha.astype("<u4").tobytes()), "row_leaf": sha(self.row_leaf)}
 
 
 def tile(jb: Job, r0: int, c0: int) -> Tile:
@@ -243,22 +247,34 @@ def tile(jb: Job, r0: int, c0: int) -> Tile:
     ia, ib = (np.float32(1.0) / f32(side.alpha) for side in (a, b))
     q = chain(a.quant.astype(np.int64), b.quant.astype(np.int64), ti, tj).reshape(T, T)
     y = rne_bf16(((f32(q) * ia[:, None]).astype(np.float32) * ib[None, :]).astype(np.float32).view(np.uint32))
-    row = a.words[0].astype("<u4").tobytes()
-    commits = [turboshake128(row[s:s + SEGMENT], D_ROWS, 32) for s in range(0, len(row), SEGMENT)]
-    return Tile(r0, c0, a, b, c, u, C.leaf(checked), tickets, y, commits)
+    row_leaf = a_domain(shape, sd).leaf(r0, r0, ROW_SCHEMA, a.words[0].astype("<u4").tobytes())
+    return Tile(r0, c0, a, b, c, u, C.leaf(checked, HASHING), tickets, y, row_leaf)
 
 
-def keys(sd: dict) -> dict[str, str]:
-    """The kernels' 32-byte keys: the noise lines' (A's, B's) and the tickets'."""
+def a_domain(shape: Shape, sd: dict):
+    """The domain of A's rows (`verity_pouw.audit`, frame-b3): unit 0 under the shape's salt, all m rows filler included."""
+    return rows_domain(activation_binding(sd["salt"], 0), 0, shape.m, "blake3")
+
+
+def t_domain(shape: Shape, sd: dict):
+    """The tile tree's domain for a one-unit epoch over the shape's tiles."""
+    epoch = Epoch(Workload((Matmul(0, MShape(shape.m, shape.k, shape.n), 0),)), {0: sd["root_b"]}, sd["salt"])
+    return transcript_domain(epoch, (shape.m // T) * (shape.n // T), "blake3")
+
+
+def keys(shape: Shape, sd: dict) -> dict[str, str]:
+    """The kernels' 32-byte keys: the noise lines' (A's, B's), the tickets', the two trees' domain ids and the -h1 labels'."""
     return {"line_a": P._line_key(sd["seed_a"]).hex(), "line_b": P._line_key(sd["seed_b"]).hex(),
-            "jackpot": P.subkey("jackpot", sd["seed_a"]).hex()}
+            "jackpot": P.subkey("jackpot", sd["seed_a"]).hex(), "dom_a": a_domain(shape, sd).domain_id.hex(),
+            "dom_t": t_domain(shape, sd).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(), "k_leaf": C.H1_KEYS["leaf"].hex()}
 
 
 def entry(shape: Shape, expected: list[dict]) -> dict:
     sd = seeds(shape)
     return {"label": shape.label, "m_real": shape.m_real, "m": shape.m, "n": shape.n, "k": shape.k,
-            "seeds": {"seed_a": sd["seed_a"].hex(), "seed_b": sd["seed_b"].hex()}, "gen": {"a": sd["gen_a"], "b": sd["gen_b"]},
-            "keys": keys(sd), "samples": expected}
+            "seeds": {"seed_a": sd["seed_a"].hex(), "seed_b": sd["seed_b"].hex(), "salt": sd["salt"].hex(), "root_b": sd["root_b"].hex()},
+            "gen": {"a": sd["gen_a"], "b": sd["gen_b"]},
+            "keys": keys(shape, sd), "samples": expected}
 
 
 def _tile_job(args) -> dict:
@@ -274,7 +290,8 @@ def build(shapes: list[Shape], processes: int | None = None) -> dict:
     per = {s.label: [] for s in shapes}
     for (jb, _, _), exp in zip(work, done):
         per[jb.shape.label].append(exp)
-    return {"schema": SCHEMA, "scheme": C.NAME_V1, "tile": T, "shapes": [entry(s, per[s.label]) for s in shapes]}
+    return {"schema": SCHEMA, "scheme": C.PearlC(forming="v1", hashing=HASHING).name, "tile": T, "hashing": HASHING,
+            "shapes": [entry(s, per[s.label]) for s in shapes]}
 
 
 if __name__ == "__main__":

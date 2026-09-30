@@ -33,6 +33,7 @@ ligero-verify batch  --system system.bin --dir DIR [--jobs N] [--threads T] [--t
                      # <= 2^-target AND every proof's n_proofs is N (PROTOCOL.md 8c "Batch verification"); agreement
                      # with the python_verdict of DIR/manifest.json, or DIR/../manifest.json (a dump's rep dirs)
 ligero-verify system-digest --system system.bin     # sys_id, table digest and the relation they are pinned for (or null)
+uv run research data fetch-fixtures backends/ligero-verify   # the proofs and systems are fetched fixtures (fixtures/artifacts.json)
 cargo test --release                                 # hash vectors (hashlib / BLAKE3 spec), NTT / coset code, Barrett mul,
                                                      # the operand decodes; tests/fixture.rs: the B=1 ZK interactive fixture
                                                      # accepted, byte flips in every region rejected, a flipped statement word

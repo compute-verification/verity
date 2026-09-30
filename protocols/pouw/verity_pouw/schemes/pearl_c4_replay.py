@@ -7,14 +7,14 @@ the unit's m rows with its zero filler) and B's, the device's A and B roots (`au
 and its tile leaves (`pearl_c.leaf`, one per tile in the scheme's order), beside ``call.json`` (the scheme, the unit's
 shape, matmul index and weight, its real rows, and the epoch beacon the call's salt was derived from).  The scale bytes
 the device's forming wrote may ride along; they are not committed (the verifier forms its own), and `prove` reports how
-many fall outside D-SS's byte range (`device_scales`).
+many fall outside D-SB's byte range (`device_scales`).
 
 **`prove`** makes transcript v0 (`FORMAT`) from a dump, on the host:
 
 * the epoch: B's root as the device committed it, and the salt from the epoch beacon (`audit.Epoch.start`);
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
-* the records: one unit, no channel split, its real rows, and the rows that fail `row_passes` (D-NF, D-SS's dead share)
-  as excluded, as `pearl_c_work.declare` has them;
+* the records: one unit, no channel split, its real rows, and the rows that fail `row_passes` (D-NF) as excluded, as
+  `pearl_c_work.declare` has them;
 * the draws' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work law opens
   there: t draws by the records' credit and one tile per excluded row.
 
@@ -102,7 +102,7 @@ def write_dump(path: str | os.PathLike, call: dict, rows_a: bytes, rows_b: bytes
 
 
 def device_scales(fmt: F.Fmt, data: bytes) -> dict:
-    """What a device's formed scale bytes hold against D-SS's range (`pearl_c4.scale_bytes_ok`)."""
+    """What a device's formed scale bytes hold against D-SB's range (`pearl_c4.scale_bytes_ok`)."""
     counts = [data.count(bytes([b])) for b in range(256)]
     out = {"bytes": len(data), "outside_range": sum(c for b, c in enumerate(counts) if not F.scale_bytes_ok(fmt, [b])),
            "min": min((b for b in range(256) if counts[b]), default=None),

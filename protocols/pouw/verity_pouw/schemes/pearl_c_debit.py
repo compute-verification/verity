@@ -13,9 +13,11 @@
 * `forming_elements(...)`: **a stub that returns 0.** P3's per-tile rule is still being written: an A′ element is shared by
   every tile of its row band, and P3's owner is stating how a per-tile `needed` and the element's credit are apportioned.
   Until it is relayed, the replayed debit is the chain debit alone.
-* `debit_units(atoms, elements)` is `debitOf` at `Params.pi`, `Costs.adopted`: 40 units per flagged atom-word (its 32
-  MACs and a quarter of a promotion add) and 64 per debited element.
-* `CAP` = ρ = 1/400: a tile whose debit exceeds ρ·`creditOf(tile)` is rejected (`capOK`, per tile).
+* `debit_units(atoms, elements, prices)` is `debitDev` at a device's W1 prices (`pearl_c.Prices`), `debitOf` at
+  `Params.pi`, `Costs.adopted` on the H100: per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on
+  the H100, 34 on sm_120), and fs per debited element (64 and 40).
+* `CAP` = ρ = 1/400: a tile whose debit exceeds ρ times its credited cells' credit, their share of the unit's `creditOf`
+  (`pearl_c_work.tile_cap`), is rejected (`capOK`, per tile: `Tile.lean`'s `tileShare`).
 """
 
 from __future__ import annotations
@@ -27,12 +29,11 @@ from verity.ml.tc import fp32
 from verity.ml.tc.models import HOPPER_E4M3_K32
 
 from . import pearl_kw as P
+from .pearl_c import H100_PRICES, Prices
 
 G = 4                                  # atoms per promotion group (`Params.pi.G`)
 ATOM = 32
 CAP = Fraction(1, 400)
-ATOM_UNITS = ATOM + Fraction(ATOM, G)  # `debitOf`: 32 MACs and 32/G of a promotion add per flagged atom-word
-ELEMENT_UNITS = 64                     # `Costs.adopted`'s fs per debited forming element
 _TOP = 0x7F7FFFFF                      # the largest finite FP32 magnitude
 
 
@@ -125,6 +126,7 @@ def forming_elements(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[
     return 0
 
 
-def debit_units(atoms: int, elements: int) -> Fraction:
-    """`debitOf Params.pi Costs.adopted ⟨atoms, elements⟩`."""
-    return ATOM_UNITS * atoms + ELEMENT_UNITS * elements
+def debit_units(atoms: int, elements: int, prices: Prices = H100_PRICES) -> Fraction:
+    """`debitDev` at a device's prices (`debitOf Params.pi Costs.adopted` at the H100's): per flagged atom-word its 32 MACs
+    and 1/G of a promotion add, and fs per debited element."""
+    return (ATOM + Fraction(prices.fadd, G)) * atoms + prices.forming_credited * elements

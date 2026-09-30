@@ -60,6 +60,31 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
     assert W.draw(S, [r], W.Beacon(6, b"another round"), bytes(32), bytes(32), bytes(32), 200) != picks
 
 
+def test_tile_cap_is_the_cells_share_of_the_units_credit():
+    """The per-tile statement's cap (`Tile.lean`'s `pearlCTiles`): ρ·creditOf(unit at |K|)·tileShare, with tileShare =
+    |rows|·|cols|/(m·n).  A row's own terms (forming, A′·F_B) count once across its row band, so a unit's tile caps sum to
+    ρ·creditOf of the unit; ρ·creditOf of each tile's own shape would count them once per tile.  At sm_120's prices the cap
+    is sm_120's credit."""
+    sm120 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", prices=C.SM120_PRICES)
+    for scheme, kept in ((S, K), (S, 64), (sm120, K)):
+        r = record(real=32, kept=kept)
+        s = r.matmul.shape
+        total = Fraction(0)
+        for t in scheme.tiles(s):
+            rows, cols = r.credited(t)
+            _, cap = W.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
+            assert cap == D.CAP * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
+            assert cap < D.CAP * scheme.credit_of(Shape(len(rows), kept, len(cols)))
+            total += cap
+        assert total == D.CAP * scheme.credit_of(Shape(s.m, kept, s.n))
+    assert sm120.credit_of(Shape(32, K, 32)) < S.credit_of(Shape(32, K, 32))
+    r = record(excluded_a=(3,), excluded_b=(20,))
+    tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
+    rows, cols = r.credited(tile)
+    assert (len(rows), len(cols)) == (15, 15)
+    assert W.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15)[1] == D.CAP * W.cell_credit(S, r) * 15 * 15
+
+
 def test_records_bind_every_field_and_the_splits():
     splits = {0: W.Split(K)}
     base = W.records_root(b"s", b"w", splits, [record()])
@@ -120,14 +145,14 @@ def test_padding_stuffing_is_rejected():
     assert "A row 0 is not zero past the kept width" in W.check_opened(S, unit, tile, rows_a, rows_b, ops_for(rows_a, rows_b, k))
 
 
-def lifecycle(rows_a=None, real=20):
+def lifecycle(rows_a=None, real=20, scheme=S):
     """32 x 128 x 16 on 16 x 16 tiles: A's rows 20 … 31 are zero filler and row 3 fails liveness; B passes."""
     if rows_a is None:
         rows_a = CV.rows_f32("work-life", "A", real, K) + [C.f32_row([0] * K)] * (32 - real)
         rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
     work = Workload((Matmul(3, Shape(32, K, 16), 9),))
-    prover = Prover(S, {9: rows_b})
+    prover = Prover(scheme, {9: rows_b})
     epoch = Epoch.start(work, prover.weight_roots, b"beacon")
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
@@ -143,6 +168,15 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
     assert out.audit.accepted and len(out.audit.verdicts) == 9 and out.audit.selected[-1] == 0
     assert out.wref == W.cell_wref(S, records[0]) * 19 * 16 and out.audit.profile.work == int(out.wref)
     assert out.credit == (1 - D.CAP) * W.cell_credit(S, records[0]) * 19 * 16 and out.job == S.job_cost(16, K)
+
+
+def test_audit_under_hashing_h1():
+    """The work law's audit is the same under hashing format -h1: its openings verify against frame-b3 roots."""
+    h1 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1")
+    epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h1)
+    records = W.declare(h1, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
+    assert W.audit(h1, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
+    assert not W.audit(S, epoch, prover, tr, SPLITS, records, BEFORE, AFTER, 4).audit.accepted
 
 
 def test_audit_rejects_what_the_red_team_found():
