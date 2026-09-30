@@ -347,7 +347,7 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name == "b3s_level_keys":
         return {0: 32 * i[0], 1: 32}
     if name == "hash_rows_b3s":
-        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(1, (max(-(-i[1] // 256), 1) - 1).bit_length()), 4: 64}
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 32 * max(RUN.b3s_levels(i[1]), 1), 4: 64}
     if name == "hash_leaves_b3s":
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32, 3: 64}
     if name == "hash_node_keys":

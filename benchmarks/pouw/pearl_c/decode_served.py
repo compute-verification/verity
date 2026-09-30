@@ -10,15 +10,16 @@ replay over CALLS, in µs a call; a graph node costs about 1 µs of its own, whi
 Variants, per shape:
   a.h1 / a.h1.wN   the -h1 A commitment (hash_node_keys, hash_rows_w, hash_tree_small, seed_line_a) as run.py launches it
                    (`run.spread`'s rows a CTA), and with hash_rows_w at N rows a CTA (N = 8, the served 8ca97148's; 4, 2, 1)
-  a.h2.keys / a.h2 -h2's (b3s_level_keys, then hash_rows_b3s under its keys), and with hash_rows_b3s deriving them
+  a.h2             -h2's, hash_rows_b3s deriving its segment level keys (GPU 1's 997ac6bd: no b3s_level_keys launch)
   t / t.lN         the tile hashing (hash_msg_v, hash_leaf_p) as run.py launches it, and hash_leaf_p at N tiles a CTA (32, the
                    served 8ca97148's; 8, 2)
   call.h1, call.h2, call.nohash   the whole call as the vLLM path runs it (pouw_pearl_c_device.CALL_STEPS; nohash without
                    HASH_STEPS)
   k.<kernel>       each hashing kernel of the call alone
 
-Gates before any timing, per shape: from outputs poisoned to 0xA5, each spread or fused variant writes the bytes of its
-default (A's leaves, the tile leaves), and each no-write control (the kernel left out) leaves them unequal.
+Gates before any timing, per shape: from outputs poisoned to 0xA5, each spread variant writes the bytes of its default (A's
+leaves, the tile leaves), hash_rows_b3s writes the same leaves with p3 null as with it set, and the level keys it stores at p3
+are b3s_level_keys'; each no-write control (the kernel left out) leaves them unequal.
 
   python3 decode_served.py --gpu1 SHIP --out OUT.json   (env: PEARLC_EXPECT_UUID; CALLS=32, REPS=30; PEARLC_ANY_GPU and
                                                          PEARLC_UNGATED for dry runs on a stand-in driver)
@@ -121,9 +122,9 @@ def main() -> int:
         def b3s_keys() -> None:
             dev.launch("b3s_level_keys", 1, 32, p=(skeys, keys["dom_a"]), i=(levels,))
 
-        def rows_b3s_keys() -> None:
+        def rows_b3s_null() -> None:
             dev.launch("hash_rows_b3s", M_REAL, 32 * R.cdiv(R.cdiv(rb, R.B3S_SEG), 32),
-                       p=(xa, b2["tree_a"], keys["dom_a"], skeys, keys["t_row"]), i=(M_REAL, rb, 0, R.b3s_template_len(R.ROW_SCHEMA)))
+                       p=(xa, b2["tree_a"], keys["dom_a"], 0, keys["t_row"]), i=(M_REAL, rb, 0, R.b3s_template_len(R.ROW_SCHEMA)))
 
         def leaf_t(t: int) -> None:
             dev.launch("hash_leaf_p", R.cdiv(tiles, t), 4 * t, p=(b1["digests"], b1["leaves"], keys["k_leaf"]), i=(M_REAL, n))
@@ -140,9 +141,12 @@ def main() -> int:
         for w in ROWS_W:
             g[f"a.h1.w{w}"] = written(lambda w=w: rows_w(w), leaves_a(b1)) == want
         g["a.h1.control"] = written(lambda: None, leaves_a(b1)) != want
-        want = written(lambda: (b3s_keys(), rows_b3s_keys()), leaves_a(b2))
+        want = written(rows_b3s_null, leaves_a(b2))
         g["a.h2"] = written(steps["h2"]["hash_rows_a"], leaves_a(b2)) == want
         g["a.h2.control"] = written(lambda: None, leaves_a(b2)) != want
+        sk = (b2["skeys_a"], 32 * levels)
+        g["a.h2.stored_keys"] = written(steps["h2"]["hash_rows_a"], sk) == written(b3s_keys, (skeys, 32 * levels))
+        g["a.h2.stored_keys.control"] = written(lambda: None, sk) != written(b3s_keys, (skeys, 32 * levels))
         tl = (b1["leaves"], 32 * tiles)
         want = written(steps["h1"]["hash_leaf"], tl)
         for t in LEAF_T:
@@ -162,8 +166,6 @@ def main() -> int:
         a_names = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a")
         pre, post = steps["h1"].get("node_keys_a", lambda: None), (steps["h1"]["tree_a"], steps["h1"]["seed_a"])
         v = {"a.h1": seq("h1", a_names), "a.h2": seq("h2", a_names),
-             "a.h2.keys": lambda: (steps["h2"].get("node_keys_a", lambda: None)(), b3s_keys(), rows_b3s_keys(), steps["h2"]["tree_a"](),
-                                   steps["h2"]["seed_a"]()),
              "t": seq("h1", ("hash_msg", "hash_leaf")),
              "call.h1": seq("h1", CALL_STEPS), "call.h2": seq("h2", CALL_STEPS),
              "call.nohash": seq("h1", [x for x in CALL_STEPS if x not in HASH_STEPS])}

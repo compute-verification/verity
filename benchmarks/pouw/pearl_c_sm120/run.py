@@ -299,6 +299,11 @@ def b3s_template_len(schema: str) -> int:
     return 31 + len(schema.encode())
 
 
+def b3s_levels(rb: int) -> int:
+    """The segment tree's levels over a value of rb bytes (an odd last node promoted, so ⌈log2 segments⌉)."""
+    return depth(cdiv(rb, B3S_SEG))
+
+
 def spread(count: int, most: int, sms: int, least: int = 1) -> int:
     """Items a CTA for a launch over `count` items: `most`, halved while the grid would leave SMs idle, down to `least`.  Each
     row leaf and tile leaf is a serial chain, so at decode's few rows and tiles more CTAs spare the SMSPs the chains would
@@ -342,8 +347,8 @@ class Pipeline:
 
     `hashing` is the trees' format, the message digests and tile leaves being the same in both: -h1 (frame-b3, a row leaf
     through BLAKE3's chunk tree, hash_rows_w) or -h2 (frame-b3s: a row leaf is a tree over its 256-byte segments,
-    hash_rows_b3s, which derives the segment tree's level keys in each CTA; the tile tree's leaves hash_leaves_b3s).  Pads,
-    node keys and every level above the leaves are frame-b3's in both.
+    hash_rows_b3s, under segment level keys it derives itself and its first CTA stores in `skeys_<tree>`; the tile tree's
+    leaves hash_leaves_b3s).  Pads, node keys and every level above the leaves are frame-b3's in both.
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
@@ -416,6 +421,7 @@ class Pipeline:
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
             "line_a": 32, "seed_a": 32, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
+            **{f"skeys_{t}": 32 * max(b3s_levels(4 * k), 1) for t in ("a", "b")},
             "qa": m * k, "qb": n * k, "sa": 4 * m, "sb": 4 * n, "y_plain": m * n * 2, "y_fast": m * n * 2,
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
         }
@@ -450,12 +456,12 @@ class Pipeline:
 
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree over `count` FP32 rows of x, then its levels: -h1 hash_sm120.cuh's hash_rows_w (a warp a row), -h2
-        hash_h2.cuh's hash_rows_b3s (a CTA a row, a thread a segment)."""
+        hash_h2.cuh's hash_rows_b3s (a CTA a row, a thread a segment, the segment tree's level keys its own)."""
         d, b, rb = self.dev, self.b, self.row_bytes
         if self.hashing == "h2":
             threads = 32 * cdiv(cdiv(rb, B3S_SEG), 32)
             leaves = lambda: d.launch("hash_rows_b3s", count, threads,  # noqa: E731
-                                      p=(b[x], b[f"tree_{tag}"], self.keys[dom], 0, self.keys["t_row"]),
+                                      p=(b[x], b[f"tree_{tag}"], self.keys[dom], b[f"skeys_{tag}"], self.keys["t_row"]),
                                       i=(count, rb, 0, b3s_template_len(ROW_SCHEMA)))
         else:
             w = spread(count, ROWS_WARPS, d.sms)

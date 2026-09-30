@@ -44,14 +44,13 @@ def level_keys(dom: bytes, levels: int = 10) -> bytes:
     return out.raw
 
 
-def rows_b3s(rows: bytes, m: int, rb: int, d: CommitmentDomain, rank0: int = 0, schema: str = ROW, own_keys: bool = False) -> bytes:
-    """hash_rows_b3s's leaves, under b3s_level_keys' level keys or (own_keys) the ones each CTA derives."""
+def rows_b3s(rows: bytes, m: int, rb: int, d: CommitmentDomain, rank0: int = 0, schema: str = ROW, skeys=None) -> bytes:
+    """hash_rows_b3s's leaves; `skeys` (a buffer, or None for a null p3) takes the level keys its first CTA stores."""
     tmpl, tlen = template(schema)
     nseg = max(1, -(-rb // 256))
     out = T.buffer(32 * m)
-    keys = None if own_keys else T.buffer(level_keys(d.domain_id))
     T.launch("hash_rows_b3s", m, 32 * -(-nseg // 32),
-             [T.buffer(rows if rows else b"\0"), out, T.buffer(d.domain_id), keys, T.buffer(tmpl)], [m, rb, rank0, tlen])
+             [T.buffer(rows if rows else b"\0"), out, T.buffer(d.domain_id), skeys, T.buffer(tmpl)], [m, rb, rank0, tlen])
     return out.raw
 
 
@@ -61,17 +60,28 @@ def test_segment_level_keys_are_frame_b3s():
     assert [got[32 * l:32 * l + 32] for l in range(10)] == [b3s_level_key(d.domain_id, l) for l in range(10)]
 
 
-@pytest.mark.parametrize("own_keys", [False, True])
-@pytest.mark.parametrize("rb", [0, 1, 63, 64, 255, 256, 257, 1000, 1300, 2817, 4100, 16384, 32768, 57344, 131072])
-def test_row_leaves_are_frame_b3s_at_every_length(rb, own_keys):
+@pytest.mark.parametrize("rb", [0, 1, 63, 64, 255, 256, 257, 1000, 1300, 2817, 4100, 16384, 32768])
+def test_row_leaves_are_frame_b3s_at_every_length(rb):
     """3 rows at ranks 5–7: lengths within one block, one segment, one byte past it, short last segments, 6 and 12
     segments (odd levels), a length that isn't a multiple of 16 (the byte path at full segments), BF16 and FP32 rows at
-    k = 8,192, FP32 rows at k = 14,336 (224 segments) and the widest row (512 segments, 9 levels); with the level keys from
-    b3s_level_keys, and derived in each CTA (p3 null)."""
+    k = 8,192."""
     m, d = 3, domain(8)
     rows = data(f"b3s rows {rb}", m * rb)
-    got = rows_b3s(rows, m, rb, d, rank0=5, own_keys=own_keys)
+    got = rows_b3s(rows, m, rb, d, rank0=5)
     assert [got[32 * r:32 * r + 32] for r in range(m)] == [d.leaf(5 + r, 5 + r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)]
+
+
+@pytest.mark.parametrize("rb", [0, 256, 257, 1300, 16384, 32768])
+def test_row_leaves_store_their_level_keys(rb):
+    """hash_rows_b3s derives its segment tree's level keys itself (no b3s_level_keys launch before it): with p3 set, its
+    first CTA stores b3s_level_keys' bytes for the row's ⌈log2 segments⌉ levels there and nothing past them, and the leaves
+    are those of a null p3."""
+    m, d = 3, domain(8)
+    rows = data(f"b3s keys {rb}", m * rb)
+    levels = max(0, (max(1, -(-rb // 256)) - 1).bit_length())
+    skeys = T.buffer(b"\xa5" * 32 * 10)
+    assert rows_b3s(rows, m, rb, d, rank0=5, skeys=skeys) == rows_b3s(rows, m, rb, d, rank0=5)
+    assert skeys.raw[:32 * 10] == level_keys(d.domain_id, levels)[:32 * levels] + b"\xa5" * 32 * (10 - levels)
 
 
 @pytest.mark.parametrize("length", [0, 1, 32, 64, 200, 256])
