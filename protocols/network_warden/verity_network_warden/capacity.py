@@ -36,8 +36,9 @@ def envelope_bits(buckets: int, allocation: int) -> float:
 
 
 def unbound_bits(buckets: int, allocation: int, frame_bits: int) -> float:
-    """What a link-window carries if nothing checks its content: `T·log2 Σ_{n≤r} 2^(n·B)`, about `T·r·B`. This is what a
-    rejected window may already have carried (every run, Theorem 1(a))."""
+    """What a link-window carries if nothing checks its content: `T·log2 Σ_{n≤r} 2^(8·n·B)`, about `8·T·r·B`, with B
+    the frame size in bytes and `frame_bits` = 8·B. This is what a rejected window may already have carried, on any
+    run, accepted or not."""
     return buckets * (allocation * frame_bits + math.log2(sum(2.0 ** (-(allocation - n) * frame_bits)
                                                           for n in range(allocation + 1))))
 

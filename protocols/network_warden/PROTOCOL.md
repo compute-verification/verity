@@ -12,7 +12,7 @@ parameter, and the warden only executes them:
 - T buckets per window;
 - the bucket width τ_b, 100 ms by default;
 - the allocation r, in frames per bucket;
-- the frame size B;
+- the frame size B, in bytes;
 - the queue capacity Q.
 
 On each link:
@@ -95,7 +95,7 @@ reference checks a link against the Program's egress frames only, so it has no c
 an accepted verdict here says nothing about one.
 
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
-about T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`.
+about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`.
 
 ## Capacity (`capacity`)
 

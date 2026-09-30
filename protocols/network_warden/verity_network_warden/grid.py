@@ -50,7 +50,7 @@ class GridParams:
 
     buckets: int  # T, buckets per window
     allocation: int  # r, frames per bucket: the constant rate and the cap
-    frame_bytes: int  # B / 8
+    frame_bytes: int  # B, the frame size in bytes
     bucket_ms: int = 100  # τ_b
     queue_capacity: int = 1 << 16  # Q; exceeding it is an overflow fault
 

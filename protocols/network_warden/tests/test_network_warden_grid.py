@@ -154,5 +154,5 @@ def test_warden_malformed_frame_is_a_fault():
     assert w.close_window().status == Status(Reason.MALFORMED)
 
 
-def test_unbound_bits_is_about_T_r_B():
-    assert math.isclose(capacity.unbound_bits(6, 2, 16), 192, rel_tol=1e-3)
+def test_unbound_bits_is_about_8_T_r_B():
+    assert math.isclose(capacity.unbound_bits(6, 2, 8 * 2), 8 * 6 * 2 * 2, rel_tol=1e-3)
