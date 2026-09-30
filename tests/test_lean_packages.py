@@ -50,3 +50,14 @@ def test_the_randomness_assumption_cites_this_toolchain():
     version = (soundness / "lean-toolchain").read_text().strip().rpartition(":")[2]
     for doc in ("ASSUMPTIONS.md", "FlockSoundness/Assumptions.lean"):
         assert f"Lean {version}'s runtime" in (soundness / doc).read_text(), doc
+
+
+CORE = ROOT / "packages" / "verity" / "lean"
+
+
+def test_core_package_has_no_dependencies():
+    """Core's own proofs (`packages/verity/lean`) live in a package of their own that requires nothing: core depends on no
+    backend, and a Lean dependency would put one in its build."""
+    assert CORE in lake_packages()
+    assert "require" not in (CORE / "lakefile.toml").read_text()
+    assert json.loads((CORE / "lake-manifest.json").read_text())["packages"] == []
