@@ -46,8 +46,11 @@ peel      P_A = [bf16(E′_A) ‖ RNE_bf16(A′·F_B)],  P_B = [RNE_bf16(Σ_p fm
 
 Only ρ depends on A alone (about 4 units per element).  The model adopts s, ρ and α as its own FP8 quantizer (e4m3(α·x)
 with PoUW off), and the accounting is the cheap-binding lane's ``Costs.adopted``: 68 units per element, 64 of them credited
-(the noise atom and the cast).  The domain rules are Pearl's with σ for δ·l2: σ·α ≥ 1 on every row, and at most 1/64 of
-each side's entries at |x| ≥ 8σ.
+(the noise atom and the cast).  v1 shares v0's seed labels (``pearl-c/v0/seed-*``): the two formings draw the same seeds.
+
+**The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
+operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
+exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².
 """
 
 from __future__ import annotations
@@ -272,6 +275,26 @@ def s5_stats(x: Sequence[int]) -> tuple[int, int, int, int]:
     return s, rho, alpha, _check_finite(fp32.mul(fp32.mul(rho, alpha), S5_LINE))
 
 
+def live_row(words: Sequence[int]) -> bool:
+    """TT_OUT's liveness on one row of FP32 words, exactly: reject when 64 · #{l : x_l² · ⌈k/8⌉ ≥ 64 · Σ_{p ≡ 0 (8)} x_p²} > k.
+    Each x² is exact as a float (48 significant bits), so the squares are compared as integers at the scale 2^300; a float
+    prefilter leaves only entries within 2^-30 of the threshold to the exact comparison."""
+    k = len(words)
+    vals = [P.f32_of_bits(w) for w in words]
+    positions = range(0, k, S5_STRIDE)
+    total = sum(int(vals[p] * vals[p] * 2.0 ** 300) for p in positions)
+    k8, bound = len(positions), 64 * total
+    approx = bound / k8 / 2.0 ** 300 if total else 0.0
+    dead = 0
+    for x in vals:
+        sq = x * x
+        if sq > approx * (1 + 2.0 ** -30):
+            dead += 1
+        elif sq >= approx * (1 - 2.0 ** -30) and int(sq * 2.0 ** 300) * k8 >= bound:
+            dead += 1
+    return 64 * dead <= k
+
+
 def eprime(beta: int, e_row: Sequence[int]) -> list[int]:
     """E′ = e4m3(β_row · E): one FP32 product per code, then Pearl's nearest-even saturating cast."""
     return [P.f32_to_fp8(P.f32_of_bits(fp32.mul(beta, P.f32_bits(P.fp8_to_f32(e))))) for e in e_row]
@@ -333,10 +356,10 @@ class PearlC:
 
     def check(self, matmul: Matmul) -> None:
         s = matmul.shape
-        if not (self.k_min <= s.k <= 1 << 16 and s.k % SLICE == 0 and s.m % self.tile[0] == 0 and s.n % self.tile[1] == 0
+        if not (self.k_min <= s.k <= 1 << 16 and s.k % WINDOW == 0 and s.m % self.tile[0] == 0 and s.n % self.tile[1] == 0
                 and s.m <= 1 << 24 and s.n <= 1 << 24):
-            raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 32 | k, tiles of {self.tile}, "
-                              f"m, n <= 2^24")
+            raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 128 | k (whole promotion groups), "
+                              f"tiles of {self.tile}, m, n <= 2^24")
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)
@@ -378,19 +401,13 @@ class PearlC:
             return None
 
     def admissible(self, ctx: Context, ops: Ops) -> bool:
-        """v0: TT_OUT's domain is every input under δ = 1 with promotion every 4 atoms.  v1 adds Pearl's two row rules with
-        σ for δ·l2: the noise floor σ·α ≥ 1 on every row (exact product), and liveness, at most 1/64 of each side's
-        entries at |x| ≥ 8σ.  Pearl's census policy is not used."""
+        """v0: TT_OUT's domain is every input under δ = 1 with promotion every 4 atoms.  v1: every row of both operands passes
+        TT_OUT's `OperandOK`, the noise floor ρ·α ≥ 1 (exact product) and `live_row` (per row, on the exact statistic).
+        Pearl's census policy is not used."""
         if self.forming == "v0":
             return True
-        for side in (ops.a, ops.b):
-            if any(P.f32_of_bits(r) * P.f32_of_bits(a) < P.SIGMA_MIN for r, a in zip(side.rho, side.alpha)):
-                return False
-            dead = sum(1 for row, r in zip(side.x, side.rho) for w in row
-                       if abs(P.f32_of_bits(w)) >= P.TAU_IDLE * P.f32_of_bits(r))
-            if dead > P.EPS_IDLE * sum(len(row) for row in side.x):
-                return False
-        return True
+        return all(P.f32_of_bits(r) * P.f32_of_bits(a) >= P.SIGMA_MIN and live_row(row)
+                   for side in (ops.a, ops.b) for r, a, row in zip(side.rho, side.alpha, side.x))
 
     def checked(self, ctx: Context, ops: Ops) -> Checked:
         c = [[chain(ra, rb) for rb in ops.b.codes] for ra in ops.a.codes]
@@ -410,7 +427,8 @@ class PearlC:
         return out
 
     def useful(self, ctx: Context, noise: Noise, ops: Ops, checked: Checked) -> list[list[float]]:
-        """U unscaled by the model's own α_A,i · α_B,j (glue)."""
+        """U/(α_A,i · α_B,j) in double, for measuring quality.  It is not the served y: the served y is the integration's
+        pinned y_unit = RN_f32(RN_f32(U · RN_f32(1/α_A)) · RN_f32(1/α_B)), two FP32 products in that order, then its glue."""
         value = P.bf16_to_f32 if self.forming == "v0" else P.f32_of_bits
         return [[P.f32_of_bits(w) / (value(ops.a.alpha[i]) * value(ops.b.alpha[j]))
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]

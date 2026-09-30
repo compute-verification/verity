@@ -332,3 +332,35 @@ def test_v1_domain_rules():
             w[p] = f32w(1e4)
         spiky.append(C.f32_row(w))
     assert not s.admissible(ctx, s.encode(ctx, noise, spiky, b, tile))
+
+
+def test_v1_liveness_is_per_row_on_the_exact_statistic():
+    """One row with 3 entries at 8ρ among 128 fails (64·3 > 128), though its side has far fewer than 1/64 dead entries in
+    all; 2 such entries pass.  An entry exactly at x² = 64ρ² counts as dead (≥), with ρ² the exact every-8th mean."""
+    k = 128
+    base = [f32w(1.0)] * k
+    assert C.live_row(base)
+    two, three = list(base), list(base)
+    for p in (1, 2):
+        two[p] = f32w(8.0)
+    for p in (1, 2, 3):
+        three[p] = f32w(8.0)
+    assert C.live_row(two) and not C.live_row(three)
+    just_below = list(three)
+    just_below[3] = f32w(P.f32_of_bits(f32w(8.0)) - 2.0 ** -20)
+    assert C.live_row(just_below)
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
+    ctx = CV.ctx_of("liveness", (16, k, 16), 3, 9)
+    noise = s.noise(ctx)
+    rows_a = [C.f32_row(base)] * 15 + [C.f32_row(three)]
+    rows_b = CV.rows_f32("liveness", "B", 16, k)
+    ops = s.encode(ctx, noise, rows_a, rows_b, Tile(tuple(range(16)), tuple(range(16))))
+    assert sum(1 for row in ops.a.x for w in row if P.f32_of_bits(w) >= 8.0) * 64 <= 16 * k
+    assert not s.admissible(ctx, ops)
+
+
+def test_domain_needs_whole_promotion_groups():
+    s = get("pearl-c-h100-v1")
+    s.check(Matmul(0, Shape(64, 1152, 64), 1))
+    with pytest.raises(DomainError):
+        s.check(Matmul(0, Shape(64, 1056, 64), 1))
