@@ -1,6 +1,7 @@
 """Pearl-C4's reference verifier on real activations (CPU), per linear of a `pearlc_capture.py` directory: X, the linear's
-input rows (float32 holding BF16 exactly), and its weight W (the model's BF16 safetensors), judged as the verifier
-(`verity_pouw.schemes.pearl_c4`) judges a unit:
+input rows (float32 holding BF16 exactly), and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture`
+npz file (X and W of each linear as float32 holding BF16), judged as the verifier (`verity_pouw.schemes.pearl_c4`) judges
+a unit:
 
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
@@ -49,12 +50,41 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def x_codes(path: Path) -> np.ndarray:
-    """X as BF16 codes (m x k uint16); it must hold BF16 values exactly."""
-    bits = np.ascontiguousarray(np.load(path), dtype=np.float32).view(np.uint32)
+def x_codes(path: Path | np.ndarray, label: str = "") -> np.ndarray:
+    """X (or an npz capture's W) as BF16 codes (m x k uint16); it must hold BF16 values exactly."""
+    bits = np.ascontiguousarray(np.load(path) if isinstance(path, Path) else path, dtype=np.float32).view(np.uint32)
     if (bits & 0xFFFF).any():
-        raise SystemExit(f"{path}: not BF16-exact")
+        raise SystemExit(f"{label or path}: not BF16-exact")
     return (bits >> 16).astype(np.uint16)
+
+
+def npz_manifest(path: Path) -> dict:
+    """A manifest for an `fp4_v3_real.capture` npz (``layers.<i>.<linear>.x`` and ``.w``, float32 holding BF16): per
+    linear ``model.layers.<i>.<linear>``, its X's shape from the member's header (nothing is loaded)."""
+    def shape(z, member: str) -> list[int]:
+        fmt = np.lib.format
+        with z.zip.open(member) as f:
+            read = fmt.read_array_header_1_0 if fmt.read_magic(f) == (1, 0) else fmt.read_array_header_2_0
+            return list(read(f)[0])
+
+    inputs = {}
+    with np.load(path) as z:
+        for member in z.zip.namelist():
+            if member.endswith(".x.npy"):
+                name = "model." + member[:-len(".x.npy")]
+                inputs[name] = {"file": name + ".npy", "shape": shape(z, member),
+                                "w_rows": shape(z, member[:-len(".x.npy")] + ".w.npy")[0]}
+    return {"model": path.name, "npz": str(path), "inputs": inputs}
+
+
+def capture_sha256(job: "Job") -> str:
+    """The capture's identity: its manifest's sha256, or an npz's own (hashed once, kept in the output directory)."""
+    if not job.npz:
+        return sha256(job.capture / "manifest.json")
+    mark = job.out / "capture.sha256"
+    if not mark.exists():
+        mark.write_text(sha256(job.capture))
+    return mark.read_text()
 
 
 def w_codes(snapshot: Path, name: str) -> np.ndarray:
@@ -83,13 +113,26 @@ def unit_rows(codes: np.ndarray, keep: np.ndarray, k_unit: int) -> list[bytes]:
 
 
 class Job:
+    """A `pearlc_capture.py` directory, or an `fp4_v3_real.capture` npz file (X and W of each linear)."""
+
     def __init__(self, capture: Path, out: Path, seed: int):
         self.capture, self.out, self.seed = capture, out, seed
-        self.man = json.loads((capture / "manifest.json").read_text())
-        self.snapshot = Path(self.man["snapshot"])
+        self.npz = capture.suffix == ".npz"
+        self.man = npz_manifest(capture) if self.npz else json.loads((capture / "manifest.json").read_text())
+        self.snapshot = None if self.npz else Path(self.man["snapshot"])
+
+    def _member(self, name: str, part: str) -> np.ndarray:
+        key = name[len("model."):] + "." + part
+        with np.load(self.capture) as z:
+            return x_codes(z[key], f"{self.capture}:{key}")
 
     def x(self, name: str) -> np.ndarray:
+        if self.npz:
+            return self._member(name, "x")
         return x_codes(self.capture / self.man["inputs"][name]["file"])
+
+    def w(self, name: str) -> np.ndarray:
+        return self._member(name, "w") if self.npz else w_codes(self.snapshot, name)
 
     def keep(self, name: str) -> tuple[np.ndarray, int]:
         """(kept channels, k_unit) of `name`'s split unit."""
@@ -99,7 +142,7 @@ class Job:
         return keep, -(-len(keep) // ALIGN) * ALIGN
 
     def operand(self, name: str, side: str) -> np.ndarray:
-        return self.x(name) if side == "x" else w_codes(self.snapshot, name)
+        return self.x(name) if side == "x" else self.w(name)
 
 
 def admit(job: Job, name: str, side: str, r0: int, r1: int) -> dict:
@@ -127,7 +170,7 @@ def admit(job: Job, name: str, side: str, r0: int, r1: int) -> dict:
 
 def tile(job: Job, name: str, t: int) -> dict:
     """One seeded grid tile of the split unit through the verifier's forming (D-SB) and its replayed debit."""
-    x, w = job.x(name), w_codes(job.snapshot, name)
+    x, w = job.x(name), job.w(name)
     keep, k_unit = job.keep(name)
     (m, _), n = x.shape, w.shape[0]
     rng = random.Random(f"{job.seed}/{name}/{t}")
@@ -182,7 +225,7 @@ def summarize(job: Job, tasks: list[tuple]) -> dict:
     flat = [t for ts in tiles.values() for t in ts]
     ratios = [t["ratio"] for t in flat if "ratio" in t]
     return {"schema": "pouw/pearl-c4-real/v0", "capture": str(job.capture),
-            "manifest_sha256": sha256(job.capture / "manifest.json"), "model": job.man.get("model"),
+            "manifest_sha256": capture_sha256(job), "model": job.man.get("model"),
             "revision": job.man.get("revision"), "seed": job.seed, "inputs": inputs,
             "weights": weights, "tiles": tiles, "tiles_debited": len(ratios), "max_ratio": max(ratios, default=None),
             "rejected_tiles": sum(bool(t.get("rejected")) for t in flat), "over_cap_tiles": sum(r > 1 for r in ratios)}
@@ -206,11 +249,14 @@ def main(argv: list[str] | None = None) -> int:
         ent = job.man["inputs"][name]
         mark = args.out / f"split-{Path(ent['file']).stem}.json"
         if not mark.exists():
-            f = args.capture / ent["file"]
-            if sha256(f) != ent["sha256"]:
-                raise SystemExit(f"{f}: sha256 differs from the manifest")
+            if job.npz:
+                digest = capture_sha256(job)
+            else:
+                f, digest = args.capture / ent["file"], ent["sha256"]
+                if sha256(f) != digest:
+                    raise SystemExit(f"{f}: sha256 differs from the manifest")
             side = split_side(job.x(name))
-            mark.write_text(json.dumps({"file": ent["file"], "sha256": ent["sha256"], "k": ent["shape"][-1], "side": side}))
+            mark.write_text(json.dumps({"file": ent["file"], "sha256": digest, "k": ent["shape"][-1], "side": side}))
     common = (str(args.capture), str(args.out), args.seed)
     tasks, seen_x = [], set()
     for name in names:
@@ -219,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
         if ent["file"] not in seen_x:
             seen_x.add(ent["file"])
             tasks += [("admit", *common, name, "x", r, min(r + ROWS_PER_TASK, m)) for r in range(0, m, ROWS_PER_TASK)]
-        n = w_codes(job.snapshot, name).shape[0]
+        n = ent["w_rows"] if job.npz else w_codes(job.snapshot, name).shape[0]
         tasks += [("admit", *common, name, "w", r, min(r + ROWS_PER_TASK, n)) for r in range(0, n, ROWS_PER_TASK)]
         tasks += [("tile", *common, name, t) for t in range(args.tiles)]
     k_of = {name: job.man["inputs"][name]["shape"][-1] for name in names}
