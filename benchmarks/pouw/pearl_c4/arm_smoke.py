@@ -2,13 +2,15 @@
 """Pearl-C4's arms through the harness's arm contract without the harness (no cuBLASLt library): `check_arm`, then per
 shape and arm, each flag set prepared on BF16 operands of the fixture's kind, launched, gated (`check_gate`), its first
 ``all`` output's middle byte flipped and the gate rerun (it must refuse), and `known_bad` gated (it must refuse).  With
---run-dir, the build gets ``transcripts_dir`` (RUN_DIR/transcripts), so the hash call dumps its transcript when freed, and
-each arm's ``verifier`` (arm interface v0.4, `check_verifier` when the harness has it) goes to RUN_DIR/verifiers.json with
-the shapes dumped.  --verify-run RUN_DIR, on the CPU alone, runs them per shape as the harness's verify.py does: the
-commands in order, accepted only by a line starting ACCEPT that names the transcript's sha256, with no REJECT naming it and
-every command exiting 0.  One JSON object per line; exit 4 when any gate, control, check or verification fails.
+--run-dir, the build gets ``transcripts_dir`` (RUN_DIR/transcripts), so the hash call dumps its transcript when freed
+(relaunched over poisoned outputs), its no-write negative control goes beside it (<arm>-<shape>-nowrite: the same buffers
+poisoned and read back without a launch), and each arm's ``verifier`` (arm interface v0.4, `check_verifier` when the
+harness has it) goes to RUN_DIR/verifiers.json with the shapes and controls dumped.  --verify-run RUN_DIR, on the CPU
+alone, runs them per shape as the harness's verify.py does: the commands in order, a transcript accepted only by a line
+starting ACCEPT that names its sha256, with no REJECT naming it and every command exiting 0, and a control passing only by
+a REJECT naming its sha256.  One JSON object per line; exit 4 when any gate, control, check or verification fails.
 
-  python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx] [--run-dir D]
+  python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx] [--roles hash ...] [--run-dir D]
   python3 arm_smoke.py --verify-run D --run-id ID --commit SHA
 
 DIR holds the harness's arm.py (benchmarks/pouw/harness).  Shapes are MxKxN, as the harness's `Shape` orders them.
@@ -31,8 +33,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 
 
-def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: str) -> dict:
-    """The verifier's commands on one shape's dump, judged as verify.py judges them."""
+def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: str, control: bool = False) -> dict:
+    """The verifier's commands on one shape's dump, judged as verify.py judges them; a negative control passes only by a
+    REJECT line naming its transcript's sha256 (and no ACCEPT)."""
     path = run_dir / v["transcript"].format(arm=arm, shape=label)
     values = {"python": sys.executable, "run_dir": str(run_dir), "run_id": run_id, "commit": commit, "arm": arm,
               "shape": label, "transcript": str(path), "dir": str(path.parent)}
@@ -51,9 +54,10 @@ def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: st
     sha = hashlib.sha256(path.read_bytes()).hexdigest()
     named = [ln for ln in lines if f"sha256:{sha}" in ln]
     accept = [ln for ln in named if re.match(r"ACCEPT\b", ln)]
-    ok = bool(accept) and not any(re.match(r"REJECT\b", ln) for ln in named) and not any(exits)
-    return {"ok": ok, "exits": exits, "sha256": sha, "accept_line": accept[0] if accept else None,
-            "tail": [] if ok else lines[-5:]}
+    reject = [ln for ln in named if re.match(r"REJECT\b", ln)]
+    ok = bool(reject) and not accept if control else bool(accept) and not reject and not any(exits)
+    return {"ok": ok, "control": control, "exits": exits, "sha256": sha, "accept_line": accept[0] if accept else None,
+            "reject_line": reject[0] if reject else None, "tail": [] if ok else lines[-5:]}
 
 
 def operands(d, shape, seed: int):
@@ -75,8 +79,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--harness", type=Path)
     ap.add_argument("--shapes", nargs="*", default=["128x1024x256", "32x2048x384"])
     ap.add_argument("--arms", nargs="*", default=["PearlC4Nv", "PearlC4Mx"])
-    ap.add_argument("--run-dir", type=Path, help="dump each shape's transcript under RUN_DIR/transcripts and record each "
-                    "arm's verifier in RUN_DIR/verifiers.json")
+    ap.add_argument("--roles", nargs="*", default=["hash", "nohash", "plain"])
+    ap.add_argument("--run-dir", type=Path, help="dump each shape's transcript (and its no-write control) under "
+                    "RUN_DIR/transcripts and record each arm's verifier in RUN_DIR/verifiers.json")
     ap.add_argument("--verify-run", type=Path, metavar="RUN_DIR", help="no GPU: run the verifiers a --run-dir pass recorded")
     ap.add_argument("--run-id", default="arm-smoke")
     ap.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
@@ -91,8 +96,8 @@ def main(argv: list[str]) -> int:
     if a.verify_run:
         recorded = json.loads((a.verify_run / "verifiers.json").read_text())
         for name, rec in recorded.items():
-            for label in rec["shapes"]:
-                r = verify(rec["verifier"], a.verify_run.resolve(), a.run_id, a.commit, name, label)
+            for label, control in [(s, False) for s in rec["shapes"]] + [(s, True) for s in rec.get("controls", [])]:
+                r = verify(rec["verifier"], a.verify_run.resolve(), a.run_id, a.commit, name, label, control)
                 emit({"arm": name, "shape": label, "ok": r["ok"], "verification": r})
         emit({"verify": "pass" if ok and recorded else "FAIL"})
         return 0 if ok and recorded else 4
@@ -110,7 +115,7 @@ def main(argv: list[str]) -> int:
         build = arm.build(ctx)
         v = A.check_verifier(arm.name, build) if hasattr(A, "check_verifier") else build["verifier"]
         emit({"arm": arm.name, "build": build, "verifier_checked": hasattr(A, "check_verifier")})
-        recorded[arm.name] = {"verifier": v, "shapes": []}
+        recorded[arm.name] = {"verifier": v, "shapes": [], "controls": []}
         d = arm.d
         for spec in a.shapes:
             m, k, n = (int(v) for v in spec.split("x"))
@@ -123,6 +128,8 @@ def main(argv: list[str]) -> int:
             w = arm.work(shape)
             emit({"arm": arm.name, "shape": shape.label, "work": w.__dict__})
             for role, flags in arm.flag_sets.items():
+                if role not in a.roles:
+                    continue
                 call = arm.prepare(None, shape, flags, ops)
                 call.launch(0)
                 d.sync()
@@ -137,6 +144,9 @@ def main(argv: list[str]) -> int:
                 d.write(buf.ptr + buf.nbytes // 2, bytes([mid[0] ^ 1]))
                 flipped = arm.gate(None, call, shape, flags)
                 emit({"arm": arm.name, "shape": shape.label, "role": role, "control": f"flip {out}", "ok": not flipped.ok})
+                if a.run_dir and role == "hash":
+                    call.dump(Path(ctx["transcripts_dir"]) / f"{arm.name}-{shape.label}-nowrite", write=False)
+                    recorded[arm.name]["controls"].append(f"{shape.label}-nowrite")
                 call.free()
             bad = arm.known_bad(None, shape, ops)
             bad.launch(0)

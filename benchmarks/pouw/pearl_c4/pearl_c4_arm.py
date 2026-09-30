@@ -12,7 +12,8 @@ fused digests, the tile leaves; per (weight, epoch), `weight_side` (B's commitme
 operands, the salt and the two domain ids (verity.commitments', public before A exists).  The salt is the verifier's
 (`audit.Epoch.start` over B's root, committed on the host, and an epoch beacon that is a label of the operand set: a
 shortcut for a public round).  The first hash-role call freed at each shape dumps its transcript into the harness's
-``transcripts_dir``/<scheme>-<shape> (`dump`), and the build record names the verifier (``verifier``) that proves and
+``transcripts_dir``/<scheme>-<shape> (`dump`, relaunched over poisoned outputs, so the transcript carries only what that
+launch wrote), and the build record names the verifier (``verifier``) that proves and
 verifies it after timing: `verity_pouw.schemes.pearl_c4_replay`'s ``prove`` and ``verify``, whose ACCEPT line names the
 transcript's sha256.  The build record's ``binaries`` is the cubin (loaded with ``cuModuleLoadData``, so never mapped).
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
@@ -52,7 +53,7 @@ for _p in (HERE, ROOT / "packages" / "verity" / "src", ROOT / "protocols" / "pou
 
 import dev as D  # noqa: E402
 
-TILE, WEIGHT_BASE = 64, 1
+TILE, WEIGHT_BASE, POISON = 64, 1, 0xA5
 OUTPUTS = {"hash": ("y", "digests", "leaves"), "nohash": ("y",), "plain": ("y",)}
 LINE_IN = 37                           # seed ‖ role ‖ index u32
 
@@ -118,11 +119,18 @@ class _Call:
             self.dump(Path(out) / f"{self.arm.name}-{self.shape.label}")
         self.pl.free()
 
-    def dump(self, path: Path) -> None:
-        """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): the call launched once more on
-        its operands as they stand, then A's and B's rows, both roots, the tile leaves and the formed scale bytes read back."""
+    def dump(self, path: Path, write: bool = True) -> None:
+        """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): every buffer the hash call
+        writes (`dev.WRITTEN`, root_a and seed_a included, which `prime` wrote before timing) poisoned with 0xA5, the call
+        launched once more on its operands as they stand, then A's and B's rows, both roots, the tile leaves and the formed
+        scale bytes read back.  write=False leaves the launch out: the no-write negative control, which the verifier must
+        reject (server.md 11:50Z)."""
         from verity_pouw.schemes import pearl_c4_replay as R
-        self.launch(0)
+        for nm in D.WRITTEN["hash"]:
+            if nm in self.pl.buf:
+                self.d.write(self.pl.buf[nm], bytes([POISON]) * self.pl.sizes[nm])
+        if write:
+            self.launch(0)
         self.d.sync()
         d, b, s = self.d, self.pl.buf, self.shape
         call = {"scheme": self.arm.name, "shape": [self.m_pad, s.k, s.n], "index": 0, "weight": self.weight,
