@@ -44,19 +44,15 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
     (vb : (p.P hone).ValueBinding plan tab ((p.P hone).placeDecoder plan tab dp.place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty ((p.P hone).Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG ((p.P hone).trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ ((p.P hone).trialStrat H E plan tab vb R τ c k Rw) M) ((p.P hone).outC H E plan tab vb R τ c)
-        (finderCost ((p.P hone).rdT H E plan tab vb R τ c) (cT plan R t')))
-    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         K ≤ ((p.PB hone).wrong
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (p.P hone).flock_e2e_count H E plan tab hExec dp (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone}
-    (p.rowsL1 hone) hConst ∅ (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht hCR K σ
+    (p.rowsL1 hone) hConst ∅ (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht K σ hCR
 
 /-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_drawn` with `hL1` discharged by
 `UProg.rowsL1`: if `execAccept` holds, the probability that a drawn unit is wrong on the program's Boolean circuit is at
@@ -69,19 +65,15 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
     (vb : (p.P hone).ValueBinding plan tab ((p.P hone).placeDecoder plan tab dp.place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty ((p.P hone).Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG ((p.P hone).trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ ((p.P hone).trialStrat H E plan tab vb R τ c k Rw) M) ((p.P hone).outC H E plan tab vb R τ c)
-        (finderCost ((p.P hone).rdT H E plan tab vb R τ c) (cT plan R t')))
-    (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         ¬ Disjoint ((p.PB hone).wrong
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (p.P hone).flock_e2e_drawn H E plan tab hExec dp (p.PB hone) (fun vals => vals ∘ p.mapG hone) {p.oneOf hone}
-    (p.rowsL1 hone) hConst ∅ (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht hCR σ
+    (p.rowsL1 hone) hConst ∅ (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht σ hCR
 
 /-- **Only a unit's constant column sits on `one`**, at the places built from the tables' classes: each unit's instance
 wires its constant column to `one` (`pairs_oneGate`). -/
@@ -111,19 +103,15 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
       ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp).place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty ((p.P hone).Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG ((p.P hone).trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ ((p.P hone).trialStrat H E plan tab vb R τ c k Rw) M) ((p.P hone).outC H E plan tab vb R τ c)
-        (finderCost ((p.P hone).rdT H E plan tab vb R τ c) (cT plan R t')))
-    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         K ≤ ((p.PB hone).wrong
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   UProg.flock_e2e_count hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
-    (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht hCR K σ
+    (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht K σ hCR
 
 /-- **The end-to-end drawn-unit bound on a program of units, from its tables' classes.** `UProg.flock_e2e_drawn` with
 `dp` built from each drawn unit's table class, as in `UProg.flock_e2e_count_classes`. -/
@@ -139,19 +127,15 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes
       ((p.P hone).placeDecoder plan tab (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp).place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty ((p.P hone).Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG ((p.P hone).trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ ((p.P hone).trialStrat H E plan tab vb R τ c k Rw) M) ((p.P hone).outC H E plan tab vb R τ c)
-        (finderCost ((p.P hone).rdT H E plan tab vb R τ c) (cT plan R t')))
-    (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         ¬ Disjoint ((p.PB hone).wrong
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   UProg.flock_e2e_drawn hone p H E plan tab hExec (p.derivedPlaces_of_classes hone plan tab cls slot blk hrd hcp)
-    (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht hCR σ
+    (p.constCols_of_classes hone plan tab cls slot blk hrd hcp) vb hk hRw hM hρ hr ht σ hCR
 
 end Partition
 

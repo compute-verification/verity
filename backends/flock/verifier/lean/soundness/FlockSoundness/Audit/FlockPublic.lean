@@ -146,22 +146,17 @@ theorem linkSoundE_mono {decode : DecoderB (C := C) (Reg := Reg) plan tab}
 variable {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : P.ValueBinding plan tab decode Hc)
 
-/-- **The link theorem at the public transcript**: `flock_batched_linkSoundE`'s bound holds for `Xpub ones zeros Xplur`
-when the public wires decode to their values. -/
+/-- **The link theorem at the public transcript**: `flock_batched_linkSoundE`'s bound, prover by prover
+(`linkBoundCR`), holds for `Xpub ones zeros Xplur` when the public wires decode to their values. -/
 theorem flock_batched_linkSoundE_pub (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}
-    (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t'))) :
+    (ht : 0 ≤ t') :
     (P.analysisBE (L := L) H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) k hk
         (fun S R j => (hr S R j).trans_lt hρ) hlow).LinkSound
-      (fun _ _ => P.linkBoundE (L := L) plan tab vb k Rw M ρ t') :=
+      (P.linkBoundCR H E plan tab vb k Rw M ρ t') :=
   P.linkSoundE_mono H E plan tab hk _ hlow (fun _ _ _ _ hu _ h => P.linkEvB_of_pub plan tab hpub hu h)
-    (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht hCR)
+    (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht)
 
 /-- **The compiled-layer count curve at the public transcript**: `flock_batched_count_linked` with the committed
 transcript 1 on `ones`, 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
@@ -169,19 +164,16 @@ theorem flock_batched_count_public (ones zeros : Finset (Fin C.N)) (hpub : P.Pub
     (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t')))
-    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
         K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_countE H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) hk
+  (P.flock_batched_countE H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
-    (P.flock_batched_linkSoundE_pub H E plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht hCR) K σ
+    (P.flock_batched_linkSoundE_pub H E plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) K σ).trans_eq
+    (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
 /-- **Drawn units at the public transcript**: `flock_batched_drawn_linked` with the committed transcript 1 on `ones`,
 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
@@ -189,19 +181,16 @@ theorem flock_batched_drawn_public (ones zeros : Finset (Fin C.N)) (hpub : P.Pub
     (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t')))
-    (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
         ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_drawnE H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) hk
+  (P.flock_batched_drawnE H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
-    (P.flock_batched_linkSoundE_pub H E plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht hCR) σ
+    (P.flock_batched_linkSoundE_pub H E plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) σ).trans_eq
+    (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
 /-! ## The public wires from the drawn units' places -/
 

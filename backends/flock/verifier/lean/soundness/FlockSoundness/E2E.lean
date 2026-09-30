@@ -9,7 +9,8 @@ circuit and values, 1 on the constants and 0 on the zero, which are public:
 * `flock_e2e_drawn`: `Pr[accept ∧ a drawn unit wrong] ≤ ε_ks(σ) + δ_link`.
 
 "Wrong" is measured on the program's Boolean circuit `CB`, as its circuit types flatten it, at the committed values. The
-only cryptographic assumption is A2, SHA-512 expected-time collision resistance (`hCR`).
+only cryptographic assumption is A2, SHA-512 expected-time collision resistance, for the link finders built from the
+prover the theorem bounds (`hCR : LinkCR … (reg σ) (cont σ) …`), not from every prover at once.
 
 **What the statement carries today.**
 * "Accept" is `execAccept`, any event on the audit's outcome that implies the model's acceptance (`hExec`). So as pinned,
@@ -71,7 +72,7 @@ def RowsL1 {CB : Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → F
 probability that at least `K` units of the committed circuit are wrong at the committed values is at most
 `miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
 (`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hL1`, `hConst`, `hZero` and `vb`
-(`assumptions/e2e-checklist.md`); A2 (`hCR`) is the assumption of record. -/
+(`assumptions/e2e-checklist.md`); A2 for `σ`'s link finders (`hCR`) is the assumption of record. -/
 theorem flock_e2e_count
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
@@ -81,12 +82,8 @@ theorem flock_e2e_count
     {Dh : Type} {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t')))
-    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         K ≤ (PB.wrong (proj (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
@@ -94,7 +91,7 @@ theorem flock_e2e_count
   (prob_mono (fun o h => ⟨hExec o h.1, h.2.trans (Finset.card_le_card (hL1 _ fun _ hg => Xpub_of_mem_ones hg))⟩) _
     σ).trans
     (P.flock_batched_count_public H E plan tab vb ones zeros (P.pubDecodes_of_place plan tab dp.place hConst hZero)
-      (P.loweringSoundB_of_place plan tab dp.place) hk hRw hM hρ hr ht hCR K σ)
+      (P.loweringSoundB_of_place plan tab dp.place) hk hRw hM hρ hr ht K σ hCR)
 
 /-- **The end-to-end drawn-unit bound (skeleton).** If `execAccept` holds (an event that implies the model's
 acceptance), the probability that a drawn unit of the committed circuit is wrong at the committed values (`Xpub`, as in
@@ -108,12 +105,8 @@ theorem flock_e2e_drawn
     {Dh : Type} {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab (P.placeDecoder plan tab dp.place) Hc)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (hCR : ∀ (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) (c : vb.Pos)
-      (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512ExpectedTimeCR Hc
-        (finderG (P.trialG H E plan tab vb R τ c k Rw) M)
-        (finderStrat _ (P.trialStrat H E plan tab vb R τ c k Rw) M) (P.outC H E plan tab vb R τ c)
-        (finderCost (P.rdT H E plan tab vb R τ c) (cT plan R t')))
-    (σ : Strategy (audit L Reg (batchedSession H E plan))) :
+    (σ : Strategy (audit L Reg (batchedSession H E plan)))
+    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
         ¬ Disjoint (PB.wrong (proj (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
@@ -121,7 +114,7 @@ theorem flock_e2e_drawn
   (prob_mono (fun o h => ⟨hExec o h.1, fun hd => h.2 (Finset.disjoint_of_subset_left
     (hL1 _ fun _ hg => Xpub_of_mem_ones hg) hd)⟩) _ σ).trans
     (P.flock_batched_drawn_public H E plan tab vb ones zeros (P.pubDecodes_of_place plan tab dp.place hConst hZero)
-      (P.loweringSoundB_of_place plan tab dp.place) hk hRw hM hρ hr ht hCR σ)
+      (P.loweringSoundB_of_place plan tab dp.place) hk hRw hM hρ hr ht σ hCR)
 
 end Partition
 
