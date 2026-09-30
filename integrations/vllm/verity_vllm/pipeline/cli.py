@@ -43,6 +43,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
     "fold-compare": ("verity_vllm.check.fold_compare", "folded observation log vs evidence"),
     "gate": ("verity_vllm.acquire.gate", "CPU acquisition gate of one row"),
+    "gemm-correspondence": ("verity_vllm.program.kernels.gemm_target_correspondence", "a target's bf16 linear vs its registered GEMM Definition"),
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
