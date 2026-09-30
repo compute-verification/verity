@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Pearl-C4's arms through the harness's arm contract without the harness (no cuBLASLt library): `check_arm`, then per
 shape and arm, each flag set prepared on BF16 operands of the fixture's kind, launched, gated (`check_gate`), its first
-``all`` output's middle byte flipped and the gate rerun (it must refuse), and `known_bad` gated (it must refuse).  One JSON
-object per line; exit 4 when any gate, control or check fails.
+``all`` output's middle byte flipped and the gate rerun (it must refuse), and `known_bad` gated (it must refuse).  With
+--run-dir, the build gets ``transcripts_dir`` (RUN_DIR/transcripts), so the hash call dumps its transcript when freed, and
+the build record's ``verifier`` (arm interface v0.4, `check_verifier` when the harness has it) runs per shape as the
+harness's verify.py runs it: its commands in order, accepted only by a line starting ACCEPT that names the transcript's
+sha256, with no REJECT naming it and every command exiting 0.  One JSON object per line; exit 4 when any gate, control,
+check or verification fails.
 
-  python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx]
+  python3 arm_smoke.py --harness DIR [--shapes 128x1024x256 ...] [--arms PearlC4Nv PearlC4Mx] [--run-dir D --commit SHA]
 
 DIR holds the harness's arm.py (benchmarks/pouw/harness).  Shapes are MxKxN, as the harness's `Shape` orders them.
 """
@@ -14,12 +18,41 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+
+
+def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: str) -> dict:
+    """The verifier's commands on one shape's dump, judged as verify.py judges them."""
+    path = run_dir / v["transcript"].format(arm=arm, shape=label)
+    values = {"python": sys.executable, "run_dir": str(run_dir), "run_id": run_id, "commit": commit, "arm": arm,
+              "shape": label, "transcript": str(path), "dir": str(path.parent)}
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(
+        [str(ROOT / "protocols" / "pouw"), str(ROOT / "packages" / "verity" / "src"), os.environ.get("PYTHONPATH", "")]))
+    exits, lines = [], []
+    for cmd in v["commands"]:
+        p = subprocess.run([x.format(**values) for x in cmd], capture_output=True, text=True, env=env)
+        exits.append(p.returncode)
+        lines += p.stdout.splitlines()
+        if p.returncode:
+            lines += p.stderr.splitlines()[-5:]
+            break
+    if not path.is_file():
+        return {"ok": False, "exits": exits, "why": f"no transcript at {path}", "tail": lines[-5:]}
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    named = [ln for ln in lines if f"sha256:{sha}" in ln]
+    accept = [ln for ln in named if re.match(r"ACCEPT\b", ln)]
+    ok = bool(accept) and not any(re.match(r"REJECT\b", ln) for ln in named) and not any(exits)
+    return {"ok": ok, "exits": exits, "sha256": sha, "accept_line": accept[0] if accept else None,
+            "tail": [] if ok else lines[-5:]}
 
 
 def operands(d, shape, seed: int):
@@ -41,6 +74,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--harness", type=Path, required=True)
     ap.add_argument("--shapes", nargs="*", default=["128x1024x256", "32x2048x384"])
     ap.add_argument("--arms", nargs="*", default=["PearlC4Nv", "PearlC4Mx"])
+    ap.add_argument("--run-dir", type=Path, help="dump each shape's transcript under RUN_DIR/transcripts and verify it")
+    ap.add_argument("--run-id", default="arm-smoke")
+    ap.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
     a = ap.parse_args(argv)
     sys.path[:0] = [str(a.harness.resolve()), str(HERE)]
     import arm as A
@@ -56,7 +92,10 @@ def main(argv: list[str]) -> int:
     for name in a.arms:
         arm = getattr(PA, name)()
         A.check_arm(arm, {"nvfp4", "mxfp4"})
-        emit({"arm": arm.name, "build": arm.build({})})
+        ctx = {"transcripts_dir": str(a.run_dir / "transcripts")} if a.run_dir else {}
+        build = arm.build(ctx)
+        v = A.check_verifier(arm.name, build) if hasattr(A, "check_verifier") else build["verifier"]
+        emit({"arm": arm.name, "build": build, "verifier_checked": hasattr(A, "check_verifier")})
         d = arm.d
         for spec in a.shapes:
             m, k, n = (int(v) for v in spec.split("x"))
@@ -93,6 +132,9 @@ def main(argv: list[str]) -> int:
             bad.free()
             d.free(ops.a.ptr)
             d.free(ops.b.ptr)
+            if a.run_dir:
+                r = verify(v, a.run_dir, a.run_id, a.commit, arm.name, shape.label)
+                emit({"arm": arm.name, "shape": shape.label, "ok": r["ok"], "verification": r})
     emit({"smoke": "pass" if ok else "FAIL"})
     return 0 if ok else 4
 
