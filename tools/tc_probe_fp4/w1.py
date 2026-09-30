@@ -1113,7 +1113,8 @@ def _fill_events(job: str) -> list[dict]:
     return events
 
 
-def fill_lease(child: list[str], owner: str, max_min: int, sub: Path, wait_min: int = 90, sleep=time.sleep) -> tuple[int, dict]:
+def fill_lease(child: list[str], owner: str, max_min: int, sub: Path, wait_min: int = 90, sleep=time.sleep,
+               job: str | None = None) -> tuple[int, dict]:
     """Run ``child`` as one GPU fill job of ``owner`` on the fill runner in FILL_DIR (``gpus=1 prio=10``, one chunk of at most
     ``max_min`` minutes, any GPU) and wait until the runner moves it to done/ or failed/.  The script is staged as a dotfile, which
     the runner skips, then renamed into queue/.  The runner leases the GPU (``gpu-lease 1 --preemptible``, which sets
@@ -1122,8 +1123,9 @@ def fill_lease(child: list[str], owner: str, max_min: int, sub: Path, wait_min: 
     and exits 0, because the runner retries any other exit once: a failed gate must fail this run, not be retried into a pass, and a
     preempted chunk must not be read as one.  A job still queued after ``wait_min`` minutes is
     withdrawn (exit 124).  Returns the child's exit status (the runner's if the child never finished), with the job's events; its
-    logs are copied into ``sub``."""
-    job = f"w1-{os.environ.get('RESEARCH_RUN_ID') or os.getpid()}.sh"
+    logs are copied into ``sub``.  ``job`` names the script (default ``w1-<run id>.sh``); a caller leasing more than once per run
+    passes a distinct name each time."""
+    job = job or f"w1-{os.environ.get('RESEARCH_RUN_ID') or os.getpid()}.sh"
     queue = FILL_DIR / "queue"
     stage = queue / f".{job}"
     sub.mkdir(parents=True, exist_ok=True)
