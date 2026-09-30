@@ -17,7 +17,9 @@ Chains (the sm_120 models of `verity.ml.tc`):
 
 Transforms, keyed after the registrant commits (a seed stands in for the beacon):
   none     the crafted codes as registered;
-  rot-rn   a randomized Hadamard R = D2 H D1 / sqrt(k) on the k side, then RN requantization per row (FP8: alpha =
+  rot-rn   the keyed rotation on the k side (--rotation: a randomized Hadamard R = D2 H D1 / sqrt(k), or rung 3's 8-block
+           Haar rotation, block8, with every crafted row confined to one block for block8-aligned; numpy for the blocks),
+           then RN requantization per row (FP8: alpha =
            448/max; NVFP4: UE4M3 block scales, E2M1 codes);
   rot-rn-shared  FP8 only: as rot-rn with one scale for the three rows, the registrant's best case (the relation holds
            in the reals before rounding);
@@ -150,6 +152,23 @@ def fwht(v: list[float]) -> list[float]:
     return v
 
 
+def block_rotation(k: int, seed: int, blocks: int = 8):
+    """Rung 3's block rotation (approved-weights.md §8j): a keyed partition of the k channels into `blocks` equal blocks, each
+    mixed by its own keyed Haar rotation onto keyed positions. Returns the map and block 0's channels (for the aligned
+    family, whose rows the registrant confines to one block). numpy, for the Haar matrices."""
+    import numpy as np
+    rng = np.random.default_rng([seed, k, blocks])
+    chans, pos, size = rng.permutation(k), rng.permutation(k), k // blocks
+    mats = [np.linalg.qr(rng.standard_normal((size, size)))[0] for _ in range(blocks)]
+
+    def rot(row):
+        r, out = np.asarray(row, dtype=np.float64), np.zeros(k)
+        for b in range(blocks):
+            out[pos[b * size:(b + 1) * size]] = r[chans[b * size:(b + 1) * size]] @ mats[b]
+        return out.tolist()
+    return rot, set(chans[:size].tolist())
+
+
 def rotation(k: int, seed: int):
     rng = random.Random(seed)
     d1 = [rng.choice((-1.0, 1.0)) for _ in range(k)]
@@ -270,6 +289,9 @@ def main() -> None:
     ap.add_argument("--output", default="")
     ap.add_argument("--out", default="", help="a directory: writes relation_attack.json there (the checkpoint) and exits 0")
     ap.add_argument("--neardup", action="store_true")
+    ap.add_argument("--rotation", choices=("hadamard", "block8", "block8-aligned"), default="hadamard",
+                    help="the transform's rotation: the randomized Hadamard, rung 3's 8-block Haar rotation, or the same with every "
+                         "crafted row confined to one block (the registrant knows the partition)")
     args = ap.parse_args()
     if args.out:
         Path(args.out).mkdir(parents=True, exist_ok=True)
@@ -277,16 +299,24 @@ def main() -> None:
         if Path(args.output).exists():
             write_result(Path(args.output))
             return
-    k, t0, out = args.k, time.time(), {"k": args.k, "activation_rows": args.rows, "cells": []}
+    k, t0, out = args.k, time.time(), {"k": args.k, "activation_rows": args.rows, "rotation": args.rotation, "cells": []}
     rng = random.Random(args.seed)
-    rot = rotation(k, args.seed + 1)
+    keep = None
+    if args.rotation == "hadamard":
+        rot = rotation(k, args.seed + 1)
+    else:
+        rot, block0 = block_rotation(k, args.seed + 1)
+        keep = block0 if args.rotation == "block8-aligned" else None
+
+    def confine(rows):
+        return rows if keep is None else [[v if i in keep else 0.0 for i, v in enumerate(r)] for r in rows]
 
     acts8 = {kind: [[e4m3_rn(v) for v in activation_row(k, rng, kind, 1.0, 448.0)] for _ in range(args.rows)]
              for kind in ("gauss", "flat")}
 
     def fp8_rows(width: int, transform: str, dup: bool) -> list[list[int]]:
-        base = (crafted_fp8_wide(k, random.Random(args.seed + 5)) if width == 0
-                else crafted_fp8(k, random.Random(args.seed + width), width))
+        base = confine(crafted_fp8_wide(k, random.Random(args.seed + 5)) if width == 0
+                       else crafted_fp8(k, random.Random(args.seed + width), width))
         if dup:
             base = [base[0], base[0][:], base[2]]
         if transform == "none":
@@ -346,7 +376,7 @@ def main() -> None:
     for family, (cs, sc) in (("E2M1 magnitudes 0.5, 1", crafted_fp4(k, random.Random(args.seed + 3))),
                              ("every E2M1 pair with an E2M1 sum or difference", crafted_fp4_wide(k, random.Random(args.seed + 11)))):
       c1, c2, c3 = cs
-      master = [nvfp4_vals(c, sc) for c in (c1, c2, c3)]
+      master = confine([nvfp4_vals(c, sc) for c in (c1, c2, c3)])
       for transform in ("none", "rot-rn", "rot-sr"):
         if transform == "none":
             rows = [(c, sc) for c in (c1, c2, c3)]
@@ -368,7 +398,7 @@ def main() -> None:
             print(json.dumps(out["cells"][-1]), f"{time.time() - t0:.0f}s", flush=True)
 
     if args.neardup:
-        base = crafted_fp8_wide(k, random.Random(args.seed + 21))[0]
+        base = confine([crafted_fp8_wide(k, random.Random(args.seed + 21))[0]])[0]
         for d in (8, 15, 24):
             nrng = random.Random(args.seed + 100 + d)
             r2 = base[:]
@@ -377,6 +407,7 @@ def main() -> None:
                     c = e4m3_rn(r2[t])
                     step = e4m3_val((c & 0x80) | min((c & 0x7F) + 1, 0x7E)) - e4m3_val(c)
                     r2[t] = r2[t] + step
+            r2 = confine([r2])[0]
             for transform in ("none", "rot-rn"):
                 if transform == "none":
                     b1, b2 = [e4m3_rn(v) for v in base], [e4m3_rn(v) for v in r2]
