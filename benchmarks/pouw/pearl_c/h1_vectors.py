@@ -96,11 +96,23 @@ def blk_case() -> dict:
     return {"rb": rb, "key": key.hex(), "levels": [k.hex() for k in levels], "roots": roots}
 
 
+def decode_domains() -> dict:
+    """The decode chain's two frame-b3 domains (A's 32 rows and the 128 tiles' tree), so that h1_bench's kernels hash under
+    domain ids the verifier (verify_h1.py) rebuilds from the same binding and owner."""
+    out = {}
+    for name, tag, count in (("a", b"h1_bench decode A rows", M), ("t", b"h1_bench decode tiles", 128)):
+        binding = hashlib.sha256(tag).digest()
+        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash="blake3")
+        out[name] = {"binding": binding.hex(), "owner": 0, "count": count, "domain": d.domain_id.hex()}
+    return out
+
+
 def main() -> None:
     out = {"source": "frame-b3 (verity.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
-           "tiles": {"m32": tile_case(M)}, "blk": blk_case()}
+           "tiles": {"m32": tile_case(M)}, "blk": blk_case(),
+           "decode": decode_domains()}
     Path(sys.argv[1]).write_text(json.dumps(out))
     print(f"{len(out['rows']['cases'])} row cases, {len(out['trees'])} trees, {len(out['tiles'])} tile case(s) -> {sys.argv[1]}")
 

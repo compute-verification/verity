@@ -156,3 +156,55 @@ def test_rows_and_tree_in_one_launch_are_merkle_trees(m, rb):
     root = MerkleTree(d, {r: rows[r * rb:(r + 1) * rb] for r in range(m)}, lambda _: ROW).commitment.root
     assert tree.raw[32 * (2 * width - 2):32 * (2 * width - 1)] == root
     assert counter.raw[:4] == bytes(4)
+
+
+def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_byte(tmp_path):
+    """verify_h1.py on a transcript made from the reference itself (A's frame-b3 tree, Pearl-C's h1 digests and leaves, the
+    tile tree) accepts it, and rejects it with one byte flipped in A's rows, A's tree, C~, the digests or the tile tree."""
+    import json as J
+    import subprocess
+
+    from verity.commitments.merkle import tree_levels
+    m, rb, n = 32, 256, 128
+    rows = data("verify rows", m * rb)
+    c, u = data("verify c", 4 * m * n), data("verify u", 4 * m * n)
+    doms = {}
+    for name, count in (("a", m), ("t", -(-m // 64) * (n // 64))):
+        binding = hashlib.sha256(f"verify {name}".encode()).digest()
+        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash="blake3")
+        doms[name] = {"binding": binding.hex(), "owner": 0, "count": count, "domain": d.domain_id.hex(), "d": d}
+    da, dt = doms["a"].pop("d"), doms["t"].pop("d")
+    a_levels = tree_levels(da, [da.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])
+    dg, ref = digests(m, n)
+    dgs = b"".join(keyed(H1_KEYS["message"], c[4 * (r * n + 32 * h):4 * (r * n + 32 * h + 32)] + u[4 * (r * n + 32 * h):4 * (r * n + 32 * h + 32)])
+                   for r in range(m) for h in range(n // 32))
+    per = n // 32
+    leaves = [keyed(H1_KEYS["leaf"], b"".join(dgs[32 * (r * per + 2 * tj + h):32 * (r * per + 2 * tj + h + 1)] for r in range(m) for h in range(2)))
+              for tj in range(n // 64)]
+    t_levels = tree_levels(dt, [dt.leaf(t, t, TILE, v) for t, v in enumerate(leaves)])
+    parts = [("a_rows", rows), ("a_tree", b"".join(b"".join(lv) for lv in a_levels)), ("c", c), ("u", u), ("digests", dgs),
+             ("leaves", b"".join(leaves)), ("tile_tree", b"".join(b"".join(lv) for lv in t_levels))]
+
+    def write(parts_, path):
+        head = {"run": "test", "arm": "reference", "m": m, "rb": rb, "n": n, "a": doms["a"], "t": doms["t"],
+                "sections": [[k, len(v)] for k, v in parts_]}
+        path.write_bytes(J.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts_))
+
+    def run(path) -> subprocess.CompletedProcess:
+        env = {"PYTHONPATH": f"{Path(__file__).parents[3] / 'packages/verity/src'}:{Path(__file__).parents[3] / 'protocols/pouw'}",
+               "PATH": "/usr/bin:/bin"}
+        return subprocess.run([sys.executable, str(HERE / "verify_h1.py"), "test", str(path)], capture_output=True, text=True, env=env)
+
+    good = tmp_path / "good.bin"
+    write(parts, good)
+    r = run(good)
+    assert r.returncode == 0 and r.stdout.startswith("h1 verifier accept: test:") and "tile root" in r.stdout, r.stdout + r.stderr
+    for i, (name, _v) in enumerate(parts):
+        bad = list(parts)
+        v = bytearray(bad[i][1])
+        v[len(v) // 2] ^= 1
+        bad[i] = (name, bytes(v))
+        path = tmp_path / f"bad-{name}.bin"
+        write(bad, path)
+        r = run(path)
+        assert r.returncode == 1 and r.stdout.startswith("h1 verifier reject:"), (name, r.stdout, r.stderr)

@@ -14,6 +14,9 @@ against `cuDeviceGetUuid`); NVML reads that UUID's clocks.
 - the tile hashing at m = 32, n = 8,192 (decode's partial 32 x 64 tiles), as pushed (`hash_msg`, `hash_leaf`) and tuned
   (`hash_msg_v`, `hash_leaf_p`), with the tile tree both ways (level keys, then `hash_nodes` or `hash_tree_small`).
 
+**Transcripts** (`--transcripts DIR`): after timing, each decode arm on -h1's format is replayed once, and its last call's A
+rows, A's tree, C~, U, digests, tile leaves and tile tree go into DIR/<arm>.bin for `verify_h1.py`, the reference verifier.
+
 **Cost per byte**: each form at prefill size (m = 8,192), a read-only L2 flush before each rep, bytes hashed over the median
 time, per SM per SM clock too.
 
@@ -379,12 +382,20 @@ def latency(d: Bench) -> dict:
     return out
 
 
-def decode(d: Bench, reps: int) -> dict:
+#: the decode arms whose last call's output verify_h1.py checks (every arm on -h1's format; the block layout is not)
+VERIFY = [name for name, _rb, amode, _post in ARMS if amode != "blk" and not name.startswith("plain")]
+
+
+def slug(name: str) -> str:
+    return "".join(ch if ch.isalnum() else "-" for ch in name).strip("-").replace("--", "-")
+
+
+def decode(d: Bench, reps: int, V: dict, tdir: str | None) -> dict:
     """Per call of the dependent chain at m = 32, n = k = 8,192, each arm replayed as one graph of CALLS calls."""
     n, k, m = N, K, M
     depth = max(0, (m - 1).bit_length())
     keys = {kk: d.put(bytes.fromhex(R.H1_KEYS[kk])) for kk in ("k_msg", "k_leaf")}
-    dom_a, dom_t = d.put(shake("dom a", 32)), d.put(shake("dom t", 32))
+    dom_a, dom_t = d.put(bytes.fromhex(V["decode"]["a"]["domain"])), d.put(bytes.fromhex(V["decode"]["t"]["domain"]))
     blk_key, blk_levels = d.put(shake("blk key", 32)), d.put(shake("blk levels", 32 * 9))
     w = [d.put(shake(f"weights {s}", n * k)) for s in range(WSETS)]
     y = d.alloc(2 * m * n)
@@ -469,6 +480,26 @@ def decode(d: Bench, reps: int) -> dict:
     for name, rb, amode, post in ARMS:
         ms = raw[name]
         out[name] = {"rows_bytes": rb, "a": amode, "post": post, "per_call_us": statistics.median(ms) * 1e3 / CALLS, "raw_ms": ms}
+    if tdir:                                                 # each verified arm once more; its last call's output, for the verifier
+        os.makedirs(tdir, exist_ok=True)
+        run = os.path.basename(os.environ.get("RESEARCH_RUN_DIR", "").rstrip("/")) or "local"
+        sl = slots[(CALLS - 1) % 2]
+        per, tiles = n // 32, (-(-m // 64)) * (n // 64)
+        for name, rb, amode, post in ARMS:
+            if name not in VERIFY:
+                continue
+            d.replay_ms(graphs[name], 1)
+            d.sync()
+            parts = [("a_rows", d.read(rows[rb], m * rb)), ("a_tree", d.read(a_tree, 32 * (2 * m - 1)))]
+            if post != "none":
+                parts += [("c", d.read(sl["c"], 4 * m * n)), ("u", d.read(sl["u"], 4 * m * n)), ("digests", d.read(sl["dg"], 32 * m * per)),
+                          ("leaves", d.read(sl["lv"], 32 * tiles)), ("tile_tree", d.read(sl["tree"], 32 * (2 * tiles - 1)))]
+            head = {"run": run, "arm": name, "m": m, "rb": rb, "n": n, "a": V["decode"]["a"], "t": V["decode"]["t"],
+                    "sections": [[k, len(v)] for k, v in parts]}
+            blob = json.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts)
+            path = os.path.join(tdir, slug(name) + ".bin")
+            open(path, "wb").write(blob)
+            out[name]["transcript"] = {"path": path, "sha256": hashlib.sha256(blob).hexdigest()}
     for name, r in out.items():
         if isinstance(r, dict) and "per_call_us" in r:
             plain = out[f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"]["per_call_us"]
@@ -484,6 +515,7 @@ def main() -> None:
     ap.add_argument("--vectors", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--reps", type=int, default=20)
+    ap.add_argument("--transcripts", help="a directory for the verified decode arms' transcripts (verify_h1.py)")
     args = ap.parse_args()
     cubin, standin = open(args.cubin, "rb").read(), open(args.standin, "rb").read()
     d = Bench(cubin, standin)
@@ -507,7 +539,7 @@ def main() -> None:
     save()
     res["latency"] = latency(d)
     save()
-    res["decode"] = decode(d, args.reps)
+    res["decode"] = decode(d, args.reps, V, args.transcripts)
     res["clocks_after"] = nv.read()
     save()
     for name, r in res["decode"].items():
