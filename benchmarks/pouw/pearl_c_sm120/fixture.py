@@ -11,7 +11,8 @@ with these bytes before it times anything.
   uv run python benchmarks/pouw/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
 Writes OUT_DIR/check.json (the shape, keys, and per buffer its file, dtype and SHA-256) and the buffers as raw little-endian
-files: `common` (lines, inputs, forming, the plain and adopted baselines, row commitments) and per variant (`sm120`,
+files: `common` (lines, inputs, forming, the plain and adopted baselines, row commitments, and seed_A with its line and
+jackpot keys from -h1's A root) and per variant (`sm120`,
 `sm120-unpromoted`) the chains and everything after them.
 """
 
@@ -72,6 +73,13 @@ def row_commits(rows: list[bytes], segment: int) -> list[bytes]:
     return [turboshake128(r[s:s + segment], D_ROWS, 32) for r in rows for s in range(0, len(r), segment)]
 
 
+def seed_a_keys(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
+    """seed_a's output: seed_A from A's tree root (the scheme's derivation; a context's own root_a is a stand-in), then E_A's
+    line key and the jackpot key from it."""
+    seed = C._labelled(salt + root_a + root_b + index.to_bytes(8, "little"), "seed-A")
+    return seed + P._line_key(seed) + P.subkey("jackpot", seed)
+
+
 def rowmajor(x: np.ndarray) -> bytes:
     """pearl_c_sm120.cu's layout of a (rows, depth) byte matrix: row-major, depth contiguous (the layout function that
     replaces the H100's `tiled`)."""
@@ -119,7 +127,9 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
                 "keys": {"line_a": P._line_key(noise.seed_a).hex(), "line_b": P._line_key(noise.seed_b).hex(),
                          "jackpot": P.subkey("jackpot", noise.seed_a).hex(), "dom_a": H.a_domain(ctx).domain_id.hex(),
                          "dom_t": H.t_domain(ctx, tiles).domain_id.hex(), "k_msg": C.H1_KEYS["message"].hex(),
-                         "k_leaf": C.H1_KEYS["leaf"].hex()},
+                         "k_leaf": C.H1_KEYS["leaf"].hex(), "k_seed": C.blake3(C.LABELS["seed-A"]).hex(),
+                         "salt": ctx.salt.hex(), "root_b": ctx.root_b.hex()},
+                "index": ctx.matmul.index,
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex()}, "variants": {}}
     o = H.Out(out_dir)
     lines = {name: np.array([P.sample_line(seed, side, 0, t) for t in range(count)], np.uint8)
@@ -151,7 +161,9 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     o.put("at", rowmajor(at), "u8")
     o.put("bt", rowmajor(bt), "u8")
     o.put("rows", row_commits(ra, F32_SEGMENT), "u8")
-    o.put("tree_a_h1", H.tree_bytes(H.a_domain(ctx), ra, ROW_SCHEMA), "u8")
+    tree_a = H.tree_bytes(H.a_domain(ctx), ra, ROW_SCHEMA)
+    o.put("tree_a_h1", tree_a, "u8")
+    o.put("seed_h1", seed_a_keys(ctx.salt, tree_a[-32:], ctx.root_b, ctx.matmul.index), "u8")
     fa_vals = np.frombuffer(b"".join(ra), "<f4").reshape(m, k)
     fb_vals = np.frombuffer(b"".join(rb), "<f4").reshape(n, k)
     qa, sa = H.plain(fa_vals)

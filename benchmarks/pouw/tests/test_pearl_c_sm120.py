@@ -219,13 +219,14 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
-HASH_SOURCE = (H100_DIR / "hash.cuh").read_text()
+HASH_SOURCE = (H100_DIR / "hash.cuh").read_text() + (H100_DIR / "hash_sm120.cuh").read_text()
 
 
 def kernel_names() -> list[str]:
-    """Every kernel run.py launches: pearl_c_sm120.cu's, and hash.cuh's but its tickets (dropped from pearl-c-sm120)."""
+    """Every kernel run.py launches: pearl_c_sm120.cu's, and hash.cuh's and hash_sm120.cuh's but the tickets (dropped from
+    pearl-c-sm120) and hash_rows (hash_rows_w's pushed form)."""
     entry = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
-    plain = set(re.findall(entry, SOURCE)) - {"NAME"} | set(re.findall(entry, HASH_SOURCE)) - {"tickets"}
+    plain = set(re.findall(entry, SOURCE)) - {"NAME"} | set(re.findall(entry, HASH_SOURCE)) - {"tickets", "hash_rows"}
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
@@ -270,12 +271,16 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 32 * i[0], 2: 128 * i[0], 3: 128 * i[0]}
     if name == "pb":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 32 * 32 * 4, 4: 128 * i[0]}
-    if name == "hash_msg":
+    if name in ("hash_msg", "hash_msg_v"):
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], **({3: 32} if p[3] else {})}
-    if name == "hash_leaf":
+    if name in ("hash_leaf", "hash_leaf_p"):
         return {0: i[0] * i[1], 1: -(-i[0] // 64) * (i[1] // 64) * 32, **({2: 32} if p[2] else {})}
-    if name == "hash_rows":
+    if name in ("hash_rows", "hash_rows_w"):
         return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
+    if name == "hash_tree_small":
+        return {0: 32 * (2 * i[0] - 1), 1: 32 * (i[0].bit_length() - 1)}
+    if name == "seed_a":
+        return {0: 96, 1: 32, 2: 32, 3: 32, 4: 32}
     if name == "hash_pad":
         return {0: 32 * i[1], 1: 32}
     if name == "hash_node_keys":
@@ -305,7 +310,9 @@ def threads(name: str, i: list[int]) -> int:
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32, "hash_leaf": lambda: -(-i[0] // 64) * (i[1] // 64),
             "hash_rows": lambda: 256 * i[0], "hash_pad": lambda: i[1] - i[0], "hash_nodes": lambda: i[1],
-            "hash_tree_leaves": lambda: i[0],
+            "hash_tree_leaves": lambda: i[0], "hash_msg_v": lambda: i[0] * i[1] // 32,
+            "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64), "hash_rows_w": lambda: 32 * i[0],
+            "hash_tree_small": lambda: i[0] // 2, "seed_a": lambda: 1,
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "quant_s5": lambda: i[0] * i[1] // 16, "hash_rows_f32": lambda: i[0] * (i[1] // 1024)}.get(name, lambda: 0)()
@@ -420,6 +427,12 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
             assert g[0] <= min(188, (i[0] // tm) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % tm == 0 and i[1] % bn == 0
         if name in ("words", "words_u"):
             assert g[0] == i[0] // 16 and ev["block"] == 128
+        if name == "hash_rows_w":
+            assert ev["smem"] >= ev["block"] // 32 * 4 * 8 * -(-(64 + i[1]) // 1024)
+        if name == "hash_tree_small":
+            assert g[0] == 1 and ev["block"] <= 1024 and i[0] <= 2 * ev["block"] and i[0] & (i[0] - 1) == 0
+        if name == "hash_leaf_p":
+            assert ev["block"] == 128
 
 
 # ---- the bench arm (pearlc_arm.py) against the harness's arm interface v0 ---------------------------------------------------
@@ -551,8 +564,10 @@ def test_arm_h1_domains_count_the_matmuls_rows(A):
         tw = A.W.Shape("x", m, 128, 1024)
         assert (a.domain_id == A.W.a_domain(tw, sd).domain_id) == same and (t.domain_id == A.W.t_domain(tw, sd).domain_id) == same
         keys = arm.keys(shape, sd)
-        assert keys == {**A.W.keys(tw, sd), "dom_a": a.domain_id.hex(), "dom_t": t.domain_id.hex()}
+        assert keys == {**A.W.keys(tw, sd), "dom_a": a.domain_id.hex(), "dom_t": t.domain_id.hex(), "k_seed": A.R.SEED_A_KEY,
+                        "salt": sd["salt"].hex(), "root_b": sd["root_b"].hex()}
         assert keys["k_msg"] == A.R.H1_KEYS["k_msg"] and keys["k_leaf"] == A.R.H1_KEYS["k_leaf"]
+    assert A.R.SEED_A_KEY == A.C.blake3(A.C.LABELS["seed-A"]).hex()
 
 
 def driver(A, ship: Path, arm_dir: Path, log: Path, cls: str, *args: str) -> list[dict]:
@@ -590,10 +605,11 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     sx, h1 = "" if arm.device.g else "_u", arm.hashing == "h1"
     for g in rows[:-1]:
         assert not g["ok"] and set(g["checked"].values()) == {"all"}
-        hashed = ({"leaves", "tree_t", "tree_a"} if h1 else {"leaves", "rows"}) if g["role"] == "hash" else set()
+        hashed = ({"leaves", "tree_t", "tree_a", "seed"} if h1 else {"leaves", "rows"}) if g["role"] == "hash" else set()
         assert set(g["checked"]) == ({"y"} | hashed | ({"digests"} if hashed else set()) if g["shape"] == "pre" else
                                      {"y", "c", "u"} | hashed)
         assert all(t["failed"] for t in g["detail"]["twin_tiles"])
+        assert (g["detail"]["seed_a"] == {"ok": False}) == (h1 and g["role"] == "hash")
     assert rows[-1]["live"] == []
 
     # prefill's m = 256 takes 128 x 128 tiles, so its chain is fused (gemm_pearlc_h, -h1's gemm_pearlc_b, or gemm_pearlc_s
@@ -604,16 +620,19 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
                                    "pa", chain(shape, role)]
 
     def tree(count: int) -> list[str]:
-        return ((["hash_pad"] if A.R.pow2(count) > count else []) +
-                (["hash_node_keys"] + ["hash_nodes"] * A.R.depth(count) if count > 1 else []))
+        levels = ["hash_tree_small"] if A.R.pow2(count) <= A.R.TREE_SMALL else ["hash_nodes"] * A.R.depth(count)
+        return (["hash_pad"] if A.R.pow2(count) > count else []) + (["hash_node_keys"] + levels if count > 1 else [])
+
+    def commit_a(shape: str) -> list[str]:
+        """A's commitment, before E_A's lines: seed_A (which keys them) is derived from its root."""
+        return ["hash_rows_w", *tree({"pre": 256, "dec": 32}[shape]), "seed_a"] if h1 else ["hash_rows_f32"]
 
     def hashes(shape: str) -> list[str]:
-        m = {"pre": 256, "dec": 32}[shape]
-        tiles = -(-m // 64) * (128 // 64)
+        """The product's hashes, after the chain."""
+        tiles = -(-{"pre": 256, "dec": 32}[shape] // 64) * (128 // 64)
         if not h1:
-            return (["hash_leaf"] if shape == "pre" else ["hash_msg", "hash_leaf"]) + ["hash_rows_f32"]
-        rows, tile_tree = ["hash_rows", *tree(m)], ["hash_tree_leaves", *tree(tiles)]
-        return ["hash_leaf", *tile_tree, *rows] if shape == "pre" else [*rows, "hash_msg", "hash_leaf", *tile_tree]
+            return ["hash_leaf"] if shape == "pre" else ["hash_msg", "hash_leaf"]
+        return (["hash_leaf_p"] if shape == "pre" else ["hash_msg_v", "hash_leaf_p"]) + ["hash_tree_leaves", *tree(tiles)]
     got, allocs = windows(log)
     assert not allocs
     stream = next(ev["ptr"] for ev in map(json.loads, log.read_text().splitlines()) if ev["op"] == "stream")
@@ -637,14 +656,21 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
             assert [ev for p in ("before", "gemm", "after") for ev in parts[p]] == whole, mark
             assert [ev["name"] for ev in parts["gemm"]] == [chain(mark["shape"], mark["role"])]
             assert [ev["name"] for ev in parts["after"]] == (hashes(mark["shape"]) if mark["role"] == "hash" else [])
+            head = copy + (commit_a(mark["shape"]) + ["lines"] if mark["role"] == "hash" else ["stats_s5"])
+            assert [ev.get("name", "copy") for ev in parts["before"]][:len(head)] == head
             continue
         launched[(mark["shape"], mark["role"], mark["set"])] = evs
-        f, h = forming(mark["shape"], mark["role"]), hashes(mark["shape"])
-        want = {"hash": copy + ["lines"] + f + h, "nohash": copy + f,
-                "known_bad": copy + ["lines"] + f + ["xor_byte"] + h}[mark["role"]]
+        f, h, first = forming(mark["shape"], mark["role"]), hashes(mark["shape"]), commit_a(mark["shape"])
+        want = {"hash": copy + first + ["lines"] + f + h, "nohash": copy + f,
+                "known_bad": copy + first + ["lines"] + f + ["xor_byte"] + h}[mark["role"]]
         assert names == want, mark
+        if h1 and mark["role"] != "nohash":
+            seed = evs[len(copy) + len(first) - 1]
+            tree_a = next(ev for ev in evs if ev.get("name") == "hash_rows_w")["p"][1]
+            assert seed["p"][3] == tree_a + 32 * (2 * A.R.pow2({"pre": 256, "dec": 32}[mark["shape"]]) - 2)
+            assert seed["p"][1:5:3] == [mark["keys"]["k_seed"], mark["keys"]["root_b"]] and seed["p"][2] == mark["keys"]["salt"]
         if mark["role"] != "nohash":
-            lines = evs[len(copy)]
+            lines = evs[len(copy) + len(first)]
             assert lines["p"][0] == mark["keys"]["line_a"] and lines["i"][2] == A.padded({"pre": 256, "dec": 32}[mark["shape"]])
             assert next(ev for ev in evs if ev.get("name") == "eprime")["p"][0] == lines["p"][1]
         e = next(ev for ev in evs if ev.get("name") == "eprime")["p"][0]
@@ -664,10 +690,11 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     128 x 128 tiles the call is fused, and one message digest's byte flipped in the last sampled tile fails it twice over,
     against the second launch (unfused, hash_msg over gemm_pearlc's C̃ and U) and against the twin."""
     first, flipped = driver(A, ship, arm_dir, tmp_path / "accept.jsonl", cls, "accept", str(small_fixture / "check.json"))
-    hashed = ("leaves", "tree_t", "tree_a") if cls.endswith("H1") else ("leaves", "rows")
+    hashed = ("leaves", "tree_t", "tree_a", "seed") if cls.endswith("H1") else ("leaves", "rows")
     assert first["ok"] and first["checked"] == {name: "all" for name in (*hashed, "digests", "y")}, first
     assert not any(first["detail"]["words_differing_from_relaunch"].values())
     assert len(first["detail"]["twin_tiles"]) == 3 and not any(t["failed"] for t in first["detail"]["twin_tiles"])
+    assert first["detail"]["seed_a"] == ({"ok": True} if cls.endswith("H1") else None)
     assert not flipped["ok"] and flipped["flipped"][0] == "digests"
     diff = flipped["detail"]["words_differing_from_relaunch"]
     assert diff["digests"] == sum(diff.values()) == 1

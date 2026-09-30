@@ -4,14 +4,16 @@ kernels as the honest prover on the harness's FP32 operands, on the device recor
 each under hashing h0 or -h1 (`PearlCSm120H1`, `PearlCSm120UnpromotedH1`: pearl-c-sm120-v1-h1, BLAKE3 throughout).
 
 Per operand set, `weight_side` is the per-(weight, epoch) work: E_B's, F_A's and F_B's lines, B's statistics, E′ and forming,
-B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 64, A's rows into a zero-padded buffer; E_A's lines; A's
-statistics, E′ and forming; A′·F_B and P_A; the chain with its peel and y; then every hash (the C̃ and U messages, the tile
-leaves, A's row commitments; Pearl's tickets are not part of `pearl-c-sm120`, since no PoUW check reads them).  On 128 x 128
+B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 64, A's rows into a zero-padded buffer; A's row commitments
+(under -h1 its tree and seed_A from the root, since seed_A keys E_A); E_A's lines; A's statistics, E′ and forming; A′·F_B and
+P_A; the chain with its peel and y; then the other hashes (the C̃ and U messages, the tile leaves, -h1's tile tree; Pearl's
+tickets are not part of `pearl-c-sm120`, since no PoUW check reads them).  On 128 x 128
 tiles (m a multiple of 128) the messages are GPU 2's fused epilogue: gemm_pearlc_h digests C̃ and U from registers and stores
 neither, only y and the digests.  `nohash` is the same call without the hashes and without E_A's XOF (its lines come from
 `prepare`), so it writes the same y (and C̃ and U where unfused; fused, gemm_pearlc_s stores only y).
-`phases` is the same call in three parts for the harness's dependent chain: `before` (A's padding copy, E_A's lines, A's
-statistics, E′ and forming, A′·F_B, P_A), `gemm` (the chain with its peel and y) and `after` (the hashes), which the chain may
+`phases` is the same call in three parts for the harness's dependent chain: `before` (A's padding copy, A's commitment and
+seed_A, E_A's lines, A's statistics, E′ and forming, A′·F_B, P_A), `gemm` (the chain with its peel and y) and `after` (the
+hashes of the product: messages unless fused, tile leaves, the tile tree), which the chain may
 run on a side stream beside the next call.  So each operand set has its own call buffers, as well as its keys, E_A's lines
 and weight side (its flag sets share them: the harness runs one call of a set at a time, and its side stream never lets a
 call reuse its set before that set's previous hashes are done); the gate's second launch has per-shape buffers.
@@ -23,15 +25,18 @@ codes and α, C̃, U (fused: their message digests), y and, with hashing, the le
 CPU twin (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the harness's operand rows.  `known_bad` flips C̃'s
 first word (fused: the first digest's) between the product and the hashes.
 
-Under -h1 the hashes are #449's hash.cuh (hash_sm120a.cubin, `b3:<name>`) and, fused, gemm_pearlc_b's keyed BLAKE3 digests:
+Under -h1 the hashes are #449's hash.cuh through hash_sm120.cuh's sm_120 entry points (hash_sm120a.cubin, `b3:<name>`), seed_a
+(pearl_c_sm120.cu), and, fused, gemm_pearlc_b's keyed BLAKE3 digests:
 A's rows as the frame-b3 tree -h1's verifier checks, the keyed digests and tile leaves, and the tile tree, all over the
 matmul's m rows (the scheme's partial last row tile at decode), so A's domain and the tile tree's count m, not the twin's
-128-row padding (`domains`); the twin's tiles are checked on their real rows, and on row r0's leaf in A's tree.
+128-row padding (`domains`); the twin's tiles are checked on their real rows, and on row r0's leaf in A's tree, and seed_a's
+seed_A, line and jackpot keys against the scheme's derivation from the call's root of A's tree.
 
 Shortcuts, flagged: at 64 x 64 tiles the hashing is #449's device code, unfused (the digests read C̃ and U back from memory);
 under h0, A's rows are committed as #449's TurboSHAKE128 1 KiB segments, not the protocol's SHA-256 whole-row leaves; m is
 padded to 64 rows (decode's m = 32 issues 2x its tensor work on 64 x 64 tiles, and `work` counts issued MACs); the prices and
-G are the H100's stand-ins, so W_ref, the credit and γ are Derived at stand-in prices.
+G are the H100's stand-ins, so W_ref, the credit and γ are Derived at stand-in prices; under -h1, E_A's lines are keyed from
+the arm's stand-in seed_A (the twin's), not seed_a's, which is derived and gated in its place in the call but not read.
 
   python bench.py --arm-path <this directory> --arm pearlc_arm:PearlCSm120 [--arm pearlc_arm:PearlCSm120H1] ...
 
@@ -82,11 +87,11 @@ CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "
 #: per hashing format, each hashed output and the pipeline's buffers it is: unfused (the second launch's too), then fused
 HASHED = {"h0": {"digests": ("digests", "digests_h"), "leaves": ("leaves", "leaves_h"), "rows": ("rows",)},
           "h1": {"digests": ("digests_h1", "digests_h"), "leaves": ("leaves_h1", "leaves_h"), "tree_t": ("tree_t_h1", "tree_t_h"),
-                 "tree_a": ("tree_a_h1",)}}
-#: the fused call's hashes after the chain (Pipeline.fused_call's)
-TAIL = {"h0": ("hash_leaf_h", "hash_rows"), "h1": ("hash_leaf_h", "tree_t_h", "hash_rows", "tree_a")}
+                 "tree_a": ("tree_a_h1",), "seed": ("seed_h1",)}}
+#: the fused call's hashes after the chain (Pipeline.fused_call's); A's commitment (R.A_FIRST) comes before forming
+TAIL = {"h0": ("hash_leaf_h",), "h1": ("hash_leaf_h", "tree_t_h")}
 LEVEL_KEYS = {"h0": (), "h1": ("keys_a", "keys_t")}
-KEYS = ("line_a", "line_b", "jackpot", "dom_a", "dom_t", "k_msg", "k_leaf")
+KEYS = ("line_a", "line_b", "jackpot", "dom_a", "dom_t", "k_msg", "k_leaf", "k_seed", "salt", "root_b")
 REF_GRID = 3
 GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and the debit cap ρ (statement parameters, cheap-binding.md §1)
 
@@ -210,11 +215,12 @@ class _Call:
         self.xa = w.get("xa", ops.a.ptr)
         t = tiles(shape)
         self.size = {**size, "rows": shape.m * (4 * k // SEGMENT) * 32, **({"digests": shape.m * n, "leaves": 32 * t,
-                     "tree_t": (2 * R.pow2(t) - 1) * 32, "tree_a": (2 * R.pow2(shape.m) - 1) * 32} if fmt == "h1" else {})}
+                     "tree_t": (2 * R.pow2(t) - 1) * 32, "tree_a": (2 * R.pow2(shape.m) - 1) * 32, "seed": 96}
+                     if fmt == "h1" else {})}
         self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr,
                                bufs={**{b: w[b] for b in OWN + CALL + LEVEL_KEYS[fmt]},
                                      **{p: w[o] for o, ps in hashed.items() for p in ps}},
-                               m_real=shape.m)
+                               m_real=shape.m, index=arm.index)
         self.fused = self.pipe.bm == R.BM
         steps = self.pipe.steps()
         by = {name: f for name, _, f in steps}
@@ -222,15 +228,16 @@ class _Call:
         lines_ea = [by["lines_ea"]]
         forming = [f for name, phase, f in steps if phase == "forming" and name != "lines_ea"]
         cleanup = [f for name, phase, f in steps if phase == "cleanup" and name != "gemm_pearlc"]
+        commit_a = [by[x] for x in R.A_FIRST[fmt]] if self.hashing else []
         if self.fused:
             chain = [by[self.pipe.fused_gemm if self.hashing else "gemm_pearlc_s"]]
             hashes = [by[x] for x in TAIL[fmt]]
         else:
             chain = [by["gemm_pearlc"]]
-            hashes = [f for _, phase, f in steps if phase == "hashing"]
+            hashes = [f for name, phase, f in steps if phase == "hashing" and name not in R.A_FIRST[fmt]]
         copy = [lambda: rd.copy_async(self.xa, ops.a.ptr, 4 * shape.m * k)] if self.xa != ops.a.ptr else []
         flip = [lambda: hdev.xor_byte(w["digests" if self.fused else "c"], 0, 0x01, rd.stream)] if corrupt else []
-        self.parts = {"before": copy + (lines_ea if self.xof else []) + forming + cleanup, "gemm": chain,
+        self.parts = {"before": copy + commit_a + (lines_ea if self.xof else []) + forming + cleanup, "gemm": chain,
                       "after": flip + (hashes if self.hashing else [])}
         self.phases = {name: (lambda stream, fs=fs: self.enqueue(fs, stream)) for name, fs in self.parts.items()}
         stored = tuple(o for o in hashed if o != "digests") if self.hashing else ()
@@ -272,7 +279,8 @@ class _Call:
         fused call's digests are held to hash_msg's over gemm_pearlc's stored C̃ and U."""
         rd, s, hashed = self.arm.rd, self.scratch.b, HASHED[self.arm.hashing]
         ref = R.Pipeline(rd, self.m, self.n, self.k, self.arm.variant, self.keys, self.xa, self.ops.b.ptr,
-                         bufs={**self.pipe.b, **{b: s["ref_" + b] for b in self.arm.ref}}, m_real=self.shape.m)
+                         bufs={**self.pipe.b, **{b: s["ref_" + b] for b in self.arm.ref}}, m_real=self.shape.m,
+                         index=self.arm.index)
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
         steps = ref.steps()
@@ -318,6 +326,15 @@ class _Call:
                 out["digests"] = b"".join(get(w["digests"] + i * n + c0, 2 * 32) for i in rows)
         return out
 
+    def seed_check(self) -> dict | None:
+        """-h1's seed_A and its keys against the scheme's derivation from the salt, the call's root of A's tree and B's root."""
+        if self.arm.hashing != "h1" or not self.hashing:
+            return None
+        get, w, sd = self.arm.rd.read, self.own.b, self.own.sd
+        want = F.seed_a_keys(sd["salt"], get(w["tree_a"] + 32 * (2 * R.pow2(self.shape.m) - 2), 32), sd["root_b"],
+                             self.arm.index)
+        return {"ok": get(w["seed"], 96) == want}
+
     def twin_tiles(self) -> list[dict]:
         sh, wt = self.shape, self.own
         tshape = W.Shape(sh.label, sh.m, sh.n, sh.k)
@@ -343,6 +360,7 @@ class PearlCSm120:
     flag_sets = {"hash": frozenset({"hash", "xof"}), "nohash": frozenset()}
     variant = "sm120"
     panel = {"line": "pearl-c-sm120", "version": "v1"}
+    index = 0                              # the matmul's, as `domains` binds it: the one unit of a one-matmul epoch
 
     def __init__(self):
         base, self.hashing = R.hashing_of(self.variant)
@@ -363,7 +381,7 @@ class PearlCSm120:
         """The kernels' keys: the twin's, with the domain ids of `domains`."""
         a, t = self.domains(shape, sd)
         return {**W.keys(W.Shape(shape.label, shape.m, shape.n, shape.k), sd), "dom_a": a.domain_id.hex(),
-                "dom_t": t.domain_id.hex()}
+                "dom_t": t.domain_id.hex(), "k_seed": R.SEED_A_KEY, "salt": sd["salt"].hex(), "root_b": sd["root_b"].hex()}
 
     def acquire(self, table: dict, key, sizes) -> tuple[_Shared, bool]:
         fresh = key not in table
@@ -397,6 +415,9 @@ class PearlCSm120:
                              "in the epilogue at 128 x 128",
                              "m padded to 64 rows (64 x 64 tiles below 128 rows); work counts issued MACs",
                              "prices and G are the H100's stand-ins; W_ref, credit and gamma Derived at those"]}
+        if self.hashing == "h1":
+            rec["shortcuts"].append("E_A's lines keyed from the arm's stand-in seed_A (the twin's); seed_a derives the protocol's "
+                                    "seed_A from A's root before forming (timed, gated) but forming doesn't read it")
         if self.hashing == "h1":
             rec["hash_cubin_sha256"] = hashlib.sha256(hash_cubin.read_bytes()).hexdigest()
             rec["commitments"] = ("A's rows and the tile tree over the matmul's m rows (the scheme's partial last row tile), "
@@ -447,10 +468,10 @@ class PearlCSm120:
 
     def gate(self, dev, call: _Call, shape, flags: frozenset[str]) -> Gate:
         differing = call.relaunch()
-        tiles = call.twin_tiles()
-        ok = not any(differing.values()) and not any(t["failed"] for t in tiles)
+        tiles, seed = call.twin_tiles(), call.seed_check()
+        ok = not any(differing.values()) and not any(t["failed"] for t in tiles) and (seed is None or seed["ok"])
         return Gate(ok, {name: "all" for name in call.outputs},
-                    {"words_differing_from_relaunch": differing, "twin_tiles": tiles, "scheme": self.scheme.name})
+                    {"words_differing_from_relaunch": differing, "twin_tiles": tiles, "seed_a": seed, "scheme": self.scheme.name})
 
 
 class PearlCSm120Unpromoted(PearlCSm120):

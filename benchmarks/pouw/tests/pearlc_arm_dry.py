@@ -109,6 +109,7 @@ def accept(arm, check: Path) -> None:
     sd = {**{kk: bytes.fromhex(v) for kk, v in man["seeds"].items()}, "salt": ctx.salt, "root_b": ctx.root_b}
     arm.seeds = lambda shape, seed: sd
     arm.domains = lambda shape, sd: (A.H.a_domain(ctx), A.H.t_domain(ctx, A.tiles(shape)))
+    arm.index = man["index"]
     shape = Shape("fixture", m, k, n)
     assert arm.keys(shape, sd) == man["keys"]
     rd = arm.rd

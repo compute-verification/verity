@@ -811,6 +811,51 @@ extern "C" __global__ void __launch_bounds__(128) hash_rows_f32(const Args a) {
   if (t < total) store32(reinterpret_cast<uint8_t*>(a.p[1]) + t * 32, h);
 }
 
+// a label of n <= 64 bytes as one message block (zero-padded, little-endian words)
+DEV void label_block(const char* s, int n, uint32_t w[16]) {
+#pragma unroll
+  for (int i = 0; i < 16; i++) {
+    uint32_t x = 0;
+#pragma unroll
+    for (int j = 0; j < 4; j++)
+      if (4 * i + j < n) x |= (uint32_t)(uint8_t)s[4 * i + j] << (8 * j);
+    w[i] = x;
+  }
+}
+
+// Pearl-C's seed_A once A's tree has its root: keyed(blake3("pearl-c/v0/seed-A"), salt ‖ root_A ‖ root_B ‖ index u64), two
+// blocks, then from it E_A's line key keyed(seed_A, "pearl/v4/FP8/noise-line") and the jackpot key keyed(seed_A,
+// "pearl/v4/FP8/jackpot"), one block each (`pearl_c`'s seeds, `pearl_kw._line_key` and `subkey`), on one thread.
+// p0 out (seed_A ‖ line key ‖ jackpot key, 96 B), p1 blake3("pearl-c/v0/seed-A"), p2 salt, p3 root_A, p4 root_B (32 B
+// each, 4-byte aligned); i0 the matmul's index
+extern "C" __global__ void __launch_bounds__(32) seed_a(const Args a) {
+  if (threadIdx.x) return;
+  using namespace ph;
+  const uint32_t* key = reinterpret_cast<const uint32_t*>(a.p[1]);
+  const uint32_t* salt = reinterpret_cast<const uint32_t*>(a.p[2]);
+  const uint32_t* root_a = reinterpret_cast<const uint32_t*>(a.p[3]);
+  const uint32_t* root_b = reinterpret_cast<const uint32_t*>(a.p[4]);
+  uint32_t m[16], cv[8], seed[8];
+#pragma unroll
+  for (int i = 0; i < 8; i++) cv[i] = key[i], m[i] = salt[i], m[8 + i] = root_a[i];
+  blake3_compress(cv, m, 0, 64, B3_KEYED_HASH | B3_CHUNK_START, cv);
+#pragma unroll
+  for (int i = 0; i < 16; i++) m[i] = i < 8 ? root_b[i] : 0;
+  m[8] = (uint32_t)a.i[0];
+  blake3_compress(cv, m, 0, 40, B3_KEYED_HASH | B3_CHUNK_END | B3_ROOT, seed);
+  uint32_t* out = reinterpret_cast<uint32_t*>(a.p[0]);
+  const char line[] = "pearl/v4/FP8/noise-line", jackpot[] = "pearl/v4/FP8/jackpot";
+  uint32_t h[8];
+  label_block(line, sizeof line - 1, m);
+  blake3_compress(seed, m, 0, sizeof line - 1, B3_KEYED_HASH | B3_CHUNK_START | B3_CHUNK_END | B3_ROOT, h);
+#pragma unroll
+  for (int i = 0; i < 8; i++) out[i] = seed[i], out[8 + i] = h[i];
+  label_block(jackpot, sizeof jackpot - 1, m);
+  blake3_compress(seed, m, 0, sizeof jackpot - 1, B3_KEYED_HASH | B3_CHUNK_START | B3_CHUNK_END | B3_ROOT, h);
+#pragma unroll
+  for (int i = 0; i < 8; i++) out[16 + i] = h[i];
+}
+
 // words differing between two buffers: p0, p1 (u32), p2 counter (u64); i0 count (in words, < 2^31 per launch)
 extern "C" __global__ void diff_words(const Args a) {
   const size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;

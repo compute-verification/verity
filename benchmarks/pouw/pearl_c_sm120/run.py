@@ -20,8 +20,12 @@
    throttle reasons before and after.
 
 A variant ending in -h1 hashes under -h1 (pearl-c-<device>-v1-h1) with hash_sm120a.cubin's kernels, launched as `b3:<name>`
-(#449's hash.cuh: A's rows as a frame-b3 tree, the digests and leaves as keyed BLAKE3, the tile tree), and its fused chain is
-gemm_pearlc_b; at decode its tile leaves are over the real rows (a partial last row tile), not the padding.  Otherwise h0:
+(#449's hash.cuh: A's rows as a frame-b3 tree, the digests and leaves as keyed BLAKE3, the tile tree; through
+hash_sm120.cuh's entry points for sm_120, which commit the same bytes: hash_rows_w, hash_msg_v, hash_leaf_p, and
+hash_tree_small for a tree of at most TREE_SMALL leaves), then seed_a derives seed_A from A's root with E_A's line and jackpot
+keys (checked against the fixture's, which it derives from the tree's root; forming still reads the key it is given), and its
+fused chain is gemm_pearlc_b; the fused call commits A before forming, since seed_A keys E_A.  At decode the tile leaves are
+over the real rows (a partial last row tile), not the padding.  Otherwise h0:
 TurboSHAKE128 digests and leaves, and A's rows as TurboSHAKE128 over 1 KB segments, the bench's model and not the SHA-256
 frame tree v1's verifier checks (each timing row names its `a_commitment`).
 
@@ -53,9 +57,15 @@ VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 #: blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf"), -h1's public keys (`pearl_c.H1_KEYS`)
 H1_KEYS = {"k_msg": "071cf46377a5d6f62e118a6c4d1bcd93d8d781af04ef0bdd84f9011381e801d1",
            "k_leaf": "0e661b01c2077b147887d1ee19aed2ddb35c2cc459cc62f6af0b05ea9f926169"}
+#: blake3("pearl-c/v0/seed-A"), seed_A's public key (`pearl_c.LABELS`)
+SEED_A_KEY = "6c8abb01868eaa7a07ed62333c4c6ae75daeb48c0f4e709fe7a6d8401f2a202a"
+#: hash_tree_small's widest level 0 (two nodes a thread, 1,024 threads), and hash_rows_w's warps per CTA (hash_sm120.cuh)
+TREE_SMALL, ROWS_W_WARPS = 2048, 4
 A_COMMITMENT = {"h0": "turboshake128 over 1 KB segments of A's FP32 rows (the bench's model; v1's verifier checks the SHA-256 "
                       "frame tree of whole rows, not timed here)",
                 "h1": "frame-b3 BLAKE3 tree of A's FP32 rows (-h1's verifier's)"}
+#: per hashing format, the hashing steps ahead of forming: A's commitment, and under -h1 seed_A from its root
+A_FIRST = {"h0": ("hash_rows",), "h1": ("hash_rows", "tree_a", "seed_a")}
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
 CUDA = {
@@ -273,6 +283,11 @@ def depth(n: int) -> int:
     return pow2(n).bit_length() - 1
 
 
+def rows_w_words(rb: int) -> int:
+    """hash_rows_w's shared words per warp for a row of rb bytes: 8 per chunk of the row and its 64-byte leaf header."""
+    return 8 * cdiv(64 + rb, 1024)
+
+
 def hashing_of(variant: str) -> tuple[str, str]:
     """(device variant, hashing format) of a variant name: `sm120-h1` is `sm120` under -h1."""
     return (variant[:-3], "h1") if variant.endswith("-h1") else (variant, "h0")
@@ -296,15 +311,16 @@ class Pipeline:
     GEMM_SMEM: dict[str, int] = {}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
-                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None):
+                 bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, index: int = 0):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's and have their rows committed, the rest filler."""
-        self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
+        matmul's and have their rows committed, the rest filler; `index` is the matmul's, which seed_A binds."""
+        self.dev, self.m, self.n, self.k, self.variant, self.keys, self.index = dev, m, n, k, variant, keys, index
         self.m_real = m if m_real is None else m_real
         base, self.hashing = hashing_of(variant)
         self.g = VARIANT_G[base]
         self.suffix = "" if self.g else "_u"
         self.fused_gemm = "gemm_pearlc_b" if self.hashing == "h1" else "gemm_pearlc_h"
+        self.tree_small = TREE_SMALL
         self.tiles = cdiv(self.m_real, 64) * (n // 64)
         self.bm = bm or (BM if m % BM == 0 else BM_D)
         if m % self.bm or n % BM or k % 1024:
@@ -334,7 +350,7 @@ class Pipeline:
             "qa_s5": m * k, "qb_s5": n * k, "y_adopt": m * n * 2, "diff": 8,
             "digests_h1": m * n, "leaves_h1": tiles * 32, "tree_a_h1": (2 * pow2(m) - 1) * 32,
             "tree_t_h1": (2 * pow2(tiles) - 1) * 32, "tree_t_h": (2 * pow2(tiles) - 1) * 32,
-            "keys_a": 32 * depth(m), "keys_t": 32 * depth(tiles),
+            "keys_a": 32 * depth(m), "keys_t": 32 * depth(tiles), "seed_h1": 96,
         }
 
     def free(self) -> None:
@@ -361,12 +377,16 @@ class Pipeline:
 
     def levels(self, name: str, count: int, dom: str, keys: str) -> None:
         """A frame-b3 tree over `count` leaves already at level 0 of buffer `name`: its pads, its level keys (into buffer
-        `keys`), then each level above (#449's run.py)."""
+        `keys`), then the levels above, in one hash_tree_small launch up to `tree_small` leaves (TREE_SMALL), else a
+        hash_nodes launch a level (#449's run.py)."""
         d, base, width, lk = self.dev, self.b[name], pow2(count), self.b[keys]
         if width > count:
             d.launch("b3:hash_pad", cdiv(width - count, 128), 128, p=(base, self.keys[dom]), i=(count, width))
         if width > 1:
             d.launch("b3:hash_node_keys", 1, 32, p=(lk, self.keys[dom]), i=(depth(count),))
+        if 1 < width <= self.tree_small:
+            d.launch("b3:hash_tree_small", 1, width // 2, p=(base, lk), i=(width,))
+            return
         off, level = 0, 0
         while width > 1:
             d.launch("b3:hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), lk + 32 * level),
@@ -432,12 +452,16 @@ class Pipeline:
                                                       p=(b["digests_h"], b["leaves_h"]), i=(m, n))))
         if self.hashing == "h1":
             mr, kx = self.m_real, self.keys
-            leaf = lambda dg, lv: d.launch("b3:hash_leaf", cdiv(self.tiles, 64), 64, p=(b[dg], b[lv], kx["k_leaf"]),  # noqa: E731
+            leaf = lambda dg, lv: d.launch("b3:hash_leaf_p", cdiv(self.tiles, 32), 128, p=(b[dg], b[lv], kx["k_leaf"]),  # noqa: E731
                                            i=(mr, n))
-            hashing = [("hash_rows", lambda: d.launch("b3:hash_rows", mr, 256, p=(b["xa"], b["tree_a_h1"], kx["dom_a"]),
-                                                      i=(mr, self.row_bytes))),
+            root_a = b["tree_a_h1"] + 32 * (2 * pow2(mr) - 2)
+            hashing = [("hash_rows", lambda: d.launch("b3:hash_rows_w", cdiv(mr, ROWS_W_WARPS), 32 * ROWS_W_WARPS,
+                                                      4 * ROWS_W_WARPS * rows_w_words(self.row_bytes),
+                                                      p=(b["xa"], b["tree_a_h1"], kx["dom_a"]), i=(mr, self.row_bytes))),
                        ("tree_a", lambda: self.levels("tree_a_h1", mr, "dom_a", "keys_a")),
-                       ("hash_msg", lambda: d.launch("b3:hash_msg", cdiv(mr * n // 32, 128), 128,
+                       ("seed_a", lambda: d.launch("seed_a", 1, 32, p=(b["seed_h1"], kx["k_seed"], kx["salt"], root_a, kx["root_b"]),
+                                                   i=(self.index,))),
+                       ("hash_msg", lambda: d.launch("b3:hash_msg_v", cdiv(mr * n // 32, 128), 128,
                                                      p=(b["c"], b["u"], b["digests_h1"], kx["k_msg"]), i=(mr, n))),
                        ("hash_leaf", lambda: leaf("digests_h1", "leaves_h1")),
                        ("tree_t", lambda: self.tile_tree("leaves_h1", "tree_t_h1"))]
@@ -465,12 +489,12 @@ class Pipeline:
         return out
 
     def fused_call(self) -> list:
-        """The call on the fused chain: forming, A'F_B, P_A, the chain with the digests in its epilogue, their leaves (and
-        -h1's tile tree), A's rows."""
+        """The call on the fused chain: A's commitment (its rows, and under -h1 its tree and seed_A, which keys E_A), forming,
+        A'F_B, P_A, the chain with the digests in its epilogue, their leaves (and -h1's tile tree)."""
         by = {nm: f for nm, _, f in self.steps()}
-        h1 = self.hashing == "h1"
-        tail = (self.fused_gemm, "hash_leaf_h") + (("tree_t_h", "hash_rows", "tree_a") if h1 else ("hash_rows",))
-        return [f for nm, p, f in self.steps() if p == "forming"] + [by[x] for x in ("af", "pa", *tail)]
+        tail = (self.fused_gemm, "hash_leaf_h") + (("tree_t_h",) if self.hashing == "h1" else ())
+        return ([by[x] for x in A_FIRST[self.hashing]] + [f for nm, p, f in self.steps() if p == "forming"]
+                + [by[x] for x in ("af", "pa", *tail)])
 
     def run_all(self) -> None:
         for _, _, f in self.steps():
@@ -493,7 +517,7 @@ GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_pl
 #: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
 #: per hashing format: the fixture's buffers the pipeline doesn't write, and each fused output's expected buffer
-UNWRITTEN = {"h0": {"digests_h1", "leaves_h1", "tree_t_h1", "tree_a_h1"}, "h1": {"digests", "leaves", "rows"}}
+UNWRITTEN = {"h0": {"digests_h1", "leaves_h1", "tree_t_h1", "tree_a_h1", "seed_h1"}, "h1": {"digests", "leaves", "rows"}}
 FUSED = {"h0": {"digests_h": "digests", "leaves_h": "leaves"},
          "h1": {"digests_h": "digests_h1", "leaves_h": "leaves_h1", "tree_t_h": "tree_t_h1"}}
 
@@ -518,7 +542,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
         files = man["variants"][base_variant]["files"]
         want = lambda name: load(base_variant, files[name]) if name in files else load("", common[name])  # noqa: E731
         xa, xb = dev.put(load("", common["xa"])), dev.put(load("", common["xb"]))
-        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb)
+        pipe = Pipeline(dev, m, n, k, variant, keys, xa, xb, index=man.get("index", 0))
         pipe.run_all()
         res = {}
         for name in [*common, *files]:
@@ -529,8 +553,16 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
         for out, name in FUSED[hashing].items():
             res[f"{name}@{pipe.fused_gemm}"] = compare(dev, pipe, name, want(name), alias=out)
+        if hashing == "h1":
+            pipe.tree_small = 1
+            for step, tree, leaves in (("tree_a", "tree_a_h1", pipe.m_real), ("tree_t", "tree_t_h1", pipe.tiles)):
+                dev.ck("cuMemsetD8_v2", u64(pipe.b[tree] + 32 * leaves), 0xAB, pipe.size[tree] - 32 * leaves)
+                [fn for nm, _, fn in pipe.steps() if nm == step][0]()
+                dev.sync()
+                res[f"{tree}@hash_nodes"] = compare(dev, pipe, tree, want(tree))
+            pipe.tree_small = TREE_SMALL
         aliases = {"c2": "c", **FUSED[hashing]}
-        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D)
+        small = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b, bm=BM_D, index=pipe.index)
         for p_, grids, tag in ((pipe, (1, 3), ""), (small, (None, 3), "bm64")):
             steps = {nm: fn for nm, _, fn in p_.steps()}
             for grid in grids:
@@ -576,8 +608,8 @@ def timing(dev: Dev, nv: Nvml, shape: tuple[int, int, int], variant: str, reps: 
     m_real, n, k = shape
     m = cdiv(m_real, BM_D) * BM_D
     keys = {name: dev.put(hashlib.sha256(f"pearl-c-timing/{name}".encode()).digest())
-            for name in ("line_a", "line_b", "jackpot", "dom_a", "dom_t")}
-    keys.update({name: dev.put(bytes.fromhex(h)) for name, h in H1_KEYS.items()})
+            for name in ("line_a", "line_b", "jackpot", "dom_a", "dom_t", "salt", "root_b")}
+    keys.update({name: dev.put(bytes.fromhex(h)) for name, h in {**H1_KEYS, "k_seed": SEED_A_KEY}.items()})
     xa, xb = dev.alloc(m * 4 * k), dev.alloc(n * 4 * k)
     for x, rows, seed in ((xa, m_real, 11), (xb, n, 12)):
         dev.launch("gen_f32", cdiv(rows * k, 256), 256, p=(x,), i=(rows, k, seed))

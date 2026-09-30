@@ -32,6 +32,6 @@ rm "$OUT/hash_sm120a.sass"
 cp "$HERE/run.py" "$OUT/"
 "$CUDA/bin/nvcc" --version | tail -2 > "$OUT/toolchain.txt"
 { git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c_sm120 benchmarks/pouw/pouw_hash benchmarks/pouw/pearl_c/hash.cu \
-  benchmarks/pouw/pearl_c/hash.cuh protocols/pouw packages/verity; } > "$OUT/source.txt"
+  benchmarks/pouw/pearl_c/hash.cuh benchmarks/pouw/pearl_c/hash_sm120.cuh protocols/pouw packages/verity; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"
