@@ -113,9 +113,9 @@ DEV uint64_t globaltimer() {
 // the tile's start, after its mainloop and after its epilogue, and globaltimer after the epilogue, to the u64s at
 // p3 + ((blockIdx.x NCW + warp) 16 + j) 4
 constexpr int NV_STAMP_TILES = 16;
-template <int TM, int ST, int RP, int BO, int LAG, bool BF16, bool STAMP>
+template <int TM, int ST, int RP, int BO, bool BF16, bool STAMP>
 DEV void nv_gemm_body(const Args& a) {
-  using L = nvf4::Mainloop<TM, ST, RP, BO, LAG>;
+  using L = nvf4::Mainloop<TM, ST, RP, BO>;
   extern __shared__ __align__(1024) uint8_t nv_smem[];
   L ml(nv_smem);
   const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
@@ -142,21 +142,17 @@ DEV void nv_gemm_body(const Args& a) {
   }
 }
 
-#define NV_GEMM(NAME, TM, ST, RP, BO, LAG, BF16, STAMP)                                                                 \
-  extern "C" __global__ void __launch_bounds__((nvf4::Mainloop<TM, ST, RP, BO, LAG>::NT), 1) NAME(const Args a) {       \
-    nv_gemm_body<TM, ST, RP, BO, LAG, BF16, STAMP>(a);                                                                  \
+#define NV_GEMM(NAME, TM, ST, RP, BO, BF16, STAMP)                                                                 \
+  extern "C" __global__ void __launch_bounds__((nvf4::Mainloop<TM, ST, RP, BO>::NT), 1) NAME(const Args a) {            \
+    nv_gemm_body<TM, ST, RP, BO, BF16, STAMP>(a);                                                                       \
   }                                                                                                                     \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = nvf4::Mainloop<TM, ST, RP, BO, LAG>::SMEM; }
+  extern "C" __global__ void NAME##_smem(int* out) { *out = nvf4::Mainloop<TM, ST, RP, BO>::SMEM; }
 // NAME_w (FP32 words), NAME_b (BF16) and NAME_t (NAME_b with STAMP)
-#define NV_PAIR(NAME, TM, ST, RP, BO, LAG)                                                                              \
-  NV_GEMM(NAME##_w, TM, ST, RP, BO, LAG, false, false)                                                                  \
-  NV_GEMM(NAME##_b, TM, ST, RP, BO, LAG, true, false) NV_GEMM(NAME##_t, TM, ST, RP, BO, LAG, true, true)
+#define NV_PAIR(NAME, TM, ST, RP, BO)                                                                                   \
+  NV_GEMM(NAME##_w, TM, ST, RP, BO, false, false)                                                                       \
+  NV_GEMM(NAME##_b, TM, ST, RP, BO, true, false) NV_GEMM(NAME##_t, TM, ST, RP, BO, true, true)
 
 // nv256: 256 x 128 tiles, 3 stages, the producer at 40 registers (232 to each consumer), A-major MMA order; _o: B-major
-// order (CUTLASS's); _lN: LAG N cycles
-NV_PAIR(nv256, 256, 3, 40, 0, 0)
-NV_PAIR(nv256_o, 256, 3, 40, 1, 0)
-NV_PAIR(nv256_l512, 256, 3, 40, 0, 512)
-NV_PAIR(nv256_l1024, 256, 3, 40, 0, 1024)
-NV_PAIR(nv256_l2048, 256, 3, 40, 0, 2048)
-NV_PAIR(nv256_o_l1024, 256, 3, 40, 1, 1024)
+// order (CUTLASS's)
+NV_PAIR(nv256, 256, 3, 40, 0)
+NV_PAIR(nv256_o, 256, 3, 40, 1)
