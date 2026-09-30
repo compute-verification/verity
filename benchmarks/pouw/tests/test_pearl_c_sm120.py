@@ -113,6 +113,8 @@ def test_kernel_constants_match_the_reference():
     assert int(n256, 16) == P.f32_to_bf16(P.NOISE_NORM * 32) and int(n16, 16) == P.f32_to_bf16(C.LINE_NORM_V1 * 32)
     for d in (C.D_MESSAGE, C.D_LEAF, 0x23):
         assert f"0x{d:02x}" in SOURCE.lower()
+    keys = dict(re.findall(r'"(k_\w+)": "([0-9a-f]{64})"', re.search(r"H1_KEYS = \{[^}]*\}", run).group(0)))
+    assert keys == {"k_msg": C.H1_KEYS["message"].hex(), "k_leaf": C.H1_KEYS["leaf"].hex()}
     variants = dict(re.findall(r'"([\w-]+)": (\d)', re.search(r"VARIANT_G = \{[^}]*\}", run).group(0)))
     assert {k: int(v) for k, v in variants.items()} == {SM120.name: SM120.g, SM120_UNPROMOTED.name: 0}
     promoted = {g for *_, g in gemms() if g}
@@ -172,7 +174,7 @@ def test_twin_tile_is_the_scheme_on_the_record(device):
 
     dev, small = DEVICES[device], W.Shape("small", 96, 128, 256)
     jb = W.job(small, dev)
-    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", device=dev)
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", device=dev, hashing=W.HASHING)
     noise = C.Noise(jb.seeds["seed_a"], jb.seeds["seed_b"])
     ctx = Context(bytes(32), Matmul(0, MShape(small.m, small.k, small.n), 0), bytes(32), bytes(32))
     own = W.tile(jb, 64, 64)
@@ -203,6 +205,8 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
     cs = {}
     for variant, spec in man["variants"].items():
         assert spec["crosscheck"]["agree"] and spec["scheme"] == f"pearl-c-{variant}-v1"
+        assert spec["crosscheck"]["h1"]["agree"] and spec["crosscheck"]["h1"]["scheme"] == f"pearl-c-{variant}-v1-h1"
+        assert {"digests_h1", "leaves_h1", "tree_t_h1"} <= set(spec["files"])
         c = np.frombuffer((small_fixture / variant / "c.bin").read_bytes(), "<u4")
         u = np.frombuffer((small_fixture / variant / "u.bin").read_bytes(), "<u4")
         assert c.size == u.size == 128 * 128 and (c != u).mean() > 0.99
@@ -215,8 +219,13 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 
 # ---- the dry run ---------------------------------------------------------------------------------------------------
 
+HASH_SOURCE = (H100_DIR / "hash.cuh").read_text()
+
+
 def kernel_names() -> list[str]:
-    plain = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(', SOURCE)) - {"NAME"}
+    """Every kernel run.py launches: pearl_c_sm120.cu's, and hash.cuh's but its tickets (dropped from pearl-c-sm120)."""
+    entry = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
+    plain = set(re.findall(entry, SOURCE)) - {"NAME"} | set(re.findall(entry, HASH_SOURCE)) - {"tickets"}
     names = [n for n, *_ in gemms()]
     return sorted(plain) + names + [g + "_smem" for g in names]
 
@@ -262,9 +271,19 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     if name == "pb":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 32 * 32 * 4, 4: 128 * i[0]}
     if name == "hash_msg":
-        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1]}
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: i[0] * i[1], **({3: 32} if p[3] else {})}
     if name == "hash_leaf":
-        return {0: i[0] * i[1], 1: (i[0] // 64) * (i[1] // 64) * 32}
+        return {0: i[0] * i[1], 1: -(-i[0] // 64) * (i[1] // 64) * 32, **({2: 32} if p[2] else {})}
+    if name == "hash_rows":
+        return {0: i[0] * i[1], 1: 32 * i[0], 2: 32}
+    if name == "hash_pad":
+        return {0: 32 * i[1], 1: 32}
+    if name == "hash_node_keys":
+        return {0: 32 * i[0], 1: 32}
+    if name == "hash_nodes":
+        return {0: 64 * i[1], 1: 32 * i[1], 2: 32}
+    if name == "hash_tree_leaves":
+        return {0: 32 * i[0], 1: 32 * i[0], 2: 32}
     if name == "hash_rows_f32":
         assert i[1] % 1024 == 0
         return {0: i[0] * i[1], 1: i[0] * (i[1] // 1024) * 32}
@@ -284,7 +303,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
 def threads(name: str, i: list[int]) -> int:
     """Threads the launch must cover."""
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
-            "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32, "hash_leaf": lambda: (i[0] // 64) * (i[1] // 64),
+            "pb": lambda: 32 * i[0], "hash_msg": lambda: i[0] * i[1] // 32, "hash_leaf": lambda: -(-i[0] // 64) * (i[1] // 64),
+            "hash_rows": lambda: 256 * i[0], "hash_pad": lambda: i[1] - i[0], "hash_nodes": lambda: i[1],
+            "hash_tree_leaves": lambda: i[0],
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
             "quant_s5": lambda: i[0] * i[1] // 16, "hash_rows_f32": lambda: i[0] * (i[1] // 1024)}.get(name, lambda: 0)()
@@ -299,7 +320,8 @@ def ship(tmp_path_factory):
     subprocess.run([cc, "-O1", "-Wall", "-Werror", "-shared", "-fPIC", "-o", str(out / "fake_cuda.so"), str(H100_DIR / "fake_cuda.c")],
                    check=True)
     shutil.copy(HERE / "run.py", out)
-    (out / "pearl_c_sm120.cubin").write_bytes(b"\x7fELF" + bytes(14) + bytes([190, 0]) + bytes(44))
+    for cubin in ("pearl_c_sm120.cubin", "hash_sm120a.cubin"):
+        (out / cubin).write_bytes(b"\x7fELF" + bytes(14) + bytes([190, 0]) + bytes(44))
     return out
 
 
@@ -330,7 +352,7 @@ def test_runner_refuses_another_device(small_fixture, ship, tmp_path):
 @pytest.mark.slow
 def test_runner_dry_run(small_fixture, ship, tmp_path):
     """The identity passes, the check fails (the stand-in computes nothing) and times nothing; ungated on the stand-in, every
-    launch of the check and the timing fits its buffers."""
+    launch of the check and the timing fits its buffers, h0 and -h1 (96 rows pad A's frame-b3 tree)."""
     log = tmp_path / "gated.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")], env=dry_env(ship, log),
                        capture_output=True, text=True, timeout=600)
@@ -341,15 +363,18 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
 
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
-                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1"), capture_output=True, text=True, timeout=600)
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="1024 96x1024x1024"),
+                       capture_output=True, text=True, timeout=600)
     assert r.returncode == 4, r.stderr
     rows = [json.loads(x) for x in r.stdout.splitlines()]
     kinds = [x["kind"] for x in rows]
-    assert kinds[:3] == ["env", "mem", "check"] and kinds.count("timing") == 2
-    assert set(rows[2]["variants"]) == {"sm120", "sm120-unpromoted"}
+    assert kinds[:3] == ["env", "mem", "check"] and kinds.count("timing") == 8
+    assert set(rows[2]["variants"]) == {"sm120", "sm120-unpromoted", "sm120-h1", "sm120-unpromoted-h1"}
     for t in rows[3:]:
-        assert t["gates"]["ungated"] and {"split_ms", "call_e2e_ms", "ratio_vs_own_plain_gemm", "consistency", "job_ms"} <= set(t)
+        assert t["gates"]["ungated"] and {"split_ms", "call_e2e_ms", "ratio_vs_own_plain_gemm", "consistency", "job_ms",
+                                          "call_e2e_fused_ms", "a_commitment"} <= set(t)
         assert set(t["split_ms"]) == {"forming", "gemm", "cleanup", "hashing"}
+        assert t["hashing"] == ("h1" if t["variant"].endswith("-h1") else "h0")
 
     allocs: dict[int, int] = {}
     seen = set()
@@ -358,6 +383,11 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         if ev["op"] == "launch":
             seen.add(ev["name"])
     assert seen == set(kernel_names())
+
+
+def room(allocs: dict[int, int], ptr: int) -> int:
+    """Bytes from `ptr` to the end of the live allocation holding it (a tree level's pointer is inside its tree's), or -1."""
+    return next((base + n - ptr for base, n in allocs.items() if base <= ptr < base + n), -1)
 
 
 def track(ev: dict, allocs: dict[int, int]) -> None:
@@ -375,8 +405,7 @@ def track(ev: dict, allocs: dict[int, int]) -> None:
         for slot, n in needs(name, p, i).items():
             if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
                 continue
-            assert p[slot] in allocs, (name, slot)
-            assert allocs[p[slot]] >= n, (name, slot, allocs[p[slot]], n)
+            assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
         assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
         if name == "form_s5":
