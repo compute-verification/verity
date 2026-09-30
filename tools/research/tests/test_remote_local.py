@@ -93,6 +93,24 @@ def test_stale_lock_from_vanished_holder_is_reclaimed(tmp_path):
     _wait_terminal(runs_root / "live")
 
 
+def test_a_queued_run_runs_its_runner_inside_the_wrapper_so_its_records_are_final_before_the_allocation_ends(tmp_path):
+    """--queue: the machine runs the runner under the queue executor's wrapper (gpu-lease on vy-nebius-2), which holds the job's
+    allocation until it exits. The stand-in wrapper reads the run's status the moment the runner is gone: already terminal."""
+    wrap = [PY, "-c", "import json, os, subprocess, sys; rc = subprocess.call(sys.argv[2:], env={**os.environ, 'HELD': 'yes'}); "
+            "open(sys.argv[1] + '.at-release', 'w').write(json.load(open(sys.argv[1]))['state']); sys.exit(rc)",
+            str(tmp_path / "root" / "runs" / "q1" / "status.json")]
+    req, runs_root = _request(tmp_path, "q1", [PY, "-c", "import os; print(os.environ['HELD'])"])
+    doc = json.loads(req.read_text())
+    doc[remote.QUEUE_WRAP] = wrap
+    req.write_text(json.dumps(doc))
+    out = remote.launch_request(req)
+    s = _wait_terminal(runs_root / "q1")
+    assert out["started"] and s["state"] == "done" and (runs_root / "q1" / "stdout.log").read_text().strip() == "yes"
+    assert (runs_root / "q1" / "status.json.at-release").read_text() == "done"
+    launch = json.loads((runs_root / "q1" / "launch.json").read_text())
+    assert launch["argv"][: len(wrap)] == wrap and launch["argv"][len(wrap):][1:3] == ["-m", "research"]
+
+
 def test_bad_schema_is_refused_without_side_effects(tmp_path):
     req, runs_root = _request(tmp_path, "bad", ["true"])
     doc = json.loads(req.read_text()); doc["schema"] = "nope"; req.write_text(json.dumps(doc))
