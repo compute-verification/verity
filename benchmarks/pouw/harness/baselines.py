@@ -17,6 +17,7 @@ entry, and cuBLASLt over half of k; the gate must reject both, or the run stops.
 from __future__ import annotations
 
 import ctypes as C
+import hashlib
 import random
 from dataclasses import dataclass, field
 
@@ -209,14 +210,40 @@ def lt_splitks(shape: Shape, sms: int) -> list[int]:
     return [1] if tiles >= 2 * sms else [1, 2, 3, 4, 6, 8, 12, 16]
 
 
+@dataclass(frozen=True)
+class LtPick:
+    """Which of an enumeration's configurations a run takes: index (the enumeration's order, per library and swap) in
+    [start, stop), and, if `names` is given, named in it. The enumeration keeps the first max(limit, stop) and counts every
+    one it accepts, so a slice past the default limit still reaches its configurations and the run reports the total."""
+    start: int = 0
+    stop: int | None = None
+    names: frozenset[str] | None = None
+    limit: int = LT_ENUMERATED_MAX
+
+    @property
+    def want(self) -> int:
+        return max(self.limit, self.stop or 0)
+
+    def takes(self, index: int, name: str) -> bool:
+        return self.start <= index and (self.stop is None or index < self.stop) and (self.names is None or name in self.names)
+
+    def record(self) -> dict:
+        return {"start": self.start, "stop": self.stop, "limit": self.limit,
+                "names": None if self.names is None else len(self.names)}
+
+
 def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: list[int], seen: set,
-                  refused: list[str] | None = None, want: int = LT_ENUMERATED_MAX) -> tuple[list[Candidate], dict]:
+                  refused: list[str] | None = None, pick: LtPick = LtPick()) -> tuple[list[Candidate], dict]:
     """Every configuration of every algorithm `lt` has for the family's types that cublasLtMatmulAlgoCheck accepts at the
-    shape (lt.cu's ph_lt_enumerate), less those in `seen` (the heuristic's, by `lt_key`). Returns them and what was tried:
-    configurations checked, accepted, and whether `want` cut the list short."""
+    shape (lt.cu's ph_lt_enumerate) and `pick` takes, less those in `seen` (the heuristic's, by `lt_key`). Returns them
+    and what was tried: configurations checked, accepted, whether the limit cut the list short, and the sha256 of the
+    taken configurations' names in order."""
     from native import LtCandidate, NativeError
 
-    info = {"checked": 0, "accepted": 0, "new": 0, "truncated": False, "splitks": splitks}
+    want = pick.want
+    info = {"checked": 0, "accepted": 0, "new": 0, "truncated": False, "splitks": splitks, "pick": pick.record(),
+            "taken": 0}
+    taken = hashlib.sha256()
     if fam.lt_kind is None or not lt.can_enumerate:
         return [], info | {"skipped": "no cuBLASLt path" if fam.lt_kind is None else "library predates ph_lt_enumerate"}
     out: list[Candidate] = []
@@ -235,7 +262,7 @@ def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: li
             continue
         info["checked"] += checked.value
         info["accepted"] += got.value
-        info["truncated"] |= got.value > want
+        info["truncated"] |= got.value > want and pick.stop is None
         mine = []
         for i in range(min(got.value, want)):
             c = LtCandidate()
@@ -243,6 +270,10 @@ def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: li
             cfg = c.config() | {"enumerated": i, "blk128_swap": swap, "library": lt.prefix, "cublaslt": lt.version}
             cand = Candidate(fam.name, "cublaslt", _enum_name(lt.prefix, fam.name, swap, cfg), cfg, lt=(plan, c),
                              ws=c.workspace, ltlib=lt)
+            if not pick.takes(i, cand.name):
+                continue
+            info["taken"] += 1
+            taken.update(cand.name.encode() + b"\n")
             if lt_key(cand) not in seen:
                 seen.add(lt_key(cand))
                 mine.append(cand)
@@ -250,6 +281,7 @@ def lt_enumerated(dev, fam: Family, shape: Shape, ops: Operands, lt, splitks: li
             lt.lib.ph_lt_plan_destroy(plan)
         out += mine
     info["new"] = len(out)
+    info["taken_sha256"] = taken.hexdigest()
     return out, info
 
 

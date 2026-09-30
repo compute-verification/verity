@@ -406,11 +406,27 @@ def arm_entries(bench: Bench, dev, arm, shape, opsets: list[A.OperandSet], first
 # ---- baselines -------------------------------------------------------------------------------------------------------------
 
 
+def lt_range(text: str) -> tuple[int, int]:
+    a, sep, b = text.partition(":")
+    if not sep or not a.isdigit() or not b.isdigit() or int(a) >= int(b):
+        raise argparse.ArgumentTypeError(f"{text!r} isn't START:STOP with 0 <= START < STOP")
+    return int(a), int(b)
+
+
+def lt_pick(args) -> B.LtPick:
+    """What the enumeration takes: --lt-enumerate-range, --lt-enumerate-names (a file, one name per line) and
+    --lt-enumerate-max."""
+    start, stop = getattr(args, "lt_enumerate_range", None) or (0, None)
+    path = getattr(args, "lt_enumerate_names", None)
+    names = None if path is None else frozenset(ln.strip() for ln in Path(path).read_text().splitlines() if ln.strip())
+    return B.LtPick(start, stop, names, getattr(args, "lt_enumerate_max", None) or B.LT_ENUMERATED_MAX)
+
+
 def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bool, want: int, seed: int,
-                   enumerate_fams: frozenset = frozenset()) -> dict:
+                   enumerate_fams: frozenset = frozenset(), pick: B.LtPick = B.LtPick()) -> dict:
     """Every family's candidates, each gated on the gate set (cuBLASLt's configurations enumerated for the families in
-    `enumerate_fams`); at the first shape, the known-bad variants. Returns per family the gated candidates and what was
-    tried."""
+    `enumerate_fams`, those `pick` takes); at the first shape, the known-bad variants. Returns per family the gated
+    candidates and what was tried."""
     out = {}
     for fam in fams:
         gops = so.ops(fam, -1)
@@ -422,8 +438,13 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
             lts += heur
             if fam.name in enumerate_fams:
                 more, enumeration[lt.prefix] = B.lt_enumerated(dev, fam, shape, gops, lt, B.lt_splitks(shape, dev.info["sms"]),
-                                                               {B.lt_key(c) for c in heur}, refused=refused)
+                                                               {B.lt_key(c) for c in heur}, refused=refused, pick=pick)
                 lts += more
+        missing = None
+        if fam.name in enumerate_fams and pick.names is not None:
+            missing = sorted({n for n in pick.names if n.split("_", 2)[1:2] == [fam.name]} - {c.name for c in lts})
+            if missing:
+                bench.log(f"{len(missing)} named {fam.name} configurations aren't in this enumeration, e.g. {missing[0]}")
         cuts, unimpl = B.cutlass_candidates(dev, fam, shape, kernels)
         gated = []
         for c in lts + cuts:
@@ -442,7 +463,7 @@ def gate_baselines(bench: Bench, dev, shape, fams, so, kernels, lt_ws, first: bo
                          "tried": [{"name": c.name, "source": c.source, "config": c.config} for c in lts + cuts],
                          "cublaslt_refused": refused, "cutlass_unimplementable": unimpl,
                          "cublaslt_libraries": [{"prefix": t.prefix, "version": t.version} for t in dev.lts],
-                         "cublaslt_enumeration": enumeration or None}
+                         "cublaslt_enumeration": enumeration or None, "cublaslt_enumeration_missing": missing}
         if not lts + cuts:
             bench.log(f"no plain kernel for {fam.name} at {shape.label} (cuBLASLt: {refused or 'no algorithm'}; "
                       f"CUTLASS: {'none built' if not unimpl else unimpl})")
@@ -693,7 +714,7 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
     unchained: dict = {}
     try:
         gated = gate_baselines(bench, dev, shape, fams, so, kernels, lt_ws, first, args.lt_candidates, args.seed,
-                               frozenset(getattr(args, "lt_enumerate", None) or ()))
+                               frozenset(getattr(args, "lt_enumerate", None) or ()), lt_pick(args))
         arm_ents, arm_sets = [], {}
         for a in arms:
             arm_sets[a.name] = arm_operand_sets(dev, a, so)
@@ -848,6 +869,13 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
                    help="for these families, beside the heuristic's candidates, every configuration each cuBLASLt's "
                         "capabilities admit at the shape (gated; the --screen-keep fastest of one graph rep go on to the "
                         "tune); cuBLASLt 13's FP8 space alone is past 8,192 at 8,192^3")
+    p.add_argument("--lt-enumerate-range", type=lt_range, metavar="START:STOP",
+                   help="take only the enumerated configurations with index in [START, STOP) of each library's "
+                        "enumeration, so a space too big for one run is searched in slices")
+    p.add_argument("--lt-enumerate-names", type=Path, metavar="FILE",
+                   help="take only the enumerated configurations named in FILE, one per line (a slice search's best)")
+    p.add_argument("--lt-enumerate-max", type=int, default=B.LT_ENUMERATED_MAX, metavar="N",
+                   help="how many configurations the enumeration keeps (it counts all it accepts); STOP raises it")
     p.add_argument("--screen-keep", type=int, default=SCREEN_KEEP)
     p.add_argument("--tune-reps", type=int, default=TUNE_REPS)
     p.add_argument("--finalists", type=int, default=FINALISTS, help="kernels per family in the interleaved timing")

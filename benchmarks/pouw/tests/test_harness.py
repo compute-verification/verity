@@ -4,6 +4,7 @@ consistency gate rejects a hash-free call faster than the plain GEMM allows, and
 
 from __future__ import annotations
 
+import argparse
 import random
 import sys
 from pathlib import Path
@@ -694,6 +695,24 @@ def test_an_enumerated_configuration_is_named_by_its_config_and_deduplicated_by_
     assert B.lt_key(heur) == B.lt_key(enum)
     assert B.lt_key(enum) != B.lt_key(B.Candidate("nvfp4", "cublaslt", name, cfg | {"library": "lt"}))
     assert "_sk4_r1" in B._enum_name("lt", "nvfp4", 0, cfg | {"splitk": 4, "reduction": 1})
+
+
+def test_a_slice_of_the_enumeration_takes_its_range_and_keeps_enough_to_reach_it(tmp_path):
+    a = argparse.Namespace
+    whole = H.lt_pick(a())
+    assert whole == B.LtPick() and whole.want == B.LT_ENUMERATED_MAX and whole.takes(10**6, "x")
+    p = H.lt_pick(a(lt_enumerate_range=H.lt_range("8192:12288"), lt_enumerate_max=B.LT_ENUMERATED_MAX))
+    assert p.want == 12288 and [p.takes(i, "x") for i in (8191, 8192, 12287, 12288)] == [False, True, True, False]
+    assert H.lt_pick(a(lt_enumerate_range=(0, 100), lt_enumerate_max=500)).want == 500
+    names = tmp_path / "best.txt"
+    names.write_text("lt13_fp8-e4m3_0_algo35_tile20_st15\n\n  lt_fp8-e4m3_0_algo60_tile13_st17_sw1 \n")
+    q = H.lt_pick(a(lt_enumerate_names=names, lt_enumerate_max=40000))
+    assert q.names == {"lt13_fp8-e4m3_0_algo35_tile20_st15", "lt_fp8-e4m3_0_algo60_tile13_st17_sw1"} and q.want == 40000
+    assert q.takes(39999, "lt13_fp8-e4m3_0_algo35_tile20_st15") and not q.takes(0, "lt13_fp8-e4m3_0_algo35_tile20_st16")
+    assert q.record() == {"start": 0, "stop": None, "limit": 40000, "names": 2}
+    for bad in ("5:5", "7:3", "3", ":4", "a:9", "-1:4"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            H.lt_range(bad)
 
 
 def test_set_count_bounds():
