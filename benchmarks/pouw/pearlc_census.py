@@ -191,7 +191,8 @@ def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: 
 FAMILIES = ("gaussian", "spike1-first", "spikes-first", "spikes-permuted", "spikes-groupstart", "constant",
             "coherent-gaussian", "orthogonal-FA", "duplicated")
 ACTIVATION_FAMILIES = ("zero-row", "zero-slices", "sparse10", "rank1", "saturated", "grid-aligned", "in-span-FA")
-FREEZE_FAMILIES = ("aligned-spikes-r64", "aligned-spikes-r160", "aligned-spikes-r220", "aligned-spikes-r300")
+FREEZE_FAMILIES = ("aligned-spikes-r64", "aligned-spikes-r160", "aligned-spikes-r220", "aligned-spikes-r300",
+                   "aligned-spikes-pm1-r64", "aligned-spikes-pm1-r220", "aligned-spikes-pm1-r300", "aligned-spikes-pm1-r444")
 
 
 def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.random.Generator):
@@ -227,12 +228,18 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
     if name in ("constant", "coherent-gaussian"):
         v = rng.choice([-1.0, 1.0], k) if name == "constant" else rng.standard_normal(k)
         return np.tile(v, (rows, 1)), np.tile(v, (cols, 1))
-    if name.startswith("aligned-spikes-r"):
+    if name.startswith("aligned-spikes-"):
         # Two spikes per 128-deep group, at the same positions in every row of A and B, off the every-8th grid so that rho is
-        # the Gaussian background's: s/rho = R, which the noise floor allows up to 444 and liveness allows at k/64 entries.
-        R = float(name.removeprefix("aligned-spikes-r"))
+        # the background's: s/rho = R, which the noise floor allows up to 444 and liveness allows at k/64 entries. The
+        # background is Gaussian, or +-1 (`aligned-spikes-pm1-rR`), which freezes whole atoms more (the reviewer's probe).
+        spec = name.removeprefix("aligned-spikes-")
+        pm1 = spec.startswith("pm1-")
+        R = float(spec.removeprefix("pm1-").removeprefix("r"))
         pos = np.concatenate([np.arange(0, k, 128) + 1, np.arange(0, k, 128) + 9])
-        A, B = rng.standard_normal((rows, k)), rng.standard_normal((cols, k))
+        if pm1:
+            A, B = rng.choice([-1.0, 1.0], (rows, k)), rng.choice([-1.0, 1.0], (cols, k))
+        else:
+            A, B = rng.standard_normal((rows, k)), rng.standard_normal((cols, k))
         A[:, pos] = R
         B[:, pos] = R
         return A, B
@@ -268,32 +275,69 @@ def chain(a: np.ndarray, b: np.ndarray, G: int):
     return tid, tex, words / (P * T), promo
 
 
+def group_run(a: np.ndarray, b: np.ndarray, ts: list[int], skip: frozenset = frozenset()) -> tuple[np.ndarray, list[np.ndarray]]:
+    """One promotion group's accumulator from +0 over atoms `ts`, the atoms in `skip` passed through; and each atom's
+    identity flag (D == C) on the unskipped run."""
+    C, ids = np.zeros(a.shape[0]), []
+    for t in ts:
+        if t in skip:
+            continue
+        D, _ = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
+        ids.append(D == C)
+        C = D
+    return C, ids
+
+
 def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
-    """The replayed debit per word (P1's form), for groups of G atoms from +0 promoted into an FP32 total: `eF`, the atoms
-    that are identities (D == C) plus every atom of a group whose promotion is an identity (total' == total); and `extra`,
-    the atoms outside that set whose skipping alone leaves the promoted total unchanged (the skip-one replay)."""
+    """The replayed debit per word, P1's option (A) (`jointFlags`): on the noisy codes and the ticket's schedule (groups of G
+    atoms from +0, each promoted into an FP32 total), flag every atom of every nonempty subset of one group whose joint
+    skip leaves the word's final total unchanged. It contains the identities, the groups whose promotion is an identity,
+    and every single or joint skip inside one group, however it is absorbed (by a later atom's grid or by a later
+    promotion). Returns the (words, atoms) flags and P1's e_F per word (identities plus promotion-identity groups)."""
     P, k = a.shape
     T = k // 32
+    groups = [list(range(g0, min(g0 + G, T))) for g0 in range(0, T, G)]
+    Cs, before, eF = [], [], np.zeros(P, dtype=np.int64)
     total = np.zeros(P, dtype=np.float32)
-    eF, extra = np.zeros(P, dtype=np.int64), np.zeros(P, dtype=np.int64)
-    for g0 in range(0, T, G):
-        ts = list(range(g0, min(g0 + G, T)))
-        C, ids = np.zeros(P), []
-        for t in ts:
-            D, _ = step(C, a[:, 32 * t:32 * t + 32], b[:, 32 * t:32 * t + 32])
-            ids.append(D == C)
-            C = D
+    for ts in groups:
+        C, ids = group_run(a, b, ts)
         new = (total + C.astype(np.float32)).astype(np.float32)
-        F = np.stack(ids, 1) | (new == total)[:, None]
-        for i, t in enumerate(ts):
-            Cs = np.zeros(P)
-            for t2 in ts:
-                if t2 != t:
-                    Cs, _ = step(Cs, a[:, 32 * t2:32 * t2 + 32], b[:, 32 * t2:32 * t2 + 32])
-            extra += ((total + Cs.astype(np.float32)).astype(np.float32) == new) & ~F[:, i]
-        eF += F.sum(1)
+        eF += (np.stack(ids, 1) | (new == total)[:, None]).sum(1)
+        Cs.append(C)
+        before.append(total)
         total = new
-    return eF, extra
+    final = total
+    flags = np.zeros((P, T), dtype=bool)
+    for g, ts in enumerate(groups):
+        for mask in range(1, 1 << len(ts)):
+            skip = frozenset(t for i, t in enumerate(ts) if mask >> i & 1)
+            Cm, _ = group_run(a, b, ts, skip)
+            same = Cm == Cs[g]
+            if not same.all():
+                t32 = (before[g] + Cm.astype(np.float32)).astype(np.float32)
+                for h in range(g + 1, len(groups)):
+                    t32 = (t32 + Cs[h].astype(np.float32)).astype(np.float32)
+                same = same | (t32 == final)
+            for t in skip:
+                flags[:, t] |= same
+    return flags, eF
+
+
+def group_sums(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
+    """Each word's group accumulators (words, groups) and its final promoted total (the ticket word)."""
+    T = a.shape[1] // 32
+    total, out = np.zeros(a.shape[0], dtype=np.float32), []
+    for g0 in range(0, T, G):
+        C, _ = group_run(a, b, list(range(g0, min(g0 + G, T))))
+        out.append(C)
+        total = (total + C.astype(np.float32)).astype(np.float32)
+    return np.stack(out, 1), total
+
+
+def not_needed_share(flags: np.ndarray, rows: int, cols: int) -> float:
+    """P3's `needed`, on the tile: the share of (A row, atom) pairs that no word of the row needs (every word (i, j) has the
+    atom flagged). A whole unit's rows meet many more columns, so the unit's share is at most the tile's."""
+    return float(flags.reshape(rows, cols, -1).all(1).mean())
 
 
 def exact_run_mask(tex: np.ndarray, min_run: int = 14) -> np.ndarray:
@@ -357,11 +401,19 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                "noise_free_entries": float(nfA.mean()), "double_rounding_differs": round((drA + drB) / 2, 6),
                "skippable_share": skip / T}
         if G and with_debit:
-            eF, ex = debit(A, B, G)
-            # Tile identities are in every word's eF, so under the debited credit only exact runs remain skippable.
-            row.update({"debit_eF_share": round(float(eF.mean()) / T, 6), "debit_extra_share": round(float(ex.mean()) / T, 6),
-                        "debit_share": round(float((eF + ex).mean()) / T, 6), "debit_max_word_share": round(float((eF + ex).max()) / T, 6),
-                        "residual_share": exact_run_atoms(tex) / T})
+            flags, eF = debit(A, B, G)
+            per_word = flags.sum(1)
+            # Every tile identity is flagged in every word, so under the debited credit only exact runs remain skippable.
+            row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
+                        "debit_eF_share": round(float(eF.mean()) / T, 6), "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
+                        "tile_all_flagged_share": round(float(flags.all(0).mean()), 6), "residual_share": exact_run_atoms(tex) / T})
+            if forming == "s5":
+                a2 = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A", "salt-2"))[0]
+                b2 = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B", "salt-2"))[0]
+                g1, t1 = group_sums(A, B, G)
+                g2, t2 = group_sums(a2[ii.ravel()], b2[jj.ravel()], G)
+                row.update({"group_sums_equal_across_salts": round(float((g1 == g2).mean()), 6),
+                            "ticket_words_equal_across_salts": round(float((t1 == t2).mean()), 6)})
         out.append(row)
     return out
 

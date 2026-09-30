@@ -32,17 +32,25 @@ def test_s5_forming_rules():
     assert not rows["zero-row"]["rules_ok"] and "noise-floor-A" in rows["zero-row"]["rejected_by"]
 
 
-def test_debit_counts_atoms_skippable_alone():
+def test_debit_flags_joint_skips_inside_a_group():
     import numpy as np
     a, b = np.zeros((1, 128), dtype=np.uint8), np.zeros((1, 128), dtype=np.uint8)
     a[0, 0], b[0, 0] = 0x38, 0x38            # 1 * 1
     a[0, 32], b[0, 32] = 0x30, 0x38          # 0.5 * 1
     a[0, 64:66], b[0, 64:66] = [0x7E, 0xFE], [0x7E, 0x7E]   # 448^2 - 448^2 sets the grid to 2^3 and truncates to +0
     a[0, 96], b[0, 96] = 0x38, 0x38          # 1 * 1
-    eF, extra = C.debit(a, b, 4)
-    assert eF.tolist() == [0] and extra.tolist() == [2]
+    flags, eF = C.debit(a, b, 4)
+    # No atom is an identity, but skipping {0, 1}, {0, 1, 2} or {1, 2, 3} jointly leaves the group's word 1: all four flagged.
+    assert eF.tolist() == [0] and flags.tolist() == [[True, True, True, True]]
 
 
 def test_aligned_spikes_pass_the_rules_and_freeze_words():
     g4 = [r for r in C.cell("aligned-spikes-r300", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0) if r["layout"] == "G4"]
     assert g4[0]["rules_ok"] and g4[0]["word_identity"] > 0.5
+
+
+def test_pm1_background_skips_whole_atoms_and_the_debit_covers_them():
+    rows = [r for r in C.cell("aligned-spikes-pm1-r444", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0, with_debit=True)
+            if r["layout"] == "G4"]
+    assert rows[0]["rules_ok"] and rows[0]["tile_identity_atoms"] > 0
+    assert rows[0]["debit_share"] >= rows[0]["tile_identity_atoms"] / rows[0]["atoms"]

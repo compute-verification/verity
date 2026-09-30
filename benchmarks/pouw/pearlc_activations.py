@@ -6,8 +6,8 @@ Each linear layer's first input X (the window's token rows) and its weight W are
 entries with |x| ≥ 8σ), the rules `OperandOK` applies. A unit is admissible only if all its rows are, so the fraction of
 64-row token tiles and 8-row weight tiles with every row admissible is reported too. On sampled tiles of admissible rows,
 64 tokens × 8 output channels, §5's forming (bit-exact atom-mix, E4M3 noise lines of norm --line-norm, one cast) and the
-G4 chain give each word's replayed debit (`pearlc_census.debit`: eF and the skip-one count) and the tile's undebited
-residual (exact runs across the tile).
+G4 chain give each word's replayed debit (`pearlc_census.debit`, P1's option (A): every atom of a within-group joint skip
+that leaves the ticket word unchanged), P3's not-needed share, and the tile's undebited residual (exact runs across it).
 
     python benchmarks/pouw/pearlc_activations.py --tiles 2 --out pearlc_activations.json
 
@@ -93,9 +93,10 @@ def main() -> None:
                 A, B = a[ii.ravel()], b[jj.ravel()]
                 T = k // 32
                 tid, tex, _, _ = C.chain(A, B, 4)
-                eF, ex = C.debit(A, B, 4)
-                tiles.append({"debit_share": float((eF + ex).mean()) / T, "debit_eF_share": float(eF.mean()) / T,
-                              "debit_extra_share": float(ex.mean()) / T, "debit_max_word_share": float((eF + ex).max()) / T,
+                flags, eF = C.debit(A, B, 4)
+                per_word = flags.sum(1)
+                tiles.append({"debit_share": float(per_word.mean()) / T, "debit_eF_share": float(eF.mean()) / T,
+                              "debit_max_word_share": float(per_word.max()) / T, "not_needed_share": C.not_needed_share(flags, 64, 8),
                               "tile_identity_share": float(tid.sum()) / T, "residual_share": C.exact_run_atoms(tex) / T})
         rec["tiles"] = tiles
         if tiles:
