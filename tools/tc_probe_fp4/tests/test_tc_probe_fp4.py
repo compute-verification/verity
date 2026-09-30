@@ -25,6 +25,7 @@ import cast  # noqa: E402
 import f1_rates as F1  # noqa: E402
 import fp4_emulation_1ad1aaa2 as E  # noqa: E402
 import k32  # noqa: E402
+import lean_vectors as LV  # noqa: E402
 import meta_rule as MR  # noqa: E402
 import probe as P  # noqa: E402
 import sparse as S  # noqa: E402
@@ -253,6 +254,64 @@ def test_scale_bit7_twins_differ_only_in_bit_7_and_the_model_refuses_those_bytes
     s = P.bit7_summary(hw, SFA, SFB, D, err)
     assert not s["hardware_ignores_bit7"] and s["device_words_differ"] == 1
     assert s["first_differences"][0]["pair"] == 1 and (s["first_differences"][0]["i"], s["first_differences"][0]["j"]) == (1, 3)
+
+
+def _lean_vectors_file(path: Path, rng) -> None:
+    """A small ``Fp4Vectors.lean``: nvf4P7's entries 0-5 in the model (5 carries a bit-7 byte, ``d`` its low-7-bit twin's word),
+    6 a bit-7 entry with ``none``; nvf4Chains' entry 0 in the model, entry 1 a bit-7 chain of 2."""
+    def pack(xs, bits):
+        return sum(int(x) << (bits * i) for i, x in enumerate(xs))
+
+    def entry(n, bit7, known=True):
+        a, b = rng.integers(0, 16, 64 * n), rng.integers(0, 16, 64 * n)
+        sa = P.UE4M3_VALID[rng.integers(0, 120, 4 * n)]
+        sb = P.UE4M3_VALID[rng.integers(0, 120, 4 * n)]
+        acc = int(P.f32_bits(np.float32(rng.standard_normal())))
+        v = {"acc": acc, "n": n, "a": pack(a, 4), "b": pack(b, 4), "sa": pack(sa, 8), "sb": pack(sb, 8), "d": None}
+        v["d"] = LV.model_word(M.BLACKWELL_SM120_NVF4, v, False) if known else None
+        if bit7:
+            sa = sa.copy()
+            sa[1] |= 0x80
+            v["sa"] = pack(sa, 8)
+        return v
+
+    def lean(v, chain):
+        d = "none" if v["d"] is None else f"some 0x{v['d']:08X}"
+        mid = f"{v['n']}, " if chain else ""
+        return f"  ⟨0x{v['acc']:08X}, {mid}0x{v['a']:X}, 0x{v['b']:X}, 0x{v['sa']:X}, 0x{v['sb']:X}, {d}⟩"
+
+    p7 = [entry(1, False) for _ in range(5)] + [entry(1, True), entry(1, True, known=False)]
+    ch = [entry(2, False), entry(2, True)]
+    path.write_text("import Pouw.PearlC.Fp4Chain\n\n/-- vectors -/\ndef nvf4P7 : List Vec := [\n" + ",\n".join(lean(v, False) for v in p7)
+                    + "]\n\n/-- chains -/\ndef nvf4Chains : List ChainVec := [\n" + ",\n".join(lean(v, True) for v in ch) + "]\n")
+
+
+def test_lean_vectors_capture_gates_the_layout_and_reports_the_prediction(no_nvcc, tmp_path):
+    """The whole driver on the CPU: a device that decodes the low 7 bits matches every prediction, one that refuses bit 7 is a
+    finding (the run passes), and a control whose file word is wrong, or a selected entry with no prediction, fails the run with
+    no selected word recorded."""
+    vec = tmp_path / "Fp4Vectors.lean"
+    _lean_vectors_file(vec, np.random.default_rng(3))
+    base = ["--instruction", "nvf4_lean_vectors", "--vectors", str(vec), "--vector-ids", "5", "--chain-ids", "1"]
+    assert P.main(base + ["--fake-silicon", "low7", "--out", str(tmp_path / "low7")]) == 0
+    doc = json.loads((tmp_path / "low7" / "probe_results.json").read_text())
+    assert doc["summary"] == {"selected": 2, "match_prediction": 2, "match_low7_twin": 2, "pinned_model_refuses": 2}
+    assert doc["gates"]["controls"]["vectors"] == 6 and doc["gates"]["controls"]["chains"] == 1
+    assert doc["gates"]["background"]["mismatches"] == 0 and doc["gates"]["background"]["checked"] > 0
+    assert [v["vector"] for v in doc["vectors"]] == ["nvf4P7[5]", "nvf4Chains[1]"] and doc["vectors"][1]["n"] == 2
+    assert P.main(base + ["--fake-silicon", "verity", "--out", str(tmp_path / "refuses")]) == 0
+    doc = json.loads((tmp_path / "refuses" / "probe_results.json").read_text())
+    assert doc["summary"]["match_prediction"] == 0 and {v["device"] for v in doc["vectors"]} == {"7fffffff"}
+
+    assert P.main(base[:4] + ["--vector-ids", "6", "--fake-silicon", "low7", "--out", str(tmp_path / "none")]) == 1
+    doc = json.loads((tmp_path / "none" / "probe_results.json").read_text())
+    assert "carries no predicted word" in doc["failures"][0] and "vectors" not in doc
+    text = vec.read_text()
+    first = LV.parse_list(text, "nvf4P7")[0]["d"]
+    vec.write_text(text.replace(f"some 0x{first:08X}", f"some 0x{first ^ 1:08X}", 1))
+    assert P.main(base + ["--fake-silicon", "low7", "--out", str(tmp_path / "control")]) == 1
+    doc = json.loads((tmp_path / "control" / "probe_results.json").read_text())
+    assert doc["gates"]["controls"]["mismatches"][0]["vector"] == "nvf4P7[0]" and "vectors" not in doc
 
 
 def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):
@@ -505,6 +564,10 @@ def test_store_declarations_keep_guards_out_of_the_derivation():
     assert p["instruction"] == "f8f6f4" and p["chain"] == 4 and "expect_uuid" not in p and p["arch"] == "sm_120a"
     assert "prebuilt" not in p and "_unknown" not in p
     assert set(p) <= set(tool.TC_PROBE_FP4.key_params) | {"out", "procs"}
+    v = tool.TC_PROBE_FP4.parse(["python", "tools/tc_probe_fp4/probe.py", "--instruction", "nvf4_lean_vectors", "--out", "x",
+                                 "--vectors", "in/Fp4Vectors.lean", "--vector-ids", "31,34", "--chain-ids", "9"])
+    assert (v["vectors"], v["vector_list"], v["vector_ids"], v["chain_ids"]) == ("in/Fp4Vectors.lean", "nvf4P7", "31,34", "9")
+    assert "_unknown" not in v and "vectors" in tool.TC_PROBE_FP4.param_artifacts
     q = tool.TC_PRICE_FP4.parse(["python", "tools/tc_probe_fp4/w1_price.py", "--out", "x", "--rows", "mxf4,nvf4,",
                                  "--expect-uuid", "GPU-1", "--max-seconds", "60"])
     assert q["rows"] == "mxf4,nvf4" and not {"out", "expect_uuid", "max_seconds"} & set(q)

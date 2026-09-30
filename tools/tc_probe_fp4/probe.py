@@ -72,7 +72,9 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
     T1's merged k128 route (``--instruction sp_nvf4_t1``, ``t1_merged.py``: the sparse k128 from C = H against two chained dense
     atoms from C = H, on the operands of ``fp4_emulation.py routes`` at 1ad1aaa2, for each ``--hot-bits`` h and C = +0);
     the sparse rows' metadata rule (``--instruction sp_nvf4_meta | sp_mxf4_meta``, ``meta_rule.py``: where each of the 16
-    nibbles puts a chunk's stored codes, the pinned step on that gather, and the zero patterns the hardware can write).
+    nibbles puts a chunk's stored codes, the pinned step on that gather, and the zero patterns the hardware can write);
+    named vectors of a generated Lean vector file (``--instruction nvf4_lean_vectors --vectors F``, ``lean_vectors.py``: each
+    selected word against the file's prediction, gated by the file's other in-model vectors).
   * ``scale_bit7`` (nvf4, record only): tile pairs whose UE4M3 scale bytes differ only in bit 7, which the pinned model refuses;
     ``bit7`` counts the words the pair's members differ in on the device, and checks the low-7-bit members against the model.
   * ``scale_split_twins`` (nvf4, mxf4): tile pairs with equal scaled products and accumulators but A's scale halved into its
@@ -149,6 +151,8 @@ SPARSE_INSTRUCTIONS = ("sp_nvf4", "sp_mxf4")
 T1_INSTRUCTIONS = ("sp_nvf4_t1",)
 #: the sparse rows' metadata rule (meta_rule.py): what each of the 16 nibbles gathers, and the pinned step on that gather
 META_RULE_INSTRUCTIONS = ("sp_nvf4_meta", "sp_mxf4_meta")
+#: named vectors of a generated Lean vector file (lean_vectors.py), captured on the NVF4 row against the file's predicted words
+LEAN_VECTOR_INSTRUCTIONS = ("nvf4_lean_vectors",)
 #: mma.sync instruction -> RowKind of mma_fp4.cu's generic kernel (single tiles of the new rows, and every in-register chain)
 ROW_KIND = {"nvf4": 0, "mxf4": 1, "f8f6f4": 2, "f8f6f4_e2m1_e4m3": 3, "f8f6f4_e4m3_e2m1": 4, "mxf8f6f4_e2m1": 5, "mxf8f6f4_e2m1_e4m3": 6,
             "mxf8f6f4_e4m3_e2m1": 7}
@@ -1303,7 +1307,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="nvf4",
                     choices=sorted(PTX) + list(CAST_INSTRUCTIONS) + list(SPARSE_INSTRUCTIONS) + list(T1_INSTRUCTIONS)
-                    + list(META_RULE_INSTRUCTIONS))
+                    + list(META_RULE_INSTRUCTIONS) + list(LEAN_VECTOR_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--chain2", action="store_true", help="tcgen05: pair each family's tiles into K=128 chains (two MMAs on one TMEM accumulator)")
@@ -1332,7 +1336,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--hot-bits", default="14,15,16", help="sp_nvf4_t1: the h of each hot accumulator H (C = +0 always runs)")
     ap.add_argument("--model-sample", type=int, default=4096,
                     help="sp_nvf4_t1: span words per accumulator checked against the pinned models (and 1/64 as many whole chains)")
+    ap.add_argument("--vectors", default=None, help="nvf4_lean_vectors: a generated Fp4Vectors.lean")
+    ap.add_argument("--vector-list", default="nvf4P7", help="nvf4_lean_vectors: the Vec list --vector-ids index")
+    ap.add_argument("--vector-ids", default=None, help="nvf4_lean_vectors: comma list of 0-based entries of --vector-list")
+    ap.add_argument("--chain-ids", default=None, help="nvf4_lean_vectors: comma list of 0-based entries of nvf4Chains")
     args = ap.parse_args(argv)
+    if args.instruction in LEAN_VECTOR_INSTRUCTIONS:
+        import lean_vectors
+        return lean_vectors.main(args)
     if args.instruction in CAST_INSTRUCTIONS:
         import cast
         return cast.main(args)
