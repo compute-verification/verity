@@ -56,9 +56,9 @@ handoff; `--update` records them, it does not approve them.  A pin whose stateme
 (same type hash and named assumptions: a toolchain's printer, notation) gets one line and needs no reviewer.  `--all` first runs the controls (`controls`): a
 fixture package built with each audited toolchain (which `--build` installs first), which must pass clean and fail each
 check once a violation is added.
-The packages are audited side by side, and the controls beside them, one `setup.sh` at a time. A package's build starts once the
-builds of the packages it requires by path have ended, since its build writes their `.lake` too; its reading and replay run
-beside the builds that follow.
+The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
+package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
+too; its reading and replay run beside the builds that follow.
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error.
 
 This directory is self-contained (the standard library, `lake` and the toolchain's `lean` and `leanchecker`): another
@@ -67,7 +67,6 @@ repository can copy it and use it with policies of its own (`README.md`).
 from __future__ import annotations
 
 import argparse
-import contextlib
 import difflib
 import hashlib
 import json
@@ -105,8 +104,10 @@ COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|pro
                           r"[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize|builtin_initialize|elab|elab_rules|macro"
                           r"|macro_rules|syntax|declare_syntax_cat)\b|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
                           r"|builtin_init|builtin_command_elab|builtin_term_elab|builtin_tactic|builtin_macro)\b")
-#: held around every `setup.sh`: they install into one elan home and fetch Mathlib's cache into one download directory
+#: held by the first `setup.sh` of each toolchain in a run (`setup`)
 SETUP = threading.Lock()
+#: the toolchains a `setup.sh` of this run has installed
+_INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 #: the controls' own packages; `--all` does not audit them as the repository's
@@ -567,6 +568,20 @@ def statement_changes(notes: list[str]) -> list[str]:
     return [n for n in notes if not n.endswith((REPRINTED, REHASHED, REGROUPED))]
 
 
+def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
+    """`setup.sh` for ``pkg``: alone until one has installed ``toolchain``, since they install into one elan home; then beside
+    the others (Mathlib's `cache get`, which they share a download directory for, writes each download to a file of its own
+    process's first)."""
+    argv = ["bash", str(TOOL / "setup.sh"), str(pkg)]
+    with SETUP:
+        if toolchain not in _INSTALLED:
+            rc, text = run(argv, pkg, log)
+            if rc == 0:
+                _INSTALLED.add(toolchain)
+            return rc, text
+    return run(argv, pkg, log)
+
+
 def killed(rc: int) -> bool:
     """A process ended by a signal (the machine's OOM killer, a timeout), which says nothing about the kernel's verdict."""
     return rc < 0 or rc >= 128
@@ -670,12 +685,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t = time.monotonic()
     if build:
         rep["sandbox"] = sandboxed()
-        for step, argv in (("setup", ["bash", str(TOOL / "setup.sh"), str(pkg)]),
+        for step, argv in (("setup", None),
                            ("build", in_sandbox(pkg, ["lake", "build"])),
                            ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
             s = time.monotonic()
-            with SETUP if step == "setup" else contextlib.nullcontext():
-                rc, text = run(argv, pkg, work / f"{step}.log")
+            rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
             rep["seconds"][step] = round(time.monotonic() - s, 1)
             if rc:
                 rep["failures"].append(f"{step}: exit {rc}\n{text[-3000:]}")
@@ -788,8 +802,7 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
     pkg = work / "pkg"
     (pkg / "lean-toolchain").write_text(toolchain + "\n")
     if install:
-        with SETUP:
-            rc, text = run(["bash", str(TOOL / "setup.sh"), str(pkg)], pkg, work / "setup.log")
+        rc, text = setup(pkg, toolchain, work / "setup.log")
         if rc:
             return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
