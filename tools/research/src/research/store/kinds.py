@@ -50,6 +50,9 @@ KINDS: dict[str, str] = {
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
                                  "{arts}, pinned by backends/flock/verifier/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
+    "kernel-attempt/v1": "one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py, written by verify.py): meta = the "
+                         "variant id, parent, tier, harness commit and gate version, metrics and step times, gamma at both FP32 prices, "
+                         "the verifier's lines, the hypothesis; refs.parent = the attempt it changes; labels kernel_outcome, kernel_reason",
     "ledger-row/v1": "one frozen overhead-ledger row (backends/numerical/reports/ledger/<lane>.jsonl) whose run is not an attempt here; "
                      "meta = the row as written (schema ledger/v1); payload null; the lane's claims are labels on it",
     "trust-dossier/v1": "the computed trust level of one numerical target (tools/tc_probe/trust.py): meta = the TrustReport "
