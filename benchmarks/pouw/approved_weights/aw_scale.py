@@ -69,7 +69,7 @@ class CompactLinear(torch.nn.Module):
             x = x @ self.rin
         y = F.linear(x, self.core()) * self.rscale.view(1, -1).to(x.dtype)
         if self.scale is not None:
-            y = y * self.scale + self.shift
+            y = y * self.scale.to(y.dtype) + self.shift.to(y.dtype)
         if self.rout is not None:
             y = y @ self.rout.T
         return y
@@ -161,8 +161,8 @@ def attach_affine(model, names, on):
     for n in names:
         mod = model.get_submodule(n)
         if on and n.endswith(("q_proj", "k_proj", "v_proj", "gate_proj", "up_proj")):
-            mod.scale = torch.nn.Parameter(torch.ones(mod.out_features, device=mod.codes.device, dtype=torch.bfloat16))
-            mod.shift = torch.nn.Parameter(torch.zeros(mod.out_features, device=mod.codes.device, dtype=torch.bfloat16))
+            mod.scale = torch.nn.Parameter(torch.ones(mod.out_features, device=mod.codes.device, dtype=torch.float32))
+            mod.shift = torch.nn.Parameter(torch.zeros(mod.out_features, device=mod.codes.device, dtype=torch.float32))
             params += [mod.scale, mod.shift]
         else:
             mod.scale = mod.shift = None

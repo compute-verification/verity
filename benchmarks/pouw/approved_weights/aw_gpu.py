@@ -182,7 +182,7 @@ def install_act(model, rung, seed, dev):
                 x = x @ m._aw_rin
             y = F.linear(act_quant(x, fmt, m._aw_f, m._aw_g), m.weight, m.bias)
             if getattr(m, "_aw_scale", None) is not None:
-                y = y * m._aw_scale + m._aw_shift
+                y = y * m._aw_scale.to(y.dtype) + m._aw_shift.to(y.dtype)
             if m._aw_rout is not None:
                 y = y @ m._aw_rout.T
             return y
@@ -194,8 +194,8 @@ def glue_params(model, on):
     params = []
     for n, m in linears(model):
         if on and n.endswith(("q_proj", "k_proj", "v_proj", "gate_proj", "up_proj")):
-            m._aw_scale = torch.nn.Parameter(torch.ones(m.out_features, device=m.weight.device, dtype=m.weight.dtype))
-            m._aw_shift = torch.nn.Parameter(torch.zeros(m.out_features, device=m.weight.device, dtype=m.weight.dtype))
+            m._aw_scale = torch.nn.Parameter(torch.ones(m.out_features, device=m.weight.device, dtype=torch.float32))
+            m._aw_shift = torch.nn.Parameter(torch.zeros(m.out_features, device=m.weight.device, dtype=torch.float32))
             params += [m._aw_scale, m._aw_shift]
         else:
             m._aw_scale = m._aw_shift = None
