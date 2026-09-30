@@ -10,8 +10,9 @@ Key params follow probe.py's argparse; `--out` and `--procs` never enter the der
 `tc_price_fp4` is the W1 price microbenchmark beside it (w1_price.py, lane pouw rtx-pro GPU 4); `--out`, `--expect-uuid` and
 `--max-seconds` are guards and paths, not part of the answer:
 
-    research run --on <server> --project verity --campaign pouw --env CUDA_VISIBLE_DEVICES=4 --tool tc_price_fp4 --source . -- \
-        python tools/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR --expect-uuid GPU-...
+    research run --on vy-nebius-2 --project verity --campaign pouw --tool tc_price_fp4 --source . --cwd source -- \
+        gpu-lease 1 -- uv run --no-project --with numpy python tools/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR \
+            --expect-uuid GPU-...,GPU-... --locked-mhz 2100
 """
 from __future__ import annotations
 
@@ -69,6 +70,8 @@ def parse_price(argv: list[str]) -> dict:
     ap.add_argument("--target-ms", type=float, default=100.0)
     ap.add_argument("--sustain-s", type=float, default=3.0)
     ap.add_argument("--warps-per-sm", type=int, default=16)
+    ap.add_argument("--ops", default=None)
+    ap.add_argument("--op-warps-per-sm", type=int, default=None)
     ap.add_argument("--latency-iters", type=int, default=20000)
     ap.add_argument("--no-scale-update", action="store_true")
     ap.add_argument("--seed", type=int, default=20260930)
@@ -83,19 +86,20 @@ def parse_price(argv: list[str]) -> dict:
     out.pop("out")
     out.pop("max_seconds")
     out.pop("expect_uuid")
-    if out["rows"]:
-        out["rows"] = ",".join(sorted(r for r in out["rows"].split(",") if r))
+    for k in ("rows", "ops"):
+        if out[k]:
+            out[k] = ",".join(sorted(r for r in out[k].split(",") if r))
     if unknown:
         out["_unknown"] = unknown
     return out
 
 
 TC_PRICE_FP4 = Tool(
-    name="tc_price_fp4", version="1",
+    name="tc_price_fp4", version="2",
     command=["python", "tools/tc_probe_fp4/w1_price.py"],
     closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
-    key_params=["rows", "reps", "target_ms", "sustain_s", "warps_per_sm", "latency_iters", "no_scale_update", "seed", "locked_mhz",
-                "corrupt_word", "fake_silicon", "sass_only"],
+    key_params=["rows", "ops", "reps", "target_ms", "sustain_s", "warps_per_sm", "op_warps_per_sm", "latency_iters", "no_scale_update",
+                "seed", "locked_mhz", "corrupt_word", "fake_silicon", "sass_only"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
     produces=["bench-result/v1", "run-files/v1"],

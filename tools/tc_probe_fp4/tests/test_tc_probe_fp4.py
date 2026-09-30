@@ -220,13 +220,48 @@ def test_w1_fragments_carry_only_the_row_formats():
                     assert not (x & 0xC3).any()
                 else:
                     assert not np.isin(x, list(k32.E4M3_NAN)).any()
-        s = by[:, :, 6:8]
+        s = by[:, :, 8:10]
         if sf == "ue4m3":
             assert ((s >= 0x30) & (s < 0x48)).all()
         elif sf == "ue8m0":
             assert ((s >= 124) & (s < 132)).all()
         else:
             assert not s.any()
+        assert not f[:, :, 11].any() and (row in W.SPARSE_ROWS or not f[:, :, 6:8].any())
+        nib = (f[:, :, 10:11] >> (4 * np.arange(8, dtype=np.uint32))) & 0xF
+        assert np.isin(nib, S.META_VALID).all() if row in W.SPARSE_ROWS else not nib.any()
+
+
+def test_w1_op_inputs_stay_in_each_op_domain():
+    for op in W.OPS:
+        x = W.op_inputs(op, 64, 1)
+        assert x.shape == (64, W.CV_CHAINS, 2)
+        v = x.view(np.float32)
+        if op in ("cvt_e4m3x2_f32_ue4m3", "cvt_ue8m0x2_f32_rp", "rcp_approx"):
+            assert (v[..., 0] > 0).all() and np.isfinite(v[..., 0]).all()
+        if op == "fmul":
+            assert (x[..., 1] == 0x3F800000).all()
+        if op == "rcp_approx":
+            assert not x[..., 1].any()
+        if op == "cvt_f16x2_e4m3x2_ue4m3":
+            assert not np.isin(x[..., 0] & 0x7F, [0x7F]).any() and not np.isin((x[..., 0] >> 8) & 0x7F, [0x7F]).any()
+
+
+def test_w1_loop_histogram_reads_the_timed_loop_only():
+    text = """
+        Function : _Z_cvt_tput_kernelILi0EEvPKjxPjPx
+        /*0000*/                   MOV R1, c[0x0][0x28] ;
+        /*0010*/                   F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C R2, R3, R4, RZ ;
+        /*0020*/                   F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C R5, R3, R4, RZ ;
+        /*0030*/                   LOP3.LUT R3, R3, 0xff, R5, 0x78, !PT ;
+        /*0040*/                   UISETP.NE.S64.AND UP0, UPT, UR4, URZ, UPT ;
+        /*0050*/              @UP0 BRA.U 0x20 ;
+        /*0060*/                   STG.E desc[UR4][R6.64], R3 ;
+        /*0070*/                   EXIT ;
+        /*0080*/                   BRA 0x80;
+    """
+    h = W.loops_of(text)["_Z_cvt_tput_kernelILi0EEvPKjxPjPx"]
+    assert h == {"F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C": 1, "LOP3.LUT": 1, "UISETP.NE.S64.AND": 1, "BRA.U": 1}
 
 
 def test_w1_dry_run_records_and_its_gates_fail_closed(no_nvcc, tmp_path):
@@ -238,6 +273,15 @@ def test_w1_dry_run_records_and_its_gates_fail_closed(no_nvcc, tmp_path):
     assert set(doc["comparisons"]) == set(W.COMPARISONS)
     names = {m["name"] for m in doc["measurements"]}
     assert "nvf4_const_scales_flop_per_sm_per_clock" in names and "f8f6f4_latency_cycles_per_mma" in names
+    assert "op_cvt_e2m1x2_f32_fp8_mac_per_element" in names and "nvf4_quantize_fp8_mac_per_element" in names
+    fp8 = doc["fp8_prices"]
+    # the fake issues one K=32 MMA per 4 clocks per warp, K=64 per 8 and the sparse K=128 per 16: every row costs one FP8 MAC
+    assert fp8["rows"]["f8f6f4_e4m3/const_scales"]["per_logical_mac"] == pytest.approx(1.0)
+    assert fp8["rows"]["sp_nvf4/const_scales"]["per_logical_mac"] == pytest.approx(1.0)
+    assert fp8["rows"]["sp_nvf4/const_scales"]["per_stored_mac"] == pytest.approx(2.0)
+    per_el = fp8["ops"]["cvt_e2m1x2_f32"]["per_element"]
+    assert fp8["ops"]["cvt_e2m1x2_f32"]["per_instruction"] == pytest.approx(2 * per_el)
+    assert fp8["nvf4_quantize_per_element"]["value"] > per_el
     assert not (tmp_path / "ok" / "result.json").exists()
 
     assert W.main(["--out", str(tmp_path / "bad"), "--corrupt-word"] + common) == 1
@@ -252,8 +296,8 @@ def test_w1_refuses_a_plan_longer_than_the_window(no_nvcc, tmp_path):
 
 
 def test_clock_label_needs_every_sample_at_the_lock():
-    s = [{"clocks.sm": "2100"}, {"clocks.sm": "2100"}]
-    assert W.clock_label(s, [2099.0, 2101.0], 2100) == "locked at 2100 MHz"
+    s = [{"clocks.sm": "2100"}, {"clocks.sm": "2092"}]
+    assert W.clock_label(s, [2099.0, 2092.0], 2100) == "locked-2100"
     assert W.clock_label(s, [2099.0, 2050.0], 2100) == "unlocked"
     assert W.clock_label([{"clocks.sm": "2100"}, {"clocks.sm": "1900"}], [2100.0], 2100) == "unlocked"
     assert W.clock_label(s, [2100.0], None) == "unlocked"
