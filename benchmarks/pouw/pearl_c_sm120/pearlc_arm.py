@@ -135,6 +135,7 @@ class _Shared:
 class _Call:
     def __init__(self, arm: PearlCSm120, hdev, shape, flags: frozenset[str], ops, corrupt: bool):
         rd, self.arm, self.hdev, self.shape, self.ops, self.freed = arm.rd, arm, hdev, shape, ops, False
+        rd.sync()                          # the operands were filled on the harness's non-blocking stream; this runs on the null one
         self.hashing, self.xof = "hash" in flags, "xof" in flags
         m, n, k = self.m, self.n, self.k = padded(shape.m), shape.n, shape.k
         size = R.Pipeline.sizes(m, n, k)
