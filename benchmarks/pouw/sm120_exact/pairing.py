@@ -94,24 +94,28 @@ def estimate(side: str, X: np.ndarray, p: tuple[int, int], ks: np.ndarray, edges
     return float(len(evaluate(side, X, p, ks, edges)[0]))
 
 
-def matching(edges, k: int) -> int:
+def matching_pairs(edges, k: int) -> list[tuple[int, int]]:
     """A greedy matching of the directed k pairs (each index used once, as first or second), lowest degree first."""
     e1, e2 = edges
     if not len(e1):
-        return 0
+        return []
     deg = np.bincount(e1, minlength=k) + np.bincount(e2, minlength=k)
     order = np.argsort(deg[e1] + deg[e2], kind="stable")
     a, b = e1[order], e2[order]
     used = np.zeros(k, bool)
-    n = 0
+    out = []
     for i in range(0, len(a), 1 << 16):
         ca, cb = a[i:i + (1 << 16)], b[i:i + (1 << 16)]
         live = ~used[ca] & ~used[cb]
         for x, y in zip(ca[live].tolist(), cb[live].tolist()):
             if not used[x] and not used[y]:
                 used[x] = used[y] = True
-                n += 1
-    return n
+                out.append((x, y))
+    return out
+
+
+def matching(edges, k: int) -> int:
+    return len(matching_pairs(edges, k))
 
 
 def candidates(X: np.ndarray, ok: np.ndarray, used: set, n: int, rng: np.random.Generator, similar: np.ndarray):
@@ -201,9 +205,14 @@ def grow(sides, ks, k, which, cands, rng, sim, s0, p0, policy: str = "max") -> d
     blocks = [(st.get("nA", 0), st.get("nB", 0), st["matched"]) for st in steps]
     ok_steps = [b for b in blocks if b[2] >= KPAIRS]
     reached = max(ok_steps, key=lambda b: (b[0] + b[1], b[2]), default=(0, 0, 0))
-    return {"steps": steps, "largest_block": max(blocks, key=lambda b: (b[0] + b[1]) * b[2], default=(0, 0, 0)),
-            "reached_with_32_k_pairs": reached,
-            "fragment": all(reached[i] >= NEED[s] for i, s in enumerate(("A", "B")) if s in which)}
+    fragment = all(reached[i] >= NEED[s] for i, s in enumerate(("A", "B")) if s in which)
+    out = {"steps": steps, "largest_block": max(blocks, key=lambda b: (b[0] + b[1]) * b[2], default=(0, 0, 0)),
+           "reached_with_32_k_pairs": reached, "fragment": fragment}
+    if fragment:
+        # the loop stops at the fragment, so the last step's pairs and matching are the fragment's
+        out["fragment_pairs"] = {s: [list(p) for p in chosen[s]] for s in which}
+        out["fragment_k_pairs"] = [list(p) for p in matching_pairs(edges, k)]
+    return out
 
 
 def rules(X: np.ndarray) -> np.ndarray:
