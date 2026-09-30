@@ -46,6 +46,7 @@ REGISTRY_REL = Path(".agents/skills/using-slack/registry.json")
 FRONT_DOOR = "agent-coordination"
 DEFAULT_API = "https://slack.com/api/"
 EVERY = "every handle"
+DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
 SUBTEAM_RE = re.compile(r"<!subteam\^([A-Z0-9]+)(?:\|@?([^>]*))?>")
 ANNOUNCE = "\U0001f4e3"                                            # 📣
@@ -92,6 +93,8 @@ def load_registry(path: Path) -> dict:
         for k in ("holder", "remit", "charter"):
             if not isinstance(h.get(k), str) or not h[k]:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
+        if len(h["remit"]) > DESCRIPTION_MAX:
+            raise SlackError(f"registry {path}: @{name}'s remit is {len(h['remit'])} characters; its user group's description takes {DESCRIPTION_MAX}")
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")

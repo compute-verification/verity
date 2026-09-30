@@ -90,14 +90,14 @@
       "holder": "the old pous coordinator (bc-b729c175-2ef6-418e-98fe-10896709028b)",
       "remit": "Advising its successor, the accounting coordinator: handing off to it and relaying the old pous workers' results.",
       "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-accounting",
-      "usergroup": null
+      "usergroup": "S0C5WBQ3A76"
     },
     {
       "handle": "old-circuits-and-proofs",
       "holder": "two holders: the old vLLM coordinator (bc-ecac3029) and the old research coordinator (bc-8ece7cde)",
-      "remit": "Advising their successors, the circuits and proofs coordinators: handing off to them and relaying the old vLLM and research workers' results.",
+      "remit": "Advising @circuits and @proofs, their successors: handing off to them and relaying the old vLLM and research workers' results.",
       "charter": "note:20260930T1955Z-handoff-from-infra-slack-advisor-circuits, note:20260930T1955Z-handoff-from-infra-slack-advisor-proofs",
-      "usergroup": null
+      "usergroup": "S0C5MCG1A2Z"
     }
   ]
 }

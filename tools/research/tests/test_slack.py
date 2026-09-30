@@ -148,6 +148,14 @@ def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "approvals") == ["infra"]
 
 
+def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
+    reg = json.loads(registry.read_text())
+    reg["handles"][0]["remit"] = "x" * (slack.DESCRIPTION_MAX + 1)
+    registry.write_text(json.dumps(reg))
+    with pytest.raises(slack.SlackError, match="remit"):
+        slack.load_registry(registry)
+
+
 def test_handles_and_subscriptions(registry, capsys):
     rc, out, _ = run(capsys, "handles")
     assert rc == 0 and "@infra" in out and "SINFRA" in out and "#agent-alerts" in out
