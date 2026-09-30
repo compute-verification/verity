@@ -69,23 +69,29 @@ def test_real_activation_replay(tmp_path):
     (row,) = RT.rows([s], RT.Fraction(1, 1000))
     assert row["x_rows"] == M and row["x_dnf_fail_split"] == 0 and row["w_rows"] == N and row["debited"] == 1
     assert abs(sum(row["mean_share"].values()) - t["ratio"]) < 1e-9 and "flag" not in row
+    assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_cap"] == 0
     assert NAME in RT.markdown([row], RT.Fraction(1, 1000))
 
 
 def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_caps():
-    """A tile's cap scales with ρ: at ρ = 1/1,000 it is over when its ratio at 1/400 exceeds 0.4."""
+    """A tile's cap scales with ρ: at ρ = 1/1,000 it is over when its ratio at 1/400 exceeds 0.4; a model's over-cap share
+    weighs each linear's fraction of tiles over the cap by its MACs."""
     def tile(ratio: float) -> dict:
         debit = {term: "0" for term in RT.TERMS} | {"forming": str(RT.Fraction(ratio).limit_denominator(10 ** 6)),
                                                     "counts": {}}
-        return {"ratio": ratio, "cap": "1", "debit": debit, "rejected": ""}
+        return {"ratio": ratio, "cap": "1", "debit": debit, "rejected": "", "m": 256, "n": 1024, "k_kept": 8111}
 
     names = [f"model.layers.{i}.mlp.down_proj" for i in (0, 8, 72)] + ["model.layers.0.self_attn.q_proj"]
     s = {"capture": "x.npz", "model": "m", "inputs": {}, "weights": {},
          "tiles": {n: [tile(0.3), tile(0.5 if "72" in n else 0.1)] for n in names}}
-    rows = {r["linear"]: r for r in RT.rows([s], RT.Fraction(1, 1000))}
+    table = RT.rows([s], RT.Fraction(1, 1000))
+    rows = {r["linear"]: r for r in table}
     assert rows[names[0]]["flag"] == "first down_proj" and rows[names[2]]["flag"] == "last down_proj"
     assert "flag" not in rows[names[1]] and "flag" not in rows[names[3]]
     assert rows[names[2]]["over_cap"] == 0 and rows[names[2]]["over_cap_tight"] == 1 and rows[names[0]]["over_cap_tight"] == 0
+    share = RT.mac_shares(table)["m"]
+    assert share["macs"] == 4 * 256 * 1024 * 8111 and share["over_cap"] == 0 and share["over_cap_tight"] == 1 / 8
+    assert "12.50% at 1/1000" in RT.markdown(table, RT.Fraction(1, 1000))
 
 
 def test_an_npz_capture_is_read_as_its_linears(tmp_path):
