@@ -12,18 +12,22 @@ it by quota and requeues it itself when it is preempted). The Job runs the task'
 image's uid 1000, with /workspace mounted, and the R2 store credentials from the Secret `research-r2` (the templates' `secrets`).
 Tasks of a multi-task template (config-run: build, then gpu) chain: the next task is submitted when the previous one succeeds.
 A task that exits 99 is resubmitted (a chunk that ended early or was told to yield); any other failure ends the item.
-Every task starts under `taskset -c $VY_DISPATCH_CPUS` (96-191): 0-7 are k3s's and 8-95 the RC's three train-check slots.
+Every task starts under `taskset -c $VY_DISPATCH_CPUS` (96-127): 0-7 are k3s's, 8-95 the RC's three train-check slots, 128-191
+pinned benches (Build 128-159, M0 160-191).
 
-**Ready files.** `$VY_DISPATCH_ROOT/ready/<workstream>.jsonl` (default root /workspace/jobs/dispatch), one item per line, which the
-workstream's owner appends to (never rewrites a line it has; a changed item is a new id):
+**Ready files.** One JSON file per item, `$VY_READY/<workstream>/<id>.json` (default /workspace/jobs/ready, which the steward's
+exporter counts as `vy_ready_jobs{lane}` for the idle alert), written by the workstream's owner (write a temp name, then rename):
 
-    {"id": "g017", "template": "config-run", "tree": "/workspace/research/trees/<lane>", "queue": "circuits",
-     "priority": "circuits", "class": "small", "rank": 0, "env": {"ROW": "...", "ROLE": "B0", "REPO": "...", "REVISION": "..."}}
+    {"template": "config-run", "tree": "/workspace/research/trees/<lane>", "queue": "circuits", "priority": "circuits",
+     "class": "small", "rank": 0, "env": {"ROW": "...", "ROLE": "B0", "REPO": "...", "REVISION": "..."}}
 
-`queue` and `priority` default to the template's labels; `class` is submit.sh's VY_ROW_CLASS table (config-run's two tasks);
-`resources` ({"<task>": {"cpus": N, "memory": GB, "gpus": N}}) overrides it. Order: higher `rank` first; within a rank the
-workstreams take turns, each in file order. A queue is topped up while it has fewer than its depth of pending workloads (anyone's;
-VY_DISPATCH_DEPTH, default circuits=4,provers=2,backfill=4). A chain's next task is submitted regardless of depth.
+The item's id is the file's stem. On submit the file moves to `$VY_DISPATCH_ROOT/taken/<workstream>/` (default root
+/workspace/jobs/dispatch), so the ready directory holds only work not yet submitted.
+`queue` and `priority` default to the template's labels (`backfill` to priority `backfill`); `class` is submit.sh's VY_ROW_CLASS
+table (config-run's two tasks); `resources` ({"<task>": {"cpus": N, "memory": GB, "gpus": N}}) overrides it. Order: higher `rank`
+first; within a rank the workstreams take turns, each oldest file first. A queue is topped up while it has fewer than its depth of
+pending workloads (anyone's; VY_DISPATCH_DEPTH, default circuits=4,provers=2,backfill=4). A chain's next task is submitted
+regardless of depth.
 
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
 Inside the Job, the template's own `research run` writes the Attempt.
@@ -46,13 +50,14 @@ HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "sky" / "jobs"
 ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
-CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-191")
+READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
+CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-127")
 SERVER = os.environ.get("VY_DISPATCH_SERVER", "vy-nebius-1")
 SECRET = "research-r2"
 REQUEUE_RC = 99
 MAX_TRIES = 50
 DEFAULT_DEPTH = "circuits=4,provers=2,backfill=4"
-DEFAULT_PRIORITY = {"backfill": "dev"}
+DEFAULT_PRIORITY = {"backfill": "backfill"}
 # submit.sh's VY_ROW_CLASS table: (build GB, gpu GB, GPUs) for config-run's two tasks
 CLASSES = {"small": (64, 64, 1), "dense": (160, 192, 1), "long": (160, 256, 1), "moe": (256, 384, 1), "b64": (256, 512, 1),
            "tp2": (160, 384, 2)}
@@ -200,26 +205,38 @@ def done_keys() -> set[str]:
     return {json.loads(line)["key"] for line in p.read_text().splitlines() if line.strip()} if p.exists() else set()
 
 
-def ready_items() -> list[tuple[int, str, str, dict]]:
-    """[(rank, workstream, key, item)] in dispatch order: rank desc, then workstreams take turns, each in file order."""
-    per_ws: dict[str, list[tuple[int, str, dict]]] = {}
-    for f in sorted((ROOT / "ready").glob("*.jsonl")):
-        ws = f.stem
-        for n, line in enumerate(f.read_text().splitlines()):
-            if not line.strip():
-                continue
+def ready_items() -> list[tuple[str, dict, Path]]:
+    """[(key, item, file)] in dispatch order: rank desc, then workstreams take turns, each oldest file first."""
+    per_ws: dict[str, list[tuple[int, str, dict, Path]]] = {}
+    for d in sorted(p for p in READY.glob("*") if p.is_dir()):
+        files = []
+        for f in d.glob("*.json"):
             try:
-                item = json.loads(line)
-                key = f"{ws}/{item['id']}"
-            except (ValueError, KeyError) as e:
-                key, item = f"{ws}/line{n + 1}", {"_error": f"unparsable: {e}"}
-            per_ws.setdefault(ws, []).append((int(item.get("rank", 0)), key, item))
+                files.append((f.stat().st_mtime, f))
+            except OSError:
+                continue
+        for _, f in sorted(files):
+            key = f"{d.name}/{f.stem}"
+            try:
+                item = {**json.loads(f.read_text()), "id": f.stem}
+            except (ValueError, OSError) as e:
+                item = {"id": f.stem, "_error": f"unparsable: {e}"}
+            per_ws.setdefault(d.name, []).append((int(item.get("rank", 0) or 0), key, item, f))
     out = []
-    for rank in sorted({r for items in per_ws.values() for r, _, _ in items}, reverse=True):
-        lists = [(ws, [(k, it) for r, k, it in per_ws[ws] if r == rank]) for ws in sorted(per_ws)]
-        for i in range(max(len(items) for _, items in lists)):
-            out.extend((rank, ws, *items[i]) for ws, items in lists if i < len(items))
+    for rank in sorted({r for items in per_ws.values() for r, *_ in items}, reverse=True):
+        lists = [[(k, it, f) for r, k, it, f in per_ws[ws] if r == rank] for ws in sorted(per_ws)]
+        for i in range(max(len(items) for items in lists)):
+            out.extend(items[i] for items in lists if i < len(items))
     return out
+
+
+def set_aside(f: Path, key: str, where: str) -> None:
+    dst = ROOT / where / key.split("/")[0]
+    dst.mkdir(parents=True, exist_ok=True)
+    try:
+        f.rename(dst / f"{f.stem}.{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}.json")
+    except OSError as e:
+        print(f"could not move {f} to {dst}: {e}", file=sys.stderr)
 
 
 def job_state(job: dict, pods: dict) -> tuple[str, int | None]:
@@ -283,25 +300,36 @@ def tick(dry: bool = False) -> None:
             q = (w.get("spec") or {}).get("queueName", "")
             pending[q] = pending.get(q, 0) + 1
     depth = dict(kv.split("=") for kv in os.environ.get("VY_DISPATCH_DEPTH", DEFAULT_DEPTH).split(","))
-    for _, ws, key, item in ready_items():
-        if key in done or key in inflight:
-            continue
-        if "_error" in item:
-            append("done.jsonl", {"key": key, "state": "rejected", "why": item["_error"]})
-            done.add(key)
-            continue
+    for key, item, f in ready_items():
         try:
-            q = item.get("queue") or render(item, key, 0, 0)["metadata"]["labels"]["kueue.x-k8s.io/queue-name"]
+            if key in done or key in inflight:
+                raise ValueError("duplicate id: this item was already submitted (a changed item needs a new id)")
+            if "_error" in item:
+                raise ValueError(item["_error"])
+            q = render(item, key, 0, 0)["metadata"]["labels"]["kueue.x-k8s.io/queue-name"]
             if not Path(item["tree"]).is_dir():
                 raise ValueError(f"no tree {item['tree']}")
-        except (ValueError, KeyError, OSError) as e:
-            append("done.jsonl", {"key": key, "state": "rejected", "why": str(e)})
-            done.add(key)
+        except (ValueError, KeyError, OSError, IndexError) as e:
             print(f"rejected {key}: {e}")
+            if not dry:
+                append("log.jsonl", {"ev": "rejected", "key": key, "why": str(e)})
+                if key not in done and key not in inflight:
+                    append("done.jsonl", {"key": key, "state": "rejected", "why": str(e)})
+                done.add(key)
+                set_aside(f, key, "rejected")
             continue
         if pending.get(q, 0) >= int(depth.get(q, 0)):
             continue
-        submit(item, key, dry=dry)
+        try:
+            submit(item, key, dry=dry)
+        except RuntimeError as e:
+            print(f"rejected {key}: {e}")
+            append("log.jsonl", {"ev": "rejected", "key": key, "why": str(e)})
+            append("done.jsonl", {"key": key, "state": "rejected", "why": str(e)})
+            set_aside(f, key, "rejected")
+            continue
+        if not dry:
+            set_aside(f, key, "taken")
         pending[q] = pending.get(q, 0) + 1
         inflight.add(key)
 
