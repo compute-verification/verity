@@ -1,0 +1,152 @@
+"""The arm interface (v0): what a PoUW prover arm gives the harness, and what the harness gives it. Its contract, and what the
+harness does with each member, is published in the project store (`internal/pouw/rtx-pro/workers/6-harness.md`, "Arm
+interface"); this module is that contract in code, and `check_arm` is what the harness enforces before it runs an arm.
+
+An arm is any object with the members of `Arm`; the harness loads it by ``module:Class`` (``--arm``), constructs it with no
+arguments, and calls `build` once. Device pointers and CUDA streams are Python ints; everything runs in the device's primary
+context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
+"""
+
+from __future__ import annotations
+
+import importlib
+from dataclasses import dataclass, field
+from typing import Any, Callable, Protocol, runtime_checkable
+
+VERSION = "v0"
+
+STREAMS = ("fp8", "fp4")
+INPUTS = ("f32", "bf16", "e4m3", "e2m1-nv", "e2m1-mx", "int8")
+REQUIRED_ROLES = ("hash", "nohash")
+
+
+@dataclass(frozen=True)
+class Shape:
+    """One matmul, D (m x n) = A (m x k) . Bᵀ with B (n x k): A is the activations, B the weight."""
+
+    label: str
+    m: int
+    k: int
+    n: int
+
+    @property
+    def mkn(self) -> int:
+        return self.m * self.k * self.n
+
+
+@dataclass(frozen=True)
+class Buffer:
+    ptr: int
+    nbytes: int
+
+
+@dataclass
+class OperandSet:
+    """One of a shape's operand sets: its own weight (a distinct buffer), activations and scales, generated on the device from
+    `seed`. `host(name)` copies a buffer to the host (bytes) on demand, for an arm's reference."""
+
+    index: int
+    weight_id: int
+    seed: int
+    a: Buffer
+    b: Buffer
+    a_scale: Buffer | None = None
+    b_scale: Buffer | None = None
+    host: Callable[[str], bytes] | None = None
+
+
+@dataclass(frozen=True)
+class Work:
+    """Per call: tensor-core MACs by precision key (the baselines' keys, e.g. ``{"fp8-e4m3": m*k*n}``), W_ref and the
+    credited work as exact strings in `unit` (Lean's `wrefOf` and `creditOf`), and the bytes absorbed by each hash. Per
+    (weight, epoch): the weight side's hashed bytes. `gamma` is the arm's statement (Derived, from its certificate)."""
+
+    tensor_macs: dict[str, int]
+    w_ref: str
+    credited: str
+    unit: str
+    hashed_bytes: dict[str, int]
+    weight_hashed_bytes: dict[str, int] = field(default_factory=dict)
+    gamma: dict[str, str] | None = None
+
+
+@dataclass
+class Gate:
+    """A gate's verdict at one (shape, flags): `checked` maps each output it compared to ``"all"`` or ``"sampled:<what>"``."""
+
+    ok: bool
+    checked: dict[str, str]
+    detail: dict[str, Any] = field(default_factory=dict)
+
+
+@runtime_checkable
+class Call(Protocol):
+    """One operand set's prepared prover call. `launch` is the timed call: one complete per-call step, enqueued on `stream`,
+    with no host sync, allocation or host-device copy (the harness captures it into a CUDA graph). `weight_side` enqueues the
+    per-(weight, epoch) work, under the same rules. `outputs` are the buffers the arm's gate reads."""
+
+    outputs: dict[str, Buffer]
+
+    def launch(self, stream: int) -> None: ...
+
+    def weight_side(self, stream: int) -> None: ...
+
+    def free(self) -> None: ...
+
+
+@runtime_checkable
+class Arm(Protocol):
+    name: str
+    stream: str
+    precision: str
+    inputs: str
+    flag_sets: dict[str, frozenset[str]]
+
+    def build(self, ctx: dict) -> dict: ...
+
+    def domain(self, shape: Shape) -> str | None: ...
+
+    def work(self, shape: Shape) -> Work: ...
+
+    def prepare(self, dev: Any, shape: Shape, flags: frozenset[str], operands: OperandSet) -> Call: ...
+
+    def gate(self, dev: Any, call: Call, shape: Shape, flags: frozenset[str]) -> Gate: ...
+
+
+class ArmError(ValueError):
+    pass
+
+
+def check_arm(arm: Any, precisions: set[str]) -> None:
+    """Refuses an arm that doesn't meet the interface: its members, stream, inputs, the required flag roles, and a headline
+    precision the harness has a baseline for."""
+    missing = [m for m in ("name", "stream", "precision", "inputs", "flag_sets", "build", "domain", "work", "prepare", "gate")
+               if not hasattr(arm, m)]
+    if missing:
+        raise ArmError(f"arm lacks {missing}")
+    if arm.stream not in STREAMS:
+        raise ArmError(f"arm {arm.name}: stream {arm.stream!r} not in {STREAMS}")
+    if arm.inputs not in INPUTS:
+        raise ArmError(f"arm {arm.name}: inputs {arm.inputs!r} not in {INPUTS}")
+    if arm.precision not in precisions:
+        raise ArmError(f"arm {arm.name}: no baseline family {arm.precision!r} (have {sorted(precisions)})")
+    roles = set(arm.flag_sets)
+    if not set(REQUIRED_ROLES) <= roles:
+        raise ArmError(f"arm {arm.name}: flag_sets needs roles {REQUIRED_ROLES}, has {sorted(roles)}")
+
+
+def check_gate(gate: Gate, call: Call) -> None:
+    """A gate must name only outputs the call has, and check at least one of them in full."""
+    unknown = set(gate.checked) - set(call.outputs)
+    if unknown:
+        raise ArmError(f"gate checked unknown outputs {sorted(unknown)}")
+    if "all" not in gate.checked.values():
+        raise ArmError("gate checks no output in full (one must be 'all': a root, or y's digest)")
+
+
+def load(spec: str) -> Arm:
+    """``module:Class`` → an instance."""
+    mod, _, cls = spec.partition(":")
+    if not cls:
+        raise ArmError(f"--arm wants module:Class, not {spec!r}")
+    return getattr(importlib.import_module(mod), cls)()
