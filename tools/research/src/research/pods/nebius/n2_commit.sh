@@ -94,7 +94,8 @@ submit() {
   local src build_run build_art
   # the Commit keeps node 1's dispatcher key, so its replay and records chain on under it
   [ -z "$job" ] || [ -n "${VY_COMMIT_KEY:-}" ] || VY_COMMIT_KEY=$(ssh -n "$N1" "$KUBE get job $job -o jsonpath='{.metadata.annotations.verity\\.dev/item}'")
-  src=$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")
+  # VY_N2_SRC: an existing job tree instead of the item tree's current one (a proof reruns a Commit from the tree it ran from)
+  src=${VY_N2_SRC:-$(sudo -n -u '#1000' bash "$tree/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$tree")}
   build_run=$(cat "$row_dir/two-task-build-run")
   build_art=$(cd /workspace/jobs && sudo -n -u '#1000' env UV_NO_CONFIG=1 RESEARCH_STORE=/workspace/jobs/store RESEARCH_RUNS=/workspace/jobs/runs \
     PYTHONPATH="$src/tools/research/src" UV_CACHE_DIR=/workspace/jobs/cache/uv UV_PYTHON_INSTALL_DIR=/workspace/jobs/cache/python \
@@ -112,12 +113,12 @@ submit() {
   done
   push "$0" "$GUEST/bin/n2_commit.sh"
   python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d.setdefault("env", {})["REPLAY_DEFERRED"]="1"
-d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art":sys.argv[5],"commit_key":sys.argv[6]}; print(json.dumps(d))' \
-    "$item" "$key" "$src" "$build_run" "$build_art" "${VY_COMMIT_KEY:-n2-commit/$key}" \
+d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art":sys.argv[5],"commit_key":sys.argv[6],"proof":sys.argv[7]=="1"}; print(json.dumps(d))' \
+    "$item" "$key" "$src" "$build_run" "$build_art" "${VY_COMMIT_KEY:-n2-commit/$key}" "${VY_N2_PROOF:-0}" \
     | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/commit-$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-commit-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=$OWNER gpus=1 max_min=30 cpus=8 project=verity
+# fill: owner=$OWNER gpus=1 max_min=30 cpus=8 project=verity prio=${VY_N2_PRIO:-0}
 # Verity vLLM Commit $row (node 1 key $key): n2_commit.sh on infra/nebius; its replay runs on node 1.
 exec bash $GUEST/bin/n2_commit.sh run $key
 EOF
@@ -182,7 +183,7 @@ d = json.load(open(sys.argv[1]))
 env = {k: str(v) for k, v in (d.get("env") or {}).items() if k != "HF_HOME"}
 n2 = d["n2"]
 env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2["commit_key"], BUILD_ART=n2.get("build_art") or "",
-           COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="1")
+           COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="0" if n2.get("proof") else "1", PROOF="1" if n2.get("proof") else "")
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
 print("ITEM_ARGS=(" + " ".join(shlex.quote(a) for a in
       [x for k, v in {**(d.get("env") or {}), "REPLAY_DEFERRED": "1"}.items() for x in ("--env", f"{k}={v}")]
@@ -230,6 +231,7 @@ home() {  # home RUN_ID [RSYNC-ARG...]
 }
 
 dispatch_n1() {  # dispatch_n1 TASK: node 1's dispatcher takes the item from TASK on
+  [ -z "${PROOF:-}" ] || { echo "a proof Commit: nothing goes to node 1's dispatcher"; return 0; }
   ssh "$N1" "$KUBE_DISPATCH /workspace/jobs/venv312/bin/python $DISPATCH submit config-run $COMMIT_KEY --tree $TREE --task $1 \
     $(printf '%q ' "${ITEM_ARGS[@]}")"
 }
@@ -265,15 +267,25 @@ run() {
     gpu_env "$row_dir/n2_gpu_env.json"
     cat "$row_dir/n2_gpu_env.json" | head -20
     echo "commit cites the Build: artifact ${BUILD_ART:-none}"
+    local deferred=(--replay-deferred 1)
+    [ -z "${PROOF:-}" ] || deferred=()
     run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
     echo "$run_id" > "$row_dir/pipeline-commit-run"
     "${research[@]}" run --id "$run_id" --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
       ${BUILD_ART:+--input "build=$BUILD_ART"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" \
-      --config-run 1 --replay-k 460 --replay-deferred 1 || rc=$?
+      --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"} || rc=$?
     # a stop (the lease's max_min, a waiter, a window) is requeued and reruns the Commit from the top
     case "$rc" in 124 | 137 | 143) exit 143 ;; esac
     cp "$row_dir/n2_gpu_env.json" "/workspace/jobs/runs/$run_id/" 2> /dev/null || true
     echo "$run_id $rc" > "$marker"
+  fi
+  # a proof (VY_N2_PROOF=1 at submit) runs the Commit as node 1's gpu task did, its replay on the GPU, and only comes home: it is
+  # compared with node 1's record of the same row, and nothing is queued after it
+  if [ -n "${PROOF:-}" ]; then
+    home "$run_id"
+    rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
+    echo "n2-commit $KEY: proof Commit $run_id on node 2 rc $rc; its row and Attempt are on node 1"
+    return 0
   fi
   if [ "$rc" != 0 ] || [ "${VY_N2_REPLAY:-n2}" = n1 ]; then
     # node 1 takes it from here: the Commit again (task 1) after a failure here, else the replay (task 2), with the whole row
