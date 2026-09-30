@@ -17,7 +17,10 @@ against `cuDeviceGetUuid`); NVML reads that UUID's clocks.
 **Cost per byte**: each form at prefill size (m = 8,192), a read-only L2 flush before each rep, bytes hashed over the median
 time, per SM per SM clock too.
 
-**Decode, dependent chain**: per call, A = f(y of the call before) (`derive_rows`), A's commitment (row leaves and tree), the
+**Latency**: dependent compressions on one thread (`b3c`) and on four lanes (`b3c4`), SM cycles each.
+
+**Decode, dependent chain** (`ARMS`): per call, A = f(y of the call before) (`derive_rows`, or `derive_rows_hash`, which hashes
+A as it writes it), A's commitment in one of its forms (row leaves and tree), the
 stand-in GEMM (`h1_standin.cu`: the weights' DRAM traffic, not a GEMM; four weight sets cycled, past twice the 128 MB L2), and
 the post-GEMM hashing (message digests, tile leaves, tile tree). CALLS calls are captured into one CUDA graph and replayed;
 per call is a replay over CALLS. The arms: `plain` (derive and the stand-in alone), `h1` (the kernels as pushed), `h1-tuned`
@@ -231,6 +234,43 @@ def gates(d: Bench, V: dict) -> dict:
             d.free(rp)
             d.free(tp)
             d.free(kp)
+        rp, tp, kp, cnt = d.put(rows), d.alloc(32 * 2 * t["m"]), d.alloc(32 * 16), d.alloc(16)
+        d.go(None, "hash_node_keys", 1, 32, (kp, dp), (max(0, (t["m"] - 1).bit_length()),))
+        d.go(None, "hash_rows_wt", -(-t["m"] // 4), 128, (rp, tp, dp, kp, cnt), (t["m"], t["rb"], t["m"]), smem=4 * 4 * rows_w_words(t["rb"]))
+        d.sync()
+        ok = d.read(tp + 32 * (2 * t["m"] - 2), 32).hex() == t["root"] and d.read(cnt, 4) == bytes(4)
+        out["trees"][f"{label} one launch"] = ok
+        if not ok:
+            bad.append(f"{label} one launch root")
+        for p_ in (rp, tp, kp, cnt):
+            d.free(p_)
+    # the producer: derive_rows_hash's A and tree against derive_rows, then hash_rows_wt, on the device
+    for rb in (ROW_F32, ROW_BF16):
+        y = d.put(shake("gate y", 2 * M * N))
+        a1, a2, t1, t2 = d.alloc(M * rb), d.alloc(M * rb), d.alloc(32 * 2 * M), d.alloc(32 * 2 * M)
+        dom, kp, c1, c2 = d.put(shake("gate producer dom", 32)), d.alloc(32 * 16), d.alloc(16), d.alloc(16)
+        d.go(None, "hash_node_keys", 1, 32, (kp, dom), (5,))
+        d.go(None, "derive_rows_hash", M // 4, 128, (y, a1, t1, dom, kp, c1), (M, rb, M, N), smem=4 * 4 * rows_w_words(rb))
+        d.go(None, "derive_rows_wide", -(-M * rb // 2 // 256), 256, (y, a2), (M, rb, N))
+        d.go(None, "hash_rows_wt", M // 4, 128, (a2, t2, dom, kp, c2), (M, rb, M), smem=4 * 4 * rows_w_words(rb))
+        d.sync()
+        ok = d.read(a1, M * rb) == d.read(a2, M * rb) and d.read(t1, 32 * 2 * M) == d.read(t2, 32 * 2 * M)
+        out["trees"][f"producer {rb} B rows"] = ok
+        if not ok:
+            bad.append(f"producer {rb}")
+        for p_ in (y, a1, a2, t1, t2, dom, kp, c1, c2):
+            d.free(p_)
+    b = V["blk"]
+    rp, op = d.put(shake("gate blk rows", 2 * b["rb"])), d.alloc(64)
+    kk, lk = d.put(bytes.fromhex(b["key"])), d.put(b"".join(bytes.fromhex(x) for x in b["levels"]))
+    d.go(None, "hash_rows_blk", 2, 256, (rp, op, kk, lk), (2, b["rb"]))
+    d.sync()
+    ok = d.read(op, 64).hex() == b["roots"][0] + b["roots"][1]
+    out["trees"]["block layout (candidate)"] = ok
+    if not ok:
+        bad.append("block layout")
+    for p_ in (rp, op, kk, lk):
+        d.free(p_)
     keys = {k: d.put(bytes.fromhex(R.H1_KEYS[k])) for k in ("k_msg", "k_leaf")}
     for form, case in (("pushed", V["tiles"]["m32"]), ("tuned", V["tiles"]["m32"])):
         rows, n = case["rows"], case["n"]
@@ -299,69 +339,139 @@ def rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
     return out
 
 
+#: decode's arms: (name, A's rows in bytes, A's commitment, the post-GEMM hashing).  A's commitment: "none"; "pushed" (hash_rows,
+#: hash_node_keys, hash_nodes a level a launch); "tuned" (hash_rows_w, hash_node_keys, hash_tree_small); "keys" (tuned, the
+#: level keys on the side stream from the call's start: they depend on the domain id only); "one" (the keys so, and
+#: hash_rows_wt: rows and tree in one launch); "producer" (the keys so, and derive_rows_hash: A hashed by the kernel that
+#: writes it). Candidates that change the protocol, measured only: "overlap" (the one-launch commitment on the side stream
+#: beside the GEMM, as if the noise didn't wait for A's root) and "blk" (the per-block Merkle row layout, hash_rows_blk, then
+#: hash_tree_small). The post-GEMM hashing: "none", "pushed", "serial" (tuned, on the GEMM's stream), "side" (tuned, on the
+#: side stream).
+ARMS = [
+    ("plain fp32 rows", ROW_F32, "none", "none"), ("plain bf16 rows", ROW_BF16, "none", "none"),
+    ("h1 as pushed", ROW_F32, "pushed", "pushed"), ("h1 tuned", ROW_F32, "tuned", "serial"),
+    ("h1 tuned, side stream", ROW_F32, "tuned", "side"),
+    ("A as pushed", ROW_F32, "pushed", "none"), ("A tuned", ROW_F32, "tuned", "none"),
+    ("A tuned, keys early", ROW_F32, "keys", "none"), ("A in one launch", ROW_F32, "one", "none"),
+    ("A in its producer", ROW_F32, "producer", "none"),
+    ("h1 A in one launch, side stream", ROW_F32, "one", "side"), ("h1 A in its producer, side stream", ROW_F32, "producer", "side"),
+    ("candidate: A overlapped with the GEMM", ROW_F32, "overlap", "none"),
+    ("candidate: h1 A overlapped, side stream", ROW_F32, "overlap", "side"),
+    ("candidate: A block layout", ROW_F32, "blk", "none"), ("candidate: h1 A block layout, side stream", ROW_F32, "blk", "side"),
+    ("candidate: A bf16 rows in its producer", ROW_BF16, "producer", "none"),
+    ("candidate: h1 bf16 rows in its producer, side stream", ROW_BF16, "producer", "side"),
+]
+
+
+def latency(d: Bench) -> dict:
+    """Dependent compressions on one thread and on four lanes: SM cycles per compression."""
+    out, n = {}, 512
+    p = d.alloc(64)
+    for mode, threads, name in ((0, 1, "one thread (b3c)"), (1, 4, "four lanes (b3c4)")):
+        d.go(None, "lat_chain", 1, threads, (p,), (n, mode))
+        d.sync()
+        cyc = []
+        for _ in range(5):
+            d.go(None, "lat_chain", 1, threads, (p,), (n, mode))
+            d.sync()
+            cyc.append(int.from_bytes(d.read(p, 8), "little") / n)
+        out[name] = {"cycles_per_compression": statistics.median(cyc), "raw": cyc}
+    return out
+
+
 def decode(d: Bench, reps: int) -> dict:
     """Per call of the dependent chain at m = 32, n = k = 8,192, each arm replayed as one graph of CALLS calls."""
     n, k, m = N, K, M
+    depth = max(0, (m - 1).bit_length())
     keys = {kk: d.put(bytes.fromhex(R.H1_KEYS[kk])) for kk in ("k_msg", "k_leaf")}
     dom_a, dom_t = d.put(shake("dom a", 32)), d.put(shake("dom t", 32))
+    blk_key, blk_levels = d.put(shake("blk key", 32)), d.put(shake("blk levels", 32 * 9))
     w = [d.put(shake(f"weights {s}", n * k)) for s in range(WSETS)]
     y = d.alloc(2 * m * n)
     rows = {rb: d.alloc(m * rb) for rb in (ROW_F32, ROW_BF16)}
-    a_tree, a_keys = d.alloc(32 * 2 * m), d.alloc(32 * 16)
+    a_tree, a_keys, counter = d.alloc(32 * 2 * m), d.alloc(32 * 16), d.alloc(16)
     slots = [{"c": d.alloc(4 * 64 * n), "u": d.alloc(4 * 64 * n), "dg": d.alloc(32 * 64 * (n // 32)), "lv": d.alloc(32 * 256),
               "tree": d.alloc(32 * 2 * 256), "keys": d.alloc(32 * 16)} for _ in range(2)]
     out: dict = {"calls_per_graph": CALLS, "weight_sets": WSETS, "shape": f"m{m}-n{n}-k{k}"}
 
-    def call(i: int, arm: str, rb: int, stage: str, joins: list) -> None:
+    def commit_a(s, amode: str, rb: int) -> None:
+        if amode in ("pushed", "tuned"):
+            launch_a(d, s, amode, rows[rb], a_tree, a_keys, dom_a, m, rb)
+        elif amode == "keys":
+            launch_rows(d, s, "tuned", rows[rb], a_tree, dom_a, m, rb)
+            d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
+        elif amode in ("one", "overlap"):
+            d.go(s, "hash_rows_wt", -(-m // 4), 128, (rows[rb], a_tree, dom_a, a_keys, counter), (m, rb, m), smem=4 * 4 * rows_w_words(rb))
+        elif amode == "blk":
+            d.go(s, "hash_rows_blk", m, 256, (rows[rb], a_tree, blk_key, blk_levels), (m, rb))
+            d.go(s, "hash_tree_small", 1, max(1, m // 2), (a_tree, a_keys), (m,))
+
+    def call(i: int, rb: int, amode: str, post: str, st: dict) -> None:
         s1, s2 = d.s1, d.s2
         sl = slots[i % 2]
-        tiled = m                                             # decode's 32 x 64 tiles, unpadded (#449's F1)
-        d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_BF16]), (m * k,))
-        if rb == ROW_F32:
-            d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_F32]), (m * k,))
-        if arm != "plain" and stage in ("all", "before"):
-            form = "pushed" if arm == "h1" else "tuned"
-            launch_a(d, s1, form, rows[rb], a_tree, a_keys, dom_a, m, rb)
-        if len(joins) >= 2:                                   # the side stream's slot from two calls back is free again
-            d.wait(s1, joins[-2])
-        d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], rows[ROW_BF16], sl["c"], sl["u"], y), (m, n, k))
-        if arm == "plain" or stage == "before":
-            return
-        form = "pushed" if arm == "h1" else "tuned"
-        if arm.endswith("-side"):
-            e = d.event(s1)
-            d.wait(s2, e)
-            launch_tiles(d, s2, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, tiled, n)
-            joins.append(d.event(s2))
+        early = amode in ("keys", "one", "producer", "overlap", "blk")
+        if early:                                            # the level keys, from the domain id alone, beside the producer
+            d.wait(s2, d.event(s1))
+            d.go(s2, "hash_node_keys", 1, 32, (a_keys, dom_a), (depth,))
+            ek = d.event(s2)
+        if st.get("a_done") is not None:                     # the previous call's overlapped commitment has read its A
+            d.wait(s1, st.pop("a_done"))
+        if amode == "producer":
+            d.wait(s1, ek)
+            d.go(s1, "derive_rows_hash", m // 4, 128, (y, rows[rb], a_tree, dom_a, a_keys, counter), (m, rb, m, n),
+                 smem=4 * 4 * rows_w_words(rb))
         else:
-            launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, tiled, n)
+            d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_BF16]), (m * k,))
+            if rb == ROW_F32:
+                d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_F32]), (m * k,))
+            if amode == "overlap":
+                d.wait(s2, d.event(s1))
+                commit_a(s2, amode, rb)
+                st["a_done"] = d.event(s2)
+            elif amode != "none":
+                if early:
+                    d.wait(s1, ek)
+                commit_a(s1, amode, rb)
+        if post == "side" and len(st["joins"]) >= 2:         # the side stream's slot from two calls back is free again
+            d.wait(s1, st["joins"][-2])
+        a_in = rows[rb] if amode == "producer" else rows[ROW_BF16]   # the A this call's producer wrote
+        d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], a_in, sl["c"], sl["u"], y), (m, n, k))
+        if post == "none":
+            return
+        form = "pushed" if post == "pushed" else "tuned"
+        if post == "side":
+            d.wait(s2, d.event(s1))
+            launch_tiles(d, s2, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
+            st["joins"].append(d.event(s2))
+        else:
+            launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
 
-    arms = [("plain", ROW_F32, "all"), ("plain", ROW_BF16, "all"), ("h1", ROW_F32, "all"), ("h1-tuned", ROW_F32, "all"),
-            ("h1-tuned-side", ROW_F32, "all"), ("h1", ROW_F32, "before"), ("h1-tuned", ROW_F32, "before"),
-            ("h1-tuned", ROW_BF16, "all"), ("h1-tuned-side", ROW_BF16, "all")]
     graphs = {}
-    for arm, rb, stage in arms:
-        def body(arm=arm, rb=rb, stage=stage):
-            joins: list = []
+    for name, rb, amode, post in ARMS:
+        def body(rb=rb, amode=amode, post=post):
+            st: dict = {"joins": []}
             for i in range(CALLS):
-                call(i, arm, rb, stage, joins)
-            if joins:
-                d.wait(d.s1, joins[-1])
-        graphs[(arm, rb, stage)] = d.graph(body)
-    for key, ge in graphs.items():                           # warm every graph once
+                call(i, rb, amode, post, st)
+            for e in [st.get("a_done")] + st["joins"][-1:]:
+                if e is not None:
+                    d.wait(d.s1, e)
+            if amode in ("keys", "one", "producer", "overlap", "blk"):
+                d.wait(d.s1, d.event(d.s2))
+        graphs[name] = d.graph(body)
+    for ge in graphs.values():                               # warm every graph once
         d.replay_ms(ge, 1)
-    raw = {key: [] for key in graphs}
+    raw = {name: [] for name in graphs}
     for rep in range(reps):                                  # the arms interleaved, rotated each rep
         order = list(graphs)
         order = order[rep % len(order):] + order[:rep % len(order)]
-        for key in order:
-            raw[key] += d.replay_ms(graphs[key], 1)
-    for (arm, rb, stage), ms in raw.items():
-        name = f"{arm} {'fp32' if rb == ROW_F32 else 'bf16'} rows" + ("" if stage == "all" else f" ({stage} the GEMM only)")
-        out[name] = {"per_call_us": statistics.median(ms) * 1e3 / CALLS, "raw_ms": ms}
+        for name in order:
+            raw[name] += d.replay_ms(graphs[name], 1)
+    for name, rb, amode, post in ARMS:
+        ms = raw[name]
+        out[name] = {"rows_bytes": rb, "a": amode, "post": post, "per_call_us": statistics.median(ms) * 1e3 / CALLS, "raw_ms": ms}
     for name, r in out.items():
         if isinstance(r, dict) and "per_call_us" in r:
-            plain = out[f"plain {'fp32' if 'fp32' in name else 'bf16'} rows"]["per_call_us"]
+            plain = out[f"plain {'fp32' if r['rows_bytes'] == ROW_F32 else 'bf16'} rows"]["per_call_us"]
             r["hashing_us"] = r["per_call_us"] - plain
             r["x_plain_standin"] = r["per_call_us"] / plain
     return out
@@ -395,12 +505,16 @@ def main() -> None:
         sys.exit(4)
     res["rates"] = rates(d, nv, args.reps)
     save()
+    res["latency"] = latency(d)
+    save()
     res["decode"] = decode(d, args.reps)
     res["clocks_after"] = nv.read()
     save()
     for name, r in res["decode"].items():
         if isinstance(r, dict):
             print(f"decode {name}: {r['per_call_us']:.1f} us per call, hashing {r['hashing_us']:.1f} us", flush=True)
+    for name, r in res["latency"].items():
+        print(f"latency {name}: {r['cycles_per_compression']:.0f} cycles a compression", flush=True)
     for name, r in res["rates"].items():
         print(f"rate {name}: {r['gb_s']:.0f} GB/s, {r['bytes_per_sm_clk']:.2f} B/SM/clk", flush=True)
 

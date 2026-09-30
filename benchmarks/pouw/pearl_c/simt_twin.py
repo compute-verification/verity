@@ -1,4 +1,4 @@
-"""A host build of `hash.cuh` and `hash_sm120.cuh` that runs its kernels thread for thread, for byte tests of the -h1 kernels without a GPU.
+"""A host build of `hash.cuh`, `hash_sm120.cuh` and `h1_standin.cu` that runs its kernels thread for thread, for byte tests of the -h1 kernels without a GPU.
 
 Every CUDA thread of a block is a host thread; `__syncthreads` and `__syncwarp` are one barrier over the block (stronger than
 a warp's, which the kernels here allow: every thread of a block reaches the same syncs), which a thread leaves when it
@@ -17,7 +17,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_node_keys", "hash_nodes",
-           "hash_tree_leaves", "hash_tree_small")
+           "hash_tree_leaves", "hash_tree_small", "hash_rows_wt", "lat_chain", "derive_rows_hash", "derive_rows_wide",
+           "hash_rows_blk", "derive_rows", "standin_gemm")
 
 PRELUDE = r"""
 #include <condition_variable>
@@ -42,7 +43,7 @@ static inline int min(int a, int b) { return a < b ? a : b; }
 static inline int __clz(int x) { return x ? __builtin_clz((unsigned)x) : 32; }
 struct Dim { unsigned x = 0, y = 0, z = 0; };
 static thread_local Dim threadIdx;
-static Dim blockIdx, blockDim;
+static Dim blockIdx, blockDim, gridDim;
 // a block's barrier that a returning thread leaves (drop), releasing the others if they were the rest of the phase
 struct TwinBarrier {
   std::mutex mu;
@@ -64,16 +65,30 @@ struct TwinBarrier {
 static TwinBarrier* twin_bar;
 static inline void __syncthreads() { twin_bar->wait(); }
 static inline void __syncwarp(unsigned = 0xffffffffu) { twin_bar->wait(); }
+static uint32_t twin_x[1024];
+// a warp shuffle: every thread of the block posts its value, then reads its source lane's within its warp
+static inline uint32_t __shfl_sync(unsigned, uint32_t v, int src) {
+  twin_x[threadIdx.x] = v;
+  twin_bar->wait();
+  const uint32_t r = twin_x[(threadIdx.x & ~31u) + (unsigned)(src & 31)];
+  twin_bar->wait();
+  return r;
+}
+static inline uint32_t __shfl_xor_sync(unsigned m, uint32_t v, int o) { return __shfl_sync(m, v, (int)(threadIdx.x & 31) ^ o); }
+static inline long long clock64() { return 0; }
+static inline void __threadfence() {}
+static inline void __threadfence_block() {}
+static inline unsigned atomicAdd(unsigned* p, unsigned v) { return __atomic_fetch_add(p, v, __ATOMIC_SEQ_CST); }
 static std::vector<uint32_t> twin_dyn;
 """
 
 
 def _source() -> str:
-    body = ((HERE / "hash.cuh").read_text() + (HERE / "hash_sm120.cuh").read_text()).replace(
+    body = ((HERE / "hash.cuh").read_text() + (HERE / "hash_sm120.cuh").read_text() + (HERE / "h1_standin.cu").read_text()).replace(
         "extern __shared__ uint32_t sh[];", "uint32_t* sh = twin_dyn.data();").replace("#pragma once", "")
     runs = "".join(
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
-        f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block;\n"
+        f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block; gridDim.x = grid;\n"
         f"  for (int b = 0; b < grid; b++) {{\n"
         f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
         f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"

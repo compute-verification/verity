@@ -123,3 +123,36 @@ def test_the_tile_tree_in_one_launch():
     want = MerkleTree(d, {i: vals[32 * i:32 * i + 32] for i in range(t)}, lambda _: TILE).commitment.root
     assert tree.raw[32 * (2 * t - 2):32 * (2 * t - 1)] == want
 
+
+
+def test_the_four_lane_compression_is_b3cs():
+    """lat_chain's chain of 40 compressions, on one thread (b3c) and on four lanes (b3c4), both equal to BLAKE3's compression
+    in `verity.commitments.blake3` chained the same way."""
+    from verity.commitments.blake3 import IV, compress
+    n, cv, m = 40, tuple(IV), [(0x9E3779B9 * (i + 1)) & 0xFFFFFFFF for i in range(16)]
+    for k in range(n):
+        cv = tuple(compress(cv, b"".join(w.to_bytes(4, "little") for w in m), k, 64, 16)[:8])
+        m[0] ^= cv[0]
+    want = b"".join(w.to_bytes(4, "little") for w in cv)
+    for mode, threads in ((0, 1), (1, 4)):
+        out = T.buffer(40)
+        T.launch("lat_chain", 1, threads, [out], [n, mode])
+        assert out.raw[8:40] == want, mode
+
+
+@pytest.mark.parametrize("m,rb", [(32, 32768), (32, 16384), (5, 900)])
+def test_rows_and_tree_in_one_launch_are_merkle_trees(m, rb):
+    """hash_rows_wt: the row leaves, then the last CTA's pads and levels, equal to hash_rows_w + hash_pad + hash_tree_small's
+    tree and MerkleTree's root; its counter is back at zero for the next call."""
+    rows = data(f"wt {m} {rb}", m * rb)
+    d = CommitmentDomain(BINDING, 7, RangeIndexedDomain(m), hash="blake3")
+    width = 1 << max(0, (m - 1).bit_length())
+    depth = max(0, (width - 1).bit_length())
+    dom, keys, counter = T.buffer(d.domain_id), T.buffer(32 * max(1, depth)), T.buffer(16)
+    T.launch("hash_node_keys", 1, 32, [keys, dom], [depth])
+    tree = T.buffer(32 * 2 * width)
+    T.launch("hash_rows_wt", -(-m // 4), 128, [T.buffer(rows), tree, dom, keys, counter], [m, rb, width],
+             smem=4 * 4 * T.rows_w_words(rb))
+    root = MerkleTree(d, {r: rows[r * rb:(r + 1) * rb] for r in range(m)}, lambda _: ROW).commitment.root
+    assert tree.raw[32 * (2 * width - 2):32 * (2 * width - 1)] == root
+    assert counter.raw[:4] == bytes(4)

@@ -79,11 +79,28 @@ def tile_case(rows: int) -> dict:
             "root": root.hex()}
 
 
+def blk_case() -> dict:
+    """The per-block Merkle row layout (hash_rows_blk; a candidate, not -h1): two rows of 32 KB, each a tree over its 512
+    blocks' one-block keyed hashes under the row-leaf key, then nodes under level keys; the keys are the gate's own."""
+    rb, key = 4 * N, shake("gate blk key", 32)
+    levels = [shake(f"gate blk level {l}", 32) for l in range(9)]
+    rows = shake("gate blk rows", 2 * rb)
+    roots = []
+    for r in range(2):
+        level = [blake3.blake3(rows[r * rb + 64 * j:r * rb + 64 * j + 64], key=key).digest() for j in range(rb // 64)]
+        lv = 0
+        while len(level) > 1:
+            level = [blake3.blake3(level[2 * i] + level[2 * i + 1], key=levels[lv]).digest() for i in range(len(level) // 2)]
+            lv += 1
+        roots.append(level[0].hex())
+    return {"rb": rb, "key": key.hex(), "levels": [k.hex() for k in levels], "roots": roots}
+
+
 def main() -> None:
     out = {"source": "frame-b3 (verity.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
-           "tiles": {"m32": tile_case(M)}}
+           "tiles": {"m32": tile_case(M)}, "blk": blk_case()}
     Path(sys.argv[1]).write_text(json.dumps(out))
     print(f"{len(out['rows']['cases'])} row cases, {len(out['trees'])} trees, {len(out['tiles'])} tile case(s) -> {sys.argv[1]}")
 
