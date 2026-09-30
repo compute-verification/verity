@@ -1,5 +1,6 @@
 import FlockSoundness.ExecTemplateSetup
 import FlockSoundness.Types.ProgramPlaces
+import FlockSoundness.Refine.StmtOfPlaced
 
 /-!
 # A typed template's table class, from `Stmt.setupH` (1e for templates)
@@ -18,6 +19,10 @@ import FlockSoundness.Types.ProgramPlaces
   columns are the unit's input columns in order (`order_sound`, `order_getD_inCols`), so input column `w` of the class's
   rows is at the position that copy row reads.
 - **There are no forced-zero rows.** Every input copies a message bit inside the block (`setupH_copySrc_lt`).
+
+The class is over the placement's model of the statement (`TemplateLayout.model`, the verifier's `placedA`, `placedB`).
+Under the layout facts `StmtWF` and `PlacedWF` that is the refinement's `stmtOf` (`setupH_template_model_eq`, from
+`Refine.stmtOf_eq_placed`), and `setupH_templateTableClass_stmtOf` is the same class over `stmtOf`.
 -/
 
 open Flock FlockLevel3
@@ -91,6 +96,19 @@ def setupH_templateTableClass : TableClass ((setupH_templateLayout ht h hr).2.2.
     exact (setupH_inputCopy ht h hr regs g.isLt hw).block_eq hz o
   zeros := ∅
   zero q hq := absurd hq (Finset.notMem_empty q)
+
+/-- **The accepted template statement's model is the refinement's `stmtOf`**, under the layout facts `StmtWF` and
+`PlacedWF`: both have `st`'s `m`, `k_log`, pin and regions, and their matrices agree (`Refine.stmtOf_eq_placed`). -/
+theorem setupH_template_model_eq (hwf : Refine.StmtWF st) (hw : Refine.PlacedWF st) :
+    (setupH_templateLayout ht h hr).2.2.model regs = Refine.stmtOf st hwf regs :=
+  Refine.stmtOf_eq_placed st hwf hw regs
+
+/-- **A typed template's table class, over the refinement's `stmtOf`**: `setupH_templateTableClass`, carried along
+`setupH_template_model_eq`. This is the class `dp` reads for a table whose statement is the accepted one's model as the
+refinement decodes it. -/
+def setupH_templateTableClass_stmtOf (hwf : Refine.StmtWF st) (hw : Refine.PlacedWF st) :
+    TableClass (Refine.stmtOf st hwf regs) :=
+  cast (congrArg TableClass (setupH_template_model_eq ht h hr regs hwf hw)) (setupH_templateTableClass ht h hr regs)
 
 end tableClass
 
