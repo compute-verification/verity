@@ -199,8 +199,9 @@ class Packed:
 
 
 def pack(ops: Operands, g: int) -> Packed:
-    return Packed(pack_rows(ops.acodes, ops.ascale), pack_rows(ops.wcodes, ops.wscale), lut_tables(ops.wcodes, g),
-                  weight_scale_words(ops.wcodes, ops.wscale), np.ascontiguousarray(ops.c0, np.uint32))
+    c = np.ascontiguousarray
+    return Packed(c(pack_rows(ops.acodes, ops.ascale)), c(pack_rows(ops.wcodes, ops.wscale)), c(lut_tables(ops.wcodes, g)),
+                  c(weight_scale_words(ops.wcodes, ops.wscale)), c(ops.c0, np.uint32))
 
 
 def terms(acodes, ascale, wcodes, wscale, grp) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -339,7 +340,13 @@ def build(out: Path) -> dict:
 # ------------------------------------------------------------------------------------------------------------------------ device
 
 def _p(a: np.ndarray | None):
-    return None if a is None else a.ctypes.data
+    """A kernel argument's address.  C-contiguous only: a kernel reads memory order, which for a strided array (einsum's output,
+    say) is not its index order."""
+    if a is None:
+        return None
+    if not a.flags["C_CONTIGUOUS"]:
+        raise ValueError(f"kernel argument of shape {a.shape} is not C-contiguous")
+    return a.ctypes.data
 
 
 class F3Device:
@@ -436,6 +443,8 @@ class FakeF3:
         return cycles / (self.MHZ * 1e3)
 
     def run_lut(self, v, arm, c, pk: Packed, rows, ng, nblocks, iters, want=True):
+        for a in (pk.arows, pk.tables, pk.wsc, pk.c0):
+            _p(a)
         _, g, _ = self._table[v]
         nkg, nidx, w = 64 // g, 16 ** g, c // 2
         cycles = iters * (rows / self.SMS) * nkg / (32 / (3 if arm == "exact" else 1))
@@ -463,6 +472,8 @@ class FakeF3:
         return self._ms(cycles), chain(pk.c0[:rows], gd * mm, x, part, iters).reshape(-1), cyc
 
     def run_native(self, pk: Packed, rows, c, ng, ntiles, nblocks, iters, want=True):
+        for a in (pk.arows, pk.wrows, pk.c0):
+            _p(a)
         warps = nblocks * NATIVE_TPB // 32
         cycles = iters * warps * self._nt * NATIVE_PRODUCTS / (self.SMS * 2048)
         cyc = np.full(nblocks, int(cycles), np.int64)

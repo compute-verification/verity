@@ -7,6 +7,7 @@ with ``VERITY_TC_PROBE_FP4_NVCC=1`` (nvcc 12.9 and cuobjdump, about 30 s)."""
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import struct
@@ -750,6 +751,10 @@ def test_f3_tables_sum_to_the_group_dots_and_pack_the_scales(width):
     ops = F3.make_operands("mixed", F3.LUT_TPB * ng, ng, c, 5)
     pk = F3.pack(ops, g)
     assert pk.tables.shape == (ng, nkg, 16 ** g, c // 2) and pk.arows.shape == (ops.acodes.shape[0], F3.AROW)
+    # the kernels read memory order: every packed array is C-contiguous, and a strided one is refused at the boundary
+    assert all(F3._p(getattr(pk, f.name)) for f in dataclasses.fields(pk))
+    with pytest.raises(ValueError):
+        F3._p(np.zeros((4, 4), np.uint32).T)
     codes, scales = F3.unpack_rows(pk.arows)
     assert np.array_equal(codes, ops.acodes) and np.array_equal(scales, ops.ascale)
     grp = ops.groups
