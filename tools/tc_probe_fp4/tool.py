@@ -16,7 +16,7 @@ Key params follow probe.py's argparse; `--out` and `--procs` never enter the der
 
 `tc_rates_fp4` is F1 (f1_rates.py): its CPU steps (``build``, ``collect``) run as research runs, its timed families as fill jobs
 (``tools.tc_probe_fp4.tool:TC_RATES_FP4``; paths, ``--jobs`` and guards are not part of the answer).  `tc_lut_fp4` is F3
-(f3_lut.py), run the same way with one width per fill chunk.
+(f3_lut.py), run the same way with one width per fill chunk, and `tc_strassen_fp4` is F2 (f2_strassen.py), one level per chunk.
 """
 from __future__ import annotations
 
@@ -181,6 +181,43 @@ TC_LUT_FP4 = Tool(
     caches=["nvcc"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_f3,
+)
+
+
+def parse_f2(argv: list[str]) -> dict:
+    idx = next((i for i, t in enumerate(argv) if Path(t).name == "f2_strassen.py"), 0)
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("cmd", nargs="?", default=None)
+    for flag in ("--out", "--build", "--runs", "--expect-uuid", "--level"):
+        ap.add_argument(flag, default=None)
+    ap.add_argument("--reps", type=int, default=5)
+    ap.add_argument("--target-ms", type=float, default=100.0)
+    ap.add_argument("--sustain-s", type=float, default=2.0)
+    ap.add_argument("--seed", type=int, default=20260930)
+    ap.add_argument("--sample", type=int, default=2048)
+    ap.add_argument("--locked-mhz", type=float, default=None)
+    ap.add_argument("--corrupt-word", action="store_true")
+    ap.add_argument("--fake-silicon", action="store_true")
+    ap.add_argument("--tolerance", type=float, default=0.02)
+    ns, unknown = ap.parse_known_args(argv[idx + 1:])
+    out = vars(ns)
+    for k in ("out", "build", "runs", "expect_uuid"):  # paths and guards, not the answer
+        out.pop(k)
+    if unknown:
+        out["_unknown"] = unknown
+    return out
+
+
+TC_STRASSEN_FP4 = Tool(
+    name="tc_strassen_fp4", version="1",
+    command=["python", "tools/tc_probe_fp4/f2_strassen.py"],
+    closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
+    key_params=["cmd", "level", "reps", "target_ms", "sustain_s", "seed", "sample", "locked_mhz", "corrupt_word", "fake_silicon",
+                "tolerance"],
+    key_conditions=["hw.family"],
+    caches=["nvcc"],
+    produces=["bench-result/v1", "run-files/v1"],
+    parse=parse_f2,
 )
 
 

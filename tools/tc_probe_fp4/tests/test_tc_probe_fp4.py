@@ -24,6 +24,7 @@ sys.path.insert(0, str(HERE))
 
 import cast  # noqa: E402
 import f1_rates as F1  # noqa: E402
+import f2_strassen as F2  # noqa: E402
 import f3_lut as F3  # noqa: E402
 import fp4_emulation_1ad1aaa2 as E  # noqa: E402
 import k32  # noqa: E402
@@ -582,6 +583,10 @@ def test_store_declarations_keep_guards_out_of_the_derivation():
                                 "--expect-uuid", "GPU-1", "--locked-mhz", "2100"])
     assert f3["cmd"] == "run" and f3["width"] == "g2c4" and f3["locked_mhz"] == 2100 and "_unknown" not in f3
     assert not {"out", "build", "runs", "expect_uuid"} & set(f3) and set(f3) <= set(tool.TC_LUT_FP4.key_params)
+    f2 = tool.TC_STRASSEN_FP4.parse(["python", "tools/tc_probe_fp4/f2_strassen.py", "run", "--build", "b", "--level", "l2", "--out", "x",
+                                     "--expect-uuid", "GPU-1", "--locked-mhz", "2100"])
+    assert f2["cmd"] == "run" and f2["level"] == "l2" and f2["locked_mhz"] == 2100 and "_unknown" not in f2
+    assert not {"out", "build", "runs", "expect_uuid"} & set(f2) and set(f2) <= set(tool.TC_STRASSEN_FP4.key_params)
 
 
 def test_f1_kernels_are_body_chains_of_their_form():
@@ -836,6 +841,119 @@ def test_f3_dry_run_is_bit_exact_against_the_atom_and_fails_closed(no_nvcc, tmp_
     assert res["validation"]["status"] == "failed" and "fake silicon" in res["validation"]["detail"]
 
 
+@pytest.mark.parametrize("level", [1, 2])
+def test_f2_strassen_multiplies_non_commuting_blocks_in_7_to_the_l_products(level):
+    """U and V's pre-additions, one product per p on 16 x KB by KB x 8 blocks and W's recombination give A B exactly, the
+    pre-added codes stay within 2^L x 12 halves (exact in TF32), and the kernel's W1 table is the host's."""
+    sh, rng = F2.Shape(level), np.random.default_rng(level)
+    a, b = rng.integers(-12, 13, (3, sh.tm, 16)), rng.integers(-12, 13, (3, 16, sh.tn))
+    ac, bc = F2.combos(a, b, level)
+    assert ac.shape == (3, 7 ** level, 16, sh.kb) and bc.shape == (3, 7 ** level, sh.kb, 8)
+    c = np.einsum("IJp,tpij->tIiJj", F2.coeffs(level)[2], np.einsum("tpik,tpkj->tpij", ac, bc)).reshape(3, sh.tm, sh.tn)
+    assert np.array_equal(c, a @ b)
+    assert max(np.abs(ac).max(), np.abs(bc).max()) <= 12 * 2 ** level and np.abs(np.einsum("tpik,tpkj->tpij", ac, bc)).max() < 2 ** 14
+    assert np.array_equal(F2.cu_w1(), F2.W1)
+
+
+@pytest.mark.parametrize("kb", [8, 4])
+def test_f2_fragment_positions_cover_each_operand_element_once(kb):
+    a, b = np.zeros((16, kb), int), np.zeros((kb, 8), int)
+    for r, c in F2.a_positions(kb):
+        np.add.at(a, (r, c), 1)
+    for r, c in F2.b_positions(kb):
+        np.add.at(b, (r, c), 1)
+    assert (a == 1).all() and (b == 1).all()
+
+
+def test_f2_lane_sums_follow_the_c_fragment():
+    """c0..c3 of lane (g, t) are C's (g, 2t), (g, 2t+1), (g+8, 2t), (g+8, 2t+1) in every 16 x 8 block; the checksum sums them in u32."""
+    sh = F2.Shape(2)
+    out = np.random.default_rng(0).integers(0, 2 ** 32, (2, sh.tm, sh.tn), dtype=np.uint64).astype(np.uint32)
+    got = F2.lane_sums(out.reshape(-1), sh)
+    for lane in range(32):
+        g, t = lane >> 2, lane & 3
+        for o, (r, c) in enumerate([(g, 2 * t), (g, 2 * t + 1), (g + 8, 2 * t), (g + 8, 2 * t + 1)]):
+            want = sum(int(out[1, 16 * i + r, 8 * j + c]) for i in range(sh.nb) for j in range(sh.nb)) & 0xFFFFFFFF
+            assert got[1, lane, o] == want
+
+
+def test_f2_tf32_rounding_ties_away_and_keeps_the_codes_exact():
+    x = np.array([1 + 2 ** -11, -(1 + 2 ** -11), 1 + 3 * 2 ** -12, 1 + 2 ** -12, 2 ** -20 * (1 + 2 ** -11)])
+    assert F2.tf32_rna(x).tolist() == [1 + 2 ** -10, -(1 + 2 ** -10), 1 + 2 ** -10, 1.0, 2 ** -20 * (1 + 2 ** -10)]
+    ints = np.arange(-48, 49)
+    assert np.array_equal(F2.tf32_rna(ints), ints)
+    assert not (F2.tf32_words(np.array([3.0, 1 + 2 ** -11, -48.0])) & 0x1FFF).any()
+
+
+def test_f2_sass_gate_counts_the_strassen_mmas_and_fails_closed():
+    pre = "_ZN47_GLOBAL__N__187ee200_14_f2_strassen_cu_f2_shape"
+    fn = {"dots_l1": pre + "15strassen_kernelILi1EEEvPKjS2_ixPjS3_Px", "dots_l2": pre + "15strassen_kernelILi2EEEvPKjS2_ixPjS3_Px",
+          "native": pre + "13native_kernelEPKjS1_S1_iiiixPjPx", "step": pre + "11step_kernelEPKjPKiS3_S1_S1_xiPj"}
+    clean = {"registers": 79, "spill_stores": 0, "spill_loads": 0}
+    loops = {fn["dots_l1"]: {F2.TF32_OPCODE[1]: 7, "FADD": 32}, fn["dots_l2"]: {F2.TF32_OPCODE[2]: 49, "FADD": 480},
+             fn["native"]: {F2.NATIVE_OPCODE: 8, "BRA": 1}, fn["step"]: {"IMAD": 20}}
+    ptxas = {v: dict(clean) for v in fn.values()}
+    g = F2.sass_gate(loops, ptxas, 8)
+    assert all(v["ok"] for v in g.values()) and set(g) == set(fn) and g["dots_l2"]["fadd"] == 480
+    for bad_loops, bad_ptxas in (({**loops, fn["dots_l1"]: {F2.TF32_OPCODE[1]: 8}}, ptxas),
+                                 ({**loops, fn["dots_l2"]: {F2.TF32_OPCODE[1]: 49}}, ptxas),
+                                 ({**loops, fn["dots_l1"]: {F2.TF32_OPCODE[1]: 7, "LDS.128": 1}}, ptxas),
+                                 ({**loops, fn["dots_l2"]: {F2.TF32_OPCODE[2]: 49, "LDG.E.CONSTANT": 1}}, ptxas),
+                                 ({**loops, fn["native"]: {F2.NATIVE_OPCODE: 7}}, ptxas),
+                                 ({**loops, fn["step"]: {"HMMA.16816.F32": 1}}, ptxas),
+                                 (loops, {**ptxas, fn["dots_l2"]: {**clean, "spill_stores": 4}}),
+                                 (loops, {k: v for k, v in ptxas.items() if k != fn["step"]}),
+                                 ({k: v for k, v in loops.items() if k != fn["dots_l2"]}, ptxas)):
+        assert not all(v["ok"] for v in F2.sass_gate(bad_loops, bad_ptxas, 8).values())
+
+
+def _f2_fake_build(d: Path, ok: bool = True) -> Path:
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "build.json").write_text(json.dumps({"schema": F2.SCHEMA + "/build", "nt": 8, "ok": ok, "gate": {"native": {"ok": ok}},
+                                              "so": "none.so", "so_sha256": "0" * 64, "source_sha256": "1" * 64, "header_sha256": "2" * 64,
+                                              "nvcc": "none", "nvcc_flags": F2.NVCC_FLAGS, "ftz_fp32": []}))
+    return d
+
+
+def test_f2_dry_run_is_bit_exact_against_the_atom_and_fails_closed(no_nvcc, tmp_path, monkeypatch):
+    """The fake unpacks the TF32 fragments, multiplies them per product and recombines by W, and runs the native arm and the
+    step through the pinned model's vectorised step, so a passing gate means the host's pre-additions, fragment layout and step
+    inputs reproduce the atom's words."""
+    b = _f2_fake_build(tmp_path / "b")
+    common = ["--build", str(b), "--fake-silicon", "--reps", "2", "--sustain-s", "0", "--target-ms", "1", "--sample", "128"]
+    assert F2.main(["run", "--level", "l1", "--out", str(tmp_path / "r")] + common) == 0
+    r = json.loads((tmp_path / "r" / "l1.fake.json").read_text())
+    assert not r["failures"] and set(r["gate"]) == set(F2.FAMILIES) and (r["mmas"], r["mmas_naive"], r["mma_shape"]) == (7, 8, "m16n8k8")
+    for fam in r["gate"].values():
+        assert all(v["ok"] and v["rounded_operands"] == 0 for v in fam["groups"].values())
+        assert set(fam["words"]) == {f"L{n}" for n in F2.GATE_LENGTHS}
+        assert all(w["ok"] and w["words"] == F2.NTILES * 32 * 16 and w["model_sample"] == 128 for w in fam["words"].values())
+    # recorded, never gated: TF32 rounds some pre-sums of the mixed family's scaled values
+    assert r["gate"]["mixed"]["groups"]["0"]["scaled"]["rounded_operands"] > 0
+    assert all(v["ok"] and v["length"] >= 1000 for v in r["timed_length_gate"].values())
+    # the fake: TF32 m16n8k8 at 256 products per SM per clock, NVFP4 at 2,048, so 8 x 7/8 slots per product
+    assert r["per_arm"]["uniform/dots"]["fp4_slots_per_product"] == pytest.approx(7.0)
+    assert r["mma_floor_fp4_slots"]["value"] == pytest.approx(7.0) and r["clocks"] == "unlocked"
+
+    assert F2.main(["run", "--level", "l1", "--out", str(tmp_path / "bad"), "--corrupt-word"] + common) == 1
+    bad = json.loads((tmp_path / "bad" / "l1.fake.json").read_text())
+    assert bad["failures"] and bad["gate"]["mixed"]["words"]["L1"]["route_native_mismatches"] == 1 and "per_arm" not in bad
+    nb = _f2_fake_build(tmp_path / "nb", ok=False)
+    assert F2.main(["run", "--level", "l1", "--out", str(tmp_path / "nb_r"), "--build", str(nb)] + common[2:]) == 1
+    assert "per_arm" not in json.loads((tmp_path / "nb_r" / "l1.fake.json").read_text())
+
+    assert F2.main(["collect", "--build", str(b), "--runs", str(tmp_path / "r"), "--out", str(tmp_path / "t")]) == 1
+    t = json.loads((tmp_path / "t" / "f2_strassen.json").read_text())
+    assert t["rows"]["l1/uniform/dots"]["fp4_slots_per_product"] == pytest.approx(7.0) and t["missing_levels"] == ["l2"]
+    assert not t["claim"]["cheaper"] and not t["claim"]["holds_over_measured"]
+    res = json.loads((tmp_path / "t" / "result.json").read_text())
+    assert res["validation"]["status"] == "failed" and "fake silicon" in res["validation"]["detail"]
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    with pytest.raises(SystemExit):
+        F2.main(["run", "--level", "l1", "--out", str(tmp_path / "never")] + common)
+    assert not (tmp_path / "never").exists()
+
+
 @pytest.mark.skipif(os.environ.get("VERITY_TC_PROBE_FP4_NVCC") != "1",
                     reason="set VERITY_TC_PROBE_FP4_NVCC=1 to build the kernels and run the offline SASS gates (nvcc 12.9, ~30 s)")
 def test_offline_sass_gates(tmp_path):
@@ -848,6 +966,7 @@ def test_offline_sass_gates(tmp_path):
                 ["probe.py", "--instruction", "sp_nvf4_t1", "--out", str(tmp_path / "t1"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
                 ["f1_rates.py", "build", "--out", str(tmp_path / "f1")],
+                ["f2_strassen.py", "build", "--out", str(tmp_path / "f2")],
                 ["f3_lut.py", "build", "--out", str(tmp_path / "f3")],
                 ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
