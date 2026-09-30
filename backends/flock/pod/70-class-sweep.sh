@@ -28,6 +28,12 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   # one build at a time per FLOCK_WORK (runs in parallel share its checkout); the second finds the first's binaries
   exec 8>$W/build.lock; flock 8
+  # a Kueue job (FLOCK_WORK under /workspace/jobs) takes the same key's binaries a direct run built into the shared cache
+  # (BUILD_ONLY=1, on the CPUs direct runs get), so an attempt's build needn't wait for a GPU
+  SHARED=/workspace/cache/flock/flock-circuit/bin-$KEY-g$G-sm$SM
+  if [ ! -x $BIN/flock-circuit-selftest ] && [ "$SHARED" != "$BIN" ] && [ -x $SHARED/flock-circuit-selftest ]; then
+    mkdir -p $BIN && cp $SHARED/flock-circuit $SHARED/flock-circuit-selftest $BIN/ && echo "binaries from $SHARED" | tee $O/build.log
+  fi
   if [ ! -x $BIN/flock-circuit-selftest ]; then
     MODE=build GPU=$G SM=$SM bash backends/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
     mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
@@ -39,6 +45,7 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   fi
   exec 8>&-
   BINARY=$BIN/flock-circuit; SELFTEST_BINARY=$BIN/flock-circuit-selftest
+  [ "${BUILD_ONLY:-0}" = 1 ] && { sha256sum $BINARY $SELFTEST_BINARY | tee $O/binary.sha256; exit 0; }
 fi
 B=$BINARY; SB=${SELFTEST_BINARY:-$BINARY}; sha256sum $B $SB | tee $O/binary.sha256
 # WRAP: a command the prover's prove sessions run under (71-gemm-slowdown.sh NSYS=1); binary.sha256 is the prover's own
