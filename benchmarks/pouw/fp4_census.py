@@ -396,7 +396,24 @@ def operand_stats(codes: np.ndarray, sc: np.ndarray, fmt: str, clean_codes: np.n
 # ---- families --------------------------------------------------------------------------------------------------------
 
 FAMILIES = ("gaussian", "student-t4", "grid-aligned", "uniform-block-amax", "outlier-in-block", "sparse-2of4", "zero-blocks",
-            "scale-spread-30", "acc-freeze", "coherent", "rank-1")
+            "scale-spread-30", "acc-freeze", "coherent", "rank-1", "spiky-row", "stride-row", "stride-row-tight",
+            "stride-row-grid")
+
+
+def _spiky(rows: int, k: int, rng) -> np.ndarray:
+    """One entry per 16-block at +-U(0.8, 1), the rest 0.08 N(0, 1) (``t1_closures_attack.py``'s spiky rows)."""
+    x = 0.08 * rng.standard_normal((rows, k))
+    nb = k // 16
+    pos = rng.integers(0, 16, (rows, nb)) + 16 * np.arange(nb)[None]
+    x[np.arange(rows)[:, None], pos] = rng.choice([-1.0, 1.0], (rows, nb)) * rng.uniform(0.8, 1.0, (rows, nb))
+    return x
+
+
+def _stride(rows: int, k: int, rng, div: float) -> np.ndarray:
+    """+-U(0.5, 1) except every 8th position, where rho is sampled, at N(0, 1) / div: rho ~ 1/div of the block amax."""
+    x = rng.choice([-1.0, 1.0], (rows, k)) * rng.uniform(0.5, 1.0, (rows, k))
+    x[:, ::8] = rng.standard_normal((rows, k // 8)) / div
+    return x
 
 
 def family(name: str, rows: int, k: int, rng) -> tuple[np.ndarray, np.ndarray]:
@@ -444,6 +461,16 @@ def family(name: str, rows: int, k: int, rng) -> tuple[np.ndarray, np.ndarray]:
     if name == "rank-1":
         u = rng.standard_normal(k)
         return rng.standard_normal((rows, 1)) * u, 0.02 * rng.standard_normal((rows, k))
+    if name == "spiky-row":
+        return _spiky(rows, k, rng), 0.02 * _spiky(rows, k, rng)
+    if name in ("stride-row", "stride-row-tight"):          # the proposer's rho = amax/10 sits on the 10 rho screen; /9 inside it
+        div = 10.0 if name == "stride-row" else 9.0
+        return _stride(rows, k, rng, div), 0.02 * _stride(rows, k, rng, div)
+    if name == "stride-row-grid":                           # the top two E2M1 codes of amax 1, rho = 1/10 exactly: the screen's edge
+        g = lambda: rng.choice([-1.0, 1.0], (rows, k)) * rng.choice([2 / 3, 1.0], (rows, k))  # noqa: E731
+        A, B = g(), g()
+        A[:, ::8], B[:, ::8] = (0.1 * rng.choice([-1.0, 1.0], (rows, k // 8)) for _ in range(2))
+        return A, 0.02 * B
     raise ValueError(name)
 
 
@@ -568,19 +595,25 @@ def two_four_term(sp: dict, rows: int = 16) -> dict[str, np.ndarray]:
             "span_either": per_span(sp["span_d24"] | sp["span_pairs"])}
 
 
-def witness_salt_dead(X: np.ndarray, fmt: str, delta: float = 0.25) -> np.ndarray:
-    """Per element, the Pearl-C4 reference's ``salt_dead`` (``pearl_c4.py`` at 524d0c2b), in float64: an element is
-    salt-live when two of the noise support's draws give it two codes, the draws being the noise atom at +-72 a_E (E = +6
-    on the row, F_t = +-6) and 0, with every other element of its block unmoved.  The row is at the reference's forming
-    scale: alpha = 2688 / (s + 4 delta rho) (a power of two for MXFP4), a_E = UE4M3(delta rho alpha 16 / sqrt(2346.125)),
-    block scales by its rule (UE4M3 of amax/6 with floor 0x01; UE8M0 rounded up)."""
-    blk = 16 if fmt == "nvf4" else 32
-    rows, k = X.shape
+def forming_scale(X: np.ndarray, fmt: str, delta: float = 0.25) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per row, the Pearl-C4 reference's (rho, alpha, a_E byte) in float64: rho the RMS over every 8th position,
+    alpha = 2688 / (s + 4 delta rho) (a power of two for MXFP4), a_E = UE4M3(delta rho alpha 16 / sqrt(2346.125))."""
     rho = np.sqrt((X[:, ::8] ** 2).mean(1))
     alpha = 2688.0 / np.maximum(np.abs(X).max(1) + 4 * delta * rho, 2.0 ** -32)
     if fmt == "mxf4":
         alpha = np.exp2(np.floor(np.log2(alpha)))
-    m, e = scale_pairs("ue4m3", e4m3_codes_unsigned(delta * rho * alpha * 16 / np.sqrt(2346.125)))
+    return rho, alpha, e4m3_codes_unsigned(delta * rho * alpha * 16 / np.sqrt(2346.125))
+
+
+def witness_salt_dead(X: np.ndarray, fmt: str, delta: float = 0.25) -> np.ndarray:
+    """Per element, the Pearl-C4 reference's ``salt_dead`` (``pearl_c4.py`` at 524d0c2b), in float64: an element is
+    salt-live when two of the noise support's draws give it two codes, the draws being the noise atom at +-72 a_E (E = +6
+    on the row, F_t = +-6) and 0, with every other element of its block unmoved.  The row is at the reference's forming
+    scale (``forming_scale``), block scales by its rule (UE4M3 of amax/6 with floor 0x01; UE8M0 rounded up)."""
+    blk = 16 if fmt == "nvf4" else 32
+    rows, k = X.shape
+    _, alpha, ae = forming_scale(X, fmt, delta)
+    m, e = scale_pairs("ue4m3", ae)
     amp = 72.0 * np.ldexp(m.astype(np.float64), e)[:, None, None]
     c = (alpha[:, None] * X).reshape(rows, k // blk, blk)
     mags = np.abs(c)
@@ -601,11 +634,23 @@ def witness_salt_dead(X: np.ndarray, fmt: str, delta: float = 0.25) -> np.ndarra
     return ((code(c - amp) == mid) & (code(c + amp) == mid)).reshape(rows, k)
 
 
-def dss_dead(X: np.ndarray, fmt: str) -> np.ndarray:
-    """D-SS's salt-free screen per (row, block): clean amax_b > 12 rho, rho the RMS over every 8th position of the row."""
+DEAD_RHO = 10.0                                   # pearl_c4.DEAD_RHO at 5f0a1529 (12 before it)
+
+
+def dss_dead(X: np.ndarray, fmt: str, dead_rho: float = DEAD_RHO) -> np.ndarray:
+    """D-SS's salt-free screen per (row, block): clean amax_b > dead_rho * rho, rho the RMS over every 8th position."""
     blk = 16 if fmt == "nvf4" else 32
     rho = np.sqrt((X[:, ::8] ** 2).mean(1))
-    return np.abs(X).reshape(X.shape[0], -1, blk).max(-1) > 12 * rho[:, None]
+    return np.abs(X).reshape(X.shape[0], -1, blk).max(-1) > dead_rho * rho[:, None]
+
+
+def rows_admitted(X: np.ndarray, fmt: str, delta: float = 0.25, dead_rho: float = DEAD_RHO) -> dict[str, np.ndarray]:
+    """The reference's ``row_passes`` per row: D-NF (a_E a normal UE4M3, byte >= 0x08) and D-SS (at most one dead block
+    in 64), each and both."""
+    dnf = forming_scale(X, fmt, delta)[2] >= 0x08
+    d = dss_dead(X, fmt, dead_rho)
+    dss = 64 * d.sum(1) <= d.shape[1]
+    return {"dnf": dnf, "dss": dss, "both": dnf & dss}
 
 
 def span_merged_equal(atom: Atom, qa, qb, ia, ib, traj: np.ndarray) -> np.ndarray:
@@ -626,7 +671,7 @@ def _tile_stats(x: np.ndarray, rho: float) -> dict:
 
 def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str, delta: float, rng, rows: int,
                  tile: int = 16, skip_tiles: int = 2, hot_bits: int = 14, rho: float = 1 / 400,
-                 hot_rule: str = "row", n: int | None = None) -> dict:
+                 hot_rule: str = "row", n: int | None = None, dead_rho: float = DEAD_RHO) -> dict:
     """The per-tile debit of §2 on every word of ``rows`` x ``rows`` (A rows x B rows), as a share of the tile's chain MACs
     against the cap rho, for v1's chains from +0 and v2's (T1) from H (``hot_start``).
 
@@ -641,7 +686,9 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     scale, as the MMA sees it), which TT_OUT-FP4 carries rather than debits.  Both 2:4 predicates are counted on the
     formed 16-row spans of A' and B', and per version, whether the merged k128 step reproduces the chain's words over
     each span, on all spans and on 2:4 spans.  ``tile_debit_total`` adds items 2 and 5 (identity steps), 3, 4 and the
-    D-24 windows to item 1 at each level and unit; the reference's total is ``witness``/``g4``."""
+    D-24 windows to item 1 at each level and unit; the reference's total is ``witness``/``g4``.  Dead blocks are D-SS's at
+    ``dead_rho``, and a tile is admitted when every row of both its sides passes the reference's row rule
+    (``rows_admitted``); each side's dead share and row admission at 12 rho is reported beside."""
     ya, yb = noisy(A, fmt, noise, delta, rng), noisy(B, fmt, noise, delta, rng)
     ca, sa, _ = quantize(ya, fmt)
     cb, sb, _ = quantize(yb, fmt)
@@ -653,8 +700,8 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
     n = n or K
     blk = 16 if fmt == "nvf4" else 32
     out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(nt), "k": int(K), "n": int(n), "rho": rho,
-           "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles, "operands": {}}
-    formed, terms, dead, sdead, windows = {}, {}, {}, {}, {}
+           "hot_bits": hot_bits, "hot_rule": hot_rule, "skip_tiles": skip_tiles, "dead_rho": dead_rho, "operands": {}}
+    formed, terms, dead, sdead, windows, admit = {}, {}, {}, {}, {}, {}
     share = lambda sp, live: {"change_density": float(live.mean()), "g4_ge2_dead": float(sp["g4"].mean()),
                               "g4_all_dead": float(sp["g4_dead"].mean()), "p8_le2_live_pairs": float(sp["p8"].mean()),
                               "span_d24": float(sp["span_d24"].mean()), "span_pairs": float(sp["span_pairs"].mean())}
@@ -663,7 +710,9 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
         c, s, c0, s0 = c[:rr], s[:rr], c0[:rr], s0[:rr]
         f = formed[side] = span_2of4((c & 7) != 0, tile)
         windows[side] = {p: f[p].reshape(rr, -1, 128 // w).all(-1).sum(1) for p, w in (("g4", 4), ("p8", 8))}
-        dead[side] = dss_dead(X[:rr], fmt)
+        dead[side] = dss_dead(X[:rr], fmt, dead_rho)
+        adm, d12 = rows_admitted(X[:rr], fmt, delta, dead_rho), dss_dead(X[:rr], fmt, 12.0)
+        admit[side] = adm["both"]
         sdead[side] = witness_salt_dead(X[:rr], fmt, delta)
         sp = span_2of4(~sdead[side], tile)
         terms[side] = {"witness": two_four_term(sp, tile)}
@@ -671,8 +720,10 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
              "formed_span_pairs": float(f["span_pairs"].mean()),
              "formed_row_windows_d24": float(windows[side]["g4"].sum() / f["span_d24"].size / tile),
              "formed_row_windows_pairs": float(windows[side]["p8"].sum() / f["span_d24"].size / tile),
-             "dss_dead_blocks": float(dead[side].mean()),
-             "dss_rows_admitted": float((64 * dead[side].sum(1) <= dead[side].shape[1]).mean()),
+             "dss_dead_blocks": float(dead[side].mean()), "dss_rows_admitted": float(adm["dss"].mean()),
+             "dnf_rows_admitted": float(adm["dnf"].mean()), "rows_admitted": float(adm["both"].mean()),
+             "dss_dead_blocks_12rho": float(d12.mean()),
+             "dss_rows_admitted_12rho": float((64 * d12.sum(1) <= d12.shape[1]).mean()),
              "witness": share(sp, ~sdead[side])}
         if noise != "none":
             (N1, E1), (N0, E0) = block_ints(c, s, fmt), block_ints(c0, s0, fmt)
@@ -683,8 +734,7 @@ def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str,
                 terms[side][lvl] = two_four_term(sp, tile)
         out["operands"][side] = o
     nta, ntb = ra // tile, rb // tile
-    adm = lambda d: (64 * d.sum(1) <= d.shape[1]).reshape(-1, tile).all(1)
-    admitted = (adm(dead["A"])[:, None] & adm(dead["B"])[None, :]).ravel()
+    admitted = (admit["A"].reshape(-1, tile).all(1)[:, None] & admit["B"].reshape(-1, tile).all(1)[None, :]).ravel()
     dA, dB = (dead[x].reshape(-1, tile, dead[x].shape[1]).sum(1).astype(np.float64) for x in "AB")
     item3 = (dA @ dB.T) * blk / (tile * tile * K)
     sd = sdead["A"].reshape(nta, tile, K).sum(1).astype(np.float64)                 # salt-dead A elements per position
@@ -833,9 +883,14 @@ def merge_rate(fmt: str, A: np.ndarray, noise: str, delta: float, rng, partner_b
 
     Per pattern and sign, over the pairs whose two blocks are both nonzero: ``eps_strict`` = the merged block is
     FP4-representable under one scale of the format; ``eps_any_scale`` = on the E2M1 grid under any common factor (an
-    upper bound); ``cancel`` = the blocks cancel exactly (a duplicate up to sign); ``dup`` = v1 = +-v2 (either sign).
+    upper bound);     ``cancel`` = the blocks cancel exactly (a duplicate up to sign); ``dup`` = v1 = +-v2 (either sign).
     """
     codes, sc, g = quantize(noisy(A, fmt, noise, delta, rng), fmt)
+    return merge_rate_codes(codes, sc, fmt, partner_blocks)
+
+
+def merge_rate_codes(codes: np.ndarray, sc: np.ndarray, fmt: str, partner_blocks: int = 256) -> dict:
+    """``merge_rate`` on operands already formed: E2M1 codes (rows, k) and their block scale bytes."""
     N, E = block_ints(codes, sc, fmt)
     rows, nb, blk = N.shape
     live = np.abs(N).max(-1) > 0
@@ -1015,7 +1070,7 @@ def cmd_debit(args) -> dict:
             for noise in args.noise.split(","):
                 try:
                     r = debit_census(atom, fmt, A, B, noise, args.delta, rng, args.pairs, hot_bits=args.hot_bits,
-                                     hot_rule=args.hot_rule, n=label["n"])
+                                     hot_rule=args.hot_rule, n=label["n"], dead_rho=args.dead_rho)
                 except OverflowError as e:
                     r = {"outside_model": str(e)}
                 res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
@@ -1033,6 +1088,7 @@ def cmd_debit(args) -> dict:
                         **({"item1_code_g4_max": round(r["item1"]["code"]["g4"]["max"], 4)} if "code" in r["item1"] else {}),
                         "item3_max": round(r["item3"]["max"], 6), "item4_max": round(r["item4"]["max"], 6),
                         "windows_d24_max": round(r["windows_d24"]["max"], 6), "tiles_admitted": r["tiles_admitted"],
+                        **{f"rows_admitted_{s}": round(r["operands"][s]["rows_admitted"], 4) for s in "AB"},
                         **{f"{v}_total_ref_max": round(tot(v, "witness", "g4"), 6) for v in ("v1", "v2")}}
                        if "item1" in r else {})}),
                     flush=True)
@@ -1133,6 +1189,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--partner-blocks", type=int, default=256, help="merge: k-blocks the adaptive partner search covers")
     ap.add_argument("--hot-bits", type=int, default=14, help="debit: v2's H has its grid at 2^-hot_bits of the RMS atom sum")
     ap.add_argument("--hot-rule", choices=["row", "word"], default="row", help="debit: whose RMS atom sum sets v2's H")
+    ap.add_argument("--dead-rho", type=float, default=DEAD_RHO, help="debit: D-SS's dead block is clean amax_b > dead_rho * rho")
     ap.add_argument("--n", type=int, default=0,
                     help="debit: output width for the forming term (default: Qwen2.5-7B's per linear with --acts, else k)")
     ap.add_argument("--seed", type=int, default=20260930)

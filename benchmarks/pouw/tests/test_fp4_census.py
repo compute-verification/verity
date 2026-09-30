@@ -270,8 +270,42 @@ def test_the_two_2of4_predicates_differ_by_hand():
 def test_dss_dead_reads_the_every_eighth_rms():
     X = np.ones((2, 64))
     X[0, 17] = 12.5                                                     # off the every-8th grid: rho stays 1
-    X[1, 16] = 1000.0                                                   # on it: rho = sqrt((1000^2 + 7) / 8), 12 rho > 1000
-    assert C.dss_dead(X, "nvf4").tolist() == [[False, True, False, False], [False, False, False, False]]
+    X[0, 49] = 11.0                                                     # dead at 10 rho (pearl_c4 at 5f0a1529), not at 12
+    X[1, 16] = 1000.0                                                   # on it: rho = sqrt((1000^2 + 7) / 8), 10 rho > 1000
+    assert C.dss_dead(X, "nvf4").tolist() == [[False, True, False, True], [False, False, False, False]]
+    assert C.dss_dead(X, "nvf4", 12.0).tolist() == [[False, True, False, False], [False, False, False, False]]
+
+
+def test_rows_admitted_reads_d_nf_and_d_ss():
+    """D-NF fails when the row's max is so far above rho that a_E leaves the normal UE4M3 range (about 14,000 rho here);
+    D-SS fails past one dead block in 64."""
+    X = np.full((3, 1024), 1e-5)
+    X[0, 3] = 1.0                                                       # s / rho = 1e5, one dead block of 64
+    X[1, 3] = 0.1                                                       # s / rho = 1e4
+    X[2, 1:1024:16] = 1e-3                                              # every block dead
+    r = C.rows_admitted(X, "nvf4")
+    assert r["dnf"].tolist() == [False, True, True] and r["dss"].tolist() == [True, True, False]
+    assert r["both"].tolist() == [False, True, False]
+
+
+@pytest.mark.parametrize("fmt", ["nvf4", "mxf4"])
+def test_the_falsifier_families_sit_where_they_claim(fmt):
+    """Spiky and stride rows pass the reference's row rule at 10 rho, except the proposer's stride rows (rho = amax/10
+    on average), which sit on the screen; stride rows put rho near a tenth of the block amax, Gaussians near a half."""
+    rng = np.random.default_rng(16)
+    adm = {f: C.rows_admitted(C.family(f, 64, 4096, rng)[0], fmt)["both"].mean()
+           for f in ("spiky-row", "stride-row", "stride-row-tight", "stride-row-grid", "gaussian")}
+    assert adm["spiky-row"] == adm["stride-row-grid"] == adm["gaussian"] == 1.0
+    assert adm["stride-row-tight"] > 0.8 and adm["stride-row"] < adm["stride-row-tight"]
+    A = C.family("stride-row-grid", 4, 4096, rng)[0]
+    rho, amax = np.sqrt((A[:, ::8] ** 2).mean(1)), np.abs(A).max(1)
+    assert np.allclose(rho, 0.1) and np.allclose(amax, 1.0)
+
+
+def test_merge_rate_codes_is_merge_rate_on_the_codes_given():
+    X = np.random.default_rng(17).standard_normal((32, 1024))
+    codes, sc, _ = C.quantize(X, "nvf4")
+    assert C.merge_rate("nvf4", X, "none", 0.25, None, 16) == C.merge_rate_codes(codes, sc, "nvf4", 16)
 
 
 @pytest.mark.parametrize("fmt", ["nvf4", "mxf4"])

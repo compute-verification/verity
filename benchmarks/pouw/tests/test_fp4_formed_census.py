@@ -18,6 +18,11 @@ def test_frag_cost_skips_passes_once_or_pays_dense():
     c = FC.frag_cost(live)
     assert (c["frag_skip"], c["frag_one_pass"]) == (0.5, 0.25)
     assert c["cost_per_mac"] == (0 + 0 + 1.0 + 0.5) / 4
+    live[:16, 64:] = False
+    live[3, 70] = True                                                  # one change in 1,024: 8.46/1,024 beats a pass
+    c = FC.frag_cost(live, fp32_op=8.46)
+    assert c["cost_per_mac"] == 1.0 / 4 and c["cost_per_mac_with_cuda_core"] == (8.46 / 1024 + 0.5) / 4
+    assert c["frag_cuda_core_cheaper"] == 0.25
 
 
 def test_bf16_words_round_to_nearest_even():
