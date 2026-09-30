@@ -2,7 +2,7 @@
 check over the ranks' components, the record per rank), docs/vllm-config-sweep-plan.md §2-§4.
 
 A config run (`--config-run 1`) is the Build, the strict word check of its manifest (`word_check`), ONE instrumented Commit (`--pairs 1
---only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay stratified by family, and
+--only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay (`--replay-draw`), and
 `config_record.json` (`config_record`), written however the run ends.  No Match, no manifest-verify rebuild, no VU export: the Commit's
 decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match there is no account
 for the executed-prefix class (`check.executed_prefix`) to link to: when every request ran to its cap the class has nothing to classify and the
@@ -33,11 +33,18 @@ def _tail(path: str, n: int = 240) -> str:
 
 def word_check(row: Any) -> None:
     """The strict word check of the Build's manifest (`epoch word-check`, as a row of record's job runs it) before any Commit; a FAIL stops
-    the run (exit 20)."""
+    the run (exit 20).  A raised VERITY_QWORD_MAX_GATES passes only when VERITY_QWORD_MAX_GATES_ALLOWED names the same value (the GO's
+    allowance for the row)."""
     env = row.env.environ
     rc = row.run_tl("build.word_check", WORD_CHECK_TIMEOUT, f"{row.d}/strict_word.log",
+<<<<<<< HEAD
                     row.cli("epoch", "word-check", row.row, row.d, "--out", f"{row.d}/strict_word.json", "--world", str(getattr(row, "W", 1)),
                             "--build-word-check", env.get("VERITY_WORD_CHECK", ""), "--build-max-gates", env.get("VERITY_QWORD_MAX_GATES", "")))
+=======
+                    row.cli("epoch", "word-check", row.row, row.d, "--out", f"{row.d}/strict_word.json", "--world", "1",
+                            "--build-word-check", env.get("VERITY_WORD_CHECK", ""), "--build-max-gates", env.get("VERITY_QWORD_MAX_GATES", ""),
+                            "--allowed-max-gates", env.get("VERITY_QWORD_MAX_GATES_ALLOWED", "")))
+>>>>>>> origin/cursor/config-run-2622
     row.verdict("word-check", "PASS" if rc == 0 else "FAIL", f"rc={rc} {_tail(f'{row.d}/strict_word.log')}")
     if rc != 0:
         row.log("strict word check FAIL -> stop")
@@ -71,10 +78,18 @@ def config_record(row: Any) -> dict[str, Any]:
 
 
 def device_id(row: Any) -> dict[str, Any] | None:
+<<<<<<< HEAD
     """What the derives are for, part of a derive's cache key: the row's declared target when it declares one (the Build derives for it
     on any host, a GPU-free one included), else the GPU model the host derives on (name, compute capability); None when neither is known."""
     if not hasattr(row, "_device_id"):
         declared = getattr(row, "tgt", "")
+=======
+    """What the derives are for, part of a derive's cache key: the workload's declared target when it declares one (the Build derives
+    for it on any host, a CPU-only one included), else the GPU model the host derives on (name, compute capability); None when neither
+    is known."""
+    if not hasattr(row, "_device_id"):
+        declared = (R.load_json(row.path(row.wl)) or {}).get("target")
+>>>>>>> origin/cursor/config-run-2622
         first: list[str] = []
         if not declared:
             try:
