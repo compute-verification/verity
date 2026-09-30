@@ -40,6 +40,11 @@ python tools/lean/audit.py PKG                     what check runs, for one pack
 Build on a CPU machine; the three packages take about nine minutes from scratch on four cores. Never `lake update`, and
 never change a `require`, a revision or `lean-toolchain` in a feature PR.
 
+The replay refuses `X.congr_simp is declared by a replayed module and by one it imports`. `simp` realizes a structure
+constructor's congruence lemma (`ZeroHom.mk.congr_simp`) in your module when it rewrites under an unfolded bundled map,
+and Mathlib has realized it already. Don't unfold a `→+` or `→*` inside `simp`: prove its `_apply` lemma by `rfl` and
+simp with that.
+
 ## Assumptions and pins
 
 - **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
