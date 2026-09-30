@@ -1578,6 +1578,7 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 source = { virtual = "benchmarks/pouw" }
 dependencies = [
+    { name = "blake3" },
     { name = "numpy" },
     { name = "research" },
     { name = "verity-pouw" },
@@ -1586,6 +1587,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "research", editable = "tools/research" },
     { name = "verity-pouw", editable = "protocols/pouw" },

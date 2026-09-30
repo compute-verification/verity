@@ -58,6 +58,9 @@ never change a `require`, a revision or `lean-toolchain` in a feature PR.
   constants its statement is about. The audit fails when the pinned dependency proves an unacknowledged theorem about
   them. Read the theorem, say in the PR whether it discharges the assumption or replaces the proof, then run
   `python tools/lean/upstream.py PKG --ack`. At a dependency bump, also run `upstream.py PKG --lean` (the exact pass).
+  At a toolchain bump, also re-read `lean_io_get_random_bytes` in the new toolchain's `src/runtime/io.cpp`. A3
+  (`soundness/ASSUMPTIONS.md`) cites what it reads, and `tests/test_lean_packages.py` fails until the citation names the
+  new version.
   Cite the output in `ASSUMPTIONS.md`'s upstream status rather than writing one.
 - **A changed record is a changed claim.** If `--update` changes a record or `reads` for a theorem you didn't mean to
   change, your edit changed what that theorem says: undo it, or say so in the PR and update the ledger.

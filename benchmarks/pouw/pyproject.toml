@@ -3,7 +3,11 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 description = "PoUW's benchmarks and their tests."
 requires-python = ">=3.12"
+<<<<<<< HEAD
 dependencies = ["research", "verity-pouw", "verity-vllm", "numpy"]
+=======
+dependencies = ["research", "verity-pouw", "numpy", "blake3>=1.0"]
+>>>>>>> 124585e55
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]

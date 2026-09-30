@@ -1,4 +1,5 @@
-"""`suites.py` in a tree without git, as `research run --source` ships one: suites are found, and keyed from their files."""
+"""`suites.py`: suites are found and keyed from git's view of the tree, on a laptop's checkout and on the checkout `research run
+--source` ships alike."""
 from __future__ import annotations
 
 import importlib.util
@@ -16,29 +17,41 @@ def _suites(monkeypatch, root: Path):
     monkeypatch.setitem(sys.modules, spec.name, mod)           # dataclasses resolve their module by name
     spec.loader.exec_module(mod)
     monkeypatch.setattr(mod, "ROOT", root)
-    monkeypatch.setattr(mod, "GIT", False)
     return mod
 
 
-def test_a_shipped_tree_is_discovered_and_keyed_from_its_files(tmp_path, monkeypatch):
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=root,
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_a_tree_is_discovered_and_keyed_from_gits_view_of_it(tmp_path, monkeypatch):
+    (tmp_path / ".gitignore").write_text("__pycache__/\n")
     (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (tmp_path / "pkg" / "tests").mkdir(parents=True)
     (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
     (tmp_path / "pkg" / "tests" / "test_a.py").write_text("def test_a():\n    pass\n")
     (tmp_path / "pkg" / "__pycache__").mkdir()
     (tmp_path / "pkg" / "__pycache__" / "a.pyc").write_bytes(b"1")
+    _git(tmp_path, "init", "-q")
     S = _suites(monkeypatch, tmp_path)
 
     [suite] = S.discover()
     assert (suite.name, suite.path) == ("pkg", "pkg")
     assert S.metadata() == ["pkg/pyproject.toml", "pyproject.toml", "uv.lock"]
-    before = S.object_ids(None, ["pkg", "uv.lock"], S.digests())
+    before = S.object_ids(S.worktree(), ["pkg", "uv.lock"])
     assert before["uv.lock"] == "absent"
 
-    (tmp_path / "pkg" / "__pycache__" / "a.pyc").write_bytes(b"2")      # what a machine adds is not source
-    assert S.object_ids(None, ["pkg", "uv.lock"], S.digests()) == before
-    (tmp_path / "pkg" / "tests" / "test_a.py").write_text("def test_a():\n    assert True\n")
-    assert S.object_ids(None, ["pkg"], S.digests())["pkg"] != before["pkg"]
+    (tmp_path / "pkg" / "__pycache__" / "a.pyc").write_bytes(b"2")      # what the ignore rules cover is not source
+    assert S.object_ids(S.worktree(), ["pkg", "uv.lock"]) == before
+    (tmp_path / "pkg" / "tests" / "test_a.py").write_text("def test_a():\n    assert True\n")     # uncommitted, and it counts
+    assert S.object_ids(S.worktree(), ["pkg"])["pkg"] != before["pkg"]
+
+
+def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = []\n')
+    S = _suites(monkeypatch, tmp_path)
+    assert S.main(["--list"]) == 2 and "is not a git checkout" in capsys.readouterr().err
 
 
 def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
@@ -47,6 +60,7 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
                                                      '[tool.verity.tests]\nartifacts = ["pkg/.lake/build/bin/tool", "pkg/.lake/cache"]\n')
+    _git(tmp_path, "init", "-q")
     S = _suites(monkeypatch, tmp_path)
     [suite] = S.discover()
     assert suite.artifacts == ("pkg/.lake/build/bin/tool", "pkg/.lake/cache")
@@ -66,23 +80,6 @@ def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
     assert 1 <= S.cpus() <= (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count())
 
 
-def test_a_shipped_tree_reports_writes_as_git_would(tmp_path, monkeypatch):
-    (tmp_path / ".gitignore").write_text("**/target/\n")
-    (tmp_path / "pkg" / "target").mkdir(parents=True)
-    (tmp_path / "pkg" / "target" / "kept.bin").write_bytes(b"a tracked file the rules cover")
-    (tmp_path / "pkg" / "a.py").write_text("A = 1\n")
-    S = _suites(monkeypatch, tmp_path)
-    before = S.digests()
-    assert "pkg/target/kept.bin" in before
-
-    (tmp_path / "pkg" / "target" / "build.o").write_bytes(b"x")        # a build output: ignored, as in a checkout
-    assert S.changed(before) == []
-    (tmp_path / "pkg" / "a.py").write_text("A = 2\n")
-    (tmp_path / "pkg" / "new.json").write_text("{}\n")
-    (tmp_path / "pkg" / "target" / "kept.bin").unlink()
-    assert S.changed(before) == ["pkg/a.py", "pkg/new.json", "pkg/target/kept.bin"]
-
-
 def _workspace(root: Path) -> None:
     """Members `a` (on numpy, with a `plot` extra on matplotlib) and `b` (on nothing), and the workspace's dev group."""
     (root / "pyproject.toml").write_text('[project]\nname = "ws"\n\n[tool.uv.workspace]\nmembers = ["a", "b"]\n\n'
@@ -92,6 +89,7 @@ def _workspace(root: Path) -> None:
         (root / name / "pyproject.toml").write_text(f'[project]\nname = "{name}"\ndependencies = {deps}\n\n'
                                                     '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
     _lock(root, numpy="2.0", pytest="8.0")
+    _git(root, "init", "-q")
 
 
 def _lock(root: Path, numpy: str, pytest: str) -> None:
@@ -138,12 +136,11 @@ dev-dependencies = {{ dev = [{{ name = "pytest" }}] }}
 
 
 def _keys(S) -> dict[str, str]:
-    pkgs, lock, env = S.members(), S.locked(), S.environment()
-    files = S.digests()
+    pkgs, lock, env, tree = S.members(), S.locked(), S.environment(), S.worktree()
     out = {}
     for s in S.discover():
         paths = S.inputs_of(s, pkgs)
-        out[s.name] = S.key(s, S.object_ids(None, sorted(set(paths) | set(S.RUNNER)), files), env, [], S.resolved(S.roots(s, pkgs), lock))
+        out[s.name] = S.key(s, S.object_ids(tree, sorted(set(paths) | set(S.RUNNER))), env, [], S.resolved(S.roots(s, pkgs), lock))
     return out
 
 
@@ -168,18 +165,18 @@ def test_a_lock_or_metadata_change_rekeys_only_the_suites_it_resolves_to(tmp_pat
 def test_a_pass_is_reused_only_while_what_it_used_beside_its_key_holds(tmp_path, monkeypatch):
     _workspace(tmp_path)
     S = _suites(monkeypatch, tmp_path)
-    lock, files = S.locked(), S.digests()
+    lock, tree = S.locked(), S.worktree()
     r = S.Result(S.discover()[1], "passed", watched=["a/pyproject.toml", "pyproject.toml"], distributions=["NumPy", "pytest"],
                  missing=["torch"])
     deps = S.resolved(["b", "pytest"], lock)
-    hit = S.used(r, ["b"], deps, None, files, lock)
+    hit = S.used(r, ["b"], deps, tree, lock)
     assert sorted(hit["watched"]) == ["a/pyproject.toml", "pyproject.toml"] and list(hit["imported"]) == ["numpy"]
-    assert S.holds(hit, None, files, lock, set())
-    assert not S.holds(hit, None, files, lock, {"torch"})                           # an import that found nothing now would
+    assert S.holds(hit, tree, lock, set())
+    assert not S.holds(hit, tree, lock, {"torch"})                                   # an import that found nothing now would
     (tmp_path / "pyproject.toml").write_text((tmp_path / "pyproject.toml").read_text() + "\n# read by b's tests\n")
-    assert not S.holds(hit, None, S.digests(), lock, set())
+    assert not S.holds(hit, S.worktree(), lock, set())
     _lock(tmp_path, numpy="2.1", pytest="8.0")
-    assert not S.holds({**hit, "watched": {}}, None, files, S.locked(), set())      # numpy, imported outside b's key, moved
+    assert not S.holds({**hit, "watched": {}}, tree, S.locked(), set())             # numpy, imported outside b's key, moved
 
 
 def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, monkeypatch):
@@ -193,8 +190,6 @@ def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, m
            "previous": {"art:" + "a" * 64: ["art:" + "d" * 64]}}
     (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
     S = _suites(monkeypatch, tmp_path)
-    assert S.fetched_fixtures(None, {"pkg"}) == {"pkg/fx/small.json": "art:" + "a" * 64, "pkg/fx/big.proof": "art:" + "b" * 64}
-
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
     tree = subprocess.run(["git", "-C", str(tmp_path), "write-tree"], capture_output=True, text=True, check=True).stdout.strip()
@@ -203,8 +198,9 @@ def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, m
 
 
 def _shipped_workspace(root: Path, *, absent: bool) -> None:
-    """A tree as `research run --source` ships one: no .git, this runner under tools/check, one package suite whose test reads a
-    registered fixture; with `absent`, the registry also names a fetched entry the tree lacks."""
+    """A tree as `research run --source` ships one: a checkout of the commit with READY.json beside it, git's view leaving it out;
+    this runner under tools/check, one package suite whose test reads a registered fixture; with `absent`, the registry also names
+    a fetched entry the tree lacks."""
     import hashlib
     import json
     import shutil
@@ -227,6 +223,13 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
         reg["art:" + hashlib.sha256(b"never shipped").hexdigest()] = "pkg/tests/fixtures/big.proof"
     (root / "fixtures").mkdir()
     (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (root / ".gitignore").write_text("__pycache__/\n")
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+    with open(root / ".git" / "info" / "exclude", "a") as f:
+        f.write("/READY.json\n")
+    (root / "READY.json").write_text("{}\n")
 
 
 def _run_shipped(root: Path, tmp_path: Path) -> subprocess.CompletedProcess:
@@ -251,3 +254,237 @@ def test_a_shipped_tree_with_no_store_fails_only_on_a_fixture_it_cannot_fetch(tm
     p = _run_shipped(root, tmp_path)
     assert p.returncode == 1
     assert "its fixtures could not be fetched: pkg/tests/fixtures/big.proof" in p.stdout, p.stdout
+
+
+def test_what_a_module_can_reach_by_name(tmp_path, monkeypatch):
+    """Imports and `test_...` words in strings are what a module mentions; a computed import leaves nothing out, unless it is computed
+    from the module's own package's name; a top-level call or an assignment to an attribute or item acts on the process."""
+    S = _suites(monkeypatch, tmp_path)
+    s = S.scan("import a.b\nfrom .c import d\nX = 'tests/test_e.py::t'\nfrom importlib import import_module\n"
+               "def f(n):\n    return import_module(f'{__name__}.{n}')\n")
+    assert {"a", "b", "c", "d", "test_e"} <= s.names and s.package and not s.computed and not s.effects
+    assert S.scan("import importlib\ndef f(n):\n    return importlib.import_module(n)\n").computed
+    assert S.scan("import glob\nFILES = glob.glob('tests/test_*.py')\n").computed          # a pattern names test modules too
+    assert not S.scan("import pytest\nnp = pytest.importorskip('numpy')\n").computed          # a literal name is a mention
+    for effect in ("import sys\nsys.path.insert(0, '.')\n", "import os\nos.environ['A'] = '1'\n", "import m\nm.X = 1\n",
+                   "try:\n    import x\nexcept ImportError:\n    print('no x')\n"):
+        assert S.scan(effect).effects, effect
+    assert not S.scan("'''doc'''\nfrom a import b\nA, B = 1, b()\nclass C:\n    pass\n").effects
+    assert S.scan("def (:\n") is None
+
+
+def _per_test_workspace(root: Path) -> None:
+    """A checkout with this runner and one parallel suite: `test_heavy` (on a helper), `test_sibling` (failing until fixed),
+    `test_uses` (importing `test_shared`), and `test_shared`."""
+    import shutil
+
+    (root / "tools" / "check").mkdir(parents=True)
+    shutil.copy(HERE / "suites.py", root / "tools" / "check" / "suites.py")
+    shutil.copytree(HERE / "guard", root / "tools" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
+    (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (root / "pkg" / "tests").mkdir(parents=True)
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
+                                                 '[tool.verity.tests]\nparallel = true\n')
+    for name, text in {"helpers.py": "VALUE = 1\n",
+                       "test_heavy.py": "from helpers import VALUE\n\ndef test_heavy():\n    assert VALUE == 1\n\ndef test_heavy_too():\n    pass\n",
+                       "test_sibling.py": "def test_sibling():\n    assert False\n",
+                       "test_uses.py": "from test_shared import X\n\ndef test_uses():\n    assert X == 1\n",
+                       "test_shared.py": "X = 1\n\ndef test_shared():\n    pass\n"}.items():
+        (root / "pkg" / "tests" / name).write_text(text)
+    _git(root, "init", "-q")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "shipped")
+
+
+def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
+    env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"), RESEARCH_FIXTURES_URL="",
+               VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1", **(extra or {}))
+    return subprocess.run([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs"), *args],
+                          cwd=root, env=env, capture_output=True, text=True)
+
+
+def _reused(tmp_path: Path) -> list[str]:
+    import json
+
+    p = tmp_path / "logs" / "pkg.reuse.json"
+    return sorted(json.loads(p.read_text())) if p.exists() else []
+
+
+def test_a_failed_suite_keeps_its_passes_and_a_sibling_fix_reuses_them(tmp_path):
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 1 and "4 per-test passes kept" in p.stdout, p.stdout
+
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")       # the fix: another module
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "1 passed, 4 reused" in p.stdout, p.stdout
+    assert _reused(tmp_path) == ["tests/test_heavy.py::test_heavy", "tests/test_heavy.py::test_heavy_too",
+                                 "tests/test_shared.py::test_shared", "tests/test_uses.py::test_uses"]
+
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")       # reaches test_uses, which imports it
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "2 passed, 3 reused" in p.stdout, p.stdout
+    assert _reused(tmp_path) == ["tests/test_heavy.py::test_heavy", "tests/test_heavy.py::test_heavy_too", "tests/test_sibling.py::test_sibling"]
+
+    (tests / "helpers.py").write_text("VALUE = 1  # not a test module: in every key\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "5 passed in" in p.stdout and _reused(tmp_path) == [], p.stdout
+
+    (tests / "test_effect.py").write_text("import os\nos.environ['PKG_FLAG'] = '1'\n\ndef test_effect():\n    pass\n")
+    (tests / "test_dyn.py").write_text("import importlib\n\ndef test_dyn():\n    assert importlib.import_module('test_' + 'shared').X == 1\n")
+    p = _run_suite(root, tmp_path)                        # new modules: the one acting on import joins every key
+    assert p.returncode == 0 and "7 passed" in p.stdout, p.stdout
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert 1\n")
+    p = _run_suite(root, tmp_path)                        # test_dyn imports by a computed name: no test module is left out of its key
+    assert p.returncode == 0 and "2 passed, 5 reused" in p.stdout and "tests/test_dyn.py::test_dyn" not in _reused(tmp_path), p.stdout
+    (tests / "test_effect.py").write_text("import os\nos.environ['PKG_FLAG'] = '2'\n\ndef test_effect():\n    pass\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "7 passed" in p.stdout and _reused(tmp_path) == [], p.stdout
+
+
+def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
+    """The nightly cold check's signal: a key that misses an input shows as a fresh failure a cached pass contradicts."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("import os\n\ndef test_sibling():\n    assert not os.environ.get('PKG_BREAK')\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    p = _run_suite(root, tmp_path, "--fresh")                                   # nothing reused, yet it all passes again
+    assert p.returncode == 0 and _reused(tmp_path) == [] and "CONTRADICTS" not in p.stdout
+    out = tmp_path / "suites.json"                   # PKG_BREAK: an input no key covers (a variable outside VERITY_ and FLOCK_)
+    p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
+    assert p.returncode == 1 and "CONTRADICTS a cached pass: (the suite), tests/test_sibling.py::test_sibling" in p.stdout, p.stdout
+    doc = json.loads(out.read_text())[0]
+    assert doc["contradicts"] == ["(the suite)", "tests/test_sibling.py::test_sibling"]
+    assert doc["nondeterministic"] == ["tests/test_sibling.py::test_sibling"] and "NONDETERMINISTIC: tests/test_sibling.py" in p.stdout
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")      # the suite's key moves; the flaky test re-runs
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "tests/test_sibling.py::test_sibling" not in _reused(tmp_path), p.stdout
+
+
+def test_a_suite_that_is_not_parallel_records_outcomes_but_reuses_none(tmp_path):
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text().replace("parallel = true", "parallel = false"))
+    (tests / "test_sibling.py").write_text("import os\n\ndef test_sibling():\n    assert not os.environ.get('PKG_BREAK')\n")
+    assert _run_suite(root, tmp_path).returncode == 0
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and _reused(tmp_path) == [] and "5 passed in" in p.stdout, p.stdout
+    p = _run_suite(root, tmp_path, "--fresh", extra={"PKG_BREAK": "1"})
+    assert p.returncode == 1 and "NONDETERMINISTIC: tests/test_sibling.py::test_sibling" in p.stdout, p.stdout
+
+
+def test_explain_names_what_a_miss_changed(tmp_path):
+    """Against the nearest kept pass: the input that moved and its files (git's trees), and per test module what it reaches."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    g = ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*g, "init", "-q"], check=True)
+    subprocess.run([*g, "add", "-A"], check=True)
+    subprocess.run([*g, "commit", "-qm", "tree"], check=True)
+    assert _run_suite(root, tmp_path).returncode == 0
+    p = _run_suite(root, tmp_path, "--explain", "pkg")
+    assert p.returncode == 0 and "pkg: cached: a pass under this key" in p.stdout, p.stdout
+    (tests / "helpers.py").write_text("VALUE = 1  # moved\n")
+    p = _run_suite(root, tmp_path, "--explain", "pkg")
+    assert "pkg: missed; the nearest pass kept here" in p.stdout and "input pkg changed" in p.stdout, p.stdout
+    assert "pkg/tests/helpers.py" in p.stdout.split("input pkg changed")[1].split("\n")[0], p.stdout
+    assert "per-test: 0 tests of 0 of 4 test modules would be reused" in p.stdout
+    assert "pkg/tests/test_heavy.py: it reaches pkg/tests/helpers.py, which changed" in p.stdout, p.stdout
+    (tests / "helpers.py").write_text("VALUE = 1\n")
+    (tests / "test_shared.py").write_text("X = 1\n\n\ndef test_shared():\n    pass\n")
+    p = _run_suite(root, tmp_path, "--explain", "pkg")
+    assert "per-test: 3 tests of 2 of 4 test modules would be reused" in p.stdout, p.stdout
+    assert "pkg/tests/test_uses.py: it reaches pkg/tests/test_shared.py, which changed" in p.stdout, p.stdout
+
+
+def test_an_interrupted_run_keeps_what_finished(tmp_path):
+    """A stop (check.py's SIGINT to the step's processes) mid-suite: the tests that passed before it are kept."""
+    import signal
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    gate = tmp_path / "gate"
+    os.mkfifo(gate)
+    for f in ("test_sibling.py", "test_uses.py", "test_shared.py"):
+        (tests / f).unlink()
+    (tests / "test_z_block.py").write_text(f"import signal\n\ndef test_block():\n    with open({str(gate)!r}, 'w') as f:\n"
+                                           "        f.write('x')\n    signal.pause()\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
+    env.update(VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
+    p = subprocess.Popen([sys.executable, str(root / "tools" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs")],
+                         cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    with open(gate) as f:                                  # test_heavy's two tests have passed; test_block is running
+        f.read()
+    os.killpg(p.pid, signal.SIGINT)
+    out = p.communicate()[0]
+    assert p.returncode != 0 and "2 per-test passes kept" in out, out
+    assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))) == 1
+
+
+_CHILD_TEST = '''import glob, os, subprocess, sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SIBLINGS = os.path.join(HERE, "*.py")
+
+
+def test_a_child_python_reads_its_siblings():
+    subprocess.run([sys.executable, "-c", "import glob, sys\\nfor p in glob.glob(sys.argv[1]):\\n    open(p).read()", SIBLINGS], check=True)
+
+
+def test_a_fork_reads_its_siblings_and_ends_without_flushing():
+    pid = os.fork()
+    if pid == 0:
+        for p in glob.glob(SIBLINGS):
+            open(p).read()
+        os._exit(0)
+    assert os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]) == 0
+'''
+
+
+def test_what_a_child_or_a_fork_reads_joins_the_module_s_reads(tmp_path):
+    """A child Python and a forked child that end with `os._exit` still count: their test module re-runs when a sibling it read
+    changes, which a key narrowed from the module's source alone (it names no test module) would miss."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (tests / "test_child.py").write_text(_CHILD_TEST)
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "7 per-test passes kept" in p.stdout, p.stdout
+    (tests / "test_heavy.py").write_text((tests / "test_heavy.py").read_text() + "\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0, p.stdout
+    reused = _reused(tmp_path)
+    assert "tests/test_uses.py::test_uses" in reused and not [n for n in reused if n.startswith(("tests/test_child.py", "tests/test_heavy.py"))]
+
+
+def test_what_a_child_reads_outside_the_inputs_keeps_its_module_out_of_the_per_test_cache(tmp_path):
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
+    (root / "elsewhere").mkdir()
+    (root / "elsewhere" / "data.txt").write_text("not an input of pkg\n")
+    (tests / "test_outside.py").write_text(
+        "import os, subprocess, sys\n\ndef test_outside():\n    p = os.path.join(os.path.dirname(__file__), '..', '..', 'elsewhere', 'data.txt')\n"
+        "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "processes its tests started read 1 files outside its inputs (elsewhere/data.txt)" in p.stdout, p.stdout
+    assert not list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_outside.py--*.json"))
+    assert list((tmp_path / "cache" / "per-test" / "pkg").glob("pkg~tests~test_heavy.py--*.json"))
+
+
+def test_the_child_tracer_hands_on_to_the_interpreter_s_own_sitecustomize(tmp_path):
+    """It shadows the system's `sitecustomize` on PYTHONPATH, so it loads that one after itself."""
+    (tmp_path / "sys").mkdir()
+    (tmp_path / "sys" / "sitecustomize.py").write_text("import builtins\nbuiltins.SYSTEM_SITECUSTOMIZE = True\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("VERITY_")}
+    env["PYTHONPATH"] = os.pathsep.join([str(HERE / "guard" / "child"), str(tmp_path / "sys")])
+    p = subprocess.run([sys.executable, "-c", "import builtins, sitecustomize; print(builtins.SYSTEM_SITECUSTOMIZE, sitecustomize.__file__)"],
+                       env=env, capture_output=True, text=True)
+    assert p.returncode == 0 and p.stdout.startswith("True ") and "guard/child/sitecustomize.py" in p.stdout, p.stdout + p.stderr
