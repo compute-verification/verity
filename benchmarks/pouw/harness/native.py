@@ -311,15 +311,23 @@ def smi(uuid: str, *args: str) -> dict:
 
 
 def versions(dev: Device) -> dict:
-    """Driver, CUDA runtime and driver API, cuBLASLt (from the process), nvcc, numpy, Python, and the build record."""
+    """Driver, CUDA runtime and driver API, cuBLASLt (from the process), nvcc, numpy, Python, and the build record (its SASS
+    MMA counts), which must describe the loaded library."""
+    import hashlib
+    import json
     import platform
 
     import numpy as np
 
-    build = lib_path().parent / "build.json"
+    lib = lib_path()
+    build_json = lib.parent / "build.json"
+    build = json.loads(build_json.read_text()) if build_json.exists() else None
+    lib_sha = hashlib.sha256(lib.read_bytes()).hexdigest()
+    if build is not None and build.get("lib_sha256") != lib_sha:
+        raise RuntimeError(f"{build_json} describes another library (sha256 {build.get('lib_sha256')}, loaded {lib_sha})")
     nvcc = shutil.which("nvcc") or (os.environ.get("CUDA_HOME", "/usr/local/cuda") + "/bin/nvcc")
     return {"cuda_runtime": dev.info["cuda_runtime"], "cuda_driver_api": dev.info["cuda_driver_api"],
             "cublaslt": dev.info["cublaslt"], "numpy": np.__version__, "python": platform.python_version(),
             "nvcc": subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1]
             if os.path.exists(nvcc) else None,
-            "build": __import__("json").loads(build.read_text()) if build.exists() else None}
+            "lib": str(lib), "lib_sha256": lib_sha, "build": build}

@@ -21,8 +21,12 @@ sensors, versions, the consistency gate) and #449's primary-context ctypes patte
 Build (no GPU needed; nvcc 12.8 or later, about 7 GB of memory per CUTLASS 3.x unit):
 
 ```bash
-benchmarks/pouw/harness/native/build.sh            # -> native/build/libpouw_harness.so, build.json (SASS MMA counts)
+export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh)"   # prints the library's path, nothing else
 ```
+
+The build lands in `native/build/<key>/` (`POUW_HARNESS_BUILD` moves the cache), keyed by the sources and nvcc's version, with
+`build.json` (the key, versions, the library's hash, each kernel's SASS MMA counts); an existing build is reused. A run refuses a
+library its `build.json` doesn't describe.
 
 Run on your GPU only (`CUDA_VISIBLE_DEVICES` one index; the UUID from `server.md`'s table):
 

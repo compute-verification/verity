@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
 # Builds libpouw_harness.so for sm_120a (no GPU needed): the harness's device side, cuBLASLt, and the CUTLASS baselines.
 #
-#   benchmarks/pouw/harness/native/build.sh [OUT_DIR]      (env: CUDA_HOME, CUTLASS_DIR, JOBS, PH_NO_CUTLASS=1)
+#   export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh [OUT_DIR])"
+#       env: POUW_HARNESS_BUILD (the build cache, default native/build), CUDA_HOME, CUTLASS_DIR, JOBS, PH_NO_CUTLASS=1
 #
-# CUTLASS is header-only, pinned below; CUTLASS_DIR points at a checkout of that tag (the script clones it if absent).
-# Writes OUT_DIR/libpouw_harness.so and OUT_DIR/build.json (the commands, versions, and each kernel's SASS MMA counts).
+# The output directory is keyed by a hash of these sources and nvcc's version (OUT_DIR overrides it); a build that exists
+# there is reused, so a timed run never compiles. CUTLASS is header-only, pinned below (cloned into the cache if absent).
+# Writes libpouw_harness.so and build.json (the key, versions, and each kernel's SASS MMA counts); prints only the library's
+# path on stdout.
 set -euo pipefail
+exec 3>&1 1>&2
 HERE="$(cd "$(dirname "$0")" && pwd)"
-OUT="${1:-$HERE/build}"
 CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+NVCC="$CUDA_HOME/bin/nvcc"
+CACHE="${POUW_HARNESS_BUILD:-$HERE/build}"
 CUTLASS_TAG="v4.8.0"
 CUTLASS_COMMIT="098de2a652cf8f00fd70b2df54051c7eccbb855a"
-CUTLASS_DIR="${CUTLASS_DIR:-$OUT/cutlass}"
-NVCC="$CUDA_HOME/bin/nvcc"
-JOBS="${JOBS:-3}"  # each CUTLASS 3.x unit takes 3-5 GB in cicc
+CUTLASS_DIR="${CUTLASS_DIR:-$CACHE/cutlass-$CUTLASS_TAG}"
+JOBS="${JOBS:-3}"  # a CUTLASS 3.x unit takes up to 7 GB in cicc
+KEY="$(cat "$HERE/build.sh" "$HERE"/*.h "$HERE"/*.cu <("$NVCC" --version) <(echo "${PH_NO_CUTLASS:-}") | sha256sum | cut -c1-16)"
+OUT="${1:-$CACHE/$KEY}"
+if [[ -f "$OUT/libpouw_harness.so" && -f "$OUT/build.json" ]] && grep -q "\"key\": \"$KEY\"" "$OUT/build.json"; then
+  echo "$OUT/libpouw_harness.so" >&3
+  exit 0
+fi
 mkdir -p "$OUT"
 
 if [[ -z "${PH_NO_CUTLASS:-}" && ! -d "$CUTLASS_DIR/include/cutlass" ]]; then
@@ -28,7 +38,7 @@ ARCH=(-gencode arch=compute_120a,code=sm_120a)
 FLAGS=(-O3 -std=c++17 "${ARCH[@]}" -Xcompiler -fPIC --expt-relaxed-constexpr -lineinfo)
 CUT=(-I"$CUTLASS_DIR/include" -I"$CUTLASS_DIR/tools/util/include" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
 
-rm -f "$OUT"/*.o "$OUT/libpouw_harness.so"
+rm -f "$OUT"/*.o "$OUT/libpouw_harness.so" "$OUT/build.json"
 objs=("$OUT/harness.o")
 "$NVCC" "${FLAGS[@]}" -c "$HERE/harness.cu" -o "$OUT/harness.o" &
 if [[ -z "${PH_NO_CUTLASS:-}" ]]; then
@@ -51,17 +61,17 @@ for o in "${objs[@]}"; do [[ -f "$o" ]] || { echo "failed to compile $o" >&2; ex
 
 sass() { "$CUDA_HOME/bin/cuobjdump" -sass "$1" | awk '/Function :/{f=$3; next} /\/\*[0-9a-f]+\*\/ +[A-Z]*MMA/{match($0,/[A-Z]*MMA[.A-Z0-9_]*/); c[f"\t"substr($0,RSTART,RLENGTH)]++} END{for(k in c) print k"\t"c[k]}' | sort; }
 sass "$OUT/libpouw_harness.so" > "$OUT/sass_mma.tsv"
-python3 - "$OUT" "$NVCC" "$CUTLASS_TAG" "$CUTLASS_COMMIT" "${PH_NO_CUTLASS:-}" <<'EOF'
+python3 - "$OUT" "$NVCC" "$CUTLASS_TAG" "$CUTLASS_COMMIT" "${PH_NO_CUTLASS:-}" "$KEY" <<'EOF'
 import hashlib, json, subprocess, sys
-out, nvcc, tag, commit, no_cutlass = sys.argv[1:6]
+out, nvcc, tag, commit, no_cutlass, key = sys.argv[1:7]
 lib = f"{out}/libpouw_harness.so"
 sass: dict = {}
 for line in open(f"{out}/sass_mma.tsv"):
     fn, op, n = line.rstrip("\n").split("\t")
     sass.setdefault(fn, {})[op] = int(n)
-json.dump({"lib_sha256": hashlib.sha256(open(lib, "rb").read()).hexdigest(),
+json.dump({"key": key, "lib_sha256": hashlib.sha256(open(lib, "rb").read()).hexdigest(),
            "nvcc": subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1],
            "arch": "sm_120a", "cutlass": None if no_cutlass else {"tag": tag, "commit": commit},
            "sass_mma": sass}, open(f"{out}/build.json", "w"), indent=1)
 EOF
-echo "built $OUT/libpouw_harness.so"
+echo "$OUT/libpouw_harness.so" >&3
