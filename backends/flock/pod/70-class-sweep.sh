@@ -25,6 +25,8 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
   BIN=$W/bin-$KEY-g$G-sm$SM; F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock
   # the prover runs on CUDA 13.3: a driver older than that (R570) needs its compat library, cached binary or not
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
+  # one build at a time per FLOCK_WORK (runs in parallel share its checkout); the second finds the first's binaries
+  exec 8>$W/build.lock; flock 8
   if [ ! -x $BIN/flock-circuit-selftest ]; then
     MODE=build GPU=$G SM=$SM bash backends/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -30 $O/build.log; exit 1; }
     mkdir -p $BIN && cp $F/target/release/flock-circuit $BIN/flock-circuit
@@ -34,6 +36,7 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
       > $O/build-selftest.txt 2>&1 || { tail -30 $O/build-selftest.txt; exit 1; }
     cp $F/target-selftest/release/flock-circuit $BIN/flock-circuit-selftest
   fi
+  exec 8>&-
   BINARY=$BIN/flock-circuit; SELFTEST_BINARY=$BIN/flock-circuit-selftest
 fi
 B=$BINARY; SB=${SELFTEST_BINARY:-$BINARY}; sha256sum $B $SB | tee $O/binary.sha256
