@@ -66,16 +66,14 @@ def test_the_row_is_the_definition_and_declines_non_finite_words():
 
 
 def test_the_gemv_word_is_not_the_f32_epilogue_chain():
-    """Strided partials and a tree against one ascending k16 chain: different words on ordinary vectors (1-3 per 1,024 on the GPU)."""
-    rng = np.random.default_rng(9)
-    K, N = 64, 64
-    gemv = bind(gemv_bias.GemvBiasF32, K=K, N=N, V=1, T=16)
-    chain = bind(gemm_bias.GemmBiasF32Epilogue, K=K, N=N, DOT=TG.DOTS["HopperBF16WgmmaDot16"])
-    differ = 0
-    for _ in range(6):
-        x, w, b = _words(rng, K), _words(rng, N * K, 0.02), _words(rng, N, 0.02)
-        differ += sum(p != q for p, q in zip(evaluate(gemv, x, w, b), evaluate(chain, x, w, b)))
-    assert differ > 0
+    """+2^25 at k = 0, -2^25 at k = 16 and +1 at k = 1: with T = 16, k = 0 and 16 share a thread and cancel before the 1 joins
+    (gemv: 1), while the ascending k16 chain absorbs the 1 into 2^25 at its first step (0)."""
+    K = 32
+    x, w, b = [0x3F80] * K, [0x0000] * K, [0x0000]
+    w[0], w[16], w[1] = 0x4C00, 0xCC00, 0x3F80
+    gemv = bind(gemv_bias.GemvBiasF32, K=K, N=1, V=1, T=16)
+    chain = bind(gemm_bias.GemmBiasF32Epilogue, K=K, N=1, DOT=TG.DOTS["HopperBF16WgmmaDot16"])
+    assert list(evaluate(gemv, x, w, b)) == [0x3F80] and list(evaluate(chain, x, w, b)) == [0x0000]
 
 
 def test_the_table_entries_are_well_formed():
