@@ -3481,6 +3481,7 @@
    "assumptions": [],
    "type_hash": "bcbdb7fd5910a4ee0480819680cc9cbfc9292b0e319ad4441cc5dccf9e0a9e1b"
   },
+  "FlockSoundness.UProg.flock_e2e_count_classes_zero": {},
   "FlockSoundness.UProg.flock_e2e_drawn_classes": {
    "signature": [
     "FlockSoundness.UProg.flock_e2e_drawn_classes {kIn one : Nat} (hone : instLTNat.lt one kIn) {outs : List Nat}",
@@ -3555,6 +3556,7 @@
    "assumptions": [],
    "type_hash": "096ca08addf889ce5fcfae1e0a9cbb9cbaa386f0951c156334f87998dc0cf5cf"
   },
+  "FlockSoundness.UProg.flock_e2e_drawn_classes_zero": {},
   "FlockSoundness.UProg.rowsL1": {
    "signature": [
     "FlockSoundness.UProg.rowsL1 {k one : Nat} (hk : instLTNat.lt one k) {outs : List Nat}",
