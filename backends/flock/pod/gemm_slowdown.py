@@ -82,6 +82,16 @@ def native(a) -> None:
     Path(a.out).write_text(json.dumps(out, indent=1))
 
 
+def statement_seconds(lv: dict) -> float:
+    """A statement's steady-state prover seconds from its median timed LIVE record: the witness wait plus both reps."""
+    # a pipelined prover (the next sessions' witnesses built beside this one) runs at the slower of its device and its host
+    # witness builds: witness_s is only the wait, and a loopback verifier's own seconds would hide a build that outruns the GPU
+    full = (lv.get("witness_s") or 0.0) + lv["prove_total_s"]
+    if lv.get("witness_prebuilt_s") is not None and lv.get("pipeline_depth"):
+        full = max(full, lv["witness_prebuilt_s"] / lv["pipeline_depth"])
+    return full
+
+
 def per_coordinate(sweep: Path) -> dict[int, dict]:
     """K -> the sweep's record for GemmCoordinate_v1{K}: seconds per coordinate, full (witness + prove) and prove only."""
     out = {}
@@ -94,11 +104,7 @@ def per_coordinate(sweep: Path) -> dict[int, dict]:
         if not mk or not lv.get("accepted"):
             continue
         n = ((r.get("stage") or {}).get("n") or lv.get("instances")) * (r.get("stage") or {}).get("coords_per_instance", 1)   # a tile: P * C
-        # a pipelined prover (the next sessions' witnesses built beside this one) runs at the slower of its device and its host
-        # witness builds: witness_s is only the wait, and a loopback verifier's own seconds would hide a build that outruns the GPU
-        full = (lv.get("witness_s") or 0.0) + lv["prove_total_s"]
-        if lv.get("witness_prebuilt_s") is not None and lv.get("pipeline_depth"):
-            full = max(full, lv["witness_prebuilt_s"] / lv["pipeline_depth"])
+        full = statement_seconds(lv)
         out[int(mk.group(1))] = {"n": n, "tile": (r.get("stage") or {}).get("tile"), "m": lv.get("dense_m"), "s_per_coord": full / n, "prove_s_per_coord": lv["prove_total_s"] / n,
                                  "witness_s": lv.get("witness_s"), "witness_prebuilt_s": lv.get("witness_prebuilt_s"),
                                  "pipeline_depth": lv.get("pipeline_depth"), "prove_total_s": lv["prove_total_s"], "shape": r["shape"],
@@ -107,8 +113,8 @@ def per_coordinate(sweep: Path) -> dict[int, dict]:
     return out
 
 
-def gate(path: Path | None) -> dict:
-    """Byte identity: every GEMM coordinate's GPU cases pass (equal proofs and transcripts)."""
+def gate(path: Path | None, shapes_needed: int = 2) -> dict:
+    """Byte identity: every GEMM coordinate's GPU cases pass (equal proofs and transcripts), for at least ``shapes_needed`` of them."""
     if path is None or not path.exists():
         return {"status": "not_run"}
     shapes, ok = {}, True
@@ -122,7 +128,7 @@ def gate(path: Path | None) -> dict:
         shapes[r.get("definition")] = {"pass": good, "digest": ((r.get("live") or {}).get("statement_digest")),
                                        "cases": {c: {k: (cases.get(c) or {}).get(k) for k in ("pass", "proofs_equal", "transcripts_equal")} for c in GATE_CASES}}
         ok &= good
-    ok &= len(shapes) >= 2
+    ok &= len(shapes) >= shapes_needed
     return {"status": "passed" if ok else "failed", "shapes": shapes}
 
 
