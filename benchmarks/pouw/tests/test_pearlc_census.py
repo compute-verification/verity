@@ -64,3 +64,10 @@ def test_cross_group_finds_cancelling_groups():
     flags, _ = C.debit(a, b, 4)
     size, beyond = C.cross_group(a, b, flags, np.array([0]), 4)
     assert not flags.any() and size[0] == 8 and beyond[0] == 8
+
+
+def test_transfer_test_runs_and_reports():
+    rows = [r for r in C.cell("outliers-groupstart", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0, with_debit=True,
+                              cross_words=2, transfer_words=2) if r["layout"] == "G4"]
+    r = rows[0]
+    assert r["transfer_words"] == 2 and 0 <= r["transfer_hits"] <= r["transfer_nonempty_sim_sets"] <= 2

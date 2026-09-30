@@ -350,76 +350,111 @@ def _f32(x) -> np.float32:
     return np.float32(x)
 
 
-def cross_group(a: np.ndarray, b: np.ndarray, flags: np.ndarray, words: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
-    """P1's greedy joint set (pearlc_freeze_census.py, §6.2) for the sampled words: atom pairs from two different groups
-    whose joint skip leaves the ticket word unchanged while neither atom alone does, packed greedily, then every single
-    atom that keeps it unchanged; each set is replayed from scratch. A lower bound on the largest jointly skippable set,
-    whose cross-group part no replay-local debit covers (`joint_cross_group`). Returns the set size and its atoms outside
-    the debit's flags, per sampled word."""
-    T = a.shape[1] // 32
+def greedy_set(ap: np.ndarray, bp: np.ndarray, G: int = 4) -> set:
+    """P1's greedy joint set for one word (`ap`, `bp`: (1, k) codes; pearlc_freeze_census.py, §6.2): atom pairs from two
+    different groups whose joint skip leaves the ticket word unchanged while neither atom alone does, packed greedily, then
+    every single atom that keeps it unchanged. The set is replayed from scratch before it is returned."""
+    T = ap.shape[1] // 32
     n = -(-T // G)
+
+    def gword(g: int, S: set) -> np.float32:
+        C, _ = group_run(ap, bp, list(range(g * G, min((g + 1) * G, T))), frozenset(S))
+        return _f32(C[0])
+
+    W = np.array([gword(g, set()) for g in range(n)], dtype=np.float32)
+    pre = np.zeros(n + 1, dtype=np.float32)
+    for g in range(n):
+        pre[g + 1] = _f32(pre[g] + W[g])
+    out = pre[n]
+
+    def output(W2: np.ndarray) -> np.float32:
+        t = np.float32(0)
+        for h in range(n):
+            t = _f32(t + W2[h])
+        return t
+
+    Wskip = np.array([gword(t // G, {t}) for t in range(T)], dtype=np.float32)
+    alone = np.array([output(np.where(np.arange(n) == t // G, Wskip[t], W)) == out for t in range(T)])
+    pairs = []
+    WsG = np.full(n * G, np.nan, dtype=np.float32)
+    WsG[:T] = Wskip
+    WsG = WsG.reshape(n, G)
+    for t1 in range(T):
+        g1 = t1 // G
+        if alone[t1] or g1 + 1 >= n:
+            continue
+        run = np.empty(n + 1, dtype=np.float32)
+        run[g1 + 1] = _f32(pre[g1] + Wskip[t1])
+        for h in range(g1 + 1, n):
+            run[h + 1] = _f32(run[h] + W[h])
+        # X[i, j]: the final total with atom j of group g1 + 1 + i skipped as well
+        X = (run[g1 + 1:n, None] + WsG[g1 + 1:n]).astype(np.float32)
+        for h in range(g1 + 2, n):
+            X[:h - g1 - 1] = (X[:h - g1 - 1] + W[h]).astype(np.float32)
+        for i, j in np.argwhere(X == out):
+            t2 = (g1 + 1 + int(i)) * G + int(j)
+            if t2 < T and not alone[t2]:
+                pairs.append((t1, t2))
+    S: set = set()
+    Wcur = W.copy()
+
+    def try_add(new: set):
+        S2 = S | new
+        W2 = Wcur.copy()
+        for g in {t // G for t in new}:
+            W2[g] = gword(g, S2)
+        return (S2, W2) if output(W2) == out else None
+
+    for t1, t2 in pairs:
+        if t1 not in S and t2 not in S and (r := try_add({t1, t2})):
+            S, Wcur = r
+    for t in range(T):
+        if t not in S and (r := try_add({t})):
+            S, Wcur = r
+    assert word_with_skip(ap, bp, S, G) == out
+    return S
+
+
+def word_with_skip(ap: np.ndarray, bp: np.ndarray, S: set, G: int = 4) -> np.float32:
+    """One word's ticket (the final promoted total) with the atoms in `S` skipped, replayed from scratch."""
+    T = ap.shape[1] // 32
+    total = np.float32(0)
+    for g0 in range(0, T, G):
+        C, _ = group_run(ap, bp, list(range(g0, min(g0 + G, T))), frozenset(S))
+        total = _f32(total + _f32(C[0]))
+    return total
+
+
+def cross_group(a: np.ndarray, b: np.ndarray, flags: np.ndarray, words: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndarray]:
+    """P1's greedy joint set for the sampled words: a lower bound on the largest jointly skippable set, whose cross-group part
+    no replay-local debit covers (`joint_cross_group`). Returns the set size and its atoms outside the debit's flags."""
     sizes, beyond = np.zeros(len(words), dtype=np.int64), np.zeros(len(words), dtype=np.int64)
     for w_i, p in enumerate(words):
-        ap, bp = a[p:p + 1], b[p:p + 1]
-
-        def gword(g: int, S: set) -> np.float32:
-            C, _ = group_run(ap, bp, list(range(g * G, min((g + 1) * G, T))), frozenset(S))
-            return _f32(C[0])
-
-        W = np.array([gword(g, set()) for g in range(n)], dtype=np.float32)
-        pre = np.zeros(n + 1, dtype=np.float32)
-        for g in range(n):
-            pre[g + 1] = _f32(pre[g] + W[g])
-        out = pre[n]
-
-        def output(W2: np.ndarray) -> np.float32:
-            t = np.float32(0)
-            for h in range(n):
-                t = _f32(t + W2[h])
-            return t
-
-        Wskip = np.array([gword(t // G, {t}) for t in range(T)], dtype=np.float32)
-        alone = np.array([output(np.where(np.arange(n) == t // G, Wskip[t], W)) == out for t in range(T)])
-        pairs = []
-        WsG = np.full(n * G, np.nan, dtype=np.float32)
-        WsG[:T] = Wskip
-        WsG = WsG.reshape(n, G)
-        for t1 in range(T):
-            g1 = t1 // G
-            if alone[t1] or g1 + 1 >= n:
-                continue
-            run = np.empty(n + 1, dtype=np.float32)
-            run[g1 + 1] = _f32(pre[g1] + Wskip[t1])
-            for h in range(g1 + 1, n):
-                run[h + 1] = _f32(run[h] + W[h])
-            # X[i, j]: the final total with atom j of group g1 + 1 + i skipped as well
-            X = (run[g1 + 1:n, None] + WsG[g1 + 1:n]).astype(np.float32)
-            for h in range(g1 + 2, n):
-                X[:h - g1 - 1] = (X[:h - g1 - 1] + W[h]).astype(np.float32)
-            for i, j in np.argwhere(X == out):
-                t2 = (g1 + 1 + int(i)) * G + int(j)
-                if t2 < T and not alone[t2]:
-                    pairs.append((t1, t2))
-        S: set = set()
-        Wcur = W.copy()
-
-        def try_add(new: set):
-            S2 = S | new
-            W2 = Wcur.copy()
-            for g in {t // G for t in new}:
-                W2[g] = gword(g, S2)
-            return (S2, W2) if output(W2) == out else None
-
-        for t1, t2 in pairs:
-            if t1 not in S and t2 not in S and (r := try_add({t1, t2})):
-                S, Wcur = r
-        for t in range(T):
-            if t not in S and (r := try_add({t})):
-                S, Wcur = r
-        assert output(np.array([gword(g, S) for g in range(n)], dtype=np.float32)) == out, p
+        S = greedy_set(a[p:p + 1], b[p:p + 1], G)
         sizes[w_i] = len(S)
         beyond[w_i] = sum(1 for t in S if not flags[p, t])
     return sizes, beyond
+
+
+def transfer(a_sim: np.ndarray, b_sim: np.ndarray, a: np.ndarray, b: np.ndarray, flags: np.ndarray, words: np.ndarray,
+             G: int = 4) -> dict:
+    """The statement reviewer's transfer test (cross-group-transfer-probe.py): an adversary that knows the activations, the
+    weights and F before the salt simulates a noise draw, finds the greedy set on it, and skips that set on the real draw.
+    Per sampled word: does the real ticket word survive the skip, and how many of the set's atoms are outside the real
+    draw's debit flags (the credit it would gain)? Beside it, the real draw's own set and its overlap with the simulated one."""
+    rows = []
+    for p in words:
+        S_sim = greedy_set(a_sim[p:p + 1], b_sim[p:p + 1], G)
+        ok = bool(word_with_skip(a[p:p + 1], b[p:p + 1], S_sim, G) == word_with_skip(a[p:p + 1], b[p:p + 1], set(), G))
+        S_real = greedy_set(a[p:p + 1], b[p:p + 1], G)
+        rows.append({"sim": len(S_sim), "transfers": ok and len(S_sim) > 0,
+                     "undebited_if_transfers": sum(1 for t in S_sim if not flags[p, t]) if ok else 0,
+                     "real": len(S_real), "overlap": len(S_sim & S_real)})
+    nonempty = [r for r in rows if r["sim"] > 0]
+    return {"transfer_words": len(rows), "transfer_nonempty_sim_sets": len(nonempty),
+            "transfer_hits": sum(r["transfers"] for r in rows),
+            "transfer_undebited_saving_max": max((r["undebited_if_transfers"] for r in rows), default=0),
+            "transfer_overlap_share_of_real": round(float(np.mean([r["overlap"] / max(r["real"], 1) for r in rows])), 6)}
 
 
 def not_needed_share(flags: np.ndarray, rows: int, cols: int) -> float:
@@ -455,7 +490,7 @@ def val(codes: np.ndarray) -> np.ndarray:
 
 
 def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming: str = "census",
-         line_norm: float = 256.0, with_debit: bool = False, cross_words: int = 0) -> list[dict]:
+         line_norm: float = 256.0, with_debit: bool = False, cross_words: int = 0, transfer_words: int = 0) -> list[dict]:
     rng = _rng(run, fam, k, delta)
     FA, FB = lines(k, _rng(run, "FA", k)), lines(k, _rng(run, "FB", k))
     XA, XB = family(fam, rows, cols, k, FA, rng)
@@ -495,6 +530,11 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
             row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
                         "debit_eF_share": round(float(eF.mean()) / T, 6), "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
                         "tile_all_flagged_share": round(float(flags.all(0).mean()), 6), "residual_share": exact_run_atoms(tex) / T})
+            if transfer_words and forming == "s5":
+                sample = np.unique(np.linspace(0, len(A) - 1, transfer_words).astype(int))
+                a_sim = form_s5(XA, FcA, delta, line_norm, _rng(run, fam, k, delta, "unit-A", "simulated"))[0]
+                b_sim = form_s5(XB, FcB, delta, line_norm, _rng(run, fam, k, delta, "unit-B", "simulated"))[0]
+                row.update(transfer(a_sim[ii.ravel()], b_sim[jj.ravel()], A, B, flags, sample, G))
             if cross_words:
                 sample = np.unique(np.linspace(0, len(A) - 1, cross_words).astype(int))
                 size, beyond = cross_group(A, B, flags, sample, G)
@@ -527,6 +567,8 @@ def main() -> None:
                     help="replay each word's debit (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
     ap.add_argument("--cross-words", type=int, default=0,
                     help="with --debit: run P1's greedy cross-group search on this many words per cell")
+    ap.add_argument("--transfer-words", type=int, default=0,
+                    help="with --debit and --forming s5: the reviewer's transfer test (simulated-draw greedy sets skipped on the real draw)")
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()
     bad = selftest()
@@ -538,7 +580,8 @@ def main() -> None:
     for delta in map(float, args.deltas.split(",")):
         for k in map(int, args.ks.split(",")):
             for fam in args.families.split(","):
-                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm, args.debit, args.cross_words):
+                for r in cell(fam, k, delta, rows, cols, args.run, args.forming, args.line_norm, args.debit, args.cross_words,
+                              args.transfer_words):
                     rows_out.append(r)
                     print(json.dumps(r), flush=True)
     key = "residual_share" if args.debit else "skippable_share"

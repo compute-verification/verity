@@ -57,6 +57,7 @@ def main() -> None:
     ap.add_argument("--line-norm", type=float, default=16.0)
     ap.add_argument("--tiles", type=int, default=2, help="sampled 64x8 tiles of admissible rows per layer")
     ap.add_argument("--cross-words", type=int, default=4, help="words per tile for P1's greedy cross-group search")
+    ap.add_argument("--transfer", action="store_true", help="the reviewer's transfer test on the cross-group sample words")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--threads", type=int, default=3)
     ap.add_argument("--out", default="pearlc_activations.json")
@@ -97,12 +98,18 @@ def main() -> None:
                 tid, tex, _, _ = C.chain(A, B, 4)
                 flags, eF = C.debit(A, B, 4)
                 per_word = flags.sum(1)
-                size, beyond = C.cross_group(A, B, flags, np.unique(np.linspace(0, len(A) - 1, args.cross_words).astype(int)), 4)
+                sample = np.unique(np.linspace(0, len(A) - 1, args.cross_words).astype(int))
+                size, beyond = C.cross_group(A, B, flags, sample, 4)
+                tr = {}
+                if args.transfer:
+                    a_sim = C.form_s5(XA, FcA, args.delta, args.line_norm, rng)[0]
+                    b_sim = C.form_s5(XB, FcB, args.delta, args.line_norm, rng)[0]
+                    tr = C.transfer(a_sim[ii.ravel()], b_sim[jj.ravel()], A, B, flags, sample, 4)
                 tiles.append({"debit_share": float(per_word.mean()) / T, "debit_eF_share": float(eF.mean()) / T,
                               "debit_max_word_share": float(per_word.max()) / T, "not_needed_share": C.not_needed_share(flags, 64, 8),
                               "tile_identity_share": float(tid.sum()) / T, "residual_share": C.exact_run_atoms(tex) / T,
                               "cross_group_share_mean": float(size.mean()) / T, "cross_group_share_max": float(size.max()) / T,
-                              "cross_group_beyond_debit_mean": float(beyond.mean()) / T})
+                              "cross_group_beyond_debit_mean": float(beyond.mean()) / T, **tr})
         rec["tiles"] = tiles
         if tiles:
             rec["debit_share_mean"] = round(float(np.mean([t["debit_share"] for t in tiles])), 6)
