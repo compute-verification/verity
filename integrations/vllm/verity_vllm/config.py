@@ -308,6 +308,9 @@ class CommitConfig:
                                   "Commit (no control arm, no pairs) under bounded staging, a k-unit replay (--replay-draw), then "
                                   "config_record.json; no Match, no manifest-verify rebuild, no VU export")
     replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
+    config_baseline: str = option("--config-baseline", env="CONFIG_BASELINE", default="0",
+                                  help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
+                                       "the record's extraction slowdown")
     replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
                               help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
                                    "stratified by family (each family at least once, the rest split evenly)")
