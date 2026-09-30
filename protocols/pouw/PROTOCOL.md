@@ -466,15 +466,17 @@ useful    U/(α_A·α_B), glue
     reads it from its low 7 bits as a zero scale, so the row would carry no noise (bc-824e54a2's post-M4 rebuild).
   - A NaN β with its sign clear would cast to 0x7F (bc-22298e90's review).
 - **Screened blocks are charged, not rejected (`dead_blocks`):** a block is screened when (clean amax_b)² > 90·ρ²
-  (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Items 3 and 4 below charge every
-  element of a screened block as salt-dead, so a row with many screened blocks is rejected only when its tile's debit
-  passes the cap. This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
+  (9.5ρ), and the screen covers every salt-dead element (Lean `saltDead4_screened`). Item 3 below charges a block
+  screened on both operands per pair-word, so a row with many screened blocks is rejected only when its tile's debit
+  passes the cap. Item 4 charges the reference's witness (`salt_dead`) alone, not every element of a screened block.
+  This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
 - **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units:
   1. per row and 4-group with at least 2 salt-dead codes, 0.5 per MAC (1 when all 4 are), on every word the row feeds,
      for A′ and for B̃;
   2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
   3. per block screened on both the A row and the B row, one block of MACs per pair-word;
-  4. per salt-dead, screened-block or unneeded A element (every credited B code at its position is zero), f_s·|cols|/n;
+  4. per salt-dead A element (the reference's witness, `salt_dead`) or unneeded one (every credited B code at its
+     position is zero), f_s·|cols|/n;
   5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it
      adds exactly 0), one block of MACs;
   - and D-24: per row and aligned 128 of k whose every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0), 0.5 per MAC

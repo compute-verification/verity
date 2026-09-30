@@ -236,51 +236,62 @@ def test_row_rules_and_debit(fmt):
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
     d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096)
     assert d.dead_pairs == f.block and d.two_four == 4 * F.two_four_units(dead) and d.identity == d.subgrid == d.windows == 0
-    assert d.counts["screened_blocks_a"] == d.counts["screened_blocks_b"] == 1 and d.counts["forming_elements"] >= f.block
-    assert d.forming == Fraction(F.FORMING_CREDITED * d.counts["forming_elements"] * 2, 4096)
+    unneeded = [all(b.codes[j][t] & 7 == 0 for j in (0, 1)) for t in range(1024)]
+    witness = sum(p or u for i in (0, 1) for p, u in zip(F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i]), unneeded))
+    assert d.counts["screened_blocks_a"] == d.counts["screened_blocks_b"] == 1 and d.counts["forming_elements"] == witness
+    assert d.forming == Fraction(F.FORMING_CREDITED * witness * 2, 4096)
     assert d.total == d.dead_pairs + d.two_four + d.forming
 
 
-def screened_tile(blocks: int):
-    """A 4 x 4 credited tile of a 4 x 1024 x 1024 NVFP4 unit whose A row 0 has `blocks` screened blocks, each by one
-    element at 9.75ρ, which leaves the block's other codes salt-live: (scheme, record, tile, A rows, B rows, ops, x_0)."""
+def screened_tile(blocks: int, b_blocks: int = 0):
+    """A 4 x 4 credited tile of a 4 x 1024 x 1024 NVFP4 unit whose A row 0 has `blocks` screened blocks and B row 0 its
+    first `b_blocks` of them, each by one element at 9.75ρ, which leaves the block's other codes salt-live: (scheme,
+    record, tile, A rows, B rows, ops, x_0)."""
     s, k = V.scheme("nvfp4", False), 1024
     ctx = V.ctx_of("screen", (4, k, 1024), 0, 0)
     a_rows, b_rows = V.rows("screen", "A", 4, k), V.rows("screen", "B", 4, k)
-    x = F.parse_row(a_rows[0], k)
-    rho = float(F._exact_rho_sq(x)) ** 0.5
-    a_rows[0] = spiked(a_rows[0], k, tuple(16 * b + 1 for b in range(blocks)), 9.75 * rho)
+    for rows, count in ((a_rows, blocks), (b_rows, b_blocks)):
+        rho = float(F._exact_rho_sq(F.parse_row(rows[0], k))) ** 0.5
+        rows[0] = spiked(rows[0], k, tuple(16 * b + 1 for b in range(count)), 9.75 * rho)
     tile = type(s.tiles(Shape(64, k, 64))[0])(range(4), range(4))
     ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
     return s, W.UnitRecord(ctx.matmul, 4, k), tile, a_rows, b_rows, ops, F.parse_row(a_rows[0], k)
 
 
-def test_a_row_the_old_cap_rejected_is_admitted_and_debited():
-    """Two screened blocks in 64, past D-SS's retired one-in-64 cap: the row is credited, every element of its screened
-    blocks is charged in the forming item (not only their salt-dead dominant elements), and the tile stays under ρ."""
-    s, record, tile, a_rows, b_rows, ops, x = screened_tile(2)
-    assert sum(F.dead_blocks(s.fmt, x)) == 2 > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
-    assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:2 * s.fmt.block]) <= 2
+def witness_elements(s, ops) -> int:
+    """Item 4's elements over the 4 x 4 tile: the witness's salt-dead A elements and the unneeded positions' A elements."""
+    unneeded = [all(ops.b.codes[j][t] & 7 == 0 for j in range(4)) for t in range(1024)]
+    return sum(p or u for i in range(4)
+               for p, u in zip(F.salt_dead(s.fmt, ops.a.x[i], ops.a.alpha[i], ops.a.ae[i]), unneeded))
+
+
+@pytest.mark.parametrize("blocks", (2, 16))
+def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(blocks):
+    """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
+    witness's salt-dead elements (not every element of a screened block), no block pair is screened, and the tile stays
+    under ρ (server.md 11:32Z)."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(blocks)
+    assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
+    assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:blocks * s.fmt.block]) <= blocks
     assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None
     d = s.last_debit
-    assert d.counts["screened_blocks_a"] == 2 and d.counts["forming_elements"] >= 2 * s.fmt.block
-    assert d.forming >= Fraction(F.FORMING_CREDITED * 2 * s.fmt.block * 4, 1024)
+    assert d.counts["screened_blocks_a"] == blocks and d.dead_pairs == 0
+    assert d.counts["forming_elements"] == witness_elements(s, ops) < blocks * s.fmt.block
+    assert d.forming == Fraction(F.FORMING_CREDITED * witness_elements(s, ops) * 4, 1024)
     assert 0 < d.total <= s.tile_cap(record, ops, range(4), range(4))[1]
 
 
-def test_a_row_whose_screened_blocks_push_the_tile_past_rho_is_rejected():
-    """Sixteen screened, otherwise salt-live blocks: without their charge the tile is well under ρ; with it, over."""
-    s, record, tile, a_rows, b_rows, ops, x = screened_tile(16)
-    assert F.row_passes(s.fmt, x) and sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:16 * s.fmt.block]) <= 16
+def test_blocks_both_operands_screen_push_the_tile_past_rho_by_item_3():
+    """Four blocks screened on A row 0 and B row 0 alike: 4 pairs on word (0, 0), 16 units each, pass the tile's cap
+    (16 cells' share of creditOf at ρ = 1/400, about 56 units), so the tile is rejected; the same four on A alone pass."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
     reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
     d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
-    assert d.counts["screened_blocks_a"] == 16 and d.total > cap
-    dead = [F.salt_dead(s.fmt, ops.a.x[i], ops.a.alpha[i], ops.a.ae[i]) for i in range(4)]
-    unneeded = [all(ops.b.codes[j][t] & 7 == 0 for j in range(4)) for t in range(1024)]
-    salt_dead_only = sum(p or u for row in dead for p, u in zip(row, unneeded))
-    assert salt_dead_only < d.counts["forming_elements"] and d.dead_pairs == 0
-    assert Fraction(F.FORMING_CREDITED * salt_dead_only * 4, 1024) + d.two_four + d.identity + d.subgrid + d.windows < cap
+    assert d.counts["dead_pairs"] == 4 and d.dead_pairs == 4 * s.fmt.block and d.total > cap
+    assert d.counts["forming_elements"] == witness_elements(s, ops)
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(4)
+    assert W.check_opened(s, record, tile, a_rows, b_rows, ops) is None and s.last_debit.dead_pairs == 0
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():

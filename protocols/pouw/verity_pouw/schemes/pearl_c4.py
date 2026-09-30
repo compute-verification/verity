@@ -45,15 +45,16 @@ as Pearl-C's H100 argument had it.  The design rests instead on every code and e
 §1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β
 and a_E's E4M3 byte v in 0x08–0x7E, a normal UE4M3 with bit 7 clear and not NaN; one a_E per row).  A block is
 screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
-and every element of it is charged as salt-dead (items 3 and 4), so a row with many screened blocks is rejected only when
-its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  A drawn tile's debit is replayed
+and its block is charged per word where both operands screen it (item 3), so a row with many screened blocks is rejected
+only when its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  Item 4 charges the
+reference's witness alone, not every element of a screened block (server.md 11:32Z).  A drawn tile's debit is replayed
 over its credited words (`tile_debit`):
 
 ~~~text
 1  2:4 groups    per row and 4-group with ≥ 2 salt-dead codes: 0.5 per MAC (1 when all 4 are), on every word the row feeds
 2  identity      per atom whose lone skip leaves the word unchanged: 64 per atom-word
 3  dead pairs    per block screened on both the A row and the B row: `block` per pair-word
-4  forming       per salt-dead, screened-block or unneeded A element: f_s · |cols|/n
+4  forming       per salt-dead (the reference's witness, `salt_dead`) or unneeded A element: f_s · |cols|/n
 5  sub-grid      per (word, block) with 2304·m_a·m_b·2^(e_a+e_b−2) below its step's grid (it adds exactly 0): `block`
 D-24 windows     per row and aligned 128 of k whose every 4-group has ≤ 2 nonzero codes: 0.5 per MAC, on every word it feeds
 cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
@@ -420,8 +421,8 @@ def _exact_rho_sq(x: Sequence[int]) -> Fraction:
 
 def dead_blocks(fmt: Fmt, x: Sequence[int]) -> list[bool]:
     """Per scale block: screened when (clean amax_b)² > 90·ρ² (9.5ρ; exact, ρ² over every 8th position).  Salt-free, and
-    it covers every salt-dead element (Lean `saltDead4_screened`), so the debit charges every element of a screened block
-    as salt-dead (items 3 and 4) instead of rejecting its row."""
+    it covers every salt-dead element (Lean `saltDead4_screened`).  The debit charges a block screened on both an A row and
+    a B row per pair-word (item 3) instead of rejecting its rows; item 4 stays on the witness (`salt_dead`)."""
     rho_sq = _exact_rho_sq(x)
     return [Fraction(P.f32_of_bits(max(w & 0x7FFFFFFF for w in x[b:b + fmt.block]))) ** 2 > DEAD_RHO_SQ * rho_sq
             for b in range(0, len(x), fmt.block)]
@@ -597,14 +598,16 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
     blocks_a, blocks_b = {i: dead_blocks(fmt, a.x[i]) for i in rows}, {j: dead_blocks(fmt, b.x[j]) for j in cols}
     pairs = sum(p and q for i in rows for j in cols for p, q in zip(blocks_a[i], blocks_b[j]))
     unneeded = [all(b.codes[j][t] & 7 == 0 for j in cols) for t in range(len(a.codes[0]))]
-    elements = sum(d or u or blocks_a[i][t // fmt.block] for i in rows for t, (d, u) in enumerate(zip(dead_a[i], unneeded)))
+    elements = sum(d or u for i in rows for d, u in zip(dead_a[i], unneeded))
+    screened_only = sum(not (d or u) and blocks_a[i][t // fmt.block]
+                        for i in rows for t, (d, u) in enumerate(zip(dead_a[i], unneeded)))
     spans = sum(all(win_a[i][w] for i in range(r, r + 16)) for r in range(0, len(a.codes) - 15, 16)
                 for w in range(len(win_a[0])))
     counts = {"salt_dead_a": sum(sum(dead_a[i]) for i in rows), "salt_dead_b": sum(sum(dead_b[j]) for j in cols),
               "two_four_windows_a": sum(sum(win_a[i]) for i in rows), "two_four_windows_b": sum(sum(win_b[j]) for j in cols),
               "d24_spans_a": spans, "identity_atom_words": identity, "subgrid_block_words": subgrid, "dead_pairs": pairs,
               "screened_blocks_a": sum(sum(blocks_a[i]) for i in rows), "screened_blocks_b": sum(sum(blocks_b[j]) for j in cols),
-              "forming_elements": elements, "unneeded_positions": sum(unneeded),
+              "forming_elements": elements, "screened_only_elements": screened_only, "unneeded_positions": sum(unneeded),
               "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
               + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
               "words": len(rows) * len(cols)}
