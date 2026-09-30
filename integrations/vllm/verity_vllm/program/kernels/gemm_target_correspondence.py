@@ -160,7 +160,7 @@ def device_facts(torch, bi) -> dict[str, Any]:
     return {"device": props.name, "compute_capability": [int(props.major), int(props.minor)],
             "tuned_gemm_arch_family": _get_tuned_matmul_arch_family(current_platform.get_device_capability()),
             "multi_processor_count": int(props.multi_processor_count), "vllm": vllm.__version__, "torch": torch.__version__,
-            "cuda": torch.version.cuda, "hostname": platform.node(), "vllm_is_batch_invariant": bool(bi.vllm_is_batch_invariant()),
+            "cuda": torch.version.cuda, "hostname": platform.node(), "batch_invariant_mode": bool(bi._batch_invariant_MODE),
             "torch_preferred_blas_library": str(torch.backends.cuda.preferred_blas_library()).split(".")[-1],
             "torch_allow_bf16_reduced_precision_reduction": str(torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction)}
 
