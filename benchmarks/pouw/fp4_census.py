@@ -458,6 +458,43 @@ def census_matrix(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str
     return {"words": words, "tile": tiles, "A": operand_stats(ca, sa, fmt, clean_a), "B": operand_stats(cb, sb, fmt, None)}
 
 
+def base_split(fmt: str, A: np.ndarray, noise: str, delta: float, rng, tile_rows: int = 16) -> dict:
+    """The salt-free base split (design X-FP4-1), as a cheaper-computation cost.
+
+    The cheapest word-reproducing prover precomputes ``base @ base.T`` before the salt (free, salt-independent: ``base``
+    is the clean-path codes it can guess from the known input) and, per salt, corrects with only the changed codes
+    ``Delta = codes(salt) != base``.  Because chains are exact, this split is exact.  What it *saves* is set by how dense
+    ``Delta`` is: a 16x64 A fragment whose ``Delta`` is 2:4 everywhere (<=2 changed per 4 consecutive k, per row) is one
+    ``mma.sp`` pass (0.5x); a denser fragment needs the dense route or two sparse passes (1.0x); an all-unchanged fragment
+    is skipped (0x).  So the per-call A-side arithmetic the cheater pays, in dense-FP4-MAC units, is the mean over
+    fragments of {0, 0.5, 1.0}.  It *ties* the honest 1.0x when ``Delta`` is dense, and *beats* it (breaks gamma) if many
+    fragments are <=2:4.  (B's ``Delta`` is per weight-epoch, amortized; this reports the per-call A side.)
+    """
+    base = quantize(A, fmt)[0]
+    salt = quantize(noisy(A, fmt, noise, delta, rng), fmt)[0]
+    delta_map = base != salt
+    rows, K = delta_map.shape
+    nr, nk = rows - rows % tile_rows, K - K % 64
+    density = float(delta_map.mean())
+    if nr == 0 or nk == 0:
+        return {"code_change_density": density, "fragments": 0}
+    d = delta_map[:nr, :nk].reshape(nr // tile_rows, tile_rows, nk // 64, 64)
+    d = d.transpose(0, 2, 1, 3).reshape(-1, tile_rows, 16, 4)          # [frag, row, group-of-4 along k, 4]
+    changed_per_group = d.sum(-1)                                       # [frag, row, group] in 0..4
+    frag_changed = changed_per_group.reshape(len(changed_per_group), -1)
+    skippable = frag_changed.sum(1) == 0
+    one_pass = (~skippable) & (changed_per_group.max((1, 2)) <= 2)      # every (row,group) has <=2 changed
+    dense = ~(skippable | one_pass)
+    cost = np.where(skippable, 0.0, np.where(one_pass, 0.5, 1.0))
+    return {"code_change_density": density,
+            "fragments": int(len(cost)),
+            "frag_skippable": float(skippable.mean()),
+            "frag_one_pass_2of4": float(one_pass.mean()),
+            "frag_dense": float(dense.mean()),
+            "cheater_A_cost_per_dense_mac": float(cost.mean()),
+            "beats_honest": bool(cost.mean() < 0.999)}
+
+
 def atoms_from(args) -> dict[str, tuple[Atom, str]]:
     from verity.ml.tc.models import MODELS
     out = {}
@@ -519,6 +556,27 @@ def cmd_real(args) -> dict:
     return res
 
 
+def cmd_basesplit(args) -> dict:
+    """The base-split falsifier (design X-FP4-1): per family/format/noise, how cheap the salt-free split is (A side)."""
+    rng = np.random.default_rng(args.seed)
+    res = {"k": args.k, "pairs": args.pairs, "seed": args.seed, "noise": args.noise, "delta": args.delta, "results": []}
+    fams = FAMILIES if args.families == "all" else tuple(args.families.split(","))
+    for name, (atom, fmt) in atoms_from(args).items():
+        for fam in fams:
+            A, _ = family(fam, max(args.pairs, 64), args.k, rng)
+            for noise in args.noise.split(","):
+                if noise == "none":
+                    continue                                            # the split needs a salt: noise is what the base can't guess
+                r = base_split(fmt, A, noise, args.delta, rng)
+                row = {"atom": atom.name, "format": fmt, "family": fam, "noise": noise, **r}
+                res["results"].append(row)
+                print(json.dumps({"format": fmt, "family": fam, "noise": noise, "density": round(r["code_change_density"], 3),
+                                  "cheater_A_cost": round(r.get("cheater_A_cost_per_dense_mac", 1.0), 3),
+                                  "one_pass_2of4": round(r.get("frag_one_pass_2of4", 0.0), 3),
+                                  "beats_honest": r.get("beats_honest")}), flush=True)
+    return res
+
+
 # ---- break-even ------------------------------------------------------------------------------------------------------
 
 #: Placeholder prices in units of one dense FP4 MAC (mma.sync kind::mxf4nvf4), from the RTX PRO Blackwell whitepaper v1.1
@@ -559,7 +617,7 @@ def breakeven(prices: dict) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["selftest", "synth", "real", "breakeven"])
+    ap.add_argument("cmd", choices=["selftest", "synth", "real", "basesplit", "breakeven"])
     ap.add_argument("--atom", action="append", default=None)
     ap.add_argument("--frac-bits", type=int, default=None)
     ap.add_argument("--acc-window", type=int, default=None)
@@ -593,14 +651,20 @@ def main() -> None:
     if not all(v["step_mismatches"] == 0 and v["chain_mismatches"] == 0 for v in rep.values()):
         print(json.dumps({"selftest": rep}))
         sys.exit("the vectorised atom disagrees with verity.ml.tc: no census")
-    doc = cmd_synth(args) if args.cmd == "synth" else cmd_real(args)
+    doc = {"synth": cmd_synth, "real": cmd_real, "basesplit": cmd_basesplit}[args.cmd](args)
     doc.update({"tool": "pouw_fp4_census", "cmd": args.cmd, "atoms": args.atom, "selftest": rep, "seconds": round(time.time() - t0, 1)})
     if args.out:
         out = Path(args.out)
         out.write_text(json.dumps(doc, indent=1) + "\n")
         es = [r["words"]["exact_steps"] for r in doc["results"] if "words" in r]
-        run_result.write(out, True, f"fp4-census-{args.cmd}", f"{len(doc['results'])} cells; exact steps {min(es):.4f}..{max(es):.4f}",
-                         [("cells", len(doc["results"]), "count"), ("exact_steps_max", max(es), "fraction")])
+        if es:
+            run_result.write(out, True, f"fp4-census-{args.cmd}", f"{len(doc['results'])} cells; exact steps {min(es):.4f}..{max(es):.4f}",
+                             [("cells", len(doc["results"]), "count"), ("exact_steps_max", max(es), "fraction")])
+        else:
+            cc = [r["cheater_A_cost_per_dense_mac"] for r in doc["results"] if "cheater_A_cost_per_dense_mac" in r]
+            run_result.write(out, bool(cc) and min(cc) >= 0.999, f"fp4-census-{args.cmd}",
+                             f"{len(doc['results'])} cells; cheater A cost {min(cc):.3f}..{max(cc):.3f} (>=1 => no saving)" if cc else "no cells",
+                             [("cells", len(doc["results"]), "count"), ("cheater_A_cost_min", min(cc) if cc else 0.0, "ratio")])
 
 
 if __name__ == "__main__":

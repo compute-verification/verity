@@ -75,3 +75,20 @@ def test_attack_kernel_tables_and_fragments_are_consistent():
         assert frag.dtype == np.uint32
     sp = A.fragments("sparse", 1).reshape(32, A.NSETS, A.WORDS_PER_SET["sparse"])
     assert (sp[:, :, 8] == 0x44444444).all()                                   # valid 2:4 ordered metadata everywhere
+
+
+def test_base_split_dense_noise_gives_no_saving():
+    """Dense row-relative noise (delta=1/4) changes enough codes that the salt-free base split ties the honest MMA."""
+    rng = np.random.default_rng(9)
+    A, _ = C.family("gaussian", 128, 4096, rng)
+    r = C.base_split("nvf4", A, "row", 0.25, rng)
+    assert r["code_change_density"] > 0.4
+    assert r["cheater_A_cost_per_dense_mac"] == 1.0 and not r["beats_honest"]
+
+
+def test_base_split_sparse_delta_is_cheaper():
+    """Tiny block-relative noise on an outlier-heavy family leaves Delta 2:4-coverable, so the cheater saves."""
+    rng = np.random.default_rng(9)
+    A, _ = C.family("outlier-in-block", 128, 4096, rng)
+    r = C.base_split("nvf4", A, "block", 0.0625, rng)
+    assert r["cheater_A_cost_per_dense_mac"] < 1.0 and r["beats_honest"]
