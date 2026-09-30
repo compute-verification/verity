@@ -96,8 +96,7 @@ DEV void row_leaf_v(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_
 
 // hash_rows, a warp per row and blockDim / 32 rows a CTA (row_leaf_v; h1_rows_p loads with L2::256B).  Dynamic shared
 // memory: rows_w_words(rb) words a warp.  Same arguments as hash_rows.
-template <bool P256> DEV void h1_rows_body(const Args& a) {
-  extern __shared__ uint32_t sh[];
+template <bool P256> DEV void h1_rows_body(const Args& a, uint32_t* sh) {
   const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
   const uint64_t row = (uint64_t)blockIdx.x * (blockDim.x / 32) + warp;
   const uint32_t rb = (uint32_t)a.i[1];
@@ -108,8 +107,14 @@ template <bool P256> DEV void h1_rows_body(const Args& a) {
                    reinterpret_cast<uint32_t(*)[8]>(sh + (size_t)warp * rows_w_words((int)rb)), lane, h);
   if (lane == 0) store_cv(a.p[1] + row * 32, h);
 }
-extern "C" __global__ void __launch_bounds__(256) h1_rows(const Args a) { h1_rows_body<false>(a); }
-extern "C" __global__ void __launch_bounds__(256) h1_rows_p(const Args a) { h1_rows_body<true>(a); }
+extern "C" __global__ void __launch_bounds__(256) h1_rows(const Args a) {
+  extern __shared__ uint32_t sh[];
+  h1_rows_body<false>(a, sh);
+}
+extern "C" __global__ void __launch_bounds__(256) h1_rows_p(const Args a) {
+  extern __shared__ uint32_t sh[];
+  h1_rows_body<true>(a, sh);
+}
 
 // a label of n <= 64 bytes as one message block (zero-padded, little-endian words)
 DEV void h1_label(const char* s, int n, uint32_t w[16]) {
