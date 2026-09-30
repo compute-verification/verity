@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Share one machine's GPUs between concurrent runs: one lock file per GPU, held with flock(1).
 #
-#   gpu-lease N [--wait] -- CMD...   take N free GPUs and run CMD with CUDA_VISIBLE_DEVICES naming them
-#   gpu-lease status                 one line per GPU: index, free or held, and the last holder's pid, run id and start
+#   gpu-lease N [--wait] [--on LIST] -- CMD...   take N free GPUs and run CMD with CUDA_VISIBLE_DEVICES naming them
+#   gpu-lease status                             one line per GPU: index, free or held, and the holder: minutes held, pid, run
+#                                                id, who, UUID, start and command
 #
 # A GPU is held while any process has its lock ($GPU_LEASE_DIR/<index>.lock) open: CMD and every child it starts inherit the
 # descriptors, and the kernel drops the lock when the last of them exits, so a killed run never leaks a GPU and there is nothing
@@ -13,6 +14,11 @@
 # On a machine whose other GPUs belong to Kubernetes (the Nebius cluster), $GPU_LEASE_ALLOWED_FILE (default /etc/vy/direct-gpus)
 # names the only indices gpu-lease may hand out, comma-separated, or `none` (every GPU is Kubernetes'): it then refuses. The file
 # is written by the cluster's bring-up (cluster_up.sh), never by hand. Absent, every GPU is gpu-lease's.
+#
+# --on LIST takes the N GPUs only from LIST, comma-separated indices or UUIDs (GPU-...), in that order; a GPU outside the allowed
+# set is refused.  CMD gets GPU_LEASE_UUID, the UUIDs it holds (comma-separated), to record with its results.  The holder is named
+# by $GPU_LEASE_WHO (else $RESEARCH_LANE, else the user), so `status` says who holds what and for how long.
+# GPU_LEASE_UUID_TABLE overrides the UUIDs nvidia-smi reports, comma-separated in index order (tests).
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -36,25 +42,40 @@ gpu_count() {
   if [ -n "${GPU_LEASE_COUNT:-}" ]; then echo "$GPU_LEASE_COUNT"; else nvidia-smi -L 2>/dev/null | grep -c '^GPU '; fi
 }
 
-usage() { echo "usage: gpu-lease N [--wait] -- CMD... | gpu-lease status" >&2; exit 2; }
+uuid_table() {
+  # "index uuid" per line
+  if [ -n "${GPU_LEASE_UUID_TABLE:-}" ]; then
+    echo "$GPU_LEASE_UUID_TABLE" | tr ',' '\n' | awk 'NF {print NR - 1, $1}'
+  else
+    nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null | tr -d ' ' | tr ',' ' '
+  fi
+}
+
+usage() { echo "usage: gpu-lease N [--wait] [--on INDEX|UUID,...] -- CMD... | gpu-lease status" >&2; exit 2; }
 
 status() {
-  local i fd state owner
+  local i fd state owner since age now
+  now=$(date -u +%s)
   [ -r "$allowed_file" ] && echo "# direct-run GPUs from $allowed_file: $(tr -d '\n' < "$allowed_file") (the rest are Kubernetes')"
   for i in $(gpu_indices); do
     owner=$(cat "$dir/$i.owner" 2>/dev/null)
     exec {fd}>>"$dir/$i.lock" || { echo "$i unreadable"; continue; }
     if flock -n -s "$fd"; then state=free; owner=""; else state=held; fi
     exec {fd}>&-
-    echo "$i $state${owner:+ $owner}"
+    age=""
+    if [ -n "$owner" ]; then
+      since=$(echo "$owner" | sed -n 's/.*since=\([^ ]*\).*/\1/p')
+      since=$(date -u -d "$since" +%s 2>/dev/null) && age="$(((now - since) / 60))m "
+    fi
+    echo "$i $state${owner:+ $age$owner}"
   done
 }
 
 take() {
-  # take N: TAKEN = the indices, their lock descriptors left open; 1 (holding nothing) when fewer than N are free
+  # take N from CANDIDATES: TAKEN = the indices, their lock descriptors left open; 1 (holding nothing) when fewer than N are free
   local want=$1 i fd
   TAKEN=() FDS=()
-  for i in $(gpu_indices); do
+  for i in "${CANDIDATES[@]}"; do
     [ "${#TAKEN[@]}" -lt "$want" ] || break
     exec {fd}>>"$dir/$i.lock" || continue
     if flock -n -x "$fd"; then TAKEN+=("$i") FDS+=("$fd"); else exec {fd}>&-; fi
@@ -70,19 +91,41 @@ take() {
 if [ "$1" = status ]; then status; exit 0; fi
 n=$1; shift
 case $n in ''|*[!0-9]*|0) usage ;; esac
-wait=0
+wait=0 on=""
 while [ $# -gt 0 ] && [ "$1" != -- ]; do
-  case $1 in --wait) wait=1 ;; *) usage ;; esac
+  case $1 in
+    --wait) wait=1 ;;
+    --on) [ $# -ge 2 ] || usage; on=$2; shift ;;
+    *) usage ;;
+  esac
   shift
 done
 [ "${1:-}" = -- ] || usage
 shift
 [ $# -ge 1 ] || usage
-total=$(gpu_indices | grep -c .)
+mapfile -t CANDIDATES < <(gpu_indices)
+total=${#CANDIDATES[@]}
 if [ "$total" -eq 0 ] && [ -r "$allowed_file" ]; then
   echo "gpu-lease: no GPU is for direct runs here ($allowed_file: none): submit through the cluster's queues (sky)" >&2; exit 2
 fi
-if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-lease's here" >&2; exit 2; fi
+if [ -n "$on" ]; then
+  table=$(uuid_table)
+  picked=()
+  for g in $(echo "$on" | tr ',' ' '); do
+    case $g in
+      GPU-*) i=$(echo "$table" | awk -v u="$g" '$2 == u {print $1}') ;;
+      *[!0-9]*) usage ;;
+      *) i=$g ;;
+    esac
+    if [ -z "$i" ] || ! printf '%s\n' "${CANDIDATES[@]}" | grep -qx "$i"; then
+      echo "gpu-lease: GPU $g is not one gpu-lease hands out here (${CANDIDATES[*]:-none})" >&2; exit 2
+    fi
+    picked+=("$i")
+  done
+  CANDIDATES=("${picked[@]}")
+  total=${#CANDIDATES[@]}
+fi
+if [ "$n" -gt "$total" ]; then echo "gpu-lease: $n GPUs asked, $total are gpu-lease's here${on:+ in --on $on}" >&2; exit 2; fi
 mkdir -p "$dir" 2>/dev/null
 [ -w "$dir" ] || { echo "gpu-lease: $dir is not writable" >&2; exit 2; }
 
@@ -94,10 +137,16 @@ until take "$n"; do
   sleep "${GPU_LEASE_POLL_S:-15}"
 done
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+[ -n "${table:-}" ] || table=$(uuid_table)
+who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
+uuids=()
 for i in "${TAKEN[@]}"; do
-  echo "pid=$$ run=${RESEARCH_RUN_ID:--} since=$started" > "$dir/$i.owner"
+  u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
+  uuids+=("${u:--}")
+  echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
 done
 CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
-export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID
-echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES for pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}" >&2
+GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
+export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID
+echo "gpu-lease: GPUs $CUDA_VISIBLE_DEVICES ($GPU_LEASE_UUID) for $who, pid $$${RESEARCH_RUN_ID:+ (run $RESEARCH_RUN_ID)}" >&2
 exec "$@"

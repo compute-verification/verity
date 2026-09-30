@@ -138,6 +138,30 @@ def test_gpu_lease_hands_out_only_the_direct_gpus_when_kubernetes_owns_the_rest(
     assert r.returncode == 2 and "submit through the cluster's queues" in r.stderr
 
 
+@needs_flock
+def test_gpu_lease_pins_by_index_or_uuid_and_status_names_the_holder(tmp_path):
+    env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1,GPU-c2,GPU-d3", "GPU_LEASE_WHO": "bc-test"}
+    show = 'echo "$CUDA_VISIBLE_DEVICES $GPU_LEASE_UUID"'
+    inner = (f"{show}; bash {GPU_LEASE} 1 --on 2 -- true; echo pinned-busy=$?; "
+             f"bash {GPU_LEASE} 1 --on 2,3 -- sh -c '{show}'; bash {GPU_LEASE} status")
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "GPU-c2", "--", "sh", "-c", inner], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 0, r.stderr
+    lines = r.stdout.splitlines()
+    assert lines[:3] == ["2 GPU-c2", "pinned-busy=75", "3 GPU-d3"]
+    held = [ln for ln in lines[3:] if ln.split()[1] == "held"]
+    assert len(held) == 1 and held[0].startswith("2 held ") and "who=bc-test" in held[0] and "uuid=GPU-c2" in held[0]
+    assert re.match(r"2 held \d+m pid=", held[0])
+    for bad in (["--on", "7"], ["--on", "GPU-zz"], ["--on", "x1"]):
+        assert subprocess.run(["bash", str(GPU_LEASE), "1", *bad, "--", "true"], env=env, capture_output=True).returncode == 2
+    assert subprocess.run(["bash", str(GPU_LEASE), "2", "--on", "1", "--", "true"], env=env, capture_output=True).returncode == 2
+    allowed = tmp_path / "direct-gpus"
+    allowed.write_text("2,3\n")
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "GPU-b1", "--", "true"],
+                       env={**env, "GPU_LEASE_ALLOWED_FILE": str(allowed)}, capture_output=True, text=True)
+    assert r.returncode == 2 and "not one gpu-lease hands out" in r.stderr
+
+
 # ---- launch.sh ---------------------------------------------------------------------------------------------------------------------------
 
 def launch(*args: str, **env: str) -> subprocess.CompletedProcess:
