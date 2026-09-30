@@ -51,7 +51,7 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     assert circuits.count("borrowingLimit: 0") == 3 and "borrowingLimit" not in text.split("metadata: {name: provers}")[1]
     assert text.count("cohortName: nebius") == 2 and text.count("    reclaimWithinCohort: Any") == 2
     values = dict(re.findall(r"metadata: \{name: (\S+)\}\nvalue: (\d+)", text))
-    assert sorted(values, key=lambda k: -int(values[k])) == ["sweep-night", "circuits", "prover-bench", "dev"]
+    assert sorted(values, key=lambda k: -int(values[k])) == ["capture", "sweep-night", "circuits", "prover-bench", "dev"]
 
 
 def test_every_job_template_names_a_defined_queue_and_priority():

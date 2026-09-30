@@ -83,6 +83,7 @@ def test_the_lease_loop_stops_a_non_runpod_machine_by_its_own_command(tmp_path):
     (tmp_path / "environ").write_bytes(b"")
     env = {k: v for k, v in os.environ.items() if not k.startswith(("LEASE_", "RESEARCH_LEASE", "RUNPOD_"))}
     env |= {"LEASE_DIR": str(tmp_path / "lease"), "LEASE_ENVIRON": str(tmp_path / "environ"), "LEASE_TERMINATE_CMD": f"sh {rec}",
+            "LEASE_DEADLINE_FILE": str(tmp_path / "no-deadline"),     # not the host's /etc/research/deadline (a Nebius server has one)
             "LEASE_MACHINE_ID": "computeinstance-e00test", "LEASE_ONCE": "1"}
     now = 1_800_000_000
     assert subprocess.run(["sh", str(L.LEASE_SH), "extend", "60", "test"], env={**env, "LEASE_NOW": str(now)}).returncode == 0
