@@ -396,7 +396,7 @@ def test_h1_hashes_with_blake3_throughout():
                        for c, u in zip(checked.c, checked.u) for h in (0, 32))
     assert C.leaf(checked, "h1") == keyed(C.H1_KEYS["leaf"], digests) != C.leaf(checked)
     with pytest.raises(ValueError):
-        C.PearlC(hashing="h2")
+        C.PearlC(hashing="h3")
 
 
 def test_h1_lifecycle_commits_with_frame_b3():
@@ -413,6 +413,36 @@ def test_h1_lifecycle_commits_with_frame_b3():
     assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
     h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1"), epoch).check_tile(tr, prover.open(epoch, 0))
     assert not h0.ok and h0.reason == "activation opening"
+
+
+def test_h2_is_h1_with_frame_b3s_trees():
+    """Hashing format -h2 (P1 at s = 256): h1's message digests and leaf, and every tree frame-b3s."""
+    s, h1 = get("pearl-c-h100-v1-h2"), get("pearl-c-h100-v1-h1")
+    assert s.name == "pearl-c-h100-v1-h2" and s.commitment_hash == "blake3-s256" and dict(s.certificate.parameters)["hashing"] == "h2"
+    assert s.certificate.claims == h1.certificate.claims and "cr/blake3" in s.certificate.claims
+    rng = random.Random(5)
+    grid = lambda: [[rng.getrandbits(32) for _ in range(64)] for _ in range(4)]  # noqa: E731
+    checked = C.Checked(grid(), grid())
+    assert C.leaf(checked, "h2") == C.leaf(checked, "h1")
+    msg = bytes(range(256))
+    assert C.message_digest(msg, "h2") == C.message_digest(msg, "h1")
+
+
+def test_h2_lifecycle_commits_with_frame_b3s():
+    from verity_pouw.audit import Epoch, Prover, Sampled, Verifier, Workload, activation_binding, commit_rows, weight_binding
+
+    s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h2"), 128
+    rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    prover = Prover(s, {9: rows_b})
+    assert prover.weight_roots[9] == commit_rows(weight_binding(9), -2, rows_b, "blake3-s256").commitment.root
+    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: rows_a})
+    root_a = commit_rows(activation_binding(epoch.salt, 3), 3, rows_a, "blake3-s256").commitment.root
+    assert tr.activation_roots[0] == root_a != commit_rows(activation_binding(epoch.salt, 3), 3, rows_a, "blake3").commitment.root
+    assert Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier").accepted
+    h1 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h1"), epoch).check_tile(tr, prover.open(epoch, 0))
+    assert not h1.ok and h1.reason == "activation opening"
 
 
 def test_v1_domain_rules():

@@ -26,7 +26,9 @@ leaf      for each tile row r and each 32-column chunk h: d_rh = TurboSHAKE128(l
           D = 0x21); leaf = TurboSHAKE128(d_00 ‖ d_01 ‖ d_10 ‖ … , D = 0x22), 32 bytes each
           (hashing format -h1: BLAKE3 keyed by blake3("pearl-c/h1/message") and blake3("pearl-c/h1/leaf") in their places)
 trees     A's rows, B's rows and the tile leaves: `verity_pouw.audit`'s framed SHA-256 Merkle trees
-          (-h1: `frame-b3`, BLAKE3 keyed by the domain id, each row leaf through BLAKE3's chunk tree)
+          (-h1: `frame-b3`, BLAKE3 keyed by the domain id, each row leaf through BLAKE3's chunk tree;
+          -h2: `frame-b3s`, -h1 with each leaf a tree over its value's 256-byte segments, each segment's key binding its
+          position, the value's length and the leaf's rank, position and schema)
 tickets   Pearl's lottery over C̃: per 16 x 16 subtile, the 16-lane fold (`pearl_kw.extract`) hashed as H_"jackpot"(z; seed_A)
 useful    U_ij / (α_A,i · α_B,j), the model's own unscale (glue)
 ~~~
@@ -90,8 +92,11 @@ TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
 LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
-#: Hashing formats: h0 (TurboSHAKE128 messages and leaf, SHA-256 trees) and h1 (BLAKE3 throughout, for decode latency)
-HASHINGS = ("h0", "h1")
+#: Hashing formats: h0 (TurboSHAKE128 messages and leaf, SHA-256 trees), h1 (BLAKE3 throughout, for decode latency) and h2
+#: (h1's messages and leaf; every tree `frame-b3s`, 256-byte segments under each leaf, for a shallower A commitment)
+HASHINGS = ("h0", "h1", "h2")
+#: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`)
+TREE_HASH = {"h0": "sha256", "h1": "blake3", "h2": "blake3-s256"}
 H1_KEYS = {r: blake3(f"pearl-c/h1/{r}".encode()) for r in ("message", "leaf")}
 
 
@@ -333,13 +338,13 @@ def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f:
 
 
 def message_digest(msg: bytes, hashing: str = "h0") -> bytes:
-    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or under h1 BLAKE3 keyed by its label."""
-    return keyed(H1_KEYS["message"], msg) if hashing == "h1" else turboshake128(msg, D_MESSAGE, 32)
+    """One (row, 32-column chunk) message's digest: TurboSHAKE128 (D = 0x21), or under h1 and h2 BLAKE3 keyed by its label."""
+    return keyed(H1_KEYS["message"], msg) if hashing in ("h1", "h2") else turboshake128(msg, D_MESSAGE, 32)
 
 
 def leaf(checked: Checked, hashing: str = "h0") -> bytes:
     """The tile leaf over the per-(row, 32-column chunk) message digests, row-major, chunks in order: TurboSHAKE128
-    (D = 0x22), or under h1 BLAKE3 keyed by its label (a tree over 1 KB chunks of digests)."""
+    (D = 0x22), or under h1 and h2 BLAKE3 keyed by its label (a tree over 1 KB chunks of digests)."""
     digests = []
     for crow, urow in zip(checked.c, checked.u):
         for h in range(0, len(crow), CHUNK):
@@ -347,14 +352,15 @@ def leaf(checked: Checked, hashing: str = "h0") -> bytes:
                 struct.pack(f"<{len(urow[h:h + CHUNK])}I", *urow[h:h + CHUNK])
             digests.append(message_digest(msg, hashing))
     joined = b"".join(digests)
-    return keyed(H1_KEYS["leaf"], joined) if hashing == "h1" else turboshake128(joined, D_LEAF, 32)
+    return keyed(H1_KEYS["leaf"], joined) if hashing in ("h1", "h2") else turboshake128(joined, D_LEAF, 32)
 
 
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles;
-    smaller bounds make a test instance.  ``hashing`` h1 names the scheme ``…-h1`` and commits with BLAKE3 throughout
-    (`commitment_hash`, `leaf`).  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit
-    read, the device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
+    smaller bounds make a test instance.  ``hashing`` names the scheme ``…-<hashing>``: h1 commits with BLAKE3 throughout
+    (`commitment_hash`, `leaf`); h2 keeps h1's digests and leaf and makes every tree `frame-b3s`.  The tree hash is
+    `TREE_HASH[hashing]`.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
+    device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
     def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
@@ -364,14 +370,14 @@ class PearlC:
         if forming == "v0" and device != H100:
             raise ValueError(f"forming v0 is #311's H100 port; {device.name} takes v1")
         if hashing not in HASHINGS:
-            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h1 (BLAKE3)")
+            raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256), h1 (BLAKE3) or h2 (h1 with frame-b3s trees)")
         prices = prices or device.prices
         if forming == "v0" and prices != H100_PRICES:
             raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
-        self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("-h1" if hashing == "h1" else "")
+        self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
-        self.commitment_hash = "blake3" if hashing == "h1" else "sha256"
+        self.commitment_hash = TREE_HASH[hashing]
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
         allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
                      "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (

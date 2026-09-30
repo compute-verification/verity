@@ -123,3 +123,144 @@ def test_the_tile_tree_in_one_launch():
     want = MerkleTree(d, {i: vals[32 * i:32 * i + 32] for i in range(t)}, lambda _: TILE).commitment.root
     assert tree.raw[32 * (2 * t - 2):32 * (2 * t - 1)] == want
 
+
+
+def test_the_four_lane_compression_is_b3cs():
+    """lat_chain's chain of 40 compressions, on one thread (b3c) and on four lanes (b3c4), both equal to BLAKE3's compression
+    in `verity.commitments.blake3` chained the same way."""
+    from verity.commitments.blake3 import IV, compress
+    n, cv, m = 40, tuple(IV), [(0x9E3779B9 * (i + 1)) & 0xFFFFFFFF for i in range(16)]
+    for k in range(n):
+        cv = tuple(compress(cv, b"".join(w.to_bytes(4, "little") for w in m), k, 64, 16)[:8])
+        m[0] ^= cv[0]
+    want = b"".join(w.to_bytes(4, "little") for w in cv)
+    for mode, threads in ((0, 1), (1, 4)):
+        out = T.buffer(48)
+        T.launch("lat_chain", 1, threads, [out], [n, mode])
+        assert out.raw[16:48] == want, mode
+
+
+@pytest.mark.parametrize("m,rb", [(32, 32768), (32, 16384), (5, 900)])
+def test_rows_and_tree_in_one_launch_are_merkle_trees(m, rb):
+    """hash_rows_wt: the row leaves, then the last CTA's pads and levels, equal to hash_rows_w + hash_pad + hash_tree_small's
+    tree and MerkleTree's root; its counter is back at zero for the next call."""
+    rows = data(f"wt {m} {rb}", m * rb)
+    d = CommitmentDomain(BINDING, 7, RangeIndexedDomain(m), hash="blake3")
+    width = 1 << max(0, (m - 1).bit_length())
+    depth = max(0, (width - 1).bit_length())
+    dom, keys, counter = T.buffer(d.domain_id), T.buffer(32 * max(1, depth)), T.buffer(16)
+    T.launch("hash_node_keys", 1, 32, [keys, dom], [depth])
+    tree = T.buffer(32 * 2 * width)
+    T.launch("hash_rows_wt", -(-m // 4), 128, [T.buffer(rows), tree, dom, keys, counter], [m, rb, width],
+             smem=4 * 4 * T.rows_w_words(rb))
+    root = MerkleTree(d, {r: rows[r * rb:(r + 1) * rb] for r in range(m)}, lambda _: ROW).commitment.root
+    assert tree.raw[32 * (2 * width - 2):32 * (2 * width - 1)] == root
+    assert counter.raw[:4] == bytes(4)
+
+
+def verifier(path, *extra) -> "subprocess.CompletedProcess":
+    import subprocess
+    env = {"PYTHONPATH": f"{Path(__file__).parents[3] / 'packages/verity/src'}:{Path(__file__).parents[3] / 'protocols/pouw'}",
+           "PATH": "/usr/bin:/bin"}
+    return subprocess.run([sys.executable, str(HERE / "verify_h1.py"), *extra, "test", str(path)], capture_output=True, text=True,
+                          env=env)
+
+
+@pytest.mark.parametrize("hashing", ["h1", "h2"])
+def test_the_verifier_accepts_the_references_transcript_and_rejects_a_flipped_byte(tmp_path, hashing):
+    """verify_h1.py on a transcript made from the reference itself (A's tree, Pearl-C's digests and leaves, the tile tree;
+    frame-b3 under -h1, frame-b3s under -h2) accepts it, and rejects it with one byte flipped in A's rows, A's tree, C~,
+    the digests or the tile tree, and with its format relabelled."""
+    import json as J
+
+    from verity.commitments.merkle import tree_levels
+    m, rb, n = 32, 256, 128
+    rows = data("verify rows", m * rb)
+    c, u = data("verify c", 4 * m * n), data("verify u", 4 * m * n)
+    doms = {}
+    for name, count in (("a", m), ("t", -(-m // 64) * (n // 64))):
+        binding = hashlib.sha256(f"verify {name}".encode()).digest()
+        d = CommitmentDomain(binding, 0, RangeIndexedDomain(count), hash={"h1": "blake3", "h2": "blake3-s256"}[hashing])
+        doms[name] = {"binding": binding.hex(), "owner": 0, "count": count, "domain": d.domain_id.hex(), "d": d}
+    da, dt = doms["a"].pop("d"), doms["t"].pop("d")
+    a_levels = tree_levels(da, [da.leaf(r, r, ROW, rows[r * rb:(r + 1) * rb]) for r in range(m)])
+    dg, ref = digests(m, n)
+    dgs = b"".join(keyed(H1_KEYS["message"], c[4 * (r * n + 32 * h):4 * (r * n + 32 * h + 32)] + u[4 * (r * n + 32 * h):4 * (r * n + 32 * h + 32)])
+                   for r in range(m) for h in range(n // 32))
+    per = n // 32
+    leaves = [keyed(H1_KEYS["leaf"], b"".join(dgs[32 * (r * per + 2 * tj + h):32 * (r * per + 2 * tj + h + 1)] for r in range(m) for h in range(2)))
+              for tj in range(n // 64)]
+    t_levels = tree_levels(dt, [dt.leaf(t, t, TILE, v) for t, v in enumerate(leaves)])
+    parts = [("a_rows", rows), ("a_tree", b"".join(b"".join(lv) for lv in a_levels)), ("c", c), ("u", u), ("digests", dgs),
+             ("leaves", b"".join(leaves)), ("tile_tree", b"".join(b"".join(lv) for lv in t_levels))]
+
+    def write(parts_, path, label=hashing):
+        head = {"run": "test", "arm": "reference", "m": m, "rb": rb, "n": n, "hashing": label, "a": doms["a"], "t": doms["t"],
+                "sections": [[k, len(v)] for k, v in parts_]}
+        path.write_bytes(J.dumps(head).encode() + b"\n" + b"".join(v for _k, v in parts_))
+
+    run = verifier
+    good = tmp_path / "good.bin"
+    write(parts, good)
+    r = run(good)
+    assert r.returncode == 0 and r.stdout.startswith(f"{hashing} verifier accept: test:") and "tile root" in r.stdout, r.stdout + r.stderr
+    other = {"h1": "h2", "h2": "h1"}[hashing]
+    write(parts, tmp_path / "relabelled.bin", other)
+    r = run(tmp_path / "relabelled.bin")
+    assert r.returncode == 1 and r.stdout.startswith(f"{other} verifier reject:"), r.stdout + r.stderr
+    for i, (name, _v) in enumerate(parts):
+        bad = list(parts)
+        v = bytearray(bad[i][1])
+        v[len(v) // 2] ^= 1
+        bad[i] = (name, bytes(v))
+        path = tmp_path / f"bad-{name}.bin"
+        write(bad, path)
+        r = run(path)
+        assert r.returncode == 1 and r.stdout.startswith(f"{hashing} verifier reject:"), (name, r.stdout, r.stderr)
+
+
+def test_the_verifier_regenerates_a_tagged_a_and_checks_its_h2_tree(tmp_path):
+    """A prefill-style transcript (the tree only; row r is SHAKE128 of the tag with r): accepted with the rows' leaves
+    split over processes, rejected with one byte of a leaf or of the root flipped."""
+    import json as J
+
+    from verity.commitments.merkle import tree_levels
+    m, rb, tag = 16, 1000, "test tagged A {r}"
+    binding = hashlib.sha256(b"verify tagged").digest()
+    d = CommitmentDomain(binding, 0, RangeIndexedDomain(m), hash="blake3-s256")
+    levels = tree_levels(d, [d.leaf(r, r, ROW, hashlib.shake_128(tag.format(r=r).encode()).digest(rb)) for r in range(m)])
+    tree = b"".join(b"".join(lv) for lv in levels)
+    head = {"run": "test", "arm": "prefill A h2", "m": m, "rb": rb, "n": 64, "hashing": "h2",
+            "a": {"binding": binding.hex(), "owner": 0, "count": m, "domain": d.domain_id.hex()}, "a_rows_tag": tag,
+            "sections": [["a_tree", len(tree)]]}
+    for name, body, ok in (("good", tree, True), ("leaf", tree[:40] + bytes([tree[40] ^ 1]) + tree[41:], False),
+                           ("root", tree[:-1] + bytes([tree[-1] ^ 1]), False)):
+        path = tmp_path / f"{name}.bin"
+        path.write_bytes(J.dumps(head).encode() + b"\n" + body)
+        r = verifier(path, "--jobs", "3")
+        assert (r.returncode == 0) == ok and r.stdout.startswith(f"h2 verifier {'accept' if ok else 'reject'}:"), r.stdout + r.stderr
+        if ok:
+            assert "regenerated from their tag" in r.stdout
+
+
+def segment_roots(rows: bytes, rb: int, s: int, key: bytes, levels: list[bytes]) -> bytes:
+    out = b""
+    for r in range(len(rows) // rb):
+        level = [keyed(key, rows[r * rb + j:r * rb + j + s]) for j in range(0, rb, s)]
+        lv = 0
+        while len(level) > 1:
+            level = [keyed(levels[lv], level[2 * i] + level[2 * i + 1]) for i in range(len(level) // 2)]
+            lv += 1
+        out += level[0]
+    return out
+
+
+@pytest.mark.parametrize("rb,s", [(32768, 256), (32768, 64), (16384, 256), (4096, 1024), (1024, 1024)])
+def test_the_segment_layout_prototype_is_keyed_blake3_over_segments(rb, s):
+    """hash_rows_seg (P1's prototype, not -h1): each s-byte segment's standard keyed BLAKE3 under the row-leaf key, then
+    one-block nodes under the level keys, equal to `verity.commitments.blake3.keyed` composed the same way."""
+    rows, key = data(f"seg rows {rb} {s}", 2 * rb), data("seg key", 32)
+    levels = [data(f"seg level {l}", 32) for l in range(9)]
+    out = T.buffer(64)
+    T.launch("hash_rows_seg", 2, max(32, rb // s), [T.buffer(rows), out, T.buffer(key), T.buffer(b"".join(levels))], [2, rb, s])
+    assert out.raw == segment_roots(rows, rb, s, key, levels)
