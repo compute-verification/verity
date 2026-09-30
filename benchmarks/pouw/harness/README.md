@@ -45,12 +45,12 @@ cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `a
 against `server.md`'s GPU table); a timed run holds the node with `gpu-lease 8 --wait` and times on its first GPU:
 
 ```bash
-R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source
-   --send BUILD/libpouw_harness.so --send BUILD/build.json --send GPUS.md'          # GPUS.md: server.md's GPU table
+R='research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --env GPU_LEASE_WHO=<your bc-id>
+   --send BUILD/libpouw_harness.so --send BUILD/build.json --send GPUS.md'          # GPUS.md: server.md (its GPU table)
 H='. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" && "$PY" benchmarks/pouw/harness/bench.py --gpu lease
    --server-md "$RESEARCH_RUN_DIR/inputs/GPUS.md" --clock-label locked-2100 --shapes headline
    --arm-path benchmarks/pouw/harness --arm example_arm:ExampleFp8 --out "$RESEARCH_RUN_DIR/bench.json"'
-$R -- gpu-lease 1 -- bash -c "$H"                                                                  # untimed: gates, autotune
+$R -- gpu-lease 1 --wait -- bash -c "$H"                                                           # untimed: gates, autotune
 $R -- gpu-lease 8 --wait -- timeout 1140 bash -c 'export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} && '"$H"  # timed
 ```
 
