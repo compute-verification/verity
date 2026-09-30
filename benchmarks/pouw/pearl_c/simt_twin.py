@@ -21,7 +21,7 @@ KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "h
            "hash_rows_blk", "hash_rows_seg", "derive_rows", "standin_gemm",
            "b3s_level_keys", "hash_rows_b3s", "hash_leaves_b3s", "b3_seeds",
            "b3s_seg_trees", "derive_rows_b3s", "derive_rows_vec", "derive_rows_b3s_coal", "derive_rows_coal", "derive_rows_v16",
-           "derive_rows_b3s_split")
+           "derive_rows_b3s_split", "derive_rows_b3s_wide")
 
 PRELUDE = r"""
 #include <condition_variable>

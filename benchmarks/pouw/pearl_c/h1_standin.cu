@@ -467,3 +467,105 @@ extern "C" __global__ void __launch_bounds__(32) derive_rows_b3s_split(const Arg
     reinterpret_cast<unsigned*>(a.p[11])[r] = 0;
   }
 }
+
+// derive_rows_b3s_wide: the fastest plain layout (derive_rows_v16's: a thread a 16-byte piece, 256-thread CTAs, 16 segments a
+// CTA) with the commitment fused.  Each thread loads its piece first, and threads j < 16 compute their segment's key while the
+// loads are in flight; every thread stores its piece (coalesced) and stages it in shared memory (a segment every 272 bytes);
+// threads j < 16 hash their segments from shared memory (b3s_segment_regs) and the CTA builds its 16-leaf subtree, which is
+// the row's segment tree at levels 0-3.  The last of the row's CTAs (a u32 counter a row in p11, which it resets) reads the
+// subtree roots back through L2 (p10) and builds the levels above, then -h3's row seed with i4 = 2.  The hashed words are the
+// stored words.  Arguments as derive_rows_b3s_split's; launched with m · rb / 4096 CTAs of 256 threads (rb a multiple of 4096,
+// at most 64 KB).
+extern "C" __global__ void __launch_bounds__(256) derive_rows_b3s_wide(const Args a) {
+  __shared__ __align__(16) uint32_t seg[16 * COAL_PAD];
+  __shared__ uint32_t lv[16][8];
+  __shared__ int last;
+  const uint32_t rb = (uint32_t)a.i[1], n = (uint32_t)a.i[2], per = rb / 4096, segs = rb / B3S_SEG;
+  const uint64_t r = blockIdx.x / per;
+  const uint32_t c = blockIdx.x % per, tid = threadIdx.x, q = 256 * c + tid;
+  const uint4 v = reinterpret_cast<const uint4*>(reinterpret_cast<const uint16_t*>(a.p[0]) + r * n)[(8 * q % n) / 8];
+  uint32_t key[8];
+  if (tid < 16) {
+    uint32_t dom[8], tmpl[16];
+    load_key(a.p[3], dom);
+#pragma unroll
+    for (int w = 0; w < 16; w++) tmpl[w] = reinterpret_cast<const uint32_t*>(a.p[4])[w];
+    b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], r, r, rb, 16 * c + tid, key);
+  }
+  const uint4 x = make_uint4(v.x ^ 0x3C003C00u, v.y ^ 0x3C003C00u, v.z ^ 0x3C003C00u, v.w ^ 0x3C003C00u);
+  reinterpret_cast<uint4*>(a.p[1] + r * rb)[q] = x;
+  *reinterpret_cast<uint4*>(&seg[(tid / 16) * COAL_PAD + (tid % 16) * 4]) = x;
+  __syncthreads();
+  if (tid < 16) {
+    uint32_t w[64], h[8];
+#pragma unroll
+    for (int k = 0; k < 16; k++) {
+      const uint4 y4 = *reinterpret_cast<const uint4*>(&seg[tid * COAL_PAD + 4 * k]);
+      w[4 * k] = y4.x; w[4 * k + 1] = y4.y; w[4 * k + 2] = y4.z; w[4 * k + 3] = y4.w;
+    }
+    b3s_segment_regs(key, w, h);
+#pragma unroll
+    for (int i = 0; i < 8; i++) lv[tid][i] = h[i];
+  }
+  __syncthreads();
+  int level = 0;
+  for (uint32_t wd = 16; wd > 1; wd /= 2, level++) {
+    uint32_t h[8];
+    if (tid < wd / 2) {
+      uint32_t lk[8], m[16];
+      load_key(a.p[5] + 32ull * level, lk);
+#pragma unroll
+      for (int k = 0; k < 8; k++) { m[k] = lv[2 * tid][k]; m[8 + k] = lv[2 * tid + 1][k]; }
+      blake3_block(lk, m, h);
+    }
+    __syncthreads();
+    if (tid < wd / 2) {
+#pragma unroll
+      for (int k = 0; k < 8; k++) lv[tid][k] = h[k];
+    }
+    __syncthreads();
+  }
+  if (tid == 0) {
+    store_cv(a.p[10] + 32 * (r * per + c), lv[0]);
+    __threadfence();
+    last = atomicAdd(reinterpret_cast<unsigned*>(a.p[11]) + r, 1u) == per - 1;
+  }
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  if (tid < per) {
+    const uint32_t* roots = reinterpret_cast<const uint32_t*>(a.p[10] + 32 * (r * per + tid));
+#pragma unroll
+    for (int k = 0; k < 8; k++) lv[tid][k] = ld_cg(roots + k);
+  }
+  __syncthreads();
+  for (uint32_t wd = per; wd > 1; wd = (wd + 1) / 2, level++) {
+    const uint32_t half = wd / 2;
+    uint32_t h[8];
+    if (tid < half) {
+      uint32_t lk[8], m[16];
+      load_key(a.p[5] + 32ull * level, lk);
+#pragma unroll
+      for (int k = 0; k < 8; k++) { m[k] = lv[2 * tid][k]; m[8 + k] = lv[2 * tid + 1][k]; }
+      blake3_block(lk, m, h);
+    } else if (tid == half && (wd & 1)) {
+#pragma unroll
+      for (int k = 0; k < 8; k++) h[k] = lv[wd - 1][k];
+    }
+    __syncthreads();
+    if (tid < half || (tid == half && (wd & 1))) {
+#pragma unroll
+      for (int k = 0; k < 8; k++) lv[tid][k] = h[k];
+    }
+    __syncthreads();
+  }
+  if (tid == 0) {
+    store_cv(a.p[2] + 32 * r, lv[0]);
+    if (a.i[4] == 2) {
+      uint32_t sd[8];
+      b3_seed(a.p[6], a.p[7], lv[0], a.p[8], (uint64_t)(uint32_t)a.i[5] << 32 | r, sd);
+      store_cv(a.p[9] + 32 * r, sd);
+    }
+    reinterpret_cast<unsigned*>(a.p[11])[r] = 0;
+  }
+}
