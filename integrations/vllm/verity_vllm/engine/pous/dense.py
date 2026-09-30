@@ -41,12 +41,14 @@ def keys(c_block_major: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
     b, g, width = c_block_major.shape
     state = _initial(tags, b, width)
     parents = c_block_major.reshape(-1, width)
+    pending, stream = [], torch.cuda.current_stream()
     for j in range(1, b + 1):
         suffix = state[(j - 1) * g:]
         _pad(suffix[:g], width)
         if j < b:
             suffix[g:, :width] = parents[:(b - j) * g]
         codec.permute(suffix)
+        _throttle(pending, stream)
     return state[:, :width]
 
 
@@ -59,15 +61,227 @@ def decode(c: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
     return w.transpose(0, 1).contiguous()
 
 
-def encode(w: torch.Tensor, tags: torch.Tensor) -> torch.Tensor:
-    """`C` of `G` segments from `W` (`[G, B, L]`), block by block."""
+IN_FLIGHT = 2
+"""Chain steps a decode keeps queued on the device.  A deeper queue fills the launch queue, and a launch blocked on it holds
+the context against the in-process responder's copies (up to a kernel's duration late)."""
+
+
+def _throttle(pending: list, stream) -> None:
+    import torch
+
+    ev = torch.cuda.Event()
+    ev.record(stream)
+    pending.append(ev)
+    if len(pending) > IN_FLIGHT:
+        pending.pop(0).synchronize()
+
+
+CHUNKED = [False]
+"""`decode_blocks` of at least `CHUNKED_MIN_ROWS` blocks keeps its state chunk-major (`_Chunked`, `feistel_chunked_kernel`)
+instead of row-major; smaller decodes keep the row-major kernels, whose warp and lane-pair launches have the lower latency."""
+
+CHUNKED_MIN_ROWS = [1024]
+CHUNKED_THREADS = [128]
+CHUNKED_SPECIALIZE = [True]
+CHUNKED_SPLIT = [False]
+CHUNKED_SPLIT_MAX_ROWS = [9_500]
+"""Chunk-major launches at the 64 KiB width below `CHUNKED_SPLIT_MAX_ROWS` rows split every Keccak state across a lane pair
+(`feistel_split_kernel`): 25.9 against 39.1 ms at 4,608 rows on the L40S, but 63.9 against 47.3 ms at 15,075, where the
+unsplit kernel already fills the GPU and the pair's shuffles cost more than its parallelism buys."""
+
+CHUNKED_FUSED_X = [False]
+"""Unsplit chunk-major decodes read each step's parents (and the pad) inside the Feistel launch instead of gathering them."""
+
+CHUNKED_WHOLE = [False]
+"""Chunk-major decodes of at least `CHUNKED_SPLIT_MAX_ROWS` rows at the 64 KiB width run every row's whole chain in one
+unsplit launch (`band_chain_kernel`), writing `W` straight to its place: no per-step launches and no key extraction.  Smaller
+decodes keep the per-step split launches, which are faster there."""
+
+CHUNKED_MAX_ROWS = [18_000]
+"""Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
+scheduler (18k rows on the L40S) a launch's per-row rate collapses (23,744 rows: 93.6 ms at once, 84.7 ms in two)."""
+"""Chunk-major launches at the 64 KiB width run the kernel compiled for its half of 8,196 words."""
+"""Threads per block of the chunk-major launches (fewer spread a launch over more SMs)."""
+
+CHUNK = 136
+SLOT = 144
+"""A chunk of 136 bytes (one Keccak rate block) in a 16-byte-aligned slot of 144."""
+
+
+class _Chunked:
+    """`rows` states of `2L + 64` bytes stored chunk-major: byte `k` of half `h` of row `r` at `[h, k // 136, r, k % 136]`
+    of int64 `[2, nch, rows, 18]` (144-byte slots, the last 8 bytes padding), so a launch reads every row's chunk `c` from
+    one contiguous run."""
+
+    def __init__(self, rows: int, width: int, device) -> None:
+        self.rows, self.width, self.half = rows, width, width + 32
+        self.nch = -(-self.half // CHUNK)
+        self.words = torch.zeros(2, self.nch, rows, SLOT // 8, dtype=torch.int64, device=device)
+        self.bytes = self.words.view(torch.uint8).view(2, self.nch, rows, SLOT)
+
+    def _pieces(self, offset: int, length: int):
+        k = 0
+        while k < length:
+            c, b = divmod(offset + k, CHUNK)
+            if b == 0 and length - k >= CHUNK:
+                n = (length - k) // CHUNK
+                yield k, c, n, None
+                k += n * CHUNK
+            else:
+                take = min(CHUNK - b, length - k)
+                yield k, c, b, take
+                k += take
+
+    def put(self, half: int, offset: int, rows: slice, data: torch.Tensor) -> None:
+        """Bytes `offset .. offset + len` of `half` of rows `rows` := `data` (`[n, len]`)."""
+        for k, c, b, take in self._pieces(offset, data.shape[1]):
+            if take is None:
+                self.bytes[half, c:c + b, rows, :CHUNK] = data[:, k:k + b * CHUNK].reshape(-1, b, CHUNK).transpose(0, 1)
+            else:
+                self.bytes[half, c, rows, b:b + take] = data[:, k:k + take]
+
+    def fill(self, half: int, offset: int, length: int, rows: slice, value: int) -> None:
+        for _, c, b, take in self._pieces(offset, length):
+            if take is None:
+                self.bytes[half, c:c + b, rows, :CHUNK] = value
+            else:
+                self.bytes[half, c, rows, b:b + take] = value
+
+    def get(self, half: int, offset: int, length: int) -> torch.Tensor:
+        parts = []
+        for _, c, b, take in self._pieces(offset, length):
+            if take is None:
+                parts.append(self.bytes[half, c:c + b, :, :CHUNK].transpose(0, 1).reshape(self.rows, b * CHUNK))
+            else:
+                parts.append(self.bytes[half, c, :, b:b + take])
+        return torch.cat(parts, 1)
+
+    def pad(self, rows: slice) -> None:
+        self.fill(0, 0, self.width, rows, 0)
+        self.bytes[0, 0, rows, 0] = 0x01
+        c, b = divmod(self.width - 1, CHUNK)
+        self.bytes[0, c, rows, b] = 0x80
+
+    def launches(self, row0: int, allow_split: bool = True) -> list[tuple[int, int, bool]]:
+        """`(start, rows, split)` of the launches covering rows `row0 ..`: pieces of at most `CHUNKED_MAX_ROWS`."""
+        rows = self.rows - row0
+        pieces = -(-rows // CHUNKED_MAX_ROWS[0])
+        step = -(-rows // pieces)
+        split = allow_split and CHUNKED_SPLIT[0] and step < CHUNKED_SPLIT_MAX_ROWS[0]
+        return [(start, min(step, self.rows - start), split) for start in range(row0, self.rows, step)]
+
+    def permute(self, row0: int, xsrc: torch.Tensor | None = None, xidx: torch.Tensor | None = None) -> None:
+        """Π₂ on rows `row0 ..`; with `xsrc`, round 1 reads each row's X from row `xidx[r]` of `xsrc` (the pad where < 0)."""
+        from verity_vllm.engine.pous import native
+
+        for start, n, split in self.launches(row0, allow_split=xsrc is None):
+            native.ext().feistel_chunked(self.words, start, n, self.half // 8, codec.PI_DOMAIN, CHUNKED_THREADS[0],
+                                         CHUNKED_SPECIALIZE[0], split, xsrc, xidx)
+
+
+def _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width: int) -> torch.Tensor:
+    r = len(blk)
+    st = _Chunked(r, width, c_flat.device)
+    st.put(1, width - 32, slice(None), tags[seg])
+    dom = torch.zeros(r, 32, dtype=torch.uint8, device=c_flat.device)
+    dom[:, 0], dom[:, 1] = (blk & 0xFF).to(torch.uint8), (blk >> 8).to(torch.uint8)
+    st.put(1, width, slice(None), dom)
+    pending, stream = [], torch.cuda.current_stream()
+    fused = CHUNKED_FUSED_X[0] and not any(split for _, _, split in st.launches(0)) and c_flat.is_contiguous()
+    xidx = torch.full((r,), -1, dtype=torch.int64, device=c_flat.device) if fused else None
+    for j in range(1, int(ln[-1]) + 2):
+        first, pad_end = starts[j - 1], starts[j]
+        if fused:
+            xidx[first:pad_end] = -1
+            if pad_end < r:
+                xidx[pad_end:] = base[pad_end:] + blk[pad_end:] - j
+            st.permute(first, c_flat, xidx)
+        else:
+            st.pad(slice(first, pad_end))
+            if pad_end < r:
+                from verity_vllm.engine.pous import native
+
+                native.ext().chunked_gather(st.words, pad_end, c_flat, (base[pad_end:] + blk[pad_end:] - j).contiguous(),
+                                            width // 8)
+            st.permute(first)
+        _throttle(pending, stream)
+    return st.get(0, 0, width)
+
+
+def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.Tensor:
+    from verity_vllm.engine.pous import native
+
+    r = len(blk)
+    st = _Chunked(r, width, c_flat.device)
+    st.put(1, width - 32, slice(None), tags[seg])
+    dom = torch.zeros(r, 32, dtype=torch.uint8, device=c_flat.device)
+    dom[:, 0], dom[:, 1] = (blk & 0xFF).to(torch.uint8), (blk >> 8).to(torch.uint8)
+    st.put(1, width, slice(None), dom)
+    out = torch.empty(r, width, dtype=torch.uint8, device=c_flat.device)
+    base, blk, ln, dest = base.contiguous(), blk.contiguous(), ln.contiguous(), order.contiguous()
+    for start, n, _ in st.launches(0, allow_split=False):
+        native.ext().band_chain(st.words, start, n, codec.PI_DOMAIN, CHUNKED_THREADS[0], c_flat, base, blk, ln, dest, out)
+    return out
+
+
+def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, blocks: torch.Tensor,
+                  per_segment: int, window: int | None = None) -> torch.Tensor:
+    """`W` of the blocks `(segs[r], blocks[r])` alone, from every segment's `C` (`[S * B, L]`, segment-major) and tags
+    (`[S, 32]`): `[R, L]` in the given order.  Block `i`'s chain absorbs `C_{i-1}, .., C_{i-n}` with `n = i` on the complete
+    DAG and `n = min(i, window)` on the band graph of in-degree `window`.  Rows are ordered by `n`, so the rows still absorbing
+    at chain step `j` (`n >= j - 1`) are a suffix, and each step gathers their parents `C_{i-j}`."""
+    width = c_flat.shape[1]
+    length = blocks if window is None else torch.clamp(blocks, max=window)
+    order = torch.argsort(length, stable=True)
+    seg, blk, ln = segs[order], blocks[order], length[order]
+    r = len(order)
+    state = torch.zeros(r, 2 * width + 64, dtype=torch.uint8, device=c_flat.device)
+    state[:, 2 * width:2 * width + 32] = tags[seg]
+    state[:, 2 * width + 32] = (blk & 0xFF).to(torch.uint8)
+    state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
+    starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
+    base = seg * per_segment
+    if (CHUNKED[0] and CHUNKED_WHOLE[0] and r >= max(CHUNKED_MIN_ROWS[0], CHUNKED_SPLIT_MAX_ROWS[0]) and width == 65_536
+            and c_flat.is_contiguous()):
+        return _decode_whole(c_flat, seg, blk, ln, tags, base, order, width)
+    if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0]:
+        w = _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width) ^ c_flat[base + blk]
+        out = torch.empty_like(w)
+        out[order] = w
+        return out
+    pending, stream = [], torch.cuda.current_stream()
+    for j in range(1, int(ln[-1]) + 2):
+        first = starts[j - 1]
+        pad_end = starts[j] if j < len(starts) else r
+        suffix = state[first:]
+        _pad(suffix[:pad_end - first], width)
+        if pad_end < r:
+            suffix[pad_end - first:, :width] = c_flat[base[pad_end:] + blk[pad_end:] - j]
+        codec.permute(suffix)
+        _throttle(pending, stream)
+    w = state[:, :width] ^ c_flat[base + blk]
+    out = torch.empty_like(w)
+    out[order] = w
+    return out
+
+
+def decode_segments(c: torch.Tensor, tags: torch.Tensor, window: int | None = None) -> torch.Tensor:
+    """`W` of `G` whole segments from `C` (`[G, B, L]`) by `decode_blocks` (every block at once)."""
+    g, b, width = c.shape
+    blocks = torch.arange(g * b, device=c.device)
+    return decode_blocks(c.reshape(g * b, width), tags, blocks // b, blocks % b, b, window).view(g, b, width)
+
+
+def encode(w: torch.Tensor, tags: torch.Tensor, window: int | None = None) -> torch.Tensor:
+    """`C` of `G` segments from `W` (`[G, B, L]`), block by block (`window` as in `decode_blocks`)."""
     g, b, width = w.shape
     c_bm = torch.zeros(b, g, width, dtype=torch.uint8, device=w.device)
     w_bm = w.transpose(0, 1)
     for i in range(b):
+        n = i if window is None else min(i, window)
         state = _initial(tags, i + 1, width)[i * g:].clone()
-        for j in range(1, i + 2):
-            if j <= i:
+        for j in range(1, n + 2):
+            if j <= n:
                 state[:, :width] = c_bm[i - j]
             else:
                 _pad(state, width)
