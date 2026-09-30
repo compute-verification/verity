@@ -1,6 +1,7 @@
 // Pearl-C's hashing kernels, arch-neutral (no wgmma, no bulk copies): BLAKE3's compression, hashing format -h1 (the message
-// digests, the tile leaves and the frame-b3 trees of A's rows and of the tile leaves, as `verity_pouw.audit` commits them) and
-// Pearl's lottery tickets.  pearl_c.cu includes it for sm_90a; hash.cu builds it alone for sm_120a.
+// digests, the tile leaves and the frame-b3 trees of A's rows and of the tile leaves, as `verity_pouw.audit` commits them), the
+// unit's seed_A over A's root and its subkeys, and Pearl's lottery tickets.  pearl_c.cu includes it for sm_90a; hash.cu builds it
+// alone for sm_120a.
 #pragma once
 #include <cstdint>
 
@@ -293,6 +294,46 @@ extern "C" __global__ void __launch_bounds__(128) hash_tree_leaves(const Args a)
   load_key(a.p[0] + t * 32, d);
   b3_short<96>(key, [&](int j) { return j < 64 ? header_byte(j, t, TILE_SCHEMA, 19) : cv_byte(d, j - 64); }, h);
   store_cv(a.p[1] + t * 32, h);
+}
+
+// Seeds: -h3's row seeds and a unit's seed_A, each the standard keyed BLAKE3 under the seed-A label's key (p2,
+// blake3("pearl-c/v0/seed-A")) of salt ‖ root ‖ root_B ‖ u64 LE ι (104 bytes: two blocks).  i2 = 1: row r of i0 rows, root its
+// leaf (p0 + 32 r) and ι = i1 · 2^32 + r (`pearl_c.row_seed`, the one-row unit's seed_A); i2 = 0: the unit's, root p0 and
+// ι = i1 (`pearl_c.unit_seed_a`).  p0 leaves or the root, p1 out (32 B a seed), p2 the key, p3 salt, p4 root_B; i0 rows,
+// i1 the unit index, i2 the mode
+extern "C" __global__ void __launch_bounds__(128) b3_seeds(const Args a) {
+  const uint64_t r = (uint64_t)blockIdx.x * blockDim.x + threadIdx.x;
+  if (r >= (uint64_t)a.i[0]) return;
+  uint32_t key[8], m[16], cv[8];
+  load_key(a.p[2], key);
+  load_key(a.p[3], m);
+  load_key(a.p[0] + 32 * r, m + 8);
+  b3c(key, m, 0, 64, B3_KEYED | B3_START, cv);
+  const uint64_t iota = a.i[2] ? ((uint64_t)(uint32_t)a.i[1] << 32 | r) : (uint64_t)(uint32_t)a.i[1];
+  uint32_t m2[16] = {0};
+  load_key(a.p[4], m2);
+  m2[8] = (uint32_t)iota;
+  m2[9] = (uint32_t)(iota >> 32);
+  b3c(cv, m2, 0, 40, B3_KEYED | B3_END | B3_ROOT, cv);
+  store_cv(a.p[1] + 32 * r, cv);
+}
+
+// A seed's two subkeys (`pearl_kw.subkey`): BLAKE3 keyed by the seed over "pearl/v4/FP8/noise-line", the key E's lines are
+// drawn from, and over "pearl/v4/FP8/jackpot", the tickets' key.  p0 the seed, p1 out (the line key, then the jackpot key)
+__constant__ uint8_t NOISE_LINE_LABEL[23] = {'p', 'e', 'a', 'r', 'l', '/', 'v', '4', '/', 'F', 'P', '8', '/', 'n', 'o', 'i', 's', 'e',
+                                             '-', 'l', 'i', 'n', 'e'};
+__constant__ uint8_t JACKPOT_LABEL[20] = {'p', 'e', 'a', 'r', 'l', '/', 'v', '4', '/', 'F', 'P', '8', '/', 'j', 'a', 'c', 'k', 'p',
+                                          'o', 't'};
+extern "C" __global__ void __launch_bounds__(32) seed_subkeys(const Args a) {
+  const int t = threadIdx.x;
+  if (blockIdx.x || t > 1) return;
+  uint32_t key[8], h[8];
+  load_key(a.p[0], key);
+  if (t == 0)
+    b3_short<23>(key, [&](int j) { return (uint32_t)NOISE_LINE_LABEL[j]; }, h);
+  else
+    b3_short<20>(key, [&](int j) { return (uint32_t)JACKPOT_LABEL[j]; }, h);
+  store_cv(a.p[1] + 32 * t, h);
 }
 
 // Pearl's tickets: per 16 x 16 subtile of C~, the 16-lane fold (lane (rb, cb) folds its 4 x 4 block row-major,

@@ -309,7 +309,8 @@ def serve(conn, args, group: str, beacon: bytes) -> None:
             run.hashing = False
             ready["gate"] += gate(run, weights)
             run.hashing = True
-            ready.update(committer=run.details["committer"], excluded_b=sum(run.details["excluded_b"].values()))
+            ready.update(committer=run.details["committer"], excluded_b=sum(run.details["excluded_b"].values()),
+                         forms=run.details.get("forms"))
         conn.send(ready)
         one = SamplingParams(temperature=0.0, max_tokens=1, ignore_eos=True)
         many = SamplingParams(temperature=0.0, max_tokens=1 + STEPS, ignore_eos=True)
@@ -688,6 +689,7 @@ def main() -> None:
 
     def arm_steps(arm: Worker, last: bool) -> None:
         ready["arm"] = arm.ready
+        out["forms"] = arm.ready.get("forms")
         if not all(g["ok"] for g in arm.ready["gate"]):
             raise SystemExit("the arm's gate failed: " + json.dumps([g for g in arm.ready["gate"] if not g["ok"]]))
         for mode in ("bf16", "pearlc-nohash", "pearlc"):

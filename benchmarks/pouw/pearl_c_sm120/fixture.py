@@ -14,9 +14,11 @@ with these bytes before it times anything.
 The instance is a one-unit epoch as `verity_pouw.audit` starts it, hashing format -h1: B's frame-b3 row tree, the salt from
 the beacon and B's root, A's frame-b3 row tree, and the noise from A's committed root (so E_A's line key is an output the
 device derives, `line_a`).  Writes OUT_DIR/check.json (the shape, keys, seeds, and per buffer its file, dtype and SHA-256)
-and the buffers as raw little-endian files: `common` (both row trees, seed_A and E_A's line key, lines, inputs, forming, the
-plain and adopted baselines) and per variant (`sm120`, `sm120-unpromoted`) the chains and everything after them, through
-the message digests, the tile leaves and the tile tree.
+and the buffers as raw little-endian files: `common` (both row trees, seed_A and E_A's line key, lines, inputs, forming,
+stats_s5's screen of the per-row rules on both sides' rows and on `screen_rows` (`xs`, `live_s`), the plain and adopted
+baselines) and per variant (`sm120`, `sm120-unpromoted`, and `sm120-hot`: v2-hot's H_i per row, then the
+unpromoted chain from it, `crosscheck_hot` in place of the scheme's) the chains and everything after them, through the
+message digests, the tile leaves and the tile tree.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ W = _load("pearl_c_twin", HERE.parent / "pearl_c" / "twin.py")
 
 from verity.commitments.blake3 import blake3  # noqa: E402
 from verity.ml.kernels import group_sum_total_batch  # noqa: E402
+from verity.ml.tc import fp32  # noqa: E402
 from verity_pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
                                rows_domain, transcript_domain, weight_binding)
 from verity_pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
@@ -57,6 +60,8 @@ from verity_pouw.schemes.pearl_c_device import (  # noqa: E402
 )
 
 VARIANTS = (SM120, SM120_UNPROMOTED)
+#: v2-hot (run.py's `sm120-hot`): SM120_UNPROMOTED's chain from each row's H_i, U the peel of fl(C~ - H_i); not yet a scheme
+HOT = "sm120-hot"
 CASE, INDEX, WEIGHT = H.CASE, H.INDEX, H.WEIGHT
 BEACON = b"verity-pouw/pearl-c-sm120-gpu-check/beacon"
 
@@ -102,6 +107,98 @@ def product(device: Device, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """C.chain on `device` for every cell of codes a (rows x k) and b, through the twin's batched chain."""
     ii, jj = H.grid(a.shape[0], b.shape[0])
     return W.chain(a, b, ii, jj, device=device).reshape(a.shape[0], b.shape[0])
+
+
+def hot_starts(seed_a: bytes, alpha: list[int], rho: list[int]) -> np.ndarray:
+    """v2-hot's H_i per row (v2-hot-start-rule.md, the public constant 64): bit 31 and bits 0-22 of the first 4 bytes of the
+    keyed line hash of E_A's line key at (side 0, factor 2, line i), with exponent field e_i + 127, where t = fl32(alpha_i
+    rho_i) and e_i = E(t) + 10 + [M(t) >= 0x3504F4] (the field mod 256 off the domain, as hot_a takes it)."""
+    key, out = P._line_key(seed_a), []
+    for i, (al, r) in enumerate(zip(alpha, rho)):
+        w = int.from_bytes(P.keyed(key, (bytes([0, 2]) + i.to_bytes(4, "little")).ljust(64, b"\0"))[:4], "little")
+        t = fp32.mul(al, r)
+        field = ((t >> 23 & 0xFF) + 10 + ((t & 0x7FFFFF) >= 0x3504F4)) & 0xFF
+        out.append((w & 0x807FFFFF) | field << 23)
+    return np.array(out, np.uint32)
+
+
+LIVE_BAND = 2.0 ** -10
+
+
+def screen_verdict(row: bytes, shortcut: bool = True) -> int:
+    """stats_s5's screen of the per-row rules (pearl_c_sm120.cu's row_verdict) on one row of FP32 words, bit for bit: 0 the row
+    passes `pearl_c_work.row_passes`, 1 it fails, 2 the screen leaves it open (a row with a non-finite word among them).
+    `shortcut`: a row whose largest square is under the band passes without counting, as the kernel does."""
+    x = np.frombuffer(row, "<u4")
+    if not np.isfinite(x.view("<f4")).all():
+        return 2
+    k, words = x.size, [int(w) for w in x]
+    part = [0] * 32
+    for i, p in enumerate(range(0, k, C.S5_STRIDE)):
+        part[i % 32] = fp32.fma(words[p], words[p], part[i % 32])
+    for o in (16, 8, 4, 2, 1):
+        part = [fp32.add(part[j], part[j ^ o]) for j in range(32)]
+    _, rho, alpha, _ = C.s5_stats(words)
+    if not P.f32_of_bits(fp32.fma(rho, alpha, P.f32_bits(-1.0))) >= 0.0:
+        return 1
+    s64 = fp32.mul(P.f32_bits(64.0), part[0])
+    t = fp32.div(s64, P.f32_bits(float(-(-k // 8)))) if s64 & 0x7F800000 != 0x7F800000 else s64
+    if k > 1 << 20 or not 2.0 ** -96 <= P.f32_of_bits(t) <= 2.0 ** 126:
+        return 2
+    hi, lo = (P.f32_of_bits(fp32.mul(t, P.f32_bits(1 + s * LIVE_BAND))) for s in (1, -1))
+    q = x.view("<f4") * x.view("<f4")
+    if shortcut and q.max() < lo:
+        return 0
+    dead, band = int((q > hi).sum()), int((~(q > hi) & ~(q < lo)).sum())
+    return 1 if 64 * dead > k else 0 if 64 * (dead + band) <= k else 2
+
+
+def screen_rows(k: int) -> list[bytes]:
+    """Rows for the screen's gate at depth k, each verdict and each way to reach it: Gaussian rows (pass), 15, 16 and 17
+    dead entries at 16 rho off the stride (k = 1,024: pass, pass, fail), 16 dead and one at the threshold (open), a
+    heavy-tailed batch (Student's t at 1, 2 and 3 degrees of freedom), one outlier over 444 rho (the floor), zeros (the
+    floor), stride squares near 2^127 (the band would overflow: open), and a NaN and an infinity off the stride (open)."""
+    rng, out = np.random.default_rng(29), []
+    gauss = lambda: rng.standard_normal(k).astype(np.float32)  # noqa: E731
+    def thr(x):
+        return 64.0 * float((x[::C.S5_STRIDE].astype(np.float64) ** 2).sum()) / len(range(0, k, C.S5_STRIDE))
+    off = [p for p in range(k) if p % C.S5_STRIDE]
+    for _ in range(8):
+        out.append(gauss())
+    for d, at in ((15, False), (16, False), (17, False), (16, True)):
+        x = gauss()
+        x[off[:d]] = np.float32(2 * np.sqrt(thr(x)))
+        if at:
+            x[off[d]] = np.float32(np.sqrt(thr(x)))
+        out.append(x)
+    for df in (1, 2, 3):
+        for _ in range(8):
+            out.append(rng.standard_t(df, k).astype(np.float32))
+    x = gauss()
+    x[1] = np.float32(1000 * np.abs(x).max())
+    out.append(x)
+    out.append(np.zeros(k, np.float32))
+    out.append(np.full(k, np.float32(1.2 * 2.0 ** 60)))
+    for bad in (np.nan, np.inf):
+        x = gauss()
+        x[off[0]] = np.float32(bad)
+        out.append(x)
+    return [x.astype("<f4").tobytes() for x in out]
+
+
+def product_hot(device: Device, a: np.ndarray, b: np.ndarray, start: np.ndarray) -> np.ndarray:
+    """The unpromoted chain on `device` for every cell of codes a and b, row i's accumulator starting at start[i]."""
+    assert device.g is None
+    ii, jj = H.grid(a.shape[0], b.shape[0])
+    acc = start[ii].astype(np.uint32)
+    for s in range(0, a.shape[1], C.SLICE):
+        acc = group_sum_total_batch(device.atom, acc, a[ii, s:s + C.SLICE], b[jj, s:s + C.SLICE])[0]
+    return acc.reshape(a.shape[0], b.shape[0])
+
+
+def removed(c: np.ndarray, start: np.ndarray) -> np.ndarray:
+    """fl(C~ - H_i) per word, FP32 nearest even."""
+    return (c.view(np.float32) - start.view(np.float32)[:, None]).view(np.uint32)
 
 
 def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np.ndarray:
@@ -177,6 +274,10 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         o.put(f"ep{tag}_codes", np.array(side.ep, np.uint8), "u8")
         inv[tag] = H.recip(np.array(side.alpha, np.uint32))
         o.put(f"ia_{tag}", inv[tag], "u32")
+    for tag, rows in (("a", ra), ("b", rb), ("s", screen_rows(k))):
+        o.put(f"live_{tag}", np.array([screen_verdict(r) for r in rows], "<u4"), "u32")
+        if tag == "s":
+            o.put("xs", b"".join(rows), "u8")
     at, bt = np.array(a.codes, np.uint8), np.array(b.codes, np.uint8)
     o.put("at", rowmajor(k32(at)), "u8")
     o.put("bt", rowmajor(k32(bt)), "u8")
@@ -197,8 +298,9 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     manifest["common"] = o.files
 
     be_a, be_b = np.array(C.scaled_noise(a, e_a), np.uint16), np.array(C.scaled_noise(b, e_b), np.uint16)
-    for device in VARIANTS:
-        vdir = out_dir / device.name
+    hot = hot_starts(noise.seed_a, a.alpha, a.rho)
+    for name, device, start in [(d.name, d, None) for d in VARIANTS] + [(HOT, SM120_UNPROMOTED, hot)]:
+        vdir = out_dir / name
         vdir.mkdir(exist_ok=True)
         v = H.Out(vdir)
         g = product(device, fbT128, faT)
@@ -210,8 +312,13 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         pa, pb = H.pa_rows(be_a, af), H.pb_rows(be_b, bf, g)
         v.put("pa_t", rowmajor(H.bf16_bytes(pa)), "u8")
         v.put("pb_t", rowmajor(H.bf16_bytes(pb)), "u8")
-        c = product(device, at, bt)
-        u = peel_np(device, c, pa, pb)
+        if start is None:
+            c = product(device, at, bt)
+            u = peel_np(device, c, pa, pb)
+        else:
+            v.put("hot_a", start, "u32")
+            c = product_hot(device, at, bt, start)
+            u = peel_np(device, removed(c, start), pa, pb)
         v.put("c", c, "u32")
         v.put("u", u, "u32")
         v.put("y", H.glue_y(u, inv["a"], inv["b"]), "u16")
@@ -220,9 +327,12 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         v.put("digests", dg, "u8")
         v.put("leaves", lv, "u8")
         v.put("tree_t", H.tree_bytes(dom_t, lv, TILE_SCHEMA), "u8")
-        agree = crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n)
-        manifest["variants"][device.name] = {"scheme": C.PearlC(forming="v1", device=device, hashing="h1").name, "g": device.g,
-                                             "files": v.files, "crosscheck": agree}
+        if start is None:
+            scheme, agree = (C.PearlC(forming="v1", device=device, hashing="h1").name,
+                             crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n))
+        else:
+            scheme, agree = None, crosscheck_hot(device, at, bt, pa, pb, start, c, u)
+        manifest["variants"][name] = {"scheme": scheme, "g": device.g, "files": v.files, "crosscheck": agree}
     (out_dir / "check.json").write_text(json.dumps(manifest, indent=1) + "\n")
     return manifest
 
@@ -242,6 +352,20 @@ def crosscheck(device, ctx, ra, rb, at, bt, pa, pb, c, u, lv, n) -> dict:
     assert s.admissible(ctx, ops)
     assert s.digest(ctx, noise, checked) == lv[(n // 64) + n // 64 - 1]
     return {"tile": [64, n - 64], "cells": 64 * 64, "agree": True}
+
+
+def crosscheck_hot(device, at, bt, pa, pb, start, c, u, cells: int = 64) -> dict:
+    """v2-hot, which no scheme states yet: `cells` words (row i, column (7 i + 3) mod n) through the scheme's own steps, the
+    record's atoms from H_i (pearl_c.chain's unpromoted loop), fp32.add of -H_i, and pearl_c.peel."""
+    m, n = c.shape
+    for t in range(cells):
+        i, j = (5 * t) % m, (7 * t + 3) % n
+        acc = int(start[i])
+        for s in range(0, at.shape[1], C.SLICE):
+            acc = C._check_finite(device.atom.step(acc, at[i, s:s + C.SLICE].tolist(), bt[j, s:s + C.SLICE].tolist()))
+        assert acc == int(c[i, j]), (i, j)
+        assert C.peel(fp32.add(acc, fp32.neg(int(start[i]))), pa[i].tolist(), pb[j].tolist(), device) == int(u[i, j]), (i, j)
+    return {"cells": cells, "agree": True, "by": "the record's atoms from H_i, fp32.add of -H_i, pearl_c.peel"}
 
 
 if __name__ == "__main__":

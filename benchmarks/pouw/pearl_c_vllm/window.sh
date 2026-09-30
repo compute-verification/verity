@@ -22,6 +22,8 @@
 # group a chunk with CHUNK_MIN=0, exiting 99 while groups remain.  OUT names the output directory where there is no research
 # run (a fill job).  SCHEDULE (serial, the default, or deferred) and SCHEME (the Pearl-C scheme, and so its hashing format)
 # pass to e2e.py and profile_decode.py; the quality run names its own schemes.  GRAPHS=1 passes --graphs to e2e.py, FP8_GRAPHS=1 --fp8-graphs.
+# GPU 1's forms (PEARLC_A_FORMS, PEARLC_FORMING) reach run.py, GPU 1's check included, through the environment; forms.txt
+# records them.  The device run refuses PEARLC_EPILOGUE=w.
 set -euo pipefail
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
 MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
@@ -43,6 +45,7 @@ touch "$OUT/.started"
 trap 'find "$HOME/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
 
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
+echo "PEARLC_A_FORMS=${PEARLC_A_FORMS:-w,nodes} PEARLC_FORMING=${PEARLC_FORMING:-split} PEARLC_EPILOGUE=${PEARLC_EPILOGUE:-b}" > "$OUT/forms.txt"
 grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/identity.csv" || fail IDENTITY "$(cat "$OUT/identity.csv")"
 
 mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-$OUT/inputs/pearl-c-sm120-ship.tar}" -C "$OUT/ship"

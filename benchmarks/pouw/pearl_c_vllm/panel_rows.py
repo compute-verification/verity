@@ -38,6 +38,10 @@ def interleaving(summary: dict) -> str:
 BY = os.environ.get("PANEL_BY", "bc-dd22acf8")
 
 
+#: GPU 1's default forms (pouw_pearl_c_device.forms_of), which a row doesn't name
+DEFAULT_FORMS = "w,nodes/split"
+
+
 def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[float, str] | None = None) -> list[list[str]]:
     res, summary, run = e2e["results"], e2e["summary"], e2e.get("run")
     bad = [f"gates of {m}" for m, ok in summary["gates"].items() if not ok]
@@ -58,11 +62,13 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
         s = summary["split"][key]
         clocks = {m: ",".join(str(r["clock"]["sm_mhz"]) for r in res[m]["reps"][reps]) for m in ("pearlc", "fp8")}
         graphs = bool(e2e.get("graphs")) and phase == "decode"
+        forms = e2e.get("forms")
         split = (f"hashing and records {s['hashing_x_fp8']:.3f}, the rest {s['gemm_x_fp8'] + s['else_x_fp8']:.3f}; no GEMM "
                  "split: the GEMM runs inside the call's graph" if graphs else
                  f"GEMM {s['gemm_x_fp8']:.3f}, hashing and records {s['hashing_x_fp8']:.3f}, else {s['else_x_fp8']:.3f}")
         desc = (f"PoUW MVP e2e: Llama-3.1-8B-Instruct in vLLM (BF16, TP 1, eager) with every linear committed by "
-                f"pouw_pearl_c_device{' (--graphs: each decode call one CUDA graph, #593)' if e2e.get('graphs') else ''}; "
+                f"pouw_pearl_c_device{' (--graphs: each decode call one CUDA graph, #593)' if e2e.get('graphs') else ''}"
+                f"{f' (GPU 1 forms {forms})' if forms and not forms.startswith(DEFAULT_FORMS) else ''}; "
                 f"{phase} {'one 8,192-token prompt' if phase == 'prefill' else '32 sequences, per step'}; "
                 f"over stock vLLM FP8 {s['slowdown_vs_fp8']:.3f}x ({split}), over BF16 {s['slowdown_vs_bf16']:.3f}x; "
                 + (f"over stock FP8 as vLLM serves it (compiled, CUDA graphs) {s['slowdown_vs_fp8_graphs']:.3f}x; "

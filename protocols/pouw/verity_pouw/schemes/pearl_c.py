@@ -112,6 +112,11 @@ def _labelled(message: bytes, role: str) -> bytes:
     return keyed(blake3(LABELS[role]), message)
 
 
+def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int) -> bytes:
+    """A unit's seed_A: H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE)."""
+    return _labelled(salt + root_a + root_b + index.to_bytes(8, "little"), "seed-A")
+
+
 def _word(x: float) -> int:
     return P.f32_bits(x)
 
@@ -452,8 +457,7 @@ class PearlC:
 
     def noise(self, ctx: Context) -> Noise:
         seed_b = _labelled(ctx.salt + ctx.root_b, "seed-B")
-        seed_a = _labelled(ctx.salt + ctx.root_a + ctx.root_b + ctx.matmul.index.to_bytes(8, "little"), "seed-A")
-        return Noise(seed_a, seed_b)
+        return Noise(unit_seed_a(ctx.salt, ctx.root_a, ctx.root_b, ctx.matmul.index), seed_b)
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], side: int, seed_e: bytes, seed_b: bytes, k: int
               ) -> tuple[P.Built | Formed, list[list[int]]]:

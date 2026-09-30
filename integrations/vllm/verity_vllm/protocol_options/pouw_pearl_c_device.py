@@ -50,6 +50,11 @@ schedule changes only between passes (`begin`), and one whose placement this pat
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
 records.  What is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
 passes, never within one.
+
+GPU 1's forms (`forms_of`) come from ``run.py``'s environment and write the same bytes.  Under rows form ``s``
+(``PEARLC_A_FORMS=s,one``) A's row leaves and stats_a's words are one kernel (``hash_rows_a``), so a call has no ``stats_a``
+step, and the no-hash pipeline takes rows form ``w`` to form on stats_s5's words.  Epilogue ``w`` is refused: it writes the
+tile leaves inside ``gemm_pearlc``, where the no-write controls can't omit them.
 """
 from __future__ import annotations
 
@@ -418,7 +423,8 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
         _put(keys[32:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32}, variant=variant)
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32}, variant=variant,
+                         device=weight.device)
         _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
         out[w] = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
     return out
@@ -501,17 +507,37 @@ def _weight_binding(w: int) -> bytes:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, variant: str = "sm120") -> Any:
+              m_real: int | None = None, variant: str = "sm120", device: Any = None) -> Any:
+    """GPU 1's pipeline over the caller's buffers.  With `device`, its trees' counters (``ctr_a``, ``ctr_b``, ``ctr_t``: the
+    ``one`` tree form's, zero between launches) are a zeroed block of its own, kept on the pipeline and outside every buffer
+    a pass poisons."""
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "unit": 0, **keys}
-    return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real)
+    counters = None
+    if device is not None:
+        counters = _zeros(16, device)
+        bufs = {**{f"ctr_{tag}": counters.data_ptr() + 4 * j for j, tag in enumerate("abt")}, **bufs}
+    pipe = kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real)
+    pipe.counters = counters
+    return pipe
+
+
+def forms_of(kernel: Kernel) -> str:
+    """The forms GPU 1's ``run.py`` took from its environment at load: A's row and tree forms (``PEARLC_A_FORMS``), the
+    forming (``PEARLC_FORMING``) and the fused epilogue (``PEARLC_EPILOGUE``).  They change the kernels, not the bytes."""
+    R = kernel.run
+    return (f"{getattr(R, 'ROWS_FORM', 'w')},{getattr(R, 'TREE_FORM', 'nodes')}/{getattr(R, 'FORMING', 'split')}"
+            f", epilogue {getattr(R, 'EPILOGUE', 'b')}")
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
     """The named steps in order.  A tree's pads and level keys exist only where the tree needs them, and on the fused path
     (``pipe.fused``: 128 x 128 tiles over every row) ``gemm_pearlc`` writes the message digests itself, so ``hash_msg`` isn't
-    a step."""
+    a step.  Under GPU 1's rows form ``s`` (``PEARLC_A_FORMS=s,one``) ``hash_rows_a`` writes stats_a's words with A's row
+    leaves, so ``stats_a`` isn't a step either."""
     by = {name: f for name, _, f in pipe.steps()}
     optional = {"hash_msg"} if getattr(pipe, "fused", False) else set()
+    if getattr(pipe, "rows_form", "w") == "s":
+        optional.add("stats_a")
     missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_")) and x not in optional]
     if missing:
         raise RuntimeError(f"the kernel's pipeline has no steps {missing}")
@@ -535,6 +561,9 @@ class PearlCDeviceRun:
                  salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
                  schedule: str | Schedule = SERIAL, graphs: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
+        if getattr(kernel.run, "EPILOGUE", "b") != "b":
+            raise ValueError(f"{entry}: epilogue {kernel.run.EPILOGUE} writes the tile leaves inside gemm_pearlc, so the "
+                             "no-write controls could not omit them; this path takes epilogue b")
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
@@ -569,6 +598,7 @@ class PearlCDeviceRun:
             "host": {"keys": "native blake3" if self.keys.native else "verity.commitments.blake3 (pure Python)",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None, "graphs": f"calls of at most {GRAPH_ROWS} rows, serial schedule" if self.graphs else None,
+            "forms": forms_of(kernel),
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -607,7 +637,7 @@ class PearlCDeviceRun:
         _put(keys, kk["line_b"] + kk["dom_b"])
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32}, variant=self.variant)
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32}, variant=self.variant, device=weight.device)
         stream = _stream(weight.device)
         _run(K, pipe, EPOCH_STEPS, stream)
         root = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
@@ -663,7 +693,11 @@ class PearlCDeviceRun:
                     "leaves": 0}
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": sh.keys.data_ptr(),
                     "unit": sh.keys.data_ptr() + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
-            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant)
+            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
+                             device=self.device)
+            if not self.hashing and getattr(pipe, "rows_form", "w") == "s":
+                # without hashing there is no hash_rows_a, which under `s` is what writes stats_a's words
+                pipe.rows_form, pipe.tree_form = "w", "nodes"
             names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)

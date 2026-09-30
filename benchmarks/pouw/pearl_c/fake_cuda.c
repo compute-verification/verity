@@ -23,7 +23,7 @@ enum { CUDA_SUCCESS = 0, CUDA_ERROR_INVALID_VALUE = 1, CUDA_ERROR_OUT_OF_MEMORY 
 enum { CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75,
        CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8 };
 
-enum { MAX_ALLOC = 4096, MAX_FN = 64 };
+enum { MAX_ALLOC = 4096, MAX_FN = 256 };
 struct Alloc { uintptr_t base; size_t size; };
 static struct Alloc g_alloc[MAX_ALLOC];
 static int g_nalloc, g_mod, g_ctx;
@@ -46,9 +46,12 @@ static void load_names(void) {
   g_nfn = 0;
   const char* s = getenv("FAKE_KERNELS");
   if (!s) return;
-  char buf[4096];
-  snprintf(buf, sizeof buf, "%s", s);
-  for (char* t = strtok(buf, ","); t && g_nfn < MAX_FN; t = strtok(NULL, ",")) snprintf(g_names[g_nfn++], 64, "%s", t);
+  char buf[16384];
+  if (snprintf(buf, sizeof buf, "%s", s) >= (int)sizeof buf) { fprintf(stderr, "fake_cuda: FAKE_KERNELS too long\n"); abort(); }
+  for (char* t = strtok(buf, ","); t; t = strtok(NULL, ",")) {
+    if (g_nfn == MAX_FN) { fprintf(stderr, "fake_cuda: more than %d names in FAKE_KERNELS\n", MAX_FN); abort(); }
+    snprintf(g_names[g_nfn++], 64, "%s", t);
+  }
 }
 
 CUresult CUDAAPI cuInit(unsigned int flags) { return flags ? CUDA_ERROR_INVALID_VALUE : CUDA_SUCCESS; }

@@ -1,4 +1,4 @@
-"""Pearl-C's FP8 arm for GPU 6's bench harness (arm interface v0.4, `benchmarks/pouw/harness/arm.py`): pearl_c_sm120.cu's
+"""Pearl-C's FP8 arm for GPU 6's bench harness (arm interface v0.5, `benchmarks/pouw/harness/arm.py`): pearl_c_sm120.cu's
 kernels as the honest prover of `pearl-c-sm120-v1-h1` on the harness's FP32 operands, on the device record
 `pearl_c_device.SM120` (G = 4, the panel's `pearl-c-sm120` v1-h1) or `SM120_UNPROMOTED` (v2-h1).
 
@@ -20,8 +20,8 @@ buffers and weight side (its flag sets share them: the harness runs one call of 
 has per-shape buffers.
 
 The gate, at the exact shape and flag set: a second, unfused launch into the gate's own buffers (with hashing A's tree and
-seed_A; C̃ by gemm_ct, another kernel; C̃, U and y by gemm_pearlc on 3 CTAs, another tile schedule; hash_msg_v and the other
-hashes over those) must equal every output word for word, so the fused call's digests are held to hash_msg_v's, and gemm_ct's
+seed_A, the trees by other kernels, run.ALT_FORMS; C̃ by gemm_ct, another kernel; C̃, U and y by gemm_pearlc on 3 CTAs,
+another tile schedule; hash_msg_v and the other hashes over those) must equal every output word for word, so the fused call's digests are held to hash_msg_v's, and gemm_ct's
 C̃ the call's (or, where it stores none, the second launch's); with hashing, seed_A and E_A's line key must be the scheme's
 from the device's root_A; and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes (the twin's in
 the kernels' K32 order, `fixture.k32`) and α, C̃, U (the second launch's where the call stores none) and y must equal #449's
@@ -29,18 +29,24 @@ CPU twin
 (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the harness's operand rows and the call's seeds, and with
 hashing the tile's leaf the scheme's over its real rows, that leaf's in the tile tree and row r0's in A's tree the verifier's
 (`CommitmentDomain.leaf`).  `known_bad` flips C̃'s first word (the first message digest's, where the call stores no C̃)
-between the product and the hashes.  `build` names the cubin (`binaries`) and the verifier the harness runs after the lease
-(`verify.py` over the run's transcripts).
+between the product and the hashes.  `build` names the cubin (`binaries`), the verifier the harness runs after the lease
+(`verify.py` over the run's transcripts), the kernel `variant` (`ledger.variant_record`: the cubin's sources and run.py, the
+priced path `PRICES`) and the attempt's `lineage` (the forms' mechanism tags, the panel line and version; PEARLC_LINEAGE, a
+JSON object by arm name, adds the run's parent and panel attempt).
 
-The transcript: when the harness frees a gated hash call of operand set 0, the arm fills every buffer of the set but its
-tensor maps with 0xA5 (the trees, the tile leaves and what the weight side wrote among them), runs the weight side and the
-call once more on the set's operands, and writes what the prover publishes and opens: `transcripts/<arm>/<shape>/manifest.json`
+The transcript: the harness makes it (arm interface v0.5, `bench.poison_dump`) after the timed items. It fills
+`call.transcript_buffers` with 0xA5: every buffer of the set but its tensor maps and the one-launch trees' counters
+(`UNPOISONED`), and a padded A's real rows.  It runs the weight side and the call, and `dump` writes what the prover
+publishes and opens; then it poisons them again, launches nothing, and `dump` writes the no-write control
+(`HARNESS_NEGATIVE`) under `negative/`.  Under a harness without `dump`, freeing a gated hash call of operand set 0 does
+the same itself: the buffers poisoned, the weight side and the call once more on the set's operands, then the dump:
+`transcripts/<arm>/<shape>/manifest.json`
 in the run's directory (the scheme, the matmul, the beacon, the salt, the weight root, A's root, the tile tree's commitment,
 and every file with its SHA-256), the levels of A's, B's and the tile tree and the tile leaves beside it, and the harness's
-A and B rows (up to 512 MB at 8,192²) under PEARLC_ROWS (default: a temporary directory).  Then the negative control, the
-same dump into `negative/<arm>/<shape>/` after the buffers are poisoned again and the call runs without its commitment or
-the weight side (`NEGATIVE`).  `verify.py` runs `verity_pouw.audit.Verifier` on both after the lease, and passes only if it
-accepts the transcript and rejects its negative control.
+A and B rows (up to 512 MB at 8,192², once per shape) under PEARLC_ROWS (default: a temporary directory).  The arm's own
+negative control is the same dump into `negative/<arm>/<shape>/` after the buffers are poisoned again and the call runs
+without its commitment or the weight side (`NEGATIVE`).  `verify.py` runs `verity_pouw.audit.Verifier` on both after the
+lease, and passes only if it accepts the transcript and rejects its negative control.
 
 Shortcuts, flagged: m is padded to 64 rows (decode's m = 32 issues 2x its tensor work on 64 x 64 tiles, and `work` counts
 issued MACs); the prices (SM120_PRICES) and G are the device record's (its stand-ins listed in the build record), so W_ref,
@@ -59,6 +65,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 from fractions import Fraction
@@ -67,7 +74,13 @@ from pathlib import Path
 import numpy as np
 from arm import Buffer, Gate, Work
 
+try:
+    import ledger
+except ImportError:              # a harness before arm interface v0.5 (#583): the build names no variant, so nothing records
+    ledger = None
+
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[2]
 
 
 def _load(name: str, path: Path):
@@ -93,10 +106,10 @@ from verity_pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
 T = W.T
 KEYS = R.TIMING_KEYS
 WEIGHT = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b", "epb_codes",
-          "bt", "bf", "pb_t", "tree_b", "keys_b", "keys_a", "keys_t")
+          "bt", "bf", "pb_t", "tree_b", "keys_b", "keys_a", "keys_t", "ctr_b")
 OWN = WEIGHT + ("ea_codes", "line_a", "seed_a")   # E_A's lines and their seed are the set's: nohash reads the last call's
 CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y", "digests", "leaves", "tree_a",
-        "tree_t", "tma")
+        "tree_t", "ctr_a", "ctr_t", "tma")
 HASHED = ("digests", "leaves", "tree_a", "tree_t")
 REF = ("c2", "c", "u", "y", "line_a", "seed_a") + HASHED
 REF_BUFS = REF + ("tma",)                 # the second launch's own tensor maps
@@ -107,25 +120,59 @@ POISON = 0xA5
 NEGATIVE = ("the negative control: the call's buffers poisoned (0xA5) as before the transcript's call, then the call with A's "
             "row tree, seed_A, E_A's lines and every hash omitted and without the weight side, so it writes y (and C~ and U "
             "unfused) and nothing the transcript reads; the verifier must reject it")
-GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and the debit cap ρ (statement parameters, cheap-binding.md §1)
+HARNESS_NEGATIVE = ("the harness's no-write control (arm interface v0.5): the transcript's buffers poisoned (0xA5) again "
+                    "and nothing launched; the verifier must reject it")
+#: kept out of the poison: the tensor maps, and the one-launch trees' last-CTA counters, zero between launches (atomicInc
+#: over 0xA5 bytes restarts at 0 and never reaches the last CTA, so the tree's top would never be folded)
+UNPOISONED = ("tma", "ctr_a", "ctr_b", "ctr_t")
+#: the priced path the default forming runs (`price_twins`' name): form_s5's packed cast, measured at most 2.87 W1 units a
+#: code (GPU 1), so γ at a cast of 8.72 holds; another forming names none, and its records then publish no γ
+PRICES = {"split": "cast-8.72"}
+#: the arms' device records, whose schemes the one cubin serves
+VARIANTS = ("sm120", "sm120-unpromoted")
+#: what each A_FORMS form (run.FORMS) runs, as the ledger's mechanism tags
+MECHANISM = {("w", "nodes"): ("hash:h1-rows-warp", "hash:h1-tree-level-launches"),
+             ("p", "one"): ("hash:h1-rows-l2-256b", "hash:h1-tree-one-launch", "hash:h1-level-key-table"),
+             ("p", "fold"): ("hash:h1-commit-one-launch", "hash:h1-tiles-one-launch", "hash:h1-level-key-table"),
+             ("s", "one"): ("hash:h1-rows-stats-one-pass", "hash:h1-tree-one-launch", "hash:h1-level-key-table")}
+PHASE_GROUPS = {"before": ["a_tree", "screen", "forming", "cleanup"], "gemm": ["gemm"], "after": ["tile_hash"]}
+GAMMA0 = RHO_CAP = Fraction(1, 400)       # TT_OUT's γ0 and v1's debit cap ρ (statement parameters, cheap-binding.md §1)
+RHO_CAP_V2 = Fraction(1, 1000)            # v2's debit cap ρ, the panel's pearl-c-sm120 v2 line (the RTX PRO coordinator's 13:52Z)
 
 
 def padded(m: int) -> int:
     return -(-m // R.BM_D) * R.BM_D
 
 
-def gamma(scheme: C.PearlC, shape) -> dict[str, str]:
+def sources(cu: Path) -> list[Path]:
+    """The cubin's sources: `cu` and every file its `#include "..."` lines reach (build.sh passes no -I), and run.py, which
+    picks the kernels a call launches."""
+    out, todo = [], [cu.resolve()]
+    while todo:
+        f = todo.pop()
+        if f in out:
+            continue
+        out.append(f)
+        for inc in re.findall(r'^\s*#\s*include\s+"([^"]+)"', f.read_text(), re.MULTILINE):
+            p = (f.parent / inc).resolve()
+            if not p.exists():
+                raise FileNotFoundError(f"{f.name} includes {inc}, which isn't beside it")
+            todo.append(p)
+    return out + [HERE / "run.py"]
+
+
+def gamma(scheme: C.PearlC, shape, rho: Fraction = RHO_CAP) -> dict[str, str]:
     """γ at `shape` from the scheme's W_ref and credit (`bench.gamma`'s four readings on the H100): `cap`, the worst case under
-    the debit cap; `floor`, a zero debit; `*_chain_only`, TT_OUT crediting no forming."""
+    the debit cap ρ; `floor`, a zero debit; `*_chain_only`, TT_OUT crediting no forming."""
     s = MShape(shape.m, shape.k, shape.n)
     wref, credit = Fraction(scheme.wref(s)), Fraction(scheme.credit_of(s))
     forming = scheme.prices.forming_credited * s.m * s.k
-    out = {"cap": 1 - (1 - GAMMA0) * (1 - RHO_CAP) * credit / wref,
-           "cap_chain_only": 1 - (1 - GAMMA0) * (credit - forming - RHO_CAP * credit) / wref,
+    out = {"cap": 1 - (1 - GAMMA0) * (1 - rho) * credit / wref,
+           "cap_chain_only": 1 - (1 - GAMMA0) * (credit - forming - rho * credit) / wref,
            "floor": 1 - (1 - GAMMA0) * credit / wref,
            "floor_chain_only": 1 - (1 - GAMMA0) * (credit - forming) / wref}
     return {**{k: str(v) for k, v in out.items()},
-            "basis": f"Derived: TT_OUT γ0 = ρ = 1/400 on {scheme.device.name} at its record's prices, G = {scheme.device.g}"}
+            "basis": f"Derived: TT_OUT γ0 = {GAMMA0}, ρ = {rho} on {scheme.device.name} at its record's prices, G = {scheme.device.g}"}
 
 
 def expected(t, real: int, hashing: bool, ep: dict, tid: int, a_row: bytes) -> dict[str, bytes]:
@@ -204,6 +251,9 @@ class _Call:
         self.phases = {name: (lambda stream, fs=fs: self.enqueue(fs, stream)) for name, fs in self.parts.items()}
         names = ("y",) + self.stored + (HASHED if self.hashing else ())
         self.outputs = {name: Buffer(w[name], size[name]) for name in names}
+        self.transcript_buffers = {name: Buffer(w[name], size[name]) for name in OWN + CALL if name not in UNPOISONED}
+        if self.xa != ops.a.ptr:
+            self.transcript_buffers["xa"] = Buffer(self.xa, 4 * shape.m * k)
         if fresh:
             self.own.epoch = self.start_epoch(steps)
         self.enqueue(copy + commit, None)
@@ -251,15 +301,12 @@ class _Call:
         self.enqueue(self.weight, stream)
 
     def poison(self) -> None:
-        """Every buffer of the set but its tensor maps, and a padded A's real rows, filled with POISON: what the weight side
-        and a launch write, the transcript's trees and leaves among them."""
-        rd, w = self.arm.rd, self.own.b
+        """`transcript_buffers` filled with POISON: what the weight side and a launch write, the transcript's trees and
+        leaves among them."""
+        rd = self.arm.rd
         rd.sync()
-        for name in OWN + CALL:
-            if name != "tma":
-                rd.ck("cuMemsetD8_v2", R.u64(w[name]), POISON, self.size[name])
-        if self.xa != self.ops.a.ptr:
-            rd.ck("cuMemsetD8_v2", R.u64(self.xa), POISON, 4 * self.shape.m * self.k)
+        for b in self.transcript_buffers.values():
+            rd.ck("cuMemsetD8_v2", R.u64(b.ptr), POISON, b.nbytes)
         rd.sync()
 
     def free(self) -> None:
@@ -285,10 +332,11 @@ class _Call:
     def relaunch(self) -> dict[str, int]:
         """Words differing between each output and the second launch's, which is unfused (gemm_pearlc stores C̃ and U,
         hash_msg digests them); `c@gemm_ct` is gemm_ct's C̃ against the call's, or the second launch's where the call stores
-        none; with hashing, seed_A and E_A's line key too."""
+        none; with hashing, seed_A and E_A's line key too.  Its trees are run.ALT_FORMS'."""
         rd, s, w = self.arm.rd, self.scratch.b, self.own.b
         ref = R.Pipeline(rd, self.m, self.n, self.k, self.arm.variant, self.keys, self.xa, self.ops.b.ptr,
                          bufs={**self.pipe.b, **{b: s["ref_" + b] for b in REF_BUFS}}, m_real=self.shape.m, fused=False)
+        ref.rows_form, ref.tree_form = R.ALT_FORMS
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
         steps = {name: f for name, _, f in ref.steps()}
@@ -372,6 +420,7 @@ class PearlCSm120:
     flag_sets = {"hash": frozenset({"hash"}), "nohash": frozenset()}
     variant = "sm120"
     panel = {"line": "pearl-c-sm120", "version": "v1-h1"}
+    rho = RHO_CAP
     index = 0
 
     def __init__(self):
@@ -381,6 +430,7 @@ class PearlCSm120:
         self.rd = None
         self.out_dir: Path | None = None
         self.transcribed: dict[str, str] = {}
+        self.row_files: dict[str, dict] = {}
         self.scratch: dict = {}
         self.sets: dict = {}
 
@@ -413,7 +463,10 @@ class PearlCSm120:
                "cubin_sha256": hashlib.sha256(cubin.read_bytes()).hexdigest(),
                "binaries": [str(cubin)],
                "verifier": {"per": "run", "transcript": "transcripts/{arm}/{shape}/manifest.json",
+                            "control": "negative/{arm}/{shape}/manifest.json",
                             "commands": [["{python}", str(HERE / "verify.py"), "{run_dir}", "--commit", "{commit}"]]},
+               "forms": {"a": f"{R.ROWS_FORM},{R.TREE_FORM}", "forming": R.FORMING, "epilogue": R.EPILOGUE},
+               "lineage": self.lineage(),
                "call": "at 128 x 128 tiles over m = m_real rows the fused chain: gemm_pearlc_b stores y and the -h1 message "
                        "digests hashed from registers (C~, U never stored), gemm_pearlc_s y alone without hashing; else "
                        "gemm_pearlc(_d) stores C~, U, y and hash_msg_v digests them",
@@ -425,18 +478,33 @@ class PearlCSm120:
                        "key the scheme's from the device's root_A; sampled: benchmarks/pouw/pearl_c/twin.py at twin.samples' "
                        "tiles (C~ and U the second launch's where the call stores none), the tile leaf the scheme's over the "
                        "real rows, its tile-tree leaf and row r0's leaf the verifier's",
-               "transcript": "operand set 0's hash call, when the harness frees it: every set buffer but the tensor maps "
-                             "poisoned (0xA5), then the weight side and the call again, into transcripts/<arm>/<shape>/ "
-                             "(manifest.json, tree_a, tree_b, tree_t, leaves), the harness's A and B rows under PEARLC_ROWS; "
-                             "then poisoned again and the call without its commitment or the weight side into "
-                             "negative/<arm>/<shape>/; verify.py accepts the first and must reject the second",
+               "transcript": "the harness's (arm interface v0.5, bench.poison_dump) of operand set 0's hash call: every set "
+                             "buffer but the tensor maps and the tree counters poisoned (0xA5), then the weight side and the "
+                             "call, dumped into transcripts/<arm>/<shape>/ (manifest.json, tree_a, tree_b, tree_t, leaves), the "
+                             "harness's A and B rows under PEARLC_ROWS; then poisoned again, nothing launched, dumped into "
+                             "negative/<arm>/<shape>/; verify.py accepts the first and must reject the second.  Under a "
+                             "harness without dump, the arm's own when the harness frees the call, whose control runs the call "
+                             "without its commitment or the weight side",
                "shortcuts": ["m padded to 64 rows (64 x 64 tiles below 128 rows); work counts issued MACs",
                              "prices and G are the device record's (stand-ins listed); W_ref, credit and gamma Derived at those"]}
+        if ledger is not None:
+            rec["variant"] = ledger.variant_record(
+                family="pearl-c", device="sm120", root=REPO, binaries=[cubin], prices=PRICES.get(R.FORMING),
+                schemes={C.PearlC(forming="v1", device=DEVICES[v], hashing="h1").name for v in VARIANTS},
+                sources=sources(HERE / "pearl_c_sm120.cu"))
         for name in ("sass.json", "toolchain.txt", "source.txt"):
             p = ship / name
             if p.exists():
                 rec[name] = json.loads(p.read_text()) if name.endswith(".json") else p.read_text().strip()
         return rec
+
+    def lineage(self) -> dict:
+        """The attempt as the ledger records it: the forms' mechanism tags, the panel line and version, the chain's phases by
+        step group; PEARLC_LINEAGE (JSON, by arm name) adds what the run knows, such as its parent and panel attempt."""
+        out = {"approach": "pouw/pearl-c-sm120", "panel": dict(self.panel), "phase_groups": PHASE_GROUPS,
+               "mechanism": [*MECHANISM[(R.ROWS_FORM, R.TREE_FORM)], f"forming:{R.FORMING}", f"epilogue:{R.EPILOGUE}"]}
+        extra = json.loads(os.environ.get("PEARLC_LINEAGE") or "{}").get(self.name, {})
+        return {**out, **extra, "panel": {**out["panel"], **extra.get("panel", {})}}
 
     def domain(self, shape) -> str | None:
         if shape.k % 1024:
@@ -461,7 +529,7 @@ class PearlCSm120:
                                   "blake3/tree_nodes": 64 * (R.pow2(mr) - 1 + R.pow2(tiles) - 1),
                                   "blake3/tile_leaves": tiles * (64 + 32)},
                     weight_hashed_bytes={"blake3/rows": n * (64 + 4 * k), "blake3/tree_nodes": 64 * (R.pow2(n) - 1)},
-                    gamma=gamma(self.scheme, shape))
+                    gamma=gamma(self.scheme, shape, self.rho))
 
     def prepare(self, dev, shape, flags: frozenset[str], operands, corrupt: bool = False) -> _Call:
         return _Call(self, dev, shape, frozenset(flags), operands, corrupt)
@@ -487,29 +555,46 @@ class PearlCSm120:
         if self.out_dir is None or sh.label in self.transcribed:
             return
         out = self.out_dir / "transcripts" / self.name / sh.label
-        rows = Path(os.environ.get("PEARLC_ROWS") or tempfile.mkdtemp(prefix="pearlc-rows-")) / self.name / sh.label
-        rows.mkdir(parents=True, exist_ok=True)
         self.transcribed[sh.label] = str(out)
         rd = self.rd
         call.poison()                      # syncs first: the harness's stream is non-blocking
         call.weight_side(None)
         call.launch(None)
         rd.sync()
-        files = {}
-        for name, ptr, count in (("rows_a", call.ops.a.ptr, sh.m), ("rows_b", call.ops.b.ptr, sh.n)):
-            data = rd.read(ptr, 4 * count * sh.k)
-            (rows / f"{name}.bin").write_bytes(data)
-            files[name] = {"path": str(rows / f"{name}.bin"), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
-        self.dump(call, out, files, None)
+        files = self.rows(call)
+        self.write_transcript(call, out, files, None)
         call.poison()
         call.enqueue(call.uncommitted, None)
         rd.sync()
-        self.dump(call, self.out_dir / "negative" / self.name / sh.label, files, NEGATIVE)
+        self.write_transcript(call, self.out_dir / "negative" / self.name / sh.label, files, NEGATIVE)
         call.weight_side(None)
         call.launch(None)
         rd.sync()
 
-    def dump(self, call: _Call, out: Path, rows: dict, negative: str | None) -> None:
+    def dump(self, dev, call: _Call, shape, out: Path) -> None:
+        """Arm interface v0.5: the transcript as the harness's poisoned call left the device (`bench.poison_dump`), or under
+        `negative/<arm>/<shape>/` its no-write control (HARNESS_NEGATIVE); reads the device and computes nothing.  Freeing the
+        call then makes no transcript of its own."""
+        self.transcribed[shape.label] = str(out)
+        control = out.parent.parent.name == "negative"
+        self.write_transcript(call, out, self.rows(call), HARNESS_NEGATIVE if control else None)
+
+    def rows(self, call: _Call) -> dict:
+        """The harness's A and B rows of the call's operand set under PEARLC_ROWS, written once per shape: the manifest's
+        `rows_a` and `rows_b`."""
+        sh = call.shape
+        if sh.label not in self.row_files:
+            rows = Path(os.environ.get("PEARLC_ROWS") or tempfile.mkdtemp(prefix="pearlc-rows-")) / self.name / sh.label
+            rows.mkdir(parents=True, exist_ok=True)
+            files = {}
+            for name, ptr, count in (("rows_a", call.ops.a.ptr, sh.m), ("rows_b", call.ops.b.ptr, sh.n)):
+                data = self.rd.read(ptr, 4 * count * sh.k)
+                (rows / f"{name}.bin").write_bytes(data)
+                files[name] = {"path": str(rows / f"{name}.bin"), "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+            self.row_files[sh.label] = files
+        return self.row_files[sh.label]
+
+    def write_transcript(self, call: _Call, out: Path, rows: dict, negative: str | None) -> None:
         """The set's trees and tile leaves as they are on the device, and the manifest over them and `rows`."""
         rd, w, ep, size, sh = self.rd, call.own.b, call.own.epoch, call.size, call.shape
         out.mkdir(parents=True, exist_ok=True)
@@ -533,3 +618,4 @@ class PearlCSm120Unpromoted(PearlCSm120):
     name = "pearl-c-sm120-unpromoted-v1-h1"
     variant = "sm120-unpromoted"
     panel = {"line": "pearl-c-sm120", "version": "v2-h1"}
+    rho = RHO_CAP_V2

@@ -389,6 +389,44 @@ def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
     assert "ABAB blocks" in blocks[0][blocks[0].index("--description") + 1] and "OutOfMemoryError" in blocks[1][blocks[1].index("--description") + 1]
     with pytest.raises(SystemExit, match="negative control was not rejected"):
         PR.rows(*e2e_result(control_accepted=True), "panel.py")
+    e, v = e2e_result()
+    for forms, named in (("s,one/split, epilogue b", True), ("w,nodes/split, epilogue b", False)):
+        e["forms"] = forms
+        desc = PR.rows(e, v, "panel.py")[0]
+        assert ("GPU 1 forms s,one/split" in desc[desc.index("--description") + 1]) is named
+
+
+# ---- GPU 1's forms ---------------------------------------------------------------------------------------------------
+
+def test_under_rows_form_s_a_call_hashes_its_rows_with_stats_and_the_nohash_arm_forms_on_stats_s5(device_run, monkeypatch):
+    make, kernel, weights, *_ = device_run
+    monkeypatch.setattr(kernel.run, "ROWS_FORM", "s")
+    monkeypatch.setattr(kernel.run, "TREE_FORM", "one")
+    x = torch.randn(32, 1024).to(torch.bfloat16)
+    names = {}
+    for hashing in (True, False):
+        run = make(hashing=hashing)
+        assert run.details["forms"] == "s,one/split, epilogue b"
+        kernel.dev.log.clear()
+        run.gemm(0, x, weights[0], None)
+        names[hashing] = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
+    assert "h1_rows_stats" in names[True] and "stats_s5" not in names[True] and "form_s5" in names[True]
+    assert "stats_s5" in names[False] and "form_s5" in names[False]
+    assert not any(n.startswith(("h1_", "hash_")) for n in names[False])
+    run = make()
+    run.begin(retain=None)
+    run.poison()
+    run.gemm(0, x, weights[0], None)
+    tree = [p for n, _, p, _ in kernel.dev.log if n == "h1_tree"][-1]
+    (pipe, *_), = run.pipes.values()
+    assert tree[2] == pipe.counters.data_ptr() and not pipe.counters.any()
+
+
+def test_the_run_refuses_epilogue_w_whose_leaves_the_controls_cannot_omit(device_run, monkeypatch):
+    make, kernel, *_ = device_run
+    monkeypatch.setattr(kernel.run, "EPILOGUE", "w")
+    with pytest.raises(ValueError, match="epilogue w"):
+        make()
 
 
 # ---- the e2e's schedule and its assembly --------------------------------------------------------------------------

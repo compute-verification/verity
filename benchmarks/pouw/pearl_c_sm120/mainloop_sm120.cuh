@@ -3,7 +3,8 @@
 //
 // The chain is the scheme's, word for word: atom j is one m16n8k32 E4M3 mma.sync over k in [32 j, 32 j + 32), atoms in
 // ascending k.  With G = 4, every 4 atoms (one 128-byte stage) start from +0 and their sum is added into the FP32 total by
-// one FADD (RN), windows in ascending k, the total starting at +0; with G = 0 there is one accumulator over all of K.
+// one FADD (RN), windows in ascending k, the total starting at +0; with G = 0 there is one accumulator over all of K, from +0
+// or (tile's INIT, v2-hot's start) from the words the caller put in acc.
 //
 // The schedule is CUTLASS's sm_120 warp-specialized mainloop (collective/sm120_mma_tma_blockwise_scaling.hpp): a producer warp
 // loads 128 x 128-byte boxes of A and B by TMA (SWIZZLE_128B, so chunk c of row r sits at c ^ (r & 7)) into STAGES stages of
@@ -215,12 +216,12 @@ template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 4
   }
   // one stage: FIRST, the tile's first (no window before it); LAST, its last (nothing to load after it).  The stage is released
   // after the MMAs that read its last fragments (LATE) or right after its last ldmatrix (!LATE); mbar_release orders it after
-  // them either way
-  template <bool FIRST, bool LAST, bool LATE>
+  // them either way.  INIT (G = 0): the tile's first atom accumulates into acc as the caller set it, not +0
+  template <bool FIRST, bool LAST, bool LATE, bool INIT = false>
   ML_DEV void stage_body(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
     const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
-    mma<G != 0 || FIRST, G != 0 && !FIRST>(acc, total, fa[0], fb[0]);
+    mma<G != 0 || (FIRST && !INIT), G != 0 && !FIRST>(acc, total, fa[0], fb[0]);
     load(fa[0], fb[0], sb, 2);
     mma<false, false>(acc, total, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
@@ -234,8 +235,10 @@ template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 4
     mma<false, false>(acc, total, fa[1], fb[1]);
     if (LATE) mbar_release(done);
   }
-  // U: stages per K-loop iteration
-  template <int U = 1, bool LATE = true> ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
+  // U: stages per K-loop iteration; INIT: the chain starts from acc's words (the caller's), not +0
+  template <int U = 1, bool LATE = true, bool INIT = false>
+  ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
+    static_assert(!INIT || G == 0, "a start word is one accumulator's over all of K");
     const int KT = K / BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
 #pragma unroll
@@ -246,7 +249,7 @@ template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 4
         for (int e = 0; e < 4; e++) total[mi][ni][e] = 0.0f;
     mbar_wait_warp(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
-    stage_body<true, false, LATE>(acc, total, fa, fb);
+    stage_body<true, false, LATE, INIT>(acc, total, fa, fb);
 #pragma unroll U
     for (int kt = 1; kt < KT - 1; kt++) stage_body<false, false, LATE>(acc, total, fa, fb);
     stage_body<false, true, LATE>(acc, total, fa, fb);
