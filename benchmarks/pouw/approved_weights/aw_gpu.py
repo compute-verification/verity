@@ -358,6 +358,17 @@ def main():
         (out / f"{v.replace(':', '_')}.json").write_text(json.dumps(doc, indent=1))
         print(json.dumps({k: doc[k] for k in ("variant", "ppl", "skippable_fraction_mean", "seconds")}), flush=True)
     done = all((out / f"{v.replace(':', '_')}.json").exists() for v in variants)
+    rd = os.environ.get("RESEARCH_RUN_DIR")
+    if rd:
+        summary = {}
+        for v in variants:
+            f = out / f"{v.replace(':', '_')}.json"
+            if f.exists():
+                d = json.loads(f.read_text())
+                summary[v] = {"ppl": d["ppl"], "skippable_fraction_mean": d["skippable_fraction_mean"],
+                              "eval_windows": d["eval_windows"], "recover_steps": d["recover_steps"]}
+        Path(rd, "result.json").write_text(json.dumps({"kind": "approved-weights/gpu-tradeoff/v1", "done": done,
+                                                         "variants": summary}, indent=1))
     if PREEMPTED["flag"] and not done:
         return 143
     return 0 if done else 99
