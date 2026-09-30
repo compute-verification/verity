@@ -125,12 +125,20 @@ _E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
 
 @dataclass(frozen=True)
 class Fmt:
-    """One FP4 operand format: the chain's atom, the scale block along k, and the scale byte of 1.0."""
+    """One FP4 operand format: the chain's atom, the scale block along k, and the scale byte of 1.0.  The module's rules
+    tell the formats apart by identity (``fmt is NVFP4``), so a format unpickles as the module's own."""
 
     name: str
     atom: BlockScaledAlignAdd
     block: int
     one: int
+
+    def __reduce__(self):
+        return _format, (self.name,)
+
+
+def _format(name: str) -> Fmt:
+    return FORMATS[name]
 
 
 NVFP4 = Fmt("nvfp4", BLACKWELL_SM120_NVF4, 16, UE4M3_ONE)
@@ -567,7 +575,8 @@ class PearlC4:
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
             omega=Fraction(1),
-            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "device-reproducibility", "beacon-unpredictability"),
+            claims=("tt-out/fp4-sm120", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
+                    "beacon-unpredictability"),
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS), as the theory lane states it, proposed and "
                 "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
