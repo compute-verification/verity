@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import itertools
 import json
 import math
 import pickle
@@ -182,6 +183,26 @@ def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 25
     for p in at:
         w[p] = P.f32_to_bf16(value)
     return F.bf16_row(w)
+
+
+def test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise():
+    """D-NF with bc-824e54a2's two fixes: 0 ≤ β, and a_E's E4M3 byte v < 128.  At β = −1/4096 the cast gives 0x80, which
+    a check of 8 ≤ v alone admits and sm_120 reads from its low 7 bits as a zero scale, so the row's noise would be zero.
+    A larger negative β (−1.0, byte 0xB8) would read as +1.0; D-NF rejects both.  The pinned stats never make β negative,
+    and every honest row's verdict is unchanged."""
+    neg = P.f32_bits(-1 / 4096)
+    assert P.f32_to_fp8(P.f32_of_bits(neg)) == 0x80 and F.scale_dyadic(F.NVFP4, 0x80)[0] == 0
+    assert not F.dnf(neg) and not F.dnf(P.f32_bits(-1.0)) and not F.dnf(P.f32_bits(-0.0))
+    assert F.dnf(P.f32_bits(2.0 ** -6)) and F.dnf(P.f32_bits(448.0)) and F.dnf(P.f32_bits(1e30))
+    assert not F.dnf(P.f32_bits(2.0 ** -7)) and not F.dnf(P.f32_bits(0.0))
+    for fmt in FMTS:
+        f = F.FORMATS[fmt]
+        rows = [F.parse_row(r, 1024) for r in V.rows("dnf", "A", 8, 1024)] + [[0] * 1024]
+        rows.append(F.parse_row(spiked(V.rows("dnf", "A", 1, 1024)[0], 1024, value=2.0 ** 16), 1024))
+        for x in rows:
+            beta, ae = F.stats(f, x)[3:]
+            assert not beta >> 31
+            assert F.row_passes(f, x) == (ae >= F.UE4M3_NORMAL)
 
 
 @pytest.mark.parametrize("fmt", FMTS)
@@ -656,16 +677,51 @@ def test_a_drawn_tile_evaluates_each_rows_f1_once():
     assert len(calls) == 10
 
 
-def test_f2_depth_cost_is_the_pinned_formula():
-    """c_L (bc-d9842080, 13:35Z) at W1's int8 leaf of 2 slots, the FP4 conditions' (ratings.md 15:18Z), with depth capped
-    only by log2(k/block): 0.808 / 0.707 / 0.619 / 0.542 at 8k–64k³."""
+def strassen_c_L(m: int, k: int, n: int) -> float:
+    """The c_L F2 pinned before the catalogue (bc-d9842080, 13:35Z; ratings.md 15:18Z): Strassen–Winograd at W1's int8
+    leaf of 2 slots, depth capped by log2(k/16) alone."""
+    return min((2 * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75
+                for L in range(1, (k // 16).bit_length())), default=2.0)
+
+
+def test_f2_depth_cost_is_the_pinned_catalogue_minimum():
+    """c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form (the assessor's
+    20:00Z ruling; fast-matmul-catalogue-audit.md §4): 0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
+    formula gave 0.808 / 0.707 / 0.619 / 0.542.  At the domain's corner (m = 2^24, k = 2^16, n = 2^18, the claimed n
+    cap) 0.270 against Strassen's 0.421; rectangular shapes read their own entries; F2 fires only past f_A + f_B = 1.915
+    at 8k³, far from honest tiles' 0.13–0.30."""
     f = F.NVFP4
     assert F.INT8_LEAF_SLOTS == 2
-    got = [F.int8_depth_cost(f, s, s, s) for s in (8192, 16384, 32768, 65536)]
-    assert got == pytest.approx([0.808, 0.707, 0.619, 0.542], abs=6e-4)
-    assert F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24) == pytest.approx(0.403, abs=6e-4)
-    assert F.int8_depth_cost(f, 1 << 24, 16, 1 << 24) == 2.0
-    assert F.int8_depth_cost(F.MXFP4, 1 << 24, 1 << 16, 1 << 24) > F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24)
+    cubes = [F.int8_depth_cost(f, s, s, s) for s in (8192, 16384, 32768, 65536)]
+    assert cubes == [0.6612, 0.579, 0.5069, 0.4083] and cubes == pytest.approx([0.661, 0.579, 0.507, 0.408], abs=1e-3)
+    assert [strassen_c_L(s, s, s) for s in (8192, 16384, 32768, 65536)] == pytest.approx([0.808, 0.707, 0.619, 0.542],
+                                                                                          abs=6e-4)
+    assert 2 - (1 - cubes[0]) / F.INT8_PATCH_SLOTS == pytest.approx(1.915, abs=1e-3)
+    corner = F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 18)
+    assert corner == 0.2697 and strassen_c_L(1 << 24, 1 << 16, 1 << 18) == pytest.approx(0.421, abs=6e-4)
+    assert F.int8_depth_cost(f, 1 << 16, 8192, 1024) == F.int8_depth_cost(f, 1024, 8192, 1 << 16) == 0.8081
+    assert F.int8_depth_cost(f, 1 << 24, 8192, 128) == 1.1302 > 1         # a 128-wide weight: no route pays
+    assert F.int8_depth_cost(f, 1 << 24, 16, 1 << 18) == 2.0              # one block of k: no level
+    assert F.int8_depth_cost(F.MXFP4, 1 << 24, 1 << 16, 1 << 18) == F.int8_depth_cost(f, 1 << 24, 1 << 15, 1 << 18)
+    for beyond in ((1 << 25, 8192, 8192), (8192, 8192, 1 << 19), (8192, 1 << 17, 8192)):
+        with pytest.raises(ValueError):
+            F.int8_depth_cost(f, *beyond)
+
+
+def test_f2_c_l_table_takes_the_lower_value_between_its_points():
+    """The pinned table never lies above Strassen's formula and falls in each of m, k and n, so a shape between tabled
+    points reads the next tabled point up in each dimension, whose c_L is the lower one."""
+    from verity_pouw.schemes import pearl_c4_c_L as CL
+    for (i, m), (j, k), (l, n) in itertools.product(enumerate(CL.MS), enumerate(CL.KS), enumerate(CL.NS)):
+        v = CL.C_L[i][j][l]
+        assert v / 10_000 <= strassen_c_L(m, k, n) + 1e-12
+        assert all(nxt <= v for nxt in (CL.C_L[i + 1][j][l] if i + 1 < len(CL.MS) else v,
+                                        CL.C_L[i][j + 1][l] if j + 1 < len(CL.KS) else v,
+                                        CL.C_L[i][j][l + 1] if l + 1 < len(CL.NS) else v))
+    f = F.NVFP4
+    for shape, up in (((3000, 5000, 700), (8192, 8192, 1024)), ((20_000, 9000, 100), (32768, 16384, 128)),
+                      ((64, 128, 16), (128, 128, 128))):
+        assert F.int8_depth_cost(f, *shape) == F.int8_depth_cost(f, *up) <= strassen_c_L(*shape)
 
 
 @pytest.mark.parametrize("fmt", FMTS)
@@ -673,7 +729,7 @@ def test_f2_reads_flatness_per_row_and_per_block_column_class(fmt):
     """F2 on the tile's realised scale bytes: flat at one byte, the route's whole 1 − c_L; flat per row (row factors of
     two) or per block-column class (two classes a byte apart, each a sub-GEMM over half of k), the same, where the tile's
     modal share (0.5) alone would read nothing; bytes spread as honest ones are, nothing."""
-    f, m, n, k = F.FORMATS[fmt], 1 << 24, 1 << 24, 8192
+    f, m, n, k = F.FORMATS[fmt], 1 << 24, 1 << 18, 8192
     nb, base = k // f.block, 0x50 if fmt == "nvfp4" else 120
     full, half = 1 - F.int8_depth_cost(f, m, k, n), 1 - F.int8_depth_cost(f, m, k // 2, n)
     flat = [[base] * nb for _ in range(8)]
@@ -690,12 +746,12 @@ def test_f2_reads_flatness_per_row_and_per_block_column_class(fmt):
 def test_f2_charges_a_formed_tile_whose_scales_sit_at_one_byte():
     """The flattest rows (fp4-int8-route.md 12:00Z): spike rows with α tuned so every block max centres byte 384, on both
     sides.  Their realised scales sit at one byte, so F2 charges the masked int8 route's saving on every chain MAC."""
-    f, k, m = F.NVFP4, 4096, 1 << 24
+    f, k, m, n = F.NVFP4, 4096, 1 << 24, 1 << 18
     rows = [spike_row(i, k, top=9.88) for i in range(4)]
     a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
     b, e_b = formed(f, rows, F.ROLE_EB, F.ROLE_FB, k)
-    d = F.tile_debit(f, a, b, range(4), range(4), m, e_a, e_b, m)
-    save = F.int8_saving(f, a.scales, b.scales, m, m)
+    d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b, m)
+    save = F.int8_saving(f, a.scales, b.scales, m, n)
     assert save > 0 and d.int8 == Fraction(save) * 16 * k
 
 

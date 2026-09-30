@@ -44,8 +44,9 @@ off) is `clean`: the same α and block rule on α·x, no noise.
 as Pearl-C's H100 argument had it.  The design rests instead on every code and every block scale depending on the salt.
 
 **The domain and the debit** are the theory lane's (research store ``internal/pouw/rtx-pro/theory-pearl-c4-domain.md``
-§1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (a_E a normal
-UE4M3, one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
+§1, §2; TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row, salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β
+and a_E's E4M3 byte v in 8 ≤ v < 128, a normal UE4M3 with bit 7 clear; one a_E per row).  A block is screened when
+(clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted
 and its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only
 when its tile's debit passes the cap (server.md 10:35Z; the theory lane's 10:50Z ruling).  Items 3 and 4 charge the
 reference's witness alone, not every element of a screened block (server.md 11:32Z; the assessor's 17:25Z B for item 3
@@ -71,7 +72,8 @@ byte (`change_probabilities`); per window, min(1, E[max(0, R_24 − κ)] + E[max
 plus a CUDA-core patch of the excess, R_skip a skip or patch per k64 atom, at the cheater's best layout inside each block,
 and κ inside the expectation, A0's scale corrections: one FFMA per word for each of the M_w blocks whose realised byte
 is not their modal byte (`split_saving`, `split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at
-one tile byte, per row, and per block-column class (`int8_saving`), with c_L bc-d9842080's formula at W1's int8 leaf (`int8_depth_cost`).
+one tile byte, per row, and per block-column class (`int8_saving`), with c_L the fast-matmul catalogue's minimum at its
+lower-bound add count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`; the assessor's 20:00Z ruling).
 They are the rows `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2
 charges the masked int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain
 claim `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
@@ -100,6 +102,7 @@ from __future__ import annotations
 import itertools
 import math
 import struct
+from bisect import bisect_left
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
@@ -113,6 +116,7 @@ from verity.ml.tc.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPP
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from . import pearl_c as C
+from . import pearl_c4_c_L as CL
 from . import pearl_kw as P
 
 R = 32
@@ -455,14 +459,23 @@ def dead_blocks(fmt: Fmt, x: Sequence[int]) -> list[bool]:
             for b in range(0, len(x), fmt.block)]
 
 
+def dnf(beta: int) -> bool:
+    """D-NF on a row's β_row word: 0 ≤ β, and a_E's E4M3 byte v, the cast with its sign, has 8 ≤ v < 128 (a normal
+    UE4M3, at least 2^-6).  The pinned `stats` never makes β negative, but the rule states both: a negative β casts to a
+    byte with bit 7 set, which a check of 8 ≤ v alone admits and sm_120 reads from its low 7 bits, so at β = −1/4096 the
+    byte 0x80 would be a zero scale and the row's noise zero (bc-824e54a2's post-M4 rebuild)."""
+    v = P.f32_to_fp8(P.f32_of_bits(beta))
+    return not beta >> 31 and UE4M3_NORMAL <= v < 0x80
+
+
 def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
-    """Admission, per row and salt-free: D-NF (a_E is a normal UE4M3, at least 2^-6).  A row's screened blocks are
-    charged in its tiles' debit (`tile_debit`), and the tile's cap rejects them."""
+    """Admission, per row and salt-free: D-NF (`dnf`).  A row's screened blocks are charged in its tiles' debit
+    (`tile_debit`), and the tile's cap rejects them."""
     try:
-        ae = stats(fmt, x)[4]
+        beta = stats(fmt, x)[3]
     except P.Reject:
         return False
-    return ae >= UE4M3_NORMAL
+    return dnf(beta)
 
 
 def scale_dyadic(fmt: Fmt, byte: int) -> tuple[int, int]:
@@ -812,13 +825,20 @@ def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int | None], scale
 
 
 def int8_depth_cost(fmt: Fmt, m: int, k: int, n: int) -> float:
-    """F2's c_L (bc-d9842080, nvfp4-int8-flatness-break.md 13:35Z; ratings.md 15:18Z): the masked int8-Strassen
-    route's cost per honest MAC before its patch, min over 1 ≤ L ≤ log2(k/block) of `INT8_LEAF_SLOTS`·(7/8)^L +
-    4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75 (int8 leaves, Strassen–Winograd's pre-adds on both sides, every post-add a free
-    merge: the adversary's best, which measured kernels don't approach); 2 (no route) below one level."""
-    levels = (k // fmt.block).bit_length() - 1
-    return min((INT8_LEAF_SLOTS * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75 for L in range(1, levels + 1)),
-               default=2.0)
+    """F2's c_L: the masked int8 route's least cost per honest MAC before its patch over the fast-matmul catalogue, at
+    each scheme's lower-bound add count (`pearl_c4_c_L`; the assessor's 20:00Z ruling), read at the smallest tabled m, k
+    and n at least the shape's.  c_L falls as any of them grows, so a shape between table points takes the lower c_L.
+    A route's depth is capped by k/block, so a 32-block format reads the table at half its k.  The claimed domain is
+    inside the table (`PearlC4.check`); a shape beyond it raises."""
+    kk = k * NVFP4.block // fmt.block
+
+    def at(grid: tuple[int, ...], v: int) -> int:
+        i = bisect_left(grid, v)
+        if i == len(grid):
+            raise ValueError(f"c_L: {v} is past the pinned table's {grid[-1]}")
+        return i
+
+    return CL.C_L[at(CL.MS, m)][at(CL.KS, max(kk, 1))][at(CL.NS, n)] / 10_000
 
 
 def _share(rows: Sequence[Sequence[int]]) -> float:
@@ -1214,5 +1234,5 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "e2m1", "form", "hw_scales", "line",
+__all__ = ["FORMATS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "clean", "dnf", "e2m1", "form", "hw_scales", "line",
            "row_passes", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit", "word_replay"]
