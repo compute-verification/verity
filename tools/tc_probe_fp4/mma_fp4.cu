@@ -216,6 +216,135 @@ __global__ void bf16_tiles_kernel(const uint16_t* __restrict__ A, const uint16_t
     store_d(D + (size_t)warp * 128, df, lane);
 }
 
+// ---- generic rows (lane pouw rtx-pro GPU 4): one MMA per step, L dependent steps with D kept in registers ----
+//
+// row_tiles_kernel<KIND> issues exactly one mma.sync inside a `#pragma unroll 1` loop over L steps; L = 1 is a single tile, L > 1 a
+// dependent chain whose accumulator never leaves the registers (the host-driven chains of the kernels above store and reload it).
+// Operands per tile: A u8[16][L*K], Bt u8[8][L*K] (step l at columns l*K..), SFA u8[16][L*NB], SFB u8[8][L*NB] (step l at l*NB..).
+// K = 64 kinds take E2M1 codes (low nibble); K = 32 kinds take the 8-bit containers as they enter the register (the host places an
+// E2M1 code at bits [2,6), an E4M3 byte as is), so container bits outside the format reach the hardware unchanged.
+enum RowKind {
+    R_NVF4 = 0,               // kind::mxf4nvf4 scale_vec::4X ue4m3 (the nvfp4_tiles_kernel instruction)
+    R_MXF4 = 1,               // kind::mxf4nvf4 scale_vec::2X ue8m0
+    R_F8F6F4_E2M1 = 2,        // kind::f8f6f4 e2m1 x e2m1, unscaled
+    R_F8F6F4_E2M1_E4M3 = 3,   // kind::f8f6f4 e2m1 x e4m3
+    R_F8F6F4_E4M3_E2M1 = 4,   // kind::f8f6f4 e4m3 x e2m1
+    R_MXF8F6F4_E2M1 = 5,      // kind::mxf8f6f4 scale_vec::1X ue8m0, e2m1 x e2m1
+    R_MXF8F6F4_E2M1_E4M3 = 6, // kind::mxf8f6f4 scale_vec::1X ue8m0, e2m1 x e4m3
+    R_MXF8F6F4_E4M3_E2M1 = 7, // kind::mxf8f6f4 scale_vec::1X ue8m0, e4m3 x e2m1
+};  // kind::mxf4nvf4 scale_vec::4X with ue8m0 is refused by ptxas 12.9 ("Illegal modifier '.scale_vec::4X' ... with type '.ue8m0'")
+
+template <int KIND> struct RowTraits {
+    static constexpr int K = (KIND == R_NVF4 || KIND == R_MXF4) ? 64 : 32;
+    static constexpr int NB = KIND == R_NVF4 ? 4 : KIND == R_MXF4 ? 2 : KIND >= R_MXF8F6F4_E2M1 ? 1 : 0;
+};
+
+#define ROW_MMA_UNSCALED(MNEMONIC)                                                                          \
+    asm volatile(MNEMONIC " {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};\n"                  \
+                 : "=f"(d[0]), "=f"(d[1]), "=f"(d[2]), "=f"(d[3])                                          \
+                 : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(c[0]), "f"(c[1]), \
+                   "f"(c[2]), "f"(c[3]))
+#define ROW_MMA_SCALED(MNEMONIC)                                                                               \
+    asm volatile(MNEMONIC " {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13}, {%14}, {0, 0}, {%15}, {0, 0};\n" \
+                 : "=f"(d[0]), "=f"(d[1]), "=f"(d[2]), "=f"(d[3])                                             \
+                 : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(c[0]), "f"(c[1]),    \
+                   "f"(c[2]), "f"(c[3]), "r"(sfa), "r"(sfb))
+
+template <int KIND>
+__device__ __forceinline__ void row_mma(float d[4], const uint32_t a[4], const uint32_t b[2], const float c[4], uint32_t sfa, uint32_t sfb) {
+    if constexpr (KIND == R_NVF4) {
+        ROW_MMA_SCALED("mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3");
+    } else if constexpr (KIND == R_MXF4) {
+        ROW_MMA_SCALED("mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0");
+    } else if constexpr (KIND == R_F8F6F4_E2M1) {
+        ROW_MMA_UNSCALED("mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32");
+    } else if constexpr (KIND == R_F8F6F4_E2M1_E4M3) {
+        ROW_MMA_UNSCALED("mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e4m3.f32");
+    } else if constexpr (KIND == R_F8F6F4_E4M3_E2M1) {
+        ROW_MMA_UNSCALED("mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e4m3.e2m1.f32");
+    } else if constexpr (KIND == R_MXF8F6F4_E2M1) {
+        ROW_MMA_SCALED("mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e2m1.e2m1.f32.ue8m0");
+    } else if constexpr (KIND == R_MXF8F6F4_E2M1_E4M3) {
+        ROW_MMA_SCALED("mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e2m1.e4m3.f32.ue8m0");
+    } else {
+        static_assert(KIND == R_MXF8F6F4_E4M3_E2M1, "unknown row kind");
+        ROW_MMA_SCALED("mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e4m3.e2m1.f32.ue8m0");
+    }
+}
+
+template <int K>
+__device__ __forceinline__ void row_pack(uint32_t a[4], uint32_t b[2], const uint8_t* At, const uint8_t* Bw, int stride, int k_off, int lane) {
+    const int row0 = lane >> 2;
+    if constexpr (K == 64) {  // E2M1 nibbles: reg r, nibble j -> k = 8*(lane%4) + j + 32*(r>>1)
+        const int kcol = 8 * (lane & 3) + k_off;
+#pragma unroll
+        for (int r = 0; r < 4; r++) {
+            const uint8_t* p = At + (row0 + 8 * (r & 1)) * stride + kcol + 32 * (r >> 1);
+            uint32_t v = 0;
+#pragma unroll
+            for (int j = 0; j < 8; j++) v |= (uint32_t)(p[j] & 0xF) << (4 * j);
+            a[r] = v;
+        }
+#pragma unroll
+        for (int r = 0; r < 2; r++) {
+            const uint8_t* p = Bw + row0 * stride + kcol + 32 * r;
+            uint32_t v = 0;
+#pragma unroll
+            for (int j = 0; j < 8; j++) v |= (uint32_t)(p[j] & 0xF) << (4 * j);
+            b[r] = v;
+        }
+    } else {  // 8-bit containers: reg r, byte j -> k = 4*(lane%4) + j + 16*(r>>1) (A), 16*r (B)
+        const int kcol = 4 * (lane & 3) + k_off;
+#pragma unroll
+        for (int r = 0; r < 4; r++) {
+            const uint8_t* p = At + (row0 + 8 * (r & 1)) * stride + kcol + 16 * (r >> 1);
+            a[r] = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        }
+#pragma unroll
+        for (int r = 0; r < 2; r++) {
+            const uint8_t* p = Bw + row0 * stride + kcol + 16 * r;
+            b[r] = (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        }
+    }
+}
+
+__device__ __forceinline__ uint32_t row_scale(const uint8_t* S, int row, int stride, int off, int nb) {
+    uint32_t v = 0;
+    for (int b = 0; b < nb; b++) v |= (uint32_t)S[row * stride + off + b] << (8 * b);
+    return v;
+}
+
+template <int KIND>
+__global__ void row_tiles_kernel(const uint8_t* __restrict__ A, const uint8_t* __restrict__ Bt, const uint8_t* __restrict__ SFA,
+                                 const uint8_t* __restrict__ SFB, const uint32_t* __restrict__ C, uint32_t* __restrict__ D, int ntiles, int L) {
+    constexpr int K = RowTraits<KIND>::K, NB = RowTraits<KIND>::NB;
+    const int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+    if (warp >= ntiles) return;
+    const int lane = threadIdx.x & 31;
+    const uint8_t* At = A + (size_t)warp * 16 * K * L;
+    const uint8_t* Bw = Bt + (size_t)warp * 8 * K * L;
+    const uint8_t* Sa = SFA + (size_t)warp * 16 * NB * L;
+    const uint8_t* Sb = SFB + (size_t)warp * 8 * NB * L;
+    float cf[4];
+    load_c(cf, C + (size_t)warp * 128, lane);
+#pragma unroll 1
+    for (int l = 0; l < L; l++) {
+        uint32_t a[4], b[2], sfa = 0, sfb = 0;
+        row_pack<K>(a, b, At, Bw, K * L, l * K, lane);
+        if constexpr (NB > 0) {
+            sfa = row_scale(Sa, 8 * (lane & 1) + (lane >> 2), NB * L, l * NB, NB);
+            sfb = row_scale(Sb, lane >> 2, NB * L, l * NB, NB);
+        }
+        float df[4];
+        row_mma<KIND>(df, a, b, cf, sfa, sfb);
+        cf[0] = df[0];
+        cf[1] = df[1];
+        cf[2] = df[2];
+        cf[3] = df[3];
+    }
+    store_d(D + (size_t)warp * 128, cf, lane);
+}
+
 // Host-side plumbing shared by every entry point: upload, launch (4 warps per block), download, free.
 struct Buf {
     void* p = nullptr;
@@ -261,6 +390,66 @@ static int run_tiles(int which, const void* A, size_t a_bytes, const void* Bt, s
     return (int)err;
 }
 
+template <int KIND>
+static void launch_rows(int blocks, int threads, const uint8_t* A, const uint8_t* B, const uint8_t* SFA, const uint8_t* SFB, const uint32_t* C,
+                        uint32_t* D, int ntiles, int L) {
+    row_tiles_kernel<KIND><<<blocks, threads>>>(A, B, SFA, SFB, C, D, ntiles, L);
+}
+
+static int run_rows(int kind, const uint8_t* A, const uint8_t* Bt, const uint8_t* SFA, const uint8_t* SFB, const uint32_t* C, uint32_t* D,
+                    int ntiles, int L) {
+    int k = 0, nb = 0;
+    switch (kind) {
+        case R_NVF4: k = RowTraits<R_NVF4>::K; nb = RowTraits<R_NVF4>::NB; break;
+        case R_MXF4: k = RowTraits<R_MXF4>::K; nb = RowTraits<R_MXF4>::NB; break;
+        case R_F8F6F4_E2M1: k = RowTraits<R_F8F6F4_E2M1>::K; nb = RowTraits<R_F8F6F4_E2M1>::NB; break;
+        case R_F8F6F4_E2M1_E4M3: k = RowTraits<R_F8F6F4_E2M1_E4M3>::K; nb = RowTraits<R_F8F6F4_E2M1_E4M3>::NB; break;
+        case R_F8F6F4_E4M3_E2M1: k = RowTraits<R_F8F6F4_E4M3_E2M1>::K; nb = RowTraits<R_F8F6F4_E4M3_E2M1>::NB; break;
+        case R_MXF8F6F4_E2M1: k = RowTraits<R_MXF8F6F4_E2M1>::K; nb = RowTraits<R_MXF8F6F4_E2M1>::NB; break;
+        case R_MXF8F6F4_E2M1_E4M3: k = RowTraits<R_MXF8F6F4_E2M1_E4M3>::K; nb = RowTraits<R_MXF8F6F4_E2M1_E4M3>::NB; break;
+        case R_MXF8F6F4_E4M3_E2M1: k = RowTraits<R_MXF8F6F4_E4M3_E2M1>::K; nb = RowTraits<R_MXF8F6F4_E4M3_E2M1>::NB; break;
+        default: return (int)cudaErrorInvalidValue;
+    }
+    if (L < 1) return (int)cudaErrorInvalidValue;
+    const size_t a_bytes = (size_t)ntiles * 16 * k * L, b_bytes = (size_t)ntiles * 8 * k * L;
+    const size_t sfa_bytes = (size_t)ntiles * 16 * nb * L, sfb_bytes = (size_t)ntiles * 8 * nb * L, c_bytes = (size_t)ntiles * 128 * 4;
+    uint8_t *dA = nullptr, *dB = nullptr, *dSFA = nullptr, *dSFB = nullptr;
+    uint32_t *dC = nullptr, *dD = nullptr;
+    cudaError_t err = cudaSuccess;
+    if ((err = cudaMalloc(&dA, a_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dB, b_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dSFA, sfa_bytes ? sfa_bytes : 1)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dSFB, sfb_bytes ? sfb_bytes : 1)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dC, c_bytes)) != cudaSuccess) return (int)err;
+    if ((err = cudaMalloc(&dD, c_bytes)) != cudaSuccess) return (int)err;
+    cudaMemcpy(dA, A, a_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(dB, Bt, b_bytes, cudaMemcpyHostToDevice);
+    if (sfa_bytes) cudaMemcpy(dSFA, SFA, sfa_bytes, cudaMemcpyHostToDevice);
+    if (sfb_bytes) cudaMemcpy(dSFB, SFB, sfb_bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(dC, C, c_bytes, cudaMemcpyHostToDevice);
+    const int wpb = 4, blocks = (ntiles + wpb - 1) / wpb, threads = 32 * wpb;
+    switch (kind) {
+        case R_NVF4: launch_rows<R_NVF4>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+        case R_MXF4: launch_rows<R_MXF4>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+        case R_F8F6F4_E2M1: launch_rows<R_F8F6F4_E2M1>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+        case R_F8F6F4_E2M1_E4M3: launch_rows<R_F8F6F4_E2M1_E4M3>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+        case R_F8F6F4_E4M3_E2M1: launch_rows<R_F8F6F4_E4M3_E2M1>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+        case R_MXF8F6F4_E2M1: launch_rows<R_MXF8F6F4_E2M1>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+        case R_MXF8F6F4_E2M1_E4M3: launch_rows<R_MXF8F6F4_E2M1_E4M3>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+        case R_MXF8F6F4_E4M3_E2M1: launch_rows<R_MXF8F6F4_E4M3_E2M1>(blocks, threads, dA, dB, dSFA, dSFB, dC, dD, ntiles, L); break;
+    }
+    err = cudaGetLastError();
+    if (err == cudaSuccess) err = cudaDeviceSynchronize();
+    if (err == cudaSuccess) cudaMemcpy(D, dD, c_bytes, cudaMemcpyDeviceToHost);
+    cudaFree(dA);
+    cudaFree(dB);
+    cudaFree(dSFA);
+    cudaFree(dSFB);
+    cudaFree(dC);
+    cudaFree(dD);
+    return (int)err;
+}
+
 }  // namespace
 
 extern "C" {
@@ -288,6 +477,31 @@ int mma_fp4raw_tiles(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uin
 // A u16[n][16][16], Bt u16[n][8][16] bf16 bits, C/D u32[n][16][8].
 int mma_bf16_tiles(const uint16_t* A, const uint16_t* Bt, const uint32_t* C, uint32_t* D, int n) {
     return run_tiles(3, A, (size_t)n * 16 * 16 * 2, Bt, (size_t)n * 8 * 16 * 2, nullptr, 0, nullptr, 0, C, D, n);
+}
+
+// The generic rows (RowKind): A u8[n][16][L*K], Bt u8[n][8][L*K], SFA u8[n][16][L*NB], SFB u8[n][8][L*NB], C/D u32[n][16][8].
+int mma_row_tiles(int kind, const uint8_t* A, const uint8_t* Bt, const uint8_t* SFA, const uint8_t* SFB, const uint32_t* C, uint32_t* D, int n,
+                  int L) {
+    return run_rows(kind, A, Bt, SFA, SFB, C, D, n, L);
+}
+
+// The device's UUID as nvidia-smi prints it ("GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"): the one CUDA sees, whatever the host lists.
+int device_uuid(char* out, int out_len) {
+    cudaDeviceProp prop;
+    cudaError_t err = cudaGetDeviceProperties(&prop, 0);
+    if (err != cudaSuccess) return (int)err;
+    if (out_len < 41) return (int)cudaErrorInvalidValue;
+    static const char* hex = "0123456789abcdef";
+    const unsigned char* u = (const unsigned char*)prop.uuid.bytes;
+    int p = 0;
+    out[p++] = 'G'; out[p++] = 'P'; out[p++] = 'U'; out[p++] = '-';
+    for (int i = 0; i < 16; i++) {
+        if (i == 4 || i == 6 || i == 8 || i == 10) out[p++] = '-';
+        out[p++] = hex[u[i] >> 4];
+        out[p++] = hex[u[i] & 15];
+    }
+    out[p] = 0;
+    return 0;
 }
 
 int has_mxf4(void) {

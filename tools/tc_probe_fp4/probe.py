@@ -89,6 +89,7 @@ sys.path.insert(0, str(HERE))
 _VERITY_SRC = HERE.parents[1] / "packages" / "verity" / "src"  # the bf16 comparison imports verity.ml.tc.silicon from the shipped tree
 if _VERITY_SRC.is_dir() and str(_VERITY_SRC) not in sys.path:
     sys.path.insert(0, str(_VERITY_SRC))
+import k32  # noqa: E402
 import model5  # noqa: E402
 
 MAX_TILES_PER_CALL = 1 << 14
@@ -106,7 +107,23 @@ PTX = {
     "tcgen05_nvf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X [idesc: e2m1 x e2m1 -> f32, scale ue4m3, M128 N8 K64, K-major]",
     "tcgen05_mxf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
     "tcgen05_mxf4kind": "tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
+    # the K=32 E2M1 rows beyond the unscaled E2M1 x E2M1 one (k32.py; generic kernel row_tiles_kernel<kind>)
+    "f8f6f4_e2m1_e4m3": "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e4m3.f32",
+    "f8f6f4_e4m3_e2m1": "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e4m3.e2m1.f32",
+    "mxf8f6f4_e2m1": "mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e2m1.e2m1.f32.ue8m0",
+    "mxf8f6f4_e2m1_e4m3": "mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e2m1.e4m3.f32.ue8m0",
+    "mxf8f6f4_e4m3_e2m1": "mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e4m3.e2m1.f32.ue8m0",
 }
+#: the conversion rows (cast.py; cvt_fp4.cu), dispatched before any MMA machinery
+CAST_INSTRUCTIONS = ("cvt_e2m1x2_f32", "cvt_f16x2_e2m1x2", "cvt_ue8m0x2_f32_rz", "cvt_ue8m0x2_f32_rp", "cvt_bf16x2_ue8m0x2",
+                     "cvt_e4m3x2_f32_ue4m3")
+#: mma.sync instruction -> RowKind of mma_fp4.cu's generic kernel (single tiles of the new rows, and every in-register chain)
+ROW_KIND = {"nvf4": 0, "mxf4": 1, "f8f6f4": 2, "f8f6f4_e2m1_e4m3": 3, "f8f6f4_e4m3_e2m1": 4, "mxf8f6f4_e2m1": 5, "mxf8f6f4_e2m1_e4m3": 6,
+            "mxf8f6f4_e4m3_e2m1": 7}
+#: the rows only the generic kernel issues
+GENERIC_ONLY = {"f8f6f4_e2m1_e4m3", "f8f6f4_e4m3_e2m1", "mxf8f6f4_e2m1", "mxf8f6f4_e2m1_e4m3", "mxf8f6f4_e4m3_e2m1"}
+#: rows autoproof's model5 applies to (E2M1 x E2M1 with no scale or the mxf4nvf4 scales)
+MODEL5_ROWS = {"nvf4", "mxf4", "f8f6f4", "tcgen05_nvf4", "tcgen05_mxf4", "tcgen05_mxf4kind"}
 INSTRUCTION_ID = {
     "nvf4": "sm120.mma.m16n8k64.e2m1.nvf4",
     "mxf4": "sm120.mma.m16n8k64.e2m1.mxf4",
@@ -115,18 +132,30 @@ INSTRUCTION_ID = {
     "tcgen05_nvf4": "sm100.tcgen05.mma.e2m1.nvf4",
     "tcgen05_mxf4": "sm100.tcgen05.mma.e2m1.mxf4",
     "tcgen05_mxf4kind": "sm100.tcgen05.mma.e2m1.mxf4",
+    "f8f6f4_e2m1_e4m3": "sm120.mma.m16n8k32.e2m1.e4m3.f8f6f4",
+    "f8f6f4_e4m3_e2m1": "sm120.mma.m16n8k32.e4m3.e2m1.f8f6f4",
+    "mxf8f6f4_e2m1": "sm120.mma.m16n8k32.e2m1.mxf8f6f4",
+    "mxf8f6f4_e2m1_e4m3": "sm120.mma.m16n8k32.e2m1.e4m3.mxf8f6f4",
+    "mxf8f6f4_e4m3_e2m1": "sm120.mma.m16n8k32.e4m3.e2m1.mxf8f6f4",
 }
 KERNEL = {"nvf4": "nvfp4_tiles_kernel", "mxf4": "mxfp4_tiles_kernel", "f8f6f4": "fp4raw_tiles_kernel", "bf16": "bf16_tiles_kernel",
-          "tcgen05_nvf4": "tcgen05_nvfp4_tiles_kernel", "tcgen05_mxf4": "tcgen05_mxfp4_tiles_kernel", "tcgen05_mxf4kind": "tcgen05_mxf4kind_tiles_kernel"}
-K_OF = {"nvf4": 64, "mxf4": 64, "f8f6f4": 32, "bf16": 16, "tcgen05_nvf4": 64, "tcgen05_mxf4": 64, "tcgen05_mxf4kind": 64}
-NBLK = {"nvf4": 4, "mxf4": 2, "f8f6f4": 0, "bf16": 0, "tcgen05_nvf4": 4, "tcgen05_mxf4": 2, "tcgen05_mxf4kind": 2}
-SCALE_KIND = {"nvf4": "ue4m3", "mxf4": "ue8m0", "f8f6f4": "none", "tcgen05_nvf4": "ue4m3", "tcgen05_mxf4": "ue8m0", "tcgen05_mxf4kind": "ue8m0"}
+          "tcgen05_nvf4": "tcgen05_nvfp4_tiles_kernel", "tcgen05_mxf4": "tcgen05_mxfp4_tiles_kernel", "tcgen05_mxf4kind": "tcgen05_mxf4kind_tiles_kernel",
+          **{instr: f"row_tiles_kernelILi{kind}EE" for instr, kind in ROW_KIND.items() if instr in GENERIC_ONLY}}
+K_OF = {"nvf4": 64, "mxf4": 64, "f8f6f4": 32, "bf16": 16, "tcgen05_nvf4": 64, "tcgen05_mxf4": 64, "tcgen05_mxf4kind": 64,
+        **{instr: 32 for instr in GENERIC_ONLY}}
+NBLK = {"nvf4": 4, "mxf4": 2, "f8f6f4": 0, "bf16": 0, "tcgen05_nvf4": 4, "tcgen05_mxf4": 2, "tcgen05_mxf4kind": 2,
+        "f8f6f4_e2m1_e4m3": 0, "f8f6f4_e4m3_e2m1": 0, "mxf8f6f4_e2m1": 1, "mxf8f6f4_e2m1_e4m3": 1, "mxf8f6f4_e4m3_e2m1": 1}
+SCALE_KIND = {"nvf4": "ue4m3", "mxf4": "ue8m0", "f8f6f4": "none", "tcgen05_nvf4": "ue4m3", "tcgen05_mxf4": "ue8m0", "tcgen05_mxf4kind": "ue8m0",
+              "f8f6f4_e2m1_e4m3": "none", "f8f6f4_e4m3_e2m1": "none", "mxf8f6f4_e2m1": "ue8m0", "mxf8f6f4_e2m1_e4m3": "ue8m0",
+              "mxf8f6f4_e4m3_e2m1": "ue8m0"}
 #: sm_100 backend: instruction -> kernel kind (tcgen05_fp4.cu) ; the source file and the default arch per backend
 TCGEN05_KIND = {"tcgen05_nvf4": 0, "tcgen05_mxf4": 1, "tcgen05_mxf4kind": 2}
 SOURCE = {instr: ("tcgen05_fp4.cu" if instr in TCGEN05_KIND else "mma_fp4.cu") for instr in PTX}
 DEFAULT_ARCH = {instr: ("sm_100a" if instr in TCGEN05_KIND else "sm_120a") for instr in PTX}
 #: canonical K-major no-swizzle shared-memory strides (bytes): LBO = the second 16-byte K chunk of an 8-row group, SBO = the next group
 TCGEN05_SMEM = {"lbo_a": 128, "sbo_a": 256, "lbo_b": 128, "sbo_b": 256}
+#: hex digits per operand code in the records (E4M3 bytes take two)
+HEX_WIDTHS = {instr: tuple(2 if f == "e4m3" else 1 for f in k32.ROWS[instr][:2]) for instr in k32.ROWS}
 UE4M3_VALID = np.array([c for c in range(0x80) if c != 0x7F], dtype=np.uint8)  # 127 codes; 0x7F is NaN
 
 
@@ -203,6 +232,12 @@ class Probe:
                 fn = getattr(self.lib, name)
                 fn.restype = ctypes.c_int
                 fn.argtypes = [P] * argc + [ctypes.c_int]
+            fn = self.lib.mma_row_tiles
+            fn.restype = ctypes.c_int
+            fn.argtypes = [ctypes.c_int] + [P] * 6 + [ctypes.c_int, ctypes.c_int]
+        if hasattr(self.lib, "device_uuid"):
+            self.lib.device_uuid.restype = ctypes.c_int
+            self.lib.device_uuid.argtypes = [ctypes.c_char_p, ctypes.c_int]
         self.debug_dir = None  # set by main(): where a failing layout check dumps its operands
         self.lib.has_mxf4.restype = ctypes.c_int
         ident = self.lib.device_identity
@@ -244,18 +279,64 @@ class Probe:
         rc = self.lib.device_identity(ctypes.byref(major), ctypes.byref(minor), name, 256)
         if rc != 0:
             raise RuntimeError(f"CUDA error {rc} in cudaGetDeviceProperties")
-        smi = subprocess.run(["nvidia-smi", "--query-gpu=name,driver_version,compute_cap,uuid", "--format=csv,noheader"], capture_output=True, text=True)
-        fields = [s.strip() for s in smi.stdout.strip().split(",")] if smi.returncode == 0 else []
+        cuda_uuid = None
+        if hasattr(self.lib, "device_uuid"):
+            buf = ctypes.create_string_buffer(64)
+            if self.lib.device_uuid(buf, 64) == 0:
+                cuda_uuid = buf.value.decode()
+        # nvidia-smi lists every GPU on the host whatever CUDA_VISIBLE_DEVICES says: query the one CUDA opened, by its UUID
+        query = ["nvidia-smi", "--query-gpu=name,driver_version,compute_cap,uuid", "--format=csv,noheader"]
+        smi = subprocess.run(query + (["-i", cuda_uuid] if cuda_uuid else []), capture_output=True, text=True)
+        fields = [s.strip() for s in smi.stdout.strip().splitlines()[0].split(",")] if smi.returncode == 0 and smi.stdout.strip() else []
         return {"device": name.value.decode(), "compute_capability": f"{major.value}.{minor.value}",
                 "nvidia_smi": smi.stdout.strip() if smi.returncode == 0 else None,
-                "driver": fields[1] if len(fields) > 1 else None, "gpu_uuid": fields[3] if len(fields) > 3 else None,
+                "driver": fields[1] if len(fields) > 1 else None, "gpu_uuid": cuda_uuid or (fields[3] if len(fields) > 3 else None),
+                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
                 "hostname": platform.node(), "has_mxf4": bool(self.lib.has_mxf4()), "backend": "tcgen05" if self.tcgen05 else "mma.sync"}
 
-    def tiles(self, instr: str, A, Bt, C, SFA=None, SFB=None, **tcgen05_kw) -> np.ndarray:
+    def clocks(self, uuid: str | None) -> dict | None:
+        """SM / memory clocks, power and throttle reasons of this GPU now (captures are clock-independent; recorded, not locked)."""
+        q = "clocks.sm,clocks.mem,clocks.max.sm,power.draw,temperature.gpu,clocks_throttle_reasons.active"
+        smi = subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv,noheader,nounits"] + (["-i", uuid] if uuid else []),
+                             capture_output=True, text=True)
+        if smi.returncode != 0 or not smi.stdout.strip():
+            return None
+        return dict(zip(q.split(","), (s.strip() for s in smi.stdout.strip().splitlines()[0].split(","))))
+
+    def rows(self, instr: str, A, Bt, C, SFA=None, SFB=None, steps: int = 1) -> np.ndarray:
+        """The generic kernel: ``steps`` dependent MMAs per tile with D kept in registers.  ``A`` (n,16,K steps) / ``Bt`` (n,8,K steps)
+        element codes (the K=32 rows' 8-bit containers are formed here), ``SFA`` (n,16,nblk steps) / ``SFB`` (n,8,nblk steps)."""
+        n, kind, k, nblk = A.shape[0], ROW_KIND[instr], K_OF[instr], NBLK[instr]
+        A = np.ascontiguousarray(A, dtype=np.uint8).reshape(n, 16, k * steps)
+        Bt = np.ascontiguousarray(Bt, dtype=np.uint8).reshape(n, 8, k * steps)
+        if k == 32:
+            fa, fb, _ = k32.ROWS[instr]
+            A, Bt = k32.container(fa, A), k32.container(fb, Bt)
+        C = np.ascontiguousarray(C, dtype=np.uint32).reshape(n, 16, 8)
+        if nblk:
+            SFA = np.ascontiguousarray(SFA, dtype=np.uint8).reshape(n, 16, nblk * steps)
+            SFB = np.ascontiguousarray(SFB, dtype=np.uint8).reshape(n, 8, nblk * steps)
+        else:
+            SFA, SFB = np.zeros((n, 16, 0), np.uint8), np.zeros((n, 8, 0), np.uint8)
+        D = np.zeros((n, 16, 8), dtype=np.uint32)
+        for s in range(0, n, MAX_TILES_PER_CALL):
+            e = min(n, s + MAX_TILES_PER_CALL)
+            a, b, sa, sb, c = (np.ascontiguousarray(x[s:e]) for x in (A, Bt, SFA, SFB, C))
+            d = np.zeros((e - s, 16, 8), dtype=np.uint32)
+            rc = self.lib.mma_row_tiles(kind, a.ctypes.data, b.ctypes.data, sa.ctypes.data, sb.ctypes.data, c.ctypes.data, d.ctypes.data,
+                                        e - s, steps)
+            if rc != 0:
+                raise RuntimeError(f"CUDA error {rc} in the {instr} row kernel (steps={steps})")
+            D[s:e] = d
+        return D
+
+    def tiles(self, instr: str, A, Bt, C, SFA=None, SFB=None, steps: int = 1, **tcgen05_kw) -> np.ndarray:
         """One MMA per tile.  ``A`` (n,16,K) / ``Bt`` (n,8,K) codes (u8; bf16: u16 words), ``SFA`` (n,16,nblk) / ``SFB`` (n,8,nblk) u8,
-        ``C`` (n,16,8) FP32 words -> ``D`` (n,16,8)."""
+        ``C`` (n,16,8) FP32 words -> ``D`` (n,16,8).  ``steps`` > 1: an in-register chain of that many MMAs (generic kernel)."""
         if instr in TCGEN05_KIND:
-            return self.tcgen05_tiles(instr, A, Bt, SFA, SFB, C, **tcgen05_kw)
+            return self.tcgen05_tiles(instr, A, Bt, SFA, SFB, C, steps=steps, **tcgen05_kw)
+        if instr in GENERIC_ONLY or steps > 1:
+            return self.rows(instr, A, Bt, C, SFA, SFB, steps)
         n = A.shape[0]
         k, nblk = K_OF[instr], NBLK[instr]
         dt = np.uint16 if instr == "bf16" else np.uint8
@@ -346,10 +427,47 @@ def _layout_fail(probe: Probe, instr: str, label: str, want: np.ndarray, got: np
     raise RuntimeError(f"layout check ({label}) failed for {instr}: {bad}/{want.size} elements differ; first: {ex}")
 
 
+def _exact_operands(rng, instr: str, n: int, steps: int):
+    """Exact small-integer operands of ``steps`` chained k-blocks and C + A.B as FP32 words (every partial sum exact in FP32)."""
+    k, nblk = K_OF[instr], NBLK[instr]
+    fa, fb = k32.ROWS[instr][:2] if instr in k32.ROWS else ("e2m1", "e2m1")
+    va, ca = k32.small_operands(rng, fa, (n, 16, k * steps))
+    vb, cb = k32.small_operands(rng, fb, (n, 8, k * steps))
+    c = rng.integers(-1000, 1001, (n, 16, 8)).astype(np.float64)
+    if not nblk:
+        return ca, cb, None, None, c, f32_bits(c + np.einsum("nik,njk->nij", va, vb))
+    blk = k // nblk
+    nb = nblk * steps
+    if SCALE_KIND[instr] == "ue4m3":
+        ea, eb = rng.integers(5, 11, (n, 16, nb)), rng.integers(5, 11, (n, 8, nb))
+        sfa, sfb, pa, pb = (ea << 3).astype(np.uint8), (eb << 3).astype(np.uint8), 2.0 ** (ea - 7), 2.0 ** (eb - 7)
+    else:
+        lo, hi = (125, 131) if k == 64 else (126, 129)
+        ea, eb = rng.integers(lo, hi, (n, 16, nb)), rng.integers(lo, hi, (n, 8, nb))
+        sfa, sfb, pa, pb = ea.astype(np.uint8), eb.astype(np.uint8), 2.0 ** (ea - 127), 2.0 ** (eb - 127)
+    prod = np.einsum("nigk,njgk->nijg", va.reshape(n, 16, nb, blk), vb.reshape(n, 8, nb, blk))
+    return ca, cb, sfa, sfb, c, f32_bits(c + np.einsum("nijg,nig,njg->nij", prod, pa, pb))
+
+
+def chain_layout_check(probe: Probe, instr: str, steps: int) -> str:
+    """The generic kernel's in-register chain of ``steps`` MMAs on exact small integers: operands of step l at k-block l."""
+    ca, cb, sfa, sfb, c, want = _exact_operands(np.random.default_rng(2), instr, 64, steps)
+    got = probe.tiles(instr, ca, cb, f32_bits(c), sfa, sfb, steps=steps)
+    if not np.array_equal(want, got):
+        _layout_fail(probe, instr, f"chain of {steps}", want, got, a=ca, b=cb, c=c)
+    return "passed"
+
+
 def layout_check(probe: Probe, instr: str) -> str:
     rng = np.random.default_rng(1)
     n = 64
     k = K_OF[instr]
+    if instr in GENERIC_ONLY:
+        ca, cb, sfa, sfb, c, want = _exact_operands(rng, instr, n, 1)
+        got = probe.tiles(instr, ca, cb, f32_bits(c), sfa, sfb)
+        if not np.array_equal(want, got):
+            _layout_fail(probe, instr, "single tile", want, got, a=ca, b=cb, c=c)
+        return "passed"
     if instr == "bf16":
         a = rng.integers(-8, 9, (n, 16, k)).astype(np.float32)
         b = rng.integers(-8, 9, (n, 8, k)).astype(np.float32)
@@ -753,26 +871,76 @@ def families_bf16(rng, n_random: int):
 _CTX: dict = {}
 
 
-PRIMARY_MODEL = {"nvf4": "verity", "mxf4": "verity", "f8f6f4": "verity", "bf16": None,
-                 "tcgen05_nvf4": "verity", "tcgen05_mxf4": "verity", "tcgen05_mxf4kind": "verity"}
+#: the model whose mismatches gate a run; None: a capture whose finding is which candidates agree (``--expect-model`` sets one)
+PRIMARY_MODEL = {"nvf4": "verity", "mxf4": "verity", "f8f6f4": None, "bf16": None,
+                 "tcgen05_nvf4": "verity", "tcgen05_mxf4": "verity", "tcgen05_mxf4kind": "verity",
+                 **{instr: None for instr in GENERIC_ONLY}}
 
 
 def verity_models(instr: str) -> dict:
-    """The verity ``BlockScaledAlignAdd`` instances evaluated for ``instr``: ``verity`` is the registry's model, the others are
-    named alternatives (mxf4: the sign of an underflowed zero, log entry D13).  For the sm_100 instructions the sm_120 models
-    are the hypothesis under test."""
+    """The models evaluated for ``instr``: for the mxf4nvf4 rows ``verity`` is the registry's ``BlockScaledAlignAdd`` and the others
+    named alternatives (mxf4: the sign of an underflowed zero, log entry D13; for the sm_100 instructions the sm_120 models are the
+    hypothesis under test); the K=32 rows (``f8f6f4`` and the rest of ``k32.ROWS``) evaluate ``k32.candidates``, whose
+    ``bsaa_g16`` is the scale-free instance earlier runs called ``verity``."""
     from verity.ml.tc import models as M
     if instr in ("nvf4", "tcgen05_nvf4"):
         return {"verity": M.BLACKWELL_SM120_NVF4}
     if instr in ("mxf4", "tcgen05_mxf4", "tcgen05_mxf4kind"):
         return {"verity": M.BLACKWELL_SM120_MXF4, "verity_underflow_signed": M.BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED}
-    if instr == "f8f6f4":
-        return {"verity": M.BlockScaledAlignAdd(
-            name="probe_unscaled_fp4_m16n8k32", arch="sm_120", dtype="e2m1", operand_bits=4, scale=None, k_per_instruction=32,
-            group=16, frac_bits=M.BLACKWELL_SM120_NVF4.frac_bits, acc_window=M.BLACKWELL_SM120_NVF4.acc_window,
-            grid_floor=M.BLACKWELL_SM120_NVF4.grid_floor,
-            underflow_zero="positive", validated="probe instance: the nvf4 adder on unscaled e2m1 (unit weight 2^-2)")}
+    if instr in k32.ROWS:
+        return k32.candidates(instr)
     return {}
+
+
+def model_words(model, A, Bt, SFA, SFB, C, k_mma: int, nblk: int) -> tuple[np.ndarray, np.ndarray]:
+    """One model's word per element, stepped once per k-block with D fed back as C: (D (n,16,8), domain-error mask)."""
+    n = A.shape[0]
+    steps = A.shape[2] // k_mma
+    out = np.zeros((n, 16, 8), np.uint32)
+    err = np.zeros((n, 16, 8), np.bool_)
+    Al, Bl, Cl = A.tolist(), Bt.tolist(), C.tolist()
+    SAl = SFA.tolist() if SFA is not None else None
+    SBl = SFB.tolist() if SFB is not None else None
+    for t in range(n):
+        for i in range(16):
+            for j in range(8):
+                c = Cl[t][i][j]
+                try:
+                    for s in range(steps):
+                        ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
+                        c = model.step_scaled(c, Al[t][i][ks], Bl[t][j][ks], SAl[t][i][bs] if SAl is not None else (),
+                                              SBl[t][j][bs] if SBl is not None else ())
+                    out[t, i, j] = c
+                except Exception:  # noqa: BLE001 - outside the model's domain (non-finite accumulator, sum leaving binary32)
+                    err[t, i, j] = True
+    return out, err
+
+
+class FakeProbe:
+    """A CPU stand-in for the device (``--fake-silicon MODEL``): every word is MODEL's, so a dry run exercises the build, the gates,
+    the families, the comparison and the verdict without a GPU.  ``main`` refuses it under a research run: it never publishes."""
+
+    tcgen05 = False
+
+    def __init__(self, instr: str, model_name: str):
+        models = verity_models(instr)
+        if model_name not in models:
+            raise SystemExit(f"--fake-silicon: {model_name!r} is not a model of {instr} ({sorted(models)})")
+        self.model_name, self.model = model_name, models[model_name]
+        self.debug_dir = None
+
+    def identity(self) -> dict:
+        return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "nvidia_smi": None, "driver": None,
+                "gpu_uuid": "GPU-fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"), "hostname": platform.node(),
+                "has_mxf4": True, "backend": "fake"}
+
+    def clocks(self, uuid):
+        return None
+
+    def tiles(self, instr: str, A, Bt, C, SFA=None, SFB=None, steps: int = 1, **_kw) -> np.ndarray:
+        D, err = model_words(self.model, np.asarray(A), np.asarray(Bt), SFA, SFB, np.asarray(C, np.uint32), K_OF[instr], NBLK[instr])
+        D[err] = 0x7FFFFFFF
+        return D
 
 
 def _init(instr: str, group: int):
@@ -810,44 +978,27 @@ def _eval_chunk(args):
                         except Exception:  # noqa: BLE001
                             errs[name][t, i, j] = True
         return outs, errs
-    # K may be a multiple of the instruction's K (tcgen05 --chain2): the models are stepped once per k-block, D fed back as C
+    # K may be a multiple of the instruction's K (--chain, tcgen05 --chain2): the models are stepped once per k-block, D fed back as C
     k_mma = K_OF[instr]
     steps = A.shape[2] // k_mma
     nblk = NBLK[instr]
-    out5 = np.zeros((n, 16, 8), np.uint32)
-    err5 = np.zeros((n, 16, 8), np.bool_)
-    empty = np.zeros((16, 0), np.uint8)
-    for t in range(n):
-        c = C[t]
-        e = np.zeros((16, 8), np.bool_)
-        for s in range(steps):
-            ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
-            c, e_s = model5.tile_eval(A[t][:, ks], Bt[t][:, ks], SFA[t][:, bs] if SFA is not None else empty,
-                                      SFB[t][:, bs] if SFB is not None else empty[:8], c, SCALE_KIND[instr], _CTX["group"])
-            e |= e_s
-        out5[t], err5[t] = c, e
-    outs = {"model5": out5}
-    errs = {"model5": err5}
-    vm = _CTX["verity"]
-    for name in vm:
-        outs[name] = np.zeros((n, 16, 8), np.uint32)
-        errs[name] = np.zeros((n, 16, 8), np.bool_)
-    Al, Bl, Cl = A.tolist(), Bt.tolist(), C.tolist()
-    SAl = SFA.tolist() if SFA is not None else None
-    SBl = SFB.tolist() if SFB is not None else None
-    for t in range(n):
-        for i in range(16):
-            for j in range(8):
-                for name, model in vm.items():
-                    c = Cl[t][i][j]
-                    try:
-                        for s in range(steps):
-                            ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
-                            c = model.step_scaled(c, Al[t][i][ks], Bl[t][j][ks], SAl[t][i][bs] if SAl is not None else (),
-                                                  SBl[t][j][bs] if SBl is not None else ())
-                        outs[name][t, i, j] = c
-                    except Exception:  # noqa: BLE001 - outside the model's domain (non-finite accumulator, sum leaving binary32)
-                        errs[name][t, i, j] = True
+    outs, errs = {}, {}
+    if instr in MODEL5_ROWS:
+        out5 = np.zeros((n, 16, 8), np.uint32)
+        err5 = np.zeros((n, 16, 8), np.bool_)
+        empty = np.zeros((16, 0), np.uint8)
+        for t in range(n):
+            c = C[t]
+            e = np.zeros((16, 8), np.bool_)
+            for s in range(steps):
+                ks, bs = slice(s * k_mma, (s + 1) * k_mma), slice(s * nblk, (s + 1) * nblk)
+                c, e_s = model5.tile_eval(A[t][:, ks], Bt[t][:, ks], SFA[t][:, bs] if SFA is not None else empty,
+                                          SFB[t][:, bs] if SFB is not None else empty[:8], c, SCALE_KIND[instr], _CTX["group"])
+                e |= e_s
+            out5[t], err5[t] = c, e
+        outs["model5"], errs["model5"] = out5, err5
+    for name, model in _CTX["verity"].items():
+        outs[name], errs[name] = model_words(model, A, Bt, SFA, SFB, C, k_mma, nblk)
     return outs, errs
 
 
@@ -883,9 +1034,9 @@ def observed_summary(D: np.ndarray, C: np.ndarray, err: np.ndarray) -> dict:
 # --- records -----------------------------------------------------------------------------------------------------------------------
 
 
-def hexrec(acc, a, b, d, sfa=None, sfb=None, bf16=False) -> dict:
-    w = 4 if bf16 else 1
-    rec = {"acc": f"{int(acc):08x}", "a": "".join(f"{int(x):0{w}x}" for x in a), "b": "".join(f"{int(x):0{w}x}" for x in b), "d": f"{int(d):08x}"}
+def hexrec(acc, a, b, d, sfa=None, sfb=None, bf16=False, widths=(1, 1)) -> dict:
+    wa, wb = (4, 4) if bf16 else widths
+    rec = {"acc": f"{int(acc):08x}", "a": "".join(f"{int(x):0{wa}x}" for x in a), "b": "".join(f"{int(x):0{wb}x}" for x in b), "d": f"{int(d):08x}"}
     if sfa is not None:
         rec["sfa"] = "".join(f"{int(x):02x}" for x in sfa)
         rec["sfb"] = "".join(f"{int(x):02x}" for x in sfb)
@@ -965,7 +1116,7 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--instruction", default="nvf4", choices=sorted(PTX))
+    ap.add_argument("--instruction", default="nvf4", choices=sorted(PTX) + list(CAST_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--chain2", action="store_true", help="tcgen05: pair each family's tiles into K=128 chains (two MMAs on one TMEM accumulator)")
@@ -980,7 +1131,17 @@ def main() -> int:
     ap.add_argument("--golden-per-family", type=int, default=60)
     ap.add_argument("--families", default=None, help="comma list (default all)")
     ap.add_argument("--sass-check", action="store_true")
+    ap.add_argument("--chain", type=int, default=1, metavar="L",
+                    help="mma.sync: regroup each family's tiles into chains of L dependent MMAs kept in registers (generic kernel)")
+    ap.add_argument("--expect-uuid", default=None, help="stop before any measurement unless CUDA's device has this UUID")
+    ap.add_argument("--expect-model", default=None, help="the model whose mismatches gate this run (default: the row's primary model)")
+    ap.add_argument("--fake-silicon", default=None, metavar="MODEL", help="dry run on the CPU: MODEL's words stand in for the device")
+    ap.add_argument("--corrupt-word", action="store_true", help="flip one bit of the first gated family's first word (the gate must fail)")
+    ap.add_argument("--sass-only", action="store_true", help="build and run the SASS gate only (no device)")
     args = ap.parse_args()
+    if args.instruction in CAST_INSTRUCTIONS:
+        import cast
+        return cast.main(args)
     # the remote runner passes argv without a shell: `$RESEARCH_RUN_DIR` arrives literally and is expanded here
     args.replay_autoproof = [os.path.expandvars(p) for p in args.replay_autoproof]
     out = Path(os.path.expandvars(args.out))
@@ -992,26 +1153,50 @@ def main() -> int:
         args.arch = DEFAULT_ARCH[instr]
     if args.chain2 and not tcgen05:
         ap.error("--chain2 is a tcgen05 option")
+    if args.chain < 1 or (args.chain > 1 and instr not in ROW_KIND):
+        ap.error("--chain L (L >= 2) is for the mma.sync rows " + ", ".join(sorted(ROW_KIND)))
+    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
+        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if args.sass_only:
+        args.sass_check = True
 
-    so, nvcc = build(args.arch, out, SOURCE[instr])
-    probe = Probe(so)
-    if tcgen05 and args.smem_strides:
+    if args.fake_silicon:
+        so, nvcc = (None, "not built (fake silicon)") if not shutil.which(nvcc_bin()) else build(args.arch, out, SOURCE[instr])
+        probe = FakeProbe(instr, args.fake_silicon)
+    else:
+        so, nvcc = build(args.arch, out, SOURCE[instr])
+        probe = None if args.sass_only else Probe(so)
+    if tcgen05 and args.smem_strides and probe is not None:
         probe.smem = dict(zip(("lbo_a", "sbo_a", "lbo_b", "sbo_b"), (int(x) for x in args.smem_strides.split(","))))
-    identity = probe.identity()
+    identity = probe.identity() if probe is not None else {"device": None, "gpu_uuid": None, "driver": None, "compute_capability": None,
+                                                           "has_mxf4": True, "backend": "none (--sass-only)"}
     identity["nvcc"] = nvcc
     identity["arch"] = args.arch
+    if args.expect_uuid and not args.fake_silicon and not args.sass_only and identity.get("gpu_uuid") != args.expect_uuid:
+        msg = f"device UUID {identity.get('gpu_uuid')} != expected {args.expect_uuid}: stopped before any measurement"
+        (out / "probe_results.json").write_text(json.dumps({"identity": identity, "failures": [msg]}, indent=1))
+        print("FAILURES", [msg], flush=True)
+        return 2
+    primary = args.expect_model or PRIMARY_MODEL[instr]
     if instr == "bf16":
         model_desc, model_src = "verity.ml.tc.silicon.tc_dot", "verity.ml.tc.silicon"
+    elif instr in k32.ROWS:
+        model_desc = "k32.candidates: " + ", ".join(sorted(verity_models(instr))) + (" (control: autoproof model5)" if instr in MODEL5_ROWS else "")
+        model_src = str(HERE / "k32.py") + " + verity.ml.tc.models"
     else:
         model_desc = "verity.ml.tc.models." + {"nvf4": "BLACKWELL_SM120_NVF4", "mxf4": "BLACKWELL_SM120_MXF4",
-                                               "f8f6f4": "BlockScaledAlignAdd(scale=None, k=32)",
                                                "tcgen05_nvf4": "BLACKWELL_SM120_NVF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)",
                                                "tcgen05_mxf4": "BLACKWELL_SM120_MXF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)",
                                                "tcgen05_mxf4kind": "BLACKWELL_SM120_MXF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)"}[instr] + \
                      " (control: autoproof model5)"
         model_src = "verity.ml.tc.models + " + str(HERE / "model5.py")
+    if args.expect_model and instr != "bf16" and args.expect_model not in {**verity_models(instr), **({"model5": 1} if instr in MODEL5_ROWS else {})}:
+        ap.error(f"--expect-model {args.expect_model!r} is not a model of {instr}")
     results: dict = {"schema": "fp4-re/tc-probe-fp4/v1", "instruction": PTX[instr], "instruction_id": INSTRUCTION_ID[instr],
-                     "identity": identity, "model": model_desc, "model_source": model_src, "primary_model": PRIMARY_MODEL[instr]}
+                     "identity": identity, "model": model_desc, "model_source": model_src, "primary_model": primary,
+                     "chain": args.chain, "fake_silicon": args.fake_silicon, "corrupt_word": bool(args.corrupt_word)}
+    if probe is not None:
+        results["clocks_start"] = probe.clocks(identity.get("gpu_uuid"))
     if tcgen05:
         results["tcgen05"] = {"mma_shape": "128x8x64 (cta_group::1)", "tile_rows_replicated": 8, "smem_strides": probe.smem,
                               "instruction_descriptor": f"0x{probe.lib.tcgen05_idesc(TCGEN05_KIND[instr]):08x}", "chain2": bool(args.chain2),
@@ -1020,13 +1205,20 @@ def main() -> int:
     print("device", json.dumps(identity), flush=True)
     failures = []
 
-    if args.sass_check:
+    if args.sass_check and so is not None:
         sass = sass_check(so)
         results["sass"] = sass
         for kern, rec in sass.items():
             if rec["mma_count"] != 1:
                 failures.append(f"sass: {kern} has {rec['mma_count']} MMA instructions")
         print("sass", json.dumps(sass), flush=True)
+        if KERNEL[instr] not in sass:
+            failures.append(f"sass: the {instr} kernel {KERNEL[instr]} is missing from the build")
+    if args.sass_only:
+        results["failures"] = failures
+        (out / "probe_results.json").write_text(json.dumps(results, indent=1))
+        print("FAILURES" if failures else "SASS GATE PASSED", failures, flush=True)
+        return 1 if failures else 0
 
     if instr == "mxf4" and not identity["has_mxf4"]:
         failures.append("mxf4 kernel not compiled")
@@ -1034,6 +1226,9 @@ def main() -> int:
         probe.debug_dir = out
         results["layout_check"] = layout_check(probe, instr)
         print("layout_check", instr, results["layout_check"], flush=True)
+        if instr in ROW_KIND and (instr in GENERIC_ONLY or args.chain > 1):
+            results["chain_layout_check"] = chain_layout_check(probe, instr, 3)
+            print("chain_layout_check", instr, results["chain_layout_check"], flush=True)
 
     replays = []
     for p in args.replay_autoproof:
@@ -1049,16 +1244,36 @@ def main() -> int:
     if args.sweep and not (instr == "mxf4" and not identity["has_mxf4"]):
         only = set(args.families.split(",")) if args.families else None
         rng = np.random.default_rng(args.seed)
-        gen = families_bf16(rng, args.n_random) if instr == "bf16" else families_nvf4(rng, args.n_random, SCALE_KIND[instr])
+        if instr == "bf16":
+            gen = families_bf16(rng, args.n_random)
+        elif instr in k32.ROWS:
+            gen = k32.families_k32(rng, args.n_random, instr)
+        else:
+            gen = families_nvf4(rng, args.n_random, SCALE_KIND[instr])
         capture = {"instruction": PTX[instr], "instruction_id": INSTRUCTION_ID[instr], "k": K_OF[instr], "scale_blocks": NBLK[instr],
-                   "note": "acc/d FP32 words (hex); a/b operand codes in K order (e2m1 nibbles as hex digits; bf16 as 4-hex words); "
-                           "sfa/sfb scale codes per K-block (hex bytes), as measured on the device in identity",
+                   "chain": args.chain,
+                   "note": "acc/d FP32 words (hex); a/b operand codes in K order (e2m1 nibbles as hex digits, e4m3 bytes as 2 hex digits; "
+                           "bf16 as 4-hex words); sfa/sfb scale codes per K-block (hex bytes), as measured on the device in identity",
                    "identity": identity, "records": []}
+        corrupted = False
         with mp.Pool(args.procs, initializer=_init, initargs=(instr, args.group)) as pool:
             for name, A, Bt, SFA, SFB, C in gen:
                 if only is not None and name not in only:
                     continue
                 steps = 1
+                if args.chain > 1:
+                    # L tiles -> one chain of L dependent MMAs: tile c + s*h supplies k-block s, tile c's C the accumulator
+                    L = args.chain
+                    h = A.shape[0] // L
+                    if h == 0:
+                        continue
+                    A = np.concatenate([A[s * h:(s + 1) * h] for s in range(L)], axis=2)
+                    Bt = np.concatenate([Bt[s * h:(s + 1) * h] for s in range(L)], axis=2)
+                    if SFA is not None:
+                        SFA = np.concatenate([SFA[s * h:(s + 1) * h] for s in range(L)], axis=2)
+                        SFB = np.concatenate([SFB[s * h:(s + 1) * h] for s in range(L)], axis=2)
+                    C = C[:h]
+                    steps = L
                 if args.chain2:
                     # pairs of tiles -> one K=128 chain: the second tile's operands are the second k-block, the first tile's C the accumulator
                     h = A.shape[0] // 2
@@ -1077,7 +1292,11 @@ def main() -> int:
                     D_tmem = probe.tiles(instr, A, Bt, C, SFA, SFB, steps=steps, force_tmem=True)
                     replica_tmem = probe.replica_disagreements
                 else:
-                    D = probe.tiles(instr, A, Bt, C, SFA, SFB)
+                    D = probe.tiles(instr, A, Bt, C, SFA, SFB, steps=steps)
+                if args.corrupt_word and not corrupted and name not in RECORD_ONLY_FAMILIES:
+                    D = D.copy()
+                    D[0, 0, 0] ^= 1
+                    corrupted = True
                 t_gpu = time.time() - t0
                 t0 = time.time()
                 models, errs = model_eval(pool, A, Bt, SFA, SFB, C, args.procs)
@@ -1107,11 +1326,10 @@ def main() -> int:
                     first = []
                     for t, i, j in list(zip(*np.nonzero(mism)))[:20]:
                         rec = hexrec(C[t, i, j], A[t, i], Bt[t, j], D[t, i, j], SFA[t, i] if SFA is not None else None,
-                                     SFB[t, j] if SFB is not None else None, bf16=(instr == "bf16"))
+                                     SFB[t, j] if SFB is not None else None, bf16=(instr == "bf16"), widths=HEX_WIDTHS.get(instr, (1, 1)))
                         rec["model"] = "error" if err[t, i, j] else f"{int(model[t, i, j]):08x}"
                         first.append(rec)
                     fam["first_mismatches"][mname] = first
-                primary = PRIMARY_MODEL[instr]
                 if primary in errs and errs[primary].any():
                     fam["observed_outside_model_domain"] = observed_summary(D, C, errs[primary])
                 if tcgen05:
@@ -1143,7 +1361,7 @@ def main() -> int:
                 for f in sorted(flat.tolist()):
                     t, i, j = f // 128, (f % 128) // 8, f % 8
                     capture["records"].append({**hexrec(C[t, i, j], A[t, i], Bt[t, j], D[t, i, j], SFA[t, i] if SFA is not None else None,
-                                                        SFB[t, j] if SFB is not None else None, bf16=(instr == "bf16")), "family": name})
+                                                        SFB[t, j] if SFB is not None else None, bf16=(instr == "bf16"), widths=HEX_WIDTHS.get(instr, (1, 1))), "family": name})
                 fams[name] = fam
                 print(name, json.dumps({k: v for k, v in fam.items() if k != "first_mismatches"}), flush=True)
         model_names = sorted({m for f in fams.values() for m in f["mismatches_vs_model"]})
@@ -1171,13 +1389,17 @@ def main() -> int:
             if not agreeing:
                 failures.append("bf16: neither AMPERE nor HOPPER pipeline reproduces every word")
         else:
-            primary = PRIMARY_MODEL[instr]
-            total = results["sweep"]["total_mismatches_vs_model"].get(primary, 0)
-            if total:
-                failures.append(f"sweep mismatches vs {primary}={total} (record-only families excluded)")
+            totals = results["sweep"]["total_mismatches_vs_model"]
+            results["candidate_finding"] = {"agreeing": sorted(m for m, c in totals.items() if c == 0), "mismatches": totals}
+            if primary is not None:
+                total = totals.get(primary, 0)
+                if total:
+                    failures.append(f"sweep mismatches vs {primary}={total} (record-only families excluded)")
         print("sweep TOTAL", results["sweep"]["total_elements"], "elements,", results["sweep"]["total_mismatches_vs_model"],
               "record-only:", results["sweep"]["record_only_mismatches_vs_model"], flush=True)
 
+    if probe is not None:
+        results["clocks_end"] = probe.clocks(identity.get("gpu_uuid"))
     results["seconds"] = round(time.time() - t_all, 1)
     results["failures"] = failures
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
@@ -1199,8 +1421,8 @@ def main() -> int:
             for rec in rep["first_mismatches"]:
                 if len(first_mism) < 20:
                     first_mism.append({"model": f"autoproof_replay:{rep['file']}", **rec})
-        primary = PRIMARY_MODEL[instr]
         # the verdict: the primary model over the gated families and every autoproof replay; controls/alternatives are recorded
+        # (a row with no primary model is a capture: its finding is ``candidate_finding``, the models that reproduce every word)
         verdict_keys = [k for k in agree if k == primary or k.startswith("autoproof_replay:")]
         model_agrees = all(agree[k] for k in verdict_keys) if verdict_keys else None
         result = {
@@ -1218,15 +1440,22 @@ def main() -> int:
                        "record_only_mismatches": results.get("sweep", {}).get("record_only_mismatches_vs_model", {})},
             "model": results["model"], "primary_model": primary, "model_agrees": model_agrees, "agreement": agree,
             "first_mismatches": first_mism, "seed": args.seed, "n": args.n_random, "group_hypothesis": args.group,
-            "bf16_pipeline_finding": results.get("bf16_pipeline_finding"),
+            "bf16_pipeline_finding": results.get("bf16_pipeline_finding"), "candidate_finding": results.get("candidate_finding"),
+            "chain": args.chain, "expected_model": args.expect_model, "cuda_visible_devices": identity.get("cuda_visible_devices"),
+            "clocks": {"start": results.get("clocks_start"), "end": results.get("clocks_end"),
+                       "note": "recorded, not locked: a capture's words do not depend on the clock"},
             "backend": identity["backend"], "tcgen05": {**results.get("tcgen05", {}), **results.get("sweep", {}).get("tcgen05", {})} if tcgen05 else None,
             "sass_opcodes": {k: sorted(set(v["opcodes"])) for k, v in results.get("sass", {}).items()},
             "workload_fingerprint": {"probe": "tools/tc_probe_fp4/probe.py", "instruction": INSTRUCTION_ID[instr], "arch": args.arch,
                                      "device": identity["device"], "seed": args.seed, "n_random": args.n_random, "chain2": bool(args.chain2),
+                                     "chain": args.chain,
                                      "replays": [Path(p).name for p in args.replay_autoproof]},
             "validation": {"status": "passed" if not failures else "failed",
                            "checker": "tc_probe_fp4 vs verity.ml.tc.models (control: model5) / tc_dot / autoproof vectors",
-                           "detail": "; ".join(failures) or "every hardware word reproduced", "evidence": ["probe_results.json"]},
+                           "detail": "; ".join(failures) or ("every hardware word reproduced" if primary is not None else
+                                                             "capture recorded (layout, SASS and identity gates passed); candidates "
+                                                             f"reproducing every word: {(results.get('candidate_finding') or {}).get('agreeing')}"),
+                           "evidence": ["probe_results.json"]},
             "measurements": [{"name": "wall", "value": results["seconds"], "unit": "s"}],
             "measurement_files": ["probe_results.json"],
             "artifacts": (["capture_sample.json"] if "sweep" in results else []) + sorted(p.name for p in out.glob("tiles_*.npz")),
@@ -1234,7 +1463,10 @@ def main() -> int:
         tmp = out / "result.json.tmp"
         tmp.write_text(json.dumps(result, indent=1))
         os.replace(tmp, out / "result.json")
-    print("FAILURES" if failures else "ALL HARDWARE WORDS REPRODUCED", failures, f"{results['seconds']}s", flush=True)
+    if results.get("candidate_finding") and primary is None:
+        print("candidates reproducing every word:", results["candidate_finding"]["agreeing"], flush=True)
+    print("FAILURES" if failures else ("ALL HARDWARE WORDS REPRODUCED" if primary is not None or not fams else "CAPTURE RECORDED"), failures,
+          f"{results['seconds']}s", flush=True)
     return 1 if failures else 0
 
 
