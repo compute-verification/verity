@@ -637,8 +637,8 @@ def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
     return out, allocs
 
 
-def transcript(run: Path, arm: str, label: str) -> tuple[dict, Path]:
-    path = run / "transcripts" / arm / label / "manifest.json"
+def transcript(run: Path, arm: str, label: str, root: str = "transcripts") -> tuple[dict, Path]:
+    path = run / root / arm / label / "manifest.json"
     return json.loads(path.read_text()), path
 
 
@@ -684,8 +684,11 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         copy = ["copy"] if mark["shape"] == "dec" else []
         if mark["what"] == "transcripts":
             sh = mark["shape"]
-            assert all(ev["stream"] == 0 for ev in evs) and names == copy + commit + forming(sh) + [chain(sh)] + hashes(sh)
+            call = copy + commit + forming(sh) + [chain(sh)] + hashes(sh)
+            assert all(ev["stream"] == 0 for ev in evs)
+            assert names == weight + call + copy + forming(sh) + [chain(sh, "nohash")] + weight + call
             man, _ = transcript(tmp_path / "run", arm.name, mark["shape"])
+            neg, _ = transcript(tmp_path / "run", arm.name, mark["shape"], root="negative")
             m, n = man["shape"]["m"], man["shape"]["n"]
             tiles = -(-m // 64) * (n // 64)
             assert man["scheme"] == arm.name and man["commitment"]["count"] == tiles and man["matmul"] == {"index": 0, "weight": 0}
@@ -693,6 +696,9 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
                 "tree_a": 32 * (2 * A.R.pow2(m) - 1), "tree_b": 32 * (2 * A.R.pow2(n) - 1), "tree_t": 32 * (2 * A.R.pow2(tiles) - 1),
                 "leaves": 32 * tiles, "rows_a": 4 * m * man["shape"]["k"], "rows_b": 4 * n * man["shape"]["k"]}
             assert Path(man["files"]["rows_a"]["path"]).parent == tmp_path / "rows" / arm.name / mark["shape"]
+            assert man["poisoned"] == neg["poisoned"] == "0xA5" and "negative_control" not in man
+            assert neg["negative_control"] == A.NEGATIVE and {f: neg["files"][f] for f in ("rows_a", "rows_b")} == {
+                f: man["files"][f] for f in ("rows_a", "rows_b")}
             continue
         assert all(ev["stream"] == end["stream"] for ev in evs), mark
         if mark["what"] == "weight":
@@ -741,7 +747,8 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     y and the digests, no C̃ or U: the twin reads the second (unfused) launch's C̃ and U, and one message digest flipped in the
     last sampled tile's row fails the gate against the second launch's hash_msg_v (on the stand-in, which computes no tile
     leaf, there alone).  Restored, it passes again and freeing the call writes the transcript, which the reference verifier
-    (verify.py, `verity_pouw.audit.Verifier`) accepts."""
+    (verify.py, `verity_pouw.audit.Verifier`) accepts, and its negative control, whose trees and leaves are all poison (the
+    stand-in writes nothing) and which the verifier rejects."""
     first, flipped, restored = driver(A, ship, arm_dir, tmp_path, cls, "accept", str(small_fixture / "check.json"))
     arm = getattr(A, cls)()
     assert first["ok"] and first["checked"] == {name: "all" for name in ("y",) + A.HASHED}
@@ -757,15 +764,37 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     man, path = transcript(tmp_path / "run", arm.name, "fixture")
     check = json.loads((small_fixture / "check.json").read_text())
     assert man["beacon"] == check["beacon"] and man["weight_root"] == check["seeds"]["root_b"]
+    _, neg_path = transcript(tmp_path / "run", arm.name, "fixture", root="negative")
+    assert all(set((neg_path.parent / f"{f}.bin").read_bytes()) == {A.POISON} for f in ("tree_a", "tree_t", "tree_b", "leaves"))
     r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
-                        "--commit", "test"], capture_output=True, text=True, timeout=600)
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True, timeout=600)
     assert r.returncode == 0, r.stdout + r.stderr
-    line, = r.stdout.splitlines()
-    sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    line, control = r.stdout.splitlines()
+    sha, neg_sha = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (path, neg_path))
     assert line.startswith(f"ACCEPT {arm.name} fixture: verity_pouw.audit.Verifier, Sampled(1) drew tiles ")
-    assert line.endswith(f"; transcript sha256:{sha}; verifier test")
+    assert line.endswith(f"; transcript sha256:{sha}; verifier test; run r-test")
+    assert control.startswith(f"REJECT negative control {arm.name} fixture: ")
+    assert control.endswith(f"; transcript sha256:{neg_sha}; verifier test; run r-test")
     verdict = json.loads((tmp_path / "run" / "verify.json").read_text())
     assert verdict["ok"] and verdict["transcripts"][0]["accepted"] and verdict["transcripts"][0]["line"] == line
+    assert not verdict["negative_controls"][0]["accepted"] and verdict["negative_controls"][0]["line"] == control
+
+
+@pytest.mark.slow
+def test_a_transcript_its_call_did_not_write_is_rejected(A, small_fixture, ship, arm_dir, tmp_path):
+    """The stale-output case (bc-b139c29c, 11:33Z): the fixture's bytes pass the gate, but the transcript's call writes
+    nothing, as a kernel that skipped its commitment would.  The dump then reads the poison, not the gate's bytes, and the
+    verifier rejects it and its negative control, so verify.py fails."""
+    *_, restored = driver(A, ship, arm_dir, tmp_path, "PearlCSm120", "stale", str(small_fixture / "check.json"))
+    assert restored["ok"] and set(restored["transcribed"]) == {"fixture"}
+    _, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
+    assert set((path.parent / "tree_a.bin").read_bytes()) == {A.POISON}
+    r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True, timeout=600)
+    assert r.returncode == 1, r.stdout + r.stderr
+    line, control = r.stdout.splitlines()
+    assert line.startswith("REJECT pearl-c-sm120-v1-h1 fixture: ") and control.startswith("REJECT negative control ")
+    assert not json.loads((tmp_path / "run" / "verify.json").read_text())["ok"]
 
 
 @pytest.mark.slow
@@ -812,6 +841,13 @@ def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_
     failed.mkdir(parents=True)
     (failed / "error.txt").write_text("RuntimeError: no\n")
     for run, missing in ((empty, []), (failed.parents[2], ["transcripts/pearl-c-sm120-v1-h1/pre"])):
-        assert V.main([str(run)]) == 1
-        assert json.loads((run / "verify.json").read_text()) == {"verifier_commit": os.environ.get("RESEARCH_SOURCE_SHA", "unknown"),
-                                                                 "draws": 3, "ok": False, "transcripts": [], "missing": missing}
+        assert V.main([str(run), "--run", "r-test"]) == 1
+        assert json.loads((run / "verify.json").read_text()) == {
+            "verifier_commit": os.environ.get("RESEARCH_SOURCE_SHA", "unknown"), "draws": 3, "run": "r-test", "ok": False,
+            "transcripts": [], "negative_controls": [], "uncontrolled": [], "missing": missing}
+
+    alone = tmp_path / "alone"
+    shutil.copytree(path.parent, alone / "transcripts" / "pearl-c-sm120-v1-h1" / "fixture")
+    assert V.main([str(alone), "--draws", "1", "--jobs", "1", "--run", "r-test"]) == 1
+    verdict = json.loads((alone / "verify.json").read_text())
+    assert verdict["transcripts"][0]["accepted"] and verdict["uncontrolled"] == [verdict["transcripts"][0]["manifest"]]
