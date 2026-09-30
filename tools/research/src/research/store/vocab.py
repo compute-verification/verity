@@ -153,6 +153,8 @@ ANCHOR = "anchor"
 #: A reviewer's grant on a pull request at one head (`pr:<n>@<sha>`), which the merge queue's admission rules require.
 GRANT = "grant"
 GRANT_ROLES = ("red-team", "statement-reviewer", "vllm-coordinator", "review")
+#: The owner's word that a pull request is ready at one head (`research queue ready`); the merge queue admits nothing without it.
+READY = "ready"
 
 
 def canonical_key(name: str) -> str:
@@ -265,6 +267,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(OUTCOME, GROUP_VERIFICATION, TEXT, "an Attempt's failure class as judged (CGROUP_OOM, UNKNOWN_EXIT, ...), restating or correcting the classifier's"),
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head (the merge queue admits on it)",
        GRANT_ROLES),
+    _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it again"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),
