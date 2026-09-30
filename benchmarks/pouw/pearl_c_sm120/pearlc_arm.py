@@ -5,8 +5,10 @@ kernels as the honest prover on the harness's FP32 operands, on the device recor
 Per operand set, `weight_side` is the per-(weight, epoch) work: E_B's, F_A's and F_B's lines, B's statistics, E′ and forming,
 B̃·F_A, G and P_B.  `launch` is one call: at m not a multiple of 64, A's rows into a zero-padded buffer; E_A's lines; A's
 statistics, E′ and forming; A′·F_B and P_A; the chain with its peel and y; then every hash (the C̃ and U messages, the tile
-leaves, A's row commitments; Pearl's tickets are not part of `pearl-c-sm120`, since no PoUW check reads them).  `nohash` is
-the same call without the hashes and without E_A's XOF (its lines come from `prepare`), so it writes the same C̃, U and y.
+leaves, A's row commitments; Pearl's tickets are not part of `pearl-c-sm120`, since no PoUW check reads them).  On 128 x 128
+tiles (m a multiple of 128) the messages are GPU 2's fused epilogue: gemm_pearlc_h digests C̃ and U from registers and stores
+neither, only y and the digests.  `nohash` is the same call without the hashes and without E_A's XOF (its lines come from
+`prepare`), so it writes the same y (and C̃ and U where unfused; fused, gemm_pearlc_s stores only y).
 `phases` is the same call in three parts for the harness's dependent chain: `before` (A's padding copy, E_A's lines, A's
 statistics, E′ and forming, A′·F_B, P_A), `gemm` (the chain with its peel and y) and `after` (the hashes), which the chain may
 run on a side stream beside the next call.  So each operand set has its own call buffers, as well as its keys, E_A's lines
@@ -14,12 +16,14 @@ and weight side (its flag sets share them: the harness runs one call of a set at
 call reuse its set before that set's previous hashes are done); the gate's second launch has per-shape buffers.
 
 The gate, at the exact shape and flag set: a second launch into the gate's own buffers (C̃ by gemm_ct, another kernel; C̃, U
-and y by gemm_pearlc on 3 CTAs, another tile schedule; the hashes over those) must equal every output word for word (`all`),
-and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes and α, C̃, U, y and, with hashing, the leaf
-and row r0's commitments must equal #449's CPU twin (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the
-harness's operand rows.  `known_bad` flips C̃'s first word between the product and the hashes.
+and y by gemm_pearlc on 3 CTAs, another tile schedule, unfused; the hashes over those) must equal every output word for word
+(`all`: the fused call's message digests too), and at the twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B
+codes and α, C̃, U (fused: their message digests), y and, with hashing, the leaf and row r0's commitments must equal #449's
+CPU twin (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the harness's operand rows.  `known_bad` flips C̃'s
+first word (fused: the first digest's) between the product and the hashes.
 
-Shortcuts, flagged: the hashing is #449's device code, unfused (the digests read C̃ and U back from memory); m is padded to
+Shortcuts, flagged: at 64 x 64 tiles the hashing is #449's device code, unfused (the digests read C̃ and U back from memory); A's
+rows are committed as #449's TurboSHAKE128 1 KiB segments, not the protocol's SHA-256 whole-row leaves; m is padded to
 64 rows (decode's m = 32 issues 2x its tensor work on 64 x 64 tiles, and `work` counts issued MACs); the prices and G are the
 H100's stand-ins, so W_ref, the credit and γ are Derived at stand-in prices.
 
@@ -97,15 +101,19 @@ def gamma(scheme: C.PearlC, shape) -> dict[str, str]:
             "basis": f"Derived: TT_OUT γ0 = ρ = 1/400 on {scheme.device.name} at stand-in prices (the H100's), G = {scheme.device.g}"}
 
 
-def expected(t, hashing: bool) -> dict[str, bytes]:
-    """A twin tile's bytes in the kernels' layout, by the names `_Call.tile_bytes` reads."""
+def expected(t, hashing: bool, fused: bool) -> dict[str, bytes]:
+    """A twin tile's bytes in the kernels' layout, by the names `_Call.tile_bytes` reads: C̃ and U, or with `fused` (never
+    stored) their message digests when hashing."""
     ia, ib = H.recip(t.a.alpha.astype(np.uint32)), H.recip(t.b.alpha.astype(np.uint32))
     out = {"at": t.a.codes.astype(np.uint8).tobytes(), "alpha_a": t.a.alpha.astype("<u4").tobytes(),
            "bt": t.b.codes.astype(np.uint8).tobytes(), "alpha_b": t.b.alpha.astype("<u4").tobytes(),
-           "c": t.c.astype("<u4").tobytes(), "u": t.u.astype("<u4").tobytes(),
            "y": H.glue_y(t.u.astype(np.uint32), ia, ib).astype("<u2").tobytes()}
+    if not fused:
+        out.update(c=t.c.astype("<u4").tobytes(), u=t.u.astype("<u4").tobytes())
     if hashing:
         out.update(leaf=t.leaf, rows=b"".join(t.row_commits))
+        if fused:
+            out["digests"] = b"".join(H.digests(t.c.astype(np.uint32), t.u.astype(np.uint32)))
     return out
 
 
@@ -155,21 +163,31 @@ class _Call:
         self.keys = {x: w["key_" + x] for x in KEYS}
         self.xa = w.get("xa", ops.a.ptr)
         self.size = {**size, "rows": shape.m * (4 * k // SEGMENT) * 32}
-        self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr, bufs={b: w[b] for b in OWN + CALL},
+        self.pipe = R.Pipeline(rd, m, n, k, arm.variant, self.keys, self.xa, ops.b.ptr,
+                               bufs={**{b: w[b] for b in OWN + CALL}, "digests_h": w["digests"], "leaves_h": w["leaves"]},
                                m_real=shape.m)
+        self.fused = self.pipe.bm == R.BM
         steps = self.pipe.steps()
+        by = {name: f for name, _, f in steps}
         self.job = [f for _, phase, f in steps if phase == "job"]
-        lines_ea = [f for name, _, f in steps if name == "lines_ea"]
+        lines_ea = [by["lines_ea"]]
         forming = [f for name, phase, f in steps if phase == "forming" and name != "lines_ea"]
         cleanup = [f for name, phase, f in steps if phase == "cleanup" and name != "gemm_pearlc"]
-        chain = [f for name, _, f in steps if name == "gemm_pearlc"]
+        if self.fused:
+            chain = [by["gemm_pearlc_h" if self.hashing else "gemm_pearlc_s"]]
+            hashes = [by["hash_leaf_h"], by["hash_rows"]]
+        else:
+            chain = [by["gemm_pearlc"]]
+            hashes = [f for _, phase, f in steps if phase == "hashing"]
         copy = [lambda: rd.copy_async(self.xa, ops.a.ptr, 4 * shape.m * k)] if self.xa != ops.a.ptr else []
-        flip = [lambda: hdev.xor_byte(w["c"], 0, 0x01, rd.stream)] if corrupt else []
-        hashes = [f for _, phase, f in steps if phase == "hashing"]
+        flip = [lambda: hdev.xor_byte(w["digests" if self.fused else "c"], 0, 0x01, rd.stream)] if corrupt else []
         self.parts = {"before": copy + (lines_ea if self.xof else []) + forming + cleanup, "gemm": chain,
                       "after": flip + (hashes if self.hashing else [])}
         self.phases = {name: (lambda stream, fs=fs: self.enqueue(fs, stream)) for name, fs in self.parts.items()}
-        names = (("leaves", "rows") if self.hashing else ()) + ("y", "c", "u")
+        if self.fused:
+            names = ("leaves", "rows", "digests", "y") if self.hashing else ("y",)
+        else:
+            names = (("leaves", "rows") if self.hashing else ()) + ("y", "c", "u")
         self.outputs = {name: Buffer(w[name], self.size[name]) for name in names}
         if fresh:
             for f in self.job:
@@ -203,7 +221,8 @@ class _Call:
     # ---- the gate's parts ------------------------------------------------------------------------------------------------
 
     def relaunch(self) -> dict[str, int]:
-        """Words differing between each output and the second launch's (gemm_ct's C̃ as `c@gemm_ct`)."""
+        """Words differing between each output and the second launch's (gemm_ct's C̃ as `c@gemm_ct`), which is unfused: the
+        fused call's digests are held to hash_msg's over gemm_pearlc's stored C̃ and U."""
         rd, s = self.arm.rd, self.scratch.b
         ref = R.Pipeline(rd, self.m, self.n, self.k, self.arm.variant, self.keys, self.xa, self.ops.b.ptr,
                          bufs={**self.pipe.b, **{b: s["ref_" + b] for b in REF}}, m_real=self.shape.m)
@@ -214,7 +233,8 @@ class _Call:
             steps[name]()
         rd.sync()
         out = {name: self.diff(buf.ptr, s["ref_" + name], buf.nbytes) for name, buf in self.outputs.items()}
-        out["c@gemm_ct"] = self.diff(self.outputs["c"].ptr, s["ref_c2"], self.outputs["c"].nbytes)
+        if "c" in self.outputs:
+            out["c@gemm_ct"] = self.diff(self.outputs["c"].ptr, s["ref_c2"], self.outputs["c"].nbytes)
         return out
 
     def diff(self, x: int, y: int, nbytes: int) -> int:
@@ -234,13 +254,16 @@ class _Call:
         rows = range(r0, r0 + T)
         out = {"at": get(w["at"] + r0 * k, T * k), "alpha_a": get(w["alpha_a"] + 4 * r0, 4 * T),
                "bt": get(w["bt"] + c0 * k, T * k), "alpha_b": get(w["alpha_b"] + 4 * c0, 4 * T),
-               "c": b"".join(get(w["c"] + 4 * (i * n + c0), 4 * T) for i in rows),
-               "u": b"".join(get(w["u"] + 4 * (i * n + c0), 4 * T) for i in rows),
                "y": b"".join(get(w["y"] + 2 * (i * n + c0), 2 * T) for i in rows)}
+        if not self.fused:
+            out.update(c=b"".join(get(w["c"] + 4 * (i * n + c0), 4 * T) for i in rows),
+                       u=b"".join(get(w["u"] + 4 * (i * n + c0), 4 * T) for i in rows))
         if self.hashing:
             segs = 4 * k // SEGMENT
             out["leaf"] = get(w["leaves"] + 32 * ((r0 // T) * (n // T) + c0 // T), 32)
             out["rows"] = get(w["rows"] + 32 * segs * r0, 32 * segs)
+            if self.fused:
+                out["digests"] = b"".join(get(w["digests"] + i * n + c0, 2 * 32) for i in rows)
         return out
 
     def twin_tiles(self) -> list[dict]:
@@ -254,7 +277,7 @@ class _Call:
             key = (r0, c0, hashlib.sha256(a_rows.tobytes() + b_rows.tobytes()).digest())
             if key not in wt.twin:
                 wt.twin[key] = W.tile(wt.job, r0, c0, a_rows, b_rows)
-            want, got = expected(wt.twin[key], self.hashing), self.tile_bytes(r0, c0)
+            want, got = expected(wt.twin[key], self.hashing, self.fused), self.tile_bytes(r0, c0)
             out.append({"tile": [r0, c0], "failed": sorted(name for name in want if got[name] != want[name])})
         return out
 
@@ -301,9 +324,12 @@ class PearlCSm120:
                "device_record": {"name": d.name, "atom": d.atom.name, "peel": d.peel.name, "g": d.g, "k_max": d.k_max,
                                  "standins": list(d.standins)},
                "cubin_sha256": hashlib.sha256(cubin.read_bytes()).hexdigest(),
-               "gate": f"all: a second launch word for word (gemm_ct, gemm_pearlc on {REF_GRID} CTAs, the hashes); sampled: "
-                       "benchmarks/pouw/pearl_c/twin.py at twin.samples' tiles",
-               "shortcuts": ["hashing unfused (#449's device code reads C~ and U back from memory)",
+               "gate": f"all: a second launch word for word (gemm_ct, gemm_pearlc on {REF_GRID} CTAs unfused, the hashes); "
+                       "sampled: benchmarks/pouw/pearl_c/twin.py at twin.samples' tiles",
+               "shortcuts": ["hashing unfused at 64 x 64 tiles (#449's device code reads C~ and U back from memory); fused "
+                             "in the epilogue at 128 x 128",
+                             "A's rows committed as TurboSHAKE128 1 KiB segments, not SHA-256 whole-row leaves "
+                             "(audit.commit_rows)",
                              "m padded to 64 rows (64 x 64 tiles below 128 rows); work counts issued MACs",
                              "prices and G are the H100's stand-ins; W_ref, credit and gamma Derived at those"]}
         for name in ("sass.json", "toolchain.txt", "source.txt"):

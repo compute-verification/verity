@@ -536,13 +536,18 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
     sx = "" if arm.device.g else "_u"
     for g in rows[:-1]:
         assert not g["ok"] and set(g["checked"].values()) == {"all"}
-        assert set(g["checked"]) == {"y", "c", "u"} | ({"leaves", "rows"} if g["role"] == "hash" else set())
+        hashed = {"leaves", "rows"} if g["role"] == "hash" else set()
+        assert set(g["checked"]) == ({"y"} | hashed | ({"digests"} if hashed else set()) if g["shape"] == "pre" else
+                                     {"y", "c", "u"} | hashed)
         assert all(t["failed"] for t in g["detail"]["twin_tiles"])
     assert rows[-1]["live"] == []
 
-    forming = lambda shape: ["stats_s5", "eprime", "form_s5", {"pre": "gemm_words", "dec": "words"}[shape] + sx, "pa",  # noqa: E731
-                             {"pre": "gemm_pearlc", "dec": "gemm_pearlc_d"}[shape] + sx]
-    hashes = ["hash_msg", "hash_leaf", "hash_rows_f32"]
+    # prefill's m = 256 takes 128 x 128 tiles, so its chain is fused (gemm_pearlc_h, or gemm_pearlc_s without hashing)
+    chain = lambda shape, role: {"pre": "gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_h",  # noqa: E731
+                                 "dec": "gemm_pearlc_d"}[shape] + sx
+    forming = lambda shape, role: ["stats_s5", "eprime", "form_s5", {"pre": "gemm_words", "dec": "words"}[shape] + sx,  # noqa: E731
+                                   "pa", chain(shape, role)]
+    hashes = lambda shape: (["hash_leaf"] if shape == "pre" else ["hash_msg", "hash_leaf"]) + ["hash_rows_f32"]  # noqa: E731
     got, allocs = windows(log)
     assert not allocs
     ea: dict[tuple, int] = {}
@@ -563,13 +568,13 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
                     cur.append(ev)
             whole = launched[(mark["shape"], mark["role"], mark["set"])]
             assert [ev for p in ("before", "gemm", "after") for ev in parts[p]] == whole, mark
-            assert [ev["name"] for ev in parts["gemm"]] == forming(mark["shape"])[-1:]
-            assert [ev["name"] for ev in parts["after"]] == (hashes if mark["role"] == "hash" else [])
+            assert [ev["name"] for ev in parts["gemm"]] == [chain(mark["shape"], mark["role"])]
+            assert [ev["name"] for ev in parts["after"]] == (hashes(mark["shape"]) if mark["role"] == "hash" else [])
             continue
         launched[(mark["shape"], mark["role"], mark["set"])] = evs
-        f = forming(mark["shape"])
-        want = {"hash": copy + ["lines"] + f + hashes, "nohash": copy + f,
-                "known_bad": copy + ["lines"] + f + ["xor_byte"] + hashes}[mark["role"]]
+        f, h = forming(mark["shape"], mark["role"]), hashes(mark["shape"])
+        want = {"hash": copy + ["lines"] + f + h, "nohash": copy + f,
+                "known_bad": copy + ["lines"] + f + ["xor_byte"] + h}[mark["role"]]
         assert names == want, mark
         if mark["role"] != "nohash":
             lines = evs[len(copy)]
@@ -579,20 +584,23 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
         assert ea.setdefault((mark["shape"], mark["set"]), e) == e
     for shape in ("pre", "dec"):
         assert ea[(shape, 0)] != ea[(shape, 1)]
-        chain = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name", "").startswith("gemm_pearlc")) for s in (0, 1)]
-        assert chain[0]["p"][2] != chain[1]["p"][2] and chain[0]["p"][0] != chain[1]["p"][0]
+        calls = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name", "").startswith("gemm_pearlc")) for s in (0, 1)]
+        assert calls[0]["p"][4] != calls[1]["p"][4] and calls[0]["p"][0] != calls[1]["p"][0]
+        if shape == "pre":
+            assert calls[0]["p"][9] != calls[1]["p"][9] and calls[0]["p"][2] == 0
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("cls", ARMS)
 def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls):
-    """The fixture's bytes (the scheme's, at its seeds) where the kernels would have written them pass the gate; one C̃ word
-    flipped in the last sampled tile fails it twice over, against the second launch and against the twin."""
+    """The fixture's bytes (the scheme's, at its seeds) where the kernels would have written them pass the gate; at its
+    128 x 128 tiles the call is fused, and one message digest's byte flipped in the last sampled tile fails it twice over,
+    against the second launch (unfused, hash_msg over gemm_pearlc's C̃ and U) and against the twin."""
     first, flipped = driver(A, ship, arm_dir, tmp_path / "accept.jsonl", cls, "accept", str(small_fixture / "check.json"))
-    assert first["ok"] and set(first["checked"].values()) == {"all"}
+    assert first["ok"] and first["checked"] == {name: "all" for name in ("leaves", "rows", "digests", "y")}
     assert not any(first["detail"]["words_differing_from_relaunch"].values())
     assert len(first["detail"]["twin_tiles"]) == 3 and not any(t["failed"] for t in first["detail"]["twin_tiles"])
-    assert not flipped["ok"]
+    assert not flipped["ok"] and flipped["flipped"][0] == "digests"
     diff = flipped["detail"]["words_differing_from_relaunch"]
-    assert diff["c"] == diff["c@gemm_ct"] == 1 and sum(diff.values()) == 2
-    assert [t["failed"] for t in flipped["detail"]["twin_tiles"]] == [[], [], ["c"]]
+    assert diff["digests"] == sum(diff.values()) == 1
+    assert [t["failed"] for t in flipped["detail"]["twin_tiles"]] == [[], [], ["digests"]]
