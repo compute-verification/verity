@@ -87,9 +87,9 @@ class Replay:
         self.lib.fp4_replay.argtypes = [u8, u8, ctypes.c_int, u8, u8, ctypes.c_int, ctypes.c_int, i32, i32, i32]
         self.lib.fp4_replay.restype = ctypes.c_int
 
-    def __call__(self, a_codes, a_scales, b_codes, b_scales) -> tuple[np.ndarray, np.ndarray]:
-        """(identity atoms, sub-grid blocks), each [rows of A, rows of B], of every word; raises where the reference's
-        chain does (a firing out of range, a NaN scale)."""
+    def run(self, a_codes, a_scales, b_codes, b_scales) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """(identity atoms, sub-grid blocks, error), each [rows of A, rows of B], of every word; error is nonzero where
+        the reference's chain raises (a firing out of range, a NaN scale)."""
         a_codes, b_codes = (np.ascontiguousarray(v, np.uint8) for v in (a_codes, b_codes))
         a_scales, b_scales = (np.ascontiguousarray(v, np.uint8) for v in (a_scales, b_scales))
         (r, k), c = a_codes.shape, b_codes.shape[0]
@@ -99,6 +99,11 @@ class Replay:
         rc = self.lib.fp4_replay(a_codes, a_scales, r, b_codes, b_scales, c, k, ident, sub, err)
         if rc:
             raise RuntimeError(f"fp4_replay ({self.kind}): CUDA error {rc}")
+        return ident, sub, err
+
+    def __call__(self, a_codes, a_scales, b_codes, b_scales) -> tuple[np.ndarray, np.ndarray]:
+        """(identity atoms, sub-grid blocks) of every word; raises where the reference's chain does."""
+        ident, sub, err = self.run(a_codes, a_scales, b_codes, b_scales)
         if err.any():
             from verity.errors import InvalidArtifact
             raise InvalidArtifact(f"word_replay: {int((err != 0).sum())} words' chains leave the model (codes {sorted(set(err.flat) - {0})})")
@@ -171,14 +176,18 @@ def salt_dead_rows(fo, device: str = "cpu", chunk: int = 16) -> list:
 @contextmanager
 def ported(a, b, words=None, dead=None):
     """`pearl_c4.word_replay` and `salt_dead` answered from the port's results over a's and b's rows: (identity,
-    sub-grid) matrices, and each side's salt-dead codes per row (a row without them goes to the reference)."""
+    sub-grid[, error]) matrices, raising where a word's error is set as the reference's chain does, and each side's
+    salt-dead codes per row (a row without them goes to the reference)."""
     saved = F.word_replay, F.salt_dead
     if words is not None:
-        ident, sub = words
+        ident, sub, *err = words
         ra, rb = {id(r): i for i, r in enumerate(a.codes)}, {id(r): j for j, r in enumerate(b.codes)}
 
         def replay(fmt, ac, bc, sa, sb):
             i, j = ra[id(ac)], rb[id(bc)]
+            if err and err[0][i, j]:
+                from verity.errors import InvalidArtifact
+                raise InvalidArtifact("word_replay: the word's chain leaves the model")
             return None, int(ident[i, j]), int(sub[i, j])
 
         F.word_replay = replay

@@ -65,14 +65,16 @@ def keep_gamma(gamma, blk):
     return gk
 
 
-def w_blocks(name: str, n: int) -> np.ndarray:
+def w_blocks(name: str, n: int, blocks: int = W_BLOCKS) -> np.ndarray:
     rng = np.random.default_rng([SEED, *name.encode(), 0x57])
-    b = np.sort(rng.choice(n // TILE, min(W_BLOCKS, n // TILE), replace=False))
+    b = np.sort(rng.choice(n // TILE, min(blocks, n // TILE), replace=False))
     return (b[:, None] * TILE + np.arange(TILE)[None]).reshape(-1)
 
 
-def layer_weights(shards, i: int, variant: str, P) -> dict[str, tuple[np.ndarray, np.ndarray | None]]:
-    """{linear: (W rows sampled, as BF16 in float32; S's positions or None)} for layer i under `variant`."""
+def layer_weights(shards, i: int, variant: str, P, blocks: int = W_BLOCKS
+                  ) -> dict[str, tuple[np.ndarray, np.ndarray | None]]:
+    """{linear: (W rows sampled, as BF16 in float32; S's positions or None)} for layer i under `variant`, `blocks`
+    keyed 64-row blocks of each linear (all of them when it has fewer)."""
     import torch
     rot = not variant.startswith("none")
     place = variant.split("|")[1]
@@ -84,7 +86,7 @@ def layer_weights(shards, i: int, variant: str, P) -> dict[str, tuple[np.ndarray
     out = {}
     for lin in LINEARS:
         w = get(f"{lin}.weight")
-        rows = torch.from_numpy(w_blocks(f"{i}.{lin}", w.shape[0]))
+        rows = torch.from_numpy(w_blocks(f"{i}.{lin}", w.shape[0], blocks))
         side = None
         if rot and lin in IN_NORM:
             gam = get(f"{IN_NORM[lin]}.weight")
