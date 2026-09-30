@@ -33,12 +33,13 @@ def cases(rng, i: int) -> dict:
 
 def production(statics: dict, inputs: list) -> list:
     import torch
+    from vllm import _custom_ops as ops
 
     q, k, cs = inputs
     D = int(statics["D"])
     query, key = q.reshape(1, -1).clone(), k.reshape(1, -1).clone()
     positions = torch.zeros(1, dtype=torch.int64, device=q.device)
-    torch.ops._C.rotary_embedding(positions, query, key, D, cs.reshape(1, D).contiguous(), True)
+    ops.rotary_embedding(positions, query, key, D, cs.reshape(1, D).contiguous(), True)
     statics["cc"] = list(torch.cuda.get_device_capability(q.device))
     return [query.reshape(-1), key.reshape(-1)]
 
