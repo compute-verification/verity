@@ -73,6 +73,8 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
     atoms from C = H, on the operands of ``fp4_emulation.py routes`` at 1ad1aaa2, for each ``--hot-bits`` h and C = +0);
     the sparse rows' metadata rule (``--instruction sp_nvf4_meta | sp_mxf4_meta``, ``meta_rule.py``: where each of the 16
     nibbles puts a chunk's stored codes, the pinned step on that gather, and the zero patterns the hardware can write).
+  * ``scale_bit7`` (nvf4, record only): tile pairs whose UE4M3 scale bytes differ only in bit 7, which the pinned model refuses;
+    ``bit7`` counts the words the pair's members differ in on the device, and checks the low-7-bit members against the model.
   * ``scale_split_twins`` (nvf4, mxf4): tile pairs with equal scaled products and accumulators but A's scale halved into its
     nibbles; ``twins`` counts the words the pair's members differ in, and any difference on the device means no model that
     reads only the exact products and the accumulator (no ``GroupSum``) computes the instruction.
@@ -120,7 +122,7 @@ MAX_TILES_PER_CALL = 1 << 14
 
 # Families whose accumulators or sums lie outside every model's domain (NaN / inf accumulators, sums leaving binary32): the
 # hardware words are recorded and summarised, they never gate validation.
-RECORD_ONLY_FAMILIES = {"specials"}
+RECORD_ONLY_FAMILIES = {"specials", "scale_bit7"}
 
 PTX = {
     "nvf4": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3",
@@ -885,6 +887,9 @@ def families_fp4_re(rng, n_random: int, scale_kind: str):
 
     yield ("scale_split_twins", *scale_split_twins(rng, n_random // 8, scale_kind))
 
+    if ue4:
+        yield ("scale_bit7", *scale_bit7_twins(rng, max(1, n_random // 32)))
+
 
 #: E2M1 magnitude index -> the index of twice its magnitude (0, .5, 1, 1.5, 2, 3 -> 0, 1, 2, 3, 4, 6); 4 and 6 have none.
 _E2M1_DOUBLE = np.array([0, 2, 4, 5, 6, 7, 0, 0], np.uint8)
@@ -936,6 +941,57 @@ def scale_split_twins(rng, n: int, scale_kind: str):
         return out
 
     return twin(a1, a2), twin(bt, bt), twin(sfa1, sfa2), twin(sfb, sfb), twin(acc, acc)
+
+
+#: UE4M3 bytes with bit 7 set that every scale_bit7 pair carries on block 0 of rows 0-2: 0x80 (low 7 bits 0x00, the zero
+#: scale), 0xB8 (0x38, 1.0) and 0xFF (0x7F, NaN)
+BIT7_PINNED = (0x80, 0xB8, 0xFF)
+
+
+def scale_bit7_twins(rng, n: int):
+    """Tile ``2t`` has bit 7 (the PTX ISA's padding bit, which the pinned model refuses) set on about half its UE4M3 scale bytes,
+    the ``BIT7_PINNED`` bytes on block 0 of A's and B's rows 0-2; tile ``2t + 1`` is the same tile with every byte's low 7 bits.
+    Equal words across every pair are what a scale decoder that ignores bit 7 produces."""
+    k, nblk = 64, 4
+    A = rng.integers(0, 16, (n, 16, k)).astype(np.uint8)
+    Bt = rng.integers(0, 16, (n, 8, k)).astype(np.uint8)
+    lo_a = UE4M3_VALID[rng.integers(0, len(UE4M3_VALID), (n, 16, nblk))]
+    lo_b = UE4M3_VALID[rng.integers(0, len(UE4M3_VALID), (n, 8, nblk))]
+    hi_a = lo_a | np.where(rng.random(lo_a.shape) < 0.5, 0x80, 0).astype(np.uint8)
+    hi_b = lo_b | np.where(rng.random(lo_b.shape) < 0.5, 0x80, 0).astype(np.uint8)
+    for r, byte in enumerate(BIT7_PINNED):
+        hi_a[:, r, 0] = hi_b[:, r, 0] = byte
+        lo_a[:, r, 0] = lo_b[:, r, 0] = byte & 0x7F
+    acc = f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-10, 10, (n, 16, 8)))).astype(np.float32))
+
+    def twin(x1, x2):
+        out = np.empty((2 * n,) + x1.shape[1:], x1.dtype)
+        out[0::2], out[1::2] = x1, x2
+        return out
+
+    return twin(A, A), twin(Bt, Bt), twin(hi_a, lo_a), twin(hi_b, lo_b), twin(acc, acc)
+
+
+def bit7_summary(D, SFA, SFB, model, err) -> dict:
+    """``scale_bit7``: words where a pair's tiles differ on the device (none: the hardware decodes a UE4M3 byte from its low 7
+    bits), and the low-7-bit tiles' mismatches against the pinned model outside its domain errors (the NaN byte 0x7F)."""
+    differ = D[0::2] != D[1::2]
+    bytes7 = np.unique(np.concatenate([SFA[0::2].ravel(), SFB[0::2].ravel()]))
+    rec = {"pairs": int(D.shape[0] // 2), "elements_per_twin": int(D.shape[0] // 2) * 128, "device_words_differ": int(differ.sum()),
+           "bit7_bytes_carried": int((bytes7 >= 0x80).sum()), "pinned_bytes": [f"0x{b:02X}" for b in BIT7_PINNED],
+           "hardware_ignores_bit7": not bool(differ.any())}
+    if model is not None:
+        ok = ~err[1::2]
+        rec["low7_twin_vs_model"] = {"checked": int(ok.sum()), "mismatches": int(((model[1::2] != D[1::2]) & ok).sum()),
+                                     "domain_errors": int((~ok).sum())}
+        rec["bit7_tiles_model_domain_errors"] = int(err[0::2].sum())
+    first = []
+    for t, i, j in list(zip(*np.nonzero(differ)))[:10]:
+        first.append({"pair": int(t), "i": int(i), "j": int(j), "word_bit7": f"{int(D[2 * t, i, j]):08x}",
+                      "word_low7": f"{int(D[2 * t + 1, i, j]):08x}",
+                      "sfa": SFA[2 * t, i].tobytes().hex(), "sfb": SFB[2 * t, j].tobytes().hex()})
+    rec["first_differences"] = first
+    return rec
 
 
 def twin_summary(D, models: dict) -> dict:
@@ -1473,6 +1529,8 @@ def main(argv: list[str] | None = None) -> int:
                     fam["first_mismatches"][mname] = first
                 if name == "scale_split_twins" and steps == 1:
                     fam["twins"] = twin_summary(D, models)
+                if name == "scale_bit7" and steps == 1:
+                    fam["bit7"] = bit7_summary(D, SFA, SFB, models.get(primary), errs.get(primary))
                 if primary in errs and errs[primary].any():
                     fam["observed_outside_model_domain"] = observed_summary(D, C, errs[primary])
                 if tcgen05:

@@ -231,6 +231,30 @@ def test_scale_split_twins_dry_run_reports_the_refutation(no_nvcc, tmp_path):
     assert twins["device_words_differ"]["off27"] == twins["device_words_differ"]["off29"] == 0
 
 
+def test_scale_bit7_twins_differ_only_in_bit_7_and_the_model_refuses_those_bytes():
+    rng = np.random.default_rng(7)
+    A, Bt, SFA, SFB, C = P.scale_bit7_twins(rng, 4)
+    assert (A[0::2] == A[1::2]).all() and (Bt[0::2] == Bt[1::2]).all() and (C[0::2] == C[1::2]).all()
+    for sf in (SFA, SFB):
+        assert ((sf[0::2] & 0x7F) == sf[1::2]).all() and (sf[1::2] < 0x80).all() and (sf[0::2] >= 0x80).mean() > 0.3
+        assert [int(sf[0, r, 0]) for r in range(3)] == list(P.BIT7_PINNED)
+    D, err = P.model_words(M.BLACKWELL_SM120_NVF4, A, Bt, SFA, SFB, C, 64, 4)
+    # the pinned model refuses a bit-7 byte (the discrepancy the capture measures) and computes its low-7-bit twin, except where
+    # A's row 2 or B's row 2 carries 0x7F (NaN)
+    nan = np.zeros((16, 8), bool)
+    nan[2, :] = nan[:, 2] = True
+    assert err[0::2, :3].all() and (err[1::2] == nan).all()
+
+    hw = D.copy()
+    hw[0::2] = D[1::2]  # a device that decodes the low 7 bits
+    s = P.bit7_summary(hw, SFA, SFB, D, err)
+    assert s["hardware_ignores_bit7"] and s["device_words_differ"] == 0 and s["low7_twin_vs_model"]["mismatches"] == 0
+    hw[2, 1, 3] ^= 1
+    s = P.bit7_summary(hw, SFA, SFB, D, err)
+    assert not s["hardware_ignores_bit7"] and s["device_words_differ"] == 1
+    assert s["first_differences"][0]["pair"] == 1 and (s["first_differences"][0]["i"], s["first_differences"][0]["j"]) == (1, 3)
+
+
 def test_expect_uuid_takes_one_uuid_or_a_list(monkeypatch):
     assert P.uuid_allowed("GPU-a", "GPU-a") and P.uuid_allowed("GPU-a", "GPU-b, GPU-a")
     assert not P.uuid_allowed("GPU-a", "GPU-b") and not P.uuid_allowed(None, "GPU-a") and not P.uuid_allowed("", ",")
