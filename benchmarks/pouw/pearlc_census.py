@@ -9,14 +9,17 @@ The census counts them over input families built to trigger each, under Pearl-sh
 promotion from +0 every 4 atoms (G4). A cell is in Pi's domain when G4 is used, or when the chain is pure and k/delta^2 <= 2^15.
 The census passes when every in-domain cell's skippable share is at most 1/400.
 
-The atom is verity.ml.tc's HOPPER_E4M3_K32 with a nonzero accumulator (one group of 32, the accumulator truncated to 14 bits
-and joined to the group), vectorized here and checked against verity.ml.tc by --selftest. The noise is Pearl's shape,
-simplified: per row, y = x + delta*rms(x)*Z with Z a rank-32 row of unit RMS (lines of entries +-(1..128)); alpha = 448/max|y|;
+The atom is `verity.ml.tc`'s FP8 `mma`/`wgmma` step with a nonzero accumulator, parametric in the model (`--atom`,
+`set_atom`): H100's one group of 32 (`HOPPER_E4M3_K32`, the default) or Ada's two groups of 16 (`ADA_E4M3_M16N8K32`),
+sm_120's first hypothesis until GPU 0's capture lands.  Only the atom changes across cards; the families, the debit and
+the domain rule are the same, so the census re-runs unchanged on the captured step.  It is vectorized here and checked
+against `verity.ml.tc` for every atom by --selftest. The noise is Pearl's shape, simplified: per row,
+y = x + delta*rms(x)*Z with Z a rank-32 row of unit RMS (lines of entries +-(1..128)); alpha = 448/max|y|;
 codes = RNE_E4M3(alpha*y). Seeds are the tuple (run, unit index, side), so duplicated units get independent noise.
 
     python benchmarks/pouw/pearlc_census.py --selftest
-    python benchmarks/pouw/pearlc_census.py --ks 8192,16384,65536 --deltas 1 --tile 64x16 --out census.json
-    python benchmarks/pouw/pearlc_census.py --forming s5 --line-norm 16 --ks 8192,65536 --out census_s5.json
+    python benchmarks/pouw/pearlc_census.py --atom ada-e4m3-k32 --ks 8192,16384,65536 --deltas 1 --tile 64x16 --out census.json
+    python benchmarks/pouw/pearlc_census.py --atom ada-e4m3-k32 --forming s5 --line-norm 16 --ks 8192,65536 --out census_s5.json
 
 --forming s5 is docs/pouw/cheap-binding.md §5's forming, bit-exact: s = max|x|, rho = RMS over every 8th position,
 sigma = delta*rho, alpha = 448/(s + 4*sigma); F's lines are E4M3 codes of (N_F/sqrt(32))*w and E'_row = e4m3((sigma*alpha/N_F)*v)
@@ -50,6 +53,29 @@ Q_MAX = 448.0
 SIG = np.array([(c & 7) | (8 if c >> 3 else 0) for c in range(128)], dtype=np.int64)
 EXP1 = np.array([max(c >> 3, 1) for c in range(128)], dtype=np.int64)
 OFF, PSHIFT = -14, 17        # verity.ml.tc.term.E4M3: product_exponent_offset, product_shift
+FP32_SIG = 24                # the FP32 significand width the adder rescales from
+
+# The atom (`verity.ml.tc.models.GroupSum`): products summed in groups on a `width`-bit truncating adder with exponent
+# floor `zero`, the incoming accumulator cut to `width` and joined to the first group, each group's result to the next.
+ATOMS = {
+    "hopper-e4m3-k32": ((32,), 14, -139),      # HOPPER_E4M3_K32 (Hawkeye H100)
+    "ada-e4m3-k32": ((16, 16), 14, -139),      # ADA_E4M3_M16N8K32 (RTX 4090); sm_120's first hypothesis (Ada's adder)
+}
+_ATOM_MODEL = {"hopper-e4m3-k32": "HOPPER_E4M3_K32", "ada-e4m3-k32": "ADA_E4M3_M16N8K32"}
+ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO = ATOMS["hopper-e4m3-k32"]
+ATOM_NAME = "hopper-e4m3-k32"
+
+
+def set_atom(name: str) -> None:
+    """Select the atom model the chain and debit replay; `--atom`.  A custom `groups:width:zero` (e.g. `16,16:14:-139`)
+    lets the captured sm_120 step run before it is pinned in `verity.ml.tc`."""
+    global ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO, ATOM_NAME
+    if name in ATOMS:
+        ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO = ATOMS[name]
+    else:
+        g, w, z = name.split(":")
+        ATOM_GROUPS, ATOM_WIDTH, ATOM_ZERO = tuple(int(x) for x in g.split(",")), int(w), int(z)
+    ATOM_NAME = name
 
 
 def enc(x: np.ndarray) -> np.ndarray:
@@ -81,8 +107,10 @@ def _fp32_parts(C: np.ndarray):
     return C < 0, ex, np.where(a > 0, np.rint(mag), 0).astype(np.int64)
 
 
-def step(C: np.ndarray, a: np.ndarray, b: np.ndarray):
-    """C: (P,) exact FP32 values; a, b: (P, 32) codes. Returns (D, exact): exact = no bit lost anywhere in the step."""
+def _group_step(C: np.ndarray, a: np.ndarray, b: np.ndarray, width: int, zero: int):
+    """One grouped-sum on a `width`-bit truncating adder (`verity.ml.tc.models.group_sum`), for a slice of up to 32 product
+    pairs.  C: (P,) exact FP32 values; a, b: (P, g) codes.  Returns (D, exact) with exact = no bit lost in this group."""
+    rs = FP32_SIG - width                        # rescale from the 24-bit FP32 grid to the adder's width (10 for width 14)
     a = a.astype(np.int64)
     b = b.astype(np.int64)
     ma, mb = a & 0x7F, b & 0x7F
@@ -90,45 +118,64 @@ def step(C: np.ndarray, a: np.ndarray, b: np.ndarray):
     pexp = EXP1[ma] + EXP1[mb] + OFF
     pneg = ((a ^ b) & 0x80) != 0
     cneg, cexp, cmag = _fp32_parts(C)
-    mx = np.maximum(np.maximum(np.where(ss > 0, pexp, -10 ** 6).max(-1), np.where(cmag > 0, cexp, -10 ** 6)), -139)
+    mx = np.maximum(np.maximum(np.where(ss > 0, pexp, -10 ** 6).max(-1), np.where(cmag > 0, cexp, -10 ** 6)), zero)
     psh = np.clip(mx[:, None] - pexp, 0, 62)
     csh = np.clip(mx - cexp, 0, 62)
-    p10 = (ss << PSHIFT) >> 10
-    ps = np.where(ss > 0, p10 >> psh, 0)
-    c10 = cmag >> 10
-    cs = np.where(cmag > 0, c10 >> csh, 0)
-    lost = ((cmag & 0x3FF) != 0) | ((c10 & ((np.int64(1) << csh) - 1)) != 0)
-    lost |= ((ss > 0) & ((p10 & ((np.int64(1) << psh) - 1)) != 0)).any(-1)
+    p_w = (ss << PSHIFT) >> rs if rs >= 0 else (ss << PSHIFT) << -rs
+    ps = np.where(ss > 0, p_w >> psh, 0)
+    c_w = cmag >> rs if rs >= 0 else cmag << -rs
+    cs = np.where(cmag > 0, c_w >> csh, 0)
+    lost = (((cmag & ((np.int64(1) << rs) - 1)) != 0) if rs > 0 else np.zeros(C.shape, bool))
+    lost |= (c_w & ((np.int64(1) << csh) - 1)) != 0
+    lost |= ((ss > 0) & ((p_w & ((np.int64(1) << psh) - 1)) != 0)).any(-1)
     tot = np.where(pneg, -ps, ps).sum(-1) + np.where(cneg, -cs, cs)
     neg, m = tot < 0, np.abs(tot)
     bl = np.frexp(m.astype(np.float64))[1].astype(np.int64)
-    ex = mx + bl - 14
-    over = np.clip(bl - 14, 0, 62)
-    lost |= (bl > 14) & ((m & ((np.int64(1) << over) - 1)) != 0)
-    m = np.where(bl > 14, m >> over, m << np.clip(14 - bl, 0, 62))
+    ex = mx + bl - width
+    over = np.clip(bl - width, 0, 62)
+    lost |= (bl > width) & ((m & ((np.int64(1) << over) - 1)) != 0)
+    m = np.where(bl > width, m >> over, m << np.clip(width - bl, 0, 62))
     sub = ex < -126
     subsh = np.clip(-126 - ex, 0, 62)
     lost |= sub & ((m & ((np.int64(1) << subsh) - 1)) != 0)
     m = np.where(sub, m >> subsh, m)
     ex = np.where(sub, -126, ex)
-    v = np.ldexp((m << 10).astype(np.float64), (ex - 23).astype(np.int64))
+    v = np.ldexp((m << rs).astype(np.float64) if rs >= 0 else (m >> -rs).astype(np.float64), (ex - 23).astype(np.int64))
     return np.where(m == 0, 0.0, np.where(neg, -v, v)), ~lost
 
 
+def step(C: np.ndarray, a: np.ndarray, b: np.ndarray):
+    """The atom's k32 step under the selected model (`set_atom`): C: (P,) exact FP32; a, b: (P, k) codes with k = Σ groups.
+    Returns (D, exact); exact = no bit lost in any group.  Each group's output is the next group's incoming accumulator."""
+    exact = np.ones(C.shape, bool)
+    start = 0
+    for g in ATOM_GROUPS:
+        D, ex = _group_step(C, a[:, start:start + g], b[:, start:start + g], ATOM_WIDTH, ATOM_ZERO)
+        C, exact, start = D, exact & ex, start + g
+    return C, exact
+
+
 def selftest(cases: int = 3000) -> int:
-    from verity.ml.tc.models import HOPPER_E4M3_K32 as H
+    """Check the vectorized parametric step against `verity.ml.tc` on nonzero-accumulator cases, for every atom in ATOMS
+    (the current selection restored at the end).  Returns the total mismatch count."""
+    from verity.ml.tc import models as M
+    saved = ATOM_NAME
     rng = np.random.default_rng(7)
     a = (rng.integers(0, 0x7F, (cases, 32)) | rng.integers(0, 2, (cases, 32)) * 0x80).astype(np.uint8)
     b = (rng.integers(0, 0x7F, (cases, 32)) | rng.integers(0, 2, (cases, 32)) * 0x80).astype(np.uint8)
     a[: cases // 3] &= 0x87
     C = np.where(rng.random(cases) < 0.2, 0.0, rng.standard_normal(cases) * np.exp2(rng.integers(-20, 30, cases)))
     C = C.astype(np.float32).astype(np.float64)
-    D, _ = step(C, a, b)
     bad = 0
-    for i in range(cases):
-        want = H.step(int(np.float32(C[i]).view(np.uint32)), [int(x) for x in a[i]], [int(x) for x in b[i]])
-        got = int(np.float32(D[i]).view(np.uint32))
-        bad += want != got and not (want & 0x7FFFFFFF == 0 and got & 0x7FFFFFFF == 0)
+    for name in ATOMS:
+        set_atom(name)
+        H = getattr(M, _ATOM_MODEL[name])
+        D, _ = step(C, a, b)
+        for i in range(cases):
+            want = H.step(int(np.float32(C[i]).view(np.uint32)), [int(x) for x in a[i]], [int(x) for x in b[i]])
+            got = int(np.float32(D[i]).view(np.uint32))
+            bad += want != got and not (want & 0x7FFFFFFF == 0 and got & 0x7FFFFFFF == 0)
+    set_atom(saved)
     return bad
 
 
@@ -563,6 +610,8 @@ def main() -> None:
     ap.add_argument("--run", type=int, default=1)
     ap.add_argument("--forming", choices=("census", "s5"), default="census")
     ap.add_argument("--line-norm", type=float, default=256.0)
+    ap.add_argument("--atom", default="hopper-e4m3-k32",
+                    help="the FP8 atom model: hopper-e4m3-k32, ada-e4m3-k32 (sm_120's first hypothesis), or groups:width:zero")
     ap.add_argument("--debit", action="store_true",
                     help="replay each word's debit (eF and skip-one) under G4; the pass criterion becomes the undebited residual")
     ap.add_argument("--cross-words", type=int, default=0,
@@ -571,8 +620,9 @@ def main() -> None:
                     help="with --debit and --forming s5: the reviewer's transfer test (simulated-draw greedy sets skipped on the real draw)")
     ap.add_argument("--out", default="pearlc_census.json")
     args = ap.parse_args()
+    set_atom(args.atom)
     bad = selftest()
-    print(json.dumps({"selftest_cases": 3000, "mismatches": bad}), flush=True)
+    print(json.dumps({"selftest_cases": 3000, "atom": ATOM_NAME, "mismatches": bad}), flush=True)
     if args.selftest or bad:
         sys.exit(1 if bad else 0)
     rows, cols = map(int, args.tile.split("x"))
@@ -588,7 +638,9 @@ def main() -> None:
     scored = [r for r in rows_out if r["in_domain"] and key in r]
     worst = max((r[key] for r in scored), default=0.0)
     worst_row = max(scored, key=lambda r: r[key], default=None)
-    doc = {"tool": "pouw_pearlc_census", "tile": args.tile, "forming": args.forming, "line_norm": args.line_norm, "selftest_mismatches": bad, "cells": rows_out,
+    doc = {"tool": "pouw_pearlc_census", "atom": ATOM_NAME, "atom_groups": list(ATOM_GROUPS), "atom_width": ATOM_WIDTH,
+           "atom_zero": ATOM_ZERO, "tile": args.tile, "forming": args.forming, "line_norm": args.line_norm,
+           "selftest_mismatches": bad, "cells": rows_out,
            "criterion": key, "worst_in_domain_skippable_share": worst, "worst_in_domain_cell": worst_row, "threshold": 1 / 400,
            "seconds": round(time.time() - t0, 1)}
     out = Path(args.out)

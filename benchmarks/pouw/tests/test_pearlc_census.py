@@ -16,6 +16,19 @@ def test_chained_atom_matches_verity():
     assert C.selftest(400) == 0
 
 
+def test_atom_is_parametric_and_census_reruns_under_ada():
+    try:
+        C.set_atom("ada-e4m3-k32")
+        assert C.ATOM_GROUPS == (16, 16)
+        rows = [r for r in C.cell("aligned-spikes-pm1-r444", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0,
+                                  with_debit=True) if r["layout"] == "G4"]
+        assert rows[0]["rules_ok"] and rows[0]["debit_share"] >= rows[0]["tile_identity_atoms"] / rows[0]["atoms"]
+        C.set_atom("16,16:14:-139")
+        assert C.ATOM_GROUPS == (16, 16) and C.ATOM_WIDTH == 14
+    finally:
+        C.set_atom("hopper-e4m3-k32")
+
+
 def test_generic_tile_has_nothing_to_skip():
     for row in C.cell("gaussian", 1024, 1.0, 8, 4, run=1):
         assert row["in_domain"] and row["skippable_share"] == 0.0
