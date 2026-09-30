@@ -75,6 +75,8 @@ submit() {
   push "$src/" "$src/"
   # the weights themselves (-L: node 1's snapshots link into its shared blobs/): the CPU bootstrap's checkpoint check reads them
   push "$model/" "/workspace/jobs/hf/hub/$(basename "$model")/" -L --exclude=/blobs/
+  ssh -n "$N2" "d=/workspace/jobs/hf/hub/$(basename "$model")/snapshots/$rev; [ -f \$d/config.json ] && [ -z \"\$(find \$d -type l -print -quit)\" ]" \
+    || { echo "checkpoint $repo@$rev isn't staged on node 2; not queued" >&2; exit 3; }
   push /workspace/jobs/bootstrap/stamps/ /workspace/jobs/bootstrap/stamps/
   push /workspace/jobs/cache/unit-rules/ /workspace/jobs/cache/unit-rules/
   push "$0" "$GUEST/bin/n2_build.sh"
