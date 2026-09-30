@@ -70,7 +70,9 @@ one tile byte, per row, and per block-column class (`int8_saving`), with c_L bc-
 They are the rows `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2
 charges the masked int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain
 claim `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
-and D-SK stays.
+and D-SK stays.  **R1** (theory §6.8): a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by
+the prover (`r1_rows`, through `pearl_c_work.declare`) and checked on drawn tiles (`row_over_debit`, through
+`pearl_c_work.check_opened`); it is still formed, checked and hashed.
 
 A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
 codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
@@ -953,6 +955,37 @@ class PearlC4:
         self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m)
         cell = Fraction(self.credit_of(Shape(1, record.k_kept, s.n)), s.n)
         return self.last_debit.total, CAP * cell * len(rows) * len(cols)
+
+    def _row_f1(self, side: Formed, e_rows: Sequence[Sequence[int]], pos: int) -> Fraction:
+        x = side.x[pos]
+        dead = salt_dead(self.fmt, x, side.alpha[pos], side.ae[pos])
+        p, modes = change_probabilities(self.fmt, x, side.alpha[pos], e_rows[pos], side.ae[pos], dead)
+        return split_units(self.fmt, p, modes, side.scales[pos])
+
+    def _r1_cap(self, k_kept: int, n: int) -> Fraction:
+        return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
+
+    def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
+        """R1 (theory-pearl-c4-domain.md §6.8; ratings.md 15:18Z condition 4): whether the row at tile position `pos` of
+        A′ ("A") or B̃ ("B") carries an F1′ per word above ρ·(its cell credit), and so must be declared excluded.  An
+        excluded row is still formed, checked and hashed; it earns nothing."""
+        formed, e_rows = (ops.a, ops.e_a) if side == "A" else (ops.b, ops.e_b)
+        return self._row_f1(formed, e_rows, pos) > self._r1_cap(record.k_kept, record.matmul.shape.n)
+
+    def r1_rows(self, ctx: Context, a_rows: Sequence[bytes], b_rows: Sequence[bytes], k_kept: int) -> tuple[set[int], set[int]]:
+        """R1 over a whole unit, for an honest prover's declaration (`pearl_c_work.declare`): the A rows and the weight's
+        B rows that pass the per-row rules but whose F1′ per word passes ρ·(their cell credit)."""
+        noise, k, n = self.noise(ctx), ctx.matmul.shape.k, ctx.matmul.shape.n
+        cap = self._r1_cap(k_kept, n)
+        out: tuple[set[int], set[int]] = (set(), set())
+        for rows, role_e, role_f, seed_e, dest in ((a_rows, ROLE_EA, ROLE_FA, noise.seed_a, out[0]),
+                                                   (b_rows, ROLE_EB, ROLE_FB, noise.seed_b, out[1])):
+            live = [i for i, row in enumerate(rows) if row_passes(self.fmt, parse_row(row, k))]
+            if not live:
+                continue
+            side, e = self._side([rows[i] for i in live], live, role_e, role_f, seed_e, noise.seed_b, k)
+            dest.update(i for p, i in enumerate(live) if self._row_f1(side, e, p) > cap)
+        return out
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
               k: int) -> tuple[Formed, list[list[int]]]:

@@ -251,8 +251,10 @@ def test_a_row_whose_screened_blocks_push_the_tile_past_rho_is_rejected():
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(16)
     assert F.row_passes(s.fmt, x) and sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:16 * s.fmt.block]) <= 16
     reason = W.check_opened(s, record, tile, a_rows, b_rows, ops)
-    assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
-    d, cap = s.last_debit, s.tile_cap(record, ops, range(4), range(4))[1]
+    # R1 now catches the row itself: its own F1′ passes ρ·(its cell credit), so declared credited it fails the tile
+    assert reason is not None and "R1's bound" in reason
+    cap = s.tile_cap(record, ops, range(4), range(4))[1]
+    d = s.last_debit
     assert d.counts["screened_blocks_a"] == 16 and d.total > cap
     dead = [F.salt_dead(s.fmt, ops.a.x[i], ops.a.alpha[i], ops.a.ae[i]) for i in range(4)]
     unneeded = [all(ops.b.codes[j][t] & 7 == 0 for j in range(4)) for t in range(1024)]
@@ -368,6 +370,35 @@ def test_f1_prime_reads_the_exact_noise_law():
     assert var == pytest.approx(8.5625 * sum(float(F.e2m1_value(c)) ** 2 for c in e))
     lo, pmf = F.noise_law((0x7,) + (0,) * 31)
     assert lo == -144 and pmf[0] == pytest.approx(1 / 16) and pmf[144] == pytest.approx(2 / 16)
+
+
+def r1_tile():
+    """A 4 x 4 credited tile of a 4 x 1024 x 4096 NVFP4 unit: A row 0 the assessor's spike row, rows 1–3 and B Gaussian."""
+    s, k = V.scheme("nvfp4", False), 1024
+    ctx = V.ctx_of("r1", (4, k, 4096), 0, 0)
+    a_rows = [F.bf16_row([x >> 16 for x in spike_row(0, k)])] + V.rows("r1", "A", 3, k)
+    b_rows = V.rows("r1", "B", 4, k)
+    tile = type(s.tiles(Shape(64, k, 64))[0])(range(4), range(4))
+    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+    return s, ctx, tile, a_rows, b_rows, ops
+
+
+def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
+    """R1 (ratings.md 15:18Z condition 4): the spike row's own F1′ passes ρ·(its cell credit), so it must be declared
+    excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it fails the
+    tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest prover's
+    declaration finds exactly row 0."""
+    s, ctx, tile, a_rows, b_rows, ops = r1_tile()
+    k = ctx.matmul.shape.k
+    assert all(F.row_passes(s.fmt, F.parse_row(r, k)) for r in a_rows + b_rows)
+    assert s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, "A", 0)
+    assert not any(s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, side, p) for side in "AB" for p in (1, 2, 3))
+    assert W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("A row 0 is credited") and "R1's bound" in reason
+    reason = W.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0, 1)), tile, a_rows, b_rows, ops)
+    assert reason is not None and reason.startswith("A row 1 is excluded but passes the per-row rules")
+    assert s.r1_rows(ctx, a_rows, b_rows, k) == ({0}, set())
 
 
 def test_f2_depth_cost_is_the_pinned_formula():

@@ -204,6 +204,13 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
     kinds = [("A", i, row, "filler" if i >= record.real_rows else "excluded" if i in ea else "credited")
              for i, row in zip(tile.rows, a_rows, strict=True)]
     kinds += [("B", j, row, "excluded" if j in eb else "credited") for j, row in zip(tile.cols, b_rows, strict=True)]
+    pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
+    over = getattr(scheme, "row_over_debit", None)
+
+    def r1(side: str, index: int) -> bool:
+        """R1, a scheme's salted per-row credit rule (Pearl-C4's F1′ bound): Pearl-C's schemes bring none."""
+        return over is not None and ops is not None and over(record, ops, side, (pos_a if side == "A" else pos_b)[index])
+
     for side, index, row, kind in kinds:
         try:
             words = parse(row, k)
@@ -215,11 +222,13 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
             continue
         if any(words[record.k_kept:]):
             return f"{side} row {index} is not zero past the kept width"
-        if passes(words) != (kind == "credited"):
+        ok = passes(words)
+        if (kind == "credited" and not ok) or (kind == "excluded" and ok and not r1(side, index)):
             return f"{side} row {index} is {kind} but {'fails' if kind == 'credited' else 'passes'} the per-row rules"
+        if kind == "credited" and r1(side, index):
+            return f"{side} row {index} is credited but its own debit passes R1's bound (ρ·its cell credit)"
     rows, cols = record.credited(tile)
     if rows and cols:
-        pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
         if hasattr(scheme, "tile_cap"):
             debit, cap = scheme.tile_cap(record, ops, [pos_a[i] for i in rows], [pos_b[j] for j in cols])
         else:
@@ -350,16 +359,30 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
 
 
 def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]],
-            splits: Mapping[int, Split], real_rows: Mapping[int, int] | None = None) -> list[UnitRecord]:
-    """An honest prover's records: each real row and each weight row checked by the per-row rules on the unit's words."""
+            splits: Mapping[int, Split], real_rows: Mapping[int, int] | None = None,
+            transcript: Transcript | None = None) -> list[UnitRecord]:
+    """An honest prover's records: each real row and each weight row checked by the per-row rules on the unit's words,
+    and, for a scheme with a salted per-row credit rule (`r1_rows`, Pearl-C4's R1), by that rule on the committed
+    transcript's forming.  Pearl-C's schemes bring none, so `transcript` changes nothing for them."""
     parse, passes = _rules(scheme)
     k_of = {u.weight: u.shape.k for u in epoch.workload.matmuls}
-    excluded_b = {w: tuple(j for j, r in enumerate(rows) if not passes(parse(r, k_of[w])))
-                  for w, rows in weights.items()}
+    excluded_b = {w: {j for j, r in enumerate(rows) if not passes(parse(r, k_of[w]))} for w, rows in weights.items()}
+    r1 = getattr(scheme, "r1_rows", None) if transcript is not None else None
+    extra_a: dict[int, set[int]] = {}
+    if r1 is not None:
+        done: set[int] = set()
+        for p, u in enumerate(epoch.workload.matmuls):
+            real = (real_rows or {}).get(u.index, u.shape.m)
+            ctx = Context(epoch.salt, u, transcript.activation_roots[p], epoch.weight_roots[u.weight])
+            ea, eb = r1(ctx, activations[u.index][:real], weights[u.weight], splits[u.weight].k_kept)
+            extra_a[u.index] = ea
+            if u.weight not in done:
+                excluded_b[u.weight] |= eb
+                done.add(u.weight)
     out = []
     for u in epoch.workload.matmuls:
         real = (real_rows or {}).get(u.index, u.shape.m)
         rows = activations[u.index]
-        excluded_a = tuple(i for i in range(real) if not passes(parse(rows[i], u.shape.k)))
-        out.append(UnitRecord(u, real, splits[u.weight].k_kept, excluded_a, excluded_b[u.weight]))
+        excluded_a = tuple(i for i in range(real) if not passes(parse(rows[i], u.shape.k)) or i in extra_a.get(u.index, ()))
+        out.append(UnitRecord(u, real, splits[u.weight].k_kept, excluded_a, tuple(sorted(excluded_b[u.weight]))))
     return out
