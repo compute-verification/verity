@@ -33,6 +33,18 @@ def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path):
     assert OC.OpenedReader(store, run)(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == b"\x07" * 10
 
 
+def test_the_dump_hashes_every_step_file_as_it_writes_it(tmp_path, monkeypatch):
+    import hashlib
+    monkeypatch.setattr(SD, "FLUSH", 100)                            # a flush between the chunks of every step
+    com, rc = commit_steps(STEPS)
+    got = {}
+    SD.dump(com, rc, tmp_path, threads=3, digests=got)
+    files = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.bin"))
+    assert sorted(got) == files and len(files) == 2 * len(STEPS)
+    assert all(got[f] == hashlib.sha256((tmp_path / f).read_bytes()).hexdigest() for f in files)
+    assert _reads(OC.OpenedReader(*SD.load(tmp_path))) == _reads(OC.OpenedReader(com, rc))
+
+
 def test_a_flipped_dumped_byte_does_not_verify(tmp_path):
     com, rc = commit_steps(STEPS)
     SD.dump(com, rc, tmp_path)

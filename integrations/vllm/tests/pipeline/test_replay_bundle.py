@@ -64,6 +64,22 @@ def test_a_sealed_bundle_opens_and_its_partial_is_gone(tmp_path):
     assert set(b["manifest"]["files"]) == {"store/raw/s0.bin", "store/store.json", "binding_map.json", "context.json"}
 
 
+def test_a_digest_taken_as_the_file_was_written_is_the_manifest_s_and_is_checked_on_opening(tmp_path):
+    import hashlib
+    p = RB.partial(tmp_path, 1)
+    (p / "store" / "raw").mkdir(parents=True)
+    (p / "store" / "raw" / "s0.bin").write_bytes(bytes(range(256)))
+    (tmp_path / "binding_map_p1.json").write_text("{}")
+    good = hashlib.sha256(bytes(range(256))).hexdigest()
+    m = RB.seal(tmp_path, 1, {"pair": 1}, tmp_path / "binding_map_p1.json", hashed={"store/raw/s0.bin": good})
+    assert m["files"]["store/raw/s0.bin"]["sha256"] == good and RB.open_bundle(m["path"])
+    p.mkdir()
+    (p / "s.bin").write_bytes(b"x")
+    m = RB.seal(tmp_path, 1, {"pair": 1}, tmp_path / "binding_map_p1.json", hashed={"s.bin": "00" * 32})
+    with pytest.raises(ValueError, match="sha256"):
+        RB.open_bundle(m["path"])
+
+
 @pytest.mark.parametrize("tamper,why", [
     (lambda b: (b / "store" / "raw" / "s0.bin").write_bytes(bytes(255) + b"\x01"), "sha256"),
     (lambda b: (b / "store" / "raw" / "s0.bin").unlink(), "missing"),

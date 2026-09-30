@@ -13,9 +13,12 @@ vllm-v1 leaves and no padding steps are dumped; any other store is refused by na
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import mmap
 import os
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -26,6 +29,8 @@ from verity_vllm.commit.native_ranges import NativeRangeOpenings
 
 SCHEMA = "verity-vllm/committed-store/v1"
 NODE = 32
+#: bytes written between flushes: the dirty pages of a dump are charged to the writer's memory cgroup, beside a pinned store
+FLUSH = 1 << 30
 
 
 def _ranges(blk: Any) -> list[tuple[int, int, Any]]:
@@ -59,32 +64,57 @@ def _refusal(com: Any) -> str | None:
     return None
 
 
-def dump(com: Any, rc: Any, d: str | os.PathLike) -> dict[str, Any]:
-    """Writes the committed store of `com` (run commitment `rc`) under `d`; returns the `store.json` document."""
+def write_file(p: Path, chunks: Iterable[memoryview]) -> str:
+    """Writes ``chunks`` to ``p`` back to back, flushed and dropped from the page cache every `FLUSH` bytes; the sha256 of what was
+    written."""
+    h = hashlib.sha256()
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    try:
+        dirty = 0
+        for mv in chunks:
+            h.update(mv)
+            dirty += len(mv)
+            while mv:
+                mv = mv[os.write(fd, mv):]
+            if dirty >= FLUSH:
+                os.fdatasync(fd)
+                os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+                dirty = 0
+        os.fdatasync(fd)
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+    finally:
+        os.close(fd)
+    return h.hexdigest()
+
+
+def _dump_step(com: Any, sc: Any, d: Path) -> tuple[dict[str, Any], dict[str, str]]:
+    s = int(sc.step)
+    blk, used = com._gpu_blocks[s]
+    rs = _ranges(blk)
+    lvs = list(com._gpu_levels[s])
+    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
+               f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", (_as_bytes(lv.contiguous()) for lv in lvs))}
+    return ({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes), "n_tensors": int(sc.n_tensors),
+             "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [int(lv.shape[0]) for lv in lvs],
+             "metas": [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off]
+                       for m in com._layouts[s]]}, digests)
+
+
+def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None) -> dict[str, Any]:
+    """Writes the committed store of `com` (run commitment `rc`) under `d`, its steps ``threads`` at a time; returns the `store.json`
+    document.  ``digests``, when given, receives the sha256 of every step file written (by its path under `d`)."""
     why = _refusal(com)
     if why:
         raise ValueError(f"committed store not dumpable: {why}")
     d = Path(d)
     (d / "raw").mkdir(parents=True, exist_ok=True)
     (d / "levels").mkdir(parents=True, exist_ok=True)
-    steps = []
-    for sc in rc.steps:
-        s = int(sc.step)
-        blk, used = com._gpu_blocks[s]
-        ranges = []
-        with open(d / "raw" / f"s{s}.bin", "wb") as f:
-            for lo, hi, hv in _ranges(blk):
-                f.write(_as_bytes(hv)[:hi - lo])
-                ranges.append([int(lo), int(hi)])
-        widths = []
-        with open(d / "levels" / f"s{s}.bin", "wb") as f:
-            for lv in com._gpu_levels[s]:
-                f.write(_as_bytes(lv.contiguous()))
-                widths.append(int(lv.shape[0]))
-        steps.append({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes),
-                      "n_tensors": int(sc.n_tensors), "used": int(used), "ranges": ranges, "levels": widths,
-                      "metas": [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off]
-                                for m in com._layouts[s]]})
+    with ThreadPoolExecutor(max(1, threads)) as pool:
+        done = list(pool.map(lambda sc: _dump_step(com, sc, d), rc.steps))
+    steps = [e for e, _ in done]
+    if digests is not None:
+        for _, dg in done:
+            digests.update(dg)
     doc = {"schema": SCHEMA, "chunk": int(com.chunk), "program_digest": com.program_digest.hex(), "geo_digest": com._geo_digest.hex(),
            "run_id": com.run_id, "layout_v2": bool(getattr(com, "layout_v2", False)), "gpu_tree_src": int(com.GPU_TREE_SRC),
            "run_root": rc.run_root.hex(), "steps": steps}
