@@ -1,0 +1,419 @@
+{
+ "schema": "verity-vllm/workload/v1",
+ "model": "unsloth/Llama-3.2-1B",
+ "case": "LLAMA32_1B",
+ "tokenizer_revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+ "seed": 0,
+ "variants": {
+  "greedy": {
+   "temperature": 0.0,
+   "top_p": 1.0,
+   "top_k": 0
+  }
+ },
+ "seeds": [],
+ "sampling": {
+  "variant": "greedy",
+  "seed": null,
+  "n": 1
+ },
+ "serving_profile": "sweep-B8",
+ "context_class": "I32-O128",
+ "length_seed": "73b21450228a080c5bb4daf169627b7972fca3b1ca25050d9b6bf8c775a819eb",
+ "prompt_seed": "73b21450228a080c5bb4daf169627b7972fca3b1ca25050d9b6bf8c775a819eb",
+ "replicate": 0,
+ "length_rule": {
+  "input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] nudged off powers of two; seeded permutation",
+  "output": "same over [2, O]; paired by seeded permutation",
+  "depends_on": "SHA256(row_id) only"
+ },
+ "expected_engine_steps": 128,
+ "engine_args_required": {
+  "max_num_batched_tokens": 2048,
+  "max_model_len": 160
+ },
+ "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 6b9e4e7fb171f92f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
+ "prompt_lengths": [
+  9,
+  13,
+  17,
+  19,
+  22,
+  26,
+  32
+ ],
+ "max_tokens": [
+  2,
+  13,
+  27,
+  51,
+  71,
+  95,
+  113,
+  128
+ ],
+ "requests": [
+  {
+   "request_id": "2ababeea-7873-54b0-b28a-ed89643dfc39",
+   "index": 0,
+   "prompt_len": 17,
+   "max_tokens": 51,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    644,
+    1455,
+    5157,
+    420,
+    4827,
+    16942,
+    2345,
+    35214,
+    6847,
+    31175,
+    57658,
+    555,
+    264,
+    3856,
+    4147,
+    10255,
+    55434
+   ],
+   "prompt_text": "In most cases this lower jaw—being easily unhinged by a practised artist—is",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶53"
+    ]
+   }
+  },
+  {
+   "request_id": "3d9e7f72-9819-5e85-a7de-17c93b3d78b1",
+   "index": 1,
+   "prompt_len": 9,
+   "max_tokens": 27,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    12555,
+    13,
+    426,
+    2222,
+    88,
+    28088,
+    3424,
+    311,
+    279
+   ],
+   "prompt_text": "Mr. Bingley inherited property to the",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶4"
+    ]
+   }
+  },
+  {
+   "request_id": "b364f394-e405-5c4d-aec0-8a146f2283ed",
+   "index": 2,
+   "prompt_len": 13,
+   "max_tokens": 95,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    22111,
+    4359,
+    0,
+    8595,
+    1550,
+    358,
+    539,
+    1243,
+    33663,
+    0,
+    8595,
+    1097,
+    358
+   ],
+   "prompt_text": "Great God! Why did I not then expire! Why am I",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶87"
+    ]
+   }
+  },
+  {
+   "request_id": "d30e51fe-2d2e-5bc6-adef-049fce5b6c51",
+   "index": 3,
+   "prompt_len": 32,
+   "max_tokens": 71,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    5159,
+    13836,
+    374,
+    810,
+    1109,
+    18545,
+    26,
+    1364,
+    753,
+    927,
+    76,
+    7443,
+    26,
+    323,
+    555,
+    264,
+    13088,
+    1543,
+    0,
+    9925,
+    2084,
+    481,
+    55413,
+    11,
+    430,
+    47942,
+    1288,
+    5015,
+    11977,
+    389,
+    1778,
+    264
+   ],
+   "prompt_text": "My soul is more than matched; she’s overmanned; and by a madman! Insufferable sting, that sanity should ground arms on such a",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶26"
+    ]
+   }
+  },
+  {
+   "request_id": "a1ca9d33-54dd-5616-83f4-4305d760535a",
+   "index": 4,
+   "prompt_len": 19,
+   "max_tokens": 113,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    76637,
+    11,
+    311,
+    8884,
+    22195,
+    1633,
+    5246,
+    59035,
+    279,
+    10388,
+    315,
+    682,
+    420,
+    11,
+    6755,
+    433,
+    304,
+    21737,
+    83001
+   ],
+   "prompt_text": "Elizabeth, to whom Jane very soon communicated the chief of all this, heard it in silent indign",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶35"
+    ]
+   }
+  },
+  {
+   "request_id": "fea2f803-be9c-503a-ad6b-c1b54e56d0b5",
+   "index": 5,
+   "prompt_len": 9,
+   "max_tokens": 2,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    10596,
+    520,
+    279,
+    93637,
+    11,
+    2663,
+    279,
+    1332,
+    3913
+   ],
+   "prompt_text": "Look at the sailor, called the mincer",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶68"
+    ]
+   }
+  },
+  {
+   "request_id": "fd181b80-8d97-533f-92b0-da7aded710a8",
+   "index": 6,
+   "prompt_len": 26,
+   "max_tokens": 128,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    17818,
+    574,
+    264,
+    17240,
+    389,
+    15580,
+    1445,
+    11,
+    24895,
+    555,
+    264,
+    3224,
+    21110,
+    439,
+    264,
+    8641,
+    13,
+    578,
+    17240,
+    574,
+    26435,
+    304,
+    264,
+    6453,
+    7937,
+    323
+   ],
+   "prompt_text": "“It was a lady on horseback, accompanied by a country-man as a guide. The lady was dressed in a dark suit and",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #84: Frankenstein (public domain) ¶45"
+    ]
+   }
+  },
+  {
+   "request_id": "ddbe8ad4-7d10-5b76-ae4b-79d9a1bdfc5e",
+   "index": 7,
+   "prompt_len": 22,
+   "max_tokens": 13,
+   "arrive_step": 0,
+   "arrival_offset_s": 0.0,
+   "prompt_token_ids": [
+    3923,
+    315,
+    433,
+    11,
+    422,
+    1063,
+    2362,
+    11794,
+    2857,
+    315,
+    264,
+    9581,
+    1824,
+    2756,
+    467,
+    10373,
+    757,
+    311,
+    636,
+    264,
+    2967,
+    316
+   ],
+   "prompt_text": "What of it, if some old hunks of a sea-captain orders me to get a broom",
+   "origin": {
+    "corpus": "corpus_coverage.json",
+    "paragraphs": [
+     "Project Gutenberg #2701: Moby Dick (public domain) ¶2"
+    ]
+   }
+  }
+ ],
+ "sweep": {
+  "schema": "verity-sweep/workload/v1",
+  "row_id": "llama32-1b__bf16__l40s__tp1__b8__i32__o128__mixed__greedy__bi-eager",
+  "seed": "73b21450228a080c5bb4daf169627b7972fca3b1ca25050d9b6bf8c775a819eb",
+  "batch": 8,
+  "max_input": 32,
+  "max_output": 128,
+  "min_input": 8,
+  "min_output": 2,
+  "sampling": "greedy",
+  "sampling_params": {
+   "temperature": 0.0,
+   "top_p": 1.0,
+   "top_k": 0
+  },
+  "arrivals": "none",
+  "input_lengths": [
+   17,
+   9,
+   13,
+   32,
+   19,
+   9,
+   26,
+   22
+  ],
+  "output_caps": [
+   51,
+   27,
+   95,
+   71,
+   113,
+   2,
+   128,
+   13
+  ],
+  "sampling_seeds": [],
+  "arrival_offsets_s": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "arrive_steps": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "arrival_rule": {
+   "nominal_step_s": 0.01,
+   "arrive_step": "round(offset_s / nominal_step_s)",
+   "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"
+  },
+  "length_rule": {
+   "input": "anchors I, lo+{0..3}, one awkward per quartile (Q2,Q3,Q1,Q4), then stratified log-uniform over [lo, I] nudged off powers of two; seeded permutation",
+   "output": "same over [2, O]; paired by seeded permutation",
+   "depends_on": "SHA256(row_id) only"
+  },
+  "seed_rule": "seed = SHA256(row_id); rng(purpose) = default_rng(SHA256(seed || '/' || purpose)); sampling seed i = SHA256(seed||'/sampling/'||i)[:4]",
+  "lengths_only": false,
+  "execution": "bi-eager"
+ },
+ "note": "R12 sweep llama32-1b__bf16__l40s__tp1__b8__i32__o128__mixed__greedy__bi-eager: B=8 I<=32 O<=128 greedy arrivals=none; prompt lens [17, 9, 13, 32, 19, 9, 26, 22], caps [51, 27, 95, 71, 113, 2, 128, 13], arrive steps [0, 0, 0, 0, 0, 0, 0, 0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
+ "target": {
+  "compute_capability": [
+   8,
+   9
+  ],
+  "num_sms": 142
+ }
+}
