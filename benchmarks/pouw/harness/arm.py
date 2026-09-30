@@ -2,9 +2,14 @@
 harness does with each member, is published in the project store (`internal/pouw/rtx-pro/workers/6-harness.md`, "Arm
 interface"); this module is that contract in code, and `check_arm` is what the harness enforces before it runs an arm.
 
-An arm is any object with the members of `Arm`; the harness loads it by ``module:Class`` (``--arm``), constructs it with no
-arguments, and calls `build` once. Device pointers and CUDA streams are Python ints; everything runs in the device's primary
-context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
+An arm is any object with the members of `BenchArm` (v0.5; `Arm`, its old name, is a deprecated alias: the vLLM API's
+`Arm` is a bench mode at the serving level, not a prover under test); the harness loads it by ``module:Class`` (``--arm``),
+constructs it with no arguments, and calls `build` once. Device pointers and CUDA streams are Python ints; everything runs in
+the device's primary context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
+
+A call's ``phases`` (v0.5) are named by the step groups the executor schedules, `GROUPS`; the chain times them in three
+parts, `PARTS`, the last of which is `MOVABLE`, what its side stream (the ``deferred`` schedule) takes. v0.4's phase names
+``before``, ``gemm`` and ``after`` are still accepted, each as its part, and deprecated.
 
 `build` returns the arm's build record (JSON), which names its ``binaries`` (v0.3): the path of every cubin, fatbin or
 library its kernels are loaded from, ``[]`` if they all come from libraries mapped into the process (those the SASS gate
@@ -37,7 +42,13 @@ import string
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-VERSION = "v0.4"
+VERSION = "v0.5"
+#: a call's step groups, in the order its main lane runs them; must equal verity_pouw.serving.GROUPS
+GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
+#: the groups nothing later in the call reads, so they may leave the main lane; must equal verity_pouw.serving.MOVABLE
+MOVABLE = frozenset({"tile_hash", "screen"})
+#: the chain's parts (`chain.py`), each the groups it runs, in order
+PARTS = {"before": ("a_tree", "forming"), "gemm": ("gemm", "cleanup"), "after": ("tile_hash", "screen")}
 VERIFIER_FIELDS = {
     "run": ("python", "run_dir", "run_id", "commit", "arm"),
     "shape": ("python", "run_dir", "run_id", "commit", "arm", "shape", "transcript", "dir"),
@@ -117,9 +128,10 @@ class Call(Protocol):
     `a_scale`, for block-scaled inputs) with f of the previous call's y, so `launch` must read A from the operand set every
     time (a copy made in `prepare` would time a chain that isn't one). y is `outputs["y"]` (else `outputs["d"]`): m x n
     row-major, its first m rows, BF16 unless the call sets ``y_format`` ("f32" or "int32"). Optional: ``phases``, a dict of
-    ``before``, ``gemm`` and ``after``, each ``fn(stream)``, whose sequence enqueues the same work as `launch`; with it the
-    chain splits the call's decode time, and runs ``after`` on a side stream (it may then overlap the next call; the harness
-    keeps call j from reusing its operand set, or the call object, until call j - S's ``after`` is done)."""
+    step groups (`GROUPS`, ``gemm`` among them), each ``fn(stream)``, which in `GROUPS` order enqueue the same work as
+    `launch`; with it the chain splits the call's decode time by `PARTS`, and runs the `MOVABLE` groups on a side stream
+    (they may then overlap the next call; the harness keeps call j from reusing its operand set, or the call object, until
+    call j - S's are done). Deprecated: v0.4's ``before``, ``gemm`` and ``after``, each run as its part."""
 
     outputs: dict[str, Buffer]
 
@@ -131,7 +143,9 @@ class Call(Protocol):
 
 
 @runtime_checkable
-class Arm(Protocol):
+class BenchArm(Protocol):
+    """A prover under test: its build, gates, timed call, work and verifier."""
+
     name: str
     stream: str
     precision: str
@@ -149,8 +163,30 @@ class Arm(Protocol):
     def gate(self, dev: Any, call: Call, shape: Shape, flags: frozenset[str]) -> Gate: ...
 
 
+#: deprecated: BenchArm's v0.4 name
+Arm = BenchArm
+
+
 class ArmError(ValueError):
     pass
+
+
+def phase_parts(phases: dict | None) -> tuple[dict[str, list], bool] | None:
+    """A call's `phases` as the chain's parts, each the list of fns it runs in order, and whether they are named by `GROUPS`
+    (else by v0.4's part names); None if the call has none (or, v0.4, lacks a part)."""
+    if not phases:
+        return None
+    keys = set(phases)
+    if keys & {"before", "after"}:
+        mixed = sorted(keys & set(GROUPS) - {"gemm"})
+        if mixed:
+            raise ArmError(f"phases mix v0.4's names (before, gemm, after) with step groups {mixed}")
+        return ({p: [phases[p]] for p in PARTS}, False) if set(PARTS) <= keys else None
+    unknown = sorted(keys - set(GROUPS))
+    if unknown or "gemm" not in keys:
+        raise ArmError(f"phases {sorted(keys)}: step groups are {', '.join(GROUPS)}, gemm among them"
+                       + (f" (unknown {unknown})" if unknown else ""))
+    return {p: [phases[g] for g in gs if g in keys] for p, gs in PARTS.items()}, True
 
 
 def check_arm(arm: Any, precisions: set[str]) -> None:
@@ -217,7 +253,7 @@ def check_gate(gate: Gate, call: Call) -> None:
         raise ArmError("gate checks no output in full (one must be 'all': a root, or y's digest)")
 
 
-def load(spec: str) -> Arm:
+def load(spec: str) -> BenchArm:
     """``module:Class`` → an instance."""
     mod, _, cls = spec.partition(":")
     if not cls:

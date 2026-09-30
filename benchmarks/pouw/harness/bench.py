@@ -666,7 +666,10 @@ def chain_report(shape, fams, arms, entries: list[Entry], med: dict, methods: tu
                 if m in r and r[m].get("baseline_ms"):
                     base = r[m]["baseline_ms"]
                     split[m] |= {"full_x": full / base, "side_x": side / base}
-        r["split"] = split or "the arm's calls expose no phases (before, gemm, after)"
+        r["split"] = split or "the arm's calls expose no phases (step groups, arm.GROUPS)"
+        if split:
+            r["split_groups"] = CH.split_groups(next(e.chain.links for e in ch if e.key[2] == a.name
+                                                     and e.meta["variant"] == "side"))
         out["arms"][a.name] = r
     return out
 

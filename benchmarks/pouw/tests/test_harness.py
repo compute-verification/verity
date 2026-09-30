@@ -997,7 +997,8 @@ def test_block_scales_land_in_the_128x4_tiled_layout():
 
 class FakeGemm:
     """A GEMM stand-in on the fake device: y (m x n BF16) a function of A's E4M3 codes, `ms` of virtual time; with
-    `phases`, before and after of their own cost."""
+    `phases`, before and after of their own cost: v0.4's names, or with ``phases="groups"`` step groups (a_tree and forming
+    splitting before, cleanup 0.1 after the GEMM, tile_hash and screen splitting after)."""
 
     def __init__(self, dev, shape, ms=1.0, phases=False, before=0.2, after=0.3):
         m, n, k = shape.m, shape.n, shape.k
@@ -1006,8 +1007,13 @@ class FakeGemm:
         dev.write(self.ops.a.ptr, F.fill(F.E4M3, m * k, id(self) & 0xFFFF))
         self.outputs = {"y": self.ops.d}
         self.launches = 0
-        if phases:
-            self.phases = {"before": lambda s: self._cost(before), "gemm": self._gemm, "after": lambda s: self._cost(after)}
+        cost = lambda ms: lambda s: self._cost(ms)  # noqa: E731
+        if phases == "groups":
+            self.phases = {"a_tree": cost(before / 4), "forming": cost(before * 3 / 4), "gemm": self._gemm,
+                           "cleanup": cost(0.1), "tile_hash": cost(after / 3), "screen": cost(after * 2 / 3)}
+            self.launch = lambda s: [self.phases[g](s) for g in A.GROUPS]
+        elif phases:
+            self.phases = {"before": cost(before), "gemm": self._gemm, "after": cost(after)}
             self.launch = lambda s: [self.phases[p](s) for p in CH.PHASES]
 
     def _cost(self, ms):
@@ -1127,10 +1133,12 @@ class FakeChainArm(FakeArm):
         return A.Gate(dev.read(call.outputs["y"].ptr, m * n * 2) == want, {"y": "all"})
 
 
-def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_row(monkeypatch):
+@pytest.mark.parametrize("phases", ["groups", True])
+def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_row(monkeypatch, phases):
     monkeypatch.setitem(SH.HEADLINE, "decode", SMALL.label)
     b, dev, e = chain_bench(ms=0.5)
-    arm = FakeChainArm()
+    arm = FakeChainArm(phases)
+    cleanup = 0.1 if phases == "groups" else 0.0
     sets = [A.OperandSet(i, i, i, c.ops.a, c.ops.b) for i, c in enumerate(e.calls)]
     arm_es = H.arm_entries(b, dev, arm, SMALL, sets, first=False)
     got, unchained = H.chain_entries(b, dev, SMALL, [e, *arm_es], [arm], {arm.name: sets}, 3, first=False)
@@ -1146,11 +1154,58 @@ def test_chain_report_gives_the_divisor_the_split_and_a_dependent_chain_panel_ro
     assert base["derive_ms"] == pytest.approx(0.1) and base["kernel"] == "k"
     split = rep["chain"]["arms"][arm.name]["split"]["graph"]
     assert split["derive_ms"] == pytest.approx(0.1) and split["before_ms"] == pytest.approx(0.2)
-    assert split["during_ms"] == pytest.approx(1.0) and split["after_ms"] == pytest.approx(0.3)
+    assert split["during_ms"] == pytest.approx(1.0 + cleanup) and split["after_ms"] == pytest.approx(0.3)
+    groups = rep["chain"]["arms"][arm.name]["split_groups"]
+    if phases == "groups":
+        assert groups == {"before_ms": ["a_tree", "forming"], "during_ms": ["gemm", "cleanup"],
+                          "after_ms": ["tile_hash", "screen"]}
+    else:
+        assert groups.startswith("v0.4 phases")
     panel = rep["arms"][arm.name]["panel"]
     assert panel["decode_method"] == "dependent-chain" and panel["baseline_kernel"] == "k"
-    assert panel["slowdown"] == pytest.approx(round(1.6 / 0.6, 4)) and panel["hash_free"] == pytest.approx(round(1.5 / 0.6, 4))
+    assert panel["slowdown"] == pytest.approx(round((1.6 + cleanup) / 0.6, 4))
+    assert panel["hash_free"] == pytest.approx(round((1.5 + cleanup) / 0.6, 4))
     assert panel["chain_length"] == 66 and "slowdown_side_stream" in panel
+
+
+def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_takes_the_movable_groups():
+    assert A.Arm is A.BenchArm and isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.5"
+    assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS
+    try:
+        from verity_pouw import serving
+    except ImportError:
+        serving = None
+    if serving is not None:
+        assert (A.GROUPS, A.MOVABLE) == (serving.GROUPS, serving.MOVABLE)
+        assert set(A.PARTS["after"]) == serving.DEFERRED.side
+    f = {g: (lambda s, g=g: g) for g in A.GROUPS + ("before", "after", "hash")}
+    parts, named = A.phase_parts({g: f[g] for g in ("forming", "gemm", "screen")})
+    assert named and {p: [fn(0) for fn in fns] for p, fns in parts.items()} == {
+        "before": ["forming"], "gemm": ["gemm"], "after": ["screen"]}
+    parts, named = A.phase_parts({p: f[p] for p in ("before", "gemm", "after")})
+    assert not named and [fn(0) for fn in parts["after"]] == ["after"]
+    assert A.phase_parts(None) is None and A.phase_parts({"before": f["before"], "gemm": f["gemm"]}) is None
+    for bad, why in (({"before": 0, "gemm": 0, "after": 0, "a_tree": 0}, "mix"), ({"gemm": 0, "hash": 0}, "unknown"),
+                     ({"forming": 0, "screen": 0}, "gemm among them")):
+        with pytest.raises(A.ArmError, match=why):
+            A.phase_parts(bad)
+
+    b, dev, e = chain_bench()
+    arm = FakeChainArm("groups")
+    sets = [A.OperandSet(i, i, i, c.ops.a, c.ops.b) for i, c in enumerate(e.calls)]
+    arm_es = H.arm_entries(b, dev, arm, SMALL, sets, first=False)
+    links, _ = CH.arm_links(next(x for x in arm_es if x.key[3] == "hash"), arm, sets, SMALL)
+    moved = []
+    for c in (ln.call for ln in links):
+        for g in ("tile_hash", "screen"):
+            c.phases[g] = lambda s, g=g, run=c.phases[g]: (moved.append((g, s)), run(s))
+    ch = CH.Chain(dev, SMALL, links, "e4m3", "side")
+    ch.enqueue(dev.stream, 3)
+    assert moved == [(g, dev.side_stream) for _ in range(3) for g in ("tile_hash", "screen")]
+    links[1].call.phases["hash"] = f["hash"]
+    got, unchained = H.chain_entries(b, dev, SMALL, [e, *arm_es], [arm], {arm.name: sets}, 3, first=False)
+    assert "unknown ['hash']" in unchained[f"{arm.name}/hash"]
+    assert [x.key[3:] for x in got if x.key[2] == arm.name] == [("nohash", "full")]
 
 
 def test_an_arm_without_a_y_output_is_not_chained():

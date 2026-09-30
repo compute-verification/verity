@@ -95,8 +95,13 @@ and SM clock of the arm's and the baseline's items, rep by rep), `sm_clock_arm` 
 `clock_gap` (medians more than 0.5% apart; server.md 08:50Z).
 
 Decode rows count on the panel only as a dependent chain, which needs a library with the derive kernel (`ph_derive`);
-`--decode-method independent` times the old independent graph with any library. An arm's calls expose `phases` (before, gemm,
-after) to get the split; `arm.py` has the contract.
+`--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface v0.5;
+`Arm` is its deprecated alias, since the vLLM API's `Arm` is a serving bench mode) gets the split when its calls expose
+`phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
+`tile_hash`, `screen`, as `verity_pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
+after (tile_hash, screen, the movable groups, which the side-stream variant runs off the main lane as the `deferred`
+schedule does), and the report's `split_groups` names the groups each time covers. v0.4's `before`, `gemm` and `after` still
+work, each as its part, and are deprecated; `arm.py` has the contract.
 
 An arm's `build` names every cubin, fatbin or library its kernels come from in `binaries` (arm interface v0.3; a cubin loaded
 with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
