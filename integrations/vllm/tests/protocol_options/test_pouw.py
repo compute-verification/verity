@@ -134,22 +134,62 @@ def test_weights_are_committed_before_the_salt_and_the_int7_linear_is_served_exa
     assert record["commitment"] == c and len(record["leaves"]) == N // 16 and record["units"][0]["shape"] == [16, K, N]
 
 
-def test_the_executor_is_the_schemes_reference_bit_for_bit():
-    """`ncp_tiles` gives the digest and output of a tile exactly as `NCP.encode`, `checked` and `digest` do."""
-    rng, s = _rng(2), get("ncp-v1")
-    a = rng.integers(-63, 64, (16, K)).astype(np.int8)
+@pytest.mark.parametrize("scheme,m,row0", [("ncp-v1", 16, 0), ("ncp-v2", 16, 0), ("ncp-v2", 32, 16)])
+def test_the_executor_is_the_schemes_reference_bit_for_bit(scheme, m, row0):
+    """`ncp_tiles` gives the digest and output of a tile exactly as `NCP.encode`, `checked` and `digest` do (under
+    ``ncp-v2``, a tile's noise from its own strip, here also a tile of the second strip)."""
+    rng, s = _rng(2), get(scheme)
+    a = rng.integers(-63, 64, (m, K)).astype(np.int8)
     b = rng.integers(-63, 64, (N, K)).astype(np.int8)
-    u = Matmul(7, Shape(16, K, N), 3)
+    u = Matmul(7, Shape(m, K, N), 3)
     rows = [r.tobytes() for r in a]
     ctx = UnitContext(b"\x11" * 32, u, commit_rows(activation_binding(b"\x11" * 32, 7), 7, rows).commitment.root, b"\x22" * 32)
     noise = s.noise(ctx)
     got = pouw.ncp_tiles(s, ctx, noise, a, pouw.Operands(np.ones(N, np.float32), *pouw.stack_y(s, ctx.salt, u.weight, b, noise)))
-    tile = Tile(tuple(range(16)), tuple(range(48, 64)))
-    ops = s.encode(ctx, noise, rows, [b[j].tobytes() for j in tile.cols], tile)
+    tile = Tile(tuple(range(row0, row0 + 16)), tuple(range(48, 64)))
+    ops = s.encode(ctx, noise, rows[row0:row0 + 16], [b[j].tobytes() for j in tile.cols], tile)
     checked = s.checked(ctx, ops)
-    digest, block = got[(0, 48)]
+    digest, block = got[(row0, 48)]
     assert digest == s.digest(ctx, noise, checked)
     assert block.tolist() == s.useful(ctx, noise, ops, checked)
+
+
+def test_ncp_v2_serves_the_int7_linear_exactly():
+    rng = _rng(7)
+    w = rng.standard_normal((N, K), np.float32)
+    model = Model(w)
+    comp = PO.install(model, _serve("pouw:ncp-v2", settings={"pouw": {"beacon": BEACON}}))
+    x = rng.standard_normal((20, K), np.float32)
+    layer = model.layers[0]
+    assert np.array_equal(layer.quant_method.apply(layer, x), _int7_linear(x, w))
+    assert comp.get("pouw").commitment()["scheme"] == "ncp-v2"
+    comp.close()
+
+
+class _Scaled(Linear):
+    """A stand-in for vLLM's FP8 linear: E4M3 codes (here as one-byte integers) beside a per-channel scale."""
+
+    def __init__(self, weight, scale):
+        super().__init__(weight)
+        self.weight_scale = scale
+
+
+@pytest.mark.parametrize("layer", [lambda r: _Scaled(r.standard_normal((N, K), np.float32), np.ones(N, np.float32)),
+                                   lambda r: Linear(r.integers(-100, 100, (N, K)).astype(np.int8)),
+                                   lambda r: Linear(r.standard_normal((N, K)).astype(np.float16).view(np.uint16))],
+                         ids=["weight_scale", "int8-codes", "uint16-view"])
+def test_a_quantized_linear_is_refused_not_misread(layer):
+    """An FP8 (or any quantized) linear's weight is codes plus scales; the executor has no dequantization, so it refuses
+    the layer at the commitment and at install, and leaves the model as it was."""
+    model = Model(_rng().standard_normal((N, K), np.float32))
+    model.layers.append(layer(_rng(3)))
+    before = [m.quant_method.apply for m in model.layers]
+    with pytest.raises(ValueError, match="linear 1: .*unquantized weights only"):
+        pouw.commit_weights("ncp-v1", types.SimpleNamespace(model=model))
+    with pytest.raises(ValueError, match="refused at install"):
+        PO.install(model, _serve("pouw:ncp-v1"))
+    assert hooks.live("pouw:ncp-v1") == () and [m.quant_method.apply for m in model.layers] == before
+    assert pouw.quantized(Linear(np.zeros((4, 4), np.float16))) is None
 
 
 def test_weight_operands_formed_in_blocks_equal_one_block(monkeypatch):
