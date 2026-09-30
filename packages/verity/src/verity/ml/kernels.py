@@ -41,6 +41,7 @@ __all__ = [
     "gemm_kernel",
     "group_sum_total_batch",
     "sample_tc",
+    "sample_tc_e5m2",
 ]
 
 F32 = Value(32)
@@ -146,7 +147,8 @@ def _operands(fmt, w: np.ndarray):
 
 def group_sum_total_batch(model: GroupSum, acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, None]:
     """`model`'s step on every encoding: acc ``(N,)`` FP32 words, a/b ``(N, k)`` operand words -> ``(N,)`` FP32 words.
-    Equal to `total.tc_dot_total` (BF16) / `total_fp8.tc_dot_total_e4m3` (E4M3) on every input; declines nothing."""
+    Equal to `total.tc_dot_total` (BF16) / `total_fp8.tc_dot_total_e4m3` (E4M3) / `total_fp8.tc_dot_total_e5m2` (E5M2) on every
+    input; declines nothing."""
     fmt = FORMATS[model.dtype]
     na, ia, za, sa, ga, ea = _operands(fmt, a)
     nb, ib, zb, sb, gb, eb = _operands(fmt, b)
@@ -374,8 +376,12 @@ def _acc_words(rng: np.random.Generator, n: int, regime: np.ndarray) -> np.ndarr
     return out.astype(np.uint32)
 
 
-def sample_tc(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
-    """Instances for the tensor-core kernels, by parameter width: 32 an accumulator, 16 BF16, 8 E4M3 operands.  A quarter
+#: The special operand words `sample_tc` draws, per 8-bit format: zeros, NaNs, the largest finite, the least subnormal (and E5M2's infinities).
+_FP8_SPECIALS = {"e4m3": (0x00, 0x80, 0x7F, 0xFF, 0x7E, 0x01), "e5m2": (0x00, 0x80, 0x7C, 0xFC, 0x7D, 0xFF, 0x7B, 0x01)}
+
+
+def sample_tc(rng: np.random.Generator, n: int, params, *, fp8: str = "e4m3", **statics: Any) -> list[np.ndarray]:
+    """Instances for the tensor-core kernels, by parameter width: 32 an accumulator, 16 BF16, 8 `fp8` operands.  A quarter
     of the instances carry special operand words; an eighth are exact cancellations (the second half of ``a`` negates the
     first, ``b`` repeats)."""
     p_special = np.where(rng.random(n) < 0.25, 0.03, 0.0)
@@ -386,8 +392,8 @@ def sample_tc(rng: np.random.Generator, n: int, params, **statics: Any) -> list[
             out.append(_acc_words(rng, n, regime))
             continue
         w = pt.elem.w
-        fmt = FORMATS["bf16" if w == 16 else "e4m3"]
-        specials = (0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0xFFFF, 0x0001) if w == 16 else (0x00, 0x80, 0x7F, 0xFF, 0x7E, 0x01)
+        fmt = FORMATS["bf16" if w == 16 else fp8]
+        specials = (0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0xFFFF, 0x0001) if w == 16 else _FP8_SPECIALS[fp8]
         out.append(_words(rng, fmt, (n, pt.n), specials, p_special, regime).astype(np.uint16 if w == 16 else np.uint8))
     if len(out) >= 2 and out[-1].ndim == 2 and out[-1].shape[1] % 2 == 0:
         a, b = out[-2].copy(), out[-1].copy()
@@ -398,6 +404,11 @@ def sample_tc(rng: np.random.Generator, n: int, params, **statics: Any) -> list[
         b[c, h:] = b[c, :h]
         out[-2], out[-1] = a, b
     return out
+
+
+def sample_tc_e5m2(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
+    """`sample_tc` with E5M2 operands."""
+    return sample_tc(rng, n, params, fp8="e5m2", **statics)
 
 
 def _sample_block_scaled(model: BlockScaledAlignAdd):

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import random
 import struct
+from pathlib import Path
 
 import pytest
 
@@ -133,6 +134,66 @@ def test_the_sm120_fp8_step_is_the_total_function_of_its_pinned_model() -> None:
     # the 26-bit adder keeps the accumulator whole; Hopper's 14-bit one truncates it (1 + 2^-23 through zero products)
     zeros = [0x00] * 64
     assert step.evaluate(0x3F800001, *zeros) == 0x3F800001 and P.HopperE4m3QgmmaDot32.evaluate(0x3F800001, *zeros) == 0x3F800000
+
+
+E5M2_PINF, E5M2_NINF, E5M2_NAN, E5M2_ONE, E5M2_MAX = 0x7C, 0xFC, 0x7D, 0x3C, 0x7B
+
+
+def test_the_sm120_e5m2_step_is_the_e4m3_pipeline_with_e5m2_products_on_every_encoding() -> None:
+    from verity.ml.tc.models import BLACKWELL_SM120_E5M2_M16N8K32 as SM120
+
+    step = P.BlackwellE5m2QmmaDot32
+    assert step.id == "BlackwellE5m2QmmaDot32_v1" and REGISTRY[step.id] is step
+    assert step.signature() == P.BlackwellE4m3QmmaDot32.signature()
+    rng = random.Random(11)
+    for _ in range(300):
+        acc = _rand_finite_f32(rng)
+        a = [b for b in (rng.getrandbits(8) for _ in range(64)) if (b >> 2) & 0x1F != 0x1F][:32]
+        b = [b for b in (rng.getrandbits(8) for _ in range(64)) if (b >> 2) & 0x1F != 0x1F][:32]
+        if len(a) == len(b) == 32:
+            assert step.evaluate(acc, *a, *b) == SM120.step(acc, a, b)
+    ones, zeros = [E5M2_ONE] * 32, [0x00] * 32
+    assert step.evaluate(0, *ones, *ones) == 0x42000000                                   # 32 * (1 * 1)
+    assert step.evaluate(0x3F800001, *zeros, *zeros) == 0x3F800001                         # the accumulator is not truncated
+
+    def one_at(k: int, x: int, rest: list[int]) -> list[int]:
+        return rest[:k] + [x] + rest[k + 1:]
+
+    assert step.evaluate(0, *one_at(3, E5M2_PINF, ones), *ones) == PINF32
+    assert step.evaluate(ONE32, *one_at(3, E5M2_PINF, ones), *one_at(3, 0xBC, ones)) == NINF32   # +inf * -1
+    assert step.evaluate(0, *one_at(3, E5M2_PINF, ones), *one_at(3, 0x00, ones)) == 0x7FFFFFFF    # inf * 0
+    assert step.evaluate(0, *one_at(3, E5M2_NAN, ones), *ones) == 0x7FFFFFFF
+    both = one_at(9, E5M2_NINF, one_at(3, E5M2_PINF, ones))
+    assert step.evaluate(0, *both, *ones) == 0x7FFFFFFF                                    # +inf and -inf in the group
+    assert step.evaluate(NINF32, *one_at(3, E5M2_PINF, ones), *ones) == 0x7FFFFFFF          # an infinity of each sign
+    assert step.evaluate(PINF32, *ones, *ones) == PINF32 and step.evaluate(NAN32, *ones, *ones) == 0x7FFFFFFF
+    # 32 of the largest products (57344^2 * 32 < 2^37) are far below the ulp of the largest finite accumulator: truncated away
+    big = [E5M2_MAX] * 32
+    assert step.evaluate(0xFF7FFFFF, *big, *[E5M2_MAX | 0x80] * 32) == 0xFF7FFFFF
+
+
+def test_the_sm120_e5m2_step_reproduces_the_pro_6000_capture_on_every_encoding() -> None:
+    """Every word of run r20260930-063527-4d6b's specials and signed-zero tiles (RTX PRO 6000, one QMMA.16832.F32.E5M2.E5M2 per
+    tile; fixtures/README.md), including the 4,824 words with a NaN or infinite operand or accumulator, which the run recorded
+    but did not assert."""
+    import numpy as np
+
+    from verity.ml.kernels import group_sum_total_batch
+    from verity.ml.tc.models import BLACKWELL_SM120_E5M2_M16N8K32 as SM120
+
+    root = Path(__file__).parent / "fixtures" / "tc-sm120-e5m2-2026-09-30"
+    for name, words in (("tiles_specials", 6144), ("tiles_signed_zero", 32768)):
+        z = np.load(root / f"{name}.npz")
+        A, Bt, C, D = z["A"], z["Bt"], z["C"], z["D"]
+        a = np.repeat(A, Bt.shape[1], axis=1).reshape(-1, 32)
+        b = np.tile(Bt, (1, A.shape[1], 1)).reshape(-1, 32)
+        acc, want = C.reshape(-1), D.reshape(-1)
+        assert acc.size == words
+        got, _ = group_sum_total_batch(SM120, acc, a, b)
+        assert np.array_equal(got, want), name
+        if name == "tiles_specials":
+            for i in range(0, words, 7):
+                assert P.BlackwellE5m2QmmaDot32.evaluate(int(acc[i]), *a[i].tolist(), *b[i].tolist()) == int(want[i])
 
 
 def test_the_sm120_nvfp4_step_is_the_pinned_block_scaled_model() -> None:

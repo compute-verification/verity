@@ -44,6 +44,7 @@ SELF_CHECKED = [
     (bind(G.Gemm, K=32, N=3, DOT=P.AmpereBF16TcDot16), 500),
     (P.HopperE4m3QgmmaDot32, 20000),
     (P.BlackwellE4m3QmmaDot32, 20000),
+    (P.BlackwellE5m2QmmaDot32, 20000),
     (P.BlackwellNvf4OmmaDot64, 20000),
     (P.F32ToE2m1Sat, 20000),
     (P.E4m3ToF32, 20000),

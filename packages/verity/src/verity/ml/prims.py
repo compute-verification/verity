@@ -14,7 +14,8 @@ an opposite-sign infinity (rule R6).  `_v2` is `tc_dot_total(AMPERE_BF16_M16N8K1
 equal to `_v1` on every finite input.  A registered id denotes one function, so the id changed.
 `F32ToE4m3Sat_v1` and `HopperE4m3QgmmaDot32_v1` are the definitions the vLLM integration registered for its FP8 linear
 (same ids, same functions).  `BlackwellE4m3QmmaDot32_v1` is the consumer-Blackwell (sm_120) FP8 `mma.sync` step,
-`tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`; `BlackwellNvf4OmmaDot64_v1` its NVFP4 step
+`tc_dot_total_e4m3` on `models.BLACKWELL_SM120_E4M3_M16N8K32`, and `BlackwellE5m2QmmaDot32_v1` the same with E5M2 operands
+(`tc_dot_total_e5m2`); `BlackwellNvf4OmmaDot64_v1` its NVFP4 step
 (`models.BLACKWELL_SM120_NVF4`), with the two casts NVFP4 quantization uses, `F32ToE2m1Sat_v1` and `E4m3ToF32_v1`.
 """
 from __future__ import annotations
@@ -23,22 +24,23 @@ from verity.ir.defs import PrimitiveDefinition, primitive
 from verity.ir.types import Array, Value
 
 from .tc import cast
-from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4
+from .tc.models import BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_E5M2_M16N8K32, BLACKWELL_SM120_NVF4
 from .tc.silicon import AMPERE_BF16_M16N8K16
 from .tc.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
-from .tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
+from .tc.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3, tc_dot_total_e5m2
 
-BF16, F32, E4M3, E2M1 = Value(16), Value(32), Value(8), Value(4)
+BF16, F32, E4M3, E5M2, E2M1 = Value(16), Value(32), Value(8), Value(8), Value(4)
 A16 = Array(16, BF16)
 A32_8 = Array(32, E4M3)
+A32_E5M2 = Array(32, E5M2)       # the same type as A32_8: an encoding type carries only its width
 A64_4 = Array(64, E2M1)
 A4_8 = Array(4, E4M3)            # four UE4M3 block-scale bytes (the E4M3 encoding with the sign bit clear)
 #: `cvt.rn.satfinite.e2m1x2.f32`'s code for a NaN input (E2M1 has none): +6, measured on the RTX PRO 6000 for every NaN element
 #: of `cvt_fp16_to_fp4` (whose FMUL hands it the canonical +NaN; the sign of a NaN input is not observable there, and dropped)
 E2M1_NAN_CODE = 0x7
 
-__all__ = ["A16", "A32_8", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "F32", "AmpereBF16TcDot16", "Bf16ToF32", "BlackwellE4m3QmmaDot32",
-           "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
+__all__ = ["A16", "A32_8", "A32_E5M2", "A4_8", "A64_4", "BF16", "E2M1", "E4M3", "E5M2", "F32", "AmpereBF16TcDot16", "Bf16ToF32",
+           "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot32", "BlackwellNvf4OmmaDot64", "E4m3ToF32", "F2fpBf16", "F32ToBf16Rn", "F32ToE2m1Sat", "F32ToE4m3Sat", "HopperBF16WgmmaDot16",
            "HopperE4m3QgmmaDot32", "const"]
 
 
@@ -114,6 +116,20 @@ def BlackwellE4m3QmmaDot32(acc: int, *ab: int) -> int:
     pipeline, exponent floor -133 (unobservable on E4M3 operands); total on every encoding.  Unlike the Hopper and Ada FP8
     adders (14 bits), the accumulator is not truncated."""
     return tc_dot_total_e4m3(BLACKWELL_SM120_E4M3_M16N8K32, acc, list(ab[:32]), list(ab[32:64]))
+
+
+@primitive("BlackwellE5m2QmmaDot32", 1, [("acc", F32), ("a", A32_E5M2), ("b", A32_E5M2)], F32,
+           conformance="exact-model-tested; RTX PRO 6000 Blackwell Server Edition (cc 12.0) QMMA.16832.F32.E5M2.E5M2: fresh-seed sweep "
+                       "r20260930-063527-4d6b, 25,041,024 words in 14 families, 0 mismatches, and r20260930-073650-c9c5 on a second die, "
+                       "6,440,960 words (trust dossier art:fc4bb8915dd22f22b3d0260a00a6d694750322852c5163ddb80a05948370a94f, PINNED); "
+                       "every word of r20260930-063527-4d6b's specials, signed-zero and near-overflow tiles under this total function "
+                       "(838,912 words, 4,824 with a NaN or infinite operand or accumulator): 0 mismatches")
+def BlackwellE5m2QmmaDot32(acc: int, *ab: int) -> int:
+    """One accumulator coordinate of `mma.sync.aligned.m16n8k32.row.col.f32.e5m2.e5m2.f32` on sm_120a (SASS
+    `QMMA.16832.F32.E5M2.E5M2`): `BlackwellE4m3QmmaDot32_v1`'s pipeline (one group of 32 exact products plus `acc`, the 26-bit
+    adder, floor -133) with E5M2 products; total on every encoding: a NaN operand, or an infinity times a zero, is a NaN; an
+    infinite product joins the group like an infinite accumulator (NaN when both signs meet); NaN -> 0x7FFFFFFF, zero +0."""
+    return tc_dot_total_e5m2(BLACKWELL_SM120_E5M2_M16N8K32, acc, list(ab[:32]), list(ab[32:64]))
 
 
 @primitive("BlackwellNvf4OmmaDot64", 1, [("acc", F32), ("a", A64_4), ("b", A64_4), ("sa", A4_8), ("sb", A4_8)], F32,
@@ -203,6 +219,8 @@ def _register_kernels() -> None:
                     domain=every, sample=K.sample_tc)
     register_kernel(BlackwellE4m3QmmaDot32, lambda acc, a, b: K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b),
                     domain=every, sample=K.sample_tc)
+    register_kernel(BlackwellE5m2QmmaDot32, lambda acc, a, b: K.group_sum_total_batch(BLACKWELL_SM120_E5M2_M16N8K32, acc, a, b),
+                    domain=every, sample=K.sample_tc_e5m2)
     register_kernel(BlackwellNvf4OmmaDot64, lambda acc, a, b, sa, sb: K.nvf4_step_total_batch(BLACKWELL_SM120_NVF4, acc, a, b, sa, sb),
                     domain=every, sample=K._sample_block_scaled(BLACKWELL_SM120_NVF4))
     register_kernel(F32ToE2m1Sat, lambda x: K.f32_to_e2m1_sat_batch(x, E2M1_NAN_CODE), domain=every)
