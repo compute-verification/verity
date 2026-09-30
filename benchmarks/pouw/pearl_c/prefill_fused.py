@@ -24,7 +24,9 @@ read-only L2 flush.
    - h2u, h3u: unfused, gemm_pearlc (C~, U and y stored) and hash_msg_v in place of gemm_pearlc_b;
    and the plain FP8 GEMMs gemm_plain and gemm_fast. REPS rounds, every graph once a round in rotated order, a read-only
    L2 flush before each and the SM clock after it. An arm's hashing is its median less nohash's, and its hashing-only
-   slowdown is 1 + hashing / the faster plain GEMM's median.
+   slowdown is 1 + hashing / the faster plain GEMM's median. --components adds each hashing part alone to the rounds (the
+   producers, A's tree and seed, gemm_pearlc_b, gemm_pearlc and gemm_pearlc_s, hash_msg_v, the tile leaves and tree) and
+   writes no transcripts: a diagnostic breakdown.
 2. Transcripts (verify_h1.py's format), written to DIR: each arm once more from its own y, so no arm's output fits another's,
    after every buffer its transcript reads is poisoned (0xA5): A (the producer's output), A's tree, the row seeds, seed_A,
    E_A's line key, the digests, the tile leaves and tree, C~, U and y. A fused arm's C~ and U come from an unfused
@@ -128,10 +130,14 @@ def main() -> None:
     ap.add_argument("--standin", required=True)
     ap.add_argument("--vectors", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--transcripts", required=True)
+    ap.add_argument("--transcripts")
     ap.add_argument("--reps", type=int, default=60)
     ap.add_argument("--size", type=int, default=8192, help="m = n = k (a dry run's smaller shape; the domains are 8,192's)")
+    ap.add_argument("--components", action="store_true",
+                    help="also time each hashing part alone, interleaved with the arms (a diagnostic breakdown; no transcripts)")
     args = ap.parse_args()
+    if not (args.transcripts or args.components):
+        ap.error("--transcripts is required unless --components")
     M = N = K = args.size
     RB = 4 * K
     R = load(os.path.join(args.gpu1, "run.py"), "gpu1_run")
@@ -223,6 +229,12 @@ def main() -> None:
                          "h3": [lambda f=fused: f(2), *commit, *forming, *factors, *post_b],
                          "h2u": [lambda f=fused: f(1), *commit, *forming, *factors, *post_u],
                          "h3u": [lambda f=fused: f(2), *commit, *forming, *factors, *post_u]}
+        if args.components:
+            seqs[variant].update({"part gemm_s": [ex["gemm_pearlc_s"]], "part gemm_b": [ex["gemm_pearlc_b"]],
+                                  "part gemm_cu": [ex["gemm_pearlc_cu"]], "part hash_msg_v": [ex["hash_msg"]],
+                                  "part a_tree_seed": commit, "part tiles": [st["hash_leaf"][1], *tile_tree],
+                                  "part forming_factors": [*forming, *factors]})
+            seqs.setdefault("producer", {"plain": [plain], "h2": [lambda f=fused: f(1)], "h3": [lambda f=fused: f(2)]})
         for nm, (ph, f) in st.items():                       # the unit's level keys, the weight side, B's plain codes
             if ph in ("unit", "job", "plain_job"):
                 f()
@@ -287,10 +299,25 @@ def main() -> None:
             h = med[f"{v} {arm}"] - med[f"{v} nohash"]
             res["rows"][f"{v} {arm}"] = {"hashing_ms": round(h, 5), "slowdown_hashing_only": round(1 + h / med[fastest], 4),
                                          "call_ms": round(med[f"{v} {arm}"], 5), "nohash_ms": round(med[f"{v} nohash"], 5)}
+    if args.components:
+        res["parts"] = {}
+        for v in R.VARIANT_G:
+            p = lambda nm: med[f"{v} part {nm}"]  # noqa: E731
+            parts = {"a_tree_seed": p("a_tree_seed"), "digests_fused": p("gemm_b") - p("gemm_s"),
+                     "c_u_stores": p("gemm_cu") - p("gemm_s"), "hash_msg_v": p("hash_msg_v"), "tiles": p("tiles"),
+                     "forming_factors": p("forming_factors")}
+            for f in ("h2", "h3"):
+                parts[f"producer_{f}"] = med[f"producer {f}"] - med["producer plain"]
+                parts[f"sum_{f}"] = parts[f"producer_{f}"] + parts["a_tree_seed"] + parts["digests_fused"] + parts["tiles"]
+                parts[f"sum_{f}u"] = parts[f"sum_{f}"] - parts["digests_fused"] + parts["c_u_stores"] + parts["hash_msg_v"]
+            res["parts"][v] = {k: round(x, 5) for k, x in parts.items()}
+            print(f"{v} parts (ms): {res['parts'][v]}", flush=True)
     save()
     for nm, r in res["rows"].items():
         print(f"{nm}: hashing {r['hashing_ms']:.4f} ms, {r['slowdown_hashing_only']:.4f}x over {fastest} {med[fastest]:.4f} ms",
               flush=True)
+    if args.components:
+        return
 
     os.makedirs(args.transcripts, exist_ok=True)
     res["transcripts"], res["consistency"] = {}, {}
