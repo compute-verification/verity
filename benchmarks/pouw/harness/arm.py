@@ -2,12 +2,12 @@
 harness does with each member, is published in the project store (`internal/pouw/rtx-pro/workers/6-harness.md`, "Arm
 interface"); this module is that contract in code, and `check_arm` is what the harness enforces before it runs an arm.
 
-An arm is any object with the members of `BenchArm` (v0.5; `Arm`, its old name, is a deprecated alias: the vLLM API's
+An arm is any object with the members of `BenchArm` (v0.6; `Arm`, its old name, is a deprecated alias: the vLLM API's
 `Arm` is a bench mode at the serving level, not a prover under test); the harness loads it by ``module:Class`` (``--arm``),
 constructs it with no arguments, and calls `build` once. Device pointers and CUDA streams are Python ints; everything runs in
 the device's primary context, so an arm may use the CUDA runtime, the driver API, or its own shared library.
 
-A call's ``phases`` (v0.5) are named by the step groups the executor schedules, `GROUPS`; the chain times them in three
+A call's ``phases`` (v0.6) are named by the step groups the executor schedules, `GROUPS`; the chain times them in three
 parts, `PARTS`, the last of which is `MOVABLE`, what its side stream (the ``deferred`` schedule) takes. v0.4's phase names
 ``before``, ``gemm`` and ``after`` are still accepted, each as its part, and deprecated.
 
@@ -30,8 +30,21 @@ arm writes each shape's transcript (``transcripts/<arm>/<shape>/`` by convention
   ``per: "run"`` once for the run (identical commands of several arms run once).
 - ``commit`` (optional): the verifier's git commit, when it isn't the run's source commit.
 
+- ``control`` (optional, v0.5): where the no-write negative control's transcript goes, like ``transcript``; by default
+  ``transcript`` with ``{shape}`` as ``<shape>-nowrite``.
+
 A transcript is accepted only by a line of the commands' output that starts with ``ACCEPT`` and names
 ``sha256:<the transcript file's sha256>``, with no ``REJECT`` line naming it (and, per shape, every command exiting 0).
+
+The transcript replay (v0.5, server.md 11:50Z): the harness, not the arm, dumps each shape's transcript. An arm with a
+verifier gives its calls ``transcript(dir, read)``, which writes into ``dir`` (the transcript file's directory) what the
+verifier's commands read, taking every device byte from ``read(name[, offset, nbytes])``, which reads only the call's
+declared ``outputs``, or from its operand set (`OperandSet.host`). After timing, the harness takes the hash role's call on
+operand set 0, fills every one of its ``outputs`` with 0xA5 (`POISON`), runs ``weight_side`` and ``launch`` once and calls
+``transcript``; then it poisons them again and calls ``transcript`` with no launch into the control's directory: the no-write
+negative control, which the verifier must reject (`bench.py --judge-controls`). So ``outputs`` holds every buffer the
+transcript reads that a setup step, the weight side or a launch writes (Pearl-C4's ``root_a`` and ``seed_a``, which
+``prime`` writes before timing, among them), and none of the operand set's buffers (`check_outputs`).
 """
 
 from __future__ import annotations
@@ -42,7 +55,9 @@ import string
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 
-VERSION = "v0.5"
+VERSION = "v0.6"
+POISON = 0xA5
+CONTROL_SUFFIX = "-nowrite"
 #: a call's step groups, in the order its main lane runs them; must equal verity_pouw.serving.GROUPS
 GROUPS = ("a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 #: the groups nothing later in the call reads, so they may leave the main lane; must equal verity_pouw.serving.MOVABLE
@@ -122,7 +137,8 @@ class Gate:
 class Call(Protocol):
     """One operand set's prepared prover call. `launch` is the timed call: one complete per-call step, enqueued on `stream`,
     with no host sync, allocation or host-device copy (the harness captures it into a CUDA graph). `weight_side` enqueues the
-    per-(weight, epoch) work, under the same rules. `outputs` are the buffers the arm's gate reads.
+    per-(weight, epoch) work, under the same rules. `outputs` are the buffers the arm's gate and its transcript read; with a
+    verifier, the call also has ``transcript(dir, read)`` (the module's docstring).
 
     The dependent chain (`chain.py`, at decode shapes): before each launch the harness overwrites the operand set's `a` (and
     `a_scale`, for block-scaled inputs) with f of the previous call's y, so `launch` must read A from the operand set every
@@ -218,11 +234,10 @@ def check_verifier(name: str, build: dict) -> dict | None:
     per = v.get("per", "shape")
     if per not in VERIFIER_FIELDS:
         raise ArmError(f"arm {name}: verifier per {per!r} not in {sorted(VERIFIER_FIELDS)}")
-    t = v.get("transcript")
-    if not isinstance(t, str) or not t or t.startswith("/") or ".." in t.split("/"):
-        raise ArmError(f"arm {name}: verifier transcript must be a path inside the run's directory, not {t!r}")
-    if not {"arm", "shape"} <= fields(t) <= {"arm", "shape"}:
-        raise ArmError(f"arm {name}: verifier transcript {t!r} must name {{arm}} and {{shape}}, and nothing else")
+    t = _path_template(name, "transcript", v.get("transcript"))
+    control = v.get("control")
+    if control is not None and _path_template(name, "control", control) == t:
+        raise ArmError(f"arm {name}: verifier control must be another path than its transcript")
     cmds = v.get("commands")
     if not cmds or not all(isinstance(c, list) and c and all(isinstance(x, str) for x in c) for c in cmds):
         raise ArmError(f"arm {name}: verifier commands must be a non-empty list of non-empty argv lists of strings")
@@ -233,8 +248,34 @@ def check_verifier(name: str, build: dict) -> dict | None:
     commit = v.get("commit")
     if commit is not None and not (isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{7,40}", commit)):
         raise ArmError(f"arm {name}: verifier commit must be a git commit (7-40 hex characters), not {commit!r}")
-    return {"per": per, "transcript": t, "commands": [list(c) for c in cmds], "commit": commit,
+    return {"per": per, "transcript": t, "control": control, "commands": [list(c) for c in cmds], "commit": commit,
             "name": v.get("name")}
+
+
+def _path_template(name: str, what: str, t) -> str:
+    if not isinstance(t, str) or not t or t.startswith("/") or ".." in t.split("/"):
+        raise ArmError(f"arm {name}: verifier {what} must be a path inside the run's directory, not {t!r}")
+    if not {"arm", "shape"} <= fields(t) <= {"arm", "shape"}:
+        raise ArmError(f"arm {name}: verifier {what} {t!r} must name {{arm}} and {{shape}}, and nothing else")
+    return t
+
+
+def transcript_paths(verifier: dict, arm: str, label: str) -> dict:
+    """Where an arm's transcript and its no-write control's go at a shape, relative to the run's directory, and the shape
+    the control's commands are given (``<shape>-nowrite`` unless the verifier declares ``control``)."""
+    control = verifier.get("control")
+    shape = label if control else label + CONTROL_SUFFIX
+    return {"transcript": verifier["transcript"].format(arm=arm, shape=label),
+            "control": (control or verifier["transcript"]).format(arm=arm, shape=shape), "control_shape": shape}
+
+
+def check_outputs(call: Call, operands: OperandSet) -> None:
+    """The replay poisons every output, so none may overlap a buffer of the operand set (the inputs)."""
+    ins = [(n, b) for n in ("a", "b", "a_scale", "b_scale") if (b := getattr(operands, n)) is not None]
+    for name, out in call.outputs.items():
+        for n, b in ins:
+            if out.ptr < b.ptr + b.nbytes and b.ptr < out.ptr + out.nbytes:
+                raise ArmError(f"output {name!r} overlaps the operand set's {n}: the replay would poison an input")
 
 
 def fields(template: str) -> set[str]:

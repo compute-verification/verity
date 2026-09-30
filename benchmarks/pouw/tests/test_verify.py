@@ -251,6 +251,9 @@ GOOD = {"transcript": "transcripts/{arm}/{shape}/t.json", "commands": [["{python
     ({"commands": [["{}"]]}, "use ['']"),
     ({"commands": [["{python"]]}, "bad placeholder"),
     ({"commit": "unknown"}, "git commit"),
+    ({"control": "/abs/{arm}/{shape}"}, "control must be a path inside the run's directory"),
+    ({"control": "negative/{arm}.json"}, "control 'negative/{arm}.json' must name {arm} and {shape}"),
+    ({"control": GOOD["transcript"]}, "control must be another path than its transcript"),
 ])
 def test_check_verifier_refuses_a_bad_declaration(bad, why):
     with pytest.raises(A.ArmError, match=re.escape(why)):
@@ -260,6 +263,12 @@ def test_check_verifier_refuses_a_bad_declaration(bad, why):
 def test_check_verifier_normalizes_a_good_one_and_allows_none():
     assert A.check_verifier("x", {}) is None
     v = A.check_verifier("x", {"verifier": GOOD | {"name": "the audit"}})
-    assert v == {"per": "shape", "transcript": GOOD["transcript"], "commands": GOOD["commands"], "commit": None,
-                 "name": "the audit"}
+    assert v == {"per": "shape", "transcript": GOOD["transcript"], "control": None, "commands": GOOD["commands"],
+                 "commit": None, "name": "the audit"}
     assert A.check_verifier("x", {"verifier": v}) == v
+    assert A.transcript_paths(v, "pc", PREFILL) == {"transcript": f"transcripts/pc/{PREFILL}/t.json",
+                                                    "control": f"transcripts/pc/{PREFILL}-nowrite/t.json",
+                                                    "control_shape": f"{PREFILL}-nowrite"}
+    neg = A.check_verifier("x", {"verifier": GOOD | {"control": "negative/{arm}/{shape}/t.json"}})
+    assert A.transcript_paths(neg, "pc", PREFILL)["control"] == f"negative/pc/{PREFILL}/t.json"
+    assert A.transcript_paths(neg, "pc", PREFILL)["control_shape"] == PREFILL
