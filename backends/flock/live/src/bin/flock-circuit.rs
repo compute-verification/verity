@@ -697,6 +697,9 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         }
         if host_units {
             let ins: Vec<Vec<F128>> = unit_inputs().collect();
+            if mapped {
+                return (WitData::Dev(rows, HostSlots::pack_units(st, &host, st.c.unit_net, &ins), Vec::new()), t.elapsed().as_secs_f64());
+            }
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
             return (WitData::Dev(rows, pack(&host), Vec::new()), t.elapsed().as_secs_f64());
         }

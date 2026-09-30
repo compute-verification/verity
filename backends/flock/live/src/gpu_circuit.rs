@@ -356,6 +356,45 @@ impl HostSlots {
         Self::pack_in(slots, |_| None)
     }
 
+    /// [`HostSlots::pack`] of `head` and then circuit `ni`'s slots from their input words (`host_slots(st, ni, ins)`), the
+    /// latter's a, b words written into mapped memory straight from their lane groups (`unit_ab_into`) rather than first as
+    /// z, a, b vectors: the same slots, layout and words. `FC_UNIT_FUSED=0` packs `host_slots` instead; `FC_UNIT_CHECK=1`
+    /// packs both and asserts they are equal.
+    pub fn pack_units(st: &Stmt, head: &[HostSlot], ni: usize, ins: &[Vec<F128>]) -> Self {
+        let unfused = || {
+            let mut all = head.to_vec();
+            all.extend(host_slots(st, ni, ins));
+            Self::pack(&all)
+        };
+        if std::env::var("FC_UNIT_FUSED").as_deref() == Ok("0") || st.c.lookups.contains_key(&ni) {
+            return unfused();
+        }
+        let t = Instant::now();
+        let (r, wpb) = (st.c.range_of(ni), 1usize << (st.c.k_log - 7));
+        let uw = 1usize << (st.c.nets[ni].1.unit_log - 7);
+        let mut words: Vec<i32> = head.iter().map(|s| s.1.len() as i32).collect();
+        let hw: usize = words.iter().map(|&w| w as usize).sum();
+        words.extend(std::iter::repeat_n(uw as i32, ins.len()));
+        let at: Vec<i64> = head.iter().map(|s| s.0 as i64)
+            .chain((0..ins.len()).map(|x| ((x / r.count) * wpb + r.slot(x % r.count) / 128) as i64)).collect();
+        let Some(mut zab) = HostBuf::mapped(4 * (hw + uw * ins.len())) else { return unfused() };
+        let (h, u) = zab.split_at_mut(4 * hw);
+        if !(Self::fill(h, &words[..head.len()], head, true) && crate::circuit::unit_ab_into(&st.c.nets[ni].1, ni, uw, ins, u)) {
+            drop(zab);
+            return unfused();
+        }
+        let got = HostSlots { at, words, zab, ab: true };
+        if crate::circuit::unit_profile() {
+            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "pack_units", "slots": got.words.len(), "layout": got.layout(), "wall_s": t.elapsed().as_secs_f64()}));
+        }
+        if std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1") {
+            let want = unfused();
+            assert!(want.at == got.at && want.words == got.words && want.ab == got.ab && want.zab[..] == got.zab[..],
+                    "circuit {ni}: the fused host slots are not host_slots' packed");
+        }
+        got
+    }
+
     /// With `mapped` (a device-readable buffer of n words, or None), a, b per slot when every z is a & b; else z, a, b in heap memory
     fn pack_in(slots: &[HostSlot], mapped: impl Fn(usize) -> Option<HostBuf>) -> Self {
         let t = Instant::now();
