@@ -42,6 +42,7 @@ envs:
   REVISION: null
   CAMPAIGN: nebius-sweep
   HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
   HF_HUB_OFFLINE: "1"
   SWEEP_DIR: /workspace/cp/sweep
   PY: /workspace/jobs/venv312/bin/python
@@ -71,12 +72,13 @@ setup: |
   chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
   cd "$SRC/integrations/vllm"
-  flock /workspace/jobs/.vllm-bootstrap.lock env WORK=/workspace/jobs HF_HOME=/workspace/hf \
+  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf \
     bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"
 
 run: |
   set -euo pipefail
   cd "$SRC/integrations/vllm"
+  export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
   "$PY" -m verity_vllm.pipeline.cli row stage build "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
 
@@ -117,6 +119,7 @@ envs:
   REVISION: null
   CAMPAIGN: nebius-sweep
   HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
   HF_HUB_OFFLINE: "1"
   SWEEP_DIR: /workspace/cp/sweep
   PY: /workspace/jobs/venv312/bin/python
@@ -141,12 +144,13 @@ setup: |
   set -euo pipefail
   mkdir -p /workspace/jobs/hot /workspace/jobs/dm
   cd "$SRC/integrations/vllm"
-  flock /workspace/jobs/.vllm-bootstrap.lock env WORK=/workspace/jobs HF_HOME=/workspace/hf \
+  flock /workspace/jobs/.vllm-bootstrap.lock env -u REPO WORK=/workspace/jobs HF_HOME=/workspace/hf \
     bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"
 
 run: |
   set -euo pipefail
   cd "$SRC/integrations/vllm"
+  export PATH=$CUDA_HOME/bin:$PATH
   export PYTHONPATH=$SRC/tools/research/src
   "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460
 
