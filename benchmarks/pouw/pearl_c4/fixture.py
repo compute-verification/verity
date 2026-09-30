@@ -121,15 +121,17 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
                                       for i in range(m) for o in range(0, 2 * k, SEGMENT)), np.uint8)
 
     le = lambda arr, dt: np.ascontiguousarray(arr, dt).tobytes()  # noqa: E731
+    # pearl_c4.cu's scales are k-tile major: k/128 x rows x 128/block
+    tiled = lambda s: s.reshape(s.shape[0], k // 128, 128 // fmt.block).transpose(1, 0, 2)  # noqa: E731
     files = {
         "xa": le(xa, "<u2"), "xb": le(xb, "<u2"), "seed_a": seed_a, "seed_b": seed_b,
         "lines_ea": le(lea, np.uint8), "lines_eb": le(leb, np.uint8),
         "lines_fa": le(lfa, np.uint8), "lines_fb": le(lfb, np.uint8),
         "fat": le(pack(fa.T.copy()), np.uint8), "fbt": le(pack(fb.T.copy()), np.uint8),
         "rows_a": le(row_hash, np.uint8),
-        "a_codes": le(pack(a.codes), np.uint8), "a_scales": le(a.scales, np.uint8), "a_alpha": le(a.alpha, "<u4"),
+        "a_codes": le(pack(a.codes), np.uint8), "a_scales": le(tiled(a.scales), np.uint8), "a_alpha": le(a.alpha, "<u4"),
         "a_inv": le(inv_a, "<u4"), "a_ae": le(a.ae, np.uint8),
-        "b_codes": le(pack(b.codes), np.uint8), "b_scales": le(b.scales, np.uint8), "b_alpha": le(b.alpha, "<u4"),
+        "b_codes": le(pack(b.codes), np.uint8), "b_scales": le(tiled(b.scales), np.uint8), "b_alpha": le(b.alpha, "<u4"),
         "b_inv": le(inv_b, "<u4"), "b_ae": le(b.ae, np.uint8),
         "pa": le(pa, "<u2"), "pb": le(pb, "<u2"), "g": le(g, "<u4"), "bf": le(bf, "<u4"),
         "c": le(c, "<u4"), "u": le(u, "<u4"), "y": le(unscale(u), "<u2"), "y_plain": le(unscale(c), "<u2"),

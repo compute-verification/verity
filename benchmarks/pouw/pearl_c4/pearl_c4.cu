@@ -3,9 +3,10 @@
 // 16 ints i[].  FMT 0 is NVFP4 (E2M1, UE4M3 per 16 along k), FMT 1 MXFP4 (E2M1, UE8M0 per 32).  Hashing is GPU 2's
 // pouw_hash.cuh (TurboSHAKE128, BLAKE3), included from the pinned commit build.sh names.
 //
-// Buffers, all row-major and little-endian:
+// Buffers, all row-major (scales k-tile major) and little-endian:
 //   x        rows x k BF16 (A or B)                          codes    rows x k/2 bytes, E2M1, even position in the low nibble
-//   scales   rows x k/16 (NVFP4) or k/32 (MXFP4) bytes       lines    count x 16 bytes, one noise line (32 E2M1 codes) each
+//   scales   k/128 x rows x 128/BLK bytes: k-tile kt's scales for row r at (kt·rows + r)·128/BLK, so a CTA's rows of one
+//            k-tile are contiguous                           lines    count x 16 bytes, one noise line (32 E2M1 codes) each
 //   ft       32 x k/2 bytes: F's lines transposed (ft[p] nibble t = line t's code p)
 //   P        rows x 64 BF16 (P_A = [Ẽ_A | bf16(A'F_B)], P_B = [bf16(Ẽ_B G - B~F_A) | -Ẽ_B])
 //   alpha, inv  rows FP32 (α and RN(1/α));  ae  rows bytes (a_E, UE4M3)
@@ -90,8 +91,6 @@ DEV void mma_bf16(float d[4], const uint32_t a[4], uint32_t b0, uint32_t b1) {
 // ---------------------------------------------------------------- shared memory: cp.async, ldmatrix
 DEV uint32_t sa(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
 DEV void cp16(void* s, const void* g) { asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(sa(s)), "l"(g) : "memory"); }
-DEV void cp8(void* s, const void* g) { asm volatile("cp.async.ca.shared.global [%0], [%1], 8;" ::"r"(sa(s)), "l"(g) : "memory"); }
-DEV void cp4(void* s, const void* g) { asm volatile("cp.async.ca.shared.global [%0], [%1], 4;" ::"r"(sa(s)), "l"(g) : "memory"); }
 DEV void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
 template <int N> DEV void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
 DEV void ldsm4(uint32_t r[4], uint32_t addr) {
@@ -310,8 +309,9 @@ template <int FMT> DEV void form_body(const Args& a) {
     if (t < 2) {
       const int row = r0 + g + 8 * t;
       const uint32_t sw = t ? sh : sg;
-      if constexpr (FMT == NVFP4) *reinterpret_cast<uint32_t*>(scales + (size_t)row * (K / 16) + 4 * c) = sw;
-      else *reinterpret_cast<uint16_t*>(scales + (size_t)row * (K / 32) + 2 * c) = (uint16_t)sw;
+      uint8_t* sp = scales + ((size_t)(c >> 1) * a.i[0] + row) * (128 / BLK) + (c & 1) * (64 / BLK);
+      if constexpr (FMT == NVFP4) *reinterpret_cast<uint32_t*>(sp) = sw;
+      else *reinterpret_cast<uint16_t*>(sp) = (uint16_t)sw;
     }
   }
 }
@@ -326,18 +326,19 @@ extern "C" __global__ void __launch_bounds__(256) form_mx(const Args a) { form_b
 // 1: bf16 into P[row][32 + q])
 constexpr int CH_STAGES = 4, CH_U = 8;
 template <int FMT, int RB> struct ChGeo {
-  static constexpr int ROWS = 16 * RB, THREADS = 128 * RB, SROW = CH_U * 64 / Fmt<FMT>::BLK;
+  static constexpr int ROWS = 16 * RB, THREADS = 128 * RB, SFB = 128 / Fmt<FMT>::BLK, SROW = CH_U / 2 * SFB;
   static constexpr int A_BYTES = ROWS * 256, F_BYTES = 32 * 256, STAGE = A_BYTES + F_BYTES + ROWS * SROW;
   static constexpr int SMEM = CH_STAGES * STAGE;
 };
 template <int FMT, int RB> DEV void chain32_body(const Args& a) {
   using G = ChGeo<FMT, RB>;
-  constexpr int BLK = Fmt<FMT>::BLK, PER = G::SROW / 16;
+  constexpr int SFB = G::SFB, PER = G::ROWS * SFB / 16;
   extern __shared__ __align__(128) uint8_t smem[];
   const uint8_t* A = reinterpret_cast<const uint8_t*>(a.p[0]);
   const uint8_t* S = reinterpret_cast<const uint8_t*>(a.p[1]);
   const uint8_t* FT = reinterpret_cast<const uint8_t*>(a.p[2]);
-  const int K = a.i[1], NB = K / 64 / CH_U, tid = threadIdx.x, warp = tid / 32, lane = tid % 32, g = lane >> 2, t = lane & 3;
+  const int ROWS_ALL = a.i[0], K = a.i[1], NB = K / 64 / CH_U, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
+  const int g = lane >> 2, t = lane & 3;
   const int r0 = blockIdx.x * G::ROWS, ra = (warp / 4) * 16 + g, rq = 8 * (warp % 4) + g;
   const int rs = (warp / 4) * 16 + 8 * (lane & 1) + (lane >> 2);
 
@@ -350,9 +351,9 @@ template <int FMT, int RB> DEV void chain32_body(const Args& a) {
       cp16(s + G::A_BYTES + (i >> 4) * 256 + (((i & 15) ^ ((i >> 4) & 7)) << 4),
            FT + (size_t)(i >> 4) * (K / 2) + b * 256 + (i & 15) * 16);
     if (S)
-      for (int i = tid; i < G::ROWS * PER; i += G::THREADS)
-        cp16(s + G::A_BYTES + G::F_BYTES + (i / PER) * G::SROW + (i % PER) * 16,
-             S + (size_t)(r0 + i / PER) * (K / BLK) + b * G::SROW + (i % PER) * 16);
+      for (int i = tid; i < CH_U / 2 * PER; i += G::THREADS)
+        cp16(s + G::A_BYTES + G::F_BYTES + i * 16,
+             S + ((size_t)(CH_U / 2 * b + i / PER) * ROWS_ALL + r0) * SFB + (i % PER) * 16);
   };
 
   float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -381,8 +382,9 @@ template <int FMT, int RB> DEV void chain32_body(const Args& a) {
       const uint32_t b1 = *reinterpret_cast<const uint32_t*>(sF + rq * 256 + hi + 4 * t);
       uint32_t sf = Fmt<FMT>::ONE;
       if (S) {
-        if constexpr (FMT == NVFP4) sf = *reinterpret_cast<const uint32_t*>(sS + rs * G::SROW + 4 * u);
-        else sf = *reinterpret_cast<const uint16_t*>(sS + rs * G::SROW + 2 * u);
+        const uint8_t* sp = sS + ((u >> 1) * G::ROWS + rs) * SFB + (u & 1) * (SFB / 2);
+        if constexpr (FMT == NVFP4) sf = *reinterpret_cast<const uint32_t*>(sp);
+        else sf = *reinterpret_cast<const uint16_t*>(sp);
       }
       mma_fp4<FMT>(acc, af, b0, b1, acc, sf, Fmt<FMT>::ONE);
     }
@@ -422,16 +424,17 @@ extern "C" __global__ void __launch_bounds__(256) pb(const Args a) {
 }
 
 // ---------------------------------------------------------------- the chain, the peel, the epilogue hashing
-// One CTA per BM x 128 output block (BM = 128: 8 warps, 64: 4), warps 32 x 64 (two m16 x n64 regions each), BK = 128 codes,
+// One CTA per BM x BN output block (128 x 128: 8 warps, 64 x 128: 4, 64 x 64: 2 for decode's narrow m, so that n/64 CTAs
+// fill the SMs), warps 32 x 64 (two m16 x n64 regions each), BK = 128 codes,
 // STAGES deep cp.async.  C~ = the atom chained from +0 over k/64 steps, no promotion.  Modes: PLAIN y = bf16(C~ inv inv);
 // NOHASH C~, U = C~ + four BF16 m16n8k16 steps of P_A P_B^T, y from U; HASH as NOHASH, plus per region
 // ph::quad_msg_digest<2> over C~ | U (0x21).
 // p0 A codes, p1 A scales, p2 B codes, p3 B scales, p4 P_A, p5 P_B, p6 inv_A, p7 inv_B, p8 y, p9 digests, p10 C~ out and
 // p11 U out (FP32, m x n; null: not stored); i0 m, i1 n, i2 k
 enum { M_PLAIN, M_NOHASH, M_HASH };
-constexpr int BN = 128, BK = 128, STAGES = 4;
-template <int FMT, int BM> struct Geo {
-  static constexpr int WARPS = BM / 32 * 2, THREADS = 32 * WARPS, SFB = BK / Fmt<FMT>::BLK;
+constexpr int BK = 128, STAGES = 4;
+template <int FMT, int BM, int BN> struct Geo {
+  static constexpr int WN = BN / 64, WARPS = BM / 32 * WN, THREADS = 32 * WARPS, SFB = BK / Fmt<FMT>::BLK;
   static constexpr int A_BYTES = BM * 64, B_BYTES = BN * 64, SA_BYTES = BM * SFB, SB_BYTES = BN * SFB;
   static constexpr int STAGE = A_BYTES + B_BYTES + SA_BYTES + SB_BYTES;
   static constexpr int WARP_EPI = 1024;
@@ -439,18 +442,19 @@ template <int FMT, int BM> struct Geo {
   static constexpr int SMEM = STAGES * STAGE > EPI ? STAGES * STAGE : EPI;
 };
 
-template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
-  using G = Geo<FMT, BM>;
-  constexpr int SFB = G::SFB, BLK = Fmt<FMT>::BLK;
+template <int FMT, int BM, int BN, int MODE> DEV void gemm_body(const Args& a) {
+  using G = Geo<FMT, BM, BN>;
+  constexpr int SFB = G::SFB;
   extern __shared__ __align__(128) uint8_t smem[];
   const int M = a.i[0], N = a.i[1], K = a.i[2], KB = K / BK;
-  const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wm = warp / 2, wn = warp % 2, g = lane >> 2, t = lane & 3;
+  const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wm = warp / G::WN, wn = warp % G::WN, g = lane >> 2;
+  const int t = lane & 3;
   const int tiles_n = N / BN, m0 = (blockIdx.x / tiles_n) * BM, n0 = (blockIdx.x % tiles_n) * BN;
   if (m0 >= M) return;
   const uint8_t* Ag = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)m0 * (K / 2);
-  const uint8_t* SAg = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)m0 * (K / BLK);
+  const uint8_t* SAg = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)m0 * SFB;
   const uint8_t* Bg = reinterpret_cast<const uint8_t*>(a.p[2]) + (size_t)n0 * (K / 2);
-  const uint8_t* SBg = reinterpret_cast<const uint8_t*>(a.p[3]) + (size_t)n0 * (K / BLK);
+  const uint8_t* SBg = reinterpret_cast<const uint8_t*>(a.p[3]) + (size_t)n0 * SFB;
 
   auto load = [&](int kb, int st) {
     uint8_t* s = smem + st * G::STAGE;
@@ -458,13 +462,11 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
       cp16(s + swz64(i >> 2, i & 3), Ag + (size_t)(i >> 2) * (K / 2) + kb * 64 + (i & 3) * 16);
     for (int i = tid; i < BN * 4; i += G::THREADS)
       cp16(s + G::A_BYTES + swz64(i >> 2, i & 3), Bg + (size_t)(i >> 2) * (K / 2) + kb * 64 + (i & 3) * 16);
-    for (int i = tid; i < BM + BN; i += G::THREADS) {
-      const bool isa = i < BM;
-      const int r = isa ? i : i - BM;
-      uint8_t* dst = s + G::A_BYTES + G::B_BYTES + (isa ? 0 : G::SA_BYTES) + r * SFB;
-      const uint8_t* src = (isa ? SAg : SBg) + (size_t)r * (K / BLK) + kb * SFB;
-      if constexpr (SFB == 8) cp8(dst, src);
-      else cp4(dst, src);
+    for (int i = tid; i < (BM + BN) * SFB / 16; i += G::THREADS) {
+      const bool isa = i < BM * SFB / 16;
+      const int j = isa ? i : i - BM * SFB / 16;
+      cp16(s + G::A_BYTES + G::B_BYTES + (isa ? 0 : G::SA_BYTES) + j * 16,
+           (isa ? SAg + (size_t)kb * M * SFB : SBg + (size_t)kb * N * SFB) + j * 16);
     }
   };
 
@@ -597,21 +599,23 @@ template <int FMT, int BM, int MODE> DEV void gemm_body(const Args& a) {
   }
 }
 
-#define GEMM(NAME, FMT, BM, MODE)                                                                                          \
-  extern "C" __global__ void __launch_bounds__(Geo<FMT, BM>::THREADS, 1) NAME(const Args a) { gemm_body<FMT, BM, MODE>(a); } \
-  extern "C" __global__ void NAME##_smem(int* out) { *out = Geo<FMT, BM>::SMEM; }
-GEMM(gemm_nv_hash, NVFP4, 128, M_HASH)
-GEMM(gemm_nv_nohash, NVFP4, 128, M_NOHASH)
-GEMM(gemm_nv_plain, NVFP4, 128, M_PLAIN)
-GEMM(gemm_nv_hash_m64, NVFP4, 64, M_HASH)
-GEMM(gemm_nv_nohash_m64, NVFP4, 64, M_NOHASH)
-GEMM(gemm_nv_plain_m64, NVFP4, 64, M_PLAIN)
-GEMM(gemm_mx_hash, MXFP4, 128, M_HASH)
-GEMM(gemm_mx_nohash, MXFP4, 128, M_NOHASH)
-GEMM(gemm_mx_plain, MXFP4, 128, M_PLAIN)
-GEMM(gemm_mx_hash_m64, MXFP4, 64, M_HASH)
-GEMM(gemm_mx_nohash_m64, MXFP4, 64, M_NOHASH)
-GEMM(gemm_mx_plain_m64, MXFP4, 64, M_PLAIN)
+#define GEMM(NAME, FMT, BM, BN, MODE)                                                                    \
+  extern "C" __global__ void __launch_bounds__(Geo<FMT, BM, BN>::THREADS, 1) NAME(const Args a) {       \
+    gemm_body<FMT, BM, BN, MODE>(a);                                                                  \
+  }                                                                                                   \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = Geo<FMT, BM, BN>::SMEM; }
+#define GEMMS(F, FMT)                                     \
+  GEMM(gemm_##F##_hash, FMT, 128, 128, M_HASH)            \
+  GEMM(gemm_##F##_nohash, FMT, 128, 128, M_NOHASH)        \
+  GEMM(gemm_##F##_plain, FMT, 128, 128, M_PLAIN)          \
+  GEMM(gemm_##F##_hash_m64, FMT, 64, 128, M_HASH)         \
+  GEMM(gemm_##F##_nohash_m64, FMT, 64, 128, M_NOHASH)     \
+  GEMM(gemm_##F##_plain_m64, FMT, 64, 128, M_PLAIN)       \
+  GEMM(gemm_##F##_hash_m64n64, FMT, 64, 64, M_HASH)       \
+  GEMM(gemm_##F##_nohash_m64n64, FMT, 64, 64, M_NOHASH)   \
+  GEMM(gemm_##F##_plain_m64n64, FMT, 64, 64, M_PLAIN)
+GEMMS(nv, NVFP4)
+GEMMS(mx, MXFP4)
 
 // tile leaves: TurboSHAKE128 of a 64 x 64 tile's 128 message digests (rows in order, 2 chunks each), 0x22.
 // p0 digests, p1 out (tiles row-major x 32 B); i0 m, i1 n

@@ -208,7 +208,8 @@ class Pipeline:
     device pointers the caller owns (the harness's operand sets); the rest are allocated here."""
 
     def __init__(self, dev: Dev, fmt: str, m: int, n: int, k: int, bm: int | None = None, store_cu: bool = False,
-                 external: dict[str, int] | None = None, split: int | None = None, chain_h: int | None = None):
+                 external: dict[str, int] | None = None, split: int | None = None, chain_h: int | None = None,
+                 bn: int | None = None):
         why = domain(m, n, k)
         if why:
             raise ValueError(f"{m}x{n}x{k} outside pearl_c4.cu's domain: {why}")
@@ -218,15 +219,18 @@ class Pipeline:
         self.chain_h = chain_h
         self.tag, self.blk = FMTS[fmt]
         self.bm = bm or (128 if m % 128 == 0 else 64)
+        self.bn = bn or (64 if self.bm == 64 and (m // 64) * (n // 128) < dev.sms else 128)
+        if (self.bm, self.bn) not in ((128, 128), (64, 128), (64, 64)):
+            raise ValueError(f"no {self.bm} x {self.bn} GEMM in pearl_c4.cu")
         self.sizes = buffer_sizes(fmt, m, n, k)
         self.external = dict(external or {})
         if store_cu:
             self.sizes.update(c=4 * m * n, u=4 * m * n)
         self.buf = {name: self.external.get(name) or dev.alloc(size) for name, size in self.sizes.items()}
-        self.threads = 32 * (self.bm // 32) * 2
+        self.threads = 32 * (self.bm // 32) * (self.bn // 64)
 
     def gemm(self, mode: str) -> str:
-        return f"gemm_{self.tag}_{mode}" + ("" if self.bm == 128 else "_m64")
+        return f"gemm_{self.tag}_{mode}" + ("" if self.bm == 128 else "_m64") + ("" if self.bn == 128 else "n64")
 
     def chain32(self, rows: int, p: list[int], i: list[int]) -> tuple[str, tuple, dict]:
         """The launch of a rows x 32 chain: two 16-row blocks per CTA where that still fills every SM."""
@@ -273,7 +277,7 @@ class Pipeline:
                b["seed_a"] if mode == "hash" else 0], i=[m, k, 0, 0, ROLE_EA])))
         out.append(self.chain32(m, [b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], [m, k, 1]))
         g = self.gemm(mode)
-        out.append((g, ((m // self.bm) * (n // 128), self.threads, self.dev.dyn_smem(g)), dict(
+        out.append((g, ((m // self.bm) * (n // self.bn), self.threads, self.dev.dyn_smem(g)), dict(
             p=[b["a_codes"], b["a_scales"], b["b_codes"], b["b_scales"], b["pa"], b["pb"], b["a_inv"], b["b_inv"], b["y"],
                b["digests"], b.get("c", 0), b.get("u", 0)], i=[m, n, k])))
         if mode == "hash":
@@ -321,11 +325,11 @@ def check_fmt(dev: Dev, d: Path) -> bool:
         if hashlib.sha256(want[name]).hexdigest() != meta["sha256"]:
             raise RuntimeError(f"{d}/{name}.bin does not match its manifest")
     ok = True
-    for bm in (128, 64):
+    for bm, bn in ((128, 128), (64, 128), (64, 64)):
         if m % bm:
             continue
         wide = bm == 64 and m % 32 == 0 and n % 32 == 0
-        pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, store_cu=True, split=k // 64 // 8 if bm == 64 else 1,
+        pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, bn=bn, store_cu=True, split=k // 64 // 8 if bm == 64 else 1,
                       chain_h=32 if wide else 16)
         for name in ("xa", "xb", "seed_a", "seed_b"):
             dev.write(pl.buf[name], want[name])
@@ -340,7 +344,7 @@ def check_fmt(dev: Dev, d: Path) -> bool:
                 rows.append(diff(name, dev.read(pl.buf[src], len(want[name])), want[name]) | {"mode": mode})
         pl.free()
         for r in rows:
-            r.update(fmt=mf["fmt"], bm=bm, split=[pl.split_a, pl.split_b], chain_h=pl.chain_h, shape=[m, n, k])
+            r.update(fmt=mf["fmt"], bm=bm, bn=bn, split=[pl.split_a, pl.split_b], chain_h=pl.chain_h, shape=[m, n, k])
             emit(r)
             ok &= r["mismatches"] == 0
     return ok
@@ -379,7 +383,7 @@ def main(argv: list[str]) -> int:
         pl.weight_side()
         pl.prime()
         dev.sync()
-        row = {"shape": [m, n, k], "fmt": a.fmt, "bm": pl.bm,
+        row = {"shape": [m, n, k], "fmt": a.fmt, "bm": pl.bm, "bn": pl.bn,
                "label": "self-timing for hillclimbing, not a panel number; clocks as the machine sets them"}
         row["weight_side_ms"] = statistics.median(dev.timed(pl.weight_side, a.reps))
         for mode in MODES:
