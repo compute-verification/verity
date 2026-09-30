@@ -123,12 +123,20 @@ def scale_value(byte, fmt):
     return np.maximum(uval(byte), 2.0 ** -9) if fmt == "nv" else np.exp2(byte.astype(np.float64) - 127)
 
 
+DELTA = {"nv": 0.25, "mx": 0.25}
+
+
 def stats_fmt(X, fmt):
-    """v1's row statistics; on MXFP4 α is floored to a power of two and a_E formed from it (the reference's `stats`)."""
+    """v1's row statistics; on MXFP4 α is floored to a power of two and a_E formed from it (the reference's `stats`).
+    δ is `DELTA[fmt]` (the design's 1/4 unless a lever run sets it)."""
     alpha, ae, dnf, rho2 = stats(X, KB1)
-    if fmt == "mx":
-        alpha = np.exp2(np.floor(np.log2(alpha)))
-        ae = uval(ue4m3_rn(np.sqrt(rho2) / 4 * alpha * KB1))
+    delta = DELTA[fmt]
+    if fmt == "mx" or delta != 0.25:
+        sig = np.sqrt(rho2) * delta
+        alpha = 2688 / np.maximum(np.abs(X).max(1) + 4 * sig, 2.0 ** -32)
+        if fmt == "mx":
+            alpha = np.exp2(np.floor(np.log2(alpha)))
+        ae = uval(ue4m3_rn(sig * alpha * KB1))
         dnf = ae >= 2.0 ** -6
     return alpha, ae, dnf, rho2
 
@@ -323,10 +331,13 @@ def f1_windows(p, off, rows=64, B=16):
             s.reshape(R, W))
 
 
-def c_L(m, k, n, B=16):
+INT8_LEAF = 1.81   # FP4 slots per int8 leaf MAC, the assessor's measured int8 replay (ratings.md 14:21Z); 2 before
+
+
+def c_L(m, k, n, B=16, leaf=INT8_LEAF):
     """The int8 route's cost at the deepest depth the shape admits (`theory-pearl-c4-domain.md` §6.3, 13:50Z):
-    min over 1 ≤ L ≤ log2(k/B) of 2·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75, B the format's block."""
-    return min(2 * 0.875 ** L + 4.25 * (1 / m + 1 / n) * (1.75 ** L - 1) / 0.75
+    min over 1 ≤ L ≤ log2(k/B) of leaf·(7/8)^L + 4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75, B the format's block."""
+    return min(leaf * 0.875 ** L + 4.25 * (1 / m + 1 / n) * (1.75 ** L - 1) / 0.75
                for L in range(1, max(1, int(np.log2(k // B))) + 1))
 
 
@@ -575,8 +586,7 @@ def capture(args, keep):
         return lins, got, (lambda nm: mods[nm].weight.detach()), int(ids.shape[1])
     from huggingface_hub import snapshot_download
     from safetensors import safe_open
-    root = Path(snapshot_download(args.model, allow_patterns=["*.json"]))
-    index = json.loads((root / "model.safetensors.index.json").read_text())["weight_map"]
+    index = weight_index(args.model)
     del model
 
     def weight(nm):
@@ -586,11 +596,24 @@ def capture(args, keep):
     return lins, got, weight, int(ids.shape[1])
 
 
+def weight_index(model_id):
+    """{tensor name: safetensors file} for a hub checkpoint, sharded or not."""
+    from huggingface_hub import snapshot_download
+    from safetensors import safe_open
+    root = Path(snapshot_download(model_id, allow_patterns=["*.json"]))
+    if (root / "model.safetensors.index.json").exists():
+        return json.loads((root / "model.safetensors.index.json").read_text())["weight_map"]
+    path = Path(snapshot_download(model_id, allow_patterns=["model.safetensors"])) / "model.safetensors"
+    with safe_open(str(path), "pt") as f:
+        return {key: "model.safetensors" for key in f.keys()}
+
+
 def layer_of(nm):
     return next((int(p) for p in nm.split(".") if p.isdigit()), 0)
 
 
 def real(args):
+    DELTA.update({"nv": args.delta_nv, "mx": args.delta_mx})
     keep = lambda nm, L: layer_of(nm) % args.layer_step == 0 or layer_of(nm) == L - 1  # noqa: E731
     lins, got, weight, tokens = capture(args, keep)
     rng = np.random.default_rng(20260930)
@@ -643,8 +666,7 @@ def flatness(args):
     so f_B ≤ 0.75 on every weight tile makes F2 zero whatever the activations."""
     from huggingface_hub import snapshot_download
     from safetensors import safe_open
-    root = Path(snapshot_download(args.model, allow_patterns=["*.json"]))
-    index = json.loads((root / "model.safetensors.index.json").read_text())["weight_map"]
+    index = weight_index(args.model)
     names = [key[:-len(".weight")] for key in index if key.endswith(".weight") and any(
         t in key for t in ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"))]
     nl = 1 + max(layer_of(nm) for nm in names)
@@ -669,9 +691,30 @@ def flatness(args):
                    **{f"f_B_median_{fmt}": float(np.median(v)) for fmt, v in fb.items()}}
         print(f"{nm:45s} k={k:6d} n={n:6d} " + "  ".join(f"{fmt}: f_B max {max(v):.3f} median {np.median(v):.3f}"
                                                         for fmt, v in fb.items()) + f"  [{time.time()-t0:.0f}s]", flush=True)
+    if args.acts:
+        # the flattest activation tile of each linear against its flattest sampled weight tile: F2 is 0 on every pair
+        # when their sum is at most the trigger 2 − (1 − c_L)/4, which is ≥ 1.75 at any shape
+        lins, got, _, tokens = capture(args, lambda nm, L: nm in out)
+        for nm in lins:
+            x = bf16(got.pop(nm).float().numpy())
+            x = x[:len(x) - len(x) % T]
+            for fmt in args.fmts:
+                xa = x[:, :x.shape[1] - x.shape[1] % BLOCK[fmt]]
+                alpha, ae, dnf, rho2 = stats_fmt(xa, fmt)
+                eh = H[rng.integers(0, 16, (len(xa), 32))]
+                b = draw_bytes(alpha[:, None] * xa, eh, ae / 64, rng, fmt)
+                fa = max(np.bincount(b[r:r + T].ravel()).max() / b[r:r + T].size for r in range(0, len(b), T))
+                out[nm][f"f_A_max_{fmt}"] = float(fa)
+                out[nm][f"bound_{fmt}"] = float(fa + out[nm][f"f_B_max_{fmt}"])
     summ = {"model": args.model, "linears": len(out),
             **{f"f_B_max_{fmt}": max(r[f"f_B_max_{fmt}"] for r in out.values()) for fmt in args.fmts},
             **{f"f_B_median_{fmt}": float(np.median([r[f"f_B_median_{fmt}"] for r in out.values()])) for fmt in args.fmts}}
+    if args.acts:
+        for fmt in args.fmts:
+            worst = max(out, key=lambda nm: out[nm][f"bound_{fmt}"])
+            summ[f"f_A_max_{fmt}"] = max(r[f"f_A_max_{fmt}"] for r in out.values())
+            summ[f"bound_max_{fmt}"] = {"linear": worst, "f_A": out[worst][f"f_A_max_{fmt}"],
+                                        "f_B": out[worst][f"f_B_max_{fmt}"], "sum": out[worst][f"bound_{fmt}"]}
     print(json.dumps(summ), flush=True)
     if args.out:
         Path(args.out).write_text(json.dumps({"summary": summ, "linears": out}))
@@ -694,6 +737,8 @@ def main(argv=None) -> int:
     r.add_argument("--layer-step", type=int, default=1, help="decoder layers whose index is a multiple of this, and the last")
     r.add_argument("--m-shape", type=int, default=0, help="the GEMM's m for F2's c_L (default: the tokens captured)")
     r.add_argument("--fmts", nargs="+", choices=("nv", "mx"), default=["nv", "mx"], help="NVFP4 and/or MXFP4 forming")
+    r.add_argument("--delta-nv", type=float, default=0.25, help="the noise level δ (σ = δρ), a lever; the design's is 1/4")
+    r.add_argument("--delta-mx", type=float, default=0.25)
     r.add_argument("--offload", default=None, help="CPU memory for the forward, e.g. 9GiB; the rest streams from disk")
     r.add_argument("--offload-folder", default="/tmp/offload")
     r.add_argument("--text", default=str(Path(__file__).resolve().parents[2] / "README.md"))
@@ -703,6 +748,11 @@ def main(argv=None) -> int:
     f.add_argument("--max-cols", type=int, default=8)
     f.add_argument("--layer-step", type=int, default=1)
     f.add_argument("--fmts", nargs="+", choices=("nv", "mx"), default=["nv", "mx"])
+    f.add_argument("--acts", action="store_true", help="also capture activations and bound f_A + f_B per linear")
+    f.add_argument("--tokens", type=int, default=256)
+    f.add_argument("--offload", default=None)
+    f.add_argument("--offload-folder", default="/tmp/offload")
+    f.add_argument("--text", default=str(Path(__file__).resolve().parents[2] / "README.md"))
     f.add_argument("--out", default=None)
     args = ap.parse_args(argv)
     {"attack": attack, "real": real, "flatness": flatness}[args.cmd](args)
