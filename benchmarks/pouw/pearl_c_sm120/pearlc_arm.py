@@ -16,8 +16,9 @@ chain) and `after` (the hashes), which the chain may run on a side stream.  Each
 buffers and weight side (its flag sets share them: the harness runs one call of a set at a time); the gate's second launch
 has per-shape buffers.
 
-The gate, at the exact shape and flag set: a second launch into the gate's own buffers (with hashing A's tree and seed_A; C̃
-by gemm_ct, another kernel; C̃, U and y by gemm_pearlc on 3 CTAs, another tile schedule; the hashes over those) must equal
+The gate, at the exact shape and flag set: a second launch into the gate's own buffers (with hashing A's tree and seed_A,
+the trees by other kernels, run.ALT_FORMS; C̃ by gemm_ct, another kernel; C̃, U and y by gemm_pearlc on 3 CTAs, another tile
+schedule; the hashes over those) must equal
 every output word for word; with hashing, seed_A and E_A's line key must be the scheme's from the device's root_A; and at the
 twin's sampled 64 x 64 tiles (`twin.samples`) the call's A and B codes and α, C̃, U and y must equal #449's CPU twin
 (`benchmarks/pouw/pearl_c/twin.py`) on the device record, from the harness's operand rows and the call's seeds, and with
@@ -82,10 +83,10 @@ from verity_pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
 T = W.T
 KEYS = R.TIMING_KEYS
 WEIGHT = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b", "epb_codes",
-          "bt", "bf", "pb_t", "tree_b", "keys_b", "keys_a", "keys_t")
+          "bt", "bf", "pb_t", "tree_b", "keys_b", "keys_a", "keys_t", "ctr_b")
 OWN = WEIGHT + ("ea_codes", "line_a", "seed_a")   # E_A's lines and their seed are the set's: nohash reads the last call's
 CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y", "digests", "leaves", "tree_a",
-        "tree_t")
+        "tree_t", "ctr_a", "ctr_t")
 HASHED = ("digests", "leaves", "tree_a", "tree_t")
 REF = ("c2", "c", "u", "y", "line_a", "seed_a") + HASHED
 REF_HASH_STEPS = ("pad_a", "pad_t", "hash_rows_a", "tree_a", "seed_a")
@@ -252,10 +253,11 @@ class _Call:
 
     def relaunch(self) -> dict[str, int]:
         """Words differing between each output and the second launch's (gemm_ct's C̃ as `c@gemm_ct`; with hashing, seed_A and
-        E_A's line key too)."""
+        E_A's line key too), whose trees are run.ALT_FORMS'."""
         rd, s, w = self.arm.rd, self.scratch.b, self.own.b
         ref = R.Pipeline(rd, self.m, self.n, self.k, self.arm.variant, self.keys, self.xa, self.ops.b.ptr,
                          bufs={**self.pipe.b, **{b: s["ref_" + b] for b in REF}}, m_real=self.shape.m)
+        ref.rows_form, ref.tree_form = R.ALT_FORMS
         real = ref.gemm
         ref.gemm = lambda *a, **kw: real(*a, **{**kw, "grid": REF_GRID})
         steps = {name: f for name, _, f in ref.steps()}

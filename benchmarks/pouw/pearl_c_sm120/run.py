@@ -7,7 +7,8 @@
    addressed by that UUID, never by index (NVML ignores CUDA_VISIBLE_DEVICES).  A mismatch exits 3 before any launch.
 1. The check.  At check.json's shape (fixture.py's), every kernel runs on the fixture's inputs and every buffer it writes is
    compared byte for byte with the fixture, for each variant (`sm120`, G = 4, and `sm120-unpromoted`); the GEMMs are re-run
-   persistent on 1 and 3 CTAs and compared again, and the chain's 64 x 64 kernels (decode's) too.  A variant is timed only if
+   persistent on 1 and 3 CTAs and compared again, and the chain's 64 x 64 kernels (decode's) too, and the trees again under
+   ALT_FORMS (A's rows by hash_rows_w, the levels by hash_nodes and hash_tree_small).  A variant is timed only if
    all of its buffers match (C~ and U bit-exact against the CPU reference), the plain baselines only if theirs do.  Exit 4 if
    any check fails.
 2. Diagnostic timing (not the headline: GPU 6's harness times the arm against autotuned baselines), at each of SHAPES
@@ -16,8 +17,9 @@
    end with and without its hashes (commit and hashing), and consistency checks (C~ of gemm_ct equals gemm_pearlc's; a
    second gemm_pearlc gives the same U; form_s5_scalar, timed beside form_s5, and the RATE kernels write form_s5's codes).
    `form_rates` prices the forming loop per code in the mix it runs in, in units of one dense E4M3 MAC, and the packed cast
-   within it (form_rate less form_rate_nocast).  The timing's keys and domain ids are stand-ins of the same sizes (diagnostic
-   only; the arm's calls run on a real epoch).  NVML's clocks, power and throttle reasons before and after.
+   within it (form_rate less form_rate_nocast); `alt_ms` times the trees' steps under ALT_FORMS.  The timing's keys and
+   domain ids are stand-ins of the same sizes (diagnostic only; the arm's calls run on a real epoch).  NVML's clocks, power
+   and throttle reasons before and after.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
@@ -246,6 +248,14 @@ def cdiv(a: int, b: int) -> int:
 
 
 TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
+#: the forms of the row leaves and of the trees: `p` h1_rows_p (h1_sm120.cuh: hash_rows_w's warp a row, its loads under
+#: L2::256B) and `one` h1_tree (a whole tree in one launch), or ALT_FORMS, hash_rows_w and hash_nodes a level a launch down to
+#: hash_tree_small, the same bytes: the check reruns them against the fixture, the timing prices them as `alt_ms` and the
+#: arm's gate relaunches under them.  PEARLC_A_FORMS=w,nodes makes those the call's.
+ROWS_FORM, TREE_FORM = os.environ.get("PEARLC_A_FORMS", "p,one").split(",")
+ALT_FORMS = ("w", "nodes")
+#: h1_tree's threads a CTA before the last CTA's roots need more: 64 CTAs of 64 cover A's 8,192 rows, 128 the tile tree's 16,384
+TREE_CTA = 64
 
 
 def pow2(n: int) -> int:
@@ -258,8 +268,22 @@ def depth(n: int) -> int:
 
 
 def rows_w_words(rb: int) -> int:
-    """hash_sm120.cuh's shared words per warp of hash_rows_w for rows of rb bytes."""
+    """hash_sm120.cuh's shared words per warp of hash_rows_w (and h1_rows_p) for rows of rb bytes."""
     return 8 * ((64 + rb + 1023) // 1024)
+
+
+def tree_grid(width: int, leaves: bool) -> tuple[int, int]:
+    """h1_tree's (CTAs, threads a CTA) for a level 0 of `width` nodes: two nodes a thread on TREE_CTA threads, more while the
+    CTAs' roots would be over two a thread of the last CTA; a thread a leaf when one CTA hashes the tile tree's leaves."""
+    t = max(1, min(width // 2, TREE_CTA))
+    while width // (2 * t) > 2 * t:
+        t *= 2
+    grid = max(1, width // (2 * t))
+    if grid == 1 and leaves:
+        t = min(width, 1024)
+    if t > 1024:
+        raise ValueError(f"h1_tree takes a level 0 of at most 2^22 nodes, not {width}")
+    return grid, t
 
 
 def gemm_tile(name: str) -> tuple[int, int]:
@@ -281,7 +305,9 @@ class Pipeline:
 
     `keys` are device pointers: `line_b` (E_B's and the F lines' key), the domain ids `dom_a`, `dom_b`, `dom_t`, the -h1
     labels `k_msg`, `k_leaf`, and `unit`, the unit's 104 bytes that seed_A reads (salt ‖ root_B ‖ u64 index ‖
-    BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a`."""
+    BLAKE3("pearl-c/v0/seed-A")).  E_A's line key is the pipeline's `line_a` buffer, written by `seed_line_a`.  `rows_form`
+    and `tree_form` pick the kernels of the trees' row leaves and levels (ROWS_FORM and TREE_FORM, or ALT_FORMS) for the steps
+    made after they're set."""
 
     GEMM_SMEM: dict[str, int] = {}
 
@@ -290,6 +316,7 @@ class Pipeline:
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
+        self.rows_form, self.tree_form = ROWS_FORM, TREE_FORM
         self.m_real = m if m_real is None else m_real
         self.g = VARIANT_G[variant]
         self.suffix = "" if self.g else "_u"
@@ -309,7 +336,7 @@ class Pipeline:
     def sizes(m: int, n: int, k: int, m_real: int | None = None) -> dict[str, int]:
         m_real = m if m_real is None else m_real
         tiles = cdiv(m_real, TILE) * (n // TILE)
-        tree = lambda count: {"tree": 32 * (2 * pow2(count) - 1), "keys": 32 * max(depth(count), 1)}  # noqa: E731
+        tree = lambda count: {"tree": 32 * (2 * pow2(count) - 1), "keys": 32 * max(depth(count), 1), "ctr": 4}  # noqa: E731
         return {
             "ea_codes": m * 32, "eb_codes": n * 32, "fa_codes": k * 32, "faT32": 32 * k, "fb_codes": k * 32, "fbT32": 32 * k,
             "fbT128": 128 * k, "g": 128 * 32 * 4,
@@ -327,10 +354,21 @@ class Pipeline:
         """The device address of a tree's root, its last node."""
         return self.b[f"tree_{tag}"] + self.size[f"tree_{tag}"] - 32
 
-    def levels(self, tag: str, count: int) -> None:
-        """A frame-b3 tree's levels above level 0 (leaves and pads written): hash_nodes a level at a time down to
-        TREE_SMALL nodes, then hash_tree_small for the rest in one launch."""
+    def levels(self, tag: str, count: int, dom: str, leaves: str | None = None) -> None:
+        """A frame-b3 tree's levels above level 0 (its leaves written, or from `leaves` the tile tree's).  `one`: h1_tree, the
+        whole tree in one launch (it writes level 0's pads, and the tile tree's frame-b3 leaves, too; its counter `ctr_<tag>`
+        is zero between launches).  `nodes` (level 0 written, pads included): hash_nodes a level at a time down to TREE_SMALL
+        nodes, then hash_tree_small for the rest in one launch."""
         d, base, lk = self.dev, self.b[f"tree_{tag}"], self.b[f"keys_{tag}"]
+        if self.tree_form == "one":
+            width = pow2(count)
+            grid, t = tree_grid(width, leaves is not None)
+            smem = 32 * (min(width, 2 * t) + 32)
+            if smem > 48 * 1024:
+                d.ck("cuFuncSetAttribute", d.fn("h1_tree"), MAX_DYN, smem)
+            d.launch("h1_tree", grid, t, smem, p=(base, self.keys[dom], self.b[f"ctr_{tag}"], self.b[leaves] if leaves else 0),
+                     i=(count, width))
+            return
         width, off, level = pow2(count), 0, 0
         while width > TREE_SMALL:
             d.launch("hash_nodes", cdiv(width // 2, 128), 128, p=(base + 32 * off, base + 32 * (off + width), lk + 32 * level),
@@ -352,14 +390,17 @@ class Pipeline:
         return out
 
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
-        """A frame-b3 tree over `count` FP32 rows of x (hash_sm120.cuh's hash_rows_w, a warp a row), then its levels."""
+        """A frame-b3 tree over `count` FP32 rows of x, a warp a row (h1_rows_p, a CTA a row per SM when the rows fit; `w`
+        hash_sm120.cuh's hash_rows_w), then its levels."""
         d, b, rb = self.dev, self.b, self.row_bytes
-        smem = 4 * ROWS_WARPS * rows_w_words(rb)
+        kernel = "h1_rows_p" if self.rows_form == "p" else "hash_rows_w"
+        warps = 1 if self.rows_form == "p" and count <= d.sms else ROWS_WARPS
+        smem = 4 * warps * rows_w_words(rb)
         if smem > 48 * 1024:
-            d.ck("cuFuncSetAttribute", d.fn("hash_rows_w"), MAX_DYN, smem)
-        return [(f"hash_rows_{tag}", lambda: d.launch("hash_rows_w", cdiv(count, ROWS_WARPS), 32 * ROWS_WARPS, smem,
+            d.ck("cuFuncSetAttribute", d.fn(kernel), MAX_DYN, smem)
+        return [(f"hash_rows_{tag}", lambda: d.launch(kernel, cdiv(count, warps), 32 * warps, smem,
                                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))),
-                (f"tree_{tag}", lambda: self.levels(tag, count))]
+                (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
     def form_scalar_launch(self, tag: str) -> None:
         b, rows = self.b, self.m if tag == "a" else self.n
@@ -444,9 +485,10 @@ class Pipeline:
                                                  i=(mr, n))),
                    ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, 32), 128, p=(b["digests"], b["leaves"], kk["k_leaf"]),
                                                   i=(mr, n))),
-                   ("tree_leaves_t", lambda: d.launch("hash_tree_leaves", cdiv(tiles, 128), 128, p=(b["leaves"], b["tree_t"], kk["dom_t"]),
-                                                      i=(tiles,))),
-                   ("tree_t", lambda: self.levels("t", tiles))]
+                   *([] if self.tree_form == "one" else [
+                       ("tree_leaves_t", lambda: d.launch("hash_tree_leaves", cdiv(tiles, 128), 128,
+                                                          p=(b["leaves"], b["tree_t"], kk["dom_t"]), i=(tiles,)))]),
+                   ("tree_t", lambda: self.levels("t", tiles, "dom_t", leaves="leaves" if self.tree_form == "one" else None))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
         plain = [("plainq_a", lambda: d.launch("plainq", m, 256, p=(b["xa"], b["qa"], b["sa"]), i=(m, k))),
                  ("gemm_plain", lambda: self.gemm("gemm_plain", "qa", "qb", m, n, out=(None, None, "y_plain"), rs=b["sa"], cs=b["sb"])),
@@ -485,6 +527,9 @@ GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_pl
 ALIASES = {"c2": "c"}
 #: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
+#: the trees and what follows A's root, rewritten under ALT_FORMS by those phases' steps and held to the fixture again
+FORM_BUFFERS = ("tree_a", "tree_b", "tree_t", "keys_a", "keys_b", "keys_t", "seed_a", "line_a")
+FORM_PHASES = ("epoch", "unit", "commit", "hashing")
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:
@@ -536,6 +581,17 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
                     dev.sync()
                     for o in outs:
                         res[f"{o}@{tag}" + (f"grid{grid}" if grid else "")] = compare(dev, pipe, o, want(ALIASES.get(o, o)))
+        alt = Pipeline(dev, m, n, k, variant, keys, xa, xb, bufs=pipe.b)
+        alt.rows_form, alt.tree_form = ALT_FORMS
+        hashed = [nm for nm in FORM_BUFFERS if nm in common or nm in files]
+        for nm in hashed:
+            dev.ck("cuMemsetD8_v2", u64(pipe.b[nm]), 0xAB, pipe.size[nm])
+        for _, phase, fn in alt.steps():
+            if phase in FORM_PHASES:
+                fn()
+        dev.sync()
+        for nm in hashed:
+            res[f"{nm}@{'+'.join(ALT_FORMS)}"] = compare(dev, pipe, nm, want(nm))
         pipe.free()
         dev.free(xa)
         dev.free(xb)
@@ -674,6 +730,12 @@ def measure(dev: Dev, nv: Nvml, pipe: Pipeline, reps: int, gates: dict) -> dict:
             fastest = min(med["gemm_plain"], med["gemm_fast"])
             out["ratio_vs_own_plain_gemm"] = {"call_e2e": round(e2e / fastest, 4), "no_hash_e2e": round(e2e_nh / fastest, 4),
                                               "chain_only": round(med["gemm_ct"] / fastest, 4)}
+    if gates["pearl_c"]:
+        alt = Pipeline(dev, m, n, k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b, m_real=pipe.m_real)
+        alt.rows_form, alt.tree_form = ALT_FORMS
+        out["alt_forms"] = "+".join(ALT_FORMS)
+        out["alt_ms"] = {nm: round(statistics.median(dev.timed(f, reps)), 4) for nm, p, f in alt.steps()
+                         if p in ("commit", "hashing") and nm.startswith(("hash_rows", "tree_"))}
     return out
 
 
