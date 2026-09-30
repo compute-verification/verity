@@ -59,14 +59,14 @@ D-24 windows     per row and aligned 128 of k whose every 4-group has ≤ 2 nonz
 cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
 ~~~
 
-**F1′ and F2** (theory §6.2–6.3, the fix for the assessor's D on ``tt-out/fp4-sm120``, fp4-base-split-break.md; under
-the assessor's conditional GO of 14:00Z, fp4-basesplit-fix-review.md, pending the int8-Strassen replay of c_L).  F1′
-charges the salt-free base split A′ = A0 + ΔA its expected saving under the noise law given this salt's E lines:
-p_t = P(code ≠ modal code) at the block's modal scale byte (`change_probabilities`); per window S_w, the better of one 2:4
-pass plus a CUDA-core patch of the excess and a skip or patch per k64 atom, at the cheater's best layout inside each block
-(`split_saving`); less A0's scale corrections, one FFMA per word for each of the M_w blocks whose realised byte is not
-their modal byte (`split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at
-one tile byte, per row, and per block-column class (`int8_saving`), with c_L bc-d9842080's formula (`int8_depth_cost`).
+**F1′ and F2** (theory §6.2–6.3, the fix for the assessor's D on ``tt-out/fp4-sm120``, fp4-base-split-break.md; the
+assessor's FP4 conditions, ratings.md 15:18Z).  F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving
+under the exact noise law given this salt's E lines (`noise_law`): p_t = P(code ≠ modal code) at the block's modal scale
+byte (`change_probabilities`); per window, min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]) with R_24 one 2:4 pass
+plus a CUDA-core patch of the excess, R_skip a skip or patch per k64 atom, at the cheater's best layout inside each block,
+and κ inside the expectation, A0's scale corrections: one FFMA per word for each of the M_w blocks whose realised byte
+is not their modal byte (`split_saving`, `split_units`).  F2 charges the masked int8-Strassen route on the tile's realised scale bytes, read at
+one tile byte, per row, and per block-column class (`int8_saving`), with c_L bc-d9842080's formula at W1's int8 leaf (`int8_depth_cost`).
 They are the rows `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2
 charges the masked int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain
 claim `scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
@@ -93,7 +93,7 @@ from __future__ import annotations
 import itertools
 import math
 import struct
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
@@ -144,9 +144,9 @@ SPREAD_X5 = 79                     # D-SS: spread ≤ 2^15.8, as spread^5 ≤ 2^
 GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 products of 6 x 6
 #: F1′ and F2's prices in FP4 units: a CUDA-core FFMA 16.92 (the measured 8.46 FP8 units x 2), the dense correction of
 #: A0's block scales at least 0.125 per MAC (an FP8 GEMM over k/16), the int8 route's patch 4 slots per useful MAC per side,
-#: and its int8 leaf 704/390 ≈ 1.81 slots per MAC (the assessor's replay, each side's best measured rate:
-#: NVFP4 704, int8 IMMA 390 G MAC/s; fp4-basesplit-fix-review.md 14:20Z).
-FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 704 / 390
+#: and its int8 leaf at W1's issue ratio, 2 slots per MAC (the assessor's FP4 conditions, ratings.md 15:18Z; the
+#: wall-time window below it, 1.81, is `concurrent-budgets/sm120`'s, not the rule's).
+FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 2
 
 _E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
 _E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
@@ -500,10 +500,6 @@ def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
     return dead
 
 
-def _phi(z: float) -> float:
-    return 0.5 * math.erfc(-z / math.sqrt(2.0))
-
-
 def _scale_value(fmt: Fmt, byte: int) -> float:
     m, e = scale_dyadic(fmt, byte)
     return m * 2.0 ** e
@@ -514,15 +510,72 @@ def noise_sigma(e_row: Sequence[int], ae: int) -> float:
     return _scale_value(NVFP4, ae) / 16 * math.sqrt(8.5625 * sum(float(e2m1_value(c)) ** 2 for c in e_row))
 
 
-def _below(v: Sequence[float], sigma: float, u: float) -> float:
-    """P(every |v_t + noise| < u), the noise N(0, σ²) per element and independent given E."""
+_F2 = (0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12)    # 2·value of each E2M1 code, in half units
+
+
+def _pmf_conv(a: tuple[int, tuple[float, ...]], b: tuple[int, tuple[float, ...]]) -> tuple[int, tuple[float, ...]]:
+    (la, pa), (lb, pb) = a, b
+    nz = [(j, y) for j, y in enumerate(pb) if y]
+    out = [0.0] * (len(pa) + len(pb) - 1)
+    for i, x in enumerate(pa):
+        if x:
+            for j, y in nz:
+                out[i + j] += x * y
+    return la + lb, tuple(out)
+
+
+@lru_cache(maxsize=64)
+def _f_power(m: int) -> tuple[int, tuple[float, ...]]:
+    """The law of the sum of m independent uniform draws of 2·F (F one E2M1 code), on the integers from its lowest value."""
+    if m == 0:
+        return 0, (1.0,)
+    if m == 1:
+        pmf = [0.0] * 25
+        for v in _F2:
+            pmf[v + 12] += 1 / 16
+        return -12, tuple(pmf)
+    return _pmf_conv(_f_power(m // 2), _f_power(m - m // 2))
+
+
+@lru_cache(maxsize=512)
+def noise_law(e_row: tuple[int, ...]) -> tuple[int, tuple[float, ...]]:
+    """The exact law of n = Σ_r (2E_r)·(2F_r) given this salt's E line, F_r uniform over the 16 E2M1 codes and independent
+    (one element's noise is a_E·2^-6·n): (lowest value, pmf over the consecutive integers from it).  F is symmetric, so
+    only |E_r| matters, and each magnitude's m-fold sum is a stretched power of one draw's law."""
+    law: tuple[int, tuple[float, ...]] = (0, (1.0,))
+    for v in sorted({abs(_F2[c]) for c in e_row} - {0}):
+        lo, pmf = _f_power(sum(1 for c in e_row if abs(_F2[c]) == v))
+        stretched = [0.0] * ((len(pmf) - 1) * v + 1)
+        stretched[::v] = pmf
+        law = _pmf_conv(law, (lo * v, tuple(stretched)))
+    return law
+
+
+@lru_cache(maxsize=512)
+def _noise_cdf(e_row: tuple[int, ...]) -> tuple[int, tuple[float, ...]]:
+    lo, pmf = noise_law(e_row)
+    return lo, (0.0, *itertools.accumulate(pmf))
+
+
+def _below_law(e_row: tuple[int, ...], scale: float) -> Callable[[float], float]:
+    """y ↦ P(noise < y) for noise = scale·n, n ~ `noise_law(e_row)`."""
+    lo, cum = _noise_cdf(e_row)
+
+    def f(y: float) -> float:
+        i = math.ceil(y / scale) - lo if math.isfinite(y) else (len(cum) if y > 0 else 0)
+        return cum[min(max(i, 0), len(cum) - 1)]
+    return f
+
+
+def _below(v: Sequence[float], cdf: Callable[[float], float], u: float) -> float:
+    """P(every |v_t + noise| < u), the noise independent per element given E."""
     p = 1.0
     for x in v:
-        p *= max(0.0, _phi((u - x) / sigma) - _phi((-u - x) / sigma))
+        p *= max(0.0, cdf(u - x) - cdf(-u - x))
     return p
 
 
-def modal_byte(fmt: Fmt, v: Sequence[float], sigma: float) -> int:
+def modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], sigma: float) -> int:
     """A block's most likely noisy scale byte under the law given E (salt-free given E): the byte whose amax interval
     [6·lower midpoint, 6·upper midpoint) holds the noisy amax most often.  Among the bytes the clean amax ± 6σ reaches."""
     top = max(abs(x) for x in v)
@@ -535,19 +588,22 @@ def modal_byte(fmt: Fmt, v: Sequence[float], sigma: float) -> int:
             return 3 * (_scale_value(fmt, s) + _scale_value(fmt, t))
         edges = {s: (mid(s - 1, s) if s > UE4M3_MIN else 0.0, mid(s, s + 1) if s < UE4M3_TOP else math.inf)
                  for s in range(lo_b, hi_b + 1)}
-    return max(edges, key=lambda s: (_below(v, sigma, edges[s][1]) - _below(v, sigma, edges[s][0]), -s))
+    return max(edges, key=lambda s: (_below(v, cdf, edges[s][1]) - _below(v, cdf, edges[s][0]), -s))
 
 
 def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int,
                          dead: Sequence[bool]) -> tuple[list[float], list[int]]:
-    """Per element, P(its code ≠ its modal code) under the noise law given this salt's E line, at its block's modal
-    scale byte (F1′'s p_t, theory-pearl-c4-domain.md §6.2), and 0 on salt-dead codes; with the blocks' modal bytes.
-    The law is the Gaussian at the conditional σ (`noise_sigma`); the exact 32-term law is the open replay."""
+    """Per element, P(its code ≠ its modal code) at its block's modal scale byte, under the exact noise law given this
+    salt's E line (`noise_law`; the Gaussian at σα under-charges some families up to 20×), and 0 on salt-dead codes;
+    with the blocks' modal bytes (F1′'s p_t, theory-pearl-c4-domain.md §6.2).  The atom's one RZ rounding of C + noise,
+    2^-23 relative, is not modelled."""
+    e = tuple(e_row)
+    cdf = _below_law(e, _scale_value(NVFP4, ae) / 64)
     sigma = noise_sigma(e_row, ae)
     p, modes = [], []
     for b in range(0, len(x), fmt.block):
         v = [P.f32_of_bits(fp32.mul(alpha, w)) for w in x[b:b + fmt.block]]
-        mode = modal_byte(fmt, v, sigma)
+        mode = modal_byte(fmt, v, cdf, sigma)
         modes.append(mode)
         vs = _scale_value(fmt, mode)
         edges = [-m * vs for m in reversed(_E2M1_MIDPOINTS)] + [m * vs for m in _E2M1_MIDPOINTS]
@@ -555,8 +611,8 @@ def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence
             if dead[b + t]:
                 p.append(0.0)
                 continue
-            cdf = [0.0] + [_phi((e - vt) / sigma) for e in edges] + [1.0]
-            p.append(1.0 - max(cdf[c + 1] - cdf[c] for c in range(len(cdf) - 1)))
+            c = [0.0] + [cdf(e - vt) for e in edges] + [1.0]
+            p.append(1.0 - max(c[i + 1] - c[i] for i in range(len(c) - 1)))
     return p, modes
 
 
@@ -613,22 +669,25 @@ def _changed(p: Sequence[float]) -> list[float]:
     return d
 
 
-def split_saving(fmt: Fmt, p: Sequence[float]) -> float:
-    """S_w of one aligned 128-window: E[max(0, ½ − c·X)] (one 2:4 pass and a CUDA-core patch of the excess X) plus, per
-    aligned k64 half, E[max(0, ½ − c·N_h)] (skip or patch the atom); the sum, capped at 1, bounds the better route."""
+def split_saving(fmt: Fmt, p: Sequence[float], kappa: float = 0.0) -> float:
+    """F1′'s per-MAC charge on one aligned 128-window, with A0's scale correction κ inside the expectation (a cheater who
+    sees the salt routes each row after it):  min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]), where
+    R_24 = max(0, ½ − c·X) is one 2:4 pass plus a CUDA-core patch of the excess X, and R_skip = Σ_h max(0, ½ − c·N_h)
+    skips or patches each aligned k64 atom.  The sum bounds E[max(0, max(R_24, R_skip) − κ)] on any law."""
     c = FFMA_UNITS / SPAN_K
     gain = [max(0.0, 0.5 - c * x) for x in range(_EXCESS_MAX + 1)]
     d = [1.0] + [0.0] * _EXCESS_MAX
     for b in range(0, SPAN_K, fmt.block):
         d = _conv(d, _block_excess(p[b:b + fmt.block]))
-    s = sum(x * g for x, g in zip(d, gain))
-    s += sum(sum(x * g for x, g in zip(_changed(p[h:h + ATOM]), gain)) for h in (0, ATOM))
+    s = sum(x * max(0.0, g - kappa) for x, g in zip(d, gain))
+    h0, h1 = _changed(p[:ATOM]), _changed(p[ATOM:SPAN_K])
+    s += sum(x * y * max(0.0, gain[i] + gain[j] - kappa) for i, x in enumerate(h0) for j, y in enumerate(h1))
     return min(1.0, s)
 
 
 def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int], scales: Sequence[int]) -> Fraction:
-    """F1′ per word the row feeds, in FP4 units: per window, 128·max(0, S_w − min(c·M_w, 0.125)), M_w the window's blocks
-    whose realised scale byte is not their modal byte (each costs A0's part one correction FFMA per word; a dense
+    """F1′ per word the row feeds, in FP4 units: 128·`split_saving` per window at κ = min(c·M_w, 0.125), M_w the window's
+    blocks whose realised scale byte is not their modal byte (each costs A0's part one correction FFMA per word; a dense
     correction GEMM over k/16 in FP8 costs at least 0.125 per MAC)."""
     c, per = FFMA_UNITS / SPAN_K, SPAN_K // fmt.block
     hw = hw_scales(fmt, scales)
@@ -636,13 +695,13 @@ def split_units(fmt: Fmt, p: Sequence[float], modes: Sequence[int], scales: Sequ
     for w in range(0, len(p) - len(p) % SPAN_K, SPAN_K):
         b0 = w // fmt.block
         moved = sum(hw[b] != modes[b] for b in range(b0, b0 + per))
-        total += SPAN_K * max(0.0, split_saving(fmt, p[w:w + SPAN_K]) - min(c * moved, DENSE_CORRECTION))
+        total += SPAN_K * split_saving(fmt, p[w:w + SPAN_K], min(c * moved, DENSE_CORRECTION))
     return Fraction(total)
 
 
 def int8_depth_cost(fmt: Fmt, m: int, k: int, n: int) -> float:
-    """F2's c_L (bc-d9842080, nvfp4-int8-flatness-break.md 13:35Z; the leaf measured by the assessor's replay): the masked
-    int8-Strassen route's cost per honest MAC before its patch, min over 1 ≤ L ≤ log2(k/block) of 1.81·(7/8)^L +
+    """F2's c_L (bc-d9842080, nvfp4-int8-flatness-break.md 13:35Z; ratings.md 15:18Z): the masked int8-Strassen
+    route's cost per honest MAC before its patch, min over 1 ≤ L ≤ log2(k/block) of `INT8_LEAF_SLOTS`·(7/8)^L +
     4.25·(1/m + 1/n)·((7/4)^L − 1)/0.75 (int8 leaves, Strassen–Winograd's pre-adds on both sides, every post-add a free
     merge: the adversary's best, which measured kernels don't approach); 2 (no route) below one level."""
     levels = (k // fmt.block).bit_length() - 1
@@ -830,7 +889,7 @@ class PearlC4:
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
                 "this job's salt, seed-B = keyed(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
-                "F2 (theory §6.2–6.3; c_L pending the int8-Strassen replay), as the theory lane states it, proposed and "
+                "F2 (theory §6.2–6.3; the assessor's FP4 conditions, ratings.md 15:18Z), as the theory lane states it, proposed and "
                 "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
                 "the cap for less than their credit less the debit (research store "
                 "internal/pouw/rtx-pro/theory-pearl-c4-domain.md §2)",
@@ -841,8 +900,8 @@ class PearlC4:
             allowances=(
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
                 "savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
-                "the salt) are TT_OUT-FP4's; the replayed debit charges the rest (tile_debit), F1′ under the Gaussian "
-                "law at the conditional σ, not yet replayed against the exact 32-term law",
+                "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
+                "(tile_debit)",
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),

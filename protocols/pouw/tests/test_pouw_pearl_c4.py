@@ -201,9 +201,9 @@ def test_row_rules_and_debit(fmt):
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
     clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
-    # F1′: NVFP4's scales move with the salt, which cancels a Gaussian window's small saving; MXFP4's UE8M0 scales don't,
-    # so its windows keep it (about 1% of this tile's cap)
-    assert (clean.split == 0) if fmt == "nvfp4" else 0 < clean.split < 1
+    # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare draws (a trace, under
+    # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 1% of this tile's cap)
+    assert 0 <= clean.split < (Fraction(1, 10 ** 4) if fmt == "nvfp4" else 1)
     # forming only at positions where every credited B code is zero (their A elements are unneeded), 3 rows x 3 columns'
     # share; MXFP4 chains hold identity atoms (theory §2: about 0.21% on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
@@ -329,7 +329,7 @@ def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
     cap = F.CAP * Fraction(F.PearlC4().credit_of(Shape(1, k, n)), n) * 16
     assert d.split > 50 * cap
     gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k) for j in range(4)]
-    assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) == 0
+    assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) < Fraction(1, 10 ** 4)
     if family is spike_row:
         assert d.counts["salt_dead_a"] == 0
 
@@ -344,13 +344,40 @@ def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
     assert F.split_saving(f, [0.5] * 128) < 1e-4
 
 
-def test_f2_depth_cost_is_the_pinned_formula():
-    """c_L (bc-d9842080, 13:35Z, with the assessor's measured int8 leaf of 704/390 slots) at the GEMM shapes of theory
-    §6.3, with depth capped only by log2(k/block): ratings.md 14:21Z's 0.741 / 0.649 / 0.568 / 0.497."""
+def test_f1_prime_puts_the_correction_inside_the_expectation():
+    """κ inside (ratings.md 15:18Z condition 1): a cheater routes each row after the salt, so F1′ charges
+    E[max(0, R − κ)] per route, never less than max(0, E[R] − κ), and κ = 0 leaves S_w as it was."""
     f = F.NVFP4
+    p = [0.0] * 16 + [0.45] * 112
+    base = F.split_saving(f, p)
+    for kappa in (0.02, 0.066, 0.125):
+        inside = F.split_saving(f, p, kappa)
+        assert inside <= base and inside >= max(0.0, base - 2 * kappa)
+    rare = [0.0, 0.5] * 64
+    assert F.split_saving(f, rare, 0.125) > 0 and F.split_saving(f, [0.3] * 128, 0.0) == pytest.approx(F.split_saving(f, [0.3] * 128))
+
+
+def test_f1_prime_reads_the_exact_noise_law():
+    """p_t under the exact law given E (ratings.md 15:18Z condition 2): the pmf of Σ (2E_r)(2F_r) has the Gaussian's
+    variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled by 12."""
+    e = tuple(F.line(b"\x05" * 32, F.ROLE_EA, 0))
+    lo, pmf = F.noise_law(e)
+    assert sum(pmf) == pytest.approx(1.0) and lo == -(len(pmf) - 1) // 2
+    assert pmf == pytest.approx(pmf[::-1])
+    var = sum(q * (lo + i) ** 2 for i, q in enumerate(pmf)) / 16
+    assert var == pytest.approx(8.5625 * sum(float(F.e2m1_value(c)) ** 2 for c in e))
+    lo, pmf = F.noise_law((0x7,) + (0,) * 31)
+    assert lo == -144 and pmf[0] == pytest.approx(1 / 16) and pmf[144] == pytest.approx(2 / 16)
+
+
+def test_f2_depth_cost_is_the_pinned_formula():
+    """c_L (bc-d9842080, 13:35Z) at W1's int8 leaf of 2 slots, the FP4 conditions' (ratings.md 15:18Z), with depth capped
+    only by log2(k/block): 0.808 / 0.707 / 0.619 / 0.542 at 8k–64k³."""
+    f = F.NVFP4
+    assert F.INT8_LEAF_SLOTS == 2
     got = [F.int8_depth_cost(f, s, s, s) for s in (8192, 16384, 32768, 65536)]
-    assert got == pytest.approx([0.741, 0.649, 0.568, 0.497], abs=6e-4)
-    assert F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24) == pytest.approx(0.364, abs=6e-4)
+    assert got == pytest.approx([0.808, 0.707, 0.619, 0.542], abs=6e-4)
+    assert F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24) == pytest.approx(0.403, abs=6e-4)
     assert F.int8_depth_cost(f, 1 << 24, 16, 1 << 24) == 2.0
     assert F.int8_depth_cost(F.MXFP4, 1 << 24, 1 << 16, 1 << 24) > F.int8_depth_cost(f, 1 << 24, 1 << 16, 1 << 24)
 
