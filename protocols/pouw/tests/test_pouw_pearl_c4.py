@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import copy
 import json
+import math
 import pickle
 import random
 import types
@@ -162,12 +163,15 @@ def test_domain_and_registry():
         get("pearl-c-mxfp4-v0")
     mx = F.PearlC4("mxfp4")
     assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
-    s.check(Matmul(0, Shape(64, 1024, 64), 0))
+    s.check(Matmul(0, Shape(64, 1024, 128), 0))
     s.check(Matmul(0, Shape(64, 1024, 1 << 18), 0))
-    for bad in (Shape(64, 1000, 64), Shape(64, 512, 64), Shape(64, 1 << 17, 64), Shape(60, 1024, 64),
-                Shape(64, 1024, 1 << 19)):
+    # n = 64, an MQA unit of one 64-wide KV head, would need B-OVF's 5.7% and is not claimed
+    for bad in (Shape(64, 1000, 128), Shape(64, 512, 128), Shape(64, 1 << 17, 128), Shape(60, 1024, 128),
+                Shape(64, 1024, 1 << 19), Shape(64, 1024, 64)):
         with pytest.raises(DomainError):
             s.check(Matmul(0, bad, 0))
+    assert s.n_min == F.B_OVF_MIN_N == 128 and ("n_min", 128) in s.certificate.parameters
+    V.scheme("nvfp4", True).check(Matmul(0, Shape(16, 128, 16), 0))
 
 
 def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 256.0) -> bytes:
@@ -538,6 +542,42 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
     for excluded in ((0,), (0, 1)):
         reason = W.check_opened(near, W.UnitRecord(ctx.matmul, 4, k, excluded), tile, a_rows, b_rows, ops)
         assert reason is None or ("R1" not in reason and "per-row rules" not in reason)
+
+
+def test_b_ovf_discounts_credit_by_its_pinned_table():
+    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b): creditOf less ⌈β(n_b)·mnk⌉, β the measured table
+    (`beta_table.py --mu 1.5`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from 4,096 up."""
+    assert F.B_OVF == ((128, Fraction(342, 10_000)), (256, Fraction(200, 10_000)), (512, Fraction(111, 10_000)),
+                       (1024, Fraction(49, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+    got = {n: F.b_ovf(n) for n in (128, 192, 256, 512, 896, 1024, 2047, 2048, 3584, 4096, 1 << 18)}
+    assert got == {128: Fraction(342, 10_000), 192: Fraction(342, 10_000), 256: Fraction(200, 10_000),
+                   512: Fraction(111, 10_000), 896: Fraction(111, 10_000), 1024: Fraction(49, 10_000),
+                   2047: Fraction(49, 10_000), 2048: Fraction(17, 10_000), 3584: Fraction(17, 10_000), 4096: 0,
+                   1 << 18: 0}
+    assert [b for _, b in F.B_OVF] == sorted((b for _, b in F.B_OVF), reverse=True)
+    s = F.PearlC4()
+    for m, k, n in ((64, 1024, 128), (2048, 3584, 512), (64, 8192, 896), (1, 1024, 1024), (64, 1024, 4096)):
+        shape = Shape(m, k, n)
+        plain = s.wref(shape) - F.FORMING_UNCREDITED * m * k
+        assert s.credit_of(shape) == plain - math.ceil(F.b_ovf(n) * m * n * k)
+        assert (s.credit_of(shape) < plain) == (n < 4096)
+    assert ("b_ovf", tuple((nb, str(b)) for nb, b in F.B_OVF)) in s.certificate.parameters
+
+
+def test_r1_and_the_tile_cap_read_the_discounted_credit(monkeypatch):
+    """R1's per-row bound and the tile cap are ρ times `credit_of`'s share, so B-OVF's discount tightens both: on a
+    unit of n = 1,024 (β = 0.49%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
+    s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
+    k, n = record.k_kept, record.matmul.shape.n
+    disc = s.credit_of(Shape(1, k, n))
+    cap = s.tile_cap(record, ops, range(4), range(4))[1]
+    ratio = s.row_debit_ratio(record, ops, "B", 0)
+    assert cap == F.CAP * Fraction(disc, n) * 16
+    monkeypatch.setattr(F, "B_OVF", ((128, Fraction(0)),))
+    plain = s.credit_of(Shape(1, k, n))
+    assert plain - disc == math.ceil(Fraction(49, 10_000) * n * k) > 0
+    assert s.tile_cap(record, ops, range(4), range(4))[1] == cap * Fraction(plain, disc)
+    assert s.row_debit_ratio(record, ops, "B", 0) == ratio * Fraction(disc, plain)
 
 
 def test_a_drawn_tile_evaluates_each_rows_f1_once():

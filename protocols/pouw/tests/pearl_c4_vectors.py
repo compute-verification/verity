@@ -20,7 +20,7 @@ OUT = Path(__file__).with_name("vectors") / "pearl_c4.json"
 #: (case, format, shape, unit index, weight id, test instance); the tile is the whole test shape, or the first 64 x 64
 CASES = (("test-16-nvfp4", "nvfp4", (16, 128, 16), 3, 9, True),
          ("test-16-mxfp4", "mxfp4", (16, 128, 16), 3, 9, True),
-         ("prod-64-nvfp4", "nvfp4", (64, 1024, 64), 7, 2, False))
+         ("prod-64-nvfp4", "nvfp4", (64, 1024, 128), 7, 2, False))
 
 
 def shake(case: str, name: str, part: str, i: int, n: int) -> bytes:
@@ -42,7 +42,7 @@ def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int) -> C
 
 
 def scheme(fmt: str, test: bool) -> F.PearlC4:
-    return F.PearlC4(fmt, k_min=128, tile=(16, 16)) if test else F.PearlC4(fmt)
+    return F.PearlC4(fmt, k_min=128, tile=(16, 16), n_min=16) if test else F.PearlC4(fmt)
 
 
 def sha(data: bytes) -> str:
