@@ -140,6 +140,15 @@ def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unc
         assert (F.product(device, a, F.k32(b)) != F.product(device, a, b)).any()
 
 
+def test_decode_spreads_its_row_and_tile_leaves_and_prefill_does_not():
+    """`run.spread` on the RTX PRO's 188 SMs: decode's 32 rows go one a CTA and its tiles two a CTA; prefill's 8,192 rows and
+    16,384 tiles keep hash_rows_w's 8 and hash_leaf_p's 32; the weight side's smaller n spreads only as far as it fills."""
+    sp = RUN.spread
+    assert sp(32, RUN.ROWS_WARPS, 188) == 1 and sp(64, RUN.LEAF_TILES, 188, 2) == 2 and sp(448, RUN.LEAF_TILES, 188, 2) == 2
+    assert sp(8192, RUN.ROWS_WARPS, 188) == 8 and sp(16384, RUN.LEAF_TILES, 188, 2) == 32
+    assert sp(1024, RUN.ROWS_WARPS, 188) == 4 and sp(28672, RUN.ROWS_WARPS, 188) == 8
+
+
 def test_kernel_constants_match_the_reference():
     from verity_pouw.schemes import pearl_c as C
     from verity_pouw.schemes import pearl_kw as P

@@ -269,7 +269,8 @@ def cdiv(a: int, b: int) -> int:
     return -(-a // b)
 
 
-TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's rows a CTA
+TILE, TREE_SMALL, ROWS_WARPS = 64, 2048, 8     # the leaf's tile; hash_tree_small's widest level 0; hash_rows_w's most rows a CTA
+LEAF_TILES = 32                                  # hash_leaf_p's most tiles a CTA (its shared memory's)
 #: hashing formats: -h1 (frame-b3 trees) and -h2 (frame-b3s: each leaf a tree over its value's 256-byte segments)
 HASHINGS = ("h1", "h2")
 #: `verity_pouw.audit`'s leaf schemas, which -h2's segment keys bind; hash_rows_b3s's segments a row (a thread each)
@@ -296,6 +297,17 @@ def b3s_template(schema: str) -> bytes:
 
 def b3s_template_len(schema: str) -> int:
     return 31 + len(schema.encode())
+
+
+def spread(count: int, most: int, sms: int, least: int = 1) -> int:
+    """Items a CTA for a launch over `count` items: `most`, halved while the grid would leave SMs idle, down to `least`.  Each
+    row leaf and tile leaf is a serial chain, so at decode's few rows and tiles more CTAs spare the SMSPs the chains would
+    share; at prefill the grid fills the card at `most` (decode_served.py: A's -h1 commitment 7.10 → 5.06 ms a Llama-3.1-8B
+    decode step at one row a CTA, r20260930-180200-7e2f)."""
+    per = most
+    while per > least and cdiv(count, per) < sms:
+        per //= 2
+    return per
 
 
 def rows_w_words(rb: int) -> int:
@@ -446,10 +458,11 @@ class Pipeline:
                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom], 0, self.keys["t_row"]),
                                       i=(count, rb, 0, b3s_template_len(ROW_SCHEMA)))
         else:
-            smem = 4 * ROWS_WARPS * rows_w_words(rb)
+            w = spread(count, ROWS_WARPS, d.sms)
+            smem = 4 * w * rows_w_words(rb)
             if smem > 48 * 1024:
                 d.ck("cuFuncSetAttribute", d.fn("hash_rows_w"), MAX_DYN, smem)
-            leaves = lambda: d.launch("hash_rows_w", cdiv(count, ROWS_WARPS), 32 * ROWS_WARPS, smem,  # noqa: E731
+            leaves = lambda: d.launch("hash_rows_w", cdiv(count, w), 32 * w, smem,  # noqa: E731
                                       p=(b[x], b[f"tree_{tag}"], self.keys[dom]), i=(count, rb))
         return [(f"hash_rows_{tag}", leaves), (f"tree_{tag}", lambda: self.levels(tag, count))]
 
@@ -558,12 +571,13 @@ class Pipeline:
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", chain["gemm_pearlc_b" if self.fused else "gemm_pearlc_cu"])]
         mr, kk, tiles = self.m_real, self.keys, self.tiles
+        lt = spread(tiles, LEAF_TILES, d.sms, 2)
         epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
         unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
         commit = self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("seed_line_a", 1, 32, p=(self.root("a"), kk["unit"], b["line_a"], b["seed_a"])))]
         hashing = ([] if self.fused else [("hash_msg", chain["hash_msg"])]) + [
-                   ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, 32), 128, p=(b["digests"], b["leaves"], kk["k_leaf"]),
+                   ("hash_leaf", lambda: d.launch("hash_leaf_p", cdiv(tiles, lt), 4 * lt, p=(b["digests"], b["leaves"], kk["k_leaf"]),
                                                   i=(mr, n))),
                    ("tree_leaves_t", lambda: self.tree_leaves("t", b["leaves"], tiles, "dom_t")),
                    ("tree_t", lambda: self.levels("t", tiles))]

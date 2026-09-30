@@ -8,10 +8,11 @@ in rotated order within a round, with L2 warm as a decode step finds A's rows an
 replay over CALLS, in µs a call; a graph node costs about 1 µs of its own, which the vLLM path's launches from Python exceed.
 
 Variants, per shape:
-  a.h1 / a.h1.wN   the served -h1 A commitment (hash_node_keys, hash_rows_w, hash_tree_small, seed_line_a), hash_rows_w at 8
-                   rows a CTA (run.py's) or at N rows a CTA (N = 4, 2, 1)
+  a.h1 / a.h1.wN   the -h1 A commitment (hash_node_keys, hash_rows_w, hash_tree_small, seed_line_a) as run.py launches it
+                   (`run.spread`'s rows a CTA), and with hash_rows_w at N rows a CTA (N = 8, the served 8ca97148's; 4, 2, 1)
   a.h2.keys / a.h2 -h2's (b3s_level_keys, then hash_rows_b3s under its keys), and with hash_rows_b3s deriving them
-  t / t.lN         the served tile hashing (hash_msg_v, hash_leaf_p at 32 tiles a CTA), hash_leaf_p at N tiles a CTA (8, 2)
+  t / t.lN         the tile hashing (hash_msg_v, hash_leaf_p) as run.py launches it, and hash_leaf_p at N tiles a CTA (32, the
+                   served 8ca97148's; 8, 2)
   call.h1, call.h2, call.nohash   the whole call as the vLLM path runs it (pouw_pearl_c_device.CALL_STEPS; nohash without
                    HASH_STEPS)
   k.<kernel>       each hashing kernel of the call alone
@@ -40,7 +41,7 @@ LAYERS = 32
 CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
               "gemm_pearlc", "hash_msg", "hash_leaf")
 HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg", "hash_leaf"})
-ROWS_W, LEAF_T = (4, 2, 1), (8, 2)
+ROWS_W, LEAF_T = (8, 4, 2, 1), (32, 8, 2)
 POISON = 0xA5
 
 
