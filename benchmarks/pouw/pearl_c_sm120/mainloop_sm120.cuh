@@ -1,5 +1,5 @@
 // Pearl-C's FP8 mainloop on sm_120a: one tile's chain C~ = A' B~^T into registers, in the fragment layout pearl_c_sm120.cu's
-// epilogue reads (8 consumer warps of 64 x 32 on a 128 x 128 tile, total[MI][NI][4] as mma.sync m16n8 accumulators).
+// epilogue reads (a consumer warp per WM x 32 warp tile, total[MI][NI][4] as mma.sync m16n8 accumulators).
 //
 // The chain is the scheme's, word for word: atom j is one m16n8k32 E4M3 mma.sync over k in [32 j, 32 j + 32), atoms in
 // ascending k.  With G = 4, every 4 atoms (one 128-byte stage) start from +0 and their sum is added into the FP32 total by
@@ -90,24 +90,25 @@ ML_DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn)
 
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 
-// TM x BN tile, one consumer warp per 64 x 32 warp tile (NCW: 8 at 128 x 128, 4 at 128 x 64, 2 at 64 x 64 and 128 x 32), then
-// the producer, whose first lane issues every TMA.  When the consumers are whole warpgroups (SPLIT) the producer is a warpgroup
-// and `setmaxnreg` moves its registers to the consumers (REGS_P and REGS_C a thread; 40 and 232 at 128 x 128, CUTLASS's split);
-// otherwise it is one warp and registers stay as launched.  Launch NT threads with __launch_bounds__(NT, CTAS), CTAS blocks per
-// SM.  STAGES stages of 128 bytes of depth; G = 4 or 0; TAIL: the producer loads P_A's TM and P_B's BN rows (128 bytes each)
-// into a stage after each tile's last, for the epilogue.  RP: the producer's registers when SPLIT (24 leaves 240 to each
-// consumer at 128 x 128).
-template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 40> struct Mainloop {
-  static constexpr int BK = 128, WM = 64, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
+// TM x BN tile, one consumer warp per WM x 32 warp tile (NCW; WM = 64: 8 warps at 128 x 128, 4 at 128 x 64; WM = 16: 8 at
+// 64 x 64 and 128 x 32), then the producer, whose first lane issues every TMA.  When the consumers are whole warpgroups (SPLIT)
+// the producer is a warpgroup and `setmaxnreg` moves its registers to the consumers (REGS_P and REGS_C a thread: RP and what
+// the launch leaves, 40 and 232 at 128 x 128 as in CUTLASS, 24 and 240 with RP = 24); otherwise it is one warp and registers
+// stay as launched.  Launch NT threads with __launch_bounds__(NT, CTAS), CTAS blocks per SM, and SMEM bytes of dynamic shared
+// memory at a 1,024-byte-aligned address (`extern __shared__ __align__(1024)`).  STAGES stages of 128 bytes of depth; G = 4
+// or 0; TAIL: the producer loads P_A's TM and P_B's BN rows (128 bytes each) into a stage after each tile's last, for the
+// epilogue.
+template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 40, int WM_ROWS = 64> struct Mainloop {
+  static constexpr int BK = 128, WM = WM_ROWS, WN = 32, WARPS_M = TM / WM, WARPS_N = BN / WN, NCW = WARPS_M * WARPS_N, NCT = NCW * 32,
                        MI = WM / 16, NI = WN / 8, APS = BK / 32;
   static constexpr bool SPLIT = NCW % 4 == 0;
   static constexpr int NT = NCT + (SPLIT ? 128 : 32), REGS_P = RP, REGS_LAUNCH = 65536 / (CTAS * NT) / 8 * 8,
                        REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
                        REGS_C = !SPLIT ? 0 : REGS_FIT < 256 ? REGS_FIT : 256;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
-  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES;   // 1024: room to align the stages to 1,024 bytes
+  static constexpr int SMEM = STAGES * STAGE + 16 * STAGES;
   static_assert(G == 0 || G == APS, "a promotion window is one stage");
-  static_assert(TM % WM == 0 && BN % WN == 0 && NCW >= 1, "whole 64 x 32 warp tiles");
+  static_assert(WM % 16 == 0 && TM % WM == 0 && BN % WN == 0 && NCW >= 1, "whole WM x 32 warp tiles");
   static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0, "every box 1,024-byte aligned for SWIZZLE_128B");
 
   uint32_t base, bars;   // the stages; full[s] at bars + 8 s, empty[s] at bars + 8 (STAGES + s)
@@ -115,7 +116,8 @@ template <int TM, int BN, int G, int STAGES, bool TAIL, int CTAS = 1, int RP = 4
   uint32_t ph = 0;
 
   ML_DEV explicit Mainloop(uint8_t* smem) {
-    base = (smem_u32(smem) + 1023) & ~1023u;
+    base = smem_u32(smem);
+    if (base & 1023) __trap();
     bars = base + STAGES * STAGE;
   }
   ML_DEV uint32_t full(int i) const { return bars + 8 * i; }
