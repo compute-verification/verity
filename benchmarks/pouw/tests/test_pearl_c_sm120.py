@@ -2,8 +2,10 @@
 ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a lowered or
 spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal and dry run on
 a CPU stand-in for libcuda (an RTX PRO 6000's name, SM count, compute capability, UUID and shared-memory limit), every
-launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu states it.  With VERITY_POUW_NVCC
-naming a CUDA >= 12.8 toolkit, the real sm_120a build passes the gate."""
+launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu states it.  The FP8 bench arm
+(pearlc_arm.py) against the harness's arm interface v0: its accounting the scheme's, its calls on the stand-in as the harness
+drives them, and its gate on the fixture.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a build passes
+the gate."""
 
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -145,6 +148,7 @@ def test_the_sm120a_build_passes_the_gate(tmp_path):
     assert funcs["gemm_pearlc"]["HMMA"] == 64 and funcs["gemm_pearlc"]["QMMA"] % 32 == 0
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("device", ["sm120", "sm120-unpromoted"])
 def test_twin_tile_is_the_scheme_on_the_record(device):
     """#449's twin on each sm_120 record, the bench arm's gate: a tile half of filler rows, and one on rows the caller
@@ -330,28 +334,227 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     allocs: dict[int, int] = {}
     seen = set()
     for ev in map(json.loads, log.read_text().splitlines()):
-        if ev["op"] == "alloc":
-            allocs[ev["ptr"]] = ev["bytes"]
-        elif ev["op"] == "free":
-            allocs.pop(ev["ptr"])
-        else:
-            name, p, i = ev["name"], ev["p"], ev["i"]
-            seen.add(name)
-            for slot, n in needs(name, p, i).items():
-                if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
-                    continue
-                assert p[slot] in allocs, (name, slot)
-                assert allocs[p[slot]] >= n, (name, slot, allocs[p[slot]], n)
-            g = ev["grid"]
-            assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
-            if name == "form_s5":
-                assert g[:2] == [i[1] // 128, i[0] // 64] and ev["block"] == 128
-            if name == "plainq":
-                assert g[0] == i[0]
-            if name == "lines":
-                assert i[3] in (0x4600, 0x4400)
-            if name.startswith("gemm_") and not name.endswith("_smem"):
-                bn = 32 if name.startswith("gemm_words") else 128
-                assert ev["block"] == 256 and 48 * 1024 < ev["smem"] <= SM120_MAX_DYN
-                assert g[0] <= min(188, (i[0] // 128) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % 128 == 0 and i[1] % bn == 0
+        track(ev, allocs)
+        if ev["op"] == "launch":
+            seen.add(ev["name"])
     assert seen == set(kernel_names())
+
+
+def track(ev: dict, allocs: dict[int, int]) -> None:
+    """One stand-in log line against the live allocations: a launch's pointers and grid cover its footprint, a copy's
+    ranges are allocated."""
+    if ev["op"] == "alloc":
+        allocs[ev["ptr"]] = ev["bytes"]
+    elif ev["op"] == "free":
+        allocs.pop(ev["ptr"])
+    elif ev["op"] == "copy":
+        for end in ("dst", "src"):
+            assert allocs.get(ev[end], 0) >= ev["bytes"], ev
+    elif ev["op"] == "launch":
+        name, p, i = ev["name"], ev["p"], ev["i"]
+        for slot, n in needs(name, p, i).items():
+            if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3)}:
+                continue
+            assert p[slot] in allocs, (name, slot)
+            assert allocs[p[slot]] >= n, (name, slot, allocs[p[slot]], n)
+        g = ev["grid"]
+        assert g[0] * g[1] * g[2] * ev["block"] >= threads(name, i), name
+        if name == "form_s5":
+            assert g[:2] == [i[1] // 128, i[0] // 64] and ev["block"] == 128
+        if name == "plainq":
+            assert g[0] == i[0]
+        if name == "lines":
+            assert i[3] in (0x4600, 0x4400)
+        if name.startswith("gemm_") and not name.endswith("_smem"):
+            bn = 32 if name.startswith("gemm_words") else 128
+            assert ev["block"] == 256 and 48 * 1024 < ev["smem"] <= SM120_MAX_DYN
+            assert g[0] <= min(188, (i[0] // 128) * (i[1] // bn)) and i[2] % 128 == 0 and i[0] % 128 == 0 and i[1] % bn == 0
+
+
+# ---- the bench arm (pearlc_arm.py) against the harness's arm interface v0 ---------------------------------------------------
+
+ARM_V0 = '''"""The harness's arm interface v0 (benchmarks/pouw/harness/arm.py), the members pearlc_arm uses."""
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+
+@dataclass(frozen=True)
+class Shape:
+    label: str
+    m: int
+    k: int
+    n: int
+
+    @property
+    def mkn(self) -> int:
+        return self.m * self.k * self.n
+
+
+@dataclass(frozen=True)
+class Buffer:
+    ptr: int
+    nbytes: int
+
+
+@dataclass
+class OperandSet:
+    index: int
+    weight_id: int
+    seed: int
+    a: Buffer
+    b: Buffer
+    a_scale: Buffer | None = None
+    b_scale: Buffer | None = None
+    host: Callable[[str], bytes] | None = None
+
+
+@dataclass(frozen=True)
+class Work:
+    tensor_macs: dict
+    w_ref: str
+    credited: str
+    unit: str
+    hashed_bytes: dict
+    weight_hashed_bytes: dict = field(default_factory=dict)
+    gamma: dict | None = None
+
+
+@dataclass
+class Gate:
+    ok: bool
+    checked: dict
+    detail: dict[str, Any] = field(default_factory=dict)
+'''
+ARMS = ["PearlCSm120", "PearlCSm120Unpromoted"]
+
+
+@pytest.fixture(scope="module")
+def arm_dir(tmp_path_factory):
+    """The harness's arm.py once it is in the tree, the interface's text until then."""
+    real = HERE.parent / "harness"
+    if (real / "arm.py").exists():
+        return real
+    out = tmp_path_factory.mktemp("arm-v0")
+    (out / "arm.py").write_text(ARM_V0)
+    return out
+
+
+@pytest.fixture(scope="module")
+def A(arm_dir):
+    sys.path.insert(0, str(arm_dir))
+    try:
+        return load("pearlc_arm", HERE / "pearlc_arm.py")
+    finally:
+        sys.path.remove(str(arm_dir))
+
+
+def test_arm_accounting_is_the_schemes(A):
+    """Work, W_ref and the credit are the scheme's on the arm's record, and G = 4's γ is #449's `bench.gamma` (the H100's, at
+    the same stand-in prices); the unpromoted record credits no promotion adds, so its γ is its own."""
+    from verity_pouw.protocol import Shape as MShape
+    from verity_pouw.schemes import pearl_c as C
+
+    sys.path.insert(0, str(H100_DIR))
+    try:
+        B = load("pearl_c_h100_bench", H100_DIR / "bench.py")
+    finally:
+        sys.path.remove(str(H100_DIR))
+    Shape = sys.modules["arm"].Shape
+    for cls in ARMS:
+        arm = getattr(A, cls)()
+        assert (arm.stream, arm.precision, arm.inputs) == ("fp8", "fp8-e4m3", "f32")
+        assert arm.flag_sets == {"hash": {"hash", "xof"}, "nohash": frozenset()} and arm.panel["line"] == "pearl-c-sm120"
+        for shape in (Shape("m8192-n8192-k8192", 8192, 8192, 8192), Shape("m32-n8192-k8192", 32, 8192, 8192)):
+            assert arm.domain(shape) is None
+            w, s, m = arm.work(shape), MShape(shape.m, shape.k, shape.n), A.padded(shape.m)
+            assert (w.w_ref, w.credited) == (str(arm.scheme.wref(s)), str(arm.scheme.credit_of(s)))
+            assert w.tensor_macs == {"fp8-e4m3": m * shape.n * shape.k + m * (C.R + arm.device.atom.k) * shape.k,
+                                     "bf16": m * shape.n * C.PEEL_K}
+            assert w.hashed_bytes == {"turboshake128/messages": 8 * m * shape.n, "turboshake128/leaves": m * shape.n,
+                                      "turboshake128/rows": 4 * shape.m * shape.k,
+                                      "blake3/tickets": 64 * (m // 16) * (shape.n // 16)}
+            g = {k: Fraction(v) for k, v in w.gamma.items() if k != "basis"}
+            if cls == "PearlCSm120":
+                assert g == B.gamma(shape.n, shape.k)
+            assert g["floor"] < g["cap"] < Fraction(1, 100) and g["cap"] < g["cap_chain_only"]
+    arm = A.PearlCSm120()
+    assert "multiple of 1,024" in arm.domain(Shape("x", 128, 1000, 128))
+    assert "multiple of 128" in arm.domain(Shape("x", 128, 1024, 100))
+
+
+def driver(A, ship: Path, arm_dir: Path, log: Path, cls: str, *args: str) -> list[dict]:
+    r = subprocess.run([sys.executable, str(Path(__file__).parent / "pearlc_arm_dry.py"), str(arm_dir), cls, *args],
+                       env=dry_env(ship, log, PEARLC_SHIP=str(ship)), capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stderr
+    return [json.loads(x) for x in r.stdout.splitlines()]
+
+
+def windows(log: Path) -> tuple[list[tuple[dict, list[dict]]], dict[int, int]]:
+    """The stand-in's log cut at the driver's marks: each launch or weight side with the launches, copies and flips inside."""
+    out, allocs, cur = [], {}, None
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs)
+        if ev["op"] == "mark" and ev["what"] in ("launch", "weight"):
+            cur = (ev, [])
+        elif ev["op"] == "mark" and ev["what"] == "end":
+            out.append(cur)
+            cur = None
+        elif cur is not None and ev["op"] in ("launch", "copy", "mark"):
+            cur[1].append(ev)
+    return out, allocs
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS)
+def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
+    """As the harness drives it, on the stand-in: every call and weight side on the harness's stream with no host copy,
+    the kernels each role's step needs and no others (nohash: no XOF, no hash), each operand set's E_A lines its own, every
+    footprint allocated; the gate fails (the stand-in computes nothing) naming every output in full, and nothing leaks."""
+    log = tmp_path / "arm.jsonl"
+    rows = driver(A, ship, arm_dir, log, cls, "dry")
+    arm = getattr(A, cls)()
+    sx = "" if arm.device.g else "_u"
+    for g in rows[:-1]:
+        assert not g["ok"] and set(g["checked"].values()) == {"all"}
+        assert set(g["checked"]) == {"y", "c", "u"} | ({"leaves", "tickets", "rows"} if g["role"] == "hash" else set())
+        assert all(t["failed"] for t in g["detail"]["twin_tiles"])
+    assert rows[-1]["live"] == []
+
+    forming = ["stats_s5", "eprime", "form_s5", "gemm_words" + sx, "pa", "gemm_pearlc" + sx]
+    hashes = ["hash_msg", "hash_leaf", "tickets", "hash_rows_f32"]
+    got, allocs = windows(log)
+    assert not allocs
+    ea: dict[tuple, int] = {}
+    for mark, evs in got:
+        assert all(ev["stream"] == 0x1234 for ev in evs), mark
+        names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
+        copy = ["copy"] if mark["shape"] == "dec" else []
+        if mark["what"] == "weight":
+            assert names == ["lines"] * 3 + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"]
+            continue
+        want = {"hash": copy + ["lines"] + forming + hashes, "nohash": copy + forming,
+                "known_bad": copy + ["lines"] + forming + ["xor_byte"] + hashes}[mark["role"]]
+        assert names == want, mark
+        if mark["role"] != "nohash":
+            lines = evs[len(copy)]
+            assert lines["p"][0] == mark["keys"]["line_a"] and lines["i"][2] == A.padded({"pre": 256, "dec": 32}[mark["shape"]])
+            assert next(ev for ev in evs if ev.get("name") == "eprime")["p"][0] == lines["p"][1]
+        e = next(ev for ev in evs if ev.get("name") == "eprime")["p"][0]
+        assert ea.setdefault((mark["shape"], mark["set"]), e) == e
+    for shape in ("pre", "dec"):
+        assert ea[(shape, 0)] != ea[(shape, 1)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS)
+def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship, arm_dir, tmp_path, cls):
+    """The fixture's bytes (the scheme's, at its seeds) where the kernels would have written them pass the gate; one C̃ word
+    flipped in the last sampled tile fails it twice over, against the second launch and against the twin."""
+    first, flipped = driver(A, ship, arm_dir, tmp_path / "accept.jsonl", cls, "accept", str(small_fixture / "check.json"))
+    assert first["ok"] and set(first["checked"].values()) == {"all"}
+    assert not any(first["detail"]["words_differing_from_relaunch"].values())
+    assert len(first["detail"]["twin_tiles"]) == 3 and not any(t["failed"] for t in first["detail"]["twin_tiles"])
+    assert not flipped["ok"]
+    diff = flipped["detail"]["words_differing_from_relaunch"]
+    assert diff["c"] == diff["c@gemm_ct"] == 1 and sum(diff.values()) == 2
+    assert [t["failed"] for t in flipped["detail"]["twin_tiles"]] == [[], [], ["c"]]
