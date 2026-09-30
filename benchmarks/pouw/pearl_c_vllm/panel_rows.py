@@ -4,7 +4,8 @@ verify job's ``prefill-verify.json``, ``decode-verify.json`` and ``control-verif
   python benchmarks/pouw/pearl_c_vllm/panel_rows.py E2E_JSON VERIFY_DIR [--panel PANEL_PY] [--append]
 
 The rows go under ``pearl-c-sm120`` at the scheme's version (v1-h1), with the coordinator's e2e shapes (11:50Z item 5).  Each
-row's slowdown is ``pearlc`` over ``fp8`` in the same window; ``--hash-free`` is ``pearlc-nohash`` over ``fp8``.  The clocks
+row's slowdown is ``pearlc`` over stock vLLM ``fp8`` in the same window, interleaved rep by rep, or in ABAB blocks when the two
+engines could not stay resident, which the row's description then says; ``--hash-free`` is ``pearlc-nohash`` over ``fp8``.  The clocks
 are every rep's SM clock, the arm's and the ``fp8`` baseline's.  Refused, with the reason, unless every gate held, both verify
 passes repeated their timed commitments and were accepted, and the negative control was rejected.  Without ``--append`` it
 prints the commands.
@@ -20,6 +21,15 @@ from pathlib import Path
 
 PANEL = "/cursor/stores/bc-b729c175-2ef6-418e-98fe-10896709028b/internal/pouw/panel/panel.py"
 PHASES = {"prefill_8192": ("prefill", "prefill_8192", "prefill", "s"), "decode_b32_step": ("decode", "decode_b32", "decode", "step_s")}
+
+
+def interleaving(summary: dict) -> str:
+    """How the baseline was timed against the arm, as the row says it (the root's ruling, 12:11Z)."""
+    if summary["interleave"] == "rep":
+        return ("the stock FP8 baseline interleaved rep by rep: both engines resident in their own processes on the same GPU, "
+                "each idle while the other times")
+    return ("the stock FP8 baseline in ABAB blocks of reps, not rep by rep: both engines could not stay resident on the GPU ("
+            + (summary.get("resident_failure") or "blocks requested") + ")")
 
 
 def rows(e2e: dict, verdicts: dict[str, dict], panel: str) -> list[list[str]]:
@@ -43,7 +53,7 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str) -> list[list[str]]:
                 f"pouw_pearl_c_device; {phase} {'one 8,192-token prompt' if phase == 'prefill' else '32 sequences, per step'}; "
                 f"over stock vLLM FP8 {s['slowdown_vs_fp8']:.3f}x (GEMM {s['gemm_x_fp8']:.3f}, hashing and records "
                 f"{s['hashing_x_fp8']:.3f}, else {s['else_x_fp8']:.3f}), over BF16 {s['slowdown_vs_bf16']:.3f}x; "
-                "baseline timed in its own process in the same window, not interleaved")
+                + interleaving(summary))
         cmd = [sys.executable, panel, "append", "--line", "pearl-c-sm120", "--version", version, "--precision", "fp8",
                "--phase", phase, "--shape", s["shape"], "--kind", "measured", "--slowdown", f"{s['slowdown_vs_fp8']:.4f}",
                "--hash-free", f"{s['nohash_s'] / s['fp8_s']:.4f}", "--change", "kernel", "--description", desc,

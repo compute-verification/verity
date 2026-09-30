@@ -32,7 +32,8 @@ device's primary context:
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
 
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
-records.  What is left is the same forming and GEMM without hashing, for the time split.
+records.  What is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
+passes, never within one.
 """
 from __future__ import annotations
 
@@ -291,7 +292,7 @@ class PearlCDeviceRun:
         self.leaves = _zeros(32 * capacity, self.device)
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
-        self.pipes: dict[tuple[int, int, frozenset], tuple[Any, list[Any]]] = {}
+        self.pipes: dict[tuple[int, int, frozenset, bool], tuple[Any, list[Any]]] = {}
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                                         "transcript_root": None, "units": 0, "tiles": 0}
@@ -344,7 +345,7 @@ class PearlCDeviceRun:
         return self.shapes[key]
 
     def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any]]:
-        key = (w, sh.m16, self.omit)
+        key = (w, sh.m16, self.omit, self.hashing)
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,

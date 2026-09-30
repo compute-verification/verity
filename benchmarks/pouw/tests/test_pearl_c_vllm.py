@@ -336,13 +336,13 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 
 # ---- the panel rows -----------------------------------------------------------------------------------------------
 
-def e2e_result(control_accepted: bool = False) -> tuple[dict, dict]:
+def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure: str | None = None) -> tuple[dict, dict]:
     reps = lambda mhz: {"prefill_8192": [{"clock": {"sm_mhz": mhz}}] * 3, "decode_b32": [{"clock": {"sm_mhz": mhz - 3}}] * 3}
     split = {key: {"shape": shape, "fp8_s": 1.0, "nohash_s": 1.5, "slowdown_vs_fp8": 2.5, "gemm_x_fp8": 1.2, "hashing_x_fp8": 1.0,
                    "else_x_fp8": 0.3, "slowdown_vs_bf16": 1.6} for key, shape in (("prefill_8192", "e2e-llama31-8b-vllm-m8192"),
                                                                                  ("decode_b32_step", "e2e-llama31-8b-vllm-m32"))}
     e2e = {"scheme": SCHEME, "run": RUN, "results": {"pearlc": {"reps": reps(2085)}, "fp8": {"reps": reps(2090)}},
-           "summary": {"gates": {"pearlc": True, "pearlc-nohash": True}, "split": split,
+           "summary": {"gates": {"arm": True}, "split": split, "interleave": interleave, "resident_failure": failure,
                        "verify_pass": {"prefill": {"same_commitment_as_timed": True}, "decode": {"same_commitment_as_timed": True}}}}
     t = lambda p: f"{RUN}:/workspace/pouw/mvp-e2e/passes/{RUN}/{p}/manifest.json sha256:{'ab' * 32}"
     verdicts = {p: {"accepted": p != "control" or control_accepted, "verifier_commit": "c7033d67", "transcript": t(p),
@@ -361,6 +361,44 @@ def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
         assert a["--kind"] == "measured" and a["--run"] == RUN and RUN in a["--transcript"] and "accept" in a["--verifier-accept"].lower()
         assert "reject" in a["--negative-control"].lower() and RUN in a["--negative-control"]
         assert a["--sm-clock-arm"] and a["--sm-clock-base"] and a["--slowdown"] == "2.5000" and a["--hash-free"] == "1.5000"
-    assert rows[1][-2:] == ["--decode-method", "dependent-chain"]
+    assert rows[1][-2:] == ["--decode-method", "dependent-chain"] and "interleaved rep by rep" in args[0]["--description"]
+    blocks = PR.rows(*e2e_result(interleave="blocks", failure="arm: OutOfMemoryError"), "panel.py")
+    assert "ABAB blocks" in blocks[0][blocks[0].index("--description") + 1] and "OutOfMemoryError" in blocks[1][blocks[1].index("--description") + 1]
     with pytest.raises(SystemExit, match="negative control was not rejected"):
         PR.rows(*e2e_result(control_accepted=True), "panel.py")
+
+
+# ---- the e2e's schedule and its assembly --------------------------------------------------------------------------
+
+def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    (one,) = E2E.schedule(3, "rep")
+    assert one == list(E2E.CYCLE) * 3 and one[0::2] == ["fp8"] * 9 and one.count("pearlc") == 3
+    blocks = E2E.schedule(3, "blocks")
+    assert [{E2E.GROUP[m] for m in b} for b in blocks] == [{"base"}, {"arm"}, {"base"}, {"arm"}]
+    assert sum(b.count("fp8") for b in blocks) == 3 and sum(b.count("pearlc") for b in blocks) == 3
+
+
+def test_the_controller_runs_each_rep_on_the_same_prompt_and_warms_each_engine_once():
+    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.clocks = lambda: {"sm_mhz": 2090}
+    p = {"warm": [1], "prefill": [[10], [11], [12]], "decode": [[2]] * 32}
+
+    class Fake:
+        def __init__(self, group, serial):
+            self.group, self.serial, self.log = group, serial, []
+
+        def ask(self, **cmd):
+            self.log.append((cmd["op"], cmd["mode"], cmd["prompt"][0]))
+            return {"s": 1.0, "gemm_s": 0.5, "step_s": 0.01, "gemm_step_s": 0.004, "commitment": {}}
+
+    workers, records, warm = {"base": Fake("base", 1), "arm": Fake("arm", 2)}, [], set()
+    E2E.measure(workers, E2E.schedule(3, "rep")[0], p, records, warm)
+    pre = [(r["mode"], r["rep"], r["clock"]["sm_mhz"]) for r in records if r["phase"] == "prefill"]
+    assert [m for m, _, _ in pre] == list(E2E.CYCLE) * 3 and [i for m, i, _ in pre if m == "pearlc"] == [0, 1, 2]
+    assert [i for m, i, _ in pre if m == "fp8"] == [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    timed = [x for x in workers["arm"].log if x[0] == "prefill" and x[2] != 1]
+    assert [x[2] for x in timed if x[1] == "pearlc"] == [10, 11, 12]
+    assert [x[0] for x in workers["base"].log if x[2] == 1] == ["prefill", "decode"] and len(warm) == 8
+    t = E2E.timing(records)
+    assert set(t) == set(E2E.MODES) and t["pearlc"]["timing"]["prefill_8192_s"] == 1.0
