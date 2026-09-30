@@ -108,7 +108,7 @@ def cmd_commit(a) -> None:
 def cmd_vk(a) -> None:
     from verity_pous import setup
 
-    from verity_vllm.engine.pous import layout, twins
+    from verity_vllm.engine.pous import layout
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
@@ -124,14 +124,15 @@ def cmd_vk(a) -> None:
         raise SystemExit("W does not match the server's commitment")
     _write(out / "salt.json", {"salt": salt.hex()})
     t0 = time.perf_counter()
-    segments = pv.encode(ck.params, w, salt, a.workers, ref_codec)
-    vk = setup.verifier_key(ck.params, twins.primitives(ref_codec, ck.params), w, commitment, salt, encoded=segments, codec=ref_codec)
+    scheme = pv.scheme_at(ref_codec.name, ck.params)
+    segments = pv.encode(scheme, w, salt, a.workers)
+    vk = pv.verifier_key(scheme, commitment, salt, w, segments)
     enc_s = time.perf_counter() - t0
     (out / "vk-leaves.bin").write_bytes(b"".join(vk.leaves))
     t1 = time.perf_counter()
     names = sorted(n for n in ck.dtypes if n.startswith(LAYER0))
     ref = {n: hashlib.sha256(b).hexdigest()
-           for n, b in pv.reference_decode(ck.layout, segments, salt, names, a.workers, ref_codec).items()}
+           for n, b in pv.reference_decode(scheme, ck.layout, segments, salt, names, a.workers).items()}
     plain = {n: hashlib.sha256(ck.layout.unpack(w, n)).hexdigest() for n in names}
     _write(out / "vk.json", {"salt": salt.hex(), "root": vk.root.hex(), "params": ck.params.manifest(), "codec": ref_codec.name,
                              "encode_s": enc_s,
@@ -242,13 +243,14 @@ def cmd_verify(a) -> None:
     from verity_vllm.pipeline import pous_verifier as pv
 
     out = Path(a.out)
-    _, vk = load_vk(out)
+    doc_vk, vk = load_vk(out)
+    scheme = pv.scheme_at(doc_vk["codec"], vk.params)
     ready = _read(out / f"ready-{a.tag}.json")
     served = (out / f"leaves-{a.tag}.bin").read_bytes()
     doc: dict[str, Any] = {"server_root_matches_vk": setup.check_server_root(vk, bytes.fromhex(ready["root"])),
                            "blocks_differing": sum(served[32 * i:32 * i + 32] != leaf for i, leaf in enumerate(vk.leaves))}
     try:
-        doc.update(pv.run("127.0.0.1", ready["port"], vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu, allowance=a.allowance))
+        doc.update(pv.run("127.0.0.1", ready["port"], scheme, vk, audits=a.audits, pings=a.pings, cpu=a.verifier_cpu, allowance=a.allowance))
     finally:
         (out / f"stop-{a.tag}").write_text("")
     _write(out / f"verify-{a.tag}.json", doc)

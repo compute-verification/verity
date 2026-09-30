@@ -1,11 +1,12 @@
-"""The POUS verifier process: its own encoding of the committed checkpoint with the reference (`verity_pous`), the round-trip
-calibration, and the reference's timed sequential audit against the live server's native responder (`engine/pous/worker.py`;
-wire format in `engine/pous/pous_native.cu`).
+"""The POUS verifier process on `verity_pous.protocol`: its own encoding of `W` with the scheme's reference, `vk`, the
+round-trip calibration, and the protocol's timed sequential audit against the live server's native responder (wire format in
+`engine/pous/pous_native.cu`).
 
-The scheme is a reference `verity_pous.codec.Codec` that `engine/pous/twins.reference` serves (`scheme.P3` by default; the band
-and dense chains too).  The verifier encodes `W` with the codec's byte-level `encode_segment`, one segment per task in a process
-pool (each task names the codec, which its worker resolves), and `setup.verifier_key(..., encoded=, codec=)` checks the commitment
-and builds `vk` from those segments.  The audit is `verity_pous.audit.TimedVerifier` + `run_timed`: `k` indices from
+The scheme is a `verity_pous.protocol.Scheme` (`verity_pous.schemes`: ``band-chain/d12/v1`` by default, ``dense-chain/v1``,
+``p3/v1``).  The verifier encodes `W` one segment per task in a process pool (a task carries the scheme's id and parameters,
+which its worker resolves: the band's functions are closures, which do not pickle), and `protocol.verifier_key` (private setup)
+checks the commitment and builds `vk` from those segments.  The audit is `protocol.Verifier`: the certificate's `k` (or `k`
+when the scheme has no certificate at these parameters, a research audit whose gaps its profile lists), indices from
 `verity.randomness` under the verifier's secret, bound to `vk`, revealed one at a time, each answer correct and within
 `Δ = 0.5 ms` plus `rtt_allowance_ns` on the verifier's clock, with the responder's own device and server times kept as each
 `Answer.report`.  The allowance is a quantile of this verifier's measured round trip for a 64 KB answer that touches no GPU (a
@@ -21,10 +22,10 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 
-from verity_pous import audit
-from verity_pous.codec import Codec, Geometry, split
-from verity_pous.layout import Layout, decode_tensor
-from verity_pous.scheme import P3
+from verity_pous import audit, protocol
+from verity_pous import schemes as pous_schemes
+from verity_pous.codec import Geometry, split
+from verity_pous.layout import Layout
 from verity_pous.verifier import VerifierKey
 
 OP_CHALLENGE, OP_PING, OP_CLOSE = 1, 2, 3
@@ -39,45 +40,38 @@ def quantiles(xs: list[float]) -> dict[str, float]:
     return {"n": len(s), "min": s[0], "p50": at(0.5), "p99": at(0.99), "p99.9": at(0.999), "max": s[-1]}
 
 
-def _codec(name: str) -> Codec:
-    """The reference codec ``name``, resolved in the worker: a codec's functions may be closures (the band's are), which
-    do not pickle, so a task carries the name (`engine/pous/twins.reference`)."""
-    from verity_vllm.engine.pous import twins
-
-    return twins.reference(name)[0]
-
-
-def _prims(codec: Codec, params: Geometry):
-    """The codec's own reference primitives (`engine/pous/twins.primitives`): P3's are not the band's."""
-    from verity_vllm.engine.pous import twins
-
-    return twins.primitives(codec, params)
+def scheme_at(name: str, params: Geometry) -> protocol.Scheme:
+    """The protocol scheme `name` at `params` (the size of `W`)."""
+    return pous_schemes.get(name, params=params)
 
 
 def _encode_one(job: tuple[str, Geometry, bytes, int, bytes]) -> list[bytes]:
     name, params, salt, s, w_seg = job
-    codec = _codec(name)
-    return codec.encode_segment(params, _prims(codec, params), salt, s, w_seg)
+    return scheme_at(name, params).encode_segment(salt, s, w_seg)
 
 
-def encode(params: Geometry, w: bytes, salt: bytes, workers: int, codec: Codec = P3) -> list[list[bytes]]:
+def encode(scheme: protocol.Scheme, w: bytes, salt: bytes, workers: int) -> list[list[bytes]]:
     """The verifier's own reference encoding of `W`: each segment's blocks, one segment per task."""
-    jobs = [(codec.name, params, salt, s, seg) for s, seg in enumerate(split(params, w))]
+    jobs = [(scheme.name, scheme.params, salt, s, seg) for s, seg in enumerate(split(scheme.params, w))]
     with ProcessPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(_encode_one, jobs))
 
 
-def _decode_one(job: tuple[str, Layout, bytes, str, dict[int, bytes]]) -> tuple[str, bytes]:
-    codec_name, lay, salt, name, blocks = job
-    codec = _codec(codec_name)
-    return name, decode_tensor(lay, _prims(codec, lay.params), salt, name, blocks.__getitem__, codec)
+def verifier_key(scheme: protocol.Scheme, commitment: bytes, salt: bytes, w: bytes, segments: list[list[bytes]]) -> VerifierKey:
+    """`vk` of the private setup: `W` checked against the commitment, the verifier's own `segments` as the encoding."""
+    return protocol.verifier_key(scheme, commitment, salt, w=w, encoded=segments)
 
 
-def reference_decode(lay: Layout, segments: list[list[bytes]], salt: bytes, names: list[str], workers: int,
-                     codec: Codec = P3) -> dict[str, bytes]:
-    """`verity_pous.layout.decode_tensor` of each of `names` from the encoded `segments`, one tensor per task."""
+def _decode_one(job: tuple[str, Geometry, Layout, bytes, str, dict[int, bytes]]) -> tuple[str, bytes]:
+    name, params, lay, salt, tensor, blocks = job
+    return tensor, protocol.decode_tensor(scheme_at(name, params), lay, salt, tensor, blocks.__getitem__)
+
+
+def reference_decode(scheme: protocol.Scheme, lay: Layout, segments: list[list[bytes]], salt: bytes, names: list[str],
+                     workers: int) -> dict[str, bytes]:
+    """`protocol.decode_tensor` of each of `names` from the encoded `segments`, one tensor per task."""
     n = lay.params.blocks_per_segment
-    jobs = [(codec.name, lay, salt, name, {i: segments[i // n][i % n] for i in lay.blocks(name)}) for name in names]
+    jobs = [(scheme.name, scheme.params, lay, salt, t, {i: segments[i // n][i % n] for i in lay.blocks(t)}) for t in names]
     with ProcessPoolExecutor(max_workers=workers) as pool:
         return dict(pool.map(_decode_one, jobs))
 
@@ -109,7 +103,7 @@ class LiveResponder:
         return (time.perf_counter_ns() - t0) / 1e9
 
     def block(self, i: int) -> tuple[bytes, dict[str, Any]]:
-        """`respond` for `audit.run_timed`: block `i` as the server sent it, with the responder's report."""
+        """`respond` for `protocol.Verifier.run`: block `i` as the server sent it, with the responder's report."""
         self.roundtrip(OP_CHALLENGE, i)
         status, device_ns, server_ns = struct.unpack_from("<QQQ", self.buf, 0)
         return bytes(self.view[HEADER:]), {"status": status, "device_s": device_ns / 1e9, "server_s": server_ns / 1e9}
@@ -140,13 +134,17 @@ def calibrate(r: LiveResponder, pings: int) -> dict[str, float]:
     return quantiles([r.roundtrip(OP_PING, 0) for _ in range(pings)])
 
 
-def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: int = audit.CHALLENGES, cpu: int | None = None,
-        allowance: str = "p99.9") -> dict[str, Any]:
+def run(host: str, port: int, scheme: protocol.Scheme, vk: VerifierKey, *, audits: int, pings: int, k: int | None = None,
+        cpu: int | None = None, allowance: str = "p99.9") -> dict[str, Any]:
     """Calibrate the round trip, fix the allowance (`allowance`: a quantile of the calibration, `p99.9` or `max`), run `audits`
-    audits (the first is the audit of record), recalibrate.  Every audit's verdict under the other allowances is recorded too.
+    `protocol.Verifier` audits (the first is the audit of record), recalibrate.  Every audit's verdict under the other allowances
+    is recorded too.  A scheme without a certificate at these parameters audits at `k` (default `audit.CHALLENGES`) as research.
 
     The verifier's own stalls count against the honest server, so the timed part runs with the garbage collector frozen and off,
     on one core (`cpu`) when given."""
+    research = scheme.certificate is None
+    if research and k is None:
+        k = audit.CHALLENGES
     if cpu is not None:
         os.sched_setaffinity(0, {cpu})
     gc.collect()
@@ -159,18 +157,21 @@ def run(host: str, port: int, vk: VerifierKey, *, audits: int, pings: int, k: in
         allowance_ns = int(rtt[allowance] * 1e9)
         results = []
         for _ in range(audits):
-            v = audit.TimedVerifier(vk, audit.challenge_key(os.urandom(32), vk), k=k, rtt_allowance_ns=allowance_ns)
-            results.append((v.limit_ns, audit.run_timed(v, r.block)))
+            v = protocol.Verifier(scheme, vk, protocol.challenge_key(os.urandom(32), vk), k=k, rtt_allowance_ns=allowance_ns,
+                                  research=research)
+            results.append((v, v.run(r.block)))
         rtt_after = calibrate(r, pings)
     finally:
         r.close()
         gc.enable()
     answers = [a for _, res in results for a in res.answers]
-    limit, first = results[0]
+    first_v, first = results[0]
     under = {q: sum(all(a.correct and a.elapsed_ns <= audit.DEADLINE_NS + int(rtt[q] * 1e9) for a in res.answers) for _, res in results)
              for q in ("p50", "p99.9", "max")}
     return {"rtt": rtt, "rtt_after": rtt_after, "deadline_ns": audit.DEADLINE_NS, "allowance": allowance, "rtt_allowance_ns": allowance_ns,
-            "limit_ns": limit, "k": k, "audits_accepted_under_allowance": under,
+            "limit_ns": first_v.limit_ns, "k": first_v.k, "scheme": scheme.name, "research": research, "gaps": list(first_v.gaps),
+            "profile": first_v.profile().to_json() if first.accepted else None,
+            "audits_accepted_under_allowance": under,
             "cgroup_cpu": {"before": cpu_before, "after": cgroup_cpu()},
             "audit_of_record": {"accepted": first.accepted, "correct": sum(a.correct for a in first.answers),
                                 "on_time": sum(a.on_time for a in first.answers),
