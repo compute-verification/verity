@@ -16,12 +16,13 @@ from functools import lru_cache
 from pathlib import Path
 
 HERE = Path(__file__).parent
-KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_nodes",
+KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_node_keys", "hash_nodes",
            "hash_tree_leaves", "hash_tree_small")
 
 PRELUDE = r"""
-#include <barrier>
+#include <condition_variable>
 #include <cstddef>
+#include <mutex>
 #include <cstdint>
 #include <cstring>
 #include <thread>
@@ -42,9 +43,27 @@ static inline int __clz(int x) { return x ? __builtin_clz((unsigned)x) : 32; }
 struct Dim { unsigned x = 0, y = 0, z = 0; };
 static thread_local Dim threadIdx;
 static Dim blockIdx, blockDim;
-static std::barrier<>* twin_bar;
-static inline void __syncthreads() { twin_bar->arrive_and_wait(); }
-static inline void __syncwarp(unsigned = 0xffffffffu) { twin_bar->arrive_and_wait(); }
+// a block's barrier that a returning thread leaves (drop), releasing the others if they were the rest of the phase
+struct TwinBarrier {
+  std::mutex mu;
+  std::condition_variable cv;
+  int expected, arrived = 0;
+  unsigned gen = 0;
+  explicit TwinBarrier(int n) : expected(n) {}
+  void wait() {
+    std::unique_lock<std::mutex> l(mu);
+    const unsigned g = gen;
+    if (++arrived == expected) { arrived = 0; gen++; cv.notify_all(); }
+    else cv.wait(l, [&] { return gen != g; });
+  }
+  void drop() {
+    std::unique_lock<std::mutex> l(mu);
+    if (--expected > 0 && arrived == expected) { arrived = 0; gen++; cv.notify_all(); }
+  }
+};
+static TwinBarrier* twin_bar;
+static inline void __syncthreads() { twin_bar->wait(); }
+static inline void __syncwarp(unsigned = 0xffffffffu) { twin_bar->wait(); }
 static std::vector<uint32_t> twin_dyn;
 """
 
@@ -56,8 +75,8 @@ def _source() -> str:
         f'extern "C" void run_{k}(const Args* a, int grid, int block, int smem) {{\n'
         f"  twin_dyn.assign(smem / 4 + 1, 0u); blockDim.x = block;\n"
         f"  for (int b = 0; b < grid; b++) {{\n"
-        f"    blockIdx.x = b; std::barrier<> bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
-        f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.arrive_and_drop(); }});\n"
+        f"    blockIdx.x = b; TwinBarrier bar(block); twin_bar = &bar; std::vector<std::thread> ts;\n"
+        f"    for (int t = 0; t < block; t++) ts.emplace_back([&, t] {{ threadIdx.x = t; {k}(*a); bar.drop(); }});\n"
         f"    for (auto& th : ts) th.join();\n  }}\n}}\n" for k in KERNELS)
     return PRELUDE + re.sub(r'#include "hash(_sm120)?.cuh"', "", body) + runs
 
@@ -92,5 +111,5 @@ def launch(kernel: str, grid: int, block: int, ptrs, ints, smem: int = 0) -> Non
 
 
 def rows_w_words(rb: int) -> int:
-    """`hash.cuh`'s rows_w_words: shared words per warp of hash_rows_w."""
-    return 8 * ((37 + rb + 1023) // 1024)
+    """`hash_sm120.cuh`'s rows_w_words: shared words per warp of hash_rows_w (the leaf header is one 64-byte block)."""
+    return 8 * ((64 + rb + 1023) // 1024)

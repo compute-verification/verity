@@ -3,7 +3,7 @@
   uv run python benchmarks/pouw/pearl_c/h1_vectors.py OUT.json
 
 Inputs are SHAKE128 streams by tag (h1_bench.py regenerates them with the standard library), so only the expected outputs
-are written. The row leaves at 1 … 258 chunks go through the `blake3` package for speed; every leaf of the first 16 chunk
+are written. The row leaves at 1 … 258 chunks (frame-b3 at #449's 6a1a051f: a one-block header, then the row) go through the `blake3` package for speed; every leaf of the first 16 chunk
 counts is also held to frame-b3's own `CommitmentDomain.leaf`, and the trees are `MerkleTree`'s roots.
 """
 from __future__ import annotations
@@ -37,7 +37,7 @@ def rows_cases() -> dict:
     d = domain(3, 2)
     cases = []
     for c in range(1, 258):
-        for rb in (1024 * c - 37, 1024 * c):
+        for rb in (1024 * c - 64, 1024 * c - 27, 1024 * c):     # exactly c chunks with the header, 37 bytes past, and 1 KB rows
             rows = shake(f"gate rows {rb}", 2 * rb)
             leaves = []
             for r in range(2):
@@ -46,7 +46,7 @@ def rows_cases() -> dict:
                 if c <= 16:
                     assert leaf == d.leaf(r, r, ROW, v)
                 leaves.append(leaf.hex())
-            cases.append({"rb": rb, "chunks": (37 + rb + 1023) // 1024, "leaves": leaves})
+            cases.append({"rb": rb, "chunks": (64 + rb + 1023) // 1024, "leaves": leaves})
     return {"domain": d.domain_id.hex(), "cases": cases}
 
 
@@ -58,8 +58,8 @@ def tree_case(tag: str, rb: int) -> dict:
 
 
 def tile_case(rows: int) -> dict:
-    """C~ and U of 32 real rows (the gate tags) and rows − 32 zero filler rows; the digests, the leaves of the tiles over
-    those rows, and the tile tree's root."""
+    """C~ and U of 32 rows (the gate tags): the digests, the leaves of the tiles over those rows (decode's partial 32 x 64
+    tiles), and the tile tree's root."""
     c = shake("gate c", 4 * M * N) + bytes(4 * (rows - M) * N)
     u = shake("gate u", 4 * M * N) + bytes(4 * (rows - M) * N)
     per, tn = N // 32, N // 64
@@ -83,9 +83,9 @@ def main() -> None:
     out = {"source": "frame-b3 (verity.commitments.merkle, hash='blake3') and pearl_c.H1_KEYS",
            "rows": rows_cases(),
            "trees": {"A m=32 fp32 rows": tree_case("gate tree fp32", 4 * N), "A m=32 bf16 rows": tree_case("gate tree bf16", 2 * N)},
-           "tiles": {"padded64": tile_case(64), "m32": tile_case(M)}}
+           "tiles": {"m32": tile_case(M)}}
     Path(sys.argv[1]).write_text(json.dumps(out))
-    print(f"{len(out['rows']['cases'])} row cases, 2 trees, 2 tile cases -> {sys.argv[1]}")
+    print(f"{len(out['rows']['cases'])} row cases, {len(out['trees'])} trees, {len(out['tiles'])} tile case(s) -> {sys.argv[1]}")
 
 
 if __name__ == "__main__":

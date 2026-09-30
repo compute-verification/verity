@@ -4,7 +4,8 @@
 #include "hash.cuh"
 
 // ---------------------------------------------------------------- -h1 on sm_120: the same bytes, fewer serial steps
-// The kernels below commit exactly what hash_rows, hash_nodes, hash_leaf and hash_msg do; the host picks either form.
+// The kernels below commit exactly what hash_rows, hash_nodes, hash_leaf and hash_msg do (#449's frame-b3 at 6a1a051f: one-block
+// leaf headers, one-compression nodes under level keys); the host picks either form.
 
 // one -h1 message digest from a lane's 32 C~ words and 32 U words (registers or memory), for hash_msg_v and GEMM epilogues
 DEV void b3_msg_digest(const uint32_t* c, const uint32_t* u, const uint32_t* key, uint32_t* out) {
@@ -34,21 +35,13 @@ extern "C" __global__ void __launch_bounds__(128) hash_msg_v(const Args a) {
   store_cv(a.p[2] + t * 32, h);
 }
 
-// A row's message byte i, i < ROW_PREFIX: the frame-b3 leaf prefix (rank = position = row)
-DEV uint32_t row_prefix_byte(uint64_t row, int i) {
-  if (i == 0) return 1u;
-  if (i < 17) return word_le(row, (i - 1) % 8);
-  if (i == 17) return 18u;
-  if (i == 18) return 0u;
-  return ROW_SCHEMA[i - 19];
-}
 // shared words hash_rows_w needs per warp for a row of rb bytes: its chunks' chaining values
 __host__ __device__ inline int rows_w_words(int rb) { return 8 * ((ROW_PREFIX + rb + 1023) / 1024); }
 
-// A row's frame-b3 leaf by one warp: lane c hashes chunks c, c + 32, … straight from the row (each message word one funnel
-// shift of two row words when the row is word-aligned, the next block's words loaded while this block compresses; the
-// prefix's and the tail's words byte by byte), the chaining values go to cvs (8 words a chunk), and the chunk tree is built
-// as hash_rows builds it.  Lane 0 returns the leaf in h.
+// A row's frame-b3 leaf by one warp: lane c hashes chunks c, c + 32, … (the header's block, then the row's, block-aligned: a
+// block of a row of whole words is 16 loads, the next block's issued while this one compresses; the rest through
+// row_msg_word), the chaining values go to cvs (8 words a chunk), and the chunk tree is built as hash_rows builds it.  Lane 0
+// returns the leaf in h.
 DEV void row_leaf_w(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_t* key, uint32_t (*cvs)[8], int lane, uint32_t* h) {
   const uint64_t len = ROW_PREFIX + (uint64_t)rb;
   const int n = (int)((len + 1023) / 1024);
@@ -58,43 +51,32 @@ DEV void row_leaf_w(const uint8_t* src, uint32_t rb, uint64_t row, const uint32_
     const uint64_t left = len - 1024ull * c;
     const uint32_t clen = (uint32_t)(left < 1024 ? left : 1024);
     const int blocks = (int)((clen + 63) / 64);
-    auto fast = [&](int b) { const uint64_t j0 = 256ull * c + 16ull * b; return aligned && j0 >= 10 && 4 * (j0 + 6) + 3 < rb; };
-    uint32_t cv[8], nxt[17];
+    // block b's 16 message words are row words j0 − 16 … j0 − 1 when they all lie in the row
+    auto fast = [&](int b) { const uint64_t j0 = 256ull * c + 16ull * b; return aligned && j0 >= 16 && 4 * j0 <= rb; };
+    uint32_t cv[8], nxt[16];
 #pragma unroll
     for (int i = 0; i < 8; i++) cv[i] = key[i];
     bool nxt_fast = fast(0);
     if (nxt_fast) {
 #pragma unroll
-      for (int q = 0; q < 17; q++) nxt[q] = src_w[256ull * c - 10 + q];
+      for (int q = 0; q < 16; q++) nxt[q] = src_w[256ull * c - 16 + q];
     }
     for (int b = 0; b < blocks; b++) {
-      const uint64_t j0 = 256ull * c + 16ull * b;             // the block's first message word
-      uint32_t cur[17], m[16];
+      const uint64_t j0 = 256ull * c + 16ull * b;
+      uint32_t m[16];
       const bool cur_fast = nxt_fast;
 #pragma unroll
-      for (int q = 0; q < 17; q++) cur[q] = nxt[q];
+      for (int q = 0; q < 16; q++) m[q] = nxt[q];
       if (b + 1 < blocks) {
         nxt_fast = fast(b + 1);
         if (nxt_fast) {
 #pragma unroll
-          for (int q = 0; q < 17; q++) nxt[q] = src_w[j0 + 16 - 10 + q];
+          for (int q = 0; q < 16; q++) nxt[q] = src_w[j0 + 16 - 16 + q];
         }
       }
-      if (cur_fast) {                                         // message word j is bytes 4j − 37 … of the row
+      if (!cur_fast) {
 #pragma unroll
-        for (int w = 0; w < 16; w++) m[w] = __funnelshift_r(cur[w], cur[w + 1], 24);
-      } else {
-#pragma unroll
-        for (int w = 0; w < 16; w++) {
-          uint32_t x = 0;
-#pragma unroll
-          for (int k = 0; k < 4; k++) {
-            const uint64_t i = 4 * (j0 + w) + k;
-            const uint32_t v = i < ROW_PREFIX ? row_prefix_byte(row, (int)i) : i < len ? (uint32_t)src[i - ROW_PREFIX] : 0u;
-            x |= v << (8 * k);
-          }
-          m[w] = x;
-        }
+        for (int w = 0; w < 16; w++) m[w] = row_msg_word(src, rb, row, j0 + w);
       }
       const bool last = b == blocks - 1;
       const uint32_t f = B3_KEYED | (b == 0 ? B3_START : 0) | (last ? B3_END : 0) | (last && n == 1 ? B3_ROOT : 0);
@@ -144,22 +126,20 @@ extern "C" __global__ void __launch_bounds__(256) hash_rows_w(const Args a) {
 }
 
 // every level of a frame-b3 tree in one CTA, for a level 0 (pads included, width a power of two) of at most 2 blockDim nodes:
-// the levels hash_nodes writes one launch at a time, in the same places.  p0 the tree (level 0 at offset 0), p1 domain id;
-// i0 the width of level 0
+// the levels hash_nodes writes one launch at a time, in the same places, each node one compression under its level's key.
+// p0 the tree (level 0 at offset 0), p1 the level keys (hash_node_keys: 32 bytes a level); i0 the width of level 0
 extern "C" __global__ void __launch_bounds__(1024) hash_tree_small(const Args a) {
-  uint32_t key[8];
-  load_key(a.p[1], key);
   uint64_t below = a.p[0];
-  uint32_t level = 0;
+  int level = 0;
   for (uint64_t w = (uint64_t)a.i[0]; w > 1; w >>= 1, level++) {
     const uint64_t above = below + 32 * w;
+    uint32_t key[8];
+    load_key(a.p[1] + 32ull * level, key);
     for (uint64_t i = threadIdx.x; i < w / 2; i += blockDim.x) {
-      uint32_t l[8], r[8], h[8];
-      load_key(below + 64 * i, l);
-      load_key(below + 64 * i + 32, r);
-      b3_short<74>(key, [&](int j) {
-        return j == 0 ? 2u : j == 1 ? level : j < 10 ? word_le(i, j - 2) : j < 42 ? cv_byte(l, j - 10) : cv_byte(r, j - 42);
-      }, h);
+      uint32_t m[16], h[8];
+      load_key(below + 64 * i, m);
+      load_key(below + 64 * i + 32, m + 8);
+      blake3_block(key, m, h);
       store_cv(above + 32 * i, h);
     }
     __syncthreads();

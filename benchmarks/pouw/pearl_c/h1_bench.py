@@ -7,12 +7,12 @@ against `cuDeviceGetUuid`); NVML reads that UUID's clocks.
 
 **Gates, all before any timing** (a difference exits 4 with nothing timed). Each kernel form against `h1_vectors.json`, which
 `h1_vectors.py` writes from `verity.commitments`' frame-b3 and Pearl-C's h1 digests:
-- the row leaves of `hash_rows` (as pushed) and `hash_rows_w` (tuned), at every chunk count 1 … 257: rows of 1,024c − 37
-  bytes (exactly c chunks) and 1,024c bytes (37 bytes past a chunk boundary), rows 0 and 1;
+- the row leaves of `hash_rows` (as pushed) and `hash_rows_w` (tuned), at every chunk count 1 … 258: rows of 1,024c − 64
+  bytes (exactly c chunks with the one-block header), 1,024c − 27 (37 bytes past a chunk boundary) and 1,024c, rows 0 and 1;
 - A's tree at m = 32 (FP32 rows at k = 8,192, as `-h1` commits them, and BF16), `hash_nodes` level by level and
   `hash_tree_small` in one launch;
-- the tile hashing at m = 32, n = 8,192: as pushed, over the tile padded to 64 rows (`hash_msg`, `hash_leaf`: it has no
-  partial tile), and tuned over the 32 rows (`hash_msg_v`, `hash_leaf_p`), with the tile tree both ways.
+- the tile hashing at m = 32, n = 8,192 (decode's partial 32 x 64 tiles), as pushed (`hash_msg`, `hash_leaf`) and tuned
+  (`hash_msg_v`, `hash_leaf_p`), with the tile tree both ways (level keys, then `hash_nodes` or `hash_tree_small`).
 
 **Cost per byte**: each form at prefill size (m = 8,192), a read-only L2 flush before each rep, bytes hashed over the median
 time, per SM per SM clock too.
@@ -147,7 +147,7 @@ class Bench(R.Dev):
 
 
 def rows_w_words(rb: int) -> int:
-    return 8 * ((37 + rb + 1023) // 1024)
+    return 8 * ((64 + rb + 1023) // 1024)
 
 
 def launch_rows(d: Bench, s, form: str, rows_p: int, out_p: int, dom_p: int, m: int, rb: int) -> None:
@@ -158,37 +158,40 @@ def launch_rows(d: Bench, s, form: str, rows_p: int, out_p: int, dom_p: int, m: 
         d.go(s, "hash_rows_w", -(-m // warps), 32 * warps, (rows_p, out_p, dom_p), (m, rb), smem=4 * warps * rows_w_words(rb))
 
 
-def launch_tree(d: Bench, s, form: str, tree_p: int, dom_p: int, width: int) -> None:
+def launch_tree(d: Bench, s, form: str, tree_p: int, keys_p: int, dom_p: int, width: int) -> None:
+    """A tree's levels over its level 0: the level keys (hash_node_keys, from the domain id), then hash_nodes a level at a
+    time (as pushed) or hash_tree_small in one launch (tuned)."""
+    depth = max(0, (width - 1).bit_length())
+    d.go(s, "hash_node_keys", 1, 32, (keys_p, dom_p), (depth,))
     if form == "pushed" or width > 2048:
         off, w, lv = 0, width, 0
         while w > 1:
-            d.go(s, "hash_nodes", -(-(w // 2) // 128), 128, (tree_p + off, tree_p + off + 32 * w, dom_p), (lv, w // 2))
+            d.go(s, "hash_nodes", -(-(w // 2) // 128), 128, (tree_p + off, tree_p + off + 32 * w, keys_p + 32 * lv), (lv, w // 2))
             off, w, lv = off + 32 * w, w // 2, lv + 1
     else:
-        d.go(s, "hash_tree_small", 1, max(1, min(1024, width // 2)), (tree_p, dom_p), (width,))
+        d.go(s, "hash_tree_small", 1, max(1, min(1024, width // 2)), (tree_p, keys_p), (width,))
 
 
-def launch_a(d: Bench, s, form: str, rows_p: int, tree_p: int, dom_p: int, m: int, rb: int) -> None:
+def launch_a(d: Bench, s, form: str, rows_p: int, tree_p: int, keys_p: int, dom_p: int, m: int, rb: int) -> None:
     """A's commitment: row leaves and tree.  pushed: hash_rows and a hash_nodes launch per level; tuned: hash_rows_w and
     hash_tree_small.  (A fused one-CTA form, r20260930-074624-555a, put every chunk on one SM: 187 us against 37.)"""
     launch_rows(d, s, form, rows_p, tree_p, dom_p, m, rb)
-    launch_tree(d, s, form, tree_p, dom_p, m)
+    launch_tree(d, s, form, tree_p, keys_p, dom_p, m)
 
 
-def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: int, tree_p: int, keys: dict, dom_t: int,
-                 rows: int, n: int) -> int:
+def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: int, tree_p: int, tkeys_p: int, keys: dict,
+                 dom_t: int, rows: int, n: int) -> int:
     """Message digests, tile leaves, the tile tree's leaves and its levels; returns the tile count."""
     per, tn = n // 32, n // 64
+    tiles = -(-rows // 64) * tn
     if form == "pushed":
-        tiles = rows // 64 * tn
         d.go(s, "hash_msg", -(-rows * per // 128), 128, (c_p, u_p, dg_p, keys["k_msg"]), (rows, n))
         d.go(s, "hash_leaf", -(-tiles // 64), 64, (dg_p, lv_p, keys["k_leaf"]), (rows, n))
     else:
-        tiles = -(-rows // 64) * tn
         d.go(s, "hash_msg_v", -(-rows * per // 128), 128, (c_p, u_p, dg_p, keys["k_msg"]), (rows, n))
         d.go(s, "hash_leaf_p", -(-tiles // 32), 128, (dg_p, lv_p, keys["k_leaf"]), (rows, n))
     d.go(s, "hash_tree_leaves", -(-tiles // 128), 128, (lv_p, tree_p, dom_t), (tiles,))
-    launch_tree(d, s, form, tree_p, dom_t, tiles)
+    launch_tree(d, s, form, tree_p, tkeys_p, dom_t, tiles)
     return tiles
 
 
@@ -218,8 +221,8 @@ def gates(d: Bench, V: dict) -> dict:
         rows = shake(t["tag"], t["m"] * t["rb"])
         dp = d.put(bytes.fromhex(t["domain"]))
         for form in ("pushed", "tuned"):
-            rp, tp = d.put(rows), d.alloc(32 * 2 * t["m"])
-            launch_a(d, None, form, rp, tp, dp, t["m"], t["rb"])
+            rp, tp, kp = d.put(rows), d.alloc(32 * 2 * t["m"]), d.alloc(32 * 16)
+            launch_a(d, None, form, rp, tp, kp, dp, t["m"], t["rb"])
             d.sync()
             ok = d.read(tp + 32 * (2 * t["m"] - 2), 32).hex() == t["root"]
             out["trees"][f"{label} {form}"] = ok
@@ -227,22 +230,23 @@ def gates(d: Bench, V: dict) -> dict:
                 bad.append(f"{label} {form} root")
             d.free(rp)
             d.free(tp)
+            d.free(kp)
     keys = {k: d.put(bytes.fromhex(R.H1_KEYS[k])) for k in ("k_msg", "k_leaf")}
-    for form, case in (("pushed", V["tiles"]["padded64"]), ("tuned", V["tiles"]["m32"])):
+    for form, case in (("pushed", V["tiles"]["m32"]), ("tuned", V["tiles"]["m32"])):
         rows, n = case["rows"], case["n"]
         c = shake("gate c", 4 * M * n) + bytes(4 * (rows - M) * n)
         uu = shake("gate u", 4 * M * n) + bytes(4 * (rows - M) * n)
         cp, up = d.put(c), d.put(uu)
         dg, lv = d.alloc(32 * rows * (n // 32)), d.alloc(32 * 256)
-        tp, dt = d.alloc(32 * 2 * 256), d.put(bytes.fromhex(case["domain"]))
-        tiles = launch_tiles(d, None, form, cp, up, dg, lv, tp, keys, dt, rows, n)
+        tp, dt, tk = d.alloc(32 * 2 * 256), d.put(bytes.fromhex(case["domain"])), d.alloc(32 * 16)
+        tiles = launch_tiles(d, None, form, cp, up, dg, lv, tp, tk, keys, dt, rows, n)
         d.sync()
         checks = {"digests": hashlib.sha256(d.read(dg, 32 * rows * (n // 32))).hexdigest() == case["digests_sha256"],
                   "leaves": hashlib.sha256(d.read(lv, 32 * tiles)).hexdigest() == case["leaves_sha256"],
                   "root": d.read(tp + 32 * (2 * tiles - 2), 32).hex() == case["root"]}
         out["tiles"][form] = {"rows": rows, "tiles": tiles, **checks}
         bad += [f"tiles {form} {k}" for k, v in checks.items() if not v]
-        for p in (cp, up, dg, lv, tp, dt):
+        for p in (cp, up, dg, lv, tp, dt, tk):
             d.free(p)
     out["failures"] = bad
     return out
@@ -303,21 +307,21 @@ def decode(d: Bench, reps: int) -> dict:
     w = [d.put(shake(f"weights {s}", n * k)) for s in range(WSETS)]
     y = d.alloc(2 * m * n)
     rows = {rb: d.alloc(m * rb) for rb in (ROW_F32, ROW_BF16)}
-    a_tree = d.alloc(32 * 2 * m)
+    a_tree, a_keys = d.alloc(32 * 2 * m), d.alloc(32 * 16)
     slots = [{"c": d.alloc(4 * 64 * n), "u": d.alloc(4 * 64 * n), "dg": d.alloc(32 * 64 * (n // 32)), "lv": d.alloc(32 * 256),
-              "tree": d.alloc(32 * 2 * 256)} for _ in range(2)]
+              "tree": d.alloc(32 * 2 * 256), "keys": d.alloc(32 * 16)} for _ in range(2)]
     out: dict = {"calls_per_graph": CALLS, "weight_sets": WSETS, "shape": f"m{m}-n{n}-k{k}"}
 
     def call(i: int, arm: str, rb: int, stage: str, joins: list) -> None:
         s1, s2 = d.s1, d.s2
         sl = slots[i % 2]
-        tiled = 64 if arm == "h1" else m
+        tiled = m                                             # decode's 32 x 64 tiles, unpadded (#449's F1)
         d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_BF16]), (m * k,))
         if rb == ROW_F32:
             d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_F32]), (m * k,))
         if arm != "plain" and stage in ("all", "before"):
             form = "pushed" if arm == "h1" else "tuned"
-            launch_a(d, s1, form, rows[rb], a_tree, dom_a, m, rb)
+            launch_a(d, s1, form, rows[rb], a_tree, a_keys, dom_a, m, rb)
         if len(joins) >= 2:                                   # the side stream's slot from two calls back is free again
             d.wait(s1, joins[-2])
         d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], rows[ROW_BF16], sl["c"], sl["u"], y), (m, n, k))
@@ -327,10 +331,10 @@ def decode(d: Bench, reps: int) -> dict:
         if arm.endswith("-side"):
             e = d.event(s1)
             d.wait(s2, e)
-            launch_tiles(d, s2, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], keys, dom_t, tiled, n)
+            launch_tiles(d, s2, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, tiled, n)
             joins.append(d.event(s2))
         else:
-            launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], keys, dom_t, tiled, n)
+            launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, tiled, n)
 
     arms = [("plain", ROW_F32, "all"), ("plain", ROW_BF16, "all"), ("h1", ROW_F32, "all"), ("h1-tuned", ROW_F32, "all"),
             ("h1-tuned-side", ROW_F32, "all"), ("h1", ROW_F32, "before"), ("h1-tuned", ROW_F32, "before"),
