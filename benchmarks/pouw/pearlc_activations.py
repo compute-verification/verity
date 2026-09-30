@@ -25,6 +25,11 @@ once and replayed per layer. --split adds the channel split to admission (`pearl
 rule, |S| ≤ ⌊k/100⌋): the unit's rows are judged again without S, and the tiles are drawn from the split unit's admissible
 rows, zero-padded to a multiple of 128 channels as `pearlc_headline.py` pads them.
 
+--merge forms each linear's whole admitted unit (A: its admissible token rows, B: its admissible weight rows, trimmed to
+multiples of 32 and 16; its own seeds, so the tiles are unchanged) and reports `fp8-merge-rate/sm120`
+(`sm120_exact/run.py`'s `merge_stats`: Strassen's 10 pre-adds per element and per 16 x 32 / 32 x 8 fragment, the fragment
+pairs where all 10 are E4M3, and the diagonal pair's largest all-E4M3 block).
+
 Under `research run` it writes result.json: passed when every sampled tile's residual is at most 1/400.
 """
 from __future__ import annotations
@@ -115,6 +120,7 @@ def main() -> None:
     ap.add_argument("--layers", default="", help="measure only the linear layers whose module name this regex matches (a shard)")
     ap.add_argument("--replay", default="", help="a pearlc_capture.py directory: X from its manifest, W from the model's safetensors")
     ap.add_argument("--split", action="store_true", help="admission with the channel split, |S| <= k/100; tiles from the split unit")
+    ap.add_argument("--merge", action="store_true", help="fp8-merge-rate/sm120 on each linear's admitted rows (sm120_exact.run)")
     ap.add_argument("--out", default="pearlc_activations.json")
     args = ap.parse_args()
     C.set_atom(args.atom)
@@ -149,6 +155,17 @@ def main() -> None:
                         "A_tiles64_admissible_split": round(tiles_ok(okA, 64), 6),
                         "B_tiles8_admissible_split": round(tiles_ok(okB, 8), 6)})
         ia, ib = np.flatnonzero(okA), np.flatnonzero(okB)
+        ra, rb = ia[: len(ia) - len(ia) % 32], ib[: len(ib) - len(ib) % 16]
+        if args.merge and kpad % 64 == 0 and len(ra) and len(rb):
+            from sm120_exact.run import merge_stats
+            mr = C._rng("merge", name, kpad)
+            FmA, FmB = (C.enc(C.unit_lines(kpad, mr) * (args.line_norm / np.sqrt(32))) for _ in range(2))
+            XA, XB = np.zeros((len(ra), kpad)), np.zeros((len(rb), kpad))
+            XA[:, :X.shape[1]], XB[:, :W.shape[1]] = X[ra], W[rb]
+            a = C.form_s5(XA, FmA, args.delta, args.line_norm, mr)[0]
+            b = C.form_s5(XB, FmB, args.delta, args.line_norm, mr)[0]
+            rec["merge"] = {"rows": [len(ra), len(rb)], **merge_stats(a, b, args.seed)}
+            del XA, XB, a, b
         tiles = []
         if kpad % 128 == 0 and len(ia) >= 64 and len(ib) >= 8:
             FcA = C.enc(C.unit_lines(kpad, rng) * (args.line_norm / np.sqrt(32)))
@@ -264,6 +281,15 @@ def main() -> None:
                        **({"cross_group_share_mean": float(np.mean([r["cross_group_share_mean"] for r in crossed])),
                            "cross_group_share_max": max(r["cross_group_share_max"] for r in crossed)} if crossed else {})},
            "seconds": round(time.time() - t0, 1)}
+    merged = [r for r in layers if "merge" in r]
+    if merged:
+        doc["summary"]["merge"] = {
+            "linears": len(merged), "preadd_frag_hits": sum(r["merge"]["preadd_frag_hits"] for r in merged),
+            "preadd_frags": sum(r["merge"]["preadd_frags"] for r in merged),
+            "strassen_frag_pairs": [sum(r["merge"]["strassen_frag_pairs"][i] for r in merged) for i in (0, 1)],
+            "pair_A_max": max(r["merge"]["pair_A"] for r in merged), "pair_B_max": max(r["merge"]["pair_B"] for r in merged),
+            "hits_by_linear": {r["layer"]: {n: v["frag_hits"] for n, v in r["merge"]["preadds"].items() if v["frag_hits"]}
+                               for r in merged if r["merge"]["preadd_frag_hits"]}}
     out = Path(args.out)
     out.write_text(json.dumps(doc, indent=1) + "\n")
     s = doc["summary"]
