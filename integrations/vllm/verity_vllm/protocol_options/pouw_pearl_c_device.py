@@ -1,0 +1,515 @@
+"""Pearl-C on the RTX PRO 6000 (sm_120) at the linears' ``quant_method.apply``: every call computed and committed on the device
+by GPU 1's kernel pipeline, one epoch per install over every linear weight, one transcript per pass over every call.
+
+The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, whose ``run.py`` has the
+`Pipeline` (its kernels in order, each a named step of a phase, over buffers the caller may own) and whose ``fixture.py`` has
+the keys (`keys_of`, `unit_block`).  The cubin is build.sh's (setting ``cubin``, default the directory's
+``pearl_c_sm120.cubin``).  This module owns the buffers and runs the pipeline's steps on torch's current stream, in the
+device's primary context:
+
+* **The weight side**, once per weight and epoch (`_Weight`).  B's FP32 words (the BF16 weight widened, exact) are hashed
+  into B's frame-b3 row tree (phase ``epoch``), whose root must be the committed one.  Then, with the salt's seed_B, come E_B's
+  and the F lines, B's statistics and forming, B̃·F_A, G and P_B (phase ``job``).  B's FP32 copy is dropped after, so the
+  weight side keeps about a byte per weight (B̃) beside the model's own weight.
+* **Each call** (`gemm`):
+  - x's rows are widened into A's FP32 words, with zero filler rows up to m₁₆ (the domain's 16 | m; filler is committed as
+    zero rows) and zero padding up to the kernels' tile;
+  - ``commit``: A's pads and level keys under its domain, A's row tree, seed_A and E_A's line key;
+  - ``forming``: E_A's lines, A's statistics and forming;
+  - ``cleanup``: A′·F_B, P_A, and the chain with its peel and y (``gemm_pearlc`` writes y into the tensor this returns);
+  - ``hashing``: the message digests and the tile leaves, into the pass's leaf buffer at the call's offset.  No per-call
+    tile tree is built, since the pass has one.
+* **The records** (`pearl_c_work.UnitRecord`): each call's real rows and width, and the rows that fail the per-row rules
+  (`pearl_c_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
+  The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
+  `pearl_c.live_row` from its retained words.
+* **Each pass** (`begin`, `end`): the transcript is every call's A root and one tile tree over every leaf, in call order,
+  under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the pass also writes what the
+  prover opens from: A's rows (BF16, exact) and tree levels per call, B's rows and tree levels per weight, the leaves, the
+  tile tree and the manifest (`write_manifest`) that the reference verifier reads
+  (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).
+
+With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
+records.  What is left is the same forming and GEMM without hashing, for the time split.
+"""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import sys
+import types
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from verity_pouw.audit import Epoch, Workload, activation_binding, rows_domain, transcript_domain
+from verity_pouw.protocol import Matmul, Shape
+from verity_pouw.schemes import pearl_c as C
+from verity_pouw.schemes import pearl_c_work as PW
+from verity_pouw.schemes import pearl_kw as P
+
+#: scheme name -> (forming, device record, hashing format).  ``-h2`` joins once GPU 1's pipeline commits A with frame-b3s.
+SCHEMES = {"pearl-c-sm120-v1-h1": ("v1", "sm120", "h1")}
+#: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
+ROW_ALIGN = 16
+#: tiles one pass's leaf buffer holds (256 MiB)
+LEAF_CAPACITY = 1 << 23
+#: the liveness screen's relative band, far wider than its FP32 error (2⁻²³)
+BAND = 2.0 ** -10
+MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v1"
+WEIGHT_BUFFERS = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b",
+                  "epb_codes", "bt", "bf", "pb_t", "tree_b", "keys_b")
+CALL_BUFFERS = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "ea_codes", "at", "af", "pa_t", "c", "u", "digests",
+                "tree_a", "keys_a", "line_a", "seed_a")
+EPOCH_STEPS = ("pad_b", "node_keys_b", "hash_rows_b", "tree_b")
+JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
+CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
+              "gemm_pearlc", "hash_msg", "hash_leaf")
+HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg", "hash_leaf"})
+
+
+def scheme_of(name: str, **instance: Any) -> C.PearlC:
+    """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
+    from verity_pouw.schemes.pearl_c_device import DEVICES
+    forming, device, hashing = SCHEMES[name]
+    s = C.PearlC(forming=forming, device=DEVICES[device], hashing=hashing, **instance)
+    if s.name != name:
+        raise ValueError(f"the scheme built for {name!r} names itself {s.name!r}")
+    return s
+
+
+def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
+    """Every linear outside the scheme's domain or the kernels' (k a multiple of 1,024, n of 128), by weight id."""
+    s, out = scheme_of(name), []
+    for w, (n, k) in sorted(shapes.items()):
+        if k % 1024 or n % 128:
+            out.append(f"linear {w}: (n, k) = ({n}, {k}), and the kernels take k a multiple of 1,024 and n of 128")
+            continue
+        try:
+            s.check(Matmul(0, Shape(ROW_ALIGN, k, n), w))
+        except Exception as e:  # noqa: BLE001 - DomainError, named per layer
+            out.append(f"linear {w}: {e}")
+    return out
+
+
+def _load(name: str, path: Path):
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+@dataclass
+class Kernel:
+    """GPU 1's pipeline, loaded once per process: ``run.py`` (as `run`), ``fixture.py`` (as `fixture`), the device (`dev`)."""
+
+    run: Any
+    fixture: Any
+    dev: Any
+    cubin_sha256: str
+
+    @classmethod
+    def load(cls, directory: str, cubin: str | None = None) -> Kernel:
+        key = (str(Path(directory).resolve()), cubin)
+        if key not in _KERNELS:
+            d = Path(directory)
+            run = _load("pearl_c_sm120_run", d / "run.py")
+            fixture = _load("pearl_c_sm120_fixture", d / "fixture.py")
+            raw = Path(cubin or d / "pearl_c_sm120.cubin").read_bytes()
+            dev = run.Dev(raw)
+            dev.open()
+            _KERNELS[key] = cls(run, fixture, dev, hashlib.sha256(raw).hexdigest())
+        return _KERNELS[key]
+
+
+_KERNELS: dict[tuple[str, str | None], Kernel] = {}
+
+
+def _zeros(n: int, device: Any) -> Any:
+    import torch
+    return torch.zeros(max(n, 16), dtype=torch.uint8, device=device)
+
+
+def _put(t: Any, data: bytes) -> None:
+    """`data` into device bytes `t`, on the current stream (the pinned staging copy is torch's to keep alive)."""
+    import torch
+    host = torch.frombuffer(bytearray(data), dtype=torch.uint8)
+    t[:len(data)].copy_(host.pin_memory() if t.is_cuda else host, non_blocking=t.is_cuda)
+
+
+def _stream(device: Any) -> int:
+    import torch
+    return torch.cuda.current_stream(device).cuda_stream if device.type == "cuda" else 0
+
+
+def _bytes(t: Any) -> bytes:
+    return t.cpu().numpy().tobytes()
+
+
+def screen(x: Any, alpha: Any, aux: Any, chunk: int = 1 << 26) -> tuple[Any, Any]:
+    """The per-row rules on FP32 rows x (rows x k, on the device) with their `stats_s5` α and (s, ρ): (fails, unsure), two
+    bool vectors.  A row fails on the noise floor (ρ·α < σ_min, exact as a double product) or when its dead count, screened
+    in FP32 against 64·Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ with a relative band of 2⁻¹⁰, is surely over k/64; `unsure` rows are those
+    the band leaves open, for `pearl_c.live_row` to decide exactly."""
+    import torch
+    rows, k = x.shape
+    rho = aux.view(torch.float32)[:2 * rows].view(rows, 2)[:, 1].double()
+    floor = rho * alpha.view(torch.float32)[:rows].double() < P.SIGMA_MIN
+    k8 = len(range(0, k, C.S5_STRIDE))
+    fails, unsure = torch.empty_like(floor), torch.empty_like(floor)
+    step = max(1, chunk // k)
+    for r0 in range(0, rows, step):
+        sq = x[r0:r0 + step].square()
+        thr = (64.0 * sq[:, ::C.S5_STRIDE].double().sum(1) / k8)[:, None]
+        hi, lo = (thr * (1 + BAND)).float(), (thr * (1 - BAND)).float()
+        dead = (sq > hi).sum(1)
+        band = ((sq >= lo) & (sq <= hi)).sum(1)
+        f = floor[r0:r0 + step]
+        sure_fail, sure_pass = 64 * dead > k, 64 * (dead + band) <= k
+        fails[r0:r0 + step] = f | sure_fail
+        unsure[r0:r0 + step] = ~f & ~sure_fail & ~sure_pass
+    return fails, unsure
+
+
+def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:
+    """The rows of x (FP32, on the device) that fail the rules: `screen`'s fails, and its unsure rows that
+    `pearl_c.live_row` rejects on their words."""
+    import torch
+    rows = unsure.nonzero().flatten()
+    out = {int(i) for i in fails.nonzero().flatten().tolist()}
+    if len(rows):
+        for r, row in zip(rows.tolist(), x[rows].view(torch.int32).cpu().numpy().astype("<u4")):
+            if not C.live_row([int(v) for v in row]):
+                out.add(int(r))
+    return tuple(sorted(out))
+
+
+@dataclass
+class _Weight:
+    n: int
+    k: int
+    b: dict[str, Any]
+    keys: Any                      # line_b ‖ dom_b
+    root: bytes
+    excluded: tuple[int, ...]
+    tensor: Any                    # the layer's own weight, for the retained transcript
+
+
+@dataclass
+class _Shape:
+    m16: int
+    mp: int
+    n: int
+    k: int
+    b: dict[str, Any]
+    xa: Any                        # FP32 (mp x k): rows m16 … mp − 1 stay zero
+    keys: Any                      # dom_a ‖ unit
+
+
+@dataclass
+class _Pass:
+    retain: Path | None
+    matmuls: list[Matmul] = field(default_factory=list)
+    roots_a: list[Any] = field(default_factory=list)
+    flags: list[tuple[Any, Any]] = field(default_factory=list)
+    records: list[PW.UnitRecord] = field(default_factory=list)
+    files: list[dict] = field(default_factory=list)
+    tiles: int = 0
+
+
+def weight_roots(kernel: Kernel, weights: dict[int, Any]) -> dict[int, bytes]:
+    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase."""
+    import torch
+    R, out = kernel.run, {}
+    for w, weight in weights.items():
+        n, k = weight.shape
+        size = R.Pipeline.sizes(R.BM, n, k, R.BM)
+        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "keys_b", "faT32", "fbT32", "fbT128")}
+        keys = _zeros(64, weight.device)
+        _put(keys[32:], rows_domain(_weight_binding(w), -2, n, "blake3").domain_id)
+        xb = weight.to(torch.float32).contiguous()
+        pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32})
+        _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
+        out[w] = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
+    return out
+
+
+def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int) -> bytes:
+    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows."""
+    return rows_domain(activation_binding(salt, index), index, m16, "blake3").domain_id + fixture.unit_block(salt, root_b, index)
+
+
+def _weight_binding(w: int) -> bytes:
+    from verity_pouw.audit import weight_binding
+    return weight_binding(w)
+
+
+def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
+              m_real: int | None = None) -> Any:
+    full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "unit": 0, **keys}
+    return kernel.run.Pipeline(kernel.dev, m, n, k, "sm120", full, xa, xb, bufs=bufs, m_real=m_real)
+
+
+def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
+    by = {name: f for name, _, f in pipe.steps()}
+    missing = [x for x in names if x not in by and not x.startswith(("pad_", "node_keys_"))]
+    if missing:
+        raise RuntimeError(f"the kernel's pipeline has no steps {missing}")
+    return [by[x] for x in names if x in by]
+
+
+def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None:
+    kernel.dev.stream = stream
+    try:
+        for f in _steps(pipe, names):
+            f()
+    finally:
+        kernel.dev.stream = None
+
+
+class PearlCDeviceRun:
+    """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
+    the passes the bench and the verifier need (`begin`, `end`)."""
+
+    def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
+                 salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False):
+        self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
+        self.time_gemm, self.events = time_gemm, []
+        self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
+        self.device = next(iter(weights.values())).device
+        self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
+                           self.roots, salt)
+        self.const = _zeros(64, self.device)
+        _put(self.const, C.H1_KEYS["message"] + C.H1_KEYS["leaf"])
+        self.leaves = _zeros(32 * capacity, self.device)
+        self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
+        self.shapes: dict[tuple[int, int, int], _Shape] = {}
+        self.pipes: dict[tuple[int, int], tuple[Any, list[Any]]] = {}
+        self.stream = lambda: _stream(self.device)
+        self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
+                                        "transcript_root": None, "units": 0, "tiles": 0}
+        self.details: dict[str, Any] = {
+            "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]})",
+            "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
+            "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
+        self.cur: _Pass | None = None
+        self.begin()
+
+    # ---- the weight side --------------------------------------------------------------------------------------------
+
+    def _weight_side(self, w: int, weight: Any) -> _Weight:
+        import torch
+        K, R = self.kernel, self.kernel.run
+        n, k = weight.shape
+        size = R.Pipeline.sizes(R.BM, n, k, R.BM)
+        b = {name: _zeros(size[name], weight.device) for name in WEIGHT_BUFFERS}
+        keys = _zeros(64, weight.device)
+        mm = Matmul(0, Shape(ROW_ALIGN, k, n), w)
+        seed_b = C._labelled(self.salt + self.roots[w], "seed-B")
+        kk = K.fixture.keys_of(self.scheme, self.epoch, mm, seed_b)
+        _put(keys, kk["line_b"] + kk["dom_b"])
+        xb = weight.to(torch.float32).contiguous()
+        pipe = _pipeline(K, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
+                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32})
+        stream = _stream(weight.device)
+        _run(K, pipe, EPOCH_STEPS, stream)
+        root = _bytes(b["tree_b"][size["tree_b"] - 32:size["tree_b"]])
+        if root != self.roots[w]:
+            raise ValueError(f"{self.entry}: weight {w}'s rows on the device root at {root.hex()[:16]}, not the committed "
+                             f"{self.roots[w].hex()[:16]}")
+        _run(K, pipe, JOB_STEPS, stream)
+        return _Weight(n, k, b, keys, root, excluded(*screen(xb, b["alpha_b"], b["aux_b"]), xb), weight)
+
+    # ---- calls ------------------------------------------------------------------------------------------------------
+
+    def _shape(self, m16: int, n: int, k: int) -> _Shape:
+        import torch
+        key = (m16, n, k)
+        if key not in self.shapes:
+            R = self.kernel.run
+            mp = R.cdiv(m16, R.BM_D) * R.BM_D
+            size = R.Pipeline.sizes(mp, n, k, m16)
+            self.shapes[key] = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
+                                      torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(32 + 104, self.device))
+        return self.shapes[key]
+
+    def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any]]:
+        key = (w, sh.m16)
+        if key not in self.pipes:
+            wt, K = self.weights[w], self.kernel
+            bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
+                    "leaves": 0}
+            keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": sh.keys.data_ptr(),
+                    "unit": sh.keys.data_ptr() + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
+            pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16)
+            names = CALL_STEPS if self.hashing else tuple(x for x in CALL_STEPS if x not in HASH_STEPS)
+            steps = _steps(pipe, names)
+            if self.time_gemm and self.device.type == "cuda":
+                at = [x for x in names if x in {n for n, _, _ in pipe.steps()}].index("gemm_pearlc")
+                steps[at] = self._timed(steps[at])
+            self.pipes[key] = (pipe, steps)
+        return self.pipes[key]
+
+    def _timed(self, f):
+        import torch
+
+        def timed():
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            f()
+            b.record()
+            self.events.append((a, b))
+        return timed
+
+    def gemm_ms(self) -> tuple[float, int]:
+        """The GEMM kernel's summed time (``gemm_pearlc``, CUDA events on its stream) and its call count since the last read."""
+        import torch
+        torch.cuda.synchronize(self.device)
+        out = (sum(a.elapsed_time(b) for a, b in self.events), len(self.events))
+        self.events.clear()
+        return out
+
+    def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
+        import torch
+        cur, wt = self.cur, self.weights[w]
+        lead, k = x.shape[:-1], x.shape[-1]
+        x2 = x.reshape(-1, k)
+        m = x2.shape[0]
+        m16 = -(-m // ROW_ALIGN) * ROW_ALIGN
+        sh = self._shape(m16, wt.n, k)
+        index = len(cur.matmuls)
+        tiles = self.kernel.run.cdiv(m16, self.kernel.run.TILE) * (wt.n // self.kernel.run.TILE)
+        if self.hashing and cur.tiles + tiles > self.capacity:
+            raise RuntimeError(f"{self.entry}: the pass is over {self.capacity} tiles; end it and begin another")
+        sh.xa[:m].copy_(x2)
+        if m16 > m:
+            sh.xa[m:m16].zero_()
+        y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
+        pipe, steps = self._pipe(w, sh)
+        pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
+        if self.hashing:
+            _put(sh.keys, call_keys(self.kernel.fixture, self.salt, self.roots[w], index, m16))
+        self.kernel.dev.stream = self.stream()
+        try:
+            for f in steps:
+                f()
+        finally:
+            self.kernel.dev.stream = None
+        cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
+        if self.hashing:
+            size = pipe.size["tree_a"]
+            cur.roots_a.append(sh.b["tree_a"][size - 32:size].clone())
+            fails, unsure = screen(sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"])
+            if cur.retain is not None:
+                cur.records.append(PW.UnitRecord(cur.matmuls[-1], m, k, excluded(fails, unsure, sh.xa[:m]), wt.excluded))
+                cur.files.append(self._retain_call(cur, index, sh, size))
+            else:
+                cur.flags.append((fails, unsure))
+            cur.tiles += tiles
+        out = y[:m] if bias is None else y[:m] + bias
+        return out.reshape(*lead, wt.n)
+
+    def _retain_call(self, cur: _Pass, index: int, sh: _Shape, tree_bytes: int) -> dict:
+        import torch
+        d = cur.retain / "calls"
+        d.mkdir(parents=True, exist_ok=True)
+        rows = _bytes(sh.xa[:sh.m16].to(torch.bfloat16).view(torch.uint8))
+        tree = _bytes(sh.b["tree_a"][:tree_bytes])
+        return {"rows": _write(d / f"{index}.rows.bf16", rows, digest=False), "tree": _write(d / f"{index}.tree", tree)}
+
+    # ---- passes -----------------------------------------------------------------------------------------------------
+
+    def begin(self, retain: str | None = None) -> None:
+        """A new pass: its own transcript under the install's epoch, the call indices from 0.  With `retain`, the pass writes
+        what the prover opens from into that directory."""
+        self.cur = _Pass(Path(retain) if retain else None)
+
+    def end(self) -> dict[str, Any]:
+        """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
+        commitment (also in `commits` and `details["passes"]`)."""
+        import torch
+        cur, K = self.cur, self.kernel
+        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing}
+        if self.hashing and cur.matmuls:
+            epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
+            R, count = K.run, cur.tiles
+            tree = _zeros(32 * (2 * R.pow2(count) - 1), self.device)
+            lk, dom = _zeros(32 * max(R.depth(count), 1), self.device), _zeros(32, self.device)
+            _put(dom, transcript_domain(epoch, count, "blake3").domain_id)
+            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr(), "keys_t": lk.data_ptr()},
+                                       keys={"dom_t": dom.data_ptr()})
+            K.dev.stream = self.stream()
+            try:
+                for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
+                    f()
+                K.dev.launch("hash_tree_leaves", R.cdiv(count, 128), 128, p=(self.leaves.data_ptr(), tree.data_ptr(), dom.data_ptr()),
+                             i=(count,))
+                R.Pipeline.levels(ns, "t", count)
+            finally:
+                K.dev.stream = None
+            roots_a = _bytes(torch.stack(cur.roots_a))
+            out.update(transcript_root=_bytes(tree[-32:]).hex(),
+                       activation_roots=hashlib.sha256(roots_a).hexdigest(),
+                       unresolved_rows=int(sum(int(u.sum()) for _, u in cur.flags)),
+                       excluded_rows=int(sum(int(f.sum()) for f, _ in cur.flags)) + sum(len(r.excluded_a) for r in cur.records))
+            if cur.retain is not None:
+                out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
+            self.commits.update(transcript_root=out["transcript_root"], units=len(cur.matmuls), tiles=count)
+        self.details["passes"].append(out)
+        return out
+
+    def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:
+        import torch
+        d = cur.retain
+        wd = d / "weights"
+        wd.mkdir(parents=True, exist_ok=True)
+        weights = {}
+        for w in sorted(self.weights):
+            wt = self.weights[w]
+            size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
+            weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
+                               "rows": _write(wd / f"{w}.rows.bf16", _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8)),
+                                              digest=False),
+                               "tree": _write(wd / f"{w}.tree", _bytes(wt.b["tree_b"][:size]))}
+        matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
+                    "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
+                    "root_a": roots_a[32 * u.index:32 * u.index + 32].hex(), **f}
+                   for u, r, f in zip(cur.matmuls, cur.records, cur.files)]
+        head = {"schema": MANIFEST_SCHEMA, "entry": self.entry, "scheme": self.scheme.name,
+                "scheme_args": dict(zip(("forming", "device", "hashing"), SCHEMES[self.scheme.name])),
+                "beacon": self.beacon.hex(), "salt": self.salt.hex(), "cubin_sha256": self.kernel.cubin_sha256,
+                "records_root": PW.records_root(self.salt, epoch.weights_root,
+                                                {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
+                "commitment": {"root": _bytes(tree[-32:]).hex(), "count": count},
+                "leaves": _write(d / "leaves", _bytes(self.leaves[:32 * count])),
+                "tree_t": _write(d / "tree_t", _bytes(tree))}
+        return write_manifest(d, head, weights, matmuls)
+
+    def finish(self) -> None:
+        if self.cur is not None and self.cur.matmuls:
+            self.end()
+            self.cur = _Pass(None)
+
+
+def _write(path: Path, data: bytes, digest: bool = True) -> dict:
+    """A transcript file.  Row files carry no digest: the committed roots bind them, and the verifier checks every opened row
+    against them."""
+    path.write_bytes(data)
+    nested = path.parent.name in ("calls", "weights")
+    out = {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": len(data)}
+    if digest:
+        out["sha256"] = hashlib.sha256(data).hexdigest()
+    return out
+
+
+def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
+    """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the beacon, the salt, the
+    records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and tree
+    levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
+    levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 32 bytes a node."""
+    path = d / "manifest.json"
+    path.write_text(json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n")
+    return path

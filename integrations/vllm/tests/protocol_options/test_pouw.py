@@ -17,10 +17,10 @@ from verity_pouw.audit import Epoch, Workload, activation_binding, commit_rows, 
 from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import Matmul, Shape, Tile
 from verity_pouw.schemes import SCHEMES, get
-
 from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw
+from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 
 BEACON = "5a" * 32
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
@@ -69,12 +69,29 @@ def _int7_linear(x, w, bias=None):
 
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
-def test_schemes_are_the_protocol_packages_and_only_ncp_is_executed():
+def test_schemes_are_the_protocol_packages_and_only_ncp_and_pearl_c_sm120_are_executed():
     from verity_pouw import circuit
-    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES})) and "ncp-v1" in pouw.schemes()
+    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES})) and "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
-    assert "not wired" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
+    assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
+
+
+def test_pearl_c_sm120_runs_on_the_device_only_and_not_beside_sampled_proofs():
+    scheme = "pearl-c-sm120-v1-h1"
+    assert scheme in pouw.EXECUTED
+    assert any("device only" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}")))
+    on = {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120"}}
+    assert pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings=on)) == ()
+    assert any("path strings" in r for r in pouw.refusals(scheme, _serve(f"pouw:{scheme}", settings={"pouw": {"kernel": 3}})))
+    commit = PO.Context(stage="commit", enabled=(f"pouw:{scheme}", "sampled-proofs:vllm-v1"), settings=on)
+    assert any("no Definition" in r for r in PO.refusals(commit))
+
+
+def test_pearl_c_sm120_refuses_linears_outside_the_kernels():
+    assert PPD.refusals("pearl-c-sm120-v1-h1", {0: (4096, 4096), 1: (6144, 4096), 2: (4096, 14336), 3: (28672, 4096)}) == []
+    bad = PPD.refusals("pearl-c-sm120-v1-h1", {0: (3584, 3584), 1: (4096, 896), 2: (4160, 4096)})
+    assert [r.split(":")[0] for r in bad] == ["linear 0", "linear 1", "linear 2"] and "1,024" in bad[0]
 
 
 @pytest.mark.parametrize("kw,match", [({"enforce_eager": False}, "graph-capturable"),

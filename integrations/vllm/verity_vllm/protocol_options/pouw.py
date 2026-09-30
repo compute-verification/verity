@@ -37,34 +37,42 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
+from verity.commitments import MerkleTree
 from verity_pouw import circuit as pouw_circuit
 from verity_pouw import schemes as pouw_schemes
-from verity_pouw.audit import (TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows, transcript_domain,
-                               weight_binding, weights_root)
+from verity_pouw.audit import (
+    TILE_SCHEMA,
+    Epoch,
+    Workload,
+    activation_binding,
+    commit_rows,
+    transcript_domain,
+    weight_binding,
+    weights_root,
+)
 from verity_pouw.protocol import Context as UnitContext
 from verity_pouw.protocol import DomainError, Matmul, Shape
 from verity_pouw.schemes import ncp
 
-from verity.commitments import MerkleTree
 from verity_vllm.protocol_options import pouw_circuit as PC
 from verity_vllm.protocol_options import pouw_device as PD
 from verity_vllm.protocol_options import pouw_native as PN
+from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 from verity_vllm.protocol_options.interface import Context, Option, Target
 
 NAME = "pouw"
 DEFAULT_SCHEME = "ncp-v1"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
-#: The schemes this adapter's executor computes; Pearl's FP10 / FP8 operands are not wired. ``ncp-v2`` is NCP-INT as a
-#: circuit (`verity_pouw.circuit`): each call is its own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1`
-#: call (`pouw_circuit`).
-EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
+#: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity_pouw.circuit`): each call is its
+#: own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1` call (`pouw_circuit`).  Pearl-C on sm_120
+#: (`pouw_pearl_c_device.SCHEMES`) runs on the device only, through GPU 1's kernel pipeline (settings ``kernel``, ``cubin``).
+EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES)
 #: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
 UNQUANTIZED = ("bfloat16", "float16", "float32")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device")
+KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -85,7 +93,7 @@ _M32 = 0xFFFFFFFF
 
 
 def schemes() -> tuple[str, ...]:
-    return tuple(sorted({*pouw_schemes.SCHEMES, *pouw_circuit.SCHEMES}))
+    return tuple(sorted({*pouw_schemes.SCHEMES, *pouw_circuit.SCHEMES, *PPD.SCHEMES}))
 
 
 @dataclass(frozen=True)
@@ -102,6 +110,9 @@ class Settings:
     #: bit flipped
     tamper: str | None = None
     device: str | None = None
+    #: Pearl-C on sm_120: the kernel directory (the run tree's ``benchmarks/pouw/pearl_c_sm120``) and build.sh's cubin
+    kernel: str | None = None
+    cubin: str | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -132,21 +143,27 @@ class Settings:
         device = raw.get("device")
         if device is not None and device not in DEVICES:
             raise ValueError(f"pouw setting 'device' is one of {', '.join(DEVICES)}")
-        return cls(beacon, retain, tdir, draws, tamper, device)
+        paths = [raw.get(key) for key in ("kernel", "cubin")]
+        if any(p is not None and not isinstance(p, str) for p in paths):
+            raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
+        return cls(beacon, retain, tdir, draws, tamper, device, *paths)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     out = []
     if scheme not in EXECUTED:
-        out.append(f"{scheme}: this adapter's executor runs {', '.join(EXECUTED)} only (Pearl's FP10/FP8 operands are not wired)")
+        out.append(f"{scheme}: this adapter's executor runs {', '.join(EXECUTED)} only")
     if not ctx.enforce_eager:
         out.append("compiled execution: the wrapper around each linear layer's apply is not graph-capturable")
     if ctx.world > 1:
         out.append(f"TP {ctx.world}: PoUW's units and transcript are per rank, which is not wired")
     try:
-        Settings.of(ctx.settings_of(NAME))
+        settings = Settings.of(ctx.settings_of(NAME))
     except ValueError as e:
         out.append(str(e))
+    else:
+        if scheme in PPD.SCHEMES and (settings.device != "cuda" or not settings.kernel):
+            out.append(f"{scheme}: runs on the device only, so it needs the pouw settings 'device': 'cuda' and 'kernel'")
     return tuple(out)
 
 
@@ -469,7 +486,7 @@ def ncp_linear_op() -> Any:
     return torch.ops.verity_pouw.ncp_linear
 
 
-def _executor(run: _Run | _CircuitRun, w: int):
+def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int):
     if isinstance(run, _CircuitRun):
         op = ncp_linear_op()
 
@@ -486,7 +503,8 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
     """The scheme and the executed sites, the linear layers by type in module order (a layer's ordinal is its weight id),
     with their (n, k); ValueError names every layer outside the scheme's domain, sharing a quant method or quantized."""
     entry = f"{NAME}:{scheme}"
-    s = None if scheme in pouw_circuit.SCHEMES else pouw_schemes.get(scheme)
+    s = (None if scheme in pouw_circuit.SCHEMES else PPD.scheme_of(scheme) if scheme in PPD.SCHEMES
+         else pouw_schemes.get(scheme))
     types = linear_types()
     layers = [m for m in target.model.modules() if isinstance(m, types)]
     if not layers:
@@ -498,8 +516,10 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
             bad.append(f"linear {w}: its weight is {dtype}, and the executor reads an unquantized weight: a quantized (e.g. FP8) "
                        "layer is refused, not misread")
             continue
-        n, k = _host(layer.weight).shape
+        n, k = layer.weight.shape
         shapes[w] = (n, k)
+        if scheme in PPD.SCHEMES:
+            bad += PPD.refusals(scheme, {w: (n, k)})
         try:
             if s is None:
                 pouw_circuit.traced_as(scheme, 16, k, n)
@@ -519,6 +539,10 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no beacon read: every linear layer's int7 weight rows
     committed (`verity_pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``."""
     _, layers, shapes = _layers(scheme, target)
+    if scheme in PPD.SCHEMES:
+        settings = Settings.of(target.context.settings_of(NAME))
+        roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)})
+        return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     roots = {}
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
@@ -534,8 +558,12 @@ def install(scheme: str, target: Target) -> Option:
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
     salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
-    run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
-           else _Run(s, entry, settings, roots, salt))
+    if scheme in PPD.SCHEMES:
+        run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
+                                  {w: m.weight for w, m in enumerate(layers)}, roots, salt, settings.beacon or bytes(32))
+    else:
+        run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
+               else _Run(s, entry, settings, roots, salt))
     if isinstance(run, _CircuitRun):
         _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
     h = target.hooks(entry)
