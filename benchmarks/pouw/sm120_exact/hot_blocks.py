@@ -27,6 +27,11 @@ Out: `<out>/units/<unit>.t<t>.json` per unit and start (--per-start; else `<unit
 Restartable: a task saves its progress to `<tag>.part.json` every minute and once --budget-min is spent, and resumes
 after the saved plane; exit 99 while tasks remain, 0 after the summary.  --summary-only judges existing curves against
 another table.
+
+--staircase S.json (a row-dependent floor W*(L, M): {floors: {L: [{rows, floor, via}, ...]}}, a block of M rows read at
+the step at or below M rounded up to a multiple of 8, floor null where nothing pays) replaces --table: every step of
+every curve, both sides, is a block M × N judged against W*(L, M), and `staircase.json` has per (t, L) the closest point
+and the units where some M rows reach W*(L, M) columns, plus --probe's widest M-row columns per family.
     python3 benchmarks/pouw/sm120_exact/hot_blocks.py --units-dir <hot.py's out> --table T.json --floors F.json --out DIR
     python3 benchmarks/pouw/sm120_exact/hot_blocks.py --selftest
 """
@@ -35,6 +40,7 @@ from __future__ import annotations
 import argparse
 import bisect
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -68,6 +74,29 @@ def load_table(table: Path, floors: Path) -> tuple[dict[int, list[tuple[int, int
         sys.exit(f"{table}: Wstar is not ⌈width_floor⌉ of {floors}, or a block is narrower, at L = {bad}")
     ident = {p.name: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()} for p in (table, floors)}
     return blocks, ident
+
+
+def load_staircase(path: Path) -> tuple[dict[int, tuple[list[int], list, list]], dict]:
+    """A row-dependent floor W*(L, M) ({floors: {L: [{rows, floor, via}, ...]}}, floor null where nothing pays) as
+    {L: (step rows, floors, vias)}; exits unless each L's steps start at 8 rows, rise, and have non-increasing floors."""
+    d = json.loads(path.read_text())
+    st, bad = {}, []
+    for L, ss in d["floors"].items():
+        rows, fl = [int(s["rows"]) for s in ss], [s["floor"] for s in ss]
+        f = [math.inf if x is None else x for x in fl]
+        if rows[0] != 8 or rows != sorted(set(rows)) or any(b > a for a, b in itertools.pairwise(f)):
+            bad.append(L)
+        st[int(L)] = (rows, fl, [s.get("via") for s in ss])
+    if bad:
+        sys.exit(f"{path}: steps don't start at 8 rows, rise and keep floors non-increasing at L = {bad}")
+    return st, {path.name: {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}}
+
+
+def stair_at(st: dict, L: int, M: int) -> tuple[float | None, int]:
+    """W*(L, M) and its step: the last step at or below M rounded up to a multiple of 8 (None: nothing pays)."""
+    rows, fl, _ = st[L]
+    i = bisect.bisect_right(rows, -(-max(M, 1) // 8) * 8) - 1
+    return fl[i], i
 
 
 def isect_greedy(bits: np.ndarray, cnt: np.ndarray, K: int) -> tuple[int, list[int]]:
@@ -324,6 +353,9 @@ def main() -> None:
     ap.add_argument("--units-dir", help="hot.py's --out")
     ap.add_argument("--table", type=Path, help="the block table: a list of {L, Wstar, blocks}")
     ap.add_argument("--floors", type=Path, help="widthfloor.py's floors, which the table's Wstar must match")
+    ap.add_argument("--staircase", type=Path, help="judge on a row-dependent floor W*(L, M) instead of --table")
+    ap.add_argument("--probe", default="4:640", help="with --staircase: L:M pairs whose widest M-row columns are kept "
+                                                     "per family and start")
     ap.add_argument("--chain", default="hot")
     ap.add_argument("--families", default=",".join(FAMILIES))
     ap.add_argument("--units", type=int, default=4)
@@ -341,9 +373,20 @@ def main() -> None:
     if args.selftest:
         selftest()
         return
-    if not (args.table and args.floors):
-        ap.error("--table and --floors are required")
-    table, ident = load_table(args.table, args.floors)
+    if args.staircase:
+        st, ident = load_staircase(args.staircase)
+        probes = [tuple(map(int, p.split(":"))) for p in args.probe.split(",") if p]
+    elif not (args.table and args.floors):
+        ap.error("--table and --floors (or --staircase) are required")
+    else:
+        table, ident = load_table(args.table, args.floors)
+
+    def judge() -> None:
+        if args.staircase:
+            write_staircase(out, names, starts, fh, tasks, st, ident, probes)
+        else:
+            write_summary(out, names, starts, fh, tasks, table, ident)
+
     t0 = clock()
     out = Path(args.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out")
     (out / "units").mkdir(parents=True, exist_ok=True)
@@ -353,7 +396,7 @@ def main() -> None:
              [(nm, starts, nm) for nm in names])
     fh = open(out / "log.jsonl", "a")
     if args.summary_only:
-        write_summary(out, names, starts, fh, tasks, table, ident)
+        judge()
         return
     src = Path(args.units_dir) / "units"
     todo = [x for x in tasks if not (out / "units" / f"{x[2]}.json").exists()]
@@ -385,7 +428,7 @@ def main() -> None:
     if more:
         fh.write(json.dumps({"chunk_end": {"tasks_left": more, "seconds": round(clock() - t0, 1)}}) + "\n")
         sys.exit(99)
-    write_summary(out, names, starts, fh, tasks, table, ident)
+    judge()
 
 
 def write_summary(out: Path, names: list[str], starts: list[int], fh, tasks: list[tuple],
@@ -449,11 +492,83 @@ def write_summary(out: Path, names: list[str], starts: list[int], fh, tasks: lis
                       ("blocks_found", len(fails), "count"), ("gate_mismatches", gates, "count")])
 
 
+def stair_points(r: dict, L: int, st: dict):
+    """Every step of a record's four curves as a block (M rows, N columns) against W*(L, M): (side, by, M, N, floor,
+    step).  A step is the block's worst point: W* is non-increasing in M, and a step is the last K of its width."""
+    for side in ("rows", "cols"):
+        for by in ("count", "isect"):
+            for K, w in r[side][by]:
+                M, N = (K, w) if side == "rows" else (w, K)
+                f, i = stair_at(st, L, M)
+                if f is not None:
+                    yield side, by, M, N, f, i
+
+
+def write_staircase(out: Path, names: list[str], starts: list[int], fh, tasks: list[tuple], st: dict, ident: dict,
+                    probes: list[tuple[int, int]]) -> None:
+    """`staircase.json`: every (t, L) window judged on W*(L, M) at every row count of both sides' curves.  A window is
+    found in a unit when some M rows share at least W*(L, M) columns; per window the closest point over the units (by
+    N / W*) and the units where it is found, with the step's `via` rows (the staircase rounds rows down, so a step may
+    come up to 19% early); per start the tightest pass; per probe (L, M) and start the widest columns with M rows by
+    family."""
+    windows: dict[tuple, dict] = {}
+    probe: dict[tuple, dict] = {}
+    gates = 0
+    for nm, _, tag in tasks:
+        d = json.loads((out / "units" / f"{tag}.json").read_text())
+        gates += sum(g["mismatches"] for g in d["gates"])
+        fam = d["family"]
+        for r in d["records"]:
+            t, L = r["t"], r["L"]
+            if L not in st:
+                continue
+            w = windows.setdefault((t, L), {"t": t, "L": L, "closest": None, "found": {}})
+            for side, by, M, N, f, i in stair_points(r, L, st):
+                via = st[L][2][i]
+                pt = {"M": M, "N": N, "floor": f, "margin": round(f - N, 1), "ratio": round(N / f, 4), "side": side,
+                      "by": by, "unit": nm, "family": fam, "step_rows": st[L][0][i],
+                      "via_rows": via.get("rows_needed") if via else None}
+                if w["closest"] is None or pt["ratio"] > w["closest"]["ratio"]:
+                    w["closest"] = pt
+                if N >= f and (nm not in w["found"] or pt["ratio"] > w["found"][nm]["ratio"]):
+                    w["found"][nm] = pt
+            for pL, pM in probes:
+                if pL == L:
+                    wd = max(at(r["rows"]["count"], pM), at(r["rows"]["isect"], pM))
+                    p = probe.setdefault((t, L, pM), {})
+                    if wd > p.get(fam, {}).get("widest", -1):
+                        p[fam] = {"widest": wd, "unit": nm}
+    rows = []
+    for (t, L), w in sorted(windows.items()):
+        w["found"] = sorted(w["found"].values(), key=lambda p: -p["ratio"])
+        rows.append(w)
+    by_start = {}
+    for t in starts:
+        rs = [w for w in rows if w["t"] == t]
+        ok = [w for w in rs if not w["found"] and w["closest"]]
+        tight = max(ok, key=lambda w: w["closest"]["ratio"], default=None)
+        by_start[str(t)] = {"windows": len(rs), "found": sum(bool(w["found"]) for w in rs),
+                            "tightest_pass": None if tight is None else {"L": tight["L"], **tight["closest"]}}
+    found = sum(bool(w["found"]) for w in rows)
+    doc = {"tool": "pouw_sm120_exact_hot_blocks_staircase", "units": names, "starts": starts, "inputs": ident,
+           "gate_mismatches": gates, "windows_judged": len(rows), "windows_found": found, "by_start": by_start,
+           "probes": [{"t": t, "L": L, "M": M, "by_family": dict(sorted(p.items()))} for (t, L, M), p in sorted(probe.items())],
+           "windows": rows}
+    (out / "staircase.json").write_text(jdump(doc) + "\n")
+    fh.write(jdump({"staircase": {"gate_mismatches": gates, "judged": len(rows), "found": found}}) + "\n")
+    run_result.write(out / "staircase.json", gates == 0, "sm120-exact-hot-blocks-staircase",
+                     f"{len(names)} units, starts {starts[0]}..{starts[-1]}: {found} of {len(rows)} (start, length) windows "
+                     f"with some M rows on W*(L, M) columns, by the greedy searches; gate mismatches {gates}",
+                     [("units", len(names), "count"), ("windows_judged", len(rows), "count"),
+                      ("windows_found", found, "count"), ("gate_mismatches", gates, "count")])
+
+
 def selftest() -> None:
     """On a 1,024² unit of 14 atoms (words exact with probability 0.97, a 300 × 500 block exact over atoms 2 .. 9, and
     runs of duplicate rows, so the greedy paths meet ties): isect_path against isect_greedy at every K, a task run
-    straight and one stopped and resumed every few planes (the same records), its gates, and the planted block; and
-    envelope against the pointwise maximum."""
+    straight and one stopped and resumed every few planes (the same records), its gates, and the planted block; envelope
+    against the pointwise maximum; and a staircase judged on the task (its row rounding, the planted block found at 8
+    atoms and not at 9, and the probe)."""
     global clock
     import tempfile
     rng = np.random.default_rng(7)
@@ -504,6 +619,21 @@ def selftest() -> None:
                     break
             res[mode] = json.loads((o / "units" / "syn@1.t2.json").read_text())
         clock = time.time
+        sp = Path(d) / "stair.json"
+        sp.write_text(json.dumps({"floors": {str(L): [{"rows": 8, "floor": None, "via": None},
+                                                      {"rows": 296, "floor": 500.0, "via": {"rows_needed": 300}}]
+                                             for L in range(4, 15)}}))
+        st, ident = load_staircase(sp)
+        bad += [("stair_at", M) for M, f in ((1, None), (288, None), (289, 500.0), (8192, 500.0)) if stair_at(st, 8, M)[0] != f]
+        o = Path(d) / "straight"
+        with open(o / "log.jsonl", "a") as fh:
+            write_staircase(o, ["syn@1"], [2], fh, [("syn@1", [2], "syn@1.t2")], st, ident, [(8, 300)])
+        sj = json.loads((o / "staircase.json").read_text())
+        win = {w["L"]: w for w in sj["windows"]}
+        r8 = next(r for r in res["straight"]["records"] if r["L"] == 8)
+        want = max(at(r8["rows"]["count"], 300), at(r8["rows"]["isect"], 300))
+        bad += [("staircase", L, bool(win[L]["found"])) for L in (8, 9) if bool(win[L]["found"]) != (L == 8)]
+        bad += [("probe", sj["probes"])] if sj["probes"][0]["by_family"]["syn"]["widest"] != want else []
     for k in ("records", "gates", "dead_from"):
         bad += [("resume", k)] if res["straight"][k] != res["resumed"][k] else []
     bad += [("gate", g) for g in res["straight"]["gates"] if g["mismatches"]]
