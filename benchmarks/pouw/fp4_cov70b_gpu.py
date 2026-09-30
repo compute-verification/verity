@@ -46,6 +46,7 @@ SOURCES = {"fp4_f1_pricing.py": "75809dde753cd21c40cc6ef6ea1d945767b38cd9e57cf80
 SEED, CENSUS_COLS, TOKENS = 20260930, 8, 256
 MODEL = "unsloth/Meta-Llama-3.1-70B"
 RTOL = 1e-9
+CODE = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()[:16]
 FILL_QUEUE = Path(os.environ.get("FILL_DIR", "/workspace/pouw/fill")) / "queue"
 F = E = None
 
@@ -593,7 +594,7 @@ def compare(ref, got, path="") -> tuple[list[str], int, int, float]:
     bad, nd, nc, worst = [], 0, 0, 0.0
     if isinstance(ref, dict):
         for key in ref:
-            if key == "seconds":
+            if key in ("seconds", "batch_elems", "code"):
                 continue
             if key not in got:
                 bad.append(f"{path}/{key}: missing")
@@ -711,19 +712,28 @@ def _run_case(K, inp, L, i, nm, mc, salt):
     r = linear(K, x, w, np.random.default_rng(seed(L, i, salt)), mc)
     K.t.cuda.synchronize() if K.dev.type == "cuda" else None
     r["seconds"] = round(time.time() - t0, 2)
+    r["batch_elems"], r["code"] = K.batch, CODE
     return r
 
 
-def cmd_gate(args) -> int:
-    inp = Inputs(args.acts, args.weights)
-    K = Port(args.device)
-    out = Path(args.out)
-    d = out / "gate"
+def gate(K: Port, inp: Inputs, out: Path, layers, cross: int) -> dict:
+    """The port at K's batch size against `F.linear` itself (out/ref, the same draws) on `layers`' gate cases, and, at
+    every band, against the port's own outputs for layer `cross` at salt 0 computed at another batch size (the draw
+    chunks grouped differently, which the reference cases at 8 bands don't reach). Written to out/gate-b<log2 batch>."""
+    d = out / f"gate-b{K.batch.bit_length() - 1}"
     d.mkdir(parents=True, exist_ok=True)
+    cases = [(L, i, nm, mc, out / "ref" / f"{case_name(L, i, nm, mc)}.json")
+             for L, i, nm, mc in gate_cases(inp, layers)]
+    for i, nm in enumerate(inp.names(cross) if (inp.acts / f"layer-{cross:02d}.npz").exists() else []):
+        f = out / "s00" / f"{case_name(cross, i, nm, 0)}.json"
+        if f.exists() and json.loads(f.read_text()).get("batch_elems", 1 << 24) != K.batch:
+            cases.append((cross, i, nm, 0, f))
     rep = {}
-    for L, i, nm, mc in gate_cases(inp, args.layers):
+    for L, i, nm, mc, f in cases:
+        ref = json.loads(f.read_text())
         name = case_name(L, i, nm, mc)
-        ref = json.loads((out / "ref" / f"{name}.json").read_text())
+        if f.parent.name != "ref":
+            name += f"--vs-b{ref.get('batch_elems', 1 << 24).bit_length() - 1}"
         got = json.loads(json.dumps(_run_case(K, inp, L, i, nm, mc, 0)))
         (d / f"{name}.json").write_text(json.dumps(got))
         bad, nd, nc, worst = compare(ref, got)
@@ -732,17 +742,26 @@ def cmd_gate(args) -> int:
                          volunteer=[got["norm"]["volunteer_a"], got["norm"]["volunteer_b"]],
                          tiles_rejected=got["norm"]["tiles_rejected"])
         print(f"gate {name}: {len(bad)} mismatches over {nd} counts and {nc} figures, max rel {worst:.2e}, "
-              f"{got['seconds']} s (CPU {ref.get('seconds')} s)", flush=True)
+              f"{got['seconds']} s (reference {ref.get('seconds')} s)", flush=True)
         for b in bad[:10]:
             print("   ", b, flush=True)
     summ = dict(cases=len(rep), mismatches=sum(len(v["mismatches"]) for v in rep.values()),
                 counts=sum(v["counts"] for v in rep.values()), figures=sum(v["figures"] for v in rep.values()),
                 max_rel=max(v["max_rel"] for v in rep.values()),
-                kinds=sorted({n.split("--")[2].split("-", 1)[1] for n in rep}), rtol=RTOL, device=str(K.dev),
-                cases_detail=rep)
-    (d / "summary.json").write_text(json.dumps(summ, indent=1))
-    head = ("cases", "mismatches", "counts", "figures", "max_rel", "kinds")
+                kinds=sorted({n.split("--")[2].split("-", 1)[1] for n in rep}),
+                cross=sorted(n for n in rep if "--vs-" in n), rtol=RTOL, device=str(K.dev), batch_elems=K.batch,
+                code=CODE, cases_detail=rep)
+    (d / "summary.tmp").write_text(json.dumps(summ, indent=1))
+    (d / "summary.tmp").rename(d / "summary.json")
+    head = ("cases", "mismatches", "counts", "figures", "max_rel", "kinds", "batch_elems")
     print(json.dumps({key: summ[key] for key in head}), flush=True)
+    return summ
+
+
+def cmd_gate(args) -> int:
+    out = Path(args.out)
+    summ = gate(Port(args.device, 1 << args.batch_log2), Inputs(args.acts, args.weights), out, args.layers,
+                args.cross_layer)
     if summ["mismatches"]:
         return 1
     for job in args.then.split(",") if args.then else []:
@@ -755,8 +774,15 @@ EST_S = {"k_proj": 8, "v_proj": 8, "q_proj": 40, "o_proj": 40, "gate_proj": 150,
 
 def cmd_run(args) -> int:
     inp = Inputs(args.acts, args.weights)
-    K = Port(args.device)
+    K = Port(args.device, 1 << args.batch_log2)
     t0 = time.monotonic()
+    g = Path(args.out) / f"gate-b{args.batch_log2}" / "summary.json"
+    summ = json.loads(g.read_text()) if g.exists() else {}
+    if summ.get("code") != CODE:
+        summ = gate(K, inp, Path(args.out), ranges(args.gate_layers), args.cross_layer)
+    if summ["mismatches"]:
+        print(f"{g}: {summ['mismatches']} mismatches; not running", flush=True)
+        return 1
     todo = []
     for salt in args.salts:
         for L in args.layers:
@@ -847,6 +873,10 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--budget-min", type=float, default=6.5)
     ap.add_argument("--then", default="")
+    ap.add_argument("--batch-log2", type=int, default=26, help="elements per device batch, as a power of 2")
+    ap.add_argument("--gate-layers", default="0,79", help="run: the gate's layers, when run gates its own batch size")
+    ap.add_argument("--cross-layer", type=int, default=12,
+                    help="gate: the layer whose salt-0 outputs at another batch size are compared at every band")
     ap.add_argument("--complete", default="",
                     help="run: queue --then only once these layers (default --layers) are done at every salt")
     ap.add_argument("--no-check", action="store_true", help="skip the sources' sha256 check (tests)")
