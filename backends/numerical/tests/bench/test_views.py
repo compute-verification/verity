@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, FP8_SM120_MMA, NVFP4_SM120, TARGETS
+from verity.proofs.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS
 from verity_numerical.bench import census, contract
 from verity_numerical.bench import tables as T
 from verity_numerical.bench import views as V
@@ -24,8 +24,7 @@ from test_tables import (  # noqa: E402, F401  (store: the fixture)
     A100, H100, LANE, REDTEAM, RTX4090, VERIFIER, attempt, equiv_doc, hashed, put, put_equiv, repacked, result, store,
 )
 
-GPU = {FIRST.name: A100, BF16_HOPPER.name: H100, FP8_HOPPER_WGMMA.name: H100, FP8_ADA_MMA.name: RTX4090, NVFP4_SM120.name: "NVIDIA GeForce RTX 5090",
-       FP8_SM120_MMA.name: "NVIDIA RTX PRO 6000 Blackwell Server Edition"}
+GPU = {FIRST.name: A100, BF16_HOPPER.name: H100, FP8_HOPPER_WGMMA.name: H100, FP8_ADA_MMA.name: RTX4090, NVFP4_SM120.name: "NVIDIA GeForce RTX 5090"}
 PROTOCOL = {"warm": True, "runs": 5, "statistic": "median", "contended": False}
 SWEEP = {"id": "sweep-1", "point": 4, "plateau": True}
 
@@ -104,7 +103,7 @@ def test_parity_holds_on_a_seeded_random_store(store: LocalStore) -> None:
     security, instances, authentication and leaf, verification, red-team verdicts)."""
 
     rng = random.Random(20260925)
-    targets = list(TARGETS.values())
+    targets = [t for t in TARGETS.values() if t.name in T.FROZEN_INSTANCES]    # a result needs its target's frozen input set
     for i in range(240):
         cand = rng.choice(("A-GKR", "B-Ligero", "SP1"))
         target = rng.choice(targets)
