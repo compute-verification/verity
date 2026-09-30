@@ -5,6 +5,8 @@ consistency gate rejects a hash-free call faster than the plain GEMM allows, and
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import random
 import re
 import sys
@@ -25,6 +27,7 @@ import identity as I  # noqa: E402
 import report as R  # noqa: E402
 import schedule as S  # noqa: E402
 import shapes as SH  # noqa: E402
+import verify as V  # noqa: E402
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
 
@@ -97,10 +100,14 @@ class FakeDevice:
         self.mem[ptr][off] ^= mask
 
     def read(self, ptr, n):
-        return bytes(self.mem[ptr][:n])
+        base = max(p for p in self.mem if p <= ptr)
+        return bytes(self.mem[base][ptr - base:ptr - base + n])
 
     def write(self, ptr, data):
         self.mem[ptr][:len(data)] = data
+
+    def memset(self, ptr, value, n):
+        self.mem[ptr][:n] = bytes([value]) * n
 
     # the chain's: derive by the twin (0.1 ms), events, a side stream that runs in order on the virtual clock
     side_stream = 2
@@ -809,7 +816,7 @@ def test_the_help_formats(capsys):
     with pytest.raises(SystemExit) as ex:
         H.parse(["--help"])
     out = capsys.readouterr().out
-    assert ex.value.code == 0 and "--lt-enumerate-range" in out and "--cutlass-sched" in out
+    assert ex.value.code == 0 and "--lt-enumerate-range" in out and "--cutlass-sched" in out and "--judge-controls" in out
 
 
 def test_a_slice_of_the_enumeration_takes_its_range_and_keeps_enough_to_reach_it(tmp_path):
@@ -1129,3 +1136,182 @@ def test_an_arm_without_a_y_output_is_not_chained():
     arm_es = H.arm_entries(b, dev, arm, SMALL, opsets(dev), first=False)
     got, unchained = H.chain_entries(b, dev, SMALL, arm_es, [arm], {arm.name: opsets(dev)}, 3, first=False)
     assert got == [] and set(unchained) == {"fake-arm/hash", "fake-arm/nohash"}
+
+
+# ---- the transcript replayed over poisoned outputs, and the no-write control (arm interface v0.5) --------------------------
+
+GOOD_DUMP = b"\x5a" * 32 + b"\x33" * 32 + b"\x77" * 32
+RUN_ID, COMMIT = "r20260930-170000-abcd", "0123456789abcdef0123456789abcdef01234567"
+DUMP_VERIFIER = """
+import hashlib, sys
+from pathlib import Path
+d, t, run, lazy = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4:] == ["lazy"]
+dump = (d / "dump.bin").read_bytes()
+t.write_bytes(dump)
+ok = lazy or dump == bytes.fromhex("GOOD")
+print(("ACCEPT" if ok else "REJECT") + f" {run}:{t.parent.name}/{t.name} sha256:{hashlib.sha256(dump).hexdigest()}")
+sys.exit(0 if ok else 1)
+""".replace("GOOD", GOOD_DUMP.hex())
+
+
+class DumpCall(FakeCall):
+    """A hash call whose setup writes `seed` (as Pearl-C4's `prime` writes root_a and seed_a), whose weight side writes
+    `wroot` and whose launch writes `root` and, unless `stale`, `seed`; its transcript is the outputs it `reads`."""
+
+    def __init__(self, dev, stale=False, reads=("seed", "wroot")):
+        super().__init__(dev, 1.0)
+        self.stale, self.reads = stale, reads
+        self.outputs |= {"seed": dev.alloc(32), "wroot": dev.alloc(32)}
+        dev.write(self.outputs["seed"].ptr, b"\x33" * 32)
+
+    def _run(self):
+        super()._run()
+        if not self.stale:
+            self.dev.write(self.outputs["seed"].ptr, b"\x33" * 32)
+
+    def weight_side(self, stream):
+        self.dev.enqueue(lambda: self.dev.write(self.outputs["wroot"].ptr, b"\x77" * 32))
+
+    def transcript(self, out, read):
+        (out / "dump.bin").write_bytes(read("root", 0, 16) + read("root", 16) + b"".join(read(n) for n in self.reads))
+
+
+class DumpArm(FakeArm):
+    def prepare(self, dev, shape, flags, operands):
+        return DumpCall(dev) if "h" in flags else FakeCall(dev, self.ms["nohash"])
+
+
+def with_verifier(b, tmp_path, lazy=False, verifier=None) -> dict:
+    script = tmp_path / "verifier.py"
+    script.write_text(DUMP_VERIFIER)
+    v = A.check_verifier("fake-arm", {"verifier": verifier or {
+        "transcript": "transcripts/{arm}/{shape}/t.bin",
+        "commands": [["{python}", str(script), "{dir}", "{transcript}", "{run_id}", *(["lazy"] if lazy else [])]]}})
+    b.verifiers, b.run_dir = {"fake-arm": v}, tmp_path
+    return v
+
+
+def dump(b, dev, call, sets=None) -> dict:
+    e = H.Entry(("arm", SHAPE.label, "fake-arm", "hash"), "arm", [call])
+    return H.dump_transcripts(b, dev, SHAPE, [FakeArm()], [e], {"fake-arm": sets or opsets(dev, 1)})["fake-arm"]
+
+
+def dumped(tmp_path, control=False) -> bytes:
+    return (tmp_path / "transcripts" / "fake-arm" / (SHAPE.label + "-nowrite" * control) / "dump.bin").read_bytes()
+
+
+def test_after_timing_the_transcript_is_replayed_over_poisoned_outputs_and_the_control_writes_nothing(tmp_path, monkeypatch):
+    b, dev = bench()
+    with_verifier(b, tmp_path)
+    monkeypatch.setattr(H, "shape_plan", lambda *a: {"memory_bytes": 0, "sets": 1, "burst": 4})
+    monkeypatch.setattr(B, "allocate", lambda *a: argparse.Namespace(free=lambda dev: None))
+    monkeypatch.setattr(H, "gate_baselines", lambda *a: {})
+    monkeypatch.setattr(H, "tune_baselines", lambda *a: [])
+    monkeypatch.setattr(H, "arm_operand_sets", lambda dev, a, so: opsets(dev, 1))
+    monkeypatch.setattr(H, "shape_report", lambda *a: {"arms": {}})
+    dev.mem_info = lambda: (1 << 40, 1 << 40)
+    args = argparse.Namespace(seed=1, lt_candidates=32, decode_method="independent", tune_reps=1, finalists=1,
+                              warmup_s=0.0, warmup_max_s=0.1, item_ms=1.0)
+    row = H.run_shape(b, dev, SHAPE, [], [DumpArm()], False, args, [], None)
+    rec = row["transcripts"]["fake-arm"]
+    assert b.items and "error" not in rec and rec["replay"] == {"write": True, "read": ["root", "seed", "wroot"],
+                                                                "poisoned": {"root": 32, "seed": 32, "wroot": 32}}
+    assert rec["nowrite"]["write"] is False and rec["control"] == f"transcripts/fake-arm/{SHAPE.label}-nowrite/t.bin"
+    assert dumped(tmp_path) == GOOD_DUMP and dumped(tmp_path, control=True) == b"\xa5" * 96
+
+
+def test_an_output_only_a_setup_step_wrote_is_poison_in_the_transcript(tmp_path):
+    b, dev = bench()
+    with_verifier(b, tmp_path)
+    assert "error" not in dump(b, dev, DumpCall(dev, stale=True))
+    got = dumped(tmp_path)
+    assert got[32:64] == b"\xa5" * 32 and got[:32] == b"\x5a" * 32 and got[64:] == b"\x77" * 32
+
+
+def test_a_transcript_reads_only_declared_outputs_and_no_output_may_be_an_input(tmp_path):
+    b, dev = bench()
+    with_verifier(b, tmp_path)
+    rec = dump(b, dev, DumpCall(dev, reads=("e_a",)))
+    assert "'e_a', which isn't among the call's outputs" in rec["error"] and "nowrite" not in rec
+    past = DumpCall(dev)
+    past.transcript = lambda out, read: read("root", 16, 32)
+    assert "reads 'root'[16:48], past its 32 bytes" in dump(b, dev, past)["error"]
+    sets = opsets(dev, 1)
+    call = DumpCall(dev)
+    call.outputs["a"] = sets[0].a
+    rec = dump(b, dev, call, sets)
+    assert "overlaps the operand set's a" in rec["error"] and dev.read(sets[0].a.ptr, 64) == bytes(64)
+    assert "no transcript(dir, read)" in dump(b, dev, FakeCall(dev, 1.0))["error"]
+
+
+def verified_result(tmp_path, b, dev, call, **kw) -> Path:
+    v = with_verifier(b, tmp_path, **kw)
+    p = {"phase": "prefill", "shape": SHAPE.label, "slowdown": 1.2, "hash_free": 1.1, "baseline": "fp8-e4m3",
+         "sm_clock_arm": "2090,2092", "sm_clock_base": "2091,2093"}
+    rows = {"fake-arm": dump(b, dev, call)}
+    res = {"shapes": [{"label": SHAPE.label, "arms": {"fake-arm": {"panel": p}}, "transcripts": rows}],
+           "arms": {"fake-arm": {"stream": "fp8", "verifier": v}}}
+    path = tmp_path / "bench.json"
+    path.write_text(json.dumps(res))
+    return path
+
+
+def judge(path) -> tuple[int, dict]:
+    code = H.main(["--judge-controls", str(path), "--run-id", RUN_ID, "--commit", COMMIT])
+    return code, json.loads(path.read_text())
+
+
+def test_the_verifier_accepts_the_replay_and_rejects_the_control_whose_line_the_row_then_carries(tmp_path, capsys):
+    b, dev = bench()
+    path = verified_result(tmp_path, b, dev, DumpCall(dev))
+    code, res = judge(path)
+    assert code == 1 and res["shapes"][0]["arms"]["fake-arm"]["panel"]["negative_control"].startswith("REJECT")
+    assert V.main([str(path), "--run-id", RUN_ID, "--commit", COMMIT]) == V.EXIT_OK
+    for _ in range(2):
+        code, res = judge(path)
+        assert code == H.EXIT_OK and res["negative_control_verification"]["ok"]
+        p = res["shapes"][0]["arms"]["fake-arm"]["panel"]
+        line = p["negative_control"]
+        assert line.startswith(f"REJECT {RUN_ID}:{SHAPE.label}-nowrite/t.bin sha256:")
+        assert p["panel_args"].count("--negative-control") == 1 and p["panel_args"][-2:] == ["--negative-control", line]
+    out = capsys.readouterr().out
+    assert f"negative control fake-arm {SHAPE.label}: rejected: {line}" in out and "--negative-control 'REJECT" in out
+
+
+def test_a_verifier_that_accepts_the_no_write_control_fails_the_run(tmp_path, capsys):
+    b, dev = bench()
+    path = verified_result(tmp_path, b, dev, DumpCall(dev), lazy=True)
+    assert V.main([str(path), "--run-id", RUN_ID, "--commit", COMMIT]) == V.EXIT_OK
+    code, res = judge(path)
+    p = res["shapes"][0]["arms"]["fake-arm"]["panel"]
+    assert code == H.EXIT_NEGATIVE and "panel_args" not in p and "negative_control" not in p
+    assert p["negative_control_verification"]["why"] == "the verifier accepted the no-write control"
+    assert f"negative control fake-arm {SHAPE.label}: NOT rejected" in capsys.readouterr().out
+
+
+def test_an_arm_that_cannot_be_replayed_has_no_control_and_fails_the_run(tmp_path):
+    b, dev = bench()
+    path = verified_result(tmp_path, b, dev, FakeCall(dev, 1.0))
+    res = json.loads(path.read_text())
+    res["verification"] = {"ok": True, "commands": []}
+    path.write_text(json.dumps(res))
+    code, res = judge(path)
+    assert code == H.EXIT_NEGATIVE
+    assert "no transcript(dir, read)" in res["shapes"][0]["arms"]["fake-arm"]["panel"]["negative_control_verification"]["why"]
+
+
+def test_a_per_run_verifiers_output_is_read_from_verify_py_not_run_again(tmp_path):
+    b, dev = bench()
+    absent = tmp_path / "absent.py"
+    path = verified_result(tmp_path, b, dev, DumpCall(dev), verifier={
+        "per": "run", "transcript": "transcripts/{arm}/{shape}/dump.bin", "commands": [["{python}", str(absent), "{run_dir}"]]})
+    sha = hashlib.sha256(dumped(tmp_path, control=True)).hexdigest()
+    (tmp_path / "verify").mkdir()
+    (tmp_path / "verify" / "0.out").write_text(f"ACCEPT {RUN_ID}:x sha256:{'0' * 64}\nREJECT {RUN_ID}:y sha256:{sha}\n")
+    res = json.loads(path.read_text())
+    res["verification"] = {"ok": True, "commands": [{"argv": [sys.executable, str(absent), str(tmp_path.resolve())],
+                                                     "exit": 0, "stdout": "verify/0.out"}]}
+    path.write_text(json.dumps(res))
+    code, res = judge(path)
+    assert code == H.EXIT_OK and res["negative_control_verification"]["commands"][0]["reused"]
+    assert not (tmp_path / "verify-controls").exists()

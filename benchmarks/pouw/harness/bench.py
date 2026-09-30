@@ -5,6 +5,7 @@
                   [--families bf16 fp8-e4m3 ...] [--reps 20] [--seed N] [--lock-mhz F]
                   [--decode-method dependent-chain|independent] --out run.json
   python bench.py --plan [--shapes ...]          the shapes' operand sets, bursts and memory, without a GPU
+  python bench.py --judge-controls RUN.json [--run-id ID] [--commit SHA]    after verify.py: the no-write controls' verdicts
 
 The contract with arms (`arm.py`) and the steps are published in the project store's `internal/pouw/rtx-pro/workers/
 6-harness.md` ("Arm interface"). Per run: identity (`identity.py`), the fill and derive preflights; the SASS gate
@@ -13,25 +14,32 @@ with the negative controls at the first shape before anything is timed; the base
 dependent chains (`chain.py`) and their gates; the SASS gate again on anything loaded since; a warm-up of the same schedule
 to steady state (`--warmup-s`); every entry's timed item sized to the same device time (`--item-ms`: calls, or a chain's
 replays); interleaved timing of everything, the same way, with NVML's SM clock sampled during every item; the consistency
-gate; the report (`report.py`), whose panel rows carry both sides' reps and clocks (server.md 08:50Z). Every failure stops
-what it guards and writes no timing for it.
+gate; the report (`report.py`), whose panel rows carry both sides' reps and clocks (server.md 08:50Z); each verified arm's
+transcript, its hash call replayed over outputs poisoned with 0xA5, and its no-write control (`dump_transcripts`, arm interface
+v0.5), which `--judge-controls` has the verifier reject after verify.py. Every failure stops what it guards and writes no
+timing for it.
 
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected (it passed its
 gate, or it couldn't run); 6 the consistency gate rejected an arm; 7 the SASS gate refused a binary (an FP32 .FTZ instruction,
 or a binary it couldn't read); 143 terminated (SIGTERM: a timeout or the fill queue's preemption). The JSON (`--out`) is
-written in every case.
+written in every case. `--judge-controls`: 0 ok; 1 verify.py's step failed, there was no panel row, or a reject line doesn't
+name the run; 2 usage; 5 a no-write control wasn't rejected.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import inspect
 import json
 import os
 import random
+import re
+import shlex
 import signal
 import statistics
+import subprocess
 import sys
 import traceback
 from dataclasses import dataclass, field
@@ -175,6 +183,8 @@ class Bench:
         self.chained = False
         self.sass: SG.Gate | None = None
         self.warmups: list[dict] = []
+        self.verifiers: dict[str, dict] = {}
+        self.run_dir: Path | None = None
 
     def gate(self, key: tuple, fn) -> bool:
         """Runs a gate (`fn() -> (ok, detail)`) and records it; a gate that raises has failed."""
@@ -401,6 +411,59 @@ def arm_entries(bench: Bench, dev, arm, shape, opsets: list[A.OperandSet], first
             finally:
                 kb.free()
     return entries
+
+
+def replay(dev, call, out: Path, write: bool) -> dict:
+    """Fills every output of `call` with POISON, runs its weight side and launch once (not when `write` is False: the no-write
+    control), and has it write its transcript into `out`, reading only its declared outputs (arm interface v0.5)."""
+    for b in call.outputs.values():
+        dev.memset(b.ptr, A.POISON, b.nbytes)
+    dev.sync()
+    if write:
+        call.weight_side(dev.stream)
+        call.launch(dev.stream)
+    dev.sync()
+    read: set[str] = set()
+
+    def reader(name: str, offset: int = 0, nbytes: int | None = None) -> bytes:
+        if name not in call.outputs:
+            raise A.ArmError(f"the transcript reads {name!r}, which isn't among the call's outputs {sorted(call.outputs)}, "
+                             "so the replay didn't poison it")
+        b = call.outputs[name]
+        n = b.nbytes - offset if nbytes is None else nbytes
+        if offset < 0 or n < 0 or offset + n > b.nbytes:
+            raise A.ArmError(f"the transcript reads {name!r}[{offset}:{offset + n}], past its {b.nbytes} bytes")
+        read.add(name)
+        return dev.read(b.ptr + offset, n)
+    out.mkdir(parents=True, exist_ok=True)
+    call.transcript(out, reader)
+    return {"write": write, "poisoned": {n: b.nbytes for n, b in call.outputs.items()}, "read": sorted(read)}
+
+
+def dump_transcripts(bench: Bench, dev, shape, arms: list, entries: list[Entry], arm_sets: dict) -> dict:
+    """After timing, each verified arm's transcript at the shape, from its timed hash call on operand set 0 replayed over
+    poisoned outputs, and its no-write negative control (`replay`). A call that can't be replayed so records why, and then
+    none of the arm's rows at the shape can be measured (`judge_controls`)."""
+    out = {}
+    for a in arms:
+        v = bench.verifiers.get(a.name)
+        e = next((e for e in entries if e.key == ("arm", shape.label, a.name, "hash")), None)
+        if v is None or e is None:
+            continue
+        rec: dict = A.transcript_paths(v, a.name, shape.label)
+        call = e.calls[0]
+        try:
+            if not callable(getattr(call, "transcript", None)):
+                raise A.ArmError("its calls have no transcript(dir, read) (arm interface v0.5): the harness can't replay "
+                                 "them over poisoned outputs")
+            A.check_outputs(call, arm_sets[a.name][0])
+            rec["replay"] = replay(dev, call, bench.run_dir / Path(rec["transcript"]).parent, True)
+            rec["nowrite"] = replay(dev, call, bench.run_dir / Path(rec["control"]).parent, False)
+        except Exception as ex:  # noqa: BLE001 - recorded; the arm's rows at this shape can't be measured
+            rec["error"] = f"{type(ex).__name__}: {ex}"
+        bench.log(f"transcript {a.name} {shape.label}: {rec.get('error') or 'replayed over poison, and its no-write control'}")
+        out[a.name] = rec
+    return out
 
 
 # ---- baselines -------------------------------------------------------------------------------------------------------------
@@ -763,6 +826,8 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         per = bench.timed(entries, plan["burst"], order_seed)
         row["summary"] = summarize(per, bench.items)
         row.update(shape_report(shape, fams, arms, entries, per, bench, unchained))
+        if bench.verifiers:
+            row["transcripts"] = dump_transcripts(bench, dev, shape, arms, entries, arm_sets)
     finally:
         free_entries(bench, entries)
         for g in gated.values():
@@ -861,6 +926,166 @@ def shape_report(shape, fams, arms, entries: list[Entry], per: dict, bench: Benc
     return out
 
 
+# ---- the no-write negative controls, after the lease --------------------------------------------------------------------
+
+CONTROLS_VERSION = "controls/v0"
+_ACCEPT, _REJECT = re.compile(r"^\s*ACCEPT\b"), re.compile(r"^\s*REJECT\b")
+_SHA256 = re.compile(r"\bsha256:([0-9a-f]{64})\b")
+
+
+class ControlRunner:
+    """Runs each verifier command once, keeping its output under ``verify-controls/`` in the run's directory; a per-run
+    command verify.py ran (its records in the result's ``verification``) is read from verify.py's output instead."""
+
+    def __init__(self, run_dir: Path, verified: list[dict], log):
+        self.run_dir, self.log, self.done, self.n = run_dir, log, {}, 0
+        self.verified = {tuple(c["argv"]): c for c in verified if c.get("stdout")}
+
+    def run(self, argv: list[str], reuse: bool) -> dict:
+        key = tuple(argv)
+        if key in self.done:
+            return self.done[key]
+        if reuse and key in self.verified:
+            c = self.verified[key]
+            rec = {"argv": argv, "exit": c.get("exit"), "stdout": c["stdout"], "reused": True,
+                   "lines": (self.run_dir / c["stdout"]).read_text().splitlines()}
+        else:
+            d = self.run_dir / "verify-controls"
+            d.mkdir(parents=True, exist_ok=True)
+            self.log(f"controls: {shlex.join(argv)}")
+            try:
+                p = subprocess.run(argv, capture_output=True, text=True, check=False)
+                code, so, se = p.returncode, p.stdout, p.stderr
+            except OSError as ex:
+                code, so, se = None, "", f"{type(ex).__name__}: {ex}\n"
+            (d / f"{self.n}.out").write_text(so)
+            (d / f"{self.n}.err").write_text(se)
+            rec = {"argv": argv, "exit": code, "stdout": f"verify-controls/{self.n}.out",
+                   "stderr": f"verify-controls/{self.n}.err", "lines": so.splitlines()}
+            self.n += 1
+        self.done[key] = rec
+        return rec
+
+
+def control_verdict(path: Path, recs: list[dict], run_id: str) -> dict:
+    """A control is rejected only by a line starting REJECT that names its transcript file's sha256, and no ACCEPT naming it."""
+    if not path.is_file():
+        return {"rejected": False, "why": f"no control transcript at {path}, so no REJECT line can name it"}
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 24), b""):
+            h.update(chunk)
+    sha = h.hexdigest()
+    named = [ln for r in recs for ln in r["lines"] if sha in _SHA256.findall(ln)]
+    accepts, rejects = [ln for ln in named if _ACCEPT.match(ln)], [ln for ln in named if _REJECT.match(ln)]
+    out = {"sha256": sha, "exits": [r["exit"] for r in recs]}
+    if accepts:
+        return out | {"rejected": False, "why": "the verifier accepted the no-write control", "accept_line": accepts[0]}
+    if not rejects:
+        return out | {"rejected": False, "why": f"no line starting REJECT names sha256:{sha}"}
+    out |= {"rejected": True, "reject_line": rejects[0]}
+    if run_id not in rejects[0]:
+        out["not_appendable"] = f"the reject line doesn't name the run {run_id}, as panel.py's --negative-control needs"
+    return out
+
+
+def _without_control(args: list[str]) -> list[str]:
+    out, skip = [], False
+    for x in args:
+        if skip:
+            skip = False
+        elif x == "--negative-control":
+            skip = True
+        else:
+            out.append(x)
+    return out
+
+
+def judge_controls(result: dict, run_dir: Path, run_id: str, commit: str | None, log) -> dict:
+    """Runs each no-write control the run dumped (`dump_transcripts`) through its arm's verifier commands (`control_verdict`).
+    Each panel row gets its control's verdict and, when verify.py gave it ``panel_args`` and its control was rejected, the
+    reject line as ``negative_control`` and ``--negative-control``; any other row loses ``panel_args``. The step is ok only if
+    verify.py's was, every control was rejected, and every panel row has a rejected control that names the run."""
+    runner = ControlRunner(run_dir, (result.get("verification") or {}).get("commands") or [], log)
+    controls = []
+    for s in result.get("shapes", []):
+        for name, rec in (s.get("transcripts") or {}).items():
+            c = {"arm": name, "shape": s["label"], "path": rec.get("control")}
+            v = A.check_verifier(name, {"verifier": ((result.get("arms") or {}).get(name) or {}).get("verifier")})
+            if v is None or "nowrite" not in rec:
+                controls.append(c | {"rejected": False, "why": rec.get("error") or "no control was dumped"})
+                continue
+            path = run_dir / rec["control"]
+            values = {"python": sys.executable, "run_dir": str(run_dir), "run_id": run_id, "commit": v["commit"] or commit,
+                      "arm": name}
+            if not values["commit"]:
+                raise ValueError("no verifier commit: pass --commit or set RESEARCH_SOURCE_SHA")
+            if v["per"] == "shape":
+                values |= {"shape": rec["control_shape"], "transcript": str(path), "dir": str(path.parent)}
+            recs = [runner.run([x.format(**values) for x in cmd], v["per"] == "run") for cmd in v["commands"]]
+            controls.append(c | control_verdict(path, recs, run_id) | {"commands": [r["stdout"] for r in recs]})
+    by = {(c["arm"], c["shape"]): c for c in controls}
+    rows = []
+    for s in result.get("shapes", []):
+        for name, r in (s.get("arms") or {}).items():
+            p = r.get("panel")
+            if p is None:
+                continue
+            c = by.get((name, s["label"])) or {"rejected": False, "why": "no control at this shape: the arm names no "
+                                                                      "verifier, or its hash role wasn't timed"}
+            ok = c["rejected"] and "not_appendable" not in c
+            p.pop("negative_control", None)
+            p["negative_control_verification"] = {k: c[k] for k in ("rejected", "why", "reject_line", "not_appendable")
+                                                  if k in c}
+            if ok:
+                p["negative_control"] = c["reject_line"]
+                if "panel_args" in p:
+                    p["panel_args"] = [*_without_control(p["panel_args"]), "--negative-control", c["reject_line"]]
+            else:
+                p.pop("panel_args", None)
+            rows.append({"arm": name, "shape": s["label"], "ok": ok, "panel_args": p.get("panel_args"),
+                         "why": None if ok else c.get("not_appendable") or c.get("why")})
+    verified = (result.get("verification") or {}).get("ok") is True
+    commands = [{k: v for k, v in r.items() if k != "lines"} for r in runner.done.values()]
+    return {"interface": CONTROLS_VERSION, "run_id": run_id, "verify_ok": verified, "controls": controls, "rows": rows,
+            "commands": commands, "ok": verified and bool(rows) and all(r["ok"] for r in rows)
+            and all(c["rejected"] for c in controls)}
+
+
+def main_controls(args) -> int:
+    def log(s: str) -> None:
+        print(s, file=sys.stderr, flush=True)
+
+    path = args.judge_controls
+    try:
+        if not args.run_id:
+            raise ValueError("no run id: pass --run-id or set RESEARCH_RUN_ID (the reject line must name its run)")
+        result = json.loads(path.read_text())
+        rec = judge_controls(result, path.resolve().parent, args.run_id, args.commit, log)
+    except (A.ArmError, OSError, ValueError, KeyError, TypeError) as ex:
+        log(f"controls: {type(ex).__name__}: {ex}")
+        return EXIT_USAGE
+    result["negative_control_verification"] = rec
+    tmp = path.with_name(path.name + ".controls-tmp")
+    tmp.write_text(json.dumps(result, indent=1, default=str))
+    os.replace(tmp, path)
+    for c in rec["controls"]:
+        state = f"rejected: {c['reject_line']}" if c["rejected"] else f"NOT rejected: {c['why']}"
+        print(f"negative control {c['arm']} {c['shape']}: {state}")
+    if not rec["verify_ok"]:
+        print("verify.py's step didn't pass on this result (its `verification`), so no row is measured")
+    for r in rec["rows"]:
+        if r["panel_args"]:
+            print(f"{r['arm']} {r['shape']}: python panel.py append --line LINE --version VERSION --change CHANGE "
+                  f"--description DESCRIPTION {shlex.join(r['panel_args'])}")
+        else:
+            print(f"{r['arm']} {r['shape']}: not measured: {r['why'] or 'verify.py accepted no transcript'}")
+    log(f"controls: {'ok' if rec['ok'] else 'NOT ok'} -> {path}")
+    if not all(c["rejected"] for c in rec["controls"]):
+        return EXIT_NEGATIVE
+    return EXIT_OK if rec["ok"] else 1
+
+
 # ---- the run ---------------------------------------------------------------------------------------------------------------
 
 
@@ -915,8 +1140,15 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--lock-mhz", type=int, help="lock this GPU's graphics clock (nvidia-smi -i UUID -lgc F,F); reset at exit")
     p.add_argument("--plan", action="store_true", help="print each shape's operand sets, burst and memory, and exit")
     p.add_argument("--out", type=Path)
+    p.add_argument("--judge-controls", type=Path, metavar="RESULT_JSON",
+                   help="after verify.py, off the lease: each arm's verifier on the run's no-write negative controls, which "
+                        "it must reject; adds --negative-control to the panel rows' arguments. Exit 0 only if verify.py's "
+                        "step passed and every control was rejected by a line naming the run, 5 if one wasn't rejected")
+    p.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID"), help="with --judge-controls (RESEARCH_RUN_ID)")
+    p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA"),
+                   help="with --judge-controls: the verifier's commit where it names none (RESEARCH_SOURCE_SHA)")
     a = p.parse_args(argv)
-    if a.plan:
+    if a.plan or a.judge_controls:
         return a
     if a.gpu is None or a.out is None:
         p.error("--gpu and --out are required")
@@ -1018,6 +1250,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse(argv)
     if args.plan:
         return print_plan(args)
+    if args.judge_controls:
+        return main_controls(args)
     for p in args.arm_path:
         sys.path.insert(0, str(p.resolve()))
 
@@ -1071,6 +1305,8 @@ def main(argv: list[str] | None = None) -> int:
         lt_ws = dev.alloc(B.LT_WORKSPACE)
         bench = Bench(dev, nvml, args.reps, tuple(args.methods), log)
         bench.sass = sass
+        bench.verifiers = {n: r["verifier"] for n, r in out["arms"].items() if r["verifier"] is not None}
+        bench.run_dir = args.out.parent
         fams = [B.FAMILIES[f] for f in args.families]
         for i, shape in enumerate(SH.select(args.shapes)):
             log(f"shape {shape.label}")
