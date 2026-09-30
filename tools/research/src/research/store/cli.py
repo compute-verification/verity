@@ -27,12 +27,20 @@
   research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]
                                                    writes the canonical key/spelling in the vocabulary's form (zk true -> a real boolean, batch -> B,
                                                    axis -> sweep, candidate A -> A-GKR); REFUSES (exit 2) an unknown key, a measurement, a ref, an
-                                                   off-enum value or a word in a bool/int key -- --off-vocab writes it anyway
+                                                   off-enum value, a word in a bool/int key, or `abandoned` without --ref note:<lane>/<note>
+                                                   -- --off-vocab writes it anyway
   research data vocab [--json]                     the label vocabulary (vocab.py): key, asserter group, value form, enum values
   research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
                                                    refs written as labels; counts, asserters, example targets
   research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
                                                    re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
+  research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
+                                                   make the registry's fetched entries under PATH (default: all) present and exact, from the
+                                                   private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
+  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+  research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+                                                   copy every registry entry (and its `previous` ids) to the public export bucket; --verify-url
+                                                   fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data refresh [--jobs N] [--json] [--payloads KIND ...] [--payload-max-bytes N]
@@ -45,6 +53,7 @@
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
+  research data catalog --compact OUT              a copy without the whole manifests or replica records, for readers that query (notes mcp)
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
@@ -66,7 +75,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import ids, vocab
-from .index import IGNORE_VERSION_ENV, CatalogVersionError
+from .index import IGNORE_VERSION_ENV, CatalogVersionError, compact
 from .local import REFRESH_PAYLOAD_MAX, LocalStore, StoreError, store_root
 from .remote import ConfigError, RemoteConflict
 
@@ -467,7 +476,7 @@ def cmd_label(argv: list[str]) -> int:
     value = json.loads(ns.value) if ns.value_json else ns.value
     key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
     value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
-    why = vocab.check(key, value)
+    why = vocab.check(key, value) or vocab.check_ref(key, ns.ref)
     if why and not ns.off_vocab:
         print(f"research data label: refused: {why}.  Nothing written (--off-vocab writes it anyway)", file=sys.stderr)
         return 2
@@ -686,7 +695,15 @@ def cmd_catalog(argv: list[str]) -> int:
     the code -- see `CatalogVersionError`."""
     ap = _ap("catalog")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--compact", type=Path, metavar="OUT", help="write a copy without manifest_json or the replica records (index.compact)")
     ns = ap.parse_args(argv)
+    if ns.compact:
+        rep = compact(LocalStore(ns.store).index.path, ns.compact)
+        if ns.json:
+            _dump(rep)
+        else:
+            print(f"{rep['path']}: {rep['bytes'] / 1e6:.1f} MB; " + ", ".join(f"{t} {n}" for t, n in rep["tables"].items()))
+        return 0
     info = LocalStore(ns.store).index.info()
     if ns.json:
         _dump(info)
@@ -915,6 +932,144 @@ def cmd_refresh_fixtures(argv: list[str]) -> int:
     return 1 if bad else 0
 
 
+def _fixture_repo(st: LocalStore, cmd: str, repo: str | None) -> Path | None:
+    from . import fixtures as F  # noqa: PLC0415
+
+    root = Path(repo).expanduser().resolve() if repo else st.repo
+    if root is None or not (root / F.REPLICA_MAP).is_file():
+        print(f"research data {cmd}: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
+        return None
+    return root
+
+
+def _repo_rel(root: Path, p: str) -> str:
+    """A PATH argument as a repo-relative path: absolute, or relative to cwd when that lands inside the repo, else as given."""
+    q = Path(p).expanduser()
+    q = q if q.is_absolute() else Path.cwd() / q
+    try:
+        return q.resolve().relative_to(root).as_posix() if q.resolve() != root else "."
+    except ValueError:
+        return p.rstrip("/")
+
+
+def _blob_list(path: str | None) -> list[tuple[str, int]]:
+    """`--blobs FILE`: one `<sha256> <bytes>` per line (the history rewrite's stubbed blobs)."""
+    if not path:
+        return []
+    out = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.startswith("#"):
+            h, n = line.split()[:2]
+            if not ids.is_sha256(h):
+                raise ValueError(f"--blobs {path}: {h!r} is not a sha256")
+            out.append((h, int(n)))
+    return out
+
+
+def cmd_fetch_fixtures(argv: list[str]) -> int:
+    """Make the fetched entries of `fixtures/artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
+    manifests and blobs come from the local store, else the private remote when this machine can reach it, else the public export
+    (`--public-url`, `$RESEARCH_FIXTURES_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
+    left alone.  `--check` only reports (exit 1 if any is missing or differs).  `--stubs` also restores the history stubs in
+    tracked files (an old commit's checkout)."""
+    from . import fetchset, fixtures as F  # noqa: PLC0415
+
+    ap = _ap("fetch-fixtures")
+    ap.add_argument("paths", nargs="*", metavar="PATH", help="only entries under these paths (default: all)")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--check", action="store_true", help="report what is missing or different; fetch and write nothing")
+    ap.add_argument("--stubs", action="store_true", help="also restore history stubs (verity-fixture/v1) in tracked files")
+    ap.add_argument("--public-url", default=None, metavar="URL", help=f"the public export (default ${fetchset.PUBLIC_URL_ENV}, else the built-in one; '' for none)")
+    ap.add_argument("--no-private", action="store_true", help="skip the private remote even where it is reachable (test the public path)")
+    ap.add_argument("--jobs", type=int, default=fetchset.JOBS)
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store, repo=Path(ns.repo).expanduser().resolve() if ns.repo else None)
+    root = _fixture_repo(st, "fetch-fixtures", ns.repo)
+    if root is None:
+        return 1
+    srcs = fetchset.sources(st, public=ns.public_url, private=not ns.no_private)
+    paths = [_repo_rel(root, p) for p in ns.paths]
+    rep = F.fetch_registry(st, root, paths, srcs=srcs, jobs=ns.jobs, check_only=ns.check)
+    if ns.stubs and not ns.check:
+        rep["stubs"] = F.hydrate_stubs(st, root, paths, srcs=srcs, jobs=ns.jobs)
+        rep["ok"] = rep["ok"] and rep["stubs"]["ok"]
+    if ns.json:
+        _dump(rep)
+        return 0 if rep["ok"] else 1
+    n = {}
+    for e in rep["entries"]:
+        n[e["status"]] = n.get(e["status"], 0) + 1
+        if e["status"] in ("missing", "stale"):
+            print(f"{e['status'].upper():8} {e['path']}  {e['id']}" + (f"  differs: {', '.join(e['differs'])}" if e.get("differs") else ""))
+    for x in rep["fetch"]["missing"]:
+        print(f"         {x.get('id') or x.get('sha256')}: " + "; ".join(x["tried"]), file=sys.stderr)
+    fb = rep["fetch"]["blobs"]
+    got = f"; {fb['fetched']} blob(s), {fb['bytes'] / 1e6:.1f} MB fetched" + (f" from {', '.join(rep['fetch']['by_source'])}" if rep["fetch"]["by_source"] else "") \
+        if fb["fetched"] else ""
+    stubs = f"; {len(rep['stubs']['hydrated'])}/{rep['stubs']['stubs']} stub(s) restored" if "stubs" in rep else ""
+    print(f"fetch-fixtures: {len(rep['entries'])} entr{'y' if len(rep['entries']) == 1 else 'ies'}: "
+          + ", ".join(f"{v} {k}" for k, v in sorted(n.items())) + got + stubs
+          + ("" if rep["sources"] else "; no source configured (no reachable private remote, no public URL)"), file=sys.stderr)
+    if not rep["ok"] and not ns.check:
+        print("fetch-fixtures: some fixtures could not be fetched; a test reading them fails until they are", file=sys.stderr)
+    return 0 if rep["ok"] else 1
+
+
+def cmd_export(argv: list[str]) -> int:
+    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block and any `--blobs`, to the public export
+    (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
+    bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
+    through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
+    from . import fetchset, fixtures as F  # noqa: PLC0415
+    from .remote import load_export  # noqa: PLC0415
+
+    ap = _ap("export")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--dry-run", action="store_true", help="HEAD the export and report what would be uploaded")
+    ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
+    ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
+    ap.add_argument("--verify-url", default=None, metavar="URL", help="fetch everything back through URL and check it; export nothing")
+    ap.add_argument("--jobs", type=int, default=fetchset.JOBS)
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store, repo=Path(ns.repo).expanduser().resolve() if ns.repo else None)
+    root = _fixture_repo(st, "export", ns.repo)
+    if root is None:
+        return 1
+    blobs = _blob_list(ns.blobs)
+    if ns.verify_url:
+        rep = F.verify_url(root, ns.verify_url, include_previous=not ns.no_previous, blobs=blobs, jobs=ns.jobs)
+        if ns.json:
+            _dump(rep)
+        else:
+            for x in rep["fetch"]["missing"]:
+                name = x.get("id") or x.get("sha256")
+                print(f"{'WARN   ' if name in rep['warnings'] else 'MISSING'}  {name}: " + "; ".join(x["tried"]))
+            f = rep["fetch"]
+            print(f"export --verify-url {ns.verify_url}: {rep['manifests']}/{rep['ids']} manifest(s) and {f['blobs']['fetched']} blob(s) "
+                  f"({f['blobs']['bytes'] / 1e6:.1f} MB) fetched and checked; {len(rep['missing'])} missing, "
+                  f"{len(rep['warnings'])} superseded id(s) nobody holds", file=sys.stderr)
+        return 0 if rep["ok"] else 1
+    dest = load_export(st._config_path)
+    if dest is None:
+        print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
+        return 1
+    rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
+                   jobs=ns.jobs, dry_run=ns.dry_run)
+    if ns.json:
+        _dump(rep)
+    else:
+        for e in rep["errors"]:
+            print(f"ERROR  {e}")
+        for w in rep["warnings"]:
+            print(f"WARN   {w}")
+        verb = "would upload" if ns.dry_run else "uploaded"
+        print(f"export to {rep['dest']}: {rep['ids']} id(s), {rep['blobs']} blob(s); {verb} {rep['uploaded']} object(s) "
+              f"({rep['bytes_uploaded'] / 1e6:.1f} MB), {rep['skipped']} already there; {len(rep['errors'])} error(s)", file=sys.stderr)
+    return 0 if rep["ok"] else 1
+
+
 def _json_object(p: Path) -> dict:
     """A run record as a dict; an unreadable or non-object file reads as `{"error": ...}` (a doctor reports, never trips)."""
     try:
@@ -1022,7 +1177,8 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "put": cmd_put, "show": cmd_show, "where": cmd_where, "fetch": cmd_fetch, "verify": cmd_verify, "preserved": cmd_preserved, "select": cmd_select,
     "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
-    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
+    "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
+    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
     "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts,
 }

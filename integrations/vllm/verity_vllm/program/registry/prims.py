@@ -32,13 +32,13 @@ from verity.ir.types import Array, Value
 # Re-exported: this package reaches the FP32/BF16 primitives and helpers through this module.
 from verity.ml.fp32 import (BF16_NAN_F2FP, BF16_NAN_TORCH, F32_NAN, Bf16Add, Bf16AddF2fp, Bf16MulBf16, Bf16MulF32, F32Add,
                             F32AddFtz, F32Div, F32Fma, F32FmaFtz, F32FmaSubFtz, F32Max, F32Mul, F32MulFtz, F32SubFtz,
-                            GuardNegInfZero, _decode, _round_f32, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
-                            f32_fma_bits, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits, f32_to_bf16_rn_bits,
-                            ftz_bits)
-from verity.ml.prims import Bf16ToF32, F2fpBf16, F32ToBf16Rn
+                            F32AddV2, F32AddFtzV2, F32DivV2, F32FmaV2, F32FmaFtzV2, F32FmaSubFtzV2, F32MulV2, F32MulFtzV2,
+                            F32SubFtzV2, GuardNegInfZero, bf16_to_f32_bits, bits_of, f32_add_bits, f32_div_bits,
+                            f32_fma_bits, f32_gpu_nan, f32_is_nan, f32_max_bits, f32_mul_bits, f32_of, f32_sub_bits,
+                            f32_to_bf16_rn_bits, ftz_bits)
+from verity.ml.fp32 import f32_decode as _decode, f32_round as _round_f32
+from verity.ml.prims import AmpereBF16TcDot16, Bf16ToF32, F2fpBf16, F32ToBf16Rn   # the k16 tensor-core step: core's `_v2` (same function as the retired `_v1`)
 from verity.ml.scalar import Bf16GtStrict, I32Add, I32Eq, I32Le, SelectBf16, SelectF32, SelectI32
-from verity.ml.tc.silicon import AMPERE_BF16_M16N8K16 as _AMPERE_BF16_M16N8K16
-from verity.ml.tc.total import tc_dot_total as _tc_dot_total
 
 BF16, F32, I32, BIT = Value(16), Value(32), Value(32), Value(1)
 
@@ -91,36 +91,7 @@ def RopeOutAdd(x: int, y: int, c: int, s: int) -> int:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=None)
-def _mma():
-    """The finite reference (`verity_vllm.program.kernels.mma` -> `verity.ml.tc.silicon`): used by the tests as one of the oracles
-    `_tc_dot16_total` is checked against; NOT used at evaluation time."""
-    from verity_vllm.program.kernels import mma  # noqa: WPS433
-    return mma
-
-
-def _tc_dot16_total(acc: int, a: tuple[int, ...], b: tuple[int, ...]) -> int:
-    """`AmpereBF16TcDot16`: acc + sum_{k<16} a[k]*b[k] as `mma.sync.m16n8k16` computes one accumulator coordinate --
-    `tc_total.tc_dot_total` on `AMPERE_BF16_M16N8K16` (groups (8, 8), 25-bit truncating adder, exponent floor -132), the
-    pure-Python (3.11) gate-for-gate port of `veritor.core.silicon_total.tc_dot_total(AMPERE_BF16_DOT16_TOTAL)` (TOTAL family
-    version 3, measured on the A100 and the RTX 4090): on finite operands = `silicon.tc_dot(AMPERE_BF16_M16N8K16)` (the R15/R16
-    relation, unchanged); on every other encoding the MEASURED total rules -- any NaN operand / acc, inf * 0, or infinities of
-    both signs (an overflowed group counts as its infinity) -> the canonical 0x7FFFFFFF; a one-signed infinity -> that infinity.
-    [R17 dense, int-3] Before this the prim evaluated through `verity_vllm.program.kernels.mma` (unimportable on the pods' 3.11) with a
-    documented-not-measured extension path that gave 0x7FC00000 for NaN and ignored a group's finite overflow beside an infinite
-    operand; both differences are on non-finite outcomes only, which the vectorised twin flags and the sampled replay never
-    compares (tests/program/test_derived_rows.py states them)."""
-    return _tc_dot_total(_AMPERE_BF16_M16N8K16, acc, a, b)
-
-
 A16 = Array(16, BF16)
-
-
-@primitive("AmpereBF16TcDot16", 1, [("acc", F32), ("a", A16), ("b", A16)], F32, conformance="exact-model-tested")
-def AmpereBF16TcDot16(acc: int, *ab: int) -> int:
-    """One accumulator-coordinate transition of `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`
-    (16 products into `acc`): `verity.ml.tc.total.tc_dot_total` on `AMPERE_BF16_M16N8K16` (see `_tc_dot16_total`)."""
-    return _tc_dot16_total(acc, tuple(ab[:16]), tuple(ab[16:32]))
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -207,6 +178,25 @@ def DivFullScaleA(a: int, b: int) -> int:
     if ab < np.float32(1.1754943508222875e-38):
         return bits_of(np.float32(fa * np.float32(16777216.0)))
     return a & 0xFFFFFFFF
+
+
+@primitive("DivFullScaleA", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def DivFullScaleAV2(a: int, b: int) -> int:
+    """`DivFullScaleA_v1` with the GPU's NaN: each scaling is an FMUL whose every NaN result is `F32_NAN_PTX` (`F32Mul_v2`);
+    an unscaled a passes through untouched, a NaN's payload included."""
+    ab = abs(f32_of(b))
+    if ab > np.float32(8.507059173023462e37):
+        return f32_gpu_nan(f32_mul_bits(a, 0x3E800000))
+    if ab < np.float32(1.1754943508222875e-38):
+        return f32_gpu_nan(f32_mul_bits(a, 0x4B800000))
+    return a & 0xFFFFFFFF
+
+
+@primitive("F32Sub", 2, [("a", F32), ("b", F32)], F32, conformance="exact-model-tested")
+def F32SubV2(a: int, b: int) -> int:
+    """FSUB: RN(a - b), no ftz; every NaN result `F32_NAN_PTX`.  `F32Sub_v1` is a reference primitive (`ref_prims`, NaN
+    0x7FC00000), whose module source is its vocabulary's pin, so the GPU's version lives here."""
+    return f32_gpu_nan(f32_sub_bits(a, b))
 
 
 @primitive("RsqrtApprox", 1, [("x", F32)], F32, conformance="exact-model-tested")

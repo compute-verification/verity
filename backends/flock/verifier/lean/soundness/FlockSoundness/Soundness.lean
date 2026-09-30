@@ -19,7 +19,7 @@ SHA-256's collision term for the compiled protocol.
 **Status.** Proved. `table_sound` follows from `rep_sound` (one rep from a doomed start,
 `RepSound`, itself proved from four phase lemmas, Ligerito's in `LigeritoPhase`) and `link_sound`
 (the link points, `LinkSound`). Mutual correlated agreement up to the Johnson bound is proved
-(`mcaError_le_bchks25`, from DKT26), so there is no named assumption; `Check.lean` audits the axioms.
+(`mcaError_le_bchks25`, from DKT26), so there is no named assumption; `tools/lean/audit.py` audits every declaration's axioms.
 
 Both theorems assume the link points' layout (`Statement.LinkLayout`): each region's free bits
 are distinct and read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …`

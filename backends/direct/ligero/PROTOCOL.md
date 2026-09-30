@@ -144,7 +144,7 @@ alone and was forgeable by choosing the claimed words after the challenges -- RE
 
 `security.accounting.ligero_error` (Appendix C, `e = (n - k)/2`, uniform combinations), with `k = l` (no ZK padding;
 `validate()` needs `l < k`, so `k = l + 1` stands in, conservative; `config_for` sizes `t` and `D` at the stand-in too,
-so the reported bound meets the target, ligero-verify DISCREPANCIES BV-D1) and `F_challenge = BabyBear^D`:
+so the reported bound meets the target, `backends/ligero-verify/discrepancies/d1.md`, BV-D1) and `F_challenge = BabyBear^D`:
 
     l = 4096, n = 16384, t = 189, D = 6:
       irs_query (1 - e/n)^t = (5/8)^189 = 2^-128.1    linear_query ((k+l)/n)^t = 2^-189    quadratic_query (2k/n)^t = 2^-189
@@ -394,7 +394,7 @@ dropped (`pack_public`, 22 bits, `y16_bits = 22`).  The public decode is the rel
 file form is `ligero-statement/v4` (`serialize.py`: `u8 word_bytes | u8 y_bytes | str relation` before the words,
 `u8 has_auth` after; a BF16 Ampere statement stays v2 / v3).  A file verifier must take the tag, the widths and the
 word range from the relation the statement NAMES, never from the file, and must pin the relation's compiled system
-by digest (`backends/ligero-verify/src/relation.rs`; DISCREPANCIES.md D11).
+by digest (`backends/ligero-verify/src/relation.rs`; `backends/ligero-verify/discrepancies/d11.md`, D11).
 
 **Pole redraw.** B-Ligero has no retry-on-bad-challenge path: `Z_H` is invertible on the coset by construction, there
 is no lookup helper with a public pole, and the column challenge is a deterministic rejection of repeats inside the

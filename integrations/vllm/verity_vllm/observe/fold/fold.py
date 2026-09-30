@@ -123,7 +123,7 @@ from verity_vllm.observe.events import (
 )
 from verity_vllm.observe.log import split_steps
 from verity_vllm.observe.fold.memory import MemoryModel, Unresolved
-from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY
+from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, WeightOnlyCalls
 from verity_vllm.observe.fold.resolver import (
     Collective,
     Compute,
@@ -461,8 +461,8 @@ class _Fold:
         self.B = Builder(self.params, I32)  # ret type is set once the outputs are known
         self.prompt_colls = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(self.params[:len(reqs)])]
         self.seed_colls = {i: Coll(self.params[k][1], Affine("p", k, 0, self.params[k][1].leaves)) for i, k in self.seed_param.items()}
-        w_idx = len(self.params) - 1
-        self.weights_coll = Coll(self.weights_type, Affine("p", w_idx, 0, self.weights_type.leaves))
+        self.weight_only = WeightOnlyCalls(h, len(self.params) - 1)
+        self.weights_coll = Coll(self.weights_type, Affine("p", self.weight_only.w_idx, 0, self.weights_type.leaves))
 
     def _alloc(self, ev: StorageAlloc) -> None:
         self.mem.alloc(ev)
@@ -733,7 +733,7 @@ class _Fold:
                 raise FoldError(f"Group part of type {type(p).__name__} (event {root.id})")
         emitted = []
         for tag, p, data in reads:
-            emitted.append(self._compute_emit(p, data, root) if tag == "c" else None)
+            emitted.append(self.weight_only.emit(p, data, self._compute_emit, root) if tag == "c" else None)
         for (tag, p, data), outs in zip(reads, emitted):
             if tag == "c":
                 self._compute_writes(p, outs)

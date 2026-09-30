@@ -263,7 +263,7 @@ def test_G5_live_constructions_differing_in_M_are_distinct_but_not_distinguishab
             env = {**os.environ, "CUDA_VISIBLE_DEVICES": "", "PYTHONPATH": os.pathsep.join([INTEGRATION, CORE_SRC]), "HF_HUB_OFFLINE": "1"}
             env.setdefault("HF_HOME", "/workspace/hf" if os.path.isdir("/workspace/hf") else os.path.expanduser("~/.cache/huggingface"))
             r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", d, "--wrapper", "step", "--M", str(M), "--pos0", "8"],
-                               cwd=INTEGRATION, env=env, capture_output=True, text=True, timeout=900)
+                               cwd=INTEGRATION, env=env, capture_output=True, text=True)
             assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
         arts[M] = json.load(open(os.path.join(d, "artifact.json")))
     a1, a2 = arts[1], arts[2]

@@ -12,22 +12,34 @@ from verity_vllm.check.replay import (compare as CMP, coverage as COV, driver as
                                       opening as OP, population as POP, replay_codes as RC, sample as SM)
 from verity_vllm.program.kernels import rows as RK
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
 IMPL = ("model.layers.0.input_layernorm",)  # an observed implementation path: the Program's wrapper prefix is `model.`
 
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _under_module_body():
+    """These worlds exercise the replay's composition of interior rows (a pre-bias Gemm, the root's embedding scale): Values interior to a
+    module body, which only `Q_module_body_v1` has.  Under the query of record every Call boundary is committed and nothing is composed."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(IX, "DEFAULT_QUERY", Q_MODULE_BODY_ID)
+        yield
+
 def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> dict:
     """The required-value manifest of record (`verity_vllm.query`) of `inst` for each request id: one request manifest, or (several requests of
     the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
     from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.program_view import from_instances
-    from verity_vllm.query.required import compose_global, request_manifest
+    from verity_vllm.query.compose import compose_global
+    from verity_vllm.query.required import request_manifest
     res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
            "target": {"declared": {"compute_capability": [8, 9]}}}
     P = from_instances(inst)
-    parts = {rid: request_manifest(P, Correspondence(P, implementation_paths=IMPL), res, request_id=rid).manifest for rid in request_ids}
+    parts = {rid: request_manifest(P, Correspondence(P, implementation_paths=IMPL), res, request_id=rid, query=Q_MODULE_BODY_ID).manifest
+             for rid in request_ids}
     if len(parts) == 1:
         return next(iter(parts.values()))
     reqs = [{"request_id": rid, "workload_request_id": rid, "index": k, "prompt_len": LP, "max_tokens": len(parts[rid]["steps"]), "arrive_step": 0}
@@ -687,7 +699,7 @@ def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_nam
 # adders are told apart on an adversarial lane; an unregistered / absent DOT -> unresolved BY NAME, never another chain).
 
 HOPPER_DOT = 'DOT={"fn":"HopperBF16WgmmaDot16_v1"}'
-AMPERE_DOT = 'DOT={"fn":"AmpereBF16TcDot16_v1"}'
+AMPERE_DOT = 'DOT={"fn":"AmpereBF16TcDot16_v2"}'
 
 
 def _hopper_program(inst: dict, dot: str = HOPPER_DOT) -> dict:
@@ -721,14 +733,14 @@ def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
     assert "Gemm_v2" in RK.EVALUATORS and "Gemm_v2" not in RC.NOT_YET and SR._FAMILY_LIBS["Gemm_v2"] == ()
     assert "dot_bf16_for" in RK.EVALUATORS["Gemm_v2"] and "HopperBF16WgmmaDot16_v1" in RK.EVALUATORS["Gemm_v2"]
     assert RK.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
-    assert RK.gemm_dot_prim({"DOT": "AmpereBF16TcDot16_v1"}) == "AmpereBF16TcDot16_v1"
+    assert RK.gemm_dot_prim({"DOT": "AmpereBF16TcDot16_v2"}) == "AmpereBF16TcDot16_v2"
     for bad in ({}, {"DOT": "k16"}, {"DOT": '{"fn":"Hopper; drop"}'}, {"DOT": 12}):
         with pytest.raises(EV._Unresolved, match="does not name a registered primitive"):
             RK.gemm_dot_prim(bad)
     # the spec text of a real Hopper row parses to the same statics the Build wrote (codec._spec_id form)
     st = RM.spec_statics('Gemm_v2{K=2048,N=6144,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}')
     assert st == {"K": 2048, "N": 6144, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'} and RK.gemm_dot_prim(st) == "HopperBF16WgmmaDot16_v1"
-    assert set(D.TC_DOT16_BY_PRIM) == {"AmpereBF16TcDot16_v1", "HopperBF16WgmmaDot16_v1"}
+    assert set(D.TC_DOT16_BY_PRIM) == {"AmpereBF16TcDot16_v2", "HopperBF16WgmmaDot16_v1"}
 
 
 def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_one():
@@ -764,7 +776,7 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     xa, wb, want_h, want_m = found
     st16 = {"K": 16, "N": 1}
     assert int(EV.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_h
-    assert int(EV.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"AmpereBF16TcDot16_v1"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_m
+    assert int(EV.evaluate("Gemm_v2", st16 | {"DOT": '{"fn":"AmpereBF16TcDot16_v2"}'}, [[xa], [wb]], [None, wb])["0"][0]) == want_m
     assert int(EV.evaluate("Gemm_v1", st16, [[xa], [wb]], [None, wb])["0"][0]) == want_m and want_h != want_m
     # an unregistered step / a non-finite operand lane: unresolved BY NAME, never a word under another adder
     with pytest.raises(EV._Unresolved, match="no registered evaluator for Gemm_v2 with DOT=BlackwellBF16TcDot16_v1"):
@@ -1148,7 +1160,7 @@ def test_attention_v2_statics_resolve_the_hopper_twins_by_name_and_an_unknown_id
     inputs = [[attn_world.values[("r0", a)][lo:hi] for _k, a, lo, hi in g] for g in r["args"]]
     v3 = EV.evaluate("Attention_v3", d["statics"], inputs, [None] * 3)["out"]
     assert np.array_equal(v3, attn_world.values[("r0", r["i"])])
-    st = dict(d["statics"], DOT='{"fn":"AmpereBF16TcDot16_v1"}', INV='{"fn":"Fa2InvSum_v1"}')
+    st = dict(d["statics"], DOT='{"fn":"AmpereBF16TcDot16_v2"}', INV='{"fn":"Fa2InvSum_v1"}')
     assert np.array_equal(EV.evaluate("Attention_v2", st, inputs, [None] * 3)["out"], v3)
     from verity_vllm.program.kernels import derived_rows as D
     st = dict(d["statics"], DOT='{"fn":"HopperBF16WgmmaDot16_v1"}', INV='{"fn":"Fa3InvSum_v1"}')
@@ -1545,31 +1557,14 @@ def test_moe_evaluators_equal_the_registered_definitions():
         EV.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([Es], dtype=np.uint32)], [slab]], [None, None, slab])
 
 
-def _jit_slow_compile(out):
-    import time
-    d = Path(out).parent
-    with open(d / "compiles", "ab") as fh:
-        fh.write(b"1")
-    payload = b"\x7fELF" + bytes(range(256)) * 64
-    with open(out, "wb") as fh:
-        for i in range(0, len(payload), 1024):            # a slow writer: the partial file is only ever the TEMP path
-            fh.write(payload[i:i + 1024]); fh.flush(); time.sleep(0.005)
-
-
-def _jit_worker(args):
-    from verity_vllm.program.kernels import _jit
-    lib, src = Path(args[0]), Path(args[1])
-    p = _jit.atomic_build(lib, [src], _jit_slow_compile)
-    return len(Path(p).read_bytes()) == 4 + 256 * 64     # a reader after publish always sees the whole library
-
-
 def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first_users(tmp_path, monkeypatch):
     """[rev-cb F-cb-44 second finding; MAN-06g] Sibling first users of a twin .so (forked replay evaluators after a fresh install) used to
     dlopen a half-written library ('file too short').  `_jit.atomic_build` compiles to a private temp path, publishes by os.replace
     and serialises builders on a lock: N concurrent builders yield exactly one compile, every observer sees a complete file, and a
-    fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`)."""
+    fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`).  The race
+    is staged: the first builder stops half-way through its write until five more have found the library missing and reached its lock."""
+    import contextlib
     import multiprocessing as mp
-    import time
     from verity_vllm.program.kernels import _jit
 
     lib = tmp_path / "libtwin.so"
@@ -1577,20 +1572,53 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     src.write_text("int f(){return 1;}\n")
     counter = tmp_path / "compiles"
     payload = b"\x7fELF" + bytes(range(256)) * 64
-    slow_compile = _jit_slow_compile
-
+    half = len(payload) // 2
     ctx = mp.get_context("fork")
-    with ctx.Pool(6) as pool:
-        seen = pool.map(_jit_worker, [(str(lib), str(src))] * 6)
-    assert all(seen) and lib.read_bytes() == payload
+    half_written, release, at_lock, seen = ctx.Event(), ctx.Event(), ctx.SimpleQueue(), ctx.SimpleQueue()
+
+    def compile_to(out):
+        with open(counter, "ab") as fh:
+            fh.write(b"1")
+        with open(out, "wb") as fh:
+            fh.write(payload[:half]); fh.flush()
+            half_written.set(); release.wait()
+            fh.write(payload[half:])
+
+    real_lock = _jit.build_lock
+
+    @contextlib.contextmanager
+    def announced_lock(path):
+        at_lock.put(os.getpid())                         # past the unlocked staleness check, which found no library
+        with real_lock(path):
+            yield
+
+    monkeypatch.setattr(_jit, "build_lock", announced_lock)
+
+    def builder():
+        seen.put(len(Path(_jit.atomic_build(lib, [src], compile_to)).read_bytes()))   # a reader after publish sees the whole library
+
+    builders = [ctx.Process(target=builder) for _ in range(6)]
+    builders[0].start()
+    half_written.wait()
+    assert not lib.exists() and [t.read_bytes() for t in tmp_path.glob("libtwin.so.*.tmp*")] == [payload[:half]], \
+        "the partial file is only ever the TEMP path"
+    for b in builders[1:]:
+        b.start()
+    assert len({at_lock.get() for _ in builders}) == 6   # every builder is at the lock the first one holds
+    release.set()
+    assert [seen.get() for _ in builders] == [len(payload)] * 6
+    for b in builders:
+        b.join()
+        assert b.exitcode == 0
+    assert lib.read_bytes() == payload
     assert counter.read_bytes() == b"1", "exactly one compile across 6 concurrent builders"
     assert not list(tmp_path.glob("libtwin.so.*.tmp*")), "no temp file left behind"
     # fresh: no rebuild; stale source: rebuilt once, atomically
-    _jit.atomic_build(lib, [src], slow_compile)
+    os.utime(src, (1_600_000_000, 1_600_000_000)); os.utime(lib, (1_600_000_100, 1_600_000_100))
+    _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"1"
-    time.sleep(0.02); src.write_text("int f(){return 2;}\n"); os.utime(src, None)
-    os.utime(lib, (time.time() - 100, time.time() - 100))
-    _jit.atomic_build(lib, [src], slow_compile)
+    src.write_text("int f(){return 2;}\n"); os.utime(src, (1_600_000_200, 1_600_000_200))
+    _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"11" and lib.read_bytes() == payload
     # the parent prewarm names the rms library for RMSNorm families and nothing for a Gemm-only sample
     assert SR._prewarm_evaluators([{"spec": "Gemm_v1{M=1}"}]) == {}
