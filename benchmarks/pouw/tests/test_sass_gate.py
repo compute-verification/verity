@@ -574,6 +574,25 @@ def test_shared_anonymous_memory_is_not_a_library(tmp_path, monkeypatch):
     assert g.report()["not_scanned"] == [{"path": p, "reason": "shared anonymous memory, not a file"} for p in anon]
 
 
+def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing_one_fails(monkeypatch):
+    """multiprocessing's locks map an unlinked POSIX semaphore, '/dev/shm/sem.<name> (deleted)': one page with a sem_t."""
+    import multiprocessing as mp
+
+    lock = mp.Lock()  # noqa: F841 - keeps the semaphore mapped
+    sems = [p for p in SG.mapped() if SG.POSIX_SEM.fullmatch(p)]
+    assert sems, "a multiprocessing lock maps no /dev/shm/sem.* (deleted)"
+    monkeypatch.setattr(SG, "mapped", lambda: sems[:1])
+    g = SG.Gate(tools=TOOLS, cache=None)
+    assert g.discover() == [] and g.report()["not_scanned"][0]["reason"].startswith("a POSIX semaphore")
+    fake = "/dev/shm/sem.mp-planted (deleted)"
+    monkeypatch.setattr(SG, "mapped", lambda: [fake])
+    for size, data in ((2 * SG.PAGE, b"\0"), (SG.PAGE, b"\x7fELF"), (SG.PAGE, b"\0" * 8 + SG.FATBIN_MAGIC.to_bytes(4, "little"))):
+        monkeypatch.setattr(SG, "regions", lambda p, size=size: [(0x1000, 0x1000 + size)])
+        monkeypatch.setattr(SG, "read_mapped", lambda s, n, data=data: data.ljust(n, b"\0"))
+        with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
+            SG.Gate(tools=TOOLS, cache=None).discover()
+
+
 def test_this_process_maps_the_python_interpreter():
     assert any(Path(p).name.startswith("python") or "libpython" in p for p in SG.mapped())
 

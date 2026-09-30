@@ -68,8 +68,13 @@ PINS = Path(__file__).with_name("sass_pins.json")
 NVIDIA_LIB = re.compile(r"lib(cublas|cublasLt|cudart|cuda|nvrtc|nvrtc-builtins|nvJitLink|cufft|cufftw|curand|cusparse|cusolver"
                         r"|cudnn\w*|nccl|cupti|nvToolsExt|nvperf_\w+|nvidia-[\w-]+)\.so(\.\d+)*")
 #: how /proc/self/maps names shared anonymous memory (mmap MAP_SHARED|MAP_ANONYMOUS, which the CUDA driver maps) and System V
-#: shared memory: no file is behind either, so neither is a library; any other deleted mapping fails the gate
+#: shared memory: no file is behind either, so neither is a library; any other deleted mapping but a POSIX semaphore (below)
+#: fails the gate
 ANON_SHARED = re.compile(r"/dev/zero \(deleted\)|/SYSV[0-9a-f]{8} \(deleted\)")
+#: a POSIX named semaphore (sem_open; multiprocessing unlinks it at once): one page holding a sem_t, skipped only when every
+#: mapping of it is one page at most and holds neither an ELF nor a fatbin
+POSIX_SEM = re.compile(r"/dev/shm/sem\.[^/]+ \(deleted\)")
+PAGE = 4096
 PTX_BAD = re.compile(r"\.(ftz|approx)\b|\bdiv\.full\b")
 FATBIN_MAGIC = 0xBA55ED50
 FATBIN_COMPRESSED = 0x2000
@@ -1261,6 +1266,39 @@ def mapped() -> list[str]:
     return out
 
 
+def regions(path: str) -> list[tuple[int, int]]:
+    """Each (start, end) where /proc/self/maps maps `path`."""
+    out = []
+    for line in Path("/proc/self/maps").read_text().splitlines():
+        parts = line.split(None, 5)
+        if len(parts) == 6 and parts[5] == path:
+            s, e = parts[0].split("-")
+            out.append((int(s, 16), int(e, 16)))
+    return out
+
+
+def read_mapped(start: int, n: int) -> bytes:
+    fd = os.open("/proc/self/mem", os.O_RDONLY)
+    try:
+        return os.pread(fd, n, start)
+    finally:
+        os.close(fd)
+
+
+def posix_semaphore(path: str) -> str | None:
+    """Why a deleted /dev/shm/sem.* mapping is a semaphore, not device code; None when it may be device code."""
+    rs = regions(path)
+    if not rs or any(e - s > PAGE for s, e in rs):
+        return None
+    try:
+        data = [read_mapped(s, e - s) for s, e in rs]
+    except OSError:
+        return None
+    if any(d[:4] == b"\x7fELF" or struct.pack("<I", FATBIN_MAGIC) in d for d in data):
+        return None
+    return "a POSIX semaphore (one page, no ELF or fatbin), not a library"
+
+
 class Gate:
     """The run's gate: every binary it has checked, and the mapped ones it didn't scan (NVIDIA's). `check` raises
     SassGateFailed naming the first failing binary, its function and instruction; `report` goes into the run's JSON."""
@@ -1300,6 +1338,9 @@ class Gate:
         for p in mapped():
             if ANON_SHARED.fullmatch(p):
                 self.not_scanned[p] = "shared anonymous memory, not a file"
+                continue
+            if POSIX_SEM.fullmatch(p) and (why := posix_semaphore(p)):
+                self.not_scanned[p] = why
                 continue
             if p.endswith(" (deleted)"):
                 raise SassGateFailed(f"{p} is mapped but deleted: the gate can't read it")
