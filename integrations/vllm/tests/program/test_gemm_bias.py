@@ -33,6 +33,7 @@ from verity_vllm.program.registry import b1, gemm_bias, gemv_bias
 from verity_vllm.program.registry import gemm_targets as GT
 from verity_vllm.program.registry import targets as TG
 from verity_vllm.program.registry.serve3_reference import materialize
+from verity_vllm.query import required as RQ
 from verity_vllm.query import word as W
 
 BF = torch.bfloat16
@@ -280,3 +281,11 @@ def test_a_target_without_a_bias_record_keeps_gemm_and_bias_add():
         VB._OBSERVED.update(saved)
     assert rep.ok, rep.unsupported
     assert _hist(rep.program) == {"Gemm_v2": M, "BiasAdd_v1": M}, _hist(rep.program)
+
+
+@pytest.mark.parametrize("family", ["GemmBias_v1", "GemmBiasF32Epilogue_v1", "GemvBiasF32_v1"])
+def test_a_fused_biased_linear_is_its_modules_slot_0(family):
+    """The required-value manifest names the Linear module's value as the collector binds it: slot 0 of `(output, output_bias)`."""
+    r = RQ._residual_for(family, "out", own_parameter=True)
+    assert r is not None and r.v1_member == "0", r
+    assert RQ._residual_for(family, "out", own_parameter=False) is None
