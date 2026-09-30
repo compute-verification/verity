@@ -601,6 +601,20 @@ def test_f1_ftz_scan_catches_every_fp32_ftz_form():
     assert hits == ["FFMA.FTZ", "FADD.FTZ", "FMUL.RN.FTZ", "FMUL.FTZ"]
 
 
+def _max_abs(words: np.ndarray, fmt: str) -> float:
+    """The largest magnitude among the elements packed in u32 operand words of ``fmt`` (finite minifloats, f16, bf16)."""
+    if fmt in ("f16", "bf16"):
+        h = np.stack([words & 0xFFFF, words >> 16], -1).astype(np.uint32)
+        v = (h << 16).view(np.float32) if fmt == "bf16" else h.astype(np.uint16).view(np.float16)
+        return float(np.abs(v.astype(np.float64)).max())
+    ebits, mbits = {"e4m3": (4, 3), "e5m2": (5, 2)}.get(fmt) or F1._NARROW[fmt][:2]
+    code = ((words[..., None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF) >> F1._CONTAINER_SHIFT.get(fmt, 0)
+    e, m = (code >> mbits) & ((1 << ebits) - 1), code & ((1 << mbits) - 1)
+    bias = (1 << (ebits - 1)) - 1
+    v = np.where(e == 0, m / 2**mbits * 2.0 ** (1 - bias), (1 + m / 2**mbits) * 2.0 ** (e.astype(np.int64) - bias))
+    return float(v.max())
+
+
 def test_f1_operands_stay_in_each_forms_domain():
     for f in F1.FORMS_TENSOR:
         w = F1.tensor_inputs(f, 64, 1)
@@ -623,10 +637,15 @@ def test_f1_operands_stay_in_each_forms_domain():
             b = (w[..., 0, None] >> (8 * np.arange(4, dtype=np.uint32))) & 0xFF
             sh = {"e2m1": 2, "e2m3": 0, "e3m2": 0}[f.fa]
             assert not (b & ((1 << sh) - 1)).any() and (b >> 6 == 0).all(), f.name
-            ebits, mbits, ecap = F1._NARROW[f.fa]
-            exp = (b >> (sh + mbits)) & ((1 << ebits) - 1)
-            # an FP16 accumulator gets small exponents (a chain of millions of MMAs stays finite); FP32 the whole code range
-            assert (exp.max() < ecap) == (f.acc[0] == "h"), f.name
+            ebits, mbits, nsmall = F1._NARROW[f.fa]
+            mag = (b >> sh) & ((1 << (ebits + mbits)) - 1)
+            # an FP16 accumulator gets the smallest codes (a chain of millions of MMAs stays finite); FP32 the whole code range
+            assert (mag.max() < nsmall) == (f.acc[0] == "h"), f.name
+        if f.acc[0] == "h":
+            # every K-sum at most 16: half an FP16 ulp once |D| >= 2^15, so a chain on fixed operands stalls short of inf
+            na = (2 if f.a[0] == "d" else 1) * f.a[1]
+            per_output = f.mnk[2] // (2 if f.sparse else 1)
+            assert per_output * _max_abs(w[..., :na], f.fa) * _max_abs(w[..., na:na + f.b[1]], f.fb) <= 16, f.name
     for op in F1.OPS:
         w = F1.simt_inputs(op, 32, 1)
         assert w.shape == (32, F1.SIMT_CH, F1.op_words_per_chain(op))
