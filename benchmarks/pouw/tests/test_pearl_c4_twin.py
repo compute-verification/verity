@@ -4,19 +4,21 @@ tickets) for both formats."""
 
 from __future__ import annotations
 
+import importlib.util
 import struct
 import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
+from verity_pouw.protocol import Context, Matmul, Shape, Tile
+from verity_pouw.schemes import pearl_c4 as F
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c4"))
-
-import twin as W  # noqa: E402
-from verity_pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity_pouw.schemes import pearl_c4 as F  # noqa: E402
-from verity_pouw.schemes import pearl_kw as P  # noqa: E402
+# Loaded under its own name: pearl_c's twin.py is `twin` to the tests beside this one.
+_spec = importlib.util.spec_from_file_location("pearl_c4_twin", Path(__file__).resolve().parents[1] / "pearl_c4" / "twin.py")
+W = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = W
+_spec.loader.exec_module(W)
 
 
 def grid() -> np.ndarray:
