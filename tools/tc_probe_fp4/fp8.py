@@ -16,6 +16,9 @@ Rows (kernels in ``mma_fp8.cu``, built ``-gencode arch=compute_120a,code=sm_120a
     cvt       cvt.rn.satfinite.e4m3x2.f32 and .e5m2x2.f32 over a structured grid + random words, against the H100-measured cast
               (``verity.ml.tc.cast``) and its E5M2 analogue
     fadd      add.rn.f32 and add.rn.ftz.f32 over structured pairs (subnormals, ties, cancellation, overflow) + random words
+    sparse    the 2:4-sparse mma.sp::ordered_metadata m16n8k64 E4M3 atom against two chained dense k32 atoms, the dense atom on the
+              compressed operands and GroupSum candidates, plus its W1 rate (``fp8_sparse.py``; ``--lease-max-min M`` runs the GPU
+              phase under gpu-lease and verifies after the lease is released)
 
 Gates, in order, before anything is measured: the device (exactly one visible, its UUID equal to ``--expect-gpu-uuid``, which
 defaults to ``gpu-lease``'s ``GPU_LEASE_UUID``), the SASS
@@ -69,13 +72,14 @@ TILES = {  # --instruction: kernel selector, operand formats, PTX, instruction i
                   "sm120.mma.m16n8k32.e4m3.mxf8"),
 }
 ROW_ID = {"chain": "sm120.mma.m16n8k32.e4m3.chain", "mixed": "sm120.mma.e4m3-bf16.mixed-chain",
-          "cvt": "sm120.cvt.rn.satfinite.f8x2.f32", "fadd": "sm120.add.rn.f32"}
+          "cvt": "sm120.cvt.rn.satfinite.f8x2.f32", "fadd": "sm120.add.rn.f32", "sparse": "sm120.mma.sp.m16n8k64.e4m3"}
 SASS_EXPECT = {  # kernel -> its exact multiset of tensor-core / conversion / FP32-add instructions
     "f8_e4m3_tiles_kernel": ["QMMA.16832.F32.E4M3.E4M3"],
     "legacy_e4m3_tiles_kernel": ["QMMA.16832.F32.E4M3.E4M3"],
     "f8_e5m2_tiles_kernel": ["QMMA.16832.F32.E5M2.E5M2"],
     "f8_e4m3e5m2_tiles_kernel": ["QMMA.16832.F32.E4M3.E5M2"],
     "mxf8_e4m3_tiles_kernel": ["QMMA.SF.16832.F32.E4M3.E4M3.E8"],
+    "sp_e4m3_tiles_kernel": ["QMMA.SP.16864.F32.E4M3.E4M3"],
     "e4m3_chain_kernel": ["QMMA.16832.F32.E4M3.E4M3"],
     "mixed_chain_kernel": ["HMMA.16816.F32.BF16", "QMMA.16832.F32.E4M3.E4M3"],
     "cvt_e4m3x2_kernel": ["F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C"],
@@ -979,6 +983,10 @@ ROWS = {"step": row_step, "chain": row_chain, "mixed": row_mixed, "cvt": row_cvt
 
 
 def run(args) -> tuple[int, dict]:
+    if args.row == "sparse":
+        import fp8_sparse
+
+        return fp8_sparse.run(args)
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -1034,7 +1042,7 @@ def finish(out: Path, args, results: dict, failures: list[str], identity: dict |
         cap = results.get("capture", {})
         instr = TILES[args.instruction][4] if args.row == "step" else ROW_ID.get(args.row, "sm120.fp8.compile")
         doc = {"schema": "research/result/v0.1", "kind": "tc-compile-check/v1" if args.row == "compile" else "tc-evidence/v1", "run_id": run_id,
-               "instruction": instr, "row": args.row, "ptx": TILES[args.instruction][3] if args.row == "step" else None, "arch": ARCH,
+               "instruction": instr, "row": args.row, "ptx": TILES[args.instruction][3] if args.row == "step" else results.get("ptx"), "arch": ARCH,
                "sku": (identity or {}).get("device"), "driver": (identity or {}).get("driver"), "gpu_uuid": (identity or {}).get("gpu_uuid"),
                "uuid_checked": (identity or {}).get("uuid_checked"), "nvcc": results.get("nvcc"),
                "sass_opcodes": {k: r["opcodes"] for k, r in results.get("sass", {}).get("kernels", {}).items()},
@@ -1050,7 +1058,7 @@ def finish(out: Path, args, results: dict, failures: list[str], identity: dict |
                "validation": {"status": "passed" if not failures else "failed", "checker": "tc_probe_fp4/fp8.py: identity, SASS, layout gates; "
                               "hardware words vs verity.ml.tc models and the scalar references", "detail": "; ".join(failures) or "every gated word reproduced",
                               "evidence": ["probe_results.json"]},
-               "measurements": [{"name": "wall", "value": results.get("seconds"), "unit": "s"}],
+               "measurements": [{"name": "wall", "value": results.get("seconds"), "unit": "s"}, *results.get("measurements", [])],
                "artifacts": sorted(p.name for p in out.iterdir() if p.suffix in (".json", ".npz", ".txt") and p.name != "result.json")}
         tmp = out / "result.json.tmp"
         tmp.write_text(json.dumps(doc, indent=1, default=str))
@@ -1060,7 +1068,7 @@ def finish(out: Path, args, results: dict, failures: list[str], identity: dict |
 
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--row", required=True, choices=["compile", "identity", *ROWS])
+    ap.add_argument("--row", required=True, choices=["compile", "identity", *ROWS, "sparse"])
     ap.add_argument("--instruction", default="f8_e4m3", choices=sorted(TILES), help="the step row's tile instruction")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=SEED_DEFAULT)
@@ -1072,6 +1080,15 @@ def parser() -> argparse.ArgumentParser:
                     help="the device's UUID (default: gpu-lease's GPU_LEASE_UUID); a mismatch stops the run")
     ap.add_argument("--fake-silicon", action="store_true", help="the primary model stands in for the device (CPU dry run; never evidence)")
     ap.add_argument("--corrupt-word", type=int, default=None, help="with --fake-silicon: flip one bit of this output word once; the run must fail")
+    sp = ap.add_argument_group("sparse row")
+    sp.add_argument("--expect-model", default=None, help="a fp8_sparse candidate that must reproduce every gated word (default: a capture)")
+    sp.add_argument("--lease-max-min", type=int, default=None,
+                    help="run the GPU phase under `gpu-lease 1 --wait --max-min M` and verify on the CPU after the lease is released")
+    sp.add_argument("--phase", default="all", choices=["all", "gpu"], help="gpu: the device part only, into --out (the lease's child)")
+    sp.add_argument("--workers", type=int, default=0, help="CPU processes for the verification (default min(32, cpu count))")
+    sp.add_argument("--reps", type=int, default=10, help="W1 timing reps")
+    sp.add_argument("--target-cycles", type=int, default=1 << 27, help="W1 cycles per timed launch")
+    sp.add_argument("--clocks", default="unlocked", help="the clock state the operator set, as the W1 rates are labelled (e.g. locked-2100)")
     return ap
 
 
@@ -1083,6 +1100,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.corrupt_word is not None and not args.fake_silicon:
         print("fp8.py: --corrupt-word needs --fake-silicon", file=sys.stderr)
         return 2
+    if args.lease_max_min and args.fake_silicon:
+        print("fp8.py: --lease-max-min takes a GPU; --fake-silicon runs in process", file=sys.stderr)
+        return 2
+    if args.expect_model is not None:
+        import fp8_sparse
+
+        if args.row != "sparse" or args.expect_model not in fp8_sparse.CANDIDATES:
+            print(f"fp8.py: --expect-model is the sparse row's, one of {sorted(fp8_sparse.CANDIDATES)}", file=sys.stderr)
+            return 2
     code, results = run(args)
     print(json.dumps({"row": args.row, "validation": results["validation"], "failures": results["failures"],
                       "mismatches": results.get("capture", {}).get("total_mismatches"), "seconds": results.get("seconds")}))

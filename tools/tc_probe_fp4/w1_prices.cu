@@ -19,6 +19,8 @@
 //   12  f2fp_e2m1_rate         cvt.rn.satfinite.e2m1x2.f32, four to a word (ptxas chains them through MERGE_C)     64 elements
 //   13  f2fp_e2m1_u8_rate      the same, each result zero-extended (+ one LOP3 and half a 3-input add per convert)  64 elements
 //   14  f2fp_e2m1_x2_rate      op 12 with 32 constants: twice the converts over the same per-iteration overhead     64 elements
+//   15  qmma_sp_e4m3_rate      mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32  8192 logical MAC
+//                              (4096 nonzero products: 2:4 along k)
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -66,6 +68,17 @@ __device__ __forceinline__ void mma_nvf4(float c[4], const uint32_t a[4], const 
         "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3}, {%10}, {0, 0}, {%11}, {0, 0};\n"
         : "+f"(c[0]), "+f"(c[1]), "+f"(c[2]), "+f"(c[3])
         : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(sfa), "r"(sfb));
+}
+
+// B's four registers are b0, b1 and two byte permutations of them (the row has two B words; repeating a register in the quad
+// puts MOVs in the loop); e is the metadata register (row word 6).
+__device__ __forceinline__ void mma_sp_e4m3(float c[4], const uint32_t a[4], const uint32_t b[2], uint32_t e) {
+    asm volatile(
+        "mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32 "
+        "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%0,%1,%2,%3}, %12, 0x0;\n"
+        : "+f"(c[0]), "+f"(c[1]), "+f"(c[2]), "+f"(c[3])
+        : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "r"(__byte_perm(b[0], b[1], 0x5140)),
+          "r"(__byte_perm(b[0], b[1], 0x7362)), "r"(e));
 }
 
 __device__ __forceinline__ void mma_bf16_f32(float c[4], const uint32_t a[4], const uint32_t b[2]) {
@@ -145,6 +158,7 @@ MMA_F32_RATE(qmma_mxf8_rate, mma_mxf8(c[j], a, b, sfa, sfb))
 MMA_F32_RATE(omma_nvf4_rate, mma_nvf4(c[j], a, b, sfa, sfb))
 MMA_F32_RATE(hmma_bf16_f32_rate, mma_bf16_f32(c[j], a, b))
 MMA_F16_RATE(hmma_f16_f16_rate, mma_f16_f16(c[j], a, b))
+MMA_F32_RATE(qmma_sp_e4m3_rate, mma_sp_e4m3(c[j], a, b, sfa))
 
 // Scalar rates: NCHAIN independent chains per thread; a lane's row word 0 is its chains' start, word 1 the addend y, word 2 the
 // multiplier m.
@@ -351,7 +365,7 @@ __global__ void __launch_bounds__(THREADS) f2fp_e2m1_x2_rate(const uint32_t* __r
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
                           fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate,
-                          f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate};
+                          f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate, qmma_sp_e4m3_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace

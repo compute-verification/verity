@@ -6,6 +6,9 @@
 //   f8_e4m3e5m2 mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e4m3.e5m2.f32
 //   legacy_e4m3 mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32   (tools/tc_probe's sm120.mma.m16n8k32.e4m3 form)
 //   mxf8_e4m3   mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e4m3.e4m3.f32.ue8m0
+//   sp_e4m3     mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32 (2:4 along k, selector 0)
+// The sparse tile kernel takes every lane's operand registers from the host (R u32[n][32][9]: a0..a3, b0..b3, e), so fp8.py's
+// layout check can try each candidate B and metadata layout without a rebuild.
 // Chain kernels keep the accumulator in registers across dependent steps (one MMA of each kind inside a `#pragma unroll 1`
 // loop) and store every step's D, so the host replays the chain step by step:
 //   e4m3_chain  f8_e4m3 repeated nsteps times (K = 32 * nsteps)
@@ -18,6 +21,7 @@
 //   bf16 A/B (K = 16): as tools/tc_probe_fp4/mma_fp4.cu's bf16_tiles_kernel
 //   SFA (1X, byte 0): lane supplies row 8*(lane&1) + (lane>>2); SFB: lane supplies col lane>>2
 //   D/C (4 f32): d0/d1 -> row lane/4, cols 2*(lane%4)+{0,1}; d2/d3 -> row+8
+//   sparse m16n8k64: the stored A (16x32) as the 8-bit A above; B (64x8) and the metadata as fp8.py's layout check selects them
 //
 // Host arrays (per tile, contiguous): A u8[16][32], Bt u8[8][32] (B n-major, k contiguous), SFA u8[16], SFB u8[8], C/D u32[16][8].
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared (no -ftz: the scalar kernels name it themselves).
@@ -129,6 +133,22 @@ __global__ void mxf8_e4m3_tiles_kernel(const uint8_t* __restrict__ A, const uint
     const uint32_t sfb = SFB[(size_t)warp * 8 + (lane >> 2)];
     load_c(cf, C + (size_t)warp * 128, lane);
     mma_mxf8_e4m3(df, a, b, cf, sfa, sfb);
+    store_d(D + (size_t)warp * 128, df, lane);
+}
+
+__global__ void sp_e4m3_tiles_kernel(const uint32_t* __restrict__ R, const uint32_t* __restrict__ C, uint32_t* __restrict__ D, int ntiles) {
+    const int warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+    if (warp >= ntiles) return;
+    const int lane = threadIdx.x & 31;
+    const uint32_t* r = R + ((size_t)warp * 32 + lane) * 9;
+    float cf[4], df[4];
+    load_c(cf, C + (size_t)warp * 128, lane);
+    asm volatile(
+        "mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32 "
+        "{%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9,%10,%11}, {%12,%13,%14,%15}, %16, 0x0;\n"
+        : "=f"(df[0]), "=f"(df[1]), "=f"(df[2]), "=f"(df[3])
+        : "r"(r[0]), "r"(r[1]), "r"(r[2]), "r"(r[3]), "r"(r[4]), "r"(r[5]), "r"(r[6]), "r"(r[7]), "f"(cf[0]), "f"(cf[1]), "f"(cf[2]),
+          "f"(cf[3]), "r"(r[8]));
     store_d(D + (size_t)warp * 128, df, lane);
 }
 
@@ -258,6 +278,17 @@ int fp8_tiles(int which, const uint8_t* A, const uint8_t* Bt, const uint8_t* SFA
         case 4: mxf8_e4m3_tiles_kernel<<<blocks, 32 * wpb>>>(a, b, (const uint8_t*)dSA.p, (const uint8_t*)dSB.p, c, d, n); break;
         default: return (int)cudaErrorInvalidValue;
     }
+    return finish(D, dD, (size_t)n * 512);
+}
+
+// R u32[n][32][9] (per lane: a0..a3, b0..b3, e), C/D u32[n][16][8].
+int sp_e4m3_tiles(const uint32_t* R, const uint32_t* C, uint32_t* D, int n) {
+    Dev dR, dC, dD;
+    int rc;
+    if ((rc = upload(dR, R, (size_t)n * 32 * 9 * 4)) || (rc = upload(dC, C, (size_t)n * 512)) || (rc = upload(dD, nullptr, (size_t)n * 512)))
+        return rc;
+    const int wpb = 4, blocks = (n + wpb - 1) / wpb;
+    sp_e4m3_tiles_kernel<<<blocks, 32 * wpb>>>((const uint32_t*)dR.p, (const uint32_t*)dC.p, (uint32_t*)dD.p, n);
     return finish(D, dD, (size_t)n * 512);
 }
 

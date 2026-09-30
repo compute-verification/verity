@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """W1 price microbenchmarks on sm_120 (the RTX PRO 6000): issue rates per SM per clock of the dense FP8 atom (f32 and f16
-accumulation), the block-scaled mxf8f6f4 and nvf4 atoms, BF16 and FP16 mma.sync, FP32 FADD and FFMA, the packed add.rn.f32x2 and
-the same adds as plain C pairs, the E4M3 cast and the E2M1 cast (three loops, whose split gives the cast's own cost), and the prices
-W1 reads off them.
+accumulation), the 2:4-sparse E4M3 atom (mma.sp m16n8k64), the block-scaled mxf8f6f4 and nvf4 atoms, BF16 and FP16 mma.sync, FP32
+FADD and FFMA, the packed add.rn.f32x2 and the same adds as plain C pairs, the E4M3 cast and the E2M1 cast (three loops, whose split
+gives the cast's own cost), and the prices W1 reads off them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
+                                    [--ops qmma_e4m3_f32,qmma_sp_e4m3] [--prebuilt libw1_prices_sm_120a.so]
 
 The unit is W1's: one dense E4M3 MAC with FP32 accumulation, i.e. 1 / (the qmma_e4m3_f32 rate per SM per clock).  A price is that
-rate over an op's rate in its own unit: per MAC for the atoms, per register written for FADD / FFMA, per result word (and per
+rate over an op's rate in its own unit: per MAC for the atoms (the sparse atom per logical MAC, 16 x 8 x 64 an instruction, and per
+nonzero product, half of them), per register written for FADD / FFMA, per result word (and per
 instruction, two words) for the packed add, per code (and per instruction, two codes) for the cast.  Per-clock rates come from clock64() around each block's loop, so they don't move with the SM clock; the
 clock itself is recorded per rep (cycles over event time, and an ``nvidia-smi --id`` sample), and results carry ``--clocks`` as
 their clock label (unlocked unless the operator says otherwise, e.g. locked-2100 on node 2).
@@ -65,18 +67,23 @@ OPS = [
     ("f2fp_e2m1x2", "F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
     ("f2fp_e2m1x2_u8", "F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C", 2 * NCHAIN * 4, 64, "code"),
     ("f2fp_e2m1x2_x2", "F2FP.SATFINITE.E2M1.F32.PACK_AB_MERGE_C", 4 * NCHAIN * 4, 64, "code"),
+    # 2:4 sparse along k: 16 x 8 x 64 logical MACs per instruction, half of them nonzero products
+    ("qmma_sp_e4m3", "QMMA.SP.16864.F32.E4M3.E4M3", NACC * UNROLL, 16 * 8 * 64, "logical MAC"),
 ]
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
            "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate", "fadd_f32x2_rate", "fadd_pairs_rate",
-           "f2fp_e2m1_rate", "f2fp_e2m1_u8_rate", "f2fp_e2m1_x2_rate"]  # w1_prices.cu's KERNELS, in op order
+           "f2fp_e2m1_rate", "f2fp_e2m1_u8_rate", "f2fp_e2m1_x2_rate", "qmma_sp_e4m3_rate"]  # w1_prices.cu's KERNELS, in op order
+SP_OP = 15
+#: the metadata nibbles mma.sp::ordered_metadata accepts for 2:4: kept indices i0 < i1 as (i1 << 2) | i0
+SP_META_VALID = np.array([0b0100, 0b1000, 0b1001, 0b1100, 0b1101, 0b1110], np.uint32)
 E2M1_OPS = (12, 13, 14)
 E2M1_NK = {12: 2 * NCHAIN, 13: 2 * NCHAIN, 14: 4 * NCHAIN}  # constants per lane in each E2M1 loop
 _WATCHED = re.compile(r"^(?:[A-Z]*MMA|F2FP|F2F|FADD2?|FFMA2?|FMUL2?|UF2FP|UFADD|UFFMA)(?:\.|$)")
 # Public (datasheet) dense rates per SM per clock, the fake device's cycles: RTX PRO 6000 Blackwell, 188 SMs.  Estimated, never output.
 _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 1024, "omma_nvf4": 2048, "hmma_bf16_f32": 512,
               "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64, "f2fp_e4m3x2_u16": 64, "fadd_f32x2": 128,
-              "fadd_pairs": 128, "f2fp_e2m1x2": 64, "f2fp_e2m1x2_u8": 64, "f2fp_e2m1x2_x2": 64}
+              "fadd_pairs": 128, "f2fp_e2m1x2": 64, "f2fp_e2m1x2_u8": 64, "f2fp_e2m1x2_x2": 64, "qmma_sp_e4m3": 2048}
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
@@ -187,6 +194,7 @@ GATE_ROW = {  # per op: the all-ones row (a0..a3, b0, b1, scale A, scale B), or 
     3: [_rep(0x2, 4)] * 6 + [_rep(0x38, 8)] * 2, 4: [_rep(0x3F80, 16)] * 6 + [0, 0], 5: [_rep(0x3C00, 16)] * 6 + [0, 0],
     6: [0, 0x3F800000, 0x3F800000] + [0] * 5, 7: [0, 0x3F800000, 0x3F800000] + [0] * 5,
     10: [0, 0, 0x3F800000, 0x40000000] + [0] * 4, 11: [0, 0, 0x3F800000, 0x40000000] + [0] * 4,  # low half adds 1, high half 2
+    SP_OP: [_rep(0x38, 8)] * 6 + [_rep(0b0100, 4), 0],  # every group keeps its first two: 32 products of 1 per output
 }
 
 
@@ -255,8 +263,8 @@ def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     """(THREADS, 16) chk words of one block: all-ones MMA accumulators are k * UNROLL * iters, FADD / FFMA chains SUNROLL * iters."""
     name, _, _, work, _ = OPS[op]
     w = np.zeros((THREADS, 16), np.uint32)
-    if op in (0, 2, 3, 4):
-        k = work // 128
+    if op in (0, 2, 3, 4, SP_OP):
+        k = work // 128 // (2 if op == SP_OP else 1)
         w[:] = np.float32(k * UNROLL * iters).view(np.uint32)
     elif op in (1, 5):
         k = work // 128
@@ -278,10 +286,12 @@ def timing_rows(op: int, rng) -> np.ndarray:
     """Random per-lane operands that keep every accumulator finite over the timed loop: FP8 / FP4 / BF16 / FP16 codes of magnitude
     about 1 with random signs (the sums are random walks), unit-order scales, FADD adds of about 2^-10, FFMA's contraction m < 1."""
     r = np.zeros((32, 8), np.uint32)
-    if op in (0, 1, 2):
+    if op in (0, 1, 2, SP_OP):
         b = (rng.integers(0, 2, (32, 6, 4)) << 7) | (rng.integers(6, 9, (32, 6, 4)) << 3) | rng.integers(0, 8, (32, 6, 4))
         r[:, :6] = (b << (8 * np.arange(4))).sum(-1)
         r[:, 6:] = rng.integers(126, 129, (32, 2))
+        if op == SP_OP:  # word 6: random valid metadata, one nibble per group
+            r[:, 6] = (SP_META_VALID[rng.integers(0, 6, (32, 8))] << (4 * np.arange(8, dtype=np.uint32))).sum(-1)
     elif op == 3:
         b = rng.integers(0, 16, (32, 6, 8))
         r[:, :6] = (b << (4 * np.arange(8))).sum(-1)
@@ -308,10 +318,12 @@ def timing_rows(op: int, rng) -> np.ndarray:
     return r.astype(np.uint32)
 
 
-def numeric_gate(dev, rng) -> tuple[dict, dict[int, np.ndarray]]:
-    rows_t = {op: timing_rows(op, rng) for op in range(len(OPS))}
+def numeric_gate(dev, rng, ops=None) -> tuple[dict, dict[int, np.ndarray]]:
+    rows_t = {op: timing_rows(op, rng) for op in range(len(OPS))}  # every op's draw, so a subset times the same data
     res = {}
     for op, (name, *_) in enumerate(OPS):
+        if ops is not None and op not in ops:
+            continue
         rows = np.array(GATE_ROW[op], np.uint32)[None].repeat(32, 0) if op in GATE_ROW else rows_t[op]
         chk, _, sm, _ = dev.run(op, GATE_ITERS, rows)
         want = expected_words(op, GATE_ITERS, rows)
@@ -336,15 +348,17 @@ def smi_sample(uuid: str | None) -> dict | None:
     return F8.smi_query(uuid, "clocks.sm,clocks.mem,temperature.gpu,power.draw,clocks_event_reasons.active", nounits=True)
 
 
-def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uuid: str | None) -> dict:
+def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uuid: str | None, ops=None) -> dict:
+    ops = sorted(range(len(OPS)) if ops is None else ops)
     iters = {}
-    for op, (name, _, per_loop, _, _) in enumerate(OPS):
+    for op in ops:
         dev.run(op, 64, rows_t[op])  # warm-up
         _, cyc, _, _ = dev.run(op, 256, rows_t[op])
         iters[op] = int(min(1 << 24, max(256, round(256 * target_cycles / max(1, int(np.median(cyc)))))))
-    per = {name: [] for name, *_ in OPS}
+    per = {OPS[op][0]: [] for op in ops}
     for rep in range(reps):
-        for op, (name, _, per_loop, work, _) in enumerate(OPS):
+        for op in ops:
+            name, _, per_loop, work, _ = OPS[op]
             _, cyc, sm, ms = dev.run(op, iters[op], rows_t[op])
             per_block = WARPS * iters[op] * per_loop * work
             rate = per_block / cyc.astype(np.float64)
@@ -364,11 +378,16 @@ def prices(tim: dict) -> dict:
     out = {"unit": f"1 / {UNIT_OP} MAC rate per SM per clock", "unit_rate_per_sm_per_clock": unit, "rates_per_sm_per_clock": rate,
            "rate_spread_over_reps": spread, "price_units": {}}
     for name, _, _, _, per in OPS:
-        out["price_units"][f"{name} per {per}"] = unit / rate[name]
-    out["price_units"]["f2fp_e4m3x2 per instruction (2 codes)"] = 2 * unit / rate["f2fp_e4m3x2"]
-    out["price_units"]["fadd_f32x2 per instruction (2 words)"] = 2 * unit / rate["fadd_f32x2"]
-    out["price_units"]["f2fp_e2m1x2 per instruction (2 codes)"] = 2 * unit / rate["f2fp_e2m1x2"]
-    out["f16_over_f32_accumulate"] = rate["qmma_e4m3_f16"] / unit
+        if name in rate:
+            out["price_units"][f"{name} per {per}"] = unit / rate[name]
+    for name, per, n in (("f2fp_e4m3x2", "instruction (2 codes)", 2), ("fadd_f32x2", "instruction (2 words)", 2),
+                         ("f2fp_e2m1x2", "instruction (2 codes)", 2), ("qmma_sp_e4m3", "nonzero product", 2)):
+        if name in rate:
+            out["price_units"][f"{name} per {per}"] = n * unit / rate[name]
+    if "qmma_sp_e4m3" in rate:  # instructions per SM per clock, sparse over dense (both 16 per loop)
+        out["sp_over_dense_instructions"] = rate["qmma_sp_e4m3"] / (2 * unit)
+    if "qmma_e4m3_f16" in rate:
+        out["f16_over_f32_accumulate"] = rate["qmma_e4m3_f16"] / unit
     return out
 
 
@@ -401,6 +420,18 @@ def split(pr: dict, loops: dict[str, dict], ops=E2M1_OPS) -> dict:
 # --- main ---------------------------------------------------------------------------------------------------------------------------
 
 
+def op_indices(names: str | None) -> list[int]:
+    """``--ops`` -> op indices in OPS order, the unit op always among them; an unknown name is an error."""
+    if not names:
+        return list(range(len(OPS)))
+    idx = {name: i for i, (name, *_) in enumerate(OPS)}
+    want = {s.strip() for s in names.split(",") if s.strip()} | {UNIT_OP}
+    unknown = sorted(want - set(idx))
+    if unknown:
+        raise SystemExit(f"w1.py: unknown --ops {unknown}; known: {sorted(idx)}")
+    return sorted(idx[n] for n in want)
+
+
 def run(args) -> tuple[int, dict]:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
@@ -408,8 +439,13 @@ def run(args) -> tuple[int, dict]:
     res: dict = {"schema": "tc-probe-fp4/w1/v1", "fake_silicon": bool(args.fake_silicon), "seed": args.seed, "reps": args.reps,
                  "target_cycles": args.target_cycles, "clocks": args.clocks}
     failures: list[str] = []
+    ops = op_indices(args.ops)
+    res["ops"] = [OPS[op][0] for op in ops]
     so = None
-    if not args.fake_silicon or Path(P4.nvcc_bin()).exists():
+    if args.prebuilt:
+        so, res["nvcc"] = Path(args.prebuilt), f"prebuilt {args.prebuilt}"
+        res["sass"] = sass_gate(so, out)
+    elif not args.fake_silicon or Path(P4.nvcc_bin()).exists():
         so, res["nvcc"] = P4.build(F8.ARCH, out, SOURCE)
         res["sass"] = sass_gate(so, out)
         if not res["sass"]["ok"]:
@@ -429,14 +465,14 @@ def run(args) -> tuple[int, dict]:
     if failures:
         return finish(out, args, res, failures, ident, t0)
     rng = np.random.default_rng(args.seed)
-    res["numeric_gate"], rows_t = numeric_gate(dev, rng)
+    res["numeric_gate"], rows_t = numeric_gate(dev, rng, ops)
     if not res["numeric_gate"]["ok"]:
         failures.append("numeric gate: " + ", ".join(k for k, r in res["numeric_gate"]["ops"].items()
                                                      if r["mismatches"] or r["vacuous"] or r["distinct_sms"] != r["blocks"]))
         return finish(out, args, res, failures, ident, t0)
-    res["timing"] = timing(dev, rows_t, args.reps, args.target_cycles, ident.get("gpu_uuid"))
+    res["timing"] = timing(dev, rows_t, args.reps, args.target_cycles, ident.get("gpu_uuid"), ops)
     res["prices"] = prices(res["timing"])
-    if res["sass"].get("kernels"):
+    if res["sass"].get("kernels") and set(E2M1_OPS) <= set(ops):
         res["prices"]["e2m1_split"] = split(res["prices"], {k: r["loop"] for k, r in res["sass"]["kernels"].items()})
     return finish(out, args, res, failures, ident, t0)
 
@@ -452,8 +488,11 @@ def finish(out: Path, args, res: dict, failures: list[str], ident: dict | None, 
         meas = [{"name": f"rate.{k}", "value": v, "unit": f"{OPS[[o[0] for o in OPS].index(k)][4]}/SM/clock", "label": label}
                 for k, v in (pr.get("rates_per_sm_per_clock") or {}).items()]
         meas += [{"name": f"price.{k}", "value": v, "unit": "W1 units", "label": label} for k, v in (pr.get("price_units") or {}).items()]
-        if pr:
+        if "f16_over_f32_accumulate" in pr:
             meas.append({"name": "ratio.qmma_e4m3_f16_over_f32", "value": pr["f16_over_f32_accumulate"], "unit": "1", "label": label})
+        if "sp_over_dense_instructions" in pr:
+            meas.append({"name": "ratio.qmma_sp_e4m3_over_dense_instructions", "value": pr["sp_over_dense_instructions"], "unit": "1",
+                         "label": label})
         sp = pr.get("e2m1_split") or {}
         if sp.get("ok"):
             derived = "Derived (three-loop split of Measured " + res["clocks"] + " rates over their SASS counts)"
@@ -466,7 +505,7 @@ def finish(out: Path, args, res: dict, failures: list[str], ident: dict | None, 
                "sass_loops": {k: r["loop"] for k, r in (res.get("sass") or {}).get("kernels", {}).items()},
                "measurements": meas + [{"name": "wall", "value": res["seconds"], "unit": "s"}],
                "workload_fingerprint": {"probe": "tools/tc_probe_fp4/w1.py", "seed": args.seed, "reps": args.reps,
-                                        "target_cycles": args.target_cycles, "compile_only": args.compile_only},
+                                        "target_cycles": args.target_cycles, "compile_only": args.compile_only, "ops": res["ops"]},
                "validation": {"status": res["validation"], "checker": "tc_probe_fp4/w1.py: identity, SASS loop, numeric and one-block-per-SM gates",
                               "detail": "; ".join(failures) or "every gate passed", "evidence": ["w1_results.json"]},
                "artifacts": sorted(p.name for p in out.iterdir() if p.suffix in (".json", ".txt") and p.name != "result.json")}
@@ -484,6 +523,8 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--target-cycles", type=int, default=1 << 27, help="cycles per timed launch (about 50 ms at 2.6 GHz)")
     ap.add_argument("--compile-only", action="store_true", help="build + SASS gate only (no GPU)")
     ap.add_argument("--clocks", default="unlocked", help="the clock state the operator set, as results label it (e.g. locked-2100)")
+    ap.add_argument("--ops", default=None, help=f"comma list of op names to gate and time (default all; {UNIT_OP}, the unit, always)")
+    ap.add_argument("--prebuilt", default=None, help="an already built libw1_prices .so (the SASS gate still reads it)")
     ap.add_argument("--expect-gpu-uuid", default=os.environ.get("GPU_LEASE_UUID"),
                     help="the device's UUID (default: gpu-lease's GPU_LEASE_UUID); a mismatch stops the run")
     ap.add_argument("--fake-silicon", action="store_true", help="host models stand in for the device (CPU dry run; never evidence)")
