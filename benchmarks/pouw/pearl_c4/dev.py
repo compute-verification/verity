@@ -41,6 +41,7 @@ CUDA = {
     "cuModuleLoadData": [P(vp), C.c_char_p], "cuModuleGetFunction": [P(vp), vp, C.c_char_p],
     "cuFuncSetAttribute": [vp, i32, i32], "cuMemAlloc_v2": [P(u64), sz], "cuMemFree_v2": [u64],
     "cuMemsetD8_v2": [u64, C.c_ubyte, sz], "cuMemcpyHtoD_v2": [u64, vp, sz], "cuMemcpyDtoH_v2": [vp, u64, sz],
+    "cuMemcpyDtoDAsync_v2": [u64, u64, sz, vp],
     "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
     "cuEventCreate": [P(vp), u], "cuEventRecord": [vp, vp], "cuEventSynchronize": [vp],
     "cuEventElapsedTime": [P(C.c_float), vp, vp], "cuEventDestroy_v2": [vp], "cuGetErrorString": [i32, P(C.c_char_p)],
@@ -140,6 +141,9 @@ class Dev:
         self.ck("cuMemcpyDtoH_v2", buf, u64(p), n)
         return buf.raw
 
+    def copy(self, dst: int, src: int, n: int, stream: int = 0) -> None:
+        self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, vp(stream or None))
+
     def launch(self, name: str, grid: int, block: int, smem: int = 0, p=(), i=(), stream: int = 0) -> None:
         a = Args()
         for j, v in enumerate(p):
@@ -234,23 +238,29 @@ class Pipeline:
         self.dev.launch("lines", cdiv(self.m, 128), 128, p=[self.buf["seed_a"], self.buf["lines_ea"]], i=[ROLE_EA, self.m],
                         stream=stream)
 
-    def launch(self, stream: int = 0, mode: str = "hash") -> None:
-        """One call: A's commitment (modeled) and E_A's lines (hash only), A's forming, A'F_B into P_A, the chain with the
-        peel and (hash) the epilogue's digests and tickets, then (hash) the tile leaves."""
-        d, b, m, n, k = self.dev, self.buf, self.m, self.n, self.k
-        L = lambda *a, **kw: d.launch(*a, stream=stream, **kw)  # noqa: E731
+    def steps(self, mode: str = "hash") -> list[tuple[str, tuple, dict]]:
+        """One call's launches: A's commitment (modeled) and E_A's lines (hash only), A's forming, A'F_B into P_A, the chain
+        with the peel and (hash) the epilogue's digests and tickets, then (hash) the tile leaves."""
+        b, m, n, k = self.buf, self.m, self.n, self.k
+        out = []
         if mode == "hash":
-            L("hash_rows", cdiv(m * (2 * k // SEGMENT), 128), 128, p=[b["xa"], b["rows_a"]], i=[m, 2 * k])
-            L("lines", cdiv(m, 128), 128, p=[b["seed_a"], b["lines_ea"]], i=[ROLE_EA, m])
-        L(f"form_{self.tag}", m // 16, 256, p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"],
-                                               b["a_inv"], b["a_ae"], b["pa"]], i=[m, k, 0, 0])
-        L(f"chain32_{self.tag}", m // 16, 128, p=[b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], i=[m, k, 1])
+            out.append(("hash_rows", (cdiv(m * (2 * k // SEGMENT), 128), 128), dict(p=[b["xa"], b["rows_a"]], i=[m, 2 * k])))
+            out.append(("lines", (cdiv(m, 128), 128), dict(p=[b["seed_a"], b["lines_ea"]], i=[ROLE_EA, m])))
+        out.append((f"form_{self.tag}", (m // 16, 256), dict(
+            p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"], b["a_inv"], b["a_ae"], b["pa"]],
+            i=[m, k, 0, 0])))
+        out.append((f"chain32_{self.tag}", (m // 16, 128), dict(p=[b["a_codes"], b["a_scales"], b["fbt"], b["pa"]], i=[m, k, 1])))
         g = self.gemm(mode)
-        L(g, (m // self.bm) * (n // 128), self.threads, d.dyn_smem(g),
-          p=[b["a_codes"], b["a_scales"], b["b_codes"], b["b_scales"], b["pa"], b["pb"], b["a_inv"], b["b_inv"], b["y"],
-             b["digests"], b["tickets"], b["key"], b.get("c", 0), b.get("u", 0)], i=[m, n, k])
+        out.append((g, ((m // self.bm) * (n // 128), self.threads, self.dev.dyn_smem(g)), dict(
+            p=[b["a_codes"], b["a_scales"], b["b_codes"], b["b_scales"], b["pa"], b["pb"], b["a_inv"], b["b_inv"], b["y"],
+               b["digests"], b["tickets"], b["key"], b.get("c", 0), b.get("u", 0)], i=[m, n, k])))
         if mode == "hash":
-            L("leaves", cdiv((m // 64) * (n // 64), 64), 64, p=[b["digests"], b["leaves"]], i=[m, n])
+            out.append(("leaves", (cdiv((m // 64) * (n // 64), 64), 64), dict(p=[b["digests"], b["leaves"]], i=[m, n])))
+        return out
+
+    def launch(self, stream: int = 0, mode: str = "hash") -> None:
+        for name, geo, kw in self.steps(mode):
+            self.dev.launch(name, *geo, stream=stream, **kw)
 
     def free(self) -> None:
         for name, p in self.buf.items():
@@ -346,13 +356,16 @@ def main(argv: list[str]) -> int:
         pl.weight_side()
         pl.prime()
         dev.sync()
-        row = {"shape": [m, n, k], "fmt": a.fmt, "bm": pl.bm, "unlabelled": "self-timing, clocks not locked: not a panel number"}
+        row = {"shape": [m, n, k], "fmt": a.fmt, "bm": pl.bm,
+               "label": "self-timing for hillclimbing, not a panel number; clocks as the machine sets them"}
         row["weight_side_ms"] = statistics.median(dev.timed(pl.weight_side, a.reps))
         for mode in MODES:
             pl.launch(mode=mode)
             ms = statistics.median(dev.timed(lambda mode=mode: pl.launch(mode=mode), a.reps))
             row[f"{mode}_ms"] = ms
             row[f"{mode}_chain_pflops"] = round(2 * m * n * k / ms / 1e12, 3)
+            row[f"{mode}_steps_ms"] = {name: round(statistics.median(dev.timed(
+                lambda name=name, geo=geo, kw=kw: dev.launch(name, *geo, **kw), a.reps)), 4) for name, geo, kw in pl.steps(mode)}
         emit(row)
         pl.free()
     return 0
