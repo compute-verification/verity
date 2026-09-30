@@ -13,10 +13,11 @@ drawn units are proved. The two-stage protocol (replay, then a second draw) is `
    (`registration.matches_public`) and writes a receipt (`registration.receipt`) before it draws. Served roots use the
    domain rule agreed with vllm-serving-commit (`registration.served_domain`).
 3. **The draw**: the verifier samples units from the operating system's randomness under its law (`stratified:K`, the
-   default, `subset:K` or `bernoulli:NUM/DEN`) and sends the draw in the clear, before the session's coin commitment.
-   Nothing is derived from a commitment. `draw.check_draw` holds it to the registration and the law.
+   default, `work:K` with its work table, `subset:K` or `bernoulli:NUM/DEN`) and sends the draw in the clear, before the
+   session's coin commitment. Nothing is derived from a commitment. `draw.check_draw` holds it to the registration and
+   the law.
 4. **Proofs** of the drawn units, in one session whose statement is the drawn units' (`draw.check_proved`: its instances
-   are the drawn units, in order).
+   are the drawn units and a work draw's closure, ascending).
 5. **Verification** by each verifier that runs, the Lean verifier of record among them.
 6. **The audit record** (`audit.audit_record`): the registration, its receipt, the draw, the law, the proved units, the
    statement's digests, every verdict, and, when every check and verdict that ran accepted, the integrity profile. The
@@ -58,6 +59,37 @@ size, independently across strata. `docs/sampling-strategies.md` has the analysi
   audit record's `wrong_units.bound` is core's exact `Stratified.count_bound` at delta, and `per_template` gives each
   template's own bound. A template wrong in every unit is never missed. `subset:K` is one stratum and gets the same exact
   bound.
+
+## The work law
+
+The draw law's second version (Daniel approved work-proportional sizing on Sep 28). It is the Lean verifier's
+`Flock.Draw.Law.work` (`backends/flock/verifier/PROTOCOL.md`, "The work law"), and `draw.py` mirrors it: the stratified
+law's strata and sampler, with each stratum's draw sized by the PoUW work its units do.
+
+- **The work table** (`draw.work_table`) is the verifier's own. It maps each template descriptor id to the work one of its
+  units is credited, a natural number in any fixed unit, or to `{"work": w, "floor": f}` with `f ≥ 1`; the floor is one
+  when the table gives only the work. A template the table does not name refuses the law.
+- **Sizes.** With `W = Σ_s w_s·n_s ≥ 1` and `1 ≤ K ≤ N`, stratum `s` draws `k_s = min(n_s, max(f_s, ⌈K·w_s·n_s / W⌉))`
+  (`draw.work_k`, Lean `workK`): its work share of `K`, rounded up, never below its floor and never above `n_s`. A work
+  stratum is `{"template", "units", "work", "floor", "k"}`, and the law object `{"law": "work", "k": K, "strata": [...]}`
+  is the rule `work:K` expanded by `draw.derive` with the table. The registration carries it expanded (`record(...,
+  work_table=)`), and R1 holds it to the verifier's own expansion with its own table.
+- **The draw** is `{"law": "work", "population": N, "k": K, "strata": [...], "units": [...]}`, with an optional `closure`:
+  units proved with the drawn ones (for a tile, the units its credit reads), non-empty, ascending and none of them drawn.
+  The session proves the drawn units and the closure.
+- **What it guarantees** (Lean `FlockSoundness/Audit/Work.lean`). Wrong units doing a fraction `ε` of the credited work
+  escape with probability at most `(1 − ε)^K` (`work_escape_le`), and a stratum with `b_s` of its `n_s` units wrong
+  escapes with at most `((n_s − b_s)/n_s)^(f_s)` (`work_escape_floor_le`). The work law is the stratified law at its
+  sizes, so the audit's profile is `Stratified` over the same strata at the work sizes, with its exact bounds.
+- **What a unit's work may count** (the Pearl-C statement review, item 5). A unit's work is what it is credited, counted
+  on the rows the Program declares, never on rows a kernel pads it with.
+  - Filler is credited nothing: a unit of filler only, or one the prover declares uncredited before the draw, does work 0.
+    Its floor still draws it for integrity, and missing it costs no work.
+  - A unit mixing real and filler rows is credited its real cells only.
+  - The law weights by template, so every unit of a template must be credited the same work. A template whose units are
+    padded differently is split before the law is derived, or credited 0. The escape bound needs every unit's inclusion
+    probability to be at least `K·w_u / W` over the credited `W`, which a per-template work that over-credits a unit
+    breaks.
 
 ## Consumers
 

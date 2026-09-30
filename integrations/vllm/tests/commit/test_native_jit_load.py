@@ -92,6 +92,73 @@ def test_the_build_dir_is_the_source_set_s_child_of_the_parent(tmp_path):
 
 
 @_isolated
+def test_two_trees_with_one_source_set_compile_the_same_staged_files(tmp_path):
+    parent, seen = str(tmp_path / "jit"), []
+
+    def loader(**kw):
+        seen.append([(p, os.stat(p).st_mtime_ns, open(p, "rb").read()) for p in kw["sources"]])
+
+    for tree in ("tree-a", "tree-b", "tree-a"):
+        (tmp_path / tree).mkdir(exist_ok=True)
+        _, bd, _ = nj.jit_load("ext", _sources(tmp_path / tree), parent=parent, loader=loader, **VERSIONS)
+    assert seen[0] == seen[1] == seen[2], "same paths, bytes and mtimes: build.ninja and ninja's view are the same for every tree"
+    assert seen[0][0][0] == os.path.join(bd, "src", "ext.cu") and seen[0][0][2] == b"__global__ void k(){}"
+
+
+@_isolated
+def test_a_staged_source_that_differs_from_the_source_is_rewritten(tmp_path):
+    src, parent = _sources(tmp_path), str(tmp_path / "jit")
+    bd = nj.keyed_build_dir(parent, nj.source_set_digest(src, cflags=(), cuda_cflags=(), **VERSIONS))
+    os.makedirs(os.path.join(bd, "src"))
+    (tmp_path / "jit" / os.path.basename(bd) / "src" / "ext.cu").write_bytes(b"partial")
+    nj.jit_load("ext", src, parent=parent, loader=_loader, **VERSIONS)
+    assert open(os.path.join(bd, "src", "ext.cu"), "rb").read() == b"__global__ void k(){}"
+
+
+@_isolated
+def test_sources_with_one_basename_twice_are_refused(tmp_path):
+    a, b = tmp_path / "a" / "ext.cu", tmp_path / "b" / "ext.cu"
+    for p in (a, b):
+        p.parent.mkdir()
+        p.write_bytes(b"__global__ void k(){}")
+    with pytest.raises(ValueError, match="basenames"):
+        nj.jit_load("ext", [str(a), str(b)], parent=str(tmp_path / "jit"), loader=_loader, **VERSIONS)
+
+
+@_isolated
+def test_local_headers_are_staged_beside_the_sources_and_key_the_digest(tmp_path):
+    src = tmp_path / "src"
+    (src / "sub").mkdir(parents=True)
+    (src / "ext.cu").write_bytes(b'#include <cuda.h>\n#include "sub/a.h"\n#include "absent.h"\n__global__ void k(){}')
+    (src / "sub" / "a.h").write_bytes(b'#include "b.h"\n')
+    (src / "sub" / "b.h").write_bytes(b"#define B 1\n")
+    paths = [str(src / "ext.cu")]
+    assert nj.local_headers(paths) == [("sub/a.h", str(src / "sub" / "a.h")), ("sub/b.h", str(src / "sub" / "b.h"))]
+    seen = {}
+    _, bd, digest = nj.jit_load("ext", paths, parent=str(tmp_path / "jit"), loader=lambda **kw: seen.update(kw), **VERSIONS)
+    assert seen["sources"] == [os.path.join(bd, "src", "ext.cu")]
+    assert open(os.path.join(bd, "src", "sub", "b.h"), "rb").read() == b"#define B 1\n"
+    (src / "sub" / "b.h").write_bytes(b"#define B 2\n")
+    assert nj.source_set_digest(paths, cflags=(), cuda_cflags=(), **VERSIONS) != digest, "a header byte moves the digest"
+
+
+def test_a_header_free_source_set_keeps_its_digest(tmp_path):
+    import hashlib
+
+    paths = _sources(tmp_path)
+    h = hashlib.sha256(b"ext.cu\0__global__ void k(){}\0cflags=|cuda_cflags=|torch=2.8.0|cuda=12.9")
+    assert nj.source_set_digest(paths, cflags=(), cuda_cflags=(), **VERSIONS) == h.hexdigest()
+
+
+def test_a_header_outside_the_sources_directory_is_refused(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "up.h").write_bytes(b"")
+    (tmp_path / "src" / "ext.cu").write_bytes(b'#include "../up.h"\n')
+    with pytest.raises(ValueError, match="outside"):
+        nj.local_headers([str(tmp_path / "src" / "ext.cu")])
+
+
+@_isolated
 def test_a_torch_lock_left_by_a_killed_build_is_removed_under_the_build_lock(tmp_path):
     src, parent = _sources(tmp_path), str(tmp_path / "jit")
     bd = nj.keyed_build_dir(parent, nj.source_set_digest(src, cflags=(), cuda_cflags=(), **VERSIONS))
