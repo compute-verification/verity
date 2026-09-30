@@ -4,7 +4,9 @@ accumulation), the 2:4-sparse E4M3 atom (mma.sp m16n8k64), the block-scaled mxf8
 FADD and FFMA, the packed add.rn.f32x2 and the same adds as plain C pairs, the E4M3 cast and the E2M1 cast (three loops, whose split
 gives the cast's own cost), the E4M3 cast-and-store of Pearl-C's sm_120 forming kernel (one code per convert, two per 16-bit store)
 beside its packed replacement (four codes per 32-bit store) and the packed words through 64- and 128-bit stores (at conflict-free row
-strides and at the port's), each fed by one FADD per code or by no per-code input, and the prices W1 reads off them.
+strides and at the port's), each fed by one FADD per code or by no per-code input, the E4M3-to-FP16 convert cvt.rn.f16x2.e4m3x2
+(alone, and with one LOP3 per two or per one convert, so the loops' differences test that the costs add), and the prices W1 reads off
+them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
                                     [--ops qmma_e4m3_f32,qmma_sp_e4m3] [--prebuilt libw1_prices_sm_120a.so] [--lease-max-min 10]
@@ -26,8 +28,11 @@ Gates, in order, before anything is timed: the device (``fp8.identity_gate``: on
 exactly their FADD feed, support and stores too; its full loop composition is recorded); the numeric gate (all-ones operands give
 exact integers for every atom and FADD / FFMA, and for the packed and paired adds 1 in the low word and 2 in the high, so a swapped
 half shows; the casts are checked against ``fp8.cvt_ref`` and ``e2m1_ref`` on the timing data, the cast-and-store loops on the words
-they leave in shared memory, and an op whose expected words are all zero fails as vacuous); one block per
-SM (distinct %smid).  A failed gate writes no measurements.  ``--fake-silicon``
+they leave in shared memory, the FP16 converts against the registered decode ``verity.ml.tc.term.decode_e4m3`` on their chains
+and on every 16-bit input, where a NaN code's half must be an FP16 NaN and its bits are recorded, and an op whose expected words are
+all zero fails as vacuous); one block per SM (distinct %smid).  Every gated launch starts from buffers poisoned with 0xA5, and the
+words an op doesn't write must still read 0xA5A5A5A5; each op's no-write negative control (no kernel launched) must be rejected, or
+the gate fails.  A failed gate writes no measurements.  ``--fake-silicon``
 replaces the device with a model that returns the gate's words and cycles from the Public datasheet rates (a CPU dry run of the
 plumbing, refused under research run); ``--corrupt-word I`` flips one bit of one gate word, and the run must then fail.
 """
@@ -45,6 +50,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+from verity.ml.tc.term import decode_e4m3
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -89,6 +95,10 @@ OPS = [
     ("cs_w128_nogen", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
     ("cs_w64_nogen_r144", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
     ("cs_w128_nogen_r144", "F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C", 32, 64, "code"),
+    # E4M3 to FP16, two codes a convert: chains alone, then with one LOP3 per two converts and per convert
+    ("f2fp_f16_e4m3", "F2FP.F16.E4M3.UNPACK_B", NCHAIN * SUNROLL, 64, "code"),
+    ("f2fp_f16_e4m3_half", "F2FP.F16.E4M3.UNPACK_B", NCHAIN * SUNROLL, 64, "code"),
+    ("f2fp_f16_e4m3_xor", "F2FP.F16.E4M3.UNPACK_B", NCHAIN * SUNROLL, 64, "code"),
 ]
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
@@ -96,7 +106,8 @@ _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_n
            "f2fp_e2m1_rate", "f2fp_e2m1_u8_rate", "f2fp_e2m1_x2_rate", "qmma_sp_e4m3_rate",
            "cs_port_fadd_rate", "cs_port_nogen_rate", "cs_packed_fadd_rate", "cs_packed_nogen_rate",
            "cs_w64_fadd_rate", "cs_w64_nogen_rate", "cs_w128_fadd_rate", "cs_w128_nogen_rate",
-           "cs_w64_nogen_r144_rate", "cs_w128_nogen_r144_rate"]  # w1_prices.cu's KERNELS, in op order
+           "cs_w64_nogen_r144_rate", "cs_w128_nogen_r144_rate", "f2fp_f16_rate", "f2fp_f16_half_rate",
+           "f2fp_f16_xor_rate"]  # w1_prices.cu's KERNELS, in op order
 SP_OP = 15
 CS_OPS = tuple(range(16, 26))
 CS_FADD = (16, 18, 20, 22)  # fed by one FADD per code; the others need no per-code input
@@ -104,7 +115,14 @@ NCS = 64  # codes per thread per loop iteration
 #: the rest of each cast-and-store loop body, exactly (the watched opcodes and these; FADD.FTZ would be a different opcode)
 LOOP_EXTRA = {16: {"FADD": 64, "LOP3.LUT": 32, "IMAD": 32, "STS.U16": 32}, 17: {"LOP3.LUT": 32, "IMAD": 32, "STS.U16": 32},
               18: {"FADD": 64, "STS": 16}, 19: {"STS": 16}, 20: {"FADD": 64, "STS.64": 8}, 21: {"STS.64": 8},
-              22: {"FADD": 64, "STS.128": 4}, 23: {"STS.128": 4}, 24: {"STS.64": 8}, 25: {"STS.128": 4}}
+              22: {"FADD": 64, "STS.128": 4}, 23: {"STS.128": 4}, 24: {"STS.64": 8}, 25: {"STS.128": 4},
+              27: {"LOP3.LUT": 32}, 28: {"LOP3.LUT": 64}}
+F16_OPS = (26, 27, 28)
+F16_FEED = {26: 0, 27: 1, 28: 2}  # the lane's constant XORed in before no convert, every other one, every one
+E4M3_NAN = (0x7F, 0xFF)
+POISON = 0xA5A5A5A5
+#: chk words each op's kernel writes, a prefix of its 16; the rest must keep w1_run's poison
+WRITTEN = {op: 16 for op in range(26 + len(F16_OPS))} | {op: NCHAIN for op in (6, 7, 8, 9, 12, 13, 14)}
 #: the metadata nibbles mma.sp::ordered_metadata accepts for 2:4: kept indices i0 < i1 as (i1 << 2) | i0
 SP_META_VALID = np.array([0b0100, 0b1000, 0b1001, 0b1100, 0b1101, 0b1110], np.uint32)
 E2M1_OPS = (12, 13, 14)
@@ -115,7 +133,8 @@ _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 10
               "hmma_f16_f16": 512, "fadd": 128, "ffma": 128, "f2fp_e4m3x2": 64, "f2fp_e4m3x2_u16": 64, "fadd_f32x2": 128,
               "fadd_pairs": 128, "f2fp_e2m1x2": 64, "f2fp_e2m1x2_u8": 64, "f2fp_e2m1x2_x2": 64, "qmma_sp_e4m3": 2048,
               "cs_port_fadd": 32, "cs_port_nogen": 43, "cs_packed_fadd": 72, "cs_packed_nogen": 128, "cs_w64_fadd": 100,
-              "cs_w64_nogen": 128, "cs_w128_fadd": 100, "cs_w128_nogen": 128, "cs_w64_nogen_r144": 128, "cs_w128_nogen_r144": 128}
+              "cs_w64_nogen": 128, "cs_w128_fadd": 100, "cs_w128_nogen": 128, "cs_w64_nogen_r144": 128, "cs_w128_nogen_r144": 128,
+              "f2fp_f16_e4m3": 128, "f2fp_f16_e4m3_half": 96, "f2fp_f16_e4m3_xor": 64}
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
@@ -158,6 +177,8 @@ def sass_gate(so: Path, out: Path | None) -> dict:
         body = bodies.get(_KERNEL[i], collections.Counter())
         expected = {opcode: per_loop, **LOOP_EXTRA.get(i, {})}
         watched = {k: v for k, v in body.items() if _WATCHED.match(k) or k in expected}
+        if i in F16_OPS:  # the whole loop but its uniform-datapath counter and branch
+            watched = {k: v for k, v in body.items() if not k.startswith(("U", "BRA"))}
         kernels[name] = {"kernel": _KERNEL[i], "loop": dict(sorted(body.items())), "expected": expected, "ok": watched == expected}
     return {"ok": all(k["ok"] for k in kernels.values()), "kernels": kernels}
 
@@ -183,12 +204,14 @@ class Device(F8.Device):
         self.sms, self.smem_per_sm, self.clock_khz = sms.value, smem.value, khz.value
         assert self.lib.w1_nops() == len(OPS) and self.lib.w1_threads() == THREADS
 
-    def run(self, op: int, iters: int, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    def run(self, op: int, iters: int, rows: np.ndarray, negative: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+        """One launch; ``negative`` is the no-write control: w1_run poisons the buffers and launches nothing."""
         blocks = self.sms
         rows = np.ascontiguousarray(rows, np.uint32).reshape(32 * 8)
         chk = np.zeros(blocks * THREADS * 16, np.uint32)
         cycles, sm, ms = np.zeros(blocks, np.int64), np.zeros(blocks, np.int32), ctypes.c_float()
-        rc = self.lib.w1_run(op, blocks, self.smem_per_sm // 2 + 1024, iters, _ptr(rows), _ptr(chk), _ptr(cycles), _ptr(sm), ctypes.byref(ms))
+        rc = self.lib.w1_run(op, blocks, self.smem_per_sm // 2 + 1024, iters, _ptr(rows), _ptr(chk), _ptr(cycles), _ptr(sm), ctypes.byref(ms),
+                             int(negative))
         if rc != 0:
             raise RuntimeError(f"CUDA error {rc} in w1_run({OPS[op][0]})")
         return chk.reshape(blocks, THREADS, 16), cycles, sm, float(ms.value)
@@ -202,10 +225,13 @@ class FakeDevice:
     def __init__(self, corrupt: int | None = None):
         self.corrupt = corrupt
 
-    def run(self, op, iters, rows):
+    def run(self, op, iters, rows, negative=False):
         name, _, per_loop, work, _ = OPS[op]
+        if negative:
+            poisoned = np.full(self.sms, POISON, np.uint32)
+            return (np.full((self.sms, THREADS, 16), POISON, np.uint32), np.repeat(poisoned, 2).view(np.int64), poisoned.view(np.int32), 0.0)
         gate = iters == GATE_ITERS  # timed launches' words are never read
-        chk = np.broadcast_to(expected_words(op, iters, rows) if gate else np.zeros((THREADS, 16), np.uint32), (self.sms, THREADS, 16)).copy()
+        chk = gate_words(op, iters, rows, self.sms)[0] if gate else np.full((self.sms, THREADS, 16), POISON, np.uint32)
         if self.corrupt is not None:
             chk.reshape(-1)[self.corrupt % chk.size] ^= 1
             self.corrupt = None
@@ -322,9 +348,102 @@ def cs_model(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     return (c[..., 0] | (c[..., 1] << 8) | (c[..., 2] << 16) | (c[..., 3] << 24)).astype(np.uint32)
 
 
+def _e4m3_f16_bits() -> np.ndarray:
+    """(256,) uint16: each E4M3 code's value under the registered decode (``verity.ml.tc.term.decode_e4m3``) as FP16 bits, exact for
+    every finite code (|x| <= 448, and the least subnormal 2^-9 is an FP16 normal); a NaN code's entry is 0x7FFF, which the gate
+    never compares (the decode names no bits for NaN)."""
+    out = np.zeros(256, np.uint16)
+    for c in range(256):
+        d = decode_e4m3(c)
+        if isinstance(d, str):
+            out[c] = 0x7FFF
+            continue
+        sign, exp, sig = d
+        v = np.float16(sig * 2.0**exp)
+        assert float(v) == sig * 2.0**exp
+        out[c] = int(v.view(np.uint16)) | sign << 15
+    return out
+
+
+E4M3_F16 = _e4m3_f16_bits()
+
+
+def f16_decode(s) -> tuple[np.ndarray, np.ndarray]:
+    """cvt.rn.f16x2.e4m3x2 of 16-bit inputs under the registered decode (the high code to the high half), and the mask of the halves
+    whose code is NaN."""
+    s = np.asarray(s, np.uint32) & np.uint32(0xFFFF)
+    hi, lo = s >> 8, s & np.uint32(0xFF)
+    words = (E4M3_F16[hi].astype(np.uint32) << 16) | E4M3_F16[lo]
+    nan = np.where(np.isin(hi, E4M3_NAN), np.uint32(0xFFFF0000), np.uint32(0)) | np.where(np.isin(lo, E4M3_NAN), np.uint32(0xFFFF), np.uint32(0))
+    return words.astype(np.uint32), nan.astype(np.uint32)
+
+
+def f16_chains(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
+    """(32, NCHAIN) chain words of an FP16-convert loop after ``iters`` iterations of SUNROLL converts: chain j starts at row word j,
+    and each convert reads the chain's low half, XORed first with row word 7 where the op feeds it.  A chain that would read a NaN
+    code raises: the decode names no bits for it, and timing_rows never draws one."""
+    rows = np.asarray(rows, np.uint32).reshape(32, 8)
+    x, y = rows.copy(), rows[:, 7:8]
+    for _ in range(iters):
+        for u in range(SUNROLL):
+            v = x ^ y if F16_FEED[op] == 2 or (F16_FEED[op] == 1 and u % 2 == 0) else x
+            x, nan = f16_decode(v)
+            if nan.any():
+                raise ValueError(f"{OPS[op][0]}: a chain reads a NaN code at step {u}; these rows can't be gated")
+    return x
+
+
+def f16_words(op: int, iters: int, rows: np.ndarray, blocks: int) -> tuple[np.ndarray, np.ndarray]:
+    """(blocks, THREADS, 16) chk words of an FP16-convert op and their NaN mask: words 0..7 of thread tid the converts of the 16-bit
+    inputs 8 * tid + w (every input once per 8,192 threads), words 8..15 the chains."""
+    tid = np.arange(blocks * THREADS, dtype=np.uint32)[:, None]
+    w, nan = np.zeros((blocks * THREADS, 16), np.uint32), np.zeros((blocks * THREADS, 16), np.uint32)
+    w[:, :8], nan[:, :8] = f16_decode(8 * tid + np.arange(8, dtype=np.uint32))
+    w[:, 8:] = np.tile(f16_chains(op, iters, rows), (blocks * THREADS // 32, 1))
+    return w.reshape(blocks, THREADS, 16), nan.reshape(blocks, THREADS, 16)
+
+
+def gate_words(op: int, iters: int, rows: np.ndarray, blocks: int) -> tuple[np.ndarray, np.ndarray]:
+    """(blocks, THREADS, 16) chk words each block must hold, the words the op doesn't write at POISON, and the mask of FP16 halves
+    that decode a NaN code (see gate_mismatches)."""
+    if op in F16_OPS:
+        want, nan = f16_words(op, iters, rows, blocks)
+    else:
+        want = np.broadcast_to(expected_words(op, iters, rows), (blocks, THREADS, 16)).copy()
+        nan = np.zeros_like(want)
+    want[..., WRITTEN[op]:] = POISON
+    return want, nan
+
+
+def gate_mismatches(chk: np.ndarray, want: np.ndarray, nan: np.ndarray) -> np.ndarray:
+    """Where chk fails: every bit outside the NaN halves equal to want's, and each NaN half an FP16 NaN (exponent all ones,
+    fraction nonzero), whatever its bits."""
+    bad = (chk & ~nan) != (want & ~nan)
+    for sh in (0, 16):
+        half = (chk >> np.uint32(sh)) & np.uint32(0xFFFF)
+        is_nan = ((half & 0x7C00) == 0x7C00) & ((half & 0x3FF) != 0)
+        bad |= (((nan >> np.uint32(sh)) & np.uint32(0xFFFF)) != 0) & ~is_nan
+    return bad
+
+
+def f16_nan_outputs(chk: np.ndarray) -> dict:
+    """The FP16 bits the device wrote for each NaN code, read off the table words (0..7) of every block."""
+    blocks = chk.shape[0]
+    s = (8 * np.arange(blocks * THREADS, dtype=np.uint32)[:, None] + np.arange(8, dtype=np.uint32)) & np.uint32(0xFFFF)
+    tab = chk.reshape(-1, 16)[:, :8]
+    out = {}
+    for code in E4M3_NAN:
+        vals = np.concatenate([(tab >> 16)[(s >> 8) == code], (tab & 0xFFFF)[(s & 0xFF) == code]])
+        out[f"0x{code:02x}"] = sorted(f"{int(v):04x}" for v in np.unique(vals))
+    return out
+
+
 def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
-    """(THREADS, 16) chk words of one block: all-ones MMA accumulators are k * UNROLL * iters, FADD / FFMA chains SUNROLL * iters."""
+    """(THREADS, 16) chk words of one block (block 0 for the FP16 converts, whose table words differ by block): all-ones MMA
+    accumulators are k * UNROLL * iters, FADD / FFMA chains SUNROLL * iters."""
     name, _, _, work, _ = OPS[op]
+    if op in F16_OPS:
+        return f16_words(op, iters, rows, 1)[0][0]
     w = np.zeros((THREADS, 16), np.uint32)
     if op in (0, 2, 3, 4, SP_OP):
         k = work // 128 // (2 if op == SP_OP else 1)
@@ -385,6 +504,24 @@ def timing_rows(op: int, rng) -> np.ndarray:
         else:  # f's start in [0.25, 0.5) (g two E4M3 ulps up), the constants' base
             r[:, 0] = np.float32(rng.uniform(0.25, 0.5, 32)).view(np.uint32)
             r[:, 1] = base
+    elif op in F16_OPS:
+        # A result's low half is the FP16 image of an E4M3 value: low byte 0x00 or 0x80, high byte <= 0x5F apart from the sign.  So
+        # with y's (word 7's) low byte not 0x7F either way round and its high byte under 0x20 apart from the sign, no convert after
+        # the first reads a NaN code; the chain starts (words 0..6) are drawn so the first doesn't either, as they are and XORed
+        # with y.  Chain 7 starts at y.
+        lo = rng.integers(0, 0x7F, 32) | (rng.integers(0, 2, 32) << 7)
+        hi = rng.integers(0, 0x20, 32) | (rng.integers(0, 2, 32) << 7)
+        r[:, 7] = (rng.integers(0, 1 << 16, 32) << 16) | (hi << 8) | lo
+        y16 = r[:, 7:8] & 0xFFFF
+
+        def has_nan(v):
+            return np.isin(v & 0xFF, E4M3_NAN) | np.isin((v >> 8) & 0xFF, E4M3_NAN)
+
+        r[:, :7] = rng.integers(0, 1 << 32, (32, 7), dtype=np.uint64)
+        bad = has_nan(r[:, :7] & 0xFFFF) | has_nan((r[:, :7] & 0xFFFF) ^ y16)
+        while bad.any():
+            r[:, :7][bad] = rng.integers(0, 1 << 32, int(bad.sum()), dtype=np.uint64)
+            bad = has_nan(r[:, :7] & 0xFFFF) | has_nan((r[:, :7] & 0xFFFF) ^ y16)
     else:
         r[:, 0] = np.float32(rng.uniform(1, 2, 32)).view(np.uint32)
         r[:, 1] = np.float32(rng.uniform(0.25, 0.5, 32)).view(np.uint32)
@@ -399,16 +536,25 @@ def numeric_gate(dev, rng, ops=None) -> tuple[dict, dict[int, np.ndarray]]:
             continue
         rows = np.array(GATE_ROW[op], np.uint32)[None].repeat(32, 0) if op in GATE_ROW else rows_t[op]
         chk, _, sm, _ = dev.run(op, GATE_ITERS, rows)
-        want = expected_words(op, GATE_ITERS, rows)
-        diff = np.argwhere(chk != want[None])
-        ref = "e2m1_ref" if op in E2M1_OPS else "fp8.cvt_ref"
+        want, nan = gate_words(op, GATE_ITERS, rows, chk.shape[0])
+        diff = np.argwhere(gate_mismatches(chk, want, nan))
+        ref = "e2m1_ref" if op in E2M1_OPS else "verity.ml.tc.term.decode_e4m3" if op in F16_OPS else "fp8.cvt_ref"
         res[name] = {"iters": GATE_ITERS, "data": "all-ones" if op in GATE_ROW else f"timing rows vs {ref}",
-                     "mismatches": int(len(diff)), "vacuous": not want[:, :NCHAIN].any(),
-                     "distinct_sms": int(len(set(sm.tolist()))), "blocks": int(len(sm))}
+                     "mismatches": int(len(diff)), "vacuous": not want[..., :NCHAIN].any(),
+                     "distinct_sms": int(len(set(sm.tolist()))), "blocks": int(len(sm)),
+                     "unwritten_words_per_thread": 16 - WRITTEN[op]}
+        if op in F16_OPS:
+            res[name]["inputs_converted"] = int(min(1 << 16, chk.shape[0] * THREADS * 8))
+            res[name]["nan_outputs"] = f16_nan_outputs(chk)
         if len(diff):
             b, t, w = (int(v) for v in diff[0])
-            res[name]["first_mismatch"] = {"block": b, "thread": t, "word": w, "got": f"{int(chk[b, t, w]):08x}", "want": f"{int(want[t, w]):08x}"}
-    ok = all(r["mismatches"] == 0 and not r["vacuous"] and r["distinct_sms"] == r["blocks"] for r in res.values())
+            res[name]["first_mismatch"] = {"block": b, "thread": t, "word": w, "got": f"{int(chk[b, t, w]):08x}", "want": f"{int(want[b, t, w]):08x}"}
+        nchk, _, nsm, _ = dev.run(op, GATE_ITERS, rows, negative=True)
+        n_bad, n_sms = int(gate_mismatches(nchk, want, nan).sum()), len(set(nsm.tolist()))
+        res[name]["negative_control"] = {"writes": "none: no kernel launched, chk, cycles and sm keep their 0xA5 poison",
+                                         "mismatches": n_bad, "distinct_sms": n_sms, "rejected": n_bad > 0 or n_sms != len(nsm)}
+    ok = all(r["mismatches"] == 0 and not r["vacuous"] and r["distinct_sms"] == r["blocks"] and r["negative_control"]["rejected"]
+             for r in res.values())
     return {"ok": ok, "ops": res}, rows_t
 
 
@@ -460,9 +606,15 @@ def prices(tim: dict) -> dict:
         if name in rate:
             out["price_units"][f"{name} per {per}"] = unit / rate[name]
     for name, per, n in (("f2fp_e4m3x2", "instruction (2 codes)", 2), ("fadd_f32x2", "instruction (2 words)", 2),
-                         ("f2fp_e2m1x2", "instruction (2 codes)", 2), ("qmma_sp_e4m3", "nonzero product", 2)):
+                         ("f2fp_e2m1x2", "instruction (2 codes)", 2), ("qmma_sp_e4m3", "nonzero product", 2),
+                         ("f2fp_f16_e4m3", "instruction (2 codes)", 2)):
         if name in rate:
             out["price_units"][f"{name} per {per}"] = n * unit / rate[name]
+    f16 = [OPS[op] for op in F16_OPS]
+    if all(o[0] in rate for o in f16):  # SM-clocks per warp per loop iteration; each step adds 32 LOP3 to the same 64 converts
+        tau = [o[2] * o[3] / rate[o[0]] for o in f16]
+        out["f16_lop3_steps"] = {"sm_clocks_per_warp_iteration": dict(zip((o[0] for o in f16), tau)),
+                                 "first_32_lop3": tau[1] - tau[0], "second_32_lop3": tau[2] - tau[1]}
     if "qmma_sp_e4m3" in rate:  # instructions per SM per clock, sparse over dense (both 16 per loop)
         out["sp_over_dense_instructions"] = rate["qmma_sp_e4m3"] / (2 * unit)
     if "qmma_e4m3_f16" in rate:
@@ -546,7 +698,8 @@ def run(args) -> tuple[int, dict]:
     res["numeric_gate"], rows_t = numeric_gate(dev, rng, ops)
     if not res["numeric_gate"]["ok"]:
         failures.append("numeric gate: " + ", ".join(k for k, r in res["numeric_gate"]["ops"].items()
-                                                     if r["mismatches"] or r["vacuous"] or r["distinct_sms"] != r["blocks"]))
+                                                     if r["mismatches"] or r["vacuous"] or r["distinct_sms"] != r["blocks"]
+                                                     or not r["negative_control"]["rejected"]))
         return finish(out, args, res, failures, ident, t0)
     res["timing"] = timing(dev, rows_t, args.reps, args.target_cycles, ident.get("gpu_uuid"), ops, args.smi_every)
     res["prices"] = prices(res["timing"])
@@ -600,6 +753,11 @@ def finish(out: Path, args, res: dict, failures: list[str], ident: dict | None, 
             meas += [{"name": f"split.e2m1.{k}", "value": sp[k], "unit": u, "label": derived}
                      for k, u in (("a_per_cast", "SM-clocks/warp instruction"), ("b_per_support", "SM-clocks/warp instruction"),
                                   ("c_per_uniform", "SM-clocks/warp instruction"), ("cast_alone_price_per_code", "W1 units"))]
+        st = pr.get("f16_lop3_steps") or {}
+        if st:
+            derived = "Derived (differences of Measured " + res["clocks"] + " loop periods)"
+            meas += [{"name": f"f16_lop3_steps.{k}", "value": st[k], "unit": "SM-clocks/warp iteration", "label": derived}
+                     for k in ("first_32_lop3", "second_32_lop3")]
         doc = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": run_id, "arch": F8.ARCH,
                "sku": (ident or {}).get("device"), "driver": (ident or {}).get("driver"), "gpu_uuid": (ident or {}).get("gpu_uuid"),
                "uuid_checked": (ident or {}).get("uuid_checked"), "nvcc": res.get("nvcc"), "clocks": res["clocks"],
@@ -607,7 +765,9 @@ def finish(out: Path, args, res: dict, failures: list[str], ident: dict | None, 
                "measurements": meas + [{"name": "wall", "value": res["seconds"], "unit": "s"}],
                "workload_fingerprint": {"probe": "tools/tc_probe_fp4/w1.py", "seed": args.seed, "reps": args.reps,
                                         "target_cycles": args.target_cycles, "compile_only": args.compile_only, "ops": res["ops"]},
-               "validation": {"status": res["validation"], "checker": "tc_probe_fp4/w1.py: identity, SASS loop, numeric and one-block-per-SM gates",
+               "validation": {"status": res["validation"],
+                              "checker": "tc_probe_fp4/w1.py: identity, SASS loop, numeric (poisoned buffers, a rejected no-write "
+                                         "negative control per op) and one-block-per-SM gates",
                               "detail": "; ".join(failures) or "every gate passed", "evidence": ["w1_results.json"]},
                "artifacts": sorted(p.name for p in out.iterdir() if p.suffix in (".json", ".txt") and p.name != "result.json")}
         tmp = out / "result.json.tmp"

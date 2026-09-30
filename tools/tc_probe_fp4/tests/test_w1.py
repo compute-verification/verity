@@ -5,7 +5,9 @@ timed; the SASS loop gate rejects a loop with a missing or an extra watched inst
 (two FADDs, no FADD2); the packed add's gate words tell its halves apart; the casts' packing (hi operand in the upper byte or
 nibble) and the E2M1 reference's grid, ties and saturation are pinned; the cast-and-store loops' staged words and exact loop bodies
 are pinned; timing samples nvidia-smi every few rounds, not every rep; the three-loop split recovers known costs; the tool
-declarations resolve their key params.  With nvcc on the PATH, the real build's loops are checked.
+declarations resolve their key params.  The E4M3-to-FP16 reference is pinned to the registered decode, its timing rows never feed a
+chain a NaN code, and its loops are pinned whole; unwritten words must keep the poison, and a device whose no-write control passes
+the gate fails the run;  With nvcc on the PATH, the real build's loops are checked.
 """
 from __future__ import annotations
 
@@ -63,7 +65,7 @@ def test_corrupt_gate_word_fails_before_timing(tmp_path, no_nvcc):
     assert "timing" not in res and "prices" not in res
 
 
-@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, *range(16, 26)])
+@pytest.mark.parametrize("op", [8, 9, 12, 13, 14, *range(16, 26), *w1.F16_OPS])
 def test_gate_words_are_not_vacuous(op):
     rows = w1.timing_rows(op, np.random.default_rng(w1.F8.SEED_DEFAULT))
     assert w1.expected_words(op, w1.GATE_ITERS, rows)[:, : w1.NCHAIN].all(axis=1).mean() > 0.5
@@ -195,6 +197,85 @@ def test_smi_sampled_every_few_rounds(monkeypatch):
 def test_lease_needs_a_real_build(tmp_path, capsys):
     assert w1.main(["--out", str(tmp_path), "--fake-silicon", "--lease-max-min", "5"]) == 2
     assert "--lease-max-min" in capsys.readouterr().err
+
+
+def test_e4m3_f16_decode_pinned():
+    """1.0, the least subnormal 2^-9 (an FP16 normal), the least normal 2^-6, 448, -0 and -448; the high code goes to the high half,
+    and only 0x7F / 0xFF halves are masked as NaN."""
+    t = w1.E4M3_F16
+    assert [int(t[c]) for c in (0x38, 0x01, 0x08, 0x7E, 0x80, 0xFE, 0x00)] == [0x3C00, 0x1800, 0x2400, 0x5F00, 0x8000, 0xDF00, 0]
+    words, nan = w1.f16_decode(np.array([0x3801, 0x7F38, 0xAB38FF], np.uint32))
+    assert words[0] == 0x3C001800 and nan.tolist() == [0, 0xFFFF0000, 0x0000FFFF]
+    assert words[2] & 0xFFFF0000 == 0x3C000000  # bits above 16 are ignored
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_f16_timing_rows_never_feed_a_nan(seed):
+    rng = np.random.default_rng(seed)
+    for op in w1.F16_OPS:
+        rows = w1.timing_rows(op, rng)
+        chains = w1.f16_chains(op, w1.GATE_ITERS, rows)
+        if op != 26:  # the fed chains stay alive; the bare chains collapse, and the table words keep that gate honest
+            assert chains.all(axis=1).mean() > 0.5
+
+
+def test_f16_prices_and_steps(tmp_path, no_nvcc):
+    code, res = _run(tmp_path, "--ops", "f2fp_f16_e4m3,f2fp_f16_e4m3_half,f2fp_f16_e4m3_xor")
+    assert code == 0, res["failures"]
+    g = res["numeric_gate"]["ops"]["f2fp_f16_e4m3"]
+    assert g["inputs_converted"] == w1.FakeDevice.sms * w1.THREADS * 8 and g["nan_outputs"] == {"0x7f": ["7fff"], "0xff": ["7fff"]}
+    p = res["prices"]["price_units"]
+    assert p["f2fp_f16_e4m3 per code"] == pytest.approx(1024 / 128) and p["f2fp_f16_e4m3 per instruction (2 codes)"] == pytest.approx(16)
+    st = res["prices"]["f16_lop3_steps"]
+    assert [st["first_32_lop3"], st["second_32_lop3"]] == pytest.approx([4096 / 96 - 4096 / 128, 4096 / 64 - 4096 / 96])
+
+
+def test_negative_controls_are_rejected(tmp_path, no_nvcc):
+    code, res = _run(tmp_path, "--ops", "fadd,f2fp_f16_e4m3")
+    assert code == 0, res["failures"]
+    for name in ("fadd", "f2fp_f16_e4m3", w1.UNIT_OP):
+        nc = res["numeric_gate"]["ops"][name]["negative_control"]
+        assert nc["rejected"] and nc["mismatches"] > 0 and nc["distinct_sms"] == 1
+
+
+def test_a_gate_that_accepts_no_writes_fails(tmp_path, no_nvcc, monkeypatch):
+    """A device whose no-write launch still returns the right words (say, stale buffers never poisoned) must fail the gate."""
+    real = w1.FakeDevice.run
+    monkeypatch.setattr(w1.FakeDevice, "run", lambda self, op, iters, rows, negative=False: real(self, op, iters, rows))
+    code, res = _run(tmp_path, "--ops", "f2fp_f16_e4m3")
+    assert code == 1 and not res["numeric_gate"]["ops"]["f2fp_f16_e4m3"]["negative_control"]["rejected"] and "prices" not in res
+    assert res["failures"] == [f"numeric gate: {w1.UNIT_OP}, f2fp_f16_e4m3"]
+
+
+def test_unwritten_words_must_keep_the_poison():
+    rows = np.array(w1.GATE_ROW[6], np.uint32)[None].repeat(32, 0)
+    want, nan = w1.gate_words(6, w1.GATE_ITERS, rows, 2)
+    assert (want[..., w1.NCHAIN:] == w1.POISON).all() and (want[..., : w1.NCHAIN] != w1.POISON).all()
+    chk = want.copy()
+    chk[..., w1.NCHAIN:] = 0  # a kernel that zeroes words it shouldn't touch
+    assert w1.gate_mismatches(chk, want, nan).sum() == 2 * w1.THREADS * (16 - w1.NCHAIN)
+
+
+def test_nan_halves_need_an_fp16_nan():
+    want, nan = w1.f16_decode(np.array([0x7F38], np.uint32))
+    ok = (want & ~nan) | np.uint32(0x7E000000)
+    assert not w1.gate_mismatches(ok, want, nan).any()
+    assert w1.gate_mismatches((want & ~nan) | np.uint32(0x7C000000), want, nan).all()  # +inf is not a NaN
+
+
+_F16 = ["F2FP.F16.E4M3.UNPACK_B"] * 64 + ["UIADD3", "UISETP.NE.AND"]
+
+
+@pytest.mark.parametrize("kernel, name, body, ok", [
+    ("f2fp_f16_rate", "f2fp_f16_e4m3", _F16, True), ("f2fp_f16_rate", "f2fp_f16_e4m3", _F16 + ["PRMT"], False),
+    ("f2fp_f16_rate", "f2fp_f16_e4m3", _F16[1:], False), ("f2fp_f16_half_rate", "f2fp_f16_e4m3_half", _F16 + ["LOP3.LUT"] * 32, True),
+    ("f2fp_f16_half_rate", "f2fp_f16_e4m3_half", _F16 + ["LOP3.LUT"] * 33, False),
+    ("f2fp_f16_xor_rate", "f2fp_f16_e4m3_xor", _F16 + ["LOP3.LUT"] * 64, True),
+    ("f2fp_f16_xor_rate", "f2fp_f16_e4m3_xor", _F16 + ["LOP3.LUT"] * 64 + ["MOV"], False)])
+def test_sass_gate_pins_the_f16_loops(monkeypatch, kernel, name, body, ok):
+    """The FP16 convert loops are exactly 64 converts and their LOP3 feed: a PRMT, a MOV or one LOP3 too many fails."""
+    monkeypatch.setattr(w1.subprocess, "run", lambda *a, **k: type("P", (), {"stdout": _sass(body, kernel)})())
+    assert w1.sass_gate(Path("/nonexistent.so"), None)["kernels"][name]["ok"] is ok
 
 
 def test_split_recovers_the_costs():

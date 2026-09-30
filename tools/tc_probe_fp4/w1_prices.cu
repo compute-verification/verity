@@ -32,6 +32,12 @@
 //   23  cs_w128_nogen_rate     the same with no per-code input                                                           64 codes
 //   24  cs_w64_nogen_r144_rate   op 21 at the port's 144-byte rows (two-way bank conflicts per half-warp)               64 codes
 //   25  cs_w128_nogen_r144_rate  op 23 at the port's 144-byte rows (two-way bank conflicts per quarter-warp)            64 codes
+//   26  f2fp_f16_rate          cvt.rn.f16x2.e4m3x2, E4M3 to FP16, each result's low half fed back (nothing else)     64 codes
+//   27  f2fp_f16_half_rate     the same with the lane's constant XORed in before every other convert (one LOP3 each)  64 codes
+//   28  f2fp_f16_xor_rate      the same with it XORed in before every convert                                         64 codes
+//
+// Every launch poisons chk, cycles and sm with 0xA5 first, so a word a kernel doesn't write reads 0xA5A5A5A5; w1_run's flag 1 is
+// the negative control, which launches nothing, and the gate must reject what it leaves.
 //
 // Build: nvcc -O2 -gencode=arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared
 
@@ -618,13 +624,59 @@ CS_WIDE(cs_w128_nogen_rate, cs_wide_nogen, 4, 192)
 CS_WIDE(cs_w64_nogen_r144_rate, cs_wide_nogen, 2, 144)
 CS_WIDE(cs_w128_nogen_r144_rate, cs_wide_nogen, 4, 144)
 
+// E4M3 to FP16: F2FP.F16.E4M3.UNPACK_B converts the two codes in a register's low half (the high code to the high FP16).  A result's
+// low half is the FP16 image of an E4M3 value, whose low byte is 0x00 or 0x80, so a chain that feeds it back as two codes reaches 0
+// within three converts (op 26); XORing the lane's constant y (row word 7) in before every other convert (27) or every one (28)
+// keeps it off 0, and w1.py's rows choose y so that no chain ever reads a NaN code.  Row words 0..7 start the chains.  After the
+// timed loop, chk words 0..7 of thread tid are the converts of the 16-bit inputs 8 * tid + w, every input once per 8,192 threads,
+// and words 8..15 are the chains.
+__device__ __forceinline__ uint32_t cvt_f16x2_e4m3x2(unsigned short s) {
+    uint32_t r;
+    asm volatile("cvt.rn.f16x2.e4m3x2 %0, %1;" : "=r"(r) : "h"(s));
+    return r;
+}
+
+template <int FEED>
+__device__ __forceinline__ void f16_chains(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk, long long* __restrict__ cycles,
+                                           int* __restrict__ sm, int iters) {
+    RATE_PROLOGUE
+    uint32_t x[NCHAIN];
+    for (int j = 0; j < NCHAIN; j++) x[j] = row[j];
+    const uint32_t y = row[7];
+#pragma unroll 1
+    for (int it = 0; it < iters; it++) {
+#pragma unroll
+        for (int u = 0; u < SUNROLL; u++) {
+#pragma unroll
+            for (int j = 0; j < NCHAIN; j++) {
+                const uint32_t v = (FEED == 2 || (FEED == 1 && (u & 1) == 0)) ? x[j] ^ y : x[j];
+                x[j] = cvt_f16x2_e4m3x2((unsigned short)v);
+            }
+        }
+    }
+    RATE_EPILOGUE
+    uint32_t* out = chk + (size_t)tid * CHK;
+    for (int w = 0; w < 8; w++) out[w] = cvt_f16x2_e4m3x2((unsigned short)(8 * tid + w));
+    for (int j = 0; j < NCHAIN; j++) out[8 + j] = x[j];
+}
+
+#define F16_CHAINS(KNAME, FEED)                                                                                           \
+    __global__ void __launch_bounds__(THREADS) KNAME(const uint32_t* __restrict__ in, uint32_t* __restrict__ chk,         \
+                                                     long long* __restrict__ cycles, int* __restrict__ sm, int iters) {  \
+        f16_chains<FEED>(in, chk, cycles, sm, iters);                                                                    \
+    }
+
+F16_CHAINS(f2fp_f16_rate, 0)
+F16_CHAINS(f2fp_f16_half_rate, 1)
+F16_CHAINS(f2fp_f16_xor_rate, 2)
+
 typedef void (*RateFn)(const uint32_t*, uint32_t*, long long*, int*, int);
 const RateFn KERNELS[] = {qmma_e4m3_f32_rate, qmma_e4m3_f16_rate, qmma_mxf8_rate, omma_nvf4_rate, hmma_bf16_f32_rate, hmma_f16_f16_rate,
                           fadd_rate, ffma_rate, f2fp_rate, f2fp_u16_rate, fadd_f32x2_rate, fadd_pairs_rate,
                           f2fp_e2m1_rate, f2fp_e2m1_u8_rate, f2fp_e2m1_x2_rate, qmma_sp_e4m3_rate,
                           cs_port_fadd_rate, cs_port_nogen_rate, cs_packed_fadd_rate, cs_packed_nogen_rate,
                           cs_w64_fadd_rate, cs_w64_nogen_rate, cs_w128_fadd_rate, cs_w128_nogen_rate,
-                          cs_w64_nogen_r144_rate, cs_w128_nogen_r144_rate};
+                          cs_w64_nogen_r144_rate, cs_w128_nogen_r144_rate, f2fp_f16_rate, f2fp_f16_half_rate, f2fp_f16_xor_rate};
 constexpr int NOPS = sizeof(KERNELS) / sizeof(KERNELS[0]);
 
 }  // namespace
@@ -635,8 +687,10 @@ int w1_nops(void) { return NOPS; }
 int w1_threads(void) { return THREADS; }
 
 // One launch of op over `blocks` blocks: in u32[32*8] (each lane's operand words), chk u32[blocks*THREADS*16] (accumulators),
-// cycles/sm per block, the event time in ms.  smem_bytes of dynamic shared memory per block keeps one block per SM.
-int w1_run(int op, int blocks, int smem_bytes, int iters, const uint32_t* in, uint32_t* chk, long long* cycles, int* sm, float* ms) {
+// cycles/sm per block, the event time in ms.  smem_bytes of dynamic shared memory per block keeps one block per SM.  chk, cycles
+// and sm are poisoned with 0xA5 before the launch; flags & 1 (the negative control) skips the launch, so they come back poisoned.
+int w1_run(int op, int blocks, int smem_bytes, int iters, const uint32_t* in, uint32_t* chk, long long* cycles, int* sm, float* ms,
+           int flags) {
     if (op < 0 || op >= NOPS) return (int)cudaErrorInvalidValue;
     cudaError_t err = cudaFuncSetAttribute(KERNELS[op], cudaFuncAttributeMaxDynamicSharedMemorySize, smem_bytes);
     if (err != cudaSuccess) return (int)err;
@@ -650,9 +704,11 @@ int w1_run(int op, int blocks, int smem_bytes, int iters, const uint32_t* in, ui
     if ((err = cudaMalloc(&dIn, 32 * 8 * 4)) == cudaSuccess && (err = cudaMalloc(&dChk, nchk * 4)) == cudaSuccess &&
         (err = cudaMalloc(&dCyc, blocks * sizeof(long long))) == cudaSuccess && (err = cudaMalloc(&dSm, blocks * sizeof(int))) == cudaSuccess) {
         cudaMemcpy(dIn, in, 32 * 8 * 4, cudaMemcpyHostToDevice);
-        cudaMemset(dChk, 0, nchk * 4);
+        cudaMemset(dChk, 0xA5, nchk * 4);
+        cudaMemset(dCyc, 0xA5, blocks * sizeof(long long));
+        cudaMemset(dSm, 0xA5, blocks * sizeof(int));
         cudaEventRecord(e0);
-        KERNELS[op]<<<blocks, THREADS, smem_bytes>>>(dIn, dChk, dCyc, dSm, iters);
+        if (!(flags & 1)) KERNELS[op]<<<blocks, THREADS, smem_bytes>>>(dIn, dChk, dCyc, dSm, iters);
         cudaEventRecord(e1);
         err = cudaGetLastError();
         if (err == cudaSuccess) err = cudaEventSynchronize(e1);
