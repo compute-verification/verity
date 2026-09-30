@@ -14,7 +14,7 @@ JOB=aw-$NAME-${SHA:0:8}
 D=/workspace/pouw/approved-weights/$JOB
 FILL=/workspace/pouw/fill
 PY=/workspace/pouw/gpu7-fp4/venv/bin/python
-ENVS="HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 OMP_NUM_THREADS=8"
+ENVS="PYTHONPATH=$(cd "$HERE/../../.." && pwd)/packages/verity/src HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 OMP_NUM_THREADS=8"
 ARGS=$(printf ' %q' "$@")
 MEM=$([ "$GPUS" = 0 ] && echo 64 || echo 128)
 mkdir -p "$D/out"
