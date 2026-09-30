@@ -113,6 +113,12 @@ not cryptographic, and to be proved: verified-lowering design, phase 2i).
 - **What it gives.** With the layout's facts (`Binding.Layout`, `Binding.HmRows`), the registration fact: a satisfying
   witness's rows have the registered leaves. Then `ValueBinding` (`HmRows.binding`) and `registered_weights` hold with
   A2 as the only cryptographic assumption, and `collide` an explicit SHA-512 collision (`ExplicitLeaf.hm96`).
+- **At the registered leaves.** The `_hm96` bounds are bounds at the leaves the registration commits to
+  (`Layout.regLeaf`). An audit bound read from registered roots also needs the roots' Merkle binding, `δ_tree` under
+  SHA-512 collision resistance (`cr/sha-512`; `DESIGN.md` §1), which those bounds leave out (red-team review of #513, C2).
+- **Discharged only by fixed readers.** `HmRowComputes` and `decode_row` count as discharged only for readers of the
+  witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
+  chooses its values discharges nothing (red-team review of #513, C3).
 - **Why it is not a proof yet.** It is a fact about the `sha512x3` and `hm96` sections of the circuit file and the
   chain's wiring (`HmRow.rowWires`), which the model does not read yet.
 - **Upstream:** watch entry `hm-row-computes`.

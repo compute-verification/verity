@@ -15,6 +15,9 @@ SHA-512 (`Refine.H512`), so A2 (`hCR`) is about SHA-512 itself, and what `vb` ca
 
 `collide_spec` is proved (`ExplicitLeaf.hm96`): the link finder's collisions are explicit SHA-512 collisions. The other
 hypotheses (`hExec`, `dp`, `hL1`, `hOne`) are the skeleton's, unchanged (`assumptions/e2e-checklist.md`).
+
+The bounds are at the registered leaves (`Layout.regLeaf`). An audit bound read from registered roots adds the roots'
+Merkle binding: `δ_tree`, under SHA-512 collision resistance (`cr/sha-512`; `DESIGN.md` §1).
 -/
 
 namespace FlockSoundness.Binding

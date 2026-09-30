@@ -91,7 +91,7 @@ theorem registered (hHm : rs.Computes) : lay.Registered rs.scheme := by
   · exact rs.other_registered S R u hu M hM g hg hrow
 
 /-- **The value binding of `hm96-sha512/row/v1` rows**: `Layout.binding` at the rows' scheme, from `HmRowComputes`. -/
-def binding (hHm : rs.Computes) : P.ValueBinding plan tab decode H512 :=
+noncomputable def binding (hHm : rs.Computes) : P.ValueBinding plan tab decode H512 :=
   lay.binding rs.scheme (rs.registered hHm)
 
 end HmRows
