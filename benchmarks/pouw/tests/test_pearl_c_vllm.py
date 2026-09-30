@@ -157,9 +157,9 @@ def device_run():
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, BEACON).salt
 
-    def make(hashing=True):
+    def make(hashing=True, defer=False):
         return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, BEACON, hashing=hashing,
-                                   capacity=1 << 12)
+                                   capacity=1 << 12, defer=defer)
     return make, kernel, weights, roots, salt
 
 
@@ -201,7 +201,7 @@ def test_a_call_over_whole_128_row_tiles_runs_gpu_1s_fused_path(device_run):
     kernel.dev.log.clear()
     y = run.gemm(0, torch.randn(128, 1024).to(torch.bfloat16), weights[0], None)
     names = [n for n, *_ in kernel.dev.log if not n.endswith("_smem")]
-    assert run.pipes[(0, 128, frozenset(), True)][0].fused and "hash_msg_v" not in names
+    assert run.pipes[(0, 128, frozenset(), True, False)][0].fused and "hash_msg_v" not in names
     assert names[-2:] == ["gemm_pearlc_b", "hash_leaf_p"] and {n: p for n, _, p, _ in kernel.dev.log}["gemm_pearlc_b"][4] == y.data_ptr()
 
 
@@ -575,3 +575,45 @@ def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(mon
     want = tuple(i for i, row in enumerate(words) if not PW.row_passes([int(v) for v in row]))
     assert PPD.excluded(fused[:, 0].bool(), fused[:, 1].bool(), x) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), x) == want
     assert torch.equal(fused, ref)
+
+
+# ---- step 2 of the decode plan: the deferred schedule -------------------------------------------------------------
+
+def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_sets(device_run):
+    make, kernel, weights, *_ = device_run
+    run = make(defer=True)
+    kernel.dev.log.clear()
+    for _ in range(3):
+        run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
+    log = [(n, st, p) for n, st, p, _ in kernel.dev.log if not n.endswith("_smem")]
+    assert {st for n, st, _ in log if n in ("hash_msg_v", "hash_leaf_p")} == {run.side.raw} == {1}
+    assert {st for n, st, _ in log if n not in ("hash_msg_v", "hash_leaf_p")} == {0}
+    sets = run.shapes[(32, 256, 1024)].sets
+    ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
+    gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
+    msgs = [p[:2] for n, _, p in log if n == "hash_msg_v"]
+    assert gemms == msgs == [ptr(0), ptr(1), ptr(0)] and ptr(0) != ptr(1)
+    run.begin()
+    run.poison()
+    assert all(bool((t == 0xA5).all()) for st in sets for t in st.values())
+
+
+def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, tmp_path):
+    make, kernel, weights, *_ = device_run
+    xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(40 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
+          for i, (w, m) in enumerate(((0, 32), (1, 16), (0, 32), (0, 128), (1, 32), (0, 128)))]
+    got = {}
+    for name, defer in (("serial", False), ("deferred", True)):
+        run = make(defer=defer)
+        kernel.dev.log.clear()
+        run.begin(retain=str(tmp_path / name), run=RUN)
+        keys = []
+        for w, x in xs:
+            run.gemm(w, x, weights[w], None)
+            keys.append(PPD._bytes(run.shapes[(-(-x.shape[0] // 16) * 16, weights[w].shape[0], 1024)].keys[:136]))
+        out = run.end()
+        man = json.loads(Path(out["manifest"]).read_text())
+        launches = sorted((n, i) for n, _, _, i in kernel.dev.log if not n.endswith("_smem"))
+        got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
+                     [{k: u[k] for k in ("root_a", "excluded_a", "real_rows", "m", "n")} for u in man["matmuls"]])
+    assert got["deferred"] == got["serial"]

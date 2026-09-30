@@ -36,6 +36,12 @@ the keys by native BLAKE3 (`_Keys`, byte for byte `call_keys`), their upload thr
 screen as one fused kernel (`screen_into`, Triton; `screen` where Triton can't run), A's roots copied into a pass buffer,
 and the stream read from torch's raw accessor.
 
+With ``defer`` (the decode plan's step 2, bc-b139c29c's schedule) each call's tile hashing (`SIDE_STEPS`: the message
+digests and the tile leaves) runs on a low-priority side stream behind an event after the GEMM, while the next calls go on:
+A's commitment stays on the call's stream, since forming reads seed_A.  Each shape then rotates `DEFER_SETS` sets of C̃, U
+and the digests, and a call reuses a set only once the side stream has finished with it; the pass's end waits for the side
+stream.  The same kernels read and write the same bytes, so the commitments are the serial schedule's.
+
 With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the digests, the leaves and the
 records.  What is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between
 passes, never within one.
@@ -59,8 +65,11 @@ from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c_work as PW
 from verity_pouw.schemes import pearl_kw as P
 
-#: scheme name -> (forming, device record, hashing format).  ``-h2`` joins once GPU 1's pipeline commits A with frame-b3s.
+#: scheme name -> (forming, device record, hashing format).  The format is a switch: ``-h2`` (frame-b3s) or ``-h3`` joins as
+#: one entry here and one in `TREE_HASH` once GPU 1's pipeline commits with it (which of them is Daniel's call).
 SCHEMES = {"pearl-c-sm120-v1-h1": ("v1", "sm120", "h1")}
+#: each hashing format's tree hash (`CommitmentDomain.hash`): A's, B's and the transcript's trees
+TREE_HASH = {"h1": "blake3"}
 #: the domain's row granularity: m₁₆ = m rounded up to it, the filler rows zero
 ROW_ALIGN = 16
 #: tiles one pass's leaf buffer holds (256 MiB)
@@ -82,6 +91,10 @@ JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b"
 CALL_STEPS = ("pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "stats_a", "eprime_a", "form_a", "af", "pa",
               "gemm_pearlc", "hash_msg", "hash_leaf")
 HASH_STEPS = frozenset({"pad_a", "node_keys_a", "hash_rows_a", "tree_a", "seed_a", "lines_ea", "hash_msg", "hash_leaf"})
+#: the deferred schedule's side-stream steps, and the buffers they read that each shape rotates
+SIDE_STEPS = ("hash_msg", "hash_leaf")
+ROTATED = ("c", "u", "digests")
+DEFER_SETS = 2
 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
@@ -92,6 +105,11 @@ def scheme_of(name: str, **instance: Any) -> C.PearlC:
     if s.name != name:
         raise ValueError(f"the scheme built for {name!r} names itself {s.name!r}")
     return s
+
+
+def tree_hash(name: str) -> str:
+    """The scheme's tree hash, from its hashing format."""
+    return TREE_HASH[SCHEMES[name][2]]
 
 
 def refusals(name: str, shapes: dict[int, tuple[int, int]]) -> list[str]:
@@ -304,6 +322,9 @@ class _Shape:
     b: dict[str, Any]
     xa: Any                        # FP32 (mp x k): rows m16 … mp − 1 stay zero
     keys: Any                      # dom_a ‖ unit
+    sets: list = field(default_factory=list)   # deferred: DEFER_SETS sets of C̃, U and the digests, set 0 b's own
+    done: list = field(default_factory=list)   # deferred: each set's last side-stream use (a CUDA event)
+    turn: int = 0
 
 
 @dataclass
@@ -318,8 +339,9 @@ class _Pass:
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
 
 
-def weight_roots(kernel: Kernel, weights: dict[int, Any]) -> dict[int, bytes]:
-    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase."""
+def weight_roots(kernel: Kernel, weights: dict[int, Any], hash: str = "blake3") -> dict[int, bytes]:
+    """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase.  `hash` is
+    the scheme's tree hash (`tree_hash`)."""
     import torch
     R, out = kernel.run, {}
     for w, weight in weights.items():
@@ -327,7 +349,7 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any]) -> dict[int, bytes]:
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
         b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "keys_b", "faT32", "fbT32", "fbT128")}
         keys = _zeros(64, weight.device)
-        _put(keys[32:], rows_domain(_weight_binding(w), -2, n, "blake3").domain_id)
+        _put(keys[32:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
                          {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 32})
@@ -336,33 +358,48 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any]) -> dict[int, bytes]:
     return out
 
 
-def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int) -> bytes:
-    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows."""
-    return rows_domain(activation_binding(salt, index), index, m16, "blake3").domain_id + fixture.unit_block(salt, root_b, index)
+def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = "blake3") -> bytes:
+    """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash`."""
+    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
 
 
 class _Keys:
     """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `CommitmentDomain.domain_id`'s framed message hashed
-    natively, and unit's label hash is a constant.  Without the package, `call_keys` itself."""
+    natively, and unit's label hash is a constant.  Under another tree hash than ``blake3`` (another format's framing), or
+    without the package, `call_keys` itself."""
 
-    def __init__(self, fixture: Any, salt: bytes):
+    def __init__(self, fixture: Any, salt: bytes, hash: str = "blake3"):
         try:
             import blake3 as native
         except ImportError:
             native = None
-        self.native, self.fixture, self.salt = native, fixture, salt
+        self.native, self.fixture, self.salt, self.hash = native if hash == "blake3" else None, fixture, salt, hash
         self.label = fixture.unit_block(salt, bytes(32), 0)[-32:]
         self.positions: dict[int, bytes] = {}
 
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
-            return call_keys(self.fixture, self.salt, root_b, index, m16)
+            return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = bytes.fromhex(RangeIndexedDomain(m16).identity_digest)
         parts = (activation_binding(self.salt, index), _uint(index + 2), pos, _uint(m16))
         msg = _FRAME + (6).to_bytes(4, "big") + b"domain" + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
         return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
+
+
+class _Side:
+    """The deferred schedule's side stream, at the least priority, and its handle (a stand-in handle off the GPU, for the
+    recording device's log).  vLLM's stream keeps its own priority, which is the default and so also the least: the side
+    work fills what the call's stream leaves free."""
+
+    def __init__(self, device: Any):
+        import torch
+        if device.type == "cuda":
+            self.stream = torch.cuda.Stream(device=device, priority=0)
+            self.raw = self.stream.cuda_stream
+        else:
+            self.stream, self.raw = None, 1
 
 
 class _Uploads:
@@ -429,10 +466,12 @@ class PearlCDeviceRun:
     the passes the bench and the verifier need (`begin`, `end`)."""
 
     def __init__(self, scheme: C.PearlC, entry: str, kernel: Kernel, weights: dict[int, Any], roots: dict[int, bytes],
-                 salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False):
+                 salt: bytes, beacon: bytes, hashing: bool = True, capacity: int = LEAF_CAPACITY, time_gemm: bool = False,
+                 defer: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
         self.torch_stream = _TorchStream()
+        self.defer, self.side = defer, _Side(next(iter(weights.values())).device) if defer else None
         self.salt, self.beacon, self.roots = salt, beacon, dict(roots)
         self.device = next(iter(weights.values())).device
         self.epoch = Epoch(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
@@ -442,7 +481,8 @@ class PearlCDeviceRun:
         self.leaves = _zeros(32 * capacity, self.device)
         self.roots_buf = _zeros(32 * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * FLAG_ROWS, self.device).view(FLAG_ROWS, 2)
-        self.keys, self.uploads = _Keys(kernel.fixture, salt), _Uploads(self.device)
+        self.tree_hash = TREE_HASH[scheme.hashing]
+        self.keys, self.uploads = _Keys(kernel.fixture, salt, self.tree_hash), _Uploads(self.device)
         self.fused_screen = self.device.type == "cuda" and fused_screen_available()
         self.weights = {w: self._weight_side(w, t) for w, t in weights.items()}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
@@ -455,6 +495,7 @@ class PearlCDeviceRun:
             "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native blake3" if self.keys.native else "verity.commitments.blake3 (pure Python)",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
+            "schedule": "deferred (tile hashing on a side stream)" if defer else "serial",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
         self.cur: _Pass | None = None
         self.begin()
@@ -493,15 +534,26 @@ class PearlCDeviceRun:
             R = self.kernel.run
             mp = R.cdiv(m16, R.BM_D) * R.BM_D
             size = R.Pipeline.sizes(mp, n, k, m16)
-            self.shapes[key] = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
-                                      torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(32 + 104, self.device))
+            sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
+                        torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(32 + 104, self.device))
+            sh.sets = [{x: sh.b[x] for x in ROTATED}]
+            if self.defer:
+                sh.sets += [{x: _zeros(size[x], self.device) for x in ROTATED} for _ in range(DEFER_SETS - 1)]
+            sh.done = [None] * len(sh.sets)
             if self.cur is not None and self.cur.poison is not None:
-                for t in self.shapes[key].b.values():
+                for t in self._buffers(sh):
                     t.fill_(self.cur.poison)
+            self.shapes[key] = sh
         return self.shapes[key]
 
-    def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any]]:
-        key = (w, sh.m16, self.omit, self.hashing)
+    @staticmethod
+    def _buffers(sh: _Shape) -> list[Any]:
+        """Every buffer a call of `sh` writes: its own, and the deferred schedule's other sets."""
+        return [*sh.b.values(), *(t for st in sh.sets[1:] for t in st.values())]
+
+    def _pipe(self, w: int, sh: _Shape) -> tuple[Any, list[Any], list[Any]]:
+        """The call's pipeline and its steps: those on the call's stream, and (deferred, with hashing) the side stream's."""
+        key = (w, sh.m16, self.omit, self.hashing, self.defer)
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
@@ -510,11 +562,15 @@ class PearlCDeviceRun:
                     "unit": sh.keys.data_ptr() + 32, "k_msg": self.const.data_ptr(), "k_leaf": self.const.data_ptr() + 32}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16)
             names = tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
+            present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
             if self.time_gemm and self.device.type == "cuda":
-                at = [x for x in names if x in {n for n, _, _ in pipe.steps()}].index("gemm_pearlc")
+                at = present.index("gemm_pearlc")
                 steps[at] = self._timed(steps[at])
-            self.pipes[key] = (pipe, steps)
+            side = self.defer and self.hashing
+            main = [f for x, f in zip(present, steps, strict=True) if not (side and x in SIDE_STEPS)]
+            aside = [f for x, f in zip(present, steps, strict=True) if side and x in SIDE_STEPS]
+            self.pipes[key] = (pipe, main, aside)
         return self.pipes[key]
 
     def _timed(self, f):
@@ -562,15 +618,33 @@ class PearlCDeviceRun:
         if m16 > m:
             sh.xa[m:m16].zero_()
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
-        pipe, steps = self._pipe(w, sh)
+        pipe, steps, side = self._pipe(w, sh)
         pipe.b["y"], pipe.b["leaves"] = y.data_ptr(), self.leaves.data_ptr() + 32 * cur.tiles
         raw = self.stream()
+        cuda = self.device.type == "cuda"
+        if side:
+            j = sh.turn % len(sh.sets)
+            sh.turn += 1
+            pipe.b.update({x: t.data_ptr() for x, t in sh.sets[j].items()})
+            if cuda and sh.done[j] is not None:
+                self.torch_stream(raw).wait_event(sh.done[j])
         if self.hashing:
             self.uploads.put(sh.keys, self.keys(self.roots[w], index, m16), self.torch_stream(raw) if self.uploads.cuda else None)
         self.kernel.dev.stream = raw
         try:
             for f in steps:
                 f()
+            if side:
+                if cuda:
+                    made = torch.cuda.Event()
+                    made.record(self.torch_stream(raw))
+                    self.side.stream.wait_event(made)
+                self.kernel.dev.stream = self.side.raw
+                for f in side:
+                    f()
+                if cuda:
+                    sh.done[j] = sh.done[j] or torch.cuda.Event()
+                    sh.done[j].record(self.side.stream)
         finally:
             self.kernel.dev.stream = None
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
@@ -614,7 +688,7 @@ class PearlCDeviceRun:
         with torch.inference_mode():
             self.leaves.fill_(value)
             for sh in self.shapes.values():
-                for t in sh.b.values():
+                for t in self._buffers(sh):
                     t.fill_(value)
 
     def end(self) -> dict[str, Any]:
@@ -624,11 +698,13 @@ class PearlCDeviceRun:
         cur, K = self.cur, self.kernel
         out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing}
         if self.hashing and cur.matmuls:
+            if self.side is not None and self.side.stream is not None:
+                self.torch_stream(self.stream()).wait_stream(self.side.stream)
             epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
             R, count = K.run, cur.tiles
             tree = _zeros(32 * (2 * R.pow2(count) - 1), self.device)
             lk, dom = _zeros(32 * max(R.depth(count), 1), self.device), _zeros(32, self.device)
-            _put(dom, transcript_domain(epoch, count, "blake3").domain_id)
+            _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
             ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr(), "keys_t": lk.data_ptr()},
                                        keys={"dom_t": dom.data_ptr()})
             K.dev.stream = self.stream()

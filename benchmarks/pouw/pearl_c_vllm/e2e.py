@@ -94,14 +94,16 @@ def install(model, args, beacon: bytes, state: dict):
 
     layers = [m for m in model.modules() if isinstance(m, LinearBase)]
     weights = {w: layer.weight.data for w, layer in enumerate(layers)}
-    bad = PPD.refusals(SCHEME, {w: tuple(t.shape) for w, t in weights.items()})
+    scheme = getattr(args, "scheme", SCHEME)
+    bad = PPD.refusals(scheme, {w: tuple(t.shape) for w, t in weights.items()})
     if bad:
-        raise SystemExit(f"{SCHEME} refuses the model: " + "; ".join(bad))
+        raise SystemExit(f"{scheme} refuses the model: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
-    roots = PPD.weight_roots(kernel, weights)
+    roots = PPD.weight_roots(kernel, weights, PPD.tree_hash(scheme))
     declared = Workload(tuple(Matmul(w, Shape(PPD.ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
     salt = Epoch.start(declared, roots, beacon).salt
-    run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, salt, beacon, time_gemm=True)
+    run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, salt, beacon, time_gemm=True,
+                              defer=getattr(args, "schedule", "serial") == "deferred")
 
     def make(original):
         def apply(layer, x, bias=None):
@@ -145,9 +147,30 @@ def gate(run, weights: dict) -> list[dict]:
                         "commitment_repeats": same, "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
     if run.hashing:
         out.append(screen_check(run, weights))
+    if run.hashing and run.defer:
+        out.append(schedule_check(run, weights))
     run.details["passes"].clear()
     run.gemm_ms()
     return out
+
+
+def schedule_check(run, weights: dict) -> dict:
+    """The deferred schedule on the card: the same calls (m = 32 on the unfused 64 x 64 path, m = 128 on the fused one), each
+    from a fresh pass on poisoned outputs, serial and deferred, must commit the same A roots and tile roots."""
+    import torch
+    w, W = next(iter(weights.items()))
+    gen = torch.Generator(device=W.device).manual_seed(20260932)
+    xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
+    commits = {}
+    for defer in (False, True):
+        run.defer = defer
+        run.begin()
+        run.poison()
+        for x in xs:
+            run.gemm(w, x, W, None)
+        commits[defer] = {k: v for k, v in run.end().items() if k in ("transcript_root", "activation_roots", "tiles")}
+    run.defer = True
+    return {"check": "schedule", "serial": commits[False], "deferred": commits[True], "ok": commits[False] == commits[True]}
 
 
 def screen_check(run, weights: dict) -> dict:
@@ -400,7 +423,9 @@ def smoke(args) -> None:
     samples; then the Pearl-C engine starts beside it (its install and gates) and samples as stock BF16 and as ``pearlc``.
     Writes each step's time and the GPU's memory use after it, the gates, and the greedy tokens' agreement with BF16."""
     ctx, beacon = mp.get_context("spawn"), os.urandom(32)
-    out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": SCHEME, "run": os.environ.get("RESEARCH_RUN_ID"),
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-smoke/v1", "scheme": getattr(args, "scheme", SCHEME),
+                 "schedule": getattr(args, "schedule", "serial"),
+                 "run": os.environ.get("RESEARCH_RUN_ID"),
                  "steps": [], "resident": False}
 
     def step(name, f):
@@ -438,6 +463,7 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
+    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
@@ -449,6 +475,9 @@ def main() -> None:
     ap.add_argument("--mem-arm", type=float, default=0.3, help="the BF16 engine's; Pearl-C's buffers (about 13 GB) sit outside it")
     ap.add_argument("--interleave", choices=["rep", "blocks"], default="rep", help="blocks: skip co-residency, go straight to ABAB")
     ap.add_argument("--retain", help="the verify passes' directory")
+    ap.add_argument("--scheme", default=SCHEME, choices=sorted(PPD.SCHEMES), help="the Pearl-C scheme, and so its hashing format")
+    ap.add_argument("--schedule", choices=["serial", "deferred"], default="serial",
+                    help="deferred: each call's tile hashing on a low-priority side stream (the decode plan's step 2)")
     ap.add_argument("--smoke", action="store_true", help="untimed: both engines resident and each one's first sampling calls")
     args = ap.parse_args()
     if args.smoke:
@@ -456,7 +485,8 @@ def main() -> None:
         return
     ctx, beacon, p = mp.get_context("spawn"), os.urandom(32), prompts(args.reps)
     records: list[dict] = []
-    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": SCHEME, "run": os.environ.get("RESEARCH_RUN_ID"),
+    out: dict = {"schema": "verity-pouw/pearl-c-vllm-e2e/v2", "scheme": args.scheme, "schedule": args.schedule,
+                 "run": os.environ.get("RESEARCH_RUN_ID"),
                  "beacon": beacon.hex(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}
 
