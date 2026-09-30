@@ -53,6 +53,7 @@ import chain as CH
 import derive as DV
 import fill as F
 import identity as I
+import refs as RF
 import report as R
 import sass_gate as SG
 import schedule as S
@@ -354,6 +355,7 @@ def _known_bad(arm, dev, shape, ops):
 def _arm_gate(dev, arm, shape, flags, calls, sets: list[int]):
     def run():
         out = {}
+        RF.prefetch(arm, dev, [calls[i] for i in sets], shape, flags)
         for i in sets:
             calls[i].launch(dev.stream)
             dev.sync()
