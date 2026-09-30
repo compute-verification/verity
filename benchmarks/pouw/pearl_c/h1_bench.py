@@ -421,7 +421,8 @@ def rates(d: Bench, nv: R.Nvml, reps: int) -> dict:
 #: Candidates that change the protocol, measured only: "overlap" (the one-launch commitment on the side stream beside the
 #: GEMM, as if the noise didn't wait for A's root) and "blkpre" (the per-block Merkle row layout, hash_rows_blk, then
 #: hash_tree_small, keys so). The post-GEMM hashing: "none", "pushed", "serial" (tuned, on the GEMM's stream), "side"
-#: (tuned, on the side stream). An arm named "…, priorities" runs the chain on the highest-priority stream and the side
+#: (tuned, on the side stream), "deferred" (the side stream's tiles of call i start once call i + 1's A commitment is done,
+#: so they overlap only the GEMM). An arm named "…, priorities" runs the chain on the highest-priority stream and the side
 #: stream at the lowest, in a graph instantiated to honour its nodes' priorities.
 ARMS = [
     ("plain fp32 rows", ROW_F32, "none", "none"), ("plain bf16 rows", ROW_BF16, "none", "none"),
@@ -440,6 +441,9 @@ ARMS = [
     ("candidate: A segment layout s=64", ROW_F32, "seg64", "none"), ("candidate: A segment layout s=256", ROW_F32, "seg256", "none"),
     ("candidate: h1 A segment layout s=64, side stream, priorities", ROW_F32, "seg64", "side"),
     ("candidate: h1 A segment layout s=256, side stream, priorities", ROW_F32, "seg256", "side"),
+    ("h1 tuned, keys precomputed, side stream deferred, priorities", ROW_F32, "pre", "deferred"),
+    ("candidate: h1 A segment layout s=64, side stream deferred, priorities", ROW_F32, "seg64", "deferred"),
+    ("candidate: h1 A segment layout s=256, side stream deferred, priorities", ROW_F32, "seg256", "deferred"),
     ("candidate: A bf16 rows, keys precomputed", ROW_BF16, "pre", "none"),
     ("candidate: h1 bf16 rows, keys precomputed, side stream", ROW_BF16, "pre", "side"),
     ("candidate: h1 bf16 rows, keys precomputed, side stream, priorities", ROW_BF16, "pre", "side"),
@@ -451,7 +455,10 @@ PRESETS = {"p1": ["plain fp32 rows", "A tuned, keys precomputed", "h1 tuned, key
                   "candidate: A block layout", "candidate: A segment layout s=64", "candidate: A segment layout s=256",
                   "candidate: h1 A block layout, side stream, priorities",
                   "candidate: h1 A segment layout s=64, side stream, priorities",
-                  "candidate: h1 A segment layout s=256, side stream, priorities"]}
+                  "candidate: h1 A segment layout s=256, side stream, priorities",
+                  "h1 tuned, keys precomputed, side stream deferred, priorities",
+                  "candidate: h1 A segment layout s=64, side stream deferred, priorities",
+                  "candidate: h1 A segment layout s=256, side stream deferred, priorities"]}
 
 #: the A modes whose level keys go on the side stream at each call's start
 EARLY = ("keys", "one", "producer", "overlap")
@@ -538,11 +545,18 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
                 if early:
                     d.wait(s1, ek)
                 commit_a(s1, amode, rb)
-        if post == "side" and len(st["joins"]) >= 2:         # the side stream's slot from two calls back is free again
+        if st.get("pending") is not None:                    # "deferred": the previous call's tiles, now A's commitment is done
+            d.wait(s2, d.event(s1))
+            launch_tiles(d, s2, "tuned", *tile_args(st.pop("pending")))
+            st["joins"].append(d.event(s2))
+        if post in ("side", "deferred") and len(st["joins"]) >= 2:   # the side stream's slot from two calls back is free again
             d.wait(s1, st["joins"][-2])
         a_in = rows[rb] if amode == "producer" else rows[ROW_BF16]   # the A this call's producer wrote
         d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], a_in, sl["c"], sl["u"], y), (m, n, k))
         if post == "none":
+            return
+        if post == "deferred":
+            st["pending"] = sl
             return
         form = "pushed" if post == "pushed" else "tuned"
         if post == "side":
@@ -551,6 +565,9 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             st["joins"].append(d.event(s2))
         else:
             launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n)
+
+    def tile_args(sl: dict) -> tuple:
+        return sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], sl["keys"], keys, dom_t, m, n
 
     arms = [a for a in ARMS if only is None or a[0] in only]
     if only is not None and len(arms) != len(only):
@@ -563,6 +580,10 @@ def decode(d: Bench, nv: R.Nvml, reps: int, V: dict, tdir: str | None, only: lis
             st: dict = {"joins": [], "streams": streams}
             for i in range(CALLS):
                 call(i, rb, amode, post, st)
+            if st.get("pending") is not None:
+                d.wait(streams[1], d.event(streams[0]))
+                launch_tiles(d, streams[1], "tuned", *tile_args(st.pop("pending")))
+                st["joins"].append(d.event(streams[1]))
             for e in [st.get("a_done")] + st["joins"][-1:]:
                 if e is not None:
                     d.wait(streams[0], e)
