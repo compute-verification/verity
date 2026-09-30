@@ -790,6 +790,12 @@ def cmd_run(args) -> int:
     if left:
         print(f"{left} linears remain", flush=True)
         return 99
+    missing = sum(not (Path(args.out) / f"s{salt:02d}" / f"{case_name(L, i, nm, 0, salt)}.json").exists()
+                  for salt in args.salts for L in args.complete for i, nm in enumerate(inp.names(L)))
+    if missing:
+        print(f"this range is done; {missing} linears of the other ranges remain, so --then waits for them",
+              flush=True)
+        return 0
     queue_next(Path(args.out), args.then)
     return 0
 
@@ -841,9 +847,12 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=16)
     ap.add_argument("--budget-min", type=float, default=6.5)
     ap.add_argument("--then", default="")
+    ap.add_argument("--complete", default="",
+                    help="run: queue --then only once these layers (default --layers) are done at every salt")
     ap.add_argument("--no-check", action="store_true", help="skip the sources' sha256 check (tests)")
     args = ap.parse_args(argv)
     load(args.src, not args.no_check)
+    args.complete = ranges(args.complete or args.layers)
     args.layers, args.salts = ranges(args.layers), ranges(args.salts)
     return {"ref": cmd_ref, "gate": cmd_gate, "run": cmd_run, "summary": cmd_summary}[args.cmd](args)
 
