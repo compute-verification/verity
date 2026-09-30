@@ -155,15 +155,40 @@ def check(kind_name: str, src: str, y: bytes, a: bytes, sf: bytes | None, m: int
 # ---- the preflight's y: every kind's rounding ties, zeros of both signs, saturation, rows of one scale -----------------------
 
 
+def _ulps(x: np.ndarray, d: np.ndarray) -> np.ndarray:
+    """Positive float32 x moved d ulps."""
+    return (np.asarray(x, np.float32).view(np.int32) + np.asarray(d, np.int32)).view(np.float32)
+
+
+def _nvfp4_edges(rng: np.random.Generator, n: int) -> np.ndarray:
+    """A row where NVFP4's roundings tie or turn (at a row scale of 1: its amax, 2016, is in [2^10, 2^11)): each block of 16 has
+    its amax at, or an ulp either side of, 6 times a midpoint between two E4M3 scales, and its other values at, or an ulp
+    either side of, an E2M1 threshold times the block's scale."""
+    pos = F.E4M3_VALUES[:127].astype(np.float32)
+    six_mid = np.float32(3) * (pos[:-1] + pos[1:])
+    six_mid = six_mid[six_mid < 2**11]
+    th = np.array([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0], np.float32)
+    v = np.empty(n, np.float32)
+    for b0 in range(0, n, 16):
+        w = min(16, n - b0)
+        bmax = _ulps(six_mid[rng.integers(len(six_mid))], rng.integers(-1, 2))
+        s = pos[e4m3_rne(bmax / np.float32(6))]
+        blk = _ulps(th[rng.integers(0, 7, w)] * s, rng.integers(-1, 2, w)) * rng.choice(np.float32([-1, 1]), w)
+        blk[rng.integers(w)] = bmax
+        v[b0:b0 + w] = blk
+    v[0] = 2016
+    return v
+
+
 def preflight_y(src: str, m: int, n: int, seed: int) -> bytes:
     """A y whose derive exercises the kinds' edge cases: random full-entropy rows, rows of small integers (exact ties in every
     format after scaling), a zero row, a row of negative zeros, rows with one large outlier (underflow to zero and
-    subnormals), a row of the same value, a row of FP32 subnormals (a row scale past 2^127) and a row near FP32's top (past
-    2^-126)."""
+    subnormals), a row of the same value, a row of FP32 subnormals (a row scale past 2^127), a row near FP32's top (past
+    2^-126) and a row on NVFP4's rounding edges (`_nvfp4_edges`, exact from f32)."""
     rng = np.random.default_rng(seed)
     rows = []
     for r in range(m):
-        t = r % 9
+        t = r % 10
         if t == 0:
             v = rng.standard_normal(n) * 2.0 ** rng.integers(-8, 12)
         elif t == 1:
@@ -181,8 +206,10 @@ def preflight_y(src: str, m: int, n: int, seed: int) -> bytes:
             v = rng.standard_normal(n) * np.exp(rng.standard_normal(n) * 3)
         elif t == 7:
             v = rng.standard_normal(n) * 2.0 ** -140
-        else:
+        elif t == 8:
             v = np.clip(rng.standard_normal(n), -7, 7) * 2.0 ** 125
+        else:
+            v = _nvfp4_edges(rng, n)
         rows.append(v)
     y = np.array(rows)
     if src == "bf16":

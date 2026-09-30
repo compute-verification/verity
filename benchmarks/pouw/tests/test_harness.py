@@ -748,6 +748,40 @@ def test_the_derive_twin_rounds_to_nearest_even_and_saturates():
     assert np.array_equal(F.E2M1_VALUES[DV.e2m1_rne(F.E2M1_VALUES.astype(np.float32))], F.E2M1_VALUES)
 
 
+def test_nvfp4_rounds_without_dividing_on_the_preflight_edge_row():
+    """harness.cu's k_derive rounds NVFP4's amax / 6 and x / scale from exact products (a division would bring a div.rn slow
+    path the SASS gate hasn't pinned); restated here, it gives the twin's bytes on the preflight's edge row, whose blocks sit
+    on those roundings' ties and turns."""
+    y = DV.preflight_y("f32", 10, 384, 11)
+    x = DV.scaled(DV.KINDS["nvfp4"], "f32", y, 10, 384, 384)[9]
+    assert np.array_equal(x, np.frombuffer(y, "<f4").reshape(10, 384)[9])
+    pos = F.E4M3_VALUES[:127].astype(np.float32)
+    six_mid = np.float32(3) * (pos[:-1] + pos[1:])
+    blocks = x.reshape(-1, 16)
+    bmax = np.max(np.abs(blocks), axis=1)
+    edge = np.stack([DV._ulps(six_mid, d) for d in (-1, 0, 1)])
+    assert all(b in edge for b in bmax[1:]) and np.isin(bmax, six_mid).any()
+
+    def reaches(b, i):
+        t = six_mid[np.clip(i, 1, 126) - 1]
+        return np.where(i % 2 == 0, b >= t, b > t)
+
+    c = DV.e4m3_rne(bmax * np.float32(float.fromhex("0x1.555556p-3"))).astype(np.int32)
+    hi = (c < 126) & reaches(bmax, c + 1)
+    scale = c + hi - (~hi & (c > 0) & ~reaches(bmax, c))
+    want = DV.e4m3_rne(bmax / np.float32(6))
+    assert np.array_equal(scale, want) and (scale != c).any()
+    s = pos[scale][:, None]
+    th = np.array([0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0], np.float32)
+    a = np.abs(blocks)
+    code = np.select([a <= th[0] * s, a < th[1] * s, a <= th[2] * s, a < th[3] * s, a <= th[4] * s, a < th[5] * s,
+                      a <= th[6] * s], [0, 1, 2, 3, 4, 5, 6], 7) | np.where(np.signbit(blocks), 8, 0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        twin = np.where(s > 0, DV.e2m1_rne(blocks / np.where(s > 0, s, np.float32(1))), 0)
+    assert np.array_equal(np.where(s > 0, code, 0), twin)
+    assert np.isin(a, th * s).sum() > len(blocks)
+
+
 @pytest.mark.parametrize("kind", sorted(DV.KINDS))
 def test_every_derive_stays_bounded_reads_columns_mod_n_and_decodes_close_to_its_input(kind):
     m, n, k = 8, 96, 128

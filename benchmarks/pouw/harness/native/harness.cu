@@ -313,9 +313,14 @@ __device__ __forceinline__ void dy_load8(int src, const void* y, size_t i, bool 
   }
 }
 
-// x * 2^s rounded once, which is ldexpf's result: a multiply by the exact power of two where it is a float.
+// x * 2^s rounded once, which is ldexpf's result: a multiply by the exact power of two where it is a float, else in double
+// (exact for any float x once s is clamped to +-400, past which every finite x gives 0 or inf alike) and one conversion.
+// Not ldexpf: ptxas builds it from MUFU.EX2, which the SASS gate refuses.
 __device__ __forceinline__ float scale2(float x, int s) {
-  if (s < -149 || s > 127) return ldexpf(x, s);
+  if (s < -149 || s > 127) {
+    s = s < -400 ? -400 : s > 400 ? 400 : s;
+    return __double2float_rn(double(x) * __longlong_as_double((long long)(s + 1023) << 52));
+  }
   return __fmul_rn(x, s >= -126 ? __int_as_float((s + 127) << 23) : __int_as_float(1 << (s + 149)));
 }
 
@@ -337,7 +342,7 @@ __device__ __forceinline__ uint8_t e4m3_rne(float x) {
 
 __device__ __forceinline__ float e4m3_value(uint8_t c) {
   int e = (c >> 3) & 15, mt = c & 7;
-  float v = e == 0 ? ldexpf(float(mt), -9) : ldexpf(float(8 + mt), e - 10);
+  float v = e == 0 ? scale2(float(mt), -9) : scale2(float(8 + mt), e - 10);
   return (c & 0x80) ? -v : v;
 }
 
@@ -346,6 +351,35 @@ __device__ __forceinline__ uint8_t e2m1_rne(float x) {
   float a = fabsf(x);
   uint8_t c = a <= 0.25f ? 0 : a < 0.75f ? 1 : a <= 1.25f ? 2 : a < 1.75f ? 3 : a <= 2.5f ? 4 : a < 3.5f ? 5 : a <= 5.0f ? 6 : 7;
   return uint8_t((signbit(x) ? 8 : 0) | c);
+}
+
+// NVFP4 rounds quotients, and a division would bring div.rn's slow path, which ptxas builds into each kernel specialized to
+// its call sites: bodies the SASS gate hasn't pinned. These round them without dividing, from exact products: RN(q) <= t
+// exactly when q <= t + ulp(t) / 2 (t even), and for q = x / s that is x <= t s, since t s is exact and no float lies within
+// s ulp(t) / 2 < ulp(t s) of it; likewise RN(q) < t exactly when x < t s (t s no power of two). Checked against derive.py's
+// twin on every b >= 0 for the scale and around every threshold of every scale for E2M1.
+
+// e2m1_rne(RN(v / s)) for an E4M3 scale s > 0.
+__device__ __forceinline__ uint8_t e2m1_rne_quot(float v, float s) {
+  const float a = fabsf(v);
+  const uint8_t c = a <= __fmul_rn(0.25f, s) ? 0 : a < __fmul_rn(0.75f, s) ? 1 : a <= __fmul_rn(1.25f, s) ? 2
+                  : a < __fmul_rn(1.75f, s) ? 3 : a <= __fmul_rn(2.5f, s) ? 4 : a < __fmul_rn(3.5f, s) ? 5
+                  : a <= __fmul_rn(5.0f, s) ? 6 : 7;
+  return uint8_t((signbit(v) ? 8 : 0) | c);
+}
+
+// Whether e4m3_rne(RN(b / 6)) is code i or above: b past 6 times the midpoint below code i, ties to the even code.
+__device__ __forceinline__ bool e4m3_sixth_reaches(float b, int i) {
+  const float t = __fmul_rn(3.f, __fadd_rn(e4m3_value(uint8_t(i - 1)), e4m3_value(uint8_t(i))));
+  return i % 2 == 0 ? b >= t : b > t;
+}
+
+// e4m3_rne(RN(b / 6)) for b >= 0: b times RN(1/6) rounds to within one code of it.
+__device__ __forceinline__ uint8_t e4m3_rne_sixth(float b) {
+  const int c = e4m3_rne(__fmul_rn(b, 0x1.555556p-3f));
+  if (c < 126 && e4m3_sixth_reaches(b, c + 1)) return uint8_t(c + 1);
+  if (c > 0 && !e4m3_sixth_reaches(b, c)) return uint8_t(c - 1);
+  return uint8_t(c);
 }
 
 __device__ __forceinline__ size_t sf_offset(int row, int col, int cols) {
@@ -420,9 +454,9 @@ __global__ void k_derive(int src, const void* __restrict__ y, int n, int kind, u
         for (int o = 1; o < lanes; o <<= 1) bmax = fmaxf(bmax, __shfl_xor_sync(0xffffffffu, bmax, o));
         uint8_t code[8], scale;
         if (kind == DV_NVFP4) {
-          scale = e4m3_rne(__fdiv_rn(bmax, 6.f));
+          scale = e4m3_rne_sixth(bmax);
           const float s = e4m3_value(scale);
-          for (int j = 0; j < 8; ++j) code[j] = s > 0.f ? e2m1_rne(__fdiv_rn(v[j], s)) : 0;
+          for (int j = 0; j < 8; ++j) code[j] = s > 0.f ? e2m1_rne_quot(v[j], s) : 0;
         } else {
           int eb = 0;
           if (bmax > 0.f) frexpf(bmax, &eb);
