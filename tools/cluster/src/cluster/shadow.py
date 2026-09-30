@@ -14,7 +14,7 @@ Each `step` takes one observation of the node (`nebius2.read` live, `nebius2.fro
 3. checks the plan with `invariants.check`: a rule the planned state breaks that the observed one doesn't is a *safety*
    divergence. So is a timed window the planner would have started more than 5 s after `gpu-lease` did, or a request
    left waiting over 10 minutes while enough GPUs sat free. Any other difference is a *design* divergence, listed for
-   review. A rule the node already breaks (a `timed=1` lease of one GPU beside others) is *observed*, recorded once each.
+   review. A rule the node already breaks (memory its leases overcommit) is *observed*, recorded once each.
 
 `gpu-lease` takes a GPU's lock before it writes the owner line, so for an instant a held lock shows the last holder's
 line. An owner line whose allocation has already ended is that: the GPU is planned as held by nobody the planner may move

@@ -11,7 +11,7 @@ from collections import Counter
 from typing import Iterable, Sequence
 
 from .model import Allocation, Cluster
-from .plan import Action, Evict, Start, in_share
+from .plan import Action, Evict, Start, in_share, whole_quiet
 
 
 def check(cluster: Cluster, node: str, allocations: Iterable[Allocation], now: int, *, actions: Sequence[Action] = (),
@@ -36,11 +36,12 @@ def check(cluster: Cluster, node: str, allocations: Iterable[Allocation], now: i
         elif a.cpus & nd.pooled_cpus:
             out.append(f"{node}: {a.id} holds a reserved pool's CPUs")
     quiet = [a for a in mine if a.job.quiet and a.state == "running"]
-    if len(quiet) > 1:
+    whole = [a for a in quiet if whole_quiet(cluster, node, a.job)]
+    if whole and len(quiet) > 1:
         out.append(f"{node}: two quiet jobs run at once")
-    if quiet:
-        out += [f"{node}: {a.id} runs beside quiet {quiet[0].id}" for a in mine
-                if a is not quiet[0] and a.state == "running" and not a.job.quiet_safe]
+    if whole:
+        out += [f"{node}: {a.id} runs beside quiet {whole[0].id}" for a in mine
+                if a is not whole[0] and a.state == "running" and not a.job.quiet_safe]
     else:
         out += [f"{node}: {a.id} is frozen with no quiet job" for a in mine if a.state == "frozen"]
     ends = nd.admission_ends
@@ -51,7 +52,7 @@ def check(cluster: Cluster, node: str, allocations: Iterable[Allocation], now: i
         n = a.job.length_s
         if ends is not None and a.job.kind != "service" and (n is None or a.started + n > ends):
             out.append(f"{node}: {a.id} admitted past the admission end")
-        if any(b.job.quiet and b.state == "running" for b in before if b.node == node) and not a.job.quiet:
+        if any(whole_quiet(cluster, node, b.job) and b.state == "running" for b in before if b.node == node) and not a.job.quiet:
             out.append(f"{node}: {a.id} started inside a quiet window")
     for a in mine:
         if nd.owner != a.job.project:

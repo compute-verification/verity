@@ -9,7 +9,7 @@ from _build import PRIO, T0, alloc, cluster, job, node
 
 from cluster import invariants, ledger, model
 from cluster.model import Job, Share, Workstream
-from cluster.plan import Evict, Expire, Refuse, Start, Wait, apply, plan
+from cluster.plan import Evict, Expire, Refuse, Start, Wait, apply, plan, whole_quiet
 from cluster.route import View, place
 
 NEBIUS = model.load(Path(__file__).parents[1] / "descriptions" / "nebius.toml")
@@ -134,7 +134,7 @@ def simulate(c, seed, n, tmp_path):
     assert ledger.verify(records) == []
     assert ledger.state(records).allocations == {} and ledger.state(records).queue == {}
     for r in records:
-        if r["kind"] == "start" and r["alloc"]["job"].get("quiet"):
+        if r["kind"] == "start" and whole_quiet(c, r["alloc"]["node"], model.job_from_dict(r["alloc"]["job"])):
             assert ledger.quiet_report(records, r["alloc"]["id"])["quiet"], "the ledger can't certify a quiet window"
     return finished, records
 

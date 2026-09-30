@@ -15,7 +15,9 @@ The rules, each enforced here and checked by `tests/test_simulation.py` on rando
    workstream never runs beyond its GPUs plus its `borrow_gpus`.
 3. **Quiet jobs** (timed windows) run with nothing else active on their node: GPU-holding allocations are evicted (a frozen
    CUDA context still holds its GPU), CPU-only ones frozen and thawed afterwards; only a `quiet_safe` service keeps running.
-   A quiet job blocked by an allocation it may not displace waits, and holds the node's reservation.
+   A quiet job blocked by an allocation it may not displace waits, and holds the node's reservation. A quiet job asking
+   for some but not all of its node's GPUs (a 1-GPU `gpu-lease --timed`) is placed as an ordinary job and runs beside what
+   it doesn't displace, as `gpu-lease` places it: a design divergence kept until the 7 Oct clamp (infra's ruling).
 4. **Reservation and backfill.** The highest-ranked blocked job with a known start (the ends of the allocations it may not
    displace) reserves its node from then. Lower jobs start ahead of it only if they end before then or it may evict them,
    so a whole-node request is never starved and GPUs never idle behind it.
@@ -197,7 +199,7 @@ def plan(cluster: Cluster, node: str, allocations: Iterable[Allocation], queue: 
         return [a for a in live.values() if a.id not in gone] + [s.alloc for s in starts]
 
     def quiet_now() -> bool:
-        return any(a.job.quiet and a.state == "running" for a in occupants())
+        return any(whole_quiet(cluster, node, a.job) and a.state == "running" for a in occupants())
 
     def arank(a: Allocation) -> tuple:
         return cluster.rank(a.job, node, a.id in in_share(cluster, node, occupants()))
@@ -241,7 +243,7 @@ def plan(cluster: Cluster, node: str, allocations: Iterable[Allocation], queue: 
             later.append(Wait(job.id, f"{node} is reserved for {reservation[0].id}", reservation[1]))
             continue
         occ = occupants()
-        if job.quiet:
+        if whole_quiet(cluster, node, job):
             outcome = _quiet(cluster, node, job, occ, held_locks, arank, jrank(job), now)
         else:
             outcome = _ordinary(cluster, node, job, occ, held_locks, arank, jrank(job), now)
@@ -318,6 +320,11 @@ def job_in_share(cluster: Cluster, node: str, job: Job, occupants: Iterable[Allo
     occ = list(occupants)
     shared = in_share(cluster, node, occ)
     return sum(len(a.gpus) for a in occ if a.id in shared and a.job.workstream == w.name) + job.gpus <= w.gpus
+
+
+def whole_quiet(cluster: Cluster, node: str, job: Job) -> bool:
+    """A quiet job the node keeps to itself: every GPU, or none (a CPU window); rule 3 places a partial one as ordinary."""
+    return job.quiet and not 0 < job.gpus < len(cluster.nodes[node].gpus)
 
 
 def _ordinary(cluster, node, job, occ, held_locks, arank, mine, now):
@@ -421,4 +428,4 @@ def _pick_cpus(n: Node, free: frozenset[int], count: int, gpus: tuple[int, ...])
 
 
 __all__ = ["Action", "Evict", "Expire", "Freeze", "Idle", "OWNER", "Refuse", "Start", "Thaw", "Wait", "apply", "fit", "idle",
-           "in_share", "job_in_share", "plan", "static_refusal", "allowed_cpus"]
+           "in_share", "job_in_share", "plan", "static_refusal", "allowed_cpus", "whole_quiet"]

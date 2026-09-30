@@ -20,7 +20,7 @@ def test_each_violation_is_named():
     b = alloc(job("b-1", gpus=1, memory_gib=10, preempt="never"), (0,), "1-2")
     g = alloc(job("g-1", "g", preempt="never", memory_gib=1), (), "3")
     g2 = alloc(job("g-2", "g", memory_gib=1), (), "4")
-    q = alloc(job("q-1", gpus=1, quiet=True, priority="timed", memory_gib=1), (5,), "5")
+    q = alloc(job("q-1", quiet=True, priority="timed", memory_gib=1), (), "5")
     late = alloc(job("l-1", max_s=2000, memory_gib=1), (), "6", started=T0)
     got = " | ".join(invariants.check(c, "n1", [a, b, g, g2, q, late], T0,
                                       actions=[Start(late), Evict(b.id, "l-1")], before=[a, b, g, g2, q]))
@@ -29,3 +29,5 @@ def test_each_violation_is_named():
                  "g's share of jobs exceeded", "evicted though it isn't preemptible", "evicted by an equal or lower rank"):
         assert want in got, want
     assert invariants.check(c, "n1", [a], T0 + 1000) == [f"n1: {a.id} outlives the admission end"]
+    partial = alloc(job("q-2", gpus=1, quiet=True, priority="timed", memory_gib=1), (5,), "5")
+    assert invariants.check(c, "n1", [a, partial], T0) == [], "a 1-GPU quiet job runs beside others, as gpu-lease runs it"

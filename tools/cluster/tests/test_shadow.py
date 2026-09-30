@@ -83,15 +83,16 @@ def _line(pid: int, since: str, extra: str = "") -> str:
     return f"pid={pid} run=- who=w{pid} since={since} {extra}".strip()
 
 
-def test_a_window_gpu_lease_ran_beside_a_session_nobody_preempts_is_a_design_divergence_not_a_safety_one(c, tmp_path):
+def test_a_one_gpu_timed_lease_beside_a_session_nobody_preempts_is_planned_as_gpu_lease_ran_it(c, tmp_path):
+    """Infra's ruling until the 7 Oct clamp: a partial `--timed` lease starts beside what it needn't displace, as `gpu-lease`
+    starts it, so the shadow agrees with `gpu-lease` and the node breaks no rule."""
     sh = shadow.Shadow(c, tmp_path)
     t = epoch("2026-09-30T10:00:00Z")
     sess = _line(11, "2026-09-30T09:59:00Z")
     sh.step(nebius2.Observation(t, {0: sess}))
     sh.step(nebius2.Observation(t + 10, {0: sess, 1: _line(12, "2026-09-30T10:00:05Z", "until=2026-09-30T10:05:05Z timed=1")}))
-    div = [json.loads(x) for x in (tmp_path / "divergences.jsonl").read_text().splitlines()]
-    assert [d["class"] for d in div if "timed window" in d["msg"]] == ["design"]
-    assert any(d["class"] == "observed" and "beside quiet" in d["msg"] for d in div)
+    div = tmp_path / "divergences.jsonl"
+    assert not div.exists() or div.read_text() == ""
 
 
 def test_a_request_left_waiting_beside_free_gpus_is_a_safety_divergence(c, tmp_path, monkeypatch):
