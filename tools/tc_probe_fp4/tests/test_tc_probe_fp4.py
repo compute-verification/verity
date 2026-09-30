@@ -114,6 +114,15 @@ def test_one_flipped_word_fails_the_capture_gate(no_nvcc, tmp_path):
     assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) != 0
 
 
+def test_result_records_elide_chain_operands_only():
+    one = P.hexrec(0x3F800000, [1] * 32, [2] * 32, 0x40000000)
+    assert P.slim_record(one) == one
+    chain = P.hexrec(0x3F800000, [1] * 32 * 1024, [2] * 32 * 1024, 0x40000000)
+    slim = P.slim_record(chain)
+    assert slim["acc"] == chain["acc"] and slim["d"] == chain["d"]
+    assert slim["a"]["hex_chars"] == 32 * 1024 and len(json.dumps([slim] * 20)) < 1 << 16
+
+
 def test_fake_silicon_is_refused_under_a_research_run(no_nvcc, tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
     with pytest.raises(SystemExit):

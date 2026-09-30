@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import json
 import multiprocessing as mp
 import os
@@ -1134,6 +1135,23 @@ def observed_summary(D: np.ndarray, C: np.ndarray, err: np.ndarray) -> dict:
 # --- records -----------------------------------------------------------------------------------------------------------------------
 
 
+#: result.json must stay under the store's 1 MiB; a --chain record's operands run to tens of KiB each
+RESULT_OPERAND_HEX_MAX = 512
+
+
+def slim_record(rec: dict) -> dict:
+    """``rec`` for result.json: an operand string longer than RESULT_OPERAND_HEX_MAX becomes its length and sha256
+    (probe_results.json and tiles_<family>.npz keep it whole)."""
+
+    out = {}
+    for k, v in rec.items():
+        if k in ("a", "b", "sfa", "sfb") and isinstance(v, str) and len(v) > RESULT_OPERAND_HEX_MAX:
+            out[k] = {"hex_chars": len(v), "sha256": hashlib.sha256(v.encode()).hexdigest()}
+        else:
+            out[k] = v
+    return out
+
+
 def hexrec(acc, a, b, d, sfa=None, sfb=None, bf16=False, widths=(1, 1)) -> dict:
     wa, wb = (4, 4) if bf16 else widths
     rec = {"acc": f"{int(acc):08x}", "a": "".join(f"{int(x):0{wa}x}" for x in a), "b": "".join(f"{int(x):0{wb}x}" for x in b), "d": f"{int(d):08x}"}
@@ -1521,12 +1539,12 @@ def main(argv: list[str] | None = None) -> int:
                 for m, lst in fam["first_mismatches"].items():
                     for rec in lst:
                         if len(first_mism) < 20:
-                            first_mism.append({"model": m, **rec})
+                            first_mism.append({"model": m, **slim_record(rec)})
         for rep in replays:
             agree[f"autoproof_replay:{rep['file']}"] = rep["mismatches"] == 0 and rep["other_positions_nonzero"] == 0
             for rec in rep["first_mismatches"]:
                 if len(first_mism) < 20:
-                    first_mism.append({"model": f"autoproof_replay:{rep['file']}", **rec})
+                    first_mism.append({"model": f"autoproof_replay:{rep['file']}", **slim_record(rec)})
         # the verdict: the primary model over the gated families and every autoproof replay; controls/alternatives are recorded
         # (a row with no primary model is a capture: its finding is ``candidate_finding``, the models that reproduce every word)
         verdict_keys = [k for k in agree if k == primary or k.startswith("autoproof_replay:")]
