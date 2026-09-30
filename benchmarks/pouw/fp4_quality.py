@@ -179,7 +179,7 @@ def main() -> None:
     rot = Q.Qwen2RotaryEmbedding(config=cfg).to(dev)
     pos = torch.arange(T, device=dev)[None]
     norm_w = tensor("model.norm.weight").to(torch.float32).to(dev)
-    head = (tensor("lm_head.weight") if "lm_head.weight" in names else tensor("model.embed_tokens.weight")).to(torch.float32).to(dev)
+    head_name = "lm_head.weight" if "lm_head.weight" in names else "model.embed_tokens.weight"
     dump_layers = {int(x) for x in args.dump_layers.split(",") if x} if args.dump_acts else set()
     if args.dump_acts:
         Path(args.dump_acts).mkdir(parents=True, exist_ok=True)
@@ -257,10 +257,12 @@ def main() -> None:
             del layer, cache, outs
             print(json.dumps({"variant": mode, "layer": i, "seconds": round(time.time() - t0, 1)}), flush=True)
         per = []
+        head = tensor(head_name).to(dev).to(torch.float32)             # 2.2 GB in FP32, so never beside a layer's weights
         with torch.no_grad():
             for w in range(nwin):
                 h = hid[w] * torch.rsqrt(hid[w].pow(2).mean(-1, keepdim=True) + cfg.rms_norm_eps) * norm_w
                 per.append(F.cross_entropy((h @ head.T)[:-1], ev[w, 1:].to(dev), reduction="none").cpu())
+        del head
         return torch.cat(per).numpy().astype(np.float64)
 
     nll, seconds = {}, {}
