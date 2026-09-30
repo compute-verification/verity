@@ -15,6 +15,7 @@ Weight sources:
              E4M3 grid), the worst case an open registry would admit
 
 Rungs (--rung):
+  bf16       the source unquantized (the reference)
   none       deploy the source as is (per-row E4M3, round to nearest)
   clamp-R    clip each row to R x its RMS
   specfloor-K   raise singular values to sigma_max / K
@@ -23,6 +24,7 @@ Rungs (--rung):
              plus a keyed permutation of the MLP intermediate dim: the recommended transform
   rot-sr     the same with keyed stochastic rounding
   random     ignore the source, deploy keyed Gaussian codes
+  X@nvfp4    rungs none and rot in NVFP4 (UE4M3 per 16, E2M1), for Pearl-C4's loss (no census: its chain is exact)
 
 The verification cost is the adversary's skippable fraction, measured on the sm_120 FP8 v1 chain (G = 4, 128-atom
 groups) at the deployed codes:
@@ -85,14 +87,51 @@ def fp8_rows(w, g=None):
     return q / alpha
 
 
+_ROT = {}
+
+
 def rot_matrix(d, dev, seed):
-    q, r = torch.linalg.qr(torch.randn(d, d, generator=gen(dev, "rot", d, seed), device=dev, dtype=torch.float32))
-    return (q * torch.sign(torch.diagonal(r))).to(torch.float32)
+    if (d, str(dev), seed) not in _ROT:
+        q, r = torch.linalg.qr(torch.randn(d, d, generator=gen(dev, "rot", d, seed), device=dev, dtype=torch.float32))
+        _ROT[(d, str(dev), seed)] = (q * torch.sign(torch.diagonal(r))).to(torch.float32)
+    return _ROT[(d, str(dev), seed)]
+
+
+def nvfp4_rows(w, g=None):
+    """NVFP4: per-row FP32 scale to 6 x 448, UE4M3 scale per 16, E2M1 codes (round to nearest, or stochastic)."""
+    n, k = w.shape
+    grid, mids = E2M1_GRID.to(w.device), E2M1_MIDS.to(w.device)
+    gs = w.abs().amax(1, keepdim=True).clamp_min(1e-30) / (6.0 * 448.0)
+    v = (w / gs).reshape(n, k // 16, 16)
+    s = e4m3_rn(v.abs().amax(2, keepdim=True) / 6.0).clamp_min(2.0 ** -9)
+    x = (v / s).clamp(-6.0, 6.0)
+    a = x.abs()
+    if g is None:
+        q = grid[torch.bucketize(a, mids)]
+    else:
+        i = (torch.bucketize(a, grid, right=True) - 1).clamp(0, 7)
+        lo, hi = grid[i], grid[(i + 1).clamp(max=7)]
+        p = torch.where(hi > lo, (a - lo) / (hi - lo).clamp_min(1e-30), torch.zeros_like(a))
+        q = torch.where(torch.rand(a.shape, generator=g, device=a.device) < p, hi, lo)
+    return (torch.sign(x) * q * s).reshape(n, k) * gs
 
 
 def project(w, rung, name, seed):
     dev, dt = w.device, w.dtype
     w = w.float()
+    if rung == "bf16":
+        return w.to(dt)
+    if rung.endswith("@nvfp4"):
+        base = rung[:-6]
+        if base == "none":
+            return nvfp4_rows(w).to(dt)
+        if base == "rot":
+            if name.endswith(("o_proj", "down_proj")):
+                r = rot_matrix(w.shape[0], dev, seed)
+                return (r @ nvfp4_rows(r.T @ w)).to(dt)
+            r = rot_matrix(w.shape[1], dev, seed)
+            return (nvfp4_rows(w @ r) @ r.T).to(dt)
+        raise ValueError(rung)
     if rung == "none":
         return fp8_rows(w).to(dt)
     if rung.startswith("clamp-"):
@@ -183,8 +222,10 @@ def deployed_values(w, rung, name, seed):
     if rung == "none":
         return w.double()
     if rung.startswith("specfloor-"):
-        u, s_, vh = torch.linalg.svd(w.double(), full_matrices=False)
-        return (u * torch.maximum(s_, s_[0] / float(rung[10:]))) @ vh
+        u, s_, vh = torch.linalg.svd(w, full_matrices=False)
+        if bool((s_ >= s_[0] / float(rung[10:])).all()):
+            return w.double()                       # the projection is the identity: the registrant's values stand
+        return ((u * torch.maximum(s_, s_[0] / float(rung[10:]))) @ vh).double()
     if rung.startswith("clamp-"):
         r = float(rung[6:]) * w.double().pow(2).mean(1, keepdim=True).sqrt()
         return w.double().clamp(-r, r)
@@ -208,7 +249,7 @@ def relation_skippable(w, rung, name, seed, group=128):
     v = deployed_values(w, rung, name, seed)
     n, k = v.shape
     t = n // 3
-    rel = (v[0:3 * t:3] + v[1:3 * t:3] - v[2:3 * t:3]).abs() <= 1e-12 * v.abs().max()
+    rel = (v[0:3 * t:3] + v[1:3 * t:3] - v[2:3 * t:3]).abs() <= 1e-9 * v.abs().max()
     ok = rel.reshape(t, k // group, group).all(2).float().mean()
     return float(ok) * (t / n) * (group - 8) / group
 
@@ -307,7 +348,9 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--census-layers", type=int, default=4, help="how many layers' linears to census (from the middle)")
     ap.add_argument("--seed", type=int, default=20260930)
+    ap.add_argument("--max-seconds", type=float, default=0, help="start no new variant after this long (0: no limit)")
     args = ap.parse_args()
+    t_start = time.time()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     variants = args.variants.split(",")
@@ -330,6 +373,8 @@ def main():
         if PREEMPTED["flag"]:
             left = True
             break
+        if args.max_seconds and time.time() - t_start > args.max_seconds:
+            break
         source, rung, rec = v.split(":")
         rec = int(rec)
         t0 = time.time()
@@ -341,7 +386,8 @@ def main():
             src_w = {n: m.weight.detach().clone() for n, m in linears(model)}
             for n, m in linears(model):
                 m.weight.copy_(project(src_w[n], rung, n, args.seed))
-        census = {n: skippable_fraction(deployed_codes(src_w[n], rung, n, args.seed)) for n in census_names}
+        census = ({} if rung.endswith("@nvfp4") else
+                  {n: skippable_fraction(deployed_codes(src_w[n], rung, n, args.seed)) for n in census_names})
         if source == "adv" and (rung in ("none", "rot", "rot-sr") or rung.startswith(("specfloor-", "clamp-"))):
             rel = {n: relation_skippable(src_w[n], rung, n, args.seed) for n in census_names}
             census = {n: max(census[n], rel[n]) for n in census_names}
@@ -351,7 +397,7 @@ def main():
                "ppl": math.exp(sum(nll) / len(nll)) if nll else None, "window_nll": nll,
                "eval_windows": len(nll), "seqlen": args.seqlen, "recover_steps": args.recover_steps if rec else 0,
                "recover_loss_trace": rloss, "skippable_fraction_by_matrix": census,
-               "skippable_fraction_mean": sum(census.values()) / len(census),
+               "skippable_fraction_mean": (sum(census.values()) / len(census)) if census else None,
                "census_layers": mid, "seconds": round(time.time() - t0, 1),
                "gpu": torch.cuda.get_device_name(0) if dev == "cuda" else "cpu",
                "gpu_uuid": os.environ.get("GPU_LEASE_UUID", ""), "clock_label": os.environ.get("AW_CLOCK", "")}
