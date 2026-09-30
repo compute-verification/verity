@@ -28,6 +28,8 @@
 #include <cuda_runtime.h>
 #include <stdint.h>
 
+#include "rows_fp4.cuh"
+
 namespace {
 
 __device__ __forceinline__ void mma_nvfp4_m16n8k64(float d[4], const uint32_t a[4], const uint32_t b[2], const float c[4],
@@ -223,54 +225,7 @@ __global__ void bf16_tiles_kernel(const uint16_t* __restrict__ A, const uint16_t
 // Operands per tile: A u8[16][L*K], Bt u8[8][L*K] (step l at columns l*K..), SFA u8[16][L*NB], SFB u8[8][L*NB] (step l at l*NB..).
 // K = 64 kinds take E2M1 codes (low nibble); K = 32 kinds take the 8-bit containers as they enter the register (the host places an
 // E2M1 code at bits [2,6), an E4M3 byte as is), so container bits outside the format reach the hardware unchanged.
-enum RowKind {
-    R_NVF4 = 0,               // kind::mxf4nvf4 scale_vec::4X ue4m3 (the nvfp4_tiles_kernel instruction)
-    R_MXF4 = 1,               // kind::mxf4nvf4 scale_vec::2X ue8m0
-    R_F8F6F4_E2M1 = 2,        // kind::f8f6f4 e2m1 x e2m1, unscaled
-    R_F8F6F4_E2M1_E4M3 = 3,   // kind::f8f6f4 e2m1 x e4m3
-    R_F8F6F4_E4M3_E2M1 = 4,   // kind::f8f6f4 e4m3 x e2m1
-    R_MXF8F6F4_E2M1 = 5,      // kind::mxf8f6f4 scale_vec::1X ue8m0, e2m1 x e2m1
-    R_MXF8F6F4_E2M1_E4M3 = 6, // kind::mxf8f6f4 scale_vec::1X ue8m0, e2m1 x e4m3
-    R_MXF8F6F4_E4M3_E2M1 = 7, // kind::mxf8f6f4 scale_vec::1X ue8m0, e4m3 x e2m1
-};  // kind::mxf4nvf4 scale_vec::4X with ue8m0 is refused by ptxas 12.9 ("Illegal modifier '.scale_vec::4X' ... with type '.ue8m0'")
-
-template <int KIND> struct RowTraits {
-    static constexpr int K = (KIND == R_NVF4 || KIND == R_MXF4) ? 64 : 32;
-    static constexpr int NB = KIND == R_NVF4 ? 4 : KIND == R_MXF4 ? 2 : KIND >= R_MXF8F6F4_E2M1 ? 1 : 0;
-};
-
-#define ROW_MMA_UNSCALED(MNEMONIC)                                                                          \
-    asm volatile(MNEMONIC " {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13};\n"                  \
-                 : "=f"(d[0]), "=f"(d[1]), "=f"(d[2]), "=f"(d[3])                                          \
-                 : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(c[0]), "f"(c[1]), \
-                   "f"(c[2]), "f"(c[3]))
-#define ROW_MMA_SCALED(MNEMONIC)                                                                               \
-    asm volatile(MNEMONIC " {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%10,%11,%12,%13}, {%14}, {0, 0}, {%15}, {0, 0};\n" \
-                 : "=f"(d[0]), "=f"(d[1]), "=f"(d[2]), "=f"(d[3])                                             \
-                 : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]), "f"(c[0]), "f"(c[1]),    \
-                   "f"(c[2]), "f"(c[3]), "r"(sfa), "r"(sfb))
-
-template <int KIND>
-__device__ __forceinline__ void row_mma(float d[4], const uint32_t a[4], const uint32_t b[2], const float c[4], uint32_t sfa, uint32_t sfb) {
-    if constexpr (KIND == R_NVF4) {
-        ROW_MMA_SCALED("mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue4m3");
-    } else if constexpr (KIND == R_MXF4) {
-        ROW_MMA_SCALED("mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0");
-    } else if constexpr (KIND == R_F8F6F4_E2M1) {
-        ROW_MMA_UNSCALED("mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32");
-    } else if constexpr (KIND == R_F8F6F4_E2M1_E4M3) {
-        ROW_MMA_UNSCALED("mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e4m3.f32");
-    } else if constexpr (KIND == R_F8F6F4_E4M3_E2M1) {
-        ROW_MMA_UNSCALED("mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e4m3.e2m1.f32");
-    } else if constexpr (KIND == R_MXF8F6F4_E2M1) {
-        ROW_MMA_SCALED("mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e2m1.e2m1.f32.ue8m0");
-    } else if constexpr (KIND == R_MXF8F6F4_E2M1_E4M3) {
-        ROW_MMA_SCALED("mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e2m1.e4m3.f32.ue8m0");
-    } else {
-        static_assert(KIND == R_MXF8F6F4_E4M3_E2M1, "unknown row kind");
-        ROW_MMA_SCALED("mma.sync.aligned.m16n8k32.row.col.kind::mxf8f6f4.block_scale.scale_vec::1X.f32.e4m3.e2m1.f32.ue8m0");
-    }
-}
+// RowKind, RowTraits and row_mma<KIND> (the mnemonic of each row) live in rows_fp4.cuh.
 
 template <int K>
 __device__ __forceinline__ void row_pack(uint32_t a[4], uint32_t b[2], const uint8_t* At, const uint8_t* Bw, int stride, int k_off, int lane) {

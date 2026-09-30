@@ -6,6 +6,12 @@
             --replay-autoproof $RESEARCH_RUN_DIR/inputs/probe3_1783788526.json
 
 Key params follow probe.py's argparse; `--out` and `--procs` never enter the derivation.  Replay files are content-resolved.
+
+`tc_price_fp4` is the W1 price microbenchmark beside it (w1_price.py, lane pouw rtx-pro GPU 4); `--out`, `--expect-uuid` and
+`--max-seconds` are guards and paths, not part of the answer:
+
+    research run --on <server> --project verity --campaign pouw --env CUDA_VISIBLE_DEVICES=4 --tool tc_price_fp4 --source . -- \
+        python tools/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR --expect-uuid GPU-...
 """
 from __future__ import annotations
 
@@ -52,6 +58,49 @@ def parse(argv: list[str]) -> dict:
     if out.get("families"):
         out["families"] = ",".join(sorted(f for f in out["families"].split(",") if f))
     return out
+
+
+def parse_price(argv: list[str]) -> dict:
+    idx = next((i for i, t in enumerate(argv) if Path(t).name == "w1_price.py"), 0)
+    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--rows", default=None)
+    ap.add_argument("--reps", type=int, default=10)
+    ap.add_argument("--target-ms", type=float, default=100.0)
+    ap.add_argument("--sustain-s", type=float, default=3.0)
+    ap.add_argument("--warps-per-sm", type=int, default=16)
+    ap.add_argument("--latency-iters", type=int, default=20000)
+    ap.add_argument("--no-scale-update", action="store_true")
+    ap.add_argument("--seed", type=int, default=20260930)
+    ap.add_argument("--max-seconds", type=float, default=900.0)   # a guard on the plan's length, not part of the answer
+    ap.add_argument("--expect-uuid", default=None)                # a guard (stops a run on the wrong GPU)
+    ap.add_argument("--locked-mhz", type=float, default=None)
+    ap.add_argument("--corrupt-word", action="store_true")
+    ap.add_argument("--fake-silicon", action="store_true")
+    ap.add_argument("--sass-only", action="store_true")
+    ns, unknown = ap.parse_known_args(argv[idx + 1:])
+    out = vars(ns)
+    out.pop("out")
+    out.pop("max_seconds")
+    out.pop("expect_uuid")
+    if out["rows"]:
+        out["rows"] = ",".join(sorted(r for r in out["rows"].split(",") if r))
+    if unknown:
+        out["_unknown"] = unknown
+    return out
+
+
+TC_PRICE_FP4 = Tool(
+    name="tc_price_fp4", version="1",
+    command=["python", "tools/tc_probe_fp4/w1_price.py"],
+    closure=["tools/tc_probe_fp4/**", "packages/verity/src/verity/ml/tc/**"],
+    key_params=["rows", "reps", "target_ms", "sustain_s", "warps_per_sm", "latency_iters", "no_scale_update", "seed", "locked_mhz",
+                "corrupt_word", "fake_silicon", "sass_only"],
+    key_conditions=["hw.family"],
+    caches=["nvcc"],
+    produces=["bench-result/v1", "run-files/v1"],
+    parse=parse_price,
+)
 
 
 TC_PROBE_FP4 = Tool(
