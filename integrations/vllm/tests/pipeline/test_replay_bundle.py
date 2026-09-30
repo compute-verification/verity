@@ -11,7 +11,7 @@ from tests.check.test_commit_verdict_hopper_no_evaluator_gap import (
     SR_HOPPER,
     _bnd,
 )
-from verity_vllm.check.verdict import commit_verdict, pending_replay_verdict
+from verity_vllm.check.verdict import commit_verdict
 from verity_vllm.pipeline import replay_bundle as RB
 
 DEFERRED, _ = RB.deferred_records(RB.path("/o", 1))
@@ -22,7 +22,7 @@ def _commit(**kw):
 
 
 def test_a_deferred_run_is_pending_and_the_same_run_replayed_passes():
-    ok, why = pending_replay_verdict(_commit(sampled_replay=DEFERRED), True, min_openings=64)
+    ok, why = RB.pending_verdict(_commit(sampled_replay=DEFERRED), True, min_openings=64)
     assert ok is None and why.startswith("PENDING"), why
     assert commit_verdict(_commit(sampled_replay=SR_HOPPER), True, min_openings=64)[0] is not None
 
@@ -33,13 +33,12 @@ def test_a_deferred_run_is_pending_and_the_same_run_replayed_passes():
     ({"value_correspondence": {"result": False, "method": "oracle", "why": "oracle FAIL"}}, True, "oracle FAIL"),
 ])
 def test_a_deferred_run_that_fails_a_check_of_its_own_fails_now(kw, tokens, why):
-    ok, reason = pending_replay_verdict(_commit(sampled_replay=DEFERRED, **kw), tokens, min_openings=64)
+    ok, reason = RB.pending_verdict(_commit(sampled_replay=DEFERRED, **kw), tokens, min_openings=64)
     assert ok is False and why in reason, reason
 
 
 def test_the_commit_pass_is_none_only_while_every_failure_is_absent():
-    pytest.importorskip("torch")
-    from verity_vllm.pipeline.commit import _pass_of
+    _pass_of = RB.pass_of
     ok, pend = {"commit": {"commit_pass": True}}, {"commit": {"commit_pass": None, "sampled_replay": DEFERRED}}
     bad = {"commit": {"commit_pass": False}}
     rows = lambda *cs: [{"arm": "instrumented", **c} for c in cs] + [{"arm": "control", "commit": {}}]
