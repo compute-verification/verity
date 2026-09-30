@@ -353,20 +353,28 @@ __global__ void fc_sha_tape3(const uint64_t* __restrict__ inputs, int in_words, 
 // slot's 2^(slot_log - 5) >= 8 words hold them; s0: the batch's first slot over every block)
 __global__ void fc_sha_rows(const uint64_t* __restrict__ tape, long long n, long long s0, const uint32_t* __restrict__ plan, int useful,
                             int per_block, int pos0, int slot_log, int k_log, uint32_t* __restrict__ z_out, uint32_t* __restrict__ a_out,
-                            uint32_t* __restrict__ b_out) {
+                            uint32_t* __restrict__ b_out, int cache) {
     const long long s = (long long)blockIdx.y * blockDim.x + threadIdx.x;
     if (s >= n) return;
     const int g = blockIdx.x;
-    auto bit = [&](uint32_t src) -> uint32_t {
-        return src < 2 ? src : (uint32_t)(tape[(long long)((src - 2) >> 6) * n + s] >> ((src - 2) & 63)) & 1u;
+    // each source through a one-word cache (cache != 0): consecutive rows read consecutive bits of one tape word (an addition's
+    // 64 bits), and every lane follows one plan, so the branches are uniform
+    long long wa = -1, wb = -1;
+    uint64_t ca = 0, cb = 0;
+    auto bit = [&](uint32_t src, long long& w0, uint64_t& c) -> uint32_t {
+        if (src < 2) return src;
+        const long long w = (long long)((src - 2) >> 6);
+        if (!cache) return (uint32_t)(tape[w * n + s] >> ((src - 2) & 63)) & 1u;
+        if (w != w0) { c = tape[w * n + s]; w0 = w; }
+        return (uint32_t)(c >> ((src - 2) & 63)) & 1u;
     };
     uint32_t A[8], B[8];
     for (int j = 0; j < 8; j++) {
         uint32_t x = 0, y = 0;
         const int r0 = 32 * (8 * g + j);
         for (int i = 0; i < 32 && r0 + i < useful; i++) {
-            x |= bit(plan[2 * (r0 + i)]) << i;
-            y |= bit(plan[2 * (r0 + i) + 1]) << i;
+            x |= bit(plan[2 * (r0 + i)], wa, ca) << i;
+            y |= bit(plan[2 * (r0 + i) + 1], wb, cb) << i;
         }
         A[j] = x; B[j] = y;
     }
@@ -575,6 +583,8 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 // a thread per compression where the tape has sha512x3's layout (FC_SHA_TAPE1=1: a thread per slot)
                 static const bool tape1 = [] { const char* e = std::getenv("FC_SHA_TAPE1"); return e && e[0] == '1'; }();
                 const bool tape3 = !tape1 && 2 * N->h_in_words >= 3 * 24 && N->h_tape_words == 2 * N->h_in_words + 3 * FC_SHA_COMP_WORDS + 24;
+                // FC_SHA_ROWS_NOCACHE=1: every row's tape bits read straight from the tape
+                static const int rows_cache = [] { const char* e = std::getenv("FC_SHA_ROWS_NOCACHE"); return !(e && e[0] == '1'); }();
                 const long long per = (long long)N->h_tape_words * 8;
                 const long long batch = std::max(1LL, std::min(n_h, (2LL << 30) / per));
                 uint64_t* d_tape;
@@ -586,7 +596,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                     if (tape3) fc_sha_tape3<<<(unsigned)((3 * nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
                     else fc_sha_tape<<<(unsigned)((nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
                     fc_sha_rows<<<dim3((unsigned)nrg, (unsigned)((nb + 255) / 256)), 256>>>(d_tape, nb, s0, d_plan, N->h_useful, (int)hper,
-                        N->r_pos0[hr], hl, k_log, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b);
+                        N->r_pos0[hr], hl, k_log, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, rows_cache);
                     CK(cudaGetLastError());
                 }
                 CK(cudaStreamSynchronize(0));
