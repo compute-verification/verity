@@ -1,22 +1,23 @@
 """`ncp-v2`'s committed values computed natively: every unit's outputs from numpy and hashlib, each hashed as it is made.
 
 A call's values are its Program's (`verity_pouw.circuit.ncp2.linear`), and evaluating that gate by gate costs about 26
-hours per Qwen2.5-0.5B forward at 16 rows. `Native` computes the same values unit by unit instead. It follows the
-partition's numbering (`verity_pouw.circuit.partition.units`) and each template's output-leaf order, and works from the
-call's inputs and the byte layouts `ncp2`'s docstring states:
+hours per Qwen2.5-0.5B forward at 16 rows. `Native` computes the same values unit by unit instead, and `NativeWeight` its
+weight side's (`ncp2.weight`). They follow the partitions' numbering (`verity_pouw.circuit.partition.units`) and each
+template's output-leaf order, and work from the inputs and the byte layouts `ncp2`'s docstring states:
 
+    form_y   Y = [B + F₁ | B − F₁∘π⁻¹ | B + F₁ − F₁∘π⁻¹] (s8) for 16 columns, then c₀ = −β·Σ Y mod 2³² (the weight side's)
     digest   D_s = SHA-512 over the strip's row digests, as big-endian u32 words
     node     SHA-512 over its two children, in `ncp2.rfc6962`'s emission order
-    key      K = SHAKE256(salt, forward, position, weight id, D_A)[:32], as little-endian u32 words
-    form_y   Y = [B + F₁ | B − F₁∘π⁻¹ | B + F₁ − F₁∘π⁻¹] (s8) for 16 columns, then c₀ = −β·Σ Y mod 2³²
+    key      K = SHAKE256(D_A, salt, forward, position, weight id)[:32], as little-endian u32 words
     form_x   X + β = [A + E₁ | A + E₁∘π | −(A + E₁ + E₁∘π)] + β (u8) for 16 rows
     tile     route U from c₀: every checkpoint, step-major then row-major, the last one Z (float64 is exact here: every
              partial sum is an integer below 2⁵³)
     dequant  Bf16Add(F32ToBf16Rn(F32Mul(F32Mul(s, t), I32ToF32Rn(Z))), bias), over arrays (`dequant`)
 
-`commit` computes a whole call one block of weight rows at a time, the blocks on a thread pool, reading those rows from the
-layer, and keeps only each unit's leaf (`pouw_circuit.unit_leaf`) and the served y. `outputs(u)` regenerates one unit for the replay's openings, and
-`args(u, opened)` gives the unit's template arguments from the call's inputs and its producers' opened outputs.
+`NativeWeight.commit` commits a weight's side once, and `Native.commit` a whole call, both one block of weight rows at a
+time, the blocks on a thread pool, reading those rows from the layer, and keep only each unit's leaf
+(`pouw_circuit.unit_leaf`) and the served y. `outputs(u)` regenerates one unit for the replay's openings, and `args(u, ...)`
+gives the unit's template arguments from the inputs and its producers' opened outputs.
 """
 from __future__ import annotations
 
@@ -29,7 +30,7 @@ from typing import Callable, Mapping
 import numpy as np
 from verity_pouw.circuit import ncp2
 from verity_pouw.circuit import reference as R
-from verity_pouw.circuit.ncp2 import D
+from verity_pouw.circuit.ncp2 import D, Shape
 
 from verity.ml.kernels import f32_to_bf16_rn_batch
 from verity.ml.scalar import F32_NAN_PTX
@@ -37,7 +38,7 @@ from verity_vllm.protocol_options import pouw_circuit as PC
 
 M32 = 0xFFFFFFFF
 BETA = 128
-ROLES = ("digest", "node", "key", "form_y", "form_x", "tile", "dequant")
+ROLES = ("digest", "node", "key", "form_x", "tile", "dequant")
 #: weight rows read, formed and multiplied at a time (a multiple of 16), one block per task of the commit's thread pool
 BLOCK = 256
 #: the fewest rows a block is cut to so that every thread of the pool has one (`block_for`)
@@ -90,6 +91,22 @@ def _i7(v) -> list[int]:
     return [int(x) & 0x7F for x in np.asarray(v).reshape(-1)]
 
 
+def _tampers(tamper: Mapping[tuple[int, int], int] | None) -> dict[int, list[tuple[int, int]]]:
+    out: dict[int, list[tuple[int, int]]] = {}
+    for (u, j), v in (tamper or {}).items():
+        out.setdefault(u, []).append((j, v))
+    return out
+
+
+def _tampered(tamper: dict[int, list[tuple[int, int]]], u: int, v: np.ndarray) -> np.ndarray:
+    hit = tamper.get(u)
+    if hit:
+        v = np.array(v, np.uint32).reshape(-1)
+        for j, x in hit:
+            v[j] = x
+    return v
+
+
 # ---- dequantization over arrays ------------------------------------------------------------------------------------------
 
 def _f32(u) -> np.ndarray:
@@ -115,30 +132,117 @@ def dequant(z, s, t, bias) -> np.ndarray:
     return f32_to_bf16_rn_batch(add)[0]
 
 
+# ---- one weight's side ---------------------------------------------------------------------------------------------------
+
+class NativeWeight:
+    """One weight's side: its Y strips and c₀, `NcpWeight`'s units (one per 16-column strip), from its rows as read.
+    ``tamper`` ((unit, output leaf) -> encoding) is a prover that commits and opens those values instead: the tests'
+    negative controls."""
+
+    def __init__(self, rows: PC.Rows, scheme: str, salt: bytes, weight: int, colids: np.ndarray,
+                 tamper: Mapping[tuple[int, int], int] | None = None) -> None:
+        self.rows, self.scheme, self.kind, self.salt, self.weight = rows, scheme, PC.kind_of(scheme), salt, weight
+        self.colids = np.asarray(colids, np.uint32)
+        self.n, self.k = rows.n, rows.k
+        Shape(D, self.k, self.n).check()
+        self.population = self.n // D
+        self.inv = np.argsort(np.asarray(ncp2.perm(self.kind, self.k)))
+        self.tamper = _tampers(tamper)
+        self._strips: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+
+    @classmethod
+    def of(cls, side: PC.WeightRecord) -> "NativeWeight":
+        """The side a record commits, regenerated from its inputs."""
+        return cls(side.rows, side.scheme, side.salt, side.weight, side.colids)
+
+    def template(self, u: int = 0):
+        return ncp2.templates(self.k, self.kind)["form_y"]
+
+    def read(self, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
+        b, t = self.rows.rows(lo, hi)
+        return np.ascontiguousarray(b, np.int8), np.ascontiguousarray(t, np.uint32)
+
+    def block(self, b: np.ndarray, lo: int) -> tuple[np.ndarray, np.ndarray]:
+        """Y (s8 bytes) and c₀ for the weight rows ``b``, the columns from ``lo``."""
+        k = self.k
+        tail = ncp2.TAG_F1 + self.salt + _u64(self.weight)
+        f = np.stack([_noise(hashlib.shake_256(_index(int(j)) + tail).digest(k)) for j in self.colids[lo:lo + len(b)]])
+        bb, fi = b.astype(np.int64), f[:, self.inv]
+        y = (np.concatenate([bb + f, bb - fi, bb + f - fi], axis=1) & 0xFF).astype(np.uint8)
+        c0 = ((-BETA * y.view(np.int8).astype(np.int64).sum(axis=1)) & M32).astype(np.uint32)
+        return y, c0
+
+    def strip(self, cs: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Column strip ``cs``'s Y (16 × 3k bytes), c₀ and scales t, as the rows give them."""
+        hit = self._strips.get(cs)
+        if hit is None:
+            b, t = self.read(D * cs, D * cs + D)
+            hit = self._strips[cs] = (*self.block(b, D * cs), t)
+        return hit
+
+    def outputs(self, u: int) -> np.ndarray:
+        """Y unit ``u``'s output leaves (its strip's Y, then its c₀), as this prover commits and opens them."""
+        if not 0 <= u < self.population:
+            raise IndexError(f"Y unit {u} outside 0..{self.population - 1}")
+        y, c0, _t = self.strip(u)
+        return _tampered(self.tamper, u, np.concatenate([y.reshape(-1).astype(np.uint32), c0]))
+
+    def args(self, u: int) -> list:
+        """Y unit ``u``'s template arguments, in parameter order: its 16 weight rows, the salt, the weight id, its column ids."""
+        b, _t = self.read(D * u, D * u + D)
+        return [_i7(b), _ints(np.frombuffer(self.salt, "<u4")), _ints(_lane(self.weight)), _ints(self.colids[D * u:D * u + D])]
+
+    def commit(self, block: int | None = None) -> PC.WeightRecord:
+        """Every Y unit's leaf, hashed as it is computed, and the inputs' digest; the rows are read ``block`` at a time."""
+        n = self.n
+        block = max(D, (block or block_for(n)) // D * D)
+        leaves: list[bytes] = [b""] * self.population
+
+        def columns(lo: int) -> np.ndarray:
+            hi = min(n, lo + block)
+            b, _t = self.read(lo, hi)
+            y, c0 = self.block(b, lo)
+            for j in range(0, hi - lo, D):
+                u = (lo + j) // D
+                leaves[u] = PC.unit_leaf(_tampered(self.tamper, u, np.concatenate([y[j:j + D].reshape(-1), c0[j:j + D]])))
+            return b
+
+        rd = PC.RowsDigest(n, self.k)
+        for b in _pool().map(columns, range(0, n, block)):               # in block order: B is digested row by row
+            rd.update(b)
+        blob = b"".join(leaves)
+        return PC.WeightRecord(self.scheme, self.rows, self.salt, self.weight, self.colids,
+                               PC.weight_inputs_digest(rd.digest(), self.salt, self.weight, self.colids), blob,
+                               PC.units_root(blob), self.outputs)
+
+
+def commit_weight(scheme: str, call: PC.Call, tamper: Mapping[tuple[int, int], int] | None = None) -> PC.WeightRecord:
+    """The call's weight side committed natively (`NativeWeight.commit`), once per run and weight."""
+    return NativeWeight(call.b, scheme, call.salt, call.weight, call.colids, tamper).commit()
+
+
 # ---- one call ------------------------------------------------------------------------------------------------------------
 
 class Native:
     """One call's committed values: the whole call hashed as it is computed (`commit`), or one unit on demand
-    (`outputs`). ``tamper`` ((unit, output leaf) -> encoding) is a prover that commits and opens those values instead:
-    the tests' negative controls."""
+    (`outputs`). It reads Y and c₀ from its weight side ``side`` (a `NativeWeight` over the call's rows when None).
+    ``tamper`` ((unit, output leaf) -> encoding) is a prover that commits and opens those values instead: the tests'
+    negative controls."""
 
-    def __init__(self, call: PC.Call, kind: str = PC.KIND, tamper: Mapping[tuple[int, int], int] | None = None) -> None:
-        self.call, self.kind = call, kind
+    def __init__(self, call: PC.Call, scheme: str, tamper: Mapping[tuple[int, int], int] | None = None,
+                 side: NativeWeight | None = None) -> None:
+        self.call, self.scheme, self.kind = call, scheme, PC.kind_of(scheme)
         sh = self.shape = call.shape
         sh.check()
+        self.side = side or NativeWeight(call.b, scheme, call.salt, call.weight, call.colids)
         self.a = np.ascontiguousarray(call.a, np.int8)
         self.ms, self.ns, self.steps = sh.m // D, sh.n // D, sh.steps
-        self.pi = np.asarray(ncp2.perm(kind, sh.k))
-        self.inv = np.argsort(self.pi)
+        self.pi = np.asarray(ncp2.perm(self.kind, sh.k))
         ms, ns = self.ms, self.ns
-        self.base = {"digest": 0, "node": ms, "key": 2 * ms - 1, "form_y": 2 * ms, "form_x": 2 * ms + ns,
-                     "tile": 3 * ms + ns, "dequant": 3 * ms + ns + ms * ns}
+        self.base = {"digest": 0, "node": ms, "key": 2 * ms - 1, "form_x": 2 * ms, "tile": 3 * ms, "dequant": 3 * ms + ms * ns}
         self.population = self.base["dequant"] + ms * ns * D * D
-        self.tamper: dict[int, list[tuple[int, int]]] = {}
-        for (u, j), v in (tamper or {}).items():
-            self.tamper.setdefault(u, []).append((j, v))
+        self.tamper = _tampers(tamper)
         self._xs: dict[int, np.ndarray] = {}
-        self._ys: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
 
     # ---- the partition's numbering
 
@@ -213,26 +317,10 @@ class Native:
         self._xs[rs] = x
         return x
 
-    def weight(self, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
-        b, t = self.call.b.rows(lo, hi)
-        return np.ascontiguousarray(b, np.int8), np.ascontiguousarray(t, np.uint32)
-
-    def y_block(self, b: np.ndarray, lo: int) -> tuple[np.ndarray, np.ndarray]:
-        """Y (s8 bytes) and c₀ for the weight rows ``b``, the columns from ``lo``."""
-        k = self.shape.k
-        tail = ncp2.TAG_F1 + self.call.salt + _u64(self.call.weight)
-        f = np.stack([_noise(hashlib.shake_256(_index(int(j)) + tail).digest(k)) for j in self.call.colids[lo:lo + len(b)]])
-        bb, fi = b.astype(np.int64), f[:, self.inv]
-        y = (np.concatenate([bb + f, bb - fi, bb + f - fi], axis=1) & 0xFF).astype(np.uint8)
-        c0 = ((-BETA * y.view(np.int8).astype(np.int64).sum(axis=1)) & M32).astype(np.uint32)
-        return y, c0
-
-    def _strip_y(self, cs: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        hit = self._ys.get(cs)
-        if hit is None:
-            b, t = self.weight(D * cs, D * cs + D)
-            hit = self._ys[cs] = (*self.y_block(b, D * cs), t)
-        return hit
+    def read(self, cs: int) -> tuple[np.ndarray, np.ndarray]:
+        """The Y strip (flat, 16 × 3k bytes) and c₀ this call reads at column strip ``cs``: its inputs there."""
+        y, c0, _t = self.side.strip(cs)
+        return y.reshape(-1), c0
 
     def _x64(self, x: np.ndarray) -> np.ndarray:
         return x.astype(np.float64).reshape(D, self.steps, D).transpose(1, 0, 2)                   # [t, r, d]
@@ -243,18 +331,10 @@ class Native:
         run = np.cumsum(np.matmul(x64, yv), axis=0) + c0.astype(np.float64)
         return (run.astype(np.int64) & M32).astype(np.uint32)
 
-    def _tampered(self, u: int, v: np.ndarray) -> np.ndarray:
-        hit = self.tamper.get(u)
-        if hit:
-            v = np.array(v, np.uint32).reshape(-1)
-            for j, x in hit:
-                v[j] = x
-        return v
-
     def outputs(self, u: int) -> np.ndarray:
         """Unit ``u``'s output leaves, regenerated from the call's inputs."""
         role, w = self.locate(u)
-        return self._tampered(u, self._outputs(role, w))
+        return _tampered(self.tamper, u, self._outputs(role, w))
 
     def _outputs(self, role: str, w: tuple[int, ...]) -> np.ndarray:
         if role == "digest":
@@ -265,14 +345,11 @@ class Native:
             return _le(self.key)
         if role == "form_x":
             return self.x_strip(w[0]).reshape(-1).astype(np.uint32)
-        if role == "form_y":
-            y, c0, _t = self._strip_y(w[0])
-            return np.concatenate([y.reshape(-1).astype(np.uint32), c0])
         if role == "tile":
-            y, c0, _t = self._strip_y(w[1])
+            y, c0, _t = self.side.strip(w[1])
             return self.tiles(self._x64(self.x_strip(w[0])), y, c0).reshape(-1)
         rs, cs, e = w
-        y, c0, t = self._strip_y(cs)
+        y, c0, t = self.side.strip(cs)
         z = self.tiles(self._x64(self.x_strip(rs)), y, c0)[-1].reshape(-1)[e]
         r, c = divmod(e, D)
         return dequant(z, self.call.s[D * rs + r], t[c], self.call.bias[D * cs + c]).reshape(1).astype(np.uint32)
@@ -280,7 +357,7 @@ class Native:
     # ---- wiring
 
     def producers(self, u: int) -> list[int]:
-        """The units whose outputs unit ``u`` reads."""
+        """The call's units whose outputs unit ``u`` reads (a tile's Y and c₀ are the call's inputs, `read`)."""
         role, w = self.locate(u)
         if role == "node":
             (left, right), _d = self.tree[0][w[0]]
@@ -290,14 +367,14 @@ class Native:
         if role == "form_x":
             return [self.index("key")]
         if role == "tile":
-            return [self.index("form_x", w[0]), self.index("form_y", w[1])]
+            return [self.index("form_x", w[0])]
         if role == "dequant":
             return [self.index("tile", w[0], w[1])]
         return []
 
-    def args(self, u: int, opened: Callable[[int], np.ndarray]) -> list:
-        """Unit ``u``'s template arguments, in parameter order: the call's inputs it reads, and its producers' outputs as
-        ``opened`` gives them."""
+    def args(self, u: int, opened: Callable[[int], np.ndarray], read: Callable[[int], tuple[np.ndarray, np.ndarray]] | None = None) -> list:
+        """Unit ``u``'s template arguments, in parameter order: the call's inputs it reads (a tile's Y and c₀ as ``read``
+        gives them, `read` when None), and its producers' outputs as ``opened`` gives them."""
         c, (role, w) = self.call, self.locate(u)
         salt, wid = _ints(np.frombuffer(c.salt, "<u4")), _ints(_lane(c.weight))
         if role == "digest":
@@ -307,33 +384,29 @@ class Native:
             return [_ints(opened(left)), _ints(opened(right))]
         if role == "key":
             return [salt, _ints(_lane(c.forward)), _ints(_lane(c.position)), wid, _ints(opened(self.producers(u)[0]))]
-        if role == "form_y":
-            b, _t = self.weight(D * w[0], D * w[0] + D)
-            return [_i7(b), salt, wid, _ints(c.colids[D * w[0]:D * w[0] + D])]
         if role == "form_x":
             return [_i7(self.a[D * w[0]:D * w[0] + D]), _ints(opened(self.index("key"))), _ints(c.rowids[D * w[0]:D * w[0] + D])]
         if role == "tile":
-            fx, fy = self.producers(u)
-            yv, cut = opened(fy), D * 3 * self.shape.k
-            return [_ints(opened(fx)), _ints(yv[:cut]), _ints(yv[cut:])]
+            y, c0 = (read or self.read)(w[1])
+            return [_ints(opened(self.producers(u)[0])), _ints(y), _ints(c0)]
         rs, cs, e = w
         r, cc = divmod(e, D)
         z = opened(self.producers(u)[0])[(self.steps - 1) * D * D + e]
-        _b, t = self.weight(D * cs + cc, D * cs + cc + 1)
-        return [int(z), int(c.s[D * rs + r]), int(t[0]), int(c.bias[D * cs + cc])]
+        t = self.side.strip(cs)[2]
+        return [int(z), int(c.s[D * rs + r]), int(t[cc]), int(c.bias[D * cs + cc])]
 
     # ---- the whole call
 
-    def commit(self, index: int, scheme: str, block: int | None = None) -> PC.CallRecord:
-        """Every unit's leaf, hashed as it is computed, and the served y; the weight's rows are read ``block`` at a time
-        (default `block_for`)."""
+    def commit(self, index: int, side: PC.WeightRecord, block: int | None = None) -> PC.CallRecord:
+        """Every unit's leaf, hashed as it is computed, and the served y, reading its weight side's Y and c₀; the weight's rows
+        are read ``block`` at a time (default `block_for`). ``side`` is the weight side's record, committed once per run."""
         c, sh = self.call, self.shape
         m, k, n = sh.m, sh.k, sh.n
-        block = block or block_for(n)
+        block = max(D, (block or block_for(n)) // D * D)
         leaves: list[bytes] = [b""] * self.population
 
         def put(u: int, v: np.ndarray) -> None:
-            leaves[u] = PC.unit_leaf(self._tampered(u, v))
+            leaves[u] = PC.unit_leaf(_tampered(self.tamper, u, v))
 
         for s in range(self.ms):
             put(self.index("digest", s), _be(self.digests[s]))
@@ -345,25 +418,22 @@ class Native:
             put(self.index("form_x", rs), x.reshape(-1))
         x64 = [self._x64(x) for x in xs]
         z, y_out = np.empty((m, n), np.uint32), np.empty((m, n), np.uint16)
-        block = max(D, block // D * D)
 
-        def columns(lo: int) -> tuple[np.ndarray, np.ndarray]:
+        def columns(lo: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             hi = min(n, lo + block)
-            b, t = self.weight(lo, hi)
-            y, c0 = self.y_block(b, lo)
-            for j in range(0, hi - lo, D):
-                put(self.index("form_y", (lo + j) // D), np.concatenate([y[j:j + D].reshape(-1), c0[j:j + D]]))
+            b, t = self.side.read(lo, hi)
+            y, c0 = self.side.block(b, lo)
             for rs in range(self.ms):
                 words = self.tiles(x64[rs], y, c0)
                 for j in range(0, hi - lo, D):
                     put(self.index("tile", rs, (lo + j) // D), np.ascontiguousarray(words[:, :, j:j + D]))
                 z[D * rs:D * rs + D, lo:hi] = words[-1]
             y_out[:, lo:hi] = dequant(z[:, lo:hi], c.s[:, None], t[None, :], c.bias[None, lo:hi])
-            return b, t
+            return y, c0, t
 
-        wd = PC.WeightDigest(n, k)
-        for b, t in _pool().map(columns, range(0, n, block)):              # in block order: B is digested row by row
-            wd.update(b, t)
+        rd = PC.Read(n, k)
+        for y, c0, t in _pool().map(columns, range(0, n, block)):          # in block order: Y, c₀ and t digested column by column
+            rd.update(y, c0, t)
         base = self.base["dequant"]
         deq = y_out.reshape(self.ms, D, self.ns, D).transpose(0, 2, 1, 3).reshape(-1).astype(np.uint32)
         for u, hit in self.tamper.items():
@@ -374,7 +444,17 @@ class Native:
         served = deq.astype(np.uint16).reshape(self.ms, self.ns, D, D).transpose(0, 2, 1, 3).reshape(m, n)
         self._xs.clear()
         blob = b"".join(leaves)
-        return PC.CallRecord(index, scheme, c, PC.inputs_digest(c, wd.parts()), blob, PC.units_root(blob), served, self.outputs)
+        return PC.CallRecord(index, self.scheme, c, PC.inputs_digest(c, rd.parts()), blob, PC.units_root(blob), served, side,
+                             self.outputs, self.read)
+
+    def read_digests(self, block: int | None = None) -> tuple[bytes, bytes, bytes]:
+        """The digests of the groups this call reads from its weight side (Y, c₀, t; `pouw_circuit.Read`), regenerated."""
+        n, rd = self.shape.n, PC.Read(self.shape.n, self.shape.k)
+        block = max(D, (block or BLOCK) // D * D)
+        for lo in range(0, n, block):
+            b, t = self.side.read(lo, min(n, lo + block))
+            rd.update(*self.side.block(b, lo), t)
+        return rd.parts()
 
 
 def served(call: PC.Call, block: int | None = None) -> np.ndarray:
@@ -391,9 +471,13 @@ def served(call: PC.Call, block: int | None = None) -> np.ndarray:
     return y
 
 
-def commit_call(index: int, scheme: str, call: PC.Call, tamper: Mapping[tuple[int, int], int] | None = None) -> PC.CallRecord:
-    """One call committed natively (`Native.commit`); its record opens units by regenerating them."""
-    return Native(call, tamper=tamper).commit(index, scheme)
+def commit_call(index: int, scheme: str, call: PC.Call, tamper: Mapping[tuple[int, int], int] | None = None,
+                side: PC.WeightRecord | None = None) -> PC.CallRecord:
+    """One call committed natively (`Native.commit`), reading its weight side ``side`` (committed here when None, as a run's
+    first call on the weight does); its record opens units by regenerating them."""
+    nw = NativeWeight(call.b, scheme, call.salt, call.weight, call.colids)
+    return Native(call, scheme, tamper, nw).commit(index, side or nw.commit())
 
 
-__all__ = ["BLOCK", "MIN_BLOCK", "Native", "THREADS", "block_for", "commit_call", "dequant", "served"]
+__all__ = ["BLOCK", "MIN_BLOCK", "Native", "NativeWeight", "THREADS", "block_for", "commit_call", "commit_weight", "dequant",
+           "served"]

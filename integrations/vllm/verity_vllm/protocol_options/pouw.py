@@ -18,9 +18,10 @@ Its commitment to the weights of record is made first, in the composition's weig
 layer's weight root); `commitment` is the scheme, the salt, the weights root the salt is derived from and, once closed,
 the transcript root with its unit and tile counts.  The audit (drawing tiles, opening them) is `verity_pouw.audit`'s,
 after the run.  Beside sampled proofs the composition asks `verity_pouw.circuit` (`protocol_options.CIRCUITS`), and only
-``ncp-v2`` has a circuit.  Under ``ncp-v2`` each call is instead bound to its own `NcpLinear_v1` Program call, its units
-computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws its units, regenerates
-them and checks each against its template (`check.replay.pouw_circuit`).
+``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+`NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
+computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws each call's units under
+its window's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
 What is a placeholder is listed in `info` (``placeholder``).
 """
 from __future__ import annotations
@@ -55,7 +56,8 @@ DEFAULT_SCHEME = "ncp-v1"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
 #: The schemes this adapter's executor computes; Pearl's FP10 / FP8 operands are not wired. ``ncp-v2`` is NCP-INT as a
-#: circuit (`verity_pouw.circuit`): each call is its own `NcpLinear_v1` Program call (`pouw_circuit`).
+#: circuit (`verity_pouw.circuit`): each call is its own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1`
+#: call (`pouw_circuit`).
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
@@ -85,12 +87,13 @@ class Settings:
     beacon: bytes | None = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    #: ``ncp-v2``'s replay: the work law's K over the run (`check.replay.pouw_circuit.draw`); None is `RECORD_K`, capped at
-    #: the run's units
+    #: ``ncp-v2``'s replay: the window's work-law budget K, each call drawing its share (`plan.window_laws`); None is
+    #: `RECORD_K`
     draws: int | None = None
-    #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of the replay's first drawn
-    #: tile with its low bit flipped (`check.replay.pouw_circuit.tamper_drawn_tile`); ``bias`` commits and serves the first
-    #: biased call with bias word 0's low bit flipped
+    #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first
+    #: call with its low bit flipped, so whatever the window's fresh draw, a drawn tile is wrong
+    #: (`check.replay.pouw_circuit.tamper_tiles`); ``bias`` commits and serves the first biased call with bias word 0's low
+    #: bit flipped
     tamper: str | None = None
 
     @classmethod
@@ -347,6 +350,7 @@ class _CircuitRun:
         self.weight_roots, self.salt = weight_roots, salt
         self.tampered: dict[str, Any] | None = None
         self.records: list[PC.CallRecord] = []
+        self.sides: dict[int, PC.WeightRecord] = {}     # each weight's side, committed at the run's first call on it
         self.seconds: list[float] = []                  # each call's executor wall time: quantize, commit, dequantize
         self.forward, self.row_base, self.rows_seen = -1, 0, 0
         self.commits: dict[str, Any] = {
@@ -354,8 +358,10 @@ class _CircuitRun:
             "calls_root": None, "calls": 0}
         self.details: dict[str, Any] = {
             "scheme": scheme, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
-            "circuit": "verity_pouw.circuit: each call is its own NcpLinear_v1 Program call, its units computed natively and "
-                       "committed a leaf per unit; y served, credited words committed",
+            "circuit": "verity_pouw.circuit: each weight's side is its own NcpWeight_v1 Program call, once per run, and each "
+                       "call its own NcpLinear_v1 Program call reading it, their units computed natively and committed a leaf "
+                       "per unit; y served, credited words committed",
+            "permutation": PC.kind_of(scheme),
             "beacon": "given" if settings.beacon else "placeholder: 32 zero bytes",
             "calls": 0, "padded_rows": 0, "commit_seconds": 0.0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
             "placeholder": list(PLACEHOLDER)}
@@ -387,7 +393,9 @@ class _CircuitRun:
         call = PC.Call(a, _f32_bits(s), _LayerRows(weight), bias_bits, self.salt, forward=self.forward, layer=w, site=0, weight=w,
                        rowids=np.arange(self.row_base, self.row_base + mp, dtype=np.uint32), colids=np.arange(n, dtype=np.uint32))
         if self.commit:
-            rec = PN.commit_call(len(self.records), self.scheme, call)
+            if w not in self.sides:
+                self.sides[w] = PN.commit_weight(self.scheme, call)
+            rec = PN.commit_call(len(self.records), self.scheme, call, side=self.sides[w])
             self.records.append(rec)
             served = rec.y
         else:
@@ -407,6 +415,7 @@ class _CircuitRun:
             d = Path(self.settings.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
             (d / PC.CALLS_FILE).write_text(json.dumps({"entry": self.entry, "commitment": self.commits,
+                                                        "weights": [PC.weight_summary(s) for s in PC.sides(self.records)],
                                                         "calls": [PC.summary(r) for r in self.records]}) + "\n")
             PC.save_calls(d / PC.CALLS_DATA_FILE, self.records)
 
