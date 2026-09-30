@@ -405,6 +405,202 @@ def peel(c_word: int, pa: Sequence[int], pb: Sequence[int]) -> int:
     return acc
 
 
+# ---- v4, a candidate: rank-2 FFMA noise (research store docs/pouw/pearl-c4-v4.md) -----------------------------------
+#
+# Not adopted: on the cap's basis (term 4 on the witness) its honest replayed debit exceeds ρ = 1/1,000 on 47–63% of a
+# real model's MACs, because its noise reaches only about 5.7σ where the atom's reaches 24σ.  Kept so that the design,
+# its peel and its witness can be replayed.  NVFP4 only.  v0's statistics, block rule and cast, with the noise atom replaced by two FP32 FMAs of rank-2 noise:
+#
+#   row i     (e_i1, e_i2) nonzero E2M1 codes; k_i1 in [0, 4096) with 5 ∤ 2^14 + k_i1; k_i2 in [0, 4096)
+#             J_iq = (2^14 + k_iq)/2^14;  a_i = ue4m3(mul.rn(mul.rn(σ, α), K_BETA4));  e′_iq = e_iq · a_i · J_iq
+#   column t  (f_t1, f_t2) nonzero E2M1 codes from seed_B (D-SK);  f′_t1 = f_t1,  f′_t2 = (5/4)·f_t2
+#   noise     D_it = fma.rn(e′_i2, f′_t2, fma.rn(e′_i1, f′_t1, α·x_it))
+#   peel      P_A,i = [e′_A,i in three BF16 pieces ‖ RNE_bf16(A′_i·F′_B) three times ‖ 0^4],
+#             P_B,j = [RNE_bf16(e′_B,j·G − B̃_j·F′_A) three times ‖ −e′_B,j in three BF16 pieces ‖ 0^4];
+#             U_ij = one HOPPER_BF16_M16N8K16 step over P_A,i · P_B,j from C̃_ij
+#
+# e′ has at most 21 significant bits (E2M1 2, UE4M3 4, J 15), so it is exact in FP32 and in three BF16 pieces.  No noise
+# value is zero: e1·f1·(2^14 + k1) + (5/4)·e2·f2·(2^14 + k2) = 0 would need a factor 5 on the left, and neither an E2M1
+# product nor 2^14 + k1 has one.  The row factors and the per-row jitters are the salt's, so identical rows form
+# different operands unless (e1, e2, k1, k2) coincide: about 1 in 2.6·10^9 per pair.
+
+V4_R = 2
+V4_J_ONE = 1 << 14
+V4_K = 4096
+K_BETA4 = 0x3D67F2C3               # f32(1/√((137/14)²·(61/48)·(41/16))): the noise's standard deviation per unit a
+V4_F2 = 0x3FA00000                 # 5/4
+V4_F2_SCALE = 0x3A                 # UE4M3 1.25: F′'s second column inside the fused chains
+D_LINE_V4 = 0x25                   # TurboSHAKE128 domain byte of v4's rows and columns
+V4_PEEL_K = 16
+
+
+def v4_codes(raw: bytes, n: int) -> list[int]:
+    """The first n nonzero E2M1 codes among raw's nibbles, low nibble first (0x0 and 0x8, ±0, are skipped)."""
+    out = [x for b in raw for x in (b & 0xF, b >> 4) if x & 7][:n]
+    if len(out) < n:
+        raise InvalidArtifact("the noise stream ran out of nonzero codes")
+    return out
+
+
+def v4_row(seed: bytes, role: int, index: int) -> tuple[int, int, int, int]:
+    """(e1, e2, k1, k2) of one row: TurboSHAKE128(seed ‖ role ‖ index u32 LE, D = 0x25), 114 bytes.  e1, e2 are the first
+    two nonzero nibbles of bytes 0–15; k1 is the low 12 bits of the first 16-bit LE word of bytes 16–111 with
+    5 ∤ 2^14 + k1; k2 is the low 12 bits of bytes 112–113."""
+    raw = turboshake128(seed + bytes([role]) + index.to_bytes(4, "little"), D_LINE_V4, 114)
+    e1, e2 = v4_codes(raw[:16], 2)
+    k1 = next((w & 0xFFF for w in struct.unpack("<48H", raw[16:112]) if (V4_J_ONE + (w & 0xFFF)) % 5), None)
+    if k1 is None:
+        raise InvalidArtifact("the noise stream ran out of jitter values")
+    return e1, e2, k1, struct.unpack("<H", raw[112:114])[0] & 0xFFF
+
+
+def v4_column(seed_b: bytes, role: int, t: int) -> tuple[int, int]:
+    """(f1, f2) of position t: the first two nonzero nibbles of TurboSHAKE128(seed_B ‖ role ‖ t u32 LE, D = 0x25)."""
+    f1, f2 = v4_codes(turboshake128(seed_b + bytes([role]) + t.to_bytes(4, "little"), D_LINE_V4, 16), 2)
+    return f1, f2
+
+
+def v4_basis(seed_b: bytes, role: int, k: int) -> tuple[tuple[int, int], ...]:
+    """F′_A (ROLE_FA) or F′_B (ROLE_FB): one (f1, f2) per position."""
+    return tuple(v4_column(seed_b, role, t) for t in range(k))
+
+
+def v4_stats(fmt: Fmt, x: Sequence[int]) -> tuple[int, int, int, int, int]:
+    """(s, ρ, α, β4, a) of one row: v0's `stats` with β4 = (σ·α)·K_BETA4 and a = ue4m3(β4)."""
+    if fmt is not NVFP4:
+        raise P.Reject("v4 is an NVFP4 design")
+    s, rho, alpha, _, _ = stats(fmt, x)
+    beta = _finite(fp32.mul(fp32.mul(fp32.mul(rho, DELTA), alpha), K_BETA4))
+    return s, rho, alpha, beta, ue4m3(beta)
+
+
+def v4_row_words(row: tuple[int, int, int, int], a: int) -> tuple[int, int]:
+    """(e′_1, e′_2) as FP32 words: e_q · a · (2^14 + k_q)/2^14, exact."""
+    e1, e2, k1, k2 = row
+    av = Fraction(P.fp8_to_f32(a))
+    return tuple(P.f32_bits(float(e2m1_value(e) * av * Fraction(V4_J_ONE + kq, V4_J_ONE))) for e, kq in ((e1, k1), (e2, k2)))
+
+
+def v4_column_words(col: tuple[int, int]) -> tuple[int, int]:
+    """(f′_1, f′_2) as FP32 words: f1 and (5/4)·f2, exact."""
+    return P.f32_bits(float(e2m1_value(col[0]))), P.f32_bits(float(e2m1_value(col[1]) * Fraction(5, 4)))
+
+
+def v4_noise(c_word: int, e_words: Sequence[int], f_words: Sequence[int]) -> int:
+    """D = fma.rn(e′_2, f′_2, fma.rn(e′_1, f′_1, C)): two FP32 FMAs, nearest even, in that order."""
+    return _finite(fp32.fma(e_words[1], f_words[1], _finite(fp32.fma(e_words[0], f_words[0], c_word))))
+
+
+def v4_form(fmt: Fmt, x_rows: Sequence[Sequence[int]], rows: Sequence[tuple[int, int, int, int]],
+            cols: Sequence[tuple[int, int]]) -> Formed:
+    """v4's noisy forming: per element two FMAs with α·x as the addend, then v0's noisy block scale and cast.  `Formed.ae`
+    holds each row's a."""
+    fw = [v4_column_words(c) for c in cols]
+    out = Formed([], [], [], [], [], [])
+    for x, row in zip(x_rows, rows, strict=True):
+        _, _, alpha, beta, a = v4_stats(fmt, x)
+        ew = v4_row_words(row, a)
+        codes, scales = quantize(fmt, [v4_noise(fp32.mul(alpha, xt), ew, fw[t]) for t, xt in enumerate(x)])
+        for field, v in (("codes", codes), ("scales", scales), ("alpha", alpha), ("beta", beta), ("ae", a),
+                         ("x", list(x))):
+            getattr(out, field).append(v)
+    return out
+
+
+def v4_pieces(word: int) -> list[int]:
+    """Three BF16 codes that sum exactly to an FP32 word of at most 24 significant bits: hi = RNE_bf16(w),
+    mid = RNE_bf16(w − hi), lo = w − hi − mid."""
+    v, out = Fraction(P.f32_of_bits(word)), []
+    for _ in range(2):
+        h = P.bf16_of_fraction(v)
+        out.append(h)
+        v -= Fraction(P.f32_of_bits(h << 16))
+    lo = P.bf16_of_fraction(v)
+    if Fraction(P.f32_of_bits(lo << 16)) != v:
+        raise InvalidArtifact("a v4 factor is not three BF16 pieces")
+    return out + [lo]
+
+
+def _v4_col_chain(fmt: Fmt, codes: Sequence[int], scales: Sequence[int], basis: Sequence[tuple[int, int]], q: int) -> int:
+    """chain(codes, F′[:, q]): column q's E2M1 codes at block scale 1.0 (q = 0) or 1.25 (q = 1)."""
+    s = [fmt.one if q == 0 else V4_F2_SCALE] * (len(codes) // fmt.block)
+    return chain(fmt, codes, [c[q] for c in basis], scales, s)
+
+
+def v4_gram(fmt: Fmt, fa: Sequence[tuple[int, int]], fb: Sequence[tuple[int, int]]) -> list[list[int]]:
+    """G = F′_Bᵀ·F′_A (2 x 2) as FP32 words, G_pq = chain(F′_B[:, p], F′_A[:, q]) with each column's scale."""
+    return [[chain(fmt, [c[p] for c in fb], [c[q] for c in fa],
+                   [fmt.one if p == 0 else V4_F2_SCALE] * (len(fb) // fmt.block),
+                   [fmt.one if q == 0 else V4_F2_SCALE] * (len(fa) // fmt.block)) for q in range(V4_R)]
+            for p in range(V4_R)]
+
+
+def v4_peel_factors_a(fmt: Fmt, side: Formed, rows: Sequence[tuple[int, int, int, int]],
+                      fb: Sequence[tuple[int, int]]) -> list[list[int]]:
+    """P_A rows (16 BF16): [e′ pieces hi1 hi2 mid1 mid2 lo1 lo2 ‖ RNE_bf16(A′·F′_B) three times ‖ 0^4]."""
+    out = []
+    for codes, scales, row, a in zip(side.codes, side.scales, rows, side.ae, strict=True):
+        pcs = [v4_pieces(w) for w in v4_row_words(row, a)]
+        af = [C._bf16_of_word(_v4_col_chain(fmt, codes, scales, fb, p)) for p in range(V4_R)]
+        out.append([pcs[q][i] for i in range(3) for q in range(V4_R)] + af * 3 + [0] * 4)
+    return out
+
+
+def v4_peel_factors_b(fmt: Fmt, side: Formed, rows: Sequence[tuple[int, int, int, int]],
+                      fa: Sequence[tuple[int, int]], fb: Sequence[tuple[int, int]]) -> list[list[int]]:
+    """P_B rows (16 BF16): [RNE_bf16(e′_B·G − B̃·F′_A) three times ‖ −e′_B pieces hi1 hi2 mid1 mid2 lo1 lo2 ‖ 0^4].
+    e′_B·G is the FP32 FMA chain from +0 in p order on the exact e′ words; the difference one FP32 nearest-even add."""
+    g = v4_gram(fmt, fa, fb)
+    out = []
+    for codes, scales, row, a in zip(side.codes, side.scales, rows, side.ae, strict=True):
+        ew = v4_row_words(row, a)
+        mid = []
+        for q in range(V4_R):
+            acc = 0
+            for p in range(V4_R):
+                acc = _finite(fp32.fma(ew[p], g[p][q], acc))
+            mid.append(C._bf16_of_word(_finite(fp32.add(acc, fp32.neg(_v4_col_chain(fmt, codes, scales, fa, q))))))
+        pcs = [v4_pieces(w) for w in ew]
+        out.append(mid * 3 + [pcs[q][i] ^ 0x8000 for i in range(3) for q in range(V4_R)] + [0] * 4)
+    return out
+
+
+def v4_peel(c_word: int, pa: Sequence[int], pb: Sequence[int]) -> int:
+    """U from C̃: one HOPPER_BF16_M16N8K16 step over the 16 BF16 peel operands."""
+    return _finite(HOPPER_BF16_M16N8K16.step(c_word, pa[:V4_PEEL_K], pb[:V4_PEEL_K]))
+
+
+def v4_salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, a: int) -> list[bool]:
+    """Per element of one row: whether its E2M1 code may be the same at every v4 noise draw (the witness; the sound side).
+
+    The draws: the row's (e1, e2) = (+6, +6) with k1 = k2 = 4095 (both in the support), the element's column
+    (f1, f2) = (+6, +6) or (−6, −6), and every other column of its block (+1/2, −1/2), whose noise is then −(3/4)·a·J.
+    An element is salt-live when the two draws give its code two values; v4 has no zero-noise draw to add."""
+    ew = v4_row_words((0x7, 0x7, V4_K - 1, V4_K - 1), a)
+    quiet, up, down = v4_column_words((0x1, 0x9)), v4_column_words((0x7, 0x7)), v4_column_words((0xF, 0xF))
+    recip: dict[int, int] = {}
+
+    def code(v: int, amax: int) -> int:
+        if amax not in recip:
+            recip[amax] = block_scale(fmt, amax)[1]
+        c = e2m1(fp32.mul(v, recip[amax]))
+        return c if c & 7 else 0
+
+    dead = []
+    for b in range(0, len(x), fmt.block):
+        c = [fp32.mul(alpha, w) for w in x[b:b + fmt.block]]
+        others = [v4_noise(w, ew, quiet) for w in c]
+        mags = [w & 0x7FFFFFFF for w in others]
+        top = max(mags)
+        at = mags.index(top)
+        second = max(mags[:at] + mags[at + 1:], default=0)
+        for t, ct in enumerate(c):
+            rest = second if t == at else top
+            draws = [v4_noise(ct, ew, f) for f in (up, down)]
+            dead.append(len({code(v, max(v & 0x7FFFFFFF, rest)) for v in draws}) == 1)
+    return dead
+
+
 # ---- the domain rules and the debit (theory-pearl-c4-domain.md §1, §2) --------------------------------------------
 
 def _exact_rho_sq(x: Sequence[int]) -> Fraction:
