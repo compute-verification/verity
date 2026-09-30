@@ -12,6 +12,10 @@ it by quota and requeues it itself when it is preempted). The Job runs the task'
 image's uid 1000, with /workspace mounted, and the R2 store credentials from the Secret `research-r2` (the templates' `secrets`).
 Tasks of a multi-task template (config-run: build, then gpu) chain: the next task is submitted when the previous one succeeds.
 A task that exits 99 is resubmitted (a chunk that ended early or was told to yield); any other failure ends the item.
+An item is pinned to its template's content at its first submit: the item carries `template_sha` (the `name@sha` its submit event
+logs) and a copy is kept at `$VY_DISPATCH_ROOT/templates.by-sha/<sha>/<template>.yaml`. Every later task, resubmission and spooled
+Commit of its chain renders from that copy, never from the live `sky/jobs/`, so a template refreshed mid-chain applies only to items
+submitted after it. A Job whose pinned copy is gone is held (left unseen, printed each tick), never chained on another template.
 Every task starts under `taskset -c $VY_DISPATCH_CPUS` (96-159): 0-7 are k3s's, 8-95 the RC's three train-check slots, 160-191
 pinned benches (Build and M0 benches, which run one at a time; infra 21:36Z).
 
@@ -38,6 +42,8 @@ the job (`"$GPU_LEASE" 1 --wait -- ...` around each GPU phase), so it can releas
 At most VY_LEASE_DEPTH (5) leased tasks per queue are in flight, since an admitted one may wait for a GPU while Kueue holds its CPUs.
 
 **Record.** `log.jsonl` gets one line per submit and per end (job, item key, task, queue, rc, wall); `done.jsonl` one per ended item.
+Both are append-only: a wrong outcome is corrected by a later `done.jsonl` line for the key (and an `ev: correct` log line) that
+names the line it corrects in `corrects` and cites its evidence; an item's outcome is its last `done.jsonl` line (`status`).
 Inside the Job, the template's own `research run` writes the Attempt.
 
 **Packing (PACK_COMMITS=1; default 0).** config-run's gpu task of an eligible item (`packable`: TP1, a model of <= 4B on
@@ -71,6 +77,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "sky" / "jobs"
 ROOT = Path(os.environ.get("VY_DISPATCH_ROOT", "/workspace/jobs/dispatch"))
+PINNED = ROOT / "templates.by-sha"
 IMAGE = os.environ.get("VY_DISPATCH_IMAGE", "us-docker.pkg.dev/sky-dev-465/skypilotk8s/skypilot-gpu:202605150216")
 READY = Path(os.environ.get("VY_READY", "/workspace/jobs/ready"))
 CPUS = os.environ.get("VY_DISPATCH_CPUS", "96-159")
@@ -113,14 +120,52 @@ def append(name: str, rec: dict) -> None:
         f.write(json.dumps({"t": now_utc(), **rec}, sort_keys=True) + "\n")
 
 
-def load_template(name: str) -> tuple[list[dict], str]:
+def template_sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:12]
+
+
+def load_template(name: str, sha: str | None = None) -> tuple[list[dict], str]:
+    """The template's tasks and sha: sky/jobs/<name>.yaml as it is now, or with `sha` exactly that content (its pinned copy, else
+    the live file while it still hashes to `sha`)."""
     import yaml
 
-    path = TEMPLATES / f"{name}.yaml"
-    text = path.read_text()
+    live = TEMPLATES / f"{name}.yaml"
+    if sha is None:
+        text = live.read_text()
+    else:
+        text = next((t for t in (p.read_text() for p in (PINNED / sha / f"{name}.yaml", live) if p.is_file())
+                     if template_sha(t) == sha), None)
+        if text is None:
+            raise ValueError(f"template {name}@{sha}: no copy in {PINNED / sha}, and sky/jobs/{name}.yaml has other content")
     docs = [d for d in yaml.safe_load_all(text) if d]
     tasks = [d for d in docs if "run" in d] if len(docs) > 1 else docs
-    return tasks, hashlib.sha256(text.encode()).hexdigest()[:12]
+    return tasks, template_sha(text)
+
+
+def pin(item: dict, dry: bool = False) -> dict:
+    """The item pinned to its template as it is now, keeping a copy under PINNED (an item's first submit); a pinned item as is."""
+    if item.get("template_sha") is not None:
+        return item
+    text = (TEMPLATES / f"{item['template']}.yaml").read_text()
+    sha = template_sha(text)
+    dst = PINNED / sha / f"{item['template']}.yaml"
+    if not dry and not dst.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+        tmp.write_text(text)
+        tmp.rename(dst)
+    return {**item, "template_sha": sha}
+
+
+def pinned_item(item: dict, template: str) -> dict:
+    """`item` pinned to `template` (a Job's or spool entry's `name@sha`): Jobs rendered before pinning carry it only there."""
+    return item if item.get("template_sha") is not None else {**item, "template_sha": template.rpartition("@")[2]}
+
+
+def job_item(job: dict) -> dict:
+    """The item a Job was rendered from, pinned to that Job's template."""
+    a = job["metadata"]["annotations"]
+    return pinned_item(json.loads(a["verity.dev/item-json"]), a.get("verity.dev/template", ""))
 
 
 def dns(s: str, n: int) -> str:
@@ -156,8 +201,8 @@ def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, 
 
 
 def render(item: dict, key: str, idx: int, tries: int) -> dict:
-    """The batch/v1 Job for task `idx` of the item's template."""
-    tasks, tsha = load_template(item["template"])
+    """The batch/v1 Job for task `idx` of the item's template (its pinned content, when the item is pinned)."""
+    tasks, tsha = load_template(item["template"], item.get("template_sha"))
     task = tasks[idx]
     cpus, mem, gpus = task_resources(item, task, idx, len(tasks))
     envs = {k: v for k, v in (task.get("envs") or {}).items()}
@@ -251,6 +296,7 @@ def lease_mode(item: dict, key: str) -> str | None:
 
 
 def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False) -> str:
+    item = pin(item, dry)
     job = render(item, key, idx, tries)
     name = job["metadata"]["name"]
     if dry:
@@ -278,7 +324,7 @@ def packable(item: dict, key: str, idx: int) -> str | None:
         return "not a config-run"
     if lease_mode(item, key):
         return "leased (its GPU comes from gpu-lease)"
-    tasks, _ = load_template(item["template"])
+    tasks, _ = load_template(item["template"], item.get("template_sha"))
     if (tasks[idx].get("name") or "") != "gpu":
         return "not the gpu task"
     if item.get("unpacked"):
@@ -307,6 +353,7 @@ def packable(item: dict, key: str, idx: int) -> str | None:
 
 def spool(item: dict, key: str, idx: int, tries: int = 0, dry: bool = False) -> str:
     """Queue task `idx` for a commit-pack pod: the Job it would be, as its env and script."""
+    item = pin(item, dry)
     job = render(item, key, idx, tries)
     name = job["metadata"]["name"]
     c = job["spec"]["template"]["spec"]["containers"][0]
@@ -382,13 +429,18 @@ def pack_results(pods: list[dict], dry: bool = False) -> None:
         res = json.loads(r.read_text())
         entry = res["entry"]
         item, key, idx, tries, rc = entry["item"], entry["key"], entry["idx"], entry["tries"], res.get("rc")
+        item = pinned_item(item, entry.get("template", ""))
+        try:
+            ntasks = len(load_template(item["template"], item["template_sha"])[0])
+        except (OSError, ValueError) as e:
+            print(f"held {r.name} ({key}): {e}", file=sys.stderr)
+            continue
         if dry:
-            print(f"would read back {r.name}: rc {rc} fault {res.get('fault')}")
+            print(f"would read back {r.name}: rc {rc} fault {res.get('fault')}, on {item['template']}@{item['template_sha']}")
             continue
         append("log.jsonl", {"ev": "end", "job": entry["job"], "key": key, "task": idx, "try": tries,
                              "state": "succeeded" if rc == 0 else "failed", "rc": rc, "wall_s": res.get("wall_s"),
                              "packed": res.get("pod"), "fault": bool(res.get("fault")), "reason": res.get("reason")})
-        ntasks = len(load_template(item["template"])[0])
         if rc == 0 and idx + 1 < ntasks:
             route(item, key, idx + 1, 0)
         elif rc == REQUEUE_RC and not res.get("fault") and tries + 1 < MAX_TRIES:
@@ -415,10 +467,13 @@ def pack_adopt(jobs: list[dict], dry: bool = False) -> None:
             return
         if not j["spec"].get("suspend") or (j.get("status") or {}).get("startTime"):
             continue
-        item = json.loads(j["metadata"]["annotations"]["verity.dev/item-json"])
+        item = job_item(j)
         idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
         name, key = j["metadata"]["name"], j["metadata"]["annotations"]["verity.dev/item"]
-        if packable(item, key, idx) is not None:
+        try:
+            if packable(item, key, idx) is not None:
+                continue
+        except (OSError, ValueError):
             continue
         if dry:
             print(f"would adopt {name} ({key})")
@@ -531,22 +586,30 @@ def tick(dry: bool = False) -> None:
             inflight.add(key)
         if state not in ("succeeded", "failed") or j["metadata"]["labels"].get("verity.dev/seen") == "1":
             continue
-        item = json.loads(j["metadata"]["annotations"]["verity.dev/item-json"])
+        item = job_item(j)
         idx, tries = int(j["metadata"]["labels"]["verity.dev/task"]), int(j["metadata"]["labels"]["verity.dev/try"])
+        try:
+            ntasks = len(load_template(item["template"], item["template_sha"])[0])
+        except (OSError, ValueError) as e:
+            print(f"held {j['metadata']['name']} ({key}): {e}", file=sys.stderr)
+            continue
         st = j.get("status") or {}
         wall = None
         if st.get("startTime") and st.get("completionTime"):
             ts = [time.mktime(time.strptime(st[k], "%Y-%m-%dT%H:%M:%SZ")) for k in ("startTime", "completionTime")]
             wall = int(ts[1] - ts[0])
-        append("log.jsonl", {"ev": "end", "job": j["metadata"]["name"], "key": key, "task": idx, "try": tries, "state": state,
-                             "rc": rc, "wall_s": wall})
-        ntasks = len(load_template(item["template"])[0])
         nxt = None
         if state == "succeeded" and idx + 1 < ntasks:
             nxt = (idx + 1, 0)
         elif state == "failed" and rc == REQUEUE_RC and tries + 1 < MAX_TRIES:
             nxt = (idx, tries + 1)
-        if not dry:
+        if dry:
+            then = "the item ends" if not nxt else \
+                f"then {render(item, key, *nxt)['metadata']['name']} (task {nxt[0]} of {ntasks})"
+            print(f"would end {j['metadata']['name']} ({key}, {state} rc {rc}) on {item['template']}@{item['template_sha']}: {then}")
+        else:
+            append("log.jsonl", {"ev": "end", "job": j["metadata"]["name"], "key": key, "task": idx, "try": tries, "state": state,
+                                 "rc": rc, "wall_s": wall})
             if nxt:
                 route(item, key, *nxt)
             else:
@@ -623,9 +686,19 @@ def busy() -> dict:
     return {k: (round(v, 1) if v is not None else None) for k, v in out.items()}
 
 
+def outcomes() -> dict[str, dict]:
+    """Each ended item's outcome: its last done.jsonl line (a correction supersedes the line it names)."""
+    p = ROOT / "done.jsonl"
+    return {r["key"]: r for r in (json.loads(line) for line in p.read_text().splitlines() if line.strip())} if p.exists() else {}
+
+
 def status() -> None:
     print(kubectl("get", "clusterqueue"), end="")
     print(kubectl("get", "jobs", "-l", f"{LABEL}=node1", "-L", "kueue.x-k8s.io/queue-name"), end="")
+    states: dict[str, int] = {}
+    for r in outcomes().values():
+        states[r.get("state", "?")] = states.get(r.get("state", "?"), 0) + 1
+    print(json.dumps({"items": states}, sort_keys=True))
     print(json.dumps(busy()))
 
 
@@ -643,6 +716,7 @@ def main(argv: list[str]) -> int:
     s.add_argument("--resources", type=json.loads, help='JSON: {"<task>": {"cpus": N, "memory": GB, "gpus": N}}')
     s.add_argument("--task", type=int, default=0, help="start the chain at this task (resume after an earlier task succeeded)")
     s.add_argument("--try", dest="tries", type=int, default=0, help="the try number in the Job name (a resubmission)")
+    s.add_argument("--template-sha", help="render from this pinned template (resume a chain on the template it started on)")
     s.add_argument("--dry-run", action="store_true")
     sp = sub.add_parser("spool", help="queue one item's task for a commit-pack pod now, whatever PACK_COMMITS says")
     sp.add_argument("template")
@@ -664,7 +738,8 @@ def main(argv: list[str]) -> int:
     if ns.cmd == "submit":
         item = {"id": ns.key.split("/", 1)[-1], "template": ns.template, "tree": ns.tree,
                 "env": dict(e.split("=", 1) for e in ns.env)}
-        for k, v in (("queue", ns.queue), ("priority", ns.priority), ("class", ns.cls), ("resources", ns.resources)):
+        for k, v in (("queue", ns.queue), ("priority", ns.priority), ("class", ns.cls), ("resources", ns.resources),
+                     ("template_sha", ns.template_sha)):
             if v:
                 item[k] = v
         submit(item, ns.key, ns.task, ns.tries, dry=ns.dry_run)
