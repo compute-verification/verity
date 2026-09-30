@@ -46,11 +46,12 @@ def parse_quality(argv: list[str]) -> dict:
     ap.add_argument("--eval-windows", type=int, default=4)
     ap.add_argument("--variants", default="all")
     ap.add_argument("--sigma-c", type=float, default=0.5)
+    ap.add_argument("--delta", type=float, default=0.25)
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--seed", type=int, default=20260930)
     ns, _ = ap.parse_known_args(argv)
     return {"model": ns.model.rstrip("/").rsplit("/", 1)[-1], "seqlen": ns.seqlen, "eval_windows": ns.eval_windows,
-            "variants": ns.variants, "sigma_c": ns.sigma_c, "device": ns.device, "seed": ns.seed}
+            "variants": ns.variants, "sigma_c": ns.sigma_c, "delta": ns.delta, "device": ns.device, "seed": ns.seed}
 
 
 def parse_attack(argv: list[str]) -> dict:
@@ -71,7 +72,7 @@ POUW_FP4_CENSUS = Tool(name="pouw_fp4_census", version="1", command=["python", "
                        produces=["bench-result/v1", "run-files/v1"], parse=parse_census)
 POUW_FP4_QUALITY = Tool(name="pouw_fp4_quality", version="1", command=["python", "benchmarks/pouw/fp4_quality.py"],
                         closure=["benchmarks/pouw/fp4_quality.py", "benchmarks/pouw/run_result.py"],
-                        key_params=["model", "seqlen", "eval_windows", "variants", "sigma_c", "device", "seed"],
+                        key_params=["model", "seqlen", "eval_windows", "variants", "sigma_c", "delta", "device", "seed"],
                         produces=["bench-result/v1", "run-files/v1"], parse=parse_quality)
 POUW_FP4_ATTACK = Tool(name="pouw_fp4_attack", version="1", command=["python", "benchmarks/pouw/kernels/fp4_attack.py"],
                        closure=["benchmarks/pouw/kernels/fp4_attack.py", "benchmarks/pouw/kernels/fp4_attack.cu",

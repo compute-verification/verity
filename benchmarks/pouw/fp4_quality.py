@@ -12,10 +12,14 @@ Quantization is exact emulation: values are rounded onto the format's grid and c
 - ``mxf4``: OCP MX v1.0 MXFP4 -- per 32-block along k a UE8M0 scale 2^(floor(log2 amax_b) - 2), elements RNE onto E2M1
   saturating at 6.
 - ``*_w4a16``: the weights only.
-- ``pouw_nvf4`` / ``pouw_mxf4`` (stand-in until the FP4 PoUW design fixes its noise): the useful output of a Pearl-C-style
-  scheme, where both operands are quantized with noise added and the clean-up removes the noise exactly, so the effective
-  operand is deq(Q(x + n)) - n.  n has RMS sigma_c code units of each block's clean scale (amax_b/6), fresh per call for
-  activations and fixed per run for weights.
+- ``pouw_nvf4`` / ``pouw_mxf4``: the useful output of a Pearl-C-style scheme, where both operands are quantized with noise
+  added and the clean-up removes the noise exactly, so the effective operand is deq(Q(x + n)) - n.  Here n is *block*-relative
+  (RMS sigma_c code units of each block's clean scale amax_b/6): the base-split census (fp4_census.py) shows block-relative
+  noise lets a salt-free cheater save 1-25% of the MACs, so this is the *insecure* config, kept only for comparison.
+- ``pouwrow_nvf4`` / ``pouwrow_mxf4``: the same clean-up, but with the *row*-relative noise the design deploys (RMS delta of
+  the operand row's RMS rho, the Pearl-C4 v0 default delta=1/4).  The base-split census shows row-relative noise at
+  delta >= 1/8 ties the honest MAC cost (gamma <= 1%), so this is the *deployable* config; its perplexity is the one to cite.
+  n is fresh per call for activations and fixed per run for weights.
 
     python benchmarks/pouw/fp4_quality.py --eval-windows 4 --seqlen 512                  # CPU, the FP8 lane's subset
     python benchmarks/pouw/fp4_quality.py --device cuda --eval-windows 0 --seqlen 2048   # GPU: the whole test split
@@ -40,7 +44,7 @@ import run_result  # noqa: E402
 
 LINEARS = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj", "mlp.gate_proj", "mlp.up_proj",
            "mlp.down_proj")
-VARIANTS = ("bf16", "fp8", "nvf4", "mxf4", "nvf4_w4a16", "mxf4_w4a16", "pouw_nvf4", "pouw_mxf4")
+VARIANTS = ("bf16", "fp8", "nvf4", "mxf4", "nvf4_w4a16", "mxf4_w4a16", "pouw_nvf4", "pouw_mxf4", "pouwrow_nvf4", "pouwrow_mxf4")
 E2M1 = torch.tensor([0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0])
 E2M1_MID = (E2M1[1:] + E2M1[:-1]) / 2
 
@@ -105,6 +109,18 @@ def pouw_operand(x: torch.Tensor, fmt: str, sigma_c: float, gen: torch.Generator
     return QUANT[fmt](x + n) - n
 
 
+def row_noise(x: torch.Tensor, delta: float, gen: torch.Generator) -> torch.Tensor:
+    """RMS delta of each row's RMS rho (the design's row-relative noise floor; secure for gamma at delta >= 1/8)."""
+    rho = x.pow(2).mean(1, keepdim=True).sqrt()
+    z = torch.randn(x.shape, generator=gen, device="cpu").to(x.device)
+    return delta * rho * z
+
+
+def pouw_operand_row(x: torch.Tensor, fmt: str, delta: float, gen: torch.Generator) -> torch.Tensor:
+    n = row_noise(x, delta, gen)
+    return QUANT[fmt](x + n) - n
+
+
 def main() -> None:
     from datasets import load_dataset
     from huggingface_hub import snapshot_download
@@ -118,6 +134,7 @@ def main() -> None:
     ap.add_argument("--eval-windows", type=int, default=4, help="0: every window of the test split")
     ap.add_argument("--variants", default=",".join(VARIANTS))
     ap.add_argument("--sigma-c", type=float, default=0.5, help="stand-in PoUW noise, RMS in code units of the block scale")
+    ap.add_argument("--delta", type=float, default=0.25, help="row-relative PoUW noise (pouwrow_*), RMS as a fraction of the row RMS")
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--window-batch", type=int, default=8, help="windows per layer call (memory)")
@@ -171,6 +188,8 @@ def main() -> None:
                 w = mod.weight
                 if mode in ("fp8", "nvf4", "mxf4", "nvf4_w4a16", "mxf4_w4a16"):
                     w = QUANT[mode.split("_")[0]](w)
+                elif mode.startswith("pouwrow_"):
+                    w = pouw_operand_row(w, mode[8:], args.delta, torch.Generator().manual_seed(seed_of(args.seed, i, name, "B")))
                 elif mode.startswith("pouw_"):
                     w = pouw_operand(w, mode[5:], args.sigma_c, torch.Generator().manual_seed(seed_of(args.seed, i, name, "B")))
                 cache[(name, mode)] = w
@@ -185,6 +204,9 @@ def main() -> None:
                     state["capture"].setdefault(name, []).append(x2[: args.dump_rows].detach().float().cpu().numpy())
                 if mode in ("fp8", "nvf4", "mxf4"):
                     x2 = QUANT[mode](x2)
+                elif mode.startswith("pouwrow_"):
+                    gen = torch.Generator().manual_seed(seed_of(args.seed, i, name, "A", state["call"]))
+                    x2 = pouw_operand_row(x2, mode[8:], args.delta, gen)
                 elif mode.startswith("pouw_"):
                     gen = torch.Generator().manual_seed(seed_of(args.seed, i, name, "A", state["call"]))
                     x2 = pouw_operand(x2, mode[5:], args.sigma_c, gen)
@@ -236,7 +258,7 @@ def main() -> None:
         res[v] = {"ppl": float(math.exp(nll[v].mean())), "vs_bf16_pct": float(100 * (math.exp(d.mean()) - 1)),
                   "vs_bf16_pct_se": float(100 * se), "vs_bf16_pct_upper95": float(100 * (math.exp(d.mean() + 1.645 * se) - 1)),
                   "tokens": int(len(d))}
-    pairs = [("pouw_nvf4", "nvf4"), ("pouw_mxf4", "mxf4"), ("mxf4", "nvf4")]
+    pairs = [("pouw_nvf4", "nvf4"), ("pouw_mxf4", "mxf4"), ("pouwrow_nvf4", "nvf4"), ("pouwrow_mxf4", "mxf4"), ("mxf4", "nvf4")]
     for a, b in pairs:
         if a in nll and b in nll:
             d = nll[a] - nll[b]
