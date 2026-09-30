@@ -234,7 +234,9 @@ def units_root(leaves: bytes) -> bytes:
 class WeightRecord:
     """One weight's side in a run, committed once: its inputs (the rows as read, the salt, the weight id, the column ids),
     their digest, every Y unit's leaf (one per 16-column strip) and the root over them. ``opening`` is the prover's: a Y
-    unit's outputs (the strip's Y, then its c₀), regenerated when the replay asks for them."""
+    unit's outputs (the strip's Y, then its c₀), regenerated when the replay asks for them. ``reads`` is what an honest
+    call on the weight reads from it, digested (`Read.parts`: its Y, its c₀ and the scales t), for a committer that doesn't
+    see Y itself."""
 
     scheme: str
     rows: Rows
@@ -245,6 +247,7 @@ class WeightRecord:
     leaves: bytes                                   # 32 bytes per Y unit, in column-strip order
     root: bytes                                     # `units_root(leaves)`
     opening: Callable[[int], np.ndarray]
+    reads: tuple[bytes, bytes, bytes]
 
     @property
     def units(self) -> int:
@@ -369,11 +372,15 @@ def commit_weight_ir(scheme: str, call: Call) -> WeightRecord:
     tp = c.weight_partition
     outs = [np.array([tr[g] for g in tp.outputs(u)], np.uint32) for u in range(tp.population)]
     leaves = b"".join(unit_leaf(v) for v in outs)
+    b, t = call.b.rows(0, call.b.n)
     rd = RowsDigest(call.b.n, call.b.k)
-    rd.update(call.b.rows(0, call.b.n)[0])
+    rd.update(b)
+    per = D * 3 * call.b.k
+    read = (_group(np.concatenate([o[:per] for o in outs]).astype(np.uint8), "<u1"),
+            _group(np.concatenate([o[per:] for o in outs]), "<u4"), _group(t, "<u4"))
     return WeightRecord(scheme, call.b, call.salt, call.weight, call.colids,
                         weight_inputs_digest(rd.digest(), call.salt, call.weight, call.colids), leaves, units_root(leaves),
-                        outs.__getitem__)
+                        outs.__getitem__, read)
 
 
 def commit_call_ir(index: int, scheme: str, call: Call, side: WeightRecord | None = None) -> CallRecord:

@@ -60,6 +60,8 @@ EXECUTES = ("LinearBase.quant_method.apply",)
 #: circuit (`verity_pouw.circuit`): each call is its own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1`
 #: call (`pouw_circuit`).
 EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
+#: The weight dtypes the executor reads (it quantizes them itself); any other, an FP8 checkpoint's float8 above all, is refused
+UNQUANTIZED = ("bfloat16", "float16", "float32")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device")
@@ -482,7 +484,7 @@ def _executor(run: _Run | _CircuitRun, w: int):
 
 def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tuple[int, int]]]:
     """The scheme and the executed sites, the linear layers by type in module order (a layer's ordinal is its weight id),
-    with their (n, k); ValueError names every layer outside the scheme's domain or sharing a quant method."""
+    with their (n, k); ValueError names every layer outside the scheme's domain, sharing a quant method or quantized."""
     entry = f"{NAME}:{scheme}"
     s = None if scheme in pouw_circuit.SCHEMES else pouw_schemes.get(scheme)
     types = linear_types()
@@ -491,6 +493,11 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
         raise ValueError(f"{entry}: the model has no linear layer to execute")
     bad, seen, shapes = [], set(), {}
     for w, layer in enumerate(layers):
+        dtype = str(getattr(layer.weight, "dtype", None)).removeprefix("torch.")
+        if dtype not in UNQUANTIZED:
+            bad.append(f"linear {w}: its weight is {dtype}, and the executor reads an unquantized weight: a quantized (e.g. FP8) "
+                       "layer is refused, not misread")
+            continue
         n, k = _host(layer.weight).shape
         shapes[w] = (n, k)
         try:
