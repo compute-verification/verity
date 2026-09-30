@@ -189,7 +189,10 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - 448 segments (14 GB) is `band_meets_14`, from POUS `lean/submissions/band-multi/`, red team §47 GO. It is one
     `Meets` for the whole store: challenges are uniform over all its blocks, the state bound is the whole store's, and
     one permutation serves every segment.
-  - Other segment counts are gaps in the storage profile.
+  - Every other count N with 2 ≤ N ≤ 2^64 is `band_meets_family` (`band-multi/BandMultiFamily.lean`): the same statement
+    with 448 replaced by N, at k = 111. Its unconditional form is the trusted pin `Pous.Pinned.BandMultiMeetsFamily`
+    (PR #431, on PR #428). A 70 GiB store, 2,240 segments, is certified whole.
+  - A count beyond 2^64 is a gap in the storage profile.
 
   Dense is `chain_meets_64` given `ChainExPostFacto`, with no cliff. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode, and no hash call.
@@ -224,7 +227,8 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
 - **`protocol.StorageProfile`** is what an accepted audit establishes: a server whose state held fewer than
   `⌊rho · |C|⌋` bits passes with probability at most `delta + 2^eps_log2`, by the certificate. It also lists the
   `gaps`, where the certificate does not cover the audit: a refusal run with `research=True`, or a segment count of `W`
-  other than the theorem's. The band's certificate is `band_meets_64` at one segment and `band_meets_14` at 448.
+  other than the theorem's. The band's certificate is `band_meets_64` at one segment, `band_meets_14` at 448 and
+  `band_meets_family` at every other count up to 2^64.
   `to_json` writes `verity-pous/storage-profile/v1`.
 - **The rest:**
   - `protocol.verifier_key(scheme, commitment, salt, mode=PRIVATE or PUBLIC, w=..., encoded=...)` builds `vk`
