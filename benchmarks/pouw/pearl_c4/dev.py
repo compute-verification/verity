@@ -183,12 +183,12 @@ def commit_blocks(rows: int) -> int:
     return max(1, (1 << max(rows - 1, 0).bit_length()) // 32)
 
 
-def buffer_sizes(fmt: str, m: int, n: int, k: int, rows_a: int | None = None) -> dict[str, int]:
+def buffer_sizes(fmt: str, m: int, n: int, k: int) -> dict[str, int]:
     blk = FMTS[fmt][1]
     return {
         "xa": 2 * m * k, "xb": 2 * n * k, "seed_a": 32, "seed_b": 32, "salt": 32, "dom_a": 32, "dom_b": 32,
         "root_a": 32, "root_b": 32, "ticket_a": 4, "ticket_b": 4,
-        "scratch_a": 32 * commit_blocks(rows_a or m) + 192, "scratch_b": 32 * commit_blocks(n) + 192,
+        "scratch_a": 32 * commit_blocks(m) + 192, "scratch_b": 32 * commit_blocks(n) + 192,
         "lines_ea": 16 * m, "lines_eb": 16 * n, "lines_fa": 16 * k, "lines_fb": 16 * k, "fat": 16 * k, "fbt": 16 * k,
         "a_codes": m * k // 2, "a_scales": m * k // blk, "a_alpha": 4 * m, "a_inv": 4 * m, "a_ae": m,
         "b_codes": n * k // 2, "b_scales": n * k // blk, "b_alpha": 4 * n, "b_inv": 4 * n, "b_ae": n,
@@ -217,19 +217,16 @@ def domain(m: int, n: int, k: int) -> str | None:
 
 class Pipeline:
     """One (format, shape) instance: its buffers and its kernels in order.  `external` maps buffer names (xa, xb) to
-    device pointers the caller owns (the harness's operand sets); the rest are allocated here.  `rows_a` is the number of
-    A's rows committed (default m; fewer when m is padded to the tile), `index` the matmul's index in A's seed."""
+    device pointers the caller owns (the harness's operand sets); the rest are allocated here.  `index` is the matmul's
+    index in A's seed."""
 
     def __init__(self, dev: Dev, fmt: str, m: int, n: int, k: int, bm: int | None = None, store_cu: bool = False,
                  external: dict[str, int] | None = None, split: int | None = None, chain_h: int | None = None,
-                 bn: int | None = None, rows_a: int | None = None, index: int = 0):
+                 bn: int | None = None, index: int = 0):
         why = domain(m, n, k)
         if why:
             raise ValueError(f"{m}x{n}x{k} outside pearl_c4.cu's domain: {why}")
-        self.dev, self.fmt, self.m, self.n, self.k = dev, fmt, m, n, k
-        self.rows_a, self.index = rows_a or m, index
-        if not 1 <= self.rows_a <= m:
-            raise ValueError(f"{self.rows_a} committed rows of A's {m}")
+        self.dev, self.fmt, self.m, self.n, self.k, self.index = dev, fmt, m, n, k, index
         self.split_a = split or form_split(m, k, dev.sms)
         self.split_b = split or form_split(n, k, dev.sms)
         self.chain_h = chain_h
@@ -238,7 +235,7 @@ class Pipeline:
         self.bn = bn or (64 if self.bm == 64 and (m // 64) * (n // 128) < dev.sms else 128)
         if (self.bm, self.bn) not in ((128, 128), (64, 128), (64, 64)):
             raise ValueError(f"no {self.bm} x {self.bn} GEMM in pearl_c4.cu")
-        self.sizes = buffer_sizes(fmt, m, n, k, self.rows_a)
+        self.sizes = buffer_sizes(fmt, m, n, k)
         self.external = dict(external or {})
         if store_cu:
             self.sizes.update(c=4 * m * n, u=4 * m * n)
@@ -257,7 +254,7 @@ class Pipeline:
     def commit(self, side: str) -> tuple[str, tuple, dict]:
         """The launch of A's (side "a") or B's commitment and seed: the root, then seed_a (reading root_b) or seed_b."""
         b, k = self.buf, self.k
-        rows, xs, extra = (self.rows_a, "xa", b["root_b"]) if side == "a" else (self.n, "xb", 0)
+        rows, xs, extra = (self.m, "xa", b["root_b"]) if side == "a" else (self.n, "xb", 0)
         return "commit_rows", (commit_blocks(rows), 32), dict(
             p=[b[xs], b[f"dom_{side}"], b[f"scratch_{side}"], b[f"ticket_{side}"], b[f"root_{side}"], b["salt"], extra,
                b[f"seed_{side}"]], i=[rows, 2 * k, self.index])

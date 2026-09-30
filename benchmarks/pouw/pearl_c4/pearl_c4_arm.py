@@ -9,9 +9,9 @@ SHA-256 whole-row leaves) and seed_a from its root, A's forming with E_A's lines
 fused digests, the tile leaves; per (weight, epoch), `weight_side` (B's commitment and seed_b first).  The host supplies the
 operands, the salt (a label of the operand set) and the two domain ids (verity.commitments', public before A exists).
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
-``plain`` (the forming and the chain alone: y from C̃).  An m that isn't a multiple of 64 is padded with zero filler rows
-(the scheme's tile is 64 x 64): the call first copies A into the padded buffer; the padded rows are computed and not
-credited, and only A's m rows are committed.
+``plain`` (the forming and the chain alone: y from C̃).  The scheme's domain is m a multiple of 64 (its 64 x 64 tile), so
+an m that isn't is the scheme's matmul of A padded with zero filler rows: the call first copies A into the padded buffer;
+the padded rows are committed, computed and hashed, and not credited.
 
 The gate: every output byte-equal to a second pipeline launched on the same operands into its own buffers (``all``); A's
 and B's roots equal to `audit.commit_rows` over the rows on the host and both seeds to the scheme's `noise` of that
@@ -78,8 +78,7 @@ class _Call:
         ext = {"xb": operands.b.ptr}
         if self.m_pad == self.shape.m:
             ext["xa"] = operands.a.ptr
-        pl = D.Pipeline(self.d, self.arm.fmt, self.m_pad, self.shape.n, self.shape.k, store_cu=store_cu, external=ext,
-                        rows_a=self.shape.m)
+        pl = D.Pipeline(self.d, self.arm.fmt, self.m_pad, self.shape.n, self.shape.k, store_cu=store_cu, external=ext)
         for name, v in (("salt", self.salt), ("dom_a", self.dom_a), ("dom_b", self.dom_b)):
             self.d.write(pl.buf[name], v)
         return pl
@@ -139,7 +138,7 @@ class _PearlC4:
         chain["nvfp4"] = chain.get("nvfp4", 0) + mp * k * 2 * F.R
         return Work(tensor_macs=chain | {"bf16": mp * n * F.PEEL_K}, w_ref=str(s.wref(ps)), credited=str(s.credit_of(ps)),
                     unit="fp4-unit (pearl_c4.wref: 1 per FP4 MAC)",
-                    hashed_bytes={"c_u_digests": mp * n * 8, "a_rows": m * k * 2, "e_a_lines": mp * LINE_IN,
+                    hashed_bytes={"c_u_digests": mp * n * 8, "a_rows": mp * k * 2, "e_a_lines": mp * LINE_IN,
                                   "tile_leaves": mp * n},
                     weight_hashed_bytes={"b_rows": n * k * 2, "e_b_lines": n * LINE_IN, "f_lines": 2 * k * LINE_IN},
                     gamma={"status": "unstated: the certificate's tt-out-fp4 conjecture is pending (fp4-design.md, Q1)"})
@@ -150,9 +149,10 @@ class _PearlC4:
 
     @staticmethod
     def domains(shape: Shape, salt: bytes, weight: int) -> tuple[bytes, bytes]:
-        """The domain ids of A's commitment (matmul 0) and B's (weight `weight`), as `audit.commit_rows` derives them."""
+        """The domain ids of A's commitment (matmul 0, over the padded rows) and B's (weight `weight`), as
+        `audit.commit_rows` derives them."""
         _, _, au = _ref()
-        return (au.rows_domain(au.activation_binding(salt, 0), 0, shape.m).domain_id,
+        return (au.rows_domain(au.activation_binding(salt, 0), 0, -(-shape.m // TILE) * TILE).domain_id,
                 au.rows_domain(au.weight_binding(weight), -2, shape.n).domain_id)
 
     def prepare(self, dev, shape: Shape, flags: frozenset[str], operands) -> _Call:
@@ -179,9 +179,10 @@ class _PearlC4:
             raw = d.read(ptr, count * 2 * k)
             return [raw[i * 2 * k:(i + 1) * 2 * k] for i in range(count)]
 
-        ta = au.commit_rows(au.activation_binding(call.salt, 0), 0, rows(pl.buf["xa"], shape.m))
+        ta = au.commit_rows(au.activation_binding(call.salt, 0), 0, rows(pl.buf["xa"], call.m_pad))
         tb = au.commit_rows(au.weight_binding(call.weight), -2, rows(pl.buf["xb"], shape.n))
-        ctx = Context(call.salt, Matmul(0, PShape(shape.m, k, shape.n), call.weight), ta.commitment.root, tb.commitment.root)
+        ctx = Context(call.salt, Matmul(0, PShape(call.m_pad, k, shape.n), call.weight), ta.commitment.root,
+                      tb.commitment.root)
         noise = F.PearlC4(self.fmt).noise(ctx)
         got = {nm: d.read(pl.buf[nm], 32) for nm in ("root_a", "root_b", "seed_a", "seed_b")}
         want = {"root_a": ctx.root_a, "root_b": ctx.root_b, "seed_a": noise.seed_a, "seed_b": noise.seed_b}
