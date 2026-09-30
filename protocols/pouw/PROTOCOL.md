@@ -225,15 +225,18 @@ The same scheme as `pearl-c-h100-v1` on another device record. The record (`Devi
 `pearl_c`, `pearl_c_debit`, `pearl_c_u` and `pearl_c_work` read them from it, and the H100's record (`H100`) is every
 function's default, so every `pearl-c-h100-*` output and vector above is unchanged.
 
-- **Every field of `SM120` is a stand-in until the card's FP8 capture lands**, and `standins` names each one; the
-  certificate lists them as hypotheses.
-  - The atom is Ada's `ADA_E4M3_M16N8K32` (Hopper's 14-bit adder in two groups of 16), the first hypothesis for sm_120's
-    `mma.sync` `kind::f8f6f4` m16n8k32 E4M3.
+- **The atom is the card's captured step**, `BLACKWELL_SM120_E4M3_M16N8K32`: `mma.sync` `kind::f8f6f4` m16n8k32 E4M3 as one
+  group of all 32 products and the accumulator in a 26-bit adder (Lean's `Pipeline ⟨[32], 26, −133⟩`), where the H100's
+  and Ada's FP8 adders are 14 bits wide.
+- **Every other field of `SM120` is a stand-in**, and `standins` names each one; the certificate lists them as hypotheses.
   - The peel is `HOPPER_BF16_M16N8K16`, which matched the RTX 5090's `mma.sync` m16n8k16 BF16.
-  - G = 4, the H100's W1 prices and k ≤ 2^16 are the H100's placeholders. They are statement parameters, changed through
-    the coordinator and the cheap-binding and Lean lanes.
+  - G = 4, the H100's W1 prices and k ≤ 2^16 are the H100's. They are statement parameters, changed through the
+    coordinator and the cheap-binding and Lean lanes; P1 and the debit are not yet re-derived for a 26-bit adder.
+- **`SM120_UNPROMOTED`** is the same record with G = None: one accumulator from +0 over the whole of k, whose word is the
+  last atom's output, with no promotion adds in `wref` and 32 ∣ k. No scheme is registered on it, and the debit
+  raises on it, until Pearl-C is restated without promotion.
 - `pearl_c_u` restates a step of several groups as one grouped sum per group, the accumulator joining the first and each
-  group's word the next; it equals both sm_120 models on random words.
+  group's word the next.
 - Only forming v1 runs on a non-H100 record (v0 is #311's H100 port).
 - The work law aligns `k_unit` to 128, so it requires 32·G ∣ 128.
 

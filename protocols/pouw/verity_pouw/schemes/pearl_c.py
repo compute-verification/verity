@@ -55,8 +55,9 @@ exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most 
 
 **The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
 the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  ``pearl-c-sm120-v1`` is v1 on
-`pearl_c_device.SM120`, whose fields are stand-ins until the RTX PRO 6000's capture lands (its `standins`); the promotion
-window is G atoms and the domain's whole groups are 32·G ∣ k.  v0 is the H100's only.
+`pearl_c_device.SM120`: the RTX PRO 6000's captured atom, with the peel, G, the prices and the k bound as stand-ins (its
+`standins`); the promotion window is G atoms and the domain's whole groups are 32·G ∣ k.  An unpromoted record (G None,
+`pearl_c_device.SM120_UNPROMOTED`) chains one accumulator over all of k, and its domain is 32 ∣ k.  v0 is the H100's only.
 """
 
 from __future__ import annotations
@@ -117,10 +118,14 @@ def _check_finite(word: int) -> int:
 def chain(a: Sequence[int], b: Sequence[int], device: Device = H100) -> int:
     """The device's replay of ``a · b`` (E4M3 codes) as an FP32 word: per window of G atoms (128 products on the H100) a
     fresh +0 accumulator chains up to G of the device's atoms, then one FP32 nearest-even add promotes it into the total;
-    a zero total is +0."""
+    a zero total is +0.  Unpromoted (G None), one accumulator from +0 chains every atom and is the word."""
     if len(a) != len(b) or len(a) % SLICE:
         raise P.Reject("the chain multiplies in atoms of k = 32")
     total, atom, window = 0, device.atom, device.window
+    if device.g is None:
+        for s in range(0, len(a), SLICE):
+            total = _check_finite(atom.step(total, a[s:s + SLICE], b[s:s + SLICE]))
+        return total
     for ws in range(0, len(a), window):
         local = 0
         for s in range(ws, min(ws + window, len(a)), SLICE):
@@ -355,7 +360,8 @@ class PearlC:
                         "docs/pouw/cheap-binding.md §1); a conjecture, not proved by counting",
                         "the H100's FP8 wgmma and BF16 wgmma are reproduced exactly (HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16)")
         else:
-            hardware = (f"TT_OUT(1/400) for Pearl-C's Π and domain on {device.name} (δ = 1, promotion every {device.g} atoms, "
+            promotion = f"promotion every {device.g} atoms" if device.g else "no promotion"
+            hardware = (f"TT_OUT(1/400) for Pearl-C's Π and domain on {device.name} (δ = 1, {promotion}, "
                         f"k <= {device.k_max}): no {device.name} W1 program outputs correct C̃ and U words for less than "
                         "99.75% of their honest cost; a conjecture stated for the H100 (research store "
                         "docs/pouw/cheap-binding.md §1), not yet re-derived on this device's atom",
@@ -390,7 +396,7 @@ class PearlC:
         return FORMING_V0_UNITS if self.forming == "v0" else pr.forming_credited + pr.forming_a_only
 
     def _chain_units(self, rows: int, cols: int, k: int) -> int:
-        return rows * cols * (k + self.device.prices.fadd * (k // self.device.window))
+        return rows * cols * (k + self.device.prices.fadd * self.device.promotions(k))
 
     def wref(self, shape: Shape) -> int:
         """The honest W1 cost of one unit, Lean's `wrefOf` (`Game.lean`; `Costs.adopted` under v1), at the device's prices

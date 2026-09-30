@@ -155,9 +155,17 @@ def rn_bf16(word: int) -> int:
 
 def chain(a: Sequence[int], b: Sequence[int], trace: dict | None = None, device: Device = H100) -> int:
     """C̃ (or A′·F_B, B̃·F_A, G): windows of 32·G products, G atoms from +0 each, promoted by one RN FP32 add.  `trace`
-    collects each atom's local word ("atoms") and each promotion's total ("totals")."""
+    collects each atom's local word ("atoms") and each promotion's total ("totals").  Unpromoted (G None): one window over
+    the whole of k and no promotion, so the word is the last atom's."""
     if len(a) != len(b) or len(a) % SLICE:
         raise ValueError("the chain multiplies in atoms of k = 32")
+    if device.g is None:
+        local = 0
+        for s in range(0, len(a), SLICE):
+            local = _finite(atom(local, a[s:s + SLICE], b[s:s + SLICE], device))
+            if trace is not None:
+                trace.setdefault("atoms", []).append(local)
+        return local
     total, window = 0, SLICE * device.g
     for ws in range(0, len(a), window):
         local = 0

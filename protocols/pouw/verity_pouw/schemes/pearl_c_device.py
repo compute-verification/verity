@@ -9,19 +9,21 @@ names hardware.
 
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
   Rounds 10-11's W1 prices (research store ``docs/pouw/cheap-binding.md`` §1) and k <= 2^16 (the pure-chain freezing bound).
-* `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  **Until the
-  card's FP8 capture lands, every field is a stand-in** (`standins` names each): Ada's `ADA_E4M3_M16N8K32` as the first
-  hypothesis for the atom, `HOPPER_BF16_M16N8K16` (which matched the RTX 5090's ``mma.sync``) for the peel, and G = 4, the
-  H100's prices and k bound as placeholders.  G, the prices and the k bound are statement parameters: they change through
-  the coordinator and the cheap-binding and Lean lanes, not here.
+* `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  The atom is the
+  card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder); the other fields are stand-ins
+  (`standins` names each): `HOPPER_BF16_M16N8K16` for the peel, and the H100's G = 4, prices and k bound.  G, the prices and
+  the k bound are statement parameters: they change through the coordinator and the cheap-binding and Lean lanes, not here.
+* `SM120_UNPROMOTED` is `SM120` without promotion (G is None: one accumulator from +0 over the whole of k, and the word is
+  the last atom's output).  It is the panel's ``pearl-c-sm120`` v2, built for the kernels and the twin; no scheme
+  is registered on it and its debit raises until the theory and Lean lanes restate Pearl-C without promotion.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from verity.ml.tc.models import (ADA_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, HOPPER_E4M3_K32,
-                                 GroupSum)
+from verity.ml.tc.models import (BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16,
+                                 HOPPER_E4M3_K32, GroupSum)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +44,7 @@ class Device:
     name: str                # the scheme name's device part: pearl-c-<name>-v1
     atom: GroupSum           # the FP8 atom, E4M3 k32
     peel: GroupSum           # the BF16 peel step, k16
-    g: int                   # atoms per promotion (`Params.pi.G`)
+    g: int | None            # atoms per promotion (`Params.pi.G`); None: no promotion
     prices: Prices
     k_max: int               # the domain's bound on k
     standins: tuple[str, ...] = ()   # the fields that are stand-ins, each with what it stands in for
@@ -50,13 +52,17 @@ class Device:
     def __post_init__(self) -> None:
         if (self.atom.dtype, self.atom.k, self.peel.dtype, self.peel.k) != ("e4m3", 32, "bf16", 16):
             raise ValueError(f"{self.name}: Pearl-C takes an E4M3 k32 atom and a BF16 k16 peel step")
-        if self.g < 1:
+        if self.g is not None and self.g < 1:
             raise ValueError(f"{self.name}: G is at least one atom")
 
     @property
     def window(self) -> int:
-        """Products per promotion: G atoms of k = 32."""
-        return self.g * self.atom.k
+        """k's alignment: products per promotion (G atoms of k = 32), or one atom when nothing is promoted."""
+        return self.atom.k * (self.g or 1)
+
+    def promotions(self, k: int) -> int:
+        """FP32 promotion adds per word of depth k."""
+        return k // self.window if self.g else 0
 
     @property
     def pipelines(self) -> dict[str, tuple[tuple[int, ...], int, int]]:
@@ -69,16 +75,22 @@ H100_PRICES = Prices(fadd=32, bf16_mac=2, forming_credited=64, forming_a_only=4,
 H100 = Device("h100", HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16, 4, H100_PRICES, 1 << 16)
 
 SM120 = Device(
-    "sm120", ADA_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, 4, H100_PRICES, 1 << 16,
+    "sm120", BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16, 4, H100_PRICES, 1 << 16,
     standins=(
-        "atom: ADA_E4M3_M16N8K32 (RTX 4090 mma.sync m16n8k32 e4m3), the first hypothesis until the RTX PRO 6000's "
-        "kind::f8f6f4 m16n8k32 E4M3 capture",
-        "peel: HOPPER_BF16_M16N8K16, matched on the RTX 5090's mma.sync m16n8k16 bf16 (204,800/204,800); not yet "
-        "rechecked on the RTX PRO 6000",
-        "g: 4, the H100's promotion period (answers Hopper's 14-bit adder), until the capture says whether chains freeze",
+        "peel: HOPPER_BF16_M16N8K16, matched on the RTX 5090's mma.sync m16n8k16 bf16 (204,800/204,800) and exact in the "
+        "vLLM lanes' RTX PRO 6000 cuBLASLt and MoE correspondences; mma.sync m16n8k16 not probed on the RTX PRO 6000 itself",
+        "g: 4, the H100 statement's promotion period (it answers Hopper's 14-bit adder); P1 and the debit not yet re-derived "
+        "for the 26-bit atom",
         "prices: the H100's W1 prices (fadd 32, bf16 MAC 2, fs 64, qa 4, 826 per hashed byte), until measured on the card",
         "k_max: 2^16, the H100's pure-chain freezing bound, until re-derived on the captured atom",
     ),
 )
 
-DEVICES = {d.name: d for d in (H100, SM120)}
+SM120_UNPROMOTED = replace(
+    SM120, name="sm120-unpromoted", g=None,
+    standins=tuple(s for s in SM120.standins if not s.startswith("g:")) + (
+        "g: none, the panel's pearl-c-sm120 v2; Pearl-C's statement (P1, the debit, TT_OUT) is not restated without "
+        "promotion",),
+)
+
+DEVICES = {d.name: d for d in (H100, SM120, SM120_UNPROMOTED)}

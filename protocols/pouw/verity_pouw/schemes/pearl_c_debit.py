@@ -38,9 +38,15 @@ ATOM_UNITS = ATOM + Fraction(H100.prices.fadd, G)  # `debitOf`: 32 MACs and 1/G 
 ELEMENT_UNITS = H100.prices.forming_credited       # `Costs.adopted`'s fs per debited forming element
 
 
+def _promoted(device: Device) -> int:
+    if device.g is None:
+        raise NotImplementedError(f"{device.name}: Skip's debit is stated for promotion groups; no rule without promotion")
+    return device.g
+
+
 def atom_units(device: Device = H100) -> Fraction:
     """`debitOf`'s price of one flagged atom-word on `device`: its MACs and 1/G of a promotion add."""
-    return device.atom.k + Fraction(device.prices.fadd, device.g)
+    return device.atom.k + Fraction(device.prices.fadd, _promoted(device))
 _TOP = 0x7F7FFFFF                      # the largest finite FP32 magnitude
 
 
@@ -101,7 +107,7 @@ def _masked(atoms: Sequence[tuple[Sequence[int], Sequence[int]]], device: Device
 
 def word_flags(a: Sequence[int], b: Sequence[int], device: Device = H100) -> list[bool]:
     """`Skip.wordFlags k a b t` for t < k/32."""
-    g_, atom = device.g, device.atom.k
+    g_, atom = _promoted(device), device.atom.k
     if len(a) != len(b) or len(a) % (g_ * atom):
         raise P.Reject("a word's rows are whole promotion groups")
     atoms = [(a[s:s + atom], b[s:s + atom]) for s in range(0, len(a), atom)]
