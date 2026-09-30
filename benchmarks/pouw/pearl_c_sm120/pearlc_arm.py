@@ -153,7 +153,7 @@ def sources(cu: Path) -> list[Path]:
         if f in out:
             continue
         out.append(f)
-        for inc in re.findall(r'^\s*#\s*include\s+"([^"]+)"', f.read_text(), re.M):
+        for inc in re.findall(r'^\s*#\s*include\s+"([^"]+)"', f.read_text(), re.MULTILINE):
             p = (f.parent / inc).resolve()
             if not p.exists():
                 raise FileNotFoundError(f"{f.name} includes {inc}, which isn't beside it")

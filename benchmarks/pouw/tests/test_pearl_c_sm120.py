@@ -1054,7 +1054,7 @@ def test_a_transcript_its_call_did_not_write_is_rejected(A, small_fixture, ship,
     _, path = transcript(tmp_path / "run", "pearl-c-sm120-v1-h1", "fixture")
     assert set((path.parent / "tree_a.bin").read_bytes()) == {A.POISON}
     r = subprocess.run([sys.executable, str(HERE / "verify.py"), str(tmp_path / "run"), "--draws", "1", "--jobs", "1",
-                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True)
+                        "--commit", "test", "--run", "r-test"], capture_output=True, text=True, check=False)
     assert r.returncode == 1, r.stdout + r.stderr
     line, control = r.stdout.splitlines()
     assert line.startswith("REJECT pearl-c-sm120-v1-h1 fixture: ") and control.startswith("REJECT negative control ")
