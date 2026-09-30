@@ -614,20 +614,34 @@ constexpr float S5_FLOOR = 0x1p-32f;
 // then the xor butterfly), alpha, beta_row.  Lane l reads x[256i + 4l ..] and x[256i + 128 + 4l ..], so chain c's position is
 // the first (c < 16) or second (c >= 16) vector's x of lane 2 (c mod 16).  p0 rows (rows x k words), p1 alpha, p2 beta,
 // p3 1/alpha (glue), p4 (s, rho) per row, p5 (or 0) the per-row rules' verdicts (row_verdict); i0 rows, i1 k (a multiple of 256)
-// a row's s and rho's sum of squares by its warp (every lane gets both: the butterfly's adds are commutative)
-DEV void row_stats(const float4* x, int k, int lane, float& s, float& part) {
+DEV float fmax_nan(float a, float b) {
+  float d;
+  asm("max.NaN.f32 %0, %1, %2;" : "=f"(d) : "f"(a), "f"(b));
+  return d;
+}
+
+// a row's s and rho's sum of squares by its warp (every lane gets both: the butterfly's adds are commutative); with SN, sn
+// the row's max |x| as a NaN if any entry is one (s skips NaNs)
+template <bool SN = false> DEV void row_stats(const float4* x, int k, int lane, float& s, float& part, float& sn) {
   const int src = 2 * (lane & 15);
-  s = 0.0f, part = 0.0f;
+  s = 0.0f, part = 0.0f, sn = 0.0f;
 #pragma unroll 4
   for (int j = lane; j < k / 4; j += 64) {
     const float4 v = x[j], w = x[j + 32];
     s = fmaxf(s, fmaxf(fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))),
                        fmaxf(fmaxf(fabsf(w.x), fabsf(w.y)), fmaxf(fabsf(w.z), fabsf(w.w)))));
+    if (SN)
+      sn = fmax_nan(sn, fmax_nan(fmax_nan(fmax_nan(fabsf(v.x), fabsf(v.y)), fmax_nan(fabsf(v.z), fabsf(v.w))),
+                                 fmax_nan(fmax_nan(fabsf(w.x), fabsf(w.y)), fmax_nan(fabsf(w.z), fabsf(w.w)))));
     const float lo = __shfl_sync(~0u, v.x, src), hi = __shfl_sync(~0u, w.x, src), e = lane < 16 ? lo : hi;
     part = __fmaf_rn(e, e, part);
   }
 #pragma unroll
-  for (int o = 16; o; o >>= 1) { s = fmaxf(s, __shfl_xor_sync(~0u, s, o)); part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o)); }
+  for (int o = 16; o; o >>= 1) {
+    s = fmaxf(s, __shfl_xor_sync(~0u, s, o));
+    if (SN) sn = fmax_nan(sn, __shfl_xor_sync(~0u, sn, o));
+    part = __fadd_rn(part, __shfl_xor_sync(~0u, part, o));
+  }
 }
 
 // a row's (alpha, rho, beta) from its (s, part)
@@ -652,13 +666,16 @@ DEV void put_stats(const Args& a, int row, float s, float3 st) {
 // part is S to within (k/256 + 5) 2^-24 relative (its FMA chains and butterfly), so for k <= 2^20 an entry above the band is
 // surely dead and one below it surely live.  Rows whose t is under 2^-96 (where squares may round as subnormals) or whose
 // band would overflow are left open.  The floor: fma(rho, alpha, -1) >= 0 is rho alpha >= 1 exactly (no nonzero difference
-// rounds to zero).
+// rounds to zero).  A row with a NaN or an infinity (outside the scheme's words) is left open.  A row whose fl(sn^2) is under
+// the band passes without the second read: every entry's fl(x^2) is at most it (sn, row_stats' max |x|, is finite here).
 constexpr float LIVE_BAND = 0x1p-10f;
-DEV uint32_t row_verdict(const float4* x, int k, int lane, float part, float3 st) {
+DEV uint32_t row_verdict(const float4* x, int k, int lane, float part, float sn, float3 st) {
+  if (!(sn <= 0x1.fffffep127f)) return 2;
   if (!(__fmaf_rn(st.y, st.x, -1.0f) >= 0.0f)) return 1;
   const float t = __fdiv_rn(__fmul_rn(64.0f, part), (float)((k + 7) / 8));
   if (k > (1 << 20) || !(t >= 0x1p-96f && t <= 0x1p126f)) return 2;
   const float hi = __fmul_rn(t, 1.0f + LIVE_BAND), lo = __fmul_rn(t, 1.0f - LIVE_BAND);
+  if (__fmul_rn(sn, sn) < lo) return 0;
   uint32_t dead = 0, band = 0;
 #pragma unroll 4
   for (int j = lane; j < k / 4; j += 32) {
@@ -675,18 +692,27 @@ DEV uint32_t row_verdict(const float4* x, int k, int lane, float part, float3 st
   return 64 * dead > (uint32_t)k ? 1 : 64 * (dead + band) <= (uint32_t)k ? 0 : 2;
 }
 
-// stats_s5, and with p5 each row's verdict (row_verdict, u32) from a second read of the row
+// a row's s and (alpha, rho, beta) by its warp, and where `verdicts` is set its verdict (row_verdict) into it
+DEV float3 row_s5(const float4* x, int k, int lane, int row, uint32_t* verdicts, float& s) {
+  float part, sn;
+  if (!verdicts) {
+    row_stats(x, k, lane, s, part, sn);
+    return s5_of(s, part, k);
+  }
+  row_stats<true>(x, k, lane, s, part, sn);
+  const float3 st = s5_of(s, part, k);
+  const uint32_t v = row_verdict(x, k, lane, part, sn, st);
+  if (!lane) verdicts[row] = v;
+  return st;
+}
+
+// stats_s5, and with p5 each row's verdict (row_verdict, u32), from a second read of the rows it doesn't pass at once
 extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
   if (row >= rows) return;
-  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
-  float s, part;
-  row_stats(x, k, lane, s, part);
-  const float3 st = s5_of(s, part, k);
-  if (a.p[5]) {
-    const uint32_t v = row_verdict(x, k, lane, part, st);
-    if (!lane) reinterpret_cast<uint32_t*>(a.p[5])[row] = v;
-  }
+  float s;
+  const float3 st = row_s5(reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4), k, lane, row,
+                           reinterpret_cast<uint32_t*>(a.p[5]), s);
   if (!lane) put_stats(a, row, s, st);
 }
 
@@ -731,14 +757,9 @@ extern "C" __global__ void eprime(const Args a) {
 extern "C" __global__ void __launch_bounds__(256) form_rows(const Args a) {
   const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
   if (row >= rows) return;
-  const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
-  float s, part;
-  row_stats(x, k, lane, s, part);
-  const float3 st = s5_of(s, part, k);
-  if (a.p[9]) {
-    const uint32_t v = row_verdict(x, k, lane, part, st);
-    if (!lane) reinterpret_cast<uint32_t*>(a.p[9])[row] = v;
-  }
+  float s;
+  const float3 st = row_s5(reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4), k, lane, row,
+                           reinterpret_cast<uint32_t*>(a.p[9]), s);
   if (lane == 0) {
     put_stats(a, row, s, st);
     uint32_t h[8];

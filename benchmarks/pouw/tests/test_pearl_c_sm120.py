@@ -281,21 +281,25 @@ def test_fixture_agrees_with_the_scheme(small_fixture):
 def test_the_screen_never_contradicts_the_per_row_rules():
     """stats_s5's screen (fixture.screen_verdict, row_verdict's twin) against pearl_c_work.row_passes: a row it passes
     passes and a row it fails fails, on screen_rows (every verdict, and both ways to fail: the floor and the dead count)
-    and on heavy-tailed BF16-widened rows at two depths.  Its squares are numpy's FP32 products, which are fp32.mul's
-    subnormals included."""
+    and on heavy-tailed BF16-widened rows at two depths; a row with a NaN or an infinity is left open.  Passing a row whose
+    largest square is under the band without counting (the kernel's shortcut, taken on the Gaussian rows) changes no verdict.
+    Its squares are numpy's FP32 products, which are fp32.mul's subnormals included."""
     from verity_pouw.schemes import pearl_c_work as PW
     screen = F.screen_rows(1024)
     v = [F.screen_verdict(r) for r in screen]
-    assert v[:12] == [0] * 8 + [0, 0, 1, 2] and v[-3:] == [1, 1, 2]
+    assert v[:12] == [0] * 8 + [0, 0, 1, 2] and v[-5:] == [1, 1, 2, 2, 2]
     words = lambda r: [int(w) for w in np.frombuffer(r, "<u4")]  # noqa: E731
     floor_ok = lambda r: (lambda st: F.P.f32_of_bits(st[1]) * F.P.f32_of_bits(st[2]) >= 1.0)(F.C.s5_stats(words(r)))  # noqa: E731
-    assert floor_ok(screen[10]) and not floor_ok(screen[-3])
+    assert floor_ok(screen[10]) and not floor_ok(screen[-5])
     rng = np.random.default_rng(5)
     rows = screen + [(rng.standard_t(df, k).astype(np.float32).view("<u4") & 0xFFFF0000).astype("<u4").tobytes()
                      for k in (1024, 2048) for df in (2, 3, 4) for _ in range(6)]
     for r in rows:
         verdict = F.screen_verdict(r)
+        assert verdict == F.screen_verdict(r, shortcut=False)
         assert verdict == 2 or (verdict == 0) == PW.row_passes(words(r)), verdict
+    x = np.frombuffer(screen[0], "<f4")
+    assert F.screen_verdict(screen[0], shortcut=False) == 0 and float((x * x).max()) < 64 * float(np.sum(x[::8] ** 2)) / 128 / 2
     x = np.array([1.5, 3e-20, 2.0 ** -70, 1.1e-23, 7.0 * 2.0 ** -80, 1.2 * 2.0 ** 60, 2.0 ** 65], np.float32)
     assert [int(w) for w in (x * x).view("<u4")] == [F.fp32.mul(int(w), int(w)) for w in x.view("<u4")]
 

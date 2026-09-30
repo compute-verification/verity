@@ -125,10 +125,13 @@ def hot_starts(seed_a: bytes, alpha: list[int], rho: list[int]) -> np.ndarray:
 LIVE_BAND = 2.0 ** -10
 
 
-def screen_verdict(row: bytes) -> int:
+def screen_verdict(row: bytes, shortcut: bool = True) -> int:
     """stats_s5's screen of the per-row rules (pearl_c_sm120.cu's row_verdict) on one row of FP32 words, bit for bit: 0 the row
-    passes `pearl_c_work.row_passes`, 1 it fails, 2 the screen leaves it open."""
+    passes `pearl_c_work.row_passes`, 1 it fails, 2 the screen leaves it open (a row with a non-finite word among them).
+    `shortcut`: a row whose largest square is under the band passes without counting, as the kernel does."""
     x = np.frombuffer(row, "<u4")
+    if not np.isfinite(x.view("<f4")).all():
+        return 2
     k, words = x.size, [int(w) for w in x]
     part = [0] * 32
     for i, p in enumerate(range(0, k, C.S5_STRIDE)):
@@ -144,6 +147,8 @@ def screen_verdict(row: bytes) -> int:
         return 2
     hi, lo = (P.f32_of_bits(fp32.mul(t, P.f32_bits(1 + s * LIVE_BAND))) for s in (1, -1))
     q = x.view("<f4") * x.view("<f4")
+    if shortcut and q.max() < lo:
+        return 0
     dead, band = int((q > hi).sum()), int((~(q > hi) & ~(q < lo)).sum())
     return 1 if 64 * dead > k else 0 if 64 * (dead + band) <= k else 2
 
@@ -152,7 +157,7 @@ def screen_rows(k: int) -> list[bytes]:
     """Rows for the screen's gate at depth k, each verdict and each way to reach it: Gaussian rows (pass), 15, 16 and 17
     dead entries at 16 rho off the stride (k = 1,024: pass, pass, fail), 16 dead and one at the threshold (open), a
     heavy-tailed batch (Student's t at 1, 2 and 3 degrees of freedom), one outlier over 444 rho (the floor), zeros (the
-    floor), and stride squares near 2^127 (the band would overflow: open)."""
+    floor), stride squares near 2^127 (the band would overflow: open), and a NaN and an infinity off the stride (open)."""
     rng, out = np.random.default_rng(29), []
     gauss = lambda: rng.standard_normal(k).astype(np.float32)  # noqa: E731
     def thr(x):
@@ -174,6 +179,10 @@ def screen_rows(k: int) -> list[bytes]:
     out.append(x)
     out.append(np.zeros(k, np.float32))
     out.append(np.full(k, np.float32(1.2 * 2.0 ** 60)))
+    for bad in (np.nan, np.inf):
+        x = gauss()
+        x[off[0]] = np.float32(bad)
+        out.append(x)
     return [x.astype("<f4").tobytes() for x in out]
 
 
