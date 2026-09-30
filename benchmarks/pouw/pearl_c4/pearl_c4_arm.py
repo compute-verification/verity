@@ -116,7 +116,7 @@ class _Call:
 
     def dump(self, path: Path) -> None:
         """The call's transcript as the timed code emits it (`pearl_c4_replay.write_dump`): the call launched once more on
-        its operands as they stand, then A's and B's rows, both roots and the tile leaves read back."""
+        its operands as they stand, then A's and B's rows, both roots, the tile leaves and the formed scale bytes read back."""
         from verity_pouw.schemes import pearl_c4_replay as R
         self.launch(0)
         self.d.sync()
@@ -124,8 +124,10 @@ class _Call:
         call = {"scheme": self.arm.name, "shape": [self.m_pad, s.k, s.n], "index": 0, "weight": self.weight,
                 "real_rows": s.m, "epoch_beacon": self.beacon.hex(), "label": s.label, "device": d.uuid,
                 "flags": sorted(self.flags)}
+        sizes = self.pl.sizes
         R.write_dump(path, call, d.read(b["xa"], self.m_pad * s.k * 2), d.read(b["xb"], s.n * s.k * 2),
-                     d.read(b["root_a"], 32), d.read(b["root_b"], 32), d.read(b["leaves"], self.pl.sizes["leaves"]))
+                     d.read(b["root_a"], 32), d.read(b["root_b"], 32), d.read(b["leaves"], sizes["leaves"]),
+                     d.read(b["a_scales"], sizes["a_scales"]), d.read(b["b_scales"], sizes["b_scales"]))
 
 
 class _PearlC4:
