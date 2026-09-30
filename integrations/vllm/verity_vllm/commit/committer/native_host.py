@@ -1385,21 +1385,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 with open(_sid_out, "w") as _f:
                     json.dump(_sid_doc, _f, indent=1, default=str)
 
-            bd = os.environ.get("HIDDEN_GPU_BUILD")
-            from verity_vllm.commit.committer.native_collect import _clear_stale_jit_lock
-
-            if bd:
-                _clear_stale_jit_lock(bd)      # a killed build's `lock` makes cpp_extension.load() wait forever (R13 07:24Z: 3 runs 'hung' here)
-            else:
-                # [R17 fp8, 04:37Z cp-h100] the same stale `lock` in torch's DEFAULT extension dir (a run killed while cpp_extension.load
-                # held it) hung every later run's worker in file_baton.wait -- seen from the serving thread as "native collector arena:
-                # waited 600s for a free block ... the worker is not releasing blocks" (three runs, two trees, one lock file)
-                try:
-                    from torch.utils.cpp_extension import _get_build_directory
-
-                    _clear_stale_jit_lock(_get_build_directory("hidden_gpu_tree", verbose=False))
-                except Exception:  # noqa: BLE001  -- private helper; without it the HIDDEN_GPU_BUILD path is the documented guard
-                    pass
+            # a killed build's torch `lock` (every later worker once hung in file_baton.wait on one) is cleared inside HG.ext(), under
+            # the build dir's lock (native_jit.jit_load)
             self._gpu_ext = HG.ext()
             self._HG = HG
         return self._gpu_ext

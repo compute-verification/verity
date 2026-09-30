@@ -19,6 +19,10 @@ judgement; `audit.py` holds the policy.
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
   `meaning`, with their source lines. Signatures print with no notation, since no notation is loaded: nothing a package
   declares can change how its statements read.
+
+The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `audit.py` keeps them only to check records written
+before SHA-256. When `CONFIG` names a `canon` path, the pinned statements and the definitions they read are also written
+there, one JSON line each, as `canon` texts, and `audit.py` hashes those with SHA-256.
 -/
 
 open Lean Meta
@@ -45,6 +49,79 @@ def valueHash : ConstantInfo → UInt64
   | .defnInfo v => v.value.hash
   | .opaqueInfo v => v.value.hash
   | _ => 0
+
+partial def levelKey : Level → String
+  | .zero => "0"
+  | .succ l => s!"s({levelKey l})"
+  | .max a b => s!"m({levelKey a},{levelKey b})"
+  | .imax a b => s!"i({levelKey a},{levelKey b})"
+  | .param n => s!"p{n}"
+  | .mvar m => s!"?{m.name}"
+
+def kids : Expr → Array Expr
+  | .app f a => #[f, a]
+  | .lam _ t b _ => #[t, b]
+  | .forallE _ t b _ => #[t, b]
+  | .letE _ t v b _ => #[t, v, b]
+  | .mdata _ e => #[e]
+  | .proj _ _ e => #[e]
+  | _ => #[]
+
+/-- One line of `canonText`, for a term whose children are the lines `ix`; `none` for metadata, which is its child. -/
+def nodeKey (e : Expr) (ix : Array Nat) : Option String :=
+  match e with
+  | .bvar i => some s!"V{i}"
+  | .sort l => some s!"S{levelKey l}"
+  | .const n ls => some s!"C{n} {",".intercalate (ls.map levelKey)}"
+  | .app .. => some s!"A{ix[0]!} {ix[1]!}"
+  | .lam .. => some s!"L{ix[0]!} {ix[1]!}"
+  | .forallE .. => some s!"P{ix[0]!} {ix[1]!}"
+  | .letE .. => some s!"E{ix[0]!} {ix[1]!} {ix[2]!}"
+  | .lit (.natVal n) => some s!"N{n}"
+  | .lit (.strVal s) => some s!"T{(toJson s).compress}"
+  | .mdata .. => none
+  | .proj s i _ => some s!"J{s} {i} {ix[0]!}"
+  | .fvar id => some s!"F{id.name}"
+  | .mvar id => some s!"M{id.name}"
+
+/-- A canonical text of `e`, which `audit.py` hashes with SHA-256: one line per distinct node, its children given as the
+numbers of earlier lines, then the root. It keeps what `Expr.hash` keeps (constant names, universe levels, bound variable
+indices, projections, literals) and drops what it drops (binder names and binder info, `let` names, metadata), so it tells
+two terms apart exactly when `Expr.hash` would, collisions aside. The walk is iterative: Mathlib's terms are too deep for
+recursion. -/
+def canonText (e : Expr) : String := Id.run do
+  let mut lines : Array String := #[]
+  let mut number : Std.HashMap String Nat := {}
+  let mut seen : Std.HashMap Expr Nat := {}
+  let mut stack : Array (Expr × Bool) := #[(e, false)]
+  while h : stack.size > 0 do
+    let (x, ready) := stack[stack.size - 1]
+    stack := stack.pop
+    if seen.contains x then continue
+    let ks := kids x
+    if !ready then
+      stack := stack.push (x, true)
+      for k in ks.reverse do
+        unless seen.contains k do
+          stack := stack.push (k, false)
+    else
+      let ix := ks.map (seen.getD · 0)
+      match nodeKey x ix with
+      | none => seen := seen.insert x ix[0]!
+      | some key =>
+        match number[key]? with
+        | some i => seen := seen.insert x i
+        | none =>
+          number := number.insert key lines.size
+          seen := seen.insert x lines.size
+          lines := lines.push key
+  return "\n".intercalate lines.toList ++ s!"\nR{seen.getD e 0}"
+
+/-- What a read definition contributes to what a statement means: its type, and a definition's value. -/
+def readCanon : ConstantInfo → String
+  | .defnInfo v => canonText v.type ++ "\n=\n" ++ canonText v.value
+  | .opaqueInfo v => canonText v.type ++ "\n=\n" ++ canonText v.value
+  | ci => canonText ci.type
 
 /-- What a constant's axioms depend on (as `Lean.collectAxioms` walks it). -/
 def uses : ConstantInfo → Array Name
@@ -203,6 +280,16 @@ unsafe def main (args : List String) : IO UInt32 := do
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
   let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do return (p.toString, ← pinInfo env meaning axioms ranges p))).toIO
     ctx { env }
+  if let some path := (cfg.getObjValD "canon").getStr?.toOption then
+    let h ← IO.FS.Handle.mk path .write
+    let mut done : NameSet := {}
+    for p in pins do
+      let some ci := env.find? p | continue
+      h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
+      for (c, _, rci) in reads env meaning ci.type.getUsedConstants do
+        if done.contains c then continue
+        done := done.insert c
+        h.putStrLn (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
   let mut oleans := #[]
   for m in mnames do
     oleans := oleans.push (toString (← findOLean m))

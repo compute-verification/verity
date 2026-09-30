@@ -40,3 +40,13 @@ def test_one_mathlib():
                 if dep["name"] == "mathlib":
                     revs[str(p.relative_to(ROOT))] = dep["rev"]
     assert revs and len(set(revs.values())) == 1, revs
+
+
+def test_the_randomness_assumption_cites_this_toolchain():
+    """A3 (`soundness/ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads for
+    `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and updates
+    the citation."""
+    soundness = ROOT / "backends/flock/verifier/lean/soundness"
+    version = (soundness / "lean-toolchain").read_text().strip().rpartition(":")[2]
+    for doc in ("ASSUMPTIONS.md", "FlockSoundness/Assumptions.lean"):
+        assert f"Lean {version}'s runtime" in (soundness / doc).read_text(), doc

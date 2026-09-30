@@ -12,9 +12,7 @@
 #include <cuda_fp8.h>
 #include "acc.h"
 
-struct Args { uint64_t p[16]; int32_t i[16]; };
-
-#define DEV __device__ __forceinline__
+#include "hash.cuh"   // Args, DEV, BLAKE3 and the hashing kernels (also built alone for sm_120a)
 #define WG_FENCE asm volatile("wgmma.fence.sync.aligned;" ::: "memory")
 #define WG_COMMIT asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory")
 #define WG_WAIT(n) asm volatile("wgmma.wait_group.sync.aligned " #n ";" ::: "memory")
@@ -264,34 +262,6 @@ GEMM(gemm_pearlc, M_PEARLC, 128)
 GEMM(gemm_words, M_WORDS, 32)
 
 // ---------------------------------------------------------------- noise lines (Pearl's line rule)
-__device__ const uint32_t B3_IV[8] = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19};
-DEV uint32_t rotr(uint32_t x, int n) { return __funnelshift_r(x, x, n); }
-DEV void b3g(uint32_t* v, int a, int b, int c, int d, uint32_t x, uint32_t y) {
-  v[a] = v[a] + v[b] + x; v[d] = rotr(v[d] ^ v[a], 16); v[c] = v[c] + v[d]; v[b] = rotr(v[b] ^ v[c], 12);
-  v[a] = v[a] + v[b] + y; v[d] = rotr(v[d] ^ v[a], 8); v[c] = v[c] + v[d]; v[b] = rotr(v[b] ^ v[c], 7);
-}
-// one keyed BLAKE3 hash of a single 64-byte block (CHUNK_START | CHUNK_END | ROOT | KEYED_HASH), the first 32 bytes
-DEV void blake3_block(const uint32_t* key, const uint32_t* msg, uint32_t* out) {
-  constexpr int PERM[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
-  uint32_t v[16], m[16], t[16];
-#pragma unroll
-  for (int i = 0; i < 8; i++) { v[i] = key[i]; v[i + 8] = i < 4 ? B3_IV[i] : 0; }
-  v[14] = 64; v[15] = 1 | 2 | 8 | 16;
-#pragma unroll
-  for (int i = 0; i < 16; i++) m[i] = msg[i];
-#pragma unroll
-  for (int r = 0; r < 7; r++) {
-    b3g(v, 0, 4, 8, 12, m[0], m[1]); b3g(v, 1, 5, 9, 13, m[2], m[3]); b3g(v, 2, 6, 10, 14, m[4], m[5]); b3g(v, 3, 7, 11, 15, m[6], m[7]);
-    b3g(v, 0, 5, 10, 15, m[8], m[9]); b3g(v, 1, 6, 11, 12, m[10], m[11]); b3g(v, 2, 7, 8, 13, m[12], m[13]); b3g(v, 3, 4, 9, 14, m[14], m[15]);
-#pragma unroll
-    for (int i = 0; i < 16; i++) t[i] = m[PERM[i]];
-#pragma unroll
-    for (int i = 0; i < 16; i++) m[i] = t[i];
-  }
-#pragma unroll
-  for (int i = 0; i < 8; i++) out[i] = v[i] ^ v[i + 8];
-}
-
 DEV uint32_t isqrt(uint32_t v) {
   uint32_t r = (uint32_t)sqrt((double)v);
   while ((uint64_t)r * r > v) r--;
@@ -704,140 +674,6 @@ extern "C" __global__ void pb(const Args a) {
   uint8_t* out = reinterpret_cast<uint8_t*>(a.p[4]);
   *reinterpret_cast<uint16_t*>(out + tiled(row, 2 * q, 128, 128)) = mid;
   *reinterpret_cast<uint16_t*>(out + tiled(row, 2 * (32 + q), 128, 128)) = scaled(a, row, q) ^ 0x8000;
-}
-
-// ---------------------------------------------------------------- hashing: TurboSHAKE128 (Keccak-p[1600, 12], rate 168)
-DEV uint64_t rol64(uint64_t x, int n) { return n ? (x << n) | (x >> (64 - n)) : x; }
-template <int LUT> DEV uint32_t lop3_32(uint32_t a, uint32_t b, uint32_t c) {
-  uint32_t r;
-  asm("lop3.b32 %0, %1, %2, %3, %4;" : "=r"(r) : "r"(a), "r"(b), "r"(c), "n"(LUT));
-  return r;
-}
-template <int LUT> DEV uint64_t lop3_64(uint64_t a, uint64_t b, uint64_t c) {
-  return (uint64_t)lop3_32<LUT>((uint32_t)(a >> 32), (uint32_t)(b >> 32), (uint32_t)(c >> 32)) << 32 |
-         lop3_32<LUT>((uint32_t)a, (uint32_t)b, (uint32_t)c);
-}
-DEV uint64_t x3(uint64_t a, uint64_t b, uint64_t c) { return lop3_64<0x96>(a, b, c); }
-DEV uint64_t chi(uint64_t a, uint64_t b, uint64_t c) { return lop3_64<0xD2>(a, b, c); }
-DEV void keccak12(uint64_t* s) {
-  constexpr uint64_t RC[12] = {0x000000008000808bULL, 0x800000000000008bULL, 0x8000000000008089ULL, 0x8000000000008003ULL,
-                               0x8000000000008002ULL, 0x8000000000000080ULL, 0x000000000000800aULL, 0x800000008000000aULL,
-                               0x8000000080008081ULL, 0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL};
-  constexpr int rotc[24] = {1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44};
-  constexpr int piln[24] = {10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1};
-#pragma unroll
-  for (int r = 0; r < 12; r++) {
-    uint64_t bc[5];
-#pragma unroll
-    for (int i = 0; i < 5; i++) bc[i] = x3(x3(s[i], s[i + 5], s[i + 10]), s[i + 15], s[i + 20]);
-#pragma unroll
-    for (int i = 0; i < 5; i++) {
-      const uint64_t p = bc[(i + 4) % 5], q = rol64(bc[(i + 1) % 5], 1);
-#pragma unroll
-      for (int j = 0; j < 25; j += 5) s[j + i] = x3(s[j + i], p, q);
-    }
-    uint64_t t = s[1];
-#pragma unroll
-    for (int i = 0; i < 24; i++) { const int j = piln[i]; const uint64_t x = s[j]; s[j] = rol64(t, rotc[i]); t = x; }
-#pragma unroll
-    for (int j = 0; j < 25; j += 5) {
-      const uint64_t b0 = s[j], b1 = s[j + 1], b2 = s[j + 2], b3 = s[j + 3], b4 = s[j + 4];
-      s[j] = chi(b0, b1, b2); s[j + 1] = chi(b1, b2, b3); s[j + 2] = chi(b2, b3, b4); s[j + 3] = chi(b3, b4, b0); s[j + 4] = chi(b4, b0, b1);
-    }
-    s[0] ^= RC[r];
-  }
-}
-// TurboSHAKE128 of NL little-endian 64-bit lanes (lane(i) = message bytes 8i..8i+7), 32 bytes out
-template <int NL, uint64_t DS, class Lane> DEV void turboshake(const Lane& lane, uint64_t* out) {
-  uint64_t s[25];
-#pragma unroll
-  for (int i = 0; i < 25; i++) s[i] = 0;
-#pragma unroll 1
-  for (int b = 0; b < NL / 21; b++) {
-#pragma unroll
-    for (int w = 0; w < 21; w++) s[w] ^= lane(b * 21 + w);
-    keccak12(s);
-  }
-  constexpr int rem = NL % 21;
-#pragma unroll
-  for (int w = 0; w < rem; w++) s[w] ^= lane(NL / 21 * 21 + w);
-  s[rem] ^= DS;
-  s[20] ^= 0x8000000000000000ULL;
-  keccak12(s);
-#pragma unroll
-  for (int i = 0; i < 4; i++) out[i] = s[i];
-}
-DEV void store32(uint8_t* p, const uint64_t* h) {
-  reinterpret_cast<ulonglong2*>(p)[0] = make_ulonglong2(h[0], h[1]);
-  reinterpret_cast<ulonglong2*>(p)[1] = make_ulonglong2(h[2], h[3]);
-}
-
-// message digests: TurboSHAKE128(le32 C~ of the 32-column chunk || le32 U of the chunk, D = 0x21) per (row, chunk).
-// p0 C~ (rows x cols), p1 U, p2 out (rows x cols/32 x 32 B); i0 rows, i1 cols
-extern "C" __global__ void __launch_bounds__(128) hash_msg(const Args a) {
-  const int cols = a.i[1], per = cols / 32;
-  const size_t m = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (m >= (size_t)a.i[0] * per) return;
-  const uint64_t* c = reinterpret_cast<const uint64_t*>(a.p[0]) + m * 16;
-  const uint64_t* u = reinterpret_cast<const uint64_t*>(a.p[1]) + m * 16;
-  uint64_t h[4];
-  turboshake<32, 0x21>([&](int i) { return i < 16 ? c[i] : u[i - 16]; }, h);
-  store32(reinterpret_cast<uint8_t*>(a.p[2]) + m * 32, h);
-}
-
-// tile leaves: TurboSHAKE128 of a 64 x 64 tile's 128 message digests (rows in order, 2 chunks each), D = 0x22.
-// p0 digests, p1 out (tiles row-major x 32 B); i0 rows, i1 cols
-extern "C" __global__ void __launch_bounds__(64) hash_leaf(const Args a) {
-  const int cols = a.i[1], tn = cols / 64, per = cols / 32;
-  const int t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= a.i[0] / 64 * tn) return;
-  const int ti = t / tn, tj = t % tn;
-  const uint64_t* dg = reinterpret_cast<const uint64_t*>(a.p[0]);
-  uint64_t h[4];
-  turboshake<512, 0x22>([&](int i) { return dg[((size_t)(64 * ti + i / 8) * per + 2 * tj + (i / 4) % 2) * 4 + i % 4]; }, h);
-  store32(reinterpret_cast<uint8_t*>(a.p[1]) + (size_t)t * 32, h);
-}
-
-// A's commitment, modeled: TurboSHAKE128 of each 8 NL-byte segment of a row (FP10 rows in 1,280-byte segments, FP32 rows in
-// 1,024-byte ones), D = 0x23.  p0 rows, p1 out (rows x segs x 32 B); i0 rows, i1 row bytes
-template <int NL> DEV void hash_rows_body(const Args& a) {
-  const int rs = a.i[1], segs = rs / (8 * NL);
-  const size_t t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= (size_t)a.i[0] * segs) return;
-  const uint64_t* src = reinterpret_cast<const uint64_t*>(a.p[0] + (t / segs) * rs + (t % segs) * 8 * NL);
-  uint64_t h[4];
-  turboshake<NL, 0x23>([&](int i) { return src[i]; }, h);
-  store32(reinterpret_cast<uint8_t*>(a.p[1]) + t * 32, h);
-}
-extern "C" __global__ void __launch_bounds__(128) hash_rows_fp10(const Args a) { hash_rows_body<160>(a); }
-extern "C" __global__ void __launch_bounds__(128) hash_rows_f32(const Args a) { hash_rows_body<128>(a); }
-
-// Pearl's tickets: per 16 x 16 subtile of C~, the 16-lane fold (lane (rb, cb) folds its 4 x 4 block row-major,
-// lane <- rotl32(lane 0x9E3779B1 + bits, 13)) hashed as one keyed BLAKE3 block.  p0 C~, p1 out (subtiles row-major x 32 B),
-// p2 key (8 words); i0 rows, i1 cols
-extern "C" __global__ void __launch_bounds__(128) tickets(const Args a) {
-  const int cols = a.i[1], sn = cols / 16;
-  const int t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= a.i[0] / 16 * sn) return;
-  const int si = t / sn, sj = t % sn;
-  const uint32_t* C = reinterpret_cast<const uint32_t*>(a.p[0]);
-  uint32_t z[16], kw[8], h[8];
-#pragma unroll
-  for (int l = 0; l < 16; l++) {
-    uint32_t lane = 0;
-#pragma unroll
-    for (int f = 0; f < 16; f++) {
-      lane = lane * 0x9E3779B1u + C[(size_t)(16 * si + 4 * (l / 4) + f / 4) * cols + 16 * sj + 4 * (l % 4) + f % 4];
-      lane = __funnelshift_l(lane, lane, 13);
-    }
-    z[l] = lane;
-  }
-#pragma unroll
-  for (int i = 0; i < 8; i++) kw[i] = reinterpret_cast<const uint32_t*>(a.p[2])[i];
-  blake3_block(kw, z, h);
-  uint4* out = reinterpret_cast<uint4*>(a.p[1] + (size_t)t * 32);
-  out[0] = make_uint4(h[0], h[1], h[2], h[3]);
-  out[1] = make_uint4(h[4], h[5], h[6], h[7]);
 }
 
 // words differing between two buffers: p0, p1 (u32), p2 counter (u64); i0 count (in words, < 2^31 per launch)

@@ -5,7 +5,9 @@ Inputs are derived, not stored: row i of operand ``name`` in case ``c`` is an FP
 of SHAKE256("verity/pouw/pearl-c-vectors/v1", c, name, "codes", i) clamped to ±127 and whose k/8 BF16 scales are
 2^(−4 − (b mod 5)) for the bytes of SHAKE256(…, "scales", i).  A v1 row (FP32 words) is that row opened, each nonzero word's
 low 16 mantissa bits replaced by the 16-bit words of SHAKE256(…, "fraction", i).  The context's salt and roots are SHA-256
-of their labels."""
+of their labels.  A ``-h1`` case (hashing format h1) reads its h0 twin's inputs (its label without ``-h1``), and adds A's
+``frame-b3`` row root over the tile's A rows, row 0's leaf and the first message digest.  ``decode-32-v1-h1`` is decode's
+partial tile: 32 rows of a 64-column tile, its leaf over 64 digests."""
 
 from __future__ import annotations
 
@@ -14,16 +16,20 @@ import json
 import struct
 from pathlib import Path
 
+from verity_pouw.audit import ROW_SCHEMA, activation_binding, commit_rows
 from verity_pouw.protocol import Context, Matmul, Shape, Tile
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_kw as P
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c.json"
-#: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming)
+#: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming[, hashing])
 CASES = (("test-16", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v0"),
          ("prod-64", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v0"),
          ("test-16-v1", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1"),
-         ("prod-64-v1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1"))
+         ("prod-64-v1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1"),
+         ("test-16-v1-h1", (16, 128, 16), (0, 16), (0, 16), 3, 9, True, "v1", "h1"),
+         ("prod-64-v1-h1", (64, 1024, 64), (0, 64), (0, 64), 7, 2, False, "v1", "h1"),
+         ("decode-32-v1-h1", (32, 1024, 64), (0, 32), (0, 64), 7, 2, False, "v1", "h1"))
 
 
 def shake(case: str, name: str, part: str, i: int, n: int) -> bytes:
@@ -53,8 +59,8 @@ def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int) -> C
     return Context(h("salt"), Matmul(index, Shape(*shape), weight), h("root_a"), h("root_b"))
 
 
-def scheme(test: bool, forming: str = "v0") -> C.PearlC:
-    return C.PearlC(k_min=32, tile=(16, 16), forming=forming) if test else C.PearlC(forming=forming)
+def scheme(test: bool, forming: str = "v0", hashing: str = "h0") -> C.PearlC:
+    return C.PearlC(k_min=32, tile=(16, 16), forming=forming, hashing=hashing) if test else C.PearlC(forming=forming, hashing=hashing)
 
 
 def sha(data: bytes) -> str:
@@ -69,17 +75,18 @@ def halves(grid: list[list[int]]) -> bytes:
     return b"".join(struct.pack(f"<{len(r)}H", *r) for r in grid)
 
 
-def case_vector(case, shape, r, c, index, weight, test, forming) -> dict:
-    s, ctx = scheme(test, forming), ctx_of(case, shape, index, weight)
+def case_vector(case, shape, r, c, index, weight, test, forming, hashing="h0") -> dict:
+    base = case.removesuffix("-h1")        # an h1 case reads its h0 twin's inputs, so only the hashing differs
+    s, ctx = scheme(test, forming, hashing), ctx_of(base, shape, index, weight)
     s.check(ctx.matmul)
     tile = Tile(tuple(range(*r)), tuple(range(*c)))
     make = rows if forming == "v0" else rows_f32
-    a, b = make(case, "A", len(tile.rows), shape[1]), make(case, "B", len(tile.cols), shape[1])
+    a, b = make(base, "A", len(tile.rows), shape[1]), make(base, "B", len(tile.cols), shape[1])
     noise = s.noise(ctx)
     ops = s.encode(ctx, noise, a, b, tile)
     checked = s.checked(ctx, ops)
     useful = s.useful(ctx, noise, ops, checked)
-    return {
+    out = {
         "case": case, "scheme": s.name, "shape": list(shape), "tile": {"rows": list(r), "cols": list(c)}, "index": index,
         "weight": weight, "test_instance": test,
         "seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(),
@@ -92,6 +99,12 @@ def case_vector(case, shape, r, c, index, weight, test, forming) -> dict:
         "leaf": s.digest(ctx, noise, checked).hex(), "tickets": [t.hex() for t in s.tickets(noise, checked)],
         "useful_sha256": sha(json.dumps(useful).encode()), "useful_00": useful[0][0],
     }
+    if hashing == "h1":
+        tree = commit_rows(activation_binding(ctx.salt, index), index, a, s.commitment_hash)
+        msg = words([checked.c[0][:C.CHUNK]]) + words([checked.u[0][:C.CHUNK]])
+        out.update({"hashing": hashing, "rows_root_a": tree.commitment.root.hex(),
+                    "row_leaf_a0": tree.domain.leaf(0, 0, ROW_SCHEMA, a[0]).hex(), "message_00": C.message_digest(msg, hashing).hex()})
+    return out
 
 
 def vectors() -> dict:
