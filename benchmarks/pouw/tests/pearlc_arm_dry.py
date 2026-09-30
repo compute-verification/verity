@@ -8,7 +8,8 @@ directory the arm writes its transcripts under (`build`'s out_dir); PEARLC_ROWS 
            run again as its three phases), the weight side, the gate and `known_bad`; one JSON line per gate.  The hash calls
            of set 0 are then taken as gated, so freeing them writes their transcripts (of the stand-in's bytes).
   accept:  at the fixture's shape on its inputs and epoch (its beacon, matmul index and weight, B's root), the fixture's bytes
-           written where the device would have put them (the call's buffers and the gate's second launch), the gate; then one
+           written where the device would have put them (the call's buffers and the gate's second launch), the prefetch and
+           the gate; then one
            C~ word flipped (a message digest's where the call stores no C~, the fused call), the gate again; then the word
            restored, the gate, and the call freed, which writes its transcript and its negative control.  Each later launch
            of the whole call writes the fixture's bytes again, as the device would; the negative control's launches don't.
@@ -168,6 +169,7 @@ def accept(arm, check: Path, rewrite: bool = True, harness: Path | None = None) 
     for name in A.REF:
         write(rd, s["ref_" + name], load("c" if name == "c2" else name))
     flags = arm.flag_sets["hash"]
+    arm.prefetch(None, call, shape, flags)
     g = arm.gate(None, call, shape, flags)
     print(json.dumps({"flipped": None, "ok": g.ok, "checked": g.checked, "detail": g.detail}), flush=True)
     r0, c0 = A.W.samples(A.W.Shape("fixture", m, n, k))[-1]

@@ -980,6 +980,49 @@ def test_arm_gate_accepts_the_fixture_and_rejects_a_flip(A, small_fixture, ship,
     assert not verdict["negative_controls"][0]["accepted"] and verdict["negative_controls"][0]["line"] == control
 
 
+REFS_STUB = '''
+import multiprocessing, os
+from concurrent.futures import ProcessPoolExecutor
+
+
+class _Logged(ProcessPoolExecutor):
+    def submit(self, fn, *args, **kw):
+        with open(os.environ["REFS_LOG"], "a") as f:
+            f.write(f"{fn.__name__} {args[1]} {args[2]}\\n")
+        return super().submit(fn, *args, **kw)
+
+
+_POOL = None
+
+
+def pool():
+    global _POOL
+    if _POOL is None:
+        _POOL = _Logged(2, mp_context=multiprocessing.get_context("fork"))
+    return _POOL
+'''
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cls", ARMS)
+def test_the_twin_in_the_harness_pool_gates_as_it_does_inline(A, small_fixture, ship, arm_dir, tmp_path, cls):
+    """With the harness's `refs.pool` (a stub of two forked workers that logs each submit), the prefetch submits each sampled
+    tile once, the three gates take those, and every verdict is the inline twin's, the flipped digest's rejection too."""
+    harness = tmp_path / "harness"
+    harness.mkdir()
+    shutil.copy(arm_dir / "arm.py", harness)
+    (harness / "refs.py").write_text(REFS_STUB)
+    check, log = str(small_fixture / "check.json"), tmp_path / "refs.log"
+    for d in ("pool", "inline"):
+        (tmp_path / d).mkdir()
+    pooled = driver(A, ship, harness, tmp_path / "pool", cls, "accept", check, REFS_LOG=str(log))
+    inline = driver(A, ship, arm_dir, tmp_path / "inline", cls, "accept", check)
+    samples = A.W.samples(A.W.Shape("fixture", 128, 128, 1024))
+    assert sorted(log.read_text().splitlines()) == sorted(f"tile {r0} {c0}" for r0, c0 in samples)
+    assert [(g["ok"], g.get("detail")) for g in pooled] == [(g["ok"], g.get("detail")) for g in inline]
+    assert [g["ok"] for g in pooled] == [True, False, True]
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("forms", ARM_FORMS)
 def test_the_harness_poisoned_dump_is_accepted_and_its_no_write_control_rejected(A, small_fixture, ship, arm_dir, tmp_path, forms):
