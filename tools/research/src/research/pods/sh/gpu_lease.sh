@@ -55,6 +55,16 @@
 # never from NVML, so a timed window stays quiet; with no log a lease records its held time alone.  Busy and sampled time are
 # capped at the held time.  Nothing is refused or stopped on it, and CMD's exit status is gpu-lease's.
 # GPU_LEASE_STARTED overrides the lease's start time, %Y-%m-%dT%H:%M:%SZ (tests).
+#
+# Agent mode: while the node's scheduler (`cluster agent --mode live`, tools/cluster) holds $GPU_LEASE_DIR/agent.lock, it decides
+# instead of the rules above.  Every request queues at once as its wait file, which also records --max-min (max=), the memory cap
+# (mem=), --preemptible (preempt=1) and --timed (timed=1); the agent stops what its plan evicts, and grants by writing
+# $GPU_LEASE_DIR/grant.<pid>, the GPU indices comma-separated.  gpu-lease takes exactly those GPUs (polling every
+# $GPU_LEASE_AGENT_POLL_S seconds, default 0.5) and preempts nothing itself.  A request without --wait gives up with 75 when no
+# grant comes within $GPU_LEASE_AGENT_WAIT_S seconds (default 10).  Once agent.lock is free (the agent stopped or died), the next
+# poll falls back to the rules above, keeping its place in the queue.
+# A lease's owner lines are written as soon as its locks are taken (the UUIDs and the memory scope are looked up before), so a
+# held lock never shows the previous holder's line for longer than that.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -175,6 +185,41 @@ may_backfill() {
   [ -n "$need" ] || return 1
   t_head=$(free_by | sort -n | sed -n "${need}p")
   [ -n "$t_head" ] && [ $(($(date -u +%s) + 60 * maxmin)) -le "$t_head" ]
+}
+
+agent_up() {
+  # the node's scheduler agent holds agent.lock while it runs
+  local fd
+  [ -e "$dir/agent.lock" ] || return 1
+  { exec {fd}<"$dir/agent.lock"; } 2>/dev/null || return 1
+  if flock -n -s "$fd"; then exec {fd}>&-; return 1; fi
+  exec {fd}>&-
+}
+
+queue_me() {
+  # MYWAIT: this request's wait file, locked while it waits
+  exec {wfd}>"$dir/.wait.$$"
+  flock -x "$wfd"
+  echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "${maxmin:+max=$maxmin }${memgb:+mem=${memgb}G }${preempt:+preempt=1 }${timed:+timed=1 }" >&"$wfd"
+  MYWAIT="$dir/wait.$(date -u +%s%N).$$"
+  mv "$dir/.wait.$$" "$MYWAIT"
+  echo "gpu-lease: waiting for $n GPU(s)${on:+ in --on $on}$1, queued as $(basename "$MYWAIT")" >&2
+}
+
+take_grant() {
+  # take exactly the GPUs the agent granted this request, when they are gpu-lease's to hand out here and n of them
+  local g i
+  local -a granted=()
+  [ -r "$dir/grant.$$" ] || return 1
+  for g in $(tr ',' ' ' < "$dir/grant.$$"); do
+    for i in "${ALL[@]}"; do [ "$i" = "$g" ] && granted+=("$g"); done
+  done
+  [ "${#granted[@]}" -eq "$n" ] || return 1
+  CANDIDATES=("${granted[@]}")
+  take "$n"; local rc=$?
+  CANDIDATES=("${ALL[@]}")
+  return $rc
 }
 
 minutes_since() {
@@ -346,30 +391,6 @@ mkdir -p "$dir" 2>/dev/null
 
 who=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}}
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-MYWAIT=""
-until { [ -z "$(ahead)" ] || may_backfill; } && take "$n"; do
-  if [ "$wait" != 1 ]; then
-    first=$(ahead | head -1)
-    if [ -n "$first" ]; then
-      echo "gpu-lease: a request is waiting first ($(cat "$first" 2>/dev/null)): add --wait to queue behind it, or a" \
-        "--max-min short enough to end before it can start" >&2
-    else
-      echo "gpu-lease: fewer than $n of $total GPUs free ($(status | grep -v '^#' | tr '\n' ';'))" >&2
-    fi
-    exit 75
-  fi
-  [ -n "$(ahead)" ] || preempt_for "$n"
-  if [ -z "$MYWAIT" ]; then
-    exec {wfd}>"$dir/.wait.$$"
-    flock -x "$wfd"
-    echo "pid=$$ n=$n${on:+ on=$on} run=${RESEARCH_RUN_ID:--} who=${who// /_} since=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >&"$wfd"
-    MYWAIT="$dir/wait.$(date -u +%s%N).$$"
-    mv "$dir/.wait.$$" "$MYWAIT"
-    echo "gpu-lease: waiting for $n GPU(s)${on:+ in --on $on}, queued as $(basename "$MYWAIT")" >&2
-  fi
-  sleep "${GPU_LEASE_POLL_S:-15}"
-done
-if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; fi
 scope=()
 if [ "$memgb" != 0 ]; then
   if [ -z "$memgb" ]; then
@@ -383,10 +404,42 @@ if [ "$memgb" != 0 ]; then
     memgb=""
   fi
 fi
+[ -n "${table:-}" ] || table=$(uuid_table)
+ALL=("${CANDIDATES[@]}")
+MYWAIT=""
+rm -f "$dir/grant.$$"
+asked=$(date -u +%s)
+while :; do
+  if agent_up; then
+    [ -n "$MYWAIT" ] || queue_me " from the node's agent"
+    take_grant && break
+    if [ "$wait" != 1 ] && [ $(($(date -u +%s) - asked)) -ge "${GPU_LEASE_AGENT_WAIT_S:-10}" ]; then
+      rm -f "$MYWAIT"
+      echo "gpu-lease: the node's agent granted no $n GPU(s) in ${GPU_LEASE_AGENT_WAIT_S:-10} s: add --wait to queue" >&2
+      exit 75
+    fi
+    sleep "${GPU_LEASE_AGENT_POLL_S:-0.5}"
+    continue
+  fi
+  { [ -z "$(ahead)" ] || may_backfill; } && take "$n" && break
+  if [ "$wait" != 1 ]; then
+    [ -z "$MYWAIT" ] || rm -f "$MYWAIT"
+    first=$(ahead | head -1)
+    if [ -n "$first" ]; then
+      echo "gpu-lease: a request is waiting first ($(cat "$first" 2>/dev/null)): add --wait to queue behind it, or a" \
+        "--max-min short enough to end before it can start" >&2
+    else
+      echo "gpu-lease: fewer than $n of $total GPUs free ($(status | grep -v '^#' | tr '\n' ';'))" >&2
+    fi
+    exit 75
+  fi
+  [ -n "$(ahead)" ] || preempt_for "$n"
+  [ -n "$MYWAIT" ] || queue_me ""
+  sleep "${GPU_LEASE_POLL_S:-15}"
+done
 started=${GPU_LEASE_STARTED:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
 ends=""
 [ -n "$maxmin" ] && ends=" until=$(date -u -d "@$(($(date -u -d "$started" +%s) + 60 * maxmin))" +%Y-%m-%dT%H:%M:%SZ)"
-[ -n "${table:-}" ] || table=$(uuid_table)
 uuids=()
 for i in "${TAKEN[@]}"; do
   u=$(echo "$table" | awk -v i="$i" '$1 == i {print $2}')
@@ -394,6 +447,8 @@ for i in "${TAKEN[@]}"; do
   echo "pid=$$ run=${RESEARCH_RUN_ID:--} who=${who// /_} uuid=${u:--} since=$started$ends${memgb:+ mem=${memgb}G}" \
     "${preempt:+preempt=1 }${timed:+timed=1 }${scope:+scope=gpu-lease-$$ }cmd=$(echo "$*" | cut -c1-80)" > "$dir/$i.owner"
 done
+if [ -n "$MYWAIT" ]; then rm -f "$MYWAIT"; exec {wfd}>&-; fi
+rm -f "$dir/grant.$$"
 CUDA_VISIBLE_DEVICES=$(IFS=,; echo "${TAKEN[*]}")
 GPU_LEASE_UUID=$(IFS=,; echo "${uuids[*]}")
 export CUDA_VISIBLE_DEVICES CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID
@@ -409,5 +464,6 @@ rc=0; wait "$child" || rc=$?
 while kill -0 "$child" 2> /dev/null; do rc=0; wait "$child" || rc=$?; done
 trap - TERM INT HUP
 for fd in "${FDS[@]}"; do exec {fd}>&-; done
+rm -f "$dir/grant.$$"
 report_usage "$rc"
 exit "$rc"
