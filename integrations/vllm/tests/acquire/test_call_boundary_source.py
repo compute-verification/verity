@@ -158,6 +158,7 @@ def test_every_call_boundary_is_committed_once_per_step_with_the_ir_words(dense)
     got = {(s, n): t for s, n, t in com.acquired}
     assert len(got) == len(com.acquired) == len(ids)
     assert set(got) == {(r["engine_step"], f"{r['op_path']}/{r['output_member']}") for r in ids}
+    assert all(src.targets_at(s) == {n: 1 for e, n in got if e == s} for s in range(1 + T)) and src.target_names() == {n for _e, n in got}
     for r in ids:
         t = got[(r["engine_step"], f"{r['op_path']}/{r['output_member']}")]
         assert t.dtype == TORCH_OF[r["dtype"]] and tuple(t.shape) == (r["rows"], r["width"]) and t.numel() == r["element_range"][1] - r["element_range"][0]
