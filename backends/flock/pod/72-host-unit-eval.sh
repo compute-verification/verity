@@ -26,6 +26,7 @@ SW=(DEFS=backends/flock/pod/gemm-coordinates.defs.json BATCH=auto BATCH_ANDS=${B
 PY=$FLOCK_WORK/flock-circuit/py/bin/python3
 if [ "${NOPIPE:-1}" = 1 ]; then
   FC_UNIT_PROFILE=1 FC_PIPELINE=0 OUT=$R/out/nopipe bash backends/flock/pod/70-class-sweep.sh "${SW[@]}" WARM=${WARM:-1} RUNS=${RUNS:-3} || exit 1
+  mkdir -p $R/out/nopipe/out   # compute writes slowdown.json to out/ beside its --result
   $PY backends/flock/pod/gemm_slowdown.py compute --sweep $R/out/nopipe/classes/results.jsonl --native $R/out/native.json \
     --result $R/out/nopipe/result.json || exit 1
 fi
