@@ -13,6 +13,7 @@ from typing import Callable
 
 from verity.ir.defs import bind as ir_bind
 from verity_vllm.program.registry import b1, gemm_bias as _gemm_bias, gemv_bias as _gemv_bias
+from verity_vllm.program.registry import fa2_check_inf as _f2
 from verity_vllm.program.registry import fa3_check_inf as _f3
 from verity_vllm.program.registry import fp8 as _fp8
 from verity_vllm.program.registry import moe as _moe
@@ -253,10 +254,13 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # GEMM at M >= 2, cuBLAS's gemv at M = 1 (`registry.targets.gemm_bias_spec` / `gemv_bias_spec`)
            "gemm_bias_f32": lambda K, N, DOT: ir_bind(_gemm_bias.GemmBiasF32Epilogue, K=K, N=N, DOT=DOT),
            "gemv_bias_f32": lambda K, N, VEC, THREADS: ir_bind(_gemv_bias.GemvBiasF32, K=K, N=N, V=VEC, T=THREADS),
-           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`; an optional
-           # static, so the role and its note -- and with them this vocabulary's version -- stay as they were)
-           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None:
-               ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
+           # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
+           # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
+           # this vocabulary's version -- stay as they were
+           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None:
+               ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+               if FA2_MASKED_FROM is not None
+               else ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
                else ir_bind(_f3.AttentionV4, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
            # [R13 X-08] `scale_tensor` (generic bf16 row x 0-d bf16 tensor) and [R15 dense] the other op-shaped elementwise / activation /
            # softcap kinds come from `_dense_kinds()` above (promoted from quarantine.dense; Gemma-2's ops were the first instances)
