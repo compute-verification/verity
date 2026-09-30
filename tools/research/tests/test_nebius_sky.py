@@ -66,23 +66,32 @@ def test_every_job_template_names_a_defined_queue_and_priority():
         assert queue in local and prio in priorities, f.name
         assert "provision_timeout: -1" in t and "infra: ssh/vy-nebius" in t and "budget-line:" in t, f.name
         seen[f.stem] = (queue, prio)
-    assert seen == {"config-run": ("circuits", "circuits"), "config-run-split": ("circuits", "circuits"),
+    assert seen == {"config-run": ("circuits", "circuits"), "config-run-row": ("circuits", "circuits"),
                     "port-capture": ("circuits", "capture"), "prover-dev": ("provers", "dev"), "prover-bench": ("provers", "prover-bench")}
 
 
-def test_the_split_config_run_holds_a_gpu_only_in_its_second_task(tmp_path):
+def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     import subprocess
-    text = (SKY / "jobs" / "config-run-split.yaml").read_text()
+    text = (SKY / "jobs" / "config-run.yaml").read_text()
     head, build, gpu = text.split("\n---\n")
-    assert "accelerators" not in build and "row stage build" in build and 'verity.dev/build: "true"' in build
-    assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" in gpu and "row stage commit" in gpu
+    assert "accelerators" not in build and 'verity.dev/build: "true"' in build and "CUDA_VISIBLE_DEVICES=" in build
+    assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
+    assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
+    assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
     assert build.count("kueue.x-k8s.io/queue-name: circuits") == gpu.count("kueue.x-k8s.io/queue-name: circuits") == 1
+    assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
+    for part in (build, gpu):
+        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part and "HOT_ROOT: /workspace/jobs/hot" in part
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
-    out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run-split.yaml"), "tp2"],
-                         capture_output=True, text=True, check=True).stdout
-    _, b2, g2 = out.split("\n---\n")
+    def render(*args):
+        out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run.yaml"), *args],
+                             capture_output=True, text=True, check=True).stdout
+        return out.split("\n---\n")[1:]
+    b2, g2 = render("tp2", "", "")
     assert "  memory: 160" in b2 and "  memory: 384" in g2 and "accelerators: RTXPRO6000:2" in g2
+    b3, g3 = render("moe", "300", "")                                                                  # a per-cell figure wins
+    assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 384" in g3
 
 
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
