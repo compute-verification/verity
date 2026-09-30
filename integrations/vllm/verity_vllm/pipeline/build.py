@@ -527,11 +527,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             from verity.ir.codec import canonical_json, encode_program
             from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
             program = rep.program
-            # the derive's own encoding when it has one: the body is fixed once derived, and annotations are re-read as encode_program
-            # reads them (the derive adds provenance after taking its digest)
-            desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)
-            canon = canonical_json({k: v for k, v in desc.items() if k != "annotations"})    # program_digest's and descriptor_size's text
-            digest = hashlib.sha256(canon).hexdigest()
+            desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
+            digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
             # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
             corr_digest = correspondence_digest(desc)
             assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
