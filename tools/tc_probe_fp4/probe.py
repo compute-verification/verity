@@ -1129,7 +1129,7 @@ def replay_autoproof(probe: Probe, path: Path) -> dict:
 # --- main --------------------------------------------------------------------------------------------------------------------------------
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instruction", default="nvf4", choices=sorted(PTX) + list(CAST_INSTRUCTIONS))
     ap.add_argument("--arch", default=None, help="nvcc -arch (default sm_120a; sm_100a for the tcgen05 instructions, sm_103a on a B300)")
@@ -1153,7 +1153,7 @@ def main() -> int:
     ap.add_argument("--fake-silicon", default=None, metavar="MODEL", help="dry run on the CPU: MODEL's words stand in for the device")
     ap.add_argument("--corrupt-word", action="store_true", help="flip one bit of the first gated family's first word (the gate must fail)")
     ap.add_argument("--sass-only", action="store_true", help="build and run the SASS gate only (no device)")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     if args.instruction in CAST_INSTRUCTIONS:
         import cast
         return cast.main(args)

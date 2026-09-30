@@ -1,0 +1,201 @@
+"""The FP4 probe's and the W1 price bench's CPU side: the K=32 candidates against verity's own ``GroupSum``, the cast references
+against brute force, the fake-silicon dry runs (each candidate the truth in turn must be the only one reproducing every word;
+one flipped word must fail the gate), the W1 driver's gates, and the store declarations.  No test here builds or runs a kernel:
+``nvcc_bin`` is pointed at nothing, so a machine with CUDA runs the same tests as one without.  The offline SASS gates run only
+with ``VERITY_TC_PROBE_FP4_NVCC=1`` (nvcc 12.9 and cuobjdump, about 30 s)."""
+
+from __future__ import annotations
+
+import json
+import os
+import struct
+import subprocess
+import sys
+from fractions import Fraction
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+HERE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(HERE))
+
+import cast  # noqa: E402
+import k32  # noqa: E402
+import probe as P  # noqa: E402
+import tool  # noqa: E402
+import w1_price as W  # noqa: E402
+
+from verity.ml.tc import models as M  # noqa: E402
+from verity.ml.tc.term import PRODUCT_WIDTH  # noqa: E402
+
+
+@pytest.fixture
+def no_nvcc(monkeypatch):
+    monkeypatch.setattr(P, "nvcc_bin", lambda: "/nonexistent/nvcc")
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+
+
+def _value(term) -> Fraction:
+    v = Fraction(term.magnitude) * Fraction(2) ** (term.exponent - 23)
+    return -v if term.negative else v
+
+
+def _f32(x: float) -> int:
+    return struct.unpack("<I", struct.pack("<f", x))[0]
+
+
+@pytest.mark.parametrize("fa,fb", [("e2m1", "e2m1"), ("e2m1", "e4m3"), ("e4m3", "e2m1")])
+def test_mixed_product_is_the_exact_product(fa, fb):
+    codes = {"e2m1": range(16), "e4m3": [c for c in range(256) if c not in k32.E4M3_NAN]}
+    for a in codes[fa]:
+        for b in codes[fb]:
+            t = k32.mixed_product(fa, fb, a, b)
+            want = Fraction(float(k32.VALUE[fa][a])) * Fraction(float(k32.VALUE[fb][b]))
+            assert _value(t) == want, (fa, fb, a, b)
+            assert t.magnitude < 1 << PRODUCT_WIDTH
+            if fa == fb:
+                assert t == M.product(fa, a, b)
+
+
+@pytest.mark.parametrize("fmt,bits", [("e4m3", 8), ("e2m1", 4)])
+def test_groupsum_candidate_is_verity_groupsum_on_one_format(fmt, bits):
+    """On a single format the candidate is ``GroupSum`` itself; E4M3 (32,)/26/-133 is the vLLM lane's measured sm_120 step."""
+    cand = k32.GroupSumCandidate("t", fmt, fmt, (32,), 26, -133)
+    ref = M.GroupSum("t", "sm_120", fmt, bits, (32,), 26, -133, "test")
+    rng = np.random.default_rng(7)
+    for _ in range(300):
+        a = k32._codes(rng, fmt, 32)
+        b = k32._codes(rng, fmt, 32)
+        acc = _f32(float(rng.normal()) * 2.0 ** int(rng.integers(-20, 12)))
+        assert cand.step_scaled(acc, a, b) == ref.step(acc, [int(x) for x in a], [int(x) for x in b])
+
+
+def test_e2m1_cast_reference_is_nearest_even_satfinite():
+    rng = np.random.default_rng(11)
+    grid = [Fraction(v) for v in (0, 0.5, 1, 1.5, 2, 3, 4, 6)]
+    xs = np.concatenate([rng.uniform(-8, 8, 4000), [0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0, 6.5, 7.0, 1e30, -0.0, -5.0]])
+    words = np.array([_f32(float(x)) for x in xs], np.uint32)
+    got = cast.ref_e2m1(words)
+    for w, c in zip(words, got):
+        x = Fraction(struct.unpack("<f", struct.pack("<I", int(w)))[0])
+        d = [abs(abs(x) - g) for g in grid]
+        best = min(range(8), key=lambda i: (d[i], i % 2))  # nearest; a tie goes to the even code; beyond 6 saturates to 6
+        assert int(c) & 7 == best and bool(int(c) & 8) == bool(int(w) >> 31)
+
+
+def test_e4m3_cast_reference_is_nearest_even_satfinite():
+    rng = np.random.default_rng(12)
+    finite = [(Fraction(float(k32.E4M3_VALUE[c])), c) for c in range(0x7F)]
+    xs = np.concatenate([np.exp2(rng.uniform(-12, 10, 3000)), [float(v) for v, _ in finite[1:]], [2.0**-10, 464.0, 1e20]])
+    words = np.array([_f32(float(x)) for x in xs], np.uint32)
+    got = cast.ref_e4m3_pos(words)
+    for w, c in zip(words, got):
+        x = Fraction(struct.unpack("<f", struct.pack("<I", int(w)))[0])
+        best = min(finite, key=lambda vc: (abs(x - vc[0]), vc[1] % 2))[1]
+        assert int(c) == best, (float(x), int(c), best)
+
+
+@pytest.mark.parametrize("instr,truth", [("f8f6f4", "gs32_w26_native"), ("f8f6f4", "bsaa_g16"),
+                                         ("f8f6f4_e2m1_e4m3", "gs32_w26_as_e4m3"), ("mxf8f6f4_e2m1", "bsaa_g32")])
+def test_fake_capture_singles_out_the_truth(no_nvcc, tmp_path, instr, truth):
+    rc = P.main(["--instruction", instr, "--out", str(tmp_path), "--fake-silicon", truth, "--sweep", "--n-random", "16", "--procs", "1"])
+    assert rc == 0
+    finding = json.loads((tmp_path / "probe_results.json").read_text())["candidate_finding"]
+    assert finding["agreeing"] == [truth], finding["mismatches"]
+
+
+def test_one_flipped_word_fails_the_capture_gate(no_nvcc, tmp_path):
+    base = ["--instruction", "f8f6f4", "--fake-silicon", "gs32_w26_native", "--expect-model", "gs32_w26_native", "--sweep",
+            "--n-random", "16", "--procs", "1"]
+    assert P.main(base + ["--out", str(tmp_path / "ok")]) == 0
+    assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) != 0
+
+
+def test_fake_silicon_is_refused_under_a_research_run(no_nvcc, tmp_path, monkeypatch):
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    with pytest.raises(SystemExit):
+        P.main(["--instruction", "f8f6f4", "--out", str(tmp_path), "--fake-silicon", "gs32_w26_native"])
+    with pytest.raises(SystemExit):
+        W.main(["--out", str(tmp_path), "--fake-silicon"])
+
+
+@pytest.mark.parametrize("instr", ["cvt_e2m1x2_f32", "cvt_ue8m0x2_f32_rp", "cvt_e4m3x2_f32_ue4m3"])
+def test_cast_dry_run_passes_and_a_flipped_word_fails(no_nvcc, tmp_path, instr):
+    base = ["--instruction", instr, "--fake-silicon", "reference", "--n-random", "256"]
+    assert P.main(base + ["--out", str(tmp_path / "ok")]) == 0
+    assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) != 0
+
+
+def test_w1_fragments_carry_only_the_row_formats():
+    for row, (_, k, fa, fb, sf, _) in W.ROWS.items():
+        f = W.fragments(row, 2, 1)
+        by = f.view(np.uint8).reshape(f.shape + (4,))
+        if k == 32:
+            for fmt, sl in ((fa, slice(0, 4)), (fb, slice(4, 6))):
+                x = by[:, :, sl]
+                if fmt == "e2m1":
+                    assert not (x & 0xC3).any()
+                else:
+                    assert not np.isin(x, list(k32.E4M3_NAN)).any()
+        s = by[:, :, 6:8]
+        if sf == "ue4m3":
+            assert ((s >= 0x30) & (s < 0x48)).all()
+        elif sf == "ue8m0":
+            assert ((s >= 124) & (s < 132)).all()
+        else:
+            assert not s.any()
+
+
+def test_w1_dry_run_records_and_its_gates_fail_closed(no_nvcc, tmp_path):
+    common = ["--fake-silicon", "--reps", "2", "--sustain-s", "0", "--target-ms", "2", "--latency-iters", "50"]
+    assert W.main(["--out", str(tmp_path / "ok")] + common) == 0
+    doc = json.loads((tmp_path / "ok" / "result.fake.json").read_text())
+    assert doc["kind"] == "bench-result/v1" and doc["validation"]["status"] == "passed"
+    assert doc["label"] == "Measured, unlocked clocks"
+    assert set(doc["comparisons"]) == set(W.COMPARISONS)
+    names = {m["name"] for m in doc["measurements"]}
+    assert "nvf4_const_scales_flop_per_sm_per_clock" in names and "f8f6f4_latency_cycles_per_mma" in names
+    assert not (tmp_path / "ok" / "result.json").exists()
+
+    assert W.main(["--out", str(tmp_path / "bad"), "--corrupt-word"] + common) == 1
+    bad = json.loads((tmp_path / "bad" / "result.fake.json").read_text())
+    assert bad["validation"]["status"] == "failed" and bad["measurements"] == []
+    assert "per_variant" not in json.loads((tmp_path / "bad" / "w1_price.json").read_text())
+
+
+def test_w1_refuses_a_plan_longer_than_the_window(no_nvcc, tmp_path):
+    with pytest.raises(SystemExit):
+        W.main(["--out", str(tmp_path), "--fake-silicon", "--reps", "1000", "--max-seconds", "60"])
+
+
+def test_clock_label_needs_every_sample_at_the_lock():
+    s = [{"clocks.sm": "2100"}, {"clocks.sm": "2100"}]
+    assert W.clock_label(s, [2099.0, 2101.0], 2100) == "locked at 2100 MHz"
+    assert W.clock_label(s, [2099.0, 2050.0], 2100) == "unlocked"
+    assert W.clock_label([{"clocks.sm": "2100"}, {"clocks.sm": "1900"}], [2100.0], 2100) == "unlocked"
+    assert W.clock_label(s, [2100.0], None) == "unlocked"
+    assert W.clock_label([None], [2100.0], 2100) == "unlocked"
+
+
+def test_store_declarations_keep_guards_out_of_the_derivation():
+    p = tool.TC_PROBE_FP4.parse(["python", "tools/tc_probe_fp4/probe.py", "--instruction", "f8f6f4", "--out", "x",
+                                 "--expect-uuid", "GPU-1", "--chain", "4"])
+    assert p["instruction"] == "f8f6f4" and p["chain"] == 4 and "expect_uuid" not in p and p["arch"] == "sm_120a"
+    q = tool.TC_PRICE_FP4.parse(["python", "tools/tc_probe_fp4/w1_price.py", "--out", "x", "--rows", "mxf4,nvf4,",
+                                 "--expect-uuid", "GPU-1", "--max-seconds", "60"])
+    assert q["rows"] == "mxf4,nvf4" and not {"out", "expect_uuid", "max_seconds"} & set(q)
+    assert set(q) <= set(tool.TC_PRICE_FP4.key_params)
+
+
+@pytest.mark.skipif(os.environ.get("VERITY_TC_PROBE_FP4_NVCC") != "1",
+                    reason="set VERITY_TC_PROBE_FP4_NVCC=1 to build the kernels and run the offline SASS gates (nvcc 12.9, ~30 s)")
+def test_offline_sass_gates(tmp_path):
+    env = dict(os.environ)
+    env.pop("RESEARCH_RUN_ID", None)
+    for cmd in (["w1_price.py", "--out", str(tmp_path / "w1"), "--sass-only"],
+                ["probe.py", "--instruction", "f8f6f4", "--out", str(tmp_path / "p"), "--sass-only"],
+                ["probe.py", "--instruction", "cvt_e2m1x2_f32", "--out", str(tmp_path / "c"), "--sass-only"],
+                ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
+        r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
+        assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])
