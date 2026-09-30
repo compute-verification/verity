@@ -10,6 +10,7 @@ counts them as structural scaffolding.
 
 from __future__ import annotations
 
+import sys
 from contextlib import contextmanager
 
 import torch
@@ -89,23 +90,61 @@ def apply_target_profile(profile):
         yield
 
 
+_CUDA_PLATFORM = "vllm.platforms.cuda.CudaPlatform"
+
+
+def _answer_cuda(platforms) -> None:
+    hooks.patch(platforms, "resolve_current_platform_cls_qualname", lambda: _CUDA_PLATFORM)
+
+
+class _AnswerCudaLoader:
+    """`vllm.platforms`' own loader, then `_answer_cuda` on the executed module: before anything can read `current_platform`."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def create_module(self, spec):
+        return self.inner.create_module(spec)
+
+    def exec_module(self, module) -> None:
+        self.inner.exec_module(module)
+        _answer_cuda(module)
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+
+class _AnswerCudaFinder:
+    def find_spec(self, name, path, target=None):
+        if name != "vllm.platforms":
+            return None
+        import importlib.machinery
+        sys.meta_path.remove(self)
+        spec = importlib.machinery.PathFinder.find_spec(name, path)
+        if spec is not None and spec.loader is not None:
+            spec.loader = _AnswerCudaLoader(spec.loader)
+        return spec
+
+
 def select_cuda_platform() -> str:
-    """A declared target is a CUDA device: install vLLM's CUDA platform as `current_platform` before anything resolves it, instead of
-    `vllm.platforms` probing NVML for it.  On a GPU-free Build host NVML is absent and that probe resolves a non-CUDA platform; the class
-    installed is the one the probe picks on a GPU host (`vllm.platforms.cuda.CudaPlatform`: the NVML-backed class when NVML answers,
-    the torch-backed one when it does not), and `apply_target_profile` answers the target's capability on either.  Build path only:
-    serving resolves its platform as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
+    """A declared target is a CUDA device: vLLM's platform resolution answers `vllm.platforms.cuda.CudaPlatform` (the qualname its CUDA
+    plugin returns on a GPU host) instead of probing NVML for it.  On a GPU-free Build host NVML is absent and that probe resolves a
+    non-CUDA platform.  `import vllm` itself resolves `current_platform` (`torch_utils.PIN_MEMORY`), so before vLLM is imported the answer
+    is installed as `vllm.platforms` finishes executing; the class vLLM then instantiates is the GPU host's (`CudaPlatform`: the
+    NVML-backed class when NVML answers, the torch-backed one when it does not), and `apply_target_profile` answers the target's
+    capability on either.  Build path only: serving resolves its platform as before.  Raises when `current_platform` already resolved to
+    a non-CUDA platform."""
     # vLLM freezes export knobs at import (`VLLM_USE_LAYERNAME` -> `torch_utils._USE_LAYERNAME`): pin them before importing vLLM here
     engine_env.pin(engine_env.EXPORT)
-    import vllm.platforms as P
-    from vllm.platforms.cuda import CudaPlatform
-    resolved = P.__dict__.get("current_platform") or P._current_platform   # the lazy `current_platform` getter returns `_current_platform`
-    if resolved is None:
-        resolved = CudaPlatform()
-        hooks.patch(P, "_current_platform", resolved)
-    elif not resolved.is_cuda():
-        raise RuntimeError(f"vLLM resolved {type(resolved).__qualname__} before the declared CUDA target could select its platform")
-    return type(resolved).__qualname__
+    loaded = sys.modules.get("vllm.platforms")
+    if loaded is None:
+        sys.meta_path.insert(0, _AnswerCudaFinder())
+    elif loaded._current_platform is None:
+        _answer_cuda(loaded)
+    from vllm.platforms import current_platform
+    if not current_platform.is_cuda():
+        raise RuntimeError(f"vLLM resolved {type(current_platform).__qualname__} before the declared CUDA target could select its platform")
+    return type(current_platform).__qualname__
 
 
 def read_back_applied() -> dict:

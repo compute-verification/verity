@@ -3,17 +3,14 @@ on a GPU-free host: the target is declared by the row id, the preflight asks no 
 vLLM's CUDA platform instead of letting `vllm.platforms` probe NVML (absent there) for it.  Every other class Builds as before."""
 from __future__ import annotations
 
-import importlib.abc
-import importlib.util
 import json
-import os
 import sys
 import types
 
 import pytest
 
 from verity_vllm import target_family as tf
-from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
@@ -66,65 +63,74 @@ def test_fa_version_and_the_cache_key_of_a_declared_target_read_no_device(tmp_pa
     assert RC.device_id(types.SimpleNamespace(tgt="")) is None, "no nvidia-smi and no declared target: no device in the key"
 
 
-class _Platform:
-    def __init__(self, cuda: bool):
-        self._cuda = cuda
-
-    def is_cuda(self) -> bool:
-        return self._cuda
-
-
-class NvmlCudaPlatform(_Platform):
-    def __init__(self):
-        super().__init__(True)
+_FAKE_VLLM = {
+    # `import vllm` resolves `current_platform` (the pinned vLLM: `env_override` -> `torch_utils.PIN_MEMORY`)
+    "vllm/__init__.py": "from vllm.platforms import current_platform as _\n",
+    "vllm/platforms/__init__.py": """
+import importlib
+_current_platform = None
 
 
-class NonNvmlCudaPlatform(_Platform):
-    def __init__(self):
-        super().__init__(True)
+class UnspecifiedPlatform:
+    def is_cuda(self):
+        return False
 
 
-class UnspecifiedPlatform(_Platform):
-    def __init__(self):
-        super().__init__(False)
+class NvmlCudaPlatform:
+    def is_cuda(self):
+        return True
+
+
+def resolve_current_platform_cls_qualname():
+    return "vllm.platforms.UnspecifiedPlatform"   # the NVML probe of a GPU-free host
+
+
+def __getattr__(name):
+    global _current_platform
+    if name != "current_platform":
+        raise AttributeError(name)
+    if _current_platform is None:
+        mod, _, cls = resolve_current_platform_cls_qualname().rpartition(".")
+        _current_platform = getattr(importlib.import_module(mod), cls)()
+    return _current_platform
+""",
+    "vllm/platforms/cuda.py": """
+import os
+ENV_AT_IMPORT = {"VLLM_USE_LAYERNAME": os.environ.get("VLLM_USE_LAYERNAME")}   # vLLM freezes `_USE_LAYERNAME` at import
+
+
+class NonNvmlCudaPlatform:
+    def is_cuda(self):
+        return True
+
+
+CudaPlatform = NonNvmlCudaPlatform
+""",
+}
 
 
 @pytest.fixture
-def vllm_without_nvml(monkeypatch):
-    """The pinned vLLM's platform resolution on a GPU-free host: `vllm.platforms.current_platform` is resolved lazily on first access by
-    probing NVML, which is absent (-> a non-CUDA platform); `vllm.platforms.cuda.CudaPlatform` is the torch-backed class there."""
-    plat = types.ModuleType("vllm.platforms")
-    plat._current_platform = None
-
-    def __getattr__(name):
-        if name == "current_platform":
-            if plat._current_platform is None:
-                plat._current_platform = UnspecifiedPlatform()
-            return plat._current_platform
-        raise AttributeError(name)
-
-    plat.__getattr__ = __getattr__
-    plat.__path__ = []
-    plat.env_at_cuda_import = {}
-
-    class CudaFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-        def find_spec(self, name, path, target=None):
-            return importlib.util.spec_from_loader(name, self) if name == "vllm.platforms.cuda" else None
-
-        def exec_module(self, module):   # the pinned vLLM reads its import-time knobs here (`torch_utils._USE_LAYERNAME`)
-            plat.env_at_cuda_import = {"VLLM_USE_LAYERNAME": os.environ.get("VLLM_USE_LAYERNAME")}
-            module.CudaPlatform = NonNvmlCudaPlatform
-
-    vllm = types.ModuleType("vllm")
-    vllm.platforms = plat
-    for name, mod in (("vllm", vllm), ("vllm.platforms", plat)):
-        monkeypatch.setitem(sys.modules, name, mod)
-    monkeypatch.delitem(sys.modules, "vllm.platforms.cuda", raising=False)
-    monkeypatch.setattr(sys, "meta_path", [CudaFinder(), *sys.meta_path])
+def vllm_without_nvml(tmp_path, monkeypatch):
+    """A stand-in for the pinned vLLM's platform resolution on a GPU-free host, not yet imported: `current_platform` is resolved lazily
+    (first by `import vllm` itself) by the module's `resolve_current_platform_cls_qualname`, whose NVML probe answers a non-CUDA
+    platform; `vllm.platforms.cuda.CudaPlatform` is the torch-backed class there."""
+    root = tmp_path / "site"
+    for rel, src in _FAKE_VLLM.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(src)
+    monkeypatch.syspath_prepend(str(root))
+    for name in [m for m in sys.modules if m == "vllm" or m.startswith("vllm.")]:
+        monkeypatch.delitem(sys.modules, name)
+    monkeypatch.setattr(sys, "meta_path", list(sys.meta_path))
     for k in engine_env.EXPORT:   # set-then-delete: teardown restores each to what it was, the selection's pin included
         monkeypatch.setenv(k, "")
         monkeypatch.delenv(k)
-    return plat
+    yield
+    for p in hooks.live():
+        if getattr(getattr(p, "owner", None), "__name__", "").startswith("vllm"):
+            p.uninstall()
+    for name in [m for m in sys.modules if m == "vllm" or m.startswith("vllm.")]:
+        del sys.modules[name]
 
 
 def _build(tmp_path, monkeypatch, target):
@@ -143,7 +149,7 @@ def _build(tmp_path, monkeypatch, target):
 def test_a_declared_target_s_build_takes_the_cuda_platform_when_nvml_is_absent(tmp_path, monkeypatch, vllm_without_nvml):
     target = parse_target_arg(R.declared_target(_wl(tmp_path), row=ROW_120))
     assert _build(tmp_path, monkeypatch, target) == "NonNvmlCudaPlatform"
-    assert vllm_without_nvml.env_at_cuda_import == {"VLLM_USE_LAYERNAME": "0"}, \
+    assert sys.modules["vllm.platforms.cuda"].ENV_AT_IMPORT == {"VLLM_USE_LAYERNAME": "0"}, \
         "the selection imports vLLM, so the construction's export env is in force first (else layer names export as opaque LayerName)"
 
 
@@ -151,10 +157,13 @@ def test_a_build_without_a_declared_target_resolves_the_platform_as_before(tmp_p
     assert _build(tmp_path, monkeypatch, None) == "UnspecifiedPlatform", "no declared target: vLLM's own probe decides, unchanged"
 
 
-def test_the_selection_keeps_an_already_resolved_cuda_platform_and_refuses_a_non_cuda_one(vllm_without_nvml):
+def test_the_selection_answers_an_imported_but_unresolved_vllm_keeps_a_cuda_platform_and_refuses_a_non_cuda_one(vllm_without_nvml):
     from verity_vllm.program.frontend.export_compat import select_cuda_platform
-    vllm_without_nvml._current_platform = NvmlCudaPlatform()
+    import vllm.platforms as P
+    P._current_platform = None
+    assert select_cuda_platform() == "NonNvmlCudaPlatform"
+    P._current_platform = P.NvmlCudaPlatform()
     assert select_cuda_platform() == "NvmlCudaPlatform"
-    vllm_without_nvml._current_platform = UnspecifiedPlatform()
+    P._current_platform = P.UnspecifiedPlatform()
     with pytest.raises(RuntimeError, match="UnspecifiedPlatform"):
         select_cuda_platform()
