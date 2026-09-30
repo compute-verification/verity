@@ -6,7 +6,8 @@
 #   bash run.sh time [MxNxK ...]   the check, then dev.py's self-timing per format (default the two headline shapes; not a panel number)
 # Nothing is built here.  Python: $PY, else python3 when it has numpy, else `uv run --with numpy`.
 # Exit: 3 identity refused; 5 the tree does not match its manifest; 4 a buffer differs (nothing timed); else dev.py's.
-# Outputs under $RESEARCH_RUN_DIR/out (or ./out): identity.txt, env.txt, inputs.check, smi_trace.csv, check.jsonl, time.jsonl.
+# Outputs under $RESEARCH_RUN_DIR/out (or ./out): identity.txt, env.txt, inputs.check, toolchain.txt (nvcc and its flags),
+# smi_trace.csv, check.jsonl, time.jsonl.
 set -uo pipefail
 cd "$(dirname "$0")"
 MODE=${1:-check}; shift || true
@@ -22,6 +23,7 @@ fi
 { nvidia-smi -i "$IDX" -q -d CLOCK,PERFORMANCE,POWER; python3 --version; lscpu | grep -E "Model name|^CPU\(s\)"
   grep PRETTY /etc/os-release; } > "$OUT/env.txt" 2>&1
 if ! sha256sum -c MANIFEST.sha256 > "$OUT/inputs.check" 2>&1; then echo "REFUSED: the tree does not match MANIFEST.sha256"; exit 5; fi
+cp toolchain.txt "$OUT/toolchain.txt"
 PY=${PY:-python3}
 if ! $PY -c "import numpy" 2> /dev/null; then PY="uv run --no-project --with numpy python3"; fi
 nvidia-smi -i "$IDX" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,clocks_throttle_reasons.active,utilization.gpu \
