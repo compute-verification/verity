@@ -1,0 +1,49 @@
+# A prover development run on the Nebius cluster (Flock, Ligero, GKR, SP1: correctness, not timing): queue provers, priority dev.
+#
+#   sky jobs launch -n prover-<what> tools/research/src/research/pods/nebius/sky/jobs/prover-dev.yaml \
+#     --env CMD='cargo test --release -p ...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# Resources from the M0 prover's measured peak: a GPU busy 0-6% of wall time, 1-5 cores with bursts to 17, 2-17 GiB of RAM.
+# A class sweep peaks at 40-150 GiB: --memory 160.
+name: prover-dev
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 8
+  labels:
+    budget-line: nebius-prover-dev
+  memory: 24
+
+workdir: .
+
+envs:
+  CMD: null
+  CAMPAIGN: nebius-provers
+  RESEARCH_RUNS: /workspace/research/runs
+  CARGO_TARGET_DIR: /workspace/cache/cargo-target
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+run: |
+  set -euo pipefail
+  PYTHONPATH=$PWD/tools/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source -- bash -c "$CMD"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: provers
+          kueue.x-k8s.io/priority-class: dev
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

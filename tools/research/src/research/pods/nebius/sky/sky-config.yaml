@@ -1,0 +1,9 @@
+# The SkyPilot API server's ~/.sky/config.yaml on vy-nebius-1 (cluster_up.sh installs it).
+# Managed jobs' controller runs on the pool itself, outside Kueue (SkyPilot never queues its controllers), so it is kept small:
+# kueue.yaml's quotas leave 4 vCPU and ~26 GiB of the node for it and the system pods.
+jobs:
+  controller:
+    resources:
+      infra: ssh/vy-nebius
+      cpus: 2
+      memory: 8

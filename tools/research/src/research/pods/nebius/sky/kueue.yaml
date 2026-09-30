@@ -1,0 +1,90 @@
+# Kueue on the Nebius cluster (Kueue v0.19.6, applied by cluster_up.sh). The weekly retune edits only this file: the nominalQuota
+# lines below, from usage_report.py's summary.
+#
+# One cohort (nebius), two ClusterQueues. Either may borrow the other's idle capacity (no borrowingLimit), and a queue reclaiming
+# its own nominal quota preempts the borrower whatever its priority (reclaimWithinCohort: Any). Within a queue, and when
+# borrowing, only lower priorities are preempted.
+#
+# The nominal quotas sum to less than vy-nebius-1's allocatable (192 vCPU, ~1,690 GiB): Kueue admits by quota, not by what the
+# scheduler can place, so a quota past allocatable admits pods that stay Pending. The rest goes to k3s, Kueue, SkyPilot's pods
+# and the DCGM exporter. Asked for: circuits 4 GPU / 144 vCPU / ~1.3 TiB, provers 4 GPU / 48 vCPU / ~400 GiB.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata: {name: vy-nebius-1}
+spec:
+  nodeLabels: {verity.dev/server: vy-nebius-1}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: circuits}
+spec:
+  cohortName: nebius
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    borrowWithinCohort: {policy: LowerPriority}
+    withinClusterQueue: LowerPriority
+  resourceGroups:
+  - coveredResources: [nvidia.com/gpu, cpu, memory]
+    flavors:
+    - name: vy-nebius-1
+      resources:
+      - {name: nvidia.com/gpu, nominalQuota: 4}
+      - {name: cpu, nominalQuota: 142}
+      - {name: memory, nominalQuota: 1280Gi}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: provers}
+spec:
+  cohortName: nebius
+  namespaceSelector: {}
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    borrowWithinCohort: {policy: LowerPriority}
+    withinClusterQueue: LowerPriority
+  resourceGroups:
+  - coveredResources: [nvidia.com/gpu, cpu, memory]
+    flavors:
+    - name: vy-nebius-1
+      resources:
+      - {name: nvidia.com/gpu, nominalQuota: 4}
+      - {name: cpu, nominalQuota: 46}
+      - {name: memory, nominalQuota: 384Gi}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: circuits, namespace: default}
+spec: {clusterQueue: circuits}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: provers, namespace: default}
+spec: {clusterQueue: provers}
+---
+# Priorities, highest first. A job names one with the pod label kueue.x-k8s.io/priority-class.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: sweep-night}
+value: 1000
+description: the night's vLLM config sweep
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: circuits}
+value: 500
+description: daytime config runs and port-lane captures
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: prover-bench}
+value: 300
+description: timed prover runs, in a quiet window (jobs/prover-bench.yaml)
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata: {name: dev}
+value: 100
+description: prover development and anything else that can wait

@@ -1,0 +1,57 @@
+# A port-lane capture on the Nebius cluster (the sm_120 GEMM correspondence, the FA2 capture, the e4m3 step probe, the 188-SM
+# kernels): queue circuits, priority circuits. It runs no Build, so it doesn't block a prover bench.
+#
+#   sky jobs launch -n capture-<what> tools/research/src/research/pods/nebius/sky/jobs/port-capture.yaml \
+#     --env CMD='python -m tc_probe ...' --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# Resources: one GPU (a TP2 capture: --gpus RTXPRO6000:2), and the small-dense class's host peak, 94-188 GB, since a capture
+# serves a model without a Build. No capture has a recorded peak on the PRO 6000 yet: take the first run's peak from its Attempt's
+# telemetry and lower --memory.
+name: port-capture
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 16
+  labels:
+    budget-line: nebius-port-capture
+  memory: 192
+
+workdir: .
+
+envs:
+  CMD: null
+  CAMPAIGN: vllm-sm120-port
+  HF_HOME: /workspace/hf
+  HF_HUB_OFFLINE: "1"
+  RESEARCH_RUNS: /workspace/research/runs
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  cd integrations/vllm
+  flock /workspace/.vllm-bootstrap.lock env WORK=/workspace bash verity_vllm/ops/pod_bootstrap.sh
+
+run: |
+  set -euo pipefail
+  PYTHONPATH=$PWD/tools/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source -- bash -c "$CMD"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: circuits
+          kueue.x-k8s.io/priority-class: circuits
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}

@@ -1,0 +1,67 @@
+# A vLLM config run (one sweep row) on the Nebius cluster: queue circuits, priority circuits. The night sweep submits the same
+# file with the priority label set to sweep-night (the runbook's one-line sed).
+#
+#   sky jobs launch -n row-<id> tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml \
+#     --env ROW=<row-id> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha> \
+#     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#
+# Resources are the measured peak of the 1-7B dense class, B 8-64 (#23, #60, #67, #68): 240-512 GB of host RAM, the Build on 1-4
+# cores (16 vCPU per GPU is the fleet plan's floor), ~200 GB on /workspace. Other classes override on the command line:
+#   small dense, B <= 16 (#4, #101)     --memory 192                                 94-188 GB
+#   long context 4096/512 (#11, #39)    --memory 512                                 the Build alone peaks at ~486 GiB
+#   TP2 (#70, #75)                      --gpus RTXPRO6000:2 --cpus 32 --memory 384   >= 377 GB
+# A row can't be checkpointed yet (5-11 h), so a preempted row restarts from scratch: size the night so its rows fit circuits'
+# nominal quota, which nothing reclaims.
+name: config-run
+
+resources:
+  infra: ssh/vy-nebius
+  accelerators: RTXPRO6000:1
+  cpus: 16
+  labels:
+    budget-line: nebius-config-run
+  memory: 512
+
+workdir: .
+
+envs:
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  HF_HUB_OFFLINE: "1"
+  RESEARCH_RUNS: /workspace/research/runs
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  cd integrations/vllm
+  flock /workspace/.vllm-bootstrap.lock env WORK=/workspace bash verity_vllm/ops/pod_bootstrap.sh --cases "$ROLE"
+
+run: |
+  set -euo pipefail
+  PYTHONPATH=$PWD/tools/research/src python3 -m research run --campaign "$CAMPAIGN" --cwd source -- \
+    bash -c 'cd integrations/vllm && /workspace/venv312/bin/python -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REVISION"'
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: circuits
+          kueue.x-k8s.io/priority-class: circuits
+          verity.dev/build: "true"
+      spec:
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
