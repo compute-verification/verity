@@ -10,7 +10,9 @@ chain a NaN code, and its loops are pinned whole; the 16-bit adds' chains are pi
 halves, add.rn.f16x2's each half), their timing rows keep every model step exact, their loops (add.rn.f16x2 split 32 / 32 over HADD2
 and HFMA2) and the FP16 leaf's are pinned, and their prices and recorded fractions of FADD's rate are checked; the MMA / HADD2
 co-issue loops' chains, words (accumulators on even warps, chains on odd) and loops are pinned, and their table reads both rates
-per N; unwritten words must
+per N; the rewrite-mix schedule issues the counts the SASS gate pins, has no two equal MMAs and reads every load, its model follows
+the MMA fragment layout and is exact on the gate's rows, its loops are pinned (MOVs aside; no spill, no FTZ, registers in the
+window), and its table reads t_mix / t_solo; unwritten words must
 keep the poison, and a device whose no-write control passes
 the gate fails the run; the fill lease writes a header the runner parses, records the child's exit status (no retry turns a failed
 gate into a pass), waits out the runner's move-then-log order and withdraws a job that never starts.  With nvcc on the PATH, the
@@ -401,6 +403,158 @@ def test_coissue_table(tmp_path, no_nvcc):
     assert [t[k]["mma_fraction_of_alone"] for k in ("hmma_f16_f32", "coissue_h4", "coissue_h128", "coissue_h256")] == pytest.approx([1, 1, 1, 0.5])
     assert [t[k]["hadd2_fraction_of_alone"] for k in ("coissue_h4", "coissue_h128", "coissue_h256")] == pytest.approx([1 / 32, 1, 1])
     assert t["coissue_h128"]["utilization_sum"] == pytest.approx(2) and t["coissue_h128"]["sm_clocks_per_warp_iteration"] == pytest.approx(64)
+
+
+def _mix(name: str) -> int:
+    return w1.MIX_OPS[list(w1.MIX).index(name)]
+
+
+@pytest.mark.parametrize("op", w1.MIX_OPS)
+def test_mix_schedule_issues_the_loop_counts(op):
+    """The schedule mix_model runs issues what the SASS gate pins: 4 HADD2 per A block-add and 2 per B, 4 FADD per merge and per
+    promotion, one ldmatrix per load, 64 MMAs, the converts."""
+    steps = collections.Counter()
+    for slot in w1.mix_schedule(op):
+        for s in slot:
+            steps[s[0] if s[0] != "add" else ("add", s[1])] += 1
+    nh, nf, nl, nc = w1.MIX_COUNTS[op]
+    assert 4 * steps[("add", 0)] + 2 * steps[("add", 1)] == nh and 4 * (steps["merge"] + steps["promote"]) == nf
+    assert (steps["ldsm"], steps["mma"], steps["cvt"], steps["promote"]) == (nl, 64, nc, 16 * (nf > 0))
+
+
+def _mix_symbolic(op: int):
+    """Two iterations of the schedule over value numbers from opaque loop-carried starts: the first iteration's MMAs as (form,
+    accumulator-in) keys, and the loads (and converted loads) that no block-add reads before their sub-block is reloaded."""
+    table: dict = {}
+
+    def vn(*key):
+        return table.setdefault(key, len(table))
+
+    p = w1.mix_params(op)
+    pools = [[[vn("sa", t, r) for r in range(4)] for t in range(p["NSA"])], [[vn("sb", t, q) for q in range(2)] for t in range(p["NSB"])]]
+    x = [[vn("x", c, r) for r in range(6)] for c in range(4)]
+    acc = [[vn("acc", c, i) for i in range(4)] for c in range(4)]
+    mmas, live, unread = [], {}, []
+    for it in range(2):
+        for k, slot in enumerate(w1.mix_schedule(op)):
+            for s in slot:
+                if s[0] == "ldsm":
+                    if s[1:3] in live and not live[s[1:3]]["read"]:
+                        unread.append(live[s[1:3]])
+                    pools[s[1]][s[2]] = [vn("ldsm", it, k, s[1], s[2], q) for q in range(len(s[3]))]
+                    live[s[1:3]] = {"iteration": it, "slot": k, "pool": s[1:3], "read": False, "converted": False}
+                elif s[0] == "cvt":
+                    pools[1][s[1]][1] = vn("cvt", pools[1][s[1]][1])
+                    live[(1, s[1])]["converted"] = True
+                elif s[0] == "add":
+                    _, role, c, lhs, rhs = s
+                    off, nr = (0, 4) if role == 0 else (4, 2)
+                    for t in {rhs} | ({lhs} - {None}):
+                        if (role, t) in live:
+                            live[(role, t)]["read"] = True
+                    left = x[c][off:off + nr] if lhs is None else pools[role][lhs]
+                    x[c][off:off + nr] = [vn("add", left[q], pools[role][rhs][q]) for q in range(nr)]
+                elif s[0] == "mma":
+                    key = ("mma", tuple(x[s[1]]), "zero" if s[2] else tuple(acc[s[1]]))
+                    if it == 0:
+                        mmas.append(key)
+                    acc[s[1]] = [vn(*key, i) for i in range(4)]
+                elif s[0] == "merge":
+                    acc[s[1]] = [vn("fadd", acc[s[1]][i], acc[(s[1] + 2) % 4][i]) for i in range(4)]
+    return mmas, [u for u in unread if u["iteration"] == 0]
+
+
+@pytest.mark.parametrize("op", w1.MIX_OPS)
+def test_mix_schedule_has_no_equal_mmas_and_reads_every_load(op):
+    """ptxas merges MMAs with equal operands and deletes dead loads, which would change the counts timed: within an iteration no
+    two MMAs share their form and accumulator-in, and every sub-block loaded (a converted one too) is read by a block-add before
+    its reload."""
+    mmas, unread = _mix_symbolic(op)
+    assert len(set(mmas)) == len(mmas) == 64
+    assert unread == []
+
+
+def test_mma16816_follows_the_fragment_layout():
+    """mma16816's reshapes against the m16n8k16 fragment layout written out lane by lane."""
+    rng = np.random.default_rng(3)
+    x, acc = rng.integers(-40, 41, (6, 32, 2)), rng.integers(-1000, 1001, (4, 32))
+    a, b, c = np.zeros((16, 16), np.int64), np.zeros((16, 8), np.int64), np.zeros((16, 8), np.int64)
+    for lane in range(32):
+        g, t = divmod(lane, 4)
+        for h in range(2):
+            a[g, 2 * t + h], a[g + 8, 2 * t + h], a[g, 2 * t + 8 + h], a[g + 8, 2 * t + 8 + h] = x[0:4, lane, h]
+            b[2 * t + h, g], b[2 * t + 8 + h, g] = x[4:6, lane, h]
+            c[g, 2 * t + h], c[g + 8, 2 * t + h] = acc[h, lane], acc[2 + h, lane]
+    d = a @ b + c
+    want = np.array([[d[g + 8 * (i // 2), 2 * t + i % 2] for g in range(8) for t in range(4)] for i in range(4)])
+    assert (w1.mma16816(x, acc) == want).all()
+    assert (w1.mma16816(x, None) == want - acc).all()
+
+
+@pytest.mark.parametrize("op", w1.MIX_OPS)
+def test_mix_gate_words_are_exact_and_not_vacuous(op):
+    """On the gate's rows every step of the model is exact (it raises otherwise), and most accumulator words are nonzero; the
+    timing rows, off the 1/4 grid, can't be gated."""
+    w = w1.expected_words(op, w1.GATE_ITERS, w1.mix_gate_rows(np.random.default_rng(w1.F8.SEED_DEFAULT)))
+    assert (w[0::2] != 0).mean() > 0.9 and (w[:64] == w[64:128]).all()
+    if w1.MIX_COUNTS[op][1]:
+        assert (w[1::2] != 0).mean() > 0.9
+    with pytest.raises(ValueError, match="1/4 grid"):
+        w1.mix_model(op, 1, w1.timing_rows(op, np.random.default_rng(0)))
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_mix_timing_rows_never_convert_a_nan(seed):
+    rows = w1.timing_rows(w1.MIX_OPS[0], np.random.default_rng(seed))
+    for sh in (0, 8, 16, 24):
+        assert not np.isin((rows >> np.uint32(sh)) & np.uint32(0xFF), w1.E4M3_NAN).any()
+
+
+def _mix_sass(body: list[str], kernel: str, outside: list[str] = ()) -> str:
+    text = _sass(body, kernel)
+    return text + "".join(f"        /*{0xf000 + 16 * i:04x}*/                   {op} R0, R1 ;\n" for i, op in enumerate(outside))
+
+
+def _usage(kernel: str, reg: int, stack: int = 0, local: int = 0) -> str:
+    return (f" Function _ZN12_GLOBAL__N_1{len(kernel)}{kernel}EPKjPjPxPii:\n"
+            f"  REG:{reg} STACK:{stack} SHARED:1040 LOCAL:{local} CONSTANT[0]:932 TEXTURE:0 SURFACE:0 SAMPLER:0\n")
+
+
+_MIX48 = (["LDSM.16.M88.4"] * 14 + ["LDSM.16.M88.2"] * 14 + ["HADD2"] * 192 + ["HMMA.16816.F32"] * 64 + ["FADD"] * 68 + ["STS"] * 4
+          + ["LDS"] * 4 + ["MOV"] * 101 + ["NOP"] * 10 + _U)
+
+
+@pytest.mark.parametrize("kernel, body, outside, reg, stack, ok", [
+    ("mix_h48_f17_rate", _MIX48, [], 236, 0, True), ("mix_h48_f17_rate", [o for o in _MIX48 if o != "MOV"], [], 232, 0, True),
+    ("mix_h48_f17_rate", _MIX48, ["FADD.FTZ"], 236, 0, False), ("mix_h48_f17_rate", _MIX48, ["STL"], 236, 0, False),
+    ("mix_h48_f17_rate", _MIX48, [], 240, 8, False), ("mix_h48_f17_rate", _MIX48, [], 230, 0, False),
+    ("mix_h48_f17_rate", _MIX48, [], 241, 0, False), ("mix_h48_f17_rate", _MIX48[1:], [], 236, 0, False),
+    ("mix_h48_f17_rate", _MIX48 + ["PRMT"], [], 236, 0, False), ("mix_h48_f17_rate", _MIX48 + ["HADD2"], [], 236, 0, False),
+    ("mix_h256_f17_rate", _MIX48[:28] + ["HADD2"] * 1024 + _MIX48[220:], [], 226, 0, True)])
+def test_sass_gate_pins_the_mix_loop(monkeypatch, kernel, body, outside, reg, stack, ok):
+    """A mix loop is exactly its MMAs, adds, FADDs, converts, ldmatrix and STS / LDS, whatever MOVs and NOPs ptxas adds; the kernel
+    has no FTZ, no local-memory spill and no stack, and its registers are in the rewrite's window (h256_f17's floor lower)."""
+    sass, usage = _mix_sass(body, kernel, outside), _usage(kernel, reg, stack)
+    monkeypatch.setattr(w1.subprocess, "run", lambda cmd, **k: type("P", (), {"stdout": usage if "-res-usage" in cmd else sass})())
+    rec = w1.sass_gate(Path("/nonexistent.so"), None)["kernels"][kernel.removesuffix("_rate")]
+    assert rec["ok"] is ok, rec
+
+
+def test_mix_table(tmp_path, no_nvcc, monkeypatch):
+    """With fake rates whose adds and FADDs overlap the MMAs, the deciding point runs at the leaf's rate and h256_f17 at the adds'
+    (0.5 SM-clocks each over 256): t_mix / t_solo 1 and 529 / 256, recorded as Derived."""
+    code, res = _run(tmp_path, "--ops", "hmma_f16_f32,mix_h0_f0,mix_h48_f17,mix_h256_f17")
+    assert code == 0, res["failures"]
+    g = res["numeric_gate"]["ops"]["mix_h48_f17"]
+    assert g["mismatches"] == 0 and g["negative_control"]["rejected"] and g["data"].startswith("per-lane FP16 halves")
+    t = res["prices"]["rewrite_mix"]
+    assert t["mix_h48_f17"]["per_16_hmma"] == {"hadd2": 48, "fadd": 17, "ldmatrix": 7, "cvt": 0, "sts_lds_pairs": 1}
+    assert [t[k]["t_mix_over_t_solo"] for k in ("mix_h0_f0", "mix_h48_f17", "mix_h256_f17")] == pytest.approx([1, 1, 529 / 256])
+    assert t["mix_h256_f17"]["t_mix_over_t_h0_f0"] == pytest.approx(529 / 256)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    w1.finish(tmp_path, w1.parser().parse_args(["--out", str(tmp_path)]), {**res, "clocks": "locked-2100"}, [], {"device": "fake"}, 0.0)
+    meas = {m["name"]: m for m in json.loads((tmp_path / "result.json").read_text())["measurements"]}
+    assert meas["rewrite_mix.mix_h48_f17.t_mix_over_t_solo"]["label"] == "Derived (from Measured locked-2100 rates)"
 
 
 @pytest.fixture

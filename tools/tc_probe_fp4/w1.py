@@ -9,7 +9,9 @@ strides and at the port's), each fed by one FADD per code or by no per-code inpu
 accumulation (the leaf beside the E4M3 atom), the 16-bit adds (HADD2 alone, add.rn.f16x2 as ptxas splits it over HADD2 and HFMA2,
 HFMA2, the widening HADD2.F32 and the mixed FHADD, each in SM-clocks per warp instruction and as a fraction of FADD's rate), their
 co-issue (the leaf's 16 MMAs with N = 4 ... 256 HADD2 per loop iteration: both rates per N, each as a fraction of its loop alone),
-and the prices W1 reads off them.
+the FP8 v1 rewrite's per-MMA instruction mix (64 HMMA.16816.F32 a loop iteration among its packed-half adds, FADDs, ldmatrix,
+converts and a shared-memory round trip, 8 warps an SM at 232-240 registers: t_mix / t_solo against the leaf), and the prices W1
+reads off them.
 
     python tools/tc_probe_fp4/w1.py --out $RESEARCH_RUN_DIR --expect-gpu-uuid GPU-... [--reps 10] [--target-cycles 134217728]
                                     [--ops qmma_e4m3_f32,qmma_sp_e4m3] [--prebuilt libw1_prices_sm_120a.so] [--lease-max-min 10]
@@ -30,8 +32,9 @@ their clock label (unlocked unless the operator says otherwise, e.g. locked-2100
 
 Gates, in order, before anything is timed: the device (``fp8.identity_gate``: one visible device, its UUID, sm_120); the SASS gate
 (each op's loop body holds exactly its instruction, NACC x UNROLL MMAs or 64 scalar instructions, and for the cast-and-store loops
-exactly their FADD feed, support and stores too; the FP16 converts' and 16-bit adds' loops are pinned whole; its full loop
-composition is recorded); the numeric gate (all-ones operands give
+exactly their FADD feed, support and stores too; the FP16 converts' and 16-bit adds' loops are pinned whole, the mix loops whole
+but their MOVs, with no spill or FTZ in the kernel and their registers in the window; its full loop composition is recorded); the
+numeric gate (the mix loops against ``mix_model`` in exact integers on per-lane rows of the FP16 1/4 grid; all-ones operands give
 exact integers for every atom and FADD / FFMA, and for the packed and paired adds 1 in the low word and 2 in the high, so a swapped
 half shows; the casts are checked against ``fp8.cvt_ref`` and ``e2m1_ref`` on the timing data, the cast-and-store loops on the words
 they leave in shared memory, the FP16 converts against the registered decode ``verity.ml.tc.term.decode_e4m3`` on their chains
@@ -48,6 +51,7 @@ from __future__ import annotations
 import argparse
 import collections
 import ctypes
+import functools
 import json
 import os
 import re
@@ -121,6 +125,19 @@ COISSUE_N = (4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 112, 128, 160, 192, 256)
 COISSUE_OPS = tuple(range(len(OPS), len(OPS) + len(COISSUE_N)))
 OPS += [(f"coissue_h{n}", "HMMA.16816.F32", NACC * UNROLL, 16 * 8 * 16, "MAC") for n in COISSUE_N]
 HADD2_PER_LOOP = dict(zip(COISSUE_OPS, COISSUE_N))
+#: the FP8 v1 rewrite's instruction mix per FP16 MMA (bc-3006c44a's rewrite-mix.md), one block of MIX_WARPS warps per SM: per warp and
+#: loop iteration 64 HMMA.16816.F32 among (packed-half adds, FADD, ldmatrix, E4M3-to-FP16 converts), w1_prices.cu's MixP
+MIX = {"r1_lb_flat": (120, 76, 30, 3), "r1_lb_br": (120, 248, 30, 3), "r2_lb_flat": (352, 84, 28, 3), "r2_lb_br": (352, 144, 28, 3),
+       "r2_con_flat": (992, 84, 28, 3), "h0_f0": (0, 0, 0, 0), "h0_f17": (0, 68, 0, 0),
+       **{f"h{n}_f17": (4 * n, 68, 28, 0) for n in (32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 256)}}
+MIX_OPS = tuple(range(len(OPS), len(OPS) + len(MIX)))
+OPS += [(f"mix_{name}", "HMMA.16816.F32", 64, 16 * 8 * 16, "MAC") for name in MIX]
+MIX_COUNTS = dict(zip(MIX_OPS, MIX.values()))
+MIX_WARPS = 8
+#: the rewrite's registers per thread, which __maxnreg__(240) and each kernel's ballast hold; h256_f17 and r2_con_flat land at 226
+#: with two ballast words and spill with four, so their floor is lower
+MIX_REG = (232, 240)
+MIX_REG_FLOOR = {"mix_h256_f17": 224, "mix_r2_con_flat": 224}
 UNIT_OP = "qmma_e4m3_f32"
 _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_nvf4_rate", "hmma_bf16_f32_rate", "hmma_f16_f16_rate",
            "fadd_rate", "ffma_rate", "f2fp_rate", "f2fp_u16_rate", "fadd_f32x2_rate", "fadd_pairs_rate",
@@ -129,7 +146,7 @@ _KERNEL = ["qmma_e4m3_f32_rate", "qmma_e4m3_f16_rate", "qmma_mxf8_rate", "omma_n
            "cs_w64_fadd_rate", "cs_w64_nogen_rate", "cs_w128_fadd_rate", "cs_w128_nogen_rate",
            "cs_w64_nogen_r144_rate", "cs_w128_nogen_r144_rate", "f2fp_f16_rate", "f2fp_f16_half_rate",
            "f2fp_f16_xor_rate", "hmma_f16_f32_rate", "hadd2_rate", "add_f16x2_rate", "hfma2_rate", "hadd2_f32_rate",
-           "fhadd_rate", *(f"coissue_h{n}_rate" for n in COISSUE_N)]  # w1_prices.cu's KERNELS, in op order
+           "fhadd_rate", *(f"coissue_h{n}_rate" for n in COISSUE_N), *(f"mix_{name}_rate" for name in MIX)]  # w1_prices.cu's KERNELS
 SP_OP = 15
 CS_OPS = tuple(range(16, 26))
 CS_FADD = (16, 18, 20, 22)  # fed by one FADD per code; the others need no per-code input
@@ -162,18 +179,28 @@ _FAKE_RATE = {"qmma_e4m3_f32": 1024, "qmma_e4m3_f16": 1024, "qmma_mxf8_e4m3": 10
               "f2fp_f16_e4m3": 128, "f2fp_f16_e4m3_half": 96, "f2fp_f16_e4m3_xor": 64, "hmma_f16_f32": 512, "hadd2": 64,
               "add_f16x2": 128, "hfma2": 64, "hadd2_f32": 64, "fhadd": 128,
               # the co-issue loops as if the HADD2 pipe (0.5 SM-clocks each) overlapped the MMAs' 64 SM-clocks per warp iteration
-              **{f"coissue_h{n}": 16 * 2048 / max(64, 0.5 * n) for n in COISSUE_N}}
+              **{f"coissue_h{n}": 16 * 2048 / max(64, 0.5 * n) for n in COISSUE_N},
+              # the mixes as if HADD2 (0.5 SM-clocks) and FADD (0.25) overlapped the MMAs' 256 SM-clocks per warp iteration
+              **{f"mix_{name}": 64 * 2048 / max(256, 0.5 * nh + 0.25 * nf) for name, (nh, nf, _, _) in MIX.items()}}
+
+
+def op_warps(op: int) -> int:
+    """Warps per block: the mix kernels run MIX_WARPS (w1_prices.cu's MIX_THREADS), the rest WARPS."""
+    return MIX_WARPS if op in MIX_OPS else WARPS
 
 
 # --- SASS gate ----------------------------------------------------------------------------------------------------------------------
 
 
-def loop_bodies(text: str) -> dict[str, collections.Counter]:
-    """Per rate kernel: the opcode multiset of its one backward-branch loop (predicates stripped)."""
-    out: dict[str, collections.Counter] = {}
+def _kernel_name(mangled: str) -> str | None:
+    return next((k for k in _KERNEL if f"{len(k)}{k}E" in mangled), None)
+
+
+def kernel_instructions(text: str) -> dict[str, list[tuple[int, str, str]]]:
+    """Per rate kernel: its instructions as (address, opcode with its predicate stripped, operands)."""
+    out = {}
     for chunk in re.split(r"\n\s+Function : ", text)[1:]:
-        fn = chunk.split("\n", 1)[0]
-        name = next((k for k in _KERNEL if f"{len(k)}{k}E" in fn), None)
+        name = _kernel_name(chunk.split("\n", 1)[0])
         if name is None:
             continue
         ins = []
@@ -181,6 +208,24 @@ def loop_bodies(text: str) -> dict[str, collections.Counter]:
             m = re.match(r"\s+/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P\w+\s+)?([A-Z0-9_.]+)(.*?);", line)
             if m:
                 ins.append((int(m.group(1), 16), m.group(2), m.group(3)))
+        out[name] = ins
+    return out
+
+
+def res_usage(text: str) -> dict[str, dict[str, int]]:
+    """Per rate kernel: REG, STACK and LOCAL from ``cuobjdump -res-usage``."""
+    out = {}
+    for m in re.finditer(r"Function (\S+):\s*\n\s*REG:(\d+) STACK:(\d+) SHARED:\d+ LOCAL:(\d+)", text):
+        name = _kernel_name(m.group(1))
+        if name is not None:
+            out[name] = {"REG": int(m.group(2)), "STACK": int(m.group(3)), "LOCAL": int(m.group(4))}
+    return out
+
+
+def loop_bodies(text: str) -> dict[str, collections.Counter]:
+    """Per rate kernel: the opcode multiset of its one backward-branch loop (predicates stripped)."""
+    out: dict[str, collections.Counter] = {}
+    for name, ins in kernel_instructions(text).items():
         loops = []
         for addr, op, rest in ins:
             t = re.search(r"0x([0-9a-f]+)", rest)
@@ -197,9 +242,10 @@ def loop_bodies(text: str) -> dict[str, collections.Counter]:
 def sass_gate(so: Path, out: Path | None) -> dict:
     cuobjdump = str(Path(P4.nvcc_bin()).parent / "cuobjdump")
     text = subprocess.run([cuobjdump, "-sass", str(so)], capture_output=True, text=True, check=True).stdout
+    usage = res_usage(subprocess.run([cuobjdump, "-res-usage", str(so)], capture_output=True, text=True, check=True).stdout)
     if out is not None:
         (out / "sass_w1_prices.txt").write_text(text)
-    bodies = loop_bodies(text)
+    bodies, ins = loop_bodies(text), kernel_instructions(text)
     kernels = {}
     for i, (name, opcode, per_loop, _, _) in enumerate(OPS):
         body = bodies.get(_KERNEL[i], collections.Counter())
@@ -210,8 +256,26 @@ def sass_gate(so: Path, out: Path | None) -> dict:
         if i in COISSUE_OPS:  # the whole loop but those and the NOPs ptxas spaces the MMAs with, recorded in the loop
             expected = {opcode: per_loop, "HADD2": HADD2_PER_LOOP[i]}
             watched = {k: v for k, v in body.items() if not k.startswith(("U", "BRA", "NOP"))}
-        kernels[name] = {"kernel": _KERNEL[i], "loop": dict(sorted(body.items())), "expected": expected, "ok": watched == expected}
+        rec = {"kernel": _KERNEL[i], "loop": dict(sorted(body.items()))}
+        ok = True
+        if i in MIX_OPS:  # the whole loop but those and the register copies (MOV), recorded; no spill or FTZ in the kernel
+            expected = mix_loop(i)
+            watched = {k: v for k, v in body.items() if not (k.startswith(("U", "BRA")) or k in ("NOP", "MOV"))}
+            reg, lo = usage.get(_KERNEL[i], {}), MIX_REG_FLOOR.get(name, MIX_REG[0])
+            bad = sorted({op for _, op, _ in ins.get(_KERNEL[i], []) if ".FTZ" in op or op.startswith(("LDL", "STL"))})
+            rec |= {"registers": reg, "register_window": [lo, MIX_REG[1]], "forbidden_in_kernel": bad, "movs": body.get("MOV", 0)}
+            ok = not bad and reg.get("STACK") == 0 and reg.get("LOCAL") == 0 and lo <= reg.get("REG", -1) <= MIX_REG[1]
+        kernels[name] = rec | {"expected": expected, "ok": ok and watched == expected}
     return {"ok": all(k["ok"] for k in kernels.values()), "kernels": kernels}
+
+
+def mix_loop(op: int) -> dict[str, int]:
+    """A mix loop's instructions besides the uniform datapath, branch, NOPs and MOVs: its 64 MMAs, NH HADD2, NF FADD, NC converts,
+    the ldmatrix (x4 for the A pool, x2 for the B pool) and 4 STS / LDS (the promotions' shared-memory round trip) when NF > 0."""
+    nh, nf, nl, nc = MIX_COUNTS[op]
+    want = {"HMMA.16816.F32": 64, "HADD2": nh, "FADD": nf, "F2FP.F16.E4M3.UNPACK_B": nc, "LDSM.16.M88.4": (nl + 1) // 2,
+            "LDSM.16.M88.2": nl // 2, "STS": 4 * (nf > 0), "LDS": 4 * (nf > 0)}
+    return {k: v for k, v in want.items() if v}
 
 
 # --- devices ------------------------------------------------------------------------------------------------------------------------
@@ -226,7 +290,7 @@ class Device(F8.Device):
 
     def __init__(self, so: Path):
         self.lib = ctypes.CDLL(str(so))
-        for name in ("w1_run", "w1_device", "device_info"):
+        for name in ("w1_run", "w1_device", "device_info", "w1_op_threads"):
             getattr(self.lib, name).restype = ctypes.c_int
         sms, smem, khz = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
         rc = self.lib.w1_device(ctypes.byref(sms), ctypes.byref(smem), ctypes.byref(khz))
@@ -234,6 +298,7 @@ class Device(F8.Device):
             raise RuntimeError(f"CUDA error {rc} in w1_device")
         self.sms, self.smem_per_sm, self.clock_khz = sms.value, smem.value, khz.value
         assert self.lib.w1_nops() == len(OPS) and self.lib.w1_threads() == THREADS
+        assert all(self.lib.w1_op_threads(op) == 32 * op_warps(op) for op in range(len(OPS)))
 
     def run(self, op: int, iters: int, rows: np.ndarray, negative: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
         """One launch; ``negative`` is the no-write control: w1_run poisons the buffers and launches nothing."""
@@ -266,7 +331,7 @@ class FakeDevice:
         if self.corrupt is not None:
             chk.reshape(-1)[self.corrupt % chk.size] ^= 1
             self.corrupt = None
-        cyc = WARPS * iters * per_loop * work / _FAKE_RATE[name]
+        cyc = op_warps(op) * iters * per_loop * work / _FAKE_RATE[name]
         cycles = np.full(self.sms, int(cyc), np.int64)
         return chk, cycles, np.arange(self.sms, dtype=np.int32), cyc / (self.clock_khz * 1e3) * 1e3
 
@@ -496,6 +561,135 @@ def coissue_chains(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
     return np.stack([by_steps[s] for s in steps], 1)
 
 
+def mix_params(op: int) -> dict:
+    """w1_prices.cu's MixP: NA A-form block-adds (4 HADD2 each) and NB B-form ones (2 each), chain u's shares na[u] and nb[u], the
+    pools of NSA x4 and NSB x2 sub-blocks, M merges an iteration, and whether each group's MMAs restart from zero."""
+    nh, nf, nl, nc = MIX_COUNTS[op]
+    na_ = 2 * (nh // 12)
+    nb_ = (nh - 4 * na_) // 2
+    return {"NH": nh, "NF": nf, "NL": nl, "NC": nc, "NA": na_, "NB": nb_, "NSA": (nl + 1) // 2 if nl else 1, "NSB": nl // 2 if nl else 1,
+            "M": (nf - 64) // 4 if nf else 0, "restart": nh > 0 and nf > 0,
+            "na": [(u + 1) * na_ // 4 - u * na_ // 4 for u in range(4)], "nb": [(u + 1) * nb_ // 4 - u * nb_ // 4 for u in range(4)]}
+
+
+@functools.cache
+def mix_schedule(op: int) -> tuple[tuple[tuple, ...], ...]:
+    """A mix loop iteration's 64 slots, each its steps in mix_slot's order: ("ldsm", role, t, matrices) loads sub-block t of the A
+    pool (role 0, an x4) or the B pool (1, an x2), register q from the warp's matrix matrices[q]; ("cvt", t) converts word 1 of B
+    sub-block t; ("add", role, c, lhs, rhs) is a block-add on chain c's form (role 0: words 0..3 from the A pool, 1: words 4 and 5
+    from the B pool), X = pool[lhs] + pool[rhs], or X + pool[rhs] when lhs is None; ("mma", c, zero) is chain c's MMA on its
+    form, from zero or from acc[c]; ("merge", c) is acc[c] += acc[(c + 2) % 4]; ("promote", c, q) is tot[4q + i] += acc[c][i]."""
+    p = mix_params(op)
+    slots = []
+    for k in range(64):
+        c, w, r = k % 4, k % 16, k // 4
+        steps: list[tuple] = []
+        for ld in range(k * p["NL"] // 64, (k + 1) * p["NL"] // 64):
+            j = ld // 2
+            steps.append(("ldsm", 0, j % p["NSA"], tuple(4 * (j % 4) + q for q in range(4))) if ld % 2 == 0 else
+                         ("ldsm", 1, j % p["NSB"], tuple(2 * (j % 8) + q for q in range(2))))
+        for i in range(p["NC"]):
+            j = i * p["NSB"] // p["NC"]
+            if ((2 * j + 2) * 64 + p["NL"] - 1) // p["NL"] - 1 == k:  # the slot that loads B sub-block j (ldmatrix 2j + 1)
+                steps.append(("cvt", j))
+        for role, n, ns in ((0, p["na"][c], p["NSA"]), (1, p["nb"][c], p["NSB"])):
+            for a in range((r * n + 15) // 16, ((r + 1) * n + 15) // 16):
+                steps.append(("add", role, c, c % ns if a == 0 else None, (4 * (a + 1) + c) % ns))
+        steps.append(("mma", c, p["restart"] and w < 4))
+        if p["NF"] and 4 <= w < 12:
+            e = 8 * (k // 16) + w - 4
+            steps += [("merge", c)] * ((e + 1) * p["M"] // 32 - e * p["M"] // 32)
+        elif p["NF"] and w >= 12:
+            steps.append(("promote", c, 4 * (k // 16) + c))
+        slots.append(tuple(steps))
+    return tuple(slots)
+
+
+def _quarters(words) -> np.ndarray:
+    """f16x2 words -> (..., 2) int64, each half times 4, the low half first; a half off the 1/4 grid (or not finite) raises."""
+    h = _halves(words) * 4
+    if not (np.isfinite(h).all() and (h == np.rint(h)).all()):
+        raise ValueError("a mix operand is off the FP16 1/4 grid; these rows can't be gated")
+    return h.astype(np.int64)
+
+
+def _bounded(v: np.ndarray, limit: int, what: str) -> np.ndarray:
+    if np.abs(v).max(initial=0) > limit:
+        raise ValueError(f"mix_model: {what} leaves the range where every order of rounding is exact; these rows can't be gated")
+    return v
+
+
+F16_QUARTERS, F32_SIXTEENTHS = 1 << 11, (1 << 24) - 1  # |4x| <= 2^11 is exact in FP16, |16x| < 2^24 in FP32
+
+
+def mma16816(x: np.ndarray, acc: np.ndarray | None) -> np.ndarray:
+    """One warp's HMMA.16816.F32 in exact integers: x (6, 32, 2) the lanes' form halves times 4 (words 0..3 A, 4 and 5 B), acc
+    (4, 32) their accumulators times 16 or None for zero; returns D's (4, 32).  Lane 4g + t holds A[g][2t, 2t + 1] (a0),
+    A[g + 8][..] (a1), A[g][2t + 8, 2t + 9] (a2), A[g + 8][..] (a3), B[2t, 2t + 1][g] (b0), B[2t + 8, 2t + 9][g] (b1), D[g][2t, 2t + 1]
+    (c0, c1) and D[g + 8][..] (c2, c3), the low half the lower index.  The sum of the products' and C's magnitudes stays under 2^20,
+    all on the 1/16 grid, so every order and alignment of the accumulation is exact."""
+    q = x.reshape(6, 8, 8)
+    a, b = np.block([[q[0], q[2]], [q[1], q[3]]]), np.concatenate([q[4].T, q[5].T])
+    cm = np.zeros((16, 8), np.int64) if acc is None else np.concatenate([acc[0:2].T.reshape(8, 8), acc[2:4].T.reshape(8, 8)])
+    _bounded(np.abs(a) @ np.abs(b) + np.abs(cm), F32_SIXTEENTHS, "an MMA")
+    d = a @ b + cm
+    return np.concatenate([d[:8].reshape(32, 2).T, d[8:].reshape(32, 2).T])
+
+
+def mix_model(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
+    """(32, 32) chk words per lane of a mix loop after ``iters`` iterations of mix_schedule, in exact integers: words 0..15 acc[c][i]
+    at 4c + i (the ballast's XOR into word 0 is zero), 16 + q the sum tot[q] + tot[q + 16] + tot[q + 32] + tot[q + 48].  Matrix m
+    of a warp is its lanes' row words m % 8, their halves swapped for m >= 8, so ldmatrix hands each lane its own words; the forms
+    start at row words 0..5 and the pools and sums at 0.  Rows whose values leave the FP16 1/4 grid, or the exact range of any step,
+    raise (mix_gate_rows keeps them in)."""
+    p = mix_params(op)
+    rows = np.asarray(rows, np.uint32).reshape(32, 8)
+    tile = [rows[:, m] if m < 8 else (rows[:, m - 8] >> np.uint32(16)) | (rows[:, m - 8] << np.uint32(16)) for m in range(16)]
+    pools = [np.zeros((p["NSA"], 4, 32), np.uint32), np.zeros((p["NSB"], 2, 32), np.uint32)]
+    x = np.stack([_quarters(rows[:, :6].T)] * 4)
+    acc, tot = np.zeros((4, 4, 32), np.int64), np.zeros((64, 32), np.int64)
+    for _ in range(iters):
+        for slot in mix_schedule(op):
+            for step in slot:
+                if step[0] == "ldsm":
+                    pools[step[1]][step[2]] = [tile[m] for m in step[3]]
+                elif step[0] == "cvt":
+                    words, nan = f16_decode(pools[1][step[1], 1])
+                    if nan.any():
+                        raise ValueError("mix_model: a convert reads a NaN code; these rows can't be gated")
+                    pools[1][step[1], 1] = words
+                elif step[0] == "add":
+                    _, role, c, lhs, rhs = step
+                    off, nr = (0, 4) if role == 0 else (4, 2)
+                    left = x[c, off:off + nr] if lhs is None else _quarters(pools[role][lhs])
+                    x[c, off:off + nr] = _bounded(left + _quarters(pools[role][rhs]), F16_QUARTERS, "a packed-half add")
+                elif step[0] == "mma":
+                    acc[step[1]] = mma16816(x[step[1]], None if step[2] else acc[step[1]])
+                elif step[0] == "merge":
+                    c = step[1]
+                    acc[c] = _bounded(acc[c] + acc[(c + 2) % 4], F32_SIXTEENTHS, "a merge")
+                else:
+                    _, c, q = step
+                    tot[4 * q:4 * q + 4] = _bounded(tot[4 * q:4 * q + 4] + acc[c], F32_SIXTEENTHS, "a promotion")
+    s = tot[:16]
+    for j in (1, 2, 3):
+        s = _bounded(s + tot[16 * j:16 * j + 16], F32_SIXTEENTHS, "the totals' sum")
+    words = np.concatenate([acc.reshape(16, 32), s]).T / 16
+    return words.astype(np.float32).view(np.uint32)
+
+
+#: the gate's FP16 halves (0.25, 0.5, 0.75, 1, with random signs): on the 1/4 grid, and so is the E4M3 value of each high byte (0.75,
+#: 1, 1.25, 1.5), which is what a convert reads of a low half (its low byte, 0x00, converts to zero); at most 3 the widest mixes
+#: reach 2^21 sixteenths, past FP32's exact range, and these keep them under half of it
+MIX_GATE_HALVES = np.array([0x3400, 0x3800, 0x3A00, 0x3C00], np.uint32)
+
+
+def mix_gate_rows(rng) -> np.ndarray:
+    """(32, 8) per-lane row words for the mix gate: every half from MIX_GATE_HALVES with a random sign."""
+    h = MIX_GATE_HALVES[rng.integers(0, len(MIX_GATE_HALVES), (32, 8, 2))] | (rng.integers(0, 2, (32, 8, 2)).astype(np.uint32) << 15)
+    return (h[..., 0] | (h[..., 1] << 16)).astype(np.uint32)
+
+
 def gate_words(op: int, iters: int, rows: np.ndarray, blocks: int) -> tuple[np.ndarray, np.ndarray]:
     """(blocks, THREADS, 16) chk words each block must hold, the words the op doesn't write at POISON, and the mask of FP16 halves
     that decode a NaN code (see gate_mismatches)."""
@@ -561,6 +755,8 @@ def expected_words(op: int, iters: int, rows: np.ndarray) -> np.ndarray:
         odd = (np.arange(THREADS) // 32) % 2 == 1
         w[odd, :NCHAIN] = np.tile(coissue_chains(op, iters, rows), (THREADS // 64, 1))
         w[odd, NCHAIN:] = POISON
+    elif op in MIX_OPS:  # MIX_WARPS identical warps, each thread t writing 32 words: rows 2t and 2t + 1
+        w[:] = np.tile(mix_model(op, iters, rows).reshape(64, 16), (THREADS // 64, 1))
     else:
         w[:, :NCHAIN] = np.tile(f2fp_model(iters, rows, packed=op == 8), (THREADS // 32, 1))
     return w
@@ -636,6 +832,11 @@ def timing_rows(op: int, rng) -> np.ndarray:
             r[:, 0] = _f16x2(rng.uniform(1, 2, (32, 2)) * sign)
         r[:, 1] = _f16x2(rng.uniform(2**-10, 2**-9, (32, 2)) * rng.choice([-1, 1], (32, 2)))
         r[:, 2] = _f16x2(1 - rng.integers(1, 9, (32, 2)) * 2.0**-11)
+    elif op in MIX_OPS:
+        # FP16 halves in [0.5, 2) with random signs and fraction bit 6 clear: a convert reads a low half's bytes, the high one
+        # E4M3 [1, 1.875] and the low one an exponent field under 8 (|x| < 2), so never a NaN code, and the forms stay under 2^8
+        b = (rng.integers(0, 2, (32, 8, 2)) << 15) | (rng.integers(14, 16, (32, 8, 2)) << 10) | (rng.integers(0, 1 << 10, (32, 8, 2)) & ~(1 << 6))
+        r[:] = (b << (16 * np.arange(2))).sum(-1)
     else:
         r[:, 0] = np.float32(rng.uniform(1, 2, 32)).view(np.uint32)
         r[:, 1] = np.float32(rng.uniform(0.25, 0.5, 32)).view(np.uint32)
@@ -644,11 +845,12 @@ def timing_rows(op: int, rng) -> np.ndarray:
 
 def numeric_gate(dev, rng, ops=None) -> tuple[dict, dict[int, np.ndarray]]:
     rows_t = {op: timing_rows(op, rng) for op in range(len(OPS))}  # every op's draw, so a subset times the same data
+    rows_mix = mix_gate_rows(rng)
     res = {}
     for op, (name, *_) in enumerate(OPS):
         if ops is not None and op not in ops:
             continue
-        rows = np.array(GATE_ROW[op], np.uint32)[None].repeat(32, 0) if op in GATE_ROW else rows_t[op]
+        rows = np.array(GATE_ROW[op], np.uint32)[None].repeat(32, 0) if op in GATE_ROW else rows_mix if op in MIX_OPS else rows_t[op]
         if op in COISSUE_OPS:
             rows[:, 6:] = rows_t[op][:, 6:]
         chk, _, sm, _ = dev.run(op, GATE_ITERS, rows)
@@ -659,6 +861,8 @@ def numeric_gate(dev, rng, ops=None) -> tuple[dict, dict[int, np.ndarray]]:
         data = f"timing rows vs {ref}" if op not in GATE_ROW else "all-ones"
         if op in COISSUE_OPS:
             data = f"all-ones MMA on even warps; odd warps' HADD2 chains on timing rows vs {ref}, their words 8..15 the poison"
+        if op in MIX_OPS:
+            data = "per-lane FP16 halves on the 1/4 grid (mix_gate_rows) vs mix_model, exact integers"
         res[name] = {"iters": GATE_ITERS, "data": data,
                      "mismatches": int(len(diff)), "vacuous": not want[..., :NCHAIN].any(),
                      "distinct_sms": int(len(set(sm.tolist()))), "blocks": int(len(sm)),
@@ -703,7 +907,7 @@ def timing(dev, rows_t: dict[int, np.ndarray], reps: int, target_cycles: int, uu
         for op in ops:
             name, _, per_loop, work, _ = OPS[op]
             _, cyc, sm, ms = dev.run(op, iters[op], rows_t[op])
-            per_block = WARPS * iters[op] * per_loop * work
+            per_block = op_warps(op) * iters[op] * per_loop * work
             rate = per_block / cyc.astype(np.float64)
             per[name].append({"rep": rep, "iters": iters[op], "rate_median": float(np.median(rate)), "rate_min": float(rate.min()),
                               "rate_max": float(rate.max()), "cycles_median": int(np.median(cyc)), "ms": ms,
@@ -759,6 +963,20 @@ def prices(tim: dict) -> dict:
                 row["utilization_sum"] = mma / mma0 + h / h_alone
             tab[name] = row
         out["coissue"] = tab
+    mix = [op for op in MIX_OPS if OPS[op][0] in rate]
+    if mix:  # t_mix / t_solo: the leaf's MAC rate (hmma_f16_f32, its 16 MMAs alone, 16 warps) over the mix's; and over mix_h0_f0's
+        solo, alone = rate.get("hmma_f16_f32"), rate.get("mix_h0_f0")
+        tab = {}
+        for op in mix:
+            name, (nh, nf, nl, nc) = OPS[op][0], MIX_COUNTS[op]
+            row = {"per_16_hmma": {"hadd2": nh / 4, "fadd": nf / 4, "ldmatrix": nl / 4, "cvt": nc / 4, "sts_lds_pairs": int(nf > 0)},
+                   "mma_macs_per_sm_per_clock": rate[name], "sm_clocks_per_warp_iteration": 64 * 2048 / rate[name]}
+            if solo:
+                row["t_mix_over_t_solo"] = solo / rate[name]
+            if alone:
+                row["t_mix_over_t_h0_f0"] = alone / rate[name]
+            tab[name] = row
+        out["rewrite_mix"] = tab
     if "qmma_sp_e4m3" in rate:  # instructions per SM per clock, sparse over dense (both 16 per loop)
         out["sp_over_dense_instructions"] = rate["qmma_sp_e4m3"] / (2 * unit)
     if "qmma_e4m3_f16" in rate:
@@ -973,6 +1191,9 @@ def finish(out: Path, args, res: dict, failures: list[str], ident: dict | None, 
                      for k, u in (("hadd2_registers_per_sm_per_clock", "register/SM/clock"), ("mma_fraction_of_alone", "1"),
                                   ("hadd2_fraction_of_alone", "1"), ("utilization_sum", "1"))
                      if (x := v.get(k)) is not None]
+        for name, v in (pr.get("rewrite_mix") or {}).items():
+            meas += [{"name": f"rewrite_mix.{name}.{k}", "value": x, "unit": "1", "label": derived}
+                     for k in ("t_mix_over_t_solo", "t_mix_over_t_h0_f0") if (x := v.get(k)) is not None]
         doc = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": run_id, "arch": F8.ARCH,
                "sku": (ident or {}).get("device"), "driver": (ident or {}).get("driver"), "gpu_uuid": (ident or {}).get("gpu_uuid"),
                "uuid_checked": (ident or {}).get("uuid_checked"), "nvcc": res.get("nvcc"), "clocks": res["clocks"],
