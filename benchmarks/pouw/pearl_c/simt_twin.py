@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 
 HERE = Path(__file__).parent
-KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_pad", "hash_nodes",
+KERNELS = ("hash_msg", "hash_msg_v", "hash_leaf", "hash_leaf_p", "hash_rows", "hash_rows_w", "hash_rows_tree", "hash_pad", "hash_nodes",
            "hash_tree_leaves", "hash_tree_small")
 
 PRELUDE = r"""

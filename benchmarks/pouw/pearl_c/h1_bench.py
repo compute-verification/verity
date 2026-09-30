@@ -168,6 +168,17 @@ def launch_tree(d: Bench, s, form: str, tree_p: int, dom_p: int, width: int) -> 
         d.go(s, "hash_tree_small", 1, max(1, min(1024, width // 2)), (tree_p, dom_p), (width,))
 
 
+def launch_a(d: Bench, s, form: str, rows_p: int, tree_p: int, dom_p: int, m: int, rb: int) -> None:
+    """A's commitment: row leaves and tree.  pushed: hash_rows and a hash_nodes launch per level; tuned: hash_rows_w and
+    hash_tree_small; fused: hash_rows_tree, the whole tree in one CTA (m <= 32)."""
+    if form == "fused":
+        width = 1 << max(0, (m - 1).bit_length())
+        d.go(s, "hash_rows_tree", 1, 32 * m, (rows_p, tree_p, dom_p), (m, rb), smem=4 * (m * rows_w_words(rb) + 16 * width))
+    else:
+        launch_rows(d, s, form, rows_p, tree_p, dom_p, m, rb)
+        launch_tree(d, s, form, tree_p, dom_p, m)
+
+
 def launch_tiles(d: Bench, s, form: str, c_p: int, u_p: int, dg_p: int, lv_p: int, tree_p: int, keys: dict, dom_t: int,
                  rows: int, n: int) -> int:
     """Message digests, tile leaves, the tile tree's leaves and its levels; returns the tile count."""
@@ -210,10 +221,9 @@ def gates(d: Bench, V: dict) -> dict:
     for label, t in V["trees"].items():
         rows = shake(t["tag"], t["m"] * t["rb"])
         dp = d.put(bytes.fromhex(t["domain"]))
-        for form in ("pushed", "tuned"):
+        for form in ("pushed", "tuned", "fused"):
             rp, tp = d.put(rows), d.alloc(32 * 2 * t["m"])
-            launch_rows(d, None, form, rp, tp, dp, t["m"], t["rb"])
-            launch_tree(d, None, form, tp, dp, t["m"])
+            launch_a(d, None, form, rp, tp, dp, t["m"], t["rb"])
             d.sync()
             ok = d.read(tp + 32 * (2 * t["m"] - 2), 32).hex() == t["root"]
             out["trees"][f"{label} {form}"] = ok
@@ -310,16 +320,15 @@ def decode(d: Bench, reps: int) -> dict:
         if rb == ROW_F32:
             d.go(s1, "derive_rows", -(-m * k // 256), 256, (y, rows[ROW_F32]), (m * k,))
         if arm != "plain" and stage in ("all", "before"):
-            form = "pushed" if arm == "h1" else "tuned"
-            launch_rows(d, s1, form, rows[rb], a_tree, dom_a, m, rb)
-            launch_tree(d, s1, form, a_tree, dom_a, m)
+            form = "pushed" if arm == "h1" else "fused" if arm.startswith("h1-fused") else "tuned"
+            launch_a(d, s1, form, rows[rb], a_tree, dom_a, m, rb)
         if len(joins) >= 2:                                   # the side stream's slot from two calls back is free again
             d.wait(s1, joins[-2])
         d.go(s1, "standin_gemm", n * 32 // 256, 256, (w[i % WSETS], rows[ROW_BF16], sl["c"], sl["u"], y), (m, n, k))
         if arm == "plain" or stage == "before":
             return
         form = "pushed" if arm == "h1" else "tuned"
-        if arm == "h1-tuned-side":
+        if arm.endswith("-side"):
             e = d.event(s1)
             d.wait(s2, e)
             launch_tiles(d, s2, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], keys, dom_t, tiled, n)
@@ -327,9 +336,10 @@ def decode(d: Bench, reps: int) -> dict:
         else:
             launch_tiles(d, s1, form, sl["c"], sl["u"], sl["dg"], sl["lv"], sl["tree"], keys, dom_t, tiled, n)
 
-    arms = [("plain", ROW_F32, "all"), ("plain", ROW_BF16, "all"), ("h1", ROW_F32, "all"), ("h1-tuned", ROW_F32, "all"), ("h1-tuned-side", ROW_F32, "all"),
-            ("h1", ROW_F32, "before"), ("h1-tuned", ROW_F32, "before"), ("h1-tuned", ROW_BF16, "all"),
-            ("h1-tuned-side", ROW_BF16, "all")]
+    arms = [("plain", ROW_F32, "all"), ("plain", ROW_BF16, "all"), ("h1", ROW_F32, "all"), ("h1-tuned", ROW_F32, "all"),
+            ("h1-tuned-side", ROW_F32, "all"), ("h1-fused", ROW_F32, "all"), ("h1-fused-side", ROW_F32, "all"),
+            ("h1", ROW_F32, "before"), ("h1-tuned", ROW_F32, "before"), ("h1-fused", ROW_F32, "before"),
+            ("h1-fused-side", ROW_BF16, "all"), ("h1-fused", ROW_BF16, "before")]
     graphs = {}
     for arm, rb, stage in arms:
         def body(arm=arm, rb=rb, stage=stage):
