@@ -188,3 +188,47 @@ def test_merge_partners_find_every_duplicate_row():
     codes, sc, _ = C.quantize(x, "nvf4")
     N, E = C.block_ints(codes, sc, "nvf4")
     assert C.merge_partners(N, E, np.abs(N).max(-1) > 0, "nvf4")["same_kblock_any_row"] < 0.05
+
+
+def _nvf4_words(fam: str, rows: int, k: int, seed: int):
+    atom, fmt = C.atoms_from(C.parse_args(["debit", "--atom", "blackwell_sm120_nvf4_m16n8k64"]))["blackwell_sm120_nvf4_m16n8k64"]
+    A, B = C.family(fam, rows, k, np.random.default_rng(seed))
+    (ca, sa, _), (cb, sb, _) = C.quantize(A, fmt), C.quantize(B, fmt)
+    qa, qb = (C.numerators(ca), C.scale_pairs(atom.scale, sa)), (C.numerators(cb), C.scale_pairs(atom.scale, sb))
+    ia, ib = (x.ravel() for x in np.meshgrid(np.arange(rows), np.arange(rows), indexing="ij"))
+    cold = C.debit_chain(atom, qa, qb, ia, ib, np.zeros(len(ia)), np.arange(len(ia)))
+    return atom, qa, qb, ia, ib, cold
+
+
+def test_lone_skip_identities_match_a_replay_without_each_atom():
+    """The debit's identity atoms (an atom whose lone skip leaves the final word unchanged): the early-exit replay counts
+    what replaying every chain without each atom counts, cold and from T1's H, on a family that freezes."""
+    atom, qa, qb, ia, ib, cold = _nvf4_words("acc-freeze", 4, 1024, 8)
+    for acc0 in (np.zeros(len(ia)), C.hot_start(cold["rms"], ia, 4, 14)):
+        r = C.debit_chain(atom, qa, qb, ia, ib, acc0, np.arange(len(ia)))
+        want = np.zeros(len(ia), np.int64)
+        for s in range(r["steps"]):
+            acc = acc0.copy()
+            for t in range(r["steps"]):
+                if t != s:
+                    acc, _ = atom.step(acc, *C._step_inputs(atom, qa, qb, ia, ib, t))
+            want += acc == r["traj"][:, -1]
+        got = C.lone_skip_identities(atom, qa, qb, ia, ib, r["traj"])
+        assert np.array_equal(got, want) and want.sum() > 0
+        assert (got >= r["ident"]).all()                              # an identity step is always a lone-skip identity
+
+
+def test_subgrid_groups_add_nothing_whatever_their_codes():
+    """A group flagged sub-grid adds exactly 0 for any codes, so the verifier may charge it from its scale bytes alone:
+    rewriting every flagged group's codes to the largest products leaves each step's output unchanged."""
+    atom, qa, qb, ia, ib, cold = _nvf4_words("acc-freeze", 4, 1024, 8)
+    acc, flagged = C.hot_start(cold["rms"], ia, 4, 14), 0
+    for t in range(cold["steps"]):
+        an, bn, sa, sb = C._step_inputs(atom, qa, qb, ia, ib, t)
+        d, fl = atom.step(acc, an, bn, sa, sb)
+        g = np.repeat(fl["subgrid"], atom.group, axis=1)
+        flagged += int(fl["subgrid"].sum())
+        d2, _ = atom.step(acc, np.where(g, 12, an), np.where(g, -12, bn), sa, sb)
+        assert np.array_equal(d, d2)
+        acc = d
+    assert flagged > 0

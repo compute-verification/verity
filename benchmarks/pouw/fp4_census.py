@@ -98,6 +98,8 @@ class Atom:
         v = np.where(sh <= 0, absm << up, absm >> dn)
         glost = (sh > 0) & (mant != 0) & ((absm & ((np.int64(1) << dn) - 1)) != 0) | ((sh >= 62) & (mant != 0))
         trunc = (mant != 0) & (v == 0)
+        # below the step's grid whatever the codes: the largest group dot (16 x 144 quarters) times the scales < 2^lsb
+        subgrid = (ma != 0) & (sh > 0) & ((sh >= 40) | (2304 * ma < (np.int64(1) << np.clip(sh, 0, 40))))
         v = np.where(mant < 0, -v, v)
         sha = lsb - acc_e
         absa = np.abs(acc_m)
@@ -124,7 +126,7 @@ class Atom:
         out = np.where(live, out, 0.0)
         lost = live & (glost.any(-1) | alost | nlost)
         return out, {"lost": lost, "part": part, "nonzero": nonzero, "cancel": part & (gd == 0), "trunc": trunc, "glost": glost,
-                     "overflow": overflow}
+                     "overflow": overflow, "subgrid": subgrid, "exact_sum": (np.ldexp(mant.astype(np.float64), X)).sum(-1)}
 
 
 def scale_pairs(fmt: str, codes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -460,6 +462,98 @@ def census_matrix(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str
     return {"words": words, "tile": tiles, "A": operand_stats(ca, sa, fmt, clean_a), "B": operand_stats(cb, sb, fmt, None)}
 
 
+# ---- the replayed debit (theory-pearl-c4-domain.md §2: identity atoms, item 2; sub-grid blocks, item 5) ---------------
+
+SUBGRID_UNITS, IDENTITY_UNITS = 16, 64            # MACs charged per sub-grid (word, group) and per identity atom-word
+
+
+def _step_inputs(atom: Atom, qa, qb, ia, ib, t: int):
+    (na, pa), (nb, pb) = qa, qb
+    k, ns = atom.k, atom.k // atom.block
+    return (na[ia, t * k:(t + 1) * k], nb[ib, t * k:(t + 1) * k],
+            (pa[0][ia, t * ns:(t + 1) * ns], pa[1][ia, t * ns:(t + 1) * ns]),
+            (pb[0][ib, t * ns:(t + 1) * ns], pb[1][ib, t * ns:(t + 1) * ns]))
+
+
+def debit_chain(atom: Atom, qa, qb, ia, ib, acc0: np.ndarray, keep: np.ndarray) -> dict:
+    """One chain per word (A row ia, B row ib) from acc0: per word the sub-grid groups, the identity steps (the step's
+    output equals its input, so skipping it alone leaves the word unchanged) and the RMS exact atom sum; the whole
+    trajectory for the words ``keep`` indexes."""
+    T = qa[0].shape[1] // atom.k
+    acc = acc0.astype(np.float64).copy()
+    sub, ident, ss = np.zeros(len(ia), np.int64), np.zeros(len(ia), np.int64), np.zeros(len(ia))
+    traj = np.zeros((len(keep), T + 1))
+    traj[:, 0] = acc[keep]
+    for t in range(T):
+        d, fl = atom.step(acc, *_step_inputs(atom, qa, qb, ia, ib, t))
+        sub += fl["subgrid"].sum(-1)
+        ident += d == acc
+        ss += fl["exact_sum"] ** 2
+        acc = d
+        traj[:, t + 1] = acc[keep]
+    return {"subgrid": sub, "ident": ident, "rms": np.sqrt(ss / T), "traj": traj, "steps": T}
+
+
+def hot_start(rms: np.ndarray, ia: np.ndarray, rows: int, hot_bits: int) -> np.ndarray:
+    """T1's H = 1.5 * 2^E_H per word, one per A row: the grid 2^(E_H - 23) at 2^-hot_bits of the row's largest RMS atom
+    sum over the given words (``fp4_emulation.py --hot-rule row``)."""
+    rms_row = np.zeros(rows)
+    np.maximum.at(rms_row, ia, rms)
+    eh = np.floor(np.log2(np.maximum(rms_row, 2.0 ** -100))).astype(np.int64) + 23 - hot_bits
+    return np.ldexp(1.5, eh)[ia]
+
+
+def lone_skip_identities(atom: Atom, qa, qb, ia, ib, traj: np.ndarray) -> np.ndarray:
+    """Per word, the atoms whose lone skip leaves the final word unchanged (the debit's exact test): the chain without
+    step s, replayed from its state before s until it rejoins the original trajectory or ends."""
+    W, T = traj.shape[0], traj.shape[1] - 1
+    Z = traj[:, :T].copy()                            # Z[w, s]: the state after skipping step s, at step s
+    done = Z == traj[:, 1:]
+    for u in range(1, T):
+        w, s = np.nonzero(~done[:, :u])
+        if not len(w):
+            continue
+        d, _ = atom.step(Z[w, s], *_step_inputs(atom, qa, qb, ia[w], ib[w], u))
+        Z[w, s] = d
+        done[w, s] = d == traj[w, u + 1]
+    return done.sum(1)
+
+
+def debit_census(atom: Atom, fmt: str, A: np.ndarray, B: np.ndarray, noise: str, delta: float, rng, rows: int,
+                 tile: int = 16, skip_words: int = 128, hot_bits: int = 14, rho: float = 1 / 400) -> dict:
+    """The per-tile replayed debit of §2's items 2 and 5 on every word of ``rows`` x ``rows`` (A rows x B rows), as a share
+    of the tile's chain MACs against the cap rho: v1's chains from +0 and v2's (T1) from H = 1.5 * 2^E_H, one per A row,
+    its grid 2^(E_H - 23) at 2^-hot_bits of the row's largest RMS atom sum over these words (``fp4_emulation.py
+    --hot-rule row``).  Identity atoms are counted as identity steps on every word (a lower bound on the lone-skip
+    test) and by the exact lone-skip test on ``skip_words`` words."""
+    ya, yb = noisy(A, fmt, noise, delta, rng), noisy(B, fmt, noise, delta, rng)
+    ca, sa, _ = quantize(ya, fmt)
+    cb, sb, _ = quantize(yb, fmt)
+    scale = atom.scale
+    qa, qb = (numerators(ca), scale_pairs(scale, sa)), (numerators(cb), scale_pairs(scale, sb))
+    ra, rb = min(rows, A.shape[0]) // tile * tile, min(rows, B.shape[0]) // tile * tile
+    ia, ib = (x.ravel() for x in np.meshgrid(np.arange(ra), np.arange(rb), indexing="ij"))
+    K = ca.shape[1]
+    keep = rng.choice(len(ia), min(skip_words, len(ia)), replace=False)
+    out = {"n_words": int(len(ia)), "tile": [tile, tile], "tiles": int(ra // tile * rb // tile), "k": int(K), "rho": rho,
+           "hot_bits": hot_bits, "skip_words": int(len(keep))}
+    cold = None
+    for name in ("v1", "v2"):
+        acc0 = np.zeros(len(ia)) if name == "v1" else hot_start(cold["rms"], ia, ra, hot_bits)
+        r = debit_chain(atom, qa, qb, ia, ib, acc0, keep)
+        cold = r if name == "v1" else cold
+        skip = lone_skip_identities(atom, qa, qb, ia[keep], ib[keep], r["traj"])
+        units = SUBGRID_UNITS * r["subgrid"] + IDENTITY_UNITS * r["ident"]
+        per_tile = units.reshape(ra // tile, tile, rb // tile, tile).sum((1, 3)) / (tile * tile * K)
+        out[name] = {"subgrid_groups": float(r["subgrid"].sum() / (len(ia) * r["steps"] * atom.groups)),
+                     "identity_steps": float(r["ident"].sum() / (len(ia) * r["steps"])),
+                     "identity_steps_on_skip_words": float(r["ident"][keep].sum() / (len(keep) * r["steps"])),
+                     "lone_skip_identities_on_skip_words": float(skip.sum() / (len(keep) * r["steps"])),
+                     "tile_debit_share": {"mean": float(per_tile.mean()), "max": float(per_tile.max()),
+                                          "over_rho": float((per_tile > rho).mean())}}
+    return out
+
+
 def base_split(fmt: str, A: np.ndarray, noise: str, delta: float, rng, tile_rows: int = 16) -> dict:
     """The salt-free base split (design X-FP4-1), as a cheaper-computation cost.
 
@@ -707,6 +801,41 @@ def cmd_real(args) -> dict:
     return res
 
 
+def cmd_debit(args) -> dict:
+    """The replayed debit per 16 x 16 tile (identity atoms, sub-grid groups) for v1 (+0) and v2 (T1's H) chains, on the
+    families (A, B from ``family``) or on real (activation, weight) rows."""
+    rng = np.random.default_rng(args.seed)
+    res = {"k": args.k, "rows": args.pairs, "seed": args.seed, "noise": args.noise, "delta": args.delta,
+           "acts": str(args.acts) if args.acts else None, "hot_bits": args.hot_bits, "results": []}
+    if args.acts:
+        acts = Path(args.acts)
+        cells = []
+        for f in [acts] if acts.is_file() else sorted(acts.glob("*.npz")):
+            d = np.load(f)
+            for lin in sorted({key.rsplit("/", 1)[0] for key in d.files}):
+                X, W = d[f"{lin}/x"].astype(np.float64), d[f"{lin}/w"].astype(np.float64)
+                if args.max_k:
+                    X, W = X[:, : args.max_k], W[:, : args.max_k]
+                cells.append(({"source": f.stem, "linear": lin, "k": int(X.shape[1])}, X, W))
+    else:
+        fams = FAMILIES if args.families == "all" else tuple(args.families.split(","))
+        cells = [({"family": fam}, *family(fam, args.pairs, args.k, rng)) for fam in fams]
+    for name, (atom, fmt) in atoms_from(args).items():
+        for label, A, B in cells:
+            for noise in args.noise.split(","):
+                try:
+                    r = debit_census(atom, fmt, A, B, noise, args.delta, rng, args.pairs, hot_bits=args.hot_bits)
+                except OverflowError as e:
+                    r = {"outside_model": str(e)}
+                res["results"].append({"atom": atom.name, "format": fmt, **label, "noise": noise, **r})
+                print(json.dumps({"format": fmt, **label, "noise": noise, **{
+                    f"{v}_{q}": round(r[v][key], 6) for v in ("v1", "v2") if v in r
+                    for q, key in (("subgrid", "subgrid_groups"), ("ident", "identity_steps"),
+                                   ("skip_ident", "lone_skip_identities_on_skip_words"))},
+                    **{f"{v}_tile_max": round(r[v]["tile_debit_share"]["max"], 6) for v in ("v1", "v2") if v in r}}), flush=True)
+    return res
+
+
 def operands(args, rng):
     """One side's operands (--operand a: activations, b: weights): the synthetic families, or with --acts the real rows
     fp4_quality.py --dump-acts wrote."""
@@ -786,7 +915,7 @@ def breakeven(prices: dict) -> dict:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["selftest", "synth", "real", "basesplit", "merge", "breakeven"])
+    ap.add_argument("cmd", choices=["selftest", "synth", "real", "basesplit", "merge", "debit", "breakeven"])
     ap.add_argument("--atom", action="append", default=None)
     ap.add_argument("--frac-bits", type=int, default=None)
     ap.add_argument("--acc-window", type=int, default=None)
@@ -799,6 +928,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--operand", choices=["a", "b"], default="a", help="basesplit/merge: activations (a) or weights (b)")
     ap.add_argument("--max-k", type=int, default=0)
     ap.add_argument("--partner-blocks", type=int, default=256, help="merge: k-blocks the adaptive partner search covers")
+    ap.add_argument("--hot-bits", type=int, default=14, help="debit: v2's H sits 2^-hot_bits above the row's largest RMS atom sum")
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--out", default="")
     args = ap.parse_args(argv)
@@ -827,14 +957,19 @@ def main() -> None:
     if not all(v["step_mismatches"] == 0 and v["chain_mismatches"] == 0 for v in rep.values()):
         print(json.dumps({"selftest": rep}))
         sys.exit("the vectorised atom disagrees with verity.ml.tc: no census")
-    doc = {"synth": cmd_synth, "real": cmd_real, "basesplit": cmd_basesplit, "merge": cmd_merge}[args.cmd](args)
+    doc = {"synth": cmd_synth, "real": cmd_real, "basesplit": cmd_basesplit, "merge": cmd_merge, "debit": cmd_debit}[args.cmd](args)
     doc.update({"tool": "pouw_fp4_census", "cmd": args.cmd, "atoms": args.atom, "selftest": rep, "seconds": round(time.time() - t0, 1)})
     if args.out:
         out = Path(args.out)
         out.write_text(json.dumps(doc, indent=1) + "\n")
         es = [r["words"]["exact_steps"] for r in doc["results"] if "words" in r]
         eps = [r["eps_R_strict_max"] for r in doc["results"] if "eps_R_strict_max" in r]
-        if eps:
+        tiles = [r[v]["tile_debit_share"]["max"] for r in doc["results"] for v in ("v1", "v2") if v in r]
+        if tiles:
+            run_result.write(out, all("v1" in r for r in doc["results"]), f"fp4-census-{args.cmd}",
+                             f"{len(doc['results'])} cells; worst tile debit share {max(tiles):.6f}",
+                             [("cells", len(doc["results"]), "count"), ("tile_debit_share_max", max(tiles), "fraction")])
+        elif eps:
             run_result.write(out, True, f"fp4-census-{args.cmd}", f"{len(eps)} cells; eps_R (strict) max {max(eps):.5f}",
                              [("cells", len(eps), "count"), ("eps_R_strict_max", max(eps), "fraction")])
         elif es:
