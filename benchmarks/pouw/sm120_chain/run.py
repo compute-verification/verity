@@ -18,6 +18,7 @@ probes, each gated before it is timed (chain.cu; the attacker's measurement, a c
 5. Report: per variant the median ms per call and TFLOPS; the promotion's time share 1 - t(unpromoted)/t(honest) beside
    its W1 price (p_fadd/128 per MAC); t(int8)/t(honest) and t(f16acc)/t(honest), this kernel's rate ratios (prices for
    pearlc_attacks.py --prices); and the unpromoted attack's success on the full output (words, 64 x 64 tiles).
+   --reps 0 stops after the gates and the unpromoted chain's success: a correctness run on the GPU alone.
 
   CUDA_VISIBLE_DEVICES=3 CUDA_DEVICE_ORDER=PCI_BUS_ID python benchmarks/pouw/sm120_chain/run.py --expect-uuid GPU-...
 """
@@ -297,7 +298,7 @@ def main() -> None:
     ap.add_argument("--gpu", type=int, default=3)
     ap.add_argument("--expect-uuid", required=True)
     ap.add_argument("--shapes", default="8192x8192x8192", help="MxNxK, comma-separated; multiples of 128")
-    ap.add_argument("--reps", type=int, default=20)
+    ap.add_argument("--reps", type=int, default=20, help="timed reps per shape; 0: the gates and the unpromoted chain only")
     ap.add_argument("--calls", type=int, default=4)
     ap.add_argument("--seed", type=int, default=20260930)
     ap.add_argument("--nvcc", default=shutil.which("nvcc") or "/usr/local/cuda/bin/nvcc")
@@ -360,6 +361,11 @@ def main() -> None:
                   "unpromoted_equal_tiles_64": round(float(eq.all(axis=(1, 3)).mean()), 6)}
         emit(fh, attack)
         del hon, unp
+        if not args.reps:
+            summary.append(attack)
+            for p in (da, db, *outs.values()):
+                dev.free(p)
+            continue
 
         times: dict[str, list[float]] = {v: [] for v in VARIANTS}
         for rep in range(args.reps):
@@ -377,7 +383,7 @@ def main() -> None:
                "promotion_w1_share_public": round((8 / 128) / (1 + 8 / 128), 5),
                "int8_over_honest": round(med["int8"] / med["honest"], 5),
                "f16acc_over_honest": round(med["f16acc"] / med["honest"], 5), **attack,
-               "clocks": "as locked by the run line (recorded per item)"}
+               "clocks": "recorded per item (NVML); locked only if the run line locked them"}
         emit(fh, {"summary": row})
         summary.append(row)
         for p in (da, db, *outs.values()):
@@ -386,6 +392,11 @@ def main() -> None:
     path = out_dir / "sm120_chain.json"
     path.write_text(json.dumps(doc, indent=1) + "\n")
     s0 = summary[0]
+    if not args.reps:
+        run_result.write(path, True, "sm120-chain", f"gates passed (untimed); unpromoted equal words {s0['unpromoted_equal_words']}",
+                         [("unpromoted_equal_words", s0["unpromoted_equal_words"], "fraction"),
+                          ("unpromoted_equal_tiles_64", s0["unpromoted_equal_tiles_64"], "fraction")])
+        return
     run_result.write(path, True, "sm120-chain", f"gates passed; promotion time share {s0['promotion_time_share']}",
                      [("promotion_time_share", s0["promotion_time_share"], "fraction"),
                       ("honest_tflops", s0["tflops"]["honest"], "TFLOPS"),
