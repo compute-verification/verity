@@ -11,7 +11,7 @@
 //   P        rows x 64 BF16 (P_A = [Ẽ_A | bf16(A'F_B)], P_B = [bf16(Ẽ_B G - B~F_A) | -Ẽ_B])
 //   alpha, inv  rows FP32 (α and RN(1/α));  ae  rows bytes (a_E, UE4M3)
 //   y        m x n BF16, RN(RN(U · inv_A) · inv_B)       digests  m x n/32 x 32 bytes: TurboSHAKE128(C~ chunk | U chunk, 0x21)
-//   leaves   m/64 x n/64 x 32 bytes (0x22)
+//   leaves   m/64 x n/64 x 32 bytes (0x22)                 dom, root, salt, seed   32 bytes each (commit_rows)
 // Pearl's lottery tickets are not computed: no PoUW check reads them (the coordinator's 06:35Z ruling for pearl-c-sm120).
 #include <cstdint>
 #include <cuda_bf16.h>
@@ -142,18 +142,204 @@ extern "C" __global__ void __launch_bounds__(256) transpose(const Args a) {
   reinterpret_cast<uint8_t*>(a.p[1])[idx] = (uint8_t)(lo | hi << 4);
 }
 
-// A's commitment, modeled: TurboSHAKE128 of each 1,024-byte segment of the BF16 rows, 0x23.  p0 rows, p1 out
-// (rows x segs x 32 B); i0 rows, i1 row bytes (a multiple of 1,024)
-extern "C" __global__ void __launch_bounds__(128) hash_rows(const Args a) {
-  const int rs = a.i[1], segs = rs / 1024;
-  const size_t t = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (t >= (size_t)a.i[0] * segs) return;
-  const uint64_t* src = reinterpret_cast<const uint64_t*>(a.p[0] + (t / segs) * rs + (t % segs) * 1024);
-  uint64_t h[4];
-  ph::pearlc::row_segment<128>([&](int i) { return src[i]; }, h);
-  ulonglong2* out = reinterpret_cast<ulonglong2*>(a.p[1] + t * 32);
-  out[0] = make_ulonglong2(h[0], h[1]);
-  out[1] = make_ulonglong2(h[2], h[3]);
+// ---------------------------------------------------------------- the rows' commitments and the seeds
+// audit.commit_rows as the verifier checks it: verity.commitments.merkle's SHA-256 tree over a RangeIndexedDomain, with
+// H(tag, parts) = SHA-256(FRAME ‖ |tag| u32 BE ‖ tag ‖ (|part| u64 BE ‖ part) ...), FRAME = "veritor/protocol/merkle/frame/v3\0",
+// uint(v) = v big-endian in its fewest bytes (at least one), dom = the domain id (32 B, from the host: public before A exists),
+//   leaf(i) = H("leaf", dom, uint(i), uint(i), "verity/pouw/row/v1", row i)      pad(r) = H("pad", dom, uint(r))
+//   node(d, j, left, right) = H("node", dom, uint(d), uint(j), left, right)      over ranks padded to a power of two.
+// Then the seed, pearl_c4.noise: keyed BLAKE3 under blake3("pearl-c4/v0/seed-A") of salt ‖ root ‖ root_b ‖ index u64 LE
+// (A), or under blake3("pearl-c4/v0/seed-B") of salt ‖ root (B).  Messages are assembled at byte positions fixed at compile
+// time (the rank's width L is a template parameter), so they stay in registers.
+__constant__ uint8_t MK_FRAME[33] = "veritor/protocol/merkle/frame/v3";
+template <int NW> struct Msg {
+  uint32_t w[NW];
+  DEV Msg() {
+#pragma unroll
+    for (int i = 0; i < NW; i++) w[i] = 0;
+  }
+  DEV void b(int pos, uint32_t v) { w[pos >> 2] |= (v & 0xFFu) << (24 - 8 * (pos & 3)); }
+  DEV int u64(int pos, uint64_t v) {
+#pragma unroll
+    for (int i = 0; i < 8; i++) b(pos + i, (uint32_t)(v >> (56 - 8 * i)));
+    return pos + 8;
+  }
+  template <int L> DEV int uv(int pos, uint32_t v) {
+    pos = u64(pos, L);
+#pragma unroll
+    for (int i = 0; i < L; i++) b(pos + i, v >> (8 * (L - 1 - i)));
+    return pos + L;
+  }
+  DEV int digest(int pos, const uint32_t h[8]) {
+    pos = u64(pos, 32);
+#pragma unroll
+    for (int i = 0; i < 32; i++) b(pos + i, h[i >> 2] >> (24 - 8 * (i & 3)));
+    return pos + 32;
+  }
+  template <int TL> DEV int head(const char (&tag)[TL], const uint32_t dom[8]) {
+#pragma unroll
+    for (int i = 0; i < 33; i++) b(i, MK_FRAME[i]);
+    int pos = 33;
+#pragma unroll
+    for (int i = 0; i < 4; i++) b(pos + i, (uint32_t)(TL - 1) >> (24 - 8 * i));
+    pos += 4;
+#pragma unroll
+    for (int i = 0; i < TL - 1; i++) b(pos + i, (uint8_t)tag[i]);
+    return digest(pos + TL - 1, dom);
+  }
+  // SHA-256 padding for a LEN-byte message ending in this Msg's last block
+  DEV void pad(int len) {
+    b(len, 0x80);
+    w[NW - 2] = 0;
+    w[NW - 1] = (uint32_t)len * 8;
+  }
+};
+template <int NW> DEV void sha_msg(const Msg<NW>& m, uint32_t h[8]) {
+  ph::sha256_iv(h);
+#pragma unroll
+  for (int q = 0; q < NW / 16; q++) ph::sha256_compress(h, m.w + 16 * q);
+}
+template <int LJ> DEV void mk_node(const uint32_t dom[8], int d, int j, const uint32_t l[8], const uint32_t r[8], uint32_t h[8]) {
+  Msg<48> m;
+  int pos = m.head("node", dom);
+  pos = m.template uv<1>(pos, d);
+  pos = m.template uv<LJ>(pos, j);
+  pos = m.digest(pos, l);
+  m.pad(m.digest(pos, r));
+  sha_msg(m, h);
+}
+DEV void node(const uint32_t dom[8], int d, int j, const uint32_t l[8], const uint32_t r[8], uint32_t h[8]) {
+  if (j < 256) mk_node<1>(dom, d, j, l, r, h);
+  else mk_node<2>(dom, d, j, l, r, h);
+}
+template <int L> DEV void mk_pad(const uint32_t dom[8], int rank, uint32_t h[8]) {
+  Msg<32> m;
+  m.pad(m.template uv<L>(m.head("pad", dom), rank));
+  sha_msg(m, h);
+}
+// The leaf of row `rank` (V bytes, a multiple of 64): blocks 0-2 hold the P = 131 + 2L byte prefix and the row's first
+// 192 − P bytes; each later block is 16 words of the row at offset 64β − P, which is S = −P mod 4 past a word boundary, so
+// word t = __byte_perm(W[t], W[t + 1]) over 17 aligned words; the last block holds the row's final P mod 64 bytes and the
+// padding.  The row streams in 16-byte loads, one block ahead in registers and eight ahead into L2.
+template <int L> DEV void mk_leaf(const uint32_t dom[8], int rank, const uint4* R, int V, uint32_t h[8]) {
+  constexpr int P = 131 + 2 * L, S = (4 - P % 4) % 4;
+  constexpr uint32_t SEL = (S + 3) | (S + 2) << 4 | (S + 1) << 8 | S << 12;
+  static_assert(192 - P >= 48 && (192 - P) / 4 == 14, "the rolling blocks start at word 14 of the row");
+  uint4 r[4];
+#pragma unroll
+  for (int i = 0; i < 4; i++) r[i] = __ldg(R + i);
+  {
+    Msg<48> m;
+    int pos = m.head("leaf", dom);
+    pos = m.template uv<L>(pos, rank);
+    pos = m.template uv<L>(pos, rank);
+    const char schema[] = "verity/pouw/row/v1";
+    pos = m.u64(pos, sizeof(schema) - 1);
+#pragma unroll
+    for (int i = 0; i < (int)sizeof(schema) - 1; i++) m.b(pos + i, (uint8_t)schema[i]);
+    pos = m.u64(pos + sizeof(schema) - 1, (uint64_t)V);
+#pragma unroll
+    for (int j = 0; j < 192 - P; j++) {
+      const uint4& q = r[j >> 4];
+      const uint32_t w = (j & 12) == 0 ? q.x : (j & 12) == 4 ? q.y : (j & 12) == 8 ? q.z : q.w;
+      m.b(P + j, w >> (8 * (j & 3)));
+    }
+    sha_msg(m, h);
+  }
+  const int NB = V / 64 - 1;
+  uint4 carry = r[3], c1 = __ldg(R + 4), c2 = __ldg(R + 5), c3 = __ldg(R + 6), c4 = __ldg(R + 7);
+#pragma unroll 1
+  for (int b = 0; b < NB; b++) {
+    const int nx = 8 + 4 * min(b, NB - 2), pf = 4 * min(b + 9, NB);
+    asm volatile("prefetch.global.L2 [%0];" ::"l"(R + pf));
+    const uint4 n1 = __ldg(R + nx), n2 = __ldg(R + nx + 1), n3 = __ldg(R + nx + 2), n4 = __ldg(R + nx + 3);
+    const uint32_t W[17] = {carry.z, carry.w, c1.x, c1.y, c1.z, c1.w, c2.x, c2.y, c2.z, c2.w,
+                            c3.x, c3.y, c3.z, c3.w, c4.x, c4.y, c4.z};
+    uint32_t blk[16];
+#pragma unroll
+    for (int t = 0; t < 16; t++) blk[t] = __byte_perm(W[t], W[t + 1], SEL);
+    ph::sha256_compress(h, blk);
+    carry = c4, c1 = n1, c2 = n2, c3 = n3, c4 = n4;
+  }
+  uint32_t blk[16];
+  blk[0] = __byte_perm(carry.z, carry.w, SEL);
+  blk[1] = __byte_perm(carry.w, 0x80u, SEL);
+  blk[2] = __byte_perm(0x80u, 0u, SEL);
+#pragma unroll
+  for (int t = 3; t < 15; t++) blk[t] = 0;
+  blk[15] = (uint32_t)(P + V) * 8;
+  ph::sha256_compress(h, blk);
+}
+DEV void load_digest(const uint8_t* p, uint32_t h[8]) {
+#pragma unroll
+  for (int i = 0; i < 8; i++) h[i] = ph::bswap32(__ldcg(reinterpret_cast<const uint32_t*>(p) + i));
+}
+DEV void store_digest(uint8_t* p, const uint32_t h[8]) {
+#pragma unroll
+  for (int i = 0; i < 8; i++) reinterpret_cast<uint32_t*>(p)[i] = ph::bswap32(h[i]);
+}
+// One warp per 32 ranks: its leaves, then its subtree by shuffles; the last warp to finish builds the top levels from the
+// subroots and derives the seed.  p0 rows, p1 dom, p2 scratch (32·max(1, width/32) + 192 B), p3 ticket (a u32, 0 between
+// launches: the last warp resets it), p4 root out, p5 salt, p6 root_b (null: B's seed), p7 seed out; i0 rows (1 … 65,536),
+// i1 row bytes (a multiple of 1,024), i2 the matmul's index
+extern "C" __global__ void __launch_bounds__(32) commit_rows(const Args a) {
+  const int count = a.i[0], V = a.i[1], lane = threadIdx.x, rank = 32 * blockIdx.x + lane;
+  const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), wb = min(width, 32), G = gridDim.x;
+  uint8_t* scr = reinterpret_cast<uint8_t*>(a.p[2]);
+  uint32_t dom[8], h[8];
+  load_digest(reinterpret_cast<const uint8_t*>(a.p[1]), dom);
+  const uint4* R = reinterpret_cast<const uint4*>(a.p[0] + (size_t)min(rank, count - 1) * V);
+  if (rank < count) {
+    if (rank < 256) mk_leaf<1>(dom, rank, R, V, h);
+    else mk_leaf<2>(dom, rank, R, V, h);
+  } else if (rank < 256) {
+    mk_pad<1>(dom, rank, h);
+  } else {
+    mk_pad<2>(dom, rank, h);
+  }
+  int d = 0;
+  for (int span = 1; span < wb; span <<= 1, d++) {
+    uint32_t r[8];
+#pragma unroll
+    for (int i = 0; i < 8; i++) r[i] = __shfl_down_sync(FULL, h[i], span);
+    if ((lane & (2 * span - 1)) == 0) node(dom, d, rank >> (d + 1), h, r, h);
+  }
+  if (lane == 0) store_digest(scr + 32 * blockIdx.x, h);
+  __threadfence();
+  unsigned ticket = 0;
+  if (lane == 0) ticket = atomicAdd(reinterpret_cast<unsigned*>(a.p[3]), 1u);
+  if (__shfl_sync(FULL, ticket, 0) != (unsigned)G - 1) return;
+  __threadfence();
+  for (int cnt = G; cnt > 1; cnt >>= 1, d++) {
+    for (int base = 0; base < cnt / 2; base += 32) {
+      const int j = base + lane;
+      uint32_t l[8], r[8], o[8];
+      if (j < cnt / 2) {
+        load_digest(scr + 64 * j, l);
+        load_digest(scr + 64 * j + 32, r);
+        node(dom, d, j, l, r, o);
+      }
+      __syncwarp();
+      if (j < cnt / 2) store_digest(scr + 32 * j, o);
+      __syncwarp();
+    }
+  }
+  if (lane) return;
+  load_digest(scr, h);
+  store_digest(reinterpret_cast<uint8_t*>(a.p[4]), h);
+  uint8_t* msg = scr + 32 * G;
+  uint32_t* key = reinterpret_cast<uint32_t*>(msg + 128);
+  const bool is_a = a.p[6] != 0;
+  const char* label = is_a ? "pearl-c4/v0/seed-A" : "pearl-c4/v0/seed-B";
+  ph::blake3_chunk(nullptr, reinterpret_cast<const uint8_t*>(label), 18, reinterpret_cast<uint8_t*>(key));
+  for (int i = 0; i < 32; i++) msg[i] = reinterpret_cast<const uint8_t*>(a.p[5])[i];
+  store_digest(msg + 32, h);
+  if (is_a) {
+    for (int i = 0; i < 32; i++) msg[64 + i] = reinterpret_cast<const uint8_t*>(a.p[6])[i];
+    for (int i = 0; i < 8; i++) msg[96 + i] = (uint8_t)((uint64_t)(uint32_t)a.i[2] >> (8 * i));
+  }
+  ph::blake3_chunk(key, msg, is_a ? 104 : 64, reinterpret_cast<uint8_t*>(a.p[7]));
+  *reinterpret_cast<unsigned*>(a.p[3]) = 0;
 }
 
 // ---------------------------------------------------------------- forming

@@ -7,7 +7,9 @@ byte for byte.
 OUT/<fmt>/ gets one raw little-endian file per buffer (the layouts are pearl_c4.cu's header) and manifest.json: the shape,
 the kernels' parameters, and each file's size and sha256.  Inputs are derived: word t of row i of operand X is the BF16 value
 with sign b0 >> 7, mantissa b0 & 0x7F and exponent −4 + (b1 mod 6), (b0, b1) bytes 2t, 2t + 1 of
-SHAKE256("verity/pouw/pearl-c4-fixture/v1", X, i); the seeds are the scheme's, from SHA-256 labels as the context.
+SHAKE256("verity/pouw/pearl-c4-fixture/v1", X, i).  The salt is a SHA-256 label; A's and B's roots are `audit.commit_rows`
+over the rows (matmul 0, weight 1), and the seeds are the scheme's `noise` of that context, so the device check holds
+pearl_c4.cu's commitments and seed derivation to the verifier's.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from pathlib import Path
 
 import numpy as np
 from verity.commitments.turboshake import turboshake128
+from verity_pouw import audit as AU
 from verity_pouw.protocol import Context, Matmul, Shape
 from verity_pouw.schemes import pearl_c as C
 from verity_pouw.schemes import pearl_c4 as F
@@ -28,8 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import twin as T  # noqa: E402
 
 SHAPE = (128, 128, 1024)
-SEGMENT = 1024
-D_ROWS = 0x23                      # A's commitment, modeled (pearl_c.cu's hash_rows)
+WEIGHT = 1
 
 
 def rows(name: str, count: int, k: int) -> np.ndarray:
@@ -60,12 +62,15 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
     m, n, k = shape
     fmt = F.FORMATS[fmt_name]
     s = F.PearlC4(fmt_name)
-    h = lambda lab: hashlib.sha256(f"{lab}/pearl-c4-fixture".encode()).digest()  # noqa: E731
-    ctx = Context(h("salt"), Matmul(0, Shape(m, k, n), 1), h("root_a"), h("root_b"))
+    salt = hashlib.sha256(b"salt/pearl-c4-fixture").digest()
+    xa, xb = rows("A", m, k), rows("B", n, k)
+    matmul = Matmul(0, Shape(m, k, n), WEIGHT)
+    tree_a = AU.commit_rows(AU.activation_binding(salt, matmul.index), matmul.index, [r.astype("<u2").tobytes() for r in xa])
+    tree_b = AU.commit_rows(AU.weight_binding(WEIGHT), -2, [r.astype("<u2").tobytes() for r in xb])
+    ctx = Context(salt, matmul, tree_a.commitment.root, tree_b.commitment.root)
     s.check(ctx.matmul)
     noise = s.noise(ctx)
     seed_a, seed_b = noise.seed_a, noise.seed_b
-    xa, xb = rows("A", m, k), rows("B", n, k)
 
     lea, leb = raw_lines(seed_a, F.ROLE_EA, m), raw_lines(seed_b, F.ROLE_EB, n)
     lfa, lfb = raw_lines(seed_b, F.ROLE_FA, k), raw_lines(seed_b, F.ROLE_FB, k)
@@ -117,18 +122,16 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
         for tj_ in range(n // F.TILE):
             rs, cs = slice(F.TILE * ti_, F.TILE * (ti_ + 1)), slice(F.TILE * tj_, F.TILE * (tj_ + 1))
             leaves[ti_, tj_] = np.frombuffer(C.leaf(C.Checked(c[rs, cs].tolist(), u[rs, cs].tolist())), np.uint8)
-    row_hash = np.frombuffer(b"".join(turboshake128(xa[i].astype("<u2").tobytes()[o:o + SEGMENT], D_ROWS, 32)
-                                      for i in range(m) for o in range(0, 2 * k, SEGMENT)), np.uint8)
 
     le = lambda arr, dt: np.ascontiguousarray(arr, dt).tobytes()  # noqa: E731
     # pearl_c4.cu's scales are k-tile major: k/128 x rows x 128/block
     tiled = lambda s: s.reshape(s.shape[0], k // 128, 128 // fmt.block).transpose(1, 0, 2)  # noqa: E731
     files = {
-        "xa": le(xa, "<u2"), "xb": le(xb, "<u2"), "seed_a": seed_a, "seed_b": seed_b,
+        "xa": le(xa, "<u2"), "xb": le(xb, "<u2"), "salt": salt, "dom_a": tree_a.domain.domain_id,
+        "dom_b": tree_b.domain.domain_id, "root_a": ctx.root_a, "root_b": ctx.root_b, "seed_a": seed_a, "seed_b": seed_b,
         "lines_ea": le(lea, np.uint8), "lines_eb": le(leb, np.uint8),
         "lines_fa": le(lfa, np.uint8), "lines_fb": le(lfb, np.uint8),
         "fat": le(pack(fa.T.copy()), np.uint8), "fbt": le(pack(fb.T.copy()), np.uint8),
-        "rows_a": le(row_hash, np.uint8),
         "a_codes": le(pack(a.codes), np.uint8), "a_scales": le(tiled(a.scales), np.uint8), "a_alpha": le(a.alpha, "<u4"),
         "a_inv": le(inv_a, "<u4"), "a_ae": le(a.ae, np.uint8),
         "b_codes": le(pack(b.codes), np.uint8), "b_scales": le(tiled(b.scales), np.uint8), "b_alpha": le(b.alpha, "<u4"),

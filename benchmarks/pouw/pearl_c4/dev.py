@@ -6,9 +6,14 @@ driver API (ctypes on libcuda.so.1; stdlib and numpy, nothing built on the machi
   python3 dev.py time MxNxK [...] [--fmt nvfp4|mxfp4] [--reps R] [--expect-uuid GPU-...]
                                                               self-timing for hillclimbing (the harness's numbers are the record)
 
-The check runs the weight side and one call in each mode (hash with C~ and U stored, nohash, plain) at both CTA heights
-(BM = 128 and 64), and compares every buffer the kernels write with the fixture.  One JSON object per line on stdout.
-Exit 3: identity refused; 4: a buffer differs.
+The check runs the weight side and one call in each mode (hash with C~ and U stored, nohash, plain) at every GEMM geometry,
+and compares every buffer the kernels write with the fixture, the rows' commitment roots and the seeds included.  One JSON
+object per line on stdout.  Exit 3: identity refused; 4: a buffer differs.
+
+The host supplies only public inputs: the operands, the epoch's salt and each commitment's domain id (`dom_a`, `dom_b`: the
+32-byte ids verity.commitments derives from the salt, the matmul's index and the row count).  The device commits A's and
+B's rows as the verifier checks them (`commit_rows`) and derives the seeds from the roots; self-timing takes labels for the
+salt and the domain ids.
 
 The pipeline (`Pipeline`) is also the FP4 bench arm's (arm.py): `weight_side` is the per-(weight, epoch) work, `launch` the
 per-call prover step, each on a given stream and capturable into a CUDA graph.
@@ -29,7 +34,6 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 SM_COUNT, MAX_DYN_SMEM = 16, 8
 ROLE_EA, ROLE_FA, ROLE_EB, ROLE_FB = 0, 1, 2, 3
-SEGMENT = 1024
 FMTS = {"nvfp4": ("nv", 16), "mxfp4": ("mx", 32)}
 MODES = ("hash", "nohash", "plain")
 
@@ -174,12 +178,18 @@ class Dev:
         return out
 
 
-def buffer_sizes(fmt: str, m: int, n: int, k: int) -> dict[str, int]:
+def commit_blocks(rows: int) -> int:
+    """commit_rows' grid: one 32-rank warp per CTA over the ranks padded to a power of two."""
+    return max(1, (1 << max(rows - 1, 0).bit_length()) // 32)
+
+
+def buffer_sizes(fmt: str, m: int, n: int, k: int, rows_a: int | None = None) -> dict[str, int]:
     blk = FMTS[fmt][1]
     return {
-        "xa": 2 * m * k, "xb": 2 * n * k, "seed_a": 32, "seed_b": 32,
+        "xa": 2 * m * k, "xb": 2 * n * k, "seed_a": 32, "seed_b": 32, "salt": 32, "dom_a": 32, "dom_b": 32,
+        "root_a": 32, "root_b": 32, "ticket_a": 4, "ticket_b": 4,
+        "scratch_a": 32 * commit_blocks(rows_a or m) + 192, "scratch_b": 32 * commit_blocks(n) + 192,
         "lines_ea": 16 * m, "lines_eb": 16 * n, "lines_fa": 16 * k, "lines_fb": 16 * k, "fat": 16 * k, "fbt": 16 * k,
-        "rows_a": m * (2 * k // SEGMENT) * 32, "rows_b": n * (2 * k // SEGMENT) * 32,
         "a_codes": m * k // 2, "a_scales": m * k // blk, "a_alpha": 4 * m, "a_inv": 4 * m, "a_ae": m,
         "b_codes": n * k // 2, "b_scales": n * k // blk, "b_alpha": 4 * n, "b_inv": 4 * n, "b_ae": n,
         "pa": 128 * m, "pb": 128 * n, "g": 4096, "bf": 128 * n,
@@ -197,23 +207,29 @@ def form_split(rows: int, k: int, sms: int) -> int:
 
 def domain(m: int, n: int, k: int) -> str | None:
     if not (1024 <= k <= 1 << 16 and k % 512 == 0):
-        return "k: 1,024 <= k <= 2^16 with 512 | k (the scheme's k_min and 128 | k; whole 1 KB row-hash segments)"
+        return "k: 1,024 <= k <= 2^16 with 512 | k (the scheme's k_min and 128 | k; commit_rows' 1 KB row multiple)"
     if m % 64 or n % 128:
         return "m a multiple of 64 (the tile; pad with zero filler rows) and n of 128 (the CTA width)"
+    if max(m, n) > 1 << 16:
+        return "at most 2^16 rows per commitment (commit_rows' two-byte ranks)"
     return None
 
 
 class Pipeline:
     """One (format, shape) instance: its buffers and its kernels in order.  `external` maps buffer names (xa, xb) to
-    device pointers the caller owns (the harness's operand sets); the rest are allocated here."""
+    device pointers the caller owns (the harness's operand sets); the rest are allocated here.  `rows_a` is the number of
+    A's rows committed (default m; fewer when m is padded to the tile), `index` the matmul's index in A's seed."""
 
     def __init__(self, dev: Dev, fmt: str, m: int, n: int, k: int, bm: int | None = None, store_cu: bool = False,
                  external: dict[str, int] | None = None, split: int | None = None, chain_h: int | None = None,
-                 bn: int | None = None):
+                 bn: int | None = None, rows_a: int | None = None, index: int = 0):
         why = domain(m, n, k)
         if why:
             raise ValueError(f"{m}x{n}x{k} outside pearl_c4.cu's domain: {why}")
         self.dev, self.fmt, self.m, self.n, self.k = dev, fmt, m, n, k
+        self.rows_a, self.index = rows_a or m, index
+        if not 1 <= self.rows_a <= m:
+            raise ValueError(f"{self.rows_a} committed rows of A's {m}")
         self.split_a = split or form_split(m, k, dev.sms)
         self.split_b = split or form_split(n, k, dev.sms)
         self.chain_h = chain_h
@@ -222,7 +238,7 @@ class Pipeline:
         self.bn = bn or (64 if self.bm == 64 and (m // 64) * (n // 128) < dev.sms else 128)
         if (self.bm, self.bn) not in ((128, 128), (64, 128), (64, 64)):
             raise ValueError(f"no {self.bm} x {self.bn} GEMM in pearl_c4.cu")
-        self.sizes = buffer_sizes(fmt, m, n, k)
+        self.sizes = buffer_sizes(fmt, m, n, k, self.rows_a)
         self.external = dict(external or {})
         if store_cu:
             self.sizes.update(c=4 * m * n, u=4 * m * n)
@@ -238,19 +254,28 @@ class Pipeline:
         name = f"chain32_{self.tag}" + ("_r2" if h == 32 else "")
         return name, (rows // h, 8 * h, self.dev.dyn_smem(name)), dict(p=p, i=i)
 
+    def commit(self, side: str) -> tuple[str, tuple, dict]:
+        """The launch of A's (side "a") or B's commitment and seed: the root, then seed_a (reading root_b) or seed_b."""
+        b, k = self.buf, self.k
+        rows, xs, extra = (self.rows_a, "xa", b["root_b"]) if side == "a" else (self.n, "xb", 0)
+        return "commit_rows", (commit_blocks(rows), 32), dict(
+            p=[b[xs], b[f"dom_{side}"], b[f"scratch_{side}"], b[f"ticket_{side}"], b[f"root_{side}"], b["salt"], extra,
+               b[f"seed_{side}"]], i=[rows, 2 * k, self.index])
+
     def weight_side(self, stream: int = 0, hashing: bool = True) -> None:
-        """Per (weight, epoch): F_A and F_B's lines, F's transposes, B's commitment (modeled), B's forming (with E_B's lines),
-        G, B~F_A, P_B."""
+        """Per (weight, epoch): B's commitment and seed_b, F_A and F_B's lines, F's transposes, B's forming (with E_B's
+        lines), G, B~F_A, P_B.  hashing=False leaves the commitment out (seed_b as it stands)."""
         d, b, n, k = self.dev, self.buf, self.n, self.k
         L = lambda *a, **kw: d.launch(*a, stream=stream, **kw)  # noqa: E731
+        if hashing:
+            name, geo, kw = self.commit("b")
+            L(name, *geo, **kw)
         L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fa"]], i=[ROLE_FA, k])
         L("lines", cdiv(k, 128), 128, p=[b["seed_b"], b["lines_fb"]], i=[ROLE_FB, k])
         if not hashing:
             L("lines", cdiv(n, 128), 128, p=[b["seed_b"], b["lines_eb"]], i=[ROLE_EB, n])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fa"], b["fat"]], i=[k])
         L("transpose", cdiv(16 * k, 256), 256, p=[b["lines_fb"], b["fbt"]], i=[k])
-        if hashing:
-            L("hash_rows", cdiv(n * (2 * k // SEGMENT), 128), 128, p=[b["xb"], b["rows_b"]], i=[n, 2 * k])
         L(f"form_{self.tag}", (n // 16, self.split_b), 256, p=[
             b["xb"], b["lines_eb"], b["lines_fb"], b["b_codes"], b["b_scales"], b["b_alpha"], b["b_inv"], b["b_ae"], b["pb"],
             b["seed_b"] if hashing else 0], i=[n, k, 32, 1, ROLE_EB])
@@ -260,18 +285,21 @@ class Pipeline:
         L("pb", cdiv(32 * n, 256), 256, p=[b["pb"], b["g"], b["bf"]], i=[n])
 
     def prime(self, stream: int = 0) -> None:
-        """E_A's lines once, so that the nohash call (which leaves the XOF out) forms from real lines."""
+        """A's commitment and seed_a, then E_A's lines once, so that the nohash call (which leaves the XOF out) forms from
+        real lines."""
+        name, geo, kw = self.commit("a")
+        self.dev.launch(name, *geo, stream=stream, **kw)
         self.dev.launch("lines", cdiv(self.m, 128), 128, p=[self.buf["seed_a"], self.buf["lines_ea"]], i=[ROLE_EA, self.m],
                         stream=stream)
 
     def steps(self, mode: str = "hash") -> list[tuple[str, tuple, dict]]:
-        """One call's launches: A's commitment (modeled; hash only), A's forming (with E_A's lines in the hash mode; the
-        others read the primed ones), A'F_B into P_A, the chain with the peel and (hash) the epilogue's digests, then (hash)
-        the tile leaves."""
+        """One call's launches: (hash) A's commitment and seed_a, A's forming (with E_A's lines from seed_a in the hash
+        mode; the others read the primed ones), A'F_B into P_A, the chain with the peel and (hash) the epilogue's digests,
+        then (hash) the tile leaves."""
         b, m, n, k = self.buf, self.m, self.n, self.k
         out = []
         if mode == "hash":
-            out.append(("hash_rows", (cdiv(m * (2 * k // SEGMENT), 128), 128), dict(p=[b["xa"], b["rows_a"]], i=[m, 2 * k])))
+            out.append(self.commit("a"))
         out.append((f"form_{self.tag}", ((m // 16, self.split_a), 256), dict(
             p=[b["xa"], b["lines_ea"], b["lines_fa"], b["a_codes"], b["a_scales"], b["a_alpha"], b["a_inv"], b["a_ae"], b["pa"],
                b["seed_a"] if mode == "hash" else 0], i=[m, k, 0, 0, ROLE_EA])))
@@ -297,14 +325,15 @@ class Pipeline:
 # ---------------------------------------------------------------- the check
 
 WRITTEN = {
-    "weight": ("lines_fa", "lines_fb", "lines_eb", "fat", "fbt", "b_codes", "b_scales", "b_alpha", "b_inv", "b_ae", "pb", "g",
-               "bf"),
-    "hash": ("rows_a", "lines_ea", "a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "c", "u", "y", "digests", "leaves"),
+    "weight": ("root_b", "seed_b", "lines_fa", "lines_fb", "lines_eb", "fat", "fbt", "b_codes", "b_scales", "b_alpha", "b_inv",
+               "b_ae", "pb", "g", "bf"),
+    "hash": ("root_a", "seed_a", "lines_ea", "a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "c", "u", "y", "digests",
+             "leaves"),
     "nohash": ("a_codes", "a_scales", "a_alpha", "a_inv", "a_ae", "pa", "y"),
     "plain": ("a_codes", "a_scales", "y_plain"),
 }
 WORD = {"a_alpha": 4, "a_inv": 4, "b_alpha": 4, "b_inv": 4, "g": 4, "bf": 4, "c": 4, "u": 4, "pa": 2, "pb": 2, "y": 2,
-        "y_plain": 2, "digests": 32, "leaves": 32, "rows_a": 32}
+        "y_plain": 2, "digests": 32, "leaves": 32, "root_a": 32, "root_b": 32, "seed_a": 32, "seed_b": 32}
 
 
 def diff(name: str, got: bytes, want: bytes) -> dict:
@@ -331,7 +360,7 @@ def check_fmt(dev: Dev, d: Path) -> bool:
         wide = bm == 64 and m % 32 == 0 and n % 32 == 0
         pl = Pipeline(dev, mf["fmt"], m, n, k, bm=bm, bn=bn, store_cu=True, split=k // 64 // 8 if bm == 64 else 1,
                       chain_h=32 if wide else 16)
-        for name in ("xa", "xb", "seed_a", "seed_b"):
+        for name in ("xa", "xb", "salt", "dom_a", "dom_b"):
             dev.write(pl.buf[name], want[name])
         pl.weight_side()
         dev.sync()
@@ -378,8 +407,8 @@ def main(argv: list[str]) -> int:
         for name, rows in (("xa", m), ("xb", n)):
             x = rng.integers(-8, 9, (rows, k)).astype(np.float32).view(np.uint32) >> 16
             dev.write(pl.buf[name], x.astype("<u2").tobytes())
-        dev.write(pl.buf["seed_a"], hashlib.sha256(b"seed-a").digest())
-        dev.write(pl.buf["seed_b"], hashlib.sha256(b"seed-b").digest())
+        for name in ("salt", "dom_a", "dom_b"):
+            dev.write(pl.buf[name], hashlib.sha256(f"verity/pouw/pearl-c4-dev/{name}".encode()).digest())
         pl.weight_side()
         pl.prime()
         dev.sync()
