@@ -38,5 +38,17 @@ CUDA_VISIBLE_DEVICES=5 CUDA_DEVICE_ORDER=PCI_BUS_ID python bench.py --gpu 5 --ex
 CUDA_VISIBLE_DEVICES=5 CUDA_DEVICE_ORDER=PCI_BUS_ID python characterize.py --gpu 5 --expect-uuid GPU-... --out char.json
 ```
 
+Where there is no CUDA 12.8+ toolkit (a RunPod pod, a node-2 job), `jobs/env.sh BUILD` gives the run NVIDIA's cuBLASLt and
+runtime wheels and a library built elsewhere: a build directory, or `art:<id>` of one preserved with
+`research data put --kind pouw-harness-build/v1 --tree DIR --preserve`. On node 2, `jobs/harness.yaml` runs anything untimed on
+one GPU (queue `pouw`), and `jobs/harness-timed.yaml` a panel run on GPU 5 with the node held (priority `pouw-timed`, killed at
+18 minutes); their headers give the `sky jobs launch` lines. On a pod, send the build with the run:
+
+```bash
+research run --on POD --project verity --campaign pouw --source . --cwd source \
+  --send BUILD/libpouw_harness.so --send BUILD/build.json -- bash -c '. benchmarks/pouw/harness/jobs/env.sh "$RESEARCH_RUN_DIR/inputs" &&
+  CUDA_VISIBLE_DEVICES=0 CUDA_DEVICE_ORDER=PCI_BUS_ID "$PY" benchmarks/pouw/harness/characterize.py --gpu 0 --pod --out "$RESEARCH_RUN_DIR/char.json"'
+```
+
 Exit codes: 0 ok; 2 identity or usage; 3 a device, build or harness error; 5 a known-bad variant wasn't rejected; 6 the
 consistency gate rejected an arm. The JSON is written in every case, with every rep.
