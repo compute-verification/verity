@@ -259,7 +259,38 @@ def test_a_config_run_with_no_commit_is_not_pass(tmp_path):
     assert CR.record(d, ROW)["why"] == "commit not run"
 
 
-<<<<<<< HEAD
+def test_the_record_s_slowdown_is_instrumented_over_control_per_phase(tmp_path):
+    d = _row_dir(tmp_path)
+    assert CR.record(d, ROW)["timing"]["slowdown"] is None, "no control arm: no baseline, no slowdown"
+    inst = json.loads((d / "commit" / "runs.jsonl").read_text())
+    inst.update(step_wall_prefill_s=0.30, step_wall_decode_mean_s=0.050)
+    ctrl = {"arm": "control", "pair": 0, "wall_s": 2.5, "engine_steps": 32, "step_wall_prefill_s": 0.02, "step_wall_decode_mean_s": 0.010}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(ctrl) + "\n" + json.dumps(inst) + "\n")
+    rec = CR.record(d, ROW)
+    assert rec["outcome"] == "PASS" and rec["commit"]["runs"] == 1, "the control arm is timing only; the decision is the instrumented run's"
+    sd = rec["timing"]["slowdown"]
+    assert sd["prefill"] == pytest.approx(15.0) and sd["decode"] == pytest.approx(5.0) and sd["wall"] == pytest.approx(5.0)
+    assert rec["timing"]["control"]["decode_mean_s"] == 0.010
+
+
+def test_the_record_carries_the_engine_s_cublas_workspace_pin(tmp_path):
+    d = _row_dir(tmp_path)
+    assert CR.record(d, ROW)["engine"] is None, "no engine facts recorded: none claimed"
+    run = json.loads((d / "commit" / "runs.jsonl").read_text())
+    run["commit"]["sampled_replay"]["engine_of_record"] = {"VLLM_BATCH_INVARIANT": "1", "CUBLAS_WORKSPACE_CONFIG": ":16:8",
+                                                           "CUBLASLT_WORKSPACE_SIZE": "1", "rule": "measured in the engine's process"}
+    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    eng = CR.record(d, ROW)["engine"]
+    assert eng["CUBLAS_WORKSPACE_CONFIG"] == ":16:8" and eng["CUBLASLT_WORKSPACE_SIZE"] == "1" and "rule" not in eng
+
+
+def test_a_config_baseline_keeps_the_control_arm(tmp_path):
+    r = _row(tmp_path, "--config-run", "1", "--config-baseline", "1")
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    cmd = r.commit_cmd([])
+    assert "--only-arm" not in cmd and cmd[cmd.index("--pairs") + 1] == "1" and "--bounded-staging" in cmd
+
+
 ROW_TP2 = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 
 
@@ -318,38 +349,6 @@ def test_a_tp2_config_run_missing_a_rank_is_not_pass(tmp_path):
     d = _tp_row_dir(tmp_path, ranks=1)
     rec = CR.record(d, ROW_TP2)
     assert rec["replay"]["ok"] is False and rec["outcome"] == "FAIL"
-=======
-def test_the_record_s_slowdown_is_instrumented_over_control_per_phase(tmp_path):
-    d = _row_dir(tmp_path)
-    assert CR.record(d, ROW)["timing"]["slowdown"] is None, "no control arm: no baseline, no slowdown"
-    inst = json.loads((d / "commit" / "runs.jsonl").read_text())
-    inst.update(step_wall_prefill_s=0.30, step_wall_decode_mean_s=0.050)
-    ctrl = {"arm": "control", "pair": 0, "wall_s": 2.5, "engine_steps": 32, "step_wall_prefill_s": 0.02, "step_wall_decode_mean_s": 0.010}
-    (d / "commit" / "runs.jsonl").write_text(json.dumps(ctrl) + "\n" + json.dumps(inst) + "\n")
-    rec = CR.record(d, ROW)
-    assert rec["outcome"] == "PASS" and rec["commit"]["runs"] == 1, "the control arm is timing only; the decision is the instrumented run's"
-    sd = rec["timing"]["slowdown"]
-    assert sd["prefill"] == pytest.approx(15.0) and sd["decode"] == pytest.approx(5.0) and sd["wall"] == pytest.approx(5.0)
-    assert rec["timing"]["control"]["decode_mean_s"] == 0.010
-
-
-def test_the_record_carries_the_engine_s_cublas_workspace_pin(tmp_path):
-    d = _row_dir(tmp_path)
-    assert CR.record(d, ROW)["engine"] is None, "no engine facts recorded: none claimed"
-    run = json.loads((d / "commit" / "runs.jsonl").read_text())
-    run["commit"]["sampled_replay"]["engine_of_record"] = {"VLLM_BATCH_INVARIANT": "1", "CUBLAS_WORKSPACE_CONFIG": ":16:8",
-                                                           "CUBLASLT_WORKSPACE_SIZE": "1", "rule": "measured in the engine's process"}
-    (d / "commit" / "runs.jsonl").write_text(json.dumps(run) + "\n")
-    eng = CR.record(d, ROW)["engine"]
-    assert eng["CUBLAS_WORKSPACE_CONFIG"] == ":16:8" and eng["CUBLASLT_WORKSPACE_SIZE"] == "1" and "rule" not in eng
-
-
-def test_a_config_baseline_keeps_the_control_arm(tmp_path):
-    r = _row(tmp_path, "--config-run", "1", "--config-baseline", "1")
-    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
-    cmd = r.commit_cmd([])
-    assert "--only-arm" not in cmd and cmd[cmd.index("--pairs") + 1] == "1" and "--bounded-staging" in cmd
->>>>>>> origin/cursor/config-run-2622
 
 
 # ---------------------------------------------------------------------------------------------------------------- the Program cache
