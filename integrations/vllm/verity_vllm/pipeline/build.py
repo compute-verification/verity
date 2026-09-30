@@ -44,7 +44,7 @@ def _instance_rows(program):
     from verity.ir.codec import descriptor_id
     from verity.ir.refs import runs
     for k, n in enumerate(program.fn.body.nodes):
-        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [[list(r) for r in runs(a.refs)] for a in n.args]}
+        yield {"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [runs(a.refs) for a in n.args]}  # json writes a run tuple as the list it was
 
 
 def _instance_sequence(program) -> list[dict]:
@@ -524,11 +524,11 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
             json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
         else:
-            from verity.ir.codec import descriptor_size, encode_program, program_digest
+            from verity.ir.codec import canonical_json, encode_program
             from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
             program = rep.program
-            desc = encode_program(program)
-            digest = program_digest(desc)
+            desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
+            digest = hashlib.sha256(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
             # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
             corr_digest = correspondence_digest(desc)
             assert corr_digest == rep.correspondence_digest, (corr_digest, rep.correspondence_digest)
@@ -537,7 +537,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 f.write(raw)
             corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
             res["program"] = {"function": program.fn.id, "digest": digest, "sha512": program_sha512(desc), "gates": program.gates, "input_gates": program.input_gates,
-                              "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": descriptor_size(desc),
+                              "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
                               "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                               "correspondence_digest": corr_digest,
                               "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),

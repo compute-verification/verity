@@ -236,6 +236,13 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     from verity_vllm.program.registry import moe_pad as _mp  # noqa: PLC0415
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
+
+def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
+    if FA2_MASKED_FROM is None:
+        raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
+    from verity_vllm.program.registry import fa2_softcap as _f2s  # noqa: PLC0415
+    return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+
 # -- profile "b1-eager-v3" [CB-A 2026-09-18]: the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —
 # TA1's v1 kinds with the attention chain `Attention_v3{T,NH,KVH,D,BN}` (`b1.AttentionV3`, `BN = fa2_kblock_n(D)`: FA2's kBlockN at
 # this head dim, D54/D57). Used by the export-of-the-real-vLLM-class frontend (`rules/vllm_bindings.py`). ---------------------------
@@ -253,9 +260,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "gemm_dot": lambda K, N, DOT: ir_bind(b1.GemmV2, K=K, N=N, DOT=DOT),
            # a `MASKED_FROM` binds FA3's per-iteration Check_inf chain instead (`Attention_v4`, `TargetProfile.fa3_construction`), an
            # `FA2_MASKED_FROM` FA2's (`Attention_v5`, `targets.fa2_check_inf`); optional statics, so the role and its note -- and with them
-           # this vocabulary's version -- stay as they were
-           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None:
-               ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+           # this vocabulary's version -- stay as they were; a `CAP` with an `FA2_MASKED_FROM` binds the softcapped chain
+           # (`AttentionSoftcap_v2`), and a `CAP` without one has no kind
+           "attention_dot": lambda T, NH, KVH, D, BN, DOT, INV, MASKED_FROM=None, FA2_MASKED_FROM=None, CAP=None:
+               _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP) if CAP is not None
+               else ir_bind(_f2.AttentionV5, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
                if FA2_MASKED_FROM is not None
                else ir_bind(b1.AttentionV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV) if MASKED_FROM is None
                else ir_bind(_f3.AttentionV4, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM),
