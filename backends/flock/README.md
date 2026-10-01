@@ -71,7 +71,10 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of 
 
 A point's `gpu_held_s_amortized` is its sweep plus an equal share of the session's other GPU-held seconds (the check, the
 pod's start); compare it with a one-point job's `gpu_held_s_job`. The session's `result.json` passes only when the check and
-every point pass.
+every point pass. `POINTS=0` runs the preflight check alone, and `STAGE_ONLY=1 POINTS=0` stages only its statement. The
+check's three GPU cases run at once, each in its own process, while three times one case's device memory (measured per K in
+`74-gemm-hill.sh`) fits the GPU's free memory, else one after another; its record (`selftest.per_case`, `selftest.run`) has
+each case's wall time, exit code and peak device memory, and why it fell back.
 
 ## Tests
 
