@@ -291,3 +291,62 @@ def test_a_family_whose_record_lacks_gemm_bias_dot_keeps_gemm_v2_then_bias_add(o
     assert _hist(rep.program) == {"Gemm_v2": M, "BiasAdd_v1": M}, _hist(rep.program)
     x = (torch.randn(M, K, generator=torch.Generator().manual_seed(11)) * 0.8).to(BF)
     assert _values(rep, m, x) == _pair(m, x, TG.tensor_core_dot(H100_TP))
+
+
+# ---------------------------------------------------------------------------------------------------------
+# the manifest: a one-Call biased linear has no call boundary
+# ---------------------------------------------------------------------------------------------------------
+
+def _qwen2_qkv_program(one_call: bool, rows: int = 2, layers: int = 2):
+    """Qwen2's biased `qkv_proj` per layer and token row, named as a cc 12.0 Build names it, read by `o_proj`: one `GemmBias_v2`
+    Call (`qkv_proj/add[r]`), or `Gemm_v2` (`qkv_proj/triton_launch_1[r]`) then `BiasAdd_v1` (`qkv_proj/add[r]/bias`) in one body."""
+    from verity.proofs.query import ValueRef as R
+    from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
+    pre = "model.model.layers"
+    names = [f"{pre}.{i}.self_attn.{p}" for i in range(layers) for p in ("qkv_proj.weight", "qkv_proj.bias", "o_proj.weight")]
+    weights = InputView(-1, "weights", "{...}", tuple(Port(n, 64 * k, 64 * k + 64, 64, 16) for k, n in enumerate(names)))
+    xs = InputView(-2, "x", f"Array<{rows * K},Value<16>>", (Port("x", 0, rows * K, rows * K, 16),))
+    calls: list = []
+
+    def add(spec, name, reads, n=N, width=16):
+        calls.append(CallView(len(calls), spec, spec.split("{", 1)[0], "call", name, (Port("out", 0, n, n, width),), tuple(reads)))
+        return len(calls) - 1
+
+    last = None
+    for r in range(rows):
+        h = R(-2, "x")
+        for i in range(layers):
+            qkv, o = f"{pre}.{i}.self_attn.qkv_proj", f"{pre}.{i}.self_attn.o_proj"
+            if one_call:
+                y = add(f"GemmBias_v2{{K={K},N={N}}}", f"{qkv}/add[{r}]", [h, R(-1, f"{qkv}.weight"), R(-1, f"{qkv}.bias")])
+            else:
+                g = add(f"Gemm_v2{{K={K},N={N}}}", f"{qkv}/triton_launch_1[{r}]", [h, R(-1, f"{qkv}.weight")])
+                y = add(f"BiasAdd_v1{{N={N}}}", f"{qkv}/add[{r}]/bias", [R(g, "out"), R(-1, f"{qkv}.bias")])
+            last = add(f"Gemm_v2{{K={N},N={K}}}", f"{o}/triton_launch_2[{r}]", [R(y, "out"), R(-1, f"{o}.weight")], n=K)
+            h = R(last, "out")
+    add("ArgmaxTokenSelect_v1{N=1}", "argmax[0]", [R(last, "out")], n=1, width=32)
+    return ProgramView(tuple(calls), (weights, xs), (R(len(calls) - 1, "out"),), "synthetic", "synthetic")
+
+
+def test_a_one_call_biased_qkv_commits_slot_0_and_no_call_boundary():
+    """The Qwen2.5-1.5B B1 control on cc 12.0 (main without this binding) carried 3,584 more identities than the coverage Build: one
+    `call_boundaries` row per (step, layer) at the pre-bias word `qkv_proj/triton_launch_1/out`, host-evaluated at Commit.  Under
+    `Q_word` the one-Call form has none, and the module's committed value is slot `0`, as the collector binds a Linear's output."""
+    from verity_vllm.correspondence.reader_for_query import Correspondence
+    res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {},
+           "target": {"declared": {"compute_capability": [12, 0]}}}
+    man = {}
+    for one_call in (True, False):
+        P = _qwen2_qkv_program(one_call)
+        man[one_call] = RQ.request_manifest(P, Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"]), res,
+                                            request_id="r0").manifest
+    rows = lambda m, fam: sorted((x["op_path"], x["output_member"], tuple(x["element_range"]), x.get("spec"))  # noqa: E731
+                                 for x in m["identities"] if x["family"] == fam)
+    qkv = [f"model.layers.{i}.self_attn.qkv_proj" for i in range(2)]
+    assert rows(man[True], "call_boundaries") == []
+    assert rows(man[False], "call_boundaries") == [(f"{q}/triton_launch_1", "out", (0, 2 * N), "Gemm_v2") for q in qkv]
+    assert [r for r in rows(man[True], "instance_outputs") if r[0] in qkv] == [(q, "0", (0, 2 * N), "GemmBias_v2") for q in qkv]
+    rest = lambda m: sorted(json.dumps(x, sort_keys=True) for x in m["identities"]  # noqa: E731
+                            if x["family"] != "call_boundaries" and x["op_path"] not in qkv)
+    assert rest(man[True]) == rest(man[False])
+    assert len(man[False]["identities"]) - len(man[True]["identities"]) == len(qkv)
