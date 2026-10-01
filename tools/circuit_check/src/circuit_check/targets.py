@@ -44,6 +44,7 @@ def load_registries() -> None:
     from verity.ir.defs import REGISTRY
 
     import verity.ml.boolean.attention  # noqa: F401
+    import verity.ml.boolean.cast  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
@@ -234,6 +235,15 @@ def _boolean_roots() -> list[Any]:
             bind(SB.TokenSelect, V=4161)]
 
 
+def _boolean_gather_roots() -> list[Any]:
+    """The Boolean embedding (`verity_vllm.program.registry.boolean_gather`) over a gather traced whole (V = 64) and over a tree
+    of Calls with a partial last chunk (V = 1100); the bf16 widening (`verity.ml.boolean.cast`) is static-free."""
+    from verity.ir.defs import bind
+    from verity_vllm.program.registry import boolean_gather as BGA
+
+    return [bind(BGA.Embedding, V=64, H=16), bind(BGA.Embedding, V=1100, H=2)]
+
+
 def _kernel_roots() -> list[Any]:
     from verity_vllm.program.kernels import kernel_registry as KR
 
@@ -365,7 +375,7 @@ def catalog() -> list[Any]:
         elif isinstance(d, CompositeDefinition) and not d.statics:
             roots.append(bind(d))
     ROOT_ERRORS.clear()
-    roots += _core_roots() + _boolean_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
+    roots += _core_roots() + _boolean_roots() + _boolean_gather_roots() + _kernel_roots() + _vocabulary_roots() + _pouw_roots()
     for label, make in _model_roots():
         try:
             fn = make()
