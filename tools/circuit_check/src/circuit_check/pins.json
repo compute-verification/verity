@@ -114,6 +114,15 @@
   "MulVecF32_v2{N=8}": {
    "and": 19440
   },
+  "NvExpfIn_v1": {
+   "and": 10829
+  },
+  "NvExpfOut_v1": {
+   "and": 743
+  },
+  "NvExpf_v2": {
+   "and": 12644
+  },
   "RsqrtApprox_v2": {
    "and": 1134
   },
