@@ -1,6 +1,7 @@
 """The records' liveness screen of the Pearl-C device path (`pouw_pearl_c_device`), and the kernel its CUDA graphs scatter a
 call's outputs with.  `screen` is the per-row rules in torch; `screen_into` runs them as one fused Triton program a row on the GPU (or
-as `screen`'s torch operations elsewhere); `excluded` gives the rows the rules exclude, deciding the band's rows exactly.
+as `screen`'s torch operations elsewhere); `scatter_into` runs the same programs into the pass, with a graph's copies of its
+leaves and A root in the same launch; `excluded` gives the rows the rules exclude, deciding the band's rows exactly.
 """
 from __future__ import annotations
 
@@ -38,78 +39,22 @@ def screen(x: Any, alpha: Any, aux: Any, chunk: int = 1 << 26) -> tuple[Any, Any
     return fails, unsure
 
 
-_SCREEN_KERNEL: list = []
-
-
-def _screen_kernel():
-    """`screen` as one Triton program a row: FP64 sum of the squares at positions ≡ 0 (mod 8), the band's bounds rounded to
-    FP32 as `screen` rounds them, the dead and in-band counts, and the noise floor from the row's α and ρ.  Its sum's order is
-    not torch's, so a row can come out unsure in one and decided in the other; both leave only rows within the band undecided,
-    and `excluded` decides those exactly, so the records are the same."""
-    if not _SCREEN_KERNEL:
-        import triton
-        import triton.language as tl
-
-        @triton.jit
-        def kernel(x, alpha, aux, out, k, k8, sigma, band, BLOCK: tl.constexpr):
-            row = tl.program_id(0)
-            base = x + row.to(tl.int64) * k
-            acc = tl.zeros([BLOCK], dtype=tl.float64)
-            for s in range(0, k, BLOCK):
-                offs = s + tl.arange(0, BLOCK)
-                v = tl.load(base + offs, mask=offs < k, other=0.0).to(tl.float32)
-                acc += tl.where(offs % 8 == 0, (v * v).to(tl.float64), 0.0)
-            thr = 64.0 * tl.sum(acc, axis=0) / k8
-            hi = (thr * (1.0 + band)).to(tl.float32)
-            lo = (thr * (1.0 - band)).to(tl.float32)
-            dead = tl.zeros([BLOCK], dtype=tl.int32)
-            near = tl.zeros([BLOCK], dtype=tl.int32)
-            for s in range(0, k, BLOCK):
-                offs = s + tl.arange(0, BLOCK)
-                live = offs < k
-                v = tl.load(base + offs, mask=live, other=0.0).to(tl.float32)
-                sq = v * v
-                dead += tl.where(live & (sq > hi), 1, 0)
-                near += tl.where(live & (sq >= lo) & (sq <= hi), 1, 0)
-            d = tl.sum(dead, axis=0)
-            b = tl.sum(near, axis=0)
-            floor = tl.where(tl.load(aux + 2 * row + 1).to(tl.float64) * tl.load(alpha + row).to(tl.float64) < sigma, 1, 0)
-            sure_fail = tl.where(64 * d > k, 1, 0)
-            sure_pass = tl.where(64 * (d + b) <= k, 1, 0)
-            tl.store(out + 2 * row, tl.maximum(floor, sure_fail).to(tl.uint8))
-            tl.store(out + 2 * row + 1, ((1 - floor) * (1 - sure_fail) * (1 - sure_pass)).to(tl.uint8))
-        _SCREEN_KERNEL.append(kernel)
-    return _SCREEN_KERNEL[0]
-
-
-_SCATTER_KERNEL: list = []
-#: bytes a program of the scatter copies
+#: elements a program of the screen reads at once, and bytes a program of the scatter copies
 SCATTER_BLOCK = 1024
 
 
-def scatter_kernel():
-    """A graph's scatter into the pass, one launch: `n_leaves` bytes from `leaves`, `n_flags` from `flags` and A's 32-byte
-    `root`, each to its destination at the byte offset `offs[0]`, `offs[1]`, `offs[2]` read on the device.  The first
-    ⌈n_leaves / BLOCK⌉ programs copy the leaves, the next ⌈n_flags / BLOCK⌉ the flags, the last one the root."""
-    if not _SCATTER_KERNEL:
-        import triton
-        import triton.language as tl
+def scatter_into(x: Any, alpha: Any, aux: Any, rows: int, flags_to: Any, leaves: Any, leaves_to: Any, root: Any, roots_to: Any,
+                 offs: Any) -> None:
+    """A graph's scatter into the pass, one launch: the first `rows` rows of x screened (`screen_into`'s flags) into
+    `flags_to`, and the `leaves` and A's 32-byte `root` copied to `leaves_to` and `roots_to`, each at the byte offset
+    `offs[1]`, `offs[0]`, `offs[2]` read on the device.  Its first `rows` programs screen a row each, the next
+    ⌈len(leaves) / SCATTER_BLOCK⌉ copy the leaves, the last one the root."""
+    import torch
 
-        @triton.jit
-        def scatter_at(leaves, leaves_to, flags, flags_to, root, roots_to, offs, n_leaves, n_flags, BLOCK: tl.constexpr):
-            p, b0 = tl.program_id(0), tl.cdiv(n_leaves, BLOCK)
-            b1 = tl.cdiv(n_flags, BLOCK)
-            if p < b0:
-                i = p * BLOCK + tl.arange(0, BLOCK)
-                tl.store(leaves_to + tl.load(offs) + i, tl.load(leaves + i, mask=i < n_leaves), mask=i < n_leaves)
-            elif p < b0 + b1:
-                i = (p - b0) * BLOCK + tl.arange(0, BLOCK)
-                tl.store(flags_to + tl.load(offs + 1) + i, tl.load(flags + i, mask=i < n_flags), mask=i < n_flags)
-            else:
-                i = tl.arange(0, BLOCK)
-                tl.store(roots_to + tl.load(offs + 2) + i, tl.load(root + i, mask=i < 32), mask=i < 32)
-        _SCATTER_KERNEL.append(scatter_at)
-    return _SCATTER_KERNEL[0]
+    from .pouw_pearl_c_triton import scatter
+    k, n, B = x.shape[1], leaves.numel(), SCATTER_BLOCK
+    scatter[(rows - (-n // B) + 1,)](x, alpha.view(torch.float32), aux.view(torch.float32), rows, k, len(range(0, k, C.S5_STRIDE)),
+                                     P.SIGMA_MIN, BAND, flags_to, leaves, leaves_to, root, roots_to, offs, n, BLOCK=B)
 
 
 def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
@@ -118,8 +63,9 @@ def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
     import torch
     rows, k = x.shape
     if fused:
-        _screen_kernel()[(rows,)](x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)),
-                                  P.SIGMA_MIN, BAND, BLOCK=1024)
+        from .pouw_pearl_c_triton import screen as kernel
+        kernel[(rows,)](x, alpha.view(torch.float32), aux.view(torch.float32), out, k, len(range(0, k, C.S5_STRIDE)), P.SIGMA_MIN,
+                        BAND, BLOCK=SCATTER_BLOCK)
     else:
         fails, unsure = screen(x, alpha, aux)
         out[:, 0].copy_(fails)

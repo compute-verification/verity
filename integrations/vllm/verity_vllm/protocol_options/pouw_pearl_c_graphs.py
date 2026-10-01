@@ -1,7 +1,7 @@
 """The Pearl-C device path's CUDA graphs (``graphs``, `pouw_pearl_c_device.PearlCDeviceRun`): each decode call's steps are
 captured once a pipeline and replayed on the caller's stream.  A graph reads its call's keys and pass offsets from its
 weight's device slot, which a forward's first call fills for the whole forward in one upload (a call the prediction missed
-uploads its own), and scatters its leaves, flags and A root into the pass itself.  The same kernels write the same bytes as
+uploads its own), and in its last launch screens its rows into the pass's flags and copies its leaves and A root there.  The same kernels write the same bytes as
 the eager steps, which the e2e's ``graphs`` gate holds.
 
 Inside vLLM's own capture of a whole decode forward (`pouw_pearl_c_whole`, between `whole_capture_begin` and
@@ -22,7 +22,7 @@ from verity_pouw.protocol import Matmul, Shape
 from verity_pouw.schemes import pearl_c_work as PW
 
 from .pouw_pearl_c_host import _bytes, _write, _zeros, torch_uint8
-from .pouw_pearl_c_screen import SCATTER_BLOCK, excluded, scatter_kernel, screen_into
+from .pouw_pearl_c_screen import excluded, scatter_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
@@ -40,11 +40,9 @@ def _capturing() -> bool:
 @dataclass
 class _Graph:
     """One pipeline's call steps captured as a CUDA graph, over buffers of its own where a call's differ: y, and the call's
-    tile leaves, which are copied to the pass's leaf buffer at the call's offset after each replay; with hashing and no filler
-    rows, the screen's flags too (``flags``), copied likewise."""
+    tile leaves, which are copied to the pass's leaf buffer at the call's offset after each replay."""
     y: Any
     leaves: Any
-    flags: Any = None
     graph: Any = None
     steps: list = field(default_factory=list)
 
@@ -157,10 +155,10 @@ class GraphCalls:
             flags_at += c.m
 
     def _graph_buffers(self):
-        """Every buffer the graphs write, as bytes: each graph's y, leaves and flags, and each stage."""
+        """Every buffer the graphs write, as bytes: each graph's y and leaves, and each stage."""
         import torch
         for g in self._graphs.values():
-            yield from (t for t in (g.y.view(torch.uint8), g.leaves, g.flags) if t is not None)
+            yield from (g.y.view(torch.uint8), g.leaves)
         for stage in (self._stages or {}).values():
             yield from (t.view(torch.uint8) for t in stage)
 
@@ -267,16 +265,11 @@ class GraphCalls:
         g = self._graphs.get(key)
         if g is None:
             g = _Graph(torch.empty((sh.mp, pipe.n), dtype=torch.bfloat16, device=self.device), _zeros(32 * tiles, self.device))
-            if screen:
-                g.flags = _zeros(2 * m, self.device)[:2 * m].view(m, 2)
             if self.cur.poison is not None:
-                for t in (g.y.view(torch.uint8), g.leaves, g.flags):
-                    if t is not None:
-                        t.fill_(self.cur.poison)
+                g.y.view(torch.uint8).fill_(self.cur.poison)
+                g.leaves.fill_(self.cur.poison)
             pipe.b["y"], pipe.b["leaves"] = g.y.data_ptr(), g.leaves.data_ptr()
             steps = self._call_steps(pipe)
-            if screen:
-                steps = [*steps, lambda: screen_into(g.flags, sh.xa[:m], sh.b["alpha_a"], sh.b["aux_a"], self.fused_screen)]
             if self.hashing:
                 steps = [*steps, self._scatter(w, sh, pipe, g, tiles, m if screen else 0)]
             g.steps = steps
@@ -327,14 +320,12 @@ class GraphCalls:
         return g.y, screen
 
     def _scatter(self, w: int, sh: Any, pipe: Any, g: _Graph, tiles: int, flag_rows: int):
-        """The graph's last step: the call's leaves, flags (when it screened) and A root into the pass's buffers, at the
-        offsets in its weight's slot."""
+        """The graph's last step, one launch: the screen of the call's first `flag_rows` rows (all of them when it screens,
+        else none), into the pass's flags, and the call's leaves and A root into the pass's buffers, at the offsets in its
+        weight's slot."""
         size, offs = pipe.size["tree_a"], self.offs[self.order[w]]
-        root, flags, kernel = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), scatter_kernel()
-        src = g.flags if flag_rows else g.leaves                  # with no flags, any pointer: no program reads it
-        n0, n1, B = 32 * tiles, 2 * flag_rows, SCATTER_BLOCK
-        grid = (-(-n0 // B) - (-n1 // B) + 1,)
+        root, flags, leaves = sh.b["tree_a"][size - 32:size], self.flag_buf.view(-1), g.leaves[:32 * tiles]
 
         def scatter():
-            kernel[grid](g.leaves, self.leaves, src, flags, root, self.roots_buf, offs, n0, n1, BLOCK=B)
+            scatter_into(sh.xa, sh.b["alpha_a"], sh.b["aux_a"], flag_rows, flags, leaves, self.leaves, root, self.roots_buf, offs)
         return scatter
