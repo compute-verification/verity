@@ -9,9 +9,12 @@
 // as Keccak-f per second and per SM clock.  A variant whose states differ from the base's fails the probe (exit 1).
 #include <cuda_runtime.h>
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <vector>
 
 #define CK(x)                                                                                    \
@@ -331,7 +334,13 @@ __global__ void pipe_kernel(uint32_t* out, int iters, long long* cycles) {
 #pragma unroll
   for (int k = 0; k < 8; ++k) acc ^= x[k] ^ (uint32_t)w[k] ^ (uint32_t)(w[k] >> 32);
   out[blockIdx.x * blockDim.x + threadIdx.x] = acc;
-  if (threadIdx.x == 0) cycles[blockIdx.x] = c1 - c0;
+  if (threadIdx.x == 0) {
+    uint32_t sm;
+    asm volatile("mov.u32 %0, %%smid;" : "=r"(sm));
+    cycles[3 * blockIdx.x] = c0;
+    cycles[3 * blockIdx.x + 1] = c1;
+    cycles[3 * blockIdx.x + 2] = sm;
+  }
 }
 
 template <int OP>
@@ -341,13 +350,19 @@ static double pipe_rate(int sms, int iters, uint32_t* dout, long long* dcyc) {
   CK(cudaDeviceSynchronize());
   pipe_kernel<OP><<<blocks, threads>>>(dout, iters, dcyc);
   CK(cudaDeviceSynchronize());
-  std::vector<long long> cyc(blocks);
-  CK(cudaMemcpy(cyc.data(), dcyc, blocks * sizeof(long long), cudaMemcpyDeviceToHost));
-  double mean = 0;
-  for (auto c : cyc) mean += (double)c;
-  mean /= blocks;
-  const double warp_instr_per_sm = (double)iters * UNROLL * 8 * (threads / 32) * 6;
-  return warp_instr_per_sm / mean;  // warp instructions per SM clock
+  std::vector<long long> cyc(3 * blocks);
+  CK(cudaMemcpy(cyc.data(), dcyc, cyc.size() * sizeof(long long), cudaMemcpyDeviceToHost));
+  // Blocks that share an SM need not overlap for their whole run, so a mean of per-block durations can overstate the
+  // rate; time each SM from its first block's start to its last block's end on that SM's clock instead.
+  std::map<long long, std::array<long long, 3>> span;  // smid -> first start, last end, blocks
+  for (int b = 0; b < blocks; ++b) {
+    auto it = span.find(cyc[3 * b + 2]);
+    if (it == span.end()) span[cyc[3 * b + 2]] = {cyc[3 * b], cyc[3 * b + 1], 1};
+    else it->second = {std::min(it->second[0], cyc[3 * b]), std::max(it->second[1], cyc[3 * b + 1]), it->second[2] + 1};
+  }
+  double sum = 0;
+  for (auto& [sm, s] : span) sum += (double)iters * UNROLL * 8 * (threads / 32) * s[2] / (double)(s[1] - s[0]);
+  return sum / span.size();  // warp instructions per SM clock
 }
 
 template <int V>
