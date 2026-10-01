@@ -1409,6 +1409,27 @@ def _moe_evaluate_all(w, mutate, *, targets=("moe/L0@0",)):
     return SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=1, seed=5, targets=list(targets), workers=0)
 
 
+def test_the_plan_of_every_moe_vu_reads_what_its_replay_reads_its_sum_plane_copy_too(moe_world):
+    """A MoeSum row's output is read back at its `moe/L<k>/sum` plane copy too (`describe`'s `copies`): a slim bundle planned without it
+    fails those picks as missing-input (OLMoE B8 slim: 17 of 460)."""
+    w = moe_world
+    bmap, committed = w.bmap_and_reader()
+    vus, _, _ = POP.population(w.pi, "r0")
+    assert any(v["family"] == "MoeSum_v1" for v in vus)
+    for vu in vus:
+        seen: dict[str, set] = {"plan": set(), "replay": set()}
+
+        def reader(key):
+            def read(step, name, lo, hi):
+                seen[key].add((step, name, lo, hi))
+                return committed(step, name, lo, hi)
+            return read
+
+        assert EV.plan_vu(w.pi, OP.CommittedStore.of_record(bmap, reader("plan"), None), vu, arrive=0) is None
+        EV.replay_vu(w.pi, OP.CommittedStore.of_record(bmap, reader("replay"), None), _weights(w), vu, arrive=0)
+        assert seen["replay"] and seen["replay"] <= seen["plan"], (vu["family"], sorted(seen["replay"] - seen["plan"])[:4])
+
+
 def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080, op_path="moe/L0"):
     """Flip one committed word of request `rid`'s plane slice (request-local element `elem`) in the packed step tensor."""
     e = next(e for e in entries if e["identity"]["request_id"] == rid and e["identity"]["step"] == step and e["identity"]["op_path"] == op_path and e["identity"]["output_member"] == plane)
