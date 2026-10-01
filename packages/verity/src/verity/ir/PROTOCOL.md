@@ -322,7 +322,7 @@ changing any of them is a new version of the query.
   `query-inapplicable` (the definition, node, argument and reference). `cut.CallGraph` keeps a gate-level check (an operand
   inside the Call comes before its gate) as a backstop.
 - **Wiring** (`cut.WIRING`): the primitive ids `Bf16ToF32_v1`, `F32BitsShl23_v1` and `F32Fabs_v1`. Like constants
-  (primitives without parameters) their gates are structure: computed in no unit, readable by any, never committed. The list is
+  (primitives without parameters) their gates are structure: computed in no unit, readable by any, outside the committed set. The list is
   a set of ids, not derived from the descriptor; that each only rearranges bits is checked on the registry by a vLLM test.
 - **Wide gates**: a gate whose primitive has more than `cut.WIDE_FAN_IN` = 4096 parameter leaves, so more than 4096
   operands. The layout's operands are the same for every gate (the reference returns a lazy sequence for a wide gate, with the
@@ -408,8 +408,8 @@ What carries over from §8 and §10:
 What changes:
 
 - **Inputs.** A gate whose primitive has no parameters is an input: Input gates (§5.2) and constants, of any width. It is in no
-  unit and never committed, and a unit reads a constant's value from the program. Every other gate is *computing* and is in
-  exactly one unit.
+  unit and outside the committed set: like an Input gate, a constant is bound outside the partition, and the cut never reads its
+  value. Every other gate is *computing* and is in exactly one unit.
 - **No structure rules.** §8's wiring list (`cut.WIRING`), its constant folding (a gate computed from constants alone) and its
   wide-gate convention (`cut.WIDE_FAN_IN`) do not apply. Every operand of every gate is read.
 - **Wide gates.** A computing gate whose declared width exceeds X makes the query inapplicable, with `why: "gate-too-wide"` and
@@ -429,7 +429,8 @@ What changes:
   gives the path, and `gates` gives the root interval. Input gates and constants inside an interval are in no unit.
 - **The committed set.** A computing gate is committed when a unit other than its own reads it, or when the Call returns it. A
   unit's committed bits are its w_out. `verify` derives it from the reads (`cut.check_call_cut`) and checks the invariant
-  (`validate_unit_cut`, with constants as its structure) and w_out ≤ X (`unit-too-wide`). Served commits are numbered by the
+  (`validate_unit_cut`, whose structure is the constants: gates any unit may read, bound outside the partition) and w_out ≤ X
+  (`unit-too-wide`). Served commits are numbered by the
   Call's computing gates in layout order (`cut.CallGates.keep`) and checked as under §8.
 - **Recompute keys.** A key is (primitive id, operand tokens). A parameter leaf's token is interned from `("i", leaf)` and a
   constant's from `("c", primitive id)`, so equal constants are equal operands. A computing gate whose key an earlier computing
@@ -438,7 +439,8 @@ What changes:
 Rules the IR left open, pinned here:
 
 - **A pass-through output** is a returned leaf that resolves to a parameter of the Call, or to a constant, rather than to a
-  computing gate of it. It is no output of any of the Call's units. The value is the Call's input, or the program's literal.
+  computing gate of it. It is no output of any of the Call's units. The value is the Call's input, or a constant, bound outside
+  the partition like an input.
 - **A scan's carry** follows from the reads: an iteration's returned carry is an output of that iteration when the next iteration
   reads it, and of the Call when it is the final carry. A carry an iteration passes through unchanged resolves to the scan's
   `init` (§7), so it is a pass-through.

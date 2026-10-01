@@ -74,7 +74,7 @@ included, to check the cut on it.
    parameter leaves Input gates `0..L-1`, its gates `0..n-1` (local, layout order), every returned leaf a designated output.
    Activations of one Definition share its cut.
 2. **Gates** (`CallGates`).  A gate is *computing* when its primitive has parameters; Input gates and constants (no parameters)
-   are inputs: in no unit, never committed.  There is no wiring list, no constant folding and no wide fan-in rule: every operand
+   are inputs: in no unit, outside the committed set.  There is no wiring list, no constant folding and no wide fan-in rule: every operand
    of every gate is read.  `last[g]` is the last gate of the Call that reads computing gate `g`, or `n` when the Call returns `g`
    (a returned leaf resolving to a computing gate of the Call; one resolving to a parameter or a constant returns nothing of the
    Call's), or -1 when nothing reads it.
@@ -90,7 +90,8 @@ included, to check the cut on it.
 5. **Units of the Program.**  By Call, then layout order within it; the input unit is not a unit.
 6. **Checks** (`check_call_cut`).  Owner per computing gate: its unit.  Committed: a computing gate another unit reads or the
    Call returns, i.e. `last[g] >= hi` of its unit, so a unit's committed bits are its w_out.  `validate_unit_cut` holds the
-   invariant (constants are its structure, the Call's parameters its input unit), recomputes reported as under Q_word v2 (keys
+   invariant (its structure the constants: gates any unit may read, bound outside the partition; the Call's parameters its
+   input unit), recomputes reported as under Q_word v2 (keys
    below), and the width rule is w_out <= X (`unit-too-wide`).  Served commits, numbered as `CallGates` compacts the computing
    gates, are held to the derived set.
    Recomputes: `key(j) = (primitive id, operand tokens)`, a parameter's token from `("i", leaf)`, a constant's from
@@ -111,7 +112,7 @@ from .partition import INPUT_UNIT, CutVerdict, validate_unit_cut
 from .refs import Affine, Strided
 
 #: primitives that only rearrange bits (each output bit a constant or a copy of one input bit): wiring, like constants, is
-#: computed in no unit, may be read by any, and is never committed
+#: computed in no unit, may be read by any, and is outside the committed set
 WIRING = frozenset({"Bf16ToF32_v1", "F32BitsShl23_v1", "F32Fabs_v1"})
 
 #: a gate with more operands than this is *wide* (step 3); Q_word v1's own threshold, not the layout's lazy-operand one
