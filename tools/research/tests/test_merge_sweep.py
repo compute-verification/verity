@@ -76,6 +76,25 @@ def test_the_sweep_closes_what_landed_and_retargets_its_children(tmp_path):
                             ("pr", "close", "1", "--comment", note), ("pr", "close", "2", "--comment", note)]
     assert sorted(gh.open) == [3, 4, 5] and gh.open[5]["baseRefName"] == "main" and gh.open[4]["baseRefName"] == "C"
     assert any(f"close #1 (A): {note}" in line for line in lines)
+    assert _heads(repo) == {"main", "C", "D", "E"}                                # A and B landed, and no open PR uses them
+
+
+def _heads(repo: Path) -> set[str]:
+    return {line.split("refs/heads/")[1] for line in _git(repo, "ls-remote", "--heads", "origin").splitlines()}
+
+
+def test_the_sweep_keeps_a_landed_branch_that_moved_past_its_landed_head(tmp_path):
+    """A commit pushed to A after A landed isn't on main: A's PR closes, and the branch stays for its owner."""
+    repo, gh, _tips, _merge = _world(tmp_path)
+    _git(repo, "checkout", "-q", "A")
+    (repo / "late.txt").write_text("late\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "late")
+    _git(repo, "push", "-q", "origin", "A")
+    _git(repo, "checkout", "-q", "main")
+    lines: list[str] = []
+    assert M.sweep(repo, gh=gh, log=lines.append) == ([1, 2], [5])
+    assert _heads(repo) == {"main", "A", "C", "D", "E"} and any(line.startswith("research merge: kept A") for line in lines)
 
 
 def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
@@ -83,6 +102,7 @@ def test_the_sweep_is_idempotent_and_its_dry_run_changes_nothing(tmp_path):
     lines: list[str] = []
     assert M.sweep(repo, dry_run=True, gh=gh, log=lines.append) == ([1, 2], [5])
     assert gh.mutations == [] and sorted(gh.open) == [1, 2, 3, 4, 5]
+    assert _heads(repo) == {"main", "A", "B", "C", "D", "E"} and any("would delete origin's branch A" in line for line in lines)
     assert "would retarget #5 from B" in lines[0] and "would close #1" in lines[1]
     M.sweep(repo, gh=gh, log=lambda *_: None)
     done = list(gh.mutations)

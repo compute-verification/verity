@@ -1,6 +1,7 @@
 """`research merge REF [--into BRANCH] [--tool check] [-m MESSAGE] [--dry-run]`: the merge gate.
 `research merge --train A B C [--on MACHINE --project P] [--command CMD]`: several refs as one checked candidate (`train`).
-`research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed (`sweep`).
+`research merge --sweep [--into BRANCH] [--remote origin] [--dry-run]`: close the pull requests that landed and delete their branches
+(`sweep`).
 
 Run in the checkout of the target branch.  It merges the commit REF names (`git merge --no-ff`) only if the evidence store holds
 a passing attempt of the tool (default `check`) for that exact commit: `state` done, rc 0, source commit REF's, tree clean.  With
@@ -17,6 +18,8 @@ the rewrite kept the tree, and REF is refused when it holds a commit the rewrite
 
 After a merge lands, and on its own with --sweep, every open pull request whose head is on the remote's copy of BRANCH is closed
 with a comment naming the commit it landed in, and every open pull request whose base branch is on it is retargeted onto BRANCH.
+A closed pull request's head branch is deleted from the remote unless an open pull request still uses it, or it moved past the
+head that landed (GitHub's "delete head branch" fires only on merges made on GitHub, and trains merge locally).
 The remote's branch, fetched first, is the truth, never the checkout: `research merge` does not push, so what a merge lands is
 closed by the sweep after the push.
 """
@@ -265,8 +268,9 @@ def landed_in(repo: Path, commit: str, tip: str) -> str:
 
 def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print) -> tuple[list[int], list[int]]:
     """Close every open pull request whose head is on ``remote``'s ``into`` (with a comment naming the commit it landed in) and
-    retarget onto ``into`` every open pull request whose base branch's tip is on it.  Idempotent: what it closed is no longer
-    open, and what it retargeted is based on ``into``.  Returns (closed, retargeted) PR numbers, ascending."""
+    retarget onto ``into`` every open pull request whose base branch's tip is on it, deleting each closed one's head branch that no
+    open pull request uses.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
+    (closed, retargeted) PR numbers, ascending."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     _git(repo, "fetch", "-q", remote, f"+refs/heads/{into}:refs/remotes/{remote}/{into}")
     tip = _git(repo, "rev-parse", f"refs/remotes/{remote}/{into}").stdout.strip()
@@ -292,6 +296,8 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         log(f"research merge: {verb}retarget #{p['number']} from {p['baseRefName']} (on {remote}/{into}) onto {into}")
         if not dry_run:
             gh("pr", "edit", str(p["number"]), "--base", into)
+    # a closed PR's head branch goes too, unless an open PR still uses it (as its head, or as a base the retargets left)
+    used = {p["headRefName"] for p in rest} | {p["baseRefName"] for p in rest if p not in moved}
     for p in done:
         landed = landed_in(repo, p["headRefOid"], tip)
         subject = _git(repo, "log", "-1", "--format=%s", landed).stdout.strip()
@@ -299,6 +305,16 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
         log(f"research merge: {verb}close #{p['number']} ({p['headRefName']}): {note}")
         if not dry_run:
             gh("pr", "close", str(p["number"]), "--comment", note)
+        head = p["headRefName"]
+        if head in used:
+            continue
+        log(f"research merge: {verb}delete {remote}'s branch {head} (#{p['number']}'s head, on {into})")
+        if not dry_run:
+            # the lease keeps a branch that moved past the PR's landed head: a commit pushed after the landing isn't on `into`
+            r = _git(repo, "push", "-q", f"--force-with-lease=refs/heads/{head}:{p['headRefOid']}", remote, f":refs/heads/{head}",
+                     check=False)
+            if r.returncode:
+                log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
     if not done and not moved:
         log(f"research merge: no open pull request is on {remote}/{into} ({tip[:12]}) or based on a branch that is")
     return [p["number"] for p in done], [p["number"] for p in moved]
