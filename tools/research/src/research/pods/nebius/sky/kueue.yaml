@@ -69,7 +69,7 @@ spec:
       resources:
       - {name: nvidia.com/gpu, nominalQuota: "0", borrowingLimit: "0"}
       - {name: cpu, nominalQuota: "100", borrowingLimit: "16"}
-      - {name: memory, nominalQuota: "480Gi", borrowingLimit: "128Gi"}
+      - {name: memory, nominalQuota: "480Gi", borrowingLimit: "256Gi"}   # borrows idle Commit memory (live 9:59 AM PDT Oct 1); Commits reclaim it
 ---
 apiVersion: kueue.x-k8s.io/v1beta2
 kind: ClusterQueue
