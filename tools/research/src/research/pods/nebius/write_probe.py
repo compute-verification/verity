@@ -92,11 +92,16 @@ def write_paths(pid: int, proc: str = "/proc", limit: int = 3) -> list[str]:
 
 
 def run_id(pid: int, proc: str = "/proc", depth: int = 16) -> str | None:
-    """RESEARCH_RUN_ID from the process's environment or its nearest ancestor's."""
+    """The run of the process or its nearest ancestor: RESEARCH_RUN_ID in its environment, or the harness itself
+    (`research run ... --id <run>`, which sets that variable only for its children)."""
     for _ in range(depth):
         for kv in (_read(f"{proc}/{pid}/environ", binary=True) or b"").split(b"\0"):
             if kv.startswith(b"RESEARCH_RUN_ID="):
                 return kv.split(b"=", 1)[1].decode(errors="replace")
+        cmd = (_read(f"{proc}/{pid}/cmdline", binary=True) or b"").replace(b"\0", b" ").decode(errors="replace")
+        m = re.search(r"\bresearch run\b.* --id (r\d{8}-\d{6}-[0-9a-f]{4})\b", cmd)
+        if m:
+            return m.group(1)
         f = _stat_fields(proc, pid)
         if not f or int(f[1]) <= 1:
             return None

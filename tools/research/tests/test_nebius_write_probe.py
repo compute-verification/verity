@@ -49,8 +49,10 @@ def test_each_allocation_is_named_and_only_uncovered_workspace_writers_are_unmat
     proc_entry(proc, 500, cgroup="/user.slice/user-1001.slice/session-17.scope", writes=("/tmp/elsewhere",), reads=("/workspace/in",))
     proc_entry(proc, 600, cgroup="/user.slice/user-1001.slice/session-17.scope", writes=("/workspace/slow",))
     proc_entry(proc, 700, cgroup="/system.slice/vy-cluster-agent.service", cwd="/workspace/cluster")
+    proc_entry(proc, 800, cgroup="/user.slice/user-1001.slice/session-18653.scope", writes=("/workspace/research/store/catalog.sqlite",),
+               cmd="python3 -m research run --runs-dir /workspace/research/runs --id r20261001-040538-950d --claimed")
     before = W.snapshot(str(proc))
-    for pid in (100, 200, 300, 400, 450, 500, 700):
+    for pid in (100, 200, 300, 400, 450, 500, 700, 800):
         set_written(proc, pid, 1200 * MB)
     set_written(proc, 600, 500 * MB)
     rows = W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, lambda: {POD: ("default", "nd-commit-0-x", "deployments-gpu")},
@@ -63,6 +65,7 @@ def test_each_allocation_is_named_and_only_uncovered_workspace_writers_are_unmat
         400: ("run:r20261001-030000-abcd", True),
         450: ("run:r20261001-022442-80e9", True),
         700: ("system:vy-cluster-agent.service", True),
+        800: ("run:r20261001-040538-950d", True),
     }
     r100 = next(r for r in rows if r["pid"] == 100)
     assert (r100["mb_per_s"], r100["paths"], r100["user"], r100["cmd"]) == (20.0, ["/workspace/scratch/big.bin"], "root", "python3 job.py")
