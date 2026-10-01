@@ -449,6 +449,15 @@ def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
     assert F.two_four_windows([0x1, 0x9, 0, 0] * 32 + [0x1] * 128) == [True, False]
 
 
+def test_d24_is_the_hardware_pair_rule():
+    """NVFP4's sparse MMA keeps 2 of each 8-chunk's 4 pairs: a window counts when every chunk has at most 2 nonzero pairs,
+    whatever its 4-groups hold (a sign-only code, 0x8, is zero)."""
+    assert F.two_four_windows([0x3, 0x5, 0x6, 0x7, 0, 0, 0x8, 0] * 16) == [True]
+    assert F.two_four_windows([0x1, 0, 0x2, 0, 0x3, 0, 0, 0] * 16) == [False]
+    assert F.two_four_windows([0x1] * 4 + [0] * 4 + [0x1, 0, 0x2, 0, 0x3, 0, 0, 0] + [0] * 112) == [False]
+    assert F.two_four_windows([0] * 128 + [0x1, 0x9] * 64) == [True, False]
+
+
 def _row(values) -> list[int]:
     return F.parse_row(F.bf16_row([P.f32_to_bf16(v) for v in values]), len(values))
 
@@ -675,14 +684,15 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
 
 
 def test_b_ovf_discounts_credit_by_its_pinned_table():
-    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b): creditOf less ⌈β(n_b)·mnk⌉, β the measured table
-    (`beta_table.py --mu 1.5`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from 4,096 up."""
-    assert F.B_OVF == ((128, Fraction(342, 10_000)), (256, Fraction(200, 10_000)), (512, Fraction(111, 10_000)),
-                       (1024, Fraction(49, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+    """B-OVF (the assessor's B, ratings.md 18:45Z; theory §6.12b; condition 7): creditOf less ⌈β(n_b)·mnk⌉, β the table
+    measured on each bucket's R1 boundary (`beta_final.py`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from
+    4,096 up."""
+    assert F.B_OVF == ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
+                       (1024, Fraction(50, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
     got = {n: F.b_ovf(n) for n in (128, 192, 256, 512, 896, 1024, 2047, 2048, 3584, 4096, 1 << 18)}
-    assert got == {128: Fraction(342, 10_000), 192: Fraction(342, 10_000), 256: Fraction(200, 10_000),
-                   512: Fraction(111, 10_000), 896: Fraction(111, 10_000), 1024: Fraction(49, 10_000),
-                   2047: Fraction(49, 10_000), 2048: Fraction(17, 10_000), 3584: Fraction(17, 10_000), 4096: 0,
+    assert got == {128: Fraction(414, 10_000), 192: Fraction(414, 10_000), 256: Fraction(223, 10_000),
+                   512: Fraction(119, 10_000), 896: Fraction(119, 10_000), 1024: Fraction(50, 10_000),
+                   2047: Fraction(50, 10_000), 2048: Fraction(17, 10_000), 3584: Fraction(17, 10_000), 4096: 0,
                    1 << 18: 0}
     assert [b for _, b in F.B_OVF] == sorted((b for _, b in F.B_OVF), reverse=True)
     s = F.PearlC4()
@@ -696,7 +706,7 @@ def test_b_ovf_discounts_credit_by_its_pinned_table():
 
 def test_r1_and_the_tile_cap_read_the_discounted_credit(monkeypatch):
     """R1's per-row bound and the tile cap are ρ times `credit_of`'s share, so B-OVF's discount tightens both: on a
-    unit of n = 1,024 (β = 0.49%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
+    unit of n = 1,024 (β = 0.50%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
     k, n = record.k_kept, record.matmul.shape.n
     disc = s.credit_of(Shape(1, k, n))
@@ -705,7 +715,7 @@ def test_r1_and_the_tile_cap_read_the_discounted_credit(monkeypatch):
     assert cap == F.CAP * Fraction(disc, n) * 16
     monkeypatch.setattr(F, "B_OVF", ((128, Fraction(0)),))
     plain = s.credit_of(Shape(1, k, n))
-    assert plain - disc == math.ceil(Fraction(49, 10_000) * n * k) > 0
+    assert plain - disc == math.ceil(Fraction(50, 10_000) * n * k) > 0
     assert s.tile_cap(record, ops, range(4), range(4))[1] == cap * Fraction(plain, disc)
     assert s.row_debit_ratio(record, ops, "B", 0) == ratio * Fraction(disc, plain)
 
