@@ -10,7 +10,7 @@
                       (package data), FA2's inverse sum, div.full's range scaling; numpy kernels for all but tanh
     verity.ml.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER;
                       the sm_120 GemmCoordinateE4m3 / GemmCoordinateNvf4 / GemmCoordinateMxf4 and their GEMM_SM120_* bindings
-    verity.ml.boolean word arithmetic as Boolean circuits: the builders (`forms`, `fp`, `tc_step`), `trace` (Boolean
+    verity.ml.boolean word arithmetic as Boolean circuits: the builders (`forms`, `fp`, `tc_step`, `softmax`), `trace` (Boolean
                       Definitions from builders), and `gemm`: the BF16 steps, cast and GemmCoordinate_v3 on bits
     verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
                       `verity.evaluation` and self-checked against `verity.ml.tc`
