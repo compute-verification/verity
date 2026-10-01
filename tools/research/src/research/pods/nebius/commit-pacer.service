@@ -1,0 +1,16 @@
+[Unit]
+Description=node 1's Commit pacer: releases circuits' Commits in deployments-gpu by their rule (commit_pacer.py)
+After=k3s.service
+Wants=k3s.service
+
+[Service]
+Environment=PACER_KUBECTL=k3s kubectl
+Environment=PACER_MODE=hold
+Environment=PACER_STATE=/var/lib/commit-pacer
+EnvironmentFile=-/etc/default/commit-pacer
+ExecStart=/usr/bin/python3 /usr/local/lib/commit-pacer/commit_pacer.py run --every 10
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

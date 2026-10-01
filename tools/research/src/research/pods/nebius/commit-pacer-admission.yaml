@@ -1,0 +1,46 @@
+# Kueue v0.19.6 (kueue.x-k8s.io/v1beta2) on k3s v1.36.4: the commit pacer's AdmissionCheck, and the policy that creates paced
+# Commits' Workloads inactive, so that one holds no quota while it waits (a Workload Pending on a check keeps its reservation,
+# borrowed cohort quota included). Applying this file changes no admission: the check gates only a ClusterQueue that lists it,
+#   k3s kubectl patch clusterqueue deployments-gpu --type=merge \
+#     -p '{"spec":{"admissionChecksStrategy":{"admissionChecks":[{"name":"commit-pacer"}]}}}'
+# and is undone by removing that field again (commit_pacer.py's docstring; the cutover note has the order).
+# The workstream list is commit_pacer.CIRCUITS; a test keeps the two equal.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: AdmissionCheck
+metadata:
+  name: commit-pacer
+spec:
+  controllerName: verity.dev/commit-pacer
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: commit-arrives-inactive
+spec:
+  failurePolicy: Fail
+  reinvocationPolicy: Never
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [kueue.x-k8s.io]
+      apiVersions: ["*"]
+      operations: [CREATE]
+      resources: [workloads]
+  matchConditions:
+  - name: paced-commit
+    expression: >-
+      object.spec.queueName == 'deployments-gpu' && has(object.spec.podSets) && object.spec.podSets.exists(p,
+      has(p.template.metadata) && has(p.template.metadata.labels)
+      && 'verity.dev/stage' in p.template.metadata.labels && p.template.metadata.labels['verity.dev/stage'] == 'commit'
+      && 'verity.dev/workstream' in p.template.metadata.labels
+      && p.template.metadata.labels['verity.dev/workstream'] in ['vllm-epoch-run', 'n2-build', 'vllm-coverage-defs'])
+  mutations:
+  - patchType: JSONPatch
+    jsonPatch:
+      expression: "[JSONPatch{op: 'add', path: '/spec/active', value: false}]"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: commit-arrives-inactive
+spec:
+  policyName: commit-arrives-inactive

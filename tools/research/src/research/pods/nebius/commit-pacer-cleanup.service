@@ -1,0 +1,10 @@
+[Unit]
+Description=delete failed Commits' replay bundles past retention, when lsof is clean and nothing is queued (commit_pacer.py cleanup)
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+Environment=PACER_KUBECTL=k3s kubectl
+Environment=PACER_STATE=/var/lib/commit-pacer
+ExecStart=/usr/bin/python3 /usr/local/lib/commit-pacer/commit_pacer.py cleanup --delete

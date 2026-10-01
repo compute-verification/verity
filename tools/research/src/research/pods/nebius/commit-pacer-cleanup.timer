@@ -1,0 +1,9 @@
+[Unit]
+Description=hourly: failed Commits' replay bundles past retention (commit-pacer-cleanup.service)
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
