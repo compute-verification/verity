@@ -123,3 +123,9 @@ def test_the_picks_are_tabulated_by_family() -> None:
     o = BR.outcome(art)
     assert o["by_family"] == {"RoPE_v1": {"picked": 3, "evaluated": 3, "mismatch": 1}, "Gemm_v2": {"picked": 1, "evaluated": 0, "mismatch": 0}}
     assert (o["seed"], o["picked"], o["equal"], o["grade"]) == (7, 4, 2, "partial")
+
+
+def test_a_replay_that_did_not_run_is_an_outcome_with_its_reason() -> None:
+    why = "sampled replay not run: KeyError('tree node 1 of step 0 level 0 is not in the slim dumped store')"
+    o = BR.outcome({"sampled_replay": {"result": None, "grade": "not-evaluated", "why": why, "error": "KeyError(...)"}})
+    assert (o["result"], o["grade"], o["why"], o["picked"], o["evaluated"], o["by_family"], o["wall_s"]) == (None, "not-evaluated", why, None, None, {}, None)

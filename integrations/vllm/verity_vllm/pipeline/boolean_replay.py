@@ -195,8 +195,8 @@ def scratch(bundle: Path, out: Path) -> Path:
 def outcome(art: dict[str, Any]) -> dict[str, Any]:
     """The replay's picks by family (picked, evaluated, mismatched) and its grade, from its `sampled_replay` record."""
     sr = art["sampled_replay"]
-    s, fam = sr["sample"], {}
-    for f, n in (sr["timing"].get("per_family_n") or {}).items():
+    s, t, fam = sr.get("sample") or {}, sr.get("timing") or {}, {}
+    for f, n in (t.get("per_family_n") or {}).items():
         fam[f] = {"picked": int(n), "evaluated": 0, "mismatch": 0}
     for key, st in (sr.get("strata") or {}).items():
         f = fam.setdefault(key.split("|")[0].split("{")[0], {"picked": 0, "evaluated": 0, "mismatch": 0})
@@ -205,7 +205,7 @@ def outcome(art: dict[str, Any]) -> dict[str, Any]:
     return {"result": sr["result"], "grade": sr["grade"], "why": sr["why"],
             **{k: s.get(k) for k in ("seed", "seed_source", "k", "picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n")},
             "by_family": fam, "not_evaluated": sr.get("not_evaluated"), "mismatch": sr.get("mismatch"),
-            "wall_s": sr["timing"]["wall_s"], "workers": sr["timing"]["workers"]}
+            "wall_s": t.get("wall_s"), "workers": t.get("workers")}
 
 
 def _replay(o: Options, link: Path) -> dict[str, Any]:
