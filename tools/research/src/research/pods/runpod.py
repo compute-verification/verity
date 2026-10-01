@@ -12,15 +12,15 @@ environment stands in, and a file that exists always wins:
 ``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``), with its
 known_hosts beside it.  Neither value is ever printed.
 
-    python zk/campaign/runpod.py balance
-    python zk/campaign/runpod.py gpus                      # price/stock for the SKUs we care about
-    python zk/campaign/runpod.py create --name veritor-4090 --gpu "NVIDIA GeForce RTX 4090" --disk 100
-    python zk/campaign/runpod.py list
-    python zk/campaign/runpod.py get POD_ID
-    python zk/campaign/runpod.py ssh POD_ID                # prints the ssh command once port 22 is mapped
-    python zk/campaign/runpod.py wait-ssh POD_ID           # blocks until sshd answers
-    python zk/campaign/runpod.py terminate POD_ID
-    python zk/campaign/runpod.py watchdog POD_ID --hours 9 # detached: terminate after N hours
+    python -m research.pods.runpod balance
+    python -m research.pods.runpod gpus                      # price/stock for the SKUs we care about
+    python -m research.pods.runpod create --name vy-4090 --gpu "NVIDIA GeForce RTX 4090" --disk 100
+    python -m research.pods.runpod list
+    python -m research.pods.runpod get POD_ID
+    python -m research.pods.runpod ssh POD_ID                # prints the ssh command once port 22 is mapped
+    python -m research.pods.runpod wait-ssh POD_ID           # blocks until sshd answers
+    python -m research.pods.runpod terminate POD_ID
+    python -m research.pods.runpod watchdog POD_ID --hours 9 # detached: terminate after N hours
 
 Every pod this script creates carries the label ``veritor-campaign`` in its
 name so a stray pod is recognisable from the console.

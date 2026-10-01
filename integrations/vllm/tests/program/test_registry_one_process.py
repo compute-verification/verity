@@ -12,14 +12,14 @@ import pytest
 
 import verity_vllm.program.registry as registry
 
-CORE = ("verity.ml.prims", "verity.ml.scalar", "verity.ml.fp32", "verity.ml.gemm", "verity.ml.kernels")
+CORE = ("verity.ml.prims", "verity.ml.scalar", "verity.ml.fp32", "verity.ml.mufu", "verity.ml.gemm", "verity.ml.kernels")
 
 CHECK = """
 import importlib, sys
 for m in sys.argv[1:]:
     importlib.import_module(m)
 from verity.ir.defs import REGISTRY
-from verity.ml import fp32 as F, gemm as G, prims as C, scalar as S
+from verity.ml import fp32 as F, gemm as G, mufu as M, prims as C, scalar as S
 from verity_vllm.program.registry import b1, fp8, hopper as H, moe, pad_prims as PP, prims as P, sampling as SM, targets as T
 from verity.ir.defs import PrimitiveDefinition
 core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.AmpereBF16TcDot16, C.F32ToE4m3Sat,
@@ -27,10 +27,13 @@ core = [C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16, C.HopperBF16WgmmaDot16, C.Ampere
 core += [getattr(S, n) for n in S.__all__ if n not in ("BIT", "BF16", "F32", "I32")]
 fp32 = {n: getattr(F, n) for n in F.__all__ if isinstance(getattr(F, n), PrimitiveDefinition)}
 core += fp32.values()
+mufu = [M.MufuEx2Ftz, M.MufuRcpFtz, M.Fa2InvSum, M.MufuSqrtFtz, M.DivFullRcp, M.DivFullScaleA, M.RsqrtApprox, M.MufuTanh]
+core += mufu
 assert all(REGISTRY[d.id] is d for d in core), [d.id for d in core if REGISTRY[d.id] is not d]
 assert (P.Bf16ToF32, P.F32ToBf16Rn, P.F2fpBf16) == (C.Bf16ToF32, C.F32ToBf16Rn, C.F2fpBf16)
 assert len(fp32) == 24 and all(getattr(P, n, None) is d for n, d in fp32.items()), [
     d.id for n, d in fp32.items() if getattr(P, n, None) is not d]
+assert all(getattr(P, d.name) is d for d in mufu), [d.id for d in mufu if getattr(P, d.name) is not d]
 assert (P.I32Le, P.I32Add, P.I32Eq, P.SelectF32, P.SelectBf16, P.SelectI32, P.Bf16GtStrict) == (
     S.I32Le, S.I32Add, S.I32Eq, S.SelectF32, S.SelectBf16, S.SelectI32, S.Bf16GtStrict)
 assert fp8.FP8_PRIMITIVES == [S.F32Fabs, S.F32Fmaxf, S.F32Fminf, C.F32ToE4m3Sat, C.HopperE4m3QgmmaDot32]
