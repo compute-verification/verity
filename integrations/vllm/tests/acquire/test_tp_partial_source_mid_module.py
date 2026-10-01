@@ -41,6 +41,34 @@ class PlainMlp(_Mod):
         return x
 
 
+class SparseMoeBlockLike(_Mod):
+    """vLLM qwen3_moe.py's shape: the block all-gathers only under sequence parallelism; the fused MoE's all-reduce is the runner's."""
+
+    tp_size = 2
+
+    def __init__(self, sequence_parallel: bool) -> None:
+        super().__init__()
+        self.is_sequence_parallel = sequence_parallel
+
+    def forward(self, x):
+        if self.is_sequence_parallel:
+            x = tensor_model_parallel_all_gather(x, 0)
+        if not self.is_sequence_parallel:
+            return x
+        else:
+            return tensor_model_parallel_all_gather(x)
+
+
+def test_a_call_whose_self_attribute_guard_is_false_is_no_site():
+    assert CS.guarded_collective_calls(SparseMoeBlockLike, model_prefix=THIS) == [("all_gather", (("is_sequence_parallel", True),)),
+                                                                                 ("all_gather", (("is_sequence_parallel", True),))], \
+        "the `else` of `if not self.<attr>` needs the attribute true"
+    assert CS.guarded_collective_calls(OlmoeAttentionLike, model_prefix=THIS) == [("all_gather", ()), ("all_gather", ())], \
+        "a guard that is not `self.<attr>` (tp_size > 1) leaves the call counted"
+    m = _model({"model.layers.0.mlp": SparseMoeBlockLike(False), "model.layers.1.mlp": SparseMoeBlockLike(True)})
+    assert [(s["name"], s["calls"]) for s in CS.mid_module_sites(m, 2, model_prefix=THIS)] == [("model.layers.1.mlp", {"all_gather": 2})]
+
+
 def test_class_collective_calls_reads_the_class_source_under_the_model_prefix():
     assert CS.class_collective_calls(OlmoeAttentionLike, model_prefix=THIS) == {"all_gather": 2}
     assert CS.class_collective_calls(PlainMlp, model_prefix=THIS) == {}

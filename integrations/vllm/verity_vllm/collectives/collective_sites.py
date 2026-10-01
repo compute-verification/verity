@@ -19,16 +19,18 @@ named verdicts); a count the run contradicts is named by identity_check, never r
 """
 from __future__ import annotations
 
+import ast
 import importlib
 import inspect
 import re
+import textwrap
 from typing import Any
 
 #: (module-level name a model class may import, collective kind)
 COLLECTIVE_NAMES = (("tensor_model_parallel_all_reduce", "all_reduce"), ("tensor_model_parallel_all_gather", "all_gather"))
 #: the python-module prefix of vLLM's model implementations (the classes whose direct collective calls are sites)
 MODEL_MODULE_PREFIX = "vllm.model_executor.models."
-_CALL_RE = re.compile(r"\btensor_model_parallel_(all_reduce|all_gather)\s*\(")
+_NAME_RE = re.compile(r"tensor_model_parallel_(all_reduce|all_gather)")
 #: the module classes that issue the fused-MoE block's final all-reduce from inside their forward; both observers hook them, and a
 #: wrapper holding a runner submodule is the site (the nested runner is not hooked)
 MOE_COLLECTIVE_CLASSES = ("MoERunner", "FusedMoE", "SharedFusedMoE")
@@ -41,18 +43,65 @@ MOE_COLLECTIVE_MODULES = ("vllm.model_executor.layers.fused_moe.runner.moe_runne
 def class_collective_calls(cls: type, *, model_prefix: str | None = None) -> dict[str, int]:
     """{kind: static call count} of the collective names called in `cls`'s own source; {} for a class outside the model modules or one
     whose source cannot be read.  Inherited methods are not searched (a vLLM layer base class is not a model class)."""
+    out: dict[str, int] = {}
+    for kind, _guards in guarded_collective_calls(cls, model_prefix=model_prefix):
+        out[kind] = out.get(kind, 0) + 1
+    return out
+
+
+def guarded_collective_calls(cls: type, *, model_prefix: str | None = None) -> list[tuple[str, tuple[tuple[str, bool], ...]]]:
+    """Every collective call in `cls`'s own source: (kind, the `self.<attr>` guards it runs under, each (attr, the truth it needs)).  An
+    enclosing `if` whose test is not `self.<attr>` / `not self.<attr>` adds no guard (the call may run).  Qwen3MoeSparseMoeBlock all-gathers
+    only `if self.is_sequence_parallel:`, a site of no step when that is False."""
     mod = getattr(cls, "__module__", "") or ""
     if model_prefix is None:
         model_prefix = MODEL_MODULE_PREFIX
     if model_prefix and not mod.startswith(model_prefix):
-        return {}
+        return []
     try:
-        src = inspect.getsource(cls)
-    except (OSError, TypeError):
-        return {}
+        src = textwrap.dedent(inspect.getsource(cls))
+        tree = ast.parse(src)
+    except (OSError, TypeError, SyntaxError):
+        return []
+    out: list[tuple[str, tuple[tuple[str, bool], ...]]] = []
+
+    def guard(test: ast.expr) -> tuple[str, bool] | None:
+        neg = isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not)
+        t = test.operand if neg else test
+        if isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name) and t.value.id == "self":
+            return t.attr, not neg
+        return None
+
+    def walk(node: ast.AST, guards: tuple[tuple[str, bool], ...]) -> None:
+        if isinstance(node, ast.Call):
+            name = node.func.id if isinstance(node.func, ast.Name) else node.func.attr if isinstance(node.func, ast.Attribute) else ""
+            m = _NAME_RE.fullmatch(name)
+            if m:
+                out.append((m.group(1), guards))
+        if isinstance(node, ast.If):
+            g = guard(node.test)
+            walk(node.test, guards)
+            for child in node.body:
+                walk(child, guards + ((g,) if g else ()))
+            for child in node.orelse:
+                walk(child, guards + (((g[0], not g[1]),) if g else ()))
+            return
+        for child in ast.iter_child_nodes(node):
+            walk(child, guards)
+
+    walk(tree, ())
+    return out
+
+
+def live_collective_calls(m: Any, *, model_prefix: str | None = None, cache: dict | None = None) -> dict[str, int]:
+    """{kind: calls per forward} of module `m`'s own collective calls whose `self.<attr>` guards hold on `m`."""
+    cls = type(m)
+    calls = cache.setdefault(cls, guarded_collective_calls(cls, model_prefix=model_prefix)) if cache is not None else \
+        guarded_collective_calls(cls, model_prefix=model_prefix)
     out: dict[str, int] = {}
-    for m in _CALL_RE.finditer(src):
-        out[m.group(1)] = out.get(m.group(1), 0) + 1
+    for kind, guards in calls:
+        if all(bool(getattr(m, a, True)) == want for a, want in guards):
+            out[kind] = out.get(kind, 0) + 1
     return out
 
 
@@ -67,12 +116,10 @@ def mid_module_sites(model: Any, world: int, *, model_prefix: str | None = None)
     if int(world) <= 1:
         return []
     out: list[dict[str, Any]] = []
-    cache: dict[type, dict[str, int]] = {}
+    cache: dict[type, list] = {}
     for name, m in model.named_modules():
         cls = type(m)
-        if cls not in cache:
-            cache[cls] = class_collective_calls(cls, model_prefix=model_prefix)
-        calls = cache[cls]
+        calls = live_collective_calls(m, model_prefix=model_prefix, cache=cache)
         if not calls or not _under_tp(m, world):
             continue
         out.append({"name": name, "cls": cls.__name__, "py_module": cls.__module__, "calls": dict(calls), "per_step": sum(calls.values())})
