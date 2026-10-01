@@ -315,10 +315,11 @@ def family_strata(vus: list[dict], k: int | None, per_stratum: int = 2, draw: st
 
 
 def planned(picked: list[dict], indices: dict, store: CommittedStore, arrivals: dict[str, int], t_start: float) -> dict[str, Any]:
-    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size and
-    the VUs whose inputs did not resolve."""
+    """A plan of `sampled_replay`: every picked VU's committed reads made without evaluating it (`evaluate.plan_vu`); the draw's size, its
+    picks ([request, request-relative step, Program row, op_path] in draw order) and the VUs whose inputs did not resolve."""
     unresolved = [w for vu in picked if (w := plan_vu(indices[vu["request_id"]], store, vu, arrive=int(arrivals.get(vu["request_id"], 0))))]
-    return {"plan": True, "picked": len(picked), "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
+    return {"plan": True, "picked": len(picked), "picks": [[vu["request_id"], int(vu["step"]), int(vu["i"]), vu["op_path"]] for vu in picked],
+            "unresolved_n": len(unresolved), "unresolved": unresolved[:8], "wall_s": round(time.perf_counter() - t_start, 3)}
 
 
 def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
