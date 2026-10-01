@@ -94,7 +94,7 @@ submit() {
   push "$0" "$GUEST/bin/n2_build.sh"
   local cpus=16
   python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"mem_gb":int(sys.argv[4]),"cpus":int(sys.argv[5]),"commit_key":sys.argv[6]}; print(json.dumps(d))' \
-    "$item" "$key" "$src" "$mem" "$cpus" "${VY_COMMIT_KEY:-n2-build/$key}" | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/$key.json"
+    "$item" "$key" "$src" "$mem" "$cpus" "${VY_COMMIT_KEY:-n2-build/$key}" | ssh "$N2" "mkdir -p $GUEST/items && rm -f $GUEST/items/$key.done && cat > $GUEST/items/$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-build-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
 # fill: owner=kueue-fold gpus=0 max_min=$max_min cpus=$cpus project=verity mem_gb=$mem prio=$PRIO
@@ -135,6 +135,12 @@ run() {
       "$(readlink -f "$0")" "$1"
   fi
   local key=$1 item=$GUEST/items/$1.json
+  # a finished job's rerun (the fill runner requeues a job it adopted, whose exit it couldn't read) is a no-op
+  if [ ! -e "$item" ] && [ -s "$GUEST/items/$key.done" ]; then
+    echo "n2-build $key: already done ($(cat "$GUEST/items/$key.done")); nothing to rerun"
+    exit 0
+  fi
+  [ -e "$item" ] || { echo "n2-build $key: no item $item and no record that it finished" >&2; exit 2; }
   # config-run.yaml's build envs, then the item's over them (dispatch.py's order); HF_HOME is node 2's own (see above)
   export HF_HOME=/workspace/jobs/hf HF_HUB_OFFLINE=1 SWEEP_DIR=/workspace/cp/sweep CUDA_HOME=/workspace/jobs/cuda-12.9 \
     TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python \
@@ -186,6 +192,7 @@ EOF
   ssh "$N1" "KUBECONFIG=\$HOME/.kube/config /workspace/jobs/venv312/bin/python $DISPATCH submit config-run $COMMIT_KEY --tree $TREE --task 1 \
     $(printf '%q ' "${COMMIT_ARGS[@]}")"
   # node 1 holds the row, the run and the Attempt now (node2-ops: delete a Build's outputs once they're back); the tree stays for reuse
+  echo "$run_id $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$GUEST/items/$KEY.done"
   rm -rf "$row_dir" "/workspace/jobs/runs/$run_id" "$item"
   echo "n2-build $KEY: Build $run_id on node 2, Commit submitted on node 1"
 }
