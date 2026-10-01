@@ -12,7 +12,13 @@ P ≥ 1 + m − Q; the bar is the largest such Q.  Against it: the cheapest prod
 multiply to at most 8 (leaf inner dimension ≥ 16), at W1's 2.0 leaf, from the minimum rank ratio per k-factor over a
 catalogue of best known ranks (rank is invariant under permuting a format's dimensions).
 
-    python benchmarks/pouw/sm120_exact/swar_bar.py --swar SUMMARY.json --catalogue FMM.txt [--out DIR]
+`--removal flat` prices the removal as the assessor's 12:23 AM PDT correction does: every strategy strips the bias before
+each 128-deep group's FP32 promotion, one write per honest output per group, 7.94/128 per honest MAC whatever the class
+width, so the saving is 0.4825·P·f − 7.94/128 with f the largest share at any width.  f is the larger of the contiguous
+and non-stride readings (a prover may permute k inside an exact group).  Under it the bar grows with f, so the bars at
+f = 1 hold for every input.
+
+    python benchmarks/pouw/sm120_exact/swar_bar.py --swar SUMMARY.json --catalogue FMM.txt [--removal flat] [--out DIR]
 
 `--catalogue` is the text of fmm.univ-lille.fr's table (rows `| ⟨X×Y×Z:N⟩ | N | XYZ | ...`).
 """
@@ -31,11 +37,13 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import run_result  # noqa: E402
 
-SAVE, LEAF, WRITE = 1 - 4.14 / 8, 2.0, 7.94
+SAVE, LEAF, WRITE, GROUP = 1 - 4.14 / 8, 2.0, 7.94, 128
 MARGINS = {"whole unit": 0.013, "measured regions": 0.092}
 
 
-def saving(P: float, f: dict[int, float]) -> float:
+def saving(P: float, f: dict[int, float], removal: str = "per-class") -> float:
+    if removal == "flat":
+        return max(0.0, SAVE * P * max(f.values()) - WRITE / GROUP)
     best = 0.0
     for k in range(1, len(f) + 1):
         for S in itertools.combinations(sorted(f, reverse=True), k):
@@ -47,9 +55,9 @@ def saving(P: float, f: dict[int, float]) -> float:
     return best
 
 
-def bar(m: float, f: dict[int, float]) -> float:
+def bar(m: float, f: dict[int, float], removal: str = "per-class") -> float:
     for Q in np.arange(1.0, -0.0005, -0.001):
-        if min(Q + P - saving(P, f) for P in np.linspace(max(0.0, 1 + m - Q), 3.0, 3001)) < 1:
+        if min(Q + P - saving(P, f, removal) for P in np.linspace(max(0.0, 1 + m - Q), 3.0, 3001)) < 1:
             return round(float(Q), 3)
     return 0.0
 
@@ -77,12 +85,14 @@ def main() -> None:
     ap.add_argument("--swar", required=True)
     ap.add_argument("--catalogue", required=True)
     ap.add_argument("--max-k-split", type=int, default=8)
+    ap.add_argument("--removal", choices=("per-class", "flat"), default="per-class")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
     out_dir = Path(args.out or Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "out")
     out_dir.mkdir(parents=True, exist_ok=True)
     fams = json.loads(Path(args.swar).read_text())["families"]
-    f = {int(L): max(r["L"][L]["W9"]["1"] for r in fams.values() if "L" in r) for L in ("16", "32", "64", "128")}
+    f = {int(L): max(r[part][L]["W9"]["1"] for r in fams.values() for part in ("L", "nonstride") if part in r)
+         for L in ("16", "32", "64", "128")}
     R = ranks(Path(args.catalogue))
     per_c = {}
     for c in range(2, args.max_k_split + 1):
@@ -94,20 +104,26 @@ def main() -> None:
             ratio = float(np.prod([per_c[c]["min_ratio"] for c in split]))
             comps.append({"k_factors": list(split), "products": round(LEAF * ratio, 6)})
     comps.sort(key=lambda r: r["products"])
-    bars = {name: bar(m, f) for name, m in MARGINS.items()}
+    bars = {name: bar(m, f, args.removal) for name, m in MARGINS.items()}
+    bars_any = {name: bar(m, {L: 1.0 for L in f}, args.removal) for name, m in MARGINS.items()}
     cheapest = comps[0]
     ok = all(cheapest["products"] >= b for b in bars.values())
-    summary = {"tool": "pouw_sm120_swar_bar", "f_W9": f, "formats": len(R), "per_k_factor": per_c,
-               "compositions": comps, "bars": bars, "cheapest": cheapest, "swar_breaks_nothing": ok}
+    ok_any = all(cheapest["products"] >= b for b in bars_any.values())
+    summary = {"tool": "pouw_sm120_swar_bar", "removal": args.removal, "f_W9": f, "formats": len(R), "per_k_factor": per_c,
+               "compositions": comps, "bars": bars, "bars_any_input": bars_any, "cheapest": cheapest,
+               "swar_breaks_nothing": ok, "swar_breaks_nothing_any_input": ok_any}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")
-    print(json.dumps({k: summary[k] for k in ("f_W9", "formats", "bars", "cheapest", "swar_breaks_nothing")}))
+    print(json.dumps({k: summary[k] for k in ("removal", "f_W9", "formats", "bars", "bars_any_input", "cheapest",
+                                              "swar_breaks_nothing", "swar_breaks_nothing_any_input")}))
     run_result.write(path, True, "sm120-swar-bar",
-                     f"cheapest admissible composition {cheapest['k_factors']} costs {cheapest['products']} of honest work in "
-                     f"products against SWAR's bars {bars}: {'no route breaks' if ok else 'a route may break'} "
-                     f"({len(R)} catalogued formats)",
+                     f"removal {args.removal}: cheapest admissible composition {cheapest['k_factors']} costs "
+                     f"{cheapest['products']} of honest work in products against SWAR's bars {bars} at the measured shares "
+                     f"and {bars_any} at share 1: {'no route breaks' if ok else 'a route may break'} at the measured shares, "
+                     f"{'none' if ok_any else 'a route may break'} on any input ({len(R)} catalogued formats)",
                      [("cheapest_products", cheapest["products"], "of honest"),
-                      *((f"bar_{n.replace(' ', '_')}", b, "of honest") for n, b in bars.items())])
+                      *((f"bar_{n.replace(' ', '_')}", b, "of honest") for n, b in bars.items()),
+                      *((f"bar_any_input_{n.replace(' ', '_')}", b, "of honest") for n, b in bars_any.items())])
 
 
 if __name__ == "__main__":

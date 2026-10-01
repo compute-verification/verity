@@ -20,6 +20,11 @@ A segment set fits at W when, with q the smallest power of two dividing all its 
 and every sum of the form (coefficients ±1, the sign the prover picks) is below 2^W·q in magnitude.  W = 9 is the
 biased-FP16 field; 8 and 10 bracket it, and 7 is a signed int8 field (an int8 leaf).
 
+Beside the census families, the `swar-plateau-*` rows are built for SWAR and are admitted: every 8th position 1, so ρ = 1,
+and the rest R < 8 (live), so the non-stride A′ sits in E4M3's top binades, on a grid of 16 or 32; `-pm` gives each
+position one shared random sign.  `nonstride` reads the k positions ≢ 0 mod 8 alone, as a prover that permutes k inside an
+exact group would lay them out.
+
     python benchmarks/pouw/sm120_exact/swar_window.py [--families F,...] [--out DIR]
 """
 from __future__ import annotations
@@ -43,6 +48,20 @@ from run import ATOM, UNIT_FAMILIES  # noqa: E402
 
 LS = (16, 32, 64, 128)
 WS = (7, 8, 9, 10)
+PLATEAUS = {"swar-plateau-r7": (7.0, False), "swar-plateau-r4": (4.0, False), "swar-plateau-pm-r7": (7.0, True)}
+
+
+def a_side(fam: str, k: int, rows: int, seed: int) -> tuple[tuple[np.ndarray, np.ndarray], dict]:
+    if fam not in PLATEAUS:
+        sides, _, info = PR.item_sides(f"unit:{fam}", k, rows, None, seed)
+        return sides["A"], info
+    R, signed = PLATEAUS[fam]
+    rng = census._rng("pairing", f"plateau:{fam}", seed)
+    X = np.full((rows, k), R)
+    X[:, ::8] = 1.0
+    if signed:
+        X *= rng.choice([-1.0, 1.0], k)
+    return (PR.form(X, census.s5_lines(k, 1, PR.LINE_NORM)[0], rng), PR.rules(X)), {"family": fam, "k": k}
 
 
 def units(codes: np.ndarray) -> np.ndarray:
@@ -117,7 +136,7 @@ def measure(n: np.ndarray) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--families", default=",".join(UNIT_FAMILIES))
+    ap.add_argument("--families", default=",".join((*UNIT_FAMILIES, *PLATEAUS)))
     ap.add_argument("--k", type=int, default=8192)
     ap.add_argument("--rows", type=int, default=512)
     ap.add_argument("--seed", type=int, default=20260930)
@@ -129,30 +148,33 @@ def main() -> None:
     fams = {}
     for fam in args.families.split(","):
         t = time.time()
-        sides, k, info = PR.item_sides(f"unit:{fam}", args.k, args.rows, None, args.seed)
-        codes, ok = sides["A"]
+        (codes, ok), info = a_side(fam, args.k, args.rows, args.seed)
         n = units(codes[ok]) if ok.any() else units(codes[:0])
         rec = {**info, "rows_used": int(len(n))}
         if len(n) >= 4:
             rec["L"] = measure(n)
+            rec["nonstride"] = measure(n[:, np.arange(n.shape[1]) % 8 != 0])
         rec["seconds"] = round(time.time() - t, 1)
         fams[fam] = rec
         print(json.dumps({"family": fam, "rows_used": rec["rows_used"], "seconds": rec["seconds"],
                           **({"L16_W9": rec["L"]["16"]["W9"], "L32_W9": rec["L"]["32"]["W9"]} if "L" in rec else {})}), flush=True)
     worst = {}
-    for L in LS:
-        for W in WS:
-            for m in ("1", "2", "3"):
-                vals = [(r["L"][str(L)][f"W{W}"][m], f) for f, r in fams.items() if "L" in r]
-                v, f = max(vals)
-                worst[f"L{L}_W{W}_{m}"] = {"max": v, "family": f, "mean": round(float(np.mean([x for x, _ in vals])), 6)}
+    for part, prefix in (("L", ""), ("nonstride", "nonstride_")):
+        for L in LS:
+            for W in WS:
+                for m in ("1", "2", "3"):
+                    vals = [(r[part][str(L)][f"W{W}"][m], f) for f, r in fams.items() if part in r]
+                    v, f = max(vals)
+                    worst[f"{prefix}L{L}_W{W}_{m}"] = {"max": v, "family": f,
+                                                      "mean": round(float(np.mean([x for x, _ in vals])), 6)}
     summary = {"tool": "pouw_sm120_swar_window", "families": fams, "worst": worst}
     path = out_dir / "summary.json"
     path.write_text(json.dumps(summary, indent=1) + "\n")
-    w = worst["L16_W9_1"]
+    w, ns = worst["L16_W9_1"], worst["nonstride_L16_W9_1"]
     run_result.write(path, True, "sm120-swar-window",
-                     f"{len(fams)} census families at v1's forming; the largest share of 16-wide leaf row segments fitting a "
-                     f"common 9-bit biased-FP16 window is {w['max']:.4f} ({w['family']}), mean {w['mean']:.4f}",
+                     f"{len(fams)} families at v1's forming; the largest share of 16-wide leaf row segments fitting a "
+                     f"common 9-bit biased-FP16 window is {w['max']:.4f} ({w['family']}), mean {w['mean']:.4f}; on the "
+                     f"non-stride positions alone {ns['max']:.4f} ({ns['family']})",
                      [(f"max_share_{key}", v["max"], "share") for key, v in worst.items()])
 
 
