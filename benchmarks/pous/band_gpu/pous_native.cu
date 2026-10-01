@@ -1030,8 +1030,8 @@ __device__ __forceinline__ void keccak_f_pairs(uint64_t st[25]) {
 // Both roles run every instruction of a chunk step but the squeezer's loads and stores: the absorber's absorb is masked to
 // nothing on the squeezer.  U unrolls the Keccak round loop.  IL: the state, the slots and the sponges in the bit-interleaved
 // form (il_const): X is converted a Keccak-f after it is loaded (so its load latency stays hidden) and W as it is written;
-// the slots' initial contents are the caller's to convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads each chunk back from its slot one chunk late,
-// so round 9 of a call that another follows writes every chunk of half 0.
+// the slots' initial contents are the caller's to convert (chunked_interleave_kernel).  LAG: no shuffles; the absorber reads
+// each chunk back from its slot one chunk late, so round 9 of a call that another follows writes every chunk of half 0.
 constexpr int PAIR_ROWS = 16;
 constexpr int PAIRS_WARPS_PER_BLOCK = 4;
 
@@ -1057,13 +1057,16 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
     const int64_t L = n < rows ? len[r] : -1;
     const bool act = j <= L + 1, fin = j == L + 1, more = j <= L;
     if (!__any_sync(ALL, act)) continue;
+    // LAG's loads run on every lane, a lane past the last row reading its group's first row's slots (and never writing).
+    const int64_t ra = n < rows ? r : row0 + g * PAIR_ROWS;
     const bool any_more = __any_sync(ALL, more);
     if (s > 0) {
       if (lane == 0)
         while (ld_acquire_gpu(done + g) < s) __nanosleep(64);
       __syncwarp();
     }
-#define CHUNK_AT(h, cc) (st_words + (((int64_t)(h) * nch + (cc)) * pitch + r) * SLOT_WORDS)
+#define SLOT_AT(h, cc, row) (st_words + (((int64_t)(h) * nch + (cc)) * pitch + (row)) * SLOT_WORDS)
+#define CHUNK_AT(h, cc) SLOT_AT(h, cc, r)
     // v: a chunk's source, loaded a Keccak-f ahead of its use (after the previous chunk's absorb), and the chunk written,
     // computed in place.
     uint64_t x[25];
@@ -1131,7 +1134,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
           }
         }
       };
-      uint64_t* p = CHUNK_AT(h, 0);  // chunk cc's slot, then (once stored) cc + 1's
+      uint64_t* p = LAG ? SLOT_AT(h, 0, ra) : CHUNK_AT(h, 0);  // chunk cc's slot, then (once stored) cc + 1's
       if (sq && act) src(0, p, v);
       auto produce = [&](int64_t cc) {  // the squeezer's chunk cc, written
         if (IL && x_in && cc <= xch) {
@@ -1148,7 +1151,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
               const int64_t jj = cc * RATE_WORDS + w;
               if (jj < xwords) orow[jj] = (IL ? de_il64(chunk_word(v, w)) : chunk_word(v, w)) ^ __ldg(crow + jj);
             }
-          } else if (st || (st_tail && cc >= xch)) {
+          } else if (st || (!LAG && st_tail && cc >= xch)) {
             slot_store_cg(p, v);
           }
         }
@@ -1168,13 +1171,11 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
           if (cc < nch) {
             produce(cc);
             __syncwarp();
-            if (x_in) {
-              if (act) {
-                if (!sq) slot_load_cg(p, v);
-                else if (cc + 1 < nch) src(cc + 1, p + cstride, v);
-              }
-            } else if (act && (!sq || cc + 1 < nch)) {
-              slot_load_cg(sq ? p + cstride : p, v);
+            if (x_in && cc + 1 <= xch) {
+              if (sq) src(cc + 1, p + cstride, v);
+              else slot_load_cg(p, v);
+            } else {
+              slot_load_cg(sq && cc + 1 < nch ? p + cstride : p, v);
             }
             p += cstride;
           }
@@ -1194,6 +1195,7 @@ __global__ void __launch_bounds__(32 * PAIRS_WARPS_PER_BLOCK) band_chain_pairs_k
       }
     }
 #undef CHUNK_AT
+#undef SLOT_AT
     if (s == 0 || part == 0 || any_more) {
       if (role == keeper && (s == 0 || part == 0 ? act : more)) {
 #pragma unroll
