@@ -370,7 +370,8 @@ def bf16_file(rows: list[bytes]) -> bytes:
 @pytest.fixture(params=sorted(s for s in PPD.SCHEMES if "unpromoted" not in s))
 def honest_pass(tmp_path, request):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
-    the scheme's reference prover and written in the device run's layout, for each device scheme (-h1 and -h2 trees)."""
+    the scheme's reference prover and written in the device run's layout, for each promoted device scheme (-h1 and -h2 trees;
+    the unpromoted record's debit isn't stated, so pearl_c_work can't audit it)."""
     scheme = request.param
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
     rng, k = np.random.default_rng(11), 128

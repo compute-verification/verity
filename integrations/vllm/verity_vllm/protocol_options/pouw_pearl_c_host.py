@@ -11,7 +11,7 @@ from typing import Any
 
 import blake3
 from verity.commitments import RangeIndexedDomain
-from verity.commitments.merkle import frame_message, frame_uint
+from verity.commitments.merkle import domain_message
 from verity_pouw.audit import activation_binding, rows_domain
 
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 136 bytes)
@@ -71,14 +71,12 @@ def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, ha
 
 
 class _Keys:
-    """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `CommitmentDomain.domain_id`'s framed message hashed
-    natively (tagged ``domain``, or ``domain/b3s`` under frame-b3s), and unit's label hash is a constant.  The native path
-    is held to `call_keys` once at construction, so a tree hash it doesn't frame (or a framing that moved) fails there.
-    ``native`` set to None takes `call_keys` itself (the reference path)."""
+    """`call_keys` by native BLAKE3 (the `blake3` package): dom_a is `merkle.domain_message` hashed natively, and unit's
+    label hash is a constant.  The native path is held to `call_keys` once at construction, so a tree hash whose domain id
+    isn't BLAKE3 of that message fails there.  ``native`` set to None takes `call_keys` itself (the reference path)."""
 
     def __init__(self, fixture: Any, salt: bytes, hash: str):
         self.native, self.fixture, self.salt, self.hash = blake3, fixture, salt, hash
-        self.tag = b"domain/b3s" if hash == "blake3-s256" else b"domain"
         self.label = fixture.unit_block(salt, bytes(32), 0)[-32:]
         self.positions: dict[int, bytes] = {}
         if self(bytes(32), 0, CHECK_ROWS) != call_keys(fixture, salt, bytes(32), 0, CHECK_ROWS, hash):
@@ -90,8 +88,8 @@ class _Keys:
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = bytes.fromhex(RangeIndexedDomain(m16).identity_digest)
-        parts = (activation_binding(self.salt, index), frame_uint(index + 2), pos, frame_uint(m16))
-        return self.native.blake3(frame_message(self.tag, *parts)).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
+        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, self.hash)
+        return self.native.blake3(msg).digest() + self.salt + root_b + index.to_bytes(8, "little") + self.label
 
 
 class _Lane:

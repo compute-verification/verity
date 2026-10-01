@@ -91,6 +91,7 @@ def test_the_build_dir_is_the_source_set_s_child_of_the_parent(tmp_path):
     assert other != bd, "another source set never shares the dir"
 
 
+@_isolated
 def test_two_trees_with_one_source_set_compile_the_same_staged_files(tmp_path):
     parent, seen = str(tmp_path / "jit"), []
 
@@ -104,6 +105,7 @@ def test_two_trees_with_one_source_set_compile_the_same_staged_files(tmp_path):
     assert seen[0][0][0] == os.path.join(bd, "src", "ext.cu") and seen[0][0][2] == b"__global__ void k(){}"
 
 
+@_isolated
 def test_a_staged_source_that_differs_from_the_source_is_rewritten(tmp_path):
     src, parent = _sources(tmp_path), str(tmp_path / "jit")
     bd = nj.keyed_build_dir(parent, nj.source_set_digest(src, cflags=(), cuda_cflags=(), **VERSIONS))
@@ -113,6 +115,7 @@ def test_a_staged_source_that_differs_from_the_source_is_rewritten(tmp_path):
     assert open(os.path.join(bd, "src", "ext.cu"), "rb").read() == b"__global__ void k(){}"
 
 
+@_isolated
 def test_sources_with_one_basename_twice_are_refused(tmp_path):
     a, b = tmp_path / "a" / "ext.cu", tmp_path / "b" / "ext.cu"
     for p in (a, b):
@@ -122,6 +125,7 @@ def test_sources_with_one_basename_twice_are_refused(tmp_path):
         nj.jit_load("ext", [str(a), str(b)], parent=str(tmp_path / "jit"), loader=_loader, **VERSIONS)
 
 
+@_isolated
 def test_local_headers_are_staged_beside_the_sources_and_key_the_digest(tmp_path):
     src = tmp_path / "src"
     (src / "sub").mkdir(parents=True)

@@ -112,7 +112,7 @@ def test_the_pools_threads_and_their_blocks_do_not_change_the_commit(threads, mo
     finally:
         PN._pool.cache_clear()
     assert PN.block_for(400) == {1: 256, 3: 144, 256: 64}[threads]
-    assert [hi - lo for lo, hi in call.b.reads][0] == PN.block_for(400)
+    assert max(hi - lo for lo, hi in call.b.reads) == PN.block_for(400)
     assert (got.leaves, got.inputs, got.root) == (ref.leaves, ref.inputs, ref.root) and np.array_equal(got.y, ref.y)
     assert (got.side.leaves, got.side.root) == (ref.side.leaves, ref.side.root)
 
