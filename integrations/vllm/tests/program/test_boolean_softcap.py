@@ -162,6 +162,15 @@ def _slow_past_a_block(targets: list) -> list:
     return [t if t.defn is BSC.AttnBlockSoftcap else pytest.param(t, marks=pytest.mark.slow) for t in targets]
 
 
+def test_the_switch_binds_tanh_and_ex2_to_mufus_boolean_versions() -> None:
+    """The switch (`verity_vllm.program.boolean`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
+    ``word_statics`` to `MufuTanh_v2` and `MufuEx2Ftz_v2`, and nothing left on words."""
+    from verity_vllm.program import boolean as BB
+    for target in PINNED:
+        bits = BB.boolean_version(TR.word_of(target))
+        assert bits.id == target.id and BL.is_boolean(bits)
+
+
 @pytest.mark.parametrize("target", _slow_past_a_block(PINNED), ids=lambda t: t.id)
 def test_pinned_counts_and_digests(target) -> None:
     ands, xors, nots, digest = PINS[target.id]
