@@ -73,13 +73,13 @@ def screen_into(out: Any, x: Any, alpha: Any, aux: Any, fused: bool) -> None:
 
 
 def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:
-    """The rows of x (FP32, on the device) that fail the rules: `screen`'s fails, and its unsure rows that
-    `pearl_c.live_row` rejects on their words."""
+    """The rows of x (FP32, or BF16 widened to its FP32 words, on the device) that fail the rules: `screen`'s fails, and its
+    unsure rows that `pearl_c.live_row` rejects on their words."""
     import torch
     rows = unsure.nonzero().flatten()
     out = {int(i) for i in fails.nonzero().flatten().tolist()}
     if len(rows):
-        for r, row in zip(rows.tolist(), x[rows].view(torch.int32).cpu().numpy().astype("<u4")):
+        for r, row in zip(rows.tolist(), x[rows].float().view(torch.int32).cpu().numpy().astype("<u4")):
             if not C.live_row([int(v) for v in row]):
                 out.add(int(r))
     return tuple(sorted(out))

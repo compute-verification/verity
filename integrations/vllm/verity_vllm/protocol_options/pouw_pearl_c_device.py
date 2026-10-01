@@ -250,7 +250,7 @@ class _Shape:
     n: int
     k: int
     b: dict[str, Any]
-    xa: Any                        # FP32 (mp x k): rows m16 … mp − 1 stay zero
+    xa: Any                        # A's rows (mp x k), FP32 or BF16 (`a_bf16`): rows m16 … mp − 1 stay zero
     keys: Any                      # dom_a ‖ unit
     sets: list = field(default_factory=list)   # the ring: set 0 b's own, then the schedule's further sets of `rotated` buffers
     done: list = field(default_factory=list)   # each set's last side-lane use (a CUDA event)
@@ -315,10 +315,10 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
-              m_real: int | None = None, *, variant: str, hashing: str, rows_form: str = "w") -> Any:
+              m_real: int | None = None, *, variant: str, hashing: str, rows_form: str = "w", a_bf16: bool = False) -> Any:
     full = {"dom_a": 0, "dom_b": 0, "dom_t": 0, "line_b": 0, "k_msg": 0, "k_leaf": 0, "t_row": 0, "t_tile": 0, "unit": 0, **keys}
     return kernel.run.Pipeline(kernel.dev, m, n, k, variant, full, xa, xb, bufs=bufs, m_real=m_real, hashing=hashing,
-                               rows_form=rows_form)
+                               rows_form=rows_form, **({"a_bf16": True} if a_bf16 else {}))
 
 
 def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
@@ -351,6 +351,7 @@ class PearlCDeviceRun(GraphCalls):
                  schedule: str | Schedule = SERIAL, graphs: bool = False, rows_form: str = "w", whole_defer: bool = False):
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.rows_form = rows_form
+        self.a_bf16 = scheme.hashing == "h2" and hasattr(kernel.run, "A_BF16_KERNELS")
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer = whole_defer
         self._graphs: dict[tuple, _Graph] = {}
@@ -390,7 +391,7 @@ class PearlCDeviceRun(GraphCalls):
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
                                                 f"sources {(kernel.source_sha256 or 'unrecorded')[:16]})",
-            "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
+            "hashing": hashing, "a_rows": "bf16" if self.a_bf16 else "fp32", "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native blake3",
                      "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None,
@@ -455,7 +456,8 @@ class PearlCDeviceRun(GraphCalls):
             mp = R.cdiv(m16, R.BM_D) * R.BM_D
             size = R.Pipeline.sizes(mp, n, k, m16)
             sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
-                        torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(32 + 104, self.device))
+                        torch.zeros((mp, k), dtype=torch.bfloat16 if self.a_bf16 else torch.float32, device=self.device),
+                        _zeros(32 + 104, self.device))
             sh.sets = [dict(sh.b)]
             sh.size = size
             if self.cur is not None and self.cur.poison is not None:
@@ -521,7 +523,7 @@ class PearlCDeviceRun(GraphCalls):
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 32, "dom_a": kp, "unit": kp + 32,
                     **_constant_keys(self.const)}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant,
-                             hashing=self.scheme.hashing, rows_form=self._rows())
+                             hashing=self.scheme.hashing, rows_form=self._rows(), a_bf16=self.a_bf16)
             names = self._call_names()
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
@@ -578,15 +580,20 @@ class PearlCDeviceRun(GraphCalls):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity ({self.capacity} tiles, {CALL_CAPACITY} calls, "
                                f"{FLAG_ROWS} screened rows); end it and begin another")
         self.join_before(sh)
-        sh.xa[:m].copy_(x2)
-        if m16 > m:
-            sh.xa[m:m16].zero_()
         pipe, steps, side = self._pipe(w, sh)
+        graphed = self._graphed(m16)
+        if self._direct(x2, sh, graphed):
+            pipe.b["xa"] = x2.data_ptr()
+        else:
+            sh.xa[:m].copy_(x2)
+            if m16 > m:
+                sh.xa[m:m16].zero_()
+            pipe.b["xa"] = sh.xa.data_ptr()
         raw = self.stream()
         cuda = self.device.type == "cuda"
         caller = self.torch_stream(raw) if cuda else None
         main = self.main if self.schedule.main_priority == "greatest" else None
-        if self._graphed(m16):
+        if graphed:
             y, screened = self._graph_call(w, sh, pipe, raw, tiles, m, index, caller)
             return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias, screened, scattered=self.hashing)
         y = torch.empty((sh.mp, wt.n), dtype=torch.bfloat16, device=x.device)
@@ -627,6 +634,14 @@ class PearlCDeviceRun(GraphCalls):
         return self._after(cur, w, wt, sh, pipe, index, m, k, m16, tiles, y, lead, bias,
                            rows=x2 if x2.is_contiguous() and x2.dtype == torch.bfloat16 else None)
 
+
+    def _direct(self, x2: Any, sh: _Shape, graphed: bool) -> bool:
+        """Whether a call's steps read A's rows from the caller's x itself, without the copy to `xa`: BF16 rows (`a_bf16`), every
+        row of the pipeline's mp (no filler rows to zero), contiguous and 16-byte aligned; not in a graph, whose launches hold
+        `xa`'s address, nor in a retained pass, which keeps A's rows from `xa`."""
+        import torch
+        return (self.a_bf16 and not graphed and self.cur.retain is None and x2.shape[0] == sh.mp and x2.dtype == torch.bfloat16
+                and x2.is_contiguous() and x2.data_ptr() % 16 == 0)
 
     def _after(self, cur: _Pass, w: int, wt: _Weight, sh: _Shape, pipe: Any, index: int, m: int, k: int, m16: int, tiles: int,
                y: Any, lead: Any, bias: Any, screened: bool = False, rows: Any = None, scattered: bool = False) -> Any:
