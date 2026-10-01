@@ -37,7 +37,6 @@ implement it is the campaign recorded under ``docs/data/tc-total-2026-09-07/``
 (``gpu/tc-total/campaign.py``): 147,258 structured tiles x 128 outputs x 3
 repetitions per device, every output reproduced, no nondeterminism, no
 position or k-index dependence, and no difference between the two devices.
-See ``docs/verified-backend/tc-total-semantics.md``.
 
 Also here: :func:`cvt_rn_bf16_f32`, the FP32 -> BF16 conversion
 (``cvt.rn.bf16.f32``, SASS ``F2FP.BF16.PACK_AB``) as measured on both devices:

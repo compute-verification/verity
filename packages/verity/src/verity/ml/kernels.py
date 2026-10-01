@@ -174,8 +174,8 @@ def _scale_batch(scale: str, code: np.ndarray):
     c = code.astype(_I64)
     if scale == "ue8m0":
         return np.full(c.shape, 8, _I64), c - 130, c == 0xFF
-    e, m = (c >> 3) & 0xF, c & 7
-    invalid = ((c & 0x80) != 0) | ((e == 15) & (m == 7))
+    e, m = (c >> 3) & 0xF, c & 7                    # the low 7 bits: sm_120 ignores bit 7 (`models._scale_dyadic`)
+    invalid = (e == 15) & (m == 7)
     return np.where(e == 0, m, 8 + m), np.where(e == 0, -9, e - 10), invalid
 
 

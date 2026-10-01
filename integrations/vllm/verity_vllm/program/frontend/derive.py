@@ -37,14 +37,13 @@ from typing import Any, Callable, NoReturn, Sequence
 
 import torch
 
-from verity.ir.codec import _spec_id, canonical_json, program_digest
+from verity.ir.codec import _spec_id, canonical_json, encode_program, program_digest
 from verity.ir.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition
 from verity.ir.defs import bind as ir_bind
 from verity.ir.program import Program
 from verity.ir.refs import Affine, Coll
 from verity.ir.refs import runs as _refs_runs
-from verity.ir.liveness import DeadGateReport
-from verity.ir.liveness import dead_gates as _dead_gates
+from verity.ir.liveness import DeadGateReport, dead_gates as _dead_gates
 from verity.ir.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
@@ -381,7 +380,7 @@ class Ctx:
         if fn is None:
             refuse("numerics_unregistered", node or self.current, self.module_path(node or self.current),
                    f"the {self.mode} vocabulary {self.vocab.name!r} has no registered kind for role {role!r} with {statics}; "
-                   f"a NUMERIC kind is needed (see docs/vllm-poc/derive-requests.md)")
+                   f"a NUMERIC kind is needed")
         return fn
 
     def call(self, fn, *args: Coll, node=None, rule: Rule | None = None, name: str | None = None) -> Coll:
@@ -491,6 +490,7 @@ class DeriveReport:
     family: dict | None = None
     flat_definition: Any = None  # the flat leaf-level SpecializedDefinition (rules' direct output)
     correspondence_digest: str | None = None  # sha256 of the runtime correspondence document (`annotations["correspondence"]`), digested apart from the Program
+    descriptor: dict | None = None  # the flat Program's descriptor its digest was taken over (`program` is the flat one), for the writer
 
     @property
     def result(self) -> Program | Unsupported:
@@ -517,10 +517,10 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-                  check_registry: bool = True, rank: tuple[int, int] | None = None) -> DeriveReport:
+                  check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None) -> DeriveReport:
     """`rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it."""
+    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -539,7 +539,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     holder: list = []
     try:
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
-                                    name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder)
+                                    name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported)
         prov["weights"] = [w.to_json() for w in ctx.weights]
         prov["weight_roles"] = ctx.weight_roles
         prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual (global M-0595 (3))
@@ -555,7 +555,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         corr_digest = correspondence_digest(corr_doc)
         flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc})
         check_identity(flat_program, check_registry=check_registry)
-        flat_digest = program_digest(flat_program)
+        flat_digest = program_digest(flat_desc := encode_program(flat_program))
         program, family_report = flat_program, None
         for fam in ruleset.families:
             if fam.modes is not None and mode not in fam.modes:
@@ -573,7 +573,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
             elif family_report is not None:
                 prov.setdefault("families_not_matched", []).append(family_report)
                 family_report = None
-        digest = program_digest(program)
+        digest = flat_digest if program is flat_program else program_digest(program)
         dead = _dead_gates(program, limit=32)
         # a family claim replaces the flat body by the family's: the correspondence describes the FLAT Calls and stays with the flat root
         corr_applies = program is flat_program
@@ -583,7 +583,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
                           "correspondence": {"schema": corr_doc["schema"], "calls": len(corr_doc["calls"]), "occurrences": len(corr_doc["occurrences"]),
                                              "applies_to": "program_fn" if corr_applies else f"flat body only ({_spec_id(flat_sd)}); not attached", "digest": corr_digest}}
         return DeriveReport(program, None, prov, digest, _spec_id(program.fn), program.gates, dead, flat_digest, _spec_id(flat_sd),
-                            prov.get("family"), flat_sd, corr_digest if corr_applies else None)
+                            prov.get("family"), flat_sd, corr_digest if corr_applies else None, flat_desc if corr_applies else None)
     except Refuse as e:
         prov["unsupported"] = e.u.to_json()
         _record_partial(prov, holder)
@@ -677,9 +677,9 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
 
 
 def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims, name, ruleset, vocab,
-                 _ctx_holder: list | None = None) -> tuple[SpecializedDefinition, Ctx]:
+                 _ctx_holder: list | None = None, exported=None) -> tuple[SpecializedDefinition, Ctx]:
     module = source if isinstance(source, torch.nn.Module) else None
-    ep = _export(source, example_inputs)
+    ep = exported if exported is not None else _export(source, example_inputs)
     sig = ep.graph_signature
     leaves, fqn_to_leaf = _weights_of(module)
     placeholder_to_weight: dict[str, int] = {}
