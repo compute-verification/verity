@@ -99,6 +99,8 @@ research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --
 vector is still checked at the registered `d = 12`, and the reference gate checks the run's own `d`. `bench-result.json` records
 the run's `d` in `scheme` and `scheme_params`.
 
-On an sm_120 (RTX PRO 6000) `pod.sh` builds with a CUDA 12.8 toolkit (installed from NVIDIA's apt repository when the image
-ships only CUDA 13, which torch's cu128 wheel does not match), `pous_native` for the device's capability (`native.arch_list`), and
-`libp2v1.so` for `ARCH=sm_120`.
+`pod.sh` installs nothing on the system, so it runs as-is on a shared node. It builds with the toolkit already installed
+(`CUDA_HOME`, `/usr/local/cuda`, or `/usr/local/cuda-13.0`, `-12.9` or `-12.8`). With CUDA 13 it uses torch 2.14.0 cu130 wheels,
+and with CUDA 12.8+ it uses 2.7.1 cu128. It builds `pous_native` for the device's capability (`native.arch_list`) and `libp2v1.so`
+for `ARCH=sm_120` on an RTX PRO 6000. Without a system `gmp.h`, CGBN's host pass takes gmpy2's wheel's from the venv.
+`WORK`, `VCPU`, `RCPU` and `WORKERS` place it on a shared node's directories and cores.

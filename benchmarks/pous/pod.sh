@@ -13,6 +13,9 @@
 #   ... -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2  # build check: kernels built, gates run
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6 [WS=...]   # the band at in-degree d (>= 5; side-by-side's band arm too)
 #
+# On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
+# the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
+#
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
 #
@@ -37,38 +40,36 @@ case "$GPU" in                                            # the census id is the
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
-AUDITS=${AUDITS:-20}
+AUDITS=${AUDITS:-20}; WORKERS=${WORKERS:-$(nproc)}
 GO=$([ "${GATES_ONLY:-0}" = 1 ] && echo --gates-only)
 mkdir -p "$W" "$O/bench"
 nvcc_release() { "$1/bin/nvcc" --version 2>/dev/null | sed -n 's/.*release \([0-9]*\)\.\([0-9]*\).*/\1 \2/p'; }
-# A CUDA 12 toolkit for torch's JIT build (torch's wheels are CUDA 12; a CUDA 13 nvcc does not match them), at least 12.8 on a
-# Blackwell GPU (sm_100, sm_120): CUDA_HOME if it is one, else an installed /usr/local/cuda-12.x, else 12.8 from NVIDIA's apt
-# repository (the Nebius image ships CUDA 13.0)
-cuda12_home() {
+# The installed CUDA toolkit for torch's JIT build and P2 v1's library; nothing is installed or changed on the system (a
+# shared node's toolkit is the node's): CUDA_HOME, /usr/local/cuda, or a /usr/local/cuda-13.0, -12.9 or -12.8, the first that
+# is CUDA 13 or CUDA 12 (at least 12.8 on a Blackwell GPU: sm_100, sm_120)
+cuda_home() {
   local need=0 cc home major minor
   cc=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1)
   [ "${cc%%.*}" -ge 10 ] 2>/dev/null && need=8
-  for home in ${CUDA_HOME:-/usr/local/cuda} /usr/local/cuda-12.9 /usr/local/cuda-12.8 /usr/local/cuda; do
+  for home in ${CUDA_HOME:-} /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.9 /usr/local/cuda-12.8; do
     read -r major minor <<< "$(nvcc_release "$home")"
+    [ "${major:-0}" = 13 ] && { echo "$home"; return 0; }
     [ "${major:-0}" = 12 ] && [ "${minor:-0}" -ge "$need" ] && { echo "$home"; return 0; }
   done
-  if [ ! -x /usr/local/cuda-12.8/bin/nvcc ]; then
-    . /etc/os-release; local repo=ubuntu${VERSION_ID/./}
-    dpkg -s cuda-keyring >/dev/null 2>&1 || { wget -q "https://developer.download.nvidia.com/compute/cuda/repos/$repo/x86_64/cuda-keyring_1.1-1_all.deb" \
-      && dpkg -i cuda-keyring_1.1-1_all.deb >/dev/null; } || return 3
-    apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends cuda-nvcc-12-8 \
-      cuda-cudart-dev-12-8 cuda-cccl-12-8 >/dev/null || return 3
-  fi
-  echo /usr/local/cuda-12.8
+  return 3
 }
-# band-gpu's Python: torch pinned (TORCH_VERSION) from the PyTorch index for the CUDA 12 toolkit (cu126 below 12.8, cu128 from it)
+# band-gpu's Python: torch pinned (TORCH_VERSION) from the PyTorch index for the toolkit's CUDA (torch's JIT build needs the
+# wheel's CUDA major to be nvcc's): 2.14.0 cu130 for CUDA 13, 2.7.1 cu128 for 12.8+, 2.7.1 cu126 below
 gpu_env() {
   local home major minor
-  home=$(cuda12_home) || { echo "no CUDA 12 toolkit for this GPU, and none could be installed"; return 3; }
+  home=$(cuda_home) || { echo "no CUDA 13 or CUDA 12 toolkit for this GPU (at least 12.8 on Blackwell) is installed"; return 3; }
   export CUDA_HOME=$home PATH=$home/bin:$PATH
   read -r major minor <<< "$(nvcc_release "$CUDA_HOME")"
-  TORCH_CUDA=${TORCH_CUDA:-$([ "${minor:-8}" -ge 8 ] && echo cu128 || echo cu126)}
-  TORCH_VERSION=${TORCH_VERSION:-2.7.1}
+  if [ "$major" = 13 ]; then
+    TORCH_CUDA=${TORCH_CUDA:-cu130}; TORCH_VERSION=${TORCH_VERSION:-2.14.0}
+  else
+    TORCH_CUDA=${TORCH_CUDA:-$([ "${minor:-8}" -ge 8 ] && echo cu128 || echo cu126)}; TORCH_VERSION=${TORCH_VERSION:-2.7.1}
+  fi
   local venv=$W/gpu312-torch$TORCH_VERSION-$TORCH_CUDA
   PY=$venv/bin/python
   [ -x "$PY" ] || { uv venv -q "$venv" --python 3.12 && uv pip install -q --python "$PY" numpy ninja \
@@ -85,8 +86,9 @@ record_host() {
   if [ -n "${NVME_DIR:-}" ]; then
     mkdir -p "$NVME_DIR"; findmnt -T "$NVME_DIR" > "$O/nvme-mount.txt" 2>&1; lsblk -o NAME,MODEL,TRAN,ROTA,SIZE > "$O/lsblk.txt" 2>&1
   fi
-  read -r VCPU RCPU <<< "$(lscpu -p=CPU,CORE 2>/dev/null | grep -v '^#' | awk -F, '!seen[$2]++ {print $1}' | sed -n '3p;4p' | tr '\n' ' ')"
-  VCPU=${VCPU:-3}; RCPU=${RCPU:-2}
+  local v r
+  read -r v r <<< "$(lscpu -p=CPU,CORE 2>/dev/null | grep -v '^#' | awk -F, '!seen[$2]++ {print $1}' | sed -n '3p;4p' | tr '\n' ' ')"
+  VCPU=${VCPU:-${v:-3}}; RCPU=${RCPU:-${r:-2}}
 }
 nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv,noheader || true
 nproc; cat /sys/fs/cgroup/cpu.max 2>/dev/null || true
@@ -123,7 +125,7 @@ elif [ "$IMPL" = band-gpu ]; then
   gpu_env || exit 3
   record_host
   "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl band-gpu --build-dir "$W/pous_build" --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" \
-    --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$(nproc)" --verifier-cpu "$VCPU" \
+    --weight-set "$WS" --hardware "$HW" --out "$O/bench" --audits "$AUDITS" --workers "$WORKERS" --verifier-cpu "$VCPU" \
     --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO \
     ${BAND_D:+--band-d "$BAND_D"}
   RC=$?
@@ -132,21 +134,26 @@ elif [ "$IMPL" = band-gpu ]; then
 elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   gpu_env || exit 3
   record_host
-  # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, libgmp for CGBN's host pass, the device's arch
+  # P2 v1's library (benchmarks/pous/p2_v1): CGBN at p2_gpu's pinned commit, gmp.h for CGBN's host pass (the system's, else
+  # gmpy2's wheel's in band-gpu's venv: nothing is installed on the system), the device's arch
   ARCH=${ARCH:-sm_$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)}
-  echo '#include <gmp.h>' | cpp >/dev/null 2>&1 || { apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgmp-dev >/dev/null; } || exit 3
+  GMPINC=
+  if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then
+    uv pip install -q --python "$PY" gmpy2 || exit 3
+    GMPINC=$("$PY" -c 'import gmpy2, os; print(os.path.dirname(gmpy2.__file__))') || exit 3
+  fi
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
   git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
   NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
   [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
   P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL                  # keyed by the nvcc too: a .so another toolkit built is never adopted
-  make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
+  make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
     ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
       --impl-commit "${RESEARCH_SOURCE_COMMIT:-}" --weight-set "$WS" --hardware "$HW" --out "$2" --audits "$AUDITS" \
-      --workers "$(nproc)" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
+      --workers "$WORKERS" --verifier-cpu "$VCPU" --responder-cpu "$RCPU" ${NVME_DIR:+--nvme-dir "$NVME_DIR"} \
       ${MAX_SEGMENTS:+--max-segments "$MAX_SEGMENTS"} $GO $([ "$1" = band-gpu ] && [ -n "${BAND_D:-}" ] && echo --band-d "$BAND_D")
   }
   if [ "$IMPL" = side-by-side ]; then
