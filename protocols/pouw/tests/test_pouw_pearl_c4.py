@@ -449,6 +449,15 @@ def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
     assert F.two_four_windows([0x1, 0x9, 0, 0] * 32 + [0x1] * 128) == [True, False]
 
 
+def test_d24_is_the_hardware_pair_rule():
+    """NVFP4's sparse MMA keeps 2 of each 8-chunk's 4 pairs: a window counts when every chunk has at most 2 nonzero pairs,
+    whatever its 4-groups hold (a sign-only code, 0x8, is zero)."""
+    assert F.two_four_windows([0x3, 0x5, 0x6, 0x7, 0, 0, 0x8, 0] * 16) == [True]
+    assert F.two_four_windows([0x1, 0, 0x2, 0, 0x3, 0, 0, 0] * 16) == [False]
+    assert F.two_four_windows([0x1] * 4 + [0] * 4 + [0x1, 0, 0x2, 0, 0x3, 0, 0, 0] + [0] * 112) == [False]
+    assert F.two_four_windows([0] * 128 + [0x1, 0x9] * 64) == [True, False]
+
+
 def _row(values) -> list[int]:
     return F.parse_row(F.bf16_row([P.f32_to_bf16(v) for v in values]), len(values))
 

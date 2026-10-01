@@ -583,9 +583,11 @@ useful    U/(α_A·α_B), glue
      position is zero), f_s·|cols|/n;
   5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it
      adds exactly 0), one block of MACs;
-  - and D-24: per row and aligned 128 of k whose every 4-group has at most 2 nonzero codes ((code & 7) ≠ 0), 0.5 per MAC
-    on every word it feeds. It is charged per row window rather than per 16-row span, since a cheaper computation may
-    gather any 16 such rows; the literal spans are counted.
+  - and D-24: per row and aligned 128 of k whose every aligned 8-chunk has at most 2 of its 4 pairs (2j, 2j + 1)
+    holding a nonzero code ((code & 7) ≠ 0), 0.5 per MAC on every word it feeds. That is the pair rule of sm_120's NVFP4
+    sparse MMA (`mma.sp…kind::mxf4nvf4…m16n8k128`, 2 of each 8-chunk's 4 pairs kept); `kind::f8f6f4`'s element-wise
+    2:4 has no UE4M3 16-block scales and runs at the FP8 rate, so it saves nothing. It is charged per row window rather
+    than per 16-row span, since a cheaper computation may gather any 16 such rows; the literal spans are counted.
   - A code is salt-dead unless two draws in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
     F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
     high.
