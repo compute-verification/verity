@@ -40,7 +40,9 @@ and result.json is the session's (`session`).
         --phases phases.tsv --census census/hardware.json --out metrics.json --result result.json --hillclimb hillclimb.json \
         [--point I --points N --preflight-key preflight/key.json --point-key key.json]
     python gemm_hill.py session --dir RUN_DIR [--points N]            # outputs.json, and with N > 1 the session's result.json
-    python gemm_hill.py rollup --point hillclimb.json --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
+    python gemm_hill.py rollup --attempt RUN [--run-dir DIR] --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
+                                                                       # every point RUN published, each citing its arts
+    python gemm_hill.py rollup --point hillclimb.json --file ROLLUP    # one point not in the store, citing none
     python gemm_hill.py plot POINTS... --out DIR [--put]   # per K, the three panels over the steps (roll-ups, points or run ids)
 """
 from __future__ import annotations
@@ -648,53 +650,98 @@ def session(a) -> None:
 
 
 def rollup(a) -> None:
-    """Append a point to its subcircuit's roll-up (verity/hillclimb-rollup/v0), the whole file written beside it and renamed over
-    it; strings cut at 200 characters and the commit at 12. Every point names its run (and its index among the run's points: a
-    GPU session's run has several), and a point already there is not appended twice."""
-    pt = json.loads(Path(a.point).read_text())
+    """Append points to their subcircuit's roll-up (verity/hillclimb-rollup/v0), the whole file written beside it and renamed
+    over it; strings cut at 200 characters and the commit at 12. Every point names its run (and its index among the run's
+    points: a GPU session's run has several), and a point already there is not appended twice. With --attempt, every point the
+    attempt published, each citing its art ids (`arts`, `_attempt_points`); a point already there without them gets them."""
+    pts = [json.loads(Path(a.point).read_text())] if a.point else _attempt_points(a.attempt, _research(), a.run_dir)
     f = Path(a.file)
     doc = json.loads(f.read_text())
-    if doc.get("schema") != ROLLUP_SCHEMA or pt.get("schema") != POINT_SCHEMA or doc["subcircuit"]["id"] != pt["subcircuit"]["id"]:
-        raise SystemExit(f"{f}: not the roll-up of {pt.get('subcircuit', {}).get('id')}")
-    if not pt.get("run_id") or not pt.get("commit"):
-        raise SystemExit(f"{a.point}: a point names its run and commit")
     index = lambda p: (p.get("run_id"), (p.get("point") or {}).get("index", 0))  # noqa: E731
-    if any(index(p) == index(pt) for p in doc["points"]):
-        print(f"{pt['run_id']} point {index(pt)[1]} is already in {f}")
-        return
     cut = lambda v: v[:200] if isinstance(v, str) else [cut(x) for x in v] if isinstance(v, list) else {k: cut(x) for k, x in v.items()} if isinstance(v, dict) else v  # noqa: E731
-    pt = cut(pt)
-    pt["commit"] = (pt.get("commit") or "")[:12]
-    doc["points"].append(pt)
+    added = cited = 0
+    for pt in pts:
+        if doc.get("schema") != ROLLUP_SCHEMA or pt.get("schema") != POINT_SCHEMA or doc["subcircuit"]["id"] != pt["subcircuit"]["id"]:
+            raise SystemExit(f"{f}: not the roll-up of {pt.get('subcircuit', {}).get('id')}")
+        if not pt.get("run_id") or not pt.get("commit"):
+            raise SystemExit(f"{a.point or a.attempt}: a point names its run and commit")
+        old = next((p for p in doc["points"] if index(p) == index(pt)), None)
+        if old is not None:
+            if pt.get("arts") and not old.get("arts"):
+                old["arts"] = pt["arts"]
+                cited += 1
+            else:
+                print(f"{pt['run_id']} point {index(pt)[1]} is already in {f}")
+            continue
+        pt = cut(pt)
+        pt["commit"] = (pt.get("commit") or "")[:12]
+        doc["points"].append(pt)
+        added += 1
+    if not (added or cited):
+        return
     doc["updated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = f.with_name(f".{f.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(doc) + "\n")
     os.chmod(tmp, 0o664)
     os.replace(tmp, f)
-    print(f"{f}: {len(doc['points'])} points")
+    print(f"{f}: {len(doc['points'])} points ({added} added, {cited} now citing their arts)")
 
 
-def _points(src: str, research: str) -> list[dict]:
-    """hillclimb points from a roll-up or point file, else the store's hillclimb-point/v0 outputs of the attempt `src` (a GPU
-    session's attempt has one per point), in point order."""
-    p = Path(src)
-    if p.exists():
-        doc = json.loads(p.read_text())
-        return doc["points"] if doc.get("schema") == ROLLUP_SCHEMA else [doc]
-    arts = json.loads(subprocess.run([research, "data", "select", "--attempt", src, "--kind", "hillclimb-point/v0", "--json"],
-                                     capture_output=True, text=True, check=True).stdout)
-    if not arts:
-        raise SystemExit(f"{src}: no hillclimb-point/v0 in the store")
+def _research() -> list[str]:
+    """The `research` command: RESEARCH_BIN, split as a shell would (node 1 has none on its PATH, only `uv run ... -m research`)."""
+    import shlex
+
+    return shlex.split(os.environ.get("RESEARCH_BIN", "research"))
+
+
+def _show(research: list[str], what: str) -> dict:
+    r = subprocess.run([*research, "data", "show", what, "--json"], capture_output=True, text=True, check=False)
+    if r.returncode:
+        raise SystemExit(f"{what}: not in the store ({(r.stderr or r.stdout).strip()[:200]})")
+    return json.loads(r.stdout)
+
+
+def _attempt_points(run: str, research: list[str], run_dir: str | None = None) -> list[dict]:
+    """The hillclimb points attempt `run` published (`research data show`: one, or a GPU session's one per point), in point
+    order, each with the art ids it cites (`arts`): its own record's (`point`), its attempt's result.json (`session`: a GPU
+    session's hillclimb-session/v0, or a one-point attempt's contract result) and its preflight check's record (`preflight`).
+    Each point is read from `run_dir` when given (its outputs.json's file, whose sha256 must be its art's payload's), else
+    fetched from the store."""
+    outs = _show(research, run).get("outputs") or {}
+    names = [n for n in outs if re.fullmatch(r"hillclimb(-\d+)?", n)]
+    if not names:
+        raise SystemExit(f"{run}: no hillclimb point among its outputs")
+    if "result" not in outs:
+        raise SystemExit(f"{run}: no result.json among its outputs, so its points have no session to cite")
+    files = {o["name"]: o["file"] for o in json.loads((Path(run_dir) / "outputs.json").read_text())["outputs"]} if run_dir else {}
     import tempfile
 
     pts = []
     with tempfile.TemporaryDirectory() as d:
-        for i, art in enumerate(arts):
-            to = Path(d) / str(i)
-            to.mkdir()
-            subprocess.run([research, "data", "fetch", art["id"], "--to", str(to)], capture_output=True, text=True, check=True)
-            pts += [json.loads(f.read_text()) for f in to.rglob("*.json")][:1]
+        for n in names:
+            if n in files:
+                b = (Path(run_dir) / files[n]).read_bytes()
+                if hashlib.sha256(b).hexdigest() != _show(research, outs[n])["manifest"]["payload"]["sha256"]:
+                    raise SystemExit(f"{run_dir}/{files[n]}: not the bytes of {outs[n]}")
+                pt = json.loads(b)
+            else:
+                to = Path(d) / n
+                to.mkdir()
+                subprocess.run([*research, "data", "fetch", outs[n], "--to", str(to)], capture_output=True, text=True, check=True)
+                pt = json.loads(next(to.rglob("*.json")).read_text())
+            if pt.get("run_id") != run:
+                raise SystemExit(f"{run}: its output {n} ({outs[n]}) is run {pt.get('run_id')}'s point")
+            pts.append(pt | {"arts": {"point": outs[n], "session": outs["result"]} | ({"preflight": outs["preflight"]} if "preflight" in outs else {})})
     return sorted(pts, key=lambda pt: (pt.get("point") or {}).get("index", 0))
+
+
+def _points(src: str, research: list[str]) -> list[dict]:
+    """hillclimb points from a roll-up or point file, else those the attempt `src` published (`_attempt_points`)."""
+    p = Path(src)
+    if p.exists():
+        doc = json.loads(p.read_text())
+        return doc["points"] if doc.get("schema") == ROLLUP_SCHEMA else [doc]
+    return _attempt_points(src, research)
 
 
 def plot(a) -> None:
@@ -706,7 +753,7 @@ def plot(a) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    research = os.environ.get("RESEARCH_BIN", "research")
+    research = _research()
     pts = [pt for src in a.points for pt in _points(src, research)]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -778,7 +825,7 @@ def plot(a) -> None:
     if a.put:
         meta = {"what": "hillclimb plots, one per subcircuit: overhead, throughput, GPU utilization and GPU-held s / VU over the steps",
                 "sources": a.points, "runs": [p.get("run_id") for p in pts], "question": QUESTION}
-        r = subprocess.run([research, "data", "put", "--kind", "plot/v1", "--tree", str(out), "--meta", json.dumps(meta), "--preserve"],
+        r = subprocess.run([*research, "data", "put", "--kind", "plot/v1", "--tree", str(out), "--meta", json.dumps(meta), "--preserve"],
                            capture_output=True, text=True)
         print(r.stdout.strip() or r.stderr.strip())
         if r.returncode:
@@ -833,7 +880,10 @@ def main() -> None:
     se.add_argument("--dir", required=True)
     se.add_argument("--points", type=int, default=1)
     r = sub.add_parser("rollup")
-    r.add_argument("--point", required=True)
+    rs = r.add_mutually_exclusive_group(required=True)
+    rs.add_argument("--point", help="one point's hillclimb record, which cites no art")
+    rs.add_argument("--attempt", help="a run id in the store: every point it published, each citing its arts")
+    r.add_argument("--run-dir", help="with --attempt: the run's directory, to read its points from (checked against their arts)")
     r.add_argument("--file", required=True)
     p = sub.add_parser("plot")
     p.add_argument("points", nargs="+")

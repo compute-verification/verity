@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 POD = Path(__file__).resolve().parents[1] / "pod"
 sys.path.insert(0, str(POD))
 import gemm_hill as GH  # noqa: E402
@@ -184,5 +186,58 @@ def test_a_roll_up_keeps_each_point_of_a_session_once(tmp_path):
         p = tmp_path / f"p{i}.json"
         p.write_text(json.dumps({"schema": GH.POINT_SCHEMA, "subcircuit": sub, "run_id": "r-session", "commit": "c" * 40,
                                  "point": {"index": i, "of": 2}}))
-        GH.rollup(SimpleNamespace(point=str(p), file=str(f)))
+        GH.rollup(SimpleNamespace(point=str(p), attempt=None, run_dir=None, file=str(f)))
     assert [p["point"]["index"] for p in json.loads(f.read_text())["points"]] == [0, 1]
+
+
+def _fake_store(tmp_path: Path, run: str, n: int, sub: dict) -> dict:
+    """A `research` on RESEARCH_BIN (a command, as on node 1) whose store holds attempt `run`: a GPU session's preflight record,
+    result.json and n points, the points also in the run's directory with its outputs.json."""
+    arts = {"preflight": "art:" + "a" * 64, "result": "art:" + "b" * 64} | {f"hillclimb-{i}": f"art:{i:064x}" for i in range(n)}
+    blobs, rd = tmp_path / "blobs", tmp_path / run
+    blobs.mkdir()
+    rd.mkdir()
+    for i in range(n):
+        b = json.dumps({"schema": GH.POINT_SCHEMA, "subcircuit": sub, "run_id": run, "commit": "c" * 40, "step": 12,
+                        "point": {"index": i, "of": n}})
+        (blobs / f"{i:064x}.json").write_text(b)
+        (rd / f"hillclimb-{i}.json").write_text(b)
+    (rd / "outputs.json").write_text(json.dumps({"outputs": [{"name": f"hillclimb-{i}", "file": f"hillclimb-{i}.json"} for i in range(n)]}))
+    exe = tmp_path / "fake_research.py"
+    exe.write_text(f"""import hashlib, json, shutil, sys
+a, blobs = sys.argv[1:], {str(blobs)!r}
+if a[:2] == ["data", "show"] and a[2] == {run!r}:
+    sys.exit(print(json.dumps({{"id": a[2], "outputs": {json.dumps(arts)}}})))
+if a[:2] == ["data", "show"] and a[2].startswith("art:"):
+    b = open(blobs + "/" + a[2][4:] + ".json", "rb").read()
+    sys.exit(print(json.dumps({{"id": a[2], "manifest": {{"payload": {{"sha256": hashlib.sha256(b).hexdigest()}}}}}})))
+if a[:2] == ["data", "fetch"]:
+    i = a[2][4:]
+    sys.exit(print(shutil.copy(blobs + "/" + i + ".json", a[a.index("--to") + 1] + f"/hillclimb-{{int(i, 16)}}.json")))
+sys.exit(f"research data show: no attempt {{a[2]}} in the store")
+""")
+    return arts
+
+
+def test_a_roll_up_from_the_store_cites_each_points_session_and_preflight_arts(tmp_path, monkeypatch):
+    """`rollup --attempt` takes every point a session published, from the store or from its run directory when those bytes are
+    the arts', and records its own, its session's and its preflight check's art ids; a point rolled up before from its file
+    gets them, and nothing is appended twice."""
+    sub = GH.subcircuit(2048)
+    arts = _fake_store(tmp_path, "r-session", 3, sub)
+    monkeypatch.setenv("RESEARCH_BIN", f"{sys.executable} {tmp_path / 'fake_research.py'}")
+    want = [{"point": arts[f"hillclimb-{i}"], "session": arts["result"], "preflight": arts["preflight"]} for i in range(3)]
+    for run_dir in (None, str(tmp_path / "r-session")):
+        f = tmp_path / "rollup.json"
+        f.write_text(json.dumps({"schema": GH.ROLLUP_SCHEMA, "subcircuit": sub, "points": []}))
+        GH.rollup(SimpleNamespace(point=str(tmp_path / "r-session/hillclimb-0.json"), attempt=None, run_dir=None, file=str(f)))
+        assert "arts" not in json.loads(f.read_text())["points"][0]
+        for _ in range(2):
+            GH.rollup(SimpleNamespace(point=None, attempt="r-session", run_dir=run_dir, file=str(f)))
+        pts = json.loads(f.read_text())["points"]
+        assert [p["point"]["index"] for p in pts] == [0, 1, 2] and [p["arts"] for p in pts] == want
+    with pytest.raises(SystemExit, match="r-elsewhere: not in the store"):
+        GH.rollup(SimpleNamespace(point=None, attempt="r-elsewhere", run_dir=None, file=str(f)))
+    (tmp_path / "r-session/hillclimb-1.json").write_text("{}")
+    with pytest.raises(SystemExit, match="hillclimb-1.json: not the bytes of art:"):
+        GH.rollup(SimpleNamespace(point=None, attempt="r-session", run_dir=str(tmp_path / "r-session"), file=str(f)))
