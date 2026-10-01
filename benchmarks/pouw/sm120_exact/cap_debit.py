@@ -2,7 +2,7 @@
 """`v1-cap600`'s honest-completeness cost (the assessor, 12:47 AM PDT): how many honest tiles does a 1/600 debit cap reject
 that 1/400 accepts?  CPU only.
 
-Per item, one 64 x 64 x k tile: 64 admitted A rows against 64 admitted weight rows, both formed as v1 forms them
+Per item, --tiles 64 x 64 x k tiles (seeds seed, seed + 1, ...): each 64 admitted A rows against 64 admitted weight rows, both formed as v1 forms them
 (pairing.py's `item_sides`: `form_s5` at delta 1, line norm 16, the domain rules), with v1's replayed debit
 (`pearlc_census.debit_parts` at G = 4: identities, promotion identities and every joint skip inside one promotion group that
 leaves the word's total unchanged).  A tile's debit is its flagged share of (word, atom) pairs; under a cap ρ an honest tile
@@ -42,7 +42,7 @@ def tile(item: str, k: int, acts: str | None, seed: int) -> dict:
     sides, k, info = PR.item_sides(item, k, TILE, Path(acts) if acts else None, seed)
     (a, oka), (b, okb) = sides["A"], sides["B"]
     a, b = a[oka][:TILE], b[okb][:TILE]
-    rec = {"item": item, **info, "rows": int(len(a)), "cols": int(len(b))}
+    rec = {"item": item, "seed": seed, **info, "rows": int(len(a)), "cols": int(len(b))}
     if len(a) == 0 or len(b) == 0 or k % 128:
         rec["skipped"] = "no admitted rows" if k % 128 == 0 else f"k = {k} isn't a whole number of 4-atom groups"
         return rec
@@ -62,6 +62,7 @@ def main() -> None:
     ap.add_argument("--units", default=None, help="census families instead of a capture")
     ap.add_argument("--k", type=int, default=8192, help="k for --units")
     ap.add_argument("--seed", type=int, default=20260930)
+    ap.add_argument("--tiles", type=int, default=1, help="tiles per item, each from its own seed")
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
@@ -73,12 +74,14 @@ def main() -> None:
         man = json.loads((Path(args.acts) / "manifest.json").read_text())
         names = args.linears.split(",") if args.linears else list(man["inputs"])
         items = [f"acts:{n}" for n in names]
-    with ProcessPoolExecutor(max_workers=max(1, min(args.workers, len(items)))) as ex:
-        recs = list(ex.map(tile, items, [args.k] * len(items), [args.acts] * len(items), [args.seed] * len(items)))
+    jobs = [(item, args.seed + t) for item in items for t in range(args.tiles)]
+    with ProcessPoolExecutor(max_workers=max(1, min(args.workers, len(jobs)))) as ex:
+        recs = list(ex.map(tile, [j[0] for j in jobs], [args.k] * len(jobs), [args.acts] * len(jobs), [j[1] for j in jobs]))
     done = [r for r in recs if "debit" in r]
     for r in recs:
         print(json.dumps({k: r[k] for k in ("item", "rows", "cols", "debit", "over", "skipped") if k in r}), flush=True)
-    summary = {"tool": "pouw_sm120_cap_debit", "acts": args.acts, "tile": [TILE, TILE], "caps": CAPS, "tiles": recs,
+    summary = {"tool": "pouw_sm120_cap_debit", "acts": args.acts, "tile": [TILE, TILE], "tiles_per_item": args.tiles,
+               "caps": CAPS, "tiles": recs,
                "tiles_measured": len(done),
                "debit_max": max((r["debit"] for r in done), default=None),
                "debit_quantiles": {q: float(np.quantile([r["debit"] for r in done], q)) for q in (0.5, 0.9, 0.99)} if done else {},
