@@ -89,6 +89,8 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01 (9:24 AM PDT): a top-level record of Daniel's approval of a changed `lean-audit.json` pin, citing his
+  message, counts as the named statement reviewer's sign-off for `research merge`.
 - 2026-10-01 (12:05 AM PDT): a protocol's README is an outline, signposts and its core API, and Lean is the source of
   truth for a mature protocol. A protocol keeps a `PROTOCOL.md` only while it is experimental (Python is the truth until
   the Lean catches up), and the PR whose Lean covers it deletes the file.
