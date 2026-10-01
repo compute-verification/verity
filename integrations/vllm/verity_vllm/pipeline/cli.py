@@ -16,7 +16,7 @@ import dataclasses
 import importlib
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from typing import Any
 
 from verity_vllm.config import UsageError
@@ -212,11 +212,15 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
 DENSE_THREADS_ENV = "VERITY_DENSE_THREADS"
 
 
-def process_settings(environ: Mapping[str, str]) -> None:
-    """The process-wide settings every command takes from the environment: the dense chain's threads."""
+def process_settings(environ: MutableMapping[str, str]) -> None:
+    """The process-wide settings every command takes from the environment: the dense chain's threads, and a leased Commit's lease
+    (`gpu_lease.acquire` reads and sets this environment)."""
     if environ.get(DENSE_THREADS_ENV):
         from verity_vllm.program.kernels import dense_rows
         dense_rows.use_threads(environ[DENSE_THREADS_ENV])
+    if environ.get("GPU_LEASE_STARTED"):
+        from verity_vllm.pipeline import gpu_lease
+        gpu_lease.use_environ(environ)
 
 
 def main(argv: list[str] | None = None) -> Any:
