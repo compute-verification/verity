@@ -89,6 +89,11 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-09-30: the Lean infrastructure lane changes `tools/lean`, the `lean-proofs` skill, `check`'s Lean steps, shared
+  Lean foundations and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. It speeds up another
+  lane's proofs when no pinned record changes; a changed record in another lane's package goes through that lane. What a
+  headline theorem may rest on, what "proved" means, retiring a theorem a table cites, spend past a budget line and any
+  new human gate go to Daniel.
 - 2026-09-30: a lane fixes a bug it hits in `tools/research` in a small PR of its own, and the research coordinator only
   reviews and merges it; when an open PR already changes the same function, the fix goes to that PR's owner.
 - 2026-09-30: a run's author declares what custody persists with `--declared-output`; undeclared files are hash-listed in
