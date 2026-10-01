@@ -84,3 +84,17 @@ padding when `hZero` is discharged, and not before.
 - `ε_ks(σ)` is the knowledge-soundness term (`ksAvgBE`), which `flock_batched_knowledgeSoundE` bounds; under
   `SHA512CRStrict` it is at most `ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`). `δ_link` is
   `linkBoundE`, the link theorem's `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`.
+
+## Before the headline is cited: the legacy SHA-256 and Blake3 paths
+
+The headline is about SHA-512 throughout. These older paths say otherwise, and each is retired, by its owner, before
+the headline is cited (red-team review of the restatement, change 6). Retiring a pinned theorem removes its pin, a
+changed record with a named statement reviewer.
+
+| Item | What it is | Owner |
+|---|---|---|
+| `Refine.setup_wf`, `blake3_regions_wf` (`Refine/Setup.lean`) | the Blake3 row leaf's statements are well formed (`Flock.Blake3Row`); `setup_wf` is pinned | the refinement lane (bc-159ce83b) |
+| `Refine/Live.lean` | `liveTable`, one table's live session on the Blake3 unsalted path | the refinement lane (bc-159ce83b) |
+| `Flock/Tags.lean` | the tags with a SHA-256 frame-v3 tree (`frame_v3_tree: sha256`: `circuit19c7269a`, `circuitFd02e847`, `circuit631567f7`) and SHA-256 leaves | flock-verifier |
+| `verity/flock-tables` | the tables statement in `live/src/tables.rs`, `python/verity_flock/tables.py` and `backends/flock/README.md` | flock-circuit |
+| M0's coins | the non-ZK session's coins from one seed (`cfg.coin_seed`), not per-round OS coins (`ASSUMPTIONS.md`, The headline, its coins) | proofs-verify-overlap |
