@@ -85,8 +85,8 @@ simp with that.
 - **An assumption is a named `Prop`** in the package's assumptions module (`FlockSoundness.Assumptions`), taken as a
   hypothesis by each theorem that needs it (`(hCR : Assumptions.SHA512ExpectedTimeCR …)`). Its docstring opens with its
   claim id (`uniform/io-getrandombytes`, from `verity.claims`) and gives its rationale. Lean is the source of truth for
-  what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on `main`, never `native_decide`, never an option that skips
-  the kernel. A statement you can't prove yet is a hypothesis, or a theorem in a lane branch, not on `main`.
+  what we assume, so a ledger points to the docstring rather than restating it. Never an `axiom`, never a `sorry` on
+  `main`, never `native_decide`, never an option that skips the kernel. A statement you can't prove yet is a hypothesis, or a theorem in a lane branch, not on `main`.
 - **Freeze the statement, then prove it.** In your lane branch, state the theorem on a `sorry` stub, check it against the
   paper or the spec, pin it and run `--update`, and have the statement reviewed before the proof. The record holds the
   statement, so it passes once the proof lands, and the pin shows if the statement moved on the way. Never make a theorem
@@ -123,8 +123,10 @@ simp with that.
 These are Daniel's rulings, newest first.
 
 - 2026-09-30: a theorem whose statement takes an obligation we haven't proved yet (`HmRowComputes`, an audit-layer `Prop`)
-  is a **working theorem**, not a proved one. A table, a ledger or a PR calls it a working theorem and names its open
-  obligations. "Proved" means its hypotheses are named assumptions and nothing else.
+  is a **working theorem**, not a proved one, even when the obligation is a named `Prop` in the assumptions module. A
+  table, a ledger or a PR calls it a working theorem and names its open obligations. "Proved" means its only hypotheses
+  are external claims (hardness such as `cr/sha-512`, platform such as `uniform/io-getrandombytes`, or a model) and
+  conditions on its parameters.
 - 2026-09-30: Lean is the one source of truth for the assumptions we make. Views of them (the console, the tables) are
   derived from Lean and the audit's output, and no hand-kept ledger is generated alongside.
 - 2026-09-30: probability and games shared across packages are our own minimal definitions over Mathlib's `PMF`, not
