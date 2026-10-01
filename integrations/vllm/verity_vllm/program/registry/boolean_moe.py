@@ -39,14 +39,15 @@ from verity.ir.defs import CompositeDefinition, bind
 from verity.ir.types import Array, Tuple
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
-from verity.ml.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.ml.boolean.forms import NOT, OR, ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, shr, sub
 from verity.ml.boolean.mufu import MufuEx2Ftz
 from verity.ml.boolean.trace import definition
 from verity_vllm.program.registry import moe as M
 from verity_vllm.program.registry import prims as P
 
 __all__ = ["MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouterShift", "MoeRouterTopKOrdered", "MoeSum",
-           "MoeSumCoordinate", "NvExpf", "NvExpfIn", "NvExpfOut", "moe_sum", "nv_expf_in", "nv_expf_out"]
+           "MoeSumCoordinate", "NvExpf", "NvExpfIn", "NvExpfOut", "jb_low_byte", "moe_sum", "nv_expf_in",
+           "nv_expf_out"]
 
 BF16 = Array(16, BL.BIT)
 F32 = I32 = Array(32, BL.BIT)
@@ -105,15 +106,27 @@ def _sat(C, t):
     return [C.AND(keep, b) ^ (one if (0x3F800000 >> i) & 1 else ZERO) for i, b in enumerate(t[:31])] + [ZERO]
 
 
+def jb_low_byte(C, s):
+    """The low byte of ``fma.rm(s, 252, 12582913)`` for s in [+0, 1]: ``1 + floor(s * 252)``. With ``s = sig * 2^(e - 150)``,
+    ``floor(s * 252)`` is the top 9 bits of the 32-bit ``sig * 252 = sig * 256 - sig * 4`` shifted right by ``127 - e``, and 0
+    below e = 119."""
+    e = list(s[23:31])
+    sig = list(s[:23]) + [or_reduce(C, e)]
+    P, _ = sub(C, [ZERO] * 8 + sig, [ZERO] * 2 + sig, 32)
+    _, below = sub(C, e, const_bits(119, 8), 8)
+    k = shr(C, P[23:], [NOT(b) for b in e[:4]], zero_if=below)
+    return add(C, k[:8], [], cin=ONE, width=8)
+
+
 def nv_expf_in(C, x):
     """`NvExpf_v1` up to its ``ex2.approx.ftz.f32``: the ex2 operand ``f = x*log2e - j`` (two fma.rn, log2e's hi/lo split) and the
     low byte L of ``jb = fma.rm(sat(x * log2e/252 + 0.5), 252, 12582913)``, the exponent field `F32BitsShl23_v1` makes 2^j of.
 
     sat is in [+0, 1], so jb is ``12582913 + floor(sat * 252)``, in [2^23, 2^24) with mantissa field ``0x400000 + L``, L in
-    [1, 253]: jb's bit 8 (the scale's sign) is 0 and ``j = jb - 12583039`` is ``L - 127`` exactly, made here from L (``-j`` is
-    -0 at j = +0, as `F32Neg_v1` makes it)."""
+    [1, 253] (`jb_low_byte`): jb's bit 8 (the scale's sign) is 0 and ``j = jb - 12583039`` is ``L - 127`` exactly, made here
+    from L (``-j`` is -0 at j = +0, as `F32Neg_v1` makes it)."""
     t = fp.f32_fma(C, x, const_bits(0x3BBB989D, 32), _f32(0.5))
-    L = fp.f32_fma(C, _sat(C, t), _f32(252.0), _f32(12582913.0), rm=True)[:8]
+    L = jb_low_byte(C, _sat(C, t))
     v, _ = sub(C, const_bits(127, 8), L, 8)
     s = v[7]
     neg_j = fp.round_f32(C, s, const_bits(133, 9), 0, add(C, [b ^ s for b in v[:7]], [s], width=7), ONE, underflow=False)

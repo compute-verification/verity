@@ -23,6 +23,7 @@ from verity.ir.defs import REGISTRY, CompositeDefinition, bind
 from verity.ir.refs import array_of, tuple_of
 from verity.ir.types import Array, Tuple
 from verity.ml.boolean import trace as TR
+from verity.ml.boolean.forms import ZERO
 from verity_vllm.program.registry import boolean_moe as BM
 from verity_vllm.program.registry import moe as M
 from verity_vllm.program.registry.prims import F32, I32
@@ -31,9 +32,9 @@ from verity_vllm.program.registry.prims import F32, I32
 PINS = {
     "MoeSumCoordinate_v2{TOPK=8}": (5222, 8395, 764, "6b71d820f6508d24d85de35f383ab531d9efe382a16ce28650cf649041cdb26e"),
     "MoeSum_v2{TOPK=8,H=8}": (41776, 67160, 6112, "9ba2b3bb9d5faad5be0299738869c260df30577c2e6245364250ea81af55f02f"),
-    "NvExpf_v2": (12645, 23980, 1027, "28da58fa58b21827f633a0bd73f00045af56a4e9b306f7f33d929ab0472c0c57"),
-    "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": (136427, 256842, 11807,
-                                                  "256f63a9d03a0495aa86127cc1bdf337228c99184a15ebdb5337bf4b6f75e028"),
+    "NvExpf_v2": (11372, 21804, 880, "83b491c59b5f94f2d54d2361ba490041c994c9b0bb7964262a9526f6275aaeb8"),
+    "MoeRouterTopKOrdered_v2{E=8,TOPK=2,VPT=4}": (126243, 239434, 10631,
+                                                  "b85ffb422ab659512bc2a9fe8078659d8154ae30f694fd33064142fbf66fbddd"),
 }
 TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.NvExpf),
            pytest.param(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4), marks=pytest.mark.slow)]
@@ -79,7 +80,7 @@ def test_the_served_router_is_pinned() -> None:
     """OLMoE's router at its served statics (64 experts, 8 slots, 8 values per thread), the size its rows are costed at; about
     95 s to trace. The pinned statics above run the same builders, but only these show a change to the served circuit's size."""
     t = bind(BM.MoeRouterTopKOrdered, E=64, TOPK=8, VPT=8)
-    assert BS.compile(t).counts == {"and": 1147793, "xor": 2150725, "not": 109491}
+    assert BS.compile(t).counts == {"and": 1066321, "xor": 2011461, "not": 100083}
 
 
 def test_the_word_views() -> None:
@@ -140,10 +141,30 @@ def test_the_routed_sum_passes_the_word_querys_cut_check() -> None:
 
 # --- the router ----------------------------------------------------------------------------------------------------------------
 
+#: the words within 8 ulps of each x, of either sign, where j steps (``x * log2e / 252 + 0.5`` crosses a multiple of 1/252)
+J_EDGES = ((np.arange(-126, 128) * np.log(2)).astype(np.float32).view(np.uint32).astype(np.int64)[:, None]
+           + np.arange(-8, 9)).reshape(-1)
+J_EDGES = np.concatenate([J_EDGES, J_EDGES | 1 << 31]).astype(np.uint32)
+
+
 def _expf_words(rng, n: int) -> np.ndarray:
-    """F32_SPECIALS, n random words and n values across expf's range (every scale 2^j, j in [-126, 126], with its ends)."""
-    return np.concatenate([F32_SPECIALS, rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32),
+    """F32_SPECIALS, J_EDGES, n random words and n values across expf's range (every scale 2^j, j in [-126, 126], with its
+    ends)."""
+    return np.concatenate([F32_SPECIALS, J_EDGES, rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32),
                            rng.uniform(-110, 95, n).astype(np.float32).view(np.uint32)])
+
+
+def test_jbs_low_byte_is_the_fma_rms() -> None:
+    """`jb_low_byte` against `F32FmaRm_v1(s, 252, 12582913)`'s low byte for s in [+0, 1]: within 2 ulps of each k / 252 (where
+    the floor steps), the ends, and 3,000 random s (every one of the 1,065,353,217 such words agrees: 13 minutes, run once)."""
+    k = (np.arange(253, dtype=np.float32) / np.float32(252)).view(np.uint32).astype(np.int64)
+    edges = (k[:, None] + np.arange(-2, 3)).clip(0, 0x3F800000).reshape(-1)
+    rand = np.random.default_rng(0x252).integers(0, 0x3F800001, 3000, dtype=np.int64)
+    s = np.concatenate([[0, 1, 0x007FFFFF, 0x00800000, 0x3F7FFFFF, 0x3F800000], edges, rand]).astype(np.uint32)
+    d = TR.definition("JbLowByteCheck", 1, lambda C, s: BM.jb_low_byte(C, s) + [ZERO] * 24, (("s", BM.F32),), BM.F32,
+                      register=False)
+    want = [M.F32FmaRm.evaluate(int(x), 0x437C0000, 0x4B400001) & 0xFF for x in s]
+    assert _rows(BS.evaluate_words(d, s), len(s)).reshape(-1).tolist() == want
 
 
 def test_the_exponential_on_special_random_and_in_range_words() -> None:
