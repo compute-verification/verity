@@ -6,6 +6,15 @@
   "Bf16AddF2fp_v2": {
    "and": 717
   },
+  "Bf16Add_v2": {
+   "and": 717
+  },
+  "Bf16MulBf16_v2": {
+   "and": 799
+  },
+  "Bf16MulF32_v2": {
+   "and": 1220
+  },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
   },
