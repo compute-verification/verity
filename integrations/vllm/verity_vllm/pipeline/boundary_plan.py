@@ -39,7 +39,7 @@ def roots(args: Any) -> tuple[str | None, str | None]:
 def use(args: Any, manifest: Mapping[str, Any] | None, *, tl: Any) -> tuple[CBP.Plan | None, dict[str, Any] | None]:
     """The call-boundary plan of the Commit `args` describes over `manifest` and the plan's record: from `--call-boundary-plan` when its
     key is the Commit's and it loads, else derived here (`plan_recomputed` with the reason); (None, None) for a manifest naming no
-    identity the source evaluates (the record says so when a plan was given).  `tl` times it (`prep.call_boundary_plan`, with its source).  A Commit's `--logits-tap` sets the claims first."""
+    identity the source evaluates (the record says so when a plan was given).  `tl` times it (`prep.call_boundary_plan`, with its source).  A Commit's `--logits-tap` and `--norm-body-tap` set the claims first."""
     if getattr(args, "tap_sources", None) is not None:
         TS.claiming(args.tap_sources)
     path = getattr(args, "call_boundary_plan", None)
@@ -96,6 +96,7 @@ class Options:
     gate_out: str | None = option("--gate-out", default=None, help="the check's record (call_boundaries.json)")
     out: str = option("--out", help="where the plan is written (the Commit's --call-boundary-plan)")
     logits_tap: int = TS.logits_tap_source.option_field()
+    norm_body_tap: int = TS.norm_body_tap_source.option_field()
 
 
 def main(o: Options) -> int:
