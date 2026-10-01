@@ -6,6 +6,24 @@
   "Bf16Tanh_v2{N=8}": {
    "and": 3128
   },
+  "BlackwellE4m3QmmaDot32_v2": {
+   "and": 9128
+  },
+  "BlackwellE5m2QmmaDot32_v2": {
+   "and": 8931
+  },
+  "BlackwellMxf4OmmaDot64_v2": {
+   "and": 5917
+  },
+  "BlackwellNvf4OmmaDot64_v2": {
+   "and": 6864
+  },
+  "DivFullRcp_v2": {
+   "and": 4508
+  },
+  "DivFullScaleA_v3": {
+   "and": 1427
+  },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
   },
@@ -33,17 +51,53 @@
   "F32SubFtz_v3": {
    "and": 952
   },
+  "Fa2InvSum_v2": {
+   "and": 947
+  },
+  "GemmCoordinateE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 18050
+  },
+  "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3QgmmaDot32_v2}": {
+   "and": 13445
+  },
+  "GemmCoordinateMxf4_v2{K=128,DOT=BlackwellMxf4OmmaDot64_v2}": {
+   "and": 11511
+  },
+  "GemmCoordinateNvf4_v2{K=128,DOT=BlackwellNvf4OmmaDot64_v2}": {
+   "and": 13401
+  },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842
   },
   "GemmCoordinate_v3{K=64,DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 31286
   },
+  "Gemm_v3{K=32,N=3,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 48966
+  },
+  "Gemm_v3{K=32,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 46626
+  },
   "GuardNegInfZero_v2": {
    "and": 63
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
+  },
+  "HopperE4m3QgmmaDot32_v2": {
+   "and": 6799
+  },
+  "MufuEx2Ftz_v2": {
+   "and": 1354
+  },
+  "MufuRcpFtz_v2": {
+   "and": 902
+  },
+  "MufuSqrtFtz_v2": {
+   "and": 879
+  },
+  "RsqrtApprox_v2": {
+   "and": 1668
   },
   "SiluMulBf16_v3": {
    "and": 1372

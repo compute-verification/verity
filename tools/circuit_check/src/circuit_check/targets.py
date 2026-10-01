@@ -45,6 +45,7 @@ def load_registries() -> None:
 
     import verity.ml.boolean.attention  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -213,17 +214,22 @@ def _core_roots() -> list[Any]:
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, `silu_and_mul`'s row at I = 8
-    (`verity_vllm.program.registry.boolean_silu`) and the final-logit softcap's tanh row at N = 8 (`boolean_activation`); the steps,
-    the cast, attention's softmax operations (`verity.ml.boolean.attention`) and the element Definitions are static-free."""
+    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, the GEMM at K = 32, N = 3, and
+    the E4M3 coordinate on both FP8 steps at K = 64, and the NVFP4 and MXFP4 coordinates at K = 128, `silu_and_mul`'s row at
+    I = 8 (`verity_vllm.program.registry.boolean_silu`) and the final-logit softcap's tanh row at N = 8 (`boolean_activation`);
+    the steps, the cast, attention's softmax operations (`verity.ml.boolean.attention`), the MUFU operations
+    (`verity.ml.boolean.mufu`) and the element Definitions are static-free."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity_vllm.program.registry import boolean_activation as BA
     from verity_vllm.program.registry import boolean_silu as BSL
 
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
-            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BSL.SiluMul, I=8),
-            bind(BA.Bf16Tanh, N=8)]
+            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
+            bind(BG.Gemm, K=32, N=3, **BG.GEMM_AMPERE), bind(BG.Gemm, K=32, N=3, **BG.GEMM_HOPPER),
+            bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_HOPPER_E4M3), bind(BG.GemmCoordinateE4m3, K=64, **BG.GEMM_SM120_E4M3),
+            bind(BG.GemmCoordinateNvf4, K=128, **BG.GEMM_SM120_NVF4), bind(BG.GemmCoordinateMxf4, K=128, **BG.GEMM_SM120_MXF4),
+            bind(BSL.SiluMul, I=8), bind(BA.Bf16Tanh, N=8)]
 
 
 def _kernel_roots() -> list[Any]:
@@ -239,6 +245,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """Tiny whole-model configurations (the vLLM tests' `TINY`) and the leaf families they do not reach."""
     from verity.ir.defs import bind
     from verity_vllm.program.registry import b1, b1_tp2, fp8, hopper, lifted, moe_pad, ref_prims, sampling, serve3, spec
+    from verity_vllm.program.registry import boolean_attention
 
     long = {**TINY, "MAX_POS": 16}
     tp2 = {**TINY_NOBIAS, "BIAS": True, "TP": 2}
@@ -254,6 +261,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Prefill_v1", lambda: bind(lifted.Prefill, C=TINY, LP=3, **lifted_profile)),
         ("StepBody_v1", lambda: bind(lifted.StepBody, C=TINY, T=4, **lifted_profile)),
         ("AttentionN_v1", lambda: bind(spec.AttentionN, T=5, NH=2, KVH=1, D=16, BN=16)),
+        # about 7 minutes a target: the smallest Boolean chain whose second block rescales (T = BN + 1)
+        ("Attention_v6", lambda: bind(boolean_attention.AttentionV6, T=17, NH=1, KVH=1, D=16, BN=16)),
         ("RMSNormFusedCuda_v1", lambda: bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5)),
         ("LMoeFfnL_v1", lambda: bind(moe_pad.LMoeFfnL, E=4, TOPK=2, VPT=2, H=16, I=16)),
         ("AllReduce_v2", lambda: b1_tp2.all_reduce(4, 8)),

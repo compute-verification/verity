@@ -381,6 +381,16 @@ def tc_dot_e4m3(C, acc, a, b, groups=(32,), W: int = 14, F: int = -139):
     return _tc_total(C, acc, a, b, U.E4M3, groups, W, F)
 
 
+def tc_dot_e5m2(C, acc, a, b, groups=(32,), W: int = 26, F: int = -133):
+    """``BlackwellE5m2QmmaDot32``: one accumulator coordinate of ``mma.sync.m16n8k32.f32.e5m2.e5m2`` on sm_120, total on every
+    encoding (``verity.ml.tc.total_fp8.tc_dot_total_e5m2`` on ``BLACKWELL_SM120_E5M2_M16N8K32``: one group of 32 exact E5M2
+    products and the accumulator through the 26-bit adder, floor -133). E5M2 has IEEE infinities and NaNs, so the special
+    rule is the BF16 step's."""
+    from . import tc_step as U
+
+    return _tc_total(C, acc, a, b, U.E5M2, groups, W, F)
+
+
 def _tc_total(C, acc, a, b, fmt, groups, W, F):
     from . import tc_step as U
 
