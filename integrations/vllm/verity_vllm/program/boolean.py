@@ -37,7 +37,7 @@ from typing import Any, Callable
 from verity.ir import boolean as BL
 from verity.ir.codec import descriptor_id
 from verity.ir.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ir.refs import Coll, PartLog, concat, prefix_runs
+from verity.ir.refs import Coll, PartLog, concat, prefix_runs, runs
 from verity.ir.types import Array, Record, Tuple, Type, Value
 from verity_vllm.config import option
 
@@ -289,6 +289,51 @@ def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
     return bind(defn, **fn.bindings, IR="boolean")
 
 
+def _merged(rs, offs: dict | None = None) -> list[tuple[str, int, int, int]]:
+    """Runs ``rs`` with adjacent ones of one source joined; with ``offs``, each word run as the bits it occupies."""
+    out: list[list] = []
+    for space, idx, lo, hi in rs:
+        if offs is not None:
+            lo, hi = offs[(space, idx)](lo), offs[(space, idx)](hi)
+        if out and out[-1][0] == space and out[-1][1] == idx and out[-1][3] == lo:
+            out[-1][3] = hi
+        elif hi > lo:
+            out.append([space, idx, lo, hi])
+    return [tuple(r) for r in out]
+
+
+def sigma_check(word: SpecializedDefinition, bits: SpecializedDefinition) -> dict:
+    """``bits`` against σ(``word``), node by node and without `lift`: each node Calls the Boolean version of the word node's
+    Definition in the same form (n, axes, scan inputs, name), and each operand and the return are the word's runs on the bits they
+    occupy (`bit_offsets`), in the bit types.  {"nodes", "definitions" (σ's entries), "mismatches" (the first 8), "ok"}."""
+    (wp, wr), (bp, br) = word.signature(), bits.signature()
+    bad = [] if ([BL.bit_type(t) for _, t in wp], BL.bit_type(wr)) == ([t for _, t in bp], br) else ["signature: not the word's on bits"]
+    wb, bb = word.body, bits.body
+    if len(wb.nodes) != len(bb.nodes):
+        bad.append(f"{len(bb.nodes)} nodes, the word body {len(wb.nodes)}")
+    offs: dict = {("p", i): bit_offsets(t) for i, (_, t) in enumerate(wp)}
+    sigma: dict[int, str] = {}
+    one = {"primitive": "call"}  # a word primitive's Call is a Call of its Boolean composite
+    for k, (w, b) in enumerate(zip(wb.nodes, bb.nodes)):
+        if id(w.fn) not in sigma:
+            v = boolean_version(w.fn)
+            sigma[id(w.fn)] = descriptor_id(bind(v) if isinstance(v, CompositeDefinition) else v)
+        if b.fn is not w.fn and descriptor_id(b.fn) != sigma[id(w.fn)]:
+            bad.append(f"node {k}: Calls {descriptor_id(b.fn)}, σ({descriptor_id(w.fn)}) = {sigma[id(w.fn)]}")
+        bf, wf = one.get(b.form, b.form), one.get(w.form, w.form)
+        if (bf, b.n, b.axes, b.name, getattr(b, "n_xs", 0)) != (wf, w.n, w.axes, w.name, getattr(w, "n_xs", 0)) \
+                or len(b.args) != len(w.args):
+            bad.append(f"node {k}: form {b.form}/{b.n}/{b.axes}/{b.name}, the word's {w.form}/{w.n}/{w.axes}/{w.name}")
+        for g, (wa, ba) in enumerate(zip(w.args, b.args)):
+            if ba.type != BL.bit_type(wa.type) or _merged(runs(ba.refs)) != _merged(runs(wa.refs), offs):
+                bad.append(f"node {k} operand {g}: not the word operand's bits")
+        offs[("n", k)] = bit_offsets(w.out)
+    if _merged(runs(bb.ret)) != _merged(runs(wb.ret), offs):
+        bad.append("return: not the word return's bits")
+    return {"nodes": len(wb.nodes), "definitions": len(set(sigma.values())), "mismatches": bad[:8], "mismatch_n": len(bad),
+            "ok": not bad}
+
+
 def boolean_function(fn: SpecializedDefinition) -> SpecializedDefinition:
     """A derived Program's function on bits: the flat derived function lifted (`lift`), a registered one (a family's claim) by its
     Boolean version."""
@@ -317,6 +362,12 @@ def derived(rep, *, check_registry: bool = True):
     except NoBooleanVersion as e:
         u = Unsupported("numerics_unregistered", hint=f"ir=boolean: {e}", detail={"missing": e.missing})
         return DeriveReport(None, u, prov | {"unsupported": u.to_json()})
+    if fn.name.startswith("Derived["):
+        sc = sigma_check(rep.program.fn, fn)
+        if not sc["ok"]:
+            u = Unsupported("identity", hint=f"ir=boolean: not σ of the word function: {'; '.join(sc['mismatches'])}", detail=sc)
+            return DeriveReport(None, u, prov | {"unsupported": u.to_json()})
+        prov["ir"]["sigma_check"] = {k: sc[k] for k in ("nodes", "definitions", "ok")}
     program = Program(fn, annotations=dict(rep.program.annotations))
     check_identity(program, check_registry=check_registry)
     desc = encode_program(program)
@@ -455,5 +506,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["NoBooleanVersion", "boolean_version", "bit_offsets", "lift", "boolean_function", "derived", "purity", "dry_run",
-           "derived_calls", "Options", "main"]
+__all__ = ["NoBooleanVersion", "boolean_version", "bit_offsets", "lift", "sigma_check", "boolean_function", "derived", "purity",
+           "dry_run", "derived_calls", "Options", "main"]

@@ -152,9 +152,29 @@ def test_a_word_derivation_report_becomes_its_program_on_bits():
     bits = Program(BB.lift(P.fn))
     assert rep.ok and rep.digest == program_digest(bits) == program_digest(rep.descriptor) != word.digest
     assert rep.root == _spec_id(bits.fn) and rep.gates == bits.gates and rep.program.annotations == {"note": "carried"}
-    assert rep.provenance["ir"] == {"ir": "boolean", "word_root": word.root, "word_digest": word.digest}
+    assert rep.provenance["ir"] == {"ir": "boolean", "word_root": word.root, "word_digest": word.digest,
+                                    "sigma_check": {"nodes": 6, "definitions": 5, "ok": True}}
     assert rep.provenance["result"]["digest"] == rep.digest and word.provenance["result"]["digest"] == word.digest
     assert BB.purity(rep.program)["non_boolean"]["definitions"] == 0
+
+
+def test_sigma_check_reads_the_boolean_function_against_sigma_of_the_word_function():
+    def one_add(row):
+        B = Builder(PARAMS[:2], Array(4, F32))
+        x, y = (Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(PARAMS[:2]))
+        body = B.finish(B.batch(W.F32AddFtz, x, y[row], axes=(0, 0)))
+        defn = CompositeDefinition("Derived[OneAdd]", 1, (), lambda S: (PARAMS[:2], Array(4, F32)), replayer(body), register=False)
+        sd = bind(defn)
+        sd.set_body(body)
+        return sd
+
+    word = _derived()
+    assert BB.sigma_check(word, BB.lift(word)) == {"nodes": 6, "definitions": 5, "mismatches": [], "mismatch_n": 0, "ok": True}
+    callee = BB.sigma_check(word, BB.lift(_derived({"mul": W.F32AddFtz})))
+    assert not callee["ok"] and callee["mismatches"] == [f"node 1: Calls {_spec_id(BB.boolean_version(W.F32AddFtz))}, "
+                                                         f"σ(F32MulFtz_v1) = {_spec_id(BB.boolean_version(W.F32MulFtz))}"]
+    assert BB.sigma_check(one_add(1), BB.lift(one_add(1)))["ok"]
+    assert BB.sigma_check(one_add(1), BB.lift(one_add(0)))["mismatches"] == ["node 0 operand 1: not the word operand's bits"]
 
 
 def test_a_definition_with_no_boolean_version_is_refused_by_name():
