@@ -329,16 +329,25 @@ class SingleRow(Row):
 
     def follow_compose(self, to: int) -> tuple[Any, str, str]:
         """B >= 2: the workload Program's compose starts beside the derives (`global-program --follow`) and loads each component as its
-        derive finishes -> (its future, the derives-done marker, the derives-failed marker)."""
+        derive finishes, then the required-value manifest is built from the components, while the envelope (`build_request`, which no
+        request runs unless its (LP, T) is a request's shape, and then the compose waits for it) may still derive -> (its future: (compose
+        rc, manifest rc or None when none was built), the derives-done marker, the derives-failed marker).  `build` keeps that manifest
+        only for a PASS Build."""
         done, stop = f"{self.d}/build_workload.derives_done", f"{self.d}/build_workload.derives_failed"
         for f in (done, stop):
             if os.path.exists(f):
                 os.remove(f)
-        dirs = [f"{self.d}/build_request", *(f"{self.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T))]
+        wl = self.path(self.wl)
+        dirs = [*([f"{self.d}/build_request"] if (self.LP, self.T) in R.request_shapes(wl) else []),
+                *(f"{self.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(wl, self.LP, self.T))]
         cmd = self.cli("global-program", "--workload", self.wl, *(x for d in dirs for x in ("--derived", d)), "--out", f"{self.d}/build_workload",
                        "--checkpoint-dir", self.ck, "--follow", str(to), "--follow-done", done, "--follow-stop", stop, py=self.py312)
+
+        def compose_then_manifest() -> tuple[int, int | None]:
+            rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log", cmd)
+            return rcw, (self.required_manifest("build") if rcw == 0 and R.workload_digest(self.d) and not self.signalled else None)
         pool = ThreadPoolExecutor(max_workers=1)
-        fut = pool.submit(self.run_tl, "build.global_program", to, f"{self.d}/build_workload.log", cmd)
+        fut = pool.submit(compose_then_manifest)
         pool.shutdown(wait=False)
         return fut, done, stop
 
@@ -354,11 +363,12 @@ class SingleRow(Row):
         self.tl("build.summary", "start")
         ok = self.guarded("build summary", R.build_summary, self.d)
         wd = ""
+        early = None
         self.tl("build.summary", "end", ("ok", ok))
         if follow is not None:
             fut, done, stop = follow
             open(done if ok == "PASS" else stop, "w").close()
-            rcw = fut.result()
+            rcw, early = fut.result()
             for f in (done, stop):
                 if os.path.exists(f):
                     os.remove(f)
@@ -381,7 +391,7 @@ class SingleRow(Row):
                 self.verdict("build-target", "WAIVED", line, quiet=True)
         mrc = 0
         if ok == "PASS" and os.path.isfile(f"{self.d}/build_request/instances.json.gz"):
-            mrc = self.required_manifest("build")
+            mrc = self.required_manifest("build") if early is None else early
             if mrc == 3:
                 self.verdict("build", "FAIL", f"PRECHECK_FAIL_REGISTRY_UNAVAILABLE (environment: core verity package not importable; see {self.d}/manifest.log)")
                 self.tl("stage.build", "end", ("ok", "false"))
@@ -390,6 +400,8 @@ class SingleRow(Row):
             if mrc != 0:
                 ok = "FAIL"
                 self.verdict("build-manifest", "FAIL", "required-value manifest not built (manifest.log)")
+        elif early == 0 and os.path.exists(f"{self.d}/manifest.json"):
+            os.remove(f"{self.d}/manifest.json")
         digest, man = R.build_line(self.d)
         self.verdict("build", ok, f"rc={rc1}/{rc2} wall={wall}s digest={digest} workload_digest={wd[:16]} manifest={man}")
         self.tl("stage.build", "end", ("ok", ok), ("wall_s", wall))
