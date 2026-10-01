@@ -47,6 +47,7 @@ def load_registries() -> None:
     import verity.ml.boolean.cast  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.mufu  # noqa: F401
     import verity.ml.boolean.scalar  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
@@ -218,8 +219,9 @@ def _core_roots() -> list[Any]:
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, and `silu_and_mul`'s row at I = 8
     (`verity_vllm.program.registry.boolean_silu`); the steps, the cast, attention's softmax operations
-    (`verity.ml.boolean.attention`), the element-wise operations (`verity.ml.boolean.elementwise`), the comparator and selects
-    (`verity.ml.boolean.scalar`), the argmax step and `SiluMulBf16_v3` are static-free. vLLM's Boolean RoPE
+    (`verity.ml.boolean.attention`), the element-wise operations (`verity.ml.boolean.elementwise`), the MUFU operations
+    (`verity.ml.boolean.mufu`), the comparator and selects (`verity.ml.boolean.scalar`), the argmax step and `SiluMulBf16_v3`
+    are static-free. vLLM's Boolean RoPE
     (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which reaches its head and halves;
     greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its tree, which reach every
     stage, leaf and merge shape (a full group, a remainder, the first group, the root group). The served norms on bits
