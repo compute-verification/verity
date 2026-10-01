@@ -651,6 +651,25 @@ useful    U/(α_A·α_B), glue
   sharing, at twice that). Its shortcuts
   are in every report: the draws' beacon is Fiat-Shamir over the commitment, the epoch beacon is the benchmark's label,
   and the transcript tree and the records are built on the host after timing.
+- **The circuit (`circuit.pc4`)** is the tile check as a Program, the first step of moving it into sampled proofs. Its
+  units are four templates:
+
+  ~~~text
+  template      per                      reads                                   returns
+  Pc4Gram{K}    column p of F_B          F_B[:, p], F_A                          G_p
+  Pc4RowB{K}    row j of B               B_j, E_B,j, F_B, F_A, G                 B̃_j's codes and scale bytes, P_B,j, ok
+  Pc4RowA{K}    row i of A               A_i, E_A,i, F_A, F_B                    A′_i's codes and scale bytes, P_A,i, ok
+  Pc4Word{K}    word (i, j)              A′_i, B̃_j, P_A,i, P_B,j                 C̃_ij, U_ij
+  ~~~
+
+  - `Pc4Weight{K,N}` holds G and the B rows, once per job and weight. `Pc4Call{M,K,N}` reads their outputs as committed
+    inputs. `Pc4Check{M,K,N}` is both in one root.
+  - ``ok`` is the row's admission (`parse_row`'s finiteness, then `row_passes`).
+  - The noise lines are anchored inputs: TurboSHAKE128 of seeds the verifier derives.
+  - The Programs evaluate to the pinned ``test-16-nvfp4`` vector, and every partition computes each value in exactly one
+    unit.
+  - Not in it yet: the debit and the cap, R1, D-24, and the hiding leaves of A's rows, B's rows and the tile's words.
+    Until those land, the replay above stays the check.
 - **Stand-ins:** the RTX 5090 pins of both atoms and of the BF16 step, and the E2M1/UE4M3/UE8M0 casts modelled from the
   PTX ISA.
 - **Vectors:** `tests/vectors/pearl_c4.json` (`tests/pearl_c4_vectors.py`) holds a 16 × 128 × 16 test instance per format
