@@ -8,6 +8,7 @@ import json
 import os
 import re
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -20,12 +21,26 @@ from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline import row_driver as RD
 
 
+def fake_smi(tmp_path: Path, looks: list[str]) -> Path:
+    """A stand-in for nvidia-smi's compute-apps query in `tmp_path/bin`: each call lists the next of `looks` (UUIDs, comma-separated;
+    "!" fails, as an nvidia-smi that can't answer; none left lists nothing) and notes in `smi.calls` whether 5.lock was held then."""
+    (tmp_path / "looks").write_text("".join(f"{x}\n" for x in looks))
+    (tmp_path / "bin").mkdir(exist_ok=True)
+    p = tmp_path / "bin" / "nvidia-smi"
+    p.write_text(f'#!/usr/bin/env bash\nflock -n "{tmp_path}/5.lock" true && s=free || s=held\necho "$s" >> "{tmp_path}/smi.calls"\n'
+                 f'l=$(head -n 1 "{tmp_path}/looks"); sed -i 1d "{tmp_path}/looks"\n[ "$l" = "!" ] && exit 1\ntr , "\\n" <<< "$l"\n')
+    p.chmod(0o755)
+    return tmp_path / "bin"
+
+
 def fake_lease(tmp_path: Path, gpu: str = "5") -> str:
     """A stand-in for gpu-lease: records its arguments, locks <gpu>.lock on a descriptor CMD inherits, sets CUDA_VISIBLE_DEVICES and
-    runs CMD as its child with its stdin, as gpu-lease does."""
+    runs CMD as its child with its stdin, as gpu-lease does, with `fake_smi` (listing nothing) as its nvidia-smi."""
+    if not (tmp_path / "bin" / "nvidia-smi").exists():
+        fake_smi(tmp_path, [])
     p = tmp_path / "gpu-lease"
     p.write_text(f'#!/usr/bin/env bash\necho "$*" > "{tmp_path}/lease.args"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
-                 f'exec 7>>"{tmp_path}/{gpu}.lock"; flock -x 7\n'
+                 f'exec 7>>"{tmp_path}/{gpu}.lock"; flock -x 7\nexport PATH="{tmp_path}/bin:$PATH"\n'
                  f'export CUDA_VISIBLE_DEVICES={gpu} CUDA_DEVICE_ORDER=PCI_BUS_ID GPU_LEASE_UUID=GPU-{gpu}\n"$@" 0<&0 &\nwait $!\n')
     p.chmod(0o755)
     return str(p)
@@ -56,7 +71,7 @@ def test_the_commit_requests_its_tasks_gpus_for_at_most_its_timeout():
     env = {"GPU_LEASE": "/l/gpu-lease", GL.STARTED: "/row/gpu_lease.started", GL.MAX_MIN: str(GL.max_min(2400))}
     argv = GL.holder_argv(env, 7)
     assert argv[:9] == ["/l/gpu-lease", "1", "--wait", "--max-min", "40", "--mem-gb", "0", "--", sys.executable]
-    assert argv[-2:] == ["/row/gpu_lease.started", "7"]
+    assert argv[-4:] == ["/row/gpu_lease.started", "7", str(GL.EMPTY_LOOKS), str(GL.EMPTY_EVERY_S)]
     assert GL.max_min(61) == 2 and GL.max_min(1) == 1
     assert GL.holder_argv({**env, "GPU_LEASE_N": "2"}, 7)[:2] == ["/l/gpu-lease", "2"]
     assert GL.STARTED != GL.TOOL_START and GL.tool_env({**env, GL.TOOL_START: "/row/x"}) == env    # the tool's own start override
@@ -93,6 +108,50 @@ def test_the_lease_tool_ending_first_ends_the_commit(tmp_path):
     GL.hide_devices(env)
     r = subprocess.run(commit("GL._HELD[0][0].kill()\nimport threading\nthreading.Event().wait()\n"), env=env, capture_output=True, text=True)
     assert r.returncode == -9 and "GPU lease ended under the Commit" in r.stderr, r.stderr
+
+
+def _holder(tmp_path: Path, looks: list[str], n: int) -> tuple[int, str, list[str]]:
+    """The holder as the lease tool runs it (a lock descriptor inherited, GPU-5 leased), told that the Commit let go (EOF)."""
+    path = fake_smi(tmp_path, looks)
+    ours, theirs = socket.socketpair()
+    with open(tmp_path / "5.lock", "a") as lock:
+        p = subprocess.Popen([sys.executable, "-c", GL._HOLDER, str(tmp_path / "gpu_lease.started"), str(theirs.fileno()), str(n), "0"],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             pass_fds=(theirs.fileno(), lock.fileno()), env={"PATH": f"{path}:{os.environ['PATH']}", "GPU_LEASE_UUID": "GPU-5"})
+    theirs.close()
+    for fd in socket.recv_fds(ours, 1, 8)[1]:
+        os.close(fd)
+    _, err = p.communicate(b"")
+    return p.returncode, err.decode(), (tmp_path / "smi.calls").read_text().split()
+
+
+@pytest.mark.parametrize("looks,n,calls,said", [
+    ([], 240, 1, None),                                                    # a release: nothing is on the GPU at the first look
+    (["GPU-5", "GPU-3,GPU-5", "GPU-3"], 240, 3, "(2 look(s) occupied); the lease ends"),     # another GPU's process doesn't count
+    (["!", ""], 240, 2, "(1 look(s) occupied)"),                           # an nvidia-smi that can't answer counts as occupied
+    (["GPU-5"] * 5, 3, 3, "nvidia-smi still lists a compute process on the leased GPU"),
+])
+def test_the_holder_ends_once_nothing_is_left_on_the_leased_gpu(tmp_path, looks, n, calls, said):
+    rc, err, seen = _holder(tmp_path, looks, n)
+    assert rc == 0 and len(seen) == calls and (said in err if said else err == ""), err
+
+
+def test_a_commit_that_exits_holding_its_lease_keeps_it_until_its_gpu_is_empty(tmp_path):
+    """A Commit's exit closes the lease's descriptors before the driver has freed its context (cov-gm388: nvidia-smi listed it on its
+    GPU for about 8 s after the lease ended, and the node's stray probe blocked the pool): the lease ends only once nothing is left."""
+    env = {"PATH": os.environ["PATH"], "GPU_LEASE": fake_lease(tmp_path)}
+    fake_smi(tmp_path, ["GPU-5", "GPU-5", ""])
+    GL.hide_devices(env)
+    log = tmp_path / "commit.log"
+
+    def run_tl(to: int, argv: list[str]) -> int:
+        with open(log, "a") as f:
+            return subprocess.run(argv, env=env, stdout=f, stderr=subprocess.STDOUT).returncode
+
+    rc, rec = GL.run(str(tmp_path), str(log), commit("pass\n"), 600, env, run_tl)
+    assert rc == 0 and rec["released_at"] == "process.end" and released(tmp_path / "5.lock")
+    assert (tmp_path / "smi.calls").read_text().split() == ["held", "held", "held"]
+    assert "nothing is left on the leased GPU" in log.read_text() and "(2 look(s) occupied)" in log.read_text()
 
 
 def test_a_commit_that_touched_cuda_before_its_lease_takes_none(tmp_path, monkeypatch):
