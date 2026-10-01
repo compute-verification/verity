@@ -156,6 +156,15 @@ def test_a_bundle_that_is_not_the_records_is_refused(tmp_path, tamper, why):
         CPU.of_record(RB.open_bundle(RB.path(out, 1)), out)
 
 
+def test_the_replay_takes_the_commits_workers_unless_told_otherwise():
+    ctx = {"args": {"replay_workers": None, "programs_root": "x", "program_dir": "y"}}
+    o = CPU.Options(bundle="b", row_dir="/row", checkpoint_dir="c")
+    assert CPU.replay_args(o, ctx).replay_workers is None
+    assert CPU.replay_args(o, {"args": {**ctx["args"], "replay_workers": 12}}).replay_workers == 12
+    a = CPU.replay_args(CPU.Options(bundle="b", row_dir="/row", checkpoint_dir="c", replay_workers=4), ctx)
+    assert a.replay_workers == 4 and a.program_dir == "/row/build_request" and ctx["args"]["replay_workers"] is None
+
+
 def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):
     art = tmp_path / "sampled_replay_p1.json"
     cpu = {"VLLM_BATCH_INVARIANT": None, "compute_capability": "unavailable: no CUDA device"}
