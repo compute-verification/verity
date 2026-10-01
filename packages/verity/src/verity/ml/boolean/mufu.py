@@ -25,8 +25,8 @@ mantissa, and no product in it costs an AND: each coefficient c is written as ``
 ±1, so ``2 c x = sum_k (x XOR n_k) 2^k + ~x - (2^n - 1)(N + 1)`` for the n-bit operand x (u, or Q(u) at ``square_shift``),
 with n_k = 1 - b_k and N = sum_k n_k 2^k. A row ``x XOR n_k`` is free; the constant is folded into the segment's C0. Each
 n_k and each bit of C0 is a function of the segment bits g, written as the XOR of the monomials of its algebraic normal form
-(the 2^|g| products of subsets of g: one AND each). So the ANDs are the monomials, the squarer's kept pairs, the sum's
-full adders, and the overrides' index matches.
+(the 2^|g| products of subsets of g: one AND each), with the sums the functions share computed once (`_xor_plan`). So the
+ANDs are the monomials, the squarer's kept pairs, the sum's full adders, and the overrides' index matches.
 """
 from __future__ import annotations
 
@@ -158,26 +158,53 @@ def _monomials(C, bits):
     return m
 
 
-def _selector(C, g):
-    """``sel(column)``: the function of the segment bits ``g`` whose value at segment s is ``column[s]`` (0 or 1), as the XOR
-    of the monomials of its algebraic normal form."""
-    mono = _monomials(C, list(g))
-
-    def sel(column) -> object:
-        a = np.array(column, dtype=np.uint8)
-        for i in range(len(g)):
-            a = a.reshape(-1, 2, 1 << i)
-            a[:, 1, :] ^= a[:, 0, :]
-            a = a.reshape(-1)
-        return _xor_all(mono[i] for i in np.flatnonzero(a).tolist())
-
-    return sel
-
-
 def _digits(cs) -> tuple[int, list[int]]:
     """``2c + 1 = sum_k (2 b_k - 1) 2^k`` (k < K) for each c of ``cs``: K and each c's ``B = sum_k b_k 2^k``."""
     K = max(abs(2 * c + 1).bit_length() for c in cs)
     return K, [c + (1 << (K - 1)) for c in cs]
+
+
+@cache
+def _segment_functions(name: str) -> tuple[tuple[int, int], np.ndarray]:
+    """The functions of the segment the table read uses, one row of 0/1 per segment each: the digit signs n_k of C1 (K1 of
+    them), then of C2 (K2), then the W bits of C0 with the digits' constants folded in; and (K1, K2)."""
+    f = fit(name)
+    W = f.shift + 24 + _top(name)
+    c0, rows, Ks = [2 * c for c in f.C0], [], []
+    for n, cs, at in ((f.nb, f.C1, 0), (2 * f.nb - f.p, f.C2, f.square_shift)):
+        K, B = _digits(cs)
+        Ks.append(K)
+        rows += [[1 - ((b >> k) & 1) for b in B] for k in range(K)]
+        c0 = [c - (((1 << n) - 1) * ((((1 << K) - 1) ^ b) + 1) << at) for c, b in zip(c0, B)]
+    rows += [[(c >> j) & 1 for c in c0] for j in range(W)]
+    return (Ks[0], Ks[1]), np.array(rows, dtype=np.uint8)
+
+
+@cache
+def _xor_plan(name: str) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, ...], ...]]:
+    """The segment functions as XORs of the monomials (`_monomials`) of their algebraic normal forms, with shared sums: terms
+    0 .. 2^n - 1 are the monomials, and each pair (a, b) appends the term ``a XOR b``; then each function's terms. The pairs
+    are chosen greedily: the first pair of terms that the most functions share, while some two share one."""
+    _, rows = _segment_functions(name)
+    anf = rows.copy()
+    for i in range(fit(name).bits - fit(name).nb):
+        anf = anf.reshape(len(rows), -1, 2, 1 << i)
+        anf[:, :, 1, :] ^= anf[:, :, 0, :]
+    M = anf.reshape(len(rows), -1).astype(np.float32)
+    const = M[:, 0].copy()
+    M[:, 0] = 0
+    pairs = []
+    while True:
+        G = np.triu(M.T @ M, 1)
+        a, b = divmod(int(np.argmax(G)), G.shape[1])
+        if G[a, b] < 2:
+            break
+        both = (M[:, a] == 1) & (M[:, b] == 1)
+        M[both, a] = M[both, b] = 0
+        M = np.concatenate([M, both[:, None].astype(np.float32)], axis=1)
+        pairs.append((a, b))
+    M[:, 0] = const
+    return tuple(pairs), tuple(tuple(np.flatnonzero(r).tolist()) for r in M)
 
 
 def truncated_square(C, u, p: int):
@@ -197,24 +224,25 @@ def table_word(C, name: str, idx):
     f = fit(name)
     assert len(idx) == f.bits
     u, top = list(idx[:f.nb]), _top(name)
-    sel = _selector(C, idx[f.nb:])
     W = f.shift + 24 + top                     # the bits of 2 v: the word below base is < 2^(23 + top)
-    c0 = [2 * c for c in f.C0]
+    terms = _monomials(C, idx[f.nb:])
+    pairs, sums = _xor_plan(name)
+    for a, b in pairs:
+        terms.append(terms[a] ^ terms[b])
+    fns = [_xor_all(terms[i] for i in s) for s in sums]
+    (K1, K2), _ = _segment_functions(name)
     cols: list[list] = [[] for _ in range(W)]
-    for x, cs, at in ((u, f.C1, 0), (truncated_square(C, u, f.p), f.C2, f.square_shift)):
-        # 2 c x = sum_k (x XOR n_k) 2^k + ~x - (2^len(x) - 1)(N + 1), n_k = 1 - b_k the digit's sign, N = sum_k n_k 2^k
-        K, B = _digits(cs)
-        for k in range(K):
-            n_k = sel([1 - ((b >> k) & 1) for b in B])
+    # 2 c x = sum_k (x XOR n_k) 2^k + ~x - (2^len(x) - 1)(N + 1), n_k = 1 - b_k the digit's sign, N = sum_k n_k 2^k
+    for x, n, at in ((u, fns[:K1], 0), (truncated_square(C, u, f.p), fns[K1:K1 + K2], f.square_shift)):
+        for k, n_k in enumerate(n):
             for j, b in enumerate(x):
                 if j + k + at < W:
                     cols[j + k + at].append(b ^ n_k)
         for j, b in enumerate(x):
             if j + at < W:
                 cols[j + at].append(NOT(b))
-        c0 = [c - (((1 << len(x)) - 1) * ((((1 << K) - 1) ^ b) + 1) << at) for c, b in zip(c0, B)]
-    for j in range(W):
-        cols[j].append(sel([(c >> j) & 1 for c in c0]))
+    for j, b in enumerate(fns[K1 + K2:]):
+        cols[j].append(b)
     for i, d in overrides(name):
         hit = and_reduce(C, [b if (i >> k) & 1 else NOT(b) for k, b in enumerate(idx)])
         for k in range(W - f.shift - 1):

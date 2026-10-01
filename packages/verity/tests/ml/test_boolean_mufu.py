@@ -25,11 +25,11 @@ DEFS = [BM.MufuEx2Ftz, BM.MufuRcpFtz, BM.MufuSqrtFtz, BM.RsqrtApprox, BM.DivFull
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
-    "MufuEx2Ftz_v2": (1073, 4917, 76, "c2e2924f375157547e7c1bfe0c283037f0f324b841420177fafff23c01af7105"),
-    "MufuRcpFtz_v2": (902, 5639, 70, "f49db0c381ce0b47b5548563e0c7a714b62284cf93b86b77261dcb783f171f00"),
-    "MufuSqrtFtz_v2": (879, 5665, 89, "6431fb0de8d2779784fc068c1ac406596e147c63c15776479ee47eb889af5346"),
-    "RsqrtApprox_v2": (1134, 6115, 134, "482071de38099933443314f94012941c01f7ea84ba1fd2dda78ab17f7f195197"),
-    "DivFullRcp_v2": (1152, 6001, 113, "d1c351899328070278c4a4229cb22f8b4a7aff2393e64a9f92d33126b2740a5e"),
+    "MufuEx2Ftz_v2": (1073, 4546, 98, "175a275441997b1a2782f4ff51a1dd9700650c0dded675c3f3aabb7987485dd0"),
+    "MufuRcpFtz_v2": (902, 4810, 101, "f502fd971790267c36c7a4ffe6113e46c403ccf2666e133eb8e900429ac5690c"),
+    "MufuSqrtFtz_v2": (879, 4840, 110, "293a798f65d38bf62c40b63faccaa606a8ee6c10f11e68d14f5c6887c582a087"),
+    "RsqrtApprox_v2": (1134, 5269, 163, "fc0129fdb4f24b3fcb4f5a3027f2c73a1c0400c7345796b81846046941b477b8"),
+    "DivFullRcp_v2": (1152, 5172, 144, "d33728134af0e8dca11368ddd08662b86c14849e89be2d9fc5794161109f7e0a"),
     "DivFullScaleA_v3": (531, 860, 94, "f8d0f52de422db61c053accdf13643773dc9b93ff29f099428f3299b70572011"),
 }
 
@@ -148,9 +148,9 @@ def test_every_word_of_a_range(d, ranges) -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("b", [0x7E800001, 0x80000001], ids=["a*0.25", "a*2^24"])
-def test_div_full_scale_a_where_it_rounds_or_normalizes(b) -> None:
-    """Every a of exponent 0 to 2 (3 * 2^23 words, about 30 s) against a b of each scaling: where a * 0.25 is subnormal and
-    rounds, and where a * 2^24 normalizes a subnormal; random words reach a few thousand of them."""
-    a = _span((0x00000000, 0x01800000))
+@pytest.mark.parametrize("b, end", [(0x7E800001, 0x01800000), (0x80000001, 0x00800000)], ids=["a*0.25", "a*2^24"])
+def test_div_full_scale_a_where_it_rounds_or_normalizes(b, end) -> None:
+    """Every a where a * 0.25 is subnormal and rounds (exponent 0 to 2, 3 * 2^23 words, about 30 s), or where a * 2^24
+    normalizes a subnormal (2^23 words, about 10 s); random words reach a few thousand of them."""
+    a = _span((0x00000000, end))
     _agree(bind(BM.DivFullScaleA), a, np.full(len(a), b, np.uint32))
