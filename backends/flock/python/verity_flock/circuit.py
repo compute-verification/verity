@@ -596,7 +596,7 @@ def main(argv=None) -> int:
     """``python -m verity_flock.circuit --input-set DIR --n N [N ...] --out DIR [--partition H --program H --unit-indices FILE]``:
     the composite circuit, then for each N the prover's ``inst-N.bin`` and the verifier's own ``pub-N.bin`` (instances [0, N),
     their global unit indices from FILE's JSON list, else [0, N)); prints the pin and the class. ``--class-only``: compose and
-    print only (the class a partition names)."""
+    print only (the class a partition names). ``--typed``: the typed statement instead."""
     import argparse
 
     from verity_numerical.bench.input_sets import InputSet
@@ -610,6 +610,7 @@ def main(argv=None) -> int:
     ap.add_argument("--unit-indices", default=None, help="a JSON list: the global unit index of each staged instance, ascending")
     ap.add_argument("--class-only", action="store_true")
     ap.add_argument("--share-rows", action="store_true", help="each input port's distinct rows as one committed table, refs per instance")
+    ap.add_argument("--typed", action="store_true", help="the typed statement (verity_flock.typed_statement.stage)")
     a = ap.parse_args(argv)
     s = InputSet.open(a.input_set)
     low = lowering_for_set(s)
@@ -619,9 +620,12 @@ def main(argv=None) -> int:
                           "program_sha512": program_sha512(s.subcircuit, set_statics(s))}))
         return 0
     idx = json.loads(Path(a.unit_indices).read_text()) if a.unit_indices else None
+    if a.typed:
+        from verity_flock import typed_statement
+    stage_ = typed_statement.stage if a.typed else stage
     for n in a.n:
-        stage(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program,
-              share_rows=a.share_rows)
+        stage_(low, s, 0, n, a.out, indices=idx[:n] if idx is not None else None, partition=a.partition, program=a.program,
+               share_rows=a.share_rows)
     text = (Path(a.out) / "circuit.txt").read_text()
     print(json.dumps({"subcircuit": s.subcircuit.id, "unit": low.name, "pin": digest(text), "class_sha512": class_digest(text), "n": a.n}))
     return 0
