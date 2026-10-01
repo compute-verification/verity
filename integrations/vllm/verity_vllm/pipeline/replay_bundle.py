@@ -16,6 +16,8 @@ linkage writes one bundle per instrumented run beside its outputs, `<out>/replay
     MANIFEST.json     {schema, files: {path: {sha256, bytes}}}, written last
 
 It is built under `replay_bundle_p<pair>.partial/` and renamed into place once sealed, so a bundle directory that exists is complete.
+The store is written from the moment the run root is fixed, beside the binding and manifest coverage (`start`), so the GPU is not
+held for the two in turn.
 `open_bundle` checks every file against the manifest before anything is read from it.
 """
 from __future__ import annotations
@@ -25,7 +27,8 @@ import json
 import os
 import shutil
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -71,15 +74,49 @@ def refuse(args: Any) -> None:
         raise SystemExit(f"--replay-deferred: {why}")
 
 
+@dataclass
+class Started:
+    """The store's write running beside the checks before the C2 site (`start`)."""
+    future: Future
+    hashed: dict[str, str]
+
+
+def start(out: Path, pair: int, com: Any, rc: Any, args: Any) -> Started | None:
+    """The store's write, started once the run root is fixed, in a thread beside the binding and manifest coverage that precede the C2
+    site: the store is final at finalize and every one of those checks only reads it, so `defer` takes the same files and digests without
+    waiting for both in turn.  None without `--replay-deferred`, or with `--replay-bundle-overlap 0` (`defer` writes it at the C2 site)."""
+    if not args.replay_deferred or not getattr(args, "replay_bundle_overlap", 1):
+        return None
+    hashed: dict[str, str] = {}
+    pool = ThreadPoolExecutor(1, thread_name_prefix="replay-bundle")
+
+    def write() -> float:
+        t0 = time.perf_counter()
+        write_store(out, pair, com, rc, digests=hashed)
+        return time.perf_counter() - t0
+
+    fut = pool.submit(write)
+    pool.shutdown(wait=False)
+    return Started(fut, hashed)
+
+
 def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: str, versions: dict, reqs: list[dict], sampling: dict,
-          tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None) -> tuple[dict, dict, dict]:
-    """At the C2 site of a deferred run: writes the bundle's store and weights tree, and returns the run's deferred sampled-replay and
-    linkage records and the bundle's context (sealed once the run's record is final, after the weights pin and the openings)."""
+          tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None,
+          started: Started | None = None) -> tuple[dict, dict, dict]:
+    """At the C2 site of a deferred run: writes the bundle's store and weights tree (or takes the write `start` began), and returns the
+    run's deferred sampled-replay and linkage records and the bundle's context (sealed once the run's record is final, after the weights
+    pin and the openings)."""
     from verity_vllm.check.replay.driver import engine_facts_of_record
 
     tl.start("validate.replay_bundle", pair=pair)
-    hashed: dict[str, str] = {}
-    write_store(out, pair, com, rc, digests=hashed)
+    if started is not None:
+        t0 = time.perf_counter()
+        write_s, hashed = started.future.result(), started.hashed
+        print(f"[delta] REPLAY BUNDLE (pair {pair}): store written in {write_s:.1f} s beside the checks before the C2 site "
+              f"(waited {time.perf_counter() - t0:.1f} s here)", flush=True)
+    else:
+        hashed = {}
+        write_store(out, pair, com, rc, digests=hashed)
     caps = {str(q.get("request_id")): int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs}
     ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
            "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
