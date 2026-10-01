@@ -84,8 +84,10 @@ def dense_program(embed=EMB, lp=LP, t=T, eps=EPS, weight_add_once=False):
     return b, at
 
 
-def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", request_id="r0"):
-    """A Build dir holding `doc`, and the manifest of its one request (the implementation paths observed = `observed`)."""
+def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", request_id="r0", norm_scales=False):
+    """A Build dir holding `doc`, and the manifest of its one request (the implementation paths observed = `observed`; `norm_scales`: built
+    under the norm-scale policy, as a Commit with the norm tap builds it)."""
+    from verity_vllm.query import norm_scales as NS
     res = {"program": {"digest": digest, "function": "f"}, "attention_impls_observed": {p: {} for p in observed},
            "target": {"declared": {"compute_capability": [8, 9]}}}
     d = tmp_path / name
@@ -94,4 +96,5 @@ def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", req
         json.dump(doc, f)
     (d / "result.json").write_text(json.dumps(res))
     P = from_instances(str(d / "instances.json.gz"))
-    return str(d), request_manifest(P, Correspondence(P, implementation_paths=observed), res, request_id=request_id).manifest
+    return str(d), request_manifest(P, Correspondence(P, implementation_paths=observed), res, request_id=request_id,
+                                    norm_scales=NS.POLICY if norm_scales else None).manifest

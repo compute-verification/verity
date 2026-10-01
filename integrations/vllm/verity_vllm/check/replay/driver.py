@@ -64,6 +64,7 @@ from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, 
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex
+from verity_vllm.query import norm_scales
 from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, plan_vu, replay_vu
 from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
@@ -327,7 +328,7 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         pi = indices.get(id(inst)) or memo.get(("index", id(inst)))
         if pi is None:
             pi = memo[("index", id(inst))] = ProgramIndex(inst, attention_paths=attention_paths, tp=tp, program_dir=(program_dirs or {}).get(rid),
-                                                         query=manifest_query(manifest))
+                                                         query=manifest_query(manifest), norm_scales=norm_scales.policy_of(manifest))
         indices[id(inst)] = pi
         addr_rec["correspondence"][str(rid)] = pi.correspondence
         # [tp M-0523 (1)] a per-rank map (tp2_worker: every entry carries identity.rank == r) labels its strata with THAT rank; a
