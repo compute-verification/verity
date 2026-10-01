@@ -181,6 +181,51 @@ def test_live_mode_holds_the_agent_lock_evicts_fill_for_a_window_then_grants_it(
     os.close(fd)
 
 
+def test_an_agent_started_on_an_existing_ledger_grants_the_requests_it_found_queued(c, tmp_path):
+    """A restart, or a handover from another agent: a request the ledger already has queued is planned like a new one."""
+    node = Node(tmp_path)
+    node.waiter(20, 1, "2026-09-30T19:59:30Z")
+    out = tmp_path / "out"
+    run(c, node, out, Clock(T0), until=T0 + 2)
+    assert list(ledger.state(ledger.read(out / "ledger.jsonl")).queue) == ["gl-20"]
+    ex = agent.Executor(node.gl, kill=lambda pid, sig: pytest.fail("the node is free"))
+    run(c, node, out, Clock(T0 + 10), mode="live", executor=ex, until=T0 + 12)
+    assert (node.gl / "grant.20").read_text() == "0\n"
+
+
+def test_with_roll_each_run_and_each_utc_day_is_a_segment_and_the_segments_are_one_chain(c, tmp_path):
+    from cluster import cli
+    node = Node(tmp_path)
+    node.lease(7, [0], "2026-09-30T23:59:00Z")
+    root = tmp_path / "live"
+    t = epoch("2026-09-30T23:59:58Z")
+    ex = agent.Executor(node.gl, kill=lambda pid, sig: pytest.fail("nothing to evict"))
+    clock = Clock(t, {t + 1: lambda: node.lease(8, [1], "2026-09-30T23:59:59Z"), t + 3: lambda: node.end(7)})
+    s = run(c, node, root, clock, mode="live", executor=ex, until=t + 5, roll=True)
+    assert (s["segment"], s["segments_rolled"]) == ("20261001T000000Z", 1)
+    run(c, node, root, Clock(t + 10), mode="live", executor=ex, until=t + 12, roll=True)
+    assert [p.parent.name for p in ledger.segments(root)] == ["20260930T235958Z", "20261001T000000Z", "20261001T000008Z"]
+    records = ledger.read(root)
+    assert ledger.verify(records) == [] and [r["kind"] for r in records] == ["agent", "start", "start", "end", "agent"]
+    assert records[-1]["pid"] == os.getpid() and records[-1]["tree"] == os.getcwd()
+    assert ledger.state_from_dict(json.loads((root / "state.json").read_text())) == ledger.state(records)
+    assert list(ledger.state(records).allocations) == [f"gl-8@{epoch('2026-09-30T23:59:59Z')}"]
+    assert cli.main(["ledger", "verify", str(root)]) == 0
+    assert cli.main(["ledger", "verify", str(ledger.segments(root)[1])]) == 1, "a later segment alone is not a whole chain"
+
+
+def test_with_roll_a_segment_past_roll_bytes_is_followed_by_a_new_one(c, tmp_path):
+    node = Node(tmp_path)
+    node.lease(7, [0], "2026-09-30T19:59:00Z")
+    root = tmp_path / "live"
+    clock = Clock(T0, {T0 + 1: lambda: node.lease(8, [1], "2026-09-30T20:00:01Z")})
+    run(c, node, root, clock, mode="live", until=T0 + 3, roll=True, roll_bytes=1,
+        executor=agent.Executor(node.gl, kill=lambda pid, sig: pytest.fail("nothing to evict")))
+    assert [p.parent.name for p in ledger.segments(root)] == ["20260930T200000Z", "20260930T200000Z-2"]
+    assert [r["kind"] for r in ledger.read(root)] == ["agent", "start", "start"] and ledger.verify(ledger.read(root)) == []
+    assert not (root / "20260930T200001Z" / "ledger.jsonl").exists(), "a segment with nothing to write rolls no further"
+
+
 def test_live_mode_never_grants_a_gpu_whose_lock_a_dead_owners_child_still_holds(c, tmp_path):
     node = Node(tmp_path)
     node.orphan(0)

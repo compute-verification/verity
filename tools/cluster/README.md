@@ -10,7 +10,9 @@ On vy-nebius-2 the agent (`cluster agent`) runs beside today's tools. In shadow 
 through a lock), mirrors what it did into the ledger, and records what the planner would have done (`shadow.py`). In live
 mode it holds `/run/gpu-lease/agent.lock` and carries the plan out: it evicts by signal and grants by writing
 `grant.<pid>`, which `gpu-lease`'s agent mode (on `infra/nebius`, 49238797 in fixtures/) takes; a free `agent.lock` puts
-`gpu-lease` back on its own rules. `cluster shadow replay` runs the shadow over a day's copied logs, and `cluster shadow
+`gpu-lease` back on its own rules. The live agent runs as `vy-cluster-agent.service` (the unit file here, pinned to one
+shipped tree) with `--roll`: a new ledger segment under `live/` for each start and each UTC day, the segments one hash
+chain, which `cluster ledger ... live/` reads whole. `cluster shadow replay` runs the shadow over a day's copied logs, and `cluster shadow
 evaluate` is the pass bar. On vy-nebius-1, `nebius1` reads Kueue's pods and Workloads and DCGM's GPU-to-pod labels as
 allocations and a queue, and `python -m cluster.nebius1 DESCRIPTION [--save|--from SNAPSHOT]` prints what the planner would
 do beside Kueue. Node 1's executor under the one queue is kueue-fold's.
@@ -42,6 +44,7 @@ src/cluster/
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
+vy-cluster-agent.service   node 2's live agent as a systemd unit: install, pin, stop and restart in its header
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
                 and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
                 the agent-mode gpu-lease 49238797 held for deploy)
