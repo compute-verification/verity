@@ -218,11 +218,16 @@ def token_select_calls(call, logits: Coll, V: int) -> Coll:
     return x
 
 
-@composite("TokenSelect", 2, ["V"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="exact-model-tested")
-def TokenSelect(B, S, logits):
-    """Greedy sampling on bits: TokenSelect_v1{V} (the first maximum of the bf16 logits; index 0 when logits[0] is a NaN), as the
-    chain of the argmax tree's stages."""
+def _token_select(B, S, logits):
     return token_select_calls(B.call, logits, S.V)
 
 
-TokenSelect.word = lambda b: bind(b1.TokenSelect, V=b["V"])  # type: ignore[attr-defined]
+def _token_select_word(b: dict):
+    return bind(b1.TokenSelect, V=b["V"])
+
+
+TokenSelect = CompositeDefinition(
+    "TokenSelect", 2, ("V",), lambda S: ((("logits", Array(S.V, BF16)),), I32), _token_select, conformance="exact-model-tested",
+    doc="Greedy sampling on bits: TokenSelect_v1{V} (the first maximum of the bf16 logits; index 0 when logits[0] is a NaN), as "
+        "the chain of the argmax tree's stages.")
+TokenSelect.word = _token_select_word  # type: ignore[attr-defined]
