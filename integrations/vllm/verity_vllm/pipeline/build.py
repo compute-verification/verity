@@ -765,6 +765,8 @@ class Options:
 
 
 def main(a: Options) -> int:
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    _gc_tune()
     try:
         from verity_vllm.program.frontend.target_profile import parse_target_arg
         from verity_vllm.program.registry.targets import parse_launch_context

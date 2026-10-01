@@ -378,7 +378,9 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
 
 def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp_path):
     """`--jobs`: the word check's rules prefetched and the components built in forked processes (`manifest.build_components`) give the
-    manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported."""
+    manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported.  A workload
+    digest read from stdin once the components are built (`--workload-digest -`) gives the manifest the same digest named on the
+    command line gives, and none read fails it."""
     import gzip
     import json
     import shutil
@@ -396,14 +398,19 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     fx = {"fixture": "t", "requests": [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]}
     (tmp_path / "wl.json").write_text(json.dumps(fx))
 
-    def build_global(jobs: int, out: str) -> subprocess.CompletedProcess:
+    def build_global(jobs: int, out: str, *extra: str, stdin: str | None = None) -> subprocess.CompletedProcess:
         return subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "manifest", "build-global", "--fixture", str(tmp_path / "wl.json"),
-                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), "--out", str(tmp_path / out)],
-                              cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True)
+                               "--programs-root", str(tmp_path / "row"), "--jobs", str(jobs), *extra, "--out", str(tmp_path / out)],
+                              cwd=Path(__file__).resolve().parents[2], input=stdin, capture_output=True, text=True)
 
     for jobs in (1, 3):
         assert build_global(jobs, f"m{jobs}.json").returncode == 0
     assert (tmp_path / "m1.json").read_bytes() == (tmp_path / "m3.json").read_bytes()
+    assert build_global(3, "named.json", "--workload-digest", "w" * 64).returncode == 0
+    assert build_global(3, "stdin.json", "--workload-digest", "-", stdin="w" * 64 + "\n").returncode == 0
+    assert (tmp_path / "named.json").read_bytes() == (tmp_path / "stdin.json").read_bytes() != (tmp_path / "m1.json").read_bytes()
+    p = build_global(3, "none.json", "--workload-digest", "-", stdin="")
+    assert p.returncode != 0 and "no workload digest on stdin" in p.stderr and not (tmp_path / "none.json").exists(), p.stderr[-2000:]
     shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
     fx["requests"][1]["max_tokens"] = T
     (tmp_path / "wl.json").write_text(json.dumps(fx))
