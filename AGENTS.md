@@ -195,9 +195,11 @@ unchanged, and keeps each pod's Lean dependencies warm under their manifest and 
   No axiom check can catch a weakened definition, so a changed record needs a named statement reviewer, who reads what
   `--update` prints (each changed signature before and after, each changed definition as it is now), and the PR
   description names them.
-- A named assumption, or a hand-proved lemma a dependency could prove, has an entry in the package's `upstream` watch
-  list. The audit fails when the pinned dependency proves a theorem about it that nobody has acknowledged
-  (`tools/lean/upstream.py`). A document's "status upstream" cites that output; it is never written by hand.
+- A named assumption or hand-proved lemma that a pinned dependency could prove, because its statement can be written in
+  that dependency's constants, has an entry in the package's `upstream` watch list. The audit fails when the pinned
+  dependency proves a theorem about it that nobody has acknowledged (`tools/lean/upstream.py`). One stated over the
+  package's own definitions (PoUS's `LemmaA`) gets no entry, since no upstream theorem can mention them. A document's
+  "status upstream" cites that output; it is never written by hand.
 - Two agents never share a writable Lake build directory (`.lake`): parallel Lean work uses separate checkouts.
 - How to work on Lean, and how parallel Lean lanes avoid conflicts: `.agents/skills/lean-proofs/SKILL.md`.
 

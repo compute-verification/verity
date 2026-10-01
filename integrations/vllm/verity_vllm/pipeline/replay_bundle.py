@@ -173,6 +173,9 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
     return True
 
 
+PENDING = "PENDING: the C2 sampled replay + boundary linkage are deferred to the replay bundle"
+
+
 def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: int = 64, declaration: dict | None = None,
                     required_classes: Any = None) -> tuple[bool | None, str]:
     """The verdict of an instrumented run whose C2 replay is deferred: (False, reason) when a check the Commit ran itself fails -- C1, a
@@ -186,7 +189,7 @@ def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: in
                 if isinstance(wp, dict) and wp.get("result") is False else None)
             or ((False, vc.get("why") or f"value correspondence FAIL ({vc.get('method')})") if isinstance(vc, dict) and vc.get("result") is False else None)
             or _after_release_verdict(commit, min_openings))
-    return fail if fail is not None else (None, "PENDING: the C2 sampled replay + boundary linkage are deferred to the replay bundle")
+    return fail if fail is not None else (None, PENDING)
 
 
 def awaits_replay(c: dict) -> bool:
