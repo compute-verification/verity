@@ -80,6 +80,17 @@ def environ(pid: int) -> dict[str, str]:
     return dict(kv.split("=", 1) for kv in raw.decode(errors="replace").split("\0") if "=" in kv)
 
 
+def alive(pid: int) -> bool:
+    return Path(f"/proc/{pid}").exists()
+
+
+def cmdline(pid: int) -> str:
+    try:
+        return " ".join(Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0"))[:200]
+    except OSError:
+        return ""
+
+
 def pod_uid_of(pid: int) -> str | None:
     try:
         m = re.search(r"pod([0-9a-f_-]{36})", Path(f"/proc/{pid}/cgroup").read_text())
@@ -149,10 +160,11 @@ def check(t: float) -> list[dict]:
                 continue
         if any((uid and pod_uid_of(owner) == uid) or owner in up for _, owner in held.get(i, [])):
             continue
+        if not alive(pid):    # ended since nvidia-smi listed it, so its /dev and cgroup read as empty
+            continue
         strays.append({"t": iso(t), "pid": pid, "gpu": i, "uuid": uuid, "pod_uid": uid, "requested": k,
                        "visible": environ(pid).get("NVIDIA_VISIBLE_DEVICES", "")[:80],
-                       "cmd": " ".join(Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace").split("\0"))[:200]
-                       if Path(f"/proc/{pid}").exists() else ""})
+                       "cmd": cmdline(pid)})
     if strays:
         for s in strays:
             pod = pods.get(s["pod_uid"] or "")

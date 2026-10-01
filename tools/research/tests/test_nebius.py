@@ -1347,13 +1347,15 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     monkeypatch.setattr(m, "POOL_DIRS", [pool])
     monkeypatch.setattr(m, "LOG", tmp_path / "stray.jsonl")
     # GPU UUID -> (index, minor); pids 10..13 compute, 50 holds the lease on GPU 1 for pod-lease
-    monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b"), (12, "GPU-c"), (13, "GPU-d")])
+    monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b"), (12, "GPU-c"), (13, "GPU-d"), (14, "GPU-c")])
     monkeypatch.setattr(m, "gpu_table", lambda: {"GPU-a": (0, 4), "GPU-b": (1, 1), "GPU-c": (2, 2), "GPU-d": (3, 0)})
     monkeypatch.setattr(m, "leases", lambda: {1: [(pool, 50)]})
     monkeypatch.setattr(m, "dev_minors", lambda pid: {10: {4}, 13: {4, 0}}.get(pid, set(range(8))))
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: {10: "u-plugin", 13: "u-plugin"}.get(pid, "u-lease"))
     monkeypatch.setattr(m, "ancestors", lambda pid: {pid})
     monkeypatch.setattr(m, "environ", lambda pid: {"NVIDIA_VISIBLE_DEVICES": "void"})
+    monkeypatch.setattr(m, "alive", lambda pid: pid != 14)
+    monkeypatch.setattr(m, "cmdline", lambda pid: f"python w{pid}.py")
 
     def pod(uid, name, gpus, mount=None):
         c = {"resources": {"limits": {"nvidia.com/gpu": str(gpus)}} if gpus else {}}
@@ -1364,7 +1366,7 @@ def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a
     monkeypatch.setattr(m, "pods_by_uid", lambda: {"u-plugin": pod("u-plugin", "nd-plugin", 1),
                                                    "u-lease": pod("u-lease", "nd-lease", 0, pool)})
     strays = m.check(1_800_000_000.0)
-    # 10: its one device-plugin GPU; 11: its pod's lease; 12: no lease on GPU 2; 13: a 1-GPU pod that sees two GPUs
+    # 10: its one device-plugin GPU; 11: its pod's lease; 12: no lease on GPU 2; 13: a 1-GPU pod that sees two GPUs; 14: gone
     assert [(s["pid"], s["gpu"], s.get("blocked")) for s in strays] == [(12, 2, str(pool)), (13, 3, None)]
     assert "pid 12 (default/nd-lease) ran on GPU 2 without a lease" in (pool / "blocked").read_text()
     assert len((tmp_path / "stray.jsonl").read_text().splitlines()) == 2
