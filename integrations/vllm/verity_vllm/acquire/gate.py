@@ -140,6 +140,7 @@ class CallBoundariesOptions:
 
     row_dir: str = option("row_dir", help="the row dir after its Build: manifest.json and the Build dirs (build_request*/) under it")
     out: str | None = option("--out", default=None, help="the record (call_boundaries.json)")
+    logits_tap: int = taps.logits_tap_source.option_field()
     cmd: str = field(default="call-boundaries", init=False)
 
 
@@ -149,6 +150,7 @@ COMMANDS = {"plan": PlanOptions, "compare-plans": ComparePlansOptions, "call-bou
 def main(a: PlanOptions | ComparePlansOptions | CallBoundariesOptions) -> int:
     if a.cmd == "call-boundaries":
         t0 = time.perf_counter()
+        taps.logits_tap_source.claiming(bool(a.logits_tap))
         rec = call_boundaries(json.loads(Path(a.row_dir, "manifest.json").read_text()), a.row_dir)
         rec["seconds"] = round(time.perf_counter() - t0, 1)
         if a.out:

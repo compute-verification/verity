@@ -5,8 +5,9 @@ the manifest names them: the blockwise FP8 GEMM's scale products (`scale_product
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  The single-rank
-`attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities;
-`attached` names what it attaches for a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`)."""
+`attach` also attaches the call-boundary source (`call_boundary_source`) whenever the manifest names `call_boundaries` identities, and
+just before it the logits tap (`logits_tap_source`) whenever `--logits-tap 1` claims some of them; `attached` names what it attaches for
+a row's manifest, constructing nothing (the CPU gate's `call-boundaries`, `acquire.gate`)."""
 from __future__ import annotations
 
 import json
@@ -15,7 +16,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import call_boundary_source, norm_scale_source, router_softmax_source, scale_products_source, vocab_range_source
+from verity_vllm.acquire.sources import call_boundary_source, logits_tap_source, norm_scale_source, router_softmax_source, scale_products_source, vocab_range_source
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_split import splits_for_v1
@@ -41,6 +42,7 @@ class TapSources:
                                        "(acquire.sources.router_softmax_source)")
     vocab_range: bool = option("--vocab-range", default=False, action="store_true", help="commit `<embedding module>/vocab_range` for every "
                                "vocab_range identity of the required manifest (acquire.sources.vocab_range_source)")
+    logits_tap: int = logits_tap_source.option_field()
 
     def given(self) -> dict[str, Any]:
         return {f: getattr(self, f) for f, *_ in SOURCES if getattr(self, f)}
@@ -49,15 +51,22 @@ class TapSources:
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], taps: TapSources, *,
            explicit_classes: bool = False, model: Any = None, programs: Sequence[str | None] = (),
            call_boundary_plan: Plan | None = None) -> tuple[str, ...]:
-    """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3), the call-boundary source when
-    the manifest names call boundaries (its Programs found under `programs`, its plan `call_boundary_plan` when derived already) and the
-    scale-products source when the manifest names its family; returns the required classes with their families added unless the caller
-    gave them explicitly."""
+    """Attach each tap that is on to `com` (each refuses a manifest that does not name its family, exit 3), the logits tap when it claims
+    call boundaries, the call-boundary source when the manifest names others (its Programs found under `programs`, its plan
+    `call_boundary_plan` when derived already; a plan of identities the logits tap commits refuses, exit 3) and the scale-products source
+    when the manifest names its family; returns the required classes with their families added unless the caller gave them explicitly."""
+    logits_tap_source.claiming(bool(taps.logits_tap))
     for f, _key, mod, _fam, _cls in SOURCES:
         required_classes, _src = mod.attach(com, getattr(taps, f), manifest, required_classes, explicit_classes=explicit_classes, model=model)
-    required_classes, _src = call_boundary_source.attach(com, bool(call_boundary_source.manifest_sites(manifest)), manifest, required_classes,
-                                                         explicit_classes=explicit_classes, model=model, programs=programs,
-                                                         plan=call_boundary_plan)
+    required_classes, tap = logits_tap_source.attach(com, manifest, required_classes, explicit_classes=explicit_classes, model=model)
+    required_classes, cb = call_boundary_source.attach(com, bool(call_boundary_source.manifest_sites(manifest)), manifest, required_classes,
+                                                       explicit_classes=explicit_classes, model=model, programs=programs,
+                                                       plan=call_boundary_plan)
+    both = sorted(tap.target_names() & cb.target_names()) if tap is not None and cb is not None else []
+    if both:
+        print(f"[delta] REFUSE: the call-boundary plan evaluates {len(both)} identities the logits tap commits ({both[:3]}): a plan derived "
+              "without --logits-tap 1", flush=True)
+        raise SystemExit(3)
     required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
                                                           explicit_classes=explicit_classes, model=model)
     if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
@@ -78,11 +87,14 @@ def warmup(com: Any, on: bool) -> None:
 def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     """The `short_name`s of the sources a row's Commit attaches through `attach` for its manifest of record, constructing none: each tap
     whose family the manifest names (the row passes a tap's option exactly then, `pipeline.row_records.applicable_taps`, and rebuilds a
-    manifest of other tap policies) and, on one rank, the call-boundary source when the manifest names call boundaries no other source
-    claims and the scale-products source when it names scale products (a TP Commit attaches neither)."""
+    manifest of other tap policies) and, on one rank, the logits tap when it claims call boundaries it can commit, the call-boundary
+    source when the manifest names call boundaries no other source claims and the scale-products source when it names scale products (a
+    TP Commit attaches none of them)."""
     fams = {r.get("family") for r in (manifest or {}).get("identities") or []}
     one = int((manifest or {}).get("ranks") or 1) == 1
+    tapped = logits_tap_source.manifest_sites(manifest)
     return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
+            *([logits_tap_source.LogitsTapSource.short_name] if one and tapped and logits_tap_source.refusal(manifest, tapped) is None else []),
             *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
             *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else [])]
 

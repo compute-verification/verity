@@ -8,8 +8,9 @@ in the Commit with its GPU held (3085 s of a Gemma-2-2B B64 Commit).
 The check is `gate call-boundaries` over the Programs the Commit reads (its `--program-dir` / `--programs-root`): the same record, line
 and exit code.  On a PASS the plan is written, keyed as the producer-facts plan is (`commit_plan.key`: the Program digest, the sha256 of
 the required manifest and of the workload, the Programs it reads, the code identity, the vLLM version).  The Commit
-(`--call-boundary-plan PLAN`) takes it only when the key is its own; a plan it cannot read, keyed differently or that does not load
-(`call_boundary_plan.of_json`), and it derives the plan itself and records `plan_recomputed` with the reason (`use`).
+(`--call-boundary-plan PLAN`) takes it only when the key is its own; a plan it cannot read, keyed differently, that does not load
+(`call_boundary_plan.of_json`) or that plans another number of identities than the source evaluates under the Commit's claims (the key
+leaves them out), and it derives the plan itself and records `plan_recomputed` with the reason (`use`).
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from typing import Any, Mapping
 from verity_vllm.acquire import gate as G
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.acquire.sources import call_boundary_source as CB
+from verity_vllm.acquire.sources import logits_tap_source as LT
 from verity_vllm.config import option
 from verity_vllm.pipeline import commit_plan as CP
 
@@ -37,7 +39,9 @@ def roots(args: Any) -> tuple[str | None, str | None]:
 def use(args: Any, manifest: Mapping[str, Any] | None, *, tl: Any) -> tuple[CBP.Plan | None, dict[str, Any] | None]:
     """The call-boundary plan of the Commit `args` describes over `manifest` and the plan's record: from `--call-boundary-plan` when its
     key is the Commit's and it loads, else derived here (`plan_recomputed` with the reason); (None, None) for a manifest naming no
-    identity the source evaluates (the record says so when a plan was given).  `tl` times it (`prep.call_boundary_plan`, with its source)."""
+    identity the source evaluates (the record says so when a plan was given).  `tl` times it (`prep.call_boundary_plan`, with its source).  A Commit's `--logits-tap` sets the claims first."""
+    if getattr(args, "tap_sources", None) is not None:
+        LT.claiming(bool(args.tap_sources.logits_tap))
     path = getattr(args, "call_boundary_plan", None)
     if not CB.manifest_sites(manifest):
         return None, (None if not path else {"path": str(path), "schema": SCHEMA, "used": False, "plan_recomputed": False,
@@ -52,6 +56,11 @@ def use(args: Any, manifest: Mapping[str, Any] | None, *, tl: Any) -> tuple[CBP.
             plan = CBP.of_json(doc["plan"]) if doc is not None else None
         except Exception as e:  # noqa: BLE001  -- the plan is derived here: the reason is on the record
             rec = {**rec, "used": False, "plan_recomputed": True, "why": f"plan does not load: {e!r}"[:300]}
+        mine = len(CB.manifest_sites(manifest))
+        if plan is not None and plan.identities != mine:
+            rec = {**rec, "used": False, "plan_recomputed": True, "why": f"the plan is of {plan.identities} identities and the source evaluates "
+                                                                      f"{mine} (another source's claims, call_boundary_source.CLAIMS)"}
+            plan = None
         if plan is not None:
             rec = {**rec, "used": True, "plan_recomputed": False, "identities": plan.identities, "bodies": len(plan.bodies),
                    "load_s": round(time.monotonic() - t0, 3)}
@@ -86,12 +95,14 @@ class Options:
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs")
     gate_out: str | None = option("--gate-out", default=None, help="the check's record (call_boundaries.json)")
     out: str = option("--out", help="where the plan is written (the Commit's --call-boundary-plan)")
+    logits_tap: int = LT.option_field()
 
 
 def main(o: Options) -> int:
     """The check's record, line (the last one printed) and exit code; the plan beside it on a PASS, or the reason none was written (the
     Commit then derives it)."""
     t0 = time.monotonic()
+    LT.claiming(bool(o.logits_tap))
     if os.path.exists(o.out):
         os.remove(o.out)
     man = json.loads(Path(o.required_manifest).read_text())
