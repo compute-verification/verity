@@ -16,8 +16,8 @@
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
 #
-# HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000 are
-# known, and any other GPU, or none, needs HW=<census/hardware.json id>.
+# HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000
+# Blackwell Server Edition are known, and any other GPU, or none, needs HW=<census/hardware.json id>.
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
@@ -33,7 +33,7 @@ case "$GPU" in                                            # the census id is the
   *"H100 80GB HBM3"*) HW=${HW:-h100-sxm5-80gb/bf16} ;;
   *L40S*) HW=${HW:-l40s-48gb/bf16} ;;
   *"RTX 4090"*) HW=${HW:-rtx-4090/e4m3} ;;                 # the census's RTX 4090 row (it has no bf16 row yet)
-  *"RTX PRO 6000"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120: the Blackwell Server Edition
+  *"RTX PRO 6000 Blackwell Server Edition"*) HW=${HW:-rtx-pro-6000-server/bf16} ;;  # sm_120; other RTX PRO 6000s need HW=
   *) [ -n "${HW:-}" ] || { echo "no census id for GPU '$GPU': pass HW=<census/hardware.json id>"; exit 2; } ;;
 esac
 SCHEME=${SCHEME:-$([ "$IMPL" = p2-gpu ] && echo p2-16448/v2 || echo band-chain/d12/v1)}
