@@ -582,6 +582,11 @@ useful    U/(α_A·α_B), glue
   - A registration declares its transforms in order, and only the two stacks pass: the rotation alone, or the rotation,
     V/O and the interleave. V/O without the interleave, the interleave without V/O, and any other order are refused,
     because the two were measured only together, after the rotation (research store `internal/pouw/keyed-transforms/`).
+  - **A checkpoint that needs γ folded registers only with it**, as Llama-3.1-70B does: the cast moves its layer 0's
+    update by 158% with the RMSNorm scales unfolded, and by under 4% with them folded (research store
+    `docs/pouw/keyed-transforms.md` §14). The rotation folds γ, so its stacks pass as they are. An unrotated, curated
+    checkpoint declares `gamma-fold` (every RMSNorm scale folded into the linears it feeds), and takes no V/O or
+    interleave.
   - The rule reads what a registration declares. Applying the transforms and drawing their keys are the
     registration's own.
 - **The work law** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.

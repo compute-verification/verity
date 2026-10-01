@@ -682,27 +682,38 @@ def b_ovf(n: int) -> Fraction:
 ROTATION_8 = "keyed-8-block-rotation"
 VO_ROTATION = "keyed-vo-rotation"
 HEAD_INTERLEAVE = "keyed-head-interleave"
-#: The transform stacks a registration may apply, in their order; an unrotated checkpoint takes none and must be curated
+#: Every RMSNorm scale γ folded into the linears it feeds, with no rotation (the `fold` rung, research store
+#: docs/pouw/keyed-transforms.md §14).  The rotation folds γ itself (rung 3), so a rotated stack never declares it.
+GAMMA_FOLD = "gamma-fold"
+#: The transform stacks a registration may apply, in their order
 REGISTRATION_STACKS = ((ROTATION_8,), (ROTATION_8, VO_ROTATION, HEAD_INTERLEAVE))
+#: The stacks of an unrotated checkpoint, which must be curated
+UNROTATED_STACKS = ((), (GAMMA_FOLD,))
 
 
-def check_registration(transforms: Sequence[str], curated: bool = False) -> None:
-    """Refuse a registration of a checkpoint's weights outside Pearl-C4's rules.  `transforms` are the keyed transforms
-    it applies, in order; `curated` says the checkpoint is on the curated list, the fallback for an unrotated one.
+def check_registration(transforms: Sequence[str], curated: bool = False, needs_gamma_fold: bool = False) -> None:
+    """Refuse a registration of a checkpoint's weights outside Pearl-C4's rules.  `transforms` are the transforms it
+    applies, in order; `curated` says the checkpoint is on the curated list, the fallback for an unrotated one;
+    `needs_gamma_fold` says it registers only with γ folded, as Llama-3.1-70B does: the cast moves its layer 0's update
+    by 158% unfolded, and by under 4% with γ folded (keyed-transforms.md §14).
 
     The keyed 8-block rotation is the registered-weights rule, alone or followed by the V/O rotation and the head
     interleave together (the stack measured and adopted).  V/O or the interleave on an unrotated checkpoint is refused,
-    curated or not.  This reads what the registration declares; applying the transforms and keying them are the
-    registration's own."""
+    curated or not.  An unrotated checkpoint that needs γ folded declares `GAMMA_FOLD`.  This reads what the
+    registration declares; applying the transforms and keying them are the registration's own."""
     t = tuple(transforms)
-    if t in REGISTRATION_STACKS or (not t and curated):
+    if t in REGISTRATION_STACKS:
         return
     if ROTATION_8 not in t and {VO_ROTATION, HEAD_INTERLEAVE} & set(t):
         raise DomainError(f"registration {t}: the V/O rotation and the head interleave apply inside the keyed 8-block "
                           "rotation only, never on an unrotated checkpoint")
-    if not t:
+    if t not in UNROTATED_STACKS:
+        raise DomainError(f"registration {t}: not an adopted stack, one of {REGISTRATION_STACKS + UNROTATED_STACKS}")
+    if not curated:
         raise DomainError("registration: an unrotated checkpoint must be on the curated list")
-    raise DomainError(f"registration {t}: not an adopted stack, one of {REGISTRATION_STACKS}")
+    if needs_gamma_fold and GAMMA_FOLD not in t:
+        raise DomainError(f"registration {t}: this checkpoint registers only with γ folded, by the keyed 8-block "
+                          f"rotation or by {GAMMA_FOLD!r}")
 
 
 def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
@@ -1143,9 +1154,9 @@ class PearlC4:
             raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= 2^16 with 128 | k, tiles of "
                               f"{self.tile}, m <= 2^24, {self.n_min} <= n <= 2^18")
 
-    def check_registration(self, transforms: Sequence[str], curated: bool = False) -> None:
+    def check_registration(self, transforms: Sequence[str], curated: bool = False, needs_gamma_fold: bool = False) -> None:
         """The registered-weights rule (`check_registration`)."""
-        check_registration(transforms, curated)
+        check_registration(transforms, curated, needs_gamma_fold)
 
     def tiles(self, shape: Shape) -> list[Tile]:
         return grid_tiles(shape, *self.tile)

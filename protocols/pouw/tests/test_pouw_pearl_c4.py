@@ -198,9 +198,29 @@ def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
         s.check_registration(())
     for bad in ((F.ROTATION_8, F.VO_ROTATION), (F.ROTATION_8, F.HEAD_INTERLEAVE),
                 (F.ROTATION_8, F.HEAD_INTERLEAVE, F.VO_ROTATION), (F.VO_ROTATION, F.ROTATION_8, F.HEAD_INTERLEAVE),
-                (F.ROTATION_8, F.ROTATION_8), (F.ROTATION_8, "an-unnamed-transform")):
+                (F.ROTATION_8, F.ROTATION_8), (F.ROTATION_8, "an-unnamed-transform"), (F.GAMMA_FOLD, F.ROTATION_8),
+                (F.ROTATION_8, F.GAMMA_FOLD), (F.GAMMA_FOLD, F.GAMMA_FOLD), ("an-unnamed-transform",)):
         with pytest.raises(DomainError, match="not an adopted stack"):
             s.check_registration(bad, curated=True)
+
+
+def test_a_checkpoint_that_needs_gamma_folded_registers_only_with_it():
+    """70B registrations fold γ (research store docs/pouw/keyed-transforms.md §14: the cast moves Llama-3.1-70B's layer 0
+    update by 158% unfolded).  The rotation folds γ, so its stacks pass as they are; an unrotated checkpoint declares
+    `GAMMA_FOLD`, and is still curated only.  A folded but unrotated checkpoint takes no V/O or interleave."""
+    s = get("pearl-c-nvfp4-v0")
+    vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
+    for stack in F.REGISTRATION_STACKS:
+        s.check_registration(stack, needs_gamma_fold=True)
+    s.check_registration((F.GAMMA_FOLD,), curated=True, needs_gamma_fold=True)
+    s.check_registration((F.GAMMA_FOLD,), curated=True)
+    with pytest.raises(DomainError, match="only with γ folded"):
+        s.check_registration((), curated=True, needs_gamma_fold=True)
+    with pytest.raises(DomainError, match="curated list"):
+        s.check_registration((F.GAMMA_FOLD,), needs_gamma_fold=True)
+    for curated in (False, True):
+        with pytest.raises(DomainError, match="never on an unrotated checkpoint"):
+            s.check_registration((F.GAMMA_FOLD, *vo), curated, needs_gamma_fold=True)
 
 
 def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 256.0) -> bytes:
