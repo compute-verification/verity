@@ -89,6 +89,8 @@ into a question for Daniel.
 
 Newest first. Each is Daniel's.
 
+- 2026-10-01: whoever lands a train runs `research merge --sweep` after each push, which closes the landed PRs, retargets
+  their children and deletes landed branches. `research merge --push` pushes the merge and then sweeps, so a lander passes it.
 - 2026-09-30: a lane fixes a bug it hits in `tools/research` in a small PR of its own, and the research coordinator only
   reviews and merges it; when an open PR already changes the same function, the fix goes to that PR's owner.
 - 2026-09-30: a run's author declares what custody persists with `--declared-output`; undeclared files are hash-listed in
