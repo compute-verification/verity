@@ -369,9 +369,9 @@ copies an attempt manifest plus its outputs' manifests and blobs from a machine'
 
 - **Write-through.** With `[remote] write_through = true` in store.toml, or `RESEARCH_WRITE_THROUGH=1`, or (no store.toml, no
   `$RESEARCH_STORE_CONFIG`) `R2_ENDPOINT` + `R2_BUCKET` in the environment, `research data label` and `put` upload in the same
-  command. The local write stands whatever the upload does; the command says `on <remote>`, `NOT preserved (<why>)` or `local only
-  (write-through off)`, never nothing. Attempt publishing already uploads whenever a remote is usable. Off on the laptop until its
-  store.toml sets the flag.
+  command. The local write stands whatever the upload does; the command says `on <remote>`, `NOT preserved (<why>)` (then `label`
+  and `queue ready` exit 1) or `local only (write-through off)`, never nothing. Attempt publishing uploads whenever a remote is
+  usable. Off on the laptop until its store.toml sets it.
 - **Pending queue.** `research data pending` lists what this store holds that the remote lacks (one listing per prefix): artifacts
   with no verified remote replica whose manifest the remote lacks or whose blobs are all local, attempts, assertions. `push
   --pending` drains exactly that. An artifact pulled from the remote without its blobs is the remote's already and is not queued.

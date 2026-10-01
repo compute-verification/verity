@@ -45,9 +45,12 @@ CHALLENGES = 132
 """P3's `k` for 1% at §2c's point (`γ = 0.0183`); parameters with a `challenges` attribute (the dense scheme's 111)
 override it."""
 
-CERTIFIED_ROUNDS = 28
-"""The most oracle rounds per answer the band certificate covers when a level costs 3 calls (an edge from the oldest
-parent: `Π₂(c_{v-12})`, `Π₂(pad)`, `P`): `⌊(D − 1)/3⌋ + 1 ≤ 10` (`docs/p3-instantiation.md` §1, `band_twoWay_220_12`)."""
+CERTIFIED_ROUNDS = 10
+"""The most oracle rounds per answer that P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
+`D = 10` on `B(220, 12)` (`Pous.Pinned.P3ConcreteMeets64`, `P3ConcreteMeets14GB`), and 12 on the fallback `B(220, 16)`
+(`P3ConcreteMeets64D12`), for Lean's `h_0`, not yet the code's (`schemes.p3`).  The column-game certificate
+`band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level reads as 28 rounds
+(`docs/p3-instantiation.md` §1); no `Meets` statement covers that reading."""
 
 WORK = 1 << 14
 """`Q`: queries per answer (§2c)."""

@@ -494,25 +494,26 @@ def cmd_label(argv: list[str]) -> int:
         print(f"research data label: warning: {why}; stored anyway (--off-vocab)", file=sys.stderr)
     st = LocalStore(ns.store)
     print(st.add_label(ns.target, key, value, ns.by, ref=ns.ref))
-    print(f"research data label: {_label_write_through(st, ns.target)}", file=sys.stderr)
-    return 0
+    said, lost = _label_write_through(st, ns.target)
+    print(f"research data label: {said}", file=sys.stderr)
+    return 1 if lost else 0
 
 
-def _label_write_through(st: LocalStore, target: str) -> str:
+def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
     """Upload the target's assertions the remote lacks, in the command that wrote one (README §7.2); the local write stands either way,
-    and a write that stays local says so."""
+    and a write that stays local says so. Also whether write-through was on and the upload failed (the caller exits 1)."""
     from . import labels_sync as LS  # noqa: PLC0415
 
     pending = "pending: `research data push --pending` uploads it"
     if not st.write_through:
-        return f"local only (write-through off); {pending}"
+        return f"local only (write-through off); {pending}", False
     if st.remote is None:
-        return f"NOT preserved ({getattr(st, 'remote_error', None) or 'no remote configured'}); {pending}"
+        return f"NOT preserved ({getattr(st, 'remote_error', None) or 'no remote configured'}); {pending}", True
     try:
         failed = LS.push_targets(st, [target])["failed"]
     except Exception as e:  # noqa: BLE001
         failed = [f"{type(e).__name__}: {e}"]
-    return f"NOT preserved ({failed[0]}); {pending}" if failed else f"on {st.remote.describe()}"
+    return (f"NOT preserved ({failed[0]}); {pending}", True) if failed else (f"on {st.remote.describe()}", False)
 
 
 def cmd_vocab_check(argv: list[str]) -> int:

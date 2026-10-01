@@ -92,3 +92,12 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousProofs.BandPubMeets14
 #print axioms PousProofs.BandPubMeets14Global
 #print axioms PousProofs.ChainDenseMeets111
+-- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
+#print axioms PousProofs.P2MeetsM1pB19Uncond
+#print axioms PousProofs.P2MeetsM1pFamilyUncond
+#print axioms PousProofs.P2MeetsM1pW8192Uncond
+#print axioms PousProofs.P2SlackB19Uncond
+#print axioms PousProofs.P2SlackFamilyUncond
+#print axioms PousProofs.P2ErrorSplitB19Uncond
+#print axioms PousP2p.not_meets_m1p_b19_k85
+#print axioms PousMargin.not_slack_raw

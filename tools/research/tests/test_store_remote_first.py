@@ -102,7 +102,7 @@ def test_d2_a_broken_endpoint_keeps_writes_local_pending_and_push_pending_drains
     out = capsys.readouterr()
     art = out.out.strip()
     assert "research data put: NOT preserved (" in out.err and "pending" in out.err
-    assert main(["label", art, "verified", "accepted", "--by", "red-team-1"]) == 0
+    assert main(["label", art, "verified", "accepted", "--by", "red-team-1"]) == 1, "a label left local by a failed upload exits 1"
     assert "research data label: NOT preserved (" in capsys.readouterr().err
     monkeypatch.setattr(LocalStore, "remote", property(real))
     st = LocalStore()

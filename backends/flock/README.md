@@ -42,6 +42,40 @@ flat class and of a template whose instance type places calls (GEMM) and reads t
 reads): `live/src/typed.rs` derives the rows from the types and layouts, as the verifier does, and `flock-circuit rows`
 writes them as staging's `rows/`, to diff the two mirrors.
 
+## Hill-climb points in GPU sessions
+
+A BF16 hill-climb point (`pod/74-gemm-hill.sh`, its records by `pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
+one preflight check (byte identity at B = 16), then `POINTS=N` points of one statement. A session's points share one tree,
+one binary, one `FC_*` set and one K; a setting that differs needs a session of its own. A point whose key (the binaries, the
+`FC_*` settings, the GPU) differs from its check's fails, and with it the session.
+
+1. Stage with no GPU (`gpus: 0`; 64 GiB at K <= 4096, 128 GiB at K >= 8192):
+   `bash backends/flock/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
+2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
+   mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
+3. Once the attempt is in the store, roll up its points, each citing its session's art. On node 1 (no `research` on the
+   PATH; `T` is the run's tree):
+
+   ~~~sh
+   RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/tools/research/src \
+   RESEARCH_BIN="/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research" \
+     python3 $T/backends/flock/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
+       --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
+   ~~~
+
+   Each point lands with `arts`: its own record's art (`point`), the attempt's `result.json` (`session`, a
+   `hillclimb-session/v0`) and the preflight check's record (`preflight`). `--run-dir` reads the points from the run's
+   directory and checks their bytes against their arts; without it they are fetched from the store. A point rolled up
+   before gets its `arts` and is not appended again. `--point FILE` still appends one point that isn't in the store,
+   citing no art.
+
+A point's `gpu_held_s_amortized` is its sweep plus an equal share of the session's other GPU-held seconds (the check, the
+pod's start); compare it with a one-point job's `gpu_held_s_job`. The session's `result.json` passes only when the check and
+every point pass. `POINTS=0` runs the preflight check alone, and `STAGE_ONLY=1 POINTS=0` stages only its statement. The
+check's three GPU cases run at once, each in its own process, while three times one case's device memory (measured per K in
+`74-gemm-hill.sh`) fits the GPU's free memory, else one after another; its record (`selftest.per_case`, `selftest.run`) has
+each case's wall time, exit code and peak device memory, and why it fell back.
+
 ## Tests
 
 ~~~sh

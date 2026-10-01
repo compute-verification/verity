@@ -14,8 +14,9 @@
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a row): every gate
                      certified by exactly one unit, cross-unit reads only through committed values, no value computed in two
                      units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes);
-                     recorded, not failed: the whole Definition's cut under `Q_word` v2 (its codes, and the values computed
-                     in two units it reports, `recomputed_across`)
+                     recorded: the whole Definition's cut under `Q_word` v2 (its codes, and the values computed in two units
+                     it reports, `recomputed_across`).  A Boolean Call is judged by v2: its `recomputed_across` is recorded,
+                     in its entry and the summary, and every other code fails as under v1
     lowering pins    a lowering's AND/XOR/NOT counts against `pins.json` (a piece's, a Boolean Definition's whole lowering's,
                      a template unit's; a Boolean Definition's lowering has at most its own And gates), a template unit's
                      circuit digest against its C-Flock
@@ -63,7 +64,7 @@ class Options:
     X: int = 16
     W: int = 32
     extras: int = 0
-    partition_max_gates: int = 1_000_000
+    partition_max_gates: int = 4_000_000
     lower_max_gates: int = 256
     lower_max_ands: int = 60_000
     input_budget: int = 1 << 22
@@ -445,13 +446,17 @@ def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
     return rec
 
 
-def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = True) -> tuple[dict, dict]:
+def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = True, q_word: int = 1) -> tuple[dict, dict]:
     """`Q_word_v1` on one Call of ``fn`` (its record and the word's unit rule).  Where the invariant applies (``fn`` is a Call of a
     served Program) every violation fails by name; elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
-    are partitioned inside the Call that contains it."""
+    are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
+    units is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else the unit rule's count;
+    None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
     from verity_vllm.query import word as W
 
     P = F if applies else Findings()
+    v2 = applies and q_word == 2
+    across_rule = 0
     rule = W.unit_rule(fn, opts.X, opts.W, opts.extras, memo=memo, max_gates=opts.partition_max_gates)
     rec: dict[str, Any] = {"applies": applies, "query": rule["query"], "units_per_call": rule["units_per_call"], "by_kind": rule["by_kind"],
                            "committed_interior_words": rule["committed_interior_words"], "max_out_bits": rule["max_out_bits"],
@@ -461,6 +466,9 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         if v["class"] == "cut":
             for code in v["codes"]:
                 det = v["detail"].get(code, {})
+                if v2 and code == "gate-recomputed":
+                    across_rule += int(det.get("n", 0)) if isinstance(det, dict) else 0
+                    continue
                 P.fail("partition", code, d, f"({det.get('n', '?')} gate(s))" if isinstance(det, dict) else "",
                        gates=det.get("gates") if isinstance(det, dict) else det)
         elif v["class"] == "too-large":
@@ -479,7 +487,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         seen = {f["code"] for f in P.failures if f["check"] == "partition" and f["definition"] == fn.id}
         for code in cut.codes:
             det = cut.detail.get(code, {})
-            if code not in seen:
+            if code not in seen and not (v2 and code == "gate-recomputed"):
                 P.fail("partition", code, fn.id, f"({det.get('n', '?')} gate(s))", gates=det.get("gates"))
         rule = dict(rule, redundant_gates=cut.detail["redundant_gates"] if applies else len(G.recomputed))
         # `Q_word` v2 reports what v1 refuses as gate-recomputed and checks every other clause as v1 does
@@ -487,6 +495,12 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
                         "q_word_v2": {"codes": [c for c in cut.codes if c != "gate-recomputed"],
                                       "recomputed_across": cut.detail.get("gate-recomputed", {}).get("n", 0)}}
         rec["_graph"] = (G, R)
+    if v2:
+        rec["q_word"] = 2
+        rec["recomputed_across"] = (rec["whole"]["q_word_v2"]["recomputed_across"] if "whole" in rec
+                                    else across_rule if rec["checked"] else None)
+    elif applies:
+        rec["q_word"] = 1
     if not applies:
         rec["isolated"] = [f["name"] for f in P.failures]
     return rec, rule
@@ -499,7 +513,8 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     """Every check on one Definition (a primitive, a bound composite) or `ScalarReference`: its entry, with its failures and
     warnings.  ``memo`` shares the word query's unit rules and the entries across calls; ``lower_whole=False`` leaves the
     Boolean lowering to a template's units; ``as_call`` says whether the partition invariant applies (default: its family is a
-    Call of a served Program, `circuit_check.targets.call_families`)."""
+    Call of a served Program, `circuit_check.targets.call_families`).  A Boolean Definition held as a Call is judged by `Q_word` v2
+    (`partition`), a word Definition by v1."""
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     t = resolve(fn)
@@ -523,7 +538,9 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
         corr["realizations"].append(wv)
     entry["correspondence"] = corr
     if kind == "composite":
-        part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call)
+        from verity.ir import boolean as BL
+
+        part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call, q_word=2 if BL.is_boolean(t) else 1)
         graph = part.pop("_graph", None)
         entry["partition"] = part
         entry["redundant_gates"] = redundant_gates(t, opts, F, rule, graph, within_units=as_call) if part["checked"] else {"checked": False}
@@ -740,8 +757,9 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
 def summarize(entries: Iterable[dict]) -> dict:
     """Totals over entries: failures by name, new (`ok` is no new failure) and known (`circuit_check.known`, with the cause),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
-    too, once)."""
+    too, once), and ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two units, with its count."""
     from .known import known
+    entries = list(entries)
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
     for e in entries:
@@ -755,7 +773,13 @@ def summarize(entries: Iterable[dict]) -> dict:
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
     new = [f["name"] for f in fails if known(f) is None]
+    across = {}
+    for e in entries:
+        p = e.get("partition") or {}
+        if p.get("q_word") == 2 and p.get("recomputed_across"):
+            across[e.get("definition") or e.get("target")] = p["recomputed_across"]
     return {"ok": not new, "failures": len(fails), "failure_names": [f["name"] for f in fails], "new_failures": new,
+            "recomputed_across": dict(sorted(across.items())),
             "known_failures": {f["name"]: known(f) for f in fails if known(f) is not None},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
