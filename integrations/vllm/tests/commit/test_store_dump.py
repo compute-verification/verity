@@ -111,3 +111,13 @@ def test_a_slim_dump_serves_the_reads_it_recorded_and_refuses_the_rest(tmp_path)
     rd = OC.OpenedReader(store, run)
     assert rd(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == want == b"\x07" * 10
     assert rd(2, "model.layers.0.mlp.down_proj", 0, 100) is None, "a member the recorded reads never opened is not in the slim store"
+
+
+def test_a_dumped_store_dumps_again_slim(tmp_path):
+    com, rc = commit_steps(STEPS)
+    SD.dump(com, rc, tmp_path / "full")
+    store, run = SD.load(tmp_path / "full")
+    with SD.touched(store) as t:
+        want = OC.OpenedReader(store, run)(1, "runner.sampler", 0, 4)
+    SD.dump(store, run, tmp_path / "slim", touched=t)
+    assert OC.OpenedReader(*SD.load(tmp_path / "slim"))(1, "runner.sampler", 0, 4) == want == b"\x01\x02\x03\x04"

@@ -42,6 +42,8 @@ def _ranges(blk: Any) -> list[tuple[int, int, Any]]:
     """The byte ranges of a step stream a retained block holds: (lo, hi, uint8 view of hi - lo bytes)."""
     if blk is None:
         return []
+    if isinstance(blk, _Block):                                 # a dumped store's own block: (lo, hi, offset in its file)
+        return [(lo, hi, blk.buf[off:off + hi - lo]) for lo, hi, off in blk.ranges]
     if hasattr(blk, "wins"):                                    # _HostWindows: window k covers [k W, k W + n)
         return [(k * blk.W, k * blk.W + n, hv[:n]) for k, (hv, n) in sorted(blk.wins.items())]
     if hasattr(blk, "ranges"):                                  # _HostRanges
@@ -176,16 +178,20 @@ def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str,
     digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
                f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", lv_bytes)}
     return ({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes), "n_tensors": int(sc.n_tensors),
-             "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [int(lv.shape[0]) for lv in lvs],
+             "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [_width(lv) for lv in lvs],
              **({} if nodes is None else {"nodes": [[d_, i] for d_, i in nodes]}),
              "metas": [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off]
                        for m in com._layouts[s]]}, digests)
 
 
+def _width(lv: Any) -> int:
+    return int(lv.shape[0]) if hasattr(lv, "shape") else len(lv)
+
+
 def nbytes(com: Any) -> int:
     """The bytes a full dump of `com` writes: every retained range and every tree node."""
     return sum(hi - lo for blk, _u in com._gpu_blocks.values() for lo, hi, _ in _ranges(blk)) + NODE * sum(
-        int(lv.shape[0]) for lvs in com._gpu_levels.values() for lv in lvs)
+        _width(lv) for lvs in com._gpu_levels.values() for lv in lvs)
 
 
 def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
