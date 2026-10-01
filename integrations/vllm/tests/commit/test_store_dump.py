@@ -96,3 +96,18 @@ def test_the_dumped_block_is_the_retained_block(tmp_path):
     com, rc = commit_steps(STEPS)
     SD.dump(com, rc, tmp_path)
     assert (tmp_path / "raw" / "s1.bin").read_bytes() == bytes(retained_block(com, 1).numpy())
+
+
+def test_a_slim_dump_serves_the_reads_it_recorded_and_refuses_the_rest(tmp_path):
+    com, rc = commit_steps(STEPS)
+    with SD.touched(com) as t:
+        want = OC.OpenedReader(com, rc)(0, "model.layers.0.self_attn.qkv_proj", 10, 20)
+    assert t.ranges[0] and t.nodes[0] and not t.ranges.get(2)
+    SD.dump(com, rc, tmp_path / "slim", touched=t)
+    SD.dump(com, rc, tmp_path / "full")
+    assert sum(p.stat().st_size for p in (tmp_path / "slim").rglob("*.bin")) < sum(p.stat().st_size for p in (tmp_path / "full").rglob("*.bin"))
+    store, run = SD.load(tmp_path / "slim")
+    assert store._run_root(run) == rc.run_root
+    rd = OC.OpenedReader(store, run)
+    assert rd(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == want == b"\x07" * 10
+    assert rd(2, "model.layers.0.mlp.down_proj", 0, 100) is None, "a member the recorded reads never opened is not in the slim store"
