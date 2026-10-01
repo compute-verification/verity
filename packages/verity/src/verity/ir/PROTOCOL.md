@@ -347,7 +347,8 @@ none and 1).
 
 ## 9. The Boolean profile
 
-A *Boolean* program is a schema-v1 program whose primitives are only these (`verity.ir.boolean`, `is_boolean`). It needs no
+A *Boolean* Definition has only `Value<1>` leaves in its signature, and every primitive it reaches is one of these
+(`verity.ir.boolean`, `is_boolean`); a Boolean program is a program whose function is Boolean. It needs no
 new syntax: §1–§8 apply unchanged, and its digests are computed the same way.
 
 | id | parameters | returns | value |

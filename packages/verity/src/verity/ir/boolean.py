@@ -7,7 +7,7 @@
     Const1[0x0]_v1, Const1[0x1]_v1 : () -> Value<1>   the constants 0 and 1
 
 The format fixes what each of these means; no semantics package defines or re-registers them. A Definition is *Boolean*
-(`is_boolean`) when every primitive it reaches is one of them or an `Input1_v1`.
+(`is_boolean`) when its signature has only 1-bit leaves and every primitive it reaches is one of them or an `Input1_v1`.
 
 **Elements and the word view.** A Boolean Definition's ports carry bits; an *element* of a port is an innermost
 `Array<w, Value<1>>` (one w-bit element, bit j = leaf j, least significant first) or a lone `Value<1>`. `word_type` replaces
@@ -78,13 +78,16 @@ _BOOLEAN: "weakref.WeakKeyDictionary[SpecializedDefinition, bool]" = weakref.Wea
 
 
 def is_boolean(fn: Any) -> bool:
-    """Whether every primitive ``fn`` reaches (a primitive, a composite, a complete specialization) is a gate, a constant bit or
-    `Input1_v1`."""
+    """Whether ``fn`` (a primitive, a composite, a complete specialization) has only 1-bit leaves in its signature and every
+    primitive it reaches is a gate, a constant bit or `Input1_v1`."""
     if isinstance(fn, CompositeDefinition):
         fn = bind(fn)
     if isinstance(fn, PrimitiveDefinition):
         return _is_boolean_primitive(fn)
     if not isinstance(fn, SpecializedDefinition) or not fn.complete:
+        return False
+    params, ret = fn.signature()
+    if not all(t.width_set() <= {1} for t in (ret, *(t for _, t in params))):
         return False
     hit = _BOOLEAN.get(fn)
     if hit is None:
