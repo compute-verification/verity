@@ -19,6 +19,7 @@ rows in the runtime's order: per token or one per request, the two splits of the
 from __future__ import annotations
 
 import math
+import re
 import time
 from typing import Any, Callable, Collection, Mapping, Sequence
 
@@ -28,6 +29,7 @@ from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, Body, Plan
 
 _SIGNED = {1: "uint8", 2: "int16", 4: "int32", 8: "int64"}
+WARMUP_ID = re.compile(r"warmup-(\d+)(?:-[0-9a-f]{8})?")
 
 #: other sources' claims on `call_boundaries` identities (identity -> the claiming source's `short_name`, or None): a claimed identity is
 #: that source's to acquire (a tap of a Value the runtime already holds, like a pre-bias GEMM output) and is never evaluated here
@@ -103,6 +105,7 @@ class CallBoundarySource:
         self._shared: dict = {}                                               # step-shared Values by form, once per Commit
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "bodies": 0, "modules": len(self.modules), "errors": 0, "seconds": 0.0}
         self.active = False
+        self._names: frozenset[str] | None = None
 
     def install(self) -> None:
         mods = dict(self.model.named_modules())
@@ -188,13 +191,20 @@ class CallBoundarySource:
             return None
         from verity_vllm.commit.binding import logical_request
 
-        got = [(logical_request(rid, self.plan.order), int(hi) - int(lo)) for rid, lo, hi in rows]
+        got = [(self._request(logical_request(rid, self.plan.order)), int(hi) - int(lo)) for rid, lo, hi in rows]
         declared = self.plan.composition.get(e) or {}
         if sorted(got) != sorted(declared.items()):
             self.error(f"call boundaries: engine step {e} ran (request, rows) {got} in this order; the manifest declares "
                        f"{sorted(declared.items())}: nothing of the step is committed")
             return None
         return [r for r, _n in got]
+
+    def _request(self, rid: str) -> str:
+        """An engine row id no workload id resolves: a warm-up request (`vllm_adapter.throwaway_requests`: `warmup-<i>`, vLLM's
+        `-<8 hex>` suffix or not) is workload request i's stand-in -- same prompt length, same schedule -- so it takes that request's
+        rows.  Anything else stays raw (a collector error naming it)."""
+        m = WARMUP_ID.fullmatch(rid)
+        return self.plan.by_index.get(int(m.group(1)), rid) if m else rid
 
     def per_request(self, body: Body, order: Sequence[str], ops: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
         """Each request's rows of the packed operands `ops`, in the runtime's `order`, evaluated with its own template; the targets
@@ -245,6 +255,25 @@ class CallBoundarySource:
         spans = getattr(self.c, "spans", None)
         if spans is not None:
             spans.add("acquisition", time.perf_counter() - t0, step=e, nbytes=n)
+
+    def targets_at(self, engine_step: int) -> dict[str, int]:
+        """The names this source commits at `engine_step`, once each: the targets of the Program's bodies there.  A body's fx node names
+        count on through the run (`logits_processor/div` at step 0, `div_1` at step 1), so no two steps share one."""
+        return {t.name: 1 for b in self._at.get(int(engine_step), ()) for t in b.targets}
+
+    def target_names(self) -> frozenset[str]:
+        if self._names is None:
+            self._names = frozenset(t.name for bs in self._at.values() for b in bs for t in b.targets)
+        return self._names
+
+    def split_step_names(self, names: Mapping[str, int], engine_step: int, padding_only: bool) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
+        """X-03 for this source's names at one step: (the step's other names, for the step-0 multiplicity rule; name -> (committed, targets)
+        where the committed names differ from `targets_at` -- by multiplicity, or as a set at a padding-only step)."""
+        mine = self.target_names()
+        got = {n: c for n, c in names.items() if n in mine}
+        want = self.targets_at(engine_step)
+        keys = set(got) ^ set(want) if padding_only else {n for n in set(got) | set(want) if got.get(n, 0) != want.get(n, 0)}
+        return {n: c for n, c in names.items() if n not in mine}, {n: (got.get(n, 0), want.get(n, 0)) for n in keys}
 
     def values(self, module: str, engine_step: int) -> dict[str, np.ndarray]:
         """The words of module body `module` at `engine_step` (target name -> [rows, f * width], every request's rows in the runtime's

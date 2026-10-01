@@ -33,6 +33,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (AllGat
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import Bf16ScalarChainRule, GeluTanhAndMulRule, ScalarTensorMulRule
 from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import CutlassScaledMmFp8BlockRule, PerTokenGroupFp8QuantRule, SameDtypeCastRule
 from verity_vllm.program.frontend.rules.vllm_bindings.fused_norm import FusedAddRmsNormBIRule
+from verity_vllm.program.frontend.rules.vllm_bindings.layer_norm import LayerNormAtenRule
 from verity_vllm.program.frontend.rules.vllm_bindings.norm_chain import (AddScalarRule, AddWidenedRule, MeanDimBIRule, MulF32Rule,
                                                                          NarrowF32ToBf16Rule, RsqrtRule, SquareRule, WidenBf16ToF32Rule)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSERVED, active_target_profile, clear_observations,
@@ -49,6 +50,7 @@ VLLM_BINDING_RULES = [TritonRmsNormRule(), TritonGemmRule(), KvCacheUpdateRule()
                       # [R15 dense] the unfused norm chain (forward_native norms as ATen on an f32 copy)
                       WidenBf16ToF32Rule(), NarrowF32ToBf16Rule(), SquareRule(), MeanDimBIRule(), RsqrtRule(), AddScalarRule(), AddWidenedRule(),
                       MulF32Rule(),
+                      LayerNormAtenRule(),   # GPT-NeoX's nn.LayerNorm (torch's vectorized CUDA kernel)
                       AllReduce2Rule(), AllGather2Rule(), AllReduceRule(), AllGatherRule(), EmbeddingShardRule(),   # [lane vllm-tp-n] WORLD-ary rules after the world-2 ones
                       # [R15 fp8] the block-scaled FP8 linear (Fp8LinearMethod -> CutlassFp8BlockScaledMMKernel) + the same-dtype cast it ends with
                       PerTokenGroupFp8QuantRule(), CutlassScaledMmFp8BlockRule(), SameDtypeCastRule()]
@@ -66,6 +68,6 @@ def vllm_ruleset():
     return RuleSet("default+vllm-bindings", base + VLLM_BINDING_RULES + VLLM_MOE_RULES + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
 
 
-__all__ = ["AllocViewRule", "GEMM_PINS", "MEAN_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
+__all__ = ["AllocViewRule", "GEMM_PINS", "LayerNormAtenRule", "MEAN_PINS", "RMS_PINS", "TritonGemmRule", "VLLM_BINDING_RULES", "_OBSERVED", "_pins_ok",
            "active_target_profile", "clear_observations", "declared_derived_accounting", "gemm_pins_for", "lookup_key", "observe_attention_impls",
            "observe_export_facts", "observe_launch_context", "observe_target_profile", "triton_launch", "tuned_gemm_table_sha256", "vllm_ruleset"]

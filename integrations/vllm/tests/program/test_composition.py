@@ -1,4 +1,4 @@
-"""Compositional reuse (lane CF1, docs/vllm-poc/composition.md): the Ampere and Hopper B1 programs are two binding
+"""Compositional reuse (lane CF1): the Ampere and Hopper B1 programs are two binding
 records of one `Serve_v2`, and the factored functions evaluated standalone on *captured* operands give the profile's
 words under the profile's statics.
 

@@ -145,7 +145,10 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
             keyed = []
         paths += keyed or sorted(glob.glob(os.path.join(ncb, "*.so")) + glob.glob(os.path.join(ncb, "*", "*.so")))
     hgb = os.environ.get("HIDDEN_GPU_BUILD")
-    cands = sorted(glob.glob(os.path.join(hgb, "*.so"))) if hgb else sorted(glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so")))
+    # the .so lives one level down, in the source-keyed child (native_jit.jit_load); the flat legacy location is listed too
+    cands = sorted(glob.glob(os.path.join(hgb, "*.so")) + glob.glob(os.path.join(hgb, "*", "*.so"))) if hgb else sorted(
+        glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so"))
+        + glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*/*.so")))
     paths += cands
     out: dict[str, str | None] = {}
     for p in paths:
@@ -177,9 +180,12 @@ def unsafe_hints(argv: list[str], env: dict[str, str] | None = None) -> list[str
     ct = _argval(argv, "--compiled-taps", "off")
     if ct != "off":
         why.append(f"--compiled-taps {ct}")
-    for flag in ("--arms", "--only-arm", "--late-read", "--value-check"):
+    for flag in ("--arms", "--late-read", "--value-check"):
         if flag in argv:
             why.append(flag)
+    oa = _argval(argv, "--only-arm")
+    if oa == "control" or (oa and ct != "off"):
+        why.append(f"--only-arm {oa}")
     if "--arena-unchecked" in argv and _argval(argv, "--arena-mb") not in (None, "0"):
         why.append("--arena-unchecked (negative test)")
     if _argval(argv, "--moe-source") == "on":
