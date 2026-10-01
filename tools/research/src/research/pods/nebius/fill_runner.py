@@ -87,9 +87,7 @@ def event(kind: str, job: str, **kw) -> None:
 
 
 # one-job exceptions to the 30-min GPU cap, each approved by infra by name
-MAX_MIN_EXCEPTIONS = {
-    "pn2g-q-1936-r0.sh": 60,   # proofs' K=8192 gate: 20 statements plus the GPU selftest, 22 min on node 1 (infra, 30 Sep 3:31 PM PDT)
-}
+MAX_MIN_EXCEPTIONS: dict[str, int] = {}
 
 
 def header(p: Path) -> dict:

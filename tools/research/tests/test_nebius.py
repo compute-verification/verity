@@ -630,7 +630,8 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
                        ("gpus=1 max_min=300 project=verity", 30), ("gpus=0 max_min=300 project=pous", 30)):
         job.write_text(f"#!/usr/bin/env bash\n# fill: owner=t {head}\n")
         assert fr.header(job)["max_min"] == want, head
-    gate = tmp_path / "pn2g-q-1936-r0.sh"
+    monkeypatch.setattr(fr, "MAX_MIN_EXCEPTIONS", {"gate.sh": 60})
+    gate = tmp_path / "gate.sh"
     gate.write_text("# fill: owner=t gpus=1 max_min=90 project=verity\n")
     assert fr.header(gate)["max_min"] == 60
     calls = []
