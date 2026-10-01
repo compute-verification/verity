@@ -1305,6 +1305,77 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
 
 
 @needs_flock
+def test_n1_lease_named_pool_labels_its_own_holders_and_a_blocked_pool_grants_nothing_new(monkeypatch, tmp_path, reap):
+    import fcntl
+    m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-circuits-1", "gpu-pool-circuits-1-x", "GPU-b")],
+                                VY_POOL_NAME="circuits", VY_POOL_QUEUE="deployments-gpu")
+    c = m.Controller()
+    t = 1_800_000_000.0
+    s = c.tick(t)
+    assert [a for a, _ in calls if a[:2] == ("get", "jobs")][0][3] == "verity.dev/gpu-pool=circuits"
+    assert s["pool"] == 1 and not s["gpus"][1]["fence_pids"] and s["blocked"] is None
+    (tmp_path / "gl" / "blocked").write_text("pid 77 on GPU 3 without a lease (pod nd-x)\n")
+    w = tmp_path / "gl" / "wait.1.4242"
+    w.write_text("pid=4242 n=2 run=r-x who=vllm-epoch-run since=2026-09-30T22:00:00Z\n")
+    fd = os.open(w, os.O_RDONLY)
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    s = c.tick(t + 10)
+    assert s["blocked"].startswith("pid 77") and all(g["fence_pids"] for g in s["gpus"])
+    assert [a[2] for a, _ in calls if a[:2] == ("delete", "job")] == ["gpu-pool-circuits-1"]
+    assert not [a for a, _ in calls if a[0] == "create"]
+    os.close(fd)
+    w.unlink()
+    (tmp_path / "gl" / "blocked").unlink()
+    state["holders"] = []
+    fd = os.open(w, os.O_CREAT | os.O_RDONLY)
+    w.write_text("pid=4242 n=1 run=r-x who=vllm-epoch-run since=2026-09-30T22:00:00Z\n")
+    fcntl.flock(fd, fcntl.LOCK_SH)
+    c.tick(t + 20)
+    created = [json.loads(st) for a, st in calls if a[0] == "create"]
+    assert len(created) == 1 and created[0]["metadata"]["name"].startswith("gpu-pool-circuits-")
+    assert created[0]["metadata"]["labels"]["verity.dev/gpu-pool"] == "circuits"
+    assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "deployments-gpu"
+    os.close(fd)
+
+
+def test_gpu_stray_allows_device_plugin_and_leased_gpus_and_blocks_the_pool_of_a_pod_off_its_lease(monkeypatch, tmp_path):
+    spec = importlib.util.spec_from_file_location("gpu_stray_under_test", NEBIUS / "gpu_stray.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    pool = tmp_path / "gpu-lease-circuits"
+    pool.mkdir()
+    monkeypatch.setattr(m, "POOL_DIRS", [pool])
+    monkeypatch.setattr(m, "LOG", tmp_path / "stray.jsonl")
+    # GPU UUID -> (index, minor); pids 10..13 compute, 50 holds the lease on GPU 1 for pod-lease
+    monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b"), (12, "GPU-c"), (13, "GPU-d"), (14, "GPU-c")])
+    monkeypatch.setattr(m, "gpu_table", lambda: {"GPU-a": (0, 4), "GPU-b": (1, 1), "GPU-c": (2, 2), "GPU-d": (3, 0)})
+    monkeypatch.setattr(m, "leases", lambda: {1: [(pool, 50)]})
+    monkeypatch.setattr(m, "dev_minors", lambda pid: {10: {4}, 13: {4, 0}}.get(pid, set(range(8))))
+    monkeypatch.setattr(m, "pod_uid_of", lambda pid: {10: "u-plugin", 13: "u-plugin"}.get(pid, "u-lease"))
+    monkeypatch.setattr(m, "ancestors", lambda pid: {pid})
+    monkeypatch.setattr(m, "environ", lambda pid: {"NVIDIA_VISIBLE_DEVICES": "void"})
+    monkeypatch.setattr(m, "alive", lambda pid: pid != 14)
+    monkeypatch.setattr(m, "cmdline", lambda pid: f"python w{pid}.py")
+
+    def pod(uid, name, gpus, mount=None):
+        c = {"resources": {"limits": {"nvidia.com/gpu": str(gpus)}} if gpus else {}}
+        vols = [{"name": "gpu-lease", "hostPath": {"path": str(mount)}}] if mount else []
+        return {"metadata": {"uid": uid, "namespace": "default", "name": name, "labels": {"verity.dev/workstream": "w"}},
+                "spec": {"containers": [c], "volumes": vols}}
+
+    monkeypatch.setattr(m, "pods_by_uid", lambda: {"u-plugin": pod("u-plugin", "nd-plugin", 1),
+                                                   "u-lease": pod("u-lease", "nd-lease", 0, pool)})
+    strays = m.check(1_800_000_000.0)
+    # 10: its one device-plugin GPU; 11: its pod's lease; 12: no lease on GPU 2; 13: a 1-GPU pod that sees two GPUs; 14: gone
+    assert [(s["pid"], s["gpu"], s.get("blocked")) for s in strays] == [(12, 2, str(pool)), (13, 3, None)]
+    assert "pid 12 (default/nd-lease) ran on GPU 2 without a lease" in (pool / "blocked").read_text()
+    assert len((tmp_path / "stray.jsonl").read_text().splitlines()) == 2
+    monkeypatch.setattr(m, "compute_apps", lambda: [(10, "GPU-a"), (11, "GPU-b")])
+    (pool / "blocked").unlink()
+    assert m.check(1_800_000_060.0) == [] and not (pool / "blocked").exists()
+
+
+@needs_flock
 def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, reap):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
