@@ -342,6 +342,19 @@ def test_the_recompute_margin_is_the_limit_minus_each_recomputed_answers_device_
     assert got["device_margin_s"]["min"] == -1e-4 and got["device_margin_s"]["max"] == 2e-4    # the fastest beats the limit
 
 
+def test_the_native_build_is_keyed_by_the_nvcc_release_that_compiles_it(tmp_path):
+    sys.path.insert(0, str(BENCH))
+    from band_gpu import native
+
+    nvcc = tmp_path / "bin" / "nvcc"
+    nvcc.parent.mkdir()
+    nvcc.write_text("#!/bin/sh\necho 'nvcc: NVIDIA (R) Cuda compiler driver'\necho 'Cuda compilation tools, release 12.8, V12.8.93'\n")
+    nvcc.chmod(0o755)
+    assert native.nvcc_release(str(tmp_path)) == "12.8" and native.nvcc_release(str(tmp_path / "none")) == "none"
+    at = lambda release: native.source_digest("2.7.1+cu128", "12.8", release, "12.0")  # noqa: E731
+    assert at("12.8") == at("12.8") != at("13.0")                       # another toolkit's .so is never adopted
+
+
 def test_the_recompute_gate_fails_a_run_whose_challenges_missed_every_dropped_block():
     harness = _harness()
     assert harness.recompute_gate({"wrong": 0, "answers": 20, "recomputed_answers": 3})["passed"]

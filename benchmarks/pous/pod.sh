@@ -138,8 +138,10 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = side-by-side ]; then
   CG=$W/CGBN
   [ -d "$CG/.git" ] || git clone -q https://github.com/NVlabs/CGBN "$CG" || exit 3
   git -C "$CG" checkout -q "$(cat benchmarks/pous/p2_gpu/CGBN.commit)" || exit 3
-  P2LIB=$W/p2v1bin-$ARCH
-  make -C benchmarks/pous/p2_v1 CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
+  NVCC_REL=$(nvcc_release "$CUDA_HOME" | tr ' ' .)
+  [ -n "$NVCC_REL" ] || { echo "no nvcc under CUDA_HOME=$CUDA_HOME"; exit 3; }
+  P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL                  # keyed by the nvcc too: a .so another toolkit built is never adopted
+  make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   arm() {  # arm IMPL OUT [sub]: one bench.py run of that implementation into OUT; a sub-run writes no result.json of its own
     ${3:+env -u RESEARCH_RUN_DIR} "$PY" benchmarks/pous/bench.py --scheme "$SCHEME" --impl "$1" --build-dir "$W/pous_build" --p2-lib "$P2LIB" \
