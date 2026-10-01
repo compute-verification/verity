@@ -27,7 +27,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "pr-captain", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
+           "ci", "lean", "comms", "top", "old-accounting", "old-circuits-and-proofs"]
 
 
 class FakeSlack:
@@ -941,7 +941,7 @@ def test_one_author_rings_one_inbox_from_a_thread_at_most_six_times_an_hour_then
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
-    for who in ("proofs", "lean", "console", "comms", "top", "pr-captain", "memory-accounting"):    # a roll call is not a loop
+    for who in ("proofs", "lean", "console", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
         assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
     assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == 13
 
