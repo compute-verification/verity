@@ -214,14 +214,16 @@ def _core_roots() -> list[Any]:
 
 
 def _boolean_roots() -> list[Any]:
-    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64; the steps, the cast,
-    attention's softmax operations (`verity.ml.boolean.attention`) and the element-wise operations
-    (`verity.ml.boolean.elementwise`) are static-free."""
+    """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, and `gelu_tanh_and_mul`'s row
+    at I = 8 (`verity_vllm.program.registry.boolean_dense`); the steps, the cast, attention's softmax operations
+    (`verity.ml.boolean.attention`), the element-wise operations (`verity.ml.boolean.elementwise`) and `GeluTanhMulBf16_v2` are
+    static-free."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
+    from verity_vllm.program.registry import boolean_dense as BDN
 
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
-            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER)]
+            bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BDN.GeluTanhMul, I=8)]
 
 
 def _kernel_roots() -> list[Any]:

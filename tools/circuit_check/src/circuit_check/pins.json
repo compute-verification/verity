@@ -45,6 +45,12 @@
   "F32SubFtz_v3": {
    "and": 952
   },
+  "GeluTanhMulBf16_v2": {
+   "and": 1347
+  },
+  "GeluTanhMul_v2{I=8}": {
+   "and": 10776
+  },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842
   },
