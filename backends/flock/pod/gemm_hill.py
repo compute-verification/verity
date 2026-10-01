@@ -466,7 +466,7 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
-            "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others")}
+            "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"), "why": out.get("why") or g.get("why")}
 
 
 def rollup(a) -> None:
@@ -528,9 +528,12 @@ def plot(a) -> None:
     (out / "points.json").write_text(json.dumps(pts, indent=1))
     for sid in sorted({p["subcircuit"]["id"] for p in pts}, key=lambda s: (len(s), s)):
         ps = sorted((p for p in pts if p["subcircuit"]["id"] == sid), key=lambda p: (p.get("time_utc") or ""))
-        mode = (ps[-1].get("coins"), ps[-1].get("session"))
-        other = len([p for p in ps if (p.get("coins"), p.get("session")) != mode])
-        ps = sorted((p for p in ps if (p.get("coins"), p.get("session")) == mode), key=lambda p: (p["step"], p.get("time_utc") or ""))
+        # a point whose session never ran (refused, failed before a verdict) has no coins: it is drawn under any mode
+        ran = [p for p in ps if p.get("coins")]
+        mode = (ran[-1].get("coins"), ran[-1].get("session")) if ran else (None, None)
+        other = len([p for p in ran if (p.get("coins"), p.get("session")) != mode])
+        ps = sorted((p for p in ps if not p.get("coins") or (p.get("coins"), p.get("session")) == mode),
+                    key=lambda p: (p["step"], p.get("time_utc") or ""))
         good = [p for p in ps if p.get("byte_identical")]
         fig, ax = plt.subplots(3, 1, figsize=(8, 9), sharex=True)
 
@@ -551,6 +554,10 @@ def plot(a) -> None:
             ax[0].step([s for s, _ in best], [v for _, v in best], where="post", color="C0", alpha=0.5, label=f"best so far {best[-1][1]:.3g}x")
         ax[0].set_yscale("log")
         ax[0].set_ylabel("x native peak (log)")
+        for p in ps:
+            if p.get("overhead") is None:
+                ax[0].text(p["step"], 0.04, (p.get("why") or "failed")[:44], transform=ax[0].get_xaxis_transform(),
+                           rotation=90, fontsize=6, ha="center", va="bottom", color="C3", clip_on=True)
         series(ax[1], "throughput_vu_per_s", "C1", "VUs / T_session")
         ax[1].set_ylabel("VUs (coordinates) / s")
         series(ax[2], "gpu_util", "C2", "SM-active fraction (timed sessions)")
@@ -563,6 +570,7 @@ def plot(a) -> None:
         tw.set_ylim(bottom=0)
         steps = sorted({p["step"] for p in ps})
         ax[2].set_xticks(steps, [str(s) for s in steps])
+        ax[2].set_xlim(steps[0] - 0.5, steps[-1] + 0.5)
         ax[2].set_xlabel("optimization step")
         for axi in ax[:2]:
             axi.legend(fontsize=7, loc="best")
