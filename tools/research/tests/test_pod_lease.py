@@ -167,7 +167,7 @@ def _kill(*pids):
                 pass
 
 
-def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp_path):
+def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp_path, reap):
     first = _arm_locally(tmp_path)
     try:
         assert first["lease_alive"] and first["guard_alive"] and first["expires_epoch"]
@@ -181,7 +181,7 @@ def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp
         _kill(first["lease_pid"], first["guard_pid"])
 
 
-def test_idle_min_zero_arms_the_lease_and_no_idle_guard(tmp_path, monkeypatch):
+def test_idle_min_zero_arms_the_lease_and_no_idle_guard(tmp_path, monkeypatch, reap):
     real = L.arm_script
     monkeypatch.setattr(L, "arm_script", lambda seconds, **kw: real(seconds, **{**kw, "idle_min": 0}))
     rep = _arm_locally(tmp_path)
