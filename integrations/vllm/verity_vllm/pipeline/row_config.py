@@ -11,7 +11,9 @@ a Build goes through the host's Program cache when one is named (`derive_cached`
 """
 from __future__ import annotations
 
+import glob
 import os
+import shutil
 import subprocess
 import time
 from typing import Any
@@ -62,11 +64,25 @@ def commit_verdict(row: Any, rck: int, wall: int) -> bool:
     row.tl("stage.commit", "end", ("ok", ok), ("wall_s", wall))
     if pending:
         return True
+    discard_bundles(row)
     if ok != "PASS":
         row.log("COMMIT FAIL -> stop")
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "commit"))
         raise Stop(12)
     return False
+
+
+def discard_bundles(row: Any) -> list[str]:
+    """Deletes the row's replay bundles (sealed or partial) once nothing will replay them: a Commit that did not end PENDING, a decided replay."""
+    gone = sorted(glob.glob(f"{row.d}/commit/replay_bundle_p*"))
+    for b in gone:
+        if os.path.islink(b):
+            os.unlink(b)
+        else:
+            shutil.rmtree(b, ignore_errors=True)
+    if gone:
+        row.log(f"replay bundles deleted: {gone}")
+    return gone
 
 
 def replay(row: Any) -> None:
@@ -89,6 +105,8 @@ def replay(row: Any) -> None:
     ok = "PASS" if rc == 0 else "FAIL"
     row.verdict("replay", ok, f"rc={rc} wall={wall}s C2 replay on CPU from {bundle or 'no bundle'}" + (f": {why}" if why else ""))
     row.tl("stage.replay", "end", ("ok", ok), ("wall_s", wall))
+    if rc in (0, 3):
+        discard_bundles(row)
     if ok != "PASS":
         row.log("REPLAY FAIL -> stop")
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "replay"))

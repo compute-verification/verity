@@ -150,6 +150,27 @@ def test_a_pending_config_run_writes_no_record(tmp_path, monkeypatch):
     assert r.run() == 0 and "config_record" not in calls
 
 
+def test_a_failed_commit_and_a_decided_replay_delete_the_bundle_and_a_crashed_replay_keeps_it(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(r, bundles=1)
+    (Path(r.d) / "commit" / "replay_bundle_p1" / "store").mkdir(parents=True)
+    (Path(r.d) / "commit" / "replay_bundle_p2.partial").mkdir()
+    assert RC.commit_verdict(r, 0, 60) is True and (Path(r.d) / "commit" / "replay_bundle_p1").is_dir(), "a pending Commit keeps its bundle"
+    r.ck = str(tmp_path)
+    for rc, kept in ((2, True), (3, False)):
+        monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, rc=rc: rc)
+        with pytest.raises(Stop):
+            RC.replay(r)
+        assert (Path(r.d) / "commit" / "replay_bundle_p1").is_dir() is kept
+    assert not list((Path(r.d) / "commit").glob("replay_bundle_p*"))
+    f = _row(tmp_path / "fail", "--config-run", "1", "--replay-deferred", "1")
+    _pending_commit(f, bundles=1)
+    (Path(f.d) / "commit" / "replay_bundle_p1.partial").mkdir()
+    with pytest.raises(Stop):
+        RC.commit_verdict(f, 3, 60)
+    assert not list((Path(f.d) / "commit").glob("replay_bundle_p*")), "a failed Commit leaves no bundle"
+
+
 def test_the_replay_stage_replays_the_one_bundle_beside_the_row_on_cpu(tmp_path, monkeypatch):
     r = _row(tmp_path, "--config-run", "1", "--replay-deferred", "1")
     _pending_commit(r, bundles=1)
