@@ -33,6 +33,7 @@ from verity.ml.prims import HopperBF16WgmmaDot16
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa3_check_inf as F3
+from verity_vllm.program.registry import gemm_bias as GB
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
@@ -57,25 +58,37 @@ TARGETS: dict[str, dict[str, Any]] = {
                "pipeline": "veritor.core.silicon_total.HOPPER_BF16_WGMMA_K16 (one group of 16, width 26, floor -133; lane HP 2026-09-07) = "
                            "silicon.HOPPER_BF16_M16N8K16 (Hawkeye H100)",
                "flash_attn_versions": (2, 3),
+               # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`): serving has no source for the
+               # pre-bias word of Gemm_v2 + BiasAdd_v1
+               "gemm_bias_dot": True,
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
     "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
-                           "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; the bf16 linear is cuBLASLt "
-                                          "with split-K disabled under VLLM_BATCH_INVARIANT=1, as on cc 9.0)",
+                           "instruction": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 (cc 12.0 has no wgmma; under VLLM_BATCH_INVARIANT=1 "
+                                          "vLLM's linear layers run the Triton matmul_kernel_persistent, then `output + bias` in bf16, at every M; "
+                                          "other bf16 matmuls stay on cuBLASLt with split-K disabled, the same chain without a bias)",
                            "pipeline": "verity.ml.tc.models.HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; the cc 12.0 mma.sync entry of "
                                        "verity.ml.tc.instructions) = HOPPER_BF16_WGMMA_K16's parameters",
                            "flash_attn_versions": (2,),
                            "fa2_construction": "check-inf-per-iteration",
                            # the fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`)
                            "moe_expert_dot": True,
+                           # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`)
+                           "gemm_bias_dot": True,
                            "evidence": {"attention_fa2": "the port's attention lane, RTX PRO 6000 (cc 12.0, 188 SMs, driver 595.91): property "
                                                          "fa2_target_capture ef4b2584 (r20260930-033258-f611, art:d342a748): vLLM selects FLASH_ATTN "
                                                          "FA2; _vllm_fa2_C carries cc 8.0 SASS + compute_80 PTX, so the kernel is the driver's JIT; "
                                                          "kBlockM 64, kBlockN fa2_kblock_n(D) at D 64/96/128/256; MUFU ex2/rcp = core's tables on all "
                                                          "2^32 inputs; 19,232 rows (122,228 heads) equal Attention_v2 with this DOT and Fa2InvSum on "
                                                          "every finite head (Attention_v3: 997 differ); fa_tap_exactness 9dee6b6f / 9403e9fe guarded "
-                                                         "(r20260930-030755-9aab, art:592bc0ae)"}},
+                                                         "(r20260930-030755-9aab, art:592bc0ae)",
+                                        "gemm_bias": "RTX PRO 6000 (driver 580.173.02), torch 2.13.0+cu129, vLLM d9105ea80 under "
+                                                     "VLLM_BATCH_INVARIANT=1: linear_batch_invariant(x, W, b) on a biased qkv linear of the bf16 "
+                                                     "sweep (K 896, N 1152) launches matmul_kernel_persistent, then a bf16 add, at M 1, 2, 7 and 256; all "
+                                                     "306,432 words equal BiasAdd_v1(Gemm_v2{DOT=HopperBF16WgmmaDot16_v1}), and 80,572 of them "
+                                                     "differ from the bias added before the rounding (F.linear's cuBLASLt epilogue), run "
+                                                     "r20260930-140739-7974"}},
 }
 
 
@@ -108,6 +121,24 @@ def moe_expert_dot(profile):
     fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one); every other family keeps the `_v1` records' binding
     (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).  An unregistered target raises `UnregisteredTarget`."""
     return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("moe_expert_dot") else None
+
+
+def gemm_bias_dot(profile):
+    """The k16 step of a biased linear's one-Call Definition `GemmBias_v2{K,N,DOT}` on the declared target, or None: the accepted kinds
+    bind `GemmBias_v1`, and a family whose record does not say `gemm_bias_dot` keeps `Gemm_v2` + `BiasAdd_v1`.  An unregistered target
+    raises `UnregisteredTarget`."""
+    if uses_accepted_kinds(profile):
+        return None
+    return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("gemm_bias_dot") else None
+
+
+def gemm_bias_spec(profile, K: int, N: int):
+    """The registered one-Call Definition of a batch-invariant linear with a bias (the launch, then `output + bias` in bf16) on the
+    declared target, or None when the target keeps the pair as two Calls."""
+    if uses_accepted_kinds(profile):
+        return bind(GB.GemmBias, K=int(K), N=int(N))
+    dot = gemm_bias_dot(profile)
+    return None if dot is None else bind(GB.GemmBiasV2, K=int(K), N=int(N), DOT=dot)
 
 
 def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
@@ -348,6 +379,6 @@ def describe(profile) -> dict[str, Any]:
 
 
 __all__ = ["TARGETS", "DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
-           "moe_expert_dot", "moe_expert_gemm_spec", "tuned_gemm_table",
+           "moe_expert_dot", "moe_expert_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
