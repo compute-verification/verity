@@ -367,7 +367,7 @@ def metrics(a) -> None:
         })
         if lv.get("dense_m") != M:
             flags.append(f"m-{lv.get('dense_m')}-not-{M}")
-        if st.get("tile") and a.K == 2048:
+        if st.get("tile"):
             flags.append("tile-statement-unreviewed")
         out["session"]["label"] = f"batched-J{out['session']['tables']}"
         # another job on the job's own cores for more than half a core over the timed sessions
