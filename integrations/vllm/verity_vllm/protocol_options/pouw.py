@@ -3,9 +3,9 @@
 The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
 composition's weight phase, with the model untouched and no beacon read, `commit_weights` finds the linear layers by
 type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity_pouw.audit.commit_rows`).
-`install` then derives the epoch salt from those roots and the beacon (`verity_pouw.audit.Epoch.start`) and replaces each
-``apply`` through the composition's tagged `Hooks`.  Each call of a replaced ``apply(layer, x, bias)`` is one unit of the
-run's workload:
+`install` then derives the epoch salt from those roots and the operator's beacon bytes, unverified
+(`verity_pouw.audit.Epoch.unverified`), and replaces each ``apply`` through the composition's tagged `Hooks`.  Each
+call of a replaced ``apply(layer, x, bias)`` is one unit of the run's workload:
 
 1. quantize x's rows to int7 per row (`quantize`), and prepare the weight operands (`weight_operands`: the int7 weight per
    output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀) from the weight of the layer the call
@@ -558,7 +558,7 @@ def install(scheme: str, target: Target) -> Option:
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    salt = Epoch.start(declared, roots, settings.beacon or bytes(32)).salt
+    salt = Epoch.unverified(declared, roots, settings.beacon or bytes(32)).salt
     if scheme in PPD.SCHEMES:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
                                   {w: m.weight for w, m in enumerate(layers)}, roots, salt, settings.beacon or bytes(32))
