@@ -175,6 +175,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
     e = CK.check_definition(fn, OPTS, as_call=True)
     assert "partition/gate-recomputed CircuitCheckRecompute_v1 (1 gate(s))" in [f["name"] for f in e["failures"]]
+    assert e["partition"]["whole"]["q_word_v2"] == {"codes": [], "recomputed_across": 1}   # v2 reports it, refuses nothing
     inner = CK.check_definition(fn, OPTS, as_call=False)                 # not a Call: its copies are redundant gates, not a failure
     assert not [f for f in inner["failures"] if f["check"] == "partition"] and inner["partition"]["isolated"]
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]

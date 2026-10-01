@@ -12,7 +12,9 @@
     dead gates       gates no output depends on (`verity.ir.liveness.dead_gates`, transitive), by primitive @ activation
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a row): every gate
                      certified by exactly one unit, cross-unit reads only through committed values, no value computed in two
-                     units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes)
+                     units, the width rule (`verity.ir.partition.validate_unit_cut`'s codes and the word's width classes);
+                     recorded, not failed: the whole Definition's cut under `Q_word` v2 (its codes, and the values computed
+                     in two units it reports, `recomputed_across`)
     lowering pins    a lowering's AND/XOR/NOT counts against `pins.json`, a template unit's circuit digest against its C-Flock
                      module's `PINS`, and the Boolean export's gate lists checked against the unit circuit
                      (`verity_flock.boolean_export`)
@@ -442,7 +444,10 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
             if code not in seen:
                 P.fail("partition", code, fn.id, f"({det.get('n', '?')} gate(s))", gates=det.get("gates"))
         rule = dict(rule, redundant_gates=cut.detail["redundant_gates"] if applies else len(G.recomputed))
-        rec["whole"] = {"units": len(R["kinds"]), "redundant_gates": cut.detail["redundant_gates"], "codes": list(cut.codes)}
+        # `Q_word` v2 reports what v1 refuses as gate-recomputed and checks every other clause as v1 does
+        rec["whole"] = {"units": len(R["kinds"]), "redundant_gates": cut.detail["redundant_gates"], "codes": list(cut.codes),
+                        "q_word_v2": {"codes": [c for c in cut.codes if c != "gate-recomputed"],
+                                      "recomputed_across": cut.detail.get("gate-recomputed", {}).get("n", 0)}}
         rec["_graph"] = (G, R)
     if not applies:
         rec["isolated"] = [f["name"] for f in P.failures]
