@@ -70,6 +70,17 @@ COINS = {"os-seed-prf": "os-seed-prf: the verifier's OS-random seed under a SHA-
 #: inferred later
 SCHEMES = {"os-seed-prf": "flock-i-v1", "live-os": "flock-i-v1+livecoins"}
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
+#: the column-major verifier fold (d1775df80, flock-fp's cde1c7ac1) is an unreviewed verifier change; a tree has it when its
+#: slot types build this way. Read from the source, not the commit's ancestry: the step-0 trees descend from the fold and revert it
+FOLD_MARK = ("backends/flock/live/src/circuit.rs", "CscCircuit::from_matrices")
+
+
+def has_fold(root: Path) -> bool:
+    """Whether the tree at `root` folds column-major; a tree whose circuit.rs can't be read counts as one that does."""
+    try:
+        return FOLD_MARK[1] in (root / FOLD_MARK[0]).read_text()
+    except OSError:
+        return True
 
 
 def subcircuit(K: int) -> dict:
@@ -367,8 +378,6 @@ def metrics(a) -> None:
         })
         if lv.get("dense_m") != M:
             flags.append(f"m-{lv.get('dense_m')}-not-{M}")
-        if st.get("tile"):
-            flags.append("tile-statement-unreviewed")
         out["session"]["label"] = f"batched-J{out['session']['tables']}"
         # another job on the job's own cores for more than half a core over the timed sessions
         if (out["slice_cores_steady"] or {}).get("others", 0) > 0.5:
@@ -376,8 +385,14 @@ def metrics(a) -> None:
         # the GPU held while this job staged the statement itself (74-gemm-hill.sh STAGE_ONLY=1 stages it in a job without one)
         if not rec.get("stage_cached"):
             flags.append("staged-on-gpu")
-    # #554 is a draft, its statements unreviewed: these are costs, not claims, and a changed statement digest starts a new curve
-    flags.append("draft-554-unreviewed")
+    # #554's untiled statements are reviewed (red-team-proofs-554's Q1 grant at 8a0b17250); a tiled one is a cost, not a claim,
+    # and a record without its stage can't show it isn't tiled. A changed statement digest starts a new curve
+    if st.get("tile"):
+        flags.append("tile-statement-unreviewed")
+    if st.get("tile") or not rec.get("stage"):
+        flags.append("draft-554-unreviewed")
+    if has_fold(Path(a.root)):
+        flags.append("verifier-fold-unreviewed")
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
     if out.get("accepted") and not rec.get("domain"):
