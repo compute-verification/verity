@@ -17,7 +17,8 @@
 #      N= with BATCH=fixed (instances per statement, the bit cap still applies)
 #      STAGE_ONLY=1 (no GPU: build, stage the shapes into FLOCK_STAGE_CACHE and prove nothing; give SM, nvidia-smi is absent)
 #      SERVE_ONLY=DIR (no GPU: stage the shapes and serve their WARM + RUNS sessions on this pod's address, published under DIR
-#      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)
+#      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)  SERVE_POINTS=1 (with SERVE_ONLY: that many provers'
+#      sessions, one prover after another, on the same verifier processes)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
@@ -73,7 +74,7 @@ SRC=(--program-graph "$GRAPH"); [ -n "$DEFS" ] && SRC=(--definitions "$DEFS")
 SEL=(); [ -n "${SHAPES:-}" ] && SEL+=(--shapes "$SHAPES"); [ "${SELFTEST_LARGEST:-1}" = 0 ] && SEL+=(--no-selftest-largest)
 [ -n "${BATCH_ANDS:-}" ] && SEL+=(--batch-ands "$BATCH_ANDS"); [ -n "${MAX_STATEMENT_BITS:-}" ] && SEL+=(--max-statement-bits "$MAX_STATEMENT_BITS"); [ -n "${SELECT:-}" ] && SEL+=(--select "$SELECT")
 [ "${STAGE_ONLY:-0}" = 1 ] && SEL+=(--stage-only)
-[ -n "${SERVE_ONLY:-}" ] && SEL+=(--serve-only "$SERVE_ONLY")
+[ -n "${SERVE_ONLY:-}" ] && SEL+=(--serve-only "$SERVE_ONLY" --serve-points "${SERVE_POINTS:-1}")
 $PYBIN -m verity_flock.class_statement "${SRC[@]}" ${MODULES:+--modules "$MODULES"} --partition q-word --out $O/classes \
   --binary $B --selftest-binary $SB "${SEL[@]}" --batch ${BATCH:-auto} ${N:+--n $N} --jobs ${JOBS:-1} --warm ${WARM:-1} --runs ${RUNS:-3} --selftest ${SELFTEST:-25} \
   --port ${PORT:-7710} --protocol ${PROTOCOL:-sweep-v0} ${SELFTEST_GPU:+--selftest-gpu} ${SELFTEST_CASES:+--selftest-cases "$SELFTEST_CASES"} \

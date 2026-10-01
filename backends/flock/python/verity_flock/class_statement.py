@@ -561,17 +561,18 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
 
 
 def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int, host: str, port: int, operator: str,
-           bounded: bool = False) -> tuple[list[subprocess.Popen], list[str]]:
+           bounded: bool = False, points: int = 1) -> tuple[list[subprocess.Popen], list[str]]:
     """The verifier processes for ``sessions`` sessions of one circuit, listening on ``host``, and their addresses. The prover's
     FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by FC_VERIFY_SERVERS (default 1,
     at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
-    system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them)."""
+    system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
+    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
-                              "--concurrency", str(concurrency)] + (["--sessions", str(len(range(i, sessions, servers)))] if bounded else []),
+                              "--concurrency", str(concurrency)] + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
                              stdout=open(log, "w"), stderr=subprocess.STDOUT)
             for i, log in enumerate(logs)]
     addrs = []
@@ -590,21 +591,22 @@ def _served_name(pin: str, n: int, sessions: int) -> str:
     return f"{pin[:32]}-n{n}-s{sessions}.json"
 
 
-def serve_remote(binary: str, d: Path, n: int, where: Path, sessions: int) -> dict:
+def serve_remote(binary: str, d: Path, n: int, where: Path, sessions: int, points: int = 1) -> dict:
     """``--serve-only``: serve one staged statement's ``sessions`` sessions on this host's address (FC_SERVE_HOST, else the
-    address its hostname resolves to: a pod's IP), for a prover in another pod, and publish the addresses under ``where``
-    (`_served_name`). The entry `serve_wait` takes."""
+    address its hostname resolves to: a pod's IP), for a prover in another pod (``points`` of them one after another, the points
+    of one GPU session, all on these processes), and publish the addresses under ``where`` (`_served_name`). The entry
+    `serve_wait` takes."""
     circ, pub = d / "circuit.txt", d / f"pub-{n}.bin"
     pin = FC.digest(circ.read_text())
     import socket
     ip = os.environ.get("FC_SERVE_HOST") or socket.gethostbyname(socket.gethostname())
-    srvs, bound = _serve(binary, d, pub, circ, pin, sessions, "0.0.0.0", 0, "verifier-pod", bounded=True)
+    srvs, bound = _serve(binary, d, pub, circ, pin, sessions, "0.0.0.0", 0, "verifier-pod", bounded=True, points=points)
     if len(bound) != len(srvs):
         for s in srvs:
             s.kill()
         raise RuntimeError(f"serve-only: {len(bound)} of {len(srvs)} verifier processes started serving")
     addrs = [f"{ip}:{a.rsplit(':', 1)[1]}" for a in bound]
-    doc = {"pin": pin, "addrs": addrs, "sessions": sessions, "host": socket.gethostname(), "run": os.environ.get("RESEARCH_RUN_ID"),
+    doc = {"pin": pin, "addrs": addrs, "sessions": sessions, "points": points, "host": socket.gethostname(), "run": os.environ.get("RESEARCH_RUN_ID"),
            "verify_ahead": int(os.environ.get("FC_VERIFY_AHEAD") or 0), "servers": len(srvs), "t": time.time()}
     where.mkdir(parents=True, exist_ok=True)
     f = where / _served_name(pin, n, sessions)
@@ -946,8 +948,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--stage-only", action="store_true", help="stage the shapes (into FLOCK_STAGE_CACHE) and run nothing, into staged.jsonl: "
                     "a GPU job with the same settings takes them from the cache and starts at the prove")
     ap.add_argument("--serve-only", default=None, metavar="DIR", help="stage the shapes (from FLOCK_STAGE_CACHE) and serve each one's "
-                    "--warm + --runs sessions on this host's address, published as DIR/<circuit pin>.json for a prover in another pod "
-                    "(FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
+                    "--warm + --runs sessions on this host's address, published as DIR/<pin>-n<N>-s<sessions>.json for a prover in "
+                    "another pod (FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
+    ap.add_argument("--serve-points", type=int, default=1, help="with --serve-only: serve that many provers' --warm + --runs "
+                    "sessions, one prover after another on the same verifier processes (the points of one GPU session)")
     ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
@@ -1030,7 +1034,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         s, cl = rec["shape"], classes[rec["shape"]]
         t0 = time.time() - rec.pop("stage_wall_s", 0)
         if "stage" in rec and a.serve_only:
-            serving.append((rec, serve_remote(a.binary, out / s[:16], rec["stage"]["n"], Path(a.serve_only), a.warm + a.runs)))
+            serving.append((rec, serve_remote(a.binary, out / s[:16], rec["stage"]["n"], Path(a.serve_only), a.warm + a.runs,
+                                                a.serve_points)))
             print(json.dumps({"shape": s, "serving": serving[-1][1]["doc"]["addrs"]}), flush=True)
             continue
         if "stage" in rec:

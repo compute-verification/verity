@@ -194,3 +194,29 @@ def test_selftest_gpu_runs_the_selftest_on_the_gpu(monkeypatch, tmp_path: Path):
     assert CS.prove("flock-circuit", tmp_path, 4, 0, selftest="honest")["all_pass"] is True
     assert "--gpu" in seen[0] and seen[0][-2:] == ["--only", "gpu_paths_agree"]
     assert "--gpu" not in seen[1]
+
+
+def test_a_verifier_pod_serves_every_point_of_a_gpu_session_on_the_same_processes(monkeypatch, tmp_path: Path):
+    """Each prover process sends its session k to verifier process k mod S from k = 0, so a pod bounded for P points serves
+    P provers one after another: each process exits after exactly the sessions the P provers send it."""
+    argvs = []
+
+    def popen(argv, stdout, **_kw):
+        stdout.write(f"SERVING 0.0.0.0:{9000 + len(argvs)}\n")
+        stdout.flush()
+        argvs.append(argv)
+        return SimpleNamespace(pid=0, kill=lambda: None, wait=lambda: None)
+
+    monkeypatch.setattr(CS.subprocess, "Popen", popen)
+    monkeypatch.setenv("FC_VERIFY_SERVERS", "11")
+    monkeypatch.setenv("FC_VERIFY_AHEAD", "10")
+    monkeypatch.setenv("FC_SERVE_HOST", "10.0.0.7")
+    (tmp_path / "circuit.txt").write_text("circuit\n")
+    sessions, points = 25, 8
+    e = CS.serve_remote("flock-circuit", tmp_path, 2048, tmp_path / "verifiers", sessions, points=points)
+    bound = [int(a[a.index("--sessions") + 1]) for a in argvs]
+    sent = [sum(1 for _ in range(points) for k in range(sessions) if k % len(argvs) == i) for i in range(len(argvs))]
+    assert len(argvs) == 11 and bound == sent and sum(bound) == points * sessions
+    doc = json.loads((tmp_path / "verifiers" / CS._served_name(FC.digest("circuit\n"), 2048, sessions)).read_text())
+    assert doc == e["doc"] and (doc["sessions"], doc["points"], doc["servers"]) == (sessions, points, 11)
+    assert doc["addrs"] == [f"10.0.0.7:{9000 + i}" for i in range(11)]
