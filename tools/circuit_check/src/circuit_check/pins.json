@@ -71,6 +71,12 @@
   },
   "RopeOut_v2": {
    "and": 2966
+  },
+  "SiluMulBf16_v3": {
+   "and": 1372
+  },
+  "SiluMul_v3{I=8}": {
+   "and": 10976
   }
  },
  "pieces": {
