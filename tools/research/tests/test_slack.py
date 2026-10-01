@@ -57,7 +57,9 @@ class FakeSlack:
             m = self.add(ch, text=text, username=p.get("username"), bot_id=BOT, **({"thread_ts": p["thread_ts"]} if p.get("thread_ts") else {}))
             return {"ok": True, "channel": ch, "ts": m["ts"], "message": m}
         if method == "chat.getPermalink":
-            return {"ok": True, "permalink": f"https://compute.slack.com/archives/{ch}/p{p['message_ts'].replace('.', '')}"}
+            m = next((m for m in self.messages.get(ch, []) if m["ts"] == p["message_ts"]), {})
+            reply = f"?thread_ts={m['thread_ts']}&cid={ch}" if m.get("thread_ts") not in (None, m.get("ts")) else ""
+            return {"ok": True, "permalink": f"https://compute.slack.com/archives/{ch}/p{p['message_ts'].replace('.', '')}{reply}"}
         if method in ("conversations.history", "conversations.replies"):
             msgs = self.messages.get(ch, [])
             if method == "conversations.replies":
@@ -90,6 +92,26 @@ class FakeSlack:
             g.update({k: p[k] for k in ("name", "handle", "description") if k in p}, **({"date_delete": 0} if method.endswith("enable") else {}))
             return {"ok": True, "usergroup": g}
         return {"ok": False, "error": "unknown_method"}
+
+
+@pytest.fixture(autouse=True)
+def routes_dirs(tmp_path, monkeypatch):
+    """No test reads the real notes clone's routes or the published ones: `local` is the clone's routes.d, `remote` the
+    published files, `seen` the read marks."""
+    local, remote = tmp_path / "notes" / slack.ROUTES_DIR, tmp_path / "published"
+    local.mkdir(parents=True)
+    remote.mkdir()
+    monkeypatch.setenv("RESEARCH_NOTES", str(tmp_path / "notes"))
+    monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{remote}")
+    monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
+    return local, remote
+
+
+def add_route(where: Path, name: str, inbox_ts: str, **kw) -> dict:
+    r = {"schema": slack.ROUTE_SCHEMA, "name": name, "holder": f"bc-{name}", "channel": COORD, "inbox_ts": inbox_ts,
+         "opened": "2026-10-01T17:00Z", "closed": None, "forward_to": None, **kw}
+    (where / f"{name}.json").write_text(json.dumps(r))
+    return r
 
 
 @pytest.fixture
@@ -819,3 +841,172 @@ def test_ask_daniels_dry_run_prints_both_shapes_and_sends_nothing(route, registr
     assert rc == 0 and not out and not route.requests and not route.identity["seen"]
     new, old = [json.loads(line[line.index("{"):]) for line in err.splitlines()]
     assert new["kind"] == "default" and old["title"] == new["question"]
+
+
+# ---- routing: `@name` at the start of a post rings that name's doorbell ---------------------------------------------------------------
+
+VECTORS = Path(__file__).with_name("slack_routing_vectors.json")
+
+
+@pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["vectors"], ids=lambda v: v["name"])
+def test_the_routing_rule_matches_every_vector(v):
+    doc = json.loads(VECTORS.read_text())
+    assert slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"])) == v["targets"]
+
+
+def bells(fake, inbox_ts):
+    return [m for m in fake.messages.get(COORD, []) if m.get("thread_ts") == inbox_ts and m["ts"] != inbox_ts]
+
+
+def inbox(fake, routes_dirs, name, where="local"):
+    root = fake.add(COORD, text=f"{slack.INBOX_HEAD}{name}. pointers", username=name, bot_id=BOT)
+    add_route(routes_dirs[0] if where == "local" else routes_dirs[1], name, root["ts"])
+    return root["ts"]
+
+
+def test_an_ask_rings_the_owners_doorbell_once_and_the_doorbell_cannot_route(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    rc, out, err = run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "can node 2 take a job?")
+    assert rc == 0 and "route @circuits: rang" in err
+    (bell,) = bells(fake, box)
+    ts, link = out.split()
+    assert bell["username"] == "router" and bell["text"].startswith(f"from infra: {link} @circuits can node 2 take a job?")
+    assert slack.route_targets(bell, fake.messages[COORD][0], json.loads(registry.read_text()), {box}) == []
+    reg = json.loads(registry.read_text())
+    slack.deliver(slack.client(argparse_ns()), reg, slack.Routes(), COORD, next(m for m in fake.messages[COORD] if m["ts"] == ts), link,
+                  now=float(ts) + 60)
+    assert len(bells(fake, box)) == 1                                                  # one doorbell per (post, target)
+
+
+def argparse_ns(**kw):
+    import argparse
+    return argparse.Namespace(dry_run=False, registry=None, channel=None, channel_id=None, **kw)
+
+
+def test_a_handle_without_an_inbox_is_left_to_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@proofs", "--text", "x")
+    assert rc == 0 and "route @proofs: no inbox (top-level forwards it)" in err
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@nobody-here", "--text", "x")
+    assert rc == 2 and "neither a registry handle nor a name with an inbox" in err and "inbox open --as nobody-here" in err
+
+
+def test_a_worker_with_a_published_inbox_can_post_and_be_addressed(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "vllm-epoch-run", where="published")               # registered after this clone was pulled
+    rc, _, err = run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--urgent", "--text", "stop using node 2")
+    assert rc == 0 and "route @vllm-epoch-run: rang" in err
+    assert bells(fake, box)[0]["text"].startswith("from circuits (URGENT): ")
+    rc, out, err = run(capsys, "reply", "--as", "vllm-epoch-run", "--thread", fake.messages[COORD][1]["ts"], "--text", "stopped")
+    assert rc == 0 and "route @circuits: no inbox" in err
+
+
+def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "infra")
+    root = fake.add(COORD, text="<!subteam^SINFRA|@infra> can node 2 take a job?", username="circuits", bot_id=BOT)
+    assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "yes")[0] == 0
+    assert bells(fake, box) == []                                                      # the replier is not its own target
+    circuits = inbox(fake, routes_dirs, "circuits")
+    assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", "from 3 PM")[0] == 0
+    assert len(bells(fake, circuits)) == 1
+    assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", "thanks")[0] == 0
+    assert len(bells(fake, circuits)) == 1
+    assert run(capsys, "done", "--as", "infra", "--thread", root["ts"], "--link", "https://x/pr/1")[0] == 0
+    assert len(bells(fake, circuits)) == 2                                             # a status line reaches the root's poster
+
+
+def test_a_thread_rings_one_inbox_at_most_six_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    box = inbox(fake, routes_dirs, "circuits")
+    root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
+    for i in range(8):
+        assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", f"point {i}")[0] == 0
+    rung = bells(fake, box)
+    assert sum(m["text"].startswith("from infra:") for m in rung) == 6 and sum("paused" in m["text"] for m in rung) == 1
+    notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
+    assert len(notices) == 1 and notices[0]["text"].startswith("routing to circuits paused here for the hour")
+    assert slack.QUIET in notices[0]["text"]
+
+
+def test_a_finished_name_forwards_and_the_server_router_switches_the_cli_off(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    add_route(routes_dirs[0], "old-worker", "1.0", closed="2026-10-01T18:00Z", forward_to="circuits")
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-worker", "--text", "where is the tree?")
+    assert rc == 0 and "route @circuits: rang (for @old-worker, finished)" in err and len(bells(fake, box)) == 1
+    add_route(routes_dirs[0], "router", "", mode="server")
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "again")
+    assert rc == 0 and "route" not in err and len(bells(fake, box)) == 1
+
+
+def notes_clone(tmp_path) -> Path:
+    import subprocess
+    bare, clone = tmp_path / "notes.git", tmp_path / "notes"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(bare)], check=True)
+    subprocess.run(["git", "-C", str(clone), "init", "-q", "-b", "main"], check=True)
+    for k, v in (("user.name", "t"), ("user.email", "t@t"), ("commit.gpgsign", "false")):
+        subprocess.run(["git", "-C", str(clone), "config", k, v], check=True)
+    subprocess.run(["git", "-C", str(clone), "remote", "add", "origin", str(bare)], check=True)
+    return clone
+
+
+def test_inbox_open_posts_the_root_publishes_the_route_and_guards_it(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
+    clone = notes_clone(tmp_path)
+    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
+    rc, out, err = run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-11111111")
+    assert rc == 0, err
+    r = json.loads((clone / slack.ROUTES_DIR / "vllm-epoch-run.json").read_text())
+    root = fake.messages[COORD][-1]
+    assert r["holder"] == "bc-11111111" and r["inbox_ts"] == root["ts"] and root["text"].startswith("Inbox for @vllm-epoch-run.")
+    assert "pushed" in out and f'threadTs="{root["ts"]}"' in out
+    assert run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-11111111")[1].startswith("@vllm-epoch-run is open already")
+    rc, _, err = run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-22222222")
+    assert rc == 2 and "held by bc-11111111; a successor passes --succeeds" in err
+    assert run(capsys, "inbox", "open", "--as", "vllm-epoch-run", "--holder", "bc-22222222", "--succeeds")[0] == 0
+    r = json.loads((clone / slack.ROUTES_DIR / "vllm-epoch-run.json").read_text())
+    assert (r["holder"], r["inbox_ts"], r["succeeds"]) == ("bc-22222222", root["ts"], "bc-11111111")   # same thread, unread and all
+    assert sum(m["text"].startswith("Inbox for") for m in fake.messages[COORD]) == 1
+    assert run(capsys, "inbox", "close", "--as", "vllm-epoch-run", "--forward-to", "@circuits")[0] == 0
+    assert json.loads((clone / slack.ROUTES_DIR / "vllm-epoch-run.json").read_text())["forward_to"] == "circuits"
+
+
+def test_inbox_read_shows_unread_doorbells_urgent_first_and_marks_them_read(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "vllm-epoch-run")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--text", "next tree")
+    run(capsys, "ask", "--as", "circuits", "--to", "@vllm-epoch-run", "--urgent", "--text", "stop node 2")
+    rc, out, _ = run(capsys, "inbox", "read", "--as", "vllm-epoch-run", "--urgent", "--peek")
+    lines = out.splitlines()
+    assert rc == 0 and lines[0].startswith("SLACK @vllm-epoch-run: 2 new") and "(URGENT)" in lines[1] and "next tree" in lines[2]
+    assert run(capsys, "inbox", "read", "--as", "vllm-epoch-run")[0] == 0
+    rc, out, _ = run(capsys, "inbox", "read", "--as", "vllm-epoch-run", "--urgent")
+    assert rc == 1 and out.strip() == "SLACK @vllm-epoch-run: nothing new"
+    assert box
+
+
+def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):
+    inbox(fake, routes_dirs, "circuits")
+    run(capsys, "ask", "--as", "infra", "--to", "@circuits", "--text", "one")
+    old = fake.add(COORD, text="@proofs ancient ask", username="infra", bot_id=BOT, ts="1600000000.000001")
+    fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
+    rep = json.loads(out)
+    assert rc == 0 and {"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0} in rep["inboxes"]
+    assert [d["name"] for d in rep["dropped"]] == ["no-such-lane"]
+    assert old["ts"] in [s["ts"] for s in rep["unanswered"]]
+
+
+def test_verify_author_accepts_a_routed_workers_name_and_the_router(fake, registry, routes_dirs, capsys):
+    inbox(fake, routes_dirs, "vllm-epoch-run")
+    for who in ("vllm-epoch-run", "router"):
+        m = fake.add(COORD, text="x", username=who, bot_id=BOT)
+        assert run(capsys, "verify-author", "--event", json.dumps({"channel": COORD, "ts": m["ts"]}))[0] == 0
+    m = fake.add(COORD, text="x", username="impostor", bot_id=BOT)
+    assert run(capsys, "verify-author", "--event", json.dumps({"channel": COORD, "ts": m["ts"]}))[0] == 1
+
+
+def test_slack_py_runs_as_a_single_file_from_any_checkout(tmp_path, registry):
+    import subprocess
+    import sys
+    single = tmp_path / "vslack.py"
+    shutil.copy(slack.__file__, single)
+    out = subprocess.run([sys.executable, str(single), "handles", "--registry", str(registry)], capture_output=True, text=True,
+                         cwd=tmp_path, env={**os.environ, "PYTHONPATH": ""})
+    assert out.returncode == 0, out.stderr
+    assert "@circuits" in out.stdout
