@@ -3,6 +3,9 @@
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
+  "Bf16AddF2fp_v2": {
+   "and": 717
+  },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
   },
@@ -15,17 +18,29 @@
   "F32AddFtz_v3": {
    "and": 888
   },
+  "F32Add_v3": {
+   "and": 812
+  },
+  "F32Div_v3": {
+   "and": 2517
+  },
   "F32FmaFtz_v3": {
    "and": 4584
   },
   "F32FmaSubFtz_v3": {
    "and": 4584
   },
+  "F32Fma_v3": {
+   "and": 4485
+  },
   "F32Max_v2": {
    "and": 237
   },
   "F32MulFtz_v3": {
    "and": 2506
+  },
+  "F32Mul_v3": {
+   "and": 2430
   },
   "F32SubFtz_v3": {
    "and": 952
@@ -41,6 +56,9 @@
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
+  },
+  "I32Add_v2": {
+   "and": 31
   }
  },
  "pieces": {

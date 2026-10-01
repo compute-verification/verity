@@ -49,8 +49,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     the word library as Boolean Definitions: C-Flock's linear-form builder and
     pieces (`forms`, `fp`, `tc_step`, `softmax`), `trace.definition` (a builder
     traced into And/Xor/Not gates, with `word_of` its word Definition), the BF16
-    dot and coordinate on bits (`gemm`: `DotBf16_v3`, `GemmCoordinate_v3`) and
-    attention's softmax operations on bits (`attention`). `verity.ml.tc.relation`
+    dot and coordinate on bits (`gemm`: `DotBf16_v3`, `GemmCoordinate_v3`),
+    attention's softmax operations on bits (`attention`) and the element-wise
+    FP32, BF16 and I32 operations on bits (`elementwise`). `verity.ml.tc.relation`
     restates the step as witness columns +
     mul/linear/lookup predicates and counts them (`census()`). Tests replay
     the A100 / RTX 4090 / H100 captures under `tests/ml/fixtures/` (see its
