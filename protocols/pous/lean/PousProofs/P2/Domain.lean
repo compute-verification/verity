@@ -1,12 +1,13 @@
 import PousProofs.P2.Rows
 
 /-!
-# M1 on P2's exact domain `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
+# The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
 
-P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. The proposed trusted model `Pous.m1p B w p b`
-(`Pous/Model/M1p.lean`) draws `B` independent uniform permutations of `Fin p`; they act on `w`-bit strings through
-the numeric value and fix the tail `[p, 2^w)`. Each block carries `b` payload bits, zero-extended to `w` bits.
-This file proves, with no hypothesis beyond what the rows discharge:
+P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. The abstract model `Pous.m1p B w p b` (`Pous/Model/M1p.lean`)
+draws `B` independent uniform permutations of `Fin p`; they act on `w`-bit strings through the numeric value and fix
+the tail `[p, 2^w)`. Each block carries `b` payload bits, zero-extended to `w` bits. These are theorems about `m1p` at
+P2's parameters, not about the concrete P2's square–mask–square maps. This file proves, with no hypothesis beyond what
+the rows discharge:
 
 * `PousP2p.p2_meets_m1p_b19`: `2^19` blocks at `w = 16,448`, `p = 2^16448 − 21065`, `Q = 2^20`, `k = 88`, for every
   `b` with `20·16448 ≤ 21·b` and `b ≤ 16447` (instances `b = 16447` and `b = 16432`, 2,054 bytes);

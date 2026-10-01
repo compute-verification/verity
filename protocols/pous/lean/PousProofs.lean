@@ -29,6 +29,4 @@ import PousProofs.P2.Count
 import PousProofs.P2.Rows
 import PousProofs.P2.Domain
 import PousProofs.P2.Margin
-import PousProofs.P2.Security
-import PousProofs.P2.Sanity
 import PousProofs.Pinned

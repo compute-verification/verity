@@ -8,8 +8,8 @@ Conventions follow Flock's Lean packages (`backends/flock/verifier/lean/`): the 
 Pous/Game/{Prob,Oracle}.lean        trusted: bits, uniform probability, ideal primitive, parallel oracle programs
 Pous/Model/{Scheme,Audit,Inc}.lean  trusted: encoding schemes, the audit game, INC and TimedINC
 Pous/Model/{M1,M1p,HashChain,Pebbling,Labelling,Invertible,ColumnGame,Dense,SampledAudit}.lean
-                                    trusted: model M1, M1 on P2's exact domain `[0, p)` (`m1p`), B3's chain,
-                                    Fisch's stacked DRGs and white/green game,
+                                    trusted: model M1, M1 on `[0, p)` (`m1p`, the abstract model at P2's domain),
+                                    B3's chain, Fisch's stacked DRGs and white/green game,
                                     Pietrzak's one-way labels, P3's invertible labels, the two-directional column
                                     game, the dense scheme S1 (one segment, segmented, and tagged as the code
                                     keys it), the state after a history
@@ -21,13 +21,11 @@ Pous/Accounting/{Params,LemmaA,PubMeets}.lean  trusted: ρ, δ, expansion, `Meet
 Pous/Assumptions.lean               trusted: named hypotheses (Lemma A, Conjecture B1′)
 Pous/Pinned.lean                    trusted: 48 statements, the 47 grade.sh grades against and
                                     `InvExPostFactoTwoLayer`, which `N10Refuted` negates
-Pous/P2/Assumptions.lean            trusted: P2's bridges to the deployed audit (P2-EXP-IO, SeqRoot, P2–M1-SGI);
-                                    the game has no cost model, so they are not statements about time
-Pous/P2/Pinned.lean                 trusted: P2's six statements about `m1p`, which grade.sh also grades against
+Pous/P2/Pinned.lean                 trusted: six statements about the abstract model `m1p` at P2's parameters,
+                                    which grade.sh also grades against; none is about the concrete P2
 Pous/Sanity.lean, Pous/Accounting/Numbers.lean   proved: the definitions are not vacuous; certified numbers
 PousProofs/                         proved: Theorem 1, Track A, pebbling, B5, sampled audits, the dense scheme, P3
-PousProofs/P2/                      proved: P2's pins (Count, Rows, Domain, Margin), their composition with the
-                                    bridges (Security) and the bridges' witnesses (Sanity)
+PousProofs/P2/                      proved: the `m1p` pins (Count, Rows, Domain, Margin)
 PousProofs/Chain/Flat.lean          proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
                                     the public encoder over the overwrite chain (the graded lanes, flattened)
 PousProofs/Pinned.lean              PousProofs.X : Pous.Pinned.X for each proved pinned statement
@@ -58,8 +56,8 @@ assumptions, escapes, orphan files, import layers (`Pous` imports no proofs), a 
 records. `lean-audit.json` pins the sanity theorems, every `PousProofs.X`, the stacked one-way bound, the band
 certificate, and the dense scheme at the deployment point (`dense_meets_64`, `seg_meets_14`, and `segTag_meets_14` for the
 implementation's tagged keying, with `segTag_auditSecure`) and its per-segment tags (`domainSep_equiv`,
-`tag_injective_14`), and for P2 the raw-storage refutations its pins cite, the composition with its bridges
-(`Pous.P2.accept_le*`) and their witnesses. A changed record needs a named statement reviewer (Verity's `AGENTS.md`).
+`tag_injective_14`), and the raw-storage refutations the `m1p` pins cite. A changed record needs a named statement
+reviewer (Verity's `AGENTS.md`).
 
 **Submissions** are one file that imports only `Pous` and `Mathlib.*` and declares
 `theorem solution : Pous.Pinned.<Name>`. `grade.sh` builds the trusted layer and the grader first and records their

@@ -20,7 +20,6 @@ import Pous.Accounting.PubMeets
 import Pous.Accounting.Numbers
 import Pous.Accounting.LemmaA
 import Pous.Assumptions
-import Pous.P2.Assumptions
 import Pous.Pinned
 import Pous.P2.Pinned
 import Pous.Sanity

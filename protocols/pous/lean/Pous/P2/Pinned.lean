@@ -2,15 +2,16 @@ import Pous.Accounting.Params
 import Pous.Model.M1p
 
 /-!
-# P2's pinned statements (trusted)
+# The `m1p` statements at P2's parameters (trusted)
 
-The six statements about P2's ideal model `m1p` (`Pous/Model/M1p.lean`) that `grade.sh` grades against, in namespace
+Six statements about the abstract model `m1p` (`Pous/Model/M1p.lean`: independent uniform permutations of `[0, p)`,
+forward queries only), at the block counts, widths and primes P2 uses, that `grade.sh` grades against, in namespace
 `Pous.Pinned` with the rest. Their texts are those of the statement review named in each docstring, verbatim. The
 proofs are in `PousProofs/P2/` (`PousProofs.P2MeetsM1pB19Uncond` and the others in `PousProofs/Pinned.lean`); a
 docstring's `lean/submissions/efficient-crypto/…` path names the store draft each was graded from.
 
-Each is about the ideal model only. What connects it to the deployed P2 is `Pous/P2/Assumptions.lean`, and
-`PousProofs/P2/Security.lean` composes the two.
+Each is a theorem about `m1p` only, not about the concrete P2: nothing here models square–mask–square, SHAKE256, roots
+or time, so none of them says the deployed P2 is secure.
 -/
 
 namespace Pous.Pinned

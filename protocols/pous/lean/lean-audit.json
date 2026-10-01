@@ -6,7 +6,7 @@
   "Grader": "the grader executable, which imports only Lean",
   "submissions": "graded one file at a time by grade.sh"
  },
- "assumptions": ["Pous.Assumptions", "Pous.P2.Assumptions"],
+ "assumptions": ["Pous.Assumptions"],
  "layers": {
   "Pous.Game": {
    "imports": ["Mathlib", "Pous.Game"],
@@ -26,7 +26,7 @@
   "Pous.P2": {
    "imports": ["Mathlib", "Pous.Game", "Pous.Model", "Pous.Accounting", "Pous.P2"],
    "except": [],
-   "why": "P2's bridges and pins read only the game, the models and the parameters"
+   "why": "the m1p pins read only the game, the models and the parameters"
   }
  },
  "pins": {
@@ -47,77 +47,6 @@
    ],
    "assumptions": [],
    "type_hash": "c2740af40bb88160cac02caae7c55e7403e9cfa14849e7b49145085c88f10952"
-  },
-  "Pous.P2.accept_le": {
-   "signature": [
-    "Pous.P2.accept_le {M : Pous.IdealModel} {sch : Pous.Scheme M} (A : Pous.P2.RealAudit sch) {S S' Q k : Nat}",
-    "  {δ ε εexp εsgi : ENNReal} (hsec : ∀ (D : Nat), Pous.AuditSecure sch Pous.Reveal.sequential S' D Q k δ ε)",
-    "  (hexp : Pous.P2.ExpIO A S εexp) (hseq : Pous.P2.SeqRoot A S Q) (hsgi : Pous.P2.SGI A S S' Q εsgi)",
-    "  (W : Pous.Bits sch.n) (s : A.Strategy) (hs : A.Bounded S s) :",
-    "  ENNReal.instLE.le (A.accept k W s) (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ ε) εsgi) εexp)"
-   ],
-   "assumptions": [],
-   "type_hash": "ca2fe69a28b6e16329f98eeb54a12a8d29bf333aafb7b89f4442223622a1aa5a"
-  },
-  "Pous.P2.accept_le_b19": {
-   "signature": [
-    "Pous.P2.accept_le_b19 (b : Nat) (hsp : instLENat.le (instHMul.hMul 20 16448) (instHMul.hMul 21 b))",
-    "  (hb : instLENat.le b 16447)",
-    "  (A : Pous.P2.RealAudit (Pous.m1p (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b))",
-    "  {S : Nat} {εexp εsgi : ENNReal} (hexp : Pous.P2.ExpIO A S εexp) (hseq : Pous.P2.SeqRoot A S (instHPow.hPow 2 20))",
-    "  (hsgi :",
-    "    Pous.P2.SGI A S",
-    "      ((Pous.m1p (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b).stateBound Pous.Params.ρ)",
-    "      (instHPow.hPow 2 20) εsgi)",
-    "  (W : Pous.Bits (Pous.m1p (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b).n)",
-    "  (s : A.Strategy) (hs : A.Bounded S s) :",
-    "  ENNReal.instLE.le (A.accept 88 W s)",
-    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (ENNReal.ofReal Pous.Params.δ.cast) Pous.Params.εMax) εsgi) εexp)"
-   ],
-   "assumptions": [],
-   "type_hash": "df3b90ac69666a00856479c4b43d274e6ea336c8b66f45451ba172b0ac9f0cf0"
-  },
-  "Pous.P2.accept_le_family_105": {
-   "signature": [
-    "Pous.P2.accept_le_family_105 (B : Nat) [NeZero B] (hB₀ : instLENat.le (instHPow.hPow 2 8) B)",
-    "  (hB₁ : instLENat.le B (instHPow.hPow 2 23)) (b : Nat)",
-    "  (hsp : instLENat.le (instHMul.hMul 20 16448) (instHMul.hMul 21 b)) (hb : instLENat.le b 16447)",
-    "  (A : Pous.P2.RealAudit (Pous.m1p B 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b)) {S : Nat}",
-    "  {εexp εsgi : ENNReal} (hexp : Pous.P2.ExpIO A S εexp) (hseq : Pous.P2.SeqRoot A S (instHPow.hPow 2 20))",
-    "  (hsgi :",
-    "    Pous.P2.SGI A S",
-    "      (instHAdd.hAdd ((Pous.m1p B 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b).stateBound Pous.Params.ρ)",
-    "        (instHMul.hMul 128 B))",
-    "      (instHPow.hPow 2 20) εsgi)",
-    "  (W : Pous.Bits (Pous.m1p B 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b).n) (s : A.Strategy)",
-    "  (hs : A.Bounded S s) :",
-    "  ENNReal.instLE.le (A.accept 105 W s)",
-    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (ENNReal.ofReal Pous.Params.δ.cast) Pous.Params.εMax) εsgi) εexp)"
-   ],
-   "assumptions": [],
-   "type_hash": "093fcf9a654889749732ff94808edd6b275ce7e52c4f637f37faece6d4b7b4d8"
-  },
-  "Pous.P2.idealAudit_bridges": {
-   "signature": [
-    "Pous.P2.idealAudit_bridges {M : Pous.IdealModel} (sch : Pous.Scheme M) (S Q : Nat) :",
-    "  And (Pous.P2.ExpIO (Pous.P2.idealAudit sch S Q) S 0)",
-    "    (And (Pous.P2.SeqRoot (Pous.P2.idealAudit sch S Q) S Q) (Pous.P2.SGI (Pous.P2.idealAudit sch S Q) S S Q 0))"
-   ],
-   "assumptions": [],
-   "type_hash": "5b04a2f7b51d1acaf21cdf6a0e15f346dbd364426b9e090a73e9d8747eee95e7"
-  },
-  "Pous.P2.not_sgi_freeRoots_b19": {
-   "signature": [
-    "Pous.P2.not_sgi_freeRoots_b19 (b : Nat) (hsp : instLENat.le (instHMul.hMul 20 16448) (instHMul.hMul 21 b))",
-    "  (hb : instLENat.le b 16447) (S : Nat) :",
-    "  Not",
-    "    (Pous.P2.SGI",
-    "      (Pous.P2.freeRoots (Pous.m1p (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b)) S",
-    "      ((Pous.m1p (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) b).stateBound Pous.Params.ρ)",
-    "      (instHPow.hPow 2 20) Pous.Params.εMax)"
-   ],
-   "assumptions": [],
-   "type_hash": "8ef8627fcd13da97210bf86090a481a3ed6cce5c05787b2777c323b992d40332"
   },
   "Pous.honest_seq_accepted": {
    "signature": [
@@ -638,9 +567,6 @@
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "pins": [
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.not_sgi_freeRoots_b19",
     "Pous.junk_not_meets",
     "Pous.junk_spaceBound",
     "Pous.k_ge_86",
@@ -715,11 +641,6 @@
     "Pous.Prog.work": "d2d99c0b30b712934b04158c0ded72b0ba662f4a1cc358734c2223d113b94ae3"
    },
    "pins": [
-    "Pous.P2.accept_le",
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.idealAudit_bridges",
-    "Pous.P2.not_sgi_freeRoots_b19",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_correct",
@@ -790,11 +711,6 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "pins": [
-    "Pous.P2.accept_le",
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.idealAudit_bridges",
-    "Pous.P2.not_sgi_freeRoots_b19",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_correct",
@@ -880,11 +796,6 @@
     "Pous.simAccepts": "62c4ef9b9565b20f69da1313f95ed2e92d2b3f1f1d2ff63bc1f71c38a804523d"
    },
    "pins": [
-    "Pous.P2.accept_le",
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.idealAudit_bridges",
-    "Pous.P2.not_sgi_freeRoots_b19",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_not_meets",
@@ -1140,9 +1051,6 @@
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "pins": [
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.not_sgi_freeRoots_b19",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.raw_seq_accepted",
@@ -1190,9 +1098,6 @@
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
    "pins": [
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.not_sgi_freeRoots_b19",
     "PousMargin.raw_b19_128",
     "PousMargin.raw_b19_256",
     "PousMargin.raw_b19_64",
@@ -1320,11 +1225,6 @@
     "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
    "pins": [
-    "Pous.P2.accept_le",
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.idealAudit_bridges",
-    "Pous.P2.not_sgi_freeRoots_b19",
     "Pous.honest_seq_accepted",
     "Pous.honest_sim_accepted",
     "Pous.junk_correct",
@@ -1379,27 +1279,6 @@
     "PousProofs.Theorem1iiSeq",
     "PousProofs.Theorem1iiTimed",
     "PousProofs.Theorem1iiiTimed"
-   ]
-  },
-  "Pous.P2.Assumptions": {
-   "digest": "00e9618c7713932730436f9e2264064de0078eaac60ce956df17bc90776b09df",
-   "definitions": {
-    "Pous.P2.ExpIO": "87f0ff1723cade417ea4fdcc53f85679c04fb262a1f60a2e36888cd86559e176",
-    "Pous.P2.RealAudit": "2674b0017a9087571fece501b7bbc405903513de12de4b82cb5c11f2492638de",
-    "Pous.P2.RealAudit.Bounded": "5889e17ac5c6fd0a0ecb7865c33792de08592bbf5e66f7a2575183255efcca87",
-    "Pous.P2.RealAudit.Forward": "9ff8c632fe80ce778e1ecf0015616d8fc4e4ffe9ea0b13263878953e26dca82c",
-    "Pous.P2.RealAudit.Strategy": "01881167163d2dd4fd49d6ca319ec249efeed93b07eef4e640e95a02937e1908",
-    "Pous.P2.RealAudit.accept": "9e7b72ca108dc84084797554026a75e7a79877c832d144a85451b551e67db7c7",
-    "Pous.P2.RealAudit.acceptIdeal": "17653191de058873a1827cf3e9d79125d0924d4bd7e764edfc5685db945bb6f1",
-    "Pous.P2.SGI": "ae2328812afe6f5e98494708354261571d8f48b535a668e46eea31736ecc2845",
-    "Pous.P2.SeqRoot": "c62bff5af1e4d5c6932e7c70f890c461751da8b604a51574637f5ab10099116d"
-   },
-   "pins": [
-    "Pous.P2.accept_le",
-    "Pous.P2.accept_le_b19",
-    "Pous.P2.accept_le_family_105",
-    "Pous.P2.idealAudit_bridges",
-    "Pous.P2.not_sgi_freeRoots_b19"
    ]
   },
   "Pous.P2.Pinned": {
@@ -1552,14 +1431,6 @@
     "PousMargin.MeetsWithSlack": "2c6f7405db1b18b55a375256bf239ffedef676b6228b5fbad6cd7a45546e3fc2"
    },
    "pins": ["PousMargin.raw_b19_128", "PousMargin.raw_b19_256", "PousMargin.raw_b19_64"]
-  },
-  "PousProofs.P2.Sanity": {
-   "digest": "a4e09df4386498fe83fa148332799865a828c4d5178aa273d025ddf6ed314e85",
-   "definitions": {
-    "Pous.P2.freeRoots": "0341a9cb53d72efdc1adb27e6b4ed1dcdfdfea84e13335fbd47e3ab39b9b1279",
-    "Pous.P2.idealAudit": "2b01858a658a1c1342e83be17e5f4bf437f9269a100d500cfa91a2a0aadda0da"
-   },
-   "pins": ["Pous.P2.idealAudit_bridges", "Pous.P2.not_sgi_freeRoots_b19"]
   },
   "PousProofs.P3.Column.BandComb": {
    "digest": "60a338189f53ebbffb4708d5e3f04b52ca741a5edd3a9cea5828d3456b2de0ca",

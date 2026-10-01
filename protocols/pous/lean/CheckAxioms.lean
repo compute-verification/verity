@@ -92,7 +92,7 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousProofs.BandPubMeets14
 #print axioms PousProofs.BandPubMeets14Global
 #print axioms PousProofs.ChainDenseMeets111
--- P2 on its exact domain (`m1p`), no hypothesis: the Meets rows, the slack rows and the error split
+-- the abstract model `m1p` at P2's parameters, no hypothesis: the Meets rows, the slack rows and the error split
 #print axioms PousProofs.P2MeetsM1pB19Uncond
 #print axioms PousProofs.P2MeetsM1pFamilyUncond
 #print axioms PousProofs.P2MeetsM1pW8192Uncond
@@ -101,9 +101,3 @@ appear here. `tools/lean/audit.py` checks every declaration; this list is the he
 #print axioms PousProofs.P2ErrorSplitB19Uncond
 #print axioms PousP2p.not_meets_m1p_b19_k85
 #print axioms PousMargin.not_slack_raw
--- P2's bridges (`Pous/P2/Assumptions.lean`): the composition, and the witnesses
-#print axioms Pous.P2.accept_le
-#print axioms Pous.P2.accept_le_b19
-#print axioms Pous.P2.accept_le_family_105
-#print axioms Pous.P2.idealAudit_bridges
-#print axioms Pous.P2.not_sgi_freeRoots_b19
