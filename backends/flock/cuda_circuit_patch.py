@@ -65,6 +65,10 @@ body = put(body, "d_cw0, d_tree0, l0_bl, l0_ni, arena, lig);", "d_cw0, d_tree0, 
 body = put(body, "    ffi_free(d_cw0); ffi_free(d_tree0);\n",
            "    ffi_free(d_cw0); ffi_free(d_tree0);\n    if (d_zk_pads) ffi_free(d_zk_pads);\n    if (d_zk_extra) ffi_free(d_zk_extra);\n")
 body = put(body, "    CKI(phase(6));\n", "    if (N->zk_on) fc_write_zk(W, fc_zk, fc_zk_comb);\n    CKI(phase(6));\n")
+# the arena also holds the witness phase's scratch and the hm96 context's buffers (fc_arena_bytes; FC_SCRATCH_CUDA=1: neither)
+core = ("packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes + ((size_t)12 << k_log) * sizeof(F128) + (64ull << 20)")
+body = put(body, f"    const size_t arena_bytes = {core};\n",
+           f"    const size_t arena_bytes = fc_arena_bytes(N, m, k_log, packed_witness_bytes,\n                                              {core});\n")
 # rep 1 from rep 0's witness and level-0 commitment (FlockCircuitParams.rep_reuse), not under M1 (its level 0 and lane phase
 # are its own): keeping holds z, a and b to the end of rep 0 and gives its Ligerito a copy of z (the folds overwrite it), three
 # more witness-sized arena buffers; rep 1 transposes z for the lincheck again
@@ -136,6 +140,43 @@ if '#include "ligerito_zk.cuh"' not in t:
     t = put(t, "        rc = query_phase(0, out.initial_open, alpha, queries);\n        if (rc) return rc;\n",
             "        rc = query_phase(0, out.initial_open, alpha, queries);\n        if (rc) return rc;\n"
             "        if (zk) zk->queries0.assign(queries.begin(), queries.end());\n")
+    lg.write_text(t)
+# Ligerito's query phase gathers each level's capped paths through its allocator (the device arena) rather than cudaMalloc and
+# cudaFree per level (merkle_capped_paths_device; FC_SCRATCH_CUDA=1 keeps it)
+t = lg.read_text()
+if "lf_capped_paths" not in t:
+    t = put(t, "    return 200; } } while (0)\n", '''    return 200; } } while (0)
+
+inline bool lf_scratch_cuda() {
+    static const bool v = [] { const char* e = std::getenv("FC_SCRATCH_CUDA"); return e && e[0] == '1'; }();
+    return v;
+}
+
+inline int lf_capped_paths(const LigAlloc& A, const uint8_t* d_tree, size_t num_leaves, const std::vector<size_t>& queries,
+                           uint32_t cap_depth, std::vector<MHash>& out) {
+    if (lf_scratch_cuda()) { out = merkle_capped_paths_device(d_tree, num_leaves, queries, cap_depth); return 0; }
+    const std::vector<size_t> idxs = merkle_capped_path_indices(num_leaves, queries, cap_depth);
+    const int n = (int)idxs.size();
+    out.assign(n, MHash{});
+    if (n == 0) return 0;
+    const std::vector<unsigned long long> h_idx(idxs.begin(), idxs.end());
+    unsigned long long* d_idx = nullptr;
+    uint8_t* d_out = nullptr;
+    LFCK(A.alloc((void**)&d_idx, (size_t)n * sizeof(unsigned long long)));
+    LFCK(A.alloc((void**)&d_out, (size_t)n * sizeof(MHash)));
+    LFCK(cudaMemcpy(d_idx, h_idx.data(), (size_t)n * sizeof(unsigned long long), cudaMemcpyHostToDevice));
+    gather_tree_nodes<<<(n + 127) / 128, 128>>>(d_tree, d_idx, n, d_out);
+    LFCK(cudaGetLastError());
+    LFCK(cudaMemcpy(out.data(), d_out, (size_t)n * sizeof(MHash), cudaMemcpyDeviceToHost));
+    LFCK(A.release(d_out));
+    LFCK(A.release(d_idx));
+    return 0;
+}
+''')
+    t = put(t, """        open.path = merkle_capped_paths_device(d_prev_tree, (size_t)prev_bl, q_out,
+                                               caps[open_level]);
+""", """        if (int prc = lf_capped_paths(A, d_prev_tree, (size_t)prev_bl, q_out, caps[open_level], open.path)) return prc;
+""")
     lg.write_text(t)
 ffi = g / "prove_ffi.cu"
 s = ffi.read_text()

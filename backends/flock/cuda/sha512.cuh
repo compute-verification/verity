@@ -284,31 +284,55 @@ inline std::vector<uint8_t> hm96_opened_salts(const uint8_t* d_tree, const std::
     return out;
 }
 
+#define HM96_TABLE_BYTES ((size_t)192 * 256 * 8 * sizeof(uint64_t))
+// what one context's device buffers take of an arena (tables, prefixes, midstates; 256-byte granules)
+#define HM96_DEVICE_BYTES (HM96_TABLE_BYTES + 256 + 256)
+
+typedef cudaError_t (*Hm96Alloc)(void** p, size_t bytes);
+typedef cudaError_t (*Hm96Release)(void* p);
+inline cudaError_t hm96_cuda_alloc(void** p, size_t bytes) { return cudaMalloc(p, bytes); }
+inline cudaError_t hm96_cuda_release(void* p) { return cudaFree(p); }
+
 // One proof's hm96 context (a null tree callback leaves the build unsalted); the salt key is zeroed when it ends. The context is
 // process-global: a second install while one is live is refused (two proofs would share a key, a tree counter and level 0).
+// Its device buffers come from `alloc` (the circuit prover passes the device arena's) and go back through `release` at
+// release_device() or at the end. FC_ARENA_BREAK=1 releases the tables right after their upload and keeps reading them, so the
+// arena hands their bytes to later buffers (the negative control; meaningful with the arena only).
 struct Hm96Guard {
     bool mine = false;
-    Hm96Guard(Hm96TreeCb tree_cb, void* ctx, const uint8_t* key, const uint8_t* prefixes, const uint64_t* tables, long long level0_leaves) {
+    bool tables_released = false;
+    Hm96Release release_fn = hm96_cuda_release;
+    Hm96Guard(Hm96TreeCb tree_cb, void* ctx, const uint8_t* key, const uint8_t* prefixes, const uint64_t* tables, long long level0_leaves,
+              Hm96Alloc alloc = hm96_cuda_alloc, Hm96Release release = hm96_cuda_release) {
         if (!tree_cb) return;
         if (g_hm96.tree_cb) { fprintf(stderr, "hm96: a salt context is already installed (one proof at a time per process)\n"); abort(); }
         mine = true;
+        release_fn = release;
         g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.nonce.clear(); g_hm96.level0_leaves = level0_leaves;
         memcpy(g_hm96.key.k, key, 32);
-        size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
-        cudaMalloc(&g_hm96.d_tables, tb);
-        cudaMemcpy(g_hm96.d_tables, tables, tb, cudaMemcpyHostToDevice);
         uint8_t* d_pre = nullptr;
-        cudaMalloc(&d_pre, 256);
+        if (alloc((void**)&g_hm96.d_tables, HM96_TABLE_BYTES) != cudaSuccess || alloc((void**)&d_pre, 256) != cudaSuccess ||
+            alloc((void**)&g_hm96.d_mid, 16 * sizeof(uint64_t)) != cudaSuccess) {
+            fprintf(stderr, "hm96: no device memory for the salt context's tables\n"); abort();
+        }
+        cudaMemcpy(g_hm96.d_tables, tables, HM96_TABLE_BYTES, cudaMemcpyHostToDevice);
         cudaMemcpy(d_pre, prefixes, 256, cudaMemcpyHostToDevice);
-        cudaMalloc(&g_hm96.d_mid, 16 * sizeof(uint64_t));
         hm96_midstates<<<1, 1>>>(d_pre, g_hm96.d_mid);
         cudaDeviceSynchronize();
-        cudaFree(d_pre);
+        release(d_pre);
+        static const bool brk = [] { const char* e = std::getenv("FC_ARENA_BREAK"); return e && e[0] == '1'; }();
+        if (brk) { release(g_hm96.d_tables); tables_released = true; }
+    }
+    // the device buffers back to their allocator, after the proof's last tree and before its arena closes
+    void release_device() {
+        if (!mine) return;
+        if (g_hm96.d_tables && !tables_released) release_fn(g_hm96.d_tables);
+        if (g_hm96.d_mid) release_fn(g_hm96.d_mid);
+        g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr;
     }
     ~Hm96Guard() {
         if (!mine) return;
-        if (g_hm96.d_tables) cudaFree(g_hm96.d_tables);
-        if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
+        release_device();
         volatile uint32_t* vk = g_hm96.key.k;
         for (int j = 0; j < 8; j++) vk[j] = 0;
         g_hm96.tree_cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr;

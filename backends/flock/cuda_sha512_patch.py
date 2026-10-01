@@ -60,10 +60,15 @@ for f in ("prove_chunk.cuh", "prove_circuit.cuh"):
         ("l0_cap.size() * 32", "l0_cap.size() * FLOCK_HB", 2),
         SALTS,
     ])
+# the proof's hm96 context, once its arena is open (rep 1 finds rep 0's open), with its buffers from the arena (fc_scratch_alloc)
+# and back to it before the arena closes
 edit("prove_circuit.cuh", [
-    ("uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n",
-     "uint8_t** out, size_t* out_len) {\n    const FlockChunkParams* C = &N->c;\n"
-     "    Hm96Guard hm96_guard(N->hm96_tree, N->hm96_ctx, N->hm96_key, N->hm96_prefixes, N->hm96_tables, N->hm96_level0_leaves);\n"),
+    ("        g_fc_arena = std::max(g_fc_arena, want);\n    }\n",
+     "        g_fc_arena = std::max(g_fc_arena, want);\n    }\n"
+     "    Hm96Guard hm96_guard(N->hm96_tree, N->hm96_ctx, N->hm96_key, N->hm96_prefixes, N->hm96_tables, N->hm96_level0_leaves,\n"
+     "                         fc_scratch_alloc, fc_scratch_free);\n"),
+    ("    if (take) g_fc_kept = FcKept{};\n    CK(device_arena.finish());\n",
+     "    if (take) g_fc_kept = FcKept{};\n    hm96_guard.release_device();\n    CK(device_arena.finish());\n"),
 ])
 edit("ligerito_f256.cuh", [
     ("out.initial_cap.size() * 32", "out.initial_cap.size() * FLOCK_HB"),
@@ -72,8 +77,8 @@ edit("ligerito_f256.cuh", [
     ("    std::vector<MHash> path;   // capped per-query siblings, sample order\n",
      "    std::vector<MHash> path;   // capped per-query siblings, sample order\n"
      "    std::vector<uint8_t> salts;   // hm96-sha512: each opened row's 192-byte salt, in sample order\n"),
-    ("                                               caps[open_level]);\n",
-     "                                               caps[open_level]);\n"
+    ("caps[open_level], open.path)) return prc;\n",
+     "caps[open_level], open.path)) return prc;\n"
      "        open.salts = hm96_opened_salts(d_prev_tree, q_out);\n"),
 ])
 print("cuda_sha512_patch: SHA-512 Merkle nodes (64 bytes) installed")

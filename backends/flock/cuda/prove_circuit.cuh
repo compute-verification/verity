@@ -14,8 +14,8 @@
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
-// device memory rep 0 leaves free when it keeps its witness for rep 1: outside the arena, the witness's scratch (at most 2 GiB
-// at a time), its inputs, and the first proof's cached type matrices
+// device memory rep 0 leaves free when it keeps its witness for rep 1: outside the arena, the first proof's cached type matrices
+// (and under FC_SCRATCH_CUDA=1 the witness's scratch, at most 2 GiB at a time, and its inputs)
 #define FC_KEEP_MARGIN ((size_t)4 << 30)
 
 typedef struct {
@@ -80,6 +80,61 @@ typedef struct {
     // word), which needs host0_zab page-locked and mapped (flock_cuda_host_alloc)
     int host0_ab;
 } FlockCircuitParams;
+
+// A proof's scratch (the witness's inputs, tape and host-slot indices, the hm96 tables, Ligerito's path gathers) comes out of the
+// device arena, which is open whenever it is live, so a steady session makes no cudaMalloc or cudaFree; FC_SCRATCH_CUDA=1 takes it
+// from cudaMalloc/cudaFree beside the arena (the same-build control). ffi_free does not synchronize the device as cudaFree does:
+// scratch is released only after the work that reads it is done (or ordered before the next use on stream 0).
+static cudaError_t fc_scratch_alloc(void** p, size_t bytes) { return lf_scratch_cuda() ? cudaMalloc(p, bytes) : ffi_malloc(p, bytes); }
+static cudaError_t fc_scratch_free(void* p) { return lf_scratch_cuda() ? cudaFree(p) : ffi_free(p); }
+
+// the arena's 256-byte granules for `bytes`
+static size_t fc_granules(size_t bytes) { return (bytes + 255) & ~(size_t)255; }
+
+static bool fc_on_device(const void* p);
+
+// the most fc_witness's scratch holds at once: the compressions' (inputs, then the tape or the level-by-level rows, and the host
+// slots' indices) or, after them, the units' (inputs, rows, and a cut template's late and cut rows)
+static size_t fc_witness_scratch_bytes(const FlockCircuitParams* N, int m, int k_log) {
+    const FlockChunkParams* C = &N->c;
+    if (C->host_z) return 0;
+    const long long nb = 1LL << (m - k_log);
+    const long long n_h = nb * N->r_count[N->h_range], hg = (n_h + 31) / 32;
+    size_t h = fc_on_device(N->h_inputs) ? 0 : fc_granules((size_t)n_h * N->h_in_words * 16);
+    if (N->h_plan) {
+        const long long per = (long long)N->h_tape_words * 8;
+        h += fc_granules((size_t)(std::max(1LL, std::min(n_h, (2LL << 30) / per)) * per));
+    } else {
+        const long long per = 3LL * N->h_useful * 4;
+        h += fc_granules((size_t)(std::max(1LL, std::min(hg, (2LL << 30) / per)) * per));
+    }
+    if (N->n_host0) h += 2 * fc_granules((size_t)N->n_host0 * 8) + fc_granules((size_t)N->n_host0 * 4);
+    size_t u = 0;
+    if (!N->u_host) {
+        const long long n_units = nb * N->r_count[N->u_range], groups = (n_units + 31) / 32, per = 3LL * N->u_useful * 4;
+        u = fc_granules((size_t)n_units * N->u_in_words * 16);
+        if (N->u_n_late == 0) {
+            u += fc_granules((size_t)(std::max(1LL, std::min(groups, (2LL << 30) / per)) * per));
+        } else {
+            u += fc_granules((size_t)(groups * per)) + fc_granules((size_t)N->u_n_late * 4) + fc_granules((size_t)N->u_n_cut * 4) +
+                 fc_granules((size_t)groups * N->u_n_late * 4) + fc_granules((size_t)groups * N->u_n_cut * 4);
+        }
+    }
+    return std::max(h, u);
+}
+
+// The arena a proof opens: `core`, the chunk prover's peak, or the witness phase's (z, a, b, the lincheck's packed z and
+// fc_witness's scratch) where that is larger, plus the hm96 context's tables and midstates, which live through the proof
+static size_t fc_arena_bytes(const FlockCircuitParams* N, int m, int k_log, size_t packed_witness_bytes, size_t core) {
+    if (lf_scratch_cuda()) return core;
+    const size_t witness = 4 * fc_granules(packed_witness_bytes) + fc_witness_scratch_bytes(N, m, k_log) + (64ull << 20);
+#ifdef FLOCK_HB
+    const size_t hm96 = N->hm96_tree ? HM96_DEVICE_BYTES : 0;
+#else
+    const size_t hm96 = 0;
+#endif
+    return std::max(core, witness) + hm96;
+}
 
 // Salts of leaves idx[0..n) of tree `nonce` under `key`, expanded on the device (192 bytes each, in order): a test vector against
 // the host's zk_hooks::LeafSalts.
@@ -526,7 +581,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             const bool hin_dev = fc_on_device(N->h_inputs);
             uint64_t* d_hin = (uint64_t*)N->h_inputs; uint32_t* d_hs = nullptr;
             if (!hin_dev) {
-                CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
+                CK(fc_scratch_alloc((void**)&d_hin, (size_t)n_h * N->h_in_words * 16));
                 CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
             }
             // the host slots from mapped host memory, on a stream of their own beside the compressions (other words of z, a, b),
@@ -556,8 +611,8 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 const long long n = N->n_host0;
                 std::vector<long long> off((size_t)n);
                 for (long long i = 0, o = 0; i < n; i++) { off[i] = o; o += (N->host0_ab ? 4LL : 6LL) * N->host0_words[i]; }
-                CK(cudaMalloc(&d_hat, n * sizeof(long long))); CK(cudaMalloc(&d_hoff, n * sizeof(long long)));
-                CK(cudaMalloc(&d_hw, n * sizeof(int)));
+                CK(fc_scratch_alloc((void**)&d_hat, n * sizeof(long long))); CK(fc_scratch_alloc((void**)&d_hoff, n * sizeof(long long)));
+                CK(fc_scratch_alloc((void**)&d_hw, n * sizeof(int)));
                 CK(cudaMemcpy(d_hat, N->host0_at, n * sizeof(long long), cudaMemcpyHostToDevice));
                 CK(cudaMemcpy(d_hoff, off.data(), n * sizeof(long long), cudaMemcpyHostToDevice));
                 CK(cudaMemcpy(d_hw, N->host0_words, n * sizeof(int), cudaMemcpyHostToDevice));
@@ -588,7 +643,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 const long long per = (long long)N->h_tape_words * 8;
                 const long long batch = std::max(1LL, std::min(n_h, (2LL << 30) / per));
                 uint64_t* d_tape;
-                CK(cudaMalloc(&d_tape, (size_t)(batch * per)));
+                CK(fc_scratch_alloc((void**)&d_tape, (size_t)(batch * per)));
                 const int nrg = (N->h_useful + 255) / 256;
                 if (const int e = host_slots()) return e;
                 for (long long s0 = 0; s0 < n_h; s0 += batch) {
@@ -600,7 +655,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                     CK(cudaGetLastError());
                 }
                 CK(cudaStreamSynchronize(0));
-                cudaFree(d_tape);
+                fc_scratch_free(d_tape);
                 d_hs = nullptr;
 #else
                 printf("FFI circuit: the native compression witness needs the SHA-512 build\n"); return 208;
@@ -608,7 +663,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             } else {
                 const long long per = 3LL * N->h_useful * 4;
                 const long long batch = std::max(1LL, std::min(hg, (2LL << 30) / per));
-                CK(cudaMalloc(&d_hs, (size_t)(batch * per)));
+                CK(fc_scratch_alloc((void**)&d_hs, (size_t)(batch * per)));
                 if (const int e = host_slots()) return e;
                 for (long long g0 = 0; g0 < hg; g0 += batch) {
                     const long long ng = std::min(batch, hg - g0);
@@ -620,11 +675,11 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 }
             }
             CK(cudaStreamSynchronize(0));
-            if (d_hs) cudaFree(d_hs);
-            if (!hin_dev) cudaFree(d_hin);
+            if (d_hs) fc_scratch_free(d_hs);
+            if (!hin_dev) fc_scratch_free(d_hin);
             if (zab_dev) {
                 CK(cudaEventSynchronize(hs_done));
-                cudaFree(d_hat); cudaFree(d_hoff); cudaFree(d_hw);
+                fc_scratch_free(d_hat); fc_scratch_free(d_hoff); fc_scratch_free(d_hw);
             } else {
                 const uint64_t* p = N->host0_zab;
                 for (long long i = 0; i < N->n_host0; i++) {
@@ -659,14 +714,15 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             const long long n_units = (1LL << (m - k_log)) * per_block;
             const long long groups = (n_units + 31) / 32;
             uint64_t* d_in; uint32_t* d_scratch;
-            CK(cudaMalloc(&d_in, (size_t)n_units * N->u_in_words * 16));
+            uint32_t *d_lr = nullptr, *d_cr = nullptr, *d_late = nullptr, *d_cut = nullptr;
+            CK(fc_scratch_alloc((void**)&d_in, (size_t)n_units * N->u_in_words * 16));
             CK(cudaMemcpy(d_in, N->u_inputs, (size_t)n_units * N->u_in_words * 16, cudaMemcpyHostToDevice));
             // groups in batches that keep the scratch under ~2 GB
             const long long per = 3LL * N->u_useful * 4;
             const int warps = N->u_warps < 1 ? 1 : (N->u_warps > 8 ? 8 : N->u_warps);
             if (N->u_n_late == 0) {
                 const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
-                CK(cudaMalloc(&d_scratch, (size_t)(batch * per)));
+                CK(fc_scratch_alloc((void**)&d_scratch, (size_t)(batch * per)));
                 for (long long g0 = 0; g0 < groups; g0 += batch) {
                     const long long ng = std::min(batch, groups - g0);
                     CK(cudaMemsetAsync(d_scratch, 0, (size_t)(ng * per)));
@@ -677,10 +733,9 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 }
             } else {
                 // both passes over every group at once: the scratch holds the first pass's rows for the second
-                uint32_t *d_lr, *d_cr, *d_late, *d_cut;
-                CK(cudaMalloc(&d_scratch, (size_t)(groups * per))); CK(cudaMemsetAsync(d_scratch, 0, (size_t)(groups * per)));
-                CK(cudaMalloc(&d_lr, N->u_n_late * 4)); CK(cudaMalloc(&d_cr, N->u_n_cut * 4));
-                CK(cudaMalloc(&d_late, (size_t)groups * N->u_n_late * 4)); CK(cudaMalloc(&d_cut, (size_t)groups * N->u_n_cut * 4));
+                CK(fc_scratch_alloc((void**)&d_scratch, (size_t)(groups * per))); CK(cudaMemsetAsync(d_scratch, 0, (size_t)(groups * per)));
+                CK(fc_scratch_alloc((void**)&d_lr, N->u_n_late * 4)); CK(fc_scratch_alloc((void**)&d_cr, N->u_n_cut * 4));
+                CK(fc_scratch_alloc((void**)&d_late, (size_t)groups * N->u_n_late * 4)); CK(fc_scratch_alloc((void**)&d_cut, (size_t)groups * N->u_n_cut * 4));
                 CK(cudaMemcpy(d_lr, N->u_late_rows, N->u_n_late * 4, cudaMemcpyHostToDevice));
                 CK(cudaMemcpy(d_cr, N->u_cut_rows, N->u_n_cut * 4, cudaMemcpyHostToDevice));
                 fc_unit_witness<<<(unsigned)groups, 32 * warps>>>(d_in, N->u_in_words, n_units, (int)per_block, N->r_pos0[ur], ul, k_log, d_ao, d_ac,
@@ -707,10 +762,11 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                     CK(cudaMemcpyAsync(d_b + host_at[i], p + 4 * w, w * 16, cudaMemcpyHostToDevice));
                     p += 6 * w;
                 }
-                cudaFree(d_lr); cudaFree(d_cr); cudaFree(d_late); cudaFree(d_cut);
             }
             CK(cudaStreamSynchronize(0));
-            cudaFree(d_scratch); cudaFree(d_in);
+            for (void* q : {(void*)d_lr, (void*)d_cr, (void*)d_late, (void*)d_cut})
+                if (q) fc_scratch_free(q);
+            fc_scratch_free(d_scratch); fc_scratch_free(d_in);
         }
         auto t2 = std::chrono::steady_clock::now();
         if (N->witness_s) {
