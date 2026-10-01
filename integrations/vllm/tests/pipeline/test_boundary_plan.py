@@ -104,6 +104,21 @@ def test_a_plan_the_commit_cannot_take_is_derived_with_the_reason(tmp_path, caps
     assert f"plan_recomputed: {rec['why']}" in capsys.readouterr().out
 
 
+def test_a_plan_under_another_claim_is_derived_with_the_reason(tmp_path, capsys, monkeypatch):
+    """The key leaves the call-boundary claims out (`call_boundary_source.CLAIMS`): a Build that planned the logits body and a Commit
+    whose logits tap claims it (`--logits-tap 1`) -- the Commit derives the plan of the identities left to the source."""
+    monkeypatch.setattr(CB, "CLAIMS", [])
+    args = _commit_args(tmp_path)
+    _plan(args, capsys)
+    planned = CB.plan_of(_man(args), args.program_dir).identities
+    args.tap_sources = types.SimpleNamespace(logits_tap=1)
+    got, rec = BP.use(args, _man(args), tl=_tl(tmp_path))
+    mine = len(CB.manifest_sites(_man(args)))
+    assert 0 < mine < planned and got.identities == mine and _ends(tmp_path) == [("derived", mine)]
+    assert rec["used"] is False and rec["plan_recomputed"] is True
+    assert rec["why"].startswith(f"the plan is of {planned} identities and the source evaluates {mine}")
+
+
 def test_a_plan_that_does_not_load_is_derived_with_the_reason(tmp_path, capsys):
     """A Definition of another arity than the plan records (the registry changed under one code identity: never in practice)."""
     args = _commit_args(tmp_path)
@@ -133,6 +148,26 @@ def test_the_commit_s_parser_takes_the_call_boundary_plan(tmp_path):
     assert cli.parse("commit", ["--out", str(tmp_path), "--call-boundary-plan", "p.json"], {}).call_boundary_plan == "p.json"
     o = cli.parse("boundary-plan", ["--workload", "w.json", "--required-manifest", "m.json", "--programs-root", "r", "--out", "o.json"], {})
     assert (o.workload, o.required_manifest, o.program_dir, o.programs_root, o.gate_out, o.out) == ("w.json", "m.json", None, "r", None, "o.json")
+    assert o.logits_tap == 0
+
+
+def test_the_logits_tap_option_defaults_from_the_rows_environment(tmp_path, capsys, monkeypatch):
+    """`--logits-tap` (VERITY_LOGITS_TAP when unset) on the Commit, the Build's plan and the gate: each sets the claims it reads."""
+    from verity_vllm.acquire.sources import logits_tap_source as LT
+
+    pytest.importorskip("torch")
+    env = {LT.ENV: "1"}
+    assert cli.parse("commit", ["--out", str(tmp_path)], env).tap_sources.logits_tap == 1
+    assert cli.parse("commit", ["--out", str(tmp_path), "--logits-tap", "0"], env).tap_sources.logits_tap == 0
+    assert cli.parse("boundary-plan", ["--workload", "w", "--required-manifest", "m", "--out", "o"], env).logits_tap == 1
+    assert cli.parse("gate", ["call-boundaries", str(tmp_path)], env).logits_tap == 1
+    monkeypatch.setattr(CB, "CLAIMS", [])
+    args = _commit_args(tmp_path)
+    assert cli.main(["gate", "call-boundaries", str(tmp_path), "--logits-tap", "1", "--out", str(tmp_path / "g.json")]) == 0
+    rec = json.loads((tmp_path / "g.json").read_text())
+    assert CB.CLAIMS == [LT.claim] and rec["sources"] == ["logits_tap", "call_boundary"] and rec["claimed"] == len(LT.manifest_sites(_man(args))) > 0
+    rc, _line, rec = _plan(args, capsys)
+    assert rc == 0 and not CB.CLAIMS and rec["claimed"] == 0
 
 
 # ------------------------------------------------------------------------------------------------------------------ the row's Build
