@@ -7,6 +7,7 @@ bits, with every table read a plain And/Xor/Not circuit.
     RsqrtApprox_v2      (x: Array<32, Value<1>>) -> Array<32, Value<1>>              word view: RsqrtApprox_v1
     DivFullRcp_v2       (b: Array<32, Value<1>>) -> Array<32, Value<1>>              word view: DivFullRcp_v1
     DivFullScaleA_v3    (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>           word view: DivFullScaleA_v1
+    MufuTanh_v2         (x: Array<32, Value<1>>) -> Array<32, Value<1>>              word view: MufuTanh_v1
 
 The exponent, sign and special-encoding rules around the tables are C-Flock's (`verity_flock.tail_pieces`, from
 ``fa2_model.cpp`` and ``rms_triton_model.cpp``). The range scalings by 0.25 and 2^24 are not multiplies: the exponent moves,
@@ -27,6 +28,15 @@ with n_k = 1 - b_k and N = sum_k n_k 2^k. A row ``x XOR n_k`` is free; the const
 n_k and each bit of C0 is a function of the segment bits g, written as the XOR of the monomials of its algebraic normal form
 (the 2^|g| products of subsets of g: one AND each), with the sums the functions share computed once (`_xor_plan`). So the
 ANDs are the monomials, the squarer's kept pairs, the sum's full adders, and the overrides' index matches.
+
+MUFU.TANH (`MufuTanh_v2`) is the same interpolator (ex2's square, from column 19 at square_shift 2) over the eleven binades
+of |x| in [2^-8, 8), with 51 segments of 2^17 offsets (each binade's top 0 to 4 mantissa bits; the offset is the 17 bits below
+them, so a binade of fewer segments ignores its low bits) and the coefficients of `tables/mufu_tanh_quadratic.json`, at shift
+16. A segment's word has its own lower exponent E: ``((E - 1) << 23) + v`` below v = 2^24, else ``(E << 23) + (v >> 1)`` (seven
+segments straddle a power of two). Every word of the binades in the measured table is that interpolant, checked when the
+circuit is built (`_tanh_measured`); outside them the primitive's rules hold (x, ±1, NaN). The segment's functions are XORs of
+51 monomials of the binade's 4-bit index and its segment bits, one per segment (`_tanh_plan`); the offset is shifted to the
+bottom by a 3-stage log shifter.
 """
 from __future__ import annotations
 
@@ -44,17 +54,30 @@ from .forms import NOT, ONE, OR, ZERO, add, and_reduce, compress_columns, const_
 from .softmax import _eq_const
 from .trace import definition
 
-__all__ = ["QUADRATIC", "DivFullRcp", "DivFullScaleA", "Fit", "MufuEx2Ftz", "MufuRcpFtz", "MufuSqrtFtz", "RsqrtApprox", "fit",
-           "overrides", "table_word"]
+__all__ = ["QUADRATIC", "TANH_QUADRATIC", "DivFullRcp", "DivFullScaleA", "Fit", "MufuEx2Ftz", "MufuRcpFtz", "MufuSqrtFtz",
+           "MufuTanh", "RsqrtApprox", "TanhFit", "fit", "overrides", "table_word", "tanh_fit", "tanh_table"]
 
 F32 = Array(32, BL.BIT)
 QUADRATIC = "mufu_quadratic.json"
+TANH_QUADRATIC = "mufu_tanh_quadratic.json"
 QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
 
 
 # --- the table encoding ------------------------------------------------------------------------------------------------------
+
+def _square(u: np.ndarray, nb: int, p: int) -> np.ndarray:
+    u = np.asarray(u, dtype=np.int64)
+    bit = [(u >> a) & 1 for a in range(nb)]
+    q = np.zeros_like(u)
+    for a in range(nb):
+        if 2 * a >= p:
+            q += bit[a] << (2 * a - p)
+        for b in range(max(a + 1, p - a - 1), nb):
+            q += (bit[a] & bit[b]) << (a + b + 1 - p)
+    return q
+
 
 class Fit:
     """One table's interpolator: ``base``, the index's ``bits``, the offset's ``nb`` (the segment is the rest), the square's
@@ -77,15 +100,7 @@ class Fit:
     def square(self, u: np.ndarray) -> np.ndarray:
         """Q(u): of u^2's folded partial products (u_a at column 2a, u_a u_b at a + b + 1 for a < b), the sum of those in
         columns >= p, shifted right by p (int64)."""
-        u = np.asarray(u, dtype=np.int64)
-        bit = [(u >> a) & 1 for a in range(self.nb)]
-        q = np.zeros_like(u)
-        for a in range(self.nb):
-            if 2 * a >= self.p:
-                q += bit[a] << (2 * a - self.p)
-            for b in range(max(a + 1, self.p - a - 1), self.nb):
-                q += (bit[a] & bit[b]) << (a + b + 1 - self.p)
-        return q
+        return _square(u, self.nb, self.p)
 
     def interpolant(self, idx: np.ndarray) -> np.ndarray:
         """``base + ((C0 + C1 u + (C2 Q(u)) << square_shift) >> shift)`` at each index (int64)."""
@@ -190,7 +205,14 @@ def _xor_plan(name: str) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, 
     for i in range(fit(name).bits - fit(name).nb):
         anf = anf.reshape(len(rows), -1, 2, 1 << i)
         anf[:, :, 1, :] ^= anf[:, :, 0, :]
-    M = anf.reshape(len(rows), -1).astype(np.float32)
+    return _shared_sums(anf.reshape(len(rows), -1))
+
+
+def _shared_sums(terms: np.ndarray) -> tuple[tuple[tuple[int, int], ...], tuple[tuple[int, ...], ...]]:
+    """Functions as XORs of terms (``terms``: a 0/1 row per function, a column per term, column 0 the constant ONE), with the
+    sums several share computed once: each pair (a, b) appends the term ``a XOR b``; then each function's terms. Greedy: the
+    first pair of terms that the most functions share, while some two share one (the constant is never paired)."""
+    M = terms.astype(np.float32)
     const = M[:, 0].copy()
     M[:, 0] = 0
     pairs = []
@@ -393,6 +415,232 @@ def div_full_scale_a(C, a, b):
     return mux(C, big, _quarter_rn(C, a), mux(C, small, _times_2_24_rn(C, a), list(a)))
 
 
+# --- MUFU.TANH -------------------------------------------------------------------------------------------------------------------
+
+class TanhFit:
+    """MUFU.TANH's interpolator at |x| in [2^-8, 8) (`tables/mufu_tanh_quadratic.json`): ``binades`` [(exponent, segment bits)]
+    in order, each segment's lower output exponent ``E`` and coefficients ``C0``, ``C1``, ``C2`` in order, and ``nb``, ``p``,
+    ``square_shift``, ``shift`` as in `Fit`."""
+
+    def __init__(self, entry: dict) -> None:
+        self.nb, self.p = int(entry["offset_bits"]), int(entry["square_from"])
+        self.square_shift, self.shift = int(entry["square_shift"]), int(entry["shift"])
+        self.binades = [(int(e), int(sb)) for e, sb in entry["binades"]]
+        self.E, self.C0, self.C1, self.C2 = (list(map(int, entry[k])) for k in ("E", "C0", "C1", "C2"))
+        es = [e for e, _ in self.binades]
+        self.sb_max = max(sb for _, sb in self.binades)
+        if es != list(range(es[0], es[0] + len(es))) or len(es) > 16 or self.sb_max + self.nb > 23:
+            raise ValueError(f"{TANH_QUADRATIC}: binades {self.binades} with {self.nb} offset bits")
+        self.first, n = {}, 0
+        for e, sb in self.binades:
+            self.first[e], n = n, n + (1 << sb)
+        if not len(self.E) == len(self.C0) == len(self.C1) == len(self.C2) == n or not self.nb < self.p < 2 * self.nb:
+            raise ValueError(f"{TANH_QUADRATIC}: {len(self.C0)} segments for {n}, square from {self.p} of {2 * self.nb} columns")
+
+    def values(self, e: int, m) -> tuple[np.ndarray, np.ndarray]:
+        """(E, V) at exponent ``e`` and each mantissa of ``m``: V = (C0 + C1 u + (C2 Q(u)) << square_shift) >> shift for the
+        segment g (m's top bits) and offset u (the nb bits below), E the segment's (int64)."""
+        sb = dict(self.binades)[e]
+        m = np.asarray(m, dtype=np.int64)
+        g = self.first[e] + (m >> (23 - sb))
+        u = (m >> (23 - sb - self.nb)) & ((1 << self.nb) - 1)
+        c0, c1, c2, E = (np.asarray(c, np.int64)[g] for c in (self.C0, self.C1, self.C2, self.E))
+        q = _square(np.arange(1 << self.nb), self.nb, self.p)[u]
+        return E, (c0 + c1 * u + ((c2 * q) << self.square_shift)) >> self.shift
+
+    def words(self, e: int, m) -> np.ndarray:
+        """The interpolant's word at exponent ``e`` and each mantissa of ``m``: ((E - 1) << 23) + V when V < 2^24, else
+        (E << 23) + (V >> 1) (`values`; positive words, int64)."""
+        return _tanh_word(*self.values(e, m))
+
+
+def _tanh_word(E: np.ndarray, v: np.ndarray) -> np.ndarray:
+    return np.where(v < 1 << 24, ((E - 1) << 23) + v, (E << 23) + (v >> 1))
+
+
+@cache
+def tanh_fit() -> TanhFit:
+    data = json.loads((resources.files("verity.ml") / "tables" / TANH_QUADRATIC).read_text())
+    if data.get("format") != "verity/mufu-tanh-quadratic/v1":
+        raise ValueError(f"{TANH_QUADRATIC}: unknown format {data.get('format')!r}")
+    return TanhFit(data)
+
+
+@cache
+def _tanh_measured() -> None:
+    """`tanh_fit` is `MufuTanh_v1`, or ValueError: the primitive's rules are x up to the fit's binades (whose first word the
+    table maps to itself), ±1 from their end and 0x7FFFFFFF for NaN; every positive word of the binades in its measured table
+    is the interpolant; and every V is in [2^23, 2^25) with E + (V >> 24) < 2^7 (`tanh_table`'s exponent)."""
+    f, R = tanh_fit(), M.MUFU_TANH_RULES
+    lo, hi = f.binades[0][0] << 23, (f.binades[-1][0] + 1) << 23
+    if (R["identity_below"], R["saturate_from"], R["nan_out"]) != (lo + 1, hi, QNAN_MUFU):
+        raise ValueError(f"{TANH_QUADRATIC}: MufuTanh_v1's rules {R} do not close the binades [{lo:#x}, {hi:#x})")
+    (s,) = M.mufu_tanh_shards()
+    bw = s.block_words
+    if not (s.lo <= lo and hi <= s.hi and s.sym_ok and (lo - s.lo) % bw == 0 and (1 << 23) % bw == 0):
+        raise ValueError(f"{TANH_QUADRATIC}: MufuTanh_v1's table [{s.lo:#x}, {s.hi:#x}) does not hold the binades by block")
+    if s.lookup(lo) != lo:
+        raise ValueError(f"{TANH_QUADRATIC}: MufuTanh_v1's table at {lo:#x} is {s.lookup(lo):#x}, its identity rule {lo:#x}")
+    for e, _ in f.binades:
+        k = ((e << 23) - s.lo) // bw
+        words = np.concatenate([s.block(k + i) for i in range((1 << 23) // bw)]).astype(np.int64)
+        E, v = f.values(e, np.arange(1 << 23))
+        if v.min() < 1 << 23 or v.max() >= 1 << 25 or (E + (v >> 24)).max() >= 1 << 7:
+            raise ValueError(f"{TANH_QUADRATIC}: binade {e}'s V in [{v.min():#x}, {v.max():#x}], E up to {E.max()}")
+        bad = int(np.count_nonzero(words != _tanh_word(E, v)))
+        if bad:
+            raise ValueError(f"{TANH_QUADRATIC}: {bad} words of binade {e} are not MufuTanh_v1's")
+
+
+def _tanh_points(f: TanhFit) -> np.ndarray:
+    """Each segment's select variables (a row of 0/1): t = e - the first binade's exponent (4 bits), then the mantissa's top
+    sb_max bits from m22 down, each 0 in the binades that do not read it as a segment bit."""
+    e0 = f.binades[0][0]
+    return np.array([[((e - e0) >> k) & 1 for k in range(4)] + [(g >> (sb - 1 - i)) & 1 if i < sb else 0 for i in range(f.sb_max)]
+                     for e, sb in f.binades for g in range(1 << sb)], dtype=np.uint8)
+
+
+def _gf2_solve(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """X with A X = B over GF(2), A square and invertible (0/1 arrays)."""
+    n = len(A)
+    X = np.concatenate([A, B], axis=1).astype(np.uint8)
+    for c in range(n):
+        r = c + int(np.flatnonzero(X[c:, c])[0])
+        X[[c, r]] = X[[r, c]]
+        hit = np.flatnonzero(X[:, c])
+        X[hit[hit != c]] ^= X[c]
+    return X[:, n:]
+
+
+@cache
+def _tanh_plan():
+    """How `tanh_table` computes the functions of the segment: ``basis``, one monomial of the select variables (`_tanh_points`,
+    as a bit mask) per segment, each taken in order of degree when it is independent of those before on the segments; ``steps``
+    [(monomial, factor, variable)] build them (and any factor that is not one) with one AND each; the functions, each an XOR of
+    basis monomials with shared sums (`_shared_sums`): the digit signs of C1 (K1 of them), of C2 (K2), then the W bits of C0 with
+    the digits' constants and ``E << (shift + 25)`` folded in, then E's bit 0. Returns (basis, steps, pairs, sums, K1, K2, W)."""
+    f = tanh_fit()
+    P = _tanh_points(f)
+    nv = P.shape[1]
+    basis, vecs, reduced = [], [], {}
+    for mask in sorted(range(1 << nv), key=lambda k: (k.bit_count(), k)):
+        v = np.ones(len(P), dtype=np.uint8)
+        for i in range(nv):
+            if mask >> i & 1:
+                v &= P[:, i]
+        r = int("".join(map(str, v)), 2)
+        for lead in sorted(reduced, reverse=True):
+            if r >> lead & 1:
+                r ^= reduced[lead]
+        if r:
+            reduced[r.bit_length() - 1] = r
+            basis.append(mask)
+            vecs.append(v)
+        if len(basis) == len(P):
+            break
+    built, steps = set(range(1)) | {1 << i for i in range(nv)}, []
+
+    def build(mask: int) -> None:
+        if mask in built:
+            return
+        fac = next((mask ^ (1 << i) for i in reversed(range(nv)) if mask >> i & 1 and mask ^ (1 << i) in built), None)
+        if fac is None:
+            fac = mask ^ (1 << (mask.bit_length() - 1))
+            build(fac)
+        steps.append((mask, fac, (mask ^ fac).bit_length() - 1))
+        built.add(mask)
+
+    for mask in basis:
+        build(mask)
+    W = f.shift + 32
+    c0, rows, Ks = [2 * c for c in f.C0], [], []
+    for n, cs, at in ((f.nb, f.C1, 0), (2 * f.nb - f.p, f.C2, f.square_shift)):
+        K, B = _digits(cs)
+        Ks.append(K)
+        rows += [[1 - ((b >> k) & 1) for b in B] for k in range(K)]
+        c0 = [c - (((1 << n) - 1) * ((((1 << K) - 1) ^ b) + 1) << at) for c, b in zip(c0, B)]
+    c0 = [c + (E << (f.shift + 25)) for c, E in zip(c0, f.E)]
+    rows += [[(c >> j) & 1 for c in c0] for j in range(W)] + [[E & 1 for E in f.E]]
+    terms = _gf2_solve(np.array(vecs, dtype=np.uint8).T, np.array(rows, dtype=np.uint8).T).T
+    pairs, sums = _shared_sums(terms)
+    return tuple(basis), tuple(steps), pairs, sums, Ks[0], Ks[1], W
+
+
+def _of_t(t_terms: dict, h: list):
+    """The function of t that is ``h[t]`` for t < len(h), as an XOR of t's monomials (Möbius over the masks below len(h), a
+    down-set)."""
+    out = ZERO
+    for S in range(len(h)):
+        if sum(h[T] for T in range(S + 1) if T & S == T) & 1:
+            out = out ^ t_terms[S]
+    return out
+
+
+def tanh_table(C, e, m):
+    """MUFU.TANH's interpolator (`TanhFit.words`) at the positive word of exponent bits ``e`` (one of the fit's binades) and
+    mantissa ``m``: the word's low 31 bits. t = e - the first binade (mod 16) selects the segment with the mantissa's top bits;
+    the offset u is the nb bits below them, shifted down by sb_max - sb (a log shifter); the sum is `table_word`'s with the
+    output exponent folded into C0, and the mantissa is the sum's bits 0..22 or, when V >= 2^24, 1..23."""
+    f = tanh_fit()
+    basis, steps, pairs, sums, K1, K2, W = _tanh_plan()
+    t = add(C, list(e[:4]), const_bits(-f.binades[0][0] % 16, 4), width=4)
+    var, terms = list(t) + [None] * f.sb_max, {0: ONE}
+    for i in range(4):
+        terms[1 << i] = t[i]
+    for mask, fac, v in steps:
+        if mask < 16:
+            terms[mask] = C.AND(terms[fac], var[v])
+    sbs = [sb for _, sb in f.binades]
+    for i in range(f.sb_max):
+        var[4 + i] = terms[1 << (4 + i)] = C.AND(m[22 - i], _of_t(terms, [int(sb > i) for sb in sbs]))
+    for mask, fac, v in steps:
+        if mask >= 16:
+            terms[mask] = C.AND(terms[fac], var[v])
+    rs = [f.sb_max - sb for sb in sbs]
+    cur = list(m[23 - f.sb_max - f.nb:])
+    for k in reversed(range(max(rs).bit_length())):
+        amt, ctrl, nxt = 1 << k, _of_t(terms, [r >> k & 1 for r in rs]), []
+        for j in range(f.nb + max(r & (amt - 1) for r in rs)):
+            read = [r >> k & 1 for r in rs if j < f.nb + (r & (amt - 1))]
+            hi = cur[j + amt] if j + amt < len(cur) else ZERO
+            nxt.append(hi if all(read) else cur[j] if not any(read) else mux(C, ctrl, [hi], [cur[j]])[0])
+        cur = nxt
+    u = cur[:f.nb]
+    T = [terms[k] for k in basis]
+    for a, b in pairs:
+        T.append(T[a] ^ T[b])
+    fns = [_xor_all(T[i] for i in s) for s in sums]
+    cols: list[list] = [[] for _ in range(W)]
+    for x, n, at in ((u, fns[:K1], 0), (truncated_square(C, u, f.p), fns[K1:K1 + K2], f.square_shift)):
+        for k, n_k in enumerate(n):
+            for j, b in enumerate(x):
+                if j + k + at < W:
+                    cols[j + k + at].append(b ^ n_k)
+        for j, b in enumerate(x):
+            if j + at < W:
+                cols[j + at].append(NOT(b))
+    for j, b in enumerate(fns[K1 + K2:K1 + K2 + W]):
+        cols[j].append(b)
+    s = compress_columns(C, cols)
+    v, up = s[f.shift + 1:], s[f.shift + 25] ^ fns[-1]
+    return mux(C, up, v[1:24], v[:23]) + list(s[f.shift + 25:W]) + [ZERO]
+
+
+def mufu_tanh(C, x):
+    """``MufuTanh_v1``: |x| <= 2^-8 is x, |x| >= 8 (the infinities too) is ±1, NaN is 0x7FFFFFFF, else MUFU.TANH's
+    interpolator at |x| (`tanh_table`) with x's sign."""
+    f = tanh_fit()
+    _tanh_measured()
+    s, e, m = x[31], list(x[23:31]), list(x[:23])
+    ident = _ult_const(C, e, f.binades[0][0])
+    special = NOT(_ult_const(C, e, f.binades[-1][0] + 1))
+    nan = C.AND(_eq_const(C, e, 0xFF), or_reduce(C, m))
+    z = mux(C, ident, list(x[:30]), tanh_table(C, e, m)[:30])
+    # ±1 (0x3F800000) or 0x7FFFFFFF: the mantissa is NaN's, the exponent's low 7 bits are 1, bit 30 is NaN's, the sign x's
+    return ([b ^ C.AND(special, b ^ nan) for b in z[:23]] + [OR(C, b, special) for b in z[23:30]]
+            + [nan, C.AND(s, NOT(nan))])
+
+
 # --- the Definitions -----------------------------------------------------------------------------------------------------------
 
 _X = (("x", F32),)
@@ -409,3 +657,5 @@ DivFullRcp = definition("DivFullRcp", 2, div_full_rcp, (("b", F32),), F32, word=
                         doc="div.full.f32's reciprocal part (range scaling, MUFU.RCP) on bits: DivFullRcp_v1")
 DivFullScaleA = definition("DivFullScaleA", 3, div_full_scale_a, (("a", F32), ("b", F32)), F32, word=M.DivFullScaleA,
                            doc="div.full.f32's numerator range scaling on bits: DivFullScaleA_v1 (a * 0.25, a * 2^24 or a)")
+MufuTanh = definition("MufuTanh", 2, mufu_tanh, _X, F32, word=M.MufuTanh,
+                      doc="tanh.approx.f32 (MUFU.TANH, sm_89) on bits: MufuTanh_v1, its table as the unit's quadratic interpolator")
