@@ -1,8 +1,10 @@
 """Bit-sliced evaluation of Boolean Definitions (`verity.ir.boolean`): 64 instances per machine word.
 
-`compile(target)` flattens a Boolean Definition once: each body is read once per specialization into local index arrays, calls,
-batches and scans are inlined into one wire space, and the gates are grouped by depth and kind, so a group is one numpy
-operation (``&``, ``^``, ``~``) over rows of ``uint64``. Wire 0 is the constant 0 and wire 1 the constant 1.
+`compile(target)` reads each body once per specialization into local index arrays over the body's own wires (wire 0 the
+constant 0, wire 1 the constant 1, then its parameter leaves, then each node's output leaves). A run of consecutive gate nodes
+is grouped by depth and kind, so a group is one numpy operation (``&``, ``^``, ``~``) over rows of ``uint64``; a call runs its
+callee's program on the rows of its arguments, the members of a batch of a composite run as one program over their rows side by
+side, and a scan runs its step once per iteration. Memory is one body's wires at a time, not the flattened circuit's.
 
     evaluate_bits(target, *inputs)    the Definition's own signature: one 0/1 array per parameter, `evaluate_batch`'s shapes
     evaluate_words(target, *inputs)   its word view (`boolean.word_type`): element j of a port is one word, least significant
@@ -25,145 +27,25 @@ from verity.ir.types import Type
 
 __all__ = ["Compiled", "compile", "evaluate_bits", "evaluate_words"]
 
-_KIND_CODE = {"and": 0, "xor": 1, "not": 2}
-_ROW_BUDGET = 1 << 28  # bytes of wire rows per chunk of instances
-
-
-@dataclass
-class _Local:
-    """One body in its own wire space: parameter leaves first, then each node's output leaves."""
-
-    n_params: int
-    node_base: list[int]
-    ops: list[tuple]
-    ret: np.ndarray
-    size: int
-
-
-_LOCAL: "weakref.WeakKeyDictionary[SpecializedDefinition, _Local]" = weakref.WeakKeyDictionary()
-
-
-def _local(spec: SpecializedDefinition) -> _Local:
-    hit = _LOCAL.get(spec)
-    if hit is not None:
-        return hit
-    body = spec.body
-    p_base, k = [], 0
-    for _, t in body.params:
-        p_base.append(k)
-        k += t.leaves
-    n_params, node_base = k, []
-    for nd in body.nodes:
-        node_base.append(k)
-        k += nd.out.leaves
-
-    def idx(refs) -> np.ndarray:
-        return np.fromiter(((p_base[i] if s == "p" else node_base[i]) + j for s, i, j in refs), dtype=np.int64,
-                           count=refs.count)
-
-    def member_refs(nd, m: int) -> list[np.ndarray]:
-        out = []
-        for a, ax in zip(nd.args, nd.axes):
-            if ax is None:
-                out.append(idx(a.refs))
-            elif ax == 0:
-                L = a.type.elem.leaves
-                out.append(idx(a.refs.slice(m * L, (m + 1) * L)))
-            else:
-                out.append(idx(a.take(ax, m).refs))
-        return out
-
-    ops: list[tuple] = []
-    for q, nd in enumerate(body.nodes):
-        fn, base = nd.fn, node_base[q]
-        if isinstance(fn, PrimitiveDefinition):
-            if BL.is_constant_bit(fn):
-                ops.append(("const", base, nd.n if nd.form == "batch" else 1, fn.evaluate()))
-                continue
-            if not BL.is_gate(fn):
-                raise TypeError(f"{spec.id} node {q}: {fn.id} is not a Boolean gate or constant bit")
-            kind, arity = BL.KINDS[fn.id]
-            if nd.form == "primitive":
-                operands = np.concatenate([idx(a.refs) for a in nd.args]).reshape(1, arity)
-            else:
-                operands = np.stack([np.concatenate(member_refs(nd, m)) for m in range(nd.n)]).reshape(nd.n, arity)
-            ops.append(("gate", _KIND_CODE[kind], base, operands))
-        elif nd.form == "call":
-            ops.append(("call", fn, base, [np.concatenate([idx(a.refs) for a in nd.args])]))
-        elif nd.form == "batch":
-            ops.append(("call", fn, base, [np.concatenate(member_refs(nd, m)) for m in range(nd.n)]))
-        else:
-            c = nd.out.fields[0].leaves
-            xs = [(idx(a.refs), a.type.elem.leaves) for a in nd.args[1:1 + nd.n_xs]]
-            shared = [idx(a.refs) for a in nd.args[1 + nd.n_xs:]]
-            ops.append(("scan", fn, base, idx(nd.args[0].refs), xs, shared, nd.n, c))
-    hit = _LOCAL[spec] = _Local(n_params, node_base, ops, idx(body.ret), k)
-    return hit
+_KINDS = ("and", "xor", "not")
+_ROW_BUDGET = 1 << 28  # bytes of one body's wire rows per chunk of instances
 
 
 @dataclass
 class Compiled:
-    """A flattened Boolean Definition: ``groups`` of (kind, out wires, operand wires a, b), in an order where every operand is
-    computed before it is read."""
+    """One body: ``steps`` in order, each ``("gates", [(kind, out, a, b), ...])`` (local wire indices, every operand computed
+    before its group), ``("call", callee, [member argument indices], out base, out leaves)`` or ``("scan", step, init, xs,
+    shared, n, carry leaves, out base)``. ``counts`` are the gates of the flattened circuit, by kind."""
 
     target: str
     params: tuple[Type, ...]
     ret: Type
-    n_wires: int
-    inputs: np.ndarray
-    outputs: np.ndarray
-    groups: list[tuple[int, np.ndarray, np.ndarray, np.ndarray]] = field(repr=False)
+    size: int
+    n_params: int
+    steps: list[tuple] = field(repr=False)
+    ret_idx: np.ndarray = field(repr=False)
     counts: dict[str, int] = field(default_factory=dict)
-
-
-class _Flat:
-    def __init__(self) -> None:
-        self.n = 2
-        self.kinds: list[int] = []
-        self.outs: list[np.ndarray] = []
-        self.ops: list[np.ndarray] = []
-
-    def alloc(self, k: int) -> np.ndarray:
-        out = np.arange(self.n, self.n + k, dtype=np.int64)
-        self.n += k
-        return out
-
-    def inline(self, spec: SpecializedDefinition, args: np.ndarray) -> np.ndarray:
-        L = _local(spec)
-        g = np.empty(L.size, dtype=np.int64)
-        g[:L.n_params] = args
-        for op in L.ops:
-            if op[0] == "gate":
-                _, kind, base, operands = op
-                n, arity = operands.shape
-                out = self.alloc(n)
-                g[base:base + n] = out
-                a = g[operands]
-                self.kinds.append(np.full(n, kind, dtype=np.int8))
-                self.outs.append(out)
-                self.ops.append(a if arity == 2 else np.concatenate([a, a], axis=1))
-            elif op[0] == "const":
-                _, base, n, v = op
-                g[base:base + n] = v
-            elif op[0] == "call":
-                _, fn, base, members = op
-                w = fn.out_leaves
-                for m, refs in enumerate(members):
-                    child = self.inline(fn, g[refs])
-                    g[base + m * w:base + (m + 1) * w] = child
-            else:
-                _, fn, base, init, xs, shared, n, c = op
-                carry = g[init]
-                ys = []
-                for m in range(n):
-                    a = [carry] + [g[r[m * e:(m + 1) * e]] for r, e in xs] + [g[r] for r in shared]
-                    r = self.inline(fn, np.concatenate(a) if a else np.empty(0, dtype=np.int64))
-                    carry, y = r[:c], r[c:]
-                    ys.append(y)
-                g[base:base + c] = carry
-                if ys:
-                    g[base + c:base + c + sum(len(y) for y in ys)] = np.concatenate(ys)
-        return g[L.ret]
+    max_size: int = 0
 
 
 _COMPILED: "weakref.WeakKeyDictionary[SpecializedDefinition, Compiled]" = weakref.WeakKeyDictionary()
@@ -177,46 +59,141 @@ def _spec(target: Any) -> SpecializedDefinition:
     return target
 
 
+def _group(gates: list[tuple[int, int, np.ndarray, np.ndarray]], size: int) -> list[tuple[int, np.ndarray, np.ndarray, np.ndarray]]:
+    """A run of gate nodes, (kind, out, a, b) each, as groups of equal depth and kind (depth counted within the run)."""
+    depth = np.zeros(size, dtype=np.int64)
+    for _, out, a, b in gates:
+        depth[out] = np.maximum(depth[a], depth[b]) + 1
+    kinds = np.concatenate([np.full(len(o), k, np.int8) for k, o, _, _ in gates])
+    outs = np.concatenate([o for _, o, _, _ in gates])
+    a = np.concatenate([x for _, _, x, _ in gates])
+    b = np.concatenate([y for _, _, _, y in gates])
+    order = np.lexsort((kinds, depth[outs]))
+    kinds, outs, a, b = kinds[order], outs[order], a[order], b[order]
+    key = depth[outs] * 4 + kinds
+    cuts = np.r_[0, np.flatnonzero(np.diff(key)) + 1, len(key)]
+    return [(int(kinds[s]), outs[s:e], a[s:e], b[s:e]) for s, e in zip(cuts[:-1], cuts[1:])]
+
+
 def compile(target: Any) -> Compiled:  # noqa: A001 (the module's verb; `builtins.compile` is not used here)
     spec = _spec(target)
     hit = _COMPILED.get(spec)
     if hit is not None:
         return hit
+    body = spec.body
+    p_base, k = [], 2
+    for _, t in body.params:
+        p_base.append(k)
+        k += t.leaves
+    n_params, node_base, const = k - 2, [], {}
+    for q, nd in enumerate(body.nodes):
+        node_base.append(k)
+        k += nd.out.leaves
+        if isinstance(nd.fn, PrimitiveDefinition) and BL.is_constant_bit(nd.fn):
+            const[q] = nd.fn.evaluate()
+
+    def idx(refs) -> np.ndarray:
+        return np.fromiter((p_base[i] + j if s == "p" else const[i] if i in const else node_base[i] + j for s, i, j in refs),
+                           dtype=np.int64, count=refs.count)
+
+    def member_refs(nd, m: int) -> np.ndarray:
+        out = []
+        for a, ax in zip(nd.args, nd.axes):
+            if ax is None:
+                out.append(idx(a.refs))
+            elif ax == 0:
+                L = a.type.elem.leaves
+                out.append(idx(a.refs.slice(m * L, (m + 1) * L)))
+            else:
+                out.append(idx(a.take(ax, m).refs))
+        return np.concatenate(out) if out else np.empty(0, np.int64)
+
+    steps: list[tuple] = []
+    run: list[tuple] = []
+    counts = dict.fromkeys(_KINDS, 0)
+    max_size = k
+
+    def flush() -> None:
+        if run:
+            steps.append(("gates", _group(run, k)))
+            run.clear()
+
+    for q, nd in enumerate(body.nodes):
+        fn, base = nd.fn, node_base[q]
+        if isinstance(fn, PrimitiveDefinition):
+            if q in const:
+                continue
+            if not BL.is_gate(fn):
+                raise TypeError(f"{spec.id} node {q}: {fn.id} is not a Boolean gate or constant bit")
+            kind, arity = BL.KINDS[fn.id]
+            if nd.form == "primitive":
+                ops = np.concatenate([idx(a.refs) for a in nd.args]).reshape(1, arity)
+            else:
+                ops = np.stack([member_refs(nd, m) for m in range(nd.n)]).reshape(nd.n, arity)
+            out = np.arange(base, base + len(ops), dtype=np.int64)
+            run.append((_KINDS.index(kind), out, ops[:, 0], ops[:, -1]))
+            counts[kind] += len(ops)
+            continue
+        flush()
+        child = compile(fn)
+        max_size = max(max_size, child.max_size)
+        if nd.form == "call":
+            members = [np.concatenate([idx(a.refs) for a in nd.args]) if nd.args else np.empty(0, np.int64)]
+        elif nd.form == "batch":
+            members = [member_refs(nd, m) for m in range(nd.n)]
+        else:
+            xs = [(idx(a.refs), a.type.elem.leaves) for a in nd.args[1:1 + nd.n_xs]]
+            shared = [idx(a.refs) for a in nd.args[1 + nd.n_xs:]]
+            steps.append(("scan", child, idx(nd.args[0].refs), xs, shared, nd.n, nd.out.fields[0].leaves, base))
+            for kk in _KINDS:
+                counts[kk] += nd.n * child.counts[kk]
+            continue
+        steps.append(("call", child, np.stack(members), base, fn.out_leaves))
+        for kk in _KINDS:
+            counts[kk] += len(members) * child.counts[kk]
+    flush()
     params, ret = spec.signature()
-    F = _Flat()
-    inputs = F.alloc(sum(t.leaves for _, t in params))
-    outputs = F.inline(spec, inputs)
-    if F.kinds:
-        kinds, outs, ops = np.concatenate(F.kinds), np.concatenate(F.outs), np.concatenate(F.ops)
-    else:
-        kinds, outs, ops = np.empty(0, np.int8), np.empty(0, np.int64), np.empty((0, 2), np.int64)
-    depth = np.zeros(F.n, dtype=np.int64)
-    for o, a in zip(F.outs, F.ops):
-        depth[o] = np.maximum(depth[a[:, 0]], depth[a[:, 1]]) + 1
-    order = np.lexsort((kinds, depth[outs]))
-    kinds, outs, ops = kinds[order], outs[order], ops[order]
-    key = depth[outs] * 4 + kinds
-    cuts = np.flatnonzero(np.diff(key)) + 1 if len(key) else np.empty(0, np.int64)
-    groups = [(int(kinds[s]), outs[s:e], ops[s:e, 0], ops[s:e, 1])
-              for s, e in zip(np.r_[0, cuts], np.r_[cuts, len(key)]) if e > s]
-    counts = {k: int(np.count_nonzero(kinds == c)) for k, c in _KIND_CODE.items()}
-    hit = _COMPILED[spec] = Compiled(spec.id, tuple(t for _, t in params), ret, F.n, inputs, outputs, groups, counts)
+    hit = _COMPILED[spec] = Compiled(spec.id, tuple(t for _, t in params), ret, k, n_params, steps, idx(body.ret), counts,
+                                     max_size)
     return hit
 
 
-def _run(c: Compiled, rows: np.ndarray) -> np.ndarray:
-    """``rows``: (input leaves, words) of packed instances; returns (output leaves, words)."""
-    W = np.zeros((c.n_wires, rows.shape[1]), dtype=np.uint64)
+def _run(c: Compiled, args: np.ndarray) -> np.ndarray:
+    """``args``: (parameter leaves, words) of packed instances; returns (return leaves, words)."""
+    words = args.shape[1]
+    W = np.empty((c.size, words), dtype=np.uint64)
+    W[0] = 0
     W[1] = ~np.uint64(0)
-    W[c.inputs] = rows
-    for kind, out, a, b in c.groups:
-        if kind == 0:
-            W[out] = W[a] & W[b]
-        elif kind == 1:
-            W[out] = W[a] ^ W[b]
+    W[2:2 + c.n_params] = args
+    for step in c.steps:
+        if step[0] == "gates":
+            for kind, out, a, b in step[1]:
+                if kind == 0:
+                    W[out] = W[a] & W[b]
+                elif kind == 1:
+                    W[out] = W[a] ^ W[b]
+                else:
+                    W[out] = ~W[a]
+        elif step[0] == "call":
+            _, child, members, base, w = step
+            n = len(members)
+            rows = W[members].transpose(1, 0, 2).reshape(members.shape[1], n * words)
+            out = _run(child, rows).reshape(w, n, words).transpose(1, 0, 2).reshape(n * w, words)
+            W[base:base + n * w] = out
         else:
-            W[out] = ~W[a]
-    return W[c.outputs]
+            _, child, init, xs, shared, n, cl, base = step
+            carry = W[init]
+            ys = []
+            for m in range(n):
+                parts = [carry] + [W[r[m * e:(m + 1) * e]] for r, e in xs] + [W[r] for r in shared]
+                r = _run(child, np.concatenate(parts) if parts else np.empty((0, words), np.uint64))
+                carry = r[:cl]
+                ys.append(r[cl:])
+            W[base:base + cl] = carry
+            if ys:
+                y = np.concatenate(ys)
+                W[base + cl:base + cl + len(y)] = y
+    return W[c.ret_idx]
 
 
 def _pack(bits: np.ndarray) -> np.ndarray:
@@ -236,8 +213,8 @@ def _unpack(rows: np.ndarray, n: int) -> np.ndarray:
 
 def _evaluate(c: Compiled, bits: np.ndarray) -> np.ndarray:
     n = bits.shape[0]
-    chunk = 64 * max(1, _ROW_BUDGET // (8 * c.n_wires))
-    out = np.empty((n, len(c.outputs)), dtype=np.uint8)
+    chunk = 64 * max(1, _ROW_BUDGET // (8 * c.max_size))
+    out = np.empty((n, len(c.ret_idx)), dtype=np.uint8)
     for lo in range(0, n, chunk):
         hi = min(n, lo + chunk)
         out[lo:hi] = _unpack(_run(c, _pack(bits[lo:hi])), hi - lo)
