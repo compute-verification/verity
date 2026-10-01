@@ -26,6 +26,10 @@ without serving again (the sample is seeded from the run root, so it draws the s
                        picks_key, picks, touched_bytes, files: {path: {sha256, bytes}}, bytes, dump_sha256}, written last
 
 `dump_sha256` is the sha256 of the canonical JSON of `files`.  It is built under `replay_slim_p<pair>.partial/` and renamed into place.
+
+BUNDLE may be that keep once the record is decided (`open_keep`): every file is checked against its `slim.json`, the bundle the
+Commit's verdict names must be the one the keep was made from, and the run is replayed as it was sealed (the bundle context's row),
+so the replay draws the same picks from the same committed reads.  A replay from a keep writes no keep.
 """
 from __future__ import annotations
 
@@ -63,7 +67,8 @@ PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    bundle: str = option("bundle", help="the sealed replay bundle (<commit out>/replay_bundle_p<pair>)")
+    bundle: str = option("bundle", help="the sealed replay bundle (<commit out>/replay_bundle_p<pair>), or its slim keep "
+                                        "(<commit out>/replay_slim_p<pair>) once the record is decided")
     row_dir: str = option("--row-dir", help="the row dir holding the Build's Programs of record (and manifest.json)")
     checkpoint_dir: str = option("--checkpoint-dir", help="the checkpoint of record (safetensors shards + config.json)")
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (shard sha256 pins)")
@@ -163,14 +168,21 @@ def _write(p: Path, text: str) -> None:
 
 
 def of_record(b: dict[str, Any], out: Path) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any], Any, Any]:
-    """(runs.jsonl rows, the deferred run's row, verdict.json, store, run) once the bundle is shown to be this record's; else Refused."""
+    """(runs.jsonl rows, the deferred run's row, verdict.json, store, run) once the bundle is shown to be this record's; else Refused.
+    From a keep, a decided run's row is the one its bundle sealed (in ``rows`` too)."""
     ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])
     verdict = json.loads((out / "verdict.json").read_text())
     ent = next((x for x in ((verdict.get("replay_deferred") or {}).get("bundles") or []) if int(x["pair"]) == pair), None)
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
         raise Refused(f"the Commit's verdict names no bundle of pair {pair} with manifest sha256 {b['manifest_sha256'][:16]}")
     rows = [json.loads(ln) for ln in (out / "runs.jsonl").read_text().splitlines() if ln.strip()]
-    row = next((r for r in rows if r["pair"] == pair and r["arm"] != "control"), None)
+    i = next((j for j, r in enumerate(rows) if r["pair"] == pair and r["arm"] != "control"), None)
+    row = rows[i] if i is not None else None
+    if row is not None and b.get("slim") is not None and not RB.awaits_replay(row.get("commit") or {}):
+        sealed = ctx.get("row") or {}
+        if (row.get("commit") or {}).get("run_root") != (sealed.get("commit") or {}).get("run_root"):
+            raise Refused(f"pair {pair}: the decided run's run root is not the run root its keep's bundle sealed")
+        row = rows[i] = sealed
     if row is None or not RB.awaits_replay(row.get("commit") or {}):
         raise Refused(f"pair {pair}: no instrumented run awaiting its deferred replay in {out / 'runs.jsonl'}")
     store, run = SD.load(bdir / "store")
@@ -231,7 +243,8 @@ def weights_attest(c: dict[str, Any], wc: dict[str, Any], consumed: set[str], wo
         by["bundle" if name in extra else "checkpoint"] += 1
     return {"pin": {"equal": pin.get("result"), "digest": pin.get("root_of_record")},
             "root_openings": f"{len(consumed & words.keys())}/{len(consumed)}", "sources": by,
-            "attests": ATTESTS if whole else None, "replay": f"cpu, from bundle {b['manifest_sha256']}"}
+            "attests": ATTESTS if whole else None,
+            "replay": f"cpu, from {'the slim keep of ' if b.get('slim') is not None else ''}bundle {b['manifest_sha256']}"}
 
 
 def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict[str, Any], consumed: set[str],
@@ -313,6 +326,39 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     return doc
 
 
+def open_keep(k: str | os.PathLike) -> dict[str, Any]:
+    """The slim keep at ``k`` as `replay_bundle.open_bundle` returns a bundle, its `manifest_sha256` the bundle's it was made from;
+    Refused unless every file its slim.json lists is there with that size and sha256 and no other is, `dump_sha256` is the digest of
+    the list, and its pair, run root and binding map are its context's."""
+    k = Path(k)
+    doc = json.loads((k / SLIM_DOC).read_text())
+    files = doc.get("files") or {}
+    if doc.get("schema") != SLIM_SCHEMA or not files:
+        raise Refused(f"{k}/{SLIM_DOC} is not a {SLIM_SCHEMA} keep that lists files")
+    if doc.get("dump_sha256") != hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest():
+        raise Refused(f"{k}/{SLIM_DOC}'s dump_sha256 is not the digest of its files")
+    have = {x.relative_to(k).as_posix() for x in k.rglob("*") if x.is_file()} - {SLIM_DOC}
+    if have != set(files):
+        raise Refused(f"{k}: files differ from its {SLIM_DOC}: missing {sorted(set(files) - have)[:4]}, extra {sorted(have - set(files))[:4]}")
+    rels = sorted(files)
+    with ThreadPoolExecutor(8) as pool:
+        sums = list(pool.map(lambda r: RB._sha256(k / r), rels))
+    bad = [r for r, h in zip(rels, sums) if h != files[r]["sha256"] or (k / r).stat().st_size != files[r]["bytes"]]
+    if bad:
+        raise Refused(f"{k}: files whose size or sha256 is not its {SLIM_DOC}'s: {bad[:4]}")
+    ctx = json.loads((k / "context.json").read_text())
+    if (int(ctx["pair"]), ctx.get("run_root"), files.get("binding_map.json", {}).get("sha256")) != (
+            doc.get("pair"), doc.get("run_root"), doc.get("binding_map_sha256")):
+        raise Refused(f"{k}/{SLIM_DOC}'s pair, run root or binding map is not its context's")
+    return {"path": str(k), "manifest": {"files": {"binding_map.json": files["binding_map.json"]}},
+            "manifest_sha256": doc["bundle_manifest_sha256"], "context": ctx, "slim": doc}
+
+
+def open_source(p: str | os.PathLike) -> dict[str, Any]:
+    """A slim keep (`open_keep`) when ``p`` holds a slim.json, else a sealed bundle (`replay_bundle.open_bundle`)."""
+    return open_keep(p) if (Path(p) / SLIM_DOC).is_file() else RB.open_bundle(p)
+
+
 def replay(o: Options) -> bool | None:
     """The bundle's C2 replay and the run's verdict on the record; the verdict's commit_pass."""
     from verity_vllm.check import weights_of_record as WR
@@ -320,7 +366,7 @@ def replay(o: Options) -> bool | None:
 
     t0 = time.perf_counter()
     tl = Timeline.from_env("commit_replay")
-    b = RB.open_bundle(o.bundle)
+    b = open_source(o.bundle)
     ctx, bdir = b["context"], Path(b["path"])
     out, pair = bdir.parent, int(ctx["pair"])
     rows, row, verdict, store, run = of_record(b, out)
@@ -343,8 +389,9 @@ def replay(o: Options) -> bool | None:
                        weights_check=lambda: dict(wc), tl=tl, reads=reads), {})
     engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
     decide(row, ctx, wc, b, consumed, words, tree.get("extra") or {})
-    with tl.span("replay.slim_keep", pair=pair):
-        keep(out, b, store, run, touched, reads, row["commit"])
+    if b.get("slim") is None:
+        with tl.span("replay.slim_keep", pair=pair):
+            keep(out, b, store, run, touched, reads, row["commit"])
     record(out, rows, verdict, b, time.perf_counter() - t0)
     c = row["commit"]
     print(f"[replay] COMMIT {'PASS' if c['commit_pass'] else 'FAIL'} (pair {pair}): {c.get('commit_fail_reason') or 'every check on the record'}; "

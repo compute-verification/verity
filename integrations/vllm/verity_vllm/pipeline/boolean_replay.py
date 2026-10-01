@@ -12,6 +12,9 @@ Build's of record (`row_dir/build_request`, its digest checked against the Commi
 or whose Boolean version does not keep the Call's boundary (the word view of its signature is not the Call's), is not evaluated, by
 name.  ``--word`` replays the same draw with the word evaluators into ``OUT/word``, the baseline.
 
+BUNDLE may be the slim keep a decided replay left (`<commit out>/replay_slim_p<pair>`, `cpu_replay.open_keep`): the run is replayed
+as its bundle sealed it, from the committed reads its decided replay made, so the draw is the decided replay's.
+
 ``OUT/boolean_replay.json`` cites the Commit (Program digest, run root, binding map sha256, bundle manifest sha256, the draw's seed),
 holds σ over the Program's row Definitions (word id -> Boolean id, or why not), and per replay the picks by family: picked,
 evaluated, mismatched.  ``OUT/boolean/rows.jsonl`` is one line per row the Boolean evaluator was asked for (interior rows included).
@@ -220,6 +223,7 @@ def run(o: Options) -> dict[str, Any]:
     ctx = json.loads((bundle / "context.json").read_text())
     pair = int(ctx["pair"])
     record = {n: _sha256(bundle.parent / n) for n in (*RECORDS, f"binding_map_p{pair}.json")}
+    slim = json.loads((bundle / CR.SLIM_DOC).read_text()) if (bundle / CR.SLIM_DOC).is_file() else None
     dec, digest = load_program(Path(o.row_dir) / "build_request" / "descriptor.json.gz")
     if digest != ctx["args"].get("program_digest"):
         raise CR.Refused(f"the row dir's request Program {digest[:16]} is not the Commit's {str(ctx['args'].get('program_digest'))[:16]}")
@@ -231,7 +235,8 @@ def run(o: Options) -> dict[str, Any]:
         raise CR.Refused(f"{len(bad)} instance rows are not their Program node's Call (first: row {bad[0]})")
     doc: dict[str, Any] = {"schema": SCHEMA, "commit": {"dir": str(bundle.parent.resolve()), "pair": pair, "program_digest": digest,
                                                         "run_root": ctx["run_root"], "binding_map_sha256": record[f"binding_map_p{pair}.json"],
-                                                        "bundle_manifest_sha256": _sha256(bundle / "MANIFEST.json")}}
+                                                        "bundle_manifest_sha256": slim["bundle_manifest_sha256"] if slim else _sha256(bundle / "MANIFEST.json"),
+                                                        "replayed_from": "slim keep" if slim else "bundle"}}
     ev = BooleanRows(nodes, K, out / "boolean" / "rows.jsonl", o.seconds_per_vu)
     for spec, k in sorted({r["spec"]: K + int(r["i"]) for r in rows}.items()):
         try:

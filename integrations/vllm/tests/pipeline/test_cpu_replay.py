@@ -1,8 +1,10 @@
 """The CPU replay of a deferred Commit (`pipeline.cpu_replay`): the checkpoint's tensors opened against the committed weights root (a
-flipped checkpoint byte fails by name), and a bundle that is not the Commit record's refused before anything is replayed."""
+flipped checkpoint byte fails by name), a bundle or slim keep that is not the Commit record's refused before anything is replayed,
+and a decided record replayed from its keep as its bundle sealed the run."""
 from __future__ import annotations
 
 import json
+import shutil
 import struct
 from pathlib import Path
 
@@ -134,7 +136,7 @@ def _deferred(tmp_path, steps=None):
     (tmp_path / "binding_map_p1.json").write_text(json.dumps({"entries": []}))
     sr, lk = RB.deferred_records(RB.path(tmp_path, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr, "boundary_linkage": lk}}
-    m = RB.seal(tmp_path, 1, {"pair": 1, "run_root": rc.run_root.hex()}, tmp_path / "binding_map_p1.json")
+    m = RB.seal(tmp_path, 1, {"pair": 1, "run_root": rc.run_root.hex(), "row": row}, tmp_path / "binding_map_p1.json")
     (tmp_path / "runs.jsonl").write_text(json.dumps(row) + "\n")
     (tmp_path / "verdict.json").write_text(json.dumps({"replay_deferred": {"bundles": [{"pair": 1, "manifest_sha256": m["sha256"]}]}}))
     return tmp_path
@@ -224,6 +226,63 @@ def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
         assert CPU.keep(out, b, store, run, t, bad, c) is None
     assert CPU.keep(out, b, store, run, t, plan, {"sampled_replay": {"grade": "not-evaluated"}}) is None
     assert not list(out.glob("replay_slim_p*"))
+
+
+def _decided_keep(tmp_path):
+    """A Commit whose replay was decided and left its slim keep, the bundle gone (config-run deletes it)."""
+    out, b, store, run, t, _want, c, plan = _kept(tmp_path)
+    CPU.keep(out, b, store, run, t, plan, c)
+    _edit_row(out, lambda cm: cm.update(commit_pass=True, sampled_replay={"result": True, "grade": "complete"}))
+    shutil.rmtree(RB.path(out, 1))
+    return out, CPU.slim_path(out, 1), run
+
+
+def _edit_row(out, f):
+    row = json.loads((out / "runs.jsonl").read_text())
+    f(row["commit"])
+    (out / "runs.jsonl").write_text(json.dumps(row) + "\n")
+
+
+def _edit_slim(k, f):
+    doc = json.loads((k / CPU.SLIM_DOC).read_text())
+    f(doc)
+    (k / CPU.SLIM_DOC).write_text(json.dumps(doc))
+
+
+def test_a_decided_record_replays_from_its_slim_keep_as_its_bundle_sealed_the_run(tmp_path):
+    out, k, run = _decided_keep(tmp_path)
+    b = CPU.open_source(k)
+    named = json.loads((out / "verdict.json").read_text())["replay_deferred"]["bundles"][0]["manifest_sha256"]
+    assert b["slim"]["pair"] == 1 and b["manifest_sha256"] == named and b["path"] == str(k)
+    rows, row, _verdict, store, srun = CPU.of_record(b, out)
+    assert RB.awaits_replay(row["commit"]) and rows == [row], "the run as sealed, in place of the decided one"
+    assert srun.run_root == run.run_root and store._run_root(srun) == run.run_root
+    assert json.loads((out / "runs.jsonl").read_text())["commit"]["commit_pass"] is True, "the record itself is not rewritten"
+    assert CPU.weights_attest({}, {"equal": True}, set(), {}, {}, b)["replay"] == f"cpu, from the slim keep of bundle {named}"
+
+
+@pytest.mark.parametrize("tamper,why", [
+    (lambda o, k: (k / "store" / "store.json").write_text((k / "store" / "store.json").read_text() + " "), "size or sha256"),
+    (lambda o, k: (k / "weights" / "stray.bin").write_bytes(b"x"), r"extra \['weights/stray.bin'\]"),
+    (lambda o, k: (k / "context.json").unlink(), r"missing \['context.json'\]"),
+    (lambda o, k: _edit_slim(k, lambda d: d["files"]["context.json"].update(bytes=1)), "dump_sha256"),
+    (lambda o, k: _edit_slim(k, lambda d: d.update(schema="verity-vllm/replay-slim/v0")), "replay-slim/v1"),
+    (lambda o, k: _edit_slim(k, lambda d: d.update(run_root="cd" * 32)), "pair, run root or binding map"),
+    (lambda o, k: _edit_slim(k, lambda d: d.update(bundle_manifest_sha256="00" * 32)), "names no bundle"),
+    (lambda o, k: _edit_row(o, lambda c: c.update(run_root="cd" * 32)), "decided run's run root"),
+])
+def test_a_keep_that_is_not_the_records_is_refused(tmp_path, tamper, why):
+    out, k, _run = _decided_keep(tmp_path)
+    tamper(out, k)
+    with pytest.raises(CPU.Refused, match=why):
+        CPU.of_record(CPU.open_source(k), out)
+
+
+def test_a_decided_record_does_not_replay_again_from_its_full_bundle(tmp_path):
+    out = _deferred(tmp_path)
+    _edit_row(out, lambda c: c.update(commit_pass=True))
+    with pytest.raises(CPU.Refused, match="awaiting"):
+        CPU.of_record(CPU.open_source(RB.path(out, 1)), out)
 
 
 def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):
