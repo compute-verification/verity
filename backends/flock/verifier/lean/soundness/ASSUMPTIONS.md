@@ -141,24 +141,29 @@ executable accept is the model's) gives one with no positions, at `δ_tree = 0` 
 - **the draw** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified draw on a byte source `src`), whose count
   curve is at most `Law.stratified`'s under A3 (`Law.execOS_miss_le`).
 
-It is a working theorem, not proved: its obligations are open. Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`.
+It is proved under the assumptions its footprint lists. Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`.
 
-**Its footprint.** Every hypothesis of its signature is one of the following.
+**Its footprint.** Every hypothesis of its signature is an assumption, listed with its kind: hardness, platform, model,
+intended to prove, or a numeric condition on the bound's parameters.
 
-| Hypothesis | What it is |
-|---|---|
-| `hKS` (`StrictCR.TableCR`), `hT` (`StrictCR.Finder.CR`) | `SHA512CRStrict` of SHA-512 (`cr/sha-512`), for the knowledge finders of each table after each draw at budgets `qF`, `qS`, and for `tr`'s finder at budget `qT` |
-| `hCR` (`LinkCR`) | `SHA512CRExpected` of SHA-512 (`ecr/sha-512`), for the prover's link finders |
-| `hA3` (`UniformRandomBytes`) | A3 (`uniform/io-getrandombytes`), for the unit draw's byte source |
-| `pp.placed`, `pp.aliased` | open: W6 (the table's statement holds the program's rows) and `Layout.Aliased` |
-| `hHm`; `lay`, `rs` | open: `HmRowComputes`, and the layout's facts (in place of `vb`) |
-| `tr` | open: the serving roots' rewinding, in place of `hExec`, which gives one at `δ_tree = 0` (`TreeRewind.ofNever`) |
-| `hConst`, `hZero` | open: the constants' and the zero's columns |
-| `hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht` | numeric conditions, and the executable's strata matching `Law.stratified`'s |
-| `qF`, `qS`, `qT` | numeric conditions Lean doesn't check: `qF ≥ 2t′ + 2v`, `qS ≥ t′ + v`, `qT ≥ 2t′ + 2v` (`SHA512CRStrict`, above) |
+| Hypothesis | Kind | What it is |
+|---|---|---|
+| `hKS` (`StrictCR.TableCR`), `hT` (`StrictCR.Finder.CR`) | hardness | `SHA512CRStrict` of SHA-512 (`cr/sha-512`), for the knowledge finders of each table after each draw at budgets `qF`, `qS`, and for `tr`'s finder at budget `qT` |
+| `hCR` (`LinkCR`) | hardness | `SHA512CRExpected` of SHA-512 (`ecr/sha-512`), for the prover's link finders |
+| `hA3` (`UniformRandomBytes`) | platform | A3 (`uniform/io-getrandombytes`), for the unit draw's byte source |
+| none: the round coins | platform | A6 (`uniform/flock-coin-server`), the coin server's OS randomness: each round's coins uniform, drawn after the prover's message. The model embodies it (next row), so no hypothesis states it |
+| none: the session's game | model | the protocol as `batchedSession` models it, against any prover `Strategy`, with the round coins A6 gives |
+| `pp.placed`, `pp.aliased` | intended to prove | W6 (the table's statement holds the program's rows) and `Layout.Aliased` |
+| `hHm`; `lay`, `rs` | intended to prove | `HmRowComputes`, and the layout's facts (in place of `vb`) |
+| `tr` | intended to prove | the serving roots' rewinding, in place of `hExec`, which gives one at `δ_tree = 0` (`TreeRewind.ofNever`) |
+| `hConst`, `hZero` | intended to prove | the constants' and the zero's columns |
+| `hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht` | numeric condition | conditions on the bound's parameters, and the executable's strata matching `Law.stratified`'s |
+| `qF`, `qS`, `qT` | numeric condition | conditions Lean doesn't check: `qF ≥ 2t′ + 2v`, `qS ≥ t′ + v`, `qT ≥ 2t′ + 2v` (`SHA512CRStrict`, above) |
 
-Nothing else in it is cryptographic. A6 (`uniform/flock-coin-server`) is not a hypothesis: the model's session draws
-its round coins itself.
+Nothing else in it is assumed. The four `flock_e2e_*_hm96` forms have the same footprint, with `dp : DerivedPlaces` (intended
+to prove: the derived column placements) in place of `pp`, and without `hA3`: the generic forms hold at every law, and
+the `_exec` forms at uniform byte tapes (`FlockSoundness/Binding/E2E.lean`). `flock_e2e_count_exec_hm96` takes `hks`
+and `hS`; the other three don't.
 
 **What it bounds.** The headline bounds wrong units of the pinned rows circuit; "computes the Definition" additionally
 needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).

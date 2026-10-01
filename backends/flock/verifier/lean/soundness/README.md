@@ -125,8 +125,10 @@ link term per audit.
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
   layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
   the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
-  with that binding on the statement's rows' circuit at the live draw under A3 (`ASSUMPTIONS.md`, The headline). These
-  are working theorems, not proved, until their open obligations are discharged (`assumptions/e2e-checklist.md`).
+  with that binding on the statement's rows' circuit at the live draw under A3 (`ASSUMPTIONS.md`, The headline). Each
+  is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
+  `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
+  `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumptions/e2e-checklist.md`), or a numeric condition.
 - **`registered_weights`** (`Binding/Weights.lean`). At each of a drawn unit's wires, the row a satisfying witness of
   its table holds is the registered row (any opening of the registered leaf: the weights and salt the registrant
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from

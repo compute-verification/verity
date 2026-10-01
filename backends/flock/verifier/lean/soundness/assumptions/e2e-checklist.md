@@ -7,15 +7,22 @@
 
 **The headline** is `Prog.flock_headline` (`FlockSoundness/Headline.lean`; `ASSUMPTIONS.md`, The headline): the count
 curve on `p.circuit outs` with `pp : ProgPlaces`, SHA-512 as the session's hash and the rows' (`flock_e2e_count_hm96`),
-at the live draw `Law.execOS` composed with A3 (`Law.execOS_miss_le`). It is a working theorem, not proved, until the
-obligations below are discharged. Its signature takes `SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`),
-`SHA512CRExpected` (`ecr/sha-512`, through `hCR`) and A3 (`uniform/io-getrandombytes`, through `hA3`), and the
-obligations below: `pp.placed` (W6), `pp.aliased` (`Layout.Aliased`), `hHm`, `lay` and `rs` (for `vb`), `tr` (for
-`hExec`), `hConst` and `hZero`. It bounds wrong units of the pinned rows circuit; "computes the Definition"
-additionally needs `RowsCert` per template and the Definition's Boolean semantics in Lean, which a generic
-Boolean-semantics lemma replaces once lane proofs-ir lands. Its round coins are A6's (`uniform/flock-coin-server`), which
-the model embodies: live uniform OS coins drawn each round, so it is cited only for runs that use them (`ASSUMPTIONS.md`,
-its coins).
+at the live draw `Law.execOS` composed with A3 (`Law.execOS_miss_le`). It is proved under the assumptions its footprint
+lists (`ASSUMPTIONS.md`, The headline), every hypothesis with its kind:
+- hardness: `SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`) and `SHA512CRExpected` (`ecr/sha-512`, through
+  `hCR`);
+- platform: A3 (`uniform/io-getrandombytes`, through `hA3`), and A6 (`uniform/flock-coin-server`), the coin server's OS
+  randomness, which the model embodies rather than a hypothesis states;
+- model: the session's game, against any prover strategy, with A6's round coins;
+- intended to prove, in the table below: `pp.placed` (W6), `pp.aliased` (`Layout.Aliased`), `hHm`, `lay` and `rs` (for
+  `vb`), `tr` (for `hExec`), `hConst` and `hZero`;
+- numeric conditions: `hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`, and the budgets `qF`, `qS`, `qT`, which Lean
+  doesn't check.
+
+It bounds wrong units of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template
+and the Definition's Boolean semantics in Lean, which a generic Boolean-semantics lemma replaces once lane proofs-ir
+lands. Its round coins are A6's (`uniform/flock-coin-server`), which the model embodies: live uniform OS coins drawn
+each round, so it is cited only for runs that use them (`ASSUMPTIONS.md`, its coins).
 
 **What it says.** Suppose the audit accepts a batched session's proofs for the drawn units under the partition. Then,
 except with `ε_ks(σ) + δ_link` (plus `miss_L(K)` for the count), the integrity profile holds for the committed circuit
@@ -43,9 +50,9 @@ their finders' budgets (`hKS`, `hT`; `ASSUMPTIONS.md`, What is restated over the
 `flock_batched_drawn_public`, which carry the compiled audit, the link theorem at the public transcript
 (`flock_batched_linkSoundE_pub`, from `flock_batched_linkSoundE`) and knowledge soundness.
 
-**The gaps.** Everything not yet proved is one of the named hypotheses below. Each is discharged by the PRs listed, and
-the skeleton's pins then lose that hypothesis. The pins need a named statement reviewer (red team, bc-f0bc7e75) each
-time.
+**The assumptions we intend to prove.** Each is one of the named hypotheses below, discharged by the PRs listed, and the
+skeleton's pins then lose that hypothesis. The pins need a named statement reviewer (red team, bc-f0bc7e75) each time.
+The last three rows are the hardness and platform assumptions, which stay.
 
 | Hypothesis | What it says | Owner | Discharged by |
 |---|---|---|---|
@@ -57,9 +64,9 @@ time.
 | `vb : ValueBinding` | the wires bind to their registered commit strings (already named on `main`) | lean-value-binding; M0's `hm96-sha512` leaf layout | built from the serving rows by `Binding.HmRows.binding` (`FlockSoundness/Binding/`), with `collide_spec` proved (`ExplicitLeaf.hm96`: an explicit SHA-512 collision). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms take, in its place, `HmRowComputes` and the layout's facts (the next row) |
 | `hHm : HmRowComputes` (in `_hm96`) | the circuit's row hashing computes `hm96-sha512/row/v1`: in a satisfying witness, the `b ‖ c` a row's `hm96` slot outputs is the commit string of the row and salt its `sha512x3` and `hm96` slots read (`Assumptions.HmRowComputes`, not cryptographic) | the verified-lowering lane (phase 2i) | only with readers of the witness at fixed addresses (`rowAt`, `saltAt`, `bcAt`), a proof from the `sha512x3` and `hm96` sections of the circuit file: each slot's constraints force SHA-512's compression (and hm96's mask and salt digest), and the chain wiring (`HmRow.rowWires`) from the row prefix's midstate gives SHA-512 of the row |
 | `lay : Layout`, `rs : HmRows` (in `_hm96`) | the layout's facts: the decoder reads the rows the witness holds (`decode_row`); the `b ‖ c` the witness holds at a row hashes to the registered leaf (`bc_registered`: the statement's regions pin the `hm96` outputs to the public `b ‖ c`, which `HmRow.checkPublic` hashes into the registered frame-v3-sha512 roots); the returned outputs' leaves (`other_registered`) | lean-value-binding, with flock-verifier (S4) | from the placement (`DerivedPlaces`, `UnitPlace`) and the refinement of `HmRow.regions` and `checkPublic` (R11). Discharging `bc_registered` and `other_registered` from registered roots also pays the roots' Merkle binding: `δ_tree`, under `SHA512CRStrict` (`DESIGN.md` §1), which the `_hm96` bounds add (`tr`, `hT`). `decode_row` counts as discharged only with the fixed readers `rowAt`, `saltAt` |
-| `hCR` (`SHA512CRExpected`, A2) | SHA-512 expected-time collision resistance for the link finders of the prover bounded, `σ` (`LinkCR … (reg σ) (cont σ) …`), not of every prover at once | the assumption of record | not discharged: it is the theorem's cryptographic assumption |
-| `hKS`, `hT` (`SHA512CRStrict`, in `_hm96`) | SHA-512 strict-time collision resistance for the knowledge term's finders of each table after each draw (`TableCR`, budgets `qF`, `qS`) and for `tr`'s finder (budget `qT`) | the assumption of record | not discharged: the `_hm96` forms' second cryptographic assumption |
-| `hA3` (A3, in the headline) | the verifier's byte source is uniform (`UniformRandomBytes`), so the live draw's count curve is at most `Law.stratified`'s | the assumption of record | not discharged: the headline's third assumption |
+| `hCR` (`SHA512CRExpected`, A2) | SHA-512 expected-time collision resistance for the link finders of the prover bounded, `σ` (`LinkCR … (reg σ) (cont σ) …`), not of every prover at once | the assumption of record | not discharged: a hardness assumption (`ecr/sha-512`) |
+| `hKS`, `hT` (`SHA512CRStrict`, in `_hm96`) | SHA-512 strict-time collision resistance for the knowledge term's finders of each table after each draw (`TableCR`, budgets `qF`, `qS`) and for `tr`'s finder (budget `qT`) | the assumption of record | not discharged: a hardness assumption (`cr/sha-512`), the `_hm96` forms' second |
+| `hA3` (A3, in the headline) | the verifier's byte source is uniform (`UniformRandomBytes`), so the live draw's count curve is at most `Law.stratified`'s | the assumption of record | not discharged: the headline's platform assumption (`uniform/io-getrandombytes`) |
 
 **Why the constant is public.** The rows multiply outputs by the constant: each output is a copy row `(form) · 1`, and
 the constant's row is `1 · 1`. At a transcript whose constant is 0, a unit's rows hold with every output 0 while the
@@ -81,7 +88,8 @@ padding when `hZero` is discharged, and not before.
 
 **How to use this list.**
 - Each PR that discharges a hypothesis changes the skeleton to prove it: an argument becomes a theorem applied. It also
-  deletes that row here. When only `hCR`, `hKS`, `hT` and `hA3` remain, the end-to-end theorem is proved.
+  deletes that row here. When only `hCR`, `hKS`, `hT` and `hA3` remain, the end-to-end theorem rests on its hardness
+  and platform assumptions alone.
 - The numeric side conditions (`hk`, `hRw`, `hM`, `hρ`, `hr`, `ht`) are parameters of the bound, not gaps. They are the
   same as in `flock_batched_count_placed`. `ones` and `zeros`, the statement's public gates, are parameters too.
 - `ε_ks(σ)` is the knowledge-soundness term (`ksAvgBE`), which `flock_batched_knowledgeSoundE` bounds; under
