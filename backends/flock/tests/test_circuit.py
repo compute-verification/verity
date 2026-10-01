@@ -13,7 +13,7 @@ from verity_flock import tail as TL
 from verity_flock.gf2 import Circuit
 
 pytest.importorskip("verity_numerical")
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_numerical.bench import lowerings, templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
 from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 
@@ -146,6 +146,39 @@ def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     assert list(got) == [_spec_id(s.subcircuit.definition(**FC.set_statics(s)))]
     assert '"f64":"0x1.4f8b588e368f1p-17"' in next(iter(got))
     assert list(got.values()) == list(s.subcircuit.program_digests([FC.set_statics(s)]).values())
+
+
+@pytest.mark.slow
+def test_a_programs_constant_is_a_hidden_row(tmp_path):
+    """RMSNorm's eps is a value: the statement has one more input port, ``values``, and every warp's value ports are leaf cuts
+    of its words. Another eps changes only where META names the program (its subcircuit, program and partition digests): the
+    units, the wiring and the pinned padding values (a zero values row) are the same. The prover's file holds every
+    instance's values row with its salt; the verifier's only its ``b || c``."""
+    from verity.commitments import hm96
+    from verity.commitments.rowleaf import ROLE_X, sha512_row_digest
+
+    s = _set("rmsnorm-fused-cuda/n64-eps1e-05/bf16", 2, tmp_path)
+    low = FC.lowering_for_set(s)
+    text = FC.compose(low, s.subcircuit)
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    assert meta["ports"][-1] == [IL.VALUES_PORT, 64, 1] and low.value_row[:2] == [0xC5AC, 0x3727]
+    assert sorted(meta["leaf_cuts"]) == sorted(["unit", u, j, leaf] for u, vs in enumerate(low.leaves["values"]) for j, leaf in vs)
+    other = TM.parse_subcircuit_id("rmsnorm-fused-cuda/n64-eps0.001/bf16")
+    text_b = FC.compose(lowerings.registry("C-Flock").module(other.template.id).circuit_lowering(other), other)
+    meta_b = json.loads(text_b.split("\n", 2)[1][5:])
+    assert [k for k in meta if meta[k] != meta_b[k]] == ["partition", "program_digests", "program_sha512", "subcircuit"]
+    assert text.split("\n", 2)[0::2] == text_b.split("\n", 2)[0::2]
+    with pytest.raises(ValueError, match="values row"):
+        FC.write(text, s, 0, 2, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32)
+    FC.write(text, s, 0, 2, tmp_path / "inst.bin", tmp_path / "pub.bin", b"k" * 32, values=low.value_row)
+    prover, verifier = ((tmp_path / f).read_bytes().split(b"\n", 1)[1] for f in ("inst.bin", "pub.bin"))
+    ports = meta["ports"]
+    rb, at = sum(2 * w for _, w, _ in ports), sum(2 * w for _, w, _ in ports[:-1])
+    assert np.frombuffer(prover[rb + at:2 * rb], dtype="<u2").tolist() == low.value_row
+    salt = prover[2 * rb + (2 * len(ports) - 1) * FC.SALT_BYTES:][:FC.SALT_BYTES]
+    bc = prover[2 * rb + 2 * len(ports) * FC.SALT_BYTES + (2 * len(ports) - 1) * FC.BC_BYTES:][:FC.BC_BYTES]
+    assert bc == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(low.value_row, 16, ROLE_X), salt)
+    assert prover.endswith(verifier) and np.asarray(low.value_row[:2], dtype="<u2").tobytes() not in verifier
 
 
 def test_leaf_scheme_reserves_what_hm96_needs():

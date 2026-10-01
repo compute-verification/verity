@@ -558,8 +558,6 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
 
 def _pin_key(sub: Any) -> Any:
     p = sub.params
-    if "N" in p and "EPS" in p:
-        return int(p["N"]), float(p["EPS"])
     ints = [v for k, v in p.items() if isinstance(v, int) and not isinstance(v, bool)]
     return ints[0] if len(ints) == 1 else None
 

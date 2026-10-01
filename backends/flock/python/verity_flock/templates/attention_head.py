@@ -6,7 +6,11 @@ MUFU.RCP of the sum, the output cast) is the native tail the verifier evaluates 
 
 T is per instance: a statement covers the instances of one T (:func:`lowering` takes it; :func:`lowering_for_set` reads it
 off a set whose instances share it). The one unit netlist is the same for every T; the leaf maps and the tail (the CUT line)
-are T's, so the pin is per T."""
+are T's, so the pin is per T.
+
+The softmax scale is the program's, so it is a value (:func:`values`): the instance's ``values`` row holds it, every k-step
+reads it and returns it to the tail, whose scale multiplies are general ones. The frame-v3 statement's verifier evaluates the
+tail itself on public cut words, so its lowering (:func:`frame_lowering`) keeps the scale a tail constant."""
 TEMPLATE = "attention-head"
 UNIT = "attention-head/fa2-bf16/tc-step"
 FRAME_SCHEMES = ("frame-v3/blake3-keyed",)
@@ -16,11 +20,20 @@ def definition(subcircuit, T: int):
     return subcircuit.definition(int(T))
 
 
+def values(subcircuit) -> list[tuple[int, int]]:
+    """The program's constants the units take as values, ``(width, value)``: FA2's ``scale_softmax_log2`` (``b1``'s
+    ``_scale_log2_bits(D)``, the f32 every block of the Definition multiplies by)."""
+    from verity_vllm.program.registry.b1 import _scale_log2_bits
+
+    return [(32, _scale_log2_bits(int(subcircuit.params["D"])))]
+
+
 def lowering(subcircuit, T: int):
     from verity_flock import ir_lower
 
     D, BN = int(subcircuit.params["D"]), int(subcircuit.params["BN"])
-    return ir_lower.lowering(definition(subcircuit, T), f"{UNIT}/d{D}-bn{BN}/t{int(T)}", unit_fn=ir_lower.tc_units)
+    return ir_lower.lowering(definition(subcircuit, T), f"{UNIT}/d{D}-bn{BN}/t{int(T)}", unit_fn=ir_lower.tc_units,
+                             values=values(subcircuit))
 
 
 def key_count(input_set) -> int:
@@ -37,7 +50,14 @@ def lowering_for_set(input_set):
 
 
 def frame_lowering(subcircuit, T: int):
-    return lowering(subcircuit, T)
+    from verity_flock import ir_lower
+
+    D, BN = int(subcircuit.params["D"]), int(subcircuit.params["BN"])
+    return ir_lower.lowering(definition(subcircuit, T), f"{UNIT}/d{D}-bn{BN}/t{int(T)}", unit_fn=ir_lower.tc_units)
+
+
+def frame_lowering_for_set(input_set):
+    return frame_lowering(input_set.subcircuit, key_count(input_set))
 
 
 def supports(subcircuit, scheme):
@@ -68,7 +88,7 @@ def key_class(T: int) -> tuple[int, int]:
 def cached_lowering(subcircuit, T: int):
     k = (subcircuit.id, int(T))
     if k not in _LOWERINGS:
-        _LOWERINGS[k] = lowering(subcircuit, T)
+        _LOWERINGS[k] = frame_lowering(subcircuit, T)
     return _LOWERINGS[k]
 
 
@@ -83,8 +103,8 @@ def unit_rows_sha256(text: str) -> str:
 
 
 def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
-    """The class's manifest, canonical JSON: every T in [lo, hi] with the sha256 of its v3 netlist (``lowering(subcircuit, T)``),
-    and the unit rows they share. Its sha256 is the class pin."""
+    """The class's manifest, canonical JSON: every T in [lo, hi] with the sha256 of its v3 netlist (``frame_lowering(subcircuit,
+    T)``), and the unit rows they share. Its sha256 is the class pin."""
     import json
 
     nets, rows = {}, set()
@@ -109,4 +129,4 @@ def stage(input_set, lo, hi, out_dir):
     """The frame-v3 instance file for ids [lo, hi) of a one-T set (``verity_flock.ir_frame.stage``): each pod stages its own."""
     from verity_flock import ir_frame
 
-    return ir_frame.stage(lowering_for_set(input_set), input_set, lo, hi, out_dir)
+    return ir_frame.stage(frame_lowering_for_set(input_set), input_set, lo, hi, out_dir)

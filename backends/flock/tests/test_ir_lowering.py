@@ -633,9 +633,46 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
     fin = IL.flat_ports(s, sub.inputs, 0, s.n)
     cuts = IL.cut_words(low, fin)
     good, _, _ = low.evaluate(fin, cuts)
-    cuts[:, -1] ^= 1 << 12
+    (scalar,) = {k for kind, k in low.units.in_src[0] if kind == "cut"}
+    cuts[:, scalar] ^= 1 << 12
     bad, _, _ = low.evaluate(fin, cuts)
     assert (good != bad).any(axis=1).all()
+
+
+@pytest.mark.slow
+def test_a_programs_constant_is_a_value(tmp_path):
+    """eps is RMSNorm's, so the lowering lifts it out of the netlist: the netlist is the same for every eps (no tail constant
+    holds it), every warp reads it from the instance's values row and returns it to the tail as a cut word, and the same
+    netlist fed another eps in that row computes RMSNorm with that eps. The frame-v3 lowering keeps it a tail constant."""
+    import struct
+
+    f32 = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]  # noqa: E731
+    mod = REG.module("rmsnorm-fused-cuda")
+    sa, sb = (TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=e) for e in (1e-5, 0.5))
+    a, b = mod.lowering(sa), mod.lowering(sb)
+    assert a.text == b.text and a.values == (f32(1e-5),) and b.values == (f32(0.5),)
+    assert a.value_row == [f32(1e-5) & 0xFFFF, f32(1e-5) >> 16] + [0] * 62
+    assert f32(1e-5) not in {op[2] for op in a.cut["tail"] if op[1] == "Const"}
+    assert f32(1e-5) in {op[2] for op in mod.frame_lowering(sa).cut["tail"] if op[1] == "Const"}
+    U = a.units
+    n_args = sum(w for w, _ in a.leaves["in_ports"][:-1])
+    assert a.leaves["in_ports"][-1] == [64, 16] and U.n_args == n_args and len(U.value_gates) == 1
+    assert a.leaves["values"] == [[[len(U.in_src[0]) - 2, n_args], [len(U.in_src[0]) - 1, n_args + 1]]] * U.n
+    assert U.relay == {0: len(U.cut) - 1} and all(src[-1] == ("cut", U.relay[0]) for src in U.out_src)
+    s = InputSet.open(generate(sa, 2, 11, tmp_path)["path"])
+    fin = IL.flat_ports(s, sa.inputs, 0, s.n)
+    with_b = np.concatenate([fin, np.tile(np.asarray(b.value_row, dtype=np.uint64), (s.n, 1))], axis=1)
+    cuts = IL.cut_words(a, with_b)
+    got, cut_out, ok = a.evaluate(with_b, cuts)
+    assert ok == (1 << (s.n * U.n)) - 1 and (cut_out == cuts).all() and (cuts[:, U.relay[0]] == f32(0.5)).all()
+    want = IL.reference_outputs(mod.frame_lowering(sb), fin)
+    assert (got == want).all() and (got != IL.reference_outputs(a, fin)).any()
+
+
+def test_a_value_names_a_constant_of_the_definition():
+    d = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5).definition()
+    with pytest.raises(ValueError, match="no live constant gate"):
+        IL.units(d, IL.reduction_cut(REG.module("rmsnorm-fused-cuda").width(64)), values=[(32, 0x12345678)])
 
 
 @pytest.mark.slow
@@ -647,7 +684,7 @@ def test_the_netlist_accounts_for_every_cut_word(tmp_path):
 
     sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
     s = InputSet.open(generate(sub, 2, 3, tmp_path / "set")["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
+    low = REG.module("rmsnorm-fused-cuda").frame_lowering(sub)
     head = json.loads(IL.stage(low, s, 0, 2, tmp_path / "st").read_bytes().split(b"\n", 1)[0])
     cut = json.loads((tmp_path / "st" / "net.txt").read_text().splitlines()[-1].removeprefix("CUT "))
     assert cut == low.cut and "cut" not in head
@@ -668,18 +705,20 @@ def test_the_netlist_accounts_for_every_cut_word(tmp_path):
 
 @pytest.mark.slow
 def test_the_pin_covers_the_cut_structure():
-    """IR4: N and eps are tail constants in the netlist's CUT line, so another eps is another pin; the unit rows do not
-    depend on eps (the row scalar is a cut word)."""
+    """IR4: in the frame-v3 lowering N and eps are tail constants in the netlist's CUT line, so another eps is another pin;
+    the unit rows do not depend on eps (the row scalar is a cut word). The circuit statement's lowering holds N only."""
     import struct
 
     f32 = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]  # noqa: E731
     mod = REG.module("rmsnorm-fused-cuda")
-    a = mod.lowering(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5))
-    b = mod.lowering(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-3))
+    sa, sb = (TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=e) for e in (1e-5, 1e-3))
+    a, b = mod.frame_lowering(sa), mod.frame_lowering(sb)
     consts = {op[2] for op in a.cut["tail"] if op[1] == "Const"}
     assert {f32(1e-5), f32(64.0)} <= consts and f32(1e-3) not in consts
     assert a.sha256 != b.sha256 and a.text.splitlines()[1:-1] == b.text.splitlines()[1:-1]
     assert a.text.splitlines()[-1] != b.text.splitlines()[-1]
+    lifted = mod.lowering(sa)
+    assert f32(64.0) in {op[2] for op in lifted.cut["tail"] if op[1] == "Const"} and lifted.sha256 == mod.lowering(sb).sha256
 
 
 def test_a_producers_file_is_not_the_verifiers_own(tmp_path):
@@ -704,8 +743,9 @@ def test_the_tables_are_the_pinned_ones(tmp_path):
 def test_rmsnorm_captured_slices_and_pins(template):
     s = InputSet.open(SLICES / RMS[template])
     assert _check_set(s) == 0
-    p = s.subcircuit.params
-    assert REG.module(template).lowering(s.subcircuit).sha256 == REG.module(template).PINS[(int(p["N"]), float(p["EPS"]))]
+    p, mod = s.subcircuit.params, REG.module(template)
+    assert mod.lowering(s.subcircuit).sha256 == mod.PINS[int(p["N"])]
+    assert mod.frame_lowering(s.subcircuit).sha256 == mod.FRAME_PINS[(int(p["N"]), float(p["EPS"]))]
 
 
 #: The served workloads' other parameters (#73 Qwen3-4B on the H100, #60 Mistral-7B on the L40S): the same units read off the
@@ -730,8 +770,9 @@ def test_workload_pins_keep_the_granted_rows(template, params):
 @SLOW
 @pytest.mark.parametrize("template,params", WORKLOAD_RMS)
 def test_workload_rmsnorm_pins(template, params):
-    mod = REG.module(template)
-    assert mod.lowering(TM.subcircuit(template, **params)).sha256 == mod.PINS[(params["N"], params["EPS"])]
+    mod, sub = REG.module(template), TM.subcircuit(template, **params)
+    assert mod.lowering(sub).sha256 == mod.PINS[params["N"]]
+    assert mod.frame_lowering(sub).sha256 == mod.FRAME_PINS[(params["N"], params["EPS"])]
 
 
 def test_rmsnorm_warp_widths():
@@ -797,11 +838,11 @@ def test_frame_plans_take_the_largest_run_that_fits():
     assert low.units.n == 4096 and (pl.G, pl.nb, pl.chunk_nb, pl.comp_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (1, 16, 16, 32, 256, 256, 22)
     assert pl.comps[3][0] == [(0, 3, 0), (0, 19, 0)]
     fused = TM.subcircuit("rmsnorm-fused-cuda", N=2048, EPS=1e-5)
-    pl = F.plan(REG.module("rmsnorm-fused-cuda").lowering(fused), fused)
+    pl = F.plan(REG.module("rmsnorm-fused-cuda").frame_lowering(fused), fused)
     assert (pl.nb, pl.chunk_nb, pl.G, pl.chunk_slots, pl.chunks_per_comp, pl.units_per_block, pl.k_log) == (4, 16, 1, 8, 6, 4, 22)
     assert pl.comps[1] == ([(p, c, 1) for p in range(3) for c in (0, 2)], [4, 5, 6, 7])
     triton = TM.subcircuit("rmsnorm-triton", N=2048, EPS=1e-5)
-    pl = F.plan(REG.module("rmsnorm-triton").lowering(triton), triton)
+    pl = F.plan(REG.module("rmsnorm-triton").frame_lowering(triton), triton)
     assert (pl.nb, pl.chunk_nb, pl.G, pl.chunk_slots, pl.units_per_block, pl.unit_pos0, pl.k_log) == (8, 16, 1, 2, 1, 1, 22)
 
 
@@ -832,7 +873,7 @@ def test_frame_staging_carries_the_cut_words(tmp_path):
 
     sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
     s = InputSet.open(generate(sub, 3, 5, tmp_path / "set")["path"])
-    low = REG.module("rmsnorm-fused-cuda").lowering(sub)
+    low = REG.module("rmsnorm-fused-cuda").frame_lowering(sub)
     path = REG.module("rmsnorm-fused-cuda").stage(s, 0, 3, tmp_path / "st")
     head, body = path.read_bytes().split(b"\n", 1)
     h = json.loads(head)
@@ -914,6 +955,28 @@ def test_attention_units_are_tensor_core_steps():
     assert ok == (1 << U.n) - 1 and (cut_out == cuts).all()
 
 
+def test_attention_scale_is_a_value():
+    """The softmax scale is the program's: the circuit statement's lowering reads it from the values row (every k-step
+    returns it to the tail), so no tail constant holds it; the unit rows are the frame lowering's, and the cut words and the
+    outputs are the IR's on the captured T = 129 head."""
+    from verity_vllm.program.registry.b1 import _scale_log2_bits
+
+    s = InputSet.open(SLICES / "attention-head-fa2-d64-bn128")
+    mod = REG.module("attention-head")
+    low, frame = mod.lowering_for_set(s), mod.frame_lowering_for_set(s)
+    scale = _scale_log2_bits(64)
+    U = low.units
+    assert low.values == (scale,) and U.relay == {0: len(U.cut) - 1} and low.leaves["in_ports"][-1] == [64, 16]
+    assert scale not in {op[2] for op in low.cut["tail"] if op[1] == "Const"}
+    assert scale in {op[2] for op in frame.cut["tail"] if op[1] == "Const"}
+    assert low.layout.counts["ands"] == frame.layout.counts["ands"] and low.layout.counts["rows"] == frame.layout.counts["rows"]
+    fin = np.stack([np.concatenate([s.port("q")[i], s.port("k")[i], s.port("v")[i]]).astype(np.uint64) for i in range(s.n)])
+    cuts = IL.cut_words(low, fin)
+    _res, cut_out, ok = low.evaluate(fin, cuts)
+    assert ok == (1 << (s.n * U.n)) - 1 and (cut_out == cuts).all() and (cuts[:, U.relay[0]] == scale).all()
+    assert (IL.reference_outputs(low, fin) == np.stack([s.port("out")[i] for i in range(s.n)])).all()
+
+
 def test_attention_frame_places_a_block_per_16_keys(tmp_path):
     """A 16-key group per block: run slots [K keys | V keys] (one key = one run of two BLAKE3 blocks), unit slots [QK steps | PV
     columns]; keys past T are empty run slots, their QK steps empty unit slots, and a PV step's masked port reads the empty
@@ -925,7 +988,7 @@ def test_attention_frame_places_a_block_per_16_keys(tmp_path):
     s = InputSet.open(SLICES / "attention-head-fa2-d64-bn128")
     mod = REG.module("attention-head")
     assert mod.key_count(s) == 129
-    low = mod.lowering_for_set(s)
+    low = mod.frame_lowering_for_set(s)
     pl = F.plan_tc(low, s.subcircuit)
     assert (pl.nb, pl.chunk_slots, pl.units_per_block, pl.unit_pos0, pl.k_log, pl.public_ports, len(pl.comps)) == (2, 32, 128, 128, 22, [0], 9)
     runs, units = pl.comps[8]

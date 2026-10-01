@@ -69,12 +69,14 @@ def _set(sub, n, tmp_path):
     return InputSet.open(generate(sub, n, 20260926, tmp_path)["path"])
 
 
-def _root_inputs(s, sub, T):
-    """The set's first T instances as the instance type's input bits: each input row's words in port order, 16 bits each,
-    bit-sliced over T lanes."""
+def _root_inputs(s, sub, T, values=()):
+    """The set's first T instances as the instance type's input bits: each input row's words in port order, then the
+    lowering's values row (every instance's the same), 16 bits each, bit-sliced over T lanes."""
     bits = []
-    for p in sub.inputs:
-        W = np.asarray(s.port(p.name, 0, T), dtype=np.uint64).reshape(T, -1)
+    rows = [np.asarray(s.port(p.name, 0, T), dtype=np.uint64).reshape(T, -1) for p in sub.inputs]
+    if len(values):
+        rows.append(np.tile(np.asarray(values, dtype=np.uint64), (T, 1)))
+    for W in rows:
         for wi in range(W.shape[1]):
             for b in range(16):
                 col = (W[:, wi] >> np.uint64(b)) & np.uint64(1)
@@ -126,7 +128,7 @@ def test_gemm_is_one_instance_type(tmp_path):
 @pytest.mark.slow
 def test_attention_is_one_instance_type(tmp_path):
     """Attention's instance type (its tensor-core units as calls, its softmax stages' gates as its own rows, its ex2 and rcp
-    reads of the measured tables) computes the set's outputs."""
+    reads of the measured tables, the scale from its values row) computes the set's outputs."""
     from verity.ml import library
     from verity_flock import gf2
     from verity_flock import tail as TL
@@ -141,7 +143,8 @@ def test_attention_is_one_instance_type(tmp_path):
     assert [n for n, _, _, _ in inst.tables] == ["ex2", "rcp"]
     words = {library.table(n).sha512: np.asarray(gf2.table(n), dtype=np.uint32) for n, _, _, _ in inst.tables}
     T = 16
-    out = CT.evaluate(types, inst.root.digest(), _root_inputs(s, sub, T), T, lambda sha, i: int(words[sha][i]))
+    assert low.value_row
+    out = CT.evaluate(types, inst.root.digest(), _root_inputs(s, sub, T, low.value_row), T, lambda sha, i: int(words[sha][i]))
     assert _words(out, T) == _root_outputs(s, sub, T)
 
 

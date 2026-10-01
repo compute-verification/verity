@@ -42,8 +42,8 @@ def _lowering(template: str, input_set):
     from verity_numerical.bench import lowerings
 
     mod = lowerings.registry("C-Flock").module(template)
-    if hasattr(mod, "lowering_for_set"):
-        return mod.lowering_for_set(input_set)
+    if hasattr(mod, "frame_lowering_for_set"):
+        return mod.frame_lowering_for_set(input_set)
     return mod.frame_lowering(input_set.subcircuit)
 
 

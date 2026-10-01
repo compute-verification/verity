@@ -20,9 +20,11 @@ from verity_numerical.bench import lowerings, templates as TM  # noqa: E402
 LEAN = Path(__file__).resolve().parents[1] / "verifier" / "lean"
 REG = lowerings.registry("C-Flock")
 #: The parameters each pinned template's `PINS` keys name, in their order.
-PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "rmsnorm-fused-cuda": ("N", "EPS"), "rmsnorm-triton": ("N", "EPS")}
+PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "rmsnorm-fused-cuda": ("N",), "rmsnorm-triton": ("N",)}
+#: The parameters a pin does not depend on: RMSNorm's eps is a value, not part of the netlist.
+UNPINNED = {"rmsnorm-fused-cuda": {"EPS": 1e-5}, "rmsnorm-triton": {"EPS": 1e-5}}
 #: Every pinned unit with its pin, and one small unpinned unit.
-CASES = [(t, dict(zip(names, key if isinstance(key, tuple) else (key,))), pin)
+CASES = [(t, {**dict(zip(names, key if isinstance(key, tuple) else (key,))), **UNPINNED.get(t, {})}, pin)
          for t, names in PIN_PARAMS.items() for key, pin in sorted(REG.module(t).PINS.items())]
 CASES += [("rmsnorm-fused-cuda", {"N": 64, "EPS": 1e-5}, None)]
 needs_lake = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
