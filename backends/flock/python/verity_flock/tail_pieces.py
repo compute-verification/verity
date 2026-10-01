@@ -694,6 +694,7 @@ PIECES = {
     "HopperE4m3QgmmaDot32_v1": lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:])),
     "BlackwellE4m3QmmaDot32_v1": lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:]), groups=(32,), W=26, F=-133),
     "BlackwellNvf4OmmaDot64_v1": lambda C, acc, *ab: unit_fp4.step_total(C, acc, ab[:64], ab[64:128], ab[128:132], ab[132:136]),
+    "BlackwellMxf4OmmaDot64_v1": lambda C, acc, *ab: unit_fp4.step_total(C, acc, ab[:64], ab[64:128], ab[128:130], ab[130:132], ue8m0=True),
     "I32Le_v1": i32_le,
     "MufuTanh_v1": mufu_tanh,
     "TanhF32Rn_v1": tanh_rn,
