@@ -376,7 +376,7 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
     for rec in inv["rows"]:
         if rx and not rx.search(rec["row"]):
             continue
-        row = {"row": rec["row"], "job": rec["job"], "dir": rec["dir"], "units": []}
+        row = {"row": rec["row"], "job": rec["job"], "dir": rec["dir"], "source_root": rec.get("source_root"), "units": []}
         try:
             phi = phi_of(rec, hf_home=hf_home, checkpoints=checkpoints)
             row["context_digest"] = phi.digest()
@@ -509,6 +509,7 @@ def _cause(u: dict) -> str:
 def summarize(res: dict) -> dict:
     by = Counter()
     by_gran = Counter()
+    by_tree = Counter()
     causes = Counter()
     unexpressible = Counter()
     rows_exact = rows_scored = 0
@@ -518,6 +519,8 @@ def summarize(res: dict) -> dict:
             g = "workload" if u["unit"] == "build_workload" else ("step" if u["unit"] == "build_step" else "request")
             by[u.get("status")] += 1
             by_gran[(g, u.get("status"))] += 1
+            if u.get("status") in ("exact", "differs"):
+                by_tree[(os.path.basename(str(row.get("source_root"))), u["status"])] += 1
             if u.get("status") == "differs":
                 causes[_cause(u)] += 1
             if u.get("status") == "unexpressible":
@@ -531,7 +534,9 @@ def summarize(res: dict) -> dict:
     return {"units_by_status": dict(by), "units_by_granularity": {f"{g}:{s}": n for (g, s), n in sorted(by_gran.items(), key=str)},
             "units_compared": by["exact"] + by["differs"], "units_exact": by["exact"], "units_equivalent": eq,
             "rows": len(res["rows"]), "rows_with_a_compared_unit": rows_scored, "rows_all_compared_exact": rows_exact,
-            "top_divergence_causes": causes.most_common(10), "top_unexpressible": unexpressible.most_common(10)}
+            "top_divergence_causes": causes.most_common(10), "top_unexpressible": unexpressible.most_common(10),
+            "compared_by_source_tree": {t: {"exact": by_tree[(t, "exact")], "differs": by_tree[(t, "differs")]}
+                                        for t in sorted({t for t, _ in by_tree})}}
 
 
 def table_md(res: dict) -> str:
@@ -543,6 +548,8 @@ def table_md(res: dict) -> str:
     lines += [f"| {k} | {v} |" for k, v in s["units_by_granularity"].items()]
     lines += ["", "| first divergence | units |", "|---|---|"] + [f"| {c} | {n} |" for c, n in s["top_divergence_causes"]]
     lines += ["", "| unexpressible | units |", "|---|---|"] + [f"| {c} | {n} |" for c, n in s["top_unexpressible"]]
+    lines += ["", "| traced from source tree | exact | differs |", "|---|---|---|"] + \
+        [f"| {t} | {v['exact']} | {v['differs']} |" for t, v in s.get("compared_by_source_tree", {}).items()]
     lines += ["", "| row | step | request (exact/compared) | workload |", "|---|---|---|---|"]
     for row in res["rows"]:
         us = row["units"]
