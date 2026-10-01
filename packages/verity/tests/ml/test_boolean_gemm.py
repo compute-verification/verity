@@ -63,7 +63,7 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
 
 
 def _agree(target, inputs) -> None:
-    word = BG.word_of(target)
+    word = TR.word_of(target)
     got = BS.evaluate_words(target, *inputs).astype(np.uint64)
     ref = E.evaluate_batch(word, *inputs).astype(np.uint64)
     assert got.shape == ref.shape
@@ -81,14 +81,14 @@ def test_the_cast_agrees_with_f2fp_v1() -> None:
 
 @pytest.mark.parametrize("target", STEPS, ids=[t.id for t in STEPS])
 def test_the_steps_agree_with_their_word_steps(target) -> None:
-    params, _ = E.batch.signature_of(BG.word_of(target))
+    params, _ = E.batch.signature_of(TR.word_of(target))
     _agree(target, K.sample_tc(np.random.default_rng(12), 20_000, params))
 
 
 @pytest.mark.parametrize("target", [AMPERE_K64, HOPPER_K64], ids=lambda t: t.id)
 def test_the_coordinate_agrees_with_gemm_coordinate_v2(target) -> None:
-    word = BG.word_of(target)
-    assert word.id == f"GemmCoordinate_v2{{K=64,DOT={BG.word_of(target.bindings['DOT']).id}}}"
+    word = TR.word_of(target)
+    assert word.id == f"GemmCoordinate_v2{{K=64,DOT={TR.word_of(target.bindings['DOT']).id}}}"
     params, _ = E.batch.signature_of(word)
     _agree(target, K.sample_tc(np.random.default_rng(13), 4000, params))
 

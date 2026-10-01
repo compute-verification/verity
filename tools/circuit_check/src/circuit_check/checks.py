@@ -6,7 +6,7 @@
                      kernel (`verity.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof units otherwise); a Boolean Definition with a word counterpart
-                     (`verity.ml.boolean.gemm.word_of`) also equals that word Definition through its word view
+                     (`verity.ml.boolean.trace.word_of`) also equals that word Definition through its word view
     redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
@@ -176,13 +176,13 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
 
 
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """A Boolean Definition against the word Definition it computes (`verity.ml.boolean.gemm.word_of`), through the word view
+    """A Boolean Definition against the word Definition it computes (`verity.ml.boolean.trace.word_of`), through the word view
     (`verity.evaluation.bits.evaluate_words`), on the word Definition's edge and random vectors."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
     from verity.evaluation import evaluate_batch
     from verity.evaluation.bits import evaluate_words
-    from verity.ml.boolean.gemm import word_of
+    from verity.ml.boolean.trace import word_of
 
     try:
         word = word_of(t)

@@ -12,7 +12,8 @@ are the builder's own linear work.
 
 `definition` wraps a builder as a `CompositeDefinition` whose body is the traced circuit, laid out level by level: each node is
 a batch of one gate kind over gates of equal depth, its operands named explicitly. The body is traced on first use, not on
-import.
+import. A Boolean Definition names the word Definition it computes as its ``word`` (a Definition, or for one with statics a
+function of its bindings); `word_of` reads it.
 """
 from __future__ import annotations
 
@@ -20,13 +21,13 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 from verity.ir import boolean as BL
-from verity.ir.defs import CompositeDefinition
+from verity.ir.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition
 from verity.ir.refs import Affine, Coll, Explicit, Ref, concat
 from verity.ir.types import Array, Type
 
 from .forms import Circuit, L
 
-__all__ = ["TL", "Traced", "TracingCircuit", "definition", "trace"]
+__all__ = ["TL", "Traced", "TracingCircuit", "definition", "trace", "word_of"]
 
 
 class TL(L):
@@ -284,9 +285,10 @@ def _body(T: Traced, params: Sequence[Type], ret: Type, B, *colls):
     return Coll(ret, _refs([ref[o] for o in T.outputs]))
 
 
-def definition(name: str, version: int, build: Callable, params: Sequence[tuple[str, Type]], ret: Type, *, doc: str = "",
-               conformance: str = "exact-model-tested", register: bool = True) -> CompositeDefinition:
-    """The Boolean Definition ``name_v{version}`` that ``build`` computes (traced once, on first use of its body)."""
+def definition(name: str, version: int, build: Callable, params: Sequence[tuple[str, Type]], ret: Type, *, word: Any = None,
+               doc: str = "", conformance: str = "exact-model-tested", register: bool = True) -> CompositeDefinition:
+    """The Boolean Definition ``name_v{version}`` that ``build`` computes (traced once, on first use of its body), computing the
+    word Definition ``word``."""
     types = [t for _, t in params]
     traced: list[Traced] = []
 
@@ -299,4 +301,14 @@ def definition(name: str, version: int, build: Callable, params: Sequence[tuple[
                             register=register)
     d.build = build  # type: ignore[attr-defined]
     d.traced = lambda: traced[0] if traced else trace(build, types, ret)  # type: ignore[attr-defined]
+    d.word = word  # type: ignore[attr-defined]
     return d
+
+
+def word_of(target: Any) -> FunctionDefinition:
+    """The word Definition a Boolean Definition computes (through `boolean.word_type`)."""
+    d, bindings = (target.defn, target.bindings) if isinstance(target, SpecializedDefinition) else (target, {})
+    w = getattr(d, "word", None)
+    if w is None:
+        raise KeyError(f"{getattr(target, 'id', target)!r} names no word Definition")
+    return w if isinstance(w, FunctionDefinition) else w(bindings)
