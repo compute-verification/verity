@@ -2,12 +2,14 @@
 every picked row evaluated by the Boolean version of its Definition (`verity_vllm.program.boolean.boolean_version`, the switch's
 one table) on the committed inputs, bit-sliced (`verity.evaluation.bits.evaluate_bits`), and compared with the committed outputs.
 
-    verity-vllm boolean-replay BUNDLE --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
+    verity-vllm boolean-replay BUNDLE|KEEP --row-dir D --checkpoint-dir CK --out OUT [--checkpoints-manifest M --model REPO
                                --revision REV] [--word]
 
-The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied into ``OUT/boolean`` beside a link to
-the bundle, so the replay rewrites the copies and never the record; `cpu_replay.of_record` checks the copies and the bundle against
-each other (manifest sha256, run root, binding map), the draw is the replay's own (seeded from the run root), and the Program is the
+BUNDLE is the Commit's sealed replay bundle, or KEEP the slim keep its decided replay left (`commit/replay_slim_p<pair>`, the kept
+leaves; `cpu_replay.open_keep`).  The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied
+into ``OUT/boolean`` beside a link to it, so the replay rewrites the copies and never the record; `cpu_replay.of_record` checks the
+copies and the bundle against each other (manifest sha256, run root, binding map), the draw is the replay's own (seeded from the
+run root), and the Program is the
 Build's of record (`row_dir/build_request`, its digest checked against the Commit's).  A row whose Definition has no Boolean version,
 or whose Boolean version does not keep the Call's boundary (the word view of its signature is not the Call's), is not evaluated, by
 name.  ``--word`` replays the same draw with the word evaluators into ``OUT/word``, the baseline.
@@ -229,9 +231,12 @@ def run(o: Options) -> dict[str, Any]:
     bad = [r["i"] for r in rows if descriptor_id(nodes[K + int(r["i"])].fn) != r["spec"]]
     if bad:
         raise CR.Refused(f"{len(bad)} instance rows are not their Program node's Call (first: row {bad[0]})")
+    keep = json.loads((bundle / CR.SLIM_DOC).read_text()) if (bundle / CR.SLIM_DOC).is_file() else None
     doc: dict[str, Any] = {"schema": SCHEMA, "commit": {"dir": str(bundle.parent.resolve()), "pair": pair, "program_digest": digest,
                                                         "run_root": ctx["run_root"], "binding_map_sha256": record[f"binding_map_p{pair}.json"],
-                                                        "bundle_manifest_sha256": _sha256(bundle / "MANIFEST.json")}}
+                                                        "bundle_manifest_sha256": keep["bundle_manifest_sha256"] if keep else _sha256(bundle / "MANIFEST.json")}}
+    if keep:
+        doc["commit"]["keep"] = {"path": str(bundle), "dump_sha256": keep["dump_sha256"], "bytes": keep["bytes"], "picked": keep["picked"]}
     ev = BooleanRows(nodes, K, out / "boolean" / "rows.jsonl", o.seconds_per_vu)
     for spec, k in sorted({r["spec"]: K + int(r["i"]) for r in rows}.items()):
         try:
