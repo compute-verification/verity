@@ -17,7 +17,7 @@ bf16-sweep	unsloth/mistral-7b-v0.3	9ea1b83f5ced5663c5fa89c300fe59f9bdcd2b10	bf16
 bf16-sweep	Qwen/Qwen2.5-7B	d149729398750b98c0af14eb82c78cfe92750796	bf16	15.2	B7
 bf16-sweep	Qwen/Qwen1.5-MoE-A2.7B-Chat	ec052fda178e241c7c443468d2fa1db6618996be	bf16	28.6	M1
 bf16-sweep	Qwen/Qwen3-30B-A3B	ad44e777bcd18fa416d9da3bd8f70d33ebb85d39	bf16	61.1	QWEN3_30B_A3B
-# grid-models: the 20 ungated BF16 checkpoints the overnight grid adds (circuits-grid-models, 2026-10-01), revisions pinned by integrations/vllm/manifests/checkpoints.json
+# grid-models: the 23 ungated BF16 checkpoints the overnight grid adds (circuits-grid-models, 2026-10-01; the last 3 from 09:10 AM PDT), revisions pinned by integrations/vllm/manifests/checkpoints.json
 grid-models	Qwen/Qwen2.5-3B	3aab1f1954e9cc14eb9509a215f9e5ca08227a9b	bf16	6.2	QWEN25_3B
 grid-models	Qwen/Qwen2.5-0.5B-Instruct	7ae557604adf67be50417f59c2c2f167def9a775	bf16	1.0	QWEN25_05B_INSTRUCT
 grid-models	Qwen/Qwen2.5-Coder-1.5B	df3ce67c0e24480f20468b6ef2894622d69eb73b	bf16	3.1	QWEN25_CODER_15B
@@ -38,6 +38,9 @@ grid-models	tiiuae/Falcon3-1B-Base	cb37ef3559b157b5c9d9226296ba01a5162da1f7	bf16
 grid-models	tiiuae/Falcon3-7B-Base	bf3d7ed586cb22a921520e2d681a9d3d7642cde8	bf16	14.9	FALCON3_7B
 grid-models	Qwen/Qwen3-14B	40c069824f4251a91eefaf281ebe4c544efd3e18	bf16	29.5	QWEN3_14B
 grid-models	microsoft/phi-4	2db69c1c3e91a05d2c64a3185acfbaf36f744e25	bf16	29.3	PHI4
+grid-models	PleIAs/Pleias-350m-Preview	f175e52d0411f2c5273b5de549ddc98ce7f3f5d6	bf16	0.7	PLEIAS_350M
+grid-models	h2oai/h2o-danube3-500m-base	0ac6d9d2999a15761bf1cb03d480a1f8e2c845a6	bf16	1.0	DANUBE3_500M
+grid-models	BSC-LT/salamandra-2b	f3a6092c93948fea08ab618388d7b78c40ad63df	bf16	4.5	SALAMANDRA_2B
 # fp8-port: the sm_120 FP8 port's checkpoint
 fp8-port	Qwen/Qwen3-4B-Instruct-2507-FP8	8591804019c8b22094c3b5b4454e0edc05dffc98	fp8	5.2	QWEN3_4B_FP8
 # frontier: DeepSeek-V3 and Kimi K2 in FP8 (their native block-FP8) and FP4 (NVIDIA's NVFP4 exports; K2's is of K2-Thinking, the only K2 NVFP4 published)

@@ -179,6 +179,16 @@
     "Qwen/Qwen3-14B",
     "microsoft/phi-4"
    ]
+  },
+  {
+   "at": "2026-10-01T16:16:53Z",
+   "by": "circuits-grid-models",
+   "note": "new entries only (roles PLEIAS_350M, DANUBE3_500M, SALAMANDRA_2B); frozen entries unchanged (overnight grid models, three more families: pleias, danube, salamandra)",
+   "repos": [
+    "PleIAs/Pleias-350m-Preview",
+    "h2oai/h2o-danube3-500m-base",
+    "BSC-LT/salamandra-2b"
+   ]
   }
  ],
  "checkpoints": [
@@ -4516,6 +4526,234 @@
     "model-00004-of-00006.safetensors": "d4f17100a39c19d352f2e8108eef6fb975afb86808e50d78a075e162f1edfc93",
     "model-00005-of-00006.safetensors": "a72666b6001d76e7a9dc3ebe0d05a2c3316f546a8c6779c87343f296bdf82e50",
     "model-00006-of-00006.safetensors": "a9bfeeea354e31503d09a864e6cd5bd0f1230664065b6a2988b05e22b3228d77"
+   }
+  },
+  {
+   "config_sha256": "96d4cd79a822447be6dc70c3dd979f9b4f64a58e9ebb764d50fefac20175ee94",
+   "downloaded": true,
+   "files": {
+    ".gitattributes": {
+     "digest_source": "downloaded",
+     "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+     "size": 1519
+    },
+    "README.md": {
+     "digest_source": "downloaded",
+     "sha256": "2397387096f5130a0284cbb578b149d705f8a85d943e14b8486c99fc73bc62f8",
+     "size": 8316
+    },
+    "config.json": {
+     "digest_source": "downloaded",
+     "sha256": "96d4cd79a822447be6dc70c3dd979f9b4f64a58e9ebb764d50fefac20175ee94",
+     "size": 654
+    },
+    "generation_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "63b76107a660687d9591beb7db277a7fb50862f00e805b19c021a266bbaef051",
+     "size": 111
+    },
+    "model.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "a79dd202fd3597d67af4c44d3e5203016ba86737d53963491bab2a59f644e6b0",
+     "size": 706875632
+    },
+    "special_tokens_map.json": {
+     "digest_source": "downloaded",
+     "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+     "size": 3
+    },
+    "tokenizer.json": {
+     "digest_source": "downloaded",
+     "sha256": "6d50b5354d1384e0cac39cc8f0a1a1d7d3a64d3a9d7f90a742a2a75a023fc6b7",
+     "size": 2774490
+    },
+    "tokenizer_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "a77865c5bbe059c2b67f0602442fc0229e8d2218ad3106d3d0e0051b00b25434",
+     "size": 1048
+    }
+   },
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--PleIAs--Pleias-350m-Preview/snapshots/f175e52d0411f2c5273b5de549ddc98ce7f3f5d6",
+   "note": "overnight grid (circuits-grid-models, family pleias, TP1): ungated BF16, downloaded to vy-nebius-1's HF cache by prefetch.py (weights.tsv group grid-models); every downloaded file sha256'd from its bytes (the hub-lfs digests agree)",
+   "repo": "PleIAs/Pleias-350m-Preview",
+   "resolved_at": "2026-10-01T16:16:46Z",
+   "resolved_by": "circuits-grid-models",
+   "revision": "f175e52d0411f2c5273b5de549ddc98ce7f3f5d6",
+   "role": "PLEIAS_350M",
+   "safetensors_sha256": {
+    "model.safetensors": "a79dd202fd3597d67af4c44d3e5203016ba86737d53963491bab2a59f644e6b0"
+   }
+  },
+  {
+   "config_sha256": "c9ec4c2ae7ad60ed465f6541f8446078d4a150ceeb4af72c665b8dc55da7e146",
+   "downloaded": true,
+   "files": {
+    ".gitattributes": {
+     "digest_source": "downloaded",
+     "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+     "size": 1519
+    },
+    "README.md": {
+     "digest_source": "downloaded",
+     "sha256": "27e702d1aa1a9e6167382dc140829913de965124e37ec40d473f85c1caba9203",
+     "size": 6605
+    },
+    "config.json": {
+     "digest_source": "downloaded",
+     "sha256": "c9ec4c2ae7ad60ed465f6541f8446078d4a150ceeb4af72c665b8dc55da7e146",
+     "size": 685
+    },
+    "generation_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "3370f4eae1cdb2c33f25c3d92acf6693c75e2a309c59678d871ef2a16fee784c",
+     "size": 132
+    },
+    "model.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "534bdecc5d58c230e1ceff943ca56d0b09ff3b70be87102403b7f59453248986",
+     "size": 1027198256
+    },
+    "onnx/model.onnx": {
+     "digest_source": "hub",
+     "size": 2054879671
+    },
+    "onnx/model_bnb4.onnx": {
+     "digest_source": "hub",
+     "size": 458563162
+    },
+    "onnx/model_fp16.onnx": {
+     "digest_source": "hub",
+     "size": 1027719497
+    },
+    "onnx/model_int8.onnx": {
+     "digest_source": "hub",
+     "size": 514382080
+    },
+    "onnx/model_q4.onnx": {
+     "digest_source": "hub",
+     "size": 487586482
+    },
+    "onnx/model_q4f16.onnx": {
+     "digest_source": "hub",
+     "size": 427423291
+    },
+    "onnx/model_quantized.onnx": {
+     "digest_source": "hub",
+     "size": 514382080
+    },
+    "onnx/model_uint8.onnx": {
+     "digest_source": "hub",
+     "size": 514382129
+    },
+    "special_tokens_map.json": {
+     "digest_source": "downloaded",
+     "sha256": "6fa06efa2785e450051989a6f8fb4416b10149ded485ddd3f127a40734f5cfd0",
+     "size": 414
+    },
+    "tokenizer.json": {
+     "digest_source": "downloaded",
+     "sha256": "e2d03d57b6cc4f80c1f50435116a7fa3ce8cdd8912c84dfd3169d30b74a4ac24",
+     "size": 1794871
+    },
+    "tokenizer.model": {
+     "digest_source": "downloaded",
+     "sha256": "dadfd56d766715c61d2ef780a525ab43b8e6da4de6865bda3d95fdef5e134055",
+     "size": 493443
+    },
+    "tokenizer_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "c91878e7f6cc7c8a2de073afc0b3ad7149cd267b8eb30b7940144157ef930359",
+     "size": 968
+    }
+   },
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--h2oai--h2o-danube3-500m-base/snapshots/0ac6d9d2999a15761bf1cb03d480a1f8e2c845a6",
+   "note": "overnight grid (circuits-grid-models, family danube, TP1): ungated BF16, downloaded to vy-nebius-1's HF cache by prefetch.py (weights.tsv group grid-models); every downloaded file sha256'd from its bytes (the hub-lfs digests agree)",
+   "repo": "h2oai/h2o-danube3-500m-base",
+   "resolved_at": "2026-10-01T16:16:47Z",
+   "resolved_by": "circuits-grid-models",
+   "revision": "0ac6d9d2999a15761bf1cb03d480a1f8e2c845a6",
+   "role": "DANUBE3_500M",
+   "safetensors_sha256": {
+    "model.safetensors": "534bdecc5d58c230e1ceff943ca56d0b09ff3b70be87102403b7f59453248986"
+   }
+  },
+  {
+   "config_sha256": "94734353ba95932b2a0de6d4783a8ecaf71605f94d4f47f3584043ad5e3ef561",
+   "downloaded": true,
+   "files": {
+    ".gitattributes": {
+     "digest_source": "downloaded",
+     "sha256": "c5f8e4ad03299e88013008cdf3aee2d30ffdbdde2b2eb4e7821ca32a0dfb7f6a",
+     "size": 1741
+    },
+    "README.md": {
+     "digest_source": "downloaded",
+     "sha256": "b2281516cec461fa25426dfa0957dfadd02a81c6e08c5fdce905659eeccf005e",
+     "size": 65412
+    },
+    "config.json": {
+     "digest_source": "downloaded",
+     "sha256": "94734353ba95932b2a0de6d4783a8ecaf71605f94d4f47f3584043ad5e3ef561",
+     "size": 678
+    },
+    "generation_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "9982c8874a270f6cc4942f04570ffa6d272e7227cd28dd139650021f7c9085cd",
+     "size": 224
+    },
+    "images/corpus_languages_1.0.png": {
+     "digest_source": "downloaded",
+     "sha256": "ca5c6f16ba8f9474da68bd9cef2bacb9055fde2df5f3eae19cbd90a5e1aa0938",
+     "size": 352496
+    },
+    "images/corpus_languages_1.1.png": {
+     "digest_source": "downloaded",
+     "sha256": "a66685fd95c43e997ba20620231b00d43e1085aba09af54c69b3a414b6a25f73",
+     "size": 352124
+    },
+    "images/salamandra_header.png": {
+     "digest_source": "downloaded",
+     "sha256": "de12bec43f22c0c41b45b84425759d6c9e38ecdf06d58519f048f10fe6e826de",
+     "size": 11097851
+    },
+    "model.safetensors": {
+     "digest_source": "downloaded",
+     "sha256": "895a734b23869bfa3fdca1956cfc3de4bba500c4e8c7d958067c74cf807406f3",
+     "size": 4507005744
+    },
+    "special_tokens_map.json": {
+     "digest_source": "downloaded",
+     "sha256": "6fa06efa2785e450051989a6f8fb4416b10149ded485ddd3f127a40734f5cfd0",
+     "size": 414
+    },
+    "tokenizer.json": {
+     "digest_source": "downloaded",
+     "sha256": "2e90b85b3e3b3ebfc6b9bafeb954b37f2435eed595738337e53f2a746d23d5a2",
+     "size": 37007416
+    },
+    "tokenizer.model": {
+     "digest_source": "downloaded",
+     "sha256": "ab94ddf46d14f0279254858d53770c5319c5129d47291ee2bada530271cb1292",
+     "size": 4813276
+    },
+    "tokenizer_config.json": {
+     "digest_source": "downloaded",
+     "sha256": "571a07af570381d504321ea7203c766a8f7f4e7cd2b1ae36dff6f80b5be24093",
+     "size": 989
+    }
+   },
+   "gated": false,
+   "local_path": "/workspace/hf/hub/models--BSC-LT--salamandra-2b/snapshots/f3a6092c93948fea08ab618388d7b78c40ad63df",
+   "note": "overnight grid (circuits-grid-models, family salamandra, TP1): ungated BF16, downloaded to vy-nebius-1's HF cache by prefetch.py (weights.tsv group grid-models); every downloaded file sha256'd from its bytes (the hub-lfs digests agree)",
+   "repo": "BSC-LT/salamandra-2b",
+   "resolved_at": "2026-10-01T16:16:53Z",
+   "resolved_by": "circuits-grid-models",
+   "revision": "f3a6092c93948fea08ab618388d7b78c40ad63df",
+   "role": "SALAMANDRA_2B",
+   "safetensors_sha256": {
+    "model.safetensors": "895a734b23869bfa3fdca1956cfc3de4bba500c4e8c7d958067c74cf807406f3"
    }
   }
  ],
