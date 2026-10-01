@@ -14,8 +14,9 @@
 #   2. ships this checkout's git-visible files to /workspace/research/trees/$VY_LANE on the host (`research pods sync`):
 #      jobs run from there (SRC), not from an upload;
 #   3. runs `sky jobs launch` with the R2 credentials as secrets (from this environment) and prints the job's queue line.
-# config-run's two tasks: VY_ROW_CLASS=small|dense|long|moe|b64|tp2 (its header's table), or VY_BUILD_MEMORY / VY_GPU_MEMORY
-# in GB per cell (e.g. `verity-vllm sweep plan`'s ram_gb), which win over the class.
+# config-run's build and gpu tasks: VY_ROW_CLASS=small|dense|long|moe|b64|tp2 (its header's table), or VY_BUILD_MEMORY / VY_GPU_MEMORY
+# in GB per cell (e.g. `verity-vllm sweep plan`'s ram_gb), which win over the class; VY_PLAN_MEMORY / VY_REPLAY_MEMORY its 0-GPU plan
+# and replay tasks'.
 # VY_LANE defaults to this checkout's branch name. KUBECONFIG is unset: the SkyPilot client forwards it to the server.
 # Another server's cluster (its own API server): VY_MACHINE=vy-nebius-2 VY_POOL=vy-nebius-2 VY_SKY_PORT=46581.
 set -euo pipefail
@@ -91,30 +92,34 @@ dest=/workspace/research/trees/$lane
 research pods sync "$machine" "$repo" --dest "$dest"
 secrets=()
 for s in R2_ENDPOINT R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do secrets+=(--secret "$s"); done
-if [ -n "${VY_ROW_CLASS:-}${VY_BUILD_MEMORY:-}${VY_GPU_MEMORY:-}${VY_REPLAY_MEMORY:-}" ]; then   # config-run: its tasks' memory (and TP2's GPUs)
+if [ -n "${VY_ROW_CLASS:-}${VY_BUILD_MEMORY:-}${VY_GPU_MEMORY:-}${VY_REPLAY_MEMORY:-}${VY_PLAN_MEMORY:-}" ]; then   # config-run: its tasks' memory (and TP2's GPUs)
   rendered=$(mktemp --suffix=.yaml)
-  python3 - "$yaml" "${VY_ROW_CLASS:-}" "${VY_BUILD_MEMORY:-}" "${VY_GPU_MEMORY:-}" "${VY_REPLAY_MEMORY:-}" > "$rendered" <<'PY'
+  python3 - "$yaml" "${VY_ROW_CLASS:-}" "${VY_BUILD_MEMORY:-}" "${VY_GPU_MEMORY:-}" "${VY_REPLAY_MEMORY:-}" "${VY_PLAN_MEMORY:-}" > "$rendered" <<'PY'
 import re, sys
-text, cls, build_gb, gpu_gb, replay_gb = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+text, cls, build_gb, gpu_gb, replay_gb, plan_gb = open(sys.argv[1]).read(), *sys.argv[2:7]
 table = {"small": (64, 64, 1), "dense": (160, 170, 1), "long": (160, 170, 1), "moe": (256, 170, 1), "b64": (256, 170, 1),
          "tp2": (160, 340, 2)}                          # the gpu task: batch 8+ Commits use ~130 GiB (epoch-run 16:35Z)
 if cls and cls not in table:
     sys.exit(f"VY_ROW_CLASS={cls}: one of {sorted(table)}")
 parts = text.split("\n---\n")
-if len(parts) not in (3, 4):
-    sys.exit("VY_ROW_CLASS / VY_BUILD_MEMORY / VY_GPU_MEMORY / VY_REPLAY_MEMORY apply to a pipeline template (config-run)")
+task = {m.group(1): i for i, p in enumerate(parts) if (m := re.search(r"(?m)^name: (\S+)$", p))}   # by name: config-run's plan sits before gpu
+if not {"build", "gpu"} <= task.keys():
+    sys.exit("VY_ROW_CLASS / VY_BUILD_MEMORY / VY_GPU_MEMORY / VY_PLAN_MEMORY / VY_REPLAY_MEMORY apply to a pipeline template (config-run)")
+def sub(name, pattern, repl):
+    parts[task[name]] = re.sub(pattern, repl, parts[task[name]])
 build, gpu, n = table.get(cls) or (None, None, None)
 build, gpu = int(build_gb or build or 0), int(gpu_gb or gpu or 0)
 if build:
-    parts[1] = re.sub(r"(?m)^  memory: \d+", f"  memory: {build}", parts[1])
-    parts[1] = re.sub(r'(?m)^  BUILD_RAM_BUDGET_GB: "\d+"$', f'  BUILD_RAM_BUDGET_GB: "{build}"', parts[1])
+    sub("build", r"(?m)^  memory: \d+", f"  memory: {build}")
+    sub("build", r'(?m)^  BUILD_RAM_BUDGET_GB: "\d+"$', f'  BUILD_RAM_BUDGET_GB: "{build}"')
 if gpu:
-    parts[2] = re.sub(r"(?m)^  memory: \d+", f"  memory: {gpu}", parts[2])
+    sub("gpu", r"(?m)^  memory: \d+", f"  memory: {gpu}")
 if n:
-    parts[2] = re.sub(r"(?m)^  accelerators: RTXPRO6000:\d+$", f"  accelerators: RTXPRO6000:{n}", parts[2])
-    parts[2] = re.sub(r"(?m)^  cpus: \d+", f"  cpus: {4 * n}", parts[2])                           # the GPU queue's 4 vCPU per GPU
-if replay_gb and len(parts) == 4:
-    parts[3] = re.sub(r"(?m)^  memory: \d+", f"  memory: {int(replay_gb)}", parts[3])
+    sub("gpu", r"(?m)^  accelerators: RTXPRO6000:\d+$", f"  accelerators: RTXPRO6000:{n}")
+    sub("gpu", r"(?m)^  cpus: \d+", f"  cpus: {4 * n}")                           # the GPU queue's 4 vCPU per GPU
+for name, gb in (("plan", plan_gb), ("replay", replay_gb)):    # the 0-GPU tasks after the Build keep their memory whatever the class
+    if gb and name in task:
+        sub(name, r"(?m)^  memory: \d+", f"  memory: {int(gb)}")
 sys.stdout.write("\n---\n".join(parts))
 PY
   yaml=$rendered

@@ -28,6 +28,12 @@ def documents(path: Path) -> list[str]:
     return [d for d in path.read_text().split("\n---\n") if "kind:" in d]
 
 
+def config_run() -> dict[str, str]:
+    """config-run.yaml's documents by name: its header (`config-run`) and its tasks, build, plan, gpu and replay, in that order."""
+    parts = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
+    return {re.search(r"(?m)^name: (\S+)$", p).group(1): p for p in parts}
+
+
 def quotas(path: Path) -> dict[str, dict[str, float]]:
     ur = usage_report()
     out = {}
@@ -89,7 +95,9 @@ def test_every_job_template_names_a_defined_queue_and_priority():
 def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     import subprocess
     text = (SKY / "jobs" / "config-run.yaml").read_text()
-    head, build, gpu, replay = text.split("\n---\n")
+    tasks = config_run()
+    assert list(tasks) == ["config-run", "build", "plan", "gpu", "replay"]
+    build, plan, gpu, replay = tasks["build"], tasks["plan"], tasks["gpu"], tasks["replay"]
     assert "accelerators" not in replay and "queue-name: deployments-cpu" in replay and "row stage replay" in replay
     assert 'if [ "$REPLAY_DEFERRED" != 1 ]; then' in replay and "REPLAY_DEFERRED: auto" in replay and "REPLAY_DEFERRED: auto" in gpu
     assert '[ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)' in gpu and '"${deferred[@]}"' in gpu
@@ -97,6 +105,13 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert gpu.count(detect) == 1 and replay.count(detect) == 2                        # setup and run resolve it as the Commit does
     assert 'if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*' in replay
     assert "accelerators" not in build and 'verity.dev/build: "true"' in build and "CUDA_VISIBLE_DEVICES=" in build
+    # the plan: 0 GPU, before the Commit, which cites it; a tree without the stage skips it (setup and run) and leaves no plan-run
+    assert "accelerators" not in plan and "queue-name: deployments-cpu" in plan and "CUDA_VISIBLE_DEVICES=" in plan
+    assert "row stage plan \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in plan
+    assert plan.count("grep -q VLLM_PLAN") == 2 and 'rm -f "$SWEEP_DIR/$ROW/plan-run"' in plan
+    assert 'echo "$run_id" > "$SWEEP_DIR/$ROW/plan-run"' in plan and '"$SWEEP_DIR/$ROW/plan-run"' in gpu
+    assert '--input "plan=$plan_art"' in gpu and "kueue.x-k8s.io/priority-class: circuits-gpu" in plan
+    assert "|| rc=$?" in plan and not plan.rstrip().endswith('exit "$rc"')        # a failed plan doesn't stop the Commit
     assert "row stage build \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in build
     assert "row stage commit \"$ROW\" \"$ROLE\" \"$REPO\" \"$REVISION\" --config-run 1 --replay-k 460" in gpu
     assert "accelerators: RTXPRO6000:1" in gpu and "row stage match" not in text                     # config runs have no Match
@@ -109,14 +124,16 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
     def render(*args):
-        out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run.yaml"), *args, *[""] * (4 - len(args))],
+        out = subprocess.run(["python3", str(tmp_path / "cls.py"), str(SKY / "jobs" / "config-run.yaml"), *args, *[""] * (5 - len(args))],
                              capture_output=True, text=True, check=True).stdout
         return out.split("\n---\n")[1:]
-    b2, g2, r2 = render("tp2", "", "")
+    b2, p2, g2, r2 = render("tp2", "", "")
     assert "  memory: 160" in b2 and "  memory: 340" in g2 and "accelerators: RTXPRO6000:2" in g2 and "  cpus: 8 " in g2
-    b3, g3, r3 = render("moe", "300", "", "96")                                                                  # a per-cell figure wins
+    assert "accelerators" not in p2 and "  memory: 64 " in p2 and "  cpus: 2 " in p2                       # the class sizes no plan
+    b3, p3, g3, r3 = render("moe", "300", "", "96", "48")                                                        # a per-cell figure wins
     assert "  memory: 300" in b3 and 'BUILD_RAM_BUDGET_GB: "300"' in b3 and "  memory: 170 " in g3
     assert "  memory: 96 " in r3 and "  memory: 64 " in r2                                                  # VY_REPLAY_MEMORY
+    assert "  memory: 48 " in p3                                                                            # VY_PLAN_MEMORY
 
 
 def test_benches_are_labelled_noisy_and_the_quiet_hour_holds_circuits():
@@ -299,32 +316,39 @@ def test_provers_gives_up_one_gpu_per_gpu_held_for_direct_runs(tmp_path):
 def test_the_coverage_build_task_has_no_gpu_but_finds_the_hosts_cuda_driver():
     """A GPU-less pod has no driver libraries, yet vLLM's CUDA platform (#536) loads libcuda.so.1 at import: the build task puts the
     host's copy, which cluster_up.sh maintains, on LD_LIBRARY_PATH."""
-    head, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
+    tasks = config_run()
+    build, plan, gpu = tasks["build"], tasks["plan"], tasks["gpu"]
     assert "accelerators" not in build and "LD_LIBRARY_PATH=/workspace/jobs/cuda-driver" in build
+    assert "accelerators" not in plan and "LD_LIBRARY_PATH=/workspace/jobs/cuda-driver" in plan
     assert "accelerators: RTXPRO6000:1" in gpu and "cuda-driver" not in gpu
     assert "/workspace/jobs/cuda-driver" in (SKY / "cluster_up.sh").read_text()
 
 
 def test_each_coverage_task_is_one_stage_attempt_whose_tool_reads_the_row():
-    """A two-task cell publishes what `row chain` does: each task's `row stage` is the workload of one `research run --tool vllm.<stage>`
-    Attempt, as plain argv (a `bash -c` string hides the row from the Tool's key params), and the Commit cites the Build's artifact."""
+    """A config-run cell publishes what `row chain` does: each task's `row stage` is the workload of one `research run --tool vllm.<stage>`
+    Attempt, as plain argv (a `bash -c` string hides the row from the Tool's key params), and the plan and the Commit cite the Build's
+    artifact."""
     import shlex
 
     from research.store import tools_registry
     repo = Path(__file__).resolve().parents[3]
     row = "smollm2-135m__bf16__rtxpro6000__tp1__b2__i64__o16__single__greedy__bi-eager"
     env = {"PY": "/venv/bin/python", "ROW": row, "ROLE": "SMOLLM2", "REPO": "HuggingFaceTB/SmolLM2-135M", "REVISION": "abc123"}
-    _, build, gpu, _ = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")
-    for stage, task in (("build", build), ("commit", gpu)):
+    tasks = config_run()
+    build, gpu = tasks["build"], tasks["gpu"]
+    for stage, task in (("build", build), ("plan", tasks["plan"]), ("commit", gpu)):
         run = task[task.index("\nrun: |"):task.index("\nconfig:")].replace("\\\n", " ")
         line = next(ln for ln in run.splitlines() if "-m research run" in ln or '"${research[@]}" run ' in ln)
         assert f'--tool vllm.{stage} --project verity --cwd "$SRC"' in line and "bash -c" not in line
         argv = line.split(" -- ", 1)[1].replace('${deferred[@]+"${deferred[@]}"}', '')
         for k, v in env.items():
             argv = argv.replace(f'"${k}"', v)
+        if f"vllm.{stage}" not in tools_registry.REGISTRY:    # vllm.plan: registered in a tree with the plan stage (the job's own)
+            continue
         _, key = tools_registry.load(f"vllm.{stage}", repo).resolve_params(shlex.split(argv), repo)
         assert (key["stage"], key["row"], key["batch"], key["revision"]) == (stage, row, 2, "abc123")
     assert "two-task-build-run" in build and "two-task-build-run" in gpu and '--input "build=$build_art"' in gpu
+    assert "two-task-build-run" in tasks["plan"] and '--input "build=$build_art"' in tasks["plan"]
 
 
 def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
@@ -536,7 +560,7 @@ def test_a_quiet_commit_is_stopped_and_a_progressing_one_is_not(tmp_path):
     here waits on wall-clock time."""
     import os
     import subprocess
-    gpu = (SKY / "jobs" / "config-run.yaml").read_text().split("\n---\n")[2]
+    gpu = config_run()["gpu"]
     fn = "\n".join(ln[2:] for ln in gpu[gpu.index("\n  # >>> commit watchdog") + 1:gpu.index("  # <<< commit watchdog")].splitlines())
     assert 'watch_commit "$SWEEP_DIR/$ROW/commit.log" "$RESEARCH_RUNS/$run_id" "${research[@]}" run --id "$run_id"' in gpu
     bin_dir = tmp_path / "bin"

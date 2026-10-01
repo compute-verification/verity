@@ -1,15 +1,21 @@
-# A vLLM deployment (a config run, --config-run 1) on the Nebius cluster: three chained managed-job tasks, the Build and the replay
-# in queue deployments-cpu and the Commit in deployments-gpu (kueue.yaml: GPU generation and CPU checking in separate queues).
+# A vLLM deployment (a config run, --config-run 1) on the Nebius cluster: four chained managed-job tasks, the Build, the plan and the
+# replay in queue deployments-cpu and the Commit in deployments-gpu (kueue.yaml: GPU generation and CPU checking in separate queues).
 # When the tree has the CPU replay (PR B registers vllm.replay; REPLAY_DEFERRED=auto, the default) the Commit seals a replay bundle
 # in <sweep>/<row>/commit/replay_bundle_p1/ and the replay task replays it on CPU; an older tree's Commit replays on its GPU and the
 # replay task exits at once. --env REPLAY_DEFERRED=1 or 0 forces either. Interface agreed with the vLLM coordinator
 # (lanes/nebius-infra/20260930T0729Z-answer-from-vllm-coordinator-config-run-split.md):
-#   build: CPU only (0 GPU)   `row stage build  ROW ROLE REPO REV --config-run 1 --replay-k 460`   Build + the strict word check
-#   gpu:   1 GPU (TP2: 2)     `row stage commit ROW ROLE REPO REV --config-run 1 --replay-k 460`   one instrumented engine run, the
+#   build:  CPU only (0 GPU)  `row stage build  ROW ROLE REPO REV --config-run 1 --replay-k 460`   Build + the strict word check
+#   plan:   CPU only (0 GPU)  `row stage plan   ROW ROLE REPO REV --config-run 1 --replay-k 460`   what the Commit derives before its
+#                              engine runs (the manifest's producer facts: 545 s of a Qwen3-4B B32 Commit's 787 s GPU hold), in
+#                              <row>/plan/commit_plan.json under a key of the Program, manifest, workload, tree and vLLM; a Commit
+#                              whose key differs recomputes it (`plan_recomputed`), and a tree without the stage skips the task
+#   gpu:    1 GPU (TP2: 2)    `row stage commit ROW ROLE REPO REV --config-run 1 --replay-k 460`   one instrumented engine run, the
 #                              460-unit host replay, config_record.json: about 5-15 min for a small or medium cell
-# Config runs have no Match stage. Both tasks use the same row directory on the host (SWEEP_DIR/<row>): the Commit reads the Build's
-# Programs and manifest there. Each task runs its `row stage` as one `research run --tool vllm.<stage>` Attempt (the Commit citing the
-# Build's artifact); the gpu task's carries ov.noisy (it runs beside Builds).
+#   replay: CPU only (0 GPU)  `row stage replay ROW ROLE REPO REV --config-run 1`                  the deferred replay of the bundle
+# Config runs have no Match stage. Every task uses the same row directory on the host (SWEEP_DIR/<row>): the plan and the Commit read
+# the Build's Programs and manifest there. Each task runs its `row stage` as one `research run --tool vllm.<stage>` Attempt (each citing
+# the artifacts of the tasks before it); the gpu task's carries ov.noisy (it runs beside Builds). A 0-GPU task requests no
+# accelerators, so Kueue books it no nvidia.com/gpu.
 # Full rows (Build, Match, Commit) use config-run-row.yaml. This is the coverage default: the GPU is held only for the Commit.
 # Needs #536 in the submitted tree: without it the GPU-less Build fails with "Device string must not be empty". Its build task
 # finds libcuda.so.1 in /workspace/jobs/cuda-driver, which cluster_up.sh keeps in step with the host's driver.
@@ -28,6 +34,8 @@
 #   moe     256 GB       170 GB            OLMoE, Qwen3-30B-A3B
 #   b64     256 GB       170 GB            batch 64
 #   tp2     160 GB       340 GB, 2 GPUs    TP2 (per-rank Builds in one task; #499, until then TP deployments are unsupported)
+# The plan and replay tasks keep their 64 GB whatever the class (VY_PLAN_MEMORY, VY_REPLAY_MEMORY): a plan's measured peak is 2.3 GiB
+# for OLMoE B8 and 12.8 GiB for Qwen3-4B B32 (node 2, 1 Oct 05:00Z).
 name: config-run
 
 ---
@@ -123,6 +131,108 @@ config:
 
 ---
 
+name: plan
+
+resources:
+  infra: ssh/vy-nebius
+  cpus: 2          # one process: a Qwen3-4B B32 plan ran 648 CPU-s in 570 s (node 2, 1 Oct 04:46Z)
+  labels:
+    budget-line: nebius-config-run
+  memory: 64         # the class table's note; VY_PLAN_MEMORY overrides
+
+envs:
+  SRC: /workspace/research/checkout
+  OMP_NUM_THREADS: "2"
+  ROW: null
+  ROLE: null
+  REPO: null
+  REVISION: null
+  CAMPAIGN: nebius-sweep
+  HF_HOME: /workspace/hf
+  CUDA_HOME: /workspace/jobs/cuda-12.9
+  TORCH_EXTENSIONS_DIR: /workspace/jobs/torch-extensions
+  HF_HUB_OFFLINE: "1"
+  SWEEP_DIR: /workspace/cp/sweep
+  PY: /workspace/jobs/venv312/bin/python
+  PY312: /workspace/jobs/venv312/bin/python
+  RESEARCH_PY: /workspace/jobs/bin/py312
+  RESEARCH_RUNS: /workspace/jobs/runs
+  RESEARCH_STORE: /workspace/jobs/store   # on the host: an attempt that couldn't be pushed outlives the pod
+  HOT_ROOT: /workspace/jobs/hot
+  HOT_RELEASING_MARKER: /workspace/jobs/hot/releasing
+  HOT_RELEASE_JSON: /workspace/jobs/hot/release.json
+  GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve
+  VERITY_UNIT_RULE_CACHE: /workspace/jobs/cache/unit-rules
+  UV_CACHE_DIR: /workspace/jobs/cache/uv
+  UV_PYTHON_INSTALL_DIR: /workspace/jobs/cache/python
+
+secrets:
+  R2_ENDPOINT: null
+  R2_BUCKET: null
+  AWS_ACCESS_KEY_ID: null
+  AWS_SECRET_ACCESS_KEY: null
+
+setup: |
+  set -euo pipefail
+  # a tree without the plan stage (its research tools register no vllm.plan) plans nothing: its Commit derives it on the GPU
+  grep -q VLLM_PLAN "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null || exit 0
+  # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
+  # every job of the tree compiles its taps at the same paths, so they are built once
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
+  [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
+  [ -x /workspace/jobs/bin/py312 ] || printf '#!/bin/sh\nexec /workspace/jobs/bin/uv run --no-project --python 3.12 python "$@"\n' > /workspace/jobs/bin/py312
+  chmod +x /workspace/jobs/bin/py312 2> /dev/null || true
+  mkdir -p /workspace/jobs/hot /workspace/jobs/dm /workspace/jobs/cache/unit-rules "$SWEEP_DIR"
+  cd "$SRC/integrations/vllm"
+  bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --cpu --out "/workspace/jobs/bootstrap/$ROLE-cpu"     # skipped, without the lock, once this tree, role and venv passed
+
+run: |
+  set -euo pipefail
+  if ! grep -q VLLM_PLAN "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null; then
+    rm -f "$SWEEP_DIR/$ROW/plan-run"     # so the Commit cites no earlier deployment's plan
+    echo "plan: this tree has no plan stage (no vllm.plan); its Commit derives the plan on the GPU"; exit 0
+  fi
+  export PATH=/workspace/jobs/venv312/bin:$PATH
+  SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" --mine); export SRC
+  export PATH=$CUDA_HOME/bin:$PATH
+  export PYTHONPATH=$SRC/integrations/vllm:$SRC/tools/research/src CUDA_VISIBLE_DEVICES=
+  export LD_LIBRARY_PATH=/workspace/jobs/cuda-driver${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}   # as the build task: no GPU, the host's libcuda
+  build_run=$(cat "$SWEEP_DIR/$ROW/two-task-build-run" 2> /dev/null || true)
+  build_art=""
+  [ -z "$build_run" ] || build_art=$(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$build_run" --json 2> /dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("build", ""))' \
+    2> /dev/null || true)
+  echo "plan cites the Build: run ${build_run:-none}, artifact ${build_art:-none}"
+  # the gpu task reads this run id back to cite the plan, as this task cites the Build
+  run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
+  echo "$run_id" > "$SWEEP_DIR/$ROW/plan-run"
+  rc=0
+  /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --id "$run_id" --tool vllm.plan --project verity --cwd "$SRC" \
+    --campaign "$CAMPAIGN" ${build_art:+--input "build=$build_art"} \
+    -- "$PY" -m verity_vllm.pipeline.cli row stage plan "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 || rc=$?
+  # the plan only saves the Commit GPU time: a failed one (its Attempt records it) doesn't stop the Commit, which uses a plan only
+  # under its own key (written whole, by rename) and otherwise derives the producer facts itself
+  [ "$rc" = 0 ] || echo "plan: row stage plan exited $rc; the Commit derives its plan on the GPU"
+
+config:
+  ssh:
+    provision_timeout: -1
+    pod_config:
+      metadata:
+        labels:
+          kueue.x-k8s.io/queue-name: deployments-cpu
+          kueue.x-k8s.io/priority-class: circuits-gpu      # the Commit waits on it: ahead of queued Builds, as the replay is
+          verity.dev/build: "true"
+      spec:
+        terminationGracePeriodSeconds: 300   # a preempted job's research run finishes publishing its attempt
+        containers:
+        - volumeMounts:
+          - {name: workspace, mountPath: /workspace}
+        volumes:
+        - {name: workspace, hostPath: {path: /workspace, type: Directory}}
+
+---
+
 name: gpu
 
 resources:
@@ -196,6 +306,13 @@ run: |
     | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("build", ""))' \
     2> /dev/null || true)
   echo "commit cites the Build: run ${build_run:-none}, artifact ${build_art:-none}"
+  # and the plan's (the plan task's run id; none for a tree without the stage), whose plan/commit_plan.json the Commit reads by key
+  plan_run=$(cat "$SWEEP_DIR/$ROW/plan-run" 2> /dev/null || true)
+  plan_art=""
+  [ -z "$plan_run" ] || plan_art=$(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research data show "$plan_run" --json 2> /dev/null \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); d=d[0] if isinstance(d, list) else d; print((d.get("outputs") or {}).get("plan", ""))' \
+    2> /dev/null || true)
+  echo "commit cites the plan: run ${plan_run:-none}, artifact ${plan_art:-none}"
   # the replay task reads this run id back to cite the Commit, as this task cites the Build
   run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
   echo "$run_id" > "$SWEEP_DIR/$ROW/pipeline-commit-run"
@@ -243,7 +360,7 @@ run: |
   [ "$REPLAY_DEFERRED" != 1 ] || deferred=(--replay-deferred 1)
   rc=0
   watch_commit "$SWEEP_DIR/$ROW/commit.log" "$RESEARCH_RUNS/$run_id" "${research[@]}" run --id "$run_id" --tool vllm.commit --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
-    ${build_art:+--input "build=$build_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"} || rc=$?
+    ${build_art:+--input "build=$build_art"} ${plan_art:+--input "plan=$plan_art"} -- "$PY" -m verity_vllm.pipeline.cli row stage commit "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 --replay-k 460 ${deferred[@]+"${deferred[@]}"} || rc=$?
   # a failed Commit's sealed bundle is never replayed (the replay task doesn't run), and a retry seals a new one
   if [ "$rc" != 0 ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*; fi
   exit "$rc"

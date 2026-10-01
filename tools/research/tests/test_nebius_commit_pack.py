@@ -19,6 +19,16 @@ NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 LLAMA_B8 = "llama32-1b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager"
 
 
+def _task_index(name: str) -> int:
+    """Where config-run's task `name` sits in its chain (build, plan, gpu, replay), as dispatch.load_template reads it."""
+    import yaml
+    docs = [d for d in yaml.safe_load_all((NEBIUS / "sky" / "jobs" / "config-run.yaml").read_text()) if d and "run" in d]
+    return [d["name"] for d in docs].index(name)
+
+
+GPU = _task_index("gpu")
+
+
 def _load(path: Path, name: str, monkeypatch):
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
@@ -75,11 +85,13 @@ def test_commit_pack_renders_one_gpu_workload_in_deployments_gpu(dispatch):
     assert int(env["PACK_SLOTS"]) * limit_gib <= 94.97
 
 
-def test_a_class_sizes_each_of_config_runs_three_tasks(dispatch, tmp_path):
-    """A `class` item on config-run's three tasks (build, gpu, replay) used to raise in render, which failed every dispatcher tick."""
+def test_a_class_sizes_each_of_config_runs_four_tasks(dispatch, tmp_path):
+    """A `class` item on config-run's tasks (build, plan, gpu, replay) used to raise in render, which failed every dispatcher tick;
+    the class sizes the build and gpu tasks by name, and the 0-GPU plan and replay keep their template's resources."""
     item = _item(_tree(tmp_path / "t"), "llama32-1b__bf16__rtxpro6000__tp2__b1__i256__o32__mixed__greedy__bi-eager", **{"class": "tp2"})
     build, gpu, n = dispatch.classes()["tp2"]
-    want = [(None, build, 0), (4 * n, gpu, n), (8, 64, 0)]
+    want = [(None, build, 0), (2, 64, 0), (4 * n, gpu, n), (8, 64, 0)]
+    assert [t["name"] for t in dispatch.load_template("config-run")[0]] == ["build", "plan", "gpu", "replay"]
     for idx, (cpus, mem, gpus) in enumerate(want):
         c = dispatch.render(item, "lane/tp2", idx, 0)["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
         assert c["memory"] == f"{mem}G" and int(c.get("nvidia.com/gpu", 0)) == gpus, (idx, c)
@@ -96,32 +108,32 @@ def test_a_class_sizes_each_of_config_runs_three_tasks(dispatch, tmp_path):
     ("mistral-7b__bf16__rtxpro6000__tp1__b8__i256__o32__mixed__greedy__bi-eager", "packing list"),
 ])
 def test_only_small_tp1_commits_pack(dispatch, tmp_path, row, why):
-    got = dispatch.packable(_item(_tree(tmp_path / "t"), row), "lane/c1", 1)
+    got = dispatch.packable(_item(_tree(tmp_path / "t"), row), "lane/c1", GPU)
     assert got is None if why is None else why in got
 
 
-def test_the_build_an_unpacked_or_leased_item_and_a_tree_without_deferred_replay_never_pack(dispatch, tmp_path):
+def test_the_build_the_plan_an_unpacked_or_leased_item_and_a_tree_without_deferred_replay_never_pack(dispatch, tmp_path):
     tree = _tree(tmp_path / "t")
-    assert "gpu task" in dispatch.packable(_item(tree), "lane/c1", 0)
-    assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), "lane/c1", 1)
-    assert "leased" in dispatch.packable(_item(tree, lease="wrap"), "lane/c1", 1)
-    assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), "lane/c1", 1)
+    assert "gpu task" in dispatch.packable(_item(tree), "lane/c1", 0) and "gpu task" in dispatch.packable(_item(tree), "lane/c1", GPU - 1)
+    assert "unpacked" in dispatch.packable(_item(tree, unpacked="p: fault"), "lane/c1", GPU)
+    assert "leased" in dispatch.packable(_item(tree, lease="wrap"), "lane/c1", GPU)
+    assert "deferred" in dispatch.packable(_item(_tree(tmp_path / "old", deferred=False)), "lane/c1", GPU)
 
 
 def test_route_spools_only_under_the_flag_and_below_the_disk_pause(dispatch, tmp_path):
     item = _item(_tree(tmp_path / "t"))
-    dispatch.route(item, "lane/c1", 1)
+    dispatch.route(item, "lane/c1", GPU)
     assert [a[0] for a, _ in dispatch.calls] == ["create"] and not list(dispatch.PACK.glob("queue/*"))
     dispatch.calls.clear()
     dispatch.PACK_COMMITS = True
     dispatch.PACK_DISK_PAUSE = 0.0
-    dispatch.route(item, "lane/c1", 1)
+    dispatch.route(item, "lane/c1", GPU)
     assert [a[0] for a, _ in dispatch.calls] == ["create"] and not list(dispatch.PACK.glob("queue/*"))
     dispatch.calls.clear()
     dispatch.PACK_DISK_PAUSE = 1.01
-    name = dispatch.route(item, "lane/c1", 1)
+    name = dispatch.route(item, "lane/c1", GPU)
     entry = json.loads((dispatch.PACK / "queue" / f"{name}.json").read_text())
-    assert not dispatch.calls and entry["key"] == "lane/c1" and entry["idx"] == 1
+    assert not dispatch.calls and entry["key"] == "lane/c1" and entry["idx"] == GPU
     assert entry["env"]["ROW"] == LLAMA_B8 and "row stage commit" in entry["script"]
     assert all((dispatch.PACK / d).stat().st_mode & 0o777 == 0o777 for d in ("", "queue", "claimed", "results/done", "logs", "stats"))
     assert dispatch.pack_keys() == {"lane/c1"}
@@ -135,17 +147,17 @@ def _result(dispatch, entry: dict, **res) -> None:
 def test_results_continue_the_chain_or_requeue_once_unpacked(dispatch, tmp_path):
     dispatch.PACK_COMMITS = True
     item = _item(_tree(tmp_path / "t"))
-    name = dispatch.spool(item, "lane/c1", 1)
+    name = dispatch.spool(item, "lane/c1", GPU)
     entry = json.loads((dispatch.PACK / "queue" / f"{name}.json").read_text())
     _result(dispatch, entry, rc=0, fault=False)
     dispatch.pack_results([])
     (_, job), = [(a, j) for a, j in dispatch.calls if a[0] == "create"]
-    assert job["metadata"]["labels"]["verity.dev/task"] == "2"            # the CPU replay, as a normal Job
+    assert job["metadata"]["labels"]["verity.dev/task"] == str(GPU + 1)   # the CPU replay, as a normal Job
     dispatch.calls.clear()
     _result(dispatch, {**entry, "job": "x2"}, rc=None, fault=True, reason="stopped: pod fault")
     dispatch.pack_results([])
     (_, job), = [(a, j) for a, j in dispatch.calls if a[0] == "create"]
-    assert job["metadata"]["labels"]["verity.dev/task"] == "1" and job["metadata"]["labels"]["verity.dev/try"] == "1"
+    assert job["metadata"]["labels"]["verity.dev/task"] == str(GPU) and job["metadata"]["labels"]["verity.dev/try"] == "1"
     assert "unpacked" in json.loads(job["metadata"]["annotations"]["verity.dev/item-json"])
     dispatch.calls.clear()
     _result(dispatch, {**entry, "job": "x3", "item": {**item, "unpacked": "pod-a: fault"}}, rc=1, fault=False)
@@ -155,7 +167,7 @@ def test_results_continue_the_chain_or_requeue_once_unpacked(dispatch, tmp_path)
 
 
 def test_an_entry_claimed_by_a_pod_that_is_gone_requeues_unpacked(dispatch, tmp_path):
-    name = dispatch.spool(_item(_tree(tmp_path / "t")), "lane/c1", 1)
+    name = dispatch.spool(_item(_tree(tmp_path / "t")), "lane/c1", GPU)
     claimed = dispatch.PACK / "claimed" / "pod-a"
     claimed.mkdir(parents=True)
     (dispatch.PACK / "queue" / f"{name}.json").rename(claimed / f"{name}.json")

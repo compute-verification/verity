@@ -10,7 +10,7 @@ Runs on the server with a Python that has PyYAML (`/workspace/jobs/venv312/bin/p
 **Templates.** Each task of `sky/jobs/<TEMPLATE>.yaml` becomes one batch/v1 Job labelled `kueue.x-k8s.io/queue-name` (Kueue admits
 it by quota and requeues it itself when it is preempted). The Job runs the task's `setup` then `run` with the task's envs, as the
 image's uid 1000, with /workspace mounted, and the R2 store credentials from the Secret `research-r2` (the templates' `secrets`).
-Tasks of a multi-task template (config-run: build, then gpu) chain: the next task is submitted when the previous one succeeds.
+Tasks of a multi-task template (config-run: build, plan, gpu, replay) chain: the next task is submitted when the previous one succeeds.
 A task that exits 99 is resubmitted (a chunk that ended early or was told to yield); any other failure ends the item.
 An item is pinned to its template's content at its first submit: the item carries `template_sha` (the `name@sha` its submit event
 logs) and a copy is kept at `$VY_DISPATCH_ROOT/templates.by-sha/<sha>/<template>.yaml`. Every later task, resubmission and spooled
@@ -29,10 +29,10 @@ exporter counts as `vy_ready_jobs{lane}` for the idle alert), written by the wor
 The item's id is the file's stem. On submit the file moves to `$VY_DISPATCH_ROOT/taken/<workstream>/` (default root
 /workspace/jobs/dispatch), so the ready directory holds only work not yet submitted.
 `queue` and `priority` default to the template's labels (`backfill` to priority `backfill`); `class` is submit.sh's VY_ROW_CLASS
-table (config-run's two tasks); `resources` ({"<task>": {"cpus": N, "memory": GB, "gpus": N}}) overrides it. Order: higher `rank`
-first; within a rank the workstreams take turns, each oldest file first. A queue is topped up while it has fewer than its depth of
-pending workloads (anyone's; VY_DISPATCH_DEPTH, default circuits=4,provers=2,backfill=4). A chain's next task is submitted
-regardless of depth.
+table (config-run's build and gpu tasks, found by name); `resources` ({"<task>": {"cpus": N, "memory": GB, "gpus": N}}) overrides
+it. Order: higher `rank` first; within a rank the workstreams take turns, each oldest file first. A queue is topped up while it has
+fewer than its depth of pending workloads (anyone's; VY_DISPATCH_DEPTH, default circuits=4,provers=2,backfill=4). A chain's next
+task is submitted regardless of depth.
 
 **GPU leases.** An item with `"lease": "wrap"` (or whose `workstream/template` is in VY_LEASE_CLASSES, comma-separated) leases its
 GPUs per process instead of binding them to its pod (n1_lease.py): the pod requests no `nvidia.com/gpu`, so Kueue books only its CPU
@@ -175,7 +175,8 @@ def dns(s: str, n: int) -> str:
 
 
 def classes() -> dict[str, tuple[int, int, int]]:
-    """submit.sh's VY_ROW_CLASS table, {class: (build GB, gpu GB, GPUs)} for config-run's two tasks, read from submit.sh itself."""
+    """submit.sh's VY_ROW_CLASS table, {class: (build GB, gpu GB, GPUs)} for config-run's build and gpu tasks, read from submit.sh
+    itself."""
     m = re.search(r"(?ms)^table = (\{.*?\})\s*(#[^\n]*)?\n(?!\s)", (HERE / "sky" / "submit.sh").read_text())
     if not m:
         raise ValueError("no VY_ROW_CLASS table in sky/submit.sh")
@@ -187,18 +188,19 @@ def task_resources(item: dict, task: dict, idx: int, ntasks: int) -> tuple[int, 
     cpus, mem = int(res.get("cpus", 8)), int(res.get("memory", 32))
     acc = str(res.get("accelerators") or "")
     gpus = int(acc.split(":")[1]) if ":" in acc else 0
-    cls = item.get("class")
+    cls, name = item.get("class"), task.get("name")
     if cls:
         table = classes()
-        if cls not in table or ntasks not in (2, 3):
-            raise ValueError(f"class {cls!r}: one of {sorted(table)}, for a pipeline template (build, gpu, and config-run's replay)")
+        if cls not in table or ntasks not in (2, 3, 4):
+            raise ValueError(f"class {cls!r}: one of {sorted(table)}, for a pipeline template (build and gpu, and config-run's "
+                             "plan and replay)")
         build, gpu, n = table[cls]
-        if idx == 0:
+        if name == "build":
             mem = build
-        elif idx == 1:
+        elif name == "gpu":
             mem, gpus, cpus = gpu, n, 4 * n          # submit.sh: the GPU queue's fixed 4 vCPU per GPU
-        # config-run's replay task (idx 2) keeps its template resources, as submit.sh does without VY_REPLAY_MEMORY
-    o = (item.get("resources") or {}).get(task.get("name") or str(idx)) or {}
+        # config-run's 0-GPU plan and replay tasks keep their template resources, as submit.sh does without VY_*_MEMORY
+    o = (item.get("resources") or {}).get(name or str(idx)) or {}
     return int(o.get("cpus", cpus)), int(o.get("memory", mem)), int(o.get("gpus", gpus))
 
 
