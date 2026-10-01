@@ -1087,6 +1087,37 @@ def test_n2_commit_counts_the_gpus_deployments_gpu_could_still_admit(tmp_path):
     assert free((6, 2, 6), (2, 1, 2), fail=True) == ""
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="n2_commit.sh is bash")
+def test_n2_commit_records_the_queues_placement_and_keeps_a_refused_row_on_node_1(tmp_path):
+    """submit's `place` asks `cluster submit` for node 2 with the row's research question and prints the placed.jsonl line; a
+    refusal exits 3, and a queue that gives no answer prints nothing and exits 0, so it never holds a row back. The queue is a
+    stand-in `cluster` package that echoes its arguments (tools/cluster's own tests cover the placement)."""
+    src = tmp_path / "cluster-src"
+    (src / "src" / "cluster").mkdir(parents=True)
+    (src / "descriptions").mkdir()
+    (src / "src" / "cluster" / "__init__.py").write_text("")
+    (src / "src" / "cluster" / "__main__.py").write_text(
+        "import json, sys\na = sys.argv[1:]\nv = lambda k: a[a.index(k) + 1]\n"
+        "assert a[0] == 'submit' and a[1].endswith('descriptions/nebius.toml') and v('--node') == 'vy-nebius-2'\n"
+        "if int(v('--gpus')) > 8:\n    print(json.dumps({'refused': 'vy-nebius-2 has 8 GPUs'}))\n    sys.exit(3)\n"
+        "print(json.dumps({'node': 'vy-nebius-2', 'why': 'starts now', 'question': v('--question'), 'max_s': int(v('--max-s'))}))\n")
+
+    def place(queue: Path, gpus: str = "1") -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(NEBIUS / "n2_commit.sh"), "place", "commit", "vllm-epoch-run-cov-gm149", gpus, "40",
+                               "Does cov-gm149's Commit validate on vy-nebius-2?"], capture_output=True, text=True,
+                              env={**os.environ, "VY_QUEUE_SRC": str(queue)})
+
+    r = place(src)
+    assert r.returncode == 0, r.stderr
+    rec = json.loads(r.stdout)
+    assert (rec["kind"], rec["key"], rec["node"], rec["executor"]) == ("commit", "vllm-epoch-run-cov-gm149", "vy-nebius-2", "fill-queue")
+    assert rec["question"] == "Does cov-gm149's Commit validate on vy-nebius-2?"
+    r = place(src, gpus="9")
+    assert r.returncode == 3 and "refuses" in r.stderr and not r.stdout
+    r = place(tmp_path / "no-cluster")
+    assert r.returncode == 0 and not r.stdout and "no placement" in r.stderr
+
+
 def test_publish_pool_merges_node_1s_own_file_only_while_it_is_fresh():
     spec = importlib.util.spec_from_file_location("publish_pool_merge_under_test", NEBIUS / "publish_pool.py")
     pp = importlib.util.module_from_spec(spec)
