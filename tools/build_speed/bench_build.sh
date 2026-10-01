@@ -12,7 +12,11 @@ RID=${RESEARCH_RUN_ID:?}
 BASE=/workspace/research/build-speed
 SCR=$BASE/runs/$RID
 mkdir -p "$SCR/sweep" "$SCR/tmp" "$RESEARCH_RUN_DIR/out"
-trap 'rm -rf "$SCR"' EXIT
+if [ -n "${BENCH_KEEP:-}" ]; then
+  trap 'rm -rf "$SCR/tmp" "$SCR/unit-rules"; mkdir -p "$BASE/keep"; rm -rf "$BASE/keep/$BENCH_KEEP"; mv "$SCR/sweep" "$BASE/keep/$BENCH_KEEP"; rm -rf "$SCR"' EXIT
+else
+  trap 'rm -rf "$SCR"' EXIT
+fi
 export TMPDIR=$SCR/tmp SWEEP_DIR=$SCR/sweep
 export PY=/workspace/jobs/venv312/bin/python PY312=/workspace/jobs/venv312/bin/python
 export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/workspace/jobs/cuda-12.9 TORCH_EXTENSIONS_DIR=/workspace/jobs/torch-extensions
