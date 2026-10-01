@@ -23,7 +23,7 @@ pids=()
 for S in "$@"; do
   i=$((i + 1))
   case "$S" in
-    default) PRE="" ;;
+    default) PRE="pass" ;;
     off) PRE="gc.disable()" ;;
     *) PRE="gc.set_threshold($S)" ;;
   esac
