@@ -25,6 +25,7 @@ import json
 import os
 import shutil
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -72,14 +73,33 @@ def refuse(args: Any) -> None:
 
 
 def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: str, versions: dict, reqs: list[dict], sampling: dict,
-          tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None) -> tuple[dict, dict, dict]:
-    """At the C2 site of a deferred run: writes the bundle's store and weights tree, and returns the run's deferred sampled-replay and
-    linkage records and the bundle's context (sealed once the run's record is final, after the weights pin and the openings)."""
+          tokens: dict, stop_of_record: Any, ids_full: Any, declaration: Any, required_classes: Any, vc_result: Any = None,
+          plan: Callable[[], dict[str, Any]] | None = None, row: dict[str, Any], deferred: dict[int, dict]) -> bool:
+    """At the C2 site of a deferred run: writes the bundle's store and weights tree, puts the run's deferred sampled-replay and linkage
+    records on `row` and the bundle's context in `deferred[pair]` (sealed once the run's record is final, after the weights pin and the
+    openings).  ``plan`` makes the replay's committed reads (`c2_replay.plan`); with it the store is SLIM: only the ranges and tree nodes
+    they opened.  False, with nothing written, when the store would exceed `args.replay_bundle_cap_gb`: the replay then runs in process."""
     from verity_vllm.check.replay.driver import engine_facts_of_record
 
     tl.start("validate.replay_bundle", pair=pair)
+    slim, t = None, None
+    if plan is not None:
+        t0 = time.perf_counter()
+        with SD.touched(com) as t:
+            planned = plan()
+        sr_p = planned.get("replay") or {}
+        slim = {"bytes": t.nbytes(), "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
+                "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
+        print(f"[delta] REPLAY BUNDLE (pair {pair}): slim -- {slim['picked']} picks + linkage read {slim['bytes'] >> 20} MiB of the store "
+              f"in {slim['plan_s']} s (unresolved {slim['unresolved_n']})", flush=True)
+    size, cap = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
+    if size > cap:
+        tl.end("validate.replay_bundle", pair=pair, ok=False)
+        print(f"[delta] REPLAY BUNDLE (pair {pair}): REFUSED -- {size / 1e9:.1f} GB is over the {cap / 1e9:.0f} GB cap (--replay-bundle-cap-gb); "
+              "the C2 replay runs in this process", flush=True)
+        return False
     hashed: dict[str, str] = {}
-    write_store(out, pair, com, rc, digests=hashed)
+    write_store(out, pair, com, rc, digests=hashed, touched=t)
     caps = {str(q.get("request_id")): int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs}
     ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
            "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
@@ -89,11 +109,12 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),
-           "vc_result": vc_result, "engine_of_record": engine_facts_of_record(), HASHED: hashed}
-    sr, lk = deferred_records(path(out, pair))
+           "vc_result": vc_result, "engine_of_record": engine_facts_of_record(), "slim": slim, HASHED: hashed}
+    row["commit"]["sampled_replay"], row["commit"]["boundary_linkage"] = deferred_records(path(out, pair))
+    deferred[pair] = ctx
     tl.end("validate.replay_bundle", pair=pair)
     print(f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair {pair}): DEFERRED -- store and weights tree written to {partial(out, pair)}", flush=True)
-    return sr, lk, ctx
+    return True
 
 
 def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: int = 64, declaration: dict | None = None,
@@ -154,7 +175,7 @@ def _registered(model: Any) -> dict[str, Any]:
 
 
 def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_names: set[str] | None = None,
-                digests: dict[str, str] | None = None) -> Path:
+                digests: dict[str, str] | None = None, touched: SD.Touched | None = None) -> Path:
     """The bundle's store and weights, written into its partial dir (the rest follows at `seal`).  `extra_names`: the registered
     tensors whose bytes go into the bundle (default: the registered buffers and engine constants, which no checkpoint holds).
     ``digests`` receives the sha256 of the store's step files as they were written (by their path in the bundle)."""
@@ -166,7 +187,7 @@ def write_store(out: str | os.PathLike, pair: int, com: Any, rc: Any, *, extra_n
     if p.exists():
         shutil.rmtree(p)
     dumped: dict[str, str] = {}
-    SD.dump(com, rc, p / "store", digests=dumped)
+    SD.dump(com, rc, p / "store", digests=dumped, touched=touched)
     if digests is not None:
         digests.update({f"store/{k}": v for k, v in dumped.items()})
     tree = getattr(com, "weights_tree", None)

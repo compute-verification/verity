@@ -275,8 +275,19 @@ def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -
     return _sr_kw, _ep_facts
 
 
-def evaluate(s: Site, held: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure."""
+def plan(s: Site) -> dict[str, Any]:
+    """The replay's and the linkage's committed reads made against `s.com` without evaluating anything (what a slim replay bundle must
+    hold, `commit.store_dump.touched`): the same Programs, readers and draw as `run`."""
+    held: dict[str, Any] = {}
+    sr, lk = evaluate(s, held, plan=True)
+    held.clear()
+    gc.collect()
+    return {"replay": sr, "linkage": lk.get("result")}
+
+
+def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
+    ``plan``: the draw's reads only (`plan`)."""
     from verity_vllm.check import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
@@ -297,7 +308,7 @@ def evaluate(s: Site, held: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     from verity_vllm.pipeline import serving_rows as SRW
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(_pi0.prefix), _progs, _bm, _arr, _loaded, s.manifest, args.label)
     _rd = held["rd"]
-    _wc = s.weights_check()
+    _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
     # [rev-cb F-cb-44] the committed store's retention decides the evaluator: DEVICE-retained blocks cannot be read by forked children
     # (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
@@ -329,7 +340,9 @@ def evaluate(s: Site, held: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
                            # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                            manifest=(s.manifest if isinstance(s.manifest, dict) else None),
                            program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")},
-                           **_sr_kw)
+                           plan=plan, **_sr_kw)
+    if plan:
+        return sr, lk
     sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
     sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
     sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
