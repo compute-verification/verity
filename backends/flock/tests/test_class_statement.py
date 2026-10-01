@@ -220,3 +220,57 @@ def test_a_verifier_pod_serves_every_point_of_a_gpu_session_on_the_same_processe
     doc = json.loads((tmp_path / "verifiers" / CS._served_name(FC.digest("circuit\n"), 2048, sessions)).read_text())
     assert doc == e["doc"] and (doc["sessions"], doc["points"], doc["servers"]) == (sessions, points, 11)
     assert doc["addrs"] == [f"10.0.0.7:{9000 + i}" for i in range(11)]
+
+
+def test_a_live_statement_is_accepted_only_if_every_session_is_and_prove_exits_0(monkeypatch, tmp_path: Path):
+    (tmp_path / "circuit.txt").write_text("circuit")
+    st: dict = {}
+
+    class Prove:
+        def __init__(self, cmd, stdout, stderr):
+            if "-o" in cmd:
+                Path(cmd[cmd.index("-o") + 1]).write_text("1024\n")
+            stdout.write("".join(f"LIVE\t{json.dumps({'run': i, 'warm': i == 0, 'accepted': v, 'prove_total_s': 1.0 + i})}\n"
+                                 for i, v in enumerate(st["verdicts"])))
+            self.returncode = st["rc"]
+
+        def wait(self):
+            return self.returncode
+
+    monkeypatch.delenv("FC_VERIFIERS", raising=False)
+    monkeypatch.setattr(CS, "_serve", lambda *_a, **_kw: ([], ["127.0.0.1:1"]))
+    monkeypatch.setattr(CS.subprocess, "Popen", Prove)
+    cases = [([True] * 4, 0, True, None), ([True] * 3, 0, False, "3 LIVE records, not warm + runs = 4"),
+             ([False, True, True, True], 0, False, "sessions [0] not accepted"), ([True, True, False, True], 0, False, "sessions [2] not accepted"),
+             ([True] * 4, 1, False, "prove exited 1")]
+    for verdicts, rc, accepted, why in cases:
+        st.update(verdicts=verdicts, rc=rc)
+        live = CS.prove("flock-circuit", tmp_path, 4, 0, warm=1, runs=3)
+        assert (live["accepted"], live["why"]) == (accepted, why), (verdicts, rc)
+        assert live["timed_runs"] == len(verdicts) - 1
+
+
+def test_serve_wait_accepts_only_every_session_served_and_accepted(tmp_path: Path):
+    class Exited:
+        pid = 0
+
+        def poll(self):
+            return 0
+
+        def kill(self):
+            pass
+
+        def wait(self):
+            return 0
+
+    def served(name: str, verdicts: list[bool]) -> dict:
+        d = tmp_path / name
+        (d / "sessions").mkdir(parents=True)
+        (d / "sessions" / "index.jsonl").write_text("".join(json.dumps({"accepted": v, "verify_s": 0.5}) + "\n" for v in verdicts))
+        (d / "addrs.json").write_text("{}")
+        return {"file": d / "addrs.json", "srvs": [Exited()], "doc": {"sessions": 3}, "d": d, "t0": 0.0}
+
+    recs = CS.serve_wait([served("all", [True] * 3), served("short", [True] * 2), served("rejected", [True, False, True]),
+                          served("none", [])], 1.0)
+    assert [(r["served"], r["accepted"]) for r in recs] == [(3, True), (2, False), (3, False), (0, False)]
+    assert not any((tmp_path / n / "addrs.json").exists() for n in ("all", "short", "rejected", "none"))

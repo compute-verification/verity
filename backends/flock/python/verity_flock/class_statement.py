@@ -548,9 +548,15 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         return {"accepted": False, "why": (err or out)[-400:]}
     timed = [x for x in live if not x.get("warm")] or live
     v = sorted(timed, key=lambda x: x.get("prove_total_s") or 0)[len(timed) // 2]      # the median timed run
-    return {k: v.get(k) for k in ("accepted", "why", "prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
-                                  "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
-                                  "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
+    # accepted: every session, warm and timed, all warm + runs of them, and prove exited 0; not the median run's verdict alone
+    rejected = [x.get("run") for x in live if x.get("accepted") is not True]
+    broke = (f"prove exited {pr.returncode}" if pr.returncode else
+             f"{len(live)} LIVE records, not warm + runs = {warm + runs}" if len(live) != warm + runs else
+             f"sessions {rejected} not accepted" if rejected else None)
+    return {"accepted": broke is None, "why": broke or v.get("why")} | \
+        {k: v.get(k) for k in ("prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
+                               "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
+                               "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
         {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
          "verifier": f"pod {remote.get('host')}" if remote else "loopback",
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
@@ -637,7 +643,8 @@ def serve_wait(entries: list[dict], limit_s: float) -> list[dict]:
         idx = e["d"] / "sessions" / "index.jsonl"
         lines = [json.loads(ln) for ln in idx.read_text().splitlines() if ln.strip()] if idx.exists() else []
         vs = [x["verify_s"] for x in lines if x.get("verify_s") is not None]
-        out.append(e["doc"] | {"served": len(lines), "accepted": bool(lines) and all(x.get("accepted") is True for x in lines),
+        out.append(e["doc"] | {"served": len(lines), "accepted": bool(lines) and len(lines) == e["doc"]["sessions"] * e["doc"].get("points", 1)
+                               and all(x.get("accepted") is True for x in lines),
                                "timed_out": timed_out, "wall_s": round(time.time() - e["t0"], 3),
                                "verify_s_median": sorted(vs)[len(vs) // 2] if vs else None,
                                "verifier_peak_gb": round(sum(peak[id(s)] for s in e["srvs"]), 2)})
