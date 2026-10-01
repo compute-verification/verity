@@ -85,12 +85,22 @@ recorded in `<root>/n2-spill/<Job>.json` and an `ev: n2-spill` log line. Each ti
 outstanding spill: exit 0 ends the task as the Job would have (the Job is deleted, the chain continues); any other exit, a third
 start (it was stopped twice), or a fill job gone from node 2 without a result reactivates the workload, so node 1 runs it
 (`ev: n2-spill-back`). Rollback: remove the flag; outstanding spills still resolve.
+
+**The queue's placement (while `$VY_DISPATCH_ROOT/place.on` exists).** After `submit` creates a Job of a workstream in
+VY_PLACE_WORKSTREAMS (circuits' `vllm-epoch-run`; circuits' yes, 1 Oct 5:15 AM PDT), it asks the queue
+(`cluster submit` from $VY_QUEUE_SRC, default /workspace/verity-guest/cluster-src) where that Job would go, with the Job's
+requests and its research question, and appends the answer to $VY_PLACED (/workspace/verity-guest/placed.jsonl,
+`executor: kueue`). The question is the item's `question`, else its key family's kind in the queue's `kinds/circuits.toml`
+(the first kind one of whose `keys` globs matches the item id). It only records: the Job is rendered and created before
+the queue is asked, so its spec, env and tree never depend on the answer, and a queue that refuses or doesn't answer is
+recorded as such. Rollback: remove the flag.
 """
 from __future__ import annotations
 
 import argparse
 import ast
 import calendar
+import fnmatch
 import hashlib
 import json
 import os
@@ -100,6 +110,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
@@ -147,6 +158,11 @@ N2_FILL = os.environ.get("VY_N2_FILL", "/workspace/pouw/fill")
 N2_LEASES = "/run/gpu-lease"
 N2_SPILL = os.environ.get("VY_N2_SPILL_DIR", "/workspace/verity-guest/spill")
 VY_PROVERS = "/usr/local/bin/vy-provers"
+PLACE_FLAG = Path(os.environ.get("VY_DISPATCH_PLACE_FLAG", str(ROOT / "place.on")))
+QUEUE_SRC = Path(os.environ.get("VY_QUEUE_SRC", "/workspace/verity-guest/cluster-src"))
+PLACED = Path(os.environ.get("VY_PLACED", "/workspace/verity-guest/placed.jsonl"))
+PLACE_TIMEOUT_S = 30
+PLACE_WORKSTREAMS = {w for w in os.environ.get("VY_PLACE_WORKSTREAMS", "vllm-epoch-run").split(",") if w}
 
 
 def kubectl(*args: str, stdin: str | None = None) -> str:
@@ -343,6 +359,64 @@ def lease_mode(item: dict, key: str) -> str | None:
     return "wrap" if f"{key.split('/')[0]}/{item['template']}" in classes else None
 
 
+def kind_of(key: str) -> dict:
+    """The kind in the queue's kinds/circuits.toml whose `keys` globs first match the item id, with its name; {} for none."""
+    try:
+        kinds = tomllib.loads((QUEUE_SRC / "kinds" / "circuits.toml").read_text()).get("kinds", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+    stem = key.split("/")[-1]
+    for name, d in kinds.items():
+        if any(fnmatch.fnmatchcase(stem, g) for g in d.get("keys", ())):
+            return {"name": name, **d}
+    return {}
+
+
+def quantity(v, unit: float) -> float:
+    """A Kubernetes quantity ("500m", "8", "64Gi", "96G") in `unit` (1 for CPUs, 1e9 for GB)."""
+    s = str(v)
+    for suffix, mult in (("m", 1e-3), ("Ki", 2**10), ("Mi", 2**20), ("Gi", 2**30), ("Ti", 2**40), ("k", 1e3), ("M", 1e6),
+                         ("G", 1e9), ("T", 1e12)):
+        if s.endswith(suffix):
+            return float(s[:-len(suffix)]) * mult / unit
+    return float(s) / unit
+
+
+def place(item: dict, key: str, job: dict) -> dict:
+    """The queue's placement of a created Job, appended to PLACED; never raises (a failure is the row's `refused` or `error`)."""
+    req = job["spec"]["template"]["spec"]["containers"][0]["resources"]["requests"]
+    kind = kind_of(key)
+    question = str(item.get("question") or kind.get("question") or "")
+    row = {"t": now_utc(), "kind": "dispatch", "key": key, "job": job["metadata"]["name"], "family": kind.get("name"),
+           "queue": job["metadata"]["labels"].get("kueue.x-k8s.io/queue-name"), "question": question, "executor": "kueue"}
+    cmd = [sys.executable, "-m", "cluster", "submit", str(QUEUE_SRC / "descriptions" / "nebius.toml"),
+           "--run-id", row["job"], "--now", str(int(time.time())), "--project", "verity", "--submitter", "circuits",
+           "--question", question, "--gpus", str(int(quantity(req.get("nvidia.com/gpu", 0), 1))),
+           "--cpus", str(max(1, round(quantity(req.get("cpu", 1), 1)))),
+           "--mem-gb", str(max(1, round(quantity(req.get("memory", "1G"), 1e9)))), "--preempt", "requeue", "--node", SERVER]
+    if kind:
+        cmd += ["--kind", kind["name"]]
+    if job["spec"].get("activeDeadlineSeconds"):
+        cmd += ["--max-s", str(job["spec"]["activeDeadlineSeconds"])]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=PLACE_TIMEOUT_S,
+                           env={**os.environ, "PYTHONPATH": str(QUEUE_SRC / "src")})
+        out = json.loads(r.stdout.strip().splitlines()[-1])
+        if "refused" in out:
+            row["refused"] = out["refused"]
+        else:
+            row.update(node=out.get("node"), why=out.get("why"), question=out.get("question") or question)
+    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError) as e:
+        row["error"] = f"the queue gave no placement: {type(e).__name__}"
+    try:
+        PLACED.parent.mkdir(parents=True, exist_ok=True)
+        with open(PLACED, "a") as f:
+            f.write(json.dumps(row) + "\n")
+    except OSError as e:
+        print(f"placed.jsonl: {e}", file=sys.stderr)
+    return row
+
+
 def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False) -> str:
     item = pin(item, dry)
     job = render(item, key, idx, tries)
@@ -358,6 +432,8 @@ def submit(item: dict, key: str, idx: int = 0, tries: int = 0, dry: bool = False
                          "template": job["metadata"]["annotations"]["verity.dev/template"], "tree": item["tree"],
                          "requests": c["resources"]["requests"]})
     print(f"submitted {name} ({key} task {idx} try {tries})")
+    if PLACE_FLAG.exists() and key.split("/")[0] in PLACE_WORKSTREAMS:
+        place(item, key, job)
     return name
 
 
