@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import hashlib
 import json
 import os
 import re
@@ -309,16 +310,39 @@ def _commit(root: Path) -> dict:
         return {"commit": os.environ.get("COMMIT"), "dirty": None, "via": "env COMMIT"}
 
 
+#: per verifier source, its mark, the flag a version nobody reviewed carries, and the git blob ids of the reviewed versions with
+#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1, art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8)
+#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d, art:f865ea7822990772c557751642e3c0c17212b6703ec2f8f5292f5f63fe5dd1f1)
+#: carry none; with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, outside both grants) each carries that
+#: change's flag, as bf16-hill's a8a3661e2 names it
+VERIFIER_SOURCES = (
+    ("circuit.rs", "CscCircuit", "verifier-fold-unreviewed",
+     {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),
+      "a38a04e336a687c52ab0d642aa4674e90669399d": ("verifier-c0-once-unreviewed",)}),
+    ("session_verify.rs", "pub enum Lincheck", "lincheck-partial-unreviewed",
+     {"a12b4c15fa1138e91b8ffda7040f49737af30bbd": (),
+      "9d3b834f078fb2e9cfb6c37876eaea063d06dafc": ("verifier-c0-once-unreviewed",)}),
+)
+
+
 def verifier_flags(root: Path, lincheck: str | None) -> list[str]:
-    """The unreviewed verifier changes a tree's prover binary is built with (red-team-proofs-554's Q3), read from the sources it
-    compiles, since a synced tree has no history: the column-major fold (d1775df80; flock-fp's cde1c7ac1) and the structured
-    lincheck (8db1cb550; flock-fp's f7d1e297d) when FC_LINCHECK leaves it on (unset or partial; `both` rejects unless it equals
-    upstream's flat fold, `flat` is upstream's)."""
+    """The flags of the verifier changes a tree's prover binary is built with (red-team-proofs-554's Q3 and Q3b), read from the
+    sources it compiles, since a synced tree has no history: the column-major fold, and the structured lincheck when FC_LINCHECK
+    leaves it on (unset or partial; `both` rejects unless it equals upstream's flat fold, `flat` is upstream's). A source that
+    carries its change but none of the reviewed versions, or a circuit.rs that can't be read, is a change nobody reviewed."""
     live = root / "backends/flock/live/src"
-    def has(f: str, s: str) -> bool:
-        return (live / f).exists() and s in (live / f).read_text()
-    return (["verifier-fold-unreviewed"] if has("circuit.rs", "CscCircuit") else []) + \
-        (["lincheck-partial-unreviewed"] if has("session_verify.rs", "pub enum Lincheck") and (lincheck or "partial") == "partial" else [])
+    flags: list[str] = []
+    for name, mark, unreviewed, reviewed in VERIFIER_SOURCES:
+        if name == "session_verify.rs" and (lincheck or "partial") != "partial":
+            continue
+        try:
+            src = (live / name).read_bytes()
+        except OSError:
+            flags += [unreviewed] if name == "circuit.rs" else []
+            continue
+        if mark.encode() in src:
+            flags += reviewed.get(hashlib.sha1(b"blob %d\0" % len(src) + src).hexdigest(), (unreviewed,))
+    return list(dict.fromkeys(flags))
 
 
 def _phases(path: Path) -> dict[str, list[float]]:
