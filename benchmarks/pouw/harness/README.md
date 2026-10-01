@@ -101,6 +101,10 @@ Decode rows count on the panel only as a dependent chain, which needs a library 
 `--decode-method independent` times the old independent graph with any library. An arm's calls expose `phases` (before, gemm,
 after) to get the split; `arm.py` has the contract.
 
+A search's best, timed later with `--lt-enumerate-names FILE`, needs an `--lt-enumerate-max` that reaches every configuration
+FILE names: the enumeration keeps only its first `--lt-enumerate-max` (8,192) per library and swap, and cuBLASLt 13's FP8
+space at `m32-n8192-k8192` is 134,216. A run that doesn't take every named configuration at every shape stops with exit 2.
+
 An arm's `build` names every cubin, fatbin or library its kernels come from in `binaries` (arm interface v0.3; a cubin loaded
 with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
 (`POUW_CUDA_BIN`, `CUDA_HOME/bin`, the PATH or `/usr/local/cuda/bin`) and caches passes by the binary's sha256
