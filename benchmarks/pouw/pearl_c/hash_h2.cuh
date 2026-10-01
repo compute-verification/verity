@@ -34,11 +34,18 @@ DEV void b3s_block_stats(const uint32_t* m, int b, float& mx, float* smp) {
   smp[2 * b + 1] = __uint_as_float(m[8]);
 }
 
+// Eight BF16 values (one 16-byte load) as their FP32 words, exactly: a BF16 value is its FP32 word's upper half
+DEV void widen_bf16(const uint4 h, uint32_t* w) {
+  w[0] = h.x << 16; w[1] = h.x & 0xFFFF0000u; w[2] = h.y << 16; w[3] = h.y & 0xFFFF0000u;
+  w[4] = h.z << 16; w[5] = h.z & 0xFFFF0000u; w[6] = h.w << 16; w[7] = h.w & 0xFFFF0000u;
+}
+
 // Segment j of the value at v (L bytes): its keyed BLAKE3 under key into out.  aligned: v is 16-byte aligned and L a
 // multiple of 16, so a whole 64-byte block is four 16-byte loads (the next one issued while this one compresses).  STATS
 // (a whole segment of 64 FP32 words): also mx = max(mx, |x|) over its words, and its every 8th word x[8t] into smp[t], t < 8,
-// from the words as they are hashed.
-template <bool STATS>
+// from the words as they are hashed.  BF16: v holds the value's FP32 words as BF16 (L / 2 bytes, 16-byte aligned, segment j
+// whole), each widened as it is loaded, so the bytes hashed are the FP32 value's.
+template <bool STATS, bool BF16 = false>
 DEV void b3s_segment_t(const uint8_t* v, uint32_t L, uint32_t j, const uint32_t* key, bool aligned, uint32_t* out, float& mx,
                        float* smp) {
   const uint32_t off = B3S_SEG * j, seg = L > off ? min((uint32_t)B3S_SEG, L - off) : 0;
@@ -46,7 +53,22 @@ DEV void b3s_segment_t(const uint8_t* v, uint32_t L, uint32_t j, const uint32_t*
   uint32_t cv[8];
 #pragma unroll
   for (int i = 0; i < 8; i++) cv[i] = key[i];
-  if (aligned && seg == B3S_SEG) {
+  if constexpr (BF16) {
+    const uint4* src = reinterpret_cast<const uint4*>(v + off / 2);
+    uint4 nx[2] = {src[0], src[1]};
+#pragma unroll
+    for (int b = 0; b < 4; b++) {
+      uint32_t m[16];
+      widen_bf16(nx[0], m);
+      widen_bf16(nx[1], m + 8);
+      if (b < 3) {
+        nx[0] = src[2 * (b + 1)];
+        nx[1] = src[2 * (b + 1) + 1];
+      }
+      if constexpr (STATS) b3s_block_stats(m, b, mx, smp);
+      b3c(cv, m, 0, 64, B3_KEYED | (b == 0 ? B3_START : 0) | (b == 3 ? B3_END | B3_ROOT : 0), cv);
+    }
+  } else if (aligned && seg == B3S_SEG) {
     const uint4* src = reinterpret_cast<const uint4*>(v + off);
     uint4 nx[4];
 #pragma unroll
@@ -117,14 +139,15 @@ static_assert(1 << B3S_MAX_LEVELS == B3S_MAX_SEGS, "a row's segment tree has at 
 // STATS, for rows of FP32 words (L a multiple of 1,024, p0 16-byte aligned): also thread j's max |x| over its segment,
 // returned, and its every 8th word x[64 j + 8 t] into samp[33 (j / 4) + 8 (j % 4) + t], t < 8, so that samp[33 i + c] is
 // x[256 i + 8 c] (stats_s5's chain c at step i) and neither the writes nor a warp's reads over c conflict; and a row at or
-// past i0 (m_real: m's filler rows) is read for its stats alone.
-template <bool STATS>
+// past i0 (m_real: m's filler rows) is read for its stats alone.  BF16: p0's rows are BF16, L / 2 bytes each (L a multiple
+// of 256, p0 16-byte aligned), hashed as their FP32 words (b3s_segment_t).
+template <bool STATS, bool BF16 = false>
 DEV float rows_b3s(const Args& a, uint32_t (*lv)[8], uint32_t (*lks)[8], float* samp) {
   const uint64_t row = blockIdx.x;
   const uint32_t L = (uint32_t)a.i[1], nseg = L == 0 ? 1 : (L + B3S_SEG - 1) / B3S_SEG;
   const int j = threadIdx.x, levels = nseg > 1 ? 32 - __clz((int)(nseg - 1)) : 0;
   const uint64_t rank = (uint64_t)a.i[2] + row;
-  const uint8_t* v = reinterpret_cast<const uint8_t*>(a.p[0]) + row * (uint64_t)L;
+  const uint8_t* v = reinterpret_cast<const uint8_t*>(a.p[0]) + row * (uint64_t)(BF16 ? L / 2 : L);
   const bool hashed = !STATS || row < (uint64_t)a.i[0];
   float mx = 0.0f;
   float* smp = STATS ? samp + 33 * (j >> 2) + 8 * (j & 3) : nullptr;
@@ -136,7 +159,7 @@ DEV float rows_b3s(const Args& a, uint32_t (*lv)[8], uint32_t (*lks)[8], float* 
       for (int w = 0; w < 16; w++) tmpl[w] = reinterpret_cast<const uint32_t*>(a.p[4])[w];
       b3s_segment_key(dom, tmpl, (uint32_t)a.i[3], rank, rank, L, (uint32_t)j, key);
       const bool aligned = (L % 16 == 0) && ((a.p[0] & 15) == 0);
-      b3s_segment_t<STATS>(v, L, (uint32_t)j, key, aligned, h, mx, smp);
+      b3s_segment_t<STATS, BF16>(v, L, (uint32_t)j, key, aligned, h, mx, smp);
 #pragma unroll
       for (int i = 0; i < 8; i++) lv[j][i] = h[i];
       if (j < levels) {
@@ -146,12 +169,24 @@ DEV float rows_b3s(const Args& a, uint32_t (*lv)[8], uint32_t (*lks)[8], float* 
         if (row == 0 && a.p[3]) store_cv(a.p[3] + 32ull * j, h);
       }
     } else if constexpr (STATS) {
-      const float4* x = reinterpret_cast<const float4*>(v + B3S_SEG * j);
+      if constexpr (BF16) {
+        const uint4* x = reinterpret_cast<const uint4*>(v + B3S_SEG / 2 * j);
 #pragma unroll
-      for (int q = 0; q < 16; q++) {
-        const float4 f = x[q];
-        mx = fmaxf(mx, fmaxf(fmaxf(fabsf(f.x), fabsf(f.y)), fmaxf(fabsf(f.z), fabsf(f.w))));
-        if (q % 2 == 0) smp[q / 2] = f.x;
+        for (int q = 0; q < 8; q++) {
+          uint32_t w[8];
+          widen_bf16(x[q], w);
+#pragma unroll
+          for (int t = 0; t < 8; t++) mx = fmaxf(mx, fabsf(__uint_as_float(w[t])));
+          smp[q] = __uint_as_float(w[0]);
+        }
+      } else {
+        const float4* x = reinterpret_cast<const float4*>(v + B3S_SEG * j);
+#pragma unroll
+        for (int q = 0; q < 16; q++) {
+          const float4 f = x[q];
+          mx = fmaxf(mx, fmaxf(fmaxf(fabsf(f.x), fabsf(f.y)), fmaxf(fabsf(f.z), fabsf(f.w))));
+          if (q % 2 == 0) smp[q / 2] = f.x;
+        }
       }
     }
   }
@@ -185,6 +220,14 @@ extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s(const Args a) {
   __shared__ uint32_t lv[B3S_MAX_SEGS][8];
   __shared__ uint32_t lks[B3S_MAX_LEVELS][8];
   rows_b3s<false>(a, lv, lks, nullptr);
+}
+
+// hash_rows_b3s over BF16 rows (k values, L / 2 bytes each; L = 4k a multiple of 256, p0 16-byte aligned), each row's leaf
+// that of its exact FP32 widening
+extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_bf16(const Args a) {
+  __shared__ uint32_t lv[B3S_MAX_SEGS][8];
+  __shared__ uint32_t lks[B3S_MAX_LEVELS][8];
+  rows_b3s<false, true>(a, lv, lks, nullptr);
 }
 
 // Leaves of short values (at most 256 bytes: one segment, so the leaf is the segment's hash), a thread a value: value t

@@ -589,16 +589,22 @@ constexpr float S5_FLOOR = 0x1p-32f;
 // one warp per FP32 row, one pass: s = max|x|, rho (32 partial FMA chains, chain c over positions 8c + 256i in order of i,
 // then the xor butterfly), alpha, beta_row.  Lane l reads x[256i + 4l ..] and x[256i + 128 + 4l ..], so chain c's position is
 // the first (c < 16) or second (c >= 16) vector's x of lane 2 (c mod 16).  p0 rows (rows x k words), p1 alpha, p2 beta,
-// p3 1/alpha (glue), p4 (s, rho) per row; i0 rows, i1 k (a multiple of 256)
-extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
+// p3 1/alpha (glue), p4 (s, rho) per row; i0 rows, i1 k (a multiple of 256).  stats_s5_bf16: p0's rows are BF16 (k values,
+// 2k bytes each), read as their exact FP32 words
+DEV float4 widen_bf16x4(const uint2 h) {
+  return make_float4(__uint_as_float(h.x << 16), __uint_as_float(h.x & 0xFFFF0000u), __uint_as_float(h.y << 16),
+                     __uint_as_float(h.y & 0xFFFF0000u));
+}
+template <bool BF16> DEV void stats_body(const Args& a) {
   const int row = (blockIdx.x * 256 + threadIdx.x) / 32, lane = threadIdx.x % 32, rows = a.i[0], k = a.i[1];
   if (row >= rows) return;
   const float4* x = reinterpret_cast<const float4*>(a.p[0]) + (size_t)row * (k / 4);
+  const uint2* xh = reinterpret_cast<const uint2*>(a.p[0]) + (size_t)row * (k / 4);
   const int src = 2 * (lane & 15);
   float s = 0.0f, part = 0.0f;
 #pragma unroll 4
   for (int j = lane; j < k / 4; j += 64) {
-    const float4 v = x[j], w = x[j + 32];
+    const float4 v = BF16 ? widen_bf16x4(xh[j]) : x[j], w = BF16 ? widen_bf16x4(xh[j + 32]) : x[j + 32];
     s = fmaxf(s, fmaxf(fmaxf(fmaxf(fabsf(v.x), fabsf(v.y)), fmaxf(fabsf(v.z), fabsf(v.w))),
                        fmaxf(fmaxf(fabsf(w.x), fabsf(w.y)), fmaxf(fabsf(w.z), fabsf(w.w)))));
     const float lo = __shfl_sync(~0u, v.x, src), hi = __shfl_sync(~0u, w.x, src), e = lane < 16 ? lo : hi;
@@ -614,6 +620,8 @@ extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) {
   reinterpret_cast<float*>(a.p[3])[row] = __frcp_rn(alpha);
   reinterpret_cast<float2*>(a.p[4])[row] = make_float2(s, rho);
 }
+extern "C" __global__ void __launch_bounds__(256) stats_s5(const Args a) { stats_body<false>(a); }
+extern "C" __global__ void __launch_bounds__(256) stats_s5_bf16(const Args a) { stats_body<true>(a); }
 
 #include "h2_rows_stats.cuh"   // -h2's rows form `s`, stats_s5's outputs from hash_rows_b3s's loads (after S5_LINE, S5_FLOOR)
 
@@ -656,6 +664,16 @@ DEV uint32_t e4m3x4(float a, float b, float c, float d) {
 // order, its gate: both write the same codes.
 constexpr int FORM_ROW = 160;   // shared bytes per staged row of codes: 128, padded so a half-warp's 64-bit stores hit 32 banks
 constexpr int FORM_X = 544;     // shared bytes per staged FP32 row: 512, padded so a half-warp's float2 reads hit 32 banks
+constexpr int FORM_XH = 272;    // per staged BF16 row (form_s5_bf16): 256, padded so a warp's 32-bit reads hit 32 banks
+// Two consecutive x of a staged row: FP32 words, or with XH BF16 values widened to theirs (exact)
+template <bool XH> DEV float2 form_x(const uint8_t* p) {
+  if constexpr (XH) {
+    const uint32_t h = *reinterpret_cast<const uint32_t*>(p);
+    return make_float2(__uint_as_float(h << 16), __uint_as_float(h & 0xFFFF0000u));
+  } else {
+    return *reinterpret_cast<const float2*>(p);
+  }
+}
 //
 // MODE 0 is form_s5's loop and 1 form_s5_scalar's; ROW the staged codes' row stride (form_s5_r144's 144 puts two lanes of a
 // half-warp's 64-bit stores on each bank, timed beside it).  With RATE (form_rate*) the block takes tile blockIdx.x of the
@@ -663,19 +681,29 @@ constexpr int FORM_X = 544;     // shared bytes per staged FP32 row: 512, padded
 // measured in the mix it runs in without the global traffic that bounds form_s5; an empty asm with a memory clobber per
 // repeat keeps the compiler from hoisting or merging repeats.  Modes 0 and 1 then write the same codes as their kernels;
 // 2 is 0 with each 32-bit word's cast replaced by one of its floats' bits, and 3 is 2 without x (the atoms, F's loads, the
-// stores).
-template <int MODE, bool RATE, int ROW = FORM_ROW> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* sX) {
+// stores).  XH (form_s5_bf16): p0's rows are BF16, staged at FORM_XH bytes a row (a warp's copy is two rows' 256 bytes) and
+// widened to their FP32 words as they are read, so the codes are form_s5's of the widened rows.
+template <int MODE, bool RATE, int ROW = FORM_ROW, bool XH = false> DEV void form_body(const Args& a, uint8_t* sO, uint8_t* sX) {
+  constexpr int XS = XH ? FORM_XH : FORM_X, XB = XH ? 2 : 4;
   const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, g = lane / 4, q = lane % 4, k = a.i[1];
   const int bx = RATE ? blockIdx.x % (k / 128) : blockIdx.x, by = RATE ? blockIdx.x / (k / 128) : blockIdx.y;
   const int t0 = bx * 128, r0 = by * 64, rw = r0 + 16 * warp;
   const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
   const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]);
-  const uint8_t* x = reinterpret_cast<const uint8_t*>(a.p[0]) + ((size_t)r0 * k + t0) * 4;
+  const uint8_t* x = reinterpret_cast<const uint8_t*>(a.p[0]) + ((size_t)r0 * k + t0) * XB;
   const float* alpha = reinterpret_cast<const float*>(a.p[1]);
+  if constexpr (XH) {
 #pragma unroll
-  for (int j = 0; j < 16; j++) {
-    const int r = warp + 4 * j;
-    cp16(sX + r * FORM_X + 16 * lane, x + (size_t)r * k * 4 + 16 * lane);
+    for (int j = 0; j < 8; j++) {
+      const int r = 2 * (warp + 4 * j) + lane / 16, c = 16 * (lane % 16);
+      cp16(sX + r * XS + c, x + (size_t)r * k * 2 + c);
+    }
+  } else {
+#pragma unroll
+    for (int j = 0; j < 16; j++) {
+      const int r = warp + 4 * j;
+      cp16(sX + r * XS + 16 * lane, x + (size_t)r * k * 4 + 16 * lane);
+    }
   }
   cp_commit();
   const uint32_t fa[4] = {ld32(E + (size_t)(rw + g) * 32 + 4 * q), ld32(E + (size_t)(rw + g + 8) * 32 + 4 * q),
@@ -686,8 +714,8 @@ template <int MODE, bool RATE, int ROW = FORM_ROW> DEV void form_body(const Args
   uint8_t* o0 = sO + (16 * warp + g) * ROW;
   uint8_t* o1 = o0 + 8 * ROW;
   // atom j of the block's 16: B is lines t0 + 8j + g, and lane q's accumulators are columns 8j + 2q, 8j + 2q + 1
-  const uint8_t* x0 = sX + (16 * warp + g) * FORM_X + 8 * q;
-  const uint8_t* x1 = x0 + 8 * FORM_X;
+  const uint8_t* x0 = sX + (16 * warp + g) * XS + 2 * XB * q;
+  const uint8_t* x1 = x0 + 8 * XS;
   const uint8_t* lines = F + (size_t)(t0 + g) * 32 + 4 * q;
   const int reps = RATE ? a.i[2] : 1;
   for (int rep = 0; rep < reps; rep++) {
@@ -705,7 +733,7 @@ template <int MODE, bool RATE, int ROW = FORM_ROW> DEV void form_body(const Args
             d[b][0] = d[b][1] = b0;
             d[b][2] = d[b][3] = b1;
           } else {
-            const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * j), v1 = *reinterpret_cast<const float2*>(x1 + 32 * j);
+            const float2 v0 = form_x<XH>(x0 + 8 * XB * j), v1 = form_x<XH>(x1 + 8 * XB * j);
             d[b][0] = __fmul_rn(b0, v0.x); d[b][1] = __fmul_rn(b0, v0.y); d[b][2] = __fmul_rn(b1, v1.x); d[b][3] = __fmul_rn(b1, v1.y);
           }
           qmma(d[b], fa, f);
@@ -725,7 +753,7 @@ template <int MODE, bool RATE, int ROW = FORM_ROW> DEV void form_body(const Args
 #pragma unroll 4
       for (int j = 0; j < 16; j++) {
         const uint32_t f[2] = {ld32(lines + 256 * j), ld32(lines + 256 * j + 16)};
-        const float2 v0 = *reinterpret_cast<const float2*>(x0 + 32 * j), v1 = *reinterpret_cast<const float2*>(x1 + 32 * j);
+        const float2 v0 = form_x<XH>(x0 + 8 * XB * j), v1 = form_x<XH>(x1 + 8 * XB * j);
         float d[4] = {__fmul_rn(b0, v0.x), __fmul_rn(b0, v0.y), __fmul_rn(b1, v1.x), __fmul_rn(b1, v1.y)};
         qmma(d, fa, f);
         const int c = 32 * (j / 4) + 8 * q + 2 * (j % 4);
@@ -759,6 +787,12 @@ FORM_KERNEL(form_rate_scalar, 1, true, FORM_ROW)
 FORM_KERNEL(form_rate_nocast, 2, true, FORM_ROW)
 FORM_KERNEL(form_rate_nocast_r144, 2, true, 144)
 FORM_KERNEL(form_rate_atoms, 3, true, FORM_ROW)
+// form_s5 over BF16 rows (form_body's XH)
+extern "C" __global__ void __launch_bounds__(128) form_s5_bf16(const Args a) {
+  __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
+  __shared__ __align__(16) uint8_t sX[64 * FORM_XH];
+  form_body<0, false, FORM_ROW, true>(a, sO, sX);
+}
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements

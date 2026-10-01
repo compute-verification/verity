@@ -7,9 +7,10 @@
 // runs chain c (x[256 i + 8 c], i in order, one FMA each), s is the row's max |x| (a max, so the same in any order), and
 // the butterfly and alpha, beta, 1/alpha, (s, rho) are stats_s5's.  p0 .. p4 and i0 .. i3 are hash_rows_b3s's (i1 = L =
 // 4k bytes, k a multiple of 256; p0 16-byte aligned), p5 alpha, p6 beta, p7 1/alpha, p8 (s, rho), i4 the stats' rows; 32
-// ⌈L / 8,192⌉ threads, and b3s_stats_smem(L) bytes of dynamic shared memory: the segment tree, then the samples
+// ⌈L / 8,192⌉ threads, and b3s_stats_smem(L) bytes of dynamic shared memory: the segment tree, then the samples.  BF16
+// (hash_rows_b3s_stats_bf16): p0's rows are A's BF16 values, L / 2 bytes each, read as their exact FP32 words.
 constexpr uint32_t b3s_stats_smem(uint32_t L) { return (L / B3S_SEG) * (32 + 33); }
-extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats(const Args a) {
+template <bool BF16> DEV void rows_b3s_stats(const Args& a) {
   extern __shared__ uint32_t sh[];
   __shared__ uint32_t lks[B3S_MAX_LEVELS][8];
   __shared__ float wmax[B3S_MAX_SEGS / 32];
@@ -18,7 +19,7 @@ extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats(const Args
   const int lane = threadIdx.x % 32, warp = threadIdx.x / 32;
   uint32_t(*lv)[8] = reinterpret_cast<uint32_t(*)[8]>(sh);
   float* samp = reinterpret_cast<float*>(sh + 8 * nseg);
-  float s = rows_b3s<true>(a, lv, lks, samp);
+  float s = rows_b3s<true, BF16>(a, lv, lks, samp);
 #pragma unroll
   for (int o = 16; o; o >>= 1) s = fmaxf(s, __shfl_xor_sync(~0u, s, o));
   if (lane == 0) wmax[warp] = s;
@@ -41,3 +42,5 @@ extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats(const Args
   reinterpret_cast<float*>(a.p[7])[row] = __frcp_rn(alpha);
   reinterpret_cast<float2*>(a.p[8])[row] = make_float2(s, rho);
 }
+extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats(const Args a) { rows_b3s_stats<false>(a); }
+extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats_bf16(const Args a) { rows_b3s_stats<true>(a); }
