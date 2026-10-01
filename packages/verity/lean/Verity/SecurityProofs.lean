@@ -1,3 +1,6 @@
+import Verity.SecurityProofs.Circuit
+import Verity.SecurityProofs.Boolean
+
 /-!
 # Proofs of core's guarantees
 

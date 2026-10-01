@@ -1,3 +1,8 @@
+import Verity.Protocol.Circuit
+import Verity.Protocol.Partition
+import Verity.Protocol.Declaration
+import Verity.Protocol.Boolean
+
 /-!
 # Core's protocol: the model every protocol states its guarantees in
 
