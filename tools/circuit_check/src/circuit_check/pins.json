@@ -114,8 +114,8 @@
   "F32ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
    "and": 35
   },
-  "F32ArgmaxLeaf_v1{G=5,FIRST=1,FINAL=1}": {
-   "and": 441
+  "F32ArgmaxLeaf_v1{G=2,FIRST=1,FINAL=1}": {
+   "and": 135
   },
   "F32ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
    "and": 6455
@@ -141,6 +141,9 @@
   "F32ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
    "and": 4593
   },
+  "F32ArgmaxStage_v1{V=2,L=0}": {
+   "and": 135
+  },
   "F32ArgmaxStage_v1{V=200,L=0}": {
    "and": 20143
   },
@@ -152,9 +155,6 @@
   },
   "F32ArgmaxStage_v1{V=4161,L=2}": {
    "and": 45
-  },
-  "F32ArgmaxStage_v1{V=5,L=0}": {
-   "and": 441
   },
   "F32ArgmaxStage_v1{V=65,L=0}": {
    "and": 6522
@@ -258,8 +258,8 @@
   "GumbelLaneRounds_v1": {
    "and": 5035
   },
-  "GumbelSetup_v1{N=5}": {
-   "and": 1138
+  "GumbelSetup_v1{N=2}": {
+   "and": 911
   },
   "GumbelSetup_v1{N=64}": {
    "and": 3859
