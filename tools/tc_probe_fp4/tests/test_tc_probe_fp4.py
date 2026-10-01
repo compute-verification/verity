@@ -237,7 +237,7 @@ def test_scale_split_twins_dry_run_reports_the_refutation(no_nvcc, tmp_path):
     assert twins["device_words_differ"]["off27"] == twins["device_words_differ"]["off29"] == 0
 
 
-def test_scale_bit7_twins_differ_only_in_bit_7_and_the_model_refuses_those_bytes():
+def test_scale_bit7_twins_differ_only_in_bit_7_and_the_model_reads_their_low_7_bits():
     rng = np.random.default_rng(7)
     A, Bt, SFA, SFB, C = P.scale_bit7_twins(rng, 4)
     assert (A[0::2] == A[1::2]).all() and (Bt[0::2] == Bt[1::2]).all() and (C[0::2] == C[1::2]).all()
@@ -245,11 +245,11 @@ def test_scale_bit7_twins_differ_only_in_bit_7_and_the_model_refuses_those_bytes
         assert ((sf[0::2] & 0x7F) == sf[1::2]).all() and (sf[1::2] < 0x80).all() and (sf[0::2] >= 0x80).mean() > 0.3
         assert [int(sf[0, r, 0]) for r in range(3)] == list(P.BIT7_PINNED)
     D, err = P.model_words(M.BLACKWELL_SM120_NVF4, A, Bt, SFA, SFB, C, 64, 4)
-    # the pinned model refuses a bit-7 byte (the discrepancy the capture measures) and computes its low-7-bit twin, except where
-    # A's row 2 or B's row 2 carries 0x7F (NaN)
+    # the pinned model reads a scale byte's low 7 bits, as sm_120 does: a bit-7 tile computes its twin's words, and both refuse
+    # only where A's row 2 or B's row 2 carries 0xFF or 0x7F (NaN)
     nan = np.zeros((16, 8), bool)
     nan[2, :] = nan[:, 2] = True
-    assert err[0::2, :3].all() and (err[1::2] == nan).all()
+    assert (err[0::2] == nan).all() and (err[1::2] == nan).all() and (D[0::2][~err[0::2]] == D[1::2][~err[1::2]]).all()
 
     hw = D.copy()
     hw[0::2] = D[1::2]  # a device that decodes the low 7 bits
@@ -295,16 +295,16 @@ def _lean_vectors_file(path: Path, rng) -> None:
 
 
 def test_lean_vectors_capture_gates_the_layout_and_reports_the_prediction(no_nvcc, tmp_path):
-    """The whole driver on the CPU: a device that decodes the low 7 bits matches every prediction, one that refuses bit 7 is a
-    finding (the run passes), and a control whose file word is wrong, or a selected entry with no prediction, fails the run with
-    no selected word recorded."""
+    """The whole driver on the CPU: a device that decodes the low 7 bits matches every prediction, as the pinned model as-is now
+    does, and a control whose file word is wrong, or a selected entry with no prediction, fails the run with no selected word
+    recorded."""
     vec = tmp_path / "Fp4Vectors.lean"
     _lean_vectors_file(vec, np.random.default_rng(3))
     base = ["--instruction", "nvf4_lean_vectors", "--vectors", str(vec), "--vector-ids", "5", "--chain-ids", "1"]
     assert P.main(base + ["--fake-silicon", "low7", "--out", str(tmp_path / "low7")]) == 0
     doc = json.loads((tmp_path / "low7" / "probe_results.json").read_text())
     assert doc["summary"] == {"selected": 2, "match_prediction": 2, "match_low7_twin": 2, "match_low7_decode": 2,
-                              "pinned_model_refuses": 2, "outside_model": 0}
+                              "pinned_model_refuses": 0, "outside_model": 0}
     assert doc["gates"]["controls"]["vectors"] == 6 and doc["gates"]["controls"]["chains"] == 1
     assert doc["gates"]["background"]["mismatches"] == 0 and doc["gates"]["background"]["checked"] > 0
     assert doc["gates"]["poison"]["words_reading_poison"] == 0 and doc["gates"]["no_write_control"]["rejected"]
@@ -313,9 +313,9 @@ def test_lean_vectors_capture_gates_the_layout_and_reports_the_prediction(no_nvc
     sp = json.loads((tmp_path / "special" / "probe_results.json").read_text())["vectors"][2]
     assert (sp["vector"], sp["outside_model"], sp["pinned_model_low7_twin"], sp["low7_decode_predicts"], sp["device"]) == \
         ("nvf4Specials[0]", "NaN accumulator", None, "7fffffff", "7fffffff") and sp["matches_low7_decode"]
-    assert P.main(base + ["--fake-silicon", "verity", "--out", str(tmp_path / "refuses")]) == 0
-    doc = json.loads((tmp_path / "refuses" / "probe_results.json").read_text())
-    assert doc["summary"]["match_prediction"] == 0 and {v["device"] for v in doc["vectors"]} == {"7fffffff"}
+    assert P.main(base + ["--fake-silicon", "verity", "--out", str(tmp_path / "as-is")]) == 0
+    doc = json.loads((tmp_path / "as-is" / "probe_results.json").read_text())
+    assert doc["summary"]["match_prediction"] == 2 and doc["summary"]["pinned_model_refuses"] == 0
 
     assert P.main(base[:4] + ["--vector-ids", "6", "--fake-silicon", "low7", "--out", str(tmp_path / "none")]) == 1
     doc = json.loads((tmp_path / "none" / "probe_results.json").read_text())

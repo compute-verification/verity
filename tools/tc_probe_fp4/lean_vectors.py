@@ -22,7 +22,7 @@ no-write control, the first tiles run again with every launch skipped, reads bac
 gate on every lane.  So a layout error or a kernel that wrote nothing fails the run instead of reading as a finding.  The finding:
 each selected word against the file's ``d``, against its twin's device word, against the low-7-bit decode (the pinned model on the
 twin; for a NaN accumulator, which the pinned model refuses, the record-only word 0x7FFFFFFF), and whether the pinned model as-is
-refuses it (it refuses bit 7 and NaN accumulators).
+refuses it (it reads a scale byte's low 7 bits, as sm_120 does, and refuses NaN accumulators).
 
 A fill chunk captures (``--out``: probe_results.json and dumps.npz, every tile's operands and both kernels' words); ``--collect
 DIR`` then derives every gate and word again from DIR's dumps on the CPU under a research run, checks them against the chunk's
@@ -236,8 +236,8 @@ def records(lists: dict, selected: list, words: dict, model) -> list[dict]:
 
 class FakeLow7:
     """CPU stand-in (``--fake-silicon low7``): the pinned model on every scale byte's low 7 bits (the decode the assessor measured,
-    ``r20260930-093120-b2f2``), NaN where it refuses; ``--fake-silicon verity`` refuses bit 7 as the pinned model does.  With the
-    launch switched off it returns the poison, as the library does.  Refused under a research run."""
+    ``r20260930-093120-b2f2``), NaN where it refuses; ``--fake-silicon verity`` is the pinned model as-is, which reads the same
+    low 7 bits.  With the launch switched off it returns the poison, as the library does.  Refused under a research run."""
 
     def __init__(self, name: str):
         if name not in ("low7", "verity"):

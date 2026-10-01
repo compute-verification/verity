@@ -1101,9 +1101,9 @@ BIT7_PINNED = (0x80, 0xB8, 0xFF)
 
 
 def scale_bit7_twins(rng, n: int):
-    """Tile ``2t`` has bit 7 (the PTX ISA's padding bit, which the pinned model refuses) set on about half its UE4M3 scale bytes,
-    the ``BIT7_PINNED`` bytes on block 0 of A's and B's rows 0-2; tile ``2t + 1`` is the same tile with every byte's low 7 bits.
-    Equal words across every pair are what a scale decoder that ignores bit 7 produces."""
+    """Tile ``2t`` has bit 7 (the PTX ISA's padding bit, which sm_120 and the pinned model ignore) set on about half its UE4M3
+    scale bytes, the ``BIT7_PINNED`` bytes on block 0 of A's and B's rows 0-2; tile ``2t + 1`` is the same tile with every byte's
+    low 7 bits.  Equal words across every pair are what a scale decoder that ignores bit 7 produces."""
     k, nblk = 64, 4
     A = rng.integers(0, 16, (n, 16, k)).astype(np.uint8)
     Bt = rng.integers(0, 16, (n, 8, k)).astype(np.uint8)
