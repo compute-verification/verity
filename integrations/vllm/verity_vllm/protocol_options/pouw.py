@@ -72,7 +72,7 @@ EXECUTED = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", *PPD.SCHEMES)
 UNQUANTIZED = ("bfloat16", "float16", "float32")
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
-KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin")
+KEYS = ("beacon", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -113,6 +113,8 @@ class Settings:
     #: Pearl-C on sm_120: the kernel directory (the run tree's ``benchmarks/pouw/pearl_c_sm120``) and build.sh's cubin
     kernel: str | None = None
     cubin: str | None = None
+    #: Pearl-C on sm_120: the schedule each pass runs under (`verity_pouw.serving.SCHEDULES`), serial by default
+    schedule: str = "serial"
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -146,7 +148,11 @@ class Settings:
         paths = [raw.get(key) for key in ("kernel", "cubin")]
         if any(p is not None and not isinstance(p, str) for p in paths):
             raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
-        return cls(beacon, retain, tdir, draws, tamper, device, *paths)
+        from verity_pouw.serving import SCHEDULES
+        schedule = raw.get("schedule", "serial")
+        if schedule not in SCHEDULES:
+            raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
+        return cls(beacon, retain, tdir, draws, tamper, device, *paths, schedule)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -164,7 +170,22 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     else:
         if scheme in PPD.SCHEMES and (settings.device != "cuda" or not settings.kernel):
             out.append(f"{scheme}: runs on the device only, so it needs the pouw settings 'device': 'cuda' and 'kernel'")
+        if scheme in PPD.SCHEMES:
+            try:
+                PPD.schedule_of(settings.schedule, PPD.scheme_of(scheme))
+            except ValueError as e:
+                out.append(str(e))
+        elif settings.schedule != "serial":
+            out.append(f"{scheme}: the pouw setting 'schedule' is Pearl-C's; this executor runs serially")
     return tuple(out)
+
+
+def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
+    """True where the executor keeps a weight-derived copy across forwards, so its GEMMs would not read what POUS decodes:
+    Pearl-C's B̃, formed once per install (`pouw_pearl_c_device.PearlCDeviceRun`), and ncp-v2's weight sides, committed at
+    each weight's first call and reused (`_CircuitRun.sides`).  ncp-v1 forms its operands per call from the weight it is
+    handed."""
+    return scheme in PPD.SCHEMES or scheme in pouw_circuit.SCHEMES
 
 
 def linear_types() -> tuple[type, ...]:
@@ -541,8 +562,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
-        roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)},
-                                 scheme)
+        roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme)
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     roots = {}
     for w, layer in enumerate(layers):
@@ -561,7 +581,8 @@ def install(scheme: str, target: Target) -> Option:
     salt = Epoch.unverified(declared, roots, settings.beacon or bytes(32)).salt
     if scheme in PPD.SCHEMES:
         run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
-                                  {w: m.weight for w, m in enumerate(layers)}, roots, salt, settings.beacon or bytes(32))
+                                  {w: m.weight for w, m in enumerate(layers)}, roots, salt, settings.beacon or bytes(32),
+                                  schedule=settings.schedule)
     else:
         run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                else _Run(s, entry, settings, roots, salt))
