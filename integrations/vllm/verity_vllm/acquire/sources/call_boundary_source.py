@@ -21,6 +21,7 @@ discarded, and the steps still lay out the record's tensors for the staging it s
 from __future__ import annotations
 
 import math
+import os
 import re
 import time
 from typing import Any, Callable, Collection, Mapping, Sequence
@@ -126,6 +127,9 @@ class CallBoundarySource:
             raise RuntimeError(f"call boundaries: the manifest's module bodies are not modules of the model: {missing[:4]}")
         for op in self.modules:
             self._handles.append(mods[op].register_forward_pre_hook(self._pre(op), with_kwargs=True))
+        if os.environ.get("VERITY_SERVED_TAP"):
+            from verity_vllm.acquire.sources import served_tap_debug
+            served_tap_debug.install(self, mods)
         self.active = True
 
     def uninstall(self) -> None:
