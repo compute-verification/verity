@@ -1113,7 +1113,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         if _unsafe:
             # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
             raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
-    RB.refuse(args)
+    _planner = RB.prepare(args)
     compiled_src = None
     fault = os.environ.get("VERITY_FAULT", "").strip()
     compiled_kernels = None
@@ -2256,7 +2256,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                           f"equal {oc.get('equal')} mismatch {oc.get('mismatch_n')} steps {oc.get('steps_compared')} not-snapshotted {oc.get('steps_not_snapshotted')} "
                           f"by-family {oc.get('compared_by_family')} not-compared {oc.get('not_compared')}{(' -- ' + str(oc.get('why'))) if oc.get('why') else ''}", flush=True)
                 _c2 = C2.Site(args=args, out=Path(args.out), pair=pair, com=com, rc=rc, row=row, reqs=reqs, sampling=sampling, tokens=r["tokens"], manifest=required_manifest, stop_of_record=stop_of_record, ids_full=_ids_full, versions=versions, components=components, vc_result=vc_result, tl=TL, protocols=protocols, weights_of=lambda p: C2.live_weights(PO.weights_view(protocols, eng.model), p), weights_check=lambda: C2.live_weights_check(lambda: PO.register_weights(protocols, com), com, rc), after_replay=C2.vu_export(args, pair, rc, required_manifest, versions, eng))
-                if not (args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred)) and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
+                if not (args.replay_deferred and not C2.live_only(_c2) and RB.defer(out, pair, com, rc, args, tl=TL, arm=arm, versions=versions, reqs=reqs, sampling=sampling, tokens=r["tokens"], stop_of_record=stop_of_record, ids_full=_ids_full, declaration=d, required_classes=required_classes, vc_result=vc_result, plan=(lambda: C2.plan(_c2, _planner)) if args.replay_deferred == "slim" else None, row=row, deferred=deferred)) and (getattr(args, "program_dir", None) or getattr(args, "programs_root", None)):
                     C2.run(_c2, replay_cache)
                 if _wor_rec is not None or _live_wd is not None:
                     # [MAN-09] WEIGHTS PIN: the served parameters the committer registered == the checkpoint of record, field by field
