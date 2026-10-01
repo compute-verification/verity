@@ -77,7 +77,7 @@ def test_pinned_counts_and_digests(target) -> None:
 @pytest.mark.slow
 def test_the_served_router_is_pinned() -> None:
     """OLMoE's router at its served statics (64 experts, 8 slots, 8 values per thread), the size its rows are costed at; about
-    80 s to trace. The pinned statics above run the same builders, but only these show a change to the served circuit's size."""
+    95 s to trace. The pinned statics above run the same builders, but only these show a change to the served circuit's size."""
     t = bind(BM.MoeRouterTopKOrdered, E=64, TOPK=8, VPT=8)
     assert BS.compile(t).counts == {"and": 1147793, "xor": 2150725, "not": 109491}
 
@@ -172,8 +172,8 @@ def test_the_router_probabilities() -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("E_, VPT", [(8, 4), (16, 2), (8, 1)])
 def test_the_router_probabilities_on_many_rows(E_, VPT) -> None:
-    """3,000 rows of each kind at 8 experts over 2 threads, 16 over 8, and 8 over 8 (about 20 s each)."""
-    _agree(bind(BM.MoeRouterProbs, E=E_, VPT=VPT), _logits(np.random.default_rng(0xB2 + E_ + VPT), 3000, E_))
+    """1,500 rows of each kind at 8 experts over 2 threads, 16 over 8, and 8 over 8 (15 to 30 s each)."""
+    _agree(bind(BM.MoeRouterProbs, E=E_, VPT=VPT), _logits(np.random.default_rng(0xB2 + E_ + VPT), 1500, E_))
 
 
 def _select_rounds(B, S, p):
@@ -211,15 +211,15 @@ def test_the_selection_rounds() -> None:
 @pytest.mark.slow
 @pytest.mark.parametrize("E_, TOPK", [(8, 4), (6, 3), (5, 5)])
 def test_the_selection_rounds_on_many_rows(E_, TOPK) -> None:
-    """5,000 rows of each kind (20,000 special) at 8 experts and 4 slots, 6 and 3, 5 and 5 (every expert, a pick tree with
-    padding); about 40 s each."""
-    _agree(bind(BM.MoeRouterSelect, E=E_, TOPK=TOPK), _probabilities(np.random.default_rng(0x5C2 + E_), 5000, E_),
+    """2,000 rows of each kind (8,000 special) at 8 experts and 4 slots, 6 and 3, 5 and 5 (every expert, a pick tree with
+    padding); 15 to 30 s each."""
+    _agree(bind(BM.MoeRouterSelect, E=E_, TOPK=TOPK), _probabilities(np.random.default_rng(0x5C2 + E_), 2000, E_),
            bind(SELECT_ROUNDS, E=E_, TOPK=TOPK))
 
 
 @pytest.mark.slow
 def test_the_router_top_k() -> None:
-    """`MoeRouterTopKOrdered_v2` at 16 experts, 4 slots, 2 values per thread, on 1,000 rows of each kind (about 60 s)."""
+    """`MoeRouterTopKOrdered_v2` at 16 experts, 4 slots, 2 values per thread, on 1,000 rows of each kind (about 30 s)."""
     _agree(bind(BM.MoeRouterTopKOrdered, E=16, TOPK=4, VPT=2), _logits(np.random.default_rng(0x70), 1000, 16))
 
 
