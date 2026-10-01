@@ -202,8 +202,28 @@ def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = Tru
         a, b = C.data[v]
         wire_of_bit[v] = gate("and", wire(a), wire(b))
     outputs = [wire(f) for f in outs]
+    gates, outputs = _prune(first, gates, outputs)
     counts = {k: sum(1 for g, _ in gates if g == k) for k in _KINDS}
     return Traced(n_in, gates, outputs, counts)
+
+
+def _prune(first: int, gates: list[tuple[str, tuple[int, ...]]], outputs: list[int]):
+    """The gates some output depends on, renumbered: a form's sources can be written before the same form turns up by another
+    making, and are then read by nothing. Every live AND is read (its bit is in a consumer's form), so none goes."""
+    need = [False] * len(gates)
+    stack = [o - first for o in outputs if o >= first]
+    while stack:
+        i = stack.pop()
+        if need[i]:
+            continue
+        need[i] = True
+        stack.extend(o - first for o in gates[i][1] if o >= first)
+    new, kept = {}, []
+    for i, (kind, ops) in enumerate(gates):
+        if need[i]:
+            new[first + i] = first + len(kept)
+            kept.append((kind, tuple(new.get(o, o) for o in ops)))
+    return kept, [new.get(o, o) for o in outputs]
 
 
 def _refs(refs: list[Ref]) -> Any:
