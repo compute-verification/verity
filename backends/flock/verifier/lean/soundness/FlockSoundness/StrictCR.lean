@@ -227,6 +227,25 @@ theorem le (tr : TreeRewind H G S bad) {q : ℝ} (h : tr.finder.CR H q) : prob b
   tr.covers.trans (ENNReal.ofReal_le_ofReal
     (tree_le_strict H tr.op tr.g tr.s tr.vstar tr.plur tr.Q tr.opens tr.binds h))
 
+/-- **A rewinding with no positions** covers an event that never happens. The skeleton's `hExec` (every executable
+accept is the model's) gives one for `execAccept ∧ o.1 = false`, at `δ_tree = 0` (`ofNever_bound`). -/
+def ofNever (h : ∀ b, ¬ bad b) : TreeRewind H G S bad where
+  α := Unit
+  P := Empty
+  V := Unit
+  op _ e := e.elim
+  g := .ret ()
+  s := PUnit.unit
+  vstar e := e.elim
+  plur e := e.elim
+  Q := 0
+  opens _ := by simp
+  binds _ e := e.elim
+  covers := (prob_mono (p := bad) (q := fun _ => False) h G S).trans (by rw [prob_false]; exact zero_le)
+
+theorem ofNever_bound (h : ∀ b, ¬ bad b) (q : ℝ) : (ofNever h : TreeRewind H G S bad).bound q = 0 := by
+  simp [bound, ofNever]
+
 end TreeRewind
 
 end Finders
