@@ -807,6 +807,226 @@ void band_chain(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain,
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
+// ---- the band chain on lane pairs, persistent ----------------------------------------------------------------------------
+// keccak_f_thread with theta's D folded into each lane's column update, one 3-input XOR (LOP3) per 32-bit half.
+__device__ __forceinline__ uint32_t xor3_32(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t d;
+  asm("lop3.b32 %0, %1, %2, %3, 0x96;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  return d;
+}
+
+__device__ __forceinline__ uint64_t xor3_64(uint64_t a, uint64_t b, uint64_t c) {
+  return ((uint64_t)xor3_32((uint32_t)(a >> 32), (uint32_t)(b >> 32), (uint32_t)(c >> 32)) << 32) |
+         xor3_32((uint32_t)a, (uint32_t)b, (uint32_t)c);
+}
+
+__device__ __forceinline__ void keccak_f_fd(uint64_t st[25]) {
+#pragma unroll 1
+  for (int r = 0; r < 24; ++r) {
+    uint64_t bc[5];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+#pragma unroll
+    for (int i = 0; i < 5; ++i) {
+      const uint64_t r1 = rotl64(bc[(i + 1) % 5], 1);
+#pragma unroll
+      for (int j = 0; j < 25; j += 5) st[j + i] = xor3_64(st[j + i], bc[(i + 4) % 5], r1);
+    }
+    keccak_rho_pi_chi(st);
+    st[0] ^= KECCAK_RC[r];
+  }
+}
+
+__device__ __forceinline__ int ld_acquire_gpu(const int* p) {
+  int v;
+  asm volatile("ld.acquire.gpu.global.b32 %0, [%1];" : "=r"(v) : "l"(p) : "memory");
+  return v;
+}
+
+__device__ __forceinline__ void st_release_gpu(int* p, int v) {
+  asm volatile("st.release.gpu.global.b32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
+}
+
+// slot_load and slot_store through L2 only: a slot another SM wrote is never read from a stale L1 line.
+__device__ __forceinline__ void slot_load_cg(const uint64_t* p, uint64_t v[RATE_WORDS]) {
+  const ulonglong2* q = reinterpret_cast<const ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_WORDS / 2; ++k) {
+    const ulonglong2 x = __ldcg(q + k);
+    v[2 * k] = x.x;
+    if (2 * k + 1 < RATE_WORDS) v[2 * k + 1] = x.y;
+  }
+}
+
+__device__ __forceinline__ void slot_store_cg(uint64_t* p, const uint64_t v[RATE_WORDS]) {
+  ulonglong2* q = reinterpret_cast<ulonglong2*>(p);
+#pragma unroll
+  for (int k = 0; k < SLOT_WORDS / 2; ++k) __stcg(q + k, make_ulonglong2(v[2 * k], 2 * k + 1 < RATE_WORDS ? v[2 * k + 1] : 0));
+}
+
+// band_chain_kernel's chains on lane pairs: a warp holds PAIR_ROWS rows, lane l row l % 16's sponge of role l / 16, one
+// Keccak state per lane where band_chain_kernel's thread permutes two.  In a Feistel round one role squeezes (its sponge
+// absorbed the round's source half) while the other absorbs the half being written (the next round's source), each chunk
+// passing from squeezer to absorber by a shuffle per word; role 0 squeezes the odd rounds.  Round 10's absorber takes half 1
+// under the next call's first prefix, so every call after the first starts squeezing at once.  When another call follows,
+// round 9 writes only half 0's chunks from xch on (the next call's X overwrites words 0 .. 8191); a row's final call writes
+// W = A ^ C_blk in round 9 and has no round 10 (only half 0 is the key).
+// Persistent: the grid's warps take tasks (group g of PAIR_ROWS rows, call j) in call-major order from `next`, each waiting
+// for `done[g] >= j - 1`; between calls role 0's sponge goes through `sponge`.  Same inputs and output as band_chain.
+constexpr int PAIR_ROWS = 16;
+
+__global__ void __launch_bounds__(128) band_chain_pairs_kernel(
+    uint64_t* st_words, int64_t pitch, int64_t row0, int64_t rows, int domain, const uint64_t* __restrict__ c,
+    const int64_t* __restrict__ base, const int64_t* __restrict__ blk, const int64_t* __restrict__ len,
+    const int64_t* __restrict__ dest, uint64_t* out, uint64_t* sponge, int* done, int* next, int64_t groups, int calls) {
+  constexpr int64_t hw = 8196, xwords = 8192, nch = (hw + RATE_WORDS - 1) / RATE_WORDS, msg = 8 * hw + 2;
+  constexpr int64_t full = msg / RATE, xch = xwords / RATE_WORDS;
+  constexpr int tail = (int)(msg - full * RATE);
+  static_assert(nch == full + 1, "the pad falls inside the last chunk");
+  constexpr unsigned ALL = 0xffffffffu;
+  const int lane = threadIdx.x & 31, rl = lane & 15, role = lane >> 4;
+  const int64_t tasks = groups * calls;
+  for (;;) {
+    int k = 0;
+    if (lane == 0) k = atomicAdd(next, 1);
+    k = __shfl_sync(ALL, k, 0);
+    if (k >= tasks) break;
+    const int j = (int)(k / groups) + 1;
+    const int64_t g = k % groups, n = g * PAIR_ROWS + rl, r = row0 + n;
+    const int64_t L = n < rows ? len[r] : -1;
+    const bool act = j <= L + 1, fin = j == L + 1, more = j <= L;
+    if (!__any_sync(ALL, act)) continue;
+    const bool any_more = __any_sync(ALL, more);
+    if (j > 1) {
+      if (lane == 0)
+        while (ld_acquire_gpu(done + g) < j - 1) __nanosleep(64);
+      __syncwarp();
+    }
+#define CHUNK_AT(h, cc) (st_words + (((int64_t)(h) * nch + (cc)) * pitch + r) * SLOT_WORDS)
+    uint64_t x[25], nxt[RATE_WORDS];
+#pragma unroll
+    for (int w = 0; w < 25; ++w) x[w] = 0;
+#pragma unroll
+    for (int w = 0; w < RATE_WORDS; ++w) nxt[w] = 0;
+    uint64_t* sp = sponge + (g * PAIR_ROWS + rl) * 25;
+    if (j == 1) {  // the first call's first absorb (half 1 under prefix 1), on role 0 alone
+      uint64_t carry = ((uint64_t)(uint8_t)domain | (1ull << 8)) << 48;
+      if (role == 0 && act) slot_load_cg(CHUNK_AT(1, 0), nxt);
+      for (int64_t cc = 0; cc < nch; ++cc) {
+        uint64_t v[RATE_WORDS];
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w) v[w] = nxt[w];
+        if (role == 0 && act && cc + 1 < nch) slot_load_cg(CHUNK_AT(1, cc + 1), nxt);
+        if (role == 0) absorb_chunk(x, v, cc, hw, full, tail, carry);
+        keccak_f_fd(x);
+      }
+    } else if (role == 0 && act) {
+#pragma unroll
+      for (int w = 0; w < 25; ++w) x[w] = __ldcg(sp + w);
+    }
+    const uint64_t* xrow = more ? c + (base[r] + blk[r] - j) * xwords : nullptr;
+    const uint64_t* crow = fin ? c + (base[r] + blk[r]) * xwords : nullptr;
+    uint64_t* orow = fin ? out + dest[r] * xwords : nullptr;
+    const int rounds = any_more ? 10 : 9;
+    for (int i = 1; i <= rounds; ++i) {
+      const int h = (i & 1) ? 0 : 1;
+      const bool sq = role == ((i & 1) ? 0 : 1), x_in = i == 1, to_out = fin && i == 9;
+      const bool st_all = act && (i <= 8 || (i == 10 && more)), st_tail = more && i == 9;
+      if (!sq) {
+#pragma unroll
+        for (int w = 0; w < 25; ++w) x[w] = 0;
+      }
+      uint64_t carry = ((uint64_t)(uint8_t)domain | ((uint64_t)(i == 10 ? 1 : i + 1) << 8)) << 48;
+      auto src = [&](int64_t cc, uint64_t d[RATE_WORDS]) {
+        if (x_in && cc < xch) {
+#pragma unroll
+          for (int w = 0; w < RATE_WORDS; ++w) {
+            const int64_t jj = cc * RATE_WORDS + w;
+            d[w] = xrow ? __ldg(xrow + jj) : (jj == 0 ? 0x01ull : (jj == xwords - 1 ? 0x80ull << 56 : 0ull));
+          }
+        } else {
+          slot_load_cg(CHUNK_AT(h, cc), d);
+          if (x_in && cc == xch) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) {
+              const int64_t jj = cc * RATE_WORDS + w;
+              if (jj < xwords) d[w] = xrow ? __ldg(xrow + jj) : (jj == xwords - 1 ? 0x80ull << 56 : 0ull);
+            }
+          }
+        }
+      };
+      if (sq && act) src(0, nxt);
+      for (int64_t cc = 0; cc < nch; ++cc) {
+        uint64_t v[RATE_WORDS];
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w) v[w] = nxt[w] ^ x[w];
+        if (sq && act) {
+          if (cc + 1 < nch) src(cc + 1, nxt);
+          if (to_out) {
+#pragma unroll
+            for (int w = 0; w < RATE_WORDS; ++w) {
+              const int64_t jj = cc * RATE_WORDS + w;
+              if (jj < xwords) orow[jj] = v[w] ^ __ldg(crow + jj);
+            }
+          } else if (st_all || (st_tail && cc >= xch)) {
+            slot_store_cg(CHUNK_AT(h, cc), v);
+          }
+        }
+#pragma unroll
+        for (int w = 0; w < RATE_WORDS; ++w) v[w] = __shfl_xor_sync(ALL, v[w], 16);
+        if (!sq) absorb_chunk(x, v, cc, hw, full, tail, carry);
+        keccak_f_fd(x);
+      }
+    }
+#undef CHUNK_AT
+    if (any_more) {
+      if (role == 0 && more) {
+#pragma unroll
+        for (int w = 0; w < 25; ++w) __stcg(sp + w, x[w]);
+      }
+      __threadfence();
+      __syncwarp();
+      if (lane == 0) st_release_gpu(done + g, j);
+    }
+  }
+}
+
+void band_chain_pairs(torch::Tensor state, int64_t row0, int64_t rows, int64_t domain, int64_t warps_per_sm, int64_t calls,
+                      torch::Tensor c, torch::Tensor base, torch::Tensor blk, torch::Tensor len, torch::Tensor dest,
+                      torch::Tensor out) {
+  TORCH_CHECK(state.is_cuda() && state.scalar_type() == torch::kInt64 && state.is_contiguous() && state.dim() == 4 &&
+              state.size(0) == 2 && state.size(3) == SLOT_WORDS && state.size(1) == (8196 + RATE_WORDS - 1) / RATE_WORDS,
+              "state must be the 64 KiB chunk-major int64 [2, 483, pitch, SLOT_WORDS]");
+  TORCH_CHECK(c.is_cuda() && c.scalar_type() == torch::kUInt8 && c.is_contiguous() && c.dim() == 2 && c.size(1) == 65536,
+              "c must be contiguous uint8 [rows, 65536]");
+  TORCH_CHECK(out.is_cuda() && out.scalar_type() == torch::kUInt8 && out.is_contiguous() && out.size(0) == state.size(2) &&
+              out.size(1) == 65536, "out must be contiguous uint8 [pitch, 65536]");
+  for (auto* t : {&base, &blk, &len, &dest})
+    TORCH_CHECK(t->is_cuda() && t->scalar_type() == torch::kInt64 && t->is_contiguous() && t->numel() == state.size(2),
+                "base, blk, len must be int64 with one entry per state row");
+  TORCH_CHECK(row0 >= 0 && rows >= 0 && row0 + rows <= state.size(2), "rows out of range");
+  TORCH_CHECK(warps_per_sm >= 1 && (warps_per_sm <= 4 || warps_per_sm % 4 == 0), "warps_per_sm: 1 .. 4 or a multiple of 4");
+  TORCH_CHECK(calls >= 1, "calls: the longest chain's calls (its length + 1)");
+  if (rows == 0) return;
+  c10::cuda::CUDAGuard guard(state.device());
+  auto stream = c10::cuda::getCurrentCUDAStream();
+  int sms = 0;
+  C10_CUDA_CHECK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, state.get_device()));
+  const int64_t groups = (rows + PAIR_ROWS - 1) / PAIR_ROWS;
+  TORCH_CHECK(groups * calls < (1ll << 30), "too many tasks");
+  auto ctl = torch::zeros({groups + 1}, state.options().dtype(torch::kInt32));
+  auto sponge = torch::empty({groups * PAIR_ROWS * 25}, state.options());
+  const unsigned threads = 32u * (unsigned)std::min<int64_t>(warps_per_sm, 4);
+  const unsigned blocks = (unsigned)sms * (unsigned)std::max<int64_t>(warps_per_sm / 4, 1);
+  band_chain_pairs_kernel<<<blocks, threads, 0, stream>>>(
+      reinterpret_cast<uint64_t*>(state.data_ptr<int64_t>()), state.size(2), row0, rows, (int)domain,
+      reinterpret_cast<const uint64_t*>(c.data_ptr<uint8_t>()), base.data_ptr<int64_t>(), blk.data_ptr<int64_t>(),
+      len.data_ptr<int64_t>(), dest.data_ptr<int64_t>(), reinterpret_cast<uint64_t*>(out.data_ptr<uint8_t>()),
+      reinterpret_cast<uint64_t*>(sponge.data_ptr<int64_t>()), ctl.data_ptr<int>(), ctl.data_ptr<int>() + groups, groups,
+      (int)calls);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
 // A Keccak-f[1600] state split across a lane pair: lane parity h holds bits 32h .. 32h + 31 of every 64-bit word.  A 64-bit
 // rotation is one shuffle for the partner's half and one funnel shift, written the same on both lanes, so the pair never
 // diverges; XOR, AND and NOT act on the halves alone.  `half_rot` is rotl64 of (mine, other) restricted to this lane's half.
@@ -1366,6 +1586,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("band_chain", &band_chain, "every step of the rows' chains in one launch, writing W", pybind11::arg("state"),
         pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("threads"), pybind11::arg("c"),
         pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"), pybind11::arg("dest"), pybind11::arg("out"));
+  m.def("band_chain_pairs", &band_chain_pairs, "band_chain on lane pairs, in a persistent launch", pybind11::arg("state"),
+        pybind11::arg("row0"), pybind11::arg("rows"), pybind11::arg("domain"), pybind11::arg("warps_per_sm"),
+        pybind11::arg("calls"), pybind11::arg("c"), pybind11::arg("base"), pybind11::arg("blk"), pybind11::arg("len"),
+        pybind11::arg("dest"), pybind11::arg("out"));
   m.def("feistel_chunked", &feistel_chunked, "Π₂ on rows of a chunk-major state", pybind11::arg("state"), pybind11::arg("row0"),
         pybind11::arg("rows"), pybind11::arg("hw"), pybind11::arg("domain"), pybind11::arg("threads") = 128,
         pybind11::arg("specialize") = true, pybind11::arg("split") = false, pybind11::arg("xsrc") = pybind11::none(),

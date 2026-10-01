@@ -75,7 +75,8 @@ SWITCHES: dict[str, tuple[str, str, type]] = {
     "pair": ("codec", "PAIR", bool), "pair_max_rows": ("codec", "PAIR_MAX_ROWS", int), "coalesced": ("codec", "COALESCED", bool),
     "chunked": ("dense", "CHUNKED", bool), "chunked_threads": ("dense", "CHUNKED_THREADS", int),
     "split": ("dense", "CHUNKED_SPLIT", bool), "fused_x": ("dense", "CHUNKED_FUSED_X", bool),
-    "whole_chain": ("dense", "CHUNKED_WHOLE", bool),
+    "whole_chain": ("dense", "CHUNKED_WHOLE", bool), "chain_pairs": ("dense", "CHAIN_PAIRS", bool),
+    "chain_pairs_wps": ("dense", "CHAIN_PAIRS_WPS", int),
 }
 """Kernel setting -> (module, switch, type). Every setting computes the same bits; the gates run after they are set."""
 STEP_VARIANTS = {
