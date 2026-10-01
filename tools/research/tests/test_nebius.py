@@ -1310,6 +1310,9 @@ def test_fill_runner_runs_an_owner_in_cpu_sets_on_its_own_cpus_beside_the_shared
         (fill / "queue" / "census.sh").write_text("# fill: owner=bc-d gpus=0 cpus=6\n")
 
     monkeypatch.setattr(fr, "start", fake_start)
+    # the fake jobs' pid 0 would make a real stop signal this test's own process group: none is due, so none may happen
+    monkeypatch.setattr(fr, "active_s", lambda j: 0.0)
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: pytest.fail(f"stopped {k}: {why}"))
     queue_jobs()
     fr.tick(0)
     assert started and all(c is None for _, c, _ in started)       # no cpu-sets: the shared slot and the Verity pool's lent ones

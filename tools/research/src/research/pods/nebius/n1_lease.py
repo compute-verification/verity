@@ -145,11 +145,23 @@ def fence(i: int, t: float) -> int | None:
 
 
 def unfence(pids: list[int]) -> None:
+    """Stop each fence and wait (up to 2 s) until its whole process group is gone, so its GPU's lock is free on return."""
     for pid in pids:
         try:
             os.killpg(pid, signal.SIGTERM)
         except OSError:
             pass
+    for pid in pids:
+        try:
+            os.waitpid(pid, 0)
+        except ChildProcessError:
+            pass
+        for _ in range(200):
+            try:
+                os.killpg(pid, 0)
+            except OSError:
+                break
+            time.sleep(0.01)
 
 
 def holder_job(t: float) -> dict:
