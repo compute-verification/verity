@@ -218,8 +218,9 @@ def _boolean_roots() -> list[Any]:
     attention's softmax operations (`verity.ml.boolean.attention`), the comparator and selects (`verity.ml.boolean.scalar`) and
     the argmax step are static-free; greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of
     its tree, which reach every stage, leaf and merge shape (a full group, a remainder, the first group, the root group).  The
-    Gumbel select (`gumbel_boolean.GumbelSelectF32_v2`) at one group and at a full group plus a remainder; the stream key,
-    setup, lane and their pieces are static-free; the f32 tree's stages at two and three levels reach its other shapes."""
+    Gumbel select (`gumbel_boolean.GumbelSelectF32_v2`) at two lanes (its family's smallest, and the noisy row's: about 600,000
+    gates each, every lane about 300,000) and at a full group plus a remainder; the stream key, setup, lane and their pieces are
+    static-free; the f32 tree's stages at two and three levels reach its other shapes."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity_vllm.program.registry import gumbel_boolean as GB
@@ -228,7 +229,7 @@ def _boolean_roots() -> list[Any]:
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER),
             bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200), bind(SB.TokenSelect, V=4161),
-            bind(GB.GumbelSelectF32, V=5), bind(GB.GumbelSelectF32, V=65),
+            bind(GB.GumbelSelectF32, V=2), bind(GB.GumbelSelectF32, V=65),
             *SB.stages(200, SB.F32ArgmaxStage), *SB.stages(4161, SB.F32ArgmaxStage)]
 
 
