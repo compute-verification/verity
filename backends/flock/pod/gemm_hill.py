@@ -5,11 +5,12 @@ and the device paths agree), then proves one m = 35 statement of `GemmCoordinate
 dot of 16 that sm_90's wgmma and sm_120's mma.m16n8k16 run) untiled, warm once and timed three times, with nvidia-smi sampling
 the GPU every second from the job's start. Per coordinate (one FP32 output word of a K-long dot product):
 
-- overhead = T_prove / T_native. T_prove is M0's (gemm_slowdown.statement_seconds): the median timed statement's witness wait
-  plus both reps, over its coordinates; the loopback verifier is excluded. T_native = 2 K FLOP / P_peak, P_peak the census line's
-  dense BF16 tensor-core peak at FP32 accumulate (--peak-id).
-- throughput: coordinates per second over the timed sessions back to back, each verifier's verdict included (the prover waits
-  for it), with 1 / T_prove beside it.
+- overhead = T_session / T_native: the interaction with the verifier is part of the algorithm. T_session is the timed
+  sessions' wall time back to back (prover work, every coin round trip, each verdict), from the warm session's verdict to the
+  last timed one's, over their coordinates; T_native = 2 K FLOP / P_peak, P_peak the census line's dense BF16 tensor-core peak
+  at FP32 accumulate (--peak-id). Beside it, prove-only: M0's T_prove (gemm_slowdown.statement_seconds, the median timed
+  statement's witness wait plus both reps) over T_native.
+- throughput: coordinates per second, 1 / T_session, with 1 / T_prove beside it.
 - GPU utilization: nvidia-smi dmon's sm% (the fraction of each second some kernel ran, so an upper bound on DCGM's SM-active)
   averaged over the timed sessions (steady) and over the job's whole GPU-held wall time (the seconds before the sampler started
   count as idle); and the timed sessions' GPU-held seconds per coordinate.
@@ -18,7 +19,7 @@ the GPU every second from the job's start. Per coordinate (one FP32 output word 
 A coordinate is the campaign contract's VU (verity_numerical.bench.contract: K MACs, 2 K FLOP): result.json is a contract result
 (t.total = T_prove per statement, its buckets, vu.*, verifier.seconds, fixed.setup_seconds = staging), with the overhead against
 the RTX PRO peak under the workload's own `hill.` names, since the contract's overhead.vs_native_peak divides by the profile's
-H100 anchor. hillclimb.json is the step's verity/hillclimb-point/v0 record (throughput = VUs / T_prove; gpu_util and
+H100 anchor. hillclimb.json is the step's verity/hillclimb-point/v0 record (throughput = VUs / T_session; gpu_util and
 gpu_held_s_per_vu over the timed sessions, the verifier's verdicts included), which `rollup` appends to its subcircuit's roll-up.
 
     python gemm_hill.py defs --K 8192 --out defs.json [--n 1024]      # the Gemm_v2 row whose coordinates are the statement's lanes
@@ -57,9 +58,9 @@ QUESTION = ("what is BF16 GemmCoordinate_v2{K} proving overhead against the RTX 
             "utilization, at this step?")
 #: the campaign target whose operands and accumulator these are (verity_flock.bench.PROFILES["bf16-hopper"])
 PROFILE = "bf16-hopper-mma-draft/2026-09-22"
-#: flock-circuit's non-ZK sessions draw every round's coins from the step-0 seed (config_with: cfg.coin_seed), a SHA-256
-#: counter-mode PRF under a SHA-512 commitment; points under different coin modes are never compared
-COINS = "seed-mode"
+#: a session's coins, from its verdict: `seed-mode` (M0's step-0 seed: a SHA-256 counter-mode PRF under a SHA-512 commitment,
+#: opened in the verdict) or `live-os` (the verifier's OS draws, round by round); points under different coin modes are never
+#: compared
 POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rollup/v0"
 
 
@@ -245,6 +246,8 @@ def metrics(a) -> None:
         t0 = (warm[-1][0] if warm else start)                 # the timed sessions: from the warm one's verdict to the last's
         t1 = timed[-1][0]
         runs = len(timed)
+        t_session = (t1 - t0) / (coords * runs)
+        verdicts = [x.get("verdict") or {} for _, x in timed]
         steady = _window(samples, t0, t1)
         verify = [((x.get("verdict") or {}).get("verify_s")) for _, x in timed]
         session = [((x.get("verdict") or {}).get("session_s")) for _, x in timed]
@@ -255,9 +258,14 @@ def metrics(a) -> None:
             "coords_per_statement": coords, "statement_digest": lv.get("statement_digest"), "shape": rec.get("shape"), "ands": rec.get("ands"),
             "statement_s": stmt_s, "prove_total_s": lv["prove_total_s"], "witness_s": lv.get("witness_s"),
             "witness_prebuilt_s": lv.get("witness_prebuilt_s"), "pipeline_depth": lv.get("pipeline_depth"),
-            "t_prove_s_per_coord": t_prove, "t_native_s_per_coord": t_native, "overhead": t_prove / t_native,
-            "throughput_coords_per_s": coords * runs / (t1 - t0), "throughput_prove_coords_per_s": 1 / t_prove,
-            "gpu_util_steady": steady["sm"], "gpu_mem_util_steady": steady["mem"], "gpu_held_s_per_coord": (t1 - t0) / (coords * runs),
+            "t_prove_s_per_coord": t_prove, "t_native_s_per_coord": t_native, "t_session_s_per_coord": t_session,
+            "overhead": t_session / t_native, "overhead_prove_only": t_prove / t_native,
+            "throughput_coords_per_s": 1 / t_session, "throughput_prove_coords_per_s": 1 / t_prove,
+            "gpu_util_steady": steady["sm"], "gpu_mem_util_steady": steady["mem"], "gpu_held_s_per_coord": t_session,
+            "coins": "seed-mode" if any(v.get("coin_seed") for v in verdicts) else "live-os",
+            "session": {"tables": len(timed[-1][1].get("tables") or [None]), "streams": verdicts[-1].get("streams"),
+                        "rounds": verdicts[-1].get("rounds"), "round_trips": timed[-1][1].get("calls"),
+                        "batched": False, "why": "the device prover proves one table per session, each rep its own stream of round trips"},
             "gpu_util_job": job["sm"] * job["s"] / held if job["sm"] is not None and held else None, "gpu_held_s_job": held,
             "verify_s_per_statement": statistics.median([v for v in verify if v is not None]) if any(v is not None for v in verify) else None,
             "session_s_per_statement": statistics.median([v for v in session if v is not None]) if any(v is not None for v in session) else None,
@@ -274,15 +282,14 @@ def metrics(a) -> None:
             flags.append(f"m-{lv.get('dense_m')}-not-{M}")
         if st.get("tile") and a.K == 2048:
             flags.append("tile-statement-unreviewed")
-        if (out["others_cores_steady"] or {}).get("median", 0) > 2:
-            flags.append("cpu-contended")
+        flags.append(f"coins-{out['coins']}")
+        if not out["session"]["batched"]:
+            flags.append("session-not-batched")
     if not out["peak"]["matches_gpu"]:
         flags.append("peak-device-mismatch")
     if out.get("accepted") and not rec.get("domain"):
         flags.append("domain-unrecorded")
-    flags.append(f"coins-{COINS}")
-    out["vcpu"] = len(os.sched_getaffinity(0))
-    out["coins"] = COINS
+    out["vcpu"] = len(os.environ["HILL_PINNED"].split(",")) if os.environ.get("HILL_PINNED") else len(os.sched_getaffinity(0))
     status = g["status"] if out["accepted"] else "failed"
     try:
         res = _contract_result(a, out, g, status, rec, lv, peak)
@@ -327,7 +334,8 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
               *([contract.measurement("verifier.seconds", out["verify_s_per_statement"])] if out.get("verify_s_per_statement") is not None else []),
               *([contract.measurement("fixed.setup_seconds", out["setup_s"])] if out.get("setup_s") is not None else []),
               *[{"name": f"hill.{k}", "value": out[k], "unit": u} for k, u in (
-                  ("overhead", "ratio"), ("t_native_s_per_coord", "s"), ("throughput_coords_per_s", "1/s"), ("gpu_util_steady", "fraction"),
+                  ("overhead", "ratio"), ("overhead_prove_only", "ratio"), ("t_session_s_per_coord", "s"), ("t_native_s_per_coord", "s"),
+                  ("throughput_coords_per_s", "1/s"), ("gpu_util_steady", "fraction"),
                   ("gpu_util_job", "fraction"), ("gpu_held_s_per_coord", "s"), ("gpu_held_s_job", "s"), ("session_s_per_statement", "s"))
                 if out.get(k) is not None],
               {"name": "hill.peak_flop_per_second", "value": peak["flop_per_second"], "unit": "FLOP/s"},
@@ -336,8 +344,9 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
     fp = contract.fingerprint(
         profile=PROFILE, domain=out.get("domain") or "total", K=a.K, B=out.get("coords_per_statement") or 1, proof_class="NON_ZK_PROOF",
         authentication="included-hash", zk_mode=contract.ZK_NONE,
-        security={"target": -100, "profile": "fast100", "reps": 2, "coins": f"{COINS}: the step-0 seed's SHA-256 counter-mode PRF under a "
-                  "SHA-512 commitment (flock-circuit's non-ZK default), beyond SHA-512 collision resistance"},
+        security={"target": -100, "profile": "fast100", "reps": 2, "coins": {
+            "seed-mode": "seed-mode: the step-0 seed's SHA-256 counter-mode PRF under a SHA-512 commitment, beyond SHA-512 collision resistance",
+            "live-os": "live-os: the verifier's OS draws, round by round"}.get(out.get("coins"), out.get("coins"))},
         hardware=contract.probe_hardware(),
         software={"backend": {"name": "flock-circuit", "configuration": "C-interactive/flock-circuit serve + prove --gpu (loopback verifier "
                               "in series)", "commit": out["commit"]["commit"], "dirty": out["commit"]["dirty"], "binary_sha256": _read(a.binary_sha),
@@ -349,7 +358,7 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
         subcircuit=subcircuit(a.K)["id"], definition=out.get("definition"), statement_digest=out.get("statement_digest"), dense_m=out.get("m"),
         k_log=out.get("k_log"), tile=out.get("tile"), vcpu=out["vcpu"], hill_peak={"census_id": a.peak_id, "flop_per_second": peak["flop_per_second"],
                                                                                     "device": peak.get("device")},
-        coins=COINS, flags=out["flags"], hill={"step": a.step, "label": a.label})
+        coins=out.get("coins"), session=out.get("session"), flags=out["flags"], hill={"step": a.step, "label": a.label})
     return {"schema": contract.RESULT_SCHEMA, "run_id": out["run_id"] or "local", "workload_fingerprint": fp,
             "validation": {"status": status, "checker": "byte identity at B = 16: " + ", ".join(GS.GATE_CASES),
                            "detail": json.dumps(g.get("shapes"))[:900], "evidence": ["out/gate/classes/results.jsonl"]},
@@ -371,10 +380,12 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "run_id": out["run_id"], "time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)),
             "hardware": {"gpu": gpu.get("name"), "sm": f"sm_{cap.replace('.', '')}" if cap else None, "node": a.node, "vcpu": out["vcpu"]},
             "peak_flop_per_s": peak["flop_per_second"], "peak_census_id": a.peak_id, "vus": out.get("coords_per_statement"),
-            "t_prove_s_per_vu": out.get("t_prove_s_per_coord"), "setup_s": out.get("setup_s"), "overhead": out.get("overhead"),
-            "throughput_vu_per_s": out.get("throughput_prove_coords_per_s"), "gpu_util": out.get("gpu_util_steady"),
+            "t_session_s_per_vu": out.get("t_session_s_per_coord"), "t_prove_only_s_per_vu": out.get("t_prove_s_per_coord"),
+            "setup_s": out.get("setup_s"), "overhead": out.get("overhead"), "overhead_prove_only": out.get("overhead_prove_only"),
+            "throughput_vu_per_s": out.get("throughput_coords_per_s"), "gpu_util": out.get("gpu_util_steady"),
             "gpu_held_s_per_vu": out.get("gpu_held_s_per_coord"), "verify_s_per_statement": out.get("verify_s_per_statement"),
-            "byte_identical": g["status"] == "passed" and bool(out.get("accepted")), "coins": COINS, "flags": flags,
+            "byte_identical": g["status"] == "passed" and bool(out.get("accepted")), "coins": out.get("coins"),
+            "session": "batched" if (out.get("session") or {}).get("batched") else "per-rep-streams", "flags": flags,
             "question": QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job")}

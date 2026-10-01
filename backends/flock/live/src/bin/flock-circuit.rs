@@ -93,6 +93,13 @@ fn is_zk(st: &Stmt) -> bool {
     st.identity["hooks"]["zk"] == true
 }
 
+/// A non-ZK session's coins: M0's step-0 seed (`coin_seed`: a SHA-256 counter-mode PRF under a SHA-512 commitment, opened in
+/// the verdict) only in a selftest build, whose harness fixes the coins, or under `FC_COINS=seed`; otherwise the verifier
+/// draws every round's coins from the OS, so soundness rests on SHA-512 collision resistance alone.
+fn seed_coins() -> bool {
+    cfg!(feature = "seed-injection") || std::env::var("FC_COINS").as_deref() == Ok("seed")
+}
+
 /// M1's pad layout for the statement: the algebraic phase's, then Ligerito level 0's (its OOD samples and lane rounds).
 fn zk_layout(st: &Stmt) -> Layout {
     let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
@@ -187,6 +194,7 @@ fn identity(c: &Composite) -> Value {
            "commitments": "one root, both reps (R1)", "flavor": "rs", "leaf_scheme": c.leaf_scheme,
            // a selftest build injects seeds (the determinism check); a proving build never has the feature
            "seed_injection": cfg!(feature = "seed-injection"),
+           "coins": if zk_mode() { "committed coin tree (M2)" } else if seed_coins() { "seed (coin-commit/sha512)" } else { "live (the verifier's OS draws)" },
            // the frame-v3 tree and the row leaf are the serving side's formats, not this statement's to choose
            "hashes": {"merkle": format!("{} (every Ligerito level)", MERKLE.as_str()),
                       "round_digest": "sha512 (framing: the coin server retains every round's bytes and the replay compares them)",
@@ -463,11 +471,11 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     let specs = tabs.iter().map(|(name, st, _)| TableSpec { name: name.to_string(), binding: Binding::R1cs { statement_digest: st.flock_digest } }).collect();
     let mut cfg = SessionConfig::flock_128_r2(specs);
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
-    // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed
+    // M2 (--zk): every coin committed at Hello and opened round by round; M0: live OS coins, or the step-0 seed (seed_coins)
     if is_zk(st) {
         cfg.coin_tree = Some(coin_spec_of(&tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>()));
     } else {
-        cfg.coin_seed = true;
+        cfg.coin_seed = seed_coins();
     }
     cfg.retain_rounds = true;
     cfg.sha512_digests = true;
@@ -2653,7 +2661,7 @@ fn session(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Pla
     let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     // M0's seed opens at the end; under M2 every coin was checked against the commitment before it was used
-    let step0 = if v["accepted"] == true && !is_zk(st) { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
+    let step0 = if v["accepted"] == true && !is_zk(st) && seed_coins() { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
     let (rows_per_vu, ands_per_vu) = c.sizes_per_vu();
