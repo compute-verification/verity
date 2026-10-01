@@ -27,6 +27,9 @@
 #      job, submitted once DIR holds both statements' addresses: its sessions' verifier is that pod's, over the pod network, so
 #      this pod holds only the prover); give both jobs the same K, N, WARM, RUNS and FC_VERIFY_AHEAD, and FC_VERIFY_SERVERS to
 #      the serving one
+#      ZK=1 (the gate's selftests, the serve and the prove with --zk; then zkaudit, the selftest build's, on the gate's and the
+#      step's statements: out/zkaudit-{gate,m35}.json, and the job fails unless every byte the verifier kept is attributed and
+#      none is in the clear)
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -81,6 +84,32 @@ keep() {
 }
 done_() { kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; rm -rf $S; }
 trap done_ EXIT
+zok=1 ZKA=; [ "${ZK:-0}" = 1 ] && [ "${GPU:-1}" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ "${NSYS:-0}" != 1 ] && [ "${NCU:-0}" != 1 ] && ZKA=1
+# zkaudit PHASE: the phase's statement, as FLOCK_STAGE_CACHE keeps it (the phase's own copy is gone once proved), under the
+# phase's selftest build (binary.sha256's second line)
+zkaudit() {
+  local f sb
+  f=$(python3 - $S/$1/classes/results.jsonl $FLOCK_STAGE_CACHE <<'EOF'
+import json, sys
+from pathlib import Path
+recs = [json.loads(ln) for ln in open(sys.argv[1]) if ln.strip()]
+rec = recs[-1] if recs else {}
+n, c = (rec.get("stage") or {}).get("n"), rec.get("stage_cached")
+d = Path(sys.argv[2]) / c if c else None
+print(f"{d}/circuit.txt {d}/inst-{n}.bin" if d and (d / "circuit.txt").exists() and (d / f"inst-{n}.bin").exists() else "")
+EOF
+  )
+  sb=$(awk 'NR == 2 {print $2}' $S/$1/binary.sha256 2>/dev/null)
+  if [ -z "$f" ] || [ ! -x "$sb" ]; then
+    echo '{"skipped": "the statement is not in FLOCK_STAGE_CACHE, or there is no selftest build"}' > $R/out/zkaudit-$1.json; zok=0; return
+  fi
+  ph zkaudit-$1 start
+  $sb zkaudit --zk --gpu --circuit ${f% *} --instances ${f#* } > $R/out/zkaudit-$1.out 2> $R/out/zkaudit-$1.err
+  ph zkaudit-$1 end
+  grep '^ZKAUDIT' $R/out/zkaudit-$1.out | cut -f2- > $R/out/zkaudit-$1.json
+  python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(0 if d["checks_pass"] and d["attributed"] else 1)' \
+    $R/out/zkaudit-$1.json || zok=0
+}
 # the gate's three GPU cases at once, each its own process (B = 16: about 7-10 GB each of host memory, under 5 GB of the GPU's)
 GS=; [ "${GPU:-1}" = 1 ] && GS="SELFTEST_GPU=1 SELFTEST_CASES=gpu_paths_agree,gpu_proofs_match_cpu,verify_ahead_matches_serial SELFTEST_JOBS=3"
 ok=1
@@ -110,6 +139,7 @@ if [ "${GATE:-1}" = 1 ]; then
   ph gate end
   keep gate
   cp $R/out/gate/binary.sha256 $R/out/ 2>/dev/null
+  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit gate
 fi
 # NSYS=1: a profile, not a point: the step's prove process under Nsight Systems' CUDA trace (out/nsys/prove-<pid>.nsys-rep, and
 # its kernel, memcpy and API summaries beside it), unpacked into NSYS_ROOT (default FLOCK_WORK/nsys-root) as 71-gemm-slowdown.sh
@@ -172,6 +202,7 @@ if [ $ok = 1 ]; then
   ph sweep end
   keep m35
   cp $S/m35/classes/results.jsonl $R/out/results.jsonl 2>/dev/null
+  [ -n "$ZKA" ] && [ $ok = 1 ] && zkaudit m35
 fi
 kill $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null; wait $DMON $SAMPLER $SLICE $VMSTAT 2>/dev/null
 if [ -n "$NCW" ]; then
@@ -198,4 +229,4 @@ PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backe
   --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
   --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
 [ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
-[ $ok = 1 ] && grep -q '"status": "passed"' $R/result.json
+[ $ok = 1 ] && [ $zok = 1 ] && grep -q '"status": "passed"' $R/result.json

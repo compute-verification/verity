@@ -17,6 +17,7 @@
 #      SERVE_ONLY=DIR (no GPU: stage the shapes and serve their WARM + RUNS sessions on this pod's address, published under DIR
 #      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
+#      ZK=1 (serve, prove and selftest with --zk)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
@@ -49,6 +50,11 @@ if [ -z "${BINARY:-}" ]; then   # BINARY / PYBIN: a prebuilt flock-circuit and a
 fi
 [ "${BUILD_ONLY:-0}" = 1 ] && { echo "BINARY=$BINARY"; echo "SELFTEST_BINARY=${SELFTEST_BINARY:-$BINARY}"; exit 0; }
 B=$BINARY; SB=${SELFTEST_BINARY:-$BINARY}; sha256sum $B $SB | tee $O/binary.sha256
+# ZK=1: every serve, prove and selftest under --zk (M1's masking and M2's committed coins); binary.sha256 stays the builds' own
+if [ "${ZK:-0}" = 1 ]; then
+  printf '#!/bin/sh\nexec %s "$@" --zk\n' "$B" > $O/prover-zk; printf '#!/bin/sh\nexec %s "$@" --zk\n' "$SB" > $O/selftest-zk
+  chmod +x $O/prover-zk $O/selftest-zk; B=$O/prover-zk; SB=$O/selftest-zk
+fi
 # WRAP: a command the prover's prove sessions run under (71-gemm-slowdown.sh NSYS=1); binary.sha256 is the prover's own
 if [ -n "${WRAP:-}" ]; then
   printf '#!/bin/sh\ncase "$1" in prove) exec %s %s "$@" ;; *) exec %s "$@" ;; esac\n' "$WRAP" "$B" "$B" > $O/prover-wrapped

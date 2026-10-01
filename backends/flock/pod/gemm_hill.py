@@ -451,6 +451,12 @@ def metrics(a) -> None:
     if out.get("accepted") and not rec.get("domain"):
         flags.append("domain-unrecorded")
     out["vcpu"] = len(os.environ["HILL_PINNED"].split(",")) if os.environ.get("HILL_PINNED") else len(os.sched_getaffinity(0))
+    # ZK=1 (74-gemm-hill.sh): every session ran with --zk, and zkaudit judged each phase's statement
+    out["zk"] = os.environ.get("ZK") == "1"
+    if out["zk"]:
+        flags.append("zk")
+        out["zkaudit"] = {p.stem.removeprefix("zkaudit-"): json.loads(p.read_text() or "null")
+                          for p in sorted(Path(a.out).parent.glob("zkaudit-*.json"))}
     status = g["status"] if out["accepted"] else "failed"
     try:
         res = _contract_result(a, out, g, status, rec, lv, peak)
@@ -509,9 +515,10 @@ def _contract_result(a, out: dict, g: dict, status: str, rec: dict, lv: dict, pe
         authentication="included-hash", zk_mode=contract.ZK_NONE,
         security={"target": -100, "profile": "fast100", "reps": 2, "coins": COINS.get(out.get("coins"), out.get("coins"))},
         hardware=contract.probe_hardware(),
-        software={"backend": {"name": "flock-circuit", "configuration": "C-interactive/flock-circuit serve + prove --gpu (loopback verifier "
-                              "in series)", "commit": out["commit"]["commit"], "dirty": out["commit"]["dirty"], "binary_sha256": _read(a.binary_sha),
-                              "prover": lv.get("prover"), "env": {k: os.environ.get(k) for k in ("FC_PIPELINE_DEPTH", "FC_HOST_PREPIN")}},
+        software={"backend": {"name": "flock-circuit", "configuration": "C-interactive/flock-circuit serve + prove --gpu" + (" --zk" if out.get("zk") else "")
+                              + " (loopback verifier in series)", "commit": out["commit"]["commit"], "dirty": out["commit"]["dirty"],
+                              "binary_sha256": _read(a.binary_sha), "prover": lv.get("prover"),
+                              "env": {k: os.environ.get(k) for k in ("FC_PIPELINE_DEPTH", "FC_HOST_PREPIN")} | ({"ZK": "1"} if out.get("zk") else {})},
                   "toolchain": {"python": sys.version.split()[0]}},
         preprocessing="none amortised: the statement's circuit is lowered and staged once per process (fixed.setup_seconds); every timed "
                       "session builds its witness and proves both reps afresh",
