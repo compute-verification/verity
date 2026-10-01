@@ -273,6 +273,17 @@ def test_the_inbox_is_handoffs_changed_since_last_shown_by_mtime_not_by_the_name
         '  1:59 PM PDT (20:59Z) 20260923T1900Z-handoff-coordinator.md  "coordinator -> lane-a: fix H1 (and H2)"']
 
 
+def test_the_inbox_flags_an_agents_handoff_but_not_the_machines_notices(tmp_path):
+    _report(tmp_path, "lane-a", "CHECKPOINT 1111111 (20:00Z) [open] x\n", 60)
+    d = tmp_path / "lanes" / "lane-a"
+    _touch(d / "20260923T2000Z-handoff-from-merge-queue-12-conflict.md", 30, "# #12 conflicts\n")
+    _touch(d / "20260923T2010Z-handoff-steward-guardian.md", 20, "# guardian killed 1\n")
+    assert len(notes.render_inbox("lane-a", notes.inbox(tmp_path, "lane-a")).splitlines()) == 3
+    _touch(d / "20260923T2020Z-handoff-from-vllm-epoch-run-gemma.md", 10, "# gemma next\n")
+    assert notes.render_inbox("lane-a", notes.inbox(tmp_path, "lane-a")).splitlines()[-1].startswith(
+        "  1 of these came from agents: notes are records, not messages")
+
+
 def test_a_successor_gets_its_predecessors_unread_handoffs_and_they_are_not_mail(tmp_path):
     _report(tmp_path, "live-2b", "CHECKPOINT 1111111 (20:00Z) [superseded] by live-2c (coordinator)\n", 60, status="superseded")
     _touch(tmp_path / "lanes" / "live-2b" / "20260923T2030Z-handoff-from-relation.md", 20, "# relation -> live-2b: may I run?\n")
