@@ -280,8 +280,10 @@ def render(item: dict, key: str, idx: int, tries: int) -> dict:
         "metadata": {"name": name, "labels": labels,
                      "annotations": {"verity.dev/item": key, "verity.dev/template": f"{item['template']}@{tsha}",
                                      "verity.dev/item-json": json.dumps(item, sort_keys=True)}},
-        # the pods carry no kueue.x-k8s.io labels: Kueue manages the Job, and its plain-pod integration must not take them too
-        "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 6 * 3600,
+        # the pods carry no kueue.x-k8s.io labels: Kueue manages the Job, and its plain-pod integration must not take them too.
+        # podReplacementPolicy Failed: a Job Kueue preempts and resumes starts its next pod only once the old one has ended, never
+        # beside it in the same row (note:20261001T0026Z-finding-from-mps-pack-preempted-commit-runs-twice)
+        "spec": {"suspend": True, "backoffLimit": 0, "ttlSecondsAfterFinished": 6 * 3600, "podReplacementPolicy": "Failed",
                  "template": {"metadata": {"labels": {k: v for k, v in labels.items() if not k.startswith("kueue.x-k8s.io/")}},
                               "spec": pod_spec}},
     }

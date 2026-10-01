@@ -148,3 +148,10 @@ def test_a_provers_task_runs_on_the_prover_slices_and_every_other_task_off_them(
     dispatch.submit({**_item(tmp_path), "id": "p", "queue": "provers"}, "lane/p")
     vllm, prover = (j["spec"]["template"]["spec"]["containers"][0]["command"][:3] for j in dispatch.created)
     assert vllm == ["taskset", "-c", "96-127,176-191"] and prover == ["taskset", "-c", "128-175"]
+
+
+def test_a_preempted_job_starts_its_next_pod_only_after_the_old_one_ended(dispatch, tmp_path):
+    """A Commit Kueue reclaimed kept running through its grace while the resumed Job ran a second copy in the same row (00:17Z)."""
+    _live(dispatch, TWO)
+    dispatch.submit(_item(tmp_path), "lane/a")
+    assert dispatch.created[0]["spec"]["podReplacementPolicy"] == "Failed"
