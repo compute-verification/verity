@@ -3,9 +3,10 @@
 call-boundary source commits every `call_boundaries` identity, evaluated on the host or served, module by module in the order it commits
 host words, so the run root is the same whichever source a word came from, and the binding map records each identity's source
 (`call_boundary_source.CallBoundarySource.identity_sources`: `host` or `tap`).  A served tensor of another dtype, element count or row
-width than its identity's (`layout`), or one written in place after the forward computed it, is a collector error naming it, and nothing
-of that module at that step is committed.  A run that is never a record (`placeholder`, the Commit's warm-up instrumented run) commits
-zero words of each identity's shape and captures nothing.  The replay requires every tapped identity's producing Calls in its draw's
+width than its identity's (`layout`), or one a torch call of the forward wrote in place after computing it (`note_writes`; an inference
+tensor has no version counter), is a collector error naming it, and nothing of that module at that step is committed; the tap keeps a
+copy of each served tensor as the forward left it (`hold`), so nothing after the forward changes what is committed.  A run that is never
+a record (`placeholder`, the Commit's warm-up instrumented run) commits zero words of each identity's shape and captures nothing.  The replay requires every tapped identity's producing Calls in its draw's
 population (`check.replay.coverage.taps_in_draw`): a served value no draw can reach is bound but never checked."""
 from __future__ import annotations
 
@@ -15,6 +16,10 @@ import numpy as np
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES
+
+#: the in-place dunders and item assignment, beside the in-place methods `name_`
+INPLACE = frozenset({"__iadd__", "__isub__", "__imul__", "__itruediv__", "__ifloordiv__", "__imod__", "__ipow__", "__imatmul__", "__iand__",
+                     "__ior__", "__ixor__", "__ilshift__", "__irshift__", "__setitem__"})
 
 
 def name(r: Mapping[str, Any]) -> str:
@@ -34,6 +39,20 @@ def layout(torch: Any, r: Mapping[str, Any], t: Any) -> str | None:
     return None
 
 
+def note_writes(writes: list[tuple[int, str]], func: Any, args: tuple, kwargs: Mapping[str, Any] | None, Tensor: Any) -> None:
+    """Append to `writes` (storage, function name) for each tensor a torch call writes in place: its `out=`, the first argument of an
+    in-place method (`add_`, `__iadd__`, `__setitem__`) and each argument its schema marks written (a custom op's mutated operands)."""
+    fn = getattr(func, "__name__", "")
+    out = (kwargs or {}).get("out")
+    got = [*(out if isinstance(out, (tuple, list)) else [out])]
+    if args and (fn in INPLACE or (fn.endswith("_") and not fn.startswith("__"))):
+        got.append(args[0])
+    for i, a in enumerate(getattr(getattr(func, "_schema", None), "arguments", None) or ()):
+        if a.alias_info is not None and a.alias_info.is_write:
+            got.append(args[i] if i < len(args) else (kwargs or {}).get(a.name))
+    writes += [(t.untyped_storage().data_ptr(), fn) for t in got if isinstance(t, Tensor) and t.numel()]
+
+
 def element_refusal(ids: Sequence[Mapping[str, Any]]) -> str | None:
     """Why identities `ids` are not each a whole [rows, width] Value of a word dtype, or None."""
     for r in ids:
@@ -44,9 +63,8 @@ def element_refusal(ids: Sequence[Mapping[str, Any]]) -> str | None:
 
 
 class ServedTap:
-    """The claimed identities by engine step and module, the modules that ran, the served tensors a subclass's capture holds
-    (`_served[(step, module)]`: name -> (tensor, its version when the forward computed it)), and the words the call-boundary source
-    commits from them."""
+    """The claimed identities by engine step and module, the modules that ran, the copies of the served tensors a subclass's capture
+    holds (`_served[(step, module)]`: name -> tensor, `hold`), and the words the call-boundary source commits from them."""
 
     short_name = "served_tap"
     label = "served tap"
@@ -62,7 +80,7 @@ class ServedTap:
         self.modules = sorted({m for mods in self._at.values() for m in mods})
         self._handles: list[Any] = []
         self._ran: dict[tuple[int, str], Any] = {}                           # (engine step, module) -> the device it ran on
-        self._served: dict[tuple[int, str], dict[str, tuple[Any, int]]] = {}
+        self._served: dict[tuple[int, str], dict[str, Any]] = {}
         self._steps: set[int] = set()
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "steps": 0, "errors": 0}
         self.active = False
@@ -88,6 +106,18 @@ class ServedTap:
         self._ran[(e, module)] = next((a.device for a in args if isinstance(a, self.torch.Tensor)), self.torch.device("cpu"))
         return not self.placeholder
 
+    def hold(self, e: int, module: str, served: Mapping[str, tuple[Any, int]], writes: Sequence[tuple[int, str]]) -> None:
+        """At `module`'s forward hook, engine step `e`: keep a contiguous copy of each served tensor (`served`: name -> (tensor, the
+        length of `writes` when the forward computed it)); one a later call of the forward wrote in place (`writes`, `note_writes`) is a
+        collector error, and nothing of the module is kept."""
+        for n, (t, mark) in served.items():
+            fn = next((f for p, f in writes[mark:] if p == t.untyped_storage().data_ptr()), None)
+            if fn is not None:
+                self.error(f"{self.label}: {n} was written in place ({fn}) after the forward computed it: nothing of {module} at engine "
+                           f"step {e} is committed")
+                return
+        self._served[(e, module)] = {n: t.clone(memory_format=self.torch.contiguous_format) for n, (t, _m) in served.items()}
+
     def words(self, e: int, module: str) -> list[tuple[str, Any]] | None:
         """The claimed identities of `module` at engine step `e` as [rows, width] words, in the manifest's order; None (a collector error)
         when the module did not run, its capture failed, or a served tensor is not its identity's."""
@@ -104,13 +134,12 @@ class ServedTap:
             if got is None:
                 return None
             for r in ids:
-                t, version = got.get(name(r), (None, None))
-                why = ("is not served by the forward" if t is None else layout(torch, r, t)
-                       or (None if t._version == version else "was written in place after the forward computed it"))
+                t = got.get(name(r))
+                why = "is not served by the forward" if t is None else layout(torch, r, t)
                 if why:
                     self.error(f"{self.label}: {CB.CP._label(r)} {why}: nothing of {module} at engine step {e} is committed")
                     return None
-                out.append((name(r), t.contiguous().view(int(r["rows"]), int(r["width"]))))
+                out.append((name(r), t.view(int(r["rows"]), int(r["width"]))))
         self.stats["tensors"] += len(out)
         self.stats["bytes"] += sum(int(v.numel()) * int(v.element_size()) for _n, v in out)
         self._steps.add(e)

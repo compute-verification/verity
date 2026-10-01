@@ -4,8 +4,9 @@ Gemma-2-style dense Program, with vLLM's GemmaRMSNorm forward at both norms (`we
 the forward computed, which the call-boundary source commits in their place: the step stream has the host's names, shapes, dtypes and
 order, each identity's source recorded (the binding map's `source`); every word is the forward's own, and those CPU torch rounds as the
 Program does (`weight + 1`, the residual sum, the square) are the host's; a module with both sources commits them in the manifest's order;
-a forward of another form, or a value written in place after it, is a collector error that commits nothing of that module at that step;
-the warm-up commits zeros and captures nothing; a manifest or model it cannot commit is refused, and the gate names it first."""
+a forward of another form, or one that writes a value in place after computing it, is a collector error that commits nothing of that
+module at that step, and a write after the forward changes nothing committed; the warm-up commits zeros and captures nothing; a manifest
+or model it cannot commit is refused, and the gate names it first.  Every forward runs under `torch.inference_mode`, as the Commit's do."""
 from __future__ import annotations
 
 import json
@@ -49,7 +50,8 @@ def chain(x, weight, eps, residual=None):
 
 class GemmaRMSNorm(torch.nn.Module):
     """The served module: vLLM's forward_native over the native IR ops; `form` another forward (`plain`: x * w, a Llama norm's; `fused`:
-    one kernel, no chain; `stash`: the variance kept where a later hook writes it)."""
+    one kernel, no chain; `inplace`: the variance written in place before the rsqrt reads it); the variance is kept where a later hook can
+    write it."""
 
     def __init__(self, weight, eps=EPSILON, form=None):
         super().__init__()
@@ -67,6 +69,8 @@ class GemmaRMSNorm(torch.nn.Module):
             y = torch.nn.functional.rms_norm(x, (x.shape[-1],), weight, self.variance_epsilon)
         else:
             variance = x.pow(2).mean(dim=-1, keepdim=True)
+            if self.form == "inplace":
+                variance += 0.0
             self.last = variance
             x = x * torch.rsqrt(variance + self.variance_epsilon)
             y = x.to(weight.dtype) * (self.weight.float() if self.form == "plain" else weight)
@@ -107,6 +111,11 @@ def rows(world, calls):
 
 
 def _drive(world, com, steps=range(1 + T), runs=lambda s, m: 1):
+    with torch.inference_mode():
+        _steps(world, com, steps, runs)
+
+
+def _steps(world, com, steps, runs):
     mods = dict(com.model.named_modules())
     for s in steps:
         com._cur = types.SimpleNamespace(step=s)
@@ -218,18 +227,34 @@ def test_a_forward_of_another_form_is_a_collector_error_that_commits_nothing_of_
                           f"norm body tap: {RESID} at engine step 0: the forward ran 0 rsqrt, not one; nothing of it is committed"]
     assert {n.split("/")[0] for _s, n, _t in com.acquired} == {"logits_processor"}
 
-    com = _commit(dense, monkeypatch, forms={ONE: "stash"})
+    com = _commit(dense, monkeypatch, forms={ONE: "inplace"})
+    _drive(dense, com, steps=[0])
+    assert com.errors == [f"norm body tap: {ONE}/mean_0/out was written in place (add_) after the forward computed it: nothing of {ONE} "
+                          "at engine step 0 is committed"]
+    assert not any(n.startswith(ONE) for _s, n, _t in com.acquired) and any(n.startswith(RESID) for _s, n, _t in com.acquired)
+
+    com = _commit(dense, monkeypatch)
     com.model.get_submodule(ONE).register_forward_hook(lambda m, _a, _o: m.last.add_(1.0))
     _drive(dense, com, steps=[0])
-    assert len(com.errors) == 1 and f"{ONE}/mean_0/out of r0 @ engine step 0 was written in place after the forward computed it: nothing " \
-                                   f"of {ONE} at engine step 0 is committed" in com.errors[0], com.errors
-    assert not any(n.startswith(ONE) for _s, n, _t in com.acquired) and any(n.startswith(RESID) for _s, n, _t in com.acquired)
+    assert not com.errors and same({n: t for _s, n, t in com.acquired}[f"{ONE}/mean_0/out"], replica(dense)[(0, ONE)]["var"])
 
     com = _commit(dense, monkeypatch)
     _drive(dense, com, steps=[0, 1], runs=lambda s, m: {(0, ONE): 0, (1, RESID): 2}.get((s, m), 1))
     assert com.errors == [f"norm body tap: {ONE} did not run at engine step 0; the manifest names its call boundaries there",
                           f"norm body tap: {RESID} ran twice at engine step 1; the Program has one body"]
     assert {(s, n.split("/")[0]) for s, n, _t in com.acquired if not n.startswith("logits_processor/")} == {(0, RESID), (1, ONE), (1, RESID)}
+
+
+def test_the_writes_of_a_call_are_its_out_its_in_place_operand_and_its_schemas_written_operands():
+    """By storage, so a write through a view is one; an inference tensor has a storage but no version counter."""
+    writes, ptr = [], lambda t: t.untyped_storage().data_ptr()
+    with torch.inference_mode():
+        a, b, c = torch.zeros(4), torch.ones(4), torch.zeros(4)
+        for func, args, kwargs in ((torch.add, (a, b), {"out": c}), (torch.Tensor.add_, (a, b), None), (torch.Tensor.__iadd__, (b, a), None),
+                                   (torch.Tensor.__setitem__, (c[1:], 0, 1.0), None), (torch.ops.aten.mul_.Tensor, (b, a), None),
+                                   (torch.add, (a, b), None), (torch.Tensor.add_, (torch.zeros(0), 1.0), None)):
+            ST.note_writes(writes, func, args, kwargs, torch.Tensor)
+        assert writes == [(ptr(c), "add"), (ptr(a), "add_"), (ptr(b), "__iadd__"), (ptr(c), "__setitem__"), (ptr(b), "mul_.Tensor")]
 
 
 def test_the_warm_up_commits_zero_words_of_the_identities_and_captures_nothing(dense, monkeypatch):
