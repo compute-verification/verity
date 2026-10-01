@@ -255,7 +255,8 @@ def test_the_commit_gives_its_gpu_back_after_its_last_run_and_ends_with_its_comm
                  "tl = types.SimpleNamespace(start=lambda n, **k: calls.append(n), end=lambda n, **k: calls.append(k.get('released')))\n"
                  "from tests.pipeline.test_gpu_lease import ENG, _args, _com\n"
                  "first = GL.release(tl, ENG, [_com()], _args(), last=False, after='work.pair0.control')\n"
-                 "ok = GL.release(tl, ENG, [_com()], _args(), last=True, after='work.pair0.instrumented', wait=lambda s: None)\n"
+                 "com = _com(_stop_worker=lambda: calls.append('worker stopped'))\n"
+                 "ok = GL.release(tl, ENG, [com], _args(), last=True, after='work.pair0.instrumented', wait=lambda s: None)\n"
                  f"free = subprocess.run(['flock', '-n', {str(lock)!r}, 'true']).returncode == 0\n"
                  f"json.dump(dict(first=first, ok=ok, free=free, calls=calls, held=len(GL._HELD)), open({str(seen)!r}, 'w'))\n"
                  "GL.run_main(lambda: sys.exit(3))\n")
@@ -268,10 +269,11 @@ def test_the_commit_gives_its_gpu_back_after_its_last_run_and_ends_with_its_comm
     rc, rec = GL.run(str(tmp_path), str(log), cmd, 600, env, run_tl)
     assert rc == 3, log.read_text()                    # the holder's end after the release did not kill the Commit
     assert json.loads(seen.read_text()) == {"first": False, "ok": True, "free": True, "held": 0,
-                                            "calls": ["gpu_lease.release", "shutdown", "reset", ["GPU-5"], "no device", True]}
+                                            "calls": ["gpu_lease.release", "worker stopped", "shutdown", "reset", ["GPU-5"], "no device", True]}
     assert not exited.exists(), "the released Commit ran its interpreter's teardown"
     assert "GPU LEASE released after work.pair0.instrumented" in log.read_text()
     assert rec["released_at"] == "work.pair0.instrumented" and rec["kept"] is None and rec["rc"] == 3 and rec["held_min"] is not None
+    assert {"shutdown_s", "reset_s", "holder_s"} <= set(rec)
 
 
 def test_a_context_that_reappears_after_the_release_ends_the_commit(tmp_path, monkeypatch):
@@ -281,7 +283,8 @@ def test_a_context_that_reappears_after_the_release_ends_the_commit(tmp_path, mo
     monkeypatch.setattr(GL.os, "kill", lambda pid, sig: killed.append((pid, sig)))
     GL._watch(SimpleNamespace(active=lambda: next(looks)), started, wait=lambda s: None)
     assert killed == [(os.getpid(), signal.SIGKILL)]
-    assert "context_reappeared" in json.loads((tmp_path / "gpu_lease.released").read_text())
+    note = json.loads((tmp_path / "gpu_lease.released").read_text())
+    assert "context_reappeared" in note and "MainThread" in note["threads"]
 
 
 def test_the_holder_ending_after_the_release_leaves_the_commit_running(monkeypatch):
