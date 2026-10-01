@@ -8,15 +8,15 @@ the weights record (vLLM's parameters in module order, then its buffers), one ca
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
 
 Vocabulary (v1, Llama-family decoders, dense or fused-MoE, under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input
-norm, and the q/k norm: per head, or over all heads), Gemm (target-keyed; the q/k/v projection's bias, when the family's rule
-gives it one, a BiasAdd per row), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
-RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, the fused-MoE block in its indexed-read construction (router
-Gemm, MoeRouterTopK per row, MoeExpertGemm / SiluMul / MoeExpertGemmW per (token, slot) pair, MoeSum per row); for Gemma-2, the
-embedding's normalizer scale, GemmaRMSNorm's unfused (1 + w) chain (every norm, the two extra MLP norms included), AttentionSoftcap,
-GeluTanhMul and the final logits' tanh soft-cap; and the token select: greedy TokenSelect, or the seeded
-temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split count a `splits` Input entry, or the single
-request's constant S).  Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a silent
-approximation).
+norm, and the q/k norm: per head, or over all heads), Gemm (target-keyed; the q/k/v projection's bias, when the family's rule gives
+it one, fused as the target's GemmBias where its record says so, else a BiasAdd per row), RoPE (all q rows, then all k rows),
+Attention (target-keyed; one call per query row over the layer's history), RMSNormFusedCuda (post-attention / next-layer / final
+norm), SiluMul, the fused-MoE block in its indexed-read construction (router Gemm, MoeRouterTopK per row, MoeExpertGemm / SiluMul /
+MoeExpertGemmW per (token, slot) pair, MoeSum per row); for Gemma-2, the embedding's normalizer scale, GemmaRMSNorm's unfused (1 +
+w) chain (every norm, the two extra MLP norms included), AttentionSoftcap, GeluTanhMul and the final logits' tanh soft-cap; and the
+token select: greedy TokenSelect, or the seeded temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split
+count a `splits` Input entry, or the single request's constant S). Anything φ asks for outside it raises `Unexpressible` naming the
+fact (a result, never a silent approximation).
 
 Restored lineage: `verity_capture.experimental.aot.build` (`aot-build/eager/v8`, deleted in 528f9d21f) built the capture fold's
 `Captured_v1{PROFILE, WORKLOAD}` Program; the Build of record now derives `Derived[vLLM*]` Programs, so the emitter targets those.
@@ -255,7 +255,13 @@ class _Specs:
         self.norm0 = self.kind("rmsnorm", N=C.H, EPS=C.EPS)
         self.fused = self.kind("rmsnorm_fused", N=C.H, EPS=C.EPS)
         self.qkv, self.o = self.gemm(C.H, C.QKV), self.gemm(C.NH * C.D, C.H)
-        self.qkv_bias = self.kind("bias_add", N=C.QKV) if C.qkv_bias else None
+        self.qkv_bias = self.qkv_fused = None
+        if C.qkv_bias:
+            role = self.gemm_bias_role()
+            if role is None:
+                self.qkv_bias = self.kind("bias_add", N=C.QKV)
+            else:
+                self.qkv = self.qkv_fused = self.kind(role[0], K=C.H, N=C.QKV, **role[1])
         self.head_norm = self.kind("rmsnorm", N=C.D, EPS=C.EPS) if C.qk_norm == "head" else None
         if C.qk_norm == "all":
             self.q_norm, self.k_norm = self.kind("rmsnorm", N=C.NH * C.D, EPS=C.EPS), self.kind("rmsnorm", N=C.KVH * C.D, EPS=C.EPS)
@@ -322,6 +328,15 @@ class _Specs:
 
     def gemm(self, K: int, N: int):
         return self.kind("gemm", K=K, N=N) if self.accepted else self.kind("gemm_dot", K=K, N=N, DOT=self.dot)
+
+    def gemm_bias_role(self) -> tuple[str, dict] | None:
+        """The biased linear's one-Call kind as `TritonGemmRule` picks it (the bias add the GEMM's only reader): `GemmBias_v1` under
+        the accepted kinds, `GemmBias_v2{DOT}` where the target's record names a biased-linear step (`registry.targets.gemm_bias_dot`,
+        on the trees that have it), else None: the GEMM, then `BiasAdd_v1` per row."""
+        if self.accepted:
+            return "gemm_bias", {}
+        dot = getattr(self.TG, "gemm_bias_dot", lambda tp: None)(self.tp)
+        return None if dot is None else ("gemm_bias_dot", {"DOT": dot})
 
     def attention(self, P: int, row: int, own_rows: int, launch_sq: int):
         """`UnifiedAttentionWithOutput[vllm]`'s kind for the query row at history length P (row = its index among the sequence's
@@ -413,7 +428,10 @@ class _Model:
             lw = self.layers[L]
             if L > 0:
                 x, res = self.rms(d, lw["ln1"], res)
-            qkv = [self.call(S.qkv, Coll(pq[0], x[i].refs), Coll(pq[1], lw["qkv"].refs)) for i in range(M)]
+            if S.qkv_fused is not None:
+                qkv = [self.call(S.qkv, Coll(pq[0], x[i].refs), Coll(pq[1], lw["qkv"].refs), Coll(pq[2], lw["qkv_b"].refs)) for i in range(M)]
+            else:
+                qkv = [self.call(S.qkv, Coll(pq[0], x[i].refs), Coll(pq[1], lw["qkv"].refs)) for i in range(M)]
             if S.qkv_bias is not None:
                 pb = _ptypes(S.qkv_bias)
                 qkv = [self.call(S.qkv_bias, Coll(pb[0], qkv[i].refs), Coll(pb[1], lw["qkv_b"].refs)) for i in range(M)]

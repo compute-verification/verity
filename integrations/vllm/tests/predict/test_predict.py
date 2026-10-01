@@ -111,6 +111,16 @@ def test_weights_record_follows_the_module_order():
         gemma.index("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache") - 1
 
 
+@pytest.mark.parametrize("target,fused", [({"compute_capability": [8, 0], "num_sms": 108}, True), (RTXPRO6000, False)])
+def test_the_biased_linear_follows_the_targets_rule(target, fused):
+    """Qwen2's q/k/v bias: one `GemmBias_v1{K,N}` Call per row under the accepted kinds (A100, FA2), and where the target's record
+    names no biased-linear step (rtxpro6000) the target's GEMM, then `BiasAdd_v1` per row."""
+    cfg = {**TINY, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32}
+    r = build_program(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target, workload={"requests": []}), "step")
+    names = {re.match(r"\w+", k).group() for k in r.desc["definitions"]}
+    assert ("GemmBias_v1" in names, "BiasAdd_v1" in names) == (fused, not fused)
+
+
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
     ({**TINY, "model_type": "gpt2"}, {}, "model_type 'gpt2': not in the family facts table"),
     ({**TINY, "attention_bias": True}, {}, "attention_bias"),
