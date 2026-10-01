@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import subprocess
+import sys
 
 import pytest
 
@@ -53,3 +55,11 @@ def test_slack_dates_leaves_ids_code_links_and_non_times_alone(text):
 
 def test_slack_dates_rewrites_around_protected_spans():
     assert slack_dates("`22:00Z` then 22:00Z", NOW) == f"`22:00Z` then {_token('2026-09-30T22:00Z')}"
+
+
+def test_research_imports_without_a_tz_database_and_prints_utc_alone():
+    """`research run` wraps every Nebius job, whose image has neither /usr/share/zoneinfo nor the tzdata package."""
+    code = ("import sys, zoneinfo; sys.modules['tzdata'] = None; zoneinfo.reset_tzpath(()); "
+            "import research.cli; from research.timefmt import both; print(both('2026-09-30T20:41Z'))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+    assert out == "20:41Z\n"

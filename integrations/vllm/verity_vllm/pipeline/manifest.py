@@ -235,7 +235,10 @@ def build_components(tasks: list[tuple[str, dict[str, Any]]], *, jobs: int = 1, 
     after = after or (lambda _i, _m: None)
     if jobs <= 1 or len(tasks) < 2 or "fork" not in multiprocessing.get_all_start_methods():
         return _build_in_turn(tasks, after)
+    t0 = time.time()
     with _pool_lock():
+        if log and time.time() - t0 >= 1:
+            log(f"  components: waited {time.time() - t0:.1f}s for the machine's component pool lock")
         head = _headroom()
         if head is None:
             return _build_in_turn(tasks, after)

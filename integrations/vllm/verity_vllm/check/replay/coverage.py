@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay.replay_codes import NOT_YET
 from verity_vllm.program.kernels.rows import EVALUATORS
@@ -66,6 +67,15 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
 }
 #: the query families whose identities ARE produced by Program rows (a VU or a named non-evaluable row must address each of them)
 QUERY_FAMILIES_WITH_ROWS = ("instance_outputs", "sampled_token_ids", "moe_block_stream", "tp_rank_partials", "call_boundaries")
+
+
+def _row_produced(ident: dict[str, Any]) -> bool:
+    """Whether a Program row must address the identity: the row families, and an ATen-chain norm's scale (its `RsqrtF32_v1` Call's own
+    output, `NS.CALL_SCALES`) -- a kernel norm's scale is interior to its Call and stays a no-row family."""
+    fam = str(ident.get("family"))
+    if fam == NS.FAMILY:
+        return NS.site_of(RM.spec_family(str(ident.get("spec") or ""))) == "aten"
+    return fam in QUERY_FAMILIES_WITH_ROWS
 
 
 def _address_family(op: str, member: str, a: dict[str, Any]) -> str:
@@ -139,14 +149,15 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
         return (rid, st, canon, mem, inv)
 
     non_row_idents: list[dict] = []                                                # [F-moe-r17-05] the no-row families, classified below
+    keyed, keyed_not_exec = Counter(), Counter()                                   # row-produced identities of a no-row family (ATen norm scales)
     if manifest is not None:
         for ident in manifest.get("identities") or []:
             fam = str(ident.get("family"))
             fam_total[fam] += 1
             ranks_seen.add(int(ident.get("rank", 0) or 0))
-            if fam in QUERY_FAMILIES_WITH_ROWS and ident.get("step") != "*" and ident.get("request_id") != "*":
-                by_key[(str(ident.get("request_id")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")),
-                        int(ident.get("invocation", 0) or 0))] = ident
+            if _row_produced(ident) and ident.get("step") != "*" and ident.get("request_id") != "*":
+                keyed[fam] += fam not in QUERY_FAMILIES_WITH_ROWS
+                by_key[(str(ident.get("request_id")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")), int(ident.get("invocation", 0) or 0))] = ident
             elif executed_prefix:
                 non_row_idents.append(ident)
     else:
@@ -164,11 +175,9 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
     req_ids: Counter = Counter()                                                   # required row identities per request (manifest rows families)
     past_stop: list[dict] = []                                                     # an EVALUATED VU past a request's executed prefix: FAIL by name
     outside: list[dict] = []
-    n_outside = 0
     rows_disagree: list[dict] = []
-    n_rows_disagree = 0
     rows_annot: list[dict] = []
-    n_rows_annot = 0
+    n_outside = n_rows_disagree = n_rows_annot = n_missing = 0
     groups: dict[tuple, dict] = {}
     seen_keys: set[tuple] = set()
     for (rid, st, op, mem), a in sorted(addresses.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2], kv[0][3])):
@@ -208,6 +217,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
             not_exec[fam] += 1                                                    # [R17-26] classified, not reached, not uncovered
             not_exec_req[str(rid)] += 1
             not_exec_req_rows[str(rid)] += 1
+            keyed_not_exec[fam] += ident is not None and fam not in QUERY_FAMILIES_WITH_ROWS
             if (rid, st, op) in evaluated:
                 past_stop.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "n_exec": ep["n_exec"]})
             continue
@@ -228,7 +238,6 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
             g["first"].append([rid, st, op, mem])
     # --- required identities no row produces (manifest / replay address disagreement) ----------------------------------------------------
     missing: list[dict] = []
-    n_missing = 0
     if manifest is not None:
         for k, ident in by_key.items():
             if k not in seen_keys:
@@ -291,11 +300,12 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
         shapes = sorted(g.pop("shapes"))
         uncovered.append(dict(g, shapes=len(shapes), shape_example=shapes[0], mechanism=mech_of_class.get(g["class"], "unstated (fail closed)")))
     for fam, n in sorted(fam_total.items()):
-        if fam in QUERY_FAMILIES_WITH_ROWS:
+        n_rowless = int(n) - keyed[fam] - (not_exec[fam] - keyed_not_exec[fam])
+        if fam in QUERY_FAMILIES_WITH_ROWS or (keyed[fam] and not n_rowless):
             continue
         cls = "mechanism" if fam in QUERY_FAMILY_MECHANISM else "unstated"
         # the family's not-executed identities left the uncovered count for the class (reached + uncovered + not-executed == |Q(P)|)
-        uncovered.append({"family": fam, "spec": None, "class": cls, "identities": int(n) - int(not_exec.get(fam, 0)), "row_addresses": 0,
+        uncovered.append({"family": fam, "spec": None, "class": cls, "identities": n_rowless, "row_addresses": 0,
                           "why": "no VU row of its own (the query requires it; the exact replay has no relation to evaluate for it)",
                           "mechanism": QUERY_FAMILY_MECHANISM.get(fam, "UNSTATED: a required family with no named mechanism -- fail closed on the record")})
     # [revb S-r17b-16 (R4) / pad R17-32] a LIFTED Program's controller rows (LStepLive / LSelect / LBot; Continuation_v1's LIsEOS<E> `is_eos`,

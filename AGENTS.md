@@ -61,7 +61,7 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
     Other modules are created when code lands, not before.
   - Tests live in `packages/verity/tests/<module>/`.
 - `protocols/`: one distribution per protocol, and each imports only the
- stdlib, `verity` and itself (`protocols/tests/test_protocol_boundaries.py`).
+ stdlib, `verity` and itself (`tests/test_protocol_boundaries.py`).
  The first is `protocols/sampled_proofs` (`verity_sampled_proofs`): the
  two-stage law, its draws from the verifier's own randomness, and verification plans. See its
  `PROTOCOL.md`. `protocols/one_stage` (`verity_one_stage`) is the one-stage
@@ -75,7 +75,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
  is proof of useful work: the `PoUWScheme` interface (`protocol`), its lifecycle
  (`audit`) and the named schemes (`schemes.get`: NCP, Pearl's FP8 scheme, Pearl-C), each with
  pinned vectors, and `circuit`, `ncp-v2` as a Program that sampled proofs verifies; see
- its `PROTOCOL.md`. Applications (vLLM) compose protocols.
+ its `PROTOCOL.md`. `protocols/network_warden` (`verity_network_warden`) is network
+ transparency's timing channel: the warden, its audit and calibration, and its Lean package
+ (`lean/`). Applications (vLLM) compose protocols.
 - `census/`: data only, meant to move to its own repository: `hardware.json`, `datatypes.json`, `networks.json`,
  `subcircuits.json`, `input_sets.json`, `workloads.json` (stable ids, sources), a JSON Schema for each under `schemas/`,
  and a README with the id scheme and sourcing rules. Nothing imports it; the renderer and benchmarks
@@ -88,6 +90,9 @@ do not bulk-migrate or scaffold directories the README merely anticipates.
 - `tools/circuit_check/`: `circuit-check`, the property checks every circuit passes (see Circuits below).
 - `tools/check/`: `check`, the one repository check a merge requires (see Checking and merging below).
 - `tools/lean/`: the Lean audit (`audit.py`), which `check` runs on every Lake package (see Lean below).
+- `tools/cluster/`: `cluster`, the shared machines' description, a pure per-node planner and the allocation ledger. Stdlib
+ only, imports neither `verity` nor `research`. On vy-nebius-2 its agent runs in shadow mode (read-only, beside
+ `gpu-lease`); nothing it decides is carried out yet (its `README.md`).
 - `backends/`, `frontends/`, `integrations/`, `benchmarks/`: created when a
   component has real code; there is no `frontends/` yet. `backends/flock`
   (`verity_flock`) is C-Flock, the backend in active development; its verifier
@@ -227,7 +232,9 @@ rather than accumulating them.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook. Keep chatter low
 (contract §3a): every message and every background shell you start reaches the coordinator and the human, so run long
-jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan.
+jobs detached on the pod, write one-line checkpoints, and hand off only to unblock or to change someone's plan. Before
+starting work another agent could plausibly be doing, read the notes' `kb/onboarding.md`: check `research notes approaches`
+and claim yours at your first checkpoint (`research notes claim`).
 
 Push your branch after every commit: `research notes push <you>` (never `main`, never `--force`). Only the research
 coordinator merges `main`, from origin and through `research merge`; `research notes branches --fetch` lists open lanes' work

@@ -16,6 +16,7 @@
   research notes service systemd|launchd [...] [-- WATCH ARGS] # steward.py: the steward's service definition
   research notes index [--root DIR] [--catalog PATH] [--search TEXT | --evidence ID]   # notes_index.py: notes, full text, citations
   research notes mcp [--root DIR] [--catalog PATH]            # notes_mcp.py: that index joined to the evidence catalog, as MCP on stdio
+  research notes claim | approach | approaches ...            # approaches.py: the approach registry (check, then claim)
 
 A lane's report is `<root>/lanes/<lane>/<stamp>-report-<lane>.md` (the newest one if several).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
@@ -1899,6 +1900,10 @@ def main(argv: list[str]) -> int:
         from .notes_archive import main as archive_main  # noqa: PLC0415
 
         return archive_main(argv[1:], default_root())
+    if argv and argv[0] in ("claim", "approach", "approaches"):
+        from . import approaches  # noqa: PLC0415
+
+        return approaches.main(argv, default_root())
     if argv and argv[0] == "service":
         from .steward import service_main  # noqa: PLC0415
 
@@ -2157,6 +2162,9 @@ def _watch(ns: argparse.Namespace, root: Path, repo: Path | None, run: Callable[
             more += steward_rule("guardian", guardian_lines, root, rows, fleet, now, state, guardian)
             more += steward_rule("render", render_lines, root, now, state)
             more += steward_rule("run", run_lines, root, now, state)
+            from .approaches import steward_lines as approaches_lines  # noqa: PLC0415
+
+            more += steward_rule("approaches", approaches_lines, root, now, state)
             more += steward_rule("state", lambda: save_state(root, state) or [])
         if lease_line:
             more.append(lease_line)
