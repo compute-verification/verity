@@ -121,11 +121,11 @@ def _sub(T: TR.Traced, keep: list[int], inputs: list[int], outputs: list[int]) -
     return TR.Traced(len(inputs), gates, [new[o] for o in outputs], counts)
 
 
-def _split(T: TR.Traced, widths: list[int], shared: int, own: int) -> tuple[TR.Traced, TR.Traced, TR.Traced]:
+def _split(T: TR.Traced, widths: list[int], shared: int, own: int | None) -> tuple[TR.Traced, TR.Traced, TR.Traced]:
     """``T``'s gates by the parameters they read (``widths``: bits per parameter): those reading only parameter ``shared``, those
-    reading only parameter ``own``, the rest. Returns the first two as circuits from their parameter's bits to their frontier
-    (their gates the rest read), and the rest as a circuit from the parameters, each of the two followed by its frontier, to
-    ``T``'s outputs."""
+    reading only parameter ``own`` (none when ``own`` is None), the rest. Returns the first two as circuits from their
+    parameter's bits to their frontier (their gates the rest read), and the rest as a circuit from the parameters, each of the
+    two followed by its frontier, to ``T``'s outputs."""
     starts = [2 + sum(widths[:p]) for p in range(len(widths))]
     wires = [list(range(s, s + n)) for s, n in zip(starts, widths)]
     sup = [0, 0] + [1 << p for p, n in enumerate(widths) for _ in range(n)]
@@ -142,11 +142,11 @@ def _split(T: TR.Traced, widths: list[int], shared: int, own: int) -> tuple[TR.T
         read = {o for i, (_, ops) in enumerate(T.gates) if sup[first + i] != 1 << p for o in ops if o in mine}
         return keep, sorted(read | (mine & set(T.outputs)))
 
-    (ks, fs), (ko, fo) = part(shared), part(own)
+    (ks, fs), (ko, fo) = part(shared), part(own) if own is not None else ([], [])
     inputs = [w for p in range(len(widths)) for w in wires[p] + (fs if p == shared else fo if p == own else [])]
     drop = set(ks) | set(ko)
     rest = _sub(T, [i for i in range(n) if i not in drop], inputs, T.outputs)
-    return _sub(T, ks, wires[shared], fs), _sub(T, ko, wires[own], fo), rest
+    return _sub(T, ks, wires[shared], fs), _sub(T, ko, wires[own] if own is not None else [], fo), rest
 
 
 def _replay(T: TR.Traced, C, bits: list) -> list:
@@ -221,6 +221,29 @@ def _check_mufu(b: dict, keys) -> None:
         got = _mufu_word(b[k]).id
         if got not in _MUFU_WORDS[k]:
             raise ValueError(f"{k} computes {got}, not {' or '.join(sorted(_MUFU_WORDS[k]))}")
+
+
+def _word_view(word, statics: tuple[str, ...], mufu: tuple[str, ...] = ()) -> Callable[[dict], object]:
+    """The word view of a binding ``b``: ``word`` bound at ``b``'s ``statics``, once each MUFU static in ``mufu`` is checked."""
+    def view(b: dict):
+        _check_mufu(b, mufu)
+        return bind(word, **{k: b[k] for k in statics})
+    return view
+
+
+def _on_bits(name: str, version: int, statics: list[str], signature: Callable, word: Callable[[dict], object],
+             word_statics: dict | None = None):
+    """Decorator: the Boolean composite ``name_v{version}``, documented by its body's docstring, whose word view
+    (`trace.word_of`) is ``word`` of its bindings. ``word_statics`` names, for each MUFU static, the word Definition it
+    computes; the switch (`verity_vllm.program.boolean`) binds that static to the Definition's Boolean version."""
+    def deco(body: Callable) -> CompositeDefinition:
+        d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
+                                conformance="exact-model-tested")
+        d.word = word  # type: ignore[attr-defined]
+        if word_statics is not None:
+            d.word_statics = word_statics  # type: ignore[attr-defined]
+        return d
+    return deco
 
 
 class _F32:
@@ -499,24 +522,14 @@ def rmsnorm_cuda_calls(B, N: int, EPS: float, RSQRT, x: Coll, res: Coll, w: Coll
     return tuple_of(out, lanes[0])
 
 
-def _rmsnorm_fused_cuda(B, S, x, res, w):
+@_on_bits("RMSNormFusedCuda", 3, ["N", "EPS", "RSQRT"],
+          lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
+                     Tuple(Array(S.N, BF16), Array(S.N, BF16))),
+          _word_view(b1.RMSNormFusedCuda, ("N", "EPS"), ("RSQRT",)), word_statics=CUDA_WORD)
+def RMSNormFusedCuda(B, S, x, res, w):
     """`RMSNormFusedCuda_v2` on bits (`rmsnorm_cuda_calls`): vLLM's generic `fused_add_rms_norm_kernel<bf16, 0, true>`,
     `s = rsqrtf(variance / N + eps)` with ``RSQRT`` computing `RsqrtApprox_v1`. Returns (normed, res')."""
     return rmsnorm_cuda_calls(B, S.N, S.EPS, S.RSQRT, x, res, w)
-
-
-def _cuda_word(b: dict):
-    _check_mufu(b, ("RSQRT",))
-    return bind(b1.RMSNormFusedCuda, N=b["N"], EPS=b["EPS"])
-
-
-RMSNormFusedCuda = CompositeDefinition("RMSNormFusedCuda", 3, ("N", "EPS", "RSQRT"),
-                                       lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16)), ("w", Array(S.N, BF16))),
-                                                  Tuple(Array(S.N, BF16), Array(S.N, BF16))),
-                                       _rmsnorm_fused_cuda, doc=_rmsnorm_fused_cuda.__doc__, conformance="exact-model-tested")
-RMSNormFusedCuda.word = _cuda_word  # type: ignore[attr-defined]
-# the switch (`verity_vllm.program.boolean`) binds RSQRT to the Boolean version of the word Definition named here
-RMSNormFusedCuda.word_statics = CUDA_WORD  # type: ignore[attr-defined]
 
 
 # --- the Triton norm (vLLM's batch-invariant _rms_norm_kernel) ------------------------------------------------------------------
@@ -601,20 +614,11 @@ def rmsnorm_triton_calls(B, N: int, EPS: float, SQRT, SCALEA, RCP, x: Coll, w: C
     return B.call(bind(RMSNormOutRowTriton, N=N), inv, B.call(RMSNormInvTriton, inv), x, th[1], w)
 
 
-def _rmsnorm_triton(B, S, x, w):
+@_on_bits("RMSNormTriton", 2, ["N", "EPS", "SQRT", "SCALEA", "RCP"],
+          lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
+          _word_view(b1.RMSNormTriton, ("N", "EPS"), ("SQRT", "SCALEA", "RCP")), word_statics=TRITON_WORD)
+def RMSNormTriton(B, S, x, w):
     """`RMSNormTriton_v1` on bits (`rmsnorm_triton_calls`): vLLM's batch-invariant Triton `_rms_norm_kernel`,
     `inv = div.full(1, sqrt.approx.ftz(fma(rcp(N), sum, eps)))` with ``SQRT``, ``SCALEA`` and ``RCP`` computing `MufuSqrtFtz_v1`,
     `DivFullScaleA_v1` and `DivFullRcp_v1`."""
     return rmsnorm_triton_calls(B, S.N, S.EPS, S.SQRT, S.SCALEA, S.RCP, x, w)
-
-
-def _triton_word(b: dict):
-    _check_mufu(b, ("SQRT", "SCALEA", "RCP"))
-    return bind(b1.RMSNormTriton, N=b["N"], EPS=b["EPS"])
-
-
-RMSNormTriton = CompositeDefinition("RMSNormTriton", 2, ("N", "EPS", "SQRT", "SCALEA", "RCP"),
-                                    lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
-                                    _rmsnorm_triton, doc=_rmsnorm_triton.__doc__, conformance="exact-model-tested")
-RMSNormTriton.word = _triton_word  # type: ignore[attr-defined]
-RMSNormTriton.word_statics = TRITON_WORD  # type: ignore[attr-defined]

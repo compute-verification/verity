@@ -26,6 +26,7 @@ from verity.ir.defs import PrimitiveDefinition, bind
 from verity.ir.parts import n_members
 from verity.ml.boolean import elementwise as EW
 from verity.ml.boolean import fp
+from verity.ml.boolean import mufu as MU
 from verity.ml.boolean import trace as TR
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import boolean_norms as BN
@@ -292,25 +293,31 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-def _check_norms(N: int, EPS: float, x: np.ndarray, res: np.ndarray, w: np.ndarray) -> None:
-    cuda = bind(BN.RMSNormFusedCuda, N=N, EPS=EPS, **BN.CUDA_WORD)
+#: the MUFU statics as proofs' Boolean Definitions (`verity.ml.boolean.mufu`), which the switch binds
+CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
+TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
+
+
+def _check_norms(N: int, EPS: float, x: np.ndarray, res: np.ndarray, w: np.ndarray, cuda_mufu=BN.CUDA_WORD,
+                 triton_mufu=BN.TRITON_WORD) -> None:
+    cuda = bind(BN.RMSNormFusedCuda, N=N, EPS=EPS, **cuda_mufu)
     want = _run(TR.word_of(cuda), x, res, w)
     got = _run(cuda, _bits16(x), _bits16(res), _bits16(w))
     got = np.concatenate([_words16(got[:, :16 * N], N), _words16(got[:, 16 * N:], N)], axis=1)
     bad = np.flatnonzero((got != want).any(axis=1))
     assert not bad.size, f"{cuda.id}: {bad.size} of {len(x)} rows differ, first {bad[:5]}"
-    triton = bind(BN.RMSNormTriton, N=N, EPS=EPS, **BN.TRITON_WORD)
+    triton = bind(BN.RMSNormTriton, N=N, EPS=EPS, **triton_mufu)
     want = _run(TR.word_of(triton), x, w)
     got = _words16(_run(triton, _bits16(x), _bits16(w)), N)
     bad = np.flatnonzero((got != want).any(axis=1))
     assert not bad.size, f"{triton.id}: {bad.size} of {len(x)} rows differ, first {bad[:5]}"
 
 
-def _rows(N: int, EPS: float, n: int, seed: int) -> None:
+def _rows(N: int, EPS: float, n: int, seed: int, **mufu) -> None:
     rng = np.random.default_rng(seed)
     sx, sr, sw = _special_rows(rng, N)
     x, res, w = (np.concatenate([s, _bf16_rows(rng, n, N)]) for s in (sx, sr, sw))
-    _check_norms(N, EPS, x, res, w)
+    _check_norms(N, EPS, x, res, w, **mufu)
 
 
 def test_the_walker_is_the_reference_on_b1s_norms() -> None:
@@ -323,6 +330,15 @@ def test_the_walker_is_the_reference_on_b1s_norms() -> None:
 
 def test_the_norms_are_b1s_at_a_small_width() -> None:
     _rows(64, 1e-5, 160, 6)
+
+
+def test_the_norms_on_proofs_boolean_mufu_are_b1s_at_a_small_width() -> None:
+    _rows(64, 1e-5, 160, 7, cuda_mufu=CUDA_BITS, triton_mufu=TRITON_BITS)
+
+
+@pytest.mark.slow
+def test_the_norms_on_proofs_boolean_mufu_are_b1s_at_smollms_width() -> None:
+    _rows(576, 1e-5, 64, 8, cuda_mufu=CUDA_BITS, triton_mufu=TRITON_BITS)
 
 
 @pytest.mark.slow
@@ -425,6 +441,36 @@ def test_only_the_mufu_sub_calls_are_word_ids(which) -> None:
     assert calls == want[which]
     for k, d in (BN.CUDA_WORD if which == "cuda" else BN.TRITON_WORD).items():
         assert BN._mufu_word(d).id in BN._MUFU_WORDS[k]
+
+
+def _on_bits(which: str, N: int, EPS: float, mufu=None):
+    return bind(BN.RMSNormFusedCuda, N=N, EPS=EPS, **(mufu or BN.CUDA_WORD)) if which == "cuda" else \
+        bind(BN.RMSNormTriton, N=N, EPS=EPS, **(mufu or BN.TRITON_WORD))
+
+
+@pytest.mark.parametrize("which", ["cuda", "triton"])
+def test_on_proofs_boolean_mufu_the_norm_is_boolean_and_pinned(which) -> None:
+    """The word-id MUFU Calls and their packing replaced by proofs' Boolean MUFU, the norm is Boolean through every sub-Call."""
+    bits = CUDA_BITS if which == "cuda" else TRITON_BITS
+    top, word = _on_bits(which, 576, 1e-5, bits), _on_bits(which, 576, 1e-5)
+    assert BL.is_boolean(top)
+    assert not {n.fn.id for n in top.body.nodes} & _WORDY
+    memo: dict = {}
+    want = {"cuda": (2609812, 1134), "triton": (2516630, 2562)}[which]
+    assert (_ands(top, memo), _ands(top, memo) - _ands(word, memo)) == want
+
+
+@pytest.mark.parametrize("which", ["cuda", "triton"])
+def test_on_proofs_boolean_mufu_only_the_divisions_mufu_share_a_gate(which) -> None:
+    """`DivFullRcp_v2` recomputes one gate of `DivFullScaleA_v3` (both read the divisor): a recompute across two opaque Boolean
+    Calls, which `Q_word` v2 allows (#667); no other value is computed twice."""
+    r = members_check(_on_bits(which, 16, 1e-5, CUDA_BITS if which == "cuda" else TRITON_BITS))
+    if which == "cuda":
+        assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]
+        return
+    assert r["recomputed_calls"] == 0 and r["recomputed_gates"] == 1, r["recomputes"]
+    [rec] = r["recomputes"]
+    assert (rec["definition"], rec["gates"], rec["examples"][0][1].split("[")[0]) == ("DivFullRcp_v2", 1, "DivFullScaleA_v3")
 
 
 def test_a_mufu_static_on_bits_is_told_from_a_word_id_bound_or_not() -> None:
