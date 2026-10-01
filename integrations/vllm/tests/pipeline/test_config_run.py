@@ -99,7 +99,11 @@ def test_a_deferred_config_run_passes_the_flag_and_parses(tmp_path):
     assert "--replay-deferred" not in of_record.commit_cmd([]), "only a config run defers its replay"
     pytest.importorskip("torch")
     from verity_vllm.pipeline import cli
-    assert cli.parse("commit", cmd[cmd.index("commit") + 1:], {}).replay_deferred is True
+    assert cli.parse("commit", cmd[cmd.index("commit") + 1:], {}).replay_deferred == "full"
+    slim = _row(tmp_path / "slim", "--config-run", "1", "--replay-deferred", "slim")
+    slim.hidden_so, slim.B = "/x/verity_fa2_matReqG.so", 1
+    sc = slim.commit_cmd([])
+    assert cli.parse("commit", sc[sc.index("commit") + 1:], {}).replay_deferred == "slim"
 
 
 def _pending_commit(r, *, bundles):
