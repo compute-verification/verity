@@ -69,7 +69,9 @@ DEV void hmma(float* d, const uint32_t* a, const uint32_t* b) {
 //   PEARLC  stores C~, then four k16 BF16 mma of P_A P_B^T into the total, stores U and y = bf16(U ia ib)
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the hash-free control for a fused epilogue's digests
 //   PEARLC_B  PEARLC_S with the -h1 message digests of C~ and U from registers (ml_body only)
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_B, M_PLAIN_C, M_PLAIN_B };
+//   R1H_S     R1-H's chain from the hot start H = P_i Q_j, y = bf16(fl(C - H') sa sb) (ml_body only; G = 0)
+//   R1H_B     R1H_S with C's message digests from registers, as PLAIN_B (ml_body only)
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_PEARLC_B, M_PLAIN_C, M_PLAIN_B, M_R1H_S, M_R1H_B };
 constexpr int BK = 64, STAGES = 4, NT = 256, PEEL_ROW = 128;
 template <int MODE, int TM, int BN> __host__ __device__ constexpr int gemm_smem() {
   return STAGES * (TM + BN) * BK + (MODE == M_PEARLC || MODE == M_PEARLC_S ? (TM + BN) * PEEL_ROW : 0);
@@ -106,6 +108,27 @@ DEV void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
 DEV void store2(float* p, float a, float b) { *reinterpret_cast<float2*>(p) = make_float2(a, b); }
 DEV void store_y(uint16_t* p, float a, float b, float sr, float sc0, float sc1) {
   *reinterpret_cast<uint32_t*>(p) = f2bf(__fmul_rn(__fmul_rn(a, sr), sc0)) | (uint32_t)f2bf(__fmul_rn(__fmul_rn(b, sr), sc1)) << 16;
+}
+
+// R1-H's hot start (store:docs/pouw/new-designs.md §1.3, §2.1): H = P_i Q_j with P_i = +-2^e and Q_j = +-1.5 2^f, so the FMUL is
+// exact and H = +-1.5 2^E.  The output is U = fl(C - H'), H' = H (1 - (K / 32) 2^-25): the floor's mean bias, 1.5 g per atom
+// toward zero, folded into H, and exact in FP32 when 256 | K.
+DEV float r1h_factor(int K) { return __fsub_rn(1.0f, __fmul_rn((float)(K / 32), 0x1p-25f)); }
+DEV float r1h_u(float c, float h, float hf) { return __fsub_rn(c, __fmul_rn(h, hf)); }
+// acc = H for one thread's fragments of a WM x 32 warp tile whose fragment (mi, ni) has rows row0 + 16 mi (+ 8) and columns
+// col0 + 8 ni (+ 1)
+template <int MI, int NI>
+DEV void r1h_start(const float* P, const float* Q, int row0, int col0, float (&acc)[MI][NI][4]) {
+#pragma unroll
+  for (int mi = 0; mi < MI; mi++) {
+    const float p0 = P[row0 + 16 * mi], p1 = P[row0 + 16 * mi + 8];
+#pragma unroll
+    for (int ni = 0; ni < NI; ni++) {
+      const float q0 = Q[col0 + 8 * ni], q1 = Q[col0 + 8 * ni + 1];
+      acc[mi][ni][0] = __fmul_rn(p0, q0); acc[mi][ni][1] = __fmul_rn(p0, q1);
+      acc[mi][ni][2] = __fmul_rn(p1, q0); acc[mi][ni][3] = __fmul_rn(p1, q1);
+    }
+  }
 }
 
 template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
@@ -282,6 +305,166 @@ template <int MODE, int TM, int BN, int G> DEV void gemm_body(const Args& a) {
   }
 }
 
+// R1-H at decode's 64 x 64 tiles (gemm_body's chain, fragments and pipeline), k split into S parts (S | K / 64), each the
+// unpromoted chain from the hot start H.  At S = 1 that chain is C.  Otherwise each part adds C_s - H into the workspace W, and
+// the tile's last part to arrive takes C = H + W.  By the per-atom lemma (§1.3) every C_s - H is a sum of per-atom roundings
+// while the part stays in H's binade, and C = H + W is the serial chain's word whenever the parts' largest |acc - H| sum to
+// under |H| / 4: the serial chain's partial sums are then within that sum of H, so it stays in H's binade too, and every
+// partial sum of W is an exact multiple of H's ulp.  CHECK: each part adds its largest |acc - H| over its steps into Mx, and
+// the last part counts the words whose sum reaches |H| / 4 in p15 (their C may not be the chain's; the arm's gate requires
+// none).  The last part writes C and y = bf16(U sa sb), U = fl(C - H'), and zeroes its tile of W and Mx and its counter.
+// p0 A (M x K), p1 B (N x K), p2 C (M x N FP32), p4 y, p5 P (M FP32), p6 Q (N FP32), p7 sa, p8 sb, p12 W and p13 Mx (M x N
+// FP32, zero), p14 the tiles' counters (int, zero), p15 the count of words failing the check; i0 M, i1 N, i2 K, i3 group, i4 S
+template <bool CHECK> DEV void r1h_body(const Args& a) {
+  constexpr int TM = 64, BN = 64, WN = 32, WARPS_N = BN / WN, WARPS_M = 8 / WARPS_N, WM = TM / WARPS_M, MI = WM / 16, NI = WN / 8;
+  constexpr uint32_t A_ST = TM * BK, B_ST = BN * BK;
+  extern __shared__ __align__(128) uint8_t smem[];
+  __shared__ int last;
+  uint8_t* sA = smem;
+  uint8_t* sB = smem + STAGES * A_ST;
+  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], S = a.i[4];
+  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KP = K / BK / S;
+  const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32, wm = warp / WARPS_N, wn = warp % WARPS_N;
+  const uint8_t* A = reinterpret_cast<const uint8_t*>(a.p[0]);
+  const uint8_t* B = reinterpret_cast<const uint8_t*>(a.p[1]);
+  float* C = reinterpret_cast<float*>(a.p[2]);
+  uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
+  const float* P = reinterpret_cast<const float*>(a.p[5]);
+  const float* Q = reinterpret_cast<const float*>(a.p[6]);
+  const float* rs = reinterpret_cast<const float*>(a.p[7]);
+  const float* cs = reinterpret_cast<const float*>(a.p[8]);
+  float* W = reinterpret_cast<float*>(a.p[12]);
+  float* Mx = reinterpret_cast<float*>(a.p[13]);
+  int* cnt = reinterpret_cast<int*>(a.p[14]);
+  unsigned* fails = reinterpret_cast<unsigned*>(a.p[15]);
+  const float hf = r1h_factor(K);
+  const int a_row = wm * WM + (lane & 15), a_half = lane >> 4;
+  const int b_row = wn * WN + (lane & 7) + ((lane >> 4) << 3), b_half = (lane >> 3) & 1;
+  const int g = lane >> 2, q = lane & 3;
+
+  for (int w = blockIdx.x; w < tiles * S; w += gridDim.x) {
+    const int t = w / S, part = w % S;
+    int tm, tn;
+    raster(t, tiles_m, tiles_n, group, tm, tn);
+    const uint8_t* ga = A + (size_t)tm * TM * K + (size_t)part * KP * BK;
+    const uint8_t* gb = B + (size_t)tn * BN * K + (size_t)part * KP * BK;
+#pragma unroll
+    for (int s = 0; s < STAGES - 1; s++) {
+      if (s < KP) {
+        stage_rows<TM>(sA + s * A_ST, ga + s * BK, K, tid);
+        stage_rows<BN>(sB + s * B_ST, gb + s * BK, K, tid);
+      }
+      cp_commit();
+    }
+    const int row0 = tm * TM + wm * WM + g, col0 = tn * BN + wn * WN + 2 * q;
+    float acc[MI][NI][4], h[MI][NI][4], mx[MI][NI][4];
+    r1h_start(P, Q, row0, col0, h);
+#pragma unroll
+    for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+      for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+        for (int e = 0; e < 4; e++) { acc[mi][ni][e] = h[mi][ni][e]; mx[mi][ni][e] = 0.0f; }
+
+    for (int kb = 0; kb < KP; kb++) {
+      cp_wait<STAGES - 2>();
+      __syncthreads();
+      {
+        const int nk = kb + STAGES - 1, s = nk % STAGES;
+        if (nk < KP) {
+          stage_rows<TM>(sA + s * A_ST, ga + (size_t)nk * BK, K, tid);
+          stage_rows<BN>(sB + s * B_ST, gb + (size_t)nk * BK, K, tid);
+        }
+        cp_commit();
+      }
+      const uint32_t a0 = sa(sA + (kb % STAGES) * A_ST), b0 = sa(sB + (kb % STAGES) * B_ST);
+#pragma unroll
+      for (int kk = 0; kk < 2; kk++) {
+        uint32_t fa[MI][4], fb[NI][2];
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++) ldsm4(fa[mi], a0 + swz64(a_row + 16 * mi, 2 * kk + a_half));
+#pragma unroll
+        for (int nj = 0; nj < NI / 2; nj++) {
+          uint32_t r[4];
+          ldsm4(r, b0 + swz64(b_row + 16 * nj, 2 * kk + b_half));
+          fb[2 * nj][0] = r[0]; fb[2 * nj][1] = r[1]; fb[2 * nj + 1][0] = r[2]; fb[2 * nj + 1][1] = r[3];
+        }
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++) {
+            qmma(acc[mi][ni], fa[mi], fb[ni]);
+            if constexpr (CHECK) {
+#pragma unroll
+              for (int e = 0; e < 4; e++) mx[mi][ni][e] = fmaxf(mx[mi][ni][e], fabsf(__fsub_rn(acc[mi][ni][e], h[mi][ni][e])));
+            }
+          }
+      }
+    }
+    cp_wait<0>();
+    __syncthreads();
+
+    bool fin = true;
+    if (S > 1) {
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+          for (int e = 0; e < 4; e++) {
+            const size_t at = (size_t)(row0 + 16 * mi + 8 * (e >> 1)) * N + col0 + 8 * ni + (e & 1);
+            atomicAdd(W + at, __fsub_rn(acc[mi][ni][e], h[mi][ni][e]));
+            if constexpr (CHECK) atomicAdd(Mx + at, mx[mi][ni][e]);
+          }
+      __threadfence();
+      __syncthreads();
+      if (tid == 0) {
+        last = atomicAdd(cnt + t, 1) == S - 1;
+        __threadfence();
+      }
+      __syncthreads();
+      fin = last;
+      if (fin) {
+        unsigned bad = 0;
+#pragma unroll
+        for (int mi = 0; mi < MI; mi++)
+#pragma unroll
+          for (int ni = 0; ni < NI; ni++)
+#pragma unroll
+            for (int e = 0; e < 4; e++) {
+              const size_t at = (size_t)(row0 + 16 * mi + 8 * (e >> 1)) * N + col0 + 8 * ni + (e & 1);
+              acc[mi][ni][e] = __fadd_rn(h[mi][ni][e], __ldcg(W + at));
+              __stcg(W + at, 0.0f);
+              if constexpr (CHECK) {
+                bad += !(__ldcg(Mx + at) < __fmul_rn(0.25f, fabsf(h[mi][ni][e])));
+                __stcg(Mx + at, 0.0f);
+              }
+            }
+        if (CHECK && bad) atomicAdd(fails, bad);
+        if (tid == 0) cnt[t] = 0;
+      }
+    }
+    if (fin) {
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) {
+        const int row = row0 + 16 * mi;
+        const float r0 = rs[row], r1 = rs[row + 8];
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          const int col = col0 + 8 * ni;
+          const float c0 = cs[col], c1 = cs[col + 1];
+          const float* x = acc[mi][ni];
+          store2(C + (size_t)row * N + col, x[0], x[1]);
+          store2(C + (size_t)(row + 8) * N + col, x[2], x[3]);
+          store_y(Y + (size_t)row * N + col, r1h_u(x[0], h[mi][ni][0], hf), r1h_u(x[1], h[mi][ni][1], hf), r0, c0, c1);
+          store_y(Y + (size_t)(row + 8) * N + col, r1h_u(x[2], h[mi][ni][2], hf), r1h_u(x[3], h[mi][ni][3], hf), r1, c0, c1);
+        }
+      }
+    }
+    __syncthreads();
+  }
+}
+
 // The 128 x 128 GEMMs on bc-fb55a759's mainloop (mainloop_sm120.cuh: TMA into 3 stages of 128 bytes of depth, a producer
 // warpgroup, 8 consumer warps of 64 x 32, the chain word for word gemm_body's), with gemm_body's epilogues; PEARLC_B's is GPU 2's
 // fused one (bc-7442ca43's gemm_pearlc_b: each (row, 32-column chunk)'s message of C~ and U hashed from registers by
@@ -292,7 +475,9 @@ constexpr int ML_NT = 384;
 template <int G> constexpr int ML_RP = G ? 24 : 40;   // the producer's registers: the mainloop's recommended v1 and v2
 template <int G> constexpr int ML_U = G ? 1 : 2;      // stages per K-loop iteration (v1 at 2 spills under nvcc 13.0)
 template <int MODE, int G> DEV void ml_body(const Args& a) {
-  constexpr bool PEEL = MODE >= M_PEARLC && MODE <= M_PEARLC_B, HASH = MODE == M_PEARLC_B, R1B = MODE == M_PLAIN_B;
+  constexpr bool PEEL = MODE >= M_PEARLC && MODE <= M_PEARLC_B, HASH = MODE == M_PEARLC_B;
+  constexpr bool HOT = MODE == M_R1H_S || MODE == M_R1H_B, R1B = MODE == M_PLAIN_B || MODE == M_R1H_B;
+  static_assert(!HOT || G == 0, "R1-H is one accumulator over all of K");
   constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
   using L = ml::Mainloop<128, 128, G, 3, PEEL || R1B, 1, ML_RP<G>, 64, !R1B>;
   constexpr int MI = L::MI, NI = L::NI;
@@ -306,7 +491,14 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
     int tm, tn;
     ml::raster(t, tiles_m, tiles_n, group, tm, tn);
     float acc[MI][NI][4], total[MI][NI][4];
-    ml.template tile<ML_U<G>, true>(K, acc, total);
+    if constexpr (HOT) {
+      uint32_t tid;
+      asm volatile("mov.u32 %0, %%tid.x;" : "=r"(tid));
+      const int warp = tid / 32, lane = tid % 32, wm = warp / L::WARPS_N, wn = warp % L::WARPS_N;
+      r1h_start(reinterpret_cast<const float*>(a.p[5]), reinterpret_cast<const float*>(a.p[6]),
+                tm * 128 + wm * L::WM + (lane >> 2), tn * 128 + wn * L::WN + 2 * (lane & 3), acc);
+    }
+    ml.template tile<ML_U<G>, true, HOT>(K, acc, total);
     // a block boundary (never taken): scheduled among the chain's last MMAs, the plain epilogue spills v1
     if (MODE == M_PLAIN && K < 0) __trap();
     uint32_t tid;
@@ -321,7 +513,7 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
     uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
     const float* rs = reinterpret_cast<const float*>(a.p[7]);
     const float* cs = reinterpret_cast<const float*>(a.p[8]);
-    if constexpr (MODE == M_PLAIN || R1B) {
+    if constexpr (MODE == M_PLAIN || MODE == M_PLAIN_B) {
 #pragma unroll
       for (int mi = 0; mi < MI; mi++) {
         const int row = row0 + 16 * mi;
@@ -332,6 +524,25 @@ template <int MODE, int G> DEV void ml_body(const Args& a) {
           const float c0 = cs[col], c1 = cs[col + 1];
           store_y(Y + (size_t)row * N + col, total[mi][ni][0], total[mi][ni][1], r0, c0, c1);
           store_y(Y + (size_t)(row + 8) * N + col, total[mi][ni][2], total[mi][ni][3], r1, c0, c1);
+        }
+      }
+    }
+    if constexpr (HOT) {
+      const float* P = reinterpret_cast<const float*>(a.p[5]);
+      const float* Q = reinterpret_cast<const float*>(a.p[6]);
+      const float hf = r1h_factor(K);
+#pragma unroll
+      for (int mi = 0; mi < MI; mi++) {
+        const int row = row0 + 16 * mi;
+        const float r0 = rs[row], r1 = rs[row + 8], p0 = P[row], p1 = P[row + 8];
+#pragma unroll
+        for (int ni = 0; ni < NI; ni++) {
+          const int col = col0 + 8 * ni;
+          const float c0 = cs[col], c1 = cs[col + 1], q0 = Q[col], q1 = Q[col + 1];
+          store_y(Y + (size_t)row * N + col, r1h_u(total[mi][ni][0], __fmul_rn(p0, q0), hf),
+                  r1h_u(total[mi][ni][1], __fmul_rn(p0, q1), hf), r0, c0, c1);
+          store_y(Y + (size_t)(row + 8) * N + col, r1h_u(total[mi][ni][2], __fmul_rn(p1, q0), hf),
+                  r1h_u(total[mi][ni][3], __fmul_rn(p1, q1), hf), r1, c0, c1);
         }
       }
     }
@@ -466,6 +677,16 @@ GEMM(gemm_words_u, M_CT, 128, 32, 0)
 ML_GEMM(gemm_r1_b_u, M_PLAIN_B, 0)
 GEMM(gemm_r1_c_d_u, M_PLAIN_C, 64, 64, 0)
 GEMM(gemm_plain_d_u, M_PLAIN, 64, 64, 0)
+// R1-H, the chain from the hot start: gemm_r1h_b_u, y = bf16(U) and C's message digests from registers (gemm_r1_b_u's layout;
+// p5 P, p6 Q); gemm_r1h_s_u, y alone; at decode's 64 x 64 tiles, r1h_body's split-K chain with the check (gemm_r1h_d_u) and
+// without it (gemm_r1h_n_d_u, the check's price), two CTAs a SM
+ML_GEMM(gemm_r1h_b_u, M_R1H_B, 0)
+ML_GEMM(gemm_r1h_s_u, M_R1H_S, 0)
+#define R1H_GEMM(NAME, CHECK)                                                                    \
+  extern "C" __global__ void __launch_bounds__(NT, 2) NAME(const Args a) { r1h_body<CHECK>(a); } \
+  extern "C" __global__ void NAME##_smem(int* out) { *out = gemm_smem<M_PLAIN, 64, 64>(); }
+R1H_GEMM(gemm_r1h_d_u, true)
+R1H_GEMM(gemm_r1h_n_d_u, false)
 // The FP32 words of a 32-column product at decode's few rows (A'F_B at M not a multiple of 128): one warp per m16 x n8
 // output tile over all of K, the chain in the GEMM's order (G-atom promotion windows from +0, or one accumulator at G = 0),
 // fragments loaded straight from global memory through a ring of D atoms in registers, so D atoms' loads are in flight

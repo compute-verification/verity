@@ -218,12 +218,13 @@ struct Mainloop {
   }
   // one stage: FIRST, the tile's first (no window before it); LAST, its last (nothing to load after it).  The stage is released
   // after the MMAs that read its last fragments (LATE) or right after its last ldmatrix (!LATE); mbar_release orders it after
-  // them either way
-  template <bool FIRST, bool LAST, bool LATE>
+  // them either way.  HOT (G = 0 only): the tile's first atom accumulates onto acc as the caller set it, not onto +0
+  template <bool FIRST, bool LAST, bool LATE, bool HOT = false>
   ML_DEV void stage_body(float (&acc)[MI][NI][4], float (&total)[MI][NI][4], uint32_t (&fa)[2][MI][4], uint32_t (&fb)[2][NI][2]) {
+    static_assert(!HOT || G == 0, "a hot start is one accumulator over all of K");
     const uint32_t sb = stage(s), done = empty(s);
     load(fa[1], fb[1], sb, 1);
-    mma<G != 0 || FIRST, G != 0 && !FIRST>(acc, total, fa[0], fb[0]);
+    mma<(G != 0 || FIRST) && !(HOT && FIRST), G != 0 && !FIRST>(acc, total, fa[0], fb[0]);
     load(fa[0], fb[0], sb, 2);
     mma<false, false>(acc, total, fa[1], fb[1]);
     load(fa[1], fb[1], sb, 3);
@@ -237,8 +238,8 @@ struct Mainloop {
     mma<false, false>(acc, total, fa[1], fb[1]);
     if (LATE) mbar_release(done);
   }
-  // U: stages per K-loop iteration
-  template <int U = 1, bool LATE = true> ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
+  // U: stages per K-loop iteration; HOT: the chain starts at acc as the caller set it (G = 0)
+  template <int U = 1, bool LATE = true, bool HOT = false> ML_DEV void tile(int K, float (&acc)[MI][NI][4], float (&total)[MI][NI][4]) {
     const int KT = K / BK;
     uint32_t fa[2][MI][4], fb[2][NI][2];
 #pragma unroll
@@ -249,7 +250,7 @@ struct Mainloop {
         for (int e = 0; e < 4; e++) total[mi][ni][e] = 0.0f;
     mbar_wait_warp(full(s), ph);
     load(fa[0], fb[0], stage(s), 0);
-    stage_body<true, false, LATE>(acc, total, fa, fb);
+    stage_body<true, false, LATE, HOT>(acc, total, fa, fb);
 #pragma unroll U
     for (int kt = 1; kt < KT - 1; kt++) stage_body<false, false, LATE>(acc, total, fa, fb);
     stage_body<false, true, LATE>(acc, total, fa, fb);

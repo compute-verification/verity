@@ -17,8 +17,10 @@ MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: 64 x 32) 16 atoms per k32, 64 per 128-deep stage, and 64 of the peel (16 in the fused _b, whose peel is a loop of 4 steps);
 #: 64 x 64 (_d) and 128 x 32 (gemm_words) tiles 4 per k32, 8 per 64-deep stage, and 16 of the peel; the words kernels one atom
 #: per k32 per warp
-WANT = {**{g: (64, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_ct_u", "gemm_r1_b_u")},
-        **{g: (8, 0) for g in ("gemm_ct_d", "gemm_ct_d_u", "gemm_words", "gemm_words_u", "gemm_r1_c_d_u", "gemm_plain_d_u")},
+WANT = {**{g: (64, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct", "gemm_ct_u", "gemm_r1_b_u", "gemm_r1h_b_u",
+                                 "gemm_r1h_s_u")},
+        **{g: (8, 0) for g in ("gemm_ct_d", "gemm_ct_d_u", "gemm_words", "gemm_words_u", "gemm_r1_c_d_u", "gemm_plain_d_u",
+                               "gemm_r1h_d_u", "gemm_r1h_n_d_u")},
         **{g: (64, 64) for g in ("gemm_pearlc", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u")},
         "gemm_pearlc_b": (64, 16), "gemm_pearlc_b_u": (64, 16),
         "gemm_pearlc_d": (8, 16), "gemm_pearlc_d_u": (8, 16),
