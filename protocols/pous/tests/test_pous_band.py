@@ -81,7 +81,7 @@ def test_wide_band_is_dense():
 def test_secure_first_parameters():
     p = band.SECURE_FIRST
     assert (p.blocks_per_segment, p.m, p.d, p.segment_bytes) == (512, 524_288, 12, 1 << 25)
-    assert (p.challenges, p.certified_rounds, p.call_ns) == (111, 5, 483_000) and p.codec is band.BAND12
+    assert (p.challenges, p.certified_rounds, p.call_ns) == (111, 5, 241_500) and p.codec is band.BAND12
     assert list(p.parents(0)) == [] and list(p.parents(5)) == [0, 1, 2, 3, 4] and list(p.parents(100)) == list(range(88, 100))
     assert sum(len(p.parents(v)) + 1 for v in range(512)) == 6_578
     with pytest.raises(ValueError):
@@ -89,14 +89,14 @@ def test_secure_first_parameters():
 
 
 def test_cliff_is_enforced():
-    """The effective D (calls of at least 483 µs within Δ + RTT) must not exceed d; 13 calls need 6.279 ms."""
+    """The effective D (calls of at least 241.5 µs within Δ + RTT) must not exceed d; 13 calls need 3.1395 ms."""
     p = band.SECURE_FIRST
     vk = VerifierKey(p, SALT, bytes(32), (bytes(32),) * p.blocks)
     key = challenge_key(b"audit", vk)
-    TimedVerifier(vk, key, deadline_ns=500_000, rtt_allowance_ns=5_700_000)
-    assert band.effective_rounds(p, 500_000, 5_700_000) == 12
+    TimedVerifier(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_499)
+    assert band.effective_rounds(p, 500_000, 2_639_499) == 12 and band.effective_rounds(p, 500_000, 2_639_500) == 13
     with pytest.raises(ValueError, match="cliff"):
-        TimedVerifier(vk, key, deadline_ns=500_000, rtt_allowance_ns=5_800_000)
+        TimedVerifier(vk, key, deadline_ns=500_000, rtt_allowance_ns=2_639_500)
     TimedVerifier(VerifierKey(dense.POINT_64K, SALT, bytes(32), (bytes(32),) * 512), key, rtt_allowance_ns=10 ** 9)
 
 
