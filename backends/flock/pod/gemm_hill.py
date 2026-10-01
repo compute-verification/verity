@@ -184,6 +184,32 @@ def _slice(path: Path | None, t0: float, t1: float) -> dict | None:
             "others": _mean([r[3] for r in inside]), "others_max": max(r[3] for r in inside)}
 
 
+VMSTAT = ("compact_stall", "pgsteal_direct")
+
+
+def vmstat(a) -> None:
+    """Every `every` seconds until killed: the host's direct-compaction stalls and directly reclaimed pages (/proc/vmstat is the
+    host's in a pod), the memory-pressure stalls that spaced K=16384's sessions in r20261001-105629-5c86 and -104247-a048."""
+    with open(a.out, "a") as out:
+        while True:
+            with open("/proc/vmstat") as f:
+                v = dict(ln.split() for ln in f)
+            out.write("\t".join([f"{time.time():.3f}", *(v.get(k, "") for k in VMSTAT)]) + "\n")
+            out.flush()
+            time.sleep(a.every)
+
+
+def _vmstat(path: Path | None, t0: float, t1: float) -> dict | None:
+    """The vmstat sampler's counters' increase over [t0, t1], from the last sample at or before t0 to the first at or after t1."""
+    rows = [ln.split("\t") for ln in (path.read_text().splitlines() if path and path.exists() else [])]
+    rows = [(float(r[0]), [int(x) if x else None for x in r[1:]]) for r in rows if len(r) == 1 + len(VMSTAT)]
+    before, after = [r for r in rows if r[0] <= t0], [r for r in rows if r[0] >= t1]
+    if not before or not after:
+        return None
+    (s0, v0), (s1, v1) = before[-1], after[0]
+    return {"s": s1 - s0, **{k: b - a if a is not None and b is not None else None for k, a, b in zip(VMSTAT, v0, v1)}}
+
+
 def stamp(a) -> None:
     """Run the command, its stdout passed through line by line; every line also goes to --out after its epoch seconds."""
     cmd = a.cmd[1:] if a.cmd[:1] == ["--"] else a.cmd
@@ -400,6 +426,7 @@ def metrics(a) -> None:
                         **{k: _window(samples, *v) for k, v in phases.items() if k != "job"}},
             "others_cores_steady": _others(Path(a.others) if a.others else None, t0, t1),
             "slice_cores_steady": _slice(Path(a.slice) if a.slice else None, t0, t1),
+            "host_vmstat_steady": _vmstat(Path(a.vmstat) if a.vmstat else None, t0, t1),
             "prover_peak_gb": lv.get("prover_peak_gb"), "verifier_peak_gb": lv.get("verifier_peak_gb"), "buckets": lv.get("buckets"),
             "setup_s": rec.get("stage_s"), "domain": rec.get("domain"),
         })
@@ -525,7 +552,9 @@ def _point(a, out: dict, g: dict, peak: dict, gpu: dict, flags: list[str], timed
             "flags": flags, "question": os.environ.get("QUESTION") or QUESTION.replace("{K}", f"{{K={a.K}}}"),
             "gpu_util_window": "the timed sessions back to back, each verifier's verdict included (gpu_util_job: the whole GPU-held job)",
             "gpu_util_job": out.get("gpu_util_job"), "gpu_mem_peak_gib": out.get("gpu_mem_peak_gib"),
-            "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"), "why": out.get("why") or g.get("why")}
+            "cpu_slice_others": (out.get("slice_cores_steady") or {}).get("others"),
+            # data, not a flag: the host's memory-pressure stalls over the timed sessions (proofs, 1145Z)
+            "host_vmstat": out.get("host_vmstat_steady"), "why": out.get("why") or g.get("why")}
 
 
 def rollup(a) -> None:
@@ -673,6 +702,9 @@ def main() -> None:
     c.add_argument("--cpus", required=True)
     c.add_argument("--out", required=True)
     c.add_argument("--every", type=float, default=5.0)
+    v = sub.add_parser("vmstat")
+    v.add_argument("--out", required=True)
+    v.add_argument("--every", type=float, default=1.0)
     s = sub.add_parser("stamp")
     s.add_argument("--out", required=True)
     s.add_argument("cmd", nargs=argparse.REMAINDER)
@@ -687,6 +719,7 @@ def main() -> None:
     m.add_argument("--phases")
     m.add_argument("--others")
     m.add_argument("--slice")
+    m.add_argument("--vmstat")
     m.add_argument("--gpu-csv")
     m.add_argument("--census", default="census/hardware.json")
     m.add_argument("--peak-id", default=PEAK_ID)
@@ -706,7 +739,8 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--put", action="store_true")
     a = ap.parse_args()
-    {"defs": defs, "dmon": dmon, "cores": cores, "stamp": stamp, "metrics": metrics, "rollup": rollup, "plot": plot}[a.cmd_](a)
+    {"defs": defs, "dmon": dmon, "cores": cores, "vmstat": vmstat, "stamp": stamp, "metrics": metrics, "rollup": rollup,
+     "plot": plot}[a.cmd_](a)
 
 
 if __name__ == "__main__":
