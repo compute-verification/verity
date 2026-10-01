@@ -719,8 +719,9 @@ def _run_case(K, inp, L, i, nm, mc, salt):
 def gate(K: Port, inp: Inputs, out: Path, layers, cross: int) -> dict:
     """The port at K's batch size against `F.linear` itself (out/ref, the same draws) on `layers`' gate cases, and, at
     every band, against the port's own outputs for layer `cross` at salt 0 computed at another batch size (the draw
-    chunks grouped differently, which the reference cases at 8 bands don't reach). Written to out/gate-b<log2 batch>."""
-    d = out / f"gate-b{K.batch.bit_length() - 1}"
+    chunks grouped differently, which the reference cases at 8 bands don't reach). Written to
+    out/gate-b<log2 batch>-<code>."""
+    d = out / f"gate-b{K.batch.bit_length() - 1}-{CODE[:8]}"
     d.mkdir(parents=True, exist_ok=True)
     cases = [(L, i, nm, mc, out / "ref" / f"{case_name(L, i, nm, mc)}.json")
              for L, i, nm, mc in gate_cases(inp, layers)]
@@ -776,7 +777,7 @@ def cmd_run(args) -> int:
     inp = Inputs(args.acts, args.weights)
     K = Port(args.device, 1 << args.batch_log2)
     t0 = time.monotonic()
-    g = Path(args.out) / f"gate-b{args.batch_log2}" / "summary.json"
+    g = Path(args.out) / f"gate-b{args.batch_log2}-{CODE[:8]}" / "summary.json"
     summ = json.loads(g.read_text()) if g.exists() else {}
     if summ.get("code") != CODE:
         summ = gate(K, inp, Path(args.out), ranges(args.gate_layers), args.cross_layer)
@@ -817,7 +818,7 @@ def cmd_run(args) -> int:
         print(f"{left} linears remain", flush=True)
         return 99
     missing = sum(not (Path(args.out) / f"s{salt:02d}" / f"{case_name(L, i, nm, 0, salt)}.json").exists()
-                  for salt in args.salts for L in args.complete for i, nm in enumerate(inp.names(L)))
+                  for salt in args.complete_salts for L in args.complete for i, nm in enumerate(inp.names(L)))
     if missing:
         print(f"this range is done; {missing} linears of the other ranges remain, so --then waits for them",
               flush=True)
@@ -879,10 +880,11 @@ def main(argv=None) -> int:
                     help="gate: the layer whose salt-0 outputs at another batch size are compared at every band")
     ap.add_argument("--complete", default="",
                     help="run: queue --then only once these layers (default --layers) are done at every salt")
+    ap.add_argument("--complete-salts", default="", help="run: the salts --complete counts (default --salts)")
     ap.add_argument("--no-check", action="store_true", help="skip the sources' sha256 check (tests)")
     args = ap.parse_args(argv)
     load(args.src, not args.no_check)
-    args.complete = ranges(args.complete or args.layers)
+    args.complete, args.complete_salts = ranges(args.complete or args.layers), ranges(args.complete_salts or args.salts)
     args.layers, args.salts = ranges(args.layers), ranges(args.salts)
     return {"ref": cmd_ref, "gate": cmd_gate, "run": cmd_run, "summary": cmd_summary}[args.cmd](args)
 
