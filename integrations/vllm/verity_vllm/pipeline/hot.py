@@ -145,7 +145,10 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
             keyed = []
         paths += keyed or sorted(glob.glob(os.path.join(ncb, "*.so")) + glob.glob(os.path.join(ncb, "*", "*.so")))
     hgb = os.environ.get("HIDDEN_GPU_BUILD")
-    cands = sorted(glob.glob(os.path.join(hgb, "*.so"))) if hgb else sorted(glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so")))
+    # the .so lives one level down, in the source-keyed child (native_jit.jit_load); the flat legacy location is listed too
+    cands = sorted(glob.glob(os.path.join(hgb, "*.so")) + glob.glob(os.path.join(hgb, "*", "*.so"))) if hgb else sorted(
+        glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*.so"))
+        + glob.glob(os.path.expanduser("~/.cache/torch_extensions/*/hidden_gpu_tree/*/*.so")))
     paths += cands
     out: dict[str, str | None] = {}
     for p in paths:

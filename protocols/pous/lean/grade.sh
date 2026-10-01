@@ -14,6 +14,10 @@
 #   4. The recorded hashes and TRUSTED.sha256 are checked again. Then the grader, with its allowed axioms and pinned
 #      targets compiled in, loads the submission's `.olean` (data only, no code runs), replays it through the kernel,
 #      matches `solution` against the pinned statement and audits its axioms.
+# The compile and the grader each run under POUS_GRADE_TIMEOUT seconds (default 3600) and POUS_GRADE_MEMORY_MB
+# (default 16384): Lean's resident-memory limit, which the kernel and the interpreter check (`lean -M`), and twice that
+# in address space for everything else. Lean maps far more than it touches: the largest honest grades (P3) peak at
+# 5.3 GB resident and 17.9 GB mapped.
 set -uo pipefail
 root=$(cd "$(dirname "$0")" && pwd)
 cd "$root"
@@ -55,7 +59,7 @@ done
 
 # 3. the sandboxed compile, after a dry run of the sandbox itself
 sandbox='
-w=$1; root=$2; lean=$3; export LEAN_PATH=$4; mode=$5
+w=$1; root=$2; lean=$3; export LEAN_PATH=$4; mode=$5; mem=$6
 mount --bind "$w" "$w" || exit 97
 for mp in $(awk "{print \$2}" /proc/self/mounts | sort -u); do
   case "$mp" in "$w"|/proc|/proc/*|/dev|/dev/*|/sys|/sys/*) ;; *) mount -o remount,bind,ro "$mp" 2> /dev/null ;; esac
@@ -64,11 +68,13 @@ for probe in "$root" "$HOME" "$(dirname "$lean")" /tmp; do
   touch "$probe/.pous-sandbox-probe" 2> /dev/null && { echo "sandbox: $probe is writable" >&2; exit 97; }
 done
 [ "$mode" = probe ] && exit 0
-cd "$w" && exec "$lean" -o PousSubmission.olean PousSubmission.lean
+ulimit -v $((2 * mem * 1024))
+cd "$w" && exec "$lean" -M "$mem" -o PousSubmission.olean PousSubmission.lean
 '
+mem=${POUS_GRADE_MEMORY_MB:-16384}
 run_sandbox() {
   timeout "${POUS_GRADE_TIMEOUT:-3600}" unshare --user --map-root-user --pid --fork --kill-child --mount --mount-proc \
-    --net bash -c "$sandbox" _ "$1" "$root" "$lean" "$lean_path" "$2" >&2
+    --net bash -c "$sandbox" _ "$1" "$root" "$lean" "$lean_path" "$2" "$mem" >&2
 }
 run_sandbox "$probe" probe
 case $? in
@@ -85,4 +91,5 @@ cp "$work/PousSubmission.olean" "$out/PousSubmission.olean"
 # 4. nothing trusted changed; grade
 [ "$(state)" = "$before" ] || fatal "the grader, the toolchain or a trusted .olean changed while the submission built"
 sha256sum --quiet -c TRUSTED.sha256 >&2 || fatal "trusted files changed while the submission built"
-LEAN_PATH="$out:$lean_path" timeout "${POUS_GRADE_TIMEOUT:-3600}" "$grader" "$file" "$target" "$(echo $imports | tr ' ' ',')"
+LEAN_PATH="$out:$lean_path" POUS_GRADE_MEMORY_MB=$mem timeout "${POUS_GRADE_TIMEOUT:-3600}" \
+  prlimit --as=$((2 * mem * 1024 * 1024)) "$grader" "$file" "$target" "$(echo $imports | tr ' ' ',')"

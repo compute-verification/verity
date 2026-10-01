@@ -1061,7 +1061,8 @@ included. Claims are listed region-major, then point 0 before point 1.
     the constant `A = B = [const]`, the last useful column. Every computed row, between them, reads in A and in B only
     earlier columns that are not input padding, or the constant (topological order: the soundness package's `Rows.topo`).
     So every column a row reads is below `useful`.
-  - Each port group's ports fit its words, and each input group lies within the input rows.
+  - Each port group's ports fit its words, and each input group lies within the input rows. The input groups ascend and
+    are disjoint, and every input port bit's row is `[i]` (only padding past a group's ports is empty): one copy each.
   - The input rows end before the constant (`128 · inWords ≤ constPos`, 128 rows per input word). Otherwise an input
     port could cover the constant's column, and Δ's input copies would rewrite the slot's constant row, leaving the
     unit's constant free.
@@ -1335,6 +1336,8 @@ digest's leading tag is the statement id, `verity/flock-circuit/types`, as the p
   - `HmRow.parseTyped` inserts the unit's rows as the file's `CIRCUIT unit` section, first, where the old statement has
     it, and parses the result with `HmRow.parse`.
   - The circuit digest and the class are the typed file's own: its SHA-512, and `classOf` over its bytes.
+  - The unit's computed columns (its order after its inputs) must lie past its input rows, and its input columns must be
+    its net's input port bits, in order (`Typed.flatNet`).
   - On RoPE (`D = 64`) and SiLU·mul (`I = 8192`), the derived rows are the old statement's unit section byte for byte
     (`flock-verify typed-expand`, `test_lean_typed_statement.py`).
 - **A template** (GEMM) is parsed with its block (`HmRow.parse`'s `tmpl`, #273's split).

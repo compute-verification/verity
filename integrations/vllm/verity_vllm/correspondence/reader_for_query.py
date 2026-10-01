@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Iterable, Mapping
 
-from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_dir
+from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_document
 
 from verity_vllm.query.program_view import ProgramView
 
@@ -113,21 +113,27 @@ def implementation_prefix(program_modules: Iterable[str], implementation_paths: 
 class Correspondence:
     """The correspondence table of one ProgramView: Call id -> CallName (module first), plus the implementation-path map.
 
-    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`); None = the v1-annotation fallback (the Calls'
-    names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
+    `table`: the Program's `runtime-correspondence/v1` record (`source = correspondence`), or its `document`, whose Call records are
+    read one at a time and not held (what `of` gives: a request Program's table is GBs); neither = the v1-annotation fallback (the
+    Calls' names).  `Correspondence.of(P, program_dir)` reads the Build dir and picks."""
 
     def __init__(self, P: ProgramView, *, implementation_paths: Iterable[str] = (), table: RuntimeCorrespondence | None = None,
-                 digest: str | None = None, problem: str | None = None) -> None:
+                 digest: str | None = None, problem: str | None = None, document: dict | None = None) -> None:
         self.P = P
         self._impl_paths = tuple(implementation_paths)
         self.table = table
         self.problem = problem
-        if table is not None:
-            if len(table) != len(P.calls):
-                raise ValueError(f"correspondence record has {len(table)} Calls, the Program {len(P.calls)}: the record is of another Program")
-            self.names: dict[int, CallName] = {c.id: call_name_of(table.record(c.id)) for c in P.calls}
+        if table is not None or document is not None:
+            if table is not None:
+                n, name_of = len(table), lambda cid: call_name_of(table.record(cid))
+            else:
+                recorded = {k: call_name_of(rec) for k, rec in enumerate(RuntimeCorrespondence.records(document))}
+                n, name_of = len(recorded), recorded.__getitem__
+            if n != len(P.calls):
+                raise ValueError(f"correspondence record has {n} Calls, the Program {len(P.calls)}: the record is of another Program")
+            self.names: dict[int, CallName] = {c.id: name_of(c.id) for c in P.calls}
             self.source = "correspondence"
-            self.digest: str | None = digest or correspondence_digest(table.doc)
+            self.digest: str | None = digest or correspondence_digest(table.doc if table is not None else document)
         else:
             self.names = {c.id: parse_call_name(c.name) for c in P.calls}
             self.source = "v1_annotations"
@@ -137,8 +143,8 @@ class Correspondence:
     def of(cls, P: ProgramView, program_dir: str | None, *, implementation_paths: Iterable[str] = ()) -> "Correspondence":
         """The Program's correspondence from its Build dir: the record when the Build carries it, else the v1-annotation fallback.  A
         record that fails to load / mismatches its recorded digest is a `problem` carried on the table (and into the manifest header)."""
-        table, digest, problem = read_program_dir(program_dir) if program_dir else (None, None, None)
-        return cls(P, implementation_paths=implementation_paths, table=table, digest=digest, problem=problem)
+        document, digest, problem = read_program_document(program_dir) if program_dir else (None, None, None)
+        return cls(P, implementation_paths=implementation_paths, document=document, digest=digest, problem=problem)
 
     def module_of(self, cid: int) -> str:
         return self.names[cid].module
@@ -152,12 +158,12 @@ class Correspondence:
         fallback's names already spell it (the frontend named the Call under it); the record's owning module is the module itself, so the
         path is composed from the record's (module, node)."""
         n = self.names[cid]
-        return n.module if self.table is None else f"{n.module}.{n.node}"
+        return n.module if self.source != "correspondence" else f"{n.module}.{n.node}"
 
     def provenance(self) -> dict[str, Any]:
         """What served the owning modules: recorded in the manifest header (`correspondence`)."""
-        out: dict[str, Any] = {"source": self.source, "schema": SCHEMA if self.table is not None else None, "digest": self.digest}
-        if self.table is None:
+        out: dict[str, Any] = {"source": self.source, "schema": SCHEMA if self.source == "correspondence" else None, "digest": self.digest}
+        if self.source != "correspondence":
             out["fallback"] = "annotations.node_hints / instance names parsed as <module>/<fx>[/<member>][<row>]"
         if self.problem:
             out["problem"] = self.problem

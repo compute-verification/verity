@@ -1385,21 +1385,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 with open(_sid_out, "w") as _f:
                     json.dump(_sid_doc, _f, indent=1, default=str)
 
-            bd = os.environ.get("HIDDEN_GPU_BUILD")
-            from verity_vllm.commit.committer.native_collect import _clear_stale_jit_lock
-
-            if bd:
-                _clear_stale_jit_lock(bd)      # a killed build's `lock` makes cpp_extension.load() wait forever (R13 07:24Z: 3 runs 'hung' here)
-            else:
-                # [R17 fp8, 04:37Z cp-h100] the same stale `lock` in torch's DEFAULT extension dir (a run killed while cpp_extension.load
-                # held it) hung every later run's worker in file_baton.wait -- seen from the serving thread as "native collector arena:
-                # waited 600s for a free block ... the worker is not releasing blocks" (three runs, two trees, one lock file)
-                try:
-                    from torch.utils.cpp_extension import _get_build_directory
-
-                    _clear_stale_jit_lock(_get_build_directory("hidden_gpu_tree", verbose=False))
-                except Exception:  # noqa: BLE001  -- private helper; without it the HIDDEN_GPU_BUILD path is the documented guard
-                    pass
+            # a killed build's torch `lock` (every later worker once hung in file_baton.wait on one) is cleared inside HG.ext(), under
+            # the build dir's lock (native_jit.jit_load)
             self._gpu_ext = HG.ext()
             self._HG = HG
         return self._gpu_ext
@@ -2107,8 +2094,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         attn_layers = sorted({int(n.split(".layers.")[1].split(".")[0]) for n, m in self._modules if "Attention" in _mro_names(m) and ".layers." in n})
         fa2 = any(getattr(s, "short_name", "") in ("hidden_m1", "hidden_m1_fa3") or type(s).__name__.endswith(("HiddenM1Source", "HiddenM1SourceFA3"))
                   for s in self.sources)                                   # [R13 hopper] the FA3 tap binds the same one-row-per-layer identity
-        # [R13 MOE-03] the MoE block source binds exactly TENSORS_PER_LAYER tensors per MoE layer per step (router_w, router_ids, up, act, down, sum)
-        moe_src = next((s for s in self.sources if getattr(s, "short_name", "") == "moe"), None)
+        # [R13 MOE-03] the MoE block source binds exactly TENSORS_PER_LAYER tensors per MoE layer per step (router_w, router_ids, up, act, down, sum), + router_softmax per tapped layer
+        moe_src, rs_src = (next((s for s in self.sources if getattr(s, "short_name", "") == n), None) for n in ("moe", "router_softmax"))
         moe_layers = sorted(set(moe_src.layers.values())) if moe_src is not None else []
         # [R14 TP-03] the TP partial source binds exactly ONE rank-local collective input per hooked site per step (install-time site set)
         tp_src = next((s for s in self.sources if getattr(s, "short_name", "") == "tp_partial"), None)
@@ -2118,7 +2105,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             modules += [s for s in tp_src.received_site_names() if s not in modules]
         return {"modules": modules, "attention_layers": attn_layers, "fa2_hidden_per_layer": 1 if fa2 else 0, "sampler_ids": 1 if any(n == "runner.sampler" for n in modules) else 0,
                 "moe_layers": moe_layers, "moe_tensors_per_layer": (getattr(moe_src, "stats", {}).get("tensors_per_layer", 6) if moe_src is not None else 0),
-                "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
+                "router_softmax_layers": sorted(int(k) for k in rs_src.layers) if rs_src is not None else [], "tp_sites": sorted(tp_src.site_names()) if tp_src is not None else [], "tp_rank": (tp_src.rank if tp_src is not None else None),
                 # [R19 moe F-r19-moe-1] partials per site per step: 1, or a mid-module site's static call count (OlmoeAttention: 2 gathers)
                 "tp_site_counts": (dict(tp_src.site_counts()) if tp_src is not None and hasattr(tp_src, "site_counts") else {})}
 
@@ -2222,8 +2209,8 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
             moe_src = (Counter({n: 1 for n in pad_ident}) if padding_only else names)
             if man.get("moe_layers"):
                 moe_counts = Counter(int(n.split("/L", 1)[1].split("/", 1)[0]) for n in moe_src.elements() if n.startswith("moe/L"))
-                want = int(man.get("moe_tensors_per_layer") or 0)
-                moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want}
+                want, rs_layers = int(man.get("moe_tensors_per_layer") or 0), set(man.get("router_softmax_layers") or [])
+                moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers)}
                 moe_bad.update({k: c for k, c in moe_counts.items() if k not in man["moe_layers"]})
             elif any(n.startswith("moe/") for n in moe_src):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source

@@ -217,10 +217,10 @@ def test_only_a_value_every_reader_of_which_is_inside_the_producer_subtree_is_pr
 
 def test_form_b_families_are_the_required_outputs_the_replay_cannot_evaluate():
     man = {"identities": [
-        {"family": "instance_outputs", "spec": "NarrowF32ToBf16_v1"}, {"family": "instance_outputs", "spec": "NarrowF32ToBf16_v1{N=4}"},
+        {"family": "instance_outputs", "spec": "LayerNormAten_v1"}, {"family": "instance_outputs", "spec": "LayerNormAten_v1{N=4}"},
         {"family": "instance_outputs", "spec": "Gemm_v1"}, {"family": "instance_outputs", "spec": "AttentionHead_v1"},
         {"family": "instance_outputs", "spec": "TokenSelect_v1"}, {"family": "sampled_token_ids", "spec": "Bf16MulScalar_v1"},
         {"family": "instance_outputs"}, {"family": "moe_block_stream", "spec": "MoeExpertGemm_v1"}]}
-    assert form_b_families(man) == {"NarrowF32ToBf16_v1": 2}
+    assert form_b_families(man) == {"LayerNormAten_v1": 2}
     assert form_b_families(None) == {} and form_b_families({"identities": [{"family": "instance_outputs", "spec": "Gemm_v1"}]}) == {}
-    assert json.loads(json.dumps(form_b_families(man))) == {"NarrowF32ToBf16_v1": 2}
+    assert json.loads(json.dumps(form_b_families(man))) == {"LayerNormAten_v1": 2}
