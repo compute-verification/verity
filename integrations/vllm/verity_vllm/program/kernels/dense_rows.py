@@ -14,7 +14,8 @@ the 65,536 bf16 words.  An instance with a non-finite operand or result word is 
 result is recomputed by `derived_rows.dot_bf16`, so every word equals the int64 twin's.  `gemm_row` is the same chain under any
 k16 step of `STEPS` (`Gemm_v2`'s DOT; Hopper's is one group of sixteen products, a 26-bit adder and floor -133, so `U = 2^(e - 25)`).  The W side (values and exponents, transposed)
 is prepared once per weight buffer (keyed by its address, shape and strides: a Commit's weight words do not change in place), and
-coordinates are split over up to `MAX_THREADS` threads; the words do not depend on the split.
+coordinates are split over up to `threads()` threads (`MAX_THREADS`, or the cap the CLI passes `use_threads` from
+`VERITY_DENSE_THREADS`); the words do not depend on the split.
 """
 from __future__ import annotations
 
@@ -216,8 +217,22 @@ def _chain(x: np.ndarray, p: _Prepared, lo: int, hi: int, step: tuple[int, int, 
         return a.astype(np.float32).view(np.uint32), bad
 
 
+_THREADS: list[int] = [MAX_THREADS]
+
+
+def use_threads(n: int | str | None) -> None:
+    """Cap the chain's threads at `n` (the CLI passes `VERITY_DENSE_THREADS`); None, or a value that is not a positive integer, is
+    `MAX_THREADS`."""
+    try:
+        k = MAX_THREADS if n is None else int(n)
+    except ValueError:
+        k = MAX_THREADS
+    _THREADS[0] = k if k > 0 else MAX_THREADS
+
+
 def threads() -> int:
-    return max(1, min(len(os.sched_getaffinity(0)), MAX_THREADS))
+    """The chain's threads: the cap (`use_threads`, else `MAX_THREADS`), at most this process's CPUs."""
+    return max(1, min(len(os.sched_getaffinity(0)), _THREADS[0]))
 
 
 def dot_ampere(x: np.ndarray, w: np.ndarray, n_threads: int | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -310,4 +325,4 @@ def _register() -> None:
 _register()
 
 __all__ = ["KERNEL", "KERNELS", "FAST_GEMM_WORDS", "MAX_THREADS", "STEPS", "dot_ampere", "dot_chain", "gemm_ampere_row", "gemm_row",
-           "prepared", "threads"]
+           "prepared", "threads", "use_threads"]
