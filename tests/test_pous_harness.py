@@ -505,7 +505,7 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
         nvcc.chmod(0o755)
         py = d / "work" / "pous-bench" / "gpu312-torch2.14.0-cu130" / "bin" / "python"     # torch's venv, as if built
         py.parent.mkdir(parents=True)
-        py.write_text("#!/bin/sh\nexit 0\n")
+        py.write_text(f"#!/bin/sh\necho \"$@\" >> {d / 'py-args'}\nexit 0\n")
         py.chmod(0o755)
         (d / "run").mkdir()
         base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(d), "RESEARCH_RUN_DIR": str(d / "run"), "WORK": str(d / "work"),
@@ -514,14 +514,17 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
                             env={**base, **smi_env, **env})
         return rc, _queries(log), d / "run"
 
-    rc, calls, out = run("lease", "GPU-a GPU-b GPU-c", GPU_LEASE_UUID="GPU-b", CUDA_VISIBLE_DEVICES="1")
+    rc, calls, out = run("lease", "GPU-a GPU-b GPU-c", GPU_LEASE_UUID="GPU-b", CUDA_VISIBLE_DEVICES="1",
+                         KERNELS='{"chain_pairs": false}')
     assert rc.returncode == 0, rc.stdout[-2000:]
     assert calls and all(c.startswith("--id=GPU-b ") for c in calls)
+    assert ' --kernels {"chain_pairs": false}' in (tmp_path / "lease" / "py-args").read_text()          # KERNELS reaches bench.py
     for name in ("before", "after"):
         assert (out / f"clocks-{name}.txt").read_text().startswith("nvidia-smi --id=GPU-b: 1, GPU-b, 00000000:02:00.0\n")
     rc, calls, _ = run("visible", "GPU-a GPU-b GPU-c", CUDA_VISIBLE_DEVICES="2")
     assert rc.returncode == 0 and calls[0] == "--id=2 --query-gpu=uuid --format=csv,noheader"
     assert calls[1:] and all(c.startswith("--id=GPU-c ") for c in calls[1:])
+    assert "--kernels" not in (tmp_path / "visible" / "py-args").read_text()                         # no KERNELS: the defaults
     rc, calls, _ = run("only", "GPU-only")
     assert rc.returncode == 0 and calls and all(c.startswith("--id=GPU-only ") for c in calls)
     rc, calls, _ = run("several", "GPU-a GPU-b GPU-c")
