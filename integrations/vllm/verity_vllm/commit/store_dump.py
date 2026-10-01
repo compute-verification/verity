@@ -10,6 +10,10 @@ vllm-v1 leaves and no padding steps are dumped; any other store is refused by na
     store.json                  {schema, chunk, program_digest, geo_digest, run_id, layout_v2, gpu_tree_src, run_root, steps: [...]}
     raw/s<step>.bin             the retained bytes of the step, the ranges `steps[i].ranges` ([lo, hi) of the step stream) back to back
     levels/s<step>.bin          the step tree's levels, leaves first, 32 bytes per node (`steps[i].levels` = the widths)
+
+A SLIM dump (`dump(..., touched=t)`, `t` recorded by `touched(com)` while a replay's reads were made) writes only the byte ranges and tree
+nodes those reads opened: `steps[i].ranges` the touched ranges, and `steps[i].nodes` ([level, index] in file order) the Merkle siblings
+their openings carried.  A read outside them fails by name, as a byte the committer no longer retains does.
 """
 from __future__ import annotations
 
@@ -17,9 +21,10 @@ import hashlib
 import json
 import mmap
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +47,80 @@ def _ranges(blk: Any) -> list[tuple[int, int, Any]]:
     if hasattr(blk, "ranges"):                                  # _HostRanges
         return [(lo, hi, hv) for lo, hi, hv in blk.ranges]
     return [(0, int(blk.numel()), blk)]
+
+
+@dataclass
+class Touched:
+    """What openings read of a committer's retained copy: per step the byte ranges of its stream and the (level, index) tree nodes."""
+    ranges: dict[int, list[tuple[int, int]]] = field(default_factory=dict)
+    nodes: dict[int, set[tuple[int, int]]] = field(default_factory=dict)
+
+    def merged(self, step: int) -> list[tuple[int, int]]:
+        out: list[list[int]] = []
+        for lo, hi in sorted(self.ranges.get(step, ())):
+            if out and lo <= out[-1][1]:
+                out[-1][1] = max(out[-1][1], hi)
+            else:
+                out.append([lo, hi])
+        return [(lo, hi) for lo, hi in out]
+
+    def nbytes(self) -> int:
+        return sum(hi - lo for s in self.ranges for lo, hi in self.merged(s)) + NODE * sum(len(v) for v in self.nodes.values())
+
+
+class _TouchedBlock:
+    def __init__(self, blk: Any, rec: list[tuple[int, int]]) -> None:
+        self._blk, self._rec = blk, rec
+
+    def __getattr__(self, k: str) -> Any:
+        return getattr(self._blk, k)
+
+    def __getitem__(self, sl: slice) -> Any:
+        self._rec.append((int(sl.start or 0), int(sl.stop)))
+        return self._blk[sl]
+
+
+class _TouchedLevel:
+    def __init__(self, lv: Any, depth: int, rec: set[tuple[int, int]]) -> None:
+        self._lv, self._d, self._rec = lv, depth, rec
+
+    def __getattr__(self, k: str) -> Any:
+        return getattr(self._lv, k)
+
+    def __len__(self) -> int:
+        return len(self._lv)
+
+    def __getitem__(self, i: int) -> Any:
+        self._rec.add((self._d, int(i)))
+        return self._lv[i]
+
+
+@contextmanager
+def touched(com: Any) -> Iterator[Touched]:
+    """Records, while open, every retained byte range and tree node `com`'s range openings read."""
+    t, blocks, levels = Touched(), com._gpu_blocks, com._gpu_levels
+    com._gpu_blocks = {s: (None if b is None else _TouchedBlock(b, t.ranges.setdefault(s, [])), u) for s, (b, u) in blocks.items()}
+    com._gpu_levels = {s: [_TouchedLevel(lv, d, t.nodes.setdefault(s, set())) for d, lv in enumerate(lvs)] for s, lvs in levels.items()}
+    try:
+        yield t
+    finally:
+        com._gpu_blocks, com._gpu_levels = blocks, levels
+
+
+def _slim_ranges(blk: Any, want: list[tuple[int, int]]) -> list[tuple[int, int, Any]]:
+    """The parts of the wanted byte ranges the retained block holds, as `_ranges` gives them."""
+    out = []
+    for rlo, rhi, hv in _ranges(blk):
+        for lo, hi in want:
+            a, b = max(lo, rlo), min(hi, rhi)
+            if a < b:
+                out.append((a, b, _as_bytes(hv)[a - rlo:b - rlo]))
+    return sorted(out, key=lambda x: x[0])
+
+
+def _nodes(lvs: list[Any], nodes: list[tuple[int, int]]) -> Iterator[memoryview]:
+    for d, i in nodes:
+        yield _as_bytes(lvs[d][i].contiguous() if hasattr(lvs[d][i], "contiguous") else lvs[d][i])
 
 
 def _as_bytes(t: Any) -> memoryview:
@@ -87,22 +166,33 @@ def write_file(p: Path, chunks: Iterable[memoryview]) -> str:
     return h.hexdigest()
 
 
-def _dump_step(com: Any, sc: Any, d: Path) -> tuple[dict[str, Any], dict[str, str]]:
+def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str, Any], dict[str, str]]:
     s = int(sc.step)
     blk, used = com._gpu_blocks[s]
-    rs = _ranges(blk)
+    rs = _ranges(blk) if t is None else _slim_ranges(blk, t.merged(s))
     lvs = list(com._gpu_levels[s])
+    nodes = None if t is None else sorted(t.nodes.get(s, ()))
+    lv_bytes = (_as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
     digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
-               f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", (_as_bytes(lv.contiguous()) for lv in lvs))}
+               f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", lv_bytes)}
     return ({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes), "n_tensors": int(sc.n_tensors),
              "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [int(lv.shape[0]) for lv in lvs],
+             **({} if nodes is None else {"nodes": [[d_, i] for d_, i in nodes]}),
              "metas": [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off]
                        for m in com._layouts[s]]}, digests)
 
 
-def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None) -> dict[str, Any]:
+def nbytes(com: Any) -> int:
+    """The bytes a full dump of `com` writes: every retained range and every tree node."""
+    return sum(hi - lo for blk, _u in com._gpu_blocks.values() for lo, hi, _ in _ranges(blk)) + NODE * sum(
+        int(lv.shape[0]) for lvs in com._gpu_levels.values() for lv in lvs)
+
+
+def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
+         touched: Touched | None = None) -> dict[str, Any]:
     """Writes the committed store of `com` (run commitment `rc`) under `d`, its steps ``threads`` at a time; returns the `store.json`
-    document.  ``digests``, when given, receives the sha256 of every step file written (by its path under `d`)."""
+    document.  ``digests``, when given, receives the sha256 of every step file written (by its path under `d`).  ``touched``: a slim dump
+    of only what those reads opened."""
     why = _refusal(com)
     if why:
         raise ValueError(f"committed store not dumpable: {why}")
@@ -110,7 +200,7 @@ def dump(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: 
     (d / "raw").mkdir(parents=True, exist_ok=True)
     (d / "levels").mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        done = list(pool.map(lambda sc: _dump_step(com, sc, d), rc.steps))
+        done = list(pool.map(lambda sc: _dump_step(com, sc, d, touched), rc.steps))
     steps = [e for e, _ in done]
     if digests is not None:
         for _, dg in done:
@@ -178,6 +268,22 @@ class _Block:
         return _Seg(b"".join(bytes(self.buf[off + max(lo, rlo) - rlo:off + min(hi, rhi) - rlo]) for rlo, rhi, off in cov))
 
 
+class _SparseLevel:
+    """One tree level of a slim dumped step: `len()` its full width, `lv[i]` a node the dump kept; any other node is refused by name."""
+
+    def __init__(self, buf: memoryview, width: int, at: dict[int, int], where: str) -> None:
+        self.buf, self.width, self.at, self.where = buf, width, at, where
+
+    def __len__(self) -> int:
+        return self.width
+
+    def __getitem__(self, i: int) -> bytes:
+        off = self.at.get(int(i))
+        if off is None:
+            raise KeyError(f"tree node {i} of {self.where} is not in the slim dumped store")
+        return bytes(self.buf[off:off + NODE])
+
+
 class _Level:
     """One tree level of a dumped step: `len()` nodes, `lv[i]` the i-th 32-byte node."""
 
@@ -240,6 +346,12 @@ class DumpedStore(NativeRangeOpenings, hiding.LeafSchemeRule):
             self._layouts[s] = [TensorMeta(o, n, dt, tuple(sh), nb, c, fl, nl, stream_off=so) for o, n, dt, sh, nb, c, fl, nl, so in st["metas"]]
             self._gpu_blocks[s] = (_Block(self._map(d / "raw" / f"s{s}.bin"), st["ranges"], st["used"], self.chunk), int(st["used"]))
             lv_buf, off, lvs = self._map(d / "levels" / f"s{s}.bin"), 0, []
+            if "nodes" in st:
+                at: list[dict[int, int]] = [{} for _ in st["levels"]]
+                for k, (dd, i) in enumerate(st["nodes"]):
+                    at[int(dd)][int(i)] = k * NODE
+                self._gpu_levels[s] = [_SparseLevel(lv_buf, int(w), at[dd], f"step {s} level {dd}") for dd, w in enumerate(st["levels"])]
+                continue
             for w in st["levels"]:
                 lvs.append(_Level(lv_buf, off, int(w)))
                 off += int(w) * NODE
