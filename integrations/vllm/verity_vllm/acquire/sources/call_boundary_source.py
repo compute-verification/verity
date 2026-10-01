@@ -4,7 +4,9 @@ host.  Per module body M and committed engine step, a forward pre-hook reads M's
 and for what a kernel declines -- exact, NaN payloads included); at the step's end every required interior Value is committed as
 `<M>/<fx node>/<member>`, [rows, width] words over the identity's element range.  Attached whenever the required manifest names
 `call_boundaries` identities; a manifest naming none refuses it (exit 3).  No kernel changes: the served kernels run unchanged, and the
-Calls that consume these Values check the served outputs (the replay evaluates them from the words committed here).
+Calls that consume these Values check the served outputs (the replay evaluates them from the words committed here).  The identities a
+served tap claims (`CLAIMS`; `served_tap`) are not evaluated: this source commits the tap's words in their place, module by module, and
+records each identity's source (`identity_sources`: `host` or `tap`) for the binding map.
 
 What a body reads, and how its rows are grouped into a row template, is `call_boundary_plan`'s; a body the rule cannot evaluate leaves
 its identities uncovered and the Commit is refused naming them, as is a manifest of several ranks.  An argument of another size, row width
@@ -94,16 +96,22 @@ def zeros(body: Body) -> dict[str, np.ndarray]:
 class CallBoundarySource:
     short_name = "call_boundary"
 
-    def __init__(self, committer: Any, model: Any, plan: Plan) -> None:
+    def __init__(self, committer: Any, model: Any, plan: Plan, taps: Sequence[Any] = (), index: Mapping[str, int] | None = None) -> None:
         import torch
 
-        if not plan.bodies:
+        if not plan.bodies and not taps:
             raise ValueError("call boundaries: no module body to evaluate")
         self.torch, self.c, self.model, self.plan = torch, committer, model, plan
         self.modules = sorted({m for _e, m in plan.bodies})
         self._at: dict[int, list[Body]] = {}
         for (e, _m), b in sorted(plan.bodies.items()):
             self._at.setdefault(e, []).append(b)
+        self.taps = tuple(taps)
+        self._tapped = {(e, m): t for t in self.taps for e, mods in t._at.items() for m in mods}
+        self._index = dict(index or {})                                       # committed name -> its manifest index (a mixed module)
+        self._mods: dict[int, list[str]] = {}                                  # engine step -> its modules, in the order they are committed
+        for e, m in sorted({*plan.bodies, *self._tapped}):
+            self._mods.setdefault(e, []).append(m)
         self._handles: list[Any] = []
         self._held: list[Any] = []
         self._ran: dict[tuple[int, str], Any] = {}                           # (engine step, module) -> the arguments' device
@@ -236,40 +244,62 @@ class CallBoundarySource:
             outs.append(CP.evaluate_template(self.plan, q.template, q.rows, mine, self.weight, self._shared))
         return {t.name: outs[0][t.name] if t.shared else np.concatenate([o[t.name] for o in outs]) for t in body.targets}
 
+    def host_words(self, e: int, b: Body, order: Sequence[str]) -> list[tuple[str, Any]] | None:
+        """Body `b`'s targets at engine step `e` as tensors on the arguments' device, evaluating a per-request body now; None (a collector
+        error) when the module did not run or its evaluation failed."""
+        if (e, b.module) not in self._ran:
+            self.error(f"call boundaries: {b.module} did not run at engine step {e}; the Program has its body there")
+            return None
+        out = self._values.get((b.module, e))
+        if out is None and (e, b.module) in self._args:
+            try:
+                out = self._values[(b.module, e)] = self.per_request(b, order, self._args.pop((e, b.module)))
+            except ValueError as err:
+                self.error(str(err))
+                return None
+        if out is None:
+            return None
+        torch, dev = self.torch, self._ran[(e, b.module)]
+        self.stats["tensors"] += len(b.targets)
+        self.stats["bodies"] += 1
+        self.stats["bytes"] += sum(int(out[t.name].nbytes) for t in b.targets)
+        return [(t.name, torch.from_numpy(out[t.name].view(_SIGNED[out[t.name].itemsize])).view(getattr(torch, WORD_DTYPES[t.dtype][1])).to(dev))
+                for t in b.targets]
+
     def on_step_end(self, job: Any) -> None:
-        """Check the step's row order against the declared composition, evaluate the per-request bodies, and commit every target."""
+        """Check the step's row order against the declared composition, evaluate the per-request bodies, and commit every target module by
+        module: a tapped module's served words (`served_tap.ServedTap.words`) where its host words would be, a module with both in the
+        manifest's order, so the step stream is the same whichever source a word came from."""
         e = int(job.step)
-        if e not in self._at:
+        if e not in self._mods:
             return
         t0 = time.perf_counter()
-        order = self._order(e)
-        torch, n = self.torch, 0
-        for b in self._at[e]:
-            if (e, b.module) not in self._ran:
-                self.error(f"call boundaries: {b.module} did not run at engine step {e}; the Program has its body there")
+        order = self._order(e) if e in self._at else []
+        if order is None:
+            return
+        n = 0
+        for m in self._mods[e]:
+            b, tap = self.plan.bodies.get((e, m)), self._tapped.get((e, m))
+            host = self.host_words(e, b, order) if b is not None else []
+            served = tap.words(e, m) if tap is not None else []
+            if host is None or served is None:
                 continue
-            out = self._values.get((b.module, e))
-            if out is None and order is not None and (e, b.module) in self._args:
-                try:
-                    out = self._values[(b.module, e)] = self.per_request(b, order, self._args.pop((e, b.module)))
-                except ValueError as err:
-                    self.error(str(err))
-                    continue
-            if out is None or order is None:
-                continue
-            for t in b.targets:
-                w = out[t.name]
-                v = torch.from_numpy(w.view(_SIGNED[w.itemsize])).view(getattr(torch, WORD_DTYPES[t.dtype][1])).to(self._ran[(e, b.module)])
+            got = sorted(host + served, key=lambda p: self._index.get(p[0], len(self._index))) if host and served else host or served
+            for name, v in got:
                 self._held.append(v)
-                self.c._acquire(t.name, v, job)
-                n += int(w.nbytes)
-            self.stats["tensors"] += len(b.targets)
-            self.stats["bodies"] += 1
-        self.stats["bytes"] += n
+                self.c._acquire(name, v, job)
+                n += int(v.numel()) * int(v.element_size())
         self.stats["seconds"] += time.perf_counter() - t0
         spans = getattr(self.c, "spans", None)
         if spans is not None:
             spans.add("acquisition", time.perf_counter() - t0, step=e, nbytes=n)
+
+    def identity_sources(self) -> dict[tuple[int, str], str]:
+        """(engine step, committed name) -> where its words come from: `host` (evaluated here) or `tap` (a served tap's), for every
+        `call_boundaries` identity this source commits; the binding map records it per entry (`commit.binding.build_binding_map`)."""
+        out = {(e, t.name): "host" for (e, _m), b in self.plan.bodies.items() for t in b.targets}
+        out.update({(e, n): "tap" for t in self.taps for e in t._at for n in t.targets_at(e)})
+        return out
 
     def targets_at(self, engine_step: int) -> dict[str, int]:
         """The names this source commits at `engine_step`, once each: the targets of the Program's bodies there.  A body's fx node names
@@ -313,25 +343,38 @@ class CallBoundarySource:
 
 
 def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, explicit_classes: bool = False,
-           model: Any = None, programs: Sequence[str | None] = (), plan: Plan | None = None) -> tuple[tuple[str, ...], CallBoundarySource | None]:
+           model: Any = None, programs: Sequence[str | None] = (), plan: Plan | None = None,
+           taps: Sequence[Any] = ()) -> tuple[tuple[str, ...], CallBoundarySource | None]:
     """Attach the source to `com` when `enabled`; the required manifest must name `call_boundaries` identities, `programs` (the Build dir,
-    the programs root) must hold each request's Program and every identity must be covered, else the Commit is refused (exit 3).  `plan`:
-    `plan_of` the manifest over `programs`, derived already (the Commit's call-boundary plan), else derived here.  Returns the required
-    classes with `call_boundaries` added unless they were given explicitly."""
+    the programs root) must hold each request's Program and every identity no tap claims must be covered, else the Commit is refused (exit
+    3).  `plan`: `plan_of` the manifest over `programs`, derived already (the Commit's call-boundary plan), else derived here; a plan that
+    evaluates an identity of `taps` (the served taps attached, whose words the source commits) refuses.  Returns the required classes with
+    `call_boundaries` added unless they were given explicitly."""
     if not enabled:
         return required_classes, None
-    if not manifest_sites(manifest):
+    sites = manifest_sites(manifest)
+    if not sites and not taps:
         print("[delta] REFUSE: the call-boundary source but the required-value manifest names no call_boundaries identity", flush=True)
         raise SystemExit(3)
-    plan = plan if plan is not None else plan_of(manifest or {}, *programs)
-    if plan.uncovered or not plan.bodies:
+    plan = (plan if plan is not None else plan_of(manifest or {}, *programs)) if sites else Plan()
+    if plan.uncovered or (sites and not plan.bodies):
         print(f"[delta] REFUSE: call boundaries: {len(plan.uncovered)} of {plan.identities} identities have no host evaluation "
               f"(--program-dir / --programs-root {list(programs)}): {plan.uncovered[:4]}", flush=True)
         raise SystemExit(3)
-    src = CallBoundarySource(com, model if model is not None else getattr(com, "model", None), plan)
+    both = sorted({t.name for b in plan.bodies.values() for t in b.targets} & {n for t in taps for n in t.target_names()})
+    if both:
+        print(f"[delta] REFUSE: the call-boundary plan evaluates {len(both)} identities a served tap commits ({both[:3]}): a plan derived "
+              "under other claims (--logits-tap / --norm-body-tap)", flush=True)
+        raise SystemExit(3)
+    index: dict[str, int] = {}
+    for i, r in enumerate((manifest or {}).get("identities") or []):
+        if r.get("family") == FAMILY:
+            index.setdefault(f"{r['op_path']}/{r['output_member']}", i)
+    src = CallBoundarySource(com, model if model is not None else getattr(com, "model", None), plan, taps, index)
     com.attach_source(src)
     print(f"[delta] call-boundary source attached: {plan.covered} identities in {len(src.modules)} module bodies of {len(plan.program_dirs)} "
-          f"request Programs, {plan.bytes_per_token} bytes per token -> committer {com.name}", flush=True)
+          f"request Programs, {plan.bytes_per_token} bytes per token, and the words of {sum(len(t.target_names()) for t in taps)} served "
+          f"identities of {[t.short_name for t in taps]} -> committer {com.name}", flush=True)
     if not explicit_classes and FAMILY not in required_classes:
         return (*required_classes, FAMILY), src
     return required_classes, src

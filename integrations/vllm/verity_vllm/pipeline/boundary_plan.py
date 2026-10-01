@@ -24,7 +24,7 @@ from typing import Any, Mapping
 from verity_vllm.acquire import gate as G
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources import logits_tap_source as LT
+from verity_vllm.acquire.sources import taps as TS
 from verity_vllm.config import option
 from verity_vllm.pipeline import commit_plan as CP
 
@@ -41,7 +41,7 @@ def use(args: Any, manifest: Mapping[str, Any] | None, *, tl: Any) -> tuple[CBP.
     key is the Commit's and it loads, else derived here (`plan_recomputed` with the reason); (None, None) for a manifest naming no
     identity the source evaluates (the record says so when a plan was given).  `tl` times it (`prep.call_boundary_plan`, with its source).  A Commit's `--logits-tap` sets the claims first."""
     if getattr(args, "tap_sources", None) is not None:
-        LT.claiming(bool(args.tap_sources.logits_tap))
+        TS.claiming(args.tap_sources)
     path = getattr(args, "call_boundary_plan", None)
     if not CB.manifest_sites(manifest):
         return None, (None if not path else {"path": str(path), "schema": SCHEMA, "used": False, "plan_recomputed": False,
@@ -95,14 +95,14 @@ class Options:
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs")
     gate_out: str | None = option("--gate-out", default=None, help="the check's record (call_boundaries.json)")
     out: str = option("--out", help="where the plan is written (the Commit's --call-boundary-plan)")
-    logits_tap: int = LT.option_field()
+    logits_tap: int = TS.logits_tap_source.option_field()
 
 
 def main(o: Options) -> int:
     """The check's record, line (the last one printed) and exit code; the plan beside it on a PASS, or the reason none was written (the
     Commit then derives it)."""
     t0 = time.monotonic()
-    LT.claiming(bool(o.logits_tap))
+    TS.claiming(o)
     if os.path.exists(o.out):
         os.remove(o.out)
     man = json.loads(Path(o.required_manifest).read_text())

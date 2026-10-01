@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, Iterator, Mapping
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
@@ -108,7 +108,8 @@ def _numel(shape: Iterable[int]) -> int:
 def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, program_digest: str, *, request_rows: dict[int, list[tuple[str, int, int]]] | None = None,
                       request_id: str = "r0", rank: int = 0, layout_version: str = "chunk-leaf-v1", chunk: int = 256,
                       weight_registration: dict | None = None, collector: dict | None = None,
-                      name_bindings: dict[str, list[str] | tuple[str, str]] | None = None) -> dict[str, Any]:
+                      name_bindings: dict[str, list[str] | tuple[str, str]] | None = None,
+                      sources: Mapping[tuple[int, str], str] | None = None) -> dict[str, Any]:
     """identity -> commitment location, for every committed tensor of every step, from the published layouts + the step roots.
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the
@@ -117,7 +118,8 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     mixed into the challenge, so the map cannot be chosen after the openings.
     `name_bindings` [R19 int-20]: committed name -> (op_path, member) of the identity it binds when that is not the name's own (a promoted
     member observed at its consumer's input: `<consumer>/in` binds (producer, `out`); `promoted_input_acquisition`).  The entry keeps the
-    committed name and says so (`observation`)."""
+    committed name and says so (`observation`).  `sources` [served taps]: (step, committed name) -> where a call boundary's words came
+    from (`identity_sources`: `host`, evaluated by the call-boundary source, or `tap`, served by the runtime); the entry says so (`source`)."""
     entries: list[dict[str, Any]] = []
     rebind = {str(k): (str(v[0]), str(v[1])) for k, v in (name_bindings or {}).items()}
     for step in sorted(layouts):
@@ -173,6 +175,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
                     "stream_offset": int(off), "width_bytes": int(m.nbytes), "encoding": {"dtype": m.dtype, "shape": list(m.shape)}, "element_offset": int(goff),
                     "tensor_ordinal": int(m.ordinal), "name": m.name,
                     **({"observation": "consumer-input"} if bound_via is not None else {}),
+                    **({"source": src} if (src := (sources or {}).get((step, m.name))) else {}),
                 })
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",
@@ -180,6 +183,16 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     canon = json.dumps(entries, sort_keys=True, separators=(",", ":"), default=str).encode()
     return {"schema": MAP_SCHEMA, "rules_version": RULES_VERSION, "program_digest": program_digest, "run_root": run_root.hex(), "rank": rank,
             "layout": layout_version, "collector": collector or {}, "entries_n": len(entries), "digest": hashlib.sha256(canon).hexdigest(), "entries": entries}
+
+
+def identity_sources(com: Any) -> dict[tuple[int, str], str]:
+    """(step, committed name) -> `host` or `tap` for every call boundary the committer's sources commit (each source's
+    `identity_sources`, `call_boundary_source.CallBoundarySource.identity_sources`); {} when none records it."""
+    out: dict[tuple[int, str], str] = {}
+    for src in getattr(com, "sources", None) or ():
+        if hasattr(src, "identity_sources"):
+            out.update(src.identity_sources())
+    return out
 
 
 def member_matches(required: str, got: str) -> bool:

@@ -87,7 +87,7 @@ def declaration(committer: str, path_label: str, classes: list[dict], notes: lis
 
 def split_step_names(sources: Iterable[Any], names: Mapping[str, int], step: int,
                      padding_only: bool) -> tuple[dict[str, int], dict[str, tuple[int, int]]]:
-    """X-03 for the sources whose names are per-step fx nodes (a `split_step_names`: the call-boundary source, the logits tap), each
+    """X-03 for the sources whose names are per-step fx nodes (a `split_step_names`: the call-boundary source, each served tap), each
     against its own targets rather than step 0's names: the step's names none of them commits, and every one's mismatches (name ->
     (committed, targets))."""
     rest, bad = dict(names), {}

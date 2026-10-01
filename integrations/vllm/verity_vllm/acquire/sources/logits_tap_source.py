@@ -1,10 +1,9 @@
 """The soft-capped logits' call boundaries (`call_boundaries` identities of `logits_processor`: the lm_head GEMM's output, its quotient by the
-cap and that quotient's tanh) as an acquisition source that commits the served tensors.  With `--logits-tap 1` the source claims them
-(`claiming`, `call_boundary_source.CLAIMS`): the call-boundary source neither plans nor evaluates them, and this one, attached just before it, commits
-at each step's end, in the manifest's order, the tensors the served forward computed -- the dividend of the division whose quotient `tanh`
-reads, the quotient and the tanh -- as `[rows, width]` words under the identities' names, the same names, shapes, dtypes and place in the
-step stream the call-boundary source gives its host words.  The replay's openings of the producing Calls (the GEMM, the division, tanh)
-check them against the Program; nothing here evaluates the Program.
+cap and that quotient's tanh) as a served tap (`served_tap`).  With `--logits-tap 1` the source claims them (`claiming`,
+`call_boundary_source.CLAIMS`): the call-boundary source does not evaluate them, and commits in their place the tensors the served forward
+computed -- the dividend of the division whose quotient `tanh` reads, the quotient and the tanh -- as `[rows, width]` words under the
+identities' names, the same names, shapes, dtypes and place in the step stream its host words have.  The replay's openings of the
+producing Calls (the GEMM, the division, tanh) check them against the Program; nothing here evaluates the Program.
 
 A forward pre-hook on `logits_processor` enters a TorchFunctionMode that keeps references to each division's dividend and quotient and to
 the one tanh; the forward hook leaves it.  A step whose claimed identities are not one each of the three, a manifest of several ranks or
@@ -15,14 +14,12 @@ environment by default, and the Commit derives again a plan made under another c
 from __future__ import annotations
 
 import re
-import time
 from collections import Counter
 from typing import Any, Mapping, Sequence
 
-import numpy as np
-
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES
+from verity_vllm.acquire.sources import served_tap as ST
+from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
 from verity_vllm.config import option
 
 ENV = "VERITY_LOGITS_TAP"
@@ -30,6 +27,7 @@ MODULE = "logits_processor"
 NODE = re.compile(rf"{MODULE}/(triton_launch|div|tanh)(?:_\d+)?")
 KINDS = ("triton_launch", "div", "tanh")
 DIVS = frozenset({"__truediv__", "div", "true_divide"})
+name = ST.name
 
 
 def option_field() -> Any:
@@ -60,10 +58,6 @@ def kind(r: Mapping[str, Any]) -> str:
     return m.group(1)
 
 
-def name(r: Mapping[str, Any]) -> str:
-    return f"{r['op_path']}/{r['output_member']}"
-
-
 def manifest_sites(manifest: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
     """The `call_boundaries` identities of a manifest this source commits, while it is claiming: every one its `claim` takes and no
     earlier claim does."""
@@ -78,12 +72,12 @@ def refusal(manifest: Mapping[str, Any] | None, ids: Sequence[Mapping[str, Any]]
     ranks = int((manifest or {}).get("ranks") or 1)
     if ranks > 1:
         return f"a manifest of {ranks} ranks (the tap serves one rank)"
+    why = ST.element_refusal(ids)
+    if why:
+        return why
     by_step: dict[int, Counter] = {}
     for r in ids:
         by_step.setdefault(int(r["engine_step"]), Counter())[kind(r)] += 1
-        rows, width = int(r.get("rows") or 0), int(r.get("width") or 0)
-        if [int(x) for x in r.get("element_range") or ()] != [0, rows * width] or str(r.get("dtype")) not in WORD_DTYPES:
-            return f"{CB.CP._label(r)} is {rows} x {width} {r.get('dtype')} over {r.get('element_range')}"
     for e, got in sorted(by_step.items()):
         if got != Counter(KINDS):
             return (f"engine step {e} claims {dict(sorted(got.items()))}; the tap takes one GEMM output, its quotient and its tanh per step "
@@ -91,25 +85,14 @@ def refusal(manifest: Mapping[str, Any] | None, ids: Sequence[Mapping[str, Any]]
     return None
 
 
-class LogitsTapSource:
+class LogitsTapSource(ST.ServedTap):
     short_name = "logits_tap"
+    label = "logits tap"
 
     def __init__(self, committer: Any, model: Any, ids: Sequence[Mapping[str, Any]]) -> None:
-        import torch
-
-        self.torch, self.c, self.model = torch, committer, model
-        self._at: dict[int, list[Mapping[str, Any]]] = {}
-        for r in ids:
-            self._at.setdefault(int(r["engine_step"]), []).append(r)
-        self._names = frozenset(name(r) for r in ids)
-        self._handles: list[Any] = []
-        self._held: list[Any] = []
+        super().__init__(committer, model, ids)
         self._mode: Any = None
-        self._ran: set[int] = set()
-        self._chain: dict[int, dict[str, Any]] = {}
         self._step = -1
-        self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "steps": 0, "errors": 0, "seconds": 0.0}
-        self.active = False
 
     def install(self) -> None:
         from torch.overrides import TorchFunctionMode
@@ -120,22 +103,22 @@ class LogitsTapSource:
         Tensor = self.torch.Tensor
 
         class Chain(TorchFunctionMode):
-            """The forward's divisions (dividend, quotient) and its tanh of one of their quotients, as references."""
+            """The forward's divisions (dividend, quotient) and its tanh of one of their quotients, as references with their versions."""
 
             def __init__(self) -> None:
                 super().__init__()
-                self.divs: list[tuple[Any, Any]] = []
+                self.divs: list[tuple[tuple[Any, int], tuple[Any, int]]] = []
                 self.tanhs = 0
-                self.got: tuple[Any, Any, Any] | None = None
+                self.got: tuple[tuple[Any, int], ...] | None = None
 
             def __torch_function__(self, func: Any, types: Any, args: tuple = (), kwargs: dict | None = None) -> Any:
                 out = func(*args, **(kwargs or {}))
                 fn = getattr(func, "__name__", "")
                 if fn in DIVS and args and isinstance(args[0], Tensor) and isinstance(out, Tensor):
-                    self.divs.append((args[0], out))
+                    self.divs.append(((args[0], args[0]._version), (out, out._version)))
                 elif fn == "tanh" and args:
                     self.tanhs += 1
-                    self.got = next(((a, q, out) for a, q in self.divs if q is args[0]), None)
+                    self.got = next(((a, q, (out, out._version)) for a, q in self.divs if q[0] is args[0]), None)
                 return out
 
         self._Chain = Chain
@@ -153,24 +136,11 @@ class LogitsTapSource:
         self.on_step_begin()
         self.active = False
 
-    def on_step_begin(self) -> None:
-        self._held.clear()
-        self._ran.clear()
-        self._chain.clear()
-
-    def error(self, msg: str) -> None:
-        self.stats["errors"] += 1
-        self.c.errors.append(msg[:300])
-
-    def _pre(self, _module: Any, _args: tuple) -> None:
+    def _pre(self, _module: Any, args: tuple) -> None:
         job = self.c._cur
         e = int(job.step) if job is not None else None
-        if e is None or e not in self._at or self._mode is not None:
+        if e is None or MODULE not in self.ids_at(e) or self._mode is not None or not self.ran(e, MODULE, args):
             return None
-        if e in self._ran:
-            self.error(f"logits tap: {MODULE} ran twice at engine step {e}; the Program has one body")
-            return None
-        self._ran.add(e)
         self._mode = self._Chain()
         self._mode.__enter__()
         self._step = e
@@ -185,62 +155,17 @@ class LogitsTapSource:
             self.error(f"logits tap: {MODULE} at engine step {self._step} ran {len(mode.divs)} divisions and {mode.tanhs} tanh, not one tanh "
                        "of a quotient")
             return None
-        self._chain[self._step] = dict(zip(KINDS, mode.got))
+        got = dict(zip(KINDS, mode.got))
+        self._served[(self._step, MODULE)] = {name(r): got[kind(r)] for r in self.ids_at(self._step)[MODULE]}
         return None
 
-    def on_step_end(self, job: Any) -> None:
-        """Commit the step's claimed identities, in the manifest's order, from the served tensors."""
-        e = int(job.step)
-        ids = self._at.get(e)
-        if not ids:
-            return
-        t0 = time.perf_counter()
-        got = self._chain.get(e)
-        if got is None:
-            if e not in self._ran:
-                self.error(f"logits tap: {MODULE} did not run at engine step {e}; the manifest names its call boundaries there")
-            return
-        torch, words = self.torch, []
-        for r in ids:
-            t, rows, width = got[kind(r)], int(r["rows"]), int(r["width"])
-            dt = getattr(torch, WORD_DTYPES[str(r["dtype"])][1])
-            if t.dtype != dt or t.numel() != rows * width or (t.dim() and int(t.shape[-1]) != width):
-                self.error(f"logits tap: {CB.CP._label(r)} is {tuple(t.shape)} {t.dtype} served; the identity is {rows} x {width} "
-                           f"{r['dtype']}: nothing of the step is committed")
-                return
-            words.append((name(r), t.contiguous().view(rows, width)))
-        n = 0
-        for nm, v in words:
-            self._held.append(v)
-            self.c._acquire(nm, v, job)
-            n += int(v.numel()) * int(v.element_size())
-        self.stats["tensors"] += len(words)
-        self.stats["steps"] += 1
-        self.stats["bytes"] += n
-        self.stats["seconds"] += time.perf_counter() - t0
-        spans = getattr(self.c, "spans", None)
-        if spans is not None:
-            spans.add("acquisition", time.perf_counter() - t0, step=e, nbytes=n)
-
-    def targets_at(self, engine_step: int) -> dict[str, int]:
-        return {name(r): 1 for r in self._at.get(int(engine_step), ())}
-
-    def target_names(self) -> frozenset[str]:
-        return self._names
-
-    split_step_names = CB.CallBoundarySource.split_step_names
-
     def extra_step_bytes(self, envelope: Mapping[str, Any], model: Any) -> dict[str, int]:
-        per_seq = max((sum(int(r["rows"]) * int(r["width"]) * np.dtype(WORD_DTYPES[str(r["dtype"])][0]).itemsize for r in rs)
-                       for rs in self._at.values()), default=0)
-        return {"per_token_bytes": 0, "per_seq_bytes": per_seq, "tensors_per_step": max((len(rs) for rs in self._at.values()), default=0)}
+        per = self.step_bytes().values()
+        return {"per_token_bytes": 0, "per_seq_bytes": max((b for b, _r, _n in per), default=0), "tensors_per_step": max((n for _b, _r, n in per), default=0)}
 
     def declaration_classes(self) -> list[dict]:
-        return [{"class": FAMILY, "how": "bound-as-leaf", "rule": None, "count": self.stats["tensors"], "bytes": self.stats["bytes"],
-                 "tensors": self.stats["tensors"], "steps": self.stats["steps"], "errors": self.stats["errors"],
-                 "evidence": (f"logits tap: the served `<fx node>/out` of {len(self._names)} call boundaries of {MODULE} (the lm_head GEMM's "
-                              "output as the soft cap's division reads it, the quotient, its tanh), committed as the runtime computed them; the "
-                              "replay's openings of the producing Calls check them against the Program")}]
+        return self.declaration(f"logits tap: the served `<fx node>/out` of {len(self._names)} call boundaries of {MODULE} (the lm_head "
+                                "GEMM's output as the soft cap's division reads it, the quotient, its tanh)")
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple[str, ...], *, explicit_classes: bool = False,

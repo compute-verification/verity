@@ -150,7 +150,7 @@ COMMANDS = {"plan": PlanOptions, "compare-plans": ComparePlansOptions, "call-bou
 def main(a: PlanOptions | ComparePlansOptions | CallBoundariesOptions) -> int:
     if a.cmd == "call-boundaries":
         t0 = time.perf_counter()
-        taps.logits_tap_source.claiming(bool(a.logits_tap))
+        taps.claiming(a)
         rec = call_boundaries(json.loads(Path(a.row_dir, "manifest.json").read_text()), a.row_dir)
         rec["seconds"] = round(time.perf_counter() - t0, 1)
         if a.out:
