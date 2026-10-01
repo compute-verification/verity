@@ -169,8 +169,8 @@ def device_run():
     return make, kernel, weights, roots, salt
 
 
-PER_CALL = ["hash_node_keys", "hash_rows_w", "hash_tree_small", "seed_line_a", "lines", "stats_s5", "eprime", "form_s5", "words",
-            "pa", "gemm_pearlc_d", "hash_msg_v", "hash_leaf_p"]
+PER_CALL = ["hash_node_keys", "hash_rows_w", "hash_tree_small", "seed_line_a", "lines", "stats_s5", "eprime", "form_s5",
+            "words_win", "words_chain", "pa", "gemm_pearlc_d", "hash_msg_v", "hash_leaf_p"]
 
 
 def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_run):
@@ -216,8 +216,8 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
     run = make(hashing=False)
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(16, 1024).to(torch.bfloat16), weights[0], None)
-    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words", "pa",
-                                                                          "gemm_pearlc_d"]
+    assert [n for n, *_ in kernel.dev.log if not n.endswith("_smem")] == ["stats_s5", "eprime", "form_s5", "words_win",
+                                                                          "words_chain", "pa", "gemm_pearlc_d"]
     assert run.end() == {"units": 1, "tiles": 0, "hashing": False, "schedule": "serial"}
 
 

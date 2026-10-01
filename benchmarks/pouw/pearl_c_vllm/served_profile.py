@@ -119,7 +119,8 @@ def _instrument() -> None:
 #: and torch's
 CATEGORIES = (
     ("pearlc:gemm", r"^gemm_pearlc|^gemm_ct"),
-    ("pearlc:forming", r"^(stats_s5|form_s5|eprime|lines|words|words_u|gemm_words|pa|pb)$|^(stats_s5|form_s5|gemm_words)"),
+    ("pearlc:forming", r"^(stats_s5|form_s5|eprime|lines|words|words_u|words_win|words_chain|gemm_words|pa|pb)$"
+                       r"|^(stats_s5|form_s5|gemm_words)"),
     ("pearlc:a_tree", r"^hash_rows|^hash_pad$|^hash_node_keys$|^seed_line_a$|^b3s_level_keys"),
     ("pearlc:tile_hash", r"^hash_msg|^hash_leaf"),
     ("pearlc:tree", r"^hash_nodes$|^hash_tree_small$|^hash_tree_leaves$"),

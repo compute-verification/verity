@@ -115,9 +115,18 @@ def test_gemms_fit_sm120_shared_memory():
     assert ML_SMEM == 98352 and gemm_smem("M_PEARLC", 64, 64) == 49152
     assert form_kernels() == ["form_s5", "form_s5_r144", "form_s5_scalar", "form_rate", "form_rate_r144", "form_rate_scalar",
                               "form_rate_nocast", "form_rate_nocast_r144", "form_rate_atoms"]
-    assert set(S.WANT) - {"words", "words_u", *form_kernels()} == names
+    assert set(S.WANT) - {"words", "words_u", "words_win", *form_kernels()} == names
     assert set(RUN.FORM_RATES) == set(form_rates()) and set(RUN.FORM_ALTS) == {"form_s5_scalar", "form_s5_r144"}
 
+
+
+def test_the_split_words_are_words_chain_cut_at_its_promotion_windows():
+    """words_win's windows are words<4>'s (the v1 device's G), WORDS_SPAN of them a warp as run.py launches it, each from a
+    zero accumulator, and words_chain adds them from +0 in window order, as words<4>'s total does; G = 0 keeps words_u."""
+    assert f"constexpr int WORDS_G = {RUN.VARIANT_G['sm120']}, WORDS_SPAN = {RUN.WORDS_SPAN};" in SOURCE
+    assert "float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};\n#pragma unroll\n    for (int d = 0; d < WORDS_G; d++) qmma(" in SOURCE
+    assert "float total = 0.0f;\n#pragma unroll 8\n  for (int w = 0; w < windows; w++) total = __fadd_rn(total, s[" in SOURCE
+    assert "total[e] = __fadd_rn(total[e], acc[e]);" in SOURCE and RUN.WORDS_SPLIT_ROWS == 256
 
 
 def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unchanged():
@@ -334,6 +343,12 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         M, N, K = i[:3]
         assert N == 32 and M % 16 == 0 and K % 128 == 0
         return {0: M * K, 1: N * K, 2: 4 * M * N}
+    if name == "words_win":
+        M, N, K = i[:3]
+        assert N == 32 and M % 16 == 0 and M <= RUN.WORDS_SPLIT_ROWS and K % (128 * RUN.WORDS_SPAN) == 0
+        return {0: M * K, 1: N * K, 2: 4 * M * N * (K // 128)}
+    if name == "words_chain":
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0]}
     if name == "pa":
         return {0: 32 * i[0], 2: 128 * i[0], 3: 128 * i[0]}
     if name == "pb":
@@ -384,7 +399,9 @@ def threads(name: str, i: list[int]) -> int:
     return {"lines": lambda: i[2], "stats_s5": lambda: 32 * i[0], "eprime": lambda: i[0], "pa": lambda: 64 * i[0],
             "pb": lambda: 32 * i[0], "hash_msg_v": lambda: i[0] * i[1] // 32, "hash_leaf_p": lambda: 4 * -(-i[0] // 64) * (i[1] // 64),
             "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0], "words": lambda: i[0] // 16 * (i[1] // 8) * 32,
-            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "hash_tree_leaves": lambda: i[0],
+            "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32,
+            "words_win": lambda: i[0] // 16 * (i[1] // 8) * (i[2] // (128 * RUN.WORDS_SPAN)) * 32, "words_chain": lambda: i[0],
+            "hash_rows_w": lambda: 32 * i[0], "hash_tree_leaves": lambda: i[0],
             "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1,
             "b3s_level_keys": lambda: i[0], "hash_leaves_b3s": lambda: i[0],
             "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
@@ -555,6 +572,8 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert not p[5] or {(p[5], 128, M), (p[6], 128, N)} <= maps, name
         if name in ("words", "words_u"):
             assert g[0] == i[0] // 16 and ev["block"] == 128
+        if name == "words_win":
+            assert g[0] == i[0] // 16 * (i[2] // (128 * RUN.WORDS_SPAN)) and ev["block"] == 128
         if name == "hash_rows_b3s":
             assert g[0] == i[0] and -(-i[1] // 256) <= ev["block"] <= 512 and ev["block"] % 32 == 0 and i[3] <= 64
         if name == "hash_leaves_b3s":
@@ -738,13 +757,13 @@ def test_arm_dry_run(A, ship, arm_dir, tmp_path, cls):
             assert g["detail"]["seeds"] == {"seed_a": False, "line_a": False, "seed_b": True}
     assert end["live"] == [] and set(end["transcribed"]) == {"pre", "dec"}
 
-    words = {"pre": "gemm_words", "dec": "words"}
+    words = {"pre": ["gemm_words" + sx], "dec": ["words_win", "words_chain"] if sx == "" else ["words_u"]}
 
     def chain(shape: str, role: str = "hash") -> str:
         return ("gemm_pearlc_s" if role == "nohash" else "gemm_pearlc_b") + sx if fused[shape] else "gemm_pearlc_d" + sx
 
     commit = ["hash_rows_w", "hash_tree_small", "seed_line_a", "lines"]
-    forming = lambda shape: ["stats_s5", "eprime", "form_s5", words[shape] + sx, "pa"]  # noqa: E731
+    forming = lambda shape: ["stats_s5", "eprime", "form_s5", *words[shape], "pa"]  # noqa: E731
     hashes = lambda shape: ([] if fused[shape] else ["hash_msg_v"]) + ["hash_leaf_p", "hash_tree_leaves", "hash_tree_small"]  # noqa: E731
     weight = (["hash_node_keys", "hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_node_keys"] + ["lines"] * 3
               + ["stats_s5", "eprime", "form_s5"] + ["gemm_words" + sx] * 2 + ["pb"])

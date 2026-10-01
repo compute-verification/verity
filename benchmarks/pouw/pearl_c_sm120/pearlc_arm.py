@@ -95,8 +95,8 @@ KEYS = R.TIMING_KEYS
 WEIGHT = ("eb_codes", "fa_codes", "faT32", "fb_codes", "fbT32", "fbT128", "g", "alpha_b", "beta_b", "ia_b", "aux_b", "epb_codes",
           "bt", "bf", "pb_t", "tree_b", "keys_b", "keys_a", "keys_t")
 OWN = WEIGHT + ("ea_codes", "line_a", "seed_a")   # E_A's lines and their seed are the set's: nohash reads the last call's
-CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "pa_t", "c", "u", "y", "digests", "leaves", "tree_a",
-        "tree_t", "tma")
+CALL = ("alpha_a", "beta_a", "ia_a", "aux_a", "epa_codes", "at", "af", "af_win", "pa_t", "c", "u", "y", "digests", "leaves",
+        "tree_a", "tree_t", "tma")
 HASHED = ("digests", "leaves", "tree_a", "tree_t")
 REF = ("c2", "c", "u", "y", "line_a", "seed_a") + HASHED
 REF_BUFS = REF + ("tma",)                 # the second launch's own tensor maps

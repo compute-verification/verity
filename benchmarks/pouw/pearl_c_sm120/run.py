@@ -50,6 +50,8 @@ SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR = 16, 8, 75, 76
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
+WORDS_SPAN = 4               # words_win's promotion windows a warp
+WORDS_SPLIT_ROWS = 256       # A'F_B's most rows on words_win and words_chain: above it, words' blocks fill the card
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
@@ -431,7 +433,8 @@ class Pipeline:
             "fbT128": 128 * k, "g": 128 * 32 * 4,
             "alpha_a": 4 * m, "beta_a": 4 * m, "ia_a": 4 * m, "aux_a": 8 * m, "epa_codes": m * 32,
             "alpha_b": 4 * n, "beta_b": 4 * n, "ia_b": 4 * n, "aux_b": 8 * n, "epb_codes": n * 32,
-            "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
+            "at": m * k, "bt": n * k, "at2": max(m, n) * k, "af": m * 32 * 4, "af_win": k // 128 * min(m, WORDS_SPLIT_ROWS) * 32 * 4,
+            "bf": n * 32 * 4, "pa_t": m * 128, "pb_t": n * 128,
             "c": m * n * 4, "c2": m * n * 4, "u": m * n * 4, "y": m * n * 2, "y2": m * n * 2, "tma": ML_SET * len(ML_MAPS),
             "line_a": 32, "seed_a": 32, "digests": m_real * n, "digests2": m_real * n, "leaves": tiles * 32,
             **{f"{part}_{t}": size for t, count in (("a", m_real), ("b", n), ("t", tiles)) for part, size in tree(count).items()},
@@ -542,7 +545,8 @@ class Pipeline:
     def extra(self) -> dict[str, object]:
         """The chain's launches by name, beside `steps`' choice: `gemm_pearlc_cu` (C~, U and y stored) and `hash_msg`
         (hash_msg_v over them), the unfused call's; at 128 x 128 tiles `gemm_pearlc_s` (y alone: the call without hashing);
-        and where fusable `gemm_pearlc_b` (y and the message digests from registers)."""
+        where fusable `gemm_pearlc_b` (y and the message digests from registers); and where `af` splits, `af_words` (A'F_B
+        on the words kernel unsplit)."""
         d, b, m, n, mr, sx, kk = self.dev, self.b, self.m, self.n, self.m_real, self.suffix, self.keys
         tile = "_d" if self.bm == BM_D else ""
         peel = lambda: {"pa": b["pa_t"], "pb": b["pb_t"], "rs": b["ia_a"], "cs": b["ia_b"]}  # noqa: E731
@@ -554,13 +558,21 @@ class Pipeline:
         if self.fusable:
             out["gemm_pearlc_b"] = lambda: self.gemm("gemm_pearlc_b" + sx, "at", "bt", m, n, out=(None, None, "y"), dg=b["digests"],
                                                      key=kk["k_msg"], **peel())
+        if self.bm == BM_D and self.g and m <= WORDS_SPLIT_ROWS:
+            out["af_words"] = lambda: self.words("at", "fbT32", m, "af", warps=True, split=False)
         return out
 
-    def words(self, a: str, b: str, M: int, out: str, warps: bool = False) -> None:
+    def words(self, a: str, b: str, M: int, out: str, warps: bool = False, split: bool = True) -> None:
         """The FP32 words of an (M x K) by (32 x K) product: on 128 x 32 CTA tiles, or with `warps` one warp per m16 x n8
-        tile, a block per m16 row."""
+        tile, a block per m16 row; with `split`, at G = 4 and at most WORDS_SPLIT_ROWS rows, words_win's promotion windows
+        apart (a warp per tile and WORDS_SPAN windows, into `<out>_win`), then words_chain's sums of them in order."""
         if M % BM == 0 and not warps:
             self.gemm("gemm_words" + self.suffix, a, b, M, 32, out=(out,))
+        elif split and self.g and M <= WORDS_SPLIT_ROWS:
+            win, words = self.b[f"{out}_win"], M * 32
+            self.dev.launch("words_win", cdiv(M // 16 * 4 * (self.k // (128 * WORDS_SPAN)), 4), 128, p=(self.b[a], self.b[b], win),
+                            i=(M, 32, self.k))
+            self.dev.launch("words_chain", cdiv(words, 256), 256, p=(win, self.b[out]), i=(words, self.k // 128))
         else:
             self.dev.launch("words" + self.suffix, M // 16, 128, p=(self.b[a], self.b[b], self.b[out]), i=(M, 32, self.k))
 
@@ -647,8 +659,8 @@ GEMM_RERUNS = (("gemm_pearlc", ("c", "u", "y")), ("gemm_ct", ("c2",)), ("gemm_pl
                ("af", ("af",)), ("bf", ("bf",)), ("gemm_adopt", ("y_adopt",)), ("gemm_pearlc_s", ("y",)),
                ("gemm_pearlc_b", ("y", "digests")))
 ALIASES = {"c2": "c"}
-#: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernel
-SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)),)
+#: the 64 x 64 pipeline's: the chain, and A'F_B on the words kernels (split, and where it splits unsplit too)
+SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_words", ("af",)))
 
 
 def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None = None) -> dict:

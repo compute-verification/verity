@@ -484,6 +484,51 @@ template <int G> DEV void words_body(const Args& a) {
 extern "C" __global__ void __launch_bounds__(128) words(const Args a) { words_body<4>(a); }
 extern "C" __global__ void __launch_bounds__(128) words_u(const Args a) { words_body<0>(a); }
 
+// words<4>'s chain cut where its accumulator restarts from zero, for decode's few rows, whose 16-row blocks leave the card
+// idle: each G-atom window's sum is the same FP32 words whichever warp computes it, so a warp takes one m16 x n8 output tile
+// and WORDS_SPAN consecutive windows (their atoms loaded at once) and stores each window's sum apart, window-major (window w's
+// M x N at p2 + 4 w M N); words_chain then adds them in window order from +0, as words<4>'s total does.  p0 A (M x K), p1 B
+// (N x K), p2 out (K / 128 windows of M x N FP32); i0 M, i1 N, i2 K (multiples of 16, 8, 32 G WORDS_SPAN)
+constexpr int WORDS_G = 4, WORDS_SPAN = 4;
+extern "C" __global__ void __launch_bounds__(128) words_win(const Args a) {
+  constexpr int D = WORDS_G * WORDS_SPAN;
+  const int M = a.i[0], N = a.i[1], K = a.i[2], tn = N / 8, tiles = M / 16 * tn, lane = threadIdx.x % 32, g = lane / 4,
+            q = lane % 4, w = blockIdx.x * 4 + threadIdx.x / 32;
+  if (w >= tiles * (K / (32 * D))) return;
+  const int t = w % tiles, j0 = w / tiles * D, r0 = t / tn * 16, c0 = t % tn * 8;
+  const uint8_t* A0 = reinterpret_cast<const uint8_t*>(a.p[0]) + (size_t)(r0 + g) * K + 32 * j0 + 4 * q;
+  const uint8_t* A1 = A0 + (size_t)8 * K;
+  const uint8_t* B0 = reinterpret_cast<const uint8_t*>(a.p[1]) + (size_t)(c0 + g) * K + 32 * j0 + 4 * q;
+  uint32_t fa[D][4], fb[D][2];
+#pragma unroll
+  for (int d = 0; d < D; d++) {
+    const int kk = 32 * d;
+    fa[d][0] = ld32(A0 + kk); fa[d][1] = ld32(A1 + kk); fa[d][2] = ld32(A0 + kk + 16); fa[d][3] = ld32(A1 + kk + 16);
+    fb[d][0] = ld32(B0 + kk); fb[d][1] = ld32(B0 + kk + 16);
+  }
+  const size_t plane = (size_t)M * N;
+  float* out = reinterpret_cast<float*>(a.p[2]) + j0 / WORDS_G * plane + (size_t)(r0 + g) * N + c0 + 2 * q;
+#pragma unroll
+  for (int s = 0; s < WORDS_SPAN; s++) {
+    float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+#pragma unroll
+    for (int d = 0; d < WORDS_G; d++) qmma(acc, fa[WORDS_G * s + d], fb[WORDS_G * s + d]);
+    store2(out + s * plane, acc[0], acc[1]);
+    store2(out + s * plane + (size_t)8 * N, acc[2], acc[3]);
+  }
+}
+// The words from words_win's windows, a thread a word: their FP32 sum in window order from +0.  p0 the windows (i1 planes of
+// i0 words), p1 out (i0 FP32 words); i0 words, i1 windows
+extern "C" __global__ void __launch_bounds__(256) words_chain(const Args a) {
+  const int i = blockIdx.x * blockDim.x + threadIdx.x, n = a.i[0], windows = a.i[1];
+  if (i >= n) return;
+  const float* s = reinterpret_cast<const float*>(a.p[0]) + i;
+  float total = 0.0f;
+#pragma unroll 8
+  for (int w = 0; w < windows; w++) total = __fadd_rn(total, s[(size_t)w * n]);
+  reinterpret_cast<float*>(a.p[1])[i] = total;
+}
+
 // ---------------------------------------------------------------- noise lines (Pearl's line rule; hash.cuh's BLAKE3)
 DEV uint32_t isqrt(uint32_t v) {
   uint32_t r = (uint32_t)sqrt((double)v);
