@@ -1,12 +1,14 @@
-"""Flash attention on bits: `AttnBlock` / `AttentionHead` / `Attention` v6 (v3's statics) and v7 (v2's), the v3 and v2 bodies
-(`b1`) line for line over Boolean Definitions, so their word views are those chains at the same statics.
+"""Flash attention on bits: `AttnBlock` / `AttentionHead` / `Attention` v6 (v3's statics), v7 (v2's) and v8 (v5's), the v3 and
+v2 bodies (`b1`) and the v5 body (`fa2_check_inf`) line for line over Boolean Definitions, so their word views are those chains
+at the same statics.
 
 Every word is its bits (`verity.ir.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
 callees are the Boolean versions of the word chains': `DotBf16_v3{K=D, DOT}` and `DOT` itself (`verity.ml.boolean.gemm`;
 v6's is `AmpereBF16TcDot16_v3`), `F2fpBf16_v2`, the FTZ f32 operations, `F32Max_v2`, `GuardNegInfZero_v2` and the inverse sum
-(v6's `Fa2InvSum_v2`; v7's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2` (`verity.ml.boolean.mufu`).
-The word constants (zero, `_scale_log2_bits(D)`) are written with the constant bits. v4 and v5 are the FA3 / FA2 per-iteration
-`Check_inf` chains (`fa3_check_inf`, `fa2_check_inf`).
+(v6's `Fa2InvSum_v2`; v7's and v8's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`
+(`verity.ml.boolean.mufu`). The word constants (zero, `_scale_log2_bits(D)`) are written with the constant bits. v4 and v5 are
+the FA3 / FA2 per-iteration `Check_inf` chains (`fa3_check_inf`, `fa2_check_inf`); v8 is v5's, whose unguarded blocks
+(`CHECK` false, below `MASKED_FROM`) rescale by the running max as it is.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from verity.ml.boolean.trace import definition, word_of
 from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
                                              _lane, _scale_log2_bits)
+from verity_vllm.program.registry.fa2_check_inf import AttentionHeadV5, AttentionV5, AttnBlockV5
 
 BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
@@ -66,10 +69,13 @@ def _attention_type(S):
              ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))), Array(S.NH, Array(S.D, BF16)))
 
 
-def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev):
-    """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body)."""
+def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True):
+    """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
+    ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded."""
     if BN % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"{name}: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
+    if FIRST and not check:
+        raise ValueError(f"{name}: the first iteration runs Check_inf (FIRST needs CHECK)")
     c = _Bits(B)
     dot = bind(BG.DotBf16, K=D, DOT=DOT)
     s = [B.call(dot, q, k[j]) for j in range(NVIS)]
@@ -80,7 +86,7 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     m_use = B.call(BA.GuardNegInfZero, m_new)
     scale_log2 = c.word(_scale_log2_bits(D), 32)
     if not FIRST:
-        scores_scale = B.call(BM.MufuEx2Ftz, B.call(BA.F32MulFtz, B.call(BA.F32SubFtz, m_prev, m_use), scale_log2))
+        scores_scale = B.call(BM.MufuEx2Ftz, B.call(BA.F32MulFtz, B.call(BA.F32SubFtz, m_prev, m_use if check else m_new), scale_log2))
     max_scaled = B.call(BA.F32MulFtz, m_use, scale_log2)
     p = [B.call(BM.MufuEx2Ftz, B.call(BA.F32FmaSubFtz, s[j], scale_log2, max_scaled)) for j in range(NVIS)]
     lanes: list[Coll] = []
@@ -104,8 +110,8 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
 
 
 def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v):
-    """Causal attention of one query at position T-1 over keys 0..T-1: ceil(T / BN) blocks (``block_of(nvis, first)``) visited
-    last -> first, then `bf16(o * INV((l0 + l2) + (l1 + l3)))` (`AttentionHead_v2` / `_v3`'s body)."""
+    """Causal attention of one query at position T-1 over keys 0..T-1: ceil(T / BN) blocks (``block_of(b, nvis, first)``) visited
+    last -> first, then `bf16(o * INV((l0 + l2) + (l1 + l3)))` (`AttentionHead_v2` / `_v3` / `_v5`'s body)."""
     c = _Bits(B)
     nb = (T + BN - 1) // BN
     m = l = o = None
@@ -121,7 +127,7 @@ def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v):
             kb = Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
             vb = Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
         first = b == nb - 1
-        blk = block_of(nvis, first)
+        blk = block_of(b, nvis, first)
         if first:
             z = c.word(0, 32)
             st = B.call(blk, q, kb, vb, z, Coll(Array(4, F32), concat([z.refs] * 4)), Coll(Array(D, F32), concat([z.refs] * D)))
@@ -155,7 +161,7 @@ def AttnBlockV6(B, S, q, k, v, m_prev, l_prev, o_prev):
 @composite("AttentionHead", 6, ["T", "D", "BN"], _head_type, conformance="exact-model-tested")
 def AttentionHeadV6(B, S, q, k, v):
     """`AttentionHead_v3`'s body on bits over `AttnBlock_v6`, epilogue `Fa2InvSum_v2`."""
-    return _head(B, S.T, S.D, S.BN, lambda nvis, first: bind(AttnBlockV6, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN), BA.Fa2InvSum,
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV6, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN), BA.Fa2InvSum,
                  q, k, v)
 
 
@@ -174,7 +180,7 @@ def AttnBlockV7(B, S, q, k, v, m_prev, l_prev, o_prev):
 @composite("AttentionHead", 7, ["T", "D", "BN", "DOT", "INV"], _head_type, conformance="exact-model-tested")
 def AttentionHeadV7(B, S, q, k, v):
     """`AttentionHead_v2`'s body on bits over `AttnBlock_v7{..., DOT}`, epilogue `INV` (`Fa2InvSum_v2` or `Fa3InvSum_v2`)."""
-    return _head(B, S.T, S.D, S.BN, lambda nvis, first: bind(AttnBlockV7, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT),
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV7, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT),
                  S.INV, q, k, v)
 
 
@@ -182,6 +188,31 @@ def AttentionHeadV7(B, S, q, k, v):
 def AttentionV7(B, S, q, kc, vc):
     """`Attention_v2`'s body on bits over `AttentionHead_v7`."""
     return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV7, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV), q, kc, vc)
+
+
+@composite("AttnBlock", 8, ["D", "NVIS", "FIRST", "BN", "DOT", "CHECK"], _block_type, conformance="exact-model-tested")
+def AttnBlockV8(B, S, q, k, v, m_prev, l_prev, o_prev):
+    """`AttnBlock_v5`'s body on bits: `AttnBlock_v7` with FA2's per-iteration `Check_inf` as the static `CHECK`."""
+    return _block(B, "AttnBlock_v8", S.D, S.NVIS, S.FIRST, S.BN, S.DOT, q, k, v, m_prev, l_prev, o_prev, check=S.CHECK)
+
+
+@composite("AttentionHead", 8, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"], _head_type, conformance="exact-model-tested")
+def AttentionHeadV8(B, S, q, k, v):
+    """`AttentionHead_v5`'s body on bits over `AttnBlock_v8`: block b runs with `CHECK = b >= MASKED_FROM`."""
+    nb = (S.T + S.BN - 1) // S.BN
+    if not 0 <= S.MASKED_FROM <= nb - 1:
+        raise ValueError(f"AttentionHead_v8: MASKED_FROM {S.MASKED_FROM} outside blocks 0..{nb - 1} "
+                         "(the first block is always a Check_inf iteration)")
+    return _head(B, S.T, S.D, S.BN, lambda b, nvis, first: bind(AttnBlockV8, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT,
+                                                                CHECK=b >= S.MASKED_FROM), S.INV, q, k, v)
+
+
+@composite("Attention", 8, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _attention_type,
+           conformance="exact-model-tested")
+def AttentionV8(B, S, q, kc, vc):
+    """`Attention_v5`'s body on bits over `AttentionHead_v8`; every head of the row shares its tile, so one MASKED_FROM."""
+    return _attention(B, S.T, S.NH, S.KVH, S.D, bind(AttentionHeadV8, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV,
+                                                     MASKED_FROM=S.MASKED_FROM), q, kc, vc)
 
 
 def _words(b: dict) -> dict:
@@ -194,6 +225,9 @@ AttentionV6.word = lambda b: bind(AttentionV3, **b)  # type: ignore[attr-defined
 AttnBlockV7.word = lambda b: bind(AttnBlockV2, **_words(b))  # type: ignore[attr-defined]
 AttentionHeadV7.word = lambda b: bind(AttentionHeadV2, **_words(b))  # type: ignore[attr-defined]
 AttentionV7.word = lambda b: bind(AttentionV2, **_words(b))  # type: ignore[attr-defined]
+AttnBlockV8.word = lambda b: bind(AttnBlockV5, **_words(b))  # type: ignore[attr-defined]
+AttentionHeadV8.word = lambda b: bind(AttentionHeadV5, **_words(b))  # type: ignore[attr-defined]
+AttentionV8.word = lambda b: bind(AttentionV5, **_words(b))  # type: ignore[attr-defined]
 
 #: the FA2 (Ampere mma.sync) and FA3 (Hopper wgmma) bindings of v7's DOT and INV
 ATTENTION_FA2: dict = {"DOT": BG.AmpereBF16TcDot16, "INV": BA.Fa2InvSum}
