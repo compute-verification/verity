@@ -30,7 +30,16 @@ windows every 8 atoms the share of words exact over the window and a greedy bicl
 intersected, both orientations); `lemma` is whether it found the v2 lemma's density (1,024 x 512 of an 8,192^2 unit: 1/8 of
 the rows by 1/16 of the columns).
 
+`width_bounds` needs no search: if M rows share W columns exact over a window, each of them has at least W exact columns
+there, so the widest block at M rows is at most U(M), the M-th largest row count of exact columns (and symmetrically for
+columns).  Per window length L, U(M) is the maximum over every start; a unit passes against the staircase floors W*(L, M)
+when U(M) < W*(L, M) at every M.  --cols 0 takes every weight row (the linear's own n), computed in column blocks.
+
+--adv FAMILY replaces A's rows with rows the prover writes in the transformed basis (a token-programmable crafted model):
+`flat` (every code +-448, keyed signs), `flat-z50` and `flat-z75` (flat with that share of codes zero, keyed positions).
+
   python r1_census.py --acts DIR --weights SNAPSHOT --out DIR [--layers 0,8,16,28] [--classes ...] [--rows 1024 --cols 512]
+  python r1_census.py --acts DIR --weights SNAPSHOT --out DIR --starts p10 --atoms 16 --rows 1024 --cols 0 [--adv flat]
   python r1_census.py --synthetic --out DIR   # gaussian rows, small: the self-test
 
 Needs numpy, and `verity` and `verity_pouw` importable.
@@ -58,6 +67,10 @@ STARTS = ("zero", "h8", "h10", "h12", "h14")
 WIN = 32
 PREFIXES = (1, 2, 4, 6, 8, 10, 16, 32)
 LEMMA = (1 / 8, 1 / 16)
+BOUND_WINDOWS = (4, 6, 8, 9, 10, 12)
+BOUND_ROWS = (8, 16, 32, 64, 128, 256, 368, 512, 768, 1024)
+BOUND_COLS = (64, 256, 1024, 1536, 2048, 4096, 8192, 16384)
+ADV_ZEROS = {"flat": 0.0, "flat-z50": 0.5, "flat-z75": 0.75}
 HEAD_DIM, Q_HEADS, KV_HEADS = 128, 32, 8
 UNIT = 2.0 ** 18
 
@@ -120,7 +133,8 @@ def operands(cls: str, layer: int, args, key: str) -> tuple[np.ndarray, np.ndarr
     if args.synthetic:
         k = 14336 // 4 if cls.startswith("down") else 1024
         g = rng(key, "synthetic", layer, cls)
-        return g.standard_normal((args.rows, k)), g.standard_normal((args.cols, k))
+        a, b = g.standard_normal((args.rows, k)), g.standard_normal((args.cols, k))
+        return (written(args.adv, args.rows, k, rng(key, "adv", layer, cls, args.adv)) if args.adv else a), b
     st = Safetensors(Path(args.weights))
     p = f"model.layers.{layer}."
     kind = cls.split("-")[0]
@@ -135,7 +149,8 @@ def operands(cls: str, layer: int, args, key: str) -> tuple[np.ndarray, np.ndarr
         w = st.get(p + ("self_attn.o_proj.weight" if kind == "o" else "mlp.down_proj.weight"))
     g = rng(key, "sample", layer, kind)
     a = np.asarray(x[args.first_row:], np.float64)
-    b = np.asarray(w[np.sort(g.choice(len(w), args.cols, replace=False))], np.float64)
+    n = len(w) if args.cols <= 0 else min(args.cols, len(w))
+    b = np.asarray(w if n == len(w) else w[np.sort(g.choice(len(w), n, replace=False))], np.float64)
     del w
     k = a.shape[1]
     g = rng(key, "fold", layer, cls)
@@ -159,7 +174,17 @@ def operands(cls: str, layer: int, args, key: str) -> tuple[np.ndarray, np.ndarr
             for s0 in range(0, k, size):
                 r = haar(size, g)
                 a[:, s0:s0 + size], b[:, s0:s0 + size] = a[:, s0:s0 + size] @ r, b[:, s0:s0 + size] @ r
+    if args.adv:
+        a = written(args.adv, args.rows, k, rng(key, "adv", layer, cls, args.adv))
     return a, b
+
+
+def written(family: str, rows: int, k: int, g: np.random.Generator) -> np.ndarray:
+    """Rows a prover writes in the transformed basis: +-1 with keyed signs (codes +-448 after the quantizer), with a keyed
+    share ADV_ZEROS[family] of them zero."""
+    a = np.where(g.integers(0, 2, (rows, k)) == 1, -1.0, 1.0)
+    a[g.random((rows, k)) < ADV_ZEROS[family]] = 0.0
+    return a
 
 
 # ---- the chain and its exact steps ----------------------------------------------------------------------------------
@@ -200,6 +225,22 @@ def chain(ac: np.ndarray, bc: np.ndarray, start: np.ndarray) -> tuple[np.ndarray
         flags[t] = now == prev + part
         prev, exact = now, exact + part
     return flags, acc, exact
+
+
+def chain_blocks(ac: np.ndarray, bc: np.ndarray, start: np.ndarray, block: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """`chain` over column blocks of at most `block` weight rows (each word's chain is its own), reassembled row-major."""
+    rows, cols = len(ac), len(bc)
+    if cols <= block:
+        return chain(ac, bc, start)
+    flags = np.zeros((ac.shape[1] // 32, rows, cols), bool)
+    acc = np.zeros((rows, cols), np.uint32)
+    exact = np.zeros((rows, cols), np.int64)
+    s0 = start.reshape(rows, cols)
+    for c0 in range(0, cols, block):
+        c1 = min(cols, c0 + block)
+        f, a, e = chain(ac, bc[c0:c1], np.ascontiguousarray(s0[:, c0:c1]).ravel())
+        flags[:, :, c0:c1], acc[:, c0:c1], exact[:, c0:c1] = f.reshape(-1, rows, c1 - c0), a.reshape(rows, -1), e.reshape(rows, -1)
+    return flags.reshape(len(flags), -1), acc.ravel(), exact.ravel()
 
 
 def greedy(e: np.ndarray) -> tuple[int, int]:
@@ -247,6 +288,30 @@ def census(flags: np.ndarray, rows: int, cols: int, k_atoms: int) -> dict:
     if best:
         out["densest_window"] = {"start": best[0], **best[1]}
     out["any_lemma_window"] = any(w["lemma"] for w in out["windows"].values())
+    out["width_bounds"] = width_bounds(flags, rows, cols)
+    return out
+
+
+def width_bounds(flags: np.ndarray, rows: int, cols: int) -> dict:
+    """Per window length L, over every start: U(M) = the M-th largest row count of columns exact over the window (an upper
+    bound on the width of any M-row block exact over it), the transposed bound at W columns, and the most exact words."""
+    out = {}
+    for length in BOUND_WINDOWS:
+        if length > len(flags):
+            continue
+        u_rows = dict.fromkeys((m for m in BOUND_ROWS if m <= rows), 0)
+        u_cols = dict.fromkeys((w for w in BOUND_COLS if w <= cols), 0)
+        share, at = 0.0, 0
+        for s in range(len(flags) - length + 1):
+            e = flags[s:s + length].all(axis=0).reshape(rows, cols)
+            by_row, by_col = np.sort(e.sum(axis=1))[::-1], np.sort(e.sum(axis=0))[::-1]
+            for m in u_rows:
+                u_rows[m] = max(u_rows[m], int(by_row[m - 1]))
+            for w in u_cols:
+                u_cols[w] = max(u_cols[w], int(by_col[w - 1]))
+            if e.mean() > share:
+                share, at = float(e.mean()), s
+        out[length] = {"U_rows": u_rows, "U_cols": u_cols, "max_share": share, "max_share_start": at}
     return out
 
 
@@ -329,7 +394,7 @@ def job(layer: int, cls: str, args, key: str, out: Path) -> str:
     res = {"layer": layer, "class": cls, "rows": rows, "cols": cols, "k": k, "census_atoms": span // 32, "key": key,
            "zero_codes": {"a": float(((ac & 0x7F) == 0).mean()), "b": float(((bc & 0x7F) == 0).mean())},
            "subnormal_codes": {"a": float(((ac & 0x78) == 0).mean()), "b": float(((bc & 0x78) == 0).mean())},
-           "a_rows": {"all": len(every), "distinct": len(keep), "dedup": args.dedup},
+           "a_rows": {"all": len(every), "distinct": len(keep), "dedup": args.dedup, "written": args.adv},
            "repeated_slices": {"a": repeated_slices(every), "a_distinct": repeated_slices(every[keep]), "b": repeated_slices(bc)},
            "starts": {}}
     path = out / f"L{layer:03d}-{cls}.json"
@@ -337,7 +402,7 @@ def job(layer: int, cls: str, args, key: str, out: Path) -> str:
     for start in args.starts:
         t1 = time.monotonic()
         g = rng(key, "hot", layer, cls, start)
-        flags, _, exact = chain(ac[:, :span], bc[:, :span], start_words(start, av, bv, g))
+        flags, _, exact = chain_blocks(ac[:, :span], bc[:, :span], start_words(start, av, bv, g), args.col_block)
         assert np.allclose(exact / UNIT, y_true, rtol=0, atol=1e-6 * np.abs(y_true).max())
         res["starts"][start] = {**census(flags, rows, cols, k // 32),
                                 **error(ac[:args.err_rows], bc[:args.err_cols], start, rng(key, "err", layer, cls, start)),
@@ -361,7 +426,9 @@ def main() -> int:
     ap.add_argument("--classes", default=",".join(CLASSES))
     ap.add_argument("--starts", default=",".join(STARTS))
     ap.add_argument("--rows", type=int, default=512)
-    ap.add_argument("--cols", type=int, default=256)
+    ap.add_argument("--cols", type=int, default=256, help="weight rows sampled; 0 takes all of them (the linear's own n)")
+    ap.add_argument("--col-block", type=int, default=512, help="the chain runs over column blocks of this many weight rows")
+    ap.add_argument("--adv", choices=tuple(ADV_ZEROS), help="replace A's rows with rows written in the transformed basis")
     ap.add_argument("--atoms", type=int, default=128, help="the census's first atoms (the error runs over all of k)")
     ap.add_argument("--err-rows", type=int, default=64)
     ap.add_argument("--err-cols", type=int, default=32)
@@ -374,7 +441,7 @@ def main() -> int:
     args = ap.parse_args()
     args.starts = args.starts.split(",")
     if args.synthetic:
-        args.rows, args.cols = min(args.rows, 64), min(args.cols, 64)
+        args.rows, args.cols = min(args.rows, 64), min(args.cols, 64) if args.cols > 0 else 64
     elif not (args.acts and args.weights):
         ap.error("--acts and --weights, or --synthetic")
     out = Path(args.out)
