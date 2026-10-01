@@ -46,6 +46,7 @@ def load_registries() -> None:
     import verity.ml.boolean.attention  # noqa: F401
     import verity.ml.boolean.elementwise  # noqa: F401
     import verity.ml.boolean.gemm  # noqa: F401
+    import verity.ml.boolean.scalar  # noqa: F401
     import verity.ml.gemm  # noqa: F401
     import verity.ml.kernels  # noqa: F401
     import verity.ml.prims  # noqa: F401
@@ -216,17 +217,21 @@ def _core_roots() -> list[Any]:
 def _boolean_roots() -> list[Any]:
     """The Boolean BF16 coordinate and dot (`verity.ml.boolean.gemm`) on both steps at K = 64, and `silu_and_mul`'s row at I = 8
     (`verity_vllm.program.registry.boolean_silu`); the steps, the cast, attention's softmax operations
-    (`verity.ml.boolean.attention`), the element-wise operations (`verity.ml.boolean.elementwise`) and `SiluMulBf16_v3` are
-    static-free. vLLM's Boolean RoPE (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding,
-    which reaches its head and halves."""
+    (`verity.ml.boolean.attention`), the element-wise operations (`verity.ml.boolean.elementwise`), the comparator and selects
+    (`verity.ml.boolean.scalar`), the argmax step and `SiluMulBf16_v3` are static-free. vLLM's Boolean RoPE
+    (`verity_vllm.program.registry.boolean_rope`) at the kernel rows' `RoPE_v1` binding, which reaches its head and halves;
+    greedy token selection (`sampling_boolean.TokenSelect_v2`) at one, two and three levels of its tree, which reach every
+    stage, leaf and merge shape (a full group, a remainder, the first group, the root group)."""
     from verity.ir.defs import bind
     from verity.ml.boolean import gemm as BG
     from verity_vllm.program.registry import boolean_rope
     from verity_vllm.program.registry import boolean_silu as BSL
+    from verity_vllm.program.registry import sampling_boolean as SB
 
     return [bind(BG.GemmCoordinate, K=64, **BG.GEMM_AMPERE), bind(BG.GemmCoordinate, K=64, **BG.GEMM_HOPPER),
             bind(BG.DotBf16, K=64, **BG.GEMM_AMPERE), bind(BG.DotBf16, K=64, **BG.GEMM_HOPPER), bind(BSL.SiluMul, I=8),
-            bind(boolean_rope.RoPE, NHEADS=2, D=8)]
+            bind(boolean_rope.RoPE, NHEADS=2, D=8), bind(SB.TokenSelect, V=50), bind(SB.TokenSelect, V=200),
+            bind(SB.TokenSelect, V=4161)]
 
 
 def _kernel_roots() -> list[Any]:
