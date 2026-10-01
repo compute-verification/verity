@@ -970,6 +970,8 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     else:
         if ns.verify or ns.ships:
             raise SlackError("--verify and --ships go with --kind announce")
+        if to and (m := LEAD_RE.match(body)) and set(lead_names(body, reg)) <= {t["handle"] for t in to}:
+            body = body[m.end():]                                    # `--to @ci` with a body that starts `@ci` names it once
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not ns.thread else channel_id(ns, reg)
     tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if ns.quiet else "") if t)

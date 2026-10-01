@@ -875,6 +875,13 @@ def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs
     assert bell["text"].startswith(f"from daniel, thread {post['ts']}: @circuits is node 2 free?")
 
 
+def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "@circuits #712 is ready")
+    assert rc == 0 and posted(fake, out)["text"].startswith("@circuits #712 is ready")
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "@proofs see this")
+    assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs see this")
+
+
 def test_a_reply_to_a_replys_ts_lands_in_its_thread(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a question", username="circuits", bot_id=BOT)
