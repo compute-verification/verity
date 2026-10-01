@@ -28,6 +28,9 @@
 set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
 GUEST=/workspace/verity-guest
+# the fill prio of node 2's vLLM guests: above every other guest's (proofs' are 5 and 10), since circuits' vLLM work goes first
+# on both nodes (Daniel 1 Oct 01:35Z)
+PRIO=${VY_N2_PRIO:-20}
 DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 OWNER=${VY_N2_COMMIT_OWNER:-bc-698052e1-8e2b-5736-997e-8fa229b85b3c}
 KUBE_DISPATCH="KUBECONFIG=\$HOME/.kube/config"
@@ -150,7 +153,7 @@ d["n2"]={"key":sys.argv[2],"src":sys.argv[3],"build_run":sys.argv[4],"build_art"
     | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/commit-$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-commit-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=$OWNER gpus=1 max_min=30 cpus=8 project=verity prio=${VY_N2_PRIO:-0}
+# fill: owner=$OWNER gpus=1 max_min=30 cpus=8 project=verity prio=$PRIO
 # Verity vLLM Commit $row (node 1 key $key): n2_commit.sh on infra/nebius; its replay runs on node 1.
 exec bash $GUEST/bin/n2_commit.sh run $key
 EOF

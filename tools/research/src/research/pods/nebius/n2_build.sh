@@ -26,6 +26,9 @@
 set -euo pipefail
 N1=${VY_N1:-vy-n1} N2=${VY_N2:-vy-n2}
 GUEST=/workspace/verity-guest
+# the fill prio of node 2's vLLM guests: above every other guest's (proofs' are 5 and 10), since circuits' vLLM work goes first
+# on both nodes (Daniel 1 Oct 01:35Z)
+PRIO=${VY_N2_PRIO:-20}
 DISPATCH=${VY_DISPATCH:-/workspace/jobs/dispatch/infra/nebius/dispatch.py}
 
 n2_quiet() { ssh -o ConnectTimeout=10 "$N2" head -1 /workspace/pouw/fill/status.txt | grep -q "timed False, window waiting False"; }
@@ -94,7 +97,7 @@ submit() {
     "$item" "$key" "$src" "$mem" "$cpus" "${VY_COMMIT_KEY:-n2-build/$key}" | ssh "$N2" "mkdir -p $GUEST/items && cat > $GUEST/items/$key.json"
   ssh "$N2" "f=/workspace/pouw/fill/queue/verity-build-$key.sh; cat > \$f.tmp && chmod +x \$f.tmp && mv \$f.tmp \$f" <<EOF
 #!/usr/bin/env bash
-# fill: owner=kueue-fold gpus=0 max_min=$max_min cpus=$cpus project=verity mem_gb=$mem
+# fill: owner=kueue-fold gpus=0 max_min=$max_min cpus=$cpus project=verity mem_gb=$mem prio=$PRIO
 # Verity vLLM Build $row (node 1 key $key): n2_build.sh on infra/nebius; its Commit runs on node 1.
 exec bash $GUEST/bin/n2_build.sh run $key
 EOF
