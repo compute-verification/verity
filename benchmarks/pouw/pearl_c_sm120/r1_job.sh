@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# R1's deciding primitive on one RTX PRO 6000 (the store's docs/pouw/new-designs.md §2.1).  Builds pearl_c_sm120.cubin with the
-# harness's pinned CUDA 12.9 (jobs/toolkit.sh), refuses it unless sass_gate.py passes, and with `bench` runs the harness's R1
-# arm (r1_arm.py) against the autotuned plain FP8 GEMMs at Llama-3.1-8B's linears, prefill (m 2,048) and decode (m 32).
+# R1's deciding primitive on one RTX PRO 6000 (the store's docs/pouw/new-designs.md §2.1).  Builds pearl_c_sm120.cubin as
+# build.sh does, with the node's CUDA 13.0.1 (CUDA, default /usr/local/cuda-13.0; the harness gate's other pinned toolkit,
+# 12.9.1, spills gemm_plain), refuses it unless sass_gate.py passes, and with `bench` runs the harness's R1 arm (r1_arm.py)
+# against the autotuned plain FP8 GEMMs at Llama-3.1-8B's linears, prefill (m 2,048) and decode (m 32).
 #
 #   bash benchmarks/pouw/pearl_c_sm120/r1_job.sh build|bench   (from the source tree's root, under research run --cwd source)
 #
@@ -14,7 +15,8 @@ SHIP="$OUT/ship"
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
 mkdir -p "$SHIP"
-. benchmarks/pouw/harness/jobs/toolkit.sh
+export CUDA_HOME="${CUDA:-/usr/local/cuda-13.0}"
+"$CUDA_HOME/bin/nvcc" --version | grep -q "V13.0.88" || { echo "$CUDA_HOME's nvcc is not 13.0.1 (V13.0.88)" >&2; exit 1; }
 FLAGS=(-O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -fmad=false -Xptxas -v -cubin)
 "$CUDA_HOME/bin/nvcc" "${FLAGS[@]}" -o "$SHIP/pearl_c_sm120.cubin" benchmarks/pouw/pearl_c_sm120/pearl_c_sm120.cu 2> "$SHIP/ptxas.txt" \
   || { tail -40 "$SHIP/ptxas.txt" >&2; exit 1; }

@@ -106,8 +106,9 @@ def test_gemms_fit_sm120_shared_memory():
     assert "*out = ml::Mainloop<128, 128, G, 3, true, 1, ML_RP<G>>::SMEM;" in SOURCE
     names = {n for n, *_ in gemms()}
     ml = {"gemm_plain", "gemm_fast", "gemm_ct", "gemm_pearlc", "gemm_ct_u", "gemm_pearlc_u", "gemm_pearlc_s", "gemm_pearlc_s_u",
-          "gemm_pearlc_b", "gemm_pearlc_b_u"}
-    assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u"}
+          "gemm_pearlc_b", "gemm_pearlc_b_u", "gemm_r1_b_u"}
+    assert names == ml | {"gemm_ct_d", "gemm_pearlc_d", "gemm_ct_d_u", "gemm_pearlc_d_u", "gemm_words", "gemm_words_u",
+                          "gemm_r1_c_d_u", "gemm_plain_d_u"}
     for name, mode, tm, bn, g in gemms():
         assert (ML_SMEM if name in ml else gemm_smem(mode, tm, bn)) <= SM120_MAX_DYN, name
         assert (tm, bn) == gemm_tile(name) and (name in ml) == ((tm, bn) == (128, 128))
@@ -264,6 +265,8 @@ HASH_SOURCE = "".join((H100_DIR / f).read_text() for f in ("hash.cuh", "hash_sm1
 #: power of two) and no level wider than hash_tree_small's; and -h2's (hash_h2.cuh) in place of the leaves'
 H1_LAUNCHED = {"hash_rows_w", "hash_tree_small", "hash_node_keys", "hash_msg_v", "hash_leaf_p", "hash_tree_leaves"}
 H2_LAUNCHED = H1_LAUNCHED - {"hash_rows_w", "hash_tree_leaves"} | {"hash_rows_b3s", "hash_leaves_b3s"}
+#: R1's kernels (r1_arm.py), which run.py's pipeline never launches
+R1_KERNELS = {"gemm_r1_b_u", "gemm_r1_c_d_u", "gemm_plain_d_u", "r1_digests"}
 
 
 def form_kernels() -> list[str]:
@@ -307,6 +310,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         elif base in ("gemm_ct", "gemm_words"):
             assert base == "gemm_ct" or N == 32, name
             need[2] = 4 * M * N
+        elif base in ("gemm_r1_b", "gemm_r1_c"):
+            need.update({4: 2 * M * N, 7: 4 * M, 8: 4 * N})
+            need.update({9: M * N, 11: 32} if base == "gemm_r1_b" else {2: 4 * M * N})
         else:
             assert base in ("gemm_pearlc", "gemm_pearlc_s", "gemm_pearlc_b"), name
             need.update({4: 2 * M * N, 5: 128 * M, 6: 128 * N, 7: 4 * M, 8: 4 * N})
@@ -357,6 +363,8 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 4 * i[0] * i[1]}
     if name == "diff_words":
         return {0: 4 * i[0], 1: 4 * i[0], 2: 8}
+    if name == "r1_digests":
+        return {0: 4 * i[0] * i[1], 1: 32, 2: i[0] * i[1]}
     if name.endswith("_smem"):
         return {0: 4}
     raise AssertionError(f"no footprint for {name}")
@@ -370,7 +378,7 @@ def threads(name: str, i: list[int]) -> int:
             "words_u": lambda: i[0] // 16 * (i[1] // 8) * 32, "hash_rows_w": lambda: 32 * i[0], "hash_tree_leaves": lambda: i[0],
             "hash_tree_small": lambda: min(1024, i[0] // 2), "hash_node_keys": lambda: i[0], "seed_line_a": lambda: 1,
             "b3s_level_keys": lambda: i[0], "hash_leaves_b3s": lambda: i[0],
-            "quant_s5": lambda: i[0] * i[1] // 16}.get(name, lambda: 0)()
+            "quant_s5": lambda: i[0] * i[1] // 16, "r1_digests": lambda: i[0] * i[1] // 32}.get(name, lambda: 0)()
 
 
 @pytest.fixture(scope="module")
@@ -443,7 +451,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         track(ev, allocs, maps)
         if ev["op"] == "launch":
             seen.add(ev["name"])
-    assert seen == set(own_kernels()) | H1_LAUNCHED
+    assert seen == set(own_kernels()) - R1_KERNELS - {k + "_smem" for k in R1_KERNELS} | H1_LAUNCHED
     for t in rows[3:]:
         assert t["fused"] and t["hashing"] == "h1"
         assert set(t["consistency"]) >= {"y_s_vs_unfused_words_differing", "y_fused_vs_unfused_words_differing",
@@ -882,3 +890,63 @@ def test_verify_rejects_what_the_prover_cannot_open(A, small_fixture, ship, arm_
     assert V.main([str(alone), "--draws", "1", "--jobs", "1", "--run", "r-test"]) == 1
     verdict = json.loads((alone / "verify.json").read_text())
     assert verdict["transcripts"][0]["accepted"] and verdict["uncontrolled"] == [verdict["transcripts"][0]["manifest"]]
+
+
+R1_CALLS = {("pre", "hash"): ["gemm_r1_b_u"], ("pre", "nohash"): ["gemm_fast"], ("pre", "known_bad"): ["gemm_r1_b_u", "xor_byte"],
+            ("dec", "hash"): ["copy", "gemm_r1_c_d_u", "r1_digests"], ("dec", "nohash"): ["copy", "gemm_plain_d_u"],
+            ("dec", "known_bad"): ["copy", "gemm_r1_c_d_u", "xor_byte", "r1_digests"]}
+
+
+@pytest.mark.slow
+def test_r1_arm_dry_run(ship, arm_dir, tmp_path):
+    """R1's arm (r1_arm.py) as the harness drives it, on the stand-in.  At 256 rows the call is gemm_r1_b_u alone (y, and C's
+    message digests from the registers under the message key), gemm_fast without hash; at decode's 32 rows A's rows are copied
+    into a 64-row buffer, gemm_r1_c_d_u stores C and y and r1_digests hashes C's 32 real rows, gemm_plain_d_u alone without
+    hash; known_bad's flip sits between the product and its digests.  The phases split each call before, at and after the
+    chain; every launch is on the harness's stream, every footprint allocated, every mainloop operand mapped, each operand
+    set's buffers its own; the gate fails (the stand-in computes nothing, so the CPU chain disagrees) naming every output in
+    full; nothing leaks."""
+    log = tmp_path / "r1.jsonl"
+    r = subprocess.run([sys.executable, str(Path(__file__).parent / "r1_arm_dry.py"), str(arm_dir), str(tmp_path / "run")],
+                       env=dry_env(ship, log, PEARLC_SHIP=str(ship)), capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    *gates, end = [json.loads(x) for x in r.stdout.splitlines()]
+    assert end["live"] == [] and all(d is None for d in end["domain"].values())
+    assert end["work"]["pre"]["tensor_macs"] == {"fp8-e4m3": 256 ** 3} and end["work"]["dec"]["tensor_macs"] == {"fp8-e4m3": 64 * 256 ** 2}
+    assert end["work"]["dec"]["hashed_bytes"] == {"c-words": 4 * 32 * 256}
+    assert [(g["shape"], g["role"]) for g in gates] == [(s, r) for s in ("pre", "dec") for r in ("hash", "nohash")]
+    for g in gates:
+        outs = {"y"} | ({"digests"} if g["role"] == "hash" else set()) | ({"c"} if (g["shape"], g["role"]) == ("dec", "hash") else set())
+        assert not g["ok"] and g["checked"] == {name: "all" for name in outs}
+        assert g["detail"]["twin_cells"] == 256 and g["detail"]["twin_cells_differing"] > 0
+        assert not any(g["detail"]["words_differing_from_relaunch"].values())
+
+    got, allocs = windows(log)
+    assert not allocs
+    launched: dict[tuple, list[dict]] = {}
+    for mark, evs in got:
+        assert all(ev["stream"] == end["stream"] for ev in evs), mark
+        key = (mark["shape"], mark["role"], mark["set"])
+        if mark["what"] == "phases":
+            parts: dict[str, list[dict]] = {}
+            for ev in evs:
+                if ev["op"] == "mark" and ev["what"] == "phase":
+                    cur = parts.setdefault(ev["name"], [])
+                else:
+                    cur.append(ev)
+            assert [ev for p in ("before", "gemm", "after") for ev in parts[p]] == launched[key], mark
+            assert [ev["name"] for ev in parts["gemm"]] == [n for n in R1_CALLS[key[:2]] if n.startswith("gemm_")]
+            continue
+        names = [ev.get("name", ev["op"] if ev["op"] == "copy" else ev.get("what")) for ev in evs]
+        assert names == R1_CALLS[key[:2]], mark
+        launched[key] = evs
+        by = {ev.get("name"): ev for ev in evs}
+        if key[:2] == ("pre", "hash"):
+            gemm = by["gemm_r1_b_u"]
+            assert gemm["p"][9] and gemm["p"][11] and not gemm["p"][2]
+        if key[:2] == ("dec", "hash"):
+            gemm, dg = by["gemm_r1_c_d_u"], by["r1_digests"]
+            assert dg["p"][0] == gemm["p"][2] and dg["p"][1] == gemm["p"][11] and dg["i"][:2] == [32, 256] and gemm["i"][0] == 64
+    for shape in ("pre", "dec"):
+        calls = [next(ev for ev in launched[(shape, "hash", s)] if ev.get("name", "").startswith("gemm_")) for s in (0, 1)]
+        assert all(calls[0]["p"][j] != calls[1]["p"][j] for j in ((0, 4, 9, 10) if shape == "pre" else (0, 2, 4)))
