@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import os
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -74,6 +75,97 @@ class HidingLeaves:
     def leaf(self, inner_digest: bytes, salt: bytes) -> bytes:
         """One leaf through core's reference (the verifier's path)."""
         return self.instance.tree_leaf(self.key, self.instance.commit_string(self.key, inner_digest, salt))
+
+
+# --- the GPU chunk tree's salts: one ChaCha20 stream per run ------------------------------------------------------------
+
+_SIGMA = np.frombuffer(b"expand 32-byte k", dtype="<u4")
+_QR = ((0, 4, 8, 12), (1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15), (0, 5, 10, 15), (1, 6, 11, 12), (2, 7, 8, 13), (3, 4, 9, 14))
+
+
+def _rotl(v: np.ndarray, n: int) -> np.ndarray:
+    return (v << np.uint32(n)) | (v >> np.uint32(32 - n))
+
+
+def chacha20(key: bytes, nonce: bytes, nbytes: int, counter: int = 0) -> bytes:
+    """``nbytes`` of the RFC 8439 ChaCha20 keystream (32-byte key, 12-byte nonce, 32-bit block counter from ``counter``)."""
+    if len(key) != 32 or len(nonce) != 12:
+        raise ValueError("ChaCha20 takes a 32-byte key and a 12-byte nonce")
+    nblk = -(-nbytes // 64)
+    if counter + nblk > 1 << 32:
+        raise ValueError("the 32-bit block counter would wrap")
+    out = []
+    for lo in range(0, nblk, 1 << 16):
+        m = min(1 << 16, nblk - lo)
+        s = np.empty((16, m), dtype=np.uint32)
+        s[0:4] = _SIGMA[:, None]
+        s[4:12] = np.frombuffer(key, dtype="<u4")[:, None]
+        s[12] = np.arange(counter + lo, counter + lo + m, dtype=np.uint64).astype(np.uint32)
+        s[13:16] = np.frombuffer(nonce, dtype="<u4")[:, None]
+        x = s.copy()
+        for _ in range(10):
+            for a, b, c, d in _QR:
+                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 16)  # noqa: E702
+                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 12)  # noqa: E702
+                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 8)  # noqa: E702
+                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 7)  # noqa: E702
+        x += s
+        out.append(np.ascontiguousarray(x.T).astype("<u4").tobytes())
+    return b"".join(out)[:nbytes]
+
+
+class StreamSalts:
+    """The salts of a committer whose leaves are hashed on the GPU: leaf ``i`` of step ``s`` takes the 128 bytes at offset ``128 i``
+    of the RFC 8439 ChaCha20 stream under the run's salt key (32 bytes from the OS generator, never in a record) with nonce
+    ``u96le(s)``.  The device expands them where it finishes the leaves (``hidden_gpu_tree.cu``'s ``hm96_leaves``); the host only an
+    opening's (:meth:`salts`).  One key per committer: no two runs, and no two steps of a run, share a stream."""
+
+    def __init__(self, instance: hm96.Instance = hm96.SHA256, key: bytes | None = None, salt_key: bytes | None = None) -> None:
+        if instance is not hm96.SHA256:
+            raise ValueError(f"the GPU chunk tree hashes SHA-256 leaves: {instance.name} is not its rule")
+        self.leaves = HidingLeaves(key, instance)
+        self.instance = instance
+        self._key = os.urandom(32) if salt_key is None else bytes(salt_key)
+        if len(self._key) != 32:
+            raise ValueError("a salt key is 32 bytes")
+        self._dev: dict[Any, tuple] = {}
+
+    @staticmethod
+    def nonce(step: int) -> bytes:
+        return int(step).to_bytes(12, "little")
+
+    def salts(self, step: int, lo: int, hi: int) -> bytes:
+        """The salts of leaves [lo, hi) of `step`, concatenated."""
+        y = self.instance.salt_bytes
+        return chacha20(self._key, self.nonce(step), (hi - lo) * y, counter=lo * y // 64) if hi > lo else b""
+
+    def leaves_of(self, step: int, inner: Sequence[bytes], first: int = 0) -> list[bytes]:
+        """The host reference of the device rule: the tree leaves of chunk-leaf digests ``inner`` (leaves ``first ..``) of `step`."""
+        return self.leaves.leaves_with(inner, self.salts(step, first, first + len(inner)))
+
+    def device_args(self, ext: Any, device: Any) -> tuple:
+        """(tables, midstates) on `device`, built once with the GPU tree extension `ext`: the key's byte tables, the prefixes' midstates."""
+        import torch
+
+        got = self._dev.get(str(device))
+        if got is None:
+            inst, k = self.instance, self.leaves.key
+            flat = b"".join(t.to_bytes(inst.digest_bytes, "little") for table in inst.byte_tables(k) for t in table)
+            tables = torch.frombuffer(bytearray(flat), dtype=torch.uint8).to(device)
+            prefixes = torch.frombuffer(bytearray(inst.salt_prefix + inst.leaf_prefix(k)), dtype=torch.uint8).to(device)
+            got = self._dev[str(device)] = (tables, ext.hm96_midstates(prefixes))
+        return got
+
+    def key_words(self, step: int) -> Any:
+        """The device kernel's 11 words: the salt key's 8, then the step's nonce's 3 (little-endian), as a host int32 tensor."""
+        import torch
+
+        return torch.frombuffer(bytearray(self._key + self.nonce(step)), dtype=torch.int32).clone()
+
+    def drop(self) -> None:
+        """Forget the salt key (after every opening this run will serve)."""
+        self._key = b""
+        self._dev.clear()
 
 
 class LeafSchemeRule:
