@@ -24,6 +24,11 @@ REGISTRY: dict[str, str] = {
     "native_peak": "tools.native_peak.tool:NATIVE_PEAK",
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
+    "pouw_gemm": "benchmarks.pouw.tool:POUW_GEMM",
+    "pouw_route_u": "benchmarks.pouw.tool:POUW_ROUTE_U",
+    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",
+    "pouw_e2e": "benchmarks.pouw.tool:POUW_E2E",
+    "pouw_pearl_cal": "benchmarks.pouw.tool:POUW_PEARL_CAL",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
     "flock_pure": "backends.flock.tool:FLOCK_PURE",
     "flock_agreement": "backends.flock.verifier.tool:FLOCK_AGREEMENT",
@@ -39,11 +44,13 @@ REGISTRY: dict[str, str] = {
 
 
 def _from_file(module: str, attr: str, source_root: Path):
-    """Execute `<source_root>/<module path>.py` under a name unique to that file: no sys.path edits, no cross-root module caching."""
+    """Execute `<source_root>/<module path>.py` under a name unique to that file and its content: no sys.path edits, no
+    cross-root module caching, and a declaration that changed on disk (the target branch gained a commit) is read anew."""
     rel = Path(*module.split("."))
     for cand in (source_root / rel.with_suffix(".py"), source_root / rel / "__init__.py"):
         if cand.is_file():
-            name = f"_research_tool_{hashlib.sha256(str(cand.resolve()).encode()).hexdigest()[:16]}"
+            name = (f"_research_tool_{hashlib.sha256(str(cand.resolve()).encode()).hexdigest()[:16]}"
+                    f"_{hashlib.sha256(cand.read_bytes()).hexdigest()[:16]}")
             mod = sys.modules.get(name)
             if mod is None:
                 spec = importlib.util.spec_from_file_location(name, cand)

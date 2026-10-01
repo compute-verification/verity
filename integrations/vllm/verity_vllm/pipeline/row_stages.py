@@ -6,7 +6,9 @@
 * **Build**: the step Program, the request wrapper Program (``--lp``/``--t``, default the envelope; a stochastic row:
   its first request) and every other declared request shape, each under its launch context at B >= 2; then GP-01's
   workload Program (the row's Program digest) and the required-value manifest of record (``manifest build`` /
-  ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).
+  ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).  After a PASS Build the
+  row stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
+  (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
   a stochastic row, the sampler value check; ``row_records.match_summary`` decides.
@@ -15,8 +17,12 @@
   (derived beside the component Program, re-derived when stale); then the manifest verification and the verdict
   record (``verdict from-record``), whose outcome is the stage's decision.
 
+A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
+k-unit replay stratified by family, and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).
+
 Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
-record incomplete at Commit; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
+record incomplete at Commit; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the Commit
+attaches; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
 """
 from __future__ import annotations
 
@@ -31,6 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
+from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
 
@@ -52,25 +59,33 @@ def _stamp() -> str:
 
 class SingleRow(Row):
     def __init__(self, *, row: str, role: str, repo: str, rev: str, stages: str, env: RunEnv, gpu_util: str,
-                 build: BuildConfig, match: MatchConfig, commit: CommitConfig):
+                 build: BuildConfig, match: MatchConfig, commit: CommitConfig, protocols: tuple[str, ...] | None = None):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="row_pod")
         self.gpu_util, self.cb, self.cm, self.ck_ = gpu_util, build, match, commit
+        self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
+        self.config_run = commit.config_run == "1"
 
     def run(self) -> int:
         try:
             self.prepare()
             if stage_on(self.stages, "build"):
                 self.build()
-            if stage_on(self.stages, "match"):
+                if self.config_run:
+                    RC.word_check(self)
+            if stage_on(self.stages, "match") and not self.config_run:
                 self.match()
             if stage_on(self.stages, "commit"):
                 self.commit()
         except Stop as s:
+            if self.config_run and self.trap:
+                RC.config_record(self)
             return s.rc
         finally:
             if self.trap:
                 self.research_result()
+        if self.config_run:
+            RC.config_record(self)
         self.tl("row", "end", ("ok", "true"))
         self.timeline_report()
         self.log("DONE")
@@ -153,10 +168,10 @@ class SingleRow(Row):
         self.LP = self.cb.lp if self.cb.lp is not None else s["LP"]
         self.T = self.cb.t if self.cb.t is not None else s["T"]
         self.MML = self.I + self.O
-        self.tgt = R.declared_target(self.path(self.wl))
+        self.tgt = R.declared_target(self.path(self.wl), self.protocols, row=self.row)
         self.tgt_args = ["--target", self.tgt] if self.tgt else []
         # the attention implementation the row executes (declared, else the pinned vLLM's default for this device) selects the tap
-        _, fa = self.output(self.cli("row", "fa-version", self.wl), stderr=subprocess.DEVNULL)
+        _, fa = self.output(self.cli("row", "fa-version", self.wl, *self.tgt_args), stderr=subprocess.DEVNULL)
         if self.guarded_max():
             self.hidden_so = self.env.hidden_so or (self.env.hidden_so_fa3_guarded if fa.strip() == "3" else self.env.hidden_so_fa2_guarded)
         else:
@@ -193,11 +208,11 @@ class SingleRow(Row):
         return self.ck_.guarded_max_tap == "1"
 
     def required_manifest(self, stage: str) -> int:
-        """Build the required-value manifest of record (Q_module_body_v1 over the Build's request Programs, under the tap and guarded-max
-        policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1."""
+        """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap and
+        guarded-max policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1."""
         wd = ""
         policy = R.tap_policy_flags(self.ck_)
-        self.tl(f"{stage}.required_manifest", "start", ("engine", "v2-query"))
+        self.tl(f"{stage}.required_manifest", "start", ("query", R.QUERY_OF_RECORD))
         if self.B > 1 and glob.glob(f"{self.d}/build_request_LP*_T*"):
             wd = R.workload_digest(self.d)
             cmd = self.cli("manifest", "build-global", "--fixture", self.wl, "--programs-root", self.d,
@@ -210,7 +225,7 @@ class SingleRow(Row):
             rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env).returncode
         if rc == 0:
             self.tl(f"{stage}.required_manifest", "end", ("rc", 0))
-            self.log(f"required-value manifest of record (Q_module_body_v1, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
+            self.log(f"required-value manifest of record ({R.QUERY_OF_RECORD}, B={self.B}{', workload digest ' + wd[:16] if wd else ''}): {_tail(log)}")
             return 0
         if os.path.exists(f"{self.d}/manifest.json"):
             os.remove(f"{self.d}/manifest.json")
@@ -245,13 +260,14 @@ class SingleRow(Row):
         return ["--launch-max-seqlen-q", *lc.split("\n")] if lc else []
 
     def derive_all(self, to: int) -> tuple[int, int]:
-        """The step, request and extra-shape derives, serially or ``--build-jobs`` wide -> (step rc, request rc)."""
+        """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
         cmd_s = self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "step", "--M", str(self.B), "--pos0", "8",
                          "--max-model-len", str(self.MML), "--workload", self.wl, "--out", f"{self.d}/build_step", *self.tgt_args)
         lctx = self.launch_args(self.LP, self.T)
         cmd_r = self.request_cmd(self.LP, self.T, f"{self.d}/build_request", lctx)
-        req = self.cb.build_jobs or "1"
-        jobs = str(R.build_jobs_auto()) if req == "auto" else req
+        req = self.cb.build_jobs or "auto"
+        shapes = [(self.LP, self.T), *R.extra_shapes(self.path(self.wl), self.LP, self.T)]
+        jobs = str(R.build_jobs_auto(shapes, R.model_layers(self.ck), budget_gb=self.cb.build_ram_budget_gb)) if req == "auto" else req
         jobs_n = int(jobs) if re.fullmatch(r"[0-9]+", jobs) else 1
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []
@@ -264,17 +280,18 @@ class SingleRow(Row):
             if lx is None:
                 rc_x = 1
                 continue
-            extra.append((f"build.derive_request_LP{lp}_T{t}", f"{out}.log", self.request_cmd(lp, t, out, lx)))
+            extra.append((f"build.derive_request_LP{lp}_T{t}", f"{out}.log", self.request_cmd(lp, t, out, lx), out))
         if jobs_n <= 1:
-            rc1 = self.run_tl("build.derive_step", to, f"{self.d}/build_step.log", cmd_s)
-            rc2 = self.run_tl("build.derive_request", to, f"{self.d}/build_request.log", cmd_r) if lctx is not None else 1
-            for st, lf, cmd in extra:
-                rcx = self.run_tl(st, to, lf, cmd)
+            rc1 = RC.derive_cached(self, "build.derive_step", to, f"{self.d}/build_step.log", cmd_s, f"{self.d}/build_step")
+            rc2 = (RC.derive_cached(self, "build.derive_request", to, f"{self.d}/build_request.log", cmd_r, f"{self.d}/build_request")
+                   if lctx is not None else 1)
+            for st, lf, cmd, out in extra:
+                rcx = RC.derive_cached(self, st, to, lf, cmd, out)
                 rc2 = rcx if rcx != 0 else rc2
             return rc1, rc2 if rc_x == 0 else 1
 
-        def job(st: str, lf: str, cmd: list[str]) -> None:
-            rc = self.run_tl(st, to, lf, cmd, ("par", "true"))
+        def job(st: str, lf: str, cmd: list[str], out: str) -> None:
+            rc = RC.derive_cached(self, st, to, lf, cmd, out, ("par", "true"))
             open(f"{lf}.rc", "w").write(f"{rc}\n")
 
         def rc_of(lf: str) -> int:
@@ -283,11 +300,11 @@ class SingleRow(Row):
             except (OSError, ValueError):
                 return 1
         t0 = int(time.time())
-        todo = [("build.derive_step", f"{self.d}/build_step.log", cmd_s)]
+        todo = [("build.derive_step", f"{self.d}/build_step.log", cmd_s, f"{self.d}/build_step")]
         if lctx is not None:
-            todo.append(("build.derive_request", f"{self.d}/build_request.log", cmd_r))
+            todo.append(("build.derive_request", f"{self.d}/build_request.log", cmd_r, f"{self.d}/build_request"))
         todo += extra
-        for _, lf, _ in todo:
+        for _, lf, _, _ in todo:
             if os.path.exists(f"{lf}.rc"):
                 os.remove(f"{lf}.rc")
         with ThreadPoolExecutor(max_workers=jobs_n) as pool:
@@ -297,7 +314,7 @@ class SingleRow(Row):
         if self.signalled:
             self.cancelled(rc1)
         rc2 = rc_of(f"{self.d}/build_request.log") if lctx is not None else 1
-        for _, lf, _ in extra:
+        for _, lf, _, _ in extra:
             rc2 = rc_of(lf) if rc_of(lf) != 0 else rc2
         rc2 = rc_x if rc_x != 0 else rc2
         self.log(f"Build derives ran {jobs_n}-wide (SYS-06): step rc={rc1} request rc={rc2} shapes={len(extra) + 1} wall={int(time.time()) - t0}s")
@@ -310,22 +327,46 @@ class SingleRow(Row):
                 out += ["--derived", dd]
         return out
 
+    def follow_compose(self, to: int) -> tuple[Any, str, str]:
+        """B >= 2: the workload Program's compose starts beside the derives (`global-program --follow`) and loads each component as its
+        derive finishes -> (its future, the derives-done marker, the derives-failed marker)."""
+        done, stop = f"{self.d}/build_workload.derives_done", f"{self.d}/build_workload.derives_failed"
+        for f in (done, stop):
+            if os.path.exists(f):
+                os.remove(f)
+        dirs = [f"{self.d}/build_request", *(f"{self.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T))]
+        cmd = self.cli("global-program", "--workload", self.wl, *(x for d in dirs for x in ("--derived", d)), "--out", f"{self.d}/build_workload",
+                       "--checkpoint-dir", self.ck, "--follow", str(to), "--follow-done", done, "--follow-stop", stop, py=self.py312)
+        pool = ThreadPoolExecutor(max_workers=1)
+        fut = pool.submit(self.run_tl, "build.global_program", to, f"{self.d}/build_workload.log", cmd)
+        pool.shutdown(wait=False)
+        return fut, done, stop
+
     def build(self) -> None:
         scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
         to = self.cb.build_timeout or min(CAP, 900 * scale)
         t0 = int(time.time())
         self.tl("stage.build", "start")
         self.gpu_exclusive("build")
+        follow = self.follow_compose(to) if self.B > 1 else None
         rc1, rc2 = self.derive_all(to)
         wall = int(time.time()) - t0
         self.tl("build.summary", "start")
         ok = self.guarded("build summary", R.build_summary, self.d)
         wd = ""
         self.tl("build.summary", "end", ("ok", ok))
+        if follow is not None:
+            fut, done, stop = follow
+            open(done if ok == "PASS" else stop, "w").close()
+            rcw = fut.result()
+            for f in (done, stop):
+                if os.path.exists(f):
+                    os.remove(f)
         if ok == "PASS":
-            rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
-                              self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
-                                       "--checkpoint-dir", self.ck, py=self.py312))
+            if follow is None:
+                rcw = self.run_tl("build.global_program", to, f"{self.d}/build_workload.log",
+                                  self.cli("global-program", "--workload", self.wl, *self.derived_dirs(), "--out", f"{self.d}/build_workload",
+                                           "--checkpoint-dir", self.ck, py=self.py312))
             wd = (R.load_json(f"{self.d}/build_workload/workload_program.json") or {}).get("workload_digest") or ""
             if not (rcw == 0 and wd):
                 ok = "FAIL"
@@ -356,6 +397,7 @@ class SingleRow(Row):
             self.log("BUILD FAIL -> stop")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10 if mrc == 0 else 13)
+        self.call_boundaries(to)
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
@@ -471,9 +513,11 @@ class SingleRow(Row):
     def match_cmd(self) -> list[str]:
         d, cm = self.d, self.cm
         snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
+        # the Programs the Match compares against (B=1 the request Program, B>=2 its components): the fold binds their sampler construction
+        progs = [p for p in ([f"{d}/build_request"] if self.B <= 1 else sorted(glob.glob(f"{d}/build_request_LP*_T*"))) if os.path.isfile(f"{p}/result.json")]
         return self.cli("match", "--case", self.role, "--workload", self.wl, "--out", f"{d}/match", "--checkpoint-dir", self.ck,
                         "--phase", cm.match_phase, "--python-gpu", self.py, "--python-cpu", self.py312, "--max-num-seqs", str(self.B),
-                        "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, "--skip", SKIP,
+                        "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax, *(x for p in progs for x in ("--program-dir", p)), "--skip", SKIP,
                         "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--cards-dir", f"{d}/match/cards", py=self.py312)
 
     def stochastic(self) -> bool:
@@ -510,9 +554,14 @@ class SingleRow(Row):
     def commit_cmd(self, taps: list[str]) -> list[str]:
         """The Commit's command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources it attaches."""
         ck = self.ck_
+        pairs, warmup = ("1", "1") if self.config_run else (str(ck.pairs), "2")
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
-                       "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", str(ck.pairs), "--warmup", "2", "--max-num-seqs", str(self.B),
+                       "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
+        if self.config_run:                           # one instrumented run, bounded staging, k units stratified by family
+            cmd += ["--only-arm", "instrumented", "--bounded-staging", "--replay-k", str(ck.replay_k)]
+        if self.protocols:
+            cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
         # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint
         if int(ck.window_mb) > 0:
@@ -528,7 +577,7 @@ class SingleRow(Row):
             cmd.append("--replay-cache")
         if ck.required_classes:
             cmd += ["--required-classes", ck.required_classes]
-        if ck.vu_export != "0":
+        if ck.vu_export != "0" and not self.config_run:
             cmd += ["--vu-export-dir", self.vu_export_dir()]
         if ck.serving_rows:
             cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
@@ -558,27 +607,28 @@ class SingleRow(Row):
                        "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
         return req
 
+    def program_digest(self) -> str:
+        """The Program digest the Commit is keyed by: the one named, else the Build's of record ("" when unreadable)."""
+        try:
+            return self.ck_.program_digest or R.program_digest_of_record(self.d, self.B)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return ""
+
     def manifest_of_record(self) -> str:
-        """The required-value manifest the Commit runs over: the one named, else the Build's when the query path built it
-        (a pre-query manifest is moved aside, never used), else rebuilt here from the Build's request Programs."""
+        """The required-value manifest the Commit runs over: the one named, else the Build's when it is of record (`R.manifest_not_of_record`:
+        the query of record with a partition, the Build's Program digest, the row's tap policies, a passing word check); any other is moved
+        aside, never used, and the manifest rebuilt here from the Build's request Programs."""
         d = self.d
         man = self.ck_.required_manifest or ""
         if not man and os.path.isfile(f"{d}/manifest.json"):
-            eng = R.manifest_engine(f"{d}/manifest.json")
-            mismatch = R.manifest_policy_mismatch(f"{d}/manifest.json", self.ck_) if eng == "v2-query" else []
-            if mismatch:
-                prev = f"{d}/manifest.policy-{'-'.join(mismatch).replace('_', '-')}-{_stamp()}.json"
-                os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build disagrees with this Commit's taps on the {', '.join(mismatch)} policy: moved aside "
-                         f"({os.path.basename(prev)}), rebuilding the manifest under the row's policies")
-            elif eng == "v2-query":
+            slug, why = R.manifest_not_of_record(R.load_json(f"{d}/manifest.json"), self.program_digest(), self.ck_)
+            if not why:
                 man = f"{d}/manifest.json"
                 self.log(f"required-value manifest of record: {man} (built at the Build stage: {_tail(f'{d}/manifest.log', 200)})")
             else:
-                prev = f"{d}/manifest.pre-v2-{_stamp()}.json"
+                prev = f"{d}/manifest.{slug}-{_stamp()}.json"
                 os.replace(f"{d}/manifest.json", prev)
-                self.log(f"manifest.json beside the Build is not the query path's (query.engine={eng or 'none'}): moved aside "
-                         f"({os.path.basename(prev)}), rebuilding the manifest of record")
+                self.log(f"manifest.json beside the Build {why}: moved aside ({os.path.basename(prev)}), rebuilding the manifest of record")
         if not man and (os.path.isfile(f"{d}/build_request/instances.json.gz") or glob.glob(f"{d}/build_request_LP*_T*")):
             mrc = self.required_manifest("commit")
             if mrc == 3:
@@ -688,12 +738,7 @@ class SingleRow(Row):
         cmd = self.commit_cmd(taps)
         if man:
             cmd += ["--required-manifest", man]
-        pdig = ck.program_digest
-        if not pdig:
-            try:
-                pdig = R.program_digest_of_record(d, self.B)
-            except (OSError, ValueError, KeyError, TypeError, AttributeError):
-                pdig = ""
+        pdig = self.program_digest()
         if pdig:
             cmd += ["--program-digest", pdig]
         cmd += (ck.commit_args or "").split()
@@ -722,6 +767,9 @@ class SingleRow(Row):
             self.gpu_exclusive("commit-cold")
             rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
+        if self.config_run:
+            RC.commit_verdict(self, rck, wall)
+            return
         if rck == 0 and man:
             self.manifest_verify(man)
         self.tl("closure.verdict", "start")

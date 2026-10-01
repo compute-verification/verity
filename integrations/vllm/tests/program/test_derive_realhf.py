@@ -4,14 +4,14 @@ on REAL `transformers` model classes, not the project's hand-written stand-ins (
 Every case is recorded as one JSONL row (outcome, verbatim refusal, rules fired in order, digest, evaluation vs torch CPU) and
 the test itself only fails on a CRASH (unclassified exception), a WRONG program (values / tokens differ from torch CPU beyond the
 importer's documented tolerance) or lost sharing. An explicit `Unsupported(...)` is a lawful outcome and is reported, not fixed
-(the importer is not modified by this lane; gaps are filed as G-RH-n in docs/vllm-poc/derive-requests.md).
+(the importer is not modified by this lane; gaps are filed as G-RH-n).
 
 Tiny random-initialised configs (no downloads; HF_HUB_OFFLINE=1): hidden 64, 2 layers, 4 heads, 2 KV heads (GQA models),
 vocab 128, intermediate 128, max_position 64; tie_word_embeddings True/False; f32 and bf16; `attn_implementation` eager / sdpa.
 
 Run (pod, `/workspace/venv-realhf`, torch 2.14.0+cu130, transformers 5.16.1):
 
-    cd /workspace/veritor-realhf && export PYTHONPATH=$PWD:$PWD/src HF_HUB_OFFLINE=1
+    cd <tree>/integrations/vllm && export PYTHONPATH=$PWD HF_HUB_OFFLINE=1
     REALHF_OUT=/workspace/realhf/results/realhf.jsonl /workspace/venv-realhf/bin/python -m pytest \
         tests/program/test_derive_realhf.py -q -p no:cacheprovider -s
 
@@ -23,7 +23,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -62,7 +61,7 @@ def _git_head() -> str:
         return os.environ["REALHF_HEAD"]
     try:
         return subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
-                              capture_output=True, text=True, timeout=5).stdout.strip()
+                              capture_output=True, text=True).stdout.strip()
     except Exception:  # noqa: BLE001
         return ""
 
@@ -484,22 +483,20 @@ def evaluate(rep: DeriveReport, module: nn.Module, inputs: tuple, tol_dtype: str
     words.append(wwords)
     if sum(len(x) for x in words) != P.input_gates:
         return {"evaluated": False, "why": f"{sum(len(x) for x in words)} words vs {P.input_gates} input gates"}
-    t0 = time.time()
     try:
         tab = materialize(P, words)
     except Exception as e:  # noqa: BLE001
         return {"evaluated": False, "why": f"materialize: {type(e).__name__}: {str(e)[:300]}"}
-    secs = time.time() - t0
     with torch.no_grad():
         want = module(*[x.clone() for x in inputs])
     want_flat = want.reshape(-1)
     outs = P.circuit.root_outputs()
     if len(outs) != want_flat.numel():
-        return {"evaluated": True, "match": False, "why": f"{len(outs)} root outputs vs {want_flat.numel()} torch outputs", "seconds": secs}
+        return {"evaluated": True, "match": False, "why": f"{len(outs)} root outputs vs {want_flat.numel()} torch outputs"}
     got = torch.tensor([_decode(tab[g], P.circuit.gate(g).prim.ret.w, want_flat.dtype) for g in outs], dtype=torch.float64)
     want_d = want_flat.to(torch.float64)
     exact = int((got == want_d).sum())
-    res = {"evaluated": True, "words": len(outs), "exact_words": exact, "bit_exact": exact == len(outs), "eval_seconds": round(secs, 1),
+    res = {"evaluated": True, "words": len(outs), "exact_words": exact, "bit_exact": exact == len(outs),
            "gates_evaluated": P.circuit.size}
     if want_flat.is_floating_point():
         d = (got - want_d).abs()
@@ -562,24 +559,20 @@ def test_realhf_case(case: Case):
                            "transformers": transformers.__version__, "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=I, MAXPOS=MAXPOS),
                            "LP": LP, "STEPS": STEPS if case.what == "greedy" else None, "prompt": PROMPT.tolist(),
                            "probe": PROBE, "probe_patches": PROBE_APPLIED}
-    t0 = time.time()
     try:
         module, inputs = case.make()
     except Exception as e:  # noqa: BLE001
         rec.update(outcome="construct-failed", detail=f"{type(e).__name__}: {str(e)[:400]}")
         _record(rec)
         pytest.fail(f"model construction failed: {rec['detail']}")
-    rec["construct_seconds"] = round(time.time() - t0, 1)
     metas = tuple(torch.empty(x.shape, dtype=x.dtype, device="meta") for x in inputs)
-    t0 = time.time()
     try:
         rep = derive_report(module, metas, mode="reference", name=f"RealHF[{case.id}]", config={**rec["dims"], "dtype": case.dtype, "impl": case.impl, "tie": case.tie})
     except Exception as e:  # noqa: BLE001
-        rec.update(outcome="crash", detail=f"{type(e).__name__}: {str(e)[:600]}", derive_seconds=round(time.time() - t0, 1))
+        rec.update(outcome="crash", detail=f"{type(e).__name__}: {str(e)[:600]}")
         _record(rec)
         print("\nREALHF", json.dumps(rec, default=str)[:1500])
         pytest.fail(f"CRASH-NOT-REFUSAL {case.id}: {rec['detail']}")
-    rec["derive_seconds"] = round(time.time() - t0, 1)
     prov = rep.provenance
     order, counts = _rules_in_order(prov)
     rec["rules_in_order"] = order

@@ -33,7 +33,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from .merkle import _NODE, MerkleTree, _hash, _uint, merkle_depth
+from .merkle import _NODE, MerkleTree, _hash, _uint, blake3_node, merkle_depth
 from verity.errors import ProtocolError
 
 type Node = Callable[[int, int, bytes, bytes], bytes]
@@ -54,6 +54,8 @@ def _ranks(count: int, ranks: Iterable[int]) -> tuple[int, ...]:
 
 def _node_of(domain_id: bytes, hash: str = "sha256") -> Node:
     def node(level: int, index: int, left: bytes, right: bytes) -> bytes:
+        if hash in ("blake3", "blake3-s256"):
+            return blake3_node(domain_id, level, index, left, right)
         return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
 
     return node

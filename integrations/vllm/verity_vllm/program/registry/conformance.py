@@ -51,9 +51,8 @@ DIVERGENCES = {
     ],
 }
 
-# The f32 -> bf16 conversion the production programs bind and its NaN rule (lane L8,
-# docs/verified-backend/l8-nan-primitive.md). `F32ToBf16Rn_v1` (NaN -> 0x7FC0, the software canonicalisation and
-# `veritor.tc-ampere-bf16@1`'s gate) stays registered and unchanged; B0/B1 bind `F2fpBf16_v1` (NaN -> 0x7FFF, the
+# The f32 -> bf16 conversion the production programs bind and its NaN rule (lane L8). `F32ToBf16Rn_v1` (NaN -> 0x7FC0,
+# the software canonicalisation and `veritor.tc-ampere-bf16@1`'s gate) stays registered and unchanged; B0/B1 bind `F2fpBf16_v1` (NaN -> 0x7FFF, the
 # measured `cvt.rn.bf16.f32` word; `veritor.tc-ampere-bf16@2`'s gate). The two are equal on every non-NaN word, so a
 # recorded trace without NaN words at conversion outputs is evidence about either binding.
 NAN_CANONICALISATION = {
@@ -66,8 +65,8 @@ NAN_CANONICALISATION = {
     "interface_family": {"F2fpBf16_v1": "veritor.tc-ampere-bf16@2 f32_to_bf16", "F32ToBf16Rn_v1": "veritor.tc-ampere-bf16@1 f32_to_bf16"},
     "narrow_delta": {"lean": ["VeritorSpec.TCBHw.castF32ToBf16Hw_eq_of_not_nan", "VeritorSpec.TCBHw.castF32ToBf16Hw_of_nan",
                               "VeritorSpec.TCBHw.castF32ToBf16Hw_ne_iff"],
-                     "rust": "zk/sp1/common/src/tc.rs the_two_casts_differ_only_on_nan (all 2^32 words, release build)",
-                     "python": "tests/veritor/core/test_tc_nan.py test_exhaustive_2_32_sweep (all 2^32 words, -m slow)"},
+                     "rust": "backends/sp1/common/src/tc.rs the_two_casts_differ_only_on_nan (all 2^32 words, release build)",
+                     "python": "the predecessor implementation's exhaustive 2^32 sweep (all 2^32 words; not in this repository)"},
     "program_digests_unchanged": {"B0": "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d",
                                   "B1": "11f3b7b6092d8020821f2388d91b029b2ad033a925bf2682bd918720d6e61097"},
     "recorded_traces_finite": {"B0": {"bf16_leaves": 14126, "bf16_words": 12568704, "nan_words": 0, "inf_words": 0},

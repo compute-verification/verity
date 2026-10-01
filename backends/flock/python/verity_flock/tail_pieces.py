@@ -29,6 +29,8 @@ QNAN_MUFU = 0x7FFFFFFF
 INF = 0x7F800000
 ONE_F = 0x3F800000
 DEFAULT_NAN = 0xFFC00000
+#: every NaN result of `NvLogf_v2`'s logs (`sampling.LOG_NAN`, the GPU's canonical NaN)
+LOG_NAN = 0x7FFFFFFF
 BIG = 0x7E800000       # 2^126
 TINY = 0x00800000      # 2^-126
 QUARTER = 0x3E800000   # 0.25
@@ -48,17 +50,16 @@ def _load_table(name: str):
     if name in TABLE_SHA256:
         arr = np.ascontiguousarray(_DERIVED[name](), dtype="<u4")
     else:
-        from verity_vllm.program.kernels import fa2_relation, rms_relation
-        t = fa2_relation.tables() if name == "ex2" else rms_relation.tables("cuda")
-        arr = np.ascontiguousarray(getattr(t, name), dtype="<u4")
+        from verity.ml import mufu
+        arr = np.ascontiguousarray(mufu.table(name), dtype="<u4")
     if hashlib.sha256(arr.tobytes()).hexdigest() != table_sha256(name):
         raise ValueError(f"the {name} table is not the pinned one ({table_sha256(name)})")
     return arr
 
 
 #: [identity below, saturated from) on |x| of each tanh table: the words its table holds. MUFU.TANH's are the IR's measured rules
-#: (``prims.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x itself below
-#: 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
+#: (``verity.ml.mufu.MUFU_TANH_RULES``); RN32(math.tanh)'s come from evaluating it on every word below 10.0 of both signs: x
+#: itself below 0x39B89BA3, 1.0 from 0x41102CB4, odd everywhere
 TANH_BOUNDS = {"tanh_mufu": (0x3B800001, 0x41000000), "tanh_rn": (0x39B89BA3, 0x41102CB4)}
 
 
@@ -67,14 +68,14 @@ def _tanh_index(lo: int, hi: int):
 
 
 def _mufu_tanh_table():
-    """``MufuTanh_v1``'s measured table (``prims._tanh_shards``) at every positive word of [identity_below, saturate_from), by the
-    word's low 27 bits."""
+    """``MufuTanh_v1``'s measured table (``verity.ml.mufu.mufu_tanh_shards``) at every positive word of [identity_below,
+    saturate_from), by the word's low 27 bits."""
     import numpy as np
-    from verity_vllm.program.registry import prims as RP
+    from verity.ml import mufu
 
     lo, hi = TANH_BOUNDS["tanh_mufu"]
-    assert (lo, hi) == (RP.MUFU_TANH_RULES["identity_below"], RP.MUFU_TANH_RULES["saturate_from"])
-    (sh,) = RP._tanh_shards()
+    assert (lo, hi) == (mufu.MUFU_TANH_RULES["identity_below"], mufu.MUFU_TANH_RULES["saturate_from"])
+    (sh,) = mufu.mufu_tanh_shards()
     out = np.zeros(1 << 27, np.uint32)
     for k in range((lo - sh.lo) // sh.block_words, (hi - 1 - sh.lo) // sh.block_words + 1):
         b = sh.block(k)
@@ -336,6 +337,39 @@ def div_full_scale_a(C, a, b):
                mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24), ir_nan=True), list(a)))
 
 
+# --- the `_v2` FP32 primitives: every NaN result the GPU's 0x7FFFFFFF (fp.F32_NAN_PTX), no operand's payload or sign ----------
+_V2 = {"nan_word": fp.F32_NAN_PTX}
+
+
+def f32_add_ftz_v2(C, a, b):
+    return ftz(C, fp.f32_add(C, ftz(C, a), ftz(C, b), **_V2))
+
+
+def f32_sub_ftz_v2(C, a, b):
+    return ftz(C, fp.f32_sub(C, ftz(C, a), ftz(C, b), **_V2))
+
+
+def f32_mul_ftz_v2(C, a, b):
+    return ftz(C, fp.f32_mul(C, ftz(C, a), ftz(C, b), **_V2))
+
+
+def f32_fma_ftz_v2(C, a, b, c):
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), ftz(C, c), **_V2))
+
+
+def f32_fma_sub_ftz_v2(C, a, b, c):
+    return ftz(C, fp.f32_fma(C, ftz(C, a), ftz(C, b), fp.f32_neg(ftz(C, c)), **_V2))
+
+
+def div_full_scale_a_v2(C, a, b):
+    """``DivFullScaleA_v2``: as ``_v1``, each scaling FMUL's NaN 0x7FFFFFFF; an unscaled a (a NaN included) passes through."""
+    mag = b[:31]
+    big = C.AND(NOT(_ult_const(C, mag, 0x7E800001)), _ult_const(C, mag, 0x7F800001))
+    small = _ult_const(C, mag, 0x00800000)
+    return mux(C, big, fp.f32_mul(C, a, fp.f32_const(QUARTER), **_V2),
+               mux(C, small, fp.f32_mul(C, a, fp.f32_const(TWO24), **_V2), list(a)))
+
+
 # --- the sampler: Philox, the Gumbel noise (libdevice logf / log1pf), the row's bit logic -----------------------------------
 
 PHILOX_KEY_A, PHILOX_KEY_B = 0x9E3779B9, 0xBB67AE85
@@ -392,8 +426,9 @@ def gumbel_stream_key(C, seed, pos):
     return philox_word0(C, pos[:32], pos[32:64], zero, zero, seed[:32], seed[32:64])
 
 
-def nv_logf(C, a):
-    """libdevice ``__nv_logf`` on an f32 word (FTZ), operation for operation as ``sampling.nv_logf``."""
+def nv_logf(C, a, gpu: bool = False):
+    """libdevice ``__nv_logf`` on an f32 word (FTZ), operation for operation as ``sampling.nv_logf``; with ``gpu`` every NaN result is
+    ``LOG_NAN`` (``sampling.nv_logf_gpu``, ``NvLogf_v2``)."""
     small = OR(C, C.AND(a[31], NOT(_is_nan(C, a))), C.AND(NOT(a[31]), _ult_const(C, a[:31], 0x00800000)))   # a < FLT_MIN
     a2 = mux(C, small, _mul_ftz(C, a, TWO_P23), a)
     i0 = mux(C, small, _c32(0xC1B80000), _c32(0))
@@ -409,15 +444,19 @@ def nv_logf(C, a):
     r = f32_mul_ftz(C, r, f)
     r = f32_fma_ftz(C, r, f, f)
     r = _fma_ftz(C, i2, LN2, r)
-    # a2 >= 0x7F800000 (+inf, a NaN, a negative): fma(a2, inf, inf) is a2 quieted for a NaN, +inf, else the invalid NaN 0xFFC00000
-    special = mux(C, _is_nan(C, a2), a2[:22] + [ONE] + a2[23:], mux(C, a2[31], _c32(0xFFC00000), _c32(INF)))
+    # a2 >= 0x7F800000 (+inf, a NaN, a negative): fma(a2, inf, inf) is a2 quieted for a NaN, +inf, else the invalid NaN 0xFFC00000;
+    # with gpu, +inf for +inf, else LOG_NAN
+    if gpu:
+        special = mux(C, _eq_const(C, a2, INF), _c32(INF), _c32(LOG_NAN))
+    else:
+        special = mux(C, _is_nan(C, a2), a2[:22] + [ONE] + a2[23:], mux(C, a2[31], _c32(0xFFC00000), _c32(INF)))
     r = mux(C, NOT(_ult_const(C, a2, 0x7F800000)), special, r)
     return mux(C, NOT(or_reduce(C, a2[:31])), _c32(0xFF800000), r)
 
 
-def nv_log1pf(C, a):
+def nv_log1pf(C, a, gpu: bool = False):
     """libdevice ``__nv_log1pf`` (FTZ): ``__fadd_rz(a, 1.0f)`` rounded toward zero, the binade selector, the polynomial, as
-    ``sampling.nv_log1pf``."""
+    ``sampling.nv_log1pf``; with ``gpu`` every NaN result is ``LOG_NAN`` (``sampling.nv_log1pf_gpu``)."""
     s = ftz(C, fp.f32_add(C, ftz(C, a), _c32(ONE_F), rz=True))
     e = sub(C, s, _c32(1061158912), 32)[0]
     e = [ZERO] * 23 + e[23:]
@@ -434,20 +473,21 @@ def nv_log1pf(C, a):
     r = f32_fma_ftz(C, r, u, u)
     r = _fma_ftz(C, ef, LN2, r)
     big = NOT(_ult_const(C, a, 0x7F800000))
-    r = mux(C, C.AND(big, _signed_gt_const(C, a, -1082130432)), _fma_ftz(C, a, INF, INF), r)
+    outside = C.AND(big, _signed_gt_const(C, a, -1082130432))                    # a < -1, +inf or a NaN
+    r = mux(C, outside, mux(C, _eq_const(C, a, INF), _c32(INF), _c32(LOG_NAN)) if gpu else _fma_ftz(C, a, INF, INF), r)
     return mux(C, C.AND(big, NOT(or_reduce(C, a[:31]))), _c32(0x80000000), r)
 
 
-def gumbel_noise_lane(C, key, v):
+def gumbel_noise_lane(C, key, v, gpu: bool = False):
     """``GumbelNoiseLane_v1``: ``-logf(-log1pf(-max(rand(key, v), 2^-31')))`` in f32 (FTZ); rand is Philox word 0 of counter
-    (v, 0, 0, 0) under key (key, 0), made uniform by ``uint_to_uniform_float``."""
+    (v, 0, 0, 0) under key (key, 0), made uniform by ``uint_to_uniform_float``.  With ``gpu``, ``_v2``: through the GPU-NaN logs."""
     zero = [ZERO] * 32
     w = philox_word0(C, v, zero, zero, zero, key, zero)
     xi = [b ^ w[31] for b in w[:31]] + [ZERO]                   # i32 w, or -w - 1 when negative
     u = f32_mul_ftz(C, _i32_to_f32(C, xi), _c32(TL_RAND_SCALE))
     u = mux(C, _ult_const(C, u[:31], TL_RAND_SCALE), _c32(TL_RAND_SCALE), u)
-    l1 = nv_log1pf(C, u[:31] + [NOT(u[31])])
-    g = nv_logf(C, l1[:31] + [NOT(l1[31])])
+    l1 = nv_log1pf(C, u[:31] + [NOT(u[31])], gpu)
+    g = nv_logf(C, l1[:31] + [NOT(l1[31])], gpu)
     return g[:31] + [NOT(g[31])]
 
 
@@ -610,6 +650,7 @@ PIECES = {
     "SelectBit_v1": lambda C, c, a, b: mux(C, c[0], a, b),
     "I32ToF32_v1": _i32_to_f32,
     "NvLogf_v1": nv_logf,
+    "NvLogf_v2": lambda C, a: nv_logf(C, a, gpu=True),
     "TopPNumkeep_v1": topp_numkeep,
     "MufuRcpFtz_v1": mufu_rcp,
     "Fa2InvSum_v1": fa2_inv_sum,
@@ -623,6 +664,7 @@ PIECES = {
     "I32Add_v1": lambda C, a, b: add(C, a, b, width=32),
     "GumbelStreamKey_v1": gumbel_stream_key,
     "GumbelNoiseLane_v1": gumbel_noise_lane,
+    "GumbelNoiseLane_v2": lambda C, key, v: gumbel_noise_lane(C, key, v, gpu=True),
     "F32Eq_v1": f32_eq,
     "BitNot_v1": lambda C, a: [NOT(a[0])],
     "BitOr_v1": lambda C, a, b: [OR(C, a[0], b[0])],
@@ -636,6 +678,14 @@ PIECES = {
     "F32ToE4m3Sat_v1": f32_to_e4m3_sat,
     "F32Sub_v1": fp.f32_sub,
     "F32FmaRm_v1": lambda C, a, b, c: fp.f32_fma(C, a, b, c, rm=True),
+    "F32AddFtz_v2": f32_add_ftz_v2,
+    "F32SubFtz_v2": f32_sub_ftz_v2,
+    "F32MulFtz_v2": f32_mul_ftz_v2,
+    "F32FmaFtz_v2": f32_fma_ftz_v2,
+    "F32FmaSubFtz_v2": f32_fma_sub_ftz_v2,
+    "DivFullScaleA_v2": div_full_scale_a_v2,
+    "F32Sub_v2": lambda C, a, b: fp.f32_sub(C, a, b, **_V2),
+    "F32FmaRm_v2": lambda C, a, b, c: fp.f32_fma(C, a, b, c, rm=True, **_V2),
     "F32Sat_v1": f32_sat,
     "F32BitsShl23_v1": lambda C, a: [ZERO] * 23 + list(a[:9]),
     "F32IsFinite_v1": lambda C, a: [NOT(and_reduce(C, a[23:31]))],

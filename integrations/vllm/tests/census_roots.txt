@@ -12,6 +12,9 @@
 
 # --- rules: every sweep runner and every negatives runner (the adversarial inputs the verifier must reject)
 verity_vllm/ops/canary.sh        # the former sweep/*.sh glob (ops/ also holds bench/ shells)
+verity_vllm/ops/epoch_row.sh     # the re-baseline epoch's row job (runs epoch_store.sh, epoch_failfast.sh and `verity-vllm epoch`)
+verity_vllm/ops/epoch_store.sh
+verity_vllm/ops/epoch_failfast.sh
 verity_vllm/ops/compiled_commit.sh
 verity_vllm/ops/fa3_row_negatives.sh
 verity_vllm/ops/pod_fa2_tap.sh
@@ -35,4 +38,8 @@ verity_vllm.properties.fa_tap_exactness
 verity_vllm.properties.norm_tap_exactness
 verity_vllm.properties.router_tap_exactness
 verity_vllm.properties.vocab_range_exactness
+verity_vllm.program.registry.rope_difftest     # properties-admission --adapter: imported by name
+verity_vllm.program.registry.moe_difftest      # properties-admission --adapter: imported by name
+verity_vllm.program.registry.collectives_difftest      # properties-admission --adapter: imported by name
+verity_vllm/protocol_options/      # the adapters, imported by name when a run enables their protocol (protocol_options.adapter)
 tests/regression/

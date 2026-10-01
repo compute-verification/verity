@@ -9,7 +9,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -24,6 +23,7 @@ from research.store.local import LocalStore, object_key
 from research.store.model import Label
 
 from test_pod_guard_daemon import QUIET, _env, idle_since
+from waits import Gate, wait_runner
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -54,15 +54,11 @@ def _request(tmp_path: Path, run_id: str, command: list[str], vault: Path) -> tu
     return p, root / "runs"
 
 
-def _wait_marker(run_dir: Path, timeout: float = 60) -> dict:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            return json.loads((run_dir / CU.MARKER).read_text())
-        except (OSError, ValueError):
-            time.sleep(0.1)
-    pytest.fail(f"no {CU.MARKER} in {run_dir}: {sorted(p.name for p in run_dir.iterdir())}; launcher.log: "
-                f"{(run_dir / 'launcher.log').read_text()[-2000:] if (run_dir / 'launcher.log').exists() else '-'}")
+def _wait_marker(run_dir: Path) -> dict:
+    wait_runner(run_dir)
+    assert (run_dir / CU.MARKER).exists(), (f"no {CU.MARKER} in {run_dir}: {sorted(p.name for p in run_dir.iterdir())}; launcher.log: "
+                                            f"{(run_dir / 'launcher.log').read_text()[-2000:] if (run_dir / 'launcher.log').exists() else '-'}")
+    return json.loads((run_dir / CU.MARKER).read_text())
 
 
 def _other_machine(tmp_path: Path, vault: Path, monkeypatch) -> LocalStore:
@@ -89,14 +85,15 @@ def _fixture_run(runs: Path, run_id: str = FIXTURE_RID) -> Path:
 
 def test_the_machine_publishes_every_run_file_and_any_machine_sees_custody(tmp_path, monkeypatch):
     vault = tmp_path / "vault"
-    cmd = [PY, "-c", "import os; print('hello from the workload'); print('token seen:', 'AWS_SESSION_TOKEN' in os.environ)"]
+    cmd = [PY, "-c", "import os; print('hello from the workload'); print('token seen:', 'AWS_SESSION_TOKEN' in os.environ); "
+                     "print('run dir:', os.environ['RESEARCH_RUN_DIR'] == os.getcwd())"]
     req, runs = _request(tmp_path, RID, cmd, vault)
     out = remote.launch_request(req)
     assert out["started"], out
     d = runs / RID
     marker = _wait_marker(d)
     assert marker["preserved"] is True, marker
-    assert (d / "stdout.log").read_text().splitlines() == ["hello from the workload", "token seen: False"], "the key is never the workload's"
+    assert (d / "stdout.log").read_text().splitlines() == ["hello from the workload", "token seen: False", "run dir: True"], "the key is never the workload's"
     assert not (req.parent / remote.CUSTODY_DIR / CU.CRED_FILE).exists(), "the key is deleted once used"
     assert SECRET not in (d / "launcher.log").read_text() + (d / "job.json").read_text() + req.read_text() + json.dumps(marker)
     assert {"stdout.log", "stderr.log", "launcher.log", "job.json", "status.json"} <= set(marker["files"])
@@ -136,16 +133,21 @@ def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custo
     import signal
 
     vault = tmp_path / "vault"
-    req, runs = _request(tmp_path, RID, [PY, "-c", "import time; time.sleep(2); print('finished')"], vault)
-    assert remote.launch_request(req)["started"]
-    d = runs / RID
-    deadline = time.time() + 30
-    while time.time() < deadline and (json.loads((d / "status.json").read_text()) if (d / "status.json").exists() else {}).get("state") != "running":
-        time.sleep(0.05)
-    runner = json.loads((d / "launch.json").read_text())["runner_pid"]
-    os.kill(runner, signal.SIGTERM)
-    os.kill(runner, signal.SIGHUP)
-    marker = _wait_marker(d)
+    arrived, gate = tmp_path / "arrived", Gate(tmp_path / "gate")
+    os.mkfifo(arrived)
+    workload = f"import sys; open(sys.argv[2], 'w').close(); {Gate.WAIT}; print('finished')"   # arrives, then waits for the gate
+    req, runs = _request(tmp_path, RID, [PY, "-c", workload, str(gate.path), str(arrived)], vault)
+    try:
+        assert remote.launch_request(req)["started"]
+        d = runs / RID
+        open(arrived, "rb").close()                              # returns once the workload runs: the runner is past its setup
+        runner = json.loads((d / "launch.json").read_text())["runner_pid"]
+        os.kill(runner, signal.SIGTERM)
+        os.kill(runner, signal.SIGHUP)
+        gate.release()
+        marker = _wait_marker(d)
+    finally:
+        gate.close()
     status = json.loads((d / "status.json").read_text())
     assert status["state"] == "done" and status["rc"] == 0 and (d / "stdout.log").read_text() == "finished\n"
     assert marker["preserved"] is True and CU.marker_problem(d) is None
@@ -153,7 +155,10 @@ def test_a_stray_sigterm_to_the_runner_does_not_cost_the_run_its_record_or_custo
     assert "runner got SIGTERM" in log and "runner got SIGHUP" in log
 
 
-def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys):
+def test_a_failed_publish_leaves_a_negative_marker_forgets_the_key_and_the_guard_refuses(tmp_path, capsys, monkeypatch):
+    from research.store import remote_s3
+
+    monkeypatch.setattr(remote_s3, "RETRY_BACKOFF_S", 0.0)
     runs = tmp_path / "root" / "runs"
     d = _fixture_run(runs)
     cdir = _custody_dir(tmp_path, FIXTURE_RID, tmp_path / "vault",
@@ -184,7 +189,7 @@ def test_on_the_machine_a_failed_push_leaves_launcher_log_as_recorded_and_names_
     code = ("from pathlib import Path; from research.store import custody as CU, remote_s3 as R; R.RETRY_BACKOFF_S = 0; "
             f"CU.runner_publish(Path({str(d)!r}), Path({str(cdir)!r}), sleep=lambda s: None, tries=1)")
     with open(d / "launcher.log", "ab") as log:
-        subprocess.run([PY, "-c", code], stdout=log, stderr=log, env={**os.environ, "PYTHONPATH": SRC}, check=True, timeout=120)
+        subprocess.run([PY, "-c", code], stdout=log, stderr=log, env={**os.environ, "PYTHONPATH": SRC}, check=True)
     assert (d / "launcher.log").read_bytes() == before
     marker = json.loads((d / CU.MARKER).read_text())
     assert marker["preserved"] is False and marker["error"].startswith("the custody key expired at 2020-01-01T00:00:00Z: the run outlived")
@@ -308,21 +313,24 @@ def test_a_refused_claim_deletes_the_staged_key(tmp_path):
 POD = "abcdefghijkl12"
 
 
+NOW = 1_800_000_000.0
+
+
 def _state(verdict="idle", unfetched=(), age_s=30.0):
-    return lambda pod_id, root: ({"verdict": verdict, "unfetched": list(unfetched), "runs": 2, "updated_epoch": time.time() - age_s}, "")
+    return lambda pod_id, root: ({"verdict": verdict, "unfetched": list(unfetched), "runs": 2, "updated_epoch": NOW - age_s}, "")
 
 
 def test_pod_custody_needs_a_fresh_guard_verdict_over_every_run_dir(tmp_path):
     st = LocalStore(tmp_path / "s")
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=_state())
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=_state())
     assert ok and "2 run dir(s) with custody" in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=_state(unfetched=[{"run": RID, "why": "no .custody"}]))
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=_state(unfetched=[{"run": RID, "why": "no .custody"}]))
     assert not ok and RID in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=_state(age_s=3600))
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=_state(age_s=3600))
     assert not ok and "guard dead?" in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, state=lambda p, r: (None, "no guard state on the pod"))
+    ok, why, _ = DR.pod_custody(st, POD, refresh=False, probe=False, now=NOW, state=lambda p, r: (None, "no guard state on the pod"))
     assert not ok and "unknown" in why
-    ok, why, _ = DR.pod_custody(st, POD, refresh=True, probe=False, state=_state())
+    ok, why, _ = DR.pod_custody(st, POD, refresh=True, probe=False, now=NOW, state=_state())
     assert not ok and "refresh" in why, "no remote: the catalog cannot be brought up to date, so custody is not claimed"
 
 
@@ -397,3 +405,56 @@ def test_custody_warns_before_pushing_a_run_bigger_than_the_warn_size(tmp_path, 
     assert CU.size_warning(tmp_path) is None
     monkeypatch.setattr(CU, "SIZE_WARN_BYTES", 1024)
     assert "no resume" in CU.size_warning(tmp_path)
+
+
+# ---- declared outputs: custody uploads what the run declares, and lists the rest ---------------------------------------------------------
+
+def _declare(d: Path, globs: list[str]) -> None:
+    job = json.loads((d / "job.json").read_text())
+    job.setdefault("execution", {})["declared_outputs"] = globs
+    (d / "job.json").write_text(json.dumps(job))
+
+
+def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_the_cap(tmp_path):
+    d = _fixture_run(tmp_path / "runs")
+    shutil.rmtree(d / "out")
+    (d / "res").mkdir()
+    (d / "res" / "result.json").write_text("{}")
+    (d / "res" / "deep").mkdir()
+    (d / "res" / "deep" / "big.bin").write_bytes(b"x" * 100)
+    (d / "a-small.txt").write_bytes(b"y" * 10)
+    (d / "z-junk.bin").write_bytes(b"z" * 100)
+    _declare(d, ["res/*"])
+    kept, trimmed = CU.select(d, cap=50)
+    assert {"stdout.log", "job.json", "res/result.json", "res/deep/big.bin", "a-small.txt"} <= set(kept)
+    assert [t["path"] for t in trimmed] == ["z-junk.bin"] and trimmed[0]["bytes"] == 100 and len(trimmed[0]["sha256"]) == 64
+    assert [t["path"] for t in CU.select(d, cap=0)[1]] == ["a-small.txt", "z-junk.bin"], "cap 0: never upload undeclared"
+    _declare(d, ["*"])
+    assert CU.select(d, cap=0)[1] == [], "`*` keeps everything"
+    w = CU.trim_warning(trimmed)
+    assert "--declared-output" in w and "will be dropped once lanes declare their outputs" in w and CU.SKILL in w
+
+
+def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_path, monkeypatch, capsys):
+    vault = tmp_path / "vault"
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{vault}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
+    runs = tmp_path / "runs"
+    d = _fixture_run(runs)
+    (d / "res").mkdir()
+    (d / "res" / "result.json").write_text('{"ok": true}')
+    (d / "junk.bin").write_bytes(b"j" * 1000)
+    _declare(d, ["res/*"])
+    assert data_main(["custody", FIXTURE_RID, "--runs-dir", str(runs), "--publish"]) == 0
+    assert "custody trimmed 3 undeclared file(s)" in capsys.readouterr().err   # junk.bin and the fixture's out/
+    assert CU.has_custody(d) == (True, "on the remote (.custody)")
+    st2 = _other_machine(tmp_path, vault, monkeypatch)
+    m = st2.get_manifest(st2.get_attempt(FIXTURE_RID)["outputs"]["run_record"])
+    paths = {f.path for f in m.payload.files}
+    assert "res/result.json" in paths and "junk.bin" not in paths
+    assert [t["path"] for t in m.meta["trimmed"]] == ["junk.bin", "out/proof.bin", "out/verify.jsonl"]
+    assert CU.verify(st2, d, mark=False)["preserved"]
+    (d / "junk.bin").write_bytes(b"k" * 1000)
+    assert "changed" in CU.verify(st2, d, mark=False)["error"], "a trimmed file is still pinned by its hash"

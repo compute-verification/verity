@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from pathlib import Path
 
 import pytest
@@ -112,10 +111,9 @@ def test_evict_runs_only_preserved_terminal_quiet_runs_and_leaves_a_restore_reco
     _tree(runs / "r20260922-105907-0002", {"proofs/y.proof": os.urandom(4000)})
     changed = _tree(runs / "r20260922-105908-0003", {"proofs/sub_00.proof": os.urandom(4000)})  # same size, different bytes vs the artifact
     store.put_attempt(_attempt(run_id="r20260922-105908-0003", outputs={"run_files": art}))
-    old = time.time() - 3600
     for d in (rd, other, changed, runs / "r20260922-105907-0002"):
         for p in d.rglob("*"):
-            os.utime(p, (old, old))
+            os.utime(p, (1_600_000_000, 1_600_000_000))           # quiet since 2020
 
     assert EV.plan_runs(store, runs, min_bytes=1000) == [], "nothing is evictable before the artifact is PRESERVED"
     assert store.push(art)["preserved"]
@@ -448,6 +446,7 @@ def _fake_ssh(monkeypatch, tmp_path, log: list):
     return cli_prov
 
 
+@pytest.mark.slow
 def test_pull_streams_ten_thousand_small_files_in_a_few_tars_with_identical_layout(tmp_path, monkeypatch, capsys):
     from research.store import cli_prov as CP
 
@@ -460,16 +459,13 @@ def test_pull_streams_ten_thousand_small_files_in_a_few_tars_with_identical_layo
     cli_prov = _fake_ssh(monkeypatch, tmp_path, log)
     monkeypatch.setattr(CP.A, "open_store", lambda store=None, root=None: LocalStore(tmp_path / "local"))
     monkeypatch.setattr(CP, "PULL_BATCH_FILES", 3000)
-    t0 = time.monotonic()
     rc = cli_prov.main(["pull", "--from", "m", RUN, "--project", "verity", "--json"])
-    dt = time.monotonic() - t0
     out = json.loads(capsys.readouterr().out)
     assert rc == 0, out
     tars = [a for a, _ in log if a[0] == "tar"]
     p = out["pulled"][0]
     assert p["id"] == art and p["blobs"] == N + 1 and p["batches"] == len(tars) - 1 == 4 and p["fetched"] == N + 1 and p["reused"] == 0, p   # 10001 distinct blobs / 3000 per tar, + one tar for the labels
     assert out["labels"] == {"seen": 0, "added": 0, "already": 0, "bad": 0}, "no assertions on the machine: nothing pulled, nothing invented"
-    assert dt < 180, f"{N} files took {dt:.1f}s over a local shell"   # ~15 s on a laptop (4-5 s of it is bsdtar); a hang guard, not a benchmark
     local = LocalStore(tmp_path / "local")
     got = local.fetch(art)
     assert sorted(q.relative_to(got).as_posix() for q in got.rglob("*") if q.is_file()) == sorted(q.relative_to(tree).as_posix() for q in tree.rglob("*") if q.is_file())
@@ -623,7 +619,7 @@ def test_multipart_upload_is_aborted_when_the_local_file_changes_under_it(tmp_pa
         def __exit__(self, *a):
             return False
 
-    def fake_request(method, key, query=None, body=None, headers=None, payload_hash=None):
+    def fake_request(method, key, query=None, body=None, headers=None, payload_hash=None, stall_window=None):
         calls.append((method, key, dict(query or {})))
         if method == "POST" and "uploads" in (query or {}):
             return _Resp(b'<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><UploadId>U1</UploadId></InitiateMultipartUploadResult>')
@@ -645,7 +641,7 @@ def test_multipart_upload_is_aborted_when_the_local_file_changes_under_it(tmp_pa
     f.write_bytes(b"x" * 10)
     calls.clear()
 
-    def bad_etag(method, key, query=None, body=None, headers=None, payload_hash=None):
+    def bad_etag(method, key, query=None, body=None, headers=None, payload_hash=None, stall_window=None):
         calls.append((method, key, dict(query or {})))
         if method == "POST" and "uploads" in (query or {}):
             return _Resp(b"<InitiateMultipartUploadResult><UploadId>U2</UploadId></InitiateMultipartUploadResult>")
@@ -666,26 +662,21 @@ def test_where_heads_in_parallel(store, fs_remote, tmp_path, monkeypatch):
     store.push(art)
     r = store.remote
     assert isinstance(r, FsRemote)
-    live, peak, lock = {"n": 0}, {"n": 0}, threading.Lock()
+    calls, lock = {"n": 0}, threading.Lock()
+    together = threading.Barrier(2)                               # the first two HEADs get past it only if both are in flight at once
     real_head = r.head
 
-    def slow_head(key):
+    def meeting_head(key):
         with lock:
-            live["n"] += 1
-            peak["n"] = max(peak["n"], live["n"])
-        try:
-            time.sleep(0.02)
-            return real_head(key)
-        finally:
-            with lock:
-                live["n"] -= 1
+            calls["n"] += 1
+            first_two = calls["n"] <= 2
+        if first_two:
+            together.wait()
+        return real_head(key)
 
-    monkeypatch.setattr(r, "head", slow_head)
-    t0 = time.monotonic()
+    monkeypatch.setattr(r, "head", meeting_head)
     rows = {w["location"]: w for w in store.where(art, jobs=8)}
-    dt = time.monotonic() - t0
-    assert rows["remote"]["present"] and rows["remote"]["missing"] == 0
-    assert peak["n"] > 1 and dt < 41 * 0.02, f"41 HEADs of 20 ms each took {dt:.2f}s with peak concurrency {peak['n']}"
+    assert rows["remote"]["present"] and rows["remote"]["missing"] == 0 and calls["n"] == 41
     (fs_remote / "objects/sha256" / store.get_manifest(art).payload.files[3].sha256).unlink()
     rows = {w["location"]: w for w in store.where(art, jobs=8)}
     assert rows["remote"]["present"] is False and rows["remote"]["missing"] == 1

@@ -1,18 +1,39 @@
 """A stuck read cannot hang a store command: every S3 request has a hard wall-clock deadline that shuts its socket, and the
-request (a whole GET, body included) is retried with backoff.  A local HTTP server plays R2 stalling mid-body and before headers."""
+request (a whole GET, body included) is retried with backoff.  A local HTTP server plays R2 stalling mid-body and before headers.
+The deadline's timer is replaced: a deadline passes when the server stalls, and the stalled handler then waits for the client to
+shut its socket, so a request that gets past a stall was cut off by its watchdog, whatever the machine's speed."""
 from __future__ import annotations
 
 import http.client
 import http.server
 import socket
 import threading
-import time
 
 import pytest
 
 from research.store import remote_s3
 
 BODY = bytes(range(256)) * 16
+
+
+class _Deadline:
+    """Stands in for the watchdog's threading.Timer: records what was armed; `pass_latest()` makes the newest live one fire."""
+    armed: list[_Deadline] = []
+
+    def __init__(self, seconds: float, fire):
+        self.seconds, self.fire, self.cancelled, self.fired, self.daemon = seconds, fire, False, False, True
+
+    def start(self) -> None:
+        _Deadline.armed.append(self)
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    @classmethod
+    def pass_latest(cls) -> None:
+        live = [t for t in cls.armed if not t.cancelled]
+        live[-1].fired = True
+        live[-1].fire()
 
 
 class _Stall(http.server.BaseHTTPRequestHandler):
@@ -22,22 +43,27 @@ class _Stall(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _stall(self) -> None:
+        """The request's deadline passes now; the handler returns only once the client has shut its socket (EOF here)."""
+        _Deadline.pass_latest()
+        self.rfile.read()
+
     def do_GET(self):
         _Stall.calls.append("GET")
         self.send_response(200)
         self.send_header("Content-Length", str(len(BODY)))
         self.end_headers()
         if len(_Stall.calls) == 1 and _Stall.stall_first:
-            self.wfile.write(BODY[:100])
+            self.wfile.write(BODY[:100])                   # a trickle that stops
             self.wfile.flush()
-            time.sleep(5)                                  # a trickle that stops: recv would block far past the deadline
+            self._stall()
             return
         self.wfile.write(BODY)
 
     def do_HEAD(self):
         _Stall.calls.append("HEAD")
         if len(_Stall.calls) == 1 and _Stall.stall_first:
-            time.sleep(5)                                  # never answers in time
+            self._stall()                                  # never answers
             return
         self.send_response(200)
         self.send_header("Content-Length", str(len(BODY)))
@@ -47,28 +73,30 @@ class _Stall(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture
 def server(monkeypatch):
-    _Stall.calls = []
+    _Stall.calls, _Deadline.armed = [], []
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Stall)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    monkeypatch.setattr(remote_s3, "REQUEST_DEADLINE_S", 0.5)
-    monkeypatch.setattr(remote_s3, "HEAD_DEADLINE_S", 0.3)
-    monkeypatch.setattr(remote_s3, "RETRY_BACKOFF_S", 0.01)
-    yield remote_s3.S3Remote(f"http://127.0.0.1:{srv.server_address[1]}", "b", "ak", "sk", timeout=30)
+    monkeypatch.setattr(remote_s3._Watchdog, "timer", _Deadline)
+    monkeypatch.setattr(remote_s3, "RETRY_BACKOFF_S", 0.0)
+    yield remote_s3.S3Remote(f"http://127.0.0.1:{srv.server_address[1]}", "b", "ak", "sk")
     srv.shutdown()
 
 
+def _fired() -> list[float]:
+    return [t.seconds for t in _Deadline.armed if t.fired]
+
+
 def test_a_get_whose_body_stalls_is_cut_off_and_retried(server, tmp_path):
-    t = time.monotonic()
     server.get("k", tmp_path / "out")
-    assert (tmp_path / "out").read_bytes() == BODY and _Stall.calls == ["GET", "GET"] and time.monotonic() - t < 4
+    assert (tmp_path / "out").read_bytes() == BODY and _Stall.calls == ["GET", "GET"]
+    assert _fired() == [remote_s3.REQUEST_DEADLINE_S] and server.deadline_hits[0]["method"] == "GET"
 
 
 def test_a_head_that_never_answers_is_cut_off_and_retried(server, capsys):
-    t = time.monotonic()
     assert server.head("k") == {"bytes": len(BODY), "etag": "0123456789abcdef0123456789abcdef"}
-    assert _Stall.calls == ["HEAD", "HEAD"] and time.monotonic() - t < 4
-    assert server.deadline_hits == [{"method": "HEAD", "key": "k", "try": 1, "of": 2, "deadline_s": 0.3}] and server.exhausted == []
-    assert "research: HEAD k: no response within 0s (try 1 of 2); retrying" in capsys.readouterr().err
+    assert _Stall.calls == ["HEAD", "HEAD"] and _fired() == [remote_s3.HEAD_DEADLINE_S]
+    assert server.deadline_hits == [{"method": "HEAD", "key": "k", "try": 1, "of": 2, "deadline_s": remote_s3.HEAD_DEADLINE_S}] and server.exhausted == []
+    assert f"research: HEAD k: no response within {remote_s3.HEAD_DEADLINE_S:.0f}s (try 1 of 2); retrying" in capsys.readouterr().err
 
 
 def test_a_head_that_never_answers_is_exhausted_after_its_one_retry_and_named(server, monkeypatch):
@@ -78,10 +106,9 @@ def test_a_head_that_never_answers_is_exhausted_after_its_one_retry_and_named(se
         _Stall.calls[:] = []
         orig(self)
     monkeypatch.setattr(_Stall, "do_HEAD", always)
-    t = time.monotonic()
-    with pytest.raises(TimeoutError, match="HEAD k2: no response within the 0s deadline on all 2 tries"):
+    with pytest.raises(TimeoutError, match=f"HEAD k2: no response within the {remote_s3.HEAD_DEADLINE_S:.0f}s deadline on all 2 tries"):
         server.head("k2")
-    assert time.monotonic() - t < 3 and [x["key"] for x in server.exhausted] == ["k2"] and len(server.deadline_hits) == 2
+    assert [x["key"] for x in server.exhausted] == ["k2"] and len(server.deadline_hits) == 2 and len(_fired()) == 2
 
 
 def test_a_retry_after_a_dropped_connection_never_draws_another_idle_one(server, monkeypatch):
@@ -97,10 +124,10 @@ def test_a_retry_after_a_dropped_connection_never_draws_another_idle_one(server,
         closed.set()
     threading.Thread(target=accept_and_close, daemon=True).start()
     for _ in range(4):
-        c = http.client.HTTPConnection("127.0.0.1", dead.getsockname()[1], timeout=5)
+        c = http.client.HTTPConnection("127.0.0.1", dead.getsockname()[1])
         c.connect()
         server.pool._idle.append(c)
-    assert closed.wait(5)
+    closed.wait()
     assert server.head("k") == {"bytes": len(BODY), "etag": "0123456789abcdef0123456789abcdef"}
     assert _Stall.calls == ["HEAD"] and server.pool.idle == 3, "one dead connection tried, then a fresh one; the other three untouched"
     dead.close()
@@ -115,7 +142,34 @@ def test_a_request_that_always_stalls_fails_within_its_retries(server, tmp_path,
         _Stall.calls[:] = []
         orig(self)
     monkeypatch.setattr(_Stall, "do_GET", always)
-    t = time.monotonic()
     with pytest.raises((TimeoutError, OSError)):
         server.get("k", tmp_path / "out")
-    assert time.monotonic() - t < 5 and not (tmp_path / "out").exists()
+    assert not (tmp_path / "out").exists() and len(_fired()) == 2
+
+
+def test_a_part_upload_that_stops_moving_is_cut_off_after_one_idle_window_and_retried(server, monkeypatch, tmp_path):
+    # nebius hosts: part PUTs sat for over an hour with nothing moving, under a whole-body deadline of hours for a 256 MiB part
+    monkeypatch.setattr(remote_s3, "STALL_MIN_BYTES", 1)
+    puts: list[int] = []
+
+    def do_PUT(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        puts.append(len(body))
+        if len(puts) == 1:
+            _Deadline.pass_latest()                        # the window saw the whole body move: re-armed, not fired
+            _Deadline.pass_latest()                        # then nothing moves (no response): cut off
+            self.rfile.read()
+            return
+        self.send_response(200)
+        self.send_header("ETag", '"' + remote_s3.hashlib.md5(body).hexdigest() + '"')
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+    monkeypatch.setattr(_Stall, "do_PUT", do_PUT, raising=False)
+    part = {"n": 1, "offset": 0, "bytes": len(BODY), "sha256": remote_s3.hashlib.sha256(BODY).hexdigest(),
+            "md5": remote_s3.hashlib.md5(BODY).hexdigest()}
+    path = tmp_path / "f"
+    path.write_bytes(BODY)
+    assert server._upload_part("k", "u", path, part) == part["md5"]
+    assert puts == [len(BODY), len(BODY)]
+    assert server.deadline_hits == [{"method": "PUT", "key": "k", "try": 1, "of": remote_s3.RETRIES + 1, "deadline_s": remote_s3.STALL_WINDOW_S}]
+    assert all(t.seconds == remote_s3.STALL_WINDOW_S for t in _Deadline.armed)

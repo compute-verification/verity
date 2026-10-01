@@ -23,6 +23,8 @@ import json
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
+from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, parse_protocols
+
 SCHEMA = "verity/aot-artifact/v1"
 
 
@@ -127,9 +129,15 @@ class TargetProfile:
                            declared-and-bound, never attested).  `"shared-per-block"` (the default when None) binds
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.
                            `"per-coordinate"` binds `ScaledMmFp8Block_v1`, whose every coordinate forms its own.  Omitted from `to_json()` when None.
+    protocols           -> the protocol set the run executes (`verity_vllm.protocol_options`; grammar `config.parse_protocols`).  None =
+                           sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
+                           whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
+                           the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
+                           committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
+                           of what it computes).  Omitted from `to_json()` when None.
 
     Derived (not fields; one rule each, `verity_vllm.program.registry.targets` consumes them): `tensor_core_family` (the registered k16
-    tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90) and `tuned_gemm_arch_family` (vLLM's tuned
+    tensor-core step of the capability: `ampere` for sm_8x, `hopper` for sm_90, `blackwell_consumer` for sm_120) and `tuned_gemm_arch_family` (vLLM's tuned
     batch-invariant GEMM table for the capability: `ada` 8.9, `hopper` 9.x, None otherwise — mirrors
     `batch_invariant_configs._get_tuned_matmul_arch_family`, read back by the builder).
     """
@@ -170,6 +178,8 @@ class TargetProfile:
 
     #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
     fp8_scale_construction: str | None = None
+    #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
+    protocols: tuple[str, ...] | None = None
 
     WEIGHT_ONLY_CALLS = ("per-forward", "once")
     DEFAULT_WEIGHT_ONLY_CALLS = "once"
@@ -257,6 +267,18 @@ class TargetProfile:
         if self.fp8_scale_construction is not None and self.fp8_scale_construction not in self.FP8_SCALE_CONSTRUCTIONS:
             raise ValueError(f"fp8_scale_construction must be None ({self.DEFAULT_FP8_SCALE_CONSTRUCTION}) or one of "
                              f"{list(self.FP8_SCALE_CONSTRUCTIONS)}; got {self.fp8_scale_construction!r}")
+        if self.protocols is not None:
+            if isinstance(self.protocols, str):
+                raise ValueError(f"protocols is a list of name:scheme entries, got the string {self.protocols!r}")
+            got = tuple(self.protocols)
+            canon = parse_protocols(got)
+            if got != canon:
+                raise ValueError(f"protocols must be spelled {list(canon)} (one entry per protocol, in install order); got {list(got)}")
+            if not any(e.startswith("sampled-proofs:") for e in canon):
+                raise ValueError(f"protocols {list(canon)} lacks sampled-proofs: a TargetProfile is the target of sampled proofs' Program")
+            if canon == DEFAULT_ROW_PROTOCOLS:
+                raise ValueError(f"protocols {list(canon)} is the default (sampled proofs alone): declare None")
+            object.__setattr__(self, "protocols", canon)
 
     # -- derived facts (one rule each; no second table anywhere) ---------------------------------------------------------
     def effective_moe_construction(self) -> str:
@@ -330,12 +352,15 @@ class TargetProfile:
         """The registered k16 tensor-core pipeline family of the capability: `ampere` (sm_80/8.6/8.9: `AmpereBF16TcDot16`, one
         registered function serves all — `silicon_total.AMPERE_BF16_DOT16_TOTAL`), `hopper` (sm_90: `HopperBF16WgmmaDot16`;
         Hawkeye's `HOPPER_BF16_M16N8K16` and lane HP's wgmma re-measurement share the 16:26:-133 pipeline, so FA2's `mma.sync` and
-        the GEMM's `wgmma` on an H100 are one registered step).  Anything else is `unregistered:<cc>` (rules refuse)."""
+        the GEMM's `wgmma` on an H100 are one registered step), `blackwell_consumer` (sm_120, cc 12.0 exactly: `mma.sync` only, on
+        the same 16:26:-133 pipeline, so `HopperBF16WgmmaDot16` again).  Anything else is `unregistered:<cc>` (rules refuse)."""
         major = self.compute_capability[0]
         if major == 8:
             return "ampere"
         if major == 9:
             return "hopper"
+        if self.compute_capability == (12, 0):
+            return "blackwell_consumer"
         return f"unregistered:{self.capability_str}"
 
     @property
@@ -409,6 +434,10 @@ class TargetProfile:
             d.pop("sampler_construction", None)
         if d.get("fp8_scale_construction") is None:
             d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
+        if d.get("protocols") is None:
+            d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
+        else:
+            d["protocols"] = list(d["protocols"])
         return d
 
     def fp8_block_gemm_kernel(self) -> str | None:

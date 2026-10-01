@@ -120,6 +120,7 @@ def test_zgroup_structure():
 # ------------------------------------------------------------------------------------------------ 3. the GPU fixture
 
 
+@pytest.mark.slow
 def test_gpu_fixture_every_split_geometry_bit_exact():
     from verity_vllm.pipeline.topp_split_probe import check
     rep = check(FIX, RECORD, verbose=False)
@@ -133,6 +134,17 @@ def test_gpu_fixture_every_split_geometry_bit_exact():
     assert {drain[B]["S"] for B in (5, 6, 7, 8)} == {16} and {drain[B]["S"] for B in (1, 2, 3, 4)} == {32}   # the B8 workload's flip
     assert drain[9]["S"] == 8 and drain[18]["S"] == 4 and drain[64]["S"] == 2
     assert all(d["rows_ok"] == d["B"] for d in rep["drain"])
+
+
+@pytest.mark.parametrize("num_sm,added", [(142, {35, 36}), (188, {11, 12, 23, 24, 47, 48}), (132, {16, 33, 34})])
+def test_drain_crosses_every_split_boundary_of_the_devices_sm_count(num_sm, added):
+    from verity_vllm.pipeline.topp_split_probe import DRAIN_BATCHES, drain_batches
+    bs = drain_batches(num_sm)
+    assert list(bs) == sorted(bs, reverse=True) and set(bs) - set(DRAIN_BATCHES) == added
+    for n in range(1, TS.SPLIT_MAX_BATCH):
+        if TS.splits_for(n, num_sm) != TS.splits_for(n + 1, num_sm):
+            assert {n, n + 1} <= set(bs), (num_sm, n)
+    assert {TS.splits_for(b, num_sm) for b in bs} == {TS.splits_for(n, num_sm) for n in range(1, TS.SPLIT_MAX_BATCH + 1)}
 
 
 def test_multi_block_slice_stats_are_fma_accumulated():

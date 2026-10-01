@@ -4,10 +4,10 @@ the golden-record format, compared bit for bit against the pinned ``verity.ml.tc
 Provenance: ported for lane WP1 from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
 ``validate_tiles.py``: the BF16 kernel, encodings, finite-sweep families, per-element records, multiprocess model comparison,
 golden sampling) and extended for lane tc-probe-fp8 with the E4M3 kernel half and encodings of the same files, the FP8-specific
-families (the Ada zero-product accumulator truncation of ``docs/hardware-semantics.md``, Hawkeye's adder-width probe of
-``characterize.py``, the special-value classes of ``gpu/tc-fp8/campaign.py``) and the Hopper ``wgmma`` path with the SASS
-confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile kernel).  Only the GPU host runs
-this; it needs numpy and nvcc (``cuobjdump`` for ``--sass-check``).
+families (the Ada zero-product accumulator truncation: discrepancy-log entry D10 and ``verity.ml.tc.models.ADA_E4M3_M16N8K32``;
+Hawkeye's adder-width probe of ``characterize.py``; the special-value classes of ``gpu/tc-fp8/campaign.py``) and the Hopper
+``wgmma`` path with the SASS confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile
+kernel).  Only the GPU host runs this; it needs numpy and nvcc (``cuobjdump`` for ``--sass-check``).
 
 Instructions (``--instruction``; ``--arch`` is derived from the entry and may be overridden)::
 
@@ -20,6 +20,8 @@ Instructions (``--instruction``; ``--arch`` is derived from the entry and may be
     sm90.mma.m16n8k32.e4m3      sm_90a     mma_e4m3_m16n8k32_tiles      32  HYPOTHESES hopper_e4m3_wgmma_k32, ada_e4m3_m16n8k32 (open question: which
                                                                             agrees) and hopper_bf16_m16n8k16 x2 (see below)
     sm90.mma.m16n8k32.e5m2      sm_90a     mma_e5m2_m16n8k32_tiles      32  HYPOTHESES the three above with e5m2 products
+    sm120.mma.m16n8k32.e4m3     sm_120a    mma_e4m3_m16n8k32_tiles      32  blackwell_sm120_e4m3_m16n8k32; controls ada_e4m3_m16n8k32, hopper_bf16_m16n8k16 x2
+    sm120.mma.m16n8k32.e5m2     sm_120a    mma_e5m2_m16n8k32_tiles      32  blackwell_sm120_e5m2_m16n8k32; the same controls with e5m2 products
     sm90.wgmma.m64n8k32.e4m3    sm_90a     wgmma_e4m3_m64n8k32_tiles    32  hopper_e4m3_wgmma_k32 (pinned)
     sm90.wgmma.m64n8k32.e5m2    sm_90a     wgmma_e5m2_m64n8k32_tiles    32  HYPOTHESIS hopper_e4m3_wgmma_k32 with e5m2 products
     sm90.wgmma.m64n8k16.bf16    sm_90a     wgmma_bf16_m64n8k16_tiles    16  hopper_bf16_wgmma_k16 (total semantics: specials asserted);
@@ -76,7 +78,7 @@ the same families, the same random draws, the same words.
 ``--canary`` (``canary.py``) runs the instruction's fixed canary tile set -- the first tiles of every family under the canary seed
 plus every regression tile of every resolved discrepancy-log entry naming the instruction -- in under a minute, exits 1 on any
 mismatch against a declared model, and marks ``result.json`` (``tc-evidence/v1``) with ``workload_fingerprint.family = canary``
-and ``tc_evidence.canary``; the trust framework (``verity.proofs.trust``) treats a failing canary on the anchor as an
+and ``tc_evidence.canary``; the trust framework (``trust.py``) treats a failing canary on the anchor as an
 invalidation trigger.  Run it after any driver / ptxas / toolkit change on an anchor and on a second device of the SKU.
 """
 
@@ -417,6 +419,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _mma("sm90.mma.m16n8k32.e4m3", "sm_90a", E4M3,
              (Model(S.HOPPER_E4M3_K32, declared=False), Model(S.ADA_E4M3_M16N8K32, declared=False), _HOPPER_HMMA_X2_E4M3), sass_mma=2),
         _mma("sm90.mma.m16n8k32.e5m2", "sm_90a", E5M2, (_HOPPER_E5M2, _ADA_E5M2, _HOPPER_HMMA_X2_E5M2), sass_mma=2),
+        # Blackwell consumer: the fitted one-group-of-32, 26-bit model; Ada's pipeline and the sm_90a two-HMMA lowering stay as controls.
+        _mma("sm120.mma.m16n8k32.e4m3", "sm_120a", E4M3,
+             (Model(TCM.BLACKWELL_SM120_E4M3_M16N8K32), Model(S.ADA_E4M3_M16N8K32, declared=False), _HOPPER_HMMA_X2_E4M3)),
+        _mma("sm120.mma.m16n8k32.e5m2", "sm_120a", E5M2, (Model(TCM.BLACKWELL_SM120_E5M2_M16N8K32), _ADA_E5M2, _HOPPER_HMMA_X2_E5M2)),
         _wgmma("sm90.wgmma.m64n8k32.e4m3", E4M3, (Model(S.HOPPER_E4M3_K32),)),
         _wgmma("sm90.wgmma.m64n8k32.e5m2", E5M2, (_HOPPER_E5M2,)),
         # lane wgmma-bf16: the BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere

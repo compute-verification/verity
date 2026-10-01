@@ -3,6 +3,10 @@
 * a cancelled row takes its running stage (and the stage's forked workers) with it: GNU ``timeout`` moves the stage into
   its own process group, which never sees the runner's killpg, so the driver forwards TERM/INT/HUP to timeout's pid,
   waits for the stage to be gone, records the cancel and exits 128+signal;
+* a row's derives run in parallel by default, as many as the memory headroom holds at the largest shape's planned peak (a fit
+  that bounds the epoch's measured derives) and at most one per CPU, the longest shapes first;
+* after a PASS Build the row stops (exit 21, no Match) when a call-boundary identity of its manifest has no source the
+  Commit attaches, the first one named in stages.txt, and goes on to Match when each has one;
 * a Commit over a Match record whose account files are gone refuses to start (PRECHECK_FAIL_MATCH_RECORD_INCOMPLETE,
   exit 14); the Match summary accepts an explicit ``--match-phase cpu`` resume over the preserved capture;
 * the Match of record (``fast`` inside ``shared``) is the default and the caller can choose the audit checker;
@@ -14,18 +18,20 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import json
 import os
+import select
 import shutil
 import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
 
+from tests.acquire.call_boundary_programs import LP, PF, T, build_dir, dense_program
 from verity_vllm.check.weights_of_record import SCHEMA, SCHEMA_V1
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
@@ -41,10 +47,11 @@ _GNU_TIMEOUT = shutil.which("timeout") is not None and b"GNU" in subprocess.run(
 
 def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str = ROW):
     env = {k: v for k, v in os.environ.items()
-           if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITOR_REPO", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
+           if k not in ("MATCH_IMPL", "MATCH_PIPELINE", "MATCH_PHASE", "VERITY_TREE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID")}
     env.update(environ or {})
+    # `prepare` creates the collector's build dir, whose default is a pod path (`/workspace/cp/...`) a non-root check can't create
     return cli.parse("row", ["run", row, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp), "--py", sys.executable,
-                             *argv], env)
+                             "--native-collect-default", str(tmp / "nc_build"), *argv], env)
 
 
 def _row(tmp: Path, *argv: str, **kw) -> SingleRow:
@@ -105,8 +112,8 @@ def test_the_commit_flags_the_row_arms_exist():
     assert "--supersedes" in {fl for f in weights_of_record.Options.__dataclass_fields__.values() for fl in f.metadata.get("flags", ())}
 
 
-def test_a_foreign_veritor_repo_is_refused_by_name(tmp_path, capsys):
-    r = _row(tmp_path, environ={"VERITOR_REPO": str(tmp_path)})
+def test_a_foreign_verity_tree_is_refused_by_name(tmp_path, capsys):
+    r = _row(tmp_path, environ={"VERITY_TREE": str(tmp_path)})
     with pytest.raises(Stop) as e:
         r.setup({})
     assert e.value.rc == 3 and "PRECHECK_FAIL_SOURCE_IDENTITY" in capsys.readouterr().err
@@ -114,29 +121,37 @@ def test_a_foreign_veritor_repo_is_refused_by_name(tmp_path, capsys):
 
 # ---------------------------------------------------------------------------------------------------------------- cancel
 
-# the stage: a python parent that forks a grandchild; both write their pids and sleep.  A row's fold / commit look like this.
+# the stage: a python parent that forks a grandchild; both write their pids (and the stage its `timeout`'s), close their end of the
+# test's FIFO and block on a pipe nobody writes to, until a signal ends them.  A row's fold / commit look like this.
 STAGE = r'''
-import os, sys, time
+import os, sys
 d = sys.argv[1]
-open(os.path.join(d, "stage.pid"), "w").write(str(os.getpid()))
-pid = os.fork()
-if pid == 0:
+for name, pid in (("stage", os.getpid()), ("timeout", os.getppid())):
+    open(os.path.join(d, name + ".pid"), "w").write(str(pid))
+ready = open(READY, "wb")
+block, _ = os.pipe()
+if os.fork() == 0:
     open(os.path.join(d, "grandchild.pid"), "w").write(str(os.getpid()))
-    time.sleep(600)
-    sys.exit(0)
-time.sleep(600)
+ready.close()
+os.read(block, 1)
 '''
 
+# the row; one byte on fd `registered` once the stage's `timeout` pid is where the signal forwarding finds it
 HARNESS = r'''
 import os, sys
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Row, Stop
-tmp, to, stage = sys.argv[1:4]
+tmp, to, stage, registered = sys.argv[1:5]
 o = cli.parse("row", ["run", "r", "R", "o/r", "x", "--sweep-dir", tmp, "--py", sys.executable], os.environ)
 row = Row(row="r", role="R", repo="o/r", rev="x", stages="build", env=o.env, proc="row_pod")
 os.makedirs(row.d, exist_ok=True)
 row.child_env = dict(os.environ)
 row.install_signal_forwarding()
+class Announced(set):
+    def add(self, pid):
+        super().add(pid)
+        os.write(int(registered), b".")
+row._running = Announced()
 try:
     rc = row.run_to(int(to), row.d + "/stage.log", [sys.executable, stage, row.d])
 except Stop as s:
@@ -157,38 +172,45 @@ def _alive(pid: int) -> bool:
         return True
 
 
-def _wait_for(pred, seconds: float) -> bool:
-    t_end = time.monotonic() + seconds
-    while time.monotonic() < t_end:
-        if pred():
-            return True
-        time.sleep(0.05)
-    return pred()
+def _wait_exited(fds: list[int]) -> None:
+    for fd in fds:                                                       # a pidfd turns readable once its process has exited
+        select.select([fd], [], [])
+        os.close(fd)
 
 
-def _start(tmp: Path, timeout_s: int, stage_exit: str | None = None) -> tuple[subprocess.Popen, Path]:
-    stage = tmp / "stage.py"
-    stage.write_text(STAGE if stage_exit is None else f"import sys; sys.exit({stage_exit})")
+def _start(tmp: Path, stage_exit: str | None = None) -> tuple[subprocess.Popen, Path]:
+    """The row, running `stage.py` under `timeout 0` (no timer: the expiry test raises it); returns once the row forwards signals to the
+    stage and, for the blocking stage, once the stage and its grandchild have written their pids."""
+    stage, ready = tmp / "stage.py", tmp / "ready"
+    os.mkfifo(ready)
+    stage.write_text(f"READY = {str(ready)!r}\n" + STAGE if stage_exit is None else f"import sys; sys.exit({stage_exit})")
     d = tmp / "r"
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}
     env.pop("VERITY_TIMELINE", None)
+    registered_r, registered_w = os.pipe()
     # the research runner starts the row as a session leader and later killpg()s that group -- same here
-    p = subprocess.Popen([sys.executable, "-c", HARNESS, str(tmp), str(timeout_s), str(stage)], start_new_session=True, env=env,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    assert _wait_for(lambda: (d / "grandchild.pid").exists() or (d / "row.log").exists() and "run_to rc" in (d / "row.log").read_text(), 20)
+    p = subprocess.Popen([sys.executable, "-c", HARNESS, str(tmp), "0", str(stage), str(registered_w)], start_new_session=True, env=env,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, pass_fds=(registered_w,))
+    os.close(registered_w)
+    assert os.read(registered_r, 1) == b".", "the row exited before it ran the stage"
+    os.close(registered_r)
+    if stage_exit is None:
+        with open(ready, "rb") as f:
+            assert f.read() == b""                                       # EOF: the stage and its grandchild both closed their ends
     return p, d
 
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 @pytest.mark.parametrize("sig,rc", [(signal.SIGTERM, 143), (signal.SIGINT, 130)])
 def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc):
-    p, d = _start(tmp_path, 600)
+    p, d = _start(tmp_path)
     stage, grand = int((d / "stage.pid").read_text()), int((d / "grandchild.pid").read_text())
     assert _alive(stage) and _alive(grand)
     assert os.getpgid(stage) != p.pid, "GNU timeout puts the stage in its own process group -- the premise of the forwarding"
+    fds = [os.pidfd_open(stage), os.pidfd_open(grand)]
     os.killpg(p.pid, sig)
-    assert p.wait(timeout=15) == rc
-    assert _wait_for(lambda: not _alive(stage) and not _alive(grand), 10), "stage or its forked worker survived the cancel"
+    assert p.wait() == rc
+    _wait_exited(fds)                                                    # the stage or its forked worker surviving the cancel hangs here
     name = signal.Signals(sig).name
     assert f"CANCELLED by {name}" in (d / "stage.log").read_text()
     row_log = (d / "row.log").read_text()
@@ -200,18 +222,20 @@ def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc)
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_the_expiry_path_still_kills_the_forked_worker(tmp_path):
-    p, d = _start(tmp_path, 1)
-    stage, grand = int((d / "stage.pid").read_text()), int((d / "grandchild.pid").read_text())
-    assert p.wait(timeout=15) == 124
-    assert _wait_for(lambda: not _alive(stage) and not _alive(grand), 10), "timeout expiry left the forked worker alive"
+    p, d = _start(tmp_path)
+    stage, grand, to = (int((d / f"{n}.pid").read_text()) for n in ("stage", "grandchild", "timeout"))
+    fds = [os.pidfd_open(stage), os.pidfd_open(grand)]
+    os.kill(to, signal.SIGALRM)                                          # what GNU timeout's own timer raises on expiry
+    assert p.wait() == 124
+    _wait_exited(fds)                                                    # timeout expiry leaving the forked worker alive hangs here
     log = (d / "stage.log").read_text()
-    assert "TIMEOUT after 1s" in log and "CANCELLED" not in log
+    assert "TIMEOUT after 0s" in log and "CANCELLED" not in log
 
 
 @pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_a_normal_exit_returns_the_stage_rc_unchanged(tmp_path):
-    p, d = _start(tmp_path, 600, stage_exit="7")
-    assert p.wait(timeout=15) == 7
+    p, d = _start(tmp_path, stage_exit="7")
+    assert p.wait() == 7
     assert "run_to rc=7" in (d / "row.log").read_text() and "cancelled" not in (d / "row.log").read_text()
     assert not (d / "timeline.jsonl").exists()
     assert (d / "stage.log").read_text().startswith(f"$ {sys.executable} ")
@@ -253,6 +277,159 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "commit"}.items() <= row_end.items()
 
 
+# ---------------------------------------------------------------------------------------------------------------- Build: derives
+
+#: request derives of the 2026-09-29 epoch's stored Builds: (row, LP, T, decoder layers, measured peak RSS in MiB)
+EPOCH_DERIVES = (("#11", 4096, 511, 16, 124529), ("#75", 1024, 127, 48, 43974), ("#74", 1024, 127, 36, 34107), ("#74", 817, 120, 36, 26893),
+                 ("#57", 1024, 127, 26, 21118), ("#67", 1024, 127, 16, 14071), ("#67", 1024, 28, 16, 11067))
+
+
+def test_the_planned_derive_peak_bounds_the_epochs_measured_ones_without_doubling_them():
+    for row, lp, t, layers, mib in EPOCH_DERIVES:
+        planned = R.derive_bytes(lp, t, layers) / (1 << 20)
+        assert mib <= planned <= 2 * mib, (row, lp, t, round(planned), mib)
+
+
+def test_auto_derives_as_many_as_the_memory_and_cpus_hold_at_the_largest_shape():
+    shapes = [(1024, 127), *[(lp, 64) for lp in range(100, 1000, 100)]]
+    per = R.derive_bytes(1024, 127, 16)
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=32) == 8
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=4) == 4
+    assert R.build_jobs_auto(shapes[:3], 16, headroom=10 * per, cpus=32) == 3
+    assert R.build_jobs_auto(shapes, 16, headroom=per, cpus=32) == 1
+    assert R.build_jobs_auto(shapes, None, headroom=100 << 30, cpus=32) == 5       # the model's layers unknown: 20 GiB per derive
+    # a sweep's per-config share of a packed host: the budget, not the host's headroom, sizes auto
+    assert R.build_jobs_auto(shapes, 16, headroom=10 * per, cpus=32, budget_gb=5 * per / (1 << 30)) == 4
+    assert R.build_jobs_auto(shapes, 16, headroom=2 * per, cpus=32, budget_gb=100 * per / (1 << 30)) == 1
+
+
+def test_the_model_layers_come_from_the_checkpoints_config(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
+    (tmp_path / "b").mkdir()
+    (tmp_path / "b" / "config.json").write_text(json.dumps({"text_config": {"num_hidden_layers": 26}}))
+    assert (R.model_layers(str(tmp_path / "a")), R.model_layers(str(tmp_path / "b")), R.model_layers(str(tmp_path / "c"))) == (16, 26, None)
+
+
+def _derive_row(tmp_path, monkeypatch, *argv: str, cpus: int, environ: dict[str, str] | None = None):
+    row = "llama32-1b__bf16__l40s__tp1__b8__i256__o32__mixed__greedy__bi-eager"
+    r = _row(tmp_path, *argv, row=row, environ=environ)
+    s = R.row_shape(r.path(r.wl), r.path("manifests/checkpoints.json"), str(tmp_path))
+    ck = tmp_path / "ck"
+    ck.mkdir()
+    (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
+    r.B, r.LP, r.T, r.MML, r.ck, r.tgt_args = s["B"], s["LP"], s["T"], s["I"] + s["O"], str(ck), []
+    ran: list[str] = []
+    monkeypatch.setattr(r, "launch_args", lambda lp, t: [])
+    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, *extra: ran.append(st) or 0)
+    monkeypatch.setattr(R, "_memory_headroom", lambda: 1 << 40)
+    monkeypatch.setattr(R, "_cpus", lambda: cpus)
+    return r, ran
+
+
+def test_a_rows_derives_run_in_parallel_by_default(tmp_path, monkeypatch):
+    r, ran = _derive_row(tmp_path, monkeypatch, cpus=4)
+    assert r.derive_all(60) == (0, 0)
+    mark = next(e for e in _timeline(r) if e["stage"] == "build.jobs")
+    assert (mark["jobs"], mark["requested"]) == (4, "auto") and len(ran) == 2 + len(R.extra_shapes(r.path(r.wl), r.LP, r.T))
+    r, _ran = _derive_row(tmp_path / "one", monkeypatch, "--build-jobs", "1", cpus=4)
+    r.derive_all(60)
+    assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 1
+    budget = 2.6 * R.derive_bytes(r.LP, r.T, 16) / (1 << 30)
+    r, _ran = _derive_row(tmp_path / "budget", monkeypatch, cpus=4, environ={"BUILD_RAM_BUDGET_GB": str(budget)})
+    r.derive_all(60)
+    assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 2
+
+
+def test_the_extra_shapes_derive_longest_first(tmp_path, monkeypatch):
+    r, ran = _derive_row(tmp_path, monkeypatch, cpus=1)
+    r.derive_all(60)
+    extra = [tuple(int(x) for x in st[len("build.derive_request_LP"):].split("_T")) for st in ran[2:]]
+    assert ran[:2] == ["build.derive_step", "build.derive_request"] and len(extra) > 1
+    assert [lp + t for lp, t in extra] == sorted((lp + t for lp, t in extra), reverse=True)
+
+
+# ---------------------------------------------------------------------------------------------------------------- Build: call boundaries
+
+def _built(r: SingleRow, monkeypatch, **kw) -> dict:
+    """A PASS Build of the call-boundary source's dense stand-in (`dense_program(**kw)`: its Build dir and manifest.json in the row dir),
+    the Build's children stubbed; the call-boundary gate after it runs for real.  Returns the manifest."""
+    b, _at = dense_program(**kw)
+    _d, man = build_dir(Path(r.d), b.doc(LP), [PF[len("model."):]])
+    (Path(r.d) / "manifest.json").write_text(json.dumps(man))
+    r.B, r.LP, r.T, r.ck = 1, LP, T, "/ck"
+    run_tl = r.run_tl
+
+    def child(stage, to, lf, cmd, *extra):
+        if stage != "build.global_program":
+            return run_tl(stage, to, lf, cmd, *extra)
+        os.makedirs(f"{r.d}/build_workload")
+        Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
+        return 0
+
+    for name, fn in (("prepare", lambda: None), ("gpu_exclusive", lambda why: None), ("derive_all", lambda to: (0, 0)),
+                     ("guarded", lambda what, fn, *a: "PASS"), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
+                     ("required_manifest", lambda stage: 0), ("run_tl", child), ("timeline_report", lambda: None)):
+        monkeypatch.setattr(r, name, fn)
+    monkeypatch.setattr(R, "build_line", lambda d: ("d" * 16, "m" * 16))
+    return man
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_call_boundary_without_a_source_stops_the_row_after_its_build_by_name(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--stages", "build,match")
+    _built(r, monkeypatch, embed=PF)
+    matched: list[int] = []
+    monkeypatch.setattr(r, "match", lambda: matched.append(1))
+    assert r.run() == 21 and not matched
+    build, gate = (ln.split(" ", 3) for ln in (Path(r.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "FAIL"]
+    rec = json.loads((Path(r.d) / "call_boundaries.json").read_text())
+    assert rec["pass"] is False and rec["uncovered"] > 0
+    assert gate[3].startswith(f"rc=1 identities={rec['identities']} claimed=0 covered={rec['covered']} uncovered={rec['uncovered']} ")
+    assert gate[3].endswith(f"first: {rec['named']['uncovered'][0]}") and "reads Program input 'prompt'" in gate[3]
+    assert "call boundaries without a source the Commit attaches -> stop" in (Path(r.d) / "row.log").read_text()
+    assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "call_boundaries"}.items() <= _timeline(r)[-1].items()
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_row_whose_every_call_boundary_has_a_source_goes_on_to_match(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--stages", "build,match")
+    man = _built(r, monkeypatch)
+    n = sum(1 for x in man["identities"] if x["family"] == "call_boundaries")
+    matched: list[int] = []
+    monkeypatch.setattr(r, "match", lambda: matched.append(1))
+    assert r.run() == 0 and matched and n > 0
+    build, gate = (ln.split(" ", 3) for ln in (Path(r.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "PASS"]
+    assert gate[3].startswith(f"identities={n} claimed=0 covered={n} uncovered=0 unattached=0 sources=call_boundary wall=")
+
+
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypatch):
+    t = _tp_row(tmp_path, TP_DENSE)
+    os.makedirs(t.d, exist_ok=True)
+    t.child_env, t.shapes = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")])}, []
+    b, _at = dense_program()
+    _d, man = build_dir(tmp_path, b.doc(LP), [PF[len("model."):]])
+
+    def manifest_global(stage, to):
+        (Path(t.d) / "manifest.json").write_text(json.dumps({**man, "ranks": 2}))
+        return 0
+
+    for name, fn in (("jobs", lambda n: 1), ("derive_all", lambda todo, jobs: None), ("compose_all", lambda ranks: None),
+                     ("guarded_summary", lambda: "PASS"), ("manifest_global", manifest_global)):
+        monkeypatch.setattr(t, name, fn)
+    monkeypatch.setattr(R, "tp_build_digests", lambda d: ("d" * 16, []))
+    monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: "w" * 16)
+    with pytest.raises(Stop) as e:
+        t.build()
+    assert e.value.rc == 21
+    build, gate = (ln.split(" ", 3) for ln in (Path(t.d) / "stages.txt").read_text().splitlines())
+    assert build[:2] == ["build", "PASS"] and gate[:2] == ["build-call-boundaries", "FAIL"]
+    assert gate[3].endswith(": a manifest of 2 ranks (the source serves one rank)") and " sources=none " in gate[3]
+
+
 # ---------------------------------------------------------------------------------------------------------------- taps
 
 TP_MOE = "qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager"
@@ -289,9 +466,65 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
                                                                                                 "guarded_max"]
 
 
+PD = "p" * 64
+
+
+def _record_manifest(path: Path, query_id: str, *, program_digest: str = PD, partition: bool = True, word_check: bool = True) -> None:
+    query = {"query_id": query_id, **{k: {} for k in ("norm_scales", "router_softmax", "vocab_range", "guarded_max")}}
+    if partition:
+        query["partition"] = {"object": {"format": "verity/partition/v1"}, "digest": "d" * 128}
+    if word_check:
+        query["word_check"] = {"query": query_id, "strict": True, "ok": True, "violations": 0}
+    path.write_text(json.dumps({"query": query, "program_digest": program_digest, "identities": [{"family": "instance_outputs"}]}))
+
+
+def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
+    """A B=1 row whose Build recorded Program `PD`, and whose manifest rebuild (recorded in the list) writes the manifest of record."""
+    r = _row(tmp_path)
+    r.B = 1
+    (Path(r.d) / "build_request").mkdir()
+    (Path(r.d) / "build_request" / "instances.json.gz").write_bytes(b"")
+    (Path(r.d) / "build_summary.json").write_text(json.dumps({"request": {"program_digest": PD}}))
+    built: list[str] = []
+    monkeypatch.setattr(r, "required_manifest", lambda stage: built.append(stage) or _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD) or 0)
+    return r, built
+
+
+def test_the_rows_query_of_record_is_the_one_its_manifest_build_writes():
+    from verity_vllm.query import required
+    assert R.QUERY_OF_RECORD == required.QUERY_OF_RECORD == required.query_header("ampere", "fa2_hidden_m1_stream", return_slots=True)["query_id"]
+
+
+def test_the_builds_q_word_manifest_with_a_partition_of_its_program_is_the_manifest_of_record(tmp_path, monkeypatch):
+    """#4's Commit (15:31Z) moved the Build's Q_word manifest aside as "not the query path's" and rebuilt it: a third full build per row."""
+    r, built = _row_with_build(tmp_path, monkeypatch)
+    assert r.program_digest() == PD
+    _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
+    assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == [] and list(Path(r.d).glob("manifest.*-*.json")) == []
+    assert "required-value manifest of record:" in (Path(r.d) / "row.log").read_text()
+
+
+@pytest.mark.parametrize("kw, slug, why", [
+    ({"query_id": "Q_module_body_v1"}, "other-query", "is not built under the query of record"),      # a pre-S1 Build's
+    ({"program_digest": "q" * 64}, "other-program", "is of Program qqqqqqqqqqqqqqqq, not the Build's pppppppppppppppp"),
+    ({"partition": False}, "no-partition", "names no partition"),
+    # the Commit refuses a Q_word manifest without a passing word check (commit.partition.word_check_refusal): a Build of before the
+    # header recorded it, or one built with --word-check off, is rebuilt instead of starting a Commit that refuses
+    ({"word_check": False}, "unchecked", "does not record a passing word check (no word check recorded"),
+])
+def test_a_manifest_of_an_older_query_another_program_or_no_partition_is_moved_aside_and_rebuilt(tmp_path, monkeypatch, kw, slug, why):
+    r, built = _row_with_build(tmp_path, monkeypatch)
+    _record_manifest(Path(r.d) / "manifest.json", kw.pop("query_id", R.QUERY_OF_RECORD), **kw)
+    assert r.manifest_of_record() == f"{r.d}/manifest.json" and built == ["commit"]
+    aside = list(Path(r.d).glob(f"manifest.{slug}-*.json"))
+    assert len(aside) == 1 and why in (Path(r.d) / "row.log").read_text()
+    assert R.manifest_not_of_record(R.load_json(f"{r.d}/manifest.json"), PD, r.ck_) == ("", "")
+
+
 def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     r = _row(tmp_path)
     r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    r.env = dataclasses.replace(r.env, norm_tap_so=str(tmp_path / "absent" / "verity_norm_tap.so"))   # a host with the default build (/workspace/cp/...) has the .so
     man = _tap_manifest(tmp_path / "manifest.json", "norm_scales")
     taps = R.applicable_taps(man, r.ck_)
     assert taps == ["norm_tap"]
@@ -302,9 +535,9 @@ def test_a_dense_tp1_row_attaches_the_norm_tap_only(tmp_path):
     assert R.applicable_taps(man, _opts(tmp_path, environ={"NORM_TAP": "0"}).commit) == []
 
 
-def _tp_row(tmp_path: Path, row: str, **kw):
+def _tp_row(tmp_path: Path, row: str, *argv: str, **kw):
     from verity_vllm.pipeline.row_tp import TpRow
-    o = _opts(tmp_path, row=row, **kw)
+    o = _opts(tmp_path, *argv, row=row, **kw)
     t = TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=o.stages, env=o.env, world=2, gpu_util=None, nccl_p2p_disable="1",
               build=o.build, match=o.match, commit=o.commit)
     t.hidden_so, t.B, t.engine, t.ck, t.fold_profile = t.hidden_build(), 2, [], "/ck", ""
@@ -332,6 +565,9 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
 
 # ---------------------------------------------------------------------------------------------------------------- Match summary
 
+STAGE_START = 1_600_000_000
+
+
 def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
     d = tmp_path / "row"
     (d / "match" / "capture").mkdir(parents=True)
@@ -342,9 +578,8 @@ def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
     (d / "match" / "capture" / "log.jsonl.gz").write_bytes(b"x")
     (d / "match" / "program.json").write_text("{}")
     (d / "match" / "instances.jsonl").write_text("")
-    if old:
-        t = time.time() - 3600
-        os.utime(d / "match" / "capture" / "log.jsonl.gz", (t, t))
+    t = STAGE_START - 3600 if old else STAGE_START
+    os.utime(d / "match" / "capture" / "log.jsonl.gz", (t, t))
     if stage_record:
         (d / "match" / "stages.json").write_text(json.dumps({"stages": [{"stage": "capture", "returncode": 0, "status": "ok"},
                                                                         {"stage": "control", "returncode": 0, "status": "ok"},
@@ -355,7 +590,7 @@ def _summary_row(tmp_path: Path, *, old: bool, stage_record: bool) -> Path:
 
 
 def _summary(d: Path, resumed: bool) -> dict:
-    R.match_summary(str(d), 0, 0, 0, int(time.time()) - 60, -1, resumed)
+    R.match_summary(str(d), 0, 0, 0, STAGE_START, -1, resumed)
     return json.load(open(d / "match_summary.json"))
 
 

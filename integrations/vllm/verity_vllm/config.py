@@ -4,8 +4,9 @@
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
   tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS`` and ``CHECKPOINTS``.
 * **What runs.**  The row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
-  (``TARGETS``), and :class:`EnginePin`, the pinned engine record every engine is built from: model, full revision and
-  checkpoint role, checked against ``manifests/checkpoints.json``.
+  (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
+  engine record every engine is built from: model, full revision and checkpoint role, checked against
+  ``manifests/checkpoints.json``.
 * **How a stage runs.**  :class:`BuildConfig`, :class:`MatchConfig` and :class:`CommitConfig`: defaults in code,
   overrides from flags or the environment of ``verity-vllm row``.
 * **Where it runs.**  :class:`RunEnv`: interpreters, caches and roots.  ``pipeline/cli.py`` fills it from flags and the
@@ -87,7 +88,13 @@ TARGETS: dict[str, tuple[int, int]] = {
     "a10": (8, 6), "a10g": (8, 6), "a40": (8, 6),
     "h100": (9, 0), "h200": (9, 0), "h20": (9, 0),
     "b200": (10, 0), "gb200": (10, 0),
+    "rtxpro6000": (12, 0),
 }
+
+#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
+#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
+#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188}
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
@@ -162,6 +169,42 @@ def row_target(row: str) -> str | None:
     return parts[2] if len(parts) >= 4 and parts[3].startswith("tp") else None
 
 
+#: The protocols a run can enable (`verity_vllm.protocol_options`), in install order, innermost first: PoUW replaces the
+#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
+PROTOCOLS = ("pouw", "pous", "sampled-proofs")
+#: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
+DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:vllm-v1",)
+_SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
+
+
+def parse_protocols(value: str | Mapping[str, str] | Any | None) -> tuple[str, ...]:
+    """A protocol set in its one spelling: ``name:scheme`` entries, one per protocol, in `PROTOCOLS` order.
+
+    ``value`` is None, ``""`` or ``"none"`` (the empty set), a comma-separated string, an iterable of entries, or a mapping
+    ``{name: scheme}``.  Refuses (ValueError) an unknown protocol, an entry without a scheme, a malformed scheme and two
+    entries of one protocol.  Whether a scheme is registered is the protocol package's to say
+    (`verity_vllm.protocol_options.refusals`)."""
+    if value is None or (isinstance(value, str) and value.strip() in ("", "none")):
+        return ()
+    if isinstance(value, Mapping):
+        items = [f"{k}:{v}" for k, v in value.items()]
+    elif isinstance(value, str):
+        items = [x.strip() for x in value.split(",")]
+    else:
+        items = [str(x).strip() for x in value]
+    got: dict[str, str] = {}
+    for item in items:
+        name, sep, scheme = item.partition(":")
+        if name not in PROTOCOLS:
+            raise ValueError(f"protocol entry {item!r}: unknown protocol {name!r} (known: {', '.join(PROTOCOLS)})")
+        if not sep or not _SCHEME.fullmatch(scheme):
+            raise ValueError(f"protocol entry {item!r}: expected {name}:<scheme>, the scheme a name its protocol registers")
+        if name in got:
+            raise ValueError(f"protocol {name!r} is enabled twice ({got[name]!r} and {scheme!r}); a run enables one scheme per protocol")
+        got[name] = scheme
+    return tuple(f"{n}:{got[n]}" for n in PROTOCOLS if n in got)
+
+
 def checkpoint_entries(checkpoints: str | Path = CHECKPOINTS) -> list[dict[str, Any]]:
     return list(json.loads(Path(checkpoints).read_text())["checkpoints"])
 
@@ -221,13 +264,19 @@ class BuildConfig:
     """How the Build stage of ``verity-vllm row`` runs.  None = the row's derived default."""
 
     build_jobs: str | None = option("--build-jobs", env="BUILD_JOBS", default=None,
-                                    help="concurrent derives: N, or auto (cgroup headroom / 20 GiB, 1..8); default 1 (TP: ranks x shapes)")
+                                    help="concurrent derives: N, or auto (default): 0.8 x the memory headroom (or --build-ram-budget-gb, if "
+                                         "smaller) over the largest shape's planned derive peak, at most one per CPU (TP: ranks x shapes)")
+    build_ram_budget_gb: float | None = option("--build-ram-budget-gb", env="BUILD_RAM_BUDGET_GB", type=float, default=None,
+                                               help="auto's memory budget when the host's headroom is shared (a sweep's per-config share)")
     build_timeout: int | None = option("--build-timeout", env="BUILD_TIMEOUT", type=int, default=None,
                                        help="seconds per derive; default scales with the envelope (TP: 7200)")
     lp: int | None = option("--lp", env="LP", type=int, default=None,
                             help="request wrapper prompt length (default: the longest prompt; a stochastic row: r0's)")
     t: int | None = option("--t", env="T", type=int, default=None,
                            help="request wrapper decode steps (default: the largest cap - 1; a stochastic row: r0's)")
+    program_cache: str | None = option("--program-cache", env="PROGRAM_CACHE", default=None,
+                                       help="a directory of derived Programs shared by the host's runs (pipeline.program_cache): each derive "
+                                            "restores a cached entry of the same key or publishes its own; default off")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -263,6 +312,11 @@ class CommitConfig:
     """How the Commit stage of ``verity-vllm row`` runs.  None = the row's derived default."""
 
     pairs: int = option("--pairs", env="PAIRS", type=int, default=3, help="instrumented/control pairs")
+    config_run: str = option("--config-run", env="CONFIG_RUN", default="0",
+                             help="1 = the config run (docs/vllm-config-sweep-plan.md §2): Build and the strict word check, ONE instrumented "
+                                  "Commit (no control arm, no pairs) under bounded staging, a k-unit replay stratified by family, then "
+                                  "config_record.json; no Match, no manifest-verify rebuild, no VU export")
+    replay_k: int = option("--replay-k", env="REPLAY_K", type=int, default=256, help="config run: the replay's k units")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
     window_mb: int = option("--window-mb", env="WINDOW_MB", type=int, default=256, help="device staging window (0 = per-step blocks)")
@@ -338,8 +392,8 @@ class RunEnv:
     hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
-    veritor_repo: str | None = option("--veritor-repo", env="VERITOR_REPO", default=None,
-                                      help="must name the tree that runs when given (the mixed-tree refusal)")
+    verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,
+                                     help="must name the tree that runs when given (the mixed-tree refusal)")
     research_run_dir: str | None = option("--research-run-dir", env="RESEARCH_RUN_DIR", default=None)
     research_run_id: str | None = option("--research-run-id", env="RESEARCH_RUN_ID", default=None)
     guard_preserve_file: str = option("--guard-preserve-file", env="GUARD_PRESERVE_FILE")

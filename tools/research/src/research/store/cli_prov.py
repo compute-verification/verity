@@ -306,7 +306,7 @@ def cmd_pull(argv: list[str]) -> int:
     try:
         m = remote.resolve_machine(ns.machine, ns.project)
         tgt = remote.pod_target(m)
-        ssh = remote.ssh_argv(tgt["host"], tgt["port"])
+        ssh = remote.ssh_argv(tgt["host"], tgt["port"], user=tgt.get("user", "root"))
         store_root = f"{m['root'].rstrip('/')}/store"
         st = A.open_store(None, ns.store)
         doc = json.loads(_cat(ssh, f"{store_root}/attempts/{ns.run}.json"))
@@ -424,7 +424,9 @@ def cmd_custody(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research data custody", description="a run's custody on the store's remote: the attempt and every run file "
                                                                            "(logs included) preserved there; answers the same on every machine")
     ap.add_argument("run", nargs="?", metavar="RUN_DIR|RUN_ID", help="run directory, id, or unique prefix under --runs-dir")
-    ap.add_argument("--publish", action="store_true", help="publish the attempt with its run record first (when not yet in the store) and push it")
+    ap.add_argument("--publish", action="store_true", help="publish the attempt with its run record first (when not yet in the store) and push it; "
+                                                         "once custody holds, the run dir's files of 1 MiB and more are removed (store.evict.evict_custody)")
+    ap.add_argument("--keep-local", action="store_true", help="--publish: keep every local run file")
     ap.add_argument("--triage", action="store_true", help="every run under --runs-dir by custody state; exit 1 while any needs action")
     ap.add_argument("--verify", action="store_true", help="--triage: check preservation on the remote (default: the catalog's recorded replicas)")
     ap.add_argument("--runs-dir", default=None)
@@ -463,10 +465,17 @@ def cmd_custody(argv: list[str]) -> int:
     rep = CU.verify(st, d)
     if pushed:
         rep["push_errors"] = pushed
+    if ns.publish and rep["preserved"] and not ns.keep_local:
+        from .evict import evict_custody
+
+        rep["evicted"] = evict_custody(d, rep)
     if ns.json:
         print(json.dumps(rep, indent=2, sort_keys=True, default=str))
     elif rep["preserved"]:
         print(f"{rep['run_id']}: custody on {rep.get('remote')}: attempt + run record {rep['run_record']} ({len(rep['files'])} file(s)); .custody written")
+        if (ev := rep.get("evicted")) and ev["files"]:
+            print(f"{rep['run_id']}: removed {len(ev['files'])} local file(s), {ev['evicted_bytes'] / 1e6:.1f} MB, preserved in {ev['artifact']} "
+                  f"(`research data fetch {ev['artifact']} --to {d}` restores them; --keep-local keeps them)")
     else:
         print(f"{rep['run_id']}: NO custody on the remote: {rep['error']}")
     return 0 if rep["preserved"] else 1

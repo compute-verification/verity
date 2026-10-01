@@ -12,8 +12,14 @@ verifier derives (`dp`, `hL1`).
 
 ## Named assumptions (taken without proof)
 
-There is one, A2, a `Prop` (`Assumptions.SHA512ExpectedTimeCR`) that the link theorem (`flock_batched_linkSoundE`)
-takes as a hypothesis (`hCR`).
+There are three, each a `Prop` taken as a hypothesis:
+- A2 (`Assumptions.SHA512ExpectedTimeCR`), for the link finders of the prover bounded (`LinkCR`), which the end-to-end
+  theorems take as `hCR`;
+- A3 (`Assumptions.UniformRandomBytes`), which the live draw's theorems take as `ht`;
+- A4 (`Assumptions.KeyedStreamsUniform`), which the PoUW window's keyed draw takes as `hA4`;
+- A5 (`Assumptions.UniformSecret`), which the same draw takes as `hsec`;
+- `Assumptions.HmRowComputes`, not cryptographic: the circuit's row hashing, which the rows' value binding
+  (`Binding.HmRows.binding`) and `flock_e2e_*_hm96` take as `hHm`.
 `README.md` §1.5 names one more, L1, about the lowering, stated below. The development declares no `axiom`. So a
 mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
 
@@ -23,10 +29,104 @@ audit's value layer (Daniel, Sep 27; constant corrected the same day).
 - **Statement.** A collision finder whose expected number of SHA-512 evaluations is `T` succeeds with probability at
   most `T/2^256`. `SHA512ExpectedTimeCR` states it for one finder: a game with a fixed strategy, whose outcomes
   record the pair output and the evaluations made, `t` for each run of the prover.
-- **Per finder.** Some finder outputs a collision after no evaluations, since collisions exist. So the `Prop` is not
-  stated for all finders: the link theorem takes it for the finder it builds from the prover.
+- **Per finder, and per prover.** Some finder outputs a collision after no evaluations, since collisions exist. So the
+  `Prop` is not stated for all finders: the link theorem takes it for the finders it builds from the prover it bounds
+  (`LinkCR … R τ …`). It is not asked of every prover at once, which SHA-512 can't meet: a prover that hard-codes two
+  openings of one commit string has finders that find a collision. `flock_batched_linkSoundE` gives the bound at each
+  prover whose finders satisfy A2, and `⊤` at any other (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s
+  finders alone (red-team review of #511, C1).
 - **Why it is plausible, and where it is used:** `assumptions/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
+
+**A3. The verifier's operating-system randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
+unit draw.
+
+- **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
+  `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
+  bytes. What A3 assumes of the operating system is that the running verifier's calls to `IO.getRandomBytes` are such a
+  source, each call's bytes independent of every earlier call's.
+- **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
+  `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
+  taking it vacuous. At run time, Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes`
+  (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
+  toolchain bump. What ties the statement to the verifier is `drawOS_def`: the live draw `Flock.Draw.drawOS` is
+  `Flock.Draw.drawWith` with every stream's bytes from `IO.getRandomBytes`, and the theorems are about `drawWith`. The
+  step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
+- **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
+  `execOS_escape_le` and `execOS_subset_escape_le` (`FlockSoundness/ExecDrawOS.lean`). They hold for every number of
+  bytes `L` the model reads. The live verifier reads as many as its reruns need, and its escape is the limit as `L`
+  grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take uniform streams
+  as their probability space, the same assumption.
+- **Upstream:** watch entry `A3-uniform-bytes`.
+
+**A4. `verity.randomness`'s keyed streams at distinct indices pass a test as independent uniform streams do, up to `η`**
+(`prf/sha-256`), for the PoUW window's keyed draw. The red team would grant it as a named hypothesis
+(`lanes/pous/20260929T1724Z-redteam-a4-keyed-streams.md`).
+
+- **Statement.** A secret of `S` uniform bytes (A5) gives the key `Randomness.derive`. For a test `E` of the key's
+  streams at indices whose framings (`Randomness.frames`) are pairwise distinct, each read to `L i` bytes
+  (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
+  `η`. `Randomness.lean` is the Lean spec of `verity.randomness` v1: it reproduces
+  `packages/verity/tests/randomness/vectors.json`, and Python matches its vectors
+  (`backends/flock/tests/test_randomness_spec.py`).
+- **Per test, as A2 is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
+  most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window draw
+  misses `B`), and `η` enters its bound.
+- **What it assumes of SHA-256.** Its compression function `f` is a pseudorandom function in two ways.
+  - Keyed by its chaining value, it makes the cascade a PRF on prefix-free inputs (Bellare, Canetti and Krawczyk 1996).
+    The inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so length extension doesn't apply.
+  - Keyed by the secret bytes in its first message block, it is a dual PRF, as the HMAC analyses use. The secret follows
+    a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header.
+  - The secret's uniformity is not A4's but A5's.
+- **η, stated.** η stays symbolic in Lean, and every record-level statement keeps `+ η` visible, never absorbed.
+  - **The claimed value:** for `S = 32`, η ≤ 2⁻¹²⁸ for the chain's tests. The derivation is generic key search over
+    `min(256, 8S)` bits, plus a hybrid over the `q` compression calls the test's streams take. With `q ≤ 2⁴⁰` and a
+    test of `T ≤ 2⁸⁰` hash evaluations, the bound stays under 2⁻¹²⁸.
+  - **One η for the whole family:** every set `B` (the closures of the bad sets, which `closure_escape` evaluates), every
+    stream budget `L`, and every receipt context. The audit takes a sup over `B`, not a union, and `E_B` costs the same
+    for every `B`, every `L` and every context.
+  - **Vacuity:** A4 is plausible only for `S ≥ 32`, and η can never be below about 2⁻⁸ˢ, since keyed probabilities are
+    multiples of that. It holds trivially at η ≥ 1, and is claimed only for the chain's efficient tests `E_B`.
+- **Upstream:** watch entry `A4-prf-sha256`.
+
+**A5. The PoUW window's secret is `S` uniform bytes, fresh for the window** (`uniform/python-secrets`).
+
+- **Statement.** A source is a finite probability space and, on each outcome, the secret. `UniformSecret sec` says every
+  event about the secret has the probability it has for `S` uniform bytes. `keyedWindow` draws over the real secret
+  source, and its theorems take A5 as `hsec`. It is satisfiable: the identity source satisfies it
+  (`Law.uniformSecret_id`, `KeyedDraw.lean`).
+- **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
+  drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`, root's C2). A
+  secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.
+- **The platform: Linux, with CPython 3.12 or later** (the red team's wording,
+  `lanes/pous/20260929T1817Z-redteam-423-receipt-key.md`, question 3). Re-read this on any other platform.
+  - `secrets.token_bytes` reads `os.urandom`, which is `getrandom(2)`, the kernel's CSPRNG. It blocks until that is
+    initialized.
+  - It keeps no user-space state, so a forked process doesn't repeat its output.
+  - A VM snapshot restored more than once must not repeat the kernel's CSPRNG state. That holds when the kernel reseeds
+    on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
+  - The CSPRNG is idealized as exactly uniform. The true bound carries its negligible distinguishing advantage.
+- **Split out of A4** at the red team's request: it is a property of what produces the secret, not of SHA-256.
+- **Upstream:** watch entry `A5-uniform-secret`.
+
+**`HmRowComputes`. The circuit's row hashing computes the `hm96-sha512/row/v1` commit string** (`circuit/hm96-sha512-row`;
+not cryptographic, and to be proved: verified-lowering design, phase 2i).
+
+- **Statement.** At every witness the circuit's constraints accept, the `b ‖ c` a serving row's `hm96` slot outputs is
+  `(SHA-512(row) ⊕ M·y) ‖ SHA-512(salt_prefix ‖ y)` for the row's bytes and the salt `y` that its `sha512x3` and `hm96`
+  slots read. `HmRows.Computes` instantiates it at the drawn units' rows, with SHA-512 and the executable's key.
+- **What it gives.** With the layout's facts (`Binding.Layout`, `Binding.HmRows`), the registration fact: a satisfying
+  witness's rows have the registered leaves. Then `ValueBinding` (`HmRows.binding`) and `registered_weights` hold with
+  A2 as the only cryptographic assumption, and `collide` an explicit SHA-512 collision (`ExplicitLeaf.hm96`).
+- **At the registered leaves.** The `_hm96` bounds are bounds at the leaves the registration commits to
+  (`Layout.regLeaf`). An audit bound read from registered roots also needs the roots' Merkle binding, `δ_tree` under
+  SHA-512 collision resistance (`cr/sha-512`; `DESIGN.md` §1), which those bounds leave out (red-team review of #513, C2).
+- **Discharged only by fixed readers.** `HmRowComputes` and `decode_row` count as discharged only for readers of the
+  witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
+  chooses its values discharges nothing (red-team review of #513, C3).
+- **Why it is not a proof yet.** It is a fact about the `sha512x3` and `hm96` sections of the circuit file and the
+  chain's wiring (`HmRow.rowWires`), which the model does not read yet.
+- **Upstream:** watch entry `hm-row-computes`.
 
 - **L1. Each template's rows compute its gates** (named hypothesis). That is, the rows' outputs are the gates' outputs, in
   the program's Boolean circuit, on every input. The audit certifies drawn units against their rows. That says something
@@ -46,6 +146,11 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   - Placed (`Placement`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
+  - A unit's input columns on one gate also carry one value in every satisfying witness (`UnitPlace.aliased`): they
+    copy one source's position, or forced-zero rows.
+  - **Proved from the executable's accept step** for `hm96-sha512/row/v1` statements (`placement_of_setupH`,
+    `unitPlace_of_setupH`; `README.md` §1.5). Open: which instance a drawn unit is (its block and VU), and `aliased`
+    from the flat statement's copies, which `unitPlace_of_setupH` takes as a hypothesis (`Layout.Aliased`).
 
 **The audit layer's named hypotheses** (`Prop`s taken as hypotheses; no `axiom`; the theorems are in
 `FlockSoundness/Audit/README.md`):
@@ -55,18 +160,20 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a drawn unit (picked before the session's first coin) fails | `table_knowledge_sound_joint` (`README.md` §1.3), after Jensen over the prover's states |
 | `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (A2, `ValueBinding`) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (`README.md` §1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
+| `Partition.AnchorsSound₂` | `δ_in` | two-stage audits: for every strategy, the session accepts while the committed coarse transcript's inputs differ from the anchors' values | as `AnchorsSound`, for the two-stage game |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
 | `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn wrong unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
 | `Partition.LoweringSound` | — | a drawn wrong unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
+| `IsHarmBound` | `H` | every wrong-unit set escaping with probability at least `δ` has harm (a consumer's weight per wrong unit) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
 
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
 before the session's first coin, not bounds state by state.
 
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
-| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; the `hm96` layout discharges it); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
-| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` (level 3) and L1 |
+| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed transcript's | for `analysisBE`: `flock_batched_linkSoundE`, under A2 for each commit string's finder and `ValueBinding` (named; for the serving rows it is `HmRows.binding`, from `HmRowComputes` and the layout's facts); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
+| `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a drawn unit's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each drawn unit's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement builder's `Placement` and `aliased` (level 3) and L1. `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and `aliased` |
 
 ## Cryptographic assumptions and coins
 
@@ -81,7 +188,8 @@ before the session's first coin, not bounds state by state.
   coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
   this theorem.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
-  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved.
+  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit draw it is
+  A3.
 - **`seed` coins** (PR #83, `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and
   SHA-256 in counter mode is a PRF. They are needed only if the seed mode becomes the verifier of record's source.
 - **The random-oracle model is not used.** Its version of the compiled bound is only a cross-check (DESIGN.md §2).
@@ -98,10 +206,13 @@ before the session's first coin, not bounds state by state.
 `lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten, and a rewritten record needs a named statement reviewer. The
 pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
-`Merkle.opening_binding`; none takes a named assumption. The end-to-end skeleton's `flock_e2e_count` and `flock_e2e_drawn`
-are pinned too; they take A2 as `hCR` and pass it to the link theorem, `flock_batched_linkSoundE`, which is not pinned,
-nor are `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25`. A theorem that is not in
-`pins` is still audited (standard axioms, kernel replay), but a change to its statement would not fail the audit.
+`Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
+(`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
+and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
+`linkBoundCR`: finite exactly at the provers whose link finders satisfy A2. The end-to-end skeleton's `flock_e2e_count` and
+`flock_e2e_drawn` are pinned too; they take A2 for `σ`'s link finders as `hCR`. `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
+pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
+would not fail the audit.
 
 ## Upstream status
 

@@ -14,6 +14,7 @@ import os
 import time
 from typing import Any
 
+from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import checkpoint_dir
 
 
@@ -45,18 +46,24 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
 
 
-def declared_target(wl: str) -> str:
-    """The workload's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none."""
-    t = json.load(open(wl)).get("target")
+def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str | None = None) -> str:
+    """The row's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none: the workload's, over
+    the device-class profile of ``row``'s id (`target_family.declared_profile`); ``protocols`` (the row's set,
+    `protocol_options.at_row`) is laid over it as the target's ``protocols``."""
+    from verity_vllm.target_family import declared_profile
+    t = declared_profile(row, json.load(open(wl))) or None
+    if protocols:
+        t = {**(t or {}), "protocols": list(protocols)}
     return json.dumps(t, sort_keys=True) if t else ""
 
 
 def extra_shapes(wl: str, lp: int, t: int) -> list[tuple[int, int]]:
     """The batch's other request shapes: every distinct (prompt length, cap - 1) of the manifest but the (LP, T) the
-    request wrapper was derived for."""
+    request wrapper was derived for, largest first (a derive's cost grows with LP + T, so parallel derives start with the
+    longest)."""
     s = json.load(open(wl))["sweep"]
     main = (int(lp), int(t))
-    pairs = sorted({(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])})
+    pairs = sorted({(int(p), int(c) - 1) for p, c in zip(s["input_lengths"], s["output_caps"])}, key=lambda pc: (-(pc[0] + pc[1]), -pc[0]))
     return [(p, c) for p, c in pairs if (p, c) != main]
 
 
@@ -68,9 +75,37 @@ def derived_ok(d: str) -> bool:
         return False
 
 
-def build_jobs_auto() -> int:
-    """``--build-jobs auto``: clamp(headroom / 20 GiB, 1, 8), headroom = cgroup memory.max - memory.current, else
-    MemAvailable (a derive that dies of OOM is rc 137, a Build FAIL by rc, never a wrong Program)."""
+#: a request derive's peak host memory: a base, a term per Call and attention's term per layer x tokens^2 (every attention Call
+#: lists each earlier key and value row), fit over the 89 request derives of the 2026-09-29 epoch's stored Builds (#11, #57, #67,
+#: #68, #74, #75: within 5% on the large ones), with Calls bounded by the most Calls per (token, layer) measured (54: Qwen3-4B-FP8,
+#: Qwen3-30B-A3B) and a 1.2 margin
+DERIVE_BASE_BYTES = 2000 << 20
+DERIVE_BYTES_PER_CALL = 6950
+DERIVE_BYTES_PER_LAYER_TOKEN2 = 362
+DERIVE_CALLS_PER_TOKEN_LAYER = 60
+DERIVE_MARGIN = 1.2
+
+
+def derive_bytes(lp: int, t: int, layers: int) -> int:
+    """The planned peak host memory of the request derive of shape (LP, T) for a model of `layers` decoder layers."""
+    tokens = int(lp) + int(t) + 1
+    calls = DERIVE_CALLS_PER_TOKEN_LAYER * layers * tokens
+    return int(DERIVE_MARGIN * (DERIVE_BASE_BYTES + DERIVE_BYTES_PER_CALL * calls + DERIVE_BYTES_PER_LAYER_TOKEN2 * layers * tokens * tokens))
+
+
+def model_layers(ck: str) -> int | None:
+    """The decoder layers of the checkpoint at `ck` (`num_hidden_layers` of its config.json, or of its `text_config`), None when
+    it does not say."""
+    cfg = load_json(os.path.join(ck, "config.json")) if ck else None
+    for c in (cfg, (cfg or {}).get("text_config")):
+        n = c.get("num_hidden_layers") if isinstance(c, dict) else None
+        if isinstance(n, int) and n > 0:
+            return n
+    return None
+
+
+def _memory_headroom() -> int:
+    """cgroup memory.max - memory.current, else MemAvailable."""
     def rd(p: str) -> int | None:
         try:
             v = open(p).read().strip(); return int(v) if v.isdigit() else None
@@ -80,10 +115,26 @@ def build_jobs_auto() -> int:
     cur = rd("/sys/fs/cgroup/memory.current") or rd("/sys/fs/cgroup/memory/memory.usage_in_bytes")
     if mx is None or mx >= (1 << 60) or cur is None:
         kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open("/proc/meminfo") if ln.split()[1].isdigit()}
-        head = kv.get("MemAvailable", 0)
-    else:
-        head = mx - cur
-    return max(1, min(8, head // (20 << 30)))
+        return kv.get("MemAvailable", 0)
+    return mx - cur
+
+
+def _cpus() -> int:
+    return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+
+
+def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, headroom: int | None = None,
+                    cpus: int | None = None, budget_gb: float | None = None) -> int:
+    """``--build-jobs auto`` (the default): as many concurrent derives as 80% of the memory headroom (or of `budget_gb`, when smaller)
+    holds at the largest shape's `derive_bytes`, at most one per CPU this process may use and one per shape.  Without the shapes or the
+    model's layers: that memory / 20 GiB, 1..8.  A derive that dies of OOM is rc 137, a Build FAIL by rc, never a wrong Program."""
+    head = _memory_headroom() if headroom is None else headroom
+    if budget_gb is not None:
+        head = min(head, int(budget_gb * (1 << 30)))
+    if not shapes or not layers:
+        return max(1, min(8, head // (20 << 30)))
+    per = max(derive_bytes(lp, t, layers) for lp, t in shapes)
+    return max(1, min(_cpus() if cpus is None else cpus, len(shapes), int(0.8 * head) // per))
 
 
 def build_summary(d: str) -> str:
@@ -313,14 +364,9 @@ def served_shape(d: str) -> str:
     return "LP=%d T_r=%d cap_T=%d" % (lp, t, cap) if t > 0 and t != cap else ""
 
 
-def manifest_engine(path: str) -> str:
-    """The query engine a manifest's header names (``v2-query`` for the manifest of record), "" when unreadable."""
-    try:
-        m = json.load(open(path))
-    except (OSError, ValueError):
-        return ""
-    q = m.get("query") or {}
-    return q.get("engine") if isinstance(q, dict) else ""
+#: the query the row builds its manifest of record under: `query.required.QUERY_OF_RECORD`, spelt here because the row driver
+#: imports no core module (tests/pipeline/test_row.py pins the two equal)
+QUERY_OF_RECORD = "Q_word_v1{X=16,W=32,R=no-recompute}"
 
 
 #: the taps a row runs by default, NORM_TAP=0 etc. opting out for A/B only: (CommitConfig field, manifest build / verify flag, the query
@@ -336,14 +382,39 @@ def tap_policy_flags(ck: Any) -> list[str]:
     return [flag if getattr(ck, field, "0") == "1" else f"--no-{flag[2:]}" for field, flag, _key in POLICIES]
 
 
-def manifest_policy_mismatch(path: str, ck: Any) -> list[str]:
-    """The policies a manifest's query header disagrees with the row's CommitConfig on, either way (every policy the row runs when the
-    manifest is unreadable)."""
-    try:
-        q = json.load(open(path)).get("query")
-    except (OSError, ValueError, AttributeError):
-        q = None
+def policy_mismatch(q: Any, ck: Any) -> list[str]:
+    """The policies a manifest's query header `q` disagrees with the row's CommitConfig on, either way (every policy the row runs when
+    there is no header)."""
     return [key for field, _flag, key in POLICIES if (getattr(ck, field, "0") == "1") != (isinstance(q, dict) and isinstance(q.get(key), dict))]
+
+
+def manifest_policy_mismatch(path: str, ck: Any) -> list[str]:
+    """`policy_mismatch` of the manifest at `path` (every policy the row runs when it is unreadable)."""
+    doc = load_json(path)
+    return policy_mismatch(doc.get("query") if isinstance(doc, dict) else None, ck)
+
+
+def manifest_not_of_record(doc: Any, program_digest: str, ck: Any) -> tuple[str, str]:
+    """Why the manifest `doc` beside a Build is not the Commit's manifest of record, as (the slug its moved-aside file is named by, the
+    reason); ("", "") when it is: built under the query of record with a partition, of the Build's Program digest (`program_digest`,
+    the one the Commit is keyed by; unknown is not a match), under the row's tap policies, and recording the word check it passed (the
+    Commit refuses one without: `commit.partition.word_check_refusal`)."""
+    q = doc.get("query") if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
+    qid = str(q.get("query_id") or "")
+    if qid != QUERY_OF_RECORD:
+        return "other-query", f"is not built under the query of record {QUERY_OF_RECORD} (query.query_id={qid or 'none'})"
+    if not isinstance(q.get("partition"), dict):
+        return "no-partition", "names no partition (query.partition)"
+    if not program_digest or doc.get("program_digest") != program_digest:
+        return "other-program", (f"is of Program {str(doc.get('program_digest'))[:16]}, not the Build's "
+                                 f"{program_digest[:16] if program_digest else '(unknown: no build_summary.json)'}")
+    mismatch = policy_mismatch(q, ck)
+    if mismatch:
+        return "policy-" + "-".join(mismatch).replace("_", "-"), f"disagrees with this Commit's taps on the {', '.join(mismatch)} policy"
+    unchecked = word_check_refusal(q)
+    if unchecked:
+        return "unchecked", f"does not record a passing word check ({unchecked})"
+    return "", ""
 
 
 def applicable_taps(path: str, ck: Any) -> list[str]:

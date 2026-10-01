@@ -54,6 +54,9 @@ def _marker(attempt_dir: Path, actor: str, target_pid: int | None, target_pgid: 
 
 
 CONTROL_TIMEOUT = Path("control") / "timeout_s"     # attempt-dir relative; written by `tele set-timeout`, re-read by the run loop
+#: The clock (seconds) the stage timeout runs on; a test replaces it to decide when the deadline passes.  The recorded times
+#: (started_mono, ended_mono, wall_s) stay on time.monotonic, the clock of every event's t_mono.
+clock = time.monotonic
 
 
 class _TimeoutControl:
@@ -145,9 +148,10 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         out_f = open(d / "stdout.log", "ab")
         err_f = open(d / "stderr.log", "ab")
         stdout, stderr = out_f, err_f
-    t_start = time.monotonic()
+    t_start, armed = time.monotonic(), clock()
     try:
-        proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None)
+        proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None,
+                                env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve())})
     except OSError as e:
         set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage)
         em.emit("mark", stage=a.stage, name="spawn_failed", error=str(e))
@@ -183,10 +187,10 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 # [r19-int-8, F-r19-int-8] the launch value is not the last word: an operator who sized --timeout on Build alone can raise
                 # (or lower) it while the row runs, and the change is a recorded mark beside the launch value -- not a paused watchdog.
                 em.mark(a.stage, "timeout_changed", old_timeout_s=timeout, new_timeout_s=new["timeout_s"], actor=new.get("actor"), reason=new.get("reason"),
-                        elapsed_s=round(time.monotonic() - t_start, 3), control=str(ctl.path))
+                        elapsed_s=round(clock() - armed, 3), control=str(ctl.path))
                 timeout = new["timeout_s"]
                 set_status(d, "running", timeout_s=timeout, timeout_changed_utc=utc_now_ms())
-            if timeout and time.monotonic() - t_start >= timeout and not timed_out:
+            if timeout and clock() - armed >= timeout and not timed_out:
                 timed_out = True
                 _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout}", None, True, a.job)
                 try:
@@ -260,7 +264,9 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--workload-digest", default=None)
     ap.add_argument("--input", action="append", default=[], help="name=path input artifact reference")
     ap.add_argument("--profile-key", action="append", default=[], help="environment variable NAMES to record (allowlist); values are read from the environment")
-    ap.add_argument("--declared-output", action="append", default=[])
+    ap.add_argument("--declared-output", action="append", default=[], metavar="GLOB",
+                    help="run-dir-relative glob of files custody uploads (repeatable; `*` crosses `/`); other files are listed by size and "
+                         "hash, not uploaded, past 256 MiB. See .agents/skills/writing-runs/SKILL.md")
     ap.add_argument("--reservation-gpu", default=None)
     ap.add_argument("--reservation-host-memory-bytes", type=int, default=None)
     ap.add_argument("--policy", default=None, help="policy toml; its version + sha256 are recorded")

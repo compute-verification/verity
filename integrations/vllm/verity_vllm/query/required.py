@@ -88,7 +88,7 @@ SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) | {"ArgmaxTokenSelect_v1"}
 STOCHASTIC_SAMPLING_EVENTS = frozenset(SAMPLING_EVENT_FAMILIES) - {"TokenSelect_v1"}
 #: Definitions implemented by ONE FlashAttention launch per (layer, step) whose M1 stream the protocol requires; their binding record
 #: carries the launch geometry (T, NH, KVH, D)
-FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "AttentionSoftcap_v1", "AttentionN_v1", "AttentionTP2_v1"})
+FLASH_ATTENTION_LAUNCHES = frozenset({"Attention_v1", "Attention_v2", "Attention_v3", "Attention_v4", "Attention_v5", "AttentionSoftcap_v1", "AttentionSoftcap_v2", "AttentionN_v1", "AttentionTP2_v1"})
 
 
 def collective_kind(family: str) -> str | None:
@@ -127,6 +127,8 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("BiasAdd_v1", "out", "0", _LINEAR_WHY + " (the biased linear's epilogue is the returned tensor)", condition="own_parameter"),
     Residual("ScaledMmFp8Block_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
     Residual("ScaledMmFp8BlockSharedScale_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
+    Residual("NcpLinearRow_v1", "out", "0", _LINEAR_WHY + " (the `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
+    Residual("NcpLinearRowBias_v1", "out", "0", _LINEAR_WHY + " (the fused-bias `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     Residual("<all_reduce>", "out", "0", _LINEAR_WHY + " (the row-parallel linear returns the all-reduced tensor as slot 0: an all-reduce of any "
              "world takes the slot of its rank-local operand when that operand is a Linear's reading its own weight)", condition="operand_own_parameter"),
     Residual("RoPE_v1", "query", "0", "the Build records RoPE's return slots by keyword (`query` / `key`); v1 spells them as the tuple index of "
@@ -373,8 +375,11 @@ class Population:
         protocol.update(self.partial_of)                                        # TP-04: the rank-local partials
         self.policy = Policy(prescribed_inputs=prescribed, protocol_required=frozenset(protocol))
         self.required = RequiredValues(B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
-        self.interior = frozenset(v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required
-                                  and fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is None)   # a MoE block row: its plane
+        inside = [v for v in B.values if v.call >= 0 and v not in B_module.values and v not in self.policy.protocol_required]
+        # a MoE block row's Value inside its body is committed as the row's `moe_block_stream` plane: no member (a member of the body's
+        # `out` would be a second producer beside the block's own output, or beside its AllReduce's on a rank Program)
+        self.plane_fed = frozenset(v for v in inside if fmt.moe_plane_kind(P.call(v.call).family, corr.module_of(v.call)) is not None)
+        self.interior = frozenset(inside) - self.plane_fed
         # (required_values() would recompute the boundary; the policy is validated the same way here)
         known_inputs = frozenset(P.inputs)
         for v in self.policy.prescribed_inputs:
@@ -484,7 +489,7 @@ class Population:
         c = self.P.call(cid)
         if c.family in SAMPLING_EVENTS:
             return []
-        out = [self.member(ValueRef(cid, p)) for p in self._ports().get(cid, ())]
+        out = [self.member(ValueRef(cid, p)) for p in self._ports().get(cid, ()) if ValueRef(cid, p) not in self.plane_fed]
         if cid in self.carries:
             port = c.port_table[0]
             width = port.elems if self.collectives[cid] == "all_reduce" else port.elems // self.world
@@ -505,8 +510,11 @@ def _profile(res: Mapping[str, Any], profile: str | None) -> tuple[str, int | No
         fa = v.get("vllm_flash_attn_version")
         break
     if profile is None:
+        from verity_vllm.program.frontend.target_profile import TargetProfile
+
         cc = ((res.get("target") or {}).get("declared") or {}).get("compute_capability") or [8, 9]
-        profile = "hopper" if (fa == 3 or (fa is None and int(cc[0]) >= 9)) else "ampere"
+        fa3 = TargetProfile(compute_capability=(int(cc[0]), int(cc[1]))).effective_flash_attn_version() == 3
+        profile = "hopper" if (fa == 3 or (fa is None and fa3)) else "ampere"
     return profile, fa, attn_obs
 
 

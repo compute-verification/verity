@@ -1,5 +1,5 @@
 """The descriptor profiler's attribution is exhaustive (parts sum to the definition bytes) and its two dominant
-terms follow the closed forms written in docs/vllm-poc/descriptor-profile.md."""
+terms follow their closed forms."""
 
 from __future__ import annotations
 

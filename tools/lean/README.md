@@ -2,8 +2,8 @@
 
 One audit for every Lake package, run by `check` (`python tools/lean/audit.py --all --build`). It needs the standard
 library, `lake` and the toolchain's `lean`; nothing here imports Verity, so another repository can copy the directory
-(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `sandbox.sh`, `setup.sh`, `tests/`) and point it
-at its own packages.
+(`audit.py`, `Facts.lean`, `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `tests/`) and
+point it at its own packages.
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
@@ -15,6 +15,7 @@ python tools/lean/audit.py [--build] PKG...       audit these packages (--build:
 python tools/lean/audit.py --update PKG...        write the pins' records from the build; commit the diff
 python tools/lean/audit.py --all [--root DIR]     the controls, then every package under DIR with a lean-audit.json
 python tools/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
+python tools/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
 ## What it checks
@@ -28,9 +29,17 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - every `.lean` file of the package is imported by a root, or exempt with a reason;
 - no source file or lakefile names `debug.skipKernelTC`, an option that turns proofs into `sorry`, a `bootstrap.*`
   option, `addDeclWithoutChecking` or `addDeclCore` (comments and docstrings may);
+- nor does the source of a module the package imports from a fetched package (`.lake/packages/*`: Mathlib, ArkLib and
+  what they require), or the lakefile of a package it imports from, unless `dependency_unchecked` lists the module with
+  the reason. The imported modules are the ones the `dependencies` record covers, and their sources are there once the
+  package is built, so the scan builds nothing: soundness's 3,900 imported dependency modules take about a second. The
+  toolchain, which defines these options, is trusted, and a path dependency is a package of the repository, audited on
+  its own. Among the pinned dependencies only doc-gen4's loader names one, and no audited package
+  imports it;
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
-  definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason, and the package
-  has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
+  definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
+  its file as it was reviewed. No listed module may declare a pinned theorem or a definition a pinned statement reads.
+  The package has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
 - the `.olean` files of the modules the package imports, as each fetched package (Mathlib's downloaded cache, ArkLib's
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
@@ -66,7 +75,9 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - an initializer that tries to forge the facts, which must never run where the audit reads the package;
 - compile-time IO that rewrites a checker input and restores it, which the compile-time check refuses and the sandbox
   blocks;
-- a docstring that names `debug.skipKernelTC`, which must pass.
+- a docstring that names `debug.skipKernelTC`, which must pass;
+- a fetched dependency (a package at `.lake/packages/dep`) whose module sets `debug.skipKernelTC`, which must fail, and
+  one whose docstring and comments name it, which must pass.
 
 ## The policy: `lean-audit.json`, beside the lakefile
 
@@ -78,7 +89,8 @@ installs it first, so a machine without elan works), must pass clean and fail on
  "assumptions": ["Pkg.Assumptions"],
  "meaning": ["Pkg"],
  "escapes": {"Pkg.loop": "why compiled code no proof sees is acceptable here"},
- "compile_time": {"Pkg.Tactic": "why this module must run code while it compiles"},
+ "compile_time": {"Pkg.Tactic": {"why": "why this module must run code while it compiles", "digest": "…"}},
+ "dependency_unchecked": {"Dep.Loader": "why the package imports a dependency module that names a kernel bypass"},
  "layers": {"Pkg.Model": {"imports": ["Mathlib", "Pkg.Model"], "except": [], "why": "definitions import no proofs"}},
  "pins": {"Pkg.main_theorem": {}}
 }
@@ -88,13 +100,27 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `assumptions`: the modules whose `Prop` constants may appear as closed hypotheses of a pinned theorem.
 - `meaning` (default `roots`): the modules whose definitions a pinned statement's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
+- `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
+  adds the `digest` of the module's file. Any later edit of the file fails the audit until someone has reviewed its
+  compile-time code and `--update` records the new digest, and `--update` lists the module among what a reviewer reads.
+  No listed module may declare a pinned theorem or a definition a pinned statement reads: a term elaborator, a notation
+  or a macro there could change what a statement means. A proof-only tactic belongs in a module of its own.
+- `dependency_unchecked`: the modules of fetched packages (for a lakefile, `<package>/lakefile.lean`) whose source may
+  name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
 - `pins`: the theorems a document or a PR cites as proved. `--update` fills each record, and a `reads` section, from the
   build: the signature, the named assumptions among the hypotheses, a hash of the type, and for each module the
-  definitions the pinned statements read, with a hash each. Without `--update` the audit fails on any difference, so a
-  statement, or a definition it depends on, cannot change without a visible diff of this file. A record holds the
-  statement, not the proof: pin a `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+  definitions the pinned statements read, with a hash each, the pins that read them, and a `digest` of those hashes (which
+  the record therefore determines). Without `--update` the audit fails on any difference, so a statement, or a definition
+  it depends on, cannot change without a visible diff of this file. A record holds the statement, not the proof: pin a
+  `sorry` stub, and the pin passes once a proof with allowed axioms replaces it.
+- **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
+  which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
+  literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
+  therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
+  32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
+  "rehashed" where the 32-bit hash still matches, so no reviewer is needed for that.
 
 **A changed pin needs a named statement reviewer.** A weakened definition leaves every proof valid, so the axiom checks
 and the replay pass it: only the pins see it, and only a person can judge it. (A redefinition of `Collision` once made
@@ -104,6 +130,24 @@ pin reads, with the pins that read it and its source now (also in `review.txt` a
 names the reviewer and the pins they read. A pin whose statement is the same but prints differently (the same type hash
 and named assumptions, after a toolchain bump or a change of notation) gets one line, "printed differently", and needs no
 reviewer.
+
+## Merging records: `merge.py`
+
+Two branches that each pin theorems both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
+conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/lean/merge.py --install` has registered
+it in the clone's git config. It merges entry by entry: each side's change to a pin, a module under `reads`, a dependency
+or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
+the digest is recomputed. Pins arrive byte for byte from their branches, and a hand-written section one side extends (a
+module added to `meaning`) is kept.
+
+It refuses when both sides changed one entry differently: a pin restated on both, a definition whose content both changed,
+a dependency both bumped. It also refuses when one side stops reading a definition in a module the other side changed,
+since the record doesn't say which pins read it. A refusal is a conflict in git, with the entries named. Resolve it the
+old way: take either side and run `audit.py --update` on the merged tree.
+
+A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
+so a merge that is clean but wrong (a definition that changed on one side without a pin there reading it, while the other
+side's new pin reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 

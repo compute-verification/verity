@@ -7,21 +7,19 @@ rule cannot evaluate is refused by name; an argument of another shape is a colle
 replay reads the committed words and checks the served output as before."""
 from __future__ import annotations
 
-import gzip
-import json
 import os
 import types
 
 import numpy as np
 import pytest
+
+from tests.acquire.call_boundary_programs import DENSE, EMB, EPS, H, IL, LP, PF, T, V, build_dir, dense_program
 from verity.evaluation import evaluate, evaluate_batch
 from verity_vllm.commit.binding import build_binding_map, logical_request
-from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.compose import compose_global
 from verity_vllm.query.call_scope import specialization
 from verity_vllm.query.manifest.format import spec_family
-from verity_vllm.query.program_view import definition_ports, from_instances, spec_statics
-from verity_vllm.query.required import request_manifest
+from verity_vllm.query.program_view import definition_ports, spec_statics
 
 torch = pytest.importorskip("torch")
 
@@ -29,9 +27,6 @@ from verity_vllm.acquire.sources import call_boundary_plan as CP  # noqa: E402
 from verity_vllm.acquire.sources import call_boundary_source as CB  # noqa: E402
 from verity_vllm.acquire.sources import taps  # noqa: E402
 
-ONE, EPS, CAP = '{"f64":"0x1.0000000000000p+0"}', '{"f64":"0x1.0c6f7a0b5ed8dp-20"}', '{"f64":"0x1.e000000000000p+4"}'
-V, H, LP, T = 16, 8, 7, 2
-PF, IL, LG, EMB = "model.model.layers.0.post_feedforward_layernorm", "model.model.layers.1.input_layernorm", "model.logits_processor", "model.model.embed_tokens"
 #: bf16 embedding rows the prompt selects: NaN payloads (quiet, negative, signalling), +-inf, +-0, subnormals, the largest finite, mixed
 EDGE = [[0x7FC0, 0xFFC1, 0x7F81, 0x3F80, 0xBF80, 0x4000, 0x3F00, 0x0000],
         [0x7F80, 0xFF80, 0x3F80, 0x4040, 0xC000, 0x3E80, 0x0000, 0x8000],
@@ -73,74 +68,6 @@ def _tensor(w: np.ndarray, dtype):
     return torch.from_numpy(np.ascontiguousarray(w).view(SIGNED[w.itemsize])).view(dtype)
 
 
-class Rows:
-    """An instance-sequence document under construction: the weights struct of `fields` [(Program name, elements, width, type)]."""
-
-    def __init__(self, fields):
-        self.rows, self.step, self.off, o = [], {}, {}, 0
-        for n, c, _b, _t in fields:
-            self.off[n] = (o, o + c)
-            o += c
-        self.wtype = "{" + ", ".join(f"{n}: {t}" for n, _c, _b, t in fields) + "}"
-
-    def add(self, s, spec, name, *args):
-        self.rows.append({"i": len(self.rows), "spec": spec, "form": "call", "name": name, "args": list(args)})
-        self.step[len(self.rows) - 1] = s
-        return len(self.rows) - 1
-
-    def W(self, n):
-        return [["p", 1, *self.off[n]]]
-
-    def doc(self, lp):
-        return {"schema": "cb-a/instance-sequence/v1", "digest": "e" * 64, "params": [["prompt", f"Array<{lp},Value<32>>"], ["weights", self.wtype]],
-                "rows": self.rows}
-
-
-DENSE = [(f"{EMB}.weight", V * H, 16, f"Array<{V},Array<{H},Value<16>>>"), (f"{PF}.weight", H, 16, f"Array<{H},Value<16>>"),
-         (f"{IL}.weight", H, 16, f"Array<{H},Value<16>>")]
-
-
-def dense_program(embed=EMB, lp=LP, t=T, eps=EPS):
-    """Per step (the prompt's `lp` rows, then one, `t` times): embed -> a post-feedforward norm chain (one input) -> an input-layernorm
-    chain (x + residual, widened; `eps` its epsilon) -> the soft-capped logits of the last row -> TokenSelect; node-major rows, as the Build
-    writes a prefill, each norm's `weight + 1` one Call of the step that every row reads.  `embed` = the module the embedding rows are named
-    under.  Returns (Rows, {(step, "e" | "x" | "y"): Calls})."""
-    b, at = Rows(DENSE), {}
-    sel = None
-    for s in range(1 + t):
-        ks = range(lp) if s == 0 else range(1)
-
-        def each(spec, node, *reads):
-            return [b.add(s, spec, f"{node}[{k}]", *([["n", r[0][k], 0, r[1]]] if isinstance(r, tuple) else r for r in reads)) for k in ks]
-
-        e = [b.add(s, f"Embedding_v1{{V={V},H={H}}}", f"{embed}/embedding_{s}[{k}]", [["p", 0, k, k + 1]] if s == 0 else [["n", sel, 0, 1]],
-                   b.W(f"{EMB}.weight")) for k in ks]
-        a0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{PF}/add_{s}[0]", b.W(f"{PF}.weight")), 0, H]]
-        sq = each(f"SquareBf16_v1{{N={H}}}", f"{PF}/pow_{s}", (e, H))
-        mu = each(f"MeanTriton_v1{{N={H}}}", f"{PF}/mean_{s}", (sq, H))
-        ve = each(f"AddScalarF32_v1{{N=1,C={EPS}}}", f"{PF}/add_1_{s}", (mu, 1))
-        rs = each("RsqrtF32_v1{N=1}", f"{PF}/rsqrt_{s}", (ve, 1))
-        sc = each(f"ScaleRowBf16_v1{{N={H}}}", f"{PF}/mul_{s}", (e, H), (rs, 1))
-        mv = each(f"MulVecF32_v1{{N={H}}}", f"{PF}/mul_1_{s}", (sc, H), a0)
-        x = each(f"NarrowF32ToBf16_v1{{N={H}}}", f"{PF}/to_{s}/out", (mv, H))
-        b0 = [["n", b.add(s, f"AddScalarBf16_v1{{N={H},C={ONE}}}", f"{IL}/add_{s}[0]", b.W(f"{IL}.weight")), 0, H]]
-        ad = each(f"AddWidenedBf16_v1{{N={H}}}", f"{IL}/add_1_{s}", (x, H), (e, H))
-        sq = each(f"SquareF32_v1{{N={H}}}", f"{IL}/pow_{s}", (ad, H))
-        mu = each(f"MeanTriton_v1{{N={H}}}", f"{IL}/mean_{s}", (sq, H))
-        ve = each(f"AddScalarF32_v1{{N=1,C={eps}}}", f"{IL}/add_2_{s}", (mu, 1))
-        rs = each("RsqrtF32_v1{N=1}", f"{IL}/rsqrt_{s}", (ve, 1))
-        sc = each(f"ScaleRowF32_v1{{N={H}}}", f"{IL}/mul_{s}", (ad, H), (rs, 1))
-        mv = each(f"MulVecF32_v1{{N={H}}}", f"{IL}/mul_1_{s}", (sc, H), b0)
-        y = each(f"NarrowF32ToBf16_v1{{N={H}}}", f"{IL}/to_{s}/0", (mv, H))
-        g = b.add(s, f"Gemm_v1{{K={H},N={V}}}", f"{LG}/triton_launch_{s}[0]", [["n", y[-1], 0, H]], b.W(f"{EMB}.weight"))
-        dv = b.add(s, f"Bf16DivScalar_v1{{N={V},C={CAP}}}", f"{LG}/div_{s}[0]", [["n", g, 0, V]])
-        th = b.add(s, f"Bf16Tanh_v1{{N={V}}}", f"{LG}/tanh_{s}[0]", [["n", dv, 0, V]])
-        ml = b.add(s, f"Bf16MulScalar_v1{{N={V},C={CAP}}}", f"{LG}/mul_{s}/out[0]", [["n", th, 0, V]])
-        sel = b.add(s, f"TokenSelect_v1{{V={V}}}", f"argmax_{s}[0]", [["n", ml, 0, V]])
-        at.update({(s, "e"): e, (s, "x"): x, (s, "y"): y})
-    return b, at
-
-
 def dense_fields():
     rng = np.random.default_rng(11)
     table = _bf16(rng, V * H).reshape(V, H)
@@ -157,19 +84,6 @@ def reference(doc, prompt, fields, field_order):
                 for g in r["args"]]
         vals[r["i"]] = list(evaluate(specialization(spec_family(r["spec"]), spec_statics(r["spec"])), *args))
     return vals
-
-
-def build_dir(tmp_path, doc, observed, *, name="build_request", digest="d0", request_id="r0"):
-    """A Build dir holding `doc`, and the manifest of its one request (the implementation paths observed = `observed`)."""
-    res = {"program": {"digest": digest, "function": "f"}, "attention_impls_observed": {p: {} for p in observed},
-           "target": {"declared": {"compute_capability": [8, 9]}}}
-    d = tmp_path / name
-    d.mkdir()
-    with gzip.open(d / "instances.json.gz", "wt") as f:
-        json.dump(doc, f)
-    (d / "result.json").write_text(json.dumps(res))
-    P = from_instances(str(d / "instances.json.gz"))
-    return str(d), request_manifest(P, Correspondence(P, implementation_paths=observed), res, request_id=request_id).manifest
 
 
 def runtime(paths, tensors=None):
@@ -253,6 +167,27 @@ def test_every_call_boundary_is_committed_once_per_step_with_the_ir_words(dense)
     assert f"model.layers.0.post_feedforward_layernorm/rsqrt_{T}/out" in body and src.values("model.layers.0.post_feedforward_layernorm", 0) == {}
     assert src.stats["bodies"] == 3 * (1 + T) and src.stats["tensors"] == len(ids) and src.stats["errors"] == 0
     assert src.declaration_classes()[0]["class"] == CB.FAMILY and src.extra_step_bytes({}, None)["tensors_per_step"] == 18
+
+
+def test_a_weight_add_made_once_is_evaluated_into_every_steps_body(tmp_path):
+    """Gemma-2's Build makes each norm's `weight + 1` once, at step 0: a later step's body reads it across the step and evaluates it from
+    the weights, committing the reference's words."""
+    b, at = dense_program(weight_add_once=True)
+    doc = b.doc(LP)
+    assert sum(r["spec"].startswith("AddScalarBf16_v1") for r in doc["rows"]) == 2
+    fields = dense_fields()
+    world = types.SimpleNamespace(b=b, at=at, doc=doc, fields=fields, vals=reference(doc, PROMPT, fields, [n for n, *_ in DENSE]))
+    world.pdir, world.man = build_dir(tmp_path, doc, [PF[len("model."):]])
+    ids = CB.manifest_sites(world.man)
+    plan = CB.plan_of(world.man, world.pdir)
+    assert not plan.uncovered and plan.covered == plan.identities == len(ids) == 18 + T * 16
+    com, src = _dense_source(world)
+    _drive(world, com, src)
+    assert not com.errors and len(com.acquired) == len(ids)
+    got = {(s, n): t for s, n, t in com.acquired}
+    for r in ids:
+        w = CB.words(torch, got[(r["engine_step"], f"{r['op_path']}/{r['output_member']}")]).reshape(r["rows"], r["width"]).astype(np.uint64)
+        assert np.array_equal(w, ir_words(doc, world.vals, b.step, r)), (r["engine_step"], r["op_path"])
 
 
 def test_edge_words_through_the_norm_chains_are_the_ir_words(dense):
@@ -442,6 +377,8 @@ def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, m
     assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
     assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
     monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
+    from verity_vllm.program.kernels import kernel_registry
+    monkeypatch.delitem(kernel_registry._REGISTERED, ("Bf16DivScalar_v1", "rows"))
     why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
     assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why
 

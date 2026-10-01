@@ -12,8 +12,8 @@ Second family (XFER's choice, disjoint from DERIVE's Qwen2/Llama-style developme
     carried as values (`torch.cat`, no host cache).
   * A non-decoder residual MLP with a shared block applied three times and one parameter used in two roles.
 
-Results are written as JSON lines to `$XFER_OUT` (default `/tmp/xfer/transfer-<importer>.jsonl`) for the report
-`docs/vllm-poc/derive-transfer-report.md`. Needs torch; runs on the pod (§37).
+Results are written as JSON lines to `$XFER_OUT` (default `/tmp/xfer/transfer-<importer>.jsonl`) for the transfer
+report. Needs torch; runs on the pod (§37).
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import math
 import os
-import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -320,20 +319,18 @@ def evaluate_against_torch(out: Outcome, module: nn.Module, inputs: tuple) -> di
         for j in range(refs.count):
             _, _, g = refs[j]
             transcript[g] = int(words[j])
-    t0 = time.time()
     try:
         evaluate_region(C, C[0:C.size], transcript)
     except MissingValue as e:
         return {"evaluated": False, "why": f"MissingValue: {e}"}
     except Exception as e:  # noqa: BLE001
         return {"evaluated": False, "why": f"{type(e).__name__}: {str(e)[:200]}"}
-    secs = time.time() - t0
     with torch.no_grad():
         want = module(*[t.clone() for t in inputs])
     want_flat = torch.cat([w.reshape(-1) for w in torch.utils._pytree.tree_leaves(want)])
     outs = C.root_outputs()
     if len(outs) != want_flat.numel():
-        return {"evaluated": True, "match": False, "why": f"{len(outs)} root outputs vs {want_flat.numel()} torch outputs", "seconds": secs}
+        return {"evaluated": True, "match": False, "why": f"{len(outs)} root outputs vs {want_flat.numel()} torch outputs"}
     got = []
     for g, like in zip(outs, [want_flat.dtype] * len(outs)):
         w = C.gate(g).prim.ret.w
@@ -348,7 +345,7 @@ def evaluate_against_torch(out: Outcome, module: nn.Module, inputs: tuple) -> di
     tol = 1e-4 if want_flat.dtype == torch.float32 else (1e-2 if want_flat.dtype == torch.bfloat16 else 0.0)
     close = bool(torch.allclose(got_t, want_d, rtol=tol, atol=tol)) if want_flat.is_floating_point() else bool((got_t == want_d).all())
     return {"evaluated": True, "match": close, "bit_exact": exact == len(outs), "exact_words": exact, "words": len(outs),
-            "max_abs": max_abs, "max_rel": max_rel, "gates": C.size, "seconds": round(secs, 2)}
+            "max_abs": max_abs, "max_rel": max_rel, "gates": C.size}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -419,7 +416,7 @@ def _git_head() -> str:
     try:
         import subprocess
         return subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=os.path.dirname(os.path.abspath(__file__)),
-                              capture_output=True, text=True, timeout=5).stdout.strip()
+                              capture_output=True, text=True).stdout.strip()
     except Exception:  # noqa: BLE001
         return ""
 
@@ -528,14 +525,12 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.registry.b1 import B0_CONFIG
     from tests.program.test_derive_negative import check_cache_ownership, check_cache_ownership_by_kind
-    t0 = time.time()
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)
-    secs = time.time() - t0
     assert rep.ok, rep.unsupported
     fam = rep.family or {}
     rec = {"case": "audit_s3_b0_serve", "root": rep.root[:40], "digest": rep.digest, "certified": rep.digest == CERTIFIED_B0_DIGEST,
-           "family_matched": bool(fam.get("matched")), "gates": rep.gates, "flat_digest": rep.flat_digest, "seconds": round(secs, 1),
+           "family_matched": bool(fam.get("matched")), "gates": rep.gates, "flat_digest": rep.flat_digest,
            "head": GIT_HEAD, "importer": IMPORTER_NAME}
     rec["ownership_by_name"] = check_cache_ownership(rep.program)[:5]
     rec["ownership_by_kind"] = check_cache_ownership_by_kind(rep.program, B0_CONFIG["NL"], 32, 15)[:5]

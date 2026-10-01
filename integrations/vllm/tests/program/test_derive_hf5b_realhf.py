@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import json
 import os
-import time
 from typing import Any
 
 import pytest
@@ -130,7 +129,7 @@ if GROUP:
 if RH.ONLY:
     CASES = [c for c in CASES if RH.ONLY in c[0]]
 
-# DERIVE-2's reported digests (docs/vllm-poc/derive-hf5-report.md §5 / §6): the re-confirmation rows must reproduce them exactly
+# DERIVE-2's reported digests: the re-confirmation rows must reproduce them exactly
 EXPECT_DIGEST_PREFIX = {"llama-sdpa-f32-tie1-greedy": "538319a3770a", "qwen2-sdpa-f32-tie1-greedy": "e9d32625a99b",
                         "gpt2-sdpa-f32-tie1-greedy-gelu_pytorch_tanh": "03925eb18841", "qwen3-sdpa-f32-tie1-greedy": "46ed593f82a3"}
 
@@ -157,17 +156,13 @@ def test_hf5b_case(case_id: str, group: str, arch: str, impl: str, dtype: str, w
                            "derive_version": DERIVE_VERSION, "torch": torch.__version__, "transformers": transformers.__version__,
                            "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=I, MAXPOS=MAXPOS, head_dim=HEAD_DIM),
                            "LP": RH.LP, "STEPS": RH.STEPS if what == "greedy" else None, "prompt": RH.PROMPT.tolist(), "probe": 0, "probe_patches": []}
-    t0 = time.time()
     model = make_model(arch, dtype, impl, True, **over)
     module = RH.Logits(model) if what == "forward" else RH.Greedy(model, RH.STEPS)
     inputs = (RH.PROMPT.clone(),)
-    rec["construct_seconds"] = round(time.time() - t0, 1)
     metas = tuple(torch.empty(x.shape, dtype=x.dtype, device="meta") for x in inputs)
-    t0 = time.time()
     name, config = _derive_identity(case_id, group, rec["dims"], dtype, impl, over)
     rec["derive_name"] = name
     rep = derive_report(module, metas, mode="reference", name=name, config=config)
-    rec["derive_seconds"] = round(time.time() - t0, 1)
     prov = rep.provenance
     order, counts = RH._rules_in_order(prov)
     rec["rules_in_order"] = order

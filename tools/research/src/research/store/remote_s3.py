@@ -58,7 +58,7 @@ in both runs); it is reached only at `jobs` = 256 on a first push (320.6; re-pus
 that plan a pack format for many-small-file trees is warranted; it is not implemented, and one object per blob stays the storage
 unit until it is.  Raising `store.toml [remote] jobs` (with `max_pool_connections` >= jobs) is the interim lever.
 
-The signing functions are pure and tested against the AWS documented vectors (`sign_headers`, `canonical_request`,
+The signing functions are pure and tested against the AWS documented vectors (`sign_headers`, `presign`, `canonical_request`,
 `string_to_sign`, `signature`).  One instance may be used from several threads (`LocalStore.push` does): the pool is locked, a
 connection is never shared by two requests at once, and the only other shared mutable is the conditional-PUT flag.
 """
@@ -101,6 +101,8 @@ PARTS_SIDECAR_SCHEMA = "research/parts/v1"
 REQUEST_DEADLINE_S = 180.0       # a request's hard wall-clock deadline to its headers; a GET body then gets max(this, bytes / MIN_BODY_RATE)
 MIN_BODY_RATE = 64 * 1024        # bytes/s a GET body may not fall below on average before its deadline cuts it off
 MIN_UPLOAD_RATE = 8 * 1024       # the same for a request body (a PUT from the laptop's 25-220 KB/s uplink must still finish)
+STALL_WINDOW_S = 120.0           # a part PUT is cut off when a window this long passes with under STALL_MIN_BYTES of its body sent,
+STALL_MIN_BYTES = 1 << 20        # or (body sent) with no response: its whole-body deadline above is hours for a 256 MiB part
 HEAD_DEADLINE_S = 30.0           # a HEAD carries no body: a much shorter deadline, and HEAD_RETRIES tries after the first
 HEAD_RETRIES = 1
 RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
@@ -159,6 +161,20 @@ def sign_headers(method: str, host: str, path: str, query: dict[str, str] | list
     signed = ";".join(sorted(k.lower() for k in h))
     h["Authorization"] = f"{ALGORITHM} Credential={access_key}/{scope},SignedHeaders={signed},Signature={sig}"
     return h
+
+
+def presign(method: str, scheme: str, host: str, path: str, access_key: str, secret_key: str, region: str, amz_date: str,
+            expires_s: int, session_token: str | None = None, service: str = "s3") -> str:
+    """A query-signed URL (SigV4 `X-Amz-*` parameters, only `host` signed, `UNSIGNED-PAYLOAD`): whoever holds it may send this one
+    request for `expires_s` seconds (at most 7 days) from `amz_date`, and nothing else."""
+    scope = f"{amz_date[:8]}/{region}/{service}/aws4_request"
+    query = {"X-Amz-Algorithm": ALGORITHM, "X-Amz-Credential": f"{access_key}/{scope}", "X-Amz-Date": amz_date,
+             "X-Amz-Expires": str(int(expires_s)), "X-Amz-SignedHeaders": "host"}
+    if session_token:
+        query["X-Amz-Security-Token"] = session_token
+    creq = canonical_request(method, path, query, {"host": host}, "UNSIGNED-PAYLOAD")
+    sig = signature(secret_key, amz_date[:8], region, string_to_sign(amz_date, scope, creq), service)
+    return f"{scheme}://{host}{uri_encode(path, keep_slash=True)}?{canonical_query(query)}&X-Amz-Signature={sig}"
 
 
 def sha256_file(path: Path) -> tuple[str, int]:
@@ -359,13 +375,23 @@ class _Watchdog:
     stalled TLS stream that trickles, a peer that never answers) returns at once and the request fails as retriable.  The socket
     timeout alone bounds each recv, not the request: a laptop parity run sat 65 min in such reads."""
 
-    def __init__(self, conn: http.client.HTTPConnection, seconds: float):
+    timer = threading.Timer          # arms the deadline; a test replaces it to decide when a deadline passes
+
+    def __init__(self, conn: http.client.HTTPConnection, seconds: float, progress: Callable[[], int] | None = None, min_bytes: int = 0):
+        """With `progress` (bytes of the body sent so far) the deadline is a window: each one that saw `min_bytes` more re-arms it."""
+        self.progress, self.min_bytes, self.seconds, self._seen = progress, min_bytes, seconds, 0
         self.conn, self.fired, self.sock = conn, False, None     # `sock` is taken once the request is sent: http.client hands a
                                                                   # closing connection's socket to the response and clears conn.sock
         self._t: threading.Timer | None = None
         self.extend(seconds)
 
     def _fire(self) -> None:
+        if self.progress is not None:
+            now = self.progress()
+            if now - self._seen >= self.min_bytes and now > self._seen:
+                self._seen = now
+                self.extend(self.seconds)
+                return
         self.fired = True
         sock = self.sock or getattr(self.conn, "sock", None)
         try:
@@ -376,13 +402,25 @@ class _Watchdog:
 
     def extend(self, seconds: float) -> None:
         self.cancel()
-        self._t = threading.Timer(seconds, self._fire)
+        self._t = self.timer(seconds, self._fire)
         self._t.daemon = True
         self._t.start()
 
     def cancel(self) -> None:
         if self._t is not None:
             self._t.cancel()
+
+
+class _Counted:
+    """A bytes body http.client reads in blocks, counting what it has taken to send (a :class:`_Watchdog`'s progress)."""
+
+    def __init__(self, data: bytes):
+        self._f, self.n = io.BytesIO(data), 0
+
+    def read(self, size: int = -1) -> bytes:
+        b = self._f.read(size)
+        self.n += len(b)
+        return b
 
 
 class _Response:
@@ -486,10 +524,11 @@ class S3Remote:
         return f"{self.base_path}/{self.bucket}/{key}" if key else f"{self.base_path}/{self.bucket}"
 
     def _request(self, method: str, key: str, query: dict[str, str] | None = None, body: bytes | Path | None = None, headers: dict[str, str] | None = None,
-                 payload_hash: str | None = None) -> _Response:
+                 payload_hash: str | None = None, stall_window: float | None = None) -> _Response:
         """One signed request on a pooled connection, with retries on 5xx / 429 / connection errors (each try re-signed with a fresh
         timestamp, a file body re-read from the start, a failed connection discarded).  `payload_hash` (sha256 hex of a Path body)
-        skips re-hashing when the caller already has it.  A status >= 400 raises `urllib.error.HTTPError` (the body read, so
+        skips re-hashing when the caller already has it.  `stall_window` (a bytes body) replaces the whole-request deadline by
+        :class:`_Watchdog`'s progress window.  A status >= 400 raises `urllib.error.HTTPError` (the body read, so
         `error_code` can parse it); the returned `_Response` is a context manager that recycles the connection."""
         query = query or {}
         path = self._path(key)
@@ -508,7 +547,8 @@ class S3Remote:
         target = uri_encode(path, keep_slash=True) + (("?" + canonical_query(query)) if query else "")
         url = urllib.parse.urlunsplit((self.scheme, self.host, uri_encode(path, keep_slash=True), canonical_query(query), ""))
         retries = HEAD_RETRIES if method == "HEAD" else RETRIES
-        deadline = HEAD_DEADLINE_S if method == "HEAD" else REQUEST_DEADLINE_S + size / MIN_UPLOAD_RATE
+        deadline = HEAD_DEADLINE_S if method == "HEAD" else stall_window or REQUEST_DEADLINE_S + size / MIN_UPLOAD_RATE
+        windowed = stall_window is not None and isinstance(data, bytes)
         conn_failed = False
         try:
             for attempt in range(retries + 1):
@@ -516,11 +556,12 @@ class S3Remote:
                     data.seek(0)
                 signed = sign_headers(method, self.host, path, query, extra, payload_hash, self.access_key, self.secret_key, self.region, self._now())
                 conn = self.pool.acquire(fresh=True) if conn_failed else self.pool.acquire()
-                dog = _Watchdog(conn, deadline)
+                sent = _Counted(data) if windowed else None
+                dog = _Watchdog(conn, deadline, progress=(lambda s=sent: s.n) if sent else None, min_bytes=STALL_MIN_BYTES)
                 try:
                     with self._stats_lock:
                         self.requests += 1
-                    conn.request(method, target, body=data, headers=signed)     # a file body streams in blocks (content-length is set above)
+                    conn.request(method, target, body=sent if sent is not None else data, headers=signed)     # a file body streams in blocks (content-length is set above)
                     dog.sock = getattr(conn, "sock", None)
                     resp = conn.getresponse()
                 except _RETRIABLE as e:
@@ -666,6 +707,12 @@ class S3Remote:
                 self.conditional_put = False
                 res["fallback"] = self.conditional_put_error
 
+    def presign(self, key: str, expires_s: int, method: str = "GET") -> str:
+        """A URL for one `method` request on `key`, valid `expires_s` seconds (`presign`): read access to one object for a machine
+        that holds no key."""
+        return presign(method, self.scheme, self.host, self._path(key), self.access_key, self.secret_key, self.region, self._now(),
+                       expires_s, self.session_token)
+
     def delete(self, key: str) -> bool:
         """Remove `key` (True) or find it absent already (False).  Not part of the `Remote` protocol -- the store never deletes a
         replica; the bench (`bench/<ts>/...`) and an operator cleaning a throwaway prefix do."""
@@ -731,7 +778,8 @@ class S3Remote:
             data = f.read(part["bytes"])
         if len(data) != part["bytes"] or hashlib.sha256(data).hexdigest() != part["sha256"]:
             raise MultipartError(f"{key} part {part['n']}: the local file changed while uploading")
-        with self._request("PUT", key, query={"partNumber": str(part["n"]), "uploadId": upload_id}, body=data, payload_hash=part["sha256"]) as r:
+        with self._request("PUT", key, query={"partNumber": str(part["n"]), "uploadId": upload_id}, body=data, payload_hash=part["sha256"],
+                           stall_window=STALL_WINDOW_S) as r:
             etag = etag_value(r.headers.get("ETag"))
         if is_md5_etag(etag) and etag != part["md5"]:
             raise MultipartError(f"{key} part {part['n']}: service ETag {etag} != local MD5 {part['md5']}")
