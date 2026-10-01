@@ -120,6 +120,9 @@ class GemmTarget:
     #: batch-invariant dispatch swaps (ScaleA = s_w) for the B1 shapes, and its FP8 program binds ScaledMmFp8_v1 in its own composites.
     fp8_dot: str | None = None
     fp8_scale_order: str | None = None
+    #: the NVFP4 (W4A4) linear (`CutlassNvFp4LinearKernel`: `cvt_fp16_to_fp4` then the block-scaled GEMM), as measured (`evidence`):
+    #: its k64 block-scaled step (`targets.FP4_DOTS`); None = not recorded on this target.
+    fp4_dot: str | None = None
 
     def launch_config(self, M: int, N: int, K: int) -> tuple[dict[str, Any], int, int, str]:
         """vLLM `_get_matmul_config(M, N, K, bf16, default)` on this target: `(constexprs, num_warps, num_stages, source)`;
@@ -189,6 +192,7 @@ REGISTERED: dict[str, GemmTarget] = {
     "blackwell_consumer": GemmTarget(
         key="blackwell_consumer", compute_capabilities=((12, 0),), vllm_arch_family=None, dot="HopperBF16WgmmaDot16", tuned_table={},
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_dot="BlackwellE4m3QmmaDot32", fp8_scale_order="no_swap",
+        fp4_dot="BlackwellNvf4OmmaDot64",
         evidence=("core verity.ml.tc.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
                   "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
@@ -207,7 +211,9 @@ REGISTERED: dict[str, GemmTarget] = {
                   "786,432 coordinates exact (run r20260930-090150-a42a); "
                   "the swapped order misses 89 of its 125 discriminating coordinates (red team fp8-per-tensor-scale-order, reproducer "
                   "r20260930-081238-476e); the step is pinned (trust dossier "
-                  "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)")),
+                  "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89)",
+                  "the NVFP4 linear: both checkpoint formats run CutlassNvFp4LinearKernel, whose only MMA is OMMA.SF.16864.F32.E2M1.E2M1."
+                  "UE4M3.4X, the pinned block-scaled step (attention lane, art:3bc1b2c4)")),
 }
 
 

@@ -29,11 +29,11 @@ from __future__ import annotations
 from typing import Any
 
 from verity.ir.defs import bind
-from verity.ml.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+from verity.ml.prims import BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import fa2_check_inf as F2
 from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import fp8
+from verity_vllm.program.registry import fp8, nvfp4
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.gemm_targets import UnregisteredGemmTarget
 from verity_vllm.program.registry.hopper import Fa3InvSum
@@ -47,6 +47,8 @@ class UnregisteredTarget(ValueError):
 DOTS: dict[str, Any] = {"AmpereBF16TcDot16": P.AmpereBF16TcDot16, "HopperBF16WgmmaDot16": HopperBF16WgmmaDot16}
 #: the registered e4m3 k32 step primitives by the name a `GemmTarget.fp8_dot` record carries.
 FP8_DOTS: dict[str, Any] = {"HopperE4m3QgmmaDot32": HopperE4m3QgmmaDot32, "BlackwellE4m3QmmaDot32": BlackwellE4m3QmmaDot32}
+#: the registered NVFP4 k64 block-scaled step primitives by the name a `GemmTarget.fp4_dot` record carries.
+FP4_DOTS: dict[str, Any] = {"BlackwellNvf4OmmaDot64": BlackwellNvf4OmmaDot64}
 
 #: attention-chain registration per tensor-core step family (`TargetProfile.tensor_core_family`).
 TARGETS: dict[str, dict[str, Any]] = {
@@ -310,6 +312,32 @@ def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
     raise UnregisteredTarget(f"per-tensor FP8 linear on {gt.key} ({profile.capability_str}): no registered binding")
 
 
+def _fp4_dot(profile):
+    gt = gemm_target(profile)
+    dot = FP4_DOTS.get(gt.fp4_dot) if gt.fp4_dot else None
+    if dot is None:
+        raise UnregisteredTarget(f"NVFP4 linear on {gt.key} ({profile.capability_str}): no registered binding")
+    return dot
+
+
+def nvfp4_quant_spec(profile, K: int):
+    """The registered Definition of the NVFP4 activation quantizer (`cvt_fp16_to_fp4`) on one row: `Nvfp4ActQuant_v1{K}` where the
+    GEMM target records the NVFP4 linear (`GemmTarget.fp4_dot`); refused by name elsewhere and for K not a multiple of 16."""
+    _fp4_dot(profile)
+    if int(K) % nvfp4.BLOCK:
+        raise UnregisteredTarget(f"NVFP4 linear: K={K} is not a multiple of {nvfp4.BLOCK}")
+    return bind(nvfp4.Nvfp4ActQuant, K=int(K))
+
+
+def nvfp4_gemm_spec(profile, K: int, N: int):
+    """The registered Definition of the NVFP4 GEMM (`cutlass_scaled_fp4_mm`) on one row: `ScaledMmNvfp4_v1{K,N,DOT}` with the
+    target's block-scaled step; refused by name elsewhere and for K not a multiple of 64 (the step)."""
+    dot = _fp4_dot(profile)
+    if int(K) % nvfp4.STEP_K:
+        raise UnregisteredTarget(f"NVFP4 linear: K={K} is not a multiple of {nvfp4.STEP_K}")
+    return bind(nvfp4.ScaledMmNvfp4, K=int(K), N=int(N), DOT=dot)
+
+
 def attention_spec(profile, T: int, NH: int, KVH: int, D: int, seqlen_q: int, row: int | None = None, own_rows: int | None = None,
                    cap: float | None = None):
     """The registered attention Definition of one query row with T visible keys on the declared target.  Under a per-iteration `Check_inf`
@@ -361,8 +389,8 @@ def describe(profile) -> dict[str, Any]:
             "evidence": {"gemm": list(gt.evidence), **t["evidence"]}}
 
 
-__all__ = ["TARGETS", "DOTS", "FP8_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
+__all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
            "moe_expert_dot", "moe_expert_gemm_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
-           "scaled_mm_fp8_spec", "attention_spec", "describe",
+           "scaled_mm_fp8_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "attention_spec", "describe",
            "LaunchContextConflict", "parse_launch_context", "launch_seqlen_q"]
