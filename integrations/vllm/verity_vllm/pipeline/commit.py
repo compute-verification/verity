@@ -1286,15 +1286,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if required_manifest is not None and kinds:
         from verity_vllm.check import oracle_compare as _OCP
         TL.start("prep.producer_facts")
-        if args.plan:
-            oracle_producers, plan_rec = CP.use(args.plan, args)
-            print(f"[delta] plan {args.plan}: " + (f"producer facts from the plan ({plan_rec['members']} members, planned {plan_rec.get('planned_utc')})"
-                                                   if plan_rec["used"] else f"plan_recomputed: {plan_rec['why']}"), flush=True)
-        if oracle_producers is None:
-            try:
-                oracle_producers = CP.oracle_producers_of_record(args, required_manifest, reqs, sampling)
-            except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
-                oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+        oracle_producers, plan_rec = CP.producer_facts(args, required_manifest, reqs, sampling)
         TL.end("prep.producer_facts", source="plan" if (plan_rec or {}).get("used") else "derived", members=len(oracle_producers[0] or {}))
         print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
         if oracle_producers[0]:
@@ -2189,10 +2181,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                                              "max_tokens": r.get("max_tokens") or sampling.get("max_tokens")} for i, r in enumerate(reqs)]}
                         _prod = OC.producers_of(required_manifest)
                         if oracle_producers is None:
-                            try:
-                                oracle_producers = CP.oracle_producers_of_record(args, required_manifest, reqs, sampling)
-                            except Exception as _pe:  # noqa: BLE001  -- no facts: the manifest's own entries stand, the reason is on the record
-                                oracle_producers = (None, {"used": False, "why": f"producer facts not derived: {_pe!r}"[:300]})
+                            oracle_producers = CP.derived(args, required_manifest, reqs, sampling)
                             print(f"[delta] form (B) producer facts from the Programs of record: {oracle_producers[1]}", flush=True)
                         if oracle_producers[0]:
                             _prod = OC.merge_producers(_prod, oracle_producers[0])
