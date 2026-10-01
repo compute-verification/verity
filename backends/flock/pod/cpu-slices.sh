@@ -1,4 +1,4 @@
-# Sourced by 74-gemm-hill.sh. Node 1 runs every dispatched job under one cpuset (96-159), so jobs pinned side by side need
+# Sourced by 74-gemm-hill.sh. Node 1 runs every provers task under one cpuset (128-175), so jobs pinned side by side need
 # cores of their own. hold_slices splits the job's cores into slices of SLICE_SIZE (16) and takes a lock (flock, under
 # SLICE_LOCKS) on every slice the job will pin, held by the job's open descriptors until its last process exits; another
 # job waits for them.
@@ -14,7 +14,10 @@ hold_slices() {
   read -ra all < <(python3 -c "import os, sys; z = int(sys.argv[1]); c = sorted(os.sched_getaffinity(0)); print(' '.join(f'{c[i]}-{c[min(i + z - 1, len(c) - 1)]}' for i in range(0, len(c), z)))" "$z")
   open_() { [ -e "$L/$1.lock" ] || { : > "$L/$1.lock"; chmod 666 "$L/$1.lock"; } 2>/dev/null; exec {fd}<"$L/$1.lock"; }
   if [ -n "$want" ]; then
-    local w; w=$(python3 -c "import sys; print(','.join(map(str, sorted(__import__('os').sched_getaffinity(0) & {int(x) for p in sys.argv[1].split(',') for x in range(int(p.partition('-')[0]), int(p.partition('-')[2] or p.partition('-')[0]) + 1)}))))" "$want")
+    # every core of CPUSET must be the job's own: taskset pins any core of the pod's cgroup, and no slice lock covers one
+    # outside the job's cpuset (the dispatcher's, e.g. a provers task's 128-175)
+    local w; w=$(python3 -c "import os, sys; w = {int(x) for p in sys.argv[1].split(',') for x in range(int(p.partition('-')[0]), int(p.partition('-')[2] or p.partition('-')[0]) + 1)}; print(','.join(map(str, sorted(w)))); sys.exit(0 if w <= os.sched_getaffinity(0) else 1)" "$want") \
+      || { echo "hold_slices: CPUSET=$want is not within this job's cores (slices ${all[*]}): not pinning cores no lock covers" >&2; return 1; }
     for s in "${all[@]}"; do
       lo=${s%-*}; hi=${s#*-}
       python3 -c "import sys; lo, hi = int(sys.argv[2]), int(sys.argv[3]); sys.exit(0 if any(lo <= int(c) <= hi for c in sys.argv[1].split(',') if c) else 1)" "$w" "$lo" "$hi" || continue

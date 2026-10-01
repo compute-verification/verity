@@ -11,9 +11,9 @@
 # Run from the verity tree (research run --cwd source), in a Kueue job on vy-nebius-1 (1 GPU). Staged circuits, instance
 # files and proofs go under FLOCK_WORK/scratch/<run id>, removed at exit: the run dir keeps records and logs only.
 # env: K= (required: 2048, 4096, 8192 or 16384)  N= (instances; default gemm_hill.INSTANCES[K], m = 35)  CPUSET= (the cores to
-#      pin to, e.g. 96-111)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices). Node 1's dispatched jobs all
-#      share 96-159, so a job holds a lock on every slice it pins (cpu-slices.sh, SLICE_LOCKS=/workspace/jobs/slices) and
-#      waits for slices another job holds  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
+#      pin to, within the job's own, e.g. 128-143)  CPUS=48 (without CPUSET: the first CPUS cores of free 16-core slices). Node
+#      1's provers tasks all share 128-175, so a job holds a lock on every slice it pins (cpu-slices.sh,
+#      SLICE_LOCKS=/workspace/jobs/slices) and waits for slices another job holds  GATE=1  WARM=1  RUNS=3  PEAK_ID=rtx-pro-6000-server/bf16
 #      STEP=0 LABEL=baseline (the hillclimb step and what changed)  HILL_NODE=vy-nebius-1
 #      FLOCK_WORK=/workspace/jobs/proofs-bf16-hill (builds, venvs and cached binaries)  DISK_MAX=80 (don't start with /workspace
 #      this full, in %)  GPU=1 (0: a CPU dry run, with BINARY= and PYBIN= as for 70-class-sweep.sh)
@@ -29,7 +29,7 @@ if [ -z "${HILL_PINNED:-}" ]; then
   use=$(df --output=pcent /workspace 2>/dev/null | tail -1 | tr -dc 0-9)
   if [ -n "$use" ] && [ "$use" -ge "${DISK_MAX:-80}" ]; then echo "/workspace is at $use%: not starting"; exit 1; fi
   . backends/flock/pod/cpu-slices.sh
-  hold_slices "${CPUSET:-}" "${CPUS:-48}"
+  hold_slices "${CPUSET:-}" "${CPUS:-48}" || exit 1
   cpus=$(taskset -c "$SLICE_CPUS" python3 -c "import os; print(','.join(map(str, sorted(os.sched_getaffinity(0)))))") || exit 1
   export HILL_PINNED=$cpus RAYON_NUM_THREADS=$(echo $cpus | tr ',' '\n' | wc -l) HILL_T0=$(date +%s.%N)
   export OMP_NUM_THREADS=$RAYON_NUM_THREADS
