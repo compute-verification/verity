@@ -75,11 +75,11 @@ POINT_SCHEMA, ROLLUP_SCHEMA = "verity/hillclimb-point/v0", "verity/hillclimb-rol
 #: the step-0 trees descend from the fold (d1775df80) and revert it
 FOLD_MARK = ("backends/flock/live/src/circuit.rs", "CscCircuit::from_matrices")
 #: circuit.rs's git blob ids that fold, and the flags each carries. The fold as granted (d1775df80 = cde1c7ac1: red-team-proofs-554's
-#: grant on art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8) carries none; with 750e344fd (= acca35385, the
-#: session verifier's C0 = I check once per statement, outside both #554 grants) it carries that change's flag. Any other circuit.rs
-#: that folds is a fold nobody reviewed
+#: grant on art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8) carries none, nor does it with 750e344fd (= acca35385
+#: = ab5087cd4, the session verifier's C0 = I check once per statement: red-team-proofs-554's Q3c(a) grant on
+#: art:2aef6594e7d5510a22c7cb7e7afa54fd20d954ceabf3d910a7437567ba204686). Any other circuit.rs that folds is a fold nobody reviewed
 FOLDS = {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),
-         "a38a04e336a687c52ab0d642aa4674e90669399d": ("verifier-c0-once-unreviewed",)}
+         "a38a04e336a687c52ab0d642aa4674e90669399d": ()}
 
 
 def verifier_flags(root: Path) -> list[str]:
@@ -207,19 +207,20 @@ def _records(path: Path | None) -> list[dict]:
     return [json.loads(ln) for ln in path.read_text().splitlines() if ln.startswith("{")]
 
 
-def _prove_process(path: Path) -> tuple[float | None, float | None, list[tuple[float, dict]]]:
-    """The last prove process in the stamps: its start, its exit, and its LIVE records with the epoch each was printed."""
-    start = end = None
+def _prove_process(path: Path) -> tuple[float | None, float | None, int | None, list[tuple[float, dict]]]:
+    """The last prove process in the stamps: its start, its exit and exit status, and its LIVE records with the epoch each was
+    printed."""
+    start = end = rc = None
     live: list[tuple[float, dict]] = []
     for ln in path.read_text().splitlines() if path.exists() else []:
         t, _, rest = ln.partition("\t")
         if rest.startswith("START"):
-            start, end, live = float(t), None, []
+            start, end, rc, live = float(t), None, None, []
         elif rest.startswith("EXIT"):
-            end = float(t)
+            end, rc = float(t), int(rest.partition("\t")[2])
         elif rest.startswith("LIVE\t"):
             live.append((float(t), json.loads(rest[5:])))
-    return start, end, live
+    return start, end, rc, live
 
 
 def _dmon(path: Path) -> list[tuple[float, float | None, float | None, float | None]]:
@@ -326,9 +327,23 @@ def metrics(a) -> None:
     g = GS.gate(Path(a.gate) if a.gate else None, shapes_needed=1)
     if g["status"] == "passed" and rec.get("definition") not in g["shapes"]:
         g = {**g, "status": "failed", "why": f"the gate proved {sorted(g['shapes'])}, not {rec.get('definition')}"}
-    start, end, live = _prove_process(Path(a.stamps))
+    start, end, rc, live = _prove_process(Path(a.stamps))
     timed = [(t, x) for t, x in live if not x.get("warm")]
     warm = [(t, x) for t, x in live if x.get("warm")]
+    # accepted: the statement, and every session the prove process ran (warm and timed), all of them, and the process exited 0
+    rejected = [x.get("run") for _, x in live if x.get("accepted") is not True]
+    if not lv.get("accepted"):
+        why_not = lv.get("why") or "no accepted statement"
+    elif rc != 0:
+        why_not = f"the prove process exited {rc}" if rc is not None else "no exit of the prove process in the stamps"
+    elif (len(warm), len(timed)) != (a.warm, a.runs):
+        why_not = f"{len(warm)} warm and {len(timed)} timed LIVE records in the stamps, not {a.warm} and {a.runs}"
+    elif rejected:
+        why_not = f"sessions {rejected} not accepted"
+    elif not timed:
+        why_not = "no timed LIVE record in the stamps"
+    else:
+        why_not = None
     samples = _dmon(Path(a.dmon))
     phases = _phases(Path(a.phases)) if a.phases else {}
     held_since = _pod_start() or (phases.get("job") or [None])[0] or (samples[0][0] if samples else None)
@@ -336,9 +351,10 @@ def metrics(a) -> None:
     out: dict = {"K": a.K, "definition": rec.get("definition"), "commit": _commit(Path(a.root)), "run_id": os.environ.get("RESEARCH_RUN_ID", ""),
                  "gpu": gpu, "peak": {"id": a.peak_id, "flop_per_second": peak["flop_per_second"], "rate": peak.get("rate"),
                                       "device": peak.get("device"), "matches_gpu": bool(gpu.get("name")) and gpu.get("name") == peak.get("device")},
-                 "byte_identity": g, "accepted": bool(lv.get("accepted")), "flags": flags}
-    if not lv.get("accepted") or not timed:
-        out["why"] = rec.get("broke") or lv.get("why") or ("no timed LIVE record in the stamps" if lv.get("accepted") else "no accepted statement")
+                 "byte_identity": g, "accepted": why_not is None, "flags": flags,
+                 "live_records": {"warm": len(warm), "timed": len(timed), "expected": [a.warm, a.runs], "rejected": rejected, "prove_exit": rc}}
+    if why_not:
+        out["why"] = rec.get("broke") or why_not
     else:
         coords = (st.get("n") or lv["instances"]) * st.get("coords_per_instance", 1)
         stmt_s = GS.statement_seconds(lv)
@@ -665,6 +681,8 @@ def main() -> None:
     m.add_argument("--gate")
     m.add_argument("--sweep", required=True)
     m.add_argument("--stamps", required=True)
+    m.add_argument("--warm", type=int, default=1, help="the warm sessions the prove process ran (74-gemm-hill.sh WARM)")
+    m.add_argument("--runs", type=int, default=3, help="its timed sessions (RUNS)")
     m.add_argument("--dmon", required=True)
     m.add_argument("--phases")
     m.add_argument("--others")

@@ -127,7 +127,7 @@ fi
 PYBIN=${PYBIN:-$FLOCK_WORK/flock-circuit/py/bin/python3}; [ -x $PYBIN ] || PYBIN=python3
 PYTHONPATH=$REPO/packages/verity/src:$REPO/backends/numerical/python:$REPO/backends/flock/python \
   $PYBIN backends/flock/pod/gemm_hill.py metrics --K $K --gate $R/out/gate/classes/results.jsonl --sweep $R/out/results.jsonl \
-  --stamps $R/out/stamps.tsv --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
+  --stamps $R/out/stamps.tsv --warm ${WARM:-1} --runs ${RUNS:-3} --dmon $R/out/dmon.tsv --phases $R/out/phases.tsv --others $R/out/others_cores.txt --slice $R/out/slice_cores.tsv \
   --gpu-csv $R/out/gpu.csv --census census/hardware.json --peak-id ${PEAK_ID:-rtx-pro-6000-server/bf16} --binary-sha $R/out/binary.sha256 --step ${STEP:-0} \
   --label "${LABEL:-baseline}" --node ${HILL_NODE:-vy-nebius-1} --out $R/out/metrics.json --result $R/result.json --hillclimb $R/hillclimb.json || ok=0
 [ -f $R/hillclimb.json ] && printf '%s\n' '{"schema": "research/outputs/v0.1", "outputs": [{"name": "hillclimb", "kind": "hillclimb-point/v0", "file": "hillclimb.json", "meta": {"campaign": "proofs-hillclimb"}}]}' > $R/outputs.json
