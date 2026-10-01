@@ -151,24 +151,30 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
     return own, rest
 
 
-def specialized(name: str, version: int, statics: Sequence[str], build: Callable, params: Sequence[tuple[str, Type]], ret: Type,
-                doc: str = "", register: bool = True) -> CompositeDefinition:
+def specialized(name: str, version: int, statics: Sequence[str], build: Callable,
+                signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]], doc: str = "", word: Any = None,
+                register: bool = True) -> CompositeDefinition:
     """The Boolean Definition ``name_v{version}{statics}`` whose circuit for bindings S is the builder ``build(S)`` traced over
-    ``params`` (`trace.trace`), so that a constant the statics name is folded into its gates, never an operand. Traced once per
-    binding, on first use; ``traced(S)``."""
-    types = [t for _, t in params]
+    ``signature(S)`` (`trace.trace`), so that a constant or a length the statics name is folded into its gates, never an operand.
+    Traced once per binding, on first use; ``traced(S)``. ``word``, a function of the bindings, names the word Definition it
+    computes (`trace.word_of`)."""
     made: dict[tuple, Traced] = {}
+
+    def types(S) -> tuple[list[Type], Type]:
+        params, ret = signature(S)
+        return [t for _, t in params], ret
 
     def traced(S) -> Traced:
         key = tuple(getattr(S, k) for k in statics)
         if key not in made:
-            made[key] = trace(build(S), types, ret)
+            made[key] = trace(build(S), *types(S))
         return made[key]
 
-    d = CompositeDefinition(name, version, tuple(statics), lambda S: (tuple(params), ret),
-                            lambda B, S, *c: _body(traced(S), types, ret, B, *c), doc=doc, conformance="exact-model-tested",
+    d = CompositeDefinition(name, version, tuple(statics), signature,
+                            lambda B, S, *c: _body(traced(S), *types(S), B, *c), doc=doc, conformance="exact-model-tested",
                             register=register)
     d.traced = traced  # type: ignore[attr-defined]
+    d.word = word  # type: ignore[attr-defined]
     return d
 
 

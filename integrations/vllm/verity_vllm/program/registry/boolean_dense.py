@@ -131,12 +131,12 @@ AddWidenedBf16Element = definition(
     "AddWidenedBf16Element", 1, lambda C, x, r: fp.f32_add(C, fp.bf16_to_f32(x), fp.bf16_to_f32(r), ir_nan=True),
     (("x", BF16), ("r", BF16)), F32, doc="RN32(f32(x) + f32(r)), F32Add_v1's NaN words")
 AddScalarF32Element = EW.specialized("AddScalarF32Element", 1, ["K"], lambda S: lambda C, x: fp.f32_add(C, x, const_bits(S.K, 32), ir_nan=True),
-                                     (("x", F32),), F32, doc="RN32(x + K) for the f32 word K, folded; F32Add_v1's NaN words")
+                                     lambda S: ((("x", F32),), F32), doc="RN32(x + K) for the f32 word K, folded; F32Add_v1's NaN words")
 AddScalarBf16Element = EW.specialized(
     "AddScalarBf16Element", 1, ["K"], lambda S: lambda C, w: fp.f32_add(C, fp.bf16_to_f32(w), const_bits(S.K, 32), ir_nan=True),
-    (("w", BF16),), F32, doc="RN32(f32(w) + K) for the f32 word K, folded; F32Add_v1's NaN words")
+    lambda S: ((("w", BF16),), F32), doc="RN32(f32(w) + K) for the f32 word K, folded; F32Add_v1's NaN words")
 Bf16MulScalarElement = EW.specialized("Bf16MulScalarElement", 1, ["K"], lambda S: lambda C, x: EW.bf16_mul_f32(C, x, const_bits(S.K, 32)),
-                                      (("x", BF16),), BF16, doc="Bf16MulF32_v1(x, K) for the f32 word K, folded")
+                                      lambda S: ((("x", BF16),), BF16), doc="Bf16MulF32_v1(x, K) for the f32 word K, folded")
 SquareF32Element = definition("SquareF32Element", 1, lambda C, x: fp.f32_mul(C, x, x, ir_nan=True), (("x", F32),), F32,
                               doc="RN32(x * x), F32Mul_v1's NaN words: x decoded once")
 ScaleRowF32Scalar, ScaleRowF32Element = EW.shared_operand(

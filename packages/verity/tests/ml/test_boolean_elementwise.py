@@ -194,7 +194,7 @@ def test_a_specialized_constant_is_folded() -> None:
     """`specialized` folds the f32 word K into `bf16_mul_f32`: no gate reads a constant wire, it has fewer ANDs than
     `Bf16MulF32_v2`, and on every bf16 word it is `Bf16MulF32_v1(x, K)` at K = 30.0 and K = RN32(1 / 30)."""
     d = EW.specialized("SpecializedCheck", 1, ["K"], lambda S: lambda C, x: EW.bf16_mul_f32(C, x, const_bits(S.K, 32)),
-                       (("x", EW.BF16),), EW.BF16, register=False)
+                       lambda S: ((("x", EW.BF16),), EW.BF16), register=False)
     every = np.arange(1 << 16, dtype=np.uint16)
     for K in (0x41F00000, 0x3D088889):
         target = bind(d, K=K)
