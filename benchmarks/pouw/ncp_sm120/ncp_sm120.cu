@@ -24,8 +24,9 @@
 // counter its index in the lane's stream, length 64, flag KEYED_HASH, and the first chaining value the key
 //   IV xor (tile, tid, S | words << 16 | LB << 24, i[7], 0, 0, 0, 0),  tile = tm * tiles_n + tn,  tid the consumer thread
 //   (0 ... NCT - 1), words = WORDS (HASH) or 2 (CHASH).
-// With LB (the low-byte binding, `_lb` kernels) a fragment's four words enter as one word, byte e word e's low byte; the
-// packed words run 16 a block in emission order and the last block's unfilled words are zero.
+// With LB (byte binding, `_lb` kernels) a fragment's four words enter as one word, byte e word e's bits 8 ... 15 (bits 0 ... 7
+// of a fresh atom word are all zero on a flat row); the packed words run 16 a block in emission order and the last block's
+// unfilled words are zero.
 // The tile's leaf would be a tree over its lanes' digests, one compression per pair (`-h2`-style segments); this kernel
 // writes the lane digests, which is where the work is.
 //
@@ -91,8 +92,8 @@ template <class L, bool LB> struct Emit {
     }
     compress(m);
   }
-  // every word of w: whole (16 a block), or with LB each fragment's four low bytes packed into one word (byte e = word e's
-  // low byte), the packed words 16 a block in emission order
+  // every word of w: whole (16 a block), or with LB each fragment's four words as one (byte e = word e's bits 8 ... 15), the
+  // packed words 16 a block in emission order
   DEV void absorb_all(const float (&w)[MI][NI][4]) {
     if constexpr (!LB) {
 #pragma unroll
@@ -102,7 +103,7 @@ template <class L, bool LB> struct Emit {
 #pragma unroll
       for (int p = 0; p < P; p++) {
         const float(&f)[4] = w[p / NI][p % NI];
-        pk[p] = __byte_perm(__byte_perm(f2u(f[0]), f2u(f[1]), 0x0040), __byte_perm(f2u(f[2]), f2u(f[3]), 0x0040), 0x5410);
+        pk[p] = __byte_perm(__byte_perm(f2u(f[0]), f2u(f[1]), 0x0051), __byte_perm(f2u(f[2]), f2u(f[3]), 0x0051), 0x5410);
       }
       if constexpr (P % 16 == 0) {
 #pragma unroll

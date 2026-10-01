@@ -11,7 +11,7 @@
    C = R_(T-1), nothing bound); store_r / store_ir at S = 1 (every bound word written to a ring: an unfused binding's
    traffic); hash_r at each S of S_R and hash_ir at each S of S_IR (BLAKE3 over the bound words from registers); chash at
    each S of S_C (the plain chained GEMM over K, every S-th accumulator bound); hash_ir_lb at each S of S_IR_LB and chash_lb
-   at each S of S_C_LB (the same words, only their low bytes bound); and hash_r and chash at each S of S_STAGGER (none by
+   at each S of S_C_LB (the same words, only their bits 8-15 bound); and hash_r and chash at each S of S_STAGGER (none by
    default; run 2 measured 4 and 8 slower than unstaggered) with the bound atoms staggered across warps.  A sample of
    lanes (their C cells and digests) at every arm, and sha256 of the whole C and digest buffers, go to OUT/arms.json for
    check.py.  NVML's clocks before and after every arm.

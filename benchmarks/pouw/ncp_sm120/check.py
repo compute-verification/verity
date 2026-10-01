@@ -98,7 +98,7 @@ def digest(I: np.ndarray, R: np.ndarray, Q: np.ndarray, tile: int, tid: int, arm
     """The lane's leaf: BLAKE3 compressions chained over its bound atoms' words (16 a block, fragment order): R then I
     (hash_ir; no R at atom 0, the duplicate of I), R (hash_r), or the chained accumulator Q (chash); atom t is bound when
     (t + 1 + phase) % S == 0, phase = (tid / 32) % S when staggered.  `_lb`: each fragment's four words as one word of their
-    low bytes, 16 a block, the last block zero-filled.  Keyed by IV xor (tile, tid, S | words << 16 | lb << 24, stagger,
+    bits 8 ... 15, 16 a block, the last block zero-filled.  Keyed by IV xor (tile, tid, S | words << 16 | lb << 24, stagger,
     0, ...); I, R and Q are (lane outputs x atoms)."""
     lb = arm.endswith("_lb")
     base = arm.removesuffix("_lb")
@@ -116,7 +116,7 @@ def digest(I: np.ndarray, R: np.ndarray, Q: np.ndarray, tile: int, tid: int, arm
             group = {"hash_r": [R[:, t]], "hash_ir": [I[:, t]] if t == 0 else [R[:, t], I[:, t]], "chash": [Q[:, t]]}[base]
             for w in group:
                 w = [int(v) for v in w]
-                stream += [sum((w[f + e] & 0xFF) << 8 * e for e in range(4)) for f in range(0, len(w), 4)] if lb else w
+                stream += [sum((w[f + e] >> 8 & 0xFF) << 8 * e for e in range(4)) for f in range(0, len(w), 4)] if lb else w
     if len(stream) % 16:
         stream += [0] * (16 - len(stream) % 16)
     for ctr, b in enumerate(range(0, len(stream), 16)):
