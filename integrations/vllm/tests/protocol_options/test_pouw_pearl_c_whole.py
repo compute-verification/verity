@@ -383,6 +383,8 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
                    7: (torch.full((32, 8), 1.0), torch.full((64,), 3, dtype=torch.uint8))}
     calls = (PG.WholeCall(9, 32, 4, 16, 32, 2), PG.WholeCall(7, 32, 8, 16, 32, 4))
     run.flag_buf[32 + 5, 0] = 1                               # weight 7's call: row 5 fails the screen
+    run.whole_capture_begin(run.whole_key(True))              # replays follow a capture, which leaves its state behind
+    run.whole_capture_end()
     run.whole_replay(calls)
     run.whole_replayed(calls)
     want = []

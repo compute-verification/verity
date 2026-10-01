@@ -148,7 +148,7 @@ class GraphCalls:
             raise RuntimeError(f"{self.entry}: a weight is called twice in one captured forward, and its slot holds one call")
         return calls
 
-    def _whole_retained(self, calls: tuple[WholeCall, ...], flags_at: int) -> None:
+    def _keep_whole(self, calls: tuple[WholeCall, ...], flags_at: int) -> None:
         """A retained pass's records and files of a forward replayed whole, its first call's flags at row `flags_at` of the
         pass's buffer: each call's from its stage and its flags, as a call made alone keeps them."""
         cur = self.cur
@@ -214,7 +214,7 @@ class GraphCalls:
         self._predicted = dict(s.predicted)    # the upload rewrote the uncalled weights' slots from the host copy
         cur.tiles, cur.flag_rows = s.after[1], s.after[2]
         if cur.retain is not None:
-            self._whole_retained(calls, s.at[2])
+            self._keep_whole(calls, s.at[2])
         self._next = self._slots(calls, s.after)
 
     def _graphed(self, m16: int) -> bool:
