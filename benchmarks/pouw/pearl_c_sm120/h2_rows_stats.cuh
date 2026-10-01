@@ -10,8 +10,7 @@
 // ⌈L / 8,192⌉ threads, and b3s_stats_smem(L) bytes of dynamic shared memory: the segment tree, then the samples.  BF16
 // (hash_rows_b3s_stats_bf16): p0's rows are A's BF16 values, L / 2 bytes each, read as their exact FP32 words.
 constexpr uint32_t b3s_stats_smem(uint32_t L) { return (L / B3S_SEG) * (32 + 33); }
-template <bool BF16> DEV void rows_b3s_stats(const Args& a) {
-  extern __shared__ uint32_t sh[];
+template <bool BF16> DEV void rows_b3s_stats(const Args& a, uint32_t* sh) {
   __shared__ uint32_t lks[B3S_MAX_LEVELS][8];
   __shared__ float wmax[B3S_MAX_SEGS / 32];
   if (blockIdx.x >= (uint32_t)a.i[4]) return;
@@ -42,5 +41,11 @@ template <bool BF16> DEV void rows_b3s_stats(const Args& a) {
   reinterpret_cast<float*>(a.p[7])[row] = __frcp_rn(alpha);
   reinterpret_cast<float2*>(a.p[8])[row] = make_float2(s, rho);
 }
-extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats(const Args a) { rows_b3s_stats<false>(a); }
-extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats_bf16(const Args a) { rows_b3s_stats<true>(a); }
+extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats(const Args a) {
+  extern __shared__ uint32_t sh[];
+  rows_b3s_stats<false>(a, sh);
+}
+extern "C" __global__ void __launch_bounds__(512) hash_rows_b3s_stats_bf16(const Args a) {
+  extern __shared__ uint32_t sh[];
+  rows_b3s_stats<true>(a, sh);
+}
