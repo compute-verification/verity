@@ -96,6 +96,7 @@ def test_a_registered_kind_supplies_what_the_job_leaves_unsaid_and_names_itself_
         ("vy-nebius-1", 1200, 8, 32, 2100)
     assert out["kind"] == "lean-audit" and out["question"].startswith("Do core's Lean proofs") and out["warnings"] == []
     assert out["kind_source"]["file"] == "kinds/proofs.toml" and "GPU_LEASE_WHO=lean-audit:proofs-w" in out["wrap"]
+    assert out["disk_gb"] == kinds.DISK_GB
 
 
 def test_the_held_rules_warn_and_never_refuse(tmp_path):
@@ -122,4 +123,12 @@ def test_a_malformed_registry_names_its_file(tmp_path):
     (tmp_path / "o.toml").write_text('[kinds.a]\nphase = "cpu-s"\nmax_wall_min = 5\n')
     (tmp_path / "p.toml").write_text('[kinds.a]\nphase = "cpu-s"\nmax_wall_min = 5\n')
     with pytest.raises(ValueError, match="already o's"):
+        kinds.load(tmp_path)
+    (tmp_path / "p.toml").write_text('[kinds.b]\nphase = "cpu-s"\nmax_wall_min = 5\ndisk_gb = 300\n')
+    reg = kinds.load(tmp_path)
+    assert reg["b"].disk_gb == 300 and reg["a"].disk_gb is None
+    out = submit.submit(model.load(NEBIUS), reg, run_id="r1", now=T, kind="b", project="verity", submitter="w")
+    assert out["disk_gb"] == 300
+    (tmp_path / "p.toml").write_text('[kinds.b]\nphase = "cpu-s"\nmax_wall_min = 5\ndisk_gb = "lots"\n')
+    with pytest.raises(ValueError, match="disk_gb"):
         kinds.load(tmp_path)

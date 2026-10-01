@@ -1,0 +1,9 @@
+[Unit]
+Description=Verity live-console panels, node1 group (verity_console.py; a dry run until ~research/.config/verity/panels.key exists)
+
+[Service]
+Type=oneshot
+User=research
+WorkingDirectory=/workspace/research/console
+Environment=HOME=/home/research KUBECONFIG=/home/research/.kube/config
+ExecStart=/usr/bin/timeout 240 /usr/bin/python3 /workspace/research/console/verity_console.py --group node1
