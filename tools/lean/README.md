@@ -166,8 +166,8 @@ side's new pin reads it) fails there. `merge.py --normalize FILE` recomputes a r
 
 A named assumption, or a lemma we prove by hand, may be proved upstream one day if its statement can be written in a
 dependency's constants, and the proof may arrive as a different theorem, with a different constant, under a name nobody
-watches. One stated over the package's own definitions has no entry, since no upstream theorem can mention them. So the watch list names what a statement is about, and
-the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
+watches. One stated over the package's own definitions has no entry, since no upstream theorem can mention them. So the
+watch list names what a statement is about, and the status comes from the dependency, not from a document. It is the `upstream` section of the package's policy:
 
 ~~~json
 "upstream": {
