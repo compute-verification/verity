@@ -1,4 +1,4 @@
-"""`manifest.build_components` takes the machine's pool lock only when its headroom is the host's, shared: a `BUILD_RAM_BUDGET_GB` or a
+"""`manifest.build_components` takes the machine's pool lock only when its headroom is the host's, shared: a `budget_gb` or a
 cgroup `memory.max` below the host's RAM is the process's own budget, which it sizes the pool from without waiting on other runs."""
 
 from __future__ import annotations
@@ -24,11 +24,10 @@ def host(tmp_path, monkeypatch):
         monkeypatch.setattr(M, "CGROUP_MEMORY_MAX", str(mx))
         monkeypatch.setattr(M, "MEMINFO", str(tmp_path / "meminfo"))
         monkeypatch.setattr(M, "_headroom", lambda: head)
-    monkeypatch.delenv("BUILD_RAM_BUDGET_GB", raising=False)
     return set_
 
 
-def test_the_budget_is_the_env_capped_by_the_headroom_else_a_cgroup_below_the_host_else_none(host, monkeypatch):
+def test_the_budget_is_the_given_one_capped_by_the_headroom_else_a_cgroup_below_the_host_else_none(host):
     host("max")
     assert M._own_budget() is None
     host(None)
@@ -37,13 +36,12 @@ def test_the_budget_is_the_env_capped_by_the_headroom_else_a_cgroup_below_the_ho
     assert M._own_budget() is None
     host(str(96 * GiB), head=90 * GiB)
     assert M._own_budget() == 90 * GiB
-    monkeypatch.setenv("BUILD_RAM_BUDGET_GB", "40")
     host("max")
-    assert M._own_budget() == 40 * GiB
+    assert M._own_budget(40) == 40 * GiB
     host("max", head=30 * GiB)
-    assert M._own_budget() == 30 * GiB
+    assert M._own_budget(40) == 30 * GiB
     host("max", head=None)
-    assert M._own_budget() == 40 * GiB
+    assert M._own_budget(40) == 40 * GiB
 
 
 def test_build_components_takes_the_lock_only_without_a_budget_of_its_own(host, monkeypatch):
