@@ -141,7 +141,7 @@ def test_ada_tile_through_the_protocol():
     rows_b = [P.fp10_row([x - 256 if x >= 128 else x for x in ints_b[r * k:(r + 1) * k]], sb[r * k // 8:(r + 1) * k // 8]) for r in range(16)]
     work = Workload((Matmul(3, Shape(16, k, 16), 9),))
     prover = Prover(s, {9: rows_b})
-    epoch = Epoch.start(work, prover.weight_roots, b"beacon")
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
     tr = prover.prove(epoch, {3: rows_a})
     audit = Verifier(s, epoch).audit(prover, tr, Sampled(2), b"verifier")
     assert audit.accepted and audit.profile.certified(0.5) is None
