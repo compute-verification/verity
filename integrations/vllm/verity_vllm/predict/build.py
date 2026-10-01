@@ -40,7 +40,7 @@ BF16 = Value(16)
 
 #: HF `architectures[0]` -> the vLLM class the registry resolves it to at the pinned revision (d9105ea80), for the families the
 #: vocabulary expresses.  The class name enters the Program's function id (`Derived[vLLMRequest[<class>]]`).
-MODEL_CLASSES = {"LlamaForCausalLM": "LlamaForCausalLM"}
+MODEL_CLASSES = {"LlamaForCausalLM": "LlamaForCausalLM", "MistralForCausalLM": "MistralForCausalLM"}
 
 #: the wrapper kinds of `vllm_meta.make_wrapper` (greedy): DERIVE_SOURCE (the SRC class) and the derive name
 WRAPPERS = {"step": ("verity-vllm/engine-step/v1", "vLLMStep"), "request": ("verity-vllm/greedy-request/v1", "vLLMRequest")}
@@ -282,6 +282,8 @@ def _check_phi(phi: Phi) -> None:
         facts.append(f"numerics profile {phi.profile!r}")
     if phi.execution != "bi-eager":
         facts.append(f"execution {phi.execution!r}")
+    if (phi.model or {}).get("dtype", "bfloat16") != "bfloat16":
+        facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} (bf16 only)")
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
 
