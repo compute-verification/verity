@@ -50,12 +50,76 @@ constexpr int CTA_RING_LOG = 22;   // 16 MiB a CTA's region of the ring (4 GiB c
 
 DEV uint32_t f2u(float x) { return __float_as_uint(x); }
 
+// NCP_B3_MIX (nvcc -D, run.py's NCP_DEFINES): the lane's compression with integer work moved from the ALU pipe (LOP3, SHF,
+// IADD3) to the FMA pipe.  1: c + d as IMAD by `one`; 2: also b's rotations as IMAD.WIDE by a power of two, b held as the
+// product's two disjoint halves, which the next three-input xor and add read as two operands.  `one` is 1 at run time (i[15]
+// + 1, and i[15] = 0), so ptxas can't fold the IMADs back.  0 (the default) is pouw_hash's blake3_compress.
+#ifndef NCP_B3_MIX
+#define NCP_B3_MIX 0
+#endif
+DEV uint32_t imad(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t d;
+  asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  return d;
+}
+DEV void wide(uint32_t x, uint32_t m, uint32_t& lo, uint32_t& hi) {
+  uint64_t p;
+  asm("mul.wide.u32 %0, %1, %2;" : "=l"(p) : "r"(x), "r"(m));
+  lo = (uint32_t)p;
+  hi = (uint32_t)(p >> 32);
+}
+DEV uint32_t rotr(uint32_t x, int n) { return __funnelshift_r(x, x, n); }
+DEV void g_mix(uint32_t& a, uint32_t& b, uint32_t& bh, uint32_t& c, uint32_t& d, uint32_t x, uint32_t y, uint32_t one,
+               uint32_t m20, uint32_t m25) {
+  if constexpr (NCP_B3_MIX == 1) {
+    a = a + b + x, d = rotr(d ^ a, 16), c = imad(d, one, c), b = rotr(b ^ c, 12);
+    a = a + b + y, d = rotr(d ^ a, 8), c = imad(d, one, c), b = rotr(b ^ c, 7);
+  } else {
+    a = imad(x, one, a + b + bh), d = rotr(d ^ a, 16), c = imad(d, one, c), wide(ph::lop3<0x96>(b, bh, c), m20, b, bh);
+    a = imad(y, one, a + b + bh), d = rotr(d ^ a, 8), c = imad(d, one, c), wide(ph::lop3<0x96>(b, bh, c), m25, b, bh);
+  }
+}
+// blake3_compress(cv, msg, counter, 64, KEYED_HASH, out) under NCP_B3_MIX 1 or 2
+DEV void b3_mix(const uint32_t cv[8], const uint32_t msg[16], uint32_t counter, uint32_t one, uint32_t out[8]) {
+  const int PERM[16] = {2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};
+  const uint32_t IV[4] = {0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A};
+  const uint32_t m20 = one << 20, m25 = one << 25;
+  uint32_t v[16], bh[4] = {0, 0, 0, 0}, m[16], t[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) v[i] = cv[i];
+#pragma unroll
+  for (int i = 0; i < 4; ++i) v[8 + i] = IV[i];
+  v[12] = counter, v[13] = 0, v[14] = 64, v[15] = ph::B3_KEYED_HASH;
+#pragma unroll
+  for (int i = 0; i < 16; ++i) m[i] = msg[i];
+#pragma unroll
+  for (int r = 0; r < 7; ++r) {
+    g_mix(v[0], v[4], bh[0], v[8], v[12], m[0], m[1], one, m20, m25);
+    g_mix(v[1], v[5], bh[1], v[9], v[13], m[2], m[3], one, m20, m25);
+    g_mix(v[2], v[6], bh[2], v[10], v[14], m[4], m[5], one, m20, m25);
+    g_mix(v[3], v[7], bh[3], v[11], v[15], m[6], m[7], one, m20, m25);
+    g_mix(v[0], v[5], bh[1], v[10], v[15], m[8], m[9], one, m20, m25);
+    g_mix(v[1], v[6], bh[2], v[11], v[12], m[10], m[11], one, m20, m25);
+    g_mix(v[2], v[7], bh[3], v[8], v[13], m[12], m[13], one, m20, m25);
+    g_mix(v[3], v[4], bh[0], v[9], v[14], m[14], m[15], one, m20, m25);
+#pragma unroll
+    for (int i = 0; i < 16; ++i) t[i] = m[PERM[i]];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) m[i] = t[i];
+  }
+#pragma unroll
+  for (int i = 0; i < 4; ++i) out[i] = v[i] ^ v[i + 8];
+#pragma unroll
+  for (int i = 0; i < 4; ++i) out[4 + i] = ph::lop3<0x96>(v[4 + i], bh[i], v[12 + i]);
+}
+
 template <class L, bool LB> struct Emit {
   static constexpr int MI = L::MI, NI = L::NI, P = MI * NI, BLOCKS = P / 4;
   static_assert(P % 4 == 0, "whole 16-word blocks");
   static_assert(!LB || P % 16 == 0 || 16 % P == 0, "packed words fill whole blocks");
   uint32_t cv[8];
   uint32_t ctr;
+  uint32_t one;   // 1, opaque to ptxas (NCP_B3_MIX)
   uint32_t off;   // STORE: the CTA's next word in its region
   bool live;      // the warp holds a row that exists
   int phase;      // the bound atoms' offset
@@ -76,7 +140,8 @@ template <class L, bool LB> struct Emit {
   }
   DEV void compress(const uint32_t* m) {
     uint32_t out[8];
-    ph::blake3_compress(cv, m, ctr, 64, ph::B3_KEYED_HASH, out);
+    if constexpr (NCP_B3_MIX) b3_mix(cv, m, ctr, one, out);
+    else ph::blake3_compress(cv, m, ctr, 64, ph::B3_KEYED_HASH, out);
 #pragma unroll
     for (int i = 0; i < 8; i++) cv[i] = out[i];
     ctr++;
@@ -233,6 +298,7 @@ DEV void body(const Args& a) {
   float* ring = reinterpret_cast<float*>(a.p[3]);
   Emit<L, LB> em;
   em.off = 0;
+  em.one = (uint32_t)a.i[15] + 1;
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     ml::raster(t, tiles_m, tiles_n, group, tm, tn);

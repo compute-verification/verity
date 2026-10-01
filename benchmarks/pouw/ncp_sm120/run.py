@@ -23,7 +23,8 @@ Operands are stand-ins for the formed X~ and Y~ (finite E4M3 codes from gen_code
 here.  Diagnostic timing, untimed-node rules apply: the run says which node and lease it ran under.
 
   python3 run.py OUT   (env: CUDA, SHAPES="p d", REPS=5, S_R="1 2 4 8 16 32 64 768", S_IR="1 4 16", S_C="1 2 4 8 16 32",
-                       S_IR_LB="1 2 4", S_C_LB="1 2 4 8", S_STAGGER="", INTERLEAVE, CHAIN_P=1, CHAIN_D=1, NCP_LIBCUDA)
+                       S_IR_LB="1 2 4", S_C_LB="1 2 4 8", S_STAGGER="", INTERLEAVE, CHAIN_P=1, CHAIN_D=1, NCP_LIBCUDA,
+                       NCP_DEFINES: extra nvcc flags for ncp_sm120.cu, e.g. -DNCP_B3_MIX=1)
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 KERNEL = os.path.join(HERE, "ncp_sm120.cu")
 FLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-fmad=false", "-Xptxas", "-v", "-cubin"]
+DEFINES = os.environ.get("NCP_DEFINES", "").split()   # e.g. -DNCP_B3_MIX=1 (ncp_sm120.cu)
 ARMS = ("plain", "core", "store_r", "store_ir", "hash_r", "hash_ir", "chash", "hash_ir_lb", "chash_lb")
 QMMA = {"p": 128, "d": 32}
 NEVER = 1 << 30            # an S no atom reaches: core's guard and nothing bound
@@ -66,7 +68,7 @@ def build(out: str) -> bytes:
     cuda = os.environ.get("CUDA", "/usr/local/cuda-13.0")
     nvcc = os.path.join(cuda, "bin", "nvcc")
     cubin = os.path.join(out, "ncp_sm120.cubin")
-    r = subprocess.run([nvcc, *FLAGS, "-o", cubin, KERNEL], capture_output=True, text=True)
+    r = subprocess.run([nvcc, *FLAGS, *DEFINES, "-o", cubin, KERNEL], capture_output=True, text=True)
     with open(os.path.join(out, "ptxas.txt"), "w") as f:
         f.write(r.stdout + r.stderr)
     if r.returncode:
@@ -94,7 +96,7 @@ def build(out: str) -> bytes:
         json.dump(counts, f, indent=1, sort_keys=True)
     ver = subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout
     with open(os.path.join(out, "toolchain.txt"), "w") as f:
-        f.write(ver + "nvcc " + " ".join(FLAGS) + " -o ncp_sm120.cubin ncp_sm120.cu\n")
+        f.write(ver + "nvcc " + " ".join([*FLAGS, *DEFINES]) + " -o ncp_sm120.cubin ncp_sm120.cu\n")
     with open(cubin, "rb") as f:
         return f.read()
 
@@ -321,7 +323,7 @@ def main(argv: list[str]) -> int:
     d = pc.Dev(cubin)
     ident = {"name": d.name, "uuid": d.uuid, "cc": d.cc, "sms": d.sms, "driver": d.driver, "count": d.count,
              "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
-             "cubin_sha256": hashlib.sha256(cubin).hexdigest()}
+             "cubin_sha256": hashlib.sha256(cubin).hexdigest(), "defines": DEFINES}
     emit({"part": "identity", **ident})
     if d.cc != (12, 0) or not d.name.startswith(pc.NAME_PREFIX) or d.count != 1:
         emit({"part": "refused", "why": "not exactly one RTX PRO 6000 Blackwell (sm_120) visible"})
