@@ -3,6 +3,39 @@
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
+  "ArgmaxLeaf_v1{G=1,FIRST=0,FINAL=0}": {
+   "and": 19
+  },
+  "ArgmaxLeaf_v1{G=50,FIRST=1,FINAL=1}": {
+   "and": 2661
+  },
+  "ArgmaxLeaf_v1{G=64,FIRST=0,FINAL=0}": {
+   "and": 3415
+  },
+  "ArgmaxLeaf_v1{G=64,FIRST=1,FINAL=0}": {
+   "and": 3431
+  },
+  "ArgmaxLeaf_v1{G=8,FIRST=0,FINAL=0}": {
+   "and": 394
+  },
+  "ArgmaxMerge_v1{G=2,IW=12,FINAL=1}": {
+   "and": 29
+  },
+  "ArgmaxMerge_v1{G=2,IW=6,FINAL=0}": {
+   "and": 40
+  },
+  "ArgmaxMerge_v1{G=4,IW=6,FINAL=1}": {
+   "and": 104
+  },
+  "ArgmaxMerge_v1{G=64,IW=6,FINAL=0}": {
+   "and": 2577
+  },
+  "ArgmaxStep_v2": {
+   "and": 134
+  },
+  "Bf16GtStrict_v2": {
+   "and": 56
+  },
   "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32776
   },
@@ -41,6 +74,33 @@
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
+  },
+  "SelectBf16_v2": {
+   "and": 16
+  },
+  "SelectI32_v2": {
+   "and": 32
+  },
+  "TokenSelectStage_v1{V=200,L=0}": {
+   "and": 10655
+  },
+  "TokenSelectStage_v1{V=200,L=1}": {
+   "and": 104
+  },
+  "TokenSelectStage_v1{V=4161,L=1}": {
+   "and": 2617
+  },
+  "TokenSelectStage_v1{V=4161,L=2}": {
+   "and": 29
+  },
+  "TokenSelectStage_v1{V=50,L=0}": {
+   "and": 2661
+  },
+  "TokenSelect_v2{V=200}": {
+   "and": 10759
+  },
+  "TokenSelect_v2{V=50}": {
+   "and": 2661
   }
  },
  "pieces": {
