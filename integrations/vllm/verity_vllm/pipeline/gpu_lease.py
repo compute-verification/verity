@@ -299,14 +299,20 @@ def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after:
     holder, ours, fds, started, environ = _HELD[0]
     tl.start("gpu_lease.release", after=after)
     why, err, drv = kept_reason(args, coms, eng, environ), None, None
+    spans: dict[str, float] = {}
     if why is None:
+        t0 = time.perf_counter()
+        for c in coms:                  # a thread that used the device ends while its context lives: its exit after the reset opens one
+            getattr(c, "_stop_worker", lambda: None)()
         err = _shut_down(eng)
+        t1 = time.perf_counter()
         try:
             drv = DRIVER()
             drv.reset()
             why = _gone(drv, [u for u in environ.get("GPU_LEASE_UUID", "").split(",") if u], wait)
         except (OSError, RuntimeError) as e:
             why = f"the CUDA context could not be reset: {e!r}"[:300]
+        spans = {"shutdown_s": round(t1 - t0, 3), "reset_s": round(time.perf_counter() - t1, 3)}
     if why is not None:
         _note(started, kept=why, after=after, shutdown_error=err)
         tl.end("gpu_lease.release", released=False, why=why)
@@ -314,6 +320,7 @@ def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after:
         return False
     _RELEASED.set()
     _no_device()
+    t2 = time.perf_counter()
     for fd in fds:
         os.close(fd)
     ours.close()
@@ -326,9 +333,10 @@ def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after:
         holder.wait()
     _HELD.clear()
     t = time.time()
-    _note(started, released=_utc(t), t=round(t, 3), released_at=after, shutdown_error=err)
+    spans["holder_s"] = round(time.perf_counter() - t2, 3)
+    _note(started, released=_utc(t), t=round(t, 3), released_at=after, shutdown_error=err, **spans)
     threading.Thread(target=_watch, args=(drv, started), daemon=True).start()
-    tl.end("gpu_lease.release", released=True, after=after, shutdown_error=err)
+    tl.end("gpu_lease.release", released=True, after=after, shutdown_error=err, **spans)
     print(f"[delta] GPU LEASE released after {after}: engine shut down{' (' + err + ')' if err else ''}, CUDA context reset, nothing on "
           f"{environ.get('GPU_LEASE_UUID')}; the checks that follow read host memory", flush=True)
     return True
@@ -337,13 +345,17 @@ def release(tl: Any, eng: Any, coms: list[Any], args: Any, *, last: bool, after:
 def _watch(drv: Any, started: str, wait: Callable[[float], Any] = time.sleep, every_s: float = WATCH_S) -> None:
     """After the release, a CUDA context that reappears (a CUDA call in this process) is on a GPU the pool may have granted to
     another holder: the Commit ends at once, named in its log and in ``gpu_lease.released``."""
+    import faulthandler
+
     while True:
         wait(every_s)
         on = drv.active()
         if on:
-            msg = f"{_utc(time.time())} GPU lease: a CUDA context reappeared on device(s) {on} after the lease was released: the Commit ends now"
-            print(msg, file=sys.stderr, flush=True)
-            _note(started, context_reappeared=_utc(time.time()))
+            names = sorted(t.name for t in threading.enumerate())
+            print(f"{_utc(time.time())} GPU lease: a CUDA context reappeared on device(s) {on} after the lease was released: the Commit "
+                  f"ends now (threads {names}; their stacks follow)", file=sys.stderr, flush=True)
+            faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+            _note(started, context_reappeared=_utc(time.time()), threads=names)
             os.kill(os.getpid(), signal.SIGKILL)
             return
 
@@ -419,7 +431,7 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
                            "kept": rel.get("kept") or (None if rel.get("released") else "the Commit ended before its release (its last run was "
                                                        "not an instrumented one, or it ended before that run's records)"),
                            "rc": rc, "started": None, "waited_min": None, "held_min": None}
-    rec.update({k: rel[k] for k in ("shutdown_error", "context_reappeared") if rel.get(k)})
+    rec.update({k: rel[k] for k in ("shutdown_s", "reset_s", "holder_s", "shutdown_error", "context_reappeared", "threads") if rel.get(k) is not None})
     tr, ts = _stamp(_requested(started)), _stamp(started)
     if tr is not None:
         rec["requested"] = _utc(tr)
