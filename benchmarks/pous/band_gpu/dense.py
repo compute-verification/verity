@@ -102,10 +102,8 @@ CHAIN_PAIRS = [False]
 the squeezing and absorbing sponges of a row on two lanes, `CHAIN_PAIRS_WPS` warps per SM taking (rows, call) tasks, so every
 scheduler holds a warp where `band_chain_kernel`'s 15,360 threads fill 480 of the RTX PRO 6000's 752."""
 CHAIN_PAIRS_WPS = [4]
-CHAIN_PAIRS_SMEM = [False]
-"""The lane-pair chain passes each chunk from squeezer to absorber through shared memory instead of shuffles."""
-CHAIN_PAIRS_U2 = [False]
-"""The lane-pair chain's Keccak-f unrolls its round loop twice."""
+CHAIN_PAIRS_UNROLL = [4]
+"""The lane-pair chain's Keccak-f unrolls its round loop this many times (1, 2, 4, 8 or 24)."""
 
 CHUNKED_MAX_ROWS = [18_000]
 """Chunk-major launches over more rows run as equal sequential pieces of at most this many: past about one warp per
@@ -231,7 +229,7 @@ def _decode_whole(c_flat, seg, blk, ln, tags, base, order, width: int) -> torch.
     base, blk, ln, dest = base.contiguous(), blk.contiguous(), ln.contiguous(), order.contiguous()
     if CHAIN_PAIRS[0]:
         native.ext().band_chain_pairs(st.words, 0, r, codec.PI_DOMAIN, CHAIN_PAIRS_WPS[0], int(ln.max()) + 1, c_flat, base,
-                                      blk, ln, dest, out, CHAIN_PAIRS_SMEM[0], CHAIN_PAIRS_U2[0])
+                                      blk, ln, dest, out, CHAIN_PAIRS_UNROLL[0])
         return out
     for start, n, _ in st.launches(0, allow_split=False):
         native.ext().band_chain(st.words, start, n, codec.PI_DOMAIN, CHUNKED_THREADS[0], c_flat, base, blk, ln, dest, out)
