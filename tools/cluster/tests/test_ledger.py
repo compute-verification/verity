@@ -53,7 +53,8 @@ def test_quiet_report_certifies_a_window_and_catches_what_broke_it(tmp_path):
     records, cpu, win = _window_day(tmp_path / "l.jsonl")
     rep = ledger.quiet_report(records, win)
     assert rep["quiet"] and rep["running"] == [(T0 + 100, T0 + 400)]
-    assert rep["overlaps"] == [{"alloc": cpu, "state": "frozen", "t0": T0 + 100, "t1": T0 + 400, "quiet_safe": False}]
+    assert rep["overlaps"] == [{"alloc": cpu, "state": "frozen", "t0": T0 + 100, "t1": T0 + 400, "quiet_safe": False, "who": "o",
+                               "gpus": [], "run": None, "preempt": "freeze"}]
     hist, _ = ledger.history(records)
     assert hist[cpu].intervals == [["running", T0, T0 + 100], ["frozen", T0 + 100, T0 + 400], ["running", T0 + 400, None]]
     lg = ledger.Ledger(tmp_path / "l.jsonl")

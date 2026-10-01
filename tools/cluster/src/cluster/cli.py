@@ -2,15 +2,17 @@
 
   cluster validate DESCRIPTION.toml
   cluster plan DESCRIPTION.toml SNAPSHOT.json         # one JSON action per line; the snapshot names the node and `now`
-  cluster ledger verify LEDGER.jsonl
-  cluster ledger quiet LEDGER.jsonl ALLOC [--until T]
-  cluster ledger failures LEDGER.jsonl [--since T]
-  cluster ledger usage LEDGER.jsonl [--since T]         # held against busy GPU time per holder, lowest share first
+  cluster ledger verify LEDGER.jsonl|DIR               # DIR: its ledger.jsonl, or every segment under it as one chain
+  cluster ledger quiet LEDGER.jsonl|DIR ALLOC|RUN [--until T]   # what ran beside a window: owner, GPUs, pid (in the id), run
+  cluster ledger failures LEDGER.jsonl|DIR [--since T]
+  cluster ledger usage LEDGER.jsonl|DIR [--since T]     # held against busy GPU time per holder, lowest share first
   cluster agent DESCRIPTION.toml --out DIR [--mode shadow|live] [--hours H] [--stop-file P] [--copy-to DIR]
+                [--roll [--roll-mb M]]                  # DIR is a root of daily segments (agent.py); exit 0 when stopped,
+                                                        # 1 on an exception, 2 when a plan would break a rule
   cluster shadow replay DESCRIPTION.toml --sampler UTIL.jsonl[.gz] --preempted LOG[.gz] --out DIR
   cluster shadow evaluate DIR [--quiet-log QUIET.jsonl[.gz]] [--sampler UTIL.jsonl[.gz]...]  # the pass bar: exit 0 or 2
-  cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W --max-s S [--gpus N ...]
-                                                        # the node and executor wrapper as JSON; exit 3 with {"refused"}
+  cluster submit DESCRIPTION.toml --run-id R --now T --project P --submitter W [--kind K] [--max-s S] [--gpus N ...]
+                                                        # the node, wrappers and kind as JSON; exit 3 with {"refused"}
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
@@ -57,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     lv.add_argument("path")
     lq = lsub.add_parser("quiet")
     lq.add_argument("path")
-    lq.add_argument("alloc")
+    lq.add_argument("alloc", help="an allocation id, or a run id: every quiet allocation of that run")
     lq.add_argument("--until", type=int)
     lf = lsub.add_parser("failures")
     lf.add_argument("path")
@@ -75,6 +77,8 @@ def main(argv: list[str] | None = None) -> int:
     ag.add_argument("--lease-dir", default="/run/gpu-lease")
     ag.add_argument("--status", default="/workspace/pouw/fill/status.txt")
     ag.add_argument("--tick-s", type=float, default=1.0)
+    ag.add_argument("--roll", action="store_true", help="--out is a root of segments, a new one each run and UTC day")
+    ag.add_argument("--roll-mb", type=int, default=256, help="with --roll, also a new segment once the ledger passes M MiB")
     sh = sub.add_parser("shadow")
     ssub = sh.add_subparsers(dest="scmd", required=True)
     sr = ssub.add_parser("replay")
@@ -94,28 +98,31 @@ def main(argv: list[str] | None = None) -> int:
     sb.add_argument("--project", required=True)
     sb.add_argument("--submitter", required=True)
     sb.add_argument("--class", dest="priority", default="work")
-    sb.add_argument("--gpus", type=int, default=0)
+    sb.add_argument("--kind", default="adhoc", help="the job's kind, from kinds/<owner>.toml beside the descriptions")
+    sb.add_argument("--question", default="", help="the research question it answers (default: its kind's)")
+    sb.add_argument("--gpus", type=int)
     sb.add_argument("--gpu-model")
-    sb.add_argument("--cpus", type=int, default=1)
-    sb.add_argument("--mem-gb", type=int, default=8)
-    sb.add_argument("--max-s", type=int, required=True)
+    sb.add_argument("--cpus", type=int)
+    sb.add_argument("--mem-gb", type=int)
+    sb.add_argument("--max-s", type=int, help="its longest run (default: its kind's max_wall_min)")
+    sb.add_argument("--disk-gb", type=float, help="the disk it writes (default: its kind's disk_gb, else 20)")
     sb.add_argument("--custody-s", type=int, default=0)
     sb.add_argument("--preempt", choices=("requeue", "never"), default="requeue")
-    sb.add_argument("--quiet", action="store_true")
+    sb.add_argument("--quiet", action="store_true", default=None)
     sb.add_argument("--node")
     sb.add_argument("--gpu-ids", default="", help="comma-separated GPU indices the job must get")
     a = ap.parse_args(argv)
 
     if a.cmd == "submit":
-        from . import submit
+        from . import kinds, submit
         c = model.load(a.description)
-        j = submit.job(run_id=a.run_id, project=a.project, submitter=a.submitter, priority=a.priority, gpus=a.gpus,
-                       gpu_model=a.gpu_model, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s, custody_s=a.custody_s,
-                       preempt=a.preempt, quiet=a.quiet, node=a.node,
-                       gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x), submitted=a.now)
         try:
-            out = submit.resolve(c, j, a.run_id, a.now)
-        except submit.Refused as e:
+            out = submit.submit(c, kinds.load(kinds.kinds_dir(a.description)), run_id=a.run_id, now=a.now, kind=a.kind,
+                                question=a.question, gpus=a.gpus, cpus=a.cpus, memory_gib=a.mem_gb, max_s=a.max_s,
+                                quiet=a.quiet, preempt=a.preempt, disk_gb=a.disk_gb, project=a.project, submitter=a.submitter,
+                                priority=a.priority, gpu_model=a.gpu_model, custody_s=a.custody_s, node=a.node,
+                                gpu_ids=tuple(int(x) for x in a.gpu_ids.split(",") if x))
+        except (submit.Refused, ValueError) as e:
             print(json.dumps({"refused": str(e)}))
             return 3
         print(json.dumps(out, sort_keys=True))
@@ -131,11 +138,14 @@ def main(argv: list[str] | None = None) -> int:
         start = time.time()
         summary = agent.run(c, Path(a.out), mode=a.mode, clock=time.time, sleep=time.sleep, lease_dir=Path(a.lease_dir),
                             status=Path(a.status), stop_file=Path(a.stop_file) if a.stop_file else None,
-                            until=start + 3600 * a.hours if a.hours else None, tick_s=a.tick_s, footprint=fp)
+                            until=start + 3600 * a.hours if a.hours else None, tick_s=a.tick_s, footprint=fp,
+                            roll=a.roll, roll_bytes=a.roll_mb << 20)
         if a.copy_to:
             shutil.copytree(a.out, a.copy_to, dirs_exist_ok=True)
         print(json.dumps(summary, sort_keys=True))
-        return 1 if summary.get("exception") or str(summary.get("stopped", "")).startswith("invariant") else 0
+        if summary.get("exception"):
+            return 1
+        return 2 if str(summary.get("stopped", "")).startswith("invariant") else 0
     if a.cmd == "shadow":
         from . import shadow
         if a.scmd == "replay":
@@ -184,9 +194,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{a.path}: {len(records)} records, chain intact")
         return 1 if problems else 0
     if a.lcmd == "quiet":
-        rep = ledger.quiet_report(records, a.alloc, until=a.until)
-        print(json.dumps(rep, indent=1, sort_keys=True))
-        return 0 if rep["quiet"] else 2
+        allocs, _ = ledger.history(records)
+        ids = [a.alloc] if a.alloc in allocs else [h.alloc for h in allocs.values()
+                                                   if h.job.get("run") == a.alloc and h.job.get("quiet")]
+        if not ids:
+            print(f"{a.alloc}: no such allocation, and no quiet allocation of that run", file=sys.stderr)
+            return 1
+        reps = [ledger.quiet_report(records, i, until=a.until) for i in ids]
+        for rep in reps:
+            print(json.dumps(rep, indent=1, sort_keys=True))
+        return 0 if all(rep["quiet"] for rep in reps) else 2
     for row in (ledger.failures if a.lcmd == "failures" else ledger.usage)(records, a.since):
         print(json.dumps(row, sort_keys=True))
     return 0

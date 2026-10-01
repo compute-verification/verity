@@ -157,6 +157,7 @@ class Job:
     pool: str | None = None
     workstream: str | None = None
     submitted: int = 0
+    run: str | None = None
 
     @property
     def length_s(self) -> int | None:
