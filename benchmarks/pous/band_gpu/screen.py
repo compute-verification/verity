@@ -64,7 +64,7 @@ def main() -> int:
     for row in rows:
         row["speedup"] = base / row["median_s"]
     doc = {"label": "untimed throughput screen: random C, decode only, against FROZEN_KERNELS",
-           "device": harness.gpu_facts(), "segments": a.segments, "d": a.d, "blocks": a.segments * 512, "rows": rows}
+           "device": harness.gpu_facts(dev.index), "segments": a.segments, "d": a.d, "blocks": a.segments * 512, "rows": rows}
     Path(a.out).write_text(json.dumps(doc, indent=1))
     return 0 if all(row["equal"] for row in rows) else 1
 
