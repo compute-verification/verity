@@ -29,7 +29,7 @@
 #      the serving one
 #      ZK=1 (the gate's selftests, the serve and the prove with --zk; then zkaudit, the selftest build's, on the gate's and the
 #      step's statements: out/zkaudit-{gate,m35}.json, and the job fails unless every byte the verifier kept is attributed and
-#      none is in the clear)  ZKAUDIT_RUNS="RUN..." (only that zkaudit, on earlier runs' statements: see zkaudit below)
+#      none is in the clear)  ZKAUDIT_RUNS=RUN,... (only that zkaudit, on earlier runs' statements: see zkaudit below)
 #      any other KEY=VALUE reaches the prover's environment (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as #20;
 #      FC_VERIFY_AHEAD=A FC_VERIFY_SERVERS=S: A sessions verified beside the next one's proving, by S verifier processes in turn)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -113,10 +113,10 @@ EOF
   python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); sys.exit(0 if d.get("checks_pass") and d.get("attributed") else 1)' \
     $R/out/zkaudit-$1.json || zok=0
 }
-# ZKAUDIT_RUNS="RUN..." (GATE=0): only zkaudit, on each earlier run's gate and step statements (its out/{gate,m35} records name
+# ZKAUDIT_RUNS=RUN,... (GATE=0): only zkaudit, on each earlier run's gate and step statements (its out/{gate,m35} records name
 # them, and FLOCK_STAGE_CACHE still holds them): out/zkaudit-RUN-{gate,m35}.json; the job fails unless every one passes
 if [ -n "${ZKAUDIT_RUNS:-}" ]; then
-  for r in $ZKAUDIT_RUNS; do
+  for r in ${ZKAUDIT_RUNS//,/ }; do
     for p in gate m35; do zkaudit $r-$p $(dirname $R)/$r/out/$p/classes/results.jsonl $(dirname $R)/$r/out/$p/binary.sha256; done
   done
   [ $zok = 1 ]; exit
