@@ -8,6 +8,7 @@ submitter ships (never a node-local copy), so a job's kind is resolved at the co
     outputs = ["the audit report"]
     restart = "idempotent"          # idempotent | requeue | never
     next = "some-kind"              # optional: the kind its declared outputs go to
+    disk_gb = 20                    # optional: the disk it writes (DISK_GB when absent); the machine holds it near full
 
 A registered kind supplies a job's defaults: its shape's GPUs, CPUs and memory, its `max_wall_min`, its question. The rules
 on kinds are warnings for now, never refusals (infra's hold, 30 Sep): an unregistered kind, a job with no question, a shape
@@ -30,6 +31,7 @@ SHAPES: dict[str, dict[str, int | bool]] = {
 }
 RESTART = ("idempotent", "requeue", "never")
 GPU_CHUNK_MIN = 60
+DISK_GB = 20
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,7 @@ class Kind:
     outputs: tuple[str, ...] = ()
     restart: str = "requeue"
     next: str | None = None
+    disk_gb: float | None = None
     source: dict[str, str] = field(default_factory=dict, compare=False)
 
     @property
@@ -68,12 +71,14 @@ def load(directory: Path) -> dict[str, Kind]:
                 raise ValueError(f"{where}: phase must be one of {', '.join(SHAPES)}")
             if not isinstance(d.get("max_wall_min"), int) or d["max_wall_min"] <= 0:
                 raise ValueError(f"{where}: max_wall_min must be a positive integer")
+            if "disk_gb" in d and (not isinstance(d["disk_gb"], (int, float)) or d["disk_gb"] < 0):
+                raise ValueError(f"{where}: disk_gb must be a number of GB, 0 or more")
             if d.get("restart", "requeue") not in RESTART:
                 raise ValueError(f"{where}: restart must be one of {', '.join(RESTART)}")
             out[name] = Kind(name=name, owner=path.stem, phase=d["phase"], max_wall_min=d["max_wall_min"],
                              question=str(d.get("question", "")), inputs=tuple(d.get("inputs", ())),
                              outputs=tuple(d.get("outputs", ())), restart=d.get("restart", "requeue"), next=d.get("next"),
-                             source=source)
+                             disk_gb=d.get("disk_gb"), source=source)
     for k in out.values():
         if k.next is not None and k.next not in out:
             raise ValueError(f"kinds/{k.owner}.toml: kind {k.name}: next names {k.next!r}, which isn't registered")
@@ -107,4 +112,4 @@ def warnings(kind: Kind | None, name: str, *, question: str, gpus: int, cpus: in
     return out
 
 
-__all__ = ["SHAPES", "RESTART", "Kind", "kinds_dir", "load", "warnings"]
+__all__ = ["SHAPES", "RESTART", "DISK_GB", "Kind", "kinds_dir", "load", "warnings"]
