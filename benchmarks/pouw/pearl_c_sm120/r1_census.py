@@ -13,11 +13,13 @@ products (E4M3 values are integers in units of 2^-9, so every sum is an exact in
   o-vo-il              o-vo, then one keyed permutation of o's k (the attention epilogue writes A in that order)
   down-none            down_proj's captured input and weight rows
   down-perm            a keyed permutation of the intermediate dimension (folded into gate/up's rows and down's columns)
-  down-bh              down-perm, then a keyed block-diagonal Haar rotation (blocks of 2,048): an online rotation, not foldable
+  down-bh, down-bh<B>  down-perm, then a keyed block-diagonal Haar rotation (blocks of 2,048, or of B): an online rotation, not
+                       foldable
 
 Rows are quantized per row (absmax to 448, E4M3 round-to-nearest-even), A's tokens and B's weight rows both.  Starts: `zero`
 (+0), and `h<H>`: word (i, j) starts at H_ij = s_ij 2^(round(log2 r_ij) + H) (1 + u_ij / 2), r_ij = sqrt(32) |a_i| |b_j| / k
-(the atom sum's rms), s and u keyed per word; the output is fl(C - H), whose error against the exact product is reported
+(the atom sum's rms), s and u keyed per word; `p<H>`, the separable form a kernel computes with one FMUL per word
+(`separable_start`); the output is fl(C - H), whose error against the exact product is reported
 (over all of k, on the first --err-rows x --err-cols words), with `order_free`, the share of those words whose final FP32 word
 is unchanged when the chain visits the atoms in reverse order (1 where each atom's contribution doesn't depend on the state).
 
@@ -148,13 +150,14 @@ def operands(cls: str, layer: int, args, key: str) -> tuple[np.ndarray, np.ndarr
         if cls == "o-vo-il":
             pi = g.permutation(k)
             a, b = a[:, pi], b[:, pi]
-    elif cls in ("down-perm", "down-bh"):
+    elif cls.startswith("down-") and cls != "down-none":
         pi = g.permutation(k)
         a, b = a[:, pi], b[:, pi]
-        if cls == "down-bh":
-            for s0 in range(0, k, 2048):
-                r = haar(2048, g)
-                a[:, s0:s0 + 2048], b[:, s0:s0 + 2048] = a[:, s0:s0 + 2048] @ r, b[:, s0:s0 + 2048] @ r
+        if cls.startswith("down-bh"):
+            size = int(cls[7:] or 2048)
+            for s0 in range(0, k, size):
+                r = haar(size, g)
+                a[:, s0:s0 + size], b[:, s0:s0 + size] = a[:, s0:s0 + size] @ r, b[:, s0:s0 + size] @ r
     return a, b
 
 
@@ -268,10 +271,25 @@ def repeated_slices(codes: np.ndarray) -> dict:
     return out
 
 
+def separable_start(av: np.ndarray, bv: np.ndarray, h: int, g: np.random.Generator) -> np.ndarray:
+    """H_ij = fl(P_i Q_j), P_i = s_i 2^round(log2 |a_i|) (1 + u_i / 2), Q_j = t_j 2^(round(log2 (sqrt(32) |b_j| / k)) + h)
+    (1 + v_j / 2): keyed per row and per column, one FMUL per word in the kernel."""
+    def side(x: np.ndarray, shift: float) -> np.ndarray:
+        n = np.linalg.norm(x, axis=1) * shift
+        e = np.round(np.log2(np.where(n > 0, n, 1.0)))
+        sign = np.where(g.integers(0, 2, len(x)) == 1, -1.0, 1.0)
+        return (sign * np.exp2(e) * (1 + g.integers(0, 1 << 22, len(x)) / float(1 << 23))).astype(np.float32)
+    p, q = side(av, 1.0), side(bv, np.sqrt(32) / av.shape[1] * 2.0 ** h)
+    hv = np.outer(p, q).astype(np.float32)
+    assert np.array_equal(hv.astype(np.float64) * UNIT, np.floor(hv.astype(np.float64) * UNIT)), "H below 2^-18"
+    return hv.ravel().view(np.uint32)
+
+
 def start_words(start: str, av: np.ndarray, bv: np.ndarray, g: np.random.Generator) -> np.ndarray:
+    """`zero` (+0), `h<H>` (hot_start, keyed per word) or `p<H>` (separable_start)."""
     if start == "zero":
         return np.zeros(len(av) * len(bv), np.uint32)
-    return hot_start(av, bv, int(start[1:]), g)
+    return (hot_start if start[0] == "h" else separable_start)(av, bv, int(start[1:]), g)
 
 
 def error(ac: np.ndarray, bc: np.ndarray, start: str, g: np.random.Generator) -> dict:
