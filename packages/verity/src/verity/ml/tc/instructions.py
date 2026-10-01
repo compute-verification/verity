@@ -215,6 +215,11 @@ _PRO6000_E5M2 = (_PRO6000_FP8 + ": run r20260930-063527-4d6b (GPU-6fbd6701-ccfb-
                  "25,041,024 elements, 0 mismatches against BLACKWELL_SM120_E5M2_M16N8K32; Ada's pipeline with e5m2 products misses 15,747,373")
 _PRO6000_E5M2_SECOND = ("a second PRO 6000 die: run r20260930-073650-c9c5 (GPU-5f1149a4-e5f5-1007-ec78-7cd350a69a4f), 6,440,960 elements, "
                         "0 mismatches")
+_PRO6000_MXF4 = ("lane proofs-tc-defs (2026-10-01), tools/tc_probe_fp4 run r20261001-000520-2440, a Kueue prover-dev job on vy-nebius-1 "
+                 "(RTX PRO 6000 Blackwell Server Edition, GPU-a98a36f6-1393-7cad-32ea-e9f7ec25376a, driver 580.173.02, CUDA 13.0 V13.0.88 "
+                 "-arch=sm_120a, SASS one OMMA.SF.16864.F32.E2M1.E2M1.E8 per tile kernel): 1,089,536 gated elements, 0 mismatches against "
+                 "BLACKWELL_SM120_MXF4; its 90,112 record-only elements (a 0xFF scale byte, sums leaving binary32, NaN and infinite "
+                 "accumulators: fixtures tc-sm120-mxf4-2026-10-01) are outside the model's domain")
 
 
 def _i(**kw) -> Instruction:
@@ -410,7 +415,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             # As nvf4: 0 mismatches over 7.39M words (fp4-re) + 9.66M (fp4-proof, _PIN_FP4); trust computed PINNED on 2026-09-23.
             status="pinned",
             dossier="art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92",
-            evidence=(_RTX5090_FP4_RE, _PIN_FP4,
+            evidence=(_RTX5090_FP4_RE, _PIN_FP4, _PRO6000_MXF4,
                       "the same adder as nvf4 with the UE8M0 scale 2^(code-127) written as mantissa 8 at 2^(code-130) (D18); a "
                       "nonzero sum below the subnormal grid is +0 (D13: BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED refuted); the "
                       "accumulator window anchors on the exponent field and the grid never drops below 2^-174 (D19)"),
