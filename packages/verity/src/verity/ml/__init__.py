@@ -12,7 +12,7 @@
                       the sm_120 GemmCoordinateE4m3 / GemmCoordinateNvf4 / GemmCoordinateMxf4 and their GEMM_SM120_* bindings
     verity.ml.boolean word arithmetic as Boolean circuits: the builders (`forms`, `fp`, `tc_step`, `softmax`), `trace` (Boolean
                       Definitions from builders), `gemm`: the BF16 steps, cast, DotBf16_v3, GemmCoordinate_v3 and Gemm_v3 on
-                      bits, and `attention`: FA2's FTZ f32 operations, max, -inf guard and inverse sum on bits
+                      bits, the E4M3 steps and GemmCoordinateE4m3_v2, and `attention`: FA2's FTZ f32 operations, max, -inf guard and inverse sum on bits
     verity.ml.kernels numpy batch forms of the steps and GEMM coordinates (BF16, FP8 E4M3, NVFP4 / MXFP4), registered with
                       `verity.evaluation` and self-checked against `verity.ml.tc`
 """

@@ -3,6 +3,9 @@
   "AmpereBF16TcDot16_v3": {
    "and": 8260
   },
+  "BlackwellE4m3QmmaDot32_v2": {
+   "and": 9128
+  },
   "DivFullRcp_v2": {
    "and": 4508
   },
@@ -39,6 +42,12 @@
   "Fa2InvSum_v2": {
    "and": 947
   },
+  "GemmCoordinateE4m3_v2{K=64,DOT=BlackwellE4m3QmmaDot32_v2}": {
+   "and": 18050
+  },
+  "GemmCoordinateE4m3_v2{K=64,DOT=HopperE4m3QgmmaDot32_v2}": {
+   "and": 13445
+  },
   "GemmCoordinate_v3{K=64,DOT=AmpereBF16TcDot16_v3}": {
    "and": 32842
   },
@@ -56,6 +65,9 @@
   },
   "HopperBF16WgmmaDot16_v2": {
    "and": 7872
+  },
+  "HopperE4m3QgmmaDot32_v2": {
+   "and": 6799
   },
   "MufuEx2Ftz_v2": {
    "and": 1354
