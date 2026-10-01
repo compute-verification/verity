@@ -280,9 +280,10 @@ def _map_path(p: str | None, path_map: list[tuple[str, str]]) -> str | None:
 
 def mem_estimate_mb(C, request_rows: list[int]) -> int:
     """A unit's peak resident memory, over-estimated: the root's nodes (about 14 per row and layer, plus the q/k/v bias, the q/k
-    RMSNorms and the MoE block's three per pair) at 6 KB each, and the attention reads of the earlier rows' keys (rows²/2 per layer)
-    at 0.4 KB each.  Measured: a Qwen3-4B request of LP+T = 79 peaks at 814 MB (estimated 1.2 GB)."""
-    per = 14 + C.qkv_bias + {"head": C.NH + C.KVH, "all": 2}.get(C.qk_norm, 0) + (3 * C.TOPK + 2 if C.E else 0)
+    RMSNorms, the MoE block's three per pair and Gemma-2's four unfused norm chains' thirty) at 6 KB each, and the attention reads
+    of the earlier rows' keys (rows²/2 per layer) at 0.4 KB each.  Measured: a Qwen3-4B request of LP+T = 79 peaks at 814 MB
+    (estimated 1.2 GB)."""
+    per = 14 + C.qkv_bias + {"head": C.NH + C.KVH, "all": 2}.get(C.qk_norm, 0) + (3 * C.TOPK + 2 if C.E else 0) + 30 * C.norm_chain
     rows = sum(request_rows)
     return int(250 + 0.006 * rows * C.NL * per + 0.0002 * C.NL * sum(r * r for r in request_rows))
 

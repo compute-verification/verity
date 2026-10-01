@@ -2,7 +2,7 @@
 
 The pinned digests are Programs the Build traced on rtxpro6000 (cc 12.0, 188 SMs) from the checkpoints' `config.json`
 (`fixtures/`): SmolLM2-135M from cov-k01-10, Llama-3.2-1B from cov-k05-7, TinyLlama-1.1B from cov-k04-7, Qwen2.5-0.5B from
-cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3.  A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
+cov-k03-7, Phi-3-mini from cov-k07-3, Qwen3-4B from cov-k09-3, Gemma-2-2B from cov-k06-5.  A library change that moves a Definition moves the traced digest too: re-trace the unit (`verity-vllm build --wrapper
 step --M 1 --pos0 8`, CPU only) and pin the new digest with the predictor's.
 """
 
@@ -41,11 +41,12 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
     ("qwen3-4b", "0af57f58fe6aa8df3f878faac16ad2b03b7295f01a82cc9d6dfbd7652613cfcd"),
     ("olmoe-1b-7b", "84fb48c7110b00c236474e7cb97f14e79c65937c41bf1339bc8e4df335153ebb"),
     ("qwen3-30b-a3b", "e4e7975d885c51f6c7c046cec02b483ffd2eed8b0697266bff54a80d2357362a"),
+    ("gemma2-2b", "c062d1b305e1bcf5fb614dbfd70c7686e73df57dd7c9c23671a66b8107c10ddd"),
 ])
 def test_step_program_equals_the_traced_build(model, digest):
     r = build_program(_phi(json.loads((FIX / f"{model}.config.json").read_text())), "step", M=1, pos0=8)
     cls = {"qwen25-05b": "Qwen2ForCausalLM", "phi3-mini": "Phi3ForCausalLM", "qwen3-4b": "Qwen3ForCausalLM", "olmoe-1b-7b": "OlmoeForCausalLM",
-           "qwen3-30b-a3b": "Qwen3MoeForCausalLM"}.get(model, "LlamaForCausalLM")
+           "qwen3-30b-a3b": "Qwen3MoeForCausalLM", "gemma2-2b": "Gemma2ForCausalLM"}.get(model, "LlamaForCausalLM")
     assert r.function == f"Derived[vLLMStep[{cls}]]_v1{{SRC={{f8a263a011b5}}}}"
     assert r.digest == digest
 
@@ -102,6 +103,12 @@ def test_weights_record_follows_the_module_order():
     assert [n.split("layers.0.")[-1] for n, _ in moe[1:10]] == [
         "self_attn.qkv_proj.weight", "self_attn.q_norm.weight", "self_attn.k_norm.weight", "self_attn.o_proj.weight", "mlp.gate.weight",
         "mlp.experts.w13_weight", "mlp.experts.w2_weight", "input_layernorm.weight", "post_attention_layernorm.weight"]
+    gemma = [n for n, _ in weight_leaves(model_shape(json.loads((FIX / "gemma2-2b.config.json").read_text())))]
+    assert [n.split("layers.0.")[-1] for n in gemma[1:9]] == [
+        "self_attn.qkv_proj.weight", "self_attn.o_proj.weight", "mlp.gate_up_proj.weight", "mlp.down_proj.weight", "input_layernorm.weight",
+        "post_attention_layernorm.weight", "pre_feedforward_layernorm.weight", "post_feedforward_layernorm.weight"]
+    assert gemma.index("model.model.normalizer") == gemma.index("model.model.norm.weight") + 1 == \
+        gemma.index("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache") - 1
 
 
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
@@ -111,6 +118,7 @@ def test_weights_record_follows_the_module_order():
     ({**TINY, "sliding_window": 32}, {}, "sliding window 32"),
     ({**TINY, "model_type": "phi3", "sliding_window": 8}, {}, "a history of 9 keys under the sliding window of 7 keys"),
     ({**TINY, "hidden_act": "gelu"}, {}, "hidden_act 'gelu'"),
+    ({**json.loads((FIX / "gemma2-2b.config.json").read_text()), "query_pre_attn_scalar": 144}, {}, "query_pre_attn_scalar 144"),
     ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "num_experts": 32}, {}, "32 experts, top-8"),
     ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "shared_expert_intermediate_size": 512}, {}, "shared experts"),
     ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "mlp_only_layers": [0]}, {}, "dense MLP layers among the MoE ones"),

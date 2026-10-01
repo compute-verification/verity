@@ -11,7 +11,9 @@ Vocabulary (v1, Llama-family decoders, dense or fused-MoE, under the bi-eager pr
 norm, and the q/k norm: per head, or over all heads), Gemm (target-keyed; the q/k/v projection's bias, when the family's rule
 gives it one, a BiasAdd per row), RoPE (all q rows, then all k rows), Attention (target-keyed; one call per query row over the layer's history),
 RMSNormFusedCuda (post-attention / next-layer / final norm), SiluMul, the fused-MoE block in its indexed-read construction (router
-Gemm, MoeRouterTopK per row, MoeExpertGemm / SiluMul / MoeExpertGemmW per (token, slot) pair, MoeSum per row), and the token select: greedy TokenSelect, or the seeded
+Gemm, MoeRouterTopK per row, MoeExpertGemm / SiluMul / MoeExpertGemmW per (token, slot) pair, MoeSum per row); for Gemma-2, the
+embedding's normalizer scale, GemmaRMSNorm's unfused (1 + w) chain (every norm, the two extra MLP norms included), AttentionSoftcap,
+GeluTanhMul and the final logits' tanh soft-cap; and the token select: greedy TokenSelect, or the seeded
 temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split count a `splits` Input entry, or the single
 request's constant S).  Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a silent
 approximation).
@@ -52,7 +54,11 @@ I64 = Value(64)
 
 
 #: the family facts (`engine.profiles.family_facts`) `model_shape` reads; a family with any other refuses
-_FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPERTS")
+_FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPERTS", "tie_word_embeddings", "attn_logit_softcapping",
+               "final_logit_softcapping", "query_pre_attn_scalar", "sliding_window", "hidden_act", "embed_normalizer", "rmsnorm_plus_one",
+               "layer_norms", "extra_layer_norms")
+#: the activations of the gated MLP: the `*Mul` kind's role per `hidden_act`
+_ACTS = {"silu": "silu_mul", "gelu_pytorch_tanh": "gelu_tanh_mul"}
 
 
 class Unexpressible(Exception):
@@ -80,6 +86,12 @@ class ModelShape:
     E: int = 0
     TOPK: int = 0
     renorm: bool = False
+    act: str = "silu"
+    norm_chain: bool = False
+    extra_norms: bool = False
+    embed_scale: bool = False
+    attn_cap: float | None = None
+    final_cap: float | None = None
 
     @property
     def QKV(self) -> int:
@@ -90,11 +102,13 @@ def model_shape(hf: dict) -> ModelShape:
     """The shape facts of an HF `config.json` the vocabulary reads, through the two declared homes of model facts: the family facts
     table (`engine.profiles.family_facts`: vLLM's class and constructor kind per `model_type`) and `program.model.config_of` (the
     static configuration, with the family's bias rule and the checkpoint's quantization).  The vocabulary is the dense and the
-    fused-MoE (indexed-read) blocks with no per-family facts beyond the q/k RMSNorm (per head, or over all heads as `qk_norm` "all")
-    and the router's renormalization: a family with any other (a norm variant, a soft-cap, LayerNorm, shared experts), a linear bias
-    other than the q/k/v one a family's rule gives, an activation other than SiLU, a partial rotary width or a rotary scaling without
-    an analytic table raises `Unexpressible`.  A sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for
-    the families whose vLLM code hands it to FA2 (the `dense2` patterns); `build_program` refuses a history longer than it."""
+    fused-MoE (indexed-read) blocks with no per-family facts beyond the q/k RMSNorm (per head, or over all heads as `qk_norm` "all"),
+    the router's renormalization and Gemma-2's (the embedding normalizer, the (1 + w) norm chain with the two extra MLP norms, the
+    attention and final logit soft-caps, the tanh-GELU MLP, `query_pre_attn_scalar` = head_dim): a family with any other (another norm
+    variant, LayerNorm, shared experts), a linear bias other than the q/k/v one a family's rule gives, an activation other than SiLU
+    or a family-declared one, a partial rotary width or a rotary scaling without an analytic table raises `Unexpressible`.  A
+    sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for the families whose vLLM code hands it to FA2
+    (the `dense2` patterns); `build_program` refuses a history longer than it."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
     from verity_vllm.engine.profiles.generic import effective_sliding_window
     from verity_vllm.program import model as analytic
@@ -141,9 +155,19 @@ def model_shape(hf: dict) -> ModelShape:
     window = effective_sliding_window(hf)
     if window and "dense2" not in (ff.get("patterns") or ()):
         facts.append(f"sliding window {window} (family {family!r} has no inert-window patterns)")
-    act = hf.get("hidden_act", hf.get("hidden_activation", "silu"))
-    if act != "silu":
-        facts.append(f"hidden_act {act!r} (SiluMul only)")
+    act = fv.get("hidden_act") or hf.get("hidden_act", hf.get("hidden_activation", "silu"))
+    if act not in _ACTS or (act != "silu" and "hidden_act" not in fv):
+        facts.append(f"hidden_act {act!r} (SiluMul, or GeluTanhMul where the family declares it)")
+    norm_chain = "unfused-norm-chains" in (ff.get("patterns") or ())
+    if norm_chain != bool(fv.get("rmsnorm_plus_one")):
+        facts.append("a norm other than the fused kernels or the unfused (1 + w) chain of the families that declare it")
+    extra = tuple(fv.get("extra_layer_norms") or ())
+    if extra not in ((), ("ln_pre_mlp", "ln_post_mlp")) or int(fv.get("layer_norms") or 2) != 2 + len(extra) or (extra and not norm_chain):
+        facts.append(f"layer norms {fv.get('layer_norms')} {list(extra)} (input + post-attention, or with the pre/post MLP pair of the unfused norm chain)")
+    qpas = fv.get("query_pre_attn_scalar")
+    if qpas is not None and float(qpas) != float(C["D"]):
+        facts.append(f"query_pre_attn_scalar {qpas} (the attention kinds fold the scale head_dim^-0.5, head_dim {C['D']})")
+    caps = [float(fv[k]) if fv.get(k) else None for k in ("attn_logit_softcapping", "final_logit_softcapping")]
     if C.get("FP8_BLOCK"):
         facts.append(f"block-scaled FP8 checkpoint (G={C['FP8_BLOCK']})")
     if analytic.rotary_dim(C) != C["D"]:
@@ -156,9 +180,10 @@ def model_shape(hf: dict) -> ModelShape:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
     cls = re.match(r"\w+", ff["vllm_class"]).group(0)
     return ModelShape(arch=family, model_class=cls, H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
-                      D=int(C["D"]), I=I, EPS=float(C["EPS"]), tie=bool(C["tie_word_embeddings"]), max_pos=int(C["MAX_POS"]),
-                      rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None, qk_norm=qk_norm, E=E, TOPK=TOPK,
-                      renorm=bool(fv.get("RENORMALIZE")))
+                      D=int(C["D"]), I=I, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
+                      max_pos=int(C["MAX_POS"]), rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None,
+                      qk_norm=qk_norm, E=E, TOPK=TOPK, renorm=bool(fv.get("RENORMALIZE")), act=act, norm_chain=norm_chain,
+                      extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_cap=caps[0], final_cap=caps[1])
 
 
 def _arr(shape: tuple[int, ...], w: int) -> Type:
@@ -178,8 +203,9 @@ def _arr_shape(t: Type) -> tuple[int, ...]:
 
 def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
     """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
-    (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the one shared rotary `cos_sin_cache` [max_pos, rot]
-    bf16, each attention layer's four f32 scalar scales).  The field names are informational: the descriptor carries types only."""
+    (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the embedding's 0-d bf16 `normalizer` where the
+    family scales it, the one shared rotary `cos_sin_cache` [max_pos, rot] bf16, each attention layer's four f32 scalar scales).  The
+    field names are informational: the descriptor carries types only."""
     bf = lambda *s: _arr(s, 16)  # noqa: E731
     out: list[tuple[str, Type]] = [("model.model.embed_tokens.weight", bf(C.V, C.H))]
     for L in range(C.NL):
@@ -198,9 +224,13 @@ def weight_leaves(C: ModelShape) -> list[tuple[str, Type]]:
         else:
             out += [(p + "mlp.gate_up_proj.weight", bf(2 * C.I, C.H)), (p + "mlp.down_proj.weight", bf(C.H, C.I))]
         out += [(p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
+        if C.extra_norms:
+            out += [(p + "pre_feedforward_layernorm.weight", bf(C.H)), (p + "post_feedforward_layernorm.weight", bf(C.H))]
     out.append(("model.model.norm.weight", bf(C.H)))
     if not C.tie:
         out.append(("model.lm_head.weight", bf(C.V, C.H)))
+    if C.embed_scale:
+        out.append(("model.model.normalizer", bf(1)))
     out.append(("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache", bf(C.max_pos, C.rot)))
     for L in range(C.NL):
         out += [(f"model.model.layers.{L}.self_attn.attn.{s}", Value(32)) for s in ("_k_scale", "_v_scale", "_q_scale", "_prob_scale")]
@@ -233,8 +263,19 @@ class _Specs:
         if C.E:
             self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
-        self.silu = self.kind("silu_mul", I=C.I)
+        self.silu = self.kind(_ACTS[C.act], I=C.I)
         self.token_select = self.kind("token_select", V=C.V)
+        if C.norm_chain:
+            self.chain = {r: self.kind(r, N=C.H) for r in ("square_bf16", "square_f32", "mean_triton", "add_widened_bf16", "scale_row_bf16",
+                                                           "scale_row_f32", "mul_vec_f32", "narrow_f32_bf16")}
+            self.chain.update(plus_one=self.kind("add_scalar_bf16", N=C.H, C=1.0), eps=self.kind("add_scalar_f32", N=1, C=C.EPS),
+                              rsqrt=self.kind("rsqrt_f32", N=1))
+            self.weight_once = target.effective_weight_only_calls() == "once"
+        if C.embed_scale:
+            self.embed_scale = self.kind("scale_tensor", N=C.H)
+        if C.final_cap is not None:
+            self.cap = [self.kind("bf16_div_scalar", N=C.V, C=C.final_cap), self.kind("bf16_tanh", N=C.V),
+                        self.kind("bf16_mul_scalar", N=C.V, C=C.final_cap)]
         self._attn: dict[tuple, Any] = {}
         self._const: dict[tuple, Any] = {}
 
@@ -290,11 +331,15 @@ class _Specs:
         fn = self._attn.get(key)
         if fn is not None:
             return fn
+        cap = {} if C.attn_cap is None else {"CAP": C.attn_cap}
         if self.accepted:
-            fn = self.kind("attention", T=P, NH=C.NH, KVH=C.KVH, D=C.D)
+            fn = self.kind("attention_softcap" if cap else "attention", T=P, NH=C.NH, KVH=C.KVH, D=C.D, **cap)
         else:
+            if cap and not TG.fa2_check_inf(tp):
+                raise Unexpressible(f"vocabulary cannot express: a soft-capped attention on {tp.tensor_core_family} without FA2's "
+                                    "per-iteration Check_inf (the only registered target-keyed softcap chain)")
             g = TG.attention_geometry(tp, C.D, launch_sq, C.NH, C.KVH)
-            extra = {}
+            extra = dict(cap)
             if TG.fa3_check_inf(tp):
                 extra["MASKED_FROM"] = TG.fa3_masked_from(tp, P, C.NH, C.KVH, C.D, launch_sq, row)
             if TG.fa2_check_inf(tp):
@@ -332,16 +377,20 @@ class _Model:
         self.layers = []
         for _ in range(C.NL):
             names = ["qkv"] + (["qkv_b"] if C.qkv_bias else []) + (["q_norm", "k_norm"] if C.qk_norm == "all" else []) + ["o"] + \
-                (["q_norm", "k_norm"] if C.qk_norm == "head" else []) + (["gate_w", "w13", "w2"] if C.E else ["gate_up", "down"]) + ["ln1", "ln2"]
+                (["q_norm", "k_norm"] if C.qk_norm == "head" else []) + (["gate_w", "w13", "w2"] if C.E else ["gate_up", "down"]) + \
+                ["ln1", "ln2"] + (["pre_ff", "post_ff"] if C.extra_norms else [])
             self.layers.append({k: W[n + i] for i, k in enumerate(names)})
             n += len(names)
         self.norm = W[n]
         n += 1
         self.lm_head = self.embed if C.tie else W[n]
         n += 0 if C.tie else 1
+        self.normalizer = W[n] if C.embed_scale else None
+        n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
         self.lp_of: dict[int, int] = {}
+        self.plus_one: dict[int, Coll] = {}
 
     def call(self, fn, *args) -> Coll:
         return self.B.call(fn, *args)
@@ -349,20 +398,21 @@ class _Model:
     def forward(self, toks: list[Coll], pos0: int) -> list[Coll]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
         S, C, M = self.S, self.C, len(toks)
-        pe, pn0, pf = _ptypes(S.embedding), _ptypes(S.norm0), _ptypes(S.fused)
+        pe = _ptypes(S.embedding)
         pq, po, pgu, pd = _ptypes(S.qkv), _ptypes(S.o), _ptypes(S.gate_up), _ptypes(S.down)
         prq, prk, ps = _ptypes(S.rope_q), _ptypes(S.rope_k), _ptypes(S.silu)
         q_w, k_w, v_w = C.NH * C.D, C.KVH * C.D, C.KVH * C.D
         h = [self.call(S.embedding, Coll(pe[0], t.refs), Coll(pe[1], self.embed.refs)) for t in toks]
-        x = [self.call(S.norm0, Coll(pn0[0], h[i].refs), Coll(pn0[1], self.layers[0]["ln1"].refs)) for i in range(M)]
+        if C.embed_scale:
+            pz = _ptypes(S.embed_scale)
+            h = [self.call(S.embed_scale, Coll(pz[0], h[i].refs), Coll(pz[1], self.normalizer.refs)) for i in range(M)]
+        x, _ = self.rms(h, self.layers[0]["ln1"])
         res = [h[i].refs for i in range(M)]
         d = None
         for L in range(C.NL):
             lw = self.layers[L]
             if L > 0:
-                f = [self.call(S.fused, Coll(pf[0], d[i].refs), Coll(pf[1], res[i]), Coll(pf[2], lw["ln1"].refs)) for i in range(M)]
-                x = [Coll(pq[0], f[i][0].refs) for i in range(M)]
-                res = [f[i][1].refs for i in range(M)]
+                x, res = self.rms(d, lw["ln1"], res)
             qkv = [self.call(S.qkv, Coll(pq[0], x[i].refs), Coll(pq[1], lw["qkv"].refs)) for i in range(M)]
             if S.qkv_bias is not None:
                 pb = _ptypes(S.qkv_bias)
@@ -394,16 +444,54 @@ class _Model:
                 pa = _ptypes(fn)
                 attn.append(self.call(fn, Coll(pa[0], q[i].refs), Coll(pa[1], concat(kh[:P])), Coll(pa[2], concat(vh[:P]))))
             o = [self.call(S.o, Coll(po[0], attn[i].refs), Coll(po[1], lw["o"].refs)) for i in range(M)]
-            f = [self.call(S.fused, Coll(pf[0], o[i].refs), Coll(pf[1], res[i]), Coll(pf[2], lw["ln2"].refs)) for i in range(M)]
-            res = [f[i][1].refs for i in range(M)]
-            if C.E:
-                d = self.moe([f[i][0] for i in range(M)], lw)
+            if C.extra_norms:
+                o, _ = self.rms(o, lw["ln2"])
+                x, res = self.rms(o, lw["pre_ff"], res)
             else:
-                gu = [self.call(S.gate_up, Coll(pgu[0], f[i][0].refs), Coll(pgu[1], lw["gate_up"].refs)) for i in range(M)]
+                x, res = self.rms(o, lw["ln2"], res)
+            if C.E:
+                d = self.moe(x, lw)
+            else:
+                gu = [self.call(S.gate_up, Coll(pgu[0], x[i].refs), Coll(pgu[1], lw["gate_up"].refs)) for i in range(M)]
                 a = [self.call(S.silu, Coll(ps[0], gu[i].refs)) for i in range(M)]
                 d = [self.call(S.down, Coll(pd[0], a[i].refs), Coll(pd[1], lw["down"].refs)) for i in range(M)]
-        f = [self.call(S.fused, Coll(pf[0], d[i].refs), Coll(pf[1], res[i]), Coll(pf[2], self.norm.refs)) for i in range(M)]
-        return [f[i][0] for i in range(M)]
+            if C.extra_norms:
+                d, _ = self.rms(d, lw["post_ff"])
+        return self.rms(d, self.norm, res)[0]
+
+    def rms(self, xs: list[Coll], w: Coll, res: list | None = None) -> tuple[list[Coll], list | None]:
+        """The RMSNorm over the rows `xs` with weight `w`, after the residual add when `res` is given -> (the normed rows, the new
+        residual rows or None): the fused kernels (`RMSNormTriton` alone, `RMSNormFusedCuda` with the residual), or GemmaRMSNorm's
+        `forward_native` as `rules.vllm_bindings.norm_chain` binds it: (1 + w) (once per program under the target's
+        `weight_only_calls = once`), [the widened residual add and its narrowing,] x², the mean, + eps, rsqrt, the row scale, the weight
+        multiply and the narrowing, each over every row."""
+        S, M = self.S, len(xs)
+        if not self.C.norm_chain:
+            if res is None:
+                p = _ptypes(S.norm0)
+                return [self.call(S.norm0, Coll(p[0], x.refs), Coll(p[1], w.refs)) for x in xs], None
+            p = _ptypes(S.fused)
+            f = [self.call(S.fused, Coll(p[0], xs[i].refs), Coll(p[1], res[i]), Coll(p[2], w.refs)) for i in range(M)]
+            return [f[i][0] for i in range(M)], [f[i][1].refs for i in range(M)]
+        K = S.chain
+        call = lambda fn, *a: self.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), a)))  # noqa: E731
+        w1 = self.plus_one.get(id(w))
+        if w1 is None:
+            w1 = call(K["plus_one"], w.refs)
+            if S.weight_once:
+                self.plus_one[id(w)] = w1
+        s, new_res = [x.refs for x in xs], None
+        if res is not None:
+            s = [call(K["add_widened_bf16"], s[i], res[i]).refs for i in range(M)]
+            new_res = [call(K["narrow_f32_bf16"], s[i]).refs for i in range(M)]
+        sq, sc = (K["square_bf16"], K["scale_row_bf16"]) if res is None else (K["square_f32"], K["scale_row_f32"])
+        v = [call(sq, s[i]) for i in range(M)]
+        m = [call(K["mean_triton"], v[i].refs) for i in range(M)]
+        e = [call(K["eps"], m[i].refs) for i in range(M)]
+        r = [call(K["rsqrt"], e[i].refs) for i in range(M)]
+        y = [call(sc, s[i], r[i].refs) for i in range(M)]
+        y = [call(K["mul_vec_f32"], y[i].refs, w1.refs) for i in range(M)]
+        return [call(K["narrow_f32_bf16"], y[i].refs) for i in range(M)], new_res
 
     def moe(self, x: list[Coll], lw: dict) -> list[Coll]:
         """The fused-MoE block over the rows `x` as `rules.vllm_moe` binds its launches: each row's router logits and top-k, then
@@ -434,6 +522,8 @@ class _Model:
         S = self.S
         pl = _ptypes(S.logits)
         lg = self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))
+        for fn in S.cap if self.C.final_cap is not None else ():
+            lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
         if policy is None:
             return self.call(S.token_select, Coll(_ptypes(S.token_select)[0], lg.refs))
         fn = S.stochastic_select(policy.S)
