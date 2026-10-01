@@ -73,7 +73,8 @@ def commit_verdict(row: Any, rck: int, wall: int) -> bool:
 
 
 def discard_bundles(row: Any) -> list[str]:
-    """Deletes the row's replay bundles (sealed or partial) once nothing will replay them: a Commit that did not end PENDING, a decided replay."""
+    """Deletes the row's replay bundles (sealed or partial) once nothing will replay them: a Commit that did not end PENDING, a decided replay
+    that left its slim keep (`cpu_replay.keep`)."""
     gone = sorted(glob.glob(f"{row.d}/commit/replay_bundle_p*"))
     for b in gone:
         if os.path.islink(b):
@@ -105,8 +106,11 @@ def replay(row: Any) -> None:
     ok = "PASS" if rc == 0 else "FAIL"
     row.verdict("replay", ok, f"rc={rc} wall={wall}s C2 replay on CPU from {bundle or 'no bundle'}" + (f": {why}" if why else ""))
     row.tl("stage.replay", "end", ("ok", ok), ("wall_s", wall))
-    if rc in (0, 3):
+    kept = f"{row.d}/commit/replay_slim_p{bundles[0]['pair']}/slim.json" if bundle else ""
+    if rc in (0, 3) and os.path.isfile(kept):
         discard_bundles(row)
+    elif rc in (0, 3):
+        row.log(f"decided replay left no slim keep ({kept or 'no bundle'}): the replay bundle is kept")
     if ok != "PASS":
         row.log("REPLAY FAIL -> stop")
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "replay"))
