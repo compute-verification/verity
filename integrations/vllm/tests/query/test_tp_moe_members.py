@@ -86,13 +86,14 @@ STORED = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-ea
           "art:8f0d249acddbaa2f8c019b6ec5f52d78ff15e62fa157a98154f55feea7f1f465",
           "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
           "art:82931d609f9f8df3df847190a4e63de2302dc1c2b12c3d722a227e79dc527d37"}
-#: the sha256 of the manifest.json each row's `build-global` writes: main 33828711's, built in one process (2026-09-29).  The parallel
-#: build (`--jobs`: the word check's cuts prefetched, the components built in forked processes) writes the same bytes; a change to
-#: what the manifest says re-pins them (the failure prints the new digest)
+#: the sha256 of the manifest.json each row's `build-global` writes: main 33828711's, built in one process (2026-09-29), with
+#: the query's named residuals (`query.required.NAMED_RESIDUALS`, which the manifest records) naming pouw:ncp-v2's linears too.
+#: The parallel build (`--jobs`: the word check's cuts prefetched, the components built in forked processes) writes the same
+#: bytes; a change to what the manifest says re-pins them (the failure prints the new digest)
 MANIFEST_SHA256 = {"qwen3-30b-a3b__bf16__l40s__tp2__b2__i1024__o128__mixed__greedy__bi-eager":
-                   "1fbe75e6852597533a12ad2f04283c2cfcccf56b97b8eb6317f8ae906d5f3ae2",
+                   "e6c92ee61ae04a611038c5548258f6a4a4a81c69e5110816ac9c41a93bf0382e",
                    "olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager":
-                   "3322490bd048abd7526321ab34ce843ec610ed1b634790119865da4a3c803848"}
+                   "cb3db31181d4ac3e4af181f6e179c6f04315677db5e193cac1635ec652bffd4f"}
 
 
 @pytest.mark.parametrize("row", sorted(STORED))

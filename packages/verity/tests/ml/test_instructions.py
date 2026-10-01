@@ -11,6 +11,8 @@ from verity.ml.tc.models import (
     AMPERE_BF16_M16N8K16,
     BLACKWELL_SM100_MXF4,
     BLACKWELL_SM100_NVF4,
+    BLACKWELL_SM120_E4M3_M16N8K32,
+    BLACKWELL_SM120_E5M2_M16N8K32,
     BLACKWELL_SM120_NVF4,
     BLACKWELL_SM120_MXF4,
     HOPPER_E4M3_K32,
@@ -33,6 +35,8 @@ EXPECTED_IDS = {
     "sm90.wgmma.m64n8k32.e5m2",
     "sm90.mma.m16n8k32.e4m3",
     "sm120.mma.m16n8k16.bf16",
+    "sm120.mma.m16n8k32.e4m3",
+    "sm120.mma.m16n8k32.e5m2",
     "sm120.mma.m16n8k64.e2m1.nvf4",
     "sm120.mma.m16n8k64.e2m1.mxf4",
     "sm100.tcgen05.mma.e2m1.nvf4",
@@ -61,6 +65,8 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm90.wgmma.m64n8k32.e4m3": HOPPER_E4M3_K32,
         "sm90.wgmma.m64n8k32.e5m2": HOPPER_E5M2_K32,             # lane tc-probe-fp8 2026-09-22: 25.5M, 0 mismatches
         "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane fp4-5090: the 5090 keeps Hopper's BF16 datapath
+        "sm120.mma.m16n8k32.e4m3": BLACKWELL_SM120_E4M3_M16N8K32,  # lane vllm-sm120-tc-gemm 2026-09-30: RTX PRO 6000, 25.0M, 0 mismatches
+        "sm120.mma.m16n8k32.e5m2": BLACKWELL_SM120_E5M2_M16N8K32,  # the same lane's sweeps on two PRO 6000 dies: 25.0M + 6.4M, 0 mismatches
         "sm100.tcgen05.mma.e2m1.nvf4": BLACKWELL_SM100_NVF4,       # lane tcgen05 2026-09-23: B200, 16.5M, 0 mismatches, any FP32 acc
         "sm100.tcgen05.mma.e2m1.mxf4": BLACKWELL_SM100_MXF4,       # lane tcgen05 2026-09-23: B200, 12.9M, 0 mismatches (both kinds)
         "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,      # lane fp4-proof 2026-09-22: 5090, 17.3M (fp4-re + fresh seed), 0 mismatches
@@ -68,9 +74,12 @@ def test_pinned_instructions_and_their_models() -> None:
     }
     # registry <= computed level (lane pin-bf16): the sm120 FP4 pair flipped to "pinned" only once tools/tc_probe/trust.py
     # computed PINNED (P2 closed by fp4-proof's fresh-seed sweeps), and each points at its published dossier
-    for iid in ("sm120.mma.m16n8k64.e2m1.nvf4", "sm120.mma.m16n8k64.e2m1.mxf4"):
+    for iid in ("sm120.mma.m16n8k64.e2m1.nvf4", "sm120.mma.m16n8k64.e2m1.mxf4", "sm120.mma.m16n8k32.e4m3", "sm120.mma.m16n8k32.e5m2"):
         ins = INSTRUCTIONS[iid]
         assert ins.status == "pinned" and ins.dossier is not None and ins.dossier.startswith("art:")
+    # measured on the PRO 6000 only: its entry names that anchor, as the e4m3 target does
+    e5 = INSTRUCTIONS["sm120.mma.m16n8k32.e5m2"]
+    assert e5.model is BLACKWELL_SM120_E5M2_M16N8K32 and e5.anchor_device == "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 
 
 def test_statuses_are_consistent_with_models_and_evidence() -> None:

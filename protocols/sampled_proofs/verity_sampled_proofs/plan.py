@@ -1,7 +1,7 @@
 """Verification plans and obligations over IR programs (IR §1, §D, §E), under the two-stage law.
 
 Moved from ``verity.verification.plan``, now ``verity.proofs`` (decision 41).  A plan selects and samples gates of a
-Program for checking; it is verification policy, not computation (README "Verification is separate from computation semantics").  Its
+Program for checking; it is verification policy, not computation (README "Protocols").  Its
 per-class rates are now `Stage`s of the two-stage law (decision 43): a gate-level plan makes every gate its own replay
 unit, which is the law's Bernoulli case, and `units` hands those replay units to `law.select_replay_units`.
 

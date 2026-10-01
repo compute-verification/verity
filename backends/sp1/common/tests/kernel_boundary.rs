@@ -215,8 +215,7 @@ fn the_object_digest_is_carried_through_exactly_or_refused() {
     }
 }
 
-/// DEDICATED REGRESSION for the one behavior change of the kernel refactor
-/// (deliverable d, documented in docs/vllm-poc/verification-kernel.md):
+/// DEDICATED REGRESSION for the one behavior change of the kernel refactor:
 /// before, the `attribution` build's copy of `check_relations` skipped
 /// `check_programs`, so a statement carrying an *unused* malformed program
 /// was accepted by `attribution` builds and rejected by every sound build

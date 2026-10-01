@@ -1,7 +1,7 @@
 """The driver under `verity-vllm row`: one row's evidence dir, its logs and telemetry, and the stage processes.
 
 The tree that runs is the tree this package was imported from (``config.ROOT``), never the environment: a caller whose
-``VERITOR_REPO`` names another tree is refused by name.  Stages are ``verity-vllm`` subcommands run as child processes
+``VERITY_TREE`` names another tree is refused by name.  Stages are ``verity-vllm`` subcommands run as child processes
 under the configured interpreter, with the tree as cwd and the environment the CLI was started with plus the pins below.
 Evidence: ``<sweep-dir>/<row>/`` -- ``stages.txt`` (one verdict line per stage), ``row.log``, ``timeline.jsonl``.
 
@@ -75,8 +75,8 @@ class Row:
     # ------------------------------------------------------------------------------------------------ setup
     def setup(self, pins: dict[str, str]) -> None:
         """Refuse a mixed tree, find the core and the runner beside it, and fix the stages' environment."""
-        if self.env.veritor_repo and os.path.realpath(self.env.veritor_repo) != self.tree:
-            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: {self.proc} at {self.tree} but $VERITOR_REPO={self.env.veritor_repo} names another tree",
+        if self.env.verity_tree and os.path.realpath(self.env.verity_tree) != self.tree:
+            print(f"PRECHECK_FAIL_SOURCE_IDENTITY: {self.proc} at {self.tree} but $VERITY_TREE={self.env.verity_tree} names another tree",
                   file=sys.stderr)
             raise Stop(3)
         core, research = Path(self.tree, "../../packages/verity/src"), Path(self.tree, "../../tools/research/src")
@@ -88,7 +88,7 @@ class Row:
             raise Stop(3)
         core_s, research_s = os.path.realpath(core), os.path.realpath(research)
         env = dict(self.env.environ)
-        env.update({"VERITOR_REPO": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
+        env.update({"VERITY_TREE": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
                     "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)

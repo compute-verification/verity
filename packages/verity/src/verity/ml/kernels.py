@@ -41,6 +41,7 @@ __all__ = [
     "gemm_kernel",
     "group_sum_total_batch",
     "sample_tc",
+    "sample_tc_e5m2",
 ]
 
 F32 = Value(32)
@@ -80,6 +81,63 @@ def f2fp_bf16_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
     return _f32_to_bf16(a, 0x7FFF), None
 
 
+def nvf4_step_total_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: np.ndarray, b_codes: np.ndarray,
+                          a_scales: np.ndarray, b_scales: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`prims.BlackwellNvf4OmmaDot64` on every encoding: a NaN-coded scale byte -> 0x7FFFFFFF; else a NaN accumulator ->
+    0x7FFFFFFF and +-inf -> itself; else `block_scaled_batch` with bit 7 of every scale byte cleared."""
+    acc = np.asarray(acc, dtype=np.uint32)
+    sa, sb = np.asarray(a_scales, dtype=np.uint8), np.asarray(b_scales, dtype=np.uint8)
+    nan_scale = ((sa & 0x7F) == 0x7F).any(axis=1) | ((sb & 0x7F) == 0x7F).any(axis=1)
+    special = (acc & 0x7F800000) == 0x7F800000
+    skip = nan_scale | special
+    words, declined = block_scaled_batch(model, np.where(skip, np.uint32(0), acc), a_codes, b_codes,
+                                         np.where(skip[:, None], np.uint8(0), sa & 0x7F), np.where(skip[:, None], np.uint8(0), sb & 0x7F))
+    words = np.where(special, np.where((acc & 0x7FFFFF) != 0, np.uint32(0x7FFFFFFF), acc), np.asarray(words, dtype=np.uint32))
+    return np.where(nan_scale, np.uint32(0x7FFFFFFF), words), np.asarray(declined, dtype=bool) & ~skip
+
+
+def mxf4_step_total_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: np.ndarray, b_codes: np.ndarray,
+                          a_scales: np.ndarray, b_scales: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`prims.BlackwellMxf4OmmaDot64` on every encoding: a 0xFF scale byte -> 0x7FFFFFFF; else a NaN accumulator ->
+    0x7FFFFFFF and +-inf -> itself; else `block_scaled_batch` with a sum leaving binary32 -> +-inf of its sign."""
+    acc = np.asarray(acc, dtype=np.uint32)
+    sa, sb = np.asarray(a_scales, dtype=np.uint8), np.asarray(b_scales, dtype=np.uint8)
+    nan_scale = (sa == 0xFF).any(axis=1) | (sb == 0xFF).any(axis=1)
+    special = (acc & 0x7F800000) == 0x7F800000
+    skip = nan_scale | special
+    words, declined = block_scaled_batch(model, np.where(skip, np.uint32(0), acc), a_codes, b_codes,
+                                         np.where(skip[:, None], np.uint8(0), sa), np.where(skip[:, None], np.uint8(0), sb),
+                                         overflow_inf=True)
+    words = np.where(special, np.where((acc & 0x7FFFFF) != 0, np.uint32(0x7FFFFFFF), acc), np.asarray(words, dtype=np.uint32))
+    return np.where(nan_scale, np.uint32(0x7FFFFFFF), words), np.asarray(declined, dtype=bool) & ~skip
+
+
+def f32_to_e2m1_sat_batch(a: np.ndarray, nan: int) -> tuple[np.ndarray, None]:
+    """`cast.f32_to_e2m1_sat_word` on every word."""
+    from .tc.cast import E2M1_UP
+
+    u = np.asarray(a, dtype=np.uint32)
+    sign = ((u >> 31) << 3).astype(np.uint8)
+    mag = u & np.uint32(0x7FFFFFFF)
+    code = np.zeros(u.shape, dtype=np.uint8)
+    for bound, up in E2M1_UP:
+        code += ((mag > bound) | ((mag == bound) if up else False)).astype(np.uint8)
+    return np.where(mag > 0x7F800000, np.uint8(nan), code | sign), None
+
+
+_E4M3_TO_F32 = None
+
+
+def e4m3_to_f32_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
+    """`cast.e4m3_to_f32_word` on every byte (a 256-entry table of it)."""
+    global _E4M3_TO_F32
+    if _E4M3_TO_F32 is None:
+        from .tc.cast import e4m3_to_f32_word
+
+        _E4M3_TO_F32 = np.array([e4m3_to_f32_word(b) for b in range(256)], dtype=np.uint32)
+    return _E4M3_TO_F32[np.asarray(a, dtype=np.int64) & 0xFF], None
+
+
 def f32_to_bf16_rn_batch(a: np.ndarray) -> tuple[np.ndarray, None]:
     """`cast.f32_to_bf16_word`: RNE, every NaN -> 0x7FC0."""
     return _f32_to_bf16(a, 0x7FC0), None
@@ -105,7 +163,8 @@ def _operands(fmt, w: np.ndarray):
 
 def group_sum_total_batch(model: GroupSum, acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, None]:
     """`model`'s step on every encoding: acc ``(N,)`` FP32 words, a/b ``(N, k)`` operand words -> ``(N,)`` FP32 words.
-    Equal to `total.tc_dot_total` (BF16) / `total_fp8.tc_dot_total_e4m3` (E4M3) on every input; declines nothing."""
+    Equal to `total.tc_dot_total` (BF16) / `total_fp8.tc_dot_total_e4m3` (E4M3) / `total_fp8.tc_dot_total_e5m2` (E5M2) on every
+    input; declines nothing."""
     fmt = FORMATS[model.dtype]
     na, ia, za, sa, ga, ea = _operands(fmt, a)
     nb, ib, zb, sb, gb, eb = _operands(fmt, b)
@@ -174,8 +233,8 @@ def _scale_batch(scale: str, code: np.ndarray):
     c = code.astype(_I64)
     if scale == "ue8m0":
         return np.full(c.shape, 8, _I64), c - 130, c == 0xFF
-    e, m = (c >> 3) & 0xF, c & 7
-    invalid = ((c & 0x80) != 0) | ((e == 15) & (m == 7))
+    e, m = (c >> 3) & 0xF, c & 7                    # the low 7 bits: sm_120 ignores bit 7 (`models._scale_dyadic`)
+    invalid = (e == 15) & (m == 7)
     return np.where(e == 0, m, 8 + m), np.where(e == 0, -9, e - 10), invalid
 
 
@@ -186,9 +245,10 @@ def _trunc_rz(mant: np.ndarray, exp: np.ndarray, lsb: np.ndarray) -> np.ndarray:
 
 
 def block_scaled_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: np.ndarray, b_codes: np.ndarray,
-                       a_scales: np.ndarray, b_scales: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+                       a_scales: np.ndarray, b_scales: np.ndarray, *, overflow_inf: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """`model.step_scaled` on ``(N,)`` FP32 words, ``(N, k)`` E2M1 codes and ``(N, k / block)`` scale bytes per operand.
-    Returns ``(words, declined)``; declined are the instances on which the scalar model raises."""
+    Returns ``(words, declined)``; declined are the instances on which the scalar model raises, except that with
+    ``overflow_inf`` a sum leaving binary32 is ±inf of its sign."""
     n, k, g = acc.shape[0], model.k, model.group
     groups = k // g
     prod = _E2M1_HALVES[a_codes.astype(_I64)] * _E2M1_HALVES[b_codes.astype(_I64)]
@@ -227,13 +287,17 @@ def block_scaled_batch(model: BlockScaledAlignAdd, acc: np.ndarray, a_codes: np.
     q = np.where(shift > 0, t_mag >> np.clip(shift, 0, 63), t_mag << np.clip(-shift, 0, 62))
     e = _bitlen(q) - 1 + grid
     live = (anchor != _NONE) & (total != 0)
-    declined |= live & (q != 0) & (e > 127)
+    over = live & (q != 0) & (e > 127)
     bits = np.where(e >= -126, ((e + 127) << 23) | (q & 0x7FFFFF), q)
     word = np.where(t_neg, bits | (1 << 31), bits)
     if model.underflow_zero == "signed":
         word = np.where(q == 0, np.where(t_neg, 1 << 31, 0), word)
     else:
         word = np.where(q == 0, 0, word)
+    if overflow_inf:
+        word = np.where(over, np.where(t_neg, int(_SIGN | _INF_WORD), int(_INF_WORD)), word)
+    else:
+        declined |= over
     return np.where(live & ~declined, word, 0).astype(np.uint32), declined
 
 
@@ -275,6 +339,23 @@ def gemm_coordinate_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
         if res is NotImplemented:
             return res
         return f2fp_bf16_batch(res[0])[0], res[1]
+
+    return kernel
+
+
+def block_scaled_coordinate_kernel(steps: Mapping[Any, tuple[BlockScaledAlignAdd, Callable[..., Any]]]) -> Callable[..., Any]:
+    """`GemmCoordinateNvf4_v1` / `GemmCoordinateMxf4_v1{K, DOT}` for the ``DOT`` steps in ``steps`` (by identity; each with its
+    model and total step kernel): K/64 steps from `+0`, then `cvt.rn.bf16.f32`."""
+
+    def kernel(x: np.ndarray, w: np.ndarray, sx: np.ndarray, sw: np.ndarray, *, K: int, DOT: Any):
+        entry = steps.get(DOT)
+        if entry is None:
+            return NotImplemented
+        model, fire = entry
+        ns = model.scales_per_step
+        acc, declined = chain_batch(lambda acc, *ops: fire(model, acc, *ops), model.k, K // model.k, x, w, sx, sw,
+                                    per_step=(model.k, model.k, ns, ns))
+        return f2fp_bf16_batch(acc)[0], declined
 
     return kernel
 
@@ -333,8 +414,12 @@ def _acc_words(rng: np.random.Generator, n: int, regime: np.ndarray) -> np.ndarr
     return out.astype(np.uint32)
 
 
-def sample_tc(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
-    """Instances for the tensor-core kernels, by parameter width: 32 an accumulator, 16 BF16, 8 E4M3 operands.  A quarter
+#: The special operand words `sample_tc` draws, per 8-bit format: zeros, NaNs, the largest finite, the least subnormal (and E5M2's infinities).
+_FP8_SPECIALS = {"e4m3": (0x00, 0x80, 0x7F, 0xFF, 0x7E, 0x01), "e5m2": (0x00, 0x80, 0x7C, 0xFC, 0x7D, 0xFF, 0x7B, 0x01)}
+
+
+def sample_tc(rng: np.random.Generator, n: int, params, *, fp8: str = "e4m3", **statics: Any) -> list[np.ndarray]:
+    """Instances for the tensor-core kernels, by parameter width: 32 an accumulator, 16 BF16, 8 `fp8` operands.  A quarter
     of the instances carry special operand words; an eighth are exact cancellations (the second half of ``a`` negates the
     first, ``b`` repeats)."""
     p_special = np.where(rng.random(n) < 0.25, 0.03, 0.0)
@@ -345,8 +430,8 @@ def sample_tc(rng: np.random.Generator, n: int, params, **statics: Any) -> list[
             out.append(_acc_words(rng, n, regime))
             continue
         w = pt.elem.w
-        fmt = FORMATS["bf16" if w == 16 else "e4m3"]
-        specials = (0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0xFFFF, 0x0001) if w == 16 else (0x00, 0x80, 0x7F, 0xFF, 0x7E, 0x01)
+        fmt = FORMATS["bf16" if w == 16 else fp8]
+        specials = (0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F81, 0xFFFF, 0x0001) if w == 16 else _FP8_SPECIALS[fp8]
         out.append(_words(rng, fmt, (n, pt.n), specials, p_special, regime).astype(np.uint16 if w == 16 else np.uint8))
     if len(out) >= 2 and out[-1].ndim == 2 and out[-1].shape[1] % 2 == 0:
         a, b = out[-2].copy(), out[-1].copy()
@@ -357,6 +442,11 @@ def sample_tc(rng: np.random.Generator, n: int, params, **statics: Any) -> list[
         b[c, h:] = b[c, :h]
         out[-2], out[-1] = a, b
     return out
+
+
+def sample_tc_e5m2(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
+    """`sample_tc` with E5M2 operands."""
+    return sample_tc(rng, n, params, fp8="e5m2", **statics)
 
 
 def _sample_block_scaled(model: BlockScaledAlignAdd):

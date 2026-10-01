@@ -80,6 +80,8 @@ import FlockSoundness.ExecTyped
 import FlockSoundness.ExecTemplate
 import FlockSoundness.ExecTemplatePlace
 import FlockSoundness.ExecTemplateSetup
+import FlockSoundness.ExecFlatClass
+import FlockSoundness.ExecFlatCopies
 import FlockSoundness.Types.Flat
 import FlockSoundness.Rope.Lowering
 import FlockSoundness.Types.Dag
@@ -131,3 +133,4 @@ import FlockSoundness.ZK.CoinBinding
 import FlockSoundness.ZK.Complete
 import FlockSoundness.ZK.Hiding
 import FlockSoundness.ZK.RealLeaves
+import FlockSoundness.ZK.Session

@@ -303,7 +303,7 @@ HAWKEYE_AMPERE_GROUPSUM_E4M3_V0 = GroupSum(
     groups=(8, 8),
     width=25,
     zero_exponent=-132,
-    validated="synthetic; see docs/hardware-semantics.md for the Ada comparison",
+    validated="synthetic; the measured Ada E4M3 model is ADA_E4M3_M16N8K32",
 )
 
 # Ada Lovelace (RTX 4090, sm_89) as measured in this repository with one
@@ -454,9 +454,11 @@ def _scale_dyadic(scale: str, code: int) -> tuple[int, int]:
             raise InvalidArtifact("UE8M0 NaN scale")
         return 8, code - 130                        # 2^(code-127) written with a 4-bit mantissa like UE4M3's
     if scale == "ue4m3":
-        if code & 0x80:
-            raise InvalidArtifact("UE4M3 scale with the padding bit set (PTX ISA: invalid)")
-        e, m = (code >> 3) & 0xF, code & 7
+        # sm_120 reads a UE4M3 scale from its low 7 bits and ignores bit 7 (all 256 bytes, r20260930-093120-b2f2; the
+        # 17 bit-7 vectors of the Lean scale-decode review replayed on the RTX PRO 6000, r20260930-161935-83a8), so
+        # 0x80 is a zero scale like 0x00 and 0xFF is NaN like 0x7F
+        code &= 0x7F
+        e, m = code >> 3, code & 7
         if e == 15 and m == 7:
             raise InvalidArtifact("UE4M3 NaN scale")
         return (m, -9) if e == 0 else (8 + m, e - 10)
@@ -628,17 +630,28 @@ class BlockScaledAlignAdd:
 
         return self._transducer(c_word, self.group_terms(a_codes, b_codes, a_scales, b_scales))
 
+    def align_add(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int:
+        """One firing on its `group_terms`: ``step_scaled(c, a, b, sa, sb) == align_add(c, group_terms(a, b, sa, sb))``."""
+
+        return self._transducer(c_word, terms)
+
+    def grid(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int | None:
+        """The exponent ``lsb`` of one firing's common grid ``2^lsb`` (the class docstring), or None when nothing
+        participates and the accumulator is zero (the firing is then ``+0``)."""
+
+        anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
+        if _fp32_dyadic(c_word)[0]:
+            e_field = (c_word >> 23) & 0xFF                 # the exponent field, not the true msb: subnormals anchor at -126
+            anchors.append((e_field if e_field else 1) - 127 - (self.acc_window - 1))
+        return max(*anchors, self.grid_floor) if anchors else None
+
     def _transducer(self, c_word: int, terms: Sequence[tuple[int, int, bool]]) -> int:
         """The five-way align-add on the common grid and the RZ normalisation."""
 
         acc_m, acc_e = _fp32_dyadic(c_word)
-        anchors = [unit - self.frac_bits for _, unit, participates in terms if participates]
-        if acc_m:
-            e_field = (c_word >> 23) & 0xFF                 # the exponent field, not the true msb: subnormals anchor at -126
-            anchors.append((e_field if e_field else 1) - 127 - (self.acc_window - 1))
-        if not anchors:
+        lsb = self.grid(c_word, terms)
+        if lsb is None:
             return 0                                        # nothing participates: +0 (a -0 accumulator included)
-        lsb = max(*anchors, self.grid_floor)
         total = sum(_trunc_rz_to_grid(m, unit, lsb) for m, unit, _ in terms if m)
         if acc_m:
             total += _trunc_rz_to_grid(acc_m, acc_e, lsb)
