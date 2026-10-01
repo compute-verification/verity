@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One B=1 manifest build (`manifest build`, as the Build's required-manifest step runs it) of a kept request Program dir (PROGRAM: its
-# instances.json.gz, result.json, artifact.json, descriptor.json.gz), reading the unit rules from RULES: its wall, the peak RSS of its
+# instances.json.gz, result.json, artifact.json, descriptor.json.gz), reading the unit rules from RULES: its wall, its processes' CPU time, the peak RSS of its
 # largest process, the manifest's digest and the sha256 of its file, and its log, to $RESEARCH_RUN_DIR/out/. Measurement only.
 set -euo pipefail
 ROW=$1 PROGRAM=$2 RULES=$3
@@ -28,6 +28,7 @@ h = hashlib.sha256()
 with open(out, "rb") as f:
     while b := f.read(8 << 20):
         h.update(b)
-print(json.dumps({"wall": round(wall, 1), "peak_rss_gb": round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 2**20, 2),
+ru = resource.getrusage(resource.RUSAGE_CHILDREN)
+print(json.dumps({"wall": round(wall, 1), "cpu_s": round(ru.ru_utime + ru.ru_stime, 1), "peak_rss_gb": round(ru.ru_maxrss / 2**20, 2),
                   "manifest_digest": m.get("manifest_digest"), "program_digest": m.get("program_digest"), "manifest_sha256": h.hexdigest()}, indent=1))
 EOF
