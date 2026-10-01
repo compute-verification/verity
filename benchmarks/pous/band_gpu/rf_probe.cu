@@ -1,0 +1,123 @@
+// A standalone sm_120 probe (no torch): does the integer pipe's issue rate depend on how many distinct registers an
+// instruction reads?  keccak_probe.cu found LOP3 and SHF at 3.45 warp instructions per SM clock with two loop-invariant
+// sources, while the band chain's Keccak-f, whose LOP3s read three registers, issues at about 0.49 per scheduler clock and
+// gains 2 % from a second warp per scheduler.
+//
+//   nvcc -O3 -arch=sm_120 -o rf_probe rf_probe.cu && ./rf_probe > rf.json
+//
+// Each thread runs 16 chains x[0..15] of one pattern, unrolled; y, z are loop-invariant.  x[k+a] is x[(k+a) % 16], written
+// 16 - a instructions before it is read, and no two consecutive instructions read a common register unless the pattern says
+// so.  Reported as warp instructions per SM clock (clock64 inside the kernel) at 1, 2, 4 and 12 warps per scheduler.
+#include <cuda_runtime.h>
+
+#include <cstdint>
+#include <cstdio>
+#include <vector>
+
+#define CK(x)                                                                                    \
+  do {                                                                                           \
+    cudaError_t e_ = (x);                                                                        \
+    if (e_ != cudaSuccess) {                                                                     \
+      fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, #x, cudaGetErrorString(e_));        \
+      exit(2);                                                                                   \
+    }                                                                                            \
+  } while (0)
+
+__device__ __forceinline__ uint32_t lop3(uint32_t a, uint32_t b, uint32_t c) {
+  uint32_t d;
+  asm volatile("lop3.b32 %0, %1, %2, %3, 0x96;" : "=r"(d) : "r"(a), "r"(b), "r"(c));
+  return d;
+}
+
+__device__ __forceinline__ uint32_t shf(uint32_t a, uint32_t b) {
+  uint32_t d;
+  asm volatile("shf.l.wrap.b32 %0, %1, %2, 7;" : "=r"(d) : "r"(a), "r"(b));
+  return d;
+}
+
+constexpr int NPAT = 8;
+const char* PATTERNS[NPAT] = {
+    "lop3_1: x[k] ^ y ^ z (one changing source)",
+    "lop3_2: x[k] ^ x[k+3] ^ z (two changing)",
+    "lop3_3: x[k] ^ x[k+3] ^ x[k+6] (three changing, none shared with the previous instruction)",
+    "lop3_3g: x[k] ^ u ^ v, u and v two other chains fixed for 4 consecutive instructions (theta's column update)",
+    "shf_1: shf(x[k], x[k]) (one source)",
+    "shf_2: shf(x[k+3], x[k]) (two)",
+    "lop3_3+shf_1: alternating",
+    "lop3_3x2+shf_1: two lop3_3 per shf_1 (Keccak's 122 LOP3 : 52 SHF is 2.3 : 1)",
+};
+
+constexpr int UNROLL = 8;
+template <int P>
+__global__ void rf_kernel(uint32_t* out, int iters, long long* cycles) {
+  uint32_t x[16];
+  const uint32_t y = threadIdx.x * 0x9E3779B9u, z = blockIdx.x * 0x85EBCA6Bu;
+#pragma unroll
+  for (int k = 0; k < 16; ++k) x[k] = threadIdx.x + k * 0x1234567u;
+  __syncthreads();
+  const long long c0 = clock64();
+  for (int it = 0; it < iters; ++it) {
+#pragma unroll
+    for (int u = 0; u < UNROLL; ++u) {
+#pragma unroll
+      for (int k = 0; k < 16; ++k) {
+        const int g = k >> 2;
+        if (P == 0) x[k] = lop3(x[k], y, z);
+        if (P == 1) x[k] = lop3(x[k], x[(k + 3) & 15], z);
+        if (P == 2) x[k] = lop3(x[k], x[(k + 3) & 15], x[(k + 6) & 15]);
+        if (P == 3) x[k] = lop3(x[k], x[((g + 1) & 3) * 4], x[((g + 2) & 3) * 4 + 1]);
+        if (P == 4) x[k] = shf(x[k], x[k]);
+        if (P == 5) x[k] = shf(x[(k + 3) & 15], x[k]);
+        if (P == 6) x[k] = (k & 1) ? shf(x[k], x[k]) : lop3(x[k], x[(k + 3) & 15], x[(k + 6) & 15]);
+        if (P == 7) x[k] = (k % 3 == 2) ? shf(x[k], x[k]) : lop3(x[k], x[(k + 3) & 15], x[(k + 6) & 15]);
+      }
+    }
+  }
+  __syncthreads();
+  const long long c1 = clock64();
+  uint32_t acc = 0;
+#pragma unroll
+  for (int k = 0; k < 16; ++k) acc ^= x[k];
+  out[blockIdx.x * blockDim.x + threadIdx.x] = acc;
+  if (threadIdx.x == 0) cycles[blockIdx.x] = c1 - c0;
+}
+
+template <int P>
+static double rate(int sms, int wps, int iters, uint32_t* dout, long long* dcyc) {
+  const int threads = 128, blocks = sms * wps;  // four warps a block, one per scheduler
+  rf_kernel<P><<<blocks, threads>>>(dout, 4, dcyc);
+  CK(cudaDeviceSynchronize());
+  rf_kernel<P><<<blocks, threads>>>(dout, iters, dcyc);
+  CK(cudaDeviceSynchronize());
+  std::vector<long long> cyc(blocks);
+  CK(cudaMemcpy(cyc.data(), dcyc, blocks * sizeof(long long), cudaMemcpyDeviceToHost));
+  double mean = 0;
+  for (auto c : cyc) mean += (double)c;
+  mean /= blocks;
+  return (double)iters * UNROLL * 16 * 4 * wps / mean;  // warp instructions per SM clock
+}
+
+typedef double (*Rate)(int, int, int, uint32_t*, long long*);
+static Rate RATES[NPAT] = {rate<0>, rate<1>, rate<2>, rate<3>, rate<4>, rate<5>, rate<6>, rate<7>};
+
+int main(int argc, char** argv) {
+  const int iters = argc > 1 ? atoi(argv[1]) : 4000;
+  cudaDeviceProp p;
+  CK(cudaGetDeviceProperties(&p, 0));
+  const int sms = p.multiProcessorCount;
+  const int wpss[] = {1, 2, 4, 12};
+  uint32_t* dout;
+  long long* dcyc;
+  CK(cudaMalloc(&dout, (size_t)sms * 12 * 128 * sizeof(uint32_t)));
+  CK(cudaMalloc(&dcyc, (size_t)sms * 12 * sizeof(long long)));
+  printf("{\"device\": \"%s\", \"sms\": %d, \"cc\": \"%d.%d\", \"iters\": %d, \"unit\": \"warp instructions per SM clock\", "
+         "\"warps_per_scheduler\": [1, 2, 4, 12], \"patterns\": [",
+         p.name, sms, p.major, p.minor, iters);
+  for (int i = 0; i < NPAT; ++i) {
+    printf("%s\n {\"pattern\": \"%s\", \"rate\": [", i ? "," : "", PATTERNS[i]);
+    for (int w = 0; w < 4; ++w) printf("%s%.4f", w ? ", " : "", RATES[i](sms, wpss[w], iters, dout, dcyc));
+    printf("]}");
+  }
+  printf("\n]}\n");
+  return 0;
+}
