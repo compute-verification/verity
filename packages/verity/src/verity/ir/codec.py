@@ -31,7 +31,7 @@ from typing import Callable, Any
 
 from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
                    SpecializedDefinition, bind)
-from .program import input_id, input_prim
+from .program import input_id, input_prim, is_input
 from .refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, refs_from_json
 from .types import type_from_json
 
@@ -720,6 +720,8 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         for nd in b["nodes"]:
             k = len(nodes)
             fn = get(callee_id(nd["fn"]))
+            if fid != desc["root"] and is_input(fn):
+                raise ValueError(f"definition {fid!r} node {k}: an input node ({fn.id}) appears only in the root's body")
             _check_node(fid, k, nd, fn)
             try:
                 args = tuple(Coll(arg_type(a["type"]), _decode_refs(a["refs"], nodes, schema, leaves)) for a in nd["args"])

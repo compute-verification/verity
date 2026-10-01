@@ -1312,6 +1312,14 @@
   [
    "a root with a parameter",
    "ValueError: root 'Root[TProg_v1]_v1': the root is a composite without parameters"
+  ],
+  [
+   "an Input node inside a Definition",
+   "ValueError: definition 'TPair_v1' node 1: an input node (Input32_v1) appears only in the root's body"
+  ],
+  [
+   "a RegisteredInput node inside a Definition",
+   "ValueError: definition 'TPair_v1' node 1: an input node (RegisteredInput32_v1) appears only in the root's body"
   ]
  ],
  "input_ids": [
