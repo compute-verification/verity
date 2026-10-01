@@ -1372,14 +1372,15 @@ def test_catalog_keeps_shipped_tables_positional_for_older_writers(tmp_path):
 def test_index_artifact_holds_the_write_lock_before_it_reads(tmp_path):
     """Two publishes into one machine's catalog: a writer that reads first and then asks to write cannot wait for the other (SQLite
     skips the busy timeout there, as waiting could deadlock) and failed "database is locked" at once (node 1, 2026-10-01).  Another
-    writer that tries to take the lock while index_artifact reads must find it held; with timeout=0 nothing here waits."""
+    writer that tries to take the lock while index_artifact reads must find it held; with busy_timeout 0 nothing here waits."""
     import sqlite3
 
     from research.store.index import Index
 
     p = tmp_path / "catalog.sqlite"
     ix = Index(p)
-    other = sqlite3.connect(p, timeout=0, isolation_level=None)
+    other = sqlite3.connect(p, isolation_level=None)
+    other.execute("PRAGMA busy_timeout = 0")
     took = []
 
     def on_statement(sql: str) -> None:
