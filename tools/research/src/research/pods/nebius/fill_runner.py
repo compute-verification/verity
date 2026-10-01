@@ -8,7 +8,8 @@ A fill job is an executable script in FILL_DIR/queue/.  Its header says what it 
 #   index or indices the job may run on (3, 2-7 or 2,5; it waits for one of them); prio: higher starts first (default 0; give GPU-heavy jobs more than
 #   ones that hold a GPU while mostly computing on the CPU); within a prio, owners take turns (the owner with the fewest
 #   jobs of that kind running goes next), then the longest-queued job (a requeued job queues afresh);
-    #   project pous (default) or verity (Verity's work, which runs only when no pous job is queued); mem_gb: a CPU job's memory cap
+    #   project pous (default) or verity (Verity's work, which runs only when no pous job is queued, except circuits' Commit
+#   guests, verity-commit-*.sh, which rank above every other job); mem_gb: a CPU job's memory cap
 #   (default 128; a GPU job's cap is gpu-lease's, 90% of RAM over the GPU count)
 
 It must be restartable: it can be stopped (SIGTERM, then SIGKILL 20 s later) at any moment and started again from the top,
@@ -21,13 +22,19 @@ oldest waiter can stop it, and a CPU job in a systemd user scope with its memory
 Every POLL_S seconds the runner:
   - finds the free GPUs (gpu-lease's locks), the waiting `gpu-lease ... --wait` requests, and a timed window (one holder of
     every GPU, or a waiter for all of them);
-  - stops GPU fill jobs, newest first, until the free GPUs cover every waiter plus RESERVE (default 0: waiters with --wait preempt fill leases anyway), and all of them while
+  - stops GPU fill jobs, proofs' and other Verity jobs first, then pous, then Commits, newest first within each, until the free
+    GPUs cover every waiter plus RESERVE (default 0: waiters with --wait preempt fill leases anyway), and all of them while
     a timed window waits or runs; pauses CPU fill jobs (SIGSTOP) during a timed window and resumes them after;
-    while the node's scheduler agent holds agent.lock it stops nothing for waiters or a waiting window (the agent evicts),
-    and falls back on the next tick once the lock is free;
+    while the node's scheduler agent holds agent.lock it stops nothing for waiters (the agent evicts), but still drains fill
+    for a waiting window, since the agent's eviction signals only gpu-lease's pid;
+  - stops a GPU job through its lease's scope (gpu-lease-<pid>) as well as its process group, and kills whatever is left in a
+    job's scope once the job ends, since `research run` starts its workload in a session of its own that outlives both;
   - stops a job past its max_min (not counting time paused) and requeues it;
   - starts GPU jobs on every free GPU beyond RESERVE when nobody waits, except the GPUs listed in FILL_DIR/keep-free
-    (e.g. `1`, or `0,1`, with an optional `# reason`), and CPU jobs up to CPU_SLOTS, pinned
+    (e.g. `1`, or `0,1`, with an optional `# reason`), and none whose max_min would reach into a window booked in
+    FILL_DIR/windows (`2026-10-01T10:00Z 30 # who`, one per line: start in UTC, minutes); Commit guests first, then pous,
+    then the rest of Verity's (only with 2+ GPUs free), and a Commit that finds no free GPU stops the newest proofs or pous
+    GPU job outside a window; and CPU jobs up to CPU_SLOTS, pinned
     to CPU_SET at nice 19; more queued CPU jobs borrow the Verity pool's idle slots while no Verity job waits.
 Status: FILL_DIR/status.txt; every start, stop and exit: FILL_DIR/events.jsonl.
 """
@@ -72,6 +79,7 @@ VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
 # the pool lends its idle slots to queued pous CPU jobs (Daniel 19:12Z: borrowing goes both ways); a Verity job that can't start
 # takes a slot back by requeueing the newest lent job (143, as a preempted job)
 VERITY_LEND = os.environ.get("FILL_VERITY_LEND", "1") == "1"
+COMMIT_PREFIX = "verity-commit-"
 
 running: dict[str, dict] = {}
 backoff_until = 0.0
@@ -159,8 +167,8 @@ def waiters() -> list[int]:
 
 
 def scope(j: dict, *args: str) -> bool:
-    """systemctl --user on a Verity job's scope: freeze and thaw reach every process in it, including a workload that
-    `research run` starts as its own process group, which killpg misses."""
+    """systemctl --user on a job's scope (a Verity or lent CPU job's own, a GPU job's gpu-lease-<pid>): freeze, thaw and kill
+    reach every process in it, including a workload that `research run` starts as its own process group, which killpg misses."""
     unit = j.get("unit")
     return bool(unit) and subprocess.run(["systemctl", "--user", *args, f"{unit}.scope"], capture_output=True).returncode == 0
 
@@ -203,6 +211,8 @@ def start(p: Path, h: dict, backfill: bool = False) -> None:
                "-p", "MemorySwapMax=0", "--", *cmd]
     proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env, cwd=str(FILL), start_new_session=True)
     log.close()
+    if h["gpus"]:
+        unit_name = f"gpu-lease-{proc.pid}"         # gpu-lease runs CMD in the scope named by its own pid
     (FILL / "running" / f".{name}.pgid").write_text(f"{proc.pid}\n")
     if unit_name:
         (FILL / "running" / f".{name}.unit").write_text(f"{unit_name}\n")
@@ -229,8 +239,38 @@ def keep_free(n: int) -> set[int]:
         return set()
 
 
+def rank(name: str, h: dict) -> int:
+    """Node 2's order (Daniel): circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
+    return 0 if name.startswith(COMMIT_PREFIX) else 1 if h["project"] != "verity" else 2
+
+
+def windows() -> list[tuple[float, float]]:
+    """The timed windows booked in FILL_DIR/windows, as (start, end) in epoch seconds."""
+    out = []
+    try:
+        lines = (FILL / "windows").read_text().splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        f = line.split("#")[0].split()
+        try:
+            t = datetime.fromisoformat(f[0]).timestamp()
+            out.append((t, t + 60 * float(f[1] if len(f) > 1 else 30)))
+        except (IndexError, ValueError):
+            continue
+    return out
+
+
+wall = time.time
+
+
+def clears(h: dict, booked: list[tuple[float, float]], t: float) -> bool:
+    """Whether a job started at `t` ends, at its max_min, before every booked window, or starts after it."""
+    return all(t + 60 * h["max_min"] <= s or t >= e for s, e in booked)
+
+
 def next_job(left: list, counts: Counter):
-    return min(left, key=lambda x: (-int(x[1].get("prio") or 0), counts[x[1]["owner"]], x[2], x[0].name))
+    return min(left, key=lambda x: (rank(x[0].name, x[1]), -int(x[1].get("prio") or 0), counts[x[1]["owner"]], x[2], x[0].name))
 
 
 def active_s(j: dict) -> float:
@@ -263,7 +303,10 @@ def reap() -> None:
                     os.killpg(j["pid"], signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+                scope(j, "kill", "--signal=SIGKILL")
             continue
+        if scope(j, "kill", "--signal=SIGKILL"):
+            event("scope-residue", name, unit=j["unit"])
         run = FILL / "running" / name
         mins = round((time.monotonic() - j["t0"]) / 60, 1)
         paused_min = round((j.get("paused_s", 0.0) + (time.monotonic() - j["paused_at"] if j["paused"] else 0.0)) / 60, 1)
@@ -377,13 +420,12 @@ def tick(n: int) -> str:
     blockers = (n - free) - len(gpu_jobs)
     need = RESERVE + sum(want)
     agent = agent_up()
-    if timed or (window and blockers <= 0 and not agent):
+    if timed or (window and blockers <= 0):
         # the window is running, or only fill stands between it and the GPUs
         for _, k in gpu_jobs:
             stop(k, "timed window")
     elif not window and not agent:
-        # verity jobs go first, then the newest pous jobs
-        order = sorted(gpu_jobs, key=lambda x: (running[x[1]]["h"]["project"] != "verity", -x[0]))
+        order = sorted(gpu_jobs, key=lambda x: (-rank(x[1], running[x[1]]["h"]), -x[0]))
         deficit = need - free
         for _, k in order:
             if deficit <= 0:
@@ -421,12 +463,12 @@ def tick(n: int) -> str:
     if not timed and (not want or backfill) and time.monotonic() >= backoff_until:
         # a job pinned with on=<index> waits for that GPU (a busy one would only bounce off gpu-lease)
         keep = keep_free(n)
+        booked, t_now = windows(), wall()
         idle = [i for i, l in enumerate(leases) if l is None and i not in keep]
-        ready = [x for x in queued if x[1]["gpus"] and idle and (gpu_set(x[1].get("on"), n) is None or
-                                                                 any(i in idle for i in gpu_set(x[1]["on"], n)))]
-        pous_gpu = [x for x in ready if x[1]["project"] != "verity"]
-        verity_gpu = [x for x in ready if x[1]["project"] == "verity"]
-        left = pous_gpu or (verity_gpu if free >= 2 else [])
+        ready = [x for x in queued if x[1]["gpus"] and idle and clears(x[1], booked, t_now) and
+                 (gpu_set(x[1].get("on"), n) is None or any(i in idle for i in gpu_set(x[1]["on"], n)))]
+        by_rank = [[x for x in ready if rank(x[0].name, x[1]) == r] for r in range(3)]
+        left = by_rank[0] + (by_rank[1] or (by_rank[2] if free >= 2 else []))
         counts = Counter(j["h"]["owner"] for j in running.values() if j["h"]["gpus"])
         # each job gets its own free GPU (--on), so jobs started in one tick don't take each other's
         slots = max(0, len(idle) - RESERVE)
@@ -443,6 +485,14 @@ def tick(n: int) -> str:
             counts[h["owner"]] += 1
             slots -= 1
             started = True
+        if not window:
+            # a Commit that found no free GPU takes the newest proofs (then pous) fill's, one per Commit, counting GPUs already freeing
+            waiting = sum(1 for p, h, _ in queued if h["gpus"] and rank(p.name, h) == 0 and p.exists() and clears(h, booked, t_now))
+            freeing = sum(1 for j in running.values() if j["h"]["gpus"] and j.get("stopping"))
+            victims = sorted((k for k, j in running.items() if j["h"]["gpus"] and not j.get("stopping") and rank(k, j["h"])),
+                             key=lambda k: (-rank(k, running[k]["h"]), -running[k]["t0"]))
+            for k in victims[:max(0, waiting - freeing)]:
+                stop(k, "a Commit reclaims its GPU")
     if not timed:
         pous_cpu = [j for j in running.values() if not j["h"]["gpus"] and j["h"]["project"] != "verity" and not j["h"].get("lent")]
         left = [x for x in queued if not x[1]["gpus"] and x[1]["project"] != "verity"]
@@ -492,6 +542,8 @@ def main() -> None:
         h = header(p)
         if unit and unit.startswith("fill-lent-"):
             h["lent"] = True
+        if h["gpus"] and not unit:
+            unit = f"gpu-lease-{pgid}"
         running[p.name] = {"pid": pgid, "proc": None, "h": h, "t0": time.monotonic(), "started": now(),
                            "paused": stopped, "paused_at": time.monotonic(), "unit": unit}
         event("adopted", p.name, pgid=pgid)

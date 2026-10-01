@@ -187,8 +187,9 @@ def test_fill_runner_counts_a_queued_waiter_but_not_a_lease_that_holds_its_gpus_
 
 
 def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_path, monkeypatch):
-    """node2-ops (21:15Z): while the agent decides, fill_runner stops no GPU fill for a waiter or a waiting window, since the
-    agent evicts; a running window still stops it, and once agent.lock is free the next tick is today's rules."""
+    """node2-ops (21:15Z): while the agent decides, fill_runner stops no GPU fill for a waiter, since the agent evicts; a waiting
+    or running window still stops it (infra, 1 Oct 06:50Z: the agent's eviction signals gpu-lease's pid only, which leaves a
+    `research run` workload on the GPU), and once agent.lock is free the next tick is today's rules."""
     gl, fill = tmp_path / "gl", tmp_path / "fill"
     (fill / "queue").mkdir(parents=True)
     gl.mkdir()
@@ -222,11 +223,99 @@ def test_fill_runner_leaves_waiters_to_the_agent_while_it_holds_agent_lock(tmp_p
     agent = os.open(gl / "agent.lock", os.O_RDWR | os.O_CREAT, 0o644)
     fcntl.flock(agent, fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
-        assert fr.agent_up() and stops([2]) == [] and stops([1, 1]) == []
+        assert fr.agent_up() and stops([2]) == ["timed window"] and stops([1, 1]) == []
         assert stops([], timed=True) == ["timed window"]
     finally:
         os.close(agent)
     assert not fr.agent_up() and stops([2]) == ["timed window"]
+
+
+def test_fill_runner_ranks_commits_first_reclaims_for_them_and_keeps_out_of_booked_windows(tmp_path, monkeypatch):
+    """Node 2's order (Daniel, 1 Oct): circuits' Commits, then pous, then proofs. A queued Commit with no free GPU stops the
+    newest proofs fill (one per Commit), never while a window waits; no GPU job starts whose max_min reaches a booked window;
+    and a GPU job's lease scope is killed when it stops and swept once it exits."""
+    gl, fill = tmp_path / "gl", tmp_path / "fill"
+    for d in ("queue", "running", "logs"):
+        (fill / d).mkdir(parents=True)
+    gl.mkdir()
+    monkeypatch.setenv("GPU_LEASE_DIR", str(gl))
+    monkeypatch.setenv("FILL_DIR", str(fill))
+    spec = importlib.util.spec_from_file_location("fill_runner_rank", FILL_RUNNER)
+    fr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fr)
+    held: dict[int, str] = {}
+    want: list[int] = []
+    started, stopped = [], []
+    monkeypatch.setattr(fr, "reap", lambda: None)
+    monkeypatch.setattr(fr, "verity_pool", lambda queued: None)
+    monkeypatch.setattr(fr, "lease", lambda i: held.get(i))
+    monkeypatch.setattr(fr, "waiters", lambda: list(want))
+    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False: started.append(p.name) or p.unlink())
+    monkeypatch.setattr(fr, "stop", lambda k, why, requeue=True: stopped.append(k) or fr.running[k].update(stopping=True, why=why))
+
+    def queue(*names):
+        for name in names:
+            head = "gpus=1 project=verity prio=20" if name.startswith("verity-commit-") else (
+                "gpus=1 project=verity" if name.startswith("pn2g") else "gpus=1")
+            (fill / "queue" / name).write_text(f"# fill: owner=o max_min=30 {head}\n")
+
+    def run(name, t0, gpu):
+        held[gpu] = f"pid={10 + gpu} run=- who=fill:o since=2026-10-01T00:00:00Z preempt=1 cmd=x"
+        fr.running[name] = {"t0": t0, "paused": False, "started": "-",
+                            "h": {"gpus": 1, "project": "verity" if name.startswith("pn2g") else "pous", "owner": "o",
+                                  "max_min": 10**9}}
+
+    run("pous-a.sh", 1, 0)
+    run("pn2g-old.sh", 2, 1)
+    run("pn2g-new.sh", 3, 2)
+    queue("verity-commit-c1.sh")
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh"] and started == []
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh"]                          # one GPU already freeing for the one Commit
+    queue("verity-commit-c2.sh")
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh", "pn2g-old.sh"]
+    for k, gpu in (("pn2g-new.sh", 2), ("pn2g-old.sh", 1)):
+        fr.running.pop(k), held.pop(gpu)
+    want[:] = [3]
+    fr.tick(3)
+    assert stopped == ["pn2g-new.sh", "pn2g-old.sh", "pous-a.sh"] and started == []   # a waiting window drains; no Commit starts
+    want.clear()
+    fr.running.clear()
+    held.clear()
+    queue("pn2g-x.sh", "pous-b.sh")
+    fr.tick(3)
+    assert started == ["verity-commit-c1.sh", "verity-commit-c2.sh", "pous-b.sh"]
+    started.clear()
+    stopped.clear()
+    queue("verity-commit-c3.sh")
+    t = 1_790_848_800.0                                        # 2026-10-01T10:00Z
+    (fill / "windows").write_text("2026-10-01T10:00Z 30 # a booked window\n\nnot a line\n")
+    assert fr.windows() == [(t, t + 1800)]
+    monkeypatch.setattr(fr, "wall", lambda: t - 600)
+    fr.tick(3)
+    assert started == [] and stopped == []                     # 30 min from 09:50Z reach the window
+    monkeypatch.setattr(fr, "wall", lambda: t - 1800)
+    fr.tick(3)
+    assert started == ["verity-commit-c3.sh", "pn2g-x.sh"]
+    assert not fr.clears({"max_min": 30}, [(t, t + 1800)], t + 60) and fr.clears({"max_min": 30}, [(t, t + 1800)], t + 1800)
+
+    calls = []
+    queue("pous-c.sh")
+    spec.loader.exec_module(fr)
+    monkeypatch.setattr(fr.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(fr.subprocess, "Popen", lambda cmd, **kw: type("P", (), {"pid": 4242, "poll": lambda self: 0})())
+    monkeypatch.setattr(fr, "event", lambda *a, **kw: calls.append(a[:2]))
+    fr.start(fill / "queue" / "pous-c.sh", fr.header(fill / "queue" / "pous-c.sh"))
+    assert fr.running["pous-c.sh"]["unit"] == "gpu-lease-4242"
+    assert (fill / "running" / ".pous-c.sh.unit").read_text() == "gpu-lease-4242\n"
+    monkeypatch.setattr(fr.os, "killpg", lambda pid, sig: None)
+    fr.stop("pous-c.sh", "test")
+    assert ["systemctl", "--user", "kill", "--signal=SIGTERM", "gpu-lease-4242.scope"] in calls
+    fr.reap()
+    assert ["systemctl", "--user", "kill", "--signal=SIGKILL", "gpu-lease-4242.scope"] in calls
+    assert ("scope-residue", "pous-c.sh") in calls and "pous-c.sh" not in fr.running
 
 
 @needs_flock
