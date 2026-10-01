@@ -15,6 +15,7 @@ from verity_vllm.check import oracle_compare as OC
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline import commit_plan as CP
 from verity_vllm.pipeline import row_config as RC
+from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.query.required import request_manifest
 
@@ -90,6 +91,19 @@ def test_an_unreadable_plan_or_another_schema_is_recomputed(planned, tmp_path):
     assert CP.use(plan, args)[1]["why"] == "plan schema 'verity-vllm/commit-plan/v0' != verity-vllm/commit-plan/v1"
 
 
+def test_the_commit_s_producer_facts_are_the_plan_s_or_derived_with_the_reason(planned, monkeypatch):
+    args, plan, facts = planned
+    man = json.loads(Path(args.required_manifest).read_text())
+    (got, _), rec = CP.producer_facts(types.SimpleNamespace(**vars(args), plan=plan), man, [], {})
+    assert got == facts and rec["used"] is True
+    stale = types.SimpleNamespace(**{**vars(args), "program_digest": "q" * 64}, plan=plan)
+    monkeypatch.setattr(CP, "oracle_producers_of_record", lambda *a: (None, {"used": False, "why": "derived here"}))
+    assert CP.producer_facts(stale, man, [], {}) == ((None, {"used": False, "why": "derived here"}), CP.use(plan, stale)[1])
+    monkeypatch.setattr(CP, "oracle_producers_of_record", lambda *a: 1 / 0)
+    (got, why), rec = CP.producer_facts(types.SimpleNamespace(**vars(args), plan=None), man, [], {})
+    assert got is None and rec is None and why == {"used": False, "why": "producer facts not derived: ZeroDivisionError('division by zero')"}
+
+
 def test_the_commit_s_parser_takes_the_plan(tmp_path):
     pytest.importorskip("torch")
     from verity_vllm.pipeline import cli
@@ -118,10 +132,10 @@ def test_the_plan_stage_plans_the_inputs_the_commit_stage_passes(tmp_path, monke
         return 0
 
     monkeypatch.setattr(r, "run_tl", run_tl)
-    r.plan()
+    RP.plan(r)
     plan = ran["plan.commit_plan"]
     assert plan[plan.index("commit-plan") + 1:] == ["--workload", r.wl, "--required-manifest", f"{r.d}/manifest.json", "--program-digest", PD,
-                                                     "--program-dir", f"{r.d}/build_request", "--out", r.plan_path]
+                                                     "--program-dir", f"{r.d}/build_request", "--out", RP.path(r)]
     assert built == [] and wor == ["plan"] and "plan PASS" in (Path(r.d) / "stages.txt").read_text()
 
     r.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")
@@ -133,17 +147,17 @@ def test_the_plan_stage_plans_the_inputs_the_commit_stage_passes(tmp_path, monke
     cmd = ran["commit.commit_delta"]
     for flag in ("--workload", "--required-manifest", "--program-digest", "--program-dir"):
         assert cmd[cmd.index(flag) + 1] == plan[plan.index(flag) + 1], flag
-    assert cmd[cmd.index("--plan") + 1] == r.plan_path and wor == ["plan", "commit"]
+    assert cmd[cmd.index("--plan") + 1] == RP.path(r) and wor == ["plan", "commit"]
 
 
 def test_a_failed_plan_stops_the_row_and_leaves_no_plan(tmp_path, monkeypatch):
     from verity_vllm.pipeline.row_driver import Stop
     r, _ = _row_with_build(tmp_path, monkeypatch)
     _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
-    Path(r.plan_path).parent.mkdir(parents=True)
-    Path(r.plan_path).write_text("{}")                                     # an earlier attempt's plan is not left for this Commit
+    Path(RP.path(r)).parent.mkdir(parents=True)
+    Path(RP.path(r)).write_text("{}")                                     # an earlier attempt's plan is not left for this Commit
     monkeypatch.setattr(r, "weights_of_record", lambda stage="commit": [])
     monkeypatch.setattr(r, "run_tl", lambda stage, to, log, cmd, *extra: 1)
     with pytest.raises(Stop) as e:
-        r.plan()
-    assert e.value.rc == 15 and not Path(r.plan_path).exists() and "plan FAIL" in (Path(r.d) / "stages.txt").read_text()
+        RP.plan(r)
+    assert e.value.rc == 15 and not Path(RP.path(r)).exists() and "plan FAIL" in (Path(r.d) / "stages.txt").read_text()
