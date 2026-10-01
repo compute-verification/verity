@@ -4,7 +4,8 @@
     fp        exact f32 / bf16 arithmetic on words of forms (rounding, conversions, the tensor-core steps)
     tc_step   the finite tensor-core transition (`verity.ml.tc` GroupSum.step) that `fp`'s steps wrap
     softmax   attention's FTZ f32 operations, strict compare, max and -inf guard
+    fp4       the NVFP4 / MXFP4 block-scaled step (64 E2M1 codes and their scale bytes per operand)
 
-These builders are what C-Flock's lowering has always run; `verity_flock.gf2`, `.fp` and `.unit` are these modules, and
-`verity_flock.tail_pieces` imports `softmax`'s.
+These builders are what C-Flock's lowering has always run; `verity_flock.gf2`, `.fp`, `.unit` and `.unit_fp4` are these modules,
+and `verity_flock.tail_pieces` imports `softmax`'s.
 """
