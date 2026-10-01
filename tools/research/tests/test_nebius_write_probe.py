@@ -22,6 +22,8 @@ def proc_entry(proc: Path, pid: int, *, ppid: int = 1, start: int = 1000, writte
     (d / "fdinfo").mkdir()
     (d / "stat").write_text(f"{pid} (py (thon)) S {ppid} " + " ".join(["0"] * 17) + f" {start} 0 0\n")
     (d / "io").write_text(f"rchar: 1\nwchar: {written}\nread_bytes: 0\nwrite_bytes: {written}\ncancelled_write_bytes: 0\n")
+    (d / "task" / str(pid)).mkdir(parents=True)
+    (d / "task" / str(pid) / "io").write_text(f"write_bytes: {written}\n")
     (d / "cgroup").write_text(f"0::{cgroup}\n")
     (d / "status").write_text("Name:\tpython3\nUid:\t0\t0\t0\t0\n")
     (d / "cmdline").write_bytes(cmd.replace(" ", "\0").encode() + b"\0")
@@ -32,8 +34,10 @@ def proc_entry(proc: Path, pid: int, *, ppid: int = 1, start: int = 1000, writte
         (d / "fdinfo" / str(i + 3)).write_text(f"pos:\t0\nflags:\t{flags}\nmnt_id:\t30\n")
 
 
-def set_written(proc: Path, pid: int, written: int) -> None:
-    (proc / str(pid) / "io").write_text(f"write_bytes: {written}\n")
+def set_written(proc: Path, pid: int, written: int, tid: int | None = None) -> None:
+    t = proc / str(pid) / "task" / str(tid or pid)
+    t.mkdir(parents=True, exist_ok=True)
+    (t / "io").write_text(f"write_bytes: {written}\n")
 
 
 def test_each_allocation_is_named_and_only_uncovered_workspace_writers_are_unmatched(tmp_path):
@@ -91,6 +95,29 @@ def test_a_pod_without_kueue_admission_or_unknown_to_kubectl_is_unmatched_and_ku
                    11: ("system:gpu-operator/dcgm-exporter", True),
                    12: (f"pod:{POD.replace('6a32', '7b43')} (not in kubectl's list)", False)}
     assert calls == [1]
+
+
+def test_a_runner_is_not_charged_for_the_children_it_reaped_and_its_jobs_are_fill_jobs(tmp_path):
+    """/proc/<pid>/io adds each reaped child's bytes to the parent's: node 2's fill runner alerted at 26.7 MB/s while its
+    log stayed empty. A CPU job without a named unit runs in an anonymous run-*.scope, so its lineage names it."""
+    proc = tmp_path / "proc"
+    proc_entry(proc, 50, cgroup="/user.slice/user-1001.slice/session-65.scope", writes=("/workspace/pouw/infra/logs/fill.err",),
+               cmd="python3 /workspace/pouw/infra/bin/fill_runner.py")
+    job = "/user.slice/user-1001.slice/user@1001.service/app.slice/run-rd021988fb33f4e9f89ecbd41e20cc1ef.scope"
+    proc_entry(proc, 60, ppid=50, cgroup=job, cwd="/workspace/pouw/fill", cmd="bash /workspace/pouw/fill/running/fp4-gc-judge-388eeb55.sh")
+    proc_entry(proc, 61, ppid=60, cgroup=job, writes=("/workspace/pouw/gpu7-fp4/kt/out/census.jsonl",), cmd="python census.py run")
+    before = W.snapshot(str(proc))
+    (proc / "50" / "io").write_text(f"write_bytes: {5000 * MB}\n")
+    set_written(proc, 61, 1200 * MB)
+    set_written(proc, 61, 600 * MB, tid=62)
+    got = {r["pid"]: (r["allocation"], r["matched"], r["mb_per_s"])
+           for r in W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, dict, "vy-nebius-2", str(proc))}
+    assert got == {61: ("fill:fp4-gc-judge-388eeb55", True, 30.0)}
+    before = W.snapshot(str(proc))
+    set_written(proc, 50, 1200 * MB)
+    got = {r["pid"]: (r["allocation"], r["matched"])
+           for r in W.writers(before, W.snapshot(str(proc)), 60.0, 10.0, dict, "vy-nebius-2", str(proc))}
+    assert got == {50: ("fill:runner", True)}
 
 
 def test_a_reused_pid_is_a_new_process_and_a_timed_window_pauses_the_probe(tmp_path):

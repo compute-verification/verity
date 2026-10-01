@@ -4,16 +4,18 @@
     sudo -n nice -n 19 ionice -c3 python3 write_probe.py probe --node vy-nebius-N [--every 60] [--mbps 10] [--out DIR]
     uv run --no-sync python -m research.pods.nebius.write_probe relay [--every 120]                  where Slack works
 
-`probe` reads every process's `write_bytes` (/proc/<pid>/io, as root, so pods' processes count too) once a tick and takes the
-delta. A process that wrote at least --mbps MB/s over the tick and has a file open for writing under /workspace, or works
-there, is a line of <out>/writes.jsonl, with the allocation that covers it:
+`probe` reads every thread's `write_bytes` (/proc/<pid>/task/<tid>/io, as root, so pods' processes count too) once a tick
+and sums each process's deltas; not /proc/<pid>/io, which also holds what every child the process reaped wrote. A process
+that wrote at least --mbps MB/s over the tick and has a file open for writing under /workspace, or works there, is a line
+of <out>/writes.jsonl, with the allocation that covers it:
   kueue:<cluster queue>/<pod>   a pod Kueue admitted (node 1)
   system:<namespace or unit>    a cluster namespace or a system service
-  fill:<scope>, lease:<scope>   a job node 2's fill runner or GPU lease started
+  fill:<scope or job>, lease:<scope>   a job node 2's fill runner or GPU lease started (its fill-* or gpu-lease-* scope, or
+                                the fill runner's running/<job>.sh it descends from; `fill:runner` is the runner itself)
   run:<id>                      a recorded `research run` (its cluster-r<id> scope, or RESEARCH_RUN_ID in its or a parent's env)
 A writer none of them covers is also a line of <out>/unmatched.jsonl. <out>/status.json is the last tick. While node 2's fill
-status shows a timed window running or waiting, the probe reads nothing. Bytes a process wrote and exited within one tick
-are missed. Stdlib only; it reads /proc and writes only under <out>.
+status shows a timed window running or waiting, the probe reads nothing. Bytes written by a process or thread that exits
+before the next tick are missed. Stdlib only; it reads /proc and writes only under <out>.
 
 `relay` posts each new unmatched writer from both nodes to #agent-alerts, once per process and again hourly while it writes.
 The nodes hold no Slack credentials, so it runs where `research slack` works.
@@ -55,19 +57,26 @@ def _stat_fields(proc: str, pid: int) -> list[str] | None:
     return s.rsplit(")", 1)[1].split() if s else None
 
 
-def snapshot(proc: str = "/proc") -> dict[tuple[int, str], int]:
-    """(pid, start time) -> write_bytes, for every process this user may read."""
+def snapshot(proc: str = "/proc") -> dict[tuple[int, str], dict[int, int]]:
+    """(pid, start time) -> {thread id: write_bytes}, for every process this user may read."""
     out = {}
     for p in os.listdir(proc):
         if not p.isdigit():
             continue
         f = _stat_fields(proc, int(p))
-        io = _read(f"{proc}/{p}/io")
-        if not f or len(f) < 20 or not io:
+        try:
+            tids = os.listdir(f"{proc}/{p}/task")
+        except OSError:
             continue
-        m = re.search(r"^write_bytes:\s*(\d+)", io, re.M)
-        if m:
-            out[(int(p), f[19])] = int(m.group(1))
+        if not f or len(f) < 20:
+            continue
+        threads = {}
+        for t in tids:
+            m = re.search(r"^write_bytes:\s*(\d+)", _read(f"{proc}/{p}/task/{t}/io") or "", re.M)
+            if m:
+                threads[int(t)] = int(m.group(1))
+        if threads:
+            out[(int(p), f[19])] = threads
     return out
 
 
@@ -91,21 +100,38 @@ def write_paths(pid: int, proc: str = "/proc", limit: int = 3) -> list[str]:
     return paths
 
 
+def _lineage(pid: int, proc: str, depth: int = 16):
+    """The process and its ancestors, nearest first, each with its command line."""
+    for _ in range(depth):
+        yield pid, (_read(f"{proc}/{pid}/cmdline", binary=True) or b"").replace(b"\0", b" ").decode(errors="replace")
+        f = _stat_fields(proc, pid)
+        if not f or int(f[1]) <= 1:
+            return
+        pid = int(f[1])
+
+
 def run_id(pid: int, proc: str = "/proc", depth: int = 16) -> str | None:
     """The run of the process or its nearest ancestor: RESEARCH_RUN_ID in its environment, or the harness itself
     (`research run ... --id <run>`, which sets that variable only for its children)."""
-    for _ in range(depth):
-        for kv in (_read(f"{proc}/{pid}/environ", binary=True) or b"").split(b"\0"):
+    for p, cmd in _lineage(pid, proc, depth):
+        for kv in (_read(f"{proc}/{p}/environ", binary=True) or b"").split(b"\0"):
             if kv.startswith(b"RESEARCH_RUN_ID="):
                 return kv.split(b"=", 1)[1].decode(errors="replace")
-        cmd = (_read(f"{proc}/{pid}/cmdline", binary=True) or b"").replace(b"\0", b" ").decode(errors="replace")
         m = re.search(r"\bresearch run\b.* --id (r\d{8}-\d{6}-[0-9a-f]{4})\b", cmd)
         if m:
             return m.group(1)
-        f = _stat_fields(proc, pid)
-        if not f or int(f[1]) <= 1:
-            return None
-        pid = int(f[1])
+    return None
+
+
+def fill_job(pid: int, proc: str = "/proc") -> str | None:
+    """The fill job of the process or its nearest ancestor (the runner runs each from running/<job>.sh, and a CPU job
+    without a named unit in an anonymous run-*.scope), or `runner` for node 2's fill runner itself."""
+    for _, cmd in _lineage(pid, proc):
+        m = re.search(r"/pouw/fill/running/([^/\s]+)\.sh\b", cmd)
+        if m:
+            return m.group(1)
+        if "/pouw/infra/bin/fill_runner.py" in cmd:
+            return "runner"
     return None
 
 
@@ -139,6 +165,9 @@ def allocation(pid: int, cgroup: str, pods: Pods, proc: str = "/proc") -> tuple[
     rid = m.group(1) if m else run_id(pid, proc)
     if rid:
         return f"run:{rid}", True
+    job = fill_job(pid, proc)
+    if job:
+        return f"fill:{job}", True
     m = re.match(r"/system\.slice/([^/]+)", cgroup)
     if m:
         return f"system:{m.group(1)}", True
@@ -155,8 +184,11 @@ def writers(prev: dict, now: dict, seconds: float, mbps: float, pods: Pods, node
         return cache["pods"]
 
     rows = []
-    for (pid, start), wb in now.items():
-        if (pid, start) not in prev or (wb - prev[(pid, start)]) < mbps * 1e6 * seconds:
+    for (pid, start), threads in now.items():
+        if (pid, start) not in prev:
+            continue
+        wrote = sum(max(0, wb - prev[(pid, start)].get(tid, 0)) for tid, wb in threads.items())
+        if wrote < mbps * 1e6 * seconds:
             continue
         paths = write_paths(pid, proc)
         try:
@@ -174,7 +206,7 @@ def writers(prev: dict, now: dict, seconds: float, mbps: float, pods: Pods, node
             user = uid.group(1) if uid else "?"
         cmd = (_read(f"{proc}/{pid}/cmdline", binary=True) or b"").replace(b"\0", b" ").decode(errors="replace").strip()
         rows.append({"node": node, "pid": pid, "key": f"{node}:{pid}:{start}", "user": user, "cmd": cmd[:300], "cgroup": cgroup,
-                     "allocation": alloc, "matched": matched, "mb_per_s": round((wb - prev[(pid, start)]) / seconds / 1e6, 1),
+                     "allocation": alloc, "matched": matched, "mb_per_s": round(wrote / seconds / 1e6, 1),
                      "paths": paths or [cwd]})
     return sorted(rows, key=lambda r: -r["mb_per_s"])
 
