@@ -662,11 +662,11 @@ F1_B_OVERFIT = 10
 #: annealed and block-optimised after the salt, over the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ,
 #: with a 1.5× margin on the measured gain and made non-increasing in n.  It is taken on each bucket's own R1 admission
 #: boundary at k = 1,024 (``k_min``), where the cap is largest, and just inside it (the worst family can sit there): the larger of
-#: that need and the assessor's boundary check, never below the earlier grid table (condition 7; research store
-#: art:e98376630e3bb30773101aacaafb8a086992f65afd0b2d7f39baa91f7fc44d1e, beta_final.py; the grid's beta_table.py on
-#: strong.jsonl, strong_ext.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
+#: that need, the assessor's boundary check and the earlier grid's cells under the same cap, never below the grid's
+#: table (condition 7; research store art:cb8395f9d67e84c354611d00bd2b6bacd490db25b535cbfb1f12490d3f6653ca,
+#: beta_final.py; the grid's beta_table.py on strong.jsonl, strong_ext.jsonl).  The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
 B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
-         (1024, Fraction(50, 10_000)), (2048, Fraction(17, 10_000)), (4096, Fraction(0)))
+         (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
 #: The claimed domain's least n: n = 64 (an MQA unit of one 64-wide KV head) would need 5.7% and is not claimed.
 B_OVF_MIN_N = B_OVF[0][0]
 
