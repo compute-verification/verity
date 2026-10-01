@@ -533,20 +533,24 @@ class DeriveReport:
 
 def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
            rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-           check_registry: bool = True, rank: tuple[int, int] | None = None) -> Program | Unsupported:
+           check_registry: bool = True, rank: tuple[int, int] | None = None, ir: str = "word") -> Program | Unsupported:
     """Derive a `Program` from an unannotated module/callable, or return `Unsupported`. See module docstring."""
     return derive_report(source, example_inputs, mode=mode, profile=profile, config=config, rules=rules, allowed_dims=allowed_dims,
-                         name=name, check_registry=check_registry, rank=rank).result
+                         name=name, check_registry=check_registry, rank=rank, ir=ir).result
 
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-                  check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None) -> DeriveReport:
+                  check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None, ir: str = "word") -> DeriveReport:
     """`rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
-    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from."""
+    (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
+    `ir="boolean"`: the derived Program on bits (`verity_vllm.program.boolean`), refused by name for a Call with no Boolean version."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
+    from verity_vllm.program.boolean import IRS
+    if ir not in IRS:
+        raise ValueError(f"ir must be one of {IRS}, got {ir!r}")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
         raise ValueError(f"rank must be (world, rank) with 0 <= rank < world, got {rank!r}")
     from verity_vllm.program.frontend.rules import DEFAULT_RULES, vocabulary_for
@@ -597,10 +601,23 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
             elif family_report is not None:
                 prov.setdefault("families_not_matched", []).append(family_report)
                 family_report = None
-        digest = flat_digest if program is flat_program else program_digest(program)
-        dead = _dead_gates(program, limit=32)
         # a family claim replaces the flat body by the family's: the correspondence describes the FLAT Calls and stays with the flat root
         corr_applies = program is flat_program
+        if ir == "boolean":
+            from verity_vllm.program.boolean import NoBooleanVersion, boolean_function
+            word_fn, word_digest = _spec_id(program.fn), flat_digest if corr_applies else program_digest(program)
+            try:
+                bits_fn = boolean_function(program.fn)
+            except NoBooleanVersion as e:
+                refuse("numerics_unregistered", None, None, f"ir=boolean: {e}", missing=e.missing)
+            program = Program(bits_fn, annotations=dict(program.annotations))
+            check_identity(program, check_registry=check_registry)
+            digest = program_digest(flat_desc := encode_program(program))
+            # each Call and node index is the word Program's, word leaf j is element j: the correspondence carries over unchanged
+            prov["ir"] = {"ir": "boolean", "word_root": word_fn, "word_digest": word_digest}
+        else:
+            digest = flat_digest if program is flat_program else program_digest(program)
+        dead = _dead_gates(program, limit=32)
         prov["result"] = {"root": _spec_id(program.fn), "digest": digest, "gates": program.gates, "flat_root": _spec_id(flat_sd),
                           "flat_digest": flat_digest, "dead_gates": dead.total,
                           "correspondence_digest": corr_digest if corr_applies else None,

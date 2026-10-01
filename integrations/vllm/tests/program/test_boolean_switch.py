@@ -1,0 +1,156 @@
+"""`TargetProfile.ir = "boolean"` (`verity_vllm.program.boolean`): a derived Program on bits.
+
+* the table: each word Definition's Boolean version is the registered Boolean Definition whose `word` names it, a function-valued
+  static bound to its own Boolean version (`DotBf16_v2{K, DOT}` -> `DotBf16_v3{K, DOT=HopperBF16WgmmaDot16_v2}`);
+* `lift` re-emits a derived function's Calls on bits, every word run mapped to the bits it occupies (affine, strided, explicit,
+  concatenated and `PartLog`-cut operands, a record of mixed widths), and computes the word function's outputs (bit-sliced
+  evaluation of the lift against the plain-integer reference of the word function);
+* a Definition with no Boolean version is refused by name, at `lift` and at derive;
+* `purity` counts the not-Boolean Definitions a Program reaches: zero for the lift, every one for the word Program;
+* the default target derives on words: `ir` is absent from its serialisation, so no profile digest moves.
+"""
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from verity.evaluation import evaluate, evaluate_words
+from verity.ir import boolean as BL
+from verity.ir.codec import _spec_id
+from verity.ir.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.ir.program import Program
+from verity.ir.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
+from verity.ir.types import Array, Record, Tuple as TupleT, Value
+from verity.ml import fp32 as W
+from verity.ml import gemm as G
+from verity.ml import prims as MP
+from verity_vllm.program import boolean as BB
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
+from verity_vllm.program.replay import replayer
+
+F32, BF16 = Value(32), Value(16)
+PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
+
+
+def _derived(fns=None):
+    """A derived function as `frontend.derive` writes one: an unregistered `Derived[...]` composite replaying a flat body of
+    registered word Definitions, whose operands are every kind of reference sequence."""
+    fns = {"add": W.F32AddFtz, "mul": W.F32MulFtz, "cast": MP.F2fpBf16, "max": W.F32Max, "guard": W.GuardNegInfZero, **(fns or {})}
+    B = Builder(PARAMS, TupleT())
+    x, y, w = (Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(PARAMS))
+    n0 = B.batch(fns["add"], x, y[1], axes=(0, 0))
+    y_t = Coll(Array(8, F32), Strided("p", 1, 0, 2, 1, 4, 8))                  # y transposed, [4][2]
+    x_twice = Coll(Array(8, F32), Concat([Affine("p", 0, 0, 4), Explicit(tuple(("p", 0, j) for j in (3, 2, 1, 0)))]))
+    n1 = B.batch(fns["mul"], y_t, x_twice, axes=(0, 0))
+    n2 = B.batch(fns["cast"], n1, axes=(0,))
+    n3 = B.call(fns["max"], w.field("s"), n0[2])
+    n4 = B.batch(fns["guard"], w.field("u"), axes=(0,))
+    log = PartLog([Affine("n", 0, 3, 1), Affine("n", 0, 0, 1), Affine("n", 3, 0, 1)])
+    cut = log.cut(3)
+    assert isinstance(cut, Concat) and cut.prefix is not None
+    n5 = B.batch(fns["add"], Coll(Array(3, F32), cut), Coll(Array(3, F32), Affine("p", 0, 1, 3)), axes=(0, 0))
+    ret_t = TupleT(Array(8, BF16), F32, Array(2, F32), Array(3, BF16), Array(3, F32))
+    B.ret_type = ret_t
+    body = B.finish(coll_concat(ret_t, [n2, n3, n4, w.field("t"), n5]))
+    defn = CompositeDefinition("Derived[Tiny]", 1, ("SRC",), lambda S: (PARAMS, ret_t), replayer(body), register=False)
+    sd = bind(defn, SRC={"class": "tests.Tiny"})
+    sd.set_body(body)
+    return sd
+
+
+def _inputs(n: int, seed: int = 7):
+    rng = np.random.default_rng(seed)
+    special = np.array([0, 0x80000000, 0x3F800000, 0xBF800000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x00000001, 0x007FFFFF,
+                        0x7F7FFFFF], dtype=np.uint64)
+
+    def words(k):
+        a = rng.integers(0, 1 << 32, size=(n, k), dtype=np.uint64)
+        pick = rng.random((n, k)) < 0.3
+        return np.where(pick, special[rng.integers(0, len(special), size=(n, k))], a)
+
+    rec = np.concatenate([words(1), rng.integers(0, 1 << 16, size=(n, 3), dtype=np.uint64), words(2)], axis=1)
+    return words(4), words(8), rec
+
+
+def test_the_table_reads_the_boolean_definitions_word_links():
+    from verity.ml.boolean import attention as BA, gemm as BG
+    assert BB.boolean_version(W.F32AddFtz) is bind(BA.F32AddFtz)
+    assert BB.boolean_version(MP.F2fpBf16) is bind(BG.F2fpBf16)
+    word = bind(G.DotBf16, K=64, DOT=MP.HopperBF16WgmmaDot16)
+    assert _spec_id(BB.boolean_version(word)) == 'DotBf16_v3{K=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"}}'
+
+
+def test_lift_computes_the_word_function_on_bits():
+    word = _derived()
+    bits = BB.lift(word)
+    assert _spec_id(bits).endswith(',IR="boolean"}') and bits.name == word.name
+    assert [n.fn for n in bits.body.nodes] == [BB.boolean_version(n.fn) for n in word.body.nodes]
+    assert bits.signature() == (tuple((n, BL.bit_type(t)) for n, t in PARAMS), BL.bit_type(word.signature()[1]))
+    x, y, rec = _inputs(64)
+    got = evaluate_words(bits, x, y, rec)
+    want = np.array([evaluate(word, *(list(map(int, a[i])) for a in (x, y, rec))) for i in range(len(x))], dtype=np.uint64)
+    assert got.shape == want.shape == (64, 17)
+    assert (got.astype(np.uint64) == want).all()
+
+
+def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
+    word = _derived()
+    bits = Program(BB.lift(word))
+    assert bits.input_gates == sum(BL.bit_type(t).leaves for _, t in PARAMS)
+    rep = BB.purity(bits)
+    assert rep["non_boolean"] == {"definitions": 0, "specializations": 0, "list": []}
+    rep = BB.purity(Program(word))
+    ids = [r["id"] for r in rep["non_boolean"]["list"]]
+    assert ids == sorted(["F2fpBf16_v1", "F32AddFtz_v1", "F32Max_v1", "F32MulFtz_v1", "GuardNegInfZero_v1",
+                          "Input16_v1", "Input32_v1", "Root[Derived[Tiny]_v1]"])
+    assert rep["non_boolean"]["definitions"] == len(ids)
+    dry = BB.dry_run(Program(word))
+    assert dry["gaps"] == [] and dry["non_boolean"]["definitions"] == 0
+    assert {r["word"]: r["boolean"] for r in dry["derived_calls"]}["F32AddFtz_v1"] == ["F32AddFtz_v3"]
+
+
+def test_a_definition_with_no_boolean_version_is_refused_by_name():
+    lonely = PrimitiveDefinition("LonelyWord", 1, (("a", F32),), F32, lambda a: a, register=False)
+    word = _derived({"guard": lonely})
+    with pytest.raises(BB.NoBooleanVersion, match="LonelyWord_v1") as e:
+        BB.lift(word)
+    assert list(e.value.missing) == ["LonelyWord_v1"]
+    dry = BB.dry_run(Program(word))
+    assert dry["gaps"] == ["LonelyWord_v1"]
+    assert {r["id"] for r in dry["non_boolean"]["list"]} == {"LonelyWord_v1", "Root[Derived[Tiny]_v1]"}
+
+
+def test_derive_refuses_a_call_with_no_boolean_version_by_name():
+    torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.derive import derive_report
+
+    class M(torch.nn.Module):
+        def forward(self, x, y):
+            return x * y + x
+
+    ex = [torch.empty(4, dtype=torch.float32, device="meta")] * 2
+    word = derive_report(M(), ex, mode="reference")
+    assert word.ok and "ir" not in word.provenance
+    rep = derive_report(M(), ex, mode="reference", ir="boolean")
+    assert not rep.ok and rep.unsupported.reason == "numerics_unregistered"
+    assert sorted(rep.unsupported.detail["missing"]) == ['AddRef_v1{N=4,DT="f32"}', 'MulRef_v1{N=4,DT="f32"}']
+    with pytest.raises(ValueError, match="ir must be one of"):
+        derive_report(M(), ex, mode="reference", ir="bits")
+
+
+def test_bit_offsets_are_the_prefix_sums_of_the_leaf_widths():
+    for t in (Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32))), Array(3, TupleT(BF16, Array(2, F32), Value(1))),
+              TupleT(Array(0, F32), F32, Array(2, TupleT()), BF16), Array(5, BF16)):
+        widths = t.leaf_widths()
+        off = BB.bit_offsets(t)
+        assert [off(j) for j in range(len(widths) + 1)] == list(np.cumsum([0] + widths))
+
+
+def test_the_default_target_derives_on_words():
+    assert DEFAULT_TARGET.ir is None and "ir" not in DEFAULT_TARGET.to_json()
+    on_bits = DEFAULT_TARGET.with_overrides(ir="boolean")
+    assert on_bits.to_json()["ir"] == "boolean" and on_bits.digest() != DEFAULT_TARGET.digest()
+    assert TargetProfile.from_json(on_bits.to_json()) == on_bits
+    for bad in ("word", "bits", ""):
+        with pytest.raises(ValueError, match="ir must be None"):
+            TargetProfile(ir=bad)

@@ -90,6 +90,8 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor)
                          "verity_vllm/program/frontend/rules/vllm_sampling.py",
+                         # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
+                         "verity_vllm/program/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py")
 
@@ -514,7 +516,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             with torch.no_grad(), vm.fake_forward_context(cfg, ntok), torch.device("meta"), export_compat(target, model), intercept_triton_launches():
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
                 rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{names[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
-                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep)
+                                    check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, ir=target.ir or "word")
         res["derive_secs"] = round(time.time() - t1, 2)
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
