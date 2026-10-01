@@ -43,7 +43,9 @@ src/cluster/
 │               unreplayed bundles (release.py's rule), read over SSH; read-only
 ├── watch.py    running jobs with no progress for 30 min (run files, the workload's CPU, GPUs) and goal jobs waiting 30 min,
 │               each routed to its Slack handle by the registry; read-only; node 1's timer feeds the exporter with it
-└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | watch
+├── preflight.py  whether a job could start on a node now: SSH, agent state or Kueue, its staged inputs, custody;
+│               one SSH round trip, read-only; research run --queue --goal runs it before submitting
+└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | watch | preflight
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
@@ -84,4 +86,5 @@ uv run cluster shadow replay tools/cluster/descriptions/nebius.toml --sampler UT
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
 uv run cluster status [--node nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
 uv run cluster watch [--node nebius-1|nebius-2|all] [--json] [--window-min 30]  # the same reads, plus each node's probe
+uv run cluster preflight --node nebius-1|nebius-2 [--input art:<sha256>|model:R@V|hf:R@V ...] [--custody] [--json]
 ~~~

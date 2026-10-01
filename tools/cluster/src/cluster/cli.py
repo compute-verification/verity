@@ -16,6 +16,8 @@
   cluster watch [--node N] [--json] [--window-min 30] [--registry R] [--local NODE] [--ssh NODE=DEST] [--out FILE]
                                                         # jobs with no progress for 30 min and waiting goal jobs, each with
                                                         # its Slack handle (watch.py); exit 1 if a node can't be read
+  cluster preflight --node nebius-1|nebius-2 [--input art:<sha256>|model:R@V|hf:R@V ...] [--custody] [--json]
+                                                        # one line per check (preflight.py); exit 0 only if all pass
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
@@ -125,7 +127,16 @@ def main(argv: list[str] | None = None) -> int:
     wa.add_argument("--local", choices=("nebius-1", "nebius-2"), help="this machine is that node: read it without SSH")
     wa.add_argument("--ssh", action="append", default=[], metavar="NODE=DEST", help="reach NODE as DEST (ssh config, e.g. vy-n2)")
     wa.add_argument("--out", help="also write the JSON here, whole (the exporter's --watch file)")
+    pf = sub.add_parser("preflight", help="whether a job could start on a node now: SSH, its state, its inputs staged, custody")
+    pf.add_argument("--node", choices=("nebius-1", "nebius-2"), required=True)
+    pf.add_argument("--input", action="append", default=[], metavar="REF", help="art:<sha256>, model:ORG/NAME@REV or hf:ORG/NAME@REV")
+    pf.add_argument("--custody", action="store_true", help="also check the run can be published (R2)")
+    pf.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+
+    if a.cmd == "preflight":
+        from . import preflight, status
+        return preflight.main(status.NODES[a.node], a.input, a.custody, a.json)
 
     if a.cmd == "status":
         from . import status
