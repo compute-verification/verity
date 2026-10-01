@@ -9,7 +9,7 @@ from verity.ir import constants as K
 from verity.ir import partition_object as PO
 from verity.ir.boolean import is_boolean
 from verity.ir.evaluate import evaluate_region
-from verity.ir.defs import REGISTRY, CompositeDefinition, bind
+from verity.ir.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ir.program import REGISTERED_ID, Program, input_prim, is_input, is_registered
 from verity.ir.refs import tuple_of
 from verity.ir.types import Array, Tuple, Value
@@ -83,6 +83,23 @@ def test_a_definition_reached_first_under_an_operation_is_listed_on_a_later_path
     both = Program(Both)
     assert [n.fn.id for n in both.root.body.nodes if not is_input(n.fn)] == [Op.id, Scale.id]
     assert K.program_data(both.root, is_op) == {Scale.id: [(1, const(32, SEVEN).id)]}
+
+
+#: a primitive that reads two tables by index, the library's and the program's
+Lookup = PrimitiveDefinition("KLookup", 1, (("x", I32),), I32, lambda x: x, register=False,
+                             tables=(("k_library", "library"), ("k_program", "registered")))
+Reads = _c("KReads", (("x", I32),), I32, lambda B, S, x: B.call(Lookup, x))
+ReadsUnderOp = _c("KReadsUnderOp", (("x", I32),), I32, lambda B, S, x: B.call(Reads, x))
+
+
+def test_a_declared_table_is_data_unless_the_library_lists_it():
+    root = Program(Reads).root
+    assert K.program_data(root) == {Lookup.id: [(0, "k_library"), (0, "k_program")]}
+    assert K.program_data(root, library=lambda n: n == "k_library") == {Lookup.id: [(0, "k_program")]}
+    assert K.program_data(root, library=lambda n: True) == {Lookup.id: [(0, "k_program")]}
+    assert K.program_data(Program(ReadsUnderOp).root, lambda fid: fid == Reads.id) == {}
+    with pytest.raises(ValueError, match="table"):
+        PrimitiveDefinition("KBadLookup", 1, (("x", I32),), I32, lambda x: x, register=False, tables=(("t", "public"),))
 
 
 def test_inputs_carry_the_values_and_the_program_holds_none(new):
