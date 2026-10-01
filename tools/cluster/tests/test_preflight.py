@@ -247,7 +247,7 @@ def test_cli_preflight_prints_one_line_per_check_and_exits_0_only_when_all_pass(
 def test_cli_preflight_refuses_a_malformed_ref_before_reaching_the_node_and_fails_when_ssh_does(capsys, monkeypatch):
     rc, text, sent = _cli(capsys, monkeypatch, ["preflight", "--node", "nebius-1", "--input", "hf:x/y@z;reboot"], "")
     assert (rc, sent) == (2, []) and "not an art:<sha256>, model:ORG/NAME@REV or hf:ORG/NAME@REV ref: hf:x/y@z;reboot" in text
-    rc, text, _ = _cli(capsys, monkeypatch, ["preflight", "--node", "nebius-1"],
+    rc, text, _ = _cli(capsys, monkeypatch, ["preflight", "--node", nebius1.NODE],
                        status.ReadError("ssh: connect to host 81.85.2.165 port 22: Connection timed out"))
     assert rc == 1 and text.splitlines()[0] == (f"FAIL  ssh      {status.HOSTS[nebius1.NODE]}: ReadError: ssh: connect to host "
                                                 "81.85.2.165 port 22: Connection timed out")

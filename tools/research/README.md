@@ -66,6 +66,7 @@ research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine p
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--max-min M | --timeout T] [--gpus N]
              [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (tools/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
+research run --queue --goal G [--no-preflight] ...   # a goal Commit's job: refused unless `cluster preflight` passes for its node (SSH, state, staged inputs, custody); `cluster watch` alerts its owner when it waits 30 min
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [--refresh] [--all] [--json]

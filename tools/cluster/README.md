@@ -20,7 +20,10 @@ places it and names the wrappers its node's executor runs it under (`submit.py`)
 and pinned systemd scope, the job's CPU allocation, so the run's custody finishes before it is released, and a GPU job's
 workload alone runs under `gpu-lease --wait` on node 2, so the GPU is booked only while it runs. Node 1's GPUs wait for kueue-fold's executor; such a job goes to node 2 or is
 refused. A job names its kind (`--kind`, default `adhoc`) and research question (`--question`); a kind registered in
-`kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now.
+`kinds/<owner>.toml` supplies its shape, time and question, and the rules on kinds only warn for now. A job a goal Commit
+needs names it (`--goal cov-g217`): `cluster preflight` must pass for its node before it is submitted (its kind's staged
+inputs and the run's `--input …=art:` ids staged there, the node's state, custody), and `cluster watch` alerts its owner
+when it waits half an hour for a grant.
 
 ## Layout
 

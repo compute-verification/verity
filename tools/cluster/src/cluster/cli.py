@@ -128,7 +128,8 @@ def main(argv: list[str] | None = None) -> int:
     wa.add_argument("--ssh", action="append", default=[], metavar="NODE=DEST", help="reach NODE as DEST (ssh config, e.g. vy-n2)")
     wa.add_argument("--out", help="also write the JSON here, whole (the exporter's --watch file)")
     pf = sub.add_parser("preflight", help="whether a job could start on a node now: SSH, its state, its inputs staged, custody")
-    pf.add_argument("--node", choices=("nebius-1", "nebius-2"), required=True)
+    pf.add_argument("--node", choices=("nebius-1", "nebius-2", "vy-nebius-1", "vy-nebius-2"), required=True,
+                    help="a node, by its short name or its placement's (research run --queue passes the latter)")
     pf.add_argument("--input", action="append", default=[], metavar="REF", help="art:<sha256>, model:ORG/NAME@REV or hf:ORG/NAME@REV")
     pf.add_argument("--custody", action="store_true", help="also check the run can be published (R2)")
     pf.add_argument("--json", action="store_true")
@@ -136,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "preflight":
         from . import preflight, status
-        return preflight.main(status.NODES[a.node], a.input, a.custody, a.json)
+        return preflight.main(status.NODES.get(a.node, a.node), a.input, a.custody, a.json)
 
     if a.cmd == "status":
         from . import status

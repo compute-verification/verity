@@ -2,8 +2,9 @@
 
   research run [--project P] [--stage S] [--timeout T] [--expect K=V ...] [--require-result] [--runs-dir D] [harness flags] -- CMD...
   research run [--tool NAME|module:NAME] [--scratch NAME ...] [--campaign C] [...] -- CMD...   # evidence store: derivation before, attempt after
-  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...
-                                                 # the one queue (tools/cluster) places the job and runs it under its node's executor
+  research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] [--goal G [--no-preflight]] -- CMD...
+                                                 # the one queue (tools/cluster) places the job and runs it under its node's executor; a goal
+                                                 # job is refused when `cluster preflight` fails for its node, and its owner alerted when it waits
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
@@ -163,6 +164,11 @@ def cmd_run(argv: list[str]) -> int:
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
+    q.add_argument("--goal", default=None, metavar="G",
+                   help="the goal Commit it is critical to (e.g. cov-g217): `cluster preflight` must pass for its node first (its SSH, "
+                        "state, staged --input art: and kind inputs, custody), and `cluster watch` alerts its owner when it waits 30 min")
+    q.add_argument("--no-preflight", dest="no_queue_preflight", action="store_true",
+                   help="with --goal: submit even when the node's preflight fails")
     ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
@@ -202,7 +208,8 @@ def cmd_run(argv: list[str]) -> int:
                                            ("--gpu-model", ns.gpu_model), ("--max-min", ns.max_min is not None),
                                            ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
                                            ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
-                                           ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids))
+                                           ("--preemptible", ns.preemptible), ("--quiet", ns.quiet), ("--gpu-ids", ns.gpu_ids),
+                                           ("--goal", ns.goal), ("--no-preflight", ns.no_queue_preflight))
                   if given]
     if queue_only:
         print(f"research run: {', '.join(queue_only)} declare a job to the queue and mean nothing without --queue", file=sys.stderr)
@@ -579,6 +586,13 @@ def _source_identity_hint(git_dir: Path) -> dict | None:
 GPU_WAIT_MIN = 120
 
 
+def _art_inputs(harness_opts: list[str]) -> list[str]:
+    """The store ids among the harness's `--input name=art:<id>` (or `--input art:<id>`) values."""
+    vals = [v for i, a in enumerate(harness_opts) for v in
+            ([harness_opts[i + 1]] if a == "--input" and i + 1 < len(harness_opts) else [a.split("=", 1)[1]] if a.startswith("--input=") else [])]
+    return [ref for ref in (v.partition("=")[2] if "=" in v else v for v in vals) if ref.startswith("art:")]
+
+
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
     """`research run --queue`: the queue places the job (`cluster submit`), then it launches as `--on` the placed machine does, with
     the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
@@ -597,7 +611,11 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             "class": ns.queue_class, "kind": ns.queue_kind, "question": ns.question or None, "gpus": ns.gpus,
             "gpu-model": ns.gpu_model, "cpus": ns.cpus, "mem-gb": math.ceil(ns.mem_gb) if ns.mem_gb is not None else None,
             "max-s": int(given_max) if given_max else None, "custody-s": RUN_MARGIN_S,
-            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids}
+            "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids,
+            "goal": ns.goal}
+    if ns.no_queue_preflight and not ns.goal:
+        print("research run --queue: --no-preflight skips a goal job's preflight; without --goal there is none", file=sys.stderr)
+        return 2
     try:
         placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
     except remote.Refused as e:
@@ -617,6 +635,18 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
           file=sys.stderr)
     for w in placed.get("warnings") or ():
         print(f"research run --queue: warning: {w}", file=sys.stderr)
+    if ns.goal:
+        refs = list(dict.fromkeys([*(placed.get("inputs") or ()), *_art_inputs(harness_opts)]))
+        passed, report = remote.queue_preflight(Path(ns.source).expanduser(), placed["node"], refs, ns.custody_r2 is not False)
+        for line in report.splitlines():
+            print(f"research run --queue: preflight: {line}", file=sys.stderr)
+        if not passed and not ns.no_queue_preflight:
+            print(f"research run --queue: refused: {placed['node']} fails its preflight, so goal {ns.goal}'s job could wait for its "
+                  "grant and then fail; fix what failed, or pass --no-preflight", file=sys.stderr)
+            return 3
+        if not passed:
+            print(f"research run --queue: warning: --no-preflight: submitting goal {ns.goal}'s job though {placed['node']} fails its "
+                  "preflight", file=sys.stderr)
     ns.on, ns.mem_gb = placed["machine"], None
     if ns.custody_r2 is not False and (why := _custody_ttl_problem(ns.custody_ttl, harness_opts)):
         print(f"research run: {why}", file=sys.stderr)

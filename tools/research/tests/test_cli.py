@@ -188,6 +188,64 @@ def test_run_queue_places_the_job_then_launches_on_the_placed_machine_with_its_w
     assert len(seen) == 3
 
 
+STUB_CLUSTER = """\
+import json, sys
+a = sys.argv
+if a[1] == 'preflight':
+    open(sys.argv[0] + '.preflight', 'w').write(json.dumps(a[1:]))
+    bad = [r for r in a if r.startswith('art:0')]
+    print('ok    ssh      research@n2 answered the caller\\'s key')
+    print(*(f'FAIL  input    {r}: no manifest' for r in bad), sep='\\n')
+    sys.exit(1 if bad else 0)
+open(sys.argv[0] + '.argv', 'w').write(json.dumps(a[1:]))
+print(json.dumps({'node': 'vy-nebius-2', 'machine': 'vy-nebius-2', 'why': 'stub', 'job': {'gpus': 0}, 'wrap': ['env', 'HELD=1'],
+                  'workload_wrap': [], 'kind': 'adhoc', 'max_s': 600, 'inputs': ['hf:org/m@main']}))
+"""
+
+
+def test_run_queue_goal_runs_the_placed_nodes_preflight_first_and_refuses_when_it_fails(tmp_path, monkeypatch, capsys):
+    """`research run --queue --goal G`: the goal reaches `cluster submit`, and `cluster preflight` runs for the placed node with
+    the kind's staged inputs, the harness's `--input name=art:` ids and custody before anything launches; a failed check refuses
+    the run (exit 3) unless --no-preflight. Without --goal there is no preflight."""
+    from research import remote
+    src, seen = _queue_source(tmp_path), []
+    pkg = src / "tools" / "cluster" / "src" / "cluster"
+    (pkg / "__main__.py").write_text(STUB_CLUSTER)
+    (pkg / "preflight.py").write_text("")
+    monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw) or
+                        {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}})
+    base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--source", str(src), "--project", "verity", "--mem-gb", "8",
+            "--max-min", "10"]
+    good, bad = "art:" + "f2" * 32, "art:" + "0" * 64
+
+    assert main([*base, "--goal", "cov-g217", "--input", f"build={good}", f"--input=lib={good}", "--", "true"]) == 0
+    assert json.loads((pkg / "__main__.py.preflight").read_text()) == \
+        ["preflight", "--node", "vy-nebius-2", "--input", "hf:org/m@main", "--input", good, "--custody"]
+    argv = json.loads((pkg / "__main__.py.argv").read_text())
+    assert argv[argv.index("--goal") + 1] == "cov-g217" and len(seen) == 1
+    assert "research run --queue: preflight: ok    ssh      research@n2 answered the caller's key" in capsys.readouterr().err
+
+    assert main([*base, "--goal", "cov-g217", "--input", f"build={bad}", "--", "true"]) == 3
+    err = capsys.readouterr().err
+    assert f"preflight: FAIL  input    {bad}: no manifest" in err and len(seen) == 1
+    assert "refused: vy-nebius-2 fails its preflight, so goal cov-g217's job could wait for its grant and then fail" in err
+    assert main([*base, "--goal", "cov-g217", "--no-preflight", "--no-custody-r2", "--input", f"build={bad}", "--", "true"]) == 0
+    assert "--custody" not in json.loads((pkg / "__main__.py.preflight").read_text())
+    assert "warning: --no-preflight: submitting goal cov-g217's job though vy-nebius-2 fails" in capsys.readouterr().err
+    assert len(seen) == 2
+
+    (pkg / "__main__.py.preflight").unlink()
+    assert main([*base, "--input", f"build={bad}", "--", "true"]) == 0
+    assert not (pkg / "__main__.py.preflight").exists() and "--goal" not in json.loads((pkg / "__main__.py.argv").read_text())
+    assert main([*base, "--no-preflight", "--", "true"]) == 2
+    assert "without --goal there is none" in capsys.readouterr().err
+    (pkg / "preflight.py").unlink()
+    assert main([*base, "--goal", "cov-g217", "--", "true"]) == 3
+    assert "preflight: the --source tree's tools/cluster has no `cluster preflight`" in capsys.readouterr().err
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--goal", "cov-g217", "--", "true"]) == 2
+    assert "--goal declare" in capsys.readouterr().err and len(seen) == 3
+
+
 def test_run_queue_needs_a_source_tree_with_the_queue_and_queue_flags_need_queue(tmp_path, capsys):
     base = ["run", "--runs-dir", str(tmp_path / "runs"), "--queue", "--project", "verity"]
     assert main([*base, "--mem-gb", "8", "--max-min", "1", "--", "true"]) == 2

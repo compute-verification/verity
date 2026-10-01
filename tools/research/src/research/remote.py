@@ -432,6 +432,23 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any]) -> d
     return out
 
 
+def queue_preflight(source: Path, node: str, inputs: list[str], custody: bool) -> tuple[bool, str]:
+    """`research run --queue --goal`: `cluster preflight` for the placed node, from the --source tree: whether the job could
+    start there now (SSH, the node's state, its staged inputs, custody). Whether every check passed, and its lines."""
+    src = Path(source) / "tools" / "cluster"
+    if not (src / "src" / "cluster" / "preflight.py").is_file():
+        return False, "the --source tree's tools/cluster has no `cluster preflight`"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(src / "src") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    argv = [sys.executable, "-m", "cluster", "preflight", "--node", node, *(x for ref in inputs for x in ("--input", ref)),
+            *(["--custody"] if custody else [])]
+    try:
+        r = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=90)
+    except subprocess.TimeoutExpired:
+        return False, "`cluster preflight` took over 90 s"
+    return r.returncode == 0, (r.stdout + r.stderr).strip() or f"`cluster preflight` exited {r.returncode}"
+
+
 def knows_preflight(pkg: Path | None) -> bool:
     """Whether the research package that will run on the machine runs `--preflight TOOL` (one that predates it would ignore it)."""
     if pkg is None:
