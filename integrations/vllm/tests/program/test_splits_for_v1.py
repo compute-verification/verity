@@ -40,6 +40,23 @@ def test_threshold_tables_l40s_and_h100_are_computed_not_tabled():
     assert diff == [17, 34, 35, 67, 68, 69, 70, 71]
 
 
+def test_threshold_table_rtx_pro_6000_188_sms():
+    assert _table(188) == [(1, 5, 32), (6, 11, 16), (12, 23, 8), (24, 47, 4), (48, 94, 2), (95, 200, 1)]
+    # inside the split pipeline's domain (n_live <= 64) it disagrees with the L40S's 142 at these live counts; S = 1 is unreachable
+    diff = [n for n in range(1, SPLIT_MAX_BATCH + 1) if splits_for_v1(n, 188) != splits_for_v1(n, 142)]
+    assert diff == [5, 9, 10, 11, 18, 19, 20, 21, 22, 23, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]
+    assert {splits_for_v1(n, 188) for n in range(1, SPLIT_MAX_BATCH + 1)} == {2, 4, 8, 16, 32}
+
+
+def test_lifted_splits_primitives_resolve_at_188_sms():
+    from verity.ir.codec import _lookup_primitive
+    from verity.ir.defs import REGISTRY
+    from verity_vllm.program.registry import lifted as L
+    assert _lookup_primitive(REGISTRY, "SplitsForSMS188_v1") is L.splits_for_prim(188)
+    assert _lookup_primitive(REGISTRY, "LSplitsForSMS188_v1") is L.l_splits_for(188)
+    assert [L.l_splits_for(188).evaluate(n) for n in (1, 5, 6, 11, 12, 23, 24, 47, 48, 64)] == [32, 32, 16, 16, 8, 8, 4, 4, 2, 2]
+
+
 def test_domain_refuses_by_name():
     with pytest.raises(ValueError, match="n_live=0 outside the domain"):
         splits_for_v1(0, 142)

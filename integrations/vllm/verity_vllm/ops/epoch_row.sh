@@ -20,7 +20,10 @@
 # timeout (status.json's start + timeout_s, or control/timeout_s after `tele set-timeout`), or at JOB_DEADLINE_UTC if that is earlier;
 # DEADLINE_BUILD / DEADLINE_MATCH / DEADLINE_COMMIT end one stage earlier still.  A stage still running then is stopped (TERM, then KILL
 # after 120 s) and the row stops "STOP <stage>: deadline" (exit 124).  STOP_AFTER=build|match stops the row after that stage (exit 23).
-# EPOCH_NOW (epoch seconds) fixes the "now" these deadlines are measured from; a stage's own timeout still runs from its start.
+# The record stage runs after the store, whose reserve it no longer holds back: it ends FINISH_RESERVE_S (default 300) before the run's
+# timeout, or at DEADLINE_RECORD if that is earlier (the job's end when the run has no timeout); stopped, it is "rebaseline run rc=124".
+# EPOCH_NOW (epoch seconds, or @FILE holding them, read at every use) fixes the "now" these deadlines are measured from; a stage's own
+# timeout still runs from its start.
 # Env: PY (/workspace/venv312/bin/python; `verity-vllm` is the launcher beside it), SWEEP_DIR (/workspace/epoch/sweep), RESEARCH_STORE
 # (/workspace/epoch/store), RESEARCH_CLI (`python3 -m research`), EPOCH_BOOTSTRAP (`bash verity_vllm/ops/epoch_failfast.sh`),
 # ALLOWED_QWORD_MAX_GATES (a GO's one allowed VERITY_QWORD_MAX_GATES value for the row).  Everything this script asks of Python is a
@@ -49,13 +52,14 @@ launcher() {  # the `verity-vllm` launcher pod_bootstrap.sh writes beside $PY; b
 export VV; VV=$(launcher)
 
 epoch_of() { [ -n "${1:-}" ] && date -u -d "$1" +%s 2>/dev/null; }
-now() { echo "${EPOCH_NOW:-$(date +%s)}"; }
+now() { case "${EPOCH_NOW:-}" in @*) cat "${EPOCH_NOW#@}";; "") date +%s;; *) echo "$EPOCH_NOW";; esac; }
 read -r RUN_END JOB_END KEY_EXPIRES < <("$VV" epoch job "$RESEARCH_RUN_DIR" --custody-dir "$CUSTODY_DIR" \
   --store-reserve-s "${STORE_RESERVE_S:-2400}" ${JOB_DEADLINE_UTC:+--job-deadline "$JOB_DEADLINE_UTC"})
 for v in RUN_END JOB_END KEY_EXPIRES; do [ "${!v:--}" = - ] && printf -v "$v" ''; done
-stage_end() {  # stage_end STAGE: the earlier of the job's end and DEADLINE_<STAGE>, epoch seconds ("" = none)
-  local s; s=$(epoch_of "$(eval echo "\${DEADLINE_${1^^}:-}")")
-  if [ -n "$s" ] && { [ -z "$JOB_END" ] || [ "$s" -lt "$JOB_END" ]; }; then echo "$s"; else echo "$JOB_END"; fi
+stage_end() {  # stage_end STAGE: the earlier of the stage's bound (the job's end; the record's, above) and DEADLINE_<STAGE> ("" = none)
+  local s e=$JOB_END; s=$(epoch_of "$(eval echo "\${DEADLINE_${1^^}:-}")")
+  [ "$1" = record ] && [ -n "$RUN_END" ] && e=$(( RUN_END - ${FINISH_RESERVE_S:-300} ))
+  if [ -n "$s" ] && { [ -z "$e" ] || [ "$s" -lt "$e" ]; }; then echo "$s"; else echo "$e"; fi
 }
 
 CHILD=
