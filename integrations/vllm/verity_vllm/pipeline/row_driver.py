@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, RunEnv
+from verity_vllm.pipeline import gpu_lease as GL
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
@@ -92,6 +93,8 @@ class Row:
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
                     "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
+        if GL.leased(env):
+            GL.hide_devices(env)
         self.child_env = env
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)
@@ -205,6 +208,19 @@ class Row:
         self.tl(stage, "start", *extra)
         rc = self.run_to(to, lf, cmd)
         self.tl(stage, "end", ("rc", rc), *extra)
+        return rc
+
+    @property
+    def leased(self) -> bool:
+        """The item leases its GPU (`gpu_lease`): its pod has none of its own."""
+        return GL.leased(self.child_env)
+
+    def run_gpu(self, stage: str, to: int | str, lf: str, cmd: list[str]) -> int:
+        """``run_tl`` for the stage that needs the GPU: under a lease when the item is leased, else as any stage."""
+        if not self.leased:
+            return self.run_tl(stage, to, lf, cmd)
+        rc, rec = GL.run(self.d, lf, cmd, int(to), self.child_env, lambda t, argv: self.run_tl(stage, t, lf, argv))
+        self.log(f"GPU lease ({GL.RECORD}): waited {rec['waited_min']} min, held {rec['held_min']} min, released {rec['released']}, rc={rc}")
         return rc
 
     def gpu_exclusive(self, why: str) -> None:

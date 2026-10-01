@@ -33,5 +33,8 @@ if [ -e "$stamps/$k" ]; then
   echo BOOTSTRAP-OK
   exit 0
 fi
-env -u REPO WORK=$work HF_HOME=${HF_HOME:-/workspace/hf} bash verity_vllm/ops/pod_bootstrap.sh "$@"
+# a leased job's pod has no GPU of its own (GPU_LEASE set): the GPU checks and tap builds of a real bootstrap take one from the lease
+lease=()
+case " $* " in *" --cpu "*) ;; *) [ -z "${GPU_LEASE:-}" ] || lease=("$GPU_LEASE" 1 --wait --max-min 60 --mem-gb 0 --);; esac
+env -u REPO WORK=$work HF_HOME=${HF_HOME:-/workspace/hf} ${lease[@]+"${lease[@]}"} bash verity_vllm/ops/pod_bootstrap.sh "$@"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$stamps/$(key "$@")"
