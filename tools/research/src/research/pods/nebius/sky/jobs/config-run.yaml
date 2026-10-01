@@ -355,8 +355,55 @@ run: |
   /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --tool vllm.replay --project verity --cwd "$SRC" --campaign "$CAMPAIGN" \
     ${build_art:+--input "build=$build_art"} ${commit_art:+--input "commit=$commit_art"} \
     -- "$PY" -m verity_vllm.pipeline.cli row stage replay "$ROW" "$ROLE" "$REPO" "$REVISION" --config-run 1 || rc=$?
-  # the sealed bundle (several GB at batch 8) goes once its replay has written the record; a failed replay keeps it for a retry
-  if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then rm -rf "$SWEEP_DIR/$ROW"/commit/replay_bundle_p*; fi
+  # the sealed bundle (several GB at batch 8) goes once its replay has written the record and left the bundle's slim keep
+  # (commit/replay_slim_p<pair>/, cpu_replay.keep: the leaves a later CPU replay reads): slim.json made from this bundle's
+  # MANIFEST.json, its dump_sha256 the digest of its files, each of them there with that size and sha256. Without one (a tree
+  # before keep-leaves) the bundle is the row's only copy of its leaves and stays, and row.log says why; a failed replay keeps it
+  # for a retry. n2_commit.sh's replay runs the same check
+  if [ "$rc" = 0 ] && [ -s "$SWEEP_DIR/$ROW/config_record.json" ]; then
+    python3 - "$SWEEP_DIR/$ROW" << 'EOF' || echo "$(date -u +%FT%TZ) replay bundles kept: the keep check failed" | tee -a "$SWEEP_DIR/$ROW/row.log" || true
+  import glob, hashlib, json, os, re, shutil, sys, time
+  row = sys.argv[1]
+
+
+  def sha256(p):
+      h = hashlib.sha256()
+      with open(p, "rb") as f:
+          for b in iter(lambda: f.read(1 << 24), b""):
+              h.update(b)
+      return h.hexdigest()
+
+
+  def unkept(b, k, pair):  # why k is not bundle b's complete slim keep, or None
+      if not os.path.isfile(f"{k}/slim.json"):
+          return f"no slim keep {k}/slim.json (a tree before keep-leaves, or its replay wrote none)"
+      try:
+          doc = json.load(open(f"{k}/slim.json"))
+          files = doc["files"]
+          if doc.get("schema") != "verity-vllm/replay-slim/v1" or doc.get("pair") != pair or not files:
+              return f"{k}/slim.json is not a replay-slim/v1 keep of pair {pair} that lists files"
+          if doc.get("dump_sha256") != hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode()).hexdigest():
+              return f"{k}/slim.json's dump_sha256 is not the digest of its files"
+          if doc.get("bundle_manifest_sha256") != sha256(f"{b}/MANIFEST.json"):
+              return f"{k} was made from another bundle (its bundle_manifest_sha256 is not this MANIFEST.json's)"
+          bad = [r for r, f in sorted(files.items()) if os.path.getsize(f"{k}/{r}") != f["bytes"] or sha256(f"{k}/{r}") != f["sha256"]]
+      except Exception as e:
+          return f"{k} is incomplete ({type(e).__name__}: {e})"
+      return f"{len(bad)} of {k}'s {len(files)} files differ from its slim.json (first {bad[0]})" if bad else None
+
+
+  with open(f"{row}/row.log", "a") as log:
+      for b in sorted(glob.glob(f"{row}/commit/replay_bundle_p*")):
+          m = re.fullmatch(r"replay_bundle_p(\d+)", os.path.basename(b))
+          k = f"{row}/commit/replay_slim_p{m[1]}" if m else ""
+          why = unkept(b, k, int(m[1])) if m else "not a sealed bundle"
+          if why is None:
+              os.unlink(b) if os.path.islink(b) else shutil.rmtree(b)
+          line = f"replay bundle {b} " + (f"kept: {why}" if why else f"deleted: {k} is its complete slim keep")
+          print(line, flush=True)
+          log.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {line}\n")
+  EOF
+  fi
   exit "$rc"
 
 config:
