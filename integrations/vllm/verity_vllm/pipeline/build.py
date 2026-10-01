@@ -68,7 +68,7 @@ def _write_instances(f, head: dict, rows, chunk: int = 4096) -> None:
 
 #: `instances.json.gz`'s gzip level.  Its readers parse its text, and no digest or published output reads its bytes
 #: (`research_outputs.NEVER`).  A long context's text is mostly the attention Calls' key and value runs (B1 4096/512: 8.6 GB), which
-#: level 6 compresses about 3x faster than level 9, 2% larger; a lower level inflates slower for every reader.
+#: level 6 compresses in under a third of level 9's CPU time, 2% larger, and which inflates as fast at either level.
 INSTANCES_GZ_LEVEL = 6
 
 
