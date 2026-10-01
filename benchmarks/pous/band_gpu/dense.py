@@ -235,20 +235,20 @@ def decode_blocks(c_flat: torch.Tensor, tags: torch.Tensor, segs: torch.Tensor, 
     order = torch.argsort(length, stable=True)
     seg, blk, ln = segs[order], blocks[order], length[order]
     r = len(order)
-    state = torch.zeros(r, 2 * width + 64, dtype=torch.uint8, device=c_flat.device)
-    state[:, 2 * width:2 * width + 32] = tags[seg]
-    state[:, 2 * width + 32] = (blk & 0xFF).to(torch.uint8)
-    state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
-    starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     base = seg * per_segment
     if (CHUNKED[0] and CHUNKED_WHOLE[0] and r >= max(CHUNKED_MIN_ROWS[0], CHUNKED_SPLIT_MAX_ROWS[0]) and width == 65_536
             and c_flat.is_contiguous()):
         return _decode_whole(c_flat, seg, blk, ln, tags, base, order, width)
+    starts = torch.searchsorted(ln, torch.arange(int(ln[-1]) + 2, device=ln.device)).tolist()
     if CHUNKED[0] and r >= CHUNKED_MIN_ROWS[0]:
         w = _decode_chunked(c_flat, seg, blk, ln, tags, base, starts, width) ^ c_flat[base + blk]
         out = torch.empty_like(w)
         out[order] = w
         return out
+    state = torch.zeros(r, 2 * width + 64, dtype=torch.uint8, device=c_flat.device)
+    state[:, 2 * width:2 * width + 32] = tags[seg]
+    state[:, 2 * width + 32] = (blk & 0xFF).to(torch.uint8)
+    state[:, 2 * width + 33] = (blk >> 8).to(torch.uint8)
     pending, stream = [], torch.cuda.current_stream()
     for j in range(1, int(ln[-1]) + 2):
         first = starts[j - 1]
